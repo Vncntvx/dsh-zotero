@@ -1,0 +1,6 @@
+# This patch is used when the plugin is installed as a dsh bundle.
+# The `name` refers to the package name, so Node module resolution can find it.
+- insert:
+    - id: zotero
+      name: dsh-zotero
+      config: {}
