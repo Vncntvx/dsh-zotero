@@ -126,7 +126,9 @@ export function resolveConfig(config: Config): ResolvedConfig {
   assertNonEmpty('defaultStyle', applied.defaultStyle)
   assertNonEmpty('defaultLocale', applied.defaultLocale)
   if (!Number.isFinite(applied.timeoutMs) || applied.timeoutMs <= 0) {
-    throw new Error(`dsh-zotero: timeoutMs must be a positive finite number; got ${applied.timeoutMs}`)
+    throw new Error(
+      `dsh-zotero: timeoutMs must be a positive finite number; got ${applied.timeoutMs}`,
+    )
   }
   assertPositiveInteger('maxSearchResults', applied.maxSearchResults)
   assertPositiveInteger('maxEvidenceChars', applied.maxEvidenceChars)

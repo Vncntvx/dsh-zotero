@@ -37,7 +37,12 @@ if (!status.connected) throw new Error(`Zotero not connected: ${status.diagnosis
 console.log(`status: connected, api ${status.apiVersion}, server ${status.serverId ?? '(pre-10)'}`)
 
 const search = await zotero.search({
-  scope: { kind: 'library' }, mode: 'metadata', sort: 'dateModified', direction: 'desc', offset: 0, limit: 2,
+  scope: { kind: 'library' },
+  mode: 'metadata',
+  sort: 'dateModified',
+  direction: 'desc',
+  offset: 0,
+  limit: 2,
 })
 console.log(`search: ${search.returned}/${search.total} items`)
 
@@ -47,10 +52,14 @@ if (search.items.length > 0) {
   console.log(`get: ${detail.title} [${detail.itemType}] (children ${detail.children.total})`)
 
   const evidence = await zotero.retrieve({ ref, query: 'a', sources: ['abstract'], passages: 1 })
-  console.log(`retrieve: ${evidence.evidence.length} evidence passage(s), truncated ${evidence.truncated}`)
+  console.log(
+    `retrieve: ${evidence.evidence.length} evidence passage(s), truncated ${evidence.truncated}`,
+  )
 
   const exported = await zotero.export({ refs: [ref], format: 'citation' })
-  console.log(`export: ${exported.format}, ${exported.citations.length} citation(s), ${exported.citations[0].text.length} chars`)
+  console.log(
+    `export: ${exported.format}, ${exported.citations.length} citation(s), ${exported.citations[0].text.length} chars`,
+  )
 } else {
   console.log('library empty; item-level calls skipped')
 }
@@ -59,7 +68,13 @@ const assembly = await ctx.systemPrompt.assemble()
 if (assembly.sections.find((entry) => entry.name === 'zotero:policy') === undefined) {
   throw new Error('zotero:policy section missing')
 }
-for (const name of ['zotero_search', 'zotero_get', 'zotero_retrieve', 'zotero_attachment', 'zotero_export']) {
+for (const name of [
+  'zotero_search',
+  'zotero_get',
+  'zotero_retrieve',
+  'zotero_attachment',
+  'zotero_export',
+]) {
   if (ctx.tools.get(name) === undefined) throw new Error(`tool ${name} not registered`)
 }
 console.log('assembly: zotero:policy present, all 5 tools registered')

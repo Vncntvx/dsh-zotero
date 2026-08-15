@@ -40,14 +40,26 @@ const SNAPSHOT_CHILD = {
 
 describe('bestAttachmentFromLinks', () => {
   it('reads the key and content type from links.attachment', () => {
-    expect(bestAttachmentFromLinks({
-      links: { attachment: { href: 'http://localhost:23119/api/users/0/items/WXYZ6789', type: 'application/json', attachmentType: 'application/pdf' } },
-    })).toEqual({ key: 'WXYZ6789', contentType: 'application/pdf' })
+    expect(
+      bestAttachmentFromLinks({
+        links: {
+          attachment: {
+            href: 'http://localhost:23119/api/users/0/items/WXYZ6789',
+            type: 'application/json',
+            attachmentType: 'application/pdf',
+          },
+        },
+      }),
+    ).toEqual({ key: 'WXYZ6789', contentType: 'application/pdf' })
   })
 
   it('returns undefined when links.attachment is absent or keyless', () => {
     expect(bestAttachmentFromLinks({ links: {} })).toBeUndefined()
-    expect(bestAttachmentFromLinks({ links: { attachment: { href: 'http://localhost:23119/api/users/0/items/not-a-key' } } })).toBeUndefined()
+    expect(
+      bestAttachmentFromLinks({
+        links: { attachment: { href: 'http://localhost:23119/api/users/0/items/not-a-key' } },
+      }),
+    ).toBeUndefined()
     expect(bestAttachmentFromLinks({})).toBeUndefined()
   })
 })
@@ -56,12 +68,25 @@ describe('selectAttachment', () => {
   it('prefers Zotero-computed PDFs: imported files first, then earliest date, then key order', () => {
     const rows = [SNAPSHOT_CHILD, LINKED_PDF_CHILD, PDF_CHILD]
     const selected = selectAttachment(rows, 'pdf')
-    expect(selected).toEqual({ key: 'WXYZ6789', title: 'Full Text PDF', contentType: 'application/pdf', linkMode: 'imported_file' })
+    expect(selected).toEqual({
+      key: 'WXYZ6789',
+      title: 'Full Text PDF',
+      contentType: 'application/pdf',
+      linkMode: 'imported_file',
+    })
   })
 
   it('falls back across equal-rank PDFs by date then key', () => {
-    const older = { ...PDF_CHILD, key: 'AAAA1111', data: { ...PDF_CHILD.data, dateAdded: '2021-01-01T00:00:00Z' } }
-    const newer = { ...PDF_CHILD, key: 'BBBB2222', data: { ...PDF_CHILD.data, dateAdded: '2022-01-01T00:00:00Z' } }
+    const older = {
+      ...PDF_CHILD,
+      key: 'AAAA1111',
+      data: { ...PDF_CHILD.data, dateAdded: '2021-01-01T00:00:00Z' },
+    }
+    const newer = {
+      ...PDF_CHILD,
+      key: 'BBBB2222',
+      data: { ...PDF_CHILD.data, dateAdded: '2022-01-01T00:00:00Z' },
+    }
     expect(selectAttachment([newer, older], 'pdf')!.key).toBe('AAAA1111')
     const tieA = { ...older, key: 'CCCC3333' }
     const tieB = { ...older, key: 'DDDD4444' }
@@ -84,8 +109,9 @@ describe('normalizeAttachmentRecord', () => {
   })
 
   it('tolerates missing optional fields', () => {
-    expect(normalizeAttachmentRecord({ key: 'WXYZ6789', data: { itemType: 'attachment' } }))
-      .toEqual({ key: 'WXYZ6789', title: '', contentType: '', linkMode: undefined })
+    expect(
+      normalizeAttachmentRecord({ key: 'WXYZ6789', data: { itemType: 'attachment' } }),
+    ).toEqual({ key: 'WXYZ6789', title: '', contentType: '', linkMode: undefined })
   })
 })
 
@@ -102,12 +128,18 @@ describe('attachment failure modes', () => {
   })
 
   it('tolerates a bare attachment row without a data block', () => {
-    expect(normalizeAttachmentRecord({ key: 'WXYZ6789' }))
-      .toEqual({ key: 'WXYZ6789', title: '', contentType: '' })
+    expect(normalizeAttachmentRecord({ key: 'WXYZ6789' })).toEqual({
+      key: 'WXYZ6789',
+      title: '',
+      contentType: '',
+    })
   })
 
   it('skips non-attachment rows while selecting', () => {
-    const selected = selectAttachment([{ key: 'NOTE1111', data: { itemType: 'note' } }, PDF_CHILD], 'pdf')
+    const selected = selectAttachment(
+      [{ key: 'NOTE1111', data: { itemType: 'note' } }, PDF_CHILD],
+      'pdf',
+    )
     expect(selected!.key).toBe('WXYZ6789')
   })
 
@@ -123,7 +155,10 @@ describe('attachment failure modes', () => {
 
 describe('selectAttachment tie-breaking', () => {
   it('treats a missing dateAdded as the earliest addition', () => {
-    const noDate = { key: 'AAAA1111', data: { itemType: 'attachment', contentType: 'application/pdf', linkMode: 'imported_file' } }
+    const noDate = {
+      key: 'AAAA1111',
+      data: { itemType: 'attachment', contentType: 'application/pdf', linkMode: 'imported_file' },
+    }
     const withDate = { ...PDF_CHILD, key: 'BBBB2222' }
     expect(selectAttachment([withDate, noDate], 'pdf')!.key).toBe('AAAA1111')
   })

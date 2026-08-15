@@ -215,11 +215,24 @@ export interface ZoteroRetrieveResult {
 }
 
 export type ZoteroAttachmentLocation =
-  | { readonly ref: string; readonly title: string; readonly contentType: string; readonly kind: 'file'; readonly path: string }
-  | { readonly ref: string; readonly title: string; readonly contentType: string; readonly kind: 'url'; readonly url: string }
+  | {
+      readonly ref: string
+      readonly title: string
+      readonly contentType: string
+      readonly kind: 'file'
+      readonly path: string
+    }
+  | {
+      readonly ref: string
+      readonly title: string
+      readonly contentType: string
+      readonly kind: 'url'
+      readonly url: string
+    }
 
 /** Export/citation output formats. `citation`/`bibliography` use Zotero's CSL engine. */
-export type ZoteroExportFormat = 'citation' | 'bibliography' | 'bibtex' | 'biblatex' | 'ris' | 'csljson'
+export type ZoteroExportFormat =
+  'citation' | 'bibliography' | 'bibtex' | 'biblatex' | 'ris' | 'csljson'
 
 export interface ZoteroExportRequest {
   readonly refs: readonly ZoteroObjectRef[]
@@ -234,8 +247,18 @@ export interface ZoteroExportRequest {
  * (the bibliography's ordering belongs to the CSL style, not the caller).
  */
 export type ZoteroExportResult =
-  | { readonly format: 'citation'; readonly style?: string; readonly locale?: string; readonly citations: { readonly ref: string; readonly text: string }[] }
-  | { readonly format: Exclude<ZoteroExportFormat, 'citation'>; readonly style?: string; readonly locale?: string; readonly text: string }
+  | {
+      readonly format: 'citation'
+      readonly style?: string
+      readonly locale?: string
+      readonly citations: { readonly ref: string; readonly text: string }[]
+    }
+  | {
+      readonly format: Exclude<ZoteroExportFormat, 'citation'>
+      readonly style?: string
+      readonly locale?: string
+      readonly text: string
+    }
 
 /** Raw fulltext payload from `GET /items/<attachmentKey>/fulltext`. */
 export interface ZoteroFulltextPayload {
@@ -282,7 +305,10 @@ export interface ZoteroProvider {
    * @param signal - caller cancellation; forwarded to the transport.
    * @returns the verified file path or linked URL.
    */
-  getAttachmentLocation(ref: ZoteroObjectRef, signal?: AbortSignal): Promise<ZoteroAttachmentLocation>
+  getAttachmentLocation(
+    ref: ZoteroObjectRef,
+    signal?: AbortSignal,
+  ): Promise<ZoteroAttachmentLocation>
   /**
    * Gather ranked evidence passages for one item.
    * @param request - the item ref, ranking query, sources, and passage cap.

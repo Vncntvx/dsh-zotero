@@ -14,18 +14,24 @@ import type { ZoteroService } from '../service.js'
 import type { ZoteroGetRequest, ZoteroInclude } from '../types.js'
 
 const GET_PARAMETERS = {
-  ref: { type: 'string', required: true, description: 'A zotero://user/0/item/<KEY> ref from zotero_search or a previous tool result.' },
+  ref: {
+    type: 'string',
+    required: true,
+    description: 'A zotero://user/0/item/<KEY> ref from zotero_search or a previous tool result.',
+  },
   include: {
     type: 'array',
     items: { type: 'string', enum: ['notes', 'annotations', 'attachments'] },
-    description: 'Child content kinds to include. Omit for metadata only; each included kind adds one lazy request.',
+    description:
+      'Child content kinds to include. Omit for metadata only; each included kind adds one lazy request.',
   },
 } as const
 
 type GetArgs = InferArgs<typeof GET_PARAMETERS>
 
 const NOTE_RECORD = {
-  type: 'object', additionalProperties: false,
+  type: 'object',
+  additionalProperties: false,
   properties: {
     ref: { type: 'string', required: true },
     text: { type: 'string', required: true },
@@ -34,7 +40,8 @@ const NOTE_RECORD = {
 } as const
 
 const ANNOTATION_RECORD = {
-  type: 'object', additionalProperties: false,
+  type: 'object',
+  additionalProperties: false,
   properties: {
     ref: { type: 'string', required: true },
     type: { type: 'string', required: true },
@@ -46,7 +53,8 @@ const ANNOTATION_RECORD = {
 } as const
 
 const ATTACHMENT_RECORD = {
-  type: 'object', additionalProperties: false,
+  type: 'object',
+  additionalProperties: false,
   properties: {
     ref: { type: 'string', required: true },
     title: { type: 'string', required: true },
@@ -56,7 +64,8 @@ const ATTACHMENT_RECORD = {
 } as const
 
 const GET_OUTPUT_SCHEMA = {
-  type: 'object', additionalProperties: false,
+  type: 'object',
+  additionalProperties: false,
   properties: {
     ref: { type: 'string', required: true },
     itemType: { type: 'string', required: true },
@@ -71,9 +80,11 @@ const GET_OUTPUT_SCHEMA = {
     abstractTruncated: { type: 'boolean', required: true },
     tags: { type: 'array', required: true, items: { type: 'string' } },
     collections: {
-      type: 'array', required: true,
+      type: 'array',
+      required: true,
       items: {
-        type: 'object', additionalProperties: false,
+        type: 'object',
+        additionalProperties: false,
         properties: {
           ref: { type: 'string', required: true },
           name: { type: 'string' },
@@ -81,12 +92,15 @@ const GET_OUTPUT_SCHEMA = {
       },
     },
     children: {
-      type: 'object', additionalProperties: false, required: true,
+      type: 'object',
+      additionalProperties: false,
+      required: true,
       properties: { total: { type: 'integer', required: true } },
     },
     bestAttachment: ATTACHMENT_RECORD,
     notes: {
-      type: 'object', additionalProperties: false,
+      type: 'object',
+      additionalProperties: false,
       properties: {
         total: { type: 'integer', required: true },
         returned: { type: 'integer', required: true },
@@ -94,7 +108,8 @@ const GET_OUTPUT_SCHEMA = {
       },
     },
     annotations: {
-      type: 'object', additionalProperties: false,
+      type: 'object',
+      additionalProperties: false,
       properties: {
         total: { type: 'integer', required: true },
         returned: { type: 'integer', required: true },
@@ -102,7 +117,8 @@ const GET_OUTPUT_SCHEMA = {
       },
     },
     attachments: {
-      type: 'object', additionalProperties: false,
+      type: 'object',
+      additionalProperties: false,
       properties: {
         total: { type: 'integer', required: true },
         returned: { type: 'integer', required: true },
@@ -139,45 +155,59 @@ export function renderGet(_args: GetArgs, value: GetOutput): ContentBlock[] {
   if (value.url !== undefined) lines.push(`URL: ${value.url}`)
   if (value.tags.length > 0) lines.push(`Tags: ${value.tags.join(', ')}`)
   if (value.collections.length > 0) {
-    lines.push(`Collections: ${value.collections.map((collection) => collection.name ?? collection.ref).join(', ')}`)
+    lines.push(
+      `Collections: ${value.collections.map((collection) => collection.name ?? collection.ref).join(', ')}`,
+    )
   }
   if (value.abstract !== undefined) {
     lines.push(`Abstract${value.abstractTruncated ? ' (truncated)' : ''}: ${value.abstract}`)
   }
   const counts = [
     value.notes === undefined ? undefined : `${value.notes.returned} of ${value.notes.total} notes`,
-    value.annotations === undefined ? undefined : `${value.annotations.returned} of ${value.annotations.total} annotations`,
-    value.attachments === undefined ? undefined : `${value.attachments.returned} of ${value.attachments.total} attachments`,
+    value.annotations === undefined
+      ? undefined
+      : `${value.annotations.returned} of ${value.annotations.total} annotations`,
+    value.attachments === undefined
+      ? undefined
+      : `${value.attachments.returned} of ${value.attachments.total} attachments`,
   ].filter((part): part is string => part !== undefined)
-  lines.push(counts.length > 0 ? `Children: ${value.children.total} total (${counts.join('; ')})` : `Children: ${value.children.total} total`)
+  lines.push(
+    counts.length > 0
+      ? `Children: ${value.children.total} total (${counts.join('; ')})`
+      : `Children: ${value.children.total} total`,
+  )
   if (value.bestAttachment !== undefined) {
-    lines.push(`Best attachment: ${value.bestAttachment.ref} (${value.bestAttachment.contentType || 'unknown type'})`)
+    lines.push(
+      `Best attachment: ${value.bestAttachment.ref} (${value.bestAttachment.contentType || 'unknown type'})`,
+    )
   }
   return [{ type: 'text', text: lines.join('\n') }]
 }
 
 export function registerGetTool(ctx: Context, service: ZoteroService): void {
-  ctx.tools.register(defineTool({
-    name: 'zotero_get',
-    description: [
-      'Read the metadata of one Zotero library item referenced by a zotero:// ref.',
-      'The default call fetches metadata only; request include to also return child notes, annotations, and attachments (each adds one lazy request).',
-      'Results echo the served instance in the ref, so refs can be reused safely.',
-    ].join(' '),
-    parameters: GET_PARAMETERS,
-    output: {
-      schema: GET_OUTPUT_SCHEMA,
-      render: renderGet,
-    },
-    presentCall: (args) => ({
-      card: 'generic',
-      kind: 'read',
-      title: 'Read Zotero item',
-      rawInput: args.ref,
+  ctx.tools.register(
+    defineTool({
+      name: 'zotero_get',
+      description: [
+        'Read the metadata of one Zotero library item referenced by a zotero:// ref.',
+        'The default call fetches metadata only; request include to also return child notes, annotations, and attachments (each adds one lazy request).',
+        'Results echo the served instance in the ref, so refs can be reused safely.',
+      ].join(' '),
+      parameters: GET_PARAMETERS,
+      output: {
+        schema: GET_OUTPUT_SCHEMA,
+        render: renderGet,
+      },
+      presentCall: (args) => ({
+        card: 'generic',
+        kind: 'read',
+        title: 'Read Zotero item',
+        rawInput: args.ref,
+      }),
+      isConcurrencySafe: () => true,
+      async execute(args, exec) {
+        return await service.get(buildRequest(args), exec.signal)
+      },
     }),
-    isConcurrencySafe: () => true,
-    async execute(args, exec) {
-      return await service.get(buildRequest(args), exec.signal)
-    },
-  }))
+  )
 }

@@ -30,7 +30,10 @@ export interface EvidenceChunk {
  * (including interior whitespace) so passages stay verbatim.
  */
 export function chunkText(text: string, maxWords: number): EvidenceChunk[] {
-  const spans = [...text.matchAll(/\S+/g)].map((match) => ({ start: match.index, end: match.index + match[0].length }))
+  const spans = [...text.matchAll(/\S+/g)].map((match) => ({
+    start: match.index,
+    end: match.index + match[0].length,
+  }))
   const chunks: EvidenceChunk[] = []
   for (let start = 0; start < spans.length; start += maxWords) {
     const group = spans.slice(start, start + maxWords)
@@ -68,9 +71,10 @@ export function rankChunks(query: string, chunks: readonly EvidenceChunk[]): Ran
       documentFrequency.set(term, (documentFrequency.get(term) ?? 0) + 1)
     }
   }
-  const averageLength = documents.length === 0
-    ? 0
-    : documents.reduce((sum, tokens) => sum + tokens.length, 0) / documents.length
+  const averageLength =
+    documents.length === 0
+      ? 0
+      : documents.reduce((sum, tokens) => sum + tokens.length, 0) / documents.length
   const ranked = chunks.map((chunk, i) => {
     const tokens = documents[i]!
     const frequencies = termFrequency(tokens)
@@ -82,7 +86,7 @@ export function rankChunks(query: string, chunks: readonly EvidenceChunk[]): Ran
       const df = documentFrequency.get(term)!
       const idf = Math.log(1 + (documents.length - df + 0.5) / (df + 0.5))
       const denominator = tf + BM25_K1 * (1 - BM25_B + BM25_B * (tokens.length / averageLength))
-      score += idf * (tf * (BM25_K1 + 1)) / denominator
+      score += (idf * (tf * (BM25_K1 + 1))) / denominator
     }
     return { text: chunk.text, index: chunk.index, score }
   })

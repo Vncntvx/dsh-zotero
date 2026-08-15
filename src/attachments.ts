@@ -15,7 +15,7 @@ const OBJECT_KEY_PATTERN = /^[A-Z0-9]{8}$/
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? value as Record<string, unknown>
+    ? (value as Record<string, unknown>)
     : undefined
 }
 
@@ -47,7 +47,9 @@ export function extractAttachmentKey(href: string | undefined): string | undefin
  * @returns the attachment key and content type, or undefined when the item
  * has no attachment link (or its href carries no valid Zotero key).
  */
-export function bestAttachmentFromLinks(json: unknown): { key: string; contentType: string } | undefined {
+export function bestAttachmentFromLinks(
+  json: unknown,
+): { key: string; contentType: string } | undefined {
   const attachment = asRecord(asRecord(asRecord(json)?.links)?.attachment)
   const key = extractAttachmentKey(asString(attachment?.href))
   if (key === undefined) return undefined
@@ -62,7 +64,10 @@ export function normalizeAttachmentRecord(json: unknown): ZoteroAttachmentCandid
   const record = asRecord(json)
   const key = asString(record?.key)
   if (key === undefined || !OBJECT_KEY_PATTERN.test(key)) {
-    throw new ZoteroError('Zotero returned an attachment without a valid object key.', ZOTERO_UNEXPECTED)
+    throw new ZoteroError(
+      'Zotero returned an attachment without a valid object key.',
+      ZOTERO_UNEXPECTED,
+    )
   }
   const data = asRecord(record?.data)
   const linkMode = asString(data?.linkMode)
@@ -86,7 +91,10 @@ export function normalizeAttachmentRecord(json: unknown): ZoteroAttachmentCandid
  * @returns the winning record, or undefined when no row matches the kind.
  * @throws {ZoteroError} `ZOTERO_UNEXPECTED` on an attachment row without a valid key.
  */
-export function selectAttachment(rows: readonly unknown[], kind: string): ZoteroAttachmentCandidate | undefined {
+export function selectAttachment(
+  rows: readonly unknown[],
+  kind: string,
+): ZoteroAttachmentCandidate | undefined {
   const wantedContentType = kind === 'pdf' ? 'application/pdf' : kind
   const scored: { candidate: ZoteroAttachmentCandidate; dateAdded: string }[] = []
   for (const row of rows) {

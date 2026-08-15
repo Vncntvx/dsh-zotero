@@ -11,8 +11,17 @@
 import { Service, type Context } from '@deepseek-ai/cordis'
 import { ZoteroHttpClient } from './client.js'
 import { registerStatusCommand } from './command.js'
-import { Config as ConfigSchema, resolveConfig, type Config, type ResolvedConfig } from './config.js'
-import { ZOTERO_CAPABILITY_UNAVAILABLE, ZOTERO_PROVIDER_UNAVAILABLE, ZoteroError } from './errors.js'
+import {
+  Config as ConfigSchema,
+  resolveConfig,
+  type Config,
+  type ResolvedConfig,
+} from './config.js'
+import {
+  ZOTERO_CAPABILITY_UNAVAILABLE,
+  ZOTERO_PROVIDER_UNAVAILABLE,
+  ZoteroError,
+} from './errors.js'
 import { LocalApiProvider } from './provider-local.js'
 import { registerPromptSection } from './prompt.js'
 import { registerAttachmentTool } from './tools/attachment.js'
@@ -58,19 +67,21 @@ export class ZoteroService extends Service {
       timeoutMs: this.config.timeoutMs,
       maxResponseBytes: this.config.maxResponseBytes,
     })
-    this.registerProvider(new LocalApiProvider(client, {
-      maxDetailChars: this.config.maxDetailChars,
-      maxNoteChars: this.config.maxNoteChars,
-      maxNoteRecords: this.config.maxNoteRecords,
-      maxAnnotationRecords: this.config.maxAnnotationRecords,
-      fulltextChunkWords: this.config.fulltextChunkWords,
-      maxEvidenceChars: this.config.maxEvidenceChars,
-      maxEvidencePassages: this.config.maxEvidencePassages,
-      maxFulltextChars: this.config.maxFulltextChars,
-      maxExportChars: this.config.maxExportChars,
-      defaultStyle: this.config.defaultStyle,
-      defaultLocale: this.config.defaultLocale,
-    }))
+    this.registerProvider(
+      new LocalApiProvider(client, {
+        maxDetailChars: this.config.maxDetailChars,
+        maxNoteChars: this.config.maxNoteChars,
+        maxNoteRecords: this.config.maxNoteRecords,
+        maxAnnotationRecords: this.config.maxAnnotationRecords,
+        fulltextChunkWords: this.config.fulltextChunkWords,
+        maxEvidenceChars: this.config.maxEvidenceChars,
+        maxEvidencePassages: this.config.maxEvidencePassages,
+        maxFulltextChars: this.config.maxFulltextChars,
+        maxExportChars: this.config.maxExportChars,
+        defaultStyle: this.config.defaultStyle,
+        defaultLocale: this.config.defaultLocale,
+      }),
+    )
     registerStatusCommand(ctx, this)
     registerPromptSection(ctx)
     registerSearchTool(ctx, this, this.config)
@@ -88,7 +99,10 @@ export class ZoteroService extends Service {
    */
   registerProvider(provider: ZoteroProvider): () => void {
     if (this.providers.has(provider.id)) {
-      throw new ZoteroError(`A Zotero provider with id "${provider.id}" is already registered.`, ZOTERO_PROVIDER_UNAVAILABLE)
+      throw new ZoteroError(
+        `A Zotero provider with id "${provider.id}" is already registered.`,
+        ZOTERO_PROVIDER_UNAVAILABLE,
+      )
     }
     const providers = this.providers
     const dispose = this.ctx.effect(() => {
@@ -153,7 +167,10 @@ export class ZoteroService extends Service {
    * @param signal - caller cancellation; forwarded to the provider.
    * @returns the bounded ranked evidence with a truncation flag.
    */
-  async retrieve(request: ZoteroRetrieveRequest, signal?: AbortSignal): Promise<ZoteroRetrieveResult> {
+  async retrieve(
+    request: ZoteroRetrieveRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroRetrieveResult> {
     const provider = this.resolveProvider()
     this.requireCapability(provider, 'fulltext')
     return await provider.retrieve(request, signal)
@@ -174,7 +191,10 @@ export class ZoteroService extends Service {
   protected resolveProvider(): ZoteroProvider {
     const provider = this.providers.get(this.config.provider)
     if (provider === undefined) {
-      throw new ZoteroError(`No Zotero provider "${this.config.provider}" is registered.`, ZOTERO_PROVIDER_UNAVAILABLE)
+      throw new ZoteroError(
+        `No Zotero provider "${this.config.provider}" is registered.`,
+        ZOTERO_PROVIDER_UNAVAILABLE,
+      )
     }
     return provider
   }

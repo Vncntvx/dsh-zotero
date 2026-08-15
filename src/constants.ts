@@ -11,4 +11,10 @@
 import type { ZoteroSortField } from './types.js'
 
 /** The sort fields `zotero_search` accepts, in Zotero's own vocabulary. */
-export const ZOTERO_SORT_FIELDS: readonly ZoteroSortField[] = ['dateModified', 'dateAdded', 'date', 'title', 'creator'] as const
+export const ZOTERO_SORT_FIELDS: readonly ZoteroSortField[] = [
+  'dateModified',
+  'dateAdded',
+  'date',
+  'title',
+  'creator',
+] as const

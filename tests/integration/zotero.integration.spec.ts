@@ -25,33 +25,38 @@ let firstItemRef: string | undefined
 
 describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', () => {
   beforeAll(() => {
-    provider = new LocalApiProvider(new ZoteroHttpClient({
-      baseUrl: BASE_URL,
-      timeoutMs: 10_000,
-      maxResponseBytes: 64 * 1024 * 1024,
-    }), {
-      maxDetailChars: 3000,
-      maxNoteChars: 2000,
-      maxNoteRecords: 50,
-      maxAnnotationRecords: 100,
-      fulltextChunkWords: 200,
-      maxEvidenceChars: 6000,
-      maxEvidencePassages: 4,
-      maxFulltextChars: 250_000,
-      maxExportChars: 1_000_000,
-      defaultStyle: 'apa',
-      defaultLocale: 'en-US',
-    })
+    provider = new LocalApiProvider(
+      new ZoteroHttpClient({
+        baseUrl: BASE_URL,
+        timeoutMs: 10_000,
+        maxResponseBytes: 64 * 1024 * 1024,
+      }),
+      {
+        maxDetailChars: 3000,
+        maxNoteChars: 2000,
+        maxNoteRecords: 50,
+        maxAnnotationRecords: 100,
+        fulltextChunkWords: 200,
+        maxEvidenceChars: 6000,
+        maxEvidencePassages: 4,
+        maxFulltextChars: 250_000,
+        maxExportChars: 1_000_000,
+        defaultStyle: 'apa',
+        defaultLocale: 'en-US',
+      },
+    )
   })
 
   it('reports a connected status with API version 3', async () => {
     const status = await provider.status()
-    expect(status).toEqual(expect.objectContaining({
-      providerId: 'local',
-      connected: true,
-      apiVersion: '3',
-      diagnosis: 'ok',
-    }))
+    expect(status).toEqual(
+      expect.objectContaining({
+        providerId: 'local',
+        connected: true,
+        apiVersion: '3',
+        diagnosis: 'ok',
+      }),
+    )
   })
 
   it('browses the library and yields valid item refs', async () => {

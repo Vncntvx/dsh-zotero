@@ -14,13 +14,13 @@ export const ZOTERO_PROMPT_SECTION_NAME = 'zotero:policy'
 export const ZOTERO_PROMPT_SECTION_ORDER = 106
 
 export const ZOTERO_PROMPT_SECTION_TEXT = [
-  'Zotero (the user\'s local library):',
+  "Zotero (the user's local library):",
   '- zotero_search discovers papers by title/creator/year, or by indexed full text in everything mode; results carry stable refs of the form zotero://user/0/item/<KEY>, optionally qualified with ?server=<id>.',
-  '- zotero_get reads one item\'s metadata; include notes/annotations/attachments only when child content matters.',
+  "- zotero_get reads one item's metadata; include notes/annotations/attachments only when child content matters.",
   '- zotero_retrieve ranks evidence passages (annotations, notes, the abstract, full text) against a query; the truncated flag signals omitted passages.',
-  '- zotero_attachment resolves an item or attachment ref to the best attachment\'s verified on-disk path or a linked URL.',
+  "- zotero_attachment resolves an item or attachment ref to the best attachment's verified on-disk path or a linked URL.",
   '- zotero_export produces per-ref citations, a joined bibliography, or bibtex/biblatex/ris/csljson output.',
-  '- Refs are provenance-checked against the running Zotero instance and fail closed on mismatch. Never invent page numbers for full-text passages: only annotations carry Zotero\'s own page labels.',
+  "- Refs are provenance-checked against the running Zotero instance and fail closed on mismatch. Never invent page numbers for full-text passages: only annotations carry Zotero's own page labels.",
 ].join('\n')
 
 /** Register the policy section; the registration unwinds with the plugin fiber. */

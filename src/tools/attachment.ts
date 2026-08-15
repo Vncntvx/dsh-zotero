@@ -12,7 +12,12 @@ import { parseRef, requireLocalRef } from '../refs.js'
 import type { ZoteroService } from '../service.js'
 
 const ATTACHMENT_PARAMETERS = {
-  ref: { type: 'string', required: true, description: 'An item ref (Zotero resolves its best attachment) or a zotero://user/0/attachment/<KEY> ref for one specific attachment.' },
+  ref: {
+    type: 'string',
+    required: true,
+    description:
+      'An item ref (Zotero resolves its best attachment) or a zotero://user/0/attachment/<KEY> ref for one specific attachment.',
+  },
 } as const
 
 type AttachmentArgs = InferArgs<typeof ATTACHMENT_PARAMETERS>
@@ -20,7 +25,8 @@ type AttachmentArgs = InferArgs<typeof ATTACHMENT_PARAMETERS>
 const ATTACHMENT_OUTPUT_SCHEMA = {
   oneOf: [
     {
-      type: 'object', additionalProperties: false,
+      type: 'object',
+      additionalProperties: false,
       properties: {
         ref: { type: 'string', required: true },
         title: { type: 'string', required: true },
@@ -30,7 +36,8 @@ const ATTACHMENT_OUTPUT_SCHEMA = {
       },
     },
     {
-      type: 'object', additionalProperties: false,
+      type: 'object',
+      additionalProperties: false,
       properties: {
         ref: { type: 'string', required: true },
         title: { type: 'string', required: true },
@@ -51,28 +58,30 @@ export function renderAttachment(_args: AttachmentArgs, value: AttachmentOutput)
 }
 
 export function registerAttachmentTool(ctx: Context, service: ZoteroService): void {
-  ctx.tools.register(defineTool({
-    name: 'zotero_attachment',
-    description: [
-      'Resolve a Zotero ref to a usable attachment location: an item ref yields the best attachment Zotero itself picks,',
-      'an attachment ref pinpoints one attachment. Returns the verified on-disk file path, or the linked URL for web-linked attachments.',
-    ].join(' '),
-    parameters: ATTACHMENT_PARAMETERS,
-    output: {
-      schema: ATTACHMENT_OUTPUT_SCHEMA,
-      render: renderAttachment,
-    },
-    presentCall: (args) => ({
-      card: 'generic',
-      kind: 'read',
-      title: 'Resolve Zotero attachment',
-      rawInput: args.ref,
+  ctx.tools.register(
+    defineTool({
+      name: 'zotero_attachment',
+      description: [
+        'Resolve a Zotero ref to a usable attachment location: an item ref yields the best attachment Zotero itself picks,',
+        'an attachment ref pinpoints one attachment. Returns the verified on-disk file path, or the linked URL for web-linked attachments.',
+      ].join(' '),
+      parameters: ATTACHMENT_PARAMETERS,
+      output: {
+        schema: ATTACHMENT_OUTPUT_SCHEMA,
+        render: renderAttachment,
+      },
+      presentCall: (args) => ({
+        card: 'generic',
+        kind: 'read',
+        title: 'Resolve Zotero attachment',
+        rawInput: args.ref,
+      }),
+      isConcurrencySafe: () => true,
+      async execute(args, exec) {
+        const ref = parseRef(args.ref)
+        requireLocalRef(ref, ['item', 'attachment'])
+        return await service.attachment(ref, exec.signal)
+      },
     }),
-    isConcurrencySafe: () => true,
-    async execute(args, exec) {
-      const ref = parseRef(args.ref)
-      requireLocalRef(ref, ['item', 'attachment'])
-      return await service.attachment(ref, exec.signal)
-    },
-  }))
+  )
 }

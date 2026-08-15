@@ -16,7 +16,8 @@
 import { ZOTERO_INVALID_REF, ZoteroError } from './errors.js'
 import type { ZoteroKind, ZoteroObjectRef } from './types.js'
 
-const REF_PATTERN = /^zotero:\/\/(user|group)\/(\d+)\/(item|attachment|annotation|collection|search)\/([A-Z0-9]{8})(?:\?server=([A-Za-z0-9_-]{1,64}))?$/
+const REF_PATTERN =
+  /^zotero:\/\/(user|group)\/(\d+)\/(item|attachment|annotation|collection|search)\/([A-Z0-9]{8})(?:\?server=([A-Za-z0-9_-]{1,64}))?$/
 
 /** True when the given string matches the ref grammar without fully parsing it. */
 export function isRefString(value: string): boolean {
@@ -38,7 +39,12 @@ export function parseRef(value: string): ZoteroObjectRef {
     )
   }
   const [, libraryType, id, kind, key, serverId] = match
-  return { library: { type: libraryType as 'user' | 'group', id: Number(id) }, kind: kind as ZoteroKind, key, serverId }
+  return {
+    library: { type: libraryType as 'user' | 'group', id: Number(id) },
+    kind: kind as ZoteroKind,
+    key,
+    serverId,
+  }
 }
 
 /** Format a parsed ref back to its canonical string form. */
@@ -88,7 +94,10 @@ export function assertKind(ref: ZoteroObjectRef, kinds: readonly ZoteroKind[]): 
 }
 
 /** Shared guard for provider use: local library only, plus an optional kind filter. */
-export function requireLocalRef(ref: ZoteroObjectRef, kinds?: readonly ZoteroKind[]): ZoteroObjectRef {
+export function requireLocalRef(
+  ref: ZoteroObjectRef,
+  kinds?: readonly ZoteroKind[],
+): ZoteroObjectRef {
   assertLocalRef(ref)
   if (kinds !== undefined) assertKind(ref, kinds)
   return ref

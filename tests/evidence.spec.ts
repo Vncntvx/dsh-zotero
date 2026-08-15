@@ -3,7 +3,13 @@ import { chunkText, rankChunks, tokenize } from '../src/evidence.js'
 
 describe('tokenize', () => {
   it('lowercases and splits on non-alphanumeric boundaries', () => {
-    expect(tokenize('Attention, is ALL you need!')).toEqual(['attention', 'is', 'all', 'you', 'need'])
+    expect(tokenize('Attention, is ALL you need!')).toEqual([
+      'attention',
+      'is',
+      'all',
+      'you',
+      'need',
+    ])
   })
 
   it('keeps unicode letters and digits together', () => {

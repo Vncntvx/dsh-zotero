@@ -57,7 +57,10 @@ describe('parseRef', () => {
   })
 
   it('accepts group libraries and non-zero user ids in the grammar (provider gates them later)', () => {
-    expect(parseRef('zotero://group/42/collection/ABCD1234').library).toEqual({ type: 'group', id: 42 })
+    expect(parseRef('zotero://group/42/collection/ABCD1234').library).toEqual({
+      type: 'group',
+      id: 42,
+    })
     expect(parseRef('zotero://user/123/item/ABCD1234').library).toEqual({ type: 'user', id: 123 })
   })
 
@@ -90,8 +93,14 @@ describe('formatRef', () => {
   })
 
   it('formats a server qualifier onto a parsed ref', () => {
-    expect(formatRef({ library: { type: 'user', id: 0 }, kind: 'item', key: 'ABCD1234', serverId: 'S1' }))
-      .toBe('zotero://user/0/item/ABCD1234?server=S1')
+    expect(
+      formatRef({
+        library: { type: 'user', id: 0 },
+        kind: 'item',
+        key: 'ABCD1234',
+        serverId: 'S1',
+      }),
+    ).toBe('zotero://user/0/item/ABCD1234?server=S1')
   })
 })
 

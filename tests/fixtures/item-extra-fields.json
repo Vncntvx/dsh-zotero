@@ -4,7 +4,10 @@
   "futureFieldThatClientsMustIgnore": { "nested": true },
   "library": { "type": "user", "id": 999, "name": "user", "links": {} },
   "links": {
-    "self": { "href": "http://localhost:23119/api/users/0/items/MNOP3456", "type": "application/json" }
+    "self": {
+      "href": "http://localhost:23119/api/users/0/items/MNOP3456",
+      "type": "application/json"
+    }
   },
   "meta": {
     "creatorSummary": "Unknown, Author",

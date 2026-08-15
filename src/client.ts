@@ -54,7 +54,11 @@ export interface ZoteroHttpResponse {
  * unreachable-instance diagnosis, and everything else is an opaque
  * unexpected failure.
  */
-function translateFetchError(error: unknown, callerSignal: AbortSignal | undefined, timeoutMs: number): never {
+function translateFetchError(
+  error: unknown,
+  callerSignal: AbortSignal | undefined,
+  timeoutMs: number,
+): never {
   if (error instanceof ZoteroError) {
     throw error
   }
@@ -65,12 +69,17 @@ function translateFetchError(error: unknown, callerSignal: AbortSignal | undefin
     throw new ZoteroError(`Zotero did not respond within ${timeoutMs} ms.`, ZOTERO_TIMEOUT)
   }
   if (/redirect/i.test(errorChainText(error))) {
-    throw new ZoteroError('Zotero responded with a redirect, which this plugin refuses to follow.', ZOTERO_UNEXPECTED)
+    throw new ZoteroError(
+      'Zotero responded with a redirect, which this plugin refuses to follow.',
+      ZOTERO_UNEXPECTED,
+    )
   }
   if (isUnreachableCause(error)) {
     throw new ZoteroError(NOT_RUNNING_MESSAGE, ZOTERO_NOT_RUNNING, { cause: errorCauseOf(error) })
   }
-  throw new ZoteroError('Zotero local API request failed unexpectedly.', ZOTERO_UNEXPECTED, { cause: errorCauseOf(error) })
+  throw new ZoteroError('Zotero local API request failed unexpectedly.', ZOTERO_UNEXPECTED, {
+    cause: errorCauseOf(error),
+  })
 }
 
 /** Translate a non-2xx status. The 412 identity path is handled before this runs. */
@@ -109,7 +118,10 @@ async function readBody(response: Response, maxResponseBytes: number): Promise<s
     total += value.byteLength
     if (total > maxResponseBytes) {
       await reader.cancel()
-      throw new ZoteroError(`Zotero response exceeded the ${maxResponseBytes}-byte limit.`, ZOTERO_RESPONSE_TOO_LARGE)
+      throw new ZoteroError(
+        `Zotero response exceeded the ${maxResponseBytes}-byte limit.`,
+        ZOTERO_RESPONSE_TOO_LARGE,
+      )
     }
     text += decoder.decode(value, { stream: true })
   }
@@ -134,13 +146,19 @@ export class ZoteroHttpClient {
    * @param path - relative path, e.g. `users/0/items/ABCD1234`.
    * @param search - query parameters, serialized verbatim.
    */
-  async get(path: string, search?: URLSearchParams, opts: ZoteroHttpGetOptions = {}): Promise<ZoteroHttpResponse> {
+  async get(
+    path: string,
+    search?: URLSearchParams,
+    opts: ZoteroHttpGetOptions = {},
+  ): Promise<ZoteroHttpResponse> {
     const url = new URL(path, this.baseUrlWithSlash)
     url.search = search?.toString() ?? ''
     const timeoutSignal = AbortSignal.timeout(this.options.timeoutMs)
-    const combined = opts.signal === undefined ? timeoutSignal : AbortSignal.any([opts.signal, timeoutSignal])
+    const combined =
+      opts.signal === undefined ? timeoutSignal : AbortSignal.any([opts.signal, timeoutSignal])
     const headers: Record<string, string> = { 'Zotero-API-Version': '3' }
-    const serverId = opts.serverId ?? (opts.sendServerId === false ? undefined : this.currentServerId)
+    const serverId =
+      opts.serverId ?? (opts.sendServerId === false ? undefined : this.currentServerId)
     if (serverId !== undefined) headers['Zotero-Server-ID'] = serverId
     let response: Response
     try {
@@ -173,13 +191,19 @@ export class ZoteroHttpClient {
   }
 
   /** GET and parse a JSON response. */
-  async getJson<T>(path: string, search?: URLSearchParams, opts: ZoteroHttpGetOptions = {}): Promise<{ json: T; body: string; headers: Headers }> {
+  async getJson<T>(
+    path: string,
+    search?: URLSearchParams,
+    opts: ZoteroHttpGetOptions = {},
+  ): Promise<{ json: T; body: string; headers: Headers }> {
     const { body, headers } = await this.get(path, search, opts)
     let json: T
     try {
       json = JSON.parse(body) as T
     } catch (error) {
-      throw new ZoteroError('Zotero returned an unparseable response.', ZOTERO_UNEXPECTED, { cause: error })
+      throw new ZoteroError('Zotero returned an unparseable response.', ZOTERO_UNEXPECTED, {
+        cause: error,
+      })
     }
     return { json, body, headers }
   }

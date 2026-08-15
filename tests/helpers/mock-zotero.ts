@@ -107,10 +107,13 @@ export class MockZotero {
         }, ms).unref()
       },
     }
-    const route = this.routes.find((candidate) => (
-      candidate.method === (req.method ?? 'GET')
-      && (typeof candidate.matcher === 'string' ? url.pathname === candidate.matcher : candidate.matcher.test(url.pathname))
-    ))
+    const route = this.routes.find(
+      (candidate) =>
+        candidate.method === (req.method ?? 'GET') &&
+        (typeof candidate.matcher === 'string'
+          ? url.pathname === candidate.matcher
+          : candidate.matcher.test(url.pathname)),
+    )
     if (route === undefined) {
       helpers.raw(404, { 'Content-Type': 'text/plain' }, 'Not found')
       return

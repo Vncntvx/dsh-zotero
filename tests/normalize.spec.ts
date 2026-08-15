@@ -86,7 +86,11 @@ describe('normalizeSearchItem', () => {
   })
 
   it('falls back to the top-level itemType when data.itemType is absent', () => {
-    const item = normalizeSearchItem({ key: 'ABCD1234', itemType: 'book', data: { title: 'Top Level Type' } })
+    const item = normalizeSearchItem({
+      key: 'ABCD1234',
+      itemType: 'book',
+      data: { title: 'Top Level Type' },
+    })
     expect(item.itemType).toBe('book')
   })
 
@@ -109,20 +113,31 @@ describe('normalizeSearchItem', () => {
 
 describe('extractAttachmentKey', () => {
   it('extracts an 8-character key from an attachment href', () => {
-    expect(extractAttachmentKey('http://localhost:23119/api/users/0/items/WXYZ6789')).toBe('WXYZ6789')
-    expect(extractAttachmentKey('https://api.zotero.org/users/1/items/WXYZ6789?format=json')).toBe('WXYZ6789')
+    expect(extractAttachmentKey('http://localhost:23119/api/users/0/items/WXYZ6789')).toBe(
+      'WXYZ6789',
+    )
+    expect(extractAttachmentKey('https://api.zotero.org/users/1/items/WXYZ6789?format=json')).toBe(
+      'WXYZ6789',
+    )
   })
 
   it('returns undefined when no key is present', () => {
-    expect(extractAttachmentKey('http://localhost:23119/api/users/0/items/not-a-key')).toBeUndefined()
+    expect(
+      extractAttachmentKey('http://localhost:23119/api/users/0/items/not-a-key'),
+    ).toBeUndefined()
     expect(extractAttachmentKey(undefined)).toBeUndefined()
   })
 })
 
 describe('normalizeScopeEntry', () => {
   it('reads the key and data name of a collection or saved search', () => {
-    expect(normalizeScopeEntry({ key: 'COLL1234', version: 1, data: { key: 'COLL1234', version: 1, name: 'LLM Papers' } }))
-      .toEqual({ key: 'COLL1234', name: 'LLM Papers' })
+    expect(
+      normalizeScopeEntry({
+        key: 'COLL1234',
+        version: 1,
+        data: { key: 'COLL1234', version: 1, name: 'LLM Papers' },
+      }),
+    ).toEqual({ key: 'COLL1234', name: 'LLM Papers' })
   })
 
   it('tolerates a missing name and rejects a broken key', () => {
@@ -139,16 +154,28 @@ describe('matchScopeName', () => {
   ]
 
   it('prefers an exact Unicode match', () => {
-    expect(matchScopeName(entries, 'LLM')).toEqual({ exact: true, matched: [{ key: 'AAAA1111', name: 'LLM' }] })
-    expect(matchScopeName(entries, 'LLMs')).toEqual({ exact: true, matched: [{ key: 'BBBB2222', name: 'LLMs' }] })
+    expect(matchScopeName(entries, 'LLM')).toEqual({
+      exact: true,
+      matched: [{ key: 'AAAA1111', name: 'LLM' }],
+    })
+    expect(matchScopeName(entries, 'LLMs')).toEqual({
+      exact: true,
+      matched: [{ key: 'BBBB2222', name: 'LLMs' }],
+    })
   })
 
   it('falls back to a case-insensitive match', () => {
-    expect(matchScopeName(entries, 'llm')).toEqual({ exact: false, matched: [{ key: 'AAAA1111', name: 'LLM' }] })
+    expect(matchScopeName(entries, 'llm')).toEqual({
+      exact: false,
+      matched: [{ key: 'AAAA1111', name: 'LLM' }],
+    })
   })
 
   it('returns every case-insensitive match and an empty list otherwise', () => {
-    expect(matchScopeName(entries, 'reasoning')).toEqual({ exact: false, matched: [{ key: 'CCCC3333', name: 'Reasoning' }] })
+    expect(matchScopeName(entries, 'reasoning')).toEqual({
+      exact: false,
+      matched: [{ key: 'CCCC3333', name: 'Reasoning' }],
+    })
     expect(matchScopeName(entries, 'vision')).toEqual({ exact: false, matched: [] })
   })
 })
@@ -168,7 +195,9 @@ describe('nearScopeCandidates', () => {
   })
 
   it('respects the limit and returns nothing without matches', () => {
-    expect(nearScopeCandidates(entries, 'llm', 1)).toEqual([{ key: 'BBBB2222', name: 'LLM Inference' }])
+    expect(nearScopeCandidates(entries, 'llm', 1)).toEqual([
+      { key: 'BBBB2222', name: 'LLM Inference' },
+    ])
     expect(nearScopeCandidates(entries, 'quantization')).toEqual([])
   })
 
@@ -186,13 +215,15 @@ describe('nearScopeCandidates', () => {
 
 describe('normalizeCreators', () => {
   it('formats name-field creators and first/last pairs, skipping empties', () => {
-    expect(normalizeCreators({
-      creators: [
-        { creatorType: 'author', firstName: 'Tri', lastName: 'Dao' },
-        { creatorType: 'author', firstName: '', lastName: 'Fu' },
-        { creatorType: 'editor', name: 'OpenAI Research' },
-      ],
-    })).toEqual(['Tri Dao', 'Fu', 'OpenAI Research'])
+    expect(
+      normalizeCreators({
+        creators: [
+          { creatorType: 'author', firstName: 'Tri', lastName: 'Dao' },
+          { creatorType: 'author', firstName: '', lastName: 'Fu' },
+          { creatorType: 'editor', name: 'OpenAI Research' },
+        ],
+      }),
+    ).toEqual(['Tri Dao', 'Fu', 'OpenAI Research'])
   })
 
   it('returns an empty list when creators are absent or not an array', () => {
@@ -214,7 +245,10 @@ describe('normalizeVenue', () => {
 
 describe('collectionKeysOf', () => {
   it('reads collection keys from the data block', () => {
-    expect(collectionKeysOf({ data: { collections: ['COLL1234', 'COLL5678'] } })).toEqual(['COLL1234', 'COLL5678'])
+    expect(collectionKeysOf({ data: { collections: ['COLL1234', 'COLL5678'] } })).toEqual([
+      'COLL1234',
+      'COLL5678',
+    ])
     expect(collectionKeysOf({ data: {} })).toEqual([])
     expect(collectionKeysOf({ data: { collections: 'nope' } })).toEqual([])
   })
@@ -231,8 +265,9 @@ describe('normalizeNoteRecord', () => {
   })
 
   it('tolerates a missing note body', () => {
-    expect(normalizeNoteRecord({ key: 'NOTE1111', data: { itemType: 'note' } }, undefined, 100))
-      .toEqual({ ref: 'zotero://user/0/item/NOTE1111', text: '', truncated: false })
+    expect(
+      normalizeNoteRecord({ key: 'NOTE1111', data: { itemType: 'note' } }, undefined, 100),
+    ).toEqual({ ref: 'zotero://user/0/item/NOTE1111', text: '', truncated: false })
   })
 })
 
@@ -262,8 +297,19 @@ describe('normalizeAnnotationRecord', () => {
   })
 
   it('tolerates image annotations without annotationText', () => {
-    expect(normalizeAnnotationRecord({ key: 'ANNO2222', data: { itemType: 'annotation', annotationType: 'image' } }, undefined))
-      .toEqual({ ref: 'zotero://user/0/item/ANNO2222', type: 'image', text: '', comment: undefined, color: undefined, pageLabel: undefined })
+    expect(
+      normalizeAnnotationRecord(
+        { key: 'ANNO2222', data: { itemType: 'annotation', annotationType: 'image' } },
+        undefined,
+      ),
+    ).toEqual({
+      ref: 'zotero://user/0/item/ANNO2222',
+      type: 'image',
+      text: '',
+      comment: undefined,
+      color: undefined,
+      pageLabel: undefined,
+    })
   })
 })
 
@@ -271,25 +317,58 @@ describe('partitionChildren', () => {
   it('partitions children into notes, annotations, and attachments', () => {
     const rows = [
       { key: 'NOTE1111', data: { itemType: 'note', note: 'n' } },
-      { key: 'ANNO1111', data: { itemType: 'annotation', annotationType: 'highlight', annotationText: 'a' } },
-      { key: 'WXYZ6789', data: { itemType: 'attachment', title: 'p', contentType: 'application/pdf', linkMode: 'imported_file' } },
+      {
+        key: 'ANNO1111',
+        data: { itemType: 'annotation', annotationType: 'highlight', annotationText: 'a' },
+      },
+      {
+        key: 'WXYZ6789',
+        data: {
+          itemType: 'attachment',
+          title: 'p',
+          contentType: 'application/pdf',
+          linkMode: 'imported_file',
+        },
+      },
       { key: 'AAAA1111', data: { itemType: 'note', note: 'n2' } },
     ]
     const partitioned = partitionChildren(rows, 'S1', 100)
     expect(partitioned.notes).toHaveLength(2)
     expect(partitioned.annotations).toHaveLength(1)
     expect(partitioned.attachments).toHaveLength(1)
-    expect(partitioned.attachments[0]).toEqual({ key: 'WXYZ6789', title: 'p', contentType: 'application/pdf', linkMode: 'imported_file' })
+    expect(partitioned.attachments[0]).toEqual({
+      key: 'WXYZ6789',
+      title: 'p',
+      contentType: 'application/pdf',
+      linkMode: 'imported_file',
+    })
     expect(partitioned.notes[0]!.text).toBe('n')
   })
 
   it('sorts annotations by their Zotero sort index', () => {
     const rows = [
-      { key: 'ANNO2222', data: { itemType: 'annotation', annotationType: 'highlight', annotationText: 'second', annotationSortIndex: '00002' } },
-      { key: 'ANNO1111', data: { itemType: 'annotation', annotationType: 'highlight', annotationText: 'first', annotationSortIndex: '00001' } },
+      {
+        key: 'ANNO2222',
+        data: {
+          itemType: 'annotation',
+          annotationType: 'highlight',
+          annotationText: 'second',
+          annotationSortIndex: '00002',
+        },
+      },
+      {
+        key: 'ANNO1111',
+        data: {
+          itemType: 'annotation',
+          annotationType: 'highlight',
+          annotationText: 'first',
+          annotationSortIndex: '00001',
+        },
+      },
     ]
-    expect(partitionChildren(rows, undefined, 100).annotations.map((annotation) => annotation.text))
-      .toEqual(['first', 'second'])
+    expect(
+      partitionChildren(rows, undefined, 100).annotations.map((annotation) => annotation.text),
+    ).toEqual(['first', 'second'])
   })
 
   it('fails loud on a child without a valid key', () => {
@@ -303,7 +382,11 @@ describe('normalizeItemDetail', () => {
     version: 3,
     links: {
       self: { href: 'http://localhost:23119/api/users/0/items/ABCD1234', type: 'application/json' },
-      attachment: { href: 'http://localhost:23119/api/users/0/items/WXYZ6789', type: 'application/json', attachmentType: 'application/pdf' },
+      attachment: {
+        href: 'http://localhost:23119/api/users/0/items/WXYZ6789',
+        type: 'application/json',
+        attachmentType: 'application/pdf',
+      },
     },
     meta: { creatorSummary: 'Dao, Tri', parsedDate: '2023-07-28', numChildren: 3 },
     data: {
@@ -322,11 +405,28 @@ describe('normalizeItemDetail', () => {
 
   const CHILDREN = [
     { key: 'NOTE1111', data: { itemType: 'note', note: 'my note' } },
-    { key: 'ANNO1111', data: { itemType: 'annotation', annotationType: 'highlight', annotationText: 'insight', annotationSortIndex: '00001', annotationColor: '#ffd400' } },
-    { key: 'WXYZ6789', data: { itemType: 'attachment', title: 'Full Text PDF', contentType: 'application/pdf', linkMode: 'imported_file' } },
+    {
+      key: 'ANNO1111',
+      data: {
+        itemType: 'annotation',
+        annotationType: 'highlight',
+        annotationText: 'insight',
+        annotationSortIndex: '00001',
+        annotationColor: '#ffd400',
+      },
+    },
+    {
+      key: 'WXYZ6789',
+      data: {
+        itemType: 'attachment',
+        title: 'Full Text PDF',
+        contentType: 'application/pdf',
+        linkMode: 'imported_file',
+      },
+    },
   ]
 
-  it('normalizes a full detail with every include and Zotero\'s best attachment', () => {
+  it("normalizes a full detail with every include and Zotero's best attachment", () => {
     const detail = normalizeItemDetail({
       parent: PARENT,
       serverId: 'S1',
@@ -356,10 +456,42 @@ describe('normalizeItemDetail', () => {
         { ref: 'zotero://user/0/collection/COLL9999?server=S1' },
       ],
       children: { total: 3 },
-      bestAttachment: { ref: 'zotero://user/0/attachment/WXYZ6789?server=S1', title: 'Full Text PDF', contentType: 'application/pdf' },
-      notes: { total: 1, returned: 1, items: [{ ref: 'zotero://user/0/item/NOTE1111?server=S1', text: 'my note', truncated: false }] },
-      annotations: { total: 1, returned: 1, items: [{ ref: 'zotero://user/0/item/ANNO1111?server=S1', type: 'highlight', text: 'insight', color: '#ffd400' }] },
-      attachments: { total: 1, returned: 1, items: [{ ref: 'zotero://user/0/attachment/WXYZ6789?server=S1', title: 'Full Text PDF', contentType: 'application/pdf', linkMode: 'imported_file' }] },
+      bestAttachment: {
+        ref: 'zotero://user/0/attachment/WXYZ6789?server=S1',
+        title: 'Full Text PDF',
+        contentType: 'application/pdf',
+      },
+      notes: {
+        total: 1,
+        returned: 1,
+        items: [
+          { ref: 'zotero://user/0/item/NOTE1111?server=S1', text: 'my note', truncated: false },
+        ],
+      },
+      annotations: {
+        total: 1,
+        returned: 1,
+        items: [
+          {
+            ref: 'zotero://user/0/item/ANNO1111?server=S1',
+            type: 'highlight',
+            text: 'insight',
+            color: '#ffd400',
+          },
+        ],
+      },
+      attachments: {
+        total: 1,
+        returned: 1,
+        items: [
+          {
+            ref: 'zotero://user/0/attachment/WXYZ6789?server=S1',
+            title: 'Full Text PDF',
+            contentType: 'application/pdf',
+            linkMode: 'imported_file',
+          },
+        ],
+      },
       version: 3,
       serverId: 'S1',
     })
@@ -390,7 +522,10 @@ describe('normalizeItemDetail', () => {
 
   it('omits the abstract entirely when it is empty', () => {
     const detail = normalizeItemDetail({
-      parent: { key: 'ABCD1234', data: { itemType: 'journalArticle', title: 'T', abstractNote: '' } },
+      parent: {
+        key: 'ABCD1234',
+        data: { itemType: 'journalArticle', title: 'T', abstractNote: '' },
+      },
       include: new Set(),
       maxAbstractChars: 100,
       maxNoteChars: 2000,
@@ -403,7 +538,10 @@ describe('normalizeItemDetail', () => {
 
   it('truncates the abstract at the budget and flags it', () => {
     const detail = normalizeItemDetail({
-      parent: { key: 'ABCD1234', data: { itemType: 'journalArticle', title: 'T', abstractNote: 'abcdefgh' } },
+      parent: {
+        key: 'ABCD1234',
+        data: { itemType: 'journalArticle', title: 'T', abstractNote: 'abcdefgh' },
+      },
       include: new Set(),
       maxAbstractChars: 4,
       maxNoteChars: 2000,
@@ -421,7 +559,12 @@ describe('normalizeItemDetail', () => {
     }))
     const annotations = Array.from({ length: 105 }, (_, i) => ({
       key: `ANNO${String(i).padStart(4, '0')}`,
-      data: { itemType: 'annotation', annotationType: 'highlight', annotationText: `a ${i}`, annotationSortIndex: String(i).padStart(5, '0') },
+      data: {
+        itemType: 'annotation',
+        annotationType: 'highlight',
+        annotationText: `a ${i}`,
+        annotationSortIndex: String(i).padStart(5, '0'),
+      },
     }))
     const detail = normalizeItemDetail({
       parent: { key: 'ABCD1234', data: { itemType: 'journalArticle', title: 'T' } },
@@ -451,9 +594,13 @@ describe('normalizeItemDetail', () => {
     expect(detail.children).toEqual({ total: 1 })
   })
 
-  it('keeps Zotero\'s numChildren when it disagrees with the fetched rows', () => {
+  it("keeps Zotero's numChildren when it disagrees with the fetched rows", () => {
     const detail = normalizeItemDetail({
-      parent: { key: 'ABCD1234', meta: { numChildren: 7 }, data: { itemType: 'journalArticle', title: 'T' } },
+      parent: {
+        key: 'ABCD1234',
+        meta: { numChildren: 7 },
+        data: { itemType: 'journalArticle', title: 'T' },
+      },
       include: new Set(['notes']),
       childrenRows: [{ key: 'NOTE1111', data: { itemType: 'note', note: 'n' } }],
       maxAbstractChars: 100,
@@ -467,10 +614,22 @@ describe('normalizeItemDetail', () => {
   it('borrows the attachment title only when the children carry it', () => {
     const withLinks = {
       key: 'ABCD1234',
-      links: { attachment: { href: 'http://localhost:23119/api/users/0/items/WXYZ6789', attachmentType: 'application/pdf' } },
+      links: {
+        attachment: {
+          href: 'http://localhost:23119/api/users/0/items/WXYZ6789',
+          attachmentType: 'application/pdf',
+        },
+      },
       data: { itemType: 'journalArticle', title: 'T' },
     }
-    const detail = normalizeItemDetail({ parent: withLinks, include: new Set(), maxAbstractChars: 100, maxNoteChars: 2000, maxNoteRecords: 50, maxAnnotationRecords: 100 })
+    const detail = normalizeItemDetail({
+      parent: withLinks,
+      include: new Set(),
+      maxAbstractChars: 100,
+      maxNoteChars: 2000,
+      maxNoteRecords: 50,
+      maxAnnotationRecords: 100,
+    })
     expect(detail.bestAttachment).toEqual({
       ref: 'zotero://user/0/attachment/WXYZ6789',
       title: '',
@@ -521,14 +680,25 @@ describe('normalizeItemDetail', () => {
   })
 
   it('fails loud when the parent has no valid key', () => {
-    const error = expectUnexpected(() => normalizeItemDetail({ parent: {}, include: new Set(), maxAbstractChars: 100, maxNoteChars: 2000, maxNoteRecords: 50, maxAnnotationRecords: 100 }))
+    const error = expectUnexpected(() =>
+      normalizeItemDetail({
+        parent: {},
+        include: new Set(),
+        maxAbstractChars: 100,
+        maxNoteChars: 2000,
+        maxNoteRecords: 50,
+        maxAnnotationRecords: 100,
+      }),
+    )
     expect(error.code).toBe(ZOTERO_UNEXPECTED)
   })
 })
 
 describe('annotation and note failure modes', () => {
   it('fails loud on an annotation without a valid key', () => {
-    const error = expectUnexpected(() => normalizeAnnotationRecord({ data: { annotationText: 'x' } }))
+    const error = expectUnexpected(() =>
+      normalizeAnnotationRecord({ data: { annotationText: 'x' } }),
+    )
     expect(error.code).toBe(ZOTERO_UNEXPECTED)
   })
 })
@@ -540,7 +710,15 @@ describe('normalizeItemDetail include and fallback branches', () => {
       include: new Set(['annotations']),
       childrenRows: [
         { key: 'NOTE1111', data: { itemType: 'note', note: 'n' } },
-        { key: 'ANNO1111', data: { itemType: 'annotation', annotationType: 'highlight', annotationText: 'a', annotationSortIndex: '00001' } },
+        {
+          key: 'ANNO1111',
+          data: {
+            itemType: 'annotation',
+            annotationType: 'highlight',
+            annotationText: 'a',
+            annotationSortIndex: '00001',
+          },
+        },
       ],
       maxAbstractChars: 100,
       maxNoteChars: 2000,
@@ -573,8 +751,19 @@ describe('normalizeScopeEntry tolerances', () => {
 describe('partitionChildren tolerances', () => {
   it('sorts annotations without a sort index first', () => {
     const rows = [
-      { key: 'ANNO2222', data: { itemType: 'annotation', annotationType: 'highlight', annotationText: 'sorted', annotationSortIndex: '00002' } },
-      { key: 'ANNO1111', data: { itemType: 'annotation', annotationType: 'highlight', annotationText: 'unsorted' } },
+      {
+        key: 'ANNO2222',
+        data: {
+          itemType: 'annotation',
+          annotationType: 'highlight',
+          annotationText: 'sorted',
+          annotationSortIndex: '00002',
+        },
+      },
+      {
+        key: 'ANNO1111',
+        data: { itemType: 'annotation', annotationType: 'highlight', annotationText: 'unsorted' },
+      },
     ]
     const partitioned = partitionChildren(rows, undefined, 100)
     expect(partitioned.annotations.map((annotation) => annotation.ref)).toEqual([
@@ -584,7 +773,11 @@ describe('partitionChildren tolerances', () => {
   })
 
   it('skips non-object child rows', () => {
-    const partitioned = partitionChildren(['junk', { key: 'NOTE1111', data: { itemType: 'note', note: 'n' } }], undefined, 100)
+    const partitioned = partitionChildren(
+      ['junk', { key: 'NOTE1111', data: { itemType: 'note', note: 'n' } }],
+      undefined,
+      100,
+    )
     expect(partitioned.notes).toHaveLength(1)
     expect(partitioned.annotations).toHaveLength(0)
     expect(partitioned.attachments).toHaveLength(0)
@@ -596,7 +789,12 @@ describe('normalizeItemDetail attachment and title tolerances', () => {
     const detail = normalizeItemDetail({
       parent: { key: 'ABCD1234', data: { itemType: 'journalArticle', title: 'T' } },
       include: new Set(['attachments']),
-      childrenRows: [{ key: 'WXYZ6789', data: { itemType: 'attachment', title: 'Snapshot', contentType: 'text/html' } }],
+      childrenRows: [
+        {
+          key: 'WXYZ6789',
+          data: { itemType: 'attachment', title: 'Snapshot', contentType: 'text/html' },
+        },
+      ],
       maxAbstractChars: 100,
       maxNoteChars: 2000,
       maxNoteRecords: 50,
@@ -641,14 +839,19 @@ describe('normalization of hostile inputs', () => {
 
 describe('normalizeCreators partial names', () => {
   it('fills missing first or last names from the other field', () => {
-    expect(normalizeCreators({ creators: [{ creatorType: 'author', lastName: 'Dao' }] })).toEqual(['Dao'])
-    expect(normalizeCreators({ creators: [{ creatorType: 'author', firstName: 'Tri' }] })).toEqual(['Tri'])
+    expect(normalizeCreators({ creators: [{ creatorType: 'author', lastName: 'Dao' }] })).toEqual([
+      'Dao',
+    ])
+    expect(normalizeCreators({ creators: [{ creatorType: 'author', firstName: 'Tri' }] })).toEqual([
+      'Tri',
+    ])
   })
 })
 
 describe('normalizeAnnotationRecord missing type', () => {
   it('defaults a missing annotation type to an empty string', () => {
-    expect(normalizeAnnotationRecord({ key: 'ANNO1111', data: { itemType: 'annotation' } }))
-      .toEqual({ ref: 'zotero://user/0/item/ANNO1111', type: '', text: '' })
+    expect(
+      normalizeAnnotationRecord({ key: 'ANNO1111', data: { itemType: 'annotation' } }),
+    ).toEqual({ ref: 'zotero://user/0/item/ANNO1111', type: '', text: '' })
   })
 })

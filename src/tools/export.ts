@@ -28,10 +28,17 @@ const EXPORT_PARAMETERS = {
     type: 'string',
     enum: ['citation', 'bibliography', 'bibtex', 'biblatex', 'ris', 'csljson'],
     required: true,
-    description: 'citation: per-ref HTML citations; bibliography: joined CSL bibliography; the rest: raw translator exports.',
+    description:
+      'citation: per-ref HTML citations; bibliography: joined CSL bibliography; the rest: raw translator exports.',
   },
-  style: { type: 'string', description: 'CSL style id for citation/bibliography (defaults to the configured style).' },
-  locale: { type: 'string', description: 'CSL locale for citation/bibliography (defaults to the configured locale).' },
+  style: {
+    type: 'string',
+    description: 'CSL style id for citation/bibliography (defaults to the configured style).',
+  },
+  locale: {
+    type: 'string',
+    description: 'CSL locale for citation/bibliography (defaults to the configured locale).',
+  },
 } as const
 
 type ExportArgs = InferArgs<typeof EXPORT_PARAMETERS>
@@ -39,15 +46,18 @@ type ExportArgs = InferArgs<typeof EXPORT_PARAMETERS>
 const EXPORT_OUTPUT_SCHEMA = {
   oneOf: [
     {
-      type: 'object', additionalProperties: false,
+      type: 'object',
+      additionalProperties: false,
       properties: {
         format: { type: 'string', const: 'citation', required: true },
         style: { type: 'string' },
         locale: { type: 'string' },
         citations: {
-          type: 'array', required: true,
+          type: 'array',
+          required: true,
           items: {
-            type: 'object', additionalProperties: false,
+            type: 'object',
+            additionalProperties: false,
             properties: {
               ref: { type: 'string', required: true },
               text: { type: 'string', required: true },
@@ -57,9 +67,14 @@ const EXPORT_OUTPUT_SCHEMA = {
       },
     },
     {
-      type: 'object', additionalProperties: false,
+      type: 'object',
+      additionalProperties: false,
       properties: {
-        format: { type: 'string', enum: ['bibliography', 'bibtex', 'biblatex', 'ris', 'csljson'], required: true },
+        format: {
+          type: 'string',
+          enum: ['bibliography', 'bibtex', 'biblatex', 'ris', 'csljson'],
+          required: true,
+        },
         style: { type: 'string' },
         locale: { type: 'string' },
         text: { type: 'string', required: true },
@@ -95,32 +110,43 @@ function buildRequest(args: ExportArgs): ZoteroExportRequest {
 
 export function renderExport(_args: ExportArgs, value: ExportOutput): ContentBlock[] {
   if (value.format === 'citation') {
-    return [{ type: 'text', text: value.citations.map((entry) => `${entry.ref}: ${entry.text}`).join('\n') }]
+    return [
+      {
+        type: 'text',
+        text: value.citations.map((entry) => `${entry.ref}: ${entry.text}`).join('\n'),
+      },
+    ]
   }
   return [{ type: 'text', text: value.text }]
 }
 
-export function registerExportTool(ctx: Context, service: ZoteroService, _config: ResolvedConfig): void {
-  ctx.tools.register(defineTool({
-    name: 'zotero_export',
-    description: [
-      'Export Zotero items as citations, a bibliography, or translator formats.',
-      'Citation mode pairs each ref with its HTML citation in the requested order;',
-      'bibliography mode returns the joined CSL-sorted bibliography; bibtex/biblatex/ris/csljson return raw export text.',
-    ].join(' '),
-    parameters: EXPORT_PARAMETERS,
-    output: {
-      schema: EXPORT_OUTPUT_SCHEMA,
-      render: renderExport,
-    },
-    presentCall: (args) => ({
-      card: 'generic',
-      title: 'Export Zotero citations',
-      rawInput: `${args.refs.length} refs · ${args.format}`,
+export function registerExportTool(
+  ctx: Context,
+  service: ZoteroService,
+  _config: ResolvedConfig,
+): void {
+  ctx.tools.register(
+    defineTool({
+      name: 'zotero_export',
+      description: [
+        'Export Zotero items as citations, a bibliography, or translator formats.',
+        'Citation mode pairs each ref with its HTML citation in the requested order;',
+        'bibliography mode returns the joined CSL-sorted bibliography; bibtex/biblatex/ris/csljson return raw export text.',
+      ].join(' '),
+      parameters: EXPORT_PARAMETERS,
+      output: {
+        schema: EXPORT_OUTPUT_SCHEMA,
+        render: renderExport,
+      },
+      presentCall: (args) => ({
+        card: 'generic',
+        title: 'Export Zotero citations',
+        rawInput: `${args.refs.length} refs · ${args.format}`,
+      }),
+      isConcurrencySafe: () => true,
+      async execute(args, exec) {
+        return await service.export(buildRequest(args), exec.signal)
+      },
     }),
-    isConcurrencySafe: () => true,
-    async execute(args, exec) {
-      return await service.export(buildRequest(args), exec.signal)
-    },
-  }))
+  )
 }

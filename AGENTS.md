@@ -13,6 +13,8 @@ npm test                 # vitest unit tests against the mock Zotero server
 npm run test:coverage    # 100% coverage gate on src/; src/index.ts and src/types.ts excluded (pure re-export / types-only)
 npm run build            # tsc emits lib/
 npm run dev              # tsc --watch
+npm run format           # prettier --write across the repo
+npm run format:check     # verify formatting; run before committing
 npm run test:integration # live Zotero at 127.0.0.1:23119; skipped unless ZOTERO_INTEGRATION=1
 ```
 

@@ -24,16 +24,8 @@ describe('resolveConfig', () => {
   })
 
   it('honors explicit values', () => {
-    expect(resolveConfig({
-      timeoutMs: 900,
-      maxExportChars: 42,
-      defaultStyle: 'chicago-note-bibliography',
-      maxNoteChars: 99,
-      maxNoteRecords: 3,
-      maxAnnotationRecords: 7,
-      fulltextChunkWords: 12,
-    }))
-      .toMatchObject({
+    expect(
+      resolveConfig({
         timeoutMs: 900,
         maxExportChars: 42,
         defaultStyle: 'chicago-note-bibliography',
@@ -41,13 +33,28 @@ describe('resolveConfig', () => {
         maxNoteRecords: 3,
         maxAnnotationRecords: 7,
         fulltextChunkWords: 12,
-      })
+      }),
+    ).toMatchObject({
+      timeoutMs: 900,
+      maxExportChars: 42,
+      defaultStyle: 'chicago-note-bibliography',
+      maxNoteChars: 99,
+      maxNoteRecords: 3,
+      maxAnnotationRecords: 7,
+      fulltextChunkWords: 12,
+    })
   })
 
   it('accepts loopback base URLs over http', () => {
-    expect(resolveConfig({ baseUrl: 'http://127.0.0.1:23119/api' }).baseUrl).toBe('http://127.0.0.1:23119/api')
-    expect(resolveConfig({ baseUrl: 'http://localhost:1234/api' }).baseUrl).toBe('http://localhost:1234/api')
-    expect(resolveConfig({ baseUrl: 'http://[::1]:23119/api' }).baseUrl).toBe('http://[::1]:23119/api')
+    expect(resolveConfig({ baseUrl: 'http://127.0.0.1:23119/api' }).baseUrl).toBe(
+      'http://127.0.0.1:23119/api',
+    )
+    expect(resolveConfig({ baseUrl: 'http://localhost:1234/api' }).baseUrl).toBe(
+      'http://localhost:1234/api',
+    )
+    expect(resolveConfig({ baseUrl: 'http://[::1]:23119/api' }).baseUrl).toBe(
+      'http://[::1]:23119/api',
+    )
   })
 
   it('rejects base URLs that cannot parse', () => {
@@ -61,7 +68,9 @@ describe('resolveConfig', () => {
   it('rejects non-loopback hosts so the plugin cannot SSRF internal hosts', () => {
     expect(() => resolveConfig({ baseUrl: 'http://evil.example.com/api' })).toThrowError(/loopback/)
     expect(() => resolveConfig({ baseUrl: 'http://10.0.0.7:23119/api' })).toThrowError(/loopback/)
-    expect(() => resolveConfig({ baseUrl: 'http://169.254.169.254/latest' })).toThrowError(/loopback/)
+    expect(() => resolveConfig({ baseUrl: 'http://169.254.169.254/latest' })).toThrowError(
+      /loopback/,
+    )
   })
 
   it('rejects non-positive timeouts', () => {

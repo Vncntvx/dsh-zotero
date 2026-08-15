@@ -1,10 +1,19 @@
 import { Context, Service, type Context as CordisContext, type Fiber } from '@deepseek-ai/cordis'
-import { CommandId, type CommandDefinition, type CommandInvocation, type CommandResult } from '@deepseek-ai/dsh-commands'
+import {
+  CommandId,
+  type CommandDefinition,
+  type CommandInvocation,
+  type CommandResult,
+} from '@deepseek-ai/dsh-commands'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import ZoteroService from '../src/index.js'
-import { ZOTERO_CAPABILITY_UNAVAILABLE, ZOTERO_PROVIDER_UNAVAILABLE, ZoteroError } from '../src/errors.js'
+import {
+  ZOTERO_CAPABILITY_UNAVAILABLE,
+  ZOTERO_PROVIDER_UNAVAILABLE,
+  ZoteroError,
+} from '../src/errors.js'
 import { ZOTERO_PROMPT_SECTION_ORDER } from '../src/prompt.js'
 import { parseRef } from '../src/refs.js'
 import type { ZoteroProvider } from '../src/types.js'
@@ -42,7 +51,9 @@ afterEach(async () => {
   await mock.close()
 })
 
-async function bootContext(commands: boolean): Promise<{ ctx: Context; stub?: StubCommands; zoteroFiber: Fiber }> {
+async function bootContext(
+  commands: boolean,
+): Promise<{ ctx: Context; stub?: StubCommands; zoteroFiber: Fiber }> {
   const ctx = new Context()
   await ctx.plugin(SystemPrompt, {})
   await ctx.plugin(ToolRuntime, {})
@@ -56,7 +67,10 @@ async function bootContext(commands: boolean): Promise<{ ctx: Context; stub?: St
   return { ctx, stub, zoteroFiber }
 }
 
-function invocation(rawInput: string, signal: AbortSignal = new AbortController().signal): CommandInvocation {
+function invocation(
+  rawInput: string,
+  signal: AbortSignal = new AbortController().signal,
+): CommandInvocation {
   return { commandId: CommandId('test-command'), agent: {} as never, rawInput, signal }
 }
 
@@ -80,14 +94,19 @@ describe('ZoteroService lifecycle', () => {
 
 describe('/zotero status command', () => {
   it('reports a connected Zotero 10+ instance', async () => {
-    mock.route('GET', '/api/', (req, res, helpers) => helpers.json({}, {
-      'Zotero-API-Version': '3',
-      'Zotero-Schema-Version': '25',
-      'Zotero-Server-ID': 'sPMHtLD6HHBd',
-    }))
+    mock.route('GET', '/api/', (req, res, helpers) =>
+      helpers.json(
+        {},
+        {
+          'Zotero-API-Version': '3',
+          'Zotero-Schema-Version': '25',
+          'Zotero-Server-ID': 'sPMHtLD6HHBd',
+        },
+      ),
+    )
     const { stub } = await bootContext(true)
     const definition = stub!.registered[0]!
-    const result = await definition.handler(invocation('status')) as CommandResult
+    const result = (await definition.handler(invocation('status'))) as CommandResult
     expect(result.kind).toBe('success')
     if (result.kind !== 'success') throw new Error('unreachable')
     expect(result.text).toContain('connected')
@@ -100,7 +119,7 @@ describe('/zotero status command', () => {
     mock.route('GET', '/api/', (req, res, helpers) => helpers.json({}))
     const { stub } = await bootContext(true)
     const definition = stub!.registered[0]!
-    const result = await definition.handler(invocation('status')) as CommandResult
+    const result = (await definition.handler(invocation('status'))) as CommandResult
     expect(result.kind).toBe('success')
     if (result.kind !== 'success') throw new Error('unreachable')
     expect(result.text).toContain('connected')
@@ -119,7 +138,7 @@ describe('/zotero status command', () => {
     const registered = (ctx.get('commands') as unknown as StubCommands).registered
     await ctx.plugin(ZoteroService, { baseUrl: url })
     const definition = registered[0]!
-    const result = await definition.handler(invocation('status')) as CommandResult
+    const result = (await definition.handler(invocation('status'))) as CommandResult
     expect(result.kind).toBe('success')
     if (result.kind !== 'success') throw new Error('unreachable')
     expect(result.text).toContain('not connected')
@@ -127,10 +146,12 @@ describe('/zotero status command', () => {
   })
 
   it('rejects unknown subcommands with usage text', async () => {
-    mock.route('GET', '/api/', (req, res, helpers) => helpers.json({}, { 'Zotero-API-Version': '3' }))
+    mock.route('GET', '/api/', (req, res, helpers) =>
+      helpers.json({}, { 'Zotero-API-Version': '3' }),
+    )
     const { stub } = await bootContext(true)
     const definition = stub!.registered[0]!
-    const result = await definition.handler(invocation('open')) as CommandResult
+    const result = (await definition.handler(invocation('open'))) as CommandResult
     expect(result).toEqual({ kind: 'error', text: 'Usage: /zotero status' })
   })
 })
@@ -145,7 +166,13 @@ describe('prompt section', () => {
     // 106 lands after the identity/persona sections that open the prompt.
     expect(assembly.sections.map((entry) => entry.name).indexOf('zotero:policy')).toBeGreaterThan(0)
     expect(ZOTERO_PROMPT_SECTION_ORDER).toBe(106)
-    for (const tool of ['zotero_search', 'zotero_get', 'zotero_retrieve', 'zotero_attachment', 'zotero_export']) {
+    for (const tool of [
+      'zotero_search',
+      'zotero_get',
+      'zotero_retrieve',
+      'zotero_attachment',
+      'zotero_export',
+    ]) {
       expect(section!.text).toContain(tool)
     }
     expect(section!.text).toContain('zotero://user/0/item/')
@@ -157,7 +184,9 @@ describe('disposal unwinds registrations', () => {
   it('removes tools, the prompt section, and the command when the plugin fiber is disposed', async () => {
     const { ctx, stub, zoteroFiber } = await bootContext(true)
     expect(ctx.tools.get('zotero_search')).toBeDefined()
-    expect((await ctx.systemPrompt.assemble()).sections.some((entry) => entry.name === 'zotero:policy')).toBe(true)
+    expect(
+      (await ctx.systemPrompt.assemble()).sections.some((entry) => entry.name === 'zotero:policy'),
+    ).toBe(true)
     expect(stub!.registered.map((definition) => definition.name)).toEqual(['zotero'])
 
     await zoteroFiber.dispose()
@@ -165,7 +194,9 @@ describe('disposal unwinds registrations', () => {
     expect(ctx.get('zotero')).toBeUndefined()
     expect(ctx.tools.get('zotero_search')).toBeUndefined()
     expect(ctx.tools.get('zotero_export')).toBeUndefined()
-    expect((await ctx.systemPrompt.assemble()).sections.some((entry) => entry.name === 'zotero:policy')).toBe(false)
+    expect(
+      (await ctx.systemPrompt.assemble()).sections.some((entry) => entry.name === 'zotero:policy'),
+    ).toBe(false)
     expect(stub!.registered).toEqual([])
   })
 })
@@ -197,11 +228,21 @@ describe('provider registration', () => {
       id: 'local',
       capabilities: new Set(),
       status: async () => ({ providerId: 'local', connected: false, diagnosis: 'test double' }),
-      search: async () => { throw new Error('test double: must not be called') },
-      getItem: async () => { throw new Error('test double: must not be called') },
-      getAttachmentLocation: async () => { throw new Error('test double: must not be called') },
-      retrieve: async () => { throw new Error('test double: must not be called') },
-      export: async () => { throw new Error('test double: must not be called') },
+      search: async () => {
+        throw new Error('test double: must not be called')
+      },
+      getItem: async () => {
+        throw new Error('test double: must not be called')
+      },
+      getAttachmentLocation: async () => {
+        throw new Error('test double: must not be called')
+      },
+      retrieve: async () => {
+        throw new Error('test double: must not be called')
+      },
+      export: async () => {
+        throw new Error('test double: must not be called')
+      },
     }
     let thrown: unknown
     try {
@@ -220,16 +261,28 @@ describe('provider registration', () => {
       id: 'foreign',
       capabilities: new Set(),
       status: async () => ({ providerId: 'foreign', connected: true, diagnosis: 'ok' }),
-      search: async () => { throw new Error('test double: must not be called') },
-      getItem: async () => { throw new Error('test double: must not be called') },
-      getAttachmentLocation: async () => { throw new Error('test double: must not be called') },
-      retrieve: async () => { throw new Error('test double: must not be called') },
-      export: async () => { throw new Error('test double: must not be called') },
+      search: async () => {
+        throw new Error('test double: must not be called')
+      },
+      getItem: async () => {
+        throw new Error('test double: must not be called')
+      },
+      getAttachmentLocation: async () => {
+        throw new Error('test double: must not be called')
+      },
+      retrieve: async () => {
+        throw new Error('test double: must not be called')
+      },
+      export: async () => {
+        throw new Error('test double: must not be called')
+      },
     }
     const dispose = service.registerProvider(foreign)
     dispose()
     // The service still resolves its configured 'local' provider; 'foreign' is gone from the registry.
-    mock.route('GET', '/api/', (req, res, helpers) => helpers.json({}, { 'Zotero-API-Version': '3' }))
+    mock.route('GET', '/api/', (req, res, helpers) =>
+      helpers.json({}, { 'Zotero-API-Version': '3' }),
+    )
     const status = await service.status()
     expect(status.providerId).toBe('local')
   })
@@ -246,16 +299,31 @@ describe('capability gating', () => {
       id: 'limited',
       capabilities: new Set(['metadata']),
       status: async () => ({ providerId: 'limited', connected: true, diagnosis: 'ok' }),
-      search: async () => { throw new Error('test double: must not be called') },
-      getItem: async () => { throw new Error('test double: must not be called') },
-      getAttachmentLocation: async () => { throw new Error('test double: must not be called') },
-      retrieve: async () => { throw new Error('test double: must not be called') },
-      export: async () => { throw new Error('test double: must not be called') },
+      search: async () => {
+        throw new Error('test double: must not be called')
+      },
+      getItem: async () => {
+        throw new Error('test double: must not be called')
+      },
+      getAttachmentLocation: async () => {
+        throw new Error('test double: must not be called')
+      },
+      retrieve: async () => {
+        throw new Error('test double: must not be called')
+      },
+      export: async () => {
+        throw new Error('test double: must not be called')
+      },
     })
     let thrown: unknown
     try {
       await service.search({
-        scope: { kind: 'library' }, mode: 'metadata', sort: 'dateModified', direction: 'desc', offset: 0, limit: 5,
+        scope: { kind: 'library' },
+        mode: 'metadata',
+        sort: 'dateModified',
+        direction: 'desc',
+        offset: 0,
+        limit: 5,
       })
     } catch (error) {
       thrown = error
@@ -275,11 +343,21 @@ describe('capability gating', () => {
       id: 'nocite',
       capabilities: new Set(['metadata']),
       status: async () => ({ providerId: 'nocite', connected: true, diagnosis: 'ok' }),
-      search: async () => { throw new Error('test double: must not be called') },
-      getItem: async () => { throw new Error('test double: must not be called') },
-      getAttachmentLocation: async () => { throw new Error('test double: must not be called') },
-      retrieve: async () => { throw new Error('test double: must not be called') },
-      export: async () => { throw new Error('test double: must not be called') },
+      search: async () => {
+        throw new Error('test double: must not be called')
+      },
+      getItem: async () => {
+        throw new Error('test double: must not be called')
+      },
+      getAttachmentLocation: async () => {
+        throw new Error('test double: must not be called')
+      },
+      retrieve: async () => {
+        throw new Error('test double: must not be called')
+      },
+      export: async () => {
+        throw new Error('test double: must not be called')
+      },
     })
     let thrown: unknown
     try {
@@ -302,14 +380,27 @@ describe('capability gating', () => {
       id: 'searchonly',
       capabilities: new Set(['search']),
       status: async () => ({ providerId: 'searchonly', connected: true, diagnosis: 'ok' }),
-      search: async () => { throw new Error('test double: must not be called') },
-      getItem: async () => { throw new Error('test double: must not be called') },
-      getAttachmentLocation: async () => { throw new Error('test double: must not be called') },
-      retrieve: async () => { throw new Error('test double: must not be called') },
-      export: async () => { throw new Error('test double: must not be called') },
+      search: async () => {
+        throw new Error('test double: must not be called')
+      },
+      getItem: async () => {
+        throw new Error('test double: must not be called')
+      },
+      getAttachmentLocation: async () => {
+        throw new Error('test double: must not be called')
+      },
+      retrieve: async () => {
+        throw new Error('test double: must not be called')
+      },
+      export: async () => {
+        throw new Error('test double: must not be called')
+      },
     })
     const attempts: [string, Promise<unknown>][] = [
-      ['metadata', service.get({ ref: parseRef('zotero://user/0/item/ABCD1234'), include: new Set() })],
+      [
+        'metadata',
+        service.get({ ref: parseRef('zotero://user/0/item/ABCD1234'), include: new Set() }),
+      ],
       ['attachments', service.attachment(parseRef('zotero://user/0/attachment/WXYZ6789'))],
     ]
     for (const [capability, attempt] of attempts) {

@@ -8,7 +8,14 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
-import { defineTool, type InferArgs, type InferValue, type JsonValue, type ToolResult, type ToolResultView } from '@deepseek-ai/dsh-tools'
+import {
+  defineTool,
+  type InferArgs,
+  type InferValue,
+  type JsonValue,
+  type ToolResult,
+  type ToolResultView,
+} from '@deepseek-ai/dsh-tools'
 import { ZOTERO_SORT_FIELDS } from '../constants.js'
 import type { ResolvedConfig } from '../config.js'
 import { ZOTERO_INVALID_ARGUMENT, ZoteroError } from '../errors.js'
@@ -17,41 +24,117 @@ import type { ZoteroSearchRequest } from '../types.js'
 
 const SEARCH_PARAMETERS = {
   query: { type: 'string', description: 'Free-text query; omit to browse the scope unfiltered.' },
-  mode: { type: 'string', enum: ['metadata', 'everything'], default: 'metadata', description: 'metadata: title/creator/year only; everything: also indexed full text.' },
+  mode: {
+    type: 'string',
+    enum: ['metadata', 'everything'],
+    default: 'metadata',
+    description: 'metadata: title/creator/year only; everything: also indexed full text.',
+  },
   scope: {
     oneOf: [
-      { type: 'object', additionalProperties: false, properties: { kind: { type: 'string', const: 'library', required: true } } },
-      { type: 'object', additionalProperties: false, properties: { kind: { type: 'string', const: 'collection', required: true }, refOrName: { type: 'string', required: true, description: 'Collection name or zotero://user/0/collection/<KEY> ref.' } } },
-      { type: 'object', additionalProperties: false, properties: { kind: { type: 'string', const: 'savedSearch', required: true }, refOrName: { type: 'string', required: true, description: 'Saved search name or zotero://user/0/search/<KEY> ref.' } } },
+      {
+        type: 'object',
+        additionalProperties: false,
+        properties: { kind: { type: 'string', const: 'library', required: true } },
+      },
+      {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          kind: { type: 'string', const: 'collection', required: true },
+          refOrName: {
+            type: 'string',
+            required: true,
+            description: 'Collection name or zotero://user/0/collection/<KEY> ref.',
+          },
+        },
+      },
+      {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          kind: { type: 'string', const: 'savedSearch', required: true },
+          refOrName: {
+            type: 'string',
+            required: true,
+            description: 'Saved search name or zotero://user/0/search/<KEY> ref.',
+          },
+        },
+      },
     ],
     default: { kind: 'library' },
     description: 'Where to search. Defaults to the whole library.',
   },
-  itemTypes: { type: 'array', items: { type: 'string' }, description: 'Zotero item type names (e.g. journalArticle), combined with OR.' },
-  tags: { type: 'array', items: { type: 'string' }, description: 'Literal tag names; items must have ALL of them.' },
-  sort: { type: 'string', enum: [...ZOTERO_SORT_FIELDS], default: 'dateModified', description: 'Result order field.' },
-  direction: { type: 'string', enum: ['asc', 'desc'], default: 'desc', description: 'Result order direction.' },
-  offset: { type: 'integer', default: 0, description: 'Pagination offset for exploring more results.' },
+  itemTypes: {
+    type: 'array',
+    items: { type: 'string' },
+    description: 'Zotero item type names (e.g. journalArticle), combined with OR.',
+  },
+  tags: {
+    type: 'array',
+    items: { type: 'string' },
+    description: 'Literal tag names; items must have ALL of them.',
+  },
+  sort: {
+    type: 'string',
+    enum: [...ZOTERO_SORT_FIELDS],
+    default: 'dateModified',
+    description: 'Result order field.',
+  },
+  direction: {
+    type: 'string',
+    enum: ['asc', 'desc'],
+    default: 'desc',
+    description: 'Result order direction.',
+  },
+  offset: {
+    type: 'integer',
+    default: 0,
+    description: 'Pagination offset for exploring more results.',
+  },
   limit: { type: 'integer', default: 10, description: 'Maximum results to return.' },
 } as const
 
 type SearchArgs = InferArgs<typeof SEARCH_PARAMETERS>
 
 const SEARCH_OUTPUT_SCHEMA = {
-  type: 'object', additionalProperties: false,
+  type: 'object',
+  additionalProperties: false,
   properties: {
     scope: {
       required: true,
       oneOf: [
-        { type: 'object', additionalProperties: false, properties: { kind: { type: 'string', const: 'library', required: true } } },
-        { type: 'object', additionalProperties: false, properties: { kind: { type: 'string', const: 'collection', required: true }, ref: { type: 'string', required: true }, name: { type: 'string', required: true } } },
-        { type: 'object', additionalProperties: false, properties: { kind: { type: 'string', const: 'savedSearch', required: true }, ref: { type: 'string', required: true }, name: { type: 'string', required: true } } },
+        {
+          type: 'object',
+          additionalProperties: false,
+          properties: { kind: { type: 'string', const: 'library', required: true } },
+        },
+        {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            kind: { type: 'string', const: 'collection', required: true },
+            ref: { type: 'string', required: true },
+            name: { type: 'string', required: true },
+          },
+        },
+        {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            kind: { type: 'string', const: 'savedSearch', required: true },
+            ref: { type: 'string', required: true },
+            name: { type: 'string', required: true },
+          },
+        },
       ],
     },
     items: {
-      type: 'array', required: true,
+      type: 'array',
+      required: true,
       items: {
-        type: 'object', additionalProperties: false,
+        type: 'object',
+        additionalProperties: false,
         properties: {
           ref: { type: 'string', required: true },
           title: { type: 'string', required: true },
@@ -83,7 +166,8 @@ function buildRequest(args: SearchArgs, config: ResolvedConfig): ZoteroSearchReq
     invalid(`limit must be an integer between 1 and ${config.maxSearchResults}; got ${limit}`)
   }
   const offset = args.offset ?? 0
-  if (!Number.isInteger(offset) || offset < 0) invalid(`offset must be a non-negative integer; got ${offset}`)
+  if (!Number.isInteger(offset) || offset < 0)
+    invalid(`offset must be a non-negative integer; got ${offset}`)
   const query = args.query?.trim()
   const scope = args.scope ?? { kind: 'library' }
   if (scope.kind !== 'library' && scope.refOrName.trim() === '') {
@@ -91,7 +175,9 @@ function buildRequest(args: SearchArgs, config: ResolvedConfig): ZoteroSearchReq
   }
   for (const tag of args.tags ?? []) {
     if (tag.trim() === '' || tag.includes('||')) {
-      invalid(`tags are literal tag names (AND semantics); got an empty or "||"-containing tag: "${tag}"`)
+      invalid(
+        `tags are literal tag names (AND semantics); got an empty or "||"-containing tag: "${tag}"`,
+      )
     }
   }
   for (const itemType of args.itemTypes ?? []) {
@@ -102,7 +188,10 @@ function buildRequest(args: SearchArgs, config: ResolvedConfig): ZoteroSearchReq
   return {
     query: query === '' ? undefined : query,
     mode: args.mode ?? 'metadata',
-    scope: scope.kind === 'library' ? { kind: 'library' } : { kind: scope.kind, refOrName: scope.refOrName },
+    scope:
+      scope.kind === 'library'
+        ? { kind: 'library' }
+        : { kind: scope.kind, refOrName: scope.refOrName },
     itemTypes: args.itemTypes,
     tags: args.tags,
     sort: args.sort ?? 'dateModified',
@@ -118,10 +207,14 @@ export function renderSearch(_args: SearchArgs, value: SearchOutput): ContentBlo
     const year = item.year === undefined ? '' : ` (${item.year})`
     const creator = item.creatorSummary === '' ? '' : ` — ${item.creatorSummary}`
     const pdf = item.bestAttachmentType === 'application/pdf' ? ' — PDF' : ''
-    lines.push(`${index + 1}. ${item.ref} — ${item.title}${year} [${item.itemType}]${creator}${pdf}`)
+    lines.push(
+      `${index + 1}. ${item.ref} — ${item.title}${year} [${item.itemType}]${creator}${pdf}`,
+    )
   })
   if (value.nextOffset !== undefined) {
-    lines.push(`More results available: search again with offset ${value.nextOffset} and the same scope ref.`)
+    lines.push(
+      `More results available: search again with offset ${value.nextOffset} and the same scope ref.`,
+    )
   }
   return [{ type: 'text', text: lines.join('\n') }]
 }
@@ -142,34 +235,43 @@ function presentSearchResult(_args: SearchArgs, result: ToolResult): ToolResultV
   if (typeof meta !== 'object' || meta === null || Array.isArray(meta)) return undefined
   const record = meta as Record<string, unknown>
   if (typeof record.returned !== 'number' || typeof record.total !== 'number') return undefined
-  return { card: 'generic', title: `Zotero search: found ${record.returned} of ${record.total} results` }
+  return {
+    card: 'generic',
+    title: `Zotero search: found ${record.returned} of ${record.total} results`,
+  }
 }
 
-export function registerSearchTool(ctx: Context, service: ZoteroService, config: ResolvedConfig): void {
-  ctx.tools.register(defineTool({
-    name: 'zotero_search',
-    description: [
-      'Search the user\'s local Zotero research library for candidate papers.',
-      'metadata mode matches titles, creators, and years; everything mode also searches indexed full text.',
-      'scope restricts the search to a collection or a Zotero saved search by name or zotero:// ref; additional filters combine with a saved search\'s own conditions.',
-      'Results carry stable zotero:// refs for zotero_get/zotero_retrieve, and a scope ref for pagination via offset.',
-    ].join(' '),
-    parameters: SEARCH_PARAMETERS,
-    output: {
-      schema: SEARCH_OUTPUT_SCHEMA,
-      render: renderSearch,
-      presentationMeta: searchPresentationMeta,
-    },
-    presentCall: (args) => ({
-      card: 'generic',
-      kind: 'search',
-      title: 'Search Zotero library',
-      rawInput: args.query ?? '(browse)',
+export function registerSearchTool(
+  ctx: Context,
+  service: ZoteroService,
+  config: ResolvedConfig,
+): void {
+  ctx.tools.register(
+    defineTool({
+      name: 'zotero_search',
+      description: [
+        "Search the user's local Zotero research library for candidate papers.",
+        'metadata mode matches titles, creators, and years; everything mode also searches indexed full text.',
+        "scope restricts the search to a collection or a Zotero saved search by name or zotero:// ref; additional filters combine with a saved search's own conditions.",
+        'Results carry stable zotero:// refs for zotero_get/zotero_retrieve, and a scope ref for pagination via offset.',
+      ].join(' '),
+      parameters: SEARCH_PARAMETERS,
+      output: {
+        schema: SEARCH_OUTPUT_SCHEMA,
+        render: renderSearch,
+        presentationMeta: searchPresentationMeta,
+      },
+      presentCall: (args) => ({
+        card: 'generic',
+        kind: 'search',
+        title: 'Search Zotero library',
+        rawInput: args.query ?? '(browse)',
+      }),
+      presentResult: presentSearchResult,
+      isConcurrencySafe: () => true,
+      async execute(args, exec) {
+        return await service.search(buildRequest(args, config), exec.signal)
+      },
     }),
-    presentResult: presentSearchResult,
-    isConcurrencySafe: () => true,
-    async execute(args, exec) {
-      return await service.search(buildRequest(args, config), exec.signal)
-    },
-  }))
+  )
 }

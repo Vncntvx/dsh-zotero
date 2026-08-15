@@ -66,12 +66,15 @@ describe('the shipped bundle patch through a real Loader composition', () => {
     // are what the composition validates.
     const bundlePatch = await readFile(new URL('../cordis.patch.yml', import.meta.url), 'utf8')
     const parsedPatch = load(bundlePatch, { schema: entryListSchema }) as PatchOptions[]
-    await writeFile(configPath, [
-      "- name: '@deepseek-ai/dsh-system-prompt'",
-      "- name: '@deepseek-ai/dsh-tools'",
-      "- name: 'test-stub-commands'",
-      '',
-    ].join('\n'))
+    await writeFile(
+      configPath,
+      [
+        "- name: '@deepseek-ai/dsh-system-prompt'",
+        "- name: '@deepseek-ai/dsh-tools'",
+        "- name: 'test-stub-commands'",
+        '',
+      ].join('\n'),
+    )
 
     context = new Context()
     context.baseUrl = pathToFileURL(root).href + '/'
@@ -107,23 +110,36 @@ describe('the shipped bundle patch through a real Loader composition', () => {
     const names = context.tools.schemas().map((schema) => schema.name)
     // Registration order is a dependency-resolution artifact, not a contract.
     expect([...names].sort()).toEqual(
-      ['zotero_search', 'zotero_get', 'zotero_retrieve', 'zotero_attachment', 'zotero_export'].sort(),
+      [
+        'zotero_search',
+        'zotero_get',
+        'zotero_retrieve',
+        'zotero_attachment',
+        'zotero_export',
+      ].sort(),
     )
     const assembly = await context.systemPrompt.assemble()
     expect(assembly.sections.some((entry) => entry.name === 'zotero:policy')).toBe(true)
     const commands = context.get('commands') as StubCommands | undefined
-    expect(commands?.registered.map((definition) => (definition as { name: string }).name)).toEqual(['zotero'])
+    expect(commands?.registered.map((definition) => (definition as { name: string }).name)).toEqual(
+      ['zotero'],
+    )
 
     // One end-to-end tool call through the assembled registry.
-    mock.route('GET', '/api/users/0/items/top', (req, res, helpers) => (
-      helpers.json([{
-        key: 'ABCD1234',
-        version: 3,
-        links: {},
-        meta: { creatorSummary: 'Dao, Tri', parsedDate: '2023-07-28' },
-        data: { key: 'ABCD1234', itemType: 'conferencePaper', title: 'FlashAttention-2' },
-      }], { 'Total-Results': '1' })
-    ))
+    mock.route('GET', '/api/users/0/items/top', (req, res, helpers) =>
+      helpers.json(
+        [
+          {
+            key: 'ABCD1234',
+            version: 3,
+            links: {},
+            meta: { creatorSummary: 'Dao, Tri', parsedDate: '2023-07-28' },
+            data: { key: 'ABCD1234', itemType: 'conferencePaper', title: 'FlashAttention-2' },
+          },
+        ],
+        { 'Total-Results': '1' },
+      ),
+    )
     const result = await context.tools.execute({
       callId: CallId('composition-search'),
       name: 'zotero_search',

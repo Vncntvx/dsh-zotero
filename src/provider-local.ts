@@ -132,7 +132,8 @@ function normalizeCoverage(payload: ZoteroFulltextPayload): ZoteroCoverage {
   const totalChars = typeof payload.totalChars === 'number' ? payload.totalChars : undefined
   const indexedPages = typeof payload.indexedPages === 'number' ? payload.indexedPages : undefined
   const totalPages = typeof payload.totalPages === 'number' ? payload.totalPages : undefined
-  const complete = totalChars !== undefined && indexedChars !== undefined && indexedChars === totalChars
+  const complete =
+    totalChars !== undefined && indexedChars !== undefined && indexedChars === totalChars
   return {
     ...(indexedPages !== undefined ? { indexedPages } : {}),
     ...(totalPages !== undefined ? { totalPages } : {}),
@@ -145,10 +146,21 @@ function normalizeCoverage(payload: ZoteroFulltextPayload): ZoteroCoverage {
 export class LocalApiProvider implements ZoteroProvider {
   readonly id = LOCAL_PROVIDER_ID
   readonly capabilities: ReadonlySet<ZoteroCapability> = new Set<ZoteroCapability>([
-    'metadata', 'search', 'collections', 'tags', 'notes', 'annotations', 'attachments', 'fulltext', 'citation',
+    'metadata',
+    'search',
+    'collections',
+    'tags',
+    'notes',
+    'annotations',
+    'attachments',
+    'fulltext',
+    'citation',
   ])
 
-  constructor(private readonly client: ZoteroHttpClient, private readonly limits: LocalApiLimits) {}
+  constructor(
+    private readonly client: ZoteroHttpClient,
+    private readonly limits: LocalApiLimits,
+  ) {}
 
   /**
    * Probe `GET /api/` and report connectivity plus the instance identity
@@ -176,21 +188,33 @@ export class LocalApiProvider implements ZoteroProvider {
 
   async search(request: ZoteroSearchRequest, signal?: AbortSignal): Promise<ZoteroSearchResult> {
     const scope = await this.resolveScope(request.scope, signal)
-    const { json, headers } = await this.client.getJson<unknown>(scope.path, buildSearchParams(request), {
-      signal,
-      serverId: scope.serverId,
-    })
+    const { json, headers } = await this.client.getJson<unknown>(
+      scope.path,
+      buildSearchParams(request),
+      {
+        signal,
+        serverId: scope.serverId,
+      },
+    )
     const rows = Array.isArray(json) ? json : []
     const responseServerId = headers.get('zotero-server-id') ?? scope.serverId
     const items = rows.map((row) => normalizeSearchItem(row, responseServerId ?? undefined))
     const headerTotal = headers.get('total-results')
-    const total = headerTotal !== null && headerTotal !== '' && Number.isInteger(Number(headerTotal))
-      ? Number(headerTotal)
-      : items.length
-    const nextOffset = request.offset + items.length < total ? request.offset + items.length : undefined
+    const total =
+      headerTotal !== null && headerTotal !== '' && Number.isInteger(Number(headerTotal))
+        ? Number(headerTotal)
+        : items.length
+    const nextOffset =
+      request.offset + items.length < total ? request.offset + items.length : undefined
     // Omit (rather than null) the pagination cursor on the final page, so the
     // result stays a pure lossless-JSON value for the tool output snapshot.
-    const result: ZoteroSearchResult = { scope: scope.resolved, items, total, offset: request.offset, returned: items.length }
+    const result: ZoteroSearchResult = {
+      scope: scope.resolved,
+      items,
+      total,
+      offset: request.offset,
+      returned: items.length,
+    }
     if (nextOffset !== undefined) result.nextOffset = nextOffset
     return result
   }
@@ -213,17 +237,26 @@ export class LocalApiProvider implements ZoteroProvider {
     const includes = INCLUDE_ORDER.filter((kind) => request.include.has(kind))
     let childrenRows: readonly unknown[] | undefined
     if (includes.length > 0) {
-      const children = await this.client.getJson<unknown>(`users/0/items/${ref.key}/children`, undefined, {
-        signal,
-        serverId,
-      })
+      const children = await this.client.getJson<unknown>(
+        `users/0/items/${ref.key}/children`,
+        undefined,
+        {
+          signal,
+          serverId,
+        },
+      )
       childrenRows = Array.isArray(children.json) ? children.json : []
     }
     const keys = collectionKeysOf(parent.json)
     let collectionNames: ReadonlyMap<string, string> | undefined
     if (keys.length > 0) {
-      const listing = await this.client.getJson<unknown>('users/0/collections', undefined, { signal, serverId })
-      const entries = (Array.isArray(listing.json) ? listing.json : []).map((row) => normalizeScopeEntry(row))
+      const listing = await this.client.getJson<unknown>('users/0/collections', undefined, {
+        signal,
+        serverId,
+      })
+      const entries = (Array.isArray(listing.json) ? listing.json : []).map((row) =>
+        normalizeScopeEntry(row),
+      )
       collectionNames = new Map(entries.map((entry) => [entry.key, entry.name]))
     }
     return normalizeItemDetail({
@@ -249,7 +282,10 @@ export class LocalApiProvider implements ZoteroProvider {
    * are stat'ed so a missing file fails with a typed error instead of a
    * dead path.
    */
-  async getAttachmentLocation(ref: ZoteroObjectRef, signal?: AbortSignal): Promise<ZoteroAttachmentLocation> {
+  async getAttachmentLocation(
+    ref: ZoteroObjectRef,
+    signal?: AbortSignal,
+  ): Promise<ZoteroAttachmentLocation> {
     const local = requireLocalRef(ref, ['item', 'attachment'])
     const attachmentKey = await this.resolveAttachmentKey(local, signal)
     const item = await this.client.getJson<unknown>(`users/0/items/${attachmentKey}`, undefined, {
@@ -259,7 +295,10 @@ export class LocalApiProvider implements ZoteroProvider {
     const data = asRecord(asRecord(item.json)?.data)
     const itemType = asString(data?.itemType)
     if (itemType !== undefined && itemType !== 'attachment') {
-      throw new ZoteroError(`The referenced object is a ${itemType}, not an attachment.`, ZOTERO_NO_ATTACHMENT)
+      throw new ZoteroError(
+        `The referenced object is a ${itemType}, not an attachment.`,
+        ZOTERO_NO_ATTACHMENT,
+      )
     }
     const attachment = normalizeAttachmentRecord(item.json)
     const serverId = item.headers.get('zotero-server-id') ?? local.serverId
@@ -268,7 +307,10 @@ export class LocalApiProvider implements ZoteroProvider {
     const contentType = attachment.contentType
     if (attachment.linkMode === 'linked_url') {
       if (attachment.url === undefined || attachment.url === '') {
-        throw new ZoteroError(`Attachment ${attachmentKey} is linked to a URL but Zotero reported none.`, ZOTERO_NO_ATTACHMENT)
+        throw new ZoteroError(
+          `Attachment ${attachmentKey} is linked to a URL but Zotero reported none.`,
+          ZOTERO_NO_ATTACHMENT,
+        )
       }
       return { ref: formattedRef, title, contentType, kind: 'url', url: attachment.url }
     }
@@ -280,14 +322,21 @@ export class LocalApiProvider implements ZoteroProvider {
     try {
       target = new URL(file.body.trim())
     } catch (error) {
-      throw new ZoteroError(`Zotero reported no usable file location for attachment ${attachmentKey}.`, ZOTERO_NO_ATTACHMENT, { cause: error })
+      throw new ZoteroError(
+        `Zotero reported no usable file location for attachment ${attachmentKey}.`,
+        ZOTERO_NO_ATTACHMENT,
+        { cause: error },
+      )
     }
     if (target.protocol !== 'file:') {
       return { ref: formattedRef, title, contentType, kind: 'url', url: target.toString() }
     }
     const path = fileURLToPath(target)
     if (!existsSync(path)) {
-      throw new ZoteroError(`The attachment file is missing from disk: ${path}`, ZOTERO_FILE_MISSING)
+      throw new ZoteroError(
+        `The attachment file is missing from disk: ${path}`,
+        ZOTERO_FILE_MISSING,
+      )
     }
     return { ref: formattedRef, title, contentType, kind: 'file', path }
   }
@@ -300,7 +349,10 @@ export class LocalApiProvider implements ZoteroProvider {
    * character budgets are enforced with the `truncated` flag, never by
    * silently editing passage text.
    */
-  async retrieve(request: ZoteroRetrieveRequest, signal?: AbortSignal): Promise<ZoteroRetrieveResult> {
+  async retrieve(
+    request: ZoteroRetrieveRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroRetrieveResult> {
     const ref = requireLocalRef(request.ref, ['item'])
     const parent = await this.client.getJson<unknown>(`users/0/items/${ref.key}`, undefined, {
       signal,
@@ -315,13 +367,18 @@ export class LocalApiProvider implements ZoteroProvider {
     const wantsFulltext = request.sources.includes('fulltext')
     // Children are fetched for annotation/note sources, or as the PDF
     // fallback when the parent carries no attachment link.
-    const fetchChildren = wantsAnnotations || wantsNotes || (wantsFulltext && linkAttachment === undefined)
+    const fetchChildren =
+      wantsAnnotations || wantsNotes || (wantsFulltext && linkAttachment === undefined)
     let childrenRows: readonly unknown[] = []
     if (fetchChildren) {
-      const children = await this.client.getJson<unknown>(`users/0/items/${ref.key}/children`, undefined, {
-        signal,
-        serverId,
-      })
+      const children = await this.client.getJson<unknown>(
+        `users/0/items/${ref.key}/children`,
+        undefined,
+        {
+          signal,
+          serverId,
+        },
+      )
       childrenRows = Array.isArray(children.json) ? children.json : []
     }
 
@@ -340,7 +397,10 @@ export class LocalApiProvider implements ZoteroProvider {
       if (attachmentKey === undefined) {
         const pdf = selectAttachment(childrenRows, 'pdf')
         if (pdf === undefined) {
-          throw new ZoteroError('The item has no PDF attachment whose full text could be searched.', ZOTERO_NO_ATTACHMENT)
+          throw new ZoteroError(
+            'The item has no PDF attachment whose full text could be searched.',
+            ZOTERO_NO_ATTACHMENT,
+          )
         }
         attachmentKey = pdf.key
       }
@@ -388,7 +448,10 @@ export class LocalApiProvider implements ZoteroProvider {
       }
     }
 
-    const ranked = rankChunks(request.query, passages.map((passage, index) => ({ text: passage.text, index })))
+    const ranked = rankChunks(
+      request.query,
+      passages.map((passage, index) => ({ text: passage.text, index })),
+    )
     const evidence: ZoteroEvidence[] = []
     let used = 0
     let truncated = ranked.length > request.passages || fulltextWasCut || abstractWasCut
@@ -436,20 +499,29 @@ export class LocalApiProvider implements ZoteroProvider {
       search.set('include', 'citation')
       search.set('style', style)
       search.set('locale', locale)
-      const { json } = await this.client.getJson<unknown>('users/0/items', search, { signal, serverId })
+      const { json } = await this.client.getJson<unknown>('users/0/items', search, {
+        signal,
+        serverId,
+      })
       const citationByKey = new Map<string, string>()
       for (const row of Array.isArray(json) ? json : []) {
         const record = asRecord(row)
         const key = asString(record?.key)
         if (key === undefined || !/^[A-Z0-9]{8}$/.test(key)) {
-          throw new ZoteroError('Zotero returned an item without a valid object key.', ZOTERO_UNEXPECTED)
+          throw new ZoteroError(
+            'Zotero returned an item without a valid object key.',
+            ZOTERO_UNEXPECTED,
+          )
         }
         citationByKey.set(key, asString(record?.citation) ?? '')
       }
       const citations = request.refs.map((ref) => {
         const text = citationByKey.get(ref.key)
         if (text === undefined) {
-          throw new ZoteroError(`Zotero did not return an item for ${formatRef(ref)}.`, ZOTERO_NOT_FOUND)
+          throw new ZoteroError(
+            `Zotero did not return an item for ${formatRef(ref)}.`,
+            ZOTERO_NOT_FOUND,
+          )
         }
         return { ref: formatRef(ref), text }
       })
@@ -496,10 +568,14 @@ export class LocalApiProvider implements ZoteroProvider {
     })
     const link = bestAttachmentFromLinks(parent.json)
     if (link !== undefined) return link.key
-    const children = await this.client.getJson<unknown>(`users/0/items/${ref.key}/children`, undefined, {
-      signal,
-      serverId: ref.serverId,
-    })
+    const children = await this.client.getJson<unknown>(
+      `users/0/items/${ref.key}/children`,
+      undefined,
+      {
+        signal,
+        serverId: ref.serverId,
+      },
+    )
     const pdf = selectAttachment(Array.isArray(children.json) ? children.json : [], 'pdf')
     if (pdf === undefined) {
       throw new ZoteroError(`Item ${ref.key} has no attachment to resolve.`, ZOTERO_NO_ATTACHMENT)
@@ -507,7 +583,11 @@ export class LocalApiProvider implements ZoteroProvider {
     return pdf.key
   }
 
-  private async fetchFulltext(attachmentKey: string, serverId: string | undefined, signal: AbortSignal | undefined): Promise<ZoteroFulltextPayload> {
+  private async fetchFulltext(
+    attachmentKey: string,
+    serverId: string | undefined,
+    signal: AbortSignal | undefined,
+  ): Promise<ZoteroFulltextPayload> {
     try {
       const response = await this.client.getJson<ZoteroFulltextPayload>(
         `users/0/items/${attachmentKey}/fulltext`,
@@ -525,7 +605,10 @@ export class LocalApiProvider implements ZoteroProvider {
     }
   }
 
-  private async resolveScope(scope: ZoteroSearchScope, signal?: AbortSignal): Promise<ResolvedScopeResult> {
+  private async resolveScope(
+    scope: ZoteroSearchScope,
+    signal?: AbortSignal,
+  ): Promise<ResolvedScopeResult> {
     switch (scope.kind) {
       case 'library':
         return { path: 'users/0/items/top', resolved: { kind: 'library' } }
@@ -554,31 +637,54 @@ export class LocalApiProvider implements ZoteroProvider {
    * matches client-side over the full listing, since the Local API has no
    * server-side name search for these endpoints.
    */
-  private async resolveNamed(kind: 'collection' | 'search', refOrName: string, signal?: AbortSignal): Promise<{ ref: ZoteroObjectRef; name: string }> {
+  private async resolveNamed(
+    kind: 'collection' | 'search',
+    refOrName: string,
+    signal?: AbortSignal,
+  ): Promise<{ ref: ZoteroObjectRef; name: string }> {
     const plural = kind === 'collection' ? 'collections' : 'searches'
     if (isRefString(refOrName)) {
       const ref = requireLocalRef(parseRef(refOrName), [kind])
-      const { json, headers } = await this.client.getJson<unknown>(`users/0/${plural}/${ref.key}`, undefined, {
-        signal,
-        serverId: ref.serverId,
-      })
+      const { json, headers } = await this.client.getJson<unknown>(
+        `users/0/${plural}/${ref.key}`,
+        undefined,
+        {
+          signal,
+          serverId: ref.serverId,
+        },
+      )
       const entry = normalizeScopeEntry(json)
-      return { ref: localRef(kind, entry.key, headers.get('zotero-server-id') ?? ref.serverId), name: entry.name }
+      return {
+        ref: localRef(kind, entry.key, headers.get('zotero-server-id') ?? ref.serverId),
+        name: entry.name,
+      }
     }
-    const { json, headers } = await this.client.getJson<unknown>(`users/0/${plural}`, undefined, { signal })
+    const { json, headers } = await this.client.getJson<unknown>(`users/0/${plural}`, undefined, {
+      signal,
+    })
     const entries = (Array.isArray(json) ? json : []).map((row) => normalizeScopeEntry(row))
     const matched = matchScopeName(entries, refOrName).matched
     if (matched.length === 1) {
       const found = matched[0]!
-      return { ref: localRef(kind, found.key, headers.get('zotero-server-id') ?? undefined), name: found.name }
+      return {
+        ref: localRef(kind, found.key, headers.get('zotero-server-id') ?? undefined),
+        name: found.name,
+      }
     }
     const label = kind === 'collection' ? 'collection' : 'saved search'
     if (matched.length > 1) {
-      const list = matched.slice(0, 5).map((entry) => formatRef(localRef(kind, entry.key))).join(', ')
-      throw new ZoteroError(`More than one ${label} matches "${refOrName}". Pick one of: ${list}`, ZOTERO_SCOPE_AMBIGUOUS)
+      const list = matched
+        .slice(0, 5)
+        .map((entry) => formatRef(localRef(kind, entry.key)))
+        .join(', ')
+      throw new ZoteroError(
+        `More than one ${label} matches "${refOrName}". Pick one of: ${list}`,
+        ZOTERO_SCOPE_AMBIGUOUS,
+      )
     }
     const near = nearScopeCandidates(entries, refOrName, 5)
-    const hint = near.length > 0 ? ` Possible matches: ${near.map((entry) => entry.name).join(', ')}` : ''
+    const hint =
+      near.length > 0 ? ` Possible matches: ${near.map((entry) => entry.name).join(', ')}` : ''
     throw new ZoteroError(`No ${label} named "${refOrName}" was found.${hint}`, ZOTERO_NOT_FOUND)
   }
 }

@@ -50,26 +50,34 @@ export class ZoteroError extends HarnessError {
 
 /** Shown when Zotero cannot be reached at all. */
 export const NOT_RUNNING_MESSAGE =
-  'Zotero is not running or its local API is unreachable. Start Zotero and enable '
-  + '"Allow other applications on this computer to communicate with Zotero" in Settings → Advanced, then retry.'
+  'Zotero is not running or its local API is unreachable. Start Zotero and enable ' +
+  '"Allow other applications on this computer to communicate with Zotero" in Settings → Advanced, then retry.'
 
 /** Shown when Zotero runs but rejects the local API request. */
 export const API_DISABLED_MESSAGE =
-  'Zotero rejected the request (403). Enable the local API in Zotero: Settings → Advanced → '
-  + '"Allow other applications on this computer to communicate with Zotero".'
+  'Zotero rejected the request (403). Enable the local API in Zotero: Settings → Advanced → ' +
+  '"Allow other applications on this computer to communicate with Zotero".'
 
 /** Shown when a ref's provenance no longer matches the running instance. */
 export const SERVER_MISMATCH_MESSAGE =
-  'The active Zotero database changed. This reference belongs to a different Zotero instance. '
-  + 'Search Zotero again before using the reference.'
+  'The active Zotero database changed. This reference belongs to a different Zotero instance. ' +
+  'Search Zotero again before using the reference.'
 
 /** Shown when an attachment has no indexed full text. */
 export const NO_FULLTEXT_MESSAGE =
-  'Zotero has no indexed full text for this attachment. Check that the file contains searchable text; '
-  + 'if needed, right-click the attachment in Zotero and choose "Reindex Item". '
-  + 'You can also use zotero_attachment to access the original file.'
+  'Zotero has no indexed full text for this attachment. Check that the file contains searchable text; ' +
+  'if needed, right-click the attachment in Zotero and choose "Reindex Item". ' +
+  'You can also use zotero_attachment to access the original file.'
 
-const UNREACHABLE_CODES = new Set(['ECONNREFUSED', 'ECONNRESET', 'EHOSTUNREACH', 'EADDRNOTAVAIL', 'ENETUNREACH', 'ENOTFOUND', 'ETIMEDOUT'])
+const UNREACHABLE_CODES = new Set([
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'EHOSTUNREACH',
+  'EADDRNOTAVAIL',
+  'ENETUNREACH',
+  'ENOTFOUND',
+  'ETIMEDOUT',
+])
 
 /** Render any thrown value's message; non-Error values fall back to String(). */
 export function errorMessageOf(error: unknown): string {
@@ -84,7 +92,10 @@ export function errorCauseOf(error: unknown): unknown {
 /** The Errno-style code of an error's cause chain, when one exists. */
 export function errnoCodeOf(error: unknown): string | undefined {
   const cause = errorCauseOf(error)
-  return typeof cause === 'object' && cause !== null && 'code' in cause && typeof cause.code === 'string'
+  return typeof cause === 'object' &&
+    cause !== null &&
+    'code' in cause &&
+    typeof cause.code === 'string'
     ? cause.code
     : undefined
 }
@@ -108,5 +119,7 @@ export function isUnreachableCause(error: unknown): boolean {
 /** An error's message joined with its cause's message, for pattern matching over the chain. */
 export function errorChainText(error: unknown): string {
   const cause = errorCauseOf(error)
-  return cause === undefined ? errorMessageOf(error) : `${errorMessageOf(error)} ${errorMessageOf(cause)}`
+  return cause === undefined
+    ? errorMessageOf(error)
+    : `${errorMessageOf(error)} ${errorMessageOf(cause)}`
 }

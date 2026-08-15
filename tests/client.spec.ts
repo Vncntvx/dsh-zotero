@@ -19,14 +19,22 @@ let client: ZoteroHttpClient
 
 beforeEach(async () => {
   mock = await MockZotero.start()
-  client = new ZoteroHttpClient({ baseUrl: mock.baseUrl, timeoutMs: 5000, maxResponseBytes: 1024 * 1024 })
+  client = new ZoteroHttpClient({
+    baseUrl: mock.baseUrl,
+    timeoutMs: 5000,
+    maxResponseBytes: 1024 * 1024,
+  })
 })
 
 afterEach(async () => {
   await mock.close()
 })
 
-async function expectZoteroError(promise: Promise<unknown>, code: string, messagePart?: string): Promise<HarnessError> {
+async function expectZoteroError(
+  promise: Promise<unknown>,
+  code: string,
+  messagePart?: string,
+): Promise<HarnessError> {
   let thrown: unknown
   try {
     await promise
@@ -43,8 +51,19 @@ async function expectZoteroError(promise: Promise<unknown>, code: string, messag
 describe('request shaping', () => {
   it('serializes repeated params and handles a base URL with a trailing slash', async () => {
     mock.route('GET', '/api/users/0/items', (req, res, helpers) => helpers.json([]))
-    const slashed = new ZoteroHttpClient({ baseUrl: `${mock.baseUrl}/`, timeoutMs: 5000, maxResponseBytes: 1024 })
-    await slashed.getJson('users/0/items', new URLSearchParams([['tag', 'a'], ['tag', 'b'], ['q', 'x y']]))
+    const slashed = new ZoteroHttpClient({
+      baseUrl: `${mock.baseUrl}/`,
+      timeoutMs: 5000,
+      maxResponseBytes: 1024,
+    })
+    await slashed.getJson(
+      'users/0/items',
+      new URLSearchParams([
+        ['tag', 'a'],
+        ['tag', 'b'],
+        ['q', 'x y'],
+      ]),
+    )
     const request = mock.requests[0]!
     expect(request.pathname).toBe('/api/users/0/items')
     expect(request.headers['zotero-api-version']).toBe('3')
@@ -53,14 +72,18 @@ describe('request shaping', () => {
   })
 
   it('does not send a server id before one is known (pre-Zotero-10 responses carry none)', async () => {
-    mock.route('GET', '/api/', (req, res, helpers) => helpers.json({}, { 'Zotero-API-Version': '3' }))
+    mock.route('GET', '/api/', (req, res, helpers) =>
+      helpers.json({}, { 'Zotero-API-Version': '3' }),
+    )
     await client.getJson('')
     expect(mock.requests[0]!.headers['zotero-server-id']).toBeUndefined()
     expect(client.serverId).toBeUndefined()
   })
 
   it('records the server id from responses and echoes it on later requests', async () => {
-    mock.route('GET', '/api/users/0/items', (req, res, helpers) => helpers.json([], { 'Zotero-Server-ID': 'sPMHtLD6HHBd' }))
+    mock.route('GET', '/api/users/0/items', (req, res, helpers) =>
+      helpers.json([], { 'Zotero-Server-ID': 'sPMHtLD6HHBd' }),
+    )
     await client.getJson('users/0/items')
     expect(client.serverId).toBe('sPMHtLD6HHBd')
     await client.getJson('users/0/items')
@@ -68,7 +91,9 @@ describe('request shaping', () => {
   })
 
   it('lets a caller-supplied server id override the remembered one', async () => {
-    mock.route('GET', '/api/users/0/items', (req, res, helpers) => helpers.json([], { 'Zotero-Server-ID': 'KNOWN' }))
+    mock.route('GET', '/api/users/0/items', (req, res, helpers) =>
+      helpers.json([], { 'Zotero-Server-ID': 'KNOWN' }),
+    )
     await client.getJson('users/0/items')
     await client.getJson('users/0/items', undefined, { serverId: 'EXPLICIT' })
     expect(mock.requests[1]!.headers['zotero-server-id']).toBe('EXPLICIT')
@@ -82,11 +107,21 @@ describe('identity protection', () => {
       rootHits += 1
       helpers.json({}, { 'Zotero-API-Version': '3', 'Zotero-Server-ID': 'NEWID' })
     })
-    mock.route('GET', '/api/users/0/items', (req, res, helpers) => (
-      helpers.raw(412, { 'Content-Type': 'text/plain' }, 'Zotero-Server-ID does not match this server')
-    ))
-    await expectZoteroError(client.getJson('users/0/items'), ZOTERO_SERVER_MISMATCH, 'database changed')
-    expect(mock.requests.filter((request) => request.pathname === '/api/users/0/items')).toHaveLength(1)
+    mock.route('GET', '/api/users/0/items', (req, res, helpers) =>
+      helpers.raw(
+        412,
+        { 'Content-Type': 'text/plain' },
+        'Zotero-Server-ID does not match this server',
+      ),
+    )
+    await expectZoteroError(
+      client.getJson('users/0/items'),
+      ZOTERO_SERVER_MISMATCH,
+      'database changed',
+    )
+    expect(
+      mock.requests.filter((request) => request.pathname === '/api/users/0/items'),
+    ).toHaveLength(1)
     expect(rootHits).toBe(1)
     expect(client.serverId).toBe('NEWID')
   })
@@ -94,43 +129,57 @@ describe('identity protection', () => {
 
 describe('http status translation', () => {
   it('maps 403 to API_DISABLED', async () => {
-    mock.route('GET', '/api/', (req, res, helpers) => helpers.raw(403, { 'Content-Type': 'text/plain' }, 'Local API is not enabled'))
+    mock.route('GET', '/api/', (req, res, helpers) =>
+      helpers.raw(403, { 'Content-Type': 'text/plain' }, 'Local API is not enabled'),
+    )
     await expectZoteroError(client.getJson(''), ZOTERO_API_DISABLED, 'Settings')
   })
 
   it('maps a version mismatch (501) to API_VERSION and reports the version', async () => {
-    mock.route('GET', '/api/users/0/items', (req, res, helpers) => (
-      helpers.raw(501, { 'Content-Type': 'text/plain', 'Zotero-API-Version': '4' }, 'API version not implemented: 4')
-    ))
+    mock.route('GET', '/api/users/0/items', (req, res, helpers) =>
+      helpers.raw(
+        501,
+        { 'Content-Type': 'text/plain', 'Zotero-API-Version': '4' },
+        'API version not implemented: 4',
+      ),
+    )
     await expectZoteroError(client.getJson('users/0/items'), ZOTERO_API_VERSION, '4')
   })
 
   it('reports an unknown version when the 501 carries no version header', async () => {
-    mock.route('GET', '/api/users/0/items', (req, res, helpers) => (
-      helpers.raw(501, { 'Content-Type': 'text/plain' }, 'API version not implemented')
-    ))
+    mock.route('GET', '/api/users/0/items', (req, res, helpers) =>
+      helpers.raw(501, { 'Content-Type': 'text/plain' }, 'API version not implemented'),
+    )
     await expectZoteroError(client.getJson('users/0/items'), ZOTERO_API_VERSION, 'unknown')
   })
 
   it('maps 404 to NOT_FOUND', async () => {
-    mock.route('GET', '/api/users/0/items', (req, res, helpers) => helpers.raw(404, { 'Content-Type': 'text/plain' }, 'Not found'))
+    mock.route('GET', '/api/users/0/items', (req, res, helpers) =>
+      helpers.raw(404, { 'Content-Type': 'text/plain' }, 'Not found'),
+    )
     await expectZoteroError(client.getJson('users/0/items'), ZOTERO_NOT_FOUND)
   })
 
   it('maps an unexpected 400 to UNEXPECTED', async () => {
-    mock.route('GET', '/api/users/0/items', (req, res, helpers) => helpers.raw(400, { 'Content-Type': 'text/plain' }, "Invalid 'sort' value"))
+    mock.route('GET', '/api/users/0/items', (req, res, helpers) =>
+      helpers.raw(400, { 'Content-Type': 'text/plain' }, "Invalid 'sort' value"),
+    )
     await expectZoteroError(client.getJson('users/0/items'), ZOTERO_UNEXPECTED, 'HTTP 400')
   })
 
   it('refuses to follow redirects, even loopback-issued ones', async () => {
-    mock.route('GET', '/api/users/0/items', (req, res, helpers) => helpers.raw(302, { Location: 'http://example.com/steal' }, ''))
+    mock.route('GET', '/api/users/0/items', (req, res, helpers) =>
+      helpers.raw(302, { Location: 'http://example.com/steal' }, ''),
+    )
     await expectZoteroError(client.getJson('users/0/items'), ZOTERO_UNEXPECTED, 'redirect')
   })
 })
 
 describe('body handling', () => {
   it('parses valid JSON and exposes response headers', async () => {
-    mock.route('GET', '/api/', (req, res, helpers) => helpers.json({ version: '10.0' }, { 'Zotero-Schema-Version': '25' }))
+    mock.route('GET', '/api/', (req, res, helpers) =>
+      helpers.json({ version: '10.0' }, { 'Zotero-Schema-Version': '25' }),
+    )
     const { json, body, headers } = await client.getJson('')
     expect(json).toEqual({ version: '10.0' })
     expect(body).toBe('{"version":"10.0"}')
@@ -138,18 +187,26 @@ describe('body handling', () => {
   })
 
   it('maps unparseable bodies to UNEXPECTED', async () => {
-    mock.route('GET', '/api/', (req, res, helpers) => helpers.text('not json', { 'Content-Type': 'application/json' }))
+    mock.route('GET', '/api/', (req, res, helpers) =>
+      helpers.text('not json', { 'Content-Type': 'application/json' }),
+    )
     await expectZoteroError(client.getJson(''), ZOTERO_UNEXPECTED, 'unparseable')
   })
 
   it('enforces the response byte bound while streaming', async () => {
-    const small = new ZoteroHttpClient({ baseUrl: mock.baseUrl, timeoutMs: 5000, maxResponseBytes: 100 })
+    const small = new ZoteroHttpClient({
+      baseUrl: mock.baseUrl,
+      timeoutMs: 5000,
+      maxResponseBytes: 100,
+    })
     mock.route('GET', '/api/users/0/items', (req, res, helpers) => helpers.text('x'.repeat(200)))
     await expectZoteroError(small.getJson('users/0/items'), ZOTERO_RESPONSE_TOO_LARGE, '100-byte')
   })
 
   it('maps a null-body 2xx to an unparseable response', async () => {
-    mock.route('GET', '/api/users/0/items', (req, res, helpers) => helpers.raw(204, { 'Content-Type': 'application/json' }, ''))
+    mock.route('GET', '/api/users/0/items', (req, res, helpers) =>
+      helpers.raw(204, { 'Content-Type': 'application/json' }, ''),
+    )
     await expectZoteroError(client.getJson('users/0/items'), ZOTERO_UNEXPECTED, 'unparseable')
   })
 
@@ -172,10 +229,18 @@ describe('failure translation', () => {
   })
 
   it('maps the provider deadline to TIMEOUT while the caller signal stays live', async () => {
-    const slow = new ZoteroHttpClient({ baseUrl: mock.baseUrl, timeoutMs: 50, maxResponseBytes: 1024 })
+    const slow = new ZoteroHttpClient({
+      baseUrl: mock.baseUrl,
+      timeoutMs: 50,
+      maxResponseBytes: 1024,
+    })
     mock.route('GET', '/api/', (req, res, helpers) => helpers.delayJson({}, 5000))
     const signal = new AbortController().signal
-    await expectZoteroError(slow.getJson('', undefined, { signal }), ZOTERO_TIMEOUT, 'did not respond')
+    await expectZoteroError(
+      slow.getJson('', undefined, { signal }),
+      ZOTERO_TIMEOUT,
+      'did not respond',
+    )
     expect(signal.aborted).toBe(false)
   })
 
