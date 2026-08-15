@@ -18,17 +18,25 @@ import {
 } from '@deepseek-ai/dsh-tools'
 import { ZOTERO_SORT_FIELDS } from '../constants.js'
 import type { ResolvedConfig } from '../config.js'
-import { ZOTERO_INVALID_ARGUMENT, ZoteroError } from '../errors.js'
 import { withConnectivityAsk } from '../ask.js'
+import { formatSearchLine } from './present.js'
+import { assertIntInRange, invalid } from './validate.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroSearchRequest } from '../types.js'
+
+const DEFAULT_MODE = 'metadata'
+const DEFAULT_SCOPE = { kind: 'library' } as const
+const DEFAULT_SORT = 'dateModified'
+const DEFAULT_DIRECTION = 'desc'
+const DEFAULT_OFFSET = 0
+const DEFAULT_LIMIT = 10
 
 const SEARCH_PARAMETERS = {
   query: { type: 'string', description: 'Free-text query; omit to browse the scope unfiltered.' },
   mode: {
     type: 'string',
     enum: ['metadata', 'everything'],
-    default: 'metadata',
+    default: DEFAULT_MODE,
     description: 'metadata: title/creator/year only; everything: also indexed full text.',
   },
   scope: {
@@ -63,7 +71,7 @@ const SEARCH_PARAMETERS = {
         },
       },
     ],
-    default: { kind: 'library' },
+    default: DEFAULT_SCOPE,
     description: 'Where to search. Defaults to the whole library.',
   },
   itemTypes: {
@@ -79,23 +87,23 @@ const SEARCH_PARAMETERS = {
   sort: {
     type: 'string',
     enum: [...ZOTERO_SORT_FIELDS],
-    default: 'dateModified',
+    default: DEFAULT_SORT,
     description: 'Result order field.',
   },
   direction: {
     type: 'string',
     enum: ['asc', 'desc'],
-    default: 'desc',
+    default: DEFAULT_DIRECTION,
     description: 'Result order direction.',
   },
   offset: {
     type: 'integer',
-    default: 0,
+    default: DEFAULT_OFFSET,
     description: 'Pagination offset for exploring more results.',
   },
   limit: {
     type: 'integer',
-    default: 10,
+    default: DEFAULT_LIMIT,
     description: 'Maximum results to return; capped by the configured maxSearchResults.',
   },
 } as const
@@ -162,20 +170,14 @@ const SEARCH_OUTPUT_SCHEMA = {
 
 type SearchOutput = InferValue<typeof SEARCH_OUTPUT_SCHEMA>
 
-function invalid(message: string): never {
-  throw new ZoteroError(message, ZOTERO_INVALID_ARGUMENT)
-}
-
-function buildRequest(args: SearchArgs, config: () => ResolvedConfig): ZoteroSearchRequest {
-  const limit = args.limit ?? 10
-  if (!Number.isInteger(limit) || limit < 1 || limit > config().maxSearchResults) {
-    invalid(`limit must be an integer between 1 and ${config().maxSearchResults}; got ${limit}`)
-  }
-  const offset = args.offset ?? 0
+function buildRequest(args: SearchArgs, config: ResolvedConfig): ZoteroSearchRequest {
+  const limit = args.limit ?? DEFAULT_LIMIT
+  assertIntInRange('limit', limit, 1, config.maxSearchResults)
+  const offset = args.offset ?? DEFAULT_OFFSET
   if (!Number.isInteger(offset) || offset < 0)
     invalid(`offset must be a non-negative integer; got ${offset}`)
   const query = args.query?.trim()
-  const scope = args.scope ?? { kind: 'library' }
+  const scope = args.scope ?? DEFAULT_SCOPE
   if (scope.kind !== 'library' && scope.refOrName.trim() === '') {
     invalid('scope.refOrName must be a collection/saved-search name or ref')
   }
@@ -193,15 +195,15 @@ function buildRequest(args: SearchArgs, config: () => ResolvedConfig): ZoteroSea
   }
   return {
     query: query === '' ? undefined : query,
-    mode: args.mode ?? 'metadata',
+    mode: args.mode ?? DEFAULT_MODE,
     scope:
       scope.kind === 'library'
         ? { kind: 'library' }
         : { kind: scope.kind, refOrName: scope.refOrName },
     itemTypes: args.itemTypes,
     tags: args.tags,
-    sort: args.sort ?? 'dateModified',
-    direction: args.direction ?? 'desc',
+    sort: args.sort ?? DEFAULT_SORT,
+    direction: args.direction ?? DEFAULT_DIRECTION,
     offset,
     limit,
   }
@@ -210,11 +212,10 @@ function buildRequest(args: SearchArgs, config: () => ResolvedConfig): ZoteroSea
 export function renderSearch(_args: SearchArgs, value: SearchOutput): ContentBlock[] {
   const lines = [`Found ${value.returned} of ${value.total} results:`]
   value.items.forEach((item, index) => {
-    const year = item.year === undefined ? '' : ` (${item.year})`
     const creator = item.creatorSummary === '' ? '' : ` — ${item.creatorSummary}`
     const pdf = item.bestAttachmentType === 'application/pdf' ? ' — PDF' : ''
     lines.push(
-      `${index + 1}. ${item.ref} — ${item.title}${year} [${item.itemType}]${creator}${pdf}`,
+      `${index + 1}. ${formatSearchLine(item.ref, item.title, item.year, item.itemType)}${creator}${pdf}`,
     )
   })
   if (value.nextOffset !== undefined) {
@@ -248,17 +249,13 @@ function presentSearchResult(_args: SearchArgs, result: ToolResult): ToolResultV
 }
 
 /**
- * Register the `zotero_search` tool. The config thunk is read per request so
- * a settings edit takes effect on the next call without re-registration.
+ * Register the `zotero_search` tool. The service's live config is read per
+ * request so a settings edit takes effect on the next call without
+ * re-registration.
  * @param ctx - the plugin context.
  * @param service - the zotero service owning the request path.
- * @param config - live provider of the resolved config.
  */
-export function registerSearchTool(
-  ctx: Context,
-  service: ZoteroService,
-  config: () => ResolvedConfig,
-): void {
+export function registerSearchTool(ctx: Context, service: ZoteroService): void {
   ctx.tools.register(
     defineTool({
       name: 'zotero_search',
@@ -285,7 +282,7 @@ export function registerSearchTool(
       isConcurrencySafe: () => true,
       async execute(args, exec) {
         return await withConnectivityAsk(ctx, exec, () =>
-          service.search(buildRequest(args, config), exec.signal),
+          service.search(buildRequest(args, service.config), exec.signal),
         )
       },
     }),

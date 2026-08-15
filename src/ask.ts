@@ -16,7 +16,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
-import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
+import { TOOL_ABORTED, type ToolRunContext } from '@deepseek-ai/dsh-tools'
 import type {
   AskUserQuestionAnswer,
   AskUserQuestionItem,
@@ -42,10 +42,7 @@ export const ASK_WORTHY_CODES = [
 export type AskWorthyCode = (typeof ASK_WORTHY_CODES)[number]
 
 /** The parts of a tool execution `withConnectivityAsk` needs. */
-export interface ConnectivityAskExec {
-  readonly signal?: AbortSignal
-  readonly agent?: unknown
-}
+export type ConnectivityAskExec = Pick<ToolRunContext, 'signal' | 'agent'>
 
 /** One connectivity failure rendered as a question card with a recommended option. */
 interface FailureSpec {
@@ -58,46 +55,46 @@ interface FailureSpec {
   readonly abortDescription: string
 }
 
-const ABORT_LABEL = '放弃这次查询'
-const ABORT_DESCRIPTION = '停止本次操作，之后可再让我重试。'
-const RETRY_DESCRIPTION = '按原参数重新执行这次查询。'
+const ABORT_LABEL = 'Abort this query'
+const ABORT_DESCRIPTION = 'Stop this operation; ask me to retry later if you still need it.'
+const RETRY_DESCRIPTION = 'Re-run the query with the original parameters.'
 
 const FAILURE_SPECS: Record<AskWorthyCode, FailureSpec> = {
   [ZOTERO_NOT_RUNNING]: {
-    header: 'Zotero 未运行',
-    question: 'Zotero 没有在运行，无法读取你的文献库。怎么处理？',
+    header: 'Zotero is not running',
+    question: 'Zotero is not running, so I cannot read your library. What should I do?',
     detail:
-      '请启动 Zotero，并确认 Settings → Advanced 里已勾选 "Allow other applications on this computer to communicate with Zotero"。',
-    retryLabel: '我已启动 Zotero，重试 (Recommended)',
+      'Start Zotero and check "Allow other applications on this computer to communicate with Zotero" under Settings → Advanced.',
+    retryLabel: 'I started Zotero, retry (Recommended)',
     retryDescription: RETRY_DESCRIPTION,
     abortLabel: ABORT_LABEL,
     abortDescription: ABORT_DESCRIPTION,
   },
   [ZOTERO_API_DISABLED]: {
-    header: 'Zotero 本地 API 未开启',
-    question: 'Zotero 正在运行，但拒绝了本地 API 请求（403）。',
+    header: 'Zotero local API is disabled',
+    question: 'Zotero is running but rejected the local API request (403).',
     detail:
-      '请在 Zotero 的 Settings → Advanced 中勾选 "Allow other applications on this computer to communicate with Zotero"。',
-    retryLabel: '我已开启本地 API，重试 (Recommended)',
+      'Check "Allow other applications on this computer to communicate with Zotero" under Zotero Settings → Advanced.',
+    retryLabel: 'I enabled the local API, retry (Recommended)',
     retryDescription: RETRY_DESCRIPTION,
     abortLabel: ABORT_LABEL,
     abortDescription: ABORT_DESCRIPTION,
   },
   [ZOTERO_API_VERSION]: {
-    header: 'Zotero 版本过旧',
-    question: '当前 Zotero 的本地 API 版本不是插件要求的版本 3。',
-    detail: '请升级 Zotero 到支持本地 API v3 的版本。',
-    retryLabel: '我已升级 Zotero，重试 (Recommended)',
+    header: 'Zotero version too old',
+    question: 'The running Zotero does not speak local API version 3, which this plugin requires.',
+    detail: 'Upgrade Zotero to a version whose local API supports version 3.',
+    retryLabel: 'I upgraded Zotero, retry (Recommended)',
     retryDescription: RETRY_DESCRIPTION,
     abortLabel: ABORT_LABEL,
     abortDescription: ABORT_DESCRIPTION,
   },
   [ZOTERO_TIMEOUT]: {
-    header: 'Zotero 响应超时',
-    question: 'Zotero 在超时时间内没有响应（可能正在为大型文献库建立索引）。',
-    detail: '本次请求在配置的超时时间后失败。',
-    retryLabel: '重试 (Recommended)',
-    retryDescription: '再次执行同一请求。',
+    header: 'Zotero timed out',
+    question: 'Zotero did not respond within the timeout (it may be indexing a large library).',
+    detail: 'The request failed after the configured timeout.',
+    retryLabel: 'Retry (Recommended)',
+    retryDescription: 'Run the same request again.',
     abortLabel: ABORT_LABEL,
     abortDescription: ABORT_DESCRIPTION,
   },
@@ -149,9 +146,7 @@ export async function withConnectivityAsk<T>(
     try {
       const request: AskUserQuestionRequest = {
         questions: [questionOf(spec)],
-        ...(exec.agent !== undefined
-          ? { agent: exec.agent as AskUserQuestionRequest['agent'] }
-          : {}),
+        ...(exec.agent !== undefined ? { agent: exec.agent } : {}),
         signal: exec.signal,
       }
       answer = await questions.ask(request)

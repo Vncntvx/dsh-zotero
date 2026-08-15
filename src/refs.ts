@@ -14,6 +14,7 @@
  */
 
 import { ZOTERO_INVALID_REF, ZoteroError } from './errors.js'
+import { isObjectKey } from './json.js'
 import type { ZoteroKind, ZoteroObjectRef } from './types.js'
 
 const REF_PATTERN =
@@ -55,7 +56,7 @@ export function formatRef(ref: ZoteroObjectRef): string {
 
 /** Build a ref for the V1 local library (user/0) without string round-tripping. */
 export function localRef(kind: ZoteroKind, key: string, serverId?: string): ZoteroObjectRef {
-  if (!/^[A-Z0-9]{8}$/.test(key)) {
+  if (!isObjectKey(key)) {
     throw new ZoteroError(`Invalid Zotero key "${key}".`, ZOTERO_INVALID_REF)
   }
   return { library: { type: 'user', id: 0 }, kind, key, serverId }

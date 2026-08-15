@@ -7,6 +7,7 @@
  */
 
 import Schema from '@deepseek-ai/schemastery'
+import { LOCAL_PROVIDER_ID } from './constants.js'
 
 export interface Config {
   /** Zotero Local API base URL. Must be plain loopback HTTP. */
@@ -51,7 +52,7 @@ export interface Config {
 
 export const Config: Schema<Config> = Schema.object({
   baseUrl: Schema.string().default('http://127.0.0.1:23119/api'),
-  provider: Schema.string().default('local'),
+  provider: Schema.string().default(LOCAL_PROVIDER_ID),
   timeoutMs: Schema.number().default(5000),
   maxSearchResults: Schema.number().default(20),
   maxNoteScanRecords: Schema.number().default(200),

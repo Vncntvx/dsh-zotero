@@ -18,8 +18,8 @@
  * @module dsh-zotero/client/card-form
  */
 
-import type { SettingsScope } from '@deepseek-ai/dsh-client-runtime/client'
-import { createSnapshot, type SnapshotSource } from './snapshot.ts'
+import type { SettingsScope, SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 
 /** The write one field's staged text performs when the card is saved. */
 export type FieldWrite = { kind: 'set'; value: unknown } | { kind: 'clear' }
@@ -165,8 +165,8 @@ export class CardForm {
    * @param project - build the card's state from the form's current reads.
    * @returns the source the card's component reads through its bound selector.
    */
-  bind<S>(project: () => S): SnapshotSource<S> {
-    const store = createSnapshot(project())
+  bind<S>(project: () => S): SnapshotStore<S> {
+    const store = createSnapshotStore(project())
     this.listeners.add(() => {
       store.set(project())
     })

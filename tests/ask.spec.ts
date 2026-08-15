@@ -9,7 +9,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
-import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
+import { TOOL_ABORTED, type ToolRunContext } from '@deepseek-ai/dsh-tools'
 import type { AskUserQuestionAnswer, AskUserQuestionRequest } from '@deepseek-ai/dsh-user-questions'
 import { describe, expect, it } from 'vitest'
 import { withConnectivityAsk } from '../src/ask.js'
@@ -20,9 +20,10 @@ import {
   ZOTERO_NOT_RUNNING,
   ZOTERO_TIMEOUT,
   ZoteroError,
+  type ZoteroErrorCode,
 } from '../src/errors.js'
 
-function zoteroError(code: string): ZoteroError {
+function zoteroError(code: ZoteroErrorCode): ZoteroError {
   return new ZoteroError(`failure ${code}`, code)
 }
 
@@ -93,30 +94,31 @@ describe('withConnectivityAsk passthrough', () => {
 })
 
 describe('withConnectivityAsk question content', () => {
-  const cases: { code: string; header: string; question: string; retryLabel: string }[] = [
+  const cases: { code: ZoteroErrorCode; header: string; question: string; retryLabel: string }[] = [
     {
       code: ZOTERO_NOT_RUNNING,
-      header: 'Zotero 未运行',
-      question: 'Zotero 没有在运行，无法读取你的文献库。怎么处理？',
-      retryLabel: '我已启动 Zotero，重试 (Recommended)',
+      header: 'Zotero is not running',
+      question: 'Zotero is not running, so I cannot read your library. What should I do?',
+      retryLabel: 'I started Zotero, retry (Recommended)',
     },
     {
       code: ZOTERO_API_DISABLED,
-      header: 'Zotero 本地 API 未开启',
-      question: 'Zotero 正在运行，但拒绝了本地 API 请求（403）。',
-      retryLabel: '我已开启本地 API，重试 (Recommended)',
+      header: 'Zotero local API is disabled',
+      question: 'Zotero is running but rejected the local API request (403).',
+      retryLabel: 'I enabled the local API, retry (Recommended)',
     },
     {
       code: ZOTERO_API_VERSION,
-      header: 'Zotero 版本过旧',
-      question: '当前 Zotero 的本地 API 版本不是插件要求的版本 3。',
-      retryLabel: '我已升级 Zotero，重试 (Recommended)',
+      header: 'Zotero version too old',
+      question:
+        'The running Zotero does not speak local API version 3, which this plugin requires.',
+      retryLabel: 'I upgraded Zotero, retry (Recommended)',
     },
     {
       code: ZOTERO_TIMEOUT,
-      header: 'Zotero 响应超时',
-      question: 'Zotero 在超时时间内没有响应（可能正在为大型文献库建立索引）。',
-      retryLabel: '重试 (Recommended)',
+      header: 'Zotero timed out',
+      question: 'Zotero did not respond within the timeout (it may be indexing a large library).',
+      retryLabel: 'Retry (Recommended)',
     },
   ]
 
@@ -138,14 +140,14 @@ describe('withConnectivityAsk question content', () => {
       expect(questionItem.detail).not.toBe('')
       expect(questionItem.options).toHaveLength(2)
       expect(questionItem.options![0]!.label).toBe(retryLabel)
-      expect(questionItem.options![1]!.label).toBe('放弃这次查询')
+      expect(questionItem.options![1]!.label).toBe('Abort this query')
     })
   }
 
   it('forwards the calling agent and signal with the question', async () => {
     const signal = new AbortController().signal
-    const agent = { id: 'agent-1' }
-    const { ctx, calls } = fakeContext(() => retryAnswer('重试 (Recommended)'))
+    const agent = { id: 'agent-1' } as unknown as NonNullable<ToolRunContext['agent']>
+    const { ctx, calls } = fakeContext(() => retryAnswer('Retry (Recommended)'))
     const error = zoteroError(ZOTERO_TIMEOUT)
     await expect(
       withConnectivityAsk(ctx, { signal, agent }, async () => Promise.reject(error)),
@@ -157,7 +159,7 @@ describe('withConnectivityAsk question content', () => {
 
 describe('withConnectivityAsk retry semantics', () => {
   it('re-runs the request once with identical arguments when the user retries', async () => {
-    const { ctx, calls } = fakeContext(() => retryAnswer('重试 (Recommended)'))
+    const { ctx, calls } = fakeContext(() => retryAnswer('Retry (Recommended)'))
     const argumentsSeen: string[] = []
     const run = async (): Promise<string> => {
       argumentsSeen.push('same')
@@ -170,7 +172,7 @@ describe('withConnectivityAsk retry semantics', () => {
   })
 
   it('surfaces the second failure without asking again', async () => {
-    const { ctx, calls } = fakeContext(() => retryAnswer('我已启动 Zotero，重试 (Recommended)'))
+    const { ctx, calls } = fakeContext(() => retryAnswer('I started Zotero, retry (Recommended)'))
     const error = zoteroError(ZOTERO_NOT_RUNNING)
     let attempts = 0
     const run = async (): Promise<never> => {
@@ -183,7 +185,7 @@ describe('withConnectivityAsk retry semantics', () => {
   })
 
   it('surfaces the original error when the user aborts', async () => {
-    const { ctx, calls } = fakeContext(() => retryAnswer('放弃这次查询'))
+    const { ctx, calls } = fakeContext(() => retryAnswer('Abort this query'))
     const error = zoteroError(ZOTERO_NOT_RUNNING)
     await expect(withConnectivityAsk(ctx, exec, async () => Promise.reject(error))).rejects.toBe(
       error,

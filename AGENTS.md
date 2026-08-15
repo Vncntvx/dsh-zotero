@@ -28,7 +28,7 @@ npm run test:integration     # live Zotero at 127.0.0.1:23119; skipped unless ZO
 The plugin is a class-form Cordis service: the loader mounts the default export (`ZoteroService`) with the row's validated config. `src/index.ts` stays a pure re-export entry.
 
 - `ZoteroService extends Service` with `static inject = ['tools', 'systemPrompt']` and `static Config = ConfigSchema`; declaration merging exposes it as `ctx.zotero` ([plugin forms](../docs/user/develop/basic/index.md), [services](../docs/user/develop/framework/service.md)).
-- The constructor installs the `zotero` settings section via `installSettingsSection` (composition entry as the base layer): `config` is a getter over a live source, and every committed section rebuilds the HTTP client and the `local` provider through `rebuild()`. Tool registrations receive a config thunk so validation limits follow edits. The namespace constant lives in `src/settings-namespace.ts`, shared with the browser half.
+- The constructor installs the `zotero` settings section via `installSettingsSection` (composition entry as the base layer): `config` is a getter over a live source, and every committed section rebuilds the HTTP client and the `local` provider through `rebuild()`. Tools read `service.config` per request so validation limits follow edits. The namespace constant lives in `src/settings-namespace.ts`, shared with the browser half.
 - One package owns all three capability roles: definition (`ZoteroService` + the `ZoteroProvider` interface in `src/types.ts`), provider (`LocalApiProvider`), consumers (`src/tools/`). Split only when roles must evolve independently ([three-role design](../docs/user/develop/practice/index.md)).
 - Providers register through `registerProvider()` (effect-scoped; duplicate ids throw) and are selected by the `provider` config id. The service gates every domain call on the provider's declared `capabilities`; there is no cross-provider fallback.
 
@@ -41,7 +41,7 @@ Everything registered in the constructor unwinds with the plugin fiber, so confi
 - Command: `ctx.inject(['commands'], ...)` — the optional-dependency form keeps the plugin loadable in headless compositions without `commands`.
 - Provider: `ctx.effect()`.
 - Settings section: `installSettingsSection` (optional dependency — absent settings services leave the plugin on its entry config).
-- Browser card: `src/client/` registers into the harness's `settings.plugin.item` slot with its own staged form (no cross-plugin value imports); built to `lib/client.js` by esbuild in the `__ModuleLoader__.load` handoff format.
+- Browser card: `src/client/` registers into the harness's `settings.section` slot with its own staged form (no cross-plugin value imports); built to `lib/client.js` by esbuild in the `__ModuleLoader__.load` handoff format.
 
 ## Conventions
 

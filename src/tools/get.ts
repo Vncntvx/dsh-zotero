@@ -1,8 +1,8 @@
 /**
  * The `zotero_get` tool: read one item's metadata, with child notes,
  * annotations, and attachments included on request. The default call is a
- * single request; each included child kind adds one lazy `/children`
- * request. Ref provenance is checked by the provider.
+ * single request; any include adds one lazy `/children` request for all
+ * requested kinds. Ref provenance is checked by the provider.
  * @module dsh-zotero/tools/get
  */
 
@@ -10,6 +10,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { defineTool, type InferArgs, type InferValue } from '@deepseek-ai/dsh-tools'
 import { withConnectivityAsk } from '../ask.js'
+import { formatSearchLine } from './present.js'
 import { parseRef, requireLocalRef } from '../refs.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroGetRequest, ZoteroInclude } from '../types.js'
@@ -24,7 +25,7 @@ const GET_PARAMETERS = {
     type: 'array',
     items: { type: 'string', enum: ['notes', 'annotations', 'attachments'] },
     description:
-      'Child content kinds to include. Omit for metadata only; each included kind adds one lazy request.',
+      'Child content kinds to include. Omit for metadata only; any include adds one lazy /children request.',
   },
 } as const
 
@@ -148,17 +149,12 @@ function buildRequest(args: GetArgs): ZoteroGetRequest {
   return { ref, include: new Set<ZoteroInclude>(args.include ?? []) }
 }
 
-function decorate(value: GetOutput): string {
-  const year = value.year === undefined ? '' : ` (${value.year})`
-  return `${value.ref} — ${value.title}${year} [${value.itemType}]`
-}
-
 export function renderGet(_args: GetArgs, value: GetOutput): ContentBlock[] {
-  const lines = [decorate(value)]
+  const lines = [formatSearchLine(value.ref, value.title, value.year, value.itemType)]
   if (value.creators.length > 0) lines.push(`Creators: ${value.creators.join('; ')}`)
   const venueLine = [
-    value.venue ?? undefined,
-    value.date ?? undefined,
+    value.venue,
+    value.date,
     value.doi === undefined ? undefined : `DOI: ${value.doi}`,
   ].filter((part): part is string => part !== undefined)
   if (venueLine.length > 0) lines.push(venueLine.join(' · '))
@@ -203,7 +199,7 @@ export function registerGetTool(ctx: Context, service: ZoteroService): void {
       name: 'zotero_get',
       description: [
         'Read the metadata of one Zotero library item referenced by a zotero:// ref.',
-        'The default call fetches metadata only; request include to also return child notes, annotations, and attachments (each adds one lazy request).',
+        'The default call fetches metadata only; request include to also return child notes, annotations, and attachments (one extra request covers all included kinds).',
         'When the item is a note, noteBody returns its own text (bounded by the configured budget; truncated flags the cut) — include governs child kinds only.',
         'Child notes carry parentRef, the parent item ref that produced them.',
         'Results echo the served instance in the ref, so refs can be reused safely.',

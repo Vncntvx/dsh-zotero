@@ -10,6 +10,9 @@
 
 import type { ZoteroSortField } from './types.js'
 
+/** The id the built-in local provider registers under; also the provider config default. */
+export const LOCAL_PROVIDER_ID = 'local'
+
 /** The sort fields `zotero_search` accepts, in Zotero's own vocabulary. */
 export const ZOTERO_SORT_FIELDS: readonly ZoteroSortField[] = [
   'dateModified',

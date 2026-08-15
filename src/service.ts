@@ -87,11 +87,16 @@ export class ZoteroService extends Service {
     this.rebuild()
     registerStatusCommand(ctx, this)
     registerPromptSection(ctx)
-    registerSearchTool(ctx, this, () => this.config)
+    registerSearchTool(ctx, this)
     registerGetTool(ctx, this)
     registerAttachmentTool(ctx, this)
-    registerRetrieveTool(ctx, this, () => this.config)
-    registerExportTool(ctx, this, () => this.config)
+    registerRetrieveTool(ctx, this)
+    registerExportTool(ctx, this)
+    // The attach runs through a cordis fiber, never synchronously inside the
+    // install: when a settings service is composed, setSource switches the
+    // config authority and onChange rebuilds shortly after this constructor —
+    // the entry-config build here serves headless compositions and the window
+    // before that attach.
     installSettingsSection(ctx, settingsNamespace(ZOTERO_SETTINGS_NAMESPACE), ConfigSchema, entry, {
       validate: resolveConfig,
       setSource: (current) => {

@@ -29,7 +29,12 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const PLUGIN_ID = 'dsh-zotero'
 
 /** Platform modules the loader's module table answers; never bundled. */
-const EXTERNALS = ['react', 'react/jsx-runtime', '@deepseek-ai/dsh-client-ui-primitives']
+const EXTERNALS = [
+  'react',
+  'react/jsx-runtime',
+  '@deepseek-ai/dsh-client-ui-primitives',
+  '@deepseek-ai/dsh-client-runtime/client',
+]
 
 const options = {
   entryPoints: [join(root, 'src/client/index.ts')],

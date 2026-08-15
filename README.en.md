@@ -47,7 +47,7 @@ The Agent moves down the ladder as a request deepens. A typical conversation:
 ## On-demand work and connectivity-failure interaction
 
 - The plugin is resident but strictly request-driven: loading, idling, and unloading never issue a request (no probes, no polling, no background work). Only two entry points touch Zotero: the five tools, invoked when the user explicitly asks about their library, and the explicitly invoked `/zotero status` command.
-- When a tool call fails with a connectivity error (`ZOTERO_NOT_RUNNING` not running / `ZOTERO_API_DISABLED` local API disabled / `ZOTERO_API_VERSION` unsupported version / `ZOTERO_TIMEOUT` timed out), the plugin asks the user how to proceed through an interactive question card: the first option is the recommended action marked `(Recommended)` (e.g. "I started Zotero — retry"); choosing it re-runs the same request once, and a second failure or the "abort" choice surfaces the original typed error — never a second question.
+- When a tool call fails with a connectivity error (`ZOTERO_NOT_RUNNING` not running / `ZOTERO_API_DISABLED` local API disabled / `ZOTERO_API_VERSION` unsupported version / `ZOTERO_TIMEOUT` timed out), the plugin asks the user how to proceed through an interactive question card: the first option is the recommended action marked `(Recommended)` (e.g. "I started Zotero, retry (Recommended)"); choosing it re-runs the same request once, and a second failure or the "Abort this query" choice surfaces the original typed error — never a second question.
 - Without an interactive provider (headless compositions), the ask is skipped and the typed error is returned as-is; a failing question mechanism never masks the original connectivity error.
 
 ## Limits

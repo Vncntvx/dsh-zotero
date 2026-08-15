@@ -37,13 +37,37 @@ export const ZOTERO_PROVIDER_UNAVAILABLE = 'ZOTERO_PROVIDER_UNAVAILABLE'
 /** A response could not be parsed or behaved unexpectedly. */
 export const ZOTERO_UNEXPECTED = 'ZOTERO_UNEXPECTED'
 
+const ZOTERO_ERROR_CODES = [
+  ZOTERO_NOT_RUNNING,
+  ZOTERO_API_DISABLED,
+  ZOTERO_API_VERSION,
+  ZOTERO_SERVER_MISMATCH,
+  ZOTERO_NOT_FOUND,
+  ZOTERO_NO_ATTACHMENT,
+  ZOTERO_NO_FULLTEXT,
+  ZOTERO_FILE_MISSING,
+  ZOTERO_INVALID_REF,
+  ZOTERO_INVALID_ARGUMENT,
+  ZOTERO_SCOPE_AMBIGUOUS,
+  ZOTERO_TIMEOUT,
+  ZOTERO_RESPONSE_TOO_LARGE,
+  ZOTERO_OUTPUT_TOO_LARGE,
+  ZOTERO_CAPABILITY_UNAVAILABLE,
+  ZOTERO_PROVIDER_UNAVAILABLE,
+  ZOTERO_UNEXPECTED,
+] as const
+
+/** Every stable error code a `ZoteroError` may carry. */
+export type ZoteroErrorCode = (typeof ZOTERO_ERROR_CODES)[number]
+
 /**
  * Domain failure with a stable machine-routable code and an actionable,
  * model-facing message. The tool registry renders it as `Error: <message>`
- * with `isError: true`; never embed HTTP internals in the message.
+ * with `isError: true`; messages may carry domain facts such as a status
+ * code, but never raw HTTP internals (bodies, headers, engine text).
  */
 export class ZoteroError extends HarnessError {
-  constructor(message: string, code: string, options?: ErrorOptions) {
+  constructor(message: string, code: ZoteroErrorCode, options?: ErrorOptions) {
     super(message, code, options)
   }
 }
@@ -100,11 +124,6 @@ export function errnoCodeOf(error: unknown): string | undefined {
     : undefined
 }
 
-/** True only for the DOMException produced by `AbortSignal.timeout`, never for caller aborts. */
-export function isProviderTimeout(error: unknown): boolean {
-  return error instanceof Error && error.name === 'TimeoutError'
-}
-
 /** True for a translated 404 domain error, which specific endpoints reinterpret. */
 export function isNotFoundError(error: unknown): boolean {
   return error instanceof ZoteroError && error.code === ZOTERO_NOT_FOUND
@@ -114,12 +133,4 @@ export function isNotFoundError(error: unknown): boolean {
 export function isUnreachableCause(error: unknown): boolean {
   const code = errnoCodeOf(error)
   return code !== undefined && UNREACHABLE_CODES.has(code)
-}
-
-/** An error's message joined with its cause's message, for pattern matching over the chain. */
-export function errorChainText(error: unknown): string {
-  const cause = errorCauseOf(error)
-  return cause === undefined
-    ? errorMessageOf(error)
-    : `${errorMessageOf(error)} ${errorMessageOf(cause)}`
 }

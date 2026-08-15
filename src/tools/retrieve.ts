@@ -12,18 +12,15 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { defineTool, type InferArgs, type InferValue } from '@deepseek-ai/dsh-tools'
 import type { ResolvedConfig } from '../config.js'
-import { ZOTERO_INVALID_ARGUMENT, ZoteroError } from '../errors.js'
 import { withConnectivityAsk } from '../ask.js'
+import { assertIntInRange, invalid } from './validate.js'
 import { parseRef, requireLocalRef } from '../refs.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroEvidenceSource, ZoteroRetrieveRequest } from '../types.js'
 
-const ALL_SOURCES: ('annotation' | 'note' | 'abstract' | 'fulltext')[] = [
-  'annotation',
-  'note',
-  'abstract',
-  'fulltext',
-]
+const ALL_SOURCES: ZoteroEvidenceSource[] = ['annotation', 'note', 'abstract', 'fulltext']
+
+const DEFAULT_PASSAGES = 4
 
 const RETRIEVE_PARAMETERS = {
   ref: {
@@ -45,7 +42,7 @@ const RETRIEVE_PARAMETERS = {
   },
   passages: {
     type: 'integer',
-    default: 4,
+    default: DEFAULT_PASSAGES,
     description:
       'Maximum ranked evidence passages to return; capped by the configured maxEvidencePassages.',
   },
@@ -96,24 +93,16 @@ const RETRIEVE_OUTPUT_SCHEMA = {
 
 type RetrieveOutput = InferValue<typeof RETRIEVE_OUTPUT_SCHEMA>
 
-function invalid(message: string): never {
-  throw new ZoteroError(message, ZOTERO_INVALID_ARGUMENT)
-}
-
-function buildRequest(args: RetrieveArgs, config: () => ResolvedConfig): ZoteroRetrieveRequest {
+function buildRequest(args: RetrieveArgs, config: ResolvedConfig): ZoteroRetrieveRequest {
   const query = args.query.trim()
   if (query === '') invalid('query must be a non-empty string of terms to rank evidence against')
-  const passages = args.passages ?? 4
-  if (!Number.isInteger(passages) || passages < 1 || passages > config().maxEvidencePassages) {
-    invalid(
-      `passages must be an integer between 1 and ${config().maxEvidencePassages}; got ${passages}`,
-    )
-  }
-  const sources = args.sources ?? ['annotation', 'note', 'abstract', 'fulltext']
+  const passages = args.passages ?? DEFAULT_PASSAGES
+  assertIntInRange('passages', passages, 1, config.maxEvidencePassages)
+  const sources = args.sources ?? ALL_SOURCES
   if (sources.length === 0) invalid('sources must list at least one evidence source')
   const ref = parseRef(args.ref)
   requireLocalRef(ref, ['item'])
-  return { ref, query, sources: [...sources] as ZoteroEvidenceSource[], passages }
+  return { ref, query, sources: [...sources], passages }
 }
 
 export function renderRetrieve(_args: RetrieveArgs, value: RetrieveOutput): ContentBlock[] {
@@ -152,17 +141,13 @@ export function renderRetrieve(_args: RetrieveArgs, value: RetrieveOutput): Cont
 }
 
 /**
- * Register the `zotero_retrieve` tool. The config thunk is read per request so
- * a settings edit takes effect on the next call without re-registration.
+ * Register the `zotero_retrieve` tool. The service's live config is read per
+ * request so a settings edit takes effect on the next call without
+ * re-registration.
  * @param ctx - the plugin context.
  * @param service - the zotero service owning the request path.
- * @param config - live provider of the resolved config.
  */
-export function registerRetrieveTool(
-  ctx: Context,
-  service: ZoteroService,
-  config: () => ResolvedConfig,
-): void {
+export function registerRetrieveTool(ctx: Context, service: ZoteroService): void {
   ctx.tools.register(
     defineTool({
       name: 'zotero_retrieve',
@@ -187,7 +172,7 @@ export function registerRetrieveTool(
       isConcurrencySafe: () => true,
       async execute(args, exec) {
         return await withConnectivityAsk(ctx, exec, () =>
-          service.retrieve(buildRequest(args, config), exec.signal),
+          service.retrieve(buildRequest(args, service.config), exec.signal),
         )
       },
     }),

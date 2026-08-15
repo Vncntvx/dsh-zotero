@@ -14,6 +14,7 @@ import {
   type ZoteroAttachmentCandidate,
 } from './attachments.js'
 import { ZOTERO_UNEXPECTED, ZoteroError } from './errors.js'
+import { asRecord, asString, isObjectKey } from './json.js'
 import { formatRef, localRef } from './refs.js'
 import type {
   ZoteroAnnotationRecord,
@@ -27,18 +28,6 @@ import type {
 } from './types.js'
 
 export { extractAttachmentKey, normalizeAttachmentRecord } from './attachments.js'
-
-const OBJECT_KEY_PATTERN = /^[A-Z0-9]{8}$/
-
-export function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : undefined
-}
-
-export function asString(value: unknown): string | undefined {
-  return typeof value === 'string' ? value : undefined
-}
 
 function nonEmpty(value: string | undefined): string | undefined {
   return value !== undefined && value !== '' ? value : undefined
@@ -72,7 +61,7 @@ export function plainNoteText(value: unknown): string {
 /** A valid parent-item key from `data.parentItem`, or undefined. */
 function parentKeyOf(data: Record<string, unknown> | undefined): string | undefined {
   const parent = asString(data?.parentItem)
-  return parent !== undefined && OBJECT_KEY_PATTERN.test(parent) ? parent : undefined
+  return parent !== undefined && isObjectKey(parent) ? parent : undefined
 }
 
 /**
@@ -87,7 +76,7 @@ export function normalizeSearchItem(json: unknown, serverId?: string): ZoteroSea
     throw new ZoteroError('Zotero returned an item without a valid object key.', ZOTERO_UNEXPECTED)
   }
   const key = asString(record.key)
-  if (key === undefined || !OBJECT_KEY_PATTERN.test(key)) {
+  if (key === undefined || !isObjectKey(key)) {
     throw new ZoteroError('Zotero returned an item without a valid object key.', ZOTERO_UNEXPECTED)
   }
   const data = asRecord(record.data)
@@ -134,7 +123,7 @@ export function normalizeSearchItem(json: unknown, serverId?: string): ZoteroSea
 export function normalizeScopeEntry(json: unknown): { key: string; name: string } {
   const record = asRecord(json)
   const key = asString(record?.key)
-  if (key === undefined || !OBJECT_KEY_PATTERN.test(key)) {
+  if (key === undefined || !isObjectKey(key)) {
     throw new ZoteroError(
       'Zotero returned a scope object without a valid object key.',
       ZOTERO_UNEXPECTED,
@@ -151,18 +140,16 @@ export interface ScopeNameEntry {
 /**
  * Match a wanted name against scope entries: an exact Unicode match wins;
  * otherwise every case-insensitive match is returned (possibly none).
+ * @returns the matching entries, exact or case-insensitive.
  */
 export function matchScopeName(
   entries: readonly ScopeNameEntry[],
   wanted: string,
-): { exact: boolean; matched: ScopeNameEntry[] } {
+): ScopeNameEntry[] {
   const exact = entries.filter((entry) => entry.name === wanted)
-  if (exact.length > 0) return { exact: true, matched: exact }
+  if (exact.length > 0) return exact
   const wantedLower = wanted.toLowerCase()
-  return {
-    exact: false,
-    matched: entries.filter((entry) => entry.name.toLowerCase() === wantedLower),
-  }
+  return entries.filter((entry) => entry.name.toLowerCase() === wantedLower)
 }
 
 /**
@@ -245,7 +232,7 @@ export function normalizeNoteRecord(
 ): ZoteroNoteRecord {
   const record = asRecord(json)
   const key = asString(record?.key)
-  if (key === undefined || !OBJECT_KEY_PATTERN.test(key)) {
+  if (key === undefined || !isObjectKey(key)) {
     throw new ZoteroError('Zotero returned a note without a valid object key.', ZOTERO_UNEXPECTED)
   }
   const data = asRecord(record?.data)
@@ -273,7 +260,7 @@ export function normalizeAnnotationRecord(
 ): ZoteroAnnotationRecord {
   const record = asRecord(json)
   const key = asString(record?.key)
-  if (key === undefined || !OBJECT_KEY_PATTERN.test(key)) {
+  if (key === undefined || !isObjectKey(key)) {
     throw new ZoteroError(
       'Zotero returned an annotation without a valid object key.',
       ZOTERO_UNEXPECTED,
@@ -384,7 +371,7 @@ function attachmentRecordOf(
 export function normalizeItemDetail(input: NormalizeItemDetailInput): ZoteroItemDetail {
   const record = asRecord(input.parent)
   const key = asString(record?.key)
-  if (key === undefined || !OBJECT_KEY_PATTERN.test(key)) {
+  if (key === undefined || !isObjectKey(key)) {
     throw new ZoteroError('Zotero returned an item without a valid object key.', ZOTERO_UNEXPECTED)
   }
   const data = asRecord(record?.data)

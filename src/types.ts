@@ -10,18 +10,8 @@
  * @module dsh-zotero/types
  */
 
-/** A capability a provider may safely support. `write` is declared but never implemented in V1. */
-export type ZoteroCapability =
-  | 'search'
-  | 'metadata'
-  | 'collections'
-  | 'tags'
-  | 'notes'
-  | 'annotations'
-  | 'fulltext'
-  | 'attachments'
-  | 'citation'
-  | 'write'
+/** A capability a provider may safely support. */
+export type ZoteroCapability = 'search' | 'metadata' | 'attachments' | 'fulltext' | 'citation'
 
 /** The library a Zotero object lives in. The Local API serves the logged-in user's library. */
 export interface ZoteroLibraryRef {

@@ -15,6 +15,7 @@
 import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { ZoteroHttpClient } from './http-client.js'
+import { LOCAL_PROVIDER_ID } from './constants.js'
 import {
   NO_FULLTEXT_MESSAGE,
   isNotFoundError,
@@ -29,9 +30,8 @@ import {
   errorMessageOf,
 } from './errors.js'
 import { chunkText, rankChunks, tokenize } from './evidence.js'
+import { asRecord, asString, isObjectKey } from './json.js'
 import {
-  asRecord,
-  asString,
   collectionKeysOf,
   matchScopeName,
   nearScopeCandidates,
@@ -68,8 +68,6 @@ import type {
   ZoteroSearchScope,
   ZoteroStatus,
 } from './types.js'
-
-export const LOCAL_PROVIDER_ID = 'local'
 
 /** Escape a literal tag so a leading `-` never becomes Zotero's NOT syntax. */
 export function encodeLiteralTag(tag: string): string {
@@ -158,10 +156,6 @@ export class LocalApiProvider implements ZoteroProvider {
   readonly capabilities: ReadonlySet<ZoteroCapability> = new Set<ZoteroCapability>([
     'metadata',
     'search',
-    'collections',
-    'tags',
-    'notes',
-    'annotations',
     'attachments',
     'fulltext',
     'citation',
@@ -655,7 +649,7 @@ export class LocalApiProvider implements ZoteroProvider {
       for (const row of Array.isArray(json) ? json : []) {
         const record = asRecord(row)
         const key = asString(record?.key)
-        if (key === undefined || !/^[A-Z0-9]{8}$/.test(key)) {
+        if (key === undefined || !isObjectKey(key)) {
           throw new ZoteroError(
             'Zotero returned an item without a valid object key.',
             ZOTERO_UNEXPECTED,
@@ -814,7 +808,7 @@ export class LocalApiProvider implements ZoteroProvider {
       signal,
     })
     const entries = (Array.isArray(json) ? json : []).map((row) => normalizeScopeEntry(row))
-    const matched = matchScopeName(entries, refOrName).matched
+    const matched = matchScopeName(entries, refOrName)
     if (matched.length === 1) {
       const found = matched[0]!
       return {
