@@ -32,16 +32,6 @@ import { en, zh } from './locales.ts'
 /** Dictionary namespace owned by this plugin. */
 const NS = 'zotero'
 
-/**
- * The Zotero brand glyph as JSON icon data (the settings shell renders it
- * inline in `currentColor`): the official mark, monochrome for the nav rail,
- * scaled to 75% of its viewBox so it reads one visual size with the shell's
- * built-in glyphs.
- */
-const NAV_ICON = {
-  path: 'M18.923 4.847 8.385 18.692h10.923V21H4.692v-1.847L15.231 5.307H5.231V3h13.692v1.847z',
-}
-
 /** Required services (cordis fiber inject). */
 export const inject = ['locale', 'slots', 'remote']
 
@@ -85,9 +75,6 @@ export function apply(ctx: ClientContext): void {
         order: 30,
         label: () => t('nav'),
         locale: NS,
-        // The nav glyph: the settings shell renders a registration-provided
-        // icon ahead of its built-in id map (ui-settings-general).
-        icon: NAV_ICON,
         inject: () => card.inject(),
       },
       ZoteroSettingsSection,

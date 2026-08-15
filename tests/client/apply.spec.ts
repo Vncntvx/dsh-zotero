@@ -149,10 +149,6 @@ describe('the browser-half entry', () => {
     expect(typeof registration?.component).toBe('function')
     // The nav label resolves through the bound locale reader.
     expect((registration?.options.label as () => string)()).toBe('nav')
-    // The nav glyph rides the registration as JSON icon data.
-    expect(registration?.options.icon).toEqual({
-      path: 'M18.923 4.847 8.385 18.692h10.923V21H4.692v-1.847L15.231 5.307H5.231V3h13.692v1.847z',
-    })
   })
 
   it('fails the mount when the Remote namespace is not served', async () => {
