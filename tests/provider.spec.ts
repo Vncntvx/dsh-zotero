@@ -982,3 +982,90 @@ describe('export tolerances', () => {
     })
   })
 })
+
+describe('getAttachmentLocation via item refs', () => {
+  const FILE_ATTACHMENT = {
+    key: 'WXYZ6789',
+    version: 1,
+    data: { itemType: 'attachment', title: 'Full Text PDF', contentType: 'application/pdf', linkMode: 'imported_file' },
+  }
+
+  it('resolves an item ref through Zotero\'s best-attachment link', async () => {
+    const filePath = join(tempDir, 'paper.pdf')
+    writeFileSync(filePath, '%PDF stub')
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) => (
+      helpers.json({
+        key: 'ABCD1234',
+        version: 3,
+        links: { attachment: { href: 'http://localhost:23119/api/users/0/items/WXYZ6789', type: 'application/json', attachmentType: 'application/pdf' } },
+        data: { itemType: 'journalArticle', title: 'FlashAttention-2' },
+      }, { 'Zotero-Server-ID': 'S1' })
+    ))
+    mock.route('GET', '/api/users/0/items/WXYZ6789', (req, res, helpers) => helpers.json(FILE_ATTACHMENT))
+    mock.route('GET', '/api/users/0/items/WXYZ6789/file/view/url', (req, res, helpers) => (
+      helpers.text(pathToFileURL(filePath).href)
+    ))
+    const location = await provider.getAttachmentLocation(parseRef('zotero://user/0/item/ABCD1234'))
+    expect(mock.requests.map((entry) => entry.pathname)).toEqual([
+      '/api/users/0/items/ABCD1234',
+      '/api/users/0/items/WXYZ6789',
+      '/api/users/0/items/WXYZ6789/file/view/url',
+    ])
+    expect(location).toEqual({
+      ref: 'zotero://user/0/attachment/WXYZ6789',
+      title: 'Full Text PDF',
+      contentType: 'application/pdf',
+      kind: 'file',
+      path: filePath,
+    })
+  })
+
+  it('falls back to a PDF child when the item has no attachment link', async () => {
+    const filePath = join(tempDir, 'paper.pdf')
+    writeFileSync(filePath, '%PDF stub')
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) => (
+      helpers.json({ key: 'ABCD1234', version: 3, data: { itemType: 'journalArticle', title: 'T' } })
+    ))
+    mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) => helpers.json([
+      { key: 'NOTE1111', data: { itemType: 'note', note: 'n' } },
+      { key: 'WXYZ6789', data: { itemType: 'attachment', title: 'Full Text PDF', contentType: 'application/pdf', linkMode: 'imported_file' } },
+    ]))
+    mock.route('GET', '/api/users/0/items/WXYZ6789', (req, res, helpers) => helpers.json(FILE_ATTACHMENT))
+    mock.route('GET', '/api/users/0/items/WXYZ6789/file/view/url', (req, res, helpers) => (
+      helpers.text(pathToFileURL(filePath).href)
+    ))
+    const location = await provider.getAttachmentLocation(parseRef('zotero://user/0/item/ABCD1234'))
+    expect(mock.requests.map((entry) => entry.pathname)).toEqual([
+      '/api/users/0/items/ABCD1234',
+      '/api/users/0/items/ABCD1234/children',
+      '/api/users/0/items/WXYZ6789',
+      '/api/users/0/items/WXYZ6789/file/view/url',
+    ])
+    expect(location.kind).toBe('file')
+  })
+
+  it('fails with NO_ATTACHMENT when the item has no attachment', async () => {
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) => (
+      helpers.json({ key: 'ABCD1234', version: 3, data: { itemType: 'journalArticle', title: 'T' } })
+    ))
+    mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) => helpers.json([
+      { key: 'NOTE1111', data: { itemType: 'note', note: 'only a note' } },
+    ]))
+    await zoteroError(
+      provider.getAttachmentLocation(parseRef('zotero://user/0/item/ABCD1234')),
+      ZOTERO_NO_ATTACHMENT,
+      'no attachment',
+    )
+  })
+
+  it('fails with NO_ATTACHMENT on a non-array children fallback', async () => {
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) => (
+      helpers.json({ key: 'ABCD1234', version: 3, data: { itemType: 'journalArticle', title: 'T' } })
+    ))
+    mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) => helpers.json({ key: 'NOTE1111' }))
+    await zoteroError(
+      provider.getAttachmentLocation(parseRef('zotero://user/0/item/ABCD1234')),
+      ZOTERO_NO_ATTACHMENT,
+    )
+  })
+})

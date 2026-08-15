@@ -401,6 +401,39 @@ describe('zotero_attachment tool', () => {
     }
   })
 
+  it('resolves an item ref to its best attachment', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dsh-zotero-'))
+    try {
+      const filePath = join(dir, 'paper.pdf')
+      writeFileSync(filePath, '%PDF stub')
+      mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) => helpers.json({
+        key: 'ABCD1234',
+        version: 3,
+        links: { attachment: { href: 'http://localhost:23119/api/users/0/items/WXYZ6789', type: 'application/json', attachmentType: 'application/pdf' } },
+        data: { itemType: 'journalArticle', title: 'FlashAttention-2' },
+      }))
+      mock.route('GET', '/api/users/0/items/WXYZ6789', (req, res, helpers) => helpers.json(FILE_ATTACHMENT))
+      mock.route('GET', '/api/users/0/items/WXYZ6789/file/view/url', (req, res, helpers) => helpers.text(pathToFileURL(filePath).href))
+      const result = await runTool('zotero_attachment', { ref: 'zotero://user/0/item/ABCD1234' })
+      expect(result.isError).toBe(false)
+      if (result.isError) throw new Error('unreachable')
+      expect(mock.requests.map((request) => request.pathname)).toEqual([
+        '/api/users/0/items/ABCD1234',
+        '/api/users/0/items/WXYZ6789',
+        '/api/users/0/items/WXYZ6789/file/view/url',
+      ])
+      expect(result.value).toEqual({
+        ref: 'zotero://user/0/attachment/WXYZ6789',
+        title: 'Full Text PDF',
+        contentType: 'application/pdf',
+        kind: 'file',
+        path: filePath,
+      })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('serves linked-URL attachments without a file request', async () => {
     mock.route('GET', '/api/users/0/items/WXYZ6789', (req, res, helpers) => helpers.json({
       key: 'WXYZ6789',
@@ -459,10 +492,10 @@ describe('zotero_attachment tool', () => {
     if (!malformed.isError) throw new Error('unreachable')
     expect((malformed.content[0] as { text: string }).text).toContain('Invalid Zotero reference')
 
-    const wrongKind = await runTool('zotero_attachment', { ref: 'zotero://user/0/item/ABCD1234' })
+    const wrongKind = await runTool('zotero_attachment', { ref: 'zotero://user/0/collection/COLL1234' })
     expect(wrongKind.isError).toBe(true)
     if (!wrongKind.isError) throw new Error('unreachable')
-    expect((wrongKind.content[0] as { text: string }).text).toContain('Expected a attachment reference')
+    expect((wrongKind.content[0] as { text: string }).text).toContain('Expected a item or attachment reference')
 
     expect(mock.requests).toEqual([])
   })

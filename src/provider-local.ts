@@ -233,15 +233,19 @@ export class LocalApiProvider implements ZoteroProvider {
   }
 
   /**
-   * Resolve an attachment ref to a usable location. Linked-URL attachments
-   * carry their target in `data.url` (their `/file/view/url` endpoint
-   * rejects non-file attachments); file attachments resolve through
-   * `/file/view/url` and are stat'ed so a missing file fails with a typed
-   * error instead of a dead path.
+   * Resolve an item or attachment ref to a usable location. An item ref
+   * follows Zotero's own best-attachment link first and falls back to the
+   * earliest PDF child, so callers do not need the attachment's key when
+   * one attachment is enough. Linked-URL attachments carry their target in
+   * `data.url` (their `/file/view/url` endpoint rejects non-file
+   * attachments); file attachments resolve through `/file/view/url` and
+   * are stat'ed so a missing file fails with a typed error instead of a
+   * dead path.
    */
   async getAttachmentLocation(ref: ZoteroObjectRef, signal?: AbortSignal): Promise<ZoteroAttachmentLocation> {
-    const local = requireLocalRef(ref, ['attachment'])
-    const item = await this.client.getJson<unknown>(`users/0/items/${local.key}`, undefined, {
+    const local = requireLocalRef(ref, ['item', 'attachment'])
+    const attachmentKey = await this.resolveAttachmentKey(local, signal)
+    const item = await this.client.getJson<unknown>(`users/0/items/${attachmentKey}`, undefined, {
       signal,
       serverId: local.serverId,
     })
@@ -257,11 +261,11 @@ export class LocalApiProvider implements ZoteroProvider {
     const contentType = attachment.contentType
     if (attachment.linkMode === 'linked_url') {
       if (attachment.url === undefined || attachment.url === '') {
-        throw new ZoteroError(`Attachment ${local.key} is linked to a URL but Zotero reported none.`, ZOTERO_NO_ATTACHMENT)
+        throw new ZoteroError(`Attachment ${attachmentKey} is linked to a URL but Zotero reported none.`, ZOTERO_NO_ATTACHMENT)
       }
       return { ref: formattedRef, title, contentType, kind: 'url', url: attachment.url }
     }
-    const file = await this.client.get(`users/0/items/${local.key}/file/view/url`, undefined, {
+    const file = await this.client.get(`users/0/items/${attachmentKey}/file/view/url`, undefined, {
       signal,
       serverId: local.serverId,
     })
@@ -269,7 +273,7 @@ export class LocalApiProvider implements ZoteroProvider {
     try {
       target = new URL(file.body.trim())
     } catch (error) {
-      throw new ZoteroError(`Zotero reported no usable file location for attachment ${local.key}.`, ZOTERO_NO_ATTACHMENT, { cause: error })
+      throw new ZoteroError(`Zotero reported no usable file location for attachment ${attachmentKey}.`, ZOTERO_NO_ATTACHMENT, { cause: error })
     }
     if (target.protocol !== 'file:') {
       return { ref: formattedRef, title, contentType, kind: 'url', url: target.toString() }
@@ -469,6 +473,31 @@ export class LocalApiProvider implements ZoteroProvider {
       return { format: 'bibliography', style, locale, text: body }
     }
     return { format: request.format, text: body }
+  }
+
+  /**
+   * Pick the attachment key an item ref resolves to: Zotero's own
+   * `links.attachment` choice when present, otherwise the earliest PDF
+   * child from a lazy `/children` fetch.
+   * @throws {ZoteroError} `ZOTERO_NO_ATTACHMENT` when the item has none.
+   */
+  private async resolveAttachmentKey(ref: ZoteroObjectRef, signal?: AbortSignal): Promise<string> {
+    if (ref.kind === 'attachment') return ref.key
+    const parent = await this.client.getJson<unknown>(`users/0/items/${ref.key}`, undefined, {
+      signal,
+      serverId: ref.serverId,
+    })
+    const link = bestAttachmentFromLinks(parent.json)
+    if (link !== undefined) return link.key
+    const children = await this.client.getJson<unknown>(`users/0/items/${ref.key}/children`, undefined, {
+      signal,
+      serverId: ref.serverId,
+    })
+    const pdf = selectAttachment(Array.isArray(children.json) ? children.json : [], 'pdf')
+    if (pdf === undefined) {
+      throw new ZoteroError(`Item ${ref.key} has no attachment to resolve.`, ZOTERO_NO_ATTACHMENT)
+    }
+    return pdf.key
   }
 
   private async fetchFulltext(attachmentKey: string, serverId: string | undefined, signal: AbortSignal | undefined): Promise<ZoteroFulltextPayload> {
