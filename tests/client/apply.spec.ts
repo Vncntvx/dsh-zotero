@@ -151,7 +151,7 @@ describe('the browser-half entry', () => {
     expect((registration?.options.label as () => string)()).toBe('nav')
     // The nav glyph rides the registration as JSON icon data.
     expect(registration?.options.icon).toEqual({
-      path: 'M21.231 2.462 7.18 20.923h14.564V24H2.256v-2.462L16.308 3.076H2.975V0h18.256v2.462z',
+      path: 'M20.308 3.416 7.662 20.031h14.308V22.8H3.23v-2.216L15.877 3.968H3.877V1.2h17.63v2.216z',
     })
   })
 
