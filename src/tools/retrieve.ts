@@ -93,11 +93,11 @@ const RETRIEVE_OUTPUT_SCHEMA = {
 
 type RetrieveOutput = InferValue<typeof RETRIEVE_OUTPUT_SCHEMA>
 
-function buildRequest(args: RetrieveArgs, config: () => ResolvedConfig): ZoteroRetrieveRequest {
+function buildRequest(args: RetrieveArgs, config: ResolvedConfig): ZoteroRetrieveRequest {
   const query = args.query.trim()
   if (query === '') invalid('query must be a non-empty string of terms to rank evidence against')
   const passages = args.passages ?? DEFAULT_PASSAGES
-  assertIntInRange('passages', passages, 1, config().maxEvidencePassages)
+  assertIntInRange('passages', passages, 1, config.maxEvidencePassages)
   const sources = args.sources ?? ALL_SOURCES
   if (sources.length === 0) invalid('sources must list at least one evidence source')
   const ref = parseRef(args.ref)
@@ -141,17 +141,13 @@ export function renderRetrieve(_args: RetrieveArgs, value: RetrieveOutput): Cont
 }
 
 /**
- * Register the `zotero_retrieve` tool. The config thunk is read per request so
- * a settings edit takes effect on the next call without re-registration.
+ * Register the `zotero_retrieve` tool. The service's live config is read per
+ * request so a settings edit takes effect on the next call without
+ * re-registration.
  * @param ctx - the plugin context.
  * @param service - the zotero service owning the request path.
- * @param config - live provider of the resolved config.
  */
-export function registerRetrieveTool(
-  ctx: Context,
-  service: ZoteroService,
-  config: () => ResolvedConfig,
-): void {
+export function registerRetrieveTool(ctx: Context, service: ZoteroService): void {
   ctx.tools.register(
     defineTool({
       name: 'zotero_retrieve',
@@ -176,7 +172,7 @@ export function registerRetrieveTool(
       isConcurrencySafe: () => true,
       async execute(args, exec) {
         return await withConnectivityAsk(ctx, exec, () =>
-          service.retrieve(buildRequest(args, config), exec.signal),
+          service.retrieve(buildRequest(args, service.config), exec.signal),
         )
       },
     }),

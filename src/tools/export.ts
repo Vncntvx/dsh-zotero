@@ -87,11 +87,11 @@ const EXPORT_OUTPUT_SCHEMA = {
 
 type ExportOutput = InferValue<typeof EXPORT_OUTPUT_SCHEMA>
 
-function buildRequest(args: ExportArgs, config: () => ResolvedConfig): ZoteroExportRequest {
+function buildRequest(args: ExportArgs, config: ResolvedConfig): ZoteroExportRequest {
   if (args.refs.length === 0) invalid('refs must list at least one zotero:// item ref')
-  if (args.refs.length > config().maxExportRefs) {
+  if (args.refs.length > config.maxExportRefs) {
     invalid(
-      `refs must list at most ${config().maxExportRefs} item refs per call; got ${args.refs.length} — export in batches`,
+      `refs must list at most ${config.maxExportRefs} item refs per call; got ${args.refs.length} — export in batches`,
     )
   }
   const refs = args.refs.map((value) => {
@@ -124,17 +124,13 @@ export function renderExport(_args: ExportArgs, value: ExportOutput): ContentBlo
 }
 
 /**
- * Register the `zotero_export` tool. The config thunk is read per request so
- * a settings edit takes effect on the next call without re-registration.
+ * Register the `zotero_export` tool. The service's live config is read per
+ * request so a settings edit takes effect on the next call without
+ * re-registration.
  * @param ctx - the plugin context.
  * @param service - the zotero service owning the request path.
- * @param config - live provider of the resolved config.
  */
-export function registerExportTool(
-  ctx: Context,
-  service: ZoteroService,
-  config: () => ResolvedConfig,
-): void {
+export function registerExportTool(ctx: Context, service: ZoteroService): void {
   ctx.tools.register(
     defineTool({
       name: 'zotero_export',
@@ -156,7 +152,7 @@ export function registerExportTool(
       isConcurrencySafe: () => true,
       async execute(args, exec) {
         return await withConnectivityAsk(ctx, exec, () =>
-          service.export(buildRequest(args, config), exec.signal),
+          service.export(buildRequest(args, service.config), exec.signal),
         )
       },
     }),

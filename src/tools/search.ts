@@ -170,9 +170,9 @@ const SEARCH_OUTPUT_SCHEMA = {
 
 type SearchOutput = InferValue<typeof SEARCH_OUTPUT_SCHEMA>
 
-function buildRequest(args: SearchArgs, config: () => ResolvedConfig): ZoteroSearchRequest {
+function buildRequest(args: SearchArgs, config: ResolvedConfig): ZoteroSearchRequest {
   const limit = args.limit ?? DEFAULT_LIMIT
-  assertIntInRange('limit', limit, 1, config().maxSearchResults)
+  assertIntInRange('limit', limit, 1, config.maxSearchResults)
   const offset = args.offset ?? DEFAULT_OFFSET
   if (!Number.isInteger(offset) || offset < 0)
     invalid(`offset must be a non-negative integer; got ${offset}`)
@@ -249,17 +249,13 @@ function presentSearchResult(_args: SearchArgs, result: ToolResult): ToolResultV
 }
 
 /**
- * Register the `zotero_search` tool. The config thunk is read per request so
- * a settings edit takes effect on the next call without re-registration.
+ * Register the `zotero_search` tool. The service's live config is read per
+ * request so a settings edit takes effect on the next call without
+ * re-registration.
  * @param ctx - the plugin context.
  * @param service - the zotero service owning the request path.
- * @param config - live provider of the resolved config.
  */
-export function registerSearchTool(
-  ctx: Context,
-  service: ZoteroService,
-  config: () => ResolvedConfig,
-): void {
+export function registerSearchTool(ctx: Context, service: ZoteroService): void {
   ctx.tools.register(
     defineTool({
       name: 'zotero_search',
@@ -286,7 +282,7 @@ export function registerSearchTool(
       isConcurrencySafe: () => true,
       async execute(args, exec) {
         return await withConnectivityAsk(ctx, exec, () =>
-          service.search(buildRequest(args, config), exec.signal),
+          service.search(buildRequest(args, service.config), exec.signal),
         )
       },
     }),

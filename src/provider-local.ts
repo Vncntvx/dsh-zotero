@@ -15,6 +15,7 @@
 import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { ZoteroHttpClient } from './http-client.js'
+import { LOCAL_PROVIDER_ID } from './constants.js'
 import {
   NO_FULLTEXT_MESSAGE,
   isNotFoundError,
@@ -67,8 +68,6 @@ import type {
   ZoteroSearchScope,
   ZoteroStatus,
 } from './types.js'
-
-export const LOCAL_PROVIDER_ID = 'local'
 
 /** Escape a literal tag so a leading `-` never becomes Zotero's NOT syntax. */
 export function encodeLiteralTag(tag: string): string {
@@ -157,10 +156,6 @@ export class LocalApiProvider implements ZoteroProvider {
   readonly capabilities: ReadonlySet<ZoteroCapability> = new Set<ZoteroCapability>([
     'metadata',
     'search',
-    'collections',
-    'tags',
-    'notes',
-    'annotations',
     'attachments',
     'fulltext',
     'citation',

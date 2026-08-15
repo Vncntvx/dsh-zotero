@@ -84,26 +84,32 @@ export class ZoteroService extends Service {
     // extra constraints resolveConfig enforces are what make the entry sound.
     const entry = resolveConfig(config)
     this.source = () => entry
-    this.rebuild()
     registerStatusCommand(ctx, this)
     registerPromptSection(ctx)
-    registerSearchTool(ctx, this, () => this.config)
+    registerSearchTool(ctx, this)
     registerGetTool(ctx, this)
     registerAttachmentTool(ctx, this)
-    registerRetrieveTool(ctx, this, () => this.config)
-    registerExportTool(ctx, this, () => this.config)
+    registerRetrieveTool(ctx, this)
+    registerExportTool(ctx, this)
+    let settingsAttached = false
     installSettingsSection(ctx, settingsNamespace(ZOTERO_SETTINGS_NAMESPACE), ConfigSchema, entry, {
       validate: resolveConfig,
       setSource: (current) => {
         // The settings-resolved value carries every schema default and has
         // passed the resolveConfig validate hook, so it is ResolvedConfig at
         // runtime even though the seam types it as Config.
+        settingsAttached = true
         this.source = current as () => ResolvedConfig
       },
       onChange: () => {
         this.rebuild()
       },
     })
+    // With a settings service already composed, the install above switched
+    // the config authority and rebuilt synchronously; building here again
+    // would register a second provider over the first. Without one, this
+    // builds from the composition entry, and the later attach rebuilds.
+    if (!settingsAttached) this.rebuild()
     // The settings page's data channel: the Remote service reads and writes
     // the namespace through the local seam, and the strict manifest claims
     // the wire endpoints for the Host Gateway. Typert is a core service;
