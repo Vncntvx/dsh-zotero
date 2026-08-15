@@ -72,7 +72,7 @@ The Agent moves down the ladder as a request deepens. A typical conversation:
 dsh plugin --profile <name> add dsh-zotero
 ```
 
-The tarball ships the built `lib/`; no local build is needed.
+The tarball ships the built `lib/` (the node half plus the browser half `lib/client.js`); no local build is needed. The browser half is the configuration card: dsh web scans the package's `dsh.client` manifest and mounts it automatically, with no extra setup.
 
 ### From a local tarball
 
@@ -127,19 +127,32 @@ All values are `Config` fields changeable from the bundle's `config` block (e.g.
 | `defaultStyle`         | `apa`                        | CSL style for citation/bibliography formats.                                                                   |
 | `defaultLocale`        | `en-US`                      | CSL locale for citation/bibliography formats.                                                                  |
 
+### Web configuration
+
+The plugin registers a "Zotero" card in dsh web's **Settings → Plugins → Plugin configuration** page listing all 19 fields above. The card binds the `zotero` settings namespace: writes land in the `zotero:` section of `$DSH_HOME/settings.yaml` (layered over the patch entry's `config`, user layer wins), and **saves apply live** — the transport and the provider rebuild on the new values, so the next tool call or `/zotero status` uses them without a dsh restart.
+
+- Invalid values (a non-loopback `baseUrl`, a non-positive limit) are refused before the write; the card reports the failed save and keeps the draft, and the plugin keeps running on the last valid value.
+- Every field shows its effective value; fields overridden by the settings document carry an "Overridden" badge and offer a one-click reset (clears the user layer, back to the patch entry value).
+- External edits to the settings document (e.g. editing `settings.yaml` directly) hot-apply too.
+- Compositions without a settings service (pure headless) never register the namespace, and the plugin behaves exactly as if unconfigured.
+
 ## Development
 
 ### Commands
 
 ```sh
-npm install                      # uses a local npm cache
-npm test                         # unit tests (mock Zotero server)
+npm install                      # uses a local npm cache (see the workspace note below)
+npm test                         # unit tests (mock Zotero server + browser card tests)
 npm run test:coverage            # 100% coverage gate on src/
-npm run typecheck                # tsc --noEmit, app + test projects
-npm run build                    # emits lib/
+npm run typecheck                # tsc --noEmit, node / test / client projects
+npm run build                    # tsc emits the node half into lib/; esbuild emits the browser half lib/client.js
+npm run build:client             # rebuild the browser half only (self-checks the loader handoff)
+npm run dev:client               # watch the browser half (pair with the hot-swap overlay)
 npm run format                   # prettier --write across the repo
 npm run format:check             # verify formatting (run before committing)
 ```
+
+> This checkout sits inside the deepseek-harness workspace tree: the parent `package.json` declares `workspaces`, so npm walks up to it and tries to install the whole workspace. Run `npm install --no-workspaces` instead (or drop a `.npmrc` with `workspaces=false` in this repository).
 
 Integration tests run against a live Zotero and stay skipped unless enabled:
 
@@ -182,6 +195,8 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 ```
 
 Hot swap affects only the instance started with `--patch`; the resident instance keeps running the tarball version.
+
+**Developing the browser half**: the web frontend only scans loader rows whose `name` is a bare package name (resolvable to `package.json`) — the absolute-path row in `dev-lib.cordis.yml` has no browser half, so the card does not appear in the dev instance. To develop the card, install this checkout into the profile (`npm install <this repo path>` as a file: dependency, or pack and install the tarball), then pair `npm run dev:client` (esbuild watch) with the hot-swap overlay: browser-bundle changes make HMR re-fetch `/plugins/dsh-zotero/client.js`.
 
 ## License
 

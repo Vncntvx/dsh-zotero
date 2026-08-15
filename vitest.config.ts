@@ -1,11 +1,14 @@
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
+  esbuild: {
+    jsx: 'automatic',
+  },
   test: {
-    include: ['tests/**/*.spec.ts'],
+    include: ['tests/**/*.spec.{ts,tsx}'],
     coverage: {
       provider: 'v8',
-      include: ['src/**/*.ts'],
+      include: ['src/**/*.{ts,tsx}'],
       // The package entry is a pure re-export module and `types.ts` is a
       // types-only module: neither has runtime statements, so v8 reports
       // them as permanently uncovered. Every other runtime-bearing source

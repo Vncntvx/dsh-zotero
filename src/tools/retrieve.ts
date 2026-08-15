@@ -100,13 +100,13 @@ function invalid(message: string): never {
   throw new ZoteroError(message, ZOTERO_INVALID_ARGUMENT)
 }
 
-function buildRequest(args: RetrieveArgs, config: ResolvedConfig): ZoteroRetrieveRequest {
+function buildRequest(args: RetrieveArgs, config: () => ResolvedConfig): ZoteroRetrieveRequest {
   const query = args.query.trim()
   if (query === '') invalid('query must be a non-empty string of terms to rank evidence against')
   const passages = args.passages ?? 4
-  if (!Number.isInteger(passages) || passages < 1 || passages > config.maxEvidencePassages) {
+  if (!Number.isInteger(passages) || passages < 1 || passages > config().maxEvidencePassages) {
     invalid(
-      `passages must be an integer between 1 and ${config.maxEvidencePassages}; got ${passages}`,
+      `passages must be an integer between 1 and ${config().maxEvidencePassages}; got ${passages}`,
     )
   }
   const sources = args.sources ?? ['annotation', 'note', 'abstract', 'fulltext']
@@ -151,10 +151,17 @@ export function renderRetrieve(_args: RetrieveArgs, value: RetrieveOutput): Cont
   return [{ type: 'text', text: lines.join('\n') }]
 }
 
+/**
+ * Register the `zotero_retrieve` tool. The config thunk is read per request so
+ * a settings edit takes effect on the next call without re-registration.
+ * @param ctx - the plugin context.
+ * @param service - the zotero service owning the request path.
+ * @param config - live provider of the resolved config.
+ */
 export function registerRetrieveTool(
   ctx: Context,
   service: ZoteroService,
-  config: ResolvedConfig,
+  config: () => ResolvedConfig,
 ): void {
   ctx.tools.register(
     defineTool({

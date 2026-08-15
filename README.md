@@ -72,7 +72,7 @@ Agent 按需求逐层深入，一段典型对话：
 dsh plugin --profile <name> add dsh-zotero
 ```
 
-tarball 内含已构建的 `lib/`，无需本地构建。
+tarball 内含已构建的 `lib/`（node 半与浏览器半 `lib/client.js`），无需本地构建。浏览器半边是配置卡片：dsh web 会扫描到包内声明的 `dsh.client` 清单并自动挂载，无需额外配置。
 
 ### 本地 tarball
 
@@ -127,19 +127,32 @@ allowBuilds:
 | `defaultStyle`         | `apa`                        | 引用/参考文献使用的 CSL 样式。                                            |
 | `defaultLocale`        | `en-US`                      | 引用/参考文献使用的 CSL locale。                                          |
 
+### Web 配置
+
+插件在 dsh web 的 **设置 → 插件 → 插件配置** 页注册了一张 "Zotero" 卡片，列出上表全部 19 个字段。卡片绑定 `zotero` 设置命名空间：写入的内容落在 `$DSH_HOME/settings.yaml` 的 `zotero:` 段（与补丁 entry 的 `config` 叠层，用户段优先），**保存即热生效**——传输层与 provider 会按新值重建，下一个工具调用或 `/zotero status` 立即使用新配置，无需重启 dsh。
+
+- 非法值（如非回环的 `baseUrl`、非正整数的限制）在写入前被拒绝，卡片提示保存失败并保留草稿，插件继续运行于上一个合法值。
+- 每个字段显示当前生效值；被设置文档覆盖的字段带「已覆盖」标记，可一键恢复默认（清除用户段，回到补丁 entry 值）。
+- 设置文档被外部编辑（如直接改 `settings.yaml`）时同样会热生效。
+- 无 settings 服务的组合（纯 headless）不注册命名空间，插件行为与未配置时完全一致。
+
 ## 开发
 
 ### 命令
 
 ```sh
-npm install                      # 使用本地 npm 缓存
-npm test                         # 单元测试（mock Zotero server）
+npm install                      # 使用本地 npm 缓存（见下方 workspace 说明）
+npm test                         # 单元测试（mock Zotero server + 浏览器卡片测试）
 npm run test:coverage            # 对 src/ 的 100% 覆盖率门禁
-npm run typecheck                # tsc --noEmit，app + test 项目
-npm run build                    # 生成 lib/
+npm run typecheck                # tsc --noEmit，node / test / client 三个项目
+npm run build                    # tsc 生成 node 半 lib/ + esbuild 生成浏览器半 lib/client.js
+npm run build:client             # 只重建浏览器半（含 loader 交接格式自检）
+npm run dev:client               # 浏览器半 watch 模式（配合热替换 overlay）
 npm run format                   # prettier --write 全仓格式化
 npm run format:check             # 校验格式化（提交前执行）
 ```
+
+> 本仓库位于 deepseek-harness workspace 树内：父目录 `package.json` 声明了 `workspaces`，npm 会向上找到它并尝试安装整个 workspace。请使用 `npm install --no-workspaces`（或在本仓库放置含 `workspaces=false` 的 `.npmrc`）。
 
 集成测试面向真实 Zotero，默认跳过，需显式开启：
 
@@ -182,6 +195,8 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 ```
 
 热替换仅作用于通过 `--patch` 启动的实例；常驻实例继续运行 tarball 版本。
+
+**浏览器半边的开发**：Web 端只扫描 Loader 行 `name` 为裸包名（npm 可解析到 `package.json`）的条目——`dev-lib.cordis.yml` 的绝对路径行不会加载浏览器半边，因此卡片不会出现在 dev 实例中。开发卡片时把本仓库装进 profile（`npm install <本仓库路径>` 作为 file: 依赖，或 `npm pack` 后安装 tarball），再配合 `npm run dev:client`（esbuild watch）与热替换 overlay：浏览器 bundle 变化会触发 HMR 重新拉取 `/plugins/dsh-zotero/client.js`。
 
 ## 许可证
 

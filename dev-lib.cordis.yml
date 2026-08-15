@@ -12,6 +12,9 @@
 # still work normally.
 # The name must be an absolute path to the BUILT entry (plain Node cannot
 # load src/index.ts). Adjust it if your checkout lives elsewhere.
+# The browser half (the settings card) loads only for rows whose name is a
+# bare package name, so this overlay row has none: to develop the card, use
+# a file: install of this checkout into the profile and npm run dev:client.
 - id: zotero
   disabled: true
 - id: hmr

@@ -14,7 +14,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest'
-import { ZoteroHttpClient } from '../../src/client.js'
+import { ZoteroHttpClient } from '../../src/http-client.js'
 import { LocalApiProvider } from '../../src/provider-local.js'
 import { parseRef } from '../../src/refs.js'
 

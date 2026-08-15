@@ -91,11 +91,11 @@ function invalid(message: string): never {
   throw new ZoteroError(message, ZOTERO_INVALID_ARGUMENT)
 }
 
-function buildRequest(args: ExportArgs, config: ResolvedConfig): ZoteroExportRequest {
+function buildRequest(args: ExportArgs, config: () => ResolvedConfig): ZoteroExportRequest {
   if (args.refs.length === 0) invalid('refs must list at least one zotero:// item ref')
-  if (args.refs.length > config.maxExportRefs) {
+  if (args.refs.length > config().maxExportRefs) {
     invalid(
-      `refs must list at most ${config.maxExportRefs} item refs per call; got ${args.refs.length} — export in batches`,
+      `refs must list at most ${config().maxExportRefs} item refs per call; got ${args.refs.length} — export in batches`,
     )
   }
   const refs = args.refs.map((value) => {
@@ -127,10 +127,17 @@ export function renderExport(_args: ExportArgs, value: ExportOutput): ContentBlo
   return [{ type: 'text', text: value.text }]
 }
 
+/**
+ * Register the `zotero_export` tool. The config thunk is read per request so
+ * a settings edit takes effect on the next call without re-registration.
+ * @param ctx - the plugin context.
+ * @param service - the zotero service owning the request path.
+ * @param config - live provider of the resolved config.
+ */
 export function registerExportTool(
   ctx: Context,
   service: ZoteroService,
-  config: ResolvedConfig,
+  config: () => ResolvedConfig,
 ): void {
   ctx.tools.register(
     defineTool({
