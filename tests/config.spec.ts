@@ -11,6 +11,7 @@ describe('resolveConfig', () => {
       maxEvidenceChars: 6000,
       maxEvidencePassages: 4,
       maxDetailChars: 3000,
+      maxNoteBodyChars: 30_000,
       maxNoteChars: 2000,
       maxNoteRecords: 50,
       maxAnnotationRecords: 100,
@@ -33,6 +34,7 @@ describe('resolveConfig', () => {
         maxNoteRecords: 3,
         maxAnnotationRecords: 7,
         fulltextChunkWords: 12,
+        maxNoteBodyChars: 123,
       }),
     ).toMatchObject({
       timeoutMs: 900,
@@ -42,6 +44,7 @@ describe('resolveConfig', () => {
       maxNoteRecords: 3,
       maxAnnotationRecords: 7,
       fulltextChunkWords: 12,
+      maxNoteBodyChars: 123,
     })
   })
 
@@ -86,6 +89,7 @@ describe('resolveConfig', () => {
     expect(() => resolveConfig({ maxExportChars: Number.NaN })).toThrowError(/maxExportChars/)
     expect(() => resolveConfig({ maxFulltextChars: 0 })).toThrowError(/maxFulltextChars/)
     expect(() => resolveConfig({ maxNoteChars: 0 })).toThrowError(/maxNoteChars/)
+    expect(() => resolveConfig({ maxNoteBodyChars: -1 })).toThrowError(/maxNoteBodyChars/)
     expect(() => resolveConfig({ maxNoteRecords: 1.5 })).toThrowError(/maxNoteRecords/)
     expect(() => resolveConfig({ maxAnnotationRecords: -2 })).toThrowError(/maxAnnotationRecords/)
     expect(() => resolveConfig({ fulltextChunkWords: 0 })).toThrowError(/fulltextChunkWords/)

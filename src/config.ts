@@ -23,6 +23,8 @@ export interface Config {
   maxEvidencePassages?: number
   /** Character budget for `zotero_get` detail previews (abstract/notes/annotations). */
   maxDetailChars?: number
+  /** Character budget for a note item's own body returned by `zotero_get`. */
+  maxNoteBodyChars?: number
   /** Per-note character budget for `zotero_get` note previews. */
   maxNoteChars?: number
   /** Upper bound for note records returned by `zotero_get`. */
@@ -51,6 +53,7 @@ export const Config: Schema<Config> = Schema.object({
   maxEvidenceChars: Schema.number().default(6000),
   maxEvidencePassages: Schema.number().default(4),
   maxDetailChars: Schema.number().default(3000),
+  maxNoteBodyChars: Schema.number().default(30_000),
   maxNoteChars: Schema.number().default(2000),
   maxNoteRecords: Schema.number().default(50),
   maxAnnotationRecords: Schema.number().default(100),
@@ -70,6 +73,7 @@ export interface ResolvedConfig {
   readonly maxEvidenceChars: number
   readonly maxEvidencePassages: number
   readonly maxDetailChars: number
+  readonly maxNoteBodyChars: number
   readonly maxNoteChars: number
   readonly maxNoteRecords: number
   readonly maxAnnotationRecords: number
@@ -134,6 +138,7 @@ export function resolveConfig(config: Config): ResolvedConfig {
   assertPositiveInteger('maxEvidenceChars', applied.maxEvidenceChars)
   assertPositiveInteger('maxEvidencePassages', applied.maxEvidencePassages)
   assertPositiveInteger('maxDetailChars', applied.maxDetailChars)
+  assertPositiveInteger('maxNoteBodyChars', applied.maxNoteBodyChars)
   assertPositiveInteger('maxNoteChars', applied.maxNoteChars)
   assertPositiveInteger('maxNoteRecords', applied.maxNoteRecords)
   assertPositiveInteger('maxAnnotationRecords', applied.maxAnnotationRecords)

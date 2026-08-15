@@ -49,6 +49,33 @@ function asInteger(value: unknown): number | undefined {
 }
 
 /**
+ * Reduce a Zotero note body to plain text: block-level tags become line
+ * breaks, remaining tags are dropped, and the common HTML entities are
+ * decoded. Whitespace otherwise stays verbatim.
+ */
+export function plainNoteText(value: unknown): string {
+  const raw = asString(value) ?? ''
+  if (raw === '') return ''
+  return raw
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(?:p|li|div|h[1-6])\s*>/gi, '\n')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .trim()
+}
+
+/** A valid parent-item key from `data.parentItem`, or undefined. */
+function parentKeyOf(data: Record<string, unknown> | undefined): string | undefined {
+  const parent = asString(data?.parentItem)
+  return parent !== undefined && OBJECT_KEY_PATTERN.test(parent) ? parent : undefined
+}
+
+/**
  * Normalize one item JSON object into a compact search hit.
  * @param json - the raw API object; anything outside the documented shape is ignored.
  * @param serverId - the instance that served the response; recorded as ref provenance.
@@ -78,6 +105,8 @@ export function normalizeSearchItem(json: unknown, serverId?: string): ZoteroSea
   }
   if (parsedDate !== undefined && /^\d{4}/.test(parsedDate))
     item.year = Number(parsedDate.slice(0, 4))
+  const parentKey = parentKeyOf(data)
+  if (parentKey !== undefined) item.parentRef = formatRef(localRef('item', parentKey, serverId))
   if (attachmentKey !== undefined)
     item.bestAttachmentRef = formatRef(localRef('attachment', attachmentKey, serverId))
   const bestAttachmentType = asString(attachment?.attachmentType)
@@ -194,21 +223,32 @@ export function truncateText(text: string, max: number): { text: string; truncat
 }
 
 /**
- * Normalize one note child row.
+ * Normalize one note child row. When `maxChars` is undefined the full body
+ * is kept — retrieve chunks untruncated notes itself.
  * @throws {ZoteroError} `ZOTERO_UNEXPECTED` when the row has no valid Zotero key.
  */
 export function normalizeNoteRecord(
   json: unknown,
   serverId: string | undefined,
-  maxChars: number,
+  maxChars?: number,
 ): ZoteroNoteRecord {
   const record = asRecord(json)
   const key = asString(record?.key)
   if (key === undefined || !OBJECT_KEY_PATTERN.test(key)) {
     throw new ZoteroError('Zotero returned a note without a valid object key.', ZOTERO_UNEXPECTED)
   }
-  const { text, truncated } = truncateText(asString(asRecord(record?.data)?.note) ?? '', maxChars)
-  return { ref: formatRef(localRef('item', key, serverId)), text, truncated }
+  const data = asRecord(record?.data)
+  const raw = plainNoteText(data?.note)
+  const { text, truncated } = truncateText(raw, maxChars ?? raw.length)
+  const parentKey = parentKeyOf(data)
+  return {
+    ref: formatRef(localRef('item', key, serverId)),
+    text,
+    truncated,
+    ...(parentKey !== undefined
+      ? { parentRef: formatRef(localRef('item', parentKey, serverId)) }
+      : {}),
+  }
 }
 
 /**
@@ -255,7 +295,8 @@ function annotationSortIndex(row: unknown): string {
 
 /**
  * Partition child rows into notes, annotations, and attachments. Notes keep
- * API order; annotations are ordered by Zotero's `annotationSortIndex`.
+ * API order and are truncated to `noteMaxChars` when given (undefined keeps
+ * the full body); annotations are ordered by Zotero's `annotationSortIndex`.
  * Unknown child kinds are ignored — the plugin only claims the three kinds
  * it understands — but a malformed row of a claimed kind fails loud.
  * @throws {ZoteroError} `ZOTERO_UNEXPECTED` on a child without a valid key.
@@ -263,7 +304,7 @@ function annotationSortIndex(row: unknown): string {
 export function partitionChildren(
   rows: readonly unknown[],
   serverId: string | undefined,
-  noteMaxChars: number,
+  noteMaxChars?: number,
 ): PartitionedChildren {
   const notes: ZoteroNoteRecord[] = []
   const annotationRows: unknown[] = []
@@ -295,6 +336,8 @@ export interface NormalizeItemDetailInput {
   readonly collectionNames?: ReadonlyMap<string, string>
   /** Character budget for the abstract preview. */
   readonly maxAbstractChars: number
+  /** Character budget for a note item's own body; `truncated` signals the cut. */
+  readonly maxNoteBodyChars: number
   /** Per-note character budget; `truncated` signals the cut. */
   readonly maxNoteChars: number
   /** Upper bound for returned note records. */
@@ -347,6 +390,12 @@ export function normalizeItemDetail(input: NormalizeItemDetailInput): ZoteroItem
       : undefined
   const version = asInteger(record?.version)
   const tags = normalizeTags(data)
+  const itemType = asString(data?.itemType) ?? asString(record?.itemType) ?? ''
+  // A note item's own body is its content; `include` governs child kinds only.
+  const noteBody =
+    itemType === 'note'
+      ? truncateText(plainNoteText(data?.note), input.maxNoteBodyChars)
+      : undefined
 
   const keys = collectionKeysOf(input.parent)
   const collections: ZoteroCollectionRecord[] = keys.map((collectionKey) => {
@@ -395,7 +444,7 @@ export function normalizeItemDetail(input: NormalizeItemDetailInput): ZoteroItem
 
   return {
     ref: formatRef(localRef('item', key, input.serverId)),
-    itemType: asString(data?.itemType) ?? asString(record?.itemType) ?? '',
+    itemType,
     title: asString(data?.title) ?? '',
     creators: normalizeCreators(data),
     abstractTruncated: abstract.truncated,
@@ -403,6 +452,7 @@ export function normalizeItemDetail(input: NormalizeItemDetailInput): ZoteroItem
     collections,
     children: { total: childrenTotal(meta, input.childrenRows) },
     ...(abstract.text !== '' ? { abstract: abstract.text } : {}),
+    ...(noteBody !== undefined ? { noteBody } : {}),
     ...(date !== undefined ? { date } : {}),
     ...(year !== undefined ? { year } : {}),
     ...(venue !== undefined ? { venue } : {}),

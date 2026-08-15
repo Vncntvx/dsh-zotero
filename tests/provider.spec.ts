@@ -32,6 +32,7 @@ function makeProvider(limits: Partial<LocalApiLimits> = {}): LocalApiProvider {
     new ZoteroHttpClient({ baseUrl: mock.baseUrl, timeoutMs: 5000, maxResponseBytes: 1024 * 1024 }),
     {
       maxDetailChars: 500,
+      maxNoteBodyChars: 30_000,
       maxNoteChars: 2000,
       maxNoteRecords: 50,
       maxAnnotationRecords: 100,
@@ -894,19 +895,17 @@ describe('retrieve', () => {
     expect(result.attachmentRef).toBe('zotero://user/0/attachment/WXYZ6789')
   })
 
-  it('maps an unindexed fulltext response to NO_FULLTEXT', async () => {
+  it('degrades an unindexed fulltext response to sourcesSkipped', async () => {
     mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) =>
       helpers.json(RETRIEVE_PARENT),
     )
     mock.route('GET', '/api/users/0/items/WXYZ6789/fulltext', (req, res, helpers) =>
       helpers.raw(404, { 'Content-Type': 'text/plain' }, 'No indexed full text'),
     )
-    const error = await zoteroError(
-      provider.retrieve(retrieveRequest({ sources: ['fulltext'] })),
-      'ZOTERO_NO_FULLTEXT',
-      'Reindex',
-    )
-    expect(error.message).toContain('zotero_attachment')
+    const result = await provider.retrieve(retrieveRequest({ sources: ['fulltext'] }))
+    expect(result.evidence).toEqual([])
+    expect(result.sourcesSkipped).toEqual(['fulltext'])
+    expect(result.truncated).toBe(false)
   })
 
   it('caps evidence by passage count and reports truncation', async () => {
@@ -990,18 +989,16 @@ describe('retrieve edge cases', () => {
     expect(result.evidence.map((entry) => entry.source)).toEqual(['note'])
   })
 
-  it('fails with NO_ATTACHMENT when no PDF child exists for fulltext', async () => {
+  it('degrades to sourcesSkipped when no PDF child exists for fulltext', async () => {
     mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) =>
       helpers.json({ ...RETRIEVE_PARENT, links: { self: RETRIEVE_PARENT.links.self } }),
     )
     mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) =>
       helpers.json([{ key: 'NOTE1111', data: { itemType: 'note', note: 'only a note' } }]),
     )
-    await zoteroError(
-      provider.retrieve(retrieveRequest({ sources: ['fulltext'] })),
-      ZOTERO_NO_ATTACHMENT,
-      'no PDF attachment',
-    )
+    const result = await provider.retrieve(retrieveRequest({ sources: ['fulltext'] }))
+    expect(result.evidence).toEqual([])
+    expect(result.sourcesSkipped).toEqual(['fulltext'])
   })
 
   it('passes non-404 fulltext failures through unchanged', async () => {
@@ -1076,6 +1073,125 @@ describe('retrieve tolerances', () => {
     const result = await provider.retrieve(retrieveRequest({ sources: ['fulltext'], passages: 2 }))
     expect(result.evidence).toEqual([])
     expect(result.coverage).toEqual({ complete: false })
+  })
+})
+
+describe('note-first-class paths', () => {
+  it('treats a note item own body as its note source without fetching children', async () => {
+    mock.route('GET', '/api/users/0/items/NOTE9999', (req, res, helpers) =>
+      helpers.json({
+        key: 'NOTE9999',
+        data: {
+          itemType: 'note',
+          note: '<p>cascade failure chains</p><p>infrastructure interdependency</p>',
+        },
+      }),
+    )
+    const result = await provider.retrieve(
+      retrieveRequest({
+        ref: parseRef('zotero://user/0/item/NOTE9999'),
+        query: 'cascade',
+        sources: ['note'],
+        passages: 4,
+      }),
+    )
+    expect(mock.requests.map((entry) => entry.pathname)).toEqual(['/api/users/0/items/NOTE9999'])
+    expect(result.evidence).toEqual([
+      {
+        source: 'note',
+        sourceRef: 'zotero://user/0/item/NOTE9999',
+        text: 'cascade failure chains\ninfrastructure interdependency',
+        chunkIndex: 0,
+        chunkCount: 1,
+      },
+    ])
+    expect(result.sourcesSkipped).toEqual([])
+  })
+
+  it('recognizes a note item from the top-level itemType fallback', async () => {
+    mock.route('GET', '/api/users/0/items/NOTE9999', (req, res, helpers) =>
+      helpers.json({ key: 'NOTE9999', itemType: 'note', data: { note: 'own body words' } }),
+    )
+    const result = await provider.retrieve(
+      retrieveRequest({
+        ref: parseRef('zotero://user/0/item/NOTE9999'),
+        query: 'body',
+        sources: ['note'],
+        passages: 2,
+      }),
+    )
+    expect(result.evidence.map((entry) => entry.text)).toEqual(['own body words'])
+  })
+
+  it('contributes every chunk of a long child note with locators', async () => {
+    const narrow = makeProvider({ fulltextChunkWords: 2 })
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) =>
+      helpers.json({ ...RETRIEVE_PARENT, links: { self: RETRIEVE_PARENT.links.self } }),
+    )
+    mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) =>
+      helpers.json([
+        { key: 'NOTE1111', data: { itemType: 'note', note: 'alpha beta gamma delta epsilon' } },
+      ]),
+    )
+    const result = await narrow.retrieve(retrieveRequest({ sources: ['note'], passages: 10 }))
+    expect(result.evidence.map((entry) => entry.source)).toEqual(['note', 'note', 'note'])
+    expect(result.evidence.map((entry) => entry.text)).toEqual([
+      'alpha beta',
+      'gamma delta',
+      'epsilon',
+    ])
+    expect(result.evidence.map((entry) => entry.chunkIndex)).toEqual([0, 1, 2])
+    expect(result.evidence.map((entry) => entry.chunkCount)).toEqual([3, 3, 3])
+    expect(
+      result.evidence.every((entry) => entry.sourceRef === 'zotero://user/0/item/NOTE1111'),
+    ).toBe(true)
+  })
+
+  it('skips an unavailable fulltext source while keeping note evidence', async () => {
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) =>
+      helpers.json({ ...RETRIEVE_PARENT, links: { self: RETRIEVE_PARENT.links.self } }),
+    )
+    mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) =>
+      helpers.json([{ key: 'NOTE1111', data: { itemType: 'note', note: 'tiling strategy note' } }]),
+    )
+    const result = await provider.retrieve(retrieveRequest({ sources: ['note', 'fulltext'] }))
+    expect(result.evidence.map((entry) => entry.source)).toEqual(['note'])
+    expect(result.sourcesSkipped).toEqual(['fulltext'])
+  })
+
+  it('returns the note body for note items under the configured budget', async () => {
+    const narrow = makeProvider({ maxNoteBodyChars: 8 })
+    mock.route('GET', '/api/users/0/items/NOTE9999', (req, res, helpers) =>
+      helpers.json({
+        key: 'NOTE9999',
+        data: { itemType: 'note', note: '<p>first line</p><p>second line long</p>' },
+      }),
+    )
+    const detail = await narrow.getItem({
+      ref: parseRef('zotero://user/0/item/NOTE9999'),
+      include: new Set(),
+    })
+    expect(detail.itemType).toBe('note')
+    expect(detail.noteBody).toEqual({ text: 'first li', truncated: true })
+  })
+
+  it('carries the parent ref on child note records', async () => {
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) =>
+      helpers.json(RETRIEVE_PARENT, { 'Zotero-Server-ID': 'S1' }),
+    )
+    mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) =>
+      helpers.json([
+        {
+          key: 'NOTE1111',
+          data: { itemType: 'note', note: 'child note', parentItem: 'ABCD1234' },
+        },
+      ]),
+    )
+    const detail = await provider.getItem(getRequest(['notes']))
+    expect(detail.notes!.items[0]).toMatchObject({
+      ref: 'zotero://user/0/item/NOTE1111?server=S1',
+      parentRef: 'zotero://user/0/item/ABCD1234?server=S1',
+    })
   })
 })
 

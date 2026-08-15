@@ -12,6 +12,7 @@ import ToolRuntime, {
 } from '@deepseek-ai/dsh-tools'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import ZoteroService from '../src/index.js'
+import { renderGet } from '../src/tools/get.js'
 import { renderRetrieve } from '../src/tools/retrieve.js'
 import { MockZotero } from './helpers/mock-zotero.js'
 
@@ -810,6 +811,7 @@ describe('zotero_retrieve render', () => {
         { source: 'abstract', sourceRef: 'zotero://user/0/item/ABCD1234', text: 'abstract text' },
       ],
       truncated: false,
+      sourcesSkipped: [],
     } as never)
     expect(text).toBe(
       [
@@ -827,6 +829,7 @@ describe('zotero_retrieve render', () => {
       coverage: { indexedChars: 10, totalChars: 12, complete: false },
       evidence: [],
       truncated: false,
+      sourcesSkipped: [],
     } as never)
     expect(charsOnly).toContain('Indexing coverage: 10/12 chars')
 
@@ -835,6 +838,7 @@ describe('zotero_retrieve render', () => {
       coverage: { indexedPages: 2, totalPages: 9, complete: false },
       evidence: [],
       truncated: false,
+      sourcesSkipped: [],
     } as never)
     expect(pagesOnly).toContain('Indexing coverage: , 2/9 pages')
 
@@ -843,6 +847,7 @@ describe('zotero_retrieve render', () => {
       coverage: { indexedChars: 5, indexedPages: 3, complete: false },
       evidence: [],
       truncated: false,
+      sourcesSkipped: [],
     } as never)
     expect(unknownTotals).toContain('Indexing coverage: 5/? chars, 3/? pages')
 
@@ -851,6 +856,7 @@ describe('zotero_retrieve render', () => {
       coverage: { indexedChars: 5, totalChars: 5, complete: true },
       evidence: [],
       truncated: false,
+      sourcesSkipped: [],
     } as never)
     expect(complete).toContain('(complete)')
   })
@@ -868,9 +874,29 @@ describe('zotero_retrieve render', () => {
         },
       ],
       truncated: false,
+      sourcesSkipped: [],
     } as never)
     expect(text).toContain('[annotation (page 7)] zotero://user/0/item/ANNO1111')
     expect(text).toContain('Comment: double-check')
+  })
+
+  it('renders chunk locators and skipped sources', () => {
+    const text = render({
+      ref: 'zotero://user/0/item/ABCD1234',
+      evidence: [
+        {
+          source: 'note',
+          sourceRef: 'zotero://user/0/item/NOTE1111',
+          text: 'later chunk',
+          chunkIndex: 2,
+          chunkCount: 3,
+        },
+      ],
+      truncated: false,
+      sourcesSkipped: ['fulltext'],
+    } as never)
+    expect(text).toContain('[note, chunk 3/3] zotero://user/0/item/NOTE1111')
+    expect(text).toContain('Skipped unavailable sources: fulltext')
   })
 
   it('announces omitted evidence and the fulltext attachment', () => {
@@ -879,12 +905,47 @@ describe('zotero_retrieve render', () => {
       attachmentRef: 'zotero://user/0/attachment/WXYZ6789',
       evidence: [],
       truncated: true,
+      sourcesSkipped: [],
     } as never)
     expect(text).toContain('Full text: zotero://user/0/attachment/WXYZ6789')
     expect(text).toContain(
       'More evidence was available but omitted by the passage or character budget.',
     )
     expect(text).toContain('(0 passages)')
+  })
+})
+
+describe('zotero_get render', () => {
+  function render(value: never): string {
+    return (renderGet({} as never, value)[0] as { text: string }).text
+  }
+
+  it('renders the note body with a truncation marker for note items', () => {
+    const truncated = render({
+      ref: 'zotero://user/0/item/NOTE1111',
+      itemType: 'note',
+      title: '',
+      creators: [],
+      abstractTruncated: false,
+      tags: [],
+      collections: [],
+      children: { total: 0 },
+      noteBody: { text: 'first line of the note', truncated: true },
+    } as never)
+    expect(truncated).toContain('Note (truncated): first line of the note')
+
+    const full = render({
+      ref: 'zotero://user/0/item/NOTE2222',
+      itemType: 'note',
+      title: '',
+      creators: [],
+      abstractTruncated: false,
+      tags: [],
+      collections: [],
+      children: { total: 0 },
+      noteBody: { text: 'short note', truncated: false },
+    } as never)
+    expect(full).toContain('Note: short note')
   })
 })
 

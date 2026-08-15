@@ -10,13 +10,13 @@
 
 ## 工具
 
-| 工具                | 用途                                                                                                                         |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `zotero_search`     | 发现：按标题/作者/年份搜索库里的资料，`everything` 模式连全文索引一起搜；可限定某个分类或已保存搜索。                        |
-| `zotero_get`        | 检查：读取一条资料的结构化核心元数据，可选检查笔记、注释、附件的清单与预览。                                                 |
-| `zotero_retrieve`   | 取证：按问题返回最相关的有界证据片段（注释、笔记、摘要、全文分块）。                                                         |
-| `zotero_attachment` | 原文：解析条目或附件 ref，返回原始附件已验证的磁盘路径或链接 URL。条目 ref 取 Zotero 自选的最佳附件，附件 ref 指定单个附件。 |
-| `zotero_export`     | 引用：让 Zotero 按自己的 citation/export 能力生成结果（引用、CSL 参考文献表、`bibtex` / `biblatex` / `ris` / `csljson`）。   |
+| 工具                | 用途                                                                                                                                                                                                      |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `zotero_search`     | 发现：按标题/作者/年份搜索库里的资料，`everything` 模式连全文索引一起搜；可限定某个分类或已保存搜索。                                                                                                     |
+| `zotero_get`        | 检查：读取一条资料的结构化核心元数据，可选检查笔记、注释、附件的清单与预览；条目是笔记时直接返回其正文（`noteBody`），子笔记带 `parentRef` 可上溯父条目。                                                 |
+| `zotero_retrieve`   | 取证：按问题返回最相关的有界证据片段（注释、笔记、摘要、全文分块）；笔记条目用自己的正文、长笔记全部内容分块参与排序（`chunkIndex`/`chunkCount` 定位）；不可用的源跳过并列入 `sourcesSkipped`，不再报错。 |
+| `zotero_attachment` | 原文：解析条目或附件 ref，返回原始附件已验证的磁盘路径或链接 URL。条目 ref 取 Zotero 自选的最佳附件，附件 ref 指定单个附件。                                                                              |
+| `zotero_export`     | 引用：让 Zotero 按自己的 citation/export 能力生成结果（引用、CSL 参考文献表、`bibtex` / `biblatex` / `ris` / `csljson`）。                                                                                |
 
 每个工具都返回形如 `zotero://user/0/<item|attachment|annotation|collection|search>/<KEY>` 的可复用 ref，后续操作都通过它串联。Zotero 10+ 的 `?server=<id>` 限定符把 ref 绑定到产生它的数据库身份，数据库切换时阻止误读旧 ref。
 
@@ -100,24 +100,25 @@ allowBuilds:
 
 所有值都是 `Config` 字段，可在 bundle 的 `config` 块中修改（例如通过 `dsh plugin config`）。以下为默认值。
 
-| 字段                   | 默认值                       | 含义                                   |
-| ---------------------- | ---------------------------- | -------------------------------------- |
-| `baseUrl`              | `http://127.0.0.1:23119/api` | 本地 API 基础 URL。仅支持纯回环 HTTP。 |
-| `provider`             | `local`                      | 要选择的 provider id。                 |
-| `timeoutMs`            | `5000`                       | 每个请求的 provider 超时时间。         |
-| `maxSearchResults`     | `20`                         | `zotero_search` `limit` 的上限。       |
-| `maxEvidenceChars`     | `6000`                       | 检索证据的总字符预算。                 |
-| `maxEvidencePassages`  | `4`                          | 证据片段数量的上限。                   |
-| `maxDetailChars`       | `3000`                       | `zotero_get` 摘要预览的字符预算。      |
-| `maxNoteChars`         | `2000`                       | `zotero_get` 单条笔记预览的字符预算。  |
-| `maxNoteRecords`       | `50`                         | `zotero_get` 返回笔记数量的上限。      |
-| `maxAnnotationRecords` | `100`                        | `zotero_get` 返回批注数量的上限。      |
-| `fulltextChunkWords`   | `200`                        | 进入证据排序的全文片段词数。           |
-| `maxFulltextChars`     | `250000`                     | 进入证据排序的全文大小上限。           |
-| `maxResponseBytes`     | `16777216`                   | 每个 API 响应的流式字节上限。          |
-| `maxExportChars`       | `1000000`                    | 导出输出的硬上限。不会中途截断。       |
-| `defaultStyle`         | `apa`                        | 引用/参考文献使用的 CSL 样式。         |
-| `defaultLocale`        | `en-US`                      | 引用/参考文献使用的 CSL locale。       |
+| 字段                   | 默认值                       | 含义                                            |
+| ---------------------- | ---------------------------- | ----------------------------------------------- |
+| `baseUrl`              | `http://127.0.0.1:23119/api` | 本地 API 基础 URL。仅支持纯回环 HTTP。          |
+| `provider`             | `local`                      | 要选择的 provider id。                          |
+| `timeoutMs`            | `5000`                       | 每个请求的 provider 超时时间。                  |
+| `maxSearchResults`     | `20`                         | `zotero_search` `limit` 的上限。                |
+| `maxEvidenceChars`     | `6000`                       | 检索证据的总字符预算。                          |
+| `maxEvidencePassages`  | `4`                          | 证据片段数量的上限。                            |
+| `maxDetailChars`       | `3000`                       | `zotero_get` 摘要预览的字符预算。               |
+| `maxNoteBodyChars`     | `30000`                      | `zotero_get` 返回 note 条目自身正文的字符预算。 |
+| `maxNoteChars`         | `2000`                       | `zotero_get` 单条笔记预览的字符预算。           |
+| `maxNoteRecords`       | `50`                         | `zotero_get` 返回笔记数量的上限。               |
+| `maxAnnotationRecords` | `100`                        | `zotero_get` 返回批注数量的上限。               |
+| `fulltextChunkWords`   | `200`                        | 进入证据排序的全文片段词数。                    |
+| `maxFulltextChars`     | `250000`                     | 进入证据排序的全文大小上限。                    |
+| `maxResponseBytes`     | `16777216`                   | 每个 API 响应的流式字节上限。                   |
+| `maxExportChars`       | `1000000`                    | 导出输出的硬上限。不会中途截断。                |
+| `defaultStyle`         | `apa`                        | 引用/参考文献使用的 CSL 样式。                  |
+| `defaultLocale`        | `en-US`                      | 引用/参考文献使用的 CSL locale。                |
 
 ## 开发
 

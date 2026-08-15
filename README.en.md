@@ -10,13 +10,13 @@ Describe what you need in a session and the Agent calls the tools below as neede
 
 ## Tools
 
-| Tool                | Purpose                                                                                                                                                                                                  |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `zotero_search`     | Discover: search the library by title/creator/year, or indexed full text with `everything`; scope to a collection or saved search.                                                                       |
-| `zotero_get`        | Inspect: read one item's structured core metadata, optionally with manifests and previews of its notes, annotations, and attachments.                                                                    |
-| `zotero_retrieve`   | Evidence: return the most relevant bounded evidence passages (annotations, notes, abstract, full-text chunks) for a query.                                                                               |
-| `zotero_attachment` | Source: resolve an item or attachment ref to the original attachment's verified on-disk path or linked URL. An item ref yields the best attachment Zotero itself picks; an attachment ref pinpoints one. |
-| `zotero_export`     | Cite: let Zotero's own citation/export machinery produce citations, a CSL bibliography, or `bibtex` / `biblatex` / `ris` / `csljson`.                                                                    |
+| Tool                | Purpose                                                                                                                                                                                                                                                                                                        |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `zotero_search`     | Discover: search the library by title/creator/year, or indexed full text with `everything`; scope to a collection or saved search.                                                                                                                                                                             |
+| `zotero_get`        | Inspect: read one item's structured core metadata, optionally with manifests and previews of its notes, annotations, and attachments; note items return their own body (`noteBody`), child notes carry `parentRef` to reach their parent.                                                                      |
+| `zotero_retrieve`   | Evidence: return the most relevant bounded evidence passages (annotations, notes, abstract, full-text chunks) for a query; note items contribute their own body, long notes rank in full via chunks (`chunkIndex`/`chunkCount`), and unavailable sources are skipped into `sourcesSkipped` instead of failing. |
+| `zotero_attachment` | Source: resolve an item or attachment ref to the original attachment's verified on-disk path or linked URL. An item ref yields the best attachment Zotero itself picks; an attachment ref pinpoints one.                                                                                                       |
+| `zotero_export`     | Cite: let Zotero's own citation/export machinery produce citations, a CSL bibliography, or `bibtex` / `biblatex` / `ris` / `csljson`.                                                                                                                                                                          |
 
 Every tool returns reusable refs of the form `zotero://user/0/<item|attachment|annotation|collection|search>/<KEY>`, optionally qualified with `?server=<id>`. Later calls chain through these refs. The Zotero 10+ `server` qualifier binds a ref to the database that produced it, so a database switch blocks stale refs instead of misreading them.
 
@@ -100,24 +100,25 @@ The plugin mounts as id `zotero` and takes effect on the next dsh start. After i
 
 All values are `Config` fields changeable from the bundle's `config` block (e.g. via `dsh plugin config`). Defaults are shown.
 
-| Field                  | Default                      | Meaning                                                      |
-| ---------------------- | ---------------------------- | ------------------------------------------------------------ |
-| `baseUrl`              | `http://127.0.0.1:23119/api` | Local API base URL. Plain loopback HTTP only.                |
-| `provider`             | `local`                      | Provider id to select.                                       |
-| `timeoutMs`            | `5000`                       | Per-request provider deadline.                               |
-| `maxSearchResults`     | `20`                         | Upper bound for `zotero_search` `limit`.                     |
-| `maxEvidenceChars`     | `6000`                       | Total character budget for retrieved evidence.               |
-| `maxEvidencePassages`  | `4`                          | Upper bound for evidence passage counts.                     |
-| `maxDetailChars`       | `3000`                       | Character budget for `zotero_get` abstract previews.         |
-| `maxNoteChars`         | `2000`                       | Character budget per note preview in `zotero_get`.           |
-| `maxNoteRecords`       | `50`                         | Upper bound for note records returned by `zotero_get`.       |
-| `maxAnnotationRecords` | `100`                        | Upper bound for annotation records returned by `zotero_get`. |
-| `fulltextChunkWords`   | `200`                        | Word count per full-text passage entering evidence ranking.  |
-| `maxFulltextChars`     | `250000`                     | Full text accepted into evidence ranking.                    |
-| `maxResponseBytes`     | `16777216`                   | Streaming byte bound for every API response.                 |
-| `maxExportChars`       | `1000000`                    | Export output hard limit. Never mid-truncated.               |
-| `defaultStyle`         | `apa`                        | CSL style for citation/bibliography formats.                 |
-| `defaultLocale`        | `en-US`                      | CSL locale for citation/bibliography formats.                |
+| Field                  | Default                      | Meaning                                                               |
+| ---------------------- | ---------------------------- | --------------------------------------------------------------------- |
+| `baseUrl`              | `http://127.0.0.1:23119/api` | Local API base URL. Plain loopback HTTP only.                         |
+| `provider`             | `local`                      | Provider id to select.                                                |
+| `timeoutMs`            | `5000`                       | Per-request provider deadline.                                        |
+| `maxSearchResults`     | `20`                         | Upper bound for `zotero_search` `limit`.                              |
+| `maxEvidenceChars`     | `6000`                       | Total character budget for retrieved evidence.                        |
+| `maxEvidencePassages`  | `4`                          | Upper bound for evidence passage counts.                              |
+| `maxDetailChars`       | `3000`                       | Character budget for `zotero_get` abstract previews.                  |
+| `maxNoteBodyChars`     | `30000`                      | Character budget for a note item's own body returned by `zotero_get`. |
+| `maxNoteChars`         | `2000`                       | Character budget per note preview in `zotero_get`.                    |
+| `maxNoteRecords`       | `50`                         | Upper bound for note records returned by `zotero_get`.                |
+| `maxAnnotationRecords` | `100`                        | Upper bound for annotation records returned by `zotero_get`.          |
+| `fulltextChunkWords`   | `200`                        | Word count per full-text passage entering evidence ranking.           |
+| `maxFulltextChars`     | `250000`                     | Full text accepted into evidence ranking.                             |
+| `maxResponseBytes`     | `16777216`                   | Streaming byte bound for every API response.                          |
+| `maxExportChars`       | `1000000`                    | Export output hard limit. Never mid-truncated.                        |
+| `defaultStyle`         | `apa`                        | CSL style for citation/bibliography formats.                          |
+| `defaultLocale`        | `en-US`                      | CSL locale for citation/bibliography formats.                         |
 
 ## Development
 

@@ -96,6 +96,8 @@ export interface ZoteroSearchItem {
   creatorSummary: string
   year?: number
   itemType: string
+  /** Parent item of a child note; provenance-qualified like the record's own ref. */
+  parentRef?: string
   bestAttachmentRef?: string
   bestAttachmentType?: string
   attachmentSize?: number
@@ -122,6 +124,8 @@ export interface ZoteroNoteRecord {
   readonly ref: string
   readonly text: string
   readonly truncated: boolean
+  /** The note's parent item, when Zotero reports one; provenance-qualified like `ref`. */
+  readonly parentRef?: string
 }
 
 export interface ZoteroAnnotationRecord {
@@ -165,6 +169,8 @@ export interface ZoteroItemDetail {
   readonly url?: string
   readonly abstract?: string
   readonly abstractTruncated: boolean
+  /** The item's own note body, when the item is a note; bounded, `truncated` signals the cut. */
+  readonly noteBody?: { readonly text: string; readonly truncated: boolean }
   readonly tags: string[]
   readonly collections: ZoteroCollectionRecord[]
   readonly children: { readonly total: number }
@@ -193,6 +199,10 @@ export interface ZoteroEvidence {
   readonly source: ZoteroEvidenceSource
   readonly sourceRef: string
   readonly text: string
+  /** Position within a multi-chunk source (note/fulltext), so the Agent can locate the span. */
+  readonly chunkIndex?: number
+  /** Total chunks of the source this passage belongs to. */
+  readonly chunkCount?: number
   readonly comment?: string
   readonly pageLabel?: string
 }
@@ -212,6 +222,8 @@ export interface ZoteroRetrieveResult {
   readonly coverage?: ZoteroCoverage
   readonly evidence: ZoteroEvidence[]
   readonly truncated: boolean
+  /** Requested sources the item could not provide; retrieval degrades instead of failing. */
+  readonly sourcesSkipped: ZoteroEvidenceSource[]
 }
 
 export type ZoteroAttachmentLocation =

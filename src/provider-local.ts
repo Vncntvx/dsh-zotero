@@ -37,6 +37,7 @@ import {
   normalizeScopeEntry,
   normalizeSearchItem,
   partitionChildren,
+  plainNoteText,
   truncateText,
   type PartitionedChildren,
 } from './normalize.js'
@@ -98,6 +99,8 @@ interface ResolvedScopeResult {
 export interface LocalApiLimits {
   /** Character budget for `zotero_get` abstract previews. */
   readonly maxDetailChars: number
+  /** Character budget for a note item's own body returned by `zotero_get`. */
+  readonly maxNoteBodyChars: number
   /** Per-note character budget for `zotero_get` note previews. */
   readonly maxNoteChars: number
   /** Upper bound for note records returned by `zotero_get`. */
@@ -266,6 +269,7 @@ export class LocalApiProvider implements ZoteroProvider {
       childrenRows,
       collectionNames,
       maxAbstractChars: this.limits.maxDetailChars,
+      maxNoteBodyChars: this.limits.maxNoteBodyChars,
       maxNoteChars: this.limits.maxNoteChars,
       maxNoteRecords: this.limits.maxNoteRecords,
       maxAnnotationRecords: this.limits.maxAnnotationRecords,
@@ -345,9 +349,13 @@ export class LocalApiProvider implements ZoteroProvider {
    * Gather ranked evidence for one item: annotations, notes, the abstract,
    * and full-text chunks are scored as one passage corpus with BM25. Fetch
    * stays lazy — children only when annotation/note sources (or a PDF
-   * fallback) need them, fulltext only when requested. Passage count and
-   * character budgets are enforced with the `truncated` flag, never by
-   * silently editing passage text.
+   * fallback) need them, fulltext only when requested. A note item's own
+   * body is its note source; child notes contribute every chunk of their
+   * full text, so long notes rank beyond their first chunk. Sources the
+   * item cannot provide are skipped and reported in `sourcesSkipped` —
+   * retrieval degrades instead of failing. Passage count and character
+   * budgets are enforced with the `truncated` flag, never by silently
+   * editing passage text.
    */
   async retrieve(
     request: ZoteroRetrieveRequest,
@@ -359,16 +367,21 @@ export class LocalApiProvider implements ZoteroProvider {
       serverId: ref.serverId,
     })
     const serverId = parent.headers.get('zotero-server-id') ?? ref.serverId
-    const data = asRecord(asRecord(parent.json)?.data)
+    const record = asRecord(parent.json)
+    const data = asRecord(record?.data)
+    const itemType = asString(data?.itemType) ?? asString(record?.itemType)
     const linkAttachment = bestAttachmentFromLinks(parent.json)
 
     const wantsAnnotations = request.sources.includes('annotation')
     const wantsNotes = request.sources.includes('note')
     const wantsFulltext = request.sources.includes('fulltext')
-    // Children are fetched for annotation/note sources, or as the PDF
-    // fallback when the parent carries no attachment link.
+    // A note item's own body is its note source, so its children are only
+    // needed for annotation sources or the PDF fallback.
+    const isNoteItem = itemType === 'note'
     const fetchChildren =
-      wantsAnnotations || wantsNotes || (wantsFulltext && linkAttachment === undefined)
+      wantsAnnotations ||
+      (wantsNotes && !isNoteItem) ||
+      (wantsFulltext && linkAttachment === undefined)
     let childrenRows: readonly unknown[] = []
     if (fetchChildren) {
       const children = await this.client.getJson<unknown>(
@@ -382,6 +395,7 @@ export class LocalApiProvider implements ZoteroProvider {
       childrenRows = Array.isArray(children.json) ? children.json : []
     }
 
+    const skipped: ZoteroEvidenceSource[] = []
     let fulltextWasCut = false
     let attachmentRef: string | undefined
     let coverage: ZoteroCoverage | undefined
@@ -389,6 +403,8 @@ export class LocalApiProvider implements ZoteroProvider {
       source: ZoteroEvidenceSource
       sourceRef: string
       text: string
+      chunkIndex?: number
+      chunkCount?: number
       comment?: string
       pageLabel?: string
     }[] = []
@@ -396,27 +412,41 @@ export class LocalApiProvider implements ZoteroProvider {
       let attachmentKey = linkAttachment?.key
       if (attachmentKey === undefined) {
         const pdf = selectAttachment(childrenRows, 'pdf')
-        if (pdf === undefined) {
-          throw new ZoteroError(
-            'The item has no PDF attachment whose full text could be searched.',
-            ZOTERO_NO_ATTACHMENT,
-          )
+        if (pdf === undefined) skipped.push('fulltext')
+        else attachmentKey = pdf.key
+      }
+      if (attachmentKey !== undefined) {
+        try {
+          attachmentRef = formatRef(localRef('attachment', attachmentKey, serverId))
+          const payload = await this.fetchFulltext(attachmentKey, serverId, signal)
+          const content = typeof payload.content === 'string' ? payload.content : ''
+          const bounded = truncateText(content, this.limits.maxFulltextChars)
+          fulltextWasCut = bounded.truncated
+          const chunks = chunkText(bounded.text, this.limits.fulltextChunkWords)
+          for (const chunk of chunks) {
+            passages.push({
+              source: 'fulltext',
+              sourceRef: attachmentRef,
+              text: chunk.text,
+              chunkIndex: chunk.index,
+              chunkCount: chunks.length,
+            })
+          }
+          coverage = normalizeCoverage(payload)
+        } catch (error) {
+          // An unindexed attachment degrades like an absent one: the other
+          // requested sources still answer, and `sourcesSkipped` reports it.
+          if (error instanceof ZoteroError && error.code === ZOTERO_NO_FULLTEXT) {
+            skipped.push('fulltext')
+          } else {
+            throw error
+          }
         }
-        attachmentKey = pdf.key
       }
-      attachmentRef = formatRef(localRef('attachment', attachmentKey, serverId))
-      const payload = await this.fetchFulltext(attachmentKey, serverId, signal)
-      const content = typeof payload.content === 'string' ? payload.content : ''
-      const bounded = truncateText(content, this.limits.maxFulltextChars)
-      fulltextWasCut = bounded.truncated
-      for (const chunk of chunkText(bounded.text, this.limits.fulltextChunkWords)) {
-        passages.push({ source: 'fulltext', sourceRef: attachmentRef, text: chunk.text })
-      }
-      coverage = normalizeCoverage(payload)
     }
 
     const partitioned: PartitionedChildren = fetchChildren
-      ? partitionChildren(childrenRows, serverId, this.limits.maxNoteChars)
+      ? partitionChildren(childrenRows, serverId)
       : { notes: [], annotations: [], attachments: [] }
     if (wantsAnnotations) {
       for (const annotation of partitioned.annotations) {
@@ -430,8 +460,21 @@ export class LocalApiProvider implements ZoteroProvider {
       }
     }
     if (wantsNotes) {
-      for (const note of partitioned.notes) {
-        passages.push({ source: 'note', sourceRef: note.ref, text: note.text })
+      const noteRef = formatRef(localRef('item', ref.key, serverId))
+      const noteSources: { ref: string; text: string }[] = isNoteItem
+        ? [{ ref: noteRef, text: plainNoteText(data?.note) }]
+        : partitioned.notes.map((note) => ({ ref: note.ref, text: note.text }))
+      for (const note of noteSources) {
+        const chunks = chunkText(note.text, this.limits.fulltextChunkWords)
+        for (const chunk of chunks) {
+          passages.push({
+            source: 'note',
+            sourceRef: note.ref,
+            text: chunk.text,
+            chunkIndex: chunk.index,
+            chunkCount: chunks.length,
+          })
+        }
       }
     }
     let abstractWasCut = false
@@ -466,6 +509,8 @@ export class LocalApiProvider implements ZoteroProvider {
         source: passage.source,
         sourceRef: passage.sourceRef,
         text: passage.text,
+        ...(passage.chunkIndex !== undefined ? { chunkIndex: passage.chunkIndex } : {}),
+        ...(passage.chunkCount !== undefined ? { chunkCount: passage.chunkCount } : {}),
         ...(passage.comment !== undefined ? { comment: passage.comment } : {}),
         ...(passage.pageLabel !== undefined ? { pageLabel: passage.pageLabel } : {}),
       })
@@ -476,6 +521,7 @@ export class LocalApiProvider implements ZoteroProvider {
       ...(coverage !== undefined ? { coverage } : {}),
       evidence,
       truncated,
+      sourcesSkipped: skipped,
     }
   }
 

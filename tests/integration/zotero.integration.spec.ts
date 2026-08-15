@@ -33,6 +33,7 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', 
       }),
       {
         maxDetailChars: 3000,
+        maxNoteBodyChars: 30_000,
         maxNoteChars: 2000,
         maxNoteRecords: 50,
         maxAnnotationRecords: 100,

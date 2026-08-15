@@ -14,6 +14,7 @@ import {
   normalizeSearchItem,
   normalizeVenue,
   partitionChildren,
+  plainNoteText,
 } from '../src/normalize.js'
 
 function fixture(name: string): unknown {
@@ -97,6 +98,17 @@ describe('normalizeSearchItem', () => {
   it('falls back to the top-level itemType when the data block is missing entirely', () => {
     const item = normalizeSearchItem({ key: 'ABCD1234', itemType: 'book' })
     expect(item.itemType).toBe('book')
+  })
+
+  it('carries the parent ref for child notes', () => {
+    const item = normalizeSearchItem(
+      { key: 'NOTE1111', data: { itemType: 'note', title: '', parentItem: 'ABCD1234' } },
+      'S1',
+    )
+    expect(item.parentRef).toBe('zotero://user/0/item/ABCD1234?server=S1')
+    expect(
+      normalizeSearchItem({ key: 'ABCD1234', data: { itemType: 'book' } }).parentRef,
+    ).toBeUndefined()
   })
 
   it('yields an empty itemType when neither level declares one', () => {
@@ -269,6 +281,45 @@ describe('normalizeNoteRecord', () => {
       normalizeNoteRecord({ key: 'NOTE1111', data: { itemType: 'note' } }, undefined, 100),
     ).toEqual({ ref: 'zotero://user/0/item/NOTE1111', text: '', truncated: false })
   })
+
+  it('strips HTML and carries the parent ref when reported', () => {
+    const row = {
+      key: 'NOTE1111',
+      data: { itemType: 'note', note: '<p>First</p><p>Second</p>', parentItem: 'ABCD1234' },
+    }
+    expect(normalizeNoteRecord(row, 'S1', 100)).toEqual({
+      ref: 'zotero://user/0/item/NOTE1111?server=S1',
+      text: 'First\nSecond',
+      truncated: false,
+      parentRef: 'zotero://user/0/item/ABCD1234?server=S1',
+    })
+  })
+
+  it('keeps the full body when no budget is given', () => {
+    const row = { key: 'NOTE1111', data: { itemType: 'note', note: 'word word word' } }
+    expect(normalizeNoteRecord(row, undefined)).toEqual({
+      ref: 'zotero://user/0/item/NOTE1111',
+      text: 'word word word',
+      truncated: false,
+    })
+  })
+
+  it('ignores malformed parent keys', () => {
+    const row = { key: 'NOTE1111', data: { itemType: 'note', note: 'x', parentItem: 'nope!!' } }
+    expect(normalizeNoteRecord(row, undefined, 10).parentRef).toBeUndefined()
+  })
+})
+
+describe('plainNoteText', () => {
+  it('strips tags, turns block ends into newlines, and decodes entities', () => {
+    expect(plainNoteText('<p>A &amp; B</p><p>C&nbsp;D<br/>E</p>')).toBe('A & B\nC D\nE')
+  })
+
+  it('returns an empty string for non-string or empty input', () => {
+    expect(plainNoteText(undefined)).toBe('')
+    expect(plainNoteText(42)).toBe('')
+    expect(plainNoteText('<p></p>')).toBe('')
+  })
 })
 
 describe('normalizeAnnotationRecord', () => {
@@ -434,6 +485,7 @@ describe('normalizeItemDetail', () => {
       childrenRows: CHILDREN,
       collectionNames: new Map([['COLL1234', 'LLM Papers']]),
       maxAbstractChars: 100,
+      maxNoteBodyChars: 3000,
       maxNoteChars: 2000,
       maxNoteRecords: 50,
       maxAnnotationRecords: 100,
@@ -503,6 +555,7 @@ describe('normalizeItemDetail', () => {
       include: new Set(['notes']),
       childrenRows: [],
       maxAbstractChars: 100,
+      maxNoteBodyChars: 3000,
       maxNoteChars: 2000,
       maxNoteRecords: 50,
       maxAnnotationRecords: 100,
@@ -528,6 +581,7 @@ describe('normalizeItemDetail', () => {
       },
       include: new Set(),
       maxAbstractChars: 100,
+      maxNoteBodyChars: 3000,
       maxNoteChars: 2000,
       maxNoteRecords: 50,
       maxAnnotationRecords: 100,
@@ -544,6 +598,7 @@ describe('normalizeItemDetail', () => {
       },
       include: new Set(),
       maxAbstractChars: 4,
+      maxNoteBodyChars: 3000,
       maxNoteChars: 2000,
       maxNoteRecords: 50,
       maxAnnotationRecords: 100,
@@ -571,6 +626,7 @@ describe('normalizeItemDetail', () => {
       include: new Set(['notes', 'annotations']),
       childrenRows: [...notes, ...annotations],
       maxAbstractChars: 100,
+      maxNoteBodyChars: 3000,
       maxNoteChars: 2000,
       maxNoteRecords: 50,
       maxAnnotationRecords: 100,
@@ -587,6 +643,7 @@ describe('normalizeItemDetail', () => {
       include: new Set(['notes']),
       childrenRows: [{ key: 'NOTE1111', data: { itemType: 'note', note: 'n' } }],
       maxAbstractChars: 100,
+      maxNoteBodyChars: 3000,
       maxNoteChars: 2000,
       maxNoteRecords: 50,
       maxAnnotationRecords: 100,
@@ -604,6 +661,7 @@ describe('normalizeItemDetail', () => {
       include: new Set(['notes']),
       childrenRows: [{ key: 'NOTE1111', data: { itemType: 'note', note: 'n' } }],
       maxAbstractChars: 100,
+      maxNoteBodyChars: 3000,
       maxNoteChars: 2000,
       maxNoteRecords: 50,
       maxAnnotationRecords: 100,
@@ -626,6 +684,7 @@ describe('normalizeItemDetail', () => {
       parent: withLinks,
       include: new Set(),
       maxAbstractChars: 100,
+      maxNoteBodyChars: 3000,
       maxNoteChars: 2000,
       maxNoteRecords: 50,
       maxAnnotationRecords: 100,
@@ -655,6 +714,7 @@ describe('normalizeItemDetail', () => {
         { key: 'NOTE1111', data: { itemType: 'note', note: 'n' } },
       ],
       maxAbstractChars: 100,
+      maxNoteBodyChars: 3000,
       maxNoteChars: 2000,
       maxNoteRecords: 50,
       maxAnnotationRecords: 100,
@@ -672,6 +732,7 @@ describe('normalizeItemDetail', () => {
       parent: { key: 'ABCD1234', itemType: 'journalArticle', data: { title: 'T' } },
       include: new Set(),
       maxAbstractChars: 100,
+      maxNoteBodyChars: 3000,
       maxNoteChars: 2000,
       maxNoteRecords: 50,
       maxAnnotationRecords: 100,
@@ -685,12 +746,42 @@ describe('normalizeItemDetail', () => {
         parent: {},
         include: new Set(),
         maxAbstractChars: 100,
+        maxNoteBodyChars: 3000,
         maxNoteChars: 2000,
         maxNoteRecords: 50,
         maxAnnotationRecords: 100,
       }),
     )
     expect(error.code).toBe(ZOTERO_UNEXPECTED)
+  })
+
+  it('returns the note body for note items under the budget', () => {
+    const detail = normalizeItemDetail({
+      parent: {
+        key: 'NOTE1111',
+        data: { itemType: 'note', note: '<p>hello <b>world</b></p>' },
+      },
+      include: new Set(),
+      maxAbstractChars: 100,
+      maxNoteBodyChars: 8,
+      maxNoteChars: 2000,
+      maxNoteRecords: 50,
+      maxAnnotationRecords: 100,
+    })
+    expect(detail.noteBody).toEqual({ text: 'hello wo', truncated: true })
+  })
+
+  it('omits noteBody for non-note items', () => {
+    const detail = normalizeItemDetail({
+      parent: { key: 'ABCD1234', data: { itemType: 'journalArticle', title: 'T' } },
+      include: new Set(),
+      maxAbstractChars: 100,
+      maxNoteBodyChars: 3000,
+      maxNoteChars: 2000,
+      maxNoteRecords: 50,
+      maxAnnotationRecords: 100,
+    })
+    expect(detail.noteBody).toBeUndefined()
   })
 })
 
@@ -721,6 +812,7 @@ describe('normalizeItemDetail include and fallback branches', () => {
         },
       ],
       maxAbstractChars: 100,
+      maxNoteBodyChars: 3000,
       maxNoteChars: 2000,
       maxNoteRecords: 50,
       maxAnnotationRecords: 100,
@@ -734,6 +826,7 @@ describe('normalizeItemDetail include and fallback branches', () => {
       parent: { key: 'ABCD1234', data: { title: 'T' } },
       include: new Set(),
       maxAbstractChars: 100,
+      maxNoteBodyChars: 3000,
       maxNoteChars: 2000,
       maxNoteRecords: 50,
       maxAnnotationRecords: 100,
@@ -796,6 +889,7 @@ describe('normalizeItemDetail attachment and title tolerances', () => {
         },
       ],
       maxAbstractChars: 100,
+      maxNoteBodyChars: 3000,
       maxNoteChars: 2000,
       maxNoteRecords: 50,
       maxAnnotationRecords: 100,
@@ -810,6 +904,7 @@ describe('normalizeItemDetail attachment and title tolerances', () => {
       parent: { key: 'ABCD1234', data: { itemType: 'journalArticle' } },
       include: new Set(),
       maxAbstractChars: 100,
+      maxNoteBodyChars: 3000,
       maxNoteChars: 2000,
       maxNoteRecords: 50,
       maxAnnotationRecords: 100,

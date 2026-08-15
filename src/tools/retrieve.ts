@@ -39,12 +39,14 @@ const RETRIEVE_PARAMETERS = {
     type: 'array',
     items: { type: 'string', enum: ['annotation', 'note', 'abstract', 'fulltext'] },
     default: ALL_SOURCES,
-    description: 'Evidence sources to gather; defaults to all four.',
+    description:
+      'Evidence sources to gather; defaults to all four. Sources the item cannot provide are skipped and reported in sourcesSkipped, not an error.',
   },
   passages: {
     type: 'integer',
     default: 4,
-    description: 'Maximum ranked evidence passages to return.',
+    description:
+      'Maximum ranked evidence passages to return; capped by the configured maxEvidencePassages.',
   },
 } as const
 
@@ -57,6 +59,8 @@ const EVIDENCE_RECORD = {
     source: { type: 'string', required: true },
     sourceRef: { type: 'string', required: true },
     text: { type: 'string', required: true },
+    chunkIndex: { type: 'integer' },
+    chunkCount: { type: 'integer' },
     comment: { type: 'string' },
     pageLabel: { type: 'string' },
   },
@@ -81,6 +85,11 @@ const RETRIEVE_OUTPUT_SCHEMA = {
     },
     evidence: { type: 'array', required: true, items: EVIDENCE_RECORD },
     truncated: { type: 'boolean', required: true },
+    sourcesSkipped: {
+      type: 'array',
+      required: true,
+      items: { type: 'string', enum: ['annotation', 'note', 'abstract', 'fulltext'] },
+    },
   },
 } as const
 
@@ -124,11 +133,18 @@ export function renderRetrieve(_args: RetrieveArgs, value: RetrieveOutput): Cont
     lines.push(`Indexing coverage: ${chars}${pages}${coverage.complete ? ' (complete)' : ''}`)
   }
   value.evidence.forEach((entry) => {
-    const label =
+    const page =
       entry.pageLabel === undefined ? entry.source : `${entry.source} (page ${entry.pageLabel})`
+    const chunk =
+      entry.chunkCount === undefined || entry.chunkIndex === undefined
+        ? ''
+        : `, chunk ${entry.chunkIndex + 1}/${entry.chunkCount}`
     const comment = entry.comment === undefined ? '' : `\nComment: ${entry.comment}`
-    lines.push(`\n[${label}] ${entry.sourceRef}\n${entry.text}${comment}`)
+    lines.push(`\n[${page}${chunk}] ${entry.sourceRef}\n${entry.text}${comment}`)
   })
+  if (value.sourcesSkipped.length > 0) {
+    lines.push(`\nSkipped unavailable sources: ${value.sourcesSkipped.join(', ')}`)
+  }
   if (value.truncated)
     lines.push('\nMore evidence was available but omitted by the passage or character budget.')
   return [{ type: 'text', text: lines.join('\n') }]
@@ -145,6 +161,8 @@ export function registerRetrieveTool(
       description: [
         'Gather evidence passages for one Zotero item and rank them against a query.',
         "Sources: annotations (with Zotero's own page labels), notes, the abstract, and BM25-ranked full-text chunks.",
+        'A note item contributes its own body; child notes contribute every chunk of their full text (chunkIndex/chunkCount locate each passage).',
+        'Unavailable sources are skipped and listed in sourcesSkipped instead of failing the call.',
         'Results are capped by passage count and character budget; a truncated flag signals omitted evidence.',
       ].join(' '),
       parameters: RETRIEVE_PARAMETERS,

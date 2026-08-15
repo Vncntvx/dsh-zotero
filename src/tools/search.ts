@@ -92,7 +92,11 @@ const SEARCH_PARAMETERS = {
     default: 0,
     description: 'Pagination offset for exploring more results.',
   },
-  limit: { type: 'integer', default: 10, description: 'Maximum results to return.' },
+  limit: {
+    type: 'integer',
+    default: 10,
+    description: 'Maximum results to return; capped by the configured maxSearchResults.',
+  },
 } as const
 
 type SearchArgs = InferArgs<typeof SEARCH_PARAMETERS>
@@ -141,6 +145,7 @@ const SEARCH_OUTPUT_SCHEMA = {
           creatorSummary: { type: 'string', required: true },
           year: { type: 'integer' },
           itemType: { type: 'string', required: true },
+          parentRef: { type: 'string' },
           bestAttachmentRef: { type: 'string' },
           bestAttachmentType: { type: 'string' },
           attachmentSize: { type: 'integer' },

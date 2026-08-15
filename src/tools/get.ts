@@ -36,6 +36,7 @@ const NOTE_RECORD = {
     ref: { type: 'string', required: true },
     text: { type: 'string', required: true },
     truncated: { type: 'boolean', required: true },
+    parentRef: { type: 'string' },
   },
 } as const
 
@@ -78,6 +79,14 @@ const GET_OUTPUT_SCHEMA = {
     url: { type: 'string' },
     abstract: { type: 'string' },
     abstractTruncated: { type: 'boolean', required: true },
+    noteBody: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        text: { type: 'string', required: true },
+        truncated: { type: 'boolean', required: true },
+      },
+    },
     tags: { type: 'array', required: true, items: { type: 'string' } },
     collections: {
       type: 'array',
@@ -162,6 +171,9 @@ export function renderGet(_args: GetArgs, value: GetOutput): ContentBlock[] {
   if (value.abstract !== undefined) {
     lines.push(`Abstract${value.abstractTruncated ? ' (truncated)' : ''}: ${value.abstract}`)
   }
+  if (value.noteBody !== undefined) {
+    lines.push(`Note${value.noteBody.truncated ? ' (truncated)' : ''}: ${value.noteBody.text}`)
+  }
   const counts = [
     value.notes === undefined ? undefined : `${value.notes.returned} of ${value.notes.total} notes`,
     value.annotations === undefined
@@ -191,6 +203,8 @@ export function registerGetTool(ctx: Context, service: ZoteroService): void {
       description: [
         'Read the metadata of one Zotero library item referenced by a zotero:// ref.',
         'The default call fetches metadata only; request include to also return child notes, annotations, and attachments (each adds one lazy request).',
+        'When the item is a note, noteBody returns its own text (bounded by the configured budget; truncated flags the cut) — include governs child kinds only.',
+        'Child notes carry parentRef, the parent item ref that produced them.',
         'Results echo the served instance in the ref, so refs can be reused safely.',
       ].join(' '),
       parameters: GET_PARAMETERS,
