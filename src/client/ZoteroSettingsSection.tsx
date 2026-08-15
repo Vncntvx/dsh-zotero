@@ -25,7 +25,13 @@ import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-cli
 // SlotMap merge into this program without a runtime dependency.
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import { ValueField } from './fields.tsx'
-import type { ZoteroCardFace, ZoteroCardState } from './zotero-card-controller.ts'
+import {
+  FIELD_GROUPS,
+  NUMERIC_FIELD_KEYS,
+  type FieldKey,
+  type ZoteroCardFace,
+  type ZoteroCardState,
+} from './zotero-card-controller.ts'
 import type { ZoteroLocaleKey } from './locales.ts'
 
 /** Props the renderer binds for the Zotero settings page. */
@@ -131,11 +137,11 @@ export function ZoteroSettingsSection(props: ZoteroSettingsSectionProps) {
           {t('readOnly')}
         </p>
       ) : null}
-      {FIELD_GROUPS.map(([groupKey, keys]) => (
+      {FIELD_GROUPS.map(({ key: groupKey, fields: keys }) => (
         <section key={groupKey} style={group} aria-label={t(groupKey)}>
           <h3 style={groupTitle}>{t(groupKey)}</h3>
           <div style={fields}>
-            {keys.map((key) => field(props, state, key, t, disabled, NUMERIC_FIELDS.has(key)))}
+            {keys.map((key) => field(props, state, key, t, disabled, NUMERIC_FIELD_KEYS.has(key)))}
           </div>
         </section>
       ))}
@@ -173,9 +179,10 @@ function field(
 ): ReactNode {
   return (
     <ValueField
+      key={key}
       id={`zotero-settings-${key}`}
       label={t(key)}
-      hint={t(`${key}Hint` as ZoteroLocaleKey)}
+      hint={t(`${key}Hint`)}
       overriddenLabel={t('overridden')}
       resetLabel={t('reset')}
       invalidLabel={t('invalidNumber')}
@@ -191,51 +198,3 @@ function field(
     />
   )
 }
-
-/**
- * The page's field keys grouped by the host schema's families (`src/config.ts`),
- * in display order; copy key equals state member name.
- */
-const FIELD_GROUPS = [
-  ['groupConnection', ['baseUrl', 'provider', 'timeoutMs']],
-  [
-    'groupSearch',
-    [
-      'maxSearchResults',
-      'maxNoteScanRecords',
-      'maxEvidenceChars',
-      'maxEvidencePassages',
-      'maxDetailChars',
-      'maxNoteBodyChars',
-      'maxNoteChars',
-      'maxNoteRecords',
-      'maxAnnotationRecords',
-      'fulltextChunkWords',
-      'maxFulltextChars',
-    ],
-  ],
-  ['groupOutput', ['maxResponseBytes', 'maxExportChars', 'maxExportRefs']],
-  ['groupDefaults', ['defaultStyle', 'defaultLocale']],
-] as const
-
-type FieldKey = (typeof FIELD_GROUPS)[number][1][number]
-type GroupKey = (typeof FIELD_GROUPS)[number][0]
-
-/** The whole-number fields, rendered with a numeric keypad hint. */
-const NUMERIC_FIELDS = new Set<FieldKey>([
-  'timeoutMs',
-  'maxSearchResults',
-  'maxNoteScanRecords',
-  'maxEvidenceChars',
-  'maxEvidencePassages',
-  'maxDetailChars',
-  'maxNoteBodyChars',
-  'maxNoteChars',
-  'maxNoteRecords',
-  'maxAnnotationRecords',
-  'fulltextChunkWords',
-  'maxFulltextChars',
-  'maxResponseBytes',
-  'maxExportChars',
-  'maxExportRefs',
-])

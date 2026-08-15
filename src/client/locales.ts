@@ -1,6 +1,8 @@
 /** Locale bundles for the Zotero settings page. */
 
-/** Locale keys the page renders. */
+import type { FieldKey, GroupKey } from './zotero-card-controller.ts'
+
+/** Locale keys the page renders: fixed chrome keys plus the field table's keys, labels, and groups. */
 export type ZoteroLocaleKey =
   | 'nav'
   | 'title'
@@ -14,48 +16,9 @@ export type ZoteroLocaleKey =
   | 'saving'
   | 'saveFailed'
   | 'invalidNumber'
-  | 'groupConnection'
-  | 'groupSearch'
-  | 'groupOutput'
-  | 'groupDefaults'
-  | 'baseUrl'
-  | 'baseUrlHint'
-  | 'provider'
-  | 'providerHint'
-  | 'timeoutMs'
-  | 'timeoutMsHint'
-  | 'maxSearchResults'
-  | 'maxSearchResultsHint'
-  | 'maxNoteScanRecords'
-  | 'maxNoteScanRecordsHint'
-  | 'maxEvidenceChars'
-  | 'maxEvidenceCharsHint'
-  | 'maxEvidencePassages'
-  | 'maxEvidencePassagesHint'
-  | 'maxDetailChars'
-  | 'maxDetailCharsHint'
-  | 'maxNoteBodyChars'
-  | 'maxNoteBodyCharsHint'
-  | 'maxNoteChars'
-  | 'maxNoteCharsHint'
-  | 'maxNoteRecords'
-  | 'maxNoteRecordsHint'
-  | 'maxAnnotationRecords'
-  | 'maxAnnotationRecordsHint'
-  | 'fulltextChunkWords'
-  | 'fulltextChunkWordsHint'
-  | 'maxFulltextChars'
-  | 'maxFulltextCharsHint'
-  | 'maxResponseBytes'
-  | 'maxResponseBytesHint'
-  | 'maxExportChars'
-  | 'maxExportCharsHint'
-  | 'maxExportRefs'
-  | 'maxExportRefsHint'
-  | 'defaultStyle'
-  | 'defaultStyleHint'
-  | 'defaultLocale'
-  | 'defaultLocaleHint'
+  | GroupKey
+  | FieldKey
+  | `${FieldKey}Hint`
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {

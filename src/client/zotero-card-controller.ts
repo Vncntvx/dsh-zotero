@@ -5,11 +5,14 @@
  * modules in). The scope arrives through the shared `SettingsScope` contract,
  * so the form is indifferent to whether the harness's settings RPC or the
  * plugin's own Typert Remote endpoints back it.
+ *
+ * One field table drives the whole card: the field specs the form edits, the
+ * state the page renders, the display groups, and the numeric hint set, so a
+ * field cannot silently vanish from the page or from its typed state.
  * @module dsh-zotero/client/zotero-card-controller
  */
 
-import type { SettingsScope } from '@deepseek-ai/dsh-client-runtime/client'
-import { ZOTERO_SETTINGS_NAMESPACE } from '../settings-namespace.ts'
+import type { SettingsScope, SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 import {
   CardForm,
   numberField,
@@ -19,68 +22,71 @@ import {
   type CardFieldState,
   type CardShell,
 } from './card-form.ts'
-import type { SnapshotSource } from './snapshot.ts'
 
-/** The section fields this card edits — the host `Config` surface, all of it. */
-const FIELDS: CardFieldSpec[] = [
-  textField('baseUrl'),
-  textField('provider'),
-  numberField('timeoutMs'),
-  numberField('maxSearchResults'),
-  numberField('maxNoteScanRecords'),
-  numberField('maxEvidenceChars'),
-  numberField('maxEvidencePassages'),
-  numberField('maxDetailChars'),
-  numberField('maxNoteBodyChars'),
-  numberField('maxNoteChars'),
-  numberField('maxNoteRecords'),
-  numberField('maxAnnotationRecords'),
-  numberField('fulltextChunkWords'),
-  numberField('maxFulltextChars'),
-  numberField('maxResponseBytes'),
-  numberField('maxExportChars'),
-  numberField('maxExportRefs'),
-  textField('defaultStyle'),
-  textField('defaultLocale'),
-]
+/**
+ * The section fields this card edits — the host `Config` surface, all of it,
+ * in display order. `group` names the page's display group (a locale key).
+ */
+export const FIELD_SPECS = [
+  { key: 'baseUrl', kind: 'text', group: 'groupConnection' },
+  { key: 'provider', kind: 'text', group: 'groupConnection' },
+  { key: 'timeoutMs', kind: 'number', group: 'groupConnection' },
+  { key: 'maxSearchResults', kind: 'number', group: 'groupSearch' },
+  { key: 'maxNoteScanRecords', kind: 'number', group: 'groupSearch' },
+  { key: 'maxEvidenceChars', kind: 'number', group: 'groupSearch' },
+  { key: 'maxEvidencePassages', kind: 'number', group: 'groupSearch' },
+  { key: 'maxDetailChars', kind: 'number', group: 'groupSearch' },
+  { key: 'maxNoteBodyChars', kind: 'number', group: 'groupSearch' },
+  { key: 'maxNoteChars', kind: 'number', group: 'groupSearch' },
+  { key: 'maxNoteRecords', kind: 'number', group: 'groupSearch' },
+  { key: 'maxAnnotationRecords', kind: 'number', group: 'groupSearch' },
+  { key: 'fulltextChunkWords', kind: 'number', group: 'groupSearch' },
+  { key: 'maxFulltextChars', kind: 'number', group: 'groupSearch' },
+  { key: 'maxResponseBytes', kind: 'number', group: 'groupOutput' },
+  { key: 'maxExportChars', kind: 'number', group: 'groupOutput' },
+  { key: 'maxExportRefs', kind: 'number', group: 'groupOutput' },
+  { key: 'defaultStyle', kind: 'text', group: 'groupDefaults' },
+  { key: 'defaultLocale', kind: 'text', group: 'groupDefaults' },
+] as const satisfies readonly { key: string; kind: 'text' | 'number'; group: string }[]
+
+/** The section field names the card edits; also the page's copy and state member names. */
+export type FieldKey = (typeof FIELD_SPECS)[number]['key']
+/** The display group a field belongs to; a page locale key. */
+export type GroupKey = (typeof FIELD_SPECS)[number]['group']
+
+const FIELDS: CardFieldSpec[] = FIELD_SPECS.map((spec) =>
+  spec.kind === 'number' ? numberField(spec.key) : textField(spec.key),
+)
+
+/** The page's field keys grouped by the host schema's families, in display order. */
+export const FIELD_GROUPS: readonly {
+  readonly key: GroupKey
+  readonly fields: readonly FieldKey[]
+}[] = groupFields(FIELD_SPECS)
+
+/** The whole-number fields, rendered with a numeric keypad hint. */
+export const NUMERIC_FIELD_KEYS: ReadonlySet<FieldKey> = new Set<FieldKey>(
+  FIELD_SPECS.filter((spec) => spec.kind === 'number').map((spec) => spec.key),
+)
 
 /** What the Zotero page renders: the shell plus one control per field. */
-export interface ZoteroCardState extends CardShell {
+export type ZoteroCardState = CardShell & {
   /** True while the first namespace read is still crossing the wire. */
   loading: boolean
-  baseUrl: CardFieldState
-  provider: CardFieldState
-  timeoutMs: CardFieldState
-  maxSearchResults: CardFieldState
-  maxNoteScanRecords: CardFieldState
-  maxEvidenceChars: CardFieldState
-  maxEvidencePassages: CardFieldState
-  maxDetailChars: CardFieldState
-  maxNoteBodyChars: CardFieldState
-  maxNoteChars: CardFieldState
-  maxNoteRecords: CardFieldState
-  maxAnnotationRecords: CardFieldState
-  fulltextChunkWords: CardFieldState
-  maxFulltextChars: CardFieldState
-  maxResponseBytes: CardFieldState
-  maxExportChars: CardFieldState
-  maxExportRefs: CardFieldState
-  defaultStyle: CardFieldState
-  defaultLocale: CardFieldState
-}
+} & { readonly [K in FieldKey]: CardFieldState }
 
 /** The registration-side face the card's slot entry injects. */
 export interface ZoteroCardFace extends CardActions {
   hooks: {
     /** Card snapshot bound by the renderer as useZoteroCard. */
-    zoteroCard: SnapshotSource<ZoteroCardState>
+    zoteroCard: SnapshotStore<ZoteroCardState>
   }
 }
 
 /** Bridges the `zotero` scope onto the page's staged form. */
 export class ZoteroCardController {
   private readonly form: CardForm
-  private readonly store: SnapshotSource<ZoteroCardState>
+  private readonly store: SnapshotStore<ZoteroCardState>
   private readonly scope: SettingsScope<unknown>
 
   /**
@@ -96,28 +102,13 @@ export class ZoteroCardController {
   }
 
   private projection(): ZoteroCardState {
+    const fields = Object.fromEntries(
+      FIELD_SPECS.map((spec) => [spec.key, this.form.field(spec.key)]),
+    ) as { [K in FieldKey]: CardFieldState }
     return {
       ...this.form.shell(),
       loading: this.scope.getSnapshot().status === 'loading',
-      baseUrl: this.form.field('baseUrl'),
-      provider: this.form.field('provider'),
-      timeoutMs: this.form.field('timeoutMs'),
-      maxSearchResults: this.form.field('maxSearchResults'),
-      maxNoteScanRecords: this.form.field('maxNoteScanRecords'),
-      maxEvidenceChars: this.form.field('maxEvidenceChars'),
-      maxEvidencePassages: this.form.field('maxEvidencePassages'),
-      maxDetailChars: this.form.field('maxDetailChars'),
-      maxNoteBodyChars: this.form.field('maxNoteBodyChars'),
-      maxNoteChars: this.form.field('maxNoteChars'),
-      maxNoteRecords: this.form.field('maxNoteRecords'),
-      maxAnnotationRecords: this.form.field('maxAnnotationRecords'),
-      fulltextChunkWords: this.form.field('fulltextChunkWords'),
-      maxFulltextChars: this.form.field('maxFulltextChars'),
-      maxResponseBytes: this.form.field('maxResponseBytes'),
-      maxExportChars: this.form.field('maxExportChars'),
-      maxExportRefs: this.form.field('maxExportRefs'),
-      defaultStyle: this.form.field('defaultStyle'),
-      defaultLocale: this.form.field('defaultLocale'),
+      ...fields,
     }
   }
 
@@ -130,5 +121,15 @@ export class ZoteroCardController {
   }
 }
 
-/** Re-export the namespace so the apply entry and the card share one spelling. */
-export { ZOTERO_SETTINGS_NAMESPACE }
+/** Group the ordered field specs into display groups, preserving declaration order. */
+function groupFields(
+  specs: typeof FIELD_SPECS,
+): readonly { readonly key: GroupKey; readonly fields: readonly FieldKey[] }[] {
+  const groups: { key: GroupKey; fields: FieldKey[] }[] = []
+  for (const spec of specs) {
+    const last = groups[groups.length - 1]
+    if (last !== undefined && last.key === spec.group) last.fields.push(spec.key)
+    else groups.push({ key: spec.group, fields: [spec.key] })
+  }
+  return groups
+}
