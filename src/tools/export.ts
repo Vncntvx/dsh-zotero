@@ -13,6 +13,7 @@ import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { defineTool, type InferArgs, type InferValue } from '@deepseek-ai/dsh-tools'
 import type { ResolvedConfig } from '../config.js'
 import { ZOTERO_INVALID_ARGUMENT, ZoteroError } from '../errors.js'
+import { withConnectivityAsk } from '../ask.js'
 import { parseRef, requireLocalRef } from '../refs.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroExportFormat, ZoteroExportRequest } from '../types.js'
@@ -145,7 +146,9 @@ export function registerExportTool(
       }),
       isConcurrencySafe: () => true,
       async execute(args, exec) {
-        return await service.export(buildRequest(args), exec.signal)
+        return await withConnectivityAsk(ctx, exec, () =>
+          service.export(buildRequest(args), exec.signal),
+        )
       },
     }),
   )

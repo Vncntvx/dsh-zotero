@@ -13,6 +13,7 @@ import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { defineTool, type InferArgs, type InferValue } from '@deepseek-ai/dsh-tools'
 import type { ResolvedConfig } from '../config.js'
 import { ZOTERO_INVALID_ARGUMENT, ZoteroError } from '../errors.js'
+import { withConnectivityAsk } from '../ask.js'
 import { parseRef, requireLocalRef } from '../refs.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroEvidenceSource, ZoteroRetrieveRequest } from '../types.js'
@@ -178,7 +179,9 @@ export function registerRetrieveTool(
       }),
       isConcurrencySafe: () => true,
       async execute(args, exec) {
-        return await service.retrieve(buildRequest(args, config), exec.signal)
+        return await withConnectivityAsk(ctx, exec, () =>
+          service.retrieve(buildRequest(args, config), exec.signal),
+        )
       },
     }),
   )

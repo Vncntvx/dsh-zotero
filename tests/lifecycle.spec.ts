@@ -90,6 +90,18 @@ describe('ZoteroService lifecycle', () => {
     // The plugin still loads fine; there is just no command registry to register into.
     expect(withoutCommands.ctx.get('zotero')).toBeInstanceOf(ZoteroService)
   })
+
+  it('never touches Zotero while loading or disposing — the plugin is request-driven only', async () => {
+    const withCommands = await bootContext(true)
+    expect(mock.requests).toEqual([])
+    await withCommands.zoteroFiber.dispose()
+    expect(mock.requests).toEqual([])
+
+    const withoutCommands = await bootContext(false)
+    expect(mock.requests).toEqual([])
+    await withoutCommands.zoteroFiber.dispose()
+    expect(mock.requests).toEqual([])
+  })
 })
 
 describe('/zotero status command', () => {
@@ -177,6 +189,12 @@ describe('prompt section', () => {
     }
     expect(section!.text).toContain('zotero://user/0/item/')
     expect(section!.text).toContain('Never invent page numbers')
+    expect(section!.text).toContain(
+      'Use the Zotero tools only when the user explicitly asks about their local library',
+    )
+    expect(section!.text).toContain(
+      'On connectivity failures (Zotero not running, local API disabled, unsupported API version, timeout), the plugin asks you how to proceed with a recommended action',
+    )
   })
 })
 

@@ -10,15 +10,13 @@ Describe what you need in a session and the Agent calls the tools below as neede
 
 ## Tools
 
-| Tool                | Purpose                                                                                                                                                                                                                                                                                                                                                                |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `zotero_search`     | Discover: search the library by title/creator/year, or indexed full text with `everything`; scope to a collection or saved search. Zotero's index never covers note bodies, so queried searches also scan note content client-side (library/collection scopes, first page only, capped by `maxNoteScanRecords`); note titles are synthesized from the first body line. |
-| `zotero_get`        | Inspect: read one item's structured core metadata, optionally with manifests and previews of its notes, annotations, and attachments; note items return their own body (`noteBody`), child notes carry `parentRef` to reach their parent.                                                                                                                              |
-| `zotero_retrieve`   | Evidence: return the most relevant bounded evidence passages (annotations, notes, abstract, full-text chunks) for a query; note items contribute their own body, long notes rank in full via chunks (`chunkIndex`/`chunkCount`), and unavailable sources are skipped into `sourcesSkipped` instead of failing.                                                         |
-| `zotero_attachment` | Source: resolve an item or attachment ref to the original attachment's verified on-disk path or linked URL. An item ref yields the best attachment Zotero itself picks; an attachment ref pinpoints one.                                                                                                                                                               |
-| `zotero_export`     | Cite: let Zotero's own citation/export machinery produce citations, a CSL bibliography, or `bibtex` / `biblatex` / `ris` / `csljson`.                                                                                                                                                                                                                                  |
-
-Every tool returns reusable refs of the form `zotero://user/0/<item|attachment|annotation|collection|search>/<KEY>`, optionally qualified with `?server=<id>`. Later calls chain through these refs. The Zotero 10+ `server` qualifier binds a ref to the database that produced it, so a database switch blocks stale refs instead of misreading them.
+| Tool                | Purpose                                                                                                                               |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `zotero_search`     | Discover: search by title/creator/year, or indexed full text with `everything`; optionally scope to a collection or saved search.     |
+| `zotero_get`        | Inspect: read one item's structured core metadata, optionally with manifests and previews of its notes, annotations, and attachments. |
+| `zotero_retrieve`   | Evidence: return the most relevant bounded evidence passages (annotations, notes, abstract, full-text chunks) for a query.            |
+| `zotero_attachment` | Source: resolve an item or attachment ref to the original attachment's verified on-disk path or linked URL.                           |
+| `zotero_export`     | Cite: let Zotero's own citation/export machinery produce citations, a CSL bibliography, or `bibtex` / `biblatex` / `ris` / `csljson`. |
 
 ## Usage example
 
@@ -46,9 +44,15 @@ The Agent moves down the ladder as a request deepens. A typical conversation:
 
 `/zotero status` reports connectivity, API/schema versions, and the database identity (Server ID, Zotero 10+). This is the only health check. Ordinary calls fail with typed domain errors.
 
+## On-demand work and connectivity-failure interaction
+
+- The plugin is resident but strictly request-driven: loading, idling, and unloading never issue a request (no probes, no polling, no background work). Only two entry points touch Zotero: the five tools, invoked when the user explicitly asks about their library, and the explicitly invoked `/zotero status` command.
+- When a tool call fails with a connectivity error (`ZOTERO_NOT_RUNNING` not running / `ZOTERO_API_DISABLED` local API disabled / `ZOTERO_API_VERSION` unsupported version / `ZOTERO_TIMEOUT` timed out), the plugin asks the user how to proceed through an interactive question card: the first option is the recommended action marked `(Recommended)` (e.g. "I started Zotero — retry"); choosing it re-runs the same request once, and a second failure or the "abort" choice surfaces the original typed error — never a second question.
+- Without an interactive provider (headless compositions), the ask is skipped and the typed error is returned as-is; a failing question mechanism never masks the original connectivity error.
+
 ## Limits
 
-- Read-only library: V1 has no path that modifies items, notes, tags, or collections.
+- Read-only library: no path modifies items, notes, tags, or collections.
 - Full-text evidence depends on Zotero's index: `everything` search and `retrieve` full-text passages both require indexing.
 - Note-content search is a client-side scan: library/collection scopes and the first result page only, bounded by `maxNoteScanRecords`; notes beyond the cap never match.
 - Attachment depth depends on the harness composition: `zotero_attachment` returns the file location; reading that PDF further needs a matching file/PDF capability.

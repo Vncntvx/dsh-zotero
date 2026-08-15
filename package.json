@@ -52,7 +52,8 @@
     "@deepseek-ai/cordis": "^4.0.1",
     "@deepseek-ai/dsh-commands": "^0.1.0-rc.5",
     "@deepseek-ai/dsh-llm": "^0.1.0-rc.5",
-    "@deepseek-ai/dsh-tools": "^0.1.0-rc.5"
+    "@deepseek-ai/dsh-tools": "^0.1.0-rc.5",
+    "@deepseek-ai/dsh-user-questions": "^0.1.0-rc.6"
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "^3.18.1",
@@ -67,6 +68,7 @@
     "@deepseek-ai/dsh-llm": "^0.1.0-rc.5",
     "@deepseek-ai/dsh-system-prompt": "^0.1.0-rc.5",
     "@deepseek-ai/dsh-tools": "^0.1.0-rc.5",
+    "@deepseek-ai/dsh-user-questions": "^0.1.0-rc.6",
     "@deepseek-ai/schemastery": "^3.18.1",
     "@vitest/coverage-v8": "^4.1.8",
     "js-yaml": "^4.1.0",

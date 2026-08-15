@@ -19,6 +19,7 @@ import {
 import { ZOTERO_SORT_FIELDS } from '../constants.js'
 import type { ResolvedConfig } from '../config.js'
 import { ZOTERO_INVALID_ARGUMENT, ZoteroError } from '../errors.js'
+import { withConnectivityAsk } from '../ask.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroSearchRequest } from '../types.js'
 
@@ -276,7 +277,9 @@ export function registerSearchTool(
       presentResult: presentSearchResult,
       isConcurrencySafe: () => true,
       async execute(args, exec) {
-        return await service.search(buildRequest(args, config), exec.signal)
+        return await withConnectivityAsk(ctx, exec, () =>
+          service.search(buildRequest(args, config), exec.signal),
+        )
       },
     }),
   )

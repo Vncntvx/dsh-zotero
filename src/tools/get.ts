@@ -9,6 +9,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { defineTool, type InferArgs, type InferValue } from '@deepseek-ai/dsh-tools'
+import { withConnectivityAsk } from '../ask.js'
 import { parseRef, requireLocalRef } from '../refs.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroGetRequest, ZoteroInclude } from '../types.js'
@@ -220,7 +221,9 @@ export function registerGetTool(ctx: Context, service: ZoteroService): void {
       }),
       isConcurrencySafe: () => true,
       async execute(args, exec) {
-        return await service.get(buildRequest(args), exec.signal)
+        return await withConnectivityAsk(ctx, exec, () =>
+          service.get(buildRequest(args), exec.signal),
+        )
       },
     }),
   )

@@ -5,6 +5,11 @@
  * there is no cross-provider fallback and no request replay), capability
  * gating, and the domain methods the model-facing tools consume. The HTTP
  * transport and the Zotero object model stay below this boundary.
+ *
+ * The plugin is request-driven by design: loading it never touches Zotero
+ * (no probes, no timers, no background work). The only request sources are
+ * the five tools, invoked because the user asked about their library, and
+ * the `/zotero status` command the user invokes explicitly.
  * @module dsh-zotero/service
  */
 

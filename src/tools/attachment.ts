@@ -8,6 +8,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { defineTool, type InferArgs, type InferValue } from '@deepseek-ai/dsh-tools'
+import { withConnectivityAsk } from '../ask.js'
 import { parseRef, requireLocalRef } from '../refs.js'
 import type { ZoteroService } from '../service.js'
 
@@ -80,7 +81,7 @@ export function registerAttachmentTool(ctx: Context, service: ZoteroService): vo
       async execute(args, exec) {
         const ref = parseRef(args.ref)
         requireLocalRef(ref, ['item', 'attachment'])
-        return await service.attachment(ref, exec.signal)
+        return await withConnectivityAsk(ctx, exec, () => service.attachment(ref, exec.signal))
       },
     }),
   )

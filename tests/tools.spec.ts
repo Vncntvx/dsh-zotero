@@ -10,8 +10,10 @@ import ToolRuntime, {
   type ToolExecutionResult,
   type ToolResult,
 } from '@deepseek-ai/dsh-tools'
+import UserQuestionService from '@deepseek-ai/dsh-user-questions'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import ZoteroService from '../src/index.js'
+import { ZOTERO_NOT_RUNNING } from '../src/errors.js'
 import { renderGet } from '../src/tools/get.js'
 import { renderRetrieve } from '../src/tools/retrieve.js'
 import { MockZotero } from './helpers/mock-zotero.js'
@@ -1180,5 +1182,45 @@ describe('tool presentation', () => {
         },
       ),
     ).toBeUndefined()
+  })
+})
+
+describe('connectivity failure ask', () => {
+  it('asks the user once and retries the request when Zotero is unreachable', async () => {
+    const down = await MockZotero.start()
+    const downUrl = down.baseUrl
+    await down.close()
+
+    const askCtx = new Context()
+    await askCtx.plugin(SystemPrompt, {})
+    await askCtx.plugin(ToolRuntime, {})
+    await askCtx.plugin(UserQuestionService)
+    const questions = askCtx.get('userQuestions')!
+    const asked: unknown[] = []
+    questions.registerProvider({
+      ask: async (request) => {
+        asked.push(request)
+        return {
+          answers: [{ id: 'zotero-failure', selected: ['我已启动 Zotero，重试 (Recommended)'] }],
+        }
+      },
+    })
+    await askCtx.plugin(ZoteroService, { baseUrl: downUrl })
+
+    const result = await askCtx.tools.execute({
+      callId: CallId('tool-ask-connectivity'),
+      name: 'zotero_search',
+      arguments: { query: 'flash attention', limit: 5 },
+      signal: new AbortController().signal,
+    })
+    expect(result.isError).toBe(true)
+    if (!result.isError) throw new Error('unreachable')
+    // The retry hit the same unreachable instance and surfaced the typed
+    // error; the user was asked exactly once, never looped.
+    expect((result.content[0] as { text: string }).text).toContain('not running')
+    expect(asked).toHaveLength(1)
+    const request = asked[0] as { questions: { id: string; options: { label: string }[] }[] }
+    expect(request.questions[0]!.id).toBe('zotero-failure')
+    expect(request.questions[0]!.options![0]!.label).toBe('我已启动 Zotero，重试 (Recommended)')
   })
 })
