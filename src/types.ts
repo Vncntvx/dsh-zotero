@@ -11,12 +11,7 @@
  */
 
 /** A capability a provider may safely support. */
-export type ZoteroCapability =
-  | 'search'
-  | 'metadata'
-  | 'attachments'
-  | 'fulltext'
-  | 'citation'
+export type ZoteroCapability = 'search' | 'metadata' | 'attachments' | 'fulltext' | 'citation'
 
 /** The library a Zotero object lives in. The Local API serves the logged-in user's library. */
 export interface ZoteroLibraryRef {

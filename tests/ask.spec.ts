@@ -20,9 +20,10 @@ import {
   ZOTERO_NOT_RUNNING,
   ZOTERO_TIMEOUT,
   ZoteroError,
+  type ZoteroErrorCode,
 } from '../src/errors.js'
 
-function zoteroError(code: string): ZoteroError {
+function zoteroError(code: ZoteroErrorCode): ZoteroError {
   return new ZoteroError(`failure ${code}`, code)
 }
 
@@ -93,7 +94,7 @@ describe('withConnectivityAsk passthrough', () => {
 })
 
 describe('withConnectivityAsk question content', () => {
-  const cases: { code: string; header: string; question: string; retryLabel: string }[] = [
+  const cases: { code: ZoteroErrorCode; header: string; question: string; retryLabel: string }[] = [
     {
       code: ZOTERO_NOT_RUNNING,
       header: 'Zotero 未运行',

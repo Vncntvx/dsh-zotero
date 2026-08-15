@@ -5,10 +5,8 @@ import {
   ZoteroError,
   errnoCodeOf,
   errorCauseOf,
-  errorChainText,
   errorMessageOf,
   isNotFoundError,
-  isProviderTimeout,
   isUnreachableCause,
 } from '../src/errors.js'
 
@@ -53,17 +51,6 @@ describe('errnoCodeOf', () => {
   })
 })
 
-describe('isProviderTimeout', () => {
-  it('recognizes the TimeoutError DOMException', () => {
-    expect(isProviderTimeout(Object.assign(new Error('x'), { name: 'TimeoutError' }))).toBe(true)
-  })
-
-  it('rejects other errors and non-Errors', () => {
-    expect(isProviderTimeout(Object.assign(new Error('x'), { name: 'AbortError' }))).toBe(false)
-    expect(isProviderTimeout('timeout')).toBe(false)
-  })
-})
-
 describe('isUnreachableCause', () => {
   it('recognizes unreachable network codes', () => {
     expect(isUnreachableCause(withCause({ code: 'ECONNREFUSED' }))).toBe(true)
@@ -74,17 +61,6 @@ describe('isUnreachableCause', () => {
     expect(isUnreachableCause(withCause({ code: 'UND_ERR_SOCKET' }))).toBe(false)
     expect(isUnreachableCause(withCause({}))).toBe(false)
     expect(isUnreachableCause(new Error('plain'))).toBe(false)
-  })
-})
-
-describe('errorChainText', () => {
-  it('joins an error message with its cause message', () => {
-    expect(errorChainText(withCause(new Error('inner')))).toBe('outer inner')
-  })
-
-  it('renders just the message when there is no cause', () => {
-    expect(errorChainText(new Error('solo'))).toBe('solo')
-    expect(errorChainText('plain')).toBe('plain')
   })
 })
 

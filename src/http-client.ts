@@ -8,6 +8,7 @@
  */
 
 import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { deadline, timeoutOf } from '@deepseek-ai/dsh-timeout'
 import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import {
   API_DISABLED_MESSAGE,
@@ -23,8 +24,6 @@ import {
   ZOTERO_UNEXPECTED,
   ZoteroError,
   errorCauseOf,
-  errorChainText,
-  isProviderTimeout,
   isUnreachableCause,
 } from './errors.js'
 
@@ -49,13 +48,18 @@ export interface ZoteroHttpResponse {
 }
 
 /**
- * Translate a `fetch` rejection. Caller cancellation and provider deadlines
- * win over transport heuristics; the remaining network errors carry the
- * unreachable-instance diagnosis, and everything else is an opaque
- * unexpected failure.
+ * Translate a `fetch` or body-read rejection. Caller cancellation and the
+ * provider's own deadline win over transport heuristics; the deadline is
+ * classified by its stamped reason rather than by engine error names, and
+ * the remaining network errors carry the unreachable-instance diagnosis.
+ * @param error - the rejection to translate.
+ * @param signal - the fused deadline signal; its reason identifies the timeout.
+ * @param callerSignal - the caller's own signal; its abort always wins.
+ * @param timeoutMs - the deadline the timeout message reports.
  */
 function translateFetchError(
   error: unknown,
+  signal: AbortSignal,
   callerSignal: AbortSignal | undefined,
   timeoutMs: number,
 ): never {
@@ -65,14 +69,11 @@ function translateFetchError(
   if (callerSignal?.aborted) {
     throw new HarnessError('tool call aborted', TOOL_ABORTED)
   }
-  if (isProviderTimeout(error)) {
-    throw new ZoteroError(`Zotero did not respond within ${timeoutMs} ms.`, ZOTERO_TIMEOUT)
-  }
-  if (/redirect/i.test(errorChainText(error))) {
-    throw new ZoteroError(
-      'Zotero responded with a redirect, which this plugin refuses to follow.',
-      ZOTERO_UNEXPECTED,
-    )
+  const timeout = timeoutOf(signal, ZOTERO_TIMEOUT)
+  if (timeout !== undefined) {
+    throw new ZoteroError(`Zotero did not respond within ${timeoutMs} ms.`, ZOTERO_TIMEOUT, {
+      cause: timeout,
+    })
   }
   if (isUnreachableCause(error)) {
     throw new ZoteroError(NOT_RUNNING_MESSAGE, ZOTERO_NOT_RUNNING, { cause: errorCauseOf(error) })
@@ -84,6 +85,12 @@ function translateFetchError(
 
 /** Translate a non-2xx status. The 412 identity path is handled before this runs. */
 function translateHttpStatus(response: Response): never {
+  if (response.status >= 300 && response.status < 400) {
+    throw new ZoteroError(
+      'Zotero responded with a redirect, which this plugin refuses to follow.',
+      ZOTERO_UNEXPECTED,
+    )
+  }
   switch (response.status) {
     case 403:
       throw new ZoteroError(API_DISABLED_MESSAGE, ZOTERO_API_DISABLED)
@@ -153,18 +160,18 @@ export class ZoteroHttpClient {
   ): Promise<ZoteroHttpResponse> {
     const url = new URL(path, this.baseUrlWithSlash)
     url.search = search?.toString() ?? ''
-    const timeoutSignal = AbortSignal.timeout(this.options.timeoutMs)
-    const combined =
-      opts.signal === undefined ? timeoutSignal : AbortSignal.any([opts.signal, timeoutSignal])
+    // The deadline fuses caller cancellation with the provider timeout; its
+    // TimeoutReason later distinguishes our timeout from caller aborts.
+    using d = deadline(opts.signal, this.options.timeoutMs, ZOTERO_TIMEOUT)
     const headers: Record<string, string> = { 'Zotero-API-Version': '3' }
     const serverId =
       opts.serverId ?? (opts.sendServerId === false ? undefined : this.currentServerId)
     if (serverId !== undefined) headers['Zotero-Server-ID'] = serverId
     let response: Response
     try {
-      response = await fetch(url, { method: 'GET', headers, redirect: 'error', signal: combined })
+      response = await fetch(url, { method: 'GET', headers, redirect: 'manual', signal: d.signal })
     } catch (error) {
-      translateFetchError(error, opts.signal, this.options.timeoutMs)
+      translateFetchError(error, d.signal, opts.signal, this.options.timeoutMs)
     }
     this.rememberServerId(response.headers)
     if (response.status === 412) {
@@ -185,7 +192,7 @@ export class ZoteroHttpClient {
     try {
       body = await readBody(response, this.options.maxResponseBytes)
     } catch (error) {
-      translateFetchError(error, opts.signal, this.options.timeoutMs)
+      translateFetchError(error, d.signal, opts.signal, this.options.timeoutMs)
     }
     return { body, headers: response.headers }
   }
