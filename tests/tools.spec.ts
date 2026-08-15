@@ -8,6 +8,7 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { type ToolExecutionResult } from '@deepseek-ai/dsh-tools'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import ZoteroService from '../src/index.js'
+import { renderRetrieve } from '../src/tools/retrieve.js'
 import { MockZotero } from './helpers/mock-zotero.js'
 
 let mock: MockZotero
@@ -468,5 +469,165 @@ describe('zotero_attachment tool', () => {
 
   it('declares itself concurrency-safe for valid arguments', () => {
     expect(ctx.tools.get('zotero_attachment')!.isConcurrencySafe?.({ ref: 'zotero://user/0/attachment/WXYZ6789' })).toBe(true)
+  })
+})
+
+const RETRIEVE_PARENT = {
+  key: 'ABCD1234',
+  version: 3,
+  links: {
+    self: { href: 'http://localhost:23119/api/users/0/items/ABCD1234', type: 'application/json' },
+    attachment: { href: 'http://localhost:23119/api/users/0/items/WXYZ6789', type: 'application/json', attachmentType: 'application/pdf' },
+  },
+  meta: { parsedDate: '2023-07-28', numChildren: 1 },
+  data: {
+    itemType: 'journalArticle',
+    title: 'FlashAttention-2',
+    abstractNote: 'FlashAttention speeds up transformer training.',
+    collections: [],
+  },
+}
+
+const RETRIEVE_CHILDREN = [
+  { key: 'ANNO1111', data: { itemType: 'annotation', annotationType: 'highlight', annotationText: 'flash attention avoids materializing the matrix', annotationSortIndex: '00001' } },
+  { key: 'WXYZ6789', data: { itemType: 'attachment', title: 'Full Text PDF', contentType: 'application/pdf', linkMode: 'imported_file' } },
+]
+
+describe('zotero_retrieve tool', () => {
+  it('registers and exposes its schema to the assembly', () => {
+    expect(ctx.tools.get('zotero_retrieve')).toBeDefined()
+    expect(ctx.tools.schemas().some((schema) => schema.name === 'zotero_retrieve')).toBe(true)
+  })
+
+  it('returns ranked evidence and coverage', async () => {
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) => (
+      helpers.json(RETRIEVE_PARENT, { 'Zotero-Server-ID': 'S1' })
+    ))
+    mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) => helpers.json(RETRIEVE_CHILDREN))
+    mock.route('GET', '/api/users/0/items/WXYZ6789/fulltext', (req, res, helpers) => helpers.json({
+      content: 'Flash attention is fast. Attention is all you need.',
+      indexedChars: 100,
+      totalChars: 100,
+    }))
+    const result = await runTool('zotero_retrieve', {
+      ref: 'zotero://user/0/item/ABCD1234',
+      query: 'flash attention',
+      passages: 3,
+    })
+    expect(result.isError).toBe(false)
+    if (result.isError) throw new Error('unreachable')
+    const value = result.value as { evidence: { source: string; text: string }[]; coverage: { complete: boolean }; truncated: boolean }
+    expect(value.evidence.length).toBeGreaterThan(0)
+    expect(value.coverage.complete).toBe(true)
+    expect(value.truncated).toBe(false)
+    const text = (result.content[0] as { text: string }).text
+    expect(text).toContain('zotero://user/0/item/ABCD1234?server=S1')
+    expect(text).toContain('fulltext')
+  })
+
+  it('rejects empty queries and out-of-range passage counts before any request', async () => {
+    const empty = await runTool('zotero_retrieve', { ref: 'zotero://user/0/item/ABCD1234', query: '   ' })
+    expect(empty.isError).toBe(true)
+    if (!empty.isError) throw new Error('unreachable')
+    expect((empty.content[0] as { text: string }).text).toContain('query')
+
+    const tooMany = await runTool('zotero_retrieve', { ref: 'zotero://user/0/item/ABCD1234', query: 'x', passages: 5 })
+    expect(tooMany.isError).toBe(true)
+    if (!tooMany.isError) throw new Error('unreachable')
+    expect((tooMany.content[0] as { text: string }).text).toContain('passages')
+
+    expect(mock.requests).toEqual([])
+  })
+
+  it('rejects an empty sources list', async () => {
+    const result = await runTool('zotero_retrieve', { ref: 'zotero://user/0/item/ABCD1234', query: 'x', sources: [] })
+    expect(result.isError).toBe(true)
+    if (!result.isError) throw new Error('unreachable')
+    expect((result.content[0] as { text: string }).text).toContain('sources must list')
+    expect(mock.requests).toEqual([])
+  })
+
+  it('rejects malformed refs before any request', async () => {
+    const result = await runTool('zotero_retrieve', { ref: 'nope', query: 'x' })
+    expect(result.isError).toBe(true)
+    if (!result.isError) throw new Error('unreachable')
+    expect((result.content[0] as { text: string }).text).toContain('Invalid Zotero reference')
+    expect(mock.requests).toEqual([])
+  })
+
+  it('declares itself concurrency-safe for valid arguments', () => {
+    expect(ctx.tools.get('zotero_retrieve')!.isConcurrencySafe?.({ ref: 'zotero://user/0/item/ABCD1234', query: 'x' })).toBe(true)
+  })
+})
+
+describe('zotero_retrieve render', () => {
+  function render(value: never): string {
+    return (renderRetrieve({} as never, value)[0] as { text: string }).text
+  }
+
+  it('renders a minimal single abstract passage', () => {
+    const text = render({
+      ref: 'zotero://user/0/item/ABCD1234',
+      evidence: [{ source: 'abstract', sourceRef: 'zotero://user/0/item/ABCD1234', text: 'abstract text' }],
+      truncated: false,
+    } as never)
+    expect(text).toBe([
+      'Evidence for zotero://user/0/item/ABCD1234 (1 passage)',
+      '',
+      '[abstract] zotero://user/0/item/ABCD1234',
+      'abstract text',
+    ].join('\n'))
+  })
+
+  it('renders coverage with chars, pages, unknown totals, and completeness', () => {
+    const charsOnly = render({
+      ref: 'zotero://user/0/item/ABCD1234',
+      coverage: { indexedChars: 10, totalChars: 12, complete: false },
+      evidence: [], truncated: false,
+    } as never)
+    expect(charsOnly).toContain('Indexing coverage: 10/12 chars')
+
+    const pagesOnly = render({
+      ref: 'zotero://user/0/item/ABCD1234',
+      coverage: { indexedPages: 2, totalPages: 9, complete: false },
+      evidence: [], truncated: false,
+    } as never)
+    expect(pagesOnly).toContain('Indexing coverage: , 2/9 pages')
+
+    const unknownTotals = render({
+      ref: 'zotero://user/0/item/ABCD1234',
+      coverage: { indexedChars: 5, indexedPages: 3, complete: false },
+      evidence: [], truncated: false,
+    } as never)
+    expect(unknownTotals).toContain('Indexing coverage: 5/? chars, 3/? pages')
+
+    const complete = render({
+      ref: 'zotero://user/0/item/ABCD1234',
+      coverage: { indexedChars: 5, totalChars: 5, complete: true },
+      evidence: [], truncated: false,
+    } as never)
+    expect(complete).toContain('(complete)')
+  })
+
+  it('renders annotation page labels and comments', () => {
+    const text = render({
+      ref: 'zotero://user/0/item/ABCD1234',
+      evidence: [{ source: 'annotation', sourceRef: 'zotero://user/0/item/ANNO1111', text: 'insight', comment: 'double-check', pageLabel: '7' }],
+      truncated: false,
+    } as never)
+    expect(text).toContain('[annotation (page 7)] zotero://user/0/item/ANNO1111')
+    expect(text).toContain('Comment: double-check')
+  })
+
+  it('announces omitted evidence and the fulltext attachment', () => {
+    const text = render({
+      ref: 'zotero://user/0/item/ABCD1234',
+      attachmentRef: 'zotero://user/0/attachment/WXYZ6789',
+      evidence: [],
+      truncated: true,
+    } as never)
+    expect(text).toContain('Full text: zotero://user/0/attachment/WXYZ6789')
+    expect(text).toContain('More evidence was available but omitted by the passage or character budget.')
+    expect(text).toContain('(0 passages)')
   })
 })

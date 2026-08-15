@@ -11,6 +11,7 @@ describe('resolveConfig', () => {
       maxEvidenceChars: 6000,
       maxEvidencePassages: 4,
       maxDetailChars: 3000,
+      maxFulltextChars: 250_000,
       maxResponseBytes: 16 * 1024 * 1024,
       maxExportChars: 1_000_000,
       defaultStyle: 'apa',
@@ -54,6 +55,7 @@ describe('resolveConfig', () => {
     expect(() => resolveConfig({ maxEvidenceChars: 1.5 })).toThrowError(/maxEvidenceChars/)
     expect(() => resolveConfig({ maxResponseBytes: -3 })).toThrowError(/maxResponseBytes/)
     expect(() => resolveConfig({ maxExportChars: Number.NaN })).toThrowError(/maxExportChars/)
+    expect(() => resolveConfig({ maxFulltextChars: 0 })).toThrowError(/maxFulltextChars/)
   })
 
   it('rejects empty provider and style strings', () => {

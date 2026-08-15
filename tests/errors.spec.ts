@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { errnoCodeOf, errorCauseOf, errorChainText, errorMessageOf, isProviderTimeout, isUnreachableCause } from '../src/errors.js'
+import {
+  ZOTERO_NOT_FOUND,
+  ZOTERO_UNEXPECTED,
+  ZoteroError,
+  errnoCodeOf,
+  errorCauseOf,
+  errorChainText,
+  errorMessageOf,
+  isNotFoundError,
+  isProviderTimeout,
+  isUnreachableCause,
+} from '../src/errors.js'
 
 function withCause(cause: unknown): Error {
   return new Error('outer', { cause })
@@ -74,5 +85,13 @@ describe('errorChainText', () => {
   it('renders just the message when there is no cause', () => {
     expect(errorChainText(new Error('solo'))).toBe('solo')
     expect(errorChainText('plain')).toBe('plain')
+  })
+})
+
+describe('isNotFoundError', () => {
+  it('recognizes only translated 404 domain errors', () => {
+    expect(isNotFoundError(new ZoteroError('missing', ZOTERO_NOT_FOUND))).toBe(true)
+    expect(isNotFoundError(new ZoteroError('other', ZOTERO_UNEXPECTED))).toBe(false)
+    expect(isNotFoundError(new Error('missing'))).toBe(false)
   })
 })

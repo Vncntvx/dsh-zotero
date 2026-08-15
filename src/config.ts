@@ -23,6 +23,8 @@ export interface Config {
   maxEvidencePassages?: number
   /** Character budget for `zotero_get` detail previews (abstract/notes/annotations). */
   maxDetailChars?: number
+  /** Character bound for full text accepted into `zotero_retrieve` ranking. */
+  maxFulltextChars?: number
   /** Streaming byte bound for every API response body. */
   maxResponseBytes?: number
   /** Provider hard limit for export output; the model-facing inline budget is deployment spill policy. */
@@ -41,6 +43,7 @@ export const Config: Schema<Config> = Schema.object({
   maxEvidenceChars: Schema.number().default(6000),
   maxEvidencePassages: Schema.number().default(4),
   maxDetailChars: Schema.number().default(3000),
+  maxFulltextChars: Schema.number().default(250_000),
   maxResponseBytes: Schema.number().default(16 * 1024 * 1024),
   maxExportChars: Schema.number().default(1_000_000),
   defaultStyle: Schema.string().default('apa'),
@@ -55,6 +58,7 @@ export interface ResolvedConfig {
   readonly maxEvidenceChars: number
   readonly maxEvidencePassages: number
   readonly maxDetailChars: number
+  readonly maxFulltextChars: number
   readonly maxResponseBytes: number
   readonly maxExportChars: number
   readonly defaultStyle: string
@@ -112,6 +116,7 @@ export function resolveConfig(config: Config): ResolvedConfig {
   assertPositiveInteger('maxEvidenceChars', applied.maxEvidenceChars)
   assertPositiveInteger('maxEvidencePassages', applied.maxEvidencePassages)
   assertPositiveInteger('maxDetailChars', applied.maxDetailChars)
+  assertPositiveInteger('maxFulltextChars', applied.maxFulltextChars)
   assertPositiveInteger('maxResponseBytes', applied.maxResponseBytes)
   assertPositiveInteger('maxExportChars', applied.maxExportChars)
   return { ...applied }

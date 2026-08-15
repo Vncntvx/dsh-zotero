@@ -94,6 +94,11 @@ export function isProviderTimeout(error: unknown): boolean {
   return error instanceof Error && error.name === 'TimeoutError'
 }
 
+/** True for a translated 404 domain error, which specific endpoints reinterpret. */
+export function isNotFoundError(error: unknown): boolean {
+  return error instanceof ZoteroError && error.code === ZOTERO_NOT_FOUND
+}
+
 /** True when an error's cause carries a network code meaning the Zotero instance is unreachable. */
 export function isUnreachableCause(error: unknown): boolean {
   const code = errnoCodeOf(error)

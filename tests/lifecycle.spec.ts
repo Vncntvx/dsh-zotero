@@ -156,6 +156,7 @@ describe('provider registration', () => {
       search: async () => { throw new Error('test double: must not be called') },
       getItem: async () => { throw new Error('test double: must not be called') },
       getAttachmentLocation: async () => { throw new Error('test double: must not be called') },
+      retrieve: async () => { throw new Error('test double: must not be called') },
     }
     let thrown: unknown
     try {
@@ -177,6 +178,7 @@ describe('provider registration', () => {
       search: async () => { throw new Error('test double: must not be called') },
       getItem: async () => { throw new Error('test double: must not be called') },
       getAttachmentLocation: async () => { throw new Error('test double: must not be called') },
+      retrieve: async () => { throw new Error('test double: must not be called') },
     }
     const dispose = service.registerProvider(foreign)
     dispose()
@@ -201,6 +203,7 @@ describe('capability gating', () => {
       search: async () => { throw new Error('test double: must not be called') },
       getItem: async () => { throw new Error('test double: must not be called') },
       getAttachmentLocation: async () => { throw new Error('test double: must not be called') },
+      retrieve: async () => { throw new Error('test double: must not be called') },
     })
     let thrown: unknown
     try {
@@ -228,6 +231,7 @@ describe('capability gating', () => {
       search: async () => { throw new Error('test double: must not be called') },
       getItem: async () => { throw new Error('test double: must not be called') },
       getAttachmentLocation: async () => { throw new Error('test double: must not be called') },
+      retrieve: async () => { throw new Error('test double: must not be called') },
     })
     const attempts: [string, Promise<unknown>][] = [
       ['metadata', service.get({ ref: parseRef('zotero://user/0/item/ABCD1234'), include: new Set() })],

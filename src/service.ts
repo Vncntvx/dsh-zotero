@@ -16,6 +16,7 @@ import { ZOTERO_CAPABILITY_UNAVAILABLE, ZOTERO_PROVIDER_UNAVAILABLE, ZoteroError
 import { LocalApiProvider } from './provider-local.js'
 import { registerAttachmentTool } from './tools/attachment.js'
 import { registerGetTool } from './tools/get.js'
+import { registerRetrieveTool } from './tools/retrieve.js'
 import { registerSearchTool } from './tools/search.js'
 import type {
   ZoteroAttachmentLocation,
@@ -24,6 +25,8 @@ import type {
   ZoteroItemDetail,
   ZoteroObjectRef,
   ZoteroProvider,
+  ZoteroRetrieveRequest,
+  ZoteroRetrieveResult,
   ZoteroSearchRequest,
   ZoteroSearchResult,
   ZoteroStatus,
@@ -51,11 +54,17 @@ export class ZoteroService extends Service {
       timeoutMs: this.config.timeoutMs,
       maxResponseBytes: this.config.maxResponseBytes,
     })
-    this.registerProvider(new LocalApiProvider(client, { maxDetailChars: this.config.maxDetailChars }))
+    this.registerProvider(new LocalApiProvider(client, {
+      maxDetailChars: this.config.maxDetailChars,
+      maxEvidenceChars: this.config.maxEvidenceChars,
+      maxEvidencePassages: this.config.maxEvidencePassages,
+      maxFulltextChars: this.config.maxFulltextChars,
+    }))
     registerStatusCommand(ctx, this)
     registerSearchTool(ctx, this, this.config)
     registerGetTool(ctx, this)
     registerAttachmentTool(ctx, this)
+    registerRetrieveTool(ctx, this, this.config)
   }
 
   /**
@@ -104,6 +113,13 @@ export class ZoteroService extends Service {
     const provider = this.resolveProvider()
     this.requireCapability(provider, 'attachments')
     return await provider.getAttachmentLocation(ref, signal)
+  }
+
+  /** Gather ranked evidence passages for one item across the requested sources. */
+  async retrieve(request: ZoteroRetrieveRequest, signal?: AbortSignal): Promise<ZoteroRetrieveResult> {
+    const provider = this.resolveProvider()
+    this.requireCapability(provider, 'fulltext')
+    return await provider.retrieve(request, signal)
   }
 
   protected resolveProvider(): ZoteroProvider {

@@ -13,34 +13,49 @@ import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { ZoteroHttpClient } from './client.js'
 import {
+  NO_FULLTEXT_MESSAGE,
+  isNotFoundError,
   ZOTERO_FILE_MISSING,
   ZOTERO_NO_ATTACHMENT,
+  ZOTERO_NO_FULLTEXT,
   ZOTERO_NOT_FOUND,
   ZOTERO_SCOPE_AMBIGUOUS,
   ZoteroError,
   errorMessageOf,
 } from './errors.js'
+import { chunkText, rankChunks } from './evidence.js'
 import {
   asRecord,
   asString,
   collectionKeysOf,
+  MAX_NOTE_CHARS,
   matchScopeName,
   nearScopeCandidates,
   normalizeAttachmentRecord,
   normalizeItemDetail,
   normalizeScopeEntry,
   normalizeSearchItem,
+  partitionChildren,
+  truncateText,
+  type PartitionedChildren,
 } from './normalize.js'
+import { bestAttachmentFromLinks, selectAttachment } from './attachments.js'
 import { formatRef, isRefString, localRef, parseRef, requireLocalRef } from './refs.js'
 import type {
   ZoteroAttachmentLocation,
   ZoteroCapability,
+  ZoteroCoverage,
+  ZoteroEvidence,
+  ZoteroEvidenceSource,
+  ZoteroFulltextPayload,
   ZoteroGetRequest,
   ZoteroInclude,
   ZoteroItemDetail,
   ZoteroObjectRef,
   ZoteroProvider,
   ZoteroResolvedScope,
+  ZoteroRetrieveRequest,
+  ZoteroRetrieveResult,
   ZoteroSearchRequest,
   ZoteroSearchResult,
   ZoteroSearchScope,
@@ -80,14 +95,43 @@ interface ResolvedScopeResult {
 export interface LocalApiLimits {
   /** Character budget for `zotero_get` abstract previews. */
   readonly maxDetailChars: number
+  /** Total character budget for retrieved evidence passages. */
+  readonly maxEvidenceChars: number
+  /** Upper bound for the number of evidence passages. */
+  readonly maxEvidencePassages: number
+  /** Character bound for full text accepted into evidence ranking. */
+  readonly maxFulltextChars: number
 }
 
 const INCLUDE_ORDER: readonly ZoteroInclude[] = ['notes', 'annotations', 'attachments']
 
+/** Word count of each full-text evidence passage. */
+const FULLTEXT_CHUNK_WORDS = 200
+
+/**
+ * Full-text indexing coverage as reported by Zotero. `complete` requires
+ * the server to report both sides of one axis and agree; anything else is
+ * an incomplete answer, never a guess.
+ */
+function normalizeCoverage(payload: ZoteroFulltextPayload): ZoteroCoverage {
+  const indexedChars = typeof payload.indexedChars === 'number' ? payload.indexedChars : undefined
+  const totalChars = typeof payload.totalChars === 'number' ? payload.totalChars : undefined
+  const indexedPages = typeof payload.indexedPages === 'number' ? payload.indexedPages : undefined
+  const totalPages = typeof payload.totalPages === 'number' ? payload.totalPages : undefined
+  const complete = totalChars !== undefined && indexedChars !== undefined && indexedChars === totalChars
+  return {
+    ...(indexedPages !== undefined ? { indexedPages } : {}),
+    ...(totalPages !== undefined ? { totalPages } : {}),
+    ...(indexedChars !== undefined ? { indexedChars } : {}),
+    ...(totalChars !== undefined ? { totalChars } : {}),
+    complete,
+  }
+}
+
 export class LocalApiProvider implements ZoteroProvider {
   readonly id = LOCAL_PROVIDER_ID
   readonly capabilities: ReadonlySet<ZoteroCapability> = new Set<ZoteroCapability>([
-    'metadata', 'search', 'collections', 'tags', 'notes', 'annotations', 'attachments',
+    'metadata', 'search', 'collections', 'tags', 'notes', 'annotations', 'attachments', 'fulltext',
   ])
 
   constructor(private readonly client: ZoteroHttpClient, private readonly limits: LocalApiLimits) {}
@@ -225,6 +269,148 @@ export class LocalApiProvider implements ZoteroProvider {
       throw new ZoteroError(`The attachment file is missing from disk: ${path}`, ZOTERO_FILE_MISSING)
     }
     return { ref: formattedRef, title, contentType, kind: 'file', path }
+  }
+
+  /**
+   * Gather ranked evidence for one item: annotations, notes, the abstract,
+   * and full-text chunks are scored as one passage corpus with BM25. Fetch
+   * stays lazy — children only when annotation/note sources (or a PDF
+   * fallback) need them, fulltext only when requested. Passage count and
+   * character budgets are enforced with the `truncated` flag, never by
+   * silently editing passage text.
+   */
+  async retrieve(request: ZoteroRetrieveRequest, signal?: AbortSignal): Promise<ZoteroRetrieveResult> {
+    const ref = requireLocalRef(request.ref, ['item'])
+    const parent = await this.client.getJson<unknown>(`users/0/items/${ref.key}`, undefined, {
+      signal,
+      serverId: ref.serverId,
+    })
+    const serverId = parent.headers.get('zotero-server-id') ?? ref.serverId
+    const data = asRecord(asRecord(parent.json)?.data)
+    const linkAttachment = bestAttachmentFromLinks(parent.json)
+
+    const wantsAnnotations = request.sources.includes('annotation')
+    const wantsNotes = request.sources.includes('note')
+    const wantsFulltext = request.sources.includes('fulltext')
+    // Children are fetched for annotation/note sources, or as the PDF
+    // fallback when the parent carries no attachment link.
+    const fetchChildren = wantsAnnotations || wantsNotes || (wantsFulltext && linkAttachment === undefined)
+    let childrenRows: readonly unknown[] = []
+    if (fetchChildren) {
+      const children = await this.client.getJson<unknown>(`users/0/items/${ref.key}/children`, undefined, {
+        signal,
+        serverId,
+      })
+      childrenRows = Array.isArray(children.json) ? children.json : []
+    }
+
+    let fulltextWasCut = false
+    let attachmentRef: string | undefined
+    let coverage: ZoteroCoverage | undefined
+    const passages: {
+      source: ZoteroEvidenceSource
+      sourceRef: string
+      text: string
+      comment?: string
+      pageLabel?: string
+    }[] = []
+    if (wantsFulltext) {
+      let attachmentKey = linkAttachment?.key
+      if (attachmentKey === undefined) {
+        const pdf = selectAttachment(childrenRows, 'pdf')
+        if (pdf === undefined) {
+          throw new ZoteroError('The item has no PDF attachment whose full text could be searched.', ZOTERO_NO_ATTACHMENT)
+        }
+        attachmentKey = pdf.key
+      }
+      attachmentRef = formatRef(localRef('attachment', attachmentKey, serverId))
+      const payload = await this.fetchFulltext(attachmentKey, serverId, signal)
+      const content = typeof payload.content === 'string' ? payload.content : ''
+      const bounded = truncateText(content, this.limits.maxFulltextChars)
+      fulltextWasCut = bounded.truncated
+      for (const chunk of chunkText(bounded.text, FULLTEXT_CHUNK_WORDS)) {
+        passages.push({ source: 'fulltext', sourceRef: attachmentRef, text: chunk.text })
+      }
+      coverage = normalizeCoverage(payload)
+    }
+
+    const partitioned: PartitionedChildren = fetchChildren
+      ? partitionChildren(childrenRows, serverId, MAX_NOTE_CHARS)
+      : { notes: [], annotations: [], attachments: [] }
+    if (wantsAnnotations) {
+      for (const annotation of partitioned.annotations) {
+        passages.push({
+          source: 'annotation',
+          sourceRef: annotation.ref,
+          text: annotation.text,
+          ...(annotation.comment !== undefined ? { comment: annotation.comment } : {}),
+          ...(annotation.pageLabel !== undefined ? { pageLabel: annotation.pageLabel } : {}),
+        })
+      }
+    }
+    if (wantsNotes) {
+      for (const note of partitioned.notes) {
+        passages.push({ source: 'note', sourceRef: note.ref, text: note.text })
+      }
+    }
+    let abstractWasCut = false
+    if (request.sources.includes('abstract')) {
+      const raw = asString(data?.abstractNote) ?? ''
+      if (raw !== '') {
+        const bounded = truncateText(raw, this.limits.maxEvidenceChars)
+        abstractWasCut = bounded.truncated
+        passages.push({
+          source: 'abstract',
+          sourceRef: formatRef(localRef('item', ref.key, serverId)),
+          text: bounded.text,
+        })
+      }
+    }
+
+    const ranked = rankChunks(request.query, passages.map((passage, index) => ({ text: passage.text, index })))
+    const evidence: ZoteroEvidence[] = []
+    let used = 0
+    let truncated = ranked.length > request.passages || fulltextWasCut || abstractWasCut
+    for (const entry of ranked.slice(0, request.passages)) {
+      const passage = passages[entry.index]!
+      if (used + passage.text.length > this.limits.maxEvidenceChars) {
+        truncated = true
+        break
+      }
+      used += passage.text.length
+      evidence.push({
+        source: passage.source,
+        sourceRef: passage.sourceRef,
+        text: passage.text,
+        ...(passage.comment !== undefined ? { comment: passage.comment } : {}),
+        ...(passage.pageLabel !== undefined ? { pageLabel: passage.pageLabel } : {}),
+      })
+    }
+    return {
+      ref: formatRef(localRef('item', ref.key, serverId)),
+      ...(attachmentRef !== undefined ? { attachmentRef } : {}),
+      ...(coverage !== undefined ? { coverage } : {}),
+      evidence,
+      truncated,
+    }
+  }
+
+  private async fetchFulltext(attachmentKey: string, serverId: string | undefined, signal: AbortSignal | undefined): Promise<ZoteroFulltextPayload> {
+    try {
+      const response = await this.client.getJson<ZoteroFulltextPayload>(
+        `users/0/items/${attachmentKey}/fulltext`,
+        undefined,
+        { signal, serverId },
+      )
+      return response.json
+    } catch (error) {
+      // The Local API reports unindexed attachments as 404, which the HTTP
+      // layer maps to NOT_FOUND; only this endpoint reinterprets that status.
+      if (isNotFoundError(error)) {
+        throw new ZoteroError(NO_FULLTEXT_MESSAGE, ZOTERO_NO_FULLTEXT)
+      }
+      throw error
+    }
   }
 
   private async resolveScope(scope: ZoteroSearchScope, signal?: AbortSignal): Promise<ResolvedScopeResult> {

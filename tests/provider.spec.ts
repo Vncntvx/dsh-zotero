@@ -9,20 +9,32 @@ import {
   ZOTERO_NO_ATTACHMENT,
   ZOTERO_NOT_FOUND,
   ZOTERO_SCOPE_AMBIGUOUS,
+  ZOTERO_UNEXPECTED,
   ZoteroError,
 } from '../src/errors.js'
 import { buildSearchParams, encodeLiteralTag, LocalApiProvider } from '../src/provider-local.js'
 import { parseRef } from '../src/refs.js'
-import type { ZoteroGetRequest, ZoteroSearchRequest } from '../src/types.js'
+import type { LocalApiLimits } from '../src/provider-local.js'
+import type { ZoteroGetRequest, ZoteroRetrieveRequest, ZoteroSearchRequest } from '../src/types.js'
 import { MockZotero } from './helpers/mock-zotero.js'
 
 let mock: MockZotero
 let provider: LocalApiProvider
 let tempDir: string
 
+function makeProvider(limits: Partial<LocalApiLimits> = {}): LocalApiProvider {
+  return new LocalApiProvider(new ZoteroHttpClient({ baseUrl: mock.baseUrl, timeoutMs: 5000, maxResponseBytes: 1024 * 1024 }), {
+    maxDetailChars: 500,
+    maxEvidenceChars: 6000,
+    maxEvidencePassages: 4,
+    maxFulltextChars: 100_000,
+    ...limits,
+  })
+}
+
 beforeEach(async () => {
   mock = await MockZotero.start()
-  provider = new LocalApiProvider(new ZoteroHttpClient({ baseUrl: mock.baseUrl, timeoutMs: 5000, maxResponseBytes: 1024 * 1024 }), { maxDetailChars: 500 })
+  provider = makeProvider()
   tempDir = mkdtempSync(join(tmpdir(), 'dsh-zotero-'))
 })
 
@@ -33,6 +45,16 @@ afterEach(async () => {
 
 function getRequest(include: ('notes' | 'annotations' | 'attachments')[] = []): ZoteroGetRequest {
   return { ref: parseRef('zotero://user/0/item/ABCD1234'), include: new Set(include) }
+}
+
+function retrieveRequest(overrides: Partial<ZoteroRetrieveRequest> = {}): ZoteroRetrieveRequest {
+  return {
+    ref: parseRef('zotero://user/0/item/ABCD1234'),
+    query: 'flash attention',
+    sources: ['annotation', 'note', 'abstract', 'fulltext'],
+    passages: 4,
+    ...overrides,
+  }
 }
 
 function request(overrides: Partial<ZoteroSearchRequest> = {}): ZoteroSearchRequest {
@@ -581,5 +603,209 @@ describe('getItem collections edge cases', () => {
     mock.route('GET', '/api/users/0/collections', (req, res, helpers) => helpers.json({ key: 'COLL1234' }))
     const detail = await provider.getItem(getRequest())
     expect(detail.collections).toEqual([{ ref: 'zotero://user/0/collection/COLL1234' }])
+  })
+})
+
+const RETRIEVE_PARENT = {
+  key: 'ABCD1234',
+  version: 3,
+  links: {
+    self: { href: 'http://localhost:23119/api/users/0/items/ABCD1234', type: 'application/json' },
+    attachment: { href: 'http://localhost:23119/api/users/0/items/WXYZ6789', type: 'application/json', attachmentType: 'application/pdf' },
+  },
+  meta: { parsedDate: '2023-07-28', numChildren: 3 },
+  data: {
+    itemType: 'journalArticle',
+    title: 'FlashAttention-2',
+    abstractNote: 'FlashAttention speeds up transformer training by reordering attention computation.',
+    collections: [],
+  },
+}
+
+const RETRIEVE_CHILDREN = [
+  { key: 'ANNO1111', data: { itemType: 'annotation', annotationType: 'highlight', annotationText: 'see the tiling figure for details', annotationComment: 'compare with figure 3', annotationPageLabel: '7', annotationSortIndex: '00001' } },
+  { key: 'NOTE1111', data: { itemType: 'note', note: 'read this for the tiling strategy' } },
+  { key: 'WXYZ6789', data: { itemType: 'attachment', title: 'Full Text PDF', contentType: 'application/pdf', linkMode: 'imported_file' } },
+]
+
+const FULLTEXT_PAYLOAD = {
+  content: 'Flash attention speeds up transformer training. Attention is all you need. Farming crops in the spring.',
+  indexedPages: 10,
+  totalPages: 12,
+  indexedChars: 1000,
+  totalChars: 1200,
+}
+
+describe('retrieve', () => {
+  it('ranks evidence across sources and reports fulltext coverage', async () => {
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) => (
+      helpers.json(RETRIEVE_PARENT, { 'Zotero-Server-ID': 'S1' })
+    ))
+    mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) => helpers.json(RETRIEVE_CHILDREN))
+    mock.route('GET', '/api/users/0/items/WXYZ6789/fulltext', (req, res, helpers) => helpers.json(FULLTEXT_PAYLOAD))
+    const result = await provider.retrieve(retrieveRequest())
+    expect(mock.requests.map((entry) => entry.pathname)).toEqual([
+      '/api/users/0/items/ABCD1234',
+      '/api/users/0/items/ABCD1234/children',
+      '/api/users/0/items/WXYZ6789/fulltext',
+    ])
+    expect(result.ref).toBe('zotero://user/0/item/ABCD1234?server=S1')
+    expect(result.attachmentRef).toBe('zotero://user/0/attachment/WXYZ6789?server=S1')
+    expect(result.coverage).toEqual({ indexedPages: 10, totalPages: 12, indexedChars: 1000, totalChars: 1200, complete: false })
+    expect(result.truncated).toBe(false)
+    const annotationEvidence = result.evidence.find((entry) => entry.source === 'annotation')!
+    expect(annotationEvidence.comment).toBe('compare with figure 3')
+    expect(annotationEvidence.pageLabel).toBe('7')
+    const sources = result.evidence.map((entry) => entry.source)
+    expect(sources).toContain('annotation')
+    expect(sources).toContain('note')
+    expect(sources).toContain('abstract')
+    expect(sources).toContain('fulltext')
+    // The fulltext chunk carries more query-term hits than any other passage.
+    expect(result.evidence[0]!.source).toBe('fulltext')
+    expect(result.evidence[0]!.text).toContain('Flash attention')
+  })
+
+  it('fetches lazily per source: abstract-only evidence needs just the parent', async () => {
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) => helpers.json(RETRIEVE_PARENT))
+    const result = await provider.retrieve(retrieveRequest({ sources: ['abstract'], passages: 1 }))
+    expect(mock.requests.map((entry) => entry.pathname)).toEqual(['/api/users/0/items/ABCD1234'])
+    expect(result.evidence.map((entry) => entry.source)).toEqual(['abstract'])
+    expect(result.attachmentRef).toBeUndefined()
+  })
+
+  it('picks a PDF child when the parent has no attachment link', async () => {
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) => (
+      helpers.json({ ...RETRIEVE_PARENT, links: { self: RETRIEVE_PARENT.links.self } })
+    ))
+    mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) => helpers.json(RETRIEVE_CHILDREN))
+    mock.route('GET', '/api/users/0/items/WXYZ6789/fulltext', (req, res, helpers) => helpers.json(FULLTEXT_PAYLOAD))
+    const result = await provider.retrieve(retrieveRequest({ sources: ['fulltext'], passages: 1 }))
+    expect(result.attachmentRef).toBe('zotero://user/0/attachment/WXYZ6789')
+  })
+
+  it('maps an unindexed fulltext response to NO_FULLTEXT', async () => {
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) => helpers.json(RETRIEVE_PARENT))
+    mock.route('GET', '/api/users/0/items/WXYZ6789/fulltext', (req, res, helpers) => (
+      helpers.raw(404, { 'Content-Type': 'text/plain' }, 'No indexed full text')
+    ))
+    const error = await zoteroError(
+      provider.retrieve(retrieveRequest({ sources: ['fulltext'] })),
+      'ZOTERO_NO_FULLTEXT',
+      'Reindex',
+    )
+    expect(error.message).toContain('zotero_attachment')
+  })
+
+  it('caps evidence by passage count and reports truncation', async () => {
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) => helpers.json(RETRIEVE_PARENT))
+    mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) => helpers.json(RETRIEVE_CHILDREN))
+    mock.route('GET', '/api/users/0/items/WXYZ6789/fulltext', (req, res, helpers) => helpers.json(FULLTEXT_PAYLOAD))
+    const result = await provider.retrieve(retrieveRequest({ passages: 1 }))
+    expect(result.evidence).toHaveLength(1)
+    expect(result.truncated).toBe(true)
+  })
+
+  it('caps evidence by the character budget', async () => {
+    const narrow = makeProvider({ maxEvidenceChars: 20 })
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) => helpers.json(RETRIEVE_PARENT))
+    mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) => helpers.json(RETRIEVE_CHILDREN))
+    mock.route('GET', '/api/users/0/items/WXYZ6789/fulltext', (req, res, helpers) => helpers.json(FULLTEXT_PAYLOAD))
+    const result = await narrow.retrieve(retrieveRequest())
+    expect(result.evidence.reduce((sum, entry) => sum + entry.text.length, 0)).toBeLessThanOrEqual(20)
+    expect(result.truncated).toBe(true)
+  })
+
+  it('rejects non-item refs before any request happens', async () => {
+    await zoteroError(
+      provider.retrieve(retrieveRequest({ ref: parseRef('zotero://user/0/attachment/WXYZ6789') })),
+      'ZOTERO_INVALID_REF',
+      'Expected a item reference',
+    )
+    expect(mock.requests).toEqual([])
+  })
+})
+
+describe('retrieve edge cases', () => {
+  it('gathers note-only evidence without annotation sources', async () => {
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) => helpers.json(RETRIEVE_PARENT))
+    mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) => helpers.json(RETRIEVE_CHILDREN))
+    const result = await provider.retrieve(retrieveRequest({ sources: ['note'], passages: 2 }))
+    expect(mock.requests.map((entry) => entry.pathname)).toEqual([
+      '/api/users/0/items/ABCD1234',
+      '/api/users/0/items/ABCD1234/children',
+    ])
+    expect(result.evidence.map((entry) => entry.source)).toEqual(['note'])
+  })
+
+  it('fails with NO_ATTACHMENT when no PDF child exists for fulltext', async () => {
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) => (
+      helpers.json({ ...RETRIEVE_PARENT, links: { self: RETRIEVE_PARENT.links.self } })
+    ))
+    mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) => helpers.json([
+      { key: 'NOTE1111', data: { itemType: 'note', note: 'only a note' } },
+    ]))
+    await zoteroError(
+      provider.retrieve(retrieveRequest({ sources: ['fulltext'] })),
+      ZOTERO_NO_ATTACHMENT,
+      'no PDF attachment',
+    )
+  })
+
+  it('passes non-404 fulltext failures through unchanged', async () => {
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) => helpers.json(RETRIEVE_PARENT))
+    mock.route('GET', '/api/users/0/items/WXYZ6789/fulltext', (req, res, helpers) => (
+      helpers.raw(500, { 'Content-Type': 'text/plain' }, 'boom')
+    ))
+    await zoteroError(
+      provider.retrieve(retrieveRequest({ sources: ['fulltext'] })),
+      ZOTERO_UNEXPECTED,
+      'HTTP 500',
+    )
+  })
+})
+
+describe('retrieve tolerances', () => {
+  it('reports page-only coverage when the payload lacks char counts', async () => {
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) => helpers.json(RETRIEVE_PARENT))
+    mock.route('GET', '/api/users/0/items/WXYZ6789/fulltext', (req, res, helpers) => helpers.json({
+      content: 'flash attention everywhere',
+      indexedPages: 2,
+      totalPages: 5,
+    }))
+    const result = await provider.retrieve(retrieveRequest({ sources: ['fulltext'], passages: 1 }))
+    expect(result.coverage).toEqual({ indexedPages: 2, totalPages: 5, complete: false })
+  })
+
+  it('treats a non-array children response as no annotation or note evidence', async () => {
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) => helpers.json(RETRIEVE_PARENT))
+    mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) => helpers.json({ key: 'NOTE1111' }))
+    const result = await provider.retrieve(retrieveRequest({ sources: ['note'], passages: 2 }))
+    expect(result.evidence).toEqual([])
+    expect(result.truncated).toBe(false)
+  })
+
+  it('omits abstract evidence when the parent has no abstract', async () => {
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) => (
+      helpers.json({ ...RETRIEVE_PARENT, data: { ...RETRIEVE_PARENT.data, abstractNote: undefined } })
+    ))
+    const result = await provider.retrieve(retrieveRequest({ sources: ['abstract'], passages: 2 }))
+    expect(result.evidence).toEqual([])
+  })
+
+  it('omits abstract evidence when the abstract is empty', async () => {
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) => (
+      helpers.json({ ...RETRIEVE_PARENT, data: { ...RETRIEVE_PARENT.data, abstractNote: '' } })
+    ))
+    const result = await provider.retrieve(retrieveRequest({ sources: ['abstract'], passages: 2 }))
+    expect(result.evidence).toEqual([])
+  })
+
+  it('treats a stringless fulltext content as no chunks', async () => {
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) => helpers.json(RETRIEVE_PARENT))
+    mock.route('GET', '/api/users/0/items/WXYZ6789/fulltext', (req, res, helpers) => helpers.json({ content: 42 }))
+    const result = await provider.retrieve(retrieveRequest({ sources: ['fulltext'], passages: 2 }))
+    expect(result.evidence).toEqual([])
+    expect(result.coverage).toEqual({ complete: false })
   })
 })

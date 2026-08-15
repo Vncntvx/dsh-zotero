@@ -208,7 +208,7 @@ export interface ZoteroRetrieveResult {
   readonly ref: string
   readonly attachmentRef?: string
   readonly coverage?: ZoteroCoverage
-  readonly evidence: readonly ZoteroEvidence[]
+  readonly evidence: ZoteroEvidence[]
   readonly truncated: boolean
 }
 
@@ -250,8 +250,8 @@ export interface ZoteroFulltextPayload {
  * that declaration. The Agent never sees which provider satisfied a request.
  * `available()` is deliberately absent: request-driven providers fail with
  * typed domain errors, and only `status()` performs a health check. The
- * retrieval-side domain methods (`retrieve`/`export`) join this interface in
- * the phases that implement them.
+ * export-side domain method joins this interface in the phase that
+ * implements it.
  */
 export interface ZoteroProvider {
   readonly id: string
@@ -260,4 +260,5 @@ export interface ZoteroProvider {
   search(request: ZoteroSearchRequest, signal?: AbortSignal): Promise<ZoteroSearchResult>
   getItem(request: ZoteroGetRequest, signal?: AbortSignal): Promise<ZoteroItemDetail>
   getAttachmentLocation(ref: ZoteroObjectRef, signal?: AbortSignal): Promise<ZoteroAttachmentLocation>
+  retrieve(request: ZoteroRetrieveRequest, signal?: AbortSignal): Promise<ZoteroRetrieveResult>
 }
