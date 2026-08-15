@@ -64,7 +64,7 @@ const FAILURE_SPECS: Record<AskWorthyCode, FailureSpec> = {
     header: 'Zotero is not running',
     question: 'Zotero is not running, so I cannot read your library. What should I do?',
     detail:
-      'Start Zotero and check "Allow other applications on this computer to communicate with Zotero" under Settings → Advanced.',
+      'Start Zotero, then in Settings → Advanced check "Allow other applications on this computer to communicate with Zotero".',
     retryLabel: 'I started Zotero, retry (Recommended)',
     retryDescription: RETRY_DESCRIPTION,
     abortLabel: ABORT_LABEL,
@@ -74,7 +74,7 @@ const FAILURE_SPECS: Record<AskWorthyCode, FailureSpec> = {
     header: 'Zotero local API is disabled',
     question: 'Zotero is running but rejected the local API request (403).',
     detail:
-      'Check "Allow other applications on this computer to communicate with Zotero" under Zotero Settings → Advanced.',
+      'In Zotero Settings → Advanced, check "Allow other applications on this computer to communicate with Zotero".',
     retryLabel: 'I enabled the local API, retry (Recommended)',
     retryDescription: RETRY_DESCRIPTION,
     abortLabel: ABORT_LABEL,
