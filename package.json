@@ -2,6 +2,15 @@
   "name": "dsh-zotero",
   "version": "0.1.0",
   "description": "Let agents search, read, and cite your local Zotero library: find papers, browse notes and annotations, pull evidence by question, open the source document, generate citations.",
+  "keywords": [
+    "zotero",
+    "dsh",
+    "deepseek-harness",
+    "plugin",
+    "research",
+    "literature"
+  ],
+  "author": "Wenjie Xu <wenjie.xu.cn@outlook.com>",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -30,6 +39,8 @@
     "test:coverage": "vitest run --coverage",
     "prepare": "npm run build",
     "prepublishOnly": "npm test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "test:integration": "ZOTERO_INTEGRATION=1 vitest run tests/integration/zotero.integration.spec.ts"
   },
   "dsh": {
@@ -45,8 +56,8 @@
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "^3.18.1",
-    "typescript": "^5.5.0",
-    "@types/node": "^22.20.0"
+    "@types/node": "^22.20.0",
+    "typescript": "^5.5.0"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
@@ -59,11 +70,19 @@
     "@deepseek-ai/schemastery": "^3.18.1",
     "@vitest/coverage-v8": "^4.1.8",
     "js-yaml": "^4.1.0",
+    "prettier": "^3.9.6",
     "vitest": "^4.1.8"
   },
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/Vncntvx/dsh-zotero.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Vncntvx/dsh-zotero/issues"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org",
+    "access": "public"
   }
 }
