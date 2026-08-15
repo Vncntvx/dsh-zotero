@@ -1,0 +1,81 @@
+/**
+ * `ctx.zotero`: the stable research-domain boundary of the plugin.
+ *
+ * The service owns provider selection (configured id must be registered —
+ * there is no cross-provider fallback and no request replay), capability
+ * gating, and the domain methods the model-facing tools consume. The HTTP
+ * transport and the Zotero object model stay below this boundary.
+ * @module dsh-zotero/service
+ */
+
+import { Service, type Context } from '@deepseek-ai/cordis'
+import { ZoteroHttpClient } from './client.js'
+import { registerStatusCommand } from './command.js'
+import { Config as ConfigSchema, resolveConfig, type Config, type ResolvedConfig } from './config.js'
+import { ZOTERO_PROVIDER_UNAVAILABLE, ZoteroError } from './errors.js'
+import { LocalApiProvider } from './provider-local.js'
+import type { ZoteroProvider, ZoteroStatus } from './types.js'
+
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    zotero: ZoteroService
+  }
+}
+
+export class ZoteroService extends Service {
+  static inject = ['tools', 'systemPrompt']
+
+  static Config = ConfigSchema
+
+  private readonly providers = new Map<string, ZoteroProvider>()
+  private readonly config: ResolvedConfig
+
+  constructor(ctx: Context, config: Config = {}) {
+    super(ctx, 'zotero')
+    this.config = resolveConfig(config)
+    const client = new ZoteroHttpClient({
+      baseUrl: this.config.baseUrl,
+      timeoutMs: this.config.timeoutMs,
+      maxResponseBytes: this.config.maxResponseBytes,
+    })
+    this.registerProvider(new LocalApiProvider(client))
+    registerStatusCommand(ctx, this)
+  }
+
+  /**
+   * Register a provider into the seam. Effect-scoped: unloading the
+   * registering fiber removes the provider.
+   * @throws {ZoteroError} `ZOTERO_PROVIDER_UNAVAILABLE` on a duplicate id.
+   * @returns the registration disposer.
+   */
+  registerProvider(provider: ZoteroProvider): () => void {
+    if (this.providers.has(provider.id)) {
+      throw new ZoteroError(`A Zotero provider with id "${provider.id}" is already registered.`, ZOTERO_PROVIDER_UNAVAILABLE)
+    }
+    const providers = this.providers
+    const dispose = this.ctx.effect(() => {
+      providers.set(provider.id, provider)
+      return () => {
+        providers.delete(provider.id)
+      }
+    }, 'zotero.registerProvider()')
+    return () => {
+      void dispose()
+    }
+  }
+
+  /** Connectivity probe — the only health check; ordinary calls fail with typed errors instead. */
+  async status(signal?: AbortSignal): Promise<ZoteroStatus> {
+    return this.resolveProvider().status(signal)
+  }
+
+  protected resolveProvider(): ZoteroProvider {
+    const provider = this.providers.get(this.config.provider)
+    if (provider === undefined) {
+      throw new ZoteroError(`No Zotero provider "${this.config.provider}" is registered.`, ZOTERO_PROVIDER_UNAVAILABLE)
+    }
+    return provider
+  }
+}
+
+export default ZoteroService

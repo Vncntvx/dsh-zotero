@@ -1,16 +1,11 @@
-import type { Context } from '@deepseek-ai/cordis'
-
-export const name = 'dsh-zotero'
-
 /**
- * Default plugin entry.
- *
- * Add your Zotero integration here:
- * - register tools with `ctx.tools.register(...)`
- * - expose services by extending `Service`
- * - listen to harness events with `ctx.on(...)`
- * - accept configuration via `Config` + Schemastery schema
+ * dsh-zotero plugin entry: a Cordis Service plugin providing `ctx.zotero`.
+ * The loader mounts the default export with the row's validated config; the
+ * constructor registers the local provider, the `/zotero status` command,
+ * and (in later phases) the model-facing tools and prompt guidance.
+ * @module dsh-zotero
  */
-export function apply(ctx: Context) {
-  console.log('[dsh-zotero] plugin loaded')
-}
+
+export { default, ZoteroService } from './service.js'
+export type * from './types.js'
+export { ZoteroError, ZOTERO_INVALID_REF, ZOTERO_NOT_RUNNING, ZOTERO_SERVER_MISMATCH } from './errors.js'
