@@ -8,9 +8,9 @@
 
 import type { RemoteResult, TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
 import { ZOTERO_INVOCATIONS } from '../contract.ts'
-import type { ZoteroConfigView } from '../contract.ts'
+import type { ZoteroConfigView, ZoteroStatusView } from '../contract.ts'
 
-export type { ZoteroConfigView } from '../contract.ts'
+export type { ZoteroConfigView, ZoteroStatusView } from '../contract.ts'
 
 /** The zotero Remote namespace's client contribution. */
 export const ZOTERO_REMOTE: TypertRemoteContribution = {
@@ -26,6 +26,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
   // through `ctx.reflect.get('remote.zotero')` instead (see client/index.ts).
   /** The `zotero` namespace face mounted under `ctx.remote.zotero`. */
   interface TypertRemoteNamespace$7a6f7465726f {
+    status: () => Promise<RemoteResult<ZoteroStatusView>>
     config: () => Promise<RemoteResult<ZoteroConfigView>>
     configUpdate: (
       patch: Record<string, unknown>,
@@ -34,6 +35,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     configClear: (field: string, revision?: number) => Promise<RemoteResult<ZoteroConfigView>>
   }
   interface TypertRemoteMap {
+    'zotero/status': () => Promise<RemoteResult<ZoteroStatusView>>
     'zotero/config': () => Promise<RemoteResult<ZoteroConfigView>>
     'zotero/configUpdate': (
       patch: Record<string, unknown>,

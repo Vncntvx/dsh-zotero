@@ -7,6 +7,7 @@
 
 import { describe, expect, it } from 'vitest'
 import {
+  booleanField,
   CardForm,
   numberField,
   textField,
@@ -44,6 +45,17 @@ describe('CardForm field specs', () => {
     expect(spec.format(42)).toBe('')
     expect(spec.parse('  abc  ')).toEqual({ kind: 'set', value: 'abc' })
     expect(spec.parse('   ')).toEqual({ kind: 'clear' })
+  })
+
+  it('booleanField formats booleans and maps the literal drafts', () => {
+    const spec = booleanField('webEnabled')
+    expect(spec.format(true)).toBe('true')
+    expect(spec.format(false)).toBe('false')
+    expect(spec.format('junk')).toBe('')
+    expect(spec.parse('true')).toEqual({ kind: 'set', value: true })
+    expect(spec.parse('false')).toEqual({ kind: 'set', value: false })
+    expect(spec.parse('  ')).toEqual({ kind: 'clear' })
+    expect(spec.parse('yes')).toBeUndefined()
   })
 
   it('numberField formats numbers and rejects non-finite drafts', () => {

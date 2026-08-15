@@ -10,6 +10,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { defineTool, type InferArgs, type InferValue } from '@deepseek-ai/dsh-tools'
 import { withConnectivityAsk } from '../ask.js'
+import { boundedPresentationMeta, projectGetMeta } from '../presentation-meta.js'
 import { formatSearchLine } from './present.js'
 import { parseRef, requireLocalRef } from '../refs.js'
 import type { ZoteroService } from '../service.js'
@@ -208,6 +209,8 @@ export function registerGetTool(ctx: Context, service: ZoteroService): void {
       output: {
         schema: GET_OUTPUT_SCHEMA,
         render: renderGet,
+        presentationMeta: (_args, value) =>
+          boundedPresentationMeta(projectGetMeta(value), ['notesPreview', 'annotationsPreview']),
       },
       presentCall: (args) => ({
         card: 'generic',

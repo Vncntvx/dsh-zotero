@@ -1,0 +1,190 @@
+/* Zotero tool row: the ToolRow geometry replicated locally for the
+ * third-party toolview posture (24px single line, 16px leading / 14px glyph,
+ * 2x2 separator dot, ellipsized summary, running sweep). Visual alignment
+ * reference: packages/client/ui-tool/src/client/tool/components/
+ * ToolRow.module.css in the deepseek-harness checkout. Tokens only. */
+
+.card {
+  display: flex;
+  flex-direction: column;
+}
+
+.root {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  min-height: 24px;
+  cursor: default;
+}
+
+.root[data-expandable] {
+  cursor: pointer;
+}
+
+/* Running sweep: a fixed-width glare band gliding over the row content. */
+.root[data-state='running']::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 300px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--dsw-alias-bg-base) 60%, transparent) 55%,
+    transparent 100%
+  );
+  animation: zotero-row-sweep 2.6s ease-out infinite;
+  pointer-events: none;
+}
+
+@keyframes zotero-row-sweep {
+  0% {
+    left: -300px;
+  }
+  90%,
+  100% {
+    left: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root[data-state='running']::after {
+    animation: none;
+    content: none;
+  }
+}
+
+.root:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 2px;
+}
+
+.leading {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  width: 16px;
+  height: 24px;
+  margin-right: 6px;
+}
+
+.chevron {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.iconIdle {
+  display: inline-flex;
+  align-items: center;
+}
+
+.chevronHover {
+  display: none;
+}
+
+.root[data-expandable]:hover .iconIdle {
+  display: none;
+}
+
+.root[data-expandable]:hover .chevronHover {
+  display: inline-flex;
+}
+
+.title {
+  font-weight: 400;
+  font-size: 14px;
+  line-height: 24px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.sep {
+  flex: none;
+  width: 2px;
+  height: 2px;
+  border-radius: 1px;
+  margin: 0 8px;
+  background: var(--dsw-alias-label-caption);
+}
+
+.summary {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  line-height: 24px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.errorSummary {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.factGroup {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.fact {
+  font-size: 14px;
+  line-height: 24px;
+  color: var(--dsw-alias-label-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.bodyWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 0 4px 22px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.inspectButton {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-state-business-primary);
+  background: transparent;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 4px;
+  padding: 0 8px;
+  cursor: pointer;
+}
+
+.inspectButton:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 2px;
+}
+
+/* Narrow surfaces: the summary keeps the whole line; secondary facts drop
+ * out rather than competing with it for horizontal space. */
+@media (max-width: 520px) {
+  .factGroup {
+    display: none;
+  }
+}

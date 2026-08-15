@@ -49,6 +49,23 @@ Everything registered in the constructor unwinds with the plugin fiber, so confi
 - **Tools**: `parameters`/`output.schema` are the model contract. Enforce domain constraints beyond the schema in the `buildRequest`-style step by throwing `ZoteroError(ZOTERO_INVALID_ARGUMENT)`. `execute` returns plain lossless-JSON DTOs from `src/types.ts`; `render` is a pure function. Keep tool schemas in sync with those DTOs.
 - **Errors**: throw `ZoteroError` with a stable code from `src/errors.ts`; messages are model-facing and never embed HTTP internals.
 
+## Web view
+
+The browser half registers two surfaces: the settings page (`settings.section`,
+main's own) and the dedicated Zotero view tab (`conversation.view`, id
+`zotero`, order 30) — nothing registers into the built-in chat/trajectory
+render holes. The tab renders the session's zotero tool calls as rich cards
+(`src/client/ZoteroToolViews.tsx` over `src/client/presenters.ts`), replay-
+driven from the conversation snapshot (`collectZoteroCalls`), with a
+request-driven connectivity strip fed by the `zotero/status` Remote endpoint
+(handwritten manifest member in `src/typert.ts`, shared wire codec in
+`src/contract.ts`). The tab registers unless the `webEnabled` config flag
+(settings page → Web group, a boolean card-form field) is explicitly off; a
+failed config read defaults to enabled. Host tool cards are projected by the
+bounded `src/presentation-meta.ts` projectors wired into all five tools'
+`output.presentationMeta` (8 KiB UTF-8 budget; over-budget projections drop
+detail keys and set `detailOmitted`).
+
 ## Dev overlays
 
 - From a dsh source checkout: `pnpm dsh web --patch ./dsh-zotero/dev.cordis.yml` — loads `src/index.ts` through tsx; keep the absolute path current.

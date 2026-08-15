@@ -157,3 +157,75 @@ export function ValueField(
     </div>
   )
 }
+
+const toggleRow: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+}
+
+const toggleLabel: CSSProperties = {
+  ...labelStyle,
+  cursor: 'pointer',
+}
+
+const toggle: CSSProperties = {
+  width: 16,
+  height: 16,
+  margin: 0,
+  accentColor: 'var(--dsw-alias-brand-primary)',
+  cursor: 'pointer',
+}
+
+const toggleHint: CSSProperties = {
+  ...hint,
+  margin: '2px 0 0 24px',
+}
+
+/**
+ * A staged boolean field rendered as a checkbox toggle. The draft text is
+ * the literal 'true'/'false' the boolean spec round-trips; checking the box
+ * stages the opposite value, and reset restages the composition layer.
+ * @param props - the field's copy, its staged text, and the edit actions.
+ * @returns the labelled toggle control.
+ */
+export function BooleanField(
+  props: Omit<FieldProps, 'hint' | 'invalidLabel'> & {
+    /** Placeholder hint shown under the control. */
+    hintLabel: string
+  },
+) {
+  return (
+    <div style={row}>
+      <div style={toggleRow}>
+        <input
+          id={props.id}
+          type="checkbox"
+          style={toggle}
+          checked={props.text === 'true'}
+          disabled={props.disabled}
+          onChange={(event) => {
+            props.onEdit(event.target.checked ? 'true' : 'false')
+          }}
+        />
+        <label style={toggleLabel} htmlFor={props.id}>
+          {props.label}
+        </label>
+        {props.overridden ? (
+          <span style={badge}>
+            {props.overriddenLabel}{' '}
+            <button
+              type="button"
+              style={resetButton}
+              disabled={props.disabled}
+              onClick={props.onReset}
+            >
+              {props.resetLabel}
+            </button>
+          </span>
+        ) : null}
+      </div>
+      <p style={toggleHint}>{props.hintLabel}</p>
+    </div>
+  )
+}

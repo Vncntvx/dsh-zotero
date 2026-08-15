@@ -23,7 +23,11 @@ import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
+// Type-only: the `conversation.view` SlotMap row (declared by the slot's
+// owning package) must be in the program for the tab registration to type.
+import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { ZoteroSettingsSection } from './ZoteroSettingsSection.tsx'
+import { ZoteroTab, type ZoteroTabFace } from './ZoteroTab.tsx'
 import { ZOTERO_REMOTE } from './remote.ts'
 import { RemoteScope, type ZoteroRemoteFace } from './remote-scope.ts'
 import { ZoteroCardController } from './zotero-card-controller.ts'
@@ -56,8 +60,40 @@ export function apply(ctx: ClientContext): void {
     if (zotero === undefined) {
       throw new Error('dsh-zotero: the zotero Remote namespace did not mount')
     }
+    // The dedicated Zotero web view (a conversation tab) registers unless
+    // the `webEnabled` namespace flag is explicitly off; a failed config
+    // read defaults to enabled, so the tab survives Remote hiccups. The
+    // gate reads before the settings scope's first load, so a config
+    // failure never blocks the tab's default-on registration.
+    let tabDispose: (() => void) | undefined
+    let webEnabled = true
+    try {
+      const view = await zotero.config()
+      webEnabled = !(view.ok && view.value?.value?.webEnabled === false)
+    } catch {
+      webEnabled = true
+    }
+    if (webEnabled) {
+      const tabT = ctx.locale.bind(NS)
+      tabDispose = ctx.slots.inject('conversation.view', () =>
+        ctx.slots.register(
+          {
+            name: 'conversation.view',
+            id: 'zotero',
+            order: 30,
+            locale: NS,
+            label: () => tabT('nav'),
+            inject: (): ZoteroTabFace => ({
+              status: () => zotero!.status(),
+            }),
+          },
+          ZoteroTab,
+        ),
+      )
+    }
     await scope.connect()
     return () => {
+      tabDispose?.()
       zotero = undefined
       void dispose()
     }

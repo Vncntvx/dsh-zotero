@@ -20,7 +20,8 @@ import type { Context } from '@deepseek-ai/cordis'
 import { TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type { SettingsProvider } from '@deepseek-ai/dsh-settings'
 import { settingsNamespace } from '@deepseek-ai/dsh-settings'
-import type { ZoteroConfigView } from './contract.js'
+import type { ZoteroConfigView, ZoteroStatusView } from './contract.js'
+import type { ZoteroService } from './service.js'
 import { ZOTERO_SETTINGS_NAMESPACE } from './settings-namespace.js'
 
 /**
@@ -61,6 +62,31 @@ export class ZoteroRuntime extends TypertRemoteService {
    */
   constructor(ctx: Context) {
     super(ctx, 'zoteroRemote', { namespace: ZOTERO_SETTINGS_NAMESPACE })
+  }
+
+  /**
+   * Live connectivity view for the dedicated web tab: the service's status
+   * probe with absent optional facts stripped (the strict wire codec rejects
+   * undefined field keys).
+   * @returns the connectivity view; the provider converges failures into it.
+   */
+  async status(): Promise<ZoteroStatusView> {
+    const status = await (this.ctx.get('zotero') as ZoteroService | undefined)?.status()
+    if (status === undefined) {
+      return {
+        providerId: 'zotero',
+        connected: false,
+        diagnosis: 'The Zotero service is not composed.',
+      }
+    }
+    return {
+      providerId: status.providerId,
+      connected: status.connected,
+      ...(status.apiVersion === undefined ? {} : { apiVersion: status.apiVersion }),
+      ...(status.serverId === undefined ? {} : { serverId: status.serverId }),
+      ...(status.schemaVersion === undefined ? {} : { schemaVersion: status.schemaVersion }),
+      diagnosis: status.diagnosis,
+    }
   }
 
   /**

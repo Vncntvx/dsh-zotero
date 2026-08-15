@@ -29,6 +29,11 @@ export const TYPERT_MANIFEST: TypertContribution = {
         members: [
           {
             kind: 'method',
+            name: 'status',
+            signature: 'status(): Promise<ZoteroStatusView>',
+          },
+          {
+            kind: 'method',
             name: 'config',
             signature: 'config(): Promise<ZoteroConfigView>',
           },

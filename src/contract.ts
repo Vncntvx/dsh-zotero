@@ -52,6 +52,28 @@ export const zoteroConfigViewSchema = z
   })
   .readonly()
 
+/** The zotero connectivity view the web tab renders (optional facts omitted when absent). */
+export interface ZoteroStatusView {
+  readonly providerId: string
+  readonly connected: boolean
+  readonly apiVersion?: string
+  readonly serverId?: string
+  readonly schemaVersion?: string
+  readonly diagnosis: string
+}
+
+/** Wire codec: one status view (strict; absent optional facts stay absent). */
+export const zoteroStatusSchema = z
+  .object({
+    providerId: z.string(),
+    connected: z.boolean(),
+    apiVersion: z.string().optional(),
+    serverId: z.string().optional(),
+    schemaVersion: z.string().optional(),
+    diagnosis: z.string(),
+  })
+  .readonly()
+
 /** Wire codec: one user-layer patch (a plain JSON object). */
 export const zoteroPatchSchema = z.record(z.string(), z.unknown()).readonly()
 
@@ -63,6 +85,19 @@ export const zoteroRevisionSchema = z.number().int().optional()
 
 /** The zotero Remote namespace's strict invocation descriptors. */
 export const ZOTERO_INVOCATIONS: readonly InvocationDescriptor[] = [
+  {
+    id: 'dsh-zotero#zotero/status',
+    service: 'zoteroRemote',
+    namespace: 'zotero',
+    method: 'status',
+    invocation: { kind: 'direct' },
+    parameters: [],
+    result: {
+      mode: 'strict',
+      typeSymbol: 'dsh-zotero#ZoteroStatusView',
+      schema: zoteroStatusSchema,
+    },
+  },
   {
     id: 'dsh-zotero#zotero/config',
     service: 'zoteroRemote',

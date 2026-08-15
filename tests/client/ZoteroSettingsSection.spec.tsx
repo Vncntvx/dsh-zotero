@@ -97,8 +97,49 @@ describe('ZoteroSettingsSection', () => {
     scope = fakeScope({ value: { baseUrl: 'http://127.0.0.1:23119/api', timeoutMs: 5000 } })
     mount()
     expect(screen.getByText('本地 Zotero 文献库的接入配置。')).toBeDefined()
-    expect(document.querySelectorAll('input')).toHaveLength(19)
+    expect(document.querySelectorAll('input')).toHaveLength(20)
     expect(timeoutInput().value).toBe('5000')
+    // The boolean field renders as a checkbox with the field's copy.
+    expect(screen.getByLabelText('会话工具卡片')).toBeDefined()
+  })
+
+  it('toggles the webEnabled checkbox and saves the boolean write', async () => {
+    scope = fakeScope({ value: { baseUrl: 'http://127.0.0.1:23119/api', webEnabled: true } })
+    mount()
+    const toggle = screen.getByLabelText('会话工具卡片') as HTMLInputElement
+    expect(toggle.checked).toBe(true)
+    fireEvent.click(toggle)
+    expect(toggle.checked).toBe(false)
+    expect(saveButton().disabled).toBe(false)
+    fireEvent.click(saveButton())
+    await screen.findByText('保存')
+    expect(scope.writes).toEqual([{ op: 'set', field: 'webEnabled', value: false }])
+  })
+
+  it('toggles webEnabled on from an absent value', async () => {
+    scope = fakeScope({ value: { baseUrl: 'http://127.0.0.1:23119/api' } })
+    mount()
+    const toggle = screen.getByLabelText('会话工具卡片') as HTMLInputElement
+    expect(toggle.checked).toBe(false)
+    fireEvent.click(toggle)
+    expect(toggle.checked).toBe(true)
+    fireEvent.click(saveButton())
+    await screen.findByText('保存')
+    expect(scope.writes).toEqual([{ op: 'set', field: 'webEnabled', value: true }])
+  })
+
+  it('stages a reset for an overridden webEnabled back to the base', async () => {
+    scope = fakeScope({
+      value: { baseUrl: 'http://127.0.0.1:23119/api', webEnabled: false },
+      base: { webEnabled: true },
+      user: { webEnabled: false },
+    })
+    mount()
+    expect(screen.getByText('已覆盖')).toBeDefined()
+    fireEvent.click(screen.getByText('恢复默认'))
+    fireEvent.click(saveButton())
+    await screen.findByText('保存')
+    expect(scope.writes).toEqual([{ op: 'unset', field: 'webEnabled' }])
   })
 
   it('stages typed edits and enables the save', () => {

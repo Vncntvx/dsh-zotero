@@ -24,8 +24,9 @@ import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-cli
 // by the settings domain's client contract; importing its types rides the
 // SlotMap merge into this program without a runtime dependency.
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
-import { ValueField } from './fields.tsx'
+import { BooleanField, ValueField } from './fields.tsx'
 import {
+  BOOLEAN_FIELD_KEYS,
   FIELD_GROUPS,
   NUMERIC_FIELD_KEYS,
   type FieldKey,
@@ -177,6 +178,26 @@ function field(
   disabled: boolean,
   numeric: boolean,
 ): ReactNode {
+  if (BOOLEAN_FIELD_KEYS.has(key)) {
+    return (
+      <BooleanField
+        key={key}
+        id={`zotero-settings-${key}`}
+        label={t(key)}
+        hintLabel={t(`${key}Hint`)}
+        overriddenLabel={t('overridden')}
+        resetLabel={t('reset')}
+        disabled={disabled}
+        {...state[key]}
+        onEdit={(text) => {
+          props.edit(key, text)
+        }}
+        onReset={() => {
+          props.resetField(key)
+        }}
+      />
+    )
+  }
   return (
     <ValueField
       key={key}

@@ -19,6 +19,7 @@ import {
 import { ZOTERO_SORT_FIELDS } from '../constants.js'
 import type { ResolvedConfig } from '../config.js'
 import { withConnectivityAsk } from '../ask.js'
+import { boundedPresentationMeta, projectSearchMeta } from '../presentation-meta.js'
 import { formatSearchLine } from './present.js'
 import { assertIntInRange, invalid } from './validate.js'
 import type { ZoteroService } from '../service.js'
@@ -226,9 +227,9 @@ export function renderSearch(_args: SearchArgs, value: SearchOutput): ContentBlo
   return [{ type: 'text', text: lines.join('\n') }]
 }
 
-/** Replayable projection of the page facts a completed card title needs. */
+/** Replayable projection: page facts plus the bounded rows the Zotero tab lists. */
 function searchPresentationMeta(_args: SearchArgs, value: SearchOutput): JsonValue {
-  return { returned: value.returned, total: value.total, nextOffset: value.nextOffset ?? null }
+  return boundedPresentationMeta(projectSearchMeta(value), ['items'])
 }
 
 /**

@@ -129,6 +129,14 @@ The plugin registers a "Zotero" card in dsh web's **Settings → Plugins → Plu
 - External edits to the settings document (e.g. editing `settings.yaml` directly) hot-apply too.
 - Compositions without a settings service (pure headless) never register the namespace, and the plugin behaves exactly as if unconfigured.
 
+### Web view
+
+The dsh web session view is a tab ring (Chat, Trajectory, …). The plugin registers a dedicated **Zotero** tab (`conversation.view`, id `zotero`, after Trajectory and dsh-context) and leaves dsh's built-in chat and trajectory display untouched:
+
+- A **connection strip** leads the tab: one status probe on mount, another per explicit Refresh (request-driven, no polling timers); it shows the connection state, API/schema versions, Server ID (Zotero 10+), and the last-checked time, with the diagnosis when Zotero is unavailable.
+- Below it, the session's **Zotero tool activity**: every search, read, retrieve, attachment, and export call renders as a rich card (expandable, copyable refs, evidence passages labeled by source), fully replay-driven from the conversation snapshot — the same transcript renders the same cards, and missing meta degrades to the raw content.
+- The **Web → Session tool cards** toggle in the settings page (`webEnabled`, default on) controls the tab's registration; when off, Zotero calls show as dsh's built-in generic cards in the trajectory.
+
 ## Limits
 
 - Read-only library: no path modifies items, notes, tags, or collections.

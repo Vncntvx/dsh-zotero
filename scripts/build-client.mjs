@@ -16,11 +16,13 @@
  */
 
 import { readFileSync } from 'node:fs'
+import { basename } from 'node:path'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import vm from 'node:vm'
 import * as esbuild from 'esbuild'
+import { transform as transformCss } from 'lightningcss'
 
 const require = createRequire(import.meta.url)
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -36,8 +38,46 @@ const EXTERNALS = [
   '@deepseek-ai/dsh-client-runtime/client',
 ]
 
+/** Inline `.module.css` files as scoped style injections (mirrors the harness
+ *  tsdown preset's CSS handling; the loader executes the bundle as a classic
+ *  script, so each module injects its own style tag with a per-module id). */
+const cssModulesPlugin = {
+  name: 'css-modules',
+  setup(build) {
+    build.onLoad({ filter: /\.module\.css$/ }, (args) => {
+      const source = readFileSync(args.path, 'utf8')
+      const { code, exports: classMap } = transformCss({
+        filename: args.path,
+        code: Buffer.from(source),
+        cssModules: true,
+        minify: true,
+      })
+      const names = {}
+      for (const [original, info] of Object.entries(classMap)) names[original] = info.name
+      const id = `dsh-zotero/${basename(args.path)}`
+      const style = code
+        .toString('utf8')
+        .replaceAll('\\', '\\\\')
+        .replaceAll('`', '\\`')
+        .replaceAll('${', '\\${')
+      const contents = [
+        'const style = `' + style + '`;',
+        `if (typeof document !== 'undefined' && !document.querySelector('style[data-plugin-css="${id}"]')) {`,
+        "  const tag = document.createElement('style');",
+        `  tag.setAttribute('data-plugin-css', ${JSON.stringify(id)});`,
+        '  tag.textContent = style;',
+        '  document.head.appendChild(tag);',
+        '}',
+        `export default ${JSON.stringify(names)};`,
+      ].join('\n')
+      return { contents, loader: 'js' }
+    })
+  },
+}
+
 const options = {
   entryPoints: [join(root, 'src/client/index.ts')],
+  plugins: [cssModulesPlugin],
   outfile: join(root, 'lib/client.js'),
   bundle: true,
   format: 'cjs',

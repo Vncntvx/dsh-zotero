@@ -1157,6 +1157,9 @@ describe('tool presentation', () => {
       returned: 10,
       total: 42,
       nextOffset: 10,
+      displayed: 0,
+      omitted: 10,
+      items: [],
     })
     // A final page omits nextOffset; the projector records it as null so the
     // projection stays lossless JSON.
@@ -1165,7 +1168,7 @@ describe('tool presentation', () => {
         {},
         { scope: { kind: 'library' }, items: [], total: 42, offset: 0, returned: 10 },
       ),
-    ).toEqual({ returned: 10, total: 42, nextOffset: null })
+    ).toEqual({ returned: 10, total: 42, nextOffset: null, displayed: 0, omitted: 10, items: [] })
     const result: ToolResult = {
       content: [{ type: 'text', text: 'x' }],
       isError: false,

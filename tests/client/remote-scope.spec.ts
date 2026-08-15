@@ -37,6 +37,10 @@ function fakeFace(script: Array<() => RemoteResult<ZoteroConfigView>>): {
   let step = 0
   const run = (): RemoteResult<ZoteroConfigView> => script[step++]()
   const face: ZoteroRemoteFace = {
+    status: async () => ({
+      ok: true,
+      value: { providerId: 'local', connected: true, diagnosis: 'ok' },
+    }),
     config: async () => {
       calls.push('config')
       return run()

@@ -9,6 +9,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { defineTool, type InferArgs, type InferValue } from '@deepseek-ai/dsh-tools'
 import { withConnectivityAsk } from '../ask.js'
+import { boundedPresentationMeta, projectAttachmentMeta } from '../presentation-meta.js'
 import { parseRef, requireLocalRef } from '../refs.js'
 import type { ZoteroService } from '../service.js'
 
@@ -70,6 +71,8 @@ export function registerAttachmentTool(ctx: Context, service: ZoteroService): vo
       output: {
         schema: ATTACHMENT_OUTPUT_SCHEMA,
         render: renderAttachment,
+        presentationMeta: (_args, value) =>
+          boundedPresentationMeta(projectAttachmentMeta(value), ['path', 'url']),
       },
       presentCall: (args) => ({
         card: 'generic',

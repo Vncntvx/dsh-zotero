@@ -17,6 +17,7 @@ import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 import { ZoteroRuntime } from '../src/remote.js'
 import { TYPERT_MANIFEST } from '../src/typert.js'
 import { MemorySettings } from './helpers/memory-settings.js'
+import { MockZotero } from './helpers/mock-zotero.js'
 
 let ctx: Context | undefined
 
@@ -151,11 +152,67 @@ describe('the zotero Remote service', () => {
   })
 })
 
+describe('the zotero status endpoint', () => {
+  afterEach(async () => {
+    await ctx?.fiber.dispose()
+    ctx = undefined
+  })
+
+  it('serves the connectivity view with every reported fact', async () => {
+    const mock = await MockZotero.start()
+    mock.route('GET', '/api/', (_req, _res, helpers) =>
+      helpers.json(
+        {},
+        { 'Zotero-API-Version': '3', 'Zotero-Schema-Version': '37', 'Zotero-Server-ID': 'S1' },
+      ),
+    )
+    ctx = await boot({ baseUrl: mock.baseUrl })
+    const runtime = ctx.get('zoteroRemote') as ZoteroRuntime
+    await expect(runtime.status()).resolves.toEqual({
+      providerId: 'local',
+      connected: true,
+      apiVersion: '3',
+      schemaVersion: '37',
+      serverId: 'S1',
+      diagnosis: 'ok',
+    })
+    await mock.close()
+  })
+
+  it('strips absent optional facts and converges failures into the view', async () => {
+    const mock = await MockZotero.start()
+    mock.route('GET', '/api/', (_req, _res, helpers) => helpers.raw(503, {}, 'down'))
+    ctx = await boot({ baseUrl: mock.baseUrl })
+    const runtime = ctx.get('zoteroRemote') as ZoteroRuntime
+    const status = await runtime.status()
+    expect(status.connected).toBe(false)
+    expect(status.apiVersion).toBeUndefined()
+    expect(status.serverId).toBeUndefined()
+    expect(status.schemaVersion).toBeUndefined()
+    expect(status.diagnosis).not.toBe('')
+    await mock.close()
+  })
+
+  it('reports unavailable without the zotero service composed', async () => {
+    const context = new Context()
+    await context.plugin(TypertRegistry)
+    await context.plugin(MemorySettings, {})
+    new ZoteroRuntime(context)
+    await expect(context.get('zoteroRemote')!.status()).resolves.toEqual({
+      providerId: 'zotero',
+      connected: false,
+      diagnosis: 'The Zotero service is not composed.',
+    })
+    await context.fiber.dispose()
+  })
+})
+
 describe('the zotero typert manifest', () => {
-  it('declares the three settings endpoints under the zotero namespace', () => {
+  it('declares the settings and status endpoints under the zotero namespace', () => {
     expect(TYPERT_MANIFEST.package).toBe('dsh-zotero')
     expect(TYPERT_MANIFEST.face).toBe('host')
     expect(TYPERT_MANIFEST.invocations.map((invocation) => invocation.method)).toEqual([
+      'status',
       'config',
       'configUpdate',
       'configClear',
@@ -163,6 +220,15 @@ describe('the zotero typert manifest', () => {
     for (const invocation of TYPERT_MANIFEST.invocations) {
       expect(invocation.namespace).toBe('zotero')
       expect(invocation.service).toBe('zoteroRemote')
+    }
+    const status = TYPERT_MANIFEST.invocations.find((invocation) => invocation.method === 'status')
+    expect(status?.result).toMatchObject({
+      mode: 'strict',
+      typeSymbol: 'dsh-zotero#ZoteroStatusView',
+    })
+    for (const invocation of TYPERT_MANIFEST.invocations.filter(
+      (entry) => entry.method !== 'status',
+    )) {
       expect(invocation.result).toMatchObject({
         mode: 'strict',
         typeSymbol: 'dsh-zotero#ZoteroConfigView',

@@ -13,6 +13,7 @@ import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { defineTool, type InferArgs, type InferValue } from '@deepseek-ai/dsh-tools'
 import type { ResolvedConfig } from '../config.js'
 import { withConnectivityAsk } from '../ask.js'
+import { boundedPresentationMeta, projectExportMeta } from '../presentation-meta.js'
 import { invalid } from './validate.js'
 import { parseRef, requireLocalRef } from '../refs.js'
 import type { ZoteroService } from '../service.js'
@@ -143,6 +144,8 @@ export function registerExportTool(ctx: Context, service: ZoteroService): void {
       output: {
         schema: EXPORT_OUTPUT_SCHEMA,
         render: renderExport,
+        presentationMeta: (args, value) =>
+          boundedPresentationMeta(projectExportMeta(args.refs.length, value), []),
       },
       presentCall: (args) => ({
         card: 'generic',

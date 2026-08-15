@@ -49,6 +49,10 @@ interface FakeApplyWorld {
   mounts: unknown[]
   effects: Array<unknown>
   mountDisposes: number
+  /** Scripted namespace `config` result; defaults to the VIEW. */
+  config: () => Promise<unknown>
+  /** Scripted namespace `status` result; defaults to ok. */
+  status: () => Promise<unknown>
 }
 
 /** A minimal context standing in for the browser kernel's plugin ctx. */
@@ -68,6 +72,8 @@ function fakeWorld(mountFail = false): FakeApplyWorld {
     mounts,
     effects,
     mountDisposes: 0,
+    config: async () => ({ ok: true, value: VIEW }),
+    status: async () => ({ ok: true, value: { connected: true, diagnosis: 'ok' } }),
   }
   const ctx = {
     effect: (register: () => unknown): (() => void) => {
@@ -93,9 +99,10 @@ function fakeWorld(mountFail = false): FakeApplyWorld {
         mountFail
           ? undefined
           : {
-              config: async () => ({ ok: true, value: VIEW }),
+              config: world.config,
               configUpdate: async () => ({ ok: true, value: VIEW }),
               configClear: async () => ({ ok: true, value: VIEW }),
+              status: world.status,
             },
     },
     slots: {
@@ -164,6 +171,62 @@ describe('the browser-half entry', () => {
     apply(world.ctx as ClientContext)
     const dispose = (await world.effects[1]) as () => void
     expect(world.mountDisposes).toBe(0)
+    dispose()
+    expect(world.mountDisposes).toBe(1)
+  })
+
+  it('registers the Zotero conversation tab when webEnabled is not off', async () => {
+    const world = fakeWorld()
+    const statusSpy = vi.fn(async () => ({ ok: true, value: {} }))
+    world.status = statusSpy
+    apply(world.ctx as ClientContext)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    const tab = world.injected.find((entry) => entry.name === 'conversation.view')
+    expect(tab).toBeDefined()
+    tab?.register()
+    const registration = world.registered.find((entry) => entry.name === 'conversation.view')
+    expect(registration?.options.id).toBe('zotero')
+    expect(registration?.options.order).toBe(30)
+    expect(registration?.options.locale).toBe('zotero')
+    expect((registration?.options.label as () => string)()).toBe('nav')
+    const face = registration?.options.inject as () => {
+      status: () => Promise<unknown>
+    }
+    const faceObj = face()
+    expect(faceObj.status).toBeTypeOf('function')
+    await faceObj.status()
+    expect(statusSpy).toHaveBeenCalled()
+  })
+
+  it('skips the tab when the namespace disables webEnabled', async () => {
+    const world = fakeWorld()
+    world.config = async () => ({
+      ok: true,
+      value: { ...VIEW, value: { ...VIEW.value, webEnabled: false } },
+    })
+    apply(world.ctx as ClientContext)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(world.injected.map((entry) => entry.name)).toEqual(['settings.section'])
+  })
+
+  it('registers the tab when the config read fails', async () => {
+    const world = fakeWorld()
+    // The gate's first read throws; the settings scope's later reload reads ok.
+    world.config = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockResolvedValue({ ok: true, value: VIEW })
+    apply(world.ctx as ClientContext)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(world.injected.some((entry) => entry.name === 'conversation.view')).toBe(true)
+  })
+
+  it('withdraws the tab with the fiber and mounts nothing without Remote', async () => {
+    const world = fakeWorld()
+    apply(world.ctx as ClientContext)
+    const dispose = (await world.effects[1]) as () => void
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(world.injected.some((entry) => entry.name === 'conversation.view')).toBe(true)
     dispose()
     expect(world.mountDisposes).toBe(1)
   })

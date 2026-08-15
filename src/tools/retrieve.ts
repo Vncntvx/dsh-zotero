@@ -13,6 +13,7 @@ import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { defineTool, type InferArgs, type InferValue } from '@deepseek-ai/dsh-tools'
 import type { ResolvedConfig } from '../config.js'
 import { withConnectivityAsk } from '../ask.js'
+import { boundedPresentationMeta, projectRetrieveMeta } from '../presentation-meta.js'
 import { assertIntInRange, invalid } from './validate.js'
 import { parseRef, requireLocalRef } from '../refs.js'
 import type { ZoteroService } from '../service.js'
@@ -162,6 +163,8 @@ export function registerRetrieveTool(ctx: Context, service: ZoteroService): void
       output: {
         schema: RETRIEVE_OUTPUT_SCHEMA,
         render: renderRetrieve,
+        presentationMeta: (_args, value) =>
+          boundedPresentationMeta(projectRetrieveMeta(value), ['items']),
       },
       presentCall: (args) => ({
         card: 'generic',

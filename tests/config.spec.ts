@@ -23,6 +23,7 @@ describe('resolveConfig', () => {
       maxExportRefs: 1000,
       defaultStyle: 'apa',
       defaultLocale: 'en-US',
+      webEnabled: true,
     })
   })
 

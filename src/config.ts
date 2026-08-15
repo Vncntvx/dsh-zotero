@@ -48,6 +48,8 @@ export interface Config {
   defaultStyle?: string
   /** CSL locale for citation/bibliography formats. */
   defaultLocale?: string
+  /** Whether the dedicated Zotero web view (tool cards in a conversation tab) is enabled. */
+  webEnabled?: boolean
 }
 
 export const Config: Schema<Config> = Schema.object({
@@ -70,6 +72,7 @@ export const Config: Schema<Config> = Schema.object({
   maxExportRefs: Schema.number().default(1000),
   defaultStyle: Schema.string().default('apa'),
   defaultLocale: Schema.string().default('en-US'),
+  webEnabled: Schema.boolean().default(true),
 })
 
 export interface ResolvedConfig {
@@ -92,6 +95,7 @@ export interface ResolvedConfig {
   readonly maxExportRefs: number
   readonly defaultStyle: string
   readonly defaultLocale: string
+  readonly webEnabled: boolean
 }
 
 const LOOPBACK_HOSTNAMES = new Set(['127.0.0.1', 'localhost', '::1', '[::1]'])

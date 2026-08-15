@@ -55,7 +55,8 @@
         "@deepseek-ai/dsh-client-locale",
         "@deepseek-ai/dsh-client-runtime",
         "@deepseek-ai/dsh-client-ui-settings",
-        "@deepseek-ai/dsh-client-ui-slots"
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-ui-conversation"
       ],
       "platform": "web"
     }
@@ -111,7 +112,8 @@
     "@types/js-yaml": "^4.0.9",
     "@deepseek-ai/dsh-client-ui-tool": "^0.1.0-rc.6",
     "@deepseek-ai/dsh-client-ui-primitives": "^0.1.0-rc.6",
-    "lightningcss": "^1.33.0"
+    "lightningcss": "^1.33.0",
+    "@deepseek-ai/dsh-client-ui-conversation": "^0.1.0-rc.6"
   },
   "license": "MIT",
   "repository": {

@@ -19,6 +19,52 @@ export type ZoteroLocaleKey =
   | GroupKey
   | FieldKey
   | `${FieldKey}Hint`
+  | 'groupWeb'
+  | 'webEnabled'
+  | 'webEnabledHint'
+  | 'copy'
+  | 'copied'
+  | 'checking'
+  | 'statusUnavailable'
+  | 'inspectLabel'
+  | 'referenceMismatch'
+  | 'browse'
+  | 'resultsCount'
+  | 'moreOmitted'
+  | 'scopeLibraryMetadata'
+  | 'scopeLibraryEverything'
+  | 'scopeCollection'
+  | 'scopeSavedSearch'
+  | 'personalNotes'
+  | 'personalAnnotations'
+  | 'evidencePassages'
+  | 'evidenceSources'
+  | 'sourceAnnotation'
+  | 'sourceNote'
+  | 'sourceAbstract'
+  | 'sourceFulltext'
+  | 'pageLabel'
+  | 'truncatedMore'
+  | 'truncatedPreview'
+  | 'evidenceExpandLabel'
+  | 'evidenceCollapseLabel'
+  | 'localFile'
+  | 'linkedUrl'
+  | 'citationsCount'
+  | 'refsRequested'
+  | 'toolSearchTitle'
+  | 'toolGetTitle'
+  | 'toolRetrieveTitle'
+  | 'toolAttachmentTitle'
+  | 'toolExportTitle'
+  | 'noActivity'
+  | 'statusConnected'
+  | 'apiVersionLabel'
+  | 'schemaVersionLabel'
+  | 'serverIdLabel'
+  | 'diagnosisLabel'
+  | 'refresh'
+  | 'lastCheckedLabel'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -84,6 +130,52 @@ export const en: Record<ZoteroLocaleKey, string> = {
   defaultStyleHint: 'CSL style id for citation and bibliography formats (e.g. apa).',
   defaultLocale: 'Default locale',
   defaultLocaleHint: 'CSL locale for citation and bibliography formats (e.g. en-US).',
+  groupWeb: 'Web',
+  webEnabled: 'Session tool cards',
+  webEnabledHint: 'Show Zotero tool cards in the dedicated Web view (a conversation tab).',
+  copy: 'Copy',
+  copied: 'Copied',
+  checking: 'Checking…',
+  statusUnavailable: 'Unavailable',
+  inspectLabel: 'Inspect',
+  referenceMismatch: 'This reference belongs to another Zotero database. Search again.',
+  browse: 'Browse',
+  resultsCount: '{count} results',
+  moreOmitted: '{count} more in Inspect',
+  scopeLibraryMetadata: 'Personal library · Metadata',
+  scopeLibraryEverything: 'Personal library · Everything',
+  scopeCollection: 'Collection · {name}',
+  scopeSavedSearch: 'Saved search · {name}',
+  personalNotes: 'Personal notes',
+  personalAnnotations: 'Personal annotations',
+  evidencePassages: '{count} evidence passages',
+  evidenceSources: 'sources: {sources}',
+  sourceAnnotation: 'Annotation',
+  sourceNote: 'Note',
+  sourceAbstract: 'Abstract',
+  sourceFulltext: 'Full text',
+  pageLabel: 'p.{label}',
+  truncatedMore: 'more omitted',
+  truncatedPreview: '(truncated)',
+  evidenceExpandLabel: 'Expand preview',
+  evidenceCollapseLabel: 'Collapse preview',
+  localFile: 'Local file',
+  linkedUrl: 'Linked URL',
+  citationsCount: '{count} citations',
+  refsRequested: '{count} refs',
+  toolSearchTitle: 'Search Zotero library',
+  toolGetTitle: 'Read Zotero item',
+  toolRetrieveTitle: 'Finding evidence',
+  toolAttachmentTitle: 'Resolve Zotero attachment',
+  toolExportTitle: 'Export Zotero citations',
+  noActivity: 'No Zotero tool calls in this session yet.',
+  statusConnected: 'Connected',
+  apiVersionLabel: 'API version',
+  schemaVersionLabel: 'Schema version',
+  serverIdLabel: 'Server ID',
+  diagnosisLabel: 'Diagnosis',
+  refresh: 'Refresh',
+  lastCheckedLabel: 'Last checked',
 }
 
 /** Simplified Chinese copy. */
@@ -142,4 +234,50 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   defaultStyleHint: 'citation/bibliography 格式的 CSL 样式 id（如 apa）。',
   defaultLocale: '默认区域设置',
   defaultLocaleHint: 'citation/bibliography 格式的 CSL locale（如 en-US）。',
+  groupWeb: 'Web',
+  webEnabled: '会话工具卡片',
+  webEnabledHint: '在专属 Web 视图（会话标签页）中显示 Zotero 工具卡片。',
+  copy: '复制',
+  copied: '已复制',
+  checking: '检查中…',
+  statusUnavailable: '不可用',
+  inspectLabel: 'Inspect',
+  referenceMismatch: '此 ref 属于另一个 Zotero 数据库，请重新搜索。',
+  browse: '浏览',
+  resultsCount: '{count} results',
+  moreOmitted: '另有 {count} 条，见 Inspect',
+  scopeLibraryMetadata: 'Personal library · Metadata',
+  scopeLibraryEverything: 'Personal library · Everything',
+  scopeCollection: 'Collection · {name}',
+  scopeSavedSearch: 'Saved search · {name}',
+  personalNotes: '个人笔记',
+  personalAnnotations: '个人批注',
+  evidencePassages: '{count} evidence passages',
+  evidenceSources: 'sources: {sources}',
+  sourceAnnotation: 'Annotation',
+  sourceNote: 'Note',
+  sourceAbstract: 'Abstract',
+  sourceFulltext: 'Full text',
+  pageLabel: 'p.{label}',
+  truncatedMore: '另有省略',
+  truncatedPreview: '(截断)',
+  evidenceExpandLabel: '展开预览',
+  evidenceCollapseLabel: '收起预览',
+  localFile: 'Local file',
+  linkedUrl: 'Linked URL',
+  citationsCount: '{count} citations',
+  refsRequested: '{count} refs',
+  toolSearchTitle: 'Search Zotero library',
+  toolGetTitle: 'Read Zotero item',
+  toolRetrieveTitle: 'Finding evidence',
+  toolAttachmentTitle: 'Resolve Zotero attachment',
+  toolExportTitle: 'Export Zotero citations',
+  noActivity: '本会话还没有 Zotero 工具调用。',
+  statusConnected: '已连接',
+  apiVersionLabel: 'API 版本',
+  schemaVersionLabel: 'Schema 版本',
+  serverIdLabel: 'Server ID',
+  diagnosisLabel: '诊断',
+  refresh: '刷新',
+  lastCheckedLabel: '上次检查',
 }

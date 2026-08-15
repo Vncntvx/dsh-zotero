@@ -15,6 +15,7 @@
 import type { SettingsScope, SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 import {
   CardForm,
+  booleanField,
   numberField,
   textField,
   type CardActions,
@@ -47,16 +48,19 @@ export const FIELD_SPECS = [
   { key: 'maxExportRefs', kind: 'number', group: 'groupOutput' },
   { key: 'defaultStyle', kind: 'text', group: 'groupDefaults' },
   { key: 'defaultLocale', kind: 'text', group: 'groupDefaults' },
-] as const satisfies readonly { key: string; kind: 'text' | 'number'; group: string }[]
+  { key: 'webEnabled', kind: 'boolean', group: 'groupWeb' },
+] as const satisfies readonly { key: string; kind: 'text' | 'number' | 'boolean'; group: string }[]
 
 /** The section field names the card edits; also the page's copy and state member names. */
 export type FieldKey = (typeof FIELD_SPECS)[number]['key']
 /** The display group a field belongs to; a page locale key. */
 export type GroupKey = (typeof FIELD_SPECS)[number]['group']
 
-const FIELDS: CardFieldSpec[] = FIELD_SPECS.map((spec) =>
-  spec.kind === 'number' ? numberField(spec.key) : textField(spec.key),
-)
+const FIELDS: CardFieldSpec[] = FIELD_SPECS.map((spec) => {
+  if (spec.kind === 'number') return numberField(spec.key)
+  if (spec.kind === 'boolean') return booleanField(spec.key)
+  return textField(spec.key)
+})
 
 /** The page's field keys grouped by the host schema's families, in display order. */
 export const FIELD_GROUPS: readonly {
@@ -67,6 +71,11 @@ export const FIELD_GROUPS: readonly {
 /** The whole-number fields, rendered with a numeric keypad hint. */
 export const NUMERIC_FIELD_KEYS: ReadonlySet<FieldKey> = new Set<FieldKey>(
   FIELD_SPECS.filter((spec) => spec.kind === 'number').map((spec) => spec.key),
+)
+
+/** The boolean fields, rendered as toggles. */
+export const BOOLEAN_FIELD_KEYS: ReadonlySet<FieldKey> = new Set<FieldKey>(
+  FIELD_SPECS.filter((spec) => spec.kind === 'boolean').map((spec) => spec.key),
 )
 
 /** What the Zotero page renders: the shell plus one control per field. */
