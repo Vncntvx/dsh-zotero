@@ -12,8 +12,8 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { defineTool, type InferArgs, type InferValue } from '@deepseek-ai/dsh-tools'
 import type { ResolvedConfig } from '../config.js'
-import { ZOTERO_INVALID_ARGUMENT, ZoteroError } from '../errors.js'
 import { withConnectivityAsk } from '../ask.js'
+import { invalid } from './validate.js'
 import { parseRef, requireLocalRef } from '../refs.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroExportFormat, ZoteroExportRequest } from '../types.js'
@@ -86,10 +86,6 @@ const EXPORT_OUTPUT_SCHEMA = {
 } as const
 
 type ExportOutput = InferValue<typeof EXPORT_OUTPUT_SCHEMA>
-
-function invalid(message: string): never {
-  throw new ZoteroError(message, ZOTERO_INVALID_ARGUMENT)
-}
 
 function buildRequest(args: ExportArgs, config: () => ResolvedConfig): ZoteroExportRequest {
   if (args.refs.length === 0) invalid('refs must list at least one zotero:// item ref')

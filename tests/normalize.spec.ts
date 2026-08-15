@@ -187,29 +187,17 @@ describe('matchScopeName', () => {
   ]
 
   it('prefers an exact Unicode match', () => {
-    expect(matchScopeName(entries, 'LLM')).toEqual({
-      exact: true,
-      matched: [{ key: 'AAAA1111', name: 'LLM' }],
-    })
-    expect(matchScopeName(entries, 'LLMs')).toEqual({
-      exact: true,
-      matched: [{ key: 'BBBB2222', name: 'LLMs' }],
-    })
+    expect(matchScopeName(entries, 'LLM')).toEqual([{ key: 'AAAA1111', name: 'LLM' }])
+    expect(matchScopeName(entries, 'LLMs')).toEqual([{ key: 'BBBB2222', name: 'LLMs' }])
   })
 
   it('falls back to a case-insensitive match', () => {
-    expect(matchScopeName(entries, 'llm')).toEqual({
-      exact: false,
-      matched: [{ key: 'AAAA1111', name: 'LLM' }],
-    })
+    expect(matchScopeName(entries, 'llm')).toEqual([{ key: 'AAAA1111', name: 'LLM' }])
   })
 
   it('returns every case-insensitive match and an empty list otherwise', () => {
-    expect(matchScopeName(entries, 'reasoning')).toEqual({
-      exact: false,
-      matched: [{ key: 'CCCC3333', name: 'Reasoning' }],
-    })
-    expect(matchScopeName(entries, 'vision')).toEqual({ exact: false, matched: [] })
+    expect(matchScopeName(entries, 'reasoning')).toEqual([{ key: 'CCCC3333', name: 'Reasoning' }])
+    expect(matchScopeName(entries, 'vision')).toEqual([])
   })
 })
 

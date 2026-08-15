@@ -40,7 +40,8 @@ export const ZOTERO_UNEXPECTED = 'ZOTERO_UNEXPECTED'
 /**
  * Domain failure with a stable machine-routable code and an actionable,
  * model-facing message. The tool registry renders it as `Error: <message>`
- * with `isError: true`; never embed HTTP internals in the message.
+ * with `isError: true`; messages may carry domain facts such as a status
+ * code, but never raw HTTP internals (bodies, headers, engine text).
  */
 export class ZoteroError extends HarnessError {
   constructor(message: string, code: string, options?: ErrorOptions) {

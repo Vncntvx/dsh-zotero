@@ -10,18 +10,7 @@
  */
 
 import { ZOTERO_UNEXPECTED, ZoteroError } from './errors.js'
-
-const OBJECT_KEY_PATTERN = /^[A-Z0-9]{8}$/
-
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : undefined
-}
-
-function asString(value: unknown): string | undefined {
-  return typeof value === 'string' ? value : undefined
-}
+import { asRecord, asString, isObjectKey } from './json.js'
 
 /**
  * A normalized attachment child row, before ref provenance is attached.
@@ -63,7 +52,7 @@ export function bestAttachmentFromLinks(
 export function normalizeAttachmentRecord(json: unknown): ZoteroAttachmentCandidate {
   const record = asRecord(json)
   const key = asString(record?.key)
-  if (key === undefined || !OBJECT_KEY_PATTERN.test(key)) {
+  if (key === undefined || !isObjectKey(key)) {
     throw new ZoteroError(
       'Zotero returned an attachment without a valid object key.',
       ZOTERO_UNEXPECTED,
