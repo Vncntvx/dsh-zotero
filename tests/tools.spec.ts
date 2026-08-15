@@ -1227,7 +1227,7 @@ describe('connectivity failure ask', () => {
       ask: async (request) => {
         asked.push(request)
         return {
-          answers: [{ id: 'zotero-failure', selected: ['我已启动 Zotero，重试 (Recommended)'] }],
+          answers: [{ id: 'zotero-failure', selected: ['I started Zotero, retry (Recommended)'] }],
         }
       },
     })
@@ -1247,6 +1247,6 @@ describe('connectivity failure ask', () => {
     expect(asked).toHaveLength(1)
     const request = asked[0] as { questions: { id: string; options: { label: string }[] }[] }
     expect(request.questions[0]!.id).toBe('zotero-failure')
-    expect(request.questions[0]!.options![0]!.label).toBe('我已启动 Zotero，重试 (Recommended)')
+    expect(request.questions[0]!.options![0]!.label).toBe('I started Zotero, retry (Recommended)')
   })
 })

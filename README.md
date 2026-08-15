@@ -47,7 +47,7 @@ Agent 按需求逐层深入，一段典型对话：
 ## 按需工作与连接失败交互
 
 - 插件常驻但完全请求驱动：加载、闲置、卸载都不会发起任何请求（无探测、无轮询、无后台任务）。只有两种入口会触达 Zotero：Agent 在用户明确要求时调用五个工具，或用户手动执行 `/zotero status`。
-- 工具调用遇到连接类失败（`ZOTERO_NOT_RUNNING` 未运行 / `ZOTERO_API_DISABLED` 本地 API 被禁用 / `ZOTERO_API_VERSION` 版本过旧 / `ZOTERO_TIMEOUT` 超时）时，会通过交互式问题卡片询问用户怎么处理：第一个选项是带 `(Recommended)` 的推荐操作（如"我已启动 Zotero，重试"），选择后插件按原参数重试一次；再失败或选择"放弃这次查询"时返回原类型化错误，绝不反复询问。
+- 工具调用遇到连接类失败（`ZOTERO_NOT_RUNNING` 未运行 / `ZOTERO_API_DISABLED` 本地 API 被禁用 / `ZOTERO_API_VERSION` 版本过旧 / `ZOTERO_TIMEOUT` 超时）时，会通过交互式问题卡片询问用户怎么处理：第一个选项是带 `(Recommended)` 的推荐操作（英文文案，与错误消息一致，如 "I started Zotero, retry (Recommended)"），选择后插件按原参数重试一次；再失败或选择 "Abort this query" 时返回原类型化错误，绝不反复询问。
 - 无交互能力的环境（headless 组合、无 UI provider）自动降级：不询问，直接返回类型化错误。询问机制自身故障也绝不掩盖原始连接错误。
 
 ## 限制
