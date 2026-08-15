@@ -198,7 +198,7 @@ smoke 需在 profile 目录内运行，裸导入由此从 profile 的扁平 `nod
 **开发实例（热替换）**：`dev-lib.cordis.yml` 覆盖层禁用 profile 中的 tarball 副本（id `zotero`），插入 `zotero-dev` 指向本仓库的 `lib/index.js`，并重新启用 HMR。生产 web profile 默认禁用 loader HMR，且 HMR 的监视根位于 profile 目录，因此覆盖层显式设置了 `base`。构建输出变化后，HMR 在同一进程内销毁旧实例并重新构造插件，无需重启 dsh：
 
 ```sh
-cd /Volumes/Work/deepseek-harness/dsh-zotero
+cd ./dsh-zotero                 # 从 deepseek-harness checkout 进入本仓库
 npm run dev &                    # tsc --watch：修改 src 后自动重建 lib
 dsh web --patch ./dev-lib.cordis.yml --port 3307
 ```

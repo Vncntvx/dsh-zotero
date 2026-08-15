@@ -198,7 +198,7 @@ Run the smoke inside the profile directory, so bare imports resolve from the pro
 **Dev instance (hot swap)**: the `dev-lib.cordis.yml` overlay disables the profile's tarball copy (id `zotero`), inserts `zotero-dev` at this checkout's `lib/index.js`, and re-enables HMR. The production web profile disables loader HMR, and the HMR watch base sits in the profile directory, so the overlay sets `base` explicitly. When the build output changes, HMR disposes the old instance and re-constructs the plugin in the same process; dsh keeps running:
 
 ```sh
-cd /Volumes/Work/deepseek-harness/dsh-zotero
+cd ./dsh-zotero                 # from the deepseek-harness checkout
 npm run dev &                    # tsc --watch: rebuild lib on src changes
 dsh web --patch ./dev-lib.cordis.yml --port 3307
 ```

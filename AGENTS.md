@@ -1,5 +1,11 @@
 # AGENTS.md
 
+## Workspace and source of truth
+
+- All work happens directly in this folder (`.`), an independent git reponested inside the harness checkout.
+- The dsh source is the parent checkout (`..`). Its docs live under `../docs/` (`docs/AGENTS.md`, `docs/architecture.md`, `docs/user/develop/`,`docs/subsystems/`, `docs/cookbook/`) and in each `packages/*/README.md`.
+- When a task touches harness contracts (slots, services, the web shell, the client-module graph, Typert), consult the harness source and docs first, the source is authoritative over this file.
+
 ## Git commit conventions
 
 Follow [Conventional Commits](https://www.conventionalcommits.org/): `<type>(<scope>): <subject>`, types lowercase (`feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `style`, `build`, `ci`, `revert`), subject in imperative mood, header under 72 chars. Optionally place an emoji matching the type right after the colon, before the subject. Body: blank line, bullet points only, each item wraps at 72, what and why.
@@ -49,28 +55,41 @@ Everything registered in the constructor unwinds with the plugin fiber, so confi
 - **Tools**: `parameters`/`output.schema` are the model contract. Enforce domain constraints beyond the schema in the `buildRequest`-style step by throwing `ZoteroError(ZOTERO_INVALID_ARGUMENT)`. `execute` returns plain lossless-JSON DTOs from `src/types.ts`; `render` is a pure function. Keep tool schemas in sync with those DTOs.
 - **Errors**: throw `ZoteroError` with a stable code from `src/errors.ts`; messages are model-facing and never embed HTTP internals.
 
-## Web view
+## Local launch & dev
 
-The browser half registers two surfaces: the settings page (`settings.section`,
-main's own) and the dedicated Zotero view tab (`conversation.view`, id
-`zotero`, order 30) — nothing registers into the built-in chat/trajectory
-render holes. The tab renders the session's zotero tool calls as rich cards
-(`src/client/ZoteroToolViews.tsx` over `src/client/presenters.ts`), replay-
-driven from the conversation snapshot (`collectZoteroCalls`), with a
-request-driven connectivity strip fed by the `zotero/status` Remote endpoint
-(handwritten manifest member in `src/typert.ts`, shared wire codec in
-`src/contract.ts`). The tab registers unless the `webEnabled` config flag
-(settings page → Web group, a boolean card-form field) is explicitly off; a
-failed config read defaults to enabled. Host tool cards are projected by the
-bounded `src/presentation-meta.ts` projectors wired into all five tools'
-`output.presentationMeta` (8 KiB UTF-8 budget; over-budget projections drop
-detail keys and set `detailOmitted`).
+Daily host-half loop (in-process HMR, non-default port):
 
-## Dev overlays
+```sh
+npm run build          # once; also `pnpm run build` in the harness checkout once (source CLI)
+npm run dev &          # host half: tsc --watch → lib/
+dsh web --patch ./dev-lib.cordis.yml --port 3307   # 3080 is the live GUI — never reuse it
+```
 
-- From a dsh source checkout: `pnpm dsh web --patch ./dsh-zotero/dev.cordis.yml` — loads `src/index.ts` through tsx; keep the absolute path current.
-- Against an installed dsh: `npm run dev` then `dsh web --patch ./dev-lib.cordis.yml --port 3307` — HMR over the built `lib/`.
-- The browser half loads only for rows whose `name` is a bare package name; the absolute-path overlay rows have none, so card development goes through a file: install into the profile plus `npm run dev:client`.
+`dev-lib.cordis.yml` re-enables loader HMR (off in the production profile), disables the profile-installed row, and runs this checkout from `lib/`: src edits hot-swap in-process. Its `name`/`base` are absolute (the loader resolves relative names beside the profile dir) — adjust on a moved checkout. The overlay row is an absolute path, so it carries **no browser half** (that loads only for bare-package-name rows).
+
+Full plugin — the only flow that loads the browser half (settings card + Zotero tab): link this checkout into a scratch profile, launch the source CLI. Seed the scratch home with **both** files: credentials carry the keys, `settings.yaml` carries custom providers (opencode-go under `llm-pi-ai.providers`) — skip the latter and the UI shows only default DeepSeek even though the credentials are complete:
+
+```sh
+export DSH_HOME=$(mktemp -d /tmp/dsh-zotero-dev-XXXX)
+cp ~/.dsh/.credentials.yaml ~/.dsh/settings.yaml "$DSH_HOME/"
+chmod 600 "$DSH_HOME/.credentials.yaml" "$DSH_HOME/settings.yaml"
+npm run build          # lib/client.js must exist before launch; link does not build it
+dsh plugin --profile web link .    # pnpm peer-dependency warnings are expected
+cd .. && pnpm dsh web --port 3307
+```
+
+Verify: `curl -w '%{http_code}' -o /dev/null http://127.0.0.1:3307` → 200; `"$DSH_HOME"/profiles/web/package.json` lists `dsh-zotero` as a link dependency; `grep -c conversation.view lib/client.js` ≥ 1. Reusing a configured home as `DSH_HOME` skips the seeding. Browser-half iteration: `npm run dev:client` (esbuild --watch) → page refresh; both home files hot-reload without a restart.
+
+Host-only alternative (tsx loads `src/index.ts`, no browser half):
+`cd .. && pnpm dsh web --patch ./dsh-zotero/dev.cordis.yml --port <X>`.
+
+## Credentials
+
+The default home already has `~/.dsh/.credentials.yaml` — nothing to do. A scratch `DSH_HOME`: `cp ~/.dsh/.credentials.yaml "$DSH_HOME/"` (hot-reloaded, no restart). Custom providers live in `settings.yaml`, not the credentials store — a scratch home needs both (see Local launch & dev). One-off: `DEEPSEEK_API_KEY=... dsh web`. Precedence: launch env
+
+> `$DSH_HOME/.credentials.yaml` > `<cwd>/.env` > `$DSH_HOME/.env`
+> ([credentials-local](../packages/credentials/credentials-local/README.md)).
+> Never print or commit the value (file mode `0600`).
 
 ## Bundle
 
