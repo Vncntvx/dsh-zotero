@@ -10,7 +10,7 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/): `<type>(<sc
 npm install
 npm run typecheck        # tsc --noEmit for the src and test projects
 npm test                 # vitest unit tests against the mock Zotero server
-npm run test:coverage    # 100% coverage gate on src/; src/index.ts excluded (pure re-export)
+npm run test:coverage    # 100% coverage gate on src/; src/index.ts and src/types.ts excluded (pure re-export / types-only)
 npm run build            # tsc emits lib/
 npm run dev              # tsc --watch
 npm run test:integration # live Zotero at 127.0.0.1:23119; skipped unless ZOTERO_INTEGRATION=1
