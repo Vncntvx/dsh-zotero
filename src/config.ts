@@ -23,7 +23,7 @@ export interface Config {
   maxEvidenceChars?: number
   /** Upper bound for the number of evidence passages. */
   maxEvidencePassages?: number
-  /** Character budget for `zotero_get` detail previews (abstract/notes/annotations). */
+  /** Character budget for the `zotero_get` abstract preview. */
   maxDetailChars?: number
   /** Character budget for a note item's own body returned by `zotero_get`. */
   maxNoteBodyChars?: number
@@ -41,6 +41,8 @@ export interface Config {
   maxResponseBytes?: number
   /** Provider hard limit for export output; the model-facing inline budget is deployment spill policy. */
   maxExportChars?: number
+  /** Upper bound for refs in one `zotero_export` call; keeps the itemKey request line under the server's HTTP header limit. */
+  maxExportRefs?: number
   /** CSL style for citation/bibliography formats; must be bundled with Zotero (e.g. `apa`). */
   defaultStyle?: string
   /** CSL locale for citation/bibliography formats. */
@@ -64,6 +66,7 @@ export const Config: Schema<Config> = Schema.object({
   maxFulltextChars: Schema.number().default(250_000),
   maxResponseBytes: Schema.number().default(16 * 1024 * 1024),
   maxExportChars: Schema.number().default(1_000_000),
+  maxExportRefs: Schema.number().default(1000),
   defaultStyle: Schema.string().default('apa'),
   defaultLocale: Schema.string().default('en-US'),
 })
@@ -85,6 +88,7 @@ export interface ResolvedConfig {
   readonly maxFulltextChars: number
   readonly maxResponseBytes: number
   readonly maxExportChars: number
+  readonly maxExportRefs: number
   readonly defaultStyle: string
   readonly defaultLocale: string
 }
@@ -151,5 +155,6 @@ export function resolveConfig(config: Config): ResolvedConfig {
   assertPositiveInteger('maxFulltextChars', applied.maxFulltextChars)
   assertPositiveInteger('maxResponseBytes', applied.maxResponseBytes)
   assertPositiveInteger('maxExportChars', applied.maxExportChars)
+  assertPositiveInteger('maxExportRefs', applied.maxExportRefs)
   return { ...applied }
 }

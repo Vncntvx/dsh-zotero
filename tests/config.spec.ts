@@ -20,6 +20,7 @@ describe('resolveConfig', () => {
       maxFulltextChars: 250_000,
       maxResponseBytes: 16 * 1024 * 1024,
       maxExportChars: 1_000_000,
+      maxExportRefs: 1000,
       defaultStyle: 'apa',
       defaultLocale: 'en-US',
     })
@@ -37,6 +38,7 @@ describe('resolveConfig', () => {
         fulltextChunkWords: 12,
         maxNoteBodyChars: 123,
         maxNoteScanRecords: 9,
+        maxExportRefs: 7,
       }),
     ).toMatchObject({
       timeoutMs: 900,
@@ -48,6 +50,7 @@ describe('resolveConfig', () => {
       fulltextChunkWords: 12,
       maxNoteBodyChars: 123,
       maxNoteScanRecords: 9,
+      maxExportRefs: 7,
     })
   })
 
@@ -94,6 +97,8 @@ describe('resolveConfig', () => {
     expect(() => resolveConfig({ maxNoteChars: 0 })).toThrowError(/maxNoteChars/)
     expect(() => resolveConfig({ maxNoteBodyChars: -1 })).toThrowError(/maxNoteBodyChars/)
     expect(() => resolveConfig({ maxNoteScanRecords: 0 })).toThrowError(/maxNoteScanRecords/)
+    expect(() => resolveConfig({ maxExportRefs: 1.5 })).toThrowError(/maxExportRefs/)
+    expect(() => resolveConfig({ maxExportRefs: -2 })).toThrowError(/maxExportRefs/)
     expect(() => resolveConfig({ maxNoteRecords: 1.5 })).toThrowError(/maxNoteRecords/)
     expect(() => resolveConfig({ maxAnnotationRecords: -2 })).toThrowError(/maxAnnotationRecords/)
     expect(() => resolveConfig({ fulltextChunkWords: 0 })).toThrowError(/fulltextChunkWords/)

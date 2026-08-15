@@ -1052,6 +1052,32 @@ describe('zotero_export tool', () => {
     expect(mock.requests).toEqual([])
   })
 
+  it('rejects ref lists above the configured export cap before any request', async () => {
+    const refs = Array.from(
+      { length: 1001 },
+      (_, i) => `zotero://user/0/item/${String(i).padStart(4, '0')}ABCD`,
+    )
+    const result = await runTool('zotero_export', { refs, format: 'bibtex' })
+    expect(result.isError).toBe(true)
+    if (!result.isError) throw new Error('unreachable')
+    expect((result.content[0] as { text: string }).text).toContain('export in batches')
+    expect(mock.requests).toEqual([])
+  })
+
+  it('accepts exactly the capped ref count', async () => {
+    const refs = Array.from(
+      { length: 1000 },
+      (_, i) => `zotero://user/0/item/${String(i).padStart(4, '0')}ABCD`,
+    )
+    mock.route('GET', '/api/users/0/items', (req, res, helpers, search) =>
+      helpers.json((search.get('itemKey') ?? '').split(',').map((key) => ({ key, citation: 'x' }))),
+    )
+    const result = await runTool('zotero_export', { refs, format: 'citation' })
+    expect(result.isError).toBe(false)
+    if (result.isError) throw new Error('unreachable')
+    expect((result.value as { citations: unknown[] }).citations).toHaveLength(1000)
+  })
+
   it('declares itself concurrency-safe for valid arguments', () => {
     expect(
       ctx.tools

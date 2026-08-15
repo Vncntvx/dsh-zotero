@@ -20,7 +20,7 @@ export const ZOTERO_PROMPT_SECTION_TEXT = [
   '- zotero_retrieve ranks evidence passages (annotations, notes, the abstract, full text) against a query; note evidence covers every chunk of long notes (chunkIndex/chunkCount locate each span), and unavailable sources (e.g. no PDF) are skipped into sourcesSkipped instead of failing. To read the rest of a long note, call zotero_get on the note ref for its full noteBody.',
   "- zotero_attachment resolves an item or attachment ref to the best attachment's verified on-disk path or a linked URL.",
   '- zotero_export produces per-ref citations, a joined bibliography, or bibtex/biblatex/ris/csljson output.',
-  '- zotero_search limit and zotero_retrieve passages are capped by the configured maxima and error when exceeded; truncated and sourcesSkipped are honest flags, never silent edits.',
+  '- zotero_search limit, zotero_retrieve passages, and zotero_export refs are capped by the configured maxima and error when exceeded; truncated and sourcesSkipped are honest flags, never silent edits.',
   "- Refs are provenance-checked against the running Zotero instance and fail closed on mismatch. Never invent page numbers for full-text passages: only annotations carry Zotero's own page labels.",
   '- Use the Zotero tools only when the user explicitly asks about their local library; never probe, browse, or test Zotero on your own.',
   "- On connectivity failures (Zotero not running, local API disabled, unsupported API version, timeout), the plugin asks you how to proceed with a recommended action; follow the user's choice and do not retry repeatedly.",

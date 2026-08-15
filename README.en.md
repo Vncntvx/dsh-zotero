@@ -105,26 +105,27 @@ The plugin mounts as id `zotero` and takes effect on the next dsh start. After i
 
 All values are `Config` fields changeable from the bundle's `config` block (e.g. via `dsh plugin config`). Defaults are shown.
 
-| Field                  | Default                      | Meaning                                                                   |
-| ---------------------- | ---------------------------- | ------------------------------------------------------------------------- |
-| `baseUrl`              | `http://127.0.0.1:23119/api` | Local API base URL. Plain loopback HTTP only.                             |
-| `provider`             | `local`                      | Provider id to select.                                                    |
-| `timeoutMs`            | `5000`                       | Per-request provider deadline.                                            |
-| `maxSearchResults`     | `20`                         | Upper bound for `zotero_search` `limit`.                                  |
-| `maxNoteScanRecords`   | `200`                        | Upper bound for note records scanned for body matches by `zotero_search`. |
-| `maxEvidenceChars`     | `6000`                       | Total character budget for retrieved evidence.                            |
-| `maxEvidencePassages`  | `4`                          | Upper bound for evidence passage counts.                                  |
-| `maxDetailChars`       | `3000`                       | Character budget for `zotero_get` abstract previews.                      |
-| `maxNoteBodyChars`     | `30000`                      | Character budget for a note item's own body returned by `zotero_get`.     |
-| `maxNoteChars`         | `2000`                       | Character budget per note preview in `zotero_get`.                        |
-| `maxNoteRecords`       | `50`                         | Upper bound for note records returned by `zotero_get`.                    |
-| `maxAnnotationRecords` | `100`                        | Upper bound for annotation records returned by `zotero_get`.              |
-| `fulltextChunkWords`   | `200`                        | Word count per full-text passage entering evidence ranking.               |
-| `maxFulltextChars`     | `250000`                     | Full text accepted into evidence ranking.                                 |
-| `maxResponseBytes`     | `16777216`                   | Streaming byte bound for every API response.                              |
-| `maxExportChars`       | `1000000`                    | Export output hard limit. Never mid-truncated.                            |
-| `defaultStyle`         | `apa`                        | CSL style for citation/bibliography formats.                              |
-| `defaultLocale`        | `en-US`                      | CSL locale for citation/bibliography formats.                             |
+| Field                  | Default                      | Meaning                                                                                                        |
+| ---------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `baseUrl`              | `http://127.0.0.1:23119/api` | Local API base URL. Plain loopback HTTP only.                                                                  |
+| `provider`             | `local`                      | Provider id to select.                                                                                         |
+| `timeoutMs`            | `5000`                       | Per-request provider deadline.                                                                                 |
+| `maxSearchResults`     | `20`                         | Upper bound for `zotero_search` `limit`.                                                                       |
+| `maxNoteScanRecords`   | `200`                        | Upper bound for note records scanned for body matches by `zotero_search`.                                      |
+| `maxEvidenceChars`     | `6000`                       | Total character budget for retrieved evidence.                                                                 |
+| `maxEvidencePassages`  | `4`                          | Upper bound for evidence passage counts.                                                                       |
+| `maxDetailChars`       | `3000`                       | Character budget for `zotero_get` abstract previews.                                                           |
+| `maxNoteBodyChars`     | `30000`                      | Character budget for a note item's own body returned by `zotero_get`.                                          |
+| `maxNoteChars`         | `2000`                       | Character budget per note preview in `zotero_get`.                                                             |
+| `maxNoteRecords`       | `50`                         | Upper bound for note records returned by `zotero_get`.                                                         |
+| `maxAnnotationRecords` | `100`                        | Upper bound for annotation records returned by `zotero_get`.                                                   |
+| `fulltextChunkWords`   | `200`                        | Word count per full-text passage entering evidence ranking.                                                    |
+| `maxFulltextChars`     | `250000`                     | Full text accepted into evidence ranking.                                                                      |
+| `maxResponseBytes`     | `16777216`                   | Streaming byte bound for every API response.                                                                   |
+| `maxExportChars`       | `1000000`                    | Export output hard limit. Never mid-truncated.                                                                 |
+| `maxExportRefs`        | `1000`                       | Upper bound for refs in one `zotero_export` call; keeps the request line under the server's HTTP header limit. |
+| `defaultStyle`         | `apa`                        | CSL style for citation/bibliography formats.                                                                   |
+| `defaultLocale`        | `en-US`                      | CSL locale for citation/bibliography formats.                                                                  |
 
 ## Development
 

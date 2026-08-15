@@ -23,7 +23,8 @@ const EXPORT_PARAMETERS = {
     type: 'array',
     items: { type: 'string' },
     required: true,
-    description: 'zotero://user/0/item/<KEY> refs to export, in the order citations should appear.',
+    description:
+      'zotero://user/0/item/<KEY> refs to export, in the order citations should appear; capped by the configured maxExportRefs.',
   },
   format: {
     type: 'string',
@@ -90,8 +91,13 @@ function invalid(message: string): never {
   throw new ZoteroError(message, ZOTERO_INVALID_ARGUMENT)
 }
 
-function buildRequest(args: ExportArgs): ZoteroExportRequest {
+function buildRequest(args: ExportArgs, config: ResolvedConfig): ZoteroExportRequest {
   if (args.refs.length === 0) invalid('refs must list at least one zotero:// item ref')
+  if (args.refs.length > config.maxExportRefs) {
+    invalid(
+      `refs must list at most ${config.maxExportRefs} item refs per call; got ${args.refs.length} — export in batches`,
+    )
+  }
   const refs = args.refs.map((value) => {
     const ref = parseRef(value)
     requireLocalRef(ref, ['item'])
@@ -124,7 +130,7 @@ export function renderExport(_args: ExportArgs, value: ExportOutput): ContentBlo
 export function registerExportTool(
   ctx: Context,
   service: ZoteroService,
-  _config: ResolvedConfig,
+  config: ResolvedConfig,
 ): void {
   ctx.tools.register(
     defineTool({
@@ -147,7 +153,7 @@ export function registerExportTool(
       isConcurrencySafe: () => true,
       async execute(args, exec) {
         return await withConnectivityAsk(ctx, exec, () =>
-          service.export(buildRequest(args), exec.signal),
+          service.export(buildRequest(args, config), exec.signal),
         )
       },
     }),

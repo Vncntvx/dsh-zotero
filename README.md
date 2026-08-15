@@ -105,26 +105,27 @@ allowBuilds:
 
 所有值都是 `Config` 字段，可在 bundle 的 `config` 块中修改（例如通过 `dsh plugin config`）。以下为默认值。
 
-| 字段                   | 默认值                       | 含义                                            |
-| ---------------------- | ---------------------------- | ----------------------------------------------- |
-| `baseUrl`              | `http://127.0.0.1:23119/api` | 本地 API 基础 URL。仅支持纯回环 HTTP。          |
-| `provider`             | `local`                      | 要选择的 provider id。                          |
-| `timeoutMs`            | `5000`                       | 每个请求的 provider 超时时间。                  |
-| `maxSearchResults`     | `20`                         | `zotero_search` `limit` 的上限。                |
-| `maxNoteScanRecords`   | `200`                        | `zotero_search` 补扫笔记正文的笔记数量上限。    |
-| `maxEvidenceChars`     | `6000`                       | 检索证据的总字符预算。                          |
-| `maxEvidencePassages`  | `4`                          | 证据片段数量的上限。                            |
-| `maxDetailChars`       | `3000`                       | `zotero_get` 摘要预览的字符预算。               |
-| `maxNoteBodyChars`     | `30000`                      | `zotero_get` 返回 note 条目自身正文的字符预算。 |
-| `maxNoteChars`         | `2000`                       | `zotero_get` 单条笔记预览的字符预算。           |
-| `maxNoteRecords`       | `50`                         | `zotero_get` 返回笔记数量的上限。               |
-| `maxAnnotationRecords` | `100`                        | `zotero_get` 返回批注数量的上限。               |
-| `fulltextChunkWords`   | `200`                        | 进入证据排序的全文片段词数。                    |
-| `maxFulltextChars`     | `250000`                     | 进入证据排序的全文大小上限。                    |
-| `maxResponseBytes`     | `16777216`                   | 每个 API 响应的流式字节上限。                   |
-| `maxExportChars`       | `1000000`                    | 导出输出的硬上限。不会中途截断。                |
-| `defaultStyle`         | `apa`                        | 引用/参考文献使用的 CSL 样式。                  |
-| `defaultLocale`        | `en-US`                      | 引用/参考文献使用的 CSL locale。                |
+| 字段                   | 默认值                       | 含义                                                                      |
+| ---------------------- | ---------------------------- | ------------------------------------------------------------------------- |
+| `baseUrl`              | `http://127.0.0.1:23119/api` | 本地 API 基础 URL。仅支持纯回环 HTTP。                                    |
+| `provider`             | `local`                      | 要选择的 provider id。                                                    |
+| `timeoutMs`            | `5000`                       | 每个请求的 provider 超时时间。                                            |
+| `maxSearchResults`     | `20`                         | `zotero_search` `limit` 的上限。                                          |
+| `maxNoteScanRecords`   | `200`                        | `zotero_search` 补扫笔记正文的笔记数量上限。                              |
+| `maxEvidenceChars`     | `6000`                       | 检索证据的总字符预算。                                                    |
+| `maxEvidencePassages`  | `4`                          | 证据片段数量的上限。                                                      |
+| `maxDetailChars`       | `3000`                       | `zotero_get` 摘要预览的字符预算。                                         |
+| `maxNoteBodyChars`     | `30000`                      | `zotero_get` 返回 note 条目自身正文的字符预算。                           |
+| `maxNoteChars`         | `2000`                       | `zotero_get` 单条笔记预览的字符预算。                                     |
+| `maxNoteRecords`       | `50`                         | `zotero_get` 返回笔记数量的上限。                                         |
+| `maxAnnotationRecords` | `100`                        | `zotero_get` 返回批注数量的上限。                                         |
+| `fulltextChunkWords`   | `200`                        | 进入证据排序的全文片段词数。                                              |
+| `maxFulltextChars`     | `250000`                     | 进入证据排序的全文大小上限。                                              |
+| `maxResponseBytes`     | `16777216`                   | 每个 API 响应的流式字节上限。                                             |
+| `maxExportChars`       | `1000000`                    | 导出输出的硬上限。不会中途截断。                                          |
+| `maxExportRefs`        | `1000`                       | 单次 `zotero_export` 的 refs 数量上限，保护请求行不超服务器 HTTP 头限制。 |
+| `defaultStyle`         | `apa`                        | 引用/参考文献使用的 CSL 样式。                                            |
+| `defaultLocale`        | `en-US`                      | 引用/参考文献使用的 CSL locale。                                          |
 
 ## 开发
 
