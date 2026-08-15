@@ -9,17 +9,35 @@
  * @module dsh-zotero/provider-local
  */
 
+import { existsSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { ZoteroHttpClient } from './client.js'
 import {
+  ZOTERO_FILE_MISSING,
+  ZOTERO_NO_ATTACHMENT,
   ZOTERO_NOT_FOUND,
   ZOTERO_SCOPE_AMBIGUOUS,
   ZoteroError,
   errorMessageOf,
 } from './errors.js'
-import { matchScopeName, nearScopeCandidates, normalizeScopeEntry, normalizeSearchItem } from './normalize.js'
+import {
+  asRecord,
+  asString,
+  collectionKeysOf,
+  matchScopeName,
+  nearScopeCandidates,
+  normalizeAttachmentRecord,
+  normalizeItemDetail,
+  normalizeScopeEntry,
+  normalizeSearchItem,
+} from './normalize.js'
 import { formatRef, isRefString, localRef, parseRef, requireLocalRef } from './refs.js'
 import type {
+  ZoteroAttachmentLocation,
   ZoteroCapability,
+  ZoteroGetRequest,
+  ZoteroInclude,
+  ZoteroItemDetail,
   ZoteroObjectRef,
   ZoteroProvider,
   ZoteroResolvedScope,
@@ -58,11 +76,21 @@ interface ResolvedScopeResult {
   readonly serverId?: string
 }
 
+/** Deployment-varying bounds the local provider needs beyond the HTTP client limits. */
+export interface LocalApiLimits {
+  /** Character budget for `zotero_get` abstract previews. */
+  readonly maxDetailChars: number
+}
+
+const INCLUDE_ORDER: readonly ZoteroInclude[] = ['notes', 'annotations', 'attachments']
+
 export class LocalApiProvider implements ZoteroProvider {
   readonly id = LOCAL_PROVIDER_ID
-  readonly capabilities: ReadonlySet<ZoteroCapability> = new Set<ZoteroCapability>(['metadata', 'search', 'collections', 'tags'])
+  readonly capabilities: ReadonlySet<ZoteroCapability> = new Set<ZoteroCapability>([
+    'metadata', 'search', 'collections', 'tags', 'notes', 'annotations', 'attachments',
+  ])
 
-  constructor(private readonly client: ZoteroHttpClient) {}
+  constructor(private readonly client: ZoteroHttpClient, private readonly limits: LocalApiLimits) {}
 
   /**
    * Probe `GET /api/` and report connectivity plus the instance identity
@@ -107,6 +135,96 @@ export class LocalApiProvider implements ZoteroProvider {
     const result: ZoteroSearchResult = { scope: scope.resolved, items, total, offset: request.offset, returned: items.length }
     if (nextOffset !== undefined) result.nextOffset = nextOffset
     return result
+  }
+
+  /**
+   * Fetch one item's full detail. The parent is always fetched once; child
+   * rows are fetched lazily (one extra request) only when the caller asked
+   * to include notes/annotations/attachments — the Local API ignores
+   * `?include=` on single-item responses, so children come from the
+   * dedicated `/children` endpoint. Collection names are resolved lazily
+   * (one listing request) only when the item belongs to collections.
+   */
+  async getItem(request: ZoteroGetRequest, signal?: AbortSignal): Promise<ZoteroItemDetail> {
+    const ref = requireLocalRef(request.ref, ['item'])
+    const parent = await this.client.getJson<unknown>(`users/0/items/${ref.key}`, undefined, {
+      signal,
+      serverId: ref.serverId,
+    })
+    const serverId = parent.headers.get('zotero-server-id') ?? ref.serverId
+    const includes = INCLUDE_ORDER.filter((kind) => request.include.has(kind))
+    let childrenRows: readonly unknown[] | undefined
+    if (includes.length > 0) {
+      const children = await this.client.getJson<unknown>(`users/0/items/${ref.key}/children`, undefined, {
+        signal,
+        serverId,
+      })
+      childrenRows = Array.isArray(children.json) ? children.json : []
+    }
+    const keys = collectionKeysOf(parent.json)
+    let collectionNames: ReadonlyMap<string, string> | undefined
+    if (keys.length > 0) {
+      const listing = await this.client.getJson<unknown>('users/0/collections', undefined, { signal, serverId })
+      const entries = (Array.isArray(listing.json) ? listing.json : []).map((row) => normalizeScopeEntry(row))
+      collectionNames = new Map(entries.map((entry) => [entry.key, entry.name]))
+    }
+    return normalizeItemDetail({
+      parent: parent.json,
+      serverId: serverId ?? undefined,
+      include: request.include,
+      childrenRows,
+      collectionNames,
+      maxAbstractChars: this.limits.maxDetailChars,
+    })
+  }
+
+  /**
+   * Resolve an attachment ref to a usable location. Linked-URL attachments
+   * carry their target in `data.url` (their `/file/view/url` endpoint
+   * rejects non-file attachments); file attachments resolve through
+   * `/file/view/url` and are stat'ed so a missing file fails with a typed
+   * error instead of a dead path.
+   */
+  async getAttachmentLocation(ref: ZoteroObjectRef, signal?: AbortSignal): Promise<ZoteroAttachmentLocation> {
+    const local = requireLocalRef(ref, ['attachment'])
+    const item = await this.client.getJson<unknown>(`users/0/items/${local.key}`, undefined, {
+      signal,
+      serverId: local.serverId,
+    })
+    const data = asRecord(asRecord(item.json)?.data)
+    const itemType = asString(data?.itemType)
+    if (itemType !== undefined && itemType !== 'attachment') {
+      throw new ZoteroError(`The referenced object is a ${itemType}, not an attachment.`, ZOTERO_NO_ATTACHMENT)
+    }
+    const attachment = normalizeAttachmentRecord(item.json)
+    const serverId = item.headers.get('zotero-server-id') ?? local.serverId
+    const formattedRef = formatRef(localRef('attachment', attachment.key, serverId))
+    const title = attachment.title
+    const contentType = attachment.contentType
+    if (attachment.linkMode === 'linked_url') {
+      if (attachment.url === undefined || attachment.url === '') {
+        throw new ZoteroError(`Attachment ${local.key} is linked to a URL but Zotero reported none.`, ZOTERO_NO_ATTACHMENT)
+      }
+      return { ref: formattedRef, title, contentType, kind: 'url', url: attachment.url }
+    }
+    const file = await this.client.get(`users/0/items/${local.key}/file/view/url`, undefined, {
+      signal,
+      serverId: local.serverId,
+    })
+    let target: URL
+    try {
+      target = new URL(file.body.trim())
+    } catch (error) {
+      throw new ZoteroError(`Zotero reported no usable file location for attachment ${local.key}.`, ZOTERO_NO_ATTACHMENT, { cause: error })
+    }
+    if (target.protocol !== 'file:') {
+      return { ref: formattedRef, title, contentType, kind: 'url', url: target.toString() }
+    }
+    const path = fileURLToPath(target)
+    if (!existsSync(path)) {
+      throw new ZoteroError(`The attachment file is missing from disk: ${path}`, ZOTERO_FILE_MISSING)
+    }
+    return { ref: formattedRef, title, contentType, kind: 'file', path }
   }
 
   private async resolveScope(scope: ZoteroSearchScope, signal?: AbortSignal): Promise<ResolvedScopeResult> {

@@ -14,9 +14,15 @@ import { registerStatusCommand } from './command.js'
 import { Config as ConfigSchema, resolveConfig, type Config, type ResolvedConfig } from './config.js'
 import { ZOTERO_CAPABILITY_UNAVAILABLE, ZOTERO_PROVIDER_UNAVAILABLE, ZoteroError } from './errors.js'
 import { LocalApiProvider } from './provider-local.js'
+import { registerAttachmentTool } from './tools/attachment.js'
+import { registerGetTool } from './tools/get.js'
 import { registerSearchTool } from './tools/search.js'
 import type {
+  ZoteroAttachmentLocation,
   ZoteroCapability,
+  ZoteroGetRequest,
+  ZoteroItemDetail,
+  ZoteroObjectRef,
   ZoteroProvider,
   ZoteroSearchRequest,
   ZoteroSearchResult,
@@ -45,9 +51,11 @@ export class ZoteroService extends Service {
       timeoutMs: this.config.timeoutMs,
       maxResponseBytes: this.config.maxResponseBytes,
     })
-    this.registerProvider(new LocalApiProvider(client))
+    this.registerProvider(new LocalApiProvider(client, { maxDetailChars: this.config.maxDetailChars }))
     registerStatusCommand(ctx, this)
     registerSearchTool(ctx, this, this.config)
+    registerGetTool(ctx, this)
+    registerAttachmentTool(ctx, this)
   }
 
   /**
@@ -82,6 +90,20 @@ export class ZoteroService extends Service {
     const provider = this.resolveProvider()
     this.requireCapability(provider, 'search')
     return await provider.search(request, signal)
+  }
+
+  /** Read one item's metadata plus optionally requested child content. */
+  async get(request: ZoteroGetRequest, signal?: AbortSignal): Promise<ZoteroItemDetail> {
+    const provider = this.resolveProvider()
+    this.requireCapability(provider, 'metadata')
+    return await provider.getItem(request, signal)
+  }
+
+  /** Resolve an attachment ref to its on-disk file or linked URL. */
+  async attachment(ref: ZoteroObjectRef, signal?: AbortSignal): Promise<ZoteroAttachmentLocation> {
+    const provider = this.resolveProvider()
+    this.requireCapability(provider, 'attachments')
+    return await provider.getAttachmentLocation(ref, signal)
   }
 
   protected resolveProvider(): ZoteroProvider {

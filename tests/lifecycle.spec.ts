@@ -5,6 +5,7 @@ import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import ZoteroService from '../src/index.js'
 import { ZOTERO_CAPABILITY_UNAVAILABLE, ZOTERO_PROVIDER_UNAVAILABLE, ZoteroError } from '../src/errors.js'
+import { parseRef } from '../src/refs.js'
 import type { ZoteroProvider } from '../src/types.js'
 import { MockZotero } from './helpers/mock-zotero.js'
 
@@ -153,6 +154,8 @@ describe('provider registration', () => {
       capabilities: new Set(),
       status: async () => ({ providerId: 'local', connected: false, diagnosis: 'test double' }),
       search: async () => { throw new Error('test double: must not be called') },
+      getItem: async () => { throw new Error('test double: must not be called') },
+      getAttachmentLocation: async () => { throw new Error('test double: must not be called') },
     }
     let thrown: unknown
     try {
@@ -172,6 +175,8 @@ describe('provider registration', () => {
       capabilities: new Set(),
       status: async () => ({ providerId: 'foreign', connected: true, diagnosis: 'ok' }),
       search: async () => { throw new Error('test double: must not be called') },
+      getItem: async () => { throw new Error('test double: must not be called') },
+      getAttachmentLocation: async () => { throw new Error('test double: must not be called') },
     }
     const dispose = service.registerProvider(foreign)
     dispose()
@@ -194,6 +199,8 @@ describe('capability gating', () => {
       capabilities: new Set(['metadata']),
       status: async () => ({ providerId: 'limited', connected: true, diagnosis: 'ok' }),
       search: async () => { throw new Error('test double: must not be called') },
+      getItem: async () => { throw new Error('test double: must not be called') },
+      getAttachmentLocation: async () => { throw new Error('test double: must not be called') },
     })
     let thrown: unknown
     try {
@@ -206,5 +213,36 @@ describe('capability gating', () => {
     expect(thrown).toBeInstanceOf(ZoteroError)
     expect((thrown as ZoteroError).code).toBe(ZOTERO_CAPABILITY_UNAVAILABLE)
     expect((thrown as ZoteroError).message).toContain('search')
+  })
+
+  it('refuses get and attachment on a search-only provider', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SystemPrompt, {})
+    await ctx.plugin(ToolRuntime, {})
+    await ctx.plugin(ZoteroService, { baseUrl: mock.baseUrl, provider: 'searchonly' })
+    const service = ctx.get('zotero') as ZoteroService
+    service.registerProvider({
+      id: 'searchonly',
+      capabilities: new Set(['search']),
+      status: async () => ({ providerId: 'searchonly', connected: true, diagnosis: 'ok' }),
+      search: async () => { throw new Error('test double: must not be called') },
+      getItem: async () => { throw new Error('test double: must not be called') },
+      getAttachmentLocation: async () => { throw new Error('test double: must not be called') },
+    })
+    const attempts: [string, Promise<unknown>][] = [
+      ['metadata', service.get({ ref: parseRef('zotero://user/0/item/ABCD1234'), include: new Set() })],
+      ['attachments', service.attachment(parseRef('zotero://user/0/attachment/WXYZ6789'))],
+    ]
+    for (const [capability, attempt] of attempts) {
+      let thrown: unknown
+      try {
+        await attempt
+      } catch (error) {
+        thrown = error
+      }
+      expect(thrown).toBeInstanceOf(ZoteroError)
+      expect((thrown as ZoteroError).code).toBe(ZOTERO_CAPABILITY_UNAVAILABLE)
+      expect((thrown as ZoteroError).message).toContain(capability)
+    }
   })
 })

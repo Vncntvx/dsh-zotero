@@ -148,14 +148,14 @@ export interface ZoteroCollectionRecord {
 export interface ZoteroChildCollection<T> {
   readonly total: number
   readonly returned: number
-  readonly items: readonly T[]
+  readonly items: T[]
 }
 
 export interface ZoteroItemDetail {
   readonly ref: string
   readonly itemType: string
   readonly title: string
-  readonly creators: readonly string[]
+  readonly creators: string[]
   readonly date?: string
   readonly year?: number
   readonly venue?: string
@@ -163,8 +163,8 @@ export interface ZoteroItemDetail {
   readonly url?: string
   readonly abstract?: string
   readonly abstractTruncated: boolean
-  readonly tags: readonly string[]
-  readonly collections: readonly ZoteroCollectionRecord[]
+  readonly tags: string[]
+  readonly collections: ZoteroCollectionRecord[]
   readonly children: { readonly total: number }
   readonly bestAttachment?: ZoteroAttachmentRecord
   readonly notes?: ZoteroChildCollection<ZoteroNoteRecord>
@@ -250,12 +250,14 @@ export interface ZoteroFulltextPayload {
  * that declaration. The Agent never sees which provider satisfied a request.
  * `available()` is deliberately absent: request-driven providers fail with
  * typed domain errors, and only `status()` performs a health check. The
- * domain methods (`search`/`getItem`/…) join this interface in the phases
- * that implement them.
+ * retrieval-side domain methods (`retrieve`/`export`) join this interface in
+ * the phases that implement them.
  */
 export interface ZoteroProvider {
   readonly id: string
   readonly capabilities: ReadonlySet<ZoteroCapability>
   status(signal?: AbortSignal): Promise<ZoteroStatus>
   search(request: ZoteroSearchRequest, signal?: AbortSignal): Promise<ZoteroSearchResult>
+  getItem(request: ZoteroGetRequest, signal?: AbortSignal): Promise<ZoteroItemDetail>
+  getAttachmentLocation(ref: ZoteroObjectRef, signal?: AbortSignal): Promise<ZoteroAttachmentLocation>
 }

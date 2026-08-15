@@ -1,0 +1,72 @@
+/**
+ * The `zotero_attachment` tool: resolve an attachment ref to a location the
+ * Agent can act on — an on-disk file path (verified to exist) or the linked
+ * URL. This is the escalation path for PDFs Zotero has not full-text-indexed.
+ * @module dsh-zotero/tools/attachment
+ */
+
+import type { Context } from '@deepseek-ai/cordis'
+import type { ContentBlock } from '@deepseek-ai/dsh-llm'
+import { defineTool, type InferArgs, type InferValue } from '@deepseek-ai/dsh-tools'
+import { parseRef, requireLocalRef } from '../refs.js'
+import type { ZoteroService } from '../service.js'
+
+const ATTACHMENT_PARAMETERS = {
+  ref: { type: 'string', required: true, description: 'A zotero://user/0/attachment/<KEY> ref from zotero_search or zotero_get.' },
+} as const
+
+type AttachmentArgs = InferArgs<typeof ATTACHMENT_PARAMETERS>
+
+const ATTACHMENT_OUTPUT_SCHEMA = {
+  oneOf: [
+    {
+      type: 'object', additionalProperties: false,
+      properties: {
+        ref: { type: 'string', required: true },
+        title: { type: 'string', required: true },
+        contentType: { type: 'string', required: true },
+        kind: { type: 'string', const: 'file', required: true },
+        path: { type: 'string', required: true },
+      },
+    },
+    {
+      type: 'object', additionalProperties: false,
+      properties: {
+        ref: { type: 'string', required: true },
+        title: { type: 'string', required: true },
+        contentType: { type: 'string', required: true },
+        kind: { type: 'string', const: 'url', required: true },
+        url: { type: 'string', required: true },
+      },
+    },
+  ],
+} as const
+
+type AttachmentOutput = InferValue<typeof ATTACHMENT_OUTPUT_SCHEMA>
+
+export function renderAttachment(_args: AttachmentArgs, value: AttachmentOutput): ContentBlock[] {
+  const label = value.title === '' ? value.ref : `${value.title} (${value.ref})`
+  const target = value.kind === 'file' ? value.path : value.url
+  return [{ type: 'text', text: `${label} ${value.contentType || 'unknown type'} → ${target}` }]
+}
+
+export function registerAttachmentTool(ctx: Context, service: ZoteroService): void {
+  ctx.tools.register(defineTool({
+    name: 'zotero_attachment',
+    description: [
+      'Resolve a Zotero attachment ref to a usable location: the verified on-disk file path,',
+      'or the linked URL for web-linked attachments. Use this to read attachments Zotero has not full-text-indexed.',
+    ].join(' '),
+    parameters: ATTACHMENT_PARAMETERS,
+    output: {
+      schema: ATTACHMENT_OUTPUT_SCHEMA,
+      render: renderAttachment,
+    },
+    isConcurrencySafe: () => true,
+    async execute(args, exec) {
+      const ref = parseRef(args.ref)
+      requireLocalRef(ref, ['attachment'])
+      return await service.attachment(ref, exec.signal)
+    },
+  }))
+}

@@ -7,26 +7,49 @@
  * @module dsh-zotero/normalize
  */
 
+import { bestAttachmentFromLinks, extractAttachmentKey, normalizeAttachmentRecord, type ZoteroAttachmentCandidate } from './attachments.js'
 import { ZOTERO_UNEXPECTED, ZoteroError } from './errors.js'
 import { formatRef, localRef } from './refs.js'
-import type { ZoteroSearchItem } from './types.js'
+import type {
+  ZoteroAnnotationRecord,
+  ZoteroAttachmentRecord,
+  ZoteroChildCollection,
+  ZoteroCollectionRecord,
+  ZoteroInclude,
+  ZoteroItemDetail,
+  ZoteroNoteRecord,
+  ZoteroSearchItem,
+} from './types.js'
+
+export { extractAttachmentKey, normalizeAttachmentRecord } from './attachments.js'
 
 const OBJECT_KEY_PATTERN = /^[A-Z0-9]{8}$/
 
-function asRecord(value: unknown): Record<string, unknown> | undefined {
+/** Per-note character budget for `zotero_get`; `truncated` signals the cut. */
+export const MAX_NOTE_CHARS = 2000
+
+/** At most this many note children are returned in a `zotero_get` detail. */
+export const MAX_NOTE_RECORDS = 50
+
+/** At most this many annotation children are returned in a `zotero_get` detail. */
+export const MAX_ANNOTATION_RECORDS = 100
+
+export function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? value as Record<string, unknown>
     : undefined
 }
 
-function asString(value: unknown): string | undefined {
+export function asString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined
 }
 
-/** Extract a Zotero object key from an API `links.attachment.href`. */
-export function extractAttachmentKey(href: string | undefined): string | undefined {
-  if (href === undefined) return undefined
-  return /\/items\/([A-Z0-9]{8})(?:[/?#]|$)/.exec(href)?.[1]
+function nonEmpty(value: string | undefined): string | undefined {
+  return value !== undefined && value !== '' ? value : undefined
+}
+
+function asInteger(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isInteger(value) ? value : undefined
 }
 
 /**
@@ -104,4 +127,243 @@ export function nearScopeCandidates(entries: readonly ScopeNameEntry[], wanted: 
     .filter((entry) => entry.name.toLowerCase().includes(wantedLower))
     .sort((a, b) => a.name.length - b.name.length || a.name.localeCompare(b.name))
     .slice(0, limit)
+}
+
+/**
+ * Format creator records as display names: a creator carrying a single
+ * `name` field wins; otherwise first and last names are joined. Empty or
+ * malformed entries are skipped.
+ */
+export function normalizeCreators(data: Record<string, unknown> | undefined): string[] {
+  const creators = Array.isArray(data?.creators) ? data.creators : []
+  const names: string[] = []
+  for (const raw of creators) {
+    const creator = asRecord(raw)
+    const name = asString(creator?.name)
+    if (name !== undefined && name !== '') {
+      names.push(name)
+      continue
+    }
+    const combined = `${asString(creator?.firstName) ?? ''} ${asString(creator?.lastName) ?? ''}`.trim()
+    if (combined !== '') names.push(combined)
+  }
+  return names
+}
+
+/** The first non-empty publication venue field, in Zotero's own priority order. */
+export function normalizeVenue(data: Record<string, unknown> | undefined): string | undefined {
+  for (const field of ['publicationTitle', 'proceedingsTitle', 'bookTitle', 'journalAbbreviation', 'conferenceName']) {
+    const value = asString(data?.[field])
+    if (value !== undefined && value !== '') return value
+  }
+  return undefined
+}
+
+/** The collection keys an item belongs to, from its `data.collections` block. */
+export function collectionKeysOf(json: unknown): string[] {
+  const collections = asRecord(asRecord(json)?.data)?.collections
+  return Array.isArray(collections) ? collections.filter((key): key is string => typeof key === 'string') : []
+}
+
+/** Cut a text at `max` characters; `truncated` records whether the cut happened. */
+export function truncateText(text: string, max: number): { text: string; truncated: boolean } {
+  return text.length > max ? { text: text.slice(0, max), truncated: true } : { text, truncated: false }
+}
+
+/**
+ * Normalize one note child row.
+ * @throws {ZoteroError} `ZOTERO_UNEXPECTED` when the row has no valid Zotero key.
+ */
+export function normalizeNoteRecord(json: unknown, serverId: string | undefined, maxChars: number): ZoteroNoteRecord {
+  const record = asRecord(json)
+  const key = asString(record?.key)
+  if (key === undefined || !OBJECT_KEY_PATTERN.test(key)) {
+    throw new ZoteroError('Zotero returned a note without a valid object key.', ZOTERO_UNEXPECTED)
+  }
+  const { text, truncated } = truncateText(asString(asRecord(record?.data)?.note) ?? '', maxChars)
+  return { ref: formatRef(localRef('item', key, serverId)), text, truncated }
+}
+
+/**
+ * Normalize one annotation child row. Optional fields are omitted rather
+ * than undefined so the record stays lossless JSON.
+ * @throws {ZoteroError} `ZOTERO_UNEXPECTED` when the row has no valid Zotero key.
+ */
+export function normalizeAnnotationRecord(json: unknown, serverId?: string): ZoteroAnnotationRecord {
+  const record = asRecord(json)
+  const key = asString(record?.key)
+  if (key === undefined || !OBJECT_KEY_PATTERN.test(key)) {
+    throw new ZoteroError('Zotero returned an annotation without a valid object key.', ZOTERO_UNEXPECTED)
+  }
+  const data = asRecord(record?.data)
+  const comment = asString(data?.annotationComment)
+  const color = asString(data?.annotationColor)
+  const pageLabel = asString(data?.annotationPageLabel)
+  return {
+    ref: formatRef(localRef('item', key, serverId)),
+    type: asString(data?.annotationType) ?? '',
+    text: asString(data?.annotationText) ?? '',
+    ...(comment !== undefined ? { comment } : {}),
+    ...(color !== undefined ? { color } : {}),
+    ...(pageLabel !== undefined ? { pageLabel } : {}),
+  }
+}
+
+/** Child rows partitioned by kind. Attachments stay ref-free; callers add provenance. */
+export interface PartitionedChildren {
+  readonly notes: readonly ZoteroNoteRecord[]
+  readonly annotations: readonly ZoteroAnnotationRecord[]
+  readonly attachments: readonly ZoteroAttachmentCandidate[]
+}
+
+function annotationSortIndex(row: unknown): string {
+  return asString(asRecord(asRecord(row)?.data)?.annotationSortIndex) ?? ''
+}
+
+/**
+ * Partition child rows into notes, annotations, and attachments. Notes keep
+ * API order; annotations are ordered by Zotero's `annotationSortIndex`.
+ * Unknown child kinds are ignored — the plugin only claims the three kinds
+ * it understands — but a malformed row of a claimed kind fails loud.
+ * @throws {ZoteroError} `ZOTERO_UNEXPECTED` on a child without a valid key.
+ */
+export function partitionChildren(rows: readonly unknown[], serverId: string | undefined, noteMaxChars: number): PartitionedChildren {
+  const notes: ZoteroNoteRecord[] = []
+  const annotationRows: unknown[] = []
+  const attachments: ZoteroAttachmentCandidate[] = []
+  for (const row of rows) {
+    const itemType = asString(asRecord(asRecord(row)?.data)?.itemType)
+    if (itemType === 'note') notes.push(normalizeNoteRecord(row, serverId, noteMaxChars))
+    else if (itemType === 'annotation') annotationRows.push(row)
+    else if (itemType === 'attachment') attachments.push(normalizeAttachmentRecord(row))
+  }
+  annotationRows.sort((a, b) => annotationSortIndex(a).localeCompare(annotationSortIndex(b)))
+  return { notes, annotations: annotationRows.map((row) => normalizeAnnotationRecord(row, serverId)), attachments }
+}
+
+export interface NormalizeItemDetailInput {
+  /** The single-item response body of `GET /users/0/items/<key>`. */
+  readonly parent: unknown
+  /** The instance that served the parent; recorded as ref provenance. */
+  readonly serverId?: string
+  /** The child kinds the caller asked to include; unrequested kinds are omitted. */
+  readonly include: ReadonlySet<ZoteroInclude>
+  /** Rows of `GET /users/0/items/<key>/children`; undefined when not fetched. */
+  readonly childrenRows?: readonly unknown[]
+  /** Collection names by key; missing entries render ref-only records. */
+  readonly collectionNames?: ReadonlyMap<string, string>
+  /** Character budget for the abstract preview. */
+  readonly maxAbstractChars: number
+}
+
+function childCollection<T>(items: readonly T[], cap: number): ZoteroChildCollection<T> {
+  const bounded = items.slice(0, cap)
+  return { total: items.length, returned: bounded.length, items: bounded }
+}
+
+function attachmentRecordOf(candidate: ZoteroAttachmentCandidate, serverId: string | undefined): ZoteroAttachmentRecord {
+  return {
+    ref: formatRef(localRef('attachment', candidate.key, serverId)),
+    title: candidate.title,
+    contentType: candidate.contentType,
+    ...(candidate.linkMode !== undefined ? { linkMode: candidate.linkMode } : {}),
+  }
+}
+
+/**
+ * Normalize a full item detail from the single-item response plus its
+ * optional children and collection names. Only the include-requested child
+ * kinds appear in the result; `bestAttachment` always prefers Zotero's own
+ * `links.attachment` choice and borrows the child row's title when present.
+ * @throws {ZoteroError} `ZOTERO_UNEXPECTED` when the parent or a claimed child has no valid key.
+ */
+export function normalizeItemDetail(input: NormalizeItemDetailInput): ZoteroItemDetail {
+  const record = asRecord(input.parent)
+  const key = asString(record?.key)
+  if (key === undefined || !OBJECT_KEY_PATTERN.test(key)) {
+    throw new ZoteroError('Zotero returned an item without a valid object key.', ZOTERO_UNEXPECTED)
+  }
+  const data = asRecord(record?.data)
+  const meta = asRecord(record?.meta)
+  const parsedDate = asString(meta?.parsedDate)
+  const abstract = truncateText(asString(data?.abstractNote) ?? '', input.maxAbstractChars)
+  const date = nonEmpty(asString(data?.date))
+  const doi = nonEmpty(asString(data?.DOI))
+  const url = nonEmpty(asString(data?.url))
+  const venue = normalizeVenue(data)
+  const year = parsedDate !== undefined && /^\d{4}/.test(parsedDate) ? Number(parsedDate.slice(0, 4)) : undefined
+  const version = asInteger(record?.version)
+  const tags = normalizeTags(data)
+
+  const keys = collectionKeysOf(input.parent)
+  const collections: ZoteroCollectionRecord[] = keys.map((collectionKey) => {
+    const name = input.collectionNames?.get(collectionKey)
+    return {
+      ref: formatRef(localRef('collection', collectionKey, input.serverId)),
+      ...(name !== undefined ? { name } : {}),
+    }
+  })
+
+  const partitioned = input.childrenRows === undefined ? undefined : partitionChildren(input.childrenRows, input.serverId, MAX_NOTE_CHARS)
+  const childCollections: {
+    notes?: ZoteroChildCollection<ZoteroNoteRecord>
+    annotations?: ZoteroChildCollection<ZoteroAnnotationRecord>
+    attachments?: ZoteroChildCollection<ZoteroAttachmentRecord>
+  } = {}
+  if (partitioned !== undefined) {
+    if (input.include.has('notes')) childCollections.notes = childCollection(partitioned.notes, MAX_NOTE_RECORDS)
+    if (input.include.has('annotations')) childCollections.annotations = childCollection(partitioned.annotations, MAX_ANNOTATION_RECORDS)
+    if (input.include.has('attachments')) {
+      const records = partitioned.attachments.map((candidate) => attachmentRecordOf(candidate, input.serverId))
+      childCollections.attachments = childCollection(records, records.length)
+    }
+  }
+
+  let bestAttachment: ZoteroAttachmentRecord | undefined
+  const linkAttachment = bestAttachmentFromLinks(input.parent)
+  if (linkAttachment !== undefined) {
+    const child = partitioned?.attachments.find((candidate) => candidate.key === linkAttachment.key)
+    bestAttachment = {
+      ref: formatRef(localRef('attachment', linkAttachment.key, input.serverId)),
+      title: child?.title ?? '',
+      contentType: linkAttachment.contentType,
+    }
+  }
+
+  return {
+    ref: formatRef(localRef('item', key, input.serverId)),
+    itemType: asString(data?.itemType) ?? asString(record?.itemType) ?? '',
+    title: asString(data?.title) ?? '',
+    creators: normalizeCreators(data),
+    abstractTruncated: abstract.truncated,
+    tags,
+    collections,
+    children: { total: childrenTotal(meta, input.childrenRows) },
+    ...(abstract.text !== '' ? { abstract: abstract.text } : {}),
+    ...(date !== undefined ? { date } : {}),
+    ...(year !== undefined ? { year } : {}),
+    ...(venue !== undefined ? { venue } : {}),
+    ...(doi !== undefined ? { doi } : {}),
+    ...(url !== undefined ? { url } : {}),
+    ...childCollections,
+    ...(bestAttachment !== undefined ? { bestAttachment } : {}),
+    ...(version !== undefined ? { version } : {}),
+    ...(input.serverId !== undefined ? { serverId: input.serverId } : {}),
+  }
+}
+
+function normalizeTags(data: Record<string, unknown> | undefined): string[] {
+  const tags = Array.isArray(data?.tags) ? data.tags : []
+  const names: string[] = []
+  for (const raw of tags) {
+    const tag = asString(asRecord(raw)?.tag)
+    if (tag !== undefined && tag !== '') names.push(tag)
+  }
+  return names
+}
+
+function childrenTotal(meta: Record<string, unknown> | undefined, childrenRows: readonly unknown[] | undefined): number {
+  const numChildren = asInteger(meta?.numChildren)
+  if (numChildren !== undefined && numChildren >= 0) return numChildren
+  return childrenRows?.length ?? 0
 }

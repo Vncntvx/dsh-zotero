@@ -1,3 +1,7 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
 import { CallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
@@ -203,5 +207,266 @@ describe('zotero_search tool', () => {
     expect((result.content[0] as { text: string }).text).toBe(
       'Found 1 of 1 results:\n1. zotero://user/0/item/ABCD1234 — FlashAttention-2 [conferencePaper]',
     )
+  })
+})
+
+const GET_PARENT = {
+  key: 'ABCD1234',
+  version: 3,
+  links: {
+    self: { href: 'http://localhost:23119/api/users/0/items/ABCD1234', type: 'application/json' },
+    attachment: { href: 'http://localhost:23119/api/users/0/items/WXYZ6789', type: 'application/json', attachmentType: 'application/pdf' },
+  },
+  meta: { creatorSummary: 'Dao, Tri', parsedDate: '2023-07-28', numChildren: 3 },
+  data: {
+    itemType: 'journalArticle',
+    title: 'FlashAttention-2',
+    date: '2023-07-28',
+    creators: [{ creatorType: 'author', firstName: 'Tri', lastName: 'Dao' }],
+    publicationTitle: 'ICML',
+    DOI: '10.1234/fa2',
+    url: 'https://arxiv.org/abs/2307.08691',
+    abstractNote: 'FlashAttention is fast.',
+    tags: [{ tag: 'attention' }, { tag: 'efficient' }],
+    collections: ['COLL1234', 'COLL9999'],
+  },
+}
+
+const GET_CHILDREN = [
+  { key: 'NOTE1111', data: { itemType: 'note', note: 'my note' } },
+  { key: 'ANNO1111', data: { itemType: 'annotation', annotationType: 'highlight', annotationText: 'insight', annotationSortIndex: '00001' } },
+  { key: 'WXYZ6789', data: { itemType: 'attachment', title: 'Full Text PDF', contentType: 'application/pdf', linkMode: 'imported_file' } },
+]
+
+describe('zotero_get tool', () => {
+  it('registers and exposes its schema to the assembly', () => {
+    expect(ctx.tools.get('zotero_get')).toBeDefined()
+    expect(ctx.tools.schemas().some((schema) => schema.name === 'zotero_get')).toBe(true)
+  })
+
+  it('reads metadata with a single request by default', async () => {
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) => (
+      helpers.json({ ...GET_PARENT, links: { self: GET_PARENT.links.self }, data: { ...GET_PARENT.data, collections: [] } }, { 'Zotero-Server-ID': 'S1' })
+    ))
+    const result = await runTool('zotero_get', { ref: 'zotero://user/0/item/ABCD1234' })
+    expect(result.isError).toBe(false)
+    if (result.isError) throw new Error('unreachable')
+    expect(mock.requests.map((request) => request.pathname)).toEqual(['/api/users/0/items/ABCD1234'])
+    expect(result.value).toMatchObject({
+      ref: 'zotero://user/0/item/ABCD1234?server=S1',
+      title: 'FlashAttention-2',
+      year: 2023,
+      collections: [],
+      children: { total: 3 },
+    })
+    expect(result.content[0]?.type).toBe('text')
+    expect((result.content[0] as { text: string }).text).toBe([
+      'zotero://user/0/item/ABCD1234?server=S1 — FlashAttention-2 (2023) [journalArticle]',
+      'Creators: Tri Dao',
+      'ICML · 2023-07-28 · DOI: 10.1234/fa2',
+      'URL: https://arxiv.org/abs/2307.08691',
+      'Tags: attention, efficient',
+      'Abstract: FlashAttention is fast.',
+      'Children: 3 total',
+    ].join('\n'))
+  })
+
+  it('renders a bare item without decorations', async () => {
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) => helpers.json({
+      key: 'ABCD1234',
+      data: { itemType: 'journalArticle', title: 'Bare' },
+    }))
+    const result = await runTool('zotero_get', { ref: 'zotero://user/0/item/ABCD1234' })
+    expect(result.isError).toBe(false)
+    if (result.isError) throw new Error('unreachable')
+    expect((result.content[0] as { text: string }).text).toBe(
+      'zotero://user/0/item/ABCD1234 — Bare [journalArticle]\nChildren: 0 total',
+    )
+  })
+
+  it('includes children and collection names on request', async () => {
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) => helpers.json(GET_PARENT, { 'Zotero-Server-ID': 'S1' }))
+    mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) => helpers.json(GET_CHILDREN))
+    mock.route('GET', '/api/users/0/collections', (req, res, helpers) => helpers.json([
+      { key: 'COLL1234', version: 1, data: { key: 'COLL1234', version: 1, name: 'LLM Papers' } },
+    ]))
+    const result = await runTool('zotero_get', {
+      ref: 'zotero://user/0/item/ABCD1234',
+      include: ['notes', 'annotations', 'attachments'],
+    })
+    expect(result.isError).toBe(false)
+    if (result.isError) throw new Error('unreachable')
+    expect(mock.requests.map((request) => request.pathname)).toEqual([
+      '/api/users/0/items/ABCD1234',
+      '/api/users/0/items/ABCD1234/children',
+      '/api/users/0/collections',
+    ])
+    const value = result.value as {
+      collections: { ref: string; name?: string }[]
+      notes: { returned: number }
+      annotations: { returned: number }
+      attachments: { returned: number }
+      bestAttachment: { title: string; contentType: string }
+    }
+    expect(value.collections).toEqual([
+      { ref: 'zotero://user/0/collection/COLL1234?server=S1', name: 'LLM Papers' },
+      { ref: 'zotero://user/0/collection/COLL9999?server=S1' },
+    ])
+    expect(value.notes.returned).toBe(1)
+    expect(value.annotations.returned).toBe(1)
+    expect(value.attachments.returned).toBe(1)
+    expect(value.bestAttachment).toEqual({
+      ref: 'zotero://user/0/attachment/WXYZ6789?server=S1',
+      title: 'Full Text PDF',
+      contentType: 'application/pdf',
+    })
+    const text = (result.content[0] as { text: string }).text
+    expect(text).toContain('Children: 3 total (1 of 1 notes; 1 of 1 annotations; 1 of 1 attachments)')
+    expect(text).toContain('Collections: LLM Papers, zotero://user/0/collection/COLL9999?server=S1')
+    expect(text).toContain('Best attachment: zotero://user/0/attachment/WXYZ6789?server=S1 (application/pdf)')
+  })
+
+  it('flags truncated abstracts and attachment content types without a label', async () => {
+    const longAbstract = 'a'.repeat(3001)
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) => helpers.json({
+      ...GET_PARENT,
+      links: { attachment: { href: 'http://localhost:23119/api/users/0/items/WXYZ6789', type: 'application/json' } },
+      data: { ...GET_PARENT.data, collections: [], creators: [], abstractNote: longAbstract, publicationTitle: '', DOI: '', url: '', date: '', tags: [] },
+    }))
+    const result = await runTool('zotero_get', { ref: 'zotero://user/0/item/ABCD1234' })
+    expect(result.isError).toBe(false)
+    if (result.isError) throw new Error('unreachable')
+    const text = (result.content[0] as { text: string }).text
+    expect(text).toContain('Abstract (truncated): ')
+    expect(text).toContain('Best attachment: zotero://user/0/attachment/WXYZ6789 (unknown type)')
+    expect(text).not.toContain('Creators:')
+    expect(text).not.toContain('Tags:')
+    expect(text).not.toContain('URL:')
+  })
+
+  it('rejects malformed and wrong-kind refs before any request', async () => {
+    const malformed = await runTool('zotero_get', { ref: 'ABCD1234' })
+    expect(malformed.isError).toBe(true)
+    if (!malformed.isError) throw new Error('unreachable')
+    expect((malformed.content[0] as { text: string }).text).toContain('Invalid Zotero reference')
+
+    const wrongKind = await runTool('zotero_get', { ref: 'zotero://user/0/collection/COLL1234' })
+    expect(wrongKind.isError).toBe(true)
+    if (!wrongKind.isError) throw new Error('unreachable')
+    expect((wrongKind.content[0] as { text: string }).text).toContain('Expected a item reference')
+
+    expect(mock.requests).toEqual([])
+  })
+
+  it('declares itself concurrency-safe for valid arguments', () => {
+    expect(ctx.tools.get('zotero_get')!.isConcurrencySafe?.({ ref: 'zotero://user/0/item/ABCD1234' })).toBe(true)
+  })
+})
+
+describe('zotero_attachment tool', () => {
+  const FILE_ATTACHMENT = {
+    key: 'WXYZ6789',
+    version: 1,
+    data: { itemType: 'attachment', title: 'Full Text PDF', contentType: 'application/pdf', linkMode: 'imported_file' },
+  }
+
+  it('registers and exposes its schema to the assembly', () => {
+    expect(ctx.tools.get('zotero_attachment')).toBeDefined()
+    expect(ctx.tools.schemas().some((schema) => schema.name === 'zotero_attachment')).toBe(true)
+  })
+
+  it('resolves a file attachment to a verified on-disk path', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dsh-zotero-'))
+    try {
+      const filePath = join(dir, 'paper.pdf')
+      writeFileSync(filePath, '%PDF stub')
+      mock.route('GET', '/api/users/0/items/WXYZ6789', (req, res, helpers) => helpers.json(FILE_ATTACHMENT))
+      mock.route('GET', '/api/users/0/items/WXYZ6789/file/view/url', (req, res, helpers) => helpers.text(pathToFileURL(filePath).href))
+      const result = await runTool('zotero_attachment', { ref: 'zotero://user/0/attachment/WXYZ6789' })
+      expect(result.isError).toBe(false)
+      if (result.isError) throw new Error('unreachable')
+      expect(result.value).toEqual({
+        ref: 'zotero://user/0/attachment/WXYZ6789',
+        title: 'Full Text PDF',
+        contentType: 'application/pdf',
+        kind: 'file',
+        path: filePath,
+      })
+      expect((result.content[0] as { text: string }).text).toBe(
+        `Full Text PDF (zotero://user/0/attachment/WXYZ6789) application/pdf → ${filePath}`,
+      )
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('serves linked-URL attachments without a file request', async () => {
+    mock.route('GET', '/api/users/0/items/WXYZ6789', (req, res, helpers) => helpers.json({
+      key: 'WXYZ6789',
+      version: 1,
+      data: { itemType: 'attachment', title: 'Preprint', contentType: 'application/pdf', linkMode: 'linked_url', url: 'https://arxiv.org/pdf/2307.08691' },
+    }))
+    const result = await runTool('zotero_attachment', { ref: 'zotero://user/0/attachment/WXYZ6789' })
+    expect(result.isError).toBe(false)
+    if (result.isError) throw new Error('unreachable')
+    expect(mock.requests).toHaveLength(1)
+    expect(result.value).toEqual({
+      ref: 'zotero://user/0/attachment/WXYZ6789',
+      title: 'Preprint',
+      contentType: 'application/pdf',
+      kind: 'url',
+      url: 'https://arxiv.org/pdf/2307.08691',
+    })
+    expect((result.content[0] as { text: string }).text).toBe(
+      'Preprint (zotero://user/0/attachment/WXYZ6789) application/pdf → https://arxiv.org/pdf/2307.08691',
+    )
+  })
+
+  it('renders untitled attachments by ref with an unknown-type label', async () => {
+    mock.route('GET', '/api/users/0/items/WXYZ6789', (req, res, helpers) => helpers.json({
+      key: 'WXYZ6789',
+      version: 1,
+      data: { itemType: 'attachment', linkMode: 'linked_url', url: 'https://example.com/doc' },
+    }))
+    const result = await runTool('zotero_attachment', { ref: 'zotero://user/0/attachment/WXYZ6789' })
+    expect(result.isError).toBe(false)
+    if (result.isError) throw new Error('unreachable')
+    expect((result.content[0] as { text: string }).text).toBe(
+      'zotero://user/0/attachment/WXYZ6789 unknown type → https://example.com/doc',
+    )
+  })
+
+  it('surfaces a missing file as a typed error', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dsh-zotero-'))
+    try {
+      mock.route('GET', '/api/users/0/items/WXYZ6789', (req, res, helpers) => helpers.json(FILE_ATTACHMENT))
+      mock.route('GET', '/api/users/0/items/WXYZ6789/file/view/url', (req, res, helpers) => (
+        helpers.text(pathToFileURL(join(dir, 'gone.pdf')).href)
+      ))
+      const result = await runTool('zotero_attachment', { ref: 'zotero://user/0/attachment/WXYZ6789' })
+      expect(result.isError).toBe(true)
+      if (!result.isError) throw new Error('unreachable')
+      expect((result.content[0] as { text: string }).text).toContain('missing from disk')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects malformed and wrong-kind refs before any request', async () => {
+    const malformed = await runTool('zotero_attachment', { ref: 'not-a-ref' })
+    expect(malformed.isError).toBe(true)
+    if (!malformed.isError) throw new Error('unreachable')
+    expect((malformed.content[0] as { text: string }).text).toContain('Invalid Zotero reference')
+
+    const wrongKind = await runTool('zotero_attachment', { ref: 'zotero://user/0/item/ABCD1234' })
+    expect(wrongKind.isError).toBe(true)
+    if (!wrongKind.isError) throw new Error('unreachable')
+    expect((wrongKind.content[0] as { text: string }).text).toContain('Expected a attachment reference')
+
+    expect(mock.requests).toEqual([])
+  })
+
+  it('declares itself concurrency-safe for valid arguments', () => {
+    expect(ctx.tools.get('zotero_attachment')!.isConcurrencySafe?.({ ref: 'zotero://user/0/attachment/WXYZ6789' })).toBe(true)
   })
 })
