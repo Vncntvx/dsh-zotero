@@ -4,18 +4,22 @@
   "description": "Let agents search, read, and cite your local Zotero library: find papers, browse notes and annotations, pull evidence by question, open the source document, generate citations.",
   "type": "module",
   "main": "./lib/index.js",
-  "types": "./lib/types/index.d.ts",
+  "types": "./lib/index.d.ts",
   "exports": {
     ".": {
-      "types": "./lib/types/index.d.ts",
+      "types": "./lib/index.d.ts",
       "default": "./lib/index.js"
     },
     "./package.json": "./package.json"
   },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
   "files": [
     "lib",
     "cordis.patch.yml",
-    "README.md"
+    "README.md",
+    "README.en.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -24,7 +28,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "prepublishOnly": "npm run build && npm test",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm test",
     "test:integration": "ZOTERO_INTEGRATION=1 vitest run tests/integration/zotero.integration.spec.ts"
   },
   "dsh": {
@@ -34,23 +39,31 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-commands": "^0.1.0-rc.5",
     "@deepseek-ai/dsh-llm": "^0.1.0-rc.5",
     "@deepseek-ai/dsh-tools": "^0.1.0-rc.5"
   },
   "dependencies": {
-    "@deepseek-ai/schemastery": "^3.18.1"
+    "@deepseek-ai/schemastery": "^3.18.1",
+    "typescript": "^5.5.0",
+    "@types/node": "^22.20.0"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/cordis-plugin-include": "^1.0.6",
+    "@deepseek-ai/cordis-plugin-loader": "^1.0.2",
     "@deepseek-ai/dsh-commands": "^0.1.0-rc.5",
     "@deepseek-ai/dsh-llm": "^0.1.0-rc.5",
     "@deepseek-ai/dsh-system-prompt": "^0.1.0-rc.5",
     "@deepseek-ai/dsh-tools": "^0.1.0-rc.5",
     "@deepseek-ai/schemastery": "^3.18.1",
-    "@types/node": "^22.20.0",
     "@vitest/coverage-v8": "^4.1.8",
-    "typescript": "^5.5.0",
+    "js-yaml": "^4.1.0",
     "vitest": "^4.1.8"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Vncntvx/dsh-zotero.git"
+  }
 }
