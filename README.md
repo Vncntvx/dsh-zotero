@@ -84,23 +84,41 @@ npm run test:integration
 # 或：ZOTERO_INTEGRATION=1 npx vitest run tests/integration/zotero.integration.spec.ts
 ```
 
-## 用已安装的 dsh 测试
+## 本地启动
 
-npm 安装的正式版 `dsh` 可以端到端验证生产安装路径：打包插件 → 把 tarball 装进临时 profile → 在真实 Zotero 上跑生产栈 smoke。
+插件可在两种环境中启动：dsh 源码 checkout，或 npm 安装的正式版 dsh。
 
-```sh
-npm pack
-dsh plugin --profile zotero-smoke add ./dsh-zotero-0.1.0.tgz
-cd ~/.dsh/profiles/zotero-smoke
-node --input-type=module < /path/to/dsh-zotero/scripts/smoke.mjs
-```
+### 从 dsh 源码启动
 
-smoke 在 profile 目录内运行，bare import 从 profile 的扁平 `node_modules` 解析——这正是 npm 版 dsh 自带的依赖栈——依次对真实 Local API 验证 `status`、`search`、`get`、`retrieve`、`export`、策略提示词分区和五个工具注册。输出 `SMOKE PASS` 即表示打包后的插件按安装路径可用。
-
-在 DeepSeek Harness 源码 checkout 中，可通过 dev overlay 直接加载插件，无需安装：
+在 deepseek-harness 源码 checkout 中构建一次（`pnpm install && pnpm run build`），然后通过 dev overlay 加载插件源码：
 
 ```sh
 pnpm dsh web --patch ./dsh-zotero/dev.cordis.yml
 ```
 
-`dev.cordis.yml` 指向绝对的 `src/index.ts` 路径。请按你的 checkout 路径调整。
+`dev.cordis.yml` 将插件入口指向绝对的 `src/index.ts`。dsh 的源码启动经 tsx 加载该 TypeScript 入口，插件因此无需预构建；若 checkout 路径不同，需同步修改文件中的绝对路径。
+
+### 使用 npm 安装的 dsh
+
+npm 安装的 dsh 提供两种运行方式。
+
+**常驻实例**：打包为 tarball 并安装到 profile，插件以 tarball 中的副本运行；代码更新需重新打包安装。安装后运行生产栈 smoke 验证：
+
+```sh
+npm pack
+dsh plugin --profile <name> add ./dsh-zotero-0.1.0.tgz
+cd ~/.dsh/profiles/<name>
+node --input-type=module < /path/to/dsh-zotero/scripts/smoke.mjs
+```
+
+smoke 需在 profile 目录内运行，裸导入由此从 profile 的扁平 `node_modules` 解析。脚本依次验证 `status`、`search`、`get`、`retrieve`、`export`、策略提示词分区与五个工具注册；输出 `SMOKE PASS` 表示打包后的插件通过安装路径验证。
+
+**开发实例（热替换）**：`dev-lib.cordis.yml` 覆盖层禁用 profile 中的 tarball 副本（id `zotero`），插入 `zotero-dev` 指向本仓库的 `lib/index.js`，并重新启用 HMR。生产 web profile 默认禁用 loader HMR，且 HMR 的监视根位于 profile 目录，因此覆盖层显式设置了 `base`。构建输出变化后，HMR 在同一进程内销毁旧实例并重新构造插件，无需重启 dsh：
+
+```sh
+cd /Volumes/Work/deepseek-harness/dsh-zotero
+npm run dev &                    # tsc --watch：修改 src 后自动重建 lib
+dsh web --patch ./dev-lib.cordis.yml --port 3307
+```
+
+热替换仅作用于通过 `--patch` 启动的实例；常驻实例继续运行 tarball 版本。

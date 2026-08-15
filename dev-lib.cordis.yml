@@ -1,0 +1,26 @@
+# Hot-reload overlay for the npm-installed dsh. Use with:
+#   cd /Volumes/Work/deepseek-harness/dsh-zotero
+#   dsh web --patch ./dev-lib.cordis.yml --port 3307
+#
+# The production web profile disables the loader HMR plugin, so this
+# overlay re-enables it for the dev instance and points its base at this
+# checkout (the loader's own baseUrl is the profile dir, so the base must
+# be explicit). Rebuild with npm run build (or npm run dev) and the plugin
+# hot-swaps without restarting dsh.
+# The profile-installed dsh-zotero (id zotero) is disabled in this instance
+# so the watched copy takes its place; /zotero status and the five tools
+# still work normally.
+# The name must be an absolute path to the BUILT entry (plain Node cannot
+# load src/index.ts). Adjust it if your checkout lives elsewhere.
+- id: zotero
+  disabled: true
+- id: hmr
+  disabled: false
+  config:
+    base: /Volumes/Work/deepseek-harness/dsh-zotero
+    root:
+      - .
+- insert:
+    - id: zotero-dev
+      name: /Volumes/Work/deepseek-harness/dsh-zotero/lib/index.js
+      config: {}

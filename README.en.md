@@ -83,23 +83,41 @@ npm run test:integration
 # or: ZOTERO_INTEGRATION=1 npx vitest run tests/integration/zotero.integration.spec.ts
 ```
 
-## Testing with an installed dsh
+## Running locally
 
-The npm-installed `dsh` can verify the production path end to end: pack the plugin, install the tarball into a throwaway profile, and run the production-stack smoke against a live Zotero.
+The plugin runs in two environments: a dsh source checkout, or the npm-installed dsh.
 
-```sh
-npm pack
-dsh plugin --profile zotero-smoke add ./dsh-zotero-0.1.0.tgz
-cd ~/.dsh/profiles/zotero-smoke
-node --input-type=module < /path/to/dsh-zotero/scripts/smoke.mjs
-```
+### From a dsh source checkout
 
-The smoke runs inside the profile directory so bare imports resolve from the profile's flat `node_modules` — the exact dependency stack the npm dsh ships — and exercises `status`, `search`, `get`, `retrieve`, `export`, the policy prompt section, and tool registration against Zotero's real Local API. `SMOKE PASS` means the packed plugin works as installed.
-
-From a DeepSeek Harness source checkout, load the plugin through the dev overlay without installing:
+Build the checkout once (`pnpm install && pnpm run build`), then load the plugin source through the dev overlay:
 
 ```sh
 pnpm dsh web --patch ./dsh-zotero/dev.cordis.yml
 ```
 
-`dev.cordis.yml` points at the absolute `src/index.ts` path. Adjust it for your checkout.
+`dev.cordis.yml` points the plugin entry at the absolute `src/index.ts`. The dsh source launch loads that TypeScript entry through tsx, so the plugin requires no prebuild. Update the absolute path when the checkout location differs.
+
+### With the npm-installed dsh
+
+Two run modes exist for the npm-installed dsh.
+
+**Resident instance**: pack a tarball and install it into a profile. The plugin runs from the tarball copy; code updates require re-packing and re-installing. Verify with the production-stack smoke:
+
+```sh
+npm pack
+dsh plugin --profile <name> add ./dsh-zotero-0.1.0.tgz
+cd ~/.dsh/profiles/<name>
+node --input-type=module < /path/to/dsh-zotero/scripts/smoke.mjs
+```
+
+Run the smoke inside the profile directory, so bare imports resolve from the profile's flat `node_modules`. It verifies `status`, `search`, `get`, `retrieve`, `export`, the policy prompt section, and tool registration; `SMOKE PASS` indicates the packed plugin passes the installed-path checks.
+
+**Dev instance (hot swap)**: the `dev-lib.cordis.yml` overlay disables the profile's tarball copy (id `zotero`), inserts `zotero-dev` at this checkout's `lib/index.js`, and re-enables HMR. The production web profile disables loader HMR, and the HMR watch base sits in the profile directory, so the overlay sets `base` explicitly. When the build output changes, HMR disposes the old instance and re-constructs the plugin in the same process; dsh keeps running:
+
+```sh
+cd /Volumes/Work/deepseek-harness/dsh-zotero
+npm run dev &                    # tsc --watch: rebuild lib on src changes
+dsh web --patch ./dev-lib.cordis.yml --port 3307
+```
+
+Hot swap affects only the instance started with `--patch`; the resident instance keeps running the tarball version.
