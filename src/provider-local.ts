@@ -352,6 +352,9 @@ export class LocalApiProvider implements ZoteroProvider {
     const keys = collectionKeysOf(parent.json)
     let collectionNames: ReadonlyMap<string, string> | undefined
     if (keys.length > 0) {
+      // The Local API returns list endpoints in full by default (unlike the
+      // Web API's 25-per-page), so one unpaginated listing resolves every
+      // collection name. Do not add limit paging against Web API habits.
       const listing = await this.client.getJson<unknown>('users/0/collections', undefined, {
         signal,
         serverId,
@@ -805,6 +808,8 @@ export class LocalApiProvider implements ZoteroProvider {
         name: entry.name,
       }
     }
+    // The Local API returns list endpoints in full by default (unlike the
+    // Web API's 25-per-page), so one unpaginated listing sees every name.
     const { json, headers } = await this.client.getJson<unknown>(`users/0/${plural}`, undefined, {
       signal,
     })
