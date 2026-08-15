@@ -43,6 +43,8 @@ import {
   plainNoteText,
   truncateText,
   type PartitionedChildren,
+  type ScopeNameEntry,
+  type ZoteroChildKind,
 } from './normalize.js'
 import { bestAttachmentFromLinks, selectAttachment } from './attachments.js'
 import { formatRef, isRefString, localRef, parseRef, requireLocalRef } from './refs.js'
@@ -96,6 +98,12 @@ interface ResolvedScopeResult {
   readonly serverId?: string
   /** The collection key a note must belong to for the body scan; library/search scopes are unset. */
   readonly collectionKey?: string
+}
+
+/** A cached full listing of one scope endpoint, with the identity header it was served under. */
+interface ScopeListing {
+  readonly entries: readonly ScopeNameEntry[]
+  readonly serverId?: string
 }
 
 /** Deployment-varying bounds the local provider needs beyond the HTTP client limits. */
@@ -166,6 +174,34 @@ export class LocalApiProvider implements ZoteroProvider {
     private readonly limits: LocalApiLimits,
   ) {}
 
+  /** Cached full listings of the scope endpoints; the provider instance is the invalidation boundary. */
+  private readonly scopeListingCache = new Map<'collections' | 'searches', ScopeListing>()
+
+  /**
+   * The cached full listing of one plural endpoint (`collections` or
+   * `searches`), fetched once per provider instance. The service rebuilds the
+   * provider on every settings commit, which is the cache's invalidation
+   * point; a second call reuses the first response, identity header included.
+   */
+  private async scopeListingOf(
+    plural: 'collections' | 'searches',
+    serverId: string | undefined,
+    signal: AbortSignal | undefined,
+  ): Promise<ScopeListing> {
+    const cached = this.scopeListingCache.get(plural)
+    if (cached !== undefined) return cached
+    const { json, headers } = await this.client.getJson<unknown>(`users/0/${plural}`, undefined, {
+      signal,
+      serverId,
+    })
+    const entries = (Array.isArray(json) ? json : []).map((row) => normalizeScopeEntry(row))
+    const servedBy = headers.get('zotero-server-id') ?? serverId
+    const listing: ScopeListing =
+      servedBy === undefined ? { entries } : { entries, serverId: servedBy }
+    this.scopeListingCache.set(plural, listing)
+    return listing
+  }
+
   /**
    * Probe `GET /api/` and report connectivity plus the instance identity
    * headers. Health checks live here, not on every tool call.
@@ -214,6 +250,7 @@ export class LocalApiProvider implements ZoteroProvider {
     let total = apiTotal
     if (this.shouldScanNotes(request, scope.resolved)) {
       const query = request.query!
+      const terms = tokenize(query.toLowerCase())
       const seen = new Set(
         rows
           .map((row) => asString(asRecord(row)?.key))
@@ -222,7 +259,7 @@ export class LocalApiProvider implements ZoteroProvider {
       for (const row of await this.fetchNoteRows(scope, signal)) {
         const key = asString(asRecord(row)?.key)
         if (key === undefined || seen.has(key)) continue
-        if (!this.noteRowMatches(row, query, request.tags, scope.collectionKey)) continue
+        if (!this.noteRowMatches(row, terms, request.tags, scope.collectionKey)) continue
         seen.add(key)
         items.push(normalizeSearchItem(row, responseServerId ?? undefined))
       }
@@ -291,12 +328,12 @@ export class LocalApiProvider implements ZoteroProvider {
   /**
    * Whether a note row satisfies the body scan: every query token appears
    * in the note text, plus the scope's collection and the literal tag
-   * filters when present. The caller has already verified the query is
-   * non-empty, so `query` is a plain string here.
+   * filters when present. The caller has already tokenized the non-empty
+   * query, so `terms` are the lowercased query tokens.
    */
   private noteRowMatches(
     row: unknown,
-    query: string,
+    terms: readonly string[],
     tags: readonly string[] | undefined,
     collectionKey: string | undefined,
   ): boolean {
@@ -312,7 +349,7 @@ export class LocalApiProvider implements ZoteroProvider {
       if (!tags.every((tag) => tagNames.has(tag))) return false
     }
     const text = plainNoteText(data?.note).toLowerCase()
-    return tokenize(query.toLowerCase()).every((term) => text.includes(term))
+    return terms.every((term) => text.includes(term))
   }
 
   /**
@@ -320,8 +357,9 @@ export class LocalApiProvider implements ZoteroProvider {
    * rows are fetched lazily (one extra request) only when the caller asked
    * to include notes/annotations/attachments — the Local API ignores
    * `?include=` on single-item responses, so children come from the
-   * dedicated `/children` endpoint. Collection names are resolved lazily
-   * (one listing request) only when the item belongs to collections.
+   * dedicated `/children` endpoint. Collection names resolve from a cached
+   * full listing (one listing request per provider instance) only when the
+   * item belongs to collections.
    */
   async getItem(request: ZoteroGetRequest, signal?: AbortSignal): Promise<ZoteroItemDetail> {
     const ref = requireLocalRef(request.ref, ['item'])
@@ -331,33 +369,14 @@ export class LocalApiProvider implements ZoteroProvider {
     })
     const serverId = parent.headers.get('zotero-server-id') ?? ref.serverId
     const includes = INCLUDE_ORDER.filter((kind) => request.include.has(kind))
-    let childrenRows: readonly unknown[] | undefined
-    if (includes.length > 0) {
-      const children = await this.client.getJson<unknown>(
-        `users/0/items/${ref.key}/children`,
-        undefined,
-        {
-          signal,
-          serverId,
-        },
-      )
-      childrenRows = Array.isArray(children.json) ? children.json : []
-    }
     const keys = collectionKeysOf(parent.json)
-    let collectionNames: ReadonlyMap<string, string> | undefined
-    if (keys.length > 0) {
-      // The Local API returns list endpoints in full by default (unlike the
-      // Web API's 25-per-page), so one unpaginated listing resolves every
-      // collection name. Do not add limit paging against Web API habits.
-      const listing = await this.client.getJson<unknown>('users/0/collections', undefined, {
-        signal,
-        serverId,
-      })
-      const entries = (Array.isArray(listing.json) ? listing.json : []).map((row) =>
-        normalizeScopeEntry(row),
-      )
-      collectionNames = new Map(entries.map((entry) => [entry.key, entry.name]))
-    }
+    // Children and the collections listing are independent once the parent
+    // has arrived; the Local API is a loopback server with no per-client
+    // throttling, so both ride the same await.
+    const [childrenRows, collectionNames] = await Promise.all([
+      includes.length > 0 ? this.fetchChildRows(ref.key, serverId, signal) : undefined,
+      keys.length > 0 ? this.collectionNamesFor(keys, serverId, signal) : undefined,
+    ])
     return normalizeItemDetail({
       parent: parent.json,
       serverId: serverId ?? undefined,
@@ -370,6 +389,44 @@ export class LocalApiProvider implements ZoteroProvider {
       maxNoteRecords: this.limits.maxNoteRecords,
       maxAnnotationRecords: this.limits.maxAnnotationRecords,
     })
+  }
+
+  /** Fetch one item's child rows; undefined when the caller asked for none. */
+  private async fetchChildRows(
+    key: string,
+    serverId: string | undefined,
+    signal: AbortSignal | undefined,
+  ): Promise<readonly unknown[]> {
+    const children = await this.client.getJson<unknown>(
+      `users/0/items/${key}/children`,
+      undefined,
+      {
+        signal,
+        serverId,
+      },
+    )
+    return Array.isArray(children.json) ? children.json : []
+  }
+
+  /**
+   * Collection names for exactly the requested keys, resolved from the cached
+   * full listing. The Local API returns list endpoints in full by default
+   * (unlike the Web API's 25-per-page), so one unpaginated listing serves
+   * every call; the provider instance is rebuilt on every settings commit,
+   * which is the cache's invalidation point.
+   */
+  private async collectionNamesFor(
+    keys: readonly string[],
+    serverId: string | undefined,
+    signal: AbortSignal | undefined,
+  ): Promise<ReadonlyMap<string, string>> {
+    const listing = await this.scopeListingOf('collections', serverId, signal)
+    const wanted = new Set(keys)
+    return new Map(
+      listing.entries
+        .filter((entry) => wanted.has(entry.key))
+        .map((entry) => [entry.key, entry.name]),
+    )
   }
 
   /**
@@ -445,10 +502,11 @@ export class LocalApiProvider implements ZoteroProvider {
    * Gather ranked evidence for one item: annotations, notes, the abstract,
    * and full-text chunks are scored as one passage corpus with BM25. Fetch
    * stays lazy — children only when annotation/note sources (or a PDF
-   * fallback) need them, fulltext only when requested. A note item's own
-   * body is its note source; child notes contribute every chunk of their
-   * full text, so long notes rank beyond their first chunk. Sources the
-   * item cannot provide are skipped and reported in `sourcesSkipped` —
+   * fallback) need them, fulltext only when requested (started concurrently
+   * with children when the parent carries the attachment link). A note
+   * item's own body is its note source; child notes contribute every chunk
+   * of their full text, so long notes rank beyond their first chunk. Sources
+   * the item cannot provide are skipped and reported in `sourcesSkipped` —
    * retrieval degrades instead of failing. Passage count and character
    * budgets are enforced with the `truncated` flag, never by silently
    * editing passage text.
@@ -478,6 +536,14 @@ export class LocalApiProvider implements ZoteroProvider {
       wantsAnnotations ||
       (wantsNotes && !isNoteItem) ||
       (wantsFulltext && linkAttachment === undefined)
+    // Children and a linked fulltext are independent once the parent has
+    // arrived; start both before awaiting either. The noop handler keeps a
+    // fulltext rejection that lands while children are still in flight from
+    // being reported as unhandled before the try below awaits it.
+    const fulltextKey = wantsFulltext ? linkAttachment?.key : undefined
+    const fulltextPromise =
+      fulltextKey === undefined ? undefined : this.fetchFulltext(fulltextKey, serverId, signal)
+    fulltextPromise?.catch(() => {})
     let childrenRows: readonly unknown[] = []
     if (fetchChildren) {
       const children = await this.client.getJson<unknown>(
@@ -505,7 +571,7 @@ export class LocalApiProvider implements ZoteroProvider {
       pageLabel?: string
     }[] = []
     if (wantsFulltext) {
-      let attachmentKey = linkAttachment?.key
+      let attachmentKey = fulltextKey
       if (attachmentKey === undefined) {
         const pdf = selectAttachment(childrenRows, 'pdf')
         if (pdf === undefined) skipped.push('fulltext')
@@ -514,7 +580,8 @@ export class LocalApiProvider implements ZoteroProvider {
       if (attachmentKey !== undefined) {
         try {
           attachmentRef = formatRef(localRef('attachment', attachmentKey, serverId))
-          const payload = await this.fetchFulltext(attachmentKey, serverId, signal)
+          const payload = await (fulltextPromise ??
+            this.fetchFulltext(attachmentKey, serverId, signal))
           const content = typeof payload.content === 'string' ? payload.content : ''
           const bounded = truncateText(content, this.limits.maxFulltextChars)
           fulltextWasCut = bounded.truncated
@@ -542,7 +609,15 @@ export class LocalApiProvider implements ZoteroProvider {
     }
 
     const partitioned: PartitionedChildren = fetchChildren
-      ? partitionChildren(childrenRows, serverId)
+      ? partitionChildren(
+          childrenRows,
+          serverId,
+          undefined,
+          new Set<ZoteroChildKind>([
+            ...(wantsNotes ? (['note'] as const) : []),
+            ...(wantsAnnotations ? (['annotation'] as const) : []),
+          ]),
+        )
       : { notes: [], annotations: [], attachments: [] }
     if (wantsAnnotations) {
       for (const annotation of partitioned.annotations) {
@@ -803,16 +878,14 @@ export class LocalApiProvider implements ZoteroProvider {
       }
     }
     // The Local API returns list endpoints in full by default (unlike the
-    // Web API's 25-per-page), so one unpaginated listing sees every name.
-    const { json, headers } = await this.client.getJson<unknown>(`users/0/${plural}`, undefined, {
-      signal,
-    })
-    const entries = (Array.isArray(json) ? json : []).map((row) => normalizeScopeEntry(row))
-    const matched = matchScopeName(entries, refOrName)
+    // Web API's 25-per-page), so one unpaginated listing sees every name;
+    // the listing is cached per provider instance.
+    const listing = await this.scopeListingOf(plural, undefined, signal)
+    const matched = matchScopeName(listing.entries, refOrName)
     if (matched.length === 1) {
       const found = matched[0]!
       return {
-        ref: localRef(kind, found.key, headers.get('zotero-server-id') ?? undefined),
+        ref: localRef(kind, found.key, listing.serverId),
         name: found.name,
       }
     }
@@ -827,7 +900,7 @@ export class LocalApiProvider implements ZoteroProvider {
         ZOTERO_SCOPE_AMBIGUOUS,
       )
     }
-    const near = nearScopeCandidates(entries, refOrName, 5)
+    const near = nearScopeCandidates(listing.entries, refOrName, 5)
     const hint =
       near.length > 0 ? ` Possible matches: ${near.map((entry) => entry.name).join(', ')}` : ''
     throw new ZoteroError(`No ${label} named "${refOrName}" was found.${hint}`, ZOTERO_NOT_FOUND)

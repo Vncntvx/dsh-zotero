@@ -287,6 +287,15 @@ export interface PartitionedChildren {
   readonly attachments: readonly ZoteroAttachmentCandidate[]
 }
 
+/** The child kinds `partitionChildren` can partition and normalize. */
+export type ZoteroChildKind = 'note' | 'annotation' | 'attachment'
+
+const ALL_CHILD_KINDS: ReadonlySet<ZoteroChildKind> = new Set<ZoteroChildKind>([
+  'note',
+  'annotation',
+  'attachment',
+])
+
 function annotationSortIndex(row: unknown): string {
   return asString(asRecord(asRecord(row)?.data)?.annotationSortIndex) ?? ''
 }
@@ -295,23 +304,37 @@ function annotationSortIndex(row: unknown): string {
  * Partition child rows into notes, annotations, and attachments. Notes keep
  * API order and are truncated to `noteMaxChars` when given (undefined keeps
  * the full body); annotations are ordered by Zotero's `annotationSortIndex`.
- * Unknown child kinds are ignored — the plugin only claims the three kinds
- * it understands — but a malformed row of a claimed kind fails loud.
- * @throws {ZoteroError} `ZOTERO_UNEXPECTED` on a child without a valid key.
+ * Only the requested kinds are normalized — rows of other kinds are still
+ * classified by their `itemType` but never read deeper. Unknown child kinds
+ * are ignored — the plugin only claims the three kinds it understands — but
+ * a malformed row of a requested kind fails loud.
+ * @param rows - raw child item JSON objects.
+ * @param serverId - the instance that served the rows; recorded as ref provenance.
+ * @param noteMaxChars - per-note budget; undefined keeps the full body.
+ * @param kinds - the kinds to normalize; defaults to all three.
+ * @throws {ZoteroError} `ZOTERO_UNEXPECTED` on a requested-kind child without a valid key.
  */
 export function partitionChildren(
   rows: readonly unknown[],
   serverId: string | undefined,
   noteMaxChars?: number,
+  kinds: ReadonlySet<ZoteroChildKind> = ALL_CHILD_KINDS,
 ): PartitionedChildren {
   const notes: ZoteroNoteRecord[] = []
   const annotationRows: unknown[] = []
   const attachments: ZoteroAttachmentCandidate[] = []
+  const wantsNotes = kinds.has('note')
+  const wantsAnnotations = kinds.has('annotation')
+  const wantsAttachments = kinds.has('attachment')
   for (const row of rows) {
     const itemType = asString(asRecord(asRecord(row)?.data)?.itemType)
-    if (itemType === 'note') notes.push(normalizeNoteRecord(row, serverId, noteMaxChars))
-    else if (itemType === 'annotation') annotationRows.push(row)
-    else if (itemType === 'attachment') attachments.push(normalizeAttachmentRecord(row))
+    if (itemType === 'note') {
+      if (wantsNotes) notes.push(normalizeNoteRecord(row, serverId, noteMaxChars))
+    } else if (itemType === 'annotation') {
+      if (wantsAnnotations) annotationRows.push(row)
+    } else if (itemType === 'attachment') {
+      if (wantsAttachments) attachments.push(normalizeAttachmentRecord(row))
+    }
   }
   annotationRows.sort((a, b) => annotationSortIndex(a).localeCompare(annotationSortIndex(b)))
   return {
@@ -347,6 +370,18 @@ export interface NormalizeItemDetailInput {
 function childCollection<T>(items: readonly T[], cap: number): ZoteroChildCollection<T> {
   const bounded = items.slice(0, cap)
   return { total: items.length, returned: bounded.length, items: bounded }
+}
+
+/**
+ * The partition kinds an item detail needs: the requested note/annotation
+ * kinds, plus attachments always — the best-attachment choice borrows the
+ * child row's title even when the caller did not include attachments.
+ */
+function detailChildKinds(include: ReadonlySet<ZoteroInclude>): ReadonlySet<ZoteroChildKind> {
+  const kinds = new Set<ZoteroChildKind>(['attachment'])
+  if (include.has('notes')) kinds.add('note')
+  if (include.has('annotations')) kinds.add('annotation')
+  return kinds
 }
 
 function attachmentRecordOf(
@@ -407,7 +442,12 @@ export function normalizeItemDetail(input: NormalizeItemDetailInput): ZoteroItem
   const partitioned =
     input.childrenRows === undefined
       ? undefined
-      : partitionChildren(input.childrenRows, input.serverId, input.maxNoteChars)
+      : partitionChildren(
+          input.childrenRows,
+          input.serverId,
+          input.maxNoteChars,
+          detailChildKinds(input.include),
+        )
   const childCollections: {
     notes?: ZoteroChildCollection<ZoteroNoteRecord>
     annotations?: ZoteroChildCollection<ZoteroAnnotationRecord>

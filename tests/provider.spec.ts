@@ -351,6 +351,30 @@ describe('search: collection scope', () => {
     expect(result.items[0]!.ref).toBe('zotero://user/0/item/ABCD1234')
   })
 
+  it('reuses the cached scope listing across searches by name', async () => {
+    mock.route('GET', '/api/users/0/collections', (req, res, helpers) => helpers.json(COLLECTIONS))
+    mock.route('GET', '/api/users/0/collections/COLL1234/items/top', (req, res, helpers) =>
+      helpers.json([ITEM]),
+    )
+    await provider.search(request({ scope: { kind: 'collection', refOrName: 'LLM Papers' } }))
+    await provider.search(request({ scope: { kind: 'collection', refOrName: 'LLM Papers' } }))
+    expect(
+      mock.requests.filter((entry) => entry.pathname === '/api/users/0/collections'),
+    ).toHaveLength(1)
+  })
+
+  it('does not share the scope listing cache across provider instances', async () => {
+    mock.route('GET', '/api/users/0/collections', (req, res, helpers) => helpers.json(COLLECTIONS))
+    mock.route('GET', '/api/users/0/collections/COLL1234/items/top', (req, res, helpers) =>
+      helpers.json([ITEM]),
+    )
+    await provider.search(request({ scope: { kind: 'collection', refOrName: 'LLM Papers' } }))
+    await makeProvider().search(request({ scope: { kind: 'collection', refOrName: 'LLM Papers' } }))
+    expect(
+      mock.requests.filter((entry) => entry.pathname === '/api/users/0/collections'),
+    ).toHaveLength(2)
+  })
+
   it('treats a non-array items response as an empty result set', async () => {
     mock.route('GET', '/api/users/0/items/top', (req, res, helpers) =>
       helpers.json({ key: 'ABCD1234' }),
@@ -788,6 +812,29 @@ describe('getItem', () => {
     expect(detail.annotations).toMatchObject({ total: 3, returned: 1 })
   })
 
+  it('reuses the cached collections listing across items', async () => {
+    const listing = [
+      { key: 'COLL1234', version: 1, data: { key: 'COLL1234', version: 1, name: 'LLM Papers' } },
+    ]
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) => helpers.json(PARENT))
+    mock.route('GET', '/api/users/0/items/EFGH5678', (req, res, helpers) =>
+      helpers.json({ ...PARENT, key: 'EFGH5678', data: { ...PARENT.data, key: 'EFGH5678' } }),
+    )
+    mock.route('GET', '/api/users/0/collections', (req, res, helpers) => helpers.json(listing))
+    const first = await provider.getItem(getRequest())
+    const second = await provider.getItem({
+      ref: parseRef('zotero://user/0/item/EFGH5678'),
+      include: new Set(),
+    })
+    expect(
+      mock.requests.filter((entry) => entry.pathname === '/api/users/0/collections'),
+    ).toHaveLength(1)
+    expect(first.collections).toEqual([
+      { ref: 'zotero://user/0/collection/COLL1234', name: 'LLM Papers' },
+    ])
+    expect(second.collections).toEqual(first.collections)
+  })
+
   it('rejects non-item refs before any request happens', async () => {
     await zoteroError(
       provider.getItem({
@@ -1026,11 +1073,15 @@ describe('retrieve', () => {
       helpers.json(FULLTEXT_PAYLOAD),
     )
     const result = await provider.retrieve(retrieveRequest())
-    expect(mock.requests.map((entry) => entry.pathname)).toEqual([
-      '/api/users/0/items/ABCD1234',
-      '/api/users/0/items/ABCD1234/children',
-      '/api/users/0/items/WXYZ6789/fulltext',
-    ])
+    // The parent gates everything; children and the linked fulltext then ride
+    // the same await and may arrive in either order.
+    expect(mock.requests[0]!.pathname).toBe('/api/users/0/items/ABCD1234')
+    expect(
+      mock.requests
+        .slice(1)
+        .map((entry) => entry.pathname)
+        .sort(),
+    ).toEqual(['/api/users/0/items/ABCD1234/children', '/api/users/0/items/WXYZ6789/fulltext'])
     expect(result.ref).toBe('zotero://user/0/item/ABCD1234?server=S1')
     expect(result.attachmentRef).toBe('zotero://user/0/attachment/WXYZ6789?server=S1')
     expect(result.coverage).toEqual({

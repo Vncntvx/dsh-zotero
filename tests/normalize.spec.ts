@@ -15,6 +15,7 @@ import {
   normalizeVenue,
   partitionChildren,
   plainNoteText,
+  type ZoteroChildKind,
 } from '../src/normalize.js'
 
 function fixture(name: string): unknown {
@@ -433,6 +434,44 @@ describe('partitionChildren', () => {
 
   it('fails loud on a child without a valid key', () => {
     expect(() => partitionChildren([{ data: { itemType: 'note' } }], undefined, 100)).toThrowError()
+  })
+
+  it('normalizes only the requested kinds', () => {
+    const rows = [
+      { key: 'NOTE1111', data: { itemType: 'note', note: '<p>body</p>' } },
+      {
+        key: 'ANNO1111',
+        data: {
+          itemType: 'annotation',
+          annotationType: 'highlight',
+          annotationText: 'a',
+          annotationSortIndex: '00001',
+        },
+      },
+      {
+        key: 'WXYZ6789',
+        data: { itemType: 'attachment', title: 'p', contentType: 'application/pdf' },
+      },
+    ]
+    const partitioned = partitionChildren(
+      rows,
+      'S1',
+      undefined,
+      new Set<ZoteroChildKind>(['attachment']),
+    )
+    expect(partitioned.notes).toEqual([])
+    expect(partitioned.annotations).toEqual([])
+    expect(partitioned.attachments).toHaveLength(1)
+  })
+
+  it('skips malformed rows of unrequested kinds', () => {
+    const malformed = [{ data: { itemType: 'note', note: 'body' } }]
+    expect(
+      partitionChildren(malformed, undefined, 100, new Set<ZoteroChildKind>(['attachment'])),
+    ).toEqual({ notes: [], annotations: [], attachments: [] })
+    expect(() =>
+      partitionChildren(malformed, undefined, 100, new Set<ZoteroChildKind>(['note'])),
+    ).toThrowError()
   })
 })
 
