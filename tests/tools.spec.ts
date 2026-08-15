@@ -631,3 +631,97 @@ describe('zotero_retrieve render', () => {
     expect(text).toContain('(0 passages)')
   })
 })
+
+describe('zotero_export tool', () => {
+  it('registers and exposes its schema to the assembly', () => {
+    expect(ctx.tools.get('zotero_export')).toBeDefined()
+    expect(ctx.tools.schemas().some((schema) => schema.name === 'zotero_export')).toBe(true)
+  })
+
+  it('exports paired citations ordered as requested', async () => {
+    mock.route('GET', '/api/users/0/items', (req, res, helpers) => helpers.json([
+      { key: 'BBBB1234', citation: '<span>B, 2021</span>' },
+      { key: 'ABCD1234', citation: '<span>A, 2023</span>' },
+    ]))
+    const result = await runTool('zotero_export', {
+      refs: ['zotero://user/0/item/ABCD1234', 'zotero://user/0/item/BBBB1234'],
+      format: 'citation',
+    })
+    expect(result.isError).toBe(false)
+    if (result.isError) throw new Error('unreachable')
+    expect(result.value).toEqual({
+      format: 'citation',
+      style: 'apa',
+      locale: 'en-US',
+      citations: [
+        { ref: 'zotero://user/0/item/ABCD1234', text: '<span>A, 2023</span>' },
+        { ref: 'zotero://user/0/item/BBBB1234', text: '<span>B, 2021</span>' },
+      ],
+    })
+    expect((result.content[0] as { text: string }).text).toBe([
+      'zotero://user/0/item/ABCD1234: <span>A, 2023</span>',
+      'zotero://user/0/item/BBBB1234: <span>B, 2021</span>',
+    ].join('\n'))
+  })
+
+  it('passes explicit style and locale through to the export', async () => {
+    mock.route('GET', '/api/users/0/items', (req, res, helpers) => helpers.json([
+      { key: 'ABCD1234', citation: 'x' },
+    ]))
+    const result = await runTool('zotero_export', {
+      refs: ['zotero://user/0/item/ABCD1234'],
+      format: 'citation',
+      style: 'chicago-note-bibliography',
+      locale: 'de-DE',
+    })
+    expect(result.isError).toBe(false)
+    if (result.isError) throw new Error('unreachable')
+    expect(mock.requests[0]!.search.get('style')).toBe('chicago-note-bibliography')
+    expect(mock.requests[0]!.search.get('locale')).toBe('de-DE')
+    expect(result.value).toEqual({
+      format: 'citation',
+      style: 'chicago-note-bibliography',
+      locale: 'de-DE',
+      citations: [{ ref: 'zotero://user/0/item/ABCD1234', text: 'x' }],
+    })
+  })
+
+  it('renders opaque bibliography text verbatim', async () => {
+    mock.route('GET', '/api/users/0/items', (req, res, helpers) => helpers.text('entry-a\nentry-b'))
+    const result = await runTool('zotero_export', {
+      refs: ['zotero://user/0/item/ABCD1234'],
+      format: 'bibliography',
+    })
+    expect(result.isError).toBe(false)
+    if (result.isError) throw new Error('unreachable')
+    expect((result.content[0] as { text: string }).text).toBe('entry-a\nentry-b')
+  })
+
+  it('rejects empty ref lists, malformed refs, and blank styles before any request', async () => {
+    const empty = await runTool('zotero_export', { refs: [], format: 'bibtex' })
+    expect(empty.isError).toBe(true)
+    if (!empty.isError) throw new Error('unreachable')
+    expect((empty.content[0] as { text: string }).text).toContain('refs')
+
+    const malformed = await runTool('zotero_export', { refs: ['nope'], format: 'bibtex' })
+    expect(malformed.isError).toBe(true)
+    if (!malformed.isError) throw new Error('unreachable')
+    expect((malformed.content[0] as { text: string }).text).toContain('Invalid Zotero reference')
+
+    const blankStyle = await runTool('zotero_export', { refs: ['zotero://user/0/item/ABCD1234'], format: 'citation', style: '  ' })
+    expect(blankStyle.isError).toBe(true)
+    if (!blankStyle.isError) throw new Error('unreachable')
+    expect((blankStyle.content[0] as { text: string }).text).toContain('style')
+
+    const blankLocale = await runTool('zotero_export', { refs: ['zotero://user/0/item/ABCD1234'], format: 'citation', locale: '  ' })
+    expect(blankLocale.isError).toBe(true)
+    if (!blankLocale.isError) throw new Error('unreachable')
+    expect((blankLocale.content[0] as { text: string }).text).toContain('locale')
+
+    expect(mock.requests).toEqual([])
+  })
+
+  it('declares itself concurrency-safe for valid arguments', () => {
+    expect(ctx.tools.get('zotero_export')!.isConcurrencySafe?.({ refs: ['zotero://user/0/item/ABCD1234'], format: 'bibtex' })).toBe(true)
+  })
+})

@@ -16,6 +16,7 @@ import { ZOTERO_CAPABILITY_UNAVAILABLE, ZOTERO_PROVIDER_UNAVAILABLE, ZoteroError
 import { LocalApiProvider } from './provider-local.js'
 import { registerAttachmentTool } from './tools/attachment.js'
 import { registerGetTool } from './tools/get.js'
+import { registerExportTool } from './tools/export.js'
 import { registerRetrieveTool } from './tools/retrieve.js'
 import { registerSearchTool } from './tools/search.js'
 import type {
@@ -24,6 +25,8 @@ import type {
   ZoteroGetRequest,
   ZoteroItemDetail,
   ZoteroObjectRef,
+  ZoteroExportRequest,
+  ZoteroExportResult,
   ZoteroProvider,
   ZoteroRetrieveRequest,
   ZoteroRetrieveResult,
@@ -59,12 +62,16 @@ export class ZoteroService extends Service {
       maxEvidenceChars: this.config.maxEvidenceChars,
       maxEvidencePassages: this.config.maxEvidencePassages,
       maxFulltextChars: this.config.maxFulltextChars,
+      maxExportChars: this.config.maxExportChars,
+      defaultStyle: this.config.defaultStyle,
+      defaultLocale: this.config.defaultLocale,
     }))
     registerStatusCommand(ctx, this)
     registerSearchTool(ctx, this, this.config)
     registerGetTool(ctx, this)
     registerAttachmentTool(ctx, this)
     registerRetrieveTool(ctx, this, this.config)
+    registerExportTool(ctx, this, this.config)
   }
 
   /**
@@ -120,6 +127,13 @@ export class ZoteroService extends Service {
     const provider = this.resolveProvider()
     this.requireCapability(provider, 'fulltext')
     return await provider.retrieve(request, signal)
+  }
+
+  /** Export citations, a bibliography, or translator formats for the requested items. */
+  async export(request: ZoteroExportRequest, signal?: AbortSignal): Promise<ZoteroExportResult> {
+    const provider = this.resolveProvider()
+    this.requireCapability(provider, 'citation')
+    return await provider.export(request, signal)
   }
 
   protected resolveProvider(): ZoteroProvider {

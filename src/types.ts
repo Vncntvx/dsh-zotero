@@ -232,7 +232,7 @@ export interface ZoteroExportRequest {
  * (the bibliography's ordering belongs to the CSL style, not the caller).
  */
 export type ZoteroExportResult =
-  | { readonly format: 'citation'; readonly style?: string; readonly locale?: string; readonly citations: readonly { readonly ref: string; readonly text: string }[] }
+  | { readonly format: 'citation'; readonly style?: string; readonly locale?: string; readonly citations: { readonly ref: string; readonly text: string }[] }
   | { readonly format: Exclude<ZoteroExportFormat, 'citation'>; readonly style?: string; readonly locale?: string; readonly text: string }
 
 /** Raw fulltext payload from `GET /items/<attachmentKey>/fulltext`. */
@@ -249,9 +249,7 @@ export interface ZoteroFulltextPayload {
  * capabilities they safely support; the service gates every domain call on
  * that declaration. The Agent never sees which provider satisfied a request.
  * `available()` is deliberately absent: request-driven providers fail with
- * typed domain errors, and only `status()` performs a health check. The
- * export-side domain method joins this interface in the phase that
- * implements it.
+ * typed domain errors, and only `status()` performs a health check.
  */
 export interface ZoteroProvider {
   readonly id: string
@@ -261,4 +259,5 @@ export interface ZoteroProvider {
   getItem(request: ZoteroGetRequest, signal?: AbortSignal): Promise<ZoteroItemDetail>
   getAttachmentLocation(ref: ZoteroObjectRef, signal?: AbortSignal): Promise<ZoteroAttachmentLocation>
   retrieve(request: ZoteroRetrieveRequest, signal?: AbortSignal): Promise<ZoteroRetrieveResult>
+  export(request: ZoteroExportRequest, signal?: AbortSignal): Promise<ZoteroExportResult>
 }

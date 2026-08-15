@@ -16,7 +16,9 @@ import {
   NO_FULLTEXT_MESSAGE,
   isNotFoundError,
   ZOTERO_FILE_MISSING,
+  ZOTERO_OUTPUT_TOO_LARGE,
   ZOTERO_NO_ATTACHMENT,
+  ZOTERO_UNEXPECTED,
   ZOTERO_NO_FULLTEXT,
   ZOTERO_NOT_FOUND,
   ZOTERO_SCOPE_AMBIGUOUS,
@@ -47,6 +49,8 @@ import type {
   ZoteroCoverage,
   ZoteroEvidence,
   ZoteroEvidenceSource,
+  ZoteroExportRequest,
+  ZoteroExportResult,
   ZoteroFulltextPayload,
   ZoteroGetRequest,
   ZoteroInclude,
@@ -101,6 +105,12 @@ export interface LocalApiLimits {
   readonly maxEvidencePassages: number
   /** Character bound for full text accepted into evidence ranking. */
   readonly maxFulltextChars: number
+  /** Provider hard limit for export output; never mid-truncated. */
+  readonly maxExportChars: number
+  /** CSL style for citation/bibliography formats. */
+  readonly defaultStyle: string
+  /** CSL locale for citation/bibliography formats. */
+  readonly defaultLocale: string
 }
 
 const INCLUDE_ORDER: readonly ZoteroInclude[] = ['notes', 'annotations', 'attachments']
@@ -131,7 +141,7 @@ function normalizeCoverage(payload: ZoteroFulltextPayload): ZoteroCoverage {
 export class LocalApiProvider implements ZoteroProvider {
   readonly id = LOCAL_PROVIDER_ID
   readonly capabilities: ReadonlySet<ZoteroCapability> = new Set<ZoteroCapability>([
-    'metadata', 'search', 'collections', 'tags', 'notes', 'annotations', 'attachments', 'fulltext',
+    'metadata', 'search', 'collections', 'tags', 'notes', 'annotations', 'attachments', 'fulltext', 'citation',
   ])
 
   constructor(private readonly client: ZoteroHttpClient, private readonly limits: LocalApiLimits) {}
@@ -393,6 +403,72 @@ export class LocalApiProvider implements ZoteroProvider {
       evidence,
       truncated,
     }
+  }
+
+  /**
+   * Export the requested items through the Local API's format pipeline:
+   * `include=citation` pairs each item with its HTML citation in one list
+   * request (reordered to match the requested refs), `format=bib` yields a
+   * joined CSL-sorted bibliography, and the translator formats
+   * (`bibtex`/`biblatex`/`ris`/`csljson`) export the whole set at once.
+   * Output that exceeds `maxExportChars` fails with OUTPUT_TOO_LARGE —
+   * export text is never mid-truncated.
+   */
+  async export(request: ZoteroExportRequest, signal?: AbortSignal): Promise<ZoteroExportResult> {
+    for (const ref of request.refs) requireLocalRef(ref, ['item'])
+    const search = new URLSearchParams()
+    search.set('itemKey', request.refs.map((ref) => ref.key).join(','))
+    const serverId = request.refs[0]?.serverId
+    const style = request.style ?? this.limits.defaultStyle
+    const locale = request.locale ?? this.limits.defaultLocale
+    if (request.format === 'citation') {
+      search.set('include', 'citation')
+      search.set('style', style)
+      search.set('locale', locale)
+      const { json } = await this.client.getJson<unknown>('users/0/items', search, { signal, serverId })
+      const citationByKey = new Map<string, string>()
+      for (const row of Array.isArray(json) ? json : []) {
+        const record = asRecord(row)
+        const key = asString(record?.key)
+        if (key === undefined || !/^[A-Z0-9]{8}$/.test(key)) {
+          throw new ZoteroError('Zotero returned an item without a valid object key.', ZOTERO_UNEXPECTED)
+        }
+        citationByKey.set(key, asString(record?.citation) ?? '')
+      }
+      const citations = request.refs.map((ref) => {
+        const text = citationByKey.get(ref.key)
+        if (text === undefined) {
+          throw new ZoteroError(`Zotero did not return an item for ${formatRef(ref)}.`, ZOTERO_NOT_FOUND)
+        }
+        return { ref: formatRef(ref), text }
+      })
+      const totalChars = citations.reduce((sum, entry) => sum + entry.text.length, 0)
+      if (totalChars > this.limits.maxExportChars) {
+        throw new ZoteroError(
+          `Citation output of ${totalChars} characters exceeds the ${this.limits.maxExportChars}-character export limit.`,
+          ZOTERO_OUTPUT_TOO_LARGE,
+        )
+      }
+      return { format: 'citation', style, locale, citations }
+    }
+    if (request.format === 'bibliography') {
+      search.set('format', 'bib')
+      search.set('style', style)
+      search.set('locale', locale)
+    } else {
+      search.set('format', request.format)
+    }
+    const { body } = await this.client.get('users/0/items', search, { signal, serverId })
+    if (body.length > this.limits.maxExportChars) {
+      throw new ZoteroError(
+        `Export output of ${body.length} characters exceeds the ${this.limits.maxExportChars}-character export limit.`,
+        ZOTERO_OUTPUT_TOO_LARGE,
+      )
+    }
+    if (request.format === 'bibliography') {
+      return { format: 'bibliography', style, locale, text: body }
+    }
+    return { format: request.format, text: body }
   }
 
   private async fetchFulltext(attachmentKey: string, serverId: string | undefined, signal: AbortSignal | undefined): Promise<ZoteroFulltextPayload> {
