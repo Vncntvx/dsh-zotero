@@ -169,6 +169,12 @@ export function registerGetTool(ctx: Context, service: ZoteroService): void {
       schema: GET_OUTPUT_SCHEMA,
       render: renderGet,
     },
+    presentCall: (args) => ({
+      card: 'generic',
+      kind: 'read',
+      title: 'Read Zotero item',
+      rawInput: args.ref,
+    }),
     isConcurrencySafe: () => true,
     async execute(args, exec) {
       return await service.get(buildRequest(args), exec.signal)

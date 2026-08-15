@@ -1,6 +1,6 @@
 /**
- * The model-facing Zotero policy section: how the research memory tools
- * compose into a retrieval workflow, what the ref grammar guarantees, and
+ * The model-facing Zotero policy section: how the five tools compose
+ * into a retrieval workflow, what the ref grammar guarantees, and
  * the honesty rules (provenance fails closed, no invented page locators).
  * Registered once in the tool-guidance band.
  * @module dsh-zotero/prompt
@@ -14,7 +14,7 @@ export const ZOTERO_PROMPT_SECTION_NAME = 'zotero:policy'
 export const ZOTERO_PROMPT_SECTION_ORDER = 106
 
 export const ZOTERO_PROMPT_SECTION_TEXT = [
-  'Zotero research memory (the user\'s local library):',
+  'Zotero (the user\'s local library):',
   '- zotero_search discovers papers by title/creator/year, or by indexed full text in everything mode; results carry stable refs of the form zotero://user/0/item/<KEY>, optionally qualified with ?server=<id>.',
   '- zotero_get reads one item\'s metadata; include notes/annotations/attachments only when child content matters.',
   '- zotero_retrieve ranks evidence passages (annotations, notes, the abstract, full text) against a query; the truncated flag signals omitted passages.',

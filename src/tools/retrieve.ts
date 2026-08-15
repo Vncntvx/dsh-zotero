@@ -115,6 +115,12 @@ export function registerRetrieveTool(ctx: Context, service: ZoteroService, confi
       schema: RETRIEVE_OUTPUT_SCHEMA,
       render: renderRetrieve,
     },
+    presentCall: (args) => ({
+      card: 'generic',
+      kind: 'search',
+      title: 'Retrieve Zotero evidence',
+      rawInput: args.query,
+    }),
     isConcurrencySafe: () => true,
     async execute(args, exec) {
       return await service.retrieve(buildRequest(args, config), exec.signal)

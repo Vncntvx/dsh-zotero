@@ -8,11 +8,12 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
-import { defineTool, type InferArgs, type InferValue } from '@deepseek-ai/dsh-tools'
+import { defineTool, type InferArgs, type InferValue, type JsonValue, type ToolResult, type ToolResultView } from '@deepseek-ai/dsh-tools'
+import { ZOTERO_SORT_FIELDS } from '../constants.js'
 import type { ResolvedConfig } from '../config.js'
 import { ZOTERO_INVALID_ARGUMENT, ZoteroError } from '../errors.js'
 import type { ZoteroService } from '../service.js'
-import { ZOTERO_SORT_FIELDS, type ZoteroSearchRequest } from '../types.js'
+import type { ZoteroSearchRequest } from '../types.js'
 
 const SEARCH_PARAMETERS = {
   query: { type: 'string', description: 'Free-text query; omit to browse the scope unfiltered.' },
@@ -125,6 +126,25 @@ export function renderSearch(_args: SearchArgs, value: SearchOutput): ContentBlo
   return [{ type: 'text', text: lines.join('\n') }]
 }
 
+/** Replayable projection of the page facts a completed card title needs. */
+function searchPresentationMeta(_args: SearchArgs, value: SearchOutput): JsonValue {
+  return { returned: value.returned, total: value.total, nextOffset: value.nextOffset ?? null }
+}
+
+/**
+ * The completed search card: a compact page summary. `meta` is absent on
+ * nested code dispatch or malformed replay records, and a failed call keeps
+ * the raw error content — both fall back to the generic card.
+ */
+function presentSearchResult(_args: SearchArgs, result: ToolResult): ToolResultView | undefined {
+  if (result.isError) return undefined
+  const meta = result.meta
+  if (typeof meta !== 'object' || meta === null || Array.isArray(meta)) return undefined
+  const record = meta as Record<string, unknown>
+  if (typeof record.returned !== 'number' || typeof record.total !== 'number') return undefined
+  return { card: 'generic', title: `Zotero search: found ${record.returned} of ${record.total} results` }
+}
+
 export function registerSearchTool(ctx: Context, service: ZoteroService, config: ResolvedConfig): void {
   ctx.tools.register(defineTool({
     name: 'zotero_search',
@@ -138,7 +158,15 @@ export function registerSearchTool(ctx: Context, service: ZoteroService, config:
     output: {
       schema: SEARCH_OUTPUT_SCHEMA,
       render: renderSearch,
+      presentationMeta: searchPresentationMeta,
     },
+    presentCall: (args) => ({
+      card: 'generic',
+      kind: 'search',
+      title: 'Search Zotero library',
+      rawInput: args.query ?? '(browse)',
+    }),
+    presentResult: presentSearchResult,
     isConcurrencySafe: () => true,
     async execute(args, exec) {
       return await service.search(buildRequest(args, config), exec.signal)

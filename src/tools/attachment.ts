@@ -62,6 +62,12 @@ export function registerAttachmentTool(ctx: Context, service: ZoteroService): vo
       schema: ATTACHMENT_OUTPUT_SCHEMA,
       render: renderAttachment,
     },
+    presentCall: (args) => ({
+      card: 'generic',
+      kind: 'read',
+      title: 'Resolve Zotero attachment',
+      rawInput: args.ref,
+    }),
     isConcurrencySafe: () => true,
     async execute(args, exec) {
       const ref = parseRef(args.ref)

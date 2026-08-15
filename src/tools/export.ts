@@ -113,6 +113,11 @@ export function registerExportTool(ctx: Context, service: ZoteroService, _config
       schema: EXPORT_OUTPUT_SCHEMA,
       render: renderExport,
     },
+    presentCall: (args) => ({
+      card: 'generic',
+      title: 'Export Zotero citations',
+      rawInput: `${args.refs.length} refs · ${args.format}`,
+    }),
     isConcurrencySafe: () => true,
     async execute(args, exec) {
       return await service.export(buildRequest(args), exec.signal)

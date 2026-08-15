@@ -4,48 +4,97 @@
   <a href="README.en.md"><b>English</b></a> · <b>中文</b>
 </p>
 
-一个 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 插件，让 Agent 渐进访问本地 [Zotero](https://www.zotero.org) 文献库：发现、元数据、证据、引用。它通过 Harness 已有扩展点提供五个工具、一个命令和一个提示词分区。
+让 Agents 搜索、阅读并引用你的本地 [Zotero](https://www.zotero.org) 文献库：找文献、查看笔记与批注、按问题取证、打开原文、生成引用。
 
-## 环境要求
-
-- 已安装 Zotero 桌面版，并启用本地 API：**设置 → 高级 → “Allow other applications on this computer to communicate with Zotero”**。
-- 本地 API 为无认证读取，地址为 `http://127.0.0.1:23119/api`。插件不会写入文献库（V1 只读）。
-- Zotero ≥ 7，本地 API 版本为 3。如果 status 命令报告版本不匹配，请升级。
-
-## 安装
-
-在 dsh checkout 中构建并安装到 profile：
-
-```sh
-cd dsh-zotero
-npm install
-npm run build
-dsh plugin --profile <name> add ./dsh-zotero
-```
-
-发布后可按包名安装：
-
-```sh
-dsh plugin --profile <name> add dsh-zotero
-```
-
-插件以 `zotero` 为 id、空配置挂载。下次运行 `dsh web` 或 headless 时使用默认配置加载。
+在会话里用自然语言描述需求，Agent 自动按需调用下面的工具；唯一的手动命令是 `/zotero status`。
 
 ## 工具
 
 | 工具 | 用途 |
 | --- | --- |
-| `zotero_search` | 通过 Zotero 快速搜索发现候选条目（标题/作者/年份，或使用 `everything` 搜索全文索引）。可搜索整个文献库，也可按名称或 ref 限定到某个分类或已保存搜索。 |
-| `zotero_get` | 读取单条条目的元数据；`include` 可附加子笔记、注释或附件（惰性请求）。 |
-| `zotero_retrieve` | 使用 BM25 对证据片段（注释、笔记、摘要、全文分块）按查询排序。 |
-| `zotero_attachment` | 将附件解析为已验证的本地磁盘路径或链接 URL。 |
-| `zotero_export` | 按 ref 导出 HTML 引用、合并的 CSL 参考文献，或 `bibtex` / `biblatex` / `ris` / `csljson` 格式。 |
+| `zotero_search` | 发现：按标题/作者/年份搜索库里的资料，`everything` 模式连全文索引一起搜；可限定某个分类或已保存搜索。 |
+| `zotero_get` | 检查：读取一条资料的结构化核心元数据，可选检查笔记、注释、附件的清单与预览。 |
+| `zotero_retrieve` | 取证：按问题返回最相关的有界证据片段（注释、笔记、摘要、全文分块）。 |
+| `zotero_attachment` | 原文：解析条目或附件 ref，返回原始附件已验证的磁盘路径或链接 URL。条目 ref 取 Zotero 自选的最佳附件，附件 ref 指定单个附件。 |
+| `zotero_export` | 引用：让 Zotero 按自己的 citation/export 能力生成结果（引用、CSL 参考文献表、`bibtex` / `biblatex` / `ris` / `csljson`）。 |
 
-每个工具都返回形如 `zotero://user/0/<item|attachment|annotation|collection|search>/<KEY>` 的稳定 ref，并可用 `?server=<id>` 限定来源。该限定符记录 ref 来自哪个 Zotero 数据库。用于不同数据库时 fail closed，不解析同 key 对象。
+每个工具都返回形如 `zotero://user/0/<item|attachment|annotation|collection|search>/<KEY>` 的可复用 ref，后续操作都通过它串联。Zotero 10+ 的 `?server=<id>` 限定符把 ref 绑定到产生它的数据库身份，数据库切换时阻止误读旧 ref。
+
+## 使用示例
+
+Agent 按需求逐层深入，一段典型对话：
+
+> 用户：「帮我找 FlashAttention 相关论文」
+> Agent → `zotero_search`，返回候选条目与 ref。
+>
+> 用户：「第一篇是什么？我以前读过吗？」
+> Agent → `zotero_get`：元数据、17 条批注、2 条笔记与有限预览。
+>
+> 用户：「我当时对 evaluation 有什么意见？」
+> Agent → `zotero_retrieve(query:"evaluation", sources:["annotations","notes"])`，返回相关笔记与批注证据。
+>
+> 用户：「论文自己怎么解释 memory efficiency？」
+> Agent → `zotero_retrieve(query:"memory efficiency", sources:["fulltext","abstract"])`，返回摘要与全文片段。
+>
+> 用户：「我要看原 PDF」
+> Agent → `zotero_attachment(条目 ref)`，返回已验证的文件路径；若当前 Harness 配置了 PDF/file 读取能力，再交给该能力继续分析。
+>
+> 用户：「把这三篇生成 APA 参考文献表」
+> Agent → `zotero_export(format:"bibliography", style:"apa")`。
 
 ## 命令
 
-`/zotero status` 报告连通性、API/schema 版本和实例的 Server ID。这是唯一的健康检查。普通调用失败时返回带类型的领域错误。
+`/zotero status` 报告连通性、API/schema 版本和数据库身份标识（Server ID，Zotero 10+）。这是唯一的健康检查。普通调用失败时返回带类型的领域错误。
+
+## 限制
+
+- 对文献库只读：V1 没有任何修改条目、笔记、标签、分类等文献库数据的路径。
+- 全文证据依赖 Zotero 的全文索引：`everything` 搜索和 `retrieve` 的全文片段都以索引为前提。
+- 附件深度分析取决于当前 Harness 配置：`zotero_attachment` 返回文件位置，能否继续读取该 PDF 由 composition 里是否有相应文件/PDF 能力决定。
+- 证据排序是词项相关度检索，不是 embedding 或语义搜索。
+
+## 环境要求
+
+- 已安装 Zotero 桌面版，并启用本地 API：**设置 → 高级 → “Allow other applications on this computer to communicate with Zotero”**。
+- 本地 API 为无认证读取，地址为 `http://127.0.0.1:23119/api`。V1 没有任何修改文献库数据（条目、笔记、标签、分类等）的路径。
+- Zotero ≥ 7，本地 API 版本为 3。如果 status 命令报告版本不匹配，请升级。
+
+## 安装
+
+### 按包名安装
+
+```sh
+dsh plugin --profile <name> add dsh-zotero
+```
+
+tarball 内含已构建的 `lib/`，无需本地构建。
+
+### 本地 tarball
+
+```sh
+cd dsh-zotero
+npm pack
+dsh plugin --profile <name> add ./dsh-zotero-0.1.0.tgz
+```
+
+`npm pack` 先运行 `prepare` 构建 `lib/`，适合未发布或本地试装。
+
+### 从 GitHub 源码安装
+
+```sh
+dsh plugin --profile <name> add github:Vncntvx/dsh-zotero
+```
+
+git 安装拉取源码而非构建产物，pnpm 安装依赖后运行本包的 `prepare` 现场构建（TypeScript 与 `@types/node` 在 `dependencies` 中）。pnpm ≥ 10 默认拒绝运行 git 依赖的 `prepare`，首次 `add` 会失败并提示：把包名加进 profile 的 `pnpm-workspace.yaml` 后重新执行：
+
+```yaml
+allowBuilds:
+  dsh-zotero: true
+```
+
+`allowBuilds` 授权该包在安装时执行代码，只允许你信任的来源，建议固定到具体提交（`github:Vncntvx/dsh-zotero#<sha>`）。
+
+插件以 id `zotero` 挂载，下次启动 dsh 时生效。安装或启用插件后，如果当前会话创建于插件加载之前，请新建会话，确保 Agent 获得 Zotero 工具。
 
 ## 配置
 
@@ -60,14 +109,19 @@ dsh plugin --profile <name> add dsh-zotero
 | `maxEvidenceChars` | `6000` | 检索证据的总字符预算。 |
 | `maxEvidencePassages` | `4` | 证据片段数量的上限。 |
 | `maxDetailChars` | `3000` | `zotero_get` 摘要预览的字符预算。 |
+| `maxNoteChars` | `2000` | `zotero_get` 单条笔记预览的字符预算。 |
+| `maxNoteRecords` | `50` | `zotero_get` 返回笔记数量的上限。 |
+| `maxAnnotationRecords` | `100` | `zotero_get` 返回批注数量的上限。 |
+| `fulltextChunkWords` | `200` | 进入证据排序的全文片段词数。 |
 | `maxFulltextChars` | `250000` | 进入证据排序的全文大小上限。 |
 | `maxResponseBytes` | `16777216` | 每个 API 响应的流式字节上限。 |
 | `maxExportChars` | `1000000` | 导出输出的硬上限。不会中途截断。 |
 | `defaultStyle` | `apa` | 引用/参考文献使用的 CSL 样式。 |
 | `defaultLocale` | `en-US` | 引用/参考文献使用的 CSL locale。 |
 
-
 ## 开发
+
+### 命令
 
 ```sh
 npm install                      # 使用本地 npm 缓存
@@ -77,18 +131,16 @@ npm run typecheck                # tsc --noEmit，app + test 项目
 npm run build                    # 生成 lib/
 ```
 
-针对真实 Zotero 运行（集成测试默认跳过，需显式开启）：
+集成测试面向真实 Zotero，默认跳过，需显式开启：
 
 ```sh
 npm run test:integration
 # 或：ZOTERO_INTEGRATION=1 npx vitest run tests/integration/zotero.integration.spec.ts
 ```
 
-## 本地启动
+### 本地启动
 
-插件可在两种环境中启动：dsh 源码 checkout，或 npm 安装的正式版 dsh。
-
-### 从 dsh 源码启动
+#### 从 dsh 源码启动
 
 在 deepseek-harness 源码 checkout 中构建一次（`pnpm install && pnpm run build`），然后通过 dev overlay 加载插件源码：
 
@@ -98,9 +150,7 @@ pnpm dsh web --patch ./dsh-zotero/dev.cordis.yml
 
 `dev.cordis.yml` 将插件入口指向绝对的 `src/index.ts`。dsh 的源码启动经 tsx 加载该 TypeScript 入口，插件因此无需预构建；若 checkout 路径不同，需同步修改文件中的绝对路径。
 
-### 使用 npm 安装的 dsh
-
-npm 安装的 dsh 提供两种运行方式。
+#### 使用 npm 安装的 dsh
 
 **常驻实例**：打包为 tarball 并安装到 profile，插件以 tarball 中的副本运行；代码更新需重新打包安装。安装后运行生产栈 smoke 验证：
 
@@ -122,3 +172,7 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 ```
 
 热替换仅作用于通过 `--patch` 启动的实例；常驻实例继续运行 tarball 版本。
+
+## 许可证
+
+本插件以 [MIT](./LICENSE) 许可证发布。
