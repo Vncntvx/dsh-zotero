@@ -14,7 +14,7 @@
 
 import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { ZoteroHttpClient } from './client.js'
+import { ZoteroHttpClient } from './http-client.js'
 import {
   NO_FULLTEXT_MESSAGE,
   isNotFoundError,

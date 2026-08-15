@@ -10,12 +10,22 @@
  * (no probes, no timers, no background work). The only request sources are
  * the five tools, invoked because the user asked about their library, and
  * the `/zotero status` command the user invokes explicitly.
+ *
+ * The effective config is live: while a settings service is composed, the
+ * `zotero` settings namespace (composition entry as its base layer) is the
+ * authority, and every committed section rebuilds the HTTP client and the
+ * `local` provider so web-edited values apply without a restart.
  * @module dsh-zotero/service
  */
 
 import { Service, type Context } from '@deepseek-ai/cordis'
-import { ZoteroHttpClient } from './client.js'
+import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
+// Type-only: brings the `ctx.typert` Context merge into this program.
+import type {} from '@deepseek-ai/dsh-typert-registry'
+import { ZoteroHttpClient } from './http-client.js'
 import { registerStatusCommand } from './command.js'
+import { ZoteroRuntime } from './remote.js'
+import { TYPERT_MANIFEST } from './typert.js'
 import {
   Config as ConfigSchema,
   resolveConfig,
@@ -27,8 +37,9 @@ import {
   ZOTERO_PROVIDER_UNAVAILABLE,
   ZoteroError,
 } from './errors.js'
-import { LocalApiProvider } from './provider-local.js'
+import { LocalApiProvider, type LocalApiLimits } from './provider-local.js'
 import { registerPromptSection } from './prompt.js'
+import { ZOTERO_SETTINGS_NAMESPACE } from './settings-namespace.js'
 import { registerAttachmentTool } from './tools/attachment.js'
 import { registerGetTool } from './tools/get.js'
 import { registerExportTool } from './tools/export.js'
@@ -62,40 +73,80 @@ export class ZoteroService extends Service {
   static Config = ConfigSchema
 
   private readonly providers = new Map<string, ZoteroProvider>()
-  private readonly config: ResolvedConfig
+  /** Current config authority: the settings section while one is attached, the composition entry otherwise. */
+  private source: () => ResolvedConfig
+  /** Disposer of the currently registered `local` provider, released before a rebuild re-registers it. */
+  private providerDispose: (() => void) | undefined
 
   constructor(ctx: Context, config: Config = {}) {
     super(ctx, 'zotero')
-    this.config = resolveConfig(config)
-    const client = new ZoteroHttpClient({
-      baseUrl: this.config.baseUrl,
-      timeoutMs: this.config.timeoutMs,
-      maxResponseBytes: this.config.maxResponseBytes,
-    })
-    this.registerProvider(
-      new LocalApiProvider(client, {
-        maxNoteScanRecords: this.config.maxNoteScanRecords,
-        maxDetailChars: this.config.maxDetailChars,
-        maxNoteBodyChars: this.config.maxNoteBodyChars,
-        maxNoteChars: this.config.maxNoteChars,
-        maxNoteRecords: this.config.maxNoteRecords,
-        maxAnnotationRecords: this.config.maxAnnotationRecords,
-        fulltextChunkWords: this.config.fulltextChunkWords,
-        maxEvidenceChars: this.config.maxEvidenceChars,
-        maxEvidencePassages: this.config.maxEvidencePassages,
-        maxFulltextChars: this.config.maxFulltextChars,
-        maxExportChars: this.config.maxExportChars,
-        defaultStyle: this.config.defaultStyle,
-        defaultLocale: this.config.defaultLocale,
-      }),
-    )
+    // Schemastery fills every schema default before the constructor runs; the
+    // extra constraints resolveConfig enforces are what make the entry sound.
+    const entry = resolveConfig(config)
+    this.source = () => entry
+    this.rebuild()
     registerStatusCommand(ctx, this)
     registerPromptSection(ctx)
-    registerSearchTool(ctx, this, this.config)
+    registerSearchTool(ctx, this, () => this.config)
     registerGetTool(ctx, this)
     registerAttachmentTool(ctx, this)
-    registerRetrieveTool(ctx, this, this.config)
-    registerExportTool(ctx, this, this.config)
+    registerRetrieveTool(ctx, this, () => this.config)
+    registerExportTool(ctx, this, () => this.config)
+    installSettingsSection(ctx, settingsNamespace(ZOTERO_SETTINGS_NAMESPACE), ConfigSchema, entry, {
+      validate: resolveConfig,
+      setSource: (current) => {
+        // The settings-resolved value carries every schema default and has
+        // passed the resolveConfig validate hook, so it is ResolvedConfig at
+        // runtime even though the seam types it as Config.
+        this.source = current as () => ResolvedConfig
+      },
+      onChange: () => {
+        this.rebuild()
+      },
+    })
+    // The settings page's data channel: the Remote service reads and writes
+    // the namespace through the local seam, and the strict manifest claims
+    // the wire endpoints for the Host Gateway. Typert is a core service;
+    // the optional-inject form keeps the plugin loadable in compositions
+    // without it, exactly like the settings seam above.
+    new ZoteroRuntime(ctx)
+    ctx.inject(['typert'], (host) => {
+      host.effect(() => {
+        const dispose = host.typert.register(TYPERT_MANIFEST)
+        return () => {
+          void dispose()
+        }
+      }, 'dsh-zotero: typert manifest')
+    })
+  }
+
+  /**
+   * The currently effective configuration: schema defaults, then the
+   * composition entry, then the settings document's `zotero:` section.
+   * @returns the live resolved config.
+   */
+  get config(): ResolvedConfig {
+    return this.source()
+  }
+
+  /**
+   * Rebuild the HTTP client and the `local` provider from the current config.
+   * The previous provider registration is disposed first so the duplicate-id
+   * guard never fires; a request already in flight finishes on the client it
+   * started with, and later calls resolve the fresh provider.
+   */
+  private rebuild(): void {
+    this.providerDispose?.()
+    this.providerDispose = undefined
+    const config = this.config
+    const client = new ZoteroHttpClient({
+      baseUrl: config.baseUrl,
+      timeoutMs: config.timeoutMs,
+      maxResponseBytes: config.maxResponseBytes,
+    })
+    this.providerDispose = this.registerProvider(
+      new LocalApiProvider(client, localProviderLimits(config)),
+    )
   }
 
   /**
@@ -213,6 +264,30 @@ export class ZoteroService extends Service {
         ZOTERO_CAPABILITY_UNAVAILABLE,
       )
     }
+  }
+}
+
+/**
+ * Project one resolved config onto the `local` provider's limits. Shared by
+ * the initial build and every live rebuild so both always agree.
+ * @param config - the resolved config to project.
+ * @returns the provider limits the transport and ranking behavior read.
+ */
+function localProviderLimits(config: ResolvedConfig): LocalApiLimits {
+  return {
+    maxNoteScanRecords: config.maxNoteScanRecords,
+    maxDetailChars: config.maxDetailChars,
+    maxNoteBodyChars: config.maxNoteBodyChars,
+    maxNoteChars: config.maxNoteChars,
+    maxNoteRecords: config.maxNoteRecords,
+    maxAnnotationRecords: config.maxAnnotationRecords,
+    fulltextChunkWords: config.fulltextChunkWords,
+    maxEvidenceChars: config.maxEvidenceChars,
+    maxEvidencePassages: config.maxEvidencePassages,
+    maxFulltextChars: config.maxFulltextChars,
+    maxExportChars: config.maxExportChars,
+    defaultStyle: config.defaultStyle,
+    defaultLocale: config.defaultLocale,
   }
 }
 

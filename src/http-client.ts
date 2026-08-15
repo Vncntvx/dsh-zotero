@@ -4,7 +4,7 @@
  * and strict transport-error translation. Every request is request-driven —
  * there is no keep-alive state, no background work, and no redirect
  * following, so a loopback endpoint can never be taken elsewhere.
- * @module dsh-zotero/client
+ * @module dsh-zotero/http-client
  */
 
 import { HarnessError } from '@deepseek-ai/dsh-llm'
