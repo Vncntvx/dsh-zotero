@@ -1,0 +1,39 @@
+{
+  "key": "ABCD1234",
+  "version": 42,
+  "library": { "type": "user", "id": 123456, "name": "user", "links": { "alternate": { "href": "https://www.zotero.org/users/123456", "type": "text/html" } } },
+  "links": {
+    "self": { "href": "http://localhost:23119/api/users/0/items/ABCD1234", "type": "application/json" },
+    "alternate": { "href": "https://www.zotero.org/users/123456/items/ABCD1234", "type": "text/html" },
+    "attachment": {
+      "href": "http://localhost:23119/api/users/0/items/WXYZ6789",
+      "type": "application/json",
+      "attachmentType": "application/pdf",
+      "attachmentSize": 1234567
+    }
+  },
+  "meta": {
+    "creatorSummary": "Dao, Tri",
+    "parsedDate": "2023-07-28",
+    "numChildren": 2
+  },
+  "data": {
+    "key": "ABCD1234",
+    "version": 42,
+    "itemType": "conferencePaper",
+    "title": "FlashAttention-2: Faster Attention with Better Parallelism and Work Partitioning",
+    "date": "2023-07-28",
+    "abstractNote": "We propose FlashAttention-2, with better work partitioning.",
+    "publicationTitle": "International Conference on Machine Learning",
+    "proceedingsTitle": "Proceedings of ICML",
+    "DOI": "10.48550/arXiv.2307.08691",
+    "url": "https://arxiv.org/abs/2307.08691",
+    "creators": [
+      { "creatorType": "author", "firstName": "Tri", "lastName": "Dao" },
+      { "creatorType": "author", "firstName": "", "lastName": "Fu" }
+    ],
+    "tags": [{ "tag": "attention" }, { "tag": "efficient-training" }],
+    "collections": ["COLL1234"],
+    "relations": {}
+  }
+}

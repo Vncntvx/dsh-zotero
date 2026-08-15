@@ -4,7 +4,7 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import ZoteroService from '../src/index.js'
-import { ZOTERO_PROVIDER_UNAVAILABLE, ZoteroError } from '../src/errors.js'
+import { ZOTERO_CAPABILITY_UNAVAILABLE, ZOTERO_PROVIDER_UNAVAILABLE, ZoteroError } from '../src/errors.js'
 import type { ZoteroProvider } from '../src/types.js'
 import { MockZotero } from './helpers/mock-zotero.js'
 
@@ -152,6 +152,7 @@ describe('provider registration', () => {
       id: 'local',
       capabilities: new Set(),
       status: async () => ({ providerId: 'local', connected: false, diagnosis: 'test double' }),
+      search: async () => { throw new Error('test double: must not be called') },
     }
     let thrown: unknown
     try {
@@ -170,6 +171,7 @@ describe('provider registration', () => {
       id: 'foreign',
       capabilities: new Set(),
       status: async () => ({ providerId: 'foreign', connected: true, diagnosis: 'ok' }),
+      search: async () => { throw new Error('test double: must not be called') },
     }
     const dispose = service.registerProvider(foreign)
     dispose()
@@ -177,5 +179,32 @@ describe('provider registration', () => {
     mock.route('GET', '/api/', (req, res, helpers) => helpers.json({}, { 'Zotero-API-Version': '3' }))
     const status = await service.status()
     expect(status.providerId).toBe('local')
+  })
+})
+
+describe('capability gating', () => {
+  it('refuses search when the configured provider lacks the capability', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SystemPrompt, {})
+    await ctx.plugin(ToolRuntime, {})
+    await ctx.plugin(ZoteroService, { baseUrl: mock.baseUrl, provider: 'limited' })
+    const service = ctx.get('zotero') as ZoteroService
+    service.registerProvider({
+      id: 'limited',
+      capabilities: new Set(['metadata']),
+      status: async () => ({ providerId: 'limited', connected: true, diagnosis: 'ok' }),
+      search: async () => { throw new Error('test double: must not be called') },
+    })
+    let thrown: unknown
+    try {
+      await service.search({
+        scope: { kind: 'library' }, mode: 'metadata', sort: 'dateModified', direction: 'desc', offset: 0, limit: 5,
+      })
+    } catch (error) {
+      thrown = error
+    }
+    expect(thrown).toBeInstanceOf(ZoteroError)
+    expect((thrown as ZoteroError).code).toBe(ZOTERO_CAPABILITY_UNAVAILABLE)
+    expect((thrown as ZoteroError).message).toContain('search')
   })
 })

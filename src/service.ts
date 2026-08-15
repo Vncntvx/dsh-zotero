@@ -12,9 +12,16 @@ import { Service, type Context } from '@deepseek-ai/cordis'
 import { ZoteroHttpClient } from './client.js'
 import { registerStatusCommand } from './command.js'
 import { Config as ConfigSchema, resolveConfig, type Config, type ResolvedConfig } from './config.js'
-import { ZOTERO_PROVIDER_UNAVAILABLE, ZoteroError } from './errors.js'
+import { ZOTERO_CAPABILITY_UNAVAILABLE, ZOTERO_PROVIDER_UNAVAILABLE, ZoteroError } from './errors.js'
 import { LocalApiProvider } from './provider-local.js'
-import type { ZoteroProvider, ZoteroStatus } from './types.js'
+import { registerSearchTool } from './tools/search.js'
+import type {
+  ZoteroCapability,
+  ZoteroProvider,
+  ZoteroSearchRequest,
+  ZoteroSearchResult,
+  ZoteroStatus,
+} from './types.js'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -40,6 +47,7 @@ export class ZoteroService extends Service {
     })
     this.registerProvider(new LocalApiProvider(client))
     registerStatusCommand(ctx, this)
+    registerSearchTool(ctx, this, this.config)
   }
 
   /**
@@ -69,12 +77,28 @@ export class ZoteroService extends Service {
     return this.resolveProvider().status(signal)
   }
 
+  /** Discover candidates; the provider resolves scopes and serves the compact records. */
+  async search(request: ZoteroSearchRequest, signal?: AbortSignal): Promise<ZoteroSearchResult> {
+    const provider = this.resolveProvider()
+    this.requireCapability(provider, 'search')
+    return await provider.search(request, signal)
+  }
+
   protected resolveProvider(): ZoteroProvider {
     const provider = this.providers.get(this.config.provider)
     if (provider === undefined) {
       throw new ZoteroError(`No Zotero provider "${this.config.provider}" is registered.`, ZOTERO_PROVIDER_UNAVAILABLE)
     }
     return provider
+  }
+
+  protected requireCapability(provider: ZoteroProvider, capability: ZoteroCapability): void {
+    if (!provider.capabilities.has(capability)) {
+      throw new ZoteroError(
+        `Zotero provider "${provider.id}" does not support the ${capability} capability.`,
+        ZOTERO_CAPABILITY_UNAVAILABLE,
+      )
+    }
   }
 }
 

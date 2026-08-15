@@ -1,0 +1,25 @@
+{
+  "key": "EFGH5678",
+  "version": 7,
+  "library": { "type": "user", "id": 999, "name": "user", "links": {} },
+  "links": {
+    "self": { "href": "http://localhost:23119/api/users/0/items/EFGH5678", "type": "application/json" }
+  },
+  "meta": {
+    "creatorSummary": "Vaswani, Ashish",
+    "parsedDate": "2017",
+    "numChildren": 1
+  },
+  "data": {
+    "key": "EFGH5678",
+    "version": 7,
+    "itemType": "journalArticle",
+    "title": "Attention Is All You Need",
+    "date": "2017",
+    "publicationTitle": "Advances in Neural Information Processing Systems",
+    "creators": [{ "creatorType": "author", "firstName": "Ashish", "lastName": "Vaswani" }],
+    "tags": [],
+    "collections": [],
+    "relations": {}
+  }
+}

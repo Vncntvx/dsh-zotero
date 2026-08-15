@@ -1,0 +1,26 @@
+{
+  "key": "MNOP3456",
+  "version": 3,
+  "futureFieldThatClientsMustIgnore": { "nested": true },
+  "library": { "type": "user", "id": 999, "name": "user", "links": {} },
+  "links": {
+    "self": { "href": "http://localhost:23119/api/users/0/items/MNOP3456", "type": "application/json" }
+  },
+  "meta": {
+    "creatorSummary": "Unknown, Author",
+    "parsedDate": "2020-03-01",
+    "futureMetaField": "ignored",
+    "numChildren": 0
+  },
+  "data": {
+    "key": "MNOP3456",
+    "version": 3,
+    "itemType": "book",
+    "title": "A Forward-Tolerant Record",
+    "futureDataField": "ignored",
+    "creators": [{ "creatorType": "author", "firstName": "Author", "lastName": "Unknown" }],
+    "tags": [],
+    "collections": [],
+    "relations": {}
+  }
+}

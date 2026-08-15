@@ -89,23 +89,23 @@ export interface ZoteroSearchRequest {
 
 /** One compact search hit. `bestAttachment*` come from Zotero's own attachment selection. */
 export interface ZoteroSearchItem {
-  readonly ref: string
-  readonly title: string
-  readonly creatorSummary: string
-  readonly year?: number
-  readonly itemType: string
-  readonly bestAttachmentRef?: string
-  readonly bestAttachmentType?: string
-  readonly attachmentSize?: number
+  ref: string
+  title: string
+  creatorSummary: string
+  year?: number
+  itemType: string
+  bestAttachmentRef?: string
+  bestAttachmentType?: string
+  attachmentSize?: number
 }
 
 export interface ZoteroSearchResult {
   readonly scope: ZoteroResolvedScope
-  readonly items: readonly ZoteroSearchItem[]
+  items: ZoteroSearchItem[]
   readonly total: number
   readonly offset: number
   readonly returned: number
-  readonly nextOffset?: number
+  nextOffset?: number
 }
 
 /** Child content kinds `zotero_get` can include beyond plain metadata. */
@@ -257,4 +257,5 @@ export interface ZoteroProvider {
   readonly id: string
   readonly capabilities: ReadonlySet<ZoteroCapability>
   status(signal?: AbortSignal): Promise<ZoteroStatus>
+  search(request: ZoteroSearchRequest, signal?: AbortSignal): Promise<ZoteroSearchResult>
 }
