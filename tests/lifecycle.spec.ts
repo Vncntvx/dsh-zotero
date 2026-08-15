@@ -5,6 +5,7 @@ import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import ZoteroService from '../src/index.js'
 import { ZOTERO_CAPABILITY_UNAVAILABLE, ZOTERO_PROVIDER_UNAVAILABLE, ZoteroError } from '../src/errors.js'
+import { ZOTERO_PROMPT_SECTION_ORDER } from '../src/prompt.js'
 import { parseRef } from '../src/refs.js'
 import type { ZoteroProvider } from '../src/types.js'
 import { MockZotero } from './helpers/mock-zotero.js'
@@ -18,8 +19,16 @@ class StubCommands extends Service {
   }
 
   register(definition: CommandDefinition): () => void {
-    this.registered.push(definition)
-    return () => {}
+    const registered = this.registered
+    // Effect-scoped like the real registry: the registration lives in the
+    // scope that called register(), so a disposed injection unwinds it.
+    return this.ctx.effect(() => {
+      registered.push(definition)
+      return () => {
+        const index = registered.indexOf(definition)
+        if (index >= 0) registered.splice(index, 1)
+      }
+    }, 'StubCommands.register()')
   }
 }
 
@@ -123,6 +132,41 @@ describe('/zotero status command', () => {
     const definition = stub!.registered[0]!
     const result = await definition.handler(invocation('open')) as CommandResult
     expect(result).toEqual({ kind: 'error', text: 'Usage: /zotero status' })
+  })
+})
+
+describe('prompt section', () => {
+  it('contributes the zotero policy section at order 106', async () => {
+    const { ctx } = await bootContext(true)
+    const assembly = await ctx.systemPrompt.assemble()
+    const section = assembly.sections.find((entry) => entry.name === 'zotero:policy')
+    expect(section).toBeDefined()
+    // Assemblies expose name/text only; order is observed through position —
+    // 106 lands after the identity/persona sections that open the prompt.
+    expect(assembly.sections.map((entry) => entry.name).indexOf('zotero:policy')).toBeGreaterThan(0)
+    expect(ZOTERO_PROMPT_SECTION_ORDER).toBe(106)
+    for (const tool of ['zotero_search', 'zotero_get', 'zotero_retrieve', 'zotero_attachment', 'zotero_export']) {
+      expect(section!.text).toContain(tool)
+    }
+    expect(section!.text).toContain('zotero://user/0/item/')
+    expect(section!.text).toContain('Never invent page numbers')
+  })
+})
+
+describe('disposal unwinds registrations', () => {
+  it('removes tools, the prompt section, and the command when the plugin fiber is disposed', async () => {
+    const { ctx, stub, zoteroFiber } = await bootContext(true)
+    expect(ctx.tools.get('zotero_search')).toBeDefined()
+    expect((await ctx.systemPrompt.assemble()).sections.some((entry) => entry.name === 'zotero:policy')).toBe(true)
+    expect(stub!.registered.map((definition) => definition.name)).toEqual(['zotero'])
+
+    await zoteroFiber.dispose()
+
+    expect(ctx.get('zotero')).toBeUndefined()
+    expect(ctx.tools.get('zotero_search')).toBeUndefined()
+    expect(ctx.tools.get('zotero_export')).toBeUndefined()
+    expect((await ctx.systemPrompt.assemble()).sections.some((entry) => entry.name === 'zotero:policy')).toBe(false)
+    expect(stub!.registered).toEqual([])
   })
 })
 

@@ -14,6 +14,7 @@ import { registerStatusCommand } from './command.js'
 import { Config as ConfigSchema, resolveConfig, type Config, type ResolvedConfig } from './config.js'
 import { ZOTERO_CAPABILITY_UNAVAILABLE, ZOTERO_PROVIDER_UNAVAILABLE, ZoteroError } from './errors.js'
 import { LocalApiProvider } from './provider-local.js'
+import { registerPromptSection } from './prompt.js'
 import { registerAttachmentTool } from './tools/attachment.js'
 import { registerGetTool } from './tools/get.js'
 import { registerExportTool } from './tools/export.js'
@@ -67,6 +68,7 @@ export class ZoteroService extends Service {
       defaultLocale: this.config.defaultLocale,
     }))
     registerStatusCommand(ctx, this)
+    registerPromptSection(ctx)
     registerSearchTool(ctx, this, this.config)
     registerGetTool(ctx, this)
     registerAttachmentTool(ctx, this)
