@@ -35,11 +35,11 @@ const NS = 'zotero'
 /**
  * The Zotero brand glyph as JSON icon data (the settings shell renders it
  * inline in `currentColor`): the official mark, monochrome for the nav rail,
- * scaled to 90% of its viewBox so it reads one visual size with the shell's
+ * scaled to 75% of its viewBox so it reads one visual size with the shell's
  * built-in glyphs.
  */
 const NAV_ICON = {
-  path: 'M20.308 3.416 7.662 20.031h14.308V22.8H3.23v-2.216L15.877 3.968H3.877V1.2h17.63v2.216z',
+  path: 'M18.923 4.847 8.385 18.692h10.923V21H4.692v-1.847L15.231 5.307H5.231V3h13.692v1.847z',
 }
 
 /** Required services (cordis fiber inject). */
