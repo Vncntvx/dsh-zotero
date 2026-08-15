@@ -76,7 +76,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Vncntvx/dsh-zotero.git"
+    "url": "git+https://github.com/Vncntvx/dsh-zotero.git"
   },
   "bugs": {
     "url": "https://github.com/Vncntvx/dsh-zotero/issues"
