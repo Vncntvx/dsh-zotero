@@ -1,7 +1,14 @@
-# dsh-zotero
+<h1 align="center">dsh-zotero</h1>
 
 <p align="center">
   <a href="README.en.md"><b>English</b></a> · <b>中文</b>
+</p>
+
+<p align="center">
+  <a href="https://awesome-dsh-plugin.com"><img src="https://awesome-dsh-plugin.com/badge.svg" alt="Awesome DSH Plugin"></a>
+  <img src="https://img.shields.io/npm/v/dsh-zotero" alt="npm version">
+  <img src="https://img.shields.io/npm/dm/dsh-zotero" alt="npm downloads">
+  <img src="https://img.shields.io/npm/l/dsh-zotero" alt="license">
 </p>
 
 让 Agents 搜索、阅读并引用你的本地 [Zotero](https://www.zotero.org) 文献库：找文献、查看笔记与批注、按问题取证、打开原文、生成引用。
@@ -43,20 +50,6 @@ Agent 按需求逐层深入，一段典型对话：
 ## 命令
 
 `/zotero status` 报告连通性、API/schema 版本和数据库身份标识（Server ID，Zotero 10+）。这是唯一的健康检查。普通调用失败时返回带类型的领域错误。
-
-## 按需工作与连接失败交互
-
-- 插件常驻但完全请求驱动：加载、闲置、卸载都不会发起任何请求（无探测、无轮询、无后台任务）。只有两种入口会触达 Zotero：Agent 在用户明确要求时调用五个工具，或用户手动执行 `/zotero status`。
-- 工具调用遇到连接类失败（`ZOTERO_NOT_RUNNING` 未运行 / `ZOTERO_API_DISABLED` 本地 API 被禁用 / `ZOTERO_API_VERSION` 版本过旧 / `ZOTERO_TIMEOUT` 超时）时，会通过交互式问题卡片询问用户怎么处理：第一个选项是带 `(Recommended)` 的推荐操作（英文文案，与错误消息一致，如 "I started Zotero, retry (Recommended)"），选择后插件按原参数重试一次；再失败或选择 "Abort this query" 时返回原类型化错误，绝不反复询问。
-- 无交互能力的环境（headless 组合、无 UI provider）自动降级：不询问，直接返回类型化错误。询问机制自身故障也绝不掩盖原始连接错误。
-
-## 限制
-
-- 对文献库只读：没有任何修改条目、笔记、标签、分类等文献库数据的路径。
-- 全文证据依赖 Zotero 的全文索引：`everything` 搜索和 `retrieve` 的全文片段都以索引为前提。
-- 笔记正文搜索是插件侧补扫：仅库/分类范围、仅结果首页、受 `maxNoteScanRecords` 上限约束，超出上限的笔记不参与匹配。
-- 附件深度分析取决于当前 Harness 配置：`zotero_attachment` 返回文件位置，能否继续读取该 PDF 由 composition 里是否有相应文件/PDF 能力决定。
-- 证据排序是词项相关度检索，不是 embedding 或语义搜索。
 
 ## 环境要求
 
@@ -135,6 +128,14 @@ allowBuilds:
 - 每个字段显示当前生效值；被设置文档覆盖的字段带「已覆盖」标记，可一键恢复默认（清除用户段，回到补丁 entry 值）。
 - 设置文档被外部编辑（如直接改 `settings.yaml`）时同样会热生效。
 - 无 settings 服务的组合（纯 headless）不注册命名空间，插件行为与未配置时完全一致。
+
+## 限制
+
+- 对文献库只读：没有任何修改条目、笔记、标签、分类等文献库数据的路径。
+- 全文证据依赖 Zotero 的全文索引：`everything` 搜索和 `retrieve` 的全文片段都以索引为前提。
+- 笔记正文搜索是插件侧补扫：仅库/分类范围、仅结果首页、受 `maxNoteScanRecords` 上限约束，超出上限的笔记不参与匹配。
+- 附件深度分析取决于当前 Harness 配置：`zotero_attachment` 返回文件位置，能否继续读取该 PDF 由 composition 里是否有相应文件/PDF 能力决定。
+- 证据排序是词项相关度检索，不是 embedding 或语义搜索。
 
 ## 开发
 

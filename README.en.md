@@ -1,7 +1,14 @@
-# dsh-zotero
+<h1 align="center">dsh-zotero</h1>
 
 <p align="center">
   <b>English</b> · <a href="README.md"><b>中文</b></a>
+</p>
+
+<p align="center">
+  <a href="https://awesome-dsh-plugin.com"><img src="https://awesome-dsh-plugin.com/badge.svg" alt="Awesome DSH Plugin"></a>
+  <img src="https://img.shields.io/npm/v/dsh-zotero" alt="npm version">
+  <img src="https://img.shields.io/npm/dm/dsh-zotero" alt="npm downloads">
+  <img src="https://img.shields.io/npm/l/dsh-zotero" alt="license">
 </p>
 
 Let agents search, read, and cite your local [Zotero](https://www.zotero.org) library: find papers, browse notes and annotations, pull evidence by question, open the source document, generate citations.
@@ -43,20 +50,6 @@ The Agent moves down the ladder as a request deepens. A typical conversation:
 ## Command
 
 `/zotero status` reports connectivity, API/schema versions, and the database identity (Server ID, Zotero 10+). This is the only health check. Ordinary calls fail with typed domain errors.
-
-## On-demand work and connectivity-failure interaction
-
-- The plugin is resident but strictly request-driven: loading, idling, and unloading never issue a request (no probes, no polling, no background work). Only two entry points touch Zotero: the five tools, invoked when the user explicitly asks about their library, and the explicitly invoked `/zotero status` command.
-- When a tool call fails with a connectivity error (`ZOTERO_NOT_RUNNING` not running / `ZOTERO_API_DISABLED` local API disabled / `ZOTERO_API_VERSION` unsupported version / `ZOTERO_TIMEOUT` timed out), the plugin asks the user how to proceed through an interactive question card: the first option is the recommended action marked `(Recommended)` (e.g. "I started Zotero, retry (Recommended)"); choosing it re-runs the same request once, and a second failure or the "Abort this query" choice surfaces the original typed error — never a second question.
-- Without an interactive provider (headless compositions), the ask is skipped and the typed error is returned as-is; a failing question mechanism never masks the original connectivity error.
-
-## Limits
-
-- Read-only library: no path modifies items, notes, tags, or collections.
-- Full-text evidence depends on Zotero's index: `everything` search and `retrieve` full-text passages both require indexing.
-- Note-content search is a client-side scan: library/collection scopes and the first result page only, bounded by `maxNoteScanRecords`; notes beyond the cap never match.
-- Attachment depth depends on the harness composition: `zotero_attachment` returns the file location; reading that PDF further needs a matching file/PDF capability.
-- Evidence ranking is term-based relevance, not embedding or semantic search.
 
 ## Requirements
 
@@ -135,6 +128,14 @@ The plugin registers a "Zotero" card in dsh web's **Settings → Plugins → Plu
 - Every field shows its effective value; fields overridden by the settings document carry an "Overridden" badge and offer a one-click reset (clears the user layer, back to the patch entry value).
 - External edits to the settings document (e.g. editing `settings.yaml` directly) hot-apply too.
 - Compositions without a settings service (pure headless) never register the namespace, and the plugin behaves exactly as if unconfigured.
+
+## Limits
+
+- Read-only library: no path modifies items, notes, tags, or collections.
+- Full-text evidence depends on Zotero's index: `everything` search and `retrieve` full-text passages both require indexing.
+- Note-content search is a client-side scan: library/collection scopes and the first result page only, bounded by `maxNoteScanRecords`; notes beyond the cap never match.
+- Attachment depth depends on the harness composition: `zotero_attachment` returns the file location; reading that PDF further needs a matching file/PDF capability.
+- Evidence ranking is term-based relevance, not embedding or semantic search.
 
 ## Development
 
