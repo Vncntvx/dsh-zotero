@@ -79,8 +79,22 @@ npm run build                    # emits lib/
 Run against a real Zotero (integration tests are opt-in and skipped otherwise):
 
 ```sh
-ZOTERO_INTEGRATION=1 npx vitest run tests/integration/zotero.integration.spec.ts
+npm run test:integration
+# or: ZOTERO_INTEGRATION=1 npx vitest run tests/integration/zotero.integration.spec.ts
 ```
+
+## Testing with an installed dsh
+
+The npm-installed `dsh` can verify the production path end to end: pack the plugin, install the tarball into a throwaway profile, and run the production-stack smoke against a live Zotero.
+
+```sh
+npm pack
+dsh plugin --profile zotero-smoke add ./dsh-zotero-0.1.0.tgz
+cd ~/.dsh/profiles/zotero-smoke
+node --input-type=module < /path/to/dsh-zotero/scripts/smoke.mjs
+```
+
+The smoke runs inside the profile directory so bare imports resolve from the profile's flat `node_modules` — the exact dependency stack the npm dsh ships — and exercises `status`, `search`, `get`, `retrieve`, `export`, the policy prompt section, and tool registration against Zotero's real Local API. `SMOKE PASS` means the packed plugin works as installed.
 
 From a DeepSeek Harness source checkout, load the plugin through the dev overlay without installing:
 

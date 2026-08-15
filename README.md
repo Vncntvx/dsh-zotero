@@ -80,8 +80,22 @@ npm run build                    # 生成 lib/
 针对真实 Zotero 运行（集成测试默认跳过，需显式开启）：
 
 ```sh
-ZOTERO_INTEGRATION=1 npx vitest run tests/integration/zotero.integration.spec.ts
+npm run test:integration
+# 或：ZOTERO_INTEGRATION=1 npx vitest run tests/integration/zotero.integration.spec.ts
 ```
+
+## 用已安装的 dsh 测试
+
+npm 安装的正式版 `dsh` 可以端到端验证生产安装路径：打包插件 → 把 tarball 装进临时 profile → 在真实 Zotero 上跑生产栈 smoke。
+
+```sh
+npm pack
+dsh plugin --profile zotero-smoke add ./dsh-zotero-0.1.0.tgz
+cd ~/.dsh/profiles/zotero-smoke
+node --input-type=module < /path/to/dsh-zotero/scripts/smoke.mjs
+```
+
+smoke 在 profile 目录内运行，bare import 从 profile 的扁平 `node_modules` 解析——这正是 npm 版 dsh 自带的依赖栈——依次对真实 Local API 验证 `status`、`search`、`get`、`retrieve`、`export`、策略提示词分区和五个工具注册。输出 `SMOKE PASS` 即表示打包后的插件按安装路径可用。
 
 在 DeepSeek Harness 源码 checkout 中，可通过 dev overlay 直接加载插件，无需安装：
 

@@ -23,3 +23,6 @@ yarn-error.log*
 
 .npm-cache/
 coverage/
+
+# packed tarballs
+*.tgz
