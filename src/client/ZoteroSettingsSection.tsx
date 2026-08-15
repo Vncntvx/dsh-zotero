@@ -105,7 +105,7 @@ const footer: CSSProperties = {
 const failed: CSSProperties = {
   margin: 0,
   flex: 1,
-  color: 'var(--dsw-alias-label-error)',
+  color: 'var(--dsw-alias-state-error-primary)',
   fontSize: 12,
 }
 

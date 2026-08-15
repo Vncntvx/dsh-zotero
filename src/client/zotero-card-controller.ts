@@ -27,8 +27,11 @@ import {
 /**
  * The section fields this card edits — the host `Config` surface, all of it,
  * in display order. `group` names the page's display group (a locale key).
+ * The Web toggle leads the page: it gates the whole conversation tab, so it
+ * is the first thing a visitor sees.
  */
 export const FIELD_SPECS = [
+  { key: 'webEnabled', kind: 'boolean', group: 'groupWeb' },
   { key: 'baseUrl', kind: 'text', group: 'groupConnection' },
   { key: 'provider', kind: 'text', group: 'groupConnection' },
   { key: 'timeoutMs', kind: 'number', group: 'groupConnection' },
@@ -48,7 +51,6 @@ export const FIELD_SPECS = [
   { key: 'maxExportRefs', kind: 'number', group: 'groupOutput' },
   { key: 'defaultStyle', kind: 'text', group: 'groupDefaults' },
   { key: 'defaultLocale', kind: 'text', group: 'groupDefaults' },
-  { key: 'webEnabled', kind: 'boolean', group: 'groupWeb' },
 ] as const satisfies readonly { key: string; kind: 'text' | 'number' | 'boolean'; group: string }[]
 
 /** The section field names the card edits; also the page's copy and state member names. */

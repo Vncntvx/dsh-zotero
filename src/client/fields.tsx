@@ -86,7 +86,7 @@ const hint: CSSProperties = {
 
 const invalid: CSSProperties = {
   ...hint,
-  color: 'var(--dsw-alias-label-error)',
+  color: 'var(--dsw-alias-state-error-primary)',
 }
 
 // The primitives Input owns its wrapper's border, so an invalid draft needs a
@@ -99,7 +99,7 @@ if (
   const tag = document.createElement('style')
   tag.dataset.plugin = 'dsh-zotero'
   tag.dataset.pluginCss = 'dsh-zotero/fields'
-  tag.textContent = '.dsh-zotero-input-invalid{border-color:var(--dsw-alias-label-error)}'
+  tag.textContent = '.dsh-zotero-input-invalid{border-color:var(--dsw-alias-state-error-primary)}'
   document.head.appendChild(tag)
 }
 
@@ -173,7 +173,7 @@ const toggle: CSSProperties = {
   width: 16,
   height: 16,
   margin: 0,
-  accentColor: 'var(--dsw-alias-brand-primary)',
+  accentColor: 'var(--dsw-alias-state-business-primary)',
   cursor: 'pointer',
 }
 

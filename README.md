@@ -120,31 +120,6 @@ allowBuilds:
 | `defaultStyle`         | `apa`                        | 引用/参考文献使用的 CSL 样式。                                            |
 | `defaultLocale`        | `en-US`                      | 引用/参考文献使用的 CSL locale。                                          |
 
-### Web 配置
-
-插件在 dsh web 的 **设置 → 插件 → 插件配置** 页注册了一张 "Zotero" 卡片，列出上表全部 19 个字段。卡片绑定 `zotero` 设置命名空间：写入的内容落在 `$DSH_HOME/settings.yaml` 的 `zotero:` 段（与补丁 entry 的 `config` 叠层，用户段优先），**保存即热生效**——传输层与 provider 会按新值重建，下一个工具调用或 `/zotero status` 立即使用新配置，无需重启 dsh。
-
-- 非法值（如非回环的 `baseUrl`、非正整数的限制）在写入前被拒绝，卡片提示保存失败并保留草稿，插件继续运行于上一个合法值。
-- 每个字段显示当前生效值；被设置文档覆盖的字段带「已覆盖」标记，可一键恢复默认（清除用户段，回到补丁 entry 值）。
-- 设置文档被外部编辑（如直接改 `settings.yaml`）时同样会热生效。
-- 无 settings 服务的组合（纯 headless）不注册命名空间，插件行为与未配置时完全一致。
-
-### Web 视图
-
-dsh web 的会话视图是一个标签环（聊天、轨迹……）。插件注册了专属的 **Zotero** 标签（`conversation.view`，id `zotero`，排在轨迹与 dsh-context 之后），不修改 dsh 自带的聊天与轨迹显示：
-
-- 顶部是一条**连接状态条**：挂载时探测一次，点击「刷新」再探测一次（请求驱动，无轮询定时器）；显示连接状态、API/Schema 版本、Server ID（Zotero 10+）、上次检查时间，Zotero 不可用时显示诊断信息。
-- 下面是本会话的 **Zotero 工具活动**：搜索、读取、取证、附件、导出每次调用都以富卡片呈现（可展开、可复制 ref、证据片段按来源标注），完全由会话快照回放驱动——同样的轨迹渲染同样的卡片，无元数据时退化为原文内容。
-- 设置页 **Web → 会话工具卡片** 开关（`webEnabled`，默认开）控制该标签的注册；关闭后 Zotero 调用在轨迹中显示为 dsh 内置的通用卡片。
-
-## 限制
-
-- 对文献库只读：没有任何修改条目、笔记、标签、分类等文献库数据的路径。
-- 全文证据依赖 Zotero 的全文索引：`everything` 搜索和 `retrieve` 的全文片段都以索引为前提。
-- 笔记正文搜索是插件侧补扫：仅库/分类范围、仅结果首页、受 `maxNoteScanRecords` 上限约束，超出上限的笔记不参与匹配。
-- 附件深度分析取决于当前 Harness 配置：`zotero_attachment` 返回文件位置，能否继续读取该 PDF 由 composition 里是否有相应文件/PDF 能力决定。
-- 证据排序是词项相关度检索，不是 embedding 或语义搜索。
-
 ## 开发
 
 ### 命令
@@ -184,7 +159,11 @@ pnpm dsh web --patch ./dsh-zotero/dev.cordis.yml
 
 #### 使用 npm 安装的 dsh
 
-**常驻实例**：打包为 tarball 并安装到 profile，插件以 tarball 中的副本运行；代码更新需重新打包安装。安装后运行生产栈 smoke 验证：
+本插件分两部分构建：**Node 端**（`lib/`，由 `tsc` 生成，包含服务、工具、provider 等逻辑）与**浏览器端**（`lib/client.js`，由 `esbuild` 生成，包含 dsh web 的配置卡片与 Zotero 标签视图）。下面三种开发流程覆盖了不同场景。
+
+**① 常驻实例验证（tarball 安装）**
+
+打包为 tarball 并安装到 profile，插件以 tarball 内的构建产物运行；代码更新后需重新打包安装。安装后通过生产栈 smoke 脚本验证：
 
 ```sh
 npm pack
@@ -193,9 +172,11 @@ cd ~/.dsh/profiles/<name>
 node --input-type=module < /path/to/dsh-zotero/scripts/smoke.mjs
 ```
 
-smoke 需在 profile 目录内运行，裸导入由此从 profile 的扁平 `node_modules` 解析。脚本依次验证 `status`、`search`、`get`、`retrieve`、`export`、策略提示词分区与五个工具注册；输出 `SMOKE PASS` 表示打包后的插件通过安装路径验证。
+smoke 脚本必须在 profile 目录内运行，这样裸导入才能从 profile 的扁平 `node_modules` 中解析。脚本依次验证 `status`、`search`、`get`、`retrieve`、`export`、策略提示词分区，以及五个工具的注册情况；输出 `SMOKE PASS` 表示打包后的插件通过了安装路径验证。
 
-**开发实例（热替换）**：`dev-lib.cordis.yml` 覆盖层禁用 profile 中的 tarball 副本（id `zotero`），插入 `zotero-dev` 指向本仓库的 `lib/index.js`，并重新启用 HMR。生产 web profile 默认禁用 loader HMR，且 HMR 的监视根位于 profile 目录，因此覆盖层显式设置了 `base`。构建输出变化后，HMR 在同一进程内销毁旧实例并重新构造插件，无需重启 dsh：
+**② Node 端热替换开发**
+
+`dev-lib.cordis.yml` 覆盖层会禁用 profile 中的 tarball 行（id `zotero`），转而插入 `zotero-dev` 行指向本仓库的 `lib/index.js`，并重新启用 HMR。生产 web profile 默认关闭 loader HMR，且 HMR 的监视根位于 profile 目录，因此覆盖层显式设置了 `base`。构建产物变化后，HMR 会在同一进程内销毁旧实例并重新构造插件，无需重启 dsh：
 
 ```sh
 cd ./dsh-zotero                 # 从 deepseek-harness checkout 进入本仓库
@@ -203,9 +184,11 @@ npm run dev &                    # tsc --watch：修改 src 后自动重建 lib
 dsh web --patch ./dev-lib.cordis.yml --port 3307
 ```
 
-热替换仅作用于通过 `--patch` 启动的实例；常驻实例继续运行 tarball 版本。
+热替换仅对通过 `--patch` 启动的实例生效；常驻实例仍运行 tarball 版本，互不影响。
 
-**浏览器半边的开发**：Web 端只扫描 Loader 行 `name` 为裸包名（npm 可解析到 `package.json`）的条目——`dev-lib.cordis.yml` 的绝对路径行不会加载浏览器半边，因此卡片不会出现在 dev 实例中。开发卡片时把本仓库装进 profile（`npm install <本仓库路径>` 作为 file: 依赖，或 `npm pack` 后安装 tarball），再配合 `npm run dev:client`（esbuild watch）与热替换 overlay：浏览器 bundle 变化会触发 HMR 重新拉取 `/plugins/dsh-zotero/client.js`。
+**③ 浏览器端开发**
+
+dsh web 只会扫描 Loader 行中 `name` 为裸包名（npm 能解析到 `package.json`）的条目来加载浏览器端 bundle。`dev-lib.cordis.yml` 使用的是绝对路径行，不会触发浏览器端加载，因此卡片不会出现在 ② 的 dev 实例中。开发卡片时需要先把本仓库装进 profile（`npm install <本仓库路径>` 作为 `file:` 依赖，或 `npm pack` 后安装 tarball），再配合 `npm run dev:client`（esbuild watch）与热替换 overlay 一起使用：浏览器 bundle 变化会触发 HMR 重新拉取 `/plugins/dsh-zotero/client.js`。
 
 ## 许可证
 

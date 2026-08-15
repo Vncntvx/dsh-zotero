@@ -100,13 +100,13 @@ describe('ZoteroSettingsSection', () => {
     expect(document.querySelectorAll('input')).toHaveLength(20)
     expect(timeoutInput().value).toBe('5000')
     // The boolean field renders as a checkbox with the field's copy.
-    expect(screen.getByLabelText('会话工具卡片')).toBeDefined()
+    expect(screen.getByLabelText('Zotero 会话标签页')).toBeDefined()
   })
 
   it('toggles the webEnabled checkbox and saves the boolean write', async () => {
     scope = fakeScope({ value: { baseUrl: 'http://127.0.0.1:23119/api', webEnabled: true } })
     mount()
-    const toggle = screen.getByLabelText('会话工具卡片') as HTMLInputElement
+    const toggle = screen.getByLabelText('Zotero 会话标签页') as HTMLInputElement
     expect(toggle.checked).toBe(true)
     fireEvent.click(toggle)
     expect(toggle.checked).toBe(false)
@@ -119,7 +119,7 @@ describe('ZoteroSettingsSection', () => {
   it('toggles webEnabled on from an absent value', async () => {
     scope = fakeScope({ value: { baseUrl: 'http://127.0.0.1:23119/api' } })
     mount()
-    const toggle = screen.getByLabelText('会话工具卡片') as HTMLInputElement
+    const toggle = screen.getByLabelText('Zotero 会话标签页') as HTMLInputElement
     expect(toggle.checked).toBe(false)
     fireEvent.click(toggle)
     expect(toggle.checked).toBe(true)
@@ -200,9 +200,11 @@ describe('ZoteroSettingsSection', () => {
     expect(timeoutInput().disabled).toBe(true)
   })
 
-  it('groups the fields under their schema families', () => {
+  it('leads the page with the web group and groups the rest by family', () => {
     scope = fakeScope({ value: { timeoutMs: 5000 } })
     mount()
+    const headings = Array.from(document.querySelectorAll('h3'), (el) => el.textContent)
+    expect(headings[0]).toBe('Web 视图')
     for (const heading of ['连接', '检索限制', '输出限制', '导出默认']) {
       expect(screen.getByText(heading)).toBeDefined()
     }

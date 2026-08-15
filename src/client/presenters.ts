@@ -64,6 +64,37 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+/** The wire name of one tool call block (settled and running forms). */
+export function callNameOf(block: ToolCallBlock): string | null {
+  return 'kind' in block ? (block.call?.name ?? null) : block.name
+}
+
+/** The kind-tag tones of the five Zotero wire tools (shared tone contract). */
+export type ZoteroToolTone = 'search' | 'get' | 'retrieve' | 'attachment' | 'export'
+
+/** The tone of one call; unknown wire names get none (neutral rendering). */
+export function callToneOf(block: ToolCallBlock): ZoteroToolTone | undefined {
+  switch (callNameOf(block)) {
+    case 'zotero_search':
+      return 'search'
+    case 'zotero_get':
+      return 'get'
+    case 'zotero_retrieve':
+      return 'retrieve'
+    case 'zotero_attachment':
+      return 'attachment'
+    case 'zotero_export':
+      return 'export'
+    default:
+      return undefined
+  }
+}
+
+/** Stable order key: settled blocks by seq, in-flight calls after them by time. */
+export function orderKeyOf(block: ToolCallBlock): number {
+  return 'kind' in block ? block.seq : 1_000_000_000 + block.time
+}
+
 /** Read a string field off a validated record. */
 export function stringField(record: Record<string, unknown>, key: string): string | undefined {
   const value = record[key]

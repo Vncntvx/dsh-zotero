@@ -10,21 +10,18 @@
 
 import { useEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
-import {
-  CodeBlock,
-  IconBrowseOutline16,
-  IconCopyOutline16,
-  IconSearchOutline16,
-  writeClipboard,
-} from '@deepseek-ai/dsh-client-ui-primitives'
+import { CodeBlock, IconCopyOutline16, writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ToolCallBlock } from '@deepseek-ai/dsh-client-runtime/client'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ZoteroLocaleKey } from './locales.ts'
 import {
   argsOf,
+  callNameOf,
   displayRefOf,
   errorSummaryOf,
   evidenceCountOf,
+  isRecord,
+  numberField,
   evidenceItemsOf,
   evidenceSourcesOf,
   evidenceTruncatedOf,
@@ -57,7 +54,16 @@ interface SharedProps {
 }
 
 /** A small copy button bound to one value (one-shot feedback, timer cleaned on unmount). */
-function CopyValue({ value, t }: { readonly value: string; readonly t: RowProps['t'] }) {
+export function CopyValue({
+  value,
+  t,
+  label,
+}: {
+  readonly value: string
+  readonly t: RowProps['t']
+  /** Button caption; defaults to the shared copy/copied pair. */
+  readonly label?: string
+}) {
   const [copied, setCopied] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   useEffect(
@@ -80,10 +86,10 @@ function CopyValue({ value, t }: { readonly value: string; readonly t: RowProps[
       onClick={() => {
         void onCopy()
       }}
-      aria-label={t('copy')}
+      aria-label={label ?? t('copy')}
     >
       <IconCopyOutline16 size={14} />
-      {copied ? t('copied') : t('copy')}
+      {copied ? t('copied') : (label ?? t('copy'))}
     </button>
   )
 }
@@ -110,7 +116,7 @@ function SearchResultRow({ row, t }: { readonly row: SearchRowView; readonly t: 
 }
 
 /** One personal note/annotation preview, kept visually apart from item metadata. */
-function ChildPreviewRow({
+export function ChildPreviewRow({
   preview,
   label,
   t,
@@ -136,7 +142,13 @@ function ChildPreviewRow({
 }
 
 /** One evidence passage: source kind, page label when owned, expandable preview. */
-function EvidenceRow({ item, t }: { readonly item: EvidenceItemView; readonly t: RowProps['t'] }) {
+export function EvidenceRow({
+  item,
+  t,
+}: {
+  readonly item: EvidenceItemView
+  readonly t: RowProps['t']
+}) {
   const [open, setOpen] = useState(false)
   const sourceLabel = t(sourceKeyOf(item.source))
   const page =
@@ -199,12 +211,21 @@ interface ExportBodyProps {
   /** The flattened result text; the row only mounts the body when non-null. */
   readonly text: string
   readonly t: RowProps['t']
+  /**
+   * Whether the code block carries its own copy button. The citations card
+   * keeps its copy affordances in the head and passes false, so the expanded
+   * body never duplicates them.
+   */
+  readonly copy?: boolean
 }
 
 /** Body split: human formats render as plain text, machine formats as code. */
-function ExportBody({ format, text, t }: ExportBodyProps) {
+export function ExportBody({ format, text, t, copy = true }: ExportBodyProps) {
   if (format === 'citation' || format === 'bibliography') {
     return <pre className={css.fallback}>{plainTextOf(text, 600)}</pre>
+  }
+  if (!copy) {
+    return <pre className={css.plainCode}>{text}</pre>
   }
   return (
     <CodeBlock
@@ -255,32 +276,40 @@ export function ZoteroSearchRow({ block, t }: SharedProps) {
     facts.push(t('referenceMismatch'))
   }
   const omitted = counts?.omitted ?? 0
+  // The bounded projection lists at most six rows; once it omits any, the
+  // full durable output takes over so nothing is hidden from the reader.
+  const fullText = resultTextOf(block)
+  const truncatedProjection = omitted > 0
   return (
     <ZoteroToolRow
       state={state}
       title={titleOf(block, t('toolSearchTitle'))}
       summary={summary}
-      icon={<IconSearchOutline16 size={14} />}
+      tag={{ label: t('tagSearch'), kind: 'search' }}
       facts={facts}
       errorSummary={errorSummaryOf(block)}
-      expandable={state !== 'running' && (rows !== null || resultTextOf(block) !== null)}
+      expandable={state !== 'running' && (rows !== null || fullText !== null)}
       inspectLabel={t('inspectLabel')}
       runningLabel={t('checking')}
       errorLabel={t('statusUnavailable')}
       stoppedLabel={t('statusUnavailable')}
     >
-      {rows !== null ? (
+      {rows !== null && !truncatedProjection ? (
         <div className={css.rows}>
           {rows.map((row) => (
             <SearchResultRow key={row.ref} row={row} t={t} />
           ))}
-          {omitted > 0 && (
-            <span className={css.omitted}>{interpolate(t('moreOmitted'), { count: omitted })}</span>
-          )}
         </div>
-      ) : (
-        resultTextOf(block) !== null && <FallbackBody text={resultTextOf(block)!} />
-      )}
+      ) : fullText !== null ? (
+        <FallbackBody text={fullText} />
+      ) : rows !== null ? (
+        <div className={css.rows}>
+          {rows.map((row) => (
+            <SearchResultRow key={row.ref} row={row} t={t} />
+          ))}
+          <span className={css.omitted}>{interpolate(t('moreOmitted'), { count: omitted })}</span>
+        </div>
+      ) : null}
     </ZoteroToolRow>
   )
 }
@@ -320,16 +349,32 @@ export function ZoteroGetRow({ block, t }: SharedProps) {
     ].filter((part) => part !== '')
     if (counts.length > 0) facts.push(counts.join(' · '))
   }
+  // The bounded previews cap at two records per kind; once the projection
+  // shows fewer than the reported totals, the full durable output takes over.
+  const fullText = resultTextOf(block)
+  const notesTotal =
+    meta === null || !isRecord(meta['notes'])
+      ? undefined
+      : numberField(meta['notes'] as Record<string, unknown>, 'total')
+  const annotationsTotal =
+    meta === null || !isRecord(meta['annotations'])
+      ? undefined
+      : numberField(meta['annotations'] as Record<string, unknown>, 'total')
+  const notesComplete = notesTotal === undefined || (notes !== null && notes.length >= notesTotal)
+  const annotationsComplete =
+    annotationsTotal === undefined ||
+    (annotations !== null && annotations.length >= annotationsTotal)
+  const truncatedProjection = !notesComplete || !annotationsComplete
   const hasBody =
     (notes !== null && notes.length > 0) ||
     (annotations !== null && annotations.length > 0) ||
-    resultTextOf(block) !== null
+    fullText !== null
   return (
     <ZoteroToolRow
       state={state}
       title={titleOf(block, t('toolGetTitle'))}
       summary={summary}
-      icon={<IconBrowseOutline16 size={14} />}
+      tag={{ label: t('tagGet'), kind: 'get' }}
       facts={facts}
       errorSummary={errorSummaryOf(block)}
       expandable={state !== 'running' && hasBody}
@@ -338,8 +383,10 @@ export function ZoteroGetRow({ block, t }: SharedProps) {
       errorLabel={t('statusUnavailable')}
       stoppedLabel={t('statusUnavailable')}
     >
-      {notes === null && annotations === null ? (
-        resultTextOf(block) !== null && <FallbackBody text={resultTextOf(block)!} />
+      {truncatedProjection && fullText !== null ? (
+        <FallbackBody text={fullText} />
+      ) : notes === null && annotations === null ? (
+        fullText !== null && <FallbackBody text={fullText} />
       ) : (
         <div className={css.rows}>
           {notes !== null && notes.length > 0 && (
@@ -394,13 +441,19 @@ export function ZoteroRetrieveRow({ block, t }: SharedProps) {
   } else if (sources.length > 0) {
     facts.push(interpolate(t('evidenceSources'), { sources: sources.join(', ') }))
   }
-  const hasBody = items !== null || resultTextOf(block) !== null
+  const fullText = resultTextOf(block)
+  // The projection caps at four passages; a truncated or skipped-source
+  // retrieval hands the reader the full durable output instead.
+  const sourcesSkipped =
+    meta !== null && Array.isArray(meta['sourcesSkipped']) && meta['sourcesSkipped'].length > 0
+  const truncatedProjection = truncated || sourcesSkipped
+  const hasBody = items !== null || fullText !== null
   return (
     <ZoteroToolRow
       state={state}
       title={titleOf(block, t('toolRetrieveTitle'))}
       summary={summary}
-      icon={<IconSearchOutline16 size={14} />}
+      tag={{ label: t('tagRetrieve'), kind: 'retrieve' }}
       facts={facts}
       errorSummary={errorSummaryOf(block)}
       expandable={state !== 'running' && hasBody}
@@ -409,16 +462,22 @@ export function ZoteroRetrieveRow({ block, t }: SharedProps) {
       errorLabel={t('statusUnavailable')}
       stoppedLabel={t('statusUnavailable')}
     >
-      {items !== null ? (
+      {items !== null && !truncatedProjection ? (
+        <div className={css.rows}>
+          {items.map((item, index) => (
+            <EvidenceRow key={`${item.sourceRef}-${index}`} item={item} t={t} />
+          ))}
+        </div>
+      ) : fullText !== null ? (
+        <FallbackBody text={fullText} />
+      ) : items !== null ? (
         <div className={css.rows}>
           {items.map((item, index) => (
             <EvidenceRow key={`${item.sourceRef}-${index}`} item={item} t={t} />
           ))}
           {truncated && <span className={css.omitted}>{t('truncatedMore')}</span>}
         </div>
-      ) : (
-        resultTextOf(block) !== null && <FallbackBody text={resultTextOf(block)!} />
-      )}
+      ) : null}
     </ZoteroToolRow>
   )
 }
@@ -451,7 +510,7 @@ export function ZoteroAttachmentRow({ block, t }: SharedProps) {
       state={state}
       title={titleOf(block, t('toolAttachmentTitle'))}
       summary={summary}
-      icon={<IconBrowseOutline16 size={14} />}
+      tag={{ label: t('tagAttachment'), kind: 'attachment' }}
       facts={facts}
       errorSummary={errorSummaryOf(block)}
       expandable={state !== 'running' && hasBody}
@@ -503,7 +562,7 @@ export function ZoteroExportRow({ block, t }: SharedProps) {
       state={state}
       title={titleOf(block, t('toolExportTitle'))}
       summary={summary}
-      icon={<IconBrowseOutline16 size={14} />}
+      tag={{ label: t('tagExport'), kind: 'export' }}
       facts={facts.filter((fact) => fact !== '')}
       errorSummary={errorSummaryOf(block)}
       expandable={state !== 'running' && text !== null}
@@ -515,4 +574,28 @@ export function ZoteroExportRow({ block, t }: SharedProps) {
       {text !== null && <ExportBody format={format} text={text} t={t} />}
     </ZoteroToolRow>
   )
+}
+
+/** One Zotero call rendered by its matching card component. */
+export function CardFor({
+  block,
+  t,
+}: {
+  readonly block: ToolCallBlock
+  readonly t: TranslateNS<'zotero'>
+}) {
+  switch (callNameOf(block)) {
+    case 'zotero_search':
+      return <ZoteroSearchRow block={block} t={t} />
+    case 'zotero_get':
+      return <ZoteroGetRow block={block} t={t} />
+    case 'zotero_retrieve':
+      return <ZoteroRetrieveRow block={block} t={t} />
+    case 'zotero_attachment':
+      return <ZoteroAttachmentRow block={block} t={t} />
+    case 'zotero_export':
+      return <ZoteroExportRow block={block} t={t} />
+    default:
+      return null
+  }
 }

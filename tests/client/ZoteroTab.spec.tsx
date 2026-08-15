@@ -33,6 +33,20 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
     createElement('span', { 'data-icon': name, ...props })
   return {
     StateDot: ({ state }: { state: string }) => createElement('span', { 'data-dot': state }),
+    Pill: ({
+      active,
+      children,
+      ...rest
+    }: {
+      active?: boolean
+      children?: unknown
+      [key: string]: unknown
+    }) =>
+      createElement(
+        'button',
+        { 'data-pill': active === true ? 'active' : undefined, ...rest },
+        children as never,
+      ),
     IconChevronDownOutline14: icon('chevron-down'),
     IconInspectOutline12: icon('inspect'),
     IconBrowseOutline16: icon('browse'),
@@ -122,6 +136,7 @@ function snapshotOf(overrides: Partial<ConversationSnapshot> = {}): Conversation
 function mountTab(
   session: ConversationSnapshot | undefined,
   status: () => Promise<{ ok: boolean; value?: unknown; error?: unknown }>,
+  inputActions?: { setDraft: (text: string) => void },
 ): {
   view: ReturnType<typeof render>
   calls: number
@@ -135,6 +150,7 @@ function mountTab(
     },
     useSession: (sel: (snap: ConversationSnapshot) => unknown) =>
       session === undefined ? undefined : sel(session),
+    ...(inputActions === undefined ? {} : { inputActions }),
   } as unknown as ZoteroTabProps
   const view = render(<ZoteroTab {...props} />)
   return { view, calls }
@@ -248,6 +264,22 @@ describe('ZoteroTab', () => {
   it('renders every zotero card kind plus the fallback for unknown names', async () => {
     const status = vi.fn(async () => ({ ok: true, value: CONNECTED }))
     const kinds = [
+      settled({
+        seq: 2,
+        callId: 's',
+        call: { name: 'zotero_search', argsRaw: '{}' },
+        meta: {
+          total: 1,
+          items: [
+            {
+              ref: 'zotero://user/0/item/AAAAAAA9',
+              title: 'Found',
+              creatorSummary: 'A',
+              itemType: 'report',
+            },
+          ],
+        },
+      }),
       settled({ seq: 3, callId: 'g', call: { name: 'zotero_get', argsRaw: '{}' } }),
       settled({
         seq: 4,
@@ -286,6 +318,9 @@ describe('ZoteroTab', () => {
     ]
     const { view } = mountTab(snapshotOf({ nodes: kinds }), status)
     await act(async () => {})
+    // The per-call cards live on the activity lens; the items lens shows the
+    // aggregated corpus instead.
+    fireEvent.click(screen.getByText(zh.lensActivity))
     for (const button of screen
       .getAllByRole('button')
       .filter((candidate) => candidate.getAttribute('aria-expanded') !== null)) {
@@ -294,7 +329,7 @@ describe('ZoteroTab', () => {
     expect(screen.getByText('a.pdf')).toBeDefined()
     expect(screen.getByText(/@book\{x\}/)).toBeDefined()
     // The unknown zotero name renders no card but must not crash.
-    expect(screen.getByText('Export Zotero citations')).toBeDefined()
+    expect(screen.getByText(zh.tagExport)).toBeDefined()
     view.unmount()
   })
 
@@ -373,19 +408,190 @@ describe('ZoteroTab', () => {
       status,
     )
     await act(async () => {})
-    // The card rows live in the expanded body; open the settled result row
-    // (the strip's Refresh button is the other button in the tab).
-    const row = screen
-      .getAllByRole('button')
-      .find((button) => button.getAttribute('aria-expanded') !== null)
-    expect(row).toBeDefined()
-    fireEvent.click(row!)
+    // The tab opens on the activity ledger; the settled search renders as a
+    // corpus line with its actions at the line end on the items lens (a
+    // search-only row never invites an empty expansion).
+    fireEvent.click(screen.getByText(zh.lensItems))
     expect(screen.getByText(/FlashAttention-2/)).toBeDefined()
+    expect(screen.getAllByLabelText(zh.copyRef).length).toBeGreaterThan(0)
     view.unmount()
 
     const empty = mountTab(snapshotOf(), status)
     await act(async () => {})
     expect(screen.getByText(zh.noActivity)).toBeDefined()
     empty.view.unmount()
+  })
+})
+
+describe('ZoteroTab lenses', () => {
+  const REF = 'zotero://user/0/item/AAAAAAA1'
+
+  function searchResult(overrides: Partial<ToolResultNode> = {}): ToolResultNode {
+    return settled({
+      seq: 3,
+      callId: 'r1',
+      call: { name: 'zotero_search', argsRaw: '{"query":"attention"}' },
+      meta: {
+        returned: 1,
+        total: 1,
+        displayed: 1,
+        omitted: 0,
+        items: [
+          {
+            ref: REF,
+            title: 'FlashAttention-2',
+            creatorSummary: 'Dao',
+            year: 2023,
+            itemType: 'conferencePaper',
+          },
+        ],
+      },
+      ...overrides,
+    })
+  }
+
+  function getDetail(overrides: Partial<ToolResultNode> = {}): ToolResultNode {
+    return settled({
+      seq: 4,
+      callId: 'g1',
+      call: { name: 'zotero_get', argsRaw: `{"ref":"${REF}"}` },
+      meta: {
+        title: 'FlashAttention-2',
+        creators: 'Dao',
+        notesPreview: [],
+        annotationsPreview: [],
+      },
+      ...overrides,
+    })
+  }
+
+  function exportArtifact(overrides: Partial<ToolResultNode> = {}): ToolResultNode {
+    return settled({
+      seq: 5,
+      callId: 'e1',
+      call: { name: 'zotero_export', argsRaw: `{"refs":["${REF}"],"format":"bibtex"}` },
+      meta: { format: 'bibtex', requested: 1 },
+      content: [{ type: 'text', text: '@book{flash2023,\n}' }],
+      ...overrides,
+    })
+  }
+
+  it('opens on the activity ledger with the funnel once two stages occurred', async () => {
+    const status = vi.fn(async () => ({ ok: true, value: CONNECTED }))
+    const { view } = mountTab(snapshotOf({ nodes: [searchResult(), getDetail()] }), status)
+    await act(async () => {})
+    // The activity ledger is the tab's front page; the funnel rides the bar.
+    expect(screen.getByText(zh.lensActivity).getAttribute('data-pill')).toBe('active')
+    expect(screen.getByText(zh.tagSearch)).toBeDefined()
+    expect(screen.getByText(zh.tagGet)).toBeDefined()
+    expect(screen.getByText(zh.funnelSearched.replace('{count}', '1'))).toBeDefined()
+    expect(screen.getByText(zh.funnelRead.replace('{count}', '1'))).toBeDefined()
+    view.unmount()
+  })
+
+  it('renders only the non-zero funnel chips for a single-stage session', async () => {
+    const status = vi.fn(async () => ({ ok: true, value: CONNECTED }))
+    const { view } = mountTab(snapshotOf({ nodes: [searchResult()] }), status)
+    await act(async () => {})
+    expect(screen.getByText(zh.funnelSearched.replace('{count}', '1'))).toBeDefined()
+    expect(screen.queryByText(new RegExp(zh.funnelRead.replace('{count}', '\\d+')))).toBeNull()
+    expect(screen.queryByText(new RegExp(zh.funnelCited.replace('{count}', '\\d+')))).toBeNull()
+    view.unmount()
+  })
+
+  it('opens on the activity ledger even with export artifacts and reaches the citations lens', async () => {
+    const status = vi.fn(async () => ({ ok: true, value: CONNECTED }))
+    const { view } = mountTab(
+      snapshotOf({ nodes: [searchResult(), getDetail(), exportArtifact()] }),
+      status,
+    )
+    await act(async () => {})
+    expect(screen.getByText(zh.lensActivity).getAttribute('data-pill')).toBe('active')
+    fireEvent.click(screen.getByText(zh.lensCitations))
+    expect(screen.getByText(zh.lensCitations).getAttribute('data-pill')).toBe('active')
+    expect(screen.getByText(zh.exportsLabel)).toBeDefined()
+    expect(screen.getByText(zh.quickAccessLabel)).toBeDefined()
+    view.unmount()
+  })
+
+  it('switches to the activity lens through the pill bar', async () => {
+    const status = vi.fn(async () => ({ ok: true, value: CONNECTED }))
+    const { view } = mountTab(snapshotOf({ nodes: [exportArtifact()] }), status)
+    await act(async () => {})
+    fireEvent.click(screen.getByText(zh.lensActivity))
+    expect(screen.getByText(zh.lensActivity).getAttribute('data-pill')).toBe('active')
+    // The ledger caption counts the calls and the card leads with its tag.
+    expect(screen.getByText(zh.activityNote.replace('{count}', '1'))).toBeDefined()
+    expect(screen.getByText(zh.tagExport)).toBeDefined()
+    view.unmount()
+  })
+
+  it('renders the activity strip segments and cross-highlights the hovered call', async () => {
+    const status = vi.fn(async () => ({ ok: true, value: CONNECTED }))
+    const failedSearch = settled({
+      seq: 1,
+      callId: 's1',
+      isError: true,
+      error: { name: 'ZoteroError', code: 'ZOTERO_INVALID_ARGUMENT' },
+    })
+    const untimedExport = settled({
+      seq: 2,
+      callId: 'e1',
+      call: { name: 'zotero_export', argsRaw: '{}' },
+      callTime: null,
+      meta: { format: 'bibtex', requested: 1 },
+      content: [{ type: 'text', text: '@book{x}' }],
+    })
+    const zeroDuration = settled({ seq: 3, callId: 'z1', time: 1 })
+    const { view } = mountTab(
+      snapshotOf({
+        nodes: [failedSearch, untimedExport, zeroDuration],
+        runningCalls: [runningCall({ callId: 'r1' })],
+      }),
+      status,
+    )
+    await act(async () => {})
+    fireEvent.click(screen.getByText(zh.lensActivity))
+    const spans = view.container.querySelectorAll('[data-activity-span]')
+    expect(spans.length).toBe(4)
+    // Kind tones follow the wire tools; failures mark the segment red.
+    expect(spans[0]!.getAttribute('data-kind')).toBe('search')
+    expect(spans[0]!.getAttribute('data-error')).toBe('true')
+    expect(spans[1]!.getAttribute('data-kind')).toBe('export')
+    expect(spans[1]!.getAttribute('data-error')).toBeNull()
+    expect(spans[2]!.getAttribute('data-kind')).toBe('search')
+    // The settled duration grows the segment; untimed and zero-duration
+    // blocks fall back to the minimum width (no inline style).
+    expect(spans[0]!.getAttribute('style')?.includes('flex-grow')).toBe(true)
+    expect(spans[1]!.getAttribute('style')).toBeNull()
+    expect(spans[2]!.getAttribute('style')).toBeNull()
+    expect(spans[3]!.getAttribute('style')).toBeNull()
+    // Hovering a segment rings it and washes the matching call's row.
+    fireEvent.mouseEnter(spans[0]!)
+    expect(spans[0]!.getAttribute('data-hovered')).toBe('true')
+    expect(view.container.querySelector('[data-hovered="true"]')).toBeDefined()
+    fireEvent.mouseLeave(spans[0]!)
+    expect(view.container.querySelector('[data-hovered="true"]')).toBeNull()
+    view.unmount()
+  })
+
+  it('prefills the composer from the empty-state starters without submitting', async () => {
+    const status = vi.fn(async () => ({ ok: true, value: CONNECTED }))
+    const setDraft = vi.fn()
+    const { view } = mountTab(snapshotOf(), status, { setDraft })
+    await act(async () => {})
+    fireEvent.click(screen.getByText(zh.starterFind))
+    fireEvent.click(screen.getByText(zh.starterCite))
+    fireEvent.click(screen.getByText(zh.starterTidy))
+    expect(setDraft).toHaveBeenCalledTimes(3)
+    expect(setDraft).toHaveBeenCalledWith(zh.starterFindTemplate)
+    expect(setDraft).toHaveBeenCalledWith(zh.starterCiteTemplate)
+    expect(setDraft).toHaveBeenCalledWith(zh.starterTidyTemplate)
+    view.unmount()
+
+    const bare = mountTab(snapshotOf(), status)
+    await act(async () => {})
+    expect(screen.queryByText(zh.starterFind)).toBeNull()
+    bare.view.unmount()
   })
 })

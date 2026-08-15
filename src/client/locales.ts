@@ -57,6 +57,12 @@ export type ZoteroLocaleKey =
   | 'toolRetrieveTitle'
   | 'toolAttachmentTitle'
   | 'toolExportTitle'
+  | 'tagSearch'
+  | 'tagGet'
+  | 'tagRetrieve'
+  | 'tagAttachment'
+  | 'tagExport'
+  | 'activityNote'
   | 'noActivity'
   | 'statusConnected'
   | 'apiVersionLabel'
@@ -65,6 +71,37 @@ export type ZoteroLocaleKey =
   | 'diagnosisLabel'
   | 'refresh'
   | 'lastCheckedLabel'
+  | 'lensItems'
+  | 'lensCitations'
+  | 'lensActivity'
+  | 'funnelSearched'
+  | 'funnelRead'
+  | 'funnelCited'
+  | 'starterFind'
+  | 'starterCite'
+  | 'starterTidy'
+  | 'starterFindTemplate'
+  | 'starterCiteTemplate'
+  | 'starterTidyTemplate'
+  | 'itemsEmptyNote'
+  | 'itemsSourceNote'
+  | 'itemsProcessedNote'
+  | 'itemsSourceOmittedNote'
+  | 'badgeRead'
+  | 'badgeCited'
+  | 'badgePdf'
+  | 'copyRef'
+  | 'copyFullText'
+  | 'copyCite'
+  | 'askAboutItem'
+  | 'askTemplate'
+  | 'generateCitation'
+  | 'citeTemplate'
+  | 'exportsLabel'
+  | 'quickAccessLabel'
+  | 'noExportsHint'
+  | 'artifactExpandLabel'
+  | 'artifactCollapseLabel'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -130,9 +167,10 @@ export const en: Record<ZoteroLocaleKey, string> = {
   defaultStyleHint: 'CSL style id for citation and bibliography formats (e.g. apa).',
   defaultLocale: 'Default locale',
   defaultLocaleHint: 'CSL locale for citation and bibliography formats (e.g. en-US).',
-  groupWeb: 'Web',
-  webEnabled: 'Session tool cards',
-  webEnabledHint: 'Show Zotero tool cards in the dedicated Web view (a conversation tab).',
+  groupWeb: 'Web view',
+  webEnabled: 'Zotero conversation tab',
+  webEnabledHint:
+    'Shows a dedicated Zotero tab at the top of conversations (items, citations, activity). Turn it off to hide the tab.',
   copy: 'Copy',
   copied: 'Copied',
   checking: 'Checking…',
@@ -168,6 +206,12 @@ export const en: Record<ZoteroLocaleKey, string> = {
   toolRetrieveTitle: 'Finding evidence',
   toolAttachmentTitle: 'Resolve Zotero attachment',
   toolExportTitle: 'Export Zotero citations',
+  tagSearch: 'SEARCH',
+  tagGet: 'DETAIL',
+  tagRetrieve: 'EVIDENCE',
+  tagAttachment: 'FILE',
+  tagExport: 'EXPORT',
+  activityNote: 'The session made {count} Zotero calls.',
   noActivity: 'No Zotero tool calls in this session yet.',
   statusConnected: 'Connected',
   apiVersionLabel: 'API version',
@@ -176,6 +220,41 @@ export const en: Record<ZoteroLocaleKey, string> = {
   diagnosisLabel: 'Diagnosis',
   refresh: 'Refresh',
   lastCheckedLabel: 'Last checked',
+  lensItems: 'Items',
+  lensCitations: 'Citations',
+  lensActivity: 'Activity',
+  funnelSearched: 'Searched {count}',
+  funnelRead: 'Read {count}',
+  funnelCited: 'Cited {count}',
+  starterFind: 'Find literature…',
+  starterCite: 'Citations (LaTeX)…',
+  starterTidy: 'Tidy my library…',
+  starterFindTemplate: 'Search my Zotero library for literature on: ',
+  starterCiteTemplate:
+    'Export the following items from my Zotero library as BibTeX for LaTeX citations: ',
+  starterTidyTemplate:
+    'Review my Zotero library and list items with missing metadata or broken attachments: ',
+  itemsEmptyNote: 'No itemized literature in this session yet.',
+  itemsSourceNote: 'Searches in this session returned {count} results; all are listed below.',
+  itemsSourceOmittedNote:
+    'Searches in this session returned {count} results; the first {shown} are listed.',
+  itemsProcessedNote: 'Papers this session read, cited, or resolved an attachment for.',
+  badgeRead: 'Read',
+  badgeCited: 'Cited',
+  badgePdf: 'PDF',
+  copyRef: 'Copy ref',
+  copyFullText: 'Copy full text',
+  copyCite: '\\cite{…}',
+  askAboutItem: 'Ask about this',
+  askTemplate: 'About this item ({ref}): ',
+  generateCitation: 'Generate citation',
+  citeTemplate: 'Export this item from Zotero as BibTeX: {ref}',
+  exportsLabel: 'Exported citations',
+  quickAccessLabel: 'Quick access',
+  noExportsHint:
+    'No export artifacts in this session yet. Ask the agent to export selected items as BibTeX or CSL citations.',
+  artifactExpandLabel: 'Expand body',
+  artifactCollapseLabel: 'Collapse body',
 }
 
 /** Simplified Chinese copy. */
@@ -234,9 +313,9 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   defaultStyleHint: 'citation/bibliography 格式的 CSL 样式 id（如 apa）。',
   defaultLocale: '默认区域设置',
   defaultLocaleHint: 'citation/bibliography 格式的 CSL locale（如 en-US）。',
-  groupWeb: 'Web',
-  webEnabled: '会话工具卡片',
-  webEnabledHint: '在专属 Web 视图（会话标签页）中显示 Zotero 工具卡片。',
+  groupWeb: 'Web 视图',
+  webEnabled: 'Zotero 会话标签页',
+  webEnabledHint: '在会话顶部显示 Zotero 专属标签页，包含文献、引用与活动；关闭后该标签页隐藏。',
   copy: '复制',
   copied: '已复制',
   checking: '检查中…',
@@ -272,6 +351,12 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   toolRetrieveTitle: 'Finding evidence',
   toolAttachmentTitle: 'Resolve Zotero attachment',
   toolExportTitle: 'Export Zotero citations',
+  tagSearch: '检索',
+  tagGet: '详情',
+  tagRetrieve: '证据',
+  tagAttachment: '附件',
+  tagExport: '导出',
+  activityNote: '本会话共 {count} 次 Zotero 调用。',
   noActivity: '本会话还没有 Zotero 工具调用。',
   statusConnected: '已连接',
   apiVersionLabel: 'API 版本',
@@ -280,4 +365,35 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   diagnosisLabel: '诊断',
   refresh: '刷新',
   lastCheckedLabel: '上次检查',
+  lensItems: '文献',
+  lensCitations: '引用',
+  lensActivity: '活动',
+  funnelSearched: '检索 {count}',
+  funnelRead: '精读 {count}',
+  funnelCited: '引用 {count}',
+  starterFind: '找文献…',
+  starterCite: '查引用（LaTeX）…',
+  starterTidy: '整理我的库…',
+  starterFindTemplate: '帮我在 Zotero 文献库里检索这个主题的文献：',
+  starterCiteTemplate: '把下面几篇从我的 Zotero 库导出为 BibTeX，用于 LaTeX 引用：',
+  starterTidyTemplate: '帮我检查 Zotero 库，列出元数据缺失或附件有问题的条目：',
+  itemsEmptyNote: '本会话还没有可按篇展示的文献结果。',
+  itemsSourceNote: '本会话检索命中 {count} 条,以下全部列出。',
+  itemsSourceOmittedNote: '本会话检索命中 {count} 条,此处列出前 {shown} 条。',
+  itemsProcessedNote: '本会话精读、引用或查过附件的文献。',
+  badgeRead: '精读',
+  badgeCited: '引用',
+  badgePdf: 'PDF',
+  copyRef: '复制 ref',
+  copyFullText: '复制全文',
+  copyCite: '\\cite{…}',
+  askAboutItem: '问这篇',
+  askTemplate: '关于这篇文献（{ref}）：',
+  generateCitation: '生成引用',
+  citeTemplate: '把这篇文献从 Zotero 导出为 BibTeX：{ref}',
+  exportsLabel: '本会话导出的引用',
+  quickAccessLabel: '快速取用',
+  noExportsHint: '本会话还没有导出产物。可以让 agent 把选中的文献导出为 BibTeX 或 CSL 引用。',
+  artifactExpandLabel: '展开全文',
+  artifactCollapseLabel: '收起全文',
 }

@@ -12,6 +12,7 @@ import {
   MAX_PRESENTATION_GET_VENUE_CHARS,
   MAX_PRESENTATION_META_BYTES,
   MAX_PRESENTATION_SEARCH_ROWS,
+  MAX_PRESENTATION_SEARCH_ROWS_BYTES,
   boundedPresentationMeta,
   presentationMetaBytes,
   projectAttachmentMeta,
@@ -38,11 +39,11 @@ function searchResult(rows: number): ZoteroSearchResult {
 }
 
 describe('projectSearchMeta', () => {
-  it('caps the displayed rows and reports the omission count', () => {
+  it('projects a normal page whole and reports honest omission counts', () => {
     const meta = projectSearchMeta(searchResult(10))
-    expect(meta.items).toHaveLength(MAX_PRESENTATION_SEARCH_ROWS)
-    expect(meta.displayed).toBe(MAX_PRESENTATION_SEARCH_ROWS)
-    expect(meta.omitted).toBe(4)
+    expect(meta.items).toHaveLength(10)
+    expect(meta.displayed).toBe(10)
+    expect(meta.omitted).toBe(0)
     expect(meta.returned).toBe(10)
     expect(meta.total).toBe(42)
     expect(meta.items[0]).toEqual({
@@ -52,6 +53,32 @@ describe('projectSearchMeta', () => {
       year: 2020,
       itemType: 'journalArticle',
     })
+  })
+
+  it('caps the projected rows at the logical limit for huge pages', () => {
+    const meta = projectSearchMeta(searchResult(30))
+    expect(meta.items).toHaveLength(MAX_PRESENTATION_SEARCH_ROWS)
+    expect(meta.displayed).toBe(MAX_PRESENTATION_SEARCH_ROWS)
+    expect(meta.omitted).toBe(10)
+  })
+
+  it('bounds heavy rows by the byte allowance without dropping the page', () => {
+    const heavy = Array.from({ length: 30 }, (_, index) => ({
+      ref: `zotero://user/0/item/ABCDEFG${index}`,
+      title: '题'.repeat(120),
+      creatorSummary: '作'.repeat(60),
+      year: 2020 + index,
+      itemType: 'journalArticle',
+    }))
+    const meta = projectSearchMeta({ ...searchResult(0), items: heavy, returned: 30 })
+    expect(meta.items.length).toBeGreaterThan(0)
+    expect(meta.items.length).toBeLessThan(30)
+    expect(meta.omitted).toBe(30 - meta.items.length)
+    const bytes = meta.items.reduce(
+      (sum, row) => sum + Buffer.byteLength(JSON.stringify(row), 'utf8'),
+      0,
+    )
+    expect(bytes).toBeLessThanOrEqual(MAX_PRESENTATION_SEARCH_ROWS_BYTES)
   })
 
   it('keeps the copyable ref on every row and normalizes the page marker', () => {

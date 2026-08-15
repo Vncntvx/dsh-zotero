@@ -240,7 +240,7 @@ describe('ZoteroToolRow', () => {
 describe('ZoteroSearchRow', () => {
   it('renders the pending query and scope facts', () => {
     render(<ZoteroSearchRow block={running()} t={t} />)
-    expect(screen.getByText('Search Zotero library')).toBeDefined()
+    expect(screen.getByText(zh.tagSearch)).toBeDefined()
     expect(screen.getByText('attention')).toBeDefined()
     expect(screen.getByText('Personal library · Metadata')).toBeDefined()
   })
@@ -262,6 +262,32 @@ describe('ZoteroSearchRow', () => {
     fireEvent.click(screen.getByRole('button'))
     expect(screen.getByText(/FlashAttention-2 · Dao · 2023 · conferencePaper/)).toBeDefined()
     expect(screen.getAllByText(t('copy')).length).toBe(2)
+  })
+
+  it('renders the kind tag as the leading identity and swaps its tone on failures', () => {
+    const ok = render(<ZoteroSearchRow block={settled({ meta: SEARCH_META })} t={t} />)
+    const tag = ok.container.querySelector('[data-kind="search"]')
+    expect(tag?.textContent).toBe(zh.tagSearch)
+    expect(tag?.getAttribute('data-state')).toBe('ok')
+    // The card leads with the chip, never the wire tool icon (the expand
+    // chevron stays, hidden until the row hover).
+    expect(ok.container.querySelector('[data-icon="search"]')).toBeNull()
+    expect(ok.container.querySelector('[data-icon="browse"]')).toBeNull()
+    ok.unmount()
+
+    const failed = render(
+      <ZoteroSearchRow
+        block={settled({
+          isError: true,
+          error: { name: 'ZoteroError', code: 'ZOTERO_INVALID_ARGUMENT' },
+        })}
+        t={t}
+      />,
+    )
+    expect(failed.container.querySelector('[data-kind="search"]')?.getAttribute('data-state')).toBe(
+      'error',
+    )
+    failed.unmount()
   })
 
   it('degrades to the content text when meta is absent and shows the mismatch guidance', () => {
@@ -352,6 +378,34 @@ describe('ZoteroSearchRow', () => {
     expect(screen.getByText(interpolate(t('resultsCount'), { count: 2 }))).toBeDefined()
     fireEvent.click(screen.getByRole('button'))
     expect(screen.getByText(interpolate(t('moreOmitted'), { count: 3 }))).toBeDefined()
+  })
+
+  it('hands the full durable output over once the projection omits rows', () => {
+    render(
+      <ZoteroSearchRow
+        block={settled({
+          meta: {
+            displayed: 1,
+            omitted: 2,
+            items: [
+              {
+                ref: 'zotero://user/0/item/AAAAAAA3',
+                title: 'Only row',
+                creatorSummary: '',
+                itemType: 'journalArticle',
+              },
+            ],
+          },
+          content: [
+            { type: 'text', text: 'Found 3 of 3 results:\n1. Full row (2023) [journalArticle]' },
+          ],
+        })}
+        t={t}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button'))
+    expect(screen.getByText(/Found 3 of 3 results/)).toBeDefined()
+    expect(screen.queryByText(t('copy'))).toBeNull()
   })
 })
 
@@ -488,6 +542,25 @@ describe('ZoteroGetRow', () => {
     const closed = render(<ZoteroGetRow block={settled({})} t={t} />)
     expect(screen.queryByRole('button')).toBeNull()
     closed.unmount()
+  })
+
+  it('hands the full durable output over once the previews fall short of the totals', () => {
+    render(
+      <ZoteroGetRow
+        block={settled({
+          meta: {
+            title: 'T',
+            notes: { total: 5, returned: 5 },
+            notesPreview: [{ ref: 'zotero://user/0/item/NOTE0001', preview: 'only one' }],
+          },
+          content: [{ type: 'text', text: 'full notes text\nsecond note' }],
+        })}
+        t={t}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button'))
+    expect(screen.getByText(/full notes text/)).toBeDefined()
+    expect(screen.queryByText(t('personalNotes'))).toBeNull()
   })
 })
 
@@ -651,6 +724,34 @@ describe('ZoteroRetrieveRow', () => {
     fireEvent.click(screen.getByRole('button'))
     expect(screen.getByText('raw evidence')).toBeDefined()
   })
+
+  it('hands the full durable output over once the retrieval truncated', () => {
+    render(
+      <ZoteroRetrieveRow
+        block={settled({
+          meta: {
+            count: 2,
+            truncated: true,
+            sourcesSkipped: ['fulltext'],
+            items: [
+              {
+                source: 'annotation',
+                sourceRef: 'zotero://user/0/annotation/ANN000001',
+                preview: 'first',
+                previewTruncated: false,
+                pageLabel: '7',
+              },
+            ],
+          },
+          content: [{ type: 'text', text: 'all passages:\n1. one\n2. two' }],
+        })}
+        t={t}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button'))
+    expect(screen.getByText(/all passages/)).toBeDefined()
+    expect(screen.queryByText(t('truncatedMore'))).toBeNull()
+  })
 })
 
 describe('ZoteroAttachmentRow', () => {
@@ -776,7 +877,7 @@ describe('ZoteroExportRow', () => {
 
   it('renders the pending summary from absent args without crashing', () => {
     render(<ZoteroExportRow block={running({ name: 'zotero_export', argsRaw: '{}' })} t={t} />)
-    expect(screen.getByText('Search Zotero library')).toBeDefined()
+    expect(screen.getByText(zh.tagExport)).toBeDefined()
   })
 
   it('counts citation requests and falls back to result and tool titles', () => {

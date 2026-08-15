@@ -17,7 +17,9 @@ import type { JsonValue } from '@deepseek-ai/dsh-tools'
 export const MAX_PRESENTATION_META_BYTES = 8192
 
 /** Logical caps applied inside each projector before the byte budget. */
-export const MAX_PRESENTATION_SEARCH_ROWS = 6
+export const MAX_PRESENTATION_SEARCH_ROWS = 20
+/** Row-bytes allowance inside the search projection (kept well under the total budget). */
+export const MAX_PRESENTATION_SEARCH_ROWS_BYTES = 6144
 export const MAX_PRESENTATION_SEARCH_TITLE_CHARS = 120
 export const MAX_PRESENTATION_SEARCH_CREATOR_CHARS = 60
 export const MAX_PRESENTATION_PREVIEW_CHARS = 200
@@ -229,18 +231,31 @@ function sourcesOf(evidence: ReadonlyArray<{ readonly source: string }>): Zotero
 }
 
 /**
- * Project one search result into card-sized facts.
+ * Project one search result into card-sized facts. Rows are bounded by both
+ * a logical cap and a row-bytes allowance, so a normal page projects whole
+ * (no arbitrary 6-row cut) while a heavy page still fits the shared budget
+ * without ever tripping the detail-dropping overflow.
  * @param value - the canonical search result.
  * @returns the bounded projection.
  */
 export function projectSearchMeta(value: SearchProjectionInput): ZoteroSearchPresentationMeta {
-  const items = value.items.slice(0, MAX_PRESENTATION_SEARCH_ROWS).map((item) => ({
-    ref: item.ref,
-    title: truncateChars(item.title, MAX_PRESENTATION_SEARCH_TITLE_CHARS),
-    creatorSummary: truncateChars(item.creatorSummary, MAX_PRESENTATION_SEARCH_CREATOR_CHARS),
-    ...(item.year === undefined ? {} : { year: item.year }),
-    itemType: item.itemType,
-  }))
+  const items: ZoteroSearchPresentationRow[] = []
+  let bytes = 0
+  for (const item of value.items) {
+    if (items.length >= MAX_PRESENTATION_SEARCH_ROWS) break
+    const row: ZoteroSearchPresentationRow = {
+      ref: item.ref,
+      title: truncateChars(item.title, MAX_PRESENTATION_SEARCH_TITLE_CHARS),
+      creatorSummary: truncateChars(item.creatorSummary, MAX_PRESENTATION_SEARCH_CREATOR_CHARS),
+      ...(item.year === undefined ? {} : { year: item.year }),
+      itemType: item.itemType,
+    }
+    const rowBytes = Buffer.byteLength(JSON.stringify(row), 'utf8')
+    // The first row always fits; later rows stop once the allowance is spent.
+    if (items.length > 0 && bytes + rowBytes > MAX_PRESENTATION_SEARCH_ROWS_BYTES) break
+    items.push(row)
+    bytes += rowBytes
+  }
   const displayed = items.length
   return {
     returned: value.returned,

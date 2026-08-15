@@ -86,7 +86,7 @@ export class ZoteroService extends Service {
     this.source = () => entry
     this.rebuild()
     registerStatusCommand(ctx, this)
-    registerPromptSection(ctx)
+    registerPromptSection(ctx, () => this.config)
     registerSearchTool(ctx, this)
     registerGetTool(ctx, this)
     registerAttachmentTool(ctx, this)

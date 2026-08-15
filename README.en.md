@@ -184,7 +184,14 @@ pnpm dsh web --patch ./dsh-zotero/dev.cordis.yml
 
 #### With the npm-installed dsh
 
-**Resident instance**: pack a tarball and install it into a profile. The plugin runs from the tarball copy; code updates require re-packing and re-installing. Verify with the production-stack smoke:
+This plugin builds in two halves: the **Node side** (`lib/`, emitted by `tsc`, holds the service, tools, provider, and other logic) and the **browser side** (`lib/client.js`, emitted by `esbuild`, holds the dsh web configuration card and the Zotero tab view). The three flows below cover the common cases.
+
+- `npm run build` emits both halves; `npm run build:client` rebuilds only the browser side.
+- The rest of this section assumes `npm run build` has been run at least once so `lib/` exists.
+
+**① Resident instance verification (tarball install)**
+
+Pack a tarball and install it into a profile. The plugin runs from the tarball's built artifacts; code updates require re-packing and re-installing. Verify with the production-stack smoke after install:
 
 ```sh
 npm pack
@@ -193,9 +200,11 @@ cd ~/.dsh/profiles/<name>
 node --input-type=module < /path/to/dsh-zotero/scripts/smoke.mjs
 ```
 
-Run the smoke inside the profile directory, so bare imports resolve from the profile's flat `node_modules`. It verifies `status`, `search`, `get`, `retrieve`, `export`, the policy prompt section, and tool registration; `SMOKE PASS` indicates the packed plugin passes the installed-path checks.
+The smoke must be run inside the profile directory, so bare imports resolve from the profile's flat `node_modules`. It verifies `status`, `search`, `get`, `retrieve`, `export`, the policy prompt section, and the registration of all five tools; `SMOKE PASS` indicates the packed plugin passes the installed-path checks.
 
-**Dev instance (hot swap)**: the `dev-lib.cordis.yml` overlay disables the profile's tarball copy (id `zotero`), inserts `zotero-dev` at this checkout's `lib/index.js`, and re-enables HMR. The production web profile disables loader HMR, and the HMR watch base sits in the profile directory, so the overlay sets `base` explicitly. When the build output changes, HMR disposes the old instance and re-constructs the plugin in the same process; dsh keeps running:
+**② Node-side hot-swap development**
+
+The `dev-lib.cordis.yml` overlay disables the profile's tarball row (id `zotero`), inserts a `zotero-dev` row pointing at this checkout's `lib/index.js`, and re-enables HMR. The production web profile disables loader HMR by default, and HMR's watch root lives in the profile directory, so the overlay sets `base` explicitly. When the build output changes, HMR disposes the old instance and reconstructs the plugin in the same process — no dsh restart needed:
 
 ```sh
 cd ./dsh-zotero                 # from the deepseek-harness checkout
@@ -203,9 +212,11 @@ npm run dev &                    # tsc --watch: rebuild lib on src changes
 dsh web --patch ./dev-lib.cordis.yml --port 3307
 ```
 
-Hot swap affects only the instance started with `--patch`; the resident instance keeps running the tarball version.
+Hot swap only affects the instance started with `--patch`; the resident instance keeps running the tarball version, independently.
 
-**Developing the browser half**: the web frontend only scans loader rows whose `name` is a bare package name (resolvable to `package.json`) — the absolute-path row in `dev-lib.cordis.yml` has no browser half, so the card does not appear in the dev instance. To develop the card, install this checkout into the profile (`npm install <this repo path>` as a file: dependency, or pack and install the tarball), then pair `npm run dev:client` (esbuild watch) with the hot-swap overlay: browser-bundle changes make HMR re-fetch `/plugins/dsh-zotero/client.js`.
+**③ Browser-side development**
+
+The web frontend only scans loader rows whose `name` is a bare package name (npm-resolvable to `package.json`) to load the browser-side bundle. `dev-lib.cordis.yml` uses an absolute-path row, which does not trigger browser-side loading, so the card does not appear in the ② dev instance. To develop the card, first install this checkout into the profile (`npm install <this repo path>` as a `file:` dependency, or pack and install the tarball), then pair `npm run dev:client` (esbuild watch) with the hot-swap overlay: browser-bundle changes make HMR re-fetch `/plugins/dsh-zotero/client.js`.
 
 ## License
 

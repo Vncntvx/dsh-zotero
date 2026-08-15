@@ -121,7 +121,9 @@ export function renderExport(_args: ExportArgs, value: ExportOutput): ContentBlo
       },
     ]
   }
-  return [{ type: 'text', text: value.text }]
+  // Zotero's raw translator output can lead with stray whitespace; a text
+  // export reads cleaner without it (display and copy alike).
+  return [{ type: 'text', text: value.text.trimStart() }]
 }
 
 /**

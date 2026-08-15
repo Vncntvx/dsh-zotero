@@ -10,11 +10,11 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/**/*.{ts,tsx}'],
-      // The package entry is a pure re-export module and `types.ts` is a
-      // types-only module: neither has runtime statements, so v8 reports
-      // them as permanently uncovered. Every other runtime-bearing source
-      // file must meet the 100% gate.
-      exclude: ['src/index.ts', 'src/types.ts'],
+      // The package entry is a pure re-export module; `types.ts` and the
+      // ambient `css-modules.d.ts` are types-only modules: none has runtime
+      // statements, so v8 reports them as permanently uncovered. Every other
+      // runtime-bearing source file must meet the 100% gate.
+      exclude: ['src/index.ts', 'src/types.ts', 'src/client/css-modules.d.ts'],
       thresholds: {
         statements: 100,
         branches: 100,

@@ -1,10 +1,23 @@
-/* Zotero tool card internals: result rows, evidence passages, previews,
- * and the degraded fallback — all on --dsw-alias-* tokens. */
+/* Zotero tool card internals, on the native card language: hairline row
+ * separators (border-l1), caption-size group labels, semantic tag chips for
+ * flags, and 999px pill affordances — all on --dsw-alias-* tokens. The body
+ * surface itself (12px card, code-block tint) is ZoteroToolRow.module.css. */
 
 .rows {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+}
+
+/* Result and evidence rows read as list entries: stacked with hairlines,
+ * first/last flush with the card padding. */
+.rows > .resultRow,
+.rows > .evidenceRow {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+}
+
+.rows > :last-child {
+  border-bottom: none;
 }
 
 .resultRow,
@@ -28,48 +41,71 @@
 }
 
 .omitted {
+  padding: 4px 0 0;
   font-size: 12px;
   line-height: 18px;
   color: var(--dsw-alias-label-tertiary);
 }
 
+/* Copy affordance: a quiet ghost button — no chrome of its own, the hover
+ * wash only — so it reads as part of the card surface, not a floating
+ * patch (the native toolbar-button language). */
 .copyButton {
   flex: none;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-family: inherit;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--dsw-alias-state-business-primary);
-  background: transparent;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 4px;
+  height: 20px;
   padding: 0 6px;
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--dsw-alias-label-tertiary);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
   cursor: pointer;
+  transition:
+    background 120ms var(--ds-ease-in-out),
+    color 120ms var(--ds-ease-in-out);
+}
+
+.copyButton:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
 }
 
 .copyButton:focus-visible {
   outline: 1px solid var(--dsw-alias-state-business-primary);
-  outline-offset: 2px;
+  outline-offset: 1px;
 }
 
+/* Group label (notes/annotations): the trajectory kind-tag cadence — small,
+ * weighted, caption-colored, set apart from the reading rows it names. */
 .previewGroupLabel {
-  font-size: 12px;
-  line-height: 18px;
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.035em;
   color: var(--dsw-alias-label-caption);
+}
+
+.rows > .previewGroupLabel:first-child {
+  margin-top: 0;
 }
 
 .previewRow {
   display: flex;
   align-items: flex-start;
   gap: 8px;
+  padding: 4px 0;
 }
 
 .previewLabel {
   flex: none;
   font-size: 12px;
-  line-height: 18px;
+  line-height: 20px;
   color: var(--dsw-alias-label-tertiary);
 }
 
@@ -99,8 +135,8 @@
 
 .evidenceSource {
   flex: none;
-  font-size: 12px;
-  line-height: 18px;
+  font-size: 13px;
+  line-height: 20px;
   font-weight: 500;
   color: var(--dsw-alias-label-primary);
 }
@@ -111,29 +147,56 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: var(--ds-font-family-code);
-  font-size: 12px;
+  font-size: 11px;
   line-height: 18px;
   color: var(--dsw-alias-label-caption);
 }
 
+/* Truncation flag: a warn-kind tag chip (the trajectory table's toolAmber). */
 .evidenceFlag {
   flex: none;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--dsw-alias-label-tertiary);
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  line-height: 12px;
+  font-weight: 650;
+  letter-spacing: 0.035em;
+  color: var(--dsw-alias-state-warn-label);
+  background: var(--dsw-alias-state-warn-tertiary);
 }
 
+/* Passage expander: a quiet ghost square that gains the hover wash. */
 .expandButton {
   flex: none;
   margin-left: auto;
-  font-family: inherit;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--dsw-alias-label-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--dsw-alias-label-caption);
   background: transparent;
   border: none;
+  border-radius: 4px;
   cursor: pointer;
-  padding: 0 2px;
+  transition:
+    background 120ms var(--ds-ease-in-out),
+    color 120ms var(--ds-ease-in-out);
+}
+
+.expandButton:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.expandButton:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
 }
 
 .evidenceText {
@@ -157,6 +220,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-family: var(--ds-font-family-code);
   font-size: 12px;
   line-height: 18px;
   color: var(--dsw-alias-label-secondary);
@@ -168,6 +232,21 @@
   font-size: 12px;
   line-height: 18px;
   color: var(--dsw-alias-label-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* The code-block chrome without the primitive's banner and copy button —
+ * the citations card owns its copy affordances in the head. */
+.plainCode {
+  margin: 0;
+  padding: 16px;
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-markdown-code-block);
+  border-radius: 12px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
