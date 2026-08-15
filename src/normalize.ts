@@ -95,13 +95,24 @@ export function normalizeSearchItem(json: unknown, serverId?: string): ZoteroSea
   const attachment = asRecord(asRecord(record.links)?.attachment)
   const attachmentKey = extractAttachmentKey(asString(attachment?.href))
   const parsedDate = asString(meta?.parsedDate)
+  const itemType = asString(data?.itemType) ?? asString(record.itemType) ?? ''
+  let title = asString(data?.title) ?? ''
+  // Notes carry their content in `data.note` and often no title; synthesize
+  // one from the first non-empty line so search hits stay distinguishable.
+  if (itemType === 'note' && title === '') {
+    title =
+      plainNoteText(data?.note)
+        .split('\n')
+        .map((line) => line.trim())
+        .find((line) => line !== '') ?? '(untitled note)'
+  }
   // Optional fields are omitted rather than set to undefined, so the record
   // is always a pure lossless-JSON value for the tool output snapshot.
   const item: ZoteroSearchItem = {
     ref: formatRef(localRef('item', key, serverId)),
-    title: asString(data?.title) ?? '',
+    title,
     creatorSummary: asString(meta?.creatorSummary) ?? '',
-    itemType: asString(data?.itemType) ?? asString(record.itemType) ?? '',
+    itemType,
   }
   if (parsedDate !== undefined && /^\d{4}/.test(parsedDate))
     item.year = Number(parsedDate.slice(0, 4))

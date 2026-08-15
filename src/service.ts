@@ -69,6 +69,7 @@ export class ZoteroService extends Service {
     })
     this.registerProvider(
       new LocalApiProvider(client, {
+        maxNoteScanRecords: this.config.maxNoteScanRecords,
         maxDetailChars: this.config.maxDetailChars,
         maxNoteBodyChars: this.config.maxNoteBodyChars,
         maxNoteChars: this.config.maxNoteChars,

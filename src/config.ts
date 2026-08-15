@@ -17,6 +17,8 @@ export interface Config {
   timeoutMs?: number
   /** Upper bound for `zotero_search` `limit`. */
   maxSearchResults?: number
+  /** Upper bound for note records `zotero_search` scans for body matches. */
+  maxNoteScanRecords?: number
   /** Total character budget for retrieved evidence passages. */
   maxEvidenceChars?: number
   /** Upper bound for the number of evidence passages. */
@@ -50,6 +52,7 @@ export const Config: Schema<Config> = Schema.object({
   provider: Schema.string().default('local'),
   timeoutMs: Schema.number().default(5000),
   maxSearchResults: Schema.number().default(20),
+  maxNoteScanRecords: Schema.number().default(200),
   maxEvidenceChars: Schema.number().default(6000),
   maxEvidencePassages: Schema.number().default(4),
   maxDetailChars: Schema.number().default(3000),
@@ -70,6 +73,7 @@ export interface ResolvedConfig {
   readonly provider: string
   readonly timeoutMs: number
   readonly maxSearchResults: number
+  readonly maxNoteScanRecords: number
   readonly maxEvidenceChars: number
   readonly maxEvidencePassages: number
   readonly maxDetailChars: number
@@ -135,6 +139,7 @@ export function resolveConfig(config: Config): ResolvedConfig {
     )
   }
   assertPositiveInteger('maxSearchResults', applied.maxSearchResults)
+  assertPositiveInteger('maxNoteScanRecords', applied.maxNoteScanRecords)
   assertPositiveInteger('maxEvidenceChars', applied.maxEvidenceChars)
   assertPositiveInteger('maxEvidencePassages', applied.maxEvidencePassages)
   assertPositiveInteger('maxDetailChars', applied.maxDetailChars)

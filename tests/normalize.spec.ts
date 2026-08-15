@@ -111,6 +111,27 @@ describe('normalizeSearchItem', () => {
     ).toBeUndefined()
   })
 
+  it('synthesizes a note title from the first body line when the title is empty', () => {
+    const item = normalizeSearchItem({
+      key: 'NOTE1111',
+      data: { itemType: 'note', title: '', note: '<p>论文概述</p><p>second line</p>' },
+    })
+    expect(item.title).toBe('论文概述')
+  })
+
+  it('falls back to an untitled marker for notes without any body', () => {
+    const item = normalizeSearchItem({ key: 'NOTE1111', data: { itemType: 'note', title: '' } })
+    expect(item.title).toBe('(untitled note)')
+  })
+
+  it('keeps an explicit note title when Zotero reports one', () => {
+    const item = normalizeSearchItem({
+      key: 'NOTE1111',
+      data: { itemType: 'note', title: 'Real title', note: 'body' },
+    })
+    expect(item.title).toBe('Real title')
+  })
+
   it('yields an empty itemType when neither level declares one', () => {
     const item = normalizeSearchItem({ key: 'ABCD1234' })
     expect(item.itemType).toBe('')

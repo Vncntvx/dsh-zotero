@@ -6,6 +6,9 @@
  * behavior: server-side pagination over `/items/top`, collection and saved
  * search scopes resolved client-side (the Local API has no server-side name
  * search), and literal tag names escaped so they never become query syntax.
+ * Zotero's index never covers note bodies, so the first page of a queried
+ * search also merges client-side note-content matches (capped by
+ * `maxNoteScanRecords`; collection scopes filter by membership).
  * @module dsh-zotero/provider-local
  */
 
@@ -25,7 +28,7 @@ import {
   ZoteroError,
   errorMessageOf,
 } from './errors.js'
-import { chunkText, rankChunks } from './evidence.js'
+import { chunkText, rankChunks, tokenize } from './evidence.js'
 import {
   asRecord,
   asString,
@@ -93,10 +96,14 @@ interface ResolvedScopeResult {
   readonly path: string
   readonly resolved: ZoteroResolvedScope
   readonly serverId?: string
+  /** The collection key a note must belong to for the body scan; library/search scopes are unset. */
+  readonly collectionKey?: string
 }
 
 /** Deployment-varying bounds the local provider needs beyond the HTTP client limits. */
 export interface LocalApiLimits {
+  /** Upper bound for note records the search scan fetches for body matches. */
+  readonly maxNoteScanRecords: number
   /** Character budget for `zotero_get` abstract previews. */
   readonly maxDetailChars: number
   /** Character budget for a note item's own body returned by `zotero_get`. */
@@ -203,12 +210,32 @@ export class LocalApiProvider implements ZoteroProvider {
     const responseServerId = headers.get('zotero-server-id') ?? scope.serverId
     const items = rows.map((row) => normalizeSearchItem(row, responseServerId ?? undefined))
     const headerTotal = headers.get('total-results')
-    const total =
+    const apiTotal =
       headerTotal !== null && headerTotal !== '' && Number.isInteger(Number(headerTotal))
         ? Number(headerTotal)
         : items.length
+    // Zotero's index never searches note bodies, so the first page of a
+    // queried search merges client-side note-content matches. Pagination
+    // stays API-driven: later pages skip the scan.
+    let total = apiTotal
+    if (this.shouldScanNotes(request, scope.resolved)) {
+      const query = request.query!
+      const seen = new Set(
+        rows
+          .map((row) => asString(asRecord(row)?.key))
+          .filter((key): key is string => key !== undefined),
+      )
+      for (const row of await this.fetchNoteRows(scope, signal)) {
+        const key = asString(asRecord(row)?.key)
+        if (key === undefined || seen.has(key)) continue
+        if (!this.noteRowMatches(row, query, request.tags, scope.collectionKey)) continue
+        seen.add(key)
+        items.push(normalizeSearchItem(row, responseServerId ?? undefined))
+      }
+      total = apiTotal + (items.length - rows.length)
+    }
     const nextOffset =
-      request.offset + items.length < total ? request.offset + items.length : undefined
+      request.offset + rows.length < apiTotal ? request.offset + rows.length : undefined
     // Omit (rather than null) the pagination cursor on the final page, so the
     // result stays a pure lossless-JSON value for the tool output snapshot.
     const result: ZoteroSearchResult = {
@@ -220,6 +247,78 @@ export class LocalApiProvider implements ZoteroProvider {
     }
     if (nextOffset !== undefined) result.nextOffset = nextOffset
     return result
+  }
+
+  /** Whether a search request qualifies for the client-side note-body scan. */
+  private shouldScanNotes(request: ZoteroSearchRequest, resolved: ZoteroResolvedScope): boolean {
+    const query = request.query?.trim()
+    return (
+      query !== undefined &&
+      query !== '' &&
+      request.offset === 0 &&
+      resolved.kind !== 'savedSearch' &&
+      (request.itemTypes === undefined || request.itemTypes.includes('note'))
+    )
+  }
+
+  /**
+   * Fetch note rows for the body scan in dateModified-descending batches,
+   * stopping at `maxNoteScanRecords`. The Local API caps a request at 100
+   * rows, so the scan pages until the budget or the end of the notes.
+   */
+  private async fetchNoteRows(
+    scope: ResolvedScopeResult,
+    signal: AbortSignal | undefined,
+  ): Promise<readonly unknown[]> {
+    const out: unknown[] = []
+    let start = 0
+    while (out.length < this.limits.maxNoteScanRecords) {
+      const wanted = Math.min(100, this.limits.maxNoteScanRecords - out.length)
+      const params = new URLSearchParams()
+      params.set('itemType', 'note')
+      params.set('sort', 'dateModified')
+      params.set('direction', 'desc')
+      params.set('start', String(start))
+      params.set('limit', String(wanted))
+      const { json } = await this.client.getJson<unknown>('users/0/items/top', params, {
+        signal,
+        serverId: scope.serverId,
+      })
+      const rows = Array.isArray(json) ? json : []
+      if (rows.length === 0) break
+      out.push(...rows.slice(0, wanted))
+      // Fewer rows than requested means the library has no more notes.
+      if (rows.length < wanted) break
+      start += rows.length
+    }
+    return out
+  }
+
+  /**
+   * Whether a note row satisfies the body scan: every query token appears
+   * in the note text, plus the scope's collection and the literal tag
+   * filters when present. The caller has already verified the query is
+   * non-empty, so `query` is a plain string here.
+   */
+  private noteRowMatches(
+    row: unknown,
+    query: string,
+    tags: readonly string[] | undefined,
+    collectionKey: string | undefined,
+  ): boolean {
+    const data = asRecord(asRecord(row)?.data)
+    if (asString(data?.itemType) !== 'note') return false
+    if (collectionKey !== undefined && !collectionKeysOf(row).includes(collectionKey)) return false
+    if (tags !== undefined && tags.length > 0) {
+      const tagNames = new Set(
+        (Array.isArray(data?.tags) ? data.tags : [])
+          .map((tag) => asString(asRecord(tag)?.tag))
+          .filter((tag): tag is string => tag !== undefined),
+      )
+      if (!tags.every((tag) => tagNames.has(tag))) return false
+    }
+    const text = plainNoteText(data?.note).toLowerCase()
+    return tokenize(query.toLowerCase()).every((term) => text.includes(term))
   }
 
   /**
@@ -664,6 +763,7 @@ export class LocalApiProvider implements ZoteroProvider {
           path: `users/0/collections/${found.ref.key}/items/top`,
           resolved: { kind: 'collection', ref: formatRef(found.ref), name: found.name },
           serverId: found.ref.serverId,
+          collectionKey: found.ref.key,
         }
       }
       case 'savedSearch': {
