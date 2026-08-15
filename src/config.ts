@@ -23,6 +23,14 @@ export interface Config {
   maxEvidencePassages?: number
   /** Character budget for `zotero_get` detail previews (abstract/notes/annotations). */
   maxDetailChars?: number
+  /** Per-note character budget for `zotero_get` note previews. */
+  maxNoteChars?: number
+  /** Upper bound for note records returned by `zotero_get`. */
+  maxNoteRecords?: number
+  /** Upper bound for annotation records returned by `zotero_get`. */
+  maxAnnotationRecords?: number
+  /** Word count of each full-text passage entering evidence ranking. */
+  fulltextChunkWords?: number
   /** Character bound for full text accepted into `zotero_retrieve` ranking. */
   maxFulltextChars?: number
   /** Streaming byte bound for every API response body. */
@@ -43,6 +51,10 @@ export const Config: Schema<Config> = Schema.object({
   maxEvidenceChars: Schema.number().default(6000),
   maxEvidencePassages: Schema.number().default(4),
   maxDetailChars: Schema.number().default(3000),
+  maxNoteChars: Schema.number().default(2000),
+  maxNoteRecords: Schema.number().default(50),
+  maxAnnotationRecords: Schema.number().default(100),
+  fulltextChunkWords: Schema.number().default(200),
   maxFulltextChars: Schema.number().default(250_000),
   maxResponseBytes: Schema.number().default(16 * 1024 * 1024),
   maxExportChars: Schema.number().default(1_000_000),
@@ -58,6 +70,10 @@ export interface ResolvedConfig {
   readonly maxEvidenceChars: number
   readonly maxEvidencePassages: number
   readonly maxDetailChars: number
+  readonly maxNoteChars: number
+  readonly maxNoteRecords: number
+  readonly maxAnnotationRecords: number
+  readonly fulltextChunkWords: number
   readonly maxFulltextChars: number
   readonly maxResponseBytes: number
   readonly maxExportChars: number
@@ -116,6 +132,10 @@ export function resolveConfig(config: Config): ResolvedConfig {
   assertPositiveInteger('maxEvidenceChars', applied.maxEvidenceChars)
   assertPositiveInteger('maxEvidencePassages', applied.maxEvidencePassages)
   assertPositiveInteger('maxDetailChars', applied.maxDetailChars)
+  assertPositiveInteger('maxNoteChars', applied.maxNoteChars)
+  assertPositiveInteger('maxNoteRecords', applied.maxNoteRecords)
+  assertPositiveInteger('maxAnnotationRecords', applied.maxAnnotationRecords)
+  assertPositiveInteger('fulltextChunkWords', applied.fulltextChunkWords)
   assertPositiveInteger('maxFulltextChars', applied.maxFulltextChars)
   assertPositiveInteger('maxResponseBytes', applied.maxResponseBytes)
   assertPositiveInteger('maxExportChars', applied.maxExportChars)

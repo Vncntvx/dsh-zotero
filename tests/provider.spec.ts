@@ -25,6 +25,10 @@ let tempDir: string
 function makeProvider(limits: Partial<LocalApiLimits> = {}): LocalApiProvider {
   return new LocalApiProvider(new ZoteroHttpClient({ baseUrl: mock.baseUrl, timeoutMs: 5000, maxResponseBytes: 1024 * 1024 }), {
     maxDetailChars: 500,
+    maxNoteChars: 2000,
+    maxNoteRecords: 50,
+    maxAnnotationRecords: 100,
+    fulltextChunkWords: 200,
     maxEvidenceChars: 6000,
     maxEvidencePassages: 4,
     maxFulltextChars: 100_000,
@@ -481,6 +485,28 @@ describe('getItem', () => {
     expect(detail.notes).toEqual({ total: 0, returned: 0, items: [] })
   })
 
+  it('applies the configured note and annotation record caps', async () => {
+    const notes = Array.from({ length: 7 }, (_, i) => ({
+      key: `NOTE${String(i).padStart(4, '0')}`,
+      data: { itemType: 'note', note: `note ${i}` },
+    }))
+    const annotations = Array.from({ length: 3 }, (_, i) => ({
+      key: `ANNO${String(i).padStart(4, '0')}`,
+      data: { itemType: 'annotation', annotationType: 'highlight', annotationText: `a ${i}`, annotationSortIndex: String(i).padStart(5, '0') },
+    }))
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) => (
+      helpers.json({ ...PARENT, data: { ...PARENT.data, collections: [] } }, { 'Zotero-Server-ID': 'S1' })
+    ))
+    mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) => (
+      helpers.json([...notes, ...annotations], { 'Zotero-Server-ID': 'S1' })
+    ))
+    const capped = makeProvider({ maxNoteRecords: 2, maxAnnotationRecords: 1, maxNoteChars: 5 })
+    const detail = await capped.getItem(getRequest(['notes', 'annotations']))
+    expect(detail.notes).toMatchObject({ total: 7, returned: 2 })
+    expect(detail.notes!.items[0]).toMatchObject({ text: 'note ', truncated: true })
+    expect(detail.annotations).toMatchObject({ total: 3, returned: 1 })
+  })
+
   it('rejects non-item refs before any request happens', async () => {
     await zoteroError(
       provider.getItem({ ref: parseRef('zotero://user/0/attachment/WXYZ6789'), include: new Set() }),
@@ -725,6 +751,22 @@ describe('retrieve', () => {
     const result = await narrow.retrieve(retrieveRequest())
     expect(result.evidence.reduce((sum, entry) => sum + entry.text.length, 0)).toBeLessThanOrEqual(20)
     expect(result.truncated).toBe(true)
+  })
+
+  it('chunks fulltext at the configured passage word count', async () => {
+    const narrow = makeProvider({ fulltextChunkWords: 2 })
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) => helpers.json(RETRIEVE_PARENT))
+    mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) => helpers.json(RETRIEVE_CHILDREN))
+    mock.route('GET', '/api/users/0/items/WXYZ6789/fulltext', (req, res, helpers) => helpers.json(FULLTEXT_PAYLOAD))
+    const result = await narrow.retrieve(retrieveRequest({ sources: ['fulltext'], passages: 20 }))
+    // Evidence comes back BM25-ranked, so chunk order is relevance order, not
+    // source order; each chunk is still a verbatim span of the original text.
+    const chunks = result.evidence.filter((entry) => entry.source === 'fulltext')
+    expect(chunks.length).toBeGreaterThan(1)
+    for (const chunk of chunks) {
+      expect(chunk.text.split(/\s+/).filter((part) => part !== '').length).toBeLessThanOrEqual(2)
+      expect(FULLTEXT_PAYLOAD.content).toContain(chunk.text)
+    }
   })
 
   it('rejects non-item refs before any request happens', async () => {

@@ -11,6 +11,10 @@ describe('resolveConfig', () => {
       maxEvidenceChars: 6000,
       maxEvidencePassages: 4,
       maxDetailChars: 3000,
+      maxNoteChars: 2000,
+      maxNoteRecords: 50,
+      maxAnnotationRecords: 100,
+      fulltextChunkWords: 200,
       maxFulltextChars: 250_000,
       maxResponseBytes: 16 * 1024 * 1024,
       maxExportChars: 1_000_000,
@@ -20,8 +24,24 @@ describe('resolveConfig', () => {
   })
 
   it('honors explicit values', () => {
-    expect(resolveConfig({ timeoutMs: 900, maxExportChars: 42, defaultStyle: 'chicago-note-bibliography' }))
-      .toMatchObject({ timeoutMs: 900, maxExportChars: 42, defaultStyle: 'chicago-note-bibliography' })
+    expect(resolveConfig({
+      timeoutMs: 900,
+      maxExportChars: 42,
+      defaultStyle: 'chicago-note-bibliography',
+      maxNoteChars: 99,
+      maxNoteRecords: 3,
+      maxAnnotationRecords: 7,
+      fulltextChunkWords: 12,
+    }))
+      .toMatchObject({
+        timeoutMs: 900,
+        maxExportChars: 42,
+        defaultStyle: 'chicago-note-bibliography',
+        maxNoteChars: 99,
+        maxNoteRecords: 3,
+        maxAnnotationRecords: 7,
+        fulltextChunkWords: 12,
+      })
   })
 
   it('accepts loopback base URLs over http', () => {
@@ -56,6 +76,10 @@ describe('resolveConfig', () => {
     expect(() => resolveConfig({ maxResponseBytes: -3 })).toThrowError(/maxResponseBytes/)
     expect(() => resolveConfig({ maxExportChars: Number.NaN })).toThrowError(/maxExportChars/)
     expect(() => resolveConfig({ maxFulltextChars: 0 })).toThrowError(/maxFulltextChars/)
+    expect(() => resolveConfig({ maxNoteChars: 0 })).toThrowError(/maxNoteChars/)
+    expect(() => resolveConfig({ maxNoteRecords: 1.5 })).toThrowError(/maxNoteRecords/)
+    expect(() => resolveConfig({ maxAnnotationRecords: -2 })).toThrowError(/maxAnnotationRecords/)
+    expect(() => resolveConfig({ fulltextChunkWords: 0 })).toThrowError(/fulltextChunkWords/)
   })
 
   it('rejects empty provider and style strings', () => {

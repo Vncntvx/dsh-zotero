@@ -60,6 +60,10 @@ export class ZoteroService extends Service {
     })
     this.registerProvider(new LocalApiProvider(client, {
       maxDetailChars: this.config.maxDetailChars,
+      maxNoteChars: this.config.maxNoteChars,
+      maxNoteRecords: this.config.maxNoteRecords,
+      maxAnnotationRecords: this.config.maxAnnotationRecords,
+      fulltextChunkWords: this.config.fulltextChunkWords,
       maxEvidenceChars: this.config.maxEvidenceChars,
       maxEvidencePassages: this.config.maxEvidencePassages,
       maxFulltextChars: this.config.maxFulltextChars,
@@ -98,40 +102,69 @@ export class ZoteroService extends Service {
     }
   }
 
-  /** Connectivity probe — the only health check; ordinary calls fail with typed errors instead. */
+  /**
+   * Connectivity probe — the only health check; ordinary calls fail with typed errors instead.
+   * @param signal - caller cancellation; forwarded to the provider.
+   * @returns live connectivity facts for the configured provider.
+   */
   async status(signal?: AbortSignal): Promise<ZoteroStatus> {
     return this.resolveProvider().status(signal)
   }
 
-  /** Discover candidates; the provider resolves scopes and serves the compact records. */
+  /**
+   * Discover candidates; the provider resolves scopes and serves the compact records.
+   * @param request - the search request with scope, mode, filters, and pagination.
+   * @param signal - caller cancellation; forwarded to the provider.
+   * @returns the resolved scope plus the compact hit records and pagination facts.
+   */
   async search(request: ZoteroSearchRequest, signal?: AbortSignal): Promise<ZoteroSearchResult> {
     const provider = this.resolveProvider()
     this.requireCapability(provider, 'search')
     return await provider.search(request, signal)
   }
 
-  /** Read one item's metadata plus optionally requested child content. */
+  /**
+   * Read one item's metadata plus optionally requested child content.
+   * @param request - the item ref and the child kinds to include.
+   * @param signal - caller cancellation; forwarded to the provider.
+   * @returns the normalized item detail.
+   */
   async get(request: ZoteroGetRequest, signal?: AbortSignal): Promise<ZoteroItemDetail> {
     const provider = this.resolveProvider()
     this.requireCapability(provider, 'metadata')
     return await provider.getItem(request, signal)
   }
 
-  /** Resolve an attachment ref to its on-disk file or linked URL. */
+  /**
+   * Resolve an attachment ref to its on-disk file or linked URL.
+   * @param ref - the item or attachment ref to resolve.
+   * @param signal - caller cancellation; forwarded to the provider.
+   * @returns the verified file path or linked URL.
+   */
   async attachment(ref: ZoteroObjectRef, signal?: AbortSignal): Promise<ZoteroAttachmentLocation> {
     const provider = this.resolveProvider()
     this.requireCapability(provider, 'attachments')
     return await provider.getAttachmentLocation(ref, signal)
   }
 
-  /** Gather ranked evidence passages for one item across the requested sources. */
+  /**
+   * Gather ranked evidence passages for one item across the requested sources.
+   * @param request - the item ref, ranking query, sources, and passage cap.
+   * @param signal - caller cancellation; forwarded to the provider.
+   * @returns the bounded ranked evidence with a truncation flag.
+   */
   async retrieve(request: ZoteroRetrieveRequest, signal?: AbortSignal): Promise<ZoteroRetrieveResult> {
     const provider = this.resolveProvider()
     this.requireCapability(provider, 'fulltext')
     return await provider.retrieve(request, signal)
   }
 
-  /** Export citations, a bibliography, or translator formats for the requested items. */
+  /**
+   * Export citations, a bibliography, or translator formats for the requested items.
+   * @param request - the item refs and the export format plus optional style/locale.
+   * @param signal - caller cancellation; forwarded to the provider.
+   * @returns per-ref citations or the joined export text.
+   */
   async export(request: ZoteroExportRequest, signal?: AbortSignal): Promise<ZoteroExportResult> {
     const provider = this.resolveProvider()
     this.requireCapability(provider, 'citation')

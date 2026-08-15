@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ZOTERO_INVALID_REF, ZoteroError } from '../src/errors.js'
 import { formatRef, isRefString, localRef, parseRef, requireLocalRef } from '../src/refs.js'
-import { ZOTERO_SORT_FIELDS } from '../src/types.js'
+import { ZOTERO_SORT_FIELDS } from '../src/constants.js'
 
 function expectInvalidRef(value: string, messagePart?: string): void {
   let thrown: unknown

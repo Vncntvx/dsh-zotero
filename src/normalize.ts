@@ -25,15 +25,6 @@ export { extractAttachmentKey, normalizeAttachmentRecord } from './attachments.j
 
 const OBJECT_KEY_PATTERN = /^[A-Z0-9]{8}$/
 
-/** Per-note character budget for `zotero_get`; `truncated` signals the cut. */
-export const MAX_NOTE_CHARS = 2000
-
-/** At most this many note children are returned in a `zotero_get` detail. */
-export const MAX_NOTE_RECORDS = 50
-
-/** At most this many annotation children are returned in a `zotero_get` detail. */
-export const MAX_ANNOTATION_RECORDS = 100
-
 export function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -254,6 +245,12 @@ export interface NormalizeItemDetailInput {
   readonly collectionNames?: ReadonlyMap<string, string>
   /** Character budget for the abstract preview. */
   readonly maxAbstractChars: number
+  /** Per-note character budget; `truncated` signals the cut. */
+  readonly maxNoteChars: number
+  /** Upper bound for returned note records. */
+  readonly maxNoteRecords: number
+  /** Upper bound for returned annotation records. */
+  readonly maxAnnotationRecords: number
 }
 
 function childCollection<T>(items: readonly T[], cap: number): ZoteroChildCollection<T> {
@@ -304,15 +301,15 @@ export function normalizeItemDetail(input: NormalizeItemDetailInput): ZoteroItem
     }
   })
 
-  const partitioned = input.childrenRows === undefined ? undefined : partitionChildren(input.childrenRows, input.serverId, MAX_NOTE_CHARS)
+  const partitioned = input.childrenRows === undefined ? undefined : partitionChildren(input.childrenRows, input.serverId, input.maxNoteChars)
   const childCollections: {
     notes?: ZoteroChildCollection<ZoteroNoteRecord>
     annotations?: ZoteroChildCollection<ZoteroAnnotationRecord>
     attachments?: ZoteroChildCollection<ZoteroAttachmentRecord>
   } = {}
   if (partitioned !== undefined) {
-    if (input.include.has('notes')) childCollections.notes = childCollection(partitioned.notes, MAX_NOTE_RECORDS)
-    if (input.include.has('annotations')) childCollections.annotations = childCollection(partitioned.annotations, MAX_ANNOTATION_RECORDS)
+    if (input.include.has('notes')) childCollections.notes = childCollection(partitioned.notes, input.maxNoteRecords)
+    if (input.include.has('annotations')) childCollections.annotations = childCollection(partitioned.annotations, input.maxAnnotationRecords)
     if (input.include.has('attachments')) {
       const records = partitioned.attachments.map((candidate) => attachmentRecordOf(candidate, input.serverId))
       childCollections.attachments = childCollection(records, records.length)

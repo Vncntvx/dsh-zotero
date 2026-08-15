@@ -66,9 +66,11 @@ export type ZoteroResolvedScope =
   | { readonly kind: 'collection'; readonly ref: string; readonly name: string }
   | { readonly kind: 'savedSearch'; readonly ref: string; readonly name: string }
 
-export const ZOTERO_SORT_FIELDS = ['dateModified', 'dateAdded', 'date', 'title', 'creator'] as const
-
-export type ZoteroSortField = (typeof ZOTERO_SORT_FIELDS)[number]
+/**
+ * Sort field names accepted by `zotero_search`. Mirrors the runtime
+ * `ZOTERO_SORT_FIELDS` array in `constants.ts`; keep the two in sync.
+ */
+export type ZoteroSortField = 'dateModified' | 'dateAdded' | 'date' | 'title' | 'creator'
 
 export type ZoteroSortDirection = 'asc' | 'desc'
 
@@ -254,10 +256,45 @@ export interface ZoteroFulltextPayload {
 export interface ZoteroProvider {
   readonly id: string
   readonly capabilities: ReadonlySet<ZoteroCapability>
+  /**
+   * Probe connectivity and report the instance identity facts.
+   * @param signal - caller cancellation; forwarded to the transport.
+   * @returns the status record; failures are reported in `diagnosis`, never thrown.
+   */
   status(signal?: AbortSignal): Promise<ZoteroStatus>
+  /**
+   * Discover candidates in the requested scope.
+   * @param request - scope, mode, filters, sort, and pagination.
+   * @param signal - caller cancellation; forwarded to the transport.
+   * @returns the resolved scope plus the compact hit records.
+   */
   search(request: ZoteroSearchRequest, signal?: AbortSignal): Promise<ZoteroSearchResult>
+  /**
+   * Read one item's detail, including requested child kinds.
+   * @param request - the item ref and the child kinds to include.
+   * @param signal - caller cancellation; forwarded to the transport.
+   * @returns the normalized item detail.
+   */
   getItem(request: ZoteroGetRequest, signal?: AbortSignal): Promise<ZoteroItemDetail>
+  /**
+   * Resolve an item or attachment ref to a usable location.
+   * @param ref - the item or attachment ref to resolve.
+   * @param signal - caller cancellation; forwarded to the transport.
+   * @returns the verified file path or linked URL.
+   */
   getAttachmentLocation(ref: ZoteroObjectRef, signal?: AbortSignal): Promise<ZoteroAttachmentLocation>
+  /**
+   * Gather ranked evidence passages for one item.
+   * @param request - the item ref, ranking query, sources, and passage cap.
+   * @param signal - caller cancellation; forwarded to the transport.
+   * @returns the bounded ranked evidence with a truncation flag.
+   */
   retrieve(request: ZoteroRetrieveRequest, signal?: AbortSignal): Promise<ZoteroRetrieveResult>
+  /**
+   * Export citations or formatted output for the requested items.
+   * @param request - the item refs, format, and optional style/locale.
+   * @param signal - caller cancellation; forwarded to the transport.
+   * @returns per-ref citations or the joined export text.
+   */
   export(request: ZoteroExportRequest, signal?: AbortSignal): Promise<ZoteroExportResult>
 }

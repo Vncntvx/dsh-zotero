@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
 import { CallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime, { type ToolExecutionResult } from '@deepseek-ai/dsh-tools'
+import ToolRuntime, { type ToolDefinition, type ToolExecutionResult, type ToolResult } from '@deepseek-ai/dsh-tools'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import ZoteroService from '../src/index.js'
 import { renderRetrieve } from '../src/tools/retrieve.js'
@@ -756,5 +756,58 @@ describe('zotero_export tool', () => {
 
   it('declares itself concurrency-safe for valid arguments', () => {
     expect(ctx.tools.get('zotero_export')!.isConcurrencySafe?.({ refs: ['zotero://user/0/item/ABCD1234'], format: 'bibtex' })).toBe(true)
+  })
+})
+
+describe('tool presentation', () => {
+  function definition(name: string): ToolDefinition {
+    const tool = ctx.tools.get(name)
+    if (tool === undefined) throw new Error(`tool ${name} not registered`)
+    return tool
+  }
+
+  it('declares a pending card for every tool', () => {
+    expect(definition('zotero_search').presentCall!({ query: 'attention', scope: { kind: 'library' } }))
+      .toEqual({ card: 'generic', kind: 'search', title: 'Search Zotero library', rawInput: 'attention' })
+    expect(definition('zotero_search').presentCall!({})).toMatchObject({ rawInput: '(browse)' })
+    expect(definition('zotero_get').presentCall!({ ref: 'zotero://user/0/item/ABCD1234' }))
+      .toEqual({ card: 'generic', kind: 'read', title: 'Read Zotero item', rawInput: 'zotero://user/0/item/ABCD1234' })
+    expect(definition('zotero_attachment').presentCall!({ ref: 'zotero://user/0/attachment/WXYZ6789' }))
+      .toEqual({ card: 'generic', kind: 'read', title: 'Resolve Zotero attachment', rawInput: 'zotero://user/0/attachment/WXYZ6789' })
+    expect(definition('zotero_retrieve').presentCall!({ ref: 'zotero://user/0/item/ABCD1234', query: 'tiling' }))
+      .toEqual({ card: 'generic', kind: 'search', title: 'Retrieve Zotero evidence', rawInput: 'tiling' })
+    expect(definition('zotero_export').presentCall!({ refs: ['zotero://user/0/item/ABCD1234'], format: 'bibliography' }))
+      .toEqual({ card: 'generic', title: 'Export Zotero citations', rawInput: '1 refs · bibliography' })
+  })
+
+  it('projects replayable search page facts and renders the completed card', () => {
+    const tool = definition('zotero_search')
+    const value = {
+      scope: { kind: 'library' as const },
+      items: [],
+      total: 42,
+      offset: 0,
+      returned: 10,
+      nextOffset: 10,
+    }
+    expect(tool.output.presentationMeta!({}, value)).toEqual({ returned: 10, total: 42, nextOffset: 10 })
+    // A final page omits nextOffset; the projector records it as null so the
+    // projection stays lossless JSON.
+    expect(tool.output.presentationMeta!({}, { scope: { kind: 'library' }, items: [], total: 42, offset: 0, returned: 10 }))
+      .toEqual({ returned: 10, total: 42, nextOffset: null })
+    const result: ToolResult = { content: [{ type: 'text', text: 'x' }], isError: false, meta: { returned: 10, total: 42, nextOffset: null } }
+    expect(tool.presentResult!({}, result)).toEqual({ card: 'generic', title: 'Zotero search: found 10 of 42 results' })
+  })
+
+  it('falls back to the generic card on failed calls and absent metadata', () => {
+    const tool = definition('zotero_search')
+    expect(tool.presentResult!({}, { content: [{ type: 'text', text: 'Error: x' }], isError: true, meta: { returned: 1, total: 1, nextOffset: null } }))
+      .toBeUndefined()
+    expect(tool.presentResult!({}, { content: [{ type: 'text', text: 'x' }], isError: false }))
+      .toBeUndefined()
+    expect(tool.presentResult!({}, { content: [{ type: 'text', text: 'x' }], isError: false, meta: 'junk' }))
+      .toBeUndefined()
+    expect(tool.presentResult!({}, { content: [{ type: 'text', text: 'x' }], isError: false, meta: { returned: 'x', total: 42 } }))
+      .toBeUndefined()
   })
 })

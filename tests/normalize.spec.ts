@@ -334,6 +334,9 @@ describe('normalizeItemDetail', () => {
       childrenRows: CHILDREN,
       collectionNames: new Map([['COLL1234', 'LLM Papers']]),
       maxAbstractChars: 100,
+      maxNoteChars: 2000,
+      maxNoteRecords: 50,
+      maxAnnotationRecords: 100,
     })
     expect(detail).toEqual({
       ref: 'zotero://user/0/item/ABCD1234?server=S1',
@@ -368,6 +371,9 @@ describe('normalizeItemDetail', () => {
       include: new Set(['notes']),
       childrenRows: [],
       maxAbstractChars: 100,
+      maxNoteChars: 2000,
+      maxNoteRecords: 50,
+      maxAnnotationRecords: 100,
     })
     expect(detail).toEqual({
       ref: 'zotero://user/0/item/ABCD1234',
@@ -387,6 +393,9 @@ describe('normalizeItemDetail', () => {
       parent: { key: 'ABCD1234', data: { itemType: 'journalArticle', title: 'T', abstractNote: '' } },
       include: new Set(),
       maxAbstractChars: 100,
+      maxNoteChars: 2000,
+      maxNoteRecords: 50,
+      maxAnnotationRecords: 100,
     })
     expect(detail.abstract).toBeUndefined()
     expect(detail.abstractTruncated).toBe(false)
@@ -397,6 +406,9 @@ describe('normalizeItemDetail', () => {
       parent: { key: 'ABCD1234', data: { itemType: 'journalArticle', title: 'T', abstractNote: 'abcdefgh' } },
       include: new Set(),
       maxAbstractChars: 4,
+      maxNoteChars: 2000,
+      maxNoteRecords: 50,
+      maxAnnotationRecords: 100,
     })
     expect(detail.abstract).toBe('abcd')
     expect(detail.abstractTruncated).toBe(true)
@@ -416,6 +428,9 @@ describe('normalizeItemDetail', () => {
       include: new Set(['notes', 'annotations']),
       childrenRows: [...notes, ...annotations],
       maxAbstractChars: 100,
+      maxNoteChars: 2000,
+      maxNoteRecords: 50,
+      maxAnnotationRecords: 100,
     })
     expect(detail.notes).toMatchObject({ total: 60, returned: 50 })
     expect(detail.notes!.items).toHaveLength(50)
@@ -429,6 +444,9 @@ describe('normalizeItemDetail', () => {
       include: new Set(['notes']),
       childrenRows: [{ key: 'NOTE1111', data: { itemType: 'note', note: 'n' } }],
       maxAbstractChars: 100,
+      maxNoteChars: 2000,
+      maxNoteRecords: 50,
+      maxAnnotationRecords: 100,
     })
     expect(detail.children).toEqual({ total: 1 })
   })
@@ -439,6 +457,9 @@ describe('normalizeItemDetail', () => {
       include: new Set(['notes']),
       childrenRows: [{ key: 'NOTE1111', data: { itemType: 'note', note: 'n' } }],
       maxAbstractChars: 100,
+      maxNoteChars: 2000,
+      maxNoteRecords: 50,
+      maxAnnotationRecords: 100,
     })
     expect(detail.children).toEqual({ total: 7 })
   })
@@ -449,7 +470,7 @@ describe('normalizeItemDetail', () => {
       links: { attachment: { href: 'http://localhost:23119/api/users/0/items/WXYZ6789', attachmentType: 'application/pdf' } },
       data: { itemType: 'journalArticle', title: 'T' },
     }
-    const detail = normalizeItemDetail({ parent: withLinks, include: new Set(), maxAbstractChars: 100 })
+    const detail = normalizeItemDetail({ parent: withLinks, include: new Set(), maxAbstractChars: 100, maxNoteChars: 2000, maxNoteRecords: 50, maxAnnotationRecords: 100 })
     expect(detail.bestAttachment).toEqual({
       ref: 'zotero://user/0/attachment/WXYZ6789',
       title: '',
@@ -475,6 +496,9 @@ describe('normalizeItemDetail', () => {
         { key: 'NOTE1111', data: { itemType: 'note', note: 'n' } },
       ],
       maxAbstractChars: 100,
+      maxNoteChars: 2000,
+      maxNoteRecords: 50,
+      maxAnnotationRecords: 100,
     })
     expect(detail.tags).toEqual(['real'])
     expect(detail.venue).toBeUndefined()
@@ -489,12 +513,15 @@ describe('normalizeItemDetail', () => {
       parent: { key: 'ABCD1234', itemType: 'journalArticle', data: { title: 'T' } },
       include: new Set(),
       maxAbstractChars: 100,
+      maxNoteChars: 2000,
+      maxNoteRecords: 50,
+      maxAnnotationRecords: 100,
     })
     expect(detail.itemType).toBe('journalArticle')
   })
 
   it('fails loud when the parent has no valid key', () => {
-    const error = expectUnexpected(() => normalizeItemDetail({ parent: {}, include: new Set(), maxAbstractChars: 100 }))
+    const error = expectUnexpected(() => normalizeItemDetail({ parent: {}, include: new Set(), maxAbstractChars: 100, maxNoteChars: 2000, maxNoteRecords: 50, maxAnnotationRecords: 100 }))
     expect(error.code).toBe(ZOTERO_UNEXPECTED)
   })
 })
@@ -516,6 +543,9 @@ describe('normalizeItemDetail include and fallback branches', () => {
         { key: 'ANNO1111', data: { itemType: 'annotation', annotationType: 'highlight', annotationText: 'a', annotationSortIndex: '00001' } },
       ],
       maxAbstractChars: 100,
+      maxNoteChars: 2000,
+      maxNoteRecords: 50,
+      maxAnnotationRecords: 100,
     })
     expect(detail.notes).toBeUndefined()
     expect(detail.annotations!.total).toBe(1)
@@ -526,6 +556,9 @@ describe('normalizeItemDetail include and fallback branches', () => {
       parent: { key: 'ABCD1234', data: { title: 'T' } },
       include: new Set(),
       maxAbstractChars: 100,
+      maxNoteChars: 2000,
+      maxNoteRecords: 50,
+      maxAnnotationRecords: 100,
     })
     expect(detail.itemType).toBe('')
   })
@@ -565,6 +598,9 @@ describe('normalizeItemDetail attachment and title tolerances', () => {
       include: new Set(['attachments']),
       childrenRows: [{ key: 'WXYZ6789', data: { itemType: 'attachment', title: 'Snapshot', contentType: 'text/html' } }],
       maxAbstractChars: 100,
+      maxNoteChars: 2000,
+      maxNoteRecords: 50,
+      maxAnnotationRecords: 100,
     })
     expect(detail.attachments!.items).toEqual([
       { ref: 'zotero://user/0/attachment/WXYZ6789', title: 'Snapshot', contentType: 'text/html' },
@@ -576,6 +612,9 @@ describe('normalizeItemDetail attachment and title tolerances', () => {
       parent: { key: 'ABCD1234', data: { itemType: 'journalArticle' } },
       include: new Set(),
       maxAbstractChars: 100,
+      maxNoteChars: 2000,
+      maxNoteRecords: 50,
+      maxAnnotationRecords: 100,
     })
     expect(detail.title).toBe('')
   })

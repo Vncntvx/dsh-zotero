@@ -30,7 +30,6 @@ import {
   asRecord,
   asString,
   collectionKeysOf,
-  MAX_NOTE_CHARS,
   matchScopeName,
   nearScopeCandidates,
   normalizeAttachmentRecord,
@@ -99,6 +98,14 @@ interface ResolvedScopeResult {
 export interface LocalApiLimits {
   /** Character budget for `zotero_get` abstract previews. */
   readonly maxDetailChars: number
+  /** Per-note character budget for `zotero_get` note previews. */
+  readonly maxNoteChars: number
+  /** Upper bound for note records returned by `zotero_get`. */
+  readonly maxNoteRecords: number
+  /** Upper bound for annotation records returned by `zotero_get`. */
+  readonly maxAnnotationRecords: number
+  /** Word count of each full-text passage entering evidence ranking. */
+  readonly fulltextChunkWords: number
   /** Total character budget for retrieved evidence passages. */
   readonly maxEvidenceChars: number
   /** Upper bound for the number of evidence passages. */
@@ -114,9 +121,6 @@ export interface LocalApiLimits {
 }
 
 const INCLUDE_ORDER: readonly ZoteroInclude[] = ['notes', 'annotations', 'attachments']
-
-/** Word count of each full-text evidence passage. */
-const FULLTEXT_CHUNK_WORDS = 200
 
 /**
  * Full-text indexing coverage as reported by Zotero. `complete` requires
@@ -229,6 +233,9 @@ export class LocalApiProvider implements ZoteroProvider {
       childrenRows,
       collectionNames,
       maxAbstractChars: this.limits.maxDetailChars,
+      maxNoteChars: this.limits.maxNoteChars,
+      maxNoteRecords: this.limits.maxNoteRecords,
+      maxAnnotationRecords: this.limits.maxAnnotationRecords,
     })
   }
 
@@ -342,14 +349,14 @@ export class LocalApiProvider implements ZoteroProvider {
       const content = typeof payload.content === 'string' ? payload.content : ''
       const bounded = truncateText(content, this.limits.maxFulltextChars)
       fulltextWasCut = bounded.truncated
-      for (const chunk of chunkText(bounded.text, FULLTEXT_CHUNK_WORDS)) {
+      for (const chunk of chunkText(bounded.text, this.limits.fulltextChunkWords)) {
         passages.push({ source: 'fulltext', sourceRef: attachmentRef, text: chunk.text })
       }
       coverage = normalizeCoverage(payload)
     }
 
     const partitioned: PartitionedChildren = fetchChildren
-      ? partitionChildren(childrenRows, serverId, MAX_NOTE_CHARS)
+      ? partitionChildren(childrenRows, serverId, this.limits.maxNoteChars)
       : { notes: [], annotations: [], attachments: [] }
     if (wantsAnnotations) {
       for (const annotation of partitioned.annotations) {
