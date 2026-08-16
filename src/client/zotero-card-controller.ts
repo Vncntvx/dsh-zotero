@@ -1,10 +1,12 @@
 /**
  * The Zotero settings page's staged form over the `zotero` settings
  * namespace — every Config field, mirroring the host schema in `src/config.ts`
- * (spelled here rather than imported: the browser bundle must not pull host
- * modules in). The scope arrives through the shared `SettingsScope` contract,
- * so the form is indifferent to whether the harness's settings RPC or the
- * plugin's own Typert Remote endpoints back it.
+ * (spelled here rather than value-imported: the browser bundle must not pull
+ * host modules in; the key set is bound to the host `ResolvedConfig` at
+ * compile time below, so the two surfaces cannot drift). The scope arrives
+ * through the shared `SettingsScope` contract, so the form is indifferent to
+ * whether the harness's settings RPC or the plugin's own Typert Remote
+ * endpoints back it.
  *
  * One field table drives the whole card: the field specs the form edits, the
  * state the page renders, the display groups, and the numeric hint set, so a
@@ -13,6 +15,7 @@
  */
 
 import type { SettingsScope, SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
+import type { ResolvedConfig } from '../config.js'
 import {
   CardForm,
   booleanField,
@@ -51,12 +54,22 @@ export const FIELD_SPECS = [
   { key: 'maxExportRefs', kind: 'number', group: 'groupOutput' },
   { key: 'defaultStyle', kind: 'text', group: 'groupDefaults' },
   { key: 'defaultLocale', kind: 'text', group: 'groupDefaults' },
-] as const satisfies readonly { key: string; kind: 'text' | 'number' | 'boolean'; group: string }[]
+] as const satisfies readonly {
+  key: keyof ResolvedConfig
+  kind: 'text' | 'number' | 'boolean'
+  group: string
+}[]
 
 /** The section field names the card edits; also the page's copy and state member names. */
 export type FieldKey = (typeof FIELD_SPECS)[number]['key']
 /** The display group a field belongs to; a page locale key. */
 export type GroupKey = (typeof FIELD_SPECS)[number]['group']
+
+/** Host Config fields the card does not list; a non-empty union fails the client build. */
+type MissingConfigField = Exclude<keyof ResolvedConfig, FieldKey>
+// The assignment check exists only for its type: a missing host field makes
+// `_configSurfaceComplete` `never`, so `true` stops being assignable.
+const _configSurfaceComplete: MissingConfigField extends never ? true : never = true
 
 const FIELDS: CardFieldSpec[] = FIELD_SPECS.map((spec) => {
   if (spec.kind === 'number') return numberField(spec.key)
