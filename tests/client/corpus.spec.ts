@@ -5,11 +5,6 @@
  * @module tests/client/corpus
  */
 
-import type {
-  ConversationSnapshot,
-  RunningToolCall,
-  ToolResultNode,
-} from '@deepseek-ai/dsh-client-runtime/client'
 import { describe, expect, it } from 'vitest'
 import {
   bibTexKeysOf,
@@ -17,44 +12,13 @@ import {
   citeCommandOf,
   normalizeRefKey,
 } from '../../src/client/corpus.ts'
+import { running, settled } from './helpers/blocks.ts'
 
 const REF = 'zotero://user/0/item/ABCD1234'
-
-function settled(overrides: Partial<ToolResultNode> = {}): ToolResultNode {
-  return {
-    kind: 'tool-result',
-    seq: 2,
-    time: 2,
-    callId: 'c1',
-    call: { name: 'zotero_search', argsRaw: '{}' },
-    callTime: 1,
-    content: [],
-    isError: false,
-    callView: null,
-    resultView: null,
-    subCalls: [],
-    ...overrides,
-  }
-}
-
-function running(overrides: Partial<RunningToolCall> = {}): RunningToolCall {
-  return {
-    callId: 'r1',
-    name: 'zotero_get',
-    argsRaw: `{"ref":"${REF}"}`,
-    turn: 1,
-    step: 1,
-    time: 1,
-    callView: null,
-    subCalls: [],
-    ...overrides,
-  }
-}
 
 /** The snapshot type is irrelevant to the corpus; a cast keeps factories honest. */
 const asBlocks = (blocks: object[]): Parameters<typeof buildCorpus>[0] =>
   blocks as unknown as Parameters<typeof buildCorpus>[0]
-void (null as unknown as ConversationSnapshot)
 
 describe('normalizeRefKey', () => {
   it('strips the query and lowercases the identity', () => {
@@ -534,6 +498,55 @@ describe('buildCorpus attribution', () => {
     expect(corpus.funnel).toEqual({ searched: 1, read: 0, cited: 0 })
   })
 
+  it('folds pagination whose scope objects differ only in key order', () => {
+    const row = (ref: string) => ({ ref, title: 'T', creatorSummary: 'C', itemType: 'report' })
+    const other = 'zotero://user/0/item/BBBB0002'
+    const corpus = buildCorpus(
+      asBlocks([
+        settled({
+          seq: 1,
+          callId: 'p1',
+          call: {
+            name: 'zotero_search',
+            argsRaw: '{"query":"x","scope":{"refOrName":"C","kind":"collection"},"offset":0}',
+          },
+          meta: { returned: 1, displayed: 1, omitted: 0, items: [row(REF)] },
+        }),
+        settled({
+          seq: 2,
+          callId: 'p2',
+          call: {
+            name: 'zotero_search',
+            argsRaw: '{"query":"x","scope":{"kind":"collection","refOrName":"C"},"offset":20}',
+          },
+          meta: { returned: 1, displayed: 1, omitted: 0, items: [row(other)] },
+        }),
+      ]),
+    )
+    // Key order in the scope object must not split one logical search: both
+    // pages fold into the same group and both rows survive in the found set.
+    expect(corpus.searched).toBe(2)
+    expect(corpus.items.map((item) => item.key)).toEqual([
+      normalizeRefKey(REF),
+      normalizeRefKey(other),
+    ])
+  })
+
+  it('tolerates a malformed scope argument without crashing the build', () => {
+    const row = (ref: string) => ({ ref, title: 'T', creatorSummary: 'C', itemType: 'report' })
+    const corpus = buildCorpus(
+      asBlocks([
+        settled({
+          seq: 1,
+          callId: 's1',
+          call: { name: 'zotero_search', argsRaw: '{"query":"x","scope":"library"}' },
+          meta: { returned: 1, displayed: 1, omitted: 0, items: [row(REF)] },
+        }),
+      ]),
+    )
+    expect(corpus.searched).toBe(1)
+  })
+
   it('lists only the worked-on items once targets exist', () => {
     const other = 'zotero://user/0/item/BBBB0002'
     const row = (ref: string, title: string) => ({
@@ -631,6 +644,44 @@ describe('buildCorpus attribution', () => {
     // never shrinks the list: no paper target exists, so the final search's
     // found set stays and the note is not listed.
     expect(corpus.items.map((item) => item.key)).toEqual([normalizeRefKey(REF)])
+    expect(corpus.funnel).toEqual({ searched: 1, read: 0, cited: 0 })
+  })
+
+  it('keeps a note read directly by get out of the target rule', () => {
+    const paper = 'zotero://user/0/item/PAPER0001'
+    const note = 'zotero://user/0/item/NOTE0001'
+    const corpus = buildCorpus(
+      asBlocks([
+        settled({
+          seq: 1,
+          callId: 's1',
+          call: { name: 'zotero_search', argsRaw: '{}' },
+          meta: {
+            returned: 1,
+            displayed: 1,
+            omitted: 0,
+            items: [
+              { ref: paper, title: 'A paper', creatorSummary: 'C', itemType: 'journalArticle' },
+            ],
+          },
+        }),
+        settled({
+          seq: 2,
+          callId: 'g',
+          call: { name: 'zotero_get', argsRaw: `{"ref":"${note}"}` },
+          // The get projection carries the item type, so a note reached
+          // without a search row still honors the notes-excluded rule.
+          meta: {
+            title: 'A note',
+            creators: '',
+            itemType: 'note',
+            notesPreview: [],
+            annotationsPreview: [],
+          },
+        }),
+      ]),
+    )
+    expect(corpus.items.map((item) => item.key)).toEqual([normalizeRefKey(paper)])
     expect(corpus.funnel).toEqual({ searched: 1, read: 0, cited: 0 })
   })
 

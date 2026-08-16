@@ -17,9 +17,16 @@ import clsx from 'clsx'
 import { IconBrowseOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { isWorkedOn, type Corpus, type CorpusItem } from './corpus.ts'
-import { displayRefOf, interpolate, rowStateOf, type ZoteroRowState } from './presenters.ts'
+import {
+  displayRefOf,
+  interpolate,
+  joinNonEmpty,
+  rowStateOf,
+  type ZoteroRowState,
+} from './presenters.ts'
 import { ChildPreviewRow, CopyValue, EvidenceRow } from './ZoteroToolViews.tsx'
 import { ZoteroToolRow } from './ZoteroToolRow.tsx'
+import viewsCss from './ZoteroToolViews.module.css'
 import css from './ZoteroItemsLens.module.css'
 
 export interface ZoteroItemsLensProps {
@@ -35,7 +42,10 @@ function itemStateOf(item: CorpusItem): ZoteroRowState {
   for (const call of item.calls) {
     const state = rowStateOf(call)
     if (state === 'running') return 'running'
-    if (worst === 'ok' && state !== 'ok') worst = state
+    // The ladder: any error beats an interrupted call, whatever the order —
+    // a retry that failed hard must not read as a benign user cancel.
+    if (state === 'error') worst = 'error'
+    else if (worst === 'ok' && state === 'stopped') worst = 'stopped'
   }
   return worst
 }
@@ -99,7 +109,7 @@ function RowActions({
       {setDraft !== undefined && (
         <button
           type="button"
-          className={css.actionButton}
+          className={viewsCss.actionButton}
           onClick={() => {
             setDraft(interpolate(t('askTemplate'), { ref: item.ref }))
           }}
@@ -194,13 +204,7 @@ export function ZoteroItemsLens({ corpus, t, setDraft }: ZoteroItemsLensProps) {
       )}
       {corpus.items.map((item) => {
         const badges = badgesOf(item, t)
-        const summary = [
-          item.creators ?? '',
-          item.year === undefined ? '' : String(item.year),
-          item.venue ?? '',
-        ]
-          .filter((part) => part !== '')
-          .join(' · ')
+        const summary = joinNonEmpty(item.creators, item.year, item.venue)
         return (
           <ZoteroToolRow
             key={item.key}

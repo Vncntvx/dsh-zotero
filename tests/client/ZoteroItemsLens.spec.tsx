@@ -18,6 +18,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { buildCorpus, type Corpus } from '../../src/client/corpus.ts'
 import { ZoteroItemsLens } from '../../src/client/ZoteroItemsLens.tsx'
 import { zh, type ZoteroLocaleKey } from '../../src/client/locales.ts'
+import { settled } from './helpers/blocks.ts'
 
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
   const { createElement } = await import('react')
@@ -38,23 +39,6 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
 const t: TranslateNS<'zotero'> = (key) => zh[key as ZoteroLocaleKey] ?? key
 
 const REF = 'zotero://user/0/item/ABCD1234'
-
-function settled(overrides: Partial<ToolResultNode> = {}): ToolResultNode {
-  return {
-    kind: 'tool-result',
-    seq: 2,
-    time: 2,
-    callId: 'c1',
-    call: { name: 'zotero_search', argsRaw: '{}' },
-    callTime: 1,
-    content: [],
-    isError: false,
-    callView: null,
-    resultView: null,
-    subCalls: [],
-    ...overrides,
-  }
-}
 
 void (null as unknown as ConversationSnapshot)
 
@@ -214,6 +198,65 @@ describe('ZoteroItemsLens', () => {
     const { view } = mountLens([errorGet], [runningGet])
     expect(document.querySelector('[aria-busy="true"]')).not.toBeNull()
     expect(document.querySelector('[data-dot="error"]')).not.toBeNull()
+    view.unmount()
+  })
+
+  it('ladders the item state: error beats stopped whatever the order', () => {
+    const other = 'zotero://user/0/item/EEEE2222'
+    const stoppedFirst = settled({
+      seq: 1,
+      callId: 's1',
+      call: { name: 'zotero_get', argsRaw: `{"ref":"${REF}"}` },
+      error: { name: 'Error', code: 'interrupted' },
+      isError: true,
+    })
+    const errorSecond = settled({
+      seq: 2,
+      callId: 's2',
+      call: { name: 'zotero_get', argsRaw: `{"ref":"${REF}"}` },
+      error: { name: 'Error', code: 'ZOTERO_UNAVAILABLE' },
+      isError: true,
+    })
+    const errorFirst = settled({
+      seq: 3,
+      callId: 'g',
+      call: { name: 'zotero_retrieve', argsRaw: `{"ref":"${other}"}` },
+      error: { name: 'Error', code: 'ZOTERO_UNAVAILABLE' },
+      isError: true,
+    })
+    const stoppedAfter = settled({
+      seq: 4,
+      callId: 'r',
+      call: { name: 'zotero_retrieve', argsRaw: `{"ref":"${other}"}` },
+      error: { name: 'Error', code: 'interrupted' },
+      isError: true,
+    })
+    const okRetrieve = settled({
+      seq: 5,
+      callId: 'r2',
+      call: { name: 'zotero_retrieve', argsRaw: `{"ref":"${other}"}` },
+      meta: {
+        count: 1,
+        sources: ['annotation'],
+        truncated: false,
+        sourcesSkipped: [],
+        items: [
+          {
+            source: 'annotation',
+            sourceRef: 'zotero://user/0/annotation/ANN1',
+            preview: 'claim',
+            previewTruncated: false,
+          },
+        ],
+      },
+    })
+    const { view } = mountLens([stoppedFirst, errorSecond, errorFirst, stoppedAfter, okRetrieve])
+    // Both items land on the error state: a later hard failure beats an
+    // earlier interrupt, and an earlier failure outranks a later interrupt.
+    expect(document.querySelectorAll('[data-state="error"]').length).toBe(2)
+    // The dossier-bearing row renders the leading StateDot inside the
+    // expandable toggle; the bare row renders it at the line start.
+    expect(document.querySelectorAll('[data-dot="error"]').length).toBe(2)
     view.unmount()
   })
 

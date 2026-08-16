@@ -15,13 +15,10 @@
  */
 
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
-import type { ToolCallBlock, ToolResultNode } from '@deepseek-ai/dsh-client-runtime/client'
+import type { ToolCallBlock } from '@deepseek-ai/dsh-client-runtime/client'
 import type { ToolCallView } from '@deepseek-ai/dsh-tools'
 
 export type ZoteroRowState = 'running' | 'ok' | 'error' | 'stopped'
-
-/** A settled tool result node; running calls never reach meta-dependent views. */
-type SettledBlock = ToolResultNode
 
 /** One bounded search row from the search projection. */
 export interface SearchRowView {
@@ -46,17 +43,6 @@ export interface EvidenceItemView {
   readonly preview: string
   readonly previewTruncated: boolean
   readonly pageLabel?: string
-}
-
-/** The complete row model a Zotero tool card renders. */
-export interface ZoteroRowModel {
-  readonly state: ZoteroRowState
-  readonly title: string
-  readonly summary: string
-  readonly facts: readonly string[]
-  readonly errorSummary: string | null
-  /** Full flattened content text when meta is absent and the card needs a body. */
-  readonly fallbackText: string | null
 }
 
 /** True for plain objects (the validated shape every meta read requires). */
@@ -323,4 +309,9 @@ export function interpolate(template: string, values: Record<string, string | nu
     const value = values[key]
     return value === undefined ? whole : String(value)
   })
+}
+
+/** Join a metadata line's non-empty parts with the middot separator. */
+export function joinNonEmpty(...parts: Array<string | number | undefined>): string {
+  return parts.filter((part) => part !== undefined && part !== '').join(' · ')
 }

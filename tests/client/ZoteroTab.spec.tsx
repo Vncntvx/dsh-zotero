@@ -8,24 +8,21 @@
  */
 
 import { cleanup, fireEvent, render, screen, act } from '@testing-library/react'
-import type {
-  ConversationSnapshot,
-  RunningToolCall,
-  ToolResultNode,
-} from '@deepseek-ai/dsh-client-runtime/client'
+import type { ConversationSnapshot, ToolResultNode } from '@deepseek-ai/dsh-client-runtime/client'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ZoteroStatusView } from '../../src/client/remote.ts'
 import {
   ZoteroTab,
-  callNameOf,
   collectZoteroCalls,
   currentTime,
   shortServerId,
   stateOf,
   type ZoteroTabProps,
 } from '../../src/client/ZoteroTab.tsx'
+import { callNameOf } from '../../src/client/presenters.ts'
 import { zh, type ZoteroLocaleKey } from '../../src/client/locales.ts'
+import { running, settled } from './helpers/blocks.ts'
 
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
   const { createElement } = await import('react')
@@ -72,37 +69,6 @@ const UNAVAILABLE: ZoteroStatusView = {
   providerId: 'local',
   connected: false,
   diagnosis: 'connection refused',
-}
-
-function runningCall(overrides: Partial<RunningToolCall> = {}): RunningToolCall {
-  return {
-    callId: 'c1',
-    name: 'zotero_search',
-    argsRaw: '{"query":"attention"}',
-    turn: 1,
-    step: 1,
-    time: 1,
-    callView: null,
-    subCalls: [],
-    ...overrides,
-  }
-}
-
-function settled(overrides: Partial<ToolResultNode> = {}): ToolResultNode {
-  return {
-    kind: 'tool-result',
-    seq: 2,
-    time: 2,
-    callId: 'c1',
-    call: { name: 'zotero_search', argsRaw: '{"query":"attention"}' },
-    callTime: 1,
-    content: [],
-    isError: false,
-    callView: null,
-    resultView: null,
-    subCalls: [],
-    ...overrides,
-  }
 }
 
 function snapshotOf(overrides: Partial<ConversationSnapshot> = {}): ConversationSnapshot {
@@ -167,7 +133,7 @@ describe('collectZoteroCalls', () => {
     })
     const snapshot = snapshotOf({
       nodes: [result],
-      runningCalls: [runningCall({ callId: 'a' })],
+      runningCalls: [running({ callId: 'a' })],
     })
     const calls = collectZoteroCalls(snapshot)
     // Settled results sort by seq; in-flight calls trail them by design.
@@ -226,7 +192,7 @@ describe('status projection helpers', () => {
   })
 
   it('names calls from both block forms', () => {
-    expect(callNameOf(runningCall())).toBe('zotero_search')
+    expect(callNameOf(running())).toBe('zotero_search')
     expect(callNameOf(settled())).toBe('zotero_search')
     expect(callNameOf(settled({ call: null }))).toBeNull()
   })
@@ -404,7 +370,7 @@ describe('ZoteroTab', () => {
       content: [{ type: 'text', text: 'Found 1 of 1 results:' }],
     })
     const { view } = mountTab(
-      snapshotOf({ nodes: [result], runningCalls: [runningCall({ callId: 'r2' })] }),
+      snapshotOf({ nodes: [result], runningCalls: [running({ callId: 'r2' })] }),
       status,
     )
     await act(async () => {})
@@ -546,7 +512,7 @@ describe('ZoteroTab lenses', () => {
     const { view } = mountTab(
       snapshotOf({
         nodes: [failedSearch, untimedExport, zeroDuration],
-        runningCalls: [runningCall({ callId: 'r1' })],
+        runningCalls: [running({ callId: 'r1' })],
       }),
       status,
     )

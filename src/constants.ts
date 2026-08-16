@@ -21,3 +21,11 @@ export const ZOTERO_SORT_FIELDS: readonly ZoteroSortField[] = [
   'title',
   'creator',
 ] as const
+
+/** `zotero_search` argument defaults; the tool and the corpus's pagination-fold identity share them. */
+export const SEARCH_DEFAULT_MODE = 'metadata'
+export const SEARCH_DEFAULT_SCOPE = { kind: 'library' } as const
+export const SEARCH_DEFAULT_SORT = 'dateModified'
+export const SEARCH_DEFAULT_DIRECTION = 'desc'
+export const SEARCH_DEFAULT_OFFSET = 0
+export const SEARCH_DEFAULT_LIMIT = 10

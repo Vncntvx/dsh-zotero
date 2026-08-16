@@ -23,6 +23,7 @@ import {
 import { zh } from '../../src/client/locales.ts'
 import { interpolate } from '../../src/client/presenters.ts'
 import { ZoteroToolRow } from '../../src/client/ZoteroToolRow.tsx'
+import { running as blocksRunning, settled as blocksSettled } from './helpers/blocks.ts'
 
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
   // Stub the primitives surface the cards render; importing the real bundle
@@ -52,34 +53,15 @@ const SEARCH_VIEW: ToolCallView = {
 }
 
 function running(overrides: Partial<RunningToolCall> = {}): RunningToolCall {
-  return {
-    callId: 'c1',
-    name: 'zotero_search',
-    argsRaw: '{"query":"attention"}',
-    turn: 1,
-    step: 1,
-    time: 1,
-    callView: SEARCH_VIEW,
-    subCalls: [],
-    ...overrides,
-  }
+  return blocksRunning({ argsRaw: '{"query":"attention"}', callView: SEARCH_VIEW, ...overrides })
 }
 
 function settled(overrides: Partial<ToolResultNode> = {}): ToolResultNode {
-  return {
-    kind: 'tool-result',
-    seq: 2,
-    time: 2,
-    callId: 'c1',
+  return blocksSettled({
     call: { name: 'zotero_search', argsRaw: '{"query":"attention"}' },
-    callTime: 1,
-    content: [],
-    isError: false,
     callView: SEARCH_VIEW,
-    resultView: null,
-    subCalls: [],
     ...overrides,
-  }
+  })
 }
 
 const SEARCH_META = {

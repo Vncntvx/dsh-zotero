@@ -24,13 +24,10 @@ import {
 import type { ZoteroRowState, ZoteroToolTone } from './presenters.ts'
 import css from './ZoteroToolRow.module.css'
 
-/** The five wire tools, each with its own kind-tag tone. */
-export type ZoteroToolTagKind = ZoteroToolTone
-
 /** The kind tag's contract: a short label plus the tone key. */
 export interface ZoteroToolTag {
   readonly label: string
-  readonly kind: ZoteroToolTagKind
+  readonly kind: ZoteroToolTone
 }
 
 export interface ZoteroToolRowProps {
@@ -107,24 +104,29 @@ export function ZoteroToolRow(props: ZoteroToolRowProps) {
           : null
 
   const visibleFacts = facts.filter((fact) => fact !== '')
-  const leading = open ? (
-    <IconChevronDownOutline14 className={css.chevron} />
-  ) : expandable ? (
-    <>
-      <span className={css.iconIdle}>
-        {state === 'error' || state === 'stopped' ? (
-          <StateDot state={state === 'error' ? 'error' : 'warning'} />
-        ) : (
-          icon
-        )}
-      </span>
-      <IconChevronDownOutline14 className={clsx(css.chevron, css.chevronHover)} />
-    </>
-  ) : state === 'error' || state === 'stopped' ? (
-    <StateDot state={state === 'error' ? 'error' : 'warning'} />
-  ) : (
-    icon
-  )
+  // Tool cards render the tag instead of the leading glyph; skip building the
+  // icon tree entirely for them (the tag branch never reads `leading`).
+  const leading =
+    tag === undefined ? (
+      open ? (
+        <IconChevronDownOutline14 className={css.chevron} />
+      ) : expandable ? (
+        <>
+          <span className={css.iconIdle}>
+            {state === 'error' || state === 'stopped' ? (
+              <StateDot state={state === 'error' ? 'error' : 'warning'} />
+            ) : (
+              icon
+            )}
+          </span>
+          <IconChevronDownOutline14 className={clsx(css.chevron, css.chevronHover)} />
+        </>
+      ) : state === 'error' || state === 'stopped' ? (
+        <StateDot state={state === 'error' ? 'error' : 'warning'} />
+      ) : (
+        icon
+      )
+    ) : null
 
   return (
     <div className={css.card}>

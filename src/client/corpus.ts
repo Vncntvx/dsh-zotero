@@ -16,9 +16,16 @@
 
 import type { ToolCallBlock } from '@deepseek-ai/dsh-client-runtime/client'
 import {
+  SEARCH_DEFAULT_DIRECTION,
+  SEARCH_DEFAULT_LIMIT,
+  SEARCH_DEFAULT_MODE,
+  SEARCH_DEFAULT_SORT,
+} from '../constants.ts'
+import {
   argsOf,
   callNameOf,
   evidenceItemsOf,
+  isRecord,
   metaOf,
   numberField,
   orderKeyOf,
@@ -156,7 +163,8 @@ export function isWorkedOn(item: Pick<CorpusItem, 'usage' | 'attachment' | 'item
  * The identity of one logical search: pagination continuations share every
  * field except `offset`, so consecutive calls with the same identity fold
  * into one group (the session's "final found set" is the last group's rows).
- * Arguments absent from a call fall back to the tool defaults.
+ * Arguments absent from a call fall back to the tool defaults (shared with
+ * the search tool, so a changed default cannot silently split groups).
  */
 function searchIdentityOf(args: unknown): string | null {
   if (typeof args !== 'object' || args === null) return null
@@ -165,14 +173,26 @@ function searchIdentityOf(args: unknown): string | null {
     Array.isArray(value) ? [...value].sort().join('|') : ''
   return JSON.stringify({
     query: typeof record['query'] === 'string' ? record['query'] : '',
-    mode: typeof record['mode'] === 'string' ? record['mode'] : 'metadata',
-    scope: record['scope'] === undefined ? 'library' : JSON.stringify(record['scope']),
+    mode: typeof record['mode'] === 'string' ? record['mode'] : SEARCH_DEFAULT_MODE,
+    // Scope objects stringify by key order; canonicalize so two semantically
+    // identical scopes fold into one group whatever order the model emitted.
+    scope: record['scope'] === undefined ? 'library' : scopeKeyOf(record['scope']),
     itemTypes: sorted(record['itemTypes']),
     tags: sorted(record['tags']),
-    sort: typeof record['sort'] === 'string' ? record['sort'] : 'dateModified',
-    direction: typeof record['direction'] === 'string' ? record['direction'] : 'desc',
-    limit: typeof record['limit'] === 'number' ? record['limit'] : 10,
+    sort: typeof record['sort'] === 'string' ? record['sort'] : SEARCH_DEFAULT_SORT,
+    direction:
+      typeof record['direction'] === 'string' ? record['direction'] : SEARCH_DEFAULT_DIRECTION,
+    limit: typeof record['limit'] === 'number' ? record['limit'] : SEARCH_DEFAULT_LIMIT,
   })
+}
+
+/** Canonical string form of a scope object: sorted keys, stable across key order. */
+function scopeKeyOf(scope: unknown): string {
+  if (!isRecord(scope)) return JSON.stringify(scope)
+  const parts = Object.keys(scope)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${JSON.stringify(scope[key])}`)
+  return `{${parts.join(',')}}`
 }
 
 /** The accumulator for the final logical search's hit set. */
@@ -218,6 +238,26 @@ export function buildCorpus(blocks: readonly ToolCallBlock[]): Corpus {
     return draft
   }
 
+  /**
+   * Attribute one ref-carrying call to its item. Calls whose arguments carry
+   * no usable ref count as unattributed and never crash the build.
+   * @returns the item's draft, or null when the call was unattributed.
+   */
+  const attributedOf = (
+    block: ToolCallBlock,
+    args: Record<string, unknown> | null,
+    seq: number,
+  ): Draft | null => {
+    const ref = args === null ? undefined : stringField(args, 'ref')
+    if (ref === undefined || ref === '') {
+      unattributed += 1
+      return null
+    }
+    const draft = itemOf(ref, seq)
+    draft.calls.push(block)
+    return draft
+  }
+
   for (const block of blocks) {
     const seq = orderKeyOf(block)
     const args = argsOf(block)
@@ -250,24 +290,23 @@ export function buildCorpus(blocks: readonly ToolCallBlock[]): Corpus {
         break
       }
       case 'zotero_get': {
-        const ref = args === null ? undefined : stringField(args, 'ref')
-        if (ref === undefined || ref === '') {
-          unattributed += 1
-          break
-        }
-        const draft = itemOf(ref, seq)
+        const draft = attributedOf(block, args, seq)
+        if (draft === null) break
         draft.usage.read = true
-        draft.calls.push(block)
         if (meta === null) break
         // The get projection is richer than a search row: it wins outright.
         const title = stringField(meta, 'title')
         const creators = stringField(meta, 'creators')
         const venue = stringField(meta, 'venue')
         const year = numberField(meta, 'year')
+        const itemType = stringField(meta, 'itemType')
         if (title !== undefined) draft.title = title
         if (creators !== undefined) draft.creators = creators
         if (venue !== undefined) draft.venue = venue
         if (year !== undefined) draft.year = year
+        // The projection carries the item type, so a note reached directly
+        // by get still honors the "notes excluded" target rule.
+        if (itemType !== undefined) draft.itemType = itemType
         const notes = previewsOf(meta, 'notesPreview')
         if (notes !== null && notes.length > 0) draft.notesPreview = notes
         const annotations = previewsOf(meta, 'annotationsPreview')
@@ -275,26 +314,16 @@ export function buildCorpus(blocks: readonly ToolCallBlock[]): Corpus {
         break
       }
       case 'zotero_retrieve': {
-        const ref = args === null ? undefined : stringField(args, 'ref')
-        if (ref === undefined || ref === '') {
-          unattributed += 1
-          break
-        }
-        const draft = itemOf(ref, seq)
+        const draft = attributedOf(block, args, seq)
+        if (draft === null) break
         draft.usage.cited = true
-        draft.calls.push(block)
         const items = meta === null ? null : evidenceItemsOf(meta)
         if (items !== null) draft.evidence.push(...items)
         break
       }
       case 'zotero_attachment': {
-        const ref = args === null ? undefined : stringField(args, 'ref')
-        if (ref === undefined || ref === '') {
-          unattributed += 1
-          break
-        }
-        const draft = itemOf(ref, seq)
-        draft.calls.push(block)
+        const draft = attributedOf(block, args, seq)
+        if (draft === null) break
         if (meta === null) break
         const kind = stringField(meta, 'kind') === 'url' ? 'url' : 'file'
         const contentType = stringField(meta, 'contentType')
@@ -307,9 +336,6 @@ export function buildCorpus(blocks: readonly ToolCallBlock[]): Corpus {
       }
       case 'zotero_export': {
         const refs = args?.['refs']
-        const requested =
-          numberField(meta ?? {}, 'requested') ??
-          (Array.isArray(refs) ? refs.filter((ref) => typeof ref === 'string').length : 0)
         // Zotero's raw export text can lead with stray whitespace; the
         // curated artifact starts clean (display and copy alike).
         const text = (resultTextOf(block) ?? '').trimStart()

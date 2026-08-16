@@ -11,13 +11,14 @@
  * @module dsh-zotero/client/ZoteroCiteLens
  */
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import clsx from 'clsx'
 import { IconChevronDownOutline14 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { bibTexKeysOf, citeCommandOf, type Corpus, type CorpusExport } from './corpus.ts'
-import { displayRefOf, interpolate } from './presenters.ts'
+import { displayRefOf, interpolate, joinNonEmpty } from './presenters.ts'
 import { CopyValue, ExportBody } from './ZoteroToolViews.tsx'
+import viewsCss from './ZoteroToolViews.module.css'
 import css from './ZoteroCiteLens.module.css'
 
 export interface ZoteroCiteLensProps {
@@ -40,7 +41,9 @@ function ExportCard({
   readonly artifact: CorpusExport
   readonly t: ZoteroCiteLensProps['t']
 }) {
-  const keys = bibTexKeysOf(artifact.text)
+  // The keys derive from the artifact's immutable text; scanning the full
+  // body again on every re-render would be wasted work.
+  const keys = useMemo(() => bibTexKeysOf(artifact.text), [artifact.text])
   const cite = citeCommandOf(keys)
   const [open, setOpen] = useState(false)
   return (
@@ -94,7 +97,7 @@ export function ZoteroCiteLens({ corpus, t, setDraft }: ZoteroCiteLensProps) {
             {setDraft !== undefined && (
               <button
                 type="button"
-                className={css.actionButton}
+                className={viewsCss.actionButton}
                 onClick={() => {
                   setDraft(t('starterCiteTemplate'))
                 }}
@@ -114,22 +117,20 @@ export function ZoteroCiteLens({ corpus, t, setDraft }: ZoteroCiteLensProps) {
           <span className={css.sectionLabel}>{t('quickAccessLabel')}</span>
           <section className={css.section}>
             {corpus.literature.map((item) => {
-              const meta = [item.creators ?? '', item.year === undefined ? '' : String(item.year)]
-                .filter((part) => part !== '')
-                .join(' · ')
+              const summary = joinNonEmpty(item.creators, item.year)
               return (
                 <div key={item.key} className={css.quickRow}>
                   <span className={css.quickTitle} title={item.title ?? item.ref}>
                     {item.title ?? displayRefOf(item.ref)}
                   </span>
-                  <span className={css.quickMeta} title={meta}>
-                    {meta}
+                  <span className={css.quickMeta} title={summary}>
+                    {summary}
                   </span>
                   <CopyValue value={item.ref} t={t} label={t('copyRef')} />
                   {setDraft !== undefined && (
                     <button
                       type="button"
-                      className={css.actionButton}
+                      className={viewsCss.actionButton}
                       onClick={() => {
                         setDraft(interpolate(t('citeTemplate'), { ref: item.ref }))
                       }}

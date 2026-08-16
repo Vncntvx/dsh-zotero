@@ -134,6 +134,8 @@ export interface ZoteroGetPresentationMeta {
   readonly creators: string
   readonly year?: number
   readonly venue?: string
+  /** The item's own type, so the corpus can keep notes out of the target rule. */
+  readonly itemType?: string
   readonly notes?: ZoteroChildCount
   readonly annotations?: ZoteroChildCount
   readonly attachments?: ZoteroChildCount
@@ -289,6 +291,7 @@ export function projectGetMeta(value: GetProjectionInput): ZoteroGetPresentation
     title: truncateChars(value.title, MAX_PRESENTATION_GET_TITLE_CHARS),
     creators: truncateChars(value.creators.join('; '), MAX_PRESENTATION_GET_CREATORS_CHARS),
     ...(value.year === undefined ? {} : { year: value.year }),
+    ...(value.itemType === undefined ? {} : { itemType: value.itemType }),
     ...(value.venue === undefined
       ? {}
       : { venue: truncateChars(value.venue, MAX_PRESENTATION_GET_VENUE_CHARS) }),

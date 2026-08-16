@@ -154,11 +154,7 @@
 }
 
 .tag[data-kind='get'] {
-  color: color-mix(
-    in srgb,
-    var(--dsw-alias-state-success-primary) 68%,
-    var(--dsw-alias-label-secondary)
-  );
+  color: var(--dsw-zotero-tone-get);
   background: var(--dsw-alias-state-success-tertiary);
 }
 
@@ -168,21 +164,8 @@
 }
 
 .tag[data-kind='export'] {
-  color: color-mix(
-    in srgb,
-    var(--dsw-alias-brand-primary-new-colorprimary-new-color) 60%,
-    var(--dsw-alias-state-error-secondary)
-  );
-  background: color-mix(
-    in srgb,
-    color-mix(
-        in srgb,
-        var(--dsw-alias-brand-primary-new-colorprimary-new-color) 55%,
-        var(--dsw-alias-state-error-secondary)
-      )
-      15%,
-    var(--dsw-alias-bg-layer-1)
-  );
+  color: var(--dsw-zotero-tone-export);
+  background: var(--dsw-zotero-tone-export-bg);
 }
 
 .tag[data-kind='attachment'] {

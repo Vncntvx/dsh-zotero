@@ -15,6 +15,29 @@
      the view's own width (container queries), not the viewport — the same
      mechanism the trajectory table uses. */
   container-type: inline-size;
+  /* The shared tone palette: the tool kind-tag colors reused by the activity
+     strip and the funnel chips. Defined here (the tab owns every consumer)
+     so one formula change recolors all three surfaces. */
+  --dsw-zotero-tone-get: color-mix(
+    in srgb,
+    var(--dsw-alias-state-success-primary) 68%,
+    var(--dsw-alias-label-secondary)
+  );
+  --dsw-zotero-tone-export: color-mix(
+    in srgb,
+    var(--dsw-alias-brand-primary-new-colorprimary-new-color) 60%,
+    var(--dsw-alias-state-error-secondary)
+  );
+  --dsw-zotero-tone-export-bg: color-mix(
+    in srgb,
+    color-mix(
+        in srgb,
+        var(--dsw-alias-brand-primary-new-colorprimary-new-color) 55%,
+        var(--dsw-alias-state-error-secondary)
+      )
+      15%,
+    var(--dsw-alias-bg-layer-1)
+  );
 }
 
 .toolbar {
@@ -171,38 +194,23 @@
   background: var(--dsw-alias-bg-layer-2);
 }
 
-/* Funnel chips borrow the tool kind-tag tones, so the stage colors match
- * the activity rows they count (search blue, read green, cited violet). */
-.funnelChip[data-tone='search'] {
+/* Funnel chips borrow the tool kind-tag tones (the shared palette on the
+ * .view root), so the stage colors match the activity rows they count
+ * (searched blue, read green, cited violet). `data-stage` values are the
+ * funnel's own vocabulary — distinct from the wire-tool `data-kind` tones. */
+.funnelChip[data-stage='searched'] {
   color: var(--dsw-alias-state-business-primary);
   background: var(--dsw-alias-state-business-tertiary);
 }
 
-.funnelChip[data-tone='read'] {
-  color: color-mix(
-    in srgb,
-    var(--dsw-alias-state-success-primary) 68%,
-    var(--dsw-alias-label-secondary)
-  );
+.funnelChip[data-stage='read'] {
+  color: var(--dsw-zotero-tone-get);
   background: var(--dsw-alias-state-success-tertiary);
 }
 
-.funnelChip[data-tone='cited'] {
-  color: color-mix(
-    in srgb,
-    var(--dsw-alias-brand-primary-new-colorprimary-new-color) 60%,
-    var(--dsw-alias-state-error-secondary)
-  );
-  background: color-mix(
-    in srgb,
-    color-mix(
-        in srgb,
-        var(--dsw-alias-brand-primary-new-colorprimary-new-color) 55%,
-        var(--dsw-alias-state-error-secondary)
-      )
-      15%,
-    var(--dsw-alias-bg-layer-1)
-  );
+.funnelChip[data-stage='cited'] {
+  color: var(--dsw-zotero-tone-export);
+  background: var(--dsw-zotero-tone-export-bg);
 }
 
 /* The activity ledger's header: the caption plus the overview strip, echoing
@@ -245,11 +253,7 @@
 }
 
 .activitySpan[data-kind='get'] {
-  background: color-mix(
-    in srgb,
-    var(--dsw-alias-state-success-primary) 68%,
-    var(--dsw-alias-label-secondary)
-  );
+  background: var(--dsw-zotero-tone-get);
 }
 
 .activitySpan[data-kind='retrieve'] {
@@ -257,11 +261,7 @@
 }
 
 .activitySpan[data-kind='export'] {
-  background: color-mix(
-    in srgb,
-    var(--dsw-alias-brand-primary-new-colorprimary-new-color) 60%,
-    var(--dsw-alias-state-error-secondary)
-  );
+  background: var(--dsw-zotero-tone-export);
 }
 
 .activitySpan[data-kind='attachment'] {

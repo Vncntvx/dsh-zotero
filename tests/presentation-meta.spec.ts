@@ -174,6 +174,7 @@ describe('projectGetMeta', () => {
     expect(meta.title).toBe('FlashAttention-2')
     expect(meta.creators).toBe('Dao, Tri; Smith, Jane')
     expect(meta.year).toBe(2023)
+    expect(meta.itemType).toBe('journalArticle')
     expect(meta.venue).toBe('ICLR')
     expect(meta.notes).toEqual({ total: 2, returned: 2 })
     expect(meta.annotations).toEqual({ total: 17, returned: 3 })
@@ -193,7 +194,6 @@ describe('projectGetMeta', () => {
   it('omits child facts the call did not request', () => {
     const meta = projectGetMeta({
       ref: 'zotero://user/0/item/ABCDEFGH',
-      itemType: 'journalArticle',
       title: 'Metadata only',
       creators: [],
       abstract: undefined,
@@ -204,6 +204,7 @@ describe('projectGetMeta', () => {
     })
     expect(meta.notes).toBeUndefined()
     expect(meta.annotations).toBeUndefined()
+    expect(meta.itemType).toBeUndefined()
     expect(meta.notesPreview).toEqual([])
     expect(meta.annotationsPreview).toEqual([])
   })

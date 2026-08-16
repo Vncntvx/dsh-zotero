@@ -5,12 +5,12 @@
  * (StateDot + fact chips + refresh) above a lens bar and a centered reading
  * column. The lens bar switches between the corpus views — items (one record
  * per library item), citations (the session's export artifacts), and the
- * per-call activity replay — with the default chosen from the session's
- * shape (an export artifact lands citation workers on their output). The
- * cards are replay-driven from the conversation snapshot; the status probe
- * is request-driven (one on mount, one per explicit Refresh; no timers).
- * Composer prefills go through the injected inputActions.setDraft and never
- * submit. The built-in chat and trajectory views are untouched.
+ * per-call activity replay — with the activity ledger as the front page and
+ * a manual pick overriding it. The cards are replay-driven from the
+ * conversation snapshot; the status probe is request-driven (one on mount,
+ * one per explicit Refresh; no timers). Composer prefills go through the
+ * injected inputActions.setDraft and never submit. The built-in chat and
+ * trajectory views are untouched.
  * @module dsh-zotero/client/ZoteroTab
  */
 
@@ -32,8 +32,6 @@ import { ZoteroItemsLens } from './ZoteroItemsLens.tsx'
 import { CardFor } from './ZoteroToolViews.tsx'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import css from './ZoteroTab.module.css'
-
-export { callNameOf } from './presenters.ts'
 
 /** The inject face the tab's slot entry provides. */
 export interface ZoteroTabFace {
@@ -299,17 +297,17 @@ export function ZoteroTab({ status, t, useSession, inputActions }: ZoteroTabProp
             {corpus.funnel !== null && (
               <div className={css.funnel}>
                 {corpus.funnel.searched > 0 && (
-                  <span className={css.funnelChip} data-tone="search">
+                  <span className={css.funnelChip} data-stage="searched">
                     {interpolate(t('funnelSearched'), { count: corpus.funnel.searched })}
                   </span>
                 )}
                 {corpus.funnel.read > 0 && (
-                  <span className={css.funnelChip} data-tone="read">
+                  <span className={css.funnelChip} data-stage="read">
                     {interpolate(t('funnelRead'), { count: corpus.funnel.read })}
                   </span>
                 )}
                 {corpus.funnel.cited > 0 && (
-                  <span className={css.funnelChip} data-tone="cited">
+                  <span className={css.funnelChip} data-stage="cited">
                     {interpolate(t('funnelCited'), { count: corpus.funnel.cited })}
                   </span>
                 )}

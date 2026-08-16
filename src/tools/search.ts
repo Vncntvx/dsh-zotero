@@ -16,7 +16,15 @@ import {
   type ToolResult,
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
-import { ZOTERO_SORT_FIELDS } from '../constants.js'
+import {
+  SEARCH_DEFAULT_DIRECTION,
+  SEARCH_DEFAULT_LIMIT,
+  SEARCH_DEFAULT_MODE,
+  SEARCH_DEFAULT_OFFSET,
+  SEARCH_DEFAULT_SCOPE,
+  SEARCH_DEFAULT_SORT,
+  ZOTERO_SORT_FIELDS,
+} from '../constants.js'
 import type { ResolvedConfig } from '../config.js'
 import { withConnectivityAsk } from '../ask.js'
 import { boundedPresentationMeta, projectSearchMeta } from '../presentation-meta.js'
@@ -25,19 +33,12 @@ import { assertIntInRange, invalid } from './validate.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroSearchRequest } from '../types.js'
 
-const DEFAULT_MODE = 'metadata'
-const DEFAULT_SCOPE = { kind: 'library' } as const
-const DEFAULT_SORT = 'dateModified'
-const DEFAULT_DIRECTION = 'desc'
-const DEFAULT_OFFSET = 0
-const DEFAULT_LIMIT = 10
-
 const SEARCH_PARAMETERS = {
   query: { type: 'string', description: 'Free-text query; omit to browse the scope unfiltered.' },
   mode: {
     type: 'string',
     enum: ['metadata', 'everything'],
-    default: DEFAULT_MODE,
+    default: SEARCH_DEFAULT_MODE,
     description: 'metadata: title/creator/year only; everything: also indexed full text.',
   },
   scope: {
@@ -72,7 +73,7 @@ const SEARCH_PARAMETERS = {
         },
       },
     ],
-    default: DEFAULT_SCOPE,
+    default: SEARCH_DEFAULT_SCOPE,
     description: 'Where to search. Defaults to the whole library.',
   },
   itemTypes: {
@@ -88,23 +89,23 @@ const SEARCH_PARAMETERS = {
   sort: {
     type: 'string',
     enum: [...ZOTERO_SORT_FIELDS],
-    default: DEFAULT_SORT,
+    default: SEARCH_DEFAULT_SORT,
     description: 'Result order field.',
   },
   direction: {
     type: 'string',
     enum: ['asc', 'desc'],
-    default: DEFAULT_DIRECTION,
+    default: SEARCH_DEFAULT_DIRECTION,
     description: 'Result order direction.',
   },
   offset: {
     type: 'integer',
-    default: DEFAULT_OFFSET,
+    default: SEARCH_DEFAULT_OFFSET,
     description: 'Pagination offset for exploring more results.',
   },
   limit: {
     type: 'integer',
-    default: DEFAULT_LIMIT,
+    default: SEARCH_DEFAULT_LIMIT,
     description: 'Maximum results to return; capped by the configured maxSearchResults.',
   },
 } as const
@@ -172,13 +173,13 @@ const SEARCH_OUTPUT_SCHEMA = {
 type SearchOutput = InferValue<typeof SEARCH_OUTPUT_SCHEMA>
 
 function buildRequest(args: SearchArgs, config: ResolvedConfig): ZoteroSearchRequest {
-  const limit = args.limit ?? DEFAULT_LIMIT
+  const limit = args.limit ?? SEARCH_DEFAULT_LIMIT
   assertIntInRange('limit', limit, 1, config.maxSearchResults)
-  const offset = args.offset ?? DEFAULT_OFFSET
+  const offset = args.offset ?? SEARCH_DEFAULT_OFFSET
   if (!Number.isInteger(offset) || offset < 0)
     invalid(`offset must be a non-negative integer; got ${offset}`)
   const query = args.query?.trim()
-  const scope = args.scope ?? DEFAULT_SCOPE
+  const scope = args.scope ?? SEARCH_DEFAULT_SCOPE
   if (scope.kind !== 'library' && scope.refOrName.trim() === '') {
     invalid('scope.refOrName must be a collection/saved-search name or ref')
   }
@@ -196,15 +197,15 @@ function buildRequest(args: SearchArgs, config: ResolvedConfig): ZoteroSearchReq
   }
   return {
     query: query === '' ? undefined : query,
-    mode: args.mode ?? DEFAULT_MODE,
+    mode: args.mode ?? SEARCH_DEFAULT_MODE,
     scope:
       scope.kind === 'library'
         ? { kind: 'library' }
         : { kind: scope.kind, refOrName: scope.refOrName },
     itemTypes: args.itemTypes,
     tags: args.tags,
-    sort: args.sort ?? DEFAULT_SORT,
-    direction: args.direction ?? DEFAULT_DIRECTION,
+    sort: args.sort ?? SEARCH_DEFAULT_SORT,
+    direction: args.direction ?? SEARCH_DEFAULT_DIRECTION,
     offset,
     limit,
   }

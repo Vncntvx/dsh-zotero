@@ -37,11 +37,6 @@
   background: var(--dsw-alias-bg-layer-2);
 }
 
-.badgeSuccess {
-  color: var(--dsw-alias-state-success-primary);
-  background: var(--dsw-alias-state-success-tertiary);
-}
-
 .badgeBusiness {
   color: var(--dsw-alias-state-business-primary);
   background: var(--dsw-alias-state-business-tertiary);
@@ -70,35 +65,6 @@
 }
 
 /* Ghost action button, the same language as the copy affordances. */
-.actionButton {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  height: 20px;
-  padding: 0 6px;
-  font-family: inherit;
-  font-size: 11px;
-  line-height: 14px;
-  color: var(--dsw-alias-label-secondary);
-  background: transparent;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  transition:
-    background 120ms var(--ds-ease-in-out),
-    color 120ms var(--ds-ease-in-out);
-}
-
-.actionButton:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-primary);
-}
-
-.actionButton:focus-visible {
-  outline: 1px solid var(--dsw-alias-state-business-primary);
-  outline-offset: 1px;
-}
-
 .attachmentRow {
   display: flex;
   align-items: center;

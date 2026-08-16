@@ -80,6 +80,38 @@
   outline-offset: 1px;
 }
 
+/* The lenses' line-end action button (copy ref / ask about / generate
+ * citation): the same quiet ghost shape, with the action-label color so it
+ * reads a step above the copy affordance. Shared by both lenses. */
+.actionButton {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 6px;
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--dsw-alias-label-secondary);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition:
+    background 120ms var(--ds-ease-in-out),
+    color 120ms var(--ds-ease-in-out);
+}
+
+.actionButton:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.actionButton:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
 /* Group label (notes/annotations): the trajectory kind-tag cadence — small,
  * weighted, caption-colored, set apart from the reading rows it names. */
 .previewGroupLabel {

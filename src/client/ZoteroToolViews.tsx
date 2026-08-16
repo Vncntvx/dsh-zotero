@@ -1,10 +1,11 @@
 /**
- * The five Zotero tool cards, registered under the keyed
- * `tool.call.toolview` slot by wire tool name. Each view derives everything
- * from the frozen call block through the shared presenters (truth ladder:
- * callView → resultView → meta → content) and renders through the shared
- * ZoteroToolRow chrome. Interactive affordances (Copy, Inspect) live in the
- * expanded body, never inside the row toggle.
+ * The five Zotero tool cards. Each view derives everything from the frozen
+ * call block through the shared presenters (truth ladder: callView →
+ * resultView → meta → content) and renders through the shared ZoteroToolRow
+ * chrome; `CardFor` dispatches one call block to its card for the tab's
+ * activity lens, and the lenses reuse the body components (CopyValue,
+ * EvidenceRow, ExportBody) for their dossiers. Interactive affordances
+ * (Copy, Inspect) live in the expanded body, never inside the row toggle.
  * @module dsh-zotero/client/ZoteroToolViews
  */
 
@@ -26,6 +27,7 @@ import {
   evidenceSourcesOf,
   evidenceTruncatedOf,
   interpolate,
+  joinNonEmpty,
   metaOf,
   previewsOf,
   queryOf,
@@ -199,6 +201,7 @@ function sourceKeyOf(source: string): ZoteroLocaleKey {
 }
 
 /** Safe plain-text preview of the (HTML) bibliography content; never injected as DOM. */
+const PLAIN_PREVIEW_CAP = 600
 function plainTextOf(html: string, cap: number): string {
   const doc = new DOMParser().parseFromString(html, 'text/html')
   const text = doc.body.textContent ?? ''
@@ -222,7 +225,7 @@ interface ExportBodyProps {
 /** Body split: human formats render as plain text, machine formats as code. */
 export function ExportBody({ format, text, t, copy = true }: ExportBodyProps) {
   if (format === 'citation' || format === 'bibliography') {
-    return <pre className={css.fallback}>{plainTextOf(text, 600)}</pre>
+    return <pre className={css.fallback}>{plainTextOf(text, PLAIN_PREVIEW_CAP)}</pre>
   }
   if (!copy) {
     return <pre className={css.plainCode}>{text}</pre>
@@ -276,7 +279,7 @@ export function ZoteroSearchRow({ block, t }: SharedProps) {
     facts.push(t('referenceMismatch'))
   }
   const omitted = counts?.omitted ?? 0
-  // The bounded projection lists at most six rows; once it omits any, the
+  // The bounded projection can truncate the rows; once it omits any, the
   // full durable output takes over so nothing is hidden from the reader.
   const fullText = resultTextOf(block)
   const truncatedProjection = omitted > 0
@@ -323,43 +326,37 @@ export function ZoteroGetRow({ block, t }: SharedProps) {
       ? displayRefOf(rawInputOf(block))
       : (stringField(meta ?? {}, 'title') ?? displayRefOf(rawInputOf(block)))
   const creators = stringField(meta ?? {}, 'creators') ?? ''
-  const yearValue = meta === null ? undefined : (meta['year'] as number | undefined)
-  const year = typeof yearValue === 'number' ? String(yearValue) : ''
+  const yearValue = numberField(meta ?? {}, 'year')
+  const year = yearValue === undefined ? '' : String(yearValue)
   const venue = stringField(meta ?? {}, 'venue') ?? ''
   const notes = previewsOf(meta ?? {}, 'notesPreview')
   const annotations = previewsOf(meta ?? {}, 'annotationsPreview')
+  // The child totals drive both the facts line and the projection-completeness
+  // check below; read them once, defensively.
+  const notesMeta = meta === null ? undefined : meta['notes']
+  const annotationsMeta = meta === null ? undefined : meta['annotations']
+  const notesTotal = isRecord(notesMeta) ? numberField(notesMeta, 'total') : undefined
+  const annotationsTotal = isRecord(annotationsMeta)
+    ? numberField(annotationsMeta, 'total')
+    : undefined
   const facts: string[] = []
   if (state !== 'running') {
-    const header = [creators, year === '' ? '' : year, venue]
-      .filter((part) => part !== '')
-      .join(' · ')
+    const header = joinNonEmpty(creators, year, venue)
     if (header !== '') facts.push(header)
-    const notesTotal =
-      meta === null ? undefined : (meta['notes'] as { total?: unknown } | undefined)?.total
-    const annotationsTotal =
-      meta === null ? undefined : (meta['annotations'] as { total?: unknown } | undefined)?.total
     const pdf =
       stringField(meta ?? {}, 'bestAttachmentContentType') === 'application/pdf' ? 'PDF' : ''
-    const counts = [
-      typeof notesTotal === 'number' ? `${notesTotal} ${t('personalNotes').toLowerCase()}` : '',
-      typeof annotationsTotal === 'number'
-        ? `${annotationsTotal} ${t('personalAnnotations').toLowerCase()}`
-        : '',
+    const counts = joinNonEmpty(
+      notesTotal === undefined ? '' : `${notesTotal} ${t('personalNotes').toLowerCase()}`,
+      annotationsTotal === undefined
+        ? ''
+        : `${annotationsTotal} ${t('personalAnnotations').toLowerCase()}`,
       pdf,
-    ].filter((part) => part !== '')
-    if (counts.length > 0) facts.push(counts.join(' · '))
+    )
+    if (counts !== '') facts.push(counts)
   }
   // The bounded previews cap at two records per kind; once the projection
   // shows fewer than the reported totals, the full durable output takes over.
   const fullText = resultTextOf(block)
-  const notesTotal =
-    meta === null || !isRecord(meta['notes'])
-      ? undefined
-      : numberField(meta['notes'] as Record<string, unknown>, 'total')
-  const annotationsTotal =
-    meta === null || !isRecord(meta['annotations'])
-      ? undefined
-      : numberField(meta['annotations'] as Record<string, unknown>, 'total')
   const notesComplete = notesTotal === undefined || (notes !== null && notes.length >= notesTotal)
   const annotationsComplete =
     annotationsTotal === undefined ||
@@ -504,7 +501,8 @@ export function ZoteroAttachmentRow({ block, t }: SharedProps) {
       : [kind === 'file' ? t('localFile') : t('linkedUrl'), contentType ?? ''].filter(
           (fact) => fact !== '',
         )
-  const hasBody = target !== undefined || resultTextOf(block) !== null
+  const fullText = resultTextOf(block)
+  const hasBody = target !== undefined || fullText !== null
   return (
     <ZoteroToolRow
       state={state}
@@ -527,7 +525,7 @@ export function ZoteroAttachmentRow({ block, t }: SharedProps) {
           <CopyValue value={target} t={t} />
         </div>
       ) : (
-        resultTextOf(block) !== null && <FallbackBody text={resultTextOf(block)!} />
+        fullText !== null && <FallbackBody text={fullText} />
       )}
     </ZoteroToolRow>
   )
@@ -539,8 +537,8 @@ export function ZoteroExportRow({ block, t }: SharedProps) {
   const args = argsOf(block)
   const meta = metaOf(block)
   const format = stringField(meta ?? {}, 'format')
-  const count = meta === null ? undefined : (meta['count'] as number | undefined)
-  const requested = meta === null ? undefined : (meta['requested'] as number | undefined)
+  const count = numberField(meta ?? {}, 'count')
+  const requested = numberField(meta ?? {}, 'requested')
   const refs = Array.isArray(args?.['refs']) ? (args?.['refs'] as unknown[]).length : undefined
   const text = resultTextOf(block)
   const summary =
@@ -555,7 +553,8 @@ export function ZoteroExportRow({ block, t }: SharedProps) {
   if (state !== 'running') {
     const style = stringField(meta ?? {}, 'style')
     const locale = stringField(meta ?? {}, 'locale')
-    facts.push([style ?? '', locale ?? ''].filter((part) => part !== '').join(' · '))
+    const detail = joinNonEmpty(style ?? '', locale ?? '')
+    if (detail !== '') facts.push(detail)
   }
   return (
     <ZoteroToolRow

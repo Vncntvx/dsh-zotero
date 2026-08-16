@@ -14,6 +14,7 @@ import { writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
 import { buildCorpus, type Corpus } from '../../src/client/corpus.ts'
 import { ZoteroCiteLens } from '../../src/client/ZoteroCiteLens.tsx'
 import { zh, type ZoteroLocaleKey } from '../../src/client/locales.ts'
+import { settled } from './helpers/blocks.ts'
 
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
   const { createElement } = await import('react')
@@ -36,23 +37,6 @@ const t: TranslateNS<'zotero'> = (key) => zh[key as ZoteroLocaleKey] ?? key
 const REF = 'zotero://user/0/item/ABCD1234'
 const OTHER = 'zotero://user/0/item/EEEE2222'
 const BIBTEX = '@article{pan2022carbon,\n title={A}\n}\n@book{dao2023,\n}'
-
-function settled(overrides: Partial<ToolResultNode> = {}): ToolResultNode {
-  return {
-    kind: 'tool-result',
-    seq: 2,
-    time: 2,
-    callId: 'c1',
-    call: { name: 'zotero_search', argsRaw: '{}' },
-    callTime: 1,
-    content: [],
-    isError: false,
-    callView: null,
-    resultView: null,
-    subCalls: [],
-    ...overrides,
-  }
-}
 
 function exportBlocks(): ToolResultNode[] {
   return [
