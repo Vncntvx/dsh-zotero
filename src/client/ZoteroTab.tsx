@@ -84,7 +84,7 @@ export function currentTime(): string {
  * @param block - one collected call block.
  * @returns the inline grow style, or undefined for the minimum-width fallback.
  */
-export function activityGrowOf(block: ToolCallBlock): { readonly flexGrow: number } | undefined {
+function activityGrowOf(block: ToolCallBlock): { readonly flexGrow: number } | undefined {
   if (!('kind' in block) || block.callTime === null) return undefined
   const duration = Math.max(0, block.time - block.callTime)
   return duration > 0 ? { flexGrow: duration } : undefined
