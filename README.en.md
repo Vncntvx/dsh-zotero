@@ -119,10 +119,11 @@ All values are `Config` fields changeable from the bundle's `config` block (e.g.
 | `maxExportRefs`        | `1000`                       | Upper bound for refs in one `zotero_export` call; keeps the request line under the server's HTTP header limit. |
 | `defaultStyle`         | `apa`                        | CSL style for citation/bibliography formats.                                                                   |
 | `defaultLocale`        | `en-US`                      | CSL locale for citation/bibliography formats.                                                                  |
+| `webEnabled`           | `true`                       | Enables the dedicated Zotero conversation tab; the gate is read once per page load.                            |
 
 ### Web configuration
 
-The plugin registers a "Zotero" card in dsh web's **Settings → Plugins → Plugin configuration** page listing all 19 fields above. The card binds the `zotero` settings namespace: writes land in the `zotero:` section of `$DSH_HOME/settings.yaml` (layered over the patch entry's `config`, user layer wins), and **saves apply live** — the transport and the provider rebuild on the new values, so the next tool call or `/zotero status` uses them without a dsh restart.
+The plugin registers a "Zotero" card in dsh web's **Settings → Plugins → Plugin configuration** page listing all 20 fields above. The card binds the `zotero` settings namespace: writes land in the `zotero:` section of `$DSH_HOME/settings.yaml` (layered over the patch entry's `config`, user layer wins), and **saves apply live** — the transport and the provider rebuild on the new values, so the next tool call or `/zotero status` uses them without a dsh restart.
 
 - Invalid values (a non-loopback `baseUrl`, a non-positive limit) are refused before the write; the card reports the failed save and keeps the draft, and the plugin keeps running on the last valid value.
 - Every field shows its effective value; fields overridden by the settings document carry an "Overridden" badge and offer a one-click reset (clears the user layer, back to the patch entry value).
@@ -135,7 +136,7 @@ The dsh web session view is a tab ring (Chat, Trajectory, …). The plugin regis
 
 - A **connection strip** leads the tab: one status probe on mount, another per explicit Refresh (request-driven, no polling timers); it shows the connection state, API/schema versions, Server ID (Zotero 10+), and the last-checked time, with the diagnosis when Zotero is unavailable.
 - Below it, the session's **Zotero tool activity**: every search, read, retrieve, attachment, and export call renders as a rich card (expandable, copyable refs, evidence passages labeled by source), fully replay-driven from the conversation snapshot — the same transcript renders the same cards, and missing meta degrades to the raw content.
-- The **Web → Session tool cards** toggle in the settings page (`webEnabled`, default on) controls the tab's registration; when off, Zotero calls show as dsh's built-in generic cards in the trajectory.
+- The **Web → Session tool cards** toggle in the settings page (`webEnabled`, default on) controls the tab's registration; the gate is read once per page load, so a toggle change applies after the page reloads. When off, Zotero calls show as dsh's built-in generic cards in the trajectory.
 
 ## Limits
 

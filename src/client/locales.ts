@@ -170,7 +170,7 @@ export const en: Record<ZoteroLocaleKey, string> = {
   groupWeb: 'Web view',
   webEnabled: 'Zotero conversation tab',
   webEnabledHint:
-    'Shows a dedicated Zotero tab at the top of conversations (items, citations, activity). Turn it off to hide the tab.',
+    'Shows a dedicated Zotero tab at the top of conversations (items, citations, activity). Turning it off hides the tab after the page reloads.',
   copy: 'Copy',
   copied: 'Copied',
   checking: 'Checking…',
@@ -315,7 +315,8 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   defaultLocaleHint: 'citation/bibliography 格式的 CSL locale（如 en-US）。',
   groupWeb: 'Web 视图',
   webEnabled: 'Zotero 会话标签页',
-  webEnabledHint: '在会话顶部显示 Zotero 专属标签页，包含文献、引用与活动；关闭后该标签页隐藏。',
+  webEnabledHint:
+    '在会话顶部显示 Zotero 专属标签页，包含文献、引用与活动；关闭后需刷新页面，标签页才会隐藏。',
   copy: '复制',
   copied: '已复制',
   checking: '检查中…',
