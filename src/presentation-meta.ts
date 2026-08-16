@@ -12,6 +12,7 @@
  */
 
 import type { JsonValue } from '@deepseek-ai/dsh-tools'
+import type { ZoteroEvidenceSource } from './types.js'
 
 /** UTF-8 byte budget for one tool's presentation meta. */
 export const MAX_PRESENTATION_META_BYTES = 8192
@@ -143,9 +144,6 @@ export interface ZoteroGetPresentationMeta {
   readonly notesPreview: ZoteroChildPreview[]
   readonly annotationsPreview: ZoteroChildPreview[]
 }
-
-/** Evidence source vocabulary the retrieve projection reads. */
-export type ZoteroEvidenceSource = 'annotation' | 'note' | 'fulltext' | 'abstract'
 
 /** One ranked evidence passage with its provenance and source kind. */
 export interface ZoteroEvidencePresentationItem {
