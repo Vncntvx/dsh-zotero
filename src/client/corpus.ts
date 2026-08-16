@@ -170,7 +170,9 @@ function searchIdentityOf(args: unknown): string | null {
   if (typeof args !== 'object' || args === null) return null
   const record = args as Record<string, unknown>
   const sorted = (value: unknown): string =>
-    Array.isArray(value) ? [...value].sort().join('|') : ''
+    // JSON encoding keeps element boundaries explicit: the plain join below
+    // would collapse `['a|b']` and `['a', 'b']` onto one identity.
+    Array.isArray(value) ? JSON.stringify([...value].sort()) : ''
   return JSON.stringify({
     query: typeof record['query'] === 'string' ? record['query'] : '',
     mode: typeof record['mode'] === 'string' ? record['mode'] : SEARCH_DEFAULT_MODE,

@@ -708,6 +708,32 @@ describe('buildCorpus attribution', () => {
       normalizeRefKey(second),
     ])
   })
+
+  it('does not fold tag lists that differ only in element boundaries', () => {
+    const row = (ref: string) => ({ ref, title: 'T', creatorSummary: 'C', itemType: 'report' })
+    const a = 'zotero://user/0/item/AAAA0001'
+    const b = 'zotero://user/0/item/BBBB0001'
+    const corpus = buildCorpus(
+      asBlocks([
+        settled({
+          seq: 1,
+          callId: 's1',
+          call: { name: 'zotero_search', argsRaw: '{"query":"x","tags":["a","b"]}' },
+          meta: { returned: 1, displayed: 1, omitted: 0, items: [row(a)] },
+        }),
+        settled({
+          seq: 2,
+          callId: 's2',
+          call: { name: 'zotero_search', argsRaw: '{"query":"x","tags":["a|b"]}' },
+          meta: { returned: 1, displayed: 1, omitted: 0, items: [row(b)] },
+        }),
+      ]),
+    )
+    // A single pipe is a legal tag character, so `['a|b']` is a different tag
+    // set than `['a', 'b']`; the identity encoding must not collapse them.
+    expect(corpus.searched).toBe(1)
+    expect(corpus.items.map((item) => item.key)).toEqual([normalizeRefKey(b)])
+  })
 })
 
 describe('lens and citation helpers', () => {
