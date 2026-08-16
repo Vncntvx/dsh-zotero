@@ -383,8 +383,12 @@ export function projectExportMeta(
   const base = {
     format: value.format,
     requested,
-    ...(value.style === undefined ? {} : { style: value.style }),
-    ...(value.locale === undefined ? {} : { locale: value.locale }),
+    ...(value.style === undefined
+      ? {}
+      : { style: truncateChars(value.style, MAX_PRESENTATION_GET_TITLE_CHARS) }),
+    ...(value.locale === undefined
+      ? {}
+      : { locale: truncateChars(value.locale, MAX_PRESENTATION_GET_TITLE_CHARS) }),
   }
   if (value.format === 'citation') {
     return { ...base, count: value.citations?.length ?? 0 }

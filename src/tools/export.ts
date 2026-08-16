@@ -10,10 +10,10 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
-import { defineTool, type InferArgs, type InferValue } from '@deepseek-ai/dsh-tools'
+import { defineTool, type InferArgs, type InferValue, type JsonValue } from '@deepseek-ai/dsh-tools'
 import type { ResolvedConfig } from '../config.js'
 import { withConnectivityAsk } from '../ask.js'
-import { boundedPresentationMeta, projectExportMeta } from '../presentation-meta.js'
+import { projectExportMeta } from '../presentation-meta.js'
 import { invalid } from './validate.js'
 import { parseRef, requireLocalRef } from '../refs.js'
 import type { ZoteroService } from '../service.js'
@@ -147,7 +147,7 @@ export function registerExportTool(ctx: Context, service: ZoteroService): void {
         schema: EXPORT_OUTPUT_SCHEMA,
         render: renderExport,
         presentationMeta: (args, value) =>
-          boundedPresentationMeta(projectExportMeta(args.refs.length, value), []),
+          projectExportMeta(args.refs.length, value) as unknown as JsonValue,
       },
       presentCall: (args) => ({
         card: 'generic',

@@ -17,6 +17,7 @@
 
 import { z } from 'zod'
 import type { InvocationDescriptor } from '@deepseek-ai/dsh-typert-protocol'
+import { ZOTERO_SETTINGS_NAMESPACE } from './settings-namespace.js'
 
 /**
  * The namespace as the settings page reads it: the resolved value over the
@@ -88,7 +89,7 @@ export const ZOTERO_INVOCATIONS: readonly InvocationDescriptor[] = [
   {
     id: 'dsh-zotero#zotero/status',
     service: 'zoteroRemote',
-    namespace: 'zotero',
+    namespace: ZOTERO_SETTINGS_NAMESPACE,
     method: 'status',
     invocation: { kind: 'direct' },
     parameters: [],
@@ -101,7 +102,7 @@ export const ZOTERO_INVOCATIONS: readonly InvocationDescriptor[] = [
   {
     id: 'dsh-zotero#zotero/config',
     service: 'zoteroRemote',
-    namespace: 'zotero',
+    namespace: ZOTERO_SETTINGS_NAMESPACE,
     method: 'config',
     invocation: { kind: 'direct' },
     parameters: [],
@@ -114,7 +115,7 @@ export const ZOTERO_INVOCATIONS: readonly InvocationDescriptor[] = [
   {
     id: 'dsh-zotero#zotero/configUpdate',
     service: 'zoteroRemote',
-    namespace: 'zotero',
+    namespace: ZOTERO_SETTINGS_NAMESPACE,
     method: 'configUpdate',
     invocation: { kind: 'direct' },
     parameters: [
@@ -145,7 +146,7 @@ export const ZOTERO_INVOCATIONS: readonly InvocationDescriptor[] = [
   {
     id: 'dsh-zotero#zotero/configClear',
     service: 'zoteroRemote',
-    namespace: 'zotero',
+    namespace: ZOTERO_SETTINGS_NAMESPACE,
     method: 'configClear',
     invocation: { kind: 'direct' },
     parameters: [

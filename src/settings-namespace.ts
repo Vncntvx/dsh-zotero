@@ -2,11 +2,11 @@
  * Settings namespace hosting the plugin's web-editable configuration section.
  *
  * The host half registers this namespace (with the `Config` schema and the
- * composition entry as its base layer) so the browser half's settings scope
- * can bind it and the settings document (`$DSH_HOME/settings.yaml`) can carry
- * a `zotero:` section. Kept in its own module — the browser bundle inlines
- * this one constant, and importing it from `service.js` would drag the whole
- * host implementation into the browser bundle.
+ * composition entry as its base layer) so the settings document
+ * (`$DSH_HOME/settings.yaml`) can carry a `zotero:` section, and the wire
+ * contract (`contract.ts`) references the same constant for the Remote
+ * namespace. Kept in its own module — it is dependency-free, so the browser
+ * bundle can inline it without dragging in the host implementation.
  * @module dsh-zotero/settings-namespace
  */
 
