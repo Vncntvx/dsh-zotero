@@ -17,6 +17,7 @@ import { ZOTERO_NOT_RUNNING } from '../src/errors.js'
 import { renderGet } from '../src/tools/get.js'
 import { renderRetrieve } from '../src/tools/retrieve.js'
 import { MockZotero } from './helpers/mock-zotero.js'
+import { CHILD_ROWS, ITEM } from './helpers/fixtures.js'
 
 let mock: MockZotero
 let ctx: Context
@@ -41,27 +42,6 @@ function runTool(name: string, args: Record<string, unknown>): Promise<ToolExecu
     arguments: args,
     signal: new AbortController().signal,
   })
-}
-
-const ITEM = {
-  key: 'ABCD1234',
-  version: 3,
-  library: { type: 'user', id: 999, name: 'user', links: {} },
-  links: {
-    self: { href: 'http://localhost:23119/api/users/0/items/ABCD1234', type: 'application/json' },
-  },
-  meta: { creatorSummary: 'Dao, Tri', parsedDate: '2023-07-28', numChildren: 1 },
-  data: {
-    key: 'ABCD1234',
-    version: 3,
-    itemType: 'conferencePaper',
-    title: 'FlashAttention-2',
-    date: '2023-07-28',
-    creators: [{ creatorType: 'author', firstName: 'Tri', lastName: 'Dao' }],
-    tags: [],
-    collections: [],
-    relations: {},
-  },
 }
 
 describe('zotero_search tool', () => {
@@ -291,28 +271,6 @@ const GET_PARENT = {
   },
 }
 
-const GET_CHILDREN = [
-  { key: 'NOTE1111', data: { itemType: 'note', note: 'my note' } },
-  {
-    key: 'ANNO1111',
-    data: {
-      itemType: 'annotation',
-      annotationType: 'highlight',
-      annotationText: 'insight',
-      annotationSortIndex: '00001',
-    },
-  },
-  {
-    key: 'WXYZ6789',
-    data: {
-      itemType: 'attachment',
-      title: 'Full Text PDF',
-      contentType: 'application/pdf',
-      linkMode: 'imported_file',
-    },
-  },
-]
-
 describe('zotero_get tool', () => {
   it('registers and exposes its schema to the assembly', () => {
     expect(ctx.tools.get('zotero_get')).toBeDefined()
@@ -377,7 +335,7 @@ describe('zotero_get tool', () => {
       helpers.json(GET_PARENT, { 'Zotero-Server-ID': 'S1' }),
     )
     mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) =>
-      helpers.json(GET_CHILDREN),
+      helpers.json(CHILD_ROWS),
     )
     mock.route('GET', '/api/users/0/collections', (req, res, helpers) =>
       helpers.json([

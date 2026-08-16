@@ -22,6 +22,7 @@ import type {
   ZoteroSearchRequest,
 } from '../src/types.js'
 import { MockZotero } from './helpers/mock-zotero.js'
+import { CHILD_ROWS, ITEM } from './helpers/fixtures.js'
 
 let mock: MockZotero
 let provider: LocalApiProvider
@@ -110,27 +111,6 @@ async function zoteroError(
   expect(zotero.code).toBe(code)
   if (messagePart !== undefined) expect(zotero.message).toContain(messagePart)
   return zotero
-}
-
-const ITEM = {
-  key: 'ABCD1234',
-  version: 3,
-  library: { type: 'user', id: 999, name: 'user', links: {} },
-  links: {
-    self: { href: 'http://localhost:23119/api/users/0/items/ABCD1234', type: 'application/json' },
-  },
-  meta: { creatorSummary: 'Dao, Tri', parsedDate: '2023-07-28', numChildren: 1 },
-  data: {
-    key: 'ABCD1234',
-    version: 3,
-    itemType: 'conferencePaper',
-    title: 'FlashAttention-2',
-    date: '2023-07-28',
-    creators: [{ creatorType: 'author', firstName: 'Tri', lastName: 'Dao' }],
-    tags: [],
-    collections: [],
-    relations: {},
-  },
 }
 
 const COLLECTIONS = [
@@ -676,28 +656,6 @@ const PARENT = {
     collections: ['COLL1234'],
   },
 }
-
-const CHILD_ROWS = [
-  { key: 'NOTE1111', data: { itemType: 'note', note: 'my note' } },
-  {
-    key: 'ANNO1111',
-    data: {
-      itemType: 'annotation',
-      annotationType: 'highlight',
-      annotationText: 'insight',
-      annotationSortIndex: '00001',
-    },
-  },
-  {
-    key: 'WXYZ6789',
-    data: {
-      itemType: 'attachment',
-      title: 'Full Text PDF',
-      contentType: 'application/pdf',
-      linkMode: 'imported_file',
-    },
-  },
-]
 
 describe('getItem', () => {
   it('fetches only the parent when nothing is included', async () => {

@@ -31,36 +31,19 @@ import {
   shortKeyOf,
   titleOf,
 } from '../../src/client/presenters.ts'
+import { running as blockRunning, settled as blockSettled } from './helpers/blocks.ts'
 
+// The shared factories default to a neutral `{}` args; these specs read the
+// pending/completed query string, so the attention query stays the default.
 function running(overrides: Partial<RunningToolCall> = {}): RunningToolCall {
-  return {
-    callId: 'c1',
-    name: 'zotero_search',
-    argsRaw: '{"query":"attention"}',
-    turn: 1,
-    step: 1,
-    time: 1,
-    callView: null,
-    subCalls: [],
-    ...overrides,
-  }
+  return blockRunning({ argsRaw: '{"query":"attention"}', ...overrides })
 }
 
 function settled(overrides: Partial<ToolResultNode> = {}): ToolResultNode {
-  return {
-    kind: 'tool-result',
-    seq: 2,
-    time: 2,
-    callId: 'c1',
+  return blockSettled({
     call: { name: 'zotero_search', argsRaw: '{"query":"attention"}' },
-    callTime: 1,
-    content: [],
-    isError: false,
-    callView: null,
-    resultView: null,
-    subCalls: [],
     ...overrides,
-  }
+  })
 }
 
 describe('isRecord / metaOf', () => {
