@@ -9,39 +9,14 @@
 
 import { Context } from '@deepseek-ai/cordis'
 import { CallId } from '@deepseek-ai/dsh-llm'
-import {
-  settingsNamespace,
-  SettingsProvider,
-  type SettingsNamespace,
-} from '@deepseek-ai/dsh-settings'
+import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { afterEach, describe, expect, it } from 'vitest'
 import ZoteroService from '../src/index.js'
 import { ZOTERO_PROVIDER_UNAVAILABLE } from '../src/errors.js'
+import { MemorySettings } from './helpers/memory-settings.js'
 import { MockZotero } from './helpers/mock-zotero.js'
-
-/** In-memory settings provider: the smallest real subclass of the seam. */
-class MemorySettings extends SettingsProvider {
-  doc: Record<string, unknown>
-
-  constructor(ctx: Context, doc: Record<string, unknown> = {}) {
-    super(ctx)
-    this.doc = structuredClone(doc)
-  }
-
-  get writable(): boolean {
-    return true
-  }
-
-  protected load(): Promise<Record<string, unknown>> {
-    return Promise.resolve(structuredClone(this.doc))
-  }
-
-  protected async persist(ns: SettingsNamespace, section: Record<string, unknown>): Promise<void> {
-    this.doc[ns] = structuredClone(section)
-  }
-}
 
 let mock: MockZotero | undefined
 let ctx: Context | undefined
