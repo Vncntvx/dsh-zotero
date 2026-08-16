@@ -45,7 +45,6 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
         children as never,
       ),
     IconChevronDownOutline14: icon('chevron-down'),
-    IconInspectOutline12: icon('inspect'),
     IconBrowseOutline16: icon('browse'),
     IconCopyOutline16: icon('copy'),
     IconSearchOutline16: icon('search'),

@@ -322,34 +322,6 @@
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
 
-/* Inspect rides as a pill (999px) the way the native tool rows surface it. */
-.inspectButton {
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 24px;
-  padding: 0 10px;
-  font-family: inherit;
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--dsw-alias-label-secondary);
-  background: var(--dsw-alias-bg-base);
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 999px;
-  cursor: pointer;
-  transition: background 120ms var(--ds-ease-in-out);
-}
-
-.inspectButton:hover {
-  background: var(--dsw-alias-interactive-bg-hover-solid);
-}
-
-.inspectButton:focus-visible {
-  outline: 1px solid var(--dsw-alias-state-business-primary);
-  outline-offset: 2px;
-}
-
 /* Narrow surfaces (the tab pane, via its container query): the tool rows
  * compress their right side instead of dropping content — facts truncate
  * (with an ellipsis) while the trailing badges stay reachable. */

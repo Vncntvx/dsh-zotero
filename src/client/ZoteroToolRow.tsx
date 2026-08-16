@@ -16,11 +16,7 @@
 
 import { useState, type KeyboardEvent, type ReactNode } from 'react'
 import clsx from 'clsx'
-import {
-  IconChevronDownOutline14,
-  IconInspectOutline12,
-  StateDot,
-} from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconChevronDownOutline14, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ZoteroRowState, ZoteroToolTone } from './presenters.ts'
 import css from './ZoteroToolRow.module.css'
 
@@ -43,8 +39,6 @@ export interface ZoteroToolRowProps {
   /** The failure's first line, shown in the error color on error rows. */
   readonly errorSummary?: string | null
   readonly expandable?: boolean
-  readonly inspect?: () => void
-  readonly inspectLabel: string
   readonly runningLabel: string
   readonly errorLabel: string
   readonly stoppedLabel: string
@@ -73,8 +67,6 @@ export function ZoteroToolRow(props: ZoteroToolRowProps) {
     facts = [],
     errorSummary,
     expandable = false,
-    inspect,
-    inspectLabel,
     runningLabel,
     errorLabel,
     stoppedLabel,
@@ -185,17 +177,7 @@ export function ZoteroToolRow(props: ZoteroToolRowProps) {
           <span className={css.actions}>{actions}</span>
         )}
       </div>
-      {open && (
-        <div className={css.bodyWrap}>
-          {children}
-          {inspect !== undefined && (
-            <button type="button" className={css.inspectButton} onClick={inspect}>
-              <IconInspectOutline12 />
-              {inspectLabel}
-            </button>
-          )}
-        </div>
-      )}
+      {open && <div className={css.bodyWrap}>{children}</div>}
     </div>
   )
 }

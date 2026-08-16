@@ -34,7 +34,6 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
   return {
     StateDot: ({ state }: { state: string }) => createElement('span', { 'data-dot': state }),
     IconChevronDownOutline14: icon('chevron-down'),
-    IconInspectOutline12: icon('inspect'),
     IconBrowseOutline16: icon('browse'),
     IconCopyOutline16: icon('copy'),
     IconSearchOutline16: icon('search'),
@@ -98,7 +97,6 @@ describe('ZoteroToolRow', () => {
         summary="Summary"
         icon={<span>i</span>}
         expandable
-        inspectLabel={t('inspectLabel')}
         runningLabel={t('checking')}
         errorLabel={t('statusUnavailable')}
         stoppedLabel={t('statusUnavailable')}
@@ -129,7 +127,6 @@ describe('ZoteroToolRow', () => {
         summary="S"
         icon={<span>i</span>}
         expandable={false}
-        inspectLabel="Inspect"
         runningLabel="Running"
         errorLabel="Error"
         stoppedLabel="Stopped"
@@ -147,7 +144,6 @@ describe('ZoteroToolRow', () => {
         summary="S"
         icon={<span>i</span>}
         expandable={false}
-        inspectLabel="Inspect"
         runningLabel="Running"
         errorLabel="Error"
         stoppedLabel="Stopped"
@@ -163,7 +159,6 @@ describe('ZoteroToolRow', () => {
         summary="S"
         icon={<span>i</span>}
         expandable
-        inspectLabel="Inspect"
         runningLabel="Running"
         errorLabel="Error"
         stoppedLabel="Stopped"
@@ -183,7 +178,6 @@ describe('ZoteroToolRow', () => {
         summary="S"
         icon={<span>i</span>}
         expandable={false}
-        inspectLabel="Inspect"
         runningLabel="Running"
         errorLabel="Error"
         stoppedLabel="Stopped"
@@ -193,28 +187,6 @@ describe('ZoteroToolRow', () => {
     expect(view.container.querySelector('[data-tool="zotero"]')?.getAttribute('aria-busy')).toBe(
       'true',
     )
-    view.unmount()
-  })
-
-  it('offers Inspect in the expanded body and reports the click', () => {
-    const inspect = vi.fn()
-    const view = render(
-      <ZoteroToolRow
-        state="ok"
-        title="T"
-        summary="S"
-        icon={<span>i</span>}
-        expandable
-        inspect={inspect}
-        inspectLabel={t('inspectLabel')}
-        runningLabel={t('checking')}
-        errorLabel={t('statusUnavailable')}
-        stoppedLabel={t('statusUnavailable')}
-      />,
-    )
-    fireEvent.click(screen.getByRole('button'))
-    fireEvent.click(screen.getByText(t('inspectLabel')).closest('button')!)
-    expect(inspect).toHaveBeenCalledTimes(1)
     view.unmount()
   })
 })

@@ -216,7 +216,6 @@ export function ZoteroItemsLens({ corpus, t, setDraft }: ZoteroItemsLensProps) {
             trailing={badges}
             actions={<RowActions item={item} t={t} setDraft={setDraft} />}
             expandable={hasDossierContent(item)}
-            inspectLabel={t('inspectLabel')}
             runningLabel={t('checking')}
             errorLabel={t('statusUnavailable')}
             stoppedLabel={t('statusUnavailable')}

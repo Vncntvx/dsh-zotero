@@ -292,7 +292,6 @@ export function ZoteroSearchRow({ block, t }: SharedProps) {
       facts={facts}
       errorSummary={errorSummaryOf(block)}
       expandable={state !== 'running' && (rows !== null || fullText !== null)}
-      inspectLabel={t('inspectLabel')}
       runningLabel={t('checking')}
       errorLabel={t('statusUnavailable')}
       stoppedLabel={t('statusUnavailable')}
@@ -375,7 +374,6 @@ export function ZoteroGetRow({ block, t }: SharedProps) {
       facts={facts}
       errorSummary={errorSummaryOf(block)}
       expandable={state !== 'running' && hasBody}
-      inspectLabel={t('inspectLabel')}
       runningLabel={t('checking')}
       errorLabel={t('statusUnavailable')}
       stoppedLabel={t('statusUnavailable')}
@@ -454,7 +452,6 @@ export function ZoteroRetrieveRow({ block, t }: SharedProps) {
       facts={facts}
       errorSummary={errorSummaryOf(block)}
       expandable={state !== 'running' && hasBody}
-      inspectLabel={t('inspectLabel')}
       runningLabel={t('checking')}
       errorLabel={t('statusUnavailable')}
       stoppedLabel={t('statusUnavailable')}
@@ -512,7 +509,6 @@ export function ZoteroAttachmentRow({ block, t }: SharedProps) {
       facts={facts}
       errorSummary={errorSummaryOf(block)}
       expandable={state !== 'running' && hasBody}
-      inspectLabel={t('inspectLabel')}
       runningLabel={t('checking')}
       errorLabel={t('statusUnavailable')}
       stoppedLabel={t('statusUnavailable')}
@@ -565,7 +561,6 @@ export function ZoteroExportRow({ block, t }: SharedProps) {
       facts={facts.filter((fact) => fact !== '')}
       errorSummary={errorSummaryOf(block)}
       expandable={state !== 'running' && text !== null}
-      inspectLabel={t('inspectLabel')}
       runningLabel={t('checking')}
       errorLabel={t('statusUnavailable')}
       stoppedLabel={t('statusUnavailable')}

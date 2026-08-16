@@ -27,7 +27,6 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
   return {
     StateDot: ({ state }: { state: string }) => createElement('span', { 'data-dot': state }),
     IconChevronDownOutline14: icon('chevron-down'),
-    IconInspectOutline12: icon('inspect'),
     IconBrowseOutline16: icon('browse'),
     IconCopyOutline16: icon('copy'),
     IconSearchOutline16: icon('search'),

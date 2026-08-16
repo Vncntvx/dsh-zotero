@@ -26,7 +26,6 @@ export type ZoteroLocaleKey =
   | 'copied'
   | 'checking'
   | 'statusUnavailable'
-  | 'inspectLabel'
   | 'referenceMismatch'
   | 'browse'
   | 'resultsCount'
@@ -175,7 +174,6 @@ export const en: Record<ZoteroLocaleKey, string> = {
   copied: 'Copied',
   checking: 'Checking…',
   statusUnavailable: 'Unavailable',
-  inspectLabel: 'Inspect',
   referenceMismatch: 'This reference belongs to another Zotero database. Search again.',
   browse: 'Browse',
   resultsCount: '{count} results',
@@ -321,7 +319,6 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   copied: '已复制',
   checking: '检查中…',
   statusUnavailable: '不可用',
-  inspectLabel: 'Inspect',
   referenceMismatch: '此 ref 属于另一个 Zotero 数据库，请重新搜索。',
   browse: '浏览',
   resultsCount: '{count} results',
