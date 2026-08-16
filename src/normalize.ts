@@ -27,14 +27,19 @@ import type {
   ZoteroSearchItem,
 } from './types.js'
 
-export { extractAttachmentKey, normalizeAttachmentRecord } from './attachments.js'
-
 function nonEmpty(value: string | undefined): string | undefined {
   return value !== undefined && value !== '' ? value : undefined
 }
 
 function asInteger(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isInteger(value) ? value : undefined
+}
+
+/** The publication year of a parsed date string (`YYYY-…`), or undefined. */
+function parsedYearOf(parsedDate: string | undefined): number | undefined {
+  return parsedDate !== undefined && /^\d{4}/.test(parsedDate)
+    ? Number(parsedDate.slice(0, 4))
+    : undefined
 }
 
 /**
@@ -103,8 +108,8 @@ export function normalizeSearchItem(json: unknown, serverId?: string): ZoteroSea
     creatorSummary: asString(meta?.creatorSummary) ?? '',
     itemType,
   }
-  if (parsedDate !== undefined && /^\d{4}/.test(parsedDate))
-    item.year = Number(parsedDate.slice(0, 4))
+  const year = parsedYearOf(parsedDate)
+  if (year !== undefined) item.year = year
   const parentKey = parentKeyOf(data)
   if (parentKey !== undefined) item.parentRef = formatRef(localRef('item', parentKey, serverId))
   if (attachmentKey !== undefined)
@@ -417,10 +422,7 @@ export function normalizeItemDetail(input: NormalizeItemDetailInput): ZoteroItem
   const doi = nonEmpty(asString(data?.DOI))
   const url = nonEmpty(asString(data?.url))
   const venue = normalizeVenue(data)
-  const year =
-    parsedDate !== undefined && /^\d{4}/.test(parsedDate)
-      ? Number(parsedDate.slice(0, 4))
-      : undefined
+  const year = parsedYearOf(parsedDate)
   const version = asInteger(record?.version)
   const tags = normalizeTags(data)
   const itemType = asString(data?.itemType) ?? asString(record?.itemType) ?? ''

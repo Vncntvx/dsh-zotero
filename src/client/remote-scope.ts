@@ -23,7 +23,11 @@ export type ZoteroRemoteFace = TypertRemoteNamespaceMap['zotero']
  * entry calls `connect()` after the Remote mount settles. Every write goes
  * out with the last known namespace revision; a refused write (validation
  * failure, moved namespace) reloads the Host view instead of resolving, so
- * the form's read-back reports it as a save that did not land.
+ * the form's read-back reports it as a save that did not land. Writes are
+ * immediate and carry the snapshot revision at call time; the interface
+ * contract's write-queue and latest-settlement rules are intentionally not
+ * implemented — the form's sequential save and the host's revision fencing
+ * make the final state converge to the Host truth.
  */
 export class RemoteScope implements SettingsScope<Record<string, unknown>> {
   private snapshot: SettingsScopeSnapshot<Record<string, unknown>> = {

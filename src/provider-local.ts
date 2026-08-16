@@ -35,7 +35,6 @@ import {
   collectionKeysOf,
   matchScopeName,
   nearScopeCandidates,
-  normalizeAttachmentRecord,
   normalizeItemDetail,
   normalizeScopeEntry,
   normalizeSearchItem,
@@ -46,7 +45,11 @@ import {
   type ScopeNameEntry,
   type ZoteroChildKind,
 } from './normalize.js'
-import { bestAttachmentFromLinks, selectAttachment } from './attachments.js'
+import {
+  bestAttachmentFromLinks,
+  normalizeAttachmentRecord,
+  selectAttachment,
+} from './attachments.js'
 import { formatRef, isRefString, localRef, parseRef, requireLocalRef } from './refs.js'
 import type {
   ZoteroAttachmentLocation,

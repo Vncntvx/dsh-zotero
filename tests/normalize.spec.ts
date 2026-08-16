@@ -1,9 +1,9 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { ZOTERO_UNEXPECTED, ZoteroError } from '../src/errors.js'
+import { extractAttachmentKey } from '../src/attachments.js'
 import {
   collectionKeysOf,
-  extractAttachmentKey,
   matchScopeName,
   nearScopeCandidates,
   normalizeAnnotationRecord,
