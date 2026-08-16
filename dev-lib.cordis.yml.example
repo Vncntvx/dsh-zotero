@@ -1,6 +1,10 @@
 # Hot-reload overlay for the npm-installed dsh. Use with:
-#   cd /Volumes/Work/deepseek-harness/dsh-zotero
+#   cd <checkout-root>/dsh-zotero
 #   dsh web --patch ./dev-lib.cordis.yml --port 3307
+#
+# Copy this file to dev-lib.cordis.yml and replace <checkout-root> with the
+# parent of this checkout (the deepseek-harness checkout), e.g.
+# /Volumes/Work/deepseek-harness.
 #
 # The production web profile disables the loader HMR plugin, so this
 # overlay re-enables it for the dev instance and points its base at this
@@ -20,10 +24,10 @@
 - id: hmr
   disabled: false
   config:
-    base: /Volumes/Work/deepseek-harness/dsh-zotero
+    base: <checkout-root>/dsh-zotero
     root:
       - .
 - insert:
     - id: zotero-dev
-      name: /Volumes/Work/deepseek-harness/dsh-zotero/lib/index.js
+      name: <checkout-root>/dsh-zotero/lib/index.js
       config: {}

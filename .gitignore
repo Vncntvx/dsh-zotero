@@ -21,6 +21,13 @@ yarn-error.log*
 .idea/
 .DS_Store
 
+# Local tool artifacts
+.zcode/
+
+# Local dev overlays carry absolute checkout paths; ship the templates instead
+dev.cordis.yml
+dev-lib.cordis.yml
+
 .npm-cache/
 coverage/
 

@@ -1,9 +1,0 @@
-# Local development overlay. Use with:
-#   pnpm dsh web --patch ./dsh-zotero/dev.cordis.yml
-#
-# The `name` must be an absolute path for local --patch overlays.
-# Replace this with your actual checkout path if it differs.
-- insert:
-    - id: zotero
-      name: '/Volumes/Work/deepseek-harness/dsh-zotero/src/index.ts'
-      config: {}

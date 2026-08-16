@@ -62,10 +62,11 @@ Daily host-half loop (in-process HMR, non-default port):
 ```sh
 npm run build          # once; also `pnpm run build` in the harness checkout once (source CLI)
 npm run dev &          # host half: tsc --watch → lib/
+cp dev-lib.cordis.yml.example dev-lib.cordis.yml   # then set <checkout-root> inside
 dsh web --patch ./dev-lib.cordis.yml --port 3307   # 3080 is the live GUI — never reuse it
 ```
 
-`dev-lib.cordis.yml` re-enables loader HMR (off in the production profile), disables the profile-installed row, and runs this checkout from `lib/`: src edits hot-swap in-process. Its `name`/`base` are absolute (the loader resolves relative names beside the profile dir) — adjust on a moved checkout. The overlay row is an absolute path, so it carries **no browser half** (that loads only for bare-package-name rows).
+`dev-lib.cordis.yml` re-enables loader HMR (off in the production profile), disables the profile-installed row, and runs this checkout from `lib/`: src edits hot-swap in-process. Its `name`/`base` are absolute (the loader resolves relative names beside the profile dir); the file is gitignored — regenerate it from `dev-lib.cordis.yml.example` and replace `<checkout-root>`. The overlay row is an absolute path, so it carries **no browser half** (that loads only for bare-package-name rows).
 
 Full plugin — the only flow that loads the browser half (settings card + Zotero tab): link this checkout into a scratch profile, launch the source CLI. Seed the scratch home with **both** files: credentials carry the keys, `settings.yaml` carries custom providers (opencode-go under `llm-pi-ai.providers`) — skip the latter and the UI shows only default DeepSeek even though the credentials are complete:
 
@@ -80,8 +81,9 @@ cd .. && pnpm dsh web --port 3307
 
 Verify: `curl -w '%{http_code}' -o /dev/null http://127.0.0.1:3307` → 200; `"$DSH_HOME"/profiles/web/package.json` lists `dsh-zotero` as a link dependency; `grep -c conversation.view lib/client.js` ≥ 1. Reusing a configured home as `DSH_HOME` skips the seeding. Browser-half iteration: `npm run dev:client` (esbuild --watch) → page refresh; both home files hot-reload without a restart.
 
-Host-only alternative (tsx loads `src/index.ts`, no browser half):
-`cd .. && pnpm dsh web --patch ./dsh-zotero/dev.cordis.yml --port <X>`.
+Host-only alternative (tsx loads `src/index.ts`, no browser half): copy
+`dev.cordis.yml.example` to `dev.cordis.yml` (set `<checkout-root>` inside),
+then run `cd .. && pnpm dsh web --patch ./dsh-zotero/dev.cordis.yml --port <X>`.
 
 ## Credentials
 

@@ -1,0 +1,11 @@
+# Local development overlay. Use with:
+#   pnpm dsh web --patch ./dsh-zotero/dev.cordis.yml
+#
+# Copy this file to dev.cordis.yml and replace <checkout-root> with the
+# parent of this checkout (the deepseek-harness checkout), e.g.
+# /Volumes/Work/deepseek-harness. The `name` must be an absolute path for
+# local --patch overlays.
+- insert:
+    - id: zotero
+      name: '<checkout-root>/dsh-zotero/src/index.ts'
+      config: {}
