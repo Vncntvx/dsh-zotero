@@ -64,6 +64,19 @@ describe('rankChunks', () => {
     expect(ranked.map((entry) => entry.index)).toEqual([0, 1, 2])
   })
 
+  it('prefers a rare query term over raw term-frequency counts', () => {
+    // `rare` appears in exactly one document (high idf), while `common`
+    // appears in both (low idf). A plain term-frequency ranking would put
+    // the four-occurrence document first; BM25's idf and length
+    // normalization put the short document with the rare term on top.
+    const ranked = rankChunks('rare common', [
+      { text: 'rare common', index: 0 },
+      { text: 'common common common common', index: 1 },
+    ])
+    expect(ranked.map((entry) => entry.index)).toEqual([0, 1])
+    expect(ranked[0]!.score).toBeGreaterThan(ranked[1]!.score)
+  })
+
   it('returns every chunk in original order with zero scores for an empty query', () => {
     const ranked = rankChunks('', CHUNKS)
     expect(ranked.map((entry) => entry.index)).toEqual([0, 1, 2, 3])

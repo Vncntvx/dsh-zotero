@@ -263,6 +263,22 @@ describe('normalizeVenue', () => {
     expect(normalizeVenue({ conferenceName: 'NeurIPS' })).toBe('NeurIPS')
     expect(normalizeVenue({})).toBeUndefined()
   })
+
+  it('prefers the earlier venue fields when several are present', () => {
+    // The priority order is Zotero's own: publicationTitle wins over the
+    // book-level and conference fields, proceedings over bookTitle. A
+    // reordering of the field list must change which one is reported.
+    expect(
+      normalizeVenue({
+        publicationTitle: 'ICML',
+        bookTitle: 'A Book',
+        conferenceName: 'NeurIPS',
+      }),
+    ).toBe('ICML')
+    expect(normalizeVenue({ proceedingsTitle: 'Proceedings', bookTitle: 'A Book' })).toBe(
+      'Proceedings',
+    )
+  })
 })
 
 describe('collectionKeysOf', () => {
@@ -370,6 +386,32 @@ describe('normalizeAnnotationRecord', () => {
       comment: undefined,
       color: undefined,
       pageLabel: undefined,
+    })
+  })
+
+  it('keeps empty-string optionals distinct from absent ones', () => {
+    // Zotero reports an empty annotationComment/annotationColor as '' rather
+    // than omitting the field; the record stays lossless by carrying them.
+    expect(
+      normalizeAnnotationRecord(
+        {
+          key: 'ANNO3333',
+          data: {
+            itemType: 'annotation',
+            annotationType: 'highlight',
+            annotationText: 'x',
+            annotationComment: '',
+            annotationColor: '',
+          },
+        },
+        undefined,
+      ),
+    ).toEqual({
+      ref: 'zotero://user/0/item/ANNO3333',
+      type: 'highlight',
+      text: 'x',
+      comment: '',
+      color: '',
     })
   })
 })

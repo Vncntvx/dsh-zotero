@@ -734,6 +734,42 @@ describe('buildCorpus attribution', () => {
     expect(corpus.searched).toBe(1)
     expect(corpus.items.map((item) => item.key)).toEqual([normalizeRefKey(b)])
   })
+
+  it('splits the search group when an identity field differs', () => {
+    const row = (ref: string) => ({ ref, title: 'T', creatorSummary: 'C', itemType: 'report' })
+    const first = 'zotero://user/0/item/AAAA0001'
+    const second = 'zotero://user/0/item/BBBB0002'
+    // Each pair differs in exactly one identity field; a differing field must
+    // start a fresh group whose rows become the found set. Dropping any of
+    // these fields from the identity would fold the pair and keep both rows.
+    const pairs: [string, string][] = [
+      ['{"query":"x","mode":"metadata"}', '{"query":"x","mode":"everything"}'],
+      ['{"query":"x","sort":"dateModified"}', '{"query":"x","sort":"title"}'],
+      ['{"query":"x","direction":"desc"}', '{"query":"x","direction":"asc"}'],
+      ['{"query":"x","limit":10}', '{"query":"x","limit":20}'],
+      ['{"query":"x","itemTypes":["note"]}', '{"query":"x","itemTypes":["journalArticle"]}'],
+    ]
+    for (const [argsA, argsB] of pairs) {
+      const corpus = buildCorpus(
+        asBlocks([
+          settled({
+            seq: 1,
+            callId: 'a',
+            call: { name: 'zotero_search', argsRaw: argsA },
+            meta: { returned: 1, displayed: 1, omitted: 0, items: [row(first)] },
+          }),
+          settled({
+            seq: 2,
+            callId: 'b',
+            call: { name: 'zotero_search', argsRaw: argsB },
+            meta: { returned: 1, displayed: 1, omitted: 0, items: [row(second)] },
+          }),
+        ]),
+      )
+      expect(corpus.searched, `${argsA} vs ${argsB}`).toBe(1)
+      expect(corpus.items.map((item) => item.key)).toEqual([normalizeRefKey(second)])
+    }
+  })
 })
 
 describe('lens and citation helpers', () => {

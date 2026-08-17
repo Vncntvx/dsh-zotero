@@ -85,6 +85,12 @@ Host-only alternative (tsx loads `src/index.ts`, no browser half): copy
 `dev.cordis.yml.example` to `dev.cordis.yml` (set `<checkout-root>` inside),
 then run `cd .. && pnpm dsh web --patch ./dsh-zotero/dev.cordis.yml --port <X>`.
 
+The DSH packages the dev launches above load from the parent pnpm workspace
+(currently `0.1.0-rc.3`), while typecheck/tests/build run against the rc.6
+versions installed in this repo's `node_modules` — an rc-level skew. The
+contract surface this plugin uses is stable across those versions; treat the
+tested version as authoritative whenever behavior differs.
+
 ## Credentials
 
 The default home already has `~/.dsh/.credentials.yaml` — nothing to do. A scratch `DSH_HOME`: `cp ~/.dsh/.credentials.yaml "$DSH_HOME/"` (hot-reloaded, no restart). Custom providers live in `settings.yaml`, not the credentials store — a scratch home needs both (see Local launch & dev). One-off: `DEEPSEEK_API_KEY=... dsh web`. Precedence: launch env

@@ -4,7 +4,7 @@
  *
  * The plugin must first be installed into a dsh profile:
  *
- *   npm_config_cache=<repo>/.npm-cache dsh plugin --profile <name> add ./dsh-zotero-0.1.0.tgz
+ *   npm_config_cache=<repo>/.npm-cache dsh plugin --profile <name> add ./dsh-zotero-<version>.tgz
  *   cd ~/.dsh/profiles/<name>
  *   node --input-type=module < /path/to/dsh-zotero/scripts/smoke.mjs
  *
