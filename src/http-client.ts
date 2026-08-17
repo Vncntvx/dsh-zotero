@@ -116,7 +116,7 @@ function translateHttpStatus(response: Response): never {
 async function readBody(response: Response, maxResponseBytes: number): Promise<string> {
   const reader = response.body?.getReader()
   if (reader === undefined) return ''
-  let text = ''
+  const parts: string[] = []
   let total = 0
   const decoder = new TextDecoder()
   for (;;) {
@@ -130,9 +130,11 @@ async function readBody(response: Response, maxResponseBytes: number): Promise<s
         ZOTERO_RESPONSE_TOO_LARGE,
       )
     }
-    text += decoder.decode(value, { stream: true })
+    parts.push(decoder.decode(value, { stream: true }))
   }
-  return text + decoder.decode()
+  // Concatenating the decoded chunks once avoids quadratic string copies on
+  // large bodies (the bound above is 16 MiB).
+  return parts.join('') + decoder.decode()
 }
 
 export class ZoteroHttpClient {
