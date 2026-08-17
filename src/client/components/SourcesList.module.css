@@ -347,3 +347,13 @@
   font-size: 12px;
   line-height: 18px;
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .chevron {
+    transition: none;
+  }
+
+  .lineAction {
+    transition: none;
+  }
+}

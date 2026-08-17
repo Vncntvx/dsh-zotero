@@ -1,8 +1,13 @@
-/** Locale bundles for the Zotero settings page. */
+/**
+ * Locale bundles for the Zotero plugin: the Settings card (fixed chrome,
+ * groups, and the field table) and the Sources panel. Both dictionaries are
+ * typed `Record<ZoteroLocaleKey, string>`, so the key sets cannot drift; the
+ * wording stays provable — no stage claims (精读/已引用) anywhere.
+ */
 
 import type { FieldKey, GroupKey } from './zotero-card-controller.ts'
 
-/** Locale keys the page renders: fixed chrome keys plus the field table's keys, labels, and groups. */
+/** Locale keys the plugin renders: settings chrome, field table keys, and panel copy. */
 export type ZoteroLocaleKey =
   | 'nav'
   | 'title'
@@ -25,101 +30,36 @@ export type ZoteroLocaleKey =
   | 'copied'
   | 'checking'
   | 'statusUnavailable'
-  | 'referenceMismatch'
-  | 'browse'
-  | 'resultsCount'
-  | 'moreOmitted'
-  | 'scopeLibraryMetadata'
-  | 'scopeLibraryEverything'
-  | 'scopeCollection'
-  | 'scopeSavedSearch'
-  | 'personalNotes'
-  | 'personalAnnotations'
-  | 'evidencePassages'
-  | 'evidenceSources'
-  | 'sourceAnnotation'
-  | 'sourceNote'
-  | 'sourceAbstract'
-  | 'sourceFulltext'
-  | 'pageLabel'
-  | 'truncatedMore'
-  | 'truncatedPreview'
-  | 'evidenceExpandLabel'
-  | 'evidenceCollapseLabel'
-  | 'localFile'
-  | 'linkedUrl'
-  | 'citationsCount'
-  | 'refsRequested'
-  | 'toolSearchTitle'
-  | 'toolGetTitle'
-  | 'toolRetrieveTitle'
-  | 'toolAttachmentTitle'
-  | 'toolExportTitle'
-  | 'tagSearch'
-  | 'tagGet'
-  | 'tagRetrieve'
-  | 'tagAttachment'
-  | 'tagExport'
-  | 'activityNote'
-  | 'noActivity'
-  | 'statusConnected'
+  | 'statusConnectedNote'
+  | 'detailsLabel'
   | 'apiVersionLabel'
   | 'schemaVersionLabel'
   | 'serverIdLabel'
   | 'diagnosisLabel'
   | 'refresh'
   | 'lastCheckedLabel'
-  | 'lensItems'
-  | 'lensCitations'
-  | 'lensActivity'
-  | 'funnelSearched'
-  | 'funnelRead'
-  | 'funnelCited'
-  | 'starterFind'
-  | 'starterCite'
-  | 'starterTidy'
-  | 'starterFindTemplate'
-  | 'starterCiteTemplate'
-  | 'starterTidyTemplate'
-  | 'itemsEmptyNote'
-  | 'itemsSourceNote'
-  | 'itemsProcessedNote'
-  | 'itemsSourceOmittedNote'
-  | 'badgeRead'
-  | 'badgeCited'
-  | 'badgePdf'
-  | 'copyRef'
-  | 'copyFullText'
-  | 'copyCite'
-  | 'askAboutItem'
-  | 'askTemplate'
-  | 'generateCitation'
-  | 'citeTemplate'
-  | 'exportsLabel'
-  | 'quickAccessLabel'
-  | 'noExportsHint'
-  | 'artifactExpandLabel'
-  | 'artifactCollapseLabel'
   | 'lensSources'
   | 'lensEvidence'
   | 'lensExports'
-  | 'statusConnectedNote'
-  | 'detailsLabel'
-  | 'countCandidates'
-  | 'countInspected'
-  | 'countEvidence'
-  | 'countExported'
   | 'filterAll'
   | 'filterEvidence'
   | 'filterExported'
   | 'filterAttachment'
   | 'filterFailed'
   | 'filterEmptyNote'
+  | 'countCandidates'
+  | 'countInspected'
+  | 'countEvidence'
+  | 'countExported'
   | 'sourcesScopeNote'
   | 'omittedRowsNote'
   | 'sourcesEmptyNote'
-  | 'evidenceEmptyNote'
-  | 'exportsEmptyNote'
+  | 'noSources'
+  | 'fromSearches'
+  | 'searchFrom'
+  | 'searchFromBrowse'
+  | 'evidenceInDetail'
+  | 'exportsInDetail'
   | 'provenanceMismatch'
   | 'attachmentBadge'
   | 'evidenceBadge'
@@ -127,46 +67,58 @@ export type ZoteroLocaleKey =
   | 'failedBadge'
   | 'runningBadge'
   | 'stoppedBadge'
-  | 'fromSearches'
-  | 'searchFrom'
-  | 'searchFromBrowse'
-  | 'evidenceInDetail'
-  | 'exportsInDetail'
+  | 'badgePdf'
   | 'bestAttachmentLabel'
-  | 'noSources'
+  | 'localFile'
+  | 'linkedUrl'
+  | 'copyRef'
+  | 'copyExport'
+  | 'copyCite'
+  | 'askAboutItem'
+  | 'askTemplate'
+  | 'citeTemplate'
+  | 'exportCitation'
+  | 'sourceAnnotation'
+  | 'sourceNote'
+  | 'sourceAbstract'
+  | 'sourceFulltext'
+  | 'pageLabel'
+  | 'truncatedPreview'
+  | 'retrievedMultiple'
+  | 'coverageLabel'
+  | 'coveragePages'
+  | 'coverageChars'
+  | 'coverageComplete'
+  | 'coverageIncomplete'
+  | 'budgetLimitedNote'
+  | 'availReturned'
+  | 'availUnavailable'
+  | 'availNoMatch'
+  | 'evidenceScopeNote'
+  | 'evidenceEmptyNote'
+  | 'exportsEmptyNote'
+  | 'exportsIncompleteNote'
+  | 'exportsStaticNote'
+  | 'formatCitation'
+  | 'formatBibliography'
+  | 'exportRefCount'
+  | 'exportRefsOmitted'
+  | 'openInZotero'
+  | 'openPdf'
+  | 'openAnnotation'
+  | 'instanceUnverified'
+  | 'starterFind'
+  | 'starterFindTemplate'
   | 'starterCompare'
   | 'starterCompareTemplate'
   | 'starterEvidence'
   | 'starterEvidenceTemplate'
   | 'starterExportSelected'
   | 'starterExportSelectedTemplate'
-  | 'coverageLabel'
-  | 'coveragePages'
-  | 'coverageChars'
-  | 'coverageComplete'
-  | 'coverageIncomplete'
-  | 'availReturned'
-  | 'availUnavailable'
-  | 'availNoMatch'
-  | 'budgetLimitedNote'
-  | 'retrievedMultiple'
-  | 'evidenceScopeNote'
-  | 'openInZotero'
-  | 'openPdf'
-  | 'openAnnotation'
-  | 'instanceUnverified'
-  | 'formatCitation'
-  | 'formatBibliography'
-  | 'exportRefCount'
-  | 'exportRefsOmitted'
-  | 'copyExport'
-  | 'exportsStaticNote'
-  | 'exportsIncompleteNote'
-  | 'exportCitation'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
-    /** Zotero settings page copy. */
+    /** Zotero plugin copy. */
     zotero: ZoteroLocaleKey
   }
 }
@@ -229,114 +181,45 @@ export const en: Record<ZoteroLocaleKey, string> = {
   defaultStyleHint: 'CSL style id for citation and bibliography formats (e.g. apa).',
   defaultLocale: 'Default locale',
   defaultLocaleHint: 'CSL locale for citation and bibliography formats (e.g. en-US).',
-  groupWeb: 'Web view',
-  webEnabled: 'Zotero conversation tab',
+  groupWeb: 'Sources panel',
+  webEnabled: 'Zotero Sources tab',
   webEnabledHint:
-    'Shows a dedicated Zotero tab at the top of conversations (items, citations, activity). Turning it off hides the tab right away.',
+    'Shows a dedicated Zotero Sources tab at the top of conversations (sources, evidence, exports). Turning it off hides the tab right away.',
   copy: 'Copy',
   copied: 'Copied',
   checking: 'Checking…',
   statusUnavailable: 'Unavailable',
-  referenceMismatch: 'This reference belongs to another Zotero database. Search again.',
-  browse: 'Browse',
-  resultsCount: '{count} results',
-  moreOmitted: '{count} more in Inspect',
-  scopeLibraryMetadata: 'Personal library · Metadata',
-  scopeLibraryEverything: 'Personal library · Everything',
-  scopeCollection: 'Collection · {name}',
-  scopeSavedSearch: 'Saved search · {name}',
-  personalNotes: 'Personal notes',
-  personalAnnotations: 'Personal annotations',
-  evidencePassages: '{count} evidence passages',
-  evidenceSources: 'sources: {sources}',
-  sourceAnnotation: 'Annotation',
-  sourceNote: 'Note',
-  sourceAbstract: 'Abstract',
-  sourceFulltext: 'Full text',
-  pageLabel: 'p.{label}',
-  truncatedMore: 'more omitted',
-  truncatedPreview: '(truncated)',
-  evidenceExpandLabel: 'Expand preview',
-  evidenceCollapseLabel: 'Collapse preview',
-  localFile: 'Local file',
-  linkedUrl: 'Linked URL',
-  citationsCount: '{count} citations',
-  refsRequested: '{count} refs',
-  toolSearchTitle: 'Search Zotero library',
-  toolGetTitle: 'Read Zotero item',
-  toolRetrieveTitle: 'Finding evidence',
-  toolAttachmentTitle: 'Resolve Zotero attachment',
-  toolExportTitle: 'Export Zotero citations',
-  tagSearch: 'SEARCH',
-  tagGet: 'DETAIL',
-  tagRetrieve: 'EVIDENCE',
-  tagAttachment: 'FILE',
-  tagExport: 'EXPORT',
-  activityNote: 'The session made {count} Zotero calls.',
-  noActivity: 'No Zotero tool calls in this session yet.',
-  statusConnected: 'Connected',
+  statusConnectedNote: 'Connected to Zotero',
+  detailsLabel: 'Diagnostics',
   apiVersionLabel: 'API version',
   schemaVersionLabel: 'Schema version',
   serverIdLabel: 'Server ID',
   diagnosisLabel: 'Diagnosis',
   refresh: 'Refresh',
   lastCheckedLabel: 'Last checked',
-  lensItems: 'Items',
-  lensCitations: 'Citations',
-  lensActivity: 'Activity',
-  funnelSearched: 'Searched {count}',
-  funnelRead: 'Read {count}',
-  funnelCited: 'Cited {count}',
-  starterFind: 'Find literature…',
-  starterCite: 'Citations (LaTeX)…',
-  starterTidy: 'Tidy my library…',
-  starterFindTemplate: 'Search my Zotero library for literature on: ',
-  starterCiteTemplate:
-    'Export the following items from my Zotero library as BibTeX for LaTeX citations: ',
-  starterTidyTemplate:
-    'Review my Zotero library and list items with missing metadata or broken attachments: ',
-  itemsEmptyNote: 'No itemized literature in this session yet.',
-  itemsSourceNote: 'Searches in this session returned {count} results; all are listed below.',
-  itemsSourceOmittedNote:
-    'Searches in this session returned {count} results; the first {shown} are listed.',
-  itemsProcessedNote: 'Papers this session read, cited, or resolved an attachment for.',
-  badgeRead: 'Read',
-  badgeCited: 'Cited',
-  badgePdf: 'PDF',
-  copyRef: 'Copy ref',
-  copyFullText: 'Copy full text',
-  copyCite: '\\cite{…}',
-  askAboutItem: 'Ask about this',
-  askTemplate: 'About this item ({ref}): ',
-  generateCitation: 'Generate citation',
-  citeTemplate: 'Export this item from Zotero as BibTeX: {ref}',
-  exportsLabel: 'Exported citations',
-  quickAccessLabel: 'Quick access',
-  noExportsHint:
-    'No export artifacts in this session yet. Ask the agent to export selected items as BibTeX or CSL citations.',
-  artifactExpandLabel: 'Expand body',
-  artifactCollapseLabel: 'Collapse body',
   lensSources: 'Sources',
   lensEvidence: 'Evidence',
   lensExports: 'Exports',
-  statusConnectedNote: 'Connected to Zotero',
-  detailsLabel: 'Diagnostics',
-  countCandidates: '{count} candidates',
-  countInspected: '{count} inspected',
-  countEvidence: '{count} with evidence',
-  countExported: '{count} exported',
   filterAll: 'All',
   filterEvidence: 'With evidence',
   filterExported: 'Exported',
   filterAttachment: 'With attachment',
   filterFailed: 'Failed calls',
   filterEmptyNote: 'No sources match this filter.',
+  countCandidates: '{count} candidates',
+  countInspected: '{count} inspected',
+  countEvidence: '{count} with evidence',
+  countExported: '{count} exported',
   sourcesScopeNote:
     "A snapshot of this session's Zotero sources — hits from this session's searches and direct references, not a full library browser.",
   omittedRowsNote: '{count} more search results are not listed individually.',
   sourcesEmptyNote: 'No usable sources in this session yet.',
-  evidenceEmptyNote: 'No evidence gathered in this session yet.',
-  exportsEmptyNote: 'No successful exports in this session yet.',
+  noSources: 'No Zotero sources in this session yet.',
+  fromSearches: "From this session's searches",
+  searchFrom: 'Search "{query}"',
+  searchFromBrowse: 'Browse search',
+  evidenceInDetail: '{count} evidence passages (see Evidence)',
+  exportsInDetail: '{count} exports (see Exports)',
   provenanceMismatch: 'Belongs to a different Zotero database',
   attachmentBadge: 'Attachment',
   evidenceBadge: '{count} passages',
@@ -344,13 +227,50 @@ export const en: Record<ZoteroLocaleKey, string> = {
   failedBadge: '{count} failed',
   runningBadge: '{count} running',
   stoppedBadge: '{count} stopped',
-  fromSearches: "From this session's searches",
-  searchFrom: 'Search "{query}"',
-  searchFromBrowse: 'Browse search',
-  evidenceInDetail: '{count} evidence passages (see Evidence)',
-  exportsInDetail: '{count} exports (see Exports)',
+  badgePdf: 'PDF',
   bestAttachmentLabel: 'Best attachment',
-  noSources: 'No Zotero sources in this session yet.',
+  localFile: 'Local file',
+  linkedUrl: 'Linked URL',
+  copyRef: 'Copy ref',
+  copyExport: 'Copy export',
+  copyCite: '\\cite{…}',
+  askAboutItem: 'Ask about this',
+  askTemplate: 'About this item ({ref}): ',
+  citeTemplate: 'Export this item from Zotero as BibTeX: {ref}',
+  exportCitation: 'Export citation',
+  sourceAnnotation: 'Annotation',
+  sourceNote: 'Note',
+  sourceAbstract: 'Abstract',
+  sourceFulltext: 'Full text',
+  pageLabel: 'p.{label}',
+  truncatedPreview: '(truncated)',
+  retrievedMultiple: 'gathered across {count} retrieves',
+  coverageLabel: 'Indexing coverage',
+  coveragePages: '{indexed}/{total} pages',
+  coverageChars: '{indexed}/{total} chars',
+  coverageComplete: ' · complete',
+  coverageIncomplete: ' · incomplete',
+  budgetLimitedNote: 'Results were limited by the global budget.',
+  availReturned: '{count} matching passages',
+  availUnavailable: 'unavailable',
+  availNoMatch: 'no matching passages',
+  evidenceScopeNote:
+    'Evidence this session gathered, grouped by source; whether the final answer used it is not tracked.',
+  evidenceEmptyNote: 'No evidence gathered in this session yet.',
+  exportsEmptyNote: 'No successful exports in this session yet.',
+  exportsIncompleteNote: 'Exports that did not complete',
+  exportsStaticNote:
+    'Static exports are not inserted or updated in Word, Google Docs, or LibreOffice documents.',
+  formatCitation: 'Citations',
+  formatBibliography: 'Bibliography',
+  exportRefCount: '{count} refs',
+  exportRefsOmitted: '{count} more not listed',
+  openInZotero: 'Open in Zotero',
+  openPdf: 'Open PDF',
+  openAnnotation: 'Open annotation',
+  instanceUnverified: 'cannot verify the current Zotero instance',
+  starterFind: 'Find literature…',
+  starterFindTemplate: 'Search my Zotero library for literature on: ',
   starterCompare: 'Compare selected papers…',
   starterCompareTemplate: 'Compare the following Zotero papers: ',
   starterEvidence: 'Find evidence in annotations and notes…',
@@ -358,31 +278,6 @@ export const en: Record<ZoteroLocaleKey, string> = {
     "Find evidence in this paper's annotations and notes for the following question: ",
   starterExportSelected: 'Export citations for selected items…',
   starterExportSelectedTemplate: 'Export these items from my Zotero library as citations: ',
-  coverageLabel: 'Indexing coverage',
-  coveragePages: '{indexed}/{total} pages',
-  coverageChars: '{indexed}/{total} chars',
-  coverageComplete: ' · complete',
-  coverageIncomplete: ' · incomplete',
-  availReturned: '{count} matching passages',
-  availUnavailable: 'unavailable',
-  availNoMatch: 'no matching passages',
-  budgetLimitedNote: 'Results were limited by the global budget.',
-  retrievedMultiple: 'gathered across {count} retrieves',
-  evidenceScopeNote:
-    'Evidence this session gathered, grouped by source; whether the final answer used it is not tracked.',
-  openInZotero: 'Open in Zotero',
-  openPdf: 'Open PDF',
-  openAnnotation: 'Open annotation',
-  instanceUnverified: 'cannot verify the current Zotero instance',
-  formatCitation: 'Citations',
-  formatBibliography: 'Bibliography',
-  exportRefCount: '{count} refs',
-  exportRefsOmitted: '{count} more not listed',
-  copyExport: 'Copy export',
-  exportsStaticNote:
-    'Static exports are not inserted or updated in Word, Google Docs, or LibreOffice documents.',
-  exportsIncompleteNote: 'Exports that did not complete',
-  exportCitation: 'Export citation',
 }
 
 /** Simplified Chinese copy. */
@@ -443,108 +338,43 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   defaultStyleHint: 'citation/bibliography 格式的 CSL 样式 id（如 apa）。',
   defaultLocale: '默认区域设置',
   defaultLocaleHint: 'citation/bibliography 格式的 CSL locale（如 en-US）。',
-  groupWeb: 'Web 视图',
-  webEnabled: 'Zotero 会话标签页',
-  webEnabledHint: '在会话顶部显示 Zotero 专属标签页，包含文献、引用与活动；关闭后标签页立即隐藏。',
+  groupWeb: '来源面板',
+  webEnabled: 'Zotero 来源标签页',
+  webEnabledHint: '在会话顶部显示 Zotero 来源标签页（来源、证据、导出）；关闭后标签页立即隐藏。',
   copy: '复制',
   copied: '已复制',
   checking: '检查中…',
   statusUnavailable: '不可用',
-  referenceMismatch: '此 ref 属于另一个 Zotero 数据库，请重新搜索。',
-  browse: '浏览',
-  resultsCount: '{count} results',
-  moreOmitted: '另有 {count} 条，见 Inspect',
-  scopeLibraryMetadata: 'Personal library · Metadata',
-  scopeLibraryEverything: 'Personal library · Everything',
-  scopeCollection: 'Collection · {name}',
-  scopeSavedSearch: 'Saved search · {name}',
-  personalNotes: '个人笔记',
-  personalAnnotations: '个人批注',
-  evidencePassages: '{count} evidence passages',
-  evidenceSources: 'sources: {sources}',
-  sourceAnnotation: '批注',
-  sourceNote: '笔记',
-  sourceAbstract: '摘要',
-  sourceFulltext: '全文',
-  pageLabel: '第{label}页',
-  truncatedMore: '另有省略',
-  truncatedPreview: '(截断)',
-  evidenceExpandLabel: '展开预览',
-  evidenceCollapseLabel: '收起预览',
-  localFile: 'Local file',
-  linkedUrl: 'Linked URL',
-  citationsCount: '{count} citations',
-  refsRequested: '{count} refs',
-  toolSearchTitle: 'Search Zotero library',
-  toolGetTitle: 'Read Zotero item',
-  toolRetrieveTitle: 'Finding evidence',
-  toolAttachmentTitle: 'Resolve Zotero attachment',
-  toolExportTitle: 'Export Zotero citations',
-  tagSearch: '检索',
-  tagGet: '详情',
-  tagRetrieve: '证据',
-  tagAttachment: '附件',
-  tagExport: '导出',
-  activityNote: '本会话共 {count} 次 Zotero 调用。',
-  noActivity: '本会话还没有 Zotero 工具调用。',
-  statusConnected: '已连接',
+  statusConnectedNote: '已连接到 Zotero',
+  detailsLabel: '诊断详情',
   apiVersionLabel: 'API 版本',
   schemaVersionLabel: 'Schema 版本',
   serverIdLabel: 'Server ID',
   diagnosisLabel: '诊断',
   refresh: '刷新',
   lastCheckedLabel: '上次检查',
-  lensItems: '文献',
-  lensCitations: '引用',
-  lensActivity: '活动',
-  funnelSearched: '检索 {count}',
-  funnelRead: '精读 {count}',
-  funnelCited: '引用 {count}',
-  starterFind: '找文献…',
-  starterCite: '查引用（LaTeX）…',
-  starterTidy: '整理我的库…',
-  starterFindTemplate: '帮我在 Zotero 文献库里检索这个主题的文献：',
-  starterCiteTemplate: '把下面几篇从我的 Zotero 库导出为 BibTeX，用于 LaTeX 引用：',
-  starterTidyTemplate: '帮我检查 Zotero 库，列出元数据缺失或附件有问题的条目：',
-  itemsEmptyNote: '本会话还没有可按篇展示的文献结果。',
-  itemsSourceNote: '本会话检索命中 {count} 条，以下全部列出。',
-  itemsSourceOmittedNote: '本会话检索命中 {count} 条，此处列出前 {shown} 条。',
-  itemsProcessedNote: '本会话精读、引用或查过附件的文献。',
-  badgeRead: '精读',
-  badgeCited: '引用',
-  badgePdf: 'PDF',
-  copyRef: '复制 ref',
-  copyFullText: '复制全文',
-  copyCite: '\\cite{…}',
-  askAboutItem: '问这篇',
-  askTemplate: '关于这篇文献（{ref}）：',
-  generateCitation: '生成引用',
-  citeTemplate: '把这篇文献从 Zotero 导出为 BibTeX：{ref}',
-  exportsLabel: '本会话导出的引用',
-  quickAccessLabel: '快速取用',
-  noExportsHint: '本会话还没有导出产物。可以让 agent 把选中的文献导出为 BibTeX 或 CSL 引用。',
-  artifactExpandLabel: '展开全文',
-  artifactCollapseLabel: '收起全文',
   lensSources: '来源',
   lensEvidence: '证据',
   lensExports: '导出',
-  statusConnectedNote: '已连接到 Zotero',
-  detailsLabel: '诊断详情',
-  countCandidates: '候选 {count}',
-  countInspected: '查看详情 {count}',
-  countEvidence: '取得证据 {count}',
-  countExported: '已导出 {count}',
   filterAll: '全部',
   filterEvidence: '有证据',
   filterExported: '已导出',
   filterAttachment: '有附件',
   filterFailed: '操作失败',
   filterEmptyNote: '这个筛选条件下没有文献。',
+  countCandidates: '候选 {count}',
+  countInspected: '查看详情 {count}',
+  countEvidence: '取得证据 {count}',
+  countExported: '已导出 {count}',
   sourcesScopeNote: '本会话的 Zotero 来源快照：来自本会话的检索与直接引用，不是完整文献库。',
   omittedRowsNote: '另有 {count} 条检索结果未逐条列出。',
   sourcesEmptyNote: '本会话还没有可展示的文献来源。',
-  evidenceEmptyNote: '本会话还没有取得证据。',
-  exportsEmptyNote: '本会话还没有成功导出。',
+  noSources: '本会话还没有 Zotero 来源。',
+  fromSearches: '来自本会话的检索',
+  searchFrom: '搜索 "{query}"',
+  searchFromBrowse: '浏览检索',
+  evidenceInDetail: '证据 {count} 条（见证据页）',
+  exportsInDetail: '导出 {count} 次（见导出页）',
   provenanceMismatch: '属于另一个 Zotero 数据库',
   attachmentBadge: '附件',
   evidenceBadge: '证据 {count}',
@@ -552,40 +382,52 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   failedBadge: '失败 {count}',
   runningBadge: '进行中 {count}',
   stoppedBadge: '已停止 {count}',
-  fromSearches: '来自本会话的检索',
-  searchFrom: '搜索 "{query}"',
-  searchFromBrowse: '浏览检索',
-  evidenceInDetail: '证据 {count} 条（见证据页）',
-  exportsInDetail: '导出 {count} 次（见导出页）',
+  badgePdf: 'PDF',
   bestAttachmentLabel: '最佳附件',
-  noSources: '本会话还没有 Zotero 来源。',
+  localFile: '本地文件',
+  linkedUrl: '链接地址',
+  copyRef: '复制 ref',
+  copyExport: '复制导出内容',
+  copyCite: '\\cite{…}',
+  askAboutItem: '问这篇',
+  askTemplate: '关于这篇文献（{ref}）：',
+  citeTemplate: '把这篇文献从 Zotero 导出为 BibTeX：{ref}',
+  exportCitation: '导出引用',
+  sourceAnnotation: '批注',
+  sourceNote: '笔记',
+  sourceAbstract: '摘要',
+  sourceFulltext: '全文',
+  pageLabel: '第{label}页',
+  truncatedPreview: '(截断)',
+  retrievedMultiple: '经 {count} 次检索取得',
+  coverageLabel: '索引覆盖',
+  coveragePages: '{indexed}/{total} 页',
+  coverageChars: '{indexed}/{total} 字符',
+  coverageComplete: ' · 已完整',
+  coverageIncomplete: ' · 未完整',
+  budgetLimitedNote: '结果受全局预算限制，另有省略。',
+  availReturned: '返回 {count} 条匹配',
+  availUnavailable: '该来源不可用',
+  availNoMatch: '没有返回匹配',
+  evidenceScopeNote: '本会话取得的证据，按文献汇总；不能确定这些内容被用于最终回答。',
+  evidenceEmptyNote: '本会话还没有取得证据。',
+  exportsEmptyNote: '本会话还没有成功导出。',
+  exportsIncompleteNote: '未完成的导出操作',
+  exportsStaticNote: '静态导出不会插入或更新 Word、Google Docs、LibreOffice 文档。',
+  formatCitation: '引文',
+  formatBibliography: '参考文献表',
+  exportRefCount: '{count} 条文献',
+  exportRefsOmitted: '另有 {count} 条未列出',
+  openInZotero: '在 Zotero 中打开',
+  openPdf: '打开 PDF',
+  openAnnotation: '打开批注',
+  instanceUnverified: '无法验证当前 Zotero 实例',
+  starterFind: '找文献…',
+  starterFindTemplate: '帮我在 Zotero 文献库里检索这个主题的文献：',
   starterCompare: '比较选中的文献…',
   starterCompareTemplate: '比较下面几篇 Zotero 文献：',
   starterEvidence: '从批注和笔记中找证据…',
   starterEvidenceTemplate: '在这篇文献的批注和笔记中找证据，问题是：',
   starterExportSelected: '导出选中条目的引用…',
   starterExportSelectedTemplate: '把下面几篇从我的 Zotero 库导出为引用：',
-  coverageLabel: '索引覆盖',
-  coveragePages: '{indexed}/{total} 页',
-  coverageChars: '{indexed}/{total} 字符',
-  coverageComplete: ' · 已完整',
-  coverageIncomplete: ' · 未完整',
-  availReturned: '返回 {count} 条匹配',
-  availUnavailable: '该来源不可用',
-  availNoMatch: '没有返回匹配',
-  budgetLimitedNote: '结果受全局预算限制，另有省略。',
-  retrievedMultiple: '经 {count} 次检索取得',
-  evidenceScopeNote: '本会话取得的证据，按文献汇总；不能确定这些内容被用于最终回答。',
-  openInZotero: '在 Zotero 中打开',
-  openPdf: '打开 PDF',
-  openAnnotation: '打开批注',
-  instanceUnverified: '无法验证当前 Zotero 实例',
-  formatCitation: '引文',
-  formatBibliography: '参考文献表',
-  exportRefCount: '{count} 条文献',
-  exportRefsOmitted: '另有 {count} 条未列出',
-  copyExport: '复制导出内容',
-  exportsStaticNote: '静态导出不会插入或更新 Word、Google Docs、LibreOffice 文档。',
-  exportsIncompleteNote: '未完成的导出操作',
-  exportCitation: '导出引用',
 }
