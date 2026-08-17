@@ -168,8 +168,10 @@ export function registerRetrieveTool(ctx: Context, service: ZoteroService): void
       output: {
         schema: RETRIEVE_OUTPUT_SCHEMA,
         render: renderRetrieve,
-        presentationMeta: (_args, value) =>
-          boundedPresentationMeta(projectRetrieveMeta(value), ['items']),
+        presentationMeta: (args, value) =>
+          boundedPresentationMeta(projectRetrieveMeta(value, args.sources ?? ALL_SOURCES), [
+            'items',
+          ]),
       },
       presentCall: (args) => ({
         card: 'generic',

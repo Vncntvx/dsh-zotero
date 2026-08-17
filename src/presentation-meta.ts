@@ -12,7 +12,7 @@
  */
 
 import type { JsonValue } from '@deepseek-ai/dsh-tools'
-import type { ZoteroEvidenceSource } from './types.js'
+import type { ZoteroCoverage, ZoteroEvidenceSource } from './types.js'
 
 /** UTF-8 byte budget for one tool's presentation meta. */
 export const MAX_PRESENTATION_META_BYTES = 8192
@@ -30,6 +30,8 @@ export const MAX_PRESENTATION_GET_VENUE_CHARS = 200
 export const MAX_PRESENTATION_PREVIEW_RECORDS = 2
 export const MAX_PRESENTATION_EVIDENCE_CHARS = 400
 export const MAX_PRESENTATION_EVIDENCE_PASSAGES = 4
+/** Bounded export-ref entries the projection itemizes; the rest count into `refsOmitted`. */
+export const MAX_PRESENTATION_EXPORT_REFS = 20
 
 /** The search projection's row shape (subset of the tool output record). */
 export interface SearchRowInput {
@@ -38,6 +40,8 @@ export interface SearchRowInput {
   readonly creatorSummary: string
   readonly year?: number
   readonly itemType: string
+  /** Zotero's own attachment selection for the row; the open-PDF deep-link key. */
+  readonly bestAttachmentRef?: string
 }
 
 /** The canonical search output the projector reads. */
@@ -60,6 +64,8 @@ export interface ZoteroSearchPresentationRow {
   readonly creatorSummary: string
   readonly year?: number
   readonly itemType: string
+  /** Zotero's own attachment selection for the row; the open-PDF deep-link key. */
+  readonly bestAttachmentRef?: string
 }
 
 export interface ZoteroSearchPresentationMeta {
@@ -141,10 +147,14 @@ export interface ZoteroGetPresentationMeta {
   readonly venue?: string
   /** The item's own type, so the corpus can keep notes out of the target rule. */
   readonly itemType?: string
+  /** The item's own ref, so the Sources panel can attribute the detail directly. */
+  readonly ref?: string
   readonly notes?: ZoteroChildCount
   readonly annotations?: ZoteroChildCount
   readonly attachments?: ZoteroChildCount
   readonly bestAttachmentContentType?: string
+  /** Zotero's attachment selection with its ref (the open-PDF deep-link key). */
+  readonly bestAttachment?: { readonly ref?: string; readonly contentType: string }
   readonly notesPreview: ZoteroChildPreview[]
   readonly annotationsPreview: ZoteroChildPreview[]
 }
@@ -158,12 +168,25 @@ export interface ZoteroEvidencePresentationItem {
   readonly pageLabel?: string
 }
 
+/** Per-source availability facts: provable from the canonical result alone. */
+export interface ZoteroSourceAvailabilityView {
+  readonly requested: boolean
+  readonly returnedPassages: number
+  readonly unavailable: boolean
+}
+
 export interface ZoteroRetrievePresentationMeta {
   readonly count: number
   readonly sources: ZoteroEvidenceSource[]
   readonly truncated: boolean
   readonly sourcesSkipped: ZoteroEvidenceSource[]
   readonly items: ZoteroEvidencePresentationItem[]
+  /** The full-text attachment the retrieval read (the open-PDF deep-link key). */
+  readonly attachmentRef?: string
+  /** Full-text indexing coverage as reported by Zotero. */
+  readonly coverage?: ZoteroCoverage
+  /** Per-source availability facts, keyed by the requested source names. */
+  readonly sourceAvailability: Record<string, ZoteroSourceAvailabilityView>
 }
 
 /** The retrieval facts the projection reads (the schema-inferred output satisfies this). */
@@ -179,12 +202,18 @@ export interface RetrieveProjectionInput {
   }>
   readonly truncated: boolean
   readonly sourcesSkipped: readonly string[]
+  /** The full-text attachment the retrieval read, when one exists. */
+  readonly attachmentRef?: string
+  /** Full-text indexing coverage as reported by Zotero. */
+  readonly coverage?: ZoteroCoverage
 }
 
 export interface ZoteroAttachmentPresentationMeta {
   readonly kind: 'file' | 'url'
   readonly title: string
   readonly contentType: string
+  /** The resolved attachment's own ref (the open-PDF deep-link key). */
+  readonly ref?: string
   readonly path?: string
   readonly url?: string
 }
@@ -196,6 +225,10 @@ export interface ZoteroExportPresentationMeta {
   readonly count?: number
   readonly style?: string
   readonly locale?: string
+  /** The bounded exported ref list (first {@link MAX_PRESENTATION_EXPORT_REFS}). */
+  readonly refs: string[]
+  /** Exported refs beyond the bounded list. */
+  readonly refsOmitted: number
 }
 
 /** The canonical attachment output the projector reads (discriminated on `kind`). */
@@ -253,6 +286,9 @@ export function projectSearchMeta(value: SearchProjectionInput): ZoteroSearchPre
       creatorSummary: truncateChars(item.creatorSummary, MAX_PRESENTATION_SEARCH_CREATOR_CHARS),
       ...(item.year === undefined ? {} : { year: item.year }),
       itemType: item.itemType,
+      ...(item.bestAttachmentRef === undefined
+        ? {}
+        : { bestAttachmentRef: item.bestAttachmentRef }),
     }
     const rowBytes = Buffer.byteLength(JSON.stringify(row), 'utf8')
     // The first row always fits; later rows stop once the allowance is spent.
@@ -295,6 +331,7 @@ export function projectGetMeta(value: GetProjectionInput): ZoteroGetPresentation
     creators: truncateChars(value.creators.join('; '), MAX_PRESENTATION_GET_CREATORS_CHARS),
     ...(value.year === undefined ? {} : { year: value.year }),
     ...(value.itemType === undefined ? {} : { itemType: value.itemType }),
+    ...(value.ref === undefined ? {} : { ref: value.ref }),
     ...(value.venue === undefined
       ? {}
       : { venue: truncateChars(value.venue, MAX_PRESENTATION_GET_VENUE_CHARS) }),
@@ -309,7 +346,13 @@ export function projectGetMeta(value: GetProjectionInput): ZoteroGetPresentation
       : { attachments: { total: value.attachments.total, returned: value.attachments.returned } }),
     ...(value.bestAttachment === undefined
       ? {}
-      : { bestAttachmentContentType: value.bestAttachment.contentType }),
+      : {
+          bestAttachmentContentType: value.bestAttachment.contentType,
+          bestAttachment: {
+            contentType: value.bestAttachment.contentType,
+            ...(value.bestAttachment.ref === undefined ? {} : { ref: value.bestAttachment.ref }),
+          },
+        }),
     notesPreview: value.notes === undefined ? [] : childPreviews(value.notes.items),
     annotationsPreview:
       value.annotations === undefined
@@ -325,12 +368,17 @@ export function projectGetMeta(value: GetProjectionInput): ZoteroGetPresentation
 /**
  * Project one retrieval result into card-sized evidence facts. Fulltext
  * passages never carry page locators — the projection copies what the
- * canonical record owns and nothing more.
+ * canonical record owns and nothing more. The per-source availability facts
+ * come from the canonical result alone: `requested` is the caller's source
+ * list, `unavailable` the skipped list, `returnedPassages` the evidence count
+ * per source.
  * @param value - the canonical retrieval result.
+ * @param requestedSources - the sources the call asked for.
  * @returns the bounded projection.
  */
 export function projectRetrieveMeta(
   value: RetrieveProjectionInput,
+  requestedSources: readonly string[],
 ): ZoteroRetrievePresentationMeta {
   const items = value.evidence.slice(0, MAX_PRESENTATION_EVIDENCE_PASSAGES).map((entry) => {
     const preview = truncateChars(entry.text, MAX_PRESENTATION_EVIDENCE_CHARS)
@@ -342,12 +390,24 @@ export function projectRetrieveMeta(
       ...(entry.pageLabel === undefined ? {} : { pageLabel: entry.pageLabel }),
     }
   })
+  const skipped = new Set(value.sourcesSkipped)
+  const sourceAvailability: Record<string, ZoteroSourceAvailabilityView> = {}
+  for (const source of requestedSources) {
+    sourceAvailability[source] = {
+      requested: true,
+      returnedPassages: value.evidence.filter((entry) => entry.source === source).length,
+      unavailable: skipped.has(source),
+    }
+  }
   return {
     count: value.evidence.length,
     sources: sourcesOf(value.evidence),
     truncated: value.truncated,
     sourcesSkipped: [...value.sourcesSkipped] as ZoteroEvidenceSource[],
     items,
+    ...(value.attachmentRef === undefined ? {} : { attachmentRef: value.attachmentRef }),
+    ...(value.coverage === undefined ? {} : { coverage: value.coverage }),
+    sourceAvailability,
   }
 }
 
@@ -362,17 +422,33 @@ export function projectAttachmentMeta(
 ): ZoteroAttachmentPresentationMeta {
   const title = truncateChars(value.title, MAX_PRESENTATION_GET_TITLE_CHARS)
   if (value.kind === 'file') {
-    return { kind: value.kind, title, contentType: value.contentType, path: value.path }
+    return {
+      kind: value.kind,
+      title,
+      contentType: value.contentType,
+      path: value.path,
+      ...(value.ref === undefined ? {} : { ref: value.ref }),
+    }
   }
-  return { kind: value.kind, title, contentType: value.contentType, url: value.url }
+  return {
+    kind: value.kind,
+    title,
+    contentType: value.contentType,
+    url: value.url,
+    ...(value.ref === undefined ? {} : { ref: value.ref }),
+  }
 }
 
 /**
  * Project one export result into card-sized facts. The citation arm counts
  * the actually exported citations; the text formats are opaque joined text,
  * so they report the requested ref count instead of inventing an item count.
+ * The exported ref list is itemized up to {@link MAX_PRESENTATION_EXPORT_REFS}
+ * entries; the byte-budget guard may drop it entirely (see
+ * `boundedPresentationMeta`), never part of it.
  * @param requested - the requested ref count from the call arguments.
  * @param value - the canonical export result.
+ * @param refs - the exported refs, in the caller's order.
  * @returns the bounded projection.
  */
 export function projectExportMeta(
@@ -384,6 +460,7 @@ export function projectExportMeta(
     readonly citations?: readonly { readonly ref: string; readonly text: string }[]
     readonly text?: string
   },
+  refs: readonly string[],
 ): ZoteroExportPresentationMeta {
   const base = {
     format: value.format,
@@ -394,6 +471,8 @@ export function projectExportMeta(
     ...(value.locale === undefined
       ? {}
       : { locale: truncateChars(value.locale, MAX_PRESENTATION_GET_TITLE_CHARS) }),
+    refs: [...refs.slice(0, MAX_PRESENTATION_EXPORT_REFS)],
+    refsOmitted: Math.max(0, refs.length - MAX_PRESENTATION_EXPORT_REFS),
   }
   if (value.format === 'citation') {
     return { ...base, count: value.citations?.length ?? 0 }

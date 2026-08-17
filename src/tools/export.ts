@@ -10,10 +10,10 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
-import { defineTool, type InferArgs, type InferValue, type JsonValue } from '@deepseek-ai/dsh-tools'
+import { defineTool, type InferArgs, type InferValue } from '@deepseek-ai/dsh-tools'
 import type { ResolvedConfig } from '../config.js'
 import { withConnectivityAsk } from '../ask.js'
-import { projectExportMeta } from '../presentation-meta.js'
+import { boundedPresentationMeta, projectExportMeta } from '../presentation-meta.js'
 import { invalid } from './validate.js'
 import { parseRef, requireLocalRef } from '../refs.js'
 import type { ZoteroService } from '../service.js'
@@ -146,8 +146,10 @@ export function registerExportTool(ctx: Context, service: ZoteroService): void {
       output: {
         schema: EXPORT_OUTPUT_SCHEMA,
         render: renderExport,
+        // The refs list is the only long field; the shared byte budget drops
+        // it (with detailOmitted) rather than mid-cutting the artifact facts.
         presentationMeta: (args, value) =>
-          projectExportMeta(args.refs.length, value) as unknown as JsonValue,
+          boundedPresentationMeta(projectExportMeta(args.refs.length, value, args.refs), ['refs']),
       },
       presentCall: (args) => ({
         card: 'generic',

@@ -1,0 +1,216 @@
+/**
+ * The meta decoding layer of the session source model: each tool's
+ * presentation projection read off a settled block. The shapes are the
+ * current wire shapes (no legacy projection versions are carried — session
+ * logs are per-session snapshots); reads are defensive, so an absent or
+ * malformed field degrades to nothing instead of crashing the panel.
+ * @module dsh-zotero/client/sources/decoders
+ */
+
+import {
+  boolField,
+  evidenceItemsOf,
+  isRecord,
+  numberField,
+  stringField,
+  type EvidenceItemView,
+} from '../presenters.ts'
+import type { SourceAvailabilityEntry, SourceCoverage } from './model.ts'
+
+/** One decoded search row (with Zotero's attachment selection when present). */
+export interface SearchRowMeta {
+  readonly ref: string
+  readonly title: string
+  readonly creatorSummary: string
+  readonly year?: number
+  readonly itemType: string
+  readonly bestAttachmentRef?: string
+}
+
+/** The search projection view; `rows === null` means malformed. */
+export interface SearchMetaView {
+  readonly rows: readonly SearchRowMeta[] | null
+  readonly displayed: number | null
+  readonly omitted: number | null
+  readonly returned: number | null
+  readonly total: number | null
+  readonly noteMatches: number | null
+}
+
+/** The get projection view; a null field is absent or malformed. */
+export interface GetMetaView {
+  readonly title: string | null
+  readonly creators: string | null
+  readonly year: number | null
+  readonly venue: string | null
+  readonly itemType: string | null
+  readonly bestAttachment: { readonly ref?: string; readonly contentType: string } | null
+}
+
+/** The retrieve projection view; `items === null` means malformed. */
+export interface RetrieveMetaView {
+  readonly items: readonly EvidenceItemView[] | null
+  readonly count: number | null
+  readonly truncated: boolean | null
+  readonly sourcesSkipped: readonly string[]
+  readonly attachmentRef: string | null
+  readonly coverage: SourceCoverage | null
+  readonly sourceAvailability: Readonly<Record<string, SourceAvailabilityEntry>>
+}
+
+/** The attachment projection view; a null field is absent or malformed. */
+export interface AttachmentMetaView {
+  readonly kind: 'file' | 'url' | null
+  readonly title: string | null
+  readonly contentType: string | null
+  readonly location: string | null
+  readonly ref: string | null
+}
+
+/** The export projection view; a record without refs itemizes none. */
+export interface ExportMetaView {
+  readonly format: string | null
+  readonly style: string | null
+  readonly locale: string | null
+  readonly count: number | null
+  readonly refs: readonly string[]
+  readonly refsOmitted: number
+}
+
+/** String entries of an array-shaped field; anything else yields nothing. */
+function stringArrayOf(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((entry): entry is string => typeof entry === 'string')
+}
+
+function decodeSearchRows(value: unknown): SearchRowMeta[] | null {
+  if (!Array.isArray(value)) return null
+  const rows: SearchRowMeta[] = []
+  for (const item of value) {
+    if (!isRecord(item)) return null
+    const ref = stringField(item, 'ref')
+    const title = stringField(item, 'title')
+    const creatorSummary = stringField(item, 'creatorSummary')
+    const itemType = stringField(item, 'itemType')
+    if (
+      ref === undefined ||
+      title === undefined ||
+      creatorSummary === undefined ||
+      itemType === undefined
+    )
+      return null
+    const year = numberField(item, 'year')
+    const bestAttachmentRef = stringField(item, 'bestAttachmentRef')
+    rows.push({
+      ref,
+      title,
+      creatorSummary,
+      itemType,
+      ...(year === undefined ? {} : { year }),
+      ...(bestAttachmentRef === undefined ? {} : { bestAttachmentRef }),
+    })
+  }
+  return rows
+}
+
+export function searchMetaOf(meta: Record<string, unknown>): SearchMetaView {
+  return {
+    rows: decodeSearchRows(meta['items']),
+    displayed: numberField(meta, 'displayed') ?? null,
+    omitted: numberField(meta, 'omitted') ?? null,
+    returned: numberField(meta, 'returned') ?? null,
+    total: numberField(meta, 'total') ?? null,
+    noteMatches: numberField(meta, 'noteMatches') ?? null,
+  }
+}
+
+export function getMetaOf(meta: Record<string, unknown>): GetMetaView {
+  let bestAttachment: GetMetaView['bestAttachment'] = null
+  const attachment = meta['bestAttachment']
+  if (isRecord(attachment)) {
+    const contentType = stringField(attachment, 'contentType')
+    if (contentType !== undefined) {
+      const ref = stringField(attachment, 'ref')
+      bestAttachment = { contentType, ...(ref === undefined ? {} : { ref }) }
+    }
+  } else {
+    const contentType = stringField(meta, 'bestAttachmentContentType')
+    if (contentType !== undefined) bestAttachment = { contentType }
+  }
+  return {
+    title: stringField(meta, 'title') ?? null,
+    creators: stringField(meta, 'creators') ?? null,
+    year: numberField(meta, 'year') ?? null,
+    venue: stringField(meta, 'venue') ?? null,
+    itemType: stringField(meta, 'itemType') ?? null,
+    bestAttachment,
+  }
+}
+
+function decodeSourceAvailability(value: unknown): Record<string, SourceAvailabilityEntry> {
+  if (!isRecord(value)) return {}
+  const result: Record<string, SourceAvailabilityEntry> = {}
+  for (const [source, entry] of Object.entries(value)) {
+    if (!isRecord(entry)) continue
+    const requested = boolField(entry, 'requested')
+    const unavailable = boolField(entry, 'unavailable')
+    const returnedPassages = numberField(entry, 'returnedPassages')
+    if (requested === undefined || unavailable === undefined || returnedPassages === undefined)
+      continue
+    result[source] = { requested, returnedPassages, unavailable }
+  }
+  return result
+}
+
+function decodeCoverage(value: unknown): SourceCoverage | null {
+  if (!isRecord(value)) return null
+  const complete = boolField(value, 'complete')
+  if (complete === undefined) return null
+  const indexedPages = numberField(value, 'indexedPages')
+  const totalPages = numberField(value, 'totalPages')
+  const indexedChars = numberField(value, 'indexedChars')
+  const totalChars = numberField(value, 'totalChars')
+  return {
+    complete,
+    ...(indexedPages === undefined ? {} : { indexedPages }),
+    ...(totalPages === undefined ? {} : { totalPages }),
+    ...(indexedChars === undefined ? {} : { indexedChars }),
+    ...(totalChars === undefined ? {} : { totalChars }),
+  }
+}
+
+export function retrieveMetaOf(meta: Record<string, unknown>): RetrieveMetaView {
+  const truncated = boolField(meta, 'truncated')
+  return {
+    items: evidenceItemsOf(meta),
+    count: numberField(meta, 'count') ?? null,
+    truncated: truncated === undefined ? null : truncated,
+    sourcesSkipped: stringArrayOf(meta['sourcesSkipped']),
+    attachmentRef: stringField(meta, 'attachmentRef') ?? null,
+    coverage: decodeCoverage(meta['coverage']),
+    sourceAvailability: decodeSourceAvailability(meta['sourceAvailability']),
+  }
+}
+
+export function attachmentMetaOf(meta: Record<string, unknown>): AttachmentMetaView {
+  const kindValue = stringField(meta, 'kind')
+  const kind = kindValue === 'file' || kindValue === 'url' ? kindValue : null
+  return {
+    kind,
+    title: stringField(meta, 'title') ?? null,
+    contentType: stringField(meta, 'contentType') ?? null,
+    location: kind === null ? null : (stringField(meta, kind === 'file' ? 'path' : 'url') ?? null),
+    ref: stringField(meta, 'ref') ?? null,
+  }
+}
+
+export function exportMetaOf(meta: Record<string, unknown>): ExportMetaView {
+  return {
+    format: stringField(meta, 'format') ?? null,
+    style: stringField(meta, 'style') ?? null,
+    locale: stringField(meta, 'locale') ?? null,
+    count: numberField(meta, 'count') ?? null,
+    refs: stringArrayOf(meta['refs']),
+    refsOmitted: numberField(meta, 'refsOmitted') ?? 0,
+  }
+}
