@@ -20,7 +20,7 @@ describe('resolveConfig', () => {
       maxFulltextChars: 250_000,
       maxResponseBytes: 16 * 1024 * 1024,
       maxExportChars: 1_000_000,
-      maxExportRefs: 1000,
+      maxExportRefs: 50,
       defaultStyle: 'apa',
       defaultLocale: 'en-US',
       webEnabled: true,

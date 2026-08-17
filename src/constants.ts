@@ -29,3 +29,14 @@ export const SEARCH_DEFAULT_SORT = 'dateModified'
 export const SEARCH_DEFAULT_DIRECTION = 'desc'
 export const SEARCH_DEFAULT_OFFSET = 0
 export const SEARCH_DEFAULT_LIMIT = 10
+
+/**
+ * The Local API's hard per-request cap for the `itemKey=` query parameter.
+ * `zotero_export` batches citation requests to this size; the batch-breaking
+ * formats (bibliography and the translators) refuse to exceed it, because
+ * their global ordering belongs to Zotero, not to the caller.
+ */
+export const ZOTERO_ITEMKEY_BATCH = 50
+
+/** How long a scope listing (collections/searches) is trusted before a re-fetch. */
+export const ZOTERO_SCOPE_LISTING_TTL_MS = 30_000

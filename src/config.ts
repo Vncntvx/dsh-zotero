@@ -42,7 +42,7 @@ export interface Config {
   maxResponseBytes?: number
   /** Provider hard limit for export output; the model-facing inline budget is deployment spill policy. */
   maxExportChars?: number
-  /** Upper bound for refs in one `zotero_export` call; keeps the itemKey request line under the server's HTTP header limit. */
+  /** Upper bound for refs in one `zotero_export` call; citation batches up to this value, the other formats refuse to exceed the API's 50-key request cap. */
   maxExportRefs?: number
   /** CSL style for citation/bibliography formats; must be bundled with Zotero (e.g. `apa`). */
   defaultStyle?: string
@@ -69,7 +69,7 @@ export const Config: Schema<Config> = Schema.object({
   maxFulltextChars: Schema.number().default(250_000),
   maxResponseBytes: Schema.number().default(16 * 1024 * 1024),
   maxExportChars: Schema.number().default(1_000_000),
-  maxExportRefs: Schema.number().default(1000),
+  maxExportRefs: Schema.number().default(50),
   defaultStyle: Schema.string().default('apa'),
   defaultLocale: Schema.string().default('en-US'),
   webEnabled: Schema.boolean().default(true),
