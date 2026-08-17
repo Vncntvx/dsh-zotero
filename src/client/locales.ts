@@ -100,6 +100,46 @@ export type ZoteroLocaleKey =
   | 'noExportsHint'
   | 'artifactExpandLabel'
   | 'artifactCollapseLabel'
+  | 'lensSources'
+  | 'lensEvidence'
+  | 'lensExports'
+  | 'statusConnectedNote'
+  | 'detailsLabel'
+  | 'countCandidates'
+  | 'countInspected'
+  | 'countEvidence'
+  | 'countExported'
+  | 'filterAll'
+  | 'filterEvidence'
+  | 'filterExported'
+  | 'filterAttachment'
+  | 'filterFailed'
+  | 'filterEmptyNote'
+  | 'sourcesScopeNote'
+  | 'omittedRowsNote'
+  | 'sourcesEmptyNote'
+  | 'evidenceEmptyNote'
+  | 'exportsEmptyNote'
+  | 'provenanceMismatch'
+  | 'attachmentBadge'
+  | 'evidenceBadge'
+  | 'exportBadge'
+  | 'failedBadge'
+  | 'runningBadge'
+  | 'stoppedBadge'
+  | 'fromSearches'
+  | 'searchFrom'
+  | 'searchFromBrowse'
+  | 'evidenceInDetail'
+  | 'exportsInDetail'
+  | 'bestAttachmentLabel'
+  | 'noSources'
+  | 'starterCompare'
+  | 'starterCompareTemplate'
+  | 'starterEvidence'
+  | 'starterEvidenceTemplate'
+  | 'starterExportSelected'
+  | 'starterExportSelectedTemplate'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -110,7 +150,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 /** English copy. */
 export const en: Record<ZoteroLocaleKey, string> = {
-  nav: 'Zotero',
+  nav: 'Sources',
   title: 'Zotero',
   description: 'Access to your Zotero library.',
   overridden: 'Overridden',
@@ -253,11 +293,53 @@ export const en: Record<ZoteroLocaleKey, string> = {
     'No export artifacts in this session yet. Ask the agent to export selected items as BibTeX or CSL citations.',
   artifactExpandLabel: 'Expand body',
   artifactCollapseLabel: 'Collapse body',
+  lensSources: 'Sources',
+  lensEvidence: 'Evidence',
+  lensExports: 'Exports',
+  statusConnectedNote: 'Connected to Zotero',
+  detailsLabel: 'Diagnostics',
+  countCandidates: '{count} candidates',
+  countInspected: '{count} inspected',
+  countEvidence: '{count} with evidence',
+  countExported: '{count} exported',
+  filterAll: 'All',
+  filterEvidence: 'With evidence',
+  filterExported: 'Exported',
+  filterAttachment: 'With attachment',
+  filterFailed: 'Failed calls',
+  filterEmptyNote: 'No sources match this filter.',
+  sourcesScopeNote:
+    "A snapshot of this session's Zotero sources — hits from this session's searches and direct references, not a full library browser.",
+  omittedRowsNote: '{count} more search results are not listed individually.',
+  sourcesEmptyNote: 'No usable sources in this session yet.',
+  evidenceEmptyNote: 'No evidence gathered in this session yet.',
+  exportsEmptyNote: 'No successful exports in this session yet.',
+  provenanceMismatch: 'Belongs to a different Zotero database',
+  attachmentBadge: 'Attachment',
+  evidenceBadge: '{count} passages',
+  exportBadge: '{count} exports',
+  failedBadge: '{count} failed',
+  runningBadge: '{count} running',
+  stoppedBadge: '{count} stopped',
+  fromSearches: "From this session's searches",
+  searchFrom: 'Search "{query}"',
+  searchFromBrowse: 'Browse search',
+  evidenceInDetail: '{count} evidence passages (see Evidence)',
+  exportsInDetail: '{count} exports (see Exports)',
+  bestAttachmentLabel: 'Best attachment',
+  noSources: 'No Zotero sources in this session yet.',
+  starterCompare: 'Compare selected papers…',
+  starterCompareTemplate: 'Compare the following Zotero papers: ',
+  starterEvidence: 'Find evidence in annotations and notes…',
+  starterEvidenceTemplate:
+    "Find evidence in this paper's annotations and notes for the following question: ",
+  starterExportSelected: 'Export citations for selected items…',
+  starterExportSelectedTemplate: 'Export these items from my Zotero library as citations: ',
 }
 
 /** Simplified Chinese copy. */
 export const zh: Record<ZoteroLocaleKey, string> = {
-  nav: 'Zotero',
+  nav: '来源',
   title: 'Zotero',
   description: 'Zotero 文献库的接入配置。',
   overridden: '已覆盖',
@@ -395,4 +477,44 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   noExportsHint: '本会话还没有导出产物。可以让 agent 把选中的文献导出为 BibTeX 或 CSL 引用。',
   artifactExpandLabel: '展开全文',
   artifactCollapseLabel: '收起全文',
+  lensSources: '来源',
+  lensEvidence: '证据',
+  lensExports: '导出',
+  statusConnectedNote: '已连接到 Zotero',
+  detailsLabel: '诊断详情',
+  countCandidates: '候选 {count}',
+  countInspected: '查看详情 {count}',
+  countEvidence: '取得证据 {count}',
+  countExported: '已导出 {count}',
+  filterAll: '全部',
+  filterEvidence: '有证据',
+  filterExported: '已导出',
+  filterAttachment: '有附件',
+  filterFailed: '操作失败',
+  filterEmptyNote: '这个筛选条件下没有文献。',
+  sourcesScopeNote: '本会话的 Zotero 来源快照：来自本会话的检索与直接引用，不是完整文献库。',
+  omittedRowsNote: '另有 {count} 条检索结果未逐条列出。',
+  sourcesEmptyNote: '本会话还没有可展示的文献来源。',
+  evidenceEmptyNote: '本会话还没有取得证据。',
+  exportsEmptyNote: '本会话还没有成功导出。',
+  provenanceMismatch: '属于另一个 Zotero 数据库',
+  attachmentBadge: '附件',
+  evidenceBadge: '证据 {count}',
+  exportBadge: '导出 {count}',
+  failedBadge: '失败 {count}',
+  runningBadge: '进行中 {count}',
+  stoppedBadge: '已停止 {count}',
+  fromSearches: '来自本会话的检索',
+  searchFrom: '搜索 "{query}"',
+  searchFromBrowse: '浏览检索',
+  evidenceInDetail: '证据 {count} 条（见证据页）',
+  exportsInDetail: '导出 {count} 次（见导出页）',
+  bestAttachmentLabel: '最佳附件',
+  noSources: '本会话还没有 Zotero 来源。',
+  starterCompare: '比较选中的文献…',
+  starterCompareTemplate: '比较下面几篇 Zotero 文献：',
+  starterEvidence: '从批注和笔记中找证据…',
+  starterEvidenceTemplate: '在这篇文献的批注和笔记中找证据，问题是：',
+  starterExportSelected: '导出选中条目的引用…',
+  starterExportSelectedTemplate: '把下面几篇从我的 Zotero 库导出为引用：',
 }

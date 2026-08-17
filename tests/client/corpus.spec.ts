@@ -785,3 +785,21 @@ describe('lens and citation helpers', () => {
     expect(citeCommandOf([])).toBe('')
   })
 })
+
+describe('buildCorpus unknown tools', () => {
+  it('ignores unknown tool names without crashing', () => {
+    const blocks = asBlocks([settled({ call: { name: 'zotero_other', argsRaw: '{}' } })])
+    expect(buildCorpus(blocks).items).toEqual([])
+    expect(buildCorpus(blocks).unattributed).toBe(0)
+  })
+})
+
+describe('buildCorpus meta-less search', () => {
+  it('skips a search without meta', () => {
+    const blocks = asBlocks([
+      settled({ call: { name: 'zotero_search', argsRaw: '{"query":"attention"}' } }),
+    ])
+    expect(buildCorpus(blocks).items).toEqual([])
+    expect(buildCorpus(blocks).searched).toBe(0)
+  })
+})

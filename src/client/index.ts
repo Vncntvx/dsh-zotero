@@ -30,7 +30,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-settings-plugins/client'
 // owning package) must be in the program for the tab registration to type.
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { ZoteroPluginCard } from './ZoteroPluginCard.tsx'
-import { ZoteroTab, type ZoteroTabFace } from './ZoteroTab.tsx'
+import { SourcesTab, type SourcesTabFace } from './components/SourcesTab.tsx'
 import { ZOTERO_REMOTE } from './remote.ts'
 import type { ZoteroRemoteFace } from './remote.ts'
 import { ZoteroCardController } from './zotero-card-controller.ts'
@@ -93,7 +93,7 @@ export function apply(ctx: ClientContext): void {
     if (zotero === undefined) {
       throw new Error('dsh-zotero: the zotero Remote namespace did not mount')
     }
-    // The dedicated Zotero web view (a conversation tab) registers unless the
+    // The dedicated Sources panel (a conversation tab) registers unless the
     // `webEnabled` namespace flag is explicitly off; before the first snapshot
     // the tab stays on, so a config hiccup never blocks it. The gate is live:
     // toggling the flag in the card hides or restores the tab without a
@@ -112,11 +112,11 @@ export function apply(ctx: ClientContext): void {
               order: 30,
               locale: NS,
               label: () => tabT('nav'),
-              inject: (): ZoteroTabFace => ({
+              inject: (): SourcesTabFace => ({
                 status: () => zotero!.status(),
               }),
             },
-            ZoteroTab,
+            SourcesTab,
           ),
         )
       } else if (!enabled && tabDispose !== undefined) {

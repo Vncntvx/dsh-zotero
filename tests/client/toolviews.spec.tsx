@@ -14,6 +14,7 @@ import { writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ToolCallView, ToolResultView } from '@deepseek-ai/dsh-tools'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  CardFor,
   ZoteroAttachmentRow,
   ZoteroExportRow,
   ZoteroGetRow,
@@ -916,5 +917,28 @@ describe('ZoteroExportRow', () => {
     } finally {
       vi.stubGlobal('DOMParser', OriginalDOMParser)
     }
+  })
+})
+
+describe('CardFor', () => {
+  it('dispatches every zotero tool to its card and ignores unknown names', () => {
+    for (const name of [
+      'zotero_search',
+      'zotero_get',
+      'zotero_retrieve',
+      'zotero_attachment',
+      'zotero_export',
+    ]) {
+      const view = render(
+        <CardFor block={blocksSettled({ call: { name, argsRaw: '{}' } })} t={t} />,
+      )
+      expect(view.container.firstChild).not.toBeNull()
+      view.unmount()
+    }
+    const unknown = render(
+      <CardFor block={blocksSettled({ call: { name: 'zotero_other', argsRaw: '{}' } })} t={t} />,
+    )
+    expect(unknown.container.firstChild).toBeNull()
+    unknown.unmount()
   })
 })

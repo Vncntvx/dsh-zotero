@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest'
 import {
   argsOf,
   boolField,
+  callToneOf,
   displayRefOf,
   errorSummaryOf,
   evidenceCountOf,
@@ -292,5 +293,16 @@ describe('preview and evidence projection reads', () => {
 describe('interpolate', () => {
   it('substitutes known placeholders and keeps unknown ones verbatim', () => {
     expect(interpolate('{count} results · {missing}', { count: 4 })).toBe('4 results · {missing}')
+  })
+})
+
+describe('callToneOf', () => {
+  it('maps the wire tools to tones and leaves unknown names neutral', () => {
+    expect(callToneOf(running())).toBe('search')
+    expect(callToneOf(running({ name: 'zotero_get' }))).toBe('get')
+    expect(callToneOf(running({ name: 'zotero_retrieve' }))).toBe('retrieve')
+    expect(callToneOf(running({ name: 'zotero_attachment' }))).toBe('attachment')
+    expect(callToneOf(running({ name: 'zotero_export' }))).toBe('export')
+    expect(callToneOf(running({ name: 'zotero_other' }))).toBeUndefined()
   })
 })
