@@ -167,6 +167,8 @@ export interface SourceWorkspace {
   readonly exports: readonly ExportArtifact[]
   /** Session-wide non-successful call counts (including searches). */
   readonly operations: OperationFacts
+  /** Non-successful export calls only; never rendered as results. */
+  readonly exportOperations: OperationFacts
   /** Settled calls whose arguments carried no usable item ref. */
   readonly unattributed: number
   /** Search rows the bounded presentation projections did not itemize. */

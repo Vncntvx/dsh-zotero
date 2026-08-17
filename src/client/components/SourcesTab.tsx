@@ -29,6 +29,7 @@ import { callNameOf, orderKeyOf } from '../presenters.ts'
 import { buildSourceWorkspace } from '../sources/reducer.ts'
 import { EmptyState } from './EmptyState.tsx'
 import { EvidenceLens } from './EvidenceLens.tsx'
+import { ExportsLens } from './ExportsLens.tsx'
 import { SourceList } from './SourceList.tsx'
 import { SourcesHeader } from './SourcesHeader.tsx'
 import css from './SourcesTab.module.css'
@@ -272,7 +273,7 @@ export function SourcesTab({ status, t, useSession, inputActions }: SourcesTabPr
               ) : lens === 'evidence' ? (
                 <EvidenceLens workspace={workspace} t={t} />
               ) : (
-                <p className={css.emptyNote}>{t('exportsEmptyNote')}</p>
+                <ExportsLens workspace={workspace} t={t} />
               )}
             </div>
           </div>

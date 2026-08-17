@@ -346,15 +346,23 @@ describe('buildSourceWorkspace', () => {
         { isError: true, error: { name: 'ZoteroError', code: 'ZOTERO_OUTPUT_TOO_LARGE' } },
       ),
       block('e3', 3, 'zotero_export', { refs: [REF('A3')] }, { content: [] }),
+      block(
+        'e4',
+        4,
+        'zotero_export',
+        { refs: [REF('A4')] },
+        { isError: true, error: { name: 'Interrupted', code: 'interrupted' } },
+      ),
     ])
     expect(workspace.exports).toEqual([])
+    expect(workspace.exportOperations).toEqual({ running: 1, failed: 1, stopped: 1 })
     const a1 = workspace.sources.find((item) => item.key.includes('a1'))
     const a2 = workspace.sources.find((item) => item.key.includes('a2'))
     expect(a1?.operations.running).toBe(1)
     expect(a1?.facts.exportCount).toBe(0)
     expect(a2?.operations.failed).toBe(1)
     expect(a2?.facts.exportCount).toBe(0)
-    expect(workspace.operations).toEqual({ running: 1, failed: 1, stopped: 0 })
+    expect(workspace.operations).toEqual({ running: 1, failed: 1, stopped: 1 })
   })
 
   it('deduplicates verbatim evidence and keeps every call id', () => {
@@ -626,6 +634,7 @@ describe('buildSourceWorkspace', () => {
       sources: [],
       exports: [],
       operations: { running: 0, failed: 0, stopped: 0 },
+      exportOperations: { running: 0, failed: 0, stopped: 0 },
       unattributed: 0,
       omittedRows: 0,
     })

@@ -199,6 +199,7 @@ export function buildSourceWorkspace(
   const episodes: SearchEpisode[] = []
   let lastEpisode: SearchEpisode | null = null
   const workspaceOperations: DraftOperations = emptyOperations()
+  const exportOperations: DraftOperations = emptyOperations()
   let unattributed = 0
   let omittedRows = 0
 
@@ -394,7 +395,12 @@ export function buildSourceWorkspace(
         break
       }
       case 'zotero_export': {
-        if (state !== 'ok') countWorkspace(state)
+        if (state !== 'ok') {
+          countWorkspace(state)
+          if (state === 'running') exportOperations.running += 1
+          else if (state === 'stopped') exportOperations.stopped += 1
+          else exportOperations.failed += 1
+        }
         const refs = exportRefsOf(meta, args)
         if (refs.length === 0) {
           if (state !== 'running') unattributed += 1
@@ -495,6 +501,7 @@ export function buildSourceWorkspace(
     sources,
     exports,
     operations: workspaceOperations,
+    exportOperations,
     unattributed,
     omittedRows,
   }

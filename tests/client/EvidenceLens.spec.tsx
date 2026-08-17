@@ -58,6 +58,7 @@ function workspaceOf(sources: readonly SourceItem[]): SourceWorkspace {
     sources,
     exports: [],
     operations: { running: 0, failed: 0, stopped: 0 },
+    exportOperations: { running: 0, failed: 0, stopped: 0 },
     unattributed: 0,
     omittedRows: 0,
   }

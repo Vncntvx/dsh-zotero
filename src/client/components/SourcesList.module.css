@@ -335,3 +335,15 @@
   flex-direction: column;
   gap: 2px;
 }
+
+/* The export body: verbatim text inside the card, below the toggle. */
+.exportBody {
+  padding: 4px 0;
+}
+
+.exportBody .line {
+  white-space: pre-wrap;
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+}

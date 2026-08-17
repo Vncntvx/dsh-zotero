@@ -155,6 +155,14 @@ export type ZoteroLocaleKey =
   | 'openPdf'
   | 'openAnnotation'
   | 'instanceUnverified'
+  | 'formatCitation'
+  | 'formatBibliography'
+  | 'exportRefCount'
+  | 'exportRefsOmitted'
+  | 'copyExport'
+  | 'exportsStaticNote'
+  | 'exportsIncompleteNote'
+  | 'exportCitation'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -366,6 +374,15 @@ export const en: Record<ZoteroLocaleKey, string> = {
   openPdf: 'Open PDF',
   openAnnotation: 'Open annotation',
   instanceUnverified: 'cannot verify the current Zotero instance',
+  formatCitation: 'Citations',
+  formatBibliography: 'Bibliography',
+  exportRefCount: '{count} refs',
+  exportRefsOmitted: '{count} more not listed',
+  copyExport: 'Copy export',
+  exportsStaticNote:
+    'Static exports are not inserted or updated in Word, Google Docs, or LibreOffice documents.',
+  exportsIncompleteNote: 'Exports that did not complete',
+  exportCitation: 'Export citation',
 }
 
 /** Simplified Chinese copy. */
@@ -563,4 +580,12 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   openPdf: '打开 PDF',
   openAnnotation: '打开批注',
   instanceUnverified: '无法验证当前 Zotero 实例',
+  formatCitation: '引文',
+  formatBibliography: '参考文献表',
+  exportRefCount: '{count} 条文献',
+  exportRefsOmitted: '另有 {count} 条未列出',
+  copyExport: '复制导出内容',
+  exportsStaticNote: '静态导出不会插入或更新 Word、Google Docs、LibreOffice 文档。',
+  exportsIncompleteNote: '未完成的导出操作',
+  exportCitation: '导出引用',
 }

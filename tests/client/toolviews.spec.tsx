@@ -15,6 +15,7 @@ import type { ToolCallView, ToolResultView } from '@deepseek-ai/dsh-tools'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   CardFor,
+  ExportBody,
   ZoteroAttachmentRow,
   ZoteroExportRow,
   ZoteroGetRow,
@@ -940,5 +941,12 @@ describe('CardFor', () => {
     )
     expect(unknown.container.firstChild).toBeNull()
     unknown.unmount()
+  })
+})
+
+describe('ExportBody', () => {
+  it('renders a copy-less body as plain code', () => {
+    render(<ExportBody format="bibtex" text="@book{x}" copy={false} t={t} />)
+    expect(screen.getByText('@book{x}')).toBeDefined()
   })
 })

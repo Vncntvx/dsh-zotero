@@ -288,6 +288,10 @@ describe('SourceRow', () => {
     render(<SourceRow item={FULL} t={t} setDraft={setDraft} />)
     fireEvent.click(screen.getByText(zh.askAboutItem))
     expect(setDraft).toHaveBeenCalledWith(zh.askTemplate.replace('{ref}', 'zotero://user/0/item/A'))
+    fireEvent.click(screen.getByText(zh.exportCitation))
+    expect(setDraft).toHaveBeenCalledWith(
+      zh.citeTemplate.replace('{ref}', 'zotero://user/0/item/A'),
+    )
     fireEvent.click(screen.getByLabelText(zh.copyRef))
     expect(writeClipboard).toHaveBeenCalledWith('zotero://user/0/item/A')
   })
