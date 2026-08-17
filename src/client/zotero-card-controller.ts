@@ -94,10 +94,7 @@ export const BOOLEAN_FIELD_KEYS: ReadonlySet<FieldKey> = new Set<FieldKey>(
 )
 
 /** What the Zotero page renders: the shell plus one control per field. */
-export type ZoteroCardState = CardShell & {
-  /** True while the first namespace read is still crossing the wire. */
-  loading: boolean
-} & { readonly [K in FieldKey]: CardFieldState }
+export type ZoteroCardState = CardShell & { readonly [K in FieldKey]: CardFieldState }
 
 /** The registration-side face the card's slot entry injects. */
 export interface ZoteroCardFace extends CardActions {
@@ -111,7 +108,6 @@ export interface ZoteroCardFace extends CardActions {
 export class ZoteroCardController {
   private readonly form: CardForm
   private readonly store: SnapshotStore<ZoteroCardState>
-  private readonly scope: SettingsScope<unknown>
 
   /**
    * @param scope - the bound settings scope for the `zotero` namespace. The
@@ -120,7 +116,6 @@ export class ZoteroCardController {
    *   is the contract the host registration established.
    */
   constructor(scope: SettingsScope<unknown>) {
-    this.scope = scope
     this.form = new CardForm(scope as SettingsScope<Record<string, unknown>>, FIELDS)
     this.store = this.form.bind(() => this.projection())
   }
@@ -131,7 +126,6 @@ export class ZoteroCardController {
     ) as { [K in FieldKey]: CardFieldState }
     return {
       ...this.form.shell(),
-      loading: this.scope.getSnapshot().status === 'loading',
       ...fields,
     }
   }

@@ -1,8 +1,9 @@
 /**
- * Browser-half entry: the apply wiring registers the page dictionaries,
- * mounts the zotero Typert Remote namespace, and injects a
- * `settings.section` registration for id `zotero` against a hand-rolled
- * context — the same surface the loader kernel exercises.
+ * Browser-half entry: the apply wiring registers the page dictionaries, binds
+ * the zotero settings namespace through the injected settings scope, injects
+ * the configuration card into the keyed `settings.plugin.item` slot, and
+ * mounts the zotero Typert Remote namespace for the conversation tab's live
+ * status, gating that tab on the namespace's `webEnabled` flag.
  * @module tests/client/apply
  */
 
@@ -10,7 +11,8 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import { apply, inject } from '../../src/client/index.ts'
 import { en, zh } from '../../src/client/locales.ts'
-import type { ZoteroConfigView } from '../../src/client/remote.ts'
+import { ZOTERO_SETTINGS_NAMESPACE } from '../../src/settings-namespace.ts'
+import { fakeScope } from './helpers/fake-scope.ts'
 
 // The page imports the primitives controls; stub them so this wiring-level
 // spec does not load the real bundle (katex css, shiki, …).
@@ -23,17 +25,9 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
       ...rest
     }: Record<string, unknown> & { children?: import('react').ReactNode }) =>
       createElement('button', { type: 'button', ...rest }, children),
+    IconChevronDownOutline14: () => null,
   }
 })
-
-const VIEW: ZoteroConfigView = {
-  available: true,
-  writable: true,
-  value: { baseUrl: 'http://127.0.0.1:23119/api', timeoutMs: 5000 },
-  base: { baseUrl: 'http://127.0.0.1:23119/api' },
-  user: undefined,
-  revision: 0,
-}
 
 interface FakeSlotsEntry {
   name: string
@@ -41,16 +35,24 @@ interface FakeSlotsEntry {
   component: unknown
 }
 
+interface FakeInjectedEntry {
+  name: string
+  register: () => FakeSlotsEntry | undefined
+  /** False once the disposer the inject call returned has run (withdrawn). */
+  active: boolean
+}
+
 interface FakeApplyWorld {
   ctx: unknown
   dictionaries: Array<{ ns: string; dict: unknown }>
-  injected: Array<{ name: string; register: () => FakeSlotsEntry | undefined }>
+  injected: Array<FakeInjectedEntry>
   registered: FakeSlotsEntry[]
   mounts: unknown[]
   effects: Array<unknown>
   mountDisposes: number
-  /** Scripted namespace `config` result; defaults to the VIEW. */
-  config: () => Promise<unknown>
+  injectDisposes: number
+  bindSpecs: Array<{ namespace: string; decode?: (section: unknown) => unknown }>
+  scope: ReturnType<typeof fakeScope>
   /** Scripted namespace `status` result; defaults to ok. */
   status: () => Promise<unknown>
 }
@@ -58,12 +60,14 @@ interface FakeApplyWorld {
 /** A minimal context standing in for the browser kernel's plugin ctx. */
 function fakeWorld(mountFail = false): FakeApplyWorld {
   const dictionaries: FakeApplyWorld['dictionaries'] = []
-  const injected: FakeApplyWorld['injected'] = []
+  const injected: FakeInjectedEntry[] = []
   const registered: FakeApplyWorld['registered'] = []
   const mounts: FakeApplyWorld['mounts'] = []
   const effects: FakeApplyWorld['effects'] = []
-  // The world object is shared with the ctx closures (mountDisposes included),
-  // so the returned handle observes the disposer's side effects.
+  const bindSpecs: FakeApplyWorld['bindSpecs'] = []
+  const scope = fakeScope()
+  // The world object is shared with the ctx closures (disposer counters
+  // included), so the returned handle observes the disposers' side effects.
   const world: FakeApplyWorld = {
     ctx: undefined,
     dictionaries,
@@ -72,7 +76,9 @@ function fakeWorld(mountFail = false): FakeApplyWorld {
     mounts,
     effects,
     mountDisposes: 0,
-    config: async () => ({ ok: true, value: VIEW }),
+    injectDisposes: 0,
+    bindSpecs,
+    scope,
     status: async () => ({ ok: true, value: { connected: true, diagnosis: 'ok' } }),
   }
   const ctx = {
@@ -99,15 +105,23 @@ function fakeWorld(mountFail = false): FakeApplyWorld {
         mountFail
           ? undefined
           : {
-              config: world.config,
-              configUpdate: async () => ({ ok: true, value: VIEW }),
-              configClear: async () => ({ ok: true, value: VIEW }),
               status: world.status,
             },
     },
+    settingsScope: {
+      bind: (spec: { namespace: string; decode?: (section: unknown) => unknown }) => {
+        bindSpecs.push(spec)
+        return world.scope
+      },
+    },
     slots: {
       inject: (name: string, register: () => FakeSlotsEntry | undefined) => {
-        injected.push({ name, register })
+        const entry: FakeInjectedEntry = { name, register, active: true }
+        injected.push(entry)
+        return () => {
+          entry.active = false
+          world.injectDisposes += 1
+        }
       },
       register: (options: Record<string, unknown>, component: unknown) => {
         registered.push({ name: String(options.name), options, component })
@@ -121,13 +135,27 @@ function fakeWorld(mountFail = false): FakeApplyWorld {
 
 describe('the browser-half entry', () => {
   it('declares the services it consumes', () => {
-    expect(inject).toEqual(['locale', 'slots', 'remote'])
+    expect(inject).toEqual(['locale', 'slots', 'connection', 'settingsScope', 'remote'])
   })
 
   it('registers the page dictionaries on apply', () => {
     const world = fakeWorld()
     apply(world.ctx as ClientContext)
     expect(world.dictionaries).toEqual([{ ns: 'zotero', dict: { zh, en } }])
+  })
+
+  it('binds the settings scope to the shared namespace constant', () => {
+    const world = fakeWorld()
+    apply(world.ctx as ClientContext)
+    expect(world.bindSpecs).toHaveLength(1)
+    expect(world.bindSpecs[0]?.namespace).toBe(ZOTERO_SETTINGS_NAMESPACE)
+    // The lenient decode passes plain sections through and refuses non-objects.
+    const decode = world.bindSpecs[0]?.decode
+    expect(decode).toBeTypeOf('function')
+    expect(decode?.({ webEnabled: true })).toEqual({ webEnabled: true })
+    expect(decode?.({})).toEqual({})
+    expect(decode?.(null)).toBeUndefined()
+    expect(decode?.(['not', 'a', 'section'])).toBeUndefined()
   })
 
   it('mounts the zotero Remote namespace contribution', () => {
@@ -138,24 +166,25 @@ describe('the browser-half entry', () => {
     expect(contribution.package).toBe('dsh-zotero')
   })
 
-  it('injects a zotero section registration into the settings panel', () => {
+  it('injects the configuration card into the keyed settings.plugin.item slot', () => {
     const world = fakeWorld()
     apply(world.ctx as ClientContext)
-    expect(world.injected).toHaveLength(1)
-    const entry = world.injected[0]
-    expect(entry?.name).toBe('settings.section')
-    const slot = entry?.register()
-    expect(slot).toBeDefined()
-    expect(world.registered).toHaveLength(1)
-    const registration = world.registered[0]
-    expect(registration?.name).toBe('settings.section')
-    expect(registration?.options.id).toBe('zotero')
-    expect(registration?.options.order).toBe(30)
-    expect(registration?.options.locale).toBe('zotero')
-    expect(registration?.options.label).toBeTypeOf('function')
-    expect(typeof registration?.component).toBe('function')
-    // The nav label resolves through the bound locale reader.
-    expect((registration?.options.label as () => string)()).toBe('nav')
+    expect(world.injected.map((entry) => entry.name)).toEqual(['settings.plugin.item'])
+
+    const cardEntry = world.injected.find((entry) => entry.name === 'settings.plugin.item')
+    expect(cardEntry?.register()).toBeDefined()
+
+    const card = world.registered.find((entry) => entry.name === 'settings.plugin.item')
+    expect(card?.options.key).toBe(ZOTERO_SETTINGS_NAMESPACE)
+    expect(card?.options.locale).toBe('zotero')
+    expect(card?.options.id).toBeUndefined()
+    expect(card?.options.order).toBeUndefined()
+    expect(typeof card?.component).toBe('function')
+    // The card's inject face carries the staged form's store.
+    const cardInject = card?.options.inject as () => {
+      hooks: { zoteroCard: unknown }
+    }
+    expect(cardInject().hooks.zoteroCard).toBeDefined()
   })
 
   it('fails the mount when the Remote namespace is not served', async () => {
@@ -175,7 +204,7 @@ describe('the browser-half entry', () => {
     expect(world.mountDisposes).toBe(1)
   })
 
-  it('registers the Zotero conversation tab when webEnabled is not off', async () => {
+  it('registers the Zotero conversation tab while webEnabled is not off', async () => {
     const world = fakeWorld()
     const statusSpy = vi.fn(async () => ({ ok: true, value: {} }))
     world.status = statusSpy
@@ -198,30 +227,53 @@ describe('the browser-half entry', () => {
     expect(statusSpy).toHaveBeenCalled()
   })
 
+  it('registers the tab while the namespace is loading or unavailable', async () => {
+    for (const status of ['loading', 'unavailable'] as const) {
+      const world = fakeWorld()
+      world.scope = fakeScope({ status })
+      apply(world.ctx as ClientContext)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(
+        world.injected.some((entry) => entry.name === 'conversation.view'),
+        `tab on ${status}`,
+      ).toBe(true)
+    }
+  })
+
   it('skips the tab when the namespace disables webEnabled', async () => {
     const world = fakeWorld()
-    world.config = async () => ({
-      ok: true,
-      value: { ...VIEW, value: { ...VIEW.value, webEnabled: false } },
+    world.scope = fakeScope({
+      value: { webEnabled: false },
+      user: { webEnabled: false },
     })
     apply(world.ctx as ClientContext)
     await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(world.injected.map((entry) => entry.name)).toEqual(['settings.section'])
+    expect(world.injected.map((entry) => entry.name)).toEqual(['settings.plugin.item'])
   })
 
-  it('registers the tab when the config read fails', async () => {
+  it('withdraws the tab live when webEnabled turns off and restores it on', async () => {
     const world = fakeWorld()
-    // The gate's first read throws; the settings scope's later reload reads ok.
-    world.config = vi
-      .fn()
-      .mockRejectedValueOnce(new Error('boom'))
-      .mockResolvedValue({ ok: true, value: VIEW })
     apply(world.ctx as ClientContext)
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(world.injected.some((entry) => entry.name === 'conversation.view')).toBe(true)
+
+    // Toggle the flag: the gate subscription withdraws the tab.
+    await world.scope.set('webEnabled', false)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(world.injected.find((entry) => entry.name === 'conversation.view')?.active).toBe(false)
+    expect(world.injectDisposes).toBe(1)
+
+    // Toggle back on: the tab returns (a fresh live registration).
+    await world.scope.set('webEnabled', true)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(
+      world.injected
+        .filter((entry) => entry.name === 'conversation.view')
+        .some((entry) => entry.active),
+    ).toBe(true)
   })
 
-  it('withdraws the tab with the fiber and mounts nothing without Remote', async () => {
+  it('withdraws the tab with the fiber and unmounts the Remote', async () => {
     const world = fakeWorld()
     apply(world.ctx as ClientContext)
     const dispose = (await world.effects[1]) as () => void
@@ -229,16 +281,21 @@ describe('the browser-half entry', () => {
     expect(world.injected.some((entry) => entry.name === 'conversation.view')).toBe(true)
     dispose()
     expect(world.mountDisposes).toBe(1)
+    expect(world.injectDisposes).toBe(1)
+    expect(world.injected.find((entry) => entry.name === 'conversation.view')?.active).toBe(false)
   })
 
-  it('injects a page face whose scope reads through the Remote namespace', async () => {
+  it('injects a card face whose scope reads the namespace snapshot', async () => {
     const world = fakeWorld()
+    world.scope = fakeScope({
+      value: { baseUrl: 'http://127.0.0.1:23119/api', timeoutMs: 5000 },
+    })
     apply(world.ctx as ClientContext)
-    // The mount settles on the microtask queue; let the first load publish.
     await new Promise((resolve) => setTimeout(resolve, 0))
-    const entry = world.injected[0]
+    const entry = world.injected.find((entry) => entry.name === 'settings.plugin.item')
     expect(entry?.register()).toBeDefined()
-    const injectFn = world.registered[0]?.options.inject as () => {
+    const registration = world.registered.find((entry) => entry.name === 'settings.plugin.item')
+    const injectFn = registration?.options.inject as () => {
       hooks: { zoteroCard: { getSnapshot: () => unknown } }
     }
     const face = injectFn()

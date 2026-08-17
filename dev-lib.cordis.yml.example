@@ -3,7 +3,8 @@
 #   dsh web --patch ./dev-lib.cordis.yml --port 3307
 #
 # Copy this file to dev-lib.cordis.yml and replace <checkout-root> with the
-# parent of this checkout (the deepseek-harness checkout).
+# parent of this checkout (the deepseek-harness checkout), e.g.
+# /path/to/deepseek-harness.
 #
 # The production web profile disables the loader HMR plugin, so this
 # overlay re-enables it for the dev instance and points its base at this

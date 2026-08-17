@@ -47,7 +47,17 @@ Everything registered in the constructor unwinds with the plugin fiber, so confi
 - Command: `ctx.inject(['commands'], ...)` — the optional-dependency form keeps the plugin loadable in headless compositions without `commands`.
 - Provider: `ctx.effect()`.
 - Settings section: `installSettingsSection` (optional dependency — absent settings services leave the plugin on its entry config).
-- Browser card: `src/client/` registers into the harness's `settings.section` slot with its own staged form (no cross-plugin value imports); built to `lib/client.js` by esbuild in the `__ModuleLoader__.load` handoff format.
+- Browser surface (`src/client/`, built to `lib/client.js` by esbuild in the
+  `__ModuleLoader__.load` handoff format): one configuration card over the
+  `zotero` namespace, reading/writing through the harness's `settingsScope`
+  binder (no cross-plugin value imports). The card registers into the keyed
+  `settings.plugin.item` slot under the namespace key so the Plugins config tab
+  dispatches it automatically, carrying the full staged form in the section's
+  native disclosure chrome (self-drawn — mirror `PluginCard` tokens, never
+  value-import it). The Typert Remote namespace carries only the `zotero/status`
+  connectivity probe for the dedicated conversation tab; the tab's `webEnabled`
+  gate is live — it subscribes to the same scope and shows/hides the tab as the
+  flag changes.
 
 ## Conventions
 
@@ -86,10 +96,11 @@ Host-only alternative (tsx loads `src/index.ts`, no browser half): copy
 then run `cd .. && pnpm dsh web --patch ./dsh-zotero/dev.cordis.yml --port <X>`.
 
 The DSH packages the dev launches above load from the parent pnpm workspace
-(currently `0.1.0-rc.3`), while typecheck/tests/build run against the rc.6
-versions installed in this repo's `node_modules` — an rc-level skew. The
-contract surface this plugin uses is stable across those versions; treat the
-tested version as authoritative whenever behavior differs.
+(currently `0.1.0-rc.7`), and typecheck/tests/build run against the same
+rc.7 versions installed in this repo's `node_modules` — no skew. If the parent
+moves ahead of the installed `node_modules`, reinstall (`npm install
+--no-workspaces`) to re-align; the contract surface this plugin uses has been
+stable across the rc.6→rc.7 bump.
 
 ## Credentials
 

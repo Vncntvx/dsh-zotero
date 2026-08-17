@@ -7,11 +7,13 @@ export type ZoteroLocaleKey =
   | 'nav'
   | 'title'
   | 'description'
-  | 'loading'
-  | 'unavailable'
   | 'overridden'
   | 'reset'
   | 'readOnly'
+  | 'discard'
+  | 'unsaved'
+  | 'expand'
+  | 'collapse'
   | 'save'
   | 'saving'
   | 'saveFailed'
@@ -19,9 +21,6 @@ export type ZoteroLocaleKey =
   | GroupKey
   | FieldKey
   | `${FieldKey}Hint`
-  | 'groupWeb'
-  | 'webEnabled'
-  | 'webEnabledHint'
   | 'copy'
   | 'copied'
   | 'checking'
@@ -113,13 +112,14 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 export const en: Record<ZoteroLocaleKey, string> = {
   nav: 'Zotero',
   title: 'Zotero',
-  description: 'Access to your local Zotero library.',
-  loading: 'Loading settings…',
-  unavailable:
-    'Settings are unavailable: this deployment composes no settings document for Zotero.',
+  description: 'Access to your Zotero library.',
   overridden: 'Overridden',
   reset: 'Reset to default',
   readOnly: 'This deployment stores settings read-only.',
+  discard: 'Discard changes',
+  unsaved: 'Unsaved',
+  expand: 'Show settings',
+  collapse: 'Hide settings',
   save: 'Save',
   saving: 'Saving…',
   saveFailed: 'The deployment did not accept these values; they were left for you to correct.',
@@ -169,7 +169,7 @@ export const en: Record<ZoteroLocaleKey, string> = {
   groupWeb: 'Web view',
   webEnabled: 'Zotero conversation tab',
   webEnabledHint:
-    'Shows a dedicated Zotero tab at the top of conversations (items, citations, activity). Turning it off hides the tab after the page reloads.',
+    'Shows a dedicated Zotero tab at the top of conversations (items, citations, activity). Turning it off hides the tab right away.',
   copy: 'Copy',
   copied: 'Copied',
   checking: 'Checking…',
@@ -259,12 +259,14 @@ export const en: Record<ZoteroLocaleKey, string> = {
 export const zh: Record<ZoteroLocaleKey, string> = {
   nav: 'Zotero',
   title: 'Zotero',
-  description: '本地 Zotero 文献库的接入配置。',
-  loading: '正在加载设置…',
-  unavailable: '设置不可用：本部署未为 Zotero 组合设置文档。',
+  description: 'Zotero 文献库的接入配置。',
   overridden: '已覆盖',
   reset: '恢复默认',
   readOnly: '本部署的设置为只读。',
+  discard: '放弃修改',
+  unsaved: '未保存',
+  expand: '展开设置',
+  collapse: '收起设置',
   save: '保存',
   saving: '保存中…',
   saveFailed: '本部署没有接受这些值，已保留供你修改。',
@@ -313,8 +315,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   defaultLocaleHint: 'citation/bibliography 格式的 CSL locale（如 en-US）。',
   groupWeb: 'Web 视图',
   webEnabled: 'Zotero 会话标签页',
-  webEnabledHint:
-    '在会话顶部显示 Zotero 专属标签页，包含文献、引用与活动；关闭后需刷新页面，标签页才会隐藏。',
+  webEnabledHint: '在会话顶部显示 Zotero 专属标签页，包含文献、引用与活动；关闭后标签页立即隐藏。',
   copy: '复制',
   copied: '已复制',
   checking: '检查中…',
