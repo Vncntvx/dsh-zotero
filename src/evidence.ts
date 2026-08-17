@@ -14,9 +14,26 @@ const TOKEN_PATTERN = /[\p{L}\p{N}]+/gu
 const BM25_K1 = 1.2
 const BM25_B = 0.75
 
-/** Lowercase alphanumeric tokens of a text, in order. */
+/** A word-granularity segmenter when the runtime provides one; the engine floor guarantees it, the check is defensive. */
+function wordSegmenter(): Intl.Segmenter | undefined {
+  return typeof Intl.Segmenter === 'function'
+    ? new Intl.Segmenter(undefined, { granularity: 'word' })
+    : undefined
+}
+
+/**
+ * Lowercase word tokens of a text, in order. Word-aware segmentation keeps
+ * scripts without spaces (CJK, Thai) queryable — a `\S+` tokenizer would
+ * treat a whole unspaced run as one token and never match a single word.
+ */
 export function tokenize(text: string): string[] {
-  return text.toLowerCase().match(TOKEN_PATTERN) ?? []
+  const segmenter = wordSegmenter()
+  if (segmenter === undefined) return text.toLowerCase().match(TOKEN_PATTERN) ?? []
+  const tokens: string[] = []
+  for (const segment of segmenter.segment(text.toLowerCase())) {
+    if (segment.isWordLike) tokens.push(segment.segment)
+  }
+  return tokens
 }
 
 /** One full-text passage: its exact original substring plus its corpus position. */
@@ -25,21 +42,84 @@ export interface EvidenceChunk {
   readonly index: number
 }
 
+/** A word span in the source text: `[start, end)` character offsets. */
+interface WordSpan {
+  readonly start: number
+  readonly end: number
+}
+
 /**
- * Cut a text into hard word-count chunks, preserving the original spans
- * (including interior whitespace) so passages stay verbatim.
+ * The word boundaries of a text. Word granularity uses ICU segmentation, so
+ * scripts without spaces (CJK, Thai) still split into words instead of one
+ * run-on span; whitespace splitting remains the fallback when the runtime
+ * lacks `Intl.Segmenter` (the engine floor guarantees it, the check is
+ * defensive).
  */
-export function chunkText(text: string, maxWords: number): EvidenceChunk[] {
-  const spans = [...text.matchAll(/\S+/g)].map((match) => ({
-    start: match.index,
-    end: match.index + match[0].length,
-  }))
+function wordSpansOf(text: string): WordSpan[] {
+  const segmenter = wordSegmenter()
+  if (segmenter === undefined) {
+    return [...text.matchAll(/\S+/g)].map((match) => ({
+      start: match.index,
+      end: match.index + match[0].length,
+    }))
+  }
+  const spans: WordSpan[] = []
+  for (const segment of segmenter.segment(text)) {
+    if (!segment.isWordLike) continue
+    spans.push({ start: segment.index, end: segment.index + segment.segment.length })
+  }
+  return spans
+}
+
+/**
+ * Cut a text into word-count chunks, preserving the original spans (including
+ * interior whitespace) so passages stay verbatim. A chunk also never exceeds
+ * `maxCharsPerChunk` when given: the word group closes before the next word
+ * would cross the character limit, and a single overlong word is cut in
+ * place — bounds that keep every chunk acceptable to a character budget.
+ * @param text - the source text to chunk.
+ * @param maxWords - hard word-count ceiling per chunk.
+ * @param maxCharsPerChunk - optional character ceiling per chunk; omitted keeps
+ *   the pure word-count behavior.
+ * @returns the bounded chunks in source order.
+ */
+export function chunkText(
+  text: string,
+  maxWords: number,
+  maxCharsPerChunk?: number,
+): EvidenceChunk[] {
+  const spans = wordSpansOf(text)
+  if (spans.length === 0) return []
+  const characterLimit =
+    maxCharsPerChunk === undefined ? Number.POSITIVE_INFINITY : maxCharsPerChunk
   const chunks: EvidenceChunk[] = []
-  for (let start = 0; start < spans.length; start += maxWords) {
-    const group = spans.slice(start, start + maxWords)
-    const first = group[0]!
-    const last = group[group.length - 1]!
-    chunks.push({ text: text.slice(first.start, last.end), index: chunks.length })
+  let start = 0
+  while (start < spans.length) {
+    let end = start
+    while (end < spans.length && end - start < maxWords) {
+      const span = spans[end]!
+      // The group's full text (interior whitespace included) must stay within
+      // the character limit; `first.start` anchors the group's length.
+      if (span.end - spans[start]!.start > characterLimit) break
+      end += 1
+    }
+    if (end === start) {
+      // A single span longer than the character limit is cut in place; leaving
+      // it whole would make the chunk undigestible for the evidence budget.
+      const span = spans[start]!
+      let pos = span.start
+      while (pos < span.end) {
+        const stop = Math.min(pos + characterLimit, span.end)
+        chunks.push({ text: text.slice(pos, stop), index: chunks.length })
+        pos = stop
+      }
+      start += 1
+    } else {
+      const first = spans[start]!
+      const last = spans[end - 1]!
+      chunks.push({ text: text.slice(first.start, last.end), index: chunks.length })
+      start = end
+    }
   }
   return chunks
 }

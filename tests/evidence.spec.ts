@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { chunkText, rankChunks, tokenize } from '../src/evidence.js'
 
 describe('tokenize', () => {
@@ -38,6 +38,66 @@ describe('chunkText', () => {
   it('preserves original whitespace inside chunks', () => {
     expect(chunkText('a  b\nc', 2)[0]!.text).toBe('a  b')
   })
+
+  it('splits unspaced CJK text into words instead of one run-on chunk', () => {
+    // A single `\S+` span would make the whole string one chunk; word-aware
+    // segmentation cuts it into several even though there is no whitespace.
+    const cjk = '中文全文没有空格'.repeat(6)
+    const chunks = chunkText(cjk, 4)
+    expect(chunks.length).toBeGreaterThan(1)
+    expect(chunks.map((chunk) => chunk.text).join('')).toBe(cjk)
+  })
+
+  it('tokenizes unspaced CJK into queryable words', () => {
+    expect(tokenize('中文全文没有空格')).toEqual(['中文', '全文', '没有', '空格'])
+  })
+
+  it('keeps every chunk within the character ceiling, whitespace included', () => {
+    const chunks = chunkText('a b c d e f', 10, 3)
+    expect(chunks.map((chunk) => chunk.text)).toEqual(['a b', 'c d', 'e f'])
+    for (const chunk of chunks) expect(chunk.text.length).toBeLessThanOrEqual(3)
+  })
+
+  it('cuts a single overlong word in place to honor the character ceiling', () => {
+    const chunks = chunkText(`a ${'x'.repeat(10)} b`, 5, 4)
+    expect(chunks.map((chunk) => chunk.text)).toEqual(['a', 'xxxx', 'xxxx', 'xx', 'b'])
+    for (const chunk of chunks) expect(chunk.text.length).toBeLessThanOrEqual(4)
+  })
+
+  it('keeps pure word-count behavior when no character ceiling is given', () => {
+    const words = Array.from({ length: 12 }, (_, i) => `w${i}`).join(' ')
+    const chunks = chunkText(words, 5)
+    expect(chunks.map((chunk) => chunk.text)).toEqual([
+      'w0 w1 w2 w3 w4',
+      'w5 w6 w7 w8 w9',
+      'w10 w11',
+    ])
+  })
+
+  it('falls back to whitespace splitting when Intl.Segmenter is unavailable', () => {
+    vi.stubGlobal('Intl', { Segmenter: undefined })
+    try {
+      expect(chunkText('w0 w1 w2 w3 w4 w5', 2).map((chunk) => chunk.text)).toEqual([
+        'w0 w1',
+        'w2 w3',
+        'w4 w5',
+      ])
+      expect(tokenize('Attention, is ALL you need!')).toEqual([
+        'attention',
+        'is',
+        'all',
+        'you',
+        'need',
+      ])
+      expect(tokenize('---')).toEqual([])
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
 })
 
 describe('rankChunks', () => {
