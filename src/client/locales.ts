@@ -140,6 +140,21 @@ export type ZoteroLocaleKey =
   | 'starterEvidenceTemplate'
   | 'starterExportSelected'
   | 'starterExportSelectedTemplate'
+  | 'coverageLabel'
+  | 'coveragePages'
+  | 'coverageChars'
+  | 'coverageComplete'
+  | 'coverageIncomplete'
+  | 'availReturned'
+  | 'availUnavailable'
+  | 'availNoMatch'
+  | 'budgetLimitedNote'
+  | 'retrievedMultiple'
+  | 'evidenceScopeNote'
+  | 'openInZotero'
+  | 'openPdf'
+  | 'openAnnotation'
+  | 'instanceUnverified'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -335,6 +350,22 @@ export const en: Record<ZoteroLocaleKey, string> = {
     "Find evidence in this paper's annotations and notes for the following question: ",
   starterExportSelected: 'Export citations for selected items…',
   starterExportSelectedTemplate: 'Export these items from my Zotero library as citations: ',
+  coverageLabel: 'Indexing coverage',
+  coveragePages: '{indexed}/{total} pages',
+  coverageChars: '{indexed}/{total} chars',
+  coverageComplete: ' · complete',
+  coverageIncomplete: ' · incomplete',
+  availReturned: '{count} matching passages',
+  availUnavailable: 'unavailable',
+  availNoMatch: 'no matching passages',
+  budgetLimitedNote: 'Results were limited by the global budget.',
+  retrievedMultiple: 'gathered across {count} retrieves',
+  evidenceScopeNote:
+    'Evidence this session gathered, grouped by source; whether the final answer used it is not tracked.',
+  openInZotero: 'Open in Zotero',
+  openPdf: 'Open PDF',
+  openAnnotation: 'Open annotation',
+  instanceUnverified: 'cannot verify the current Zotero instance',
 }
 
 /** Simplified Chinese copy. */
@@ -414,11 +445,11 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   personalAnnotations: '个人批注',
   evidencePassages: '{count} evidence passages',
   evidenceSources: 'sources: {sources}',
-  sourceAnnotation: 'Annotation',
-  sourceNote: 'Note',
-  sourceAbstract: 'Abstract',
-  sourceFulltext: 'Full text',
-  pageLabel: 'p.{label}',
+  sourceAnnotation: '批注',
+  sourceNote: '笔记',
+  sourceAbstract: '摘要',
+  sourceFulltext: '全文',
+  pageLabel: '第{label}页',
   truncatedMore: '另有省略',
   truncatedPreview: '(截断)',
   evidenceExpandLabel: '展开预览',
@@ -517,4 +548,19 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   starterEvidenceTemplate: '在这篇文献的批注和笔记中找证据，问题是：',
   starterExportSelected: '导出选中条目的引用…',
   starterExportSelectedTemplate: '把下面几篇从我的 Zotero 库导出为引用：',
+  coverageLabel: '索引覆盖',
+  coveragePages: '{indexed}/{total} 页',
+  coverageChars: '{indexed}/{total} 字符',
+  coverageComplete: ' · 已完整',
+  coverageIncomplete: ' · 未完整',
+  availReturned: '返回 {count} 条匹配',
+  availUnavailable: '该来源不可用',
+  availNoMatch: '没有返回匹配',
+  budgetLimitedNote: '结果受全局预算限制，另有省略。',
+  retrievedMultiple: '经 {count} 次检索取得',
+  evidenceScopeNote: '本会话取得的证据，按文献汇总；不能确定这些内容被用于最终回答。',
+  openInZotero: '在 Zotero 中打开',
+  openPdf: '打开 PDF',
+  openAnnotation: '打开批注',
+  instanceUnverified: '无法验证当前 Zotero 实例',
 }

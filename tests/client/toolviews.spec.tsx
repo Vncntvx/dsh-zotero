@@ -447,7 +447,7 @@ describe('ZoteroGetRow', () => {
     expect(screen.getAllByText(t('personalNotes')).length).toBeGreaterThan(0)
     expect(screen.getByText(/my note/)).toBeDefined()
     expect(screen.getByText(/highlight/)).toBeDefined()
-    expect(screen.getByText(/p\.7/)).toBeDefined()
+    expect(screen.getByText(/第7页/)).toBeDefined()
   })
 
   it('degrades to the content text when meta is absent', () => {
@@ -559,10 +559,10 @@ describe('ZoteroRetrieveRow', () => {
     render(<ZoteroRetrieveRow block={settled({ meta: RETRIEVE_META })} t={t} />)
     expect(screen.getByText('4 evidence passages')).toBeDefined()
     fireEvent.click(screen.getByRole('button'))
-    expect(screen.getByText(/Annotation · p\.7/)).toBeDefined()
+    expect(screen.getByText(/批注 · 第7页/)).toBeDefined()
     // The fulltext row never shows a page label.
-    const fulltextHead = screen.getByText(/Full text/).textContent ?? ''
-    expect(fulltextHead).not.toContain('p.')
+    const fulltextHead = screen.getByText(/全文/).textContent ?? ''
+    expect(fulltextHead).not.toContain('第')
     expect(screen.getByText(/memory claim/)).toBeDefined()
     expect(screen.getByText(t('truncatedMore'))).toBeDefined()
   })

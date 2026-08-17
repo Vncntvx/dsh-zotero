@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react'
 import clsx from 'clsx'
 import { IconChevronDownOutline14, writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import { askDraftOf } from '../actions/source-actions.ts'
 import { interpolate, joinNonEmpty } from '../presenters.ts'
 import type { SourceItem } from '../sources/model.ts'
 import { SourceDetail } from './SourceDetail.tsx'
@@ -136,7 +137,7 @@ export function SourceRow({ item, t, setDraft }: SourceRowProps) {
             type="button"
             className={css.lineAction}
             onClick={() => {
-              setDraft(interpolate(t('askTemplate'), { ref: item.ref }))
+              setDraft(askDraftOf(item.ref, t))
             }}
           >
             {t('askAboutItem')}
