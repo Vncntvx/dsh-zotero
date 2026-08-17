@@ -63,6 +63,14 @@ The Agent moves down the ladder as a request deepens. A typical conversation:
 - Zotero desktop with the local API enabled: **Settings → Advanced → "Allow other applications on this computer to communicate with Zotero"**.
 - Read access is unauthenticated on `http://127.0.0.1:23119/api`. V1 has no path that modifies library data (items, notes, tags, collections).
 - Zotero ≥ 7 speaking local API version 3. Upgrade if the status command reports a version mismatch.
+- Node.js ≥ 22.19 (or 24+); the host dsh runtime is the rc.7 line. Runtime peer dependencies are declared in `package.json` `peerDependencies` (`@deepseek-ai/cordis` ≥ 4, `dsh-tools`, `dsh-llm`, `dsh-settings`, `dsh-user-questions`, `dsh-typert-protocol`, `dsh-typert-registry`, `dsh-api-remotes`, `dsh-commands`, `dsh-timeout`), all currently `^0.1.0-rc.7`.
+
+### Capability boundary and side effects
+
+- Network: only the loopback-forced `http://127.0.0.1:23119/api` (redirects refused, streaming byte bound); no external network calls.
+- Files: only `existsSync` checks of attachment disk paths — never written, never executed.
+- Process: no shell calls, no native modules, no resident background tasks or timers — every request is driven by a tool call, and loading the plugin never probes Zotero.
+- External side effects: the only persistent write is the settings card saving the `zotero:` section (user layer) of `$DSH_HOME/settings.yaml`; no telemetry.
 
 ## Install
 
@@ -79,7 +87,7 @@ The tarball ships the built `lib/` (the node half plus the browser half `lib/cli
 ```sh
 cd dsh-zotero
 npm pack
-dsh plugin --profile <name> add ./dsh-zotero-0.1.0.tgz
+dsh plugin --profile <name> add ./dsh-zotero-0.3.1.tgz
 ```
 
 `npm pack` runs `prepare` first, so the tarball carries a fresh `lib/`. Use this for unpublished or local trial installs.
@@ -200,7 +208,7 @@ Pack a tarball and install it into a profile. The plugin runs from the tarball's
 
 ```sh
 npm pack
-dsh plugin --profile <name> add ./dsh-zotero-0.1.0.tgz
+dsh plugin --profile <name> add ./dsh-zotero-0.3.1.tgz
 cd ~/.dsh/profiles/<name>
 node --input-type=module < /path/to/dsh-zotero/scripts/smoke.mjs
 ```

@@ -63,6 +63,14 @@ Agent 按需求逐层深入，一段典型对话：
 - 已安装 Zotero 桌面版，并启用本地 API：**设置 → 高级 → “Allow other applications on this computer to communicate with Zotero”**。
 - 本地 API 为无认证读取，地址为 `http://127.0.0.1:23119/api`。V1 没有任何修改文献库数据（条目、笔记、标签、分类等）的路径。
 - Zotero ≥ 7，本地 API 版本为 3。如果 status 命令报告版本不匹配，请升级。
+- Node.js ≥ 22.19（或 24+）；宿主 dsh 运行时为 rc.7 系。运行时依赖（peer）见 `package.json` 的 `peerDependencies`（`@deepseek-ai/cordis` ≥ 4、`dsh-tools`、`dsh-llm`、`dsh-settings`、`dsh-user-questions`、`dsh-typert-protocol`、`dsh-typert-registry`、`dsh-api-remotes`、`dsh-commands`、`dsh-timeout`），当前均声明为 `^0.1.0-rc.7`。
+
+### 能力边界与副作用
+
+- 网络：只访问强制回环的 `http://127.0.0.1:23119/api`（拒绝重定向、流式字节上限）；没有任何外部网络调用。
+- 文件：仅读取附件磁盘路径的存在性（`existsSync`），不写入、不执行。
+- 进程：无 Shell 调用、无 native 模块、无常驻后台任务或定时器——所有请求都由工具调用驱动，加载插件不会探测 Zotero。
+- 外部副作用：唯一的持久化写入是设置卡片保存时对 `$DSH_HOME/settings.yaml` 中 `zotero:` 小节（用户层）的更新；无遥测、无埋点。
 
 ## 安装
 
@@ -79,7 +87,7 @@ tarball 内含已构建的 `lib/`（node 半与浏览器半 `lib/client.js`）�
 ```sh
 cd dsh-zotero
 npm pack
-dsh plugin --profile <name> add ./dsh-zotero-0.1.0.tgz
+dsh plugin --profile <name> add ./dsh-zotero-0.3.1.tgz
 ```
 
 `npm pack` 先运行 `prepare` 构建 `lib/`，适合未发布或本地试装。
@@ -200,7 +208,7 @@ pnpm dsh web --patch ./dsh-zotero/dev.cordis.yml
 
 ```sh
 npm pack
-dsh plugin --profile <name> add ./dsh-zotero-0.1.0.tgz
+dsh plugin --profile <name> add ./dsh-zotero-0.3.1.tgz
 cd ~/.dsh/profiles/<name>
 node --input-type=module < /path/to/dsh-zotero/scripts/smoke.mjs
 ```
