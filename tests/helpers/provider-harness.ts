@@ -14,7 +14,11 @@ import { join } from 'node:path'
 import { expect } from 'vitest'
 import { ZoteroError } from '../../src/errors.js'
 import { ZoteroHttpClient } from '../../src/http-client.js'
-import { LocalApiProvider, type LocalApiLimits } from '../../src/provider-local.js'
+import {
+  LocalApiProvider,
+  type LocalApiLimits,
+  type LocalApiProviderOptions,
+} from '../../src/provider-local.js'
 import { parseRef } from '../../src/refs.js'
 import type {
   ZoteroExportRequest,
@@ -45,10 +49,12 @@ export const DEFAULT_PROVIDER_LIMITS: LocalApiLimits = {
 export function createProvider(
   mock: MockZotero,
   limits: Partial<LocalApiLimits> = {},
+  options: LocalApiProviderOptions = {},
 ): LocalApiProvider {
   return new LocalApiProvider(
     new ZoteroHttpClient({ baseUrl: mock.baseUrl, timeoutMs: 5000, maxResponseBytes: 1024 * 1024 }),
     { ...DEFAULT_PROVIDER_LIMITS, ...limits },
+    options,
   )
 }
 

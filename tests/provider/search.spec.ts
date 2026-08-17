@@ -401,7 +401,10 @@ describe('search: note-content scan', () => {
       'zotero://user/0/item/ABCD1234?server=S1',
       'zotero://user/0/item/NOTE1111?server=S1',
     ])
-    expect(result.total).toBe(2)
+    // The paged total stays API-driven (the count `offset` walks); the merged
+    // note is reported separately so pagination semantics stay exact.
+    expect(result.total).toBe(1)
+    expect(result.noteMatches).toBe(1)
     expect(result.returned).toBe(2)
     expect(result.nextOffset).toBeUndefined()
     expect(mock.requests[1]!.search.get('itemType')).toBe('note')
@@ -491,7 +494,9 @@ describe('search: note-content scan', () => {
     expect(result.items.map((entry) => entry.ref)).toEqual([
       'zotero://user/0/item/NOTE1111?server=S1',
     ])
-    expect(result.total).toBe(1)
+    expect(result.total).toBe(0)
+    expect(result.noteMatches).toBe(1)
+    expect(result.returned).toBe(1)
   })
 
   it('stops the scan at the configured record cap', async () => {
@@ -617,5 +622,141 @@ describe('search: note-content scan', () => {
       'zotero://user/0/item/ABCD1234?server=S1',
       'zotero://user/0/item/NOTE1111?server=S1',
     ])
+  })
+
+  it('skips the scan for punctuation-only and emoji-only queries', async () => {
+    mock.route('GET', '/api/users/0/items/top', (req, res, helpers, search) => {
+      if (search.get('itemType') === 'note') helpers.json([NOTE_HIT])
+      else helpers.json([], { 'Total-Results': '0' })
+    })
+    const punctuated = await provider.search(request({ query: '---' }))
+    const emoted = await provider.search(request({ query: '👾👾' }))
+    expect(punctuated.items).toEqual([])
+    expect(punctuated.noteMatches).toBeUndefined()
+    expect(emoted.items).toEqual([])
+    expect(emoted.noteMatches).toBeUndefined()
+    // A query with no tokens would vacuously "match" every scanned note; the
+    // scan stays off instead of flooding the page with irrelevant notes.
+    expect(mock.requests.filter((entry) => entry.search.get('itemType') === 'note')).toEqual([])
+  })
+
+  it('does not merge notes when the API page already fills the limit', async () => {
+    mock.route('GET', '/api/users/0/items/top', (req, res, helpers, search) => {
+      if (search.get('itemType') === 'note') helpers.json([NOTE_HIT])
+      else helpers.json([ITEM, ITEM, ITEM], { 'Total-Results': '3' })
+    })
+    const result = await provider.search(request({ query: 'cascade', limit: 3 }))
+    expect(result.items).toHaveLength(3)
+    expect(result.noteMatches).toBeUndefined()
+    expect(result.returned).toBe(3)
+    expect(result.total).toBe(3)
+    // The scan still ran (the headroom check happens after the fetch), but no
+    // note displaced an API hit — `returned` never exceeds the limit.
+    expect(mock.requests.filter((entry) => entry.search.get('itemType') === 'note')).toHaveLength(1)
+  })
+
+  it('merges note matches only up to the remaining limit headroom', async () => {
+    const NOTE_HIT_2 = {
+      key: 'NOTE2222',
+      data: { itemType: 'note', note: 'cascade chains in infrastructure too' },
+    }
+    const NOTE_HIT_3 = {
+      key: 'NOTE3333',
+      data: { itemType: 'note', note: 'cascade infrastructure again' },
+    }
+    mock.route('GET', '/api/users/0/items/top', (req, res, helpers, search) => {
+      if (search.get('itemType') === 'note') helpers.json([NOTE_HIT, NOTE_HIT_2, NOTE_HIT_3])
+      else helpers.json([ITEM], { 'Total-Results': '1' })
+    })
+    const result = await provider.search(request({ query: 'cascade', limit: 3 }))
+    expect(result.items.map((entry) => entry.ref)).toEqual([
+      'zotero://user/0/item/ABCD1234',
+      'zotero://user/0/item/NOTE1111',
+      'zotero://user/0/item/NOTE2222',
+    ])
+    expect(result.noteMatches).toBe(2)
+    expect(result.returned).toBe(3)
+    expect(result.total).toBe(1)
+  })
+
+  it('re-fetches a scope listing once the TTL expires', async () => {
+    const ttlProvider = createProvider(mock, {}, { scopeListingTtlMs: 30 })
+    mock.route('GET', '/api/users/0/collections', (req, res, helpers) =>
+      helpers.json(COLLECTIONS, { 'Zotero-Server-ID': 'S1' }),
+    )
+    mock.route('GET', '/api/users/0/collections/COLL1234/items/top', (req, res, helpers) =>
+      helpers.json([], { 'Total-Results': '0', 'Zotero-Server-ID': 'S1' }),
+    )
+    mock.route('GET', '/api/users/0/items/top', (req, res, helpers, search) =>
+      search.get('itemType') === 'note'
+        ? helpers.json([])
+        : helpers.json([], { 'Total-Results': '0', 'Zotero-Server-ID': 'S1' }),
+    )
+    const searchByName = () =>
+      ttlProvider.search(
+        request({ query: 'cascade', scope: { kind: 'collection', refOrName: 'LLM Papers' } }),
+      )
+    await searchByName()
+    const first = mock.requests.filter((entry) => entry.pathname === '/api/users/0/collections')
+    expect(first).toHaveLength(1)
+    await new Promise((resolve) => setTimeout(resolve, 40))
+    await searchByName()
+    expect(
+      mock.requests.filter((entry) => entry.pathname === '/api/users/0/collections'),
+    ).toHaveLength(2)
+  })
+
+  it('re-checks the scope listing once before failing an unknown collection name', async () => {
+    mock.route('GET', '/api/users/0/collections', (req, res, helpers) =>
+      helpers.json(COLLECTIONS, { 'Zotero-Server-ID': 'S1' }),
+    )
+    await zoteroError(
+      provider.search(
+        request({ query: 'cascade', scope: { kind: 'collection', refOrName: 'Missing' } }),
+      ),
+      'ZOTERO_NOT_FOUND',
+      'No collection',
+    )
+    // A name miss gets one fresh look in case the library changed since the
+    // cached listing; the failure is only reported after that.
+    expect(
+      mock.requests.filter((entry) => entry.pathname === '/api/users/0/collections'),
+    ).toHaveLength(2)
+  })
+
+  it('finds a collection created after the cached listing via the miss re-check', async () => {
+    let created = false
+    mock.route('GET', '/api/users/0/collections', (req, res, helpers) =>
+      helpers.json(
+        created ? [{ key: 'COLL1234', data: { key: 'COLL1234', name: 'Brand New' } }] : COLLECTIONS,
+        {
+          'Zotero-Server-ID': 'S1',
+        },
+      ),
+    )
+    mock.route('GET', '/api/users/0/collections/COLL1234/items/top', (req, res, helpers) =>
+      helpers.json([], { 'Total-Results': '0', 'Zotero-Server-ID': 'S1' }),
+    )
+    mock.route('GET', '/api/users/0/items/top', (req, res, helpers, search) =>
+      search.get('itemType') === 'note'
+        ? helpers.json([])
+        : helpers.json([], { 'Total-Results': '0', 'Zotero-Server-ID': 'S1' }),
+    )
+    await zoteroError(
+      provider.search(
+        request({ query: 'cascade', scope: { kind: 'collection', refOrName: 'Brand New' } }),
+      ),
+      'ZOTERO_NOT_FOUND',
+      'No collection',
+    )
+    created = true
+    const result = await provider.search(
+      request({ query: 'cascade', scope: { kind: 'collection', refOrName: 'Brand New' } }),
+    )
+    expect(result.scope).toEqual({
+      kind: 'collection',
+      ref: 'zotero://user/0/collection/COLL1234?server=S1',
+      name: 'Brand New',
+    })
   })
 })

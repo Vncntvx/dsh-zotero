@@ -167,6 +167,7 @@ const SEARCH_OUTPUT_SCHEMA = {
     offset: { type: 'integer', required: true },
     returned: { type: 'integer', required: true },
     nextOffset: { type: 'integer' },
+    noteMatches: { type: 'integer' },
   },
 } as const
 
@@ -225,6 +226,11 @@ export function renderSearch(_args: SearchArgs, value: SearchOutput): ContentBlo
       `More results available: search again with offset ${value.nextOffset} and the same scope ref.`,
     )
   }
+  if (value.noteMatches !== undefined && value.noteMatches > 0) {
+    lines.push(
+      `${value.noteMatches} of the listed hits came from the client-side note-body scan (first page only, not part of the paged total).`,
+    )
+  }
   return [{ type: 'text', text: lines.join('\n') }]
 }
 
@@ -264,7 +270,7 @@ export function registerSearchTool(ctx: Context, service: ZoteroService): void {
       description: [
         "Search the user's local Zotero research library for candidate papers.",
         'metadata mode matches titles, creators, and years; everything mode also searches indexed full text.',
-        'With a query, note bodies are matched client-side and merged into the first page (library and collection scopes; capped by maxNoteScanRecords); notes show a synthesized title from their first line.',
+        'On the first page (offset 0), note bodies are matched client-side and merged up to the limit (library and collection scopes; capped by maxNoteScanRecords); noteMatches reports how many hits came from that scan, and they are not part of the paged total; notes show a synthesized title from their first line.',
         "scope restricts the search to a collection or a Zotero saved search by name or zotero:// ref; additional filters combine with a saved search's own conditions.",
         'Results carry stable zotero:// refs for zotero_get/zotero_retrieve, and a scope ref for pagination via offset.',
       ].join(' '),

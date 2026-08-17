@@ -6,7 +6,12 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { ZOTERO_NOT_FOUND, ZOTERO_OUTPUT_TOO_LARGE, ZOTERO_UNEXPECTED } from '../../src/errors.js'
+import {
+  ZOTERO_NOT_FOUND,
+  ZOTERO_OUTPUT_TOO_LARGE,
+  ZOTERO_SERVER_MISMATCH,
+  ZOTERO_UNEXPECTED,
+} from '../../src/errors.js'
 import { type LocalApiLimits, type LocalApiProvider } from '../../src/provider-local.js'
 import { parseRef } from '../../src/refs.js'
 import { MockZotero } from '../helpers/mock-zotero.js'
@@ -194,6 +199,88 @@ describe('export', () => {
       provider.export(exportRequest({ refs: [parseRef('zotero://group/42/item/ABCD1234')] })),
       'ZOTERO_INVALID_REF',
       'Group library references are not supported',
+    )
+    expect(mock.requests).toEqual([])
+  })
+
+  it('batches citation requests at the API key cap and merges in request order', async () => {
+    const refs = Array.from({ length: 51 }, (_, i) =>
+      parseRef(`zotero://user/0/item/${String(i).padStart(4, '0')}ABCD`),
+    )
+    mock.route('GET', '/api/users/0/items', (req, res, helpers, search) =>
+      helpers.json(
+        (search.get('itemKey') ?? '').split(',').map((key) => ({ key, citation: `c-${key}` })),
+      ),
+    )
+    const result = await provider.export(exportRequest({ refs, format: 'citation' }))
+    const batchRequests = mock.requests.filter((entry) => entry.pathname === '/api/users/0/items')
+    expect(batchRequests).toHaveLength(2)
+    expect(batchRequests[0]!.search.get('itemKey')!.split(',')).toHaveLength(50)
+    expect(batchRequests[1]!.search.get('itemKey')!.split(',')).toHaveLength(1)
+    if (result.format !== 'citation') throw new Error('unreachable')
+    // Merging keeps the requested order across batches; no citation is lost.
+    expect(result.citations.map((entry) => entry.ref)).toEqual(
+      refs.map((ref) => `zotero://user/0/item/${ref.key}`),
+    )
+  })
+
+  it('keeps exactly the API key cap in a single citation request', async () => {
+    const refs = Array.from({ length: 50 }, (_, i) =>
+      parseRef(`zotero://user/0/item/${String(i).padStart(4, '0')}ABCD`),
+    )
+    mock.route('GET', '/api/users/0/items', (req, res, helpers, search) =>
+      helpers.json((search.get('itemKey') ?? '').split(',').map((key) => ({ key, citation: 'c' }))),
+    )
+    const result = await provider.export(exportRequest({ refs, format: 'citation' }))
+    expect(mock.requests).toHaveLength(1)
+    if (result.format !== 'citation') throw new Error('unreachable')
+    expect(result.citations).toHaveLength(50)
+  })
+
+  it('refuses batch-breaking formats above the API key cap without a request', async () => {
+    const refs = Array.from({ length: 51 }, (_, i) =>
+      parseRef(`zotero://user/0/item/${String(i).padStart(4, '0')}ABCD`),
+    )
+    for (const format of ['bibliography', 'bibtex', 'biblatex', 'ris', 'csljson'] as const) {
+      await zoteroError(
+        provider.export(exportRequest({ refs, format })),
+        'ZOTERO_INVALID_ARGUMENT',
+        '50',
+      )
+    }
+    expect(mock.requests).toEqual([])
+  })
+
+  it('applies the output cap across citation batches', async () => {
+    const narrow = makeProvider({ maxExportChars: 5 })
+    const refs = Array.from({ length: 51 }, (_, i) =>
+      parseRef(`zotero://user/0/item/${String(i).padStart(4, '0')}ABCD`),
+    )
+    mock.route('GET', '/api/users/0/items', (req, res, helpers, search) =>
+      helpers.json(
+        (search.get('itemKey') ?? '').split(',').map((key) => ({ key, citation: 'xx' })),
+      ),
+    )
+    await zoteroError(
+      narrow.export(exportRequest({ refs, format: 'citation' })),
+      'ZOTERO_OUTPUT_TOO_LARGE',
+    )
+  })
+
+  it('fails closed when export refs mix Zotero instances', async () => {
+    mock.route('GET', '/api/users/0/items', (req, res, helpers) =>
+      helpers.json([{ key: 'ABCD1234', citation: 'x' }]),
+    )
+    await zoteroError(
+      provider.export(
+        exportRequest({
+          refs: [
+            parseRef('zotero://user/0/item/ABCD1234?server=S1'),
+            parseRef('zotero://user/0/item/BBBB1234?server=S2'),
+          ],
+        }),
+      ),
+      ZOTERO_SERVER_MISMATCH,
     )
     expect(mock.requests).toEqual([])
   })

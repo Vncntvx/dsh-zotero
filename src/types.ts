@@ -96,10 +96,17 @@ export interface ZoteroSearchItem {
 export interface ZoteroSearchResult {
   readonly scope: ZoteroResolvedScope
   items: ZoteroSearchItem[]
+  /** The paged API total — the count `offset` pagination walks; note-body matches are not part of it. */
   readonly total: number
   readonly offset: number
   readonly returned: number
   nextOffset?: number
+  /**
+   * Client-side note-body matches merged into this first page (offset 0 only,
+   * library/collection scopes). They fill the page up to `limit` but are not
+   * counted in `total`, so pagination stays API-driven; omitted when none.
+   */
+  noteMatches?: number
 }
 
 /** Child content kinds `zotero_get` can include beyond plain metadata. */
@@ -284,7 +291,9 @@ export interface ZoteroProvider {
   /**
    * Probe connectivity and report the instance identity facts.
    * @param signal - caller cancellation; forwarded to the transport.
-   * @returns the status record; failures are reported in `diagnosis`, never thrown.
+   * @returns the status record; failures are reported in `diagnosis`, never
+   *   thrown — except an explicit caller abort, which propagates so a cancel
+   *   is never mistaken for a connectivity problem.
    */
   status(signal?: AbortSignal): Promise<ZoteroStatus>
   /**

@@ -16,6 +16,7 @@ import ZoteroService from '../src/index.js'
 import { ZOTERO_NOT_RUNNING } from '../src/errors.js'
 import { renderGet } from '../src/tools/get.js'
 import { renderRetrieve } from '../src/tools/retrieve.js'
+import { renderSearch } from '../src/tools/search.js'
 import { MockZotero } from './helpers/mock-zotero.js'
 import { CHILD_ROWS, ITEM } from './helpers/fixtures.js'
 
@@ -81,6 +82,25 @@ describe('zotero_search tool', () => {
     expect((result.content[0] as { text: string }).text).toBe(
       'Found 1 of 1 results:\n1. zotero://user/0/item/ABCD1234?server=S1 — FlashAttention-2 (2023) [conferencePaper] — Dao, Tri',
     )
+  })
+
+  it('renders the merged-note notice only when noteMatches is present and positive', () => {
+    const value = {
+      scope: { kind: 'library' as const },
+      items: [],
+      total: 42,
+      offset: 0,
+      returned: 2,
+      noteMatches: 2,
+    }
+    const withNotes = renderSearch({}, value)
+    expect((withNotes[0] as { text: string }).text).toContain(
+      '2 of the listed hits came from the client-side note-body scan',
+    )
+    const withoutNotes = renderSearch({}, { ...value, noteMatches: undefined })
+    expect((withoutNotes[0] as { text: string }).text).not.toContain('note-body scan')
+    const zeroNotes = renderSearch({}, { ...value, noteMatches: 0 })
+    expect((zeroNotes[0] as { text: string }).text).not.toContain('note-body scan')
   })
 
   it('chains a resolved scope ref into the next page without re-resolving names', async () => {
@@ -1024,7 +1044,7 @@ describe('zotero_export tool', () => {
 
   it('accepts exactly the capped ref count', async () => {
     const refs = Array.from(
-      { length: 1000 },
+      { length: 50 },
       (_, i) => `zotero://user/0/item/${String(i).padStart(4, '0')}ABCD`,
     )
     mock.route('GET', '/api/users/0/items', (req, res, helpers, search) =>
@@ -1033,7 +1053,7 @@ describe('zotero_export tool', () => {
     const result = await runTool('zotero_export', { refs, format: 'citation' })
     expect(result.isError).toBe(false)
     if (result.isError) throw new Error('unreachable')
-    expect((result.value as { citations: unknown[] }).citations).toHaveLength(1000)
+    expect((result.value as { citations: unknown[] }).citations).toHaveLength(50)
   })
 
   it('declares itself concurrency-safe for valid arguments', () => {
@@ -1117,6 +1137,7 @@ describe('tool presentation', () => {
       nextOffset: 10,
       displayed: 0,
       omitted: 10,
+      noteMatches: null,
       items: [],
     })
     // A final page omits nextOffset; the projector records it as null so the
@@ -1126,7 +1147,15 @@ describe('tool presentation', () => {
         {},
         { scope: { kind: 'library' }, items: [], total: 42, offset: 0, returned: 10 },
       ),
-    ).toEqual({ returned: 10, total: 42, nextOffset: null, displayed: 0, omitted: 10, items: [] })
+    ).toEqual({
+      returned: 10,
+      total: 42,
+      nextOffset: null,
+      displayed: 0,
+      omitted: 10,
+      noteMatches: null,
+      items: [],
+    })
     const result: ToolResult = {
       content: [{ type: 'text', text: 'x' }],
       isError: false,

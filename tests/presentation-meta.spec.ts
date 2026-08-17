@@ -91,6 +91,13 @@ describe('projectSearchMeta', () => {
     expect(projectSearchMeta(searchResult(0)).nextOffset).toBeNull()
   })
 
+  it('passes the merged note count through and defaults it to null', () => {
+    expect(
+      projectSearchMeta({ ...searchResult(1), noteMatches: 3 } as ZoteroSearchResult).noteMatches,
+    ).toBe(3)
+    expect(projectSearchMeta(searchResult(0)).noteMatches).toBeNull()
+  })
+
   it('truncates long titles and creator summaries', () => {
     const meta = projectSearchMeta({
       scope: { kind: 'library' },

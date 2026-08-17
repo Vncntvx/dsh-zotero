@@ -110,6 +110,11 @@ export function renderRetrieve(_args: RetrieveArgs, value: RetrieveOutput): Cont
   const lines = [
     `Evidence for ${value.ref} (${value.evidence.length} passage${value.evidence.length === 1 ? '' : 's'})`,
   ]
+  if (value.evidence.length === 0) {
+    lines.push(
+      'No passages matched the query — the item may still have content, but none of it ranked against these terms.',
+    )
+  }
   if (value.attachmentRef !== undefined) lines.push(`Full text: ${value.attachmentRef}`)
   if (value.coverage !== undefined) {
     const coverage = value.coverage

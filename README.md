@@ -1,19 +1,26 @@
-<h1 align="center">dsh-zotero</h1>
+<div align="center">
+
+# dsh-zotero
+
+<img
+  src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=500&size=18&pause=2000&color=CC2936&center=true&vCenter=true&width=760&lines=%3E+Zotero+as+an+evidence+store+for+agents."
+  alt="dsh-zotero"
+/>
+<p align="center">
+  <a href="https://www.npmjs.com/package/dsh-zotero"><img src="https://img.shields.io/npm/v/dsh-zotero" alt="npm version" style="max-width:100%;"></a>
+  <a href="https://www.npmjs.com/package/dsh-zotero"><img src="https://img.shields.io/npm/dm/dsh-zotero" alt="npm downloads" style="max-width:100%;"></a>
+  <a href="https://www.npmjs.com/package/dsh-zotero"><img src="https://img.shields.io/npm/l/dsh-zotero" alt="license" style="max-width:100%;"></a>
+  <a href="https://awesome-dsh-plugin.com"><img src="https://awesome-dsh-plugin.com/badge.svg" alt="Awesome DSH Plugin"></a>
+</p>
+</div>
 
 <p align="center">
   <a href="README.en.md"><b>English</b></a> · <b>中文</b>
 </p>
 
-<p align="center">
-  <a href="https://awesome-dsh-plugin.com"><img src="https://awesome-dsh-plugin.com/badge.svg" alt="Awesome DSH Plugin"></a>
-  <img src="https://img.shields.io/npm/v/dsh-zotero" alt="npm version">
-  <img src="https://img.shields.io/npm/dm/dsh-zotero" alt="npm downloads">
-  <img src="https://img.shields.io/npm/l/dsh-zotero" alt="license">
-</p>
+让 Agent 从你的 [Zotero](https://www.zotero.org) 文献库中发现来源、提取与问题相关的证据，并始终保留证据与原始文献之间的联系。
 
-让 Agents 搜索、阅读并引用你的本地 [Zotero](https://www.zotero.org) 文献库：找文献、查看笔记与批注、按问题取证、打开原文、生成引用。
-
-在会话里用自然语言描述需求，Agent 自动按需调用下面的工具；唯一的手动命令是 `/zotero status`。
+dsh-zotero 面向 Agent 的研究工作流设计：从文献检索、元数据与笔记查看，到证据检索、原文打开和引用生成，Agent 可以根据当前任务逐步获取所需信息，而不必一次读取整篇文献或整个文献库。
 
 ## 工具
 
@@ -98,28 +105,28 @@ allowBuilds:
 
 所有值都是 `Config` 字段，可在 bundle 的 `config` 块中修改（例如通过 `dsh plugin config`）。以下为默认值。
 
-| 字段                   | 默认值                       | 含义                                                                                   |
-| ---------------------- | ---------------------------- | -------------------------------------------------------------------------------------- |
-| `baseUrl`              | `http://127.0.0.1:23119/api` | 本地 API 基础 URL。仅支持纯回环 HTTP。                                                 |
-| `provider`             | `local`                      | 要选择的 provider id。                                                                 |
-| `timeoutMs`            | `5000`                       | 每个请求的 provider 超时时间。                                                         |
-| `maxSearchResults`     | `20`                         | `zotero_search` `limit` 的上限。                                                       |
-| `maxNoteScanRecords`   | `200`                        | `zotero_search` 补扫笔记正文的笔记数量上限。                                           |
-| `maxEvidenceChars`     | `6000`                       | 检索证据的总字符预算。                                                                 |
-| `maxEvidencePassages`  | `4`                          | 证据片段数量的上限。                                                                   |
-| `maxDetailChars`       | `3000`                       | `zotero_get` 摘要预览的字符预算。                                                      |
-| `maxNoteBodyChars`     | `30000`                      | `zotero_get` 返回 note 条目自身正文的字符预算。                                        |
-| `maxNoteChars`         | `2000`                       | `zotero_get` 单条笔记预览的字符预算。                                                  |
-| `maxNoteRecords`       | `50`                         | `zotero_get` 返回笔记数量的上限。                                                      |
-| `maxAnnotationRecords` | `100`                        | `zotero_get` 返回批注数量的上限。                                                      |
-| `fulltextChunkWords`   | `200`                        | 进入证据排序的全文片段词数。                                                           |
-| `maxFulltextChars`     | `250000`                     | 进入证据排序的全文大小上限。                                                           |
-| `maxResponseBytes`     | `16777216`                   | 每个 API 响应的流式字节上限。                                                          |
-| `maxExportChars`       | `1000000`                    | 导出输出的硬上限。不会中途截断。                                                       |
-| `maxExportRefs`        | `1000`                       | 单次 `zotero_export` 的 refs 数量上限，保护请求行不超服务器 HTTP 头限制。              |
-| `defaultStyle`         | `apa`                        | 引用/参考文献使用的 CSL 样式。                                                         |
-| `defaultLocale`        | `en-US`                      | 引用/参考文献使用的 CSL locale。                                                       |
-| `webEnabled`           | `true`                       | 是否在会话顶部显示 Zotero 专属标签页；开关在每次页面加载时读取，切换后需刷新页面生效。 |
+| 字段                   | 默认值                       | 含义                                                                                 |
+| ---------------------- | ---------------------------- | ------------------------------------------------------------------------------------ |
+| `baseUrl`              | `http://127.0.0.1:23119/api` | 本地 API 基础 URL。仅支持纯回环 HTTP。                                               |
+| `provider`             | `local`                      | 要选择的 provider id。                                                               |
+| `timeoutMs`            | `5000`                       | 每个请求的 provider 超时时间。                                                       |
+| `maxSearchResults`     | `20`                         | `zotero_search` `limit` 的上限。                                                     |
+| `maxNoteScanRecords`   | `200`                        | `zotero_search` 补扫笔记正文的笔记数量上限。                                         |
+| `maxEvidenceChars`     | `6000`                       | 检索证据的总字符预算。                                                               |
+| `maxEvidencePassages`  | `4`                          | 证据片段数量的上限。                                                                 |
+| `maxDetailChars`       | `3000`                       | `zotero_get` 摘要预览的字符预算。                                                    |
+| `maxNoteBodyChars`     | `30000`                      | `zotero_get` 返回 note 条目自身正文的字符预算。                                      |
+| `maxNoteChars`         | `2000`                       | `zotero_get` 单条笔记预览的字符预算。                                                |
+| `maxNoteRecords`       | `50`                         | `zotero_get` 返回笔记数量的上限。                                                    |
+| `maxAnnotationRecords` | `100`                        | `zotero_get` 返回批注数量的上限。                                                    |
+| `fulltextChunkWords`   | `200`                        | 进入证据排序的全文片段词数。                                                         |
+| `maxFulltextChars`     | `250000`                     | 进入证据排序的全文大小上限。                                                         |
+| `maxResponseBytes`     | `16777216`                   | 每个 API 响应的流式字节上限。                                                        |
+| `maxExportChars`       | `1000000`                    | 导出输出的硬上限。不会中途截断。                                                     |
+| `maxExportRefs`        | `50`                         | 单次 `zotero_export` 的 refs 数量上限；citation 分批到该上限，其余格式单次最多 50。  |
+| `defaultStyle`         | `apa`                        | 引用/参考文献使用的 CSL 样式。                                                       |
+| `defaultLocale`        | `en-US`                      | 引用/参考文献使用的 CSL locale。                                                     |
+| `webEnabled`           | `true`                       | 是否在会话顶部显示 Zotero 专属标签页；开关即时生效，关闭后立即隐藏标签页，无需刷新。 |
 
 ### Web 配置
 
@@ -136,13 +143,13 @@ dsh web 的会话视图是标签页环（Chat、Trajectory、…）。插件注�
 
 - 标签页顶部是**连接条**：挂载时探测一次、每次手动刷新再探测一次（请求驱动，无轮询定时器）；显示连接状态、API/Schema 版本、Server ID（Zotero 10+）与上次检查时间；Zotero 不可用时显示诊断信息。
 - 下方是本会话的 **Zotero 工具活动**：每次搜索、精读、取证、附件解析与导出调用都渲染为富卡片（可展开、ref 可复制、证据段落标注来源），完全由会话快照重放驱动——同一段记录永远渲染出同样的卡片，meta 缺失时降级为原始内容。
-- 设置页的 **Web → 会话工具卡片** 开关（`webEnabled`，默认开启）控制标签页的注册；开关在每次页面加载时读取一次，切换后需刷新页面生效。关闭后，Zotero 调用在轨迹中显示为 dsh 内置的通用卡片。
+- 设置页的 **Web → 会话工具卡片** 开关（`webEnabled`，默认开启）控制标签页的注册；开关即时生效——打开立即显示、关闭立即隐藏，无需刷新页面。关闭后，Zotero 调用在轨迹中显示为 dsh 内置的通用卡片。
 
 ### 限制
 
 - 只读文献库：没有任何路径会修改条目、笔记、标签或合集。
 - 全文证据依赖 Zotero 的索引：`everything` 搜索与 `retrieve` 的全文段落都需要已建立索引。
-- 笔记正文搜索是客户端扫描：仅限 library/collection 作用域与第一页结果，受 `maxNoteScanRecords` 限制；超出上限的笔记永远不会命中。
+- 笔记正文搜索是客户端扫描：仅限 library/collection 作用域与第一页结果（offset 0），受 `maxNoteScanRecords` 限制；命中并入第一页直到 `limit`，计数在返回的 `noteMatches` 字段中，不计入分页 `total`。
 - 附件深度取决于宿主组合：`zotero_attachment` 返回文件位置；继续阅读该 PDF 需要宿主具备对应的文件/PDF 能力。
 - 证据排序是基于词项的相关性，而非向量或语义检索。
 

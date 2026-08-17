@@ -1,19 +1,26 @@
-<h1 align="center">dsh-zotero</h1>
+<div align="center">
 
-<p align="center">
-  <b>English</b> · <a href="README.md"><b>中文</b></a>
-</p>
+# dsh-zotero
 
+<img
+  src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=500&size=18&pause=2000&color=CC2936&center=true&vCenter=true&width=760&lines=%3E+Zotero+as+an+evidence+store+for+agents."
+  alt="dsh-zotero"
+/>
 <p align="center">
+  <a href="https://www.npmjs.com/package/dsh-zotero"><img src="https://img.shields.io/npm/v/dsh-zotero" alt="npm version" style="max-width:100%;"></a>
+  <a href="https://www.npmjs.com/package/dsh-zotero"><img src="https://img.shields.io/npm/dm/dsh-zotero" alt="npm downloads" style="max-width:100%;"></a>
+  <a href="https://www.npmjs.com/package/dsh-zotero"><img src="https://img.shields.io/npm/l/dsh-zotero" alt="license" style="max-width:100%;"></a>
   <a href="https://awesome-dsh-plugin.com"><img src="https://awesome-dsh-plugin.com/badge.svg" alt="Awesome DSH Plugin"></a>
-  <img src="https://img.shields.io/npm/v/dsh-zotero" alt="npm version">
-  <img src="https://img.shields.io/npm/dm/dsh-zotero" alt="npm downloads">
-  <img src="https://img.shields.io/npm/l/dsh-zotero" alt="license">
+</p>
+</div>
+
+<p align="center">
+  <a href="README.md"><b>中文</b></a> · <b>English</b>
 </p>
 
-Let agents search, read, and cite your local [Zotero](https://www.zotero.org) library: find papers, browse notes and annotations, pull evidence by question, open the source document, generate citations.
+Let agents discover sources in your [Zotero](https://www.zotero.org) library, extract the evidence relevant to a question, and always keep the link between evidence and the source document.
 
-Describe what you need in a session and the Agent calls the tools below as needed. The only manual command is `/zotero status`.
+dsh-zotero is built for agent research workflows: from literature search and metadata/note inspection to evidence retrieval, opening the source, and citation generation, the Agent pulls what the current task needs step by step — without reading a whole paper or the whole library up front.
 
 ## Tools
 
@@ -98,32 +105,32 @@ The plugin mounts as id `zotero` and takes effect on the next dsh start. After i
 
 All values are `Config` fields changeable from the bundle's `config` block (e.g. via `dsh plugin config`). Defaults are shown.
 
-| Field                  | Default                      | Meaning                                                                                                        |
-| ---------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `baseUrl`              | `http://127.0.0.1:23119/api` | Local API base URL. Plain loopback HTTP only.                                                                  |
-| `provider`             | `local`                      | Provider id to select.                                                                                         |
-| `timeoutMs`            | `5000`                       | Per-request provider deadline.                                                                                 |
-| `maxSearchResults`     | `20`                         | Upper bound for `zotero_search` `limit`.                                                                       |
-| `maxNoteScanRecords`   | `200`                        | Upper bound for note records scanned for body matches by `zotero_search`.                                      |
-| `maxEvidenceChars`     | `6000`                       | Total character budget for retrieved evidence.                                                                 |
-| `maxEvidencePassages`  | `4`                          | Upper bound for evidence passage counts.                                                                       |
-| `maxDetailChars`       | `3000`                       | Character budget for `zotero_get` abstract previews.                                                           |
-| `maxNoteBodyChars`     | `30000`                      | Character budget for a note item's own body returned by `zotero_get`.                                          |
-| `maxNoteChars`         | `2000`                       | Character budget per note preview in `zotero_get`.                                                             |
-| `maxNoteRecords`       | `50`                         | Upper bound for note records returned by `zotero_get`.                                                         |
-| `maxAnnotationRecords` | `100`                        | Upper bound for annotation records returned by `zotero_get`.                                                   |
-| `fulltextChunkWords`   | `200`                        | Word count per full-text passage entering evidence ranking.                                                    |
-| `maxFulltextChars`     | `250000`                     | Full text accepted into evidence ranking.                                                                      |
-| `maxResponseBytes`     | `16777216`                   | Streaming byte bound for every API response.                                                                   |
-| `maxExportChars`       | `1000000`                    | Export output hard limit. Never mid-truncated.                                                                 |
-| `maxExportRefs`        | `1000`                       | Upper bound for refs in one `zotero_export` call; keeps the request line under the server's HTTP header limit. |
-| `defaultStyle`         | `apa`                        | CSL style for citation/bibliography formats.                                                                   |
-| `defaultLocale`        | `en-US`                      | CSL locale for citation/bibliography formats.                                                                  |
-| `webEnabled`           | `true`                       | Enables the dedicated Zotero conversation tab; the gate is read once per page load.                            |
+| Field                  | Default                      | Meaning                                                                                                                                          |
+| ---------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `baseUrl`              | `http://127.0.0.1:23119/api` | Local API base URL. Plain loopback HTTP only.                                                                                                    |
+| `provider`             | `local`                      | Provider id to select.                                                                                                                           |
+| `timeoutMs`            | `5000`                       | Per-request provider deadline.                                                                                                                   |
+| `maxSearchResults`     | `20`                         | Upper bound for `zotero_search` `limit`.                                                                                                         |
+| `maxNoteScanRecords`   | `200`                        | Upper bound for note records scanned for body matches by `zotero_search`.                                                                        |
+| `maxEvidenceChars`     | `6000`                       | Total character budget for retrieved evidence.                                                                                                   |
+| `maxEvidencePassages`  | `4`                          | Upper bound for evidence passage counts.                                                                                                         |
+| `maxDetailChars`       | `3000`                       | Character budget for `zotero_get` abstract previews.                                                                                             |
+| `maxNoteBodyChars`     | `30000`                      | Character budget for a note item's own body returned by `zotero_get`.                                                                            |
+| `maxNoteChars`         | `2000`                       | Character budget per note preview in `zotero_get`.                                                                                               |
+| `maxNoteRecords`       | `50`                         | Upper bound for note records returned by `zotero_get`.                                                                                           |
+| `maxAnnotationRecords` | `100`                        | Upper bound for annotation records returned by `zotero_get`.                                                                                     |
+| `fulltextChunkWords`   | `200`                        | Word count per full-text passage entering evidence ranking.                                                                                      |
+| `maxFulltextChars`     | `250000`                     | Full text accepted into evidence ranking.                                                                                                        |
+| `maxResponseBytes`     | `16777216`                   | Streaming byte bound for every API response.                                                                                                     |
+| `maxExportChars`       | `1000000`                    | Export output hard limit. Never mid-truncated.                                                                                                   |
+| `maxExportRefs`        | `50`                         | Upper bound for refs in one `zotero_export` call; citation batches past the API's 50-key per-request cap.                                        |
+| `defaultStyle`         | `apa`                        | CSL style for citation/bibliography formats.                                                                                                     |
+| `defaultLocale`        | `en-US`                      | CSL locale for citation/bibliography formats.                                                                                                    |
+| `webEnabled`           | `true`                       | Enables the dedicated Zotero tab at the top of the session; the toggle applies live — turning it off hides the tab right away, no reload needed. |
 
 ### Web configuration
 
-The plugin registers a "Zotero" card in dsh web's **Settings → Plugins → Plugin configuration** page listing all 20 fields above. The card binds the `zotero` settings namespace: writes land in the `zotero:` section of `$DSH_HOME/settings.yaml` (layered over the patch entry's `config`, user layer wins), and **saves apply live** — the transport and the provider rebuild on the new values, so the next tool call or `/zotero status` uses them without a dsh restart.
+The plugin registers a "Zotero" card in dsh web's **Settings → Plugins → Plugin configuration** page listing every field in the table above. The card binds the `zotero` settings namespace: writes land in the `zotero:` section of `$DSH_HOME/settings.yaml` (layered over the patch entry's `config`, user layer wins), and **saves apply live** — the transport and the provider rebuild on the new values, so the next tool call or `/zotero status` uses them without a dsh restart.
 
 - Invalid values (a non-loopback `baseUrl`, a non-positive limit) are refused before the write; the card reports the failed save and keeps the draft, and the plugin keeps running on the last valid value.
 - Every field shows its effective value; fields overridden by the settings document carry an "Overridden" badge and offer a one-click reset (clears the user layer, back to the patch entry value).
@@ -136,13 +143,13 @@ The dsh web session view is a tab ring (Chat, Trajectory, …). The plugin regis
 
 - A **connection strip** leads the tab: one status probe on mount, another per explicit Refresh (request-driven, no polling timers); it shows the connection state, API/schema versions, Server ID (Zotero 10+), and the last-checked time, with the diagnosis when Zotero is unavailable.
 - Below it, the session's **Zotero tool activity**: every search, read, retrieve, attachment, and export call renders as a rich card (expandable, copyable refs, evidence passages labeled by source), fully replay-driven from the conversation snapshot — the same transcript renders the same cards, and missing meta degrades to the raw content.
-- The **Web → Session tool cards** toggle in the settings page (`webEnabled`, default on) controls the tab's registration; the gate is read once per page load, so a toggle change applies after the page reloads. When off, Zotero calls show as dsh's built-in generic cards in the trajectory.
+- The **Web → Session tool cards** toggle in the settings page (`webEnabled`, default on) controls the tab's registration; the toggle applies live — turning it off hides the tab immediately, no reload needed. When off, Zotero calls show as dsh's built-in generic cards in the trajectory.
 
 ## Limits
 
 - Read-only library: no path modifies items, notes, tags, or collections.
 - Full-text evidence depends on Zotero's index: `everything` search and `retrieve` full-text passages both require indexing.
-- Note-content search is a client-side scan: library/collection scopes and the first result page only, bounded by `maxNoteScanRecords`; notes beyond the cap never match.
+- Note-content search is a client-side scan: library/collection scopes and the first result page (offset 0) only, bounded by `maxNoteScanRecords`; matches fill the first page up to the limit and are reported in the `noteMatches` field, outside the paged `total`.
 - Attachment depth depends on the harness composition: `zotero_attachment` returns the file location; reading that PDF further needs a matching file/PDF capability.
 - Evidence ranking is term-based relevance, not embedding or semantic search.
 
@@ -186,9 +193,6 @@ pnpm dsh web --patch ./dsh-zotero/dev.cordis.yml
 #### With the npm-installed dsh
 
 This plugin builds in two halves: the **Node side** (`lib/`, emitted by `tsc`, holds the service, tools, provider, and other logic) and the **browser side** (`lib/client.js`, emitted by `esbuild`, holds the dsh web configuration card and the Zotero tab view). The three flows below cover the common cases.
-
-- `npm run build` emits both halves; `npm run build:client` rebuilds only the browser side.
-- The rest of this section assumes `npm run build` has been run at least once so `lib/` exists.
 
 **① Resident instance verification (tarball install)**
 

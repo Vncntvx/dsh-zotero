@@ -7,25 +7,34 @@
  * search scopes resolved client-side (the Local API has no server-side name
  * search), and literal tag names escaped so they never become query syntax.
  * Zotero's index never covers note bodies, so the first page of a queried
- * search also merges client-side note-content matches (capped by
- * `maxNoteScanRecords`; collection scopes filter by membership).
+ * search (offset 0) also merges client-side note-content matches up to the
+ * requested limit (capped by `maxNoteScanRecords`; collection scopes filter
+ * by membership). The merged notes are reported in `noteMatches` and are not
+ * part of the paged `total`, so pagination stays API-driven.
  * @module dsh-zotero/provider-local
  */
 
 import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { ZoteroHttpClient } from './http-client.js'
-import { LOCAL_PROVIDER_ID } from './constants.js'
+import {
+  LOCAL_PROVIDER_ID,
+  ZOTERO_ITEMKEY_BATCH,
+  ZOTERO_SCOPE_LISTING_TTL_MS,
+} from './constants.js'
 import {
   NO_FULLTEXT_MESSAGE,
+  SERVER_MISMATCH_MESSAGE,
   isNotFoundError,
   ZOTERO_FILE_MISSING,
+  ZOTERO_INVALID_ARGUMENT,
   ZOTERO_OUTPUT_TOO_LARGE,
   ZOTERO_NO_ATTACHMENT,
   ZOTERO_UNEXPECTED,
   ZOTERO_NO_FULLTEXT,
   ZOTERO_NOT_FOUND,
   ZOTERO_SCOPE_AMBIGUOUS,
+  ZOTERO_SERVER_MISMATCH,
   ZoteroError,
   errorMessageOf,
 } from './errors.js'
@@ -107,6 +116,14 @@ interface ResolvedScopeResult {
 interface ScopeListing {
   readonly entries: readonly ScopeNameEntry[]
   readonly serverId?: string
+  /** Fetch time; a cached listing older than the TTL is re-fetched. */
+  readonly fetchedAt: number
+}
+
+/** Provider construction options; kept minimal so the harness default stays one call. */
+export interface LocalApiProviderOptions {
+  /** How long a scope listing stays fresh before a re-fetch. */
+  readonly scopeListingTtlMs?: number
 }
 
 /** Deployment-varying bounds the local provider needs beyond the HTTP client limits. */
@@ -141,18 +158,30 @@ export interface LocalApiLimits {
 
 const INCLUDE_ORDER: readonly ZoteroInclude[] = ['notes', 'annotations', 'attachments']
 
+/** The order `sourcesSkipped` reports in; stable regardless of the request order. */
+const SOURCE_ORDER: readonly ZoteroEvidenceSource[] = ['annotation', 'note', 'abstract', 'fulltext']
+
 /**
- * Full-text indexing coverage as reported by Zotero. `complete` requires
- * the server to report both sides of one axis and agree; anything else is
- * an incomplete answer, never a guess.
+ * Full-text indexing coverage as reported by Zotero. `complete` is derived
+ * per axis: the chars axis (text files) and the pages axis (PDFs) each count
+ * as complete when the server reports both sides and they agree; the overall
+ * answer is complete when at least one axis is reportable and every
+ * reportable axis agrees. Anything else is an incomplete answer, never a
+ * guess — so a full PDF index without char counts still reads complete.
  */
 function normalizeCoverage(payload: ZoteroFulltextPayload): ZoteroCoverage {
   const indexedChars = typeof payload.indexedChars === 'number' ? payload.indexedChars : undefined
   const totalChars = typeof payload.totalChars === 'number' ? payload.totalChars : undefined
   const indexedPages = typeof payload.indexedPages === 'number' ? payload.indexedPages : undefined
   const totalPages = typeof payload.totalPages === 'number' ? payload.totalPages : undefined
-  const complete =
-    totalChars !== undefined && indexedChars !== undefined && indexedChars === totalChars
+  const charsComplete =
+    indexedChars !== undefined && totalChars !== undefined ? indexedChars === totalChars : undefined
+  const pagesComplete =
+    indexedPages !== undefined && totalPages !== undefined ? indexedPages === totalPages : undefined
+  const axes = [charsComplete, pagesComplete].filter(
+    (value): value is boolean => value !== undefined,
+  )
+  const complete = axes.length > 0 && axes.every((value) => value)
   return {
     ...(indexedPages !== undefined ? { indexedPages } : {}),
     ...(totalPages !== undefined ? { totalPages } : {}),
@@ -175,24 +204,37 @@ export class LocalApiProvider implements ZoteroProvider {
   constructor(
     private readonly client: ZoteroHttpClient,
     private readonly limits: LocalApiLimits,
+    private readonly options: LocalApiProviderOptions = {},
   ) {}
 
-  /** Cached full listings of the scope endpoints; the provider instance is the invalidation boundary. */
+  /** How long a scope listing is trusted before a re-fetch. */
+  private get scopeListingTtlMs(): number {
+    return this.options.scopeListingTtlMs ?? ZOTERO_SCOPE_LISTING_TTL_MS
+  }
+
+  /** Cached full listings of the scope endpoints; a listing older than the TTL is re-fetched. */
   private readonly scopeListingCache = new Map<'collections' | 'searches', ScopeListing>()
 
   /**
    * The cached full listing of one plural endpoint (`collections` or
-   * `searches`), fetched once per provider instance. The service rebuilds the
-   * provider on every settings commit, which is the cache's invalidation
-   * point; a second call reuses the first response, identity header included.
+   * `searches`), re-fetched when the cached copy is older than the TTL or
+   * `force` asks for a fresh answer. Always stored with the identity header
+   * it was served under, so later calls keep the listing's own provenance.
    */
   private async scopeListingOf(
     plural: 'collections' | 'searches',
     serverId: string | undefined,
     signal: AbortSignal | undefined,
+    options: { force?: boolean } = {},
   ): Promise<ScopeListing> {
     const cached = this.scopeListingCache.get(plural)
-    if (cached !== undefined) return cached
+    if (
+      !options.force &&
+      cached !== undefined &&
+      Date.now() - cached.fetchedAt < this.scopeListingTtlMs
+    ) {
+      return cached
+    }
     const { json, headers } = await this.client.getJson<unknown>(`users/0/${plural}`, undefined, {
       signal,
       serverId,
@@ -200,14 +242,18 @@ export class LocalApiProvider implements ZoteroProvider {
     const entries = (Array.isArray(json) ? json : []).map((row) => normalizeScopeEntry(row))
     const servedBy = headers.get('zotero-server-id') ?? serverId
     const listing: ScopeListing =
-      servedBy === undefined ? { entries } : { entries, serverId: servedBy }
+      servedBy === undefined
+        ? { entries, fetchedAt: Date.now() }
+        : { entries, serverId: servedBy, fetchedAt: Date.now() }
     this.scopeListingCache.set(plural, listing)
     return listing
   }
 
   /**
    * Probe `GET /api/` and report connectivity plus the instance identity
-   * headers. Health checks live here, not on every tool call.
+   * headers. Health checks live here, not on every tool call. An explicit
+   * caller abort propagates instead of folding into `connected: false`, so a
+   * cancel is never mistaken for a connectivity problem.
    */
   async status(signal?: AbortSignal): Promise<ZoteroStatus> {
     try {
@@ -221,6 +267,7 @@ export class LocalApiProvider implements ZoteroProvider {
         diagnosis: 'ok',
       }
     } catch (error) {
+      if (signal?.aborted) throw error
       return {
         providerId: this.id,
         connected: false,
@@ -248,25 +295,38 @@ export class LocalApiProvider implements ZoteroProvider {
         ? Number(headerTotal)
         : items.length
     // Zotero's index never searches note bodies, so the first page of a
-    // queried search merges client-side note-content matches. Pagination
-    // stays API-driven: later pages skip the scan.
-    let total = apiTotal
-    if (this.shouldScanNotes(request, scope.resolved)) {
-      const query = request.query!
+    // queried search merges client-side note-content matches up to the
+    // requested limit. Pagination stays API-driven: later pages skip the
+    // scan, and the merged count is reported separately rather than folded
+    // into the paged total (the API total is the count `offset` walks).
+    let noteMatches: number | undefined
+    const query = request.query?.trim()
+    if (query !== undefined && query !== '' && this.shouldScanNotes(request, scope.resolved)) {
       const terms = tokenize(query.toLowerCase())
-      const seen = new Set(
-        rows
-          .map((row) => asString(asRecord(row)?.key))
-          .filter((key): key is string => key !== undefined),
-      )
-      for (const row of await this.fetchNoteRows(scope, signal)) {
-        const key = asString(asRecord(row)?.key)
-        if (key === undefined || seen.has(key)) continue
-        if (!this.noteRowMatches(row, terms, request.tags, scope.collectionKey)) continue
-        seen.add(key)
-        items.push(normalizeSearchItem(row, responseServerId ?? undefined))
+      // A query whose tokens are all punctuation/emoji/whitespace matches
+      // every note (the empty token list is vacuously present), so the scan
+      // stays disabled for it.
+      if (terms.length > 0) {
+        const seen = new Set(
+          rows
+            .map((row) => asString(asRecord(row)?.key))
+            .filter((key): key is string => key !== undefined),
+        )
+        // The API rows already fill `limit`; note matches only fill the
+        // remaining headroom, so `returned` never exceeds the limit.
+        const headroom = request.limit - rows.length
+        let merged = 0
+        for (const row of await this.fetchNoteRows(scope, signal)) {
+          if (merged >= headroom) break
+          const key = asString(asRecord(row)?.key)
+          if (key === undefined || seen.has(key)) continue
+          if (!this.noteRowMatches(row, terms, request.tags, scope.collectionKey)) continue
+          seen.add(key)
+          items.push(normalizeSearchItem(row, responseServerId ?? undefined))
+          merged += 1
+        }
+        if (merged > 0) noteMatches = merged
       }
-      total = apiTotal + (items.length - rows.length)
     }
     const nextOffset =
       request.offset + rows.length < apiTotal ? request.offset + rows.length : undefined
@@ -275,10 +335,11 @@ export class LocalApiProvider implements ZoteroProvider {
     const result: ZoteroSearchResult = {
       scope: scope.resolved,
       items,
-      total,
+      total: apiTotal,
       offset: request.offset,
       returned: items.length,
     }
+    if (noteMatches !== undefined) result.noteMatches = noteMatches
     if (nextOffset !== undefined) result.nextOffset = nextOffset
     return result
   }
@@ -415,8 +476,8 @@ export class LocalApiProvider implements ZoteroProvider {
    * Collection names for exactly the requested keys, resolved from the cached
    * full listing. The Local API returns list endpoints in full by default
    * (unlike the Web API's 25-per-page), so one unpaginated listing serves
-   * every call; the provider instance is rebuilt on every settings commit,
-   * which is the cache's invalidation point.
+   * every call; the cached listing is re-fetched when it outlives the scope
+   * TTL, so renames and new collections surface without a settings commit.
    */
   private async collectionNamesFor(
     keys: readonly string[],
@@ -588,7 +649,11 @@ export class LocalApiProvider implements ZoteroProvider {
           const content = typeof payload.content === 'string' ? payload.content : ''
           const bounded = truncateText(content, this.limits.maxFulltextChars)
           fulltextWasCut = bounded.truncated
-          const chunks = chunkText(bounded.text, this.limits.fulltextChunkWords)
+          const chunks = chunkText(
+            bounded.text,
+            this.limits.fulltextChunkWords,
+            this.limits.maxEvidenceChars,
+          )
           for (const chunk of chunks) {
             passages.push({
               source: 'fulltext',
@@ -623,6 +688,7 @@ export class LocalApiProvider implements ZoteroProvider {
         )
       : { notes: [], annotations: [], attachments: [] }
     if (wantsAnnotations) {
+      if (partitioned.annotations.length === 0) skipped.push('annotation')
       for (const annotation of partitioned.annotations) {
         passages.push({
           source: 'annotation',
@@ -638,8 +704,15 @@ export class LocalApiProvider implements ZoteroProvider {
       const noteSources: { ref: string; text: string }[] = isNoteItem
         ? [{ ref: noteRef, text: plainNoteText(data?.note) }]
         : partitioned.notes.map((note) => ({ ref: note.ref, text: note.text }))
+      // A note item's own body is its note source, so only a non-note item
+      // without child notes cannot provide the source.
+      if (!isNoteItem && partitioned.notes.length === 0) skipped.push('note')
       for (const note of noteSources) {
-        const chunks = chunkText(note.text, this.limits.fulltextChunkWords)
+        const chunks = chunkText(
+          note.text,
+          this.limits.fulltextChunkWords,
+          this.limits.maxEvidenceChars,
+        )
         for (const chunk of chunks) {
           passages.push({
             source: 'note',
@@ -662,6 +735,8 @@ export class LocalApiProvider implements ZoteroProvider {
           sourceRef: formatRef(localRef('item', ref.key, serverId)),
           text: bounded.text,
         })
+      } else {
+        skipped.push('abstract')
       }
     }
 
@@ -669,10 +744,15 @@ export class LocalApiProvider implements ZoteroProvider {
       request.query,
       passages.map((passage, index) => ({ text: passage.text, index })),
     )
+    // Zero-score passages share nothing with the query; returning them as
+    // "evidence" would present arbitrary excerpts as matches. A query with no
+    // token overlap therefore yields an empty evidence array, which the
+    // contract reads as "no match", not "no content".
+    const matched = ranked.filter((entry) => entry.score > 0)
     const evidence: ZoteroEvidence[] = []
     let used = 0
-    let truncated = ranked.length > request.passages || fulltextWasCut || abstractWasCut
-    for (const entry of ranked.slice(0, request.passages)) {
+    let truncated = matched.length > request.passages || fulltextWasCut || abstractWasCut
+    for (const entry of matched.slice(0, request.passages)) {
       const passage = passages[entry.index]!
       if (used + passage.text.length > this.limits.maxEvidenceChars) {
         truncated = true
@@ -689,71 +769,55 @@ export class LocalApiProvider implements ZoteroProvider {
         ...(passage.pageLabel !== undefined ? { pageLabel: passage.pageLabel } : {}),
       })
     }
+    // A stable report order keeps the contract predictable: the sources the
+    // caller asked for but the item could not provide, deduplicated.
+    const sourcesSkipped = [...new Set(skipped)].sort(
+      (a, b) => SOURCE_ORDER.indexOf(a) - SOURCE_ORDER.indexOf(b),
+    )
     return {
       ref: formatRef(localRef('item', ref.key, serverId)),
       ...(attachmentRef !== undefined ? { attachmentRef } : {}),
       ...(coverage !== undefined ? { coverage } : {}),
       evidence,
       truncated,
-      sourcesSkipped: skipped,
+      sourcesSkipped,
     }
   }
 
   /**
    * Export the requested items through the Local API's format pipeline:
-   * `include=citation` pairs each item with its HTML citation in one list
-   * request (reordered to match the requested refs), `format=bib` yields a
+   * `include=citation` pairs each item with its HTML citation (batched to the
+   * API's itemKey cap when the request is larger), `format=bib` yields a
    * joined CSL-sorted bibliography, and the translator formats
-   * (`bibtex`/`biblatex`/`ris`/`csljson`) export the whole set at once.
-   * Output that exceeds `maxExportChars` fails with OUTPUT_TOO_LARGE —
-   * export text is never mid-truncated.
+   * (`bibtex`/`biblatex`/`ris`/`csljson`) export the whole set at once. The
+   * batch-breaking formats refuse to exceed `ZOTERO_ITEMKEY_BATCH` — their
+   * global ordering belongs to Zotero, so splitting them would silently
+   * reorder the output. Output that exceeds `maxExportChars` fails with
+   * OUTPUT_TOO_LARGE — export text is never mid-truncated.
    */
   async export(request: ZoteroExportRequest, signal?: AbortSignal): Promise<ZoteroExportResult> {
     for (const ref of request.refs) requireLocalRef(ref, ['item'])
-    const search = new URLSearchParams()
-    search.set('itemKey', request.refs.map((ref) => ref.key).join(','))
-    const serverId = request.refs[0]?.serverId
+    // Every ref must come from the same Zotero instance: the request header
+    // carries one identity, and a ref from another instance must fail closed
+    // instead of silently resolving same-key objects there.
+    const serverIds = new Set(
+      request.refs.map((ref) => ref.serverId).filter((id): id is string => id !== undefined),
+    )
+    if (serverIds.size > 1) throw new ZoteroError(SERVER_MISMATCH_MESSAGE, ZOTERO_SERVER_MISMATCH)
+    const serverId = serverIds.size === 1 ? serverIds.values().next().value : undefined
     const style = request.style ?? this.limits.defaultStyle
     const locale = request.locale ?? this.limits.defaultLocale
     if (request.format === 'citation') {
-      search.set('include', 'citation')
-      search.set('style', style)
-      search.set('locale', locale)
-      const { json } = await this.client.getJson<unknown>('users/0/items', search, {
-        signal,
-        serverId,
-      })
-      const citationByKey = new Map<string, string>()
-      for (const row of Array.isArray(json) ? json : []) {
-        const record = asRecord(row)
-        const key = asString(record?.key)
-        if (key === undefined || !isObjectKey(key)) {
-          throw new ZoteroError(
-            'Zotero returned an item without a valid object key.',
-            ZOTERO_UNEXPECTED,
-          )
-        }
-        citationByKey.set(key, asString(record?.citation) ?? '')
-      }
-      const citations = request.refs.map((ref) => {
-        const text = citationByKey.get(ref.key)
-        if (text === undefined) {
-          throw new ZoteroError(
-            `Zotero did not return an item for ${formatRef(ref)}.`,
-            ZOTERO_NOT_FOUND,
-          )
-        }
-        return { ref: formatRef(ref), text }
-      })
-      const totalChars = citations.reduce((sum, entry) => sum + entry.text.length, 0)
-      if (totalChars > this.limits.maxExportChars) {
-        throw new ZoteroError(
-          `Citation output of ${totalChars} characters exceeds the ${this.limits.maxExportChars}-character export limit.`,
-          ZOTERO_OUTPUT_TOO_LARGE,
-        )
-      }
-      return { format: 'citation', style, locale, citations }
+      return await this.exportCitations(request.refs, serverId, style, locale, signal)
     }
+    if (request.refs.length > ZOTERO_ITEMKEY_BATCH) {
+      throw new ZoteroError(
+        `The ${request.format} format accepts at most ${ZOTERO_ITEMKEY_BATCH} item refs per call (Zotero's itemKey request cap, which also keeps the format's global ordering intact). Request up to ${ZOTERO_ITEMKEY_BATCH} refs at a time, or use citation, which batches up to the configured export cap.`,
+        ZOTERO_INVALID_ARGUMENT,
+      )
+    }
+    const search = new URLSearchParams()
+    search.set('itemKey', request.refs.map((ref) => ref.key).join(','))
     if (request.format === 'bibliography') {
       search.set('format', 'bib')
       search.set('style', style)
@@ -772,6 +836,77 @@ export class LocalApiProvider implements ZoteroProvider {
       return { format: 'bibliography', style, locale, text: body }
     }
     return { format: request.format, text: body }
+  }
+
+  /**
+   * Citation export: batches the refs into API-sized requests, merges the
+   * per-key citations, and reorders them to the requested sequence. Order is
+   * exact — each citation stays paired with its ref — so batching is
+   * invisible to the caller.
+   */
+  private async exportCitations(
+    refs: readonly ZoteroObjectRef[],
+    serverId: string | undefined,
+    style: string,
+    locale: string,
+    signal: AbortSignal | undefined,
+  ): Promise<ZoteroExportResult> {
+    const citationByKey = new Map<string, string>()
+    for (let start = 0; start < refs.length; start += ZOTERO_ITEMKEY_BATCH) {
+      const batch = refs.slice(start, start + ZOTERO_ITEMKEY_BATCH)
+      const batchCitations = await this.fetchCitationBatch(batch, serverId, style, locale, signal)
+      for (const [key, text] of batchCitations) citationByKey.set(key, text)
+    }
+    const citations = refs.map((ref) => {
+      const text = citationByKey.get(ref.key)
+      if (text === undefined) {
+        throw new ZoteroError(
+          `Zotero did not return an item for ${formatRef(ref)}.`,
+          ZOTERO_NOT_FOUND,
+        )
+      }
+      return { ref: formatRef(ref), text }
+    })
+    const totalChars = citations.reduce((sum, entry) => sum + entry.text.length, 0)
+    if (totalChars > this.limits.maxExportChars) {
+      throw new ZoteroError(
+        `Citation output of ${totalChars} characters exceeds the ${this.limits.maxExportChars}-character export limit.`,
+        ZOTERO_OUTPUT_TOO_LARGE,
+      )
+    }
+    return { format: 'citation', style, locale, citations }
+  }
+
+  /** One batch of per-key citations — at most `ZOTERO_ITEMKEY_BATCH` keys. */
+  private async fetchCitationBatch(
+    batch: readonly ZoteroObjectRef[],
+    serverId: string | undefined,
+    style: string,
+    locale: string,
+    signal: AbortSignal | undefined,
+  ): Promise<Map<string, string>> {
+    const search = new URLSearchParams()
+    search.set('itemKey', batch.map((ref) => ref.key).join(','))
+    search.set('include', 'citation')
+    search.set('style', style)
+    search.set('locale', locale)
+    const { json } = await this.client.getJson<unknown>('users/0/items', search, {
+      signal,
+      serverId,
+    })
+    const citationByKey = new Map<string, string>()
+    for (const row of Array.isArray(json) ? json : []) {
+      const record = asRecord(row)
+      const key = asString(record?.key)
+      if (key === undefined || !isObjectKey(key)) {
+        throw new ZoteroError(
+          'Zotero returned an item without a valid object key.',
+          ZOTERO_UNEXPECTED,
+        )
+      }
+      citationByKey.set(key, asString(record?.citation) ?? '')
+    }
+    return citationByKey
   }
 
   /**
@@ -881,10 +1016,15 @@ export class LocalApiProvider implements ZoteroProvider {
       }
     }
     // The Local API returns list endpoints in full by default (unlike the
-    // Web API's 25-per-page), so one unpaginated listing sees every name;
-    // the listing is cached per provider instance.
-    const listing = await this.scopeListingOf(plural, undefined, signal)
-    const matched = matchScopeName(listing.entries, refOrName)
+    // Web API's 25-per-page), so one unpaginated listing sees every name; the
+    // listing is cached for the scope TTL. A name miss gets one fresh look —
+    // the library may have changed since the cached listing was fetched.
+    let listing = await this.scopeListingOf(plural, undefined, signal)
+    let matched = matchScopeName(listing.entries, refOrName)
+    if (matched.length === 0) {
+      listing = await this.scopeListingOf(plural, undefined, signal, { force: true })
+      matched = matchScopeName(listing.entries, refOrName)
+    }
     if (matched.length === 1) {
       const found = matched[0]!
       return {

@@ -123,21 +123,27 @@ describe('retrieve', () => {
       complete: false,
     })
     expect(result.truncated).toBe(false)
-    const annotationEvidence = result.evidence.find((entry) => entry.source === 'annotation')!
-    expect(annotationEvidence.comment).toBe('compare with figure 3')
-    expect(annotationEvidence.pageLabel).toBe('7')
     const sources = result.evidence.map((entry) => entry.source)
-    expect(sources).toContain('annotation')
-    expect(sources).toContain('note')
-    expect(sources).toContain('abstract')
-    expect(sources).toContain('fulltext')
     // The full ranked order is contract: the fulltext chunk carries every
-    // query term (flash tf 1, attention tf 2), the abstract only `attention`,
-    // and the unmatched annotation/note tie at zero in passage order. A
-    // ranking that keeps passage order, ties by index descending, or
-    // otherwise shuffles ranks 1-3 must fail here.
-    expect(sources).toEqual(['fulltext', 'abstract', 'annotation', 'note'])
+    // query term (flash tf 1, attention tf 2) and the abstract only
+    // `attention`. The annotation and the note share no query term, so their
+    // zero scores drop out instead of masquerading as ranked evidence.
+    expect(sources).toEqual(['fulltext', 'abstract'])
     expect(result.evidence[0]!.text).toContain('Flash attention')
+  })
+
+  it('carries annotation comments and page labels on ranked evidence', async () => {
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) =>
+      helpers.json(RETRIEVE_PARENT),
+    )
+    mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) =>
+      helpers.json(RETRIEVE_CHILDREN),
+    )
+    const result = await provider.retrieve(retrieveRequest({ query: 'tiling', passages: 4 }))
+    const annotation = result.evidence.find((entry) => entry.source === 'annotation')
+    expect(annotation).toBeDefined()
+    expect(annotation!.comment).toBe('compare with figure 3')
+    expect(annotation!.pageLabel).toBe('7')
   })
 
   it('fetches lazily per source: abstract-only evidence needs just the parent', async () => {
@@ -241,7 +247,7 @@ describe('retrieve', () => {
       helpers.json({ content: 'a'.repeat(10) }),
     )
     const result = await narrow.retrieve(
-      retrieveRequest({ sources: ['fulltext'], passages: 4, query: 'a' }),
+      retrieveRequest({ sources: ['fulltext'], passages: 4, query: 'aaaaaaaaaa' }),
     )
     // A passage whose length lands exactly on the budget is accepted: an
     // off-by-one (>=) would drop it and silently return less evidence.
@@ -290,7 +296,9 @@ describe('retrieve edge cases', () => {
     mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) =>
       helpers.json(RETRIEVE_CHILDREN),
     )
-    const result = await provider.retrieve(retrieveRequest({ sources: ['note'], passages: 2 }))
+    const result = await provider.retrieve(
+      retrieveRequest({ sources: ['note'], passages: 2, query: 'tiling' }),
+    )
     expect(mock.requests.map((entry) => entry.pathname)).toEqual([
       '/api/users/0/items/ABCD1234',
       '/api/users/0/items/ABCD1234/children',
@@ -351,6 +359,9 @@ describe('retrieve tolerances', () => {
     const result = await provider.retrieve(retrieveRequest({ sources: ['note'], passages: 2 }))
     expect(result.evidence).toEqual([])
     expect(result.truncated).toBe(false)
+    // A requested source the item cannot provide is reported, not silently
+    // absent: the malformed children response yields no notes.
+    expect(result.sourcesSkipped).toEqual(['note'])
   })
 
   it('omits abstract evidence when the parent has no abstract', async () => {
@@ -442,14 +453,19 @@ describe('note-first-class paths', () => {
         { key: 'NOTE1111', data: { itemType: 'note', note: 'alpha beta gamma delta epsilon' } },
       ]),
     )
-    const result = await narrow.retrieve(retrieveRequest({ sources: ['note'], passages: 10 }))
+    const result = await narrow.retrieve(
+      retrieveRequest({ sources: ['note'], passages: 10, query: 'alpha gamma epsilon' }),
+    )
+    // BM25 ranks the shorter `epsilon` chunk above the tied longer ones, so
+    // the order is relevance order, not source order — every chunk must still
+    // be present with its locators.
     expect(result.evidence.map((entry) => entry.source)).toEqual(['note', 'note', 'note'])
-    expect(result.evidence.map((entry) => entry.text)).toEqual([
+    expect(result.evidence.map((entry) => entry.text).sort()).toEqual([
       'alpha beta',
-      'gamma delta',
       'epsilon',
+      'gamma delta',
     ])
-    expect(result.evidence.map((entry) => entry.chunkIndex)).toEqual([0, 1, 2])
+    expect(new Set(result.evidence.map((entry) => entry.chunkIndex))).toEqual(new Set([0, 1, 2]))
     expect(result.evidence.map((entry) => entry.chunkCount)).toEqual([3, 3, 3])
     expect(
       result.evidence.every((entry) => entry.sourceRef === 'zotero://user/0/item/NOTE1111'),
@@ -463,7 +479,9 @@ describe('note-first-class paths', () => {
     mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) =>
       helpers.json([{ key: 'NOTE1111', data: { itemType: 'note', note: 'tiling strategy note' } }]),
     )
-    const result = await provider.retrieve(retrieveRequest({ sources: ['note', 'fulltext'] }))
+    const result = await provider.retrieve(
+      retrieveRequest({ sources: ['note', 'fulltext'], query: 'tiling' }),
+    )
     expect(result.evidence.map((entry) => entry.source)).toEqual(['note'])
     expect(result.sourcesSkipped).toEqual(['fulltext'])
   })
@@ -501,5 +519,119 @@ describe('note-first-class paths', () => {
       ref: 'zotero://user/0/item/NOTE1111?server=S1',
       parentRef: 'zotero://user/0/item/ABCD1234?server=S1',
     })
+  })
+})
+
+describe('retrieval contract hardening', () => {
+  it('reports a complete PDF index from the pages axis alone', async () => {
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) =>
+      helpers.json(RETRIEVE_PARENT),
+    )
+    mock.route('GET', '/api/users/0/items/WXYZ6789/fulltext', (req, res, helpers) =>
+      helpers.json({ content: 'flash attention', indexedPages: 5, totalPages: 5 }),
+    )
+    const result = await provider.retrieve(
+      retrieveRequest({ sources: ['fulltext'], query: 'flash' }),
+    )
+    expect(result.coverage).toEqual({ indexedPages: 5, totalPages: 5, complete: true })
+  })
+
+  it('reports a complete text-file index from the chars axis alone', async () => {
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) =>
+      helpers.json(RETRIEVE_PARENT),
+    )
+    mock.route('GET', '/api/users/0/items/WXYZ6789/fulltext', (req, res, helpers) =>
+      helpers.json({ content: 'flash attention', indexedChars: 15, totalChars: 15 }),
+    )
+    const result = await provider.retrieve(
+      retrieveRequest({ sources: ['fulltext'], query: 'flash' }),
+    )
+    expect(result.coverage).toEqual({ indexedChars: 15, totalChars: 15, complete: true })
+  })
+
+  it('reports incomplete coverage when two reportable axes disagree', async () => {
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) =>
+      helpers.json(RETRIEVE_PARENT),
+    )
+    mock.route('GET', '/api/users/0/items/WXYZ6789/fulltext', (req, res, helpers) =>
+      helpers.json({
+        content: 'flash attention',
+        indexedPages: 5,
+        totalPages: 5,
+        indexedChars: 10,
+        totalChars: 15,
+      }),
+    )
+    const result = await provider.retrieve(
+      retrieveRequest({ sources: ['fulltext'], query: 'flash' }),
+    )
+    expect(result.coverage).toEqual({
+      indexedPages: 5,
+      totalPages: 5,
+      indexedChars: 10,
+      totalChars: 15,
+      complete: false,
+    })
+  })
+
+  it('returns no evidence when no passage shares a token with the query', async () => {
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) =>
+      helpers.json(RETRIEVE_PARENT),
+    )
+    mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) =>
+      helpers.json(RETRIEVE_CHILDREN),
+    )
+    mock.route('GET', '/api/users/0/items/WXYZ6789/fulltext', (req, res, helpers) =>
+      helpers.json(FULLTEXT_PAYLOAD),
+    )
+    const result = await provider.retrieve(retrieveRequest({ query: 'quantum entanglement' }))
+    expect(result.evidence).toEqual([])
+    expect(result.truncated).toBe(false)
+  })
+
+  it('lists every requested-but-missing source in sourcesSkipped', async () => {
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) =>
+      helpers.json({
+        ...RETRIEVE_PARENT,
+        links: { self: RETRIEVE_PARENT.links.self },
+        data: { ...RETRIEVE_PARENT.data, abstractNote: undefined },
+      }),
+    )
+    mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) =>
+      helpers.json([{ key: 'NOTE1111', data: { itemType: 'note', note: 'queries' } }]),
+    )
+    const result = await provider.retrieve(
+      retrieveRequest({
+        sources: ['annotation', 'note', 'abstract', 'fulltext'],
+        query: 'queries',
+      }),
+    )
+    expect(result.evidence.map((entry) => entry.source)).toEqual(['note'])
+    expect(result.sourcesSkipped).toEqual(['annotation', 'abstract', 'fulltext'])
+  })
+
+  it('keeps unspaced CJK full text digestible: every chunk fits the evidence budget', async () => {
+    const narrow = makeProvider({ maxEvidenceChars: 200 })
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) =>
+      helpers.json(RETRIEVE_PARENT),
+    )
+    mock.route('GET', '/api/users/0/items/WXYZ6789/fulltext', (req, res, helpers) =>
+      helpers.json({ content: '中文全文没有空格'.repeat(60) }),
+    )
+    const result = await narrow.retrieve(
+      retrieveRequest({ sources: ['fulltext'], passages: 2, query: '中文' }),
+    )
+    expect(result.evidence.length).toBeGreaterThan(0)
+    for (const entry of result.evidence) {
+      expect(entry.text.length).toBeLessThanOrEqual(200)
+    }
+  })
+
+  it('propagates an explicit abort from the status probe', async () => {
+    mock.route('GET', '/api/', (req, res, helpers) => helpers.delayJson({}, 5000))
+    const controller = new AbortController()
+    const probe = provider.status(controller.signal)
+    controller.abort()
+    await expect(probe).rejects.toThrow()
   })
 })

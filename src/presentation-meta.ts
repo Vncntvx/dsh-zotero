@@ -46,6 +46,8 @@ export interface SearchProjectionInput {
   readonly total: number
   readonly returned: number
   readonly nextOffset?: number
+  /** Notes merged into the first page by the client-side body scan; absent when none. */
+  readonly noteMatches?: number
   /** Canonical-record fields the projection ignores (accepted for shape compatibility). */
   readonly scope?: unknown
   readonly offset?: number
@@ -66,6 +68,8 @@ export interface ZoteroSearchPresentationMeta {
   readonly nextOffset: number | null
   readonly displayed: number
   readonly omitted: number
+  /** Note-body matches merged into the first page; null when the page had none. */
+  readonly noteMatches: number | null
   readonly items: ZoteroSearchPresentationRow[]
 }
 
@@ -263,6 +267,7 @@ export function projectSearchMeta(value: SearchProjectionInput): ZoteroSearchPre
     nextOffset: value.nextOffset ?? null,
     displayed,
     omitted: value.returned - displayed,
+    noteMatches: value.noteMatches ?? null,
     items,
   }
 }
