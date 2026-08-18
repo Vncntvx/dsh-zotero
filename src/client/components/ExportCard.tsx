@@ -25,7 +25,8 @@ export function formatLabelOf(format: string, t: TranslateNS<'zotero'>): string 
     case 'bibliography':
       return t('formatBibliography')
     default:
-      return format
+      // An artifact without a usable projection meta keeps a named title.
+      return format === '' ? t('formatUnknown') : format
   }
 }
 

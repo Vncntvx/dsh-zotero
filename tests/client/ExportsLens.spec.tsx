@@ -54,6 +54,10 @@ describe('formatLabelOf', () => {
     expect(formatLabelOf('bibliography', t)).toBe(zh.formatBibliography)
     expect(formatLabelOf('bibtex', t)).toBe('bibtex')
   })
+
+  it('names an artifact without usable format facts', () => {
+    expect(formatLabelOf('', t)).toBe(zh.formatUnknown)
+  })
 })
 
 describe('incompleteExportsNoteOf', () => {
@@ -111,6 +115,23 @@ describe('ExportsLens', () => {
   it('shows the honest empty note without successful exports', () => {
     render(<ExportsLens workspace={workspaceOf([])} t={t} />)
     expect(screen.getByText(zh.exportsEmptyNote)).toBeDefined()
+  })
+
+  it('keeps failed and running operations visible when no artifact succeeded', () => {
+    render(
+      <ExportsLens
+        workspace={workspaceOf([], {
+          exports: [],
+          exportOperations: { running: 1, failed: 2, stopped: 0 },
+        })}
+        t={t}
+      />,
+    )
+    expect(screen.getByText(zh.exportsEmptyNote)).toBeDefined()
+    expect(
+      screen.getByText(zh.exportsIncompleteNote.replace('{counts}', '进行中 1 · 失败 2')),
+    ).toBeDefined()
+    expect(screen.queryByText(zh.exportsStaticNote)).toBeNull()
   })
 
   it('lists the artifacts, the incomplete operations, and the static disclaimer', () => {

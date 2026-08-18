@@ -27,12 +27,10 @@ export interface ExportsLensProps {
 
 /** The exports lens: artifacts, incomplete operations, and the disclaimer. */
 export function ExportsLens({ workspace, t }: ExportsLensProps) {
-  if (workspace.exports.length === 0) {
-    return <p className={css.emptyNote}>{t('exportsEmptyNote')}</p>
-  }
   const incomplete = incompleteExportsNoteOf(workspace.exportOperations, t)
   return (
     <div className={css.wrap}>
+      {workspace.exports.length === 0 && <p className={css.note}>{t('exportsEmptyNote')}</p>}
       {incomplete !== '' && (
         <p className={css.note}>
           {interpolate(t('exportsIncompleteNote'), { counts: incomplete })}
@@ -41,7 +39,7 @@ export function ExportsLens({ workspace, t }: ExportsLensProps) {
       {workspace.exports.map((artifact, index) => (
         <ExportCard key={artifact.callId} artifact={artifact} ordinal={index + 1} t={t} />
       ))}
-      <p className={css.note}>{t('exportsStaticNote')}</p>
+      {workspace.exports.length > 0 && <p className={css.note}>{t('exportsStaticNote')}</p>}
     </div>
   )
 }
