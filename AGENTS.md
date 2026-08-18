@@ -67,7 +67,53 @@ Everything registered in the constructor unwinds with the plugin fiber, so confi
 
 ## Local launch & dev
 
-Daily host-half loop (in-process HMR, non-default port):
+Two dev servers; pick by what you are testing:
+
+- **Full plugin** — the only flow that loads the browser half (settings
+  card + Zotero tab). Use for UI work and end-to-end plugin tests.
+- **Host half only (HMR)** — tools and `/zotero` status with in-process
+  hot reload; the plugin UI never loads here.
+
+### Full plugin (settings card + Zotero tab)
+
+Seed a scratch home with **both** files: credentials carry the keys,
+`settings.yaml` carries custom providers (opencode-go under
+`llm-pi-ai.providers`) — skip the latter and the UI shows only default
+DeepSeek even though the credentials are complete. Link this checkout
+into the web profile (bare package name, so the browser half loads),
+run both watchers, then launch the source CLI **with `env DSH_HOME`** —
+`pnpm dsh web` ignores a sourced `DSH_HOME` and boots the real `~/.dsh`
+(the npm-installed row, not this checkout); the plugin then looks
+"missing" because you are looking at the other home:
+
+```sh
+export DSH_HOME=$(mktemp -d /tmp/dsh-zotero-dev-XXXX)
+cp ~/.dsh/.credentials.yaml ~/.dsh/settings.yaml "$DSH_HOME/"
+chmod 600 "$DSH_HOME/.credentials.yaml" "$DSH_HOME/settings.yaml"
+npm run build          # lib/client.js must exist before launch; link does not build it
+dsh plugin --profile web link .    # pnpm peer-dependency warnings are expected
+npm run dev &          # host half: tsc --watch → lib/
+npm run dev:client &   # browser half: esbuild --watch → lib/client.js
+cd .. && env DSH_HOME="$DSH_HOME" node --import tsx/esm apps/cli/src/bin.ts web --port 3307
+# 3080 is the live GUI — never reuse it
+```
+
+One-shot check (all four must pass; no further digging):
+
+```sh
+curl -w '%{http_code}' -o /dev/null http://127.0.0.1:3307        # 200
+ps eww $(lsof -ti :3307) | grep -o 'DSH_HOME=[^ ]*'              # the scratch home
+grep dsh-zotero "$DSH_HOME"/profiles/web/package.json            # link: dependency
+grep -c conversation.view lib/client.js                          # ≥ 1
+```
+
+Iteration: edit `src/client` → esbuild watch rebuilds → page refresh
+(the browser half has no HMR). Edit the host half → tsc watch rebuilds
+`lib/`; restart dsh to apply (no HMR in this flow either). Both home
+files hot-reload without a restart. Reusing a configured home as
+`DSH_HOME` skips seeding and link, but `/tmp` is wiped on reboot.
+
+### Host half only (in-process HMR)
 
 ```sh
 npm run build          # once; also `pnpm run build` in the harness checkout once (source CLI)
@@ -76,20 +122,7 @@ cp dev-lib.cordis.yml.example dev-lib.cordis.yml   # then set <checkout-root> in
 dsh web --patch ./dev-lib.cordis.yml --port 3307   # 3080 is the live GUI — never reuse it
 ```
 
-`dev-lib.cordis.yml` re-enables loader HMR (off in the production profile), disables the profile-installed row, and runs this checkout from `lib/`: src edits hot-swap in-process. Its `name`/`base` are absolute (the loader resolves relative names beside the profile dir); the file is gitignored — regenerate it from `dev-lib.cordis.yml.example` and replace `<checkout-root>`. The overlay row is an absolute path, so it carries **no browser half** (that loads only for bare-package-name rows).
-
-Full plugin — the only flow that loads the browser half (settings card + Zotero tab): link this checkout into a scratch profile, launch the source CLI. Seed the scratch home with **both** files: credentials carry the keys, `settings.yaml` carries custom providers (opencode-go under `llm-pi-ai.providers`) — skip the latter and the UI shows only default DeepSeek even though the credentials are complete:
-
-```sh
-export DSH_HOME=$(mktemp -d /tmp/dsh-zotero-dev-XXXX)
-cp ~/.dsh/.credentials.yaml ~/.dsh/settings.yaml "$DSH_HOME/"
-chmod 600 "$DSH_HOME/.credentials.yaml" "$DSH_HOME/settings.yaml"
-npm run build          # lib/client.js must exist before launch; link does not build it
-dsh plugin --profile web link .    # pnpm peer-dependency warnings are expected
-cd .. && pnpm dsh web --port 3307
-```
-
-Verify: `curl -w '%{http_code}' -o /dev/null http://127.0.0.1:3307` → 200; `"$DSH_HOME"/profiles/web/package.json` lists `dsh-zotero` as a link dependency; `grep -c conversation.view lib/client.js` ≥ 1. Reusing a configured home as `DSH_HOME` skips the seeding. Browser-half iteration: `npm run dev:client` (esbuild --watch) → page refresh; both home files hot-reload without a restart.
+`dev-lib.cordis.yml` re-enables loader HMR (off in the production profile), disables the profile-installed row, and runs this checkout from `lib/`: src edits hot-swap in-process. Its `name`/`base` are absolute (the loader resolves relative names beside the profile dir); the file is gitignored — regenerate it from `dev-lib.cordis.yml.example` and replace `<checkout-root>`. The overlay row is an absolute path, so it carries **no browser half** (that loads only for bare-package-name rows) — no settings card and no Zotero tab; for UI work use the full-plugin flow above.
 
 Host-only alternative (tsx loads `src/index.ts`, no browser half): copy
 `dev.cordis.yml.example` to `dev.cordis.yml` (set `<checkout-root>` inside),

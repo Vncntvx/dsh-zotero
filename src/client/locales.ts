@@ -107,6 +107,9 @@ export type ZoteroLocaleKey =
   | 'openPdf'
   | 'openAnnotation'
   | 'instanceUnverified'
+  | 'openBlockedNote'
+  | 'openUnverifiedNote'
+  | 'availabilityEntry'
   | 'starterFind'
   | 'starterFindTemplate'
   | 'starterCompare'
@@ -125,7 +128,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 /** English copy. */
 export const en: Record<ZoteroLocaleKey, string> = {
-  nav: 'Sources',
+  nav: 'Zotero',
   title: 'Zotero',
   description: 'Access to your Zotero library.',
   overridden: 'Overridden',
@@ -204,7 +207,7 @@ export const en: Record<ZoteroLocaleKey, string> = {
   filterEvidence: 'With evidence',
   filterExported: 'Exported',
   filterAttachment: 'With attachment',
-  filterFailed: 'Failed calls',
+  filterFailed: 'With failed calls',
   filterEmptyNote: 'No sources match this filter.',
   countCandidates: '{count} candidates',
   countInspected: '{count} inspected',
@@ -217,7 +220,7 @@ export const en: Record<ZoteroLocaleKey, string> = {
   noSources: 'No Zotero sources in this session yet.',
   fromSearches: "From this session's searches",
   searchFrom: 'Search "{query}"',
-  searchFromBrowse: 'Browse search',
+  searchFromBrowse: 'Search without a query',
   evidenceInDetail: '{count} evidence passages (see Evidence)',
   exportsInDetail: '{count} exports (see Exports)',
   provenanceMismatch: 'Belongs to a different Zotero database',
@@ -258,7 +261,7 @@ export const en: Record<ZoteroLocaleKey, string> = {
     'Evidence this session gathered, grouped by source; whether the final answer used it is not tracked.',
   evidenceEmptyNote: 'No evidence gathered in this session yet.',
   exportsEmptyNote: 'No successful exports in this session yet.',
-  exportsIncompleteNote: 'Exports that did not complete',
+  exportsIncompleteNote: 'Exports that did not complete: {counts}',
   exportsStaticNote:
     'Static exports are not inserted or updated in Word, Google Docs, or LibreOffice documents.',
   formatCitation: 'Citations',
@@ -269,6 +272,9 @@ export const en: Record<ZoteroLocaleKey, string> = {
   openPdf: 'Open PDF',
   openAnnotation: 'Open annotation',
   instanceUnverified: 'cannot verify the current Zotero instance',
+  openBlockedNote: '{label} ({reason})',
+  openUnverifiedNote: ' ({detail})',
+  availabilityEntry: '{source}: {detail}',
   starterFind: 'Find literature…',
   starterFindTemplate: 'Search my Zotero library for literature on: ',
   starterCompare: 'Compare selected papers…',
@@ -282,7 +288,7 @@ export const en: Record<ZoteroLocaleKey, string> = {
 
 /** Simplified Chinese copy. */
 export const zh: Record<ZoteroLocaleKey, string> = {
-  nav: '来源',
+  nav: 'Zotero',
   title: 'Zotero',
   description: 'Zotero 文献库的接入配置。',
   overridden: '已覆盖',
@@ -360,7 +366,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   filterEvidence: '有证据',
   filterExported: '已导出',
   filterAttachment: '有附件',
-  filterFailed: '操作失败',
+  filterFailed: '有失败调用',
   filterEmptyNote: '这个筛选条件下没有文献。',
   countCandidates: '候选 {count}',
   countInspected: '查看详情 {count}',
@@ -405,14 +411,14 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   coverageChars: '{indexed}/{total} 字符',
   coverageComplete: ' · 已完整',
   coverageIncomplete: ' · 未完整',
-  budgetLimitedNote: '结果受全局预算限制，另有省略。',
+  budgetLimitedNote: '结果受全局预算限制。',
   availReturned: '返回 {count} 条匹配',
   availUnavailable: '该来源不可用',
   availNoMatch: '没有返回匹配',
   evidenceScopeNote: '本会话取得的证据，按文献汇总；不能确定这些内容被用于最终回答。',
   evidenceEmptyNote: '本会话还没有取得证据。',
   exportsEmptyNote: '本会话还没有成功导出。',
-  exportsIncompleteNote: '未完成的导出操作',
+  exportsIncompleteNote: '未完成的导出操作：{counts}',
   exportsStaticNote: '静态导出不会插入或更新 Word、Google Docs、LibreOffice 文档。',
   formatCitation: '引文',
   formatBibliography: '参考文献表',
@@ -422,6 +428,9 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   openPdf: '打开 PDF',
   openAnnotation: '打开批注',
   instanceUnverified: '无法验证当前 Zotero 实例',
+  openBlockedNote: '{label}（{reason}）',
+  openUnverifiedNote: '（{detail}）',
+  availabilityEntry: '{source}：{detail}',
   starterFind: '找文献…',
   starterFindTemplate: '帮我在 Zotero 文献库里检索这个主题的文献：',
   starterCompare: '比较选中的文献…',

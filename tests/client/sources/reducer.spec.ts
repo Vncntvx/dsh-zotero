@@ -1,6 +1,6 @@
 /**
  * The session source reducer: stable union, provable facts only, operation
- * separation, dedup, provenance, and v1 transcript degradation.
+ * separation, dedup, provenance, and malformed-meta degradation.
  * @module tests/client/sources/reducer
  */
 
@@ -8,7 +8,6 @@ import { describe, expect, it } from 'vitest'
 import type { ToolResultNode } from '@deepseek-ai/dsh-client-runtime/client'
 import { settled, running } from '../helpers/blocks.ts'
 import { buildSourceWorkspace } from '../../../src/client/sources/reducer.ts'
-import { serverIdOf } from '../../../src/client/sources/provenance.ts'
 
 const REF = (key: string, serverId?: string): string =>
   `zotero://user/0/item/${key}${serverId === undefined ? '' : `?server=${serverId}`}`
@@ -82,15 +81,15 @@ describe('buildSourceWorkspace', () => {
         1,
         'zotero_search',
         { query: 'attention' },
-        { meta: searchMetaOf([{ ref: REF('A1') }, { ref: REF('A2') }, { ref: REF('A3') }]) },
+        {
+          meta: searchMetaOf([{ ref: REF('A1') }, { ref: REF('A2') }, { ref: REF('A3') }]),
+        },
       ),
       block('g1', 2, 'zotero_get', { ref: REF('A2') }, { meta: GET_META }),
     ])
     expect(workspace.sources).toHaveLength(3)
     const inspected = workspace.sources.find((item) => item.key.includes('a2'))
     expect(inspected?.facts.inspected).toBe(true)
-    expect(inspected?.facts.discovered).toBe(true)
-    expect(workspace.sources.every((item) => item.facts.discovered)).toBe(true)
   })
 
   it('keeps the hits of every distinct query', () => {
@@ -110,11 +109,11 @@ describe('buildSourceWorkspace', () => {
         { meta: searchMetaOf([{ ref: REF('B1') }]) },
       ),
     ])
-    expect(workspace.sources.map((item) => serverIdOf(item.ref) ?? item.key)).toHaveLength(2)
+    expect(workspace.sources).toHaveLength(2)
     const first = workspace.sources.find((item) => item.key.includes('a1'))
     const second = workspace.sources.find((item) => item.key.includes('b1'))
-    expect(first?.searches.map((entry) => entry.query)).toEqual(['attention'])
-    expect(second?.searches.map((entry) => entry.query)).toEqual(['diffusion'])
+    expect(first?.searches).toEqual([{ callId: 's1', query: 'attention' }])
+    expect(second?.searches).toEqual([{ callId: 's2', query: 'diffusion' }])
   })
 
   it('folds pagination continuations into one logical search', () => {
@@ -136,14 +135,7 @@ describe('buildSourceWorkspace', () => {
     ])
     expect(workspace.sources).toHaveLength(3)
     for (const source of workspace.sources) {
-      expect(source.searches).toHaveLength(1)
-      expect(source.searches[0]).toMatchObject({
-        callId: 's1',
-        query: 'attention',
-        offset: 0,
-        returned: 3,
-        omitted: 0,
-      })
+      expect(source.searches).toEqual([{ callId: 's1', query: 'attention' }])
     }
   })
 
@@ -177,39 +169,40 @@ describe('buildSourceWorkspace', () => {
     expect(a2?.searches.map((entry) => entry.callId)).toEqual(['s3'])
   })
 
-  it('normalizes the search scope and never keeps raw arguments', () => {
+  it('keeps degraded searches distinct and never crashes on their arguments', () => {
+    const mk = (callId: string, seq: number, args: Record<string, unknown>, ref: string) =>
+      block(callId, seq, 'zotero_search', args, { meta: searchMetaOf([{ ref }]) })
     const workspace = buildSourceWorkspace([
-      block(
-        's1',
-        1,
-        'zotero_search',
-        {
-          query: 'attention',
-          mode: 'everything',
-          scope: { kind: 'collection', refOrName: 'Reading' },
-        },
-        { meta: searchMetaOf([{ ref: REF('A1') }]) },
-      ),
-      block(
+      mk('s1', 1, { query: 'attention', scope: 'x' }, REF('A1')),
+      mk(
         's2',
         2,
-        'zotero_search',
+        {
+          query: 3,
+          scope: { kind: 'savedSearch', refOrName: 'Inbox' },
+          offset: -1,
+          mode: 'everything',
+        },
+        REF('A2'),
+      ),
+      mk('s3', 3, { query: 'attention', scope: { kind: 'collection' } }, REF('A3')),
+      mk('s4', 4, { query: 'attention', scope: { kind: 'collection', refOrName: '' } }, REF('A4')),
+      mk('s5', 5, {}, REF('A5')),
+      mk(
+        's6',
+        6,
         {
           query: 'attention',
-          mode: 'metadata',
-          scope: { kind: 'savedSearch', refOrName: 'zotero://user/0/search/SS1' },
+          scope: { kind: 'collection', refOrName: 'zotero://user/0/collection/C1' },
         },
-        { meta: searchMetaOf([{ ref: REF('A2') }]) },
+        REF('A6'),
       ),
     ])
-    const a1 = workspace.sources.find((item) => item.key.includes('a1'))
-    const a2 = workspace.sources.find((item) => item.key.includes('a2'))
-    expect(a1?.searches[0]!.scope).toEqual({ kind: 'collection', name: 'Reading' })
-    expect(a1?.searches[0]!.mode).toBe('everything')
-    expect(a2?.searches[0]!.scope).toEqual({
-      kind: 'savedSearch',
-      ref: 'zotero://user/0/search/SS1',
-    })
+    expect(workspace.sources).toHaveLength(6)
+    expect(workspace.sources[0]!.searches).toEqual([{ callId: 's1', query: 'attention' }])
+    expect(workspace.sources[1]!.searches).toEqual([{ callId: 's2' }])
+    expect(workspace.sources[4]!.searches).toEqual([{ callId: 's5' }])
+    expect(workspace.sources[5]!.searches).toEqual([{ callId: 's6', query: 'attention' }])
   })
 
   it('produces only inspected from a get, with no invented stage facts', () => {
@@ -218,14 +211,52 @@ describe('buildSourceWorkspace', () => {
     ])
     expect(workspace.sources).toHaveLength(1)
     expect(workspace.sources[0]!.facts).toEqual({
-      discovered: false,
       inspected: true,
       evidenceCount: 0,
       attachmentResolved: false,
       exportCount: 0,
     })
-    expect(workspace.sources[0]!.callRefs.successful).toEqual(['g1'])
     expect(workspace.sources[0]!.title).toBe('Attention Is All You Need')
+  })
+
+  it('skips a get whose arguments and projection both lack a ref', () => {
+    const workspace = buildSourceWorkspace([
+      {
+        ...settled(),
+        callId: 'g1',
+        seq: 1,
+        call: { name: 'zotero_get', argsRaw: '' },
+        meta: { title: 'Only Title' },
+      },
+    ])
+    expect(workspace.sources).toEqual([])
+  })
+
+  it('skips an export with neither projection refs nor usable arguments', () => {
+    const workspace = buildSourceWorkspace([
+      {
+        ...settled(),
+        callId: 'e1',
+        seq: 1,
+        call: { name: 'zotero_export', argsRaw: '' },
+      },
+    ])
+    expect(workspace.sources).toEqual([])
+    expect(workspace.exports).toEqual([])
+  })
+
+  it('attributes a get through the projection ref when the arguments are unusable', () => {
+    const workspace = buildSourceWorkspace([
+      {
+        ...settled(),
+        callId: 'g1',
+        seq: 1,
+        call: { name: 'zotero_get', argsRaw: '' },
+        meta: { title: 'Attention Is All You Need', ref: REF('A1') },
+      },
+    ])
+    expect(workspace.sources).toHaveLength(1)
+    expect(workspace.sources[0]!.facts.inspected).toBe(true)
   })
 
   it('produces evidence facts from retrieve and never export facts', () => {
@@ -250,15 +281,12 @@ describe('buildSourceWorkspace', () => {
     ])
     expect(workspace.sources).toHaveLength(1)
     expect(workspace.sources[0]!.facts).toEqual({
-      discovered: false,
       inspected: false,
       evidenceCount: 0,
       attachmentResolved: false,
       exportCount: 0,
     })
     expect(workspace.sources[0]!.operations).toEqual({ running: 1, failed: 0, stopped: 0 })
-    expect(workspace.sources[0]!.callRefs.running).toEqual(['g1'])
-    expect(workspace.operations.running).toBe(1)
   })
 
   it('counts failed and stopped calls in operations, never as achievements', () => {
@@ -283,7 +311,6 @@ describe('buildSourceWorkspace', () => {
     expect(failed?.operations).toEqual({ running: 0, failed: 1, stopped: 0 })
     expect(failed?.facts.inspected).toBe(false)
     expect(stopped?.operations).toEqual({ running: 0, failed: 0, stopped: 1 })
-    expect(workspace.operations).toEqual({ running: 0, failed: 1, stopped: 1 })
   })
 
   it('creates an export artifact and exportCount only from a successful call', () => {
@@ -331,7 +358,7 @@ describe('buildSourceWorkspace', () => {
     expect(workspace.sources[0]!.facts.exportCount).toBe(1)
   })
 
-  it('creates no artifact from running, failed, or text-less exports', () => {
+  it('creates no artifact from running, failed, stopped, or text-less exports', () => {
     const workspace = buildSourceWorkspace([
       running({
         callId: 'e1',
@@ -362,7 +389,6 @@ describe('buildSourceWorkspace', () => {
     expect(a1?.facts.exportCount).toBe(0)
     expect(a2?.operations.failed).toBe(1)
     expect(a2?.facts.exportCount).toBe(0)
-    expect(workspace.operations).toEqual({ running: 1, failed: 1, stopped: 1 })
   })
 
   it('deduplicates verbatim evidence and keeps every call id', () => {
@@ -376,15 +402,15 @@ describe('buildSourceWorkspace', () => {
     expect(workspace.sources[0]!.facts.evidenceCount).toBe(1)
   })
 
-  it('counts ref-less settled calls as unattributed', () => {
+  it('skips ref-less calls without crashing', () => {
     const workspace = buildSourceWorkspace([
       block('g1', 1, 'zotero_get', {}, {}),
       block('e1', 2, 'zotero_export', { refs: 3 }, {}),
       block('r1', 3, 'zotero_retrieve', {}, {}),
       block('a1', 4, 'zotero_attachment', {}, {}),
     ])
-    expect(workspace.unattributed).toBe(4)
     expect(workspace.sources).toEqual([])
+    expect(workspace.exports).toEqual([])
   })
 
   it('degrades malformed meta to no facts without crashing', () => {
@@ -395,8 +421,6 @@ describe('buildSourceWorkspace', () => {
     ])
     expect(workspace.sources).toHaveLength(2)
     expect(workspace.sources.every((item) => item.facts.inspected === false)).toBe(true)
-    expect(workspace.sources.every((item) => item.facts.discovered === false)).toBe(true)
-    expect(workspace.operations).toEqual({ running: 0, failed: 0, stopped: 0 })
   })
 
   it('marks one mismatch source for refs of different instances', () => {
@@ -413,9 +437,6 @@ describe('buildSourceWorkspace', () => {
     const mismatch = buildSourceWorkspace(blocks, { currentServerId: 'S1' })
     expect(mismatch.sources).toHaveLength(1)
     expect(mismatch.sources[0]!.provenance).toBe('mismatch')
-
-    const verified = buildSourceWorkspace(blocks, { currentServerId: 'S2' })
-    expect(verified.sources[0]!.provenance).toBe('mismatch')
 
     const matched = buildSourceWorkspace(
       [
@@ -493,13 +514,17 @@ describe('buildSourceWorkspace', () => {
                 preview: 'a',
                 previewTruncated: false,
               },
-              { source: 'fulltext', sourceRef: REF('A1'), preview: 'b', previewTruncated: false },
+              {
+                source: 'fulltext',
+                sourceRef: REF('A1'),
+                preview: 'b',
+                previewTruncated: false,
+              },
             ],
           },
         },
       ),
     ])
-    expect(workspace.sources[0]!.facts.discovered).toBe(true)
     expect(workspace.sources[0]!.facts.evidenceCount).toBe(2)
     expect(workspace.sources[0]!.retrievalFacts?.sourceAvailability).toEqual({})
     expect(workspace.sources[0]!.retrievalFacts?.coverage).toBeUndefined()
@@ -605,7 +630,7 @@ describe('buildSourceWorkspace', () => {
     expect(workspace.omittedRows).toBe(8)
   })
 
-  it('counts running and failed searches in the workspace operations', () => {
+  it('produces no sources from running or failed searches', () => {
     const workspace = buildSourceWorkspace([
       running({ callId: 's1', name: 'zotero_search', argsRaw: '{}' }),
       block(
@@ -617,30 +642,18 @@ describe('buildSourceWorkspace', () => {
       ),
     ])
     expect(workspace.sources).toEqual([])
-    expect(workspace.operations).toEqual({ running: 1, failed: 1, stopped: 0 })
-  })
-
-  it('treats ref-less calls with unparseable arguments as unattributed', () => {
-    const workspace = buildSourceWorkspace([
-      { ...settled(), callId: 'g1', seq: 1, call: { name: 'zotero_get', argsRaw: '' } },
-      { ...settled(), callId: 'e1', seq: 2, call: { name: 'zotero_export', argsRaw: '' } },
-    ])
-    expect(workspace.unattributed).toBe(2)
-    expect(workspace.sources).toEqual([])
+    expect(workspace.exportOperations).toEqual({ running: 0, failed: 0, stopped: 0 })
   })
 
   it('ignores unknown tool names and handles the empty slice', () => {
     expect(buildSourceWorkspace([])).toEqual({
       sources: [],
       exports: [],
-      operations: { running: 0, failed: 0, stopped: 0 },
       exportOperations: { running: 0, failed: 0, stopped: 0 },
-      unattributed: 0,
       omittedRows: 0,
     })
     const workspace = buildSourceWorkspace([block('x1', 1, 'other_tool', {}, {})])
     expect(workspace.sources).toEqual([])
-    expect(workspace.operations).toEqual({ running: 0, failed: 0, stopped: 0 })
   })
 
   it('accepts a search whose meta carries no omission count', () => {
@@ -691,7 +704,6 @@ describe('buildSourceWorkspace', () => {
       block('s1', 1, 'zotero_search', { query: 'attention' }, {}),
     ])
     expect(workspace.sources).toEqual([])
-    expect(workspace.operations).toEqual({ running: 0, failed: 0, stopped: 0 })
   })
 
   it('never folds searches whose arguments are unparseable', () => {
@@ -716,39 +728,6 @@ describe('buildSourceWorkspace', () => {
     expect(workspace.sources[1]!.searches.map((entry) => entry.callId)).toEqual(['s2'])
   })
 
-  it('normalizes degraded scope, query, and offset arguments', () => {
-    const mk = (callId: string, seq: number, args: Record<string, unknown>, ref: string) =>
-      block(callId, seq, 'zotero_search', args, { meta: searchMetaOf([{ ref }]) })
-    const workspace = buildSourceWorkspace([
-      mk('s1', 1, { query: 'attention', scope: 'x' }, REF('A1')),
-      mk(
-        's2',
-        2,
-        {
-          query: 3,
-          scope: { kind: 'savedSearch', refOrName: 'Inbox' },
-          offset: -1,
-          mode: 'everything',
-        },
-        REF('A2'),
-      ),
-      mk('s3', 3, { query: 'attention', scope: { kind: 'collection' } }, REF('A3')),
-      mk('s4', 4, { query: 'attention', scope: { kind: 'collection', refOrName: '' } }, REF('A4')),
-      mk('s5', 5, {}, REF('A5')),
-    ])
-    expect(workspace.sources).toHaveLength(5)
-    expect(workspace.sources[0]!.searches[0]!.scope).toEqual({ kind: 'library' })
-    expect(workspace.sources[1]!.searches[0]).toMatchObject({
-      scope: { kind: 'savedSearch', name: 'Inbox' },
-      mode: 'everything',
-      offset: 0,
-    })
-    expect(workspace.sources[1]!.searches[0]!.query).toBeUndefined()
-    expect(workspace.sources[2]!.searches[0]!.scope).toEqual({ kind: 'library' })
-    expect(workspace.sources[3]!.searches[0]!.scope).toEqual({ kind: 'library' })
-    expect(workspace.sources[4]!.searches[0]!.query).toBeUndefined()
-  })
-
   it('inspects from a minimal get meta without inventing fields', () => {
     const workspace = buildSourceWorkspace([
       block('g1', 1, 'zotero_get', { ref: REF('A1') }, { meta: { title: 'Only Title' } }),
@@ -758,7 +737,6 @@ describe('buildSourceWorkspace', () => {
     expect(workspace.sources[0]!.creators).toBeUndefined()
     expect(workspace.sources[0]!.venue).toBeUndefined()
     expect(workspace.sources[0]!.year).toBeUndefined()
-    expect(workspace.sources[0]!.itemType).toBeUndefined()
     expect(workspace.sources[0]!.bestAttachment).toBeUndefined()
   })
 
@@ -824,13 +802,12 @@ describe('buildSourceWorkspace', () => {
     expect(workspace.exports[0]).toMatchObject({ format: '', refsOmitted: 0, text: 'raw' })
   })
 
-  it('does not count a running export with unusable arguments as unattributed', () => {
+  it('creates no sources from a running export with unusable arguments', () => {
     const workspace = buildSourceWorkspace([
       running({ callId: 'e1', name: 'zotero_export', argsRaw: '{}' }),
     ])
-    expect(workspace.unattributed).toBe(0)
     expect(workspace.sources).toEqual([])
-    expect(workspace.operations).toEqual({ running: 1, failed: 0, stopped: 0 })
+    expect(workspace.exportOperations).toEqual({ running: 1, failed: 0, stopped: 0 })
   })
 
   it('lets the latest retrieve facts win', () => {
@@ -860,58 +837,38 @@ describe('buildSourceWorkspace', () => {
   })
 
   it('keeps the first attachment hint a search surfaced', () => {
+    const searchRowMeta = (attachmentRef: string) => ({
+      returned: 1,
+      total: 1,
+      nextOffset: null,
+      displayed: 1,
+      omitted: 0,
+      noteMatches: null,
+      items: [
+        {
+          ref: REF('A1'),
+          title: 'T',
+          creatorSummary: 'C',
+          year: 2020,
+          itemType: 'journalArticle',
+          bestAttachmentRef: attachmentRef,
+        },
+      ],
+    })
     const workspace = buildSourceWorkspace([
       block(
         's1',
         1,
         'zotero_search',
         { query: 'attention' },
-        {
-          meta: {
-            returned: 1,
-            total: 1,
-            nextOffset: null,
-            displayed: 1,
-            omitted: 0,
-            noteMatches: null,
-            items: [
-              {
-                ref: REF('A1'),
-                title: 'T',
-                creatorSummary: 'C',
-                year: 2020,
-                itemType: 'journalArticle',
-                bestAttachmentRef: 'zotero://user/0/attachment/WXYZ6789',
-              },
-            ],
-          },
-        },
+        { meta: searchRowMeta('zotero://user/0/attachment/WXYZ6789') },
       ),
       block(
         's2',
         2,
         'zotero_search',
         { query: 'attention', offset: 1 },
-        {
-          meta: {
-            returned: 1,
-            total: 1,
-            nextOffset: null,
-            displayed: 1,
-            omitted: 0,
-            noteMatches: null,
-            items: [
-              {
-                ref: REF('A1'),
-                title: 'T',
-                creatorSummary: 'C',
-                year: 2020,
-                itemType: 'journalArticle',
-                bestAttachmentRef: 'zotero://user/0/attachment/OTHER99',
-              },
-            ],
-          },
-        },
+        { meta: searchRowMeta('zotero://user/0/attachment/OTHER99') },
       ),
     ])
     expect(workspace.sources[0]!.bestAttachment).toEqual({

@@ -66,8 +66,3 @@ export function attachmentRefOf(item: SourceItem): string | null {
     item.attachment?.ref ?? item.bestAttachment?.ref ?? item.retrievalFacts?.attachmentRef ?? null
   )
 }
-
-/** The object key of one annotation ref (the open-pdf `annotation` parameter). */
-export function annotationKeyOf(sourceRef: string): string | null {
-  return shortKeyOf(sourceRef)
-}

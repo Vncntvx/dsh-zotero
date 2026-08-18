@@ -182,13 +182,6 @@
   padding: 8px 16px calc(var(--dsh-composer-height, 152px) + 16px);
 }
 
-.emptyNote {
-  margin: 0;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--dsw-alias-label-caption);
-}
-
 .empty {
   display: flex;
   flex-direction: column;

@@ -7,50 +7,17 @@
  * @module dsh-zotero/client/components/SourceRow
  */
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import clsx from 'clsx'
-import { IconChevronDownOutline14, writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconChevronDownOutline14 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { askDraftOf, exportDraftOf } from '../actions/source-actions.ts'
 import { interpolate, joinNonEmpty } from '../presenters.ts'
 import type { SourceItem } from '../sources/model.ts'
+import { CopyButton } from './CopyButton.tsx'
+import { operationsLabelsOf } from './operations.ts'
 import { SourceDetail } from './SourceDetail.tsx'
 import css from './SourcesList.module.css'
-
-/** A copy button with a brief copied feedback window (cleared on unmount). */
-export function CopyButton({
-  value,
-  label,
-  t,
-}: {
-  readonly value: string
-  readonly label: string
-  readonly t: TranslateNS<'zotero'>
-}) {
-  const [copied, setCopied] = useState(false)
-  useEffect(() => {
-    if (!copied) return
-    const timer = window.setTimeout(() => {
-      setCopied(false)
-    }, 1500)
-    return () => {
-      window.clearTimeout(timer)
-    }
-  }, [copied])
-  return (
-    <button
-      type="button"
-      className={css.lineAction}
-      aria-label={label}
-      onClick={() => {
-        void writeClipboard(value)
-        setCopied(true)
-      }}
-    >
-      {copied ? t('copied') : t('copy')}
-    </button>
-  )
-}
 
 /** The provable fact badges of one source, in fixed order. */
 export function badgesOf(item: SourceItem, t: TranslateNS<'zotero'>): string[] {
@@ -67,16 +34,15 @@ export function badgesOf(item: SourceItem, t: TranslateNS<'zotero'>): string[] {
     badges.push(interpolate(t('evidenceBadge'), { count: item.facts.evidenceCount }))
   if (item.facts.exportCount > 0)
     badges.push(interpolate(t('exportBadge'), { count: item.facts.exportCount }))
-  if (item.operations.failed > 0)
-    badges.push(interpolate(t('failedBadge'), { count: item.operations.failed }))
-  if (item.operations.running > 0)
-    badges.push(interpolate(t('runningBadge'), { count: item.operations.running }))
-  if (item.operations.stopped > 0)
-    badges.push(interpolate(t('stoppedBadge'), { count: item.operations.stopped }))
+  badges.push(...operationsLabelsOf(item.operations, t))
   return badges
 }
 
-/** Whether the dossier has anything to show beyond the header line. */
+/**
+ * Whether the dossier has anything to show beyond the header line. Must
+ * mirror the sections `SourceDetail` renders, or rows lose their expand
+ * affordance when a new section appears.
+ */
 export function hasDossierContent(item: SourceItem): boolean {
   return (
     item.searches.length > 0 ||

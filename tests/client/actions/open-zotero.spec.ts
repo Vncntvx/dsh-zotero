@@ -6,36 +6,13 @@
 
 import { describe, expect, it } from 'vitest'
 import {
-  annotationKeyOf,
   attachmentRefOf,
   openVerdictOf,
   pdfUrlOf,
   selectUrlOf,
 } from '../../../src/client/actions/open-zotero.ts'
 import type { SourceItem } from '../../../src/client/sources/model.ts'
-
-function itemOf(overrides: Partial<SourceItem>): SourceItem {
-  return {
-    key: 'zotero://user/0/item/a',
-    ref: 'zotero://user/0/item/A',
-    provenance: 'unknown',
-    facts: {
-      discovered: true,
-      inspected: false,
-      evidenceCount: 0,
-      attachmentResolved: false,
-      exportCount: 0,
-    },
-    operations: { running: 0, failed: 0, stopped: 0 },
-    searches: [],
-    evidence: [],
-    exports: [],
-    firstSeenAt: 1,
-    lastTouchedAt: 1,
-    callRefs: { successful: [], failed: [], running: [] },
-    ...overrides,
-  }
-}
+import { sourceOf } from '../helpers/source-fixtures.ts'
 
 describe('selectUrlOf', () => {
   it('builds the select deep link for a personal-library item ref', () => {
@@ -75,9 +52,9 @@ describe('pdfUrlOf', () => {
 
 describe('openVerdictOf', () => {
   it('opens verified items, blocks mismatches, and caves the rest', () => {
-    expect(openVerdictOf(itemOf({ provenance: 'verified' }))).toBe('open')
-    expect(openVerdictOf(itemOf({ provenance: 'mismatch' }))).toBe('blocked')
-    expect(openVerdictOf(itemOf({ provenance: 'unknown' }))).toBe('unverified')
+    expect(openVerdictOf(sourceOf({ provenance: 'verified' }))).toBe('open')
+    expect(openVerdictOf(sourceOf({ provenance: 'mismatch' }))).toBe('blocked')
+    expect(openVerdictOf(sourceOf({ provenance: 'unknown' }))).toBe('unverified')
   })
 })
 
@@ -85,7 +62,7 @@ describe('attachmentRefOf', () => {
   it('prefers the resolved attachment, then the hint, then the retrieve attachment', () => {
     expect(
       attachmentRefOf(
-        itemOf({
+        sourceOf({
           attachment: {
             ref: 'zotero://user/0/attachment/RESOLVED',
             kind: 'file',
@@ -103,11 +80,11 @@ describe('attachmentRefOf', () => {
       ),
     ).toBe('zotero://user/0/attachment/RESOLVED')
     expect(
-      attachmentRefOf(itemOf({ bestAttachment: { ref: 'zotero://user/0/attachment/HINT' } })),
+      attachmentRefOf(sourceOf({ bestAttachment: { ref: 'zotero://user/0/attachment/HINT' } })),
     ).toBe('zotero://user/0/attachment/HINT')
     expect(
       attachmentRefOf(
-        itemOf({
+        sourceOf({
           retrievalFacts: {
             attachmentRef: 'zotero://user/0/attachment/FULLTEXT',
             truncated: false,
@@ -116,13 +93,6 @@ describe('attachmentRefOf', () => {
         }),
       ),
     ).toBe('zotero://user/0/attachment/FULLTEXT')
-    expect(attachmentRefOf(itemOf({}))).toBeNull()
-  })
-})
-
-describe('annotationKeyOf', () => {
-  it('extracts the annotation key', () => {
-    expect(annotationKeyOf('zotero://user/0/annotation/ANN00001')).toBe('ANN00001')
-    expect(annotationKeyOf('junk')).toBeNull()
+    expect(attachmentRefOf(sourceOf({}))).toBeNull()
   })
 })

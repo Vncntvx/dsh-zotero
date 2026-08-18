@@ -7,14 +7,14 @@
  * @module dsh-zotero/client/components/ExportCard
  */
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import clsx from 'clsx'
 import { IconChevronDownOutline14 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { interpolate } from '../presenters.ts'
 import { bibTexKeysOf, citeCommandOf } from '../sources/bibtex.ts'
 import type { ExportArtifact } from '../sources/model.ts'
-import { CopyButton } from './SourceRow.tsx'
+import { CopyButton } from './CopyButton.tsx'
 import css from './SourcesList.module.css'
 
 /** The display label of one export format; the translator names stay verbatim. */
@@ -38,8 +38,16 @@ export interface ExportCardProps {
 /** One successful export artifact card. */
 export function ExportCard({ artifact, ordinal, t }: ExportCardProps) {
   const [open, setOpen] = useState(false)
-  const keys = bibTexKeysOf(artifact.text)
-  const citeCommand = citeCommandOf(keys)
+  // Key extraction is only meaningful for the BibTeX family; other bodies
+  // can be large, so the regex never runs on them.
+  const keys = useMemo(
+    () =>
+      artifact.format === 'bibtex' || artifact.format === 'biblatex'
+        ? bibTexKeysOf(artifact.text)
+        : [],
+    [artifact.format, artifact.text],
+  )
+  const citeCommand = useMemo(() => citeCommandOf(keys), [keys])
   return (
     <section className={css.card} data-export-card>
       <button

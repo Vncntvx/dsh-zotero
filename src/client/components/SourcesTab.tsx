@@ -80,9 +80,22 @@ export function currentTime(): string {
   return `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
 }
 
-/** Short display form of an instance id; the full value stays in the title attribute. */
-export function shortServerId(serverId: string): string {
-  return serverId.slice(0, 8)
+/**
+ * A cheap content signature of the zotero-relevant slice: the settled-node
+ * count and tail position plus the running-call ids. Streaming chunk
+ * publications change neither, so the call collection (and with it the
+ * workspace rebuild) skips them.
+ * @param snapshot - the conversation snapshot, undefined while none is open.
+ * @returns the signature string.
+ */
+export function sessionSignatureOf(snapshot: ConversationSnapshot | undefined): string {
+  if (snapshot === undefined) return ''
+  const last =
+    snapshot.nodes.length === 0
+      ? -1
+      : orderKeyOf(snapshot.nodes[snapshot.nodes.length - 1] as ToolCallBlock)
+  const running = snapshot.runningCalls.map((call) => call.callId).join(',')
+  return `${snapshot.nodes.length}:${last}:${snapshot.runningCalls.length}:${running}`
 }
 
 /**
@@ -142,14 +155,18 @@ export function diagnosisOf(state: TabStatusState, t: SourcesTabProps['t']): str
 /** The Sources panel body: status strip, diagnostics, lens bar, and the active lens. */
 export function SourcesTab({ status, t, useSession, inputActions }: SourcesTabProps) {
   const session = useSession((snapshot) => snapshot)
-  const blocks = useMemo(() => collectZoteroCalls(session), [session])
   const [lens, setLens] = useState<SourcesLensId>('sources')
   const [statusState, setStatusState] = useState<TabStatusState>({ kind: 'loading' })
   const [requestId, setRequestId] = useState(0)
-  const currentServerId = statusState.kind === 'connected' ? statusState.data.serverId : undefined
+  // The last verified instance id feeds the provenance verdicts. It updates
+  // only when a connected probe settles — a refresh's loading flip must not
+  // drop it, or the workspace would rebuild twice per probe.
+  const [serverId, setServerId] = useState<string | undefined>(undefined)
+  const signature = useMemo(() => sessionSignatureOf(session), [session])
+  const blocks = useMemo(() => collectZoteroCalls(session), [signature])
   const workspace = useMemo(
-    () => buildSourceWorkspace(blocks, { currentServerId }),
-    [blocks, currentServerId],
+    () => buildSourceWorkspace(blocks, { currentServerId: serverId }),
+    [blocks, serverId],
   )
   const setDraft = inputActions?.setDraft.bind(inputActions)
 
@@ -163,7 +180,11 @@ export function SourcesTab({ status, t, useSession, inputActions }: SourcesTabPr
       // ignore-stale: the aborted probe settles normally and its result is
       // dropped here, never mistaken for a connectivity problem.
       if (controller.signal.aborted) return
-      setStatusState(stateOf(result, currentTime()))
+      const next = stateOf(result, currentTime())
+      setStatusState(next)
+      if (next.kind === 'connected' && next.data.serverId !== undefined) {
+        setServerId(next.data.serverId)
+      }
     })()
     return () => {
       controller.abort()

@@ -13,7 +13,8 @@ import { ExportCard, formatLabelOf } from '../../src/client/components/ExportCar
 import { ExportsLens, incompleteExportsNoteOf } from '../../src/client/components/ExportsLens.tsx'
 import { zh, type ZoteroLocaleKey } from '../../src/client/locales.ts'
 import { bibTexKeysOf, citeCommandOf } from '../../src/client/sources/bibtex.ts'
-import type { ExportArtifact, SourceWorkspace } from '../../src/client/sources/model.ts'
+import type { ExportArtifact } from '../../src/client/sources/model.ts'
+import { workspaceOf } from './helpers/source-fixtures.ts'
 
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
   const { createElement } = await import('react')
@@ -40,20 +41,6 @@ const BIBTEX_ARTIFACT: ExportArtifact = {
   refs: ['zotero://user/0/item/AAAAAAA1', 'zotero://user/0/item/AAAAAAA2'],
   refsOmitted: 0,
   text: '@article{dao2023,\n title={A}\n}',
-}
-
-function workspaceOf(
-  exports: readonly ExportArtifact[],
-  exportOperations = { running: 0, failed: 0, stopped: 0 },
-): SourceWorkspace {
-  return {
-    sources: [],
-    exports,
-    operations: { running: 0, failed: 0, stopped: 0 },
-    exportOperations,
-    unattributed: 0,
-    omittedRows: 0,
-  }
 }
 
 afterEach(() => {
@@ -136,13 +123,18 @@ describe('ExportsLens', () => {
     }
     render(
       <ExportsLens
-        workspace={workspaceOf([BIBTEX_ARTIFACT, second], { running: 0, failed: 1, stopped: 1 })}
+        workspace={workspaceOf([], {
+          exports: [BIBTEX_ARTIFACT, second],
+          exportOperations: { running: 0, failed: 1, stopped: 1 },
+        })}
         t={t}
       />,
     )
     expect(screen.getByText(`1. ${BIBTEX_ARTIFACT.format}`)).toBeDefined()
     expect(screen.getByText(`2. ${zh.formatBibliography}`)).toBeDefined()
-    expect(screen.getByText(new RegExp(zh.exportsIncompleteNote))).toBeDefined()
+    expect(
+      screen.getByText(zh.exportsIncompleteNote.replace('{counts}', '失败 1 · 已停止 1')),
+    ).toBeDefined()
     expect(screen.getByText(/失败 1 · 已停止 1/)).toBeDefined()
     expect(screen.getByText(zh.exportsStaticNote)).toBeDefined()
   })

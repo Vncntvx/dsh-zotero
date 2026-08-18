@@ -11,8 +11,6 @@
 
 /** Provable outcome facts; every field is produced by successful calls only. */
 export interface SourceFacts {
-  /** The item appeared in a successful search's rows or a direct ref. */
-  readonly discovered: boolean
   /** A successful zotero_get read the item's detail. */
   readonly inspected: boolean
   /** Distinct evidence passages gathered by successful zotero_retrieve calls. */
@@ -48,11 +46,6 @@ export type SourceScope =
 export interface SearchProvenance {
   readonly callId: string
   readonly query?: string
-  readonly mode: 'metadata' | 'everything'
-  readonly scope: SourceScope
-  readonly offset: number
-  readonly returned: number
-  readonly omitted: number
 }
 
 /** One deduplicated evidence passage with the calls that returned it. */
@@ -95,13 +88,6 @@ export interface ExportArtifact {
   readonly text: string
 }
 
-/** Call ids grouped by structural state (stopped counts as non-successful). */
-export interface SourceCallRefs {
-  readonly successful: readonly string[]
-  readonly failed: readonly string[]
-  readonly running: readonly string[]
-}
-
 /** Full-text indexing coverage as reported by Zotero. */
 export interface SourceCoverage {
   readonly indexedPages?: number
@@ -133,14 +119,11 @@ export interface SourceItem {
   readonly key: string
   /** First-seen full ref, the display and copy form. */
   readonly ref: string
-  /** The serving-instance qualifier of the first-seen ref, when present. */
-  readonly serverId?: string
   readonly provenance: ItemProvenance
   readonly title?: string
   readonly creators?: string
   readonly year?: number
   readonly venue?: string
-  readonly itemType?: string
   readonly facts: SourceFacts
   readonly operations: OperationFacts
   readonly searches: readonly SearchProvenance[]
@@ -156,7 +139,6 @@ export interface SourceItem {
   readonly firstSeenAt: number
   /** Ordering: transcript position of the last touch. */
   readonly lastTouchedAt: number
-  readonly callRefs: SourceCallRefs
 }
 
 /** The aggregated session sources plus session-wide facts. */
@@ -165,12 +147,8 @@ export interface SourceWorkspace {
   readonly sources: readonly SourceItem[]
   /** Every successful export artifact, in transcript order. */
   readonly exports: readonly ExportArtifact[]
-  /** Session-wide non-successful call counts (including searches). */
-  readonly operations: OperationFacts
   /** Non-successful export calls only; never rendered as results. */
   readonly exportOperations: OperationFacts
-  /** Settled calls whose arguments carried no usable item ref. */
-  readonly unattributed: number
   /** Search rows the bounded presentation projections did not itemize. */
   readonly omittedRows: number
 }

@@ -1,6 +1,6 @@
 /**
- * Pure selectors over the source workspace: filters, sorts, and the neutral
- * count strip. Filters narrow the stable union — they never replace it, so
+ * Pure selectors over the source workspace: filters and the neutral count
+ * strip. Filters narrow the stable union — they never replace it, so
  * clearing a filter restores every source.
  * @module dsh-zotero/client/sources/selectors
  */
@@ -9,9 +9,6 @@ import type { SourceItem, SourceWorkspace } from './model.ts'
 
 /** The sources filters; every filter is a subset of the stable union. */
 export type SourceFilter = 'all' | 'evidence' | 'exported' | 'attachment' | 'failed'
-
-/** The sources sort orders. */
-export type SourceSort = 'firstSeen' | 'lastTouched' | 'title'
 
 export function filterSources(
   sources: readonly SourceItem[],
@@ -28,20 +25,6 @@ export function filterSources(
       return sources.filter((item) => item.operations.failed > 0)
     default:
       return sources
-  }
-}
-
-export function sortSources(
-  sources: readonly SourceItem[],
-  sort: SourceSort,
-): readonly SourceItem[] {
-  switch (sort) {
-    case 'lastTouched':
-      return [...sources].sort((a, b) => b.lastTouchedAt - a.lastTouchedAt)
-    case 'title':
-      return [...sources].sort((a, b) => (a.title ?? a.ref).localeCompare(b.title ?? b.ref))
-    default:
-      return [...sources].sort((a, b) => a.firstSeenAt - b.firstSeenAt)
   }
 }
 

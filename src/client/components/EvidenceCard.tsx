@@ -8,9 +8,8 @@
  */
 
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import { interpolate, joinNonEmpty } from '../presenters.ts'
+import { interpolate, joinNonEmpty, shortKeyOf } from '../presenters.ts'
 import {
-  annotationKeyOf,
   attachmentRefOf,
   openVerdictOf,
   pdfUrlOf,
@@ -23,7 +22,7 @@ import type {
   SourceCoverage,
   SourceItem,
 } from '../sources/model.ts'
-import { CopyButton } from './SourceRow.tsx'
+import { CopyButton } from './CopyButton.tsx'
 import css from './SourcesList.module.css'
 
 /** The locale key of one evidence source kind; unknown kinds read as fulltext. */
@@ -86,7 +85,7 @@ export function OpenLink({
   if (verdict === 'blocked') {
     return (
       <span className={css.warning} title={t('provenanceMismatch')}>
-        {label}（{t('provenanceMismatch')}）
+        {interpolate(t('openBlockedNote'), { label, reason: t('provenanceMismatch') })}
       </span>
     )
   }
@@ -95,7 +94,11 @@ export function OpenLink({
       <a className={css.link} href={url} target="_blank" rel="noreferrer">
         {label}
       </a>
-      {verdict === 'unverified' && <span className={css.note}>（{t('instanceUnverified')}）</span>}
+      {verdict === 'unverified' && (
+        <span className={css.note}>
+          {interpolate(t('openUnverifiedNote'), { detail: t('instanceUnverified') })}
+        </span>
+      )}
     </span>
   )
 }
@@ -112,7 +115,7 @@ function PassageRow({
   readonly verdict: OpenVerdict
   readonly t: TranslateNS<'zotero'>
 }) {
-  const annotationKey = passage.source === 'annotation' ? annotationKeyOf(passage.sourceRef) : null
+  const annotationKey = passage.source === 'annotation' ? shortKeyOf(passage.sourceRef) : null
   const annotationUrl =
     annotationKey !== null && pdfRef !== null
       ? pdfUrlOf(pdfRef, { page: passage.pageLabel, annotation: annotationKey })
@@ -192,7 +195,10 @@ export function EvidenceCard({ item, t }: EvidenceCardProps) {
         <ul className={css.availability}>
           {availabilityEntries.map(([source, entry]) => (
             <li key={source} className={css.note}>
-              {t(sourceLabelKeyOf(source))}：{availabilityLineOf(entry, t)}
+              {interpolate(t('availabilityEntry'), {
+                source: t(sourceLabelKeyOf(source)),
+                detail: availabilityLineOf(entry, t),
+              })}
             </li>
           ))}
         </ul>

@@ -7,6 +7,7 @@
 
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SourceWorkspace } from '../sources/model.ts'
+import { filterSources } from '../sources/selectors.ts'
 import { EvidenceCard } from './EvidenceCard.tsx'
 import css from './SourcesList.module.css'
 
@@ -17,7 +18,7 @@ export interface EvidenceLensProps {
 
 /** The evidence lens: scope note plus one card per evidence-bearing source. */
 export function EvidenceLens({ workspace, t }: EvidenceLensProps) {
-  const sources = workspace.sources.filter((item) => item.facts.evidenceCount > 0)
+  const sources = filterSources(workspace.sources, 'evidence')
   if (sources.length === 0) {
     return <p className={css.emptyNote}>{t('evidenceEmptyNote')}</p>
   }

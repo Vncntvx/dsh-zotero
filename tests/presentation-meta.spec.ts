@@ -211,7 +211,6 @@ describe('projectGetMeta', () => {
     expect(meta.ref).toBe('zotero://user/0/item/ABCDEFGH')
     expect(meta.notes).toEqual({ total: 2, returned: 2 })
     expect(meta.annotations).toEqual({ total: 17, returned: 3 })
-    expect(meta.bestAttachmentContentType).toBe('application/pdf')
     expect(meta.bestAttachment).toEqual({
       ref: 'zotero://user/0/attachment/WXYZ6789',
       contentType: 'application/pdf',
@@ -260,7 +259,6 @@ describe('projectGetMeta', () => {
       children: { total: 0 },
       bestAttachment: { contentType: 'application/pdf' },
     })
-    expect(meta.bestAttachmentContentType).toBe('application/pdf')
     expect(meta.bestAttachment).toEqual({ contentType: 'application/pdf' })
   })
 

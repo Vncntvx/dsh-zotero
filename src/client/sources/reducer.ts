@@ -28,6 +28,7 @@ import {
   getMetaOf,
   retrieveMetaOf,
   searchMetaOf,
+  type ExportMetaView,
 } from './decoders.ts'
 import type {
   EvidencePassage,
@@ -35,7 +36,6 @@ import type {
   OperationFacts,
   SearchProvenance,
   SourceAttachment,
-  SourceCallRefs,
   SourceItem,
   SourceRetrievalFacts,
   SourceScope,
@@ -63,7 +63,6 @@ interface SearchEpisode {
 
 /** Mutable accumulator shapes; the frozen views come from `model.ts`. */
 interface DraftFacts {
-  discovered: boolean
   inspected: boolean
   evidenceCount: number
   attachmentResolved: boolean
@@ -90,7 +89,6 @@ interface Draft {
   creators?: string
   year?: number
   venue?: string
-  itemType?: string
   facts: DraftFacts
   operations: DraftOperations
   evidence: Map<string, EvidenceDraft>
@@ -102,12 +100,10 @@ interface Draft {
   searches: SearchProvenance[]
   firstSeenAt: number
   lastTouchedAt: number
-  callRefs: { successful: string[]; failed: string[]; running: string[] }
 }
 
 function emptyFacts(): DraftFacts {
   return {
-    discovered: false,
     inspected: false,
     evidenceCount: 0,
     attachmentResolved: false,
@@ -161,13 +157,10 @@ function refArgOf(args: Record<string, unknown> | null): string | null {
 
 /** The exported refs of one export call: the projection's list first, then the arguments. */
 function exportRefsOf(
-  meta: Record<string, unknown> | null,
+  metaView: ExportMetaView | null,
   args: Record<string, unknown> | null,
 ): string[] {
-  if (meta !== null) {
-    const view = exportMetaOf(meta)
-    if (view.refs.length > 0) return [...view.refs]
-  }
+  if (metaView !== null && metaView.refs.length > 0) return [...metaView.refs]
   if (args === null) return []
   const refs = args['refs']
   if (!Array.isArray(refs)) return []
@@ -198,9 +191,7 @@ export function buildSourceWorkspace(
   const exports: ExportArtifact[] = []
   const episodes: SearchEpisode[] = []
   let lastEpisode: SearchEpisode | null = null
-  const workspaceOperations: DraftOperations = emptyOperations()
   const exportOperations: DraftOperations = emptyOperations()
-  let unattributed = 0
   let omittedRows = 0
 
   const draftOf = (ref: string, seq: number): Draft => {
@@ -219,7 +210,6 @@ export function buildSourceWorkspace(
         searches: [],
         firstSeenAt: seq,
         lastTouchedAt: seq,
-        callRefs: { successful: [], failed: [], running: [] },
       }
       byKey.set(key, draft)
     }
@@ -230,27 +220,11 @@ export function buildSourceWorkspace(
     return draft
   }
 
-  /** Record one attributed call's state on the item's operations and call refs. */
-  const recordCall = (draft: Draft, state: ZoteroRowState, callId: string): void => {
-    if (state === 'running') {
-      draft.operations.running += 1
-      draft.callRefs.running.push(callId)
-    } else if (state === 'ok') {
-      draft.callRefs.successful.push(callId)
-    } else {
-      // Stopped counts as non-successful here; the precise stopped tally lives
-      // in `operations`.
-      draft.callRefs.failed.push(callId)
-      if (state === 'stopped') draft.operations.stopped += 1
-      else draft.operations.failed += 1
-    }
-  }
-
-  /** Count one call's non-successful state in the session-wide operations. */
-  const countWorkspace = (state: ZoteroRowState): void => {
-    if (state === 'running') workspaceOperations.running += 1
-    else if (state === 'stopped') workspaceOperations.stopped += 1
-    else if (state === 'error') workspaceOperations.failed += 1
+  /** Count one attributed call's state on the item's operations. */
+  const countOperation = (draft: Draft, state: ZoteroRowState): void => {
+    if (state === 'running') draft.operations.running += 1
+    else if (state === 'stopped') draft.operations.stopped += 1
+    else if (state === 'error') draft.operations.failed += 1
   }
 
   const pushEvidence = (
@@ -298,10 +272,7 @@ export function buildSourceWorkspace(
 
     switch (name) {
       case 'zotero_search': {
-        if (state !== 'ok') {
-          countWorkspace(state)
-          break
-        }
+        if (state !== 'ok') break
         const view = meta === null ? null : searchMetaOf(meta)
         if (view === null || view.rows === null) break
         const identity = searchIdentityOf(args)
@@ -325,12 +296,9 @@ export function buildSourceWorkspace(
         lastEpisode.omitted += view.omitted ?? 0
         for (const row of view.rows) {
           const draft = draftOf(row.ref, seq)
-          draft.facts.discovered = true
-          draft.callRefs.successful.push(block.callId)
           draft.title ??= row.title
           draft.creators ??= row.creatorSummary
           draft.year ??= row.year
-          draft.itemType ??= row.itemType
           if (row.bestAttachmentRef !== undefined && draft.bestAttachment === undefined) {
             draft.bestAttachment = { ref: row.bestAttachmentRef }
           }
@@ -339,14 +307,12 @@ export function buildSourceWorkspace(
         break
       }
       case 'zotero_get': {
-        const ref = refArgOf(args)
-        if (ref === null) {
-          unattributed += 1
-          break
-        }
+        // The args carry the ref; when they are unusable, the get projection's
+        // own ref still attributes the detail.
+        const ref = refArgOf(args) ?? (meta === null ? null : (stringField(meta, 'ref') ?? null))
+        if (ref === null) break
         const draft = draftOf(ref, seq)
-        recordCall(draft, state, block.callId)
-        countWorkspace(state)
+        countOperation(draft, state)
         if (state !== 'ok' || meta === null) break
         const view = getMetaOf(meta)
         if (view.title === null) break
@@ -356,31 +322,22 @@ export function buildSourceWorkspace(
         if (view.creators !== null) draft.creators = view.creators
         if (view.venue !== null) draft.venue = view.venue
         if (view.year !== null) draft.year = view.year
-        if (view.itemType !== null) draft.itemType = view.itemType
         if (view.bestAttachment !== null) draft.bestAttachment = view.bestAttachment
         break
       }
       case 'zotero_retrieve': {
         const ref = refArgOf(args)
-        if (ref === null) {
-          unattributed += 1
-          break
-        }
+        if (ref === null) break
         const draft = draftOf(ref, seq)
-        recordCall(draft, state, block.callId)
-        countWorkspace(state)
+        countOperation(draft, state)
         if (state === 'ok' && meta !== null) pushEvidence(draft, meta, block.callId, seq)
         break
       }
       case 'zotero_attachment': {
         const ref = refArgOf(args)
-        if (ref === null) {
-          unattributed += 1
-          break
-        }
+        if (ref === null) break
         const draft = draftOf(ref, seq)
-        recordCall(draft, state, block.callId)
-        countWorkspace(state)
+        countOperation(draft, state)
         if (state !== 'ok' || meta === null) break
         const view = attachmentMetaOf(meta)
         if (view.kind === null || view.contentType === null) break
@@ -396,24 +353,20 @@ export function buildSourceWorkspace(
       }
       case 'zotero_export': {
         if (state !== 'ok') {
-          countWorkspace(state)
           if (state === 'running') exportOperations.running += 1
           else if (state === 'stopped') exportOperations.stopped += 1
           else exportOperations.failed += 1
         }
-        const refs = exportRefsOf(meta, args)
-        if (refs.length === 0) {
-          if (state !== 'running') unattributed += 1
-          break
-        }
+        const metaView = meta === null ? null : exportMetaOf(meta)
+        const refs = exportRefsOf(metaView, args)
+        if (refs.length === 0) break
         for (const ref of refs) {
           const draft = draftOf(ref, seq)
-          recordCall(draft, state, block.callId)
+          countOperation(draft, state)
         }
         if (state !== 'ok') break
         const text = (resultTextOf(block) ?? '').trimStart()
         if (text === '') break
-        const metaView = meta === null ? null : exportMetaOf(meta)
         const artifact: ExportArtifact = {
           callId: block.callId,
           format: metaView?.format ?? '',
@@ -449,11 +402,6 @@ export function buildSourceWorkspace(
     const provenance: SearchProvenance = {
       callId: episode.callId,
       ...(episode.query === undefined ? {} : { query: episode.query }),
-      mode: episode.mode,
-      scope: episode.scope,
-      offset: episode.offset,
-      returned: episode.returned,
-      omitted: episode.omitted,
     }
     for (const key of episode.keys) {
       // Every episode key entered through `draftOf`, so the draft exists.
@@ -468,21 +416,14 @@ export function buildSourceWorkspace(
       const evidence = [...draft.evidence.values()]
         .sort((a, b) => a.seq - b.seq)
         .map((entry) => entry.passage)
-      const callRefs: SourceCallRefs = {
-        successful: [...draft.callRefs.successful],
-        failed: [...draft.callRefs.failed],
-        running: [...draft.callRefs.running],
-      }
       return {
         key: draft.key,
         ref: draft.ref,
-        ...(serverIdOf(draft.ref) === undefined ? {} : { serverId: serverIdOf(draft.ref) }),
         provenance: provenanceOf(draft.serverIds, currentServerId),
         ...(draft.title === undefined ? {} : { title: draft.title }),
         ...(draft.creators === undefined ? {} : { creators: draft.creators }),
         ...(draft.year === undefined ? {} : { year: draft.year }),
         ...(draft.venue === undefined ? {} : { venue: draft.venue }),
-        ...(draft.itemType === undefined ? {} : { itemType: draft.itemType }),
         facts: draft.facts,
         operations: draft.operations,
         searches: draft.searches,
@@ -493,16 +434,13 @@ export function buildSourceWorkspace(
         exports: draft.exports,
         firstSeenAt: draft.firstSeenAt,
         lastTouchedAt: draft.lastTouchedAt,
-        callRefs,
       }
     })
 
   return {
     sources,
     exports,
-    operations: workspaceOperations,
     exportOperations,
-    unattributed,
     omittedRows,
   }
 }

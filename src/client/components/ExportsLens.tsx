@@ -9,6 +9,7 @@ import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { interpolate } from '../presenters.ts'
 import type { OperationFacts, SourceWorkspace } from '../sources/model.ts'
 import { ExportCard } from './ExportCard.tsx'
+import { operationsLabelsOf } from './operations.ts'
 import css from './SourcesList.module.css'
 
 /** The non-zero non-successful export counts as one note. */
@@ -16,13 +17,7 @@ export function incompleteExportsNoteOf(
   operations: OperationFacts,
   t: TranslateNS<'zotero'>,
 ): string {
-  const parts: string[] = []
-  if (operations.running > 0)
-    parts.push(interpolate(t('runningBadge'), { count: operations.running }))
-  if (operations.failed > 0) parts.push(interpolate(t('failedBadge'), { count: operations.failed }))
-  if (operations.stopped > 0)
-    parts.push(interpolate(t('stoppedBadge'), { count: operations.stopped }))
-  return parts.join(' · ')
+  return operationsLabelsOf(operations, t).join(' · ')
 }
 
 export interface ExportsLensProps {
@@ -40,7 +35,7 @@ export function ExportsLens({ workspace, t }: ExportsLensProps) {
     <div className={css.wrap}>
       {incomplete !== '' && (
         <p className={css.note}>
-          {t('exportsIncompleteNote')}：{incomplete}
+          {interpolate(t('exportsIncompleteNote'), { counts: incomplete })}
         </p>
       )}
       {workspace.exports.map((artifact, index) => (

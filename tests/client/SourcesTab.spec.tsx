@@ -18,7 +18,7 @@ import {
   collectZoteroCalls,
   currentTime,
   diagnosisOf,
-  shortServerId,
+  sessionSignatureOf,
   stateOf,
   type SourcesTabProps,
   type TabStatusState,
@@ -204,9 +204,29 @@ describe('status projection helpers', () => {
     ).toEqual({ kind: 'remote-error', message: 'offline' })
   })
 
-  it('formats the clock as an absolute HH:MM:SS time and shortens ids', () => {
+  it('formats the clock as an absolute HH:MM:SS time', () => {
     expect(currentTime()).toMatch(/^\d{2}:\d{2}:\d{2}$/)
-    expect(shortServerId('sPMHtLD6HHBd')).toBe('sPMHtLD6')
+  })
+
+  it('signs the zotero-relevant snapshot slice', () => {
+    expect(sessionSignatureOf(undefined)).toBe('')
+    const snapshot = snapshotOf({
+      nodes: [settled({ seq: 3, callId: 'a' })],
+      runningCalls: [running({ callId: 'b' })],
+    })
+    const signed = sessionSignatureOf(snapshot)
+    expect(signed).toBe('1:3:1:b')
+    // The same content signs identically; streaming publications change
+    // neither the node count nor the running ids.
+    expect(
+      sessionSignatureOf(
+        snapshotOf({
+          nodes: [settled({ seq: 3, callId: 'a' })],
+          runningCalls: [running({ callId: 'b' })],
+        }),
+      ),
+    ).toBe(signed)
+    expect(sessionSignatureOf(snapshotOf())).toBe('0:-1:0:')
   })
 
   it('builds the failure diagnosis line', () => {

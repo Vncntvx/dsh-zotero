@@ -17,7 +17,8 @@ import {
 } from '../../src/client/components/EvidenceCard.tsx'
 import { EvidenceLens } from '../../src/client/components/EvidenceLens.tsx'
 import { zh, type ZoteroLocaleKey } from '../../src/client/locales.ts'
-import type { SourceItem, SourceWorkspace } from '../../src/client/sources/model.ts'
+import type { SourceItem } from '../../src/client/sources/model.ts'
+import { sourceOf, workspaceOf } from './helpers/source-fixtures.ts'
 
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
   const { createElement } = await import('react')
@@ -30,41 +31,7 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
 
 const t: TranslateNS<'zotero'> = (key) => zh[key as ZoteroLocaleKey] ?? key
 
-function itemOf(overrides: Partial<SourceItem>): SourceItem {
-  return {
-    key: 'zotero://user/0/item/a',
-    ref: 'zotero://user/0/item/A',
-    provenance: 'unknown',
-    facts: {
-      discovered: true,
-      inspected: false,
-      evidenceCount: 0,
-      attachmentResolved: false,
-      exportCount: 0,
-    },
-    operations: { running: 0, failed: 0, stopped: 0 },
-    searches: [],
-    evidence: [],
-    exports: [],
-    firstSeenAt: 1,
-    lastTouchedAt: 1,
-    callRefs: { successful: [], failed: [], running: [] },
-    ...overrides,
-  }
-}
-
-function workspaceOf(sources: readonly SourceItem[]): SourceWorkspace {
-  return {
-    sources,
-    exports: [],
-    operations: { running: 0, failed: 0, stopped: 0 },
-    exportOperations: { running: 0, failed: 0, stopped: 0 },
-    unattributed: 0,
-    omittedRows: 0,
-  }
-}
-
-const EVIDENCE_ITEM: SourceItem = itemOf({
+const EVIDENCE_ITEM: SourceItem = sourceOf({
   key: 'zotero://user/0/item/ABCDEFGH',
   ref: 'zotero://user/0/item/ABCDEFGH',
   title: 'FlashAttention-2',
@@ -72,7 +39,6 @@ const EVIDENCE_ITEM: SourceItem = itemOf({
   year: 2023,
   provenance: 'verified',
   facts: {
-    discovered: true,
     inspected: false,
     evidenceCount: 2,
     attachmentResolved: false,
@@ -182,7 +148,7 @@ describe('EvidenceCard', () => {
   })
 
   it('blocks every open link for a mismatching item and keeps the copy fallback', () => {
-    const mismatch = itemOf({
+    const mismatch = sourceOf({
       ...EVIDENCE_ITEM,
       provenance: 'mismatch',
     })
@@ -193,14 +159,14 @@ describe('EvidenceCard', () => {
   })
 
   it('caves unverified items with an instance caveat', () => {
-    const unverified = itemOf({ ...EVIDENCE_ITEM, provenance: 'unknown' })
+    const unverified = sourceOf({ ...EVIDENCE_ITEM, provenance: 'unknown' })
     const { container } = render(<EvidenceCard item={unverified} t={t} />)
     expect(container.querySelector('a')).not.toBeNull()
     expect(screen.getAllByText(new RegExp(zh.instanceUnverified)).length).toBeGreaterThanOrEqual(1)
   })
 
   it('falls back to the ref for an item the session never titled', () => {
-    const untitled = itemOf({
+    const untitled = sourceOf({
       ...EVIDENCE_ITEM,
       title: undefined,
       creators: undefined,
@@ -213,16 +179,15 @@ describe('EvidenceCard', () => {
 
 describe('EvidenceLens', () => {
   it('shows the honest empty note without evidence and groups by literature', () => {
-    const empty = render(<EvidenceLens workspace={workspaceOf([itemOf({})])} t={t} />)
+    const empty = render(<EvidenceLens workspace={workspaceOf([sourceOf({})])} t={t} />)
     expect(screen.getByText(zh.evidenceEmptyNote)).toBeDefined()
     empty.unmount()
 
-    const other = itemOf({
+    const other = sourceOf({
       key: 'zotero://user/0/item/other',
       ref: 'zotero://user/0/item/OTHER',
       title: 'Another Paper',
       facts: {
-        discovered: true,
         inspected: false,
         evidenceCount: 1,
         attachmentResolved: false,

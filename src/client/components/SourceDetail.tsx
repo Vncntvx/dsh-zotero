@@ -9,9 +9,10 @@
  */
 
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import { interpolate } from '../presenters.ts'
+import { interpolate, joinNonEmpty } from '../presenters.ts'
 import type { SourceItem } from '../sources/model.ts'
-import { CopyButton } from './SourceRow.tsx'
+import { CopyButton } from './CopyButton.tsx'
+import { operationsLabelsOf } from './operations.ts'
 import css from './SourcesList.module.css'
 
 export interface SourceDetailProps {
@@ -21,7 +22,7 @@ export interface SourceDetailProps {
 
 /** The dossier body of one source row. */
 export function SourceDetail({ item, t }: SourceDetailProps) {
-  const operations = [item.operations.running, item.operations.failed, item.operations.stopped]
+  const operationLabels = operationsLabelsOf(item.operations, t)
   return (
     <div className={css.dossier}>
       {item.searches.length > 0 && (
@@ -69,23 +70,7 @@ export function SourceDetail({ item, t }: SourceDetailProps) {
         </p>
       )}
       {item.provenance === 'mismatch' && <p className={css.warning}>{t('provenanceMismatch')}</p>}
-      {operations.some((count) => count > 0) && (
-        <p className={css.line}>
-          {[
-            item.operations.running > 0
-              ? interpolate(t('runningBadge'), { count: item.operations.running })
-              : '',
-            item.operations.failed > 0
-              ? interpolate(t('failedBadge'), { count: item.operations.failed })
-              : '',
-            item.operations.stopped > 0
-              ? interpolate(t('stoppedBadge'), { count: item.operations.stopped })
-              : '',
-          ]
-            .filter((part) => part !== '')
-            .join(' · ')}
-        </p>
-      )}
+      {operationLabels.length > 0 && <p className={css.line}>{joinNonEmpty(...operationLabels)}</p>}
     </div>
   )
 }

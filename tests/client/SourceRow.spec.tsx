@@ -10,12 +10,9 @@ import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SourceItem } from '../../src/client/sources/model.ts'
 import { zh, type ZoteroLocaleKey } from '../../src/client/locales.ts'
-import {
-  CopyButton,
-  SourceRow,
-  badgesOf,
-  hasDossierContent,
-} from '../../src/client/components/SourceRow.tsx'
+import { CopyButton } from '../../src/client/components/CopyButton.tsx'
+import { SourceRow, badgesOf, hasDossierContent } from '../../src/client/components/SourceRow.tsx'
+import { sourceOf } from './helpers/source-fixtures.ts'
 
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
   const { createElement } = await import('react')
@@ -34,29 +31,6 @@ const { writeClipboard } = vi.mocked(
 
 const t: TranslateNS<'zotero'> = (key) => zh[key as ZoteroLocaleKey] ?? key
 
-function itemOf(overrides: Partial<SourceItem>): SourceItem {
-  return {
-    key: 'zotero://user/0/item/a',
-    ref: 'zotero://user/0/item/A',
-    provenance: 'unknown',
-    facts: {
-      discovered: true,
-      inspected: false,
-      evidenceCount: 0,
-      attachmentResolved: false,
-      exportCount: 0,
-    },
-    operations: { running: 0, failed: 0, stopped: 0 },
-    searches: [],
-    evidence: [],
-    exports: [],
-    firstSeenAt: 1,
-    lastTouchedAt: 1,
-    callRefs: { successful: [], failed: [], running: [] },
-    ...overrides,
-  }
-}
-
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
@@ -64,19 +38,18 @@ afterEach(() => {
 
 describe('badgesOf', () => {
   it('returns nothing for a bare source', () => {
-    expect(badgesOf(itemOf({}), t)).toEqual([])
+    expect(badgesOf(sourceOf({}), t)).toEqual([])
   })
 
   it('marks a mismatching instance first', () => {
-    expect(badgesOf(itemOf({ provenance: 'mismatch' }), t)).toEqual([zh.provenanceMismatch])
+    expect(badgesOf(sourceOf({ provenance: 'mismatch' }), t)).toEqual([zh.provenanceMismatch])
   })
 
   it('badges a resolved PDF and a resolved non-PDF attachment', () => {
     expect(
       badgesOf(
-        itemOf({
+        sourceOf({
           facts: {
-            discovered: true,
             inspected: false,
             evidenceCount: 0,
             attachmentResolved: true,
@@ -95,9 +68,8 @@ describe('badgesOf', () => {
     ).toEqual([zh.badgePdf])
     expect(
       badgesOf(
-        itemOf({
+        sourceOf({
           facts: {
-            discovered: true,
             inspected: false,
             evidenceCount: 0,
             attachmentResolved: true,
@@ -116,16 +88,15 @@ describe('badgesOf', () => {
   })
 
   it('badges the attachment selection hint when nothing was resolved', () => {
-    expect(badgesOf(itemOf({ bestAttachment: { contentType: 'application/pdf' } }), t)).toEqual([
+    expect(badgesOf(sourceOf({ bestAttachment: { contentType: 'application/pdf' } }), t)).toEqual([
       zh.badgePdf,
     ])
   })
 
   it('badges evidence, exports, and every operation kind', () => {
     const badges = badgesOf(
-      itemOf({
+      sourceOf({
         facts: {
-          discovered: true,
           inspected: false,
           evidenceCount: 2,
           attachmentResolved: false,
@@ -138,8 +109,8 @@ describe('badgesOf', () => {
     expect(badges).toEqual([
       zh.evidenceBadge.replace('{count}', '2'),
       zh.exportBadge.replace('{count}', '1'),
-      zh.failedBadge.replace('{count}', '2'),
       zh.runningBadge.replace('{count}', '1'),
+      zh.failedBadge.replace('{count}', '2'),
       zh.stoppedBadge.replace('{count}', '3'),
     ])
   })
@@ -147,39 +118,29 @@ describe('badgesOf', () => {
 
 describe('hasDossierContent', () => {
   it('is false for a bare source', () => {
-    expect(hasDossierContent(itemOf({}))).toBe(false)
+    expect(hasDossierContent(sourceOf({}))).toBe(false)
   })
 
   it('is true for every provable fact', () => {
     expect(
       hasDossierContent(
-        itemOf({
-          searches: [
-            {
-              callId: 's1',
-              mode: 'metadata',
-              scope: { kind: 'library' },
-              offset: 0,
-              returned: 1,
-              omitted: 0,
-            },
-          ],
+        sourceOf({
+          searches: [{ callId: 's1' }],
         }),
       ),
     ).toBe(true)
     expect(
       hasDossierContent(
-        itemOf({ attachment: { kind: 'file', contentType: 'x', title: '', location: '' } }),
+        sourceOf({ attachment: { kind: 'file', contentType: 'x', title: '', location: '' } }),
       ),
     ).toBe(true)
-    expect(hasDossierContent(itemOf({ bestAttachment: { contentType: 'application/pdf' } }))).toBe(
-      true,
-    )
+    expect(
+      hasDossierContent(sourceOf({ bestAttachment: { contentType: 'application/pdf' } })),
+    ).toBe(true)
     expect(
       hasDossierContent(
-        itemOf({
+        sourceOf({
           facts: {
-            discovered: true,
             inspected: false,
             evidenceCount: 1,
             attachmentResolved: false,
@@ -190,9 +151,8 @@ describe('hasDossierContent', () => {
     ).toBe(true)
     expect(
       hasDossierContent(
-        itemOf({
+        sourceOf({
           facts: {
-            discovered: true,
             inspected: false,
             evidenceCount: 0,
             attachmentResolved: false,
@@ -201,16 +161,16 @@ describe('hasDossierContent', () => {
         }),
       ),
     ).toBe(true)
-    expect(hasDossierContent(itemOf({ operations: { running: 1, failed: 0, stopped: 0 } }))).toBe(
+    expect(hasDossierContent(sourceOf({ operations: { running: 1, failed: 0, stopped: 0 } }))).toBe(
       true,
     )
-    expect(hasDossierContent(itemOf({ operations: { running: 0, failed: 1, stopped: 0 } }))).toBe(
+    expect(hasDossierContent(sourceOf({ operations: { running: 0, failed: 1, stopped: 0 } }))).toBe(
       true,
     )
-    expect(hasDossierContent(itemOf({ operations: { running: 0, failed: 0, stopped: 1 } }))).toBe(
+    expect(hasDossierContent(sourceOf({ operations: { running: 0, failed: 0, stopped: 1 } }))).toBe(
       true,
     )
-    expect(hasDossierContent(itemOf({ provenance: 'mismatch' }))).toBe(true)
+    expect(hasDossierContent(sourceOf({ provenance: 'mismatch' }))).toBe(true)
   })
 })
 
@@ -230,13 +190,12 @@ describe('CopyButton', () => {
 })
 
 describe('SourceRow', () => {
-  const FULL: SourceItem = itemOf({
+  const FULL: SourceItem = sourceOf({
     title: 'FlashAttention-2',
     creators: 'Dao',
     year: 2023,
     venue: 'ICLR',
     facts: {
-      discovered: true,
       inspected: false,
       evidenceCount: 1,
       attachmentResolved: true,
@@ -249,22 +208,12 @@ describe('SourceRow', () => {
       title: 'a.pdf',
       location: '/tmp/a.pdf',
     },
-    searches: [
-      {
-        callId: 's1',
-        query: 'attention',
-        mode: 'metadata',
-        scope: { kind: 'library' },
-        offset: 0,
-        returned: 1,
-        omitted: 0,
-      },
-    ],
+    searches: [{ callId: 's1', query: 'attention' }],
     operations: { running: 1, failed: 2, stopped: 3 },
   })
 
   it('opens a disabled head for a bare source and an expanding one with facts', () => {
-    const bare = itemOf({})
+    const bare = sourceOf({})
     const view = render(<SourceRow item={bare} t={t} />)
     const head = screen.getByRole('button', { name: /zotero:\/\/user\/0\/item\/A/ })
     expect(head.getAttribute('aria-expanded')).toBeNull()
@@ -297,9 +246,8 @@ describe('SourceRow', () => {
   })
 
   it('renders the linked-url and attachment-hint dossier arms', () => {
-    const urlItem = itemOf({
+    const urlItem = sourceOf({
       facts: {
-        discovered: true,
         inspected: false,
         evidenceCount: 0,
         attachmentResolved: true,
@@ -313,7 +261,7 @@ describe('SourceRow', () => {
     expect(screen.getByText('https://e.org')).toBeDefined()
     view.unmount()
 
-    const hintItem = itemOf({
+    const hintItem = sourceOf({
       bestAttachment: {
         ref: 'zotero://user/0/attachment/WXYZ6789',
         contentType: 'application/pdf',
@@ -325,13 +273,13 @@ describe('SourceRow', () => {
     expect(screen.getByText('zotero://user/0/attachment/WXYZ6789')).toBeDefined()
     hintView.unmount()
 
-    const hintNoRef = itemOf({ bestAttachment: { contentType: 'application/pdf' } })
+    const hintNoRef = sourceOf({ bestAttachment: { contentType: 'application/pdf' } })
     const noRefView = render(<SourceRow item={hintNoRef} t={t} />)
     fireEvent.click(screen.getByRole('button', { name: /zotero:\/\/user\/0\/item\/A/ }))
     expect(screen.getByText('application/pdf')).toBeDefined()
     noRefView.unmount()
 
-    const hintEmpty = itemOf({ bestAttachment: {} })
+    const hintEmpty = sourceOf({ bestAttachment: {} })
     const emptyView = render(<SourceRow item={hintEmpty} t={t} />)
     fireEvent.click(screen.getByRole('button', { name: /zotero:\/\/user\/0\/item\/A/ }))
     expect(screen.getByText(zh.bestAttachmentLabel)).toBeDefined()
@@ -339,7 +287,7 @@ describe('SourceRow', () => {
   })
 
   it('joins only the non-zero operation counts', () => {
-    const failedOnly = itemOf({ operations: { running: 0, failed: 2, stopped: 0 } })
+    const failedOnly = sourceOf({ operations: { running: 0, failed: 2, stopped: 0 } })
     const failedView = render(<SourceRow item={failedOnly} t={t} />)
     fireEvent.click(screen.getByRole('button', { name: /zotero:\/\/user\/0\/item\/A/ }))
     // The badge and the dossier line both carry the count.
@@ -348,7 +296,7 @@ describe('SourceRow', () => {
     ).toBeGreaterThanOrEqual(2)
     failedView.unmount()
 
-    const runningOnly = itemOf({ operations: { running: 1, failed: 0, stopped: 0 } })
+    const runningOnly = sourceOf({ operations: { running: 1, failed: 0, stopped: 0 } })
     const runningView = render(<SourceRow item={runningOnly} t={t} />)
     fireEvent.click(screen.getByRole('button', { name: /zotero:\/\/user\/0\/item\/A/ }))
     expect(
@@ -358,7 +306,7 @@ describe('SourceRow', () => {
   })
 
   it('shows the mismatch warning and the operations line in the dossier', () => {
-    const mismatch = itemOf({
+    const mismatch = sourceOf({
       provenance: 'mismatch',
       operations: { running: 1, failed: 2, stopped: 3 },
     })
@@ -369,17 +317,8 @@ describe('SourceRow', () => {
   })
 
   it('shows browse provenance for a search without a query', () => {
-    const browse = itemOf({
-      searches: [
-        {
-          callId: 's1',
-          mode: 'metadata',
-          scope: { kind: 'library' },
-          offset: 0,
-          returned: 1,
-          omitted: 0,
-        },
-      ],
+    const browse = sourceOf({
+      searches: [{ callId: 's1' }],
     })
     render(<SourceRow item={browse} t={t} />)
     fireEvent.click(screen.getByRole('button', { name: /zotero:\/\/user\/0\/item\/A/ }))

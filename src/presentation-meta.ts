@@ -145,14 +145,13 @@ export interface ZoteroGetPresentationMeta {
   readonly creators: string
   readonly year?: number
   readonly venue?: string
-  /** The item's own type, so the corpus can keep notes out of the target rule. */
+  /** The item's own type; kept on the wire for clients that distinguish notes. */
   readonly itemType?: string
   /** The item's own ref, so the Sources panel can attribute the detail directly. */
   readonly ref?: string
   readonly notes?: ZoteroChildCount
   readonly annotations?: ZoteroChildCount
   readonly attachments?: ZoteroChildCount
-  readonly bestAttachmentContentType?: string
   /** Zotero's attachment selection with its ref (the open-PDF deep-link key). */
   readonly bestAttachment?: { readonly ref?: string; readonly contentType: string }
   readonly notesPreview: ZoteroChildPreview[]
@@ -347,7 +346,6 @@ export function projectGetMeta(value: GetProjectionInput): ZoteroGetPresentation
     ...(value.bestAttachment === undefined
       ? {}
       : {
-          bestAttachmentContentType: value.bestAttachment.contentType,
           bestAttachment: {
             contentType: value.bestAttachment.contentType,
             ...(value.bestAttachment.ref === undefined ? {} : { ref: value.bestAttachment.ref }),

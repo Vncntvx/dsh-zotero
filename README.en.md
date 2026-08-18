@@ -87,7 +87,7 @@ The tarball ships the built `lib/` (the node half plus the browser half `lib/cli
 ```sh
 cd dsh-zotero
 npm pack
-dsh plugin --profile <name> add ./dsh-zotero-0.3.1.tgz
+dsh plugin --profile <name> add ./dsh-zotero-*.tgz
 ```
 
 `npm pack` runs `prepare` first, so the tarball carries a fresh `lib/`. Use this for unpublished or local trial installs.
@@ -214,7 +214,7 @@ Pack a tarball and install it into a profile. The plugin runs from the tarball's
 
 ```sh
 npm pack
-dsh plugin --profile <name> add ./dsh-zotero-0.3.1.tgz
+dsh plugin --profile <name> add ./dsh-zotero-*.tgz
 cd ~/.dsh/profiles/<name>
 node --input-type=module < /path/to/dsh-zotero/scripts/smoke.mjs
 ```

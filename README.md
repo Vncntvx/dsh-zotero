@@ -87,7 +87,7 @@ tarball 内含已构建的 `lib/`（node 半与浏览器半 `lib/client.js`）�
 ```sh
 cd dsh-zotero
 npm pack
-dsh plugin --profile <name> add ./dsh-zotero-0.3.1.tgz
+dsh plugin --profile <name> add ./dsh-zotero-*.tgz
 ```
 
 `npm pack` 先运行 `prepare` 构建 `lib/`，适合未发布或本地试装。
@@ -214,7 +214,7 @@ pnpm dsh web --patch ./dsh-zotero/dev.cordis.yml
 
 ```sh
 npm pack
-dsh plugin --profile <name> add ./dsh-zotero-0.3.1.tgz
+dsh plugin --profile <name> add ./dsh-zotero-*.tgz
 cd ~/.dsh/profiles/<name>
 node --input-type=module < /path/to/dsh-zotero/scripts/smoke.mjs
 ```

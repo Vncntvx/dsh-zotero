@@ -19,10 +19,9 @@ describe('searchMetaOf', () => {
     title: 'Paper',
     creatorSummary: 'Creator',
     year: 2020,
-    itemType: 'journalArticle',
   }
 
-  it('decodes valid rows and the page facts', () => {
+  it('decodes valid rows and the omission count', () => {
     const meta = searchMetaOf({
       returned: 3,
       total: 42,
@@ -31,9 +30,7 @@ describe('searchMetaOf', () => {
       noteMatches: 1,
       items: [ROW, { ...ROW, bestAttachmentRef: 'zotero://user/0/attachment/WXYZ6789' }],
     })
-    expect(meta.returned).toBe(3)
-    expect(meta.total).toBe(42)
-    expect(meta.noteMatches).toBe(1)
+    expect(meta.omitted).toBe(0)
     expect(meta.rows).toEqual([
       ROW,
       { ...ROW, bestAttachmentRef: 'zotero://user/0/attachment/WXYZ6789' },
@@ -44,7 +41,6 @@ describe('searchMetaOf', () => {
     const meta = searchMetaOf({ items: [{ ref: 'x' }] })
     expect(meta.rows).toBeNull()
     expect(meta.omitted).toBeNull()
-    expect(meta.displayed).toBeNull()
   })
 
   it('degrades a non-record row to null and omits an absent year', () => {
@@ -55,17 +51,11 @@ describe('searchMetaOf', () => {
           ref: 'zotero://user/0/item/ABCDEFGH',
           title: 'T',
           creatorSummary: 'C',
-          itemType: 'journalArticle',
         },
       ],
     })
     expect(meta.rows).toEqual([
-      {
-        ref: 'zotero://user/0/item/ABCDEFGH',
-        title: 'T',
-        creatorSummary: 'C',
-        itemType: 'journalArticle',
-      },
+      { ref: 'zotero://user/0/item/ABCDEFGH', title: 'T', creatorSummary: 'C' },
     ])
   })
 })
@@ -77,7 +67,6 @@ describe('getMetaOf', () => {
       creators: 'C',
       year: 2020,
       venue: 'V',
-      itemType: 'journalArticle',
       bestAttachment: {
         ref: 'zotero://user/0/attachment/WXYZ6789',
         contentType: 'application/pdf',
@@ -93,11 +82,6 @@ describe('getMetaOf', () => {
 
   it('keeps a ref-less attachment selection as the content type alone', () => {
     const meta = getMetaOf({ bestAttachment: { contentType: 'application/pdf' } })
-    expect(meta.bestAttachment).toEqual({ contentType: 'application/pdf' })
-  })
-
-  it('falls back to the content-type field when the attachment record is absent', () => {
-    const meta = getMetaOf({ bestAttachmentContentType: 'application/pdf' })
     expect(meta.bestAttachment).toEqual({ contentType: 'application/pdf' })
   })
 
@@ -222,14 +206,12 @@ describe('exportMetaOf', () => {
       format: 'bibtex',
       style: 'apa',
       locale: 'en-US',
-      count: 3,
       refs: ['zotero://user/0/item/AAAAAAA1'],
       refsOmitted: 2,
     })
     expect(meta.format).toBe('bibtex')
     expect(meta.style).toBe('apa')
     expect(meta.locale).toBe('en-US')
-    expect(meta.count).toBe(3)
     expect(meta.refs).toEqual(['zotero://user/0/item/AAAAAAA1'])
     expect(meta.refsOmitted).toBe(2)
   })
@@ -245,7 +227,6 @@ describe('exportMetaOf', () => {
       format: null,
       style: null,
       locale: null,
-      count: null,
       refs: [],
       refsOmitted: 0,
     })
