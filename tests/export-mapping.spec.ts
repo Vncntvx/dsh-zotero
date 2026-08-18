@@ -38,43 +38,189 @@ describe('splitBibtexEntries', () => {
     expect(splitBibtexEntries('plain text')).toEqual([])
     expect(splitBibtexEntries('')).toEqual([])
   })
+
+  it('ignores @type{key, shapes inside field values and nested braces', () => {
+    const text =
+      '@article{doe2020,\n  title = {{A {nested} @book{b1, title}}},\n  note = {See @article{smith1999, for details},\n}\n'
+    const entries = splitBibtexEntries(text)
+    expect(entries).toEqual([
+      {
+        key: 'doe2020',
+        start: 0,
+        end: text.length,
+        text: '@article{doe2020,\n  title = {{A {nested} @book{b1, title}}},\n  note = {See @article{smith1999, for details},\n}',
+      },
+    ])
+  })
+
+  it('treats quoted strings as opaque, braces inside them never split an entry', () => {
+    const text = '@article{keyA,\n  note = "A {b} @book{x, y} c",\n}\n'
+    const entries = splitBibtexEntries(text)
+    expect(entries).toEqual([
+      {
+        key: 'keyA',
+        start: 0,
+        end: text.length,
+        text: '@article{keyA,\n  note = "A {b} @book{x, y} c",\n}',
+      },
+    ])
+  })
+
+  it('keeps @comment and @string bodies as entries without disturbing the real ones', () => {
+    const text =
+      '@comment{jabref-meta: databaseType:bibtex;}\n@string{jour = {Nature}}\n@article{keyB,\n  title = {B},\n}\n'
+    const articleStart = text.indexOf('@article{keyB,')
+    const entries = splitBibtexEntries(text)
+    expect(entries).toHaveLength(3)
+    expect(entries[0]).toEqual({
+      key: 'jabref-meta:',
+      start: 0,
+      end: text.indexOf('@string{'),
+      text: '@comment{jabref-meta: databaseType:bibtex;}',
+    })
+    expect(entries[1]).toEqual({
+      key: 'jour',
+      start: text.indexOf('@string{'),
+      end: articleStart,
+      text: '@string{jour = {Nature}}',
+    })
+    expect(entries[2]).toEqual({
+      key: 'keyB',
+      start: articleStart,
+      end: text.length,
+      text: '@article{keyB,\n  title = {B},\n}',
+    })
+  })
+
+  it('splits CRLF bodies with the same spans', () => {
+    const text = '@article{a,\r\n  title = {A},\r\n}\r\n@article{b,\r\n  title = {B},\r\n}\r\n'
+    const secondStart = text.indexOf('@article{b,')
+    const entries = splitBibtexEntries(text)
+    expect(entries).toEqual([
+      { key: 'a', start: 0, end: secondStart, text: '@article{a,\r\n  title = {A},\r\n}' },
+      {
+        key: 'b',
+        start: secondStart,
+        end: text.length,
+        text: '@article{b,\r\n  title = {B},\r\n}',
+      },
+    ])
+  })
+
+  it('keeps an entry whose key is empty', () => {
+    const text = '@article{,\n  title = {No key},\n}\n'
+    const entries = splitBibtexEntries(text)
+    expect(entries).toEqual([
+      { start: 0, end: text.length, text: '@article{,\n  title = {No key},\n}' },
+    ])
+  })
 })
 
 describe('splitRisRecords', () => {
   const TEXT = 'TY  - JOUR\nTI  - One\nID  - K1\nER  -\n\nTY  - JOUR\nTI  - Two\nID  - K2\nER  -\n'
 
-  it('splits records with their ids and text spans', () => {
+  it('splits records with their ids and text spans through the terminator', () => {
     const records = splitRisRecords(TEXT)
-    const firstEr = TEXT.indexOf('ER  -')
+    const secondStart = TEXT.indexOf('TY  - JOUR\nTI  - Two')
     expect(records).toEqual([
-      { key: 'K1', start: 0, end: firstEr, text: 'TY  - JOUR\nTI  - One\nID  - K1' },
+      {
+        key: 'K1',
+        start: 0,
+        end: secondStart,
+        text: 'TY  - JOUR\nTI  - One\nID  - K1\nER  -',
+      },
       {
         key: 'K2',
-        start: firstEr + 'ER  -'.length,
-        end: TEXT.length - 'ER  -\n'.length,
-        text: 'TY  - JOUR\nTI  - Two\nID  - K2',
+        start: secondStart,
+        end: TEXT.length,
+        text: 'TY  - JOUR\nTI  - Two\nID  - K2\nER  -',
       },
+    ])
+  })
+
+  it('round-trips the body from its record slices, each ending at its terminator', () => {
+    const records = splitRisRecords(TEXT)
+    expect(records.map((record) => TEXT.slice(record.start, record.end)).join('')).toBe(TEXT)
+    for (const record of records) {
+      expect(record.text.endsWith('ER  -')).toBe(true)
+    }
+  })
+
+  it('handles CRLF line endings', () => {
+    const text =
+      'TY  - JOUR\r\nTI  - One\r\nID  - K1\r\nER  -\r\n\r\nTY  - JOUR\r\nTI  - Two\r\nID  - K2\r\nER  -\r\n'
+    const secondStart = text.indexOf('TY  - JOUR\r\nTI  - Two')
+    const records = splitRisRecords(text)
+    expect(records).toEqual([
+      {
+        key: 'K1',
+        start: 0,
+        end: secondStart,
+        text: 'TY  - JOUR\r\nTI  - One\r\nID  - K1\r\nER  -',
+      },
+      {
+        key: 'K2',
+        start: secondStart,
+        end: text.length,
+        text: 'TY  - JOUR\r\nTI  - Two\r\nID  - K2\r\nER  -',
+      },
+    ])
+  })
+
+  it('keeps a trailing-space terminator and a final record without a newline', () => {
+    const text = 'TY  - JOUR\nID  - K1\nER  - \nTY  - JOUR\nID  - K2\nER  -'
+    const secondStart = text.indexOf('TY  - JOUR\nID  - K2')
+    const records = splitRisRecords(text)
+    expect(records).toEqual([
+      { key: 'K1', start: 0, end: secondStart, text: 'TY  - JOUR\nID  - K1\nER  -' },
+      { key: 'K2', start: secondStart, end: text.length, text: 'TY  - JOUR\nID  - K2\nER  -' },
+    ])
+  })
+
+  it('skips multiple blank lines between records', () => {
+    const text = 'TY  - JOUR\nID  - K1\nER  -\n\n\nTY  - JOUR\nID  - K2\nER  -\n'
+    const secondStart = text.indexOf('TY  - JOUR\nID  - K2')
+    const records = splitRisRecords(text)
+    expect(records).toEqual([
+      { key: 'K1', start: 0, end: secondStart, text: 'TY  - JOUR\nID  - K1\nER  -' },
+      { key: 'K2', start: secondStart, end: text.length, text: 'TY  - JOUR\nID  - K2\nER  -' },
     ])
   })
 
   it('handles a trailing record without a terminator', () => {
     const text = 'TY  - JOUR\nID  - K1\nER  -\n\nTY  - JOUR\nTI  - Two\nID  - K2\n'
+    const secondStart = text.indexOf('TY  - JOUR\nTI  - Two')
     const records = splitRisRecords(text)
-    const firstEr = text.indexOf('ER  -')
     expect(records).toHaveLength(2)
+    expect(records[0]).toEqual({
+      key: 'K1',
+      start: 0,
+      end: secondStart,
+      text: 'TY  - JOUR\nID  - K1\nER  -',
+    })
     expect(records[1]).toEqual({
       key: 'K2',
-      start: firstEr + 'ER  -'.length,
+      start: secondStart,
       end: text.length,
       text: 'TY  - JOUR\nTI  - Two\nID  - K2',
     })
+  })
+
+  it('keeps a non-blank tail without a trailing newline', () => {
+    const text = 'TY  - JOUR\nID  - K1\nER  -\njunk'
+    const junkStart = text.indexOf('junk')
+    const records = splitRisRecords(text)
+    expect(records).toEqual([
+      { key: 'K1', start: 0, end: junkStart, text: 'TY  - JOUR\nID  - K1\nER  -' },
+      { key: undefined, start: junkStart, end: text.length, text: 'junk' },
+    ])
   })
 
   it('keeps records without an id', () => {
     const text = 'TY  - JOUR\nTI  - No id\nER  -\n'
     const records = splitRisRecords(text)
     expect(records).toEqual([
-      { start: 0, end: text.indexOf('ER  -'), text: 'TY  - JOUR\nTI  - No id' },
+      { start: 0, end: text.length, text: 'TY  - JOUR\nTI  - No id\nER  -' },
     ])
     expect(splitRisRecords('')).toEqual([])
   })
@@ -106,19 +252,14 @@ describe('locateExportItems', () => {
   it('pairs RIS items by record id', () => {
     const batch =
       'TY  - JOUR\nTI  - One\nID  - K1\nER  -\n\nTY  - JOUR\nTI  - Two\nID  - K2\nER  -\n'
-    const firstEr = batch.indexOf('ER  -')
+    const secondStart = batch.indexOf('TY  - JOUR\nTI  - Two')
     const items = locateExportItems('ris', batch, [
       { ref: R1, key: 'K1', text: 'TY  - JOUR\nTI  - One\nID  - K1\nER  -\n' },
       { ref: R2, key: 'K2', text: 'TY  - JOUR\nTI  - Two\nID  - K2\nER  -\n' },
     ])
     expect(items).toEqual([
-      { ref: R1, title: 'One', start: 0, end: firstEr },
-      {
-        ref: R2,
-        title: 'Two',
-        start: firstEr + 'ER  -'.length,
-        end: batch.length - 'ER  -\n'.length,
-      },
+      { ref: R1, title: 'One', start: 0, end: secondStart },
+      { ref: R2, title: 'Two', start: secondStart, end: batch.length },
     ])
   })
 

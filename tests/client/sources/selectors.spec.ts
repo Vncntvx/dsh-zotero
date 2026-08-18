@@ -160,7 +160,7 @@ describe('exportSectionsOf', () => {
   const REF = 'zotero://user/0/item/QRST3456'
   const BIBTEX_TEXT = '@article{a,\n  title = {A},\n}'
   const RIS_TEXT = 'TY  - JOUR\nTI  - A\nID  - QRST3456\nER  -\n'
-  const RIS_END = RIS_TEXT.indexOf('ER  -')
+  const RIS_END = RIS_TEXT.length
   const BIBTEX_ITEMS = [{ ref: REF, key: 'a', title: 'A', start: 0, end: BIBTEX_TEXT.length }]
 
   it('groups documents into first-seen format sections', () => {
@@ -196,7 +196,7 @@ describe('exportSectionsOf', () => {
       ref: REF,
       format: 'ris',
       title: 'A',
-      text: 'TY  - JOUR\nTI  - A\nID  - QRST3456',
+      text: 'TY  - JOUR\nTI  - A\nID  - QRST3456\nER  -',
       callIds: ['e2'],
       latestExportedAt: undefined,
     })
@@ -391,7 +391,7 @@ describe('exportSectionsOf', () => {
         {
           ref: REF,
           start: 0,
-          end: 'TY  - JOUR\nTI  - A revised\nID  - QRST3456\nER  -\n'.indexOf('ER  -'),
+          end: 'TY  - JOUR\nTI  - A revised\nID  - QRST3456\nER  -\n'.length,
         },
       ],
     })
@@ -401,7 +401,7 @@ describe('exportSectionsOf', () => {
       ref: REF,
       format: 'ris',
       title: 'A',
-      text: 'TY  - JOUR\nTI  - A revised\nID  - QRST3456',
+      text: 'TY  - JOUR\nTI  - A revised\nID  - QRST3456\nER  -',
       callIds: ['e1', 'e2'],
       latestExportedAt: 1000,
     })

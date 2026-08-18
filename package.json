@@ -41,7 +41,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "prepare": "npm run build",
-    "prepublishOnly": "npm test",
+    "prepublishOnly": "npm run release:check",
+    "release:check": "npm run format:check && npm run typecheck && npm run test:coverage && npm run build && npm pack --dry-run --ignore-scripts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test:integration": "ZOTERO_INTEGRATION=1 vitest run tests/integration/zotero.integration.spec.ts"

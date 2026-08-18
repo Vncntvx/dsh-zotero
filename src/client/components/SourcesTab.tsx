@@ -128,7 +128,21 @@ export function SourcesTab({ status, t, useSession, inputActions }: SourcesTabPr
     const controller = new AbortController()
     setStatusState({ kind: 'loading' })
     void (async () => {
-      const result = await status()
+      let result: RemoteResult<ZoteroStatusView>
+      try {
+        result = await status()
+      } catch (error) {
+        // The Remote face folds carrier failures into `ok: false`, so a
+        // rejection is an assembly fault. Surface it as a remote error
+        // instead of leaving the surface stuck on loading.
+        if (controller.signal.aborted) return
+        setStatusState({
+          kind: 'remote-error',
+          message: error instanceof Error ? error.message : String(error),
+        })
+        setServerId(undefined)
+        return
+      }
       // The Remote face carries no signal by contract, so cancellation is
       // ignore-stale: the aborted probe settles normally and its result is
       // dropped here, never mistaken for a connectivity problem.

@@ -50,7 +50,8 @@ export interface ExportItemInput {
   readonly text: string
 }
 
-const ENTRY_START = /@[A-Za-z]+\{([^,\s{}]+),/g
+/** The start of one entry: `@type{` in letters, anywhere in the body. */
+const ENTRY_START = /@[A-Za-z]+\{/g
 const RIS_RECORD_END = /^ER  -[ ]?$/gm
 const RIS_ID = /^ID  - (.+)$/m
 
@@ -59,23 +60,68 @@ function normalizeBibtexEntry(text: string): string {
   return text.trim().replace(/^@[A-Za-z]+\{[^,\s{}]+,/, '@{,')
 }
 
+/** The entry's citation key: the run after `@type{` up to a comma, brace, or whitespace. */
+function entryKeyOf(text: string, from: number): string | undefined {
+  let end = from
+  while (end < text.length && !/[,\s{}]/.test(text[end]!)) end += 1
+  return end === from ? undefined : text.slice(from, end)
+}
+
+/**
+ * The offset just past the `}` closing the entry that starts at `from` (the
+ * entry's opening `@type{` brace). Field values nest braces and may carry
+ * quoted strings; a quote only opens at field-value level — inside braces it
+ * is a literal character — and a body that never closes runs to the text end.
+ */
+function entryEndOf(text: string, from: number): number {
+  let depth = 1
+  let inString = false
+  let cursor = from
+  while (cursor < text.length) {
+    const char = text[cursor]!
+    if (inString) {
+      if (char === '"') inString = false
+    } else if (char === '{') {
+      depth += 1
+    } else if (char === '}') {
+      depth -= 1
+      if (depth === 0) return cursor + 1
+    } else if (char === '"' && depth === 1) {
+      inString = true
+    }
+    cursor += 1
+  }
+  return text.length
+}
+
 /**
  * Split a BibTeX/BibLaTeX body into its entries with their text spans. Each
- * entry runs from its `@type{key,` start to the next entry's start.
+ * entry runs from its `@type{` start to the next entry's start. The scan is
+ * progressive and brace-aware: every entry's body is skipped to its closing
+ * brace before the next start is searched, so an `@type{key,` shape inside a
+ * field value, a quoted string, or a comment never starts a new entry.
  * @param text - the export body (offsets are relative to this string).
  * @returns the entries in body order.
  */
 export function splitBibtexEntries(text: string): BatchEntry[] {
-  const starts: { readonly key: string; readonly index: number }[] = []
-  for (const match of text.matchAll(ENTRY_START)) {
-    starts.push({ key: match[1]!, index: match.index })
+  const starts: { readonly key?: string; readonly index: number }[] = []
+  let cursor = 0
+  for (;;) {
+    ENTRY_START.lastIndex = cursor
+    const start = ENTRY_START.exec(text)
+    if (start === null) break
+    const key = entryKeyOf(text, start.index + start[0].length)
+    starts.push({ ...(key === undefined ? {} : { key }), index: start.index })
+    const end = entryEndOf(text, start.index + start[0].length)
+    cursor = Math.max(end, start.index + start[0].length)
+    if (end >= text.length) break
   }
   const entries: BatchEntry[] = []
   for (let index = 0; index < starts.length; index += 1) {
     const start = starts[index]!
     const end = starts[index + 1]?.index ?? text.length
     entries.push({
-      key: start.key,
+      ...(start.key === undefined ? {} : { key: start.key }),
       start: start.index,
       end,
       text: text.slice(start.index, end).trim(),
@@ -84,9 +130,28 @@ export function splitBibtexEntries(text: string): BatchEntry[] {
   return entries
 }
 
+/** The next record's start: the first non-blank line after `offset`. */
+function nextRecordStart(text: string, offset: number): number {
+  let cursor = offset
+  while (cursor < text.length) {
+    const lineEnd = text.indexOf('\n', cursor)
+    const end = lineEnd === -1 ? text.length : lineEnd + 1
+    if (text.slice(cursor, end).trim() === '') {
+      cursor = end
+      continue
+    }
+    return cursor
+  }
+  return cursor
+}
+
 /**
  * Split an RIS body into its records with their text spans. Each record
- * runs from the previous terminator to its `ER` line.
+ * runs from the previous terminator (the body start for the first) to the
+ * start of the next record, its `ER` terminator line and any blank lines
+ * after it included — every record's own text is a complete RIS record,
+ * and the slices tile the body exactly. A trailing record without a
+ * terminator runs to the body end.
  * @param text - the export body (offsets are relative to this string).
  * @returns the records in body order.
  */
@@ -95,13 +160,14 @@ export function splitRisRecords(text: string): BatchEntry[] {
   let recordStart = 0
   for (const match of text.matchAll(RIS_RECORD_END)) {
     const start = recordStart
-    const record = text.slice(start, match.index)
-    recordStart = match.index + match[0].length
+    const end = nextRecordStart(text, match.index + match[0].length)
+    recordStart = end
+    const record = text.slice(start, end)
     const id = RIS_ID.exec(record)?.[1]?.trim()
     records.push({
       ...(id === undefined || id === '' ? {} : { key: id }),
       start,
-      end: match.index,
+      end,
       text: record.trim(),
     })
   }

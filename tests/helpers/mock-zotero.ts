@@ -76,6 +76,10 @@ export class MockZotero {
   async close(): Promise<void> {
     const server = this.server
     if (server === undefined) return
+    // `server.close()` only closes the connections idle at the moment it is
+    // called; handlers still in flight would keep the callback waiting for
+    // the client's keep-alive timeout, so destroy every connection outright.
+    server.closeAllConnections()
     await new Promise<void>((resolve) => server.close(() => resolve()))
   }
 

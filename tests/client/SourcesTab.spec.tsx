@@ -362,6 +362,46 @@ describe('SourcesTab', () => {
     view.unmount()
   })
 
+  it('renders a rejected probe as a remote error instead of staying on loading', async () => {
+    const status = vi.fn(async () => {
+      throw new Error('remote face unmounted')
+    })
+    const { view } = mountTab(snapshotOf(), status)
+    expect(screen.getByText(zh.checking)).toBeDefined()
+    await act(async () => {})
+    expect(screen.getByText('remote face unmounted')).toBeDefined()
+    view.unmount()
+  })
+
+  it('renders a non-Error rejection message too', async () => {
+    const status = vi.fn(async () => {
+      throw 'remote face unmounted'
+    })
+    const { view } = mountTab(snapshotOf(), status)
+    await act(async () => {})
+    expect(screen.getByText('remote face unmounted')).toBeDefined()
+    view.unmount()
+  })
+
+  it('drops a rejected probe that unmounts before the rejection settles', async () => {
+    let rejectProbe: (error: Error) => void = () => {}
+    const status = vi.fn(
+      () =>
+        new Promise<never>((_resolve, reject) => {
+          rejectProbe = reject
+        }),
+    )
+    const { view } = mountTab(snapshotOf(), status)
+    await act(async () => {})
+    expect(screen.getByText(zh.checking)).toBeDefined()
+    view.unmount()
+    // The abort wins over the late rejection: no state update, no unhandled
+    // rejection from the probe's catch.
+    await act(async () => {
+      rejectProbe(new Error('late rejection'))
+    })
+  })
+
   it('opens on the sources lens and keeps every search hit when one was inspected', async () => {
     const status = vi.fn(async () => ({ ok: true, value: CONNECTED }))
     const rows = Array.from({ length: 20 }, (_, index) => ({

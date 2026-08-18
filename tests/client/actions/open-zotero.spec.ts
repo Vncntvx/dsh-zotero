@@ -6,11 +6,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { openVerdictOf, pdfUrlOf, selectUrlOf } from '../../../src/client/actions/open-zotero.ts'
-import {
-  canActivatePdfAction,
-  hasPdf,
-  pdfCapabilityOf,
-} from '../../../src/client/sources/source-capabilities.ts'
+import { hasPdf, pdfCapabilityOf } from '../../../src/client/sources/source-capabilities.ts'
 import type { SourceAttachment } from '../../../src/client/sources/model.ts'
 import { sourceOf } from '../helpers/source-fixtures.ts'
 
@@ -187,15 +183,5 @@ describe('hasPdf', () => {
     ).toBe(true)
     expect(hasPdf(sourceOf({ attachment: attachmentOf('text/html') }))).toBe(false)
     expect(hasPdf(sourceOf({}))).toBe(false)
-  })
-})
-
-describe('canActivatePdfAction', () => {
-  it('is false without a capability or under a mismatch, true for any other verdict', () => {
-    const pdf = sourceOf({ bestAttachment: { ref: 'zotero://user/0/attachment/HINT0001' } })
-    expect(canActivatePdfAction(sourceOf({}))).toBe(false)
-    expect(canActivatePdfAction(sourceOf({ ...pdf, provenance: 'mismatch' }))).toBe(false)
-    expect(canActivatePdfAction(sourceOf({ ...pdf, provenance: 'verified' }))).toBe(true)
-    expect(canActivatePdfAction(sourceOf({ ...pdf, provenance: 'unknown' }))).toBe(true)
   })
 })

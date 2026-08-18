@@ -38,5 +38,13 @@ export const SEARCH_DEFAULT_LIMIT = 10
  */
 export const ZOTERO_ITEMKEY_BATCH = 50
 
+/**
+ * The bounded concurrency of the per-document export requests a translator
+ * export issues against the Local API. A pool — not a bare `Promise.all` —
+ * keeps the in-flight single-item requests small, so a full 50-ref export
+ * cannot storm the local server.
+ */
+export const ZOTERO_EXPORT_CONCURRENCY = 4
+
 /** How long a scope listing (collections/searches) is trusted before a re-fetch. */
 export const ZOTERO_SCOPE_LISTING_TTL_MS = 30_000

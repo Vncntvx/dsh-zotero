@@ -89,14 +89,6 @@ export const FILTERS: readonly {
   { id: 'issues', key: 'filterIssues' },
 ]
 
-/** The default selection: the first visible source, or nothing. */
-export function initialSelectionOf(visible: readonly SourceItemLike[]): SelectionState {
-  return {
-    key: visible.length === 0 ? undefined : visible[0]!.key,
-    focusIndex: 0,
-  }
-}
-
 /**
  * Resolve the effective selection against the workspace union and the visible
  * rows. A selection a filter hid is kept — filtering narrows the left list

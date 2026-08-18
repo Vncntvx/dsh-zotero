@@ -6,7 +6,7 @@
  * @module dsh-zotero/client/sources/source-capabilities
  */
 
-import { openVerdictOf, pdfUrlOf } from '../actions/open-zotero.ts'
+import { pdfUrlOf } from '../actions/open-zotero.ts'
 import type { SourceItem } from './model.ts'
 
 /** The content type that makes an attachment a PDF for the deep link. */
@@ -68,16 +68,4 @@ export function pdfCapabilityOf(item: SourceItem): PdfCapability | null {
 /** The item fact: some attachment of the source is (or is inferred to be) a PDF. */
 export function hasPdf(item: SourceItem): boolean {
   return pdfCapabilityOf(item) !== null
-}
-
-/**
- * Whether the open-PDF action may activate: the source has a target and its
- * provenance is not a mismatch. A mismatched source still *has* a PDF — the
- * badge and the filter say so — the action just cannot safely open another
- * instance's database.
- * @param item - the source to probe.
- * @returns true when the action may be enabled.
- */
-export function canActivatePdfAction(item: SourceItem): boolean {
-  return pdfCapabilityOf(item) !== null && openVerdictOf(item) !== 'blocked'
 }

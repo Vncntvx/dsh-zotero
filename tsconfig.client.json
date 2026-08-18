@@ -13,5 +13,5 @@
     "forceConsistentCasingInFileNames": true,
     "types": []
   },
-  "include": ["src/client", "tests/client"]
+  "include": ["src/client", "tests/client", "src/node-dns.d.ts"]
 }

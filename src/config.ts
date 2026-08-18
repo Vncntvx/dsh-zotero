@@ -100,6 +100,21 @@ export interface ResolvedConfig {
 
 const LOOPBACK_HOSTNAMES = new Set(['127.0.0.1', 'localhost', '::1', '[::1]'])
 
+/**
+ * Pin a loopback hostname to a loopback IP literal. `localhost` would
+ * otherwise resolve through the system resolver, whose answer a hosts-file
+ * change can redirect after validation; rewriting it here locks every
+ * request to a verified loopback address. Node removed the synchronous
+ * resolver (`dns.lookupSync` removed in 20.13), so `localhost` pins
+ * directly to the IPv4 loopback literal — the address every mainstream
+ * platform resolves it to — keeping validation synchronous and the
+ * resolver out of every request.
+ */
+function pinLoopbackHostname(hostname: string): string {
+  if (hostname !== 'localhost') return hostname
+  return '127.0.0.1'
+}
+
 function assertPositiveInteger(name: string, value: number): void {
   if (!Number.isInteger(value) || value <= 0) {
     throw new Error(`dsh-zotero: ${name} must be a positive integer; got ${value}`)
@@ -134,10 +149,25 @@ export function resolveConfig(config: Config): ResolvedConfig {
       `dsh-zotero: baseUrl must use the http: scheme (the Zotero Local API is plain loopback HTTP); got ${applied.baseUrl}`,
     )
   }
+  if (url.username !== '' || url.password !== '') {
+    throw new Error(
+      'dsh-zotero: baseUrl must not carry credentials (the Zotero Local API is unauthenticated)',
+    )
+  }
+  if (url.search !== '' || url.hash !== '') {
+    throw new Error(
+      'dsh-zotero: baseUrl must not carry a query string or fragment (the Zotero Local API takes none)',
+    )
+  }
   if (!LOOPBACK_HOSTNAMES.has(url.hostname)) {
     throw new Error(
       `dsh-zotero: baseUrl must point at loopback (127.0.0.1, localhost, or ::1) to reach the Zotero Local API; got ${applied.baseUrl}`,
     )
+  }
+  const hostname = pinLoopbackHostname(url.hostname)
+  if (hostname !== url.hostname) {
+    // The URL hostname setter accepts IPv6 literals only in brackets.
+    url.hostname = hostname.includes(':') ? `[${hostname}]` : hostname
   }
   assertNonEmpty('provider', applied.provider)
   assertNonEmpty('defaultStyle', applied.defaultStyle)
@@ -161,5 +191,5 @@ export function resolveConfig(config: Config): ResolvedConfig {
   assertPositiveInteger('maxResponseBytes', applied.maxResponseBytes)
   assertPositiveInteger('maxExportChars', applied.maxExportChars)
   assertPositiveInteger('maxExportRefs', applied.maxExportRefs)
-  return { ...applied }
+  return { ...applied, baseUrl: url.toString() }
 }

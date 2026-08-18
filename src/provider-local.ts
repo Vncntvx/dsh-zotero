@@ -19,6 +19,7 @@ import { fileURLToPath } from 'node:url'
 import { ZoteroHttpClient } from './http-client.js'
 import {
   LOCAL_PROVIDER_ID,
+  ZOTERO_EXPORT_CONCURRENCY,
   ZOTERO_ITEMKEY_BATCH,
   ZOTERO_SCOPE_LISTING_TTL_MS,
 } from './constants.js'
@@ -105,6 +106,38 @@ export function buildSearchParams(request: ZoteroSearchRequest): URLSearchParams
   params.set('start', String(request.offset))
   params.set('limit', String(request.limit))
   return params
+}
+
+/**
+ * Map `items` through `worker` with at most `concurrency` calls in flight,
+ * preserving the input order in the results. A worker rejection propagates
+ * immediately and stops the pool from starting further items; workers
+ * already in flight keep running to completion.
+ */
+async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  concurrency: number,
+  worker: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length)
+  let next = 0
+  let failed = false
+  const run = async (): Promise<void> => {
+    for (;;) {
+      if (failed) return
+      const index = next
+      next += 1
+      if (index >= items.length) return
+      try {
+        results[index] = await worker(items[index]!)
+      } catch (error) {
+        failed = true
+        throw error
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => run()))
+  return results
 }
 
 interface ResolvedScopeResult {
@@ -807,10 +840,11 @@ export class LocalApiProvider implements ZoteroProvider {
    * batch-breaking formats refuse to exceed `ZOTERO_ITEMKEY_BATCH` — their
    * global ordering belongs to Zotero, so splitting them would silently
    * reorder the output. The translator formats additionally itemize each
-   * document by requesting it on its own (parallel, in the requested ref
-   * order), because the merged body's entry order is Zotero's own and cannot
-   * be indexed against the refs. Output that exceeds `maxExportChars` fails
-   * with OUTPUT_TOO_LARGE — export text is never mid-truncated.
+   * document by requesting it on its own — through a bounded parallel pool,
+   * one request per unique key, in the requested ref order — because the
+   * merged body's entry order is Zotero's own and cannot be indexed against
+   * the refs. Output that exceeds `maxExportChars` fails with
+   * OUTPUT_TOO_LARGE — export text is never mid-truncated.
    */
   async export(request: ZoteroExportRequest, signal?: AbortSignal): Promise<ZoteroExportResult> {
     for (const ref of request.refs) requireLocalRef(ref, ['item'])
@@ -827,14 +861,24 @@ export class LocalApiProvider implements ZoteroProvider {
     if (request.format === 'citation') {
       return await this.exportCitations(request.refs, serverId, style, locale, signal)
     }
-    if (request.refs.length > ZOTERO_ITEMKEY_BATCH) {
+    // Duplicate refs name the same item; the translator formats fetch each
+    // document on its own, so every unique key is requested once, keeping
+    // the first-seen order.
+    const seen = new Set<string>()
+    const refs: ZoteroObjectRef[] = []
+    for (const ref of request.refs) {
+      if (seen.has(ref.key)) continue
+      seen.add(ref.key)
+      refs.push(ref)
+    }
+    if (refs.length > ZOTERO_ITEMKEY_BATCH) {
       throw new ZoteroError(
         `The ${request.format} format accepts at most ${ZOTERO_ITEMKEY_BATCH} item refs per call (Zotero's itemKey request cap, which also keeps the format's global ordering intact). Request up to ${ZOTERO_ITEMKEY_BATCH} refs at a time, or use citation, which batches up to the configured export cap.`,
         ZOTERO_INVALID_ARGUMENT,
       )
     }
     const search = new URLSearchParams()
-    search.set('itemKey', request.refs.map((ref) => ref.key).join(','))
+    search.set('itemKey', refs.map((ref) => ref.key).join(','))
     if (request.format === 'bibliography') {
       search.set('format', 'bib')
       search.set('style', style)
@@ -856,7 +900,7 @@ export class LocalApiProvider implements ZoteroProvider {
     // render strips it), so the entry offsets are measured on that same
     // trimmed body.
     const items = await this.fetchExportItems(
-      request.refs,
+      refs,
       request.format,
       body.trimStart(),
       serverId,
@@ -866,12 +910,15 @@ export class LocalApiProvider implements ZoteroProvider {
   }
 
   /**
-   * One single-item export per ref, in the requested order, paired with its
-   * batch entry. The merged body's entry order belongs to Zotero, so each
-   * document is requested on its own (parallel against the local API) and
-   * matched to the batch body server-side; a missing or empty entry fails
-   * the whole call — the same closed contract as the citation arm, instead
-   * of the batch body silently omitting the item.
+   * One single-item export per unique ref, in the requested order, paired
+   * with its batch entry. The merged body's entry order belongs to Zotero,
+   * so each document is requested on its own — through a bounded parallel
+   * pool, so a full export cannot storm the local API — and matched to the
+   * batch body server-side. The single-item bodies share the batch body's
+   * output budget, and a missing or empty entry fails the whole call — the
+   * same closed contract as the citation arm, instead of the batch body
+   * silently omitting the item. Caller cancellation reaches every request
+   * through the HTTP layer's fused signal.
    */
   private async fetchExportItems(
     refs: readonly ZoteroObjectRef[],
@@ -880,21 +927,27 @@ export class LocalApiProvider implements ZoteroProvider {
     serverId: string | undefined,
     signal: AbortSignal | undefined,
   ): Promise<ZoteroExportItem[]> {
-    const inputs = await Promise.all(
-      refs.map(async (ref) => {
-        const search = new URLSearchParams()
-        search.set('itemKey', ref.key)
-        search.set('format', format)
-        const { body } = await this.client.get('users/0/items', search, { signal, serverId })
-        if (body === '') {
-          throw new ZoteroError(
-            `Zotero did not return an item for ${formatRef(ref)}.`,
-            ZOTERO_NOT_FOUND,
-          )
-        }
-        return { ref: formatRef(ref), key: ref.key, text: body }
-      }),
-    )
+    let totalChars = 0
+    const inputs = await mapWithConcurrency(refs, ZOTERO_EXPORT_CONCURRENCY, async (ref) => {
+      const search = new URLSearchParams()
+      search.set('itemKey', ref.key)
+      search.set('format', format)
+      const { body } = await this.client.get('users/0/items', search, { signal, serverId })
+      if (body === '') {
+        throw new ZoteroError(
+          `Zotero did not return an item for ${formatRef(ref)}.`,
+          ZOTERO_NOT_FOUND,
+        )
+      }
+      totalChars += body.length
+      if (totalChars > this.limits.maxExportChars) {
+        throw new ZoteroError(
+          `Per-document export output of ${totalChars} characters exceeds the ${this.limits.maxExportChars}-character export limit.`,
+          ZOTERO_OUTPUT_TOO_LARGE,
+        )
+      }
+      return { ref: formatRef(ref), key: ref.key, text: body }
+    })
     return locateExportItems(format, text, inputs)
   }
 

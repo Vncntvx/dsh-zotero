@@ -251,7 +251,14 @@ describe('export', () => {
 
   it('accepts a raw export body that lands exactly on the output cap', async () => {
     const narrow = makeProvider({ maxExportChars: 10 })
-    mock.route('GET', '/api/users/0/items', (req, res, helpers) => helpers.text('0123456789'))
+    mock.route('GET', '/api/users/0/items', (req, res, helpers, search) => {
+      const keys = (search.get('itemKey') ?? '').split(',')
+      if (keys.length > 1) {
+        helpers.text('0123456789')
+        return
+      }
+      helpers.text('12345')
+    })
     const result = await narrow.export(exportRequest({ format: 'bibtex' }))
     expect(result).toEqual({
       format: 'bibtex',
@@ -338,6 +345,180 @@ describe('export', () => {
       )
     }
     expect(mock.requests).toEqual([])
+  })
+
+  it('counts unique items against the batch-breaking cap', async () => {
+    const refs = Array.from({ length: 50 }, (_, i) =>
+      parseRef(`zotero://user/0/item/${String(i).padStart(4, '0')}ABCD`),
+    )
+    refs.push(refs[0]!)
+    mock.route('GET', '/api/users/0/items', (req, res, helpers, search) => {
+      const keys = (search.get('itemKey') ?? '').split(',')
+      if (keys.length > 1) {
+        helpers.text(keys.map((key) => `TY  - JOUR\nID  - ${key}\nER  -\n`).join('\n'))
+        return
+      }
+      helpers.text(`TY  - JOUR\nID  - ${keys[0]}\nER  -\n`)
+    })
+    // 51 refs with one duplicate are 50 unique items, so the export proceeds.
+    const result = await provider.export(exportRequest({ refs, format: 'ris' }))
+    if (result.format !== 'ris') throw new Error('unreachable')
+    expect(mock.requests).toHaveLength(51)
+    expect(result.items).toHaveLength(50)
+  })
+
+  it('fetches each unique item once when refs repeat', async () => {
+    mock.route('GET', '/api/users/0/items', (req, res, helpers, search) => {
+      const keys = (search.get('itemKey') ?? '').split(',')
+      if (keys.length > 1) {
+        helpers.text(
+          keys.map((key) => `TY  - JOUR\nTI  - ${key}\nID  - ${key}\nER  -\n`).join('\n'),
+        )
+        return
+      }
+      helpers.text(`TY  - JOUR\nTI  - ${keys[0]}\nID  - ${keys[0]}\nER  -\n`)
+    })
+    const result = await provider.export(
+      exportRequest({
+        format: 'ris',
+        refs: [
+          parseRef('zotero://user/0/item/ABCD1234'),
+          parseRef('zotero://user/0/item/BBBB1234'),
+          parseRef('zotero://user/0/item/ABCD1234'),
+        ],
+      }),
+    )
+    if (result.format !== 'ris') throw new Error('unreachable')
+    // The batch request carries the deduplicated keys, and each unique item
+    // is fetched once — the repeated ref never becomes a second request.
+    expect(mock.requests).toHaveLength(3)
+    expect(mock.requests[0]!.search.get('itemKey')).toBe('ABCD1234,BBBB1234')
+    const perItem = mock.requests.slice(1)
+    expect(new Set(perItem.map((entry) => entry.search.get('itemKey')))).toEqual(
+      new Set(['ABCD1234', 'BBBB1234']),
+    )
+    expect(result.items).toHaveLength(2)
+  })
+
+  it('itemizes a full 50-ref translator export through the bounded pool', async () => {
+    mock.route('GET', '/api/users/0/items', (req, res, helpers, search) => {
+      const keys = (search.get('itemKey') ?? '').split(',')
+      if (keys.length > 1) {
+        helpers.text(keys.map((key) => `TY  - JOUR\nID  - ${key}\nER  -\n`).join('\n'))
+        return
+      }
+      helpers.text(`TY  - JOUR\nID  - ${keys[0]}\nER  -\n`)
+    })
+    const refs = Array.from({ length: 50 }, (_, i) =>
+      parseRef(`zotero://user/0/item/${String(i).padStart(4, '0')}ABCD`),
+    )
+    const result = await provider.export(exportRequest({ refs, format: 'ris' }))
+    if (result.format !== 'ris') throw new Error('unreachable')
+    expect(mock.requests).toHaveLength(51)
+    expect(result.items).toHaveLength(50)
+    // Every item locates its batch record, in the requested ref order.
+    expect(result.items.every((item) => item.start !== undefined && item.end !== undefined)).toBe(
+      true,
+    )
+    expect(result.items.map((item) => item.ref)).toEqual(
+      refs.map((ref) => `zotero://user/0/item/${ref.key}`),
+    )
+  })
+
+  it('limits the single-item requests to a bounded concurrency', async () => {
+    let inFlight = 0
+    let maxInFlight = 0
+    mock.route('GET', '/api/users/0/items', async (req, res, helpers, search) => {
+      const keys = (search.get('itemKey') ?? '').split(',')
+      if (keys.length > 1) {
+        helpers.text('batch')
+        return
+      }
+      inFlight += 1
+      maxInFlight = Math.max(maxInFlight, inFlight)
+      await new Promise((resolve) => setTimeout(resolve, 30))
+      inFlight -= 1
+      helpers.text(`entry-of-${keys[0]}`)
+    })
+    const refs = Array.from({ length: 8 }, (_, i) =>
+      parseRef(`zotero://user/0/item/${String(i).padStart(4, '0')}ABCD`),
+    )
+    await provider.export(exportRequest({ refs, format: 'ris' }))
+    // The pool keeps the concurrent single-item requests at its bound; a
+    // bare Promise.all would have put all eight in flight at once.
+    expect(maxInFlight).toBe(4)
+  })
+
+  it('stops the pool when one single-item export fails', async () => {
+    mock.route('GET', '/api/users/0/items', async (req, res, helpers, search) => {
+      const keys = (search.get('itemKey') ?? '').split(',')
+      if (keys.length > 1) {
+        helpers.text('batch')
+        return
+      }
+      if (keys[0] === '0002ABCD') {
+        helpers.text('')
+        return
+      }
+      await new Promise((resolve) => setTimeout(resolve, 30))
+      if (res.destroyed || res.writableEnded) return
+      helpers.text(`entry-of-${keys[0]}`)
+    })
+    const refs = Array.from({ length: 8 }, (_, i) =>
+      parseRef(`zotero://user/0/item/${String(i).padStart(4, '0')}ABCD`),
+    )
+    await zoteroError(
+      provider.export(exportRequest({ refs, format: 'ris' })),
+      ZOTERO_NOT_FOUND,
+      '0002ABCD',
+    )
+    // Let the in-flight workers finish their delayed responses: the failure
+    // must stop the pool from starting further items even as those complete.
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    const requestedKeys = new Set(
+      mock.requests
+        .map((entry) => entry.search.get('itemKey'))
+        .filter((key): key is string => key !== null && key.split(',').length === 1),
+    )
+    for (const ref of refs.slice(4)) {
+      expect(requestedKeys.has(ref.key)).toBe(false)
+    }
+  })
+
+  it('applies the output cap to the per-document exports too', async () => {
+    const narrow = makeProvider({ maxExportChars: 20 })
+    mock.route('GET', '/api/users/0/items', (req, res, helpers, search) => {
+      const keys = (search.get('itemKey') ?? '').split(',')
+      if (keys.length > 1) {
+        helpers.text('small batch body')
+        return
+      }
+      helpers.text('x'.repeat(12))
+    })
+    // The batch body fits the cap, but the two single-item bodies together
+    // exceed it — the cumulative per-document budget fails the call closed.
+    await zoteroError(
+      narrow.export(exportRequest({ format: 'ris' })),
+      ZOTERO_OUTPUT_TOO_LARGE,
+      'Per-document',
+    )
+  })
+
+  it('propagates an abort while the per-document requests are in flight', async () => {
+    mock.route('GET', '/api/users/0/items', async (req, res, helpers, search) => {
+      const keys = (search.get('itemKey') ?? '').split(',')
+      if (keys.length > 1) {
+        helpers.text('batch')
+        return
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500))
+      if (res.destroyed || res.writableEnded) return
+      helpers.text(`entry-of-${keys[0]}`)
+    })
+    const controller = new AbortController()
+    const call = provider.export(exportRequest({ format: 'ris' }), controller.signal)
+    setTimeout(() => controller.abort(), 20)
+    await expect(call).rejects.toThrow()
   })
 
   it('applies the output cap across citation batches', async () => {

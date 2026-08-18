@@ -22,7 +22,6 @@ import {
 import {
   ZoteroWorkspaceView,
   effectiveSelectionOf,
-  initialSelectionOf,
   type SelectionState,
 } from '../../src/client/components/workspace/ZoteroWorkspaceView.tsx'
 import {
@@ -150,15 +149,6 @@ function mountView(
 afterEach(cleanup)
 
 describe('selection', () => {
-  it('defaults to the first visible source', () => {
-    const workspace = mixedFixture()
-    expect(initialSelectionOf(workspace.sources)).toEqual({
-      key: workspace.sources[0]!.key,
-      focusIndex: 0,
-    })
-    expect(initialSelectionOf([])).toEqual({ key: undefined, focusIndex: 0 })
-  })
-
   it('keeps a selection a filter hides, and falls back only when the workspace lacks it', () => {
     const workspace = mixedFixture()
     const visible = workspace.sources.slice(0, 3)

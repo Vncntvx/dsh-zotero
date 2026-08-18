@@ -59,8 +59,10 @@ describe('resolveConfig', () => {
     expect(resolveConfig({ baseUrl: 'http://127.0.0.1:23119/api' }).baseUrl).toBe(
       'http://127.0.0.1:23119/api',
     )
+    // localhost is pinned to the IPv4 loopback literal, so a hosts-file
+    // change after validation cannot redirect the API calls.
     expect(resolveConfig({ baseUrl: 'http://localhost:1234/api' }).baseUrl).toBe(
-      'http://localhost:1234/api',
+      'http://127.0.0.1:1234/api',
     )
     expect(resolveConfig({ baseUrl: 'http://[::1]:23119/api' }).baseUrl).toBe(
       'http://[::1]:23119/api',
@@ -73,6 +75,19 @@ describe('resolveConfig', () => {
 
   it('rejects https base URLs (the Local API is plain loopback HTTP)', () => {
     expect(() => resolveConfig({ baseUrl: 'https://127.0.0.1:23119/api' })).toThrowError(/http:/)
+  })
+
+  it('rejects base URLs carrying credentials', () => {
+    expect(() => resolveConfig({ baseUrl: 'http://user:pass@127.0.0.1:23119/api' })).toThrowError(
+      /credentials/,
+    )
+  })
+
+  it('rejects base URLs carrying a query string or fragment', () => {
+    expect(() => resolveConfig({ baseUrl: 'http://127.0.0.1:23119/api?x=1' })).toThrowError(/query/)
+    expect(() => resolveConfig({ baseUrl: 'http://127.0.0.1:23119/api#frag' })).toThrowError(
+      /query/,
+    )
   })
 
   it('rejects non-loopback hosts so the plugin cannot SSRF internal hosts', () => {

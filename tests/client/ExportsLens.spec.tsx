@@ -77,7 +77,7 @@ function itemizedRis(overrides: Partial<ExportArtifact> = {}): ExportArtifact {
     refs: [REF_B],
     refsOmitted: 0,
     text: RIS_TEXT,
-    items: [{ ref: REF_B, title: 'A RIS record', start: 0, end: RIS_TEXT.indexOf('ER  -') }],
+    items: [{ ref: REF_B, title: 'A RIS record', start: 0, end: RIS_TEXT.length }],
     ...overrides,
   }
 }
