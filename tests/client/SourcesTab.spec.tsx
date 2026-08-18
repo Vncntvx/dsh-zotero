@@ -73,6 +73,8 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
           : undefined,
       ),
     IconChevronDownOutline14: icon('chevron-down'),
+    IconChevronLeftOutline14: icon('chevron-left'),
+    IconChevronRightOutline14: icon('chevron-right'),
     IconBrowseOutline16: icon('browse'),
     writeClipboard: vi.fn(async () => true),
     Tooltip: ({ children }: { children: React.ReactElement }) => children,

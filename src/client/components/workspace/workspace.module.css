@@ -208,7 +208,10 @@
 /* The filter bar stays on one line and scrolls horizontally when the
  * surface is too narrow; pills never shrink or wrap (a squeezed pill reads
  * as broken, a scroll reads as more). Zero-count filters are not rendered
- * at all, so there are usually only three or four pills to fit. */
+ * at all, so there are usually only three or four pills to fit. Following
+ * the harness's composer-rail pattern, the strip's scrollbar stays hidden
+ * (both engines) and overflow is announced by the edge arrows overlaid at
+ * the pill rail's sides. */
 .filterBar {
   flex: none;
   display: flex;
@@ -217,6 +220,12 @@
   gap: 4px;
   overflow-x: auto;
   scrollbar-width: none;
+  position: relative;
+  /* The rail scrolls on the elevated listbox surface: bind the l2 pair
+     (ui-theme styles/scrollbar.css rebinding contract) so anything that
+     does draw a thumb here matches the surface. */
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
 
 .filterBar > * {
@@ -225,6 +234,39 @@
 
 .filterBar::-webkit-scrollbar {
   display: none;
+}
+
+/* The paging arrows, mirroring the composer attachment rail: a small circle
+ * anchored to the strip's edge, visible only on the sides that still hold
+ * hidden pills. */
+.filterArrow {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--dsw-alias-border-l2-darkmode-thin);
+  border-radius: 999px;
+  background: var(--dsw-specific-input-major);
+  color: var(--dsw-alias-label-secondary);
+  box-shadow: var(--dsw-shadow-lv2);
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.filterArrow:hover {
+  background: var(--dsw-alias-interactive-bg-hover-solid);
+}
+
+.filterArrowLeft {
+  left: 2px;
+}
+
+.filterArrowRight {
+  right: 2px;
 }
 
 /* The quiet passages entry: a text link to the cross-source board. */
