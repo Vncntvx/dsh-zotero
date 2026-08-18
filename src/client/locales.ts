@@ -42,6 +42,27 @@ export type ZoteroLocaleKey =
   | 'lensSources'
   | 'lensEvidence'
   | 'lensExports'
+  | 'panelOverview'
+  | 'panelEvidence'
+  | 'panelExports'
+  | 'backToList'
+  | 'selectionHiddenNote'
+  | 'inspectorEmptyNote'
+  | 'scopeLine'
+  | 'filterLine'
+  | 'modeLine'
+  | 'modeMetadata'
+  | 'modeEverything'
+  | 'overviewScopeLibrary'
+  | 'overviewScopeCollection'
+  | 'overviewScopeSavedSearch'
+  | 'overviewFacts'
+  | 'overviewActions'
+  | 'overviewNoSearch'
+  | 'retrievalRunCount'
+  | 'retrievalKeptCount'
+  | 'retrievalReportedCount'
+  | 'availabilityTitle'
   | 'filterAll'
   | 'filterPdf'
   | 'filterRetrieved'
@@ -210,6 +231,28 @@ export const en: Record<ZoteroLocaleKey, string> = {
   lensSources: 'Sources',
   lensEvidence: 'Evidence',
   lensExports: 'Exports',
+  panelOverview: 'Overview',
+  panelEvidence: 'Evidence',
+  panelExports: 'Exports',
+  backToList: 'Back to list',
+  selectionHiddenNote:
+    'This source is hidden by the active filter; the details stay available here.',
+  inspectorEmptyNote: 'Select a source to see its details.',
+  scopeLine: 'Scope',
+  filterLine: 'Filters',
+  modeLine: 'Mode',
+  modeMetadata: 'Metadata',
+  modeEverything: 'Metadata and full text',
+  overviewScopeLibrary: 'Library',
+  overviewScopeCollection: 'Collection',
+  overviewScopeSavedSearch: 'Saved search',
+  overviewFacts: 'Session facts',
+  overviewActions: 'Actions',
+  overviewNoSearch: 'This source was referenced directly, not through a search.',
+  retrievalRunCount: '{count} retrieves',
+  retrievalKeptCount: '{count} passages kept',
+  retrievalReportedCount: '{count} reported',
+  availabilityTitle: 'Latest state of each retrieve source',
   filterAll: 'All',
   filterPdf: 'With PDF',
   filterRetrieved: 'Retrieved',
@@ -375,6 +418,27 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   lensSources: '来源',
   lensEvidence: '证据',
   lensExports: '导出',
+  panelOverview: '概览',
+  panelEvidence: '证据',
+  panelExports: '导出',
+  backToList: '返回列表',
+  selectionHiddenNote: '这篇文献在当前筛选下被隐藏；详情仍然保留在这里。',
+  inspectorEmptyNote: '选择一篇文献查看详情。',
+  scopeLine: '范围',
+  filterLine: '筛选',
+  modeLine: '模式',
+  modeMetadata: '元数据',
+  modeEverything: '元数据与全文',
+  overviewScopeLibrary: '文献库',
+  overviewScopeCollection: '合集',
+  overviewScopeSavedSearch: '保存的检索',
+  overviewFacts: '会话事实',
+  overviewActions: '操作',
+  overviewNoSearch: '这篇文献是直接引用的，不是通过检索获得。',
+  retrievalRunCount: '检索 {count} 次',
+  retrievalKeptCount: '保留 {count} 条',
+  retrievalReportedCount: '报告 {count} 条',
+  availabilityTitle: '最近一次各检索来源状态',
   filterAll: '全部',
   filterPdf: '有 PDF',
   filterRetrieved: '已检索',

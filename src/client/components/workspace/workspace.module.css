@@ -1,0 +1,600 @@
+/* The workspace surface: a slim toolbar, the lens bar, and the master-detail
+ * pair. The master-detail grid caps at 1440px and centers; the sidebar is a
+ * fixed-proportion rail, the inspector flows. Narrow surfaces (the pane, not
+ * the viewport) collapse to one pane at a time through container queries.
+ * Tokens only, no theme selectors — light/dark resolves through the aliases. */
+
+.view {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  /* Responsive styles switch on the view's own width (container queries),
+     not the viewport. */
+  container-type: inline-size;
+}
+
+/* The connection strip: one slim line, mirroring the trajectory toolbar. */
+.toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  min-height: 36px;
+  padding: 5px 12px;
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.statusText {
+  flex: none;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* The failure diagnosis: one muted-red line that gives way to the refresh
+ * control instead of sprawling over the toolbar. */
+.diagnosis {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.spacer {
+  flex: 1 1 auto;
+}
+
+/* The diagnostic menu trigger: a quiet text button in the toolbar's cadence. */
+.menuButton {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  min-width: 28px;
+  padding: 0 6px;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+  background: transparent;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  cursor: pointer;
+  transition:
+    background 120ms var(--ds-ease-in-out),
+    color 120ms var(--ds-ease-in-out);
+}
+
+.menuButton:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.menuButton:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+.refresh {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+  background: transparent;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  cursor: pointer;
+  transition:
+    background 120ms var(--ds-ease-in-out),
+    color 120ms var(--ds-ease-in-out);
+}
+
+.refresh:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.refresh:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.refresh:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+/* The top lens bar: 文献 | 导出, one row wrapping on narrow surfaces. */
+.lensBar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px 12px 0;
+}
+
+/* The master-detail pair: sidebar rail plus the flowing inspector. */
+.workspace {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+  width: min(100%, 1440px);
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+/* The sidebar: the filter bar above a scrollable listbox. */
+.sidebar {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 12px 12px;
+  overflow-y: auto;
+  border-right: 1px solid var(--dsw-alias-border-l2);
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+}
+
+.filterBar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.emptyNote {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-caption);
+}
+
+/* The filtered-empty state: the note plus its recovery action. */
+.emptyWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.filterClear {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+  background: transparent;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  cursor: pointer;
+  transition:
+    background 120ms var(--ds-ease-in-out),
+    color 120ms var(--ds-ease-in-out);
+}
+
+.filterClear:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.filterClear:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+/* The listbox: one option per source; the option carries the selection
+ * visual (light background plus a 2px primary line on the left edge). */
+.listbox {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+}
+
+.listItem {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 8px 6px 10px;
+  border-radius: 6px;
+  border-left: 2px solid transparent;
+  cursor: pointer;
+}
+
+.listItem:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.listItem:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: -1px;
+}
+
+.listItemSelected {
+  background: var(--dsw-alias-interactive-bg-hover);
+  border-left-color: var(--dsw-alias-state-business-primary);
+}
+
+.listItemTitle {
+  min-width: 0;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.listItemMeta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.badges {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  line-height: 12px;
+  font-weight: 650;
+  letter-spacing: 0.035em;
+  color: var(--dsw-alias-label-tertiary);
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+/* The inspector: the selected source's detail surface. */
+.inspector {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 16px calc(var(--dsh-composer-height, 152px) + 16px);
+  overflow-y: auto;
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+}
+
+/* The back action exists for narrow surfaces; hidden on the wide two-pane
+ * layout, where the sidebar is always visible. */
+.backAction {
+  display: none;
+}
+
+.inspectorHead {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.inspectorTitleWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.inspectorTitle {
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+}
+
+.inspectorMeta {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.inspectorTabs {
+  flex: none;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.inspectorBody {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 900px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sectionLabel {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-caption);
+}
+
+.line {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  overflow-wrap: anywhere;
+}
+
+.note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-caption);
+}
+
+.warning {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.summaryLine {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* The guarded action row: open buttons, copy, and the composer prefills. */
+.actionRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+  background: transparent;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  cursor: pointer;
+  transition:
+    background 120ms var(--ds-ease-in-out),
+    color 120ms var(--ds-ease-in-out);
+}
+
+.action:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.action:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+/* The evidence passages: one row per deduplicated passage. */
+.passages {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.passage {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.passageHead {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.sourceTag {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  line-height: 12px;
+  font-weight: 650;
+  letter-spacing: 0.035em;
+  color: var(--dsw-alias-label-tertiary);
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.availability {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* The card stack: export artifacts and the evidence cards. */
+.cardStack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* The exports page: the session-wide artifact list. */
+.exportsPage {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  padding: 8px 16px calc(var(--dsh-composer-height, 152px) + 16px);
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+}
+
+/* The empty state centers inside the same surface without scrolling. */
+.empty {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 72px 16px calc(var(--dsh-composer-height, 152px) + 32px);
+}
+
+.emptyIcon {
+  color: var(--dsw-alias-label-caption);
+}
+
+.emptyText {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.starterRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* Narrow surfaces (the pane, not the viewport): the workspace collapses to
+ * one pane at a time — the sidebar list or the inspector detail — with the
+ * back action revealed. */
+@container (max-width: 800px) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .workspace[data-pane='list'] .inspector {
+    display: none;
+  }
+
+  .workspace[data-pane='detail'] .sidebar {
+    display: none;
+  }
+
+  .backAction {
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-start;
+    height: 24px;
+    padding: 0 8px;
+    font-family: inherit;
+    font-size: 12px;
+    line-height: 16px;
+    color: var(--dsw-alias-label-secondary);
+    background: transparent;
+    border: 1px solid var(--dsw-alias-border-l2);
+    border-radius: 6px;
+    cursor: pointer;
+  }
+
+  .backAction:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+
+  .backAction:focus-visible {
+    outline: 1px solid var(--dsw-alias-state-business-primary);
+    outline-offset: 1px;
+  }
+}
+
+@container (max-width: 620px) {
+  .lensBar {
+    padding: 6px 8px 0;
+  }
+
+  .sidebar {
+    padding: 8px 8px 12px;
+  }
+
+  .inspector {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .exportsPage {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}
+
+@container (max-width: 460px) {
+  .toolbar {
+    padding: 4px 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .refresh,
+  .action,
+  .menuButton,
+  .filterClear,
+  .backAction {
+    transition: none;
+  }
+}

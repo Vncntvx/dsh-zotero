@@ -17,12 +17,14 @@ import {
   SourcesTab,
   collectZoteroCalls,
   currentTime,
-  diagnosisOf,
   sessionSignatureOf,
   stateOf,
   type SourcesTabProps,
-  type TabStatusState,
 } from '../../src/client/components/SourcesTab.tsx'
+import {
+  connectionDiagnosisOf,
+  type ConnectionView,
+} from '../../src/client/components/workspace/connection.ts'
 import { callNameOf } from '../../src/client/presenters.ts'
 import { zh, type ZoteroLocaleKey } from '../../src/client/locales.ts'
 import { running, settled } from './helpers/blocks.ts'
@@ -46,6 +48,29 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
         'button',
         { 'data-pill': active === true ? 'active' : undefined, ...rest },
         children as never,
+      ),
+    Menu: ({
+      anchor,
+      items,
+      open,
+    }: {
+      anchor?: unknown
+      items?: Array<{ id: string; label?: unknown; disabled?: boolean }>
+      open?: boolean
+    }) =>
+      createElement(
+        'div',
+        { 'data-menu': open === true ? 'open' : undefined },
+        anchor as never,
+        open === true
+          ? items?.map((item) =>
+              createElement(
+                'span',
+                { key: item.id, 'data-menu-item': item.id },
+                item.label as never,
+              ),
+            )
+          : undefined,
       ),
     IconChevronDownOutline14: icon('chevron-down'),
     IconBrowseOutline16: icon('browse'),
@@ -231,14 +256,14 @@ describe('status projection helpers', () => {
   })
 
   it('builds the failure diagnosis line', () => {
-    expect(
-      diagnosisOf({ kind: 'remote-error', message: 'gateway offline' } as TabStatusState, t),
-    ).toBe('gateway offline')
-    expect(diagnosisOf({ kind: 'unavailable', data: UNAVAILABLE, checkedAt: '10:00:00' }, t)).toBe(
-      '诊断: connection refused',
+    expect(connectionDiagnosisOf({ kind: 'remote-error', message: 'gateway offline' }, t)).toBe(
+      'gateway offline',
     )
     expect(
-      diagnosisOf(
+      connectionDiagnosisOf({ kind: 'unavailable', data: UNAVAILABLE, checkedAt: '10:00:00' }, t),
+    ).toBe('诊断: connection refused')
+    expect(
+      connectionDiagnosisOf(
         {
           kind: 'unavailable',
           data: { providerId: 'local', connected: false, diagnosis: '' },
@@ -247,7 +272,7 @@ describe('status projection helpers', () => {
         t,
       ),
     ).toBe(zh.statusUnavailable)
-    expect(diagnosisOf({ kind: 'loading' } as TabStatusState, t)).toBe('')
+    expect(connectionDiagnosisOf({ kind: 'loading' }, t)).toBe('')
   })
 
   it('names calls from both block forms', () => {
@@ -264,10 +289,12 @@ describe('SourcesTab', () => {
     expect(screen.getByText(zh.checking)).toBeDefined()
     await act(async () => {})
     expect(screen.getByText(zh.statusConnectedNote)).toBeDefined()
+    // The diagnostic facts live in the toolbar menu (portal mode).
+    fireEvent.click(screen.getByLabelText(zh.detailsLabel))
+    await act(async () => {})
     expect(screen.getByText(/API 版本 3/)).toBeDefined()
     expect(screen.getByText(/Schema 版本 37/)).toBeDefined()
     expect(screen.getByText(/sPMHtLD6HHBd/)).toBeDefined()
-    expect(screen.getByText(/上次检查/)).toBeDefined()
     view.unmount()
   })
 
@@ -441,10 +468,11 @@ describe('SourcesTab', () => {
     const { view } = mountTab(snapshotOf({ nodes: [foreign] }), status)
     await act(async () => {})
     expect(screen.getByText(zh.omittedRowsNote.replace('{count}', '5'))).toBeDefined()
-    expect(screen.getByText(zh.provenanceMismatch)).toBeDefined()
-    // The mismatch row opens a dossier with the warning line.
+    // The mismatch row carries the issues badge; the selected inspector shows
+    // the warning line for the first (mismatched) source.
+    expect(screen.getAllByText(zh.provenanceMismatch).length).toBeGreaterThanOrEqual(1)
     const row = view.container.querySelector('[data-provenance="mismatch"]')!
-    fireEvent.click(row.querySelector('button')!)
+    fireEvent.click(row)
     expect(screen.getAllByText(zh.provenanceMismatch).length).toBeGreaterThanOrEqual(2)
     view.unmount()
   })
@@ -487,18 +515,20 @@ describe('SourcesTab', () => {
     view.unmount()
   })
 
-  it('shows honest placeholders on the evidence and exports lenses', async () => {
+  it('shows honest placeholders on the inspector evidence panel and the exports lens', async () => {
     const status = vi.fn(async () => ({ ok: true, value: CONNECTED }))
     const { view } = mountTab(snapshotOf({ nodes: [searchResult()] }), status)
     await act(async () => {})
-    fireEvent.click(screen.getByText(zh.lensEvidence))
-    expect(screen.getByText(zh.evidenceEmptyNote)).toBeDefined()
-    fireEvent.click(screen.getByText(zh.lensExports))
+    // The evidence placeholder lives on the inspector's evidence panel.
+    fireEvent.click(view.container.querySelector('[data-inspector-panel="evidence"]')!)
+    expect(screen.getByText(zh.evidenceRetrievedNone)).toBeDefined()
+    // The exports lens is a top-level pill.
+    fireEvent.click(view.container.querySelector('[data-workspace-lens="exports"]')!)
     expect(screen.getByText(zh.exportsEmptyNote)).toBeDefined()
     view.unmount()
   })
 
-  it('expands a row dossier with search provenance and prefills from the line actions', async () => {
+  it('shows the inspector overview with search provenance and prefills from its actions', async () => {
     const status = vi.fn(async () => ({ ok: true, value: CONNECTED }))
     const setDraft = vi.fn()
     const retrieve = settled({
@@ -525,12 +555,14 @@ describe('SourcesTab', () => {
       setDraft,
     })
     await act(async () => {})
-    const row = view.container.querySelector('[data-provenance]')!
-    fireEvent.click(row.querySelector('button')!)
+    // The first source is selected by default; the inspector overview shows
+    // the search provenance (one line: query · scope · mode) and the facts.
     expect(screen.getByText(zh.fromSearches)).toBeDefined()
-    expect(screen.getByText(zh.searchFrom.replace('{query}', 'attention'))).toBeDefined()
+    expect(
+      screen.getByText(new RegExp(zh.searchFrom.replace('{query}', 'attention'))),
+    ).toBeDefined()
     expect(screen.getByText(zh.evidenceInDetail.replace('{count}', '1'))).toBeDefined()
-    // The line-end actions prefill without submitting.
+    // The overview actions prefill without submitting.
     fireEvent.click(screen.getByText(zh.askAboutItem))
     expect(setDraft).toHaveBeenCalledWith(
       zh.askTemplate.replace('{ref}', 'zotero://user/0/item/AAAAAAA1'),
@@ -549,7 +581,7 @@ describe('SourcesTab', () => {
     })
     const { view } = mountTab(snapshotOf({ nodes: [failedSearch] }), status)
     await act(async () => {})
-    expect(screen.getByText(zh.sourcesEmptyNote)).toBeDefined()
+    expect(screen.getByText(zh.noSources)).toBeDefined()
     view.unmount()
 
     const filtered = mountTab(snapshotOf({ nodes: [searchResult()] }), status)
