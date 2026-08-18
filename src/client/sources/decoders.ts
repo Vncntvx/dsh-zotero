@@ -25,6 +25,7 @@ export interface SearchRowMeta {
   readonly creatorSummary: string
   readonly year?: number
   readonly bestAttachmentRef?: string
+  readonly bestAttachmentType?: string
 }
 
 /** The search projection view; `rows === null` means malformed. */
@@ -48,6 +49,7 @@ export interface RetrieveMetaView {
   readonly count: number | null
   readonly truncated: boolean | null
   readonly attachmentRef: string | null
+  readonly attachmentContentType: string | null
   readonly coverage: SourceCoverage | null
   readonly sourceAvailability: Readonly<Record<string, SourceAvailabilityEntry>>
 }
@@ -87,12 +89,14 @@ function decodeSearchRows(value: unknown): SearchRowMeta[] | null {
     if (ref === undefined || title === undefined || creatorSummary === undefined) return null
     const year = numberField(item, 'year')
     const bestAttachmentRef = stringField(item, 'bestAttachmentRef')
+    const bestAttachmentType = stringField(item, 'bestAttachmentType')
     rows.push({
       ref,
       title,
       creatorSummary,
       ...(year === undefined ? {} : { year }),
       ...(bestAttachmentRef === undefined ? {} : { bestAttachmentRef }),
+      ...(bestAttachmentType === undefined ? {} : { bestAttachmentType }),
     })
   }
   return rows
@@ -163,6 +167,7 @@ export function retrieveMetaOf(meta: Record<string, unknown>): RetrieveMetaView 
     count: numberField(meta, 'count') ?? null,
     truncated: truncated === undefined ? null : truncated,
     attachmentRef: stringField(meta, 'attachmentRef') ?? null,
+    attachmentContentType: stringField(meta, 'attachmentContentType') ?? null,
     coverage: decodeCoverage(meta['coverage']),
     sourceAvailability: decodeSourceAvailability(meta['sourceAvailability']),
   }

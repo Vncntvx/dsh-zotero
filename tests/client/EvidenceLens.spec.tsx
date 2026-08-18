@@ -26,6 +26,7 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
     IconChevronDownOutline14: (props: Record<string, unknown>) =>
       createElement('span', { 'data-icon': 'chevron-down', ...props }),
     writeClipboard: vi.fn(async () => true),
+    Tooltip: ({ children }: { children: React.ReactElement }) => children,
   }
 })
 

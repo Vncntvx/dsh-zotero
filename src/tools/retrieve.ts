@@ -71,6 +71,7 @@ const RETRIEVE_OUTPUT_SCHEMA = {
   properties: {
     ref: { type: 'string', required: true },
     attachmentRef: { type: 'string' },
+    attachmentContentType: { type: 'string' },
     coverage: {
       type: 'object',
       additionalProperties: false,
@@ -115,7 +116,11 @@ export function renderRetrieve(_args: RetrieveArgs, value: RetrieveOutput): Cont
       'No passages matched the query — the item may still have content, but none of it ranked against these terms.',
     )
   }
-  if (value.attachmentRef !== undefined) lines.push(`Full text: ${value.attachmentRef}`)
+  if (value.attachmentRef !== undefined) {
+    const type =
+      value.attachmentContentType === undefined ? '' : ` (${value.attachmentContentType})`
+    lines.push(`Full text: ${value.attachmentRef}${type}`)
+  }
   if (value.coverage !== undefined) {
     const coverage = value.coverage
     const chars =

@@ -66,7 +66,11 @@ export function SourceDetail({ item, t }: SourceDetailProps) {
           ) : (
             <p className={css.line}>{item.attachment.location}</p>
           )}
-          <CopyButton value={item.attachment.location} label={t('copy')} t={t} />
+          <CopyButton
+            value={item.attachment.location}
+            label={t('copy')}
+            copiedLabel={t('copied')}
+          />
         </div>
       )}
       {item.attachment === undefined && item.bestAttachment !== undefined && (
@@ -76,7 +80,11 @@ export function SourceDetail({ item, t }: SourceDetailProps) {
             {item.bestAttachment.ref ?? item.bestAttachment.contentType ?? ''}
           </p>
           {item.bestAttachment.ref !== undefined && (
-            <CopyButton value={item.bestAttachment.ref} label={t('copyRef')} t={t} />
+            <CopyButton
+              value={item.bestAttachment.ref}
+              label={t('copyRef')}
+              copiedLabel={t('copied')}
+            />
           )}
         </div>
       )}

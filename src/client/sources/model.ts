@@ -109,12 +109,15 @@ export interface SourceAvailabilityEntry {
 /**
  * Aggregated facts of the successful retrieves on one item: per-source
  * availability holds the latest state each source reported, coverage and
- * the attachment ref come from the latest retrieve that carried them,
- * `truncated` sticks once any retrieve truncated. Passages themselves are
- * accumulated and deduplicated separately in `evidence`.
+ * the attachment ref (with its paired content type) come from the latest
+ * retrieve that carried them, `truncated` sticks once any retrieve
+ * truncated. Passages themselves are accumulated and deduplicated separately
+ * in `evidence`.
  */
 export interface SourceRetrievalFacts {
   readonly attachmentRef?: string
+  /** The content type of `attachmentRef`; absent when Zotero reported none. */
+  readonly attachmentContentType?: string
   readonly coverage?: SourceCoverage
   /** The global passage/character budget omitted more evidence. */
   readonly truncated: boolean

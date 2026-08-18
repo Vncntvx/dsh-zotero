@@ -15,6 +15,7 @@
  * @module dsh-zotero/scripts/build-client
  */
 
+import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { basename } from 'node:path'
 import { createRequire } from 'node:module'
@@ -29,6 +30,40 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 
 /** Plugin id stamped into the loader handoff; must equal the npm package name. */
 const PLUGIN_ID = 'dsh-zotero'
+
+/** The package version the bundle carries; `unknown` on an unreadable manifest. */
+function buildVersionOf() {
+  try {
+    const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
+    if (typeof manifest.version === 'string' && manifest.version !== '') return manifest.version
+  } catch {
+    // Fall through: a missing manifest must not fail the build.
+  }
+  return 'unknown'
+}
+
+/**
+ * The commit short-id the bundle carries: an explicit env value (a local
+ * `DSH_ZOTERO_COMMIT` override or CI's `GITHUB_SHA`) beats git; a git
+ * failure degrades to `unknown` instead of failing the build.
+ */
+function buildCommitOf() {
+  for (const name of ['DSH_ZOTERO_COMMIT', 'GITHUB_SHA']) {
+    const value = process.env[name]
+    if (value !== undefined && /^[A-Za-z0-9]{4,64}$/.test(value)) return value.slice(0, 7)
+  }
+  try {
+    const head = execFileSync('git', ['rev-parse', '--short', 'HEAD'], {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim()
+    if (/^[A-Za-z0-9]{4,64}$/.test(head)) return head
+  } catch {
+    // Fall through: no git (a tarball checkout) must not fail the build.
+  }
+  return 'unknown'
+}
 
 /** Platform modules the loader's module table answers; never bundled. */
 const EXTERNALS = [
@@ -91,6 +126,8 @@ const options = {
   external: EXTERNALS,
   define: {
     'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV ?? 'production'),
+    __DSH_ZOTERO_VERSION__: JSON.stringify(buildVersionOf()),
+    __DSH_ZOTERO_COMMIT__: JSON.stringify(buildCommitOf()),
   },
   // The loader executes the bundle as a classic script; the handoff is the
   // only global side effect, and the factory returns the CJS exports. The

@@ -56,13 +56,3 @@ export function openVerdictOf(item: SourceItem): OpenVerdict {
       return 'unverified'
   }
 }
-
-/**
- * The attachment ref usable for an open-PDF link: the resolved location's
- * ref, else Zotero's selection, else the retrieve full-text attachment.
- */
-export function attachmentRefOf(item: SourceItem): string | null {
-  return (
-    item.attachment?.ref ?? item.bestAttachment?.ref ?? item.retrievalFacts?.attachmentRef ?? null
-  )
-}

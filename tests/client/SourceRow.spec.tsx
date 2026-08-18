@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SourceItem } from '../../src/client/sources/model.ts'
 import { zh, type ZoteroLocaleKey } from '../../src/client/locales.ts'
 import { CopyButton } from '../../src/client/components/CopyButton.tsx'
+import { ZoteroOpenButton } from '../../src/client/components/open/ZoteroOpenButton.tsx'
 import { SourceRow, badgesOf, hasDossierContent } from '../../src/client/components/SourceRow.tsx'
 import { sourceOf } from './helpers/source-fixtures.ts'
 
@@ -20,6 +21,7 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
     IconChevronDownOutline14: (props: Record<string, unknown>) =>
       createElement('span', { 'data-icon': 'chevron-down', ...props }),
     writeClipboard: vi.fn(async () => true),
+    Tooltip: ({ children }: { children: React.ReactElement }) => children,
   }
 })
 
@@ -41,21 +43,14 @@ describe('badgesOf', () => {
     expect(badgesOf(sourceOf({}), t)).toEqual([])
   })
 
-  it('marks a mismatching instance first', () => {
-    expect(badgesOf(sourceOf({ provenance: 'mismatch' }), t)).toEqual([zh.provenanceMismatch])
+  it('flags a mismatching instance under the issues badge', () => {
+    expect(badgesOf(sourceOf({ provenance: 'mismatch' }), t)).toEqual([zh.issuesBadge])
   })
 
-  it('badges a resolved PDF and a resolved non-PDF attachment', () => {
+  it('badges a PDF and stays silent for a resolved non-PDF attachment', () => {
     expect(
       badgesOf(
         sourceOf({
-          facts: {
-            inspected: false,
-            evidenceCount: 0,
-            reportedEvidenceCount: 0,
-            attachmentResolved: true,
-            exportCount: 0,
-          },
           attachment: {
             ref: 'zotero://user/0/attachment/WXYZ6789',
             kind: 'file',
@@ -70,13 +65,6 @@ describe('badgesOf', () => {
     expect(
       badgesOf(
         sourceOf({
-          facts: {
-            inspected: false,
-            evidenceCount: 0,
-            reportedEvidenceCount: 0,
-            attachmentResolved: true,
-            exportCount: 0,
-          },
           attachment: {
             kind: 'url',
             contentType: 'text/html',
@@ -86,16 +74,33 @@ describe('badgesOf', () => {
         }),
         t,
       ),
-    ).toEqual([zh.attachmentBadge])
+    ).toEqual([])
   })
 
-  it('badges the attachment selection hint when nothing was resolved', () => {
-    expect(badgesOf(sourceOf({ bestAttachment: { contentType: 'application/pdf' } }), t)).toEqual([
-      zh.badgePdf,
-    ])
+  it('badges a PDF attachment selection hint and an inferred type-less ref', () => {
+    expect(
+      badgesOf(
+        sourceOf({
+          bestAttachment: {
+            ref: 'zotero://user/0/attachment/WXYZ6789',
+            contentType: 'application/pdf',
+          },
+        }),
+        t,
+      ),
+    ).toEqual([zh.badgePdf])
+    expect(
+      badgesOf(sourceOf({ bestAttachment: { ref: 'zotero://user/0/attachment/WXYZ6789' } }), t),
+    ).toEqual([zh.badgePdf])
   })
 
-  it('badges evidence, exports, and every operation kind', () => {
+  it('stays silent for a hint without a deep-linkable ref', () => {
+    expect(badgesOf(sourceOf({ bestAttachment: { contentType: 'application/pdf' } }), t)).toEqual(
+      [],
+    )
+  })
+
+  it('badges evidence and exports, collapsing every operation into one issues badge', () => {
     const badges = badgesOf(
       sourceOf({
         facts: {
@@ -112,28 +117,7 @@ describe('badgesOf', () => {
     expect(badges).toEqual([
       zh.evidenceBadge.replace('{count}', '2'),
       zh.exportBadge.replace('{count}', '1'),
-      zh.runningBadge.replace('{count}', '1'),
-      zh.failedBadge.replace('{count}', '2'),
-      zh.stoppedBadge.replace('{count}', '3'),
-    ])
-  })
-
-  it('badges the reported count only when it exceeds the kept previews', () => {
-    const badges = badgesOf(
-      sourceOf({
-        facts: {
-          inspected: false,
-          evidenceCount: 2,
-          reportedEvidenceCount: 7,
-          attachmentResolved: false,
-          exportCount: 0,
-        },
-      }),
-      t,
-    )
-    expect(badges).toEqual([
-      zh.evidenceBadge.replace('{count}', '2'),
-      zh.reportedEvidenceBadge.replace('{count}', '7'),
+      zh.issuesBadge,
     ])
   })
 })
@@ -199,17 +183,35 @@ describe('hasDossierContent', () => {
 })
 
 describe('CopyButton', () => {
-  it('copies the value and shows the feedback window', () => {
+  it('copies the value, shows the caller label, and swaps to the copied label briefly', () => {
     vi.useFakeTimers()
-    render(<CopyButton value="zotero://user/0/item/A" label={zh.copyRef} t={t} />)
+    render(<CopyButton value="zotero://user/0/item/A" label={zh.copyRef} copiedLabel={zh.copied} />)
+    expect(screen.getByText(zh.copyRef)).toBeDefined()
     fireEvent.click(screen.getByRole('button'))
     expect(writeClipboard).toHaveBeenCalledWith('zotero://user/0/item/A')
     expect(screen.getByText(zh.copied)).toBeDefined()
     act(() => {
       vi.advanceTimersByTime(1600)
     })
-    expect(screen.getByText(zh.copy)).toBeDefined()
+    expect(screen.getByText(zh.copyRef)).toBeDefined()
     vi.useRealTimers()
+  })
+})
+
+describe('ZoteroOpenButton', () => {
+  it('renders a bare action with the shared geometry when no class is given', () => {
+    render(
+      <ZoteroOpenButton
+        url="zotero://select/library/items/ABCDEFGH"
+        verdict="open"
+        label={zh.openInZotero}
+        t={t}
+      />,
+    )
+    const anchor = screen.getByText(zh.openInZotero)
+    expect(anchor.getAttribute('href')).toBe('zotero://select/library/items/ABCDEFGH')
+    expect(anchor.getAttribute('target')).toBe('_blank')
+    expect(anchor.getAttribute('title')).toBeNull()
   })
 })
 
@@ -324,22 +326,19 @@ describe('SourceRow', () => {
     emptyView.unmount()
   })
 
-  it('joins only the non-zero operation counts', () => {
+  it('joins only the non-zero operation counts in the dossier', () => {
     const failedOnly = sourceOf({ operations: { running: 0, failed: 2, stopped: 0 } })
     const failedView = render(<SourceRow item={failedOnly} t={t} />)
     fireEvent.click(screen.getByRole('button', { name: /zotero:\/\/user\/0\/item\/A/ }))
-    // The badge and the dossier line both carry the count.
-    expect(
-      screen.getAllByText(zh.failedBadge.replace('{count}', '2')).length,
-    ).toBeGreaterThanOrEqual(2)
+    // The badge collapses to issues; the dossier keeps the exact counts.
+    expect(screen.getByText(zh.issuesBadge)).toBeDefined()
+    expect(screen.getByText(/失败 2/)).toBeDefined()
     failedView.unmount()
 
     const runningOnly = sourceOf({ operations: { running: 1, failed: 0, stopped: 0 } })
     const runningView = render(<SourceRow item={runningOnly} t={t} />)
     fireEvent.click(screen.getByRole('button', { name: /zotero:\/\/user\/0\/item\/A/ }))
-    expect(
-      screen.getAllByText(zh.runningBadge.replace('{count}', '1')).length,
-    ).toBeGreaterThanOrEqual(2)
+    expect(screen.getByText(/进行中 1/)).toBeDefined()
     runningView.unmount()
   })
 
@@ -379,7 +378,7 @@ describe('SourceRow', () => {
     })
     render(<SourceRow item={mismatch} t={t} />)
     fireEvent.click(screen.getByRole('button', { name: /zotero:\/\/user\/0\/item\/A/ }))
-    expect(screen.getAllByText(zh.provenanceMismatch).length).toBeGreaterThanOrEqual(2)
+    expect(screen.getAllByText(zh.provenanceMismatch).length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText(/进行中 1 · 失败 2 · 已停止 3/)).toBeDefined()
   })
 
@@ -407,27 +406,75 @@ describe('SourceRow', () => {
     view.unmount()
   })
 
-  it('blocks every open link for a mismatching item', () => {
+  it('shows the pdf action exactly when a capability exists, inferred refs included', () => {
+    const inferred = sourceOf({ bestAttachment: { ref: 'zotero://user/0/attachment/WXYZ6789' } })
+    const view = render(<SourceRow item={inferred} t={t} />)
+    expect(
+      Array.from(view.container.querySelectorAll('a'))
+        .map((anchor) => anchor.getAttribute('href'))
+        .some((href) => href === 'zotero://open-pdf/library/items/WXYZ6789'),
+    ).toBe(true)
+    view.unmount()
+
+    const noCapability = sourceOf({ bestAttachment: { contentType: 'application/pdf' } })
+    const bare = render(<SourceRow item={noCapability} t={t} />)
+    expect(
+      Array.from(bare.container.querySelectorAll('a'))
+        .map((anchor) => anchor.getAttribute('href'))
+        .some((href) => href?.startsWith('zotero://open-pdf/')),
+    ).toBe(false)
+    bare.unmount()
+  })
+
+  it('blocks every open link for a mismatching item with focusable disabled actions', () => {
     const mismatch = sourceOf({
       key: 'zotero://user/0/item/ABCDEFGH',
       ref: 'zotero://user/0/item/ABCDEFGH',
       provenance: 'mismatch',
+      bestAttachment: {
+        ref: 'zotero://user/0/attachment/WXYZ6789',
+        contentType: 'application/pdf',
+      },
     })
     const view = render(<SourceRow item={mismatch} t={t} />)
     expect(view.container.querySelector('a')).toBeNull()
-    expect(screen.getAllByText(new RegExp(zh.provenanceMismatch)).length).toBeGreaterThanOrEqual(1)
+    const blocked = view.container.querySelectorAll('button[aria-disabled="true"]')
+    expect(blocked.length).toBeGreaterThanOrEqual(2)
+    expect(blocked[0]!.getAttribute('aria-disabled')).toBe('true')
+    expect(blocked[0]!.getAttribute('disabled')).toBeNull()
+    // A real activation attempt stays inert: aria-disabled blocks the action.
+    fireEvent.click(blocked[0]!)
+    expect(blocked[0]!.getAttribute('aria-disabled')).toBe('true')
+    // The reason stays readable: the sr-only description, plus the dossier line on open.
+    expect(screen.getAllByText(zh.provenanceMismatch).length).toBeGreaterThanOrEqual(1)
     view.unmount()
   })
 
-  it('caves unverified open links with the instance note', () => {
+  it('caves unverified open links with the instance note in the native title', () => {
     const unverified = sourceOf({
       key: 'zotero://user/0/item/ABCDEFGH',
       ref: 'zotero://user/0/item/ABCDEFGH',
       provenance: 'unknown',
     })
     const view = render(<SourceRow item={unverified} t={t} />)
-    expect(view.container.querySelector('a')).not.toBeNull()
-    expect(screen.getAllByText(new RegExp(zh.instanceUnverified)).length).toBeGreaterThanOrEqual(1)
+    const anchors = Array.from(view.container.querySelectorAll('a'))
+    expect(anchors.length).toBeGreaterThanOrEqual(1)
+    expect(anchors.every((anchor) => anchor.getAttribute('title') === zh.instanceUnverified)).toBe(
+      true,
+    )
+    view.unmount()
+  })
+
+  it('omits the caveat title for a verified item', () => {
+    const verified = sourceOf({
+      key: 'zotero://user/0/item/ABCDEFGH',
+      ref: 'zotero://user/0/item/ABCDEFGH',
+      provenance: 'verified',
+    })
+    const view = render(<SourceRow item={verified} t={t} />)
+    const anchors = Array.from(view.container.querySelectorAll('a'))
+    expect(anchors.length).toBeGreaterThanOrEqual(1)
+    expect(anchors.every((anchor) => anchor.getAttribute('title') === null)).toBe(true)
     view.unmount()
   })
 })

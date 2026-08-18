@@ -115,6 +115,7 @@ describe('retrieve', () => {
     ).toEqual(['/api/users/0/items/ABCD1234/children', '/api/users/0/items/WXYZ6789/fulltext'])
     expect(result.ref).toBe('zotero://user/0/item/ABCD1234?server=S1')
     expect(result.attachmentRef).toBe('zotero://user/0/attachment/WXYZ6789?server=S1')
+    expect(result.attachmentContentType).toBe('application/pdf')
     expect(result.coverage).toEqual({
       indexedPages: 10,
       totalPages: 12,
@@ -168,6 +169,32 @@ describe('retrieve', () => {
     )
     const result = await provider.retrieve(retrieveRequest({ sources: ['fulltext'], passages: 1 }))
     expect(result.attachmentRef).toBe('zotero://user/0/attachment/WXYZ6789')
+  })
+
+  it('omits the attachment content type when Zotero reports none', async () => {
+    const parent = {
+      ...RETRIEVE_PARENT,
+      links: {
+        self: {
+          href: 'http://localhost:23119/api/users/0/items/ABCD1234',
+          type: 'application/json',
+        },
+        attachment: {
+          href: 'http://localhost:23119/api/users/0/items/WXYZ6789',
+          type: 'application/json',
+        },
+      },
+    }
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) => helpers.json(parent))
+    mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) =>
+      helpers.json(RETRIEVE_CHILDREN),
+    )
+    mock.route('GET', '/api/users/0/items/WXYZ6789/fulltext', (req, res, helpers) =>
+      helpers.json(FULLTEXT_PAYLOAD),
+    )
+    const result = await provider.retrieve(retrieveRequest({ sources: ['fulltext'], passages: 1 }))
+    expect(result.attachmentRef).toBe('zotero://user/0/attachment/WXYZ6789')
+    expect(result.attachmentContentType).toBeUndefined()
   })
 
   it('degrades an unindexed fulltext response to sourcesSkipped', async () => {

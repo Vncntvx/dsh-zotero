@@ -60,6 +60,42 @@
   color: var(--dsw-alias-label-caption);
 }
 
+/* The filtered-empty state: the note plus its recovery action. */
+.emptyWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.filterClear {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+  background: transparent;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  cursor: pointer;
+  transition:
+    background 120ms var(--ds-ease-in-out),
+    color 120ms var(--ds-ease-in-out);
+}
+
+.filterClear:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.filterClear:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
 /* One source row: the toggle head plus the line-end actions on one line. */
 .row {
   display: flex;
@@ -354,6 +390,10 @@
   }
 
   .lineAction {
+    transition: none;
+  }
+
+  .filterClear {
     transition: none;
   }
 }

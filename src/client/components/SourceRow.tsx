@@ -1,9 +1,10 @@
 /**
- * One source row: the title line with a metadata summary, provable fact
- * badges (never a funnel), line-end actions (copy ref, ask-about prefill),
- * and an expandable dossier. The header is a whole-line toggle like the
- * harness's tool rows; actions sit outside the toggle so a copy or prefill
- * never opens the row.
+ * One source row: the title line with a metadata summary, the provable fact
+ * badges (a strict whitelist — PDF, evidence, exports, issues), line-end
+ * actions (the provenance-guarded open buttons, copy ref, ask-about and
+ * export prefills), and an expandable dossier. The header is a whole-line
+ * toggle like the harness's tool rows; actions sit outside the toggle so a
+ * copy or prefill never opens the row.
  * @module dsh-zotero/client/components/SourceRow
  */
 
@@ -12,37 +13,32 @@ import clsx from 'clsx'
 import { IconChevronDownOutline14 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { askDraftOf, exportDraftOf } from '../actions/source-actions.ts'
-import { attachmentRefOf, openVerdictOf, pdfUrlOf, selectUrlOf } from '../actions/open-zotero.ts'
+import { openVerdictOf, selectUrlOf } from '../actions/open-zotero.ts'
 import { interpolate, joinNonEmpty } from '../presenters.ts'
 import type { SourceItem } from '../sources/model.ts'
+import { hasIssue } from '../sources/selectors.ts'
+import { hasPdf, pdfCapabilityOf } from '../sources/source-capabilities.ts'
 import { CopyButton } from './CopyButton.tsx'
-import { OpenLink } from './EvidenceCard.tsx'
-import { operationsLabelsOf } from './operations.ts'
+import { BlockedOpenAction } from './open/BlockedOpenAction.tsx'
+import { ZoteroOpenButton } from './open/ZoteroOpenButton.tsx'
 import { SourceDetail } from './SourceDetail.tsx'
 import css from './SourcesList.module.css'
 
-/** The provable fact badges of one source, in fixed order. */
+/**
+ * The provable fact badges of one source: a strict whitelist of PDF,
+ * evidence count, export count, and issues. The PDF badge shares its single
+ * source of truth with the "with PDF" filter and the open-PDF button
+ * (`hasPdf`); reported counts, truncation, and operation detail stay in the
+ * dossier and the lenses.
+ */
 export function badgesOf(item: SourceItem, t: TranslateNS<'zotero'>): string[] {
   const badges: string[] = []
-  if (item.provenance === 'mismatch') badges.push(t('provenanceMismatch'))
-  if (item.facts.attachmentResolved) {
-    badges.push(
-      item.attachment?.contentType === 'application/pdf' ? t('badgePdf') : t('attachmentBadge'),
-    )
-  } else if (item.bestAttachment?.contentType === 'application/pdf') {
-    badges.push(t('badgePdf'))
-  }
+  if (hasPdf(item)) badges.push(t('badgePdf'))
   if (item.facts.evidenceCount > 0)
     badges.push(interpolate(t('evidenceBadge'), { count: item.facts.evidenceCount }))
-  // The reported count only adds information when it differs from the kept
-  // previews (dedup or budget); equal counts are the badge already shows.
-  if (item.facts.reportedEvidenceCount > item.facts.evidenceCount)
-    badges.push(
-      interpolate(t('reportedEvidenceBadge'), { count: item.facts.reportedEvidenceCount }),
-    )
   if (item.facts.exportCount > 0)
     badges.push(interpolate(t('exportBadge'), { count: item.facts.exportCount }))
-  badges.push(...operationsLabelsOf(item.operations, t))
+  if (hasIssue(item)) badges.push(t('issuesBadge'))
   return badges
 }
 
@@ -79,8 +75,7 @@ export function SourceRow({ item, t, setDraft }: SourceRowProps) {
   const badges = badgesOf(item, t)
   const verdict = openVerdictOf(item)
   const selectUrl = selectUrlOf(item.ref)
-  const pdfRef = attachmentRefOf(item)
-  const pdfUrl = pdfRef === null ? null : pdfUrlOf(pdfRef)
+  const pdfCapability = pdfCapabilityOf(item)
   return (
     <div className={css.row} data-provenance={item.provenance}>
       <button
@@ -110,25 +105,31 @@ export function SourceRow({ item, t, setDraft }: SourceRowProps) {
         )}
       </button>
       <span className={css.lineActions}>
-        {selectUrl !== null && (
-          <OpenLink
-            url={selectUrl}
-            verdict={verdict}
-            label={t('openInZotero')}
-            t={t}
-            className={css.lineAction}
-          />
-        )}
-        {pdfUrl !== null && (
-          <OpenLink
-            url={pdfUrl}
-            verdict={verdict}
-            label={t('openPdf')}
-            t={t}
-            className={css.lineAction}
-          />
-        )}
-        <CopyButton value={item.ref} label={t('copyRef')} t={t} />
+        {selectUrl !== null &&
+          (verdict === 'blocked' ? (
+            <BlockedOpenAction label={t('openInZotero')} t={t} className={css.lineAction} />
+          ) : (
+            <ZoteroOpenButton
+              url={selectUrl}
+              verdict={verdict}
+              label={t('openInZotero')}
+              t={t}
+              className={css.lineAction}
+            />
+          ))}
+        {pdfCapability !== null &&
+          (verdict === 'blocked' ? (
+            <BlockedOpenAction label={t('openPdf')} t={t} className={css.lineAction} />
+          ) : (
+            <ZoteroOpenButton
+              url={pdfCapability.url}
+              verdict={verdict}
+              label={t('openPdf')}
+              t={t}
+              className={css.lineAction}
+            />
+          ))}
+        <CopyButton value={item.ref} label={t('copyRef')} copiedLabel={t('copied')} />
         {setDraft !== undefined && (
           <button
             type="button"

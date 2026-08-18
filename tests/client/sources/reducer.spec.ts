@@ -883,6 +883,92 @@ describe('buildSourceWorkspace', () => {
     })
   })
 
+  it('keeps the content type of the first attachment hint a search surfaced', () => {
+    const workspace = buildSourceWorkspace([
+      block(
+        's1',
+        1,
+        'zotero_search',
+        { query: 'attention' },
+        {
+          meta: {
+            returned: 1,
+            total: 1,
+            nextOffset: null,
+            displayed: 1,
+            omitted: 0,
+            noteMatches: null,
+            items: [
+              {
+                ref: REF('A1'),
+                title: 'T',
+                creatorSummary: 'C',
+                year: 2020,
+                itemType: 'journalArticle',
+                bestAttachmentRef: 'zotero://user/0/attachment/WXYZ6789',
+                bestAttachmentType: 'application/pdf',
+              },
+            ],
+          },
+        },
+      ),
+    ])
+    expect(workspace.sources[0]!.bestAttachment).toEqual({
+      ref: 'zotero://user/0/attachment/WXYZ6789',
+      contentType: 'application/pdf',
+    })
+  })
+
+  it('keeps the attachment content type paired with the ref it described', () => {
+    const withType = { ...RETRIEVE_META, attachmentContentType: 'application/pdf' }
+    const firstMeet = buildSourceWorkspace([
+      block('r1', 1, 'zotero_retrieve', { ref: REF('A1') }, { meta: withType }),
+    ])
+    expect(firstMeet.sources[0]!.retrievalFacts?.attachmentContentType).toBe('application/pdf')
+
+    const replaced = buildSourceWorkspace([
+      block('r1', 1, 'zotero_retrieve', { ref: REF('A1') }, { meta: withType }),
+      block(
+        'r2',
+        2,
+        'zotero_retrieve',
+        { ref: REF('A1') },
+        { meta: { ...withType, attachmentContentType: 'text/plain' } },
+      ),
+    ])
+    expect(replaced.sources[0]!.retrievalFacts?.attachmentContentType).toBe('text/plain')
+
+    // A ref-less follow-up preserves the pair it already carries.
+    const preserved = buildSourceWorkspace([
+      block('r1', 1, 'zotero_retrieve', { ref: REF('A1') }, { meta: withType }),
+      block(
+        'r2',
+        2,
+        'zotero_retrieve',
+        { ref: REF('A1') },
+        {
+          meta: {
+            count: 0,
+            sources: [],
+            truncated: false,
+            sourcesSkipped: [],
+            items: [],
+            sourceAvailability: {},
+          },
+        },
+      ),
+    ])
+    expect(preserved.sources[0]!.retrievalFacts?.attachmentContentType).toBe('application/pdf')
+
+    // A new ref without a type drops the stale pair: the deep link and its
+    // type always describe the same retrieve.
+    const dropped = buildSourceWorkspace([
+      block('r1', 1, 'zotero_retrieve', { ref: REF('A1') }, { meta: withType }),
+      block('r2', 2, 'zotero_retrieve', { ref: REF('A1') }, { meta: RETRIEVE_META }),
+    ])
+    expect(dropped.sources[0]!.retrievalFacts?.attachmentContentType).toBeUndefined()
+  })
+
   it('distinguishes searches by itemTypes and tags, not just query and mode', () => {
     const workspace = buildSourceWorkspace([
       block(

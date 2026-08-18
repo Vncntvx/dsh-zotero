@@ -68,6 +68,11 @@ describe('locale bundles', () => {
       'browse',
       'referenceMismatch',
       'statusConnected',
+      'filterAttachment',
+      'filterFailed',
+      'attachmentBadge',
+      'reportedEvidenceBadge',
+      'openBlockedNote',
     ]
     for (const key of retired) {
       expect(key in zh, key).toBe(false)

@@ -25,6 +25,7 @@ import type {
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ZoteroStatusView } from '../remote.ts'
+import { buildInfoOf } from '../build-info.ts'
 import { callNameOf, orderKeyOf } from '../presenters.ts'
 import { buildSourceWorkspace } from '../sources/reducer.ts'
 import { EmptyState } from './EmptyState.tsx'
@@ -265,6 +266,9 @@ export function SourcesTab({ status, t, useSession, inputActions }: SourcesTabPr
                 {t('serverIdLabel')} {connected.serverId}
               </span>
             )}
+            <span className={clsx(css.chip, css.chipMono)}>
+              {t('buildInfoLabel')} {buildInfoOf()}
+            </span>
           </div>
         </details>
       )}
@@ -291,7 +295,12 @@ export function SourcesTab({ status, t, useSession, inputActions }: SourcesTabPr
               {lens === 'sources' ? (
                 <>
                   <SourcesHeader workspace={workspace} t={t} />
-                  <SourceList workspace={workspace} t={t} setDraft={setDraft} />
+                  <SourceList
+                    key={session?.sessionId ?? 'none'}
+                    workspace={workspace}
+                    t={t}
+                    setDraft={setDraft}
+                  />
                 </>
               ) : lens === 'evidence' ? (
                 <EvidenceLens workspace={workspace} t={t} />

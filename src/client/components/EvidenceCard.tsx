@@ -1,28 +1,26 @@
 /**
  * One source's evidence card: the header with open-in-Zotero actions (each
- * gated by the item's provenance verdict), the indexing coverage line, the
- * budget note, the deduplicated passages with their source tags and page
- * labels, and the per-source availability lines. Everything here is provable
- * session facts — the panel never claims the passages supported the answer.
+ * gated by the item's provenance verdict and the source's PDF capability),
+ * the indexing coverage line, the budget note, the deduplicated passages
+ * with their source tags and page labels, and the per-source availability
+ * lines. Everything here is provable session facts — the panel never claims
+ * the passages supported the answer.
  * @module dsh-zotero/client/components/EvidenceCard
  */
 
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { interpolate, joinNonEmpty, shortKeyOf } from '../presenters.ts'
-import {
-  attachmentRefOf,
-  openVerdictOf,
-  pdfUrlOf,
-  selectUrlOf,
-  type OpenVerdict,
-} from '../actions/open-zotero.ts'
+import { openVerdictOf, pdfUrlOf, selectUrlOf, type OpenVerdict } from '../actions/open-zotero.ts'
 import type {
   EvidencePassage,
   SourceAvailabilityEntry,
   SourceCoverage,
   SourceItem,
 } from '../sources/model.ts'
+import { pdfCapabilityOf } from '../sources/source-capabilities.ts'
 import { CopyButton } from './CopyButton.tsx'
+import { BlockedOpenAction } from './open/BlockedOpenAction.tsx'
+import { ZoteroOpenLink } from './open/ZoteroOpenLink.tsx'
 import css from './SourcesList.module.css'
 
 /** The locale key of one evidence source kind; unknown kinds read as fulltext. */
@@ -68,42 +66,6 @@ export function availabilityLineOf(
   if (entry.returnedPassages > 0)
     return interpolate(t('availReturned'), { count: entry.returnedPassages })
   return t('availNoMatch')
-}
-
-/** One deep link with its provenance guard; blocked links become a note. */
-export function OpenLink({
-  url,
-  verdict,
-  label,
-  t,
-  className,
-}: {
-  readonly url: string
-  readonly verdict: OpenVerdict
-  readonly label: string
-  readonly t: TranslateNS<'zotero'>
-  /** The anchor's class; defaults to the card's text link. */
-  readonly className?: string
-}) {
-  if (verdict === 'blocked') {
-    return (
-      <span className={css.warning} title={t('provenanceMismatch')}>
-        {interpolate(t('openBlockedNote'), { label, reason: t('provenanceMismatch') })}
-      </span>
-    )
-  }
-  return (
-    <span className={css.linkWrap}>
-      <a className={className ?? css.link} href={url} target="_blank" rel="noreferrer">
-        {label}
-      </a>
-      {verdict === 'unverified' && (
-        <span className={css.note}>
-          {interpolate(t('openUnverifiedNote'), { detail: t('instanceUnverified') })}
-        </span>
-      )}
-    </span>
-  )
 }
 
 /** One deduplicated passage with its tags and optional annotation deep link. */
@@ -160,8 +122,7 @@ export interface EvidenceCardProps {
 export function EvidenceCard({ item, t }: EvidenceCardProps) {
   const verdict = openVerdictOf(item)
   const selectUrl = selectUrlOf(item.ref)
-  const pdfRef = attachmentRefOf(item)
-  const pdfUrl = pdfRef === null ? null : pdfUrlOf(pdfRef)
+  const pdfCapability = pdfCapabilityOf(item)
   const coverageLine =
     item.retrievalFacts?.coverage === undefined
       ? ''
@@ -173,11 +134,19 @@ export function EvidenceCard({ item, t }: EvidenceCardProps) {
       <header className={css.cardHead}>
         <span className={css.cardTitle}>{item.title ?? item.ref}</span>
         <span className={css.note}>{joinNonEmpty(item.creators, item.year)}</span>
-        {selectUrl !== null && (
-          <OpenLink url={selectUrl} verdict={verdict} label={t('openInZotero')} t={t} />
-        )}
-        {pdfUrl !== null && <OpenLink url={pdfUrl} verdict={verdict} label={t('openPdf')} t={t} />}
-        <CopyButton value={item.ref} label={t('copyRef')} t={t} />
+        {selectUrl !== null &&
+          (verdict === 'blocked' ? (
+            <BlockedOpenAction label={t('openInZotero')} t={t} />
+          ) : (
+            <ZoteroOpenLink url={selectUrl} verdict={verdict} label={t('openInZotero')} t={t} />
+          ))}
+        {pdfCapability !== null &&
+          (verdict === 'blocked' ? (
+            <BlockedOpenAction label={t('openPdf')} t={t} />
+          ) : (
+            <ZoteroOpenLink url={pdfCapability.url} verdict={verdict} label={t('openPdf')} t={t} />
+          ))}
+        <CopyButton value={item.ref} label={t('copyRef')} copiedLabel={t('copied')} />
       </header>
       {coverageLine !== '' && <p className={css.note}>{coverageLine}</p>}
       {item.retrievalFacts?.truncated === true && (
@@ -188,7 +157,7 @@ export function EvidenceCard({ item, t }: EvidenceCardProps) {
           <PassageRow
             key={`${passage.sourceRef}-${index}`}
             passage={passage}
-            pdfRef={pdfRef}
+            pdfRef={pdfCapability === null ? null : pdfCapability.ref}
             verdict={verdict}
             t={t}
           />

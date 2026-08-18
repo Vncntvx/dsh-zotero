@@ -35,6 +35,7 @@ export type ZoteroLocaleKey =
   | 'apiVersionLabel'
   | 'schemaVersionLabel'
   | 'serverIdLabel'
+  | 'buildInfoLabel'
   | 'diagnosisLabel'
   | 'refresh'
   | 'lastCheckedLabel'
@@ -42,10 +43,12 @@ export type ZoteroLocaleKey =
   | 'lensEvidence'
   | 'lensExports'
   | 'filterAll'
+  | 'filterPdf'
+  | 'filterRetrieved'
   | 'filterEvidence'
   | 'filterExported'
-  | 'filterAttachment'
-  | 'filterFailed'
+  | 'filterIssues'
+  | 'filterClear'
   | 'filterEmptyNote'
   | 'countCandidates'
   | 'countInspected'
@@ -62,14 +65,13 @@ export type ZoteroLocaleKey =
   | 'reportedEvidenceInDetail'
   | 'exportsInDetail'
   | 'provenanceMismatch'
-  | 'attachmentBadge'
   | 'evidenceBadge'
   | 'exportBadge'
   | 'failedBadge'
   | 'runningBadge'
   | 'stoppedBadge'
   | 'badgePdf'
-  | 'reportedEvidenceBadge'
+  | 'issuesBadge'
   | 'bestAttachmentLabel'
   | 'localFile'
   | 'linkedUrl'
@@ -112,7 +114,6 @@ export type ZoteroLocaleKey =
   | 'openPdf'
   | 'openAnnotation'
   | 'instanceUnverified'
-  | 'openBlockedNote'
   | 'openUnverifiedNote'
   | 'availabilityEntry'
   | 'starterFind'
@@ -202,6 +203,7 @@ export const en: Record<ZoteroLocaleKey, string> = {
   apiVersionLabel: 'API version',
   schemaVersionLabel: 'Schema version',
   serverIdLabel: 'Server ID',
+  buildInfoLabel: 'Build',
   diagnosisLabel: 'Diagnosis',
   refresh: 'Refresh',
   lastCheckedLabel: 'Last checked',
@@ -209,10 +211,12 @@ export const en: Record<ZoteroLocaleKey, string> = {
   lensEvidence: 'Evidence',
   lensExports: 'Exports',
   filterAll: 'All',
+  filterPdf: 'With PDF',
+  filterRetrieved: 'Retrieved',
   filterEvidence: 'With evidence',
   filterExported: 'Exported',
-  filterAttachment: 'With attachment',
-  filterFailed: 'With failed calls',
+  filterIssues: 'Issues',
+  filterClear: 'Clear filter',
   filterEmptyNote: 'No sources match this filter.',
   countCandidates: '{count} candidates',
   countInspected: '{count} inspected',
@@ -230,14 +234,13 @@ export const en: Record<ZoteroLocaleKey, string> = {
   reportedEvidenceInDetail: '{count} reported evidence passages across retrieves',
   exportsInDetail: '{count} exports (see Exports)',
   provenanceMismatch: 'Belongs to a different Zotero database',
-  attachmentBadge: 'Attachment',
   evidenceBadge: '{count} passages',
-  reportedEvidenceBadge: 'Reported {count}',
   exportBadge: '{count} exports',
   failedBadge: '{count} failed',
   runningBadge: '{count} running',
   stoppedBadge: '{count} stopped',
   badgePdf: 'PDF',
+  issuesBadge: 'Issues',
   bestAttachmentLabel: 'Best attachment',
   localFile: 'Local file',
   linkedUrl: 'Linked URL',
@@ -282,7 +285,6 @@ export const en: Record<ZoteroLocaleKey, string> = {
   openPdf: 'Open PDF',
   openAnnotation: 'Open annotation',
   instanceUnverified: 'cannot verify the current Zotero instance',
-  openBlockedNote: '{label} ({reason})',
   openUnverifiedNote: ' ({detail})',
   availabilityEntry: '{source}: {detail}',
   starterFind: 'Find literature…',
@@ -366,6 +368,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   apiVersionLabel: 'API 版本',
   schemaVersionLabel: 'Schema 版本',
   serverIdLabel: 'Server ID',
+  buildInfoLabel: '构建',
   diagnosisLabel: '诊断',
   refresh: '刷新',
   lastCheckedLabel: '上次检查',
@@ -373,10 +376,12 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   lensEvidence: '证据',
   lensExports: '导出',
   filterAll: '全部',
+  filterPdf: '有 PDF',
+  filterRetrieved: '已检索',
   filterEvidence: '有证据',
   filterExported: '已导出',
-  filterAttachment: '有附件',
-  filterFailed: '有失败调用',
+  filterIssues: '异常',
+  filterClear: '清除筛选',
   filterEmptyNote: '这个筛选条件下没有文献。',
   countCandidates: '候选 {count}',
   countInspected: '查看详情 {count}',
@@ -393,14 +398,13 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   reportedEvidenceInDetail: '各次检索共报告 {count} 条证据',
   exportsInDetail: '导出 {count} 次（见导出页）',
   provenanceMismatch: '属于另一个 Zotero 数据库',
-  attachmentBadge: '附件',
   evidenceBadge: '证据 {count}',
-  reportedEvidenceBadge: '报告 {count}',
   exportBadge: '导出 {count}',
   failedBadge: '失败 {count}',
   runningBadge: '进行中 {count}',
   stoppedBadge: '已停止 {count}',
   badgePdf: 'PDF',
+  issuesBadge: '异常',
   bestAttachmentLabel: '最佳附件',
   localFile: '本地文件',
   linkedUrl: '链接地址',
@@ -443,7 +447,6 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   openPdf: '打开 PDF',
   openAnnotation: '打开批注',
   instanceUnverified: '无法验证当前 Zotero 实例',
-  openBlockedNote: '{label}（{reason}）',
   openUnverifiedNote: '（{detail}）',
   availabilityEntry: '{source}：{detail}',
   starterFind: '找文献…',

@@ -28,12 +28,23 @@ describe('searchMetaOf', () => {
       displayed: 3,
       omitted: 0,
       noteMatches: 1,
-      items: [ROW, { ...ROW, bestAttachmentRef: 'zotero://user/0/attachment/WXYZ6789' }],
+      items: [
+        ROW,
+        {
+          ...ROW,
+          bestAttachmentRef: 'zotero://user/0/attachment/WXYZ6789',
+          bestAttachmentType: 'application/pdf',
+        },
+      ],
     })
     expect(meta.omitted).toBe(0)
     expect(meta.rows).toEqual([
       ROW,
-      { ...ROW, bestAttachmentRef: 'zotero://user/0/attachment/WXYZ6789' },
+      {
+        ...ROW,
+        bestAttachmentRef: 'zotero://user/0/attachment/WXYZ6789',
+        bestAttachmentType: 'application/pdf',
+      },
     ])
   })
 

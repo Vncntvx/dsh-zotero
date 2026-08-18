@@ -78,8 +78,10 @@ export function ExportCard({ artifact, ordinal, t }: ExportCardProps) {
         <IconChevronDownOutline14 className={clsx(css.chevron, open && css.chevronOpen)} />
       </button>
       <span className={css.lineActions}>
-        <CopyButton value={artifact.text} label={t('copyExport')} t={t} />
-        {citeCommand !== '' && <CopyButton value={citeCommand} label={t('copyCite')} t={t} />}
+        <CopyButton value={artifact.text} label={t('copyExport')} copiedLabel={t('copied')} />
+        {citeCommand !== '' && (
+          <CopyButton value={citeCommand} label={t('copyCite')} copiedLabel={t('copied')} />
+        )}
       </span>
       {open && (
         <div className={css.exportBody}>

@@ -275,6 +275,9 @@ export function buildSourceWorkspace(
     }
     const nextFacts: SourceRetrievalFacts = {
       ...(view.attachmentRef === null ? {} : { attachmentRef: view.attachmentRef }),
+      ...(view.attachmentContentType === null
+        ? {}
+        : { attachmentContentType: view.attachmentContentType }),
       ...(view.coverage === null ? {} : { coverage: view.coverage }),
       truncated: view.truncated === true,
       sourceAvailability: view.sourceAvailability,
@@ -286,13 +289,24 @@ export function buildSourceWorkspace(
         mergedAvailability[source] = entry
       }
       draft.retrievalFacts = {
-        // The latest carried values win, so the attachment deep link and
-        // the coverage line always describe the same retrieve.
+        // The latest carried values win, so the attachment deep link (with
+        // its paired content type) and the coverage line always describe the
+        // same retrieve.
         ...(view.attachmentRef === null
           ? prev.attachmentRef !== undefined
-            ? { attachmentRef: prev.attachmentRef }
+            ? {
+                attachmentRef: prev.attachmentRef,
+                ...(prev.attachmentContentType === undefined
+                  ? {}
+                  : { attachmentContentType: prev.attachmentContentType }),
+              }
             : {}
-          : { attachmentRef: view.attachmentRef }),
+          : {
+              attachmentRef: view.attachmentRef,
+              ...(view.attachmentContentType === null
+                ? {}
+                : { attachmentContentType: view.attachmentContentType }),
+            }),
         ...(view.coverage === null
           ? prev.coverage !== undefined
             ? { coverage: prev.coverage }
@@ -364,7 +378,12 @@ export function buildSourceWorkspace(
           draft.creators ??= row.creatorSummary
           draft.year ??= row.year
           if (row.bestAttachmentRef !== undefined && draft.bestAttachment === undefined) {
-            draft.bestAttachment = { ref: row.bestAttachmentRef }
+            draft.bestAttachment = {
+              ref: row.bestAttachmentRef,
+              ...(row.bestAttachmentType === undefined
+                ? {}
+                : { contentType: row.bestAttachmentType }),
+            }
           }
           lastEpisode.keys.add(draft.key)
         }

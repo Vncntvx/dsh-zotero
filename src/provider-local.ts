@@ -624,6 +624,7 @@ export class LocalApiProvider implements ZoteroProvider {
     const skipped: ZoteroEvidenceSource[] = []
     let fulltextWasCut = false
     let attachmentRef: string | undefined
+    let attachmentContentType: string | undefined
     let coverage: ZoteroCoverage | undefined
     const passages: {
       source: ZoteroEvidenceSource
@@ -636,14 +637,23 @@ export class LocalApiProvider implements ZoteroProvider {
     }[] = []
     if (wantsFulltext) {
       let attachmentKey = fulltextKey
+      // The link arm reports Zotero's own type (possibly empty); the child
+      // fallback selects an application/pdf candidate whose type is known.
+      let selectedContentType = linkAttachment?.contentType
       if (attachmentKey === undefined) {
         const pdf = selectAttachment(childrenRows, 'pdf')
         if (pdf === undefined) skipped.push('fulltext')
-        else attachmentKey = pdf.key
+        else {
+          attachmentKey = pdf.key
+          selectedContentType = pdf.contentType
+        }
       }
       if (attachmentKey !== undefined) {
         try {
           attachmentRef = formatRef(localRef('attachment', attachmentKey, serverId))
+          if (selectedContentType !== undefined && selectedContentType !== '') {
+            attachmentContentType = selectedContentType
+          }
           const payload = await (fulltextPromise ??
             this.fetchFulltext(attachmentKey, serverId, signal))
           const content = typeof payload.content === 'string' ? payload.content : ''
@@ -777,6 +787,7 @@ export class LocalApiProvider implements ZoteroProvider {
     return {
       ref: formatRef(localRef('item', ref.key, serverId)),
       ...(attachmentRef !== undefined ? { attachmentRef } : {}),
+      ...(attachmentContentType !== undefined ? { attachmentContentType } : {}),
       ...(coverage !== undefined ? { coverage } : {}),
       evidence,
       truncated,

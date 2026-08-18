@@ -1,17 +1,17 @@
 /**
  * The open-in-Zotero deep links and verdicts: URL construction, provenance
- * gating, and the attachment-ref precedence.
+ * gating, and the PDF capability of one source.
  * @module tests/client/actions/open-zotero
  */
 
 import { describe, expect, it } from 'vitest'
+import { openVerdictOf, pdfUrlOf, selectUrlOf } from '../../../src/client/actions/open-zotero.ts'
 import {
-  attachmentRefOf,
-  openVerdictOf,
-  pdfUrlOf,
-  selectUrlOf,
-} from '../../../src/client/actions/open-zotero.ts'
-import type { SourceItem } from '../../../src/client/sources/model.ts'
+  canActivatePdfAction,
+  hasPdf,
+  pdfCapabilityOf,
+} from '../../../src/client/sources/source-capabilities.ts'
+import type { SourceAttachment } from '../../../src/client/sources/model.ts'
 import { sourceOf } from '../helpers/source-fixtures.ts'
 
 describe('selectUrlOf', () => {
@@ -58,41 +58,144 @@ describe('openVerdictOf', () => {
   })
 })
 
-describe('attachmentRefOf', () => {
-  it('prefers the resolved attachment, then the hint, then the retrieve attachment', () => {
+/** A resolved attachment fixture; the content type is always present (possibly empty). */
+function attachmentOf(contentType: string): SourceAttachment {
+  return {
+    ref: 'zotero://user/0/attachment/RESOLVED',
+    kind: 'file',
+    title: '',
+    location: '',
+    contentType,
+  }
+}
+
+describe('pdfCapabilityOf', () => {
+  const PDF_REF = 'zotero://user/0/attachment/RESOLVED'
+  const HINT_REF = 'zotero://user/0/attachment/HINT0001'
+  const FULLTEXT_REF = 'zotero://user/0/attachment/FULLTEXT'
+  it('confirms the resolved attachment ahead of the hint and the retrieve attachment', () => {
+    const capability = pdfCapabilityOf(
+      sourceOf({
+        attachment: attachmentOf('application/pdf'),
+        bestAttachment: { ref: HINT_REF, contentType: 'application/pdf' },
+        retrievalFacts: {
+          attachmentRef: FULLTEXT_REF,
+          attachmentContentType: 'application/pdf',
+          truncated: false,
+          sourceAvailability: {},
+        },
+      }),
+    )
+    expect(capability).toEqual({
+      ref: PDF_REF,
+      url: 'zotero://open-pdf/library/items/RESOLVED',
+      confidence: 'confirmed',
+    })
+  })
+
+  it('confirms the hint and the retrieve attachment when nothing was resolved', () => {
     expect(
-      attachmentRefOf(
+      pdfCapabilityOf(
+        sourceOf({ bestAttachment: { ref: HINT_REF, contentType: 'application/pdf' } }),
+      ),
+    ).toEqual({
+      ref: HINT_REF,
+      url: 'zotero://open-pdf/library/items/HINT0001',
+      confidence: 'confirmed',
+    })
+    expect(
+      pdfCapabilityOf(
         sourceOf({
-          attachment: {
-            ref: 'zotero://user/0/attachment/RESOLVED',
-            kind: 'file',
-            contentType: 'application/pdf',
-            title: '',
-            location: '',
-          },
-          bestAttachment: { ref: 'zotero://user/0/attachment/HINT' },
           retrievalFacts: {
-            attachmentRef: 'zotero://user/0/attachment/FULLTEXT',
+            attachmentRef: FULLTEXT_REF,
+            attachmentContentType: 'application/pdf',
             truncated: false,
             sourceAvailability: {},
           },
         }),
       ),
-    ).toBe('zotero://user/0/attachment/RESOLVED')
+    ).toEqual({
+      ref: FULLTEXT_REF,
+      url: 'zotero://open-pdf/library/items/FULLTEXT',
+      confidence: 'confirmed',
+    })
+  })
+
+  it('skips a resolved non-PDF attachment for a PDF hint with a known type', () => {
     expect(
-      attachmentRefOf(sourceOf({ bestAttachment: { ref: 'zotero://user/0/attachment/HINT' } })),
-    ).toBe('zotero://user/0/attachment/HINT')
+      pdfCapabilityOf(
+        sourceOf({
+          attachment: attachmentOf('text/html'),
+          bestAttachment: { ref: HINT_REF, contentType: 'application/pdf' },
+        }),
+      ),
+    ).toEqual({
+      ref: HINT_REF,
+      url: 'zotero://open-pdf/library/items/HINT0001',
+      confidence: 'confirmed',
+    })
+  })
+
+  it('rejects a resolved non-PDF when no candidate carries a PDF type', () => {
+    expect(pdfCapabilityOf(sourceOf({ attachment: attachmentOf('text/html') }))).toBeNull()
+  })
+
+  it('infers a capability from a type-less ref of an older session', () => {
+    expect(pdfCapabilityOf(sourceOf({ bestAttachment: { ref: HINT_REF } }))).toEqual({
+      ref: HINT_REF,
+      url: 'zotero://open-pdf/library/items/HINT0001',
+      confidence: 'inferred',
+    })
     expect(
-      attachmentRefOf(
+      pdfCapabilityOf(
         sourceOf({
           retrievalFacts: {
-            attachmentRef: 'zotero://user/0/attachment/FULLTEXT',
+            attachmentRef: FULLTEXT_REF,
             truncated: false,
             sourceAvailability: {},
           },
         }),
       ),
-    ).toBe('zotero://user/0/attachment/FULLTEXT')
-    expect(attachmentRefOf(sourceOf({}))).toBeNull()
+    ).toEqual({
+      ref: FULLTEXT_REF,
+      url: 'zotero://open-pdf/library/items/FULLTEXT',
+      confidence: 'inferred',
+    })
+  })
+
+  it('rejects a confirmed-type ref the deep link cannot parse', () => {
+    const unparseable = {
+      ...attachmentOf('application/pdf'),
+      ref: 'junk',
+    }
+    expect(pdfCapabilityOf(sourceOf({ attachment: unparseable }))).toBeNull()
+  })
+
+  it('never yields a capability for a type-less ref the deep link cannot parse', () => {
+    expect(pdfCapabilityOf(sourceOf({ bestAttachment: { ref: 'junk' } }))).toBeNull()
+  })
+
+  it('yields nothing for a bare source', () => {
+    expect(pdfCapabilityOf(sourceOf({}))).toBeNull()
+  })
+})
+
+describe('hasPdf', () => {
+  it('mirrors pdfCapabilityOf exactly', () => {
+    expect(
+      hasPdf(sourceOf({ bestAttachment: { ref: 'zotero://user/0/attachment/HINT0001' } })),
+    ).toBe(true)
+    expect(hasPdf(sourceOf({ attachment: attachmentOf('text/html') }))).toBe(false)
+    expect(hasPdf(sourceOf({}))).toBe(false)
+  })
+})
+
+describe('canActivatePdfAction', () => {
+  it('is false without a capability or under a mismatch, true for any other verdict', () => {
+    const pdf = sourceOf({ bestAttachment: { ref: 'zotero://user/0/attachment/HINT0001' } })
+    expect(canActivatePdfAction(sourceOf({}))).toBe(false)
+    expect(canActivatePdfAction(sourceOf({ ...pdf, provenance: 'mismatch' }))).toBe(false)
+    expect(canActivatePdfAction(sourceOf({ ...pdf, provenance: 'verified' }))).toBe(true)
+    expect(canActivatePdfAction(sourceOf({ ...pdf, provenance: 'unknown' }))).toBe(true)
   })
 })

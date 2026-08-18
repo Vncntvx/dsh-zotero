@@ -42,6 +42,8 @@ export interface SearchRowInput {
   readonly itemType: string
   /** Zotero's own attachment selection for the row; the open-PDF deep-link key. */
   readonly bestAttachmentRef?: string
+  /** The content type of Zotero's attachment selection; tells a PDF from other kinds. */
+  readonly bestAttachmentType?: string
 }
 
 /** The canonical search output the projector reads. */
@@ -66,6 +68,8 @@ export interface ZoteroSearchPresentationRow {
   readonly itemType: string
   /** Zotero's own attachment selection for the row; the open-PDF deep-link key. */
   readonly bestAttachmentRef?: string
+  /** The content type of Zotero's attachment selection; tells a PDF from other kinds. */
+  readonly bestAttachmentType?: string
 }
 
 export interface ZoteroSearchPresentationMeta {
@@ -182,6 +186,8 @@ export interface ZoteroRetrievePresentationMeta {
   readonly items: ZoteroEvidencePresentationItem[]
   /** The full-text attachment the retrieval read (the open-PDF deep-link key). */
   readonly attachmentRef?: string
+  /** The content type of that attachment; tells a PDF from other kinds. */
+  readonly attachmentContentType?: string
   /** Full-text indexing coverage as reported by Zotero. */
   readonly coverage?: ZoteroCoverage
   /** Per-source availability facts, keyed by the requested source names. */
@@ -203,6 +209,8 @@ export interface RetrieveProjectionInput {
   readonly sourcesSkipped: readonly string[]
   /** The full-text attachment the retrieval read, when one exists. */
   readonly attachmentRef?: string
+  /** The content type of that attachment, when Zotero reported one. */
+  readonly attachmentContentType?: string
   /** Full-text indexing coverage as reported by Zotero. */
   readonly coverage?: ZoteroCoverage
 }
@@ -288,6 +296,9 @@ export function projectSearchMeta(value: SearchProjectionInput): ZoteroSearchPre
       ...(item.bestAttachmentRef === undefined
         ? {}
         : { bestAttachmentRef: item.bestAttachmentRef }),
+      ...(item.bestAttachmentType === undefined
+        ? {}
+        : { bestAttachmentType: item.bestAttachmentType }),
     }
     const rowBytes = Buffer.byteLength(JSON.stringify(row), 'utf8')
     // The first row always fits; later rows stop once the allowance is spent.
@@ -404,6 +415,9 @@ export function projectRetrieveMeta(
     sourcesSkipped: [...value.sourcesSkipped] as ZoteroEvidenceSource[],
     items,
     ...(value.attachmentRef === undefined ? {} : { attachmentRef: value.attachmentRef }),
+    ...(value.attachmentContentType === undefined
+      ? {}
+      : { attachmentContentType: value.attachmentContentType }),
     ...(value.coverage === undefined ? {} : { coverage: value.coverage }),
     sourceAvailability,
   }

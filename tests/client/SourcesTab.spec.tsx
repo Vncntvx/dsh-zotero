@@ -50,6 +50,7 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
     IconChevronDownOutline14: icon('chevron-down'),
     IconBrowseOutline16: icon('browse'),
     writeClipboard: vi.fn(async () => true),
+    Tooltip: ({ children }: { children: React.ReactElement }) => children,
   }
 })
 
@@ -397,15 +398,15 @@ describe('SourcesTab', () => {
     // The search hit and the retrieve share one item; the failed get is its own.
     expect(view.container.querySelectorAll('[data-provenance]')).toHaveLength(2)
 
-    fireEvent.click(screen.getByText(zh.filterEvidence))
+    fireEvent.click(screen.getByText(`${zh.filterEvidence} 1`))
     expect(view.container.querySelectorAll('[data-provenance]')).toHaveLength(1)
     expect(screen.getByText(zh.evidenceBadge.replace('{count}', '1'))).toBeDefined()
 
-    fireEvent.click(screen.getByText(zh.filterFailed))
+    fireEvent.click(screen.getByText(`${zh.filterIssues} 1`))
     expect(view.container.querySelectorAll('[data-provenance]')).toHaveLength(1)
-    expect(screen.getByText(zh.failedBadge.replace('{count}', '1'))).toBeDefined()
+    expect(screen.getByText(zh.issuesBadge)).toBeDefined()
 
-    fireEvent.click(screen.getByText(zh.filterAll))
+    fireEvent.click(screen.getByText(`${zh.filterAll} 2`))
     expect(view.container.querySelectorAll('[data-provenance]')).toHaveLength(2)
     view.unmount()
   })
@@ -537,7 +538,7 @@ describe('SourcesTab', () => {
     view.unmount()
   })
 
-  it('shows honest empty notes when the calls produced no sources or no filter match', async () => {
+  it('shows the honest sources empty note and disables zero-count filters', async () => {
     const status = vi.fn(async () => ({ ok: true, value: CONNECTED }))
     const failedSearch = settled({
       seq: 3,
@@ -553,9 +554,66 @@ describe('SourcesTab', () => {
 
     const filtered = mountTab(snapshotOf({ nodes: [searchResult()] }), status)
     await act(async () => {})
-    fireEvent.click(screen.getByText(zh.filterExported))
-    expect(screen.getByText(zh.filterEmptyNote)).toBeDefined()
+    // Zero-count filters are disabled, so an empty filter state is never
+    // actively reachable; the recovery note stays for tomorrow's text search.
+    const exportedPill = screen.getByText(`${zh.filterExported} 0`)
+    expect((exportedPill as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(exportedPill)
+    expect(screen.queryByText(zh.filterEmptyNote)).toBeNull()
     filtered.view.unmount()
+  })
+
+  it('recovers from a filter that empties when the sources change under it', async () => {
+    const status = vi.fn(async () => ({ ok: true, value: CONNECTED }))
+    const holder = { session: snapshotOf({ nodes: [searchResult()] }) }
+    const props = {
+      t,
+      status: async () => ({ ok: true, value: CONNECTED }),
+      useSession: (sel: (snap: ConversationSnapshot) => unknown) =>
+        holder.session === undefined ? undefined : sel(holder.session),
+    } as unknown as SourcesTabProps
+    const view = render(<SourcesTab {...props} />)
+    await act(async () => {})
+    // Nothing is exported yet, so no pill can empty the list. A direct
+    // sources change under an active filter is the one path that can leave
+    // an active filter with zero matches — the clear button recovers it.
+    const exportCall = settled({
+      seq: 4,
+      callId: 'e1',
+      call: {
+        name: 'zotero_export',
+        argsRaw: '{"refs":["zotero://user/0/item/AAAAAAA1"],"format":"bibtex"}',
+      },
+      meta: {
+        format: 'bibtex',
+        requested: 1,
+        refs: ['zotero://user/0/item/AAAAAAA1'],
+        refsOmitted: 0,
+      },
+      content: [{ type: 'text', text: '@book{x}' }],
+    })
+    const withExport = { ...holder.session, nodes: [searchResult(), exportCall] }
+    holder.session = withExport as ConversationSnapshot
+    view.rerender(<SourcesTab {...props} />)
+    await act(async () => {})
+    fireEvent.click(
+      screen.getAllByText(`${zh.filterExported} 1`).find((el) => el.tagName === 'BUTTON')!,
+    )
+    expect(
+      screen
+        .getAllByText(`${zh.filterExported} 1`)
+        .find((el) => el.tagName === 'BUTTON')!
+        .getAttribute('data-pill'),
+    ).toBe('active')
+    // The same session now loses its export (a stale snapshot view): the
+    // filter stays active, the list empties, and the clear action restores.
+    holder.session = snapshotOf({ nodes: [searchResult()] })
+    view.rerender(<SourcesTab {...props} />)
+    await act(async () => {})
+    expect(screen.getByText(zh.filterEmptyNote)).toBeDefined()
+    fireEvent.click(screen.getByText(zh.filterClear))
+    expect(screen.getByText(`${zh.filterAll} 1`).getAttribute('data-pill')).toBe('active')
+    view.unmount()
   })
 
   it('counts the exported stage in the header', async () => {
@@ -577,8 +635,69 @@ describe('SourcesTab', () => {
     })
     const { view } = mountTab(snapshotOf({ nodes: [searchResult(), exportCall] }), status)
     await act(async () => {})
-    expect(screen.getByText(zh.countExported.replace('{count}', '1'))).toBeDefined()
+    // The header chip and the exported filter pill both carry the count.
+    expect(
+      screen.getAllByText(zh.countExported.replace('{count}', '1')).length,
+    ).toBeGreaterThanOrEqual(2)
     expect(screen.getByText(zh.exportBadge.replace('{count}', '1'))).toBeDefined()
+    view.unmount()
+  })
+
+  it('renders the sources list with a fallback key when the session id is missing', async () => {
+    const status = vi.fn(async () => ({ ok: true, value: CONNECTED }))
+    const { view } = mountTab(
+      snapshotOf({ sessionId: undefined as never, nodes: [searchResult()] }),
+      status,
+    )
+    await act(async () => {})
+    expect(screen.getByText(`${zh.filterAll} 1`)).toBeDefined()
+    view.unmount()
+  })
+
+  it('resets the filter when the session switches', async () => {
+    const status = vi.fn(async () => ({ ok: true, value: CONNECTED }))
+    const retrieve = settled({
+      seq: 4,
+      callId: 'rv1',
+      call: { name: 'zotero_retrieve', argsRaw: '{"ref":"zotero://user/0/item/AAAAAAA1"}' },
+      meta: {
+        count: 1,
+        sources: ['annotation'],
+        truncated: false,
+        sourcesSkipped: [],
+        items: [
+          {
+            source: 'annotation',
+            sourceRef: 'zotero://user/0/annotation/ANN1',
+            preview: 'claim',
+            previewTruncated: false,
+            pageLabel: '7',
+          },
+        ],
+      },
+    })
+    const holder = { session: snapshotOf({ nodes: [searchResult(), retrieve] }) }
+    const props = {
+      t,
+      status: async () => ({ ok: true, value: CONNECTED }),
+      useSession: (sel: (snap: ConversationSnapshot) => unknown) =>
+        holder.session === undefined ? undefined : sel(holder.session),
+    } as unknown as SourcesTabProps
+    const view = render(<SourcesTab {...props} />)
+    await act(async () => {})
+    fireEvent.click(screen.getByText(`${zh.filterEvidence} 1`))
+    expect(screen.getByText(`${zh.filterEvidence} 1`).getAttribute('data-pill')).toBe('active')
+
+    // A new session id remounts the list (key), so the filter starts clean.
+    holder.session = snapshotOf({
+      sessionId: 's2' as unknown as ConversationSnapshot['sessionId'],
+      nodes: [searchResult()],
+    })
+    view.rerender(<SourcesTab {...props} />)
+    await act(async () => {})
+    const evidencePill = screen.getByText(`${zh.filterEvidence} 0`)
+    expect((evidencePill as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByText(`${zh.filterAll} 1`).getAttribute('data-pill')).toBe('active')
     view.unmount()
   })
 

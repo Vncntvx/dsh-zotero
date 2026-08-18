@@ -216,6 +216,8 @@ export interface ZoteroCoverage {
 export interface ZoteroRetrieveResult {
   readonly ref: string
   readonly attachmentRef?: string
+  /** The content type of the attachment `attachmentRef` points at; absent when Zotero reported none. */
+  readonly attachmentContentType?: string
   readonly coverage?: ZoteroCoverage
   readonly evidence: ZoteroEvidence[]
   readonly truncated: boolean
