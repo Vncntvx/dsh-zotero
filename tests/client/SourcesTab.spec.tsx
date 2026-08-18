@@ -383,11 +383,11 @@ describe('SourcesTab', () => {
     })
     const { view } = mountTab(snapshotOf({ nodes: [search, get] }), status)
     await act(async () => {})
-    expect(screen.getByText(zh.lensSources).getAttribute('data-pill')).toBe('active')
-    expect(screen.getByText(zh.countCandidates.replace('{count}', '20'))).toBeDefined()
-    expect(screen.getByText(zh.countInspected.replace('{count}', '1'))).toBeDefined()
+    const lensTab = view.container.querySelector('[data-workspace-lens="sources"]')!
+    expect(lensTab.getAttribute('aria-pressed')).toBe('true')
     expect(view.container.querySelectorAll('[data-provenance]')).toHaveLength(20)
-    expect(screen.getByText(zh.sourcesScopeNote)).toBeDefined()
+    // The workflow stats strip is gone; the filter bar is the only count line.
+    expect(screen.getByText(`${zh.filterAll} 20`)).toBeDefined()
     view.unmount()
   })
 
@@ -519,10 +519,11 @@ describe('SourcesTab', () => {
     const status = vi.fn(async () => ({ ok: true, value: CONNECTED }))
     const { view } = mountTab(snapshotOf({ nodes: [searchResult()] }), status)
     await act(async () => {})
-    // The evidence placeholder lives on the inspector's evidence panel.
+    // A search hit that was never retrieved onboards instead of claiming a
+    // retrieval that did not happen.
     fireEvent.click(view.container.querySelector('[data-inspector-panel="evidence"]')!)
-    expect(screen.getByText(zh.evidenceRetrievedNone)).toBeDefined()
-    // The exports lens is a top-level pill.
+    expect(screen.getByText(zh.evidenceNotRetrieved)).toBeDefined()
+    // The exports lens is a top-level tab.
     fireEvent.click(view.container.querySelector('[data-workspace-lens="exports"]')!)
     expect(screen.getByText(zh.exportsEmptyNote)).toBeDefined()
     view.unmount()
@@ -555,13 +556,14 @@ describe('SourcesTab', () => {
       setDraft,
     })
     await act(async () => {})
-    // The first source is selected by default; the inspector overview shows
-    // the search provenance (one line: query · scope · mode) and the facts.
-    expect(screen.getByText(zh.fromSearches)).toBeDefined()
+    // The first source is selected by default; the overview shows the query
+    // that surfaced it, and the passages tab carries the kept-passage count.
     expect(
       screen.getByText(new RegExp(zh.searchFrom.replace('{query}', 'attention'))),
     ).toBeDefined()
-    expect(screen.getByText(zh.evidenceInDetail.replace('{count}', '1'))).toBeDefined()
+    expect(
+      view.container.querySelector('[data-inspector-panel="evidence"]')!.textContent,
+    ).toContain('1')
     // The overview actions prefill without submitting.
     fireEvent.click(screen.getByText(zh.askAboutItem))
     expect(setDraft).toHaveBeenCalledWith(
@@ -570,7 +572,7 @@ describe('SourcesTab', () => {
     view.unmount()
   })
 
-  it('shows the honest sources empty note and disables zero-count filters', async () => {
+  it('shows the honest sources empty note and hides zero-count filters', async () => {
     const status = vi.fn(async () => ({ ok: true, value: CONNECTED }))
     const failedSearch = settled({
       seq: 3,
@@ -586,11 +588,10 @@ describe('SourcesTab', () => {
 
     const filtered = mountTab(snapshotOf({ nodes: [searchResult()] }), status)
     await act(async () => {})
-    // Zero-count filters are disabled, so an empty filter state is never
-    // actively reachable; the recovery note stays for tomorrow's text search.
-    const exportedPill = screen.getByText(`${zh.filterExported} 0`)
-    expect((exportedPill as HTMLButtonElement).disabled).toBe(true)
-    fireEvent.click(exportedPill)
+    // Zero-count filters are not rendered at all, so an empty filter state
+    // is never actively reachable.
+    expect(screen.queryByText(`${zh.filterExported} 0`)).toBeNull()
+    expect(screen.queryByText(`${zh.filterIssues} 0`)).toBeNull()
     expect(screen.queryByText(zh.filterEmptyNote)).toBeNull()
     filtered.view.unmount()
   })
@@ -648,7 +649,7 @@ describe('SourcesTab', () => {
     view.unmount()
   })
 
-  it('counts the exported stage in the header', async () => {
+  it('carries the exported count on the filter pill, the badge, and the exports tab', async () => {
     const status = vi.fn(async () => ({ ok: true, value: CONNECTED }))
     const exportCall = settled({
       seq: 4,
@@ -667,11 +668,13 @@ describe('SourcesTab', () => {
     })
     const { view } = mountTab(snapshotOf({ nodes: [searchResult(), exportCall] }), status)
     await act(async () => {})
-    // The header chip and the exported filter pill both carry the count.
-    expect(
-      screen.getAllByText(zh.countExported.replace('{count}', '1')).length,
-    ).toBeGreaterThanOrEqual(2)
+    // The workflow header is gone; the filter pill, the row badge, and the
+    // exports tab count are the count surfaces.
+    expect(screen.getAllByText(`${zh.filterExported} 1`).length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText(zh.exportBadge.replace('{count}', '1'))).toBeDefined()
+    expect(view.container.querySelector('[data-workspace-lens="exports"]')!.textContent).toContain(
+      '1',
+    )
     view.unmount()
   })
 
@@ -727,8 +730,9 @@ describe('SourcesTab', () => {
     })
     view.rerender(<SourcesTab {...props} />)
     await act(async () => {})
-    const evidencePill = screen.getByText(`${zh.filterEvidence} 0`)
-    expect((evidencePill as HTMLButtonElement).disabled).toBe(true)
+    // The passages filter has nothing to show in the new session, so its
+    // pill is gone and "all" is active again.
+    expect(screen.queryByText(`${zh.filterEvidence} 0`)).toBeNull()
     expect(screen.getByText(`${zh.filterAll} 1`).getAttribute('data-pill')).toBe('active')
     view.unmount()
   })

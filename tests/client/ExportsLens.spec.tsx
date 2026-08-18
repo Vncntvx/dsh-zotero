@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 /**
- * The exports lens: successful artifacts only, format and scope facts,
- * the BibTeX key convenience, the copy actions, the incomplete-operations
- * note, and the static-export disclaimer.
+ * The exports lens: successful artifacts only, format and scope facts, the
+ * disclosure contract (keys and verbatim body behind the toggle), the copy
+ * and download actions, and the incomplete-operations note. The
+ * static-export disclaimer is a README concern, never a UI line.
  * @module tests/client/ExportsLens
  */
 
@@ -16,7 +17,6 @@ import {
   fileNameOf,
   formatLabelOf,
   mimeOf,
-  PREVIEW_LINE_COUNT,
 } from '../../src/client/components/ExportCard.tsx'
 import { incompleteExportsNoteOf } from '../../src/client/components/operations.ts'
 import { ExportsPage } from '../../src/client/components/workspace/ExportsPage.tsx'
@@ -58,13 +58,17 @@ afterEach(() => {
 })
 
 describe('formatLabelOf', () => {
-  it('localizes the CSL formats and keeps translator names verbatim', () => {
+  it('renders the known translator ids in proper case and localizes the CSL formats', () => {
+    expect(formatLabelOf('bibtex', t)).toBe('BibTeX')
+    expect(formatLabelOf('biblatex', t)).toBe('BibLaTeX')
+    expect(formatLabelOf('ris', t)).toBe('RIS')
+    expect(formatLabelOf('csljson', t)).toBe('CSL JSON')
     expect(formatLabelOf('citation', t)).toBe(zh.formatCitation)
     expect(formatLabelOf('bibliography', t)).toBe(zh.formatBibliography)
-    expect(formatLabelOf('bibtex', t)).toBe('bibtex')
   })
 
-  it('names an artifact without usable format facts', () => {
+  it('keeps unknown translator names verbatim and names a factless artifact', () => {
+    expect(formatLabelOf('coolmine', t)).toBe('coolmine')
     expect(formatLabelOf('', t)).toBe(zh.formatUnknown)
   })
 })
@@ -89,23 +93,31 @@ describe('bibtex helpers', () => {
 })
 
 describe('ExportCard', () => {
-  it('shows the format, style, and ref scope facts', () => {
-    render(<ExportCard artifact={BIBTEX_ARTIFACT} ordinal={1} t={t} />)
-    expect(screen.getByText(`1. ${BIBTEX_ARTIFACT.format}`)).toBeDefined()
-    expect(screen.getByText('apa')).toBeDefined()
-    expect(screen.getByText('en-US')).toBeDefined()
-    expect(screen.getByText(zh.exportRefCount.replace('{count}', '2'))).toBeDefined()
-    expect(screen.getByText('dao2023')).toBeDefined()
+  it('names the artifact by format with the scope facts on the head line', () => {
+    render(<ExportCard artifact={BIBTEX_ARTIFACT} t={t} />)
+    expect(screen.getByText('BibTeX')).toBeDefined()
+    expect(screen.getByText(/apa/)).toBeDefined()
+    expect(screen.getByText(/en-US/)).toBeDefined()
+    expect(screen.getByText(new RegExp(zh.exportRefCount.replace('{count}', '2')))).toBeDefined()
   })
 
-  it('copies the export text and the cite command, and expands the body', () => {
-    render(<ExportCard artifact={BIBTEX_ARTIFACT} ordinal={1} t={t} />)
-    fireEvent.click(screen.getByLabelText(zh.copyExport))
-    expect(writeClipboard).toHaveBeenCalledWith(BIBTEX_ARTIFACT.text)
+  it('keeps the keys, cite command, and verbatim body behind the disclosure', () => {
+    render(<ExportCard artifact={BIBTEX_ARTIFACT} t={t} />)
+    // Collapsed: no keys, no verbatim body in the DOM.
+    expect(screen.queryAllByText(/dao2023/)).toHaveLength(0)
+    fireEvent.click(screen.getByRole('button', { expanded: false }))
+    expect(screen.getAllByText(/dao2023/).length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText(/@article\{dao2023/)).toBeDefined()
     fireEvent.click(screen.getByLabelText(zh.copyCite))
     expect(writeClipboard).toHaveBeenCalledWith('\\cite{dao2023}')
-    fireEvent.click(screen.getByRole('button', { expanded: false }))
-    expect(screen.getByText(/@article\{dao2023/)).toBeDefined()
+    fireEvent.click(screen.getByRole('button', { expanded: true }))
+    expect(screen.queryAllByText(/dao2023/)).toHaveLength(0)
+  })
+
+  it('copies the full export text from the always-visible action', () => {
+    render(<ExportCard artifact={BIBTEX_ARTIFACT} t={t} />)
+    fireEvent.click(screen.getByLabelText(zh.copyExport))
+    expect(writeClipboard).toHaveBeenCalledWith(BIBTEX_ARTIFACT.text)
   })
 
   it('notes the refs omitted by the bounded projection and skips the cite button without keys', () => {
@@ -114,8 +126,9 @@ describe('ExportCard', () => {
       refsOmitted: 3,
       text: 'no entries here',
     }
-    render(<ExportCard artifact={bounded} ordinal={2} t={t} />)
+    render(<ExportCard artifact={bounded} t={t} />)
     expect(screen.getByText(new RegExp(zh.exportRefsOmitted.replace('{count}', '3')))).toBeDefined()
+    fireEvent.click(screen.getByRole('button', { expanded: false }))
     expect(screen.queryByLabelText(zh.copyCite)).toBeNull()
   })
 })
@@ -140,10 +153,9 @@ describe('ExportsPage', () => {
     expect(
       screen.getByText(zh.exportsIncompleteNote.replace('{counts}', '进行中 1 · 失败 2')),
     ).toBeDefined()
-    expect(screen.queryByText(zh.exportsStaticNote)).toBeNull()
   })
 
-  it('lists the artifacts, the incomplete operations, and the static disclaimer', () => {
+  it('lists the artifacts as disclosure rows with the incomplete operations', () => {
     const second: ExportArtifact = {
       callId: 'e2',
       format: 'bibliography',
@@ -160,13 +172,9 @@ describe('ExportsPage', () => {
         t={t}
       />,
     )
-    expect(screen.getByText(`1. ${BIBTEX_ARTIFACT.format}`)).toBeDefined()
-    expect(screen.getByText(`2. ${zh.formatBibliography}`)).toBeDefined()
-    expect(
-      screen.getByText(zh.exportsIncompleteNote.replace('{counts}', '失败 1 · 已停止 1')),
-    ).toBeDefined()
+    expect(screen.getByText('BibTeX')).toBeDefined()
+    expect(screen.getByText(zh.formatBibliography)).toBeDefined()
     expect(screen.getByText(/失败 1 · 已停止 1/)).toBeDefined()
-    expect(screen.getByText(zh.exportsStaticNote)).toBeDefined()
   })
 })
 
@@ -181,25 +189,24 @@ describe('artifact file and time facts', () => {
     expect(mimeOf('csljson')).toBe('application/json')
     expect(mimeOf('ris')).toBe('application/x-research-info-systems')
     expect(mimeOf('bibtex')).toBe('text/plain')
+    expect(mimeOf('citation')).toBe('text/plain')
   })
 
   it('sanitizes the download filename and formats the settled time', () => {
     expect(fileNameOf({ ...BIBTEX_ARTIFACT, format: 'bibtex' })).toBe('zotero-bibtex.bib')
     expect(fileNameOf({ ...BIBTEX_ARTIFACT, format: 'bad/name' })).toBe('zotero-bad-name.txt')
-    expect(artifactTimeOf({ ...BIBTEX_ARTIFACT, settledAt: 0 }, t)).toMatch(
-      new RegExp(zh.artifactAtLabel),
-    )
-    expect(artifactTimeOf(BIBTEX_ARTIFACT, t)).toBe('')
+    expect(fileNameOf({ ...BIBTEX_ARTIFACT, format: '' })).toBe('zotero-export.txt')
+    expect(artifactTimeOf({ ...BIBTEX_ARTIFACT, settledAt: 0 })).toMatch(/^\d{2}:\d{2}$/)
+    expect(artifactTimeOf(BIBTEX_ARTIFACT)).toBe('')
   })
 
   it('downloads the full text as a blob and revokes the URL', async () => {
     const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
     const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock')
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
-    render(
-      <ExportCard artifact={{ ...BIBTEX_ARTIFACT, settledAt: 1720000000000 }} ordinal={1} t={t} />,
-    )
-    fireEvent.click(screen.getByText(zh.downloadArtifact))
+    render(<ExportCard artifact={{ ...BIBTEX_ARTIFACT, settledAt: 1720000000000 }} t={t} />)
+    // The download action names the file it produces.
+    fireEvent.click(screen.getByText(`${zh.downloadArtifact} ${extensionOf('bibtex')}`))
     expect(create).toHaveBeenCalledTimes(1)
     expect(click).toHaveBeenCalledTimes(1)
     // The URL release is scheduled right after the click, never leaked.
@@ -208,19 +215,5 @@ describe('artifact file and time facts', () => {
     create.mockRestore()
     revoke.mockRestore()
     click.mockRestore()
-  })
-
-  it('renders a bounded preview until expanded, copying the full text always', () => {
-    const longLines = Array.from({ length: PREVIEW_LINE_COUNT + 5 }, (_, i) => `line ${i}`)
-    const artifact = { ...BIBTEX_ARTIFACT, text: longLines.join('\n') }
-    render(<ExportCard artifact={artifact} ordinal={1} t={t} />)
-    fireEvent.click(screen.getByText(`1. ${BIBTEX_ARTIFACT.format}`))
-    // The preview shows the bounded window with the ellipsis, not the tail.
-    expect(screen.getByText(new RegExp('line 0'))).toBeDefined()
-    expect(screen.queryByText(new RegExp('line ' + (PREVIEW_LINE_COUNT + 4)))).toBeNull()
-    fireEvent.click(screen.getByText(zh.expandFullText))
-    expect(screen.getByText(new RegExp('line ' + (PREVIEW_LINE_COUNT + 4)))).toBeDefined()
-    fireEvent.click(screen.getByText(zh.collapseFullText))
-    expect(screen.queryByText(new RegExp('line ' + (PREVIEW_LINE_COUNT + 4)))).toBeNull()
   })
 })
