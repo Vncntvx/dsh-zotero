@@ -198,6 +198,23 @@ describe('EvidenceCard', () => {
     expect(links).toContain('zotero://open-pdf/library/items/WXYZ6789?annotation=ANN00001')
   })
 
+  it('targets the annotation jump at the annotation own PDF attachment', () => {
+    const item = sourceOf({
+      ...EVIDENCE_ITEM,
+      evidence: EVIDENCE_ITEM.evidence.map((passage) =>
+        passage.source === 'annotation'
+          ? { ...passage, attachmentRef: 'zotero://user/0/attachment/XYZ99990' }
+          : passage,
+      ),
+    })
+    const { container } = render(<EvidenceCard item={item} t={t} />)
+    const links = Array.from(container.querySelectorAll('a')).map((anchor) =>
+      anchor.getAttribute('href'),
+    )
+    expect(links).toContain('zotero://open-pdf/library/items/WXYZ6789')
+    expect(links).toContain('zotero://open-pdf/library/items/XYZ99990?annotation=ANN00001')
+  })
+
   it('opens a resolved web PDF at its web location and offers no annotation jump', () => {
     const item = sourceOf({
       ...EVIDENCE_ITEM,

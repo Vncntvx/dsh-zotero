@@ -62,6 +62,7 @@ const EVIDENCE_RECORD = {
     chunkCount: { type: 'integer' },
     comment: { type: 'string' },
     pageLabel: { type: 'string' },
+    attachmentRef: { type: 'string' },
   },
 } as const
 

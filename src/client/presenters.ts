@@ -22,6 +22,8 @@ export interface EvidenceItemView {
   readonly preview: string
   readonly previewTruncated: boolean
   readonly pageLabel?: string
+  /** The annotation passage's parent attachment ref (its own PDF's deep-link key). */
+  readonly attachmentRef?: string
 }
 
 /** True for plain objects (the validated shape every meta read requires). */
@@ -119,12 +121,14 @@ export function evidenceItemsOf(meta: Record<string, unknown>): EvidenceItemView
     if (source === undefined || sourceRef === undefined || preview === undefined) return null
     const previewTruncated = boolField(item, 'previewTruncated') === true
     const pageLabel = stringField(item, 'pageLabel')
+    const attachmentRef = stringField(item, 'attachmentRef')
     rows.push({
       source,
       sourceRef,
       preview,
       previewTruncated,
       ...(pageLabel === undefined ? {} : { pageLabel }),
+      ...(attachmentRef === undefined ? {} : { attachmentRef }),
     })
   }
   return rows

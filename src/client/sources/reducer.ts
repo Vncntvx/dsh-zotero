@@ -356,6 +356,7 @@ export function buildSourceWorkspace(
               text: item.preview,
               previewTruncated: item.previewTruncated,
               ...(item.pageLabel === undefined ? {} : { pageLabel: item.pageLabel }),
+              ...(item.attachmentRef === undefined ? {} : { attachmentRef: item.attachmentRef }),
               callIds: [callId],
             },
             seq,

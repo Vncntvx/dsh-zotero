@@ -670,6 +670,7 @@ export class LocalApiProvider implements ZoteroProvider {
       chunkCount?: number
       comment?: string
       pageLabel?: string
+      attachmentRef?: string
     }[] = []
     if (wantsFulltext) {
       let attachmentKey = fulltextKey
@@ -742,6 +743,7 @@ export class LocalApiProvider implements ZoteroProvider {
           text: annotation.text,
           ...(annotation.comment !== undefined ? { comment: annotation.comment } : {}),
           ...(annotation.pageLabel !== undefined ? { pageLabel: annotation.pageLabel } : {}),
+          ...(annotation.parentRef === undefined ? {} : { attachmentRef: annotation.parentRef }),
         })
       }
     }
@@ -813,6 +815,7 @@ export class LocalApiProvider implements ZoteroProvider {
         ...(passage.chunkCount !== undefined ? { chunkCount: passage.chunkCount } : {}),
         ...(passage.comment !== undefined ? { comment: passage.comment } : {}),
         ...(passage.pageLabel !== undefined ? { pageLabel: passage.pageLabel } : {}),
+        ...(passage.attachmentRef !== undefined ? { attachmentRef: passage.attachmentRef } : {}),
       })
     }
     // A stable report order keeps the contract predictable: the sources the

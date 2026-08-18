@@ -147,6 +147,36 @@ describe('retrieve', () => {
     expect(annotation!.pageLabel).toBe('7')
   })
 
+  it('carries the parent attachment ref on annotation evidence', async () => {
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) =>
+      helpers.json(RETRIEVE_PARENT, { 'Zotero-Server-ID': 'S1' }),
+    )
+    mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) =>
+      helpers.json([
+        {
+          key: 'ANNO1111',
+          data: {
+            itemType: 'annotation',
+            annotationType: 'highlight',
+            annotationText: 'parented',
+            parentItem: 'WXYZ6789',
+          },
+        },
+      ]),
+    )
+    const result = await provider.retrieve(
+      retrieveRequest({ sources: ['annotation'], query: 'parented', passages: 1 }),
+    )
+    expect(result.evidence).toEqual([
+      {
+        source: 'annotation',
+        sourceRef: 'zotero://user/0/item/ANNO1111?server=S1',
+        text: 'parented',
+        attachmentRef: 'zotero://user/0/attachment/WXYZ6789?server=S1',
+      },
+    ])
+  })
+
   it('fetches lazily per source: abstract-only evidence needs just the parent', async () => {
     mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) =>
       helpers.json(RETRIEVE_PARENT),

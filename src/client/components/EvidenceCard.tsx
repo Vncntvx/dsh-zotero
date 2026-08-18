@@ -84,7 +84,7 @@ function PassageRow({
   const annotationKey = passage.source === 'annotation' ? shortKeyOf(passage.sourceRef) : null
   const annotationUrl =
     annotationKey !== null && pdfRef !== null
-      ? pdfUrlOf(pdfRef, { annotation: annotationKey })
+      ? pdfUrlOf(passage.attachmentRef ?? pdfRef, { annotation: annotationKey })
       : null
   return (
     <li className={css.passage} data-source={passage.source}>

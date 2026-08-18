@@ -70,6 +70,8 @@ export interface EvidencePassage {
   readonly previewTruncated: boolean
   /** Zotero-owned page label (annotations only); never invented. */
   readonly pageLabel?: string
+  /** The annotation passage's parent attachment ref; lets the jump target the annotation's own PDF. */
+  readonly attachmentRef?: string
   /** Call ids of the successful retrieves that returned this passage. */
   readonly callIds: readonly string[]
 }

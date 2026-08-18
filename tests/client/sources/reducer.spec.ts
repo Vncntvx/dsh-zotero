@@ -92,6 +92,7 @@ const RETRIEVE_META = {
       preview: 'the claim',
       previewTruncated: false,
       pageLabel: '7',
+      attachmentRef: 'zotero://user/0/attachment/WXYZ6789',
     },
   ],
   attachmentRef: 'zotero://user/0/attachment/WXYZ6789',
@@ -312,6 +313,9 @@ describe('buildSourceWorkspace', () => {
       complete: false,
     })
     expect(workspace.sources[0]!.retrievalFacts?.attachmentRef).toBe(
+      'zotero://user/0/attachment/WXYZ6789',
+    )
+    expect(workspace.sources[0]!.evidence[0]!.attachmentRef).toBe(
       'zotero://user/0/attachment/WXYZ6789',
     )
   })

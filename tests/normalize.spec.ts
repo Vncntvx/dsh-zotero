@@ -361,6 +361,7 @@ describe('normalizeAnnotationRecord', () => {
         annotationPageLabel: '7',
         annotationSortIndex: '00003',
         annotationPosition: '{"pageIndex":6}',
+        parentItem: 'WXYZ6789',
       },
     }
     expect(normalizeAnnotationRecord(row, 'S1')).toEqual({
@@ -370,6 +371,7 @@ describe('normalizeAnnotationRecord', () => {
       comment: 'check this',
       color: '#ffd400',
       pageLabel: '7',
+      parentRef: 'zotero://user/0/attachment/WXYZ6789?server=S1',
     })
   })
 

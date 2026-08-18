@@ -275,6 +275,7 @@ export function normalizeAnnotationRecord(
   const comment = asString(data?.annotationComment)
   const color = asString(data?.annotationColor)
   const pageLabel = asString(data?.annotationPageLabel)
+  const parentKey = parentKeyOf(data)
   return {
     ref: formatRef(localRef('item', key, serverId)),
     type: asString(data?.annotationType) ?? '',
@@ -282,6 +283,9 @@ export function normalizeAnnotationRecord(
     ...(comment !== undefined ? { comment } : {}),
     ...(color !== undefined ? { color } : {}),
     ...(pageLabel !== undefined ? { pageLabel } : {}),
+    ...(parentKey !== undefined
+      ? { parentRef: formatRef(localRef('attachment', parentKey, serverId)) }
+      : {}),
   }
 }
 

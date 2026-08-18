@@ -302,6 +302,7 @@ describe('projectRetrieveMeta', () => {
             sourceRef: 'zotero://user/0/annotation/ANN000001',
             text: 'highlighted claim',
             pageLabel: '7',
+            attachmentRef: 'zotero://user/0/attachment/WXYZ6789',
           },
           { source: 'note', sourceRef: 'zotero://user/0/item/NOTE0001', text: 'my note' },
           {
@@ -326,6 +327,7 @@ describe('projectRetrieveMeta', () => {
       preview: 'highlighted claim',
       previewTruncated: false,
       pageLabel: '7',
+      attachmentRef: 'zotero://user/0/attachment/WXYZ6789',
     })
     // Fulltext passages never gain an invented page locator.
     expect(meta.items[2]!.pageLabel).toBeUndefined()

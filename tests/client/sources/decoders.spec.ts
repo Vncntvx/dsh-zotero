@@ -114,6 +114,7 @@ describe('retrieveMetaOf', () => {
     preview: 'claim',
     previewTruncated: false,
     pageLabel: '7',
+    attachmentRef: 'zotero://user/0/attachment/WXYZ6789',
   }
 
   it('reads the availability facts, attachment ref, and coverage', () => {

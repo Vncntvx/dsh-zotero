@@ -133,6 +133,8 @@ export interface ZoteroAnnotationRecord {
   readonly color?: string
   /** Zotero-owned page label; never a plugin-invented locator. */
   readonly pageLabel?: string
+  /** The annotation's parent attachment, when Zotero reports one; provenance-qualified like `ref`. */
+  readonly parentRef?: string
 }
 
 export interface ZoteroAttachmentRecord {
@@ -202,6 +204,8 @@ export interface ZoteroEvidence {
   readonly chunkCount?: number
   readonly comment?: string
   readonly pageLabel?: string
+  /** The annotation passage's parent attachment ref; absent for other sources. */
+  readonly attachmentRef?: string
 }
 
 /** Full-text indexing coverage as reported by Zotero; `complete` is derived. */

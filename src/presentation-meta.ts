@@ -169,6 +169,8 @@ export interface ZoteroEvidencePresentationItem {
   readonly preview: string
   readonly previewTruncated: boolean
   readonly pageLabel?: string
+  /** The annotation passage's parent attachment ref (its own PDF's deep-link key). */
+  readonly attachmentRef?: string
 }
 
 /** Per-source availability facts: provable from the canonical result alone. */
@@ -204,6 +206,7 @@ export interface RetrieveProjectionInput {
     readonly chunkIndex?: number
     readonly chunkCount?: number
     readonly comment?: string
+    readonly attachmentRef?: string
   }>
   readonly truncated: boolean
   readonly sourcesSkipped: readonly string[]
@@ -418,6 +421,7 @@ export function projectRetrieveMeta(
       preview,
       previewTruncated: entry.text.length > preview.length,
       ...(entry.pageLabel === undefined ? {} : { pageLabel: entry.pageLabel }),
+      ...(entry.attachmentRef === undefined ? {} : { attachmentRef: entry.attachmentRef }),
     }
   })
   const skipped = new Set(value.sourcesSkipped)
