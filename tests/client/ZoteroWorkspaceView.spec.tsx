@@ -26,11 +26,13 @@ import {
   type SelectionState,
 } from '../../src/client/components/workspace/ZoteroWorkspaceView.tsx'
 import {
+  artifactOf,
   mixedFixture,
   passageOf,
   repeatedRetrieveFixture,
   searchOf,
   singleFixture,
+  workspaceOf,
   zeroMatchFixture,
 } from './helpers/source-fixtures.ts'
 
@@ -637,6 +639,47 @@ describe('narrow-surface pane state', () => {
     expect(view.container.querySelector('[data-pane="detail"]')).not.toBeNull()
     fireEvent.keyDown(view.container.querySelector('[data-pane="detail"]')!, { key: 'Escape' })
     expect(view.container.querySelector('[data-pane="list"]')).not.toBeNull()
+    view.unmount()
+  })
+})
+
+describe('exports lens count', () => {
+  it('counts distinct exported documents across calls and formats', () => {
+    const REF = 'zotero://user/0/item/QRST3456'
+    const { view } = mountView(
+      workspaceOf([], {
+        exports: [
+          artifactOf({ callId: 'e1', refs: [REF], settledAt: 1000 }),
+          artifactOf({ callId: 'e2', refs: [REF], settledAt: 2000 }),
+          artifactOf({
+            callId: 'e3',
+            format: 'ris',
+            refs: [REF],
+            settledAt: 3000,
+            items: undefined,
+          }),
+        ],
+      }),
+    )
+    // Three export calls of the same document — the lens tab reads 1.
+    expect(view.container.querySelector('[data-workspace-lens="exports"]')!.textContent).toContain(
+      '1',
+    )
+    view.unmount()
+  })
+
+  it('counts distinct documents, not the formats they were exported as', () => {
+    const { view } = mountView(
+      workspaceOf([], {
+        exports: [
+          artifactOf({ callId: 'e1', refs: ['zotero://user/0/item/QRST3456'] }),
+          artifactOf({ callId: 'e2', refs: ['zotero://user/0/item/AAAA1111'] }),
+        ],
+      }),
+    )
+    expect(view.container.querySelector('[data-workspace-lens="exports"]')!.textContent).toContain(
+      '2',
+    )
     view.unmount()
   })
 })

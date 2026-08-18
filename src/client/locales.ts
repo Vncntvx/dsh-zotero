@@ -95,6 +95,8 @@ export type ZoteroLocaleKey =
   | 'copyRef'
   | 'copyExport'
   | 'copyCite'
+  | 'copyAll'
+  | 'downloadAll'
   | 'askAboutItem'
   | 'askTemplate'
   | 'citeTemplate'
@@ -280,6 +282,8 @@ export const en: Record<ZoteroLocaleKey, string> = {
   copyRef: 'Copy ref',
   copyExport: 'Copy',
   copyCite: '\\cite{…}',
+  copyAll: 'Copy all',
+  downloadAll: 'Download all',
   askAboutItem: 'Ask about this',
   askTemplate: 'About this item ({ref}): ',
   citeTemplate: 'Export this item from Zotero as BibTeX: {ref}',
@@ -460,6 +464,8 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   copyRef: '复制 ref',
   copyExport: '复制',
   copyCite: '\\cite{…}',
+  copyAll: '复制全部',
+  downloadAll: '下载全部',
   askAboutItem: '问这篇',
   askTemplate: '关于这篇文献（{ref}）：',
   citeTemplate: '把这篇文献从 Zotero 导出为 BibTeX：{ref}',

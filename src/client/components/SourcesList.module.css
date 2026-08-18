@@ -164,6 +164,73 @@
   padding: 6px 0;
 }
 
+/* One format section of the exports page: a head line with the format
+ * label, the deduplicated document count, and the section-wide copy-all /
+ * download-all actions, above the document rows and any whole-text
+ * fallback rows of the same format. */
+.exportSection {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.exportSectionHead {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  padding: 6px 0 4px;
+}
+
+.exportSectionTitle {
+  flex: none;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.exportSectionCount {
+  flex: none;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-caption);
+}
+
+.exportSectionActions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* One exported document row: the citation key in code type as the main
+ * line (the title when the format carries no key), the paper title as the
+ * weak second line, and the per-document actions outside the toggle. */
+.documentKey {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--ds-font-family-code);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.documentTitle {
+  margin: 0;
+  padding-left: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-caption);
+}
+
 .exportHead {
   display: flex;
   align-items: center;

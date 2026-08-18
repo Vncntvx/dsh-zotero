@@ -1,13 +1,13 @@
 /**
- * The inspector's exports panel: the selected source's export artifacts as
- * disclosure rows — same shape as the session-wide exports page. The panel
- * tab already carries the count, so the rows speak for themselves.
+ * The inspector's exports panel: the selected source's exported documents
+ * as per-format rows — same surface as the session-wide exports page. The
+ * panel tab already carries the count, so the rows speak for themselves.
  * @module dsh-zotero/client/components/workspace/SourceExports
  */
 
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SourceItem } from '../../sources/model.ts'
-import { ExportCard } from '../ExportCard.tsx'
+import { ExportSections } from '../ExportSections.tsx'
 import css from './workspace.module.css'
 
 export interface SourceExportsProps {
@@ -15,7 +15,7 @@ export interface SourceExportsProps {
   readonly t: TranslateNS<'zotero'>
 }
 
-/** The exports panel: one disclosure row per artifact of the selected source. */
+/** The exports panel: one document row per export of the selected source. */
 export function SourceExports({ item, t }: SourceExportsProps) {
   if (item.exports.length === 0) {
     return (
@@ -26,11 +26,7 @@ export function SourceExports({ item, t }: SourceExportsProps) {
   }
   return (
     <div className={css.panel}>
-      <div className={css.exportStack}>
-        {item.exports.map((artifact) => (
-          <ExportCard key={artifact.callId} artifact={artifact} t={t} />
-        ))}
-      </div>
+      <ExportSections exports={item.exports} t={t} />
     </div>
   )
 }

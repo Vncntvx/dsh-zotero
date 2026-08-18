@@ -1,15 +1,19 @@
 // @vitest-environment jsdom
 /**
- * The exports lens: successful artifacts only, format and scope facts, the
- * disclosure contract (keys and verbatim body behind the toggle), the copy
- * and download actions, and the incomplete-operations note. The
- * static-export disclaimer is a README concern, never a UI line.
+ * The exports lens: successful exports as per-format sections of deduplicated
+ * documents — the format head with its count and copy-all / download-all
+ * actions, per-document rows (citation key, weak title line, \cite copy,
+ * single-document download, disclosure into the verbatim entry) — with
+ * artifacts without per-document data falling back to whole-text call rows,
+ * and the incomplete-operations note. The static-export disclaimer is a
+ * README concern, never a UI line.
  * @module tests/client/ExportsLens
  */
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ExportDocumentRow } from '../../src/client/components/ExportDocumentRow.tsx'
 import {
   ExportCard,
   artifactTimeOf,
@@ -18,11 +22,13 @@ import {
   formatLabelOf,
   mimeOf,
 } from '../../src/client/components/ExportCard.tsx'
+import { ExportSections, sectionTextOf } from '../../src/client/components/ExportSections.tsx'
 import { incompleteExportsNoteOf } from '../../src/client/components/operations.ts'
 import { ExportsPage } from '../../src/client/components/workspace/ExportsPage.tsx'
 import { zh, type ZoteroLocaleKey } from '../../src/client/locales.ts'
 import { bibTexKeysOf, citeCommandOf } from '../../src/client/sources/bibtex.ts'
-import type { ExportArtifact } from '../../src/client/sources/model.ts'
+import type { ExportArtifact, ExportDocumentItem } from '../../src/client/sources/model.ts'
+import type { ExportedDocument } from '../../src/client/sources/selectors.ts'
 import { workspaceOf } from './helpers/source-fixtures.ts'
 
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
@@ -42,14 +48,64 @@ const { writeClipboard } = vi.mocked(
 
 const t: TranslateNS<'zotero'> = (key) => zh[key as ZoteroLocaleKey] ?? key
 
+const REF_A = 'zotero://user/0/item/AAAAAAA1'
+const REF_B = 'zotero://user/0/item/BBBBBBBB'
+
+/** An itemized BibTeX artifact whose body matches its items. */
+function itemizedBibtex(overrides: Partial<ExportArtifact> = {}): ExportArtifact {
+  const items: readonly ExportDocumentItem[] = [
+    { ref: REF_A, key: 'dao2023', title: 'A study on dao' },
+  ]
+  return {
+    callId: 'e1',
+    format: 'bibtex',
+    refs: [REF_A],
+    refsOmitted: 0,
+    text: '@article{dao2023,\n title={A study on dao}\n}',
+    items,
+    ...overrides,
+  }
+}
+
+/** An itemized RIS artifact whose record id matches its ref. */
+function itemizedRis(overrides: Partial<ExportArtifact> = {}): ExportArtifact {
+  return {
+    callId: 'e2',
+    format: 'ris',
+    refs: [REF_B],
+    refsOmitted: 0,
+    text: 'TY  - JOUR\nTI  - A RIS record\nID  - BBBBBBBB\nER  -\n',
+    items: [{ ref: REF_B, title: 'A RIS record' }],
+    ...overrides,
+  }
+}
+
 const BIBTEX_ARTIFACT: ExportArtifact = {
   callId: 'e1',
   format: 'bibtex',
   style: 'apa',
   locale: 'en-US',
-  refs: ['zotero://user/0/item/AAAAAAA1', 'zotero://user/0/item/AAAAAAA2'],
+  refs: [REF_A, 'zotero://user/0/item/AAAAAAA2'],
   refsOmitted: 0,
   text: '@article{dao2023,\n title={A}\n}',
+}
+
+const BIBTEX_DOC: ExportedDocument = {
+  ref: REF_A,
+  format: 'bibtex',
+  key: 'dao2023',
+  title: 'A study on dao',
+  text: '@article{dao2023,\n title={A study on dao}\n}',
+  callIds: ['e1'],
+  latestExportedAt: 1720000000000,
+}
+
+const RIS_DOC: ExportedDocument = {
+  ref: REF_B,
+  format: 'ris',
+  title: 'A RIS record',
+  text: 'TY  - JOUR\nTI  - A RIS record\nID  - BBBBBBBB\nER  -\n',
+  callIds: ['e2'],
 }
 
 afterEach(() => {
@@ -133,6 +189,167 @@ describe('ExportCard', () => {
   })
 })
 
+describe('ExportDocumentRow', () => {
+  it('names the document by its citation key with the title as the weak second line', () => {
+    render(<ExportDocumentRow doc={BIBTEX_DOC} t={t} />)
+    expect(screen.getByText('dao2023')).toBeDefined()
+    expect(screen.getByText('A study on dao')).toBeDefined()
+    expect(screen.getByLabelText(zh.copyCite)).toBeDefined()
+    // The verbatim entry stays behind the disclosure.
+    expect(screen.queryAllByText(/@article\{dao2023/)).toHaveLength(0)
+  })
+
+  it('keeps the verbatim entry and its copy action behind the disclosure', () => {
+    render(<ExportDocumentRow doc={BIBTEX_DOC} t={t} />)
+    fireEvent.click(screen.getByRole('button', { expanded: false }))
+    expect(screen.getByText(/@article\{dao2023/)).toBeDefined()
+    fireEvent.click(screen.getByLabelText(zh.copyExport))
+    expect(writeClipboard).toHaveBeenCalledWith(BIBTEX_DOC.text)
+    fireEvent.click(screen.getByRole('button', { expanded: true }))
+    expect(screen.queryAllByText(/@article\{dao2023/)).toHaveLength(0)
+  })
+
+  it('copies the per-document cite command from the always-visible action', () => {
+    render(<ExportDocumentRow doc={BIBTEX_DOC} t={t} />)
+    fireEvent.click(screen.getByLabelText(zh.copyCite))
+    expect(writeClipboard).toHaveBeenCalledWith('\\cite{dao2023}')
+  })
+
+  it('skips the cite button and the title line for documents without a key', () => {
+    render(<ExportDocumentRow doc={RIS_DOC} t={t} />)
+    // The title is the main line; there is no key to cite and no second line.
+    expect(screen.getByText('A RIS record')).toBeDefined()
+    expect(screen.queryByLabelText(zh.copyCite)).toBeNull()
+    expect(screen.getAllByText('A RIS record')).toHaveLength(1)
+  })
+
+  it('downloads the single document as a blob named by its key', async () => {
+    const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+    const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock')
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    render(<ExportDocumentRow doc={BIBTEX_DOC} t={t} />)
+    fireEvent.click(screen.getByText(`${zh.downloadArtifact} ${extensionOf('bibtex')}`))
+    expect(create).toHaveBeenCalledTimes(1)
+    expect(click).toHaveBeenCalledTimes(1)
+    const anchor = click.mock.instances[0] as HTMLAnchorElement
+    expect(anchor.download).toBe('zotero-dao2023.bib')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(revoke).toHaveBeenCalledTimes(1)
+    create.mockRestore()
+    revoke.mockRestore()
+    click.mockRestore()
+  })
+
+  it('names a keyless download by the item key', async () => {
+    const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock')
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    render(<ExportDocumentRow doc={RIS_DOC} t={t} />)
+    fireEvent.click(screen.getByText(`${zh.downloadArtifact} ${extensionOf('ris')}`))
+    const anchor = click.mock.instances[0] as HTMLAnchorElement
+    expect(anchor.download).toBe('zotero-BBBBBBBB.ris')
+    // Let the scheduled URL release run before the next test's spy lands.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    create.mockRestore()
+    click.mockRestore()
+  })
+
+  it('falls back the download name for a ref without an item key', async () => {
+    const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock')
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    render(<ExportDocumentRow doc={{ ...RIS_DOC, ref: 'not-a-zotero-ref' }} t={t} />)
+    fireEvent.click(screen.getByText(`${zh.downloadArtifact} ${extensionOf('ris')}`))
+    const anchor = click.mock.instances[0] as HTMLAnchorElement
+    expect(anchor.download).toBe('zotero-export.ris')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    create.mockRestore()
+    click.mockRestore()
+  })
+
+  it('falls back to the format label when the document has neither key nor title', () => {
+    render(
+      <ExportDocumentRow
+        doc={{ ref: REF_B, format: 'ris', text: 'TY  - JOUR\nER  -\n', callIds: ['e2'] }}
+        t={t}
+      />,
+    )
+    expect(screen.getByText('RIS')).toBeDefined()
+    expect(screen.queryByLabelText(zh.copyCite)).toBeNull()
+  })
+})
+
+describe('sectionTextOf', () => {
+  it('joins the documents in display order', () => {
+    const section = { format: 'bibtex', documents: [BIBTEX_DOC], unresolved: [] }
+    expect(sectionTextOf(section)).toBe(BIBTEX_DOC.text)
+    expect(sectionTextOf({ ...section, documents: [BIBTEX_DOC, RIS_DOC] })).toBe(
+      `${BIBTEX_DOC.text}\n\n${RIS_DOC.text}`,
+    )
+  })
+})
+
+describe('ExportSections', () => {
+  it('groups documents into format sections with the count and section-wide actions', () => {
+    render(<ExportSections exports={[itemizedBibtex(), itemizedRis()]} t={t} />)
+    expect(screen.getByText('BibTeX')).toBeDefined()
+    expect(screen.getByText('RIS')).toBeDefined()
+    // The section count is the deduplicated document count, one per section.
+    expect(screen.getAllByText('1')).toHaveLength(2)
+    expect(screen.getAllByLabelText(zh.copyAll)).toHaveLength(2)
+    expect(screen.getByText(`${zh.downloadAll} ${extensionOf('bibtex')}`)).toBeDefined()
+    expect(screen.getByText(`${zh.downloadAll} ${extensionOf('ris')}`)).toBeDefined()
+  })
+
+  it('collapses repeated exports into one row and copies the latest entry with copy-all', () => {
+    const first = itemizedBibtex({ callId: 'e1', settledAt: 1000 })
+    const second = itemizedBibtex({
+      callId: 'e2',
+      settledAt: 2000,
+      text: '@article{dao2023,\n title={A study on dao, revised}\n}',
+      items: [{ ref: REF_A, key: 'dao2023', title: 'A study on dao, revised' }],
+    })
+    render(<ExportSections exports={[first, second]} t={t} />)
+    // One section, one document row — the latest entry wins, no duplicates.
+    expect(screen.getAllByText('dao2023')).toHaveLength(1)
+    fireEvent.click(screen.getByLabelText(zh.copyAll))
+    expect(writeClipboard).toHaveBeenCalledWith(
+      '@article{dao2023,\n title={A study on dao, revised}\n}',
+    )
+  })
+
+  it('downloads the joined latest entries as one file', async () => {
+    const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+    const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock')
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    render(<ExportSections exports={[itemizedBibtex(), itemizedRis()]} t={t} />)
+    fireEvent.click(screen.getByText(`${zh.downloadAll} ${extensionOf('bibtex')}`))
+    expect(create).toHaveBeenCalledTimes(1)
+    const anchor = click.mock.instances[0] as HTMLAnchorElement
+    expect(anchor.download).toBe('zotero-bibtex.bib')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(revoke).toHaveBeenCalledTimes(1)
+    create.mockRestore()
+    revoke.mockRestore()
+    click.mockRestore()
+  })
+
+  it('falls back artifacts without per-document data to whole-text call rows', () => {
+    const bibliography: ExportArtifact = {
+      callId: 'e2',
+      format: 'bibliography',
+      refs: [REF_A],
+      refsOmitted: 0,
+      text: '<div>a bibliography</div>',
+    }
+    const legacy = itemizedBibtex({ callId: 'e3', items: undefined })
+    render(<ExportSections exports={[bibliography, legacy]} t={t} />)
+    // A document-less section has no head and no copy-all action.
+    expect(screen.queryByLabelText(zh.copyAll)).toBeNull()
+    expect(screen.getByText(zh.formatBibliography)).toBeDefined()
+    expect(screen.getByText('BibTeX')).toBeDefined()
+    expect(screen.queryByText('dao2023')).toBeNull()
+  })
+})
+
 describe('ExportsPage', () => {
   it('shows the honest empty note without successful exports', () => {
     render(<ExportsPage workspace={workspaceOf([])} t={t} />)
@@ -155,26 +372,28 @@ describe('ExportsPage', () => {
     ).toBeDefined()
   })
 
-  it('lists the artifacts as disclosure rows with the incomplete operations', () => {
-    const second: ExportArtifact = {
+  it('renders the document sections with the incomplete operations', () => {
+    const bibliography: ExportArtifact = {
       callId: 'e2',
       format: 'bibliography',
-      refs: ['zotero://user/0/item/AAAAAAA3'],
+      refs: [REF_B],
       refsOmitted: 0,
       text: '<div>a bibliography</div>',
     }
     render(
       <ExportsPage
         workspace={workspaceOf([], {
-          exports: [BIBTEX_ARTIFACT, second],
+          exports: [itemizedBibtex(), bibliography],
           exportOperations: { running: 0, failed: 1, stopped: 1 },
         })}
         t={t}
       />,
     )
-    expect(screen.getByText('BibTeX')).toBeDefined()
-    expect(screen.getByText(zh.formatBibliography)).toBeDefined()
+    // The itemized BibTeX export renders as a document row under its head.
+    expect(screen.getByText('dao2023')).toBeDefined()
     expect(screen.getByText(/失败 1 · 已停止 1/)).toBeDefined()
+    // The bibliography stays a whole-text call row without a section head.
+    expect(screen.getByText(zh.formatBibliography)).toBeDefined()
   })
 })
 

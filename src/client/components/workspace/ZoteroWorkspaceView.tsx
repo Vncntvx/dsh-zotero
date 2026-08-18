@@ -16,7 +16,12 @@ import { useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SourceWorkspace } from '../../sources/model.ts'
-import { filterCountsOf, filterSources, type SourceFilter } from '../../sources/selectors.ts'
+import {
+  exportedRefCountOf,
+  filterCountsOf,
+  filterSources,
+  type SourceFilter,
+} from '../../sources/selectors.ts'
 import { WorkspaceToolbar } from './WorkspaceToolbar.tsx'
 import type { ConnectionView } from './connection.ts'
 import { SourceSidebar } from './SourceSidebar.tsx'
@@ -137,6 +142,8 @@ export function ZoteroWorkspaceView({
     [workspace.sources, filter],
   )
   const selectedKey = effectiveSelectionOf(selection, workspace.sources, visible)
+  // The exports lens counts distinct exported documents, not export calls.
+  const exportedCount = useMemo(() => exportedRefCountOf(workspace.exports), [workspace.exports])
 
   // Session switches reset the whole surface: the parent keys this view by
   // the session id, so this state never survives a session change.
@@ -183,8 +190,8 @@ export function ZoteroWorkspaceView({
             }}
           >
             {t(entry.key)}
-            {entry.id === 'exports' && workspace.exports.length > 0 && (
-              <span className={css.lensTabCount}>{workspace.exports.length}</span>
+            {entry.id === 'exports' && exportedCount > 0 && (
+              <span className={css.lensTabCount}>{exportedCount}</span>
             )}
           </button>
         ))}
