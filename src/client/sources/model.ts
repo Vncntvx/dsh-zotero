@@ -44,10 +44,22 @@ export type SourceScope =
   | { readonly kind: 'collection'; readonly ref?: string; readonly name?: string }
   | { readonly kind: 'savedSearch'; readonly ref?: string; readonly name?: string }
 
-/** One logical search (pagination continuations fold into one entry). */
+/**
+ * One logical search (pagination continuations fold into one entry). The
+ * mode, scope, and filter fields are the episode's own arguments — captured
+ * at episode creation, never re-parsed from an identity string.
+ */
 export interface SearchProvenance {
   readonly callId: string
   readonly query?: string
+  /** The search's mode argument: metadata-only or full text. */
+  readonly mode: 'metadata' | 'everything'
+  /** The normalized scope argument (library, collection, or saved search). */
+  readonly scope: SourceScope
+  /** The item-type filter arguments, normalized (deduplicated, sorted). */
+  readonly itemTypes: readonly string[]
+  /** The tag filter arguments, normalized (deduplicated, sorted). */
+  readonly tags: readonly string[]
 }
 
 /** One deduplicated evidence passage with the calls that returned it. */
@@ -124,6 +136,25 @@ export interface SourceRetrievalFacts {
   readonly sourceAvailability: Readonly<Record<string, SourceAvailabilityEntry>>
 }
 
+/**
+ * The retrieves on one item, summarized for the Evidence head. Run count is
+ * the number of successful, ref-valid, presentation-meta-recognizable
+ * retrieve calls; `latestRetrievedAt` is the settled result's event time
+ * (Unix epoch ms), not a transcript position.
+ */
+export interface RetrievalSummary {
+  readonly runCount: number
+  /** Only internal diagnostics; never rendered. */
+  readonly latestCallId: string
+  /** The settled result's event time (Unix epoch ms). */
+  readonly latestRetrievedAt: number
+  /** Deduplicated passages kept after the preview budget. */
+  readonly keptPassageCount: number
+  /** Total passages reported across all successful retrieves. */
+  readonly reportedPassageCount: number
+  readonly truncated: boolean
+}
+
 /** One library item with everything the session proved about it. */
 export interface SourceItem {
   /** Normalized identity (query stripped, lowercased). */
@@ -145,6 +176,8 @@ export interface SourceItem {
   readonly attachment?: SourceAttachment
   /** Aggregated retrieval facts of the successful zotero_retrieve calls. */
   readonly retrievalFacts?: SourceRetrievalFacts
+  /** The successful retrieves on this item, summarized for the Evidence head. */
+  readonly retrievalSummary?: RetrievalSummary
   readonly exports: readonly ExportArtifact[]
   /** Ordering: transcript position of the first touch. */
   readonly firstSeenAt: number

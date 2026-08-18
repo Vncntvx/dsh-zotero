@@ -131,7 +131,9 @@ describe('hasDossierContent', () => {
     expect(
       hasDossierContent(
         sourceOf({
-          searches: [{ callId: 's1' }],
+          searches: [
+            { callId: 's1', mode: 'metadata', scope: { kind: 'library' }, itemTypes: [], tags: [] },
+          ],
         }),
       ),
     ).toBe(true)
@@ -235,7 +237,16 @@ describe('SourceRow', () => {
       title: 'a.pdf',
       location: '/tmp/a.pdf',
     },
-    searches: [{ callId: 's1', query: 'attention' }],
+    searches: [
+      {
+        callId: 's1',
+        query: 'attention',
+        mode: 'metadata',
+        scope: { kind: 'library' },
+        itemTypes: [],
+        tags: [],
+      },
+    ],
     operations: { running: 1, failed: 2, stopped: 3 },
   })
 
@@ -384,7 +395,9 @@ describe('SourceRow', () => {
 
   it('shows browse provenance for a search without a query', () => {
     const browse = sourceOf({
-      searches: [{ callId: 's1' }],
+      searches: [
+        { callId: 's1', mode: 'metadata', scope: { kind: 'library' }, itemTypes: [], tags: [] },
+      ],
     })
     render(<SourceRow item={browse} t={t} />)
     fireEvent.click(screen.getByRole('button', { name: /zotero:\/\/user\/0\/item\/A/ }))

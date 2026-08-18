@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest'
 import type { ToolResultNode } from '@deepseek-ai/dsh-client-runtime/client'
 import { settled, running } from '../helpers/blocks.ts'
 import { buildSourceWorkspace } from '../../../src/client/sources/reducer.ts'
+import type { SourceScope } from '../../../src/client/sources/model.ts'
 
 const REF = (key: string, serverId?: string): string =>
   `zotero://user/0/item/${key}${serverId === undefined ? '' : `?server=${serverId}`}`
@@ -42,6 +43,31 @@ function block(
   extra: Partial<ToolResultNode> = {},
 ): ToolResultNode {
   return settled({ callId, seq, call: { name, argsRaw: JSON.stringify(args) }, ...extra })
+}
+
+/**
+ * The expected SearchProvenance of one episode: defaults mirror the reducer's
+ * argument normalization, so an episode created from plain `query` args
+ * carries the library scope and empty filters.
+ */
+function provenanceOf(
+  overrides: Partial<{
+    callId: string
+    query?: string
+    mode: 'metadata' | 'everything'
+    scope: SourceScope
+    itemTypes: string[]
+    tags: string[]
+  }> = {},
+): Record<string, unknown> {
+  return {
+    callId: 's1',
+    mode: 'metadata',
+    scope: { kind: 'library' },
+    itemTypes: [],
+    tags: [],
+    ...overrides,
+  }
 }
 
 const GET_META = {
@@ -112,8 +138,8 @@ describe('buildSourceWorkspace', () => {
     expect(workspace.sources).toHaveLength(2)
     const first = workspace.sources.find((item) => item.key.includes('a1'))
     const second = workspace.sources.find((item) => item.key.includes('b1'))
-    expect(first?.searches).toEqual([{ callId: 's1', query: 'attention' }])
-    expect(second?.searches).toEqual([{ callId: 's2', query: 'diffusion' }])
+    expect(first?.searches).toEqual([provenanceOf({ callId: 's1', query: 'attention' })])
+    expect(second?.searches).toEqual([provenanceOf({ callId: 's2', query: 'diffusion' })])
   })
 
   it('folds pagination continuations into one logical search', () => {
@@ -135,7 +161,7 @@ describe('buildSourceWorkspace', () => {
     ])
     expect(workspace.sources).toHaveLength(3)
     for (const source of workspace.sources) {
-      expect(source.searches).toEqual([{ callId: 's1', query: 'attention' }])
+      expect(source.searches).toEqual([provenanceOf({ callId: 's1', query: 'attention' })])
     }
   })
 
@@ -199,10 +225,24 @@ describe('buildSourceWorkspace', () => {
       ),
     ])
     expect(workspace.sources).toHaveLength(6)
-    expect(workspace.sources[0]!.searches).toEqual([{ callId: 's1', query: 'attention' }])
-    expect(workspace.sources[1]!.searches).toEqual([{ callId: 's2' }])
-    expect(workspace.sources[4]!.searches).toEqual([{ callId: 's5' }])
-    expect(workspace.sources[5]!.searches).toEqual([{ callId: 's6', query: 'attention' }])
+    expect(workspace.sources[0]!.searches).toEqual([
+      provenanceOf({ callId: 's1', query: 'attention' }),
+    ])
+    expect(workspace.sources[1]!.searches).toEqual([
+      provenanceOf({
+        callId: 's2',
+        mode: 'everything',
+        scope: { kind: 'savedSearch', name: 'Inbox' },
+      }),
+    ])
+    expect(workspace.sources[4]!.searches).toEqual([provenanceOf({ callId: 's5' })])
+    expect(workspace.sources[5]!.searches).toEqual([
+      provenanceOf({
+        callId: 's6',
+        query: 'attention',
+        scope: { kind: 'collection', ref: 'zotero://user/0/collection/C1' },
+      }),
+    ])
   })
 
   it('produces only inspected from a get, with no invented stage facts', () => {
@@ -274,6 +314,71 @@ describe('buildSourceWorkspace', () => {
     expect(workspace.sources[0]!.retrievalFacts?.attachmentRef).toBe(
       'zotero://user/0/attachment/WXYZ6789',
     )
+  })
+
+  it('summarizes retrieves with a run count, the latest event time, and the budget', () => {
+    const workspace = buildSourceWorkspace([
+      block('r1', 1, 'zotero_retrieve', { ref: REF('A1') }, { meta: RETRIEVE_META, time: 1000 }),
+      block(
+        'r2',
+        2,
+        'zotero_retrieve',
+        { ref: REF('A1') },
+        {
+          meta: {
+            ...RETRIEVE_META,
+            count: 2,
+            items: [
+              ...RETRIEVE_META.items,
+              {
+                source: 'annotation',
+                sourceRef: 'zotero://user/0/annotation/ANN2',
+                preview: 'another claim',
+                previewTruncated: false,
+              },
+            ],
+            truncated: true,
+          },
+          time: 2000,
+        },
+      ),
+    ])
+    const summary = workspace.sources[0]!.retrievalSummary
+    expect(summary).toEqual({
+      runCount: 2,
+      latestCallId: 'r2',
+      latestRetrievedAt: 2000,
+      keptPassageCount: 2,
+      reportedPassageCount: 3,
+      truncated: true,
+    })
+  })
+
+  it('counts each successful retrieve once even when its meta arrives late', () => {
+    const workspace = buildSourceWorkspace([
+      block(
+        'r1',
+        1,
+        'zotero_retrieve',
+        { ref: REF('A1') },
+        { meta: { count: 1, items: null, truncated: false } },
+      ),
+      block(
+        'r2',
+        2,
+        'zotero_retrieve',
+        { ref: REF('A1') },
+        { meta: { count: 1, items: null, truncated: false } },
+      ),
+    ])
+    expect(workspace.sources[0]!.retrievalSummary?.runCount).toBe(2)
+  })
+
+  it('keeps retrievalSummary off an item with no successful retrieve', () => {
+    const workspace = buildSourceWorkspace([
+      block('g1', 1, 'zotero_get', { ref: REF('A1') }, { meta: GET_META }),
+    ])
+    expect(workspace.sources[0]!.retrievalSummary).toBeUndefined()
   })
 
   it('counts running calls as operations and never as facts', () => {
@@ -1035,8 +1140,22 @@ describe('buildSourceWorkspace', () => {
       ),
     ])
     expect(workspace.sources).toHaveLength(2)
-    expect(workspace.sources[0]!.searches).toEqual([{ callId: 's1', query: 'transformer' }])
-    expect(workspace.sources[1]!.searches).toEqual([{ callId: 's2', query: 'transformer' }])
+    expect(workspace.sources[0]!.searches).toEqual([
+      provenanceOf({
+        callId: 's1',
+        query: 'transformer',
+        itemTypes: ['journalArticle'],
+        tags: ['review'],
+      }),
+    ])
+    expect(workspace.sources[1]!.searches).toEqual([
+      provenanceOf({
+        callId: 's2',
+        query: 'transformer',
+        itemTypes: ['journalArticle'],
+        tags: ['dataset'],
+      }),
+    ])
   })
 
   it('normalizes non-array itemTypes and tags into empty arrays', () => {
@@ -1389,7 +1508,11 @@ describe('buildSourceWorkspace', () => {
       ),
     ])
     expect(workspace.sources).toHaveLength(2)
-    expect(workspace.sources[0]!.searches).toEqual([{ callId: 's1', query: 'x' }])
-    expect(workspace.sources[1]!.searches).toEqual([{ callId: 's1', query: 'x' }])
+    expect(workspace.sources[0]!.searches).toEqual([
+      provenanceOf({ callId: 's1', query: 'x', tags: ['ml', 'review'] }),
+    ])
+    expect(workspace.sources[1]!.searches).toEqual([
+      provenanceOf({ callId: 's1', query: 'x', tags: ['ml', 'review'] }),
+    ])
   })
 })

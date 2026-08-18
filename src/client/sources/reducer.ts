@@ -55,6 +55,9 @@ interface SearchEpisode {
   readonly query?: string
   readonly mode: 'metadata' | 'everything'
   readonly scope: SourceScope
+  /** The episode's own filter arguments, normalized at creation. */
+  readonly itemTypes: readonly string[]
+  readonly tags: readonly string[]
   readonly offset: number
   returned: number
   omitted: number
@@ -96,6 +99,9 @@ interface Draft {
   bestAttachment?: SourceItem['bestAttachment']
   attachment?: SourceAttachment
   retrievalFacts?: SourceRetrievalFacts
+  retrievalSummary?: SourceItem['retrievalSummary']
+  /** Call ids of the successful, meta-recognizable retrieves (run count). */
+  readonly successfulRetrieveCallIds: Set<string>
   exports: ExportArtifact[]
   readonly exportedCallIds: Set<string>
   searches: SearchProvenance[]
@@ -240,6 +246,7 @@ export function buildSourceWorkspace(
         evidence: new Map(),
         exports: [],
         exportedCallIds: new Set(),
+        successfulRetrieveCallIds: new Set(),
         searches: [],
         firstSeenAt: seq,
         lastTouchedAt: seq,
@@ -265,11 +272,23 @@ export function buildSourceWorkspace(
     meta: Record<string, unknown>,
     callId: string,
     seq: number,
+    time: number,
   ): void => {
     const view = retrieveMetaOf(meta)
     // A recognized projection always carries `count` (the byte budget may
     // drop `items` alone); only a fully unusable meta yields no facts.
     if (view.items === null && view.count === null) return
+    if (!draft.successfulRetrieveCallIds.has(callId)) {
+      draft.successfulRetrieveCallIds.add(callId)
+      draft.retrievalSummary = {
+        runCount: draft.successfulRetrieveCallIds.size,
+        latestCallId: callId,
+        latestRetrievedAt: time,
+        keptPassageCount: 0,
+        reportedPassageCount: 0,
+        truncated: false,
+      }
+    }
     if (view.count !== null) {
       draft.facts.reportedEvidenceCount += view.count
     }
@@ -318,27 +337,39 @@ export function buildSourceWorkspace(
     } else {
       draft.retrievalFacts = nextFacts
     }
-    if (view.items === null) return
-    for (const item of view.items) {
-      const key = evidenceKeyOf(item.source, item.sourceRef, item.preview, item.pageLabel)
-      const existing = draft.evidence.get(key)
-      if (existing === undefined) {
-        draft.evidence.set(key, {
-          passage: {
-            source: item.source,
-            sourceRef: item.sourceRef,
-            text: item.preview,
-            previewTruncated: item.previewTruncated,
-            ...(item.pageLabel === undefined ? {} : { pageLabel: item.pageLabel }),
-            callIds: [callId],
-          },
-          seq,
-        })
-      } else {
-        existing.passage.callIds.push(callId)
+    if (view.items !== null) {
+      for (const item of view.items) {
+        const key = evidenceKeyOf(item.source, item.sourceRef, item.preview, item.pageLabel)
+        const existing = draft.evidence.get(key)
+        if (existing === undefined) {
+          draft.evidence.set(key, {
+            passage: {
+              source: item.source,
+              sourceRef: item.sourceRef,
+              text: item.preview,
+              previewTruncated: item.previewTruncated,
+              ...(item.pageLabel === undefined ? {} : { pageLabel: item.pageLabel }),
+              callIds: [callId],
+            },
+            seq,
+          })
+        } else {
+          existing.passage.callIds.push(callId)
+        }
+      }
+      draft.facts.evidenceCount = draft.evidence.size
+    }
+    // Refresh the summary's derived counters after the merge, so the latest
+    // retrieve's facts are reflected even when this call was already counted.
+    const summary = draft.retrievalSummary
+    if (summary !== undefined) {
+      draft.retrievalSummary = {
+        ...summary,
+        keptPassageCount: draft.evidence.size,
+        reportedPassageCount: draft.facts.reportedEvidenceCount,
+        truncated: draft.retrievalFacts?.truncated === true,
       }
     }
-    draft.facts.evidenceCount = draft.evidence.size
   }
 
   for (const block of blocks) {
@@ -363,6 +394,8 @@ export function buildSourceWorkspace(
               : {}),
             mode: args?.['mode'] === 'everything' ? 'everything' : 'metadata',
             scope: scopeOf(args?.['scope']),
+            itemTypes: normalizedListOf(args?.['itemTypes']),
+            tags: normalizedListOf(args?.['tags']),
             offset: offsetOf(args),
             returned: 0,
             omitted: 0,
@@ -413,7 +446,9 @@ export function buildSourceWorkspace(
         if (ref === null) break
         const draft = draftOf(ref, seq)
         countOperation(draft, state)
-        if (state === 'ok' && meta !== null) pushEvidence(draft, meta, block.callId, seq)
+        if (state === 'ok' && meta !== null) {
+          pushEvidence(draft, meta, block.callId, seq, 'kind' in block ? block.time : 0)
+        }
         break
       }
       case 'zotero_attachment': {
@@ -485,6 +520,10 @@ export function buildSourceWorkspace(
     const provenance: SearchProvenance = {
       callId: episode.callId,
       ...(episode.query === undefined ? {} : { query: episode.query }),
+      mode: episode.mode,
+      scope: episode.scope,
+      itemTypes: episode.itemTypes,
+      tags: episode.tags,
     }
     for (const key of episode.keys) {
       // Every episode key entered through `draftOf`, so the draft exists.
@@ -514,6 +553,9 @@ export function buildSourceWorkspace(
         ...(draft.bestAttachment === undefined ? {} : { bestAttachment: draft.bestAttachment }),
         ...(draft.attachment === undefined ? {} : { attachment: draft.attachment }),
         ...(draft.retrievalFacts === undefined ? {} : { retrievalFacts: draft.retrievalFacts }),
+        ...(draft.retrievalSummary === undefined
+          ? {}
+          : { retrievalSummary: draft.retrievalSummary }),
         exports: draft.exports,
         firstSeenAt: draft.firstSeenAt,
         lastTouchedAt: draft.lastTouchedAt,
