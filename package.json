@@ -1,6 +1,6 @@
 {
   "name": "dsh-zotero",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Let agents search, read, and cite your local Zotero library: find papers, browse notes and annotations, pull evidence by question, open the source document, generate citations.",
   "keywords": [
     "zotero",
@@ -61,6 +61,46 @@
         "@deepseek-ai/dsh-client-ui-conversation"
       ],
       "platform": "web"
+    }
+  },
+  "dshWorkshop": {
+    "schema": "omdsh-workshop-package/v1",
+    "type": "plugin",
+    "integration": {
+      "protocol": "harness-profile",
+      "artifact": "cordis.patch.yml"
+    },
+    "install": {
+      "mode": "transactional",
+      "adapter": "profile-bundle",
+      "failurePolicy": "generation-rollback",
+      "touchesCurrentBeforeActivation": false
+    },
+    "lifecycle": {
+      "activation": "restart-profile",
+      "dispose": "supported"
+    },
+    "permissions": [
+      "network:loopback",
+      "filesystem:read",
+      "settings:write"
+    ],
+    "compatibility": {
+      "dshVersions": [
+        "0.1.0-rc.7"
+      ]
+    },
+    "capability": {
+      "id": "zotero_search",
+      "kind": "tool",
+      "invocation": "call the registered zotero_search tool with a query against the local library",
+      "expected": "matching items from the connected local Zotero library, or the documented offline error when Zotero is unreachable"
+    },
+    "evidence": {
+      "install": "scripts/discovery-smoke.mjs",
+      "failureIsolation": null,
+      "hotReload": null,
+      "remove": null
     }
   },
   "peerDependencies": {

@@ -65,6 +65,7 @@ The plugin provides a settings card under **Settings → Plugins** where you can
 
 - Zotero ≥ 7 with local API enabled: **Settings → Advanced → "Allow other applications on this computer to communicate with Zotero"**
 - Node.js ≥ 22.19 (or ≥ 24)
+- dsh 0.1.0-rc.7 series host (all `@deepseek-ai/dsh-*` peer dependencies are `^0.1.0-rc.7`)
 - Local API at `http://127.0.0.1:23119/api`, unauthenticated, read-only
 
 ## Usage example
@@ -99,6 +100,14 @@ More examples in [Features](docs/features.md).
 - **Exports are static text**: returned as text, ready to copy into your target document
 - **Full-text evidence depends on Zotero's index**: unindexed PDFs yield no full-text passages
 - **Attachment depth depends on the harness**: `zotero_attachment` returns the file location; reading the PDF further needs a matching host capability
+
+## Permissions and external side effects
+
+- **Network**: HTTP requests go only to `http://127.0.0.1:23119/api` (redirects are not followed); `resolveConfig` enforces a loopback address
+- **Filesystem**: read-only — `zotero_attachment` verifies attachment paths with `existsSync`; no file writes
+- **Persistence**: the only write comes from the settings card under Settings → Plugins, saved to the `zotero:` user layer of `$DSH_HOME/settings.yaml`
+- **No shell / native / background tasks**: the plugin runs no shell commands, loads no native modules, and starts no daemon
+- **Restart**: after installing or removing the plugin, restart dsh and start a new session; configuration changes hot-reload on save without a restart
 
 ## Documentation
 

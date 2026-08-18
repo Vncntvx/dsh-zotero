@@ -65,6 +65,7 @@ dsh plugin --profile <name> add ./dsh-zotero-*.tgz
 
 - Zotero ≥ 7 桌面版，启用本地 API：**设置 → 高级 → "允许其他应用程序与 Zotero 通信"**
 - Node.js ≥ 22.19（或 ≥ 24）
+- 宿主 dsh 0.1.0-rc.7 系列（`@deepseek-ai/dsh-*` peer 依赖均为 `^0.1.0-rc.7`）
 - 本地 API 地址 `http://127.0.0.1:23119/api`，无认证，只读
 
 ## 使用示例
@@ -99,6 +100,14 @@ Agent → zotero_export(refs: [1,2,3], format: "bibtex")
 - **导出是静态文本**：以文本形式返回，需要手动复制到目标位置
 - **全文证据依赖 Zotero 索引**：未索引的 PDF 无法提供全文段落
 - **附件深度取决于宿主**：`zotero_attachment` 返回文件位置，继续阅读 PDF 需要宿主具备对应能力
+
+## 权限与外部副作用
+
+- **网络**：只向 `http://127.0.0.1:23119/api` 发起 HTTP 请求（不跟随重定向），`resolveConfig` 强制 loopback 地址
+- **文件**：只读——`zotero_attachment` 用 `existsSync` 校验 Zotero 返回的附件路径，不写文件系统
+- **持久化**：唯一写入来自 Settings → Plugins 中的配置卡片，保存到 `$DSH_HOME/settings.yaml` 的 `zotero:` 用户层
+- **无 Shell / native / 后台任务**：插件不执行 shell 命令、不加载 native 模块、不启动常驻进程
+- **重启**：安装或卸载插件后需要重启 dsh 并新建会话；配置修改保存即热更新，无需重启
 
 ## 文档
 
