@@ -129,24 +129,28 @@
   padding: 8px 12px 0;
 }
 
-/* The master-detail pair: sidebar rail plus the flowing inspector. */
+/* The master-detail pair: sidebar rail plus the flowing inspector. The
+ * pair caps at 1440px and centers on wide surfaces; `max-width` (not
+ * `width`) lets the flex grow fill the pane up to the cap. */
 .workspace {
   flex: 1 1 auto;
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
-  width: min(100%, 1440px);
+  width: 100%;
+  max-width: 1440px;
   margin: 0 auto;
   box-sizing: border-box;
 }
 
-/* The sidebar: the filter bar above a scrollable listbox. */
+/* The sidebar: the filter bar above a scrollable listbox. The bottom
+ * padding clears the floating composer, mirroring the inspector. */
 .sidebar {
   min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 8px 12px 12px;
+  padding: 8px 12px calc(var(--dsh-composer-height, 152px) + 16px);
   overflow-y: auto;
   border-right: 1px solid var(--dsw-alias-border-l2);
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
