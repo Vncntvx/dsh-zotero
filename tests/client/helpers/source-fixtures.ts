@@ -75,7 +75,10 @@ export function artifactOf(
     format: 'bibtex',
     refs: ['zotero://user/0/item/QRST3456'],
     refsOmitted: 0,
+    // The default itemization must match the default body's citation key,
+    // or the artifact would fall back to a whole-text row everywhere.
     text: '@article{a,\n  title = {A},\n}',
+    items: [{ ref: 'zotero://user/0/item/QRST3456', key: 'a', title: 'A' }],
     ...overrides,
   }
 }
@@ -424,7 +427,9 @@ const LARGE_BIBTEX = Array.from(
 
 /**
  * 7/8 — a large BibTeX artifact: the exports lens shows the file with a
- * bounded preview and a full-text expand, never a truncating layout.
+ * bounded preview and a full-text expand, never a truncating layout. The
+ * artifact stays item-less on purpose, so the page also exercises the
+ * whole-text fallback row.
  */
 export function largeArtifactFixture(): SourceWorkspace {
   return workspaceOf([pdfItemOf()], {
@@ -435,6 +440,7 @@ export function largeArtifactFixture(): SourceWorkspace {
         refs: ['zotero://user/0/item/QRST3456'],
         refsOmitted: 19,
         text: LARGE_BIBTEX,
+        items: undefined,
       }),
     ],
   })

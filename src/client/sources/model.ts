@@ -89,6 +89,20 @@ export interface SourceAttachment {
   readonly location: string
 }
 
+/** One exported document inside a translator-format artifact. */
+export interface ExportDocumentItem {
+  /** The formatted `zotero://` ref the entry was exported for. */
+  readonly ref: string
+  /**
+   * The format-local identifier: the BibTeX/BibLaTeX citation key or the
+   * CSL JSON id; absent when the format has none (RIS) or it cannot be
+   * parsed. The RIS records identify themselves by the item key instead.
+   */
+  readonly key?: string
+  /** The item's title for display, when the entry carried one. */
+  readonly title?: string
+}
+
 /** The export facts of one successful artifact. */
 export interface ExportArtifact {
   readonly callId: string
@@ -101,6 +115,12 @@ export interface ExportArtifact {
   readonly refsOmitted: number
   /** The settled result's event time (Unix epoch ms); absent for legacy projections. */
   readonly settledAt?: number
+  /**
+   * The per-document itemization of a translator-format export (ref, key,
+   * title — never the entry text, which stays in the merged body); absent
+   * for citation/bibliography artifacts and legacy projections.
+   */
+  readonly items?: readonly ExportDocumentItem[]
   readonly text: string
 }
 

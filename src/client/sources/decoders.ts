@@ -16,7 +16,7 @@ import {
   stringField,
   type EvidenceItemView,
 } from '../presenters.ts'
-import type { SourceAvailabilityEntry, SourceCoverage } from './model.ts'
+import type { ExportDocumentItem, SourceAvailabilityEntry, SourceCoverage } from './model.ts'
 
 /** One decoded search row (with Zotero's attachment selection when present). */
 export interface SearchRowMeta {
@@ -70,12 +70,33 @@ export interface ExportMetaView {
   readonly locale: string | null
   readonly refs: readonly string[]
   readonly refsOmitted: number
+  /** The bounded per-document items; empty when the projection carried none. */
+  readonly items: readonly ExportDocumentItem[]
 }
 
 /** String entries of an array-shaped field; anything else yields nothing. */
 function stringArrayOf(value: unknown): string[] {
   if (!Array.isArray(value)) return []
   return value.filter((entry): entry is string => typeof entry === 'string')
+}
+
+/** The bounded per-document items of an export projection; malformed rows are dropped. */
+function exportItemsOf(value: unknown): ExportDocumentItem[] {
+  if (!Array.isArray(value)) return []
+  const items: ExportDocumentItem[] = []
+  for (const entry of value) {
+    if (!isRecord(entry)) continue
+    const ref = stringField(entry, 'ref')
+    if (ref === undefined) continue
+    const key = stringField(entry, 'key')
+    const title = stringField(entry, 'title')
+    items.push({
+      ref,
+      ...(key === undefined ? {} : { key }),
+      ...(title === undefined ? {} : { title }),
+    })
+  }
+  return items
 }
 
 function decodeSearchRows(value: unknown): SearchRowMeta[] | null {
@@ -192,5 +213,6 @@ export function exportMetaOf(meta: Record<string, unknown>): ExportMetaView {
     locale: stringField(meta, 'locale') ?? null,
     refs: stringArrayOf(meta['refs']),
     refsOmitted: numberField(meta, 'refsOmitted') ?? 0,
+    items: exportItemsOf(meta['items']),
   }
 }

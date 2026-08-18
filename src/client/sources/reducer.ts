@@ -501,6 +501,7 @@ export function buildSourceWorkspace(
             : { locale: metaView.locale }),
           refs,
           refsOmitted,
+          ...(metaView === null || metaView.items.length === 0 ? {} : { items: metaView.items }),
           // The settled result's event time (Unix epoch ms), never a
           // transcript position.
           settledAt: eventTimeOf(block),

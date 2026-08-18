@@ -240,6 +240,24 @@ describe('exportMetaOf', () => {
       locale: null,
       refs: [],
       refsOmitted: 0,
+      items: [],
     })
+  })
+
+  it('decodes the bounded per-document items and drops malformed rows', () => {
+    const meta = exportMetaOf({
+      items: [
+        { ref: 'zotero://user/0/item/AAAAAAA1', key: 'a1', title: 'Alpha' },
+        { ref: 'zotero://user/0/item/AAAAAAA2' },
+        { key: 'no-ref' },
+        'junk',
+        { ref: 'zotero://user/0/item/AAAAAAA3', key: 7 },
+      ],
+    })
+    expect(meta.items).toEqual([
+      { ref: 'zotero://user/0/item/AAAAAAA1', key: 'a1', title: 'Alpha' },
+      { ref: 'zotero://user/0/item/AAAAAAA2' },
+      { ref: 'zotero://user/0/item/AAAAAAA3' },
+    ])
   })
 })

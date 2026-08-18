@@ -459,6 +459,71 @@ describe('buildSourceWorkspace', () => {
     }
   })
 
+  it('carries the per-document items of a translator export onto the artifact', () => {
+    const workspace = buildSourceWorkspace([
+      block(
+        'e1',
+        1,
+        'zotero_export',
+        { refs: [REF('A1')], format: 'bibtex' },
+        {
+          meta: {
+            format: 'bibtex',
+            requested: 1,
+            refs: [REF('A1')],
+            refsOmitted: 0,
+            items: [{ ref: REF('A1'), key: 'a1', title: 'Alpha' }],
+          },
+          content: [{ type: 'text', text: '@article{a1}' }],
+        },
+      ),
+    ])
+    expect(workspace.exports[0]!.items).toEqual([{ ref: REF('A1'), key: 'a1', title: 'Alpha' }])
+  })
+
+  it('drops malformed item rows while decoding the rest', () => {
+    const workspace = buildSourceWorkspace([
+      block(
+        'e1',
+        1,
+        'zotero_export',
+        { refs: [REF('A1'), REF('A2')], format: 'bibtex' },
+        {
+          meta: {
+            format: 'bibtex',
+            requested: 2,
+            refs: [REF('A1'), REF('A2')],
+            refsOmitted: 0,
+            items: [
+              { ref: REF('A1'), key: 'a1' },
+              { key: 'no-ref' },
+              'junk',
+              { ref: REF('A2'), key: 7 },
+            ],
+          },
+          content: [{ type: 'text', text: '@article{a1}\n@article{a2}' }],
+        },
+      ),
+    ])
+    expect(workspace.exports[0]!.items).toEqual([{ ref: REF('A1'), key: 'a1' }, { ref: REF('A2') }])
+  })
+
+  it('keeps artifacts item-less when the projection carries no items', () => {
+    const workspace = buildSourceWorkspace([
+      block(
+        'e1',
+        1,
+        'zotero_export',
+        { refs: [REF('A1')], format: 'bibtex' },
+        {
+          meta: { format: 'bibtex', requested: 1, refs: [REF('A1')], refsOmitted: 0 },
+          content: [{ type: 'text', text: '@article{a1}' }],
+        },
+      ),
+    ])
+    expect(workspace.exports[0]!).not.toHaveProperty('items')
+  })
+
   it('counts a duplicated ref once per artifact', () => {
     const workspace = buildSourceWorkspace([
       block(

@@ -1,6 +1,6 @@
 /**
  * Pure selectors over the source workspace: filters, the per-filter counts,
- * and the issues predicate.
+ * the issues predicate, and the exports view model.
  * @module tests/client/sources/selectors
  */
 
@@ -8,11 +8,13 @@ import { describe, expect, it } from 'vitest'
 import type { SourceItem } from '../../../src/client/sources/model.ts'
 import {
   evidencePassageTotalOf,
+  exportedRefCountOf,
+  exportSectionsOf,
   filterCountsOf,
   filterSources,
   hasIssue,
 } from '../../../src/client/sources/selectors.ts'
-import { passageOf, sourceOf } from '../helpers/source-fixtures.ts'
+import { artifactOf, passageOf, sourceOf } from '../helpers/source-fixtures.ts'
 
 const SOURCES: readonly SourceItem[] = [
   sourceOf({ key: 'a', ref: 'zotero://user/0/item/A', firstSeenAt: 3, lastTouchedAt: 3 }),
@@ -151,5 +153,235 @@ describe('evidencePassageTotalOf', () => {
 
   it('is zero for an empty list', () => {
     expect(evidencePassageTotalOf([])).toBe(0)
+  })
+})
+
+describe('exportSectionsOf', () => {
+  const REF = 'zotero://user/0/item/QRST3456'
+  const BIBTEX_TEXT = '@article{a,\n  title = {A},\n}'
+  const BIBTEX_ITEMS = [{ ref: REF, key: 'a', title: 'A' }]
+
+  it('groups documents into first-seen format sections', () => {
+    const bibtex = artifactOf({
+      callId: 'e1',
+      format: 'bibtex',
+      refs: [REF],
+      text: BIBTEX_TEXT,
+      items: BIBTEX_ITEMS,
+    })
+    const ris = artifactOf({
+      callId: 'e2',
+      format: 'ris',
+      refs: [REF],
+      text: `TY  - JOUR\nTI  - A\nID  - QRST3456\nER  -\n`,
+      items: [{ ref: REF, title: 'A' }],
+    })
+    const sections = exportSectionsOf([bibtex, ris])
+    expect(sections.map((section) => section.format)).toEqual(['bibtex', 'ris'])
+    expect(sections[0]!.unresolved).toEqual([])
+    expect(sections[0]!.documents[0]).toEqual({
+      ref: REF,
+      format: 'bibtex',
+      key: 'a',
+      title: 'A',
+      text: BIBTEX_TEXT,
+      callIds: ['e1'],
+      latestExportedAt: undefined,
+    })
+    // RIS records carry no citation key; the document keeps only the title.
+    expect(sections[1]!.documents[0]).toEqual({
+      ref: REF,
+      format: 'ris',
+      title: 'A',
+      text: 'TY  - JOUR\nTI  - A\nID  - QRST3456',
+      callIds: ['e2'],
+      latestExportedAt: undefined,
+    })
+  })
+
+  it('collapses repeated exports of one document into the latest result', () => {
+    const first = artifactOf({
+      callId: 'e1',
+      format: 'bibtex',
+      refs: [REF],
+      settledAt: 1000,
+      text: BIBTEX_TEXT,
+      items: BIBTEX_ITEMS,
+    })
+    const second = artifactOf({
+      callId: 'e2',
+      format: 'bibtex',
+      refs: [REF],
+      settledAt: 2000,
+      text: '@article{a,\n  title = {A updated},\n}',
+      items: [{ ref: REF, key: 'a', title: 'A updated' }],
+    })
+    const sections = exportSectionsOf([first, second])
+    expect(sections).toHaveLength(1)
+    expect(sections[0]!.documents).toHaveLength(1)
+    expect(sections[0]!.documents[0]).toEqual({
+      ref: REF,
+      format: 'bibtex',
+      key: 'a',
+      title: 'A updated',
+      text: '@article{a,\n  title = {A updated},\n}',
+      callIds: ['e1', 'e2'],
+      latestExportedAt: 2000,
+    })
+  })
+
+  it('falls back an artifact whose entries cannot be located in the body', () => {
+    const artifact = artifactOf({
+      callId: 'e1',
+      format: 'bibtex',
+      refs: [REF],
+      text: '@article{other,\n  title = {Other},\n}',
+      items: BIBTEX_ITEMS,
+    })
+    const sections = exportSectionsOf([artifact])
+    expect(sections[0]!.documents).toEqual([])
+    expect(sections[0]!.unresolved).toEqual([artifact])
+  })
+
+  it('falls back citation, bibliography, and legacy artifacts to whole-text rows', () => {
+    const citation = artifactOf({
+      callId: 'e1',
+      format: 'citation',
+      refs: [REF],
+      text: '<span>A</span>',
+    })
+    const bibliography = artifactOf({
+      callId: 'e2',
+      format: 'bibliography',
+      refs: [REF],
+      text: '<div class="csl-entry">A</div>',
+    })
+    const legacy = artifactOf({ callId: 'e3', refs: [REF], items: undefined })
+    const sections = exportSectionsOf([citation, bibliography, legacy])
+    expect(sections.map((section) => section.format)).toEqual([
+      'citation',
+      'bibliography',
+      'bibtex',
+    ])
+    expect(sections.every((section) => section.documents.length === 0)).toBe(true)
+    expect(sections[0]!.unresolved).toEqual([citation])
+    expect(sections[1]!.unresolved).toEqual([bibliography])
+    expect(sections[2]!.unresolved).toEqual([legacy])
+  })
+
+  it('falls back an empty itemization and an unlocatable RIS record', () => {
+    const empty = artifactOf({ callId: 'e1', refs: [REF], items: [] })
+    const ris = artifactOf({
+      callId: 'e2',
+      format: 'ris',
+      refs: [REF],
+      text: 'TY  - JOUR\nTI  - No id\nER  -\n',
+      items: [{ ref: REF, title: 'No id' }],
+    })
+    const sections = exportSectionsOf([empty, ris])
+    expect(sections.every((section) => section.documents.length === 0)).toBe(true)
+    expect(sections[0]!.unresolved).toEqual([empty])
+    expect(sections[1]!.unresolved).toEqual([ris])
+  })
+
+  it('resolves CSL JSON documents through their id', () => {
+    const csljson = artifactOf({
+      callId: 'e4',
+      format: 'csljson',
+      refs: [REF],
+      text: JSON.stringify([{ id: 'wang2023', title: 'Carbon trading' }]),
+      items: [{ ref: REF, key: 'wang2023', title: 'Carbon trading' }],
+    })
+    const sections = exportSectionsOf([csljson])
+    expect(sections[0]!.documents).toEqual([
+      {
+        ref: REF,
+        format: 'csljson',
+        key: 'wang2023',
+        title: 'Carbon trading',
+        text: '{"id":"wang2023","title":"Carbon trading"}',
+        callIds: ['e4'],
+      },
+    ])
+  })
+
+  it('falls back an artifact whose item ref carries no usable record id', () => {
+    const artifact = artifactOf({
+      callId: 'e5',
+      format: 'ris',
+      refs: [REF],
+      text: 'TY  - JOUR\nTI  - A\nID  - QRST3456\nER  -\n',
+      items: [{ ref: 'not-a-zotero-ref', title: 'A' }],
+    })
+    const sections = exportSectionsOf([artifact])
+    expect(sections[0]!.documents).toEqual([])
+    expect(sections[0]!.unresolved).toEqual([artifact])
+  })
+
+  it('omits the title when the entry carried none', () => {
+    const artifact = artifactOf({ callId: 'e6', items: [{ ref: REF, key: 'a' }] })
+    const sections = exportSectionsOf([artifact])
+    expect(sections[0]!.documents[0]).toMatchObject({
+      ref: REF,
+      key: 'a',
+      text: '@article{a,\n  title = {A},\n}',
+    })
+    expect(sections[0]!.documents[0]!).not.toHaveProperty('title')
+  })
+
+  it('keeps the earlier title and time when a later export carries none', () => {
+    const first = artifactOf({
+      callId: 'e1',
+      format: 'ris',
+      refs: [REF],
+      settledAt: 1000,
+      text: 'TY  - JOUR\nTI  - A\nID  - QRST3456\nER  -\n',
+      items: [{ ref: REF, title: 'A' }],
+    })
+    const second = artifactOf({
+      callId: 'e2',
+      format: 'ris',
+      refs: [REF],
+      text: 'TY  - JOUR\nTI  - A revised\nID  - QRST3456\nER  -\n',
+      items: [{ ref: REF }],
+    })
+    const sections = exportSectionsOf([first, second])
+    expect(sections[0]!.documents).toHaveLength(1)
+    expect(sections[0]!.documents[0]).toEqual({
+      ref: REF,
+      format: 'ris',
+      title: 'A',
+      text: 'TY  - JOUR\nTI  - A revised\nID  - QRST3456',
+      callIds: ['e1', 'e2'],
+      latestExportedAt: 1000,
+    })
+  })
+
+  it('is empty for no exports', () => {
+    expect(exportSectionsOf([])).toEqual([])
+  })
+})
+
+describe('exportedRefCountOf', () => {
+  it('counts distinct exported documents, deduplicated across formats', () => {
+    const REF = 'zotero://user/0/item/QRST3456'
+    const exports = [
+      artifactOf({ callId: 'e1', format: 'bibtex', refs: [REF] }),
+      artifactOf({ callId: 'e2', format: 'ris', refs: [REF] }),
+      artifactOf({ callId: 'e3', format: 'bibtex', refs: ['zotero://user/0/item/AAAA1111'] }),
+    ]
+    expect(exportedRefCountOf(exports)).toBe(2)
+  })
+
+  it('deduplicates refs that differ only by server provenance', () => {
+    const exports = [
+      artifactOf({ callId: 'e1', refs: ['zotero://user/0/item/QRST3456'] }),
+      artifactOf({ callId: 'e2', refs: ['zotero://user/0/item/QRST3456?server=S1'] }),
+    ]
+    expect(exportedRefCountOf(exports)).toBe(1)
+  })
+
+  it('is zero for no exports', () => {
+    expect(exportedRefCountOf([])).toBe(0)
   })
 })
