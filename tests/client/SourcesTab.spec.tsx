@@ -448,6 +448,44 @@ describe('SourcesTab', () => {
     view.unmount()
   })
 
+  it('clears the verified server id when the probe stops confirming it', async () => {
+    const status = vi
+      .fn(async () => ({ ok: true, value: CONNECTED }))
+      .mockResolvedValueOnce({ ok: true, value: CONNECTED })
+      .mockResolvedValueOnce({ ok: true, value: UNAVAILABLE })
+    const foreign = settled({
+      seq: 3,
+      callId: 's1',
+      call: { name: 'zotero_search', argsRaw: '{"query":"attention"}' },
+      meta: {
+        returned: 1,
+        total: 1,
+        displayed: 1,
+        omitted: 0,
+        items: [
+          {
+            ref: 'zotero://user/0/item/AAAAAAA1?server=S1',
+            title: 'Foreign',
+            creatorSummary: 'Creator',
+            itemType: 'journalArticle',
+          },
+        ],
+      },
+    })
+    const { view } = mountTab(snapshotOf({ nodes: [foreign] }), status)
+    await act(async () => {})
+    // Connected: the foreign qualifier is a mismatch against the verified id.
+    expect(view.container.querySelector('[data-provenance="mismatch"]')).not.toBeNull()
+
+    fireEvent.click(screen.getByText(zh.refresh))
+    await act(async () => {})
+    // Unavailable: the instance is no longer verifiable, so the verdict
+    // degrades to unknown instead of staying a stale mismatch.
+    expect(view.container.querySelector('[data-provenance="mismatch"]')).toBeNull()
+    expect(view.container.querySelector('[data-provenance="unknown"]')).not.toBeNull()
+    view.unmount()
+  })
+
   it('shows honest placeholders on the evidence and exports lenses', async () => {
     const status = vi.fn(async () => ({ ok: true, value: CONNECTED }))
     const { view } = mountTab(snapshotOf({ nodes: [searchResult()] }), status)

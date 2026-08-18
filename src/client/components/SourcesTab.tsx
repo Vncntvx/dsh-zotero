@@ -184,6 +184,8 @@ export function SourcesTab({ status, t, useSession, inputActions }: SourcesTabPr
       setStatusState(next)
       if (next.kind === 'connected' && next.data.serverId !== undefined) {
         setServerId(next.data.serverId)
+      } else {
+        setServerId(undefined)
       }
     })()
     return () => {
