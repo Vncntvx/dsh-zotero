@@ -17,7 +17,7 @@ import type {
   SourceCoverage,
   SourceItem,
 } from '../sources/model.ts'
-import { pdfCapabilityOf } from '../sources/source-capabilities.ts'
+import { pdfCapabilityOf, type PdfCapability } from '../sources/source-capabilities.ts'
 import { CopyButton } from './CopyButton.tsx'
 import { BlockedOpenAction } from './open/BlockedOpenAction.tsx'
 import { ZoteroOpenLink } from './open/ZoteroOpenLink.tsx'
@@ -76,6 +76,7 @@ function PassageRow({
   t,
 }: {
   readonly passage: EvidencePassage
+  /** The source's file-PDF ref; annotation jumps prefer the passage's own parent attachment. */
   readonly pdfRef: string | null
   readonly verdict: OpenVerdict
   readonly t: TranslateNS<'zotero'>
@@ -118,11 +119,17 @@ export interface EvidenceCardProps {
   readonly t: TranslateNS<'zotero'>
 }
 
+/** The source's file-PDF ref for annotation jumps; a web PDF cannot jump to annotations. */
+function pdfRefOf(capability: PdfCapability | null): string | null {
+  return capability !== null && capability.kind === 'file' ? capability.ref : null
+}
+
 /** One source's evidence card. */
 export function EvidenceCard({ item, t }: EvidenceCardProps) {
   const verdict = openVerdictOf(item)
   const selectUrl = selectUrlOf(item.ref)
   const pdfCapability = pdfCapabilityOf(item)
+  const pdfRef = pdfRefOf(pdfCapability)
   const coverageLine =
     item.retrievalFacts?.coverage === undefined
       ? ''
@@ -157,7 +164,7 @@ export function EvidenceCard({ item, t }: EvidenceCardProps) {
           <PassageRow
             key={`${passage.sourceRef}-${index}`}
             passage={passage}
-            pdfRef={pdfCapability === null ? null : pdfCapability.ref}
+            pdfRef={pdfRef}
             verdict={verdict}
             t={t}
           />

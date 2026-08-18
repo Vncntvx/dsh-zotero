@@ -69,9 +69,9 @@ describe('filterSources', () => {
     expect(filterSources(SOURCES, 'issues').map((item) => item.key)).toEqual(['d'])
   })
 
-  it('keeps an inferred PDF ref under the pdf filter like the badge does', () => {
+  it('excludes a type-less ref from the pdf filter like the badge does', () => {
     const historical = sourceOf({ bestAttachment: { ref: 'zotero://user/0/attachment/WXYZ6789' } })
-    expect(filterSources([historical], 'pdf')).toHaveLength(1)
+    expect(filterSources([historical], 'pdf')).toHaveLength(0)
   })
 
   it('returns empty for a filter with no matches', () => {

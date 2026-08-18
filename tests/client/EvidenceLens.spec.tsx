@@ -65,6 +65,7 @@ const EVIDENCE_ITEM: SourceItem = sourceOf({
   ],
   retrievalFacts: {
     attachmentRef: 'zotero://user/0/attachment/WXYZ6789',
+    attachmentContentType: 'application/pdf',
     coverage: { indexedPages: 5, totalPages: 10, complete: false },
     truncated: true,
     sourceAvailability: {
@@ -195,6 +196,27 @@ describe('EvidenceCard', () => {
     expect(links).toContain('zotero://select/library/items/ABCDEFGH')
     expect(links).toContain('zotero://open-pdf/library/items/WXYZ6789')
     expect(links).toContain('zotero://open-pdf/library/items/WXYZ6789?annotation=ANN00001')
+  })
+
+  it('opens a resolved web PDF at its web location and offers no annotation jump', () => {
+    const item = sourceOf({
+      ...EVIDENCE_ITEM,
+      retrievalFacts: undefined,
+      attachment: {
+        ref: 'zotero://user/0/attachment/WEBLINK1',
+        kind: 'url',
+        contentType: 'application/pdf',
+        title: 'paper.pdf',
+        location: 'https://e.org/paper.pdf',
+      },
+    })
+    const { container } = render(<EvidenceCard item={item} t={t} />)
+    const links = Array.from(container.querySelectorAll('a')).map((anchor) =>
+      anchor.getAttribute('href'),
+    )
+    expect(links).toContain('https://e.org/paper.pdf')
+    expect(links).not.toContain('zotero://open-pdf/library/items/WEBLINK1')
+    expect(links.filter((url) => url !== null && url.includes('annotation'))).toHaveLength(0)
   })
 
   it('blocks every open link for a mismatching item and keeps the copy fallback', () => {

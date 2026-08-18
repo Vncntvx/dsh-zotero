@@ -65,6 +65,17 @@ function attachmentOf(contentType: string): SourceAttachment {
   }
 }
 
+/** A resolved web-linked attachment fixture. */
+function urlAttachmentOf(contentType: string, location: string): SourceAttachment {
+  return {
+    ref: 'zotero://user/0/attachment/WEBLINK1',
+    kind: 'url',
+    title: '',
+    location,
+    contentType,
+  }
+}
+
 describe('pdfCapabilityOf', () => {
   const PDF_REF = 'zotero://user/0/attachment/RESOLVED'
   const HINT_REF = 'zotero://user/0/attachment/HINT0001'
@@ -83,9 +94,9 @@ describe('pdfCapabilityOf', () => {
       }),
     )
     expect(capability).toEqual({
+      kind: 'file',
       ref: PDF_REF,
       url: 'zotero://open-pdf/library/items/RESOLVED',
-      confidence: 'confirmed',
     })
   })
 
@@ -95,9 +106,9 @@ describe('pdfCapabilityOf', () => {
         sourceOf({ bestAttachment: { ref: HINT_REF, contentType: 'application/pdf' } }),
       ),
     ).toEqual({
+      kind: 'file',
       ref: HINT_REF,
       url: 'zotero://open-pdf/library/items/HINT0001',
-      confidence: 'confirmed',
     })
     expect(
       pdfCapabilityOf(
@@ -111,9 +122,9 @@ describe('pdfCapabilityOf', () => {
         }),
       ),
     ).toEqual({
+      kind: 'file',
       ref: FULLTEXT_REF,
       url: 'zotero://open-pdf/library/items/FULLTEXT',
-      confidence: 'confirmed',
     })
   })
 
@@ -126,9 +137,9 @@ describe('pdfCapabilityOf', () => {
         }),
       ),
     ).toEqual({
+      kind: 'file',
       ref: HINT_REF,
       url: 'zotero://open-pdf/library/items/HINT0001',
-      confidence: 'confirmed',
     })
   })
 
@@ -136,12 +147,57 @@ describe('pdfCapabilityOf', () => {
     expect(pdfCapabilityOf(sourceOf({ attachment: attachmentOf('text/html') }))).toBeNull()
   })
 
-  it('infers a capability from a type-less ref of an older session', () => {
-    expect(pdfCapabilityOf(sourceOf({ bestAttachment: { ref: HINT_REF } }))).toEqual({
+  it('never hands a resolved web PDF to the open-pdf protocol when a file fact answers', () => {
+    expect(
+      pdfCapabilityOf(
+        sourceOf({
+          attachment: urlAttachmentOf('application/pdf', 'https://e.org/paper.pdf'),
+          bestAttachment: { ref: HINT_REF, contentType: 'application/pdf' },
+        }),
+      ),
+    ).toEqual({
+      kind: 'file',
       ref: HINT_REF,
       url: 'zotero://open-pdf/library/items/HINT0001',
-      confidence: 'inferred',
     })
+    expect(
+      pdfCapabilityOf(
+        sourceOf({
+          attachment: urlAttachmentOf('application/pdf', 'https://e.org/paper.pdf'),
+          retrievalFacts: {
+            attachmentRef: FULLTEXT_REF,
+            attachmentContentType: 'application/pdf',
+            truncated: false,
+            sourceAvailability: {},
+          },
+        }),
+      ),
+    ).toEqual({
+      kind: 'file',
+      ref: FULLTEXT_REF,
+      url: 'zotero://open-pdf/library/items/FULLTEXT',
+    })
+  })
+
+  it('opens a resolved web PDF at its web location when it is the only PDF fact', () => {
+    expect(
+      pdfCapabilityOf(
+        sourceOf({ attachment: urlAttachmentOf('application/pdf', 'https://e.org/paper.pdf') }),
+      ),
+    ).toEqual({ kind: 'url', url: 'https://e.org/paper.pdf' })
+  })
+
+  it('yields no capability for a resolved web PDF without an openable web location', () => {
+    expect(pdfCapabilityOf(sourceOf({ attachment: urlAttachmentOf('application/pdf', '') }))).toBe(
+      null,
+    )
+    expect(
+      pdfCapabilityOf(sourceOf({ attachment: urlAttachmentOf('application/pdf', 'file:///x') })),
+    ).toBeNull()
+  })
+
+  it('never promises a PDF from a type-less ref of an older session', () => {
+    expect(pdfCapabilityOf(sourceOf({ bestAttachment: { ref: HINT_REF } }))).toBeNull()
     expect(
       pdfCapabilityOf(
         sourceOf({
@@ -152,11 +208,7 @@ describe('pdfCapabilityOf', () => {
           },
         }),
       ),
-    ).toEqual({
-      ref: FULLTEXT_REF,
-      url: 'zotero://open-pdf/library/items/FULLTEXT',
-      confidence: 'inferred',
-    })
+    ).toBeNull()
   })
 
   it('rejects a confirmed-type ref the deep link cannot parse', () => {
@@ -180,6 +232,11 @@ describe('hasPdf', () => {
   it('mirrors pdfCapabilityOf exactly', () => {
     expect(
       hasPdf(sourceOf({ bestAttachment: { ref: 'zotero://user/0/attachment/HINT0001' } })),
+    ).toBe(false)
+    expect(
+      hasPdf(
+        sourceOf({ attachment: urlAttachmentOf('application/pdf', 'https://e.org/paper.pdf') }),
+      ),
     ).toBe(true)
     expect(hasPdf(sourceOf({ attachment: attachmentOf('text/html') }))).toBe(false)
     expect(hasPdf(sourceOf({}))).toBe(false)

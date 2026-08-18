@@ -77,7 +77,23 @@ describe('badgesOf', () => {
     ).toEqual([])
   })
 
-  it('badges a PDF attachment selection hint and an inferred type-less ref', () => {
+  it('badges a resolved web PDF like a file PDF', () => {
+    expect(
+      badgesOf(
+        sourceOf({
+          attachment: {
+            kind: 'url',
+            contentType: 'application/pdf',
+            title: 'p',
+            location: 'https://e.org/p.pdf',
+          },
+        }),
+        t,
+      ),
+    ).toEqual([zh.badgePdf])
+  })
+
+  it('badges a PDF hint and stays silent for a type-less ref of an older session', () => {
     expect(
       badgesOf(
         sourceOf({
@@ -91,7 +107,7 @@ describe('badgesOf', () => {
     ).toEqual([zh.badgePdf])
     expect(
       badgesOf(sourceOf({ bestAttachment: { ref: 'zotero://user/0/attachment/WXYZ6789' } }), t),
-    ).toEqual([zh.badgePdf])
+    ).toEqual([])
   })
 
   it('stays silent for a hint without a deep-linkable ref', () => {

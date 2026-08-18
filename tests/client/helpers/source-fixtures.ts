@@ -186,8 +186,9 @@ export function singleFixture(): SourceWorkspace {
 }
 
 /**
- * 2/8 — twelve items in mixed states: fresh, inspected, PDF vs inferred vs
- * no PDF, evidence, exports, issues, and a mismatch. The main visual sweep.
+ * 2/8 — twelve items in mixed states: fresh, inspected, PDF vs no-PDF
+ * (untyped hints are never promised), evidence, exports, issues, and a
+ * mismatch. The main visual sweep.
  */
 export function mixedFixture(): SourceWorkspace {
   const items: SourceItem[] = []
@@ -252,7 +253,7 @@ export function mixedFixture(): SourceWorkspace {
       }
       overrides.searches = [searchOf({ callId: 'call-3', query: 'mismatch' })]
     } else {
-      // Odd indexes: an inferred-PDF fresh hit, nothing else.
+      // Odd indexes: a fresh hit whose untyped hint promises no PDF.
       overrides.bestAttachment = { ref: 'zotero://user/0/attachment/ABCD1234' }
       overrides.searches = [searchOf({ callId: 'call-1', query: 'fresh' })]
     }
@@ -270,7 +271,7 @@ export function mixedFixture(): SourceWorkspace {
 
 /**
  * 3/8 — thirty items: the large-list workspace for scrolling and density.
- * Half confirmed PDF with evidence, half fresh inferred hits.
+ * Half confirmed PDF with evidence, half fresh hits without a PDF promise.
  */
 export function largeFixture(): SourceWorkspace {
   const items: SourceItem[] = []
