@@ -13,8 +13,10 @@
 export interface SourceFacts {
   /** A successful zotero_get read the item's detail. */
   readonly inspected: boolean
-  /** Distinct evidence passages gathered by successful zotero_retrieve calls. */
+  /** Distinct evidence passages kept after dedup and preview budget. */
   readonly evidenceCount: number
+  /** Total evidence passages reported across all successful retrieves. */
+  readonly reportedEvidenceCount: number
   /** A successful zotero_attachment resolved a usable location. */
   readonly attachmentResolved: boolean
   /** Successful zotero_export artifacts whose ref list included the item. */
@@ -81,9 +83,9 @@ export interface ExportArtifact {
   readonly format: string
   readonly style?: string
   readonly locale?: string
-  /** The exported refs (bounded by the presentation projection). */
+  /** The exported refs in the caller's order: the complete argument list when it parses, else the bounded projection preview. */
   readonly refs: readonly string[]
-  /** Exported refs beyond the bounded list. */
+  /** Exported refs beyond the bounded list; zero when the refs are the complete argument list. */
   readonly refsOmitted: number
   readonly text: string
 }
@@ -104,7 +106,13 @@ export interface SourceAvailabilityEntry {
   readonly unavailable: boolean
 }
 
-/** Facts of the most recent successful retrieve on one item. */
+/**
+ * Aggregated facts of the successful retrieves on one item: per-source
+ * availability holds the latest state each source reported, coverage and
+ * the attachment ref come from the latest retrieve that carried them,
+ * `truncated` sticks once any retrieve truncated. Passages themselves are
+ * accumulated and deduplicated separately in `evidence`.
+ */
 export interface SourceRetrievalFacts {
   readonly attachmentRef?: string
   readonly coverage?: SourceCoverage
@@ -132,7 +140,7 @@ export interface SourceItem {
   readonly bestAttachment?: AttachmentHint
   /** The resolved location from a successful zotero_attachment call. */
   readonly attachment?: SourceAttachment
-  /** Facts of the most recent successful retrieve on this item. */
+  /** Aggregated retrieval facts of the successful zotero_retrieve calls. */
   readonly retrievalFacts?: SourceRetrievalFacts
   readonly exports: readonly ExportArtifact[]
   /** Ordering: transcript position of the first touch. */

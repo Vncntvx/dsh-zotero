@@ -65,6 +65,7 @@ interface SearchEpisode {
 interface DraftFacts {
   inspected: boolean
   evidenceCount: number
+  reportedEvidenceCount: number
   attachmentResolved: boolean
   exportCount: number
 }
@@ -106,6 +107,7 @@ function emptyFacts(): DraftFacts {
   return {
     inspected: false,
     evidenceCount: 0,
+    reportedEvidenceCount: 0,
     attachmentResolved: false,
     exportCount: 0,
   }
@@ -377,7 +379,7 @@ export function buildSourceWorkspace(
             ? {}
             : { locale: metaView.locale }),
           refs,
-          refsOmitted: metaView?.refsOmitted ?? 0,
+          refsOmitted,
           text,
         }
         exports.push(artifact)

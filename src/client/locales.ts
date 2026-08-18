@@ -59,6 +59,7 @@ export type ZoteroLocaleKey =
   | 'searchFrom'
   | 'searchFromBrowse'
   | 'evidenceInDetail'
+  | 'reportedEvidenceInDetail'
   | 'exportsInDetail'
   | 'provenanceMismatch'
   | 'attachmentBadge'
@@ -68,6 +69,7 @@ export type ZoteroLocaleKey =
   | 'runningBadge'
   | 'stoppedBadge'
   | 'badgePdf'
+  | 'reportedEvidenceBadge'
   | 'bestAttachmentLabel'
   | 'localFile'
   | 'linkedUrl'
@@ -94,6 +96,8 @@ export type ZoteroLocaleKey =
   | 'availReturned'
   | 'availUnavailable'
   | 'availNoMatch'
+  | 'evidenceRetrievedNone'
+  | 'evidenceReportedNoPreview'
   | 'evidenceScopeNote'
   | 'evidenceEmptyNote'
   | 'exportsEmptyNote'
@@ -101,6 +105,7 @@ export type ZoteroLocaleKey =
   | 'exportsStaticNote'
   | 'formatCitation'
   | 'formatBibliography'
+  | 'formatUnknown'
   | 'exportRefCount'
   | 'exportRefsOmitted'
   | 'openInZotero'
@@ -222,10 +227,12 @@ export const en: Record<ZoteroLocaleKey, string> = {
   searchFrom: 'Search "{query}"',
   searchFromBrowse: 'Search without a query',
   evidenceInDetail: '{count} evidence passages (see Evidence)',
+  reportedEvidenceInDetail: '{count} reported evidence passages across retrieves',
   exportsInDetail: '{count} exports (see Exports)',
   provenanceMismatch: 'Belongs to a different Zotero database',
   attachmentBadge: 'Attachment',
   evidenceBadge: '{count} passages',
+  reportedEvidenceBadge: 'Reported {count}',
   exportBadge: '{count} exports',
   failedBadge: '{count} failed',
   runningBadge: '{count} running',
@@ -257,6 +264,8 @@ export const en: Record<ZoteroLocaleKey, string> = {
   availReturned: '{count} matching passages',
   availUnavailable: 'unavailable',
   availNoMatch: 'no matching passages',
+  evidenceRetrievedNone: 'Retrieved, but no passages matched.',
+  evidenceReportedNoPreview: 'Reported {count} passages across retrieves; no previews were kept.',
   evidenceScopeNote:
     'Evidence this session gathered, grouped by source; whether the final answer used it is not tracked.',
   evidenceEmptyNote: 'No evidence gathered in this session yet.',
@@ -266,6 +275,7 @@ export const en: Record<ZoteroLocaleKey, string> = {
     'Static exports are not inserted or updated in Word, Google Docs, or LibreOffice documents.',
   formatCitation: 'Citations',
   formatBibliography: 'Bibliography',
+  formatUnknown: 'Export',
   exportRefCount: '{count} refs',
   exportRefsOmitted: '{count} more not listed',
   openInZotero: 'Open in Zotero',
@@ -380,10 +390,12 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   searchFrom: '搜索 "{query}"',
   searchFromBrowse: '浏览检索',
   evidenceInDetail: '证据 {count} 条（见证据页）',
+  reportedEvidenceInDetail: '各次检索共报告 {count} 条证据',
   exportsInDetail: '导出 {count} 次（见导出页）',
   provenanceMismatch: '属于另一个 Zotero 数据库',
   attachmentBadge: '附件',
   evidenceBadge: '证据 {count}',
+  reportedEvidenceBadge: '报告 {count}',
   exportBadge: '导出 {count}',
   failedBadge: '失败 {count}',
   runningBadge: '进行中 {count}',
@@ -415,6 +427,8 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   availReturned: '返回 {count} 条匹配',
   availUnavailable: '该来源不可用',
   availNoMatch: '没有返回匹配',
+  evidenceRetrievedNone: '已检索，但没有匹配到任何段落。',
+  evidenceReportedNoPreview: '各次检索共报告 {count} 条证据，未保留预览段落。',
   evidenceScopeNote: '本会话取得的证据，按文献汇总；不能确定这些内容被用于最终回答。',
   evidenceEmptyNote: '本会话还没有取得证据。',
   exportsEmptyNote: '本会话还没有成功导出。',
@@ -422,6 +436,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   exportsStaticNote: '静态导出不会插入或更新 Word、Google Docs、LibreOffice 文档。',
   formatCitation: '引文',
   formatBibliography: '参考文献表',
+  formatUnknown: '导出',
   exportRefCount: '{count} 条文献',
   exportRefsOmitted: '另有 {count} 条未列出',
   openInZotero: '在 Zotero 中打开',

@@ -45,6 +45,7 @@ export interface GetMetaView {
 /** The retrieve projection view; `items === null` means malformed. */
 export interface RetrieveMetaView {
   readonly items: readonly EvidenceItemView[] | null
+  readonly count: number | null
   readonly truncated: boolean | null
   readonly attachmentRef: string | null
   readonly coverage: SourceCoverage | null
@@ -159,6 +160,7 @@ export function retrieveMetaOf(meta: Record<string, unknown>): RetrieveMetaView 
   const truncated = boolField(meta, 'truncated')
   return {
     items: evidenceItemsOf(meta),
+    count: numberField(meta, 'count') ?? null,
     truncated: truncated === undefined ? null : truncated,
     attachmentRef: stringField(meta, 'attachmentRef') ?? null,
     coverage: decodeCoverage(meta['coverage']),

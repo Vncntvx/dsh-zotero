@@ -18,7 +18,7 @@ export interface EvidenceLensProps {
 
 /** The evidence lens: scope note plus one card per evidence-bearing source. */
 export function EvidenceLens({ workspace, t }: EvidenceLensProps) {
-  const sources = filterSources(workspace.sources, 'evidence')
+  const sources = filterSources(workspace.sources, 'retrieved')
   if (sources.length === 0) {
     return <p className={css.emptyNote}>{t('evidenceEmptyNote')}</p>
   }

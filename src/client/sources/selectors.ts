@@ -8,7 +8,7 @@
 import type { SourceItem, SourceWorkspace } from './model.ts'
 
 /** The sources filters; every filter is a subset of the stable union. */
-export type SourceFilter = 'all' | 'evidence' | 'exported' | 'attachment' | 'failed'
+export type SourceFilter = 'all' | 'evidence' | 'exported' | 'attachment' | 'failed' | 'retrieved'
 
 export function filterSources(
   sources: readonly SourceItem[],
@@ -23,6 +23,8 @@ export function filterSources(
       return sources.filter((item) => item.facts.attachmentResolved)
     case 'failed':
       return sources.filter((item) => item.operations.failed > 0)
+    case 'retrieved':
+      return sources.filter((item) => item.retrievalFacts !== undefined)
     default:
       return sources
   }

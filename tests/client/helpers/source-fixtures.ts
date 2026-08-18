@@ -17,6 +17,7 @@ export function sourceOf(overrides: Partial<SourceItem> = {}): SourceItem {
     facts: {
       inspected: false,
       evidenceCount: 0,
+      reportedEvidenceCount: 0,
       attachmentResolved: false,
       exportCount: 0,
     },

@@ -16,7 +16,13 @@ const SOURCES: readonly SourceItem[] = [
     title: 'Alpha',
     firstSeenAt: 1,
     lastTouchedAt: 9,
-    facts: { inspected: false, evidenceCount: 2, attachmentResolved: false, exportCount: 0 },
+    facts: {
+      inspected: false,
+      evidenceCount: 2,
+      reportedEvidenceCount: 2,
+      attachmentResolved: false,
+      exportCount: 0,
+    },
   }),
   sourceOf({
     key: 'c',
@@ -24,7 +30,13 @@ const SOURCES: readonly SourceItem[] = [
     title: 'Beta',
     firstSeenAt: 2,
     lastTouchedAt: 2,
-    facts: { inspected: false, evidenceCount: 0, attachmentResolved: true, exportCount: 1 },
+    facts: {
+      inspected: false,
+      evidenceCount: 0,
+      reportedEvidenceCount: 0,
+      attachmentResolved: true,
+      exportCount: 1,
+    },
   }),
   sourceOf({
     key: 'd',
@@ -57,13 +69,31 @@ describe('countsOf', () => {
     const workspace = workspaceOf([
       sourceOf({}),
       sourceOf({
-        facts: { inspected: true, evidenceCount: 0, attachmentResolved: false, exportCount: 0 },
+        facts: {
+          inspected: true,
+          evidenceCount: 0,
+          reportedEvidenceCount: 0,
+          attachmentResolved: false,
+          exportCount: 0,
+        },
       }),
       sourceOf({
-        facts: { inspected: false, evidenceCount: 3, attachmentResolved: false, exportCount: 0 },
+        facts: {
+          inspected: false,
+          evidenceCount: 3,
+          reportedEvidenceCount: 3,
+          attachmentResolved: false,
+          exportCount: 0,
+        },
       }),
       sourceOf({
-        facts: { inspected: false, evidenceCount: 0, attachmentResolved: false, exportCount: 2 },
+        facts: {
+          inspected: false,
+          evidenceCount: 0,
+          reportedEvidenceCount: 0,
+          attachmentResolved: false,
+          exportCount: 2,
+        },
       }),
     ])
     expect(countsOf(workspace)).toEqual({ candidates: 4, inspected: 1, evidence: 1, exported: 1 })
