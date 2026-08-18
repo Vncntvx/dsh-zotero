@@ -54,6 +54,16 @@ export interface SourceFilterCounts {
   readonly issues: number
 }
 
+/**
+ * Total passage count across the session: the actual kept passages, not the
+ * number of sources that carry them. The sidebar's aggregate entry shows this
+ * sum, while the "has passages" filter pill keeps the source count — the two
+ * numbers mean different things and should not be conflated.
+ */
+export function evidencePassageTotalOf(sources: readonly SourceItem[]): number {
+  return sources.reduce((total, item) => total + item.evidence.length, 0)
+}
+
 /** Count the sources matching each filter in one pass. */
 export function filterCountsOf(sources: readonly SourceItem[]): SourceFilterCounts {
   let pdf = 0

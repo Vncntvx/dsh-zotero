@@ -6,8 +6,13 @@
 
 import { describe, expect, it } from 'vitest'
 import type { SourceItem } from '../../../src/client/sources/model.ts'
-import { filterCountsOf, filterSources, hasIssue } from '../../../src/client/sources/selectors.ts'
-import { sourceOf } from '../helpers/source-fixtures.ts'
+import {
+  evidencePassageTotalOf,
+  filterCountsOf,
+  filterSources,
+  hasIssue,
+} from '../../../src/client/sources/selectors.ts'
+import { passageOf, sourceOf } from '../helpers/source-fixtures.ts'
 
 const SOURCES: readonly SourceItem[] = [
   sourceOf({ key: 'a', ref: 'zotero://user/0/item/A', firstSeenAt: 3, lastTouchedAt: 3 }),
@@ -106,5 +111,45 @@ describe('filterCountsOf', () => {
       exported: 0,
       issues: 0,
     })
+  })
+})
+
+describe('evidencePassageTotalOf', () => {
+  it('sums the kept passages, not the sources that carry them', () => {
+    const sources = [
+      sourceOf({
+        facts: {
+          inspected: false,
+          evidenceCount: 3,
+          reportedEvidenceCount: 3,
+          attachmentResolved: false,
+          exportCount: 0,
+        },
+        evidence: [passageOf(), passageOf(), passageOf()],
+      }),
+      sourceOf({
+        facts: {
+          inspected: false,
+          evidenceCount: 1,
+          reportedEvidenceCount: 1,
+          attachmentResolved: false,
+          exportCount: 0,
+        },
+        evidence: [passageOf()],
+      }),
+      sourceOf({}),
+    ]
+    expect(evidencePassageTotalOf(sources)).toBe(4)
+    // The same three sources count as two evidence-bearing sources — the
+    // filter pill count and the overview sum genuinely differ.
+    expect(filterCountsOf(sources).evidence).toBe(2)
+  })
+
+  it('is zero when no source carries passages', () => {
+    expect(evidencePassageTotalOf([sourceOf({}), sourceOf({})])).toBe(0)
+  })
+
+  it('is zero for an empty list', () => {
+    expect(evidencePassageTotalOf([])).toBe(0)
   })
 })
