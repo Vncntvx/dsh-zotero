@@ -70,15 +70,24 @@ export function passageOf(
 export function artifactOf(
   overrides: Partial<SourceWorkspace['exports'][number]> = {},
 ): SourceWorkspace['exports'][number] {
+  const text = '@article{a,\n  title = {A},\n}'
   return {
     callId: 'call-export-1',
     format: 'bibtex',
     refs: ['zotero://user/0/item/QRST3456'],
     refsOmitted: 0,
-    // The default itemization must match the default body's citation key,
+    // The default itemization must locate its entry in the default body,
     // or the artifact would fall back to a whole-text row everywhere.
-    text: '@article{a,\n  title = {A},\n}',
-    items: [{ ref: 'zotero://user/0/item/QRST3456', key: 'a', title: 'A' }],
+    text,
+    items: [
+      {
+        ref: 'zotero://user/0/item/QRST3456',
+        key: 'a',
+        title: 'A',
+        start: 0,
+        end: text.length,
+      },
+    ],
     ...overrides,
   }
 }

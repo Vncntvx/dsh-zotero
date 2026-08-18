@@ -78,10 +78,13 @@ export function ExportDocumentRow({ doc, t }: ExportDocumentRowProps) {
       )}
       {open && (
         <div className={css.exportBody}>
-          <pre className={css.exportPre}>{doc.text}</pre>
-          <span className={css.lineActions}>
-            <CopyButton value={doc.text} label={t('copyExport')} copiedLabel={t('copied')} />
-          </span>
+          <div className={css.exportCode}>
+            <div className={css.exportCodeHead}>
+              <span className={css.exportCodeLabel}>{formatLabelOf(doc.format, t)}</span>
+              <CopyButton value={doc.text} label={t('copyExport')} copiedLabel={t('copied')} />
+            </div>
+            <pre className={css.exportPre}>{doc.text}</pre>
+          </div>
         </div>
       )}
     </section>

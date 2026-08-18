@@ -247,16 +247,24 @@ describe('exportMetaOf', () => {
   it('decodes the bounded per-document items and drops malformed rows', () => {
     const meta = exportMetaOf({
       items: [
-        { ref: 'zotero://user/0/item/AAAAAAA1', key: 'a1', title: 'Alpha' },
-        { ref: 'zotero://user/0/item/AAAAAAA2' },
+        {
+          ref: 'zotero://user/0/item/AAAAAAA1',
+          key: 'a1',
+          title: 'Alpha',
+          start: 0,
+          end: 41,
+        },
+        { ref: 'zotero://user/0/item/AAAAAAA2', entryIndex: 1 },
+        { ref: 'zotero://user/0/item/AAAAAAA4', start: 'x' },
         { key: 'no-ref' },
         'junk',
         { ref: 'zotero://user/0/item/AAAAAAA3', key: 7 },
       ],
     })
     expect(meta.items).toEqual([
-      { ref: 'zotero://user/0/item/AAAAAAA1', key: 'a1', title: 'Alpha' },
-      { ref: 'zotero://user/0/item/AAAAAAA2' },
+      { ref: 'zotero://user/0/item/AAAAAAA1', key: 'a1', title: 'Alpha', start: 0, end: 41 },
+      { ref: 'zotero://user/0/item/AAAAAAA2', entryIndex: 1 },
+      { ref: 'zotero://user/0/item/AAAAAAA4' },
       { ref: 'zotero://user/0/item/AAAAAAA3' },
     ])
   })

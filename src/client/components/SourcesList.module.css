@@ -281,11 +281,38 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 2px 0 6px;
+  max-width: 960px;
+  padding: 4px 0 10px;
 }
 
-/* The BibTeX keys and the \cite convenience: inside the body, capped so a
- * long key never stretches the row. */
+/* The expanded code surface of a document row: bordered and rounded with a
+ * head bar naming the format and carrying the copy action; the verbatim
+ * entry scrolls inside, never stretching the row. */
+.exportCode {
+  overflow: hidden;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.exportCodeHead {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+}
+
+.exportCodeLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* The BibTeX keys and the \cite convenience of a whole-text fallback row:
+ * inside the body, capped so a long key never stretches the row. */
 .exportKeys {
   margin: 0;
   display: flex;
@@ -306,14 +333,12 @@
   color: var(--dsw-alias-label-secondary);
 }
 
-/* The verbatim export body: rounded, padded, self-scrolling, bounded. */
+/* The verbatim export body: self-scrolling, bounded, code type. */
 .exportPre {
   margin: 0;
-  max-height: 360px;
+  max-height: 280px;
   overflow: auto;
   padding: 10px 12px;
-  border-radius: 8px;
-  background: var(--dsw-alias-bg-layer-2);
   font-family: var(--ds-font-family-code);
   font-size: 12px;
   line-height: 18px;
@@ -321,6 +346,23 @@
   white-space: pre;
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+}
+
+/* The light note for entries the provider could not locate: the count and
+ * the artifact's full text stay downloadable, so a partial failure never
+ * hides the documents that did resolve. */
+.unresolvedItems {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  padding: 4px 0 6px;
+}
+
+.unresolvedItemsText {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-caption);
 }
 
 @media (prefers-reduced-motion: reduce) {

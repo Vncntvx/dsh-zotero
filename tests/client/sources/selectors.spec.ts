@@ -159,7 +159,9 @@ describe('evidencePassageTotalOf', () => {
 describe('exportSectionsOf', () => {
   const REF = 'zotero://user/0/item/QRST3456'
   const BIBTEX_TEXT = '@article{a,\n  title = {A},\n}'
-  const BIBTEX_ITEMS = [{ ref: REF, key: 'a', title: 'A' }]
+  const RIS_TEXT = 'TY  - JOUR\nTI  - A\nID  - QRST3456\nER  -\n'
+  const RIS_END = RIS_TEXT.indexOf('ER  -')
+  const BIBTEX_ITEMS = [{ ref: REF, key: 'a', title: 'A', start: 0, end: BIBTEX_TEXT.length }]
 
   it('groups documents into first-seen format sections', () => {
     const bibtex = artifactOf({
@@ -173,12 +175,13 @@ describe('exportSectionsOf', () => {
       callId: 'e2',
       format: 'ris',
       refs: [REF],
-      text: `TY  - JOUR\nTI  - A\nID  - QRST3456\nER  -\n`,
-      items: [{ ref: REF, title: 'A' }],
+      text: RIS_TEXT,
+      items: [{ ref: REF, title: 'A', start: 0, end: RIS_END }],
     })
     const sections = exportSectionsOf([bibtex, ris])
     expect(sections.map((section) => section.format)).toEqual(['bibtex', 'ris'])
     expect(sections[0]!.unresolved).toEqual([])
+    expect(sections[0]!.unresolvedItems).toEqual([])
     expect(sections[0]!.documents[0]).toEqual({
       ref: REF,
       format: 'bibtex',
@@ -200,6 +203,7 @@ describe('exportSectionsOf', () => {
   })
 
   it('collapses repeated exports of one document into the latest result', () => {
+    const updated = '@article{a,\n  title = {A updated},\n}'
     const first = artifactOf({
       callId: 'e1',
       format: 'bibtex',
@@ -213,8 +217,8 @@ describe('exportSectionsOf', () => {
       format: 'bibtex',
       refs: [REF],
       settledAt: 2000,
-      text: '@article{a,\n  title = {A updated},\n}',
-      items: [{ ref: REF, key: 'a', title: 'A updated' }],
+      text: updated,
+      items: [{ ref: REF, key: 'a', title: 'A updated', start: 0, end: updated.length }],
     })
     const sections = exportSectionsOf([first, second])
     expect(sections).toHaveLength(1)
@@ -224,23 +228,29 @@ describe('exportSectionsOf', () => {
       format: 'bibtex',
       key: 'a',
       title: 'A updated',
-      text: '@article{a,\n  title = {A updated},\n}',
+      text: updated,
       callIds: ['e1', 'e2'],
       latestExportedAt: 2000,
     })
   })
 
-  it('falls back an artifact whose entries cannot be located in the body', () => {
+  it('keeps the other documents when one item cannot be located', () => {
+    const text = '@article{a,\n  title = {A},\n}\n\n@article{b,\n  title = {B},\n}'
     const artifact = artifactOf({
       callId: 'e1',
-      format: 'bibtex',
-      refs: [REF],
-      text: '@article{other,\n  title = {Other},\n}',
-      items: BIBTEX_ITEMS,
+      refs: [REF, 'zotero://user/0/item/BBBBBBBB'],
+      text,
+      items: [
+        { ref: REF, key: 'a', title: 'A', start: 0, end: text.indexOf('@article{b,') },
+        // The provider could not locate this item in the body.
+        { ref: 'zotero://user/0/item/BBBBBBBB', key: 'b', title: 'B' },
+      ],
     })
     const sections = exportSectionsOf([artifact])
-    expect(sections[0]!.documents).toEqual([])
-    expect(sections[0]!.unresolved).toEqual([artifact])
+    expect(sections[0]!.documents).toHaveLength(1)
+    expect(sections[0]!.documents[0]).toMatchObject({ ref: REF, key: 'a' })
+    expect(sections[0]!.unresolved).toEqual([])
+    expect(sections[0]!.unresolvedItems).toEqual([{ artifact, count: 1 }])
   })
 
   it('falls back citation, bibliography, and legacy artifacts to whole-text rows', () => {
@@ -264,33 +274,35 @@ describe('exportSectionsOf', () => {
       'bibtex',
     ])
     expect(sections.every((section) => section.documents.length === 0)).toBe(true)
+    expect(sections.every((section) => section.unresolvedItems.length === 0)).toBe(true)
     expect(sections[0]!.unresolved).toEqual([citation])
     expect(sections[1]!.unresolved).toEqual([bibliography])
     expect(sections[2]!.unresolved).toEqual([legacy])
   })
 
-  it('falls back an empty itemization and an unlocatable RIS record', () => {
+  it('falls back an empty itemization to a whole-text row and reports unlocatable items', () => {
     const empty = artifactOf({ callId: 'e1', refs: [REF], items: [] })
     const ris = artifactOf({
       callId: 'e2',
       format: 'ris',
       refs: [REF],
-      text: 'TY  - JOUR\nTI  - No id\nER  -\n',
-      items: [{ ref: REF, title: 'No id' }],
+      text: RIS_TEXT,
+      items: [{ ref: REF, title: 'A' }],
     })
     const sections = exportSectionsOf([empty, ris])
-    expect(sections.every((section) => section.documents.length === 0)).toBe(true)
     expect(sections[0]!.unresolved).toEqual([empty])
-    expect(sections[1]!.unresolved).toEqual([ris])
+    expect(sections[1]!.documents).toEqual([])
+    expect(sections[1]!.unresolved).toEqual([])
+    expect(sections[1]!.unresolvedItems).toEqual([{ artifact: ris, count: 1 }])
   })
 
-  it('resolves CSL JSON documents through their id', () => {
+  it('resolves CSL JSON documents through their id and array index', () => {
     const csljson = artifactOf({
       callId: 'e4',
       format: 'csljson',
       refs: [REF],
       text: JSON.stringify([{ id: 'wang2023', title: 'Carbon trading' }]),
-      items: [{ ref: REF, key: 'wang2023', title: 'Carbon trading' }],
+      items: [{ ref: REF, key: 'wang2023', title: 'Carbon trading', entryIndex: 0 }],
     })
     const sections = exportSectionsOf([csljson])
     expect(sections[0]!.documents).toEqual([
@@ -305,26 +317,58 @@ describe('exportSectionsOf', () => {
     ])
   })
 
-  it('falls back an artifact whose item ref carries no usable record id', () => {
-    const artifact = artifactOf({
-      callId: 'e5',
-      format: 'ris',
+  it('leaves CSL JSON items unlocated when the body or index is unusable', () => {
+    const malformed = artifactOf({
+      callId: 'e7',
+      format: 'csljson',
       refs: [REF],
-      text: 'TY  - JOUR\nTI  - A\nID  - QRST3456\nER  -\n',
-      items: [{ ref: 'not-a-zotero-ref', title: 'A' }],
+      text: 'not json',
+      items: [{ ref: REF, key: 'wang2023', entryIndex: 0 }],
     })
-    const sections = exportSectionsOf([artifact])
-    expect(sections[0]!.documents).toEqual([])
-    expect(sections[0]!.unresolved).toEqual([artifact])
+    const noIndex = artifactOf({
+      callId: 'e8',
+      format: 'csljson',
+      refs: [REF],
+      text: JSON.stringify([{ id: 'wang2023' }]),
+      items: [{ ref: REF, key: 'wang2023' }],
+    })
+    const notAnArray = artifactOf({
+      callId: 'e9',
+      format: 'csljson',
+      refs: [REF],
+      text: '{}',
+      items: [{ ref: REF, key: 'wang2023', entryIndex: 0 }],
+    })
+    const notAnObject = artifactOf({
+      callId: 'e10',
+      format: 'csljson',
+      refs: [REF],
+      text: JSON.stringify(['junk', null]),
+      items: [
+        { ref: REF, key: 'wang2023', entryIndex: 0 },
+        { ref: 'zotero://user/0/item/DDDDDDDD', key: 'x', entryIndex: 1 },
+      ],
+    })
+    const sections = exportSectionsOf([malformed, noIndex, notAnArray, notAnObject])
+    expect(sections.every((section) => section.documents.length === 0)).toBe(true)
+    expect(sections[0]!.unresolvedItems).toEqual([
+      { artifact: malformed, count: 1 },
+      { artifact: noIndex, count: 1 },
+      { artifact: notAnArray, count: 1 },
+      { artifact: notAnObject, count: 2 },
+    ])
   })
 
   it('omits the title when the entry carried none', () => {
-    const artifact = artifactOf({ callId: 'e6', items: [{ ref: REF, key: 'a' }] })
+    const artifact = artifactOf({
+      callId: 'e6',
+      items: [{ ref: REF, key: 'a', start: 0, end: BIBTEX_TEXT.length }],
+    })
     const sections = exportSectionsOf([artifact])
     expect(sections[0]!.documents[0]).toMatchObject({
       ref: REF,
       key: 'a',
-      text: '@article{a,\n  title = {A},\n}',
+      text: BIBTEX_TEXT,
     })
     expect(sections[0]!.documents[0]!).not.toHaveProperty('title')
   })
@@ -335,15 +379,21 @@ describe('exportSectionsOf', () => {
       format: 'ris',
       refs: [REF],
       settledAt: 1000,
-      text: 'TY  - JOUR\nTI  - A\nID  - QRST3456\nER  -\n',
-      items: [{ ref: REF, title: 'A' }],
+      text: RIS_TEXT,
+      items: [{ ref: REF, title: 'A', start: 0, end: RIS_END }],
     })
     const second = artifactOf({
       callId: 'e2',
       format: 'ris',
       refs: [REF],
       text: 'TY  - JOUR\nTI  - A revised\nID  - QRST3456\nER  -\n',
-      items: [{ ref: REF }],
+      items: [
+        {
+          ref: REF,
+          start: 0,
+          end: 'TY  - JOUR\nTI  - A revised\nID  - QRST3456\nER  -\n'.indexOf('ER  -'),
+        },
+      ],
     })
     const sections = exportSectionsOf([first, second])
     expect(sections[0]!.documents).toHaveLength(1)

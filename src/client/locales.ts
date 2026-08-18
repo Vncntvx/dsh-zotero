@@ -97,6 +97,8 @@ export type ZoteroLocaleKey =
   | 'copyCite'
   | 'copyAll'
   | 'downloadAll'
+  | 'unresolvedItemsNote'
+  | 'downloadFull'
   | 'askAboutItem'
   | 'askTemplate'
   | 'citeTemplate'
@@ -284,6 +286,8 @@ export const en: Record<ZoteroLocaleKey, string> = {
   copyCite: '\\cite{…}',
   copyAll: 'Copy all',
   downloadAll: 'Download all',
+  unresolvedItemsNote: '{count} more documents cannot be shown individually',
+  downloadFull: 'Download full',
   askAboutItem: 'Ask about this',
   askTemplate: 'About this item ({ref}): ',
   citeTemplate: 'Export this item from Zotero as BibTeX: {ref}',
@@ -466,6 +470,8 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   copyCite: '\\cite{…}',
   copyAll: '复制全部',
   downloadAll: '下载全部',
+  unresolvedItemsNote: '另有 {count} 篇无法单独显示',
+  downloadFull: '下载完整',
   askAboutItem: '问这篇',
   askTemplate: '关于这篇文献（{ref}）：',
   citeTemplate: '把这篇文献从 Zotero 导出为 BibTeX：{ref}',

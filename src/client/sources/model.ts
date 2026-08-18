@@ -94,13 +94,19 @@ export interface ExportDocumentItem {
   /** The formatted `zotero://` ref the entry was exported for. */
   readonly ref: string
   /**
-   * The format-local identifier: the BibTeX/BibLaTeX citation key or the
-   * CSL JSON id; absent when the format has none (RIS) or it cannot be
-   * parsed. The RIS records identify themselves by the item key instead.
+   * The batch body's real key: the BibTeX/BibLaTeX citation key or the CSL
+   * JSON id; absent when the format has none (RIS) or the entry could not
+   * be located.
    */
   readonly key?: string
   /** The item's title for display, when the entry carried one. */
   readonly title?: string
+  /** The located entry's index within the parsed CSL JSON array. */
+  readonly entryIndex?: number
+  /** The located entry's start offset within the trimmed batch body. */
+  readonly start?: number
+  /** The located entry's end offset (exclusive) within the trimmed batch body. */
+  readonly end?: number
 }
 
 /** The export facts of one successful artifact. */

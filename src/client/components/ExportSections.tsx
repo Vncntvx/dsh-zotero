@@ -5,16 +5,19 @@
  * copy-all / download-all actions (the joined latest entries); artifacts
  * without per-document data — citation and bibliography calls, legacy
  * projections — render as whole-text call rows inside their format's
- * section, so the page never hides a successful export.
+ * section, and entries the provider could not locate get a light note with
+ * the artifact's full text still downloadable, so a partial failure never
+ * hides the documents that did resolve.
  * @module dsh-zotero/client/components/ExportSections
  */
 
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import { interpolate } from '../presenters.ts'
 import type { ExportArtifact } from '../sources/model.ts'
 import { exportSectionsOf, type ExportSection } from '../sources/selectors.ts'
 import { CopyButton } from './CopyButton.tsx'
 import { ExportDocumentRow } from './ExportDocumentRow.tsx'
-import { ExportCard, extensionOf, formatLabelOf, mimeOf } from './ExportCard.tsx'
+import { ExportCard, extensionOf, fileNameOf, formatLabelOf, mimeOf } from './ExportCard.tsx'
 import css from './SourcesList.module.css'
 
 export interface ExportSectionsProps {
@@ -36,6 +39,20 @@ function downloadSection(section: ExportSection): void {
   // extension lookup keeps the fallback for unknown ids.
   anchor.href = url
   anchor.download = `zotero-${section.format}${extensionOf(section.format)}`
+  anchor.click()
+  // The blob URL must not outlive the click.
+  window.setTimeout(() => {
+    URL.revokeObjectURL(url)
+  }, 0)
+}
+
+/** Download one artifact's full merged body, for the unlocatable-items note. */
+function downloadArtifact(artifact: ExportArtifact): void {
+  const blob = new Blob([artifact.text], { type: mimeOf(artifact.format) })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = fileNameOf(artifact)
   anchor.click()
   // The blob URL must not outlive the click.
   window.setTimeout(() => {
@@ -78,6 +95,22 @@ export function ExportSections({ exports, t }: ExportSectionsProps) {
           )}
           {section.documents.map((document) => (
             <ExportDocumentRow key={document.ref} doc={document} t={t} />
+          ))}
+          {section.unresolvedItems.map((group) => (
+            <div className={css.unresolvedItems} key={group.artifact.callId}>
+              <span className={css.unresolvedItemsText}>
+                {interpolate(t('unresolvedItemsNote'), { count: group.count })}
+              </span>
+              <button
+                type="button"
+                className={css.lineAction}
+                onClick={() => {
+                  downloadArtifact(group.artifact)
+                }}
+              >
+                {`${t('downloadFull')} ${formatLabelOf(group.artifact.format, t)}`}
+              </button>
+            </div>
           ))}
           {section.unresolved.map((artifact) => (
             <ExportCard key={artifact.callId} artifact={artifact} t={t} />

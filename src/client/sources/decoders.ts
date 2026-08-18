@@ -90,10 +90,16 @@ function exportItemsOf(value: unknown): ExportDocumentItem[] {
     if (ref === undefined) continue
     const key = stringField(entry, 'key')
     const title = stringField(entry, 'title')
+    const entryIndex = numberField(entry, 'entryIndex')
+    const start = numberField(entry, 'start')
+    const end = numberField(entry, 'end')
     items.push({
       ref,
       ...(key === undefined ? {} : { key }),
       ...(title === undefined ? {} : { title }),
+      ...(entryIndex === undefined ? {} : { entryIndex }),
+      ...(start === undefined ? {} : { start }),
+      ...(end === undefined ? {} : { end }),
     })
   }
   return items

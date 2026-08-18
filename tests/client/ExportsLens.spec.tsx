@@ -27,7 +27,7 @@ import { incompleteExportsNoteOf } from '../../src/client/components/operations.
 import { ExportsPage } from '../../src/client/components/workspace/ExportsPage.tsx'
 import { zh, type ZoteroLocaleKey } from '../../src/client/locales.ts'
 import { bibTexKeysOf, citeCommandOf } from '../../src/client/sources/bibtex.ts'
-import type { ExportArtifact, ExportDocumentItem } from '../../src/client/sources/model.ts'
+import type { ExportArtifact } from '../../src/client/sources/model.ts'
 import type { ExportedDocument } from '../../src/client/sources/selectors.ts'
 import { workspaceOf } from './helpers/source-fixtures.ts'
 
@@ -51,31 +51,33 @@ const t: TranslateNS<'zotero'> = (key) => zh[key as ZoteroLocaleKey] ?? key
 const REF_A = 'zotero://user/0/item/AAAAAAA1'
 const REF_B = 'zotero://user/0/item/BBBBBBBB'
 
-/** An itemized BibTeX artifact whose body matches its items. */
+const BIBTEX_TEXT = '@article{dao2023,\n title={A study on dao}\n}'
+const RIS_TEXT = 'TY  - JOUR\nTI  - A RIS record\nID  - BBBBBBBB\nER  -\n'
+
+/** An itemized BibTeX artifact whose item locates its entry in the body. */
 function itemizedBibtex(overrides: Partial<ExportArtifact> = {}): ExportArtifact {
-  const items: readonly ExportDocumentItem[] = [
-    { ref: REF_A, key: 'dao2023', title: 'A study on dao' },
-  ]
   return {
     callId: 'e1',
     format: 'bibtex',
     refs: [REF_A],
     refsOmitted: 0,
-    text: '@article{dao2023,\n title={A study on dao}\n}',
-    items,
+    text: BIBTEX_TEXT,
+    items: [
+      { ref: REF_A, key: 'dao2023', title: 'A study on dao', start: 0, end: BIBTEX_TEXT.length },
+    ],
     ...overrides,
   }
 }
 
-/** An itemized RIS artifact whose record id matches its ref. */
+/** An itemized RIS artifact whose item locates its record in the body. */
 function itemizedRis(overrides: Partial<ExportArtifact> = {}): ExportArtifact {
   return {
     callId: 'e2',
     format: 'ris',
     refs: [REF_B],
     refsOmitted: 0,
-    text: 'TY  - JOUR\nTI  - A RIS record\nID  - BBBBBBBB\nER  -\n',
-    items: [{ ref: REF_B, title: 'A RIS record' }],
+    text: RIS_TEXT,
+    items: [{ ref: REF_B, title: 'A RIS record', start: 0, end: RIS_TEXT.indexOf('ER  -') }],
     ...overrides,
   }
 }
@@ -202,6 +204,9 @@ describe('ExportDocumentRow', () => {
   it('keeps the verbatim entry and its copy action behind the disclosure', () => {
     render(<ExportDocumentRow doc={BIBTEX_DOC} t={t} />)
     fireEvent.click(screen.getByRole('button', { expanded: false }))
+    // The code surface names the format in its head and keeps the copy
+    // action inside, so the row header itself never changes on expand.
+    expect(screen.getByText('BibTeX')).toBeDefined()
     expect(screen.getByText(/@article\{dao2023/)).toBeDefined()
     fireEvent.click(screen.getByLabelText(zh.copyExport))
     expect(writeClipboard).toHaveBeenCalledWith(BIBTEX_DOC.text)
@@ -279,7 +284,12 @@ describe('ExportDocumentRow', () => {
 
 describe('sectionTextOf', () => {
   it('joins the documents in display order', () => {
-    const section = { format: 'bibtex', documents: [BIBTEX_DOC], unresolved: [] }
+    const section = {
+      format: 'bibtex',
+      documents: [BIBTEX_DOC],
+      unresolved: [],
+      unresolvedItems: [],
+    }
     expect(sectionTextOf(section)).toBe(BIBTEX_DOC.text)
     expect(sectionTextOf({ ...section, documents: [BIBTEX_DOC, RIS_DOC] })).toBe(
       `${BIBTEX_DOC.text}\n\n${RIS_DOC.text}`,
@@ -300,20 +310,55 @@ describe('ExportSections', () => {
   })
 
   it('collapses repeated exports into one row and copies the latest entry with copy-all', () => {
+    const updated = '@article{dao2023,\n title={A study on dao, revised}\n}'
     const first = itemizedBibtex({ callId: 'e1', settledAt: 1000 })
     const second = itemizedBibtex({
       callId: 'e2',
       settledAt: 2000,
-      text: '@article{dao2023,\n title={A study on dao, revised}\n}',
-      items: [{ ref: REF_A, key: 'dao2023', title: 'A study on dao, revised' }],
+      text: updated,
+      items: [
+        {
+          ref: REF_A,
+          key: 'dao2023',
+          title: 'A study on dao, revised',
+          start: 0,
+          end: updated.length,
+        },
+      ],
     })
     render(<ExportSections exports={[first, second]} t={t} />)
     // One section, one document row — the latest entry wins, no duplicates.
     expect(screen.getAllByText('dao2023')).toHaveLength(1)
     fireEvent.click(screen.getByLabelText(zh.copyAll))
-    expect(writeClipboard).toHaveBeenCalledWith(
-      '@article{dao2023,\n title={A study on dao, revised}\n}',
-    )
+    expect(writeClipboard).toHaveBeenCalledWith(updated)
+  })
+
+  it('reports unlocatable items as a light note with the full text download', async () => {
+    const artifact = itemizedBibtex({
+      callId: 'e1',
+      refs: [REF_A, 'zotero://user/0/item/CCCCCCCC'],
+      items: [
+        { ref: REF_A, key: 'dao2023', title: 'A study on dao', start: 0, end: BIBTEX_TEXT.length },
+        // The provider could not locate this item in the body.
+        { ref: 'zotero://user/0/item/CCCCCCCC', key: 'other' },
+      ],
+    })
+    const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+    const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock')
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    render(<ExportSections exports={[artifact]} t={t} />)
+    // The located document still renders; the unlocated item gets the light
+    // note instead of hiding the whole export.
+    expect(screen.getByText('dao2023')).toBeDefined()
+    expect(screen.getByText(zh.unresolvedItemsNote.replace('{count}', '1'))).toBeDefined()
+    fireEvent.click(screen.getByText(`${zh.downloadFull} BibTeX`))
+    const anchor = click.mock.instances[0] as HTMLAnchorElement
+    expect(anchor.download).toBe('zotero-bibtex.bib')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(revoke).toHaveBeenCalledTimes(1)
+    create.mockRestore()
+    revoke.mockRestore()
+    click.mockRestore()
   })
 
   it('downloads the joined latest entries as one file', async () => {

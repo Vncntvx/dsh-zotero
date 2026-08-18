@@ -9,8 +9,6 @@
  * @module dsh-zotero/client/sources/selectors
  */
 
-import { shortKeyOf } from '../presenters.ts'
-import { bibtexEntriesOf, csljsonEntriesOf, risEntriesOf } from './export-entries.ts'
 import type { ExportArtifact, ExportDocumentItem, SourceItem } from './model.ts'
 import { normalizeRefKey } from './provenance.ts'
 import { hasPdf } from './source-capabilities.ts'
@@ -109,16 +107,29 @@ export interface ExportedDocument {
   readonly latestExportedAt?: number
 }
 
+/** The items of one artifact that could not be located in the merged body. */
+export interface UnresolvedItemGroup {
+  /** The artifact whose full text remains downloadable. */
+  readonly artifact: ExportArtifact
+  /** The number of items that could not be shown individually. */
+  readonly count: number
+}
+
 /** One format section of the exports page: documents plus the calls that could not be itemized. */
 export interface ExportSection {
   readonly format: string
   readonly documents: readonly ExportedDocument[]
   /**
-   * Artifacts without per-document data: citation/bibliography exports,
-   * legacy projections, or translator exports whose entries could not be
-   * located in the merged body. They render as whole-text call rows.
+   * Artifacts without per-document data: citation/bibliography exports and
+   * legacy projections. They render as whole-text call rows.
    */
   readonly unresolved: readonly ExportArtifact[]
+  /**
+   * Items the provider could not locate in the merged body; the section
+   * reports them as a light note with the artifact's full text still
+   * downloadable, instead of failing the whole export.
+   */
+  readonly unresolvedItems: readonly UnresolvedItemGroup[]
 }
 
 /** The mutable build shape of one export section. */
@@ -126,37 +137,46 @@ interface ExportSectionDraft {
   readonly format: string
   readonly documents: ExportedDocument[]
   readonly unresolved: ExportArtifact[]
+  readonly unresolvedItems: UnresolvedItemGroup[]
 }
 
-/** The translator formats whose bodies chunk into per-document entries. */
+/** The translator formats whose bodies itemize into per-document entries. */
 const DOCUMENT_FORMATS = new Set(['bibtex', 'biblatex', 'ris', 'csljson'])
 
-/** Locate one artifact's entries in its merged body, keyed by the join key. */
-function entriesOf(artifact: ExportArtifact): Map<string, string> {
-  if (artifact.format === 'ris') return risEntriesOf(artifact.text)
-  if (artifact.format === 'csljson') return csljsonEntriesOf(artifact.text)
-  return bibtexEntriesOf(artifact.text)
-}
-
 /**
- * The join key that locates one item's entry in the merged body: the
- * citation-style key for BibTeX/BibLaTeX/CSL JSON, the item key (which RIS
- * records carry as their id) for RIS.
+ * The entry text of one located item within the artifact's body. The
+ * provider determined the location — a text span for the BibTeX family and
+ * RIS, an array index for CSL JSON — so nothing is matched by guessing here.
  */
-function joinKeyOf(format: string, item: ExportDocumentItem): string | undefined {
-  if (format === 'ris') {
-    const key = shortKeyOf(item.ref)
-    return key === null ? undefined : key
+function entryTextOf(artifact: ExportArtifact, item: ExportDocumentItem): string | undefined {
+  if (artifact.format === 'csljson') {
+    if (item.entryIndex === undefined) return undefined
+    try {
+      const records: unknown = JSON.parse(artifact.text)
+      const record = Array.isArray(records) ? records[item.entryIndex] : undefined
+      if (typeof record !== 'object' || record === null) return undefined
+      return JSON.stringify(record)
+    } catch {
+      return undefined
+    }
   }
-  return item.key
+  if (item.start === undefined || item.end === undefined) return undefined
+  return artifact.text.slice(item.start, item.end).trim()
 }
 
 /**
- * Resolve one artifact into per-document rows; undefined when any item's
- * entry cannot be located in the merged body. An artifact resolves wholly
- * or not at all, so its facts never split across two render modes.
+ * Resolve one artifact into per-document rows plus the items that could not
+ * be located; undefined when the artifact carries no per-document data at
+ * all (citation, bibliography, legacy projections), which keeps the whole
+ * artifact on the call-row fallback. Partial resolution is the rule: one
+ * unlocatable item never hides the other documents of the same export.
  */
-function documentsOf(artifact: ExportArtifact): readonly ExportedDocument[] | undefined {
+function documentsOf(artifact: ExportArtifact):
+  | {
+      readonly documents: readonly ExportedDocument[]
+      readonly unresolved: readonly ExportDocumentItem[]
+    }
+  | undefined {
   if (
     artifact.items === undefined ||
     artifact.items.length === 0 ||
@@ -164,12 +184,14 @@ function documentsOf(artifact: ExportArtifact): readonly ExportedDocument[] | un
   ) {
     return undefined
   }
-  const entries = entriesOf(artifact)
   const documents: ExportedDocument[] = []
+  const unresolved: ExportDocumentItem[] = []
   for (const item of artifact.items) {
-    const joinKey = joinKeyOf(artifact.format, item)
-    const text = joinKey === undefined ? undefined : entries.get(joinKey)
-    if (text === undefined) return undefined
+    const text = entryTextOf(artifact, item)
+    if (text === undefined) {
+      unresolved.push(item)
+      continue
+    }
     documents.push({
       ref: item.ref,
       format: artifact.format,
@@ -180,7 +202,7 @@ function documentsOf(artifact: ExportArtifact): readonly ExportedDocument[] | un
       ...(artifact.settledAt === undefined ? {} : { latestExportedAt: artifact.settledAt }),
     })
   }
-  return documents
+  return { documents, unresolved }
 }
 
 /**
@@ -188,8 +210,9 @@ function documentsOf(artifact: ExportArtifact): readonly ExportedDocument[] | un
  * first-seen format order. Repeated exports of the same (format, ref)
  * collapse into one document — the latest success is the current result,
  * the call history stays on the document — and exports without per-document
- * data (citation, bibliography, legacy projections, unlocatable entries)
- * fall back to whole-text artifact rows.
+ * data (citation, bibliography, legacy projections) fall back to whole-text
+ * artifact rows, while entries the provider could not locate are reported
+ * individually.
  * @param exports - the successful export artifacts in transcript order.
  * @returns the format sections in first-seen order.
  */
@@ -200,16 +223,16 @@ export function exportSectionsOf(exports: readonly ExportArtifact[]): readonly E
   for (const artifact of exports) {
     let section = sectionByFormat.get(artifact.format)
     if (section === undefined) {
-      section = { format: artifact.format, documents: [], unresolved: [] }
+      section = { format: artifact.format, documents: [], unresolved: [], unresolvedItems: [] }
       sectionByFormat.set(artifact.format, section)
       sections.push(section)
     }
-    const documents = documentsOf(artifact)
-    if (documents === undefined) {
+    const resolved = documentsOf(artifact)
+    if (resolved === undefined) {
       section.unresolved.push(artifact)
       continue
     }
-    for (const document of documents) {
+    for (const document of resolved.documents) {
       const key = `${document.format}|${document.ref}`
       const existing = documentByKey.get(key)
       if (existing === undefined) {
@@ -229,6 +252,9 @@ export function exportSectionsOf(exports: readonly ExportArtifact[]): readonly E
         documentByKey.set(key, merged)
         section.documents[section.documents.indexOf(existing)] = merged
       }
+    }
+    if (resolved.unresolved.length > 0) {
+      section.unresolvedItems.push({ artifact, count: resolved.unresolved.length })
     }
   }
   return sections
