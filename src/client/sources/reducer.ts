@@ -10,7 +10,7 @@
  * @module dsh-zotero/client/sources/reducer
  */
 
-import type { ToolCallBlock } from '@deepseek-ai/dsh-client-runtime/client'
+import type { ToolCallBlock, ToolResultNode } from '@deepseek-ai/dsh-client-runtime/client'
 import {
   argsOf,
   callNameOf,
@@ -267,6 +267,13 @@ export function buildSourceWorkspace(
     else if (state === 'error') draft.operations.failed += 1
   }
 
+  /**
+   * The event time of a settled block. `rowStateOf` maps kind-less blocks
+   * to 'running', so every caller reaches here only with a tool result —
+   * the cast documents what the state check already proved.
+   */
+  const eventTimeOf = (block: ToolCallBlock): number => (block as ToolResultNode).time
+
   const pushEvidence = (
     draft: Draft,
     meta: Record<string, unknown>,
@@ -361,14 +368,12 @@ export function buildSourceWorkspace(
     }
     // Refresh the summary's derived counters after the merge, so the latest
     // retrieve's facts are reflected even when this call was already counted.
-    const summary = draft.retrievalSummary
-    if (summary !== undefined) {
-      draft.retrievalSummary = {
-        ...summary,
-        keptPassageCount: draft.evidence.size,
-        reportedPassageCount: draft.facts.reportedEvidenceCount,
-        truncated: draft.retrievalFacts?.truncated === true,
-      }
+    // The creation block above guarantees a summary exists by this point.
+    draft.retrievalSummary = {
+      ...draft.retrievalSummary!,
+      keptPassageCount: draft.evidence.size,
+      reportedPassageCount: draft.facts.reportedEvidenceCount,
+      truncated: draft.retrievalFacts?.truncated === true,
     }
   }
 
@@ -447,7 +452,7 @@ export function buildSourceWorkspace(
         const draft = draftOf(ref, seq)
         countOperation(draft, state)
         if (state === 'ok' && meta !== null) {
-          pushEvidence(draft, meta, block.callId, seq, 'kind' in block ? block.time : 0)
+          pushEvidence(draft, meta, block.callId, seq, eventTimeOf(block))
         }
         break
       }
@@ -498,7 +503,7 @@ export function buildSourceWorkspace(
           refsOmitted,
           // The settled result's event time (Unix epoch ms), never a
           // transcript position.
-          ...('kind' in block ? { settledAt: block.time } : {}),
+          settledAt: eventTimeOf(block),
           text,
         }
         exports.push(artifact)

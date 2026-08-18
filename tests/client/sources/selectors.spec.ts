@@ -6,13 +6,8 @@
 
 import { describe, expect, it } from 'vitest'
 import type { SourceItem } from '../../../src/client/sources/model.ts'
-import {
-  countsOf,
-  filterCountsOf,
-  filterSources,
-  hasIssue,
-} from '../../../src/client/sources/selectors.ts'
-import { sourceOf, workspaceOf } from '../helpers/source-fixtures.ts'
+import { filterCountsOf, filterSources, hasIssue } from '../../../src/client/sources/selectors.ts'
+import { sourceOf } from '../helpers/source-fixtures.ts'
 
 const SOURCES: readonly SourceItem[] = [
   sourceOf({ key: 'a', ref: 'zotero://user/0/item/A', firstSeenAt: 3, lastTouchedAt: 3 }),
@@ -110,51 +105,6 @@ describe('filterCountsOf', () => {
       evidence: 0,
       exported: 0,
       issues: 0,
-    })
-  })
-})
-
-describe('countsOf', () => {
-  it('counts the neutral strip per provable stage', () => {
-    const workspace = workspaceOf([
-      sourceOf({}),
-      sourceOf({
-        facts: {
-          inspected: true,
-          evidenceCount: 0,
-          reportedEvidenceCount: 0,
-          attachmentResolved: false,
-          exportCount: 0,
-        },
-      }),
-      sourceOf({
-        facts: {
-          inspected: false,
-          evidenceCount: 3,
-          reportedEvidenceCount: 3,
-          attachmentResolved: false,
-          exportCount: 0,
-        },
-      }),
-      sourceOf({
-        facts: {
-          inspected: false,
-          evidenceCount: 0,
-          reportedEvidenceCount: 0,
-          attachmentResolved: false,
-          exportCount: 2,
-        },
-      }),
-    ])
-    expect(countsOf(workspace)).toEqual({ candidates: 4, inspected: 1, evidence: 1, exported: 1 })
-  })
-
-  it('is all zero for an empty workspace', () => {
-    expect(countsOf(workspaceOf([]))).toEqual({
-      candidates: 0,
-      inspected: 0,
-      evidence: 0,
-      exported: 0,
     })
   })
 })

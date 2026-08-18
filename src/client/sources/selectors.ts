@@ -1,14 +1,14 @@
 /**
- * Pure selectors over the source workspace: filters, the per-filter counts,
- * and the neutral count strip. Filters narrow the stable union — they never
- * replace it, so clearing a filter restores every source. The "with PDF"
- * filter shares its single source of truth with the PDF badge and the
- * open-PDF action (`hasPdf`), and "issues" spans every non-running
- * irregularity, so what the bar names is what it shows.
+ * Pure selectors over the source workspace: filters and the per-filter
+ * counts. Filters narrow the stable union — they never replace it, so
+ * clearing a filter restores every source. The "with PDF" filter shares its
+ * single source of truth with the PDF badge and the open-PDF action
+ * (`hasPdf`), and "issues" spans every non-running irregularity, so what
+ * the bar names is what it shows.
  * @module dsh-zotero/client/sources/selectors
  */
 
-import type { SourceItem, SourceWorkspace } from './model.ts'
+import type { SourceItem } from './model.ts'
 import { hasPdf } from './source-capabilities.ts'
 
 /** The sources filters; every filter is a subset of the stable union. */
@@ -69,24 +69,4 @@ export function filterCountsOf(sources: readonly SourceItem[]): SourceFilterCoun
     if (hasIssue(item)) issues += 1
   }
   return { all: sources.length, pdf, retrieved, evidence, exported, issues }
-}
-
-/** The neutral count strip: item counts per provable stage (no funnel). */
-export interface SourceCounts {
-  readonly candidates: number
-  readonly inspected: number
-  readonly evidence: number
-  readonly exported: number
-}
-
-export function countsOf(workspace: SourceWorkspace): SourceCounts {
-  let inspected = 0
-  let evidence = 0
-  let exported = 0
-  for (const source of workspace.sources) {
-    if (source.facts.inspected) inspected += 1
-    if (source.facts.evidenceCount > 0) evidence += 1
-    if (source.facts.exportCount > 0) exported += 1
-  }
-  return { candidates: workspace.sources.length, inspected, evidence, exported }
 }

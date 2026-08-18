@@ -1,36 +1,6 @@
-/* The sources lens: the neutral count strip and provenance notes above a
- * filter bar and one expandable row per source. Rows follow the house tool
- * row cadence (whole-line toggle, fact badges, line-end actions outside the
- * toggle); the dossier stacks the item's provable facts. Tokens only, no
- * theme selectors. */
-
-.header {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-/* The neutral count strip: provable item counts per stage, no funnel. */
-.counts {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.countChip {
-  display: inline-flex;
-  align-items: center;
-  height: 18px;
-  padding: 0 6px;
-  border-radius: 4px;
-  font-size: 10px;
-  line-height: 12px;
-  font-weight: 650;
-  letter-spacing: 0.035em;
-  color: var(--dsw-alias-label-tertiary);
-  background: var(--dsw-alias-bg-layer-2);
-}
+/* Shared surface styles for the panel's cards and rows: the evidence card
+ * (the cross-source board), the copy action leaf, and the export disclosure
+ * rows. Tokens only, no theme selectors. */
 
 /* Caption geometry: one shared note style, 12px/18px caption gray. */
 .note {
@@ -40,148 +10,16 @@
   color: var(--dsw-alias-label-caption);
 }
 
-.wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.filterBar {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.emptyNote {
+.line {
   margin: 0;
   font-size: 12px;
   line-height: 18px;
-  color: var(--dsw-alias-label-caption);
-}
-
-/* The filtered-empty state: the note plus its recovery action. */
-.emptyWrap {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-}
-
-.filterClear {
-  display: inline-flex;
-  align-items: center;
-  height: 24px;
-  padding: 0 8px;
-  font-family: inherit;
-  font-size: 12px;
-  line-height: 16px;
   color: var(--dsw-alias-label-secondary);
-  background: transparent;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 6px;
-  cursor: pointer;
-  transition:
-    background 120ms var(--ds-ease-in-out),
-    color 120ms var(--ds-ease-in-out);
+  overflow-wrap: anywhere;
 }
 
-.filterClear:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-primary);
-}
-
-.filterClear:focus-visible {
-  outline: 1px solid var(--dsw-alias-state-business-primary);
-  outline-offset: 1px;
-}
-
-/* One source row: the toggle head plus the line-end actions on one line. */
-.row {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  flex-direction: column;
-}
-
-.rowHead {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px 8px;
-  width: 100%;
-  box-sizing: border-box;
-  padding: 0;
-  font-family: inherit;
-  text-align: left;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  border-radius: 4px;
-}
-
-.rowHead:disabled {
-  cursor: default;
-}
-
-.rowHead:focus-visible {
-  outline: 1px solid var(--dsw-alias-state-business-primary);
-  outline-offset: 1px;
-}
-
-.rowTitle {
-  min-width: 0;
-  font-size: 13px;
-  line-height: 20px;
-  font-weight: 500;
-  color: var(--dsw-alias-label-primary);
-}
-
-.rowMeta {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.badges {
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.badge {
-  display: inline-flex;
-  align-items: center;
-  height: 18px;
-  padding: 0 6px;
-  border-radius: 4px;
-  font-size: 10px;
-  line-height: 12px;
-  font-weight: 650;
-  letter-spacing: 0.035em;
-  color: var(--dsw-alias-label-tertiary);
-  background: var(--dsw-alias-bg-layer-2);
-}
-
-.chevron {
-  flex: none;
-  color: var(--dsw-alias-label-caption);
-  transition: transform 120ms var(--ds-ease-in-out);
-}
-
-.chevronOpen {
-  transform: rotate(180deg);
-}
-
-/* Line-end actions sit outside the toggle: a copy or prefill never opens
- * the row. */
+/* Line-end actions sit outside a disclosure toggle: a copy or download
+ * never expands the row. */
 .lineActions {
   flex: none;
   display: inline-flex;
@@ -218,65 +56,14 @@
   outline-offset: 1px;
 }
 
-/* The dossier: the row's expanded facts, aligned under the title line. */
-.dossier {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 4px 0 4px 4px;
-  border-left: 2px solid var(--dsw-alias-state-business-primary);
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.section {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.sectionLabel {
-  margin: 0;
-  font-size: 12px;
-  line-height: 18px;
+.chevron {
+  flex: none;
   color: var(--dsw-alias-label-caption);
+  transition: transform 120ms var(--ds-ease-in-out);
 }
 
-.lines {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.line {
-  margin: 0;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--dsw-alias-label-secondary);
-  overflow-wrap: anywhere;
-}
-
-.warning {
-  margin: 0;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--dsw-alias-state-error-primary);
-}
-
-/* Narrow surfaces (the pane, not the viewport): the meta line wraps under
- * the title; actions and badges stay reachable. */
-@container (max-width: 620px) {
-  .row {
-    gap: 4px;
-  }
-
-  .rowMeta {
-    width: 100%;
-    flex-basis: 100%;
-  }
+.chevronOpen {
+  transform: rotate(180deg);
 }
 
 /* Evidence card: one per literature item, provable facts only. */
@@ -288,8 +75,6 @@
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 8px;
   background: var(--dsw-alias-bg-layer-1);
-  /* A very long export body must not stretch the card past the reading
-     column's natural width. */
   max-width: 900px;
 }
 
@@ -305,13 +90,6 @@
   line-height: 20px;
   font-weight: 500;
   color: var(--dsw-alias-label-primary);
-}
-
-.linkWrap {
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px;
 }
 
 .link {
@@ -375,61 +153,112 @@
   gap: 2px;
 }
 
-/* The export body: verbatim text inside the card, below the toggle. */
-.exportBody {
-  padding: 4px 0;
+/* One export artifact: a disclosure row, not a border card. The head line
+ * carries the format name (proper case), the scope facts, and the
+ * always-visible copy/download actions outside the toggle; the expanded
+ * body renders the verbatim text on a layer-2 code surface. */
+.exportRow {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  padding: 6px 0;
 }
 
-.exportBody .line {
-  white-space: pre-wrap;
-  font-family: var(--ds-font-family-code);
-  font-size: 12px;
-  line-height: 18px;
+.exportHead {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
 }
 
-/* The expand/collapse toggle for a body longer than the preview window. */
-.expandToggle {
-  align-self: flex-start;
+.exportToggle {
+  flex: 1 1 auto;
+  min-width: 0;
   display: inline-flex;
   align-items: center;
-  height: 24px;
-  padding: 0 8px;
+  gap: 8px;
+  padding: 2px 0;
   font-family: inherit;
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--dsw-alias-label-secondary);
+  text-align: left;
   background: transparent;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 6px;
+  border: none;
   cursor: pointer;
-  transition:
-    background 120ms var(--ds-ease-in-out),
-    color 120ms var(--ds-ease-in-out);
 }
 
-.expandToggle:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+.exportToggle:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.exportTitle {
+  flex: none;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
   color: var(--dsw-alias-label-primary);
 }
 
-.expandToggle:focus-visible {
-  outline: 1px solid var(--dsw-alias-state-business-primary);
-  outline-offset: 1px;
+.exportFacts {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-caption);
+}
+
+.exportBody {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 2px 0 6px;
+}
+
+/* The BibTeX keys and the \cite convenience: inside the body, capped so a
+ * long key never stretches the row. */
+.exportKeys {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.exportKeysText {
+  min-width: 0;
+  max-width: 480px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* The verbatim export body: rounded, padded, self-scrolling, bounded. */
+.exportPre {
+  margin: 0;
+  max-height: 360px;
+  overflow: auto;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-2);
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  white-space: pre;
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .chevron {
-    transition: none;
-  }
-
+  .chevron,
   .lineAction {
-    transition: none;
-  }
-
-  .filterClear {
     transition: none;
   }
 }

@@ -354,6 +354,17 @@ describe('buildSourceWorkspace', () => {
     })
   })
 
+  it('counts a repeated retrieve call id as one run', () => {
+    // The same call id replayed (a duplicated block in the slice) must not
+    // inflate the run count; the evidence merge still refreshes counters.
+    const workspace = buildSourceWorkspace([
+      block('r1', 1, 'zotero_retrieve', { ref: REF('A1') }, { meta: RETRIEVE_META }),
+      block('r1', 2, 'zotero_retrieve', { ref: REF('A1') }, { meta: RETRIEVE_META }),
+    ])
+    expect(workspace.sources[0]!.retrievalSummary?.runCount).toBe(1)
+    expect(workspace.sources[0]!.facts.evidenceCount).toBe(1)
+  })
+
   it('counts each successful retrieve once even when its meta arrives late', () => {
     const workspace = buildSourceWorkspace([
       block(
