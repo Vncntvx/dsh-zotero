@@ -12,9 +12,11 @@ import clsx from 'clsx'
 import { IconChevronDownOutline14 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { askDraftOf, exportDraftOf } from '../actions/source-actions.ts'
+import { attachmentRefOf, openVerdictOf, pdfUrlOf, selectUrlOf } from '../actions/open-zotero.ts'
 import { interpolate, joinNonEmpty } from '../presenters.ts'
 import type { SourceItem } from '../sources/model.ts'
 import { CopyButton } from './CopyButton.tsx'
+import { OpenLink } from './EvidenceCard.tsx'
 import { operationsLabelsOf } from './operations.ts'
 import { SourceDetail } from './SourceDetail.tsx'
 import css from './SourcesList.module.css'
@@ -32,6 +34,12 @@ export function badgesOf(item: SourceItem, t: TranslateNS<'zotero'>): string[] {
   }
   if (item.facts.evidenceCount > 0)
     badges.push(interpolate(t('evidenceBadge'), { count: item.facts.evidenceCount }))
+  // The reported count only adds information when it differs from the kept
+  // previews (dedup or budget); equal counts are the badge already shows.
+  if (item.facts.reportedEvidenceCount > item.facts.evidenceCount)
+    badges.push(
+      interpolate(t('reportedEvidenceBadge'), { count: item.facts.reportedEvidenceCount }),
+    )
   if (item.facts.exportCount > 0)
     badges.push(interpolate(t('exportBadge'), { count: item.facts.exportCount }))
   badges.push(...operationsLabelsOf(item.operations, t))
@@ -49,6 +57,7 @@ export function hasDossierContent(item: SourceItem): boolean {
     item.attachment !== undefined ||
     item.bestAttachment !== undefined ||
     item.facts.evidenceCount > 0 ||
+    item.facts.reportedEvidenceCount > item.facts.evidenceCount ||
     item.facts.exportCount > 0 ||
     item.operations.failed > 0 ||
     item.operations.running > 0 ||
@@ -68,6 +77,10 @@ export function SourceRow({ item, t, setDraft }: SourceRowProps) {
   const [open, setOpen] = useState(false)
   const expandable = hasDossierContent(item)
   const badges = badgesOf(item, t)
+  const verdict = openVerdictOf(item)
+  const selectUrl = selectUrlOf(item.ref)
+  const pdfRef = attachmentRefOf(item)
+  const pdfUrl = pdfRef === null ? null : pdfUrlOf(pdfRef)
   return (
     <div className={css.row} data-provenance={item.provenance}>
       <button
@@ -97,6 +110,24 @@ export function SourceRow({ item, t, setDraft }: SourceRowProps) {
         )}
       </button>
       <span className={css.lineActions}>
+        {selectUrl !== null && (
+          <OpenLink
+            url={selectUrl}
+            verdict={verdict}
+            label={t('openInZotero')}
+            t={t}
+            className={css.lineAction}
+          />
+        )}
+        {pdfUrl !== null && (
+          <OpenLink
+            url={pdfUrl}
+            verdict={verdict}
+            label={t('openPdf')}
+            t={t}
+            className={css.lineAction}
+          />
+        )}
         <CopyButton value={item.ref} label={t('copyRef')} t={t} />
         {setDraft !== undefined && (
           <button

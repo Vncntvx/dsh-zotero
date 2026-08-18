@@ -52,6 +52,7 @@ describe('badgesOf', () => {
           facts: {
             inspected: false,
             evidenceCount: 0,
+            reportedEvidenceCount: 0,
             attachmentResolved: true,
             exportCount: 0,
           },
@@ -72,6 +73,7 @@ describe('badgesOf', () => {
           facts: {
             inspected: false,
             evidenceCount: 0,
+            reportedEvidenceCount: 0,
             attachmentResolved: true,
             exportCount: 0,
           },
@@ -99,6 +101,7 @@ describe('badgesOf', () => {
         facts: {
           inspected: false,
           evidenceCount: 2,
+          reportedEvidenceCount: 2,
           attachmentResolved: false,
           exportCount: 1,
         },
@@ -112,6 +115,25 @@ describe('badgesOf', () => {
       zh.runningBadge.replace('{count}', '1'),
       zh.failedBadge.replace('{count}', '2'),
       zh.stoppedBadge.replace('{count}', '3'),
+    ])
+  })
+
+  it('badges the reported count only when it exceeds the kept previews', () => {
+    const badges = badgesOf(
+      sourceOf({
+        facts: {
+          inspected: false,
+          evidenceCount: 2,
+          reportedEvidenceCount: 7,
+          attachmentResolved: false,
+          exportCount: 0,
+        },
+      }),
+      t,
+    )
+    expect(badges).toEqual([
+      zh.evidenceBadge.replace('{count}', '2'),
+      zh.reportedEvidenceBadge.replace('{count}', '7'),
     ])
   })
 })
@@ -143,6 +165,7 @@ describe('hasDossierContent', () => {
           facts: {
             inspected: false,
             evidenceCount: 1,
+            reportedEvidenceCount: 1,
             attachmentResolved: false,
             exportCount: 0,
           },
@@ -155,6 +178,7 @@ describe('hasDossierContent', () => {
           facts: {
             inspected: false,
             evidenceCount: 0,
+            reportedEvidenceCount: 0,
             attachmentResolved: false,
             exportCount: 1,
           },
@@ -198,6 +222,7 @@ describe('SourceRow', () => {
     facts: {
       inspected: false,
       evidenceCount: 1,
+      reportedEvidenceCount: 1,
       attachmentResolved: true,
       exportCount: 1,
     },
@@ -250,6 +275,7 @@ describe('SourceRow', () => {
       facts: {
         inspected: false,
         evidenceCount: 0,
+        reportedEvidenceCount: 0,
         attachmentResolved: true,
         exportCount: 0,
       },
@@ -258,8 +284,20 @@ describe('SourceRow', () => {
     const view = render(<SourceRow item={urlItem} t={t} />)
     fireEvent.click(screen.getByRole('button', { name: /zotero:\/\/user\/0\/item\/A/ }))
     expect(screen.getByText(zh.linkedUrl)).toBeDefined()
-    expect(screen.getByText('https://e.org')).toBeDefined()
+    const urlLink = screen.getByText('https://e.org')
+    expect(urlLink.getAttribute('href')).toBe('https://e.org')
     view.unmount()
+
+    // Non-web schemes and unparseable locations stay copyable plain text.
+    for (const location of ['file:///tmp/a.pdf', 'not a url']) {
+      const unsafeItem = sourceOf({
+        attachment: { kind: 'url', contentType: 'text/html', title: 'p', location },
+      })
+      const unsafeView = render(<SourceRow item={unsafeItem} t={t} />)
+      fireEvent.click(screen.getByRole('button', { name: /zotero:\/\/user\/0\/item\/A/ }))
+      expect(screen.getByText(location).tagName).toBe('P')
+      unsafeView.unmount()
+    }
 
     const hintItem = sourceOf({
       bestAttachment: {
@@ -305,6 +343,35 @@ describe('SourceRow', () => {
     runningView.unmount()
   })
 
+  it('shows the reported-evidence line in the dossier only when it exceeds the kept previews', () => {
+    const reported = sourceOf({
+      facts: {
+        inspected: false,
+        evidenceCount: 1,
+        reportedEvidenceCount: 7,
+        attachmentResolved: false,
+        exportCount: 0,
+      },
+    })
+    const view = render(<SourceRow item={reported} t={t} />)
+    fireEvent.click(screen.getByRole('button', { name: /zotero:\/\/user\/0\/item\/A/ }))
+    expect(screen.getByText(zh.reportedEvidenceInDetail.replace('{count}', '7'))).toBeDefined()
+    view.unmount()
+
+    const equal = sourceOf({
+      facts: {
+        inspected: false,
+        evidenceCount: 1,
+        reportedEvidenceCount: 1,
+        attachmentResolved: false,
+        exportCount: 0,
+      },
+    })
+    render(<SourceRow item={equal} t={t} />)
+    fireEvent.click(screen.getByRole('button', { name: /zotero:\/\/user\/0\/item\/A/ }))
+    expect(screen.queryByText(zh.reportedEvidenceInDetail.replace('{count}', '1'))).toBeNull()
+  })
+
   it('shows the mismatch warning and the operations line in the dossier', () => {
     const mismatch = sourceOf({
       provenance: 'mismatch',
@@ -323,5 +390,44 @@ describe('SourceRow', () => {
     render(<SourceRow item={browse} t={t} />)
     fireEvent.click(screen.getByRole('button', { name: /zotero:\/\/user\/0\/item\/A/ }))
     expect(screen.getByText(zh.searchFromBrowse)).toBeDefined()
+  })
+
+  it('opens in Zotero and opens the PDF from the line actions', () => {
+    const full = sourceOf({
+      ...FULL,
+      key: 'zotero://user/0/item/ABCDEFGH',
+      ref: 'zotero://user/0/item/ABCDEFGH',
+    })
+    const view = render(<SourceRow item={full} t={t} />)
+    const links = Array.from(view.container.querySelectorAll('a')).map((anchor) =>
+      anchor.getAttribute('href'),
+    )
+    expect(links).toContain('zotero://select/library/items/ABCDEFGH')
+    expect(links).toContain('zotero://open-pdf/library/items/WXYZ6789')
+    view.unmount()
+  })
+
+  it('blocks every open link for a mismatching item', () => {
+    const mismatch = sourceOf({
+      key: 'zotero://user/0/item/ABCDEFGH',
+      ref: 'zotero://user/0/item/ABCDEFGH',
+      provenance: 'mismatch',
+    })
+    const view = render(<SourceRow item={mismatch} t={t} />)
+    expect(view.container.querySelector('a')).toBeNull()
+    expect(screen.getAllByText(new RegExp(zh.provenanceMismatch)).length).toBeGreaterThanOrEqual(1)
+    view.unmount()
+  })
+
+  it('caves unverified open links with the instance note', () => {
+    const unverified = sourceOf({
+      key: 'zotero://user/0/item/ABCDEFGH',
+      ref: 'zotero://user/0/item/ABCDEFGH',
+      provenance: 'unknown',
+    })
+    const view = render(<SourceRow item={unverified} t={t} />)
+    expect(view.container.querySelector('a')).not.toBeNull()
+    expect(screen.getAllByText(new RegExp(zh.instanceUnverified)).length).toBeGreaterThanOrEqual(1)
+    view.unmount()
   })
 })

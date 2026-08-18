@@ -76,11 +76,14 @@ export function OpenLink({
   verdict,
   label,
   t,
+  className,
 }: {
   readonly url: string
   readonly verdict: OpenVerdict
   readonly label: string
   readonly t: TranslateNS<'zotero'>
+  /** The anchor's class; defaults to the card's text link. */
+  readonly className?: string
 }) {
   if (verdict === 'blocked') {
     return (
@@ -91,7 +94,7 @@ export function OpenLink({
   }
   return (
     <span className={css.linkWrap}>
-      <a className={css.link} href={url} target="_blank" rel="noreferrer">
+      <a className={className ?? css.link} href={url} target="_blank" rel="noreferrer">
         {label}
       </a>
       {verdict === 'unverified' && (
@@ -118,7 +121,7 @@ function PassageRow({
   const annotationKey = passage.source === 'annotation' ? shortKeyOf(passage.sourceRef) : null
   const annotationUrl =
     annotationKey !== null && pdfRef !== null
-      ? pdfUrlOf(pdfRef, { page: passage.pageLabel, annotation: annotationKey })
+      ? pdfUrlOf(pdfRef, { annotation: annotationKey })
       : null
   return (
     <li className={css.passage} data-source={passage.source}>
@@ -202,6 +205,15 @@ export function EvidenceCard({ item, t }: EvidenceCardProps) {
             </li>
           ))}
         </ul>
+      )}
+      {item.retrievalFacts !== undefined && item.evidence.length === 0 && (
+        <p className={css.note}>
+          {item.facts.reportedEvidenceCount > 0
+            ? interpolate(t('evidenceReportedNoPreview'), {
+                count: item.facts.reportedEvidenceCount,
+              })
+            : t('evidenceRetrievedNone')}
+        </p>
       )}
     </section>
   )

@@ -20,6 +20,16 @@ export interface SourceDetailProps {
   readonly t: TranslateNS<'zotero'>
 }
 
+/** Whether a web URL is safe to open directly (http/https only). */
+export function isSafeWebUrl(value: string): boolean {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
 /** The dossier body of one source row. */
 export function SourceDetail({ item, t }: SourceDetailProps) {
   const operationLabels = operationsLabelsOf(item.operations, t)
@@ -44,7 +54,18 @@ export function SourceDetail({ item, t }: SourceDetailProps) {
           <p className={css.sectionLabel}>
             {t(item.attachment.kind === 'file' ? 'localFile' : 'linkedUrl')}
           </p>
-          <p className={css.line}>{item.attachment.location}</p>
+          {item.attachment.kind === 'url' && isSafeWebUrl(item.attachment.location) ? (
+            <a
+              className={css.link}
+              href={item.attachment.location}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {item.attachment.location}
+            </a>
+          ) : (
+            <p className={css.line}>{item.attachment.location}</p>
+          )}
           <CopyButton value={item.attachment.location} label={t('copy')} t={t} />
         </div>
       )}
@@ -62,6 +83,11 @@ export function SourceDetail({ item, t }: SourceDetailProps) {
       {item.facts.evidenceCount > 0 && (
         <p className={css.line}>
           {interpolate(t('evidenceInDetail'), { count: item.facts.evidenceCount })}
+        </p>
+      )}
+      {item.facts.reportedEvidenceCount > item.facts.evidenceCount && (
+        <p className={css.line}>
+          {interpolate(t('reportedEvidenceInDetail'), { count: item.facts.reportedEvidenceCount })}
         </p>
       )}
       {item.facts.exportCount > 0 && (

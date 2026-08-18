@@ -41,6 +41,7 @@ const EVIDENCE_ITEM: SourceItem = sourceOf({
   facts: {
     inspected: false,
     evidenceCount: 2,
+    reportedEvidenceCount: 2,
     attachmentResolved: false,
     exportCount: 0,
   },
@@ -137,6 +138,54 @@ describe('EvidenceCard', () => {
     expect(screen.getAllByText(/没有返回匹配/).length).toBeGreaterThanOrEqual(1)
   })
 
+  it('shows the retrieved-but-empty summary and the per-source availability lines', () => {
+    const item = sourceOf({
+      title: 'Notes Only',
+      retrievalFacts: {
+        truncated: false,
+        sourceAvailability: {
+          note: { requested: true, returnedPassages: 0, unavailable: false },
+          fulltext: { requested: true, returnedPassages: 0, unavailable: false },
+        },
+      },
+    })
+    render(<EvidenceCard item={item} t={t} />)
+    expect(screen.getByText(zh.evidenceRetrievedNone)).toBeDefined()
+    expect(screen.getAllByText(/没有返回匹配/).length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('reports reported-but-not-previewed evidence without claiming no match', () => {
+    const item = sourceOf({
+      title: 'Budget Dropped',
+      facts: {
+        inspected: false,
+        evidenceCount: 0,
+        reportedEvidenceCount: 25,
+        attachmentResolved: false,
+        exportCount: 0,
+      },
+      retrievalFacts: {
+        truncated: true,
+        sourceAvailability: {
+          fulltext: { requested: true, returnedPassages: 25, unavailable: false },
+        },
+      },
+    })
+    render(<EvidenceCard item={item} t={t} />)
+    expect(screen.queryByText(zh.evidenceRetrievedNone)).toBeNull()
+    expect(screen.getByText(zh.evidenceReportedNoPreview.replace('{count}', '25'))).toBeDefined()
+    expect(screen.getByText(zh.budgetLimitedNote)).toBeDefined()
+  })
+
+  it('renders an evidence card with no retrieval facts without crashing', () => {
+    const item = sourceOf({
+      title: 'No Retrieval',
+      evidence: [],
+    })
+    render(<EvidenceCard item={item} t={t} />)
+    expect(screen.getByText('No Retrieval')).toBeDefined()
+  })
+
   it('links open actions for a verified item with an attachment ref', () => {
     const { container } = render(<EvidenceCard item={EVIDENCE_ITEM} t={t} />)
     const links = Array.from(container.querySelectorAll('a')).map((anchor) =>
@@ -144,7 +193,7 @@ describe('EvidenceCard', () => {
     )
     expect(links).toContain('zotero://select/library/items/ABCDEFGH')
     expect(links).toContain('zotero://open-pdf/library/items/WXYZ6789')
-    expect(links).toContain('zotero://open-pdf/library/items/WXYZ6789?page=7&annotation=ANN00001')
+    expect(links).toContain('zotero://open-pdf/library/items/WXYZ6789?annotation=ANN00001')
   })
 
   it('blocks every open link for a mismatching item and keeps the copy fallback', () => {
@@ -190,6 +239,7 @@ describe('EvidenceLens', () => {
       facts: {
         inspected: false,
         evidenceCount: 1,
+        reportedEvidenceCount: 1,
         attachmentResolved: false,
         exportCount: 0,
       },
@@ -202,6 +252,10 @@ describe('EvidenceLens', () => {
           callIds: ['r3'],
         },
       ],
+      retrievalFacts: {
+        truncated: false,
+        sourceAvailability: {},
+      },
     })
     const view = render(<EvidenceLens workspace={workspaceOf([EVIDENCE_ITEM, other])} t={t} />)
     expect(screen.getByText(zh.evidenceScopeNote)).toBeDefined()
