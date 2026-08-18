@@ -3,8 +3,9 @@
  * exports. Citation mode pairs every requested ref with Zotero's own HTML
  * citation, ordered as requested; bibliography mode yields the joined
  * CSL-sorted bibliography; bibtex/biblatex/ris/csljson pass the translator
- * output through verbatim. Export output is never mid-truncated — it either
- * fits the provider's character limit or fails with a typed error.
+ * output through verbatim and itemize each exported document (its citation
+ * key and title) paired with its ref. Export output is never mid-truncated —
+ * it either fits the provider's character limit or fails with a typed error.
  * @module dsh-zotero/tools/export
  */
 
@@ -73,14 +74,38 @@ const EXPORT_OUTPUT_SCHEMA = {
       type: 'object',
       additionalProperties: false,
       properties: {
+        format: { type: 'string', const: 'bibliography', required: true },
+        style: { type: 'string' },
+        locale: { type: 'string' },
+        text: { type: 'string', required: true },
+      },
+    },
+    {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
         format: {
           type: 'string',
-          enum: ['bibliography', 'bibtex', 'biblatex', 'ris', 'csljson'],
+          enum: ['bibtex', 'biblatex', 'ris', 'csljson'],
           required: true,
         },
         style: { type: 'string' },
         locale: { type: 'string' },
         text: { type: 'string', required: true },
+        items: {
+          type: 'array',
+          required: true,
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              ref: { type: 'string', required: true },
+              key: { type: 'string' },
+              title: { type: 'string' },
+              text: { type: 'string', required: true },
+            },
+          },
+        },
       },
     },
   ],
@@ -140,16 +165,20 @@ export function registerExportTool(ctx: Context, service: ZoteroService): void {
       description: [
         'Export Zotero items as citations, a bibliography, or translator formats.',
         "Citation mode pairs each ref with its HTML citation in the requested order and batches past Zotero's 50-key request cap;",
-        "bibliography mode returns the joined CSL-sorted bibliography; bibtex/biblatex/ris/csljson return raw export text — those formats stay at one request (up to 50 refs), so their ordering remains Zotero's own.",
+        "bibliography mode returns the joined CSL-sorted bibliography; bibtex/biblatex/ris/csljson return raw export text — those formats stay at one request (up to 50 refs), their ordering remains Zotero's own, and every exported document is itemized with its ref, citation key, and title.",
       ].join(' '),
       parameters: EXPORT_PARAMETERS,
       output: {
         schema: EXPORT_OUTPUT_SCHEMA,
         render: renderExport,
-        // The refs list is the only long field; the shared byte budget drops
-        // it (with detailOmitted) rather than mid-cutting the artifact facts.
+        // The refs list and the per-document items are the long fields; the
+        // shared byte budget drops them (with detailOmitted) rather than
+        // mid-cutting the artifact facts.
         presentationMeta: (args, value) =>
-          boundedPresentationMeta(projectExportMeta(args.refs.length, value, args.refs), ['refs']),
+          boundedPresentationMeta(projectExportMeta(args.refs.length, value, args.refs), [
+            'refs',
+            'items',
+          ]),
       },
       presentCall: (args) => ({
         card: 'generic',

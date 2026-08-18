@@ -225,6 +225,15 @@ export interface ZoteroAttachmentPresentationMeta {
   readonly url?: string
 }
 
+/** One bounded export document item: the ref with its format-local key and display title. */
+export interface ZoteroExportPresentationItem {
+  readonly ref: string
+  /** The format-local identifier (citation key, CSL JSON id, RIS record id). */
+  readonly key?: string
+  /** The item's title for display, when the entry carries one. */
+  readonly title?: string
+}
+
 export interface ZoteroExportPresentationMeta {
   readonly format: string
   readonly requested: number
@@ -236,6 +245,13 @@ export interface ZoteroExportPresentationMeta {
   readonly refs: string[]
   /** Exported refs beyond the bounded list. */
   readonly refsOmitted: number
+  /**
+   * The bounded per-document items (first {@link MAX_PRESENTATION_EXPORT_REFS},
+   * without their entry text — the byte budget drops them wholesale rather
+   * than mid-cutting); absent for exports without items or when the budget
+   * dropped the detail.
+   */
+  readonly items?: readonly ZoteroExportPresentationItem[]
 }
 
 /** The canonical attachment output the projector reads (discriminated on `kind`). */
@@ -456,8 +472,10 @@ export function projectAttachmentMeta(
  * the actually exported citations; the text formats are opaque joined text,
  * so they report the requested ref count instead of inventing an item count.
  * The exported ref list is itemized up to {@link MAX_PRESENTATION_EXPORT_REFS}
- * entries; the byte-budget guard may drop it entirely (see
- * `boundedPresentationMeta`), never part of it.
+ * entries, and the translator formats carry their per-document items (ref,
+ * key, title — never the entry text) in the same bound; the byte-budget
+ * guard may drop them entirely (see `boundedPresentationMeta`), never part
+ * of it.
  * @param requested - the requested ref count from the call arguments.
  * @param value - the canonical export result.
  * @param refs - the exported refs, in the caller's order.
@@ -471,6 +489,12 @@ export function projectExportMeta(
     readonly locale?: string
     readonly citations?: readonly { readonly ref: string; readonly text: string }[]
     readonly text?: string
+    readonly items?: readonly {
+      readonly ref: string
+      readonly key?: string
+      readonly title?: string
+      readonly text: string
+    }[]
   },
   refs: readonly string[],
 ): ZoteroExportPresentationMeta {
@@ -489,7 +513,13 @@ export function projectExportMeta(
   if (value.format === 'citation') {
     return { ...base, count: value.citations?.length ?? 0 }
   }
-  return base
+  if (value.items === undefined) return base
+  const items = value.items.slice(0, MAX_PRESENTATION_EXPORT_REFS).map((item) => ({
+    ref: item.ref,
+    ...(item.key === undefined ? {} : { key: item.key }),
+    ...(item.title === undefined ? {} : { title: item.title }),
+  }))
+  return { ...base, items }
 }
 
 /** The UTF-8 byte size of one JSON projection. */

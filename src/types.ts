@@ -253,9 +253,31 @@ export interface ZoteroExportRequest {
 }
 
 /**
+ * One exported document inside a translator-format export, keyed to its ref.
+ * The merged body's entry order belongs to Zotero, so each document is
+ * fetched and itemized on its own instead of being indexed against the
+ * requested refs.
+ */
+export interface ZoteroExportItem {
+  /** The formatted `zotero://` ref the entry was exported for. */
+  readonly ref: string
+  /**
+   * The format-local identifier: the BibTeX/BibLaTeX citation key, the CSL
+   * JSON id, or the RIS record id; absent when the format has none (RIS) or
+   * the entry cannot be parsed.
+   */
+  readonly key?: string
+  /** The item's title for display, when the entry carries one. */
+  readonly title?: string
+  /** This document's entry text, exactly as Zotero exported it. */
+  readonly text: string
+}
+
+/**
  * Citation exports keep Zotero's per-item HTML strings paired with their
- * refs, ordered as requested. The other formats are opaque formatted text
- * (the bibliography's ordering belongs to the CSL style, not the caller).
+ * refs, ordered as requested. The bibliography's ordering belongs to the CSL
+ * style, not the caller. The translator formats keep the merged body opaque
+ * (same ordering caveat) but itemize each exported document with its ref.
  */
 export type ZoteroExportResult =
   | {
@@ -265,10 +287,17 @@ export type ZoteroExportResult =
       readonly citations: { readonly ref: string; readonly text: string }[]
     }
   | {
-      readonly format: Exclude<ZoteroExportFormat, 'citation'>
+      readonly format: 'bibliography'
       readonly style?: string
       readonly locale?: string
       readonly text: string
+    }
+  | {
+      readonly format: 'bibtex' | 'biblatex' | 'ris' | 'csljson'
+      readonly style?: string
+      readonly locale?: string
+      readonly text: string
+      readonly items: ZoteroExportItem[]
     }
 
 /** Raw fulltext payload from `GET /items/<attachmentKey>/fulltext`. */

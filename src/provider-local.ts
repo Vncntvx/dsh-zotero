@@ -39,6 +39,7 @@ import {
   errorMessageOf,
 } from './errors.js'
 import { chunkText, rankChunks, tokenize } from './evidence.js'
+import { parseExportItem } from './export-items.js'
 import { asRecord, asString, isObjectKey } from './json.js'
 import {
   collectionKeysOf,
@@ -66,6 +67,8 @@ import type {
   ZoteroCoverage,
   ZoteroEvidence,
   ZoteroEvidenceSource,
+  ZoteroExportFormat,
+  ZoteroExportItem,
   ZoteroExportRequest,
   ZoteroExportResult,
   ZoteroFulltextPayload,
@@ -803,8 +806,11 @@ export class LocalApiProvider implements ZoteroProvider {
    * (`bibtex`/`biblatex`/`ris`/`csljson`) export the whole set at once. The
    * batch-breaking formats refuse to exceed `ZOTERO_ITEMKEY_BATCH` — their
    * global ordering belongs to Zotero, so splitting them would silently
-   * reorder the output. Output that exceeds `maxExportChars` fails with
-   * OUTPUT_TOO_LARGE — export text is never mid-truncated.
+   * reorder the output. The translator formats additionally itemize each
+   * document by requesting it on its own (parallel, in the requested ref
+   * order), because the merged body's entry order is Zotero's own and cannot
+   * be indexed against the refs. Output that exceeds `maxExportChars` fails
+   * with OUTPUT_TOO_LARGE — export text is never mid-truncated.
    */
   async export(request: ZoteroExportRequest, signal?: AbortSignal): Promise<ZoteroExportResult> {
     for (const ref of request.refs) requireLocalRef(ref, ['item'])
@@ -846,7 +852,40 @@ export class LocalApiProvider implements ZoteroProvider {
     if (request.format === 'bibliography') {
       return { format: 'bibliography', style, locale, text: body }
     }
-    return { format: request.format, text: body }
+    const items = await this.fetchExportItems(request.refs, request.format, serverId, signal)
+    return { format: request.format, text: body, items }
+  }
+
+  /**
+   * One single-item export per ref, in the requested order. The merged batch
+   * body's entry order belongs to Zotero, so each document is requested on
+   * its own (parallel against the local API) to pair the ref with its entry
+   * and parse its key/title without guessing. A missing or empty entry fails
+   * the whole call — the same closed contract as the citation arm, instead
+   * of the batch body silently omitting the item.
+   */
+  private async fetchExportItems(
+    refs: readonly ZoteroObjectRef[],
+    format: ZoteroExportFormat,
+    serverId: string | undefined,
+    signal: AbortSignal | undefined,
+  ): Promise<ZoteroExportItem[]> {
+    return await Promise.all(
+      refs.map(async (ref) => {
+        const search = new URLSearchParams()
+        search.set('itemKey', ref.key)
+        search.set('format', format)
+        const { body } = await this.client.get('users/0/items', search, { signal, serverId })
+        if (body === '') {
+          throw new ZoteroError(
+            `Zotero did not return an item for ${formatRef(ref)}.`,
+            ZOTERO_NOT_FOUND,
+          )
+        }
+        const facts = parseExportItem(format, body)
+        return { ref: formatRef(ref), text: body, ...facts }
+      }),
+    )
   }
 
   /**

@@ -511,6 +511,54 @@ describe('projectExportMeta', () => {
     expect(meta.refsOmitted).toBe(5)
     expect(meta.refs[0]).toBe('zotero://user/0/item/ITEM0')
   })
+
+  it('itemizes the per-document facts without their entry text', () => {
+    const meta = projectExportMeta(
+      3,
+      {
+        format: 'bibtex',
+        text: 'raw',
+        items: [
+          { ref: 'zotero://user/0/item/AAAAAAA1', key: 'a1', title: 'A', text: '@article{a1}' },
+          { ref: 'zotero://user/0/item/AAAAAAA2', key: 'a2', text: '@article{a2}' },
+          { ref: 'zotero://user/0/item/AAAAAAA3', text: '@article{a3}' },
+        ],
+      },
+      REFS,
+    )
+    expect(meta).toEqual({
+      format: 'bibtex',
+      requested: 3,
+      refs: REFS,
+      refsOmitted: 0,
+      items: [
+        { ref: 'zotero://user/0/item/AAAAAAA1', key: 'a1', title: 'A' },
+        { ref: 'zotero://user/0/item/AAAAAAA2', key: 'a2' },
+        { ref: 'zotero://user/0/item/AAAAAAA3' },
+      ],
+    })
+  })
+
+  it('bounds the per-document items to the same ref bound', () => {
+    const refs = Array.from({ length: 25 }, (_, index) => `zotero://user/0/item/ITEM${index}`)
+    const meta = projectExportMeta(
+      25,
+      { format: 'ris', text: 'raw', items: refs.map((ref, index) => ({ ref, text: `r${index}` })) },
+      refs,
+    )
+    expect(meta.items).toHaveLength(20)
+    expect(meta.items![19]).toEqual({ ref: 'zotero://user/0/item/ITEM19' })
+    expect(meta.refsOmitted).toBe(5)
+  })
+
+  it('omits the items for exports without per-document data', () => {
+    expect(projectExportMeta(2, { format: 'bibliography', text: 'x' }, REFS)).toEqual({
+      format: 'bibliography',
+      requested: 2,
+      refs: REFS,
+      refsOmitted: 0,
+    })
+  })
 })
 
 describe('boundedPresentationMeta', () => {
@@ -541,6 +589,21 @@ describe('boundedPresentationMeta', () => {
     }
     const bounded = boundedPresentationMeta(meta, ['items', 'notesPreview'])
     expect(bounded).toEqual({ detailOmitted: true, count: 3, title: 'kept' })
+  })
+
+  it('drops the export items and refs wholesale when the projection overflows', () => {
+    const filler = 'x'.repeat(MAX_PRESENTATION_META_BYTES)
+    const meta = projectExportMeta(
+      2,
+      {
+        format: 'bibtex',
+        text: 'raw',
+        items: [{ ref: 'zotero://user/0/item/AAAAAAA1', key: 'a1', title: filler, text: 'raw' }],
+      },
+      ['zotero://user/0/item/AAAAAAA1'],
+    )
+    const bounded = boundedPresentationMeta(meta, ['refs', 'items'])
+    expect(bounded).toEqual({ detailOmitted: true, format: 'bibtex', requested: 2, refsOmitted: 0 })
   })
 
   it('honors the byte budget at the exact boundary', () => {

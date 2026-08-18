@@ -998,6 +998,49 @@ describe('zotero_export tool', () => {
     expect((result.content[0] as { text: string }).text).toBe('entry-a\nentry-b')
   })
 
+  it('itemizes each translator document with its citation key and title', async () => {
+    mock.route('GET', '/api/users/0/items', (req, res, helpers, search) => {
+      const keys = (search.get('itemKey') ?? '').split(',')
+      if (keys.length > 1) {
+        helpers.text('@article{pan2022}\n\n@article{zheng2025}\n')
+        return
+      }
+      helpers.text(
+        keys[0] === 'ABCD1234'
+          ? '@article{panCarbonPriceForecasting2022,\n  title = {Carbon price forecasting},\n}'
+          : '@article{zhengInsightHeterogeneousRisks2025,\n  title = {Insight into heterogeneous risks},\n}',
+      )
+    })
+    const result = await runTool('zotero_export', {
+      refs: ['zotero://user/0/item/ABCD1234', 'zotero://user/0/item/BBBB1234'],
+      format: 'bibtex',
+    })
+    expect(result.isError).toBe(false)
+    if (result.isError) throw new Error('unreachable')
+    expect(result.value).toEqual({
+      format: 'bibtex',
+      text: '@article{pan2022}\n\n@article{zheng2025}\n',
+      items: [
+        {
+          ref: 'zotero://user/0/item/ABCD1234',
+          key: 'panCarbonPriceForecasting2022',
+          title: 'Carbon price forecasting',
+          text: '@article{panCarbonPriceForecasting2022,\n  title = {Carbon price forecasting},\n}',
+        },
+        {
+          ref: 'zotero://user/0/item/BBBB1234',
+          key: 'zhengInsightHeterogeneousRisks2025',
+          title: 'Insight into heterogeneous risks',
+          text: '@article{zhengInsightHeterogeneousRisks2025,\n  title = {Insight into heterogeneous risks},\n}',
+        },
+      ],
+    })
+    // The model-visible render stays the merged body, not the itemization.
+    expect((result.content[0] as { text: string }).text).toBe(
+      '@article{pan2022}\n\n@article{zheng2025}\n',
+    )
+  })
+
   it('rejects empty ref lists, malformed refs, and blank styles before any request', async () => {
     const empty = await runTool('zotero_export', { refs: [], format: 'bibtex' })
     expect(empty.isError).toBe(true)

@@ -110,15 +110,92 @@ describe('export', () => {
     })
   })
 
-  it('passes translator export bodies through with the format parameter', async () => {
-    mock.route('GET', '/api/users/0/items', (req, res, helpers, search) =>
-      helpers.text(`exported-as-${search.get('format')}`),
-    )
+  it('passes translator export bodies through and itemizes every ref', async () => {
+    mock.route('GET', '/api/users/0/items', (req, res, helpers, search) => {
+      const keys = (search.get('itemKey') ?? '').split(',')
+      if (keys.length > 1) {
+        helpers.text(`exported-as-${search.get('format')}`)
+        return
+      }
+      helpers.text(`entry-of-${search.get('format')}-${keys[0]}`)
+    })
     for (const format of ['bibtex', 'biblatex', 'ris', 'csljson'] as const) {
+      const before = mock.requests.length
       const result = await provider.export(exportRequest({ format }))
-      expect(mock.requests[mock.requests.length - 1]!.search.get('format')).toBe(format)
-      expect(result).toEqual({ format, text: `exported-as-${format}` })
+      if (result.format !== format) throw new Error('unreachable')
+      expect(result).toEqual({
+        format,
+        text: `exported-as-${format}`,
+        items: [
+          { ref: 'zotero://user/0/item/ABCD1234', text: `entry-of-${format}-ABCD1234` },
+          { ref: 'zotero://user/0/item/BBBB1234', text: `entry-of-${format}-BBBB1234` },
+        ],
+      })
+      const perItem = mock.requests.slice(before + 1)
+      expect(perItem).toHaveLength(2)
+      expect(new Set(perItem.map((entry) => entry.search.get('itemKey')))).toEqual(
+        new Set(['ABCD1234', 'BBBB1234']),
+      )
+      expect(perItem.every((entry) => entry.search.get('format') === format)).toBe(true)
     }
+  })
+
+  it('pairs each translator document with its ref in the requested order', async () => {
+    mock.route('GET', '/api/users/0/items', (req, res, helpers, search) => {
+      const keys = (search.get('itemKey') ?? '').split(',')
+      if (keys.length > 1) {
+        helpers.text('@article{pan2022,...}\n\n@article{zheng2025,...}\n')
+        return
+      }
+      helpers.text(
+        keys[0] === 'ABCD1234'
+          ? '@article{panCarbonPriceForecasting2022,\n  title = {Carbon price forecasting},\n}'
+          : '@article{zhengInsightHeterogeneousRisks2025,\n  title = {Insight into heterogeneous risks},\n}',
+      )
+    })
+    const result = await provider.export(exportRequest({ format: 'bibtex' }))
+    if (result.format !== 'bibtex') throw new Error('unreachable')
+    expect(result.text).toBe('@article{pan2022,...}\n\n@article{zheng2025,...}\n')
+    expect(result.items).toEqual([
+      {
+        ref: 'zotero://user/0/item/ABCD1234',
+        key: 'panCarbonPriceForecasting2022',
+        title: 'Carbon price forecasting',
+        text: '@article{panCarbonPriceForecasting2022,\n  title = {Carbon price forecasting},\n}',
+      },
+      {
+        ref: 'zotero://user/0/item/BBBB1234',
+        key: 'zhengInsightHeterogeneousRisks2025',
+        title: 'Insight into heterogeneous risks',
+        text: '@article{zhengInsightHeterogeneousRisks2025,\n  title = {Insight into heterogeneous risks},\n}',
+      },
+    ])
+    // The merged body stays one batch request; each ref then gets its own
+    // single-key request, so the pairing never indexes the batch's order.
+    expect(mock.requests).toHaveLength(3)
+    expect(mock.requests[0]!.search.get('itemKey')).toBe('ABCD1234,BBBB1234')
+    expect(mock.requests[0]!.search.get('format')).toBe('bibtex')
+    const perItem = mock.requests.slice(1)
+    expect(new Set(perItem.map((entry) => entry.search.get('itemKey')))).toEqual(
+      new Set(['ABCD1234', 'BBBB1234']),
+    )
+    expect(perItem.every((entry) => entry.search.get('format') === 'bibtex')).toBe(true)
+  })
+
+  it('fails with NOT_FOUND when a single-item export comes back empty', async () => {
+    mock.route('GET', '/api/users/0/items', (req, res, helpers, search) => {
+      const keys = (search.get('itemKey') ?? '').split(',')
+      if (keys.length > 1) {
+        helpers.text('@article{a1}\n@article{b1}\n')
+        return
+      }
+      helpers.text(keys[0] === 'ABCD1234' ? '@article{a1,\n  title = {A},\n}' : '')
+    })
+    await zoteroError(
+      provider.export(exportRequest({ format: 'bibtex' })),
+      ZOTERO_NOT_FOUND,
+      'BBBB1234',
+    )
   })
 
   it('fails with OUTPUT_TOO_LARGE instead of truncating oversized exports', async () => {
@@ -168,7 +245,14 @@ describe('export', () => {
     const narrow = makeProvider({ maxExportChars: 10 })
     mock.route('GET', '/api/users/0/items', (req, res, helpers) => helpers.text('0123456789'))
     const result = await narrow.export(exportRequest({ format: 'bibtex' }))
-    expect(result).toEqual({ format: 'bibtex', text: '0123456789' })
+    expect(result).toEqual({
+      format: 'bibtex',
+      text: '0123456789',
+      items: [
+        { ref: 'zotero://user/0/item/ABCD1234', text: '0123456789' },
+        { ref: 'zotero://user/0/item/BBBB1234', text: '0123456789' },
+      ],
+    })
   })
 
   it("sends the first ref's server provenance on the export request", async () => {
