@@ -43,12 +43,12 @@ Evidence passages: relevant text segments grouped by source, showing page labels
 
 `zotero_retrieve` is the core information extraction tool. It collects text segments from four sources, ranks them with BM25, and returns the most relevant passages:
 
-| Source       | Description                                        |
-| ------------ | -------------------------------------------------- |
+| Source       | Description                                                   |
+| ------------ | ------------------------------------------------------------- |
 | `annotation` | PDF annotations and highlight text, with Zotero's page labels |
-| `note`       | Child note body text, chunked                      |
-| `abstract`   | Item abstract                                      |
-| `fulltext`   | Zotero-indexed full text, ranked by BM25 chunks    |
+| `note`       | Child note body text, chunked                                 |
+| `abstract`   | Item abstract                                                 |
+| `fulltext`   | Zotero-indexed full text, ranked by BM25 chunks               |
 
 **What evidence is:** Evidence is a ranked result of existing text segments within an item, based on BM25 term-frequency matching. BM25 only matches terms — if a query word does not appear in a chunk, it will not appear in the results even if the content is semantically related.
 
@@ -74,14 +74,14 @@ To open a `zotero://` deep link and view the item in Zotero, use the ref format 
 
 `zotero_export` supports six formats:
 
-| Format         | Output                                           |
-| -------------- | ------------------------------------------------ |
-| `citation`     | Per-item HTML citations, in refs order           |
-| `bibliography` | CSL-sorted combined bibliography                 |
-| `bibtex`       | BibTeX entries                                   |
-| `biblatex`     | BibLaTeX entries                                 |
-| `ris`          | RIS format                                       |
-| `csljson`      | CSL-JSON                                         |
+| Format         | Output                                 |
+| -------------- | -------------------------------------- |
+| `citation`     | Per-item HTML citations, in refs order |
+| `bibliography` | CSL-sorted combined bibliography       |
+| `bibtex`       | BibTeX entries                         |
+| `biblatex`     | BibLaTeX entries                       |
+| `ris`          | RIS format                             |
+| `csljson`      | CSL-JSON                               |
 
 Optional `style` and `locale` parameters set the citation style. In citation mode, refs lists exceeding Zotero's 50-key limit are batched automatically.
 

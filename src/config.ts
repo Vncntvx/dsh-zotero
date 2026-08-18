@@ -166,8 +166,10 @@ export function resolveConfig(config: Config): ResolvedConfig {
   }
   const hostname = pinLoopbackHostname(url.hostname)
   if (hostname !== url.hostname) {
-    // The URL hostname setter accepts IPv6 literals only in brackets.
-    url.hostname = hostname.includes(':') ? `[${hostname}]` : hostname
+    // The pin only rewrites `localhost` (to the IPv4 loopback literal), so
+    // the assignment needs no bracket handling — IPv6 literals come back
+    // unchanged and never enter this branch.
+    url.hostname = hostname
   }
   assertNonEmpty('provider', applied.provider)
   assertNonEmpty('defaultStyle', applied.defaultStyle)

@@ -12,17 +12,17 @@ Discover candidate entries in the library. Metadata mode searches title/author/y
 
 ### Parameters
 
-| Parameter   | Type                           | Default           | Description                                                                                   |
-| ----------- | ------------------------------ | ----------------- | --------------------------------------------------------------------------------------------- |
-| `query`     | string                         | —                 | Free-text query; omit to browse the full library                                              |
-| `mode`      | `"metadata"` \| `"everything"` | `"metadata"`      | Search scope                                                                                  |
+| Parameter   | Type                           | Default             | Description                                                                               |
+| ----------- | ------------------------------ | ------------------- | ----------------------------------------------------------------------------------------- |
+| `query`     | string                         | —                   | Free-text query; omit to browse the full library                                          |
+| `mode`      | `"metadata"` \| `"everything"` | `"metadata"`        | Search scope                                                                              |
 | `scope`     | object                         | `{kind: "library"}` | `{kind:"library"}` / `{kind:"collection", refOrName}` / `{kind:"savedSearch", refOrName}` |
-| `itemTypes` | string[]                       | —                 | Zotero item type names (e.g. `journalArticle`), OR combined                                  |
-| `tags`      | string[]                       | —                 | Tag names, AND semantics                                                                      |
-| `sort`      | string                         | `"dateModified"`  | Sort field: `dateModified` / `dateAdded` / `date` / `title` / `creator`                      |
-| `direction` | `"asc"` \| `"desc"`            | `"desc"`          | Sort direction                                                                                |
-| `offset`    | integer                        | `0`               | Pagination offset                                                                             |
-| `limit`     | integer                        | `10`              | Max return count (capped by `maxSearchResults`, default 20)                                   |
+| `itemTypes` | string[]                       | —                   | Zotero item type names (e.g. `journalArticle`), OR combined                               |
+| `tags`      | string[]                       | —                   | Tag names, AND semantics                                                                  |
+| `sort`      | string                         | `"dateModified"`    | Sort field: `dateModified` / `dateAdded` / `date` / `title` / `creator`                   |
+| `direction` | `"asc"` \| `"desc"`            | `"desc"`            | Sort direction                                                                            |
+| `offset`    | integer                        | `0`                 | Pagination offset                                                                         |
+| `limit`     | integer                        | `10`                | Max return count (capped by `maxSearchResults`, default 20)                               |
 
 ### Output
 
@@ -46,9 +46,9 @@ Read a single item's full metadata. By default returns only metadata; specifying
 
 ### Parameters
 
-| Parameter | Type                                        | Required | Description                  |
-| --------- | ------------------------------------------- | -------- | ---------------------------- |
-| `ref`     | string                                      | ✓        | Item ref                     |
+| Parameter | Type                                        | Required | Description                    |
+| --------- | ------------------------------------------- | -------- | ------------------------------ |
+| `ref`     | string                                      | ✓        | Item ref                       |
 | `include` | `("notes"\|"annotations"\|"attachments")[]` | —        | Child content types to include |
 
 ### Output
@@ -69,12 +69,12 @@ Collect and query-rank evidence passages for a single item. Sources include: Zot
 
 ### Parameters
 
-| Parameter  | Type     | Default   | Description                                                         |
-| ---------- | -------- | --------- | ------------------------------------------------------------------- |
-| `ref`      | string   | —         | Item ref (required)                                                 |
-| `query`    | string   | —         | Query terms for ranking evidence (required)                         |
-| `sources`  | string[] | All 4     | `annotation` / `note` / `abstract` / `fulltext`                     |
-| `passages` | integer  | `4`       | Max return passage count (capped by `maxEvidencePassages`, default 4) |
+| Parameter  | Type     | Default | Description                                                           |
+| ---------- | -------- | ------- | --------------------------------------------------------------------- |
+| `ref`      | string   | —       | Item ref (required)                                                   |
+| `query`    | string   | —       | Query terms for ranking evidence (required)                           |
+| `sources`  | string[] | All 4   | `annotation` / `note` / `abstract` / `fulltext`                       |
+| `passages` | integer  | `4`     | Max return passage count (capped by `maxEvidencePassages`, default 4) |
 
 ### Output
 
@@ -101,8 +101,8 @@ Resolve a ref to an accessible attachment location. Accepts an item ref (auto-pi
 
 ### Parameters
 
-| Parameter | Type   | Required | Description             |
-| --------- | ------ | -------- | ----------------------- |
+| Parameter | Type   | Required | Description                |
+| --------- | ------ | -------- | -------------------------- |
 | `ref`     | string | ✓        | Item ref or attachment ref |
 
 ### Output
@@ -128,20 +128,20 @@ Generate citations or formatted exports.
 
 ### Parameters
 
-| Parameter | Type     | Default   | Description                                                                             |
-| --------- | -------- | --------- | --------------------------------------------------------------------------------------- |
-| `refs`    | string[] | —         | Item ref list (required), capped by `maxExportRefs` (default 50)                        |
-| `format`  | string   | —         | `citation` / `bibliography` / `bibtex` / `biblatex` / `ris` / `csljson` (required)      |
-| `style`   | string   | Config    | CSL style ID (citation/bibliography only)                                               |
-| `locale`  | string   | `"en-US"` | CSL locale (citation/bibliography only)                                                 |
+| Parameter | Type     | Default   | Description                                                                        |
+| --------- | -------- | --------- | ---------------------------------------------------------------------------------- |
+| `refs`    | string[] | —         | Item ref list (required), capped by `maxExportRefs` (default 50)                   |
+| `format`  | string   | —         | `citation` / `bibliography` / `bibtex` / `biblatex` / `ris` / `csljson` (required) |
+| `style`   | string   | Config    | CSL style ID (citation/bibliography only)                                          |
+| `locale`  | string   | `"en-US"` | CSL locale (citation/bibliography only)                                            |
 
 ### Output
 
-| Format                            | Output structure                                                    |
-| --------------------------------- | ------------------------------------------------------------------- |
-| `citation`                        | `{citations: [{ref, text}]}`                                        |
-| `bibliography`                    | `{text}`                                                            |
-| `bibtex`/`biblatex`/`ris`/`csljson` | `{text, items: [{ref, key, title, entryIndex, start, end}]}`     |
+| Format                              | Output structure                                             |
+| ----------------------------------- | ------------------------------------------------------------ |
+| `citation`                          | `{citations: [{ref, text}]}`                                 |
+| `bibliography`                      | `{text}`                                                     |
+| `bibtex`/`biblatex`/`ris`/`csljson` | `{text, items: [{ref, key, title, entryIndex, start, end}]}` |
 
 ### Notes
 
@@ -159,22 +159,22 @@ zotero_export(refs=["zotero://user/0/item/ABC123", "zotero://user/0/item/DEF456"
 
 ## Error codes
 
-| Error code                      | Description                                                       |
-| ------------------------------- | ----------------------------------------------------------------- |
-| `ZOTERO_NOT_RUNNING`            | Zotero not running or local API unreachable                       |
-| `ZOTERO_API_DISABLED`           | Zotero running but local API disabled (403)                       |
-| `ZOTERO_API_VERSION`            | Zotero API version not supported                                  |
-| `ZOTERO_SERVER_MISMATCH`        | Ref from a different Zotero instance                              |
-| `ZOTERO_NOT_FOUND`              | Referenced item, collection, or saved search does not exist       |
-| `ZOTERO_NO_ATTACHMENT`          | Item has no attachment of the specified type                      |
-| `ZOTERO_NO_FULLTEXT`            | Attachment has no full-text index                                 |
-| `ZOTERO_FILE_MISSING`           | Local file reported by Zotero does not exist on disk              |
+| Error code                      | Description                                                                    |
+| ------------------------------- | ------------------------------------------------------------------------------ |
+| `ZOTERO_NOT_RUNNING`            | Zotero not running or local API unreachable                                    |
+| `ZOTERO_API_DISABLED`           | Zotero running but local API disabled (403)                                    |
+| `ZOTERO_API_VERSION`            | Zotero API version not supported                                               |
+| `ZOTERO_SERVER_MISMATCH`        | Ref from a different Zotero instance                                           |
+| `ZOTERO_NOT_FOUND`              | Referenced item, collection, or saved search does not exist                    |
+| `ZOTERO_NO_ATTACHMENT`          | Item has no attachment of the specified type                                   |
+| `ZOTERO_NO_FULLTEXT`            | Attachment has no full-text index                                              |
+| `ZOTERO_FILE_MISSING`           | Local file reported by Zotero does not exist on disk                           |
 | `ZOTERO_INVALID_REF`            | Ref string does not match `zotero://` syntax or references unsupported library |
-| `ZOTERO_INVALID_ARGUMENT`       | Parameter violates domain constraints not expressible in schema   |
-| `ZOTERO_SCOPE_AMBIGUOUS`        | Collection or saved search name matched multiple objects          |
-| `ZOTERO_TIMEOUT`                | Provider internal timeout                                         |
-| `ZOTERO_RESPONSE_TOO_LARGE`     | Response stream exceeded resource limit                           |
-| `ZOTERO_OUTPUT_TOO_LARGE`       | Export output exceeded provider hard limit                        |
-| `ZOTERO_CAPABILITY_UNAVAILABLE` | Provider did not declare the required capability                  |
-| `ZOTERO_PROVIDER_UNAVAILABLE`   | Configured provider not registered                                |
-| `ZOTERO_UNEXPECTED`             | Response could not be parsed or behaved unexpectedly              |
+| `ZOTERO_INVALID_ARGUMENT`       | Parameter violates domain constraints not expressible in schema                |
+| `ZOTERO_SCOPE_AMBIGUOUS`        | Collection or saved search name matched multiple objects                       |
+| `ZOTERO_TIMEOUT`                | Provider internal timeout                                                      |
+| `ZOTERO_RESPONSE_TOO_LARGE`     | Response stream exceeded resource limit                                        |
+| `ZOTERO_OUTPUT_TOO_LARGE`       | Export output exceeded provider hard limit                                     |
+| `ZOTERO_CAPABILITY_UNAVAILABLE` | Provider did not declare the required capability                               |
+| `ZOTERO_PROVIDER_UNAVAILABLE`   | Configured provider not registered                                             |
+| `ZOTERO_UNEXPECTED`             | Response could not be parsed or behaved unexpectedly                           |

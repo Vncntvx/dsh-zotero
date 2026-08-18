@@ -6,28 +6,28 @@ All configuration fields are defined in `src/config.ts`, with defaults provided 
 
 ## Field overview
 
-| Field                  | Default                      | Description                                     |
-| ---------------------- | ---------------------------- | ----------------------------------------------- |
-| `baseUrl`              | `http://127.0.0.1:23119/api` | Zotero Local API address, must be loopback HTTP |
-| `provider`             | `local`                      | Selected provider id                            |
-| `timeoutMs`            | `5000`                       | Single request timeout (ms)                     |
-| `maxSearchResults`     | `20`                         | `zotero_search` max return count                |
-| `maxNoteScanRecords`   | `200`                        | Max note items scanned during note content search |
-| `maxEvidenceChars`     | `6000`                       | Evidence passage total character budget         |
-| `maxEvidencePassages`  | `4`                          | Evidence passage count limit                    |
-| `maxDetailChars`       | `3000`                       | `zotero_get` abstract preview character budget  |
-| `maxNoteBodyChars`     | `30000`                      | Note body character budget                      |
-| `maxNoteChars`         | `2000`                       | `zotero_get` single note preview character budget |
-| `maxNoteRecords`       | `50`                         | `zotero_get` max note count                     |
-| `maxAnnotationRecords` | `100`                        | `zotero_get` max annotation count               |
-| `fulltextChunkWords`   | `200`                        | Word count for full-text chunks entering ranking |
+| Field                  | Default                      | Description                                                    |
+| ---------------------- | ---------------------------- | -------------------------------------------------------------- |
+| `baseUrl`              | `http://127.0.0.1:23119/api` | Zotero Local API address, must be loopback HTTP                |
+| `provider`             | `local`                      | Selected provider id                                           |
+| `timeoutMs`            | `5000`                       | Single request timeout (ms)                                    |
+| `maxSearchResults`     | `20`                         | `zotero_search` max return count                               |
+| `maxNoteScanRecords`   | `200`                        | Max note items scanned during note content search              |
+| `maxEvidenceChars`     | `6000`                       | Evidence passage total character budget                        |
+| `maxEvidencePassages`  | `4`                          | Evidence passage count limit                                   |
+| `maxDetailChars`       | `3000`                       | `zotero_get` abstract preview character budget                 |
+| `maxNoteBodyChars`     | `30000`                      | Note body character budget                                     |
+| `maxNoteChars`         | `2000`                       | `zotero_get` single note preview character budget              |
+| `maxNoteRecords`       | `50`                         | `zotero_get` max note count                                    |
+| `maxAnnotationRecords` | `100`                        | `zotero_get` max annotation count                              |
+| `fulltextChunkWords`   | `200`                        | Word count for full-text chunks entering ranking               |
 | `maxFulltextChars`     | `250000`                     | Max full-text characters accepted by `zotero_retrieve` ranking |
-| `maxResponseBytes`     | `16777216`                   | Single API response stream byte limit (16 MiB) |
-| `maxExportChars`       | `1000000`                    | Export output hard limit (1M characters)        |
-| `maxExportRefs`        | `50`                         | Single `zotero_export` ref count limit          |
-| `defaultStyle`         | `apa`                        | CSL citation style (must be built into Zotero)  |
-| `defaultLocale`        | `en-US`                      | CSL citation locale                             |
-| `webEnabled`           | `true`                       | Whether to enable Zotero session tab in dsh web |
+| `maxResponseBytes`     | `16777216`                   | Single API response stream byte limit (16 MiB)                 |
+| `maxExportChars`       | `1000000`                    | Export output hard limit (1M characters)                       |
+| `maxExportRefs`        | `50`                         | Single `zotero_export` ref count limit                         |
+| `defaultStyle`         | `apa`                        | CSL citation style (must be built into Zotero)                 |
+| `defaultLocale`        | `en-US`                      | CSL citation locale                                            |
+| `webEnabled`           | `true`                       | Whether to enable Zotero session tab in dsh web                |
 
 ## Validation rules
 

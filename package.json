@@ -1,6 +1,6 @@
 {
   "name": "dsh-zotero",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "description": "Let agents search, read, and cite your local Zotero library: find papers, browse notes and annotations, pull evidence by question, open the source document, generate citations.",
   "keywords": [
     "zotero",
