@@ -39,7 +39,7 @@ import {
   errorMessageOf,
 } from './errors.js'
 import { chunkText, rankChunks, tokenize } from './evidence.js'
-import { parseExportItem } from './export-items.js'
+import { locateExportItems } from './export-mapping.js'
 import { asRecord, asString, isObjectKey } from './json.js'
 import {
   collectionKeysOf,
@@ -852,25 +852,35 @@ export class LocalApiProvider implements ZoteroProvider {
     if (request.format === 'bibliography') {
       return { format: 'bibliography', style, locale, text: body }
     }
-    const items = await this.fetchExportItems(request.refs, request.format, serverId, signal)
+    // The browser holds `text` with its leading whitespace trimmed (the
+    // render strips it), so the entry offsets are measured on that same
+    // trimmed body.
+    const items = await this.fetchExportItems(
+      request.refs,
+      request.format,
+      body.trimStart(),
+      serverId,
+      signal,
+    )
     return { format: request.format, text: body, items }
   }
 
   /**
-   * One single-item export per ref, in the requested order. The merged batch
-   * body's entry order belongs to Zotero, so each document is requested on
-   * its own (parallel against the local API) to pair the ref with its entry
-   * and parse its key/title without guessing. A missing or empty entry fails
+   * One single-item export per ref, in the requested order, paired with its
+   * batch entry. The merged body's entry order belongs to Zotero, so each
+   * document is requested on its own (parallel against the local API) and
+   * matched to the batch body server-side; a missing or empty entry fails
    * the whole call — the same closed contract as the citation arm, instead
    * of the batch body silently omitting the item.
    */
   private async fetchExportItems(
     refs: readonly ZoteroObjectRef[],
     format: ZoteroExportFormat,
+    text: string,
     serverId: string | undefined,
     signal: AbortSignal | undefined,
   ): Promise<ZoteroExportItem[]> {
-    return await Promise.all(
+    const inputs = await Promise.all(
       refs.map(async (ref) => {
         const search = new URLSearchParams()
         search.set('itemKey', ref.key)
@@ -882,10 +892,10 @@ export class LocalApiProvider implements ZoteroProvider {
             ZOTERO_NOT_FOUND,
           )
         }
-        const facts = parseExportItem(format, body)
-        return { ref: formatRef(ref), text: body, ...facts }
+        return { ref: formatRef(ref), key: ref.key, text: body }
       }),
     )
+    return locateExportItems(format, text, inputs)
   }
 
   /**

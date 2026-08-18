@@ -998,17 +998,23 @@ describe('zotero_export tool', () => {
     expect((result.content[0] as { text: string }).text).toBe('entry-a\nentry-b')
   })
 
-  it('itemizes each translator document with its citation key and title', async () => {
+  it('itemizes each translator document with its batch citation key and title', async () => {
+    const batchText =
+      '@article{batchPan2022,\n  title = {Carbon price forecasting},\n}\n\n' +
+      '@article{batchZheng2025,\n  title = {Insight into heterogeneous risks},\n}\n'
+    const secondStart = batchText.indexOf('@article{batchZheng2025,')
     mock.route('GET', '/api/users/0/items', (req, res, helpers, search) => {
       const keys = (search.get('itemKey') ?? '').split(',')
       if (keys.length > 1) {
-        helpers.text('@article{pan2022}\n\n@article{zheng2025}\n')
+        helpers.text(batchText)
         return
       }
+      // The single-item context generates different citation keys; the
+      // mapping pairs the entries by content regardless.
       helpers.text(
         keys[0] === 'ABCD1234'
-          ? '@article{panCarbonPriceForecasting2022,\n  title = {Carbon price forecasting},\n}'
-          : '@article{zhengInsightHeterogeneousRisks2025,\n  title = {Insight into heterogeneous risks},\n}',
+          ? '@article{singlePan2022,\n  title = {Carbon price forecasting},\n}\n'
+          : '@article{singleZheng2025,\n  title = {Insight into heterogeneous risks},\n}\n',
       )
     })
     const result = await runTool('zotero_export', {
@@ -1019,26 +1025,26 @@ describe('zotero_export tool', () => {
     if (result.isError) throw new Error('unreachable')
     expect(result.value).toEqual({
       format: 'bibtex',
-      text: '@article{pan2022}\n\n@article{zheng2025}\n',
+      text: batchText,
       items: [
         {
           ref: 'zotero://user/0/item/ABCD1234',
-          key: 'panCarbonPriceForecasting2022',
+          key: 'batchPan2022',
           title: 'Carbon price forecasting',
-          text: '@article{panCarbonPriceForecasting2022,\n  title = {Carbon price forecasting},\n}',
+          start: 0,
+          end: secondStart,
         },
         {
           ref: 'zotero://user/0/item/BBBB1234',
-          key: 'zhengInsightHeterogeneousRisks2025',
+          key: 'batchZheng2025',
           title: 'Insight into heterogeneous risks',
-          text: '@article{zhengInsightHeterogeneousRisks2025,\n  title = {Insight into heterogeneous risks},\n}',
+          start: secondStart,
+          end: batchText.length,
         },
       ],
     })
     // The model-visible render stays the merged body, not the itemization.
-    expect((result.content[0] as { text: string }).text).toBe(
-      '@article{pan2022}\n\n@article{zheng2025}\n',
-    )
+    expect((result.content[0] as { text: string }).text).toBe(batchText)
   })
 
   it('rejects empty ref lists, malformed refs, and blank styles before any request', async () => {

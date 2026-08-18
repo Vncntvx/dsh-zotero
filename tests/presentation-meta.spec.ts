@@ -512,16 +512,16 @@ describe('projectExportMeta', () => {
     expect(meta.refs[0]).toBe('zotero://user/0/item/ITEM0')
   })
 
-  it('itemizes the per-document facts without their entry text', () => {
+  it('itemizes the per-document facts with their located entry', () => {
     const meta = projectExportMeta(
       3,
       {
         format: 'bibtex',
         text: 'raw',
         items: [
-          { ref: 'zotero://user/0/item/AAAAAAA1', key: 'a1', title: 'A', text: '@article{a1}' },
-          { ref: 'zotero://user/0/item/AAAAAAA2', key: 'a2', text: '@article{a2}' },
-          { ref: 'zotero://user/0/item/AAAAAAA3', text: '@article{a3}' },
+          { ref: 'zotero://user/0/item/AAAAAAA1', key: 'a1', title: 'A', start: 0, end: 11 },
+          { ref: 'zotero://user/0/item/AAAAAAA2', key: 'a2', entryIndex: 1 },
+          { ref: 'zotero://user/0/item/AAAAAAA3' },
         ],
       },
       REFS,
@@ -532,8 +532,8 @@ describe('projectExportMeta', () => {
       refs: REFS,
       refsOmitted: 0,
       items: [
-        { ref: 'zotero://user/0/item/AAAAAAA1', key: 'a1', title: 'A' },
-        { ref: 'zotero://user/0/item/AAAAAAA2', key: 'a2' },
+        { ref: 'zotero://user/0/item/AAAAAAA1', key: 'a1', title: 'A', start: 0, end: 11 },
+        { ref: 'zotero://user/0/item/AAAAAAA2', key: 'a2', entryIndex: 1 },
         { ref: 'zotero://user/0/item/AAAAAAA3' },
       ],
     })
@@ -543,11 +543,15 @@ describe('projectExportMeta', () => {
     const refs = Array.from({ length: 25 }, (_, index) => `zotero://user/0/item/ITEM${index}`)
     const meta = projectExportMeta(
       25,
-      { format: 'ris', text: 'raw', items: refs.map((ref, index) => ({ ref, text: `r${index}` })) },
+      {
+        format: 'ris',
+        text: 'raw',
+        items: refs.map((ref, index) => ({ ref, start: index, end: index + 1 })),
+      },
       refs,
     )
     expect(meta.items).toHaveLength(20)
-    expect(meta.items![19]).toEqual({ ref: 'zotero://user/0/item/ITEM19' })
+    expect(meta.items![19]).toEqual({ ref: 'zotero://user/0/item/ITEM19', start: 19, end: 20 })
     expect(meta.refsOmitted).toBe(5)
   })
 
@@ -598,7 +602,7 @@ describe('boundedPresentationMeta', () => {
       {
         format: 'bibtex',
         text: 'raw',
-        items: [{ ref: 'zotero://user/0/item/AAAAAAA1', key: 'a1', title: filler, text: 'raw' }],
+        items: [{ ref: 'zotero://user/0/item/AAAAAAA1', key: 'a1', title: filler, start: 0 }],
       },
       ['zotero://user/0/item/AAAAAAA1'],
     )

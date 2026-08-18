@@ -123,14 +123,13 @@ describe('export', () => {
       const before = mock.requests.length
       const result = await provider.export(exportRequest({ format }))
       if (result.format !== format) throw new Error('unreachable')
-      expect(result).toEqual({
-        format,
-        text: `exported-as-${format}`,
-        items: [
-          { ref: 'zotero://user/0/item/ABCD1234', text: `entry-of-${format}-ABCD1234` },
-          { ref: 'zotero://user/0/item/BBBB1234', text: `entry-of-${format}-BBBB1234` },
-        ],
-      })
+      expect(result.text).toBe(`exported-as-${format}`)
+      // A body without parseable entries leaves every item unlocated, but
+      // the per-ref itemization itself is always present.
+      expect(result.items).toEqual([
+        { ref: 'zotero://user/0/item/ABCD1234' },
+        { ref: 'zotero://user/0/item/BBBB1234' },
+      ])
       const perItem = mock.requests.slice(before + 1)
       expect(perItem).toHaveLength(2)
       expect(new Set(perItem.map((entry) => entry.search.get('itemKey')))).toEqual(
@@ -140,34 +139,43 @@ describe('export', () => {
     }
   })
 
-  it('pairs each translator document with its ref in the requested order', async () => {
+  it('pairs each translator document with its batch entry and projects the span', async () => {
+    const batchText =
+      '@article{batchPan2022,\n  title = {Carbon price forecasting},\n}\n\n' +
+      '@article{batchZheng2025,\n  title = {Insight into heterogeneous risks},\n}\n'
+    const secondStart = batchText.indexOf('@article{batchZheng2025,')
     mock.route('GET', '/api/users/0/items', (req, res, helpers, search) => {
       const keys = (search.get('itemKey') ?? '').split(',')
       if (keys.length > 1) {
-        helpers.text('@article{pan2022,...}\n\n@article{zheng2025,...}\n')
+        helpers.text(batchText)
         return
       }
+      // The single-item context generates different citation keys; the
+      // mapping must still pair the entries by their content.
       helpers.text(
         keys[0] === 'ABCD1234'
-          ? '@article{panCarbonPriceForecasting2022,\n  title = {Carbon price forecasting},\n}'
-          : '@article{zhengInsightHeterogeneousRisks2025,\n  title = {Insight into heterogeneous risks},\n}',
+          ? '@article{singlePan2022,\n  title = {Carbon price forecasting},\n}\n'
+          : '@article{singleZheng2025,\n  title = {Insight into heterogeneous risks},\n}\n',
       )
     })
     const result = await provider.export(exportRequest({ format: 'bibtex' }))
     if (result.format !== 'bibtex') throw new Error('unreachable')
-    expect(result.text).toBe('@article{pan2022,...}\n\n@article{zheng2025,...}\n')
+    expect(result.text).toBe(batchText)
+    // The batch body's own citation keys win over the single-item context's.
     expect(result.items).toEqual([
       {
         ref: 'zotero://user/0/item/ABCD1234',
-        key: 'panCarbonPriceForecasting2022',
+        key: 'batchPan2022',
         title: 'Carbon price forecasting',
-        text: '@article{panCarbonPriceForecasting2022,\n  title = {Carbon price forecasting},\n}',
+        start: 0,
+        end: secondStart,
       },
       {
         ref: 'zotero://user/0/item/BBBB1234',
-        key: 'zhengInsightHeterogeneousRisks2025',
+        key: 'batchZheng2025',
         title: 'Insight into heterogeneous risks',
-        text: '@article{zhengInsightHeterogeneousRisks2025,\n  title = {Insight into heterogeneous risks},\n}',
+        start: secondStart,
+        end: batchText.length,
       },
     ])
     // The merged body stays one batch request; each ref then gets its own
@@ -248,10 +256,7 @@ describe('export', () => {
     expect(result).toEqual({
       format: 'bibtex',
       text: '0123456789',
-      items: [
-        { ref: 'zotero://user/0/item/ABCD1234', text: '0123456789' },
-        { ref: 'zotero://user/0/item/BBBB1234', text: '0123456789' },
-      ],
+      items: [{ ref: 'zotero://user/0/item/ABCD1234' }, { ref: 'zotero://user/0/item/BBBB1234' }],
     })
   })
 

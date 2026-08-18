@@ -253,24 +253,30 @@ export interface ZoteroExportRequest {
 }
 
 /**
- * One exported document inside a translator-format export, keyed to its ref.
- * The merged body's entry order belongs to Zotero, so each document is
- * fetched and itemized on its own instead of being indexed against the
- * requested refs.
+ * One exported document inside a translator-format export, keyed to its ref
+ * and located within the merged body. The provider maps each ref to its
+ * batch entry on the server (by content for BibTeX/BibLaTeX, by record id
+ * for RIS and CSL JSON), so the browser never guesses which entry belongs
+ * to which ref — the merged body's entry order belongs to Zotero, and
+ * citation keys are generated in the export context.
  */
 export interface ZoteroExportItem {
   /** The formatted `zotero://` ref the entry was exported for. */
   readonly ref: string
   /**
-   * The format-local identifier: the BibTeX/BibLaTeX citation key, the CSL
-   * JSON id, or the RIS record id; absent when the format has none (RIS) or
-   * the entry cannot be parsed.
+   * The batch body's real key: the BibTeX/BibLaTeX citation key or the CSL
+   * JSON id; absent when the format has none (RIS) or the entry could not
+   * be located.
    */
   readonly key?: string
-  /** The item's title for display, when the entry carries one. */
+  /** The item's title for display, when the entry carried one. */
   readonly title?: string
-  /** This document's entry text, exactly as Zotero exported it. */
-  readonly text: string
+  /** The located entry's index within the parsed CSL JSON array. */
+  readonly entryIndex?: number
+  /** The located entry's start offset within the trimmed batch body. */
+  readonly start?: number
+  /** The located entry's end offset (exclusive) within the trimmed batch body. */
+  readonly end?: number
 }
 
 /**

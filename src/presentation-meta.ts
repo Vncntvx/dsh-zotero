@@ -225,13 +225,18 @@ export interface ZoteroAttachmentPresentationMeta {
   readonly url?: string
 }
 
-/** One bounded export document item: the ref with its format-local key and display title. */
+/** One bounded export document item: the ref with its format-local key, display title, and located entry. */
 export interface ZoteroExportPresentationItem {
   readonly ref: string
-  /** The format-local identifier (citation key, CSL JSON id, RIS record id). */
+  /** The format-local identifier (citation key, CSL JSON id). */
   readonly key?: string
-  /** The item's title for display, when the entry carries one. */
+  /** The item's title for display, when the entry carried one. */
   readonly title?: string
+  /** The located entry's index within the parsed CSL JSON array. */
+  readonly entryIndex?: number
+  /** The located entry's text span within the trimmed batch body (text formats). */
+  readonly start?: number
+  readonly end?: number
 }
 
 export interface ZoteroExportPresentationMeta {
@@ -493,7 +498,9 @@ export function projectExportMeta(
       readonly ref: string
       readonly key?: string
       readonly title?: string
-      readonly text: string
+      readonly entryIndex?: number
+      readonly start?: number
+      readonly end?: number
     }[]
   },
   refs: readonly string[],
@@ -518,6 +525,9 @@ export function projectExportMeta(
     ref: item.ref,
     ...(item.key === undefined ? {} : { key: item.key }),
     ...(item.title === undefined ? {} : { title: item.title }),
+    ...(item.entryIndex === undefined ? {} : { entryIndex: item.entryIndex }),
+    ...(item.start === undefined ? {} : { start: item.start }),
+    ...(item.end === undefined ? {} : { end: item.end }),
   }))
   return { ...base, items }
 }
