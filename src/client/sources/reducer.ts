@@ -117,12 +117,30 @@ function emptyOperations(): DraftOperations {
   return { running: 0, failed: 0, stopped: 0 }
 }
 
-/** The identity of one logical search: query, mode, and normalized scope. */
+/** The identity of one logical search: query, mode, scope, and filter fields. */
 function searchIdentityOf(args: Record<string, unknown> | null): string | null {
   if (args === null) return null
   const query = typeof args['query'] === 'string' ? args['query'] : ''
   const mode = args['mode'] === 'everything' ? 'everything' : 'metadata'
-  return JSON.stringify({ query, mode, scope: scopeOf(args['scope']) })
+  const itemTypes = normalizedListOf(args['itemTypes'])
+  const tags = normalizedListOf(args['tags'])
+  const sort = typeof args['sort'] === 'string' ? args['sort'] : ''
+  const direction = typeof args['direction'] === 'string' ? args['direction'] : ''
+  return JSON.stringify({
+    query,
+    mode,
+    scope: scopeOf(args['scope']),
+    itemTypes,
+    tags,
+    sort,
+    direction,
+  })
+}
+
+/** String entries of a list field, deduplicated and ordered (order-free identity). */
+function normalizedListOf(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return [...new Set(value.filter((entry): entry is string => typeof entry === 'string'))].sort()
 }
 
 /** The normalized scope of one search call; unparseable scopes fall back to the library. */
@@ -157,16 +175,29 @@ function refArgOf(args: Record<string, unknown> | null): string | null {
   return ref === undefined || ref === '' ? null : ref
 }
 
-/** The exported refs of one export call: the projection's list first, then the arguments. */
+/**
+ * The exported refs of one export call: the arguments are the complete,
+ * validated business attribution, so they win and report no omitted refs;
+ * the meta projection only previews (bounded, with its own omitted count)
+ * when the args are unusable.
+ */
 function exportRefsOf(
   metaView: ExportMetaView | null,
   args: Record<string, unknown> | null,
-): string[] {
-  if (metaView !== null && metaView.refs.length > 0) return [...metaView.refs]
-  if (args === null) return []
-  const refs = args['refs']
-  if (!Array.isArray(refs)) return []
-  return refs.filter((entry): entry is string => typeof entry === 'string' && entry !== '')
+): { readonly refs: readonly string[]; readonly refsOmitted: number } {
+  if (args !== null) {
+    const refs = args['refs']
+    if (Array.isArray(refs)) {
+      return {
+        refs: refs.filter((entry): entry is string => typeof entry === 'string' && entry !== ''),
+        refsOmitted: 0,
+      }
+    }
+  }
+  return {
+    refs: metaView === null ? [] : [...metaView.refs],
+    refsOmitted: metaView === null ? 0 : metaView.refsOmitted,
+  }
 }
 
 /** The dedup identity of one evidence passage: its verbatim fields, no hashing. */
@@ -236,13 +267,44 @@ export function buildSourceWorkspace(
     seq: number,
   ): void => {
     const view = retrieveMetaOf(meta)
-    if (view.items === null) return
-    draft.retrievalFacts = {
+    // A recognized projection always carries `count` (the byte budget may
+    // drop `items` alone); only a fully unusable meta yields no facts.
+    if (view.items === null && view.count === null) return
+    if (view.count !== null) {
+      draft.facts.reportedEvidenceCount += view.count
+    }
+    const nextFacts: SourceRetrievalFacts = {
       ...(view.attachmentRef === null ? {} : { attachmentRef: view.attachmentRef }),
       ...(view.coverage === null ? {} : { coverage: view.coverage }),
       truncated: view.truncated === true,
       sourceAvailability: view.sourceAvailability,
     }
+    if (draft.retrievalFacts !== undefined) {
+      const prev = draft.retrievalFacts
+      const mergedAvailability = { ...prev.sourceAvailability }
+      for (const [source, entry] of Object.entries(nextFacts.sourceAvailability)) {
+        mergedAvailability[source] = entry
+      }
+      draft.retrievalFacts = {
+        // The latest carried values win, so the attachment deep link and
+        // the coverage line always describe the same retrieve.
+        ...(view.attachmentRef === null
+          ? prev.attachmentRef !== undefined
+            ? { attachmentRef: prev.attachmentRef }
+            : {}
+          : { attachmentRef: view.attachmentRef }),
+        ...(view.coverage === null
+          ? prev.coverage !== undefined
+            ? { coverage: prev.coverage }
+            : {}
+          : { coverage: view.coverage }),
+        truncated: prev.truncated || nextFacts.truncated,
+        sourceAvailability: mergedAvailability,
+      }
+    } else {
+      draft.retrievalFacts = nextFacts
+    }
+    if (view.items === null) return
     for (const item of view.items) {
       const key = evidenceKeyOf(item.source, item.sourceRef, item.preview, item.pageLabel)
       const existing = draft.evidence.get(key)
@@ -360,7 +422,7 @@ export function buildSourceWorkspace(
           else exportOperations.failed += 1
         }
         const metaView = meta === null ? null : exportMetaOf(meta)
-        const refs = exportRefsOf(metaView, args)
+        const { refs, refsOmitted } = exportRefsOf(metaView, args)
         if (refs.length === 0) break
         for (const ref of refs) {
           const draft = draftOf(ref, seq)

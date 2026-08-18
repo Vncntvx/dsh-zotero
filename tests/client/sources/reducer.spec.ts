@@ -213,6 +213,7 @@ describe('buildSourceWorkspace', () => {
     expect(workspace.sources[0]!.facts).toEqual({
       inspected: true,
       evidenceCount: 0,
+      reportedEvidenceCount: 0,
       attachmentResolved: false,
       exportCount: 0,
     })
@@ -283,6 +284,7 @@ describe('buildSourceWorkspace', () => {
     expect(workspace.sources[0]!.facts).toEqual({
       inspected: false,
       evidenceCount: 0,
+      reportedEvidenceCount: 0,
       attachmentResolved: false,
       exportCount: 0,
     })
@@ -537,11 +539,12 @@ describe('buildSourceWorkspace', () => {
         callId: 'e1',
         seq: 1,
         call: { name: 'zotero_export', argsRaw: '' },
-        meta: { format: 'ris', requested: 1, refs: [REF('A1')], refsOmitted: 0 },
+        meta: { format: 'ris', requested: 1, refs: [REF('A1')] },
         content: [{ type: 'text', text: 'TY - JOUR' }],
       },
     ])
     expect(workspace.exports[0]!.refs).toEqual([REF('A1')])
+    expect(workspace.exports[0]!.refsOmitted).toBe(0)
     expect(workspace.sources).toHaveLength(1)
   })
 
@@ -833,7 +836,11 @@ describe('buildSourceWorkspace', () => {
       ),
     ])
     expect(workspace.sources[0]!.retrievalFacts?.truncated).toBe(true)
-    expect(workspace.sources[0]!.retrievalFacts?.coverage).toBeUndefined()
+    expect(workspace.sources[0]!.retrievalFacts?.coverage).toEqual({
+      indexedPages: 5,
+      totalPages: 10,
+      complete: false,
+    })
   })
 
   it('keeps the first attachment hint a search surfaced', () => {
@@ -874,5 +881,429 @@ describe('buildSourceWorkspace', () => {
     expect(workspace.sources[0]!.bestAttachment).toEqual({
       ref: 'zotero://user/0/attachment/WXYZ6789',
     })
+  })
+
+  it('distinguishes searches by itemTypes and tags, not just query and mode', () => {
+    const workspace = buildSourceWorkspace([
+      block(
+        's1',
+        1,
+        'zotero_search',
+        {
+          query: 'transformer',
+          itemTypes: ['journalArticle'],
+          tags: ['review'],
+          sort: 'date',
+          direction: 'desc',
+        },
+        {
+          meta: {
+            returned: 1,
+            total: 1,
+            nextOffset: null,
+            displayed: 1,
+            omitted: 0,
+            noteMatches: null,
+            items: [
+              {
+                ref: REF('A1'),
+                title: 'T1',
+                creatorSummary: 'C',
+                year: 2020,
+                itemType: 'journalArticle',
+              },
+            ],
+          },
+        },
+      ),
+      block(
+        's2',
+        2,
+        'zotero_search',
+        {
+          query: 'transformer',
+          itemTypes: ['journalArticle'],
+          tags: ['dataset'],
+          sort: 'date',
+          direction: 'asc',
+        },
+        {
+          meta: {
+            returned: 1,
+            total: 1,
+            nextOffset: null,
+            displayed: 1,
+            omitted: 0,
+            noteMatches: null,
+            items: [
+              {
+                ref: REF('A2'),
+                title: 'T2',
+                creatorSummary: 'C',
+                year: 2020,
+                itemType: 'journalArticle',
+              },
+            ],
+          },
+        },
+      ),
+    ])
+    expect(workspace.sources).toHaveLength(2)
+    expect(workspace.sources[0]!.searches).toEqual([{ callId: 's1', query: 'transformer' }])
+    expect(workspace.sources[1]!.searches).toEqual([{ callId: 's2', query: 'transformer' }])
+  })
+
+  it('normalizes non-array itemTypes and tags into empty arrays', () => {
+    const workspace = buildSourceWorkspace([
+      block(
+        's1',
+        1,
+        'zotero_search',
+        { query: 'x', itemTypes: 'not-array', tags: null },
+        {
+          meta: {
+            returned: 1,
+            total: 1,
+            nextOffset: null,
+            displayed: 1,
+            omitted: 0,
+            noteMatches: null,
+            items: [
+              {
+                ref: REF('A1'),
+                title: 'T',
+                creatorSummary: 'C',
+                year: 2020,
+                itemType: 'journalArticle',
+              },
+            ],
+          },
+        },
+      ),
+    ])
+    expect(workspace.sources).toHaveLength(1)
+  })
+
+  it('preserves previous coverage and attachmentRef when the next retrieve carries none', () => {
+    const workspace = buildSourceWorkspace([
+      block('r1', 1, 'zotero_retrieve', { ref: REF('A1') }, { meta: RETRIEVE_META }),
+      block(
+        'r2',
+        2,
+        'zotero_retrieve',
+        { ref: REF('A1') },
+        {
+          meta: {
+            count: 0,
+            sources: [],
+            truncated: false,
+            sourcesSkipped: [],
+            items: [],
+            sourceAvailability: {},
+          },
+        },
+      ),
+    ])
+    expect(workspace.sources[0]!.retrievalFacts?.coverage).toEqual({
+      indexedPages: 5,
+      totalPages: 10,
+      complete: false,
+    })
+    expect(workspace.sources[0]!.retrievalFacts?.attachmentRef).toBe(
+      'zotero://user/0/attachment/WXYZ6789',
+    )
+  })
+
+  it('adopts later attachmentRef and coverage when earlier retrieve had none', () => {
+    const workspace = buildSourceWorkspace([
+      block(
+        'r1',
+        1,
+        'zotero_retrieve',
+        { ref: REF('A1') },
+        {
+          meta: {
+            count: 0,
+            sources: [],
+            truncated: false,
+            sourcesSkipped: [],
+            items: [],
+            sourceAvailability: {},
+          },
+        },
+      ),
+      block('r2', 2, 'zotero_retrieve', { ref: REF('A1') }, { meta: RETRIEVE_META }),
+    ])
+    expect(workspace.sources[0]!.retrievalFacts?.attachmentRef).toBe(
+      'zotero://user/0/attachment/WXYZ6789',
+    )
+    expect(workspace.sources[0]!.retrievalFacts?.coverage).toEqual({
+      indexedPages: 5,
+      totalPages: 10,
+      complete: false,
+    })
+  })
+
+  it('treats retrieve count as optional and does not invent reportedEvidenceCount when absent', () => {
+    const workspace = buildSourceWorkspace([
+      block(
+        'r1',
+        1,
+        'zotero_retrieve',
+        { ref: REF('A1') },
+        {
+          meta: {
+            sources: ['fulltext'],
+            truncated: false,
+            sourcesSkipped: [],
+            items: [
+              {
+                source: 'fulltext',
+                sourceRef: REF('A1'),
+                preview: 'body',
+                previewTruncated: false,
+              },
+            ],
+            sourceAvailability: {},
+          },
+        },
+      ),
+    ])
+    expect(workspace.sources[0]!.facts.reportedEvidenceCount).toBe(0)
+    expect(workspace.sources[0]!.facts.evidenceCount).toBe(1)
+  })
+
+  it('leaves attachmentRef and coverage unset when no retrieve provides them', () => {
+    const workspace = buildSourceWorkspace([
+      block(
+        'r1',
+        1,
+        'zotero_retrieve',
+        { ref: REF('A1') },
+        {
+          meta: {
+            count: 0,
+            sources: [],
+            truncated: false,
+            sourcesSkipped: [],
+            items: [],
+            sourceAvailability: {},
+          },
+        },
+      ),
+      block(
+        'r2',
+        2,
+        'zotero_retrieve',
+        { ref: REF('A1') },
+        {
+          meta: {
+            count: 0,
+            sources: [],
+            truncated: false,
+            sourcesSkipped: [],
+            items: [],
+            sourceAvailability: {},
+          },
+        },
+      ),
+    ])
+    expect(workspace.sources[0]!.retrievalFacts?.attachmentRef).toBeUndefined()
+    expect(workspace.sources[0]!.retrievalFacts?.coverage).toBeUndefined()
+  })
+
+  it('normalizes non-string sort and direction into empty strings', () => {
+    const workspace = buildSourceWorkspace([
+      block(
+        's1',
+        1,
+        'zotero_search',
+        { query: 'x', sort: 1, direction: true },
+        {
+          meta: {
+            returned: 1,
+            total: 1,
+            nextOffset: null,
+            displayed: 1,
+            omitted: 0,
+            noteMatches: null,
+            items: [
+              {
+                ref: REF('A1'),
+                title: 'T',
+                creatorSummary: 'C',
+                year: 2020,
+                itemType: 'journalArticle',
+              },
+            ],
+          },
+        },
+      ),
+    ])
+    expect(workspace.sources).toHaveLength(1)
+  })
+
+  it('attributes every ref of a 50-ref export from the arguments, with no phantom omitted count', () => {
+    const refs = Array.from({ length: 50 }, (_, index) => REF(`B${String(index).padStart(2, '0')}`))
+    const workspace = buildSourceWorkspace([
+      block(
+        'e1',
+        1,
+        'zotero_export',
+        { refs, format: 'bibtex' },
+        {
+          meta: {
+            format: 'bibtex',
+            requested: 50,
+            refs: refs.slice(0, 20),
+            refsOmitted: 30,
+          },
+          content: [{ type: 'text', text: 'bib' }],
+        },
+      ),
+    ])
+    expect(workspace.exports[0]!.refs).toHaveLength(50)
+    expect(workspace.exports[0]!.refsOmitted).toBe(0)
+    expect(workspace.sources).toHaveLength(50)
+    for (const source of workspace.sources) {
+      expect(source.facts.exportCount).toBe(1)
+    }
+  })
+
+  it('keeps the projection refsOmitted only for the meta-preview fallback', () => {
+    const refs = Array.from({ length: 25 }, (_, index) => REF(`C${String(index).padStart(2, '0')}`))
+    const workspace = buildSourceWorkspace([
+      {
+        ...settled(),
+        callId: 'e1',
+        seq: 1,
+        call: { name: 'zotero_export', argsRaw: '' },
+        meta: { format: 'ris', requested: 25, refs: refs.slice(0, 20), refsOmitted: 5 },
+        content: [{ type: 'text', text: 'TY - JOUR' }],
+      },
+    ])
+    expect(workspace.exports[0]!.refs).toHaveLength(20)
+    expect(workspace.exports[0]!.refsOmitted).toBe(5)
+  })
+
+  it('records retrieval facts when the byte budget dropped the items preview', () => {
+    const workspace = buildSourceWorkspace([
+      block(
+        'r1',
+        1,
+        'zotero_retrieve',
+        { ref: REF('A1') },
+        {
+          meta: {
+            count: 25,
+            sources: ['fulltext'],
+            truncated: true,
+            sourcesSkipped: [],
+            detailOmitted: true,
+            attachmentRef: 'zotero://user/0/attachment/WXYZ6789',
+            sourceAvailability: {
+              fulltext: { requested: true, returnedPassages: 25, unavailable: false },
+            },
+          },
+        },
+      ),
+    ])
+    expect(workspace.sources[0]!.retrievalFacts).toBeDefined()
+    expect(workspace.sources[0]!.retrievalFacts?.truncated).toBe(true)
+    expect(workspace.sources[0]!.retrievalFacts?.attachmentRef).toBe(
+      'zotero://user/0/attachment/WXYZ6789',
+    )
+    expect(workspace.sources[0]!.facts.reportedEvidenceCount).toBe(25)
+    expect(workspace.sources[0]!.facts.evidenceCount).toBe(0)
+  })
+
+  it('adopts the latest attachmentRef and pairs it with the latest coverage', () => {
+    const workspace = buildSourceWorkspace([
+      block('r1', 1, 'zotero_retrieve', { ref: REF('A1') }, { meta: RETRIEVE_META }),
+      block(
+        'r2',
+        2,
+        'zotero_retrieve',
+        { ref: REF('A1') },
+        {
+          meta: {
+            count: 1,
+            sources: ['fulltext'],
+            truncated: false,
+            sourcesSkipped: [],
+            items: [],
+            attachmentRef: 'zotero://user/0/attachment/OTHER99',
+            coverage: { indexedPages: 9, totalPages: 9, complete: true },
+            sourceAvailability: {},
+          },
+        },
+      ),
+    ])
+    expect(workspace.sources[0]!.retrievalFacts?.attachmentRef).toBe(
+      'zotero://user/0/attachment/OTHER99',
+    )
+    expect(workspace.sources[0]!.retrievalFacts?.coverage).toEqual({
+      indexedPages: 9,
+      totalPages: 9,
+      complete: true,
+    })
+  })
+
+  it('folds searches whose tags differ only in order into one episode', () => {
+    const workspace = buildSourceWorkspace([
+      block(
+        's1',
+        1,
+        'zotero_search',
+        { query: 'x', tags: ['review', 'ml'] },
+        {
+          meta: {
+            returned: 1,
+            total: 1,
+            nextOffset: null,
+            displayed: 1,
+            omitted: 0,
+            noteMatches: null,
+            items: [
+              {
+                ref: REF('A1'),
+                title: 'T',
+                creatorSummary: 'C',
+                year: 2020,
+                itemType: 'journalArticle',
+              },
+            ],
+          },
+        },
+      ),
+      block(
+        's2',
+        2,
+        'zotero_search',
+        { query: 'x', tags: ['ml', 'review'] },
+        {
+          meta: {
+            returned: 1,
+            total: 1,
+            nextOffset: null,
+            displayed: 1,
+            omitted: 0,
+            noteMatches: null,
+            items: [
+              {
+                ref: REF('A2'),
+                title: 'T',
+                creatorSummary: 'C',
+                year: 2020,
+                itemType: 'journalArticle',
+              },
+            ],
+          },
+        },
+      ),
+    ])
+    expect(workspace.sources).toHaveLength(2)
+    expect(workspace.sources[0]!.searches).toEqual([{ callId: 's1', query: 'x' }])
+    expect(workspace.sources[1]!.searches).toEqual([{ callId: 's1', query: 'x' }])
   })
 })
