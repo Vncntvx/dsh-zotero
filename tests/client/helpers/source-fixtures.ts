@@ -1,5 +1,5 @@
 /**
- * Shared source fixtures for the panel specs and the v0.4 visual baseline.
+ * Shared source fixtures for the panel specs and the visual baseline.
  * Beyond the neutral `sourceOf`/`workspaceOf` builders (the spec convention,
  * same as blocks.ts), this module exports a deterministic fixture gallery of
  * eight named workspaces — one item, a mixed 12, a large 30, a zero-match

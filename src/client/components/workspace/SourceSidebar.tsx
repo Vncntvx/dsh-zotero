@@ -5,22 +5,36 @@
  * and selection, so the whole row is the option. Zero-count filters are not
  * rendered at all (an entry with nothing to show is noise, not navigation),
  * except the active filter, which stays visible so it can be switched away
- * from. The quiet passages entry below the bar opens the cross-source board,
- * and the omitted-rows caption keeps the bounded-projection limit honest.
- * Selection follows the fixed invariants: first visible row by default, kept
- * across filter switches (a hidden selection stays in the inspector with a
- * note), and session switches reset through the parent's `key`. The keyboard
- * contract is listbox semantics — ArrowUp/ArrowDown move and select, Home/
- * End jump, and the focused row keeps tabIndex 0 (roving tabindex).
+ * from. When the pills outgrow the rail, the strip scrolls with its bar
+ * hidden and edge arrows page it, so overflow is announced by the arrows,
+ * not by scrollbar chrome. The passage-overview entry below the bar (its
+ * count is the true passage sum, and it appears once two sources carry
+ * passages, so the comparative board is not shown for a single doc) opens
+ * the cross-source board, and the omitted-rows caption keeps the
+ * bounded-projection limit honest. Selection follows the fixed invariants:
+ * first visible row by default, kept across filter switches (a hidden
+ * selection stays in the inspector with a note), and session switches reset
+ * through the parent's `key`. The keyboard contract is listbox semantics —
+ * ArrowUp/ArrowDown move and select, Home/End jump, and the focused row
+ * keeps tabIndex 0 (roving tabindex).
  * @module dsh-zotero/client/components/workspace/SourceSidebar
  */
 
-import { useRef } from 'react'
-import { Pill } from '@deepseek-ai/dsh-client-ui-primitives'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import clsx from 'clsx'
+import {
+  IconChevronLeftOutline14,
+  IconChevronRightOutline14,
+  Pill,
+} from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { interpolate } from '../../presenters.ts'
 import type { SourceItem, SourceWorkspace } from '../../sources/model.ts'
-import type { SourceFilter, SourceFilterCounts } from '../../sources/selectors.ts'
+import {
+  evidencePassageTotalOf,
+  type SourceFilter,
+  type SourceFilterCounts,
+} from '../../sources/selectors.ts'
 import { FILTERS, type MobilePane, type SelectionState } from './ZoteroWorkspaceView.tsx'
 import { SourceListItem } from './SourceListItem.tsx'
 import css from './workspace.module.css'
@@ -67,6 +81,43 @@ export function SourceSidebar({
 }: SourceSidebarProps) {
   const optionRefs = useRef<Array<HTMLDivElement | null>>([])
   const listRefLocal = listRef
+  const filterBarRef = useRef<HTMLDivElement>(null)
+  const [filterEdges, setFilterEdges] = useState({ left: false, right: false })
+
+  // The pill strip follows the harness's composer-rail pattern: the
+  // scrollbar stays hidden and overflow is announced by edge arrows paging
+  // the strip, recomputed from the scroll geometry on scroll, pill changes,
+  // and rail size changes (a ResizeObserver on the bar itself, so sidebar or
+  // viewport resizes count, not only window resizes). In jsdom there is no
+  // layout, so scrollWidth equals clientWidth and no arrow renders.
+  const updateFilterEdges = useCallback(() => {
+    const el = filterBarRef.current!
+    const left = el.scrollLeft > 1
+    const right = el.scrollLeft < el.scrollWidth - el.clientWidth - 1
+    setFilterEdges((prev) => (prev.left === left && prev.right === right ? prev : { left, right }))
+  }, [])
+
+  useLayoutEffect(() => {
+    updateFilterEdges()
+  }, [counts, filter, updateFilterEdges])
+
+  useEffect(() => {
+    const el = filterBarRef.current!
+    el.addEventListener('scroll', updateFilterEdges)
+    const observer = new ResizeObserver(updateFilterEdges)
+    observer.observe(el)
+    return () => {
+      el.removeEventListener('scroll', updateFilterEdges)
+      observer.disconnect()
+    }
+  }, [updateFilterEdges])
+
+  // One strip minus a pill keeps the last pill in view as context; the floor
+  // keeps a narrow strip paging a useful distance.
+  const pageFilters = (direction: -1 | 1): void => {
+    const el = filterBarRef.current!
+    el.scrollBy({ left: direction * Math.max(el.clientWidth - 60, 120) })
+  }
 
   const focusVisible = (index: number): void => {
     optionRefs.current[index]?.focus()
@@ -106,7 +157,19 @@ export function SourceSidebar({
 
   return (
     <aside className={css.sidebar} ref={listRefLocal}>
-      <div className={css.filterBar} role="group">
+      <div className={css.filterBar} ref={filterBarRef} role="group">
+        {filterEdges.left && (
+          <button
+            type="button"
+            className={clsx(css.filterArrow, css.filterArrowLeft)}
+            aria-label={t('filterScrollLeft')}
+            onClick={() => {
+              pageFilters(-1)
+            }}
+          >
+            <IconChevronLeftOutline14 />
+          </button>
+        )}
         {shownFiltersOf(filter, counts).map((entry) => {
           const count = counts[entry.id]
           return (
@@ -122,10 +185,28 @@ export function SourceSidebar({
             </Pill>
           )
         })}
+        {filterEdges.right && (
+          <button
+            type="button"
+            className={clsx(css.filterArrow, css.filterArrowRight)}
+            aria-label={t('filterScrollRight')}
+            onClick={() => {
+              pageFilters(1)
+            }}
+          >
+            <IconChevronRightOutline14 />
+          </button>
+        )}
       </div>
-      {counts.evidence > 0 && (
+      {/* The aggregate passage board needs at least two evidence-bearing
+          sources to be worth the trip: one source reads better in its own
+          detail rows, and the entry shows the true passage sum, not the
+          source count. */}
+      {counts.evidence >= 2 && (
         <button type="button" className={css.evidenceEntry} onClick={onOpenEvidence}>
-          {interpolate(t('evidenceEntryLabel'), { count: counts.evidence })}
+          {interpolate(t('evidenceEntryLabel'), {
+            count: evidencePassageTotalOf(workspace.sources),
+          })}
         </button>
       )}
       {workspace.omittedRows > 0 && (

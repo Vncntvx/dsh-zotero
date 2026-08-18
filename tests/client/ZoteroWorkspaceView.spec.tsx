@@ -12,7 +12,7 @@ import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { zh, type ZoteroLocaleKey } from '../../src/client/locales.ts'
 import type { ZoteroStatusView } from '../../src/client/remote.ts'
-import { filterCountsOf } from '../../src/client/sources/selectors.ts'
+import { filterCountsOf, evidencePassageTotalOf } from '../../src/client/sources/selectors.ts'
 import type { ConnectionView } from '../../src/client/components/workspace/connection.ts'
 import {
   filterLineOf,
@@ -97,6 +97,8 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
           : undefined,
       ),
     IconChevronDownOutline14: icon('chevron-down'),
+    IconChevronLeftOutline14: icon('chevron-left'),
+    IconChevronRightOutline14: icon('chevron-right'),
     IconBrowseOutline16: icon('browse'),
     writeClipboard: vi.fn(async () => true),
     Tooltip: ({ children }: { children: React.ReactElement }) => children,
@@ -155,15 +157,30 @@ describe('selection', () => {
     expect(initialSelectionOf([])).toEqual({ key: undefined, focusIndex: 0 })
   })
 
-  it('keeps a hidden selection when a filter hides it, falling back to the first visible', () => {
+  it('keeps a selection a filter hides, and falls back only when the workspace lacks it', () => {
     const workspace = mixedFixture()
     const visible = workspace.sources.slice(0, 3)
-    const selection: SelectionState = { key: visible[2]!.key, focusIndex: 2 }
-    expect(effectiveSelectionOf(selection, visible)).toBe(visible[2]!.key)
-    // A selection outside the visible rows falls back to the first visible.
+    // A key inside the union but outside the visible rows is kept: filtering
+    // narrows the list, never the document under inspection.
     expect(
-      effectiveSelectionOf({ key: 'zotero://user/0/item/ZZZZZZZZ', focusIndex: 0 }, visible),
+      effectiveSelectionOf(
+        { key: workspace.sources[5]!.key, focusIndex: 5 },
+        workspace.sources,
+        visible,
+      ),
+    ).toBe(workspace.sources[5]!.key)
+    // A selection the workspace no longer contains falls back to the first visible.
+    expect(
+      effectiveSelectionOf(
+        { key: 'zotero://user/0/item/ZZZZZZZZ', focusIndex: 0 },
+        workspace.sources,
+        visible,
+      ),
     ).toBe(visible[0]!.key)
+    // Nothing visible at all yields no selection.
+    expect(
+      effectiveSelectionOf({ key: 'zotero://user/0/item/ZZZZZZZZ', focusIndex: 0 }, [], []),
+    ).toBeUndefined()
   })
 
   it('renders the first source selected and switches selection on row click', () => {
@@ -506,17 +523,54 @@ describe('overview label helpers', () => {
 })
 
 describe('filter interplay', () => {
-  it('notes when the selection is hidden by a filter', () => {
+  it('notes when the selection is hidden by a filter and keeps the document', () => {
     const workspace = mixedFixture()
     const { view } = mountView(workspace)
     // Pick a fresh hit without evidence, then filter to evidence-bearing
-    // sources: the inspector keeps the hidden selection with a note.
+    // sources: the inspector keeps showing that same source with a note —
+    // the filter changed the list, not the document under inspection.
     const options = view.container.querySelectorAll('[role="option"]')
     fireEvent.click(options[1]!)
     fireEvent.click(
       screen.getByText(`${zh.filterEvidence} ${filterCountsOf(workspace.sources).evidence}`),
     )
     expect(screen.getByText(zh.selectionHiddenNote)).toBeDefined()
+    expect(screen.getByText(/Source item 2: mixed states/)).toBeDefined()
+    view.unmount()
+  })
+})
+
+describe('source sidebar', () => {
+  it('pages the filter strip with edge arrows only while the pills overflow', () => {
+    const workspace = mixedFixture()
+    const { view } = mountView(workspace)
+    const bar = screen.getByText(`${zh.filterAll} 12`).closest('[role="group"]')!
+    // jsdom measures no layout, so the strip fits and no edge arrow renders.
+    expect(screen.queryByLabelText(zh.filterScrollLeft)).toBeNull()
+    expect(screen.queryByLabelText(zh.filterScrollRight)).toBeNull()
+    // Widen the strip's scroll footprint, then the scroll listener recomputes
+    // the edges: the right arrow announces the hidden pills.
+    Object.defineProperty(bar, 'scrollWidth', { value: 400, configurable: true })
+    Object.defineProperty(bar, 'clientWidth', { value: 80, configurable: true })
+    fireEvent.scroll(bar)
+    expect(screen.getByLabelText(zh.filterScrollRight)).toBeDefined()
+    expect(screen.queryByLabelText(zh.filterScrollLeft)).toBeNull()
+    // Paging right moves the strip (the shimmed scrollBy writes scrollLeft);
+    // the left edge opens while the right edge still holds pills.
+    fireEvent.click(screen.getByLabelText(zh.filterScrollRight))
+    expect(bar.scrollLeft).toBe(120)
+    expect(screen.getByLabelText(zh.filterScrollLeft)).toBeDefined()
+    expect(screen.getByLabelText(zh.filterScrollRight)).toBeDefined()
+    // Paging back reaches the start and drops the left arrow.
+    fireEvent.click(screen.getByLabelText(zh.filterScrollLeft))
+    expect(bar.scrollLeft).toBe(0)
+    expect(screen.queryByLabelText(zh.filterScrollLeft)).toBeNull()
+    // A wider rail pages by the strip minus a pill instead of the floor.
+    Object.defineProperty(bar, 'clientWidth', { value: 300, configurable: true })
+    Object.defineProperty(bar, 'scrollWidth', { value: 600, configurable: true })
+    fireEvent.scroll(bar)
+    fireEvent.click(screen.getByLabelText(zh.filterScrollRight))
+    expect(bar.scrollLeft).toBe(240)
     view.unmount()
   })
 })
@@ -525,14 +579,27 @@ describe('evidence overview', () => {
   it('opens the cross-source board from the sidebar entry and returns', () => {
     const workspace = mixedFixture()
     const { view } = mountView(workspace)
-    const entry = screen.getByText(
-      zh.evidenceEntryLabel.replace('{count}', String(filterCountsOf(workspace.sources).evidence)),
-    )
-    fireEvent.click(entry)
-    // The board groups passages by source; the scope note explains the limits.
-    expect(screen.getByText(zh.evidenceScopeNote)).toBeDefined()
+    // The aggregate entry carries the true passage sum — not the source
+    // count the filter pill shows — so the two numbers never conflate.
+    const total = evidencePassageTotalOf(workspace.sources)
+    expect(total).toBeGreaterThan(filterCountsOf(workspace.sources).evidence)
+    fireEvent.click(screen.getByText(zh.evidenceEntryLabel.replace('{count}', String(total))))
+    // The board groups passages by source; the cards carry their own facts,
+    // so the defensive scope note is gone from the page.
+    expect(screen.getByText(/Source item 1: mixed states/)).toBeDefined()
+    expect(screen.queryByText(/不能确定这些内容被用于最终回答/)).toBeNull()
     fireEvent.click(screen.getByText(zh.backToSources))
     expect(screen.getByText(zh.searchDetailOpen)).toBeDefined()
+    view.unmount()
+  })
+
+  it('hides the entry when only one source carries passages', () => {
+    // One evidence-bearing source reads better in its own detail rows; the
+    // comparative board exists for weighing several papers at once.
+    const { view } = mountView(singleFixture())
+    expect(
+      screen.queryByText(new RegExp(zh.evidenceEntryLabel.replace('{count}', '\\d+'))),
+    ).toBeNull()
     view.unmount()
   })
 

@@ -75,6 +75,8 @@ export type ZoteroLocaleKey =
   | 'filterIssues'
   | 'filterClear'
   | 'filterEmptyNote'
+  | 'filterScrollLeft'
+  | 'filterScrollRight'
   | 'omittedRowsNote'
   | 'noSources'
   | 'searchFrom'
@@ -116,7 +118,6 @@ export type ZoteroLocaleKey =
   | 'evidenceRetrievedNone'
   | 'evidenceNotRetrieved'
   | 'evidenceReportedNoPreview'
-  | 'evidenceScopeNote'
   | 'evidenceEmptyNote'
   | 'exportsEmptyNote'
   | 'exportsIncompleteNote'
@@ -177,9 +178,9 @@ export const en: Record<ZoteroLocaleKey, string> = {
   maxSearchResultsHint: 'Upper bound for the limit zotero_search accepts in one call.',
   maxNoteScanRecords: 'Note scan cap',
   maxNoteScanRecordsHint: 'Note records zotero_search scans for body matches.',
-  maxEvidenceChars: 'Evidence character budget',
-  maxEvidenceCharsHint: 'Total character budget for retrieved evidence passages.',
-  maxEvidencePassages: 'Evidence passage cap',
+  maxEvidenceChars: 'Passage character budget',
+  maxEvidenceCharsHint: 'Total character budget for retrieved passages.',
+  maxEvidencePassages: 'Passage cap',
   maxEvidencePassagesHint: 'Upper bound for the passages zotero_retrieve returns.',
   maxDetailChars: 'Detail preview budget',
   maxDetailCharsHint: 'Character budget for the zotero_get abstract preview.',
@@ -192,7 +193,7 @@ export const en: Record<ZoteroLocaleKey, string> = {
   maxAnnotationRecords: 'Annotation record cap',
   maxAnnotationRecordsHint: 'Annotation records zotero_get returns at most.',
   fulltextChunkWords: 'Full-text chunk words',
-  fulltextChunkWordsHint: 'Word count of each full-text passage entering evidence ranking.',
+  fulltextChunkWordsHint: 'Word count of each full-text passage entering passage ranking.',
   maxFulltextChars: 'Full-text character bound',
   maxFulltextCharsHint: 'Full text accepted into zotero_retrieve ranking at most.',
   maxResponseBytes: 'Response byte cap',
@@ -248,7 +249,7 @@ export const en: Record<ZoteroLocaleKey, string> = {
   retrievalKeptCount: '{count} passages kept',
   retrievalReportedCount: '{count} reported',
   availabilityTitle: 'Latest state of each retrieve source',
-  evidenceEntryLabel: 'View passages ({count})',
+  evidenceEntryLabel: 'Passage overview ({count})',
   backToSources: 'Back to literature',
   downloadArtifact: 'Download',
   filterAll: 'All',
@@ -259,8 +260,10 @@ export const en: Record<ZoteroLocaleKey, string> = {
   filterIssues: 'Issues',
   filterClear: 'Clear filter',
   filterEmptyNote: 'No sources match this filter.',
+  filterScrollLeft: 'Scroll filters left',
+  filterScrollRight: 'Scroll filters right',
   omittedRowsNote: '{count} more search results are not listed individually.',
-  noSources: 'No Zotero sources in this session yet.',
+  noSources: 'No Zotero papers in this session yet.',
   searchFrom: 'Search "{query}"',
   searchFromBrowse: 'Search without a query',
   provenanceMismatch: 'Belongs to a different Zotero database',
@@ -301,8 +304,6 @@ export const en: Record<ZoteroLocaleKey, string> = {
   evidenceNotRetrieved:
     "This paper's content has not been retrieved yet. Ask the Agent about it and the matching passages will appear here.",
   evidenceReportedNoPreview: '{count} passages reported across retrieves; no previews were kept.',
-  evidenceScopeNote:
-    'Passages gathered this session, grouped by paper; whether the final answer used them is not tracked.',
   evidenceEmptyNote:
     'No passages yet. Ask the Agent about a paper and the abstracts, annotations, notes, or full-text passages it finds will appear here.',
   exportsEmptyNote: 'No successful exports in this session yet.',
@@ -322,9 +323,8 @@ export const en: Record<ZoteroLocaleKey, string> = {
   starterFindTemplate: 'Search my Zotero library for literature on: ',
   starterCompare: 'Compare selected papers…',
   starterCompareTemplate: 'Compare the following Zotero papers: ',
-  starterEvidence: 'Find evidence in annotations and notes…',
-  starterEvidenceTemplate:
-    "Find evidence in this paper's annotations and notes for the following question: ",
+  starterEvidence: 'Find passages…',
+  starterEvidenceTemplate: 'Find passages in this paper for the following question: ',
   starterExportSelected: 'Export citations for selected items…',
   starterExportSelectedTemplate: 'Export these items from my Zotero library as citations: ',
 }
@@ -359,9 +359,9 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   maxSearchResultsHint: 'zotero_search 单次调用接受的 limit 上限。',
   maxNoteScanRecords: '笔记扫描上限',
   maxNoteScanRecordsHint: 'zotero_search 为正文匹配扫描的笔记记录数上限。',
-  maxEvidenceChars: '证据字符预算',
-  maxEvidenceCharsHint: 'zotero_retrieve 检索到的证据段落总字符预算。',
-  maxEvidencePassages: '证据段落上限',
+  maxEvidenceChars: '片段字符预算',
+  maxEvidenceCharsHint: 'zotero_retrieve 检索到的片段总字符预算。',
+  maxEvidencePassages: '片段上限',
   maxEvidencePassagesHint: 'zotero_retrieve 返回的段落数量上限。',
   maxDetailChars: '详情摘要预算',
   maxDetailCharsHint: 'zotero_get 摘要预览的字符预算。',
@@ -374,7 +374,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   maxAnnotationRecords: '批注记录上限',
   maxAnnotationRecordsHint: 'zotero_get 最多返回的批注记录数。',
   fulltextChunkWords: '全文分块词数',
-  fulltextChunkWordsHint: '进入证据排序的每个全文分块的词数。',
+  fulltextChunkWordsHint: '进入片段排序的每个全文分块的词数。',
   maxFulltextChars: '全文字符上限',
   maxFulltextCharsHint: 'zotero_retrieve 最多接受进入排序的全文字符数。',
   maxResponseBytes: '响应体上限（字节）',
@@ -429,19 +429,21 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   retrievalKeptCount: '保留 {count} 条',
   retrievalReportedCount: '报告 {count} 条',
   availabilityTitle: '最近一次各检索来源状态',
-  evidenceEntryLabel: '查看相关片段 {count}',
+  evidenceEntryLabel: '片段总览 {count}',
   backToSources: '返回文献',
   downloadArtifact: '下载',
   filterAll: '全部',
   filterPdf: 'PDF',
-  filterRetrieved: '已查内容',
-  filterEvidence: '有相关片段',
+  filterRetrieved: '已查',
+  filterEvidence: '有片段',
   filterExported: '已导出',
   filterIssues: '异常',
   filterClear: '清除筛选',
   filterEmptyNote: '这个筛选条件下没有文献。',
+  filterScrollLeft: '向左滚动筛选',
+  filterScrollRight: '向右滚动筛选',
   omittedRowsNote: '另有 {count} 条检索结果未逐条列出。',
-  noSources: '本会话还没有 Zotero 来源。',
+  noSources: '本会话还没有 Zotero 文献。',
   searchFrom: '搜索 "{query}"',
   searchFromBrowse: '浏览检索',
   provenanceMismatch: '属于另一个 Zotero 数据库',
@@ -481,7 +483,6 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   evidenceRetrievedNone: '这次没有找到相关片段。',
   evidenceNotRetrieved: '还没有查过这篇文献的内容。向 Agent 提问这篇文献后，相关段落会显示在这里。',
   evidenceReportedNoPreview: '各次检索共报告 {count} 条相关片段，未保留预览。',
-  evidenceScopeNote: '本会话找到的相关片段，按文献汇总；不能确定这些内容被用于最终回答。',
   evidenceEmptyNote:
     '还没有相关片段。向 Agent 提问某篇文献的内容后，找到的摘要、批注、笔记或全文段落会出现在这里。',
   exportsEmptyNote: '本会话还没有成功导出。',
@@ -501,8 +502,8 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   starterFindTemplate: '帮我在 Zotero 文献库里检索这个主题的文献：',
   starterCompare: '比较选中的文献…',
   starterCompareTemplate: '比较下面几篇 Zotero 文献：',
-  starterEvidence: '从批注和笔记中找证据…',
-  starterEvidenceTemplate: '在这篇文献的批注和笔记中找证据，问题是：',
+  starterEvidence: '查找相关片段…',
+  starterEvidenceTemplate: '在这篇文献中查找相关片段，问题是：',
   starterExportSelected: '导出选中条目的引用…',
   starterExportSelectedTemplate: '把下面几篇从我的 Zotero 库导出为引用：',
 }

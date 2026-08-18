@@ -1,7 +1,7 @@
 /**
  * The fixture gallery's shape contract: every fixture builds a workspace
  * whose sources are stable, renderable, and exercise the state it names.
- * This is the floor the v0.4 visual baseline renders from.
+ * This is the floor the visual baseline renders from.
  * @module tests/client/source-fixtures
  */
 

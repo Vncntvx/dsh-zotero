@@ -94,6 +94,9 @@ describe('locale bundles', () => {
       'artifactAtLabel',
       'expandFullText',
       'collapseFullText',
+      // The copy pass: the cross-source board's defensive scope note left
+      // the page — the cards carry their own facts.
+      'evidenceScopeNote',
     ]
     for (const key of retired) {
       expect(key in zh, key).toBe(false)

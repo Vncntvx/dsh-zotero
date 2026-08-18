@@ -93,15 +93,18 @@ export function initialSelectionOf(visible: readonly SourceItemLike[]): Selectio
 }
 
 /**
- * Resolve the effective selection against the visible rows. A selection that
- * a filter hid is kept (the inspector notes it); a selection the workspace
- * no longer contains falls back to the first visible row.
+ * Resolve the effective selection against the workspace union and the visible
+ * rows. A selection a filter hid is kept — filtering narrows the left list
+ * only, never the document the inspector is showing, which notes the hidden
+ * state — and only a selection the workspace no longer contains falls back to
+ * the first visible row.
  */
 export function effectiveSelectionOf(
   selection: SelectionState,
+  workspace: readonly SourceItemLike[],
   visible: readonly SourceItemLike[],
 ): SelectedKey {
-  if (selection.key !== undefined && visible.some((item) => item.key === selection.key)) {
+  if (selection.key !== undefined && workspace.some((item) => item.key === selection.key)) {
     return selection.key
   }
   return visible.length === 0 ? undefined : visible[0]!.key
@@ -133,7 +136,7 @@ export function ZoteroWorkspaceView({
     () => filterSources(workspace.sources, filter),
     [workspace.sources, filter],
   )
-  const selectedKey = effectiveSelectionOf(selection, visible)
+  const selectedKey = effectiveSelectionOf(selection, workspace.sources, visible)
 
   // Session switches reset the whole surface: the parent keys this view by
   // the session id, so this state never survives a session change.
@@ -212,9 +215,7 @@ export function ZoteroWorkspaceView({
             workspace={workspace}
             selectedKey={selectedKey}
             selectionHidden={
-              selectedKey !== undefined &&
-              selection.key !== undefined &&
-              selectedKey !== selection.key
+              selectedKey !== undefined && !visible.some((item) => item.key === selectedKey)
             }
             setMobilePane={setMobilePane}
             setDraft={setDraft}

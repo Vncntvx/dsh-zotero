@@ -263,9 +263,11 @@ describe('EvidenceOverview', () => {
     const view = render(
       <EvidenceOverview workspace={workspaceOf([EVIDENCE_ITEM, other])} onBack={vi.fn()} t={t} />,
     )
-    expect(screen.getByText(zh.evidenceScopeNote)).toBeDefined()
     expect(screen.getByText('FlashAttention-2')).toBeDefined()
     expect(screen.getByText('Another Paper')).toBeDefined()
+    // No scope note: the cards carry their own facts, so the page needs no
+    // defensive disclaimer about what the passages were used for.
+    expect(screen.queryByText(/不能确定这些内容被用于最终回答/)).toBeNull()
     view.unmount()
   })
 })
