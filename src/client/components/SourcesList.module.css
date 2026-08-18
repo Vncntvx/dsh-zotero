@@ -288,6 +288,9 @@
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 8px;
   background: var(--dsw-alias-bg-layer-1);
+  /* A very long export body must not stretch the card past the reading
+     column's natural width. */
+  max-width: 900px;
 }
 
 .cardHead {
@@ -375,6 +378,9 @@
 /* The export body: verbatim text inside the card, below the toggle. */
 .exportBody {
   padding: 4px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .exportBody .line {
@@ -382,6 +388,36 @@
   font-family: var(--ds-font-family-code);
   font-size: 12px;
   line-height: 18px;
+}
+
+/* The expand/collapse toggle for a body longer than the preview window. */
+.expandToggle {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+  background: transparent;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  cursor: pointer;
+  transition:
+    background 120ms var(--ds-ease-in-out),
+    color 120ms var(--ds-ease-in-out);
+}
+
+.expandToggle:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.expandToggle:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
 }
 
 @media (prefers-reduced-motion: reduce) {

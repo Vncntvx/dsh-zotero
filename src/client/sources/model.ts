@@ -99,6 +99,8 @@ export interface ExportArtifact {
   readonly refs: readonly string[]
   /** Exported refs beyond the bounded list; zero when the refs are the complete argument list. */
   readonly refsOmitted: number
+  /** The settled result's event time (Unix epoch ms); absent for legacy projections. */
+  readonly settledAt?: number
   readonly text: string
 }
 

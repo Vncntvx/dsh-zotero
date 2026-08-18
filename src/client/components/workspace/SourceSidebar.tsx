@@ -14,6 +14,7 @@
 import { useRef } from 'react'
 import { Pill } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import { interpolate } from '../../presenters.ts'
 import type { SourceItem, SourceWorkspace } from '../../sources/model.ts'
 import type { SourceFilterCounts } from '../../sources/selectors.ts'
 import { SourcesHeader } from '../SourcesHeader.tsx'
@@ -33,6 +34,7 @@ export interface SourceSidebarProps {
   ) => void
   readonly setSelection: (selection: SelectionState) => void
   readonly setMobilePane: (pane: MobilePane) => void
+  readonly onOpenEvidence: () => void
   readonly listRef: React.Ref<HTMLElement>
   readonly t: TranslateNS<'zotero'>
 }
@@ -48,6 +50,7 @@ export function SourceSidebar({
   setFilter,
   setSelection,
   setMobilePane,
+  onOpenEvidence,
   listRef,
   t,
 }: SourceSidebarProps) {
@@ -94,6 +97,16 @@ export function SourceSidebar({
   return (
     <aside className={css.sidebar} ref={listRefLocal}>
       <SourcesHeader workspace={workspace} t={t} />
+      <div className={css.sidebarSecondary}>
+        <span className={css.sidebarCount}>
+          {interpolate(t('sidebarSourceCount'), { count: workspace.sources.length })}
+        </span>
+        {counts.evidence > 0 && (
+          <button type="button" className={css.evidenceEntry} onClick={onOpenEvidence}>
+            {interpolate(t('evidenceEntryLabel'), { count: counts.evidence })}
+          </button>
+        )}
+      </div>
       <div className={css.filterBar} role="group">
         {FILTERS.map((entry) => {
           const count = counts[entry.id]

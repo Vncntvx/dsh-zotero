@@ -496,6 +496,9 @@ export function buildSourceWorkspace(
             : { locale: metaView.locale }),
           refs,
           refsOmitted,
+          // The settled result's event time (Unix epoch ms), never a
+          // transcript position.
+          ...('kind' in block ? { settledAt: block.time } : {}),
           text,
         }
         exports.push(artifact)

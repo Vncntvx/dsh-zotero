@@ -26,6 +26,7 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
   const { createElement } = await import('react')
   const icon = (name: string) => (props: Record<string, unknown>) =>
     createElement('span', { 'data-icon': name, ...props })
+
   return {
     StateDot: ({ state }: { state: string }) => createElement('span', { 'data-dot': state }),
     Pill: ({
@@ -220,6 +221,60 @@ describe('inspector', () => {
       screen.getByText(`${zh.filterEvidence} ${filterCountsOf(workspace.sources).evidence}`),
     )
     expect(screen.getByText(zh.selectionHiddenNote)).toBeDefined()
+    view.unmount()
+  })
+})
+
+describe('evidence overview', () => {
+  it('opens the cross-source board from the sidebar entry and returns', () => {
+    const workspace = mixedFixture()
+    const { view } = mountView(workspace)
+    expect(screen.getByText(zh.sidebarSourceCount.replace('{count}', '12'))).toBeDefined()
+    const entry = screen.getByText(
+      zh.evidenceEntryLabel.replace('{count}', String(filterCountsOf(workspace.sources).evidence)),
+    )
+    fireEvent.click(entry)
+    // The board groups evidence by source; the scope note explains the limits.
+    expect(screen.getByText(zh.evidenceScopeNote)).toBeDefined()
+    fireEvent.click(screen.getByText(zh.backToSources))
+    expect(screen.getByText(zh.fromSearches)).toBeDefined()
+    view.unmount()
+  })
+
+  it('hides the entry when no source carries evidence', () => {
+    const workspace = singleFixture()
+    const bare = {
+      ...workspace,
+      sources: workspace.sources.map((item) => ({
+        ...item,
+        evidence: [],
+        facts: { ...item.facts, evidenceCount: 0 },
+      })),
+    }
+    const { view } = mountView(bare)
+    expect(
+      screen.queryByText(new RegExp(zh.evidenceEntryLabel.replace('{count}', '\\d+'))),
+    ).toBeNull()
+    view.unmount()
+  })
+})
+
+describe('narrow-surface pane state', () => {
+  it('selecting a row enters the detail pane; back and Escape return to the list', () => {
+    const workspace = mixedFixture()
+    const { view } = mountView(workspace)
+    const options = view.container.querySelectorAll('[role="option"]')
+    // Selecting a row switches the pane state to detail.
+    fireEvent.click(options[2]!)
+    expect(view.container.querySelector('[data-pane="detail"]')).not.toBeNull()
+    // The back action returns to the list.
+    fireEvent.click(screen.getByText(zh.backToList))
+    expect(view.container.querySelector('[data-pane="list"]')).not.toBeNull()
+    // Selecting again enters detail; Escape returns to the list.
+    fireEvent.click(view.container.querySelectorAll('[role="option"]')[4]!)
+    expect(view.container.querySelector('[data-pane="detail"]')).not.toBeNull()
+    fireEvent.keyDown(view.container.querySelector('[data-pane="detail"]')!, { key: 'Escape' })
+    expect(view.container.querySelector('[data-pane="list"]')).not.toBeNull()
     view.unmount()
   })
 })

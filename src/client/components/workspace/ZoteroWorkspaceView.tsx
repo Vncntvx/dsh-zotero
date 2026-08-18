@@ -23,6 +23,7 @@ import { SourceSidebar } from './SourceSidebar.tsx'
 import { SourceInspector } from './SourceInspector.tsx'
 import { WorkspaceEmptyState } from './WorkspaceEmptyState.tsx'
 import { ExportsPage } from './ExportsPage.tsx'
+import { EvidenceOverview } from './EvidenceOverview.tsx'
 import css from './workspace.module.css'
 
 /** The workspace view's top-level lenses: the sources workspace or the exports page. */
@@ -124,6 +125,7 @@ export function ZoteroWorkspaceView({
   const [filter, setFilter] = useState<SourceFilter>('all')
   const [selection, setSelection] = useState<SelectionState>({ key: undefined, focusIndex: 0 })
   const [mobilePane, setMobilePane] = useState<MobilePane>('list')
+  const [evidenceOpen, setEvidenceOpen] = useState(false)
   const listRef = useRef<HTMLElement>(null)
 
   const counts = useMemo(() => filterCountsOf(workspace.sources), [workspace.sources])
@@ -137,8 +139,33 @@ export function ZoteroWorkspaceView({
   // the session id, so this state never survives a session change.
   void sessionId
 
+  if (evidenceOpen) {
+    return (
+      <div className={css.view} data-conversation-composer-overlay>
+        <WorkspaceToolbar connection={connection} onRefresh={onRefresh} t={t} />
+        <EvidenceOverview
+          workspace={workspace}
+          onBack={() => {
+            setEvidenceOpen(false)
+          }}
+          t={t}
+        />
+      </div>
+    )
+  }
+
   return (
-    <div className={css.view} data-conversation-composer-overlay>
+    <div
+      className={css.view}
+      data-conversation-composer-overlay
+      onKeyDown={(event) => {
+        // Esc in the narrow detail pane returns to the list. On wide
+        // surfaces the pane state is inert, so the key does nothing.
+        if (event.key === 'Escape' && mobilePane === 'detail') {
+          setMobilePane('list')
+        }
+      }}
+    >
       <WorkspaceToolbar connection={connection} onRefresh={onRefresh} t={t} />
       <div className={css.lensBar} role="group">
         {LENSES.map((entry) => (
@@ -171,6 +198,9 @@ export function ZoteroWorkspaceView({
             setFilter={setFilter}
             setSelection={setSelection}
             setMobilePane={setMobilePane}
+            onOpenEvidence={() => {
+              setEvidenceOpen(true)
+            }}
             listRef={listRef}
             t={t}
           />

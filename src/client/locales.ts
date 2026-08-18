@@ -63,6 +63,13 @@ export type ZoteroLocaleKey =
   | 'retrievalKeptCount'
   | 'retrievalReportedCount'
   | 'availabilityTitle'
+  | 'sidebarSourceCount'
+  | 'evidenceEntryLabel'
+  | 'backToSources'
+  | 'artifactAtLabel'
+  | 'downloadArtifact'
+  | 'expandFullText'
+  | 'collapseFullText'
   | 'filterAll'
   | 'filterPdf'
   | 'filterRetrieved'
@@ -253,6 +260,13 @@ export const en: Record<ZoteroLocaleKey, string> = {
   retrievalKeptCount: '{count} passages kept',
   retrievalReportedCount: '{count} reported',
   availabilityTitle: 'Latest state of each retrieve source',
+  sidebarSourceCount: '{count} sources',
+  evidenceEntryLabel: 'View all evidence ({count})',
+  backToSources: 'Back to sources',
+  artifactAtLabel: 'At',
+  downloadArtifact: 'Download file',
+  expandFullText: 'Show full content',
+  collapseFullText: 'Collapse full content',
   filterAll: 'All',
   filterPdf: 'With PDF',
   filterRetrieved: 'Retrieved',
@@ -439,6 +453,13 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   retrievalKeptCount: '保留 {count} 条',
   retrievalReportedCount: '报告 {count} 条',
   availabilityTitle: '最近一次各检索来源状态',
+  sidebarSourceCount: '文献 {count}',
+  evidenceEntryLabel: '查看全部证据 {count}',
+  backToSources: '返回文献',
+  artifactAtLabel: '于',
+  downloadArtifact: '下载文件',
+  expandFullText: '展开完整内容',
+  collapseFullText: '收起完整内容',
   filterAll: '全部',
   filterPdf: '有 PDF',
   filterRetrieved: '已检索',

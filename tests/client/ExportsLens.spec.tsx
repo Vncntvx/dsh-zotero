@@ -9,7 +9,15 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ExportCard, formatLabelOf } from '../../src/client/components/ExportCard.tsx'
+import {
+  ExportCard,
+  artifactTimeOf,
+  extensionOf,
+  fileNameOf,
+  formatLabelOf,
+  mimeOf,
+  PREVIEW_LINE_COUNT,
+} from '../../src/client/components/ExportCard.tsx'
 import { ExportsLens, incompleteExportsNoteOf } from '../../src/client/components/ExportsLens.tsx'
 import { zh, type ZoteroLocaleKey } from '../../src/client/locales.ts'
 import { bibTexKeysOf, citeCommandOf } from '../../src/client/sources/bibtex.ts'
@@ -158,5 +166,60 @@ describe('ExportsLens', () => {
     ).toBeDefined()
     expect(screen.getByText(/失败 1 · 已停止 1/)).toBeDefined()
     expect(screen.getByText(zh.exportsStaticNote)).toBeDefined()
+  })
+})
+
+describe('artifact file and time facts', () => {
+  it('maps export formats to extensions and MIME types', () => {
+    expect(extensionOf('bibtex')).toBe('.bib')
+    expect(extensionOf('biblatex')).toBe('.bib')
+    expect(extensionOf('ris')).toBe('.ris')
+    expect(extensionOf('csljson')).toBe('.json')
+    expect(extensionOf('citation')).toBe('.txt')
+    expect(extensionOf('unknown')).toBe('.txt')
+    expect(mimeOf('csljson')).toBe('application/json')
+    expect(mimeOf('ris')).toBe('application/x-research-info-systems')
+    expect(mimeOf('bibtex')).toBe('text/plain')
+  })
+
+  it('sanitizes the download filename and formats the settled time', () => {
+    expect(fileNameOf({ ...BIBTEX_ARTIFACT, format: 'bibtex' })).toBe('zotero-bibtex.bib')
+    expect(fileNameOf({ ...BIBTEX_ARTIFACT, format: 'bad/name' })).toBe('zotero-bad-name.txt')
+    expect(artifactTimeOf({ ...BIBTEX_ARTIFACT, settledAt: 0 }, t)).toMatch(
+      new RegExp(zh.artifactAtLabel),
+    )
+    expect(artifactTimeOf(BIBTEX_ARTIFACT, t)).toBe('')
+  })
+
+  it('downloads the full text as a blob and revokes the URL', async () => {
+    const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+    const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock')
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    render(
+      <ExportCard artifact={{ ...BIBTEX_ARTIFACT, settledAt: 1720000000000 }} ordinal={1} t={t} />,
+    )
+    fireEvent.click(screen.getByText(zh.downloadArtifact))
+    expect(create).toHaveBeenCalledTimes(1)
+    expect(click).toHaveBeenCalledTimes(1)
+    // The URL release is scheduled right after the click, never leaked.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(revoke).toHaveBeenCalledTimes(1)
+    create.mockRestore()
+    revoke.mockRestore()
+    click.mockRestore()
+  })
+
+  it('renders a bounded preview until expanded, copying the full text always', () => {
+    const longLines = Array.from({ length: PREVIEW_LINE_COUNT + 5 }, (_, i) => `line ${i}`)
+    const artifact = { ...BIBTEX_ARTIFACT, text: longLines.join('\n') }
+    render(<ExportCard artifact={artifact} ordinal={1} t={t} />)
+    fireEvent.click(screen.getByText(`1. ${BIBTEX_ARTIFACT.format}`))
+    // The preview shows the bounded window with the ellipsis, not the tail.
+    expect(screen.getByText(new RegExp('line 0'))).toBeDefined()
+    expect(screen.queryByText(new RegExp('line ' + (PREVIEW_LINE_COUNT + 4)))).toBeNull()
+    fireEvent.click(screen.getByText(zh.expandFullText))
+    expect(screen.getByText(new RegExp('line ' + (PREVIEW_LINE_COUNT + 4)))).toBeDefined()
+    fireEvent.click(screen.getByText(zh.collapseFullText))
+    expect(screen.queryByText(new RegExp('line ' + (PREVIEW_LINE_COUNT + 4)))).toBeNull()
   })
 })
