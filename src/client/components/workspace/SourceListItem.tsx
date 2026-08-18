@@ -10,10 +10,29 @@
 
 import clsx from 'clsx'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import { joinNonEmpty } from '../../presenters.ts'
+import { interpolate, joinNonEmpty } from '../../presenters.ts'
 import type { SourceItem } from '../../sources/model.ts'
-import { badgesOf } from '../SourceRow.tsx'
+import { hasIssue } from '../../sources/selectors.ts'
+import { hasPdf } from '../../sources/source-capabilities.ts'
 import css from './workspace.module.css'
+
+/**
+ * The provable fact badges of one source: a strict whitelist of PDF,
+ * evidence count, export count, and issues. The PDF badge shares its single
+ * source of truth with the "with PDF" filter and the open-PDF button
+ * (`hasPdf`); reported counts, truncation, and operation detail stay in the
+ * inspector panels.
+ */
+export function badgesOf(item: SourceItem, t: TranslateNS<'zotero'>): string[] {
+  const badges: string[] = []
+  if (hasPdf(item)) badges.push(t('badgePdf'))
+  if (item.facts.evidenceCount > 0)
+    badges.push(interpolate(t('evidenceBadge'), { count: item.facts.evidenceCount }))
+  if (item.facts.exportCount > 0)
+    badges.push(interpolate(t('exportBadge'), { count: item.facts.exportCount }))
+  if (hasIssue(item)) badges.push(t('issuesBadge'))
+  return badges
+}
 
 export interface SourceListItemProps {
   readonly item: SourceItem

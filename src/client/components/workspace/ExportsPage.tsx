@@ -9,8 +9,8 @@
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { interpolate } from '../../presenters.ts'
 import type { SourceWorkspace } from '../../sources/model.ts'
+import { incompleteExportsNoteOf } from '../operations.ts'
 import { ExportCard } from '../ExportCard.tsx'
-import { incompleteExportsNoteOf } from '../ExportsLens.tsx'
 import css from './workspace.module.css'
 
 export interface ExportsPageProps {

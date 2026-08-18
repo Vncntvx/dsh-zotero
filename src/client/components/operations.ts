@@ -21,3 +21,11 @@ export function operationsLabelsOf(operations: OperationFacts, t: TranslateNS<'z
     labels.push(interpolate(t('stoppedBadge'), { count: operations.stopped }))
   return labels
 }
+
+/** The non-zero non-successful export counts as one middot-joined note. */
+export function incompleteExportsNoteOf(
+  operations: OperationFacts,
+  t: TranslateNS<'zotero'>,
+): string {
+  return operationsLabelsOf(operations, t).join(' · ')
+}

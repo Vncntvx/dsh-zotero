@@ -18,7 +18,8 @@ import {
   mimeOf,
   PREVIEW_LINE_COUNT,
 } from '../../src/client/components/ExportCard.tsx'
-import { ExportsLens, incompleteExportsNoteOf } from '../../src/client/components/ExportsLens.tsx'
+import { incompleteExportsNoteOf } from '../../src/client/components/operations.ts'
+import { ExportsPage } from '../../src/client/components/workspace/ExportsPage.tsx'
 import { zh, type ZoteroLocaleKey } from '../../src/client/locales.ts'
 import { bibTexKeysOf, citeCommandOf } from '../../src/client/sources/bibtex.ts'
 import type { ExportArtifact } from '../../src/client/sources/model.ts'
@@ -119,15 +120,15 @@ describe('ExportCard', () => {
   })
 })
 
-describe('ExportsLens', () => {
+describe('ExportsPage', () => {
   it('shows the honest empty note without successful exports', () => {
-    render(<ExportsLens workspace={workspaceOf([])} t={t} />)
+    render(<ExportsPage workspace={workspaceOf([])} t={t} />)
     expect(screen.getByText(zh.exportsEmptyNote)).toBeDefined()
   })
 
   it('keeps failed and running operations visible when no artifact succeeded', () => {
     render(
-      <ExportsLens
+      <ExportsPage
         workspace={workspaceOf([], {
           exports: [],
           exportOperations: { running: 1, failed: 2, stopped: 0 },
@@ -151,7 +152,7 @@ describe('ExportsLens', () => {
       text: '<div>a bibliography</div>',
     }
     render(
-      <ExportsLens
+      <ExportsPage
         workspace={workspaceOf([], {
           exports: [BIBTEX_ARTIFACT, second],
           exportOperations: { running: 0, failed: 1, stopped: 1 },

@@ -15,7 +15,7 @@ import {
   coverageLineOf,
   sourceLabelKeyOf,
 } from '../../src/client/components/EvidenceCard.tsx'
-import { EvidenceLens } from '../../src/client/components/EvidenceLens.tsx'
+import { EvidenceOverview } from '../../src/client/components/workspace/EvidenceOverview.tsx'
 import { zh, type ZoteroLocaleKey } from '../../src/client/locales.ts'
 import type { SourceItem } from '../../src/client/sources/model.ts'
 import { sourceOf, workspaceOf } from './helpers/source-fixtures.ts'
@@ -227,9 +227,11 @@ describe('EvidenceCard', () => {
   })
 })
 
-describe('EvidenceLens', () => {
+describe('EvidenceOverview', () => {
   it('shows the honest empty note without evidence and groups by literature', () => {
-    const empty = render(<EvidenceLens workspace={workspaceOf([sourceOf({})])} t={t} />)
+    const empty = render(
+      <EvidenceOverview workspace={workspaceOf([sourceOf({})])} onBack={vi.fn()} t={t} />,
+    )
     expect(screen.getByText(zh.evidenceEmptyNote)).toBeDefined()
     empty.unmount()
 
@@ -258,7 +260,9 @@ describe('EvidenceLens', () => {
         sourceAvailability: {},
       },
     })
-    const view = render(<EvidenceLens workspace={workspaceOf([EVIDENCE_ITEM, other])} t={t} />)
+    const view = render(
+      <EvidenceOverview workspace={workspaceOf([EVIDENCE_ITEM, other])} onBack={vi.fn()} t={t} />,
+    )
     expect(screen.getByText(zh.evidenceScopeNote)).toBeDefined()
     expect(screen.getByText('FlashAttention-2')).toBeDefined()
     expect(screen.getByText('Another Paper')).toBeDefined()
