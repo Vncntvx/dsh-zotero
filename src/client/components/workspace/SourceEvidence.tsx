@@ -1,10 +1,14 @@
 /**
- * The inspector's evidence panel: one source's gathered evidence. The head
- * carries the RetrievalSummary — run count, kept/reported passage counts,
- * and the truncation note — then the deduplicated passages with their source
- * tags and page labels, the indexing coverage line, and the per-source
- * availability list titled for the latest retrieve. Facts only; nothing here
- * implies the final answer used the passages.
+ * The inspector's passages panel: one source's retrieved passages. Three
+ * states come apart honestly: an item never retrieved shows the onboarding
+ * note (how passages come to exist), a retrieved item with no kept passage
+ * says so without inventing a cause, and a retrieved item with passages
+ * renders them. The head carries the RetrievalSummary — run count, kept/
+ * reported passage counts, and the truncation note — then the deduplicated
+ * passages with their source tags and page labels, the indexing coverage
+ * line, and the per-source availability list titled for the latest
+ * retrieve. Facts only; nothing here implies the final answer used the
+ * passages.
  * @module dsh-zotero/client/components/workspace/SourceEvidence
  */
 
@@ -63,15 +67,19 @@ function PassageRow({
   )
 }
 
-/** The evidence panel: summary head, passages, coverage, and availability. */
+/** The passages panel: summary head, passages, coverage, and availability. */
 export function SourceEvidence({ item, t }: SourceEvidenceProps) {
+  if (item.retrievalFacts === undefined) {
+    return (
+      <div className={css.panel}>
+        <p className={css.note}>{t('evidenceNotRetrieved')}</p>
+      </div>
+    )
+  }
   const summaryLine = retrievalSummaryLineOf(item, t)
-  const coverageLine =
-    item.retrievalFacts?.coverage === undefined
-      ? ''
-      : coverageLineOf(item.retrievalFacts.coverage, t)
-  const availabilityEntries =
-    item.retrievalFacts === undefined ? [] : Object.entries(item.retrievalFacts.sourceAvailability)
+  const facts = item.retrievalFacts
+  const coverageLine = facts.coverage === undefined ? '' : coverageLineOf(facts.coverage, t)
+  const availabilityEntries = Object.entries(facts.sourceAvailability)
   return (
     <div className={css.panel}>
       {summaryLine !== '' && <p className={css.summaryLine}>{summaryLine}</p>}

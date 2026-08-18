@@ -1,8 +1,9 @@
 /**
  * The exports page: the session-wide export artifacts lens. Only successful
- * exports appear, in session order, with the non-successful calls listed
- * separately as operations — never as achievements — and the static-export
- * disclaimer stated once.
+ * exports appear, as disclosure rows in session order, with the
+ * non-successful calls listed separately as operations — never as
+ * achievements. The static-export disclaimer lives in the README, not here:
+ * a capability boundary is not something to restate under every success.
  * @module dsh-zotero/client/components/workspace/ExportsPage
  */
 
@@ -18,7 +19,7 @@ export interface ExportsPageProps {
   readonly t: TranslateNS<'zotero'>
 }
 
-/** The exports page: artifacts, incomplete operations, and the disclaimer. */
+/** The exports page: artifact rows and the incomplete-operations note. */
 export function ExportsPage({ workspace, t }: ExportsPageProps) {
   const incomplete = incompleteExportsNoteOf(workspace.exportOperations, t)
   return (
@@ -29,12 +30,11 @@ export function ExportsPage({ workspace, t }: ExportsPageProps) {
           {interpolate(t('exportsIncompleteNote'), { counts: incomplete })}
         </p>
       )}
-      <div className={css.cardStack}>
-        {workspace.exports.map((artifact, index) => (
-          <ExportCard key={artifact.callId} artifact={artifact} ordinal={index + 1} t={t} />
+      <div className={css.exportStack}>
+        {workspace.exports.map((artifact) => (
+          <ExportCard key={artifact.callId} artifact={artifact} t={t} />
         ))}
       </div>
-      {workspace.exports.length > 0 && <p className={css.note}>{t('exportsStaticNote')}</p>}
     </div>
   )
 }
