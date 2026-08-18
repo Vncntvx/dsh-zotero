@@ -73,6 +73,27 @@ describe('locale bundles', () => {
       'attachmentBadge',
       'reportedEvidenceBadge',
       'openBlockedNote',
+      // The 2026-08 UI audit: internal workflow language left the panel —
+      // candidates/inspected chips, the snapshot scope note, session facts,
+      // and the static-export disclaimer all moved out of the main path.
+      'lensEvidence',
+      'sourcesScopeNote',
+      'sourcesEmptyNote',
+      'sidebarSourceCount',
+      'countCandidates',
+      'countInspected',
+      'countEvidence',
+      'countExported',
+      'overviewFacts',
+      'overviewActions',
+      'fromSearches',
+      'evidenceInDetail',
+      'reportedEvidenceInDetail',
+      'exportsInDetail',
+      'exportsStaticNote',
+      'artifactAtLabel',
+      'expandFullText',
+      'collapseFullText',
     ]
     for (const key of retired) {
       expect(key in zh, key).toBe(false)

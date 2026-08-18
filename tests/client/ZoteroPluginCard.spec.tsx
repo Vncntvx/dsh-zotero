@@ -120,7 +120,7 @@ describe('ZoteroPluginCard', () => {
     scope = fakeScope({ value: { webEnabled: true } })
     mount()
     openCard()
-    const toggle = screen.getByLabelText('Zotero 来源标签页') as HTMLInputElement
+    const toggle = screen.getByLabelText(zh.webEnabled) as HTMLInputElement
     expect(toggle.checked).toBe(true)
     fireEvent.click(toggle)
     expect(toggle.checked).toBe(false)
@@ -135,7 +135,7 @@ describe('ZoteroPluginCard', () => {
     scope = fakeScope({ value: { baseUrl: 'http://127.0.0.1:23119/api' } })
     mount()
     openCard()
-    const toggle = screen.getByLabelText('Zotero 来源标签页') as HTMLInputElement
+    const toggle = screen.getByLabelText(zh.webEnabled) as HTMLInputElement
     expect(toggle.checked).toBe(false)
     fireEvent.click(toggle)
     expect(toggle.checked).toBe(true)

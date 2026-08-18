@@ -40,7 +40,6 @@ export type ZoteroLocaleKey =
   | 'refresh'
   | 'lastCheckedLabel'
   | 'lensSources'
-  | 'lensEvidence'
   | 'lensExports'
   | 'panelOverview'
   | 'panelEvidence'
@@ -56,20 +55,18 @@ export type ZoteroLocaleKey =
   | 'overviewScopeLibrary'
   | 'overviewScopeCollection'
   | 'overviewScopeSavedSearch'
-  | 'overviewFacts'
-  | 'overviewActions'
+  | 'searchDetailOpen'
+  | 'searchDetailClose'
+  | 'refLine'
+  | 'moreActions'
   | 'overviewNoSearch'
   | 'retrievalRunCount'
   | 'retrievalKeptCount'
   | 'retrievalReportedCount'
   | 'availabilityTitle'
-  | 'sidebarSourceCount'
   | 'evidenceEntryLabel'
   | 'backToSources'
-  | 'artifactAtLabel'
   | 'downloadArtifact'
-  | 'expandFullText'
-  | 'collapseFullText'
   | 'filterAll'
   | 'filterPdf'
   | 'filterRetrieved'
@@ -78,20 +75,10 @@ export type ZoteroLocaleKey =
   | 'filterIssues'
   | 'filterClear'
   | 'filterEmptyNote'
-  | 'countCandidates'
-  | 'countInspected'
-  | 'countEvidence'
-  | 'countExported'
-  | 'sourcesScopeNote'
   | 'omittedRowsNote'
-  | 'sourcesEmptyNote'
   | 'noSources'
-  | 'fromSearches'
   | 'searchFrom'
   | 'searchFromBrowse'
-  | 'evidenceInDetail'
-  | 'reportedEvidenceInDetail'
-  | 'exportsInDetail'
   | 'provenanceMismatch'
   | 'evidenceBadge'
   | 'exportBadge'
@@ -127,12 +114,12 @@ export type ZoteroLocaleKey =
   | 'availUnavailable'
   | 'availNoMatch'
   | 'evidenceRetrievedNone'
+  | 'evidenceNotRetrieved'
   | 'evidenceReportedNoPreview'
   | 'evidenceScopeNote'
   | 'evidenceEmptyNote'
   | 'exportsEmptyNote'
   | 'exportsIncompleteNote'
-  | 'exportsStaticNote'
   | 'formatCitation'
   | 'formatBibliography'
   | 'formatUnknown'
@@ -218,10 +205,10 @@ export const en: Record<ZoteroLocaleKey, string> = {
   defaultStyleHint: 'CSL style id for citation and bibliography formats (e.g. apa).',
   defaultLocale: 'Default locale',
   defaultLocaleHint: 'CSL locale for citation and bibliography formats (e.g. en-US).',
-  groupWeb: 'Sources panel',
-  webEnabled: 'Zotero Sources tab',
+  groupWeb: 'Literature panel',
+  webEnabled: 'Zotero literature tab',
   webEnabledHint:
-    'Shows a dedicated Zotero Sources tab at the top of conversations (sources, evidence, exports). Turning it off hides the tab right away.',
+    'Shows a dedicated Zotero tab at the top of conversations (literature, passages, exports). Turning it off hides the tab right away.',
   copy: 'Copy',
   copied: 'Copied',
   checking: 'Checking…',
@@ -235,11 +222,10 @@ export const en: Record<ZoteroLocaleKey, string> = {
   diagnosisLabel: 'Diagnosis',
   refresh: 'Refresh',
   lastCheckedLabel: 'Last checked',
-  lensSources: 'Sources',
-  lensEvidence: 'Evidence',
+  lensSources: 'Literature',
   lensExports: 'Exports',
   panelOverview: 'Overview',
-  panelEvidence: 'Evidence',
+  panelEvidence: 'Passages',
   panelExports: 'Exports',
   backToList: 'Back to list',
   selectionHiddenNote:
@@ -253,43 +239,30 @@ export const en: Record<ZoteroLocaleKey, string> = {
   overviewScopeLibrary: 'Library',
   overviewScopeCollection: 'Collection',
   overviewScopeSavedSearch: 'Saved search',
-  overviewFacts: 'Session facts',
-  overviewActions: 'Actions',
+  searchDetailOpen: 'Search details',
+  searchDetailClose: 'Hide search details',
+  refLine: 'Ref',
+  moreActions: 'More actions',
   overviewNoSearch: 'This source was referenced directly, not through a search.',
   retrievalRunCount: '{count} retrieves',
   retrievalKeptCount: '{count} passages kept',
   retrievalReportedCount: '{count} reported',
   availabilityTitle: 'Latest state of each retrieve source',
-  sidebarSourceCount: '{count} sources',
-  evidenceEntryLabel: 'View all evidence ({count})',
-  backToSources: 'Back to sources',
-  artifactAtLabel: 'At',
-  downloadArtifact: 'Download file',
-  expandFullText: 'Show full content',
-  collapseFullText: 'Collapse full content',
+  evidenceEntryLabel: 'View passages ({count})',
+  backToSources: 'Back to literature',
+  downloadArtifact: 'Download',
   filterAll: 'All',
-  filterPdf: 'With PDF',
-  filterRetrieved: 'Retrieved',
-  filterEvidence: 'With evidence',
+  filterPdf: 'PDF',
+  filterRetrieved: 'Content retrieved',
+  filterEvidence: 'With passages',
   filterExported: 'Exported',
   filterIssues: 'Issues',
   filterClear: 'Clear filter',
   filterEmptyNote: 'No sources match this filter.',
-  countCandidates: '{count} candidates',
-  countInspected: '{count} inspected',
-  countEvidence: '{count} with evidence',
-  countExported: '{count} exported',
-  sourcesScopeNote:
-    "A snapshot of this session's Zotero sources — hits from this session's searches and direct references, not a full library browser.",
   omittedRowsNote: '{count} more search results are not listed individually.',
-  sourcesEmptyNote: 'No usable sources in this session yet.',
   noSources: 'No Zotero sources in this session yet.',
-  fromSearches: "From this session's searches",
   searchFrom: 'Search "{query}"',
   searchFromBrowse: 'Search without a query',
-  evidenceInDetail: '{count} evidence passages (see Evidence)',
-  reportedEvidenceInDetail: '{count} reported evidence passages across retrieves',
-  exportsInDetail: '{count} exports (see Exports)',
   provenanceMismatch: 'Belongs to a different Zotero database',
   evidenceBadge: '{count} passages',
   exportBadge: '{count} exports',
@@ -302,7 +275,7 @@ export const en: Record<ZoteroLocaleKey, string> = {
   localFile: 'Local file',
   linkedUrl: 'Linked URL',
   copyRef: 'Copy ref',
-  copyExport: 'Copy export',
+  copyExport: 'Copy',
   copyCite: '\\cite{…}',
   askAboutItem: 'Ask about this',
   askTemplate: 'About this item ({ref}): ',
@@ -324,15 +297,16 @@ export const en: Record<ZoteroLocaleKey, string> = {
   availReturned: '{count} matching passages',
   availUnavailable: 'unavailable',
   availNoMatch: 'no matching passages',
-  evidenceRetrievedNone: 'Retrieved, but no passages matched.',
-  evidenceReportedNoPreview: 'Reported {count} passages across retrieves; no previews were kept.',
+  evidenceRetrievedNone: 'No matching passages were found this time.',
+  evidenceNotRetrieved:
+    "This paper's content has not been retrieved yet. Ask the Agent about it and the matching passages will appear here.",
+  evidenceReportedNoPreview: '{count} passages reported across retrieves; no previews were kept.',
   evidenceScopeNote:
-    'Evidence this session gathered, grouped by source; whether the final answer used it is not tracked.',
-  evidenceEmptyNote: 'No evidence gathered in this session yet.',
+    'Passages gathered this session, grouped by paper; whether the final answer used them is not tracked.',
+  evidenceEmptyNote:
+    'No passages yet. Ask the Agent about a paper and the abstracts, annotations, notes, or full-text passages it finds will appear here.',
   exportsEmptyNote: 'No successful exports in this session yet.',
   exportsIncompleteNote: 'Exports that did not complete: {counts}',
-  exportsStaticNote:
-    'Static exports are not inserted or updated in Word, Google Docs, or LibreOffice documents.',
   formatCitation: 'Citations',
   formatBibliography: 'Bibliography',
   formatUnknown: 'Export',
@@ -413,9 +387,10 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   defaultStyleHint: 'citation/bibliography 格式的 CSL 样式 id（如 apa）。',
   defaultLocale: '默认区域设置',
   defaultLocaleHint: 'citation/bibliography 格式的 CSL locale（如 en-US）。',
-  groupWeb: '来源面板',
-  webEnabled: 'Zotero 来源标签页',
-  webEnabledHint: '在会话顶部显示 Zotero 来源标签页（来源、证据、导出）；关闭后标签页立即隐藏。',
+  groupWeb: '文献面板',
+  webEnabled: 'Zotero 文献标签页',
+  webEnabledHint:
+    '在会话顶部显示 Zotero 文献标签页（文献、相关片段、导出）；关闭后标签页立即隐藏。',
   copy: '复制',
   copied: '已复制',
   checking: '检查中…',
@@ -429,11 +404,10 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   diagnosisLabel: '诊断',
   refresh: '刷新',
   lastCheckedLabel: '上次检查',
-  lensSources: '来源',
-  lensEvidence: '证据',
+  lensSources: '文献',
   lensExports: '导出',
   panelOverview: '概览',
-  panelEvidence: '证据',
+  panelEvidence: '相关片段',
   panelExports: '导出',
   backToList: '返回列表',
   selectionHiddenNote: '这篇文献在当前筛选下被隐藏；详情仍然保留在这里。',
@@ -446,44 +420,32 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   overviewScopeLibrary: '文献库',
   overviewScopeCollection: '合集',
   overviewScopeSavedSearch: '保存的检索',
-  overviewFacts: '会话事实',
-  overviewActions: '操作',
+  searchDetailOpen: '查看检索条件',
+  searchDetailClose: '收起检索条件',
+  refLine: 'ref',
+  moreActions: '更多操作',
   overviewNoSearch: '这篇文献是直接引用的，不是通过检索获得。',
   retrievalRunCount: '检索 {count} 次',
   retrievalKeptCount: '保留 {count} 条',
   retrievalReportedCount: '报告 {count} 条',
   availabilityTitle: '最近一次各检索来源状态',
-  sidebarSourceCount: '文献 {count}',
-  evidenceEntryLabel: '查看全部证据 {count}',
+  evidenceEntryLabel: '查看相关片段 {count}',
   backToSources: '返回文献',
-  artifactAtLabel: '于',
-  downloadArtifact: '下载文件',
-  expandFullText: '展开完整内容',
-  collapseFullText: '收起完整内容',
+  downloadArtifact: '下载',
   filterAll: '全部',
-  filterPdf: '有 PDF',
-  filterRetrieved: '已检索',
-  filterEvidence: '有证据',
+  filterPdf: 'PDF',
+  filterRetrieved: '已查内容',
+  filterEvidence: '有相关片段',
   filterExported: '已导出',
   filterIssues: '异常',
   filterClear: '清除筛选',
   filterEmptyNote: '这个筛选条件下没有文献。',
-  countCandidates: '候选 {count}',
-  countInspected: '查看详情 {count}',
-  countEvidence: '取得证据 {count}',
-  countExported: '已导出 {count}',
-  sourcesScopeNote: '本会话的 Zotero 来源快照：来自本会话的检索与直接引用，不是完整文献库。',
   omittedRowsNote: '另有 {count} 条检索结果未逐条列出。',
-  sourcesEmptyNote: '本会话还没有可展示的文献来源。',
   noSources: '本会话还没有 Zotero 来源。',
-  fromSearches: '来自本会话的检索',
   searchFrom: '搜索 "{query}"',
   searchFromBrowse: '浏览检索',
-  evidenceInDetail: '证据 {count} 条（见证据页）',
-  reportedEvidenceInDetail: '各次检索共报告 {count} 条证据',
-  exportsInDetail: '导出 {count} 次（见导出页）',
   provenanceMismatch: '属于另一个 Zotero 数据库',
-  evidenceBadge: '证据 {count}',
+  evidenceBadge: '片段 {count}',
   exportBadge: '导出 {count}',
   failedBadge: '失败 {count}',
   runningBadge: '进行中 {count}',
@@ -494,7 +456,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   localFile: '本地文件',
   linkedUrl: '链接地址',
   copyRef: '复制 ref',
-  copyExport: '复制导出内容',
+  copyExport: '复制',
   copyCite: '\\cite{…}',
   askAboutItem: '问这篇',
   askTemplate: '关于这篇文献（{ref}）：',
@@ -516,13 +478,14 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   availReturned: '返回 {count} 条匹配',
   availUnavailable: '该来源不可用',
   availNoMatch: '没有返回匹配',
-  evidenceRetrievedNone: '已检索，但没有匹配到任何段落。',
-  evidenceReportedNoPreview: '各次检索共报告 {count} 条证据，未保留预览段落。',
-  evidenceScopeNote: '本会话取得的证据，按文献汇总；不能确定这些内容被用于最终回答。',
-  evidenceEmptyNote: '本会话还没有取得证据。',
+  evidenceRetrievedNone: '这次没有找到相关片段。',
+  evidenceNotRetrieved: '还没有查过这篇文献的内容。向 Agent 提问这篇文献后，相关段落会显示在这里。',
+  evidenceReportedNoPreview: '各次检索共报告 {count} 条相关片段，未保留预览。',
+  evidenceScopeNote: '本会话找到的相关片段，按文献汇总；不能确定这些内容被用于最终回答。',
+  evidenceEmptyNote:
+    '还没有相关片段。向 Agent 提问某篇文献的内容后，找到的摘要、批注、笔记或全文段落会出现在这里。',
   exportsEmptyNote: '本会话还没有成功导出。',
   exportsIncompleteNote: '未完成的导出操作：{counts}',
-  exportsStaticNote: '静态导出不会插入或更新 Word、Google Docs、LibreOffice 文档。',
   formatCitation: '引文',
   formatBibliography: '参考文献表',
   formatUnknown: '导出',
