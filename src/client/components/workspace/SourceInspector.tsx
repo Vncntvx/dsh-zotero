@@ -1,18 +1,20 @@
 /**
  * The source inspector: the detail surface of the selected source. Three
- * panels — Overview (identity and search provenance), Evidence (the
+ * panels — Overview (identity and search provenance), Passages (the
  * retrieval summary, passages, and per-source availability), and Exports
  * (the item's export artifacts) — switch through the inspector's own tab
- * row. A selection hidden by the current filter keeps rendering with a
- * note instead of vanishing. The narrow-surface back action returns to the
- * list pane.
+ * row: light text tabs (no pill chrome, so the three hierarchy levels —
+ * top lens tabs, filter pills, detail tabs — read differently at a glance)
+ * carrying the panel's count when there is something to count. A selection
+ * hidden by the current filter keeps rendering with a note instead of
+ * vanishing. The narrow-surface back action returns to the list pane.
  * @module dsh-zotero/client/components/workspace/SourceInspector
  */
 
 import { useState } from 'react'
-import { Pill } from '@deepseek-ai/dsh-client-ui-primitives'
+import clsx from 'clsx'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import type { SourceWorkspace } from '../../sources/model.ts'
+import type { SourceItem, SourceWorkspace } from '../../sources/model.ts'
 import type { MobilePane } from './ZoteroWorkspaceView.tsx'
 import { SourceOverview } from './SourceOverview.tsx'
 import { SourceEvidence } from './SourceEvidence.tsx'
@@ -22,15 +24,22 @@ import css from './workspace.module.css'
 /** The inspector's panels. */
 export type InspectorPanelId = 'overview' | 'evidence' | 'exports'
 
-/** The panel tab entries: id plus its locale key. */
-const PANELS: readonly {
+/**
+ * The panel tab entries of one item: id, locale key, and the count shown
+ * beside the label (omitted when zero — an empty panel's onboarding note
+ * states more than a "0" would).
+ */
+export function panelEntriesOf(item: SourceItem): readonly {
   readonly id: InspectorPanelId
   readonly key: 'panelOverview' | 'panelEvidence' | 'panelExports'
-}[] = [
-  { id: 'overview', key: 'panelOverview' },
-  { id: 'evidence', key: 'panelEvidence' },
-  { id: 'exports', key: 'panelExports' },
-]
+  readonly count: number | undefined
+}[] {
+  return [
+    { id: 'overview', key: 'panelOverview', count: undefined },
+    { id: 'evidence', key: 'panelEvidence', count: item.evidence.length },
+    { id: 'exports', key: 'panelExports', count: item.exports.length },
+  ]
+}
 
 export interface SourceInspectorProps {
   readonly workspace: SourceWorkspace
@@ -83,10 +92,11 @@ export function SourceInspector({
       </div>
       {selectionHidden && <p className={css.warning}>{t('selectionHiddenNote')}</p>}
       <div className={css.inspectorTabs} role="group">
-        {PANELS.map((entry) => (
-          <Pill
+        {panelEntriesOf(selected).map((entry) => (
+          <button
+            type="button"
             key={entry.id}
-            active={panel === entry.id}
+            className={clsx(css.detailTab, panel === entry.id && css.detailTabActive)}
             aria-pressed={panel === entry.id}
             data-inspector-panel={entry.id}
             onClick={() => {
@@ -94,7 +104,10 @@ export function SourceInspector({
             }}
           >
             {t(entry.key)}
-          </Pill>
+            {entry.count !== undefined && entry.count > 0 && (
+              <span className={css.detailTabCount}>{entry.count}</span>
+            )}
+          </button>
         ))}
       </div>
       <div className={css.inspectorBody}>

@@ -1,8 +1,10 @@
-/* The workspace surface: a slim toolbar, the lens bar, and the master-detail
- * pair. The master-detail grid caps at 1440px and centers; the sidebar is a
- * fixed-proportion rail, the inspector flows. Narrow surfaces (the pane, not
- * the viewport) collapse to one pane at a time through container queries.
- * Tokens only, no theme selectors — light/dark resolves through the aliases. */
+/* The workspace surface: a slim toolbar, the lens tab bar, and the
+ * master-detail pair. Every business surface — the lens bar, the workspace
+ * grid, the exports page, the passages board — shares one content axis
+ * (full width up to 1440px, centered), so wide screens never split the
+ * navigation from the content. The toolbar stays full-width dsh chrome.
+ * Tokens only, no theme selectors — light/dark resolves through the
+ * aliases. */
 
 .view {
   height: 100%;
@@ -13,6 +15,18 @@
   /* Responsive styles switch on the view's own width (container queries),
      not the viewport. */
   container-type: inline-size;
+}
+
+/* The shared business content axis: one frame for every page-level
+ * surface (see the header comment). */
+.lensBar,
+.workspace,
+.exportsPage,
+.evidencePage {
+  width: 100%;
+  max-width: 1440px;
+  margin-inline: auto;
+  box-sizing: border-box;
 }
 
 /* The connection strip: one slim line, mirroring the trajectory toolbar. */
@@ -119,73 +133,108 @@
   outline-offset: 1px;
 }
 
-/* The top lens bar: 文献 | 导出, one row wrapping on narrow surfaces. */
+/* The top lens bar: 文献 | 导出 as plain text tabs with an active
+ * underline — page-level navigation, deliberately not pills (those belong
+ * to the filter bar one level down). */
 .lensBar {
   flex: none;
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px;
-  padding: 8px 12px 0;
+  align-items: stretch;
+  gap: 12px;
+  padding: 4px 12px 0;
 }
 
-/* The master-detail pair: sidebar rail plus the flowing inspector. The
- * pair caps at 1440px and centers on wide surfaces; `max-width` (not
- * `width`) lets the flex grow fill the pane up to the cap. */
+.lensTab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 2px;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-secondary);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+  transition: color 120ms var(--ds-ease-in-out);
+}
+
+.lensTab:hover {
+  color: var(--dsw-alias-label-primary);
+}
+
+.lensTab:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: -1px;
+}
+
+.lensTabActive {
+  color: var(--dsw-alias-label-primary);
+  border-bottom-color: var(--dsw-alias-label-primary);
+}
+
+.lensTabCount {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-caption);
+}
+
+/* The master-detail pair: a proportionally clamped sidebar rail plus the
+ * flowing inspector. `max-width` (not `width`) lets the flex child fill the
+ * pane up to the shared cap; the rail width breathes with the surface
+ * instead of jumping between fixed stops. */
 .workspace {
   flex: 1 1 auto;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
-  width: 100%;
-  max-width: 1440px;
-  margin: 0 auto;
-  box-sizing: border-box;
+  grid-template-columns: clamp(280px, 30cqi, 400px) minmax(0, 1fr);
 }
 
-/* The sidebar: the filter bar above a scrollable listbox. The bottom
- * padding clears the floating composer, mirroring the inspector. */
+/* The sidebar: the filter bar above a scrollable listbox. Only the listbox
+ * scrolls — one vertical scroll container per pane, never two. The bottom
+ * padding clears the floating composer at every width. */
 .sidebar {
   min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 8px 12px calc(var(--dsh-composer-height, 152px) + 16px);
-  overflow-y: auto;
+  overflow: hidden;
   border-right: 1px solid var(--dsw-alias-border-l2);
-  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
-  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
 
+/* The filter bar stays on one line and scrolls horizontally when the
+ * surface is too narrow; pills never shrink or wrap (a squeezed pill reads
+ * as broken, a scroll reads as more). Zero-count filters are not rendered
+ * at all, so there are usually only three or four pills to fit. */
 .filterBar {
   flex: none;
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
-/* The sidebar's secondary line: the source count plus the evidence entry. */
-.sidebarSecondary {
+.filterBar > * {
   flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
 }
 
-.sidebarCount {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--dsw-alias-label-caption);
+.filterBar::-webkit-scrollbar {
+  display: none;
 }
 
-/* The secondary evidence entry: a quiet text link to the cross-source board. */
+/* The quiet passages entry: a text link to the cross-source board. */
 .evidenceEntry {
+  align-self: flex-start;
   display: inline-flex;
   align-items: center;
   height: 24px;
-  padding: 0 8px;
+  padding: 0;
+  margin-left: 8px;
   font-family: inherit;
   font-size: 12px;
   line-height: 16px;
@@ -380,12 +429,52 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+/* The inspector's panel tabs: light text tabs (概览 / 相关片段 / 导出) with
+ * counts — a third visual level, quieter than the top lens tabs and never
+ * confused with the filter pills. */
 .inspectorTabs {
   flex: none;
   display: flex;
+  align-items: stretch;
+  gap: 12px;
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+}
+
+.detailTab {
+  display: inline-flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 4px;
+  gap: 5px;
+  padding: 4px 1px;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+  transition: color 120ms var(--ds-ease-in-out);
+}
+
+.detailTab:hover {
+  color: var(--dsw-alias-label-primary);
+}
+
+.detailTab:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: -1px;
+}
+
+.detailTabActive {
+  color: var(--dsw-alias-label-primary);
+  border-bottom-color: var(--dsw-alias-label-primary);
+}
+
+.detailTabCount {
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--dsw-alias-label-caption);
 }
 
 .inspectorBody {
@@ -526,11 +615,48 @@
   gap: 2px;
 }
 
-/* The card stack: export artifacts and the evidence cards. */
+/* The card stack: the evidence cards. */
 .cardStack {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* The export stack: artifact disclosure rows separated by hairlines — no
+ * per-row border cards. */
+.exportStack {
+  display: flex;
+  flex-direction: column;
+}
+
+.exportStack > * + * {
+  border-top: 1px solid var(--dsw-alias-border-l2);
+}
+
+/* The quiet text toggle that reveals the search-detail facts. */
+.detailToggle {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 2px;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.detailToggle:hover {
+  color: var(--dsw-alias-label-primary);
+  text-decoration: underline;
+}
+
+.detailToggle:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
 }
 
 /* The exports page: the session-wide artifact list. */
@@ -580,7 +706,7 @@
 /* Narrow surfaces (the pane, not the viewport): the workspace collapses to
  * one pane at a time — the sidebar list or the inspector detail — with the
  * back action revealed. */
-@container (max-width: 800px) {
+@container (max-width: 760px) {
   .workspace {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -622,11 +748,13 @@
 
 @container (max-width: 620px) {
   .lensBar {
-    padding: 6px 8px 0;
+    padding: 4px 8px 0;
   }
 
+  /* The composer clearance survives the tighter gutters — a narrower pane
+   * does not move the floating composer out of the way. */
   .sidebar {
-    padding: 8px 8px 12px;
+    padding: 8px 8px calc(var(--dsh-composer-height, 152px) + 16px);
   }
 
   .inspector {
@@ -651,7 +779,9 @@
   .action,
   .menuButton,
   .filterClear,
-  .backAction {
+  .backAction,
+  .lensTab,
+  .detailTab {
     transition: none;
   }
 }

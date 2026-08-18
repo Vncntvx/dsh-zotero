@@ -13,7 +13,7 @@
  */
 
 import { useMemo, useRef, useState } from 'react'
-import { Pill } from '@deepseek-ai/dsh-client-ui-primitives'
+import clsx from 'clsx'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SourceWorkspace } from '../../sources/model.ts'
 import { filterCountsOf, filterSources, type SourceFilter } from '../../sources/selectors.ts'
@@ -169,9 +169,10 @@ export function ZoteroWorkspaceView({
       <WorkspaceToolbar connection={connection} onRefresh={onRefresh} t={t} />
       <div className={css.lensBar} role="group">
         {LENSES.map((entry) => (
-          <Pill
+          <button
+            type="button"
             key={entry.id}
-            active={lens === entry.id}
+            className={clsx(css.lensTab, lens === entry.id && css.lensTabActive)}
             aria-pressed={lens === entry.id}
             data-workspace-lens={entry.id}
             onClick={() => {
@@ -179,7 +180,10 @@ export function ZoteroWorkspaceView({
             }}
           >
             {t(entry.key)}
-          </Pill>
+            {entry.id === 'exports' && workspace.exports.length > 0 && (
+              <span className={css.lensTabCount}>{workspace.exports.length}</span>
+            )}
+          </button>
         ))}
       </div>
       {lens === 'exports' ? (
