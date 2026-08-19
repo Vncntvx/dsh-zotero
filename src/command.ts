@@ -11,7 +11,7 @@ import type { ZoteroService } from './service.js'
 import type { ZoteroStatus } from './types.js'
 
 /** Render a status record for the command's user-facing text. */
-export function formatStatus(status: ZoteroStatus): string {
+function formatStatus(status: ZoteroStatus): string {
   if (!status.connected) {
     return `Zotero local API: not connected\n${status.diagnosis}`
   }

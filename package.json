@@ -45,7 +45,9 @@
     "release:check": "npm run format:check && npm run typecheck && npm run test:coverage && npm run build && npm pack --dry-run --ignore-scripts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test:integration": "ZOTERO_INTEGRATION=1 vitest run tests/integration/zotero.integration.spec.ts"
+    "test:integration": "ZOTERO_INTEGRATION=1 vitest run tests/integration/zotero.integration.spec.ts",
+    "smoke": "node scripts/smoke.mjs",
+    "smoke:discovery": "node scripts/discovery-smoke.mjs"
   },
   "dsh": {
     "bundle": {
@@ -136,7 +138,6 @@
     "@deepseek-ai/dsh-timeout": "^0.1.0-rc.7",
     "@deepseek-ai/dsh-tools": "^0.1.0-rc.7",
     "@deepseek-ai/dsh-user-questions": "^0.1.0-rc.7",
-    "@deepseek-ai/schemastery": "^3.18.1",
     "@testing-library/react": "^16.3.0",
     "@types/react": "~18.3.1",
     "@vitest/coverage-v8": "^4.1.8",

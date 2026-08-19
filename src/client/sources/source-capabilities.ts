@@ -17,13 +17,6 @@ import type { SourceItem } from './model.ts'
 /** The content type that makes an attachment a PDF for the open action. */
 const PDF_CONTENT_TYPE = 'application/pdf'
 
-/**
- * The openable target of a PDF capability. `file` targets open in Zotero's
- * own reader through the open-pdf deep link; `url` targets are plain web
- * locations the browser opens directly.
- */
-export type PdfTarget = 'file' | 'url'
-
 /** The PDF capability of one source, or null when nothing answers the open-PDF action. */
 export type PdfCapability =
   | {

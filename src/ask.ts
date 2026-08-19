@@ -32,14 +32,14 @@ import {
 } from './errors.js'
 
 /** The connectivity failure codes that warrant asking the user how to proceed. */
-export const ASK_WORTHY_CODES = [
+const ASK_WORTHY_CODES = [
   ZOTERO_NOT_RUNNING,
   ZOTERO_API_DISABLED,
   ZOTERO_API_VERSION,
   ZOTERO_TIMEOUT,
 ] as const
 
-export type AskWorthyCode = (typeof ASK_WORTHY_CODES)[number]
+type AskWorthyCode = (typeof ASK_WORTHY_CODES)[number]
 
 /** The parts of a tool execution `withConnectivityAsk` needs. */
 export type ConnectivityAskExec = Pick<ToolRunContext, 'signal' | 'agent'>

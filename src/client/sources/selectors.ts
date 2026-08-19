@@ -108,7 +108,7 @@ export interface ExportedDocument {
 }
 
 /** The items of one artifact that could not be located in the merged body. */
-export interface UnresolvedItemGroup {
+interface UnresolvedItemGroup {
   /** The artifact whose full text remains downloadable. */
   readonly artifact: ExportArtifact
   /** The number of items that could not be shown individually. */

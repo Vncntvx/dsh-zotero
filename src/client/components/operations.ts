@@ -11,7 +11,7 @@ import { interpolate } from '../presenters.ts'
 import type { OperationFacts } from '../sources/model.ts'
 
 /** The non-zero operation labels of one operation-facts record, in fixed order. */
-export function operationsLabelsOf(operations: OperationFacts, t: TranslateNS<'zotero'>): string[] {
+function operationsLabelsOf(operations: OperationFacts, t: TranslateNS<'zotero'>): string[] {
   const labels: string[] = []
   if (operations.running > 0)
     labels.push(interpolate(t('runningBadge'), { count: operations.running }))

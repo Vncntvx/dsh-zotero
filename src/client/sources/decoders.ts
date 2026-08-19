@@ -19,7 +19,7 @@ import {
 import type { ExportDocumentItem, SourceAvailabilityEntry, SourceCoverage } from './model.ts'
 
 /** One decoded search row (with Zotero's attachment selection when present). */
-export interface SearchRowMeta {
+interface SearchRowMeta {
   readonly ref: string
   readonly title: string
   readonly creatorSummary: string

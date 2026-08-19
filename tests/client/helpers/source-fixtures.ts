@@ -93,7 +93,7 @@ export function artifactOf(
 }
 
 /** One confirmed-PDF item, the fixture gallery's shared building block. */
-export function pdfItemOf(overrides: Partial<SourceItem> = {}): SourceItem {
+function pdfItemOf(overrides: Partial<SourceItem> = {}): SourceItem {
   return sourceOf({
     ref: 'zotero://user/0/item/P',
     key: 'zotero://user/0/item/p',
@@ -137,7 +137,7 @@ export function searchOf(
 }
 
 /** A neutral retrieval-facts block; override per scenario. */
-export function retrievalFactsOf(
+function retrievalFactsOf(
   overrides: Partial<NonNullable<SourceItem['retrievalFacts']>> = {},
 ): NonNullable<SourceItem['retrievalFacts']> {
   return {

@@ -227,6 +227,36 @@ function normalizeCoverage(payload: ZoteroFulltextPayload): ZoteroCoverage {
   }
 }
 
+/**
+ * Parse a location the Local API reported for an attachment and require one
+ * of the allowed protocols. Malformed text, relative paths, and exotic
+ * schemes fail the call instead of leaking an unopenable location into tool
+ * output; the failure message names the allowed protocols so the model can
+ * act on the boundary.
+ * @throws {ZoteroError} `ZOTERO_NO_ATTACHMENT` when the value is not a usable location.
+ */
+function parseAttachmentLocation(
+  raw: string,
+  allowedProtocols: readonly string[],
+  parseFailureMessage: string,
+): URL {
+  let target: URL
+  try {
+    target = new URL(raw)
+  } catch (error) {
+    throw new ZoteroError(parseFailureMessage, ZOTERO_NO_ATTACHMENT, { cause: error })
+  }
+  if (!allowedProtocols.includes(target.protocol)) {
+    throw new ZoteroError(
+      `Zotero reported an attachment location with unsupported protocol ${target.protocol}; only ${allowedProtocols
+        .map((protocol) => protocol.slice(0, -1))
+        .join(', ')} locations are usable.`,
+      ZOTERO_NO_ATTACHMENT,
+    )
+  }
+  return target
+}
+
 export class LocalApiProvider implements ZoteroProvider {
   readonly id = LOCAL_PROVIDER_ID
   readonly capabilities: ReadonlySet<ZoteroCapability> = new Set<ZoteroCapability>([
@@ -569,33 +599,33 @@ export class LocalApiProvider implements ZoteroProvider {
           ZOTERO_NO_ATTACHMENT,
         )
       }
-      return { ref: formattedRef, title, contentType, kind: 'url', url: attachment.url }
+      const target = parseAttachmentLocation(
+        attachment.url,
+        ['http:', 'https:'],
+        `Attachment ${attachmentKey} is linked to a URL that is not a usable web location.`,
+      )
+      return { ref: formattedRef, title, contentType, kind: 'url', url: target.toString() }
     }
     const file = await this.client.get(`users/0/items/${attachmentKey}/file/view/url`, undefined, {
       signal,
       serverId: local.serverId,
     })
-    let target: URL
-    try {
-      target = new URL(file.body.trim())
-    } catch (error) {
-      throw new ZoteroError(
-        `Zotero reported no usable file location for attachment ${attachmentKey}.`,
-        ZOTERO_NO_ATTACHMENT,
-        { cause: error },
-      )
+    const target = parseAttachmentLocation(
+      file.body.trim(),
+      ['file:', 'http:', 'https:'],
+      `Zotero reported no usable file location for attachment ${attachmentKey}.`,
+    )
+    if (target.protocol === 'file:') {
+      const path = fileURLToPath(target)
+      if (!existsSync(path)) {
+        throw new ZoteroError(
+          `The attachment file is missing from disk: ${path}`,
+          ZOTERO_FILE_MISSING,
+        )
+      }
+      return { ref: formattedRef, title, contentType, kind: 'file', path }
     }
-    if (target.protocol !== 'file:') {
-      return { ref: formattedRef, title, contentType, kind: 'url', url: target.toString() }
-    }
-    const path = fileURLToPath(target)
-    if (!existsSync(path)) {
-      throw new ZoteroError(
-        `The attachment file is missing from disk: ${path}`,
-        ZOTERO_FILE_MISSING,
-      )
-    }
-    return { ref: formattedRef, title, contentType, kind: 'file', path }
+    return { ref: formattedRef, title, contentType, kind: 'url', url: target.toString() }
   }
 
   /**

@@ -101,12 +101,8 @@ describe('request shaping', () => {
 })
 
 describe('identity protection', () => {
-  it('refreshes identity on 412 but never replays the original request', async () => {
-    let rootHits = 0
-    mock.route('GET', '/api/', (req, res, helpers) => {
-      rootHits += 1
-      helpers.json({}, { 'Zotero-API-Version': '3', 'Zotero-Server-ID': 'NEWID' })
-    })
+  /** Route the original request as an instance-identity mismatch; each test then varies the refresh arm. */
+  function routeServerMismatch(): void {
     mock.route('GET', '/api/users/0/items', (req, res, helpers) =>
       helpers.raw(
         412,
@@ -114,6 +110,15 @@ describe('identity protection', () => {
         'Zotero-Server-ID does not match this server',
       ),
     )
+  }
+
+  it('refreshes identity on 412 but never replays the original request', async () => {
+    let rootHits = 0
+    mock.route('GET', '/api/', (req, res, helpers) => {
+      rootHits += 1
+      helpers.json({}, { 'Zotero-API-Version': '3', 'Zotero-Server-ID': 'NEWID' })
+    })
+    routeServerMismatch()
     await expectZoteroError(
       client.getJson('users/0/items'),
       ZOTERO_SERVER_MISMATCH,
@@ -124,6 +129,50 @@ describe('identity protection', () => {
     ).toHaveLength(1)
     expect(rootHits).toBe(1)
     expect(client.serverId).toBe('NEWID')
+  })
+
+  it('keeps SERVER_MISMATCH when the identity refresh fails with a non-2xx status', async () => {
+    mock.route('GET', '/api/', (req, res, helpers) =>
+      helpers.raw(500, { 'Content-Type': 'text/plain' }, 'boom'),
+    )
+    routeServerMismatch()
+    const error = await expectZoteroError(
+      client.getJson('users/0/items'),
+      ZOTERO_SERVER_MISMATCH,
+      'database changed',
+    )
+    expect(error.cause).toBeInstanceOf(HarnessError)
+    expect((error.cause as HarnessError).code).toBe(ZOTERO_UNEXPECTED)
+  })
+
+  it('keeps SERVER_MISMATCH when the identity refresh times out', async () => {
+    const fast = new ZoteroHttpClient({
+      baseUrl: mock.baseUrl,
+      timeoutMs: 50,
+      maxResponseBytes: 1024,
+    })
+    mock.route('GET', '/api/', (req, res, helpers) => helpers.delayJson({}, 5000))
+    routeServerMismatch()
+    const error = await expectZoteroError(fast.getJson('users/0/items'), ZOTERO_SERVER_MISMATCH)
+    expect((error.cause as HarnessError).code).toBe(ZOTERO_TIMEOUT)
+  })
+
+  it('keeps SERVER_MISMATCH when the identity refresh hits a dead connection', async () => {
+    mock.route('GET', '/api/', (req, res) => {
+      res.destroy()
+    })
+    routeServerMismatch()
+    const error = await expectZoteroError(client.getJson('users/0/items'), ZOTERO_SERVER_MISMATCH)
+    expect(error.cause).toBeInstanceOf(HarnessError)
+  })
+
+  it('propagates caller cancellation during the identity refresh', async () => {
+    mock.route('GET', '/api/', (req, res, helpers) => helpers.delayJson({}, 5000))
+    routeServerMismatch()
+    const controller = new AbortController()
+    const pending = client.getJson('users/0/items', undefined, { signal: controller.signal })
+    setTimeout(() => controller.abort(), 30).unref()
+    await expectZoteroError(pending, TOOL_ABORTED, 'aborted')
   })
 })
 

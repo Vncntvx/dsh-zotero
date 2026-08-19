@@ -19,7 +19,7 @@ import { availabilityLineOf, coverageLineOf, sourceLabelKeyOf } from '../Evidenc
 import css from './workspace.module.css'
 
 /** The summary line of one item's retrieves: runs, kept, reported, truncated. */
-export function retrievalSummaryLineOf(item: SourceItem, t: TranslateNS<'zotero'>): string {
+function retrievalSummaryLineOf(item: SourceItem, t: TranslateNS<'zotero'>): string {
   const summary = item.retrievalSummary
   if (summary === undefined) return ''
   const parts = [

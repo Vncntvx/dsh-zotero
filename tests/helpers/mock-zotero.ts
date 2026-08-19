@@ -20,7 +20,7 @@ export interface RecordedRequest {
 }
 
 /** Response-writing helpers handed to route handlers. */
-export interface ResponseHelpers {
+interface ResponseHelpers {
   /** 200 with a JSON body. */
   json(body: unknown, headers?: Record<string, string>): void
   /** 200 with a plain-text body. */

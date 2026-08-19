@@ -180,9 +180,22 @@ export class ZoteroHttpClient {
       // The instance identity changed mid-session. Refresh the identity
       // record so later diagnostics are accurate, but never replay the
       // original request: the ref's provenance no longer matches, and the
-      // caller must search again.
-      await this.refreshIdentity(opts.signal)
-      throw new ZoteroError(SERVER_MISMATCH_MESSAGE, ZOTERO_SERVER_MISMATCH)
+      // caller must search again. A failed refresh must not mask the
+      // mismatch itself — the original error stays stable and the refresh
+      // error rides along as its cause. Caller cancellation still wins, so
+      // an aborted refresh aborts the call like any other.
+      let refreshError: unknown
+      try {
+        await this.refreshIdentity(opts.signal)
+      } catch (error) {
+        if (opts.signal?.aborted) throw error
+        refreshError = error
+      }
+      throw new ZoteroError(
+        SERVER_MISMATCH_MESSAGE,
+        ZOTERO_SERVER_MISMATCH,
+        refreshError === undefined ? undefined : { cause: refreshError },
+      )
     }
     if (!response.ok) {
       translateHttpStatus(response)

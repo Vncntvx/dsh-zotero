@@ -10,7 +10,7 @@
  */
 
 /** Provable outcome facts; every field is produced by successful calls only. */
-export interface SourceFacts {
+interface SourceFacts {
   /** A successful zotero_get read the item's detail. */
   readonly inspected: boolean
   /** Distinct evidence passages kept after dedup and preview budget. */
@@ -77,7 +77,7 @@ export interface EvidencePassage {
 }
 
 /** Zotero's attachment selection hint (search/get facts); no resolved location. */
-export interface AttachmentHint {
+interface AttachmentHint {
   readonly ref?: string
   readonly contentType?: string
 }
@@ -172,7 +172,7 @@ export interface SourceRetrievalFacts {
  * retrieve calls; `latestRetrievedAt` is the settled result's event time
  * (Unix epoch ms), not a transcript position.
  */
-export interface RetrievalSummary {
+interface RetrievalSummary {
   readonly runCount: number
   /** Only internal diagnostics; never rendered. */
   readonly latestCallId: string

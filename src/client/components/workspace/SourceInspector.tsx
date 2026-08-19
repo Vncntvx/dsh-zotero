@@ -29,7 +29,7 @@ export type InspectorPanelId = 'overview' | 'evidence' | 'exports'
  * beside the label (omitted when zero — an empty panel's onboarding note
  * states more than a "0" would).
  */
-export function panelEntriesOf(item: SourceItem): readonly {
+function panelEntriesOf(item: SourceItem): readonly {
   readonly id: InspectorPanelId
   readonly key: 'panelOverview' | 'panelEvidence' | 'panelExports'
   readonly count: number | undefined

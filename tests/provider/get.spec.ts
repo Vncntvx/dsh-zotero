@@ -354,6 +354,108 @@ describe('getAttachmentLocation', () => {
     expect((location as { url: string }).url).toBe('https://example.com/paper.pdf')
   })
 
+  it('rejects an ftp: location from /file/view/url', async () => {
+    mock.route('GET', '/api/users/0/items/WXYZ6789', (req, res, helpers) =>
+      helpers.json(FILE_ATTACHMENT),
+    )
+    mock.route('GET', '/api/users/0/items/WXYZ6789/file/view/url', (req, res, helpers) =>
+      helpers.text('ftp://files.example.com/paper.pdf'),
+    )
+    await zoteroError(
+      provider.getAttachmentLocation(parseRef('zotero://user/0/attachment/WXYZ6789')),
+      ZOTERO_NO_ATTACHMENT,
+      'unsupported protocol',
+    )
+  })
+
+  it('rejects a javascript: location from /file/view/url', async () => {
+    mock.route('GET', '/api/users/0/items/WXYZ6789', (req, res, helpers) =>
+      helpers.json(FILE_ATTACHMENT),
+    )
+    mock.route('GET', '/api/users/0/items/WXYZ6789/file/view/url', (req, res, helpers) =>
+      helpers.text('javascript:alert(1)'),
+    )
+    await zoteroError(
+      provider.getAttachmentLocation(parseRef('zotero://user/0/attachment/WXYZ6789')),
+      ZOTERO_NO_ATTACHMENT,
+      'unsupported protocol',
+    )
+  })
+
+  it('rejects a relative location from /file/view/url', async () => {
+    mock.route('GET', '/api/users/0/items/WXYZ6789', (req, res, helpers) =>
+      helpers.json(FILE_ATTACHMENT),
+    )
+    mock.route('GET', '/api/users/0/items/WXYZ6789/file/view/url', (req, res, helpers) =>
+      helpers.text('relative/paper.pdf'),
+    )
+    await zoteroError(
+      provider.getAttachmentLocation(parseRef('zotero://user/0/attachment/WXYZ6789')),
+      ZOTERO_NO_ATTACHMENT,
+      'no usable file location',
+    )
+  })
+
+  it('rejects a linked-URL attachment with a non-http(s) target', async () => {
+    mock.route('GET', '/api/users/0/items/WXYZ6789', (req, res, helpers) =>
+      helpers.json({
+        key: 'WXYZ6789',
+        version: 1,
+        data: {
+          itemType: 'attachment',
+          title: 'Preprint',
+          linkMode: 'linked_url',
+          url: 'javascript:alert(1)',
+        },
+      }),
+    )
+    await zoteroError(
+      provider.getAttachmentLocation(parseRef('zotero://user/0/attachment/WXYZ6789')),
+      ZOTERO_NO_ATTACHMENT,
+      'unsupported protocol',
+    )
+  })
+
+  it('rejects a linked-URL attachment pointing at a file: target', async () => {
+    mock.route('GET', '/api/users/0/items/WXYZ6789', (req, res, helpers) =>
+      helpers.json({
+        key: 'WXYZ6789',
+        version: 1,
+        data: {
+          itemType: 'attachment',
+          title: 'Preprint',
+          linkMode: 'linked_url',
+          url: 'file:///tmp/paper.pdf',
+        },
+      }),
+    )
+    await zoteroError(
+      provider.getAttachmentLocation(parseRef('zotero://user/0/attachment/WXYZ6789')),
+      ZOTERO_NO_ATTACHMENT,
+      'unsupported protocol',
+    )
+  })
+
+  it('rejects a linked-URL attachment with an unparsable target', async () => {
+    mock.route('GET', '/api/users/0/items/WXYZ6789', (req, res, helpers) =>
+      helpers.json({
+        key: 'WXYZ6789',
+        version: 1,
+        data: {
+          itemType: 'attachment',
+          title: 'Preprint',
+          linkMode: 'linked_url',
+          url: 'not a web url',
+        },
+      }),
+    )
+    await zoteroError(
+      provider.getAttachmentLocation(parseRef('zotero://user/0/attachment/WXYZ6789')),
+      ZOTERO_NO_ATTACHMENT,
+      'not a usable web location',
+    )
+  })
+
   it('rejects group refs before any request happens', async () => {
     await zoteroError(
       provider.getAttachmentLocation(parseRef('zotero://group/42/attachment/WXYZ6789')),

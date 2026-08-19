@@ -16,7 +16,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { ResolvedConfig } from './config.js'
 
-export const ZOTERO_PROMPT_SECTION_NAME = 'zotero:policy'
+const ZOTERO_PROMPT_SECTION_NAME = 'zotero:policy'
 
 /** Tool guidance sits in the 100–199 order band; 106 keeps it after the core tool sections. */
 export const ZOTERO_PROMPT_SECTION_ORDER = 106
@@ -28,7 +28,7 @@ export const ZOTERO_PROMPT_SECTION_ORDER = 106
  * @param config - the resolved config snapshot to state.
  * @returns the section text for one assembly.
  */
-export function zoteroPromptTextOf(
+function zoteroPromptTextOf(
   config: Pick<
     ResolvedConfig,
     'maxSearchResults' | 'maxEvidencePassages' | 'maxExportRefs' | 'maxNoteScanRecords'

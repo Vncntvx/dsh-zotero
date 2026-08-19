@@ -9,7 +9,7 @@
 import type { SettingsScope, SettingsScopeSnapshot } from '@deepseek-ai/dsh-client-runtime/client'
 
 /** One write the fake scope performed. */
-export interface FakeWrite {
+interface FakeWrite {
   /** 'set' or 'unset'. */
   op: 'set' | 'unset'
   /** Field the write addressed. */

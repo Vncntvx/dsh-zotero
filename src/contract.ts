@@ -28,7 +28,7 @@ export interface ZoteroStatusView {
 }
 
 /** Wire codec: one status view (strict; absent optional facts stay absent). */
-export const zoteroStatusSchema = z
+const zoteroStatusSchema = z
   .object({
     providerId: z.string(),
     connected: z.boolean(),

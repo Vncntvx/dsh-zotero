@@ -67,7 +67,7 @@ export function localRef(kind: ZoteroKind, key: string, serverId?: string): Zote
  * user expressed as `user/0`. Group libraries and foreign user ids fail
  * closed with a typed error instead of silently serving wrong data.
  */
-export function assertLocalRef(ref: ZoteroObjectRef): ZoteroObjectRef {
+function assertLocalRef(ref: ZoteroObjectRef): ZoteroObjectRef {
   if (ref.library.type === 'group') {
     throw new ZoteroError(
       `Group library references are not supported by this plugin version (got zotero://${ref.library.type}/${ref.library.id}/${ref.kind}/${ref.key}).`,
@@ -84,7 +84,7 @@ export function assertLocalRef(ref: ZoteroObjectRef): ZoteroObjectRef {
 }
 
 /** Assert the ref kind is one of the allowed kinds. @param kinds - allowed kinds. */
-export function assertKind(ref: ZoteroObjectRef, kinds: readonly ZoteroKind[]): ZoteroObjectRef {
+function assertKind(ref: ZoteroObjectRef, kinds: readonly ZoteroKind[]): ZoteroObjectRef {
   if (!kinds.includes(ref.kind)) {
     throw new ZoteroError(
       `Expected a ${kinds.join(' or ')} reference, got ${ref.kind}.`,

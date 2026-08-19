@@ -29,7 +29,7 @@ import type {
 import { MockZotero } from './mock-zotero.js'
 
 /** The limits every provider spec starts from; specs override per test. */
-export const DEFAULT_PROVIDER_LIMITS: LocalApiLimits = {
+const DEFAULT_PROVIDER_LIMITS: LocalApiLimits = {
   maxNoteScanRecords: 200,
   maxDetailChars: 500,
   maxNoteBodyChars: 30_000,

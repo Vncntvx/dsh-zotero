@@ -53,7 +53,7 @@ const ATTACHMENT_OUTPUT_SCHEMA = {
 
 type AttachmentOutput = InferValue<typeof ATTACHMENT_OUTPUT_SCHEMA>
 
-export function renderAttachment(_args: AttachmentArgs, value: AttachmentOutput): ContentBlock[] {
+function renderAttachment(_args: AttachmentArgs, value: AttachmentOutput): ContentBlock[] {
   const label = value.title === '' ? value.ref : `${value.title} (${value.ref})`
   const target = value.kind === 'file' ? value.path : value.url
   return [{ type: 'text', text: `${label} ${value.contentType || 'unknown type'} → ${target}` }]

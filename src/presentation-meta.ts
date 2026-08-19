@@ -21,20 +21,20 @@ export const MAX_PRESENTATION_META_BYTES = 8192
 export const MAX_PRESENTATION_SEARCH_ROWS = 20
 /** Row-bytes allowance inside the search projection (kept well under the total budget). */
 export const MAX_PRESENTATION_SEARCH_ROWS_BYTES = 6144
-export const MAX_PRESENTATION_SEARCH_TITLE_CHARS = 120
-export const MAX_PRESENTATION_SEARCH_CREATOR_CHARS = 60
-export const MAX_PRESENTATION_PREVIEW_CHARS = 200
-export const MAX_PRESENTATION_GET_TITLE_CHARS = 200
-export const MAX_PRESENTATION_GET_CREATORS_CHARS = 120
+const MAX_PRESENTATION_SEARCH_TITLE_CHARS = 120
+const MAX_PRESENTATION_SEARCH_CREATOR_CHARS = 60
+const MAX_PRESENTATION_PREVIEW_CHARS = 200
+const MAX_PRESENTATION_GET_TITLE_CHARS = 200
+const MAX_PRESENTATION_GET_CREATORS_CHARS = 120
 export const MAX_PRESENTATION_GET_VENUE_CHARS = 200
-export const MAX_PRESENTATION_PREVIEW_RECORDS = 2
+const MAX_PRESENTATION_PREVIEW_RECORDS = 2
 export const MAX_PRESENTATION_EVIDENCE_CHARS = 400
-export const MAX_PRESENTATION_EVIDENCE_PASSAGES = 4
+const MAX_PRESENTATION_EVIDENCE_PASSAGES = 4
 /** Bounded export-ref entries the projection itemizes; the rest count into `refsOmitted`. */
-export const MAX_PRESENTATION_EXPORT_REFS = 20
+const MAX_PRESENTATION_EXPORT_REFS = 20
 
 /** The search projection's row shape (subset of the tool output record). */
-export interface SearchRowInput {
+interface SearchRowInput {
   readonly ref: string
   readonly title: string
   readonly creatorSummary: string
@@ -60,7 +60,7 @@ export interface SearchProjectionInput {
 }
 
 /** One compact search row: the card's list unit with its copyable ref. */
-export interface ZoteroSearchPresentationRow {
+interface ZoteroSearchPresentationRow {
   readonly ref: string
   readonly title: string
   readonly creatorSummary: string
@@ -84,13 +84,13 @@ export interface ZoteroSearchPresentationMeta {
 }
 
 /** One bounded child preview: personal note/annotation, kept distinct from item metadata. */
-export interface ZoteroChildPreview {
+interface ZoteroChildPreview {
   readonly ref: string
   readonly preview: string
   readonly pageLabel?: string
 }
 
-export interface ZoteroChildCount {
+interface ZoteroChildCount {
   readonly total: number
   readonly returned: number
 }
@@ -163,7 +163,7 @@ export interface ZoteroGetPresentationMeta {
 }
 
 /** One ranked evidence passage with its provenance and source kind. */
-export interface ZoteroEvidencePresentationItem {
+interface ZoteroEvidencePresentationItem {
   readonly source: ZoteroEvidenceSource
   readonly sourceRef: string
   readonly preview: string
@@ -174,7 +174,7 @@ export interface ZoteroEvidencePresentationItem {
 }
 
 /** Per-source availability facts: provable from the canonical result alone. */
-export interface ZoteroSourceAvailabilityView {
+interface ZoteroSourceAvailabilityView {
   readonly requested: boolean
   readonly returnedPassages: number
   readonly unavailable: boolean
@@ -229,7 +229,7 @@ export interface ZoteroAttachmentPresentationMeta {
 }
 
 /** One bounded export document item: the ref with its format-local key, display title, and located entry. */
-export interface ZoteroExportPresentationItem {
+interface ZoteroExportPresentationItem {
   readonly ref: string
   /** The format-local identifier (citation key, CSL JSON id). */
   readonly key?: string

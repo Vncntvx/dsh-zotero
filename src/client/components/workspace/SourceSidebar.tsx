@@ -58,7 +58,7 @@ export interface SourceSidebarProps {
  * The filter entries the bar renders: every non-empty filter plus "all",
  * with the active filter kept visible even at zero so it can be left.
  */
-export function shownFiltersOf(filter: SourceFilter, counts: SourceFilterCounts): typeof FILTERS {
+function shownFiltersOf(filter: SourceFilter, counts: SourceFilterCounts): typeof FILTERS {
   return FILTERS.filter(
     (entry) => entry.id === 'all' || entry.id === filter || counts[entry.id] > 0,
   )

@@ -22,7 +22,7 @@ import type { SettingsScope, SnapshotStore } from '@deepseek-ai/dsh-client-runti
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 
 /** The write one field's staged text performs when the card is saved. */
-export type FieldWrite = { kind: 'set'; value: unknown } | { kind: 'clear' }
+type FieldWrite = { kind: 'set'; value: unknown } | { kind: 'clear' }
 
 /** How one section field converts between its stored value and its draft text. */
 export interface CardFieldSpec {

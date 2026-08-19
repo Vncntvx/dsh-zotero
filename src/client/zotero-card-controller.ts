@@ -33,7 +33,7 @@ import {
  * The Web toggle leads the page: it gates the whole conversation tab, so it
  * is the first thing a visitor sees.
  */
-export const FIELD_SPECS = [
+const FIELD_SPECS = [
   { key: 'webEnabled', kind: 'boolean', group: 'groupWeb' },
   { key: 'baseUrl', kind: 'text', group: 'groupConnection' },
   { key: 'provider', kind: 'text', group: 'groupConnection' },
