@@ -456,11 +456,11 @@ describe('getAttachmentLocation', () => {
     )
   })
 
-  it('rejects group refs before any request happens', async () => {
+  it('rejects non-zero user refs before any request happens', async () => {
     await zoteroError(
-      provider.getAttachmentLocation(parseRef('zotero://group/42/attachment/WXYZ6789')),
+      provider.getAttachmentLocation(parseRef('zotero://user/123/attachment/WXYZ6789')),
       'ZOTERO_INVALID_REF',
-      'Group library references are not supported',
+      'user/0',
     )
     expect(mock.requests).toEqual([])
   })

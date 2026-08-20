@@ -24,7 +24,7 @@ import {
 
 function searchResult(rows: number): ZoteroSearchResult {
   return {
-    scope: { kind: 'library' },
+    scope: { kind: 'library', library: { type: 'user', id: 0 } },
     items: Array.from({ length: rows }, (_, index) => ({
       ref: `zotero://user/0/item/ABCDEFG${index % 10}`,
       title: `Paper ${index}`,
@@ -100,7 +100,7 @@ describe('projectSearchMeta', () => {
 
   it('truncates long titles and creator summaries', () => {
     const meta = projectSearchMeta({
-      scope: { kind: 'library' },
+      scope: { kind: 'library', library: { type: 'user', id: 0 } },
       items: [
         {
           ref: 'zotero://user/0/item/ABCDEFGH',

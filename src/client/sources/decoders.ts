@@ -16,7 +16,13 @@ import {
   stringField,
   type EvidenceItemView,
 } from '../presenters.ts'
-import type { ExportDocumentItem, SourceAvailabilityEntry, SourceCoverage } from './model.ts'
+import type {
+  ExportDocumentItem,
+  SourceAvailabilityEntry,
+  SourceCoverage,
+  SupportedLocalLibrary,
+} from './model.ts'
+import type { ZoteroResolvedScope } from '../../types.ts'
 
 /** One decoded search row (with Zotero's attachment selection when present). */
 interface SearchRowMeta {
@@ -32,6 +38,8 @@ interface SearchRowMeta {
 export interface SearchMetaView {
   readonly rows: readonly SearchRowMeta[] | null
   readonly omitted: number | null
+  readonly scope: ZoteroResolvedScope | null
+  readonly library: SupportedLocalLibrary | null
 }
 
 /** The get projection view; a null field is absent or malformed. */
@@ -129,10 +137,40 @@ function decodeSearchRows(value: unknown): SearchRowMeta[] | null {
   return rows
 }
 
+function decodeSupportedLibrary(value: unknown): SupportedLocalLibrary | null {
+  if (!isRecord(value)) return null
+  const type = stringField(value, 'type')
+  const id = numberField(value, 'id')
+  if ((type !== 'user' && type !== 'group') || id === undefined || !Number.isInteger(id))
+    return null
+  if (type === 'user' && id !== 0) return null
+  if (type === 'group' && id <= 0) return null
+  return { type, id } as SupportedLocalLibrary
+}
+
+function decodeResolvedScope(value: unknown): ZoteroResolvedScope | null {
+  if (!isRecord(value)) return null
+  const kind = stringField(value, 'kind')
+  if (kind === 'library') {
+    const lib = decodeSupportedLibrary(value['library'])
+    if (lib === null) return null
+    return { kind: 'library', library: lib }
+  }
+  if (kind === 'collection' || kind === 'savedSearch') {
+    const ref = stringField(value, 'ref')
+    const name = stringField(value, 'name')
+    if (ref === undefined || name === undefined) return null
+    return { kind, ref, name } as ZoteroResolvedScope
+  }
+  return null
+}
+
 export function searchMetaOf(meta: Record<string, unknown>): SearchMetaView {
   return {
     rows: decodeSearchRows(meta['items']),
     omitted: numberField(meta, 'omitted') ?? null,
+    scope: decodeResolvedScope(meta['scope']),
+    library: decodeSupportedLibrary(meta['library']),
   }
 }
 

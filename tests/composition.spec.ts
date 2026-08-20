@@ -116,6 +116,7 @@ describe('the shipped bundle patch through a real Loader composition', () => {
         'zotero_retrieve',
         'zotero_attachment',
         'zotero_export',
+        'zotero_browse',
       ].sort(),
     )
     const assembly = await context.systemPrompt.assemble()
@@ -126,7 +127,7 @@ describe('the shipped bundle patch through a real Loader composition', () => {
     )
 
     // One end-to-end tool call through the assembled registry.
-    mock.route('GET', '/api/users/0/items/top', (req, res, helpers) =>
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers) =>
       helpers.json(
         [
           {

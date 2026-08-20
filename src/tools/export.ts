@@ -16,7 +16,7 @@ import type { ResolvedConfig } from '../config.js'
 import { withConnectivityAsk } from '../ask.js'
 import { boundedPresentationMeta, projectExportMeta } from '../presentation-meta.js'
 import { invalid } from './validate.js'
-import { parseRef, requireLocalRef } from '../refs.js'
+import { parseRef, requireSupportedLocalRef } from '../refs.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroExportFormat, ZoteroExportRequest } from '../types.js'
 
@@ -26,7 +26,7 @@ const EXPORT_PARAMETERS = {
     items: { type: 'string' },
     required: true,
     description:
-      "zotero://user/0/item/<KEY> refs to export, in the order citations should appear; capped by the configured maxExportRefs. citation batches past Zotero's 50-key request cap; bibliography/bibtex/biblatex/ris/csljson accept at most 50, so batch those calls.",
+      "zotero://user/0/item/<KEY> or zotero://group/<id>/item/<KEY> refs to export, in the order citations should appear; capped by the configured maxExportRefs. citation batches past Zotero's 50-key request cap; bibliography/bibtex/biblatex/ris/csljson accept at most 50, so batch those calls.",
   },
   format: {
     type: 'string',
@@ -124,7 +124,7 @@ function buildRequest(args: ExportArgs, config: ResolvedConfig): ZoteroExportReq
   }
   const refs = args.refs.map((value) => {
     const ref = parseRef(value)
-    requireLocalRef(ref, ['item'])
+    requireSupportedLocalRef(ref, ['item'])
     return ref
   })
   const style = args.style?.trim()

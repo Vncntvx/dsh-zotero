@@ -129,9 +129,11 @@ export function searchOf(
     callId: 'call-1',
     query: 'risk policy',
     mode: 'everything',
-    scope: { kind: 'library' },
+    scope: { kind: 'library', library: { type: 'user', id: 0 } },
     itemTypes: [],
     tags: [],
+    excludeTags: [],
+    includeTrashed: false,
     ...overrides,
   }
 }

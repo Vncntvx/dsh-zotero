@@ -56,16 +56,23 @@ function provenanceOf(
     query?: string
     mode: 'metadata' | 'everything'
     scope: SourceScope
+    library?: { type: 'user' | 'group'; id: number }
     itemTypes: string[]
     tags: string[]
+    tagMatch?: 'all' | 'any'
+    excludeTags?: string[]
+    includeTrashed?: boolean
   }> = {},
 ): Record<string, unknown> {
   return {
     callId: 's1',
     mode: 'metadata',
-    scope: { kind: 'library' },
+    scope: { kind: 'library', library: { type: 'user', id: 0 } },
     itemTypes: [],
     tags: [],
+    tagMatch: 'all',
+    excludeTags: [],
+    includeTrashed: false,
     ...overrides,
   }
 }

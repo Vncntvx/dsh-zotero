@@ -285,16 +285,16 @@ describe('export', () => {
     expect(mock.requests[0]!.headers['zotero-server-id']).toBe('S1')
   })
 
-  it('rejects non-item and group refs before any request happens', async () => {
+  it('rejects non-item and non-zero user refs before any request happens', async () => {
     await zoteroError(
       provider.export(exportRequest({ refs: [parseRef('zotero://user/0/attachment/WXYZ6789')] })),
       'ZOTERO_INVALID_REF',
       'Expected a item reference',
     )
     await zoteroError(
-      provider.export(exportRequest({ refs: [parseRef('zotero://group/42/item/ABCD1234')] })),
+      provider.export(exportRequest({ refs: [parseRef('zotero://user/123/item/ABCD1234')] })),
       'ZOTERO_INVALID_REF',
-      'Group library references are not supported',
+      'user/0',
     )
     expect(mock.requests).toEqual([])
   })

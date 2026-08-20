@@ -38,9 +38,12 @@ export interface OperationFacts {
  */
 export type ItemProvenance = 'verified' | 'unknown' | 'mismatch'
 
+import type { SupportedLocalLibrary } from '../../types.js'
+export type { SupportedLocalLibrary } from '../../types.js'
+
 /** The normalized search scope, free of raw tool arguments. */
 export type SourceScope =
-  | { readonly kind: 'library' }
+  | { readonly kind: 'library'; readonly library?: SupportedLocalLibrary }
   | { readonly kind: 'collection'; readonly ref?: string; readonly name?: string }
   | { readonly kind: 'savedSearch'; readonly ref?: string; readonly name?: string }
 
@@ -56,10 +59,14 @@ export interface SearchProvenance {
   readonly mode: 'metadata' | 'everything'
   /** The normalized scope argument (library, collection, or saved search). */
   readonly scope: SourceScope
+  readonly library?: SupportedLocalLibrary
   /** The item-type filter arguments, normalized (deduplicated, sorted). */
   readonly itemTypes: readonly string[]
   /** The tag filter arguments, normalized (deduplicated, sorted). */
   readonly tags: readonly string[]
+  readonly tagMatch?: 'all' | 'any'
+  readonly excludeTags: readonly string[]
+  readonly includeTrashed: boolean
 }
 
 /** One deduplicated evidence passage with the calls that returned it. */

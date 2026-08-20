@@ -40,8 +40,10 @@ import type {
   SourceRetrievalFacts,
   SourceScope,
   SourceWorkspace,
+  SupportedLocalLibrary,
 } from './model.ts'
 import { normalizeRefKey, provenanceOf, serverIdOf } from './provenance.ts'
+import type { ZoteroResolvedScope } from '../../types.ts'
 
 export interface BuildSourceWorkspaceOptions {
   /** The connected instance's Server ID from the status probe, when known. */
@@ -55,9 +57,13 @@ interface SearchEpisode {
   readonly query?: string
   readonly mode: 'metadata' | 'everything'
   readonly scope: SourceScope
+  readonly library?: SupportedLocalLibrary
   /** The episode's own filter arguments, normalized at creation. */
   readonly itemTypes: readonly string[]
   readonly tags: readonly string[]
+  readonly tagMatch?: 'all' | 'any'
+  readonly excludeTags: readonly string[]
+  readonly includeTrashed: boolean
   readonly offset: number
   returned: number
   omitted: number
@@ -123,21 +129,39 @@ function emptyOperations(): DraftOperations {
   return { running: 0, failed: 0, stopped: 0 }
 }
 
-/** The identity of one logical search: query, mode, scope, and filter fields. */
+/** The identity of one logical search: query, mode, scope, library and filter fields. */
 function searchIdentityOf(args: Record<string, unknown> | null): string | null {
   if (args === null) return null
   const query = typeof args['query'] === 'string' ? args['query'] : ''
   const mode = args['mode'] === 'everything' ? 'everything' : 'metadata'
   const itemTypes = normalizedListOf(args['itemTypes'])
   const tags = normalizedListOf(args['tags'])
+  const tagMatch = args['tagMatch'] === 'any' ? 'any' : 'all'
+  const excludeTags = normalizedListOf(args['excludeTags'])
+  const includeTrashed = args['includeTrashed'] === true
   const sort = typeof args['sort'] === 'string' ? args['sort'] : ''
   const direction = typeof args['direction'] === 'string' ? args['direction'] : ''
+  const library = (() => {
+    const l = args['library']
+    if (
+      isRecord(l) &&
+      (l['type'] === 'user' || l['type'] === 'group') &&
+      typeof l['id'] === 'number'
+    ) {
+      return { type: l['type'] as 'user' | 'group', id: l['id'] as number }
+    }
+    return { type: 'user' as const, id: 0 }
+  })()
   return JSON.stringify({
     query,
     mode,
+    library,
     scope: scopeOf(args['scope']),
     itemTypes,
     tags,
+    tagMatch,
+    excludeTags,
+    includeTrashed,
     sort,
     direction,
   })
@@ -164,7 +188,58 @@ function scopeOf(value: unknown): SourceScope {
         : { kind, name: refOrName }
     }
   }
-  return { kind: 'library' }
+  return { kind: 'library', library: { type: 'user', id: 0 } }
+}
+
+function resolvedToSourceScope(scope: ZoteroResolvedScope): SourceScope {
+  if (scope.kind === 'library') return { kind: 'library', library: scope.library }
+  if (scope.kind === 'collection') return { kind: 'collection', ref: scope.ref, name: scope.name }
+  return { kind: 'savedSearch', ref: scope.ref, name: scope.name }
+}
+
+function searchIdentityOfResolved(
+  args: Record<string, unknown> | null,
+  resolvedScope: ZoteroResolvedScope | null,
+  resolvedLibrary: SupportedLocalLibrary | null,
+): string | null {
+  if (args === null) return null
+  const query = typeof args['query'] === 'string' ? args['query'] : ''
+  const mode = args['mode'] === 'everything' ? 'everything' : 'metadata'
+  const itemTypes = normalizedListOf(args['itemTypes'])
+  const tags = normalizedListOf(args['tags'])
+  const tagMatch = args['tagMatch'] === 'any' ? 'any' : 'all'
+  const excludeTags = normalizedListOf(args['excludeTags'])
+  const includeTrashed = args['includeTrashed'] === true
+  const sort = typeof args['sort'] === 'string' ? args['sort'] : ''
+  const direction = typeof args['direction'] === 'string' ? args['direction'] : ''
+  const library =
+    resolvedLibrary ??
+    (() => {
+      const l = args['library']
+      if (
+        isRecord(l) &&
+        (l['type'] === 'user' || l['type'] === 'group') &&
+        typeof l['id'] === 'number'
+      ) {
+        return { type: l['type'] as 'user' | 'group', id: l['id'] as number }
+      }
+      return { type: 'user' as const, id: 0 }
+    })()
+  const scope =
+    resolvedScope !== null ? resolvedToSourceScope(resolvedScope) : scopeOf(args['scope'])
+  return JSON.stringify({
+    query,
+    mode,
+    library,
+    scope,
+    itemTypes,
+    tags,
+    tagMatch,
+    excludeTags,
+    includeTrashed,
+    sort,
+    direction,
+  })
 }
 
 /** The offset argument of one search call, or the tool default. */
@@ -390,8 +465,25 @@ export function buildSourceWorkspace(
         if (state !== 'ok') break
         const view = meta === null ? null : searchMetaOf(meta)
         if (view === null || view.rows === null) break
-        const identity = searchIdentityOf(args)
+        const resolvedScope = view.scope
+        const resolvedLibrary = view.library
+        const identity =
+          resolvedScope !== null && resolvedLibrary !== null
+            ? searchIdentityOfResolved(args, resolvedScope, resolvedLibrary)
+            : searchIdentityOf(args)
         if (lastEpisode === null || identity === null || lastEpisode.identity !== identity) {
+          const scopeForEpisode =
+            resolvedScope !== null ? resolvedToSourceScope(resolvedScope) : scopeOf(args?.['scope'])
+          const libraryForEpisode: SupportedLocalLibrary | undefined =
+            resolvedLibrary ??
+            (() => {
+              const libArg = args?.['library']
+              return isRecord(libArg) &&
+                (libArg['type'] === 'user' || libArg['type'] === 'group') &&
+                typeof libArg['id'] === 'number'
+                ? (libArg as unknown as SupportedLocalLibrary)
+                : undefined
+            })()
           lastEpisode = {
             identity,
             callId: block.callId,
@@ -399,9 +491,13 @@ export function buildSourceWorkspace(
               ? { query: args['query'] }
               : {}),
             mode: args?.['mode'] === 'everything' ? 'everything' : 'metadata',
-            scope: scopeOf(args?.['scope']),
+            scope: scopeForEpisode,
+            ...(libraryForEpisode ? { library: libraryForEpisode } : {}),
             itemTypes: normalizedListOf(args?.['itemTypes']),
             tags: normalizedListOf(args?.['tags']),
+            tagMatch: args?.['tagMatch'] === 'any' ? 'any' : 'all',
+            excludeTags: normalizedListOf(args?.['excludeTags']),
+            includeTrashed: args?.['includeTrashed'] === true,
             offset: offsetOf(args),
             returned: 0,
             omitted: 0,
@@ -532,8 +628,12 @@ export function buildSourceWorkspace(
       ...(episode.query === undefined ? {} : { query: episode.query }),
       mode: episode.mode,
       scope: episode.scope,
+      ...(episode.library ? { library: episode.library } : {}),
       itemTypes: episode.itemTypes,
       tags: episode.tags,
+      ...(episode.tagMatch ? { tagMatch: episode.tagMatch } : {}),
+      excludeTags: episode.excludeTags,
+      includeTrashed: episode.includeTrashed,
     }
     for (const key of episode.keys) {
       // Every episode key entered through `draftOf`, so the draft exists.

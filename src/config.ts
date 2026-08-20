@@ -44,6 +44,8 @@ export interface Config {
   maxExportChars?: number
   /** Upper bound for refs in one `zotero_export` call; citation batches up to this value, the other formats refuse to exceed the API's 50-key request cap. */
   maxExportRefs?: number
+  /** Upper bound for items a browse call may return */
+  maxBrowseResults?: number
   /** CSL style for citation/bibliography formats; must be bundled with Zotero (e.g. `apa`). */
   defaultStyle?: string
   /** CSL locale for citation/bibliography formats. */
@@ -70,6 +72,7 @@ export const Config: Schema<Config> = Schema.object({
   maxResponseBytes: Schema.number().default(16 * 1024 * 1024),
   maxExportChars: Schema.number().default(1_000_000),
   maxExportRefs: Schema.number().default(50),
+  maxBrowseResults: Schema.number().default(50),
   defaultStyle: Schema.string().default('apa'),
   defaultLocale: Schema.string().default('en-US'),
   webEnabled: Schema.boolean().default(true),
@@ -93,6 +96,7 @@ export interface ResolvedConfig {
   readonly maxResponseBytes: number
   readonly maxExportChars: number
   readonly maxExportRefs: number
+  readonly maxBrowseResults: number
   readonly defaultStyle: string
   readonly defaultLocale: string
   readonly webEnabled: boolean
@@ -193,5 +197,6 @@ export function resolveConfig(config: Config): ResolvedConfig {
   assertPositiveInteger('maxResponseBytes', applied.maxResponseBytes)
   assertPositiveInteger('maxExportChars', applied.maxExportChars)
   assertPositiveInteger('maxExportRefs', applied.maxExportRefs)
+  assertPositiveInteger('maxBrowseResults', applied.maxBrowseResults)
   return { ...applied, baseUrl: url.toString() }
 }

@@ -31,7 +31,7 @@ tests/                  # 单元测试（mock Zotero server）
 ## 安装与构建
 
 ```sh
-npm install                  # 本仓库与 ../deepseek-harness 并列；仅嵌套在 harness 内时需加 --no-workspaces
+npm install --no-workspaces  # 本仓库位于 deepseek-harness workspace 内
 npm test                     # 单元测试（mock Zotero server + browser card tests）
 npm run typecheck            # tsc --noEmit（node/test/client projects）
 npm run build                # tsc + esbuild（node lib/ + browser lib/client.js）
@@ -41,7 +41,7 @@ npm run format               # prettier --write
 npm run format:check         # 格式化检查
 ```
 
-> 本仓库与 `../deepseek-harness` 并列，属本地暂存布局。`--no-workspaces` 仅在嵌套于 harness workspace 时需要。
+> 本仓库嵌套在 deepseek-harness workspace 中，必须使用 `npm install --no-workspaces`。
 
 ## 集成测试
 
@@ -50,7 +50,7 @@ npm run test:integration
 # 或: ZOTERO_INTEGRATION=1 npx vitest run tests/integration/zotero.integration.spec.ts
 ```
 
-你在本机启动 Zotero，它在 `127.0.0.1:23119` 提供服务。
+需要本地 Zotero 运行在 `127.0.0.1:23119`。
 
 ## 两部分构建
 
@@ -62,8 +62,8 @@ npm run test:integration
 ### 从 dsh 源码构建
 
 ```sh
-pnpm install && pnpm run build   # 先构建 dsh（在 ../deepseek-harness 中执行）
-pnpm dsh web --patch ../dsh-zotero/dev.cordis.yml  # 相对路径：harness 与本仓库并列
+pnpm install && pnpm run build   # 先构建 dsh
+pnpm dsh web --patch ./dsh-zotero/dev.cordis.yml
 ```
 
 ### 使用 npm 安装的 dsh

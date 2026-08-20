@@ -104,7 +104,7 @@ describe('encodeLiteralTag', () => {
 
 describe('search: library scope', () => {
   it('searches /items/top with server-side pagination and a Total-Results header', async () => {
-    mock.route('GET', '/api/users/0/items/top', (req, res, helpers) =>
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers) =>
       helpers.json([ITEM], { 'Total-Results': '25', 'Zotero-Server-ID': 'S1' }),
     )
     const result = await provider.search(request({ query: 'flash', offset: 10, limit: 5 }))
@@ -124,14 +124,16 @@ describe('search: library scope', () => {
   })
 
   it('omits nextOffset on the final page and falls back to body length for total', async () => {
-    mock.route('GET', '/api/users/0/items/top', (req, res, helpers) => helpers.json([ITEM]))
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers) =>
+      helpers.json([ITEM]),
+    )
     const result = await provider.search(request({ offset: 20, limit: 10 }))
     expect(result.total).toBe(1)
     expect(result.nextOffset).toBeUndefined()
   })
 
   it('falls back to body length when Total-Results is not a number', async () => {
-    mock.route('GET', '/api/users/0/items/top', (req, res, helpers) =>
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers) =>
       helpers.json([ITEM], { 'Total-Results': 'garbage' }),
     )
     const result = await provider.search(request({}))
@@ -285,7 +287,7 @@ describe('search: collection scope', () => {
   })
 
   it('treats a non-array items response as an empty result set', async () => {
-    mock.route('GET', '/api/users/0/items/top', (req, res, helpers) =>
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers) =>
       helpers.json({ key: 'ABCD1234' }),
     )
     const result = await provider.search(request({}))
@@ -367,15 +369,29 @@ describe('search failures', () => {
     )
   })
 
-  it('rejects group refs before any request happens', async () => {
+  it('rejects non-zero user refs before any request happens', async () => {
     await zoteroError(
       provider.search(
         request({
-          scope: { kind: 'collection', refOrName: 'zotero://group/42/collection/COLL1234' },
+          scope: { kind: 'collection', refOrName: 'zotero://user/123/collection/COLL1234' },
         }),
       ),
       'ZOTERO_INVALID_REF',
-      'Group library references are not supported',
+      'user/0',
+    )
+    expect(mock.requests).toEqual([])
+  })
+
+  it('rejects mismatched library and ref libraries', async () => {
+    await zoteroError(
+      provider.search(
+        request({
+          library: { type: 'group', id: 42 },
+          scope: { kind: 'collection', refOrName: 'zotero://group/51/collection/COLL1234' },
+        }),
+      ),
+      'ZOTERO_INVALID_ARGUMENT',
+      'Library mismatch',
     )
     expect(mock.requests).toEqual([])
   })
@@ -392,7 +408,7 @@ describe('search: note-content scan', () => {
   }
 
   it('merges body-matched notes into the first page and counts them in total', async () => {
-    mock.route('GET', '/api/users/0/items/top', (req, res, helpers, search) => {
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers, search) => {
       if (search.get('itemType') === 'note') helpers.json([NOTE_HIT, NOTE_OTHER])
       else helpers.json([ITEM], { 'Total-Results': '1', 'Zotero-Server-ID': 'S1' })
     })
@@ -418,7 +434,7 @@ describe('search: note-content scan', () => {
       key: 'NOTE3333',
       data: { itemType: 'note', note: '数据计算 notes about cascade risk' },
     }
-    mock.route('GET', '/api/users/0/items/top', (req, res, helpers, search) => {
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers, search) => {
       if (search.get('itemType') === 'note') helpers.json([titled])
       else helpers.json([titled], { 'Total-Results': '1' })
     })
@@ -429,7 +445,7 @@ describe('search: note-content scan', () => {
   })
 
   it('skips the scan for later pages, saved searches, empty queries, and non-note type filters', async () => {
-    mock.route('GET', '/api/users/0/items/top', (req, res, helpers) =>
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers) =>
       helpers.json([ITEM], { 'Total-Results': '1', 'Zotero-Server-ID': 'S1' }),
     )
     mock.route('GET', '/api/users/0/searches', (req, res, helpers) => helpers.json(SEARCHES))
@@ -479,7 +495,7 @@ describe('search: note-content scan', () => {
         tags: [],
       },
     }
-    mock.route('GET', '/api/users/0/items/top', (req, res, helpers, search) => {
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers, search) => {
       if (search.get('itemType') === 'note')
         helpers.json([inCollection, otherCollection, missingTag])
       else helpers.json([], { 'Total-Results': '0', 'Zotero-Server-ID': 'S1' })
@@ -501,7 +517,7 @@ describe('search: note-content scan', () => {
 
   it('stops the scan at the configured record cap', async () => {
     const capped = makeProvider({ maxNoteScanRecords: 2 })
-    mock.route('GET', '/api/users/0/items/top', (req, res, helpers, search) => {
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers, search) => {
       if (search.get('itemType') === 'note')
         helpers.json([
           { key: 'NOTE1111', data: { itemType: 'note', note: 'cascade one' } },
@@ -520,7 +536,7 @@ describe('search: note-content scan', () => {
   })
 
   it('treats an empty scan response as no note matches', async () => {
-    mock.route('GET', '/api/users/0/items/top', (req, res, helpers, search) => {
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers, search) => {
       if (search.get('itemType') === 'note') helpers.json({})
       else helpers.json([ITEM], { 'Total-Results': '1', 'Zotero-Server-ID': 'S1' })
     })
@@ -532,7 +548,7 @@ describe('search: note-content scan', () => {
   })
 
   it('skips non-note scan rows, tagless notes, and partial term matches', async () => {
-    mock.route('GET', '/api/users/0/items/top', (req, res, helpers, search) => {
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers, search) => {
       if (search.get('itemType') === 'note')
         helpers.json([
           {
@@ -563,7 +579,7 @@ describe('search: note-content scan', () => {
         data: { itemType: 'note', note: 'unrelated note body' },
       }))
     let scanPage = 0
-    mock.route('GET', '/api/users/0/items/top', (req, res, helpers, search) => {
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers, search) => {
       if (search.get('itemType') === 'note') {
         scanPage += 1
         helpers.json(scanPage === 1 ? batch(100) : batch(30))
@@ -582,7 +598,7 @@ describe('search: note-content scan', () => {
   })
 
   it('requires every query term in the note body without filter interference', async () => {
-    mock.route('GET', '/api/users/0/items/top', (req, res, helpers, search) => {
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers, search) => {
       if (search.get('itemType') === 'note')
         helpers.json([
           { key: 'NOTE1111', data: { itemType: 'note', note: 'cascade without the second term' } },
@@ -598,7 +614,7 @@ describe('search: note-content scan', () => {
   })
 
   it('matches note bodies case-insensitively', async () => {
-    mock.route('GET', '/api/users/0/items/top', (req, res, helpers, search) => {
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers, search) => {
       if (search.get('itemType') === 'note')
         helpers.json([
           { key: 'NOTE1111', data: { itemType: 'note', note: 'Cascade Risk Assessment' } },
@@ -611,7 +627,7 @@ describe('search: note-content scan', () => {
 
   it('scans note bodies when note is among the requested item types', async () => {
     const note = { key: 'NOTE1111', data: { itemType: 'note', note: 'cascade note body' } }
-    mock.route('GET', '/api/users/0/items/top', (req, res, helpers, search) => {
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers, search) => {
       if (search.get('itemType') === 'note') helpers.json([note])
       else helpers.json([ITEM], { 'Total-Results': '1', 'Zotero-Server-ID': 'S1' })
     })
@@ -625,7 +641,7 @@ describe('search: note-content scan', () => {
   })
 
   it('skips the scan for punctuation-only and emoji-only queries', async () => {
-    mock.route('GET', '/api/users/0/items/top', (req, res, helpers, search) => {
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers, search) => {
       if (search.get('itemType') === 'note') helpers.json([NOTE_HIT])
       else helpers.json([], { 'Total-Results': '0' })
     })
@@ -641,7 +657,7 @@ describe('search: note-content scan', () => {
   })
 
   it('does not merge notes when the API page already fills the limit', async () => {
-    mock.route('GET', '/api/users/0/items/top', (req, res, helpers, search) => {
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers, search) => {
       if (search.get('itemType') === 'note') helpers.json([NOTE_HIT])
       else helpers.json([ITEM, ITEM, ITEM], { 'Total-Results': '3' })
     })
@@ -650,9 +666,8 @@ describe('search: note-content scan', () => {
     expect(result.noteMatches).toBeUndefined()
     expect(result.returned).toBe(3)
     expect(result.total).toBe(3)
-    // The scan still ran (the headroom check happens after the fetch), but no
-    // note displaced an API hit — `returned` never exceeds the limit.
-    expect(mock.requests.filter((entry) => entry.search.get('itemType') === 'note')).toHaveLength(1)
+    // headroom == 0 early return: no note scan request at all (fix for review 473-485)
+    expect(mock.requests.filter((entry) => entry.search.get('itemType') === 'note')).toHaveLength(0)
   })
 
   it('merges note matches only up to the remaining limit headroom', async () => {
@@ -664,7 +679,7 @@ describe('search: note-content scan', () => {
       key: 'NOTE3333',
       data: { itemType: 'note', note: 'cascade infrastructure again' },
     }
-    mock.route('GET', '/api/users/0/items/top', (req, res, helpers, search) => {
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers, search) => {
       if (search.get('itemType') === 'note') helpers.json([NOTE_HIT, NOTE_HIT_2, NOTE_HIT_3])
       else helpers.json([ITEM], { 'Total-Results': '1' })
     })
@@ -687,7 +702,7 @@ describe('search: note-content scan', () => {
     mock.route('GET', '/api/users/0/collections/COLL1234/items/top', (req, res, helpers) =>
       helpers.json([], { 'Total-Results': '0', 'Zotero-Server-ID': 'S1' }),
     )
-    mock.route('GET', '/api/users/0/items/top', (req, res, helpers, search) =>
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers, search) =>
       search.get('itemType') === 'note'
         ? helpers.json([])
         : helpers.json([], { 'Total-Results': '0', 'Zotero-Server-ID': 'S1' }),
@@ -737,7 +752,7 @@ describe('search: note-content scan', () => {
     mock.route('GET', '/api/users/0/collections/COLL1234/items/top', (req, res, helpers) =>
       helpers.json([], { 'Total-Results': '0', 'Zotero-Server-ID': 'S1' }),
     )
-    mock.route('GET', '/api/users/0/items/top', (req, res, helpers, search) =>
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers, search) =>
       search.get('itemType') === 'note'
         ? helpers.json([])
         : helpers.json([], { 'Total-Results': '0', 'Zotero-Server-ID': 'S1' }),

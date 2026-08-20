@@ -99,8 +99,8 @@ describe('ZoteroPluginCard', () => {
     expect(document.querySelectorAll('input')).toHaveLength(0)
     openCard()
     expect(cardHeader().getAttribute('aria-expanded')).toBe('true')
-    // The body carries the full configuration form plus the save footer.
-    expect(document.querySelectorAll('input')).toHaveLength(20)
+    // The body carries the full configuration form plus the save footer (now + maxBrowseResults).
+    expect(document.querySelectorAll('input')).toHaveLength(21)
     expect(saveButton().disabled).toBe(true)
   })
 

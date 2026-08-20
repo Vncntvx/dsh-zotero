@@ -8,7 +8,7 @@
  *
  * The plugin is request-driven by design: loading it never touches Zotero
  * (no probes, no timers, no background work). The only request sources are
- * the five tools, invoked because the user asked about their library, and
+ * the tools, invoked because the user asked about their library, and
  * the `/zotero status` command the user invokes explicitly.
  *
  * The effective config is live: while a settings service is composed, the
@@ -41,12 +41,15 @@ import { LocalApiProvider, type LocalApiLimits } from './provider-local.js'
 import { registerPromptSection } from './prompt.js'
 import { ZOTERO_SETTINGS_NAMESPACE } from './settings-namespace.js'
 import { registerAttachmentTool } from './tools/attachment.js'
+import { registerBrowseTool } from './tools/browse.js'
 import { registerGetTool } from './tools/get.js'
 import { registerExportTool } from './tools/export.js'
 import { registerRetrieveTool } from './tools/retrieve.js'
 import { registerSearchTool } from './tools/search.js'
 import type {
   ZoteroAttachmentLocation,
+  ZoteroBrowseRequest,
+  ZoteroBrowseResult,
   ZoteroCapability,
   ZoteroGetRequest,
   ZoteroItemDetail,
@@ -92,6 +95,7 @@ export class ZoteroService extends Service {
     registerAttachmentTool(ctx, this)
     registerRetrieveTool(ctx, this)
     registerExportTool(ctx, this)
+    registerBrowseTool(ctx, this)
     // The attach runs through a cordis fiber, never synchronously inside the
     // install: when a settings service is composed, setSource switches the
     // config authority and onChange rebuilds shortly after this constructor —
@@ -251,6 +255,14 @@ export class ZoteroService extends Service {
     return await provider.export(request, signal)
   }
 
+  async browse(request: ZoteroBrowseRequest, signal?: AbortSignal): Promise<ZoteroBrowseResult> {
+    const provider = this.resolveProvider()
+    this.requireCapability(provider, 'browse')
+    if (provider.browse === undefined)
+      throw new ZoteroError('browse not supported', ZOTERO_CAPABILITY_UNAVAILABLE)
+    return await provider.browse(request, signal)
+  }
+
   protected resolveProvider(): ZoteroProvider {
     const provider = this.providers.get(this.config.provider)
     if (provider === undefined) {
@@ -291,6 +303,7 @@ function localProviderLimits(config: ResolvedConfig): LocalApiLimits {
     maxEvidencePassages: config.maxEvidencePassages,
     maxFulltextChars: config.maxFulltextChars,
     maxExportChars: config.maxExportChars,
+    maxBrowseResults: config.maxBrowseResults,
     defaultStyle: config.defaultStyle,
     defaultLocale: config.defaultLocale,
   }

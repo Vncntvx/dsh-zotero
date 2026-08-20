@@ -11,13 +11,18 @@
  */
 
 /** A capability a provider may safely support. */
-export type ZoteroCapability = 'search' | 'metadata' | 'attachments' | 'fulltext' | 'citation'
+export type ZoteroCapability =
+  'search' | 'metadata' | 'attachments' | 'fulltext' | 'citation' | 'browse'
 
 /** The library a Zotero object lives in. The Local API serves the logged-in user's library. */
 export interface ZoteroLibraryRef {
   readonly type: 'user' | 'group'
   readonly id: number
 }
+
+/** The local libraries this plugin contract supports: canonical personal + any group. */
+export type SupportedLocalLibrary =
+  { readonly type: 'user'; readonly id: 0 } | { readonly type: 'group'; readonly id: number }
 
 /** The object kinds the reference grammar distinguishes. */
 export type ZoteroKind = 'item' | 'attachment' | 'annotation' | 'collection' | 'search'
@@ -50,9 +55,14 @@ export type ZoteroSearchScope =
   | { readonly kind: 'collection'; readonly refOrName: string }
   | { readonly kind: 'savedSearch'; readonly refOrName: string }
 
-/** Resolved scope echoed back to the Agent so pagination reuses a stable ref. */
+/**
+ * Resolved scope echoed back to the Agent so pagination reuses a stable ref.
+ * @remarks BREAKING CHANGE v3: `kind:"library"` now carries `library: SupportedLocalLibrary`
+ * (previously `{kind:"library"}` without library). Consumers must handle the new field;
+ * `SEARCH_DEFAULT_SCOPE` (`{kind:"library"}`) is normalized to `{kind:"library", library:{user:0}}`.
+ */
 export type ZoteroResolvedScope =
-  | { readonly kind: 'library' }
+  | { readonly kind: 'library'; readonly library: SupportedLocalLibrary }
   | { readonly kind: 'collection'; readonly ref: string; readonly name: string }
   | { readonly kind: 'savedSearch'; readonly ref: string; readonly name: string }
 
@@ -71,8 +81,14 @@ export interface ZoteroSearchRequest {
   readonly query?: string
   readonly mode: ZoteroSearchMode
   readonly scope: ZoteroSearchScope
+  /** Library for library-scope or name-resolution; omitted defaults to user/0. */
+  readonly library?: SupportedLocalLibrary
   readonly itemTypes?: readonly string[]
   readonly tags?: readonly string[]
+  /** Tag query mode: all=AND (default) any=OR */
+  readonly tagMatch?: 'all' | 'any'
+  readonly excludeTags?: readonly string[]
+  readonly includeTrashed?: boolean
   readonly sort: ZoteroSortField
   readonly direction: ZoteroSortDirection
   readonly offset: number
@@ -102,9 +118,11 @@ export interface ZoteroSearchResult {
   readonly returned: number
   nextOffset?: number
   /**
-   * Client-side note-body matches merged into this first page (offset 0 only,
-   * library/collection scopes). They fill the page up to `limit` but are not
-   * counted in `total`, so pagination stays API-driven; omitted when none.
+   * On the first page, note-body matches may fill unused result slots after
+   * Zotero's primary search results, subject to `maxNoteScanRecords`. They do
+   * not compete with or displace a full primary result page; not counted in
+   * `total`, so pagination stays API-driven; omitted when none.
+   * // TODO(search-ranking): merge primary and note-body candidates under an explicit ranking/pagination contract.
    */
   noteMatches?: number
 }
@@ -177,6 +195,7 @@ export interface ZoteroItemDetail {
   readonly notes?: ZoteroChildCollection<ZoteroNoteRecord>
   readonly annotations?: ZoteroChildCollection<ZoteroAnnotationRecord>
   readonly attachments?: ZoteroChildCollection<ZoteroAttachmentRecord>
+  readonly relations?: readonly ZoteroRelation[]
   /** Local object version (Zotero 10+); may differ from Web API versions. */
   readonly version?: number
   /** Identity of the Zotero instance that served this record. */
@@ -249,6 +268,11 @@ export type ZoteroAttachmentLocation =
 export type ZoteroExportFormat =
   'citation' | 'bibliography' | 'bibtex' | 'biblatex' | 'ris' | 'csljson'
 
+/**
+ * @remarks BREAKING CHANGE v3: Export is single-library only. All refs must belong to the same
+ * `SupportedLocalLibrary` (personal user/0 or a single group). Mixed libraries throw
+ * `ZOTERO_INVALID_ARGUMENT` with 0 HTTP; split by library.
+ */
 export interface ZoteroExportRequest {
   readonly refs: readonly ZoteroObjectRef[]
   readonly format: ZoteroExportFormat
@@ -319,6 +343,72 @@ export interface ZoteroFulltextPayload {
   readonly totalChars?: number
 }
 
+/** A single relation extracted from Zotero data.relations */
+export interface ZoteroRelation {
+  readonly predicate: string
+  readonly targetUri: string
+  readonly targetRef?: string
+}
+
+/** Bounded browse kinds (v3 lock: no schema matrix, no recursive collection) */
+export type ZoteroBrowseKind = 'libraries' | 'collections' | 'savedSearches' | 'tags' | 'itemTypes'
+
+export interface ZoteroBrowseRequest {
+  readonly kind: ZoteroBrowseKind
+  readonly library?: SupportedLocalLibrary
+  readonly q?: string
+  readonly match?: 'contains' | 'startsWith'
+  readonly offset: number
+  readonly limit: number
+}
+
+export interface ZoteroLibraryInfo {
+  readonly library: SupportedLocalLibrary
+  readonly name: string
+}
+
+export interface ZoteroCollectionInfo {
+  readonly ref: string
+  readonly name: string
+  readonly parentRef?: string
+  readonly path: readonly string[]
+  readonly depth: number
+}
+
+export interface ZoteroSavedSearchInfo {
+  readonly ref: string
+  readonly name: string
+  readonly conditions?: unknown
+}
+
+export interface ZoteroTagInfo {
+  readonly tag: string
+  readonly count?: number
+}
+
+export interface ZoteroItemTypeInfo {
+  readonly itemType: string
+  readonly localized?: string
+}
+
+export type ZoteroBrowseItem =
+  | ZoteroLibraryInfo
+  | ZoteroCollectionInfo
+  | ZoteroSavedSearchInfo
+  | ZoteroTagInfo
+  | ZoteroItemTypeInfo
+
+export interface ZoteroBrowseResult {
+  readonly kind: ZoteroBrowseKind
+  readonly library?: SupportedLocalLibrary
+  readonly serverId?: string
+  readonly items: readonly ZoteroBrowseItem[]
+  readonly total: number
+  readonly offset: number
+  readonly returned: number
+  nextOffset?: number
+}
+
 /**
  * The storage side of the `ctx.zotero` seam. Providers declare which
  * capabilities they safely support; the service gates every domain call on
@@ -375,4 +465,5 @@ export interface ZoteroProvider {
    * @returns per-ref citations or the joined export text.
    */
   export(request: ZoteroExportRequest, signal?: AbortSignal): Promise<ZoteroExportResult>
+  browse?(request: ZoteroBrowseRequest, signal?: AbortSignal): Promise<ZoteroBrowseResult>
 }

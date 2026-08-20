@@ -1,5 +1,5 @@
 /**
- * Card-sized presentation projections for the five Zotero tools. Each
+ * Card-sized presentation projections for the Zotero tools. Each
  * projector is a pure function of the canonical tool output (plus, for
  * export, the requested ref count) and feeds `output.presentationMeta`, so
  * the projected facts persist into the `tool/result` event's `meta` and
@@ -12,7 +12,13 @@
  */
 
 import type { JsonValue } from '@deepseek-ai/dsh-tools'
-import type { ZoteroCoverage, ZoteroEvidenceSource } from './types.js'
+import type {
+  SupportedLocalLibrary,
+  ZoteroCoverage,
+  ZoteroEvidenceSource,
+  ZoteroResolvedScope,
+} from './types.js'
+import { parseRef } from './refs.js'
 
 /** UTF-8 byte budget for one tool's presentation meta. */
 export const MAX_PRESENTATION_META_BYTES = 8192
@@ -54,8 +60,7 @@ export interface SearchProjectionInput {
   readonly nextOffset?: number
   /** Notes merged into the first page by the client-side body scan; absent when none. */
   readonly noteMatches?: number
-  /** Canonical-record fields the projection ignores (accepted for shape compatibility). */
-  readonly scope?: unknown
+  readonly scope: ZoteroResolvedScope
   readonly offset?: number
 }
 
@@ -81,6 +86,8 @@ export interface ZoteroSearchPresentationMeta {
   /** Note-body matches merged into the first page; null when the page had none. */
   readonly noteMatches: number | null
   readonly items: ZoteroSearchPresentationRow[]
+  readonly scope: ZoteroResolvedScope
+  readonly library: SupportedLocalLibrary
 }
 
 /** One bounded child preview: personal note/annotation, kept distinct from item metadata. */
@@ -88,6 +95,7 @@ interface ZoteroChildPreview {
   readonly ref: string
   readonly preview: string
   readonly pageLabel?: string
+  readonly parentRef?: string
 }
 
 interface ZoteroChildCount {
@@ -121,8 +129,14 @@ export interface GetProjectionInput {
       readonly type?: string
       readonly comment?: string
       readonly color?: string
+      readonly parentRef?: string
     }[]
   }
+  readonly relations?: readonly {
+    readonly predicate: string
+    readonly targetUri: string
+    readonly targetRef?: string
+  }[]
   readonly attachments?: {
     readonly total: number
     readonly returned: number
@@ -160,6 +174,11 @@ export interface ZoteroGetPresentationMeta {
   readonly bestAttachment?: { readonly ref?: string; readonly contentType: string }
   readonly notesPreview: ZoteroChildPreview[]
   readonly annotationsPreview: ZoteroChildPreview[]
+  readonly relations?: readonly {
+    readonly predicate: string
+    readonly targetUri: string
+    readonly targetRef?: string
+  }[]
 }
 
 /** One ranked evidence passage with its provenance and source kind. */
@@ -298,6 +317,16 @@ function sourcesOf(evidence: ReadonlyArray<{ readonly source: string }>): Zotero
   return sources
 }
 
+function libraryOfScope(scope: ZoteroResolvedScope): SupportedLocalLibrary {
+  if (scope.kind === 'library') return scope.library
+  try {
+    const parsed = parseRef((scope as { ref: string }).ref)
+    return parsed.library as SupportedLocalLibrary
+  } catch {
+    return { type: 'user', id: 0 }
+  }
+}
+
 /**
  * Project one search result into card-sized facts. Rows are bounded by both
  * a logical cap and a row-bytes allowance, so a normal page projects whole
@@ -339,16 +368,25 @@ export function projectSearchMeta(value: SearchProjectionInput): ZoteroSearchPre
     omitted: value.returned - displayed,
     noteMatches: value.noteMatches ?? null,
     items,
+    scope: value.scope,
+    library: libraryOfScope(value.scope),
   }
 }
 
 /** One child collection into bounded previews. */
 function childPreviews(
-  items: ReadonlyArray<{ readonly ref: string; readonly text: string }>,
+  items: ReadonlyArray<{
+    readonly ref: string
+    readonly text: string
+    readonly parentRef?: string
+    readonly pageLabel?: string
+  }>,
 ): ZoteroChildPreview[] {
   return items.slice(0, MAX_PRESENTATION_PREVIEW_RECORDS).map((item) => ({
     ref: item.ref,
     preview: truncateChars(item.text, MAX_PRESENTATION_PREVIEW_CHARS),
+    ...(item.pageLabel === undefined ? {} : { pageLabel: item.pageLabel }),
+    ...(item.parentRef === undefined ? {} : { parentRef: item.parentRef }),
   }))
 }
 
@@ -388,13 +426,8 @@ export function projectGetMeta(value: GetProjectionInput): ZoteroGetPresentation
         }),
     notesPreview: value.notes === undefined ? [] : childPreviews(value.notes.items),
     annotationsPreview:
-      value.annotations === undefined
-        ? []
-        : value.annotations.items.slice(0, MAX_PRESENTATION_PREVIEW_RECORDS).map((annotation) => ({
-            ref: annotation.ref,
-            preview: truncateChars(annotation.text, MAX_PRESENTATION_PREVIEW_CHARS),
-            ...(annotation.pageLabel === undefined ? {} : { pageLabel: annotation.pageLabel }),
-          })),
+      value.annotations === undefined ? [] : childPreviews(value.annotations.items),
+    ...(value.relations === undefined ? {} : { relations: value.relations }),
   }
 }
 

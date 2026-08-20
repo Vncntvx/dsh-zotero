@@ -56,7 +56,8 @@ const SEARCH_PARAMETERS = {
           refOrName: {
             type: 'string',
             required: true,
-            description: 'Collection name or zotero://user/0/collection/<KEY> ref.',
+            description:
+              'Collection name or zotero://user/0/collection/<KEY> or zotero://group/<id>/collection/<KEY> ref.',
           },
         },
       },
@@ -68,13 +69,24 @@ const SEARCH_PARAMETERS = {
           refOrName: {
             type: 'string',
             required: true,
-            description: 'Saved search name or zotero://user/0/search/<KEY> ref.',
+            description:
+              'Saved search name or zotero://user/0/search/<KEY> ref or zotero://group/<id>/search/<KEY> ref.',
           },
         },
       },
     ],
     default: SEARCH_DEFAULT_SCOPE,
     description: 'Where to search. Defaults to the whole library.',
+  },
+  library: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      type: { type: 'string', enum: ['user', 'group'], required: true },
+      id: { type: 'integer', required: true },
+    },
+    description:
+      'Library to search (personal user/0 or group/<id>); omit defaults to user/0. For collection/savedSearch by name, this chooses the library; for ref scopes must match the ref.',
   },
   itemTypes: {
     type: 'array',
@@ -84,7 +96,21 @@ const SEARCH_PARAMETERS = {
   tags: {
     type: 'array',
     items: { type: 'string' },
-    description: 'Literal tag names; items must have ALL of them.',
+    description: 'Literal tag names; items must have ALL of them (tagMatch controls ANY).',
+  },
+  tagMatch: {
+    type: 'string',
+    enum: ['all', 'any'],
+    description: 'How multiple tags combine: all=AND (default), any=OR.',
+  },
+  excludeTags: {
+    type: 'array',
+    items: { type: 'string' },
+    description: 'Literal tag names to exclude (NOT).',
+  },
+  includeTrashed: {
+    type: 'boolean',
+    description: 'Include trashed items (only with library scope); default false.',
   },
   sort: {
     type: 'string',
@@ -122,7 +148,18 @@ const SEARCH_OUTPUT_SCHEMA = {
         {
           type: 'object',
           additionalProperties: false,
-          properties: { kind: { type: 'string', const: 'library', required: true } },
+          properties: {
+            kind: { type: 'string', const: 'library', required: true },
+            library: {
+              type: 'object',
+              required: true,
+              additionalProperties: false,
+              properties: {
+                type: { type: 'string', enum: ['user', 'group'], required: true },
+                id: { type: 'integer', required: true },
+              },
+            },
+          },
         },
         {
           type: 'object',
@@ -173,7 +210,7 @@ const SEARCH_OUTPUT_SCHEMA = {
 
 type SearchOutput = InferValue<typeof SEARCH_OUTPUT_SCHEMA>
 
-function buildRequest(args: SearchArgs, config: ResolvedConfig): ZoteroSearchRequest {
+export function buildRequest(args: SearchArgs, config: ResolvedConfig): ZoteroSearchRequest {
   const limit = args.limit ?? SEARCH_DEFAULT_LIMIT
   assertIntInRange('limit', limit, 1, config.maxSearchResults)
   const offset = args.offset ?? SEARCH_DEFAULT_OFFSET
@@ -191,10 +228,37 @@ function buildRequest(args: SearchArgs, config: ResolvedConfig): ZoteroSearchReq
       )
     }
   }
+  for (const tag of ((args as Record<string, unknown>).excludeTags as string[] | undefined) ?? []) {
+    if (tag.trim() === '' || tag.includes('||')) {
+      invalid(`excludeTags are literal tag names; got "${tag}"`)
+    }
+  }
+  const tagMatch = (args as Record<string, unknown>).tagMatch as 'all' | 'any' | undefined
+  if (tagMatch !== undefined && tagMatch !== 'all' && tagMatch !== 'any')
+    invalid(`tagMatch must be all or any; got ${tagMatch}`)
+  const includeTrashed = (args as Record<string, unknown>).includeTrashed as boolean | undefined
+  if (includeTrashed === true && scope.kind !== 'library') {
+    invalid('includeTrashed is only allowed with library scope')
+  }
   for (const itemType of args.itemTypes ?? []) {
     if (!/^[A-Za-z][A-Za-z0-9]*$/.test(itemType)) {
       invalid(`itemTypes are positive Zotero item type names joined with OR; got "${itemType}"`)
     }
+  }
+  const libRaw = (args as Record<string, unknown>).library as
+    { type: string; id: number } | undefined
+  let library: import('../types.js').SupportedLocalLibrary | undefined
+  if (libRaw !== undefined) {
+    if (libRaw.type !== 'user' && libRaw.type !== 'group')
+      invalid('library.type must be user or group')
+    if (!Number.isInteger(libRaw.id)) invalid('library.id must be integer')
+    if (libRaw.type === 'user' && libRaw.id !== 0)
+      invalid('Only user/0 is supported for personal library')
+    if (libRaw.type === 'group' && libRaw.id <= 0) invalid('group id must be positive')
+    library = {
+      type: libRaw.type as 'user' | 'group',
+      id: libRaw.id,
+    } as import('../types.js').SupportedLocalLibrary
   }
   return {
     query: query === '' ? undefined : query,
@@ -203,8 +267,14 @@ function buildRequest(args: SearchArgs, config: ResolvedConfig): ZoteroSearchReq
       scope.kind === 'library'
         ? { kind: 'library' }
         : { kind: scope.kind, refOrName: scope.refOrName },
+    ...(library ? { library } : {}),
     itemTypes: args.itemTypes,
     tags: args.tags,
+    ...(tagMatch ? { tagMatch } : {}),
+    ...(((args as Record<string, unknown>).excludeTags as string[] | undefined)
+      ? { excludeTags: (args as Record<string, unknown>).excludeTags as string[] }
+      : {}),
+    ...(includeTrashed ? { includeTrashed: true } : {}),
     sort: args.sort ?? SEARCH_DEFAULT_SORT,
     direction: args.direction ?? SEARCH_DEFAULT_DIRECTION,
     offset,
@@ -236,7 +306,10 @@ export function renderSearch(_args: SearchArgs, value: SearchOutput): ContentBlo
 
 /** Replayable projection: page facts plus the bounded rows the Zotero tab lists. */
 function searchPresentationMeta(_args: SearchArgs, value: SearchOutput): JsonValue {
-  return boundedPresentationMeta(projectSearchMeta(value), ['items'])
+  return boundedPresentationMeta(
+    projectSearchMeta(value as unknown as Parameters<typeof projectSearchMeta>[0]),
+    ['items'],
+  )
 }
 
 /**
@@ -270,7 +343,8 @@ export function registerSearchTool(ctx: Context, service: ZoteroService): void {
       description: [
         "Search the user's local Zotero research library for candidate papers.",
         'metadata mode matches titles, creators, and years; everything mode also searches indexed full text.',
-        'On the first page (offset 0), note bodies are matched client-side and merged up to the limit (library and collection scopes; capped by maxNoteScanRecords); noteMatches reports how many hits came from that scan, and they are not part of the paged total; notes show a synthesized title from their first line.',
+        "On the first page, note-body matches may fill unused result slots after Zotero's primary search results, subject to maxNoteScanRecords. They do not compete with or displace a full primary result page; noteMatches reports how many hits came from that scan and they are not part of the paged total; notes show a synthesized title from their first line.",
+        // TODO(search-ranking): merge primary and note-body candidates under an explicit ranking/pagination contract.
         "scope restricts the search to a collection or a Zotero saved search by name or zotero:// ref; additional filters combine with a saved search's own conditions.",
         'Results carry stable zotero:// refs for zotero_get/zotero_retrieve, and a scope ref for pagination via offset.',
       ].join(' '),

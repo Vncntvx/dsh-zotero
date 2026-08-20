@@ -54,18 +54,74 @@ export function formatRef(ref: ZoteroObjectRef): string {
   return ref.serverId === undefined ? base : `${base}?server=${ref.serverId}`
 }
 
-/** Build a ref for the V1 local library (user/0) without string round-tripping. */
-export function localRef(kind: ZoteroKind, key: string, serverId?: string): ZoteroObjectRef {
+/** True when a library is one the local contract may address: personal canonical 0 or any group. */
+export function isSupportedLocalLibrary(library: { type: string; id: number }): boolean {
+  if (library.type === 'user') return library.id === 0
+  if (library.type === 'group') return Number.isInteger(library.id) && library.id > 0
+  return false
+}
+
+/** Build a URL prefix for a supported local library: users/0 or groups/{id}. */
+export function libraryPrefix(library: { type: 'user' | 'group'; id: number }): string {
+  if (library.type === 'user') return 'users/0'
+  return `groups/${library.id}`
+}
+
+/** The personal library canonical constant for discovery endpoints. */
+export const PERSONAL_LIBRARY: { readonly type: 'user'; readonly id: 0 } = { type: 'user', id: 0 }
+
+/** Intentional personal-only discovery prefix (only GET /users/0/groups uses it). */
+export const PERSONAL_GROUPS_DISCOVERY = 'users/0/groups'
+
+/** Build a ref for any supported local library. */
+export function refForLibrary(
+  library: { type: 'user' | 'group'; id: number },
+  kind: ZoteroKind,
+  key: string,
+  serverId?: string,
+): ZoteroObjectRef {
   if (!isObjectKey(key)) {
     throw new ZoteroError(`Invalid Zotero key "${key}".`, ZOTERO_INVALID_REF)
   }
-  return { library: { type: 'user', id: 0 }, kind, key, serverId }
+  if (!isSupportedLocalLibrary(library)) {
+    throw new ZoteroError(
+      `Unsupported library zotero://${library.type}/${library.id}: only user/0 and groups are supported.`,
+      ZOTERO_INVALID_REF,
+    )
+  }
+  return { library: { type: library.type, id: library.id }, kind, key, serverId }
+}
+
+/** Build a ref for the V1 local library (user/0) without string round-tripping. Compatibility helper. */
+export function localRef(kind: ZoteroKind, key: string, serverId?: string): ZoteroObjectRef {
+  return refForLibrary(PERSONAL_LIBRARY, kind, key, serverId)
+}
+
+/**
+ * Assert that a ref names a supported local library: user/0 or any group.
+ * This is the provider-level contract (v3 lock: non-zero user ids still fail closed).
+ */
+function assertSupportedLocalRef(ref: ZoteroObjectRef): ZoteroObjectRef {
+  if (!isSupportedLocalLibrary(ref.library)) {
+    if (ref.library.type === 'user' && ref.library.id !== 0) {
+      throw new ZoteroError(
+        `Use zotero://user/0/${ref.kind}/${ref.key}: the local API serves only the logged-in user's library (group libraries use zotero://group/<id>/...).`,
+        ZOTERO_INVALID_REF,
+      )
+    }
+    throw new ZoteroError(
+      `Unsupported library zotero://${ref.library.type}/${ref.library.id}: only user/0 and groups are supported.`,
+      ZOTERO_INVALID_REF,
+    )
+  }
+  return ref
 }
 
 /**
  * Assert that a ref names the V1-supported library: the locally logged-in
  * user expressed as `user/0`. Group libraries and foreign user ids fail
  * closed with a typed error instead of silently serving wrong data.
+ * @deprecated use requireSupportedLocalRef for v3 branches
  */
 function assertLocalRef(ref: ZoteroObjectRef): ZoteroObjectRef {
   if (ref.library.type === 'group') {
@@ -94,7 +150,17 @@ function assertKind(ref: ZoteroObjectRef, kinds: readonly ZoteroKind[]): ZoteroO
   return ref
 }
 
-/** Shared guard for provider use: local library only, plus an optional kind filter. */
+/** Shared guard for provider use: supported local library, plus an optional kind filter. */
+export function requireSupportedLocalRef(
+  ref: ZoteroObjectRef,
+  kinds?: readonly ZoteroKind[],
+): ZoteroObjectRef {
+  assertSupportedLocalRef(ref)
+  if (kinds !== undefined) assertKind(ref, kinds)
+  return ref
+}
+
+/** Shared guard for provider use: local library only, plus an optional kind filter. @deprecated use requireSupportedLocalRef */
 export function requireLocalRef(
   ref: ZoteroObjectRef,
   kinds?: readonly ZoteroKind[],
@@ -102,4 +168,28 @@ export function requireLocalRef(
   assertLocalRef(ref)
   if (kinds !== undefined) assertKind(ref, kinds)
   return ref
+}
+
+/**
+ * Parse a Zotero canonical relation URI (http://zotero.org/users|groups/.../items/KEY)
+ * into a library+key pair. Returns null for non-Zotero, malformed, or non-item URIs.
+ * This never canonicalizes foreign user ids to user/0 — caller decides if mapping is provable.
+ */
+export function parseZoteroRelationUri(
+  uri: string,
+): { library: { type: 'user' | 'group'; id: number }; key: string } | null {
+  let url: URL
+  try {
+    url = new URL(uri)
+  } catch {
+    return null
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
+  const host = url.hostname.toLowerCase()
+  if (host !== 'zotero.org' && host !== 'www.zotero.org' && host !== 'api.zotero.org') return null
+  const m = /^\/users\/(\d+)\/items\/([A-Z0-9]{8})(?:[/?#].*)?$/.exec(url.pathname)
+  if (m) return { library: { type: 'user', id: Number(m[1]!) }, key: m[2]! }
+  const mg = /^\/groups\/(\d+)\/items\/([A-Z0-9]{8})(?:[/?#].*)?$/.exec(url.pathname)
+  if (mg) return { library: { type: 'group', id: Number(mg[1]!) }, key: mg[2]! }
+  return null
 }

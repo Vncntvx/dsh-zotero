@@ -2,7 +2,7 @@
 
 # dsh-zotero Tool Reference
 
-dsh-zotero registers 5 tools that operate on the user's library through the local Zotero HTTP API. All refs are stable identifiers in `zotero://user/0/item/<KEY>` format.
+dsh-zotero registers 6 tools that operate on the user's library through the local Zotero HTTP API. All refs are stable identifiers in `zotero://user/0/item/<KEY>` (personal) or `zotero://group/<ID>/item/<KEY>` (group) format; personal is always `user/0` canonical.
 
 ---
 
@@ -12,21 +12,25 @@ Discover candidate entries in the library. Metadata mode searches title/author/y
 
 ### Parameters
 
-| Parameter   | Type                           | Default             | Description                                                                               |
-| ----------- | ------------------------------ | ------------------- | ----------------------------------------------------------------------------------------- |
-| `query`     | string                         | —                   | Free-text query; omit to browse the full library                                          |
-| `mode`      | `"metadata"` \| `"everything"` | `"metadata"`        | Search scope                                                                              |
-| `scope`     | object                         | `{kind: "library"}` | `{kind:"library"}` / `{kind:"collection", refOrName}` / `{kind:"savedSearch", refOrName}` |
-| `itemTypes` | string[]                       | —                   | Zotero item type names (e.g. `journalArticle`), OR combined                               |
-| `tags`      | string[]                       | —                   | Tag names, AND semantics                                                                  |
-| `sort`      | string                         | `"dateModified"`    | Sort field: `dateModified` / `dateAdded` / `date` / `title` / `creator`                   |
-| `direction` | `"asc"` \| `"desc"`            | `"desc"`            | Sort direction                                                                            |
-| `offset`    | integer                        | `0`                 | Pagination offset                                                                         |
-| `limit`     | integer                        | `10`                | Max return count (capped by `maxSearchResults`, default 20)                               |
+| Parameter        | Type                           | Default             | Description                                                                                               |
+| ---------------- | ------------------------------ | ------------------- | --------------------------------------------------------------------------------------------------------- |
+| `query`          | string                         | —                   | Free-text query; omit to browse the full library                                                          |
+| `mode`           | `"metadata"` \| `"everything"` | `"metadata"`        | Search scope                                                                                              |
+| `scope`          | object                         | `{kind: "library"}` | `{kind:"library"}` / `{kind:"collection", refOrName}` / `{kind:"savedSearch", refOrName}`                 |
+| `library`        | object                         | —                   | Library: `{type:"user",id:0}` or `{type:"group",id}`; for name scopes selects library, for ref must match |
+| `itemTypes`      | string[]                       | —                   | Zotero item type names (e.g. `journalArticle`), OR combined                                               |
+| `tags`           | string[]                       | —                   | Tag names, `tagMatch` controls AND/OR                                                                     |
+| `tagMatch`       | `"all"` \| `"any"`             | `"all"`             | How multiple tags combine                                                                                 |
+| `excludeTags`    | string[]                       | —                   | Tags to exclude (NOT)                                                                                     |
+| `includeTrashed` | boolean                        | `false`             | Include trashed items (only with `library` scope)                                                         |
+| `sort`           | string                         | `"dateModified"`    | Sort field: `dateModified` / `dateAdded` / `date` / `title` / `creator`                                   |
+| `direction`      | `"asc"` \| `"desc"`            | `"desc"`            | Sort direction                                                                                            |
+| `offset`         | integer                        | `0`                 | Pagination offset                                                                                         |
+| `limit`          | integer                        | `10`                | Max return count (capped by `maxSearchResults`, default 20)                                               |
 
 ### Output
 
-`scope`, `items` (ref, title, creatorSummary, year, itemType, bestAttachmentRef, bestAttachmentType), `total`, `offset`, `returned`, `nextOffset`, `noteMatches`
+`scope` (library scopes include `library` for pagination replay), `items` (ref, title, creatorSummary, year, itemType, bestAttachmentRef, bestAttachmentType), `total`, `offset`, `returned`, `nextOffset`, `noteMatches`
 
 ### Notes
 
@@ -53,7 +57,7 @@ Read a single item's full metadata. By default returns only metadata; specifying
 
 ### Output
 
-`ref`, `itemType`, `title`, `creators`, `date`, `year`, `venue`, `doi`, `url`, `abstract`, `abstractTruncated`, `noteBody` (note items), `tags`, `collections`, `children`, `bestAttachment`, plus requested `notes`/`annotations`/`attachments` (with total, returned, items)
+`ref`, `itemType`, `title`, `creators`, `date`, `year`, `venue`, `doi`, `url`, `abstract`, `abstractTruncated`, `noteBody` (note items), `tags`, `collections`, `children`, `bestAttachment`, `relations` (as `dc:relation` etc, `targetRef` only when provably local), plus requested `notes`/`annotations`/`attachments` (with total, returned, items)
 
 ### Example
 
@@ -148,6 +152,7 @@ Generate citations or formatted exports.
 - `citation` mode auto-batches requests per Zotero's 50-key limit
 - `bibtex`/`biblatex`/`ris`/`csljson` accept up to 50 items per call; split larger sets into batches
 - Export text is never truncated — exceeding `maxExportChars` (default 1M) raises an error
+- One export call allows refs from only one `library`; mixing `user/0` and `group` (or different groups) raises `INVALID_ARGUMENT` with 0 HTTP
 
 ### Example
 

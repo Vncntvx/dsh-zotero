@@ -15,8 +15,9 @@ import {
 } from './attachments.js'
 import { ZOTERO_UNEXPECTED, ZoteroError } from './errors.js'
 import { asRecord, asString, isObjectKey } from './json.js'
-import { formatRef, localRef } from './refs.js'
+import { formatRef, parseZoteroRelationUri, refForLibrary } from './refs.js'
 import type {
+  SupportedLocalLibrary,
   ZoteroAnnotationRecord,
   ZoteroAttachmentRecord,
   ZoteroChildCollection,
@@ -24,6 +25,7 @@ import type {
   ZoteroInclude,
   ZoteroItemDetail,
   ZoteroNoteRecord,
+  ZoteroRelation,
   ZoteroSearchItem,
 } from './types.js'
 
@@ -69,13 +71,34 @@ function parentKeyOf(data: Record<string, unknown> | undefined): string | undefi
   return parent !== undefined && isObjectKey(parent) ? parent : undefined
 }
 
+export interface NormalizeContext {
+  readonly library: SupportedLocalLibrary
+  readonly serverId?: string
+}
+
+const PERSONAL_CTX: NormalizeContext = { library: { type: 'user', id: 0 } }
+
+function resolveContext(value?: string | NormalizeContext): NormalizeContext {
+  if (value === undefined) return PERSONAL_CTX
+  if (typeof value === 'string') return { library: { type: 'user', id: 0 }, serverId: value }
+  return value
+}
+
+function normalizeCtx(value?: string | NormalizeContext): NormalizeContext {
+  return resolveContext(value)
+}
+
 /**
  * Normalize one item JSON object into a compact search hit.
  * @param json - the raw API object; anything outside the documented shape is ignored.
- * @param serverId - the instance that served the response; recorded as ref provenance.
+ * @param ctx - the library+serverId context; string shorthand is legacy personal serverId.
  * @throws {ZoteroError} `ZOTERO_UNEXPECTED` when the object has no valid Zotero key.
  */
-export function normalizeSearchItem(json: unknown, serverId?: string): ZoteroSearchItem {
+export function normalizeSearchItem(
+  json: unknown,
+  ctx?: string | NormalizeContext,
+): ZoteroSearchItem {
+  const context = normalizeCtx(ctx)
   const record = asRecord(json)
   if (record === undefined) {
     throw new ZoteroError('Zotero returned an item without a valid object key.', ZOTERO_UNEXPECTED)
@@ -103,7 +126,7 @@ export function normalizeSearchItem(json: unknown, serverId?: string): ZoteroSea
   // Optional fields are omitted rather than set to undefined, so the record
   // is always a pure lossless-JSON value for the tool output snapshot.
   const item: ZoteroSearchItem = {
-    ref: formatRef(localRef('item', key, serverId)),
+    ref: formatRef(refForLibrary(context.library, 'item', key, context.serverId)),
     title,
     creatorSummary: asString(meta?.creatorSummary) ?? '',
     itemType,
@@ -111,9 +134,12 @@ export function normalizeSearchItem(json: unknown, serverId?: string): ZoteroSea
   const year = parsedYearOf(parsedDate)
   if (year !== undefined) item.year = year
   const parentKey = parentKeyOf(data)
-  if (parentKey !== undefined) item.parentRef = formatRef(localRef('item', parentKey, serverId))
+  if (parentKey !== undefined)
+    item.parentRef = formatRef(refForLibrary(context.library, 'item', parentKey, context.serverId))
   if (attachmentKey !== undefined)
-    item.bestAttachmentRef = formatRef(localRef('attachment', attachmentKey, serverId))
+    item.bestAttachmentRef = formatRef(
+      refForLibrary(context.library, 'attachment', attachmentKey, context.serverId),
+    )
   const bestAttachmentType = asString(attachment?.attachmentType)
   if (bestAttachmentType !== undefined) item.bestAttachmentType = bestAttachmentType
   if (typeof attachment?.attachmentSize === 'number')
@@ -232,9 +258,10 @@ export function truncateText(text: string, max: number): { text: string; truncat
  */
 export function normalizeNoteRecord(
   json: unknown,
-  serverId: string | undefined,
+  ctx: string | NormalizeContext | undefined,
   maxChars?: number,
 ): ZoteroNoteRecord {
+  const context = normalizeCtx(ctx as string | NormalizeContext | undefined)
   const record = asRecord(json)
   const key = asString(record?.key)
   if (key === undefined || !isObjectKey(key)) {
@@ -245,11 +272,13 @@ export function normalizeNoteRecord(
   const { text, truncated } = truncateText(raw, maxChars ?? raw.length)
   const parentKey = parentKeyOf(data)
   return {
-    ref: formatRef(localRef('item', key, serverId)),
+    ref: formatRef(refForLibrary(context.library, 'item', key, context.serverId)),
     text,
     truncated,
     ...(parentKey !== undefined
-      ? { parentRef: formatRef(localRef('item', parentKey, serverId)) }
+      ? {
+          parentRef: formatRef(refForLibrary(context.library, 'item', parentKey, context.serverId)),
+        }
       : {}),
   }
 }
@@ -261,8 +290,9 @@ export function normalizeNoteRecord(
  */
 export function normalizeAnnotationRecord(
   json: unknown,
-  serverId?: string,
+  ctx?: string | NormalizeContext,
 ): ZoteroAnnotationRecord {
+  const context = normalizeCtx(ctx)
   const record = asRecord(json)
   const key = asString(record?.key)
   if (key === undefined || !isObjectKey(key)) {
@@ -277,14 +307,18 @@ export function normalizeAnnotationRecord(
   const pageLabel = asString(data?.annotationPageLabel)
   const parentKey = parentKeyOf(data)
   return {
-    ref: formatRef(localRef('item', key, serverId)),
+    ref: formatRef(refForLibrary(context.library, 'item', key, context.serverId)),
     type: asString(data?.annotationType) ?? '',
     text: asString(data?.annotationText) ?? '',
     ...(comment !== undefined ? { comment } : {}),
     ...(color !== undefined ? { color } : {}),
     ...(pageLabel !== undefined ? { pageLabel } : {}),
     ...(parentKey !== undefined
-      ? { parentRef: formatRef(localRef('attachment', parentKey, serverId)) }
+      ? {
+          parentRef: formatRef(
+            refForLibrary(context.library, 'attachment', parentKey, context.serverId),
+          ),
+        }
       : {}),
   }
 }
@@ -318,17 +352,18 @@ function annotationSortIndex(row: unknown): string {
  * are ignored — the plugin only claims the three kinds it understands — but
  * a malformed row of a requested kind fails loud.
  * @param rows - raw child item JSON objects.
- * @param serverId - the instance that served the rows; recorded as ref provenance.
+ * @param ctx - the library+serverId context.
  * @param noteMaxChars - per-note budget; undefined keeps the full body.
  * @param kinds - the kinds to normalize; defaults to all three.
  * @throws {ZoteroError} `ZOTERO_UNEXPECTED` on a requested-kind child without a valid key.
  */
 export function partitionChildren(
   rows: readonly unknown[],
-  serverId: string | undefined,
+  ctx: string | NormalizeContext | undefined,
   noteMaxChars?: number,
   kinds: ReadonlySet<ZoteroChildKind> = ALL_CHILD_KINDS,
 ): PartitionedChildren {
+  const context = normalizeCtx(ctx)
   const notes: ZoteroNoteRecord[] = []
   const annotationRows: unknown[] = []
   const attachments: ZoteroAttachmentCandidate[] = []
@@ -338,7 +373,7 @@ export function partitionChildren(
   for (const row of rows) {
     const itemType = asString(asRecord(asRecord(row)?.data)?.itemType)
     if (itemType === 'note') {
-      if (wantsNotes) notes.push(normalizeNoteRecord(row, serverId, noteMaxChars))
+      if (wantsNotes) notes.push(normalizeNoteRecord(row, context, noteMaxChars))
     } else if (itemType === 'annotation') {
       if (wantsAnnotations) annotationRows.push(row)
     } else if (itemType === 'attachment') {
@@ -348,7 +383,7 @@ export function partitionChildren(
   annotationRows.sort((a, b) => annotationSortIndex(a).localeCompare(annotationSortIndex(b)))
   return {
     notes,
-    annotations: annotationRows.map((row) => normalizeAnnotationRecord(row, serverId)),
+    annotations: annotationRows.map((row) => normalizeAnnotationRecord(row, context)),
     attachments,
   }
 }
@@ -356,6 +391,8 @@ export function partitionChildren(
 export interface NormalizeItemDetailInput {
   /** The single-item response body of `GET /users/0/items/<key>`. */
   readonly parent: unknown
+  /** Library context (canonical personal or group); omitted defaults to user/0. */
+  readonly library?: SupportedLocalLibrary
   /** The instance that served the parent; recorded as ref provenance. */
   readonly serverId?: string
   /** The child kinds the caller asked to include; unrequested kinds are omitted. */
@@ -395,14 +432,56 @@ function detailChildKinds(include: ReadonlySet<ZoteroInclude>): ReadonlySet<Zote
 
 function attachmentRecordOf(
   candidate: ZoteroAttachmentCandidate,
-  serverId: string | undefined,
+  ctx: NormalizeContext,
 ): ZoteroAttachmentRecord {
   return {
-    ref: formatRef(localRef('attachment', candidate.key, serverId)),
+    ref: formatRef(refForLibrary(ctx.library, 'attachment', candidate.key, ctx.serverId)),
     title: candidate.title,
     contentType: candidate.contentType,
     ...(candidate.linkMode !== undefined ? { linkMode: candidate.linkMode } : {}),
   }
+}
+
+function normalizeRelations(
+  data: Record<string, unknown> | undefined,
+  ctx: NormalizeContext,
+  parentLibraryId?: number,
+): ZoteroRelation[] | undefined {
+  const raw = data?.relations
+  if (raw === undefined || raw === null) return undefined
+  const record = asRecord(raw)
+  if (record === undefined) return undefined
+  const out: ZoteroRelation[] = []
+  for (const [predicate, value] of Object.entries(record)) {
+    const targets = Array.isArray(value) ? value : typeof value === 'string' ? [value] : []
+    for (const target of targets) {
+      if (typeof target !== 'string' || target === '') continue
+      const parsed = parseZoteroRelationUri(target)
+      let targetRef: string | undefined
+      if (parsed !== null) {
+        if (
+          parsed.library.type === 'group' &&
+          ctx.library.type === 'group' &&
+          parsed.library.id === ctx.library.id
+        ) {
+          targetRef = formatRef(refForLibrary(ctx.library, 'item', parsed.key, ctx.serverId))
+        } else if (parsed.library.type === 'user' && ctx.library.type === 'user') {
+          // Personal library: only canonicalize if URI's user id matches parent's real id or is 0
+          if (parsed.library.id === 0) {
+            targetRef = formatRef(refForLibrary(ctx.library, 'item', parsed.key, ctx.serverId))
+          } else if (parentLibraryId !== undefined && parsed.library.id === parentLibraryId) {
+            targetRef = formatRef(refForLibrary(ctx.library, 'item', parsed.key, ctx.serverId))
+          }
+        }
+      }
+      out.push(
+        targetRef === undefined
+          ? { predicate, targetUri: target }
+          : { predicate, targetUri: target, targetRef },
+      )
+    }
+  }
+  return out.length > 0 ? out : undefined
 }
 
 /**
@@ -413,6 +492,10 @@ function attachmentRecordOf(
  * @throws {ZoteroError} `ZOTERO_UNEXPECTED` when the parent or a claimed child has no valid key.
  */
 export function normalizeItemDetail(input: NormalizeItemDetailInput): ZoteroItemDetail {
+  const ctx: NormalizeContext = {
+    library: input.library ?? { type: 'user', id: 0 },
+    serverId: input.serverId,
+  }
   const record = asRecord(input.parent)
   const key = asString(record?.key)
   if (key === undefined || !isObjectKey(key)) {
@@ -440,7 +523,7 @@ export function normalizeItemDetail(input: NormalizeItemDetailInput): ZoteroItem
   const collections: ZoteroCollectionRecord[] = keys.map((collectionKey) => {
     const name = input.collectionNames?.get(collectionKey)
     return {
-      ref: formatRef(localRef('collection', collectionKey, input.serverId)),
+      ref: formatRef(refForLibrary(ctx.library, 'collection', collectionKey, ctx.serverId)),
       ...(name !== undefined ? { name } : {}),
     }
   })
@@ -450,7 +533,7 @@ export function normalizeItemDetail(input: NormalizeItemDetailInput): ZoteroItem
       ? undefined
       : partitionChildren(
           input.childrenRows,
-          input.serverId,
+          ctx,
           input.maxNoteChars,
           detailChildKinds(input.include),
         )
@@ -468,9 +551,7 @@ export function normalizeItemDetail(input: NormalizeItemDetailInput): ZoteroItem
         input.maxAnnotationRecords,
       )
     if (input.include.has('attachments')) {
-      const records = partitioned.attachments.map((candidate) =>
-        attachmentRecordOf(candidate, input.serverId),
-      )
+      const records = partitioned.attachments.map((candidate) => attachmentRecordOf(candidate, ctx))
       childCollections.attachments = childCollection(records, records.length)
     }
   }
@@ -480,14 +561,32 @@ export function normalizeItemDetail(input: NormalizeItemDetailInput): ZoteroItem
   if (linkAttachment !== undefined) {
     const child = partitioned?.attachments.find((candidate) => candidate.key === linkAttachment.key)
     bestAttachment = {
-      ref: formatRef(localRef('attachment', linkAttachment.key, input.serverId)),
+      ref: formatRef(refForLibrary(ctx.library, 'attachment', linkAttachment.key, ctx.serverId)),
       title: child?.title ?? '',
       contentType: linkAttachment.contentType,
     }
   }
 
+  const parentLibraryId = (() => {
+    const lib = asRecord(record?.library)
+    const candidates: unknown[] = [
+      lib?.id,
+      lib?.libraryID,
+      (lib as Record<string, unknown> | undefined)?.libraryId,
+      asRecord(record)?.libraryID,
+      (record as Record<string, unknown> | undefined)?.libraryId,
+    ]
+    for (const c of candidates) {
+      if (typeof c === 'number' && Number.isInteger(c)) return c
+      if (typeof c === 'string' && /^\d+$/.test(c.trim()) && Number.isInteger(Number(c)))
+        return Number(c)
+    }
+    return undefined
+  })()
+  const relations = normalizeRelations(data, ctx, parentLibraryId)
+
   return {
-    ref: formatRef(localRef('item', key, input.serverId)),
+    ref: formatRef(refForLibrary(ctx.library, 'item', key, ctx.serverId)),
     itemType,
     title: asString(data?.title) ?? '',
     creators: normalizeCreators(data),
@@ -504,8 +603,9 @@ export function normalizeItemDetail(input: NormalizeItemDetailInput): ZoteroItem
     ...(url !== undefined ? { url } : {}),
     ...childCollections,
     ...(bestAttachment !== undefined ? { bestAttachment } : {}),
+    ...(relations !== undefined ? { relations } : {}),
     ...(version !== undefined ? { version } : {}),
-    ...(input.serverId !== undefined ? { serverId: input.serverId } : {}),
+    ...(ctx.serverId !== undefined ? { serverId: ctx.serverId } : {}),
   }
 }
 

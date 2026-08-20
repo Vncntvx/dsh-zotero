@@ -53,14 +53,14 @@ describe('zotero_search tool', () => {
   })
 
   it('executes a library search and renders a compact list', async () => {
-    mock.route('GET', '/api/users/0/items/top', (req, res, helpers) =>
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers) =>
       helpers.json([ITEM], { 'Total-Results': '1', 'Zotero-Server-ID': 'S1' }),
     )
     const result = await runTool('zotero_search', { query: 'flash attention', limit: 5 })
     expect(result.isError).toBe(false)
     if (result.isError) throw new Error('unreachable')
     expect(result.value).toEqual({
-      scope: { kind: 'library' },
+      scope: { kind: 'library', library: { type: 'user', id: 0 } },
       items: [
         {
           ref: 'zotero://user/0/item/ABCD1234?server=S1',
@@ -68,15 +68,11 @@ describe('zotero_search tool', () => {
           creatorSummary: 'Dao, Tri',
           year: 2023,
           itemType: 'conferencePaper',
-          bestAttachmentRef: undefined,
-          bestAttachmentType: undefined,
-          attachmentSize: undefined,
         },
       ],
       total: 1,
       offset: 0,
       returned: 1,
-      nextOffset: undefined,
     })
     expect(result.content[0]?.type).toBe('text')
     expect((result.content[0] as { text: string }).text).toBe(
@@ -86,7 +82,7 @@ describe('zotero_search tool', () => {
 
   it('renders the merged-note notice only when noteMatches is present and positive', () => {
     const value = {
-      scope: { kind: 'library' as const },
+      scope: { kind: 'library' as const, library: { type: 'user' as const, id: 0 } },
       items: [],
       total: 42,
       offset: 0,
@@ -175,7 +171,7 @@ describe('zotero_search tool', () => {
   })
 
   it('announces further pages in the rendered output', async () => {
-    mock.route('GET', '/api/users/0/items/top', (req, res, helpers) =>
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers) =>
       helpers.json([ITEM], { 'Total-Results': '25' }),
     )
     const result = await runTool('zotero_search', { limit: 5 })
@@ -206,7 +202,7 @@ describe('zotero_search tool', () => {
         },
       },
     }
-    mock.route('GET', '/api/users/0/items/top', (req, res, helpers) =>
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers) =>
       helpers.json([withPdf], { 'Total-Results': '1' }),
     )
     const result = await runTool('zotero_search', {
@@ -220,7 +216,7 @@ describe('zotero_search tool', () => {
   })
 
   it('treats whitespace-only queries as omitted and rejects zero limits and blank tags', async () => {
-    mock.route('GET', '/api/users/0/items/top', (req, res, helpers) =>
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers) =>
       helpers.json([], { 'Total-Results': '0' }),
     )
     const blankQuery = await runTool('zotero_search', { query: '   ' })
@@ -253,7 +249,7 @@ describe('zotero_search tool', () => {
       meta: {},
       data: { ...ITEM.data, creators: [] },
     }
-    mock.route('GET', '/api/users/0/items/top', (req, res, helpers) =>
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers) =>
       helpers.json([bare], { 'Total-Results': '1' }),
     )
     const result = await runTool('zotero_search', { query: 'x' })
@@ -1173,7 +1169,7 @@ describe('tool presentation', () => {
   it('projects replayable search page facts and renders the completed card', () => {
     const tool = definition('zotero_search')
     const value = {
-      scope: { kind: 'library' as const },
+      scope: { kind: 'library' as const, library: { type: 'user' as const, id: 0 } },
       items: [],
       total: 42,
       offset: 0,
@@ -1188,13 +1184,21 @@ describe('tool presentation', () => {
       omitted: 10,
       noteMatches: null,
       items: [],
+      scope: { kind: 'library', library: { type: 'user', id: 0 } },
+      library: { type: 'user', id: 0 },
     })
     // A final page omits nextOffset; the projector records it as null so the
     // projection stays lossless JSON.
     expect(
       tool.output.presentationMeta!(
         {},
-        { scope: { kind: 'library' }, items: [], total: 42, offset: 0, returned: 10 },
+        {
+          scope: { kind: 'library', library: { type: 'user', id: 0 } },
+          items: [],
+          total: 42,
+          offset: 0,
+          returned: 10,
+        },
       ),
     ).toEqual({
       returned: 10,
@@ -1204,6 +1208,8 @@ describe('tool presentation', () => {
       omitted: 10,
       noteMatches: null,
       items: [],
+      scope: { kind: 'library', library: { type: 'user', id: 0 } },
+      library: { type: 'user', id: 0 },
     })
     const result: ToolResult = {
       content: [{ type: 'text', text: 'x' }],

@@ -10,7 +10,7 @@ import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { defineTool, type InferArgs, type InferValue } from '@deepseek-ai/dsh-tools'
 import { withConnectivityAsk } from '../ask.js'
 import { boundedPresentationMeta, projectAttachmentMeta } from '../presentation-meta.js'
-import { parseRef, requireLocalRef } from '../refs.js'
+import { parseRef, requireSupportedLocalRef } from '../refs.js'
 import type { ZoteroService } from '../service.js'
 
 const ATTACHMENT_PARAMETERS = {
@@ -18,7 +18,7 @@ const ATTACHMENT_PARAMETERS = {
     type: 'string',
     required: true,
     description:
-      'An item ref (Zotero resolves its best attachment) or a zotero://user/0/attachment/<KEY> ref for one specific attachment.',
+      'An item ref (Zotero resolves its best attachment) or a zotero://user/0/attachment/<KEY> or zotero://group/<id>/attachment/<KEY> ref for one specific attachment.',
   },
 } as const
 
@@ -83,7 +83,7 @@ export function registerAttachmentTool(ctx: Context, service: ZoteroService): vo
       isConcurrencySafe: () => true,
       async execute(args, exec) {
         const ref = parseRef(args.ref)
-        requireLocalRef(ref, ['item', 'attachment'])
+        requireSupportedLocalRef(ref, ['item', 'attachment'])
         return await withConnectivityAsk(ctx, exec, () => service.attachment(ref, exec.signal))
       },
     }),

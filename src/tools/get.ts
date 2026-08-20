@@ -12,7 +12,7 @@ import { defineTool, type InferArgs, type InferValue } from '@deepseek-ai/dsh-to
 import { withConnectivityAsk } from '../ask.js'
 import { boundedPresentationMeta, projectGetMeta } from '../presentation-meta.js'
 import { formatSearchLine } from './present.js'
-import { parseRef, requireLocalRef } from '../refs.js'
+import { parseRef, requireSupportedLocalRef } from '../refs.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroGetRequest, ZoteroInclude } from '../types.js'
 
@@ -20,7 +20,8 @@ const GET_PARAMETERS = {
   ref: {
     type: 'string',
     required: true,
-    description: 'A zotero://user/0/item/<KEY> ref from zotero_search or a previous tool result.',
+    description:
+      'A zotero://user/0/item/<KEY> or zotero://group/<id>/item/<KEY> ref from zotero_search or a previous tool result.',
   },
   include: {
     type: 'array',
@@ -53,6 +54,7 @@ const ANNOTATION_RECORD = {
     comment: { type: 'string' },
     color: { type: 'string' },
     pageLabel: { type: 'string' },
+    parentRef: { type: 'string' },
   },
 } as const
 
@@ -137,6 +139,18 @@ const GET_OUTPUT_SCHEMA = {
         items: { type: 'array', required: true, items: ATTACHMENT_RECORD },
       },
     },
+    relations: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          predicate: { type: 'string', required: true },
+          targetUri: { type: 'string', required: true },
+          targetRef: { type: 'string' },
+        },
+      },
+    },
     version: { type: 'integer' },
     serverId: { type: 'string' },
   },
@@ -146,7 +160,7 @@ type GetOutput = InferValue<typeof GET_OUTPUT_SCHEMA>
 
 function buildRequest(args: GetArgs): ZoteroGetRequest {
   const ref = parseRef(args.ref)
-  requireLocalRef(ref, ['item'])
+  requireSupportedLocalRef(ref, ['item'])
   return { ref, include: new Set<ZoteroInclude>(args.include ?? []) }
 }
 
@@ -191,6 +205,11 @@ export function renderGet(_args: GetArgs, value: GetOutput): ContentBlock[] {
       `Best attachment: ${value.bestAttachment.ref} (${value.bestAttachment.contentType || 'unknown type'})`,
     )
   }
+  if (value.relations !== undefined && value.relations.length > 0) {
+    lines.push(
+      `Relations: ${value.relations.map((r) => `${r.predicate} -> ${r.targetRef ?? r.targetUri}`).join(', ')}`,
+    )
+  }
   return [{ type: 'text', text: lines.join('\n') }]
 }
 
@@ -210,7 +229,10 @@ export function registerGetTool(ctx: Context, service: ZoteroService): void {
         schema: GET_OUTPUT_SCHEMA,
         render: renderGet,
         presentationMeta: (_args, value) =>
-          boundedPresentationMeta(projectGetMeta(value), ['notesPreview', 'annotationsPreview']),
+          boundedPresentationMeta(
+            projectGetMeta(value as unknown as Parameters<typeof projectGetMeta>[0]),
+            ['notesPreview', 'annotationsPreview', 'relations'],
+          ),
       },
       presentCall: (args) => ({
         card: 'generic',
@@ -220,9 +242,9 @@ export function registerGetTool(ctx: Context, service: ZoteroService): void {
       }),
       isConcurrencySafe: () => true,
       async execute(args, exec) {
-        return await withConnectivityAsk(ctx, exec, () =>
+        return (await withConnectivityAsk(ctx, exec, () =>
           service.get(buildRequest(args), exec.signal),
-        )
+        )) as unknown as GetOutput
       },
     }),
   )

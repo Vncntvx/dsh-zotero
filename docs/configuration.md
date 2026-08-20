@@ -25,6 +25,7 @@
 | `maxResponseBytes`     | `16777216`                   | 单次 API 响应流式读取字节上限（16 MiB）     |
 | `maxExportChars`       | `1000000`                    | 导出输出硬上限（100 万字符）                |
 | `maxExportRefs`        | `50`                         | 单次 `zotero_export` 引用条数上限           |
+| `maxBrowseResults`     | `50`                         | 单次 `zotero_browse` 返回条目上限           |
 | `defaultStyle`         | `apa`                        | CSL 引用样式（需 Zotero 内置）              |
 | `defaultLocale`        | `en-US`                      | CSL 引用语言                                |
 | `webEnabled`           | `true`                       | 是否在 dsh web 中启用 Zotero 会话标签页     |

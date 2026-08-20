@@ -15,7 +15,7 @@ import type { ResolvedConfig } from '../config.js'
 import { withConnectivityAsk } from '../ask.js'
 import { boundedPresentationMeta, projectRetrieveMeta } from '../presentation-meta.js'
 import { assertIntInRange, invalid } from './validate.js'
-import { parseRef, requireLocalRef } from '../refs.js'
+import { parseRef, requireSupportedLocalRef } from '../refs.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroEvidenceSource, ZoteroRetrieveRequest } from '../types.js'
 
@@ -27,7 +27,8 @@ const RETRIEVE_PARAMETERS = {
   ref: {
     type: 'string',
     required: true,
-    description: 'A zotero://user/0/item/<KEY> ref from zotero_search or zotero_get.',
+    description:
+      'A zotero://user/0/item/<KEY> or zotero://group/<id>/item/<KEY> ref from zotero_search or zotero_get.',
   },
   query: {
     type: 'string',
@@ -104,7 +105,7 @@ function buildRequest(args: RetrieveArgs, config: ResolvedConfig): ZoteroRetriev
   const sources = args.sources ?? ALL_SOURCES
   if (sources.length === 0) invalid('sources must list at least one evidence source')
   const ref = parseRef(args.ref)
-  requireLocalRef(ref, ['item'])
+  requireSupportedLocalRef(ref, ['item'])
   return { ref, query, sources: [...sources], passages }
 }
 

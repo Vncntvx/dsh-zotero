@@ -2,7 +2,7 @@
 
 # dsh-zotero 工具参考
 
-dsh-zotero 注册 5 个工具，通过本地 Zotero HTTP API 操作用户的文献库。所有 ref 均为 `zotero://user/0/item/<KEY>` 格式的稳定标识符。
+dsh-zotero 注册 6 个工具，通过本地 Zotero HTTP API 操作用户的文献库。所有 ref 均为 `zotero://user/0/item/<KEY>`（个人库）或 `zotero://group/<ID>/item/<KEY>`（群组库）格式的稳定标识符，个人库恒为 `user/0` canonical。
 
 ---
 
@@ -12,21 +12,25 @@ dsh-zotero 注册 5 个工具，通过本地 Zotero HTTP API 操作用户的文�
 
 ### 参数
 
-| 参数        | 类型                           | 默认值              | 说明                                                                                      |
-| ----------- | ------------------------------ | ------------------- | ----------------------------------------------------------------------------------------- |
-| `query`     | string                         | —                   | 自由文本查询；省略则浏览全库                                                              |
-| `mode`      | `"metadata"` \| `"everything"` | `"metadata"`        | 搜索范围                                                                                  |
-| `scope`     | object                         | `{kind: "library"}` | `{kind:"library"}` / `{kind:"collection", refOrName}` / `{kind:"savedSearch", refOrName}` |
-| `itemTypes` | string[]                       | —                   | Zotero 条目类型名（如 `journalArticle`），OR 组合                                         |
-| `tags`      | string[]                       | —                   | 标签名，AND 语义                                                                          |
-| `sort`      | string                         | `"dateModified"`    | 排序字段：`dateModified` / `dateAdded` / `date` / `title` / `creator`                     |
-| `direction` | `"asc"` \| `"desc"`            | `"desc"`            | 排序方向                                                                                  |
-| `offset`    | integer                        | `0`                 | 分页偏移                                                                                  |
-| `limit`     | integer                        | `10`                | 返回数量上限（受 `maxSearchResults` 限制，默认 20）                                       |
+| 参数             | 类型                           | 默认值              | 说明                                                                                              |
+| ---------------- | ------------------------------ | ------------------- | ------------------------------------------------------------------------------------------------- |
+| `query`          | string                         | —                   | 自由文本查询；省略则浏览全库                                                                      |
+| `mode`           | `"metadata"` \| `"everything"` | `"metadata"`        | 搜索范围                                                                                          |
+| `scope`          | object                         | `{kind: "library"}` | `{kind:"library"}` / `{kind:"collection", refOrName}` / `{kind:"savedSearch", refOrName}`         |
+| `library`        | object                         | —                   | 库：`{type:"user",id:0}` 或 `{type:"group",id}`；`scope` 为 name 时作解析上下文，`ref` 时必须一致 |
+| `itemTypes`      | string[]                       | —                   | Zotero 条目类型名（如 `journalArticle`），OR 组合                                                 |
+| `tags`           | string[]                       | —                   | 标签名，`tagMatch` 控制 AND/OR                                                                    |
+| `tagMatch`       | `"all"` \| `"any"`             | `"all"`             | 多标签组合：`all`=AND，`any`=OR                                                                   |
+| `excludeTags`    | string[]                       | —                   | 需排除的标签（NOT）                                                                               |
+| `includeTrashed` | boolean                        | `false`             | 是否包含已删除条目（仅 `library` scope 允许）                                                     |
+| `sort`           | string                         | `"dateModified"`    | 排序字段：`dateModified` / `dateAdded` / `date` / `title` / `creator`                             |
+| `direction`      | `"asc"` \| `"desc"`            | `"desc"`            | 排序方向                                                                                          |
+| `offset`         | integer                        | `0`                 | 分页偏移                                                                                          |
+| `limit`          | integer                        | `10`                | 返回数量上限（受 `maxSearchResults` 限制，默认 20）                                               |
 
 ### 输出
 
-`scope`, `items`（ref, title, creatorSummary, year, itemType, bestAttachmentRef, bestAttachmentType）, `total`, `offset`, `returned`, `nextOffset`, `noteMatches`
+`scope`（`library` scope 含 `library` 字段，便于分页回放）, `items`（ref, title, creatorSummary, year, itemType, bestAttachmentRef, bestAttachmentType）, `total`, `offset`, `returned`, `nextOffset`, `noteMatches`
 
 ### 注意事项
 
@@ -53,7 +57,7 @@ zotero_search(query="transformer attention", mode="everything", tags=["deep-lear
 
 ### 输出
 
-`ref`, `itemType`, `title`, `creators`, `date`, `year`, `venue`, `doi`, `url`, `abstract`, `abstractTruncated`, `noteBody`（笔记条目）, `tags`, `collections`, `children`, `bestAttachment`, 以及请求的 `notes`/`annotations`/`attachments`（含 total、returned、items）
+`ref`, `itemType`, `title`, `creators`, `date`, `year`, `venue`, `doi`, `url`, `abstract`, `abstractTruncated`, `noteBody`（笔记条目）, `tags`, `collections`, `children`, `bestAttachment`, `relations`（如 `dc:relation` 等，`targetRef` 仅同库可证时出现）, 以及请求的 `notes`/`annotations`/`attachments`（含 total、returned、items）
 
 ### 示例
 
@@ -148,11 +152,42 @@ zotero_attachment(ref="zotero://user/0/item/ABC123")
 - `citation` 模式自动按 Zotero 的 50 键上限分批请求
 - `bibtex`/`biblatex`/`ris`/`csljson` 每次调用最多 50 条，超出需分批
 - 导出文本永远不会被截断——超过 `maxExportChars`（默认 1M）会报错
+- 单次导出仅允许同一 `library` 的 refs，跨库（`user/0` + `group` 或不同 `group`）会 `INVALID_ARGUMENT` 且 0 次 HTTP
 
 ### 示例
 
 ```
 zotero_export(refs=["zotero://user/0/item/ABC123", "zotero://user/0/item/DEF456"], format="bibtex")
+```
+
+---
+
+## zotero_browse
+
+发现库结构。所有 `kind` 均 `offset/limit` 分页（默认 `20`，受 `maxBrowseResults` 限制 50），返回 `total/returned/nextOffset`。
+
+| 参数      | 类型                                                             | 默认值     | 说明                                                                        |
+| --------- | ---------------------------------------------------------------- | ---------- | --------------------------------------------------------------------------- |
+| `kind`    | `libraries`\|`collections`\|`savedSearches`\|`tags`\|`itemTypes` | —          | 浏览类型                                                                    |
+| `library` | object `{type, id}`                                              | `user/0`   | 目标库（`collections/savedSearches/tags` 有效；`libraries/itemTypes` 忽略） |
+| `q`       | string                                                           | —          | `tags` 时 substring 过滤                                                    |
+| `match`   | `contains`\|`startsWith`                                         | `contains` | `tags` 时 `q` 的匹配方式（需 `q`）                                          |
+| `offset`  | integer                                                          | `0`        | 分页偏移                                                                    |
+| `limit`   | integer                                                          | `20`       | 返回上限                                                                    |
+
+### 输出
+
+- `libraries`：`{library, name}`（个人库固定 `My Library`，群组名来自 `GET /users/0/groups`，`serverId` 在顶层）
+- `collections`：`{ref, name, parentRef?, path: string[], depth}`（单次 `GET /collections` 本地构树，`path` 为根到叶子）
+- `savedSearches`：`{ref, name, conditions?}`（`conditions` 原样透传）
+- `tags`：`{tag, count?}`（`count` 仅服务端提供时）
+- `itemTypes`：`{itemType, localized?}`
+
+### 示例
+
+```
+zotero_browse(kind="collections", library={type:"group", id:42}, limit=20)
+zotero_browse(kind="tags", q="review", match="contains")
 ```
 
 ---

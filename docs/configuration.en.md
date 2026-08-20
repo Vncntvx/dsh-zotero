@@ -25,6 +25,7 @@ All configuration fields are defined in `src/config.ts`, with defaults provided 
 | `maxResponseBytes`     | `16777216`                   | Single API response stream byte limit (16 MiB)                 |
 | `maxExportChars`       | `1000000`                    | Export output hard limit (1M characters)                       |
 | `maxExportRefs`        | `50`                         | Single `zotero_export` ref count limit                         |
+| `maxBrowseResults`     | `50`                         | Single `zotero_browse` max return count                        |
 | `defaultStyle`         | `apa`                        | CSL citation style (must be built into Zotero)                 |
 | `defaultLocale`        | `en-US`                      | CSL citation locale                                            |
 | `webEnabled`           | `true`                       | Whether to enable Zotero session tab in dsh web                |
