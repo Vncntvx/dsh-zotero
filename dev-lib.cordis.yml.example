@@ -1,33 +1,36 @@
-# Hot-reload overlay for the npm-installed dsh. Use with:
-#   cd <checkout-root>/dsh-zotero
+# Hot-reload overlay for npm-installed dsh. Use with:
+#   cd <absolute-path-to-dsh-zotero>  # you run this from the dsh-zotero checkout
 #   dsh web --patch ./dev-lib.cordis.yml --port 3307
+# Note: `dsh` here is the global npm binary. It works from any cwd.
+# For harness source builds you use `pnpm dsh` from ../deepseek-harness instead.
 #
-# Copy this file to dev-lib.cordis.yml and replace <checkout-root> with the
-# parent of this checkout (the deepseek-harness checkout), e.g.
-# /path/to/deepseek-harness.
+# Copy this file to dev-lib.cordis.yml and replace <absolute-path-to-dsh-zotero>
+# with the absolute path to this checkout, e.g. /path/to/dsh-zotero.
+# The sibling harness checkout lives at ../deepseek-harness (local dev layout,
+# hard-coded for this machine).
 #
 # The production web profile disables the loader HMR plugin, so this
 # overlay re-enables it for the dev instance and points its base at this
-# checkout (the loader's own baseUrl is the profile dir, so the base must
-# be explicit). Rebuild with npm run build (or npm run dev) and the plugin
-# hot-swaps without restarting dsh.
-# The profile-installed dsh-zotero (id zotero) is disabled in this instance
-# so the watched copy takes its place; /zotero status and the five tools
-# still work normally.
-# The name must be an absolute path to the BUILT entry (plain Node cannot
-# load src/index.ts). Adjust it if your checkout lives elsewhere.
-# The browser half (the settings card) loads only for rows whose name is a
-# bare package name, so this overlay row has none: to develop the card, use
-# a file: install of this checkout into the profile and npm run dev:client.
+# checkout. The loader's baseUrl is the profile dir, so you must set base
+# explicit. Run npm run build or npm run dev and the plugin hot-swaps
+# without you restarting dsh.
+# This instance disables the profile-installed dsh-zotero (id zotero),
+# so the watched copy takes its place. You still get /zotero status and
+# the five tools.
+# The name must be an absolute path to the BUILT entry. Plain Node cannot
+# load src/index.ts. Adjust the path if your checkout lives elsewhere.
+# This overlay row has no browser half. The browser half loads only for
+# rows whose name is a bare package name. To develop the card, install
+# this checkout into the profile with file: and run npm run dev:client.
 - id: zotero
   disabled: true
 - id: hmr
   disabled: false
   config:
-    base: <checkout-root>/dsh-zotero
+    base: <absolute-path-to-dsh-zotero>
     root:
       - .
 - insert:
     - id: zotero-dev
-      name: <checkout-root>/dsh-zotero/lib/index.js
+      name: <absolute-path-to-dsh-zotero>/lib/index.js
       config: {}

@@ -31,7 +31,7 @@ tests/                  # Unit tests (mock Zotero server)
 ## Install and build
 
 ```sh
-npm install --no-workspaces  # this repo lives inside the deepseek-harness workspace
+npm install                  # sibling checkout at ../deepseek-harness; add --no-workspaces only for a nested copy
 npm test                     # unit tests (mock Zotero server + browser card tests)
 npm run typecheck            # tsc --noEmit (node/test/client projects)
 npm run build                # tsc + esbuild (node lib/ + browser lib/client.js)
@@ -41,7 +41,7 @@ npm run format               # prettier --write
 npm run format:check         # format check
 ```
 
-> This repo is nested inside the deepseek-harness workspace and requires `npm install --no-workspaces`.
+> This repo sits beside `../deepseek-harness` as a local sibling layout. You need `--no-workspaces` only when you nest it inside the harness workspace.
 
 ## Integration tests
 
@@ -50,7 +50,7 @@ npm run test:integration
 # or: ZOTERO_INTEGRATION=1 npx vitest run tests/integration/zotero.integration.spec.ts
 ```
 
-Requires a local Zotero running on `127.0.0.1:23119`.
+Run Zotero locally on `127.0.0.1:23119`.
 
 ## Two-part build
 
@@ -62,8 +62,8 @@ Requires a local Zotero running on `127.0.0.1:23119`.
 ### From dsh source
 
 ```sh
-pnpm install && pnpm run build   # build dsh first
-pnpm dsh web --patch ./dsh-zotero/dev.cordis.yml
+pnpm install && pnpm run build   # build dsh first (run inside ../deepseek-harness)
+pnpm dsh web --patch ../dsh-zotero/dev.cordis.yml  # relative: harness and this repo are siblings
 ```
 
 ### With npm-installed dsh

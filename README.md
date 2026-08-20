@@ -104,7 +104,7 @@ Agent → zotero_export(refs: [1,2,3], format: "bibtex")
 ## 权限与外部副作用
 
 - **网络**：只向 `http://127.0.0.1:23119/api` 发起 HTTP 请求（不跟随重定向），`resolveConfig` 强制 loopback 地址
-- **文件**：只读——`zotero_attachment` 用 `existsSync` 校验 Zotero 返回的附件路径，不写文件系统
+- **文件**：只读，`zotero_attachment` 用 `existsSync` 校验 Zotero 返回的附件路径，不写文件系统
 - **持久化**：唯一写入来自 Settings → Plugins 中的配置卡片，保存到 `$DSH_HOME/settings.yaml` 的 `zotero:` 用户层
 - **无 Shell / native / 后台任务**：插件不执行 shell 命令、不加载 native 模块、不启动常驻进程
 - **重启**：安装或卸载插件后需要重启 dsh 并新建会话；配置修改保存即热更新，无需重启
@@ -124,7 +124,7 @@ Agent → zotero_export(refs: [1,2,3], format: "bibtex")
 ## 开发
 
 ```sh
-npm install --no-workspaces   # 本仓库在 deepseek-harness 工作区内，需要加 --no-workspaces
+npm install                  # 本仓库与 ../deepseek-harness 并列；仅嵌套在 harness 内时需加 --no-workspaces
 npm test                      # 单元测试（vitest，mock Zotero 服务器）
 npm run typecheck             # tsc --noEmit，覆盖 node、test、client 三个项目
 npm run build                 # tsc 编译 node 部分到 lib/，esbuild 编译浏览器部分到 lib/client.js
@@ -132,8 +132,8 @@ npm run dev                   # tsc --watch，host half 热更新
 npm run dev:client            # esbuild --watch，浏览器部分热更新
 ```
 
-构建产物分两部分：`lib/` 是 Node 侧代码，`lib/client.js` 是浏览器侧（settings 卡片 + Zotero tab）。本地开发推荐用 `dev-lib.cordis.yml` overlay 实现完整插件流程，详见 [开发指南](docs/development.md)。
+`lib/` 放 Node 侧代码，`lib/client.js` 放浏览器侧代码（settings 卡片和 Zotero tab）。你用 `dev-lib.cordis.yml` overlay 跑完整插件流程，见[开发指南](docs/development.md)。本仓库与 `../deepseek-harness` 并列，属本地暂存布局。
 
 ## 许可证
 
-[MIT](./LICENSE) — 自由使用、修改和分发。
+[MIT](./LICENSE)：自由使用、修改和分发。
