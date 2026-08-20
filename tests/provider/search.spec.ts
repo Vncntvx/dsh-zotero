@@ -407,7 +407,7 @@ describe('search: note-content scan', () => {
     data: { itemType: 'note', note: 'something unrelated entirely' },
   }
 
-  it('merges body-matched notes into the first page and counts them in total', async () => {
+  it('lists body-matched notes as a first-page supplement beside the paged results', async () => {
     mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers, search) => {
       if (search.get('itemType') === 'note') helpers.json([NOTE_HIT, NOTE_OTHER])
       else helpers.json([ITEM], { 'Total-Results': '1', 'Zotero-Server-ID': 'S1' })
@@ -415,13 +415,17 @@ describe('search: note-content scan', () => {
     const result = await provider.search(request({ query: 'cascade infrastructure' }))
     expect(result.items.map((entry) => entry.ref)).toEqual([
       'zotero://user/0/item/ABCD1234?server=S1',
-      'zotero://user/0/item/NOTE1111?server=S1',
     ])
-    // The paged total stays API-driven (the count `offset` walks); the merged
-    // note is reported separately so pagination semantics stay exact.
+    // The paged fields describe the primary hits only; the note match rides
+    // in `supplemental` so pagination semantics stay exact.
     expect(result.total).toBe(1)
-    expect(result.noteMatches).toBe(1)
-    expect(result.returned).toBe(2)
+    expect(result.returned).toBe(1)
+    expect(result.supplemental).toEqual({
+      kind: 'noteBody',
+      items: [expect.objectContaining({ ref: 'zotero://user/0/item/NOTE1111?server=S1' })],
+      scanned: 2,
+      truncated: false,
+    })
     expect(result.nextOffset).toBeUndefined()
     expect(mock.requests[1]!.search.get('itemType')).toBe('note')
     expect(mock.requests[1]!.search.get('limit')).toBe('100')
@@ -442,6 +446,7 @@ describe('search: note-content scan', () => {
     expect(result.items).toHaveLength(1)
     expect(result.items[0]!.title).toBe('数据计算 notes about cascade risk')
     expect(result.total).toBe(1)
+    expect(result.supplemental).toBeUndefined()
   })
 
   it('skips the scan for later pages, saved searches, empty queries, and non-note type filters', async () => {
@@ -507,12 +512,75 @@ describe('search: note-content scan', () => {
         tags: ['reviewed'],
       }),
     )
-    expect(result.items.map((entry) => entry.ref)).toEqual([
+    expect(result.items).toEqual([])
+    expect(result.supplemental?.items.map((entry) => entry.ref)).toEqual([
       'zotero://user/0/item/NOTE1111?server=S1',
     ])
     expect(result.total).toBe(0)
-    expect(result.noteMatches).toBe(1)
-    expect(result.returned).toBe(1)
+    expect(result.returned).toBe(0)
+  })
+
+  it('resolves child-note collection membership through the parent item', async () => {
+    mock.route('GET', '/api/users/0/collections', (req, res, helpers) =>
+      helpers.json(COLLECTIONS, { 'Zotero-Server-ID': 'S1' }),
+    )
+    mock.route('GET', '/api/users/0/collections/COLL1234/items/top', (req, res, helpers) =>
+      helpers.json([], { 'Total-Results': '0', 'Zotero-Server-ID': 'S1' }),
+    )
+    // Zotero child notes carry no `collections` of their own — membership
+    // belongs to the parent bibliographic item.
+    const childIn = {
+      key: 'NOTE1111',
+      data: {
+        itemType: 'note',
+        note: 'cascade risk note',
+        parentItem: 'PARE1111',
+        collections: [],
+      },
+    }
+    const childOtherCollection = {
+      key: 'NOTE2222',
+      data: {
+        itemType: 'note',
+        note: 'cascade risk note',
+        parentItem: 'PARE2222',
+        collections: [],
+      },
+    }
+    const childParentMissing = {
+      key: 'NOTE3333',
+      data: {
+        itemType: 'note',
+        note: 'cascade risk note',
+        parentItem: 'PARE3333',
+        collections: [],
+      },
+    }
+    const standaloneIn = {
+      key: 'NOTE4444',
+      data: { itemType: 'note', note: 'cascade risk note', collections: ['COLL1234'] },
+    }
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers, search) => {
+      if (search.get('itemType') === 'note')
+        helpers.json([childIn, childOtherCollection, childParentMissing, standaloneIn])
+      else if (search.get('itemKey') !== null) {
+        // PARE3333 stays absent: an unfetchable parent (e.g. trashed) fails closed.
+        helpers.json([
+          { key: 'PARE1111', data: { collections: ['COLL1234'] } },
+          { key: 'PARE2222', data: { collections: ['OTHER123'] } },
+        ])
+      } else helpers.json([], { 'Total-Results': '0', 'Zotero-Server-ID': 'S1' })
+    })
+    const result = await provider.search(
+      request({ query: 'cascade', scope: { kind: 'collection', refOrName: 'LLM Papers' } }),
+    )
+    expect(result.items).toEqual([])
+    expect(result.supplemental?.items.map((entry) => entry.ref)).toEqual([
+      'zotero://user/0/item/NOTE1111?server=S1',
+      'zotero://user/0/item/NOTE4444?server=S1',
+    ])
+    const parentFetch = mock.requests.find((entry) => entry.search.get('itemKey') !== null)
+    expect(parentFetch?.search.get('itemKey')).toBe('PARE1111,PARE2222,PARE3333')
   })
 
   it('stops the scan at the configured record cap', async () => {
@@ -527,11 +595,13 @@ describe('search: note-content scan', () => {
       else helpers.json([], { 'Total-Results': '0' })
     })
     const result = await capped.search(request({ query: 'cascade' }))
-    expect(result.items).toHaveLength(2)
-    expect(result.items.map((entry) => entry.ref)).toEqual([
+    expect(result.items).toEqual([])
+    expect(result.supplemental?.items.map((entry) => entry.ref)).toEqual([
       'zotero://user/0/item/NOTE1111',
       'zotero://user/0/item/NOTE2222',
     ])
+    expect(result.supplemental?.scanned).toBe(2)
+    expect(result.supplemental?.truncated).toBe(true)
     expect(mock.requests[1]!.search.get('limit')).toBe('2')
   })
 
@@ -622,7 +692,9 @@ describe('search: note-content scan', () => {
       else helpers.json([], { 'Total-Results': '0' })
     })
     const result = await provider.search(request({ query: 'cascade' }))
-    expect(result.items.map((entry) => entry.ref)).toEqual(['zotero://user/0/item/NOTE1111'])
+    expect(result.supplemental?.items.map((entry) => entry.ref)).toEqual([
+      'zotero://user/0/item/NOTE1111',
+    ])
   })
 
   it('scans note bodies when note is among the requested item types', async () => {
@@ -636,6 +708,8 @@ describe('search: note-content scan', () => {
     )
     expect(result.items.map((entry) => entry.ref)).toEqual([
       'zotero://user/0/item/ABCD1234?server=S1',
+    ])
+    expect(result.supplemental?.items.map((entry) => entry.ref)).toEqual([
       'zotero://user/0/item/NOTE1111?server=S1',
     ])
   })
@@ -648,9 +722,9 @@ describe('search: note-content scan', () => {
     const punctuated = await provider.search(request({ query: '---' }))
     const emoted = await provider.search(request({ query: '👾👾' }))
     expect(punctuated.items).toEqual([])
-    expect(punctuated.noteMatches).toBeUndefined()
+    expect(punctuated.supplemental).toBeUndefined()
     expect(emoted.items).toEqual([])
-    expect(emoted.noteMatches).toBeUndefined()
+    expect(emoted.supplemental).toBeUndefined()
     // A query with no tokens would vacuously "match" every scanned note; the
     // scan stays off instead of flooding the page with irrelevant notes.
     expect(mock.requests.filter((entry) => entry.search.get('itemType') === 'note')).toEqual([])
@@ -663,14 +737,14 @@ describe('search: note-content scan', () => {
     })
     const result = await provider.search(request({ query: 'cascade', limit: 3 }))
     expect(result.items).toHaveLength(3)
-    expect(result.noteMatches).toBeUndefined()
+    expect(result.supplemental).toBeUndefined()
     expect(result.returned).toBe(3)
     expect(result.total).toBe(3)
     // headroom == 0 early return: no note scan request at all (fix for review 473-485)
     expect(mock.requests.filter((entry) => entry.search.get('itemType') === 'note')).toHaveLength(0)
   })
 
-  it('merges note matches only up to the remaining limit headroom', async () => {
+  it('caps note matches at the remaining limit headroom beside a partial primary page', async () => {
     const NOTE_HIT_2 = {
       key: 'NOTE2222',
       data: { itemType: 'note', note: 'cascade chains in infrastructure too' },
@@ -684,13 +758,12 @@ describe('search: note-content scan', () => {
       else helpers.json([ITEM], { 'Total-Results': '1' })
     })
     const result = await provider.search(request({ query: 'cascade', limit: 3 }))
-    expect(result.items.map((entry) => entry.ref)).toEqual([
-      'zotero://user/0/item/ABCD1234',
+    expect(result.items.map((entry) => entry.ref)).toEqual(['zotero://user/0/item/ABCD1234'])
+    expect(result.supplemental?.items.map((entry) => entry.ref)).toEqual([
       'zotero://user/0/item/NOTE1111',
       'zotero://user/0/item/NOTE2222',
     ])
-    expect(result.noteMatches).toBe(2)
-    expect(result.returned).toBe(3)
+    expect(result.returned).toBe(1)
     expect(result.total).toBe(1)
   })
 

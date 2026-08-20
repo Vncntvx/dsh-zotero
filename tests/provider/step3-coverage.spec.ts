@@ -236,9 +236,14 @@ describe('step3: browseSavedSearches single GET', () => {
       { key: 'SRCH0001', data: { key: 'SRCH0001', name: 'A', conditions: [{ a: 1 }] } },
       { key: 'SRCH0002', data: { key: 'SRCH0002', name: 'B' } },
     ]
-    harness.mock.route('GET', '/api/users/0/searches', (req, res, helpers) =>
-      helpers.json(searches, { 'Zotero-Server-ID': 'S2' }),
-    )
+    harness.mock.route('GET', '/api/users/0/searches', (req, res, helpers, search) => {
+      const start = Number(search.get('start') ?? '0')
+      const limit = Number(search.get('limit') ?? '10')
+      helpers.json(searches.slice(start, start + limit), {
+        'Total-Results': String(searches.length),
+        'Zotero-Server-ID': 'S2',
+      })
+    })
     const r = await harness.provider.browse({ kind: 'savedSearches', offset: 0, limit: 10 })
     expect(
       harness.mock.requests.filter((x) => x.pathname === '/api/users/0/searches'),
@@ -561,6 +566,15 @@ describe('step3: remaining branches', () => {
         maxBrowseResults: 50,
       }),
     ).toThrow()
+    // unsupported kind and non-integer library id
+    expect(() =>
+      buildRequest({ kind: 'shelves', offset: 0, limit: 5 } as never, { maxBrowseResults: 50 }),
+    ).toThrow('Unsupported browse kind')
+    const { parseLibrary } = await import('../../src/tools/browse.js')
+    expect(() => parseLibrary({ type: 'user', id: 0.5 })).toThrow('library.id must be integer')
+    expect(() => parseLibrary({ type: 'shelves', id: 1 })).toThrow(
+      'library.type must be user or group',
+    )
     // search buildRequest branches: tagMatch invalid, includeTrashed with collection, library type invalid, id not integer, user id non-zero, group id <=0
     const cfg = { maxSearchResults: 20 } as unknown as import('../../src/config.js').ResolvedConfig
     expect(() => buildSearchRequest({ tagMatch: 'bad' } as never, cfg)).toThrow()
@@ -671,10 +685,10 @@ describe('step3: remaining branches', () => {
     const r2 = await h.provider.search(
       request({ query: 'cascade', tags: ['a'], tagMatch: 'any', limit: 5 }),
     )
-    expect(r2.noteMatches).toBeDefined()
+    expect(r2.supplemental).toBeDefined()
     // excludeTags: note has b, exclude b => should not match
     const r3 = await h.provider.search(request({ query: 'cascade', excludeTags: ['b'], limit: 5 }))
-    expect(r3.noteMatches).toBeUndefined()
+    expect(r3.supplemental).toBeUndefined()
     await teardownProvider(h)
   })
 })

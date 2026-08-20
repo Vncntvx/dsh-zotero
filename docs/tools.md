@@ -30,11 +30,11 @@ dsh-zotero 注册 6 个工具，通过本地 Zotero HTTP API 操作用户的文�
 
 ### 输出
 
-`scope`（`library` scope 含 `library` 字段，便于分页回放）, `items`（ref, title, creatorSummary, year, itemType, bestAttachmentRef, bestAttachmentType）, `total`, `offset`, `returned`, `nextOffset`, `noteMatches`
+`scope`（`library` scope 含 `library` 字段，便于分页回放）, `items`（仅主结果：ref, title, creatorSummary, year, itemType, bestAttachmentRef, bestAttachmentType）, `total`, `offset`, `returned`, `nextOffset`, `supplemental`（可选：`{kind:"noteBody", items, scanned, truncated}`）
 
 ### 注意事项
 
-首次查询（offset 0）时，客户端扫描笔记正文并合并到结果中（最多 `limit` 条）。`noteMatches` 报告其中来自笔记扫描的数量，这部分不计入分页总数。
+首次查询（offset 0）且 scope 为 `library`/`collection` 时（`savedSearch` 不扫描），客户端扫描笔记正文，命中的笔记列入 `supplemental.items`（按 dateModified 降序、最多填满 `limit` 剩余额度、受 `maxNoteScanRecords` 限制）。`items`/`total`/`returned`/`nextOffset` 只描述主结果集合，`returned` 永远不会大于 `total`；collection scope 下子笔记通过父条目判定归属（子笔记自身不携带 collections）。`tagMatch` 必须与 `tags` 同现，否则报参数错误。
 
 ### 示例
 
@@ -178,10 +178,12 @@ zotero_export(refs=["zotero://user/0/item/ABC123", "zotero://user/0/item/DEF456"
 ### 输出
 
 - `libraries`：`{library, name}`（个人库固定 `My Library`，群组名来自 `GET /users/0/groups`，`serverId` 在顶层）
-- `collections`：`{ref, name, parentRef?, path: string[], depth}`（单次 `GET /collections` 本地构树，`path` 为根到叶子）
-- `savedSearches`：`{ref, name, conditions?}`（`conditions` 原样透传）
-- `tags`：`{tag, count?}`（`count` 仅服务端提供时）
+- `collections`：`{ref, name, parentRef?, path: string[], depth}`（完整集合图共享 30s TTL 快照——面包屑需要全部祖先；`path` 为根到叶子）
+- `savedSearches`：`{ref, name, conditions?}`（`conditions` 原样透传；服务器端 `start/limit` 分页，缺 `Total-Results` 头则 fail-closed）
+- `tags`：`{tag, count?}`（`count` 仅服务端提供时；服务器端分页）
 - `itemTypes`：`{itemType, localized?}`
+
+各 `kind` 的行结构在工具 output schema 中以判别式 `oneOf` 声明；`collections` 渲染为 `A / B / C — ref` 面包屑，`tags` 带 `— N items`，`savedSearches` 带 `— N conditions`。`q` 提供时必须非空白，否则报参数错误。
 
 ### 示例
 

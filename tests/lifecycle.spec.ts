@@ -76,8 +76,8 @@ function invocation(
     commandId: CommandId('test-command'),
     agent: {} as never,
     rawInput,
-    attachments: [],
     signal,
+    attachments: [],
   }
 }
 
@@ -213,7 +213,7 @@ describe('prompt section', () => {
     expect(section!.text).toContain('zotero_retrieve passages up to 4')
     expect(section!.text).toContain('zotero_export refs up to 50')
     expect(section!.text).toContain('Exceeding a cap errors')
-    expect(section!.text).toContain('noteMatches')
+    expect(section!.text).toContain('supplemental')
   })
 
   it('tracks config edits in the assembled cap values', async () => {

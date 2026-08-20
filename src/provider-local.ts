@@ -10,10 +10,9 @@
  * search (offset 0) may fill unused result slots after Zotero's primary
  * search results with client-side note-body matches (capped by
  * `maxNoteScanRecords`; collection scopes filter by membership). They do not
- * compete with or displace a full primary result page. The merged notes are
- * reported in `noteMatches` and are not part of the paged `total`, so
- * pagination stays API-driven.
- * // TODO(search-ranking): merge primary and note-body candidates under an explicit ranking/pagination contract.
+ * compete with or displace a full primary result page. The matches are listed
+ * in `supplemental` — a separate collection from the paged `items`/`total`,
+ * so pagination stays API-driven and the primary sort stays exact.
  * @module dsh-zotero/provider-local
  */
 
@@ -99,9 +98,11 @@ import type {
   ZoteroResolvedScope,
   ZoteroRetrieveRequest,
   ZoteroRetrieveResult,
+  ZoteroSearchItem,
   ZoteroSearchRequest,
   ZoteroSearchResult,
   ZoteroSearchScope,
+  ZoteroSearchSupplement,
   ZoteroStatus,
 } from './types.js'
 
@@ -436,11 +437,11 @@ export class LocalApiProvider implements ZoteroProvider {
         ? Number(headerTotal)
         : items.length
     // Zotero's index never searches note bodies, so the first page of a
-    // queried search merges client-side note-content matches up to the
-    // requested limit. Pagination stays API-driven: later pages skip the
-    // scan, and the merged count is reported separately rather than folded
-    // into the paged total (the API total is the count `offset` walks).
-    let noteMatches: number | undefined
+    // queried search lists client-side note-content matches in `supplemental`
+    // — a separate list beside the paged primary results, up to the primary
+    // page's unused headroom. Pagination stays API-driven: later pages skip
+    // the scan, and the paged fields never fold in supplement counts.
+    let supplemental: ZoteroSearchSupplement | undefined
     const query = request.query?.trim()
     if (query !== undefined && query !== '' && this.shouldScanNotes(request, scope.resolved)) {
       const terms = tokenize(query.toLowerCase())
@@ -454,22 +455,57 @@ export class LocalApiProvider implements ZoteroProvider {
             .filter((key): key is string => key !== undefined),
         )
         // The API rows already fill `limit`; note matches only fill the
-        // remaining headroom, so `returned` never exceeds the limit.
+        // remaining headroom, so the supplement never exceeds the limit.
         const headroom = request.limit - rows.length
         if (headroom <= 0) {
           // Fail-closed early return: no headroom means no note scan (review 473-485)
         } else {
-          let merged = 0
-          for (const row of await this.fetchNoteRows(scope, request, signal)) {
-            if (merged >= headroom) break
+          const scan = await this.fetchNoteRows(scope, request, signal)
+          // Matched rows keep scan order; child notes wait here for the
+          // parent-membership resolution below before they can join the page.
+          const matched: { row: unknown; key: string; parentKey?: string }[] = []
+          for (const row of scan.rows) {
+            if (matched.length >= headroom) break
             const key = asString(asRecord(row)?.key)
             if (key === undefined || seen.has(key)) continue
             if (!this.noteRowMatches(row, terms, request, scope.collectionKey)) continue
-            seen.add(key)
-            items.push(normalizeSearchItem(row, ctxForSearch))
-            merged += 1
+            const parentKey =
+              scope.collectionKey === undefined
+                ? undefined
+                : asString(asRecord(asRecord(row)?.data)?.parentItem)
+            matched.push({ row, key, ...(parentKey !== undefined ? { parentKey } : {}) })
           }
-          if (merged > 0) noteMatches = merged
+          let memberships: Map<string, Set<string>> | undefined
+          const pendingParents = matched
+            .map((entry) => entry.parentKey)
+            .filter((parentKey): parentKey is string => parentKey !== undefined)
+          if (pendingParents.length > 0) {
+            memberships = await this.fetchParentCollections(
+              libraryForItems,
+              [...new Set(pendingParents)],
+              scope.serverId,
+              signal,
+            )
+          }
+          const supplementItems: ZoteroSearchItem[] = []
+          for (const entry of matched) {
+            if (
+              entry.parentKey !== undefined &&
+              !memberships?.get(entry.parentKey)?.has(scope.collectionKey!)
+            ) {
+              continue
+            }
+            seen.add(entry.key)
+            supplementItems.push(normalizeSearchItem(entry.row, ctxForSearch))
+          }
+          if (supplementItems.length > 0) {
+            supplemental = {
+              kind: 'noteBody',
+              items: supplementItems,
+              scanned: scan.rows.length,
+              truncated: scan.truncated,
+            }
+          }
         }
       }
     }
@@ -484,7 +520,7 @@ export class LocalApiProvider implements ZoteroProvider {
       offset: request.offset,
       returned: items.length,
     }
-    if (noteMatches !== undefined) result.noteMatches = noteMatches
+    if (supplemental !== undefined) result.supplemental = supplemental
     if (nextOffset !== undefined) result.nextOffset = nextOffset
     return result
   }
@@ -506,13 +542,16 @@ export class LocalApiProvider implements ZoteroProvider {
    * stopping at `maxNoteScanRecords`. The provider uses a 100-row batch as a
    * bounded scanning policy; the Local API itself has no default/maximum
    * limit for local requests, so fewer rows than requested reliably means EOF.
-   * Note scan now uses `/{libraryPrefix}/items` (not `/items/top`) so child notes are included.
+   * Note scan uses `/{libraryPrefix}/items` (not `/items/top`) so child notes
+   * are included. `truncated` is true when the cap — not EOF — ended the
+   * scan (the only way to leave the loop at exactly the cap is a full final
+   * batch, so more notes may exist).
    */
   private async fetchNoteRows(
     scope: ResolvedScopeResult,
     request: ZoteroSearchRequest,
     signal: AbortSignal | undefined,
-  ): Promise<readonly unknown[]> {
+  ): Promise<{ rows: readonly unknown[]; truncated: boolean }> {
     const libraryForScan: SupportedLocalLibrary =
       scope.resolved.kind === 'library'
         ? scope.resolved.library
@@ -546,13 +585,45 @@ export class LocalApiProvider implements ZoteroProvider {
       if (rows.length < wanted) break
       start += rows.length
     }
-    return out
+    return { rows: out, truncated: out.length >= this.limits.maxNoteScanRecords }
+  }
+
+  /**
+   * Resolve collection membership for child notes through their parents in
+   * one batched request: child notes belong to a collection only via the
+   * parent bibliographic item. A parent missing from the response (e.g.
+   * trashed without `includeTrashed`) fails closed as a non-member.
+   */
+  private async fetchParentCollections(
+    library: SupportedLocalLibrary,
+    parentKeys: readonly string[],
+    serverId: string | undefined,
+    signal: AbortSignal | undefined,
+  ): Promise<Map<string, Set<string>>> {
+    const params = new URLSearchParams()
+    params.set('itemKey', parentKeys.join(','))
+    const { json } = await this.client.getJson<unknown>(`${libraryPrefix(library)}/items`, params, {
+      signal,
+      serverId,
+    })
+    const memberships = new Map<string, Set<string>>()
+    for (const row of Array.isArray(json) ? json : []) {
+      const key = asString(asRecord(row)?.key)
+      if (key === undefined) continue
+      memberships.set(key, new Set(collectionKeysOf(row)))
+    }
+    return memberships
   }
 
   /**
    * Whether a note row satisfies the body scan: every query token appears
-   * in the note text, plus the scope's collection and the literal tag
-   * filters when present. Mirrors server tag semantics: tagMatch, excludeTags, includeTrashed.
+   * in the note text, plus the literal tag filters when present. Mirrors
+   * server tag semantics: tagMatch, excludeTags, includeTrashed.
+   *
+   * Collection scope checks membership on the note itself only for
+   * standalone notes — Zotero child notes carry no `collections` of their
+   * own (membership belongs to the parent item), so they pass here and the
+   * caller resolves membership through `fetchParentCollections`.
    */
   private noteRowMatches(
     row: unknown,
@@ -562,7 +633,9 @@ export class LocalApiProvider implements ZoteroProvider {
   ): boolean {
     const data = asRecord(asRecord(row)?.data)
     if (asString(data?.itemType) !== 'note') return false
-    if (collectionKey !== undefined && !collectionKeysOf(row).includes(collectionKey)) return false
+    if (collectionKey !== undefined && asString(data?.parentItem) === undefined) {
+      if (!collectionKeysOf(row).includes(collectionKey)) return false
+    }
     const tags = request.tags
     const excludeTags = request.excludeTags
     const tagMatch = request.tagMatch ?? 'all'
@@ -1514,34 +1587,19 @@ export class LocalApiProvider implements ZoteroProvider {
     signal?: AbortSignal,
   ): Promise<ZoteroBrowseResult> {
     const library: SupportedLocalLibrary = request.library ?? PERSONAL_LIBRARY
-    const prefix = libraryPrefix(library)
-    // Single fresh GET: derives both entries and detailed from same raw, updates cache, eliminates double GET
-    const { json, headers } = await this.client.getJson<unknown>(
-      `${prefix}/collections`,
-      undefined,
-      { signal },
-    )
-    const serverId = headers.get('zotero-server-id') ?? undefined
-    const rawRows = Array.isArray(json) ? json : []
-    const entries: ScopeNameEntry[] = rawRows.map((row) => normalizeScopeEntry(row))
-    const cacheKeyStr = cacheKey(library, 'collections')
-    const listing: ScopeListing =
-      serverId === undefined
-        ? { entries, fetchedAt: Date.now() }
-        : { entries, serverId, fetchedAt: Date.now() }
-    this.scopeListingCache.set(cacheKeyStr, listing)
-
-    const byKey = new Map(entries.map((e) => [e.key, e.name] as const))
+    // Breadcrumbs need the whole ancestor chain, so a collections browse
+    // cannot page server-side. It shares the TTL snapshot with scope-name
+    // resolution instead: at most one full graph fetch per window, and every
+    // later browse (or name lookup) serves from the cached graph. The
+    // streamed-response byte cap remains the hard bound on the fetch itself.
+    const listing = await this.scopeListingOf('collections', library, undefined, signal)
+    const serverId = listing.serverId
     const detailed = new Map<string, { name: string; parentKey?: string }>()
-    for (const row of rawRows) {
-      const rec = asRecord(row)
-      const key = asString(rec?.key)
-      if (key === undefined || !isObjectKey(key)) continue
-      const data = asRecord(rec?.data)
-      const name = asString(data?.name) ?? byKey.get(key) ?? ''
-      const parent = asString(data?.parentCollection)
-      const parentKey = parent !== undefined && isObjectKey(parent) ? parent : undefined
-      detailed.set(key, { name, parentKey })
+    for (const entry of listing.entries) {
+      detailed.set(entry.key, {
+        name: entry.name,
+        ...(entry.parentKey !== undefined ? { parentKey: entry.parentKey } : {}),
+      })
     }
 
     const items: ZoteroCollectionInfo[] = []
@@ -1600,19 +1658,32 @@ export class LocalApiProvider implements ZoteroProvider {
   ): Promise<ZoteroBrowseResult> {
     const library: SupportedLocalLibrary = request.library ?? PERSONAL_LIBRARY
     const prefix = libraryPrefix(library)
-    const { json, headers } = await this.client.getJson<unknown>(`${prefix}/searches`, undefined, {
+    // Browsing pages server-side and reads only its own window; scope-name
+    // resolution keeps the full-listing path under the TTL cache. The two
+    // acquisition strategies stay separate so a browse page never has to
+    // fetch the whole library just to show `limit` rows.
+    const params = new URLSearchParams()
+    params.set('start', String(request.offset))
+    params.set('limit', String(request.limit))
+    const { json, headers } = await this.client.getJson<unknown>(`${prefix}/searches`, params, {
       signal,
     })
     const serverId = headers.get('zotero-server-id') ?? undefined
     const rawRows = Array.isArray(json) ? json : []
+    const headerTotal = headers.get('total-results') ?? headers.get('Total-Results')
+    if (
+      headerTotal === null ||
+      headerTotal === undefined ||
+      headerTotal.trim() === '' ||
+      !/^\d+$/.test(headerTotal.trim())
+    ) {
+      throw new ZoteroError(
+        'Zotero did not return a valid Total-Results header for saved searches',
+        ZOTERO_UNEXPECTED,
+      )
+    }
+    const total = Number(headerTotal.trim())
     const entries: ScopeNameEntry[] = rawRows.map((row) => normalizeScopeEntry(row))
-    const cacheKeyStr = cacheKey(library, 'searches')
-    const listing: ScopeListing =
-      serverId === undefined
-        ? { entries, fetchedAt: Date.now() }
-        : { entries, serverId, fetchedAt: Date.now() }
-    this.scopeListingCache.set(cacheKeyStr, listing)
-
     const condByKey = new Map<string, unknown>()
     for (const row of rawRows) {
       const rec = asRecord(row)
@@ -1629,18 +1700,16 @@ export class LocalApiProvider implements ZoteroProvider {
         ...(condByKey.has(entry.key) ? { conditions: condByKey.get(entry.key) } : {}),
       }))
       .sort((a, b) => a.name.localeCompare(b.name))
-    const total = items.length
-    const slice = items.slice(request.offset, request.offset + request.limit)
     return {
       kind: 'savedSearches',
       library,
       ...(serverId ? { serverId } : {}),
-      items: slice,
+      items,
       total,
       offset: request.offset,
-      returned: slice.length,
-      ...(request.offset + slice.length < total
-        ? { nextOffset: request.offset + slice.length }
+      returned: items.length,
+      ...(request.offset + items.length < total
+        ? { nextOffset: request.offset + items.length }
         : {}),
     }
   }

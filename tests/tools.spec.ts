@@ -80,23 +80,61 @@ describe('zotero_search tool', () => {
     )
   })
 
-  it('renders the merged-note notice only when noteMatches is present and positive', () => {
+  it('renders the supplemental note list only when note-body matches exist', () => {
+    const noteRow = {
+      ref: 'zotero://user/0/item/NOTE1111',
+      title: 'cascade note',
+      creatorSummary: '',
+      itemType: 'note',
+    }
     const value = {
       scope: { kind: 'library' as const, library: { type: 'user' as const, id: 0 } },
       items: [],
       total: 42,
       offset: 0,
       returned: 2,
-      noteMatches: 2,
     }
-    const withNotes = renderSearch({}, value)
-    expect((withNotes[0] as { text: string }).text).toContain(
-      '2 of the listed hits came from the client-side note-body scan',
+    const withNotes = renderSearch(
+      {},
+      {
+        ...value,
+        supplemental: {
+          kind: 'noteBody' as const,
+          items: [noteRow, noteRow],
+          scanned: 5,
+          truncated: true,
+        },
+      },
     )
-    const withoutNotes = renderSearch({}, { ...value, noteMatches: undefined })
-    expect((withoutNotes[0] as { text: string }).text).not.toContain('note-body scan')
-    const zeroNotes = renderSearch({}, { ...value, noteMatches: 0 })
-    expect((zeroNotes[0] as { text: string }).text).not.toContain('note-body scan')
+    expect((withNotes[0] as { text: string }).text).toContain(
+      '+2 note-body matches (scanned 5+ notes, ordered by dateModified desc, outside the paged total):',
+    )
+    const completeScan = renderSearch(
+      {},
+      {
+        ...value,
+        supplemental: {
+          kind: 'noteBody' as const,
+          items: [{ ...noteRow, title: 'settled note', creatorSummary: 'Dao, Tri', year: 2024 }],
+          scanned: 5,
+          truncated: false,
+        },
+      },
+    )
+    expect((completeScan[0] as { text: string }).text).toContain(
+      '+1 note-body matches (scanned 5 notes, ordered by dateModified desc, outside the paged total):',
+    )
+    expect((completeScan[0] as { text: string }).text).toContain(' — Dao, Tri')
+    const withoutNotes = renderSearch({}, value)
+    expect((withoutNotes[0] as { text: string }).text).not.toContain('note-body')
+    const emptySupplement = renderSearch(
+      {},
+      {
+        ...value,
+        supplemental: { kind: 'noteBody' as const, items: [], scanned: 3, truncated: false },
+      },
+    )
+    expect((emptySupplement[0] as { text: string }).text).not.toContain('note-body')
   })
 
   it('chains a resolved scope ref into the next page without re-resolving names', async () => {
@@ -154,6 +192,16 @@ describe('zotero_search tool', () => {
     expect((result.content[0] as { text: string }).text).toContain(
       'limit must be an integer between 1 and 20',
     )
+  })
+
+  it('rejects tagMatch without a tag filter', async () => {
+    const result = await runTool('zotero_search', { query: 'x', tagMatch: 'any' })
+    expect(result.isError).toBe(true)
+    if (!result.isError) throw new Error('unreachable')
+    expect((result.content[0] as { text: string }).text).toContain(
+      'tagMatch requires tags; it has no effect without a tag filter',
+    )
+    expect(mock.requests).toEqual([])
   })
 
   it('rejects an empty scope refOrName and malformed item types', async () => {
@@ -1164,6 +1212,13 @@ describe('tool presentation', () => {
       title: 'Export Zotero citations',
       rawInput: '1 refs · bibliography',
     })
+    expect(definition('zotero_browse').presentCall!({ kind: 'collections' })).toEqual({
+      card: 'generic',
+      kind: 'search',
+      title: 'Browse Zotero collections',
+      rawInput: 'collections',
+    })
+    expect(definition('zotero_browse').isConcurrencySafe?.({ kind: 'tags' })).toBe(true)
   })
 
   it('projects replayable search page facts and renders the completed card', () => {
@@ -1219,6 +1274,15 @@ describe('tool presentation', () => {
     expect(tool.presentResult!({}, result)).toEqual({
       card: 'generic',
       title: 'Zotero search: found 10 of 42 results',
+    })
+    const withNotes: ToolResult = {
+      content: [{ type: 'text', text: 'x' }],
+      isError: false,
+      meta: { returned: 10, total: 42, nextOffset: null, noteMatches: 3 },
+    }
+    expect(tool.presentResult!({}, withNotes)).toEqual({
+      card: 'generic',
+      title: 'Zotero search: found 10 of 42 results (+3 note matches)',
     })
   })
 

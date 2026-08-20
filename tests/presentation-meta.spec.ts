@@ -91,10 +91,20 @@ describe('projectSearchMeta', () => {
     expect(projectSearchMeta(searchResult(0)).nextOffset).toBeNull()
   })
 
-  it('passes the merged note count through and defaults it to null', () => {
-    expect(
-      projectSearchMeta({ ...searchResult(1), noteMatches: 3 } as ZoteroSearchResult).noteMatches,
-    ).toBe(3)
+  it('appends supplemental note rows to the bounded list and reports their count', () => {
+    const noteRow = {
+      ref: 'zotero://user/0/item/NOTE1111',
+      title: 'note',
+      creatorSummary: '',
+      itemType: 'note',
+    }
+    const meta = projectSearchMeta({
+      ...searchResult(1),
+      supplemental: { items: [noteRow, noteRow] },
+    } as ZoteroSearchResult)
+    expect(meta.noteMatches).toBe(2)
+    expect(meta.items).toHaveLength(3)
+    expect(meta.omitted).toBe(0)
     expect(projectSearchMeta(searchResult(0)).noteMatches).toBeNull()
   })
 

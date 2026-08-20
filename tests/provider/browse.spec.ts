@@ -135,6 +135,26 @@ describe('browse: collections', () => {
     expect(r.returned).toBe(2)
     expect(r.nextOffset).toBe(3)
   })
+  it('serves repeat browses from the TTL snapshot without a second full fetch', async () => {
+    const cols = [
+      { key: 'COLL0001', data: { key: 'COLL0001', name: 'Root' } },
+      { key: 'COLL0002', data: { key: 'COLL0002', name: 'Child', parentCollection: 'COLL0001' } },
+    ]
+    let fetches = 0
+    mock.route('GET', '/api/users/0/collections', (req, res, helpers) => {
+      fetches += 1
+      helpers.json(cols, { 'Zotero-Server-ID': 'S1' })
+    })
+    const first = await provider.browse({ kind: 'collections', offset: 0, limit: 1 })
+    const second = await provider.browse({ kind: 'collections', offset: 1, limit: 1 })
+    expect(fetches).toBe(1)
+    expect(first.total).toBe(2)
+    expect(second.items).toHaveLength(1)
+    // The snapshot still yields full breadcrumbs on the cached pass.
+    expect((second.items as unknown as Array<{ path: string[] }>).map((item) => item.path)).toEqual(
+      [['Root', 'Child']],
+    )
+  })
   it('supports group library', async () => {
     const cols = [{ key: 'COLL0001', data: { key: 'COLL0001', name: 'G Root' } }]
     mock.route('GET', '/api/groups/42/collections', (req, res, helpers) =>
@@ -151,21 +171,51 @@ describe('browse: collections', () => {
 })
 
 describe('browse: savedSearches', () => {
-  it('returns saved searches with conditions', async () => {
-    const searches = [
-      {
-        key: 'SRCH0001',
-        data: { key: 'SRCH0001', name: 'Unread', conditions: [{ condition: 'unread' }] },
-      },
-      { key: 'SRCH0002', data: { key: 'SRCH0002', name: 'Recent' } },
-    ]
-    mock.route('GET', '/api/users/0/searches', (req, res, helpers) => helpers.json(searches))
-    const result = await provider.browse({ kind: 'savedSearches', offset: 0, limit: 10 })
-    expect(result.total).toBe(2)
+  const searches = [
+    {
+      key: 'SRCH0001',
+      data: { key: 'SRCH0001', name: 'Unread', conditions: [{ condition: 'unread' }] },
+    },
+    { key: 'SRCH0002', data: { key: 'SRCH0002', name: 'Recent' } },
+    { key: 'SRCH0003', data: { key: 'SRCH0003', name: 'Pinned' } },
+  ]
+  function routeSearches() {
+    mock.route('GET', '/api/users/0/searches', (req, res, helpers, search) => {
+      const start = Number(search.get('start') ?? '0')
+      const limit = Number(search.get('limit') ?? '10')
+      helpers.json(searches.slice(start, start + limit), {
+        'Total-Results': String(searches.length),
+        'Zotero-Server-ID': 'S1',
+      })
+    })
+  }
+  it('returns saved searches with conditions from a server-paged window', async () => {
+    routeSearches()
+    const result = await provider.browse({ kind: 'savedSearches', offset: 0, limit: 2 })
+    expect(result.total).toBe(3)
+    expect(result.items).toHaveLength(2)
+    expect(mock.requests[0]!.search.get('start')).toBe('0')
+    expect(mock.requests[0]!.search.get('limit')).toBe('2')
     const unread = (result.items as unknown as Array<{ name: string; conditions?: unknown }>).find(
       (i) => i.name === 'Unread',
-    )!
-    expect(unread.conditions).toBeTruthy()
+    )
+    expect(unread?.conditions).toBeTruthy()
+  })
+  it('paginates saved searches with nextOffset against the header total', async () => {
+    routeSearches()
+    const r1 = await provider.browse({ kind: 'savedSearches', offset: 0, limit: 2 })
+    expect(r1.returned).toBe(2)
+    expect(r1.nextOffset).toBe(2)
+    const r2 = await provider.browse({ kind: 'savedSearches', offset: 2, limit: 2 })
+    expect(r2.returned).toBe(1)
+    expect(r2.nextOffset).toBeUndefined()
+    expect(mock.requests[1]!.search.get('start')).toBe('2')
+  })
+  it('fails closed when Total-Results header is missing', async () => {
+    mock.route('GET', '/api/users/0/searches', (req, res, helpers) => helpers.json(searches))
+    await expect(provider.browse({ kind: 'savedSearches', offset: 0, limit: 10 })).rejects.toThrow(
+      'Total-Results',
+    )
   })
 })
 

@@ -109,22 +109,39 @@ export interface ZoteroSearchItem {
   attachmentSize?: number
 }
 
+/**
+ * First-page note-body supplement: client-side scanned matches listed apart
+ * from the paged primary results. Zotero's index never searches note bodies,
+ * so these hits cannot join the API page; listing them separately keeps
+ * `items`/`total`/`returned`/`nextOffset` describing one collection under the
+ * requested sort.
+ */
+export interface ZoteroSearchSupplement {
+  readonly kind: 'noteBody'
+  items: ZoteroSearchItem[]
+  /** Note rows the scan examined before returning (≤ `maxNoteScanRecords`). */
+  readonly scanned: number
+  /** True when the scan stopped at `maxNoteScanRecords` before reaching the library's last note. */
+  readonly truncated: boolean
+}
+
 export interface ZoteroSearchResult {
   readonly scope: ZoteroResolvedScope
+  /** Primary API hits only — the collection `total`/`offset`/`returned`/`nextOffset` describe. */
   items: ZoteroSearchItem[]
-  /** The paged API total — the count `offset` pagination walks; note-body matches are not part of it. */
+  /** The paged API total — the count `offset` pagination walks; supplements are not part of it. */
   readonly total: number
   readonly offset: number
+  /** Primary hits on this page (`items.length`); supplements never inflate it. */
   readonly returned: number
   nextOffset?: number
   /**
-   * On the first page, note-body matches may fill unused result slots after
-   * Zotero's primary search results, subject to `maxNoteScanRecords`. They do
-   * not compete with or displace a full primary result page; not counted in
-   * `total`, so pagination stays API-driven; omitted when none.
-   * // TODO(search-ranking): merge primary and note-body candidates under an explicit ranking/pagination contract.
+   * On the first page of a library/collection-scope query (saved-search
+   * scopes never scan), note-body matches fill unused result slots — listed
+   * here, ordered by dateModified desc, capped by the page headroom and
+   * `maxNoteScanRecords`; omitted when none matched.
    */
-  noteMatches?: number
+  supplemental?: ZoteroSearchSupplement
 }
 
 /** Child content kinds `zotero_get` can include beyond plain metadata. */

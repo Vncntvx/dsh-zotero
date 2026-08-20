@@ -54,12 +54,15 @@ interface SearchRowInput {
 
 /** The canonical search output the projector reads. */
 export interface SearchProjectionInput {
+  /** Primary API hits only — the paged list the `total`/`returned` fields describe. */
   readonly items: readonly SearchRowInput[]
   readonly total: number
   readonly returned: number
   readonly nextOffset?: number
-  /** Notes merged into the first page by the client-side body scan; absent when none. */
-  readonly noteMatches?: number
+  /** First-page note-body supplement; absent when the scan matched nothing. */
+  readonly supplemental?: {
+    readonly items: readonly SearchRowInput[]
+  }
   readonly scope: ZoteroResolvedScope
   readonly offset?: number
 }
@@ -338,7 +341,9 @@ function libraryOfScope(scope: ZoteroResolvedScope): SupportedLocalLibrary {
 export function projectSearchMeta(value: SearchProjectionInput): ZoteroSearchPresentationMeta {
   const items: ZoteroSearchPresentationRow[] = []
   let bytes = 0
-  for (const item of value.items) {
+  // Supplemental note rows follow the primary rows in the same bounded list,
+  // so the Zotero tab keeps listing note hits without a second list surface.
+  for (const item of [...value.items, ...(value.supplemental?.items ?? [])]) {
     if (items.length >= MAX_PRESENTATION_SEARCH_ROWS) break
     const row: ZoteroSearchPresentationRow = {
       ref: item.ref,
@@ -360,13 +365,14 @@ export function projectSearchMeta(value: SearchProjectionInput): ZoteroSearchPre
     bytes += rowBytes
   }
   const displayed = items.length
+  const supplementCount = value.supplemental?.items.length ?? 0
   return {
     returned: value.returned,
     total: value.total,
     nextOffset: value.nextOffset ?? null,
     displayed,
-    omitted: value.returned - displayed,
-    noteMatches: value.noteMatches ?? null,
+    omitted: value.returned + supplementCount - displayed,
+    noteMatches: value.supplemental === undefined ? null : supplementCount,
     items,
     scope: value.scope,
     library: libraryOfScope(value.scope),

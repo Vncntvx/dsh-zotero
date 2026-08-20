@@ -74,7 +74,72 @@ const BROWSE_OUTPUT_SCHEMA = {
       },
     },
     serverId: { type: 'string' },
-    items: { type: 'array', required: true, items: { type: 'object', additionalProperties: true } },
+    // Each kind lists its own row shape, so the model can rely on
+    // collections carrying path/depth/parentRef, tags carrying count, and
+    // saved searches carrying conditions straight from the schema.
+    items: {
+      type: 'array',
+      required: true,
+      items: {
+        oneOf: [
+          {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              library: {
+                type: 'object',
+                required: true,
+                additionalProperties: false,
+                properties: {
+                  type: { type: 'string', enum: ['user', 'group'], required: true },
+                  id: { type: 'integer', required: true },
+                },
+              },
+              name: { type: 'string', required: true },
+            },
+          },
+          {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              ref: { type: 'string', required: true },
+              name: { type: 'string', required: true },
+              parentRef: { type: 'string' },
+              path: { type: 'array', required: true, items: { type: 'string' } },
+              depth: { type: 'integer', required: true },
+            },
+          },
+          {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              ref: { type: 'string', required: true },
+              name: { type: 'string', required: true },
+              conditions: {
+                type: 'array',
+                items: { type: 'object', additionalProperties: true },
+              },
+            },
+          },
+          {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              tag: { type: 'string', required: true },
+              count: { type: 'integer' },
+            },
+          },
+          {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              itemType: { type: 'string', required: true },
+              localized: { type: 'string' },
+            },
+          },
+        ],
+      },
+    },
     total: { type: 'integer', required: true },
     offset: { type: 'integer', required: true },
     returned: { type: 'integer', required: true },
@@ -129,6 +194,9 @@ export function buildRequest(
   if (match !== undefined && q === undefined) {
     throw new ZoteroError('match requires q', ZOTERO_INVALID_ARGUMENT)
   }
+  if (q !== undefined && q.trim() === '') {
+    throw new ZoteroError('q must be a non-empty string when provided', ZOTERO_INVALID_ARGUMENT)
+  }
   return {
     kind,
     ...(library ? { library } : {}),
@@ -143,16 +211,30 @@ export function renderBrowse(_args: BrowseArgs, value: BrowseOutput): ContentBlo
   const lines = [`${value.kind}: ${value.returned} of ${value.total}`]
   const items = value.items as Array<Record<string, unknown>>
   items.forEach((it, idx) => {
-    if (value.kind === 'libraries' && asRecord(it.library) !== undefined) {
+    const n = idx + 1
+    if (asRecord(it.library) !== undefined) {
       const lib = asRecord(it.library)!
       const libId = `${lib.type}/${lib.id}`
       const name = (it.name as string | undefined) ?? libId
-      lines.push(`${idx + 1}. ${name} — ${libId}`)
+      lines.push(`${n}. ${name} — ${libId}`)
       lines.push(`   library=${libId}`)
-    } else {
-      const name = (it.name ?? it.tag ?? it.itemType ?? it.ref ?? JSON.stringify(it)) as string
+    } else if (Array.isArray(it.path)) {
+      // Collections: the full breadcrumb is the useful line, not just the leaf name.
+      const breadcrumb = (it.path as unknown[]).map(String).join(' / ')
       const ref = (it.ref as string | undefined) ?? ''
-      lines.push(`${idx + 1}. ${name}${ref ? ` — ${ref}` : ''}`)
+      lines.push(`${n}. ${breadcrumb}${ref ? ` — ${ref}` : ''}`)
+    } else if (typeof it.tag === 'string') {
+      const count = typeof it.count === 'number' ? ` — ${it.count} items` : ''
+      lines.push(`${n}. ${it.tag}${count}`)
+    } else if (typeof it.itemType === 'string') {
+      const localized = typeof it.localized === 'string' ? ` (${it.localized})` : ''
+      lines.push(`${n}. ${it.itemType}${localized}`)
+    } else {
+      const conditions = Array.isArray(it.conditions) ? ` — ${it.conditions.length} conditions` : ''
+      const name =
+        (it.name as string | undefined) ?? (it.ref as string | undefined) ?? JSON.stringify(it)
+      const ref = (it.ref as string | undefined) ?? ''
+      lines.push(`${n}. ${name}${conditions}${ref ? ` — ${ref}` : ''}`)
     }
   })
   if (value.nextOffset !== undefined)

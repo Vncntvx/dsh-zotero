@@ -167,6 +167,73 @@ describe('registry integration: zotero_browse libraries Native identity', () => 
   })
 })
 
+describe('registry integration: browse render exposes structured fields', () => {
+  it('renders collection breadcrumbs instead of bare names', async () => {
+    const cols = [
+      { key: 'COLL0001', data: { key: 'COLL0001', name: 'Methods' } },
+      { key: 'COLL0002', data: { key: 'COLL0002', name: 'RAG', parentCollection: 'COLL0001' } },
+    ]
+    mock.route('GET', '/api/users/0/collections', (req, res, helpers) =>
+      helpers.json(cols, { 'Zotero-Server-ID': 'S1' }),
+    )
+    const result = await run('zotero_browse', { kind: 'collections' })
+    expect(result.isError).toBe(false)
+    if (result.isError) throw new Error('unreachable')
+    const text = (result.content[0] as { text: string }).text
+    expect(text).toContain('Methods / RAG — zotero://user/0/collection/COLL0002?server=S1')
+    // The root keeps its single-segment path (its own name).
+    expect(text).toContain('1. Methods — zotero://user/0/collection/COLL0001?server=S1')
+  })
+
+  it('renders tag counts, saved-search condition counts, and localized item types', async () => {
+    mock.route('GET', '/api/users/0/tags', (req, res, helpers) =>
+      helpers.json([{ tag: 'machine-learning', meta: { numItems: 84 } }], {
+        'Total-Results': '1',
+      }),
+    )
+    const tags = await run('zotero_browse', { kind: 'tags' })
+    expect((tags.content[0] as { text: string }).text).toContain('machine-learning — 84 items')
+
+    mock.route('GET', '/api/users/0/searches', (req, res, helpers) =>
+      helpers.json(
+        [
+          {
+            key: 'SRCH0001',
+            data: {
+              key: 'SRCH0001',
+              name: 'Unread papers',
+              conditions: [
+                { condition: 'unread', operator: 'is', value: 'true' },
+                { condition: 'itemType', operator: 'is', value: 'journalArticle' },
+              ],
+            },
+          },
+        ],
+        { 'Total-Results': '1' },
+      ),
+    )
+    const searches = await run('zotero_browse', { kind: 'savedSearches' })
+    expect((searches.content[0] as { text: string }).text).toContain(
+      'Unread papers — 2 conditions — zotero://user/0/search/SRCH0001',
+    )
+
+    mock.route('GET', '/api/itemTypes', (req, res, helpers) =>
+      helpers.json([{ itemType: 'book', localized: 'Book' }]),
+    )
+    const types = await run('zotero_browse', { kind: 'itemTypes' })
+    expect((types.content[0] as { text: string }).text).toContain('book (Book)')
+  })
+
+  it('rejects a whitespace-only q instead of silently dropping match', async () => {
+    const result = await run('zotero_browse', { kind: 'tags', q: '   ', match: 'startsWith' })
+    expect(result.isError).toBe(true)
+    expect((result.content[0] as { text: string }).text).toContain(
+      'q must be a non-empty string when provided',
+    )
+    expect(mock.requests.filter((entry) => entry.pathname === '/api/users/0/tags')).toEqual([])
+  })
+})
+
 describe('registry integration: browseTags server pagination', () => {
   it('uses q/qmode and Total-Results via tool', async () => {
     const tags = [{ tag: 'alpha' }, { tag: 'beta' }, { tag: 'gamma' }]

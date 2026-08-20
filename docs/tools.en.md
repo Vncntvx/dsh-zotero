@@ -30,11 +30,11 @@ Discover candidate entries in the library. Metadata mode searches title/author/y
 
 ### Output
 
-`scope` (library scopes include `library` for pagination replay), `items` (ref, title, creatorSummary, year, itemType, bestAttachmentRef, bestAttachmentType), `total`, `offset`, `returned`, `nextOffset`, `noteMatches`
+`scope` (library scopes include `library` for pagination replay), `items` (primary hits only: ref, title, creatorSummary, year, itemType, bestAttachmentRef, bestAttachmentType), `total`, `offset`, `returned`, `nextOffset`, `supplemental` (optional: `{kind:"noteBody", items, scanned, truncated}`)
 
 ### Notes
 
-On the first query (offset 0), the client scans note bodies and merges them into results (up to `limit` items). `noteMatches` reports how many came from note scanning; these do not count toward the pagination total.
+On the first query (offset 0) with a `library`/`collection` scope (saved searches never scan), the client scans note bodies and lists the matches in `supplemental.items` (ordered by dateModified desc, filling only the page's unused headroom, capped by `maxNoteScanRecords`). `items`/`total`/`returned`/`nextOffset` describe the primary result set alone, so `returned` never exceeds `total`; under a collection scope, child notes join through their parent item's membership (child notes carry no `collections` of their own). `tagMatch` requires `tags`; the call fails otherwise.
 
 ### Example
 

@@ -138,6 +138,23 @@ const SEARCH_PARAMETERS = {
 
 type SearchArgs = InferArgs<typeof SEARCH_PARAMETERS>
 
+/** One primary or supplemental hit; shared by the paged list and the note-body supplement. */
+const SEARCH_ITEM_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    ref: { type: 'string', required: true },
+    title: { type: 'string', required: true },
+    creatorSummary: { type: 'string', required: true },
+    year: { type: 'integer' },
+    itemType: { type: 'string', required: true },
+    parentRef: { type: 'string' },
+    bestAttachmentRef: { type: 'string' },
+    bestAttachmentType: { type: 'string' },
+    attachmentSize: { type: 'integer' },
+  },
+} as const
+
 const SEARCH_OUTPUT_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -184,27 +201,22 @@ const SEARCH_OUTPUT_SCHEMA = {
     items: {
       type: 'array',
       required: true,
-      items: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          ref: { type: 'string', required: true },
-          title: { type: 'string', required: true },
-          creatorSummary: { type: 'string', required: true },
-          year: { type: 'integer' },
-          itemType: { type: 'string', required: true },
-          parentRef: { type: 'string' },
-          bestAttachmentRef: { type: 'string' },
-          bestAttachmentType: { type: 'string' },
-          attachmentSize: { type: 'integer' },
-        },
-      },
+      items: SEARCH_ITEM_SCHEMA,
     },
     total: { type: 'integer', required: true },
     offset: { type: 'integer', required: true },
     returned: { type: 'integer', required: true },
     nextOffset: { type: 'integer' },
-    noteMatches: { type: 'integer' },
+    supplemental: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        kind: { type: 'string', const: 'noteBody', required: true },
+        items: { type: 'array', required: true, items: SEARCH_ITEM_SCHEMA },
+        scanned: { type: 'integer', required: true },
+        truncated: { type: 'boolean', required: true },
+      },
+    },
   },
 } as const
 
@@ -236,6 +248,8 @@ export function buildRequest(args: SearchArgs, config: ResolvedConfig): ZoteroSe
   const tagMatch = (args as Record<string, unknown>).tagMatch as 'all' | 'any' | undefined
   if (tagMatch !== undefined && tagMatch !== 'all' && tagMatch !== 'any')
     invalid(`tagMatch must be all or any; got ${tagMatch}`)
+  if (tagMatch !== undefined && (args.tags === undefined || args.tags.length === 0))
+    invalid('tagMatch requires tags; it has no effect without a tag filter')
   const includeTrashed = (args as Record<string, unknown>).includeTrashed as boolean | undefined
   if (includeTrashed === true && scope.kind !== 'library') {
     invalid('includeTrashed is only allowed with library scope')
@@ -296,10 +310,17 @@ export function renderSearch(_args: SearchArgs, value: SearchOutput): ContentBlo
       `More results available: search again with offset ${value.nextOffset} and the same scope ref.`,
     )
   }
-  if (value.noteMatches !== undefined && value.noteMatches > 0) {
+  const supplemental = value.supplemental
+  if (supplemental !== undefined && supplemental.items.length > 0) {
     lines.push(
-      `${value.noteMatches} of the listed hits came from the client-side note-body scan (first page only, not part of the paged total).`,
+      `+${supplemental.items.length} note-body matches (scanned ${supplemental.scanned}${supplemental.truncated ? '+' : ''} notes, ordered by dateModified desc, outside the paged total):`,
     )
+    supplemental.items.forEach((item, index) => {
+      const creator = item.creatorSummary === '' ? '' : ` — ${item.creatorSummary}`
+      lines.push(
+        `${index + 1}. ${formatSearchLine(item.ref, item.title, item.year, item.itemType)}${creator}`,
+      )
+    })
   }
   return [{ type: 'text', text: lines.join('\n') }]
 }
@@ -323,9 +344,10 @@ function presentSearchResult(_args: SearchArgs, result: ToolResult): ToolResultV
   if (typeof meta !== 'object' || meta === null || Array.isArray(meta)) return undefined
   const record = meta as Record<string, unknown>
   if (typeof record.returned !== 'number' || typeof record.total !== 'number') return undefined
+  const noteMatches = typeof record.noteMatches === 'number' ? record.noteMatches : 0
   return {
     card: 'generic',
-    title: `Zotero search: found ${record.returned} of ${record.total} results`,
+    title: `Zotero search: found ${record.returned} of ${record.total} results${noteMatches > 0 ? ` (+${noteMatches} note matches)` : ''}`,
   }
 }
 
@@ -343,8 +365,7 @@ export function registerSearchTool(ctx: Context, service: ZoteroService): void {
       description: [
         "Search the user's local Zotero research library for candidate papers.",
         'metadata mode matches titles, creators, and years; everything mode also searches indexed full text.',
-        "On the first page, note-body matches may fill unused result slots after Zotero's primary search results, subject to maxNoteScanRecords. They do not compete with or displace a full primary result page; noteMatches reports how many hits came from that scan and they are not part of the paged total; notes show a synthesized title from their first line.",
-        // TODO(search-ranking): merge primary and note-body candidates under an explicit ranking/pagination contract.
+        'On the first page of a library or collection scope (saved-search scopes never scan note bodies), a client-side note-body scan lists matching notes separately in supplemental — they fill unused page slots up to the limit, are ordered by dateModified desc, never displace a full primary result page, and are not part of the paged total/nextOffset; notes show a synthesized title from their first line.',
         "scope restricts the search to a collection or a Zotero saved search by name or zotero:// ref; additional filters combine with a saved search's own conditions.",
         'Results carry stable zotero:// refs for zotero_get/zotero_retrieve, and a scope ref for pagination via offset.',
       ].join(' '),

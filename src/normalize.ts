@@ -149,9 +149,11 @@ export function normalizeSearchItem(
 
 /**
  * Normalize one collection or saved-search JSON object into its identity pair.
+ * Collections also carry their parent key, so a cached listing is rich enough
+ * to rebuild breadcrumbs without a second fetch.
  * @throws {ZoteroError} `ZOTERO_UNEXPECTED` when the object has no valid Zotero key.
  */
-export function normalizeScopeEntry(json: unknown): { key: string; name: string } {
+export function normalizeScopeEntry(json: unknown): ScopeNameEntry {
   const record = asRecord(json)
   const key = asString(record?.key)
   if (key === undefined || !isObjectKey(key)) {
@@ -160,12 +162,21 @@ export function normalizeScopeEntry(json: unknown): { key: string; name: string 
       ZOTERO_UNEXPECTED,
     )
   }
-  return { key, name: asString(asRecord(record?.data)?.name) ?? '' }
+  const data = asRecord(record?.data)
+  const parent = asString(data?.parentCollection)
+  const parentKey = parent !== undefined && isObjectKey(parent) ? parent : undefined
+  return {
+    key,
+    name: asString(data?.name) ?? '',
+    ...(parentKey !== undefined ? { parentKey } : {}),
+  }
 }
 
 export interface ScopeNameEntry {
   readonly key: string
   readonly name: string
+  /** Parent collection key; present only for non-root collections. */
+  readonly parentKey?: string
 }
 
 /**
