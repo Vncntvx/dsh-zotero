@@ -72,7 +72,13 @@ function invocation(
   rawInput: string,
   signal: AbortSignal = new AbortController().signal,
 ): CommandInvocation {
-  return { commandId: CommandId('test-command'), agent: {} as never, rawInput, signal }
+  return {
+    commandId: CommandId('test-command'),
+    agent: {} as never,
+    rawInput,
+    attachments: [],
+    signal,
+  }
 }
 
 describe('ZoteroService lifecycle', () => {

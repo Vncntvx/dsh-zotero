@@ -65,7 +65,7 @@ The plugin provides a settings card under **Settings → Plugins** where you can
 
 - Zotero ≥ 7 with local API enabled: **Settings → Advanced → "Allow other applications on this computer to communicate with Zotero"**
 - Node.js ≥ 22.19 (or ≥ 24)
-- dsh 0.1.0-rc.7 series host (all `@deepseek-ai/dsh-*` peer dependencies are `^0.1.0-rc.7`)
+- dsh 0.1.0-rc.8 series host (all `@deepseek-ai/dsh-*` peer dependencies are `^0.1.0-rc.8`)
 - Local API at `http://127.0.0.1:23119/api`, unauthenticated, read-only
 
 ## Usage example
@@ -104,7 +104,7 @@ More examples in [Features](docs/features.md).
 ## Permissions and external side effects
 
 - **Network**: HTTP requests go only to `http://127.0.0.1:23119/api` (redirects are not followed); `resolveConfig` enforces a loopback address
-- **Filesystem**: read-only. `zotero_attachment` verifies attachment paths with `existsSync`; no file writes.
+- **Filesystem**: read-only — `zotero_attachment` verifies attachment paths with `existsSync`; no file writes
 - **Persistence**: the only write comes from the settings card under Settings → Plugins, saved to the `zotero:` user layer of `$DSH_HOME/settings.yaml`
 - **No shell / native / background tasks**: the plugin runs no shell commands, loads no native modules, and starts no daemon
 - **Restart**: after installing or removing the plugin, restart dsh and start a new session; configuration changes hot-reload on save without a restart
@@ -124,7 +124,7 @@ More examples in [Features](docs/features.md).
 ## Development
 
 ```sh
-npm install                  # sibling checkout at ../deepseek-harness; add --no-workspaces only for a nested copy
+npm install --no-workspaces   # this repo lives inside the deepseek-harness workspace
 npm test                      # vitest unit tests against the mock Zotero server
 npm run typecheck             # tsc --noEmit for node, test, and client projects
 npm run build                 # tsc emits node half into lib/; esbuild emits browser half lib/client.js
@@ -132,8 +132,8 @@ npm run dev                   # tsc --watch for host half hot reload
 npm run dev:client            # esbuild --watch for browser half hot reload
 ```
 
-You build `lib/` for the Node side and `lib/client.js` for the browser side (settings card and Zotero tab). Use the `dev-lib.cordis.yml` overlay for full plugin work. See [Development](docs/development.md). This repo sits beside `../deepseek-harness` as a local sibling layout.
+Build output splits into `lib/` (Node side) and `lib/client.js` (browser side — settings card + Zotero tab). For full plugin development with both halves, use the `dev-lib.cordis.yml` overlay. See [Development](docs/development.md) for details.
 
 ## License
 
-[MIT](./LICENSE): free to use, modify, and distribute.
+[MIT](./LICENSE) — free to use, modify, and distribute.

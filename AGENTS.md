@@ -99,7 +99,7 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307   # 3080 is the live GUI, never
 
 Host-only alternative (tsx loads `src/index.ts`, no browser half): copy `dev.cordis.yml.example` to `dev.cordis.yml` (set `<absolute-path-to-dsh-zotero>` inside), then run `cd ../deepseek-harness && pnpm dsh web --patch ../dsh-zotero/dev.cordis.yml --port <X>`.
 
-The DSH packages you launch above come from the sibling pnpm workspace at `../deepseek-harness` (`0.1.0-rc.7`). Typecheck, tests, and build run against the same rc.7 versions in `node_modules`, no skew. If the sibling moves ahead, run `npm install` to re-align. The contract surface you use here stayed stable across rc.6 to rc.7.
+The DSH packages you launch above come from the sibling pnpm workspace at `../deepseek-harness` (`0.1.0-rc.8`). Typecheck, tests, and build run against the same rc.8 versions in `node_modules`, no skew. If the sibling moves ahead, run `npm install` to re-align. The contract surface you use here stayed stable across rc.6 to rc.8.
 
 ## Credentials
 
