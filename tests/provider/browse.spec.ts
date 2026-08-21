@@ -48,6 +48,24 @@ describe('browse: validation', () => {
       'ZOTERO_INVALID_ARGUMENT',
     )
   })
+
+  it('rejects tag facets and mispairings at the provider boundary', async () => {
+    await zoteroError(
+      provider.browse({ kind: 'collections', q: 'x', offset: 0, limit: 5 }),
+      ZOTERO_INVALID_ARGUMENT,
+      'q/match are only valid when kind="tags"',
+    )
+    await zoteroError(
+      provider.browse({
+        kind: 'tags',
+        scope: { kind: 'collection', refOrName: '' },
+        offset: 0,
+        limit: 5,
+      }),
+      ZOTERO_INVALID_ARGUMENT,
+      'non-empty string',
+    )
+  })
 })
 
 describe('browse: libraries', () => {
@@ -263,6 +281,33 @@ describe('browse: collections', () => {
       }),
       ZOTERO_INVALID_ARGUMENT,
       'parentRef is only valid',
+    )
+  })
+
+  it('propagates non-404 ancestor failures instead of truncating silently', async () => {
+    mock.route('GET', '/api/users/0/collections/COLL0001/collections', (req, res, helpers) =>
+      helpers.json(
+        [
+          {
+            key: 'COLL0002',
+            data: { key: 'COLL0002', name: 'Child', parentCollection: 'COLL0001' },
+          },
+        ],
+        { 'Total-Results': '1' },
+      ),
+    )
+    mock.route('GET', '/api/users/0/collections/COLL0001', (req, res, helpers) =>
+      helpers.raw(500, { 'Content-Type': 'text/plain' }, 'boom'),
+    )
+    await zoteroError(
+      provider.browse({
+        kind: 'collections',
+        parentRef: 'zotero://user/0/collection/COLL0001',
+        offset: 0,
+        limit: 10,
+      }),
+      'ZOTERO_UNEXPECTED',
+      'HTTP 500',
     )
   })
 

@@ -48,6 +48,18 @@ const RETRIEVE_PARAMETERS = {
     description:
       'Maximum ranked evidence passages to return; capped by the configured maxEvidencePassages.',
   },
+  attachmentPolicy: {
+    type: 'string',
+    enum: ['best', 'allIndexed', 'specified'],
+    description:
+      "How full text is sourced when requested. best (default) uses Zotero's single chosen PDF; allIndexed ranks every PDF child (publisher copy, manuscript, supplement); specified ranks exactly the attachmentRefs.",
+  },
+  attachmentRefs: {
+    type: 'array',
+    items: { type: 'string' },
+    description:
+      'Required with attachmentPolicy="specified": zotero://.../attachment/<KEY> refs of the same library whose full text enters ranking.',
+  },
 } as const
 
 type RetrieveArgs = InferArgs<typeof RETRIEVE_PARAMETERS>
@@ -106,7 +118,35 @@ function buildRequest(args: RetrieveArgs, config: ResolvedConfig): ZoteroRetriev
   if (sources.length === 0) invalid('sources must list at least one evidence source')
   const ref = parseRef(args.ref)
   requireSupportedLocalRef(ref, ['item'])
-  return { ref, query, sources: [...sources], passages }
+  const policy = args.attachmentPolicy ?? 'best'
+  let attachmentRefs: ReturnType<typeof parseRef>[] | undefined
+  if (args.attachmentPolicy === 'specified') {
+    const raw = args.attachmentRefs ?? []
+    if (raw.length === 0) {
+      invalid('attachmentPolicy "specified" requires at least one attachmentRef')
+    }
+    attachmentRefs = raw.map((value) => requireSupportedLocalRef(parseRef(value), ['attachment']))
+    for (const attachmentRef of attachmentRefs) {
+      if (
+        attachmentRef.library.type !== ref.library.type ||
+        attachmentRef.library.id !== ref.library.id
+      ) {
+        invalid(
+          `attachmentRefs must belong to the same library as ref (${ref.library.type}/${ref.library.id})`,
+        )
+      }
+    }
+  } else if (args.attachmentRefs !== undefined) {
+    invalid('attachmentRefs is only valid with attachmentPolicy="specified"')
+  }
+  return {
+    ref,
+    query,
+    sources: [...sources],
+    passages,
+    ...(args.attachmentPolicy !== undefined ? { attachmentPolicy: policy } : {}),
+    ...(attachmentRefs !== undefined ? { attachmentRefs } : {}),
+  }
 }
 
 export function renderRetrieve(_args: RetrieveArgs, value: RetrieveOutput): ContentBlock[] {
@@ -168,6 +208,7 @@ export function registerRetrieveTool(ctx: Context, service: ZoteroService): void
         'Gather evidence passages for one Zotero item and rank them against a query.',
         "Sources: annotations (with Zotero's own page labels), notes, the abstract, and BM25-ranked full-text chunks.",
         'A note item contributes its own body; child notes contribute every chunk of their full text (chunkIndex/chunkCount locate each passage).',
+        "attachmentPolicy picks the fulltext sources: best (default, Zotero's chosen PDF), allIndexed (every PDF child — use when a work has several files), or specified via attachmentRefs.",
         'Unavailable sources are skipped and listed in sourcesSkipped instead of failing the call.',
         'Results are capped by passage count and character budget; a truncated flag signals omitted evidence.',
       ].join(' '),

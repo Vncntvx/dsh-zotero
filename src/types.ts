@@ -12,7 +12,14 @@
 
 /** A capability a provider may safely support. */
 export type ZoteroCapability =
-  'search' | 'metadata' | 'attachments' | 'fulltext' | 'citation' | 'browse'
+  | 'search'
+  | 'metadata'
+  | 'attachments'
+  | 'fulltext'
+  | 'citation'
+  | 'browse'
+  /** Ranked evidence across a work's sources; not synonymous with raw fulltext access. */
+  | 'retrieve'
 
 /** The library a Zotero object lives in. The Local API serves the logged-in user's library. */
 export interface ZoteroLibraryRef {
@@ -249,11 +256,22 @@ export interface ZoteroItemDetail {
 /** Evidence sources `zotero_retrieve` can rank against the query. */
 export type ZoteroEvidenceSource = 'annotation' | 'note' | 'fulltext' | 'abstract'
 
+/**
+ * How `zotero_retrieve` picks the attachment(s) whose full text enters
+ * ranking. `best` (default) keeps Zotero's own single choice; `allIndexed`
+ * ranks every PDF child as a first-class source; `specified` ranks exactly
+ * the attachments named in `attachmentRefs`.
+ */
+export type ZoteroAttachmentPolicy = 'best' | 'allIndexed' | 'specified'
+
 export interface ZoteroRetrieveRequest {
   readonly ref: ZoteroObjectRef
   readonly query: string
   readonly sources: readonly ZoteroEvidenceSource[]
   readonly passages: number
+  readonly attachmentPolicy?: ZoteroAttachmentPolicy
+  /** Required for `attachmentPolicy:"specified"`: attachment refs of the same library. */
+  readonly attachmentRefs?: readonly ZoteroObjectRef[]
 }
 
 /** One bounded evidence passage. Fulltext passages never carry page locators. */
@@ -282,6 +300,11 @@ export interface ZoteroCoverage {
 
 export interface ZoteroRetrieveResult {
   readonly ref: string
+  /**
+   * The attachment behind the fulltext evidence when exactly one attachment
+   * contributed; with several (allIndexed/specified), per-passage
+   * `attachmentRef` provenance carries the mapping instead.
+   */
   readonly attachmentRef?: string
   /** The content type of the attachment `attachmentRef` points at; absent when Zotero reported none. */
   readonly attachmentContentType?: string

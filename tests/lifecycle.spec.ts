@@ -466,4 +466,41 @@ describe('capability gating', () => {
       expect((thrown as ZoteroError).message).toContain(capability)
     }
   })
+
+  it('refuses children on a provider without the optional method', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SystemPrompt, {})
+    await ctx.plugin(ToolRuntime, {})
+    await ctx.plugin(ZoteroService, { baseUrl: mock.baseUrl, provider: 'legacy' })
+    const service = ctx.get('zotero') as ZoteroService
+    service.registerProvider({
+      id: 'legacy',
+      capabilities: new Set(['metadata']),
+      status: async () => ({ providerId: 'legacy', connected: true, diagnosis: 'ok' }),
+      getItem: async () => {
+        throw new Error('test double: must not be called')
+      },
+      getAttachmentLocation: async () => {
+        throw new Error('test double: must not be called')
+      },
+      retrieve: async () => {
+        throw new Error('test double: must not be called')
+      },
+      export: async () => {
+        throw new Error('test double: must not be called')
+      },
+    })
+    let thrown: unknown
+    try {
+      await service.children({
+        ref: parseRef('zotero://user/0/item/ABCD1234'),
+        include: new Set(),
+      })
+    } catch (error) {
+      thrown = error
+    }
+    expect(thrown).toBeInstanceOf(ZoteroError)
+    expect((thrown as ZoteroError).code).toBe(ZOTERO_CAPABILITY_UNAVAILABLE)
+    expect((thrown as ZoteroError).message).toContain('children not supported')
+  })
 })

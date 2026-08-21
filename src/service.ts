@@ -260,7 +260,9 @@ export class ZoteroService extends Service {
     signal?: AbortSignal,
   ): Promise<ZoteroRetrieveResult> {
     const provider = this.resolveProvider()
-    this.requireCapability(provider, 'fulltext')
+    // Retrieve is ranked evidence across sources — a broader contract than
+    // raw fulltext access, so it gates on its own capability.
+    this.requireCapability(provider, 'retrieve')
     return await provider.retrieve(request, signal)
   }
 

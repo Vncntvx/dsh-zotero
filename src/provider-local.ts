@@ -68,7 +68,7 @@ import {
 import {
   bestAttachmentFromLinks,
   normalizeAttachmentRecord,
-  selectAttachment,
+  selectAttachments,
 } from './attachments.js'
 import {
   formatRef,
@@ -321,6 +321,7 @@ export class LocalApiProvider implements ZoteroProvider {
     'fulltext',
     'citation',
     'browse',
+    'retrieve',
   ])
 
   constructor(
@@ -994,9 +995,13 @@ export class LocalApiProvider implements ZoteroProvider {
    * with children when the parent carries the attachment link). Annotations
    * live under each attachment, so annotation sources walk the graph's
    * second level and rank every attachment's annotations as one corpus; each
-   * passage keeps its own attachment provenance. A note item's own body is
-   * its note source; child notes contribute every chunk of their full text,
-   * so long notes rank beyond their first chunk. Sources the item cannot
+   * passage keeps its own attachment provenance. The `attachmentPolicy`
+   * picks the fulltext sources: `best` (default) keeps Zotero's single
+   * choice, `allIndexed` ranks every PDF child, and `specified` ranks the
+   * named attachments — multi-attachment results speak through per-passage
+   * refs instead of a result-level attachment. A note item's own body is its
+   * note source; child notes contribute every chunk of their full text, so
+   * long notes rank beyond their first chunk. Sources the item cannot
    * provide are skipped and reported in `sourcesSkipped` — retrieval degrades
    * instead of failing. Passage count and character budgets are enforced
    * with the `truncated` flag, never by silently editing passage text.
@@ -1005,6 +1010,13 @@ export class LocalApiProvider implements ZoteroProvider {
     request: ZoteroRetrieveRequest,
     signal?: AbortSignal,
   ): Promise<ZoteroRetrieveResult> {
+    const policy = request.attachmentPolicy ?? 'best'
+    if (policy === 'specified' && (request.attachmentRefs?.length ?? 0) === 0) {
+      throw new ZoteroError(
+        'attachmentPolicy "specified" requires at least one attachmentRef.',
+        ZOTERO_INVALID_ARGUMENT,
+      )
+    }
     const ref = requireSupportedLocalRef(request.ref, ['item'])
     const prefix = libraryPrefix(ref.library as SupportedLocalLibrary)
     const parent = await this.client.getJson<unknown>(`${prefix}/items/${ref.key}`, undefined, {
@@ -1021,21 +1033,27 @@ export class LocalApiProvider implements ZoteroProvider {
     const wantsNotes = request.sources.includes('note')
     const wantsFulltext = request.sources.includes('fulltext')
     // A note item's own body is its note source, so its children are only
-    // needed for annotation sources or the PDF fallback.
+    // needed for annotation sources, the PDF fallback, or an allIndexed scan.
     const isNoteItem = itemType === 'note'
+    const needsChildrenForFulltext =
+      wantsFulltext &&
+      (policy === 'allIndexed' || (policy === 'best' && linkAttachment === undefined))
     const fetchChildren =
-      wantsAnnotations ||
-      (wantsNotes && !isNoteItem) ||
-      (wantsFulltext && linkAttachment === undefined)
+      wantsAnnotations || (wantsNotes && !isNoteItem) || needsChildrenForFulltext
     // Children and a linked fulltext are independent once the parent has
     // arrived; start both before awaiting either. The noop handler keeps a
     // fulltext rejection that lands while children are still in flight from
     // being reported as unhandled before the try below awaits it.
-    const fulltextKey = wantsFulltext ? linkAttachment?.key : undefined
+    const bestFulltextKey = wantsFulltext && policy === 'best' ? linkAttachment?.key : undefined
     const fulltextPromise =
-      fulltextKey === undefined
+      bestFulltextKey === undefined
         ? undefined
-        : this.fetchFulltext(fulltextKey, ref.library as SupportedLocalLibrary, serverId, signal)
+        : this.fetchFulltext(
+            bestFulltextKey,
+            ref.library as SupportedLocalLibrary,
+            serverId,
+            signal,
+          )
     fulltextPromise?.catch(() => {})
     let childrenRows: readonly unknown[] = []
     if (fetchChildren) {
@@ -1065,13 +1083,13 @@ export class LocalApiProvider implements ZoteroProvider {
       pageLabel?: string
       attachmentRef?: string
     }[] = []
-    if (wantsFulltext) {
-      let attachmentKey = fulltextKey
+    if (wantsFulltext && policy === 'best') {
+      let attachmentKey = bestFulltextKey
       // The link arm reports Zotero's own type (possibly empty); the child
       // fallback selects an application/pdf candidate whose type is known.
       let selectedContentType = linkAttachment?.contentType
       if (attachmentKey === undefined) {
-        const pdf = selectAttachment(childrenRows, 'pdf')
+        const pdf = selectAttachments(childrenRows, 'pdf')[0]
         if (pdf === undefined) skipped.push('fulltext')
         else {
           attachmentKey = pdf.key
@@ -1124,6 +1142,115 @@ export class LocalApiProvider implements ZoteroProvider {
           } else {
             throw error
           }
+        }
+      }
+    } else if (wantsFulltext) {
+      // Multi-attachment policies: every selected PDF is a first-class
+      // source, and each passage carries its own attachment provenance.
+      let candidates: { key: string; contentType?: string }[]
+      if (policy === 'allIndexed') {
+        candidates = selectAttachments(childrenRows, 'pdf').map((candidate) => ({
+          key: candidate.key,
+          contentType: candidate.contentType,
+        }))
+      } else {
+        candidates = await mapWithConcurrency(
+          request.attachmentRefs!,
+          ZOTERO_GRAPH_CONCURRENCY,
+          async (wanted): Promise<{ key: string; contentType?: string }> => {
+            const row = await this.client.getJson<unknown>(
+              `${prefix}/items/${wanted.key}`,
+              undefined,
+              { signal, serverId },
+            )
+            const rowData = asRecord(asRecord(row.json)?.data)
+            const rowType = asString(rowData?.itemType)
+            if (rowType !== undefined && rowType !== 'attachment') {
+              throw new ZoteroError(
+                `Attachment ref ${wanted.key} names a ${rowType}, not an attachment.`,
+                ZOTERO_INVALID_ARGUMENT,
+              )
+            }
+            return { key: wanted.key, contentType: asString(rowData?.contentType) }
+          },
+        )
+      }
+      if (candidates.length === 0) {
+        skipped.push('fulltext')
+      } else {
+        const fetched = await mapWithConcurrency(
+          candidates,
+          ZOTERO_GRAPH_CONCURRENCY,
+          async (candidate) => {
+            try {
+              return {
+                candidate,
+                payload: await this.fetchFulltext(
+                  candidate.key,
+                  ref.library as SupportedLocalLibrary,
+                  serverId,
+                  signal,
+                ),
+              }
+            } catch (error) {
+              // An unindexed member of the set degrades alone; only an
+              // entirely unindexed set reads as a skipped source.
+              if (error instanceof ZoteroError && error.code === ZOTERO_NO_FULLTEXT) {
+                return { candidate, payload: undefined }
+              }
+              throw error
+            }
+          },
+        )
+        const indexed = fetched.filter(
+          (entry): entry is typeof entry & { payload: ZoteroFulltextPayload } =>
+            entry.payload !== undefined,
+        )
+        if (indexed.length === 0) skipped.push('fulltext')
+        for (const { candidate, payload } of indexed) {
+          const passageAttachmentRef = formatRef(
+            refForLibrary(
+              ref.library as SupportedLocalLibrary,
+              'attachment',
+              candidate.key,
+              serverId,
+            ),
+          )
+          const content = typeof payload.content === 'string' ? payload.content : ''
+          const bounded = truncateText(content, this.limits.maxFulltextChars)
+          fulltextWasCut = fulltextWasCut || bounded.truncated
+          const chunks = chunkText(
+            bounded.text,
+            this.limits.fulltextChunkWords,
+            this.limits.maxEvidenceChars,
+          )
+          for (const chunk of chunks) {
+            passages.push({
+              source: 'fulltext',
+              sourceRef: passageAttachmentRef,
+              text: chunk.text,
+              chunkIndex: chunk.index,
+              chunkCount: chunks.length,
+            })
+          }
+        }
+        // Result-level provenance stays unambiguous: with exactly one
+        // contributing attachment it names that file; with several, the
+        // per-passage refs carry the mapping.
+        if (indexed.length === 1) {
+          const { candidate, payload } = indexed[0]!
+          attachmentRef = formatRef(
+            refForLibrary(
+              ref.library as SupportedLocalLibrary,
+              'attachment',
+              candidate.key,
+              serverId,
+            ),
+          )
+          if (candidate.contentType !== undefined && candidate.contentType !== '') {
+            attachmentContentType = candidate.contentType
+          }
+          coverage = normalizeCoverage(payload)
         }
       }
     }
@@ -1486,7 +1613,7 @@ export class LocalApiProvider implements ZoteroProvider {
         serverId: ref.serverId,
       },
     )
-    const pdf = selectAttachment(Array.isArray(children.json) ? children.json : [], 'pdf')
+    const pdf = selectAttachments(Array.isArray(children.json) ? children.json : [], 'pdf')[0]
     if (pdf === undefined) {
       throw new ZoteroError(`Item ${ref.key} has no attachment to resolve.`, ZOTERO_NO_ATTACHMENT)
     }

@@ -906,6 +906,52 @@ describe('zotero_retrieve tool', () => {
     expect(mock.requests).toEqual([])
   })
 
+  it('validates attachment policy pairings before any request', async () => {
+    const cases: [Record<string, unknown>, string][] = [
+      [
+        {
+          ref: 'zotero://user/0/item/ABCD1234',
+          query: 'x',
+          attachmentPolicy: 'specified',
+        },
+        'requires at least one attachmentRef',
+      ],
+      [
+        {
+          ref: 'zotero://user/0/item/ABCD1234',
+          query: 'x',
+          attachmentRefs: ['zotero://user/0/attachment/WXYZ6789'],
+        },
+        'only valid with attachmentPolicy="specified"',
+      ],
+      [
+        {
+          ref: 'zotero://user/0/item/ABCD1234',
+          query: 'x',
+          attachmentPolicy: 'specified',
+          attachmentRefs: ['zotero://group/42/attachment/WXYZ6789'],
+        },
+        'same library',
+      ],
+      [
+        {
+          ref: 'zotero://user/0/item/ABCD1234',
+          query: 'x',
+          attachmentPolicy: 'specified',
+          attachmentRefs: ['zotero://user/0/item/WXYZ6789'],
+        },
+        'Expected a attachment reference',
+      ],
+    ]
+    for (const [args, message] of cases) {
+      const result = await runTool('zotero_retrieve', args)
+      expect(result.isError).toBe(true)
+      if (!result.isError) throw new Error('unreachable')
+      expect((result.content[0] as { text: string }).text).toContain(message)
+    }
+    expect(mock.requests).toEqual([])
+  })
+
   it('rejects an empty sources list', async () => {
     const result = await runTool('zotero_retrieve', {
       ref: 'zotero://user/0/item/ABCD1234',

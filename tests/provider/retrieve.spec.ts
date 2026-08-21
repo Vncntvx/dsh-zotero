@@ -6,7 +6,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { ZOTERO_UNEXPECTED } from '../../src/errors.js'
+import { ZOTERO_INVALID_ARGUMENT, ZOTERO_UNEXPECTED } from '../../src/errors.js'
 import { type LocalApiLimits, type LocalApiProvider } from '../../src/provider-local.js'
 import { parseRef } from '../../src/refs.js'
 import { MockZotero } from '../helpers/mock-zotero.js'
@@ -219,14 +219,218 @@ describe('retrieve', () => {
     mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) =>
       helpers.json(RETRIEVE_CHILDREN),
     )
-    mock.route('GET', '/api/users/0/items/WXYZ6789/children', (req, res, helpers) =>
-      helpers.json(RETRIEVE_ATTACHMENT_CHILDREN),
-    )
     mock.route('GET', '/api/users/0/items/WXYZ6789/fulltext', (req, res, helpers) =>
       helpers.json(FULLTEXT_PAYLOAD),
     )
     const result = await provider.retrieve(retrieveRequest({ sources: ['fulltext'], passages: 1 }))
     expect(result.attachmentRef).toBe('zotero://user/0/attachment/WXYZ6789')
+  })
+
+  it('ranks every PDF child as a first-class source under allIndexed', async () => {
+    const secondPdf = {
+      key: 'SECD0001',
+      data: {
+        itemType: 'attachment',
+        title: 'Author Manuscript',
+        contentType: 'application/pdf',
+        linkMode: 'imported_file',
+      },
+    }
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) =>
+      helpers.json(RETRIEVE_PARENT, { 'Zotero-Server-ID': 'S1' }),
+    )
+    mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) =>
+      helpers.json([...RETRIEVE_CHILDREN, secondPdf]),
+    )
+    mock.route('GET', '/api/users/0/items/WXYZ6789/fulltext', (req, res, helpers) =>
+      helpers.json({ content: 'publisher copy mentions tiling', indexedPages: 10, totalPages: 10 }),
+    )
+    mock.route('GET', '/api/users/0/items/SECD0001/fulltext', (req, res, helpers) =>
+      helpers.json({
+        content: 'manuscript mentions flash attention',
+        indexedChars: 30,
+        totalChars: 30,
+      }),
+    )
+    const result = await provider.retrieve(
+      retrieveRequest({
+        sources: ['fulltext'],
+        query: 'tiling flash',
+        passages: 10,
+        attachmentPolicy: 'allIndexed',
+      }),
+    )
+    // Both files contributed; per-passage provenance maps chunks to files.
+    const refs = new Set(result.evidence.map((entry) => entry.sourceRef))
+    expect(refs).toEqual(
+      new Set([
+        'zotero://user/0/attachment/WXYZ6789?server=S1',
+        'zotero://user/0/attachment/SECD0001?server=S1',
+      ]),
+    )
+    // With several contributors the result-level attachment stays unset.
+    expect(result.attachmentRef).toBeUndefined()
+    expect(result.coverage).toBeUndefined()
+    expect(result.sourcesSkipped).toEqual([])
+  })
+
+  it('ranks exactly the named attachments under specified and verifies targets', async () => {
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) =>
+      helpers.json(RETRIEVE_PARENT, { 'Zotero-Server-ID': 'S1' }),
+    )
+    mock.route('GET', '/api/users/0/items/WXYZ6789', (req, res, helpers) =>
+      helpers.json(RETRIEVE_CHILDREN[1]),
+    )
+    mock.route('GET', '/api/users/0/items/WXYZ6789/fulltext', (req, res, helpers) =>
+      helpers.json(FULLTEXT_PAYLOAD),
+    )
+    const result = await provider.retrieve(
+      retrieveRequest({
+        sources: ['fulltext'],
+        query: 'flash attention',
+        passages: 4,
+        attachmentPolicy: 'specified',
+        attachmentRefs: [parseRef('zotero://user/0/attachment/WXYZ6789?server=S1')],
+      }),
+    )
+    // Exactly one contributor keeps the result-level provenance.
+    expect(result.attachmentRef).toBe('zotero://user/0/attachment/WXYZ6789?server=S1')
+    expect(result.attachmentContentType).toBe('application/pdf')
+    expect(result.evidence.length).toBeGreaterThan(0)
+  })
+
+  it('fails closed when a specified ref names a non-attachment', async () => {
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) =>
+      helpers.json(RETRIEVE_PARENT),
+    )
+    mock.route('GET', '/api/users/0/items/NOTE1111', (req, res, helpers) =>
+      helpers.json({ key: 'NOTE1111', data: { itemType: 'note', note: 'x' } }),
+    )
+    await zoteroError(
+      provider.retrieve(
+        retrieveRequest({
+          sources: ['fulltext'],
+          attachmentPolicy: 'specified',
+          attachmentRefs: [parseRef('zotero://user/0/attachment/NOTE1111')],
+        }),
+      ),
+      ZOTERO_INVALID_ARGUMENT,
+      'not an attachment',
+    )
+  })
+
+  it('degrades allIndexed to sourcesSkipped when no PDF child exists', async () => {
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) =>
+      helpers.json({ ...RETRIEVE_PARENT, links: { self: RETRIEVE_PARENT.links.self } }),
+    )
+    mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) =>
+      helpers.json([{ key: 'NOTE1111', data: { itemType: 'note', note: 'only a note' } }]),
+    )
+    const result = await provider.retrieve(
+      retrieveRequest({
+        sources: ['fulltext'],
+        attachmentPolicy: 'allIndexed',
+      }),
+    )
+    expect(result.evidence).toEqual([])
+    expect(result.sourcesSkipped).toEqual(['fulltext'])
+  })
+
+  it('keeps indexed members of an allIndexed set while unindexed ones degrade alone', async () => {
+    const secondPdf = {
+      key: 'SECD0001',
+      data: {
+        itemType: 'attachment',
+        title: 'Supplement',
+        contentType: 'application/pdf',
+        linkMode: 'imported_file',
+      },
+    }
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) =>
+      helpers.json({ ...RETRIEVE_PARENT, links: { self: RETRIEVE_PARENT.links.self } }),
+    )
+    mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) =>
+      helpers.json([...RETRIEVE_CHILDREN, secondPdf]),
+    )
+    mock.route('GET', '/api/users/0/items/WXYZ6789/fulltext', (req, res, helpers) =>
+      helpers.raw(404, { 'Content-Type': 'text/plain' }, 'No indexed content'),
+    )
+    mock.route('GET', '/api/users/0/items/SECD0001/fulltext', (req, res, helpers) =>
+      helpers.json({ content: 'supplement mentions tiling' }),
+    )
+    const result = await provider.retrieve(
+      retrieveRequest({
+        sources: ['fulltext'],
+        query: 'tiling',
+        passages: 4,
+        attachmentPolicy: 'allIndexed',
+      }),
+    )
+    expect(result.evidence.map((entry) => entry.sourceRef)).toEqual([
+      'zotero://user/0/attachment/SECD0001',
+    ])
+    // One contributor survived, so the set did not count as a skipped source.
+    expect(result.sourcesSkipped).toEqual([])
+  })
+
+  it('reports allIndexed as skipped when every PDF is unindexed', async () => {
+    const secondPdf = {
+      key: 'SECD0001',
+      data: { itemType: 'attachment', title: 'S', contentType: 'application/pdf' },
+    }
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) =>
+      helpers.json({ ...RETRIEVE_PARENT, links: { self: RETRIEVE_PARENT.links.self } }),
+    )
+    mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) =>
+      helpers.json([secondPdf]),
+    )
+    mock.route(
+      'GET',
+      /^\/api\/users\/0\/items\/(SECD0001|WXYZ6789)\/fulltext$/,
+      (req, res, helpers) =>
+        helpers.raw(404, { 'Content-Type': 'text/plain' }, 'No indexed content'),
+    )
+    const result = await provider.retrieve(
+      retrieveRequest({ sources: ['fulltext'], attachmentPolicy: 'allIndexed' }),
+    )
+    expect(result.evidence).toEqual([])
+    expect(result.sourcesSkipped).toEqual(['fulltext'])
+  })
+
+  it('propagates non-indexing failures from the multi-attachment fetch', async () => {
+    const secondPdf = {
+      key: 'SECD0001',
+      data: { itemType: 'attachment', title: 'S', contentType: 'application/pdf' },
+    }
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) =>
+      helpers.json({ ...RETRIEVE_PARENT, links: { self: RETRIEVE_PARENT.links.self } }),
+    )
+    mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) =>
+      helpers.json([secondPdf]),
+    )
+    mock.route('GET', '/api/users/0/items/SECD0001/fulltext', (req, res, helpers) =>
+      helpers.raw(500, { 'Content-Type': 'text/plain' }, 'boom'),
+    )
+    await zoteroError(
+      provider.retrieve(retrieveRequest({ sources: ['fulltext'], attachmentPolicy: 'allIndexed' })),
+      ZOTERO_UNEXPECTED,
+      'HTTP 500',
+    )
+  })
+
+  it('fails closed on a specified policy without refs before any request happens', async () => {
+    await zoteroError(
+      provider.retrieve(
+        retrieveRequest({
+          sources: ['fulltext'],
+          attachmentPolicy: 'specified',
+          attachmentRefs: [],
+        }),
+      ),
+      ZOTERO_INVALID_ARGUMENT,
+      'requires at least one attachmentRef',
+    )
+    expect(mock.requests).toEqual([])
   })
 
   it('omits the attachment content type when Zotero reports none', async () => {

@@ -84,6 +84,20 @@ export function selectAttachment(
   rows: readonly unknown[],
   kind: string,
 ): ZoteroAttachmentCandidate | undefined {
+  return selectAttachments(rows, kind)[0]
+}
+
+/**
+ * Select every attachment of the requested kind from raw child rows, ordered
+ * by the same deterministic ranking {@link selectAttachment} uses — so the
+ * first entry always equals the single-selection answer, and a work with
+ * several PDFs (publisher copy, manuscript, supplement) can enter evidence
+ * ranking as several first-class sources.
+ */
+export function selectAttachments(
+  rows: readonly unknown[],
+  kind: string,
+): readonly ZoteroAttachmentCandidate[] {
   const wantedContentType = kind === 'pdf' ? 'application/pdf' : kind
   const scored: { candidate: ZoteroAttachmentCandidate; dateAdded: string }[] = []
   for (const row of rows) {
@@ -102,5 +116,5 @@ export function selectAttachment(
     if (byDate !== 0) return byDate
     return a.candidate.key.localeCompare(b.candidate.key)
   })
-  return scored[0]?.candidate
+  return scored.map((entry) => entry.candidate)
 }
