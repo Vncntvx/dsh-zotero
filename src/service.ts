@@ -42,6 +42,7 @@ import { registerPromptSection } from './prompt.js'
 import { ZOTERO_SETTINGS_NAMESPACE } from './settings-namespace.js'
 import { registerAttachmentTool } from './tools/attachment.js'
 import { registerBrowseTool } from './tools/browse.js'
+import { registerChangesTool } from './tools/changes.js'
 import { registerChildrenTool } from './tools/children.js'
 import { registerGetTool } from './tools/get.js'
 import { registerExportTool } from './tools/export.js'
@@ -52,6 +53,8 @@ import type {
   ZoteroBrowseRequest,
   ZoteroBrowseResult,
   ZoteroCapability,
+  ZoteroChangesRequest,
+  ZoteroChangesResult,
   ZoteroChildrenRequest,
   ZoteroChildrenResult,
   ZoteroGetRequest,
@@ -100,6 +103,7 @@ export class ZoteroService extends Service {
     registerRetrieveTool(ctx, this)
     registerExportTool(ctx, this)
     registerBrowseTool(ctx, this)
+    registerChangesTool(ctx, this)
     // The attach runs through a cordis fiber, never synchronously inside the
     // install: when a settings service is composed, setSource switches the
     // config authority and onChange rebuilds shortly after this constructor —
@@ -284,6 +288,20 @@ export class ZoteroService extends Service {
     if (provider.browse === undefined)
       throw new ZoteroError('browse not supported', ZOTERO_CAPABILITY_UNAVAILABLE)
     return await provider.browse(request, signal)
+  }
+
+  /**
+   * Diff the library against a local transaction version.
+   * @param request - the baseline version and the resource kinds to diff.
+   * @param signal - caller cancellation; forwarded to the provider.
+   * @returns changed/deleted keys plus the library's current version.
+   */
+  async changes(request: ZoteroChangesRequest, signal?: AbortSignal): Promise<ZoteroChangesResult> {
+    const provider = this.resolveProvider()
+    this.requireCapability(provider, 'changes')
+    if (provider.changes === undefined)
+      throw new ZoteroError('changes not supported', ZOTERO_CAPABILITY_UNAVAILABLE)
+    return await provider.changes(request, signal)
   }
 
   protected resolveProvider(): ZoteroProvider {

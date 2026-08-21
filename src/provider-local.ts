@@ -87,6 +87,10 @@ import type {
   ZoteroBrowseRequest,
   ZoteroBrowseResult,
   ZoteroCapability,
+  ZoteroChangedObject,
+  ZoteroChangesInclude,
+  ZoteroChangesRequest,
+  ZoteroChangesResult,
   ZoteroChildrenRequest,
   ZoteroChildrenResult,
   ZoteroCollectionInfo,
@@ -249,6 +253,15 @@ function sameLibrary(a: SupportedLocalLibrary, b: SupportedLocalLibrary): boolea
 
 const INCLUDE_ORDER: readonly ZoteroInclude[] = ['notes', 'annotations', 'attachments']
 
+/** The resource kinds a full `zotero_changes` diff covers, in request order. */
+const ZOTERO_CHANGES_INCLUDES: readonly ZoteroChangesInclude[] = [
+  'items',
+  'collections',
+  'savedSearches',
+  'fulltext',
+  'deleted',
+]
+
 /** The order `sourcesSkipped` reports in; stable regardless of the request order. */
 const SOURCE_ORDER: readonly ZoteroEvidenceSource[] = ['annotation', 'note', 'abstract', 'fulltext']
 
@@ -322,6 +335,7 @@ export class LocalApiProvider implements ZoteroProvider {
     'citation',
     'browse',
     'retrieve',
+    'changes',
   ])
 
   constructor(
@@ -840,6 +854,133 @@ export class LocalApiProvider implements ZoteroProvider {
           }
         : {}),
       ...(ctx.serverId !== undefined ? { serverId: ctx.serverId } : {}),
+    }
+  }
+
+  /**
+   * Diff the library against a local transaction version. Zotero 10+ versions
+   * are local transactions: any edit, sync, or local-API write advances them,
+   * so `?since=` answers "what changed here" without the cloud and without a
+   * background watcher. Without `since` this is a baseline reading — just the
+   * current version for the next call to diff from. `format=versions`
+   * responses are key→version maps; `/deleted` returns tombstone key lists.
+   * Each resource is capped at `maxBrowseResults` entries with an honest
+   * `truncated` flag driven by the Total-Results header.
+   */
+  async changes(request: ZoteroChangesRequest, signal?: AbortSignal): Promise<ZoteroChangesResult> {
+    const library = request.library ?? PERSONAL_LIBRARY
+    const prefix = libraryPrefix(library)
+    const cap = this.limits.maxBrowseResults ?? 50
+    const include = request.include ?? new Set(ZOTERO_CHANGES_INCLUDES)
+    let serverId: string | undefined
+    let toVersion: number | undefined
+
+    if (request.since === undefined) {
+      const baselineParams = new URLSearchParams()
+      baselineParams.set('limit', '1')
+      const { headers } = await this.client.get(`${prefix}/items/top`, baselineParams, {
+        signal,
+      })
+      serverId = headers.get('zotero-server-id') ?? undefined
+      const lastModified = headers.get('last-modified-version')
+      toVersion =
+        lastModified !== null && /^\d+$/.test(lastModified) ? Number(lastModified) : undefined
+      return {
+        library,
+        ...(serverId !== undefined ? { serverId } : {}),
+        ...(toVersion !== undefined ? { toVersion } : {}),
+        changed: {},
+      }
+    }
+
+    const fetchVersions = async (
+      path: string,
+    ): Promise<{ entries: ZoteroChangedObject[]; truncated: boolean }> => {
+      const params = new URLSearchParams()
+      params.set('since', String(request.since))
+      params.set('format', 'versions')
+      params.set('limit', String(cap))
+      const { json, headers } = await this.client.getJson<unknown>(path, params, { signal })
+      serverId = serverId ?? headers.get('zotero-server-id') ?? undefined
+      const lastModified = headers.get('last-modified-version')
+      if (lastModified !== null && /^\d+$/.test(lastModified)) {
+        toVersion = Math.max(toVersion ?? 0, Number(lastModified))
+      }
+      const map = asRecord(json)
+      const entries = Object.entries(map ?? {})
+        .filter(([key, version]) => isObjectKey(key) && typeof version === 'number')
+        .map(([key, version]) => ({ key, version: version as number }))
+        .sort((a, b) => b.version - a.version || a.key.localeCompare(b.key))
+      const totalHeader = headers.get('total-results')
+      const total =
+        totalHeader !== null && /^\d+$/.test(totalHeader.trim())
+          ? Number(totalHeader.trim())
+          : entries.length
+      return { entries, truncated: total > entries.length }
+    }
+
+    const changed: {
+      items?: ZoteroChangedObject[]
+      collections?: ZoteroChangedObject[]
+      savedSearches?: ZoteroChangedObject[]
+      fulltextAttachments?: ZoteroChangedObject[]
+    } = {}
+    const deleted: {
+      items?: string[]
+      collections?: string[]
+      savedSearches?: string[]
+    } = {}
+    let truncated = false
+    if (include.has('items')) {
+      const result = await fetchVersions(`${prefix}/items/top`)
+      changed.items = result.entries
+      truncated = truncated || result.truncated
+    }
+    if (include.has('collections')) {
+      const result = await fetchVersions(`${prefix}/collections`)
+      changed.collections = result.entries
+      truncated = truncated || result.truncated
+    }
+    if (include.has('savedSearches')) {
+      const result = await fetchVersions(`${prefix}/searches`)
+      changed.savedSearches = result.entries
+      truncated = truncated || result.truncated
+    }
+    if (include.has('fulltext')) {
+      // The fulltext delta has its own endpoint and reports attachment keys.
+      const result = await fetchVersions(`${prefix}/fulltext`)
+      changed.fulltextAttachments = result.entries
+      truncated = truncated || result.truncated
+    }
+    if (include.has('deleted')) {
+      const params = new URLSearchParams()
+      params.set('since', String(request.since))
+      const { json, headers } = await this.client.getJson<unknown>(`${prefix}/deleted`, params, {
+        signal,
+      })
+      serverId = serverId ?? headers.get('zotero-server-id') ?? undefined
+      const record = asRecord(json)
+      const keysOf = (field: string): string[] =>
+        (Array.isArray(record?.[field]) ? (record![field] as unknown[]) : []).filter(
+          (key): key is string => typeof key === 'string' && isObjectKey(key),
+        )
+      deleted.items = keysOf('items')
+      deleted.collections = keysOf('collections')
+      deleted.savedSearches = keysOf('searches')
+    }
+
+    return {
+      library,
+      ...(serverId !== undefined ? { serverId } : {}),
+      fromVersion: request.since,
+      ...(toVersion !== undefined ? { toVersion } : {}),
+      changed,
+      ...((deleted.items?.length ?? 0) > 0 ||
+      (deleted.collections?.length ?? 0) > 0 ||
+      (deleted.savedSearches?.length ?? 0) > 0
+        ? { deleted }
+        : {}),
+      ...(truncated ? { truncated } : {}),
     }
   }
 

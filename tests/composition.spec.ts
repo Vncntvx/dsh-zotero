@@ -118,6 +118,7 @@ describe('the shipped bundle patch through a real Loader composition', () => {
         'zotero_attachment',
         'zotero_export',
         'zotero_browse',
+        'zotero_changes',
       ].sort(),
     )
     const assembly = await context.systemPrompt.assemble()

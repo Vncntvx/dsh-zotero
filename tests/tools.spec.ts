@@ -14,6 +14,7 @@ import UserQuestionService from '@deepseek-ai/dsh-user-questions'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import ZoteroService from '../src/index.js'
 import { ZOTERO_NOT_RUNNING } from '../src/errors.js'
+import { renderChanges } from '../src/tools/changes.js'
 import { renderChildren } from '../src/tools/children.js'
 import { renderGet } from '../src/tools/get.js'
 import { renderRetrieve } from '../src/tools/retrieve.js'
@@ -1316,6 +1317,90 @@ describe('zotero_export tool', () => {
   })
 })
 
+describe('zotero_changes tool', () => {
+  it('registers and exposes its schema to the assembly', () => {
+    expect(ctx.tools.get('zotero_changes')).toBeDefined()
+    expect(ctx.tools.schemas().some((schema) => schema.name === 'zotero_changes')).toBe(true)
+  })
+
+  it('takes a baseline reading end to end and renders the version hint', async () => {
+    mock.route('GET', '/api/users/0/items/top', (req, res, helpers, search) => {
+      expect(search.get('limit')).toBe('1')
+      helpers.json([], { 'Last-Modified-Version': '42' })
+    })
+    const result = await runTool('zotero_changes', {})
+    expect(result.isError).toBe(false)
+    if (result.isError) throw new Error('unreachable')
+    const value = result.value as { toVersion?: number; changed: Record<string, unknown> }
+    expect(value.toVersion).toBe(42)
+    expect(value.changed).toEqual({})
+    const text = (result.content[0] as { text: string }).text
+    expect(text).toContain('Baseline reading')
+    expect(text).toContain('version 42')
+  })
+
+  it('diffs from a since version and renders per-resource sections', async () => {
+    mock.route('GET', '/api/users/0/items/top', (req, res, helpers, search) => {
+      expect(search.get('since')).toBe('42')
+      expect(search.get('format')).toBe('versions')
+      helpers.json({ ABCD1234: 44 }, { 'Total-Results': '1', 'Last-Modified-Version': '50' })
+    })
+    mock.route('GET', '/api/users/0/deleted', (req, res, helpers, search) => {
+      expect(search.get('since')).toBe('42')
+      helpers.json({ items: ['EEEE0001'], collections: [], searches: [] })
+    })
+    const result = await runTool('zotero_changes', {
+      since: 42,
+      include: ['items', 'deleted'],
+    })
+    expect(result.isError).toBe(false)
+    if (result.isError) throw new Error('unreachable')
+    const value = result.value as {
+      fromVersion?: number
+      toVersion?: number
+      deleted?: { items?: string[] }
+    }
+    expect(value.fromVersion).toBe(42)
+    expect(value.toVersion).toBe(50)
+    expect(value.deleted?.items).toEqual(['EEEE0001'])
+    const text = (result.content[0] as { text: string }).text
+    expect(text).toContain('Changes 42 → 50')
+    expect(text).toContain('- ABCD1234 (v44)')
+    expect(text).toContain('Deleted items: 1')
+  })
+
+  it('rejects an invalid library shape before any request', async () => {
+    const result = await runTool('zotero_changes', {
+      library: { type: 'user', id: 5 },
+    })
+    expect(result.isError).toBe(true)
+    if (!result.isError) throw new Error('unreachable')
+    expect((result.content[0] as { text: string }).text).toContain('Only user/0 is supported')
+    expect(mock.requests).toEqual([])
+  })
+
+  it('renders bare baselines, truncation markers, and long lists honestly', () => {
+    const bare = renderChanges({}, { changed: {} } as never)
+    expect((bare[0] as { text: string }).text).toContain('Baseline reading.')
+
+    const truncated = renderChanges({}, {
+      fromVersion: 1,
+      changed: {
+        items: Array.from({ length: 25 }, (_, i) => ({
+          key: `KEY${String(i).padStart(4, '0')}`,
+          version: i + 2,
+        })),
+      },
+      truncated: true,
+    } as never)
+    const text = (truncated[0] as { text: string }).text
+    expect(text).toContain('Changes 1 → ?')
+    expect(text).toContain('Items: 25+')
+    expect(text).toContain('… 5 more')
+    expect(text).not.toContain('KEY0024')
+  })
+})
+
 describe('tool presentation', () => {
   function definition(name: string): ToolDefinition {
     const tool = ctx.tools.get(name)
@@ -1377,6 +1462,16 @@ describe('tool presentation', () => {
       rawInput: 'collections',
     })
     expect(definition('zotero_browse').isConcurrencySafe?.({ kind: 'tags' })).toBe(true)
+    expect(definition('zotero_changes').presentCall!({})).toEqual({
+      card: 'generic',
+      kind: 'read',
+      title: 'Read Zotero changes',
+      rawInput: 'baseline',
+    })
+    expect(definition('zotero_changes').presentCall!({ since: 42 })).toMatchObject({
+      rawInput: '42',
+    })
+    expect(definition('zotero_changes').isConcurrencySafe?.({ since: 42 })).toBe(true)
   })
 
   it('projects replayable search page facts and renders the completed card', () => {

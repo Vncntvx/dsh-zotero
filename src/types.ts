@@ -20,6 +20,8 @@ export type ZoteroCapability =
   | 'browse'
   /** Ranked evidence across a work's sources; not synonymous with raw fulltext access. */
   | 'retrieve'
+  /** Incremental library reads through local transaction versions (`?since=`). */
+  | 'changes'
 
 /** The library a Zotero object lives in. The Local API serves the logged-in user's library. */
 export interface ZoteroLibraryRef {
@@ -502,6 +504,50 @@ export interface ZoteroBrowseResult {
   nextOffset?: number
 }
 
+/** The resource kinds `zotero_changes` can diff. */
+export type ZoteroChangesInclude =
+  'items' | 'collections' | 'savedSearches' | 'fulltext' | 'deleted'
+
+export interface ZoteroChangesRequest {
+  readonly library?: SupportedLocalLibrary
+  /**
+   * The library version to diff from. Omitted takes a baseline reading: the
+   * result carries only the library's current version, which the next call
+   * can pass as `since`.
+   */
+  readonly since?: number
+  readonly include?: ReadonlySet<ZoteroChangesInclude>
+}
+
+/** One changed object: its key and the local version it reached. */
+export interface ZoteroChangedObject {
+  readonly key: string
+  readonly version: number
+}
+
+export interface ZoteroChangesResult {
+  readonly library: SupportedLocalLibrary
+  readonly serverId?: string
+  /** The version the diff started from; absent on a baseline reading. */
+  readonly fromVersion?: number
+  /** The library's current transaction version (Zotero 10+). */
+  readonly toVersion?: number
+  readonly changed: {
+    readonly items?: readonly ZoteroChangedObject[]
+    readonly collections?: readonly ZoteroChangedObject[]
+    readonly savedSearches?: readonly ZoteroChangedObject[]
+    /** Attachments whose full-text index changed (`/fulltext?since=`). */
+    readonly fulltextAttachments?: readonly ZoteroChangedObject[]
+  }
+  readonly deleted?: {
+    readonly items?: readonly string[]
+    readonly collections?: readonly string[]
+    readonly savedSearches?: readonly string[]
+  }
+  /** True when any resource hit the per-resource listing cap. */
+  readonly truncated?: boolean
+}
+
 /**
  * The storage side of the `ctx.zotero` seam. Providers declare which
  * capabilities they safely support; the service gates every domain call on
@@ -541,6 +587,13 @@ export interface ZoteroProvider {
    * @returns the bounded child collections with their totals.
    */
   children?(request: ZoteroChildrenRequest, signal?: AbortSignal): Promise<ZoteroChildrenResult>
+  /**
+   * Diff the library against a local transaction version.
+   * @param request - the baseline version and the resource kinds to diff.
+   * @param signal - caller cancellation; forwarded to the transport.
+   * @returns changed/deleted keys plus the library's current version.
+   */
+  changes?(request: ZoteroChangesRequest, signal?: AbortSignal): Promise<ZoteroChangesResult>
   /**
    * Resolve an item or attachment ref to a usable location.
    * @param ref - the item or attachment ref to resolve.
