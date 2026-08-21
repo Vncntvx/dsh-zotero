@@ -583,6 +583,57 @@ describe('search: note-content scan', () => {
     expect(parentFetch?.search.get('itemKey')).toBe('PARE1111,PARE2222,PARE3333')
   })
 
+  it('splits parent-membership lookups into itemKey batches of at most 50', async () => {
+    mock.route('GET', '/api/users/0/collections', (req, res, helpers) =>
+      helpers.json(COLLECTIONS, { 'Zotero-Server-ID': 'S1' }),
+    )
+    mock.route('GET', '/api/users/0/collections/COLL1234/items/top', (req, res, helpers) =>
+      helpers.json([], { 'Total-Results': '0', 'Zotero-Server-ID': 'S1' }),
+    )
+    // 60 matched child notes over 59 distinct parents — one parent shared by
+    // two notes proves deduplication before batching.
+    const notes = Array.from({ length: 60 }, (_, i) => ({
+      key: `NOTE${String(i).padStart(4, '0')}`,
+      data: {
+        itemType: 'note',
+        note: 'cascade risk note',
+        parentItem: `PARE${String(i % 59).padStart(4, '0')}`,
+        collections: [],
+      },
+    }))
+    const parentFetches: string[][] = []
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers, search) => {
+      if (search.get('itemType') === 'note') {
+        helpers.json(notes)
+        return
+      }
+      const itemKey = search.get('itemKey')
+      if (itemKey !== null) {
+        const keys = itemKey.split(',')
+        parentFetches.push(keys)
+        helpers.json(
+          keys.map((key) => ({ key, data: { collections: ['COLL1234'] } })),
+          { 'Zotero-Server-ID': 'S1' },
+        )
+        return
+      }
+      helpers.json([], { 'Total-Results': '0', 'Zotero-Server-ID': 'S1' })
+    })
+    const result = await provider.search(
+      request({
+        query: 'cascade',
+        scope: { kind: 'collection', refOrName: 'LLM Papers' },
+        limit: 60,
+      }),
+    )
+    expect(result.supplemental?.items).toHaveLength(60)
+    expect(parentFetches.map((keys) => keys.length).sort((a, b) => a - b)).toEqual([9, 50])
+    const requested = parentFetches.flat()
+    expect(new Set(requested).size).toBe(59)
+    expect(requested).toContain('PARE0000')
+    expect(requested).toContain('PARE0058')
+  })
+
   it('stops the scan at the configured record cap', async () => {
     const capped = makeProvider({ maxNoteScanRecords: 2 })
     mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers, search) => {

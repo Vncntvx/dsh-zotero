@@ -566,9 +566,12 @@ export class LocalApiProvider implements ZoteroProvider {
 
   /**
    * Resolve collection membership for child notes through their parents in
-   * one batched request: child notes belong to a collection only via the
-   * parent bibliographic item. A parent missing from the response (e.g.
-   * trashed without `includeTrashed`) fails closed as a non-member.
+   * batched requests: child notes belong to a collection only via the
+   * parent bibliographic item. Keys are deduplicated and split into
+   * `ZOTERO_ITEMKEY_BATCH`-sized chunks — the Local API's hard per-request
+   * cap for `itemKey=` — fetched through the bounded pool. A parent missing
+   * from a response (e.g. trashed without `includeTrashed`) fails closed as
+   * a non-member.
    */
   private async fetchParentCollections(
     library: SupportedLocalLibrary,
@@ -576,19 +579,36 @@ export class LocalApiProvider implements ZoteroProvider {
     serverId: string | undefined,
     signal: AbortSignal | undefined,
   ): Promise<Map<string, Set<string>>> {
-    const params = new URLSearchParams()
-    params.set('itemKey', parentKeys.join(','))
-    const { json } = await this.client.getJson<unknown>(`${libraryPrefix(library)}/items`, params, {
-      signal,
-      serverId,
-    })
-    const memberships = new Map<string, Set<string>>()
-    for (const row of Array.isArray(json) ? json : []) {
-      const key = asString(asRecord(row)?.key)
-      if (key === undefined) continue
-      memberships.set(key, new Set(collectionKeysOf(row)))
+    const unique = [...new Set(parentKeys)]
+    const chunks: string[][] = []
+    for (let start = 0; start < unique.length; start += ZOTERO_ITEMKEY_BATCH) {
+      chunks.push(unique.slice(start, start + ZOTERO_ITEMKEY_BATCH))
     }
-    return memberships
+    const membershipsPerChunk = await mapWithConcurrency(
+      chunks,
+      ZOTERO_EXPORT_CONCURRENCY,
+      async (chunk) => {
+        const params = new URLSearchParams()
+        params.set('itemKey', chunk.join(','))
+        const { json } = await this.client.getJson<unknown>(
+          `${libraryPrefix(library)}/items`,
+          params,
+          { signal, serverId },
+        )
+        const memberships = new Map<string, Set<string>>()
+        for (const row of Array.isArray(json) ? json : []) {
+          const key = asString(asRecord(row)?.key)
+          if (key === undefined) continue
+          memberships.set(key, new Set(collectionKeysOf(row)))
+        }
+        return memberships
+      },
+    )
+    const merged = new Map<string, Set<string>>()
+    for (const memberships of membershipsPerChunk) {
+      for (const [key, collections] of memberships) merged.set(key, collections)
+    }
+    return merged
   }
 
   /**
