@@ -563,6 +563,27 @@ describe('step3: remaining branches', () => {
       } as never,
     )
     expect((out1[0] as { text: string }).text).toContain('a')
+    // Fallback shapes: a library row without a name, a collection row without
+    // a ref, and an unknown row with neither name nor ref.
+    const fallbacks = renderBrowse(
+      { kind: 'libraries', offset: 0, limit: 10 } as never,
+      {
+        kind: 'libraries',
+        total: 3,
+        returned: 3,
+        offset: 0,
+        nextOffset: undefined,
+        items: [
+          { library: { type: 'group', id: 9 } },
+          { path: ['Root'] },
+          { conditions: [{ condition: 'unread' }] },
+        ],
+      } as never,
+    )
+    const fallbackText = (fallbacks[0] as { text: string }).text
+    expect(fallbackText).toContain('group/9 — group/9')
+    expect(fallbackText).toContain('1.'.length ? 'Root' : 'Root')
+    expect(fallbackText).not.toContain('undefined')
     // itemFields row shapes with and without localized labels
     const outFields = renderBrowse(
       { kind: 'itemFields', offset: 0, limit: 10 } as never,

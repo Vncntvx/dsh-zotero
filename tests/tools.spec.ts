@@ -911,6 +911,18 @@ describe('zotero_retrieve tool', () => {
     expect(text).toContain('fulltext')
   })
 
+  it('searches My Publications end to end through the tool', async () => {
+    mock.route('GET', '/api/users/0/publications/items/top', (req, res, helpers) =>
+      helpers.json([ITEM], { 'Total-Results': '1' }),
+    )
+    const result = await runTool('zotero_search', { scope: { kind: 'publications' } })
+    expect(result.isError).toBe(false)
+    if (result.isError) throw new Error('unreachable')
+    expect(mock.requests[0]!.pathname).toBe('/api/users/0/publications/items/top')
+    const value = result.value as { scope: { kind: string } }
+    expect(value.scope.kind).toBe('publications')
+  })
+
   it('rejects empty queries and out-of-range passage counts before any request', async () => {
     const empty = await runTool('zotero_retrieve', {
       ref: 'zotero://user/0/item/ABCD1234',
@@ -952,10 +964,10 @@ describe('zotero_retrieve tool', () => {
       ],
       [
         {
-          ref: 'zotero://user/0/item/ABCD1234',
+          ref: 'zotero://group/7/item/ABCD1234',
           query: 'x',
           attachmentPolicy: 'specified',
-          attachmentRefs: ['zotero://group/42/attachment/WXYZ6789'],
+          attachmentRefs: ['zotero://group/8/attachment/WXYZ6789'],
         },
         'same library',
       ],
@@ -1141,6 +1153,22 @@ describe('zotero_get render', () => {
       extraFields: { ghost: undefined },
     } as never)
     expect(text).not.toContain('Additional fields')
+  })
+
+  it('JSON-encodes non-string extra field values', () => {
+    const text = render({
+      ref: 'zotero://user/0/item/ABCD1234',
+      itemType: 'dataset',
+      title: 'T',
+      creators: [],
+      abstractTruncated: false,
+      tags: [],
+      collections: [],
+      children: { total: 0 },
+      extraFields: { versionNumber: 2, flags: ['a', true] },
+    } as never)
+    expect(text).toContain('versionNumber: 2')
+    expect(text).toContain('flags: ["a",true]')
   })
 
   it('renders the note body with a truncation marker for note items', () => {
@@ -1431,6 +1459,9 @@ describe('zotero_changes tool', () => {
           version: i + 2,
         })),
       },
+      deleted: {
+        items: Array.from({ length: 22 }, (_, i) => `GONE${String(i).padStart(4, '0')}`),
+      },
       truncated: true,
     } as never)
     const text = (truncated[0] as { text: string }).text
@@ -1438,6 +1469,8 @@ describe('zotero_changes tool', () => {
     expect(text).toContain('Items: 25+')
     expect(text).toContain('… 5 more')
     expect(text).not.toContain('KEY0024')
+    expect(text).toContain('Deleted items: 22')
+    expect(text).toContain('… 2 more')
   })
 })
 

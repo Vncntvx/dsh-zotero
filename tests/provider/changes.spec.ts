@@ -75,7 +75,8 @@ describe('changes', () => {
     route('/api/users/0/fulltext', versionMap([['WXYZ6789', 46]]))
     mock.route('GET', '/api/users/0/deleted', (req, res, helpers, search) => {
       expect(search.get('since')).toBe('42')
-      helpers.json({ items: ['EEEE0001'], collections: [], searches: [] })
+      // A non-array tombstone section is skipped by the key filter.
+      helpers.json({ items: ['EEEE0001'], collections: [], searches: 'garbage' })
     })
 
     const result = await provider.changes({ since: 42 })
@@ -145,5 +146,28 @@ describe('changes', () => {
     )
     const result = await provider.changes({ since: 10, include: new Set(['items']) })
     expect(result.changed.items).toEqual([{ key: 'ABCD1234', version: 44 }])
+  })
+
+  it('degrades a resource this build does not serve to an absent section', async () => {
+    // /deleted 404s on some local-API versions; the rest of the diff answers.
+    mock.route('GET', '/api/users/0/items/top', (req, res, helpers) =>
+      helpers.json(versionMap([['ABCD1234', 44]]), {
+        'Total-Results': '1',
+        'Last-Modified-Version': '50',
+      }),
+    )
+    const result = await provider.changes({ since: 42, include: new Set(['items', 'deleted']) })
+    expect(result.changed.items?.map((entry) => entry.key)).toEqual(['ABCD1234'])
+    expect(result.deleted).toBeUndefined()
+    expect(result.truncated).toBeUndefined()
+  })
+
+  it('reports a versionless library as an empty baseline reading', async () => {
+    mock.route('GET', '/api/users/0/items/top', (req, res, helpers) =>
+      helpers.raw(404, { 'Content-Type': 'text/plain' }, 'Not found'),
+    )
+    const result = await provider.changes({})
+    expect(result.toVersion).toBeUndefined()
+    expect(result.changed).toEqual({})
   })
 })

@@ -878,14 +878,36 @@ export class LocalApiProvider implements ZoteroProvider {
     let serverId: string | undefined
     let toVersion: number | undefined
 
+    /**
+     * A diff resource this Zotero build does not serve (some local-API
+     * versions 404 on `/deleted`, for example) contributes nothing instead
+     * of failing the whole read — degradation matches the plugin's honest-
+     * absence contract everywhere else.
+     */
+    const optional = async <T>(run: () => Promise<T>): Promise<T | undefined> => {
+      try {
+        return await run()
+      } catch (error) {
+        if (error instanceof ZoteroError && error.code === ZOTERO_NOT_FOUND) return undefined
+        throw error
+      }
+    }
+
     if (request.since === undefined) {
-      const baselineParams = new URLSearchParams()
-      baselineParams.set('limit', '1')
-      const { headers } = await this.client.get(`${prefix}/items/top`, baselineParams, {
-        signal,
+      const baseline = await optional(async () => {
+        const baselineParams = new URLSearchParams()
+        baselineParams.set('limit', '1')
+        return await this.client.get(`${prefix}/items/top`, baselineParams, {
+          signal,
+        })
       })
-      serverId = headers.get('zotero-server-id') ?? undefined
-      const lastModified = headers.get('last-modified-version')
+      // A library that cannot serve versioned items at all has no changes
+      // story; the baseline reading reports an unknown version.
+      if (baseline === undefined) {
+        return { library, changed: {} }
+      }
+      serverId = baseline.headers.get('zotero-server-id') ?? undefined
+      const lastModified = baseline.headers.get('last-modified-version')
       toVersion =
         lastModified !== null && /^\d+$/.test(lastModified) ? Number(lastModified) : undefined
       return {
@@ -935,41 +957,53 @@ export class LocalApiProvider implements ZoteroProvider {
     } = {}
     let truncated = false
     if (include.has('items')) {
-      const result = await fetchVersions(`${prefix}/items/top`)
-      changed.items = result.entries
-      truncated = truncated || result.truncated
+      const result = await optional(() => fetchVersions(`${prefix}/items/top`))
+      if (result !== undefined) {
+        changed.items = result.entries
+        truncated = truncated || result.truncated
+      }
     }
     if (include.has('collections')) {
-      const result = await fetchVersions(`${prefix}/collections`)
-      changed.collections = result.entries
-      truncated = truncated || result.truncated
+      const result = await optional(() => fetchVersions(`${prefix}/collections`))
+      if (result !== undefined) {
+        changed.collections = result.entries
+        truncated = truncated || result.truncated
+      }
     }
     if (include.has('savedSearches')) {
-      const result = await fetchVersions(`${prefix}/searches`)
-      changed.savedSearches = result.entries
-      truncated = truncated || result.truncated
+      const result = await optional(() => fetchVersions(`${prefix}/searches`))
+      if (result !== undefined) {
+        changed.savedSearches = result.entries
+        truncated = truncated || result.truncated
+      }
     }
     if (include.has('fulltext')) {
       // The fulltext delta has its own endpoint and reports attachment keys.
-      const result = await fetchVersions(`${prefix}/fulltext`)
-      changed.fulltextAttachments = result.entries
-      truncated = truncated || result.truncated
+      const result = await optional(() => fetchVersions(`${prefix}/fulltext`))
+      if (result !== undefined) {
+        changed.fulltextAttachments = result.entries
+        truncated = truncated || result.truncated
+      }
     }
     if (include.has('deleted')) {
-      const params = new URLSearchParams()
-      params.set('since', String(request.since))
-      const { json, headers } = await this.client.getJson<unknown>(`${prefix}/deleted`, params, {
-        signal,
+      const payload = await optional(async () => {
+        const params = new URLSearchParams()
+        params.set('since', String(request.since))
+        return await this.client.getJson<unknown>(`${prefix}/deleted`, params, {
+          signal,
+        })
       })
-      serverId = serverId ?? headers.get('zotero-server-id') ?? undefined
-      const record = asRecord(json)
-      const keysOf = (field: string): string[] =>
-        (Array.isArray(record?.[field]) ? (record![field] as unknown[]) : []).filter(
-          (key): key is string => typeof key === 'string' && isObjectKey(key),
-        )
-      deleted.items = keysOf('items')
-      deleted.collections = keysOf('collections')
-      deleted.savedSearches = keysOf('searches')
+      if (payload !== undefined) {
+        serverId = serverId ?? payload.headers.get('zotero-server-id') ?? undefined
+        const record = asRecord(payload.json)
+        const keysOf = (field: string): string[] =>
+          (Array.isArray(record?.[field]) ? (record![field] as unknown[]) : []).filter(
+            (key): key is string => typeof key === 'string' && isObjectKey(key),
+          )
+        deleted.items = keysOf('items')
+        deleted.collections = keysOf('collections')
+        deleted.savedSearches = keysOf('searches')
+      }
     }
 
     return {
