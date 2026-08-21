@@ -7,9 +7,8 @@
  * `?server=<Zotero-Server-ID>` recorded by Zotero 10+. Zotero object keys are
  * 8 uppercase alphanumeric characters. The library segment makes identity
  * explicit: an object key is never treated as a global identity. Group
- * libraries and non-zero user ids parse here, but the V1 local provider
- * fails closed on them, so the grammar does not have to change when they
- * gain support.
+ * libraries parse here and are served by the local provider; foreign user
+ * ids still fail closed (`requireSupportedLocalRef`).
  * @module dsh-zotero/refs
  */
 

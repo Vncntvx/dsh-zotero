@@ -47,6 +47,7 @@ import { chunkText, rankChunks, tokenize } from './evidence.js'
 import { locateExportItems } from './export-mapping.js'
 import { asRecord, asString, isObjectKey } from './json.js'
 import { loadItemGraph } from './item-graph.js'
+import { cacheEntryMatchesIdentity, type LocalReadContext } from './local/identity.js'
 import {
   collectionKeysOf,
   matchScopeName,
@@ -307,30 +308,34 @@ export class LocalApiProvider implements ZoteroProvider {
    * `searches`), re-fetched when the cached copy is older than the TTL or
    * `force` asks for a fresh answer. Always stored with the identity header
    * it was served under, so later calls keep the listing's own provenance.
+   * A read pinned to one instance (a ref carrying `?server=`) never consumes
+   * an entry served by a different instance, even inside the TTL window —
+   * after a profile or database switch, same-key objects are different
+   * objects.
    */
   private async scopeListingOf(
     plural: 'collections' | 'searches',
-    library: SupportedLocalLibrary,
-    serverId: string | undefined,
+    ctx: LocalReadContext,
     signal: AbortSignal | undefined,
     options: { force?: boolean } = {},
   ): Promise<ScopeListing> {
-    const key = cacheKey(library, plural)
+    const key = cacheKey(ctx.library, plural)
     const cached = this.scopeListingCache.get(key)
     if (
       !options.force &&
       cached !== undefined &&
-      Date.now() - cached.fetchedAt < this.scopeListingTtlMs
+      Date.now() - cached.fetchedAt < this.scopeListingTtlMs &&
+      cacheEntryMatchesIdentity(cached.serverId, ctx.serverId)
     ) {
       return cached
     }
-    const prefix = libraryPrefix(library)
+    const prefix = libraryPrefix(ctx.library)
     const { json, headers } = await this.client.getJson<unknown>(`${prefix}/${plural}`, undefined, {
       signal,
-      serverId,
+      serverId: ctx.serverId,
     })
     const entries = (Array.isArray(json) ? json : []).map((row) => normalizeScopeEntry(row))
-    const servedBy = headers.get('zotero-server-id') ?? serverId
+    const servedBy = headers.get('zotero-server-id') ?? ctx.serverId
     const listing: ScopeListing =
       servedBy === undefined
         ? { entries, fetchedAt: Date.now() }
@@ -747,7 +752,7 @@ export class LocalApiProvider implements ZoteroProvider {
     serverId: string | undefined,
     signal: AbortSignal | undefined,
   ): Promise<ReadonlyMap<string, string>> {
-    const listing = await this.scopeListingOf('collections', library, serverId, signal)
+    const listing = await this.scopeListingOf('collections', { library, serverId }, signal)
     const wanted = new Set(keys)
     return new Map(
       listing.entries
@@ -1461,10 +1466,10 @@ export class LocalApiProvider implements ZoteroProvider {
       }
     }
     // name resolution uses effective library
-    let listing = await this.scopeListingOf(plural, effectiveLibrary, undefined, signal)
+    let listing = await this.scopeListingOf(plural, { library: effectiveLibrary }, signal)
     let matched = matchScopeName(listing.entries, refOrName)
     if (matched.length === 0) {
-      listing = await this.scopeListingOf(plural, effectiveLibrary, undefined, signal, {
+      listing = await this.scopeListingOf(plural, { library: effectiveLibrary }, signal, {
         force: true,
       })
       matched = matchScopeName(listing.entries, refOrName)
@@ -1601,7 +1606,7 @@ export class LocalApiProvider implements ZoteroProvider {
     // resolution instead: at most one full graph fetch per window, and every
     // later browse (or name lookup) serves from the cached graph. The
     // streamed-response byte cap remains the hard bound on the fetch itself.
-    const listing = await this.scopeListingOf('collections', library, undefined, signal)
+    const listing = await this.scopeListingOf('collections', { library }, signal)
     const serverId = listing.serverId
     const detailed = new Map<string, { name: string; parentKey?: string }>()
     for (const entry of listing.entries) {
