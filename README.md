@@ -26,13 +26,16 @@ dsh-zotero 是面向 Agent 研究工作流的 [Zotero](https://www.zotero.org) �
 
 ## 工具
 
-| 工具                | 用途                                                    |
-| ------------------- | ------------------------------------------------------- |
-| `zotero_search`     | 按标题/作者/年份搜索，`everything` 模式连全文索引一起搜 |
-| `zotero_get`        | 读取单条文献的元数据，可选返回笔记、批注、附件清单      |
-| `zotero_retrieve`   | 按查询词返回最相关的证据段落（批注/笔记/摘要/全文）     |
-| `zotero_attachment` | 将文献 ref 解析为已验证的磁盘路径或链接 URL             |
-| `zotero_export`     | 生成引用、参考文献表、BibTeX/BibLaTeX/RIS/CSL JSON      |
+| 工具                | 用途                                                                                                          |
+| ------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `zotero_search`     | 按标题/作者/年份搜索（library/collection/savedSearch/publications 作用域），`everything` 模式连全文索引一起搜 |
+| `zotero_browse`     | 发现库结构：库、合集树（层级导航）、保存的检索、标签 facet、条目类型及其字段                                  |
+| `zotero_get`        | 读取单条文献的元数据，可选返回笔记、批注、附件清单；`fields:"all"` 保留全部元数据                             |
+| `zotero_children`   | 探索单条文献的子对象图：直连笔记、附件，以及挂在 PDF 下的批注                                                 |
+| `zotero_retrieve`   | 按查询词返回最相关的证据段落（批注/笔记/摘要/全文），支持多附件检索                                           |
+| `zotero_changes`    | 基于本地事务版本的增量感知：哪些条目/合集/全文索引变了、什么被删除                                            |
+| `zotero_attachment` | 将文献 ref 解析为已验证的磁盘路径或链接 URL                                                                   |
+| `zotero_export`     | 生成引用、参考文献表、BibTeX/BibLaTeX/RIS/CSL JSON                                                            |
 
 [完整工具参考 →](docs/tools.md)
 
@@ -111,15 +114,15 @@ Agent → zotero_export(refs: [1,2,3], format: "bibtex")
 
 ## 文档
 
-| 文档                                | 内容                               |
-| ----------------------------------- | ---------------------------------- |
-| [快速上手](docs/getting-started.md) | 安装、前置条件、首次验证           |
-| [功能概览](docs/features.md)        | 来源面板、对话集成、证据提取、导出 |
-| [工具参考](docs/tools.md)           | 5 个工具的参数、返回值、错误码     |
-| [配置](docs/configuration.md)       | 20 个配置字段、默认值、热更新      |
-| [架构](docs/architecture.md)        | 数据流、各层职责、设计边界         |
-| [开发指南](docs/development.md)     | 构建、测试、本地开发               |
-| [问题排查](docs/troubleshooting.md) | 11 个常见问题的症状和处理          |
+| 文档                                | 内容                                |
+| ----------------------------------- | ----------------------------------- |
+| [快速上手](docs/getting-started.md) | 安装、前置条件、首次验证            |
+| [功能概览](docs/features.md)        | 来源面板、对话集成、证据提取、导出  |
+| [工具参考](docs/tools.md)           | 全部 8 个工具的参数、返回值、错误码 |
+| [配置](docs/configuration.md)       | 20 个配置字段、默认值、热更新       |
+| [架构](docs/architecture.md)        | 数据流、各层职责、设计边界          |
+| [开发指南](docs/development.md)     | 构建、测试、本地开发                |
+| [问题排查](docs/troubleshooting.md) | 11 个常见问题的症状和处理           |
 
 ## 开发
 

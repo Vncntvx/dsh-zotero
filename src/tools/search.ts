@@ -51,6 +51,11 @@ const SEARCH_PARAMETERS = {
       {
         type: 'object',
         additionalProperties: false,
+        properties: { kind: { type: 'string', const: 'publications', required: true } },
+      },
+      {
+        type: 'object',
+        additionalProperties: false,
         properties: {
           kind: { type: 'string', const: 'collection', required: true },
           refOrName: {
@@ -76,7 +81,8 @@ const SEARCH_PARAMETERS = {
       },
     ],
     default: SEARCH_DEFAULT_SCOPE,
-    description: 'Where to search. Defaults to the whole library.',
+    description:
+      'Where to search. Defaults to the whole library; publications searches My Publications.',
   },
   library: {
     type: 'object',
@@ -182,6 +188,22 @@ const SEARCH_OUTPUT_SCHEMA = {
           type: 'object',
           additionalProperties: false,
           properties: {
+            kind: { type: 'string', const: 'publications', required: true },
+            library: {
+              type: 'object',
+              required: true,
+              additionalProperties: false,
+              properties: {
+                type: { type: 'string', enum: ['user', 'group'], required: true },
+                id: { type: 'integer', required: true },
+              },
+            },
+          },
+        },
+        {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
             kind: { type: 'string', const: 'collection', required: true },
             ref: { type: 'string', required: true },
             name: { type: 'string', required: true },
@@ -230,7 +252,7 @@ export function buildRequest(args: SearchArgs, config: ResolvedConfig): ZoteroSe
     invalid(`offset must be a non-negative integer; got ${offset}`)
   const query = args.query?.trim()
   const scope = args.scope ?? SEARCH_DEFAULT_SCOPE
-  if (scope.kind !== 'library' && scope.refOrName.trim() === '') {
+  if (scope.kind !== 'library' && scope.kind !== 'publications' && scope.refOrName.trim() === '') {
     invalid('scope.refOrName must be a collection/saved-search name or ref')
   }
   for (const tag of args.tags ?? []) {
@@ -280,7 +302,9 @@ export function buildRequest(args: SearchArgs, config: ResolvedConfig): ZoteroSe
     scope:
       scope.kind === 'library'
         ? { kind: 'library' }
-        : { kind: scope.kind, refOrName: scope.refOrName },
+        : scope.kind === 'publications'
+          ? { kind: 'publications' }
+          : { kind: scope.kind, refOrName: scope.refOrName },
     ...(library ? { library } : {}),
     itemTypes: args.itemTypes,
     tags: args.tags,

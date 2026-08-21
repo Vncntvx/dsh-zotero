@@ -61,6 +61,7 @@ export interface ZoteroStatus {
 /** Where `zotero_search` looks for items. */
 export type ZoteroSearchScope =
   | { readonly kind: 'library' }
+  | { readonly kind: 'publications' }
   | { readonly kind: 'collection'; readonly refOrName: string }
   | { readonly kind: 'savedSearch'; readonly refOrName: string }
 
@@ -72,6 +73,7 @@ export type ZoteroSearchScope =
  */
 export type ZoteroResolvedScope =
   | { readonly kind: 'library'; readonly library: SupportedLocalLibrary }
+  | { readonly kind: 'publications'; readonly library: SupportedLocalLibrary }
   | { readonly kind: 'collection'; readonly ref: string; readonly name: string }
   | { readonly kind: 'savedSearch'; readonly ref: string; readonly name: string }
 

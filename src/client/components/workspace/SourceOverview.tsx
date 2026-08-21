@@ -32,6 +32,8 @@ export function scopeLabelOf(scope: SearchProvenance['scope'], t: TranslateNS<'z
   switch (scope.kind) {
     case 'library':
       return t('overviewScopeLibrary')
+    case 'publications':
+      return t('overviewScopePublications')
     case 'collection':
       return scope.name ?? scope.ref ?? t('overviewScopeCollection')
     case 'savedSearch':

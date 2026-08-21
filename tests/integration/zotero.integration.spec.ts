@@ -172,25 +172,94 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', 
       expect(item.path.length).toBeGreaterThan(0)
       expect(item.depth).toBe(item.path.length - 1)
       expect(item.path[item.path.length - 1]).toBe(item.name)
-      if (item.path.length > 1) expect(item.parentRef).toBeDefined()
-      else expect(item.parentRef).toBeUndefined()
+      // Top-level pages carry top-level collections only.
+      expect(item.depth).toBe(0)
     }
-    // A second page within the TTL must serve from the snapshot: same total,
-    // disjoint rows, no additional full fetch observable from its result.
-    if (first.total > first.returned && first.nextOffset !== undefined) {
-      const second = await provider.browse({
-        kind: 'collections',
-        offset: first.nextOffset,
-        limit: 5,
+    if (first.nextOffset === undefined) return
+    const second = await provider.browse({
+      kind: 'collections',
+      offset: first.nextOffset,
+      limit: 5,
+    })
+    const firstRefs = new Set((first.items as unknown as { ref: string }[]).map((item) => item.ref))
+    for (const item of second.items as unknown as { ref: string }[]) {
+      expect(firstRefs.has(item.ref)).toBe(false)
+    }
+  })
+
+  it('navigates into a collection and lists its children with real breadcrumbs', async () => {
+    const top = await provider.browse({ kind: 'collections', offset: 0, limit: 5 })
+    if (top.total === 0) {
+      console.log('[integration] library has no collections; skipping child navigation')
+      return
+    }
+    const parent = top.items[0] as unknown as { ref: string; name: string; depth: number }
+    if (parent.depth !== 0) {
+      console.log('[integration] first browse page held no top-level collection; skipping')
+      return
+    }
+    const children = await provider.browse({
+      kind: 'collections',
+      parentRef: parent.ref,
+      offset: 0,
+      limit: 10,
+    })
+    for (const item of children.items as unknown as {
+      name: string
+      path: string[]
+      parentRef?: string
+    }[]) {
+      expect(item.path[0]).toBeDefined()
+      expect(item.path[item.path.length - 1]).toBe(item.name)
+      if (item.path.length > 1) expect(item.parentRef).toBeDefined()
+    }
+  })
+
+  it('explores an item graph through children with attachment-nested annotations', async () => {
+    const search = await provider.search({
+      scope: { kind: 'library' },
+      mode: 'metadata',
+      sort: 'dateModified',
+      direction: 'desc',
+      offset: 0,
+      limit: 5,
+    })
+    for (const hit of search.items.slice(0, 3)) {
+      const graph = await provider.children({
+        ref: parseRef(hit.ref),
+        include: new Set(['notes', 'attachments', 'annotations']),
       })
-      expect(second.total).toBe(first.total)
-      const firstRefs = new Set(
-        (first.items as unknown as { ref: string }[]).map((item) => item.ref),
-      )
-      for (const item of second.items as unknown as { ref: string }[]) {
-        expect(firstRefs.has(item.ref)).toBe(false)
+      expect(graph.itemType).toBeDefined()
+      if (graph.annotations !== undefined) {
+        for (const annotation of graph.annotations.items) {
+          // Annotations are provenance-linked to their PDF, not to the paper.
+          expect(annotation.ref).toContain('/annotation/')
+        }
+      }
+      if (graph.attachments !== undefined) {
+        const pdf = graph.attachments.items.find(
+          (attachment) => attachment.contentType === 'application/pdf',
+        )
+        if (pdf !== undefined) {
+          const nested = await provider.children({
+            ref: parseRef(pdf.ref),
+            include: new Set(['annotations']),
+          })
+          expect(nested.itemType).toBe('attachment')
+        }
       }
     }
+  })
+
+  it('takes a changes baseline reading and diffs from it', async () => {
+    const baseline = await provider.changes({})
+    expect(baseline.toVersion).toBeDefined()
+    expect(Object.keys(baseline.changed)).toHaveLength(0)
+    const diff = await provider.changes({ since: baseline.toVersion! })
+    expect(diff.fromVersion).toBe(baseline.toVersion!)
+    expect(diff.toVersion).toBeGreaterThanOrEqual(baseline.toVersion!)
+    // A same-version diff is empty but well-formed.
+    expect(Array.isArray(diff.changed.items)).toBe(true)
   })
 
   it('browses saved searches through the server-side pagination window', async () => {

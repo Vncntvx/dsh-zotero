@@ -44,6 +44,7 @@ export type { SupportedLocalLibrary } from '../../types.js'
 /** The normalized search scope, free of raw tool arguments. */
 export type SourceScope =
   | { readonly kind: 'library'; readonly library?: SupportedLocalLibrary }
+  | { readonly kind: 'publications'; readonly library?: SupportedLocalLibrary }
   | { readonly kind: 'collection'; readonly ref?: string; readonly name?: string }
   | { readonly kind: 'savedSearch'; readonly ref?: string; readonly name?: string }
 

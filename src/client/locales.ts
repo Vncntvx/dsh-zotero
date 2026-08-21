@@ -53,6 +53,7 @@ export type ZoteroLocaleKey =
   | 'modeMetadata'
   | 'modeEverything'
   | 'overviewScopeLibrary'
+  | 'overviewScopePublications'
   | 'overviewScopeCollection'
   | 'overviewScopeSavedSearch'
   | 'searchDetailOpen'
@@ -244,6 +245,7 @@ export const en: Record<ZoteroLocaleKey, string> = {
   modeMetadata: 'Metadata',
   modeEverything: 'Metadata and full text',
   overviewScopeLibrary: 'Library',
+  overviewScopePublications: 'My Publications',
   overviewScopeCollection: 'Collection',
   overviewScopeSavedSearch: 'Saved search',
   searchDetailOpen: 'Search details',
@@ -430,6 +432,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   modeMetadata: '元数据',
   modeEverything: '元数据与全文',
   overviewScopeLibrary: '文献库',
+  overviewScopePublications: '我的出版物',
   overviewScopeCollection: '合集',
   overviewScopeSavedSearch: '保存的检索',
   searchDetailOpen: '查看检索条件',

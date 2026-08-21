@@ -26,13 +26,16 @@ dsh-zotero is a [Zotero](https://www.zotero.org) plugin designed for agent resea
 
 ## Tools
 
-| Tool                | Purpose                                                                         |
-| ------------------- | ------------------------------------------------------------------------------- |
-| `zotero_search`     | Search by title/creator/year; `everything` mode also searches indexed full text |
-| `zotero_get`        | Read one item's metadata, optionally with notes, annotations, and attachments   |
-| `zotero_retrieve`   | Return the most relevant evidence passages for a query                          |
-| `zotero_attachment` | Resolve a ref to a verified on-disk path or linked URL                          |
-| `zotero_export`     | Generate citations, bibliographies, BibTeX/BibLaTeX/RIS/CSL JSON                |
+| Tool                | Purpose                                                                                                                              |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `zotero_search`     | Search by title/creator/year (library/collection/savedSearch/publications scopes); `everything` mode also searches indexed full text |
+| `zotero_browse`     | Discover library structure: libraries, the collection tree, saved searches, tag facets, item types and their fields                  |
+| `zotero_get`        | Read one item's metadata, optionally with notes, annotations, and attachments; `fields:"all"` keeps every field                      |
+| `zotero_children`   | Explore one item's child-object graph: direct notes, attachments, and the annotations that live under each PDF                       |
+| `zotero_retrieve`   | Return the most relevant evidence passages for a query; multi-attachment retrieval supported                                         |
+| `zotero_changes`    | Incremental awareness via local transaction versions: what changed, what was deleted                                                 |
+| `zotero_attachment` | Resolve a ref to a verified on-disk path or linked URL                                                                               |
+| `zotero_export`     | Generate citations, bibliographies, BibTeX/BibLaTeX/RIS/CSL JSON                                                                     |
 
 [Full tool reference →](docs/tools.md)
 
@@ -115,7 +118,7 @@ More examples in [Features](docs/features.md).
 | ------------------------------------------ | ------------------------------------------------------ |
 | [Getting Started](docs/getting-started.md) | Installation, prerequisites, first verification        |
 | [Features](docs/features.md)               | Sources panel, chat integration, evidence, exports     |
-| [Tool Reference](docs/tools.md)            | Parameters, return values, error codes for all 5 tools |
+| [Tool Reference](docs/tools.md)            | Parameters, return values, error codes for all 8 tools |
 | [Configuration](docs/configuration.md)     | 20 config fields, defaults, hot-reload                 |
 | [Architecture](docs/architecture.md)       | Data flow, layer responsibilities, design boundaries   |
 | [Development](docs/development.md)         | Build, test, local development                         |

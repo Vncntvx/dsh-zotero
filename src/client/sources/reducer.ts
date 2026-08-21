@@ -193,6 +193,7 @@ function scopeOf(value: unknown): SourceScope {
 
 function resolvedToSourceScope(scope: ZoteroResolvedScope): SourceScope {
   if (scope.kind === 'library') return { kind: 'library', library: scope.library }
+  if (scope.kind === 'publications') return { kind: 'publications', library: scope.library }
   if (scope.kind === 'collection') return { kind: 'collection', ref: scope.ref, name: scope.name }
   return { kind: 'savedSearch', ref: scope.ref, name: scope.name }
 }

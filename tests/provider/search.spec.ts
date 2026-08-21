@@ -123,6 +123,17 @@ describe('search: library scope', () => {
     expect(result.items[0]!.ref).toBe('zotero://user/0/item/ABCD1234?server=S1')
   })
 
+  it('searches My Publications through the publications scope', async () => {
+    mock.route('GET', '/api/users/0/publications/items/top', (req, res, helpers) =>
+      helpers.json([ITEM], { 'Total-Results': '3', 'Zotero-Server-ID': 'S1' }),
+    )
+    const result = await provider.search(request({ scope: { kind: 'publications' } }))
+    expect(result.scope).toEqual({ kind: 'publications', library: { type: 'user', id: 0 } })
+    expect(mock.requests[0]!.pathname).toBe('/api/users/0/publications/items/top')
+    expect(result.total).toBe(3)
+    expect(result.items).toHaveLength(1)
+  })
+
   it('omits nextOffset on the final page and falls back to body length for total', async () => {
     mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers) =>
       helpers.json([ITEM]),

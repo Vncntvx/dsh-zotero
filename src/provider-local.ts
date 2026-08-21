@@ -1817,6 +1817,13 @@ export class LocalApiProvider implements ZoteroProvider {
           path: `${libraryPrefix(effectiveLibrary)}/items/top`,
           resolved: { kind: 'library', library: effectiveLibrary },
         }
+      case 'publications':
+        // My Publications: the Local API mirrors the Web API's
+        // /publications/items scope, so published works are one hop away.
+        return {
+          path: `${libraryPrefix(effectiveLibrary)}/publications/items/top`,
+          resolved: { kind: 'publications', library: effectiveLibrary },
+        }
       case 'collection': {
         const found = await this.resolveNamed(
           'collection',
