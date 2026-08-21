@@ -175,6 +175,7 @@ describe('registry integration: zotero_browse libraries Native identity', () => 
         { kind: 'tags', tagCollection: 'LLM Papers' },
         'tagCollection requires tagScope="collection"',
       ],
+      [{ kind: 'tags', tagScope: 'collection' }, 'tagScope="collection" requires tagCollection'],
       [{ kind: 'tags', itemLevel: 'all' }, 'itemLevel/itemQuery require tagScope'],
       [
         { kind: 'tags', tagScope: 'library', itemQueryMode: 'everything' },

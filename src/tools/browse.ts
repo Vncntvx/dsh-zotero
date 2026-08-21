@@ -295,6 +295,12 @@ export function buildRequest(
   if (tagCollection !== undefined && tagScope !== 'collection') {
     throw new ZoteroError('tagCollection requires tagScope="collection"', ZOTERO_INVALID_ARGUMENT)
   }
+  if (tagScope === 'collection' && tagCollection === undefined) {
+    throw new ZoteroError(
+      'tagScope="collection" requires tagCollection (a zotero:// ref or a collection name)',
+      ZOTERO_INVALID_ARGUMENT,
+    )
+  }
   if ((itemLevel !== undefined || itemQuery !== undefined) && tagScope === undefined) {
     throw new ZoteroError(
       'itemLevel/itemQuery require tagScope (library, collection, or publications)',

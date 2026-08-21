@@ -583,16 +583,19 @@ export class LocalApiProvider implements ZoteroProvider {
     signal: AbortSignal | undefined,
   ): Promise<{ rows: readonly unknown[]; truncated: boolean }> {
     const libraryForScan: SupportedLocalLibrary =
-      scope.resolved.kind === 'library'
-        ? scope.resolved.library
-        : (() => {
+      scope.resolved.kind === 'collection' || scope.resolved.kind === 'savedSearch'
+        ? (() => {
             try {
               if ('ref' in scope.resolved && scope.resolved.ref)
                 return parseRef(scope.resolved.ref).library as SupportedLocalLibrary
             } catch {}
             return request.library ?? PERSONAL_LIBRARY
           })()
-    const prefix = libraryPrefix(libraryForScan)
+        : scope.resolved.library
+    let prefix = libraryPrefix(libraryForScan)
+    // A publications-scoped scan must stay inside My Publications; the bare
+    // library prefix would leak note matches from outside the segment.
+    if (scope.resolved.kind === 'publications') prefix += '/publications'
     const out: unknown[] = []
     let start = 0
     while (out.length < this.limits.maxNoteScanRecords) {

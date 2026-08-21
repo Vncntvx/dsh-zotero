@@ -444,6 +444,25 @@ describe('search: note-content scan', () => {
     expect(mock.requests[1]!.search.get('direction')).toBe('desc')
   })
 
+  it('keeps the publications scan inside My Publications', async () => {
+    mock.route('GET', '/api/users/0/publications/items/top', (req, res, helpers) =>
+      helpers.json([ITEM], { 'Total-Results': '1', 'Zotero-Server-ID': 'S1' }),
+    )
+    mock.route('GET', '/api/users/0/publications/items', (req, res, helpers, search) => {
+      if (search.get('itemType') === 'note') helpers.json([NOTE_HIT])
+      else helpers.json([])
+    })
+    const result = await provider.search(
+      request({ query: 'cascade infrastructure', scope: { kind: 'publications' } }),
+    )
+    // The scan must hit the publications segment; the bare library prefix
+    // would leak note matches from outside My Publications.
+    expect(mock.requests[1]!.pathname).toBe('/api/users/0/publications/items')
+    expect(result.supplemental?.items.map((entry) => entry.ref)).toEqual([
+      'zotero://user/0/item/NOTE1111?server=S1',
+    ])
+  })
+
   it('synthesizes a title for the merged note and dedupes API-page overlap', async () => {
     const titled = {
       key: 'NOTE3333',
