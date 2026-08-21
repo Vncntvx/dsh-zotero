@@ -1676,6 +1676,32 @@ export class LocalApiProvider implements ZoteroProvider {
         ZOTERO_INVALID_ARGUMENT,
       )
     }
+    if (
+      (request.scope !== undefined ||
+        request.itemLevel !== undefined ||
+        request.itemQuery !== undefined ||
+        request.itemQueryMode !== undefined) &&
+      request.kind !== 'tags'
+    ) {
+      throw new ZoteroError(
+        'scope/itemLevel/itemQuery are only valid when kind="tags"',
+        ZOTERO_INVALID_ARGUMENT,
+      )
+    }
+    if (request.scope === undefined) {
+      if (request.itemLevel !== undefined || request.itemQuery !== undefined) {
+        throw new ZoteroError(
+          'itemLevel/itemQuery require a scope (library, collection, or publications)',
+          ZOTERO_INVALID_ARGUMENT,
+        )
+      }
+    } else if (request.scope.kind === 'collection' && !isRefString(request.scope.refOrName)) {
+      // Name resolution happens in browseTags via resolveNamed; nothing to
+      // check here beyond non-emptiness.
+      if (request.scope.refOrName.trim() === '') {
+        throw new ZoteroError('scope.refOrName must be a non-empty string', ZOTERO_INVALID_ARGUMENT)
+      }
+    }
     switch (request.kind) {
       case 'libraries':
         return await this.browseLibraries(request, signal)
@@ -1943,23 +1969,60 @@ export class LocalApiProvider implements ZoteroProvider {
     }
   }
 
+  /**
+   * Browse tags, optionally scoped: without a scope this is the
+   * whole-library `/tags` listing; with a scope the scoped tag endpoints
+   * count tags over a faceted item set — a collection or My Publications,
+   * top-level by default or all items, optionally narrowed to items matching
+   * an item query. That makes "search → which tags do these hits carry →
+   * narrow" a server-side round trip instead of client-side guessing.
+   */
   private async browseTags(
     request: ZoteroBrowseRequest,
     signal?: AbortSignal,
   ): Promise<ZoteroBrowseResult> {
     const library: SupportedLocalLibrary = request.library ?? PERSONAL_LIBRARY
     const prefix = libraryPrefix(library)
+    const itemsSegment = request.itemLevel === 'all' ? 'items' : 'items/top'
+    let path = `${prefix}/tags`
+    let serverIdClaim: string | undefined
+    if (request.scope !== undefined) {
+      switch (request.scope.kind) {
+        case 'library':
+          path = `${prefix}/${itemsSegment}/tags`
+          break
+        case 'publications':
+          path = `${prefix}/publications/${itemsSegment}/tags`
+          break
+        case 'collection': {
+          const found = await this.resolveNamed(
+            'collection',
+            request.scope.refOrName,
+            library,
+            signal,
+          )
+          serverIdClaim = found.ref.serverId
+          path = `${libraryPrefix(found.ref.library as SupportedLocalLibrary)}/collections/${found.ref.key}/${itemsSegment}/tags`
+          break
+        }
+      }
+    }
     const params = new URLSearchParams()
     if (request.q !== undefined && request.q !== '') {
       params.set('q', request.q)
       params.set('qmode', request.match === 'startsWith' ? 'startsWith' : 'contains')
     }
+    if (request.itemQuery !== undefined && request.itemQuery !== '') {
+      params.set('itemQ', request.itemQuery)
+      params.set('itemQMode', request.itemQueryMode ?? 'titleCreatorYear')
+    }
     params.set('start', String(request.offset))
     params.set('limit', String(request.limit))
-    const { json, headers } = await this.client.getJson<unknown>(`${prefix}/tags`, params, {
+    const { json, headers } = await this.client.getJson<unknown>(path, params, {
       signal,
+      ...(serverIdClaim !== undefined ? { serverId: serverIdClaim } : {}),
     })
-    const serverId = headers.get('zotero-server-id') ?? undefined
+    const serverId = headers.get('zotero-server-id') ?? serverIdClaim
     const rawRows = Array.isArray(json) ? json : []
     const total = requireTotalResults(headers, 'tags')
     const items = rawRows

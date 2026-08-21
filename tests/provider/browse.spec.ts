@@ -392,6 +392,112 @@ describe('browse: tags', () => {
       'Total-Results',
     )
   })
+
+  it('counts scoped tags over a collection resolved by ref, with item query params', async () => {
+    mock.route('GET', '/api/users/0/collections/COLL1234', (req, res, helpers) =>
+      helpers.json(
+        { key: 'COLL1234', data: { key: 'COLL1234', name: 'LLM Papers' } },
+        { 'Zotero-Server-ID': 'S1' },
+      ),
+    )
+    mock.route(
+      'GET',
+      '/api/users/0/collections/COLL1234/items/top/tags',
+      (req, res, helpers, search) => {
+        expect(search.get('itemQ')).toBe('agent memory')
+        expect(search.get('itemQMode')).toBe('titleCreatorYear')
+        expect(search.get('start')).toBe('0')
+        helpers.json(
+          [
+            { tag: 'long-term-memory', meta: { numItems: 31 } },
+            { tag: 'benchmark', meta: { numItems: 9 } },
+          ],
+          { 'Total-Results': '2', 'Zotero-Server-ID': 'S1' },
+        )
+      },
+    )
+    const result = await provider.browse({
+      kind: 'tags',
+      scope: { kind: 'collection', refOrName: 'zotero://user/0/collection/COLL1234' },
+      itemQuery: 'agent memory',
+      offset: 0,
+      limit: 10,
+    })
+    expect(result.total).toBe(2)
+    expect(result.serverId).toBe('S1')
+    expect(result.items.map((item) => (item as { tag: string }).tag)).toEqual([
+      'long-term-memory',
+      'benchmark',
+    ])
+  })
+
+  it('resolves a collection by name through the cached listing before the scoped tags call', async () => {
+    mock.route('GET', '/api/users/0/collections', (req, res, helpers) =>
+      helpers.json([{ key: 'COLL1234', data: { key: 'COLL1234', name: 'LLM Papers' } }], {
+        'Zotero-Server-ID': 'S1',
+      }),
+    )
+    mock.route('GET', '/api/users/0/collections/COLL1234/items/top/tags', (req, res, helpers) =>
+      helpers.json([{ tag: 'rag' }], { 'Total-Results': '1' }),
+    )
+    const result = await provider.browse({
+      kind: 'tags',
+      scope: { kind: 'collection', refOrName: 'LLM Papers' },
+      offset: 0,
+      limit: 10,
+    })
+    expect(result.total).toBe(1)
+  })
+
+  it('maps library/publications scopes and the all item level to their endpoints', async () => {
+    const routed: string[] = []
+    const route = (matcher: string): void => {
+      mock.route('GET', matcher, (req, res, helpers) => {
+        routed.push(matcher)
+        helpers.json([{ tag: 'x' }], { 'Total-Results': '1' })
+      })
+    }
+    route('/api/users/0/items/top/tags')
+    route('/api/users/0/items/tags')
+    route('/api/users/0/publications/items/top/tags')
+    route('/api/users/0/publications/items/tags')
+
+    await provider.browse({ kind: 'tags', scope: { kind: 'library' }, offset: 0, limit: 5 })
+    await provider.browse({
+      kind: 'tags',
+      scope: { kind: 'library' },
+      itemLevel: 'all',
+      offset: 0,
+      limit: 5,
+    })
+    await provider.browse({ kind: 'tags', scope: { kind: 'publications' }, offset: 0, limit: 5 })
+    await provider.browse({
+      kind: 'tags',
+      scope: { kind: 'publications' },
+      itemLevel: 'all',
+      offset: 0,
+      limit: 5,
+    })
+    expect(routed).toEqual([
+      '/api/users/0/items/top/tags',
+      '/api/users/0/items/tags',
+      '/api/users/0/publications/items/top/tags',
+      '/api/users/0/publications/items/tags',
+    ])
+  })
+
+  it('fails closed on facet params without a scope or on a non-tags kind', async () => {
+    await zoteroError(
+      provider.browse({ kind: 'tags', itemQuery: 'x', offset: 0, limit: 5 }),
+      ZOTERO_INVALID_ARGUMENT,
+      'require a scope',
+    )
+    await zoteroError(
+      provider.browse({ kind: 'searches', scope: { kind: 'library' }, offset: 0, limit: 5 }),
+      ZOTERO_INVALID_ARGUMENT,
+      'only valid when kind="tags"',
+    )
+  })
 })
 
 describe('browse: itemTypes', () => {

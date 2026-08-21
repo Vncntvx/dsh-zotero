@@ -167,6 +167,32 @@ describe('registry integration: zotero_browse libraries Native identity', () => 
     const r2 = await run('zotero_browse', { kind: 'tags', match: 'contains' })
     expect(r2.isError).toBe(true)
   })
+
+  it('fails closed on mispaired tag facet arguments via tool', async () => {
+    const cases: [Record<string, unknown>, string][] = [
+      [{ kind: 'collections', tagScope: 'library' }, 'tagScope/itemLevel/itemQuery are only valid'],
+      [
+        { kind: 'tags', tagCollection: 'LLM Papers' },
+        'tagCollection requires tagScope="collection"',
+      ],
+      [{ kind: 'tags', itemLevel: 'all' }, 'itemLevel/itemQuery require tagScope'],
+      [
+        { kind: 'tags', tagScope: 'library', itemQueryMode: 'everything' },
+        'itemQueryMode requires itemQuery',
+      ],
+      [
+        { kind: 'tags', parentRef: 'zotero://user/0/collection/COLL0001' },
+        'parentRef is only valid',
+      ],
+    ]
+    for (const [args, message] of cases) {
+      const r = await run('zotero_browse', args)
+      expect(r.isError).toBe(true)
+      if (!r.isError) throw new Error('unreachable')
+      expect((r.content[0] as { text: string }).text).toContain(message)
+    }
+    expect(mock.requests).toEqual([])
+  })
 })
 
 describe('registry integration: browse render exposes structured fields', () => {

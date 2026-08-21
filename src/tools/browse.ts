@@ -46,6 +46,33 @@ const BROWSE_PARAMETERS = {
     description:
       'Collections only: a zotero://.../collection/<KEY> ref whose children to list. Omit to list top-level collections.',
   },
+  tagScope: {
+    type: 'string',
+    enum: ['library', 'collection', 'publications'],
+    description:
+      'Tags only: count tags over this item set. Omit for the whole-library tag list; collection/publications use the scoped tag endpoints.',
+  },
+  tagCollection: {
+    type: 'string',
+    description:
+      'Tags only with tagScope="collection": a collection ref or exact name whose items the tag counts describe.',
+  },
+  itemLevel: {
+    type: 'string',
+    enum: ['top', 'all'],
+    description:
+      'Tags only with a scope: top counts bibliographic items (default), all includes child items.',
+  },
+  itemQuery: {
+    type: 'string',
+    description:
+      'Tags only with a scope: count only tags of items matching this query — the facet-discovery move after a search.',
+  },
+  itemQueryMode: {
+    type: 'string',
+    enum: ['titleCreatorYear', 'everything'],
+    description: 'Tags only with itemQuery: how itemQuery matches (default titleCreatorYear).',
+  },
   q: {
     type: 'string',
     description: 'Filter for tags kind (substring); only valid when kind="tags"',
@@ -209,10 +236,51 @@ export function buildRequest(
       ZOTERO_INVALID_ARGUMENT,
     )
   }
+  const tagScope = (args as Record<string, unknown>).tagScope as
+    'library' | 'collection' | 'publications' | undefined
+  const tagCollection = (args as Record<string, unknown>).tagCollection as string | undefined
+  const itemLevel = (args as Record<string, unknown>).itemLevel as 'top' | 'all' | undefined
+  const itemQuery = (args as Record<string, unknown>).itemQuery as string | undefined
+  const itemQueryMode = (args as Record<string, unknown>).itemQueryMode as
+    'titleCreatorYear' | 'everything' | undefined
+  if (
+    (tagScope !== undefined ||
+      itemLevel !== undefined ||
+      itemQuery !== undefined ||
+      itemQueryMode !== undefined) &&
+    kind !== 'tags'
+  ) {
+    throw new ZoteroError(
+      'tagScope/itemLevel/itemQuery are only valid when kind="tags"',
+      ZOTERO_INVALID_ARGUMENT,
+    )
+  }
+  if (tagCollection !== undefined && tagScope !== 'collection') {
+    throw new ZoteroError('tagCollection requires tagScope="collection"', ZOTERO_INVALID_ARGUMENT)
+  }
+  if ((itemLevel !== undefined || itemQuery !== undefined) && tagScope === undefined) {
+    throw new ZoteroError(
+      'itemLevel/itemQuery require tagScope (library, collection, or publications)',
+      ZOTERO_INVALID_ARGUMENT,
+    )
+  }
+  if (itemQueryMode !== undefined && itemQuery === undefined) {
+    throw new ZoteroError('itemQueryMode requires itemQuery', ZOTERO_INVALID_ARGUMENT)
+  }
+  const scope =
+    tagScope === undefined
+      ? undefined
+      : tagScope === 'collection'
+        ? { kind: 'collection' as const, refOrName: tagCollection! }
+        : { kind: tagScope as 'library' | 'publications' }
   return {
     kind,
     ...(library ? { library } : {}),
     ...(parentRef !== undefined ? { parentRef } : {}),
+    ...(scope !== undefined ? { scope } : {}),
+    ...(itemLevel !== undefined ? { itemLevel } : {}),
+    ...(itemQuery !== undefined ? { itemQuery } : {}),
+    ...(itemQueryMode !== undefined ? { itemQueryMode } : {}),
     ...(q !== undefined ? { q } : {}),
     ...(match !== undefined ? { match } : {}),
     offset,
@@ -262,6 +330,7 @@ export function registerBrowseTool(ctx: Context, service: ZoteroService): void {
       description: [
         'Browse Zotero library structure. Use libraries to discover personal/group libraries,',
         'collections/savedSearches/tags per library, itemTypes globally. Collections navigate the tree: omit parentRef for top-level, pass a collection ref to list its children.',
+        'Tags accept a scope plus itemQuery for faceted discovery (which tags do my search hits carry?).',
         'Always offset/limit paginated; use for discovery before search/get.',
       ].join(' '),
       parameters: BROWSE_PARAMETERS,

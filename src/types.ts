@@ -407,11 +407,30 @@ export interface ZoteroBrowseRequest {
    * server-side tree navigation instead of one whole-library snapshot.
    */
   readonly parentRef?: string
+  /**
+   * Tags only: the item set whose tags the listing counts. Omitted keeps the
+   * whole-library `/tags` listing; `collection` and `publications` use the
+   * scoped tag endpoints, turning browse into a faceted-navigation primitive
+   * (search → scoped tags for the same query → narrow).
+   */
+  readonly scope?: ZoteroTagScope
+  /** Tags only with a scope: `top` counts bibliographic items (default), `all` includes child items. */
+  readonly itemLevel?: 'top' | 'all'
+  /** Tags only with a scope: count only tags of items matching this item query (`itemQ`). */
+  readonly itemQuery?: string
+  /** Tags only with an itemQuery: the Zotero item-query mode (default titleCreatorYear). */
+  readonly itemQueryMode?: 'titleCreatorYear' | 'everything'
   readonly q?: string
   readonly match?: 'contains' | 'startsWith'
   readonly offset: number
   readonly limit: number
 }
+
+/** The item set a scoped tags listing counts over. */
+export type ZoteroTagScope =
+  | { readonly kind: 'library' }
+  | { readonly kind: 'collection'; readonly refOrName: string }
+  | { readonly kind: 'publications' }
 
 export interface ZoteroLibraryInfo {
   readonly library: SupportedLocalLibrary
