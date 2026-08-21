@@ -42,6 +42,7 @@ import { registerPromptSection } from './prompt.js'
 import { ZOTERO_SETTINGS_NAMESPACE } from './settings-namespace.js'
 import { registerAttachmentTool } from './tools/attachment.js'
 import { registerBrowseTool } from './tools/browse.js'
+import { registerChildrenTool } from './tools/children.js'
 import { registerGetTool } from './tools/get.js'
 import { registerExportTool } from './tools/export.js'
 import { registerRetrieveTool } from './tools/retrieve.js'
@@ -51,6 +52,8 @@ import type {
   ZoteroBrowseRequest,
   ZoteroBrowseResult,
   ZoteroCapability,
+  ZoteroChildrenRequest,
+  ZoteroChildrenResult,
   ZoteroGetRequest,
   ZoteroItemDetail,
   ZoteroObjectRef,
@@ -92,6 +95,7 @@ export class ZoteroService extends Service {
     registerPromptSection(ctx, () => this.config)
     registerSearchTool(ctx, this)
     registerGetTool(ctx, this)
+    registerChildrenTool(ctx, this)
     registerAttachmentTool(ctx, this)
     registerRetrieveTool(ctx, this)
     registerExportTool(ctx, this)
@@ -214,6 +218,23 @@ export class ZoteroService extends Service {
     const provider = this.resolveProvider()
     this.requireCapability(provider, 'metadata')
     return await provider.getItem(request, signal)
+  }
+
+  /**
+   * Explore one item's or attachment's child-object graph.
+   * @param request - the item/attachment ref and the child kinds to return.
+   * @param signal - caller cancellation; forwarded to the provider.
+   * @returns the bounded child collections with their totals.
+   */
+  async children(
+    request: ZoteroChildrenRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroChildrenResult> {
+    const provider = this.resolveProvider()
+    this.requireCapability(provider, 'metadata')
+    if (provider.children === undefined)
+      throw new ZoteroError('children not supported', ZOTERO_CAPABILITY_UNAVAILABLE)
+    return await provider.children(request, signal)
   }
 
   /**

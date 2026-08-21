@@ -147,6 +147,33 @@ export interface ZoteroSearchResult {
 /** Child content kinds `zotero_get` can include beyond plain metadata. */
 export type ZoteroInclude = 'notes' | 'annotations' | 'attachments'
 
+/**
+ * Child content kinds `zotero_children` returns. The tool explores the
+ * Zotero object graph: an item ref yields its direct notes and attachments
+ * plus every attachment's annotations; an attachment ref yields its own
+ * annotations.
+ */
+export type ZoteroChildrenInclude = 'notes' | 'attachments' | 'annotations'
+
+export interface ZoteroChildrenRequest {
+  /** An item or attachment ref; annotation refs have no children and fail closed. */
+  readonly ref: ZoteroObjectRef
+  readonly include: ReadonlySet<ZoteroChildrenInclude>
+}
+
+/** The explored child-object graph of one item or attachment. */
+export interface ZoteroChildrenResult {
+  /** Echo of the requested object's ref, provenance-qualified with the serving instance. */
+  readonly ref: string
+  /** The requested object's Zotero item type (`attachment` for attachment refs). */
+  readonly itemType?: string
+  readonly notes?: ZoteroChildCollection<ZoteroNoteRecord>
+  readonly annotations?: ZoteroChildCollection<ZoteroAnnotationRecord>
+  readonly attachments?: ZoteroChildCollection<ZoteroAttachmentRecord>
+  /** Identity of the Zotero instance that served these records. */
+  readonly serverId?: string
+}
+
 export interface ZoteroGetRequest {
   readonly ref: ZoteroObjectRef
   readonly include: ReadonlySet<ZoteroInclude>
@@ -458,6 +485,13 @@ export interface ZoteroProvider {
    * @returns the normalized item detail.
    */
   getItem(request: ZoteroGetRequest, signal?: AbortSignal): Promise<ZoteroItemDetail>
+  /**
+   * Explore one item's or attachment's child-object graph.
+   * @param request - the item/attachment ref and the child kinds to return.
+   * @param signal - caller cancellation; forwarded to the transport.
+   * @returns the bounded child collections with their totals.
+   */
+  children?(request: ZoteroChildrenRequest, signal?: AbortSignal): Promise<ZoteroChildrenResult>
   /**
    * Resolve an item or attachment ref to a usable location.
    * @param ref - the item or attachment ref to resolve.

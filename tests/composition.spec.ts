@@ -113,6 +113,7 @@ describe('the shipped bundle patch through a real Loader composition', () => {
       [
         'zotero_search',
         'zotero_get',
+        'zotero_children',
         'zotero_retrieve',
         'zotero_attachment',
         'zotero_export',

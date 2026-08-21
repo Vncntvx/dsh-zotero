@@ -126,7 +126,7 @@ describe('getItem', () => {
     })
     expect(detail.annotations!.total).toBe(1)
     expect(detail.annotations!.items[0]).toMatchObject({
-      ref: 'zotero://user/0/item/ANNO1111?server=S1',
+      ref: 'zotero://user/0/annotation/ANNO1111?server=S1',
       parentRef: 'zotero://user/0/attachment/WXYZ6789?server=S1',
     })
     expect(detail.attachments!.items[0]!.title).toBe('Full Text PDF')

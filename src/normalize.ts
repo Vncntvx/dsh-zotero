@@ -318,7 +318,10 @@ export function normalizeAnnotationRecord(
   const pageLabel = asString(data?.annotationPageLabel)
   const parentKey = parentKeyOf(data)
   return {
-    ref: formatRef(refForLibrary(context.library, 'item', key, context.serverId)),
+    // Annotations are semantic first-class objects: the ref grammar's
+    // `annotation` kind, not the generic `item` kind. Their parentRef points
+    // at the attachment they annotate.
+    ref: formatRef(refForLibrary(context.library, 'annotation', key, context.serverId)),
     type: asString(data?.annotationType) ?? '',
     text: asString(data?.annotationText) ?? '',
     ...(comment !== undefined ? { comment } : {}),
@@ -430,7 +433,8 @@ export interface NormalizeItemDetailInput {
   readonly maxAnnotationRecords: number
 }
 
-function childCollection<T>(items: readonly T[], cap: number): ZoteroChildCollection<T> {
+/** Bound records to `cap` while keeping Zotero's total honest. */
+export function childCollection<T>(items: readonly T[], cap: number): ZoteroChildCollection<T> {
   const bounded = items.slice(0, cap)
   return { total: items.length, returned: bounded.length, items: bounded }
 }
@@ -447,7 +451,8 @@ function detailChildKinds(include: ReadonlySet<ZoteroInclude>): ReadonlySet<Zote
   return kinds
 }
 
-function attachmentRecordOf(
+/** Project an attachment candidate into its ref-carrying record. */
+export function attachmentRecordOf(
   candidate: ZoteroAttachmentCandidate,
   ctx: NormalizeContext,
 ): ZoteroAttachmentRecord {

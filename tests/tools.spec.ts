@@ -14,6 +14,7 @@ import UserQuestionService from '@deepseek-ai/dsh-user-questions'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import ZoteroService from '../src/index.js'
 import { ZOTERO_NOT_RUNNING } from '../src/errors.js'
+import { renderChildren } from '../src/tools/children.js'
 import { renderGet } from '../src/tools/get.js'
 import { renderRetrieve } from '../src/tools/retrieve.js'
 import { renderSearch } from '../src/tools/search.js'
@@ -508,6 +509,100 @@ describe('zotero_get tool', () => {
     expect(
       ctx.tools.get('zotero_get')!.isConcurrencySafe?.({ ref: 'zotero://user/0/item/ABCD1234' }),
     ).toBe(true)
+  })
+})
+
+describe('zotero_children tool', () => {
+  it('registers and exposes its schema to the assembly', () => {
+    expect(ctx.tools.get('zotero_children')).toBeDefined()
+    expect(ctx.tools.schemas().some((schema) => schema.name === 'zotero_children')).toBe(true)
+  })
+
+  it('explores an item graph end to end and renders the three sections', async () => {
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) =>
+      helpers.json(
+        { key: 'ABCD1234', version: 3, data: { itemType: 'journalArticle', title: 'T' } },
+        { 'Zotero-Server-ID': 'S1' },
+      ),
+    )
+    mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) =>
+      helpers.json(CHILD_ROWS),
+    )
+    mock.route('GET', '/api/users/0/items/WXYZ6789/children', (req, res, helpers) =>
+      helpers.json(ATTACHMENT_CHILD_ROWS),
+    )
+    const result = await runTool('zotero_children', {
+      ref: 'zotero://user/0/item/ABCD1234',
+      include: ['notes', 'attachments', 'annotations'],
+    })
+    expect(result.isError).toBe(false)
+    if (result.isError) throw new Error('unreachable')
+    const value = result.value as {
+      annotations?: { total: number; items: { parentRef?: string }[] }
+      itemType?: string
+      serverId?: string
+    }
+    expect(value.itemType).toBe('journalArticle')
+    expect(value.serverId).toBe('S1')
+    // The annotation's provenance points at its real parent attachment.
+    expect(value.annotations?.items[0]?.parentRef).toBe(
+      'zotero://user/0/attachment/WXYZ6789?server=S1',
+    )
+    const text = (result.content[0] as { text: string }).text
+    expect(text).toContain('zotero://user/0/item/ABCD1234?server=S1 (journalArticle)')
+    expect(text).toContain('Notes: 1 of 1')
+    expect(text).toContain('Attachments: 1 of 1')
+    expect(text).toContain('Annotations: 1 of 1')
+  })
+
+  it('returns an attachment own annotations from an attachment ref', async () => {
+    mock.route('GET', '/api/users/0/items/WXYZ6789', (req, res, helpers) =>
+      helpers.json({
+        key: 'WXYZ6789',
+        data: { itemType: 'attachment', title: 'Full Text PDF', contentType: 'application/pdf' },
+      }),
+    )
+    mock.route('GET', '/api/users/0/items/WXYZ6789/children', (req, res, helpers) =>
+      helpers.json(ATTACHMENT_CHILD_ROWS),
+    )
+    const result = await runTool('zotero_children', {
+      ref: 'zotero://user/0/attachment/WXYZ6789',
+    })
+    expect(result.isError).toBe(false)
+    if (result.isError) throw new Error('unreachable')
+    const value = result.value as { itemType?: string; notes?: unknown; annotations?: unknown }
+    expect(value.itemType).toBe('attachment')
+    expect(value.notes).toBeUndefined()
+    expect(value.annotations).toBeDefined()
+  })
+
+  it('rejects annotation refs and non-attachment targets before any request', async () => {
+    const annotationRef = await runTool('zotero_children', {
+      ref: 'zotero://user/0/annotation/ANNO1111',
+    })
+    expect(annotationRef.isError).toBe(true)
+    if (!annotationRef.isError) throw new Error('unreachable')
+    expect((annotationRef.content[0] as { text: string }).text).toContain(
+      'Expected a item or attachment reference',
+    )
+
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) =>
+      helpers.json({ key: 'ABCD1234', data: { itemType: 'journalArticle' } }),
+    )
+    const wrongTarget = await runTool('zotero_children', {
+      ref: 'zotero://user/0/attachment/ABCD1234',
+    })
+    expect(wrongTarget.isError).toBe(true)
+    if (!wrongTarget.isError) throw new Error('unreachable')
+    expect((wrongTarget.content[0] as { text: string }).text).toContain('not an attachment')
+  })
+
+  it('renders an empty result without sections', async () => {
+    const text = renderChildren(
+      { ref: 'zotero://user/0/item/ABCD1234' },
+      { ref: 'zotero://user/0/item/ABCD1234' },
+    )
+    expect((text[0] as { text: string }).text).toContain('No child kinds requested.')
   })
 })
 

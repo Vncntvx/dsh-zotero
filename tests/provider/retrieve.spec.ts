@@ -195,7 +195,7 @@ describe('retrieve', () => {
     expect(result.evidence).toEqual([
       {
         source: 'annotation',
-        sourceRef: 'zotero://user/0/item/ANNO1111?server=S1',
+        sourceRef: 'zotero://user/0/annotation/ANNO1111?server=S1',
         text: 'parented',
         attachmentRef: 'zotero://user/0/attachment/WXYZ6789?server=S1',
       },

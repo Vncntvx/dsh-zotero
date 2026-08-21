@@ -365,7 +365,7 @@ describe('normalizeAnnotationRecord', () => {
       },
     }
     expect(normalizeAnnotationRecord(row, 'S1')).toEqual({
-      ref: 'zotero://user/0/item/ANNO1111?server=S1',
+      ref: 'zotero://user/0/annotation/ANNO1111?server=S1',
       type: 'highlight',
       text: 'the key insight',
       comment: 'check this',
@@ -382,7 +382,7 @@ describe('normalizeAnnotationRecord', () => {
         undefined,
       ),
     ).toEqual({
-      ref: 'zotero://user/0/item/ANNO2222',
+      ref: 'zotero://user/0/annotation/ANNO2222',
       type: 'image',
       text: '',
       comment: undefined,
@@ -409,7 +409,7 @@ describe('normalizeAnnotationRecord', () => {
         undefined,
       ),
     ).toEqual({
-      ref: 'zotero://user/0/item/ANNO3333',
+      ref: 'zotero://user/0/annotation/ANNO3333',
       type: 'highlight',
       text: 'x',
       comment: '',
@@ -617,7 +617,7 @@ describe('normalizeItemDetail', () => {
         returned: 1,
         items: [
           {
-            ref: 'zotero://user/0/item/ANNO1111?server=S1',
+            ref: 'zotero://user/0/annotation/ANNO1111?server=S1',
             type: 'highlight',
             text: 'insight',
             color: '#ffd400',
@@ -952,8 +952,8 @@ describe('partitionChildren tolerances', () => {
     ]
     const partitioned = partitionChildren(rows, undefined, 100)
     expect(partitioned.annotations.map((annotation) => annotation.ref)).toEqual([
-      'zotero://user/0/item/ANNO1111',
-      'zotero://user/0/item/ANNO2222',
+      'zotero://user/0/annotation/ANNO1111',
+      'zotero://user/0/annotation/ANNO2222',
     ])
   })
 
@@ -1039,6 +1039,6 @@ describe('normalizeAnnotationRecord missing type', () => {
   it('defaults a missing annotation type to an empty string', () => {
     expect(
       normalizeAnnotationRecord({ key: 'ANNO1111', data: { itemType: 'annotation' } }),
-    ).toEqual({ ref: 'zotero://user/0/item/ANNO1111', type: '', text: '' })
+    ).toEqual({ ref: 'zotero://user/0/annotation/ANNO1111', type: '', text: '' })
   })
 })

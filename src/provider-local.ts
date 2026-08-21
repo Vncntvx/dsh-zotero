@@ -49,6 +49,8 @@ import { asRecord, asString, isObjectKey } from './json.js'
 import { loadItemGraph } from './item-graph.js'
 import { cacheEntryMatchesIdentity, type LocalReadContext } from './local/identity.js'
 import {
+  attachmentRecordOf,
+  childCollection,
   collectionKeysOf,
   matchScopeName,
   nearScopeCandidates,
@@ -58,6 +60,7 @@ import {
   partitionChildren,
   plainNoteText,
   truncateText,
+  type NormalizeContext,
   type PartitionedChildren,
   type ScopeNameEntry,
   type ZoteroChildKind,
@@ -84,6 +87,8 @@ import type {
   ZoteroBrowseRequest,
   ZoteroBrowseResult,
   ZoteroCapability,
+  ZoteroChildrenRequest,
+  ZoteroChildrenResult,
   ZoteroCollectionInfo,
   ZoteroCoverage,
   ZoteroEvidence,
@@ -711,6 +716,98 @@ export class LocalApiProvider implements ZoteroProvider {
       maxNoteRecords: this.limits.maxNoteRecords,
       maxAnnotationRecords: this.limits.maxAnnotationRecords,
     })
+  }
+
+  /**
+   * Explore one item's or attachment's child-object graph. An item ref
+   * yields its direct notes and attachments plus, when requested, every
+   * attachment's annotations as one merged corpus; an attachment ref yields
+   * its own annotations. The target row is always fetched first so the
+   * whole result pins to one Server-ID and a non-attachment target of an
+   * attachment ref fails with a typed error.
+   */
+  async children(
+    request: ZoteroChildrenRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroChildrenResult> {
+    const ref = requireSupportedLocalRef(request.ref, ['item', 'attachment'])
+    const library = ref.library as SupportedLocalLibrary
+    const prefix = libraryPrefix(library)
+    const row = await this.client.getJson<unknown>(`${prefix}/items/${ref.key}`, undefined, {
+      signal,
+      serverId: ref.serverId,
+    })
+    const serverId = row.headers.get('zotero-server-id') ?? ref.serverId
+    const ctx: NormalizeContext = { library, serverId: serverId ?? undefined }
+    const data = asRecord(asRecord(row.json)?.data)
+    const itemType = asString(data?.itemType) ?? ''
+    if (ref.kind === 'attachment' && itemType !== 'attachment') {
+      throw new ZoteroError(
+        itemType === ''
+          ? `The referenced object ${ref.key} could not be confirmed as an attachment.`
+          : `The referenced object is a ${itemType}, not an attachment; annotations hang off attachment refs.`,
+        ZOTERO_INVALID_ARGUMENT,
+      )
+    }
+    if (ref.kind === 'attachment') {
+      // An attachment's own children are exactly its annotations.
+      const rows = await this.fetchChildRows(ref.key, library, serverId, signal)
+      const partitioned = partitionChildren(
+        rows,
+        ctx,
+        undefined,
+        new Set<ZoteroChildKind>(['annotation']),
+      )
+      return {
+        ref: formatRef(refForLibrary(library, 'attachment', ref.key, serverId)),
+        ...(itemType !== '' ? { itemType } : {}),
+        ...(request.include.has('annotations')
+          ? {
+              annotations: childCollection(
+                partitioned.annotations,
+                this.limits.maxAnnotationRecords,
+              ),
+            }
+          : {}),
+        ...(ctx.serverId !== undefined ? { serverId: ctx.serverId } : {}),
+      }
+    }
+    const graphRows = (
+      await this.loadChildRows(
+        ref.key,
+        library,
+        serverId,
+        signal,
+        request.include.has('annotations'),
+      )
+    ).rows
+    const kinds = new Set<ZoteroChildKind>()
+    if (request.include.has('notes')) kinds.add('note')
+    if (request.include.has('attachments')) kinds.add('attachment')
+    if (request.include.has('annotations')) kinds.add('annotation')
+    const partitioned =
+      kinds.size > 0 ? partitionChildren(graphRows, ctx, undefined, kinds) : undefined
+    return {
+      ref: formatRef(refForLibrary(library, 'item', ref.key, serverId)),
+      ...(itemType !== '' ? { itemType } : {}),
+      ...(request.include.has('notes') && partitioned !== undefined
+        ? { notes: childCollection(partitioned.notes, this.limits.maxNoteRecords) }
+        : {}),
+      ...(request.include.has('annotations') && partitioned !== undefined
+        ? {
+            annotations: childCollection(partitioned.annotations, this.limits.maxAnnotationRecords),
+          }
+        : {}),
+      ...(request.include.has('attachments') && partitioned !== undefined
+        ? {
+            attachments: childCollection(
+              partitioned.attachments.map((candidate) => attachmentRecordOf(candidate, ctx)),
+              partitioned.attachments.length,
+            ),
+          }
+        : {}),
+      ...(ctx.serverId !== undefined ? { serverId: ctx.serverId } : {}),
+    }
   }
 
   /**
