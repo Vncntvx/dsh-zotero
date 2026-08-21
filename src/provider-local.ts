@@ -94,6 +94,8 @@ import type {
   ZoteroChildrenRequest,
   ZoteroChildrenResult,
   ZoteroCollectionInfo,
+  ZoteroCreatorTypeInfo,
+  ZoteroItemFieldInfo,
   ZoteroCoverage,
   ZoteroEvidence,
   ZoteroEvidenceSource,
@@ -762,6 +764,7 @@ export class LocalApiProvider implements ZoteroProvider {
       maxNoteChars: this.limits.maxNoteChars,
       maxNoteRecords: this.limits.maxNoteRecords,
       maxAnnotationRecords: this.limits.maxAnnotationRecords,
+      fields: request.fields,
     })
   }
 
@@ -1927,13 +1930,37 @@ export class LocalApiProvider implements ZoteroProvider {
     }
     // Fail-closed: libraries/itemTypes are global; library param must not be set (review 117-120)
     if (
-      (request.kind === 'libraries' || request.kind === 'itemTypes') &&
+      (request.kind === 'libraries' ||
+        request.kind === 'itemTypes' ||
+        request.kind === 'itemFields') &&
       request.library !== undefined
     ) {
       throw new ZoteroError(
-        `library is not allowed for kind ${request.kind}; omit library for libraries/itemTypes`,
+        `library is not allowed for kind ${request.kind}; omit library for libraries/itemTypes/itemFields`,
         ZOTERO_INVALID_ARGUMENT,
       )
+    }
+    if (
+      (request.kind === 'libraries' ||
+        request.kind === 'itemTypes' ||
+        request.kind === 'collections' ||
+        request.kind === 'savedSearches' ||
+        request.kind === 'tags') &&
+      request.itemType !== undefined
+    ) {
+      throw new ZoteroError(
+        `itemType is only valid when kind="itemFields"`,
+        ZOTERO_INVALID_ARGUMENT,
+      )
+    }
+    if (request.kind === 'itemFields') {
+      if (request.itemType === undefined || !/^[A-Za-z][A-Za-z0-9]*$/.test(request.itemType)) {
+        throw new ZoteroError(
+          'kind="itemFields" requires a Zotero item type name (e.g. dataset, journalArticle)',
+          ZOTERO_INVALID_ARGUMENT,
+        )
+      }
+      return await this.browseItemFields(request, signal)
     }
     if ((request.q !== undefined || request.match !== undefined) && request.kind !== 'tags') {
       throw new ZoteroError('q/match are only valid when kind="tags"', ZOTERO_INVALID_ARGUMENT)
@@ -2347,6 +2374,70 @@ export class LocalApiProvider implements ZoteroProvider {
     const slice = items.slice(request.offset, request.offset + request.limit)
     return {
       kind: 'itemTypes',
+      ...(serverId ? { serverId } : {}),
+      items: slice,
+      total,
+      offset: request.offset,
+      returned: slice.length,
+      ...(request.offset + slice.length < total
+        ? { nextOffset: request.offset + slice.length }
+        : {}),
+    }
+  }
+
+  /**
+   * The metadata fields and creator types valid for one item type, with the
+   * localized labels Zotero reports for the user's locale. This is the
+   * schema-aware read behind `fields:"all"`: when a dataset or patent's
+   * fields would be dropped by the normalized model, the model can look up
+   * what exists and ask for it by name.
+   */
+  private async browseItemFields(
+    request: ZoteroBrowseRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroBrowseResult> {
+    const itemType = request.itemType!
+    const params = new URLSearchParams()
+    params.set('itemType', itemType)
+    const [fields, creatorTypes] = await Promise.all([
+      this.client.getJson<unknown>('itemTypeFields', params, { signal }),
+      this.client.getJson<unknown>('itemTypeCreatorTypes', params, { signal }),
+    ])
+    const serverId =
+      fields.headers.get('zotero-server-id') ??
+      creatorTypes.headers.get('zotero-server-id') ??
+      undefined
+    const localizedOf = (row: unknown): { field?: string; localized?: string } => {
+      const rec = asRecord(row)
+      return {
+        field: asString(rec?.field),
+        localized: asString(rec?.localized),
+      }
+    }
+    const items: (ZoteroItemFieldInfo | ZoteroCreatorTypeInfo)[] = []
+    for (const row of Array.isArray(fields.json) ? fields.json : []) {
+      const { field, localized } = localizedOf(row)
+      if (field === undefined) continue
+      items.push({ field, ...(localized !== undefined ? { localized } : {}) })
+    }
+    for (const row of Array.isArray(creatorTypes.json) ? creatorTypes.json : []) {
+      const rec = asRecord(row)
+      const creatorType = asString(rec?.creatorType)
+      if (creatorType === undefined) continue
+      const localized = asString(rec?.localized)
+      items.push({ creatorType, ...(localized !== undefined ? { localized } : {}) })
+    }
+    items.sort((a, b) =>
+      'field' in a && 'field' in b
+        ? a.field.localeCompare(b.field)
+        : 'creatorType' in a && 'creatorType' in b
+          ? a.creatorType.localeCompare(b.creatorType)
+          : 0,
+    )
+    const total = items.length
+    const slice = items.slice(request.offset, request.offset + request.limit)
+    return {
+      kind: 'itemFields',
       ...(serverId ? { serverId } : {}),
       items: slice,
       total,

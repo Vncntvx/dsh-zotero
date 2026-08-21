@@ -326,6 +326,84 @@ describe('browse: collections', () => {
   })
 })
 
+describe('browse: itemFields', () => {
+  it('lists the fields and creator types valid for one item type', async () => {
+    const seen: string[] = []
+    mock.route('GET', '/api/itemTypeFields', (req, res, helpers, search) => {
+      expect(search.get('itemType')).toBe('dataset')
+      seen.push('fields')
+      helpers.json([
+        { field: 'repository', localized: 'Repository' },
+        { field: 'versionNumber', localized: 'Version' },
+      ])
+    })
+    mock.route('GET', '/api/itemTypeCreatorTypes', (req, res, helpers) => {
+      seen.push('creators')
+      helpers.json([{ creatorType: 'author', localized: 'Author' }])
+    })
+    const result = await provider.browse({
+      kind: 'itemFields',
+      itemType: 'dataset',
+      offset: 0,
+      limit: 10,
+    })
+    expect(seen).toEqual(['fields', 'creators'])
+    expect(result.total).toBe(3)
+    expect(result.items).toEqual([
+      { field: 'repository', localized: 'Repository' },
+      { field: 'versionNumber', localized: 'Version' },
+      { creatorType: 'author', localized: 'Author' },
+    ])
+  })
+
+  it('paginates itemFields against the merged row list', async () => {
+    mock.route('GET', '/api/itemTypeFields', (req, res, helpers) =>
+      helpers.json([{ field: 'a' }, { field: 'b' }]),
+    )
+    mock.route('GET', '/api/itemTypeCreatorTypes', (req, res, helpers) =>
+      helpers.json([{ creatorType: 'author' }]),
+    )
+    const page = await provider.browse({
+      kind: 'itemFields',
+      itemType: 'journalArticle',
+      offset: 0,
+      limit: 2,
+    })
+    expect(page.returned).toBe(2)
+    expect(page.nextOffset).toBe(2)
+  })
+
+  it('fails closed without a well-formed item type or with a library', async () => {
+    await zoteroError(
+      provider.browse({ kind: 'itemFields', offset: 0, limit: 5 }),
+      ZOTERO_INVALID_ARGUMENT,
+      'requires a Zotero item type name',
+    )
+    await zoteroError(
+      provider.browse({ kind: 'itemFields', itemType: 'bad type!', offset: 0, limit: 5 }),
+      ZOTERO_INVALID_ARGUMENT,
+      'requires a Zotero item type name',
+    )
+    await zoteroError(
+      provider.browse({
+        kind: 'itemFields',
+        itemType: 'dataset',
+        library: { type: 'user', id: 0 },
+        offset: 0,
+        limit: 5,
+      }),
+      ZOTERO_INVALID_ARGUMENT,
+      'library is not allowed',
+    )
+    await zoteroError(
+      provider.browse({ kind: 'tags', itemType: 'dataset', offset: 0, limit: 5 }),
+      ZOTERO_INVALID_ARGUMENT,
+      'itemType is only valid when kind="itemFields"',
+    )
+    expect(mock.requests).toEqual([])
+  })
+})
+
 describe('browse: savedSearches', () => {
   const searches = [
     {
@@ -538,7 +616,7 @@ describe('browse: tags', () => {
       'require a scope',
     )
     await zoteroError(
-      provider.browse({ kind: 'searches', scope: { kind: 'library' }, offset: 0, limit: 5 }),
+      provider.browse({ kind: 'collections', scope: { kind: 'library' }, offset: 0, limit: 5 }),
       ZOTERO_INVALID_ARGUMENT,
       'only valid when kind="tags"',
     )

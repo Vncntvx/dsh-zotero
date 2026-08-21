@@ -563,6 +563,56 @@ describe('step3: remaining branches', () => {
       } as never,
     )
     expect((out1[0] as { text: string }).text).toContain('a')
+    // itemFields row shapes with and without localized labels
+    const outFields = renderBrowse(
+      { kind: 'itemFields', offset: 0, limit: 10 } as never,
+      {
+        kind: 'itemFields',
+        total: 3,
+        returned: 3,
+        offset: 0,
+        items: [
+          { field: 'repository', localized: 'Repository' },
+          { field: 'archive' },
+          { creatorType: 'author' },
+        ],
+      } as never,
+    )
+    const fieldsText = (outFields[0] as { text: string }).text
+    expect(fieldsText).toContain('field repository (Repository)')
+    expect(fieldsText).toContain('field archive')
+    expect(fieldsText).toContain('creatorType author')
+    // buildRequest scope mapping for every tagScope value
+    const scoped = buildRequest(
+      {
+        kind: 'tags',
+        offset: 0,
+        limit: 5,
+        tagScope: 'collection',
+        tagCollection: 'zotero://user/0/collection/COLL0001',
+        itemLevel: 'all',
+        itemQuery: 'memory',
+        itemQueryMode: 'everything',
+      } as never,
+      { maxBrowseResults: 50 },
+    )
+    expect(scoped.scope).toEqual({
+      kind: 'collection',
+      refOrName: 'zotero://user/0/collection/COLL0001',
+    })
+    expect(scoped.itemLevel).toBe('all')
+    expect(scoped.itemQuery).toBe('memory')
+    expect(scoped.itemQueryMode).toBe('everything')
+    const publications = buildRequest(
+      { kind: 'tags', offset: 0, limit: 5, tagScope: 'publications' } as never,
+      { maxBrowseResults: 50 },
+    )
+    expect(publications.scope).toEqual({ kind: 'publications' })
+    const libraryScope = buildRequest(
+      { kind: 'tags', offset: 0, limit: 5, tagScope: 'library' } as never,
+      { maxBrowseResults: 50 },
+    )
+    expect(libraryScope.scope).toEqual({ kind: 'library' })
     const out2 = renderBrowse(
       { kind: 'tags', offset: 0, limit: 10 } as never,
       {

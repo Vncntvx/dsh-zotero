@@ -477,6 +477,9 @@ describe('capability gating', () => {
       id: 'legacy',
       capabilities: new Set(['metadata']),
       status: async () => ({ providerId: 'legacy', connected: true, diagnosis: 'ok' }),
+      search: async () => {
+        throw new Error('test double: must not be called')
+      },
       getItem: async () => {
         throw new Error('test double: must not be called')
       },

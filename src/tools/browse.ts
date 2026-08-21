@@ -22,6 +22,7 @@ const BROWSE_KINDS: readonly ZoteroBrowseKind[] = [
   'savedSearches',
   'tags',
   'itemTypes',
+  'itemFields',
 ]
 
 const BROWSE_PARAMETERS = {
@@ -72,6 +73,11 @@ const BROWSE_PARAMETERS = {
     type: 'string',
     enum: ['titleCreatorYear', 'everything'],
     description: 'Tags only with itemQuery: how itemQuery matches (default titleCreatorYear).',
+  },
+  itemType: {
+    type: 'string',
+    description:
+      'ItemFields only: the Zotero item type whose valid fields and creator types to list (e.g. dataset, patent).',
   },
   q: {
     type: 'string',
@@ -169,6 +175,22 @@ const BROWSE_OUTPUT_SCHEMA = {
               localized: { type: 'string' },
             },
           },
+          {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              field: { type: 'string', required: true },
+              localized: { type: 'string' },
+            },
+          },
+          {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              creatorType: { type: 'string', required: true },
+              localized: { type: 'string' },
+            },
+          },
         ],
       },
     },
@@ -211,12 +233,27 @@ export function buildRequest(
   assertIntInRange('offset', offset, 0, 1_000_000)
   assertIntInRange('limit', limit, 1, config.maxBrowseResults)
   const library = parseLibrary((args as Record<string, unknown>).library)
-  // Fail-closed: libraries/itemTypes are global; library param is not allowed
-  if ((kind === 'libraries' || kind === 'itemTypes') && library !== undefined) {
+  // Fail-closed: libraries/itemTypes/itemFields are global; library param is not allowed
+  if (
+    (kind === 'libraries' || kind === 'itemTypes' || kind === 'itemFields') &&
+    library !== undefined
+  ) {
     throw new ZoteroError(
-      `library is not allowed for kind ${kind}; omit library for libraries/itemTypes`,
+      `library is not allowed for kind ${kind}; omit library for libraries/itemTypes/itemFields`,
       ZOTERO_INVALID_ARGUMENT,
     )
+  }
+  const itemType = (args as Record<string, unknown>).itemType as string | undefined
+  if (itemType !== undefined && kind !== 'itemFields') {
+    throw new ZoteroError('itemType is only valid when kind="itemFields"', ZOTERO_INVALID_ARGUMENT)
+  }
+  if (kind === 'itemFields') {
+    if (itemType === undefined || !/^[A-Za-z][A-Za-z0-9]*$/.test(itemType)) {
+      throw new ZoteroError(
+        'kind="itemFields" requires a Zotero item type name (e.g. dataset, journalArticle)',
+        ZOTERO_INVALID_ARGUMENT,
+      )
+    }
   }
   const q = (args as Record<string, unknown>).q as string | undefined
   const match = (args as Record<string, unknown>).match as 'contains' | 'startsWith' | undefined
@@ -281,6 +318,7 @@ export function buildRequest(
     ...(itemLevel !== undefined ? { itemLevel } : {}),
     ...(itemQuery !== undefined ? { itemQuery } : {}),
     ...(itemQueryMode !== undefined ? { itemQueryMode } : {}),
+    ...(itemType !== undefined ? { itemType } : {}),
     ...(q !== undefined ? { q } : {}),
     ...(match !== undefined ? { match } : {}),
     offset,
@@ -310,6 +348,12 @@ export function renderBrowse(_args: BrowseArgs, value: BrowseOutput): ContentBlo
     } else if (typeof it.itemType === 'string') {
       const localized = typeof it.localized === 'string' ? ` (${it.localized})` : ''
       lines.push(`${n}. ${it.itemType}${localized}`)
+    } else if (typeof it.field === 'string') {
+      const localized = typeof it.localized === 'string' ? ` (${it.localized})` : ''
+      lines.push(`${n}. field ${it.field}${localized}`)
+    } else if (typeof it.creatorType === 'string') {
+      const localized = typeof it.localized === 'string' ? ` (${it.localized})` : ''
+      lines.push(`${n}. creatorType ${it.creatorType}${localized}`)
     } else {
       const conditions = Array.isArray(it.conditions) ? ` — ${it.conditions.length} conditions` : ''
       const name =
@@ -329,7 +373,8 @@ export function registerBrowseTool(ctx: Context, service: ZoteroService): void {
       name: 'zotero_browse',
       description: [
         'Browse Zotero library structure. Use libraries to discover personal/group libraries,',
-        'collections/savedSearches/tags per library, itemTypes globally. Collections navigate the tree: omit parentRef for top-level, pass a collection ref to list its children.',
+        'collections/savedSearches/tags per library, itemTypes globally, itemFields with an itemType for its valid fields/creator types.',
+        'Collections navigate the tree: omit parentRef for top-level, pass a collection ref to list its children.',
         'Tags accept a scope plus itemQuery for faceted discovery (which tags do my search hits carry?).',
         'Always offset/limit paginated; use for discovery before search/get.',
       ].join(' '),

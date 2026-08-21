@@ -184,6 +184,11 @@ describe('registry integration: zotero_browse libraries Native identity', () => 
         { kind: 'tags', parentRef: 'zotero://user/0/collection/COLL0001' },
         'parentRef is only valid',
       ],
+      [{ kind: 'tags', itemType: 'dataset' }, 'itemType is only valid when kind="itemFields"'],
+      [
+        { kind: 'itemFields', library: { type: 'user', id: 0 } },
+        'library is not allowed for kind itemFields',
+      ],
     ]
     for (const [args, message] of cases) {
       const r = await run('zotero_browse', args)
@@ -191,7 +196,29 @@ describe('registry integration: zotero_browse libraries Native identity', () => 
       if (!r.isError) throw new Error('unreachable')
       expect((r.content[0] as { text: string }).text).toContain(message)
     }
+    const missingType = await run('zotero_browse', { kind: 'itemFields' })
+    expect(missingType.isError).toBe(true)
+    if (!missingType.isError) throw new Error('unreachable')
+    expect((missingType.content[0] as { text: string }).text).toContain(
+      'requires a Zotero item type name',
+    )
     expect(mock.requests).toEqual([])
+  })
+
+  it('lists schema fields and creator types for an item type via tool', async () => {
+    mock.route('GET', '/api/itemTypeFields', (req, res, helpers, search) => {
+      expect(search.get('itemType')).toBe('dataset')
+      helpers.json([{ field: 'repository', localized: 'Repository' }])
+    })
+    mock.route('GET', '/api/itemTypeCreatorTypes', (req, res, helpers) =>
+      helpers.json([{ creatorType: 'author', localized: 'Author' }]),
+    )
+    const result = await run('zotero_browse', { kind: 'itemFields', itemType: 'dataset' })
+    expect(result.isError).toBe(false)
+    if (result.isError) throw new Error('unreachable')
+    const text = (result.content[0] as { text: string }).text
+    expect(text).toContain('1. field repository (Repository)')
+    expect(text).toContain('2. creatorType author (Author)')
   })
 })
 

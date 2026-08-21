@@ -186,6 +186,12 @@ export interface ZoteroChildrenResult {
 export interface ZoteroGetRequest {
   readonly ref: ZoteroObjectRef
   readonly include: ReadonlySet<ZoteroInclude>
+  /**
+   * `standard` (default) returns the normalized model; `all` additionally
+   * passes through every `data` field the model does not consume, so
+   * dataset/patent/statute-style metadata survives instead of being dropped.
+   */
+  readonly fields?: 'standard' | 'all'
 }
 
 export interface ZoteroNoteRecord {
@@ -253,6 +259,11 @@ export interface ZoteroItemDetail {
   readonly version?: number
   /** Identity of the Zotero instance that served this record. */
   readonly serverId?: string
+  /**
+   * `data` fields the normalized model does not consume, present only when
+   * the request asked `fields:"all"`. Values are lossless JSON.
+   */
+  readonly extraFields?: Record<string, unknown>
 }
 
 /** Evidence sources `zotero_retrieve` can rank against the query. */
@@ -419,8 +430,9 @@ export interface ZoteroRelation {
   readonly targetRef?: string
 }
 
-/** Bounded browse kinds (v3 lock: no schema matrix, no recursive collection) */
-export type ZoteroBrowseKind = 'libraries' | 'collections' | 'savedSearches' | 'tags' | 'itemTypes'
+/** Bounded browse kinds (v3 lock: no recursive collection) */
+export type ZoteroBrowseKind =
+  'libraries' | 'collections' | 'savedSearches' | 'tags' | 'itemTypes' | 'itemFields'
 
 export interface ZoteroBrowseRequest {
   readonly kind: ZoteroBrowseKind
@@ -445,6 +457,8 @@ export interface ZoteroBrowseRequest {
   readonly itemQuery?: string
   /** Tags only with an itemQuery: the Zotero item-query mode (default titleCreatorYear). */
   readonly itemQueryMode?: 'titleCreatorYear' | 'everything'
+  /** ItemFields only: the Zotero item type whose fields and creator types to list. */
+  readonly itemType?: string
   readonly q?: string
   readonly match?: 'contains' | 'startsWith'
   readonly offset: number
@@ -486,12 +500,26 @@ export interface ZoteroItemTypeInfo {
   readonly localized?: string
 }
 
+/** One metadata field valid for a requested item type, with its localized label. */
+export interface ZoteroItemFieldInfo {
+  readonly field: string
+  readonly localized?: string
+}
+
+/** One creator type valid for a requested item type. */
+export interface ZoteroCreatorTypeInfo {
+  readonly creatorType: string
+  readonly localized?: string
+}
+
 export type ZoteroBrowseItem =
   | ZoteroLibraryInfo
   | ZoteroCollectionInfo
   | ZoteroSavedSearchInfo
   | ZoteroTagInfo
   | ZoteroItemTypeInfo
+  | ZoteroItemFieldInfo
+  | ZoteroCreatorTypeInfo
 
 export interface ZoteroBrowseResult {
   readonly kind: ZoteroBrowseKind

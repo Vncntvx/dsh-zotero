@@ -381,6 +381,31 @@ describe('zotero_get tool', () => {
     )
   })
 
+  it('passes unconsumed fields through extraFields under fields:"all"', async () => {
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) =>
+      helpers.json({
+        key: 'ABCD1234',
+        version: 3,
+        data: {
+          itemType: 'dataset',
+          title: 'Replication data',
+          repository: 'Zenodo',
+          libraryCatalog: 'Zotero',
+        },
+      }),
+    )
+    const result = await runTool('zotero_get', {
+      ref: 'zotero://user/0/item/ABCD1234',
+      fields: 'all',
+    })
+    expect(result.isError).toBe(false)
+    if (result.isError) throw new Error('unreachable')
+    const value = result.value as { extraFields?: Record<string, unknown> }
+    expect(value.extraFields).toEqual({ repository: 'Zenodo', libraryCatalog: 'Zotero' })
+    const text = (result.content[0] as { text: string }).text
+    expect(text).toContain('Additional fields: libraryCatalog: Zotero; repository: Zenodo')
+  })
+
   it('renders a bare item without decorations', async () => {
     mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) =>
       helpers.json({
@@ -1102,6 +1127,21 @@ describe('zotero_get render', () => {
   function render(value: never): string {
     return (renderGet({} as never, value)[0] as { text: string }).text
   }
+
+  it('omits the additional-fields line when every extra field is undefined', () => {
+    const text = render({
+      ref: 'zotero://user/0/item/ABCD1234',
+      itemType: 'dataset',
+      title: 'T',
+      creators: [],
+      abstractTruncated: false,
+      tags: [],
+      collections: [],
+      children: { total: 0 },
+      extraFields: { ghost: undefined },
+    } as never)
+    expect(text).not.toContain('Additional fields')
+  })
 
   it('renders the note body with a truncation marker for note items', () => {
     const truncated = render({

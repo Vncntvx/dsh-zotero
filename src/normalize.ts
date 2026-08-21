@@ -431,6 +431,69 @@ export interface NormalizeItemDetailInput {
   readonly maxNoteRecords: number
   /** Upper bound for returned annotation records. */
   readonly maxAnnotationRecords: number
+  /** `all` passes through `data` fields the normalized model does not consume. */
+  readonly fields?: 'standard' | 'all'
+}
+
+/**
+ * The `data` keys the normalized detail model consumes (directly or via the
+ * venue fallback chain). Everything else is eligible for `extraFields`.
+ */
+const CONSUMED_DATA_KEYS: ReadonlySet<string> = new Set([
+  'itemType',
+  'key',
+  'version',
+  'title',
+  'creators',
+  'date',
+  'DOI',
+  'url',
+  'abstractNote',
+  'tags',
+  'collections',
+  'relations',
+  'note',
+  'parentItem',
+  'publicationTitle',
+  'proceedingsTitle',
+  'bookTitle',
+  'journalAbbreviation',
+  'conferenceName',
+])
+
+/** True when the value survives lossless-JSON round-tripping unchanged. */
+function isLosslessJson(value: unknown): boolean {
+  if (
+    value === null ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  ) {
+    return true
+  }
+  if (Array.isArray(value)) return value.every((entry) => isLosslessJson(entry))
+  if (typeof value === 'object') {
+    return Object.values(value).every((entry) => isLosslessJson(entry))
+  }
+  return false
+}
+
+/**
+ * Collect the `data` fields the normalized model does not consume, sorted by
+ * key for stable output. Non-JSON-safe values (undefined, functions) drop.
+ */
+function extraFieldsOf(
+  data: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (data === undefined) return undefined
+  const out: Record<string, unknown> = {}
+  for (const key of Object.keys(data).sort()) {
+    if (CONSUMED_DATA_KEYS.has(key)) continue
+    const value = data[key]
+    if (value === undefined || !isLosslessJson(value)) continue
+    out[key] = value
+  }
+  return Object.keys(out).length > 0 ? out : undefined
 }
 
 /** Bound records to `cap` while keeping Zotero's total honest. */
@@ -606,6 +669,7 @@ export function normalizeItemDetail(input: NormalizeItemDetailInput): ZoteroItem
     return undefined
   })()
   const relations = normalizeRelations(data, ctx, parentLibraryId)
+  const extraFields = input.fields === 'all' ? extraFieldsOf(data) : undefined
 
   return {
     ref: formatRef(refForLibrary(ctx.library, 'item', key, ctx.serverId)),
@@ -628,6 +692,7 @@ export function normalizeItemDetail(input: NormalizeItemDetailInput): ZoteroItem
     ...(relations !== undefined ? { relations } : {}),
     ...(version !== undefined ? { version } : {}),
     ...(ctx.serverId !== undefined ? { serverId: ctx.serverId } : {}),
+    ...(extraFields !== undefined ? { extraFields } : {}),
   }
 }
 

@@ -29,6 +29,12 @@ const GET_PARAMETERS = {
     description:
       'Child content kinds to include. Omit for metadata only; any include adds one lazy /children request.',
   },
+  fields: {
+    type: 'string',
+    enum: ['standard', 'all'],
+    description:
+      'standard (default) returns the normalized model; all additionally returns extraFields — every data field the model does not consume (repository, archive, number-of-pages, …), so special item types keep their metadata.',
+  },
 } as const
 
 type GetArgs = InferArgs<typeof GET_PARAMETERS>
@@ -153,6 +159,7 @@ const GET_OUTPUT_SCHEMA = {
     },
     version: { type: 'integer' },
     serverId: { type: 'string' },
+    extraFields: { type: 'object', additionalProperties: true },
   },
 } as const
 
@@ -161,7 +168,11 @@ type GetOutput = InferValue<typeof GET_OUTPUT_SCHEMA>
 function buildRequest(args: GetArgs): ZoteroGetRequest {
   const ref = parseRef(args.ref)
   requireSupportedLocalRef(ref, ['item'])
-  return { ref, include: new Set<ZoteroInclude>(args.include ?? []) }
+  return {
+    ref,
+    include: new Set<ZoteroInclude>(args.include ?? []),
+    ...(args.fields !== undefined ? { fields: args.fields } : {}),
+  }
 }
 
 export function renderGet(_args: GetArgs, value: GetOutput): ContentBlock[] {
@@ -209,6 +220,14 @@ export function renderGet(_args: GetArgs, value: GetOutput): ContentBlock[] {
     lines.push(
       `Relations: ${value.relations.map((r) => `${r.predicate} -> ${r.targetRef ?? r.targetUri}`).join(', ')}`,
     )
+  }
+  if (value.extraFields !== undefined) {
+    const entries = Object.entries(value.extraFields).filter(([, v]) => v !== undefined)
+    if (entries.length > 0) {
+      lines.push(
+        `Additional fields: ${entries.map(([key, val]) => `${key}: ${typeof val === 'string' ? val : JSON.stringify(val)}`).join('; ')}`,
+      )
+    }
   }
   return [{ type: 'text', text: lines.join('\n') }]
 }

@@ -204,6 +204,39 @@ describe('getItem', () => {
     expect(detail.annotations).toMatchObject({ total: 3, returned: 1 })
   })
 
+  it('passes unconsumed data fields through under fields:"all"', async () => {
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) =>
+      helpers.json({
+        key: 'ABCD1234',
+        version: 3,
+        data: {
+          itemType: 'dataset',
+          title: 'Attention Is All You Need — replication data',
+          repository: 'Zenodo',
+          versionNumber: 2,
+          archive: 'arXiv',
+          libraryCatalog: 'Zotero',
+          extra: { nested: ['a', 1, true] },
+        },
+      }),
+    )
+    const all = await provider.getItem({
+      ref: parseRef('zotero://user/0/item/ABCD1234'),
+      include: new Set(),
+      fields: 'all',
+    })
+    // Consumed keys never leak into extraFields; unknown ones survive verbatim.
+    expect(all.extraFields).toEqual({
+      archive: 'arXiv',
+      extra: { nested: ['a', 1, true] },
+      libraryCatalog: 'Zotero',
+      repository: 'Zenodo',
+      versionNumber: 2,
+    })
+    const standard = await provider.getItem(getRequest())
+    expect(standard.extraFields).toBeUndefined()
+  })
+
   it('reuses the cached collections listing across items', async () => {
     const listing = [
       { key: 'COLL1234', version: 1, data: { key: 'COLL1234', version: 1, name: 'LLM Papers' } },
