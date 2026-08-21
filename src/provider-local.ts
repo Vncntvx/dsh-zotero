@@ -172,6 +172,35 @@ interface ScopeListing {
   readonly fetchedAt: number
 }
 
+/** One collection node of a breadcrumb walk: its name and optional parent link. */
+interface CollectionNode {
+  readonly name: string
+  readonly parentKey?: string
+}
+
+/** A TTL-cached breadcrumb node with the identity that served it. */
+interface CachedCollectionNode {
+  readonly node: CollectionNode
+  readonly serverId?: string
+  readonly fetchedAt: number
+}
+
+/**
+ * Read and validate the `Total-Results` header a server-paged list endpoint
+ * must report. A missing or malformed header fails loud — pagination without
+ * an honest total would silently under-report.
+ */
+function requireTotalResults(headers: Headers, what: string): number {
+  const raw = headers.get('total-results') ?? headers.get('Total-Results')
+  if (raw === null || raw.trim() === '' || !/^\d+$/.test(raw.trim())) {
+    throw new ZoteroError(
+      `Zotero did not return a valid Total-Results header for ${what}`,
+      ZOTERO_UNEXPECTED,
+    )
+  }
+  return Number(raw.trim())
+}
+
 /** Provider construction options; kept minimal so the harness default stays one call. */
 export interface LocalApiProviderOptions {
   /** How long a scope listing stays fresh before a re-fetch. */
@@ -307,6 +336,9 @@ export class LocalApiProvider implements ZoteroProvider {
 
   /** Cached full listings of the scope endpoints, partitioned by library. */
   private readonly scopeListingCache = new Map<string, ScopeListing>()
+
+  /** TTL-cached breadcrumb nodes for hierarchical collection walks. */
+  private readonly collectionNodeCache = new Map<string, CachedCollectionNode>()
 
   /**
    * The cached full listing of one plural endpoint (`collections` or
@@ -1638,6 +1670,12 @@ export class LocalApiProvider implements ZoteroProvider {
     if ((request.q !== undefined || request.match !== undefined) && request.kind !== 'tags') {
       throw new ZoteroError('q/match are only valid when kind="tags"', ZOTERO_INVALID_ARGUMENT)
     }
+    if (request.parentRef !== undefined && request.kind !== 'collections') {
+      throw new ZoteroError(
+        'parentRef is only valid when kind="collections"',
+        ZOTERO_INVALID_ARGUMENT,
+      )
+    }
     switch (request.kind) {
       case 'libraries':
         return await this.browseLibraries(request, signal)
@@ -1713,73 +1751,145 @@ export class LocalApiProvider implements ZoteroProvider {
     }
   }
 
+  /**
+   * Browse collections as real tree navigation: no `parentRef` lists
+   * top-level collections (`/collections/top`), a `parentRef` lists that
+   * collection's children — both server-side paged, so a page never depends
+   * on the whole library graph. Breadcrumbs resolve lazily: each row's own
+   * `parentCollection` field drives a per-key ancestor walk (TTL-cached,
+   * cycle-guarded), and an ancestor the API cannot serve truncates the path
+   * fail-closed instead of inventing one.
+   */
   private async browseCollections(
     request: ZoteroBrowseRequest,
     signal?: AbortSignal,
   ): Promise<ZoteroBrowseResult> {
     const library: SupportedLocalLibrary = request.library ?? PERSONAL_LIBRARY
-    // Breadcrumbs need the whole ancestor chain, so a collections browse
-    // cannot page server-side. It shares the TTL snapshot with scope-name
-    // resolution instead: at most one full graph fetch per window, and every
-    // later browse (or name lookup) serves from the cached graph. The
-    // streamed-response byte cap remains the hard bound on the fetch itself.
-    const listing = await this.scopeListingOf('collections', { library }, signal)
-    const serverId = listing.serverId
-    const detailed = new Map<string, { name: string; parentKey?: string }>()
-    for (const entry of listing.entries) {
-      detailed.set(entry.key, {
-        name: entry.name,
-        ...(entry.parentKey !== undefined ? { parentKey: entry.parentKey } : {}),
-      })
-    }
-
-    const items: ZoteroCollectionInfo[] = []
-    for (const [key, meta] of detailed.entries()) {
-      const stack: string[] = []
-      const visited = new Set<string>()
-      let cur: string | undefined = key
-      while (cur !== undefined && !visited.has(cur)) {
-        visited.add(cur)
-        const node = detailed.get(cur)
-        if (node === undefined) break
-        stack.unshift(node.name)
-        const pk = node.parentKey
-        if (pk === undefined) break
-        if (!detailed.has(pk)) break // missing parent: fail-closed, do not include phantom parent in path
-        cur = pk
+    const prefix = libraryPrefix(library)
+    let listPath = `${prefix}/collections/top`
+    if (request.parentRef !== undefined) {
+      const parentRef = requireSupportedLocalRef(parseRef(request.parentRef), ['collection'])
+      if (!sameLibrary(parentRef.library as SupportedLocalLibrary, library)) {
+        throw new ZoteroError(
+          `Library mismatch: parentRef is ${parentRef.library.type}/${parentRef.library.id} but request library is ${library.type}/${library.id}.`,
+          ZOTERO_INVALID_ARGUMENT,
+        )
       }
-      const path = stack
-      const depth = path.length > 0 ? path.length - 1 : 0
-      // Fail-closed: only emit parentRef when parent exists in detailed; otherwise omit to keep path contract
-      const parentKey = meta.parentKey
-      const parentExists = parentKey !== undefined && detailed.has(parentKey)
-      const parentRef = parentExists
-        ? formatRef(refForLibrary(library, 'collection', parentKey!, serverId))
-        : undefined
+      listPath = `${prefix}/collections/${parentRef.key}/collections`
+    }
+    const params = new URLSearchParams()
+    params.set('start', String(request.offset))
+    params.set('limit', String(request.limit))
+    const { json, headers } = await this.client.getJson<unknown>(listPath, params, { signal })
+    const serverId = headers.get('zotero-server-id') ?? undefined
+    const total = requireTotalResults(headers, 'collections')
+    const items: ZoteroCollectionInfo[] = []
+    for (const row of Array.isArray(json) ? json : []) {
+      const entry = normalizeScopeEntry(row)
+      const ancestors = await this.collectionAncestorNames(
+        library,
+        entry.key,
+        entry.parentKey,
+        serverId,
+        signal,
+      )
+      const path = [...ancestors, entry.name]
       items.push({
-        ref: formatRef(refForLibrary(library, 'collection', key, serverId)),
-        name: meta.name,
-        ...(parentRef ? { parentRef } : {}),
+        ref: formatRef(refForLibrary(library, 'collection', entry.key, serverId)),
+        name: entry.name,
+        ...(entry.parentKey !== undefined
+          ? {
+              parentRef: formatRef(refForLibrary(library, 'collection', entry.parentKey, serverId)),
+            }
+          : {}),
         path,
-        depth,
+        depth: path.length - 1,
       })
     }
-    items.sort(
-      (a, b) => a.path.join('/').localeCompare(b.path.join('/')) || a.name.localeCompare(b.name),
-    )
-    const total = items.length
-    const slice = items.slice(request.offset, request.offset + request.limit)
+    // A page-local sort keeps output deterministic without re-sorting the
+    // library; ordering across pages belongs to Zotero.
+    items.sort((a, b) => a.name.localeCompare(b.name))
     return {
       kind: 'collections',
       library,
       ...(serverId ? { serverId } : {}),
-      items: slice,
+      items,
       total,
       offset: request.offset,
-      returned: slice.length,
-      ...(request.offset + slice.length < total
-        ? { nextOffset: request.offset + slice.length }
+      returned: items.length,
+      ...(request.offset + items.length < total
+        ? { nextOffset: request.offset + items.length }
         : {}),
+    }
+  }
+
+  /**
+   * The ancestor names of one collection, walking `parentCollection` links
+   * upward from its immediate parent. The walk is sequential (one chain),
+   * cycle-guarded by the keys already visited, and stops at an ancestor the
+   * API cannot serve — the breadcrumb then reflects only provable names.
+   */
+  private async collectionAncestorNames(
+    library: SupportedLocalLibrary,
+    ownKey: string,
+    parentKey: string | undefined,
+    serverId: string | undefined,
+    signal: AbortSignal | undefined,
+  ): Promise<string[]> {
+    const names: string[] = []
+    const visited = new Set<string>([ownKey])
+    let current = parentKey
+    while (current !== undefined && !visited.has(current)) {
+      visited.add(current)
+      const node = await this.collectionNodeOf(library, current, serverId, signal)
+      if (node === undefined) break
+      names.unshift(node.name)
+      current = node.parentKey
+    }
+    return names
+  }
+
+  /**
+   * One collection node for breadcrumb walks, TTL-cached per library+key and
+   * identity-checked like the scope listings. A missing collection resolves
+   * to undefined (a phantom parent truncates the path) instead of failing
+   * the browse.
+   */
+  private async collectionNodeOf(
+    library: SupportedLocalLibrary,
+    key: string,
+    serverId: string | undefined,
+    signal: AbortSignal | undefined,
+  ): Promise<CollectionNode | undefined> {
+    const nodeCacheKey = `${cacheKey(library, 'collections')}:${key}`
+    const cached = this.collectionNodeCache.get(nodeCacheKey)
+    if (
+      cached !== undefined &&
+      Date.now() - cached.fetchedAt < this.scopeListingTtlMs &&
+      cacheEntryMatchesIdentity(cached.serverId, serverId)
+    ) {
+      return cached.node
+    }
+    try {
+      const { json } = await this.client.getJson<unknown>(
+        `${libraryPrefix(library)}/collections/${key}`,
+        undefined,
+        { signal, serverId },
+      )
+      const entry = normalizeScopeEntry(json)
+      const node: CollectionNode = {
+        name: entry.name,
+        ...(entry.parentKey !== undefined ? { parentKey: entry.parentKey } : {}),
+      }
+      this.collectionNodeCache.set(nodeCacheKey, {
+        node,
+        ...(serverId !== undefined ? { serverId } : {}),
+        fetchedAt: Date.now(),
+      })
+      return node
+    } catch (error) {
+      if (isNotFoundError(error)) return undefined
+      throw error
     }
   }
 
@@ -1801,19 +1911,7 @@ export class LocalApiProvider implements ZoteroProvider {
     })
     const serverId = headers.get('zotero-server-id') ?? undefined
     const rawRows = Array.isArray(json) ? json : []
-    const headerTotal = headers.get('total-results') ?? headers.get('Total-Results')
-    if (
-      headerTotal === null ||
-      headerTotal === undefined ||
-      headerTotal.trim() === '' ||
-      !/^\d+$/.test(headerTotal.trim())
-    ) {
-      throw new ZoteroError(
-        'Zotero did not return a valid Total-Results header for saved searches',
-        ZOTERO_UNEXPECTED,
-      )
-    }
-    const total = Number(headerTotal.trim())
+    const total = requireTotalResults(headers, 'saved searches')
     const entries: ScopeNameEntry[] = rawRows.map((row) => normalizeScopeEntry(row))
     const condByKey = new Map<string, unknown>()
     for (const row of rawRows) {
@@ -1863,19 +1961,7 @@ export class LocalApiProvider implements ZoteroProvider {
     })
     const serverId = headers.get('zotero-server-id') ?? undefined
     const rawRows = Array.isArray(json) ? json : []
-    const headerTotal = headers.get('total-results') ?? headers.get('Total-Results')
-    if (
-      headerTotal === null ||
-      headerTotal === undefined ||
-      headerTotal.trim() === '' ||
-      !/^\d+$/.test(headerTotal.trim())
-    ) {
-      throw new ZoteroError(
-        'Zotero did not return a valid Total-Results header for tags',
-        ZOTERO_UNEXPECTED,
-      )
-    }
-    const total = Number(headerTotal.trim())
+    const total = requireTotalResults(headers, 'tags')
     const items = rawRows
       .map((row) => {
         const rec = asRecord(row)

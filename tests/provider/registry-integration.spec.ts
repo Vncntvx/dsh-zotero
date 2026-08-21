@@ -143,7 +143,9 @@ describe('registry integration: zotero_browse libraries Native identity', () => 
       key: `COLL${String(i).padStart(4, '0')}`,
       data: { key: `COLL${String(i).padStart(4, '0')}`, name: `C${i}` },
     }))
-    mock.route('GET', '/api/users/0/collections', (req, res, helpers) => helpers.json(cols))
+    mock.route('GET', '/api/users/0/collections/top', (req, res, helpers) =>
+      helpers.json(cols, { 'Total-Results': String(cols.length) }),
+    )
     const result = await run('zotero_browse', { kind: 'collections', limit: 35 })
     expect(result.isError).toBe(false)
     if (result.isError) throw new Error('unreachable')
@@ -169,20 +171,45 @@ describe('registry integration: zotero_browse libraries Native identity', () => 
 
 describe('registry integration: browse render exposes structured fields', () => {
   it('renders collection breadcrumbs instead of bare names', async () => {
-    const cols = [
-      { key: 'COLL0001', data: { key: 'COLL0001', name: 'Methods' } },
-      { key: 'COLL0002', data: { key: 'COLL0002', name: 'RAG', parentCollection: 'COLL0001' } },
-    ]
-    mock.route('GET', '/api/users/0/collections', (req, res, helpers) =>
-      helpers.json(cols, { 'Zotero-Server-ID': 'S1' }),
+    mock.route('GET', '/api/users/0/collections/top', (req, res, helpers) =>
+      helpers.json([{ key: 'COLL0001', data: { key: 'COLL0001', name: 'Methods' } }], {
+        'Total-Results': '1',
+        'Zotero-Server-ID': 'S1',
+      }),
     )
-    const result = await run('zotero_browse', { kind: 'collections' })
-    expect(result.isError).toBe(false)
-    if (result.isError) throw new Error('unreachable')
-    const text = (result.content[0] as { text: string }).text
-    expect(text).toContain('Methods / RAG — zotero://user/0/collection/COLL0002?server=S1')
+    const top = await run('zotero_browse', { kind: 'collections' })
+    expect(top.isError).toBe(false)
+    if (top.isError) throw new Error('unreachable')
+    const topText = (top.content[0] as { text: string }).text
     // The root keeps its single-segment path (its own name).
-    expect(text).toContain('1. Methods — zotero://user/0/collection/COLL0001?server=S1')
+    expect(topText).toContain('1. Methods — zotero://user/0/collection/COLL0001?server=S1')
+
+    // Navigating into the collection lists its children with full breadcrumbs.
+    mock.route('GET', '/api/users/0/collections/COLL0001', (req, res, helpers) =>
+      helpers.json(
+        { key: 'COLL0001', data: { key: 'COLL0001', name: 'Methods' } },
+        { 'Zotero-Server-ID': 'S1' },
+      ),
+    )
+    mock.route('GET', '/api/users/0/collections/COLL0001/collections', (req, res, helpers) =>
+      helpers.json(
+        [
+          {
+            key: 'COLL0002',
+            data: { key: 'COLL0002', name: 'RAG', parentCollection: 'COLL0001' },
+          },
+        ],
+        { 'Total-Results': '1', 'Zotero-Server-ID': 'S1' },
+      ),
+    )
+    const children = await run('zotero_browse', {
+      kind: 'collections',
+      parentRef: 'zotero://user/0/collection/COLL0001?server=S1',
+    })
+    expect(children.isError).toBe(false)
+    if (children.isError) throw new Error('unreachable')
+    const text = (children.content[0] as { text: string }).text
+    expect(text).toContain('Methods / RAG — zotero://user/0/collection/COLL0002?server=S1')
   })
 
   it('renders tag counts, saved-search condition counts, and localized item types', async () => {

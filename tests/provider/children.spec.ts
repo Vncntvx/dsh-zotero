@@ -80,7 +80,8 @@ const ANNOTATION_ROWS = [
 ]
 
 function routeGraph(serverId?: string): void {
-  const headers = serverId === undefined ? {} : { 'Zotero-Server-ID': serverId }
+  const headers: Record<string, string> =
+    serverId === undefined ? {} : { 'Zotero-Server-ID': serverId }
   mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) =>
     helpers.json(PARENT, headers),
   )

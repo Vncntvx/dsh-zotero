@@ -41,6 +41,11 @@ const BROWSE_PARAMETERS = {
     description:
       'Library for collections/savedSearches/tags; omitted defaults to personal user/0. Not allowed for libraries/itemTypes (fail-closed).',
   },
+  parentRef: {
+    type: 'string',
+    description:
+      'Collections only: a zotero://.../collection/<KEY> ref whose children to list. Omit to list top-level collections.',
+  },
   q: {
     type: 'string',
     description: 'Filter for tags kind (substring); only valid when kind="tags"',
@@ -197,9 +202,17 @@ export function buildRequest(
   if (q !== undefined && q.trim() === '') {
     throw new ZoteroError('q must be a non-empty string when provided', ZOTERO_INVALID_ARGUMENT)
   }
+  const parentRef = (args as Record<string, unknown>).parentRef as string | undefined
+  if (parentRef !== undefined && kind !== 'collections') {
+    throw new ZoteroError(
+      'parentRef is only valid when kind="collections"',
+      ZOTERO_INVALID_ARGUMENT,
+    )
+  }
   return {
     kind,
     ...(library ? { library } : {}),
+    ...(parentRef !== undefined ? { parentRef } : {}),
     ...(q !== undefined ? { q } : {}),
     ...(match !== undefined ? { match } : {}),
     offset,
@@ -248,7 +261,8 @@ export function registerBrowseTool(ctx: Context, service: ZoteroService): void {
       name: 'zotero_browse',
       description: [
         'Browse Zotero library structure. Use libraries to discover personal/group libraries,',
-        'collections/savedSearches/tags per library, itemTypes globally. Always offset/limit paginated; use for discovery before search/get.',
+        'collections/savedSearches/tags per library, itemTypes globally. Collections navigate the tree: omit parentRef for top-level, pass a collection ref to list its children.',
+        'Always offset/limit paginated; use for discovery before search/get.',
       ].join(' '),
       parameters: BROWSE_PARAMETERS,
       output: {

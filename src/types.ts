@@ -400,6 +400,13 @@ export type ZoteroBrowseKind = 'libraries' | 'collections' | 'savedSearches' | '
 export interface ZoteroBrowseRequest {
   readonly kind: ZoteroBrowseKind
   readonly library?: SupportedLocalLibrary
+  /**
+   * Collections only: a collection ref whose children to list. Omitted lists
+   * top-level collections (`/collections/top`); present lists that
+   * collection's children (`/collections/<key>/collections`) — real
+   * server-side tree navigation instead of one whole-library snapshot.
+   */
+  readonly parentRef?: string
   readonly q?: string
   readonly match?: 'contains' | 'startsWith'
   readonly offset: number

@@ -183,40 +183,55 @@ describe('step3: browseCollections single GET and parent fail-closed', () => {
     await teardownProvider(harness)
   })
 
-  it('single GET derives entries+detailed and emits parentRef only when parent exists', async () => {
-    const cols = [
-      { key: 'COLL0001', data: { key: 'COLL0001', name: 'Root', parentCollection: false } },
-      { key: 'COLL0002', data: { key: 'COLL0002', name: 'Child', parentCollection: 'COLL0001' } },
-      { key: 'COLL0003', data: { key: 'COLL0003', name: 'Orphan', parentCollection: 'MISSING1' } },
-    ]
-    mock.route('GET', '/api/users/0/collections', (req, res, helpers) =>
-      helpers.json(cols, { 'Zotero-Server-ID': 'S1' }),
+  it('single page derives entries and emits parentRef straight from the row', async () => {
+    mock.route('GET', '/api/users/0/collections/top', (req, res, helpers) =>
+      helpers.json(
+        [
+          { key: 'COLL0001', data: { key: 'COLL0001', name: 'Root' } },
+          {
+            key: 'COLL0002',
+            data: { key: 'COLL0002', name: 'Child', parentCollection: 'COLL0001' },
+          },
+        ],
+        { 'Total-Results': '2', 'Zotero-Server-ID': 'S1' },
+      ),
+    )
+    mock.route('GET', '/api/users/0/collections/COLL0001', (req, res, helpers) =>
+      helpers.json({ key: 'COLL0001', data: { key: 'COLL0001', name: 'Root' } }),
     )
     const result = await provider.browse({ kind: 'collections', offset: 0, limit: 10 })
-    expect(mock.requests.filter((r) => r.pathname === '/api/users/0/collections')).toHaveLength(1)
-    const child = (
-      result.items as unknown as Array<{
-        path: string[]
-        parentRef?: string
-        depth: number
-        name: string
-      }>
-    ).find((i) => i.name === 'Child')!
+    expect(mock.requests.filter((r) => r.pathname === '/api/users/0/collections/top')).toHaveLength(
+      1,
+    )
+    const rows = result.items as unknown as Array<{
+      path: string[]
+      parentRef?: string
+      depth: number
+      name: string
+    }>
+    const child = rows.find((i) => i.name === 'Child')!
+    // The row itself declares the parent, so parentRef is emitted even though
+    // the breadcrumb walk only proves the name via the ancestor GET.
     expect(child.parentRef).toBe('zotero://user/0/collection/COLL0001?server=S1')
     expect(child.path).toEqual(['Root', 'Child'])
     expect(child.depth).toBe(1)
-    const orphan = (
-      result.items as unknown as Array<{ path: string[]; parentRef?: string; name: string }>
-    ).find((i) => i.name === 'Orphan')!
-    expect(orphan.parentRef).toBeUndefined()
-    expect(orphan.path).toEqual(['Orphan']) // missing parent not in path, fail-closed
+    const root = rows.find((i) => i.name === 'Root')!
+    expect(root.parentRef).toBeUndefined()
+    expect(root.path).toEqual(['Root'])
   })
 
-  it('handles deep/loop guard (20)', async () => {
-    const cols = [
-      { key: 'COLL0001', data: { key: 'COLL0001', name: 'Self', parentCollection: 'COLL0001' } },
-    ]
-    mock.route('GET', '/api/users/0/collections', (req, res, helpers) => helpers.json(cols))
+  it('handles a self-referential parent without looping (20)', async () => {
+    mock.route('GET', '/api/users/0/collections/top', (req, res, helpers) =>
+      helpers.json(
+        [
+          {
+            key: 'COLL0001',
+            data: { key: 'COLL0001', name: 'Self', parentCollection: 'COLL0001' },
+          },
+        ],
+        { 'Total-Results': '1' },
+      ),
+    )
     const r = await provider.browse({ kind: 'collections', offset: 0, limit: 10 })
     expect(r.total).toBe(1)
     expect((r.items[0] as unknown as { depth: number }).depth).toBe(0)
