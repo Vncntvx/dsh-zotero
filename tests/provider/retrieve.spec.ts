@@ -60,17 +60,6 @@ const RETRIEVE_PARENT = {
 }
 
 const RETRIEVE_CHILDREN = [
-  {
-    key: 'ANNO1111',
-    data: {
-      itemType: 'annotation',
-      annotationType: 'highlight',
-      annotationText: 'see the tiling figure for details',
-      annotationComment: 'compare with figure 3',
-      annotationPageLabel: '7',
-      annotationSortIndex: '00001',
-    },
-  },
   { key: 'NOTE1111', data: { itemType: 'note', note: 'read this for the tiling strategy' } },
   {
     key: 'WXYZ6789',
@@ -82,6 +71,32 @@ const RETRIEVE_CHILDREN = [
     },
   },
 ]
+
+/** Annotations live under the PDF attachment (`WXYZ6789`), not under the parent. */
+const RETRIEVE_ATTACHMENT_CHILDREN = [
+  {
+    key: 'ANNO1111',
+    data: {
+      itemType: 'annotation',
+      annotationType: 'highlight',
+      annotationText: 'see the tiling figure for details',
+      annotationComment: 'compare with figure 3',
+      annotationPageLabel: '7',
+      annotationSortIndex: '00001',
+      parentItem: 'WXYZ6789',
+    },
+  },
+]
+
+/** Register both levels of the child graph: the parent's children and the PDF's annotations. */
+function routeChildren(): void {
+  mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) =>
+    helpers.json(RETRIEVE_CHILDREN),
+  )
+  mock.route('GET', '/api/users/0/items/WXYZ6789/children', (req, res, helpers) =>
+    helpers.json(RETRIEVE_ATTACHMENT_CHILDREN),
+  )
+}
 
 const FULLTEXT_PAYLOAD = {
   content:
@@ -100,6 +115,9 @@ describe('retrieve', () => {
     mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) =>
       helpers.json(RETRIEVE_CHILDREN),
     )
+    mock.route('GET', '/api/users/0/items/WXYZ6789/children', (req, res, helpers) =>
+      helpers.json(RETRIEVE_ATTACHMENT_CHILDREN),
+    )
     mock.route('GET', '/api/users/0/items/WXYZ6789/fulltext', (req, res, helpers) =>
       helpers.json(FULLTEXT_PAYLOAD),
     )
@@ -112,7 +130,11 @@ describe('retrieve', () => {
         .slice(1)
         .map((entry) => entry.pathname)
         .sort(),
-    ).toEqual(['/api/users/0/items/ABCD1234/children', '/api/users/0/items/WXYZ6789/fulltext'])
+    ).toEqual([
+      '/api/users/0/items/ABCD1234/children',
+      '/api/users/0/items/WXYZ6789/children',
+      '/api/users/0/items/WXYZ6789/fulltext',
+    ])
     expect(result.ref).toBe('zotero://user/0/item/ABCD1234?server=S1')
     expect(result.attachmentRef).toBe('zotero://user/0/attachment/WXYZ6789?server=S1')
     expect(result.attachmentContentType).toBe('application/pdf')
@@ -139,6 +161,9 @@ describe('retrieve', () => {
     )
     mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) =>
       helpers.json(RETRIEVE_CHILDREN),
+    )
+    mock.route('GET', '/api/users/0/items/WXYZ6789/children', (req, res, helpers) =>
+      helpers.json(RETRIEVE_ATTACHMENT_CHILDREN),
     )
     const result = await provider.retrieve(retrieveRequest({ query: 'tiling', passages: 4 }))
     const annotation = result.evidence.find((entry) => entry.source === 'annotation')
@@ -194,6 +219,9 @@ describe('retrieve', () => {
     mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) =>
       helpers.json(RETRIEVE_CHILDREN),
     )
+    mock.route('GET', '/api/users/0/items/WXYZ6789/children', (req, res, helpers) =>
+      helpers.json(RETRIEVE_ATTACHMENT_CHILDREN),
+    )
     mock.route('GET', '/api/users/0/items/WXYZ6789/fulltext', (req, res, helpers) =>
       helpers.json(FULLTEXT_PAYLOAD),
     )
@@ -218,6 +246,9 @@ describe('retrieve', () => {
     mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) => helpers.json(parent))
     mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) =>
       helpers.json(RETRIEVE_CHILDREN),
+    )
+    mock.route('GET', '/api/users/0/items/WXYZ6789/children', (req, res, helpers) =>
+      helpers.json(RETRIEVE_ATTACHMENT_CHILDREN),
     )
     mock.route('GET', '/api/users/0/items/WXYZ6789/fulltext', (req, res, helpers) =>
       helpers.json(FULLTEXT_PAYLOAD),
@@ -247,6 +278,9 @@ describe('retrieve', () => {
     mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) =>
       helpers.json(RETRIEVE_CHILDREN),
     )
+    mock.route('GET', '/api/users/0/items/WXYZ6789/children', (req, res, helpers) =>
+      helpers.json(RETRIEVE_ATTACHMENT_CHILDREN),
+    )
     mock.route('GET', '/api/users/0/items/WXYZ6789/fulltext', (req, res, helpers) =>
       helpers.json(FULLTEXT_PAYLOAD),
     )
@@ -262,6 +296,9 @@ describe('retrieve', () => {
     )
     mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) =>
       helpers.json(RETRIEVE_CHILDREN),
+    )
+    mock.route('GET', '/api/users/0/items/WXYZ6789/children', (req, res, helpers) =>
+      helpers.json(RETRIEVE_ATTACHMENT_CHILDREN),
     )
     mock.route('GET', '/api/users/0/items/WXYZ6789/fulltext', (req, res, helpers) =>
       helpers.json(FULLTEXT_PAYLOAD),
@@ -321,6 +358,9 @@ describe('retrieve', () => {
     mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) =>
       helpers.json(RETRIEVE_CHILDREN),
     )
+    mock.route('GET', '/api/users/0/items/WXYZ6789/children', (req, res, helpers) =>
+      helpers.json(RETRIEVE_ATTACHMENT_CHILDREN),
+    )
     mock.route('GET', '/api/users/0/items/WXYZ6789/fulltext', (req, res, helpers) =>
       helpers.json(FULLTEXT_PAYLOAD),
     )
@@ -352,6 +392,9 @@ describe('retrieve edge cases', () => {
     )
     mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) =>
       helpers.json(RETRIEVE_CHILDREN),
+    )
+    mock.route('GET', '/api/users/0/items/WXYZ6789/children', (req, res, helpers) =>
+      helpers.json(RETRIEVE_ATTACHMENT_CHILDREN),
     )
     const result = await provider.retrieve(
       retrieveRequest({ sources: ['note'], passages: 2, query: 'tiling' }),
@@ -637,6 +680,9 @@ describe('retrieval contract hardening', () => {
     )
     mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) =>
       helpers.json(RETRIEVE_CHILDREN),
+    )
+    mock.route('GET', '/api/users/0/items/WXYZ6789/children', (req, res, helpers) =>
+      helpers.json(RETRIEVE_ATTACHMENT_CHILDREN),
     )
     mock.route('GET', '/api/users/0/items/WXYZ6789/fulltext', (req, res, helpers) =>
       helpers.json(FULLTEXT_PAYLOAD),

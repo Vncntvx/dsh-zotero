@@ -18,7 +18,7 @@ import { renderGet } from '../src/tools/get.js'
 import { renderRetrieve } from '../src/tools/retrieve.js'
 import { renderSearch } from '../src/tools/search.js'
 import { MockZotero } from './helpers/mock-zotero.js'
-import { CHILD_ROWS, ITEM } from './helpers/fixtures.js'
+import { ATTACHMENT_CHILD_ROWS, CHILD_ROWS, ITEM } from './helpers/fixtures.js'
 
 let mock: MockZotero
 let ctx: Context
@@ -401,6 +401,9 @@ describe('zotero_get tool', () => {
     mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) =>
       helpers.json(CHILD_ROWS),
     )
+    mock.route('GET', '/api/users/0/items/WXYZ6789/children', (req, res, helpers) =>
+      helpers.json(ATTACHMENT_CHILD_ROWS),
+    )
     mock.route('GET', '/api/users/0/collections', (req, res, helpers) =>
       helpers.json([
         { key: 'COLL1234', version: 1, data: { key: 'COLL1234', version: 1, name: 'LLM Papers' } },
@@ -412,11 +415,17 @@ describe('zotero_get tool', () => {
     })
     expect(result.isError).toBe(false)
     if (result.isError) throw new Error('unreachable')
-    expect(mock.requests.map((request) => request.pathname)).toEqual([
-      '/api/users/0/items/ABCD1234',
-      '/api/users/0/items/ABCD1234/children',
-      '/api/users/0/collections',
-    ])
+    // The parent, its children, the attachment-level annotation walk, and one
+    // collections listing — the two independent arms may interleave.
+    const paths = mock.requests.map((request) => request.pathname)
+    expect(paths[0]).toBe('/api/users/0/items/ABCD1234')
+    expect(paths.slice(1).sort()).toEqual(
+      [
+        '/api/users/0/items/ABCD1234/children',
+        '/api/users/0/items/WXYZ6789/children',
+        '/api/users/0/collections',
+      ].sort(),
+    )
     const value = result.value as {
       collections: { ref: string; name?: string }[]
       notes: { returned: number }
@@ -714,21 +723,26 @@ const RETRIEVE_PARENT = {
 
 const RETRIEVE_CHILDREN = [
   {
-    key: 'ANNO1111',
-    data: {
-      itemType: 'annotation',
-      annotationType: 'highlight',
-      annotationText: 'flash attention avoids materializing the matrix',
-      annotationSortIndex: '00001',
-    },
-  },
-  {
     key: 'WXYZ6789',
     data: {
       itemType: 'attachment',
       title: 'Full Text PDF',
       contentType: 'application/pdf',
       linkMode: 'imported_file',
+    },
+  },
+]
+
+/** Annotations live under the PDF attachment (`WXYZ6789`), not under the parent. */
+const RETRIEVE_ATTACHMENT_CHILDREN = [
+  {
+    key: 'ANNO1111',
+    data: {
+      itemType: 'annotation',
+      annotationType: 'highlight',
+      annotationText: 'flash attention avoids materializing the matrix',
+      annotationSortIndex: '00001',
+      parentItem: 'WXYZ6789',
     },
   },
 ]
@@ -745,6 +759,9 @@ describe('zotero_retrieve tool', () => {
     )
     mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) =>
       helpers.json(RETRIEVE_CHILDREN),
+    )
+    mock.route('GET', '/api/users/0/items/WXYZ6789/children', (req, res, helpers) =>
+      helpers.json(RETRIEVE_ATTACHMENT_CHILDREN),
     )
     mock.route('GET', '/api/users/0/items/WXYZ6789/fulltext', (req, res, helpers) =>
       helpers.json({

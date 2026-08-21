@@ -14,7 +14,7 @@ import { ZOTERO_FILE_MISSING, ZOTERO_NO_ATTACHMENT } from '../../src/errors.js'
 import { type LocalApiLimits, type LocalApiProvider } from '../../src/provider-local.js'
 import { parseRef } from '../../src/refs.js'
 import { MockZotero } from '../helpers/mock-zotero.js'
-import { CHILD_ROWS } from '../helpers/fixtures.js'
+import { ATTACHMENT_CHILD_ROWS, CHILD_ROWS } from '../helpers/fixtures.js'
 import {
   createProvider,
   getRequest,
@@ -55,7 +55,7 @@ const PARENT = {
       attachmentType: 'application/pdf',
     },
   },
-  meta: { creatorSummary: 'Dao, Tri', parsedDate: '2023-07-28', numChildren: 3 },
+  meta: { creatorSummary: 'Dao, Tri', parsedDate: '2023-07-28', numChildren: 2 },
   data: {
     itemType: 'journalArticle',
     title: 'FlashAttention-2',
@@ -78,7 +78,7 @@ describe('getItem', () => {
     const detail = await provider.getItem(getRequest())
     expect(mock.requests.map((entry) => entry.pathname)).toEqual(['/api/users/0/items/ABCD1234'])
     expect(detail.ref).toBe('zotero://user/0/item/ABCD1234?server=S1')
-    expect(detail.children.total).toBe(3)
+    expect(detail.children.total).toBe(2)
     expect(detail.notes).toBeUndefined()
     expect(detail.bestAttachment).toEqual({
       ref: 'zotero://user/0/attachment/WXYZ6789?server=S1',
@@ -94,17 +94,26 @@ describe('getItem', () => {
     mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) =>
       helpers.json(CHILD_ROWS, { 'Zotero-Server-ID': 'S1' }),
     )
+    mock.route('GET', '/api/users/0/items/WXYZ6789/children', (req, res, helpers) =>
+      helpers.json(ATTACHMENT_CHILD_ROWS, { 'Zotero-Server-ID': 'S1' }),
+    )
     mock.route('GET', '/api/users/0/collections', (req, res, helpers) =>
       helpers.json([
         { key: 'COLL1234', version: 1, data: { key: 'COLL1234', version: 1, name: 'LLM Papers' } },
       ]),
     )
     const detail = await provider.getItem(getRequest(['notes', 'annotations', 'attachments']))
-    expect(mock.requests.map((entry) => entry.pathname)).toEqual([
-      '/api/users/0/items/ABCD1234',
-      '/api/users/0/items/ABCD1234/children',
-      '/api/users/0/collections',
-    ])
+    // The parent, its children, the attachment-level annotation walk, and one
+    // collections listing — the two independent arms may interleave.
+    const paths = mock.requests.map((entry) => entry.pathname)
+    expect(paths[0]).toBe('/api/users/0/items/ABCD1234')
+    expect(paths.slice(1).sort()).toEqual(
+      [
+        '/api/users/0/items/ABCD1234/children',
+        '/api/users/0/items/WXYZ6789/children',
+        '/api/users/0/collections',
+      ].sort(),
+    )
     expect(detail.collections).toEqual([
       { ref: 'zotero://user/0/collection/COLL1234?server=S1', name: 'LLM Papers' },
     ])
@@ -116,6 +125,10 @@ describe('getItem', () => {
       ],
     })
     expect(detail.annotations!.total).toBe(1)
+    expect(detail.annotations!.items[0]).toMatchObject({
+      ref: 'zotero://user/0/item/ANNO1111?server=S1',
+      parentRef: 'zotero://user/0/attachment/WXYZ6789?server=S1',
+    })
     expect(detail.attachments!.items[0]!.title).toBe('Full Text PDF')
     expect(detail.bestAttachment!.title).toBe('Full Text PDF')
   })
@@ -162,6 +175,7 @@ describe('getItem', () => {
         annotationType: 'highlight',
         annotationText: `a ${i}`,
         annotationSortIndex: String(i).padStart(5, '0'),
+        parentItem: 'ATTA0001',
       },
     }))
     mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) =>
@@ -171,12 +185,22 @@ describe('getItem', () => {
       ),
     )
     mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) =>
-      helpers.json([...notes, ...annotations], { 'Zotero-Server-ID': 'S1' }),
+      helpers.json(
+        [
+          ...notes,
+          { key: 'ATTA0001', data: { itemType: 'attachment', contentType: 'application/pdf' } },
+        ],
+        { 'Zotero-Server-ID': 'S1' },
+      ),
+    )
+    mock.route('GET', '/api/users/0/items/ATTA0001/children', (req, res, helpers) =>
+      helpers.json(annotations, { 'Zotero-Server-ID': 'S1' }),
     )
     const capped = makeProvider({ maxNoteRecords: 2, maxAnnotationRecords: 1, maxNoteChars: 5 })
     const detail = await capped.getItem(getRequest(['notes', 'annotations']))
     expect(detail.notes).toMatchObject({ total: 7, returned: 2 })
     expect(detail.notes!.items[0]).toMatchObject({ text: 'note ', truncated: true })
+    // The merged cross-attachment corpus is capped as one collection.
     expect(detail.annotations).toMatchObject({ total: 3, returned: 1 })
   })
 

@@ -30,18 +30,14 @@ export const ITEM = {
   },
 }
 
-/** The note/annotation/attachment child rows of the shared parent item. */
+/**
+ * The direct child rows of the shared parent item: one note and one PDF
+ * attachment. This mirrors Zotero's real hierarchy — annotations are NOT
+ * direct children of a bibliographic item (`itemAnnotations.parentItemID`
+ * references `itemAttachments`), so they live in {@link ATTACHMENT_CHILD_ROWS}.
+ */
 export const CHILD_ROWS = [
   { key: 'NOTE1111', data: { itemType: 'note', note: 'my note' } },
-  {
-    key: 'ANNO1111',
-    data: {
-      itemType: 'annotation',
-      annotationType: 'highlight',
-      annotationText: 'insight',
-      annotationSortIndex: '00001',
-    },
-  },
   {
     key: 'WXYZ6789',
     data: {
@@ -49,6 +45,24 @@ export const CHILD_ROWS = [
       title: 'Full Text PDF',
       contentType: 'application/pdf',
       linkMode: 'imported_file',
+    },
+  },
+]
+
+/**
+ * The child rows of the parent's PDF attachment `WXYZ6789`: where Zotero
+ * actually serves annotation items. The row carries `parentItem` like the
+ * real API, so normalized records point their provenance at the attachment.
+ */
+export const ATTACHMENT_CHILD_ROWS = [
+  {
+    key: 'ANNO1111',
+    data: {
+      itemType: 'annotation',
+      annotationType: 'highlight',
+      annotationText: 'insight',
+      annotationSortIndex: '00001',
+      parentItem: 'WXYZ6789',
     },
   },
 ]

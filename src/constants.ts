@@ -46,5 +46,13 @@ export const ZOTERO_ITEMKEY_BATCH = 50
  */
 export const ZOTERO_EXPORT_CONCURRENCY = 4
 
+/**
+ * The bounded concurrency of the per-attachment `/children` requests the
+ * item-graph walk issues when gathering annotations. A pool — not a bare
+ * `Promise.all` — keeps the in-flight second-level requests small, so an
+ * item with many attachments cannot storm the local server.
+ */
+export const ZOTERO_GRAPH_CONCURRENCY = 4
+
 /** How long a scope listing (collections/searches) is trusted before a re-fetch. */
 export const ZOTERO_SCOPE_LISTING_TTL_MS = 30_000

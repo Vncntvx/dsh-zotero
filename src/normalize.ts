@@ -410,6 +410,12 @@ export interface NormalizeItemDetailInput {
   readonly include: ReadonlySet<ZoteroInclude>
   /** Rows of `GET /users/0/items/<key>/children`; undefined when not fetched. */
   readonly childrenRows?: readonly unknown[]
+  /**
+   * The parent's direct child count when annotation rows gathered from
+   * attachments were merged into `childrenRows` — the merged array is longer
+   * than the direct child set, so the fallback total needs the original count.
+   */
+  readonly directChildCount?: number
   /** Collection names by key; missing entries render ref-only records. */
   readonly collectionNames?: ReadonlyMap<string, string>
   /** Character budget for the abstract preview. */
@@ -604,7 +610,7 @@ export function normalizeItemDetail(input: NormalizeItemDetailInput): ZoteroItem
     abstractTruncated: abstract.truncated,
     tags,
     collections,
-    children: { total: childrenTotal(meta, input.childrenRows) },
+    children: { total: childrenTotal(meta, input.childrenRows, input.directChildCount) },
     ...(abstract.text !== '' ? { abstract: abstract.text } : {}),
     ...(noteBody !== undefined ? { noteBody } : {}),
     ...(date !== undefined ? { date } : {}),
@@ -633,8 +639,12 @@ function normalizeTags(data: Record<string, unknown> | undefined): string[] {
 function childrenTotal(
   meta: Record<string, unknown> | undefined,
   childrenRows: readonly unknown[] | undefined,
+  directChildCount?: number,
 ): number {
   const numChildren = asInteger(meta?.numChildren)
   if (numChildren !== undefined && numChildren >= 0) return numChildren
+  // The merged array inflates the row count by the attachment-nested
+  // annotations, so prefer the caller's direct count when it rode along.
+  if (directChildCount !== undefined) return directChildCount
   return childrenRows?.length ?? 0
 }

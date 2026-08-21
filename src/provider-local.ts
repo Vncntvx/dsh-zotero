@@ -19,9 +19,11 @@
 import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { ZoteroHttpClient } from './http-client.js'
+import { mapWithConcurrency } from './concurrency.js'
 import {
   LOCAL_PROVIDER_ID,
   ZOTERO_EXPORT_CONCURRENCY,
+  ZOTERO_GRAPH_CONCURRENCY,
   ZOTERO_ITEMKEY_BATCH,
   ZOTERO_SCOPE_LISTING_TTL_MS,
 } from './constants.js'
@@ -44,6 +46,7 @@ import {
 import { chunkText, rankChunks, tokenize } from './evidence.js'
 import { locateExportItems } from './export-mapping.js'
 import { asRecord, asString, isObjectKey } from './json.js'
+import { loadItemGraph } from './item-graph.js'
 import {
   collectionKeysOf,
   matchScopeName,
@@ -145,38 +148,6 @@ export function buildSearchParams(request: ZoteroSearchRequest): URLSearchParams
   params.set('start', String(request.offset))
   params.set('limit', String(request.limit))
   return params
-}
-
-/**
- * Map `items` through `worker` with at most `concurrency` calls in flight,
- * preserving the input order in the results. A worker rejection propagates
- * immediately and stops the pool from starting further items; workers
- * already in flight keep running to completion.
- */
-async function mapWithConcurrency<T, R>(
-  items: readonly T[],
-  concurrency: number,
-  worker: (item: T) => Promise<R>,
-): Promise<R[]> {
-  const results = new Array<R>(items.length)
-  let next = 0
-  let failed = false
-  const run = async (): Promise<void> => {
-    for (;;) {
-      if (failed) return
-      const index = next
-      next += 1
-      if (index >= items.length) return
-      try {
-        results[index] = await worker(items[index]!)
-      } catch (error) {
-        failed = true
-        throw error
-      }
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => run()))
-  return results
 }
 
 interface ResolvedScopeResult {
@@ -665,12 +636,14 @@ export class LocalApiProvider implements ZoteroProvider {
 
   /**
    * Fetch one item's full detail. The parent is always fetched once; child
-   * rows are fetched lazily (one extra request) only when the caller asked
-   * to include notes/annotations/attachments — the Local API ignores
-   * `?include=` on single-item responses, so children come from the
-   * dedicated `/children` endpoint. Collection names resolve from a cached
-   * full listing (one listing request per provider instance) only when the
-   * item belongs to collections.
+   * rows are fetched lazily only when the caller asked to include
+   * notes/annotations/attachments — the Local API ignores `?include=` on
+   * single-item responses, so children come from the dedicated `/children`
+   * endpoint. Annotations live one level deeper (under each attachment), so
+   * an annotations include additionally walks every attachment's own
+   * `/children` under the bounded graph pool. Collection names resolve from
+   * a cached full listing (one listing request per provider instance) only
+   * when the item belongs to collections.
    */
   async getItem(request: ZoteroGetRequest, signal?: AbortSignal): Promise<ZoteroItemDetail> {
     const ref = requireSupportedLocalRef(request.ref, ['item'])
@@ -685,9 +658,15 @@ export class LocalApiProvider implements ZoteroProvider {
     // Children and the collections listing are independent once the parent
     // has arrived; the Local API is a loopback server with no per-client
     // throttling, so both ride the same await.
-    const [childrenRows, collectionNames] = await Promise.all([
+    const [children, collectionNames] = await Promise.all([
       includes.length > 0
-        ? this.fetchChildRows(ref.key, ref.library as SupportedLocalLibrary, serverId, signal)
+        ? this.loadChildRows(
+            ref.key,
+            ref.library as SupportedLocalLibrary,
+            serverId,
+            signal,
+            request.include.has('annotations'),
+          )
         : undefined,
       keys.length > 0
         ? this.collectionNamesFor(keys, ref.library as SupportedLocalLibrary, serverId, signal)
@@ -698,7 +677,8 @@ export class LocalApiProvider implements ZoteroProvider {
       library: ref.library as SupportedLocalLibrary,
       serverId: serverId ?? undefined,
       include: request.include,
-      childrenRows,
+      childrenRows: children?.rows,
+      directChildCount: children?.directCount,
       collectionNames,
       maxAbstractChars: this.limits.maxDetailChars,
       maxNoteBodyChars: this.limits.maxNoteBodyChars,
@@ -706,6 +686,33 @@ export class LocalApiProvider implements ZoteroProvider {
       maxNoteRecords: this.limits.maxNoteRecords,
       maxAnnotationRecords: this.limits.maxAnnotationRecords,
     })
+  }
+
+  /**
+   * One item's child rows for get/retrieve. Without annotations this is the
+   * single `/children` response; with them the walk descends into each
+   * attachment and merges those annotation rows into one partition input.
+   * The direct row count rides along so the detail's `children.total` stays
+   * honest after the merge.
+   */
+  private async loadChildRows(
+    key: string,
+    library: SupportedLocalLibrary,
+    serverId: string | undefined,
+    signal: AbortSignal | undefined,
+    withAnnotations: boolean,
+  ): Promise<{ readonly rows: readonly unknown[]; readonly directCount: number }> {
+    const graph = await loadItemGraph({
+      parentKey: key,
+      fetchChildren: (childKey) => this.fetchChildRows(childKey, library, serverId, signal),
+      concurrency: ZOTERO_GRAPH_CONCURRENCY,
+      withAnnotations,
+    })
+    const merged =
+      withAnnotations && graph.attachmentAnnotations.length > 0
+        ? [...graph.childRows, ...graph.attachmentAnnotations]
+        : graph.childRows
+    return { rows: merged, directCount: graph.childRows.length }
   }
 
   /** Fetch one item's child rows; undefined when the caller asked for none. */
@@ -830,13 +837,15 @@ export class LocalApiProvider implements ZoteroProvider {
    * and full-text chunks are scored as one passage corpus with BM25. Fetch
    * stays lazy — children only when annotation/note sources (or a PDF
    * fallback) need them, fulltext only when requested (started concurrently
-   * with children when the parent carries the attachment link). A note
-   * item's own body is its note source; child notes contribute every chunk
-   * of their full text, so long notes rank beyond their first chunk. Sources
-   * the item cannot provide are skipped and reported in `sourcesSkipped` —
-   * retrieval degrades instead of failing. Passage count and character
-   * budgets are enforced with the `truncated` flag, never by silently
-   * editing passage text.
+   * with children when the parent carries the attachment link). Annotations
+   * live under each attachment, so annotation sources walk the graph's
+   * second level and rank every attachment's annotations as one corpus; each
+   * passage keeps its own attachment provenance. A note item's own body is
+   * its note source; child notes contribute every chunk of their full text,
+   * so long notes rank beyond their first chunk. Sources the item cannot
+   * provide are skipped and reported in `sourcesSkipped` — retrieval degrades
+   * instead of failing. Passage count and character budgets are enforced
+   * with the `truncated` flag, never by silently editing passage text.
    */
   async retrieve(
     request: ZoteroRetrieveRequest,
@@ -876,15 +885,15 @@ export class LocalApiProvider implements ZoteroProvider {
     fulltextPromise?.catch(() => {})
     let childrenRows: readonly unknown[] = []
     if (fetchChildren) {
-      const children = await this.client.getJson<unknown>(
-        `${prefix}/items/${ref.key}/children`,
-        undefined,
-        {
-          signal,
+      childrenRows = (
+        await this.loadChildRows(
+          ref.key,
+          ref.library as SupportedLocalLibrary,
           serverId,
-        },
-      )
-      childrenRows = Array.isArray(children.json) ? children.json : []
+          signal,
+          wantsAnnotations,
+        )
+      ).rows
     }
 
     const skipped: ZoteroEvidenceSource[] = []
