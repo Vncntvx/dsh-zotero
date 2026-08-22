@@ -11,9 +11,8 @@ import {
   buildSearchParams,
   encodeExcludeTag,
   encodeLiteralTag,
-  type LocalApiLimits,
-  type LocalApiProvider,
-} from '../../src/provider-local.js'
+} from '../../src/local/search-domain.js'
+import { type LocalApiLimits, type LocalApiProvider } from '../../src/provider-local.js'
 import { MockZotero } from '../helpers/mock-zotero.js'
 import { ITEM } from '../helpers/fixtures.js'
 import {

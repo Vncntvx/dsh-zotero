@@ -66,6 +66,14 @@ export function libraryPrefix(library: { type: 'user' | 'group'; id: number }): 
   return `groups/${library.id}`
 }
 
+/** True when both values name the same library (type and id). */
+export function sameLibrary(
+  a: { type: 'user' | 'group'; id: number },
+  b: { type: 'user' | 'group'; id: number },
+): boolean {
+  return a.type === b.type && a.id === b.id
+}
+
 /** The personal library canonical constant for discovery endpoints. */
 export const PERSONAL_LIBRARY: { readonly type: 'user'; readonly id: 0 } = { type: 'user', id: 0 }
 
