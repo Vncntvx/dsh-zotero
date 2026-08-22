@@ -112,3 +112,12 @@ The default home already has `~/.dsh/.credentials.yaml`, you do nothing. For a s
 ## Bundle
 
 `dsh.bundle.patch` points at `cordis.patch.yml`, which inserts one row: id `zotero`, name `dsh-zotero`, empty config. Keep the patch small. Defaults belong in the Config schema ([bundle manifest](../deepseek-harness/docs/user/develop/basic/publish.md)).
+
+## Release & upstream checklist
+
+Work through every item when you align with a new deepseek-harness version or cut a release:
+
+- `package.json` `dshWorkshop.compatibility.dshVersions`: add the harness version the artifact was verified against. This is the DSH Hub Workshop intake manifest (introduced in v0.4.1); the published npm tarball carries it, and a stale pin misreports compatibility to the hub.
+- `src/client/index.ts` resolves the mounted namespace via `ctx.reflect.get('remote.zotero')` instead of a dotted `ctx.remote.zotero` read: the generated-style walk stops at the Loader's runtime-less internal forks between a plugin entry and the root fiber. This is deliberate (see the in-place comment) and is the first thing to re-check on any harness upgrade — if upstream provides an official face read, replace the workaround.
+- `scripts/build-client.mjs` marks `@deepseek-ai/dsh-client-ui-primitives`, `react`, and `react/jsx-runtime` as external, and `package.json` `dsh.client.inject` names six client packages. When upstream reshapes its client package boundaries, verify both lists together; `npm run build`'s sandbox self-check (`verifyBundle`) catches a broken handoff.
+- `docs/tools.md` states the pagination policy (every paged listing requires a valid `Total-Results` header and fails loud otherwise). Keep that sentence true if you touch `src/local/pagination.ts`.
