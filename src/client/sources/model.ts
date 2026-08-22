@@ -186,10 +186,7 @@ interface RetrievalSummary {
   readonly latestCallId: string
   /** The settled result's event time (Unix epoch ms). */
   readonly latestRetrievedAt: number
-  /** Deduplicated passages kept after the preview budget. */
-  readonly keptPassageCount: number
-  /** Total passages reported across all successful retrieves. */
-  readonly reportedPassageCount: number
+  /** Any successful retrieve hit the passage/character budget. */
   readonly truncated: boolean
 }
 

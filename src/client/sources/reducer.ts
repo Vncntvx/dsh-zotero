@@ -129,8 +129,19 @@ function emptyOperations(): DraftOperations {
   return { running: 0, failed: 0, stopped: 0 }
 }
 
-/** The identity of one logical search: query, mode, scope, library and filter fields. */
-function searchIdentityOf(args: Record<string, unknown> | null): string | null {
+/**
+ * The identity of one logical search: query, mode, scope, library and filter
+ * fields. When the result's presentation meta resolved both the scope and the
+ * library, they override the raw argument parse — the resolved values are
+ * what Zotero actually served.
+ */
+function searchIdentityOf(
+  args: Record<string, unknown> | null,
+  overrides?: {
+    readonly resolvedScope: ZoteroResolvedScope
+    readonly resolvedLibrary: SupportedLocalLibrary
+  },
+): string | null {
   if (args === null) return null
   const query = typeof args['query'] === 'string' ? args['query'] : ''
   const mode = args['mode'] === 'everything' ? 'everything' : 'metadata'
@@ -141,22 +152,27 @@ function searchIdentityOf(args: Record<string, unknown> | null): string | null {
   const includeTrashed = args['includeTrashed'] === true
   const sort = typeof args['sort'] === 'string' ? args['sort'] : ''
   const direction = typeof args['direction'] === 'string' ? args['direction'] : ''
-  const library = (() => {
-    const l = args['library']
-    if (
-      isRecord(l) &&
-      (l['type'] === 'user' || l['type'] === 'group') &&
-      typeof l['id'] === 'number'
-    ) {
-      return { type: l['type'] as 'user' | 'group', id: l['id'] as number }
-    }
-    return { type: 'user' as const, id: 0 }
-  })()
+  const library =
+    overrides?.resolvedLibrary ??
+    (() => {
+      const l = args['library']
+      if (
+        isRecord(l) &&
+        (l['type'] === 'user' || l['type'] === 'group') &&
+        typeof l['id'] === 'number'
+      ) {
+        return { type: l['type'] as 'user' | 'group', id: l['id'] as number }
+      }
+      return { type: 'user' as const, id: 0 }
+    })()
   return JSON.stringify({
     query,
     mode,
     library,
-    scope: scopeOf(args['scope']),
+    scope:
+      overrides !== undefined
+        ? resolvedToSourceScope(overrides.resolvedScope)
+        : scopeOf(args['scope']),
     itemTypes,
     tags,
     tagMatch,
@@ -196,51 +212,6 @@ function resolvedToSourceScope(scope: ZoteroResolvedScope): SourceScope {
   if (scope.kind === 'publications') return { kind: 'publications', library: scope.library }
   if (scope.kind === 'collection') return { kind: 'collection', ref: scope.ref, name: scope.name }
   return { kind: 'savedSearch', ref: scope.ref, name: scope.name }
-}
-
-function searchIdentityOfResolved(
-  args: Record<string, unknown> | null,
-  resolvedScope: ZoteroResolvedScope | null,
-  resolvedLibrary: SupportedLocalLibrary | null,
-): string | null {
-  if (args === null) return null
-  const query = typeof args['query'] === 'string' ? args['query'] : ''
-  const mode = args['mode'] === 'everything' ? 'everything' : 'metadata'
-  const itemTypes = normalizedListOf(args['itemTypes'])
-  const tags = normalizedListOf(args['tags'])
-  const tagMatch = args['tagMatch'] === 'any' ? 'any' : 'all'
-  const excludeTags = normalizedListOf(args['excludeTags'])
-  const includeTrashed = args['includeTrashed'] === true
-  const sort = typeof args['sort'] === 'string' ? args['sort'] : ''
-  const direction = typeof args['direction'] === 'string' ? args['direction'] : ''
-  const library =
-    resolvedLibrary ??
-    (() => {
-      const l = args['library']
-      if (
-        isRecord(l) &&
-        (l['type'] === 'user' || l['type'] === 'group') &&
-        typeof l['id'] === 'number'
-      ) {
-        return { type: l['type'] as 'user' | 'group', id: l['id'] as number }
-      }
-      return { type: 'user' as const, id: 0 }
-    })()
-  const scope =
-    resolvedScope !== null ? resolvedToSourceScope(resolvedScope) : scopeOf(args['scope'])
-  return JSON.stringify({
-    query,
-    mode,
-    library,
-    scope,
-    itemTypes,
-    tags,
-    tagMatch,
-    excludeTags,
-    includeTrashed,
-    sort,
-    direction,
-  })
 }
 
 /** The offset argument of one search call, or the tool default. */
@@ -367,8 +338,6 @@ export function buildSourceWorkspace(
         runCount: draft.successfulRetrieveCallIds.size,
         latestCallId: callId,
         latestRetrievedAt: time,
-        keptPassageCount: 0,
-        reportedPassageCount: 0,
         truncated: false,
       }
     }
@@ -443,13 +412,12 @@ export function buildSourceWorkspace(
       }
       draft.facts.evidenceCount = draft.evidence.size
     }
-    // Refresh the summary's derived counters after the merge, so the latest
-    // retrieve's facts are reflected even when this call was already counted.
-    // The creation block above guarantees a summary exists by this point.
+    // Refresh the truncation flag after the merge, so the latest retrieve's
+    // facts are reflected even when this call was already counted. The
+    // creation block above guarantees a summary exists by this point; the
+    // kept/reported counters live on `facts` alone — one storage path.
     draft.retrievalSummary = {
       ...draft.retrievalSummary!,
-      keptPassageCount: draft.evidence.size,
-      reportedPassageCount: draft.facts.reportedEvidenceCount,
       truncated: draft.retrievalFacts?.truncated === true,
     }
   }
@@ -468,9 +436,11 @@ export function buildSourceWorkspace(
         if (view === null || view.rows === null) break
         const resolvedScope = view.scope
         const resolvedLibrary = view.library
+        // The resolved pair overrides the raw args only when both are
+        // present — exactly what Zotero served for this call.
         const identity =
           resolvedScope !== null && resolvedLibrary !== null
-            ? searchIdentityOfResolved(args, resolvedScope, resolvedLibrary)
+            ? searchIdentityOf(args, { resolvedScope, resolvedLibrary })
             : searchIdentityOf(args)
         if (lastEpisode === null || identity === null || lastEpisode.identity !== identity) {
           const scopeForEpisode =

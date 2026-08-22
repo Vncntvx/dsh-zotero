@@ -173,8 +173,6 @@ export function singleFixture(): SourceWorkspace {
           runCount: 1,
           latestCallId: 'call-1',
           latestRetrievedAt: 1720000000000,
-          keptPassageCount: 2,
-          reportedPassageCount: 4,
           truncated: false,
         },
         searches: [searchOf()],
@@ -415,8 +413,6 @@ export function repeatedRetrieveFixture(): SourceWorkspace {
       runCount: 3,
       latestCallId: 'call-3',
       latestRetrievedAt: 1720000002000,
-      keptPassageCount: 3,
-      reportedPassageCount: 7,
       truncated: true,
     },
     searches: [

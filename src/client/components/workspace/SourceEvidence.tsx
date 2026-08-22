@@ -22,10 +22,12 @@ import css from './workspace.module.css'
 function retrievalSummaryLineOf(item: SourceItem, t: TranslateNS<'zotero'>): string {
   const summary = item.retrievalSummary
   if (summary === undefined) return ''
+  // The kept/reported counters live on `facts`; the summary carries only the
+  // run bookkeeping.
   const parts = [
     interpolate(t('retrievalRunCount'), { count: summary.runCount }),
-    interpolate(t('retrievalKeptCount'), { count: summary.keptPassageCount }),
-    interpolate(t('retrievalReportedCount'), { count: summary.reportedPassageCount }),
+    interpolate(t('retrievalKeptCount'), { count: item.facts.evidenceCount }),
+    interpolate(t('retrievalReportedCount'), { count: item.facts.reportedEvidenceCount }),
   ]
   if (summary.truncated) parts.push(t('budgetLimitedNote'))
   return parts.join(' · ')

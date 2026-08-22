@@ -395,10 +395,11 @@ describe('buildSourceWorkspace', () => {
       runCount: 2,
       latestCallId: 'r2',
       latestRetrievedAt: 2000,
-      keptPassageCount: 2,
-      reportedPassageCount: 3,
       truncated: true,
     })
+    // The kept/reported counters live on facts alone — one storage path.
+    expect(workspace.sources[0]!.facts.evidenceCount).toBe(2)
+    expect(workspace.sources[0]!.facts.reportedEvidenceCount).toBe(3)
   })
 
   it('counts a repeated retrieve call id as one run', () => {
