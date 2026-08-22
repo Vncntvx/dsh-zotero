@@ -262,5 +262,3 @@ async function fetchCitationBatch(
   }
   return citationByKey
 }
-
-// ---- browse (Phase C) ----

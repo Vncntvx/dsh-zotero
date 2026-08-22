@@ -181,7 +181,7 @@ zotero_export(refs=["zotero://user/0/item/ABC123", "zotero://user/0/item/DEF456"
 
 - `libraries`：`{library, name}`（个人库固定 `My Library`，群组名来自 `GET /users/0/groups`，`serverId` 在顶层）
 - `collections`：`{ref, name, parentRef?, path: string[], depth}`（完整集合图共享 30s TTL 快照——面包屑需要全部祖先；`path` 为根到叶子）
-- `savedSearches`：`{ref, name, conditions?}`（`conditions` 原样透传；服务器端 `start/limit` 分页，缺 `Total-Results` 头则 fail-closed）
+- `savedSearches`：`{ref, name, conditions?}`（`conditions` 为 Zotero 的条件行数组（非该形状时按缺省处理）；服务器端 `start/limit` 分页，缺 `Total-Results` 头则 fail-closed）
 - `tags`：`{tag, count?}`（`count` 仅服务端提供时；服务器端分页）
 - `itemTypes`：`{itemType, localized?}`
 
