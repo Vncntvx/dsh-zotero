@@ -461,11 +461,9 @@ export class LocalApiProvider implements ZoteroProvider {
       serverId: responseServerId ?? undefined,
     }
     const items = rows.map((row) => normalizeSearchItem(row, ctxForSearch))
-    const headerTotal = headers.get('total-results')
-    const apiTotal =
-      headerTotal !== null && headerTotal !== '' && Number.isInteger(Number(headerTotal))
-        ? Number(headerTotal)
-        : items.length
+    // Pagination honesty is uniform across every paged listing: without a
+    // valid Total-Results header the call fails instead of guessing a total.
+    const apiTotal = requireTotalResults(headers, 'items top listing')
     // Zotero's index never searches note bodies, so the first page of a
     // queried search lists client-side note-content matches in `supplemental`
     // — a separate list beside the paged primary results, up to the primary
@@ -936,11 +934,7 @@ export class LocalApiProvider implements ZoteroProvider {
         .filter(([key, version]) => isObjectKey(key) && typeof version === 'number')
         .map(([key, version]) => ({ key, version: version as number }))
         .sort((a, b) => b.version - a.version || a.key.localeCompare(b.key))
-      const totalHeader = headers.get('total-results')
-      const total =
-        totalHeader !== null && /^\d+$/.test(totalHeader.trim())
-          ? Number(totalHeader.trim())
-          : entries.length
+      const total = requireTotalResults(headers, 'versions listing')
       return { entries, truncated: total > entries.length }
     }
 

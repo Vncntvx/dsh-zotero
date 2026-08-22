@@ -107,6 +107,15 @@ describe('changes', () => {
     expect(result.truncated).toBe(true)
   })
 
+  it('fails loud when a versions listing omits Total-Results', async () => {
+    mock.route('GET', '/api/users/0/items/top', (req, res, helpers) =>
+      helpers.json(versionMap([['ABCD1234', 44]]), { 'Last-Modified-Version': '50' }),
+    )
+    await expect(provider.changes({ since: 42, include: new Set(['items']) })).rejects.toThrow(
+      'Total-Results header for versions listing',
+    )
+  })
+
   it('honors include subsets and skips their endpoints', async () => {
     mock.route('GET', '/api/users/0/items/top', (req, res, helpers) =>
       helpers.json(versionMap([['ABCD1234', 44]]), { 'Total-Results': '1' }),

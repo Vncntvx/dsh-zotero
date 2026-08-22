@@ -156,21 +156,30 @@ describe('search: library scope', () => {
     expect(result.items).toHaveLength(1)
   })
 
-  it('omits nextOffset on the final page and falls back to body length for total', async () => {
+  it('omits nextOffset when the page reaches the reported total', async () => {
     mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers) =>
-      helpers.json([ITEM]),
+      helpers.json([ITEM], { 'Total-Results': '1' }),
     )
-    const result = await provider.search(request({ offset: 20, limit: 10 }))
+    const result = await provider.search(request({ offset: 0, limit: 10 }))
     expect(result.total).toBe(1)
     expect(result.nextOffset).toBeUndefined()
   })
 
-  it('falls back to body length when Total-Results is not a number', async () => {
+  it('fails loud when Total-Results is missing or not a number', async () => {
+    // Pagination honesty is uniform: without an honest total the call
+    // fails instead of guessing one from the body length.
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers) =>
+      helpers.json([ITEM]),
+    )
+    await zoteroError(
+      provider.search(request({})),
+      'ZOTERO_UNEXPECTED',
+      'Total-Results header for items top listing',
+    )
     mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers) =>
       helpers.json([ITEM], { 'Total-Results': 'garbage' }),
     )
-    const result = await provider.search(request({}))
-    expect(result.total).toBe(1)
+    await zoteroError(provider.search(request({})), 'ZOTERO_UNEXPECTED', 'Total-Results')
   })
 
   it('keeps the scope provenance when the items response omits the server id', async () => {
@@ -178,7 +187,7 @@ describe('search: library scope', () => {
       helpers.json(COLLECTIONS[0], { 'Zotero-Server-ID': 'S1' }),
     )
     mock.route('GET', '/api/users/0/collections/COLL1234/items/top', (req, res, helpers) =>
-      helpers.json([ITEM]),
+      helpers.json([ITEM], { 'Total-Results': '1' }),
     )
     const result = await provider.search(
       request({
@@ -235,7 +244,9 @@ describe('search: collection scope', () => {
   })
 
   it('fails with SCOPE_AMBIGUOUS listing candidate refs for multiple matches', async () => {
-    mock.route('GET', '/api/users/0/collections', (req, res, helpers) => helpers.json(COLLECTIONS))
+    mock.route('GET', '/api/users/0/collections', (req, res, helpers) =>
+      helpers.json(COLLECTIONS, { 'Total-Results': '3' }),
+    )
     const error = await zoteroError(
       provider.search(request({ scope: { kind: 'collection', refOrName: 'llm papers' } })),
       ZOTERO_SCOPE_AMBIGUOUS,
@@ -245,7 +256,9 @@ describe('search: collection scope', () => {
   })
 
   it('fails with NOT_FOUND and near candidates when nothing matches', async () => {
-    mock.route('GET', '/api/users/0/collections', (req, res, helpers) => helpers.json(COLLECTIONS))
+    mock.route('GET', '/api/users/0/collections', (req, res, helpers) =>
+      helpers.json(COLLECTIONS, { 'Total-Results': '3' }),
+    )
     const error = await zoteroError(
       provider.search(request({ scope: { kind: 'collection', refOrName: 'reason' } })),
       ZOTERO_NOT_FOUND,
@@ -255,7 +268,9 @@ describe('search: collection scope', () => {
   })
 
   it('fails with NOT_FOUND without candidates when nothing is even close', async () => {
-    mock.route('GET', '/api/users/0/collections', (req, res, helpers) => helpers.json(COLLECTIONS))
+    mock.route('GET', '/api/users/0/collections', (req, res, helpers) =>
+      helpers.json(COLLECTIONS, { 'Total-Results': '3' }),
+    )
     const error = await zoteroError(
       provider.search(request({ scope: { kind: 'collection', refOrName: 'quantization' } })),
       ZOTERO_NOT_FOUND,
@@ -280,9 +295,11 @@ describe('search: collection scope', () => {
   })
 
   it('resolves a collection name without server provenance on pre-10 listings', async () => {
-    mock.route('GET', '/api/users/0/collections', (req, res, helpers) => helpers.json(COLLECTIONS))
+    mock.route('GET', '/api/users/0/collections', (req, res, helpers) =>
+      helpers.json(COLLECTIONS, { 'Total-Results': '3' }),
+    )
     mock.route('GET', '/api/users/0/collections/COLL1234/items/top', (req, res, helpers) =>
-      helpers.json([ITEM]),
+      helpers.json([ITEM], { 'Total-Results': '1' }),
     )
     const result = await provider.search(
       request({ scope: { kind: 'collection', refOrName: 'LLM Papers' } }),
@@ -296,9 +313,11 @@ describe('search: collection scope', () => {
   })
 
   it('reuses the cached scope listing across searches by name', async () => {
-    mock.route('GET', '/api/users/0/collections', (req, res, helpers) => helpers.json(COLLECTIONS))
+    mock.route('GET', '/api/users/0/collections', (req, res, helpers) =>
+      helpers.json(COLLECTIONS, { 'Total-Results': '3' }),
+    )
     mock.route('GET', '/api/users/0/collections/COLL1234/items/top', (req, res, helpers) =>
-      helpers.json([ITEM]),
+      helpers.json([ITEM], { 'Total-Results': '1' }),
     )
     await provider.search(request({ scope: { kind: 'collection', refOrName: 'LLM Papers' } }))
     await provider.search(request({ scope: { kind: 'collection', refOrName: 'LLM Papers' } }))
@@ -308,9 +327,11 @@ describe('search: collection scope', () => {
   })
 
   it('does not share the scope listing cache across provider instances', async () => {
-    mock.route('GET', '/api/users/0/collections', (req, res, helpers) => helpers.json(COLLECTIONS))
+    mock.route('GET', '/api/users/0/collections', (req, res, helpers) =>
+      helpers.json(COLLECTIONS, { 'Total-Results': '3' }),
+    )
     mock.route('GET', '/api/users/0/collections/COLL1234/items/top', (req, res, helpers) =>
-      helpers.json([ITEM]),
+      helpers.json([ITEM], { 'Total-Results': '1' }),
     )
     await provider.search(request({ scope: { kind: 'collection', refOrName: 'LLM Papers' } }))
     await makeProvider().search(request({ scope: { kind: 'collection', refOrName: 'LLM Papers' } }))
@@ -321,7 +342,7 @@ describe('search: collection scope', () => {
 
   it('treats a non-array items response as an empty result set', async () => {
     mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers) =>
-      helpers.json({ key: 'ABCD1234' }),
+      helpers.json({ key: 'ABCD1234' }, { 'Total-Results': '0' }),
     )
     const result = await provider.search(request({}))
     expect(result.items).toEqual([])
@@ -345,7 +366,7 @@ describe('search: collection scope', () => {
       helpers.json(COLLECTIONS[0]),
     )
     mock.route('GET', '/api/users/0/collections/COLL1234/items/top', (req, res, helpers) =>
-      helpers.json([ITEM]),
+      helpers.json([ITEM], { 'Total-Results': '1' }),
     )
     const result = await provider.search(
       request({
