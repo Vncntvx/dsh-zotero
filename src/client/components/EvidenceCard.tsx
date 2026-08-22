@@ -21,7 +21,7 @@ import { pdfCapabilityOf, type PdfCapability } from '../sources/source-capabilit
 import { CopyButton } from './CopyButton.tsx'
 import { BlockedOpenAction } from './open/BlockedOpenAction.tsx'
 import { ZoteroOpenLink } from './open/ZoteroOpenLink.tsx'
-import css from './SourcesList.module.css'
+import css from './cards.module.css'
 
 /** The locale key of one evidence source kind; unknown kinds read as fulltext. */
 export function sourceLabelKeyOf(

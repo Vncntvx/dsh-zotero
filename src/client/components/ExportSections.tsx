@@ -18,7 +18,7 @@ import { exportSectionsOf, type ExportSection } from '../sources/selectors.ts'
 import { CopyButton } from './CopyButton.tsx'
 import { ExportDocumentRow } from './ExportDocumentRow.tsx'
 import { ExportCard, extensionOf, fileNameOf, formatLabelOf, mimeOf } from './ExportCard.tsx'
-import css from './SourcesList.module.css'
+import css from './cards.module.css'
 
 export interface ExportSectionsProps {
   readonly exports: readonly ExportArtifact[]

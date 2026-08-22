@@ -13,6 +13,7 @@
 
 import type { CSSProperties } from 'react'
 import { Input } from '@deepseek-ai/dsh-client-ui-primitives'
+import css from './fields.module.css'
 
 /** What every field control needs regardless of its value type. */
 export interface FieldProps {
@@ -89,20 +90,6 @@ const invalid: CSSProperties = {
   color: 'var(--dsw-alias-state-error-primary)',
 }
 
-// The primitives Input owns its wrapper's border, so an invalid draft needs a
-// style sheet entry rather than a style prop; inject it once, in the same
-// data-plugin-css pattern the harness's own client bundles use.
-if (
-  typeof document !== 'undefined' &&
-  document.querySelector('style[data-plugin-css="dsh-zotero/fields"]') === null
-) {
-  const tag = document.createElement('style')
-  tag.dataset.plugin = 'dsh-zotero'
-  tag.dataset.pluginCss = 'dsh-zotero/fields'
-  tag.textContent = '.dsh-zotero-input-invalid{border-color:var(--dsw-alias-state-error-primary)}'
-  document.head.appendChild(tag)
-}
-
 /**
  * A staged value field. `numeric` only hints the keypad: which drafts a field
  * accepts is decided by its spec, so the control never silently rewrites what
@@ -140,7 +127,7 @@ export function ValueField(
       </div>
       <Input
         id={props.id}
-        className={props.invalid ? 'dsh-zotero-input-invalid' : undefined}
+        className={props.invalid ? css.invalid : undefined}
         type="text"
         {...(props.numeric === true ? { inputMode: 'numeric' as const } : {})}
         {...(props.invalid ? { 'aria-invalid': true } : {})}

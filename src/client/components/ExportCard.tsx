@@ -19,7 +19,7 @@ import { interpolate } from '../presenters.ts'
 import { bibTexKeysOf, citeCommandOf } from '../sources/bibtex.ts'
 import type { ExportArtifact } from '../sources/model.ts'
 import { CopyButton } from './CopyButton.tsx'
-import css from './SourcesList.module.css'
+import css from './cards.module.css'
 
 /**
  * The display label of one export format: the known translator ids in

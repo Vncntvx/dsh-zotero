@@ -152,7 +152,9 @@ describe('ZoteroPluginCard', () => {
     const timeout = document.querySelector('#zotero-settings-timeoutMs') as HTMLInputElement
     fireEvent.change(timeout, { target: { value: 'abc' } })
     expect(timeout.getAttribute('aria-invalid')).toBe('true')
-    expect(timeout.className).toContain('dsh-zotero-input-invalid')
+    // The invalid border rides a css-module class; its hashed name carries
+    // the source class name.
+    expect(timeout.className).toContain('invalid')
     expect(screen.getByText('请填数字；留空表示使用默认值。')).toBeDefined()
     expect(saveButton().disabled).toBe(true)
   })

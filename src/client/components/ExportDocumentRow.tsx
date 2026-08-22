@@ -18,7 +18,7 @@ import { citeCommandOf } from '../sources/bibtex.ts'
 import type { ExportedDocument } from '../sources/selectors.ts'
 import { CopyButton } from './CopyButton.tsx'
 import { extensionOf, formatLabelOf, mimeOf } from './ExportCard.tsx'
-import css from './SourcesList.module.css'
+import css from './cards.module.css'
 
 export interface ExportDocumentRowProps {
   readonly doc: ExportedDocument

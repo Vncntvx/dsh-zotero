@@ -9,7 +9,7 @@
 
 import { useEffect, useState } from 'react'
 import { writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
-import css from './SourcesList.module.css'
+import css from './cards.module.css'
 
 export interface CopyButtonProps {
   readonly value: string

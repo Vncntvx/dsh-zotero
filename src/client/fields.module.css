@@ -1,0 +1,5 @@
+/* The primitives Input owns its wrapper's border, so an invalid draft needs a
+   stylesheet rule rather than a style prop. */
+.invalid {
+  border-color: var(--dsw-alias-state-error-primary);
+}
