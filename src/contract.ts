@@ -7,8 +7,8 @@
  * connectivity of the configured Zotero provider, which the dedicated web tab
  * renders as its status strip. The configuration surface no longer rides this
  * channel — the browser half reads and writes the `zotero` settings namespace
- * through the harness's own settings scope (`ctx.settingsScope`), which rc.7
- * serves for every registered namespace — so the namespace view, patch, and
+ * through the harness's own settings scope (`ctx.settingsScope`), which serves
+ * every registered namespace — so the namespace view, patch, and
  * field-clearing endpoints are gone.
  * @module dsh-zotero/contract
  */

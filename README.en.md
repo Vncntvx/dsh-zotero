@@ -68,7 +68,7 @@ The plugin provides a settings card under **Settings → Plugins** where you can
 
 - Zotero ≥ 7 with local API enabled: **Settings → Advanced → "Allow other applications on this computer to communicate with Zotero"**
 - Node.js ≥ 22.19 (or ≥ 24)
-- dsh 0.1.0-rc.8 series host (all `@deepseek-ai/dsh-*` peer dependencies are `^0.1.0-rc.8`)
+- dsh 0.1.1-rc.2 series host (all `@deepseek-ai/dsh-*` peer dependencies are `^0.1.1-rc.2`)
 - Local API at `http://127.0.0.1:23119/api`, unauthenticated, read-only
 
 ## Usage example

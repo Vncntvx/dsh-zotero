@@ -16,7 +16,7 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/): `<type>(<sc
 npm install                  # sibling at ../deepseek-harness; add --no-workspaces only for a nested copy
 npm run typecheck            # tsc --noEmit for the node, test, and client projects
 npm test                     # vitest unit tests against the mock Zotero server
-npm run test:coverage        # 100% coverage gate on src/; src/index.ts and src/types.ts excluded (pure re-export / types-only)
+npm run test:coverage        # coverage gate on src/ (97 stmts / 95 branches / 98 funcs / 97 lines); pure re-export and types-only modules excluded, see vitest.config.ts
 npm run build                # tsc emits the node half into lib/; esbuild emits the browser half lib/client.js (with a loader-handoff self-check)
 npm run build:client         # rebuild the browser half only
 npm run dev                  # tsc --watch
@@ -99,7 +99,7 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307   # 3080 is the live GUI, never
 
 Host-only alternative (tsx loads `src/index.ts`, no browser half): copy `dev.cordis.yml.example` to `dev.cordis.yml` (set `<absolute-path-to-dsh-zotero>` inside), then run `cd ../deepseek-harness && pnpm dsh web --patch ../dsh-zotero/dev.cordis.yml --port <X>`.
 
-The DSH packages you launch above come from the sibling pnpm workspace at `../deepseek-harness` (`0.1.0-rc.8`). Typecheck, tests, and build run against the same rc.8 versions in `node_modules`, no skew. If the sibling moves ahead, run `npm install` to re-align. The contract surface you use here stayed stable across rc.6 to rc.8.
+The DSH packages you launch above come from the sibling pnpm workspace at `../deepseek-harness` (`0.1.1-rc.2`). Typecheck, tests, and build run against the same `0.1.1-rc.2` versions in `node_modules` (devDependencies pin it exactly), no skew. If the sibling moves ahead, run `npm install` to re-align.
 
 ## Credentials
 

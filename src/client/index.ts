@@ -5,7 +5,7 @@
  * the section's native disclosure chrome.
  *
  * The card reads and writes the `zotero` namespace through the harness's own
- * settings scope (`ctx.settingsScope`) — the rc.7 seam that serves every
+ * settings scope (`ctx.settingsScope`) — the seam that serves every
  * registered namespace — with the same staged form the harness's own plugin
  * cards use (stage locally, write only on save, mark user-layer presence as
  * overridden). The Typert Remote namespace carries only the live connectivity
