@@ -12,7 +12,6 @@ import { asRecord, asString, isObjectKey } from '../json.js'
 import { libraryPrefix, PERSONAL_LIBRARY } from '../refs.js'
 import type { LocalApiLimits } from './limits.js'
 import { ZOTERO_INVALID_ARGUMENT, ZOTERO_UNEXPECTED, ZoteroError } from '../errors.js'
-import { requireTotalResults } from './pagination.js'
 import type {
   SupportedLocalLibrary,
   ZoteroChangesInclude,
@@ -109,8 +108,16 @@ export async function changes(
       .filter(([key, version]) => isObjectKey(key) && typeof version === 'number')
       .map(([key, version]) => ({ key, version: version as number }))
       .sort((a, b) => b.version - a.version || a.key.localeCompare(b.key))
-    const total = requireTotalResults(headers, 'versions listing')
-    return { entries, truncated: total > entries.length }
+    // The versions format answers with a key→version map, and local-API
+    // builds omit Total-Results here even though the array listings send it
+    // (verified against live Zotero). Honesty then comes from the page
+    // itself: a full page may have more, a short one cannot — the same EOF
+    // heuristic the note scan documents.
+    const rawTotal = headers.get('total-results')?.trim()
+    if (rawTotal !== undefined && rawTotal !== '' && /^\d+$/.test(rawTotal)) {
+      return { entries, truncated: Number(rawTotal) > entries.length }
+    }
+    return { entries, truncated: entries.length >= cap }
   }
 
   const changed: {

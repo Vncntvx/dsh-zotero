@@ -107,13 +107,30 @@ describe('changes', () => {
     expect(result.truncated).toBe(true)
   })
 
-  it('fails loud when a versions listing omits Total-Results', async () => {
-    mock.route('GET', '/api/users/0/items/top', (req, res, helpers) =>
-      helpers.json(versionMap([['ABCD1234', 44]]), { 'Last-Modified-Version': '50' }),
-    )
-    await expect(provider.changes({ since: 42, include: new Set(['items']) })).rejects.toThrow(
-      'Total-Results header for versions listing',
-    )
+  it('degrades honestly when a versions listing omits Total-Results', async () => {
+    // Local-API builds send no Total-Results on the versions format (the
+    // array listings do — verified against live Zotero). A short page is
+    // provably complete; a full page reports truncated instead of guessing.
+    const pages = [
+      versionMap([['ABCD1234', 44]]),
+      versionMap([
+        ['ABCD1234', 44],
+        ['BBBB1234', 45],
+        ['CCCC1234', 46],
+      ]),
+    ]
+    let call = 0
+    mock.route('GET', '/api/users/0/items/top', (_req, _res, helpers) => {
+      helpers.json(pages[Math.min(call, pages.length - 1)], { 'Last-Modified-Version': '50' })
+      call += 1
+    })
+    const partial = await provider.changes({ since: 42, include: new Set(['items']) })
+    expect(partial.truncated).toBeUndefined()
+    expect(partial.changed.items).toHaveLength(1)
+
+    const capped = await provider.changes({ since: 42, include: new Set(['items']) })
+    expect(capped.truncated).toBe(true)
+    expect(capped.changed.items).toHaveLength(3)
   })
 
   it('honors include subsets and skips their endpoints', async () => {

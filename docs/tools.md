@@ -166,7 +166,7 @@ zotero_export(refs=["zotero://user/0/item/ABC123", "zotero://user/0/item/DEF456"
 
 发现库结构。所有 `kind` 均 `offset/limit` 分页（默认 `20`，受 `maxBrowseResults` 限制 50），返回 `total/returned/nextOffset`。
 
-分页诚实性对所有分页列表端点统一生效：`zotero_search`、`zotero_browse` 与 `zotero_changes` 的列表读取都要求响应携带合法的 `Total-Results` 头，缺失或非法时整个调用以 `ZOTERO_UNEXPECTED` 失败，而不是用响应体长度猜测总数。
+分页诚实性对所有分页列表端点统一生效：`zotero_search` 与 `zotero_browse` 的数组型列表读取要求响应携带合法的 `Total-Results` 头，缺失或非法时整个调用以 `ZOTERO_UNEXPECTED` 失败，而不是用响应体长度猜测总数。`zotero_changes` 的 `format=versions` 差异是 key→version 映射，本地 API 在此不返回该头（已对真机验证）：短页即为完整，满页如实标记 `truncated`。
 
 | 参数      | 类型                                                             | 默认值     | 说明                                                                        |
 | --------- | ---------------------------------------------------------------- | ---------- | --------------------------------------------------------------------------- |
