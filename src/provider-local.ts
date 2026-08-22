@@ -23,7 +23,6 @@ import { mapWithConcurrency } from './concurrency.js'
 import {
   LOCAL_PROVIDER_ID,
   ZOTERO_EXPORT_CONCURRENCY,
-  ZOTERO_GRAPH_CONCURRENCY,
   ZOTERO_ITEMKEY_BATCH,
   ZOTERO_SCOPE_LISTING_TTL_MS,
 } from './constants.js'
@@ -43,10 +42,8 @@ import {
   ZoteroError,
   errorMessageOf,
 } from './errors.js'
-import { chunkText, rankChunks, tokenize } from './evidence.js'
 import { locateExportItems } from './export-mapping.js'
 import { asRecord, asString, isObjectKey } from './json.js'
-import { loadItemGraph } from './item-graph.js'
 import {
   attachmentRecordOf,
   childCollection,
@@ -84,6 +81,8 @@ import { type LocalApiLimits, type LocalApiProviderOptions } from './local/limit
 export type { LocalApiLimits, LocalApiProviderOptions } from './local/limits.js'
 import { ScopeDirectory } from './local/scope-directory.js'
 import { runSearch } from './local/search-domain.js'
+import { children, getItem } from './local/detail.js'
+import { retrieve } from './local/retrieve.js'
 import type {
   SupportedLocalLibrary,
   ZoteroAttachmentLocation,
@@ -124,8 +123,6 @@ import type {
   ZoteroStatus,
 } from './types.js'
 
-const INCLUDE_ORDER: readonly ZoteroInclude[] = ['notes', 'annotations', 'attachments']
-
 /** The resource kinds a full `zotero_changes` diff covers, in request order. */
 const ZOTERO_CHANGES_INCLUDES: readonly ZoteroChangesInclude[] = [
   'items',
@@ -134,39 +131,6 @@ const ZOTERO_CHANGES_INCLUDES: readonly ZoteroChangesInclude[] = [
   'fulltext',
   'deleted',
 ]
-
-/** The order `sourcesSkipped` reports in; stable regardless of the request order. */
-const SOURCE_ORDER: readonly ZoteroEvidenceSource[] = ['annotation', 'note', 'abstract', 'fulltext']
-
-/**
- * Full-text indexing coverage as reported by Zotero. `complete` is derived
- * per axis: the chars axis (text files) and the pages axis (PDFs) each count
- * as complete when the server reports both sides and they agree; the overall
- * answer is complete when at least one axis is reportable and every
- * reportable axis agrees. Anything else is an incomplete answer, never a
- * guess — so a full PDF index without char counts still reads complete.
- */
-function normalizeCoverage(payload: ZoteroFulltextPayload): ZoteroCoverage {
-  const indexedChars = typeof payload.indexedChars === 'number' ? payload.indexedChars : undefined
-  const totalChars = typeof payload.totalChars === 'number' ? payload.totalChars : undefined
-  const indexedPages = typeof payload.indexedPages === 'number' ? payload.indexedPages : undefined
-  const totalPages = typeof payload.totalPages === 'number' ? payload.totalPages : undefined
-  const charsComplete =
-    indexedChars !== undefined && totalChars !== undefined ? indexedChars === totalChars : undefined
-  const pagesComplete =
-    indexedPages !== undefined && totalPages !== undefined ? indexedPages === totalPages : undefined
-  const axes = [charsComplete, pagesComplete].filter(
-    (value): value is boolean => value !== undefined,
-  )
-  const complete = axes.length > 0 && axes.every((value) => value)
-  return {
-    ...(indexedPages !== undefined ? { indexedPages } : {}),
-    ...(totalPages !== undefined ? { totalPages } : {}),
-    ...(indexedChars !== undefined ? { indexedChars } : {}),
-    ...(totalChars !== undefined ? { totalChars } : {}),
-    complete,
-  }
-}
 
 /**
  * Parse a location the Local API reported for an attachment and require one
@@ -261,158 +225,6 @@ export class LocalApiProvider implements ZoteroProvider {
    */
   async search(request: ZoteroSearchRequest, signal?: AbortSignal): Promise<ZoteroSearchResult> {
     return runSearch({ client: this.client, limits: this.limits }, this.directory, request, signal)
-  }
-
-  /**
-   * Fetch one item's full detail. The parent is always fetched once; child
-   * rows are fetched lazily only when the caller asked to include
-   * notes/annotations/attachments — the Local API ignores `?include=` on
-   * single-item responses, so children come from the dedicated `/children`
-   * endpoint. Annotations live one level deeper (under each attachment), so
-   * an annotations include additionally walks every attachment's own
-   * `/children` under the bounded graph pool. Collection names resolve from
-   * a cached full listing (one listing request per provider instance) only
-   * when the item belongs to collections.
-   */
-  async getItem(request: ZoteroGetRequest, signal?: AbortSignal): Promise<ZoteroItemDetail> {
-    const ref = requireSupportedLocalRef(request.ref, ['item'])
-    const prefix = libraryPrefix(ref.library as SupportedLocalLibrary)
-    const parent = await this.client.getJson<unknown>(`${prefix}/items/${ref.key}`, undefined, {
-      signal,
-      serverId: ref.serverId,
-    })
-    const serverId = parent.headers.get('zotero-server-id') ?? ref.serverId
-    const includes = INCLUDE_ORDER.filter((kind) => request.include.has(kind))
-    const keys = collectionKeysOf(parent.json)
-    // Children and the collections listing are independent once the parent
-    // has arrived; the Local API is a loopback server with no per-client
-    // throttling, so both ride the same await.
-    const [children, collectionNames] = await Promise.all([
-      includes.length > 0
-        ? this.loadChildRows(
-            ref.key,
-            ref.library as SupportedLocalLibrary,
-            serverId,
-            signal,
-            request.include.has('annotations'),
-          )
-        : undefined,
-      keys.length > 0
-        ? this.directory.collectionNamesFor(
-            keys,
-            ref.library as SupportedLocalLibrary,
-            serverId,
-            signal,
-          )
-        : undefined,
-    ])
-    return normalizeItemDetail({
-      parent: parent.json,
-      library: ref.library as SupportedLocalLibrary,
-      serverId: serverId ?? undefined,
-      include: request.include,
-      childrenRows: children?.rows,
-      directChildCount: children?.directCount,
-      collectionNames,
-      maxAbstractChars: this.limits.maxDetailChars,
-      maxNoteBodyChars: this.limits.maxNoteBodyChars,
-      maxNoteChars: this.limits.maxNoteChars,
-      maxNoteRecords: this.limits.maxNoteRecords,
-      maxAnnotationRecords: this.limits.maxAnnotationRecords,
-      fields: request.fields,
-    })
-  }
-
-  /**
-   * Explore one item's or attachment's child-object graph. An item ref
-   * yields its direct notes and attachments plus, when requested, every
-   * attachment's annotations as one merged corpus; an attachment ref yields
-   * its own annotations. The target row is always fetched first so the
-   * whole result pins to one Server-ID and a non-attachment target of an
-   * attachment ref fails with a typed error.
-   */
-  async children(
-    request: ZoteroChildrenRequest,
-    signal?: AbortSignal,
-  ): Promise<ZoteroChildrenResult> {
-    const ref = requireSupportedLocalRef(request.ref, ['item', 'attachment'])
-    const library = ref.library as SupportedLocalLibrary
-    const prefix = libraryPrefix(library)
-    const row = await this.client.getJson<unknown>(`${prefix}/items/${ref.key}`, undefined, {
-      signal,
-      serverId: ref.serverId,
-    })
-    const serverId = row.headers.get('zotero-server-id') ?? ref.serverId
-    const ctx: NormalizeContext = { library, serverId: serverId ?? undefined }
-    const data = asRecord(asRecord(row.json)?.data)
-    const itemType = asString(data?.itemType) ?? ''
-    if (ref.kind === 'attachment' && itemType !== 'attachment') {
-      throw new ZoteroError(
-        itemType === ''
-          ? `The referenced object ${ref.key} could not be confirmed as an attachment.`
-          : `The referenced object is a ${itemType}, not an attachment; annotations hang off attachment refs.`,
-        ZOTERO_INVALID_ARGUMENT,
-      )
-    }
-    if (ref.kind === 'attachment') {
-      // An attachment's own children are exactly its annotations.
-      const rows = await this.fetchChildRows(ref.key, library, serverId, signal)
-      const partitioned = partitionChildren(
-        rows,
-        ctx,
-        undefined,
-        new Set<ZoteroChildKind>(['annotation']),
-      )
-      return {
-        ref: formatRef(refForLibrary(library, 'attachment', ref.key, serverId)),
-        ...(itemType !== '' ? { itemType } : {}),
-        ...(request.include.has('annotations')
-          ? {
-              annotations: childCollection(
-                partitioned.annotations,
-                this.limits.maxAnnotationRecords,
-              ),
-            }
-          : {}),
-        ...(ctx.serverId !== undefined ? { serverId: ctx.serverId } : {}),
-      }
-    }
-    const graphRows = (
-      await this.loadChildRows(
-        ref.key,
-        library,
-        serverId,
-        signal,
-        request.include.has('annotations'),
-      )
-    ).rows
-    const kinds = new Set<ZoteroChildKind>()
-    if (request.include.has('notes')) kinds.add('note')
-    if (request.include.has('attachments')) kinds.add('attachment')
-    if (request.include.has('annotations')) kinds.add('annotation')
-    const partitioned =
-      kinds.size > 0 ? partitionChildren(graphRows, ctx, undefined, kinds) : undefined
-    return {
-      ref: formatRef(refForLibrary(library, 'item', ref.key, serverId)),
-      ...(itemType !== '' ? { itemType } : {}),
-      ...(request.include.has('notes') && partitioned !== undefined
-        ? { notes: childCollection(partitioned.notes, this.limits.maxNoteRecords) }
-        : {}),
-      ...(request.include.has('annotations') && partitioned !== undefined
-        ? {
-            annotations: childCollection(partitioned.annotations, this.limits.maxAnnotationRecords),
-          }
-        : {}),
-      ...(request.include.has('attachments') && partitioned !== undefined
-        ? {
-            attachments: childCollection(
-              partitioned.attachments.map((candidate) => attachmentRecordOf(candidate, ctx)),
-              partitioned.attachments.length,
-            ),
-          }
-        : {}),
-      ...(ctx.serverId !== undefined ? { serverId: ctx.serverId } : {}),
-    }
   }
 
   /**
@@ -573,49 +385,22 @@ export class LocalApiProvider implements ZoteroProvider {
   }
 
   /**
-   * One item's child rows for get/retrieve. Without annotations this is the
-   * single `/children` response; with them the walk descends into each
-   * attachment and merges those annotation rows into one partition input.
-   * The direct row count rides along so the detail's `children.total` stays
-   * honest after the merge.
+   * Read one item's metadata plus optionally requested child content. The
+   * domain logic lives in `local/detail`; this is the provider seam.
    */
-  private async loadChildRows(
-    key: string,
-    library: SupportedLocalLibrary,
-    serverId: string | undefined,
-    signal: AbortSignal | undefined,
-    withAnnotations: boolean,
-  ): Promise<{ readonly rows: readonly unknown[]; readonly directCount: number }> {
-    const graph = await loadItemGraph({
-      parentKey: key,
-      fetchChildren: (childKey) => this.fetchChildRows(childKey, library, serverId, signal),
-      concurrency: ZOTERO_GRAPH_CONCURRENCY,
-      withAnnotations,
-    })
-    const merged =
-      withAnnotations && graph.attachmentAnnotations.length > 0
-        ? [...graph.childRows, ...graph.attachmentAnnotations]
-        : graph.childRows
-    return { rows: merged, directCount: graph.childRows.length }
+  async getItem(request: ZoteroGetRequest, signal?: AbortSignal): Promise<ZoteroItemDetail> {
+    return getItem({ client: this.client, limits: this.limits }, this.directory, request, signal)
   }
 
-  /** Fetch one item's child rows; undefined when the caller asked for none. */
-  private async fetchChildRows(
-    key: string,
-    library: SupportedLocalLibrary,
-    serverId: string | undefined,
-    signal: AbortSignal | undefined,
-  ): Promise<readonly unknown[]> {
-    const prefix = libraryPrefix(library)
-    const children = await this.client.getJson<unknown>(
-      `${prefix}/items/${key}/children`,
-      undefined,
-      {
-        signal,
-        serverId,
-      },
-    )
-    return Array.isArray(children.json) ? children.json : []
+  /**
+   * Explore one item's or attachment's child-object graph. The domain logic
+   * lives in `local/detail`; this is the provider seam.
+   */
+  async children(
+    request: ZoteroChildrenRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroChildrenResult> {
+    return children({ client: this.client, limits: this.limits }, request, signal)
   }
 
   /**
@@ -695,388 +480,14 @@ export class LocalApiProvider implements ZoteroProvider {
   }
 
   /**
-   * Gather ranked evidence for one item: annotations, notes, the abstract,
-   * and full-text chunks are scored as one passage corpus with BM25. Fetch
-   * stays lazy — children only when annotation/note sources (or a PDF
-   * fallback) need them, fulltext only when requested (started concurrently
-   * with children when the parent carries the attachment link). Annotations
-   * live under each attachment, so annotation sources walk the graph's
-   * second level and rank every attachment's annotations as one corpus; each
-   * passage keeps its own attachment provenance. The `attachmentPolicy`
-   * picks the fulltext sources: `best` (default) keeps Zotero's single
-   * choice, `allIndexed` ranks every PDF child, and `specified` ranks the
-   * named attachments — multi-attachment results speak through per-passage
-   * refs instead of a result-level attachment. A note item's own body is its
-   * note source; child notes contribute every chunk of their full text, so
-   * long notes rank beyond their first chunk. Sources the item cannot
-   * provide are skipped and reported in `sourcesSkipped` — retrieval degrades
-   * instead of failing. Passage count and character budgets are enforced
-   * with the `truncated` flag, never by silently editing passage text.
+   * Gather ranked evidence passages for one item across the requested
+   * sources. The domain logic lives in `local/retrieve`; this is the seam.
    */
   async retrieve(
     request: ZoteroRetrieveRequest,
     signal?: AbortSignal,
   ): Promise<ZoteroRetrieveResult> {
-    const policy = request.attachmentPolicy ?? 'best'
-    if (policy === 'specified' && (request.attachmentRefs?.length ?? 0) === 0) {
-      throw new ZoteroError(
-        'attachmentPolicy "specified" requires at least one attachmentRef.',
-        ZOTERO_INVALID_ARGUMENT,
-      )
-    }
-    const ref = requireSupportedLocalRef(request.ref, ['item'])
-    const prefix = libraryPrefix(ref.library as SupportedLocalLibrary)
-    const parent = await this.client.getJson<unknown>(`${prefix}/items/${ref.key}`, undefined, {
-      signal,
-      serverId: ref.serverId,
-    })
-    const serverId = parent.headers.get('zotero-server-id') ?? ref.serverId
-    const record = asRecord(parent.json)
-    const data = asRecord(record?.data)
-    const itemType = asString(data?.itemType) ?? asString(record?.itemType)
-    const linkAttachment = bestAttachmentFromLinks(parent.json)
-
-    const wantsAnnotations = request.sources.includes('annotation')
-    const wantsNotes = request.sources.includes('note')
-    const wantsFulltext = request.sources.includes('fulltext')
-    // A note item's own body is its note source, so its children are only
-    // needed for annotation sources, the PDF fallback, or an allIndexed scan.
-    const isNoteItem = itemType === 'note'
-    const needsChildrenForFulltext =
-      wantsFulltext &&
-      (policy === 'allIndexed' || (policy === 'best' && linkAttachment === undefined))
-    const fetchChildren =
-      wantsAnnotations || (wantsNotes && !isNoteItem) || needsChildrenForFulltext
-    // Children and a linked fulltext are independent once the parent has
-    // arrived; start both before awaiting either. The noop handler keeps a
-    // fulltext rejection that lands while children are still in flight from
-    // being reported as unhandled before the try below awaits it.
-    const bestFulltextKey = wantsFulltext && policy === 'best' ? linkAttachment?.key : undefined
-    const fulltextPromise =
-      bestFulltextKey === undefined
-        ? undefined
-        : this.fetchFulltext(
-            bestFulltextKey,
-            ref.library as SupportedLocalLibrary,
-            serverId,
-            signal,
-          )
-    fulltextPromise?.catch(() => {})
-    let childrenRows: readonly unknown[] = []
-    if (fetchChildren) {
-      childrenRows = (
-        await this.loadChildRows(
-          ref.key,
-          ref.library as SupportedLocalLibrary,
-          serverId,
-          signal,
-          wantsAnnotations,
-        )
-      ).rows
-    }
-
-    const skipped: ZoteroEvidenceSource[] = []
-    let fulltextWasCut = false
-    let attachmentRef: string | undefined
-    let attachmentContentType: string | undefined
-    let coverage: ZoteroCoverage | undefined
-    const passages: {
-      source: ZoteroEvidenceSource
-      sourceRef: string
-      text: string
-      chunkIndex?: number
-      chunkCount?: number
-      comment?: string
-      pageLabel?: string
-      attachmentRef?: string
-    }[] = []
-    if (wantsFulltext && policy === 'best') {
-      let attachmentKey = bestFulltextKey
-      // The link arm reports Zotero's own type (possibly empty); the child
-      // fallback selects an application/pdf candidate whose type is known.
-      let selectedContentType = linkAttachment?.contentType
-      if (attachmentKey === undefined) {
-        const pdf = selectAttachments(childrenRows, 'pdf')[0]
-        if (pdf === undefined) skipped.push('fulltext')
-        else {
-          attachmentKey = pdf.key
-          selectedContentType = pdf.contentType
-        }
-      }
-      if (attachmentKey !== undefined) {
-        try {
-          attachmentRef = formatRef(
-            refForLibrary(
-              ref.library as SupportedLocalLibrary,
-              'attachment',
-              attachmentKey,
-              serverId,
-            ),
-          )
-          if (selectedContentType !== undefined && selectedContentType !== '') {
-            attachmentContentType = selectedContentType
-          }
-          const payload = await (fulltextPromise ??
-            this.fetchFulltext(
-              attachmentKey,
-              ref.library as SupportedLocalLibrary,
-              serverId,
-              signal,
-            ))
-          const content = typeof payload.content === 'string' ? payload.content : ''
-          const bounded = truncateText(content, this.limits.maxFulltextChars)
-          fulltextWasCut = bounded.truncated
-          const chunks = chunkText(
-            bounded.text,
-            this.limits.fulltextChunkWords,
-            this.limits.maxEvidenceChars,
-          )
-          for (const chunk of chunks) {
-            passages.push({
-              source: 'fulltext',
-              sourceRef: attachmentRef,
-              text: chunk.text,
-              chunkIndex: chunk.index,
-              chunkCount: chunks.length,
-            })
-          }
-          coverage = normalizeCoverage(payload)
-        } catch (error) {
-          // An unindexed attachment degrades like an absent one: the other
-          // requested sources still answer, and `sourcesSkipped` reports it.
-          if (error instanceof ZoteroError && error.code === ZOTERO_NO_FULLTEXT) {
-            skipped.push('fulltext')
-          } else {
-            throw error
-          }
-        }
-      }
-    } else if (wantsFulltext) {
-      // Multi-attachment policies: every selected PDF is a first-class
-      // source, and each passage carries its own attachment provenance.
-      let candidates: { key: string; contentType?: string }[]
-      if (policy === 'allIndexed') {
-        candidates = selectAttachments(childrenRows, 'pdf').map((candidate) => ({
-          key: candidate.key,
-          contentType: candidate.contentType,
-        }))
-      } else {
-        candidates = await mapWithConcurrency(
-          request.attachmentRefs!,
-          ZOTERO_GRAPH_CONCURRENCY,
-          async (wanted): Promise<{ key: string; contentType?: string }> => {
-            const row = await this.client.getJson<unknown>(
-              `${prefix}/items/${wanted.key}`,
-              undefined,
-              { signal, serverId },
-            )
-            const rowData = asRecord(asRecord(row.json)?.data)
-            const rowType = asString(rowData?.itemType)
-            if (rowType !== undefined && rowType !== 'attachment') {
-              throw new ZoteroError(
-                `Attachment ref ${wanted.key} names a ${rowType}, not an attachment.`,
-                ZOTERO_INVALID_ARGUMENT,
-              )
-            }
-            return { key: wanted.key, contentType: asString(rowData?.contentType) }
-          },
-        )
-      }
-      if (candidates.length === 0) {
-        skipped.push('fulltext')
-      } else {
-        const fetched = await mapWithConcurrency(
-          candidates,
-          ZOTERO_GRAPH_CONCURRENCY,
-          async (candidate) => {
-            try {
-              return {
-                candidate,
-                payload: await this.fetchFulltext(
-                  candidate.key,
-                  ref.library as SupportedLocalLibrary,
-                  serverId,
-                  signal,
-                ),
-              }
-            } catch (error) {
-              // An unindexed member of the set degrades alone; only an
-              // entirely unindexed set reads as a skipped source.
-              if (error instanceof ZoteroError && error.code === ZOTERO_NO_FULLTEXT) {
-                return { candidate, payload: undefined }
-              }
-              throw error
-            }
-          },
-        )
-        const indexed = fetched.filter(
-          (entry): entry is typeof entry & { payload: ZoteroFulltextPayload } =>
-            entry.payload !== undefined,
-        )
-        if (indexed.length === 0) skipped.push('fulltext')
-        for (const { candidate, payload } of indexed) {
-          const passageAttachmentRef = formatRef(
-            refForLibrary(
-              ref.library as SupportedLocalLibrary,
-              'attachment',
-              candidate.key,
-              serverId,
-            ),
-          )
-          const content = typeof payload.content === 'string' ? payload.content : ''
-          const bounded = truncateText(content, this.limits.maxFulltextChars)
-          fulltextWasCut = fulltextWasCut || bounded.truncated
-          const chunks = chunkText(
-            bounded.text,
-            this.limits.fulltextChunkWords,
-            this.limits.maxEvidenceChars,
-          )
-          for (const chunk of chunks) {
-            passages.push({
-              source: 'fulltext',
-              sourceRef: passageAttachmentRef,
-              text: chunk.text,
-              chunkIndex: chunk.index,
-              chunkCount: chunks.length,
-            })
-          }
-        }
-        // Result-level provenance stays unambiguous: with exactly one
-        // contributing attachment it names that file; with several, the
-        // per-passage refs carry the mapping.
-        if (indexed.length === 1) {
-          const { candidate, payload } = indexed[0]!
-          attachmentRef = formatRef(
-            refForLibrary(
-              ref.library as SupportedLocalLibrary,
-              'attachment',
-              candidate.key,
-              serverId,
-            ),
-          )
-          if (candidate.contentType !== undefined && candidate.contentType !== '') {
-            attachmentContentType = candidate.contentType
-          }
-          coverage = normalizeCoverage(payload)
-        }
-      }
-    }
-
-    const partitioned: PartitionedChildren = fetchChildren
-      ? partitionChildren(
-          childrenRows,
-          { library: ref.library as SupportedLocalLibrary, serverId },
-          undefined,
-          new Set<ZoteroChildKind>([
-            ...(wantsNotes ? (['note'] as const) : []),
-            ...(wantsAnnotations ? (['annotation'] as const) : []),
-          ]),
-        )
-      : { notes: [], annotations: [], attachments: [] }
-    if (wantsAnnotations) {
-      if (partitioned.annotations.length === 0) skipped.push('annotation')
-      for (const annotation of partitioned.annotations) {
-        passages.push({
-          source: 'annotation',
-          sourceRef: annotation.ref,
-          text: annotation.text,
-          ...(annotation.comment !== undefined ? { comment: annotation.comment } : {}),
-          ...(annotation.pageLabel !== undefined ? { pageLabel: annotation.pageLabel } : {}),
-          ...(annotation.parentRef === undefined ? {} : { attachmentRef: annotation.parentRef }),
-        })
-      }
-    }
-    if (wantsNotes) {
-      const noteRef = formatRef(
-        refForLibrary(ref.library as SupportedLocalLibrary, 'item', ref.key, serverId),
-      )
-      const noteSources: { ref: string; text: string }[] = isNoteItem
-        ? [{ ref: noteRef, text: plainNoteText(data?.note) }]
-        : partitioned.notes.map((note) => ({ ref: note.ref, text: note.text }))
-      // A note item's own body is its note source, so only a non-note item
-      // without child notes cannot provide the source.
-      if (!isNoteItem && partitioned.notes.length === 0) skipped.push('note')
-      for (const note of noteSources) {
-        const chunks = chunkText(
-          note.text,
-          this.limits.fulltextChunkWords,
-          this.limits.maxEvidenceChars,
-        )
-        for (const chunk of chunks) {
-          passages.push({
-            source: 'note',
-            sourceRef: note.ref,
-            text: chunk.text,
-            chunkIndex: chunk.index,
-            chunkCount: chunks.length,
-          })
-        }
-      }
-    }
-    let abstractWasCut = false
-    if (request.sources.includes('abstract')) {
-      const raw = asString(data?.abstractNote) ?? ''
-      if (raw !== '') {
-        const bounded = truncateText(raw, this.limits.maxEvidenceChars)
-        abstractWasCut = bounded.truncated
-        passages.push({
-          source: 'abstract',
-          sourceRef: formatRef(
-            refForLibrary(ref.library as SupportedLocalLibrary, 'item', ref.key, serverId),
-          ),
-          text: bounded.text,
-        })
-      } else {
-        skipped.push('abstract')
-      }
-    }
-
-    const ranked = rankChunks(
-      request.query,
-      passages.map((passage, index) => ({ text: passage.text, index })),
-    )
-    // Zero-score passages share nothing with the query; returning them as
-    // "evidence" would present arbitrary excerpts as matches. A query with no
-    // token overlap therefore yields an empty evidence array, which the
-    // contract reads as "no match", not "no content".
-    const matched = ranked.filter((entry) => entry.score > 0)
-    const evidence: ZoteroEvidence[] = []
-    let used = 0
-    let truncated = matched.length > request.passages || fulltextWasCut || abstractWasCut
-    for (const entry of matched.slice(0, request.passages)) {
-      const passage = passages[entry.index]!
-      if (used + passage.text.length > this.limits.maxEvidenceChars) {
-        truncated = true
-        break
-      }
-      used += passage.text.length
-      evidence.push({
-        source: passage.source,
-        sourceRef: passage.sourceRef,
-        text: passage.text,
-        ...(passage.chunkIndex !== undefined ? { chunkIndex: passage.chunkIndex } : {}),
-        ...(passage.chunkCount !== undefined ? { chunkCount: passage.chunkCount } : {}),
-        ...(passage.comment !== undefined ? { comment: passage.comment } : {}),
-        ...(passage.pageLabel !== undefined ? { pageLabel: passage.pageLabel } : {}),
-        ...(passage.attachmentRef !== undefined ? { attachmentRef: passage.attachmentRef } : {}),
-      })
-    }
-    // A stable report order keeps the contract predictable: the sources the
-    // caller asked for but the item could not provide, deduplicated.
-    const sourcesSkipped = [...new Set(skipped)].sort(
-      (a, b) => SOURCE_ORDER.indexOf(a) - SOURCE_ORDER.indexOf(b),
-    )
-    return {
-      ref: formatRef(
-        refForLibrary(ref.library as SupportedLocalLibrary, 'item', ref.key, serverId),
-      ),
-      ...(attachmentRef !== undefined ? { attachmentRef } : {}),
-      ...(attachmentContentType !== undefined ? { attachmentContentType } : {}),
-      ...(coverage !== undefined ? { coverage } : {}),
-      evidence,
-      truncated,
-      sourcesSkipped,
-    }
+    return retrieve({ client: this.client, limits: this.limits }, request, signal)
   }
 
   /**
@@ -1325,30 +736,6 @@ export class LocalApiProvider implements ZoteroProvider {
       throw new ZoteroError(`Item ${ref.key} has no attachment to resolve.`, ZOTERO_NO_ATTACHMENT)
     }
     return pdf.key
-  }
-
-  private async fetchFulltext(
-    attachmentKey: string,
-    library: SupportedLocalLibrary,
-    serverId: string | undefined,
-    signal: AbortSignal | undefined,
-  ): Promise<ZoteroFulltextPayload> {
-    try {
-      const prefix = libraryPrefix(library)
-      const response = await this.client.getJson<ZoteroFulltextPayload>(
-        `${prefix}/items/${attachmentKey}/fulltext`,
-        undefined,
-        { signal, serverId },
-      )
-      return response.json
-    } catch (error) {
-      // The Local API reports unindexed attachments as 404, which the HTTP
-      // layer maps to NOT_FOUND; only this endpoint reinterprets that status.
-      if (isNotFoundError(error)) {
-        throw new ZoteroError(NO_FULLTEXT_MESSAGE, ZOTERO_NO_FULLTEXT)
-      }
-      throw error
-    }
   }
 
   // ---- browse (Phase C) ----
