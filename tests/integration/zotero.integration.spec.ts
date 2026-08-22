@@ -19,7 +19,7 @@
 
 import { beforeAll, describe, expect, it } from 'vitest'
 import { ZoteroHttpClient } from '../../src/http-client.js'
-import { LocalApiProvider } from '../../src/provider-local.js'
+import { LocalApiProvider } from '../../src/local/provider.js'
 import { parseRef } from '../../src/refs.js'
 import type { ZoteroItemDetail } from '../../src/types.js'
 
@@ -50,6 +50,7 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', 
         maxExportChars: 1_000_000,
         defaultStyle: 'apa',
         defaultLocale: 'en-US',
+        maxBrowseResults: 50,
       },
     )
   })

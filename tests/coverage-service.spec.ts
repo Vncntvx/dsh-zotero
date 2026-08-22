@@ -7,7 +7,7 @@ import ZoteroService from '../src/index.js'
 import { MockZotero } from './helpers/mock-zotero.js'
 import { parseRef } from '../src/refs.js'
 import { ZoteroHttpClient } from '../src/http-client.js'
-import { LocalApiProvider } from '../src/provider-local.js'
+import { LocalApiProvider } from '../src/local/provider.js'
 
 describe('service browse and search new filters', () => {
   let mock: MockZotero
@@ -161,6 +161,7 @@ describe('service browse and search new filters', () => {
       maxExportChars: 1000000,
       defaultStyle: 'apa',
       defaultLocale: 'en-US',
+      maxBrowseResults: 50,
     })
     // Directly test buildSearchParams via search call with tagMatch any and excludeTags
     mock.route('GET', '/api/users/0/items/top', (req, res, helpers) => {

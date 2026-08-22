@@ -7,7 +7,8 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ZOTERO_INVALID_ARGUMENT, ZOTERO_UNEXPECTED } from '../../src/errors.js'
-import { type LocalApiLimits, type LocalApiProvider } from '../../src/provider-local.js'
+import { type LocalApiProvider } from '../../src/local/provider.js'
+import type { LocalApiLimits } from '../../src/local/limits.js'
 import { parseRef } from '../../src/refs.js'
 import { MockZotero } from '../helpers/mock-zotero.js'
 import {

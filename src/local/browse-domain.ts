@@ -48,7 +48,7 @@ export async function runBrowse(
   request: ZoteroBrowseRequest,
   signal?: AbortSignal,
 ): Promise<ZoteroBrowseResult> {
-  const maxBrowse = deps.limits.maxBrowseResults ?? 50
+  const maxBrowse = deps.limits.maxBrowseResults
   if (!Number.isInteger(request.offset) || request.offset < 0) {
     throw new ZoteroError('offset must be a non-negative integer', ZOTERO_INVALID_ARGUMENT)
   }

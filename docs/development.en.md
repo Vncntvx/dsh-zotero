@@ -8,7 +8,8 @@
 src/
   index.ts              # Plugin entry (pure re-export)
   service.ts            # ZoteroService (Cordis service)
-  provider-local.ts     # LocalApiProvider (Zotero Local API)
+  local/provider.ts     # LocalApiProvider (Zotero Local API)
+  local/*-domain.ts     # Domain pipelines (search/detail/retrieve/attachment/export/changes/browse) + scope-directory/pagination/limits
   http-client.ts        # HTTP transport (loopback fetch)
   config.ts             # Config schema and validation
   types.ts              # Domain types (DTOs)

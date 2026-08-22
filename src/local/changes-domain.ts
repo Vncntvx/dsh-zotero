@@ -46,7 +46,7 @@ export async function changes(
 ): Promise<ZoteroChangesResult> {
   const library = request.library ?? PERSONAL_LIBRARY
   const prefix = libraryPrefix(library)
-  const cap = deps.limits.maxBrowseResults ?? 50
+  const cap = deps.limits.maxBrowseResults
   const include = request.include ?? new Set(ZOTERO_CHANGES_INCLUDES)
   let serverId: string | undefined
   let toVersion: number | undefined

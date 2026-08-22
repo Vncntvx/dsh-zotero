@@ -30,7 +30,7 @@ graph LR
 - `rebuild()` 从当前配置创建 HTTP 客户端和 local provider
 - 请求驱动：加载从不触及 Zotero
 
-### Provider 层 (`src/provider-local.ts`)
+### Provider 层 (`src/local/provider.ts`)
 
 - `LocalApiProvider` 实现 `ZoteroProvider`
 - 能力：search、metadata、attachments、fulltext、citation、browse、retrieve、changes

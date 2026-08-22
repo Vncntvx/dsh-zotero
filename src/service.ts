@@ -37,7 +37,8 @@ import {
   ZOTERO_PROVIDER_UNAVAILABLE,
   ZoteroError,
 } from './errors.js'
-import { LocalApiProvider, type LocalApiLimits } from './provider-local.js'
+import { LocalApiProvider } from './local/provider.js'
+import type { LocalApiLimits } from './local/limits.js'
 import { registerPromptSection } from './prompt.js'
 import { ZOTERO_SETTINGS_NAMESPACE } from './settings-namespace.js'
 import { registerAttachmentTool } from './tools/attachment.js'

@@ -14,11 +14,8 @@ import { join } from 'node:path'
 import { expect } from 'vitest'
 import { ZoteroError } from '../../src/errors.js'
 import { ZoteroHttpClient } from '../../src/http-client.js'
-import {
-  LocalApiProvider,
-  type LocalApiLimits,
-  type LocalApiProviderOptions,
-} from '../../src/provider-local.js'
+import { LocalApiProvider } from '../../src/local/provider.js'
+import type { LocalApiLimits, LocalApiProviderOptions } from '../../src/local/limits.js'
 import { parseRef } from '../../src/refs.js'
 import type {
   ZoteroExportRequest,
@@ -43,6 +40,7 @@ const DEFAULT_PROVIDER_LIMITS: LocalApiLimits = {
   maxExportChars: 1_000_000,
   defaultStyle: 'apa',
   defaultLocale: 'en-US',
+  maxBrowseResults: 50,
 }
 
 /** A provider over the given mock server's base URL, with optional limit overrides. */

@@ -8,7 +8,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { type LocalApiProvider } from '../../src/provider-local.js'
+import { type LocalApiProvider } from '../../src/local/provider.js'
 import { parseRef } from '../../src/refs.js'
 import { MockZotero } from '../helpers/mock-zotero.js'
 import {

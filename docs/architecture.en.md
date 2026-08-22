@@ -30,7 +30,7 @@ User → Agent → dsh Zotero Tools → ZoteroService → Provider → 127.0.0.1
 - `rebuild()` creates HTTP client and local provider from current config
 - Request-driven: loading never touches Zotero
 
-### Provider layer (`src/provider-local.ts`)
+### Provider layer (`src/local/provider.ts`)
 
 - `LocalApiProvider` implements `ZoteroProvider`
 - Capabilities: search, metadata, attachments, fulltext, citation

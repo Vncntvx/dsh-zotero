@@ -12,7 +12,8 @@ import {
   encodeExcludeTag,
   encodeLiteralTag,
 } from '../../src/local/search-domain.js'
-import { type LocalApiLimits, type LocalApiProvider } from '../../src/provider-local.js'
+import { type LocalApiProvider } from '../../src/local/provider.js'
+import type { LocalApiLimits } from '../../src/local/limits.js'
 import { MockZotero } from '../helpers/mock-zotero.js'
 import { ITEM } from '../helpers/fixtures.js'
 import {

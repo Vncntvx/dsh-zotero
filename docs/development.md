@@ -8,7 +8,8 @@
 src/
   index.ts              # 插件入口（纯 re-export）
   service.ts            # ZoteroService（Cordis 服务）
-  provider-local.ts     # LocalApiProvider（Zotero Local API）
+  local/provider.ts     # LocalApiProvider（Zotero Local API）
+  local/*-domain.ts     # 领域管线（search/detail/retrieve/attachment/export/changes/browse）+ scope-directory/pagination/limits
   http-client.ts        # HTTP 传输层（loopback fetch）
   config.ts             # Config schema 与校验
   types.ts              # 领域类型（DTOs）

@@ -40,5 +40,5 @@ export interface LocalApiLimits {
   /** CSL locale for citation/bibliography formats. */
   readonly defaultLocale: string
   /** Max items a browse call may return; capped by provider */
-  readonly maxBrowseResults?: number
+  readonly maxBrowseResults: number
 }

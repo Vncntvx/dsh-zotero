@@ -8,7 +8,7 @@ import {
   zoteroError,
   type ProviderHarness,
 } from '../helpers/provider-harness.js'
-import { LocalApiProvider } from '../../src/provider-local.js'
+import { LocalApiProvider } from '../../src/local/provider.js'
 
 let mock: MockZotero
 let provider: LocalApiProvider
@@ -24,7 +24,7 @@ afterEach(async () => {
 })
 
 function makeProvider(
-  limits: Partial<import('../../src/provider-local.js').LocalApiLimits> = {},
+  limits: Partial<import('../../src/local/limits.js').LocalApiLimits> = {},
 ): LocalApiProvider {
   return createProvider(mock, limits)
 }

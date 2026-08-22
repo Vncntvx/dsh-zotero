@@ -12,7 +12,8 @@ import {
   ZOTERO_SERVER_MISMATCH,
   ZOTERO_UNEXPECTED,
 } from '../../src/errors.js'
-import { type LocalApiLimits, type LocalApiProvider } from '../../src/provider-local.js'
+import { type LocalApiProvider } from '../../src/local/provider.js'
+import type { LocalApiLimits } from '../../src/local/limits.js'
 import { parseRef } from '../../src/refs.js'
 import { MockZotero } from '../helpers/mock-zotero.js'
 import {
