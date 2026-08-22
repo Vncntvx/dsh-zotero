@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ZOTERO_INVALID_REF, ZoteroError } from '../src/errors.js'
-import { formatRef, isRefString, localRef, parseRef, requireLocalRef } from '../src/refs.js'
+import { formatRef, isRefString, parseRef, requireSupportedLocalRef } from '../src/refs.js'
 import { ZOTERO_SORT_FIELDS } from '../src/constants.js'
 
 function expectInvalidRef(value: string, messagePart?: string): void {
@@ -119,46 +119,29 @@ describe('sort vocabulary', () => {
   })
 })
 
-describe('localRef', () => {
-  it('builds a user/0 ref', () => {
-    expect(localRef('item', 'ABCD1234')).toEqual({
-      library: { type: 'user', id: 0 },
-      kind: 'item',
-      key: 'ABCD1234',
-      serverId: undefined,
-    })
-  })
-
-  it('rejects malformed keys', () => {
-    expectRejected(() => localRef('item', 'nope'), ZOTERO_INVALID_REF, 'nope')
-  })
-})
-
-describe('requireLocalRef', () => {
-  it('passes a user/0 ref through unchanged', () => {
+describe('requireSupportedLocalRef', () => {
+  it('passes a supported local ref through unchanged', () => {
     const ref = parseRef('zotero://user/0/item/ABCD1234')
-    expect(requireLocalRef(ref)).toBe(ref)
+    expect(requireSupportedLocalRef(ref)).toBe(ref)
   })
 
-  it('rejects group refs before any request happens', () => {
+  it('rejects non-zero user ids with the canonical-ref hint', () => {
     expectRejected(
-      () => requireLocalRef(parseRef('zotero://group/42/item/ABCD1234')),
+      () => requireSupportedLocalRef(parseRef('zotero://user/123/item/ABCD1234')),
       ZOTERO_INVALID_REF,
-      'Group library references are not supported',
+      'zotero://user/0/item/ABCD1234',
     )
   })
 
-  it('rejects non-zero user ids', () => {
+  it('rejects an unknown library type even when the object shape parses', () => {
     expectRejected(
-      () => requireLocalRef(parseRef('zotero://user/123/item/ABCD1234')),
+      () =>
+        requireSupportedLocalRef({
+          library: { type: 'unknown' as unknown as 'user', id: 0 },
+          kind: 'item',
+          key: 'ABCD1234',
+        }),
       ZOTERO_INVALID_REF,
-      'user/0',
     )
-  })
-
-  it('enforces a kind filter when given', () => {
-    const ref = parseRef('zotero://user/0/collection/ABCD1234')
-    expectRejected(() => requireLocalRef(ref, ['item']), ZOTERO_INVALID_REF, 'item')
-    expect(requireLocalRef(ref, ['collection']).key).toBe('ABCD1234')
   })
 })

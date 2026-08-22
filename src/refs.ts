@@ -91,14 +91,9 @@ export function refForLibrary(
   return { library: { type: library.type, id: library.id }, kind, key, serverId }
 }
 
-/** Build a ref for the V1 local library (user/0) without string round-tripping. Compatibility helper. */
-export function localRef(kind: ZoteroKind, key: string, serverId?: string): ZoteroObjectRef {
-  return refForLibrary(PERSONAL_LIBRARY, kind, key, serverId)
-}
-
 /**
  * Assert that a ref names a supported local library: user/0 or any group.
- * This is the provider-level contract (v3 lock: non-zero user ids still fail closed).
+ * This is the provider-level contract (non-zero user ids fail closed).
  */
 function assertSupportedLocalRef(ref: ZoteroObjectRef): ZoteroObjectRef {
   if (!isSupportedLocalLibrary(ref.library)) {
@@ -110,28 +105,6 @@ function assertSupportedLocalRef(ref: ZoteroObjectRef): ZoteroObjectRef {
     }
     throw new ZoteroError(
       `Unsupported library zotero://${ref.library.type}/${ref.library.id}: only user/0 and groups are supported.`,
-      ZOTERO_INVALID_REF,
-    )
-  }
-  return ref
-}
-
-/**
- * Assert that a ref names the V1-supported library: the locally logged-in
- * user expressed as `user/0`. Group libraries and foreign user ids fail
- * closed with a typed error instead of silently serving wrong data.
- * @deprecated use requireSupportedLocalRef for v3 branches
- */
-function assertLocalRef(ref: ZoteroObjectRef): ZoteroObjectRef {
-  if (ref.library.type === 'group') {
-    throw new ZoteroError(
-      `Group library references are not supported by this plugin version (got zotero://${ref.library.type}/${ref.library.id}/${ref.kind}/${ref.key}).`,
-      ZOTERO_INVALID_REF,
-    )
-  }
-  if (ref.library.id !== 0) {
-    throw new ZoteroError(
-      `Use zotero://user/0/${ref.kind}/${ref.key}: the local API serves only the logged-in user's library.`,
       ZOTERO_INVALID_REF,
     )
   }
@@ -155,16 +128,6 @@ export function requireSupportedLocalRef(
   kinds?: readonly ZoteroKind[],
 ): ZoteroObjectRef {
   assertSupportedLocalRef(ref)
-  if (kinds !== undefined) assertKind(ref, kinds)
-  return ref
-}
-
-/** Shared guard for provider use: local library only, plus an optional kind filter. @deprecated use requireSupportedLocalRef */
-export function requireLocalRef(
-  ref: ZoteroObjectRef,
-  kinds?: readonly ZoteroKind[],
-): ZoteroObjectRef {
-  assertLocalRef(ref)
   if (kinds !== undefined) assertKind(ref, kinds)
   return ref
 }

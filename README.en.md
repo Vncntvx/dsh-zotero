@@ -119,7 +119,7 @@ More examples in [Features](docs/features.md).
 | [Getting Started](docs/getting-started.md) | Installation, prerequisites, first verification        |
 | [Features](docs/features.md)               | Sources panel, chat integration, evidence, exports     |
 | [Tool Reference](docs/tools.md)            | Parameters, return values, error codes for all 8 tools |
-| [Configuration](docs/configuration.md)     | 20 config fields, defaults, hot-reload                 |
+| [Configuration](docs/configuration.md)     | 21 config fields, defaults, hot-reload                 |
 | [Architecture](docs/architecture.md)       | Data flow, layer responsibilities, design boundaries   |
 | [Development](docs/development.md)         | Build, test, local development                         |
 | [Troubleshooting](docs/troubleshooting.md) | 11 common issues with symptoms and fixes               |

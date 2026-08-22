@@ -78,27 +78,18 @@ export interface NormalizeContext {
 
 const PERSONAL_CTX: NormalizeContext = { library: { type: 'user', id: 0 } }
 
-function resolveContext(value?: string | NormalizeContext): NormalizeContext {
-  if (value === undefined) return PERSONAL_CTX
-  if (typeof value === 'string') return { library: { type: 'user', id: 0 }, serverId: value }
-  return value
-}
-
-function normalizeCtx(value?: string | NormalizeContext): NormalizeContext {
-  return resolveContext(value)
+function resolveContext(ctx?: NormalizeContext): NormalizeContext {
+  return ctx ?? PERSONAL_CTX
 }
 
 /**
  * Normalize one item JSON object into a compact search hit.
  * @param json - the raw API object; anything outside the documented shape is ignored.
- * @param ctx - the library+serverId context; string shorthand is legacy personal serverId.
+ * @param ctx - the library+serverId context; omitted means the personal library without provenance.
  * @throws {ZoteroError} `ZOTERO_UNEXPECTED` when the object has no valid Zotero key.
  */
-export function normalizeSearchItem(
-  json: unknown,
-  ctx?: string | NormalizeContext,
-): ZoteroSearchItem {
-  const context = normalizeCtx(ctx)
+export function normalizeSearchItem(json: unknown, ctx?: NormalizeContext): ZoteroSearchItem {
+  const context = resolveContext(ctx)
   const record = asRecord(json)
   if (record === undefined) {
     throw new ZoteroError('Zotero returned an item without a valid object key.', ZOTERO_UNEXPECTED)
@@ -269,10 +260,10 @@ export function truncateText(text: string, max: number): { text: string; truncat
  */
 export function normalizeNoteRecord(
   json: unknown,
-  ctx: string | NormalizeContext | undefined,
+  ctx: NormalizeContext | undefined,
   maxChars?: number,
 ): ZoteroNoteRecord {
-  const context = normalizeCtx(ctx as string | NormalizeContext | undefined)
+  const context = resolveContext(ctx)
   const record = asRecord(json)
   const key = asString(record?.key)
   if (key === undefined || !isObjectKey(key)) {
@@ -301,9 +292,9 @@ export function normalizeNoteRecord(
  */
 export function normalizeAnnotationRecord(
   json: unknown,
-  ctx?: string | NormalizeContext,
+  ctx?: NormalizeContext,
 ): ZoteroAnnotationRecord {
-  const context = normalizeCtx(ctx)
+  const context = resolveContext(ctx)
   const record = asRecord(json)
   const key = asString(record?.key)
   if (key === undefined || !isObjectKey(key)) {
@@ -373,11 +364,11 @@ function annotationSortIndex(row: unknown): string {
  */
 export function partitionChildren(
   rows: readonly unknown[],
-  ctx: string | NormalizeContext | undefined,
+  ctx: NormalizeContext | undefined,
   noteMaxChars?: number,
   kinds: ReadonlySet<ZoteroChildKind> = ALL_CHILD_KINDS,
 ): PartitionedChildren {
-  const context = normalizeCtx(ctx)
+  const context = resolveContext(ctx)
   const notes: ZoteroNoteRecord[] = []
   const annotationRows: unknown[] = []
   const attachments: ZoteroAttachmentCandidate[] = []

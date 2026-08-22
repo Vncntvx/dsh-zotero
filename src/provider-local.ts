@@ -478,63 +478,60 @@ export class LocalApiProvider implements ZoteroProvider {
       // A query whose tokens are all punctuation/emoji/whitespace matches
       // every note (the empty token list is vacuously present), so the scan
       // stays disabled for it.
-      if (terms.length > 0) {
+      // The API rows already fill `limit`; the supplement only fills the
+      // page's remaining headroom, so a full page never runs the scan and
+      // the result never exceeds the requested limit.
+      const headroom = request.limit - rows.length
+      if (terms.length > 0 && headroom > 0) {
         const seen = new Set(
           rows
             .map((row) => asString(asRecord(row)?.key))
             .filter((key): key is string => key !== undefined),
         )
-        // The API rows already fill `limit`; note matches only fill the
-        // remaining headroom, so the supplement never exceeds the limit.
-        const headroom = request.limit - rows.length
-        if (headroom <= 0) {
-          // Fail-closed early return: no headroom means no note scan (review 473-485)
-        } else {
-          const scan = await this.fetchNoteRows(scope, request, signal)
-          // Matched rows keep scan order; child notes wait here for the
-          // parent-membership resolution below before they can join the page.
-          const matched: { row: unknown; key: string; parentKey?: string }[] = []
-          for (const row of scan.rows) {
-            if (matched.length >= headroom) break
-            const key = asString(asRecord(row)?.key)
-            if (key === undefined || seen.has(key)) continue
-            if (!this.noteRowMatches(row, terms, request, scope.collectionKey)) continue
-            const parentKey =
-              scope.collectionKey === undefined
-                ? undefined
-                : asString(asRecord(asRecord(row)?.data)?.parentItem)
-            matched.push({ row, key, ...(parentKey !== undefined ? { parentKey } : {}) })
+        const scan = await this.fetchNoteRows(scope, request, signal)
+        // Matched rows keep scan order; child notes wait here for the
+        // parent-membership resolution below before they can join the page.
+        const matched: { row: unknown; key: string; parentKey?: string }[] = []
+        for (const row of scan.rows) {
+          if (matched.length >= headroom) break
+          const key = asString(asRecord(row)?.key)
+          if (key === undefined || seen.has(key)) continue
+          if (!this.noteRowMatches(row, terms, request, scope.collectionKey)) continue
+          const parentKey =
+            scope.collectionKey === undefined
+              ? undefined
+              : asString(asRecord(asRecord(row)?.data)?.parentItem)
+          matched.push({ row, key, ...(parentKey !== undefined ? { parentKey } : {}) })
+        }
+        let memberships: Map<string, Set<string>> | undefined
+        const pendingParents = matched
+          .map((entry) => entry.parentKey)
+          .filter((parentKey): parentKey is string => parentKey !== undefined)
+        if (pendingParents.length > 0) {
+          memberships = await this.fetchParentCollections(
+            libraryForItems,
+            [...new Set(pendingParents)],
+            scope.serverId,
+            signal,
+          )
+        }
+        const supplementItems: ZoteroSearchItem[] = []
+        for (const entry of matched) {
+          if (
+            entry.parentKey !== undefined &&
+            !memberships?.get(entry.parentKey)?.has(scope.collectionKey!)
+          ) {
+            continue
           }
-          let memberships: Map<string, Set<string>> | undefined
-          const pendingParents = matched
-            .map((entry) => entry.parentKey)
-            .filter((parentKey): parentKey is string => parentKey !== undefined)
-          if (pendingParents.length > 0) {
-            memberships = await this.fetchParentCollections(
-              libraryForItems,
-              [...new Set(pendingParents)],
-              scope.serverId,
-              signal,
-            )
-          }
-          const supplementItems: ZoteroSearchItem[] = []
-          for (const entry of matched) {
-            if (
-              entry.parentKey !== undefined &&
-              !memberships?.get(entry.parentKey)?.has(scope.collectionKey!)
-            ) {
-              continue
-            }
-            seen.add(entry.key)
-            supplementItems.push(normalizeSearchItem(entry.row, ctxForSearch))
-          }
-          if (supplementItems.length > 0) {
-            supplemental = {
-              kind: 'noteBody',
-              items: supplementItems,
-              scanned: scan.rows.length,
-              truncated: scan.truncated,
-            }
+          seen.add(entry.key)
+          supplementItems.push(normalizeSearchItem(entry.row, ctxForSearch))
+        }
+        if (supplementItems.length > 0) {
+          supplemental = {
+            kind: 'noteBody',
+            items: supplementItems,
+            scanned: scan.rows.length,
+            truncated: scan.truncated,
           }
         }
       }
@@ -1600,7 +1597,7 @@ export class LocalApiProvider implements ZoteroProvider {
     }
     // Duplicate refs name the same item; the translator formats fetch each
     // document on its own, so every unique key is requested once, keeping
-    // the first-seen order. Dedupe by canonical ref (library+key) not bare key is safer, but with same-library gate key-only suffices.
+    // the first-seen order. Dedupe by canonical ref (library+key), not bare key.
     const seen = new Set<string>()
     const refs: ZoteroObjectRef[] = []
     for (const ref of request.refs) {
@@ -1830,8 +1827,10 @@ export class LocalApiProvider implements ZoteroProvider {
     library: SupportedLocalLibrary | undefined,
     signal?: AbortSignal,
   ): Promise<ResolvedScopeResult> {
-    // Fail-Closed 但避免 UX 陷阱：library 省略且 scope 为 group ref 时，从 ref 推断 library
-    // 否则 zotero://group/42/collection/XXXX 在未传 library 时必错（review 1298-1352）
+    // Fail-closed but UX-safe: when library is omitted and the scope is a
+    // group ref, infer the library from the ref — otherwise a group
+    // zotero://group/42/collection/XXXX scope without an explicit library
+    // could never resolve.
     let effectiveLibrary: SupportedLocalLibrary
     if (library !== undefined) {
       effectiveLibrary = library
@@ -1972,7 +1971,8 @@ export class LocalApiProvider implements ZoteroProvider {
     if (!Number.isInteger(request.limit) || request.limit <= 0 || request.limit > maxBrowse) {
       throw new ZoteroError(`limit must be integer 1..${maxBrowse}`, ZOTERO_INVALID_ARGUMENT)
     }
-    // Fail-closed: libraries/itemTypes are global; library param must not be set (review 117-120)
+    // Fail-closed: libraries/itemTypes/itemFields are global, so the library
+    // parameter must not be set for them.
     if (
       (request.kind === 'libraries' ||
         request.kind === 'itemTypes' ||

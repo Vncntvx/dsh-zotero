@@ -119,7 +119,7 @@ Agent → zotero_export(refs: [1,2,3], format: "bibtex")
 | [快速上手](docs/getting-started.md) | 安装、前置条件、首次验证            |
 | [功能概览](docs/features.md)        | 来源面板、对话集成、证据提取、导出  |
 | [工具参考](docs/tools.md)           | 全部 8 个工具的参数、返回值、错误码 |
-| [配置](docs/configuration.md)       | 20 个配置字段、默认值、热更新       |
+| [配置](docs/configuration.md)       | 21 个配置字段、默认值、热更新       |
 | [架构](docs/architecture.md)        | 数据流、各层职责、设计边界          |
 | [开发指南](docs/development.md)     | 构建、测试、本地开发                |
 | [问题排查](docs/troubleshooting.md) | 11 个常见问题的症状和处理           |

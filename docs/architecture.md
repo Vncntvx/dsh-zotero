@@ -33,7 +33,7 @@ graph LR
 ### Provider 层 (`src/provider-local.ts`)
 
 - `LocalApiProvider` 实现 `ZoteroProvider`
-- 能力：search、metadata、attachments、fulltext、citation
+- 能力：search、metadata、attachments、fulltext、citation、browse、retrieve、changes
 - 客户端侧解析作用域（Local API 无服务端名称搜索）
 - 笔记体扫描：客户端侧第一页（offset 0），受 maxNoteScanRecords 限制
 - 证据排名：基于 passage 语料库的 BM25（annotations、notes、abstract、fulltext chunks）

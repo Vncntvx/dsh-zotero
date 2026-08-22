@@ -15,11 +15,17 @@ import {
   normalizeVenue,
   partitionChildren,
   plainNoteText,
+  type NormalizeContext,
   type ZoteroChildKind,
 } from '../src/normalize.js'
 
 function fixture(name: string): unknown {
   return JSON.parse(readFileSync(new URL(`./fixtures/${name}.json`, import.meta.url), 'utf8'))
+}
+
+/** Personal-library context with an optional server provenance qualifier. */
+function ctx(serverId?: string): NormalizeContext {
+  return { library: { type: 'user', id: 0 }, ...(serverId !== undefined ? { serverId } : {}) }
 }
 
 function expectUnexpected(fn: () => unknown): ZoteroError {
@@ -36,7 +42,7 @@ function expectUnexpected(fn: () => unknown): ZoteroError {
 
 describe('normalizeSearchItem', () => {
   it('normalizes a full Zotero 10 item, including the best attachment link and server provenance', () => {
-    const item = normalizeSearchItem(fixture('item10'), 'S1')
+    const item = normalizeSearchItem(fixture('item10'), ctx('S1'))
     expect(item).toEqual({
       ref: 'zotero://user/0/item/ABCD1234?server=S1',
       title: 'FlashAttention-2: Faster Attention with Better Parallelism and Work Partitioning',
@@ -57,7 +63,7 @@ describe('normalizeSearchItem', () => {
   })
 
   it('ignores unknown fields from future Zotero versions', () => {
-    const item = normalizeSearchItem(fixture('item-extra-fields'), 'S2')
+    const item = normalizeSearchItem(fixture('item-extra-fields'), ctx('S2'))
     expect(item.ref).toBe('zotero://user/0/item/MNOP3456?server=S2')
     expect(item.title).toBe('A Forward-Tolerant Record')
     expect(item.year).toBe(2020)
@@ -104,7 +110,7 @@ describe('normalizeSearchItem', () => {
   it('carries the parent ref for child notes', () => {
     const item = normalizeSearchItem(
       { key: 'NOTE1111', data: { itemType: 'note', title: '', parentItem: 'ABCD1234' } },
-      'S1',
+      ctx('S1'),
     )
     expect(item.parentRef).toBe('zotero://user/0/item/ABCD1234?server=S1')
     expect(
@@ -295,7 +301,7 @@ describe('collectionKeysOf', () => {
 describe('normalizeNoteRecord', () => {
   it('normalizes a note child with truncation budget', () => {
     const row = { key: 'NOTE1111', data: { itemType: 'note', note: 'hello world' } }
-    expect(normalizeNoteRecord(row, 'S1', 5)).toEqual({
+    expect(normalizeNoteRecord(row, ctx('S1'), 5)).toEqual({
       ref: 'zotero://user/0/item/NOTE1111?server=S1',
       text: 'hello',
       truncated: true,
@@ -313,7 +319,7 @@ describe('normalizeNoteRecord', () => {
       key: 'NOTE1111',
       data: { itemType: 'note', note: '<p>First</p><p>Second</p>', parentItem: 'ABCD1234' },
     }
-    expect(normalizeNoteRecord(row, 'S1', 100)).toEqual({
+    expect(normalizeNoteRecord(row, ctx('S1'), 100)).toEqual({
       ref: 'zotero://user/0/item/NOTE1111?server=S1',
       text: 'First\nSecond',
       truncated: false,
@@ -364,7 +370,7 @@ describe('normalizeAnnotationRecord', () => {
         parentItem: 'WXYZ6789',
       },
     }
-    expect(normalizeAnnotationRecord(row, 'S1')).toEqual({
+    expect(normalizeAnnotationRecord(row, ctx('S1'))).toEqual({
       ref: 'zotero://user/0/annotation/ANNO1111?server=S1',
       type: 'highlight',
       text: 'the key insight',
@@ -437,7 +443,7 @@ describe('partitionChildren', () => {
       },
       { key: 'AAAA1111', data: { itemType: 'note', note: 'n2' } },
     ]
-    const partitioned = partitionChildren(rows, 'S1', 100)
+    const partitioned = partitionChildren(rows, ctx('S1'), 100)
     expect(partitioned.notes).toHaveLength(2)
     expect(partitioned.annotations).toHaveLength(1)
     expect(partitioned.attachments).toHaveLength(1)
@@ -499,7 +505,7 @@ describe('partitionChildren', () => {
     ]
     const partitioned = partitionChildren(
       rows,
-      'S1',
+      ctx('S1'),
       undefined,
       new Set<ZoteroChildKind>(['attachment']),
     )

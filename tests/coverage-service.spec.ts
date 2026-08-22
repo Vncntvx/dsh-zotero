@@ -91,9 +91,8 @@ describe('service browse and search new filters', () => {
       includeTrashed: false,
       limit: 5,
     })
-    // Should succeed (library + collection) - but we used collection scope not library, so includeTrashed false is allowed
-    // Actually includeTrashed true would fail with collection; we used false so ok
-    // This test just ensures no validation error, request succeeded (isError false)
+    // includeTrashed is only valid with library scope; a collection-scope
+    // call without it must pass validation.
     expect(result.isError).toBe(false)
   })
 

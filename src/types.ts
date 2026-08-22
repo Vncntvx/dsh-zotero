@@ -7,6 +7,9 @@
  * (`?server=<Zotero-Server-ID>`). Everything in this module is a plain
  * lossless-JSON-safe DTO; tool `execute` bodies return these values directly
  * as canonical tool results.
+ *
+ * Terminology: the "v3" in `BREAKING CHANGE` remarks below denotes this
+ * plugin's own DTO contract iteration, not the Zotero wire API version.
  * @module dsh-zotero/types
  */
 

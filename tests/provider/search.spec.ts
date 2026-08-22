@@ -821,7 +821,7 @@ describe('search: note-content scan', () => {
     expect(result.supplemental).toBeUndefined()
     expect(result.returned).toBe(3)
     expect(result.total).toBe(3)
-    // headroom == 0 early return: no note scan request at all (fix for review 473-485)
+    // headroom == 0: a full primary page never runs the note scan at all
     expect(mock.requests.filter((entry) => entry.search.get('itemType') === 'note')).toHaveLength(0)
   })
 
