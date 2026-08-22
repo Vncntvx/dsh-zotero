@@ -247,10 +247,11 @@ export function registerGetTool(ctx: Context, service: ZoteroService): void {
         schema: GET_OUTPUT_SCHEMA,
         render: renderGet,
         presentationMeta: (_args, value) =>
-          boundedPresentationMeta(
-            projectGetMeta(value as unknown as Parameters<typeof projectGetMeta>[0]),
-            ['notesPreview', 'annotationsPreview', 'relations'],
-          ),
+          boundedPresentationMeta(projectGetMeta(value), [
+            'notesPreview',
+            'annotationsPreview',
+            'relations',
+          ]),
       },
       presentCall: (args) => ({
         card: 'generic',

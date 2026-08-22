@@ -168,6 +168,9 @@ const SEARCH_OUTPUT_SCHEMA = {
     scope: {
       required: true,
       oneOf: [
+        // The personal library is always the canonical user/0; a group id
+        // is any positive integer. Splitting the arms keeps the inferred
+        // type equal to SupportedLocalLibrary.
         {
           type: 'object',
           additionalProperties: false,
@@ -178,7 +181,23 @@ const SEARCH_OUTPUT_SCHEMA = {
               required: true,
               additionalProperties: false,
               properties: {
-                type: { type: 'string', enum: ['user', 'group'], required: true },
+                type: { type: 'string', const: 'user', required: true },
+                id: { type: 'integer', const: 0, required: true },
+              },
+            },
+          },
+        },
+        {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            kind: { type: 'string', const: 'library', required: true },
+            library: {
+              type: 'object',
+              required: true,
+              additionalProperties: false,
+              properties: {
+                type: { type: 'string', const: 'group', required: true },
                 id: { type: 'integer', required: true },
               },
             },
@@ -194,7 +213,23 @@ const SEARCH_OUTPUT_SCHEMA = {
               required: true,
               additionalProperties: false,
               properties: {
-                type: { type: 'string', enum: ['user', 'group'], required: true },
+                type: { type: 'string', const: 'user', required: true },
+                id: { type: 'integer', const: 0, required: true },
+              },
+            },
+          },
+        },
+        {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            kind: { type: 'string', const: 'publications', required: true },
+            library: {
+              type: 'object',
+              required: true,
+              additionalProperties: false,
+              properties: {
+                type: { type: 'string', const: 'group', required: true },
                 id: { type: 'integer', required: true },
               },
             },
@@ -336,10 +371,7 @@ export function renderSearch(_args: SearchArgs, value: SearchOutput): ContentBlo
 
 /** Replayable projection: page facts plus the bounded rows the Zotero tab lists. */
 function searchPresentationMeta(_args: SearchArgs, value: SearchOutput): JsonValue {
-  return boundedPresentationMeta(
-    projectSearchMeta(value as unknown as Parameters<typeof projectSearchMeta>[0]),
-    ['items'],
-  )
+  return boundedPresentationMeta(projectSearchMeta(value), ['items'])
 }
 
 /**

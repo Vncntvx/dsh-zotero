@@ -67,7 +67,11 @@ const EVIDENCE_RECORD = {
   type: 'object',
   additionalProperties: false,
   properties: {
-    source: { type: 'string', required: true },
+    source: {
+      type: 'string',
+      enum: ALL_SOURCES,
+      required: true,
+    },
     sourceRef: { type: 'string', required: true },
     text: { type: 'string', required: true },
     chunkIndex: { type: 'integer' },

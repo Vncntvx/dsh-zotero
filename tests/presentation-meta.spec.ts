@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import type { ZoteroSearchResult } from '../src/types.js'
+import type { ZoteroItemDetail, ZoteroRetrieveResult, ZoteroSearchResult } from '../src/types.js'
 import {
   MAX_PRESENTATION_EVIDENCE_CHARS,
   MAX_PRESENTATION_GET_VENUE_CHARS,
@@ -35,6 +35,32 @@ function searchResult(rows: number): ZoteroSearchResult {
     total: 42,
     offset: 0,
     returned: rows,
+  }
+}
+
+/** A full item detail with every required field; tests spread overrides. */
+function getDetail(overrides: Partial<ZoteroItemDetail> = {}): ZoteroItemDetail {
+  return {
+    ref: 'zotero://user/0/item/ABCDEFGH',
+    itemType: 'journalArticle',
+    title: 'T',
+    creators: [],
+    abstractTruncated: false,
+    tags: [],
+    collections: [],
+    children: { total: 0 },
+    ...overrides,
+  }
+}
+
+/** A full retrieve result with every required field; tests spread overrides. */
+function retrieveResult(overrides: Partial<ZoteroRetrieveResult> = {}): ZoteroRetrieveResult {
+  return {
+    ref: 'zotero://user/0/item/ABCDEFGH',
+    evidence: [],
+    truncated: false,
+    sourcesSkipped: [],
+    ...overrides,
   }
 }
 
@@ -156,63 +182,65 @@ describe('projectSearchMeta', () => {
 
 describe('projectGetMeta', () => {
   it('projects the header line, counts, and bounded child previews', () => {
-    const meta = projectGetMeta({
-      ref: 'zotero://user/0/item/ABCDEFGH',
-      itemType: 'journalArticle',
-      title: 'FlashAttention-2',
-      creators: ['Dao, Tri', 'Smith, Jane'],
-      date: '2023-07-28',
-      year: 2023,
-      venue: 'ICLR',
-      abstract: undefined,
-      abstractTruncated: false,
-      tags: [],
-      collections: [],
-      children: { total: 20 },
-      bestAttachment: {
-        ref: 'zotero://user/0/attachment/WXYZ6789',
-        title: 'a.pdf',
-        contentType: 'application/pdf',
-      },
-      attachments: {
-        total: 1,
-        returned: 1,
-        items: [
-          {
-            ref: 'zotero://user/0/attachment/WXYZ6789',
-            title: 'a.pdf',
-            contentType: 'application/pdf',
-          },
-        ],
-      },
-      notes: {
-        total: 2,
-        returned: 2,
-        items: [
-          { ref: 'zotero://user/0/item/NOTE0001', text: 'note one', truncated: false },
-          { ref: 'zotero://user/0/item/NOTE0002', text: 'note two', truncated: false },
-        ],
-      },
-      annotations: {
-        total: 17,
-        returned: 3,
-        items: [
-          {
-            ref: 'zotero://user/0/annotation/ANN000001',
-            type: 'highlight',
-            text: 'a'.repeat(500),
-            color: '#ffd400',
-            pageLabel: '7',
-          },
-          {
-            ref: 'zotero://user/0/annotation/ANN000002',
-            type: 'note',
-            text: 'annotation two',
-            color: '#ffd400',
-          },
-        ],
-      },
-    })
+    const meta = projectGetMeta(
+      getDetail({
+        ref: 'zotero://user/0/item/ABCDEFGH',
+        itemType: 'journalArticle',
+        title: 'FlashAttention-2',
+        creators: ['Dao, Tri', 'Smith, Jane'],
+        date: '2023-07-28',
+        year: 2023,
+        venue: 'ICLR',
+        abstract: undefined,
+        abstractTruncated: false,
+        tags: [],
+        collections: [],
+        children: { total: 20 },
+        bestAttachment: {
+          ref: 'zotero://user/0/attachment/WXYZ6789',
+          title: 'a.pdf',
+          contentType: 'application/pdf',
+        },
+        attachments: {
+          total: 1,
+          returned: 1,
+          items: [
+            {
+              ref: 'zotero://user/0/attachment/WXYZ6789',
+              title: 'a.pdf',
+              contentType: 'application/pdf',
+            },
+          ],
+        },
+        notes: {
+          total: 2,
+          returned: 2,
+          items: [
+            { ref: 'zotero://user/0/item/NOTE0001', text: 'note one', truncated: false },
+            { ref: 'zotero://user/0/item/NOTE0002', text: 'note two', truncated: false },
+          ],
+        },
+        annotations: {
+          total: 17,
+          returned: 3,
+          items: [
+            {
+              ref: 'zotero://user/0/annotation/ANN000001',
+              type: 'highlight',
+              text: 'a'.repeat(500),
+              color: '#ffd400',
+              pageLabel: '7',
+            },
+            {
+              ref: 'zotero://user/0/annotation/ANN000002',
+              type: 'note',
+              text: 'annotation two',
+              color: '#ffd400',
+            },
+          ],
+        },
+      }),
+    )
     expect(meta.title).toBe('FlashAttention-2')
     expect(meta.creators).toBe('Dao, Tri; Smith, Jane')
     expect(meta.year).toBe(2023)
@@ -238,66 +266,65 @@ describe('projectGetMeta', () => {
   })
 
   it('omits child facts the call did not request', () => {
-    const meta = projectGetMeta({
-      ref: 'zotero://user/0/item/ABCDEFGH',
-      title: 'Metadata only',
-      creators: [],
-      abstract: undefined,
-      abstractTruncated: false,
-      tags: [],
-      collections: [],
-      children: { total: 0 },
-    })
+    const meta = projectGetMeta(
+      getDetail({
+        ref: 'zotero://user/0/item/ABCDEFGH',
+        title: 'Metadata only',
+        creators: [],
+        abstract: undefined,
+        abstractTruncated: false,
+        tags: [],
+        collections: [],
+        children: { total: 0 },
+      }),
+    )
     expect(meta.notes).toBeUndefined()
     expect(meta.annotations).toBeUndefined()
-    expect(meta.itemType).toBeUndefined()
     expect(meta.ref).toBe('zotero://user/0/item/ABCDEFGH')
     expect(meta.bestAttachment).toBeUndefined()
     expect(meta.notesPreview).toEqual([])
     expect(meta.annotationsPreview).toEqual([])
   })
 
-  it('keeps the attachment selection content type when its ref is absent', () => {
-    const meta = projectGetMeta({
-      ref: 'zotero://user/0/item/ABCDEFGH',
-      title: 'T',
-      creators: [],
-      abstract: undefined,
-      abstractTruncated: false,
-      tags: [],
-      collections: [],
-      children: { total: 0 },
-      bestAttachment: { contentType: 'application/pdf' },
+  it('passes the attachment selection through with its content type', () => {
+    const meta = projectGetMeta(
+      getDetail({
+        ref: 'zotero://user/0/item/ABCDEFGH',
+        title: 'T',
+        creators: [],
+        abstract: undefined,
+        abstractTruncated: false,
+        tags: [],
+        collections: [],
+        children: { total: 0 },
+        bestAttachment: {
+          ref: 'zotero://user/0/attachment/WXYZ6789',
+          title: 'PDF',
+          contentType: 'application/pdf',
+        },
+      }),
+    )
+    expect(meta.bestAttachment).toEqual({
+      ref: 'zotero://user/0/attachment/WXYZ6789',
+      contentType: 'application/pdf',
     })
-    expect(meta.bestAttachment).toEqual({ contentType: 'application/pdf' })
-  })
-
-  it('omits the ref when the input carries none', () => {
-    const meta = projectGetMeta({
-      title: 'T',
-      creators: [],
-      abstract: undefined,
-      abstractTruncated: false,
-      tags: [],
-      collections: [],
-      children: { total: 0 },
-    })
-    expect(meta.ref).toBeUndefined()
   })
 
   it('caps the venue string like the other header fields', () => {
-    const meta = projectGetMeta({
-      ref: 'zotero://user/0/item/ABCDEFGH',
-      itemType: 'journalArticle',
-      title: 'T',
-      creators: [],
-      venue: 'v'.repeat(500),
-      abstract: undefined,
-      abstractTruncated: false,
-      tags: [],
-      collections: [],
-      children: { total: 0 },
-    })
+    const meta = projectGetMeta(
+      getDetail({
+        ref: 'zotero://user/0/item/ABCDEFGH',
+        itemType: 'journalArticle',
+        title: 'T',
+        creators: [],
+        venue: 'v'.repeat(500),
+        abstract: undefined,
+        abstractTruncated: false,
+        tags: [],
+        collections: [],
+        children: { total: 0 },
+      }),
+    )
     expect(meta.venue).toHaveLength(MAX_PRESENTATION_GET_VENUE_CHARS)
   })
 })
@@ -305,7 +332,7 @@ describe('projectGetMeta', () => {
 describe('projectRetrieveMeta', () => {
   it('projects ranked evidence with provenance and source kinds', () => {
     const meta = projectRetrieveMeta(
-      {
+      retrieveResult({
         evidence: [
           {
             source: 'annotation',
@@ -323,7 +350,7 @@ describe('projectRetrieveMeta', () => {
         ],
         truncated: true,
         sourcesSkipped: ['abstract'],
-      },
+      }),
       ['annotation', 'note', 'abstract', 'fulltext'],
     )
     expect(meta.count).toBe(3)
@@ -345,14 +372,14 @@ describe('projectRetrieveMeta', () => {
 
   it('records per-source availability from the requested list', () => {
     const meta = projectRetrieveMeta(
-      {
+      retrieveResult({
         evidence: [
           { source: 'annotation', sourceRef: 'zotero://user/0/annotation/ANN1', text: 'a' },
           { source: 'fulltext', sourceRef: 'zotero://user/0/item/ABCDEFGH', text: 'b' },
         ],
         truncated: false,
         sourcesSkipped: ['note'],
-      },
+      }),
       ['annotation', 'note'],
     )
     expect(meta.sourceAvailability).toEqual({
@@ -363,13 +390,13 @@ describe('projectRetrieveMeta', () => {
 
   it('passes the attachment ref and coverage through when the result carries them', () => {
     const meta = projectRetrieveMeta(
-      {
+      retrieveResult({
         evidence: [],
         truncated: false,
         sourcesSkipped: [],
         attachmentRef: 'zotero://user/0/attachment/WXYZ6789',
         coverage: { indexedPages: 5, totalPages: 10, complete: false },
-      },
+      }),
       ['fulltext'],
     )
     expect(meta.attachmentRef).toBe('zotero://user/0/attachment/WXYZ6789')
@@ -378,7 +405,7 @@ describe('projectRetrieveMeta', () => {
 
   it('caps passages and previews, marking preview truncation', () => {
     const meta = projectRetrieveMeta(
-      {
+      retrieveResult({
         evidence: Array.from({ length: 6 }, (_, index) => ({
           source: 'fulltext',
           sourceRef: 'zotero://user/0/item/ABCDEFGH',
@@ -386,7 +413,7 @@ describe('projectRetrieveMeta', () => {
         })),
         truncated: false,
         sourcesSkipped: [],
-      },
+      }),
       ['fulltext'],
     )
     expect(meta.items).toHaveLength(4)
@@ -432,16 +459,18 @@ describe('projectAttachmentMeta', () => {
     })
   })
 
-  it('omits the attachment ref when the input carries none', () => {
+  it('passes the provenance ref through for both location kinds', () => {
     expect(
       projectAttachmentMeta({
         kind: 'file',
+        ref: 'zotero://user/0/attachment/WXYZ6789',
         title: 'a.pdf',
         contentType: 'application/pdf',
         path: '/tmp/a.pdf',
       }),
     ).toEqual({
       kind: 'file',
+      ref: 'zotero://user/0/attachment/WXYZ6789',
       title: 'a.pdf',
       contentType: 'application/pdf',
       path: '/tmp/a.pdf',
@@ -449,15 +478,17 @@ describe('projectAttachmentMeta', () => {
     expect(
       projectAttachmentMeta({
         kind: 'url',
+        ref: 'zotero://user/0/attachment/WXYZ6789',
         title: 'p',
         contentType: 'text/html',
-        url: 'https://e.org',
+        url: 'https://e.org/x',
       }),
     ).toEqual({
       kind: 'url',
+      ref: 'zotero://user/0/attachment/WXYZ6789',
       title: 'p',
       contentType: 'text/html',
-      url: 'https://e.org',
+      url: 'https://e.org/x',
     })
   })
 })

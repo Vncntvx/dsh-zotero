@@ -39,6 +39,8 @@ import {
 import type { ZoteroHttpClient } from '../http-client.js'
 import { cacheEntryMatchesIdentity, type LocalReadContext } from './identity.js'
 import type {
+  GroupLibrary,
+  PersonalLibrary,
   SupportedLocalLibrary,
   ZoteroObjectRef,
   ZoteroSearchScope,
@@ -333,17 +335,27 @@ export async function resolveScope(
   }
   switch (scope.kind) {
     case 'library':
-      return {
-        path: `${libraryPrefix(effectiveLibrary)}/items/top`,
-        resolved: { kind: 'library', library: effectiveLibrary },
-      }
+      return effectiveLibrary.type === 'user'
+        ? {
+            path: `${libraryPrefix(PERSONAL_LIBRARY)}/items/top`,
+            resolved: { kind: 'library', library: { type: 'user', id: 0 } },
+          }
+        : {
+            path: `${libraryPrefix(effectiveLibrary)}/items/top`,
+            resolved: { kind: 'library', library: { type: 'group', id: effectiveLibrary.id } },
+          }
     case 'publications':
       // My Publications: the Local API mirrors the Web API's
       // /publications/items scope, so published works are one hop away.
-      return {
-        path: `${libraryPrefix(effectiveLibrary)}/publications/items/top`,
-        resolved: { kind: 'publications', library: effectiveLibrary },
-      }
+      return effectiveLibrary.type === 'user'
+        ? {
+            path: `${libraryPrefix(PERSONAL_LIBRARY)}/publications/items/top`,
+            resolved: { kind: 'publications', library: { type: 'user', id: 0 } },
+          }
+        : {
+            path: `${libraryPrefix(effectiveLibrary)}/publications/items/top`,
+            resolved: { kind: 'publications', library: { type: 'group', id: effectiveLibrary.id } },
+          }
     case 'collection': {
       const found = await directory.resolveNamed(
         'collection',

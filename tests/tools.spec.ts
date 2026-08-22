@@ -92,7 +92,7 @@ describe('zotero_search tool', () => {
       itemType: 'note',
     }
     const value = {
-      scope: { kind: 'library' as const, library: { type: 'user' as const, id: 0 } },
+      scope: { kind: 'library' as const, library: { type: 'user' as const, id: 0 as const } },
       items: [],
       total: 42,
       offset: 0,
@@ -1689,7 +1689,7 @@ describe('tool presentation', () => {
   it('projects replayable search page facts and renders the completed card', () => {
     const tool = definition('zotero_search')
     const value = {
-      scope: { kind: 'library' as const, library: { type: 'user' as const, id: 0 } },
+      scope: { kind: 'library' as const, library: { type: 'user' as const, id: 0 as const } },
       items: [],
       total: 42,
       offset: 0,

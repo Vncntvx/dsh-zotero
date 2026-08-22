@@ -35,7 +35,11 @@ export interface ZoteroLibraryRef {
 }
 
 /** The local libraries this plugin contract supports: canonical personal + any group. */
-export type SupportedLocalLibrary = { type: 'user'; id: 0 } | { type: 'group'; id: number }
+/** The canonical personal library: the local API's logged-in user. */
+export type PersonalLibrary = { type: 'user'; id: 0 }
+/** A synced group library by its positive group id. */
+export type GroupLibrary = { type: 'group'; id: number }
+export type SupportedLocalLibrary = PersonalLibrary | GroupLibrary
 
 /** The object kinds the reference grammar distinguishes. */
 export type ZoteroKind = 'item' | 'attachment' | 'annotation' | 'collection' | 'search'
@@ -76,8 +80,10 @@ export type ZoteroSearchScope =
  * `SEARCH_DEFAULT_SCOPE` (`{kind:"library"}`) is normalized to `{kind:"library", library:{user:0}}`.
  */
 export type ZoteroResolvedScope =
-  | { kind: 'library'; library: SupportedLocalLibrary }
-  | { kind: 'publications'; library: SupportedLocalLibrary }
+  | { kind: 'library'; library: PersonalLibrary }
+  | { kind: 'library'; library: GroupLibrary }
+  | { kind: 'publications'; library: PersonalLibrary }
+  | { kind: 'publications'; library: GroupLibrary }
   | { kind: 'collection'; ref: string; name: string }
   | { kind: 'savedSearch'; ref: string; name: string }
 

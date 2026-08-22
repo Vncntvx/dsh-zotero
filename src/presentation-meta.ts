@@ -14,11 +14,16 @@
 import type { JsonValue } from '@deepseek-ai/dsh-tools'
 import type {
   SupportedLocalLibrary,
+  ZoteroAttachmentLocation,
   ZoteroCoverage,
   ZoteroEvidenceSource,
+  ZoteroItemDetail,
   ZoteroResolvedScope,
+  ZoteroRetrieveResult,
+  ZoteroSearchResult,
 } from './types.js'
 import { parseRef } from './refs.js'
+import { isLosslessJson } from './normalize.js'
 
 /** UTF-8 byte budget for one tool's presentation meta. */
 export const MAX_PRESENTATION_META_BYTES = 8192
@@ -40,32 +45,8 @@ const MAX_PRESENTATION_EVIDENCE_PASSAGES = 4
 const MAX_PRESENTATION_EXPORT_REFS = 20
 
 /** The search projection's row shape (subset of the tool output record). */
-interface SearchRowInput {
-  readonly ref: string
-  readonly title: string
-  readonly creatorSummary: string
-  readonly year?: number
-  readonly itemType: string
-  /** Zotero's own attachment selection for the row; the open-PDF deep-link key. */
-  readonly bestAttachmentRef?: string
-  /** The content type of Zotero's attachment selection; tells a PDF from other kinds. */
-  readonly bestAttachmentType?: string
-}
-
 /** The canonical search output the projector reads. */
-export interface SearchProjectionInput {
-  /** Primary API hits only — the paged list the `total`/`returned` fields describe. */
-  readonly items: readonly SearchRowInput[]
-  readonly total: number
-  readonly returned: number
-  readonly nextOffset?: number
-  /** First-page note-body supplement; absent when the scan matched nothing. */
-  readonly supplemental?: {
-    readonly items: readonly SearchRowInput[]
-  }
-  readonly scope: ZoteroResolvedScope
-  readonly offset?: number
-}
+export type SearchProjectionInput = ZoteroSearchResult
 
 /** One compact search row: the card's list unit with its copyable ref. */
 interface ZoteroSearchPresentationRow {
@@ -106,60 +87,8 @@ interface ZoteroChildCount {
   readonly returned: number
 }
 
-/** The canonical get output the projector reads (subset of the tool output record). */
-export interface GetProjectionInput {
-  readonly title: string
-  readonly creators: readonly string[]
-  readonly year?: number
-  readonly venue?: string
-  readonly notes?: {
-    readonly total: number
-    readonly returned: number
-    readonly items: readonly {
-      readonly ref: string
-      readonly text: string
-      readonly truncated?: boolean
-      readonly parentRef?: string
-    }[]
-  }
-  readonly annotations?: {
-    readonly total: number
-    readonly returned: number
-    readonly items: readonly {
-      readonly ref: string
-      readonly text: string
-      readonly pageLabel?: string
-      readonly type?: string
-      readonly comment?: string
-      readonly color?: string
-      readonly parentRef?: string
-    }[]
-  }
-  readonly relations?: readonly {
-    readonly predicate: string
-    readonly targetUri: string
-    readonly targetRef?: string
-  }[]
-  readonly attachments?: {
-    readonly total: number
-    readonly returned: number
-    readonly items?: unknown
-  }
-  readonly bestAttachment?: {
-    readonly contentType: string
-    readonly ref?: string
-    readonly title?: string
-  }
-  /** Canonical-record fields the projection ignores (accepted for shape compatibility). */
-  readonly ref?: string
-  readonly itemType?: string
-  readonly date?: string
-  readonly abstract?: string
-  readonly abstractTruncated?: boolean
-  readonly tags?: unknown
-  readonly collections?: unknown
-  readonly children?: unknown
-}
+/** The canonical get output the projector reads. */
+export type GetProjectionInput = ZoteroItemDetail
 
 export interface ZoteroGetPresentationMeta {
   readonly title: string
@@ -219,26 +148,8 @@ export interface ZoteroRetrievePresentationMeta {
 }
 
 /** The retrieval facts the projection reads (the schema-inferred output satisfies this). */
-export interface RetrieveProjectionInput {
-  readonly evidence: ReadonlyArray<{
-    readonly source: string
-    readonly sourceRef: string
-    readonly text: string
-    readonly pageLabel?: string
-    readonly chunkIndex?: number
-    readonly chunkCount?: number
-    readonly comment?: string
-    readonly attachmentRef?: string
-  }>
-  readonly truncated: boolean
-  readonly sourcesSkipped: readonly string[]
-  /** The full-text attachment the retrieval read, when one exists. */
-  readonly attachmentRef?: string
-  /** The content type of that attachment, when Zotero reported one. */
-  readonly attachmentContentType?: string
-  /** Full-text indexing coverage as reported by Zotero. */
-  readonly coverage?: ZoteroCoverage
-}
+/** The canonical retrieve output the projector reads. */
+export type RetrieveProjectionInput = ZoteroRetrieveResult
 
 export interface ZoteroAttachmentPresentationMeta {
   readonly kind: 'file' | 'url'
@@ -285,21 +196,7 @@ export interface ZoteroExportPresentationMeta {
 }
 
 /** The canonical attachment output the projector reads (discriminated on `kind`). */
-export type AttachmentProjectionInput =
-  | {
-      readonly kind: 'file'
-      readonly title: string
-      readonly contentType: string
-      readonly path: string
-      readonly ref?: string
-    }
-  | {
-      readonly kind: 'url'
-      readonly title: string
-      readonly contentType: string
-      readonly url: string
-      readonly ref?: string
-    }
+export type AttachmentProjectionInput = ZoteroAttachmentLocation
 
 /** Cut text at a character cap for a card preview. */
 function truncateChars(text: string, cap: number): string {
@@ -450,12 +347,12 @@ export function projectGetMeta(value: GetProjectionInput): ZoteroGetPresentation
  */
 export function projectRetrieveMeta(
   value: RetrieveProjectionInput,
-  requestedSources: readonly string[],
+  requestedSources: readonly ZoteroEvidenceSource[],
 ): ZoteroRetrievePresentationMeta {
   const items = value.evidence.slice(0, MAX_PRESENTATION_EVIDENCE_PASSAGES).map((entry) => {
     const preview = truncateChars(entry.text, MAX_PRESENTATION_EVIDENCE_CHARS)
     return {
-      source: entry.source as ZoteroEvidenceSource,
+      source: entry.source,
       sourceRef: entry.sourceRef,
       preview,
       previewTruncated: entry.text.length > preview.length,
@@ -595,9 +492,14 @@ export function boundedPresentationMeta(meta: unknown, detailKeys: readonly stri
   if (typeof meta !== 'object' || meta === null || Array.isArray(meta)) return meta as JsonValue
   const record = meta as Record<string, unknown>
   if (presentationMetaBytes(record) <= MAX_PRESENTATION_META_BYTES) return meta as JsonValue
-  const reduced: Record<string, unknown> = { detailOmitted: true }
+  const reduced: Record<string, JsonValue> = { detailOmitted: true }
   for (const [key, value] of Object.entries(record)) {
-    if (!detailKeys.includes(key)) reduced[key] = value
+    if (!detailKeys.includes(key) && isLosslessJson(value)) reduced[key] = value
   }
-  return reduced as unknown as JsonValue
+  // Structural widening only: every kept value already entered through a
+  // JsonValue-typed projector; TypeScript has no index-signature way to
+  // express Record<string, JsonValue> assignability from Record<string,
+  // unknown>, so this one narrowing-by-construction cast is documented here
+  // rather than spread across every projector.
+  return reduced as JsonValue
 }
