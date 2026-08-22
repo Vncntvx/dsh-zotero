@@ -12,7 +12,7 @@ import { withConnectivityAsk } from '../ask.js'
 import { boundedPresentationMeta } from '../presentation-meta.js'
 import { ZoteroError, ZOTERO_INVALID_ARGUMENT } from '../errors.js'
 import { asRecord } from '../json.js'
-import { assertIntInRange } from './validate.js'
+import { assertIntInRange, parseLibrary } from './validate.js'
 import type { ZoteroService } from '../service.js'
 import type { SupportedLocalLibrary, ZoteroBrowseKind, ZoteroBrowseRequest } from '../types.js'
 
@@ -203,28 +203,7 @@ const BROWSE_OUTPUT_SCHEMA = {
 
 type BrowseOutput = InferValue<typeof BROWSE_OUTPUT_SCHEMA>
 
-export { assertIntInRange }
-
-export function parseLibrary(value: unknown): SupportedLocalLibrary | undefined {
-  if (value === undefined || value === null) return undefined
-  const rec = value as Record<string, unknown>
-  const type = rec.type
-  const id = rec.id
-  if (type !== 'user' && type !== 'group')
-    throw new ZoteroError('library.type must be user or group', ZOTERO_INVALID_ARGUMENT)
-  if (!Number.isInteger(id))
-    throw new ZoteroError('library.id must be integer', ZOTERO_INVALID_ARGUMENT)
-  if (type === 'user' && id !== 0)
-    throw new ZoteroError('Only user/0 is supported for personal library', ZOTERO_INVALID_ARGUMENT)
-  if (type === 'group' && (id as number) <= 0)
-    throw new ZoteroError('group id must be positive integer', ZOTERO_INVALID_ARGUMENT)
-  return { type: type as SupportedLocalLibrary['type'], id: id as number } as SupportedLocalLibrary
-}
-
-export function buildRequest(
-  args: BrowseArgs,
-  config: { maxBrowseResults: number },
-): ZoteroBrowseRequest {
+function buildRequest(args: BrowseArgs, config: { maxBrowseResults: number }): ZoteroBrowseRequest {
   const kind = args.kind as ZoteroBrowseKind
   if (!BROWSE_KINDS.includes(kind))
     throw new ZoteroError(`Unsupported browse kind ${kind}`, ZOTERO_INVALID_ARGUMENT)

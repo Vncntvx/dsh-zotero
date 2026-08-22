@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ZOTERO_NOT_FOUND, ZOTERO_SCOPE_AMBIGUOUS } from '../../src/errors.js'
 import {
   buildSearchParams,
+  encodeExcludeTag,
   encodeLiteralTag,
   type LocalApiLimits,
   type LocalApiProvider,
@@ -92,6 +93,18 @@ describe('buildSearchParams', () => {
     const params = buildSearchParams(request({ itemTypes: [] }))
     expect(params.has('itemType')).toBe(false)
   })
+
+  it('serializes excludeTags as - + escaped literal', () => {
+    const params = buildSearchParams(request({ excludeTags: ['-foo', 'bar'] }))
+    expect(params.getAll('tag')).toEqual(['-\\-foo', '-bar'])
+  })
+
+  it('serializes tagMatch any as one OR list and all as repeated tags', () => {
+    const any = buildSearchParams(request({ tags: ['a', 'b'], tagMatch: 'any' }))
+    expect(any.get('tag')).toBe('a || b')
+    const all = buildSearchParams(request({ tags: ['a', 'b'], tagMatch: 'all' }))
+    expect(all.getAll('tag')).toEqual(['a', 'b'])
+  })
 })
 
 describe('encodeLiteralTag', () => {
@@ -99,6 +112,15 @@ describe('encodeLiteralTag', () => {
     expect(encodeLiteralTag('-draft')).toBe('\\-draft')
     expect(encodeLiteralTag('reviewed')).toBe('reviewed')
     expect(encodeLiteralTag('deep learning')).toBe('deep learning')
+  })
+})
+
+describe('encodeExcludeTag', () => {
+  it('prefixes the NOT dash onto the escaped literal', () => {
+    expect(encodeExcludeTag('foo')).toBe('-foo')
+    // A literal "-foo" becomes NOT literal "-foo": the inner escape survives.
+    expect(encodeExcludeTag('-foo')).toBe('-\\-foo')
+    expect(encodeExcludeTag('--foo')).toBe('-\\--foo')
   })
 })
 
@@ -405,6 +427,28 @@ describe('search failures', () => {
       'Library mismatch',
     )
     expect(mock.requests).toEqual([])
+  })
+
+  it('infers the group library from the scope ref when library is omitted', async () => {
+    mock.route('GET', '/api/groups/42/collections/COLL1234', (req, res, helpers) =>
+      helpers.json(
+        { key: 'COLL1234', data: { key: 'COLL1234', name: 'GCol' } },
+        { 'Zotero-Server-ID': 'S1' },
+      ),
+    )
+    mock.route('GET', '/api/groups/42/collections/COLL1234/items/top', (req, res, helpers) =>
+      helpers.json([], { 'Total-Results': '0' }),
+    )
+    const result = await provider.search(
+      request({
+        scope: { kind: 'collection', refOrName: 'zotero://group/42/collection/COLL1234' },
+      }),
+    )
+    expect(result.scope).toEqual({
+      kind: 'collection',
+      ref: 'zotero://group/42/collection/COLL1234?server=S1',
+      name: 'GCol',
+    })
   })
 })
 

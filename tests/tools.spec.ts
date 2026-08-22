@@ -15,6 +15,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import ZoteroService from '../src/index.js'
 import { ZOTERO_NOT_RUNNING } from '../src/errors.js'
 import { renderChanges } from '../src/tools/changes.js'
+import { renderBrowse } from '../src/tools/browse.js'
+import { parseLibrary } from '../src/tools/validate.js'
 import { renderChildren } from '../src/tools/children.js'
 import { renderGet } from '../src/tools/get.js'
 import { renderRetrieve } from '../src/tools/retrieve.js'
@@ -284,7 +286,7 @@ describe('zotero_search tool', () => {
     expect(negativeOffset.isError).toBe(true)
     if (!negativeOffset.isError) throw new Error('unreachable')
     expect((negativeOffset.content[0] as { text: string }).text).toContain(
-      'offset must be a non-negative integer',
+      'offset must be an integer between 0 and 1000000',
     )
 
     const blankTag = await runTool('zotero_search', { tags: ['   '] })
@@ -1471,6 +1473,143 @@ describe('zotero_changes tool', () => {
     expect(text).not.toContain('KEY0024')
     expect(text).toContain('Deleted items: 22')
     expect(text).toContain('… 2 more')
+  })
+})
+
+describe('zotero_browse validation', () => {
+  it('rejects malformed libraries, ranges, and kinds through execute', async () => {
+    const cases = [
+      { args: { kind: 'libraries', library: { type: 'bad', id: 0 } }, contains: 'library.type' },
+      { args: { kind: 'tags', library: { type: 'user', id: 'x' } }, contains: 'library.id' },
+      { args: { kind: 'tags', library: { type: 'user', id: 1 } }, contains: 'Only user/0' },
+      {
+        args: { kind: 'tags', library: { type: 'group', id: 0 } },
+        contains: 'group id must be positive',
+      },
+      { args: { kind: 'tags', offset: -1 }, contains: 'offset' },
+      { args: { kind: 'tags', limit: 9999 }, contains: 'limit' },
+      { args: { kind: 'unsupported' }, contains: 'kind' },
+      // match is only meaningful alongside q
+      { args: { kind: 'tags', match: 'contains' }, contains: 'match requires q' },
+      // the global kinds refuse a library parameter
+      {
+        args: { kind: 'libraries', library: { type: 'group', id: 1 } },
+        contains: 'library is not allowed',
+      },
+    ]
+    for (const c of cases) {
+      const result = await runTool('zotero_browse', c.args)
+      expect(result.isError).toBe(true)
+      if (!result.isError) throw new Error('unreachable')
+      expect((result.content[0] as { text: string }).text).toContain(c.contains)
+    }
+  })
+})
+
+describe('parseLibrary', () => {
+  it('returns undefined for an absent library', () => {
+    expect(parseLibrary(undefined)).toBeUndefined()
+    expect(parseLibrary(null)).toBeUndefined()
+  })
+
+  it('fails closed on malformed shapes with model-facing messages', () => {
+    expect(() => parseLibrary({ type: 'shelves', id: 1 })).toThrow(
+      'library.type must be user or group',
+    )
+    expect(() => parseLibrary({ type: 'user', id: 0.5 })).toThrow('library.id must be integer')
+    expect(() => parseLibrary({ type: 'user', id: 123 })).toThrow('Only user/0')
+    expect(() => parseLibrary({ type: 'group', id: 0 })).toThrow(
+      'group id must be positive integer',
+    )
+    expect(() => parseLibrary({ type: 'user', id: -3 })).toThrow('Only user/0')
+  })
+
+  it('accepts user/0 and positive groups', () => {
+    expect(parseLibrary({ type: 'user', id: 0 })).toEqual({ type: 'user', id: 0 })
+    expect(parseLibrary({ type: 'group', id: 42 })).toEqual({ type: 'group', id: 42 })
+  })
+})
+
+describe('zotero_search validation', () => {
+  it('rejects domain-invalid tag filters and libraries through execute', async () => {
+    // Shapes the parameter schema already rejects (unknown library type,
+    // non-integer ids, invalid tagMatch enums) never reach these handlers;
+    // these cases cover the domain constraints beyond the schema.
+    const cases = [
+      {
+        args: { includeTrashed: true, scope: { kind: 'collection', refOrName: 'x' } },
+        contains: 'includeTrashed is only allowed with library scope',
+      },
+      { args: { library: { type: 'user', id: 1 } }, contains: 'Only user/0' },
+      { args: { library: { type: 'group', id: 0 } }, contains: 'group id must be positive' },
+    ]
+    for (const c of cases) {
+      const result = await runTool('zotero_search', c.args)
+      expect(result.isError).toBe(true)
+      if (!result.isError) throw new Error('unreachable')
+      expect((result.content[0] as { text: string }).text).toContain(c.contains)
+    }
+  })
+})
+
+describe('zotero_browse render', () => {
+  it('renders tag rows and skips unknown row shapes without leaking undefined', () => {
+    const out = renderBrowse({ kind: 'tags', offset: 0, limit: 10 }, {
+      kind: 'tags',
+      total: 2,
+      returned: 2,
+      offset: 0,
+      items: [{ tag: 'a' }, { itemType: 'book' }],
+    } as never)
+    expect((out[0] as { text: string }).text).toContain('a')
+  })
+
+  it('falls back to ref-only lines for rows missing names or refs', () => {
+    const out = renderBrowse({ kind: 'libraries', offset: 0, limit: 10 }, {
+      kind: 'libraries',
+      total: 3,
+      returned: 3,
+      offset: 0,
+      items: [
+        { library: { type: 'group', id: 9 } },
+        { path: ['Root'] },
+        { conditions: [{ condition: 'unread' }] },
+      ],
+    } as never)
+    const text = (out[0] as { text: string }).text
+    expect(text).toContain('group/9 — group/9')
+    expect(text).toContain('Root')
+    expect(text).not.toContain('undefined')
+  })
+
+  it('renders itemFields rows with and without localized labels', () => {
+    const out = renderBrowse({ kind: 'itemFields', offset: 0, limit: 10 }, {
+      kind: 'itemFields',
+      total: 3,
+      returned: 3,
+      offset: 0,
+      items: [
+        { field: 'repository', localized: 'Repository' },
+        { field: 'archive' },
+        { creatorType: 'author' },
+      ],
+    } as never)
+    const text = (out[0] as { text: string }).text
+    expect(text).toContain('field repository (Repository)')
+    expect(text).toContain('field archive')
+    expect(text).toContain('creatorType author')
+  })
+
+  it('points at browse again when a next page exists', () => {
+    const out = renderBrowse({ kind: 'tags', offset: 0, limit: 10 }, {
+      kind: 'tags',
+      total: 10,
+      returned: 2,
+      offset: 0,
+      nextOffset: 2,
+      items: [{ tag: 'a' }],
+    } as never)
+    expect((out[0] as { text: string }).text).toContain('More: browse again')
   })
 })
 

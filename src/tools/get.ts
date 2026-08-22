@@ -12,7 +12,7 @@ import { defineTool, type InferArgs, type InferValue } from '@deepseek-ai/dsh-to
 import { withConnectivityAsk } from '../ask.js'
 import { boundedPresentationMeta, projectGetMeta } from '../presentation-meta.js'
 import { formatSearchLine } from './present.js'
-import { parseRef, requireSupportedLocalRef } from '../refs.js'
+import { parseSupportedRef } from './validate.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroGetRequest, ZoteroInclude } from '../types.js'
 
@@ -166,8 +166,7 @@ const GET_OUTPUT_SCHEMA = {
 type GetOutput = InferValue<typeof GET_OUTPUT_SCHEMA>
 
 function buildRequest(args: GetArgs): ZoteroGetRequest {
-  const ref = parseRef(args.ref)
-  requireSupportedLocalRef(ref, ['item'])
+  const ref = parseSupportedRef(args.ref, ['item'])
   return {
     ref,
     include: new Set<ZoteroInclude>(args.include ?? []),

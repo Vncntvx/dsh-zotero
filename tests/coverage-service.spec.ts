@@ -35,36 +35,58 @@ describe('service browse and search new filters', () => {
   it('zotero_browse validates offset/limit and match requires q', async () => {
     const bad1 = await runTool('zotero_browse', { kind: 'tags', offset: -1 })
     expect(bad1.isError).toBe(true)
+    if (!bad1.isError) throw new Error('unreachable')
+    expect((bad1.content[0] as { text: string }).text).toContain('offset must be an integer')
     const bad2 = await runTool('zotero_browse', { kind: 'collections', limit: 1000 })
     expect(bad2.isError).toBe(true)
+    if (!bad2.isError) throw new Error('unreachable')
+    expect((bad2.content[0] as { text: string }).text).toContain('limit must be an integer')
     const bad3 = await runTool('zotero_browse', {
       kind: 'tags',
       match: 'contains',
     } as unknown as Record<string, unknown>)
     expect(bad3.isError).toBe(true)
+    if (!bad3.isError) throw new Error('unreachable')
+    expect((bad3.content[0] as { text: string }).text).toContain('match requires q')
     const bad4 = await runTool('zotero_browse', {
       kind: 'tags',
       library: { type: 'user', id: 123 } as unknown as Record<string, unknown>,
     } as unknown as Record<string, unknown>)
     expect(bad4.isError).toBe(true)
+    if (!bad4.isError) throw new Error('unreachable')
+    expect((bad4.content[0] as { text: string }).text).toContain('Only user/0')
   })
 
   it('zotero_search validates new filters', async () => {
     const badTags = await runTool('zotero_search', { tags: ['a||b'] })
     expect(badTags.isError).toBe(true)
+    if (!badTags.isError) throw new Error('unreachable')
+    expect((badTags.content[0] as { text: string }).text).toContain('tags are literal tag names')
     const badExclude = await runTool('zotero_search', { excludeTags: ['a||b'] })
     expect(badExclude.isError).toBe(true)
+    if (!badExclude.isError) throw new Error('unreachable')
+    expect((badExclude.content[0] as { text: string }).text).toContain(
+      'excludeTags are literal tag names',
+    )
     const badTagMatch = await runTool('zotero_search', { tagMatch: 'invalid' as never })
     expect(badTagMatch.isError).toBe(true)
+    if (!badTagMatch.isError) throw new Error('unreachable')
+    expect((badTagMatch.content[0] as { text: string }).text).toContain('tagMatch')
     const badTrashed = await runTool('zotero_search', {
       includeTrashed: true,
       scope: { kind: 'collection', refOrName: 'X' },
     })
     expect(badTrashed.isError).toBe(true)
+    if (!badTrashed.isError) throw new Error('unreachable')
+    expect((badTrashed.content[0] as { text: string }).text).toContain(
+      'includeTrashed is only allowed with library scope',
+    )
     const badLib = await runTool('zotero_search', {
       library: { type: 'user', id: 123 } as unknown as Record<string, unknown>,
     })
     expect(badLib.isError).toBe(true)
+    if (!badLib.isError) throw new Error('unreachable')
+    expect((badLib.content[0] as { text: string }).text).toContain('Only user/0')
   })
 
   it('search with library and tag filters maps correctly', async () => {

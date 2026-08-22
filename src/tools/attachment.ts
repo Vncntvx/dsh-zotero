@@ -10,7 +10,7 @@ import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { defineTool, type InferArgs, type InferValue } from '@deepseek-ai/dsh-tools'
 import { withConnectivityAsk } from '../ask.js'
 import { boundedPresentationMeta, projectAttachmentMeta } from '../presentation-meta.js'
-import { parseRef, requireSupportedLocalRef } from '../refs.js'
+import { parseSupportedRef } from './validate.js'
 import type { ZoteroService } from '../service.js'
 
 const ATTACHMENT_PARAMETERS = {
@@ -82,8 +82,7 @@ export function registerAttachmentTool(ctx: Context, service: ZoteroService): vo
       }),
       isConcurrencySafe: () => true,
       async execute(args, exec) {
-        const ref = parseRef(args.ref)
-        requireSupportedLocalRef(ref, ['item', 'attachment'])
+        const ref = parseSupportedRef(args.ref, ['item', 'attachment'])
         return await withConnectivityAsk(ctx, exec, () => service.attachment(ref, exec.signal))
       },
     }),

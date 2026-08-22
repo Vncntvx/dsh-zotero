@@ -13,10 +13,9 @@ import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { defineTool, type InferArgs, type InferValue } from '@deepseek-ai/dsh-tools'
 import { withConnectivityAsk } from '../ask.js'
 import { boundedPresentationMeta } from '../presentation-meta.js'
-import { assertIntInRange } from './validate.js'
-import type { ZoteroService } from '../service.js'
+import { assertIntInRange, parseLibrary } from './validate.js'
 import type { ZoteroChangesInclude, ZoteroChangesRequest, SupportedLocalLibrary } from '../types.js'
-import { parseLibrary } from './browse.js'
+import type { ZoteroService } from '../service.js'
 
 const ALL_INCLUDES: ZoteroChangesInclude[] = [
   'items',

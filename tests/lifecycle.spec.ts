@@ -506,4 +506,49 @@ describe('capability gating', () => {
     expect((thrown as ZoteroError).code).toBe(ZOTERO_CAPABILITY_UNAVAILABLE)
     expect((thrown as ZoteroError).message).toContain('children not supported')
   })
+
+  it.each([
+    [
+      'browse',
+      (service: ZoteroService) => service.browse({ kind: 'libraries', offset: 0, limit: 5 }),
+    ],
+    [
+      'changes',
+      (service: ZoteroService) => service.changes({ library: { type: 'user', id: 0 }, since: 1 }),
+    ],
+  ])('refuses %s on a provider without the optional method', async (_name, attempt) => {
+    const ctx = new Context()
+    await ctx.plugin(SystemPrompt, {})
+    await ctx.plugin(ToolRuntime, {})
+    await ctx.plugin(ZoteroService, { baseUrl: mock.baseUrl, provider: 'legacy' })
+    const service = ctx.get('zotero') as ZoteroService
+    service.registerProvider({
+      id: 'legacy',
+      capabilities: new Set(['browse', 'changes']),
+      status: async () => ({ providerId: 'legacy', connected: true, diagnosis: 'ok' }),
+      search: async () => {
+        throw new Error('test double: must not be called')
+      },
+      getItem: async () => {
+        throw new Error('test double: must not be called')
+      },
+      getAttachmentLocation: async () => {
+        throw new Error('test double: must not be called')
+      },
+      retrieve: async () => {
+        throw new Error('test double: must not be called')
+      },
+      export: async () => {
+        throw new Error('test double: must not be called')
+      },
+    })
+    let thrown: unknown
+    try {
+      await attempt(service)
+    } catch (error) {
+      thrown = error
+    }
+    expect(thrown).toBeInstanceOf(ZoteroError)
+    expect((thrown as ZoteroError).code).toBe(ZOTERO_CAPABILITY_UNAVAILABLE)
+  })
 })

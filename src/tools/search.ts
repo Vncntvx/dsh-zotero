@@ -29,7 +29,7 @@ import type { ResolvedConfig } from '../config.js'
 import { withConnectivityAsk } from '../ask.js'
 import { boundedPresentationMeta, projectSearchMeta } from '../presentation-meta.js'
 import { formatSearchLine } from './present.js'
-import { assertIntInRange, invalid } from './validate.js'
+import { assertIntInRange, invalid, parseLibrary } from './validate.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroSearchRequest } from '../types.js'
 
@@ -244,12 +244,11 @@ const SEARCH_OUTPUT_SCHEMA = {
 
 type SearchOutput = InferValue<typeof SEARCH_OUTPUT_SCHEMA>
 
-export function buildRequest(args: SearchArgs, config: ResolvedConfig): ZoteroSearchRequest {
+function buildRequest(args: SearchArgs, config: ResolvedConfig): ZoteroSearchRequest {
   const limit = args.limit ?? SEARCH_DEFAULT_LIMIT
   assertIntInRange('limit', limit, 1, config.maxSearchResults)
   const offset = args.offset ?? SEARCH_DEFAULT_OFFSET
-  if (!Number.isInteger(offset) || offset < 0)
-    invalid(`offset must be a non-negative integer; got ${offset}`)
+  assertIntInRange('offset', offset, 0, 1_000_000)
   const query = args.query?.trim()
   const scope = args.scope ?? SEARCH_DEFAULT_SCOPE
   if (scope.kind !== 'library' && scope.kind !== 'publications' && scope.refOrName.trim() === '') {
@@ -267,9 +266,9 @@ export function buildRequest(args: SearchArgs, config: ResolvedConfig): ZoteroSe
       invalid(`excludeTags are literal tag names; got "${tag}"`)
     }
   }
+  // tagMatch's all|any enum is enforced by the parameter schema; the
+  // cross-field rule below is what the schema cannot express.
   const tagMatch = (args as Record<string, unknown>).tagMatch as 'all' | 'any' | undefined
-  if (tagMatch !== undefined && tagMatch !== 'all' && tagMatch !== 'any')
-    invalid(`tagMatch must be all or any; got ${tagMatch}`)
   if (tagMatch !== undefined && (args.tags === undefined || args.tags.length === 0))
     invalid('tagMatch requires tags; it has no effect without a tag filter')
   const includeTrashed = (args as Record<string, unknown>).includeTrashed as boolean | undefined
@@ -281,21 +280,7 @@ export function buildRequest(args: SearchArgs, config: ResolvedConfig): ZoteroSe
       invalid(`itemTypes are positive Zotero item type names joined with OR; got "${itemType}"`)
     }
   }
-  const libRaw = (args as Record<string, unknown>).library as
-    { type: string; id: number } | undefined
-  let library: import('../types.js').SupportedLocalLibrary | undefined
-  if (libRaw !== undefined) {
-    if (libRaw.type !== 'user' && libRaw.type !== 'group')
-      invalid('library.type must be user or group')
-    if (!Number.isInteger(libRaw.id)) invalid('library.id must be integer')
-    if (libRaw.type === 'user' && libRaw.id !== 0)
-      invalid('Only user/0 is supported for personal library')
-    if (libRaw.type === 'group' && libRaw.id <= 0) invalid('group id must be positive')
-    library = {
-      type: libRaw.type as 'user' | 'group',
-      id: libRaw.id,
-    } as import('../types.js').SupportedLocalLibrary
-  }
+  const library = parseLibrary((args as Record<string, unknown>).library)
   return {
     query: query === '' ? undefined : query,
     mode: args.mode ?? SEARCH_DEFAULT_MODE,

@@ -108,6 +108,42 @@ const RETRIEVE_META = {
 }
 
 describe('buildSourceWorkspace', () => {
+  it('falls back to the args-derived library when the meta resolves none', () => {
+    // Without a resolved library in the meta, the episode's library comes
+    // from the args parse: an unparseable shape degrades to the default
+    // personal-library episode scope and omits the field; a well-formed
+    // group id survives verbatim.
+    const invalid = buildSourceWorkspace([
+      block(
+        's1',
+        1,
+        'zotero_search',
+        { query: 'attention', library: { type: 'invalid', id: 'x' } },
+        { meta: searchMetaOf([{ ref: REF('A1') }]) },
+      ),
+    ])
+    expect(invalid.sources).toHaveLength(1)
+    const invalidProvenance = invalid.sources[0]?.searches[0] as unknown as Record<string, unknown>
+    expect(invalidProvenance.scope).toEqual({
+      kind: 'library',
+      library: { type: 'user', id: 0 },
+    })
+    expect(invalidProvenance).not.toHaveProperty('library')
+
+    const group = buildSourceWorkspace([
+      block(
+        's2',
+        1,
+        'zotero_search',
+        { query: 'attention', library: { type: 'group', id: 5 } },
+        { meta: searchMetaOf([{ ref: REF('B1') }]) },
+      ),
+    ])
+    expect(group.sources).toHaveLength(1)
+    const groupProvenance = group.sources[0]?.searches[0] as unknown as Record<string, unknown>
+    expect(groupProvenance.library).toEqual({ type: 'group', id: 5 })
+  })
+
   it('unions search rows with directly referenced items without shrinking', () => {
     const workspace = buildSourceWorkspace([
       block(

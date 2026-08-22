@@ -6,6 +6,8 @@
  */
 
 import { ZOTERO_INVALID_ARGUMENT, ZoteroError } from '../errors.js'
+import { parseRef, requireSupportedLocalRef } from '../refs.js'
+import type { ZoteroKind, ZoteroObjectRef, SupportedLocalLibrary } from '../types.js'
 
 /** Throw an argument error; the message is model-facing. */
 export function invalid(message: string): never {
@@ -23,4 +25,37 @@ export function assertIntInRange(name: string, value: number, min: number, max: 
   if (!Number.isInteger(value) || value < min || value > max) {
     invalid(`${name} must be an integer between ${min} and ${max}; got ${value}`)
   }
+}
+
+/**
+ * Parse a model-provided ref string and gate it on the supported local
+ * libraries plus the allowed object kinds — the shared entry every tool
+ * uses to turn a `zotero://` argument into a domain ref.
+ * @param value - the raw ref string argument.
+ * @param kinds - allowed kinds; omit to accept any parsed kind.
+ * @throws {ZoteroError} `ZOTERO_INVALID_REF` outside the grammar or contract.
+ */
+export function parseSupportedRef(value: string, kinds?: readonly ZoteroKind[]): ZoteroObjectRef {
+  return requireSupportedLocalRef(parseRef(value), kinds)
+}
+
+/**
+ * Parse the optional `library` tool argument. Absent stays absent; a
+ * malformed shape fails closed instead of silently defaulting.
+ * @throws {ZoteroError} `ZOTERO_INVALID_ARGUMENT` on a non-local library shape.
+ */
+export function parseLibrary(value: unknown): SupportedLocalLibrary | undefined {
+  if (value === undefined || value === null) return undefined
+  const rec = value as Record<string, unknown>
+  const type = rec.type
+  const id = rec.id
+  if (type !== 'user' && type !== 'group')
+    throw new ZoteroError('library.type must be user or group', ZOTERO_INVALID_ARGUMENT)
+  if (!Number.isInteger(id))
+    throw new ZoteroError('library.id must be integer', ZOTERO_INVALID_ARGUMENT)
+  if (type === 'user' && id !== 0)
+    throw new ZoteroError('Only user/0 is supported for personal library', ZOTERO_INVALID_ARGUMENT)
+  if (type === 'group' && (id as number) <= 0)
+    throw new ZoteroError('group id must be positive integer', ZOTERO_INVALID_ARGUMENT)
+  return { type: type as SupportedLocalLibrary['type'], id: id as number } as SupportedLocalLibrary
 }

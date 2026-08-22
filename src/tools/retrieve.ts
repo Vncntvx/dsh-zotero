@@ -14,10 +14,9 @@ import { defineTool, type InferArgs, type InferValue } from '@deepseek-ai/dsh-to
 import type { ResolvedConfig } from '../config.js'
 import { withConnectivityAsk } from '../ask.js'
 import { boundedPresentationMeta, projectRetrieveMeta } from '../presentation-meta.js'
-import { assertIntInRange, invalid } from './validate.js'
-import { parseRef, requireSupportedLocalRef } from '../refs.js'
+import { assertIntInRange, invalid, parseSupportedRef } from './validate.js'
 import type { ZoteroService } from '../service.js'
-import type { ZoteroEvidenceSource, ZoteroRetrieveRequest } from '../types.js'
+import type { ZoteroEvidenceSource, ZoteroObjectRef, ZoteroRetrieveRequest } from '../types.js'
 
 const ALL_SOURCES: ZoteroEvidenceSource[] = ['annotation', 'note', 'abstract', 'fulltext']
 
@@ -116,16 +115,15 @@ function buildRequest(args: RetrieveArgs, config: ResolvedConfig): ZoteroRetriev
   assertIntInRange('passages', passages, 1, config.maxEvidencePassages)
   const sources = args.sources ?? ALL_SOURCES
   if (sources.length === 0) invalid('sources must list at least one evidence source')
-  const ref = parseRef(args.ref)
-  requireSupportedLocalRef(ref, ['item'])
+  const ref = parseSupportedRef(args.ref, ['item'])
   const policy = args.attachmentPolicy ?? 'best'
-  let attachmentRefs: ReturnType<typeof parseRef>[] | undefined
+  let attachmentRefs: ZoteroObjectRef[] | undefined
   if (args.attachmentPolicy === 'specified') {
     const raw = args.attachmentRefs ?? []
     if (raw.length === 0) {
       invalid('attachmentPolicy "specified" requires at least one attachmentRef')
     }
-    attachmentRefs = raw.map((value) => requireSupportedLocalRef(parseRef(value), ['attachment']))
+    attachmentRefs = raw.map((value) => parseSupportedRef(value, ['attachment']))
     for (const attachmentRef of attachmentRefs) {
       if (
         attachmentRef.library.type !== ref.library.type ||

@@ -15,8 +15,7 @@ import { defineTool, type InferArgs, type InferValue } from '@deepseek-ai/dsh-to
 import type { ResolvedConfig } from '../config.js'
 import { withConnectivityAsk } from '../ask.js'
 import { boundedPresentationMeta, projectExportMeta } from '../presentation-meta.js'
-import { invalid } from './validate.js'
-import { parseRef, requireSupportedLocalRef } from '../refs.js'
+import { invalid, parseSupportedRef } from './validate.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroExportFormat, ZoteroExportRequest } from '../types.js'
 
@@ -123,8 +122,7 @@ function buildRequest(args: ExportArgs, config: ResolvedConfig): ZoteroExportReq
     )
   }
   const refs = args.refs.map((value) => {
-    const ref = parseRef(value)
-    requireSupportedLocalRef(ref, ['item'])
+    const ref = parseSupportedRef(value, ['item'])
     return ref
   })
   const style = args.style?.trim()

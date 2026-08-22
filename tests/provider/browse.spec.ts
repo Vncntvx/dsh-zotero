@@ -66,6 +66,29 @@ describe('browse: validation', () => {
       'non-empty string',
     )
   })
+
+  it('rejects the library parameter for the global kinds', async () => {
+    await zoteroError(
+      provider.browse({
+        kind: 'libraries',
+        offset: 0,
+        limit: 5,
+        library: { type: 'group', id: 1 },
+      }),
+      ZOTERO_INVALID_ARGUMENT,
+      'library is not allowed',
+    )
+    await zoteroError(
+      provider.browse({
+        kind: 'itemTypes',
+        offset: 0,
+        limit: 5,
+        library: { type: 'user', id: 0 },
+      }),
+      ZOTERO_INVALID_ARGUMENT,
+      'library is not allowed',
+    )
+  })
 })
 
 describe('browse: libraries', () => {
@@ -91,6 +114,10 @@ describe('browse: libraries', () => {
     )
     const result = await provider.browse({ kind: 'libraries', offset: 0, limit: 10 })
     expect(result.total).toBe(1)
+  })
+  it('propagates a groups listing failure instead of degrading silently', async () => {
+    mock.route('GET', '/api/users/0/groups', (req, res, helpers) => helpers.raw(500, {}, 'err'))
+    await expect(provider.browse({ kind: 'libraries', offset: 0, limit: 5 })).rejects.toThrow()
   })
   it('paginates libraries', async () => {
     mock.route('GET', '/api/users/0/groups', (req, res, helpers) =>
@@ -496,7 +523,7 @@ describe('browse: tags', () => {
     })
     expect(starts.total).toBe(2)
   })
-  it('paginates tags', async () => {
+  it('paginates tags with exactly one request per page', async () => {
     const tags = Array.from({ length: 5 }, (_, i) => ({ tag: `t${i}` }))
     mock.route('GET', '/api/users/0/tags', (req, res, helpers, search) => {
       const start = Number(search.get('start') ?? '0')
@@ -508,6 +535,10 @@ describe('browse: tags', () => {
     expect(r.returned).toBe(2)
     expect(r.total).toBe(5)
     expect(r.nextOffset).toBe(4)
+    // Each page is one server-paged request — never a whole-listing scan.
+    expect(mock.requests.filter((req) => req.pathname === '/api/users/0/tags')).toHaveLength(1)
+    await provider.browse({ kind: 'tags', offset: 4, limit: 2 })
+    expect(mock.requests.filter((req) => req.pathname === '/api/users/0/tags')).toHaveLength(2)
   })
   it('fails closed when Total-Results header is missing', async () => {
     mock.route('GET', '/api/users/0/tags', (req, res, helpers) => helpers.json([{ tag: 'a' }]))

@@ -883,6 +883,75 @@ describe('normalizeItemDetail', () => {
   })
 })
 
+describe('normalizeItemDetail relations', () => {
+  function detailWithLibrary(parentLibrary: Record<string, unknown>): {
+    targetRef: string | undefined
+  } {
+    const detail = normalizeItemDetail({
+      parent: {
+        key: 'ABCD1234',
+        ...parentLibrary,
+        data: {
+          itemType: 'journalArticle',
+          title: 'T',
+          relations: { 'dc:relation': ['http://zotero.org/users/123/items/BBBB1234'] },
+        },
+      },
+      library: { type: 'user', id: 0 },
+      include: new Set(),
+      maxAbstractChars: 100,
+      maxNoteBodyChars: 100,
+      maxNoteChars: 100,
+      maxNoteRecords: 10,
+      maxAnnotationRecords: 10,
+    })
+    return { targetRef: detail.relations?.[0]?.targetRef }
+  }
+
+  it('canonicalizes a personal relation when the parent library proves the id', () => {
+    // Every spelling Zotero has used for the parent's library id counts as
+    // proof: nested id, libraryID/libraryId in either casing or as a string,
+    // and the top-level record fields.
+    for (const parentLibrary of [
+      { library: { type: 'user', id: 123 } },
+      { library: { libraryID: 123 } },
+      { library: { libraryId: 123 } },
+      { library: { id: '123' } },
+      { library: { libraryID: '123' } },
+      { libraryID: 123 },
+      { libraryId: 123 },
+    ]) {
+      expect(detailWithLibrary(parentLibrary).targetRef).toBe('zotero://user/0/item/BBBB1234')
+    }
+  })
+
+  it('keeps the raw URI when no parent library fact proves the id', () => {
+    expect(detailWithLibrary({ library: { type: 'user', id: 999 } }).targetRef).toBeUndefined()
+    expect(detailWithLibrary({}).targetRef).toBeUndefined()
+  })
+
+  it('drops a non-string relation value instead of guessing a target', () => {
+    const detail = normalizeItemDetail({
+      parent: {
+        key: 'ABCD1234',
+        data: {
+          itemType: 'book',
+          title: 'T',
+          relations: { 'dc:relation': 42 as unknown as string },
+        },
+      },
+      library: { type: 'user', id: 0 },
+      include: new Set(),
+      maxAbstractChars: 100,
+      maxNoteBodyChars: 100,
+      maxNoteChars: 100,
+      maxNoteRecords: 10,
+      maxAnnotationRecords: 10,
+    })
+    expect(detail.relations).toBeUndefined()
+  })
+})
+
 describe('annotation and note failure modes', () => {
   it('fails loud on an annotation without a valid key', () => {
     const error = expectUnexpected(() =>

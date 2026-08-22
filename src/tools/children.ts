@@ -13,7 +13,7 @@ import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { defineTool, type InferArgs, type InferValue } from '@deepseek-ai/dsh-tools'
 import { withConnectivityAsk } from '../ask.js'
 import { boundedPresentationMeta } from '../presentation-meta.js'
-import { parseRef, requireSupportedLocalRef } from '../refs.js'
+import { parseSupportedRef } from './validate.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroChildrenInclude, ZoteroChildrenRequest } from '../types.js'
 
@@ -116,8 +116,7 @@ const CHILDREN_OUTPUT_SCHEMA = {
 type ChildrenOutput = InferValue<typeof CHILDREN_OUTPUT_SCHEMA>
 
 function buildRequest(args: ChildrenArgs): ZoteroChildrenRequest {
-  const ref = parseRef(args.ref)
-  requireSupportedLocalRef(ref, ['item', 'attachment'])
+  const ref = parseSupportedRef(args.ref, ['item', 'attachment'])
   const include = new Set<ZoteroChildrenInclude>(
     (args.include as ZoteroChildrenInclude[] | undefined) ?? [
       'notes',
