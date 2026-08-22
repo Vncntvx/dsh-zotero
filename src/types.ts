@@ -13,6 +13,8 @@
  * @module dsh-zotero/types
  */
 
+import type { JsonValue } from '@deepseek-ai/dsh-tools'
+
 /** A capability a provider may safely support. */
 export type ZoteroCapability =
   | 'search'
@@ -28,13 +30,12 @@ export type ZoteroCapability =
 
 /** The library a Zotero object lives in. The Local API serves the logged-in user's library. */
 export interface ZoteroLibraryRef {
-  readonly type: 'user' | 'group'
-  readonly id: number
+  type: 'user' | 'group'
+  id: number
 }
 
 /** The local libraries this plugin contract supports: canonical personal + any group. */
-export type SupportedLocalLibrary =
-  { readonly type: 'user'; readonly id: 0 } | { readonly type: 'group'; readonly id: number }
+export type SupportedLocalLibrary = { type: 'user'; id: 0 } | { type: 'group'; id: number }
 
 /** The object kinds the reference grammar distinguishes. */
 export type ZoteroKind = 'item' | 'attachment' | 'annotation' | 'collection' | 'search'
@@ -45,28 +46,28 @@ export type ZoteroKind = 'item' | 'attachment' | 'annotation' | 'collection' | '
  * different instance must fail closed instead of resolving same-key objects.
  */
 export interface ZoteroObjectRef {
-  readonly library: ZoteroLibraryRef
-  readonly kind: ZoteroKind
-  readonly key: string
-  readonly serverId?: string
+  library: ZoteroLibraryRef
+  kind: ZoteroKind
+  key: string
+  serverId?: string
 }
 
 /** Live connectivity facts for one provider, rendered by `/zotero status`. */
 export interface ZoteroStatus {
-  readonly providerId: string
-  readonly connected: boolean
-  readonly apiVersion?: string
-  readonly serverId?: string
-  readonly schemaVersion?: string
-  readonly diagnosis: string
+  providerId: string
+  connected: boolean
+  apiVersion?: string
+  serverId?: string
+  schemaVersion?: string
+  diagnosis: string
 }
 
 /** Where `zotero_search` looks for items. */
 export type ZoteroSearchScope =
-  | { readonly kind: 'library' }
-  | { readonly kind: 'publications' }
-  | { readonly kind: 'collection'; readonly refOrName: string }
-  | { readonly kind: 'savedSearch'; readonly refOrName: string }
+  | { kind: 'library' }
+  | { kind: 'publications' }
+  | { kind: 'collection'; refOrName: string }
+  | { kind: 'savedSearch'; refOrName: string }
 
 /**
  * Resolved scope echoed back to the Agent so pagination reuses a stable ref.
@@ -75,10 +76,10 @@ export type ZoteroSearchScope =
  * `SEARCH_DEFAULT_SCOPE` (`{kind:"library"}`) is normalized to `{kind:"library", library:{user:0}}`.
  */
 export type ZoteroResolvedScope =
-  | { readonly kind: 'library'; readonly library: SupportedLocalLibrary }
-  | { readonly kind: 'publications'; readonly library: SupportedLocalLibrary }
-  | { readonly kind: 'collection'; readonly ref: string; readonly name: string }
-  | { readonly kind: 'savedSearch'; readonly ref: string; readonly name: string }
+  | { kind: 'library'; library: SupportedLocalLibrary }
+  | { kind: 'publications'; library: SupportedLocalLibrary }
+  | { kind: 'collection'; ref: string; name: string }
+  | { kind: 'savedSearch'; ref: string; name: string }
 
 /**
  * Sort field names accepted by `zotero_search`. Mirrors the runtime
@@ -92,21 +93,21 @@ export type ZoteroSortDirection = 'asc' | 'desc'
 export type ZoteroSearchMode = 'metadata' | 'everything'
 
 export interface ZoteroSearchRequest {
-  readonly query?: string
-  readonly mode: ZoteroSearchMode
-  readonly scope: ZoteroSearchScope
+  query?: string
+  mode: ZoteroSearchMode
+  scope: ZoteroSearchScope
   /** Library for library-scope or name-resolution; omitted defaults to user/0. */
-  readonly library?: SupportedLocalLibrary
-  readonly itemTypes?: readonly string[]
-  readonly tags?: readonly string[]
+  library?: SupportedLocalLibrary
+  itemTypes?: string[]
+  tags?: string[]
   /** Tag query mode: all=AND (default) any=OR */
-  readonly tagMatch?: 'all' | 'any'
-  readonly excludeTags?: readonly string[]
-  readonly includeTrashed?: boolean
-  readonly sort: ZoteroSortField
-  readonly direction: ZoteroSortDirection
-  readonly offset: number
-  readonly limit: number
+  tagMatch?: 'all' | 'any'
+  excludeTags?: string[]
+  includeTrashed?: boolean
+  sort: ZoteroSortField
+  direction: ZoteroSortDirection
+  offset: number
+  limit: number
 }
 
 /** One compact search hit. `bestAttachment*` come from Zotero's own attachment selection. */
@@ -131,23 +132,23 @@ export interface ZoteroSearchItem {
  * requested sort.
  */
 export interface ZoteroSearchSupplement {
-  readonly kind: 'noteBody'
+  kind: 'noteBody'
   items: ZoteroSearchItem[]
   /** Note rows the scan examined before returning (≤ `maxNoteScanRecords`). */
-  readonly scanned: number
+  scanned: number
   /** True when the scan stopped at `maxNoteScanRecords` before reaching the library's last note. */
-  readonly truncated: boolean
+  truncated: boolean
 }
 
 export interface ZoteroSearchResult {
-  readonly scope: ZoteroResolvedScope
+  scope: ZoteroResolvedScope
   /** Primary API hits only — the collection `total`/`offset`/`returned`/`nextOffset` describe. */
   items: ZoteroSearchItem[]
   /** The paged API total — the count `offset` pagination walks; supplements are not part of it. */
-  readonly total: number
-  readonly offset: number
+  total: number
+  offset: number
   /** Primary hits on this page (`items.length`); supplements never inflate it. */
-  readonly returned: number
+  returned: number
   nextOffset?: number
   /**
    * On the first page of a library/collection-scope query (saved-search
@@ -171,104 +172,104 @@ export type ZoteroChildrenInclude = 'notes' | 'attachments' | 'annotations'
 
 export interface ZoteroChildrenRequest {
   /** An item or attachment ref; annotation refs have no children and fail closed. */
-  readonly ref: ZoteroObjectRef
-  readonly include: ReadonlySet<ZoteroChildrenInclude>
+  ref: ZoteroObjectRef
+  include: ReadonlySet<ZoteroChildrenInclude>
 }
 
 /** The explored child-object graph of one item or attachment. */
 export interface ZoteroChildrenResult {
   /** Echo of the requested object's ref, provenance-qualified with the serving instance. */
-  readonly ref: string
+  ref: string
   /** The requested object's Zotero item type (`attachment` for attachment refs). */
-  readonly itemType?: string
-  readonly notes?: ZoteroChildCollection<ZoteroNoteRecord>
-  readonly annotations?: ZoteroChildCollection<ZoteroAnnotationRecord>
-  readonly attachments?: ZoteroChildCollection<ZoteroAttachmentRecord>
+  itemType?: string
+  notes?: ZoteroChildCollection<ZoteroNoteRecord>
+  annotations?: ZoteroChildCollection<ZoteroAnnotationRecord>
+  attachments?: ZoteroChildCollection<ZoteroAttachmentRecord>
   /** Identity of the Zotero instance that served these records. */
-  readonly serverId?: string
+  serverId?: string
 }
 
 export interface ZoteroGetRequest {
-  readonly ref: ZoteroObjectRef
-  readonly include: ReadonlySet<ZoteroInclude>
+  ref: ZoteroObjectRef
+  include: ReadonlySet<ZoteroInclude>
   /**
    * `standard` (default) returns the normalized model; `all` additionally
    * passes through every `data` field the model does not consume, so
    * dataset/patent/statute-style metadata survives instead of being dropped.
    */
-  readonly fields?: 'standard' | 'all'
+  fields?: 'standard' | 'all'
 }
 
 export interface ZoteroNoteRecord {
-  readonly ref: string
-  readonly text: string
-  readonly truncated: boolean
+  ref: string
+  text: string
+  truncated: boolean
   /** The note's parent item, when Zotero reports one; provenance-qualified like `ref`. */
-  readonly parentRef?: string
+  parentRef?: string
 }
 
 export interface ZoteroAnnotationRecord {
-  readonly ref: string
-  readonly type: string
-  readonly text: string
-  readonly comment?: string
-  readonly color?: string
+  ref: string
+  type: string
+  text: string
+  comment?: string
+  color?: string
   /** Zotero-owned page label; never a plugin-invented locator. */
-  readonly pageLabel?: string
+  pageLabel?: string
   /** The annotation's parent attachment, when Zotero reports one; provenance-qualified like `ref`. */
-  readonly parentRef?: string
+  parentRef?: string
 }
 
 export interface ZoteroAttachmentRecord {
-  readonly ref: string
-  readonly title: string
-  readonly contentType: string
-  readonly linkMode?: string
+  ref: string
+  title: string
+  contentType: string
+  linkMode?: string
 }
 
 export interface ZoteroCollectionRecord {
-  readonly ref: string
-  readonly name?: string
+  ref: string
+  name?: string
 }
 
 /** One included child kind: Zotero's total count plus the bounded records returned. */
 export interface ZoteroChildCollection<T> {
-  readonly total: number
-  readonly returned: number
-  readonly items: T[]
+  total: number
+  returned: number
+  items: T[]
 }
 
 export interface ZoteroItemDetail {
-  readonly ref: string
-  readonly itemType: string
-  readonly title: string
-  readonly creators: string[]
-  readonly date?: string
-  readonly year?: number
-  readonly venue?: string
-  readonly doi?: string
-  readonly url?: string
-  readonly abstract?: string
-  readonly abstractTruncated: boolean
+  ref: string
+  itemType: string
+  title: string
+  creators: string[]
+  date?: string
+  year?: number
+  venue?: string
+  doi?: string
+  url?: string
+  abstract?: string
+  abstractTruncated: boolean
   /** The item's own note body, when the item is a note; bounded, `truncated` signals the cut. */
-  readonly noteBody?: { readonly text: string; readonly truncated: boolean }
-  readonly tags: string[]
-  readonly collections: ZoteroCollectionRecord[]
-  readonly children: { readonly total: number }
-  readonly bestAttachment?: ZoteroAttachmentRecord
-  readonly notes?: ZoteroChildCollection<ZoteroNoteRecord>
-  readonly annotations?: ZoteroChildCollection<ZoteroAnnotationRecord>
-  readonly attachments?: ZoteroChildCollection<ZoteroAttachmentRecord>
-  readonly relations?: readonly ZoteroRelation[]
+  noteBody?: { text: string; truncated: boolean }
+  tags: string[]
+  collections: ZoteroCollectionRecord[]
+  children: { total: number }
+  bestAttachment?: ZoteroAttachmentRecord
+  notes?: ZoteroChildCollection<ZoteroNoteRecord>
+  annotations?: ZoteroChildCollection<ZoteroAnnotationRecord>
+  attachments?: ZoteroChildCollection<ZoteroAttachmentRecord>
+  relations?: ZoteroRelation[]
   /** Local object version (Zotero 10+); may differ from Web API versions. */
-  readonly version?: number
+  version?: number
   /** Identity of the Zotero instance that served this record. */
-  readonly serverId?: string
+  serverId?: string
   /**
    * `data` fields the normalized model does not consume, present only when
    * the request asked `fields:"all"`. Values are lossless JSON.
    */
-  readonly extraFields?: Record<string, unknown>
+  extraFields?: Record<string, JsonValue>
 }
 
 /** Evidence sources `zotero_retrieve` can rank against the query. */
@@ -283,70 +284,70 @@ export type ZoteroEvidenceSource = 'annotation' | 'note' | 'fulltext' | 'abstrac
 export type ZoteroAttachmentPolicy = 'best' | 'allIndexed' | 'specified'
 
 export interface ZoteroRetrieveRequest {
-  readonly ref: ZoteroObjectRef
-  readonly query: string
-  readonly sources: readonly ZoteroEvidenceSource[]
-  readonly passages: number
-  readonly attachmentPolicy?: ZoteroAttachmentPolicy
+  ref: ZoteroObjectRef
+  query: string
+  sources: ZoteroEvidenceSource[]
+  passages: number
+  attachmentPolicy?: ZoteroAttachmentPolicy
   /** Required for `attachmentPolicy:"specified"`: attachment refs of the same library. */
-  readonly attachmentRefs?: readonly ZoteroObjectRef[]
+  attachmentRefs?: ZoteroObjectRef[]
 }
 
 /** One bounded evidence passage. Fulltext passages never carry page locators. */
 export interface ZoteroEvidence {
-  readonly source: ZoteroEvidenceSource
-  readonly sourceRef: string
-  readonly text: string
+  source: ZoteroEvidenceSource
+  sourceRef: string
+  text: string
   /** Position within a multi-chunk source (note/fulltext), so the Agent can locate the span. */
-  readonly chunkIndex?: number
+  chunkIndex?: number
   /** Total chunks of the source this passage belongs to. */
-  readonly chunkCount?: number
-  readonly comment?: string
-  readonly pageLabel?: string
+  chunkCount?: number
+  comment?: string
+  pageLabel?: string
   /** The annotation passage's parent attachment ref; absent for other sources. */
-  readonly attachmentRef?: string
+  attachmentRef?: string
 }
 
 /** Full-text indexing coverage as reported by Zotero; `complete` is derived. */
 export interface ZoteroCoverage {
-  readonly indexedPages?: number
-  readonly totalPages?: number
-  readonly indexedChars?: number
-  readonly totalChars?: number
-  readonly complete: boolean
+  indexedPages?: number
+  totalPages?: number
+  indexedChars?: number
+  totalChars?: number
+  complete: boolean
 }
 
 export interface ZoteroRetrieveResult {
-  readonly ref: string
+  ref: string
   /**
    * The attachment behind the fulltext evidence when exactly one attachment
    * contributed; with several (allIndexed/specified), per-passage
    * `attachmentRef` provenance carries the mapping instead.
    */
-  readonly attachmentRef?: string
+  attachmentRef?: string
   /** The content type of the attachment `attachmentRef` points at; absent when Zotero reported none. */
-  readonly attachmentContentType?: string
-  readonly coverage?: ZoteroCoverage
-  readonly evidence: ZoteroEvidence[]
-  readonly truncated: boolean
+  attachmentContentType?: string
+  coverage?: ZoteroCoverage
+  evidence: ZoteroEvidence[]
+  truncated: boolean
   /** Requested sources the item could not provide; retrieval degrades instead of failing. */
-  readonly sourcesSkipped: ZoteroEvidenceSource[]
+  sourcesSkipped: ZoteroEvidenceSource[]
 }
 
 export type ZoteroAttachmentLocation =
   | {
-      readonly ref: string
-      readonly title: string
-      readonly contentType: string
-      readonly kind: 'file'
-      readonly path: string
+      ref: string
+      title: string
+      contentType: string
+      kind: 'file'
+      path: string
     }
   | {
-      readonly ref: string
-      readonly title: string
-      readonly contentType: string
-      readonly kind: 'url'
-      readonly url: string
+      ref: string
+      title: string
+      contentType: string
+      kind: 'url'
+      url: string
     }
 
 /** Export/citation output formats. `citation`/`bibliography` use Zotero's CSL engine. */
@@ -359,10 +360,10 @@ export type ZoteroExportFormat =
  * `ZOTERO_INVALID_ARGUMENT` with 0 HTTP; split by library.
  */
 export interface ZoteroExportRequest {
-  readonly refs: readonly ZoteroObjectRef[]
-  readonly format: ZoteroExportFormat
-  readonly style?: string
-  readonly locale?: string
+  refs: ZoteroObjectRef[]
+  format: ZoteroExportFormat
+  style?: string
+  locale?: string
 }
 
 /**
@@ -375,21 +376,21 @@ export interface ZoteroExportRequest {
  */
 export interface ZoteroExportItem {
   /** The formatted `zotero://` ref the entry was exported for. */
-  readonly ref: string
+  ref: string
   /**
    * The batch body's real key: the BibTeX/BibLaTeX citation key or the CSL
    * JSON id; absent when the format has none (RIS) or the entry could not
    * be located.
    */
-  readonly key?: string
+  key?: string
   /** The item's title for display, when the entry carried one. */
-  readonly title?: string
+  title?: string
   /** The located entry's index within the parsed CSL JSON array. */
-  readonly entryIndex?: number
+  entryIndex?: number
   /** The located entry's start offset within the trimmed batch body. */
-  readonly start?: number
+  start?: number
   /** The located entry's end offset (exclusive) within the trimmed batch body. */
-  readonly end?: number
+  end?: number
 }
 
 /**
@@ -400,39 +401,39 @@ export interface ZoteroExportItem {
  */
 export type ZoteroExportResult =
   | {
-      readonly format: 'citation'
-      readonly style?: string
-      readonly locale?: string
-      readonly citations: { readonly ref: string; readonly text: string }[]
+      format: 'citation'
+      style?: string
+      locale?: string
+      citations: { ref: string; text: string }[]
     }
   | {
-      readonly format: 'bibliography'
-      readonly style?: string
-      readonly locale?: string
-      readonly text: string
+      format: 'bibliography'
+      style?: string
+      locale?: string
+      text: string
     }
   | {
-      readonly format: 'bibtex' | 'biblatex' | 'ris' | 'csljson'
-      readonly style?: string
-      readonly locale?: string
-      readonly text: string
-      readonly items: ZoteroExportItem[]
+      format: 'bibtex' | 'biblatex' | 'ris' | 'csljson'
+      style?: string
+      locale?: string
+      text: string
+      items: ZoteroExportItem[]
     }
 
 /** Raw fulltext payload from `GET /items/<attachmentKey>/fulltext`. */
 export interface ZoteroFulltextPayload {
-  readonly content: string
-  readonly indexedPages?: number
-  readonly totalPages?: number
-  readonly indexedChars?: number
-  readonly totalChars?: number
+  content: string
+  indexedPages?: number
+  totalPages?: number
+  indexedChars?: number
+  totalChars?: number
 }
 
 /** A single relation extracted from Zotero data.relations */
 export interface ZoteroRelation {
-  readonly predicate: string
-  readonly targetUri: string
-  readonly targetRef?: string
+  predicate: string
+  targetUri: string
+  targetRef?: string
 }
 
 /** Bounded browse kinds (v3 lock: no recursive collection) */
@@ -440,81 +441,80 @@ export type ZoteroBrowseKind =
   'libraries' | 'collections' | 'savedSearches' | 'tags' | 'itemTypes' | 'itemFields'
 
 export interface ZoteroBrowseRequest {
-  readonly kind: ZoteroBrowseKind
-  readonly library?: SupportedLocalLibrary
+  kind: ZoteroBrowseKind
+  library?: SupportedLocalLibrary
   /**
    * Collections only: a collection ref whose children to list. Omitted lists
    * top-level collections (`/collections/top`); present lists that
    * collection's children (`/collections/<key>/collections`) — real
    * server-side tree navigation instead of one whole-library snapshot.
    */
-  readonly parentRef?: string
+  parentRef?: string
   /**
    * Tags only: the item set whose tags the listing counts. Omitted keeps the
    * whole-library `/tags` listing; `collection` and `publications` use the
    * scoped tag endpoints, turning browse into a faceted-navigation primitive
    * (search → scoped tags for the same query → narrow).
    */
-  readonly scope?: ZoteroTagScope
+  scope?: ZoteroTagScope
   /** Tags only with a scope: `top` counts bibliographic items (default), `all` includes child items. */
-  readonly itemLevel?: 'top' | 'all'
+  itemLevel?: 'top' | 'all'
   /** Tags only with a scope: count only tags of items matching this item query (`itemQ`). */
-  readonly itemQuery?: string
+  itemQuery?: string
   /** Tags only with an itemQuery: the Zotero item-query mode (default titleCreatorYear). */
-  readonly itemQueryMode?: 'titleCreatorYear' | 'everything'
+  itemQueryMode?: 'titleCreatorYear' | 'everything'
   /** ItemFields only: the Zotero item type whose fields and creator types to list. */
-  readonly itemType?: string
-  readonly q?: string
-  readonly match?: 'contains' | 'startsWith'
-  readonly offset: number
-  readonly limit: number
+  itemType?: string
+  q?: string
+  match?: 'contains' | 'startsWith'
+  offset: number
+  limit: number
 }
 
 /** The item set a scoped tags listing counts over. */
 export type ZoteroTagScope =
-  | { readonly kind: 'library' }
-  | { readonly kind: 'collection'; readonly refOrName: string }
-  | { readonly kind: 'publications' }
+  { kind: 'library' } | { kind: 'collection'; refOrName: string } | { kind: 'publications' }
 
 export interface ZoteroLibraryInfo {
-  readonly library: SupportedLocalLibrary
-  readonly name: string
+  library: SupportedLocalLibrary
+  name: string
 }
 
 export interface ZoteroCollectionInfo {
-  readonly ref: string
-  readonly name: string
-  readonly parentRef?: string
-  readonly path: readonly string[]
-  readonly depth: number
+  ref: string
+  name: string
+  parentRef?: string
+  path: string[]
+  depth: number
 }
 
 export interface ZoteroSavedSearchInfo {
-  readonly ref: string
-  readonly name: string
-  readonly conditions?: unknown
+  ref: string
+  name: string
+  /** Zotero's saved-search condition rows; absent when the record carried none. */
+  conditions?: Record<string, JsonValue>[]
 }
 
 export interface ZoteroTagInfo {
-  readonly tag: string
-  readonly count?: number
+  tag: string
+  count?: number
 }
 
 export interface ZoteroItemTypeInfo {
-  readonly itemType: string
-  readonly localized?: string
+  itemType: string
+  localized?: string
 }
 
 /** One metadata field valid for a requested item type, with its localized label. */
 export interface ZoteroItemFieldInfo {
-  readonly field: string
-  readonly localized?: string
+  field: string
+  localized?: string
 }
 
 /** One creator type valid for a requested item type. */
 export interface ZoteroCreatorTypeInfo {
-  readonly creatorType: string
-  readonly localized?: string
+  creatorType: string
+  localized?: string
 }
 
 export type ZoteroBrowseItem =
@@ -527,13 +527,13 @@ export type ZoteroBrowseItem =
   | ZoteroCreatorTypeInfo
 
 export interface ZoteroBrowseResult {
-  readonly kind: ZoteroBrowseKind
-  readonly library?: SupportedLocalLibrary
-  readonly serverId?: string
-  readonly items: readonly ZoteroBrowseItem[]
-  readonly total: number
-  readonly offset: number
-  readonly returned: number
+  kind: ZoteroBrowseKind
+  library?: SupportedLocalLibrary
+  serverId?: string
+  items: ZoteroBrowseItem[]
+  total: number
+  offset: number
+  returned: number
   nextOffset?: number
 }
 
@@ -542,43 +542,43 @@ export type ZoteroChangesInclude =
   'items' | 'collections' | 'savedSearches' | 'fulltext' | 'deleted'
 
 export interface ZoteroChangesRequest {
-  readonly library?: SupportedLocalLibrary
+  library?: SupportedLocalLibrary
   /**
    * The library version to diff from. Omitted takes a baseline reading: the
    * result carries only the library's current version, which the next call
    * can pass as `since`.
    */
-  readonly since?: number
-  readonly include?: ReadonlySet<ZoteroChangesInclude>
+  since?: number
+  include?: ReadonlySet<ZoteroChangesInclude>
 }
 
 /** One changed object: its key and the local version it reached. */
 export interface ZoteroChangedObject {
-  readonly key: string
-  readonly version: number
+  key: string
+  version: number
 }
 
 export interface ZoteroChangesResult {
-  readonly library: SupportedLocalLibrary
-  readonly serverId?: string
+  library: SupportedLocalLibrary
+  serverId?: string
   /** The version the diff started from; absent on a baseline reading. */
-  readonly fromVersion?: number
+  fromVersion?: number
   /** The library's current transaction version (Zotero 10+). */
-  readonly toVersion?: number
-  readonly changed: {
-    readonly items?: readonly ZoteroChangedObject[]
-    readonly collections?: readonly ZoteroChangedObject[]
-    readonly savedSearches?: readonly ZoteroChangedObject[]
+  toVersion?: number
+  changed: {
+    items?: ZoteroChangedObject[]
+    collections?: ZoteroChangedObject[]
+    savedSearches?: ZoteroChangedObject[]
     /** Attachments whose full-text index changed (`/fulltext?since=`). */
-    readonly fulltextAttachments?: readonly ZoteroChangedObject[]
+    fulltextAttachments?: ZoteroChangedObject[]
   }
-  readonly deleted?: {
-    readonly items?: readonly string[]
-    readonly collections?: readonly string[]
-    readonly savedSearches?: readonly string[]
+  deleted?: {
+    items: string[]
+    collections: string[]
+    savedSearches: string[]
   }
   /** True when any resource hit the per-resource listing cap. */
-  readonly truncated?: boolean
+  truncated?: boolean
 }
 
 /**
@@ -589,8 +589,8 @@ export interface ZoteroChangesResult {
  * typed domain errors, and only `status()` performs a health check.
  */
 export interface ZoteroProvider {
-  readonly id: string
-  readonly capabilities: ReadonlySet<ZoteroCapability>
+  id: string
+  capabilities: ReadonlySet<ZoteroCapability>
   /**
    * Probe connectivity and report the instance identity facts.
    * @param signal - caller cancellation; forwarded to the transport.

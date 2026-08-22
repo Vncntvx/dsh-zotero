@@ -13,6 +13,7 @@ import {
   normalizeAttachmentRecord,
   type ZoteroAttachmentCandidate,
 } from './attachments.js'
+import type { JsonValue } from '@deepseek-ai/dsh-tools'
 import { ZOTERO_UNEXPECTED, ZoteroError } from './errors.js'
 import { asRecord, asString, isObjectKey } from './json.js'
 import { formatRef, parseZoteroRelationUri, refForLibrary } from './refs.js'
@@ -453,7 +454,7 @@ const CONSUMED_DATA_KEYS: ReadonlySet<string> = new Set([
 ])
 
 /** True when the value survives lossless-JSON round-tripping unchanged. */
-function isLosslessJson(value: unknown): boolean {
+export function isLosslessJson(value: unknown): value is JsonValue {
   if (
     value === null ||
     typeof value === 'string' ||
@@ -475,9 +476,9 @@ function isLosslessJson(value: unknown): boolean {
  */
 function extraFieldsOf(
   data: Record<string, unknown> | undefined,
-): Record<string, unknown> | undefined {
+): Record<string, JsonValue> | undefined {
   if (data === undefined) return undefined
-  const out: Record<string, unknown> = {}
+  const out: Record<string, JsonValue> = {}
   for (const key of Object.keys(data).sort()) {
     if (CONSUMED_DATA_KEYS.has(key)) continue
     const value = data[key]

@@ -377,9 +377,9 @@ export function registerBrowseTool(ctx: Context, service: ZoteroService): void {
       }),
       isConcurrencySafe: () => true,
       async execute(args, exec) {
-        return (await withConnectivityAsk(ctx, exec, () =>
+        return await withConnectivityAsk(ctx, exec, () =>
           service.browse(buildRequest(args as BrowseArgs, service.config), exec.signal),
-        )) as unknown as BrowseOutput
+        )
       },
     }),
   )

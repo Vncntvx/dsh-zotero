@@ -119,11 +119,13 @@ export async function changes(
     savedSearches?: ZoteroChangedObject[]
     fulltextAttachments?: ZoteroChangedObject[]
   } = {}
-  const deleted: {
-    items?: string[]
-    collections?: string[]
-    savedSearches?: string[]
-  } = {}
+  // When the tombstone read succeeds, all three lists exist together
+  // (possibly empty) — matching the wire contract's required keys.
+  const deleted: { items: string[]; collections: string[]; savedSearches: string[] } = {
+    items: [],
+    collections: [],
+    savedSearches: [],
+  }
   let truncated = false
   if (include.has('items')) {
     const result = await optional(() => fetchVersions(`${prefix}/items/top`))

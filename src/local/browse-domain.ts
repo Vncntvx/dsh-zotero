@@ -26,6 +26,8 @@ import {
   PERSONAL_LIBRARY,
 } from '../refs.js'
 import { requireTotalResults, nextOffsetOf } from './pagination.js'
+import type { JsonValue } from '@deepseek-ai/dsh-tools'
+import { isLosslessJson } from '../normalize.js'
 import type { ScopeDirectory } from './scope-directory.js'
 import type { ZoteroHttpClient } from '../http-client.js'
 import type { LocalApiLimits } from './limits.js'
@@ -290,14 +292,21 @@ async function browseSavedSearches(
   const rawRows = Array.isArray(json) ? json : []
   const total = requireTotalResults(headers, 'saved searches')
   const entries: ScopeNameEntry[] = rawRows.map((row) => normalizeScopeEntry(row))
-  const condByKey = new Map<string, unknown>()
+  const condByKey = new Map<string, Record<string, JsonValue>[]>()
   for (const row of rawRows) {
     const rec = asRecord(row)
     const key = asString(rec?.key)
     if (key === undefined || !isObjectKey(key)) continue
     const data = asRecord(rec?.data)
     const cond = data?.conditions ?? (rec as Record<string, unknown>)?.conditions
-    if (cond !== undefined) condByKey.set(key, cond)
+    // Zotero's saved-search conditions are an array of row objects; anything
+    // else on the wire is treated as absence rather than passed through.
+    if (
+      Array.isArray(cond) &&
+      cond.every((row) => row !== null && typeof row === 'object' && !Array.isArray(row))
+    ) {
+      condByKey.set(key, cond as Record<string, JsonValue>[])
+    }
   }
   const items = entries
     .map((entry) => ({

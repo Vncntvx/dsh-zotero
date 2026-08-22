@@ -176,9 +176,9 @@ export function registerChangesTool(ctx: Context, service: ZoteroService): void 
       }),
       isConcurrencySafe: () => true,
       async execute(args, exec) {
-        return (await withConnectivityAsk(ctx, exec, () =>
+        return await withConnectivityAsk(ctx, exec, () =>
           service.changes(buildRequest(args), exec.signal),
-        )) as unknown as ChangesOutput
+        )
       },
     }),
   )
