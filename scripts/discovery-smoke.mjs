@@ -115,8 +115,19 @@ async function main() {
         `__DSH_BOOT__ has no dsh-zotero row; entries: ${graph.entries.map((row) => row.id).join(', ')}`,
       )
     }
-    if (!entry.url.startsWith('/plugins/dsh-zotero/client.js?rev=')) {
+    // The alpha.1 boot graph composes content-addressed combo scripts: every
+    // entry row carries the revisioned single-resource combo URL, and its id
+    // must appear in exactly one scheduling batch.
+    if (!entry.url.startsWith('/plugins/??dsh-zotero/client.js&rev=')) {
       throw new Error(`unexpected bundle url: ${entry.url}`)
+    }
+    if (
+      !Array.isArray(graph.batches) ||
+      !graph.batches.some(
+        (batch) => Array.isArray(batch.entries) && batch.entries.includes('dsh-zotero'),
+      )
+    ) {
+      throw new Error('__DSH_BOOT__ schedules no batch entry for dsh-zotero')
     }
     const bundle = await fetchText(`http://127.0.0.1:${port}${entry.url}`)
     if (!bundle.includes('__ModuleLoader__.load')) {

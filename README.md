@@ -68,7 +68,7 @@ dsh plugin --profile <name> add ./dsh-zotero-*.tgz
 
 - Zotero ≥ 7 桌面版，启用本地 API：**设置 → 高级 → "允许其他应用程序与 Zotero 通信"**
 - Node.js ≥ 22.19（或 ≥ 24）
-- 宿主 dsh 0.1.1-rc.2 系列（`@deepseek-ai/dsh-*` peer 依赖均为 `^0.1.1-rc.2`）
+- 宿主 dsh 0.1.2-alpha.1 系列（`@deepseek-ai/dsh-*` peer 依赖均为 `^0.1.2-alpha.1`）
 - 本地 API 地址 `http://127.0.0.1:23119/api`，无认证，只读
 
 ## 使用示例

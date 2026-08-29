@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { CallId } from '@deepseek-ai/dsh-llm'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import ZoteroService from '../src/index.js'
@@ -25,7 +25,7 @@ describe('service browse and search new filters', () => {
   })
   function runTool(name: string, args: Record<string, unknown>) {
     return ctx.tools.execute({
-      callId: CallId('x'),
+      callId: ToolCallId('x'),
       name,
       arguments: args,
       signal: new AbortController().signal,

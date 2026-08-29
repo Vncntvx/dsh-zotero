@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import type { ToolResultNode } from '@deepseek-ai/dsh-client-runtime/client'
+import type { ToolResultNode } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { settled, running } from '../helpers/blocks.ts'
 import { buildSourceWorkspace } from '../../../src/client/sources/reducer.ts'
 import type { SourceScope } from '../../../src/client/sources/model.ts'

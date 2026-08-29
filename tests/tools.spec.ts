@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
-import { CallId } from '@deepseek-ai/dsh-llm'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, {
   type ToolDefinition,
@@ -42,7 +42,7 @@ afterEach(async () => {
 
 function runTool(name: string, args: Record<string, unknown>): Promise<ToolExecutionResult> {
   return ctx.tools.execute({
-    callId: CallId(`tool-${++callCounter}`),
+    callId: ToolCallId(`tool-${++callCounter}`),
     name,
     arguments: args,
     signal: new AbortController().signal,
@@ -1795,20 +1795,20 @@ describe('connectivity failure ask', () => {
     await askCtx.plugin(SystemPrompt, {})
     await askCtx.plugin(ToolRuntime, {})
     await askCtx.plugin(UserQuestionService)
-    const questions = askCtx.get('userQuestions')!
     const asked: unknown[] = []
-    questions.registerProvider({
-      ask: async (request) => {
-        asked.push(request)
-        return {
-          answers: [{ id: 'zotero-failure', selected: ['I started Zotero, retry (Recommended)'] }],
-        }
-      },
+    // The alpha.1 ask seam is a scope-filtered waterfall: the listener claims
+    // the request by returning an answer, so the ask flow observes the same
+    // contract the old provider used to serve.
+    askCtx.on('user-questions/request', async (request, _next) => {
+      asked.push(request)
+      return {
+        answers: [{ id: 'zotero-failure', selected: ['I started Zotero, retry (Recommended)'] }],
+      }
     })
     await askCtx.plugin(ZoteroService, { baseUrl: downUrl })
 
     const result = await askCtx.tools.execute({
-      callId: CallId('tool-ask-connectivity'),
+      callId: ToolCallId('tool-ask-connectivity'),
       name: 'zotero_search',
       arguments: { query: 'flash attention', limit: 5 },
       signal: new AbortController().signal,

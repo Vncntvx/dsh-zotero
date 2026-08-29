@@ -13,11 +13,13 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
-import type {
-  ConversationSnapshot,
-  ToolCallBlock,
-  ToolResultNode,
-} from '@deepseek-ai/dsh-client-runtime/client'
+// Session-scope standard props: `useSession` (lifecycle and identity) is
+// merged by ui-session, `useChat` (conversation data) by ui-chat — the named
+// type import pulls the chat merge into the program; the session merge rides
+// the bare import.
+import type {} from '@deepseek-ai/dsh-client-ui-session/client'
+import type { LegacyConversationSlice } from '@deepseek-ai/dsh-client-ui-chat/client'
+import type { ToolCallBlock, ToolResultNode } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ZoteroStatusView } from '../remote.ts'
@@ -49,17 +51,15 @@ export function currentTime(): string {
  * count and tail position plus the running-call ids. Streaming chunk
  * publications change neither, so the call collection (and with it the
  * workspace rebuild) skips them.
- * @param snapshot - the conversation snapshot, undefined while none is open.
+ * @param slice - the chat's legacy projection, undefined while none is open.
  * @returns the signature string.
  */
-export function sessionSignatureOf(snapshot: ConversationSnapshot | undefined): string {
-  if (snapshot === undefined) return ''
+export function sessionSignatureOf(slice: LegacyConversationSlice | undefined): string {
+  if (slice === undefined) return ''
   const last =
-    snapshot.nodes.length === 0
-      ? -1
-      : orderKeyOf(snapshot.nodes[snapshot.nodes.length - 1] as ToolCallBlock)
-  const running = snapshot.runningCalls.map((call) => call.callId).join(',')
-  return `${snapshot.nodes.length}:${last}:${snapshot.runningCalls.length}:${running}`
+    slice.nodes.length === 0 ? -1 : orderKeyOf(slice.nodes[slice.nodes.length - 1] as ToolCallBlock)
+  const running = slice.runningCalls.map((call) => call.callId).join(',')
+  return `${slice.nodes.length}:${last}:${slice.runningCalls.length}:${running}`
 }
 
 /**
@@ -80,14 +80,14 @@ export function stateOf(result: RemoteResult<ZoteroStatusView>, checkedAt: strin
 
 /**
  * Collect the session's Zotero tool calls: settled results and in-flight
- * calls, including nested dispatch (Code mode), deduplicated by callId and
- * ordered by transcript position. Pure over the snapshot — the same log
+ * calls, including nested dispatch (PTC mode), deduplicated by callId and
+ * ordered by transcript position. Pure over the slice — the same log
  * slice renders the same list.
- * @param snapshot - the conversation snapshot, undefined while none is open.
+ * @param slice - the chat's legacy projection, undefined while none is open.
  * @returns the ordered zotero call blocks.
  */
-export function collectZoteroCalls(snapshot: ConversationSnapshot | undefined): ToolCallBlock[] {
-  if (snapshot === undefined) return []
+export function collectZoteroCalls(slice: LegacyConversationSlice | undefined): ToolCallBlock[] {
+  if (slice === undefined) return []
   const out: ToolCallBlock[] = []
   const seen = new Set<string>()
   const visit = (block: ToolCallBlock): void => {
@@ -98,25 +98,28 @@ export function collectZoteroCalls(snapshot: ConversationSnapshot | undefined): 
     }
     for (const child of block.subCalls) visit(child)
   }
-  for (const node of snapshot.nodes) {
+  for (const node of slice.nodes) {
     if (node.kind === 'tool-result') visit(node as ToolResultNode)
   }
-  for (const call of snapshot.runningCalls) visit(call)
+  for (const call of slice.runningCalls) visit(call)
   out.sort((a, b) => orderKeyOf(a) - orderKeyOf(b))
   return out
 }
 
 /** The Sources panel controller: probe, workspace build, and the view. */
-export function SourcesTab({ status, t, useSession, inputActions }: SourcesTabProps) {
+export function SourcesTab({ status, t, useSession, useChat, inputActions }: SourcesTabProps) {
+  // Lifecycle and identity come from the session snapshot; the zotero-relevant
+  // call blocks live in the chat target's legacy projection.
   const session = useSession((snapshot) => snapshot)
+  const chat = useChat((snapshot) => snapshot.legacy)
   const [statusState, setStatusState] = useState<ConnectionView>({ kind: 'loading' })
   const [requestId, setRequestId] = useState(0)
   // The last verified instance id feeds the provenance verdicts. It updates
   // only when a connected probe settles — a refresh's loading flip must not
   // drop it, or the workspace would rebuild twice per probe.
   const [serverId, setServerId] = useState<string | undefined>(undefined)
-  const signature = useMemo(() => sessionSignatureOf(session), [session])
-  const blocks = useMemo(() => collectZoteroCalls(session), [signature])
+  const signature = useMemo(() => sessionSignatureOf(chat), [chat])
+  const blocks = useMemo(() => collectZoteroCalls(chat), [signature])
   const workspace = useMemo(
     () => buildSourceWorkspace(blocks, { currentServerId: serverId }),
     [blocks, serverId],

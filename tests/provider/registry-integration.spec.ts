@@ -1,5 +1,5 @@
 import { Context } from '@deepseek-ai/cordis'
-import { CallId } from '@deepseek-ai/dsh-llm'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -24,7 +24,7 @@ afterEach(async () => {
 
 function run(name: string, args: Record<string, unknown>) {
   return ctx.tools.execute({
-    callId: CallId(`t-${++counter}`),
+    callId: ToolCallId(`t-${++counter}`),
     name,
     arguments: args,
     signal: new AbortController().signal,

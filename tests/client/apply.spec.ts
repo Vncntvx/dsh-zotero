@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, it, vi } from 'vitest'
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
+import type { Context } from '@deepseek-ai/cordis'
 import { apply, inject } from '../../src/client/index.ts'
 import { en, zh } from '../../src/client/locales.ts'
 import { ZOTERO_SETTINGS_NAMESPACE } from '../../src/settings-namespace.ts'
@@ -140,13 +140,13 @@ describe('the browser-half entry', () => {
 
   it('registers the page dictionaries on apply', () => {
     const world = fakeWorld()
-    apply(world.ctx as ClientContext)
+    apply(world.ctx as Context)
     expect(world.dictionaries).toEqual([{ ns: 'zotero', dict: { zh, en } }])
   })
 
   it('binds the settings scope to the shared namespace constant', () => {
     const world = fakeWorld()
-    apply(world.ctx as ClientContext)
+    apply(world.ctx as Context)
     expect(world.bindSpecs).toHaveLength(1)
     expect(world.bindSpecs[0]?.namespace).toBe(ZOTERO_SETTINGS_NAMESPACE)
     // The lenient decode passes plain sections through and refuses non-objects.
@@ -160,7 +160,7 @@ describe('the browser-half entry', () => {
 
   it('mounts the zotero Remote namespace contribution', () => {
     const world = fakeWorld()
-    apply(world.ctx as ClientContext)
+    apply(world.ctx as Context)
     expect(world.mounts).toHaveLength(1)
     const contribution = world.mounts[0] as { package: string }
     expect(contribution.package).toBe('dsh-zotero')
@@ -168,7 +168,7 @@ describe('the browser-half entry', () => {
 
   it('injects the configuration card into the keyed settings.plugin.item slot', () => {
     const world = fakeWorld()
-    apply(world.ctx as ClientContext)
+    apply(world.ctx as Context)
     expect(world.injected.map((entry) => entry.name)).toEqual(['settings.plugin.item'])
 
     const cardEntry = world.injected.find((entry) => entry.name === 'settings.plugin.item')
@@ -189,7 +189,7 @@ describe('the browser-half entry', () => {
 
   it('fails the mount when the Remote namespace is not served', async () => {
     const world = fakeWorld(true)
-    apply(world.ctx as ClientContext)
+    apply(world.ctx as Context)
     const mount = world.effects[1]
     expect(mount).toBeTypeOf('object')
     await expect(Promise.resolve(mount)).rejects.toThrow(/did not mount/)
@@ -197,7 +197,7 @@ describe('the browser-half entry', () => {
 
   it('disposes the mount and clears the face with the fiber', async () => {
     const world = fakeWorld()
-    apply(world.ctx as ClientContext)
+    apply(world.ctx as Context)
     const dispose = (await world.effects[1]) as () => void
     expect(world.mountDisposes).toBe(0)
     dispose()
@@ -208,7 +208,7 @@ describe('the browser-half entry', () => {
     const world = fakeWorld()
     const statusSpy = vi.fn(async () => ({ ok: true, value: {} }))
     world.status = statusSpy
-    apply(world.ctx as ClientContext)
+    apply(world.ctx as Context)
     await new Promise((resolve) => setTimeout(resolve, 0))
     const tab = world.injected.find((entry) => entry.name === 'conversation.view')
     expect(tab).toBeDefined()
@@ -231,7 +231,7 @@ describe('the browser-half entry', () => {
     for (const status of ['loading', 'unavailable'] as const) {
       const world = fakeWorld()
       world.scope = fakeScope({ status })
-      apply(world.ctx as ClientContext)
+      apply(world.ctx as Context)
       await new Promise((resolve) => setTimeout(resolve, 0))
       expect(
         world.injected.some((entry) => entry.name === 'conversation.view'),
@@ -246,14 +246,14 @@ describe('the browser-half entry', () => {
       value: { webEnabled: false },
       user: { webEnabled: false },
     })
-    apply(world.ctx as ClientContext)
+    apply(world.ctx as Context)
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(world.injected.map((entry) => entry.name)).toEqual(['settings.plugin.item'])
   })
 
   it('withdraws the tab live when webEnabled turns off and restores it on', async () => {
     const world = fakeWorld()
-    apply(world.ctx as ClientContext)
+    apply(world.ctx as Context)
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(world.injected.some((entry) => entry.name === 'conversation.view')).toBe(true)
 
@@ -275,7 +275,7 @@ describe('the browser-half entry', () => {
 
   it('withdraws the tab with the fiber and unmounts the Remote', async () => {
     const world = fakeWorld()
-    apply(world.ctx as ClientContext)
+    apply(world.ctx as Context)
     const dispose = (await world.effects[1]) as () => void
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(world.injected.some((entry) => entry.name === 'conversation.view')).toBe(true)
@@ -290,7 +290,7 @@ describe('the browser-half entry', () => {
     world.scope = fakeScope({
       value: { baseUrl: 'http://127.0.0.1:23119/api', timeoutMs: 5000 },
     })
-    apply(world.ctx as ClientContext)
+    apply(world.ctx as Context)
     await new Promise((resolve) => setTimeout(resolve, 0))
     const entry = world.injected.find((entry) => entry.name === 'settings.plugin.item')
     expect(entry?.register()).toBeDefined()

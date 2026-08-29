@@ -65,13 +65,10 @@ function buildCommitOf() {
   return 'unknown'
 }
 
-/** Platform modules the loader's module table answers; never bundled. */
-const EXTERNALS = [
-  'react',
-  'react/jsx-runtime',
-  '@deepseek-ai/dsh-client-ui-primitives',
-  '@deepseek-ai/dsh-client-runtime/client',
-]
+/** Platform modules the loader's module table answers; never bundled. The
+ *  snapshot-store library (`@deepseek-ai/dsh-client-store`) is deliberately
+ *  absent: it is a plain library with no module-table row, so it bundles in. */
+const EXTERNALS = ['react', 'react/jsx-runtime', '@deepseek-ai/dsh-client-ui-primitives']
 
 /** Inline `.module.css` files as scoped style injections (mirrors the harness
  *  tsdown preset's CSS handling; the loader executes the bundle as a classic
@@ -126,6 +123,9 @@ const options = {
   external: EXTERNALS,
   define: {
     'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV ?? 'production'),
+    // The bundled snapshot store's dependencies (zustand/immer) probe the
+    // bundler mode the way the harness tsdown preset substitutes them.
+    'import.meta.env.MODE': JSON.stringify('production'),
     __DSH_ZOTERO_VERSION__: JSON.stringify(buildVersionOf()),
     __DSH_ZOTERO_COMMIT__: JSON.stringify(buildCommitOf()),
   },

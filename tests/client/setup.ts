@@ -1,42 +1,16 @@
 /**
- * Test double for the platform snapshot store.
+ * Shared client-lane test shims.
  *
- * The published `@deepseek-ai/dsh-client-runtime/client` is a loader-handoff
- * bundle that resolves `window.__ModuleLoader__` at module load, which plain
- * vitest environments do not provide. The card only uses the store's
- * `getSnapshot`/`subscribe`/`set` surface, so tests drive the card against a
- * shape-compatible stand-in; the real store runs in the harness browser, and
- * `scripts/build-client.mjs` proves the client bundle resolves its externals.
+ * The harness seam the card consumes — `@deepseek-ai/dsh-client-store` — is a
+ * plain library, so the suite drives the card against the real snapshot
+ * store; no module mock is needed. Only the jsdom gaps remain here: the
+ * environment stubs below stand in for layout primitives jsdom does not
+ * implement. `scripts/build-client.mjs` still proves the client bundle
+ * resolves its loader externals.
  * @module tests/client/setup
  */
 
 import { vi } from 'vitest'
-
-vi.mock('@deepseek-ai/dsh-client-runtime/client', () => {
-  /** The store surface the card reads: snapshot plus subscription and a setter. */
-  function createSnapshotStore<T>(initial: T): {
-    getSnapshot(): T
-    subscribe(listener: () => void): () => void
-    set(next: T): void
-  } {
-    let value = initial
-    const listeners = new Set<() => void>()
-    return {
-      getSnapshot: () => value,
-      subscribe: (listener) => {
-        listeners.add(listener)
-        return () => {
-          listeners.delete(listener)
-        }
-      },
-      set: (next) => {
-        value = next
-        for (const listener of listeners) listener()
-      },
-    }
-  }
-  return { createSnapshotStore }
-})
 
 /**
  * jsdom has no layout and therefore no ResizeObserver; the filter bar's

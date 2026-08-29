@@ -5,7 +5,10 @@
  * @module tests/client/presenters
  */
 
-import type { RunningToolCall, ToolResultNode } from '@deepseek-ai/dsh-client-runtime/client'
+import type {
+  RunningToolCall,
+  ToolResultNode,
+} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { describe, expect, it } from 'vitest'
 import {

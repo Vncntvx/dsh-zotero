@@ -18,8 +18,8 @@
  * @module dsh-zotero/client/card-form
  */
 
-import type { SettingsScope, SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
-import { createSnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
+import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
+import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 
 /** The write one field's staged text performs when the card is saved. */
 type FieldWrite = { kind: 'set'; value: unknown } | { kind: 'clear' }

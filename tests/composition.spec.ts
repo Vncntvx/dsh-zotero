@@ -16,7 +16,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { Context, Service, type Context as CordisContext } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include, { entryListSchema, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
-import { CallId } from '@deepseek-ai/dsh-llm'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import ZoteroService from '../src/index.js'
@@ -144,7 +144,7 @@ describe('the shipped bundle patch through a real Loader composition', () => {
       ),
     )
     const result = await context.tools.execute({
-      callId: CallId('composition-search'),
+      callId: ToolCallId('composition-search'),
       name: 'zotero_search',
       arguments: { query: 'flash', limit: 5 },
       signal: new AbortController().signal,

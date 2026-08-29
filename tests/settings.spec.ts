@@ -8,7 +8,7 @@
  */
 
 import { Context } from '@deepseek-ai/cordis'
-import { CallId } from '@deepseek-ai/dsh-llm'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
@@ -49,7 +49,7 @@ function runTool(name: string, args: Record<string, unknown>): ToolExecution {
   // The module-level ctx is assigned before any test invokes this helper.
   const tools = ctx as Context
   return tools.tools.execute({
-    callId: CallId(`settings-tool-${++callCounter}`),
+    callId: ToolCallId(`settings-tool-${++callCounter}`),
     name,
     arguments: args,
     signal: new AbortController().signal,

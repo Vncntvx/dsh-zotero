@@ -6,7 +6,10 @@
  * @module tests/client/helpers/fake-scope
  */
 
-import type { SettingsScope, SettingsScopeSnapshot } from '@deepseek-ai/dsh-client-runtime/client'
+import type {
+  SettingsScope,
+  SettingsScopeSnapshot,
+} from '@deepseek-ai/dsh-client-ui-settings/client'
 
 /** One write the fake scope performed. */
 interface FakeWrite {
@@ -95,6 +98,23 @@ export function fakeScope(options: FakeScopeOptions = {}): FakeScope {
       writes.push({ op: 'unset', field })
       applyWrite('unset', field)
       publish()
+    },
+    // The alpha.1 scope adds the atomic multi-op mutation; the fake applies
+    // each path op through the same per-field surface the ledger records.
+    mutate: async (ops) => {
+      for (const op of ops) {
+        if (op.op === 'set') {
+          if (options.rejectWrites === true) continue
+          writes.push({ op: 'set', field: op.path[0]!, value: op.value })
+          applyWrite('set', op.path[0]!, op.value)
+          publish()
+        } else {
+          if (options.rejectWrites === true) continue
+          writes.push({ op: 'unset', field: op.path[0]! })
+          applyWrite('unset', op.path[0]!)
+          publish()
+        }
+      }
     },
   }
 }

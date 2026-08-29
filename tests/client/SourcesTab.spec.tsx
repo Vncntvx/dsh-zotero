@@ -9,7 +9,9 @@
  */
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import type { ConversationSnapshot, ToolResultNode } from '@deepseek-ai/dsh-client-runtime/client'
+import type { ToolResultNode } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { ChatSnapshot, LegacyConversationSlice } from '@deepseek-ai/dsh-client-ui-chat/client'
+import type { SessionSnapshot } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ZoteroStatusView } from '../../src/client/remote.ts'
@@ -98,21 +100,39 @@ const UNAVAILABLE: ZoteroStatusView = {
   diagnosis: 'connection refused',
 }
 
-function snapshotOf(overrides: Partial<ConversationSnapshot> = {}): ConversationSnapshot {
+/** A legacy chat projection with neutral defaults; carry nodes/runningCalls here. */
+function legacyOf(overrides: Partial<LegacyConversationSlice> = {}): LegacyConversationSlice {
   return {
-    sessionId: 's1' as unknown as ConversationSnapshot['sessionId'],
-    views: new Map() as ConversationSnapshot['views'],
-    chat: {} as ConversationSnapshot['chat'],
     nodes: [],
     turnTimings: new Map(),
     turnEnds: new Map(),
     partial: null,
     runningCalls: [],
-    pending: [],
+    ...overrides,
+  }
+}
+
+/** A chat snapshot whose legacy slice defaults to `legacyOf()`; index types are opaque. */
+function chatOf(overrides: Partial<ChatSnapshot> = {}): ChatSnapshot {
+  return {
+    order: [],
+    nodes: { get: () => undefined, values: () => [] },
+    locations: {} as ChatSnapshot['locations'],
+    navigation: {} as ChatSnapshot['navigation'],
+    timeline: {} as ChatSnapshot['timeline'],
+    legacy: legacyOf(),
+    ...overrides,
+  }
+}
+
+/** A lifecycle session snapshot with neutral defaults; carry sessionId here. */
+function sessionOf(overrides: Partial<SessionSnapshot> = {}): SessionSnapshot {
+  return {
+    sessionId: 's1' as unknown as SessionSnapshot['sessionId'],
     queue: [],
+    pendingSubmissions: [],
     running: false,
     subagent: null,
-    composerPhase: 'active',
     removed: false,
     openState: 'open',
     openError: null,
@@ -121,6 +141,8 @@ function snapshotOf(overrides: Partial<ConversationSnapshot> = {}): Conversation
     promptError: null,
     blank: false,
     lastAgentError: null,
+    promptAttempted: false,
+    awaitingFirstTurn: false,
     ...overrides,
   }
 }
@@ -150,11 +172,12 @@ function searchResult(overrides: Partial<ToolResultNode> = {}): ToolResultNode {
   })
 }
 
-/** Render the tab with a stubbed session hook and status face. */
+/** Render the tab with stubbed session/chat hooks and the status face. */
 function mountTab(
-  session: ConversationSnapshot | undefined,
+  chat: ChatSnapshot | undefined,
   status: () => Promise<{ ok: boolean; value?: unknown; error?: unknown }>,
   inputActions?: { setDraft: (text: string) => void },
+  session: SessionSnapshot | undefined = sessionOf(),
 ): {
   view: ReturnType<typeof render>
   calls: number
@@ -166,8 +189,9 @@ function mountTab(
       calls += 1
       return (await status()) as never
     },
-    useSession: (sel: (snap: ConversationSnapshot) => unknown) =>
+    useSession: (sel: (snap: SessionSnapshot) => unknown) =>
       session === undefined ? undefined : sel(session),
+    useChat: (sel: (snap: ChatSnapshot) => unknown) => (chat === undefined ? undefined : sel(chat)),
     ...(inputActions === undefined ? {} : { inputActions }),
   } as unknown as SourcesTabProps
   const view = render(<SourcesTab {...props} />)
@@ -183,7 +207,7 @@ describe('collectZoteroCalls', () => {
       callId: 'b',
       call: { name: 'zotero_get', argsRaw: '{}' },
     })
-    const snapshot = snapshotOf({
+    const snapshot = legacyOf({
       nodes: [result],
       runningCalls: [running({ callId: 'a' })],
     })
@@ -204,14 +228,14 @@ describe('collectZoteroCalls', () => {
       call: { name: 'bash', argsRaw: '{}' },
       subCalls: [nested],
     })
-    const calls = collectZoteroCalls(snapshotOf({ nodes: [outer] }))
+    const calls = collectZoteroCalls(legacyOf({ nodes: [outer] }))
     expect(calls.map((call) => call.callId)).toEqual(['nested'])
   })
 
   it('returns an empty list without a session and skips non-tool nodes', () => {
     expect(collectZoteroCalls(undefined)).toEqual([])
     const assistant = { kind: 'assistant', seq: 1, time: 1, turn: 1, step: 1, blocks: [] }
-    expect(collectZoteroCalls(snapshotOf({ nodes: [assistant as never] }))).toEqual([])
+    expect(collectZoteroCalls(legacyOf({ nodes: [assistant as never] }))).toEqual([])
   })
 })
 
@@ -238,7 +262,7 @@ describe('status projection helpers', () => {
 
   it('signs the zotero-relevant snapshot slice', () => {
     expect(sessionSignatureOf(undefined)).toBe('')
-    const snapshot = snapshotOf({
+    const snapshot = legacyOf({
       nodes: [settled({ seq: 3, callId: 'a' })],
       runningCalls: [running({ callId: 'b' })],
     })
@@ -248,13 +272,13 @@ describe('status projection helpers', () => {
     // neither the node count nor the running ids.
     expect(
       sessionSignatureOf(
-        snapshotOf({
+        legacyOf({
           nodes: [settled({ seq: 3, callId: 'a' })],
           runningCalls: [running({ callId: 'b' })],
         }),
       ),
     ).toBe(signed)
-    expect(sessionSignatureOf(snapshotOf())).toBe('0:-1:0:')
+    expect(sessionSignatureOf(legacyOf())).toBe('0:-1:0:')
   })
 
   it('builds the failure diagnosis line', () => {
@@ -287,7 +311,7 @@ describe('status projection helpers', () => {
 describe('SourcesTab', () => {
   it('renders the checking strip, then the connected note and the diagnostic facts', async () => {
     const status = vi.fn(async () => ({ ok: true, value: CONNECTED }))
-    const { view } = mountTab(snapshotOf(), status)
+    const { view } = mountTab(chatOf(), status)
     expect(screen.getByText(zh.checking)).toBeDefined()
     await act(async () => {})
     expect(screen.getByText(zh.statusConnectedNote)).toBeDefined()
@@ -304,7 +328,7 @@ describe('SourcesTab', () => {
     const status = vi
       .fn(async () => ({ ok: true, value: CONNECTED }))
       .mockResolvedValueOnce({ ok: true, value: UNAVAILABLE })
-    const { view } = mountTab(snapshotOf(), status)
+    const { view } = mountTab(chatOf(), status)
     await act(async () => {})
     expect(screen.getByText(zh.statusUnavailable)).toBeDefined()
     expect(screen.getByText(/connection refused/)).toBeDefined()
@@ -320,12 +344,18 @@ describe('SourcesTab', () => {
       <SourcesTab
         t={t}
         status={undefined as never}
-        useSession={((sel: (snap: ConversationSnapshot) => unknown) => sel(snapshotOf())) as never}
+        viewRequest={undefined as never}
+        openView={undefined as never}
+        completeViewRequest={undefined as never}
+        useSession={((sel: (snap: SessionSnapshot) => unknown) => sel(sessionOf())) as never}
+        useChat={((sel: (snap: ChatSnapshot) => unknown) => sel(chatOf())) as never}
         sessionId={'s1' as never}
         useProjection={undefined as never}
+        useConversation={undefined as never}
         useInput={undefined as never}
         inputActions={undefined as never}
         useSessions={undefined as never}
+        useSessionPendingInteraction={undefined as never}
         useWorkspaces={undefined as never}
       />,
     )
@@ -342,7 +372,7 @@ describe('SourcesTab', () => {
           resolveProbe = resolve
         }),
     )
-    const { view } = mountTab(snapshotOf(), status)
+    const { view } = mountTab(chatOf(), status)
     await act(async () => {})
     expect(screen.getByText(zh.checking)).toBeDefined()
     view.unmount()
@@ -356,7 +386,7 @@ describe('SourcesTab', () => {
       ok: false,
       error: { code: 'x', message: 'gateway offline', details: {} },
     }))
-    const { view } = mountTab(snapshotOf(), status)
+    const { view } = mountTab(chatOf(), status)
     await act(async () => {})
     expect(screen.getByText('gateway offline')).toBeDefined()
     view.unmount()
@@ -366,7 +396,7 @@ describe('SourcesTab', () => {
     const status = vi.fn(async () => {
       throw new Error('remote face unmounted')
     })
-    const { view } = mountTab(snapshotOf(), status)
+    const { view } = mountTab(chatOf(), status)
     expect(screen.getByText(zh.checking)).toBeDefined()
     await act(async () => {})
     expect(screen.getByText('remote face unmounted')).toBeDefined()
@@ -377,7 +407,7 @@ describe('SourcesTab', () => {
     const status = vi.fn(async () => {
       throw 'remote face unmounted'
     })
-    const { view } = mountTab(snapshotOf(), status)
+    const { view } = mountTab(chatOf(), status)
     await act(async () => {})
     expect(screen.getByText('remote face unmounted')).toBeDefined()
     view.unmount()
@@ -391,7 +421,7 @@ describe('SourcesTab', () => {
           rejectProbe = reject
         }),
     )
-    const { view } = mountTab(snapshotOf(), status)
+    const { view } = mountTab(chatOf(), status)
     await act(async () => {})
     expect(screen.getByText(zh.checking)).toBeDefined()
     view.unmount()
@@ -423,7 +453,7 @@ describe('SourcesTab', () => {
       call: { name: 'zotero_get', argsRaw: '{"ref":"zotero://user/0/item/AAAAAAA0"}' },
       meta: { title: 'Paper 0', creators: 'Creator', notesPreview: [], annotationsPreview: [] },
     })
-    const { view } = mountTab(snapshotOf({ nodes: [search, get] }), status)
+    const { view } = mountTab(chatOf({ legacy: legacyOf({ nodes: [search, get] }) }), status)
     await act(async () => {})
     const lensTab = view.container.querySelector('[data-workspace-lens="sources"]')!
     expect(lensTab.getAttribute('aria-pressed')).toBe('true')
@@ -462,7 +492,10 @@ describe('SourcesTab', () => {
       isError: true,
       error: { name: 'ZoteroError', code: 'ZOTERO_NOT_FOUND' },
     })
-    const { view } = mountTab(snapshotOf({ nodes: [searchResult(), retrieve, failed] }), status)
+    const { view } = mountTab(
+      chatOf({ legacy: legacyOf({ nodes: [searchResult(), retrieve, failed] }) }),
+      status,
+    )
     await act(async () => {})
     // The search hit and the retrieve share one item; the failed get is its own.
     expect(view.container.querySelectorAll('[data-provenance]')).toHaveLength(2)
@@ -507,7 +540,7 @@ describe('SourcesTab', () => {
         ],
       },
     })
-    const { view } = mountTab(snapshotOf({ nodes: [foreign] }), status)
+    const { view } = mountTab(chatOf({ legacy: legacyOf({ nodes: [foreign] }) }), status)
     await act(async () => {})
     expect(screen.getByText(zh.omittedRowsNote.replace('{count}', '5'))).toBeDefined()
     // The mismatch row carries the issues badge; the selected inspector shows
@@ -543,7 +576,7 @@ describe('SourcesTab', () => {
         ],
       },
     })
-    const { view } = mountTab(snapshotOf({ nodes: [foreign] }), status)
+    const { view } = mountTab(chatOf({ legacy: legacyOf({ nodes: [foreign] }) }), status)
     await act(async () => {})
     // Connected: the foreign qualifier is a mismatch against the verified id.
     expect(view.container.querySelector('[data-provenance="mismatch"]')).not.toBeNull()
@@ -559,7 +592,7 @@ describe('SourcesTab', () => {
 
   it('shows honest placeholders on the inspector evidence panel and the exports lens', async () => {
     const status = vi.fn(async () => ({ ok: true, value: CONNECTED }))
-    const { view } = mountTab(snapshotOf({ nodes: [searchResult()] }), status)
+    const { view } = mountTab(chatOf({ legacy: legacyOf({ nodes: [searchResult()] }) }), status)
     await act(async () => {})
     // A search hit that was never retrieved onboards instead of claiming a
     // retrieval that did not happen.
@@ -594,9 +627,13 @@ describe('SourcesTab', () => {
         ],
       },
     })
-    const { view } = mountTab(snapshotOf({ nodes: [searchResult(), retrieve] }), status, {
-      setDraft,
-    })
+    const { view } = mountTab(
+      chatOf({ legacy: legacyOf({ nodes: [searchResult(), retrieve] }) }),
+      status,
+      {
+        setDraft,
+      },
+    )
     await act(async () => {})
     // The first source is selected by default; the overview shows the query
     // that surfaced it, and the passages tab carries the kept-passage count.
@@ -623,12 +660,12 @@ describe('SourcesTab', () => {
       isError: true,
       error: { name: 'ZoteroError', code: 'ZOTERO_INVALID_ARGUMENT' },
     })
-    const { view } = mountTab(snapshotOf({ nodes: [failedSearch] }), status)
+    const { view } = mountTab(chatOf({ legacy: legacyOf({ nodes: [failedSearch] }) }), status)
     await act(async () => {})
     expect(screen.getByText(zh.noSources)).toBeDefined()
     view.unmount()
 
-    const filtered = mountTab(snapshotOf({ nodes: [searchResult()] }), status)
+    const filtered = mountTab(chatOf({ legacy: legacyOf({ nodes: [searchResult()] }) }), status)
     await act(async () => {})
     // Zero-count filters are not rendered at all, so an empty filter state
     // is never actively reachable.
@@ -640,12 +677,13 @@ describe('SourcesTab', () => {
 
   it('recovers from a filter that empties when the sources change under it', async () => {
     const status = vi.fn(async () => ({ ok: true, value: CONNECTED }))
-    const holder = { session: snapshotOf({ nodes: [searchResult()] }) }
+    const holder = { chat: chatOf({ legacy: legacyOf({ nodes: [searchResult()] }) }) }
     const props = {
       t,
       status: async () => ({ ok: true, value: CONNECTED }),
-      useSession: (sel: (snap: ConversationSnapshot) => unknown) =>
-        holder.session === undefined ? undefined : sel(holder.session),
+      useSession: (sel: (snap: SessionSnapshot) => unknown) => sel(sessionOf()),
+      useChat: (sel: (snap: ChatSnapshot) => unknown) =>
+        holder.chat === undefined ? undefined : sel(holder.chat),
     } as unknown as SourcesTabProps
     const view = render(<SourcesTab {...props} />)
     await act(async () => {})
@@ -667,8 +705,8 @@ describe('SourcesTab', () => {
       },
       content: [{ type: 'text', text: '@book{x}' }],
     })
-    const withExport = { ...holder.session, nodes: [searchResult(), exportCall] }
-    holder.session = withExport as ConversationSnapshot
+    const withExport = chatOf({ legacy: legacyOf({ nodes: [searchResult(), exportCall] }) })
+    holder.chat = withExport
     view.rerender(<SourcesTab {...props} />)
     await act(async () => {})
     fireEvent.click(
@@ -682,7 +720,7 @@ describe('SourcesTab', () => {
     ).toBe('active')
     // The same session now loses its export (a stale snapshot view): the
     // filter stays active, the list empties, and the clear action restores.
-    holder.session = snapshotOf({ nodes: [searchResult()] })
+    holder.chat = chatOf({ legacy: legacyOf({ nodes: [searchResult()] }) })
     view.rerender(<SourcesTab {...props} />)
     await act(async () => {})
     expect(screen.getByText(zh.filterEmptyNote)).toBeDefined()
@@ -708,7 +746,10 @@ describe('SourcesTab', () => {
       },
       content: [{ type: 'text', text: '@book{x}' }],
     })
-    const { view } = mountTab(snapshotOf({ nodes: [searchResult(), exportCall] }), status)
+    const { view } = mountTab(
+      chatOf({ legacy: legacyOf({ nodes: [searchResult(), exportCall] }) }),
+      status,
+    )
     await act(async () => {})
     // The workflow header is gone; the filter pill, the row badge, and the
     // exports tab count are the count surfaces.
@@ -723,8 +764,10 @@ describe('SourcesTab', () => {
   it('renders the sources list with a fallback key when the session id is missing', async () => {
     const status = vi.fn(async () => ({ ok: true, value: CONNECTED }))
     const { view } = mountTab(
-      snapshotOf({ sessionId: undefined as never, nodes: [searchResult()] }),
+      chatOf({ legacy: legacyOf({ nodes: [searchResult()] }) }),
       status,
+      undefined,
+      sessionOf({ sessionId: undefined as never }),
     )
     await act(async () => {})
     expect(screen.getByText(`${zh.filterAll} 1`)).toBeDefined()
@@ -753,12 +796,14 @@ describe('SourcesTab', () => {
         ],
       },
     })
-    const holder = { session: snapshotOf({ nodes: [searchResult(), retrieve] }) }
+    const holder = { session: sessionOf() }
     const props = {
       t,
       status: async () => ({ ok: true, value: CONNECTED }),
-      useSession: (sel: (snap: ConversationSnapshot) => unknown) =>
+      useSession: (sel: (snap: SessionSnapshot) => unknown) =>
         holder.session === undefined ? undefined : sel(holder.session),
+      useChat: (sel: (snap: ChatSnapshot) => unknown) =>
+        sel(chatOf({ legacy: legacyOf({ nodes: [searchResult(), retrieve] }) })),
     } as unknown as SourcesTabProps
     const view = render(<SourcesTab {...props} />)
     await act(async () => {})
@@ -766,10 +811,7 @@ describe('SourcesTab', () => {
     expect(screen.getByText(`${zh.filterEvidence} 1`).getAttribute('data-pill')).toBe('active')
 
     // A new session id remounts the list (key), so the filter starts clean.
-    holder.session = snapshotOf({
-      sessionId: 's2' as unknown as ConversationSnapshot['sessionId'],
-      nodes: [searchResult()],
-    })
+    holder.session = sessionOf({ sessionId: 's2' as unknown as SessionSnapshot['sessionId'] })
     view.rerender(<SourcesTab {...props} />)
     await act(async () => {})
     // The passages filter has nothing to show in the new session, so its
@@ -782,7 +824,7 @@ describe('SourcesTab', () => {
   it('prefills the composer from the empty-state starters without submitting', async () => {
     const status = vi.fn(async () => ({ ok: true, value: CONNECTED }))
     const setDraft = vi.fn()
-    const { view } = mountTab(snapshotOf(), status, { setDraft })
+    const { view } = mountTab(chatOf(), status, { setDraft })
     await act(async () => {})
     expect(screen.getByText(zh.noSources)).toBeDefined()
     fireEvent.click(screen.getByText(zh.starterFind))
@@ -796,7 +838,7 @@ describe('SourcesTab', () => {
     expect(setDraft).toHaveBeenCalledWith(zh.starterExportSelectedTemplate)
     view.unmount()
 
-    const bare = mountTab(snapshotOf(), status)
+    const bare = mountTab(chatOf(), status)
     await act(async () => {})
     expect(screen.queryByText(zh.starterFind)).toBeNull()
     bare.view.unmount()

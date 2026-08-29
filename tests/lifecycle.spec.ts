@@ -5,7 +5,7 @@ import {
   type CommandInvocation,
   type CommandResult,
 } from '@deepseek-ai/dsh-commands'
-import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+import SystemPrompt, { FIRST_PARTY_SECTION_ORDER } from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import ZoteroService from '../src/index.js'
@@ -182,9 +182,10 @@ describe('prompt section', () => {
     const section = assembly.sections.find((entry) => entry.name === 'zotero:policy')
     expect(section).toBeDefined()
     // Assemblies expose name/text only; order is observed through position —
-    // 106 lands after the identity/persona sections that open the prompt.
+    // the derived 3000 lands after the identity/persona sections that open
+    // the prompt and after every first-party per-tool section it complements.
     expect(assembly.sections.map((entry) => entry.name).indexOf('zotero:policy')).toBeGreaterThan(0)
-    expect(ZOTERO_PROMPT_SECTION_ORDER).toBe(106)
+    expect(ZOTERO_PROMPT_SECTION_ORDER).toBe(FIRST_PARTY_SECTION_ORDER.TOOL_REPORT + 100)
     for (const tool of [
       'zotero_search',
       'zotero_get',

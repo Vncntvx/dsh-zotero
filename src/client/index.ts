@@ -15,16 +15,17 @@
  * @module dsh-zotero/client
  */
 
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
+import type { Context as ClientContext } from '@deepseek-ai/cordis'
 // Type-only Context merges: locale (ctx.locale) arrives through its package's
 // client declaration; the Remote face (ctx.remote) through the api-remotes
-// assembly; ui-settings supplies the `settingsScope` service; ui-settings-plugins
-// the keyed `settings.plugin.item` slot this card registers into. Cross-plugin
-// collaboration rides services and slot declarations, never value imports
-// (client bundle purity).
+// assembly; ui-settings supplies the `settingsScope` service; ui-renderer the
+// `slots` registry; ui-settings-plugins the keyed `settings.plugin.item` slot
+// this card registers into. Cross-plugin collaboration rides services and
+// slot declarations, never value imports (client bundle purity).
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings-plugins/client'
 // Type-only: the `conversation.view` SlotMap row (declared by the slot's
 // owning package) must be in the program for the tab registration to type.

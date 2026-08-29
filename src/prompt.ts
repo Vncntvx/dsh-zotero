@@ -14,12 +14,18 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import { FIRST_PARTY_SECTION_ORDER } from '@deepseek-ai/dsh-system-prompt'
 import type { ResolvedConfig } from './config.js'
 
 const ZOTERO_PROMPT_SECTION_NAME = 'zotero:policy'
 
-/** Tool guidance sits in the 100–199 order band; 106 keeps it after the core tool sections. */
-export const ZOTERO_PROMPT_SECTION_ORDER = 106
+/**
+ * Tail of the first-party tool-guidance band (`TOOL_*` placements end at
+ * `TOOL_REPORT`, the SDK section follows far later), so the policy reads
+ * after every per-tool section it complements. Derived from the sparse
+ * first-party placements instead of a magic number.
+ */
+export const ZOTERO_PROMPT_SECTION_ORDER = FIRST_PARTY_SECTION_ORDER.TOOL_REPORT + 100
 
 /**
  * The policy body with the configured tool caps interpolated — the values

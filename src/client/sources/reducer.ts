@@ -10,7 +10,7 @@
  * @module dsh-zotero/client/sources/reducer
  */
 
-import type { ToolCallBlock, ToolResultNode } from '@deepseek-ai/dsh-client-runtime/client'
+import type { ToolCallBlock, ToolResultNode } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import {
   argsOf,
   callNameOf,
