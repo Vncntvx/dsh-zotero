@@ -6,9 +6,10 @@
  * without a browser.
  *
  * Steps: npm pack → temp profile → `dsh plugin add <tarball>` → `dsh web
- * --port 0` → GET / → parse window.__DSH_BOOT__ → assert the dsh-zotero row
- * → GET its bundle URL → assert 200 and the __ModuleLoader__.load handoff →
- * shutdown.
+ * --port 0` → read the boot token the CLI prints → exchange it for the page
+ * cookie (alpha.1 gates the composition behind instance auth) → GET / →
+ * parse window.__DSH_BOOT__ → assert the dsh-zotero row → GET its bundle URL
+ * → assert 200 and the __ModuleLoader__.load handoff → shutdown.
  *
  * Usage: node scripts/discovery-smoke.mjs [--dsh <dsh-binary>] [--profile <dir>]
  * @module scripts/discovery-smoke
@@ -16,7 +17,7 @@
 
 import { execFile, spawn } from 'node:child_process'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, openSync, rmSync } from 'node:fs'
+import { mkdtempSync, openSync, readFileSync, rmSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -46,14 +47,24 @@ function packPath() {
   return resolve(PACKAGE_DIR, lines[lines.length - 1])
 }
 
-async function fetchText(url) {
-  const response = await fetch(url)
+function sleep(ms) {
+  return new Promise((resolveDelay) => {
+    setTimeout(resolveDelay, ms)
+  })
+}
+
+async function fetchText(url, cookie) {
+  const response = await fetch(url, { headers: cookie === undefined ? {} : { cookie } })
   if (!response.ok) throw new Error(`GET ${url} → HTTP ${response.status}`)
   return await response.text()
 }
 
 function extractBootGraph(html) {
-  const match = /window\.__DSH_BOOT__\s*=\s*(\{[\s\S]*?\})\s*<\//.exec(html)
+  // The rc-era webserver spelled the global `window.__DSH_BOOT__`; alpha.1
+  // spells it `globalThis["__DSH_BOOT__"]`. Accept both spellings.
+  const match = /(?:window\.__DSH_BOOT__|globalThis\["__DSH_BOOT__"\])\s*=\s*(\{[\s\S]*?\})\s*<\//.exec(
+    html,
+  )
   if (match === null) throw new Error('index HTML carries no window.__DSH_BOOT__ manifest')
   // The host escapes '<' inside the injected script as '\\u003c' so plugin
   // strings cannot break out of the script element; JSON.parse expects the
@@ -61,17 +72,45 @@ function extractBootGraph(html) {
   return JSON.parse(match[1].replaceAll('\\u003c', '<'))
 }
 
-async function waitForIndex(port, attempts = 240) {
+/** Poll the boot log for the one-time token the web CLI prints on startup. */
+async function waitForBootToken(home, attempts = 240) {
+  const logPath = join(home, 'dsh-web.log')
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
-      const text = await fetchText(`http://127.0.0.1:${port}/`)
+      const match = /token=([A-Za-z0-9_-]+)/.exec(readFileSync(logPath, 'utf8'))
+      if (match !== null) return match[1]
+    } catch {
+      // The log appears with the first boot output; retry until then.
+    }
+    await sleep(250)
+  }
+  throw new Error('dsh web printed no boot token within the probe window')
+}
+
+/** Exchange the one-time boot token for the page cookie every request carries. */
+async function exchangeTokenForCookie(port, token) {
+  const response = await fetch(`http://127.0.0.1:${port}/?token=${token}`, {
+    redirect: 'manual',
+  })
+  if (response.status !== 303) {
+    throw new Error(`the boot token exchange returned HTTP ${response.status}`)
+  }
+  const [setCookie] = response.headers.getSetCookie()
+  if (setCookie === undefined) {
+    throw new Error('the boot token exchange set no page cookie')
+  }
+  return setCookie.split(';')[0]
+}
+
+async function waitForIndex(port, cookie, attempts = 240) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      const text = await fetchText(`http://127.0.0.1:${port}/`, cookie)
       if (text.includes('__DSH_BOOT__')) return text
     } catch {
       // The server is not listening yet; retry after a short delay.
     }
-    await new Promise((resolveDelay) => {
-      setTimeout(resolveDelay, 250)
-    })
+    await sleep(250)
   }
   throw new Error(`dsh web did not serve an index within the probe window on port ${port}`)
 }
@@ -107,7 +146,12 @@ async function main() {
     child.once('exit', resolveClosed)
   })
   try {
-    const html = await waitForIndex(port)
+    // The alpha.1 web CLI authenticates the composition behind a per-instance
+    // token: the log carries the one-time token, the 303 exchanges it for the
+    // page cookie, and every probe below rides that cookie.
+    const token = await waitForBootToken(HOME)
+    const cookie = await exchangeTokenForCookie(port, token)
+    const html = await waitForIndex(port, cookie)
     const graph = extractBootGraph(html)
     const entry = graph.entries.find((candidate) => candidate.id === 'dsh-zotero')
     if (entry === undefined) {
@@ -129,7 +173,7 @@ async function main() {
     ) {
       throw new Error('__DSH_BOOT__ schedules no batch entry for dsh-zotero')
     }
-    const bundle = await fetchText(`http://127.0.0.1:${port}${entry.url}`)
+    const bundle = await fetchText(`http://127.0.0.1:${port}${entry.url}`, cookie)
     if (!bundle.includes('__ModuleLoader__.load')) {
       throw new Error('the served bundle does not carry the __ModuleLoader__.load handoff')
     }
