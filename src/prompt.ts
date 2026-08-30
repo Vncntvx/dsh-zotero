@@ -9,7 +9,7 @@
  * The section text is a provider evaluated at every assembly, so the tool
  * cap values it states always track the live config — the model never has
  * to guess a limit the plugin will reject.
- * Registered once in the tool-guidance band.
+ * Registered once, after the first-party per-tool sections.
  * @module dsh-zotero/prompt
  */
 
@@ -23,7 +23,9 @@ const ZOTERO_PROMPT_SECTION_NAME = 'zotero:policy'
  * Tail of the first-party tool-guidance band (`TOOL_*` placements end at
  * `TOOL_REPORT`, the SDK section follows far later), so the policy reads
  * after every per-tool section it complements. Derived from the sparse
- * first-party placements instead of a magic number.
+ * first-party placements instead of a magic number; `+ 100` is deliberate
+ * headroom over the placements' ≥ 10 sparsity so a first-party insertion
+ * between them cannot collide with this section.
  */
 export const ZOTERO_PROMPT_SECTION_ORDER = FIRST_PARTY_SECTION_ORDER.TOOL_REPORT + 100
 

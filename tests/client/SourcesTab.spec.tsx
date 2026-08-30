@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
- * The Sources panel: pure helpers (snapshot collection, status projection,
- * clock, id shortening, diagnosis line) plus the rendered tab — the
+ * The Sources panel: pure helpers (call-block collection, status projection,
+ * clock, diagnosis line) plus the rendered tab — the
  * connectivity strip states, the sources-first default with its stable
  * union and filters, the honest evidence/exports placeholders, refresh,
  * abort, and the empty state.
@@ -172,30 +172,66 @@ function searchResult(overrides: Partial<ToolResultNode> = {}): ToolResultNode {
   })
 }
 
+/** A settled zotero_retrieve on the standard item ref, carrying one passage. */
+function retrieveOf(): ToolResultNode {
+  return settled({
+    seq: 4,
+    callId: 'rv1',
+    call: { name: 'zotero_retrieve', argsRaw: '{"ref":"zotero://user/0/item/AAAAAAA1"}' },
+    meta: {
+      count: 1,
+      sources: ['annotation'],
+      truncated: false,
+      sourcesSkipped: [],
+      items: [
+        {
+          source: 'annotation',
+          sourceRef: 'zotero://user/0/annotation/ANN1',
+          preview: 'claim',
+          previewTruncated: false,
+          pageLabel: '7',
+        },
+      ],
+    },
+  })
+}
+
+/** A settled zotero_export of the standard ref as bibtex. */
+function exportOf(): ToolResultNode {
+  return settled({
+    seq: 4,
+    callId: 'e1',
+    call: {
+      name: 'zotero_export',
+      argsRaw: '{"refs":["zotero://user/0/item/AAAAAAA1"],"format":"bibtex"}',
+    },
+    meta: {
+      format: 'bibtex',
+      requested: 1,
+      refs: ['zotero://user/0/item/AAAAAAA1'],
+      refsOmitted: 0,
+    },
+    content: [{ type: 'text', text: '@book{x}' }],
+  })
+}
+
 /** Render the tab with stubbed session/chat hooks and the status face. */
 function mountTab(
   chat: ChatSnapshot | undefined,
   status: () => Promise<{ ok: boolean; value?: unknown; error?: unknown }>,
   inputActions?: { setDraft: (text: string) => void },
   session: SessionSnapshot | undefined = sessionOf(),
-): {
-  view: ReturnType<typeof render>
-  calls: number
-} {
-  let calls = 0
+): { view: ReturnType<typeof render> } {
   const props = {
     t,
-    status: async () => {
-      calls += 1
-      return (await status()) as never
-    },
+    status,
     useSession: (sel: (snap: SessionSnapshot) => unknown) =>
       session === undefined ? undefined : sel(session),
     useChat: (sel: (snap: ChatSnapshot) => unknown) => (chat === undefined ? undefined : sel(chat)),
     ...(inputActions === undefined ? {} : { inputActions }),
   } as unknown as SourcesTabProps
   const view = render(<SourcesTab {...props} />)
-  return { view, calls }
+  return { view }
 }
 
 afterEach(cleanup)
@@ -340,25 +376,15 @@ describe('SourcesTab', () => {
   })
 
   it('skips the probe when no status face is injected', async () => {
-    const view = render(
-      <SourcesTab
-        t={t}
-        status={undefined as never}
-        viewRequest={undefined as never}
-        openView={undefined as never}
-        completeViewRequest={undefined as never}
-        useSession={((sel: (snap: SessionSnapshot) => unknown) => sel(sessionOf())) as never}
-        useChat={((sel: (snap: ChatSnapshot) => unknown) => sel(chatOf())) as never}
-        sessionId={'s1' as never}
-        useProjection={undefined as never}
-        useConversation={undefined as never}
-        useInput={undefined as never}
-        inputActions={undefined as never}
-        useSessions={undefined as never}
-        useSessionPendingInteraction={undefined as never}
-        useWorkspaces={undefined as never}
-      />,
-    )
+    // The whole-props cast keeps this test blind to the merged
+    // PropsRuntime surface — upstream merges stop breaking it.
+    const props = {
+      t,
+      status: undefined,
+      useSession: (sel: (snap: SessionSnapshot) => unknown) => sel(sessionOf()),
+      useChat: (sel: (snap: ChatSnapshot) => unknown) => sel(chatOf()),
+    } as unknown as SourcesTabProps
+    const view = render(<SourcesTab {...props} />)
     await act(async () => {})
     expect(screen.getByText(zh.noSources)).toBeDefined()
     view.unmount()
@@ -465,26 +491,7 @@ describe('SourcesTab', () => {
 
   it('filters the stable union by evidence and by failures', async () => {
     const status = vi.fn(async () => ({ ok: true, value: CONNECTED }))
-    const retrieve = settled({
-      seq: 4,
-      callId: 'rv1',
-      call: { name: 'zotero_retrieve', argsRaw: '{"ref":"zotero://user/0/item/AAAAAAA1"}' },
-      meta: {
-        count: 1,
-        sources: ['annotation'],
-        truncated: false,
-        sourcesSkipped: [],
-        items: [
-          {
-            source: 'annotation',
-            sourceRef: 'zotero://user/0/annotation/ANN1',
-            preview: 'claim',
-            previewTruncated: false,
-            pageLabel: '7',
-          },
-        ],
-      },
-    })
+    const retrieve = retrieveOf()
     const failed = settled({
       seq: 5,
       callId: 'g1',
@@ -607,26 +614,7 @@ describe('SourcesTab', () => {
   it('shows the inspector overview with search provenance and prefills from its actions', async () => {
     const status = vi.fn(async () => ({ ok: true, value: CONNECTED }))
     const setDraft = vi.fn()
-    const retrieve = settled({
-      seq: 4,
-      callId: 'rv1',
-      call: { name: 'zotero_retrieve', argsRaw: '{"ref":"zotero://user/0/item/AAAAAAA1"}' },
-      meta: {
-        count: 1,
-        sources: ['annotation'],
-        truncated: false,
-        sourcesSkipped: [],
-        items: [
-          {
-            source: 'annotation',
-            sourceRef: 'zotero://user/0/annotation/ANN1',
-            preview: 'claim',
-            previewTruncated: false,
-            pageLabel: '7',
-          },
-        ],
-      },
-    })
+    const retrieve = retrieveOf()
     const { view } = mountTab(
       chatOf({ legacy: legacyOf({ nodes: [searchResult(), retrieve] }) }),
       status,
@@ -690,21 +678,7 @@ describe('SourcesTab', () => {
     // Nothing is exported yet, so no pill can empty the list. A direct
     // sources change under an active filter is the one path that can leave
     // an active filter with zero matches — the clear button recovers it.
-    const exportCall = settled({
-      seq: 4,
-      callId: 'e1',
-      call: {
-        name: 'zotero_export',
-        argsRaw: '{"refs":["zotero://user/0/item/AAAAAAA1"],"format":"bibtex"}',
-      },
-      meta: {
-        format: 'bibtex',
-        requested: 1,
-        refs: ['zotero://user/0/item/AAAAAAA1'],
-        refsOmitted: 0,
-      },
-      content: [{ type: 'text', text: '@book{x}' }],
-    })
+    const exportCall = exportOf()
     const withExport = chatOf({ legacy: legacyOf({ nodes: [searchResult(), exportCall] }) })
     holder.chat = withExport
     view.rerender(<SourcesTab {...props} />)
@@ -731,21 +705,7 @@ describe('SourcesTab', () => {
 
   it('carries the exported count on the filter pill, the badge, and the exports tab', async () => {
     const status = vi.fn(async () => ({ ok: true, value: CONNECTED }))
-    const exportCall = settled({
-      seq: 4,
-      callId: 'e1',
-      call: {
-        name: 'zotero_export',
-        argsRaw: '{"refs":["zotero://user/0/item/AAAAAAA1"],"format":"bibtex"}',
-      },
-      meta: {
-        format: 'bibtex',
-        requested: 1,
-        refs: ['zotero://user/0/item/AAAAAAA1'],
-        refsOmitted: 0,
-      },
-      content: [{ type: 'text', text: '@book{x}' }],
-    })
+    const exportCall = exportOf()
     const { view } = mountTab(
       chatOf({ legacy: legacyOf({ nodes: [searchResult(), exportCall] }) }),
       status,
@@ -776,34 +736,14 @@ describe('SourcesTab', () => {
 
   it('resets the filter when the session switches', async () => {
     const status = vi.fn(async () => ({ ok: true, value: CONNECTED }))
-    const retrieve = settled({
-      seq: 4,
-      callId: 'rv1',
-      call: { name: 'zotero_retrieve', argsRaw: '{"ref":"zotero://user/0/item/AAAAAAA1"}' },
-      meta: {
-        count: 1,
-        sources: ['annotation'],
-        truncated: false,
-        sourcesSkipped: [],
-        items: [
-          {
-            source: 'annotation',
-            sourceRef: 'zotero://user/0/annotation/ANN1',
-            preview: 'claim',
-            previewTruncated: false,
-            pageLabel: '7',
-          },
-        ],
-      },
-    })
+    const retrieve = retrieveOf()
     const holder = { session: sessionOf() }
+    const chat = chatOf({ legacy: legacyOf({ nodes: [searchResult(), retrieve] }) })
     const props = {
       t,
       status: async () => ({ ok: true, value: CONNECTED }),
-      useSession: (sel: (snap: SessionSnapshot) => unknown) =>
-        holder.session === undefined ? undefined : sel(holder.session),
-      useChat: (sel: (snap: ChatSnapshot) => unknown) =>
-        sel(chatOf({ legacy: legacyOf({ nodes: [searchResult(), retrieve] }) })),
+      useSession: (sel: (snap: SessionSnapshot) => unknown) => sel(holder.session),
+      useChat: (sel: (snap: ChatSnapshot) => unknown) => sel(chat),
     } as unknown as SourcesTabProps
     const view = render(<SourcesTab {...props} />)
     await act(async () => {})

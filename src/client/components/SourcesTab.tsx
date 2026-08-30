@@ -1,7 +1,9 @@
 /**
  * The Sources panel: the plugin's conversation tab (id `zotero`, order 30).
- * This module is the controller: it reads the session and the connectivity
- * probe, builds the source workspace, and renders the pure presentation
+ * This module is the controller: it reads the session's identity (the id
+ * only — lifecycle churn never re-renders the panel), the chat target's
+ * legacy call-block slice, and the connectivity probe; it builds the source
+ * workspace and renders the pure presentation
  * surface `ZoteroWorkspaceView` (fixture-renderable, no session or Zotero
  * needed). The probe runs once on mount and once per explicit refresh — no
  * timers — and its cancellation is ignore-stale: the Remote face carries no
@@ -108,9 +110,10 @@ export function collectZoteroCalls(slice: LegacyConversationSlice | undefined): 
 
 /** The Sources panel controller: probe, workspace build, and the view. */
 export function SourcesTab({ status, t, useSession, useChat, inputActions }: SourcesTabProps) {
-  // Lifecycle and identity come from the session snapshot; the zotero-relevant
-  // call blocks live in the chat target's legacy projection.
-  const session = useSession((snapshot) => snapshot)
+  // The session selector takes the primitive id, so lifecycle churn during a
+  // turn (running flips, queue, error fields) never re-renders the panel; the
+  // zotero-relevant call blocks live in the chat target's legacy projection.
+  const sessionId = useSession((snapshot) => snapshot.sessionId)
   const chat = useChat((snapshot) => snapshot.legacy)
   const [statusState, setStatusState] = useState<ConnectionView>({ kind: 'loading' })
   const [requestId, setRequestId] = useState(0)
@@ -119,6 +122,11 @@ export function SourcesTab({ status, t, useSession, useChat, inputActions }: Sou
   // drop it, or the workspace would rebuild twice per probe.
   const [serverId, setServerId] = useState<string | undefined>(undefined)
   const signature = useMemo(() => sessionSignatureOf(chat), [chat])
+  // Keyed on the signature, not on `chat`: streaming publications keep the
+  // settled-node count, tail order key, and running-call ids stable, so the
+  // collection skips them. A nested dispatch appearing under an already
+  // running call keeps that call's id and lands with the next signature
+  // change — an accepted delay, not an omission.
   const blocks = useMemo(() => collectZoteroCalls(chat), [signature])
   const workspace = useMemo(
     () => buildSourceWorkspace(blocks, { currentServerId: serverId }),
@@ -169,10 +177,10 @@ export function SourcesTab({ status, t, useSession, useChat, inputActions }: Sou
 
   return (
     <ZoteroWorkspaceView
-      key={session?.sessionId ?? 'none'}
+      key={sessionId ?? 'none'}
       workspace={workspace}
       connection={statusState}
-      sessionId={session?.sessionId ?? 'none'}
+      sessionId={sessionId ?? 'none'}
       setDraft={setDraft}
       onRefresh={refresh}
       t={t}

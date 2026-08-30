@@ -75,7 +75,7 @@ export function fakeScope(options: FakeScopeOptions = {}): FakeScope {
     }
     snapshot = { ...snapshot, user, value: resolved }
   }
-  return {
+  const scope: FakeScope = {
     writes,
     getSnapshot: () => snapshot,
     subscribe: (listener) => {
@@ -99,22 +99,16 @@ export function fakeScope(options: FakeScopeOptions = {}): FakeScope {
       applyWrite('unset', field)
       publish()
     },
-    // The alpha.1 scope adds the atomic multi-op mutation; the fake applies
-    // each path op through the same per-field surface the ledger records.
+    // The alpha.1 scope adds the atomic multi-op mutation. No card path
+    // drives it yet — the fake delegates to the same per-field surface so
+    // the ledger stays single-sourced (the real scope fences the whole batch
+    // with one revision and one publish; this per-op form is unexercised).
     mutate: async (ops) => {
       for (const op of ops) {
-        if (op.op === 'set') {
-          if (options.rejectWrites === true) continue
-          writes.push({ op: 'set', field: op.path[0]!, value: op.value })
-          applyWrite('set', op.path[0]!, op.value)
-          publish()
-        } else {
-          if (options.rejectWrites === true) continue
-          writes.push({ op: 'unset', field: op.path[0]! })
-          applyWrite('unset', op.path[0]!)
-          publish()
-        }
+        if (op.op === 'set') await scope.set(op.path[0]!, op.value)
+        else await scope.unset(op.path[0]!)
       }
     },
   }
+  return scope
 }

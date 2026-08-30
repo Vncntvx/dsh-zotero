@@ -1797,13 +1797,12 @@ describe('connectivity failure ask', () => {
     await askCtx.plugin(UserQuestionService)
     const asked: unknown[] = []
     // The alpha.1 ask seam is a scope-filtered waterfall: the listener claims
-    // the request by returning an answer, so the ask flow observes the same
-    // contract the old provider used to serve.
+    // the request by returning an answer; the plugin's ask flow consumes the
+    // same request/answer contract the old provider registration served.
+    const retryOption = 'I started Zotero, retry (Recommended)'
     askCtx.on('user-questions/request', async (request, _next) => {
       asked.push(request)
-      return {
-        answers: [{ id: 'zotero-failure', selected: ['I started Zotero, retry (Recommended)'] }],
-      }
+      return { answers: [{ id: 'zotero-failure', selected: [retryOption] }] }
     })
     await askCtx.plugin(ZoteroService, { baseUrl: downUrl })
 
@@ -1821,6 +1820,6 @@ describe('connectivity failure ask', () => {
     expect(asked).toHaveLength(1)
     const request = asked[0] as { questions: { id: string; options: { label: string }[] }[] }
     expect(request.questions[0]!.id).toBe('zotero-failure')
-    expect(request.questions[0]!.options![0]!.label).toBe('I started Zotero, retry (Recommended)')
+    expect(request.questions[0]!.options![0]!.label).toBe(retryOption)
   })
 })

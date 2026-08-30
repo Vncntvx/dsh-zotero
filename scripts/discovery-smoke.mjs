@@ -62,10 +62,9 @@ async function fetchText(url, cookie) {
 function extractBootGraph(html) {
   // The rc-era webserver spelled the global `window.__DSH_BOOT__`; alpha.1
   // spells it `globalThis["__DSH_BOOT__"]`. Accept both spellings.
-  const match = /(?:window\.__DSH_BOOT__|globalThis\["__DSH_BOOT__"\])\s*=\s*(\{[\s\S]*?\})\s*<\//.exec(
-    html,
-  )
-  if (match === null) throw new Error('index HTML carries no window.__DSH_BOOT__ manifest')
+  const match =
+    /(?:window\.__DSH_BOOT__|globalThis\["__DSH_BOOT__"\])\s*=\s*(\{[\s\S]*?\})\s*<\//.exec(html)
+  if (match === null) throw new Error('index HTML carries no __DSH_BOOT__ manifest')
   // The host escapes '<' inside the injected script as '\\u003c' so plugin
   // strings cannot break out of the script element; JSON.parse expects the
   // raw character.
@@ -161,7 +160,7 @@ async function main() {
     }
     // The alpha.1 boot graph composes content-addressed combo scripts: every
     // entry row carries the revisioned single-resource combo URL, and its id
-    // must appear in exactly one scheduling batch.
+    // must appear in a scheduling batch.
     if (!entry.url.startsWith('/plugins/??dsh-zotero/client.js&rev=')) {
       throw new Error(`unexpected bundle url: ${entry.url}`)
     }

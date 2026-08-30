@@ -5,7 +5,7 @@ import {
   type CommandInvocation,
   type CommandResult,
 } from '@deepseek-ai/dsh-commands'
-import SystemPrompt, { FIRST_PARTY_SECTION_ORDER } from '@deepseek-ai/dsh-system-prompt'
+import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import ZoteroService from '../src/index.js'
@@ -176,16 +176,18 @@ describe('/zotero status command', () => {
 })
 
 describe('prompt section', () => {
-  it('contributes the zotero policy section at order 106', async () => {
+  it('contributes the zotero policy section after the first-party tool band', async () => {
     const { ctx } = await bootContext(true)
     const assembly = await ctx.systemPrompt.assemble()
     const section = assembly.sections.find((entry) => entry.name === 'zotero:policy')
     expect(section).toBeDefined()
     // Assemblies expose name/text only; order is observed through position —
-    // the derived 3000 lands after the identity/persona sections that open
-    // the prompt and after every first-party per-tool section it complements.
+    // 3000 lands after the identity/persona sections that open the prompt
+    // and after every first-party per-tool section it complements.
     expect(assembly.sections.map((entry) => entry.name).indexOf('zotero:policy')).toBeGreaterThan(0)
-    expect(ZOTERO_PROMPT_SECTION_ORDER).toBe(FIRST_PARTY_SECTION_ORDER.TOOL_REPORT + 100)
+    // The concrete pin keeps the derivation in src/prompt.ts honest: any
+    // anchor or offset drift fails here instead of passing by restatement.
+    expect(ZOTERO_PROMPT_SECTION_ORDER).toBe(3000)
     for (const tool of [
       'zotero_search',
       'zotero_get',
