@@ -124,8 +124,10 @@ const options = {
   define: {
     'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV ?? 'production'),
     // The bundled snapshot store's dependencies (zustand/immer) probe the
-    // bundler mode the way the harness tsdown preset substitutes them.
-    'import.meta.env.MODE': JSON.stringify('production'),
+    // bundler mode exactly the way the harness tsdown preset substitutes
+    // them: the bare `import.meta.env` truthiness probe AND the MODE key.
+    'import.meta.env': JSON.stringify({ MODE: process.env.NODE_ENV ?? 'production' }),
+    'import.meta.env.MODE': JSON.stringify(process.env.NODE_ENV ?? 'production'),
     __DSH_ZOTERO_VERSION__: JSON.stringify(buildVersionOf()),
     __DSH_ZOTERO_COMMIT__: JSON.stringify(buildCommitOf()),
   },
