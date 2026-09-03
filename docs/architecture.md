@@ -74,7 +74,7 @@ graph LR
 ### 设置
 
 - 命名空间 `zotero` 在 `$DSH_HOME/settings.yaml` 中
-- `installSettingsSection` 以 composition entry 作为基础层
+- `installSection`（经 `ctx.inject(['settings'])`）以 composition entry 作为基础层
 - 热重载：`onChange` 重建 HTTP 客户端和 provider
 
 ## 设计边界

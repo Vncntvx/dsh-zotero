@@ -74,7 +74,7 @@ User → Agent → dsh Zotero Tools → ZoteroService → Provider → 127.0.0.1
 ### Settings
 
 - Namespace `zotero` in `$DSH_HOME/settings.yaml`
-- `installSettingsSection` as composition entry base layer
+- `installSection` (via `ctx.inject(['settings'])`) as composition entry base layer
 - Hot-reload: `onChange` rebuilds HTTP client and provider
 
 ## Design boundaries
