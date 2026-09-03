@@ -14,7 +14,11 @@
 
 import { ZOTERO_INVALID_REF, ZoteroError } from './errors.js'
 import { isObjectKey } from './json.js'
-import { REF_PATTERN } from './ref-grammar.js'
+import {
+  REF_PATTERN,
+  ZOTERO_GROUP_ITEM_PATH_PATTERN,
+  ZOTERO_USER_ITEM_PATH_PATTERN,
+} from './ref-grammar.js'
 import type { ZoteroKind, ZoteroObjectRef } from './types.js'
 
 /** True when the given string matches the ref grammar without fully parsing it. */
@@ -30,15 +34,21 @@ export function isRefString(value: string): boolean {
  */
 export function parseRef(value: string): ZoteroObjectRef {
   const match = REF_PATTERN.exec(value)
-  if (match === null) {
+  if (match === null || match.groups === undefined) {
     throw new ZoteroError(
       `Invalid Zotero reference "${value}". Expected zotero://user/0/<item|attachment|annotation|collection|search>/<KEY> with an 8-character key, optionally followed by ?server=<id>.`,
       ZOTERO_INVALID_REF,
     )
   }
-  const [, libraryType, id, kind, key, serverId] = match
+  const { libraryType, libraryId, kind, key, serverId } = match.groups as {
+    libraryType: string
+    libraryId: string
+    kind: string
+    key: string
+    serverId?: string
+  }
   return {
-    library: { type: libraryType as 'user' | 'group', id: Number(id) },
+    library: { type: libraryType as 'user' | 'group', id: Number(libraryId) },
     kind: kind as ZoteroKind,
     key,
     serverId,
@@ -155,9 +165,9 @@ export function parseZoteroRelationUri(
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
   const host = url.hostname.toLowerCase()
   if (host !== 'zotero.org' && host !== 'www.zotero.org' && host !== 'api.zotero.org') return null
-  const m = /^\/users\/(\d+)\/items\/([A-Z0-9]{8})(?:[/?#].*)?$/.exec(url.pathname)
+  const m = ZOTERO_USER_ITEM_PATH_PATTERN.exec(url.pathname)
   if (m) return { library: { type: 'user', id: Number(m[1]!) }, key: m[2]! }
-  const mg = /^\/groups\/(\d+)\/items\/([A-Z0-9]{8})(?:[/?#].*)?$/.exec(url.pathname)
+  const mg = ZOTERO_GROUP_ITEM_PATH_PATTERN.exec(url.pathname)
   if (mg) return { library: { type: 'group', id: Number(mg[1]!) }, key: mg[2]! }
   return null
 }

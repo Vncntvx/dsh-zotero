@@ -12,6 +12,7 @@
 
 import { ZOTERO_UNEXPECTED, ZoteroError } from './errors.js'
 import { asRecord, asString, isObjectKey } from './json.js'
+import { ATTACHMENT_HREF_PATTERN } from './ref-grammar.js'
 
 /**
  * A normalized attachment child row, before ref provenance is attached.
@@ -29,7 +30,7 @@ export interface ZoteroAttachmentCandidate {
 /** Extract a Zotero object key from an API `links.attachment.href`. */
 export function extractAttachmentKey(href: string | undefined): string | undefined {
   if (href === undefined) return undefined
-  return /\/items\/([A-Z0-9]{8})(?:[/?#]|$)/.exec(href)?.[1]
+  return ATTACHMENT_HREF_PATTERN.exec(href)?.[1]
 }
 
 /**

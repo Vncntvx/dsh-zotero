@@ -12,6 +12,26 @@
 /** The object-key source: 8 uppercase alphanumerics. */
 export const REF_KEY_SOURCE = '[A-Z0-9]{8}'
 
+/**
+ * The `links.attachment.href` key extractor: `/items/<KEY>` with a path
+ * boundary, unanchored so query strings and fragments pass through.
+ */
+export const ATTACHMENT_HREF_PATTERN = new RegExp(`/items/(${REF_KEY_SOURCE})(?:[/?#]|$)`)
+
+/**
+ * One canonical Zotero relation path (`/users/<id>/items/<KEY>` or
+ * `/groups/<id>/items/<KEY>`), trailing content allowed for the relation
+ * forms Zotero serves.
+ */
+export const ZOTERO_USER_ITEM_PATH_PATTERN = new RegExp(
+  `^/users/(\\d+)/items/(${REF_KEY_SOURCE})(?:[/?#].*)?$`,
+)
+
+/** The group-library form of {@link ZOTERO_USER_ITEM_PATH_PATTERN}. */
+export const ZOTERO_GROUP_ITEM_PATH_PATTERN = new RegExp(
+  `^/groups/(\\d+)/items/(${REF_KEY_SOURCE})(?:[/?#].*)?$`,
+)
+
 const LIBRARY = '(?<libraryType>user|group)/(?<libraryId>\\d+)'
 const KINDS = '(?<kind>item|attachment|annotation|collection|search)'
 const SERVER_QUALIFIER = '\\?server=(?<serverId>[A-Za-z0-9_-]{1,64})'

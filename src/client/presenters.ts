@@ -28,7 +28,11 @@ export interface EvidenceItemView {
   readonly attachmentRef?: string
 }
 
-/** True for plain objects (the validated shape every meta read requires). */
+/**
+ * True for plain objects (the validated shape every meta read requires).
+ * Semantic layer over json.ts for panel readers: decoders and the reducer
+ * read through here so the validation entry point stays uniform.
+ */
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return asRecord(value) !== undefined
 }

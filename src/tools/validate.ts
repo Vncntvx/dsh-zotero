@@ -7,10 +7,10 @@
 
 import { ZOTERO_INVALID_ARGUMENT, ZoteroError } from '../errors.js'
 import { parseRef, requireSupportedLocalRef } from '../refs.js'
+import type { ZoteroKind, ZoteroObjectRef, SupportedLocalLibrary } from '../types.js'
 
 /** The item-ref format the tool descriptions state verbatim, so the tools cannot drift apart. */
 export const REF_ARG_HINT = 'zotero://user/0/item/<KEY> or zotero://group/<id>/item/<KEY>'
-import type { ZoteroKind, ZoteroObjectRef, SupportedLocalLibrary } from '../types.js'
 
 /** Throw an argument error; the message is model-facing. */
 export function invalid(message: string): never {
@@ -52,13 +52,9 @@ export function parseLibrary(value: unknown): SupportedLocalLibrary | undefined 
   const rec = value as Record<string, unknown>
   const type = rec.type
   const id = rec.id
-  if (type !== 'user' && type !== 'group')
-    throw new ZoteroError('library.type must be user or group', ZOTERO_INVALID_ARGUMENT)
-  if (!Number.isInteger(id))
-    throw new ZoteroError('library.id must be integer', ZOTERO_INVALID_ARGUMENT)
-  if (type === 'user' && id !== 0)
-    throw new ZoteroError('Only user/0 is supported for personal library', ZOTERO_INVALID_ARGUMENT)
-  if (type === 'group' && (id as number) <= 0)
-    throw new ZoteroError('group id must be positive integer', ZOTERO_INVALID_ARGUMENT)
+  if (type !== 'user' && type !== 'group') invalid('library.type must be user or group')
+  if (!Number.isInteger(id)) invalid('library.id must be integer')
+  if (type === 'user' && id !== 0) invalid('Only user/0 is supported for personal library')
+  if (type === 'group' && (id as number) <= 0) invalid('group id must be positive integer')
   return { type: type as SupportedLocalLibrary['type'], id: id as number } as SupportedLocalLibrary
 }
