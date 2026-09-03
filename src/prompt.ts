@@ -14,20 +14,25 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { FIRST_PARTY_SECTION_ORDER } from '@deepseek-ai/dsh-system-prompt'
 import type { ResolvedConfig } from './config.js'
 
 const ZOTERO_PROMPT_SECTION_NAME = 'zotero:policy'
 
 /**
- * Tail of the first-party tool-guidance band (`TOOL_*` placements end at
- * `TOOL_REPORT`, the SDK section follows far later), so the policy reads
- * after every per-tool section it complements. Derived from the sparse
- * first-party placements instead of a magic number; `+ 100` is deliberate
- * headroom over the placements' ≥ 10 sparsity so a first-party insertion
- * between them cannot collide with this section.
+ * Central placement anchor the policy trails: the tail of the first-party
+ * tool-guidance band (`TOOL_*` placements end here, the SDK section follows
+ * far later), so the policy reads after every per-tool section it
+ * complements.
  */
-export const ZOTERO_PROMPT_SECTION_ORDER = FIRST_PARTY_SECTION_ORDER.TOOL_REPORT + 100
+export const ZOTERO_PROMPT_ANCHOR = 'TOOL_REPORT' as const
+
+/**
+ * Headroom over the anchor: deliberate room above the placements' ≥ 10
+ * sparsity so a first-party insertion between them cannot collide with this
+ * section. Kept beside the anchor (not inlined at the call) so the pin in
+ * tests/lifecycle.spec.ts guards it.
+ */
+export const ZOTERO_PROMPT_ORDER_OFFSET = 100
 
 /**
  * The policy body with the configured tool caps interpolated — the values
@@ -66,7 +71,7 @@ function zoteroPromptTextOf(
 export function registerPromptSection(ctx: Context, config: () => ResolvedConfig): void {
   ctx.systemPrompt.section({
     name: ZOTERO_PROMPT_SECTION_NAME,
-    order: ZOTERO_PROMPT_SECTION_ORDER,
+    order: ctx.systemPrompt.getSectionOrder(ZOTERO_PROMPT_ANCHOR) + ZOTERO_PROMPT_ORDER_OFFSET,
     text: () => zoteroPromptTextOf(config()),
   })
 }

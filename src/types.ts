@@ -13,7 +13,7 @@
  * @module dsh-zotero/types
  */
 
-import type { JsonValue } from '@deepseek-ai/dsh-tools'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 
 /** A capability a provider may safely support. */
 export type ZoteroCapability =

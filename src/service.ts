@@ -19,7 +19,8 @@
  */
 
 import { Service, type Context } from '@deepseek-ai/cordis'
-import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
+// Type-only: brings the `ctx.settings` Context merge into this program.
+import type {} from '@deepseek-ai/dsh-settings'
 // Type-only: brings the `ctx.typert` Context merge into this program.
 import type {} from '@deepseek-ai/dsh-typert-registry'
 import { ZoteroHttpClient } from './http-client.js'
@@ -105,31 +106,28 @@ export class ZoteroService extends Service {
     registerExportTool(ctx, this)
     registerBrowseTool(ctx, this)
     registerChangesTool(ctx, this)
-    // The attach runs through a cordis fiber, never synchronously inside the
-    // install: when a settings service is composed, setSource switches the
-    // config authority and onChange rebuilds shortly after this constructor —
-    // the entry-config build here serves headless compositions and the window
-    // before that attach.
-    installSettingsSection(ctx, settingsNamespace(ZOTERO_SETTINGS_NAMESPACE), ConfigSchema, entry, {
-      validate: resolveConfig,
-      setSource: (current) => {
-        // The settings-resolved value carries every schema default and has
-        // passed the resolveConfig validate hook, so it is ResolvedConfig at
-        // runtime even though the seam types it as Config.
-        this.source = current as () => ResolvedConfig
-      },
-      onChange: () => {
-        this.rebuild()
-      },
+    // The settings attach runs through a cordis fiber, never synchronously
+    // inside the install: when a settings service is composed, setSource
+    // switches the config authority and onChange rebuilds shortly after this
+    // constructor — the entry-config build here serves headless compositions
+    // and the window before that attach.
+    ctx.inject(['settings'], (settingsCtx) => {
+      settingsCtx.settings.installSection(ctx, ZOTERO_SETTINGS_NAMESPACE, ConfigSchema, entry, {
+        validate: resolveConfig,
+        setSource: (current) => {
+          // The settings-resolved value carries every schema default and has
+          // passed the resolveConfig validate hook, so it is ResolvedConfig at
+          // runtime even though the seam types it as Config.
+          this.source = current as () => ResolvedConfig
+        },
+        onChange: () => {
+          this.rebuild()
+        },
+      })
     })
     // The settings page's data channel: the Remote service binds the wire
-    // namespace, and the strict manifest claims its endpoints. The manifest
-    // self-registers because dsh-typert-loader's auto-discovery only reaches
-    // bare-package-name rows (it resolves `<entry-name>/package.json` from
-    // the config tree): the dev-overlay row spells an absolute file path, is
-    // invisible to that scan, and a `./typert` export would double-register
-    // wherever both paths meet. Typert is a core service; the optional-inject
-    // form keeps the plugin loadable in compositions without it.
+    // namespace, and the strict manifest claims its endpoints. See typert.ts
+    // for why the manifest self-registers through ctx.inject(['typert']).
     new ZoteroRuntime(ctx)
     ctx.inject(['typert'], (host) => {
       host.effect(() => {

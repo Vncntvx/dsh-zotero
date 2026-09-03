@@ -14,8 +14,8 @@ import {
   ZOTERO_PROVIDER_UNAVAILABLE,
   ZoteroError,
 } from '../src/errors.js'
-import { ZOTERO_PROMPT_SECTION_ORDER } from '../src/prompt.js'
 import { parseRef } from '../src/refs.js'
+import { ZOTERO_PROMPT_ANCHOR, ZOTERO_PROMPT_ORDER_OFFSET } from '../src/prompt.js'
 import type { ZoteroProvider } from '../src/types.js'
 import { MockZotero } from './helpers/mock-zotero.js'
 
@@ -182,12 +182,17 @@ describe('prompt section', () => {
     const section = assembly.sections.find((entry) => entry.name === 'zotero:policy')
     expect(section).toBeDefined()
     // Assemblies expose name/text only; order is observed through position —
-    // 3000 lands after the identity/persona sections that open the prompt
-    // and after every first-party per-tool section it complements.
-    expect(assembly.sections.map((entry) => entry.name).indexOf('zotero:policy')).toBeGreaterThan(0)
-    // The concrete pin keeps the derivation in src/prompt.ts honest: any
-    // anchor or offset drift fails here instead of passing by restatement.
-    expect(ZOTERO_PROMPT_SECTION_ORDER).toBe(3000)
+    // the policy lands after the identity/persona sections that open the
+    // prompt and after every first-party per-tool section it complements.
+    const names = assembly.sections.map((entry) => entry.name)
+    expect(names.indexOf('zotero:policy')).toBeGreaterThan(0)
+    // The pin guards the plugin-owned derivation (anchor + offset), not the
+    // harness table: the anchor is the central placement name, the offset is
+    // the headroom over the band's sparsity. Either drifting fails here
+    // instead of passing by restatement.
+    expect(ZOTERO_PROMPT_ANCHOR).toBe('TOOL_REPORT')
+    expect(ZOTERO_PROMPT_ORDER_OFFSET).toBe(100)
+    expect(ctx.systemPrompt.getSectionOrder(ZOTERO_PROMPT_ANCHOR)).toBe(2900)
     for (const tool of [
       'zotero_search',
       'zotero_get',

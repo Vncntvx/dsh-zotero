@@ -12,10 +12,10 @@ import {
   defineTool,
   type InferArgs,
   type InferValue,
-  type JsonValue,
   type ToolResult,
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import {
   SEARCH_DEFAULT_DIRECTION,
   SEARCH_DEFAULT_LIMIT,

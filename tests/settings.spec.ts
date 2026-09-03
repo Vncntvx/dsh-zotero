@@ -9,12 +9,12 @@
 
 import { Context } from '@deepseek-ai/cordis'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
-import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { afterEach, describe, expect, it } from 'vitest'
 import ZoteroService from '../src/index.js'
 import { ZOTERO_PROVIDER_UNAVAILABLE } from '../src/errors.js'
+import { ZOTERO_SETTINGS_NAMESPACE } from '../src/settings-namespace.js'
 import { MemorySettings } from './helpers/memory-settings.js'
 import { MockZotero } from './helpers/mock-zotero.js'
 
@@ -59,7 +59,7 @@ function runTool(name: string, args: Record<string, unknown>): ToolExecution {
 describe('the zotero settings namespace', () => {
   it('registers with the Config schema and the composition entry as its base', async () => {
     ctx = await boot({ baseUrl: 'http://127.0.0.1:1/api' })
-    const resolved = ctx.settings.get(settingsNamespace('zotero')) as Record<string, unknown>
+    const resolved = ctx.settings.get(ZOTERO_SETTINGS_NAMESPACE) as Record<string, unknown>
     expect(resolved.baseUrl).toBe('http://127.0.0.1:1/api')
     expect(resolved.timeoutMs).toBe(5000)
     expect(resolved.maxSearchResults).toBe(20)
@@ -84,7 +84,7 @@ describe('the zotero settings namespace', () => {
     )
     ctx = await boot({ baseUrl: 'http://127.0.0.1:1/api' })
     expect((await ctx.zotero.status()).connected).toBe(false)
-    await ctx.settings.update(settingsNamespace('zotero'), { baseUrl: mock.baseUrl })
+    await ctx.settings.update(ZOTERO_SETTINGS_NAMESPACE, { baseUrl: mock.baseUrl })
     await flush()
     const status = await ctx.zotero.status()
     expect(status.connected).toBe(true)
@@ -95,7 +95,7 @@ describe('the zotero settings namespace', () => {
   it('refuses a write that violates the config constraints', async () => {
     ctx = await boot({ baseUrl: 'http://127.0.0.1:1/api' })
     await expect(
-      ctx.settings.update(settingsNamespace('zotero'), { baseUrl: 'http://example.com/api' }),
+      ctx.settings.update(ZOTERO_SETTINGS_NAMESPACE, { baseUrl: 'http://example.com/api' }),
     ).rejects.toThrow(/loopback/)
     expect(ctx.zotero.config.baseUrl).toBe('http://127.0.0.1:1/api')
   })
@@ -103,7 +103,7 @@ describe('the zotero settings namespace', () => {
   it('live-applies a provider selection change', async () => {
     mock = await MockZotero.start()
     ctx = await boot({ baseUrl: mock.baseUrl })
-    await ctx.settings.update(settingsNamespace('zotero'), { provider: 'missing' })
+    await ctx.settings.update(ZOTERO_SETTINGS_NAMESPACE, { provider: 'missing' })
     await flush()
     await expect(
       ctx.zotero.search({
@@ -119,7 +119,7 @@ describe('the zotero settings namespace', () => {
 
   it('live-applies a tool validation limit', async () => {
     ctx = await boot({ baseUrl: 'http://127.0.0.1:1/api' })
-    await ctx.settings.update(settingsNamespace('zotero'), { maxSearchResults: 5 })
+    await ctx.settings.update(ZOTERO_SETTINGS_NAMESPACE, { maxSearchResults: 5 })
     await flush()
     const result = await runTool('zotero_search', { query: 'x', limit: 10 })
     expect(result.isError).toBe(true)

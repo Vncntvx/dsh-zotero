@@ -13,6 +13,7 @@ import type { ToolCallBlock, ToolResultNode } from '@deepseek-ai/dsh-client-ui-c
 import type { ChatConversationViewNode, ChatSnapshot } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { SessionSnapshot } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ZoteroStatusView } from '../../src/client/remote.ts'
 import {
@@ -117,11 +118,20 @@ function toolRow(
   } as ChatConversationViewNode
 }
 
-/** A chat snapshot whose node store carries the given rows; the other faces stay opaque. */
+/**
+ * A chat snapshot whose node store carries the given rows; the other faces
+ * stay opaque. Only `get`/`values` are implemented — the collectors never
+ * touch the per-key subscription sources, so the stand-in converts through
+ * `unknown` instead of growing a stub per harness addition.
+ */
 function chatOf(rows: ChatConversationViewNode[] = []): ChatSnapshot {
+  const nodes = {
+    get: () => undefined,
+    values: () => rows,
+  } as unknown as ChatSnapshot['nodes']
   return {
     order: [],
-    nodes: { get: () => undefined, values: () => rows },
+    nodes,
     locations: {} as ChatSnapshot['locations'],
     navigation: {} as ChatSnapshot['navigation'],
     timeline: {} as ChatSnapshot['timeline'],
@@ -290,7 +300,7 @@ describe('status projection helpers', () => {
       checkedAt: '10:00:01',
     })
     expect(
-      stateOf({ ok: false, error: { code: 'x', message: 'offline', details: {} } }, '10:00:02'),
+      stateOf({ ok: false, error: new RemoteError('gateway/internal', 'offline', {}) }, '10:00:02'),
     ).toEqual({ kind: 'remote-error', message: 'offline' })
   })
 

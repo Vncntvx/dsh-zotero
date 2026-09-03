@@ -13,7 +13,7 @@ import {
   normalizeAttachmentRecord,
   type ZoteroAttachmentCandidate,
 } from './attachments.js'
-import type { JsonValue } from '@deepseek-ai/dsh-tools'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { ZOTERO_UNEXPECTED, ZoteroError } from './errors.js'
 import { asRecord, asString, isObjectKey } from './json.js'
 import { formatRef, parseZoteroRelationUri, refForLibrary } from './refs.js'

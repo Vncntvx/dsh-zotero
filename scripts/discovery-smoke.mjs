@@ -7,8 +7,8 @@
  *
  * Steps: npm pack → temp profile → `dsh plugin add <tarball>` → `dsh web
  * --port 0` → read the boot token the CLI prints → exchange it for the page
- * cookie (alpha.1 gates the composition behind instance auth) → GET / →
- * parse window.__DSH_BOOT__ → assert the dsh-zotero row → GET its bundle URL
+ * cookie (alpha.5 gates the composition behind instance auth) → GET /
+ * → parse the `globalThis["__DSH_BOOT__"]` manifest → assert the dsh-zotero
  * → assert 200 and the __ModuleLoader__.load handoff → shutdown.
  *
  * Usage: node scripts/discovery-smoke.mjs [--dsh <dsh-binary>] [--profile <dir>]
@@ -60,10 +60,9 @@ async function fetchText(url, cookie) {
 }
 
 function extractBootGraph(html) {
-  // The rc-era webserver spelled the global `window.__DSH_BOOT__`; alpha.1
-  // spells it `globalThis["__DSH_BOOT__"]`. Accept both spellings.
-  const match =
-    /(?:window\.__DSH_BOOT__|globalThis\["__DSH_BOOT__"\])\s*=\s*(\{[\s\S]*?\})\s*<\//.exec(html)
+  // The webserver injects the boot graph as `globalThis["__DSH_BOOT__"] = …`
+  // (the `window.` spelling is only a browser-side read alias).
+  const match = /globalThis\["__DSH_BOOT__"\]\s*=\s*(\{[\s\S]*?\})\s*<\//.exec(html)
   if (match === null) throw new Error('index HTML carries no __DSH_BOOT__ manifest')
   // The host escapes '<' inside the injected script as '\\u003c' so plugin
   // strings cannot break out of the script element; JSON.parse expects the
@@ -145,7 +144,7 @@ async function main() {
     child.once('exit', resolveClosed)
   })
   try {
-    // The alpha.1 web CLI authenticates the composition behind a per-instance
+    // The web CLI authenticates the composition behind a per-instance
     // token: the log carries the one-time token, the 303 exchanges it for the
     // page cookie, and every probe below rides that cookie.
     const token = await waitForBootToken(HOME)
@@ -158,7 +157,7 @@ async function main() {
         `__DSH_BOOT__ has no dsh-zotero row; entries: ${graph.entries.map((row) => row.id).join(', ')}`,
       )
     }
-    // The alpha.1 boot graph composes content-addressed combo scripts: every
+    // The boot graph composes content-addressed combo scripts: every
     // entry row carries the revisioned single-resource combo URL, and its id
     // must appear in a scheduling batch.
     if (!entry.url.startsWith('/plugins/??dsh-zotero/client.js&rev=')) {
