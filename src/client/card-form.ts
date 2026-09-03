@@ -100,7 +100,7 @@ interface PlannedWrite {
  * @param field - field name inside the settings section.
  * @returns the field's conversion spec.
  */
-export function numberField(field: string): CardFieldSpec {
+export function numberFieldSpec(field: string): CardFieldSpec {
   return {
     field,
     // A section that carries no number for this field renders empty rather
@@ -121,7 +121,7 @@ export function numberField(field: string): CardFieldSpec {
  * @param field - field name inside the settings section.
  * @returns the field's conversion spec.
  */
-export function booleanField(field: string): CardFieldSpec {
+export function booleanFieldSpec(field: string): CardFieldSpec {
   return {
     field,
     format: (value) => (typeof value === 'boolean' ? String(value) : ''),
@@ -141,7 +141,7 @@ export function booleanField(field: string): CardFieldSpec {
  * @param field - field name inside the settings section.
  * @returns the field's conversion spec.
  */
-export function textField(field: string): CardFieldSpec {
+export function textFieldSpec(field: string): CardFieldSpec {
   return {
     field,
     format: (value) => (typeof value === 'string' ? value : ''),

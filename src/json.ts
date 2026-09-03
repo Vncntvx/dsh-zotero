@@ -5,7 +5,9 @@
  * @module dsh-zotero/json
  */
 
-const OBJECT_KEY_PATTERN = /^[A-Z0-9]{8}$/
+import { REF_KEY_SOURCE } from './ref-grammar.js'
+
+const OBJECT_KEY_PATTERN = new RegExp(`^${REF_KEY_SOURCE}$`)
 
 /** Narrow any value to a plain JSON object, or undefined. */
 export function asRecord(value: unknown): Record<string, unknown> | undefined {

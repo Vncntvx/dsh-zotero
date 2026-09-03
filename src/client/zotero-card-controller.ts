@@ -19,9 +19,9 @@ import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { ResolvedConfig } from '../config.js'
 import {
   CardForm,
-  booleanField,
-  numberField,
-  textField,
+  booleanFieldSpec,
+  numberFieldSpec,
+  textFieldSpec,
   type CardActions,
   type CardFieldSpec,
   type CardFieldState,
@@ -74,9 +74,9 @@ type MissingConfigField = Exclude<keyof ResolvedConfig, FieldKey>
 const _configSurfaceComplete: MissingConfigField extends never ? true : never = true
 
 const FIELDS: CardFieldSpec[] = FIELD_SPECS.map((spec) => {
-  if (spec.kind === 'number') return numberField(spec.key)
-  if (spec.kind === 'boolean') return booleanField(spec.key)
-  return textField(spec.key)
+  if (spec.kind === 'number') return numberFieldSpec(spec.key)
+  if (spec.kind === 'boolean') return booleanFieldSpec(spec.key)
+  return textFieldSpec(spec.key)
 })
 
 /** The page's field keys grouped by the host schema's families, in display order. */

@@ -6,11 +6,15 @@
  * @module dsh-zotero/client/sources/bibtex
  */
 
+import { BIBTEX_KEY_SOURCE } from '../../export-items.ts'
+
+const BIBTEX_KEY = new RegExp(BIBTEX_KEY_SOURCE, 'g')
+
 /** Extract the citation keys of a BibTeX/BibLaTeX export body, first-seen order. */
 export function bibTexKeysOf(text: string): string[] {
   const keys: string[] = []
   const seen = new Set<string>()
-  for (const match of text.matchAll(/@[A-Za-z]+\{([^,\s{}]+),/g)) {
+  for (const match of text.matchAll(BIBTEX_KEY)) {
     const key = match[1]!
     if (!seen.has(key)) {
       seen.add(key)

@@ -42,7 +42,7 @@ const ASK_WORTHY_CODES = [
 type AskWorthyCode = (typeof ASK_WORTHY_CODES)[number]
 
 /** The parts of a tool execution `withConnectivityAsk` needs. */
-export type ConnectivityAskExec = Pick<ToolRunContext, 'signal' | 'agent'>
+type ConnectivityAskExec = Pick<ToolRunContext, 'signal' | 'agent'>
 
 /** One connectivity failure rendered as a question card with a recommended option. */
 interface FailureSpec {

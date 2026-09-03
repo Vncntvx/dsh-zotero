@@ -122,11 +122,14 @@ export class ZoteroService extends Service {
         this.rebuild()
       },
     })
-    // The settings page's data channel: the Remote service reads and writes
-    // the namespace through the local seam, and the strict manifest claims
-    // the wire endpoints for the Host Gateway. Typert is a core service;
-    // the optional-inject form keeps the plugin loadable in compositions
-    // without it, exactly like the settings seam above.
+    // The settings page's data channel: the Remote service binds the wire
+    // namespace, and the strict manifest claims its endpoints. The manifest
+    // self-registers because dsh-typert-loader's auto-discovery only reaches
+    // bare-package-name rows (it resolves `<entry-name>/package.json` from
+    // the config tree): the dev-overlay row spells an absolute file path, is
+    // invisible to that scan, and a `./typert` export would double-register
+    // wherever both paths meet. Typert is a core service; the optional-inject
+    // form keeps the plugin loadable in compositions without it.
     new ZoteroRuntime(ctx)
     ctx.inject(['typert'], (host) => {
       host.effect(() => {
@@ -237,8 +240,6 @@ export class ZoteroService extends Service {
   ): Promise<ZoteroChildrenResult> {
     const provider = this.resolveProvider()
     this.requireCapability(provider, 'metadata')
-    if (provider.children === undefined)
-      throw new ZoteroError('children not supported', ZOTERO_CAPABILITY_UNAVAILABLE)
     return await provider.children(request, signal)
   }
 
@@ -286,8 +287,6 @@ export class ZoteroService extends Service {
   async browse(request: ZoteroBrowseRequest, signal?: AbortSignal): Promise<ZoteroBrowseResult> {
     const provider = this.resolveProvider()
     this.requireCapability(provider, 'browse')
-    if (provider.browse === undefined)
-      throw new ZoteroError('browse not supported', ZOTERO_CAPABILITY_UNAVAILABLE)
     return await provider.browse(request, signal)
   }
 
@@ -300,8 +299,6 @@ export class ZoteroService extends Service {
   async changes(request: ZoteroChangesRequest, signal?: AbortSignal): Promise<ZoteroChangesResult> {
     const provider = this.resolveProvider()
     this.requireCapability(provider, 'changes')
-    if (provider.changes === undefined)
-      throw new ZoteroError('changes not supported', ZOTERO_CAPABILITY_UNAVAILABLE)
     return await provider.changes(request, signal)
   }
 

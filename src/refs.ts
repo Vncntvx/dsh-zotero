@@ -14,10 +14,8 @@
 
 import { ZOTERO_INVALID_REF, ZoteroError } from './errors.js'
 import { isObjectKey } from './json.js'
+import { REF_PATTERN } from './ref-grammar.js'
 import type { ZoteroKind, ZoteroObjectRef } from './types.js'
-
-const REF_PATTERN =
-  /^zotero:\/\/(user|group)\/(\d+)\/(item|attachment|annotation|collection|search)\/([A-Z0-9]{8})(?:\?server=([A-Za-z0-9_-]{1,64}))?$/
 
 /** True when the given string matches the ref grammar without fully parsing it. */
 export function isRefString(value: string): boolean {

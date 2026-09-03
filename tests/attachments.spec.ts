@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   bestAttachmentFromLinks,
   normalizeAttachmentRecord,
-  selectAttachment,
+  selectAttachments,
 } from '../src/attachments.js'
 
 const PDF_CHILD = {
@@ -64,10 +64,10 @@ describe('bestAttachmentFromLinks', () => {
   })
 })
 
-describe('selectAttachment', () => {
+describe('selectAttachments', () => {
   it('prefers Zotero-computed PDFs: imported files first, then earliest date, then key order', () => {
     const rows = [SNAPSHOT_CHILD, LINKED_PDF_CHILD, PDF_CHILD]
-    const selected = selectAttachment(rows, 'pdf')
+    const selected = selectAttachments(rows, 'pdf')[0]
     expect(selected).toEqual({
       key: 'WXYZ6789',
       title: 'Full Text PDF',
@@ -87,14 +87,14 @@ describe('selectAttachment', () => {
       key: 'BBBB2222',
       data: { ...PDF_CHILD.data, dateAdded: '2022-01-01T00:00:00Z' },
     }
-    expect(selectAttachment([newer, older], 'pdf')!.key).toBe('AAAA1111')
+    expect(selectAttachments([newer, older], 'pdf')[0]!.key).toBe('AAAA1111')
     const tieA = { ...older, key: 'CCCC3333' }
     const tieB = { ...older, key: 'DDDD4444' }
-    expect(selectAttachment([tieB, tieA], 'pdf')!.key).toBe('CCCC3333')
+    expect(selectAttachments([tieB, tieA], 'pdf')[0]!.key).toBe('CCCC3333')
   })
 
   it('returns undefined when no attachment of the requested kind exists', () => {
-    expect(selectAttachment([SNAPSHOT_CHILD], 'pdf')).toBeUndefined()
+    expect(selectAttachments([SNAPSHOT_CHILD], 'pdf')[0]).toBeUndefined()
   })
 })
 
@@ -136,15 +136,15 @@ describe('attachment failure modes', () => {
   })
 
   it('skips non-attachment rows while selecting', () => {
-    const selected = selectAttachment(
+    const selected = selectAttachments(
       [{ key: 'NOTE1111', data: { itemType: 'note' } }, PDF_CHILD],
       'pdf',
-    )
+    )[0]
     expect(selected!.key).toBe('WXYZ6789')
   })
 
   it('matches non-pdf kinds as literal content types', () => {
-    expect(selectAttachment([SNAPSHOT_CHILD], 'text/html')).toEqual({
+    expect(selectAttachments([SNAPSHOT_CHILD], 'text/html')[0]).toEqual({
       key: 'SNAP0002',
       title: 'Web Page Snapshot',
       contentType: 'text/html',
@@ -153,20 +153,20 @@ describe('attachment failure modes', () => {
   })
 })
 
-describe('selectAttachment tie-breaking', () => {
+describe('selectAttachments tie-breaking', () => {
   it('treats a missing dateAdded as the earliest addition', () => {
     const noDate = {
       key: 'AAAA1111',
       data: { itemType: 'attachment', contentType: 'application/pdf', linkMode: 'imported_file' },
     }
     const withDate = { ...PDF_CHILD, key: 'BBBB2222' }
-    expect(selectAttachment([withDate, noDate], 'pdf')!.key).toBe('AAAA1111')
+    expect(selectAttachments([withDate, noDate], 'pdf')[0]!.key).toBe('AAAA1111')
   })
 })
 
-describe('selectAttachment non-object rows', () => {
+describe('selectAttachments non-object rows', () => {
   it('treats non-object rows as unselectable', () => {
-    expect(selectAttachment(['junk'], 'pdf')).toBeUndefined()
+    expect(selectAttachments(['junk'], 'pdf')[0]).toBeUndefined()
     let thrown: unknown
     try {
       normalizeAttachmentRecord('junk')
@@ -177,9 +177,9 @@ describe('selectAttachment non-object rows', () => {
   })
 })
 
-describe('selectAttachment rank comparison', () => {
+describe('selectAttachments rank comparison', () => {
   it('ranks a linked file below an imported file even when added earlier', () => {
-    expect(selectAttachment([LINKED_PDF_CHILD, PDF_CHILD], 'pdf')!.key).toBe('WXYZ6789')
-    expect(selectAttachment([PDF_CHILD, LINKED_PDF_CHILD], 'pdf')!.key).toBe('WXYZ6789')
+    expect(selectAttachments([LINKED_PDF_CHILD, PDF_CHILD], 'pdf')[0]!.key).toBe('WXYZ6789')
+    expect(selectAttachments([PDF_CHILD, LINKED_PDF_CHILD], 'pdf')[0]!.key).toBe('WXYZ6789')
   })
 })

@@ -21,7 +21,14 @@ export interface ExportItemFacts {
   readonly title?: string
 }
 
-const BIBTEX_KEY = /@[A-Za-z]+\{([^,\s{}]+),/
+/**
+ * The BibTeX/BibLaTeX entry-header key grammar, shared with the client's
+ * exports lens. Exported as a source string because the two halves need
+ * different flags: the host parses one entry with stateless `exec`, the
+ * client scans a whole body with `matchAll` (which requires `g`).
+ */
+export const BIBTEX_KEY_SOURCE = '@[A-Za-z]+\\{([^,\\s{}]+),'
+const BIBTEX_KEY = new RegExp(BIBTEX_KEY_SOURCE)
 const BIBTEX_TITLE = /\btitle\s*=\s*\{([^}]*)\}/i
 const RIS_TITLE = /^TI  - (.+)$/m
 

@@ -14,7 +14,7 @@ import { defineTool, type InferArgs, type InferValue } from '@deepseek-ai/dsh-to
 import type { ResolvedConfig } from '../config.js'
 import { withConnectivityAsk } from '../ask.js'
 import { boundedPresentationMeta, projectRetrieveMeta } from '../presentation-meta.js'
-import { assertIntInRange, invalid, parseSupportedRef } from './validate.js'
+import { assertIntInRange, invalid, parseSupportedRef, REF_ARG_HINT } from './validate.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroEvidenceSource, ZoteroObjectRef, ZoteroRetrieveRequest } from '../types.js'
 
@@ -26,8 +26,7 @@ const RETRIEVE_PARAMETERS = {
   ref: {
     type: 'string',
     required: true,
-    description:
-      'A zotero://user/0/item/<KEY> or zotero://group/<id>/item/<KEY> ref from zotero_search or zotero_get.',
+    description: `A ${REF_ARG_HINT} ref from zotero_search or zotero_get.`,
   },
   query: {
     type: 'string',

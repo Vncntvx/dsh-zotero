@@ -129,12 +129,16 @@ describe('argsOf', () => {
 })
 
 describe('shortKeyOf', () => {
-  it('extracts the object key of every zotero ref kind and rejects junk', () => {
+  it('extracts the object key of every zotero ref kind, personal and group, and rejects junk', () => {
     expect(shortKeyOf('zotero://user/0/item/ABCDEFGH')).toBe('ABCDEFGH')
     expect(shortKeyOf('zotero://user/0/attachment/WXYZ6789?server=S1')).toBe('WXYZ6789')
     expect(shortKeyOf('zotero://user/0/annotation/ANN00001')).toBe('ANN00001')
     expect(shortKeyOf('zotero://user/0/collection/COLLECT1')).toBe('COLLECT1')
     expect(shortKeyOf('zotero://user/0/search/SEARCH01')).toBe('SEARCH01')
+    // Group-library refs share the grammar the host parser serves; a
+    // client-side copy pinned to user/0 would drop them.
+    expect(shortKeyOf('zotero://group/1234/item/GROUPKEY')).toBe('GROUPKEY')
+    expect(shortKeyOf('zotero://group/12/attachment/ATTACH01?server=S1')).toBe('ATTACH01')
     expect(shortKeyOf('junk')).toBeNull()
   })
 })

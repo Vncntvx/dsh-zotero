@@ -590,7 +590,9 @@ export interface ZoteroChangesResult {
 /**
  * The storage side of the `ctx.zotero` seam. Providers declare which
  * capabilities they safely support; the service gates every domain call on
- * that declaration. The Agent never sees which provider satisfied a request.
+ * that declaration — the capability set is the single gate, so a provider
+ * that does not serve a domain simply omits the capability and its method is
+ * never reached. The Agent never sees which provider satisfied a request.
  * `available()` is deliberately absent: request-driven providers fail with
  * typed domain errors, and only `status()` performs a health check.
  */
@@ -625,14 +627,14 @@ export interface ZoteroProvider {
    * @param signal - caller cancellation; forwarded to the transport.
    * @returns the bounded child collections with their totals.
    */
-  children?(request: ZoteroChildrenRequest, signal?: AbortSignal): Promise<ZoteroChildrenResult>
+  children(request: ZoteroChildrenRequest, signal?: AbortSignal): Promise<ZoteroChildrenResult>
   /**
    * Diff the library against a local transaction version.
    * @param request - the baseline version and the resource kinds to diff.
    * @param signal - caller cancellation; forwarded to the transport.
    * @returns changed/deleted keys plus the library's current version.
    */
-  changes?(request: ZoteroChangesRequest, signal?: AbortSignal): Promise<ZoteroChangesResult>
+  changes(request: ZoteroChangesRequest, signal?: AbortSignal): Promise<ZoteroChangesResult>
   /**
    * Resolve an item or attachment ref to a usable location.
    * @param ref - the item or attachment ref to resolve.
@@ -657,5 +659,5 @@ export interface ZoteroProvider {
    * @returns per-ref citations or the joined export text.
    */
   export(request: ZoteroExportRequest, signal?: AbortSignal): Promise<ZoteroExportResult>
-  browse?(request: ZoteroBrowseRequest, signal?: AbortSignal): Promise<ZoteroBrowseResult>
+  browse(request: ZoteroBrowseRequest, signal?: AbortSignal): Promise<ZoteroBrowseResult>
 }

@@ -12,7 +12,7 @@ import { defineTool, type InferArgs, type InferValue } from '@deepseek-ai/dsh-to
 import { withConnectivityAsk } from '../ask.js'
 import { boundedPresentationMeta, projectGetMeta } from '../presentation-meta.js'
 import { formatSearchLine } from './present.js'
-import { parseSupportedRef } from './validate.js'
+import { parseSupportedRef, REF_ARG_HINT } from './validate.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroGetRequest, ZoteroInclude } from '../types.js'
 
@@ -20,8 +20,7 @@ const GET_PARAMETERS = {
   ref: {
     type: 'string',
     required: true,
-    description:
-      'A zotero://user/0/item/<KEY> or zotero://group/<id>/item/<KEY> ref from zotero_search or a previous tool result.',
+    description: `A ${REF_ARG_HINT} ref from zotero_search or a previous tool result.`,
   },
   include: {
     type: 'array',

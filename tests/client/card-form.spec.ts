@@ -7,10 +7,10 @@
 
 import { describe, expect, it } from 'vitest'
 import {
-  booleanField,
+  booleanFieldSpec,
   CardForm,
-  numberField,
-  textField,
+  numberFieldSpec,
+  textFieldSpec,
   type CardActions,
   type CardFieldSpec,
   type CardShell,
@@ -31,7 +31,7 @@ function scopeWithLayers(overrides?: Partial<FakeScope>): FakeScope {
 
 function form(
   scope: FakeScope,
-  specs: CardFieldSpec[] = [textField('baseUrl'), numberField('timeoutMs')],
+  specs: CardFieldSpec[] = [textFieldSpec('baseUrl'), numberFieldSpec('timeoutMs')],
 ) {
   const cardForm = new CardForm(scope, specs)
   const shell = (): CardShell => cardForm.shell()
@@ -40,7 +40,7 @@ function form(
 
 describe('CardForm field specs', () => {
   it('textField formats strings and clears on an empty draft', () => {
-    const spec = textField('x')
+    const spec = textFieldSpec('x')
     expect(spec.format('abc')).toBe('abc')
     expect(spec.format(42)).toBe('')
     expect(spec.parse('  abc  ')).toEqual({ kind: 'set', value: 'abc' })
@@ -48,7 +48,7 @@ describe('CardForm field specs', () => {
   })
 
   it('booleanField formats booleans and maps the literal drafts', () => {
-    const spec = booleanField('webEnabled')
+    const spec = booleanFieldSpec('webEnabled')
     expect(spec.format(true)).toBe('true')
     expect(spec.format(false)).toBe('false')
     expect(spec.format('junk')).toBe('')
@@ -59,7 +59,7 @@ describe('CardForm field specs', () => {
   })
 
   it('numberField formats numbers and rejects non-finite drafts', () => {
-    const spec = numberField('x')
+    const spec = numberFieldSpec('x')
     expect(spec.format(5)).toBe('5')
     expect(spec.format('5')).toBe('')
     expect(spec.parse('42')).toEqual({ kind: 'set', value: 42 })
@@ -144,7 +144,7 @@ describe('CardForm staging', () => {
 
   it('skips a staged edit that equals the effective value', async () => {
     const scope = fakeScope({ value: { timeoutMs: 5000 }, user: { timeoutMs: 5000 } })
-    const { cardForm } = form(scope, [numberField('timeoutMs')])
+    const { cardForm } = form(scope, [numberFieldSpec('timeoutMs')])
     const actions = cardForm.actions()
     actions.edit('timeoutMs', '5000')
     await actions.save()

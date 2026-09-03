@@ -7,6 +7,9 @@
 
 import { ZOTERO_INVALID_ARGUMENT, ZoteroError } from '../errors.js'
 import { parseRef, requireSupportedLocalRef } from '../refs.js'
+
+/** The item-ref format the tool descriptions state verbatim, so the tools cannot drift apart. */
+export const REF_ARG_HINT = 'zotero://user/0/item/<KEY> or zotero://group/<id>/item/<KEY>'
 import type { ZoteroKind, ZoteroObjectRef, SupportedLocalLibrary } from '../types.js'
 
 /** Throw an argument error; the message is model-facing. */

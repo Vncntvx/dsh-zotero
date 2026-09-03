@@ -10,9 +10,8 @@ import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { defineTool, type InferArgs, type InferValue } from '@deepseek-ai/dsh-tools'
 import { withConnectivityAsk } from '../ask.js'
 import { boundedPresentationMeta } from '../presentation-meta.js'
-import { ZoteroError, ZOTERO_INVALID_ARGUMENT } from '../errors.js'
 import { asRecord } from '../json.js'
-import { assertIntInRange, parseLibrary } from './validate.js'
+import { assertIntInRange, invalid, parseLibrary } from './validate.js'
 import type { ZoteroService } from '../service.js'
 import type { SupportedLocalLibrary, ZoteroBrowseKind, ZoteroBrowseRequest } from '../types.js'
 
@@ -205,8 +204,7 @@ type BrowseOutput = InferValue<typeof BROWSE_OUTPUT_SCHEMA>
 
 function buildRequest(args: BrowseArgs, config: { maxBrowseResults: number }): ZoteroBrowseRequest {
   const kind = args.kind as ZoteroBrowseKind
-  if (!BROWSE_KINDS.includes(kind))
-    throw new ZoteroError(`Unsupported browse kind ${kind}`, ZOTERO_INVALID_ARGUMENT)
+  if (!BROWSE_KINDS.includes(kind)) invalid(`Unsupported browse kind ${kind}`)
   const offset = args.offset ?? 0
   const limit = args.limit ?? 20
   assertIntInRange('offset', offset, 0, 1_000_000)
@@ -217,40 +215,33 @@ function buildRequest(args: BrowseArgs, config: { maxBrowseResults: number }): Z
     (kind === 'libraries' || kind === 'itemTypes' || kind === 'itemFields') &&
     library !== undefined
   ) {
-    throw new ZoteroError(
+    invalid(
       `library is not allowed for kind ${kind}; omit library for libraries/itemTypes/itemFields`,
-      ZOTERO_INVALID_ARGUMENT,
     )
   }
   const itemType = (args as Record<string, unknown>).itemType as string | undefined
   if (itemType !== undefined && kind !== 'itemFields') {
-    throw new ZoteroError('itemType is only valid when kind="itemFields"', ZOTERO_INVALID_ARGUMENT)
+    invalid('itemType is only valid when kind="itemFields"')
   }
   if (kind === 'itemFields') {
     if (itemType === undefined || !/^[A-Za-z][A-Za-z0-9]*$/.test(itemType)) {
-      throw new ZoteroError(
-        'kind="itemFields" requires a Zotero item type name (e.g. dataset, journalArticle)',
-        ZOTERO_INVALID_ARGUMENT,
-      )
+      invalid('kind="itemFields" requires a Zotero item type name (e.g. dataset, journalArticle)')
     }
   }
   const q = (args as Record<string, unknown>).q as string | undefined
   const match = (args as Record<string, unknown>).match as 'contains' | 'startsWith' | undefined
   if ((q !== undefined || match !== undefined) && kind !== 'tags') {
-    throw new ZoteroError('q/match are only valid when kind="tags"', ZOTERO_INVALID_ARGUMENT)
+    invalid('q/match are only valid when kind="tags"')
   }
   if (match !== undefined && q === undefined) {
-    throw new ZoteroError('match requires q', ZOTERO_INVALID_ARGUMENT)
+    invalid('match requires q')
   }
   if (q !== undefined && q.trim() === '') {
-    throw new ZoteroError('q must be a non-empty string when provided', ZOTERO_INVALID_ARGUMENT)
+    invalid('q must be a non-empty string when provided')
   }
   const parentRef = (args as Record<string, unknown>).parentRef as string | undefined
   if (parentRef !== undefined && kind !== 'collections') {
-    throw new ZoteroError(
-      'parentRef is only valid when kind="collections"',
-      ZOTERO_INVALID_ARGUMENT,
-    )
+    invalid('parentRef is only valid when kind="collections"')
   }
   const tagScope = (args as Record<string, unknown>).tagScope as
     'library' | 'collection' | 'publications' | undefined
@@ -266,28 +257,19 @@ function buildRequest(args: BrowseArgs, config: { maxBrowseResults: number }): Z
       itemQueryMode !== undefined) &&
     kind !== 'tags'
   ) {
-    throw new ZoteroError(
-      'tagScope/itemLevel/itemQuery are only valid when kind="tags"',
-      ZOTERO_INVALID_ARGUMENT,
-    )
+    invalid('tagScope/itemLevel/itemQuery are only valid when kind="tags"')
   }
   if (tagCollection !== undefined && tagScope !== 'collection') {
-    throw new ZoteroError('tagCollection requires tagScope="collection"', ZOTERO_INVALID_ARGUMENT)
+    invalid('tagCollection requires tagScope="collection"')
   }
   if (tagScope === 'collection' && tagCollection === undefined) {
-    throw new ZoteroError(
-      'tagScope="collection" requires tagCollection (a zotero:// ref or a collection name)',
-      ZOTERO_INVALID_ARGUMENT,
-    )
+    invalid('tagScope="collection" requires tagCollection (a zotero:// ref or a collection name)')
   }
   if ((itemLevel !== undefined || itemQuery !== undefined) && tagScope === undefined) {
-    throw new ZoteroError(
-      'itemLevel/itemQuery require tagScope (library, collection, or publications)',
-      ZOTERO_INVALID_ARGUMENT,
-    )
+    invalid('itemLevel/itemQuery require tagScope (library, collection, or publications)')
   }
   if (itemQueryMode !== undefined && itemQuery === undefined) {
-    throw new ZoteroError('itemQueryMode requires itemQuery', ZOTERO_INVALID_ARGUMENT)
+    invalid('itemQueryMode requires itemQuery')
   }
   const scope =
     tagScope === undefined

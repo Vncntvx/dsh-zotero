@@ -2,10 +2,11 @@
  * Attachment records and deterministic attachment selection.
  *
  * Zotero's own best-attachment choice (`links.attachment` on item
- * responses) is preferred wherever it exists; `selectAttachment` is the
+ * responses) is preferred wherever it exists; `selectAttachments` is the
  * documented fallback that ranks child rows the same way Zotero's
  * `getBestAttachment` does — PDF over other kinds, imported files first,
- * then earliest addition date, then key order.
+ * then earliest addition date, then key order. Single selection is the
+ * ranking's first entry.
  * @module dsh-zotero/attachments
  */
 
@@ -71,26 +72,9 @@ export function normalizeAttachmentRecord(json: unknown): ZoteroAttachmentCandid
 }
 
 /**
- * Select one attachment of the requested kind from raw child rows, ranked
- * deterministically: imported files first, then earliest `dateAdded`, then
- * key order. Rows without an attachment content type are skipped; a
- * malformed attachment row fails loud like every other broken invariant.
- * @param rows - raw child item JSON objects (notes and annotations are skipped).
- * @param kind - `pdf` selects `application/pdf`; anything else is matched as a literal content type.
- * @returns the winning record, or undefined when no row matches the kind.
- * @throws {ZoteroError} `ZOTERO_UNEXPECTED` on an attachment row without a valid key.
- */
-export function selectAttachment(
-  rows: readonly unknown[],
-  kind: string,
-): ZoteroAttachmentCandidate | undefined {
-  return selectAttachments(rows, kind)[0]
-}
-
-/**
  * Select every attachment of the requested kind from raw child rows, ordered
- * by the same deterministic ranking {@link selectAttachment} uses — so the
- * first entry always equals the single-selection answer, and a work with
+ * by the same deterministic ranking Zotero's `getBestAttachment` uses — so
+ * the first entry always equals the single-selection answer, and a work with
  * several PDFs (publisher copy, manuscript, supplement) can enter evidence
  * ranking as several first-class sources.
  */

@@ -1,12 +1,13 @@
 /**
  * The hand-written host Typert manifest for the zotero Remote. Registered
- * through `ctx.typert.register` in the plugin body, it claims the wire
- * endpoints through the strict registry — the same path generated `./typert`
- * artifacts use — so the Host Gateway resolves and invokes `zotero/status`
- * without consulting the `@Remote` marker table. That marker independence
- * matters in the harness's source-launch development environment, where the
- * tsx-loaded gateway and a profile-loaded plugin bundle can hold separate
- * copies of the decorator module state.
+ * through `ctx.typert.register` in the plugin body — not via a `./typert`
+ * export, because dsh-typert-loader's auto-discovery only resolves
+ * bare-package-name rows and would double-register this manifest on the
+ * production profile where the plugin also self-registers (see service.ts).
+ * The strict registry is the Host Gateway's preferred resolution path for
+ * `zotero/status` and needs no `@Remote` markers; avoiding the decorators
+ * also keeps the source runnable under Node's plain TypeScript type
+ * stripping, which rejects decorator syntax.
  * @module dsh-zotero/typert
  */
 

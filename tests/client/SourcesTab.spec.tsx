@@ -9,8 +9,8 @@
  */
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import type { ToolResultNode } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { ChatSnapshot, LegacyConversationSlice } from '@deepseek-ai/dsh-client-ui-chat/client'
+import type { ToolCallBlock, ToolResultNode } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { ChatConversationViewNode, ChatSnapshot } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { SessionSnapshot } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -100,28 +100,32 @@ const UNAVAILABLE: ZoteroStatusView = {
   diagnosis: 'connection refused',
 }
 
-/** A legacy chat projection with neutral defaults; carry nodes/runningCalls here. */
-function legacyOf(overrides: Partial<LegacyConversationSlice> = {}): LegacyConversationSlice {
+/** A chat tool-call row carrying one root block; the collectors read kind/visibility/data.root. */
+function toolRow(
+  root: ToolCallBlock,
+  visibility: 'visible' | 'hidden' = 'visible',
+): ChatConversationViewNode {
   return {
-    nodes: [],
-    turnTimings: new Map(),
-    turnEnds: new Map(),
-    partial: null,
-    runningCalls: [],
-    ...overrides,
-  }
+    id: `tool:${root.callId}`,
+    key: `tool:${root.callId}`,
+    target: 'chat',
+    anchorSeq: 0,
+    location: {} as never,
+    visibility,
+    kind: 'tool-call',
+    data: { root },
+  } as ChatConversationViewNode
 }
 
-/** A chat snapshot whose legacy slice defaults to `legacyOf()`; index types are opaque. */
-function chatOf(overrides: Partial<ChatSnapshot> = {}): ChatSnapshot {
+/** A chat snapshot whose node store carries the given rows; the other faces stay opaque. */
+function chatOf(rows: ChatConversationViewNode[] = []): ChatSnapshot {
   return {
     order: [],
-    nodes: { get: () => undefined, values: () => [] },
+    nodes: { get: () => undefined, values: () => rows },
     locations: {} as ChatSnapshot['locations'],
     navigation: {} as ChatSnapshot['navigation'],
     timeline: {} as ChatSnapshot['timeline'],
-    legacy: legacyOf(),
-    ...overrides,
+    legacy: {} as ChatSnapshot['legacy'],
   }
 }
 
@@ -243,10 +247,7 @@ describe('collectZoteroCalls', () => {
       callId: 'b',
       call: { name: 'zotero_get', argsRaw: '{}' },
     })
-    const snapshot = legacyOf({
-      nodes: [result],
-      runningCalls: [running({ callId: 'a' })],
-    })
+    const snapshot = chatOf([toolRow(result), toolRow(running({ callId: 'a' }))])
     const calls = collectZoteroCalls(snapshot)
     expect(calls.map((call) => call.callId)).toEqual(['b', 'a'])
     expect(collectZoteroCalls(snapshot).map((call) => call.callId)).toEqual(['b', 'a'])
@@ -264,14 +265,15 @@ describe('collectZoteroCalls', () => {
       call: { name: 'bash', argsRaw: '{}' },
       subCalls: [nested],
     })
-    const calls = collectZoteroCalls(legacyOf({ nodes: [outer] }))
+    const calls = collectZoteroCalls(chatOf([toolRow(outer)]))
     expect(calls.map((call) => call.callId)).toEqual(['nested'])
   })
 
-  it('returns an empty list without a session and skips non-tool nodes', () => {
+  it('returns an empty list without a chat and skips hidden and non-tool rows', () => {
     expect(collectZoteroCalls(undefined)).toEqual([])
-    const assistant = { kind: 'assistant', seq: 1, time: 1, turn: 1, step: 1, blocks: [] }
-    expect(collectZoteroCalls(legacyOf({ nodes: [assistant as never] }))).toEqual([])
+    const assistant = { kind: 'assistant', anchorSeq: 1 } as ChatConversationViewNode
+    expect(collectZoteroCalls(chatOf([assistant]))).toEqual([])
+    expect(collectZoteroCalls(chatOf([toolRow(settled({ callId: 'h' }), 'hidden')]))).toEqual([])
   })
 })
 
@@ -298,23 +300,20 @@ describe('status projection helpers', () => {
 
   it('signs the zotero-relevant snapshot slice', () => {
     expect(sessionSignatureOf(undefined)).toBe('')
-    const snapshot = legacyOf({
-      nodes: [settled({ seq: 3, callId: 'a' })],
-      runningCalls: [running({ callId: 'b' })],
-    })
-    const signed = sessionSignatureOf(snapshot)
-    expect(signed).toBe('1:3:1:b')
+    const signed = sessionSignatureOf(
+      chatOf([toolRow(settled({ seq: 3, callId: 'a' })), toolRow(running({ callId: 'b' }))]),
+    )
+    expect(signed).toBe('2:b')
     // The same content signs identically; streaming publications change
-    // neither the node count nor the running ids.
+    // neither the visible tool-row count nor the in-flight ids.
     expect(
       sessionSignatureOf(
-        legacyOf({
-          nodes: [settled({ seq: 3, callId: 'a' })],
-          runningCalls: [running({ callId: 'b' })],
-        }),
+        chatOf([toolRow(settled({ seq: 3, callId: 'a' })), toolRow(running({ callId: 'b' }))]),
       ),
     ).toBe(signed)
-    expect(sessionSignatureOf(legacyOf())).toBe('0:-1:0:')
+    expect(sessionSignatureOf(chatOf())).toBe('0:')
+    // A hidden row does not count.
+    expect(sessionSignatureOf(chatOf([toolRow(settled({ callId: 'h' }), 'hidden')]))).toBe('0:')
   })
 
   it('builds the failure diagnosis line', () => {
@@ -479,7 +478,7 @@ describe('SourcesTab', () => {
       call: { name: 'zotero_get', argsRaw: '{"ref":"zotero://user/0/item/AAAAAAA0"}' },
       meta: { title: 'Paper 0', creators: 'Creator', notesPreview: [], annotationsPreview: [] },
     })
-    const { view } = mountTab(chatOf({ legacy: legacyOf({ nodes: [search, get] }) }), status)
+    const { view } = mountTab(chatOf([toolRow(search), toolRow(get)]), status)
     await act(async () => {})
     const lensTab = view.container.querySelector('[data-workspace-lens="sources"]')!
     expect(lensTab.getAttribute('aria-pressed')).toBe('true')
@@ -500,7 +499,7 @@ describe('SourcesTab', () => {
       error: { name: 'ZoteroError', code: 'ZOTERO_NOT_FOUND' },
     })
     const { view } = mountTab(
-      chatOf({ legacy: legacyOf({ nodes: [searchResult(), retrieve, failed] }) }),
+      chatOf([toolRow(searchResult()), toolRow(retrieve), toolRow(failed)]),
       status,
     )
     await act(async () => {})
@@ -547,7 +546,7 @@ describe('SourcesTab', () => {
         ],
       },
     })
-    const { view } = mountTab(chatOf({ legacy: legacyOf({ nodes: [foreign] }) }), status)
+    const { view } = mountTab(chatOf([toolRow(foreign)]), status)
     await act(async () => {})
     expect(screen.getByText(zh.omittedRowsNote.replace('{count}', '5'))).toBeDefined()
     // The mismatch row carries the issues badge; the selected inspector shows
@@ -583,7 +582,7 @@ describe('SourcesTab', () => {
         ],
       },
     })
-    const { view } = mountTab(chatOf({ legacy: legacyOf({ nodes: [foreign] }) }), status)
+    const { view } = mountTab(chatOf([toolRow(foreign)]), status)
     await act(async () => {})
     // Connected: the foreign qualifier is a mismatch against the verified id.
     expect(view.container.querySelector('[data-provenance="mismatch"]')).not.toBeNull()
@@ -599,7 +598,7 @@ describe('SourcesTab', () => {
 
   it('shows honest placeholders on the inspector evidence panel and the exports lens', async () => {
     const status = vi.fn(async () => ({ ok: true, value: CONNECTED }))
-    const { view } = mountTab(chatOf({ legacy: legacyOf({ nodes: [searchResult()] }) }), status)
+    const { view } = mountTab(chatOf([toolRow(searchResult())]), status)
     await act(async () => {})
     // A search hit that was never retrieved onboards instead of claiming a
     // retrieval that did not happen.
@@ -615,13 +614,9 @@ describe('SourcesTab', () => {
     const status = vi.fn(async () => ({ ok: true, value: CONNECTED }))
     const setDraft = vi.fn()
     const retrieve = retrieveOf()
-    const { view } = mountTab(
-      chatOf({ legacy: legacyOf({ nodes: [searchResult(), retrieve] }) }),
-      status,
-      {
-        setDraft,
-      },
-    )
+    const { view } = mountTab(chatOf([toolRow(searchResult()), toolRow(retrieve)]), status, {
+      setDraft,
+    })
     await act(async () => {})
     // The first source is selected by default; the overview shows the query
     // that surfaced it, and the passages tab carries the kept-passage count.
@@ -648,12 +643,12 @@ describe('SourcesTab', () => {
       isError: true,
       error: { name: 'ZoteroError', code: 'ZOTERO_INVALID_ARGUMENT' },
     })
-    const { view } = mountTab(chatOf({ legacy: legacyOf({ nodes: [failedSearch] }) }), status)
+    const { view } = mountTab(chatOf([toolRow(failedSearch)]), status)
     await act(async () => {})
     expect(screen.getByText(zh.noSources)).toBeDefined()
     view.unmount()
 
-    const filtered = mountTab(chatOf({ legacy: legacyOf({ nodes: [searchResult()] }) }), status)
+    const filtered = mountTab(chatOf([toolRow(searchResult())]), status)
     await act(async () => {})
     // Zero-count filters are not rendered at all, so an empty filter state
     // is never actively reachable.
@@ -665,7 +660,7 @@ describe('SourcesTab', () => {
 
   it('recovers from a filter that empties when the sources change under it', async () => {
     const status = vi.fn(async () => ({ ok: true, value: CONNECTED }))
-    const holder = { chat: chatOf({ legacy: legacyOf({ nodes: [searchResult()] }) }) }
+    const holder = { chat: chatOf([toolRow(searchResult())]) }
     const props = {
       t,
       status: async () => ({ ok: true, value: CONNECTED }),
@@ -679,7 +674,7 @@ describe('SourcesTab', () => {
     // sources change under an active filter is the one path that can leave
     // an active filter with zero matches — the clear button recovers it.
     const exportCall = exportOf()
-    const withExport = chatOf({ legacy: legacyOf({ nodes: [searchResult(), exportCall] }) })
+    const withExport = chatOf([toolRow(searchResult()), toolRow(exportCall)])
     holder.chat = withExport
     view.rerender(<SourcesTab {...props} />)
     await act(async () => {})
@@ -694,7 +689,7 @@ describe('SourcesTab', () => {
     ).toBe('active')
     // The same session now loses its export (a stale snapshot view): the
     // filter stays active, the list empties, and the clear action restores.
-    holder.chat = chatOf({ legacy: legacyOf({ nodes: [searchResult()] }) })
+    holder.chat = chatOf([toolRow(searchResult())])
     view.rerender(<SourcesTab {...props} />)
     await act(async () => {})
     expect(screen.getByText(zh.filterEmptyNote)).toBeDefined()
@@ -706,10 +701,7 @@ describe('SourcesTab', () => {
   it('carries the exported count on the filter pill, the badge, and the exports tab', async () => {
     const status = vi.fn(async () => ({ ok: true, value: CONNECTED }))
     const exportCall = exportOf()
-    const { view } = mountTab(
-      chatOf({ legacy: legacyOf({ nodes: [searchResult(), exportCall] }) }),
-      status,
-    )
+    const { view } = mountTab(chatOf([toolRow(searchResult()), toolRow(exportCall)]), status)
     await act(async () => {})
     // The workflow header is gone; the filter pill, the row badge, and the
     // exports tab count are the count surfaces.
@@ -724,7 +716,7 @@ describe('SourcesTab', () => {
   it('renders the sources list with a fallback key when the session id is missing', async () => {
     const status = vi.fn(async () => ({ ok: true, value: CONNECTED }))
     const { view } = mountTab(
-      chatOf({ legacy: legacyOf({ nodes: [searchResult()] }) }),
+      chatOf([toolRow(searchResult())]),
       status,
       undefined,
       sessionOf({ sessionId: undefined as never }),
@@ -738,7 +730,7 @@ describe('SourcesTab', () => {
     const status = vi.fn(async () => ({ ok: true, value: CONNECTED }))
     const retrieve = retrieveOf()
     const holder = { session: sessionOf() }
-    const chat = chatOf({ legacy: legacyOf({ nodes: [searchResult(), retrieve] }) })
+    const chat = chatOf([toolRow(searchResult()), toolRow(retrieve)])
     const props = {
       t,
       status: async () => ({ ok: true, value: CONNECTED }),

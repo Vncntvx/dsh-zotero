@@ -15,7 +15,8 @@ import { defineTool, type InferArgs, type InferValue } from '@deepseek-ai/dsh-to
 import type { ResolvedConfig } from '../config.js'
 import { withConnectivityAsk } from '../ask.js'
 import { boundedPresentationMeta, projectExportMeta } from '../presentation-meta.js'
-import { invalid, parseSupportedRef } from './validate.js'
+import { ZOTERO_ITEMKEY_BATCH } from '../constants.js'
+import { invalid, parseSupportedRef, REF_ARG_HINT } from './validate.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroExportFormat, ZoteroExportRequest } from '../types.js'
 
@@ -24,8 +25,7 @@ const EXPORT_PARAMETERS = {
     type: 'array',
     items: { type: 'string' },
     required: true,
-    description:
-      "zotero://user/0/item/<KEY> or zotero://group/<id>/item/<KEY> refs to export, in the order citations should appear; capped by the configured maxExportRefs. citation batches past Zotero's 50-key request cap; bibliography/bibtex/biblatex/ris/csljson accept at most 50, so batch those calls.",
+    description: `${REF_ARG_HINT} refs to export, in the order citations should appear; capped by the configured maxExportRefs. citation batches past Zotero's ${ZOTERO_ITEMKEY_BATCH}-key request cap; bibliography/bibtex/biblatex/ris/csljson accept at most ${ZOTERO_ITEMKEY_BATCH}, so batch those calls.`,
   },
   format: {
     type: 'string',
@@ -137,7 +137,7 @@ function buildRequest(args: ExportArgs, config: ResolvedConfig): ZoteroExportReq
   }
 }
 
-function renderExport(_args: ExportArgs, value: ExportOutput): ContentBlock[] {
+export function renderExport(_args: ExportArgs, value: ExportOutput): ContentBlock[] {
   if (value.format === 'citation') {
     return [
       {
@@ -164,8 +164,8 @@ export function registerExportTool(ctx: Context, service: ZoteroService): void {
       name: 'zotero_export',
       description: [
         'Export Zotero items as citations, a bibliography, or translator formats.',
-        "Citation mode pairs each ref with its HTML citation in the requested order and batches past Zotero's 50-key request cap;",
-        "bibliography mode returns the joined CSL-sorted bibliography; bibtex/biblatex/ris/csljson return raw export text — those formats stay at one request (up to 50 refs), their ordering remains Zotero's own, and every exported document is itemized with its ref, citation key, and title.",
+        `Citation mode pairs each ref with its HTML citation in the requested order and batches past Zotero's ${ZOTERO_ITEMKEY_BATCH}-key request cap;`,
+        `bibliography mode returns the joined CSL-sorted bibliography; bibtex/biblatex/ris/csljson return raw export text — those formats stay at one request (up to ${ZOTERO_ITEMKEY_BATCH} refs), their ordering remains Zotero's own, and every exported document is itemized with its ref, citation key, and title.`,
       ].join(' '),
       parameters: EXPORT_PARAMETERS,
       output: {

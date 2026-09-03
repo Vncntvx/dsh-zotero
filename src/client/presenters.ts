@@ -12,6 +12,8 @@
 
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { ToolCallBlock } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import { asRecord, asString } from '../json.ts'
+import { REF_IN_TEXT_PATTERN } from '../ref-grammar.ts'
 
 export type ZoteroRowState = 'running' | 'ok' | 'error' | 'stopped'
 
@@ -28,7 +30,7 @@ export interface EvidenceItemView {
 
 /** True for plain objects (the validated shape every meta read requires). */
 export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
+  return asRecord(value) !== undefined
 }
 
 /** The wire name of one tool call block (settled and running forms). */
@@ -43,8 +45,7 @@ export function orderKeyOf(block: ToolCallBlock): number {
 
 /** Read a string field off a validated record. */
 export function stringField(record: Record<string, unknown>, key: string): string | undefined {
-  const value = record[key]
-  return typeof value === 'string' ? value : undefined
+  return asString(record[key])
 }
 
 /** Read a number field off a validated record. */
@@ -101,11 +102,7 @@ export function argsOf(block: ToolCallBlock): Record<string, unknown> | null {
 
 /** The 8-character object key of a zotero:// ref, or null for other strings. */
 export function shortKeyOf(value: string): string | null {
-  const match =
-    /zotero:\/\/user\/0\/(?:item|attachment|annotation|collection|search)\/([A-Z0-9]{8})/.exec(
-      value,
-    )
-  return match?.[1] ?? null
+  return REF_IN_TEXT_PATTERN.exec(value)?.groups?.key ?? null
 }
 
 /** Evidence items from the retrieve projection; null when malformed. */
