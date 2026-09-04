@@ -35,6 +35,17 @@ export const ZOTERO_PROMPT_ANCHOR = 'TOOL_REPORT' as const
 export const ZOTERO_PROMPT_ORDER_OFFSET = 100
 
 /**
+ * Fallback placement for harness lines without the runtime anchor lookup:
+ * dsh 0.1.1-rc.2 exposes no `systemPrompt.getSectionOrder()` and exports no
+ * anchor table — sections sort by plain numeric order and tool guidance
+ * lives in the 100-199 band. 106 is the proven 0.5.2-line placement (after
+ * the core tool sections, matching the released 0.5.1/0.5.2 policy slot).
+ * Kept as a named constant so the registration stays self-documenting and
+ * testable.
+ */
+export const ZOTERO_PROMPT_RC2_FALLBACK_ORDER = 106
+
+/**
  * The policy body with the configured tool caps interpolated — the values
  * the model must stay within, so out-of-range guesses fail before they hit
  * the validation step.
@@ -69,9 +80,18 @@ function zoteroPromptTextOf(
  * @param config - the live resolved config getter.
  */
 export function registerPromptSection(ctx: Context, config: () => ResolvedConfig): void {
+  // dsh >= 0.1.2-alpha.5 resolves the anchor at runtime. Older harness lines
+  // (e.g. 0.1.1-rc.2) have neither `getSectionOrder` nor any exported anchor
+  // table; registering there would throw at load, so fall back to the proven
+  // rc.2 band placement instead. On the alpha line this resolves to the same
+  // 3000 as before — behavior is unchanged.
+  const order =
+    typeof ctx.systemPrompt.getSectionOrder === 'function'
+      ? ctx.systemPrompt.getSectionOrder(ZOTERO_PROMPT_ANCHOR) + ZOTERO_PROMPT_ORDER_OFFSET
+      : ZOTERO_PROMPT_RC2_FALLBACK_ORDER
   ctx.systemPrompt.section({
     name: ZOTERO_PROMPT_SECTION_NAME,
-    order: ctx.systemPrompt.getSectionOrder(ZOTERO_PROMPT_ANCHOR) + ZOTERO_PROMPT_ORDER_OFFSET,
+    order,
     text: () => zoteroPromptTextOf(config()),
   })
 }
