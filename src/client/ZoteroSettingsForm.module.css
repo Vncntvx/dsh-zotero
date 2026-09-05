@@ -1,0 +1,25 @@
+/* Zotero settings form groups: the families the host schema declares. Spacing
+ * follows the harness plugin fields (`fields.module.css` `.field` padding
+ * 12px 0 with `.field + .field` separators): groups stack without extra gaps,
+ * fields inside a group stack tight; the card body owns the outer margins. */
+
+.group {
+  display: flex;
+  flex-direction: column;
+}
+
+.groupTitle {
+  margin: 0;
+  padding: 10px 0 4px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.fields {
+  display: flex;
+  flex-direction: column;
+}

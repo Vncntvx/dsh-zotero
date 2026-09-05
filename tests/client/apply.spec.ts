@@ -14,20 +14,12 @@ import { en, zh } from '../../src/client/locales.ts'
 import { ZOTERO_SETTINGS_NAMESPACE } from '../../src/settings-namespace.ts'
 import { fakeScope } from './helpers/fake-scope.ts'
 
-// The page imports the primitives controls; stub them so this wiring-level
-// spec does not load the real bundle (katex css, shiki, …).
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
-  const { createElement } = await import('react')
-  return {
-    Input: (props: Record<string, unknown>) => createElement('input', props),
-    Button: ({
-      children,
-      ...rest
-    }: Record<string, unknown> & { children?: import('react').ReactNode }) =>
-      createElement('button', { type: 'button', ...rest }, children),
-    IconChevronDownOutline14: () => null,
-  }
-})
+// The page imports primitive icons; stub them so this wiring-level spec does
+// not load the real bundle (katex css, shiki, …).
+vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
+  IconChevronDownOutline14: () => null,
+  LinkIcon: () => null,
+}))
 
 interface FakeSlotsEntry {
   name: string
@@ -149,13 +141,9 @@ describe('the browser-half entry', () => {
     apply(world.ctx as Context)
     expect(world.bindSpecs).toHaveLength(1)
     expect(world.bindSpecs[0]?.namespace).toBe(ZOTERO_SETTINGS_NAMESPACE)
-    // The lenient decode passes plain sections through and refuses non-objects.
-    const decode = world.bindSpecs[0]?.decode
-    expect(decode).toBeTypeOf('function')
-    expect(decode?.({ webEnabled: true })).toEqual({ webEnabled: true })
-    expect(decode?.({})).toEqual({})
-    expect(decode?.(null)).toBeUndefined()
-    expect(decode?.(['not', 'a', 'section'])).toBeUndefined()
+    // The default decode (schema rehydrate + validate, fail-closed) is the
+    // authority — no lenient bypass.
+    expect(world.bindSpecs[0]?.decode).toBeUndefined()
   })
 
   it('mounts the zotero Remote namespace contribution', () => {

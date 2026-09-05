@@ -51,16 +51,14 @@ export const inject = ['locale', 'slots', 'connection', 'settingsScope', 'remote
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-zotero: page dictionaries')
   // One binder for the namespace the host half registers; the card stages and
-  // saves through it. The lenient decode keeps the served plain-object section
-  // as-is: the wire schema's own rehydration would re-validate a resolved
-  // shape this plugin does not enumerate, and the per-field form parse is the
-  // authority the card uses.
-  const scope = ctx.settingsScope.bind({
+  // saves through it. The default decode (schema rehydrate + validate,
+  // fail-closed to non-ready) is the authority — no lenient bypass. This entry
+  // declares only its own dependency (`webEnabled` for the tab gate); the card
+  // form owns the full field table through `ZoteroCardController` (which binds
+  // the same scope as a record), so the narrow type is the entry's read
+  // contract, not a truncation of the stored document.
+  const scope = ctx.settingsScope.bind<{ webEnabled?: boolean }>({
     namespace: ZOTERO_SETTINGS_NAMESPACE,
-    decode: (section) =>
-      typeof section === 'object' && section !== null && !Array.isArray(section)
-        ? (section as Record<string, unknown>)
-        : undefined,
   })
   const card = new ZoteroCardController(scope)
 
@@ -86,11 +84,13 @@ export function apply(ctx: ClientContext): void {
   // runtime-less internal forks between a plugin entry and the root fiber —
   // the namespace service mounted under the gateway entry is unreachable that
   // way (the store path resolves it by isolation label instead).
+  // Re-verified against dsh 0.1.3-alpha.1: the vendored cordis and the
+  // gateway's `remote.<namespace>` mount mechanism are unchanged, so the
+  // workaround stays. Re-check first on any harness upgrade.
   let zotero: ZoteroRemoteFace | undefined
   ctx.effect(async () => {
     const dispose = await ctx.remote.$mount(ZOTERO_REMOTE)
-    zotero = (ctx.reflect as unknown as { get(name: string): unknown }).get('remote.zotero') as
-      ZoteroRemoteFace | undefined
+    zotero = ctx.reflect.get('remote.zotero') as ZoteroRemoteFace | undefined
     if (zotero === undefined) {
       throw new Error('dsh-zotero: the zotero Remote namespace did not mount')
     }

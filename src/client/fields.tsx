@@ -1,18 +1,21 @@
 /**
- * Hand-written control for the Zotero settings card. Each renders one field's
+ * Hand-written controls for the Zotero settings card. Each renders one field's
  * label, its staged text, whether saving would leave an override, and — when
  * one stands — the reset that stages a clear back to the composition layer.
  * Nothing here writes: a control reports what the user typed, and the card's
  * save is the single point where a draft becomes a document mutation.
  *
- * The control reuses the harness's official `Input` primitive (32px, radius
- * 8, brand focus ring) and the shared `--dsw-alias-*` tokens, so it matches
- * the settings surface without shipping a CSS pipeline in the client bundle.
+ * Structure, tokens, and geometry mirror the harness's official plugin fields
+ * (`packages/client/ui-settings-plugins/src/client/fields.tsx` +
+ * `fields.module.css`): native inputs (34px, radius 8, layer-3 surface),
+ * pill override badges, and `.field + .field` separators. Spelled here rather
+ * than imported because a client bundle must not value-import another
+ * plugin's code. The boolean toggle has no official atom (the official module
+ * ships only `ValueField`/`SecretField`), so it keeps a native checkbox while
+ * reusing the official badge/reset/hint language.
  * @module dsh-zotero/client/fields
  */
 
-import type { CSSProperties } from 'react'
-import { Input } from '@deepseek-ai/dsh-client-ui-primitives'
 import css from './fields.module.css'
 
 /** What every field control needs regardless of its value type. */
@@ -43,53 +46,6 @@ export interface FieldProps {
   onReset: () => void
 }
 
-const row: CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 4,
-  padding: '5px 0',
-}
-
-const head: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  gap: 8,
-}
-
-const labelStyle: CSSProperties = {
-  color: 'var(--dsw-alias-label-primary)',
-  fontSize: 13,
-  lineHeight: 1.4,
-}
-
-const badge: CSSProperties = {
-  color: 'var(--dsw-alias-label-secondary)',
-  fontSize: 12,
-}
-
-const resetButton: CSSProperties = {
-  border: 'none',
-  background: 'none',
-  padding: 0,
-  color: 'var(--dsw-alias-brand-primary)',
-  fontSize: 12,
-  cursor: 'pointer',
-  textDecoration: 'underline',
-}
-
-const hint: CSSProperties = {
-  margin: 0,
-  color: 'var(--dsw-alias-label-tertiary)',
-  fontSize: 12,
-  lineHeight: 1.4,
-}
-
-const invalid: CSSProperties = {
-  ...hint,
-  color: 'var(--dsw-alias-state-error-primary)',
-}
-
 /**
  * A staged value field. `numeric` only hints the keypad: which drafts a field
  * accepts is decided by its spec, so the control never silently rewrites what
@@ -106,17 +62,17 @@ export function ValueField(
   },
 ) {
   return (
-    <div style={row}>
-      <div style={head}>
-        <label style={labelStyle} htmlFor={props.id}>
+    <div className={css.field}>
+      <div className={css.head}>
+        <label className={css.label} htmlFor={props.id}>
           {props.label}
         </label>
         {props.overridden ? (
-          <span style={badge}>
-            {props.overriddenLabel}{' '}
+          <span className={css.badges}>
+            <span className={css.badge}>{props.overriddenLabel}</span>
             <button
               type="button"
-              style={resetButton}
+              className={css.reset}
               disabled={props.disabled}
               onClick={props.onReset}
             >
@@ -125,9 +81,9 @@ export function ValueField(
           </span>
         ) : null}
       </div>
-      <Input
+      <input
         id={props.id}
-        className={props.invalid ? css.invalid : undefined}
+        className={props.invalid ? css.inputInvalid : css.input}
         type="text"
         {...(props.numeric === true ? { inputMode: 'numeric' as const } : {})}
         {...(props.invalid ? { 'aria-invalid': true } : {})}
@@ -138,35 +94,11 @@ export function ValueField(
           props.onEdit(event.target.value)
         }}
       />
-      <p style={props.invalid ? invalid : hint}>
+      <p className={props.invalid ? css.invalid : css.hint}>
         {props.invalid ? props.invalidLabel : props.hint}
       </p>
     </div>
   )
-}
-
-const toggleRow: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 8,
-}
-
-const toggleLabel: CSSProperties = {
-  ...labelStyle,
-  cursor: 'pointer',
-}
-
-const toggle: CSSProperties = {
-  width: 16,
-  height: 16,
-  margin: 0,
-  accentColor: 'var(--dsw-alias-state-business-primary)',
-  cursor: 'pointer',
-}
-
-const toggleHint: CSSProperties = {
-  ...hint,
-  margin: '2px 0 0 24px',
 }
 
 /**
@@ -183,27 +115,27 @@ export function BooleanField(
   },
 ) {
   return (
-    <div style={row}>
-      <div style={toggleRow}>
+    <div className={css.field}>
+      <div className={css.toggleRow}>
         <input
           id={props.id}
           type="checkbox"
-          style={toggle}
+          className={css.toggle}
           checked={props.text === 'true'}
           disabled={props.disabled}
           onChange={(event) => {
             props.onEdit(event.target.checked ? 'true' : 'false')
           }}
         />
-        <label style={toggleLabel} htmlFor={props.id}>
+        <label className={css.toggleLabel} htmlFor={props.id}>
           {props.label}
         </label>
         {props.overridden ? (
-          <span style={badge}>
-            {props.overriddenLabel}{' '}
+          <span className={css.badges}>
+            <span className={css.badge}>{props.overriddenLabel}</span>
             <button
               type="button"
-              style={resetButton}
+              className={css.reset}
               disabled={props.disabled}
               onClick={props.onReset}
             >
@@ -212,7 +144,7 @@ export function BooleanField(
           </span>
         ) : null}
       </div>
-      <p style={toggleHint}>{props.hintLabel}</p>
+      <p className={css.hint}>{props.hintLabel}</p>
     </div>
   )
 }

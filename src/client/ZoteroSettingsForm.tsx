@@ -10,7 +10,6 @@
  */
 
 import type { ReactNode } from 'react'
-import type { CSSProperties } from 'react'
 import { BooleanField, ValueField } from './fields.tsx'
 import type { CardActions } from './card-form.ts'
 import {
@@ -21,6 +20,7 @@ import {
   type ZoteroCardState,
 } from './zotero-card-controller.ts'
 import type { ZoteroLocaleKey } from './locales.ts'
+import css from './ZoteroSettingsForm.module.css'
 
 /** Field-editing actions a surface wires from its card face. */
 export type ZoteroFormActions = Pick<CardActions, 'edit' | 'resetField'>
@@ -35,29 +35,6 @@ export interface ZoteroSettingsFormProps {
   actions: ZoteroFormActions
 }
 
-const group: CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 2,
-}
-
-const groupTitle: CSSProperties = {
-  margin: 0,
-  padding: '10px 0 4px',
-  color: 'var(--dsw-alias-label-tertiary)',
-  fontSize: 12,
-  fontWeight: 600,
-  lineHeight: 1.4,
-  textTransform: 'uppercase',
-  letterSpacing: '0.04em',
-}
-
-const fields: CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 4,
-}
-
 /**
  * Render every group of the namespace's fields.
  * @param props - copy, snapshot, and staged-edit actions.
@@ -68,9 +45,9 @@ export function ZoteroSettingsForm(props: ZoteroSettingsFormProps) {
   return (
     <>
       {FIELD_GROUPS.map(({ key: groupKey, fields: keys }) => (
-        <section key={groupKey} style={group} aria-label={t(groupKey)}>
-          <h3 style={groupTitle}>{t(groupKey)}</h3>
-          <div style={fields}>{keys.map((key) => field(t, state, actions, key))}</div>
+        <section key={groupKey} className={css.group} aria-label={t(groupKey)}>
+          <h3 className={css.groupTitle}>{t(groupKey)}</h3>
+          <div className={css.fields}>{keys.map((key) => field(t, state, actions, key))}</div>
         </section>
       ))}
     </>
