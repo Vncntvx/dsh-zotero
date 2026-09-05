@@ -22,20 +22,10 @@ import {
 import { fakeScope, type FakeScope } from './helpers/fake-scope.ts'
 
 // The real primitives bundle pulls heavy dependencies (katex, shiki); the card
-// only needs the controls and the chevron icon, so stub them with their DOM
-// faces.
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
-  const { createElement } = await import('react')
-  return {
-    Input: (props: Record<string, unknown>) => createElement('input', props),
-    Button: ({
-      children,
-      ...rest
-    }: Record<string, unknown> & { children?: import('react').ReactNode }) =>
-      createElement('button', { type: 'button', ...rest }, children),
-    IconChevronDownOutline14: () => null,
-  }
-})
+// only needs the chevron icon, so stub it with its DOM face.
+vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
+  IconChevronDownOutline14: () => null,
+}))
 
 const t = (key: ZoteroLocaleKey): string => zh[key]
 
@@ -153,8 +143,8 @@ describe('ZoteroPluginCard', () => {
     fireEvent.change(timeout, { target: { value: 'abc' } })
     expect(timeout.getAttribute('aria-invalid')).toBe('true')
     // The invalid border rides a css-module class; its hashed name carries
-    // the source class name.
-    expect(timeout.className).toContain('invalid')
+    // the source class name (`inputInvalid` per the official fields).
+    expect(timeout.className).toMatch(/inputInvalid/)
     expect(screen.getByText('请填数字；留空表示使用默认值。')).toBeDefined()
     expect(saveButton().disabled).toBe(true)
   })
