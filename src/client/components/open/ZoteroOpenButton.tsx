@@ -8,6 +8,7 @@
  * @module dsh-zotero/client/components/open/ZoteroOpenButton
  */
 
+import { LinkIcon } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { OpenVerdict } from '../../actions/open-zotero.ts'
 import css from './open.module.css'
@@ -22,16 +23,26 @@ export interface ZoteroOpenButtonProps {
   readonly className?: string
 }
 
-/** One provenance-guarded action button. */
+/** One provenance-guarded action button: leading destination glyph per the
+ * harness clickable-link spec (produced-file chips lead with `LinkIcon` even
+ * on button geometry). External `http(s)` targets open in a new tab with the
+ * safe rel; `zotero://` protocol links hand to the OS handler in place. */
 export function ZoteroOpenButton({ url, verdict, label, t, className }: ZoteroOpenButtonProps) {
+  let external = false
+  try {
+    const protocol = new URL(url).protocol
+    external = protocol === 'http:' || protocol === 'https:'
+  } catch {
+    external = false
+  }
   return (
     <a
       className={className ?? css.button}
       href={url}
-      target="_blank"
-      rel="noreferrer"
+      {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
       title={verdict === 'unverified' ? t('instanceUnverified') : undefined}
     >
+      <LinkIcon kind="url" className={css.linkIcon} />
       {label}
     </a>
   )

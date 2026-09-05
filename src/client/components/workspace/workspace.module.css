@@ -269,7 +269,9 @@
   right: 2px;
 }
 
-/* The quiet passages entry: a text link to the cross-source board. */
+/* The quiet passages entry: a text link to the cross-source board. Uses the
+ * harness clickable-link alias (as `ProducedFiles` file buttons do for
+ * button-as-link surfaces), with dotted hover per the link spec. */
 .evidenceEntry {
   align-self: flex-start;
   display: inline-flex;
@@ -280,19 +282,22 @@
   font-family: inherit;
   font-size: 12px;
   line-height: 16px;
-  color: var(--dsw-alias-state-business-primary);
+  font-weight: 500;
+  color: var(--dsw-alias-link);
   background: transparent;
   border: none;
   border-radius: 6px;
   cursor: pointer;
+  text-decoration: none;
 }
 
 .evidenceEntry:hover {
-  text-decoration: underline;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
 }
 
 .evidenceEntry:focus-visible {
-  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline: 1px solid var(--dsw-alias-link);
   outline-offset: 1px;
 }
 
@@ -575,7 +580,10 @@
   color: var(--dsw-alias-label-secondary);
 }
 
-/* The guarded action row: open buttons, copy, and the composer prefills. */
+/* The guarded action row: open buttons, copy, and the composer prefills.
+ * `.action` geometry intentionally duplicated with
+ * `../open/open.module.css` `.button` and `../cards.module.css` `.lineAction`
+ * — change all three together. */
 .actionRow {
   display: flex;
   align-items: center;

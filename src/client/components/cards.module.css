@@ -19,7 +19,9 @@
 }
 
 /* Line-end actions sit outside a disclosure toggle: a copy or download
- * never expands the row. */
+ * never expands the row. Geometry intentionally duplicated with
+ * `open/open.module.css` `.button` and `workspace/workspace.module.css`
+ * `.action` — change all three together (see above for why). */
 .lineActions {
   flex: none;
   display: inline-flex;
@@ -92,19 +94,29 @@
   color: var(--dsw-alias-label-primary);
 }
 
+/* Text-link language (mirrors the harness clickable-link spec:
+ * `ui-primitives/src/markdown/MarkdownText.module.css` anchor + `.linkIcon`,
+ * `ui-primitives/src/WebBlock.module.css` source/fetch links, and
+ * `ui-deliverables/src/client/ProducedFiles.module.css` file buttons — link-blue
+ * at rest, dotted underline + 3px offset on hover/focus. Keep in sync with
+ * `open/open.module.css` `.link`: the esbuild css-modules pipeline resolves each
+ * file independently, so `composes` across files would drop the base rules). */
 .link {
   font-size: 12px;
   line-height: 16px;
-  color: var(--dsw-alias-state-business-primary);
+  font-weight: 500;
+  color: var(--dsw-alias-link);
   text-decoration: none;
 }
 
-.link:hover {
-  text-decoration: underline;
+.link:hover,
+.link:focus-visible {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
 }
 
 .link:focus-visible {
-  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline: 1px solid var(--dsw-alias-link);
   outline-offset: 1px;
 }
 

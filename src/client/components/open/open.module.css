@@ -9,20 +9,43 @@
   gap: 4px;
 }
 
+/* Text-link language (mirrors the harness clickable-link spec:
+ * `ui-primitives/src/markdown/MarkdownText.module.css` anchor + `.linkIcon`,
+ * `ui-primitives/src/WebBlock.module.css` source/fetch links, and
+ * `ui-deliverables/src/client/ProducedFiles.module.css` file buttons — link-blue
+ * at rest, dotted underline + 3px offset on hover/focus, 1.1em/-0.25em/5px glyph
+ * seat. Keep in sync with `../cards.module.css` `.link`: the esbuild css-modules
+ * pipeline resolves each file independently, so `composes` across files would
+ * drop the base rules). */
 .link {
   font-size: 12px;
   line-height: 16px;
-  color: var(--dsw-alias-state-business-primary);
+  font-weight: 500;
+  color: var(--dsw-alias-link);
   text-decoration: none;
 }
 
-.link:hover {
-  text-decoration: underline;
+.link:hover,
+.link:focus-visible {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
 }
 
 .link:focus-visible {
-  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline: 1px solid var(--dsw-alias-link);
   outline-offset: 1px;
+}
+
+/* Leading link-category glyph seat for `<LinkIcon kind="url">`
+ * (mirrors the harness clickable-link geometry: 1.1em keeps the glyph
+ * proportional to the surrounding text, the negative offset seats its
+ * optical center on the cap height). */
+.linkIcon {
+  flex: none;
+  width: 1.1em;
+  height: 1.1em;
+  vertical-align: -0.25em;
+  margin-right: 5px;
 }
 
 .note {
@@ -31,7 +54,11 @@
   color: var(--dsw-alias-label-caption);
 }
 
-/* The action-area form: the row's bordered-button geometry, as an anchor. */
+/* The action-area form: the row's bordered-button geometry, as an anchor.
+ * Intentionally duplicated with `../cards.module.css` `.lineAction` and
+ * `../workspace/workspace.module.css` `.action` (same 24px geometry per
+ * surface; esbuild css-modules cannot `composes` across files) — change all
+ * three together. */
 .button {
   display: inline-flex;
   align-items: center;
