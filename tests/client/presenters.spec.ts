@@ -16,7 +16,6 @@ import {
   boolField,
   callNameOf,
   evidenceItemsOf,
-  interpolate,
   isRecord,
   joinNonEmpty,
   metaOf,
@@ -92,7 +91,7 @@ describe('rowStateOf', () => {
 })
 
 describe('resultTextOf', () => {
-  it('joins text blocks, stringifies the rest, and degrades to null', () => {
+  it('joins text blocks, pretty-prints the rest, and matches the harness resultText', () => {
     expect(
       resultTextOf(
         settled({
@@ -107,11 +106,11 @@ describe('resultTextOf', () => {
       resultTextOf(
         settled({ content: [{ type: 'json', data: { x: 1 } } as unknown as ContentBlock] }),
       ),
-    ).toBe('{"type":"json","data":{"x":1}}')
+    ).toBe(JSON.stringify({ type: 'json', data: { x: 1 } }, null, 2))
     expect(
       resultTextOf(settled({ content: [], isError: true, error: { name: 'E', code: 'X' } })),
     ).toBe('E: X')
-    expect(resultTextOf(settled({ content: [] }))).toBeNull()
+    expect(resultTextOf(settled({ content: [] }))).toBe('')
     expect(resultTextOf(running())).toBeNull()
   })
 })
@@ -183,12 +182,6 @@ describe('evidenceItemsOf', () => {
     expect(evidenceItemsOf({ items: 'x' })).toBeNull()
     expect(evidenceItemsOf({ items: [{ source: 'annotation' }] })).toBeNull()
     expect(evidenceItemsOf({ items: ['x'] })).toBeNull()
-  })
-})
-
-describe('interpolate', () => {
-  it('substitutes known placeholders and keeps unknown ones verbatim', () => {
-    expect(interpolate('{count} results · {missing}', { count: 4 })).toBe('4 results · {missing}')
   })
 })
 

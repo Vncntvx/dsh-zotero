@@ -11,7 +11,6 @@
  */
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ExportDocumentRow } from '../../src/client/components/ExportDocumentRow.tsx'
 import {
@@ -25,7 +24,7 @@ import {
 import { ExportSections, sectionTextOf } from '../../src/client/components/ExportSections.tsx'
 import { incompleteExportsNoteOf } from '../../src/client/components/operations.ts'
 import { ExportsPage } from '../../src/client/components/workspace/ExportsPage.tsx'
-import { zh, type ZoteroLocaleKey } from '../../src/client/locales.ts'
+import { zh } from '../../src/client/locales.ts'
 import { bibTexKeysOf, citeCommandOf } from '../../src/client/sources/bibtex.ts'
 import type { ExportArtifact } from '../../src/client/sources/model.ts'
 import type { ExportedDocument } from '../../src/client/sources/selectors.ts'
@@ -36,6 +35,8 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
   return {
     IconChevronDownOutline14: (props: Record<string, unknown>) =>
       createElement('span', { 'data-icon': 'chevron-down', ...props }),
+    LinkIcon: (props: Record<string, unknown>) =>
+      createElement('span', { 'data-icon': 'link', ...props }),
     writeClipboard: vi.fn(async () => true),
   }
 })
@@ -46,7 +47,8 @@ const { writeClipboard } = vi.mocked(
   ),
 )
 
-const t: TranslateNS<'zotero'> = (key) => zh[key as ZoteroLocaleKey] ?? key
+import { mockT } from './helpers/mock-translate.ts'
+const t = mockT
 
 const REF_A = 'zotero://user/0/item/AAAAAAA1'
 const REF_B = 'zotero://user/0/item/BBBBBBBB'

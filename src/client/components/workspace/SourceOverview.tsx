@@ -15,7 +15,6 @@ import { Menu, writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { askDraftOf, exportDraftOf } from '../../actions/source-actions.ts'
 import { openVerdictOf, selectUrlOf } from '../../actions/open-zotero.ts'
-import { interpolate } from '../../presenters.ts'
 import type { SearchProvenance, SourceItem } from '../../sources/model.ts'
 import { pdfCapabilityOf } from '../../sources/source-capabilities.ts'
 import { BlockedOpenAction } from '../open/BlockedOpenAction.tsx'
@@ -138,7 +137,7 @@ export function SourceOverview({ item, t, setDraft }: SourceOverviewProps) {
         item.searches.map((search, index) => (
           <p key={`${search.callId}-${index}`} className={css.line}>
             {search.query !== undefined
-              ? interpolate(t('searchFrom'), { query: search.query })
+              ? t('searchFrom', { query: search.query })
               : t('searchFromBrowse')}
           </p>
         ))

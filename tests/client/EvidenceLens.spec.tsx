@@ -7,7 +7,6 @@
  */
 
 import { cleanup, render, screen } from '@testing-library/react'
-import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   EvidenceCard,
@@ -16,7 +15,7 @@ import {
   sourceLabelKeyOf,
 } from '../../src/client/components/EvidenceCard.tsx'
 import { EvidenceOverview } from '../../src/client/components/workspace/EvidenceOverview.tsx'
-import { zh, type ZoteroLocaleKey } from '../../src/client/locales.ts'
+import { zh } from '../../src/client/locales.ts'
 import type { SourceItem } from '../../src/client/sources/model.ts'
 import { sourceOf, workspaceOf } from './helpers/source-fixtures.ts'
 
@@ -25,12 +24,15 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
   return {
     IconChevronDownOutline14: (props: Record<string, unknown>) =>
       createElement('span', { 'data-icon': 'chevron-down', ...props }),
+    LinkIcon: (props: Record<string, unknown>) =>
+      createElement('span', { 'data-icon': 'link', ...props }),
     writeClipboard: vi.fn(async () => true),
     Tooltip: ({ children }: { children: React.ReactElement }) => children,
   }
 })
 
-const t: TranslateNS<'zotero'> = (key) => zh[key as ZoteroLocaleKey] ?? key
+import { mockT } from './helpers/mock-translate.ts'
+const t = mockT
 
 const EVIDENCE_ITEM: SourceItem = sourceOf({
   key: 'zotero://user/0/item/ABCDEFGH',

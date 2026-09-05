@@ -12,7 +12,6 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ToolCallBlock, ToolResultNode } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { ChatConversationViewNode, ChatSnapshot } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { SessionSnapshot } from '@deepseek-ai/dsh-api-session-controller/client'
-import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ZoteroStatusView } from '../../src/client/remote.ts'
@@ -29,7 +28,7 @@ import {
   type ConnectionView,
 } from '../../src/client/components/workspace/connection.ts'
 import { callNameOf } from '../../src/client/presenters.ts'
-import { zh, type ZoteroLocaleKey } from '../../src/client/locales.ts'
+import { zh } from '../../src/client/locales.ts'
 import { running, settled } from './helpers/blocks.ts'
 
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
@@ -79,12 +78,14 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
     IconChevronLeftOutline14: icon('chevron-left'),
     IconChevronRightOutline14: icon('chevron-right'),
     IconBrowseOutline16: icon('browse'),
+    LinkIcon: icon('link'),
     writeClipboard: vi.fn(async () => true),
     Tooltip: ({ children }: { children: React.ReactElement }) => children,
   }
 })
 
-const t: TranslateNS<'zotero'> = (key) => zh[key as ZoteroLocaleKey] ?? key
+import { mockT } from './helpers/mock-translate.ts'
+const t = mockT
 
 const CONNECTED: ZoteroStatusView = {
   providerId: 'local',
@@ -120,17 +121,24 @@ function toolRow(
 
 /**
  * A chat snapshot whose node store carries the given rows; the other faces
- * stay opaque. Only `get`/`values` are implemented — the collectors never
- * touch the per-key subscription sources, so the stand-in converts through
- * `unknown` instead of growing a stub per harness addition.
+ * stay opaque. Implements both `order` (presentation order) and `get`, the
+ * two faces the collectors read. `values` mirrors the same rows for store
+ * shape completeness (the harness `ChatNodeStore` always provides it); the
+ * production collector never reads it, and the order-vs-values test above
+ * locks that in.
  */
 function chatOf(rows: ChatConversationViewNode[] = []): ChatSnapshot {
+  const keys = rows.map((row, index) => (row.key ?? `row-${index}`) as string)
+  const byKey = new Map<string, ChatConversationViewNode>()
+  rows.forEach((row, index) => {
+    byKey.set(keys[index]!, row)
+  })
   const nodes = {
-    get: () => undefined,
+    get: (key: string) => byKey.get(key),
     values: () => rows,
   } as unknown as ChatSnapshot['nodes']
   return {
-    order: [],
+    order: keys,
     nodes,
     locations: {} as ChatSnapshot['locations'],
     navigation: {} as ChatSnapshot['navigation'],
@@ -313,17 +321,54 @@ describe('status projection helpers', () => {
     const signed = sessionSignatureOf(
       chatOf([toolRow(settled({ seq: 3, callId: 'a' })), toolRow(running({ callId: 'b' }))]),
     )
-    expect(signed).toBe('2:b')
+    expect(signed).toBe(JSON.stringify({ order: ['tool:a', 'tool:b'], running: ['b'] }))
     // The same content signs identically; streaming publications change
-    // neither the visible tool-row count nor the in-flight ids.
+    // neither the visible zotero row order nor the in-flight ids.
     expect(
       sessionSignatureOf(
         chatOf([toolRow(settled({ seq: 3, callId: 'a' })), toolRow(running({ callId: 'b' }))]),
       ),
     ).toBe(signed)
-    expect(sessionSignatureOf(chatOf())).toBe('0:')
+    expect(sessionSignatureOf(chatOf())).toBe(JSON.stringify({ order: [], running: [] }))
     // A hidden row does not count.
-    expect(sessionSignatureOf(chatOf([toolRow(settled({ callId: 'h' }), 'hidden')]))).toBe('0:')
+    expect(sessionSignatureOf(chatOf([toolRow(settled({ callId: 'h' }), 'hidden')]))).toBe(
+      JSON.stringify({ order: [], running: [] }),
+    )
+    // A non-zotero row does not count either.
+    const bashRow = toolRow(settled({ seq: 6, callId: 'n', call: { name: 'bash', argsRaw: '{}' } }))
+    expect(sessionSignatureOf(chatOf([toolRow(settled({ seq: 3, callId: 'a' })), bashRow]))).toBe(
+      JSON.stringify({ order: ['tool:a'], running: [] }),
+    )
+  })
+
+  it('encodes control characters in keys without colliding', () => {
+    const tricky = sessionSignatureOf(chatOf([toolRow(settled({ seq: 1, callId: 'a b' }))]))
+    const plain = sessionSignatureOf(chatOf([toolRow(settled({ seq: 1, callId: 'a' }))]))
+    expect(tricky).not.toBe(plain)
+    expect(JSON.parse(tricky)).toEqual({ order: ['tool:a b'], running: [] })
+  })
+
+  it('collects in presentation order even when values disagree', () => {
+    const first = toolRow(settled({ seq: 1, callId: 'first' }))
+    const second = toolRow(settled({ seq: 2, callId: 'second' }))
+    const chat = chatOf([first, second])
+    // `values()` deliberately disagrees with `order` here: the collector must
+    // follow `order`, the harness presentation order.
+    const nodes = chat.nodes as unknown as {
+      get: (key: string) => unknown
+      values: () => unknown[]
+    }
+    const reversed = [second, first]
+    ;(nodes as { values: () => unknown[] }).values = () => reversed
+    expect(collectZoteroCalls(chat).map((block) => block.callId)).toEqual(['first', 'second'])
+  })
+
+  it('ignores stale order keys without crashing', () => {
+    const chat = chatOf([toolRow(settled({ seq: 1, callId: 'a' }))])
+    const withStale: ChatSnapshot = { ...chat, order: [...chat.order, 'stale-key'] }
+    expect(() => collectZoteroCalls(withStale)).not.toThrow()
+    expect(collectZoteroCalls(withStale)).toHaveLength(1)
+    expect(sessionSignatureOf(withStale)).toBe(JSON.stringify({ order: ['tool:a'], running: [] }))
   })
 
   it('builds the failure diagnosis line', () => {

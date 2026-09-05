@@ -6,10 +6,9 @@
  */
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SourceItem } from '../../src/client/sources/model.ts'
-import { zh, type ZoteroLocaleKey } from '../../src/client/locales.ts'
+import { zh } from '../../src/client/locales.ts'
 import { CopyButton } from '../../src/client/components/CopyButton.tsx'
 import { ZoteroOpenButton } from '../../src/client/components/open/ZoteroOpenButton.tsx'
 import { badgesOf } from '../../src/client/components/workspace/SourceListItem.tsx'
@@ -20,6 +19,8 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
   return {
     IconChevronDownOutline14: (props: Record<string, unknown>) =>
       createElement('span', { 'data-icon': 'chevron-down', ...props }),
+    LinkIcon: (props: Record<string, unknown>) =>
+      createElement('span', { 'data-icon': 'link', ...props }),
     writeClipboard: vi.fn(async () => true),
     Tooltip: ({ children }: { children: React.ReactElement }) => children,
   }
@@ -31,7 +32,8 @@ const { writeClipboard } = vi.mocked(
   ),
 )
 
-const t: TranslateNS<'zotero'> = (key) => zh[key as ZoteroLocaleKey] ?? key
+import { mockT } from './helpers/mock-translate.ts'
+const t = mockT
 
 afterEach(() => {
   cleanup()
@@ -166,7 +168,27 @@ describe('ZoteroOpenButton', () => {
     )
     const anchor = screen.getByText(zh.openInZotero)
     expect(anchor.getAttribute('href')).toBe('zotero://select/library/items/ABCDEFGH')
-    expect(anchor.getAttribute('target')).toBe('_blank')
+    // Protocol links hand to the OS handler in place per the harness
+    // `renderSafeLink` contract: no blank tab, no external rel.
+    expect(anchor.getAttribute('target')).toBeNull()
+    expect(anchor.getAttribute('rel')).toBeNull()
     expect(anchor.getAttribute('title')).toBeNull()
+    // Leading destination glyph per the clickable-link spec.
+    const link = anchor.closest('a') ?? anchor
+    expect(link.querySelector('[data-icon="link"]')).not.toBeNull()
+  })
+
+  it('opens http targets in a new tab with the safe rel', () => {
+    render(
+      <ZoteroOpenButton
+        url="https://example.com/a.pdf"
+        verdict="open"
+        label={zh.openInZotero}
+        t={t}
+      />,
+    )
+    const anchor = screen.getByText(zh.openInZotero)
+    expect(anchor.getAttribute('target')).toBe('_blank')
+    expect(anchor.getAttribute('rel')).toBe('noopener noreferrer')
   })
 })

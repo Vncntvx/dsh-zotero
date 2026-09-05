@@ -24,10 +24,39 @@ import type { ToolCallBlock } from '@deepseek-ai/dsh-client-ui-conversation/clie
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ZoteroStatusView } from '../remote.ts'
-import { callNameOf, orderKeyOf } from '../presenters.ts'
+import { callNameOf, isSettledTool } from '../presenters.ts'
 import { buildSourceWorkspace } from '../sources/reducer.ts'
 import type { ConnectionView } from './workspace/connection.ts'
 import { ZoteroWorkspaceView } from './workspace/ZoteroWorkspaceView.tsx'
+
+/** Defensive recursion bound for nested dispatch trees (the harness block type is unbounded). */
+const MAX_SUBCALL_DEPTH = 256
+
+/**
+ * The visible tool-call rows in presentation order: one `order` walk shared
+ * by the signature and the collector, so the traversal logic lives once.
+ * @param snapshot - the chat snapshot, undefined while none is open.
+ * @returns the visible tool roots with their stable order keys.
+ */
+function visibleToolRoots(snapshot: ChatSnapshot | undefined): Array<{
+  readonly key: string
+  readonly root: ToolCallBlock
+}> {
+  if (snapshot === undefined) return []
+  const out: Array<{ readonly key: string; readonly root: ToolCallBlock }> = []
+  for (const key of snapshot.order) {
+    const node = snapshot.nodes.get(key) as ChatNode | undefined
+    if (node?.kind !== 'tool-call' || node.visibility !== 'visible') continue
+    out.push({ key, root: node.data.root })
+  }
+  return out
+}
+
+/** True for the plugin's own tool names (settled and running forms). */
+function isZoteroRoot(root: ToolCallBlock): boolean {
+  const name = callNameOf(root)
+  return name !== null && name.startsWith('zotero_')
+}
 
 /** The inject face the tab's slot entry provides. */
 export interface SourcesTabFace {
@@ -49,28 +78,30 @@ export function currentTime(): string {
 
 /**
  * A cheap content signature of the zotero-relevant slice: the visible
- * tool-call row count plus the in-flight call ids. Streaming chunk
- * publications change neither, so the call collection (and with it the
- * workspace rebuild) skips them. A call enters or leaves through the row
- * count and settles by dropping out of the in-flight set — exactly the
- * events that can change the collection. A nested dispatch appearing under an
- * already running call keeps that call's id, so it lands with the next
- * signature change — an accepted delay, not an omission.
+ * zotero tool-call row order plus the in-flight call ids. `snapshot.order`
+ * is already the harness's presentation order, so the signature tracks it
+ * directly — streaming chunk publications keep the order and the in-flight
+ * set stable, so the call collection (and with it the workspace rebuild)
+ * skips them. Only zotero rows contribute, so unrelated tool activity never
+ * rebuilds the workspace. A nested dispatch appearing under an already
+ * running call keeps that call's id, so it lands with the next signature
+ * change — an accepted delay, not an omission. Encoded with `JSON.stringify`
+ * so arbitrary order keys and call ids (the harness never promises they
+ * exclude control characters) cannot collide.
  * @param snapshot - the chat snapshot, undefined while none is open.
  * @returns the signature string.
  */
 export function sessionSignatureOf(snapshot: ChatSnapshot | undefined): string {
   if (snapshot === undefined) return ''
-  let count = 0
   const running: string[] = []
-  for (const raw of snapshot.nodes.values()) {
-    const node = raw as ChatNode
-    if (node.kind !== 'tool-call' || node.visibility !== 'visible') continue
-    count += 1
+  const order: string[] = []
+  for (const { key, root } of visibleToolRoots(snapshot)) {
+    if (!isZoteroRoot(root)) continue
+    order.push(key)
     // The tool row's root lifecycle value: settled roots carry `kind`, in-flight ones do not.
-    if (!('kind' in node.data.root)) running.push(node.data.root.callId)
+    if (!isSettledTool(root)) running.push(root.callId)
   }
-  return `${count}:${running.join(',')}`
+  return JSON.stringify({ order, running })
 }
 
 /**
@@ -92,8 +123,9 @@ export function stateOf(result: RemoteResult<ZoteroStatusView>, checkedAt: strin
 /**
  * Collect the session's Zotero tool calls: settled results and in-flight
  * calls, including nested dispatch (PTC mode), deduplicated by callId and
- * ordered by transcript position. Only visible tool rows contribute — the
- * same set the harness's own compatibility projection carries. Pure over the
+ * in transcript order. Only visible tool rows contribute — the same set the
+ * harness's own compatibility projection carries. Iterates `snapshot.order`
+ * (already presentation order) instead of re-sorting. Pure over the
  * snapshot — the same log slice renders the same list.
  * @param snapshot - the chat snapshot, undefined while none is open.
  * @returns the ordered zotero call blocks.
@@ -102,22 +134,33 @@ export function collectZoteroCalls(snapshot: ChatSnapshot | undefined): ToolCall
   if (snapshot === undefined) return []
   const out: ToolCallBlock[] = []
   const seen = new Set<string>()
-  const visit = (block: ToolCallBlock): void => {
-    const name = callNameOf(block)
-    if (name !== null && name.startsWith('zotero_') && !seen.has(block.callId)) {
+  const visit = (block: ToolCallBlock, depth: number): void => {
+    if (depth > MAX_SUBCALL_DEPTH) return
+    if (isZoteroRoot(block) && !seen.has(block.callId)) {
       seen.add(block.callId)
       out.push(block)
     }
-    for (const child of block.subCalls) visit(child)
+    for (const child of block.subCalls) visit(child, depth + 1)
   }
-  for (const raw of snapshot.nodes.values()) {
-    const node = raw as ChatNode
-    if (node.kind !== 'tool-call' || node.visibility !== 'visible') continue
+  for (const { root } of visibleToolRoots(snapshot)) {
     // The row's root block owns the whole recursive subcall tree (PTC mode).
-    visit(node.data.root)
+    visit(root, 1)
   }
-  out.sort((a, b) => orderKeyOf(a) - orderKeyOf(b))
   return out
+}
+
+/** The Sources panel controller: probe, workspace build, and the view. */
+export function useZoteroBlocks(chat: ChatSnapshot | undefined): ToolCallBlock[] {
+  const signature = useMemo(() => sessionSignatureOf(chat), [chat])
+  // Keyed on the signature, not on `chat`: streaming publications keep the
+  // zotero order and in-flight set stable, so the deep collection below skips
+  // them. A nested dispatch under an already running call likewise waits for
+  // the next signature change (see `sessionSignatureOf`). The `chat` read
+  // stays visible so the hooks lint sees the true dependency — the memo only
+  // reuses the previous blocks while the signature is unchanged. Localized
+  // here so the suppression lives in exactly one place.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  return useMemo(() => collectZoteroCalls(chat), [signature])
 }
 
 /** The Sources panel controller: probe, workspace build, and the view. */
@@ -134,13 +177,10 @@ export function SourcesTab({ status, t, useSession, useChat, inputActions }: Sou
   // only when a connected probe settles — a refresh's loading flip must not
   // drop it, or the workspace would rebuild twice per probe.
   const [serverId, setServerId] = useState<string | undefined>(undefined)
-  const signature = useMemo(() => sessionSignatureOf(chat), [chat])
-  // Keyed on the signature, not on `chat`: streaming publications keep the
-  // visible tool-row count and in-flight call ids stable, so the collection
-  // skips them. A nested dispatch appearing under an already
-  // running call keeps that call's id and lands with the next signature
-  // change — an accepted delay, not an omission.
-  const blocks = useMemo(() => collectZoteroCalls(chat), [signature])
+  // The signature gate lives inside `useZoteroBlocks`: streaming publications
+  // keep the zotero order and in-flight set stable, so the deep collection
+  // (and with it the workspace rebuild) skips them.
+  const blocks = useZoteroBlocks(chat)
   const workspace = useMemo(
     () => buildSourceWorkspace(blocks, { currentServerId: serverId }),
     [blocks, serverId],

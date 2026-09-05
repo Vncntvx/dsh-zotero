@@ -9,64 +9,27 @@
  */
 
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import { interpolate, joinNonEmpty, shortKeyOf } from '../presenters.ts'
+import { joinNonEmpty, shortKeyOf } from '../presenters.ts'
 import { openVerdictOf, pdfUrlOf, selectUrlOf, type OpenVerdict } from '../actions/open-zotero.ts'
-import type {
-  EvidencePassage,
-  SourceAvailabilityEntry,
-  SourceCoverage,
-  SourceItem,
-} from '../sources/model.ts'
+import {
+  availabilityLineOf,
+  coverageLineOf,
+  emptyEvidenceNoteOf,
+  sourceLabelKeyOf,
+} from '../evidence-labels.ts'
+import type { EvidencePassage, SourceItem } from '../sources/model.ts'
 import { pdfCapabilityOf, type PdfCapability } from '../sources/source-capabilities.ts'
 import { CopyButton } from './CopyButton.tsx'
 import { BlockedOpenAction } from './open/BlockedOpenAction.tsx'
 import { ZoteroOpenLink } from './open/ZoteroOpenLink.tsx'
 import css from './cards.module.css'
 
-/** The locale key of one evidence source kind; unknown kinds read as fulltext. */
-export function sourceLabelKeyOf(
-  source: string,
-): 'sourceAnnotation' | 'sourceNote' | 'sourceAbstract' | 'sourceFulltext' {
-  switch (source) {
-    case 'annotation':
-      return 'sourceAnnotation'
-    case 'note':
-      return 'sourceNote'
-    case 'abstract':
-      return 'sourceAbstract'
-    default:
-      return 'sourceFulltext'
-  }
-}
-
-/** The coverage line of one retrieve: pages when reported, else chars, else nothing. */
-export function coverageLineOf(coverage: SourceCoverage, t: TranslateNS<'zotero'>): string {
-  const suffix = coverage.complete ? t('coverageComplete') : t('coverageIncomplete')
-  if (coverage.indexedPages !== undefined && coverage.totalPages !== undefined) {
-    return `${t('coverageLabel')} ${interpolate(t('coveragePages'), {
-      indexed: coverage.indexedPages,
-      total: coverage.totalPages,
-    })}${suffix}`
-  }
-  if (coverage.indexedChars !== undefined && coverage.totalChars !== undefined) {
-    return `${t('coverageLabel')} ${interpolate(t('coverageChars'), {
-      indexed: coverage.indexedChars,
-      total: coverage.totalChars,
-    })}${suffix}`
-  }
-  return ''
-}
-
-/** The per-source availability line: unavailable, returned, or no match. */
-export function availabilityLineOf(
-  entry: SourceAvailabilityEntry,
-  t: TranslateNS<'zotero'>,
-): string {
-  if (entry.unavailable) return t('availUnavailable')
-  if (entry.returnedPassages > 0)
-    return interpolate(t('availReturned'), { count: entry.returnedPassages })
-  return t('availNoMatch')
-}
+export {
+  availabilityLineOf,
+  coverageLineOf,
+  emptyEvidenceNoteOf,
+  sourceLabelKeyOf,
+} from '../evidence-labels.ts'
 
 /** One deduplicated passage with its tags and optional annotation deep link. */
 function PassageRow({
@@ -91,14 +54,16 @@ function PassageRow({
       <p className={css.passageHead}>
         <span className={css.sourceTag}>{t(sourceLabelKeyOf(passage.source))}</span>
         {passage.pageLabel !== undefined && (
-          <span className={css.note}>
-            {interpolate(t('pageLabel'), { label: passage.pageLabel })}
-          </span>
+          <span className={css.note}>{t('pageLabel', { label: passage.pageLabel })}</span>
         )}
         {annotationUrl !== null && verdict !== 'blocked' && (
-          <a className={css.link} href={annotationUrl} target="_blank" rel="noreferrer">
-            {t('openAnnotation')}
-          </a>
+          <ZoteroOpenLink
+            url={annotationUrl}
+            verdict={verdict}
+            label={t('openAnnotation')}
+            t={t}
+            className={css.link}
+          />
         )}
       </p>
       <p className={css.line}>
@@ -106,9 +71,7 @@ function PassageRow({
         {passage.previewTruncated ? ` ${t('truncatedPreview')}` : ''}
       </p>
       {passage.callIds.length > 1 && (
-        <p className={css.note}>
-          {interpolate(t('retrievedMultiple'), { count: passage.callIds.length })}
-        </p>
+        <p className={css.note}>{t('retrievedMultiple', { count: passage.callIds.length })}</p>
       )}
     </li>
   )
@@ -174,7 +137,7 @@ export function EvidenceCard({ item, t }: EvidenceCardProps) {
         <ul className={css.availability}>
           {availabilityEntries.map(([source, entry]) => (
             <li key={source} className={css.note}>
-              {interpolate(t('availabilityEntry'), {
+              {t('availabilityEntry', {
                 source: t(sourceLabelKeyOf(source)),
                 detail: availabilityLineOf(entry, t),
               })}
@@ -183,13 +146,7 @@ export function EvidenceCard({ item, t }: EvidenceCardProps) {
         </ul>
       )}
       {item.retrievalFacts !== undefined && item.evidence.length === 0 && (
-        <p className={css.note}>
-          {item.facts.reportedEvidenceCount > 0
-            ? interpolate(t('evidenceReportedNoPreview'), {
-                count: item.facts.reportedEvidenceCount,
-              })
-            : t('evidenceRetrievedNone')}
-        </p>
+        <p className={css.note}>{emptyEvidenceNoteOf(item.facts.reportedEvidenceCount, t)}</p>
       )}
     </section>
   )

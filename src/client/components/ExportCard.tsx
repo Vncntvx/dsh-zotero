@@ -15,9 +15,9 @@ import { useMemo, useState } from 'react'
 import clsx from 'clsx'
 import { IconChevronDownOutline14 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import { interpolate } from '../presenters.ts'
 import { bibTexKeysOf, citeCommandOf } from '../sources/bibtex.ts'
 import type { ExportArtifact } from '../sources/model.ts'
+import { downloadBlob } from '../download.ts'
 import { CopyButton } from './CopyButton.tsx'
 import css from './cards.module.css'
 
@@ -63,7 +63,9 @@ export function extensionOf(format: string): string {
   }
 }
 
-/** The MIME type of one export format for the download blob. */
+/** The MIME type of one export format for the download blob. BibTeX/BibLaTeX
+ * intentionally fall through to `text/plain`: no registered BibTeX MIME type
+ * exists, and `text/plain` downloads verbatim everywhere. */
 export function mimeOf(format: string): string {
   switch (format) {
     case 'ris':
@@ -78,10 +80,10 @@ export function mimeOf(format: string): string {
   }
 }
 
-/** Sanitize a title into a download filename: no path or separator chars. */
+/** Sanitize a title into a download filename: no path, separator, or control chars. */
 export function fileNameOf(artifact: ExportArtifact): string {
   const base = artifact.format === '' ? 'export' : artifact.format
-  const cleaned = base.replace(/[/\\:*?"<>|]/g, '-')
+  const cleaned = base.replace(/[/\\:*?"<>|\x00-\x1F]/g, '-')
   return `zotero-${cleaned}${extensionOf(artifact.format)}`
 }
 
@@ -114,22 +116,13 @@ export function ExportCard({ artifact, t }: ExportCardProps) {
   const timeLabel = artifactTimeOf(artifact)
 
   const download = (): void => {
-    const blob = new Blob([artifact.text], { type: mimeOf(artifact.format) })
-    const url = URL.createObjectURL(blob)
-    const anchor = document.createElement('a')
-    anchor.href = url
-    anchor.download = fileNameOf(artifact)
-    anchor.click()
-    // The blob URL must not outlive the click.
-    window.setTimeout(() => {
-      URL.revokeObjectURL(url)
-    }, 0)
+    downloadBlob(artifact.text, fileNameOf(artifact), mimeOf(artifact.format))
   }
 
   const headFacts = [
-    interpolate(t('exportRefCount'), { count: artifact.refs.length }) +
+    t('exportRefCount', { count: artifact.refs.length }) +
       (artifact.refsOmitted > 0
-        ? ` · ${interpolate(t('exportRefsOmitted'), { count: artifact.refsOmitted })}`
+        ? ` · ${t('exportRefsOmitted', { count: artifact.refsOmitted })}`
         : ''),
     ...(artifact.style !== undefined ? [artifact.style] : []),
     ...(artifact.locale !== undefined ? [artifact.locale] : []),

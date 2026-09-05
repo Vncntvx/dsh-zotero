@@ -8,9 +8,8 @@
  */
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { zh, type ZoteroLocaleKey } from '../../src/client/locales.ts'
+import { zh } from '../../src/client/locales.ts'
 import type { ZoteroStatusView } from '../../src/client/remote.ts'
 import { filterCountsOf, evidencePassageTotalOf } from '../../src/client/sources/selectors.ts'
 import type { ConnectionView } from '../../src/client/components/workspace/connection.ts'
@@ -101,6 +100,7 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
     IconChevronLeftOutline14: icon('chevron-left'),
     IconChevronRightOutline14: icon('chevron-right'),
     IconBrowseOutline16: icon('browse'),
+    LinkIcon: icon('link'),
     writeClipboard: vi.fn(async () => true),
     Tooltip: ({ children }: { children: React.ReactElement }) => children,
   }
@@ -112,7 +112,8 @@ const { writeClipboard } = vi.mocked(
   ),
 )
 
-const t: TranslateNS<'zotero'> = (key) => zh[key as ZoteroLocaleKey] ?? key
+import { mockT } from './helpers/mock-translate.ts'
+const t = mockT
 
 const CONNECTED: ConnectionView = {
   kind: 'connected',

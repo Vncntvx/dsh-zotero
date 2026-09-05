@@ -13,9 +13,13 @@
  */
 
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import { interpolate } from '../../presenters.ts'
 import type { EvidencePassage, SourceItem } from '../../sources/model.ts'
-import { availabilityLineOf, coverageLineOf, sourceLabelKeyOf } from '../EvidenceCard.tsx'
+import {
+  availabilityLineOf,
+  coverageLineOf,
+  emptyEvidenceNoteOf,
+  sourceLabelKeyOf,
+} from '../../evidence-labels.ts'
 import css from './workspace.module.css'
 
 /** The summary line of one item's retrieves: runs, kept, reported, truncated. */
@@ -25,9 +29,9 @@ function retrievalSummaryLineOf(item: SourceItem, t: TranslateNS<'zotero'>): str
   // The kept/reported counters live on `facts`; the summary carries only the
   // run bookkeeping.
   const parts = [
-    interpolate(t('retrievalRunCount'), { count: summary.runCount }),
-    interpolate(t('retrievalKeptCount'), { count: item.facts.evidenceCount }),
-    interpolate(t('retrievalReportedCount'), { count: item.facts.reportedEvidenceCount }),
+    t('retrievalRunCount', { count: summary.runCount }),
+    t('retrievalKeptCount', { count: item.facts.evidenceCount }),
+    t('retrievalReportedCount', { count: item.facts.reportedEvidenceCount }),
   ]
   if (summary.truncated) parts.push(t('budgetLimitedNote'))
   return parts.join(' · ')
@@ -38,7 +42,9 @@ export interface SourceEvidenceProps {
   readonly t: TranslateNS<'zotero'>
 }
 
-/** One passage row with its source tag, page label, and truncated note. */
+/** One passage row with its source tag, page label, and truncated note.
+ * Kept separate from EvidenceCard's twin: different CSS module and no
+ * annotation-deep-link action here — sharing would need class injection. */
 function PassageRow({
   passage,
   t,
@@ -51,9 +57,7 @@ function PassageRow({
       <p className={css.passageHead}>
         <span className={css.sourceTag}>{t(sourceLabelKeyOf(passage.source))}</span>
         {passage.pageLabel !== undefined && (
-          <span className={css.note}>
-            {interpolate(t('pageLabel'), { label: passage.pageLabel })}
-          </span>
+          <span className={css.note}>{t('pageLabel', { label: passage.pageLabel })}</span>
         )}
       </p>
       <p className={css.line}>
@@ -61,9 +65,7 @@ function PassageRow({
         {passage.previewTruncated ? ` ${t('truncatedPreview')}` : ''}
       </p>
       {passage.callIds.length > 1 && (
-        <p className={css.note}>
-          {interpolate(t('retrievedMultiple'), { count: passage.callIds.length })}
-        </p>
+        <p className={css.note}>{t('retrievedMultiple', { count: passage.callIds.length })}</p>
       )}
     </li>
   )
@@ -87,13 +89,7 @@ export function SourceEvidence({ item, t }: SourceEvidenceProps) {
       {summaryLine !== '' && <p className={css.summaryLine}>{summaryLine}</p>}
       {coverageLine !== '' && <p className={css.note}>{coverageLine}</p>}
       {item.evidence.length === 0 ? (
-        <p className={css.note}>
-          {item.facts.reportedEvidenceCount > 0
-            ? interpolate(t('evidenceReportedNoPreview'), {
-                count: item.facts.reportedEvidenceCount,
-              })
-            : t('evidenceRetrievedNone')}
-        </p>
+        <p className={css.note}>{emptyEvidenceNoteOf(item.facts.reportedEvidenceCount, t)}</p>
       ) : (
         <ul className={css.passages}>
           {item.evidence.map((passage, index) => (
@@ -107,7 +103,7 @@ export function SourceEvidence({ item, t }: SourceEvidenceProps) {
           <ul className={css.availability}>
             {availabilityEntries.map(([source, entry]) => (
               <li key={source} className={css.note}>
-                {interpolate(t('availabilityEntry'), {
+                {t('availabilityEntry', {
                   source: t(sourceLabelKeyOf(source)),
                   detail: availabilityLineOf(entry, t),
                 })}

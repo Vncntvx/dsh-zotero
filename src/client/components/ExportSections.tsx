@@ -12,8 +12,8 @@
  */
 
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import { interpolate } from '../presenters.ts'
 import type { ExportArtifact } from '../sources/model.ts'
+import { downloadBlob } from '../download.ts'
 import { exportSectionsOf, type ExportSection } from '../sources/selectors.ts'
 import { CopyButton } from './CopyButton.tsx'
 import { ExportDocumentRow } from './ExportDocumentRow.tsx'
@@ -32,32 +32,18 @@ export function sectionTextOf(section: ExportSection): string {
 
 /** Download one section's joined entries as a single file of the format's extension. */
 function downloadSection(section: ExportSection): void {
-  const blob = new Blob([sectionTextOf(section)], { type: mimeOf(section.format) })
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement('a')
   // A section with documents always carries a named translator format; the
   // extension lookup keeps the fallback for unknown ids.
-  anchor.href = url
-  anchor.download = `zotero-${section.format}${extensionOf(section.format)}`
-  anchor.click()
-  // The blob URL must not outlive the click.
-  window.setTimeout(() => {
-    URL.revokeObjectURL(url)
-  }, 0)
+  downloadBlob(
+    sectionTextOf(section),
+    `zotero-${section.format}${extensionOf(section.format)}`,
+    mimeOf(section.format),
+  )
 }
 
 /** Download one artifact's full merged body, for the unlocatable-items note. */
 function downloadArtifact(artifact: ExportArtifact): void {
-  const blob = new Blob([artifact.text], { type: mimeOf(artifact.format) })
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = fileNameOf(artifact)
-  anchor.click()
-  // The blob URL must not outlive the click.
-  window.setTimeout(() => {
-    URL.revokeObjectURL(url)
-  }, 0)
+  downloadBlob(artifact.text, fileNameOf(artifact), mimeOf(artifact.format))
 }
 
 /** The exports surface: format sections over the successful artifacts. */
@@ -99,7 +85,7 @@ export function ExportSections({ exports, t }: ExportSectionsProps) {
           {section.unresolvedItems.map((group) => (
             <div className={css.unresolvedItems} key={group.artifact.callId}>
               <span className={css.unresolvedItemsText}>
-                {interpolate(t('unresolvedItemsNote'), { count: group.count })}
+                {t('unresolvedItemsNote', { count: group.count })}
               </span>
               <button
                 type="button"

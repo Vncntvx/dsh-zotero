@@ -9,7 +9,6 @@
  */
 
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import { interpolate } from '../../presenters.ts'
 import type { SourceWorkspace } from '../../sources/model.ts'
 import { incompleteExportsNoteOf } from '../operations.ts'
 import { ExportSections } from '../ExportSections.tsx'
@@ -27,9 +26,7 @@ export function ExportsPage({ workspace, t }: ExportsPageProps) {
     <div className={css.exportsPage}>
       {workspace.exports.length === 0 && <p className={css.note}>{t('exportsEmptyNote')}</p>}
       {incomplete !== '' && (
-        <p className={css.note}>
-          {interpolate(t('exportsIncompleteNote'), { counts: incomplete })}
-        </p>
+        <p className={css.note}>{t('exportsIncompleteNote', { counts: incomplete })}</p>
       )}
       <ExportSections exports={workspace.exports} t={t} />
     </div>

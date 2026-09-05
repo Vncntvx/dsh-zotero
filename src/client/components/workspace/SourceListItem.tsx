@@ -10,7 +10,7 @@
 
 import clsx from 'clsx'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import { interpolate, joinNonEmpty } from '../../presenters.ts'
+import { joinNonEmpty } from '../../presenters.ts'
 import type { SourceItem } from '../../sources/model.ts'
 import { hasIssue } from '../../sources/selectors.ts'
 import { hasPdf } from '../../sources/source-capabilities.ts'
@@ -27,16 +27,14 @@ export function badgesOf(item: SourceItem, t: TranslateNS<'zotero'>): string[] {
   const badges: string[] = []
   if (hasPdf(item)) badges.push(t('badgePdf'))
   if (item.facts.evidenceCount > 0)
-    badges.push(interpolate(t('evidenceBadge'), { count: item.facts.evidenceCount }))
-  if (item.facts.exportCount > 0)
-    badges.push(interpolate(t('exportBadge'), { count: item.facts.exportCount }))
+    badges.push(t('evidenceBadge', { count: item.facts.evidenceCount }))
+  if (item.facts.exportCount > 0) badges.push(t('exportBadge', { count: item.facts.exportCount }))
   if (hasIssue(item)) badges.push(t('issuesBadge'))
   return badges
 }
 
 export interface SourceListItemProps {
   readonly item: SourceItem
-  readonly index: number
   readonly selected: boolean
   readonly focused: boolean
   readonly optionRef: (el: HTMLDivElement | null) => void
@@ -47,7 +45,6 @@ export interface SourceListItemProps {
 /** One source row as a listbox option. */
 export function SourceListItem({
   item,
-  index,
   selected,
   focused,
   optionRef,

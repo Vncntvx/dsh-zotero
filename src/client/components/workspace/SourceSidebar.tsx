@@ -28,7 +28,6 @@ import {
   Pill,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import { interpolate } from '../../presenters.ts'
 import type { SourceItem, SourceWorkspace } from '../../sources/model.ts'
 import {
   evidencePassageTotalOf,
@@ -91,7 +90,8 @@ export function SourceSidebar({
   // viewport resizes count, not only window resizes). In jsdom there is no
   // layout, so scrollWidth equals clientWidth and no arrow renders.
   const updateFilterEdges = useCallback(() => {
-    const el = filterBarRef.current!
+    const el = filterBarRef.current
+    if (el === null) return
     const left = el.scrollLeft > 1
     const right = el.scrollLeft < el.scrollWidth - el.clientWidth - 1
     setFilterEdges((prev) => (prev.left === left && prev.right === right ? prev : { left, right }))
@@ -102,7 +102,8 @@ export function SourceSidebar({
   }, [counts, filter, updateFilterEdges])
 
   useEffect(() => {
-    const el = filterBarRef.current!
+    const el = filterBarRef.current
+    if (el === null) return
     el.addEventListener('scroll', updateFilterEdges)
     const observer = new ResizeObserver(updateFilterEdges)
     observer.observe(el)
@@ -115,7 +116,8 @@ export function SourceSidebar({
   // One strip minus a pill keeps the last pill in view as context; the floor
   // keeps a narrow strip paging a useful distance.
   const pageFilters = (direction: -1 | 1): void => {
-    const el = filterBarRef.current!
+    const el = filterBarRef.current
+    if (el === null) return
     el.scrollBy({ left: direction * Math.max(el.clientWidth - 60, 120) })
   }
 
@@ -124,10 +126,14 @@ export function SourceSidebar({
   }
 
   // The listbox renders only when at least one row is visible, so the key
-  // handler and the mover can rely on a non-empty list.
+  // handler and the mover can rely on a non-empty list; the guards below keep
+  // that invariant explicit instead of asserting it.
   const moveSelection = (nextIndex: number): void => {
+    if (visible.length === 0) return
     const clamped = Math.max(0, Math.min(visible.length - 1, nextIndex))
-    setSelection({ key: visible[clamped]!.key, focusIndex: clamped })
+    const current = visible[clamped]
+    if (current === undefined) return
+    setSelection({ key: current.key, focusIndex: clamped })
     focusVisible(clamped)
   }
 
@@ -204,15 +210,13 @@ export function SourceSidebar({
           source count. */}
       {counts.evidence >= 2 && (
         <button type="button" className={css.evidenceEntry} onClick={onOpenEvidence}>
-          {interpolate(t('evidenceEntryLabel'), {
+          {t('evidenceEntryLabel', {
             count: evidencePassageTotalOf(workspace.sources),
           })}
         </button>
       )}
       {workspace.omittedRows > 0 && (
-        <p className={css.emptyNote}>
-          {interpolate(t('omittedRowsNote'), { count: workspace.omittedRows })}
-        </p>
+        <p className={css.emptyNote}>{t('omittedRowsNote', { count: workspace.omittedRows })}</p>
       )}
       {visible.length === 0 ? (
         <div className={css.emptyWrap}>
@@ -238,7 +242,6 @@ export function SourceSidebar({
             <SourceListItem
               key={item.key}
               item={item}
-              index={index}
               selected={item.key === selectedKey}
               focused={index === selection.focusIndex}
               optionRef={(el) => {

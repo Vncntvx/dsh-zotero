@@ -16,6 +16,7 @@ import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { shortKeyOf } from '../presenters.ts'
 import { citeCommandOf } from '../sources/bibtex.ts'
 import type { ExportedDocument } from '../sources/selectors.ts'
+import { downloadBlob } from '../download.ts'
 import { CopyButton } from './CopyButton.tsx'
 import { extensionOf, formatLabelOf, mimeOf } from './ExportCard.tsx'
 import css from './cards.module.css'
@@ -34,17 +35,8 @@ export function ExportDocumentRow({ doc, t }: ExportDocumentRowProps) {
     [doc.key],
   )
   const download = (): void => {
-    const blob = new Blob([doc.text], { type: mimeOf(doc.format) })
-    const url = URL.createObjectURL(blob)
-    const anchor = document.createElement('a')
     const base = doc.key ?? shortKeyOf(doc.ref) ?? 'export'
-    anchor.href = url
-    anchor.download = `zotero-${base}${extensionOf(doc.format)}`
-    anchor.click()
-    // The blob URL must not outlive the click.
-    window.setTimeout(() => {
-      URL.revokeObjectURL(url)
-    }, 0)
+    downloadBlob(doc.text, `zotero-${base}${extensionOf(doc.format)}`, mimeOf(doc.format))
   }
 
   return (

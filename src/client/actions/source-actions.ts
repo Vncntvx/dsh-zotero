@@ -6,14 +6,13 @@
  */
 
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import { interpolate } from '../presenters.ts'
 
 /** The ask-about prefill for one item's ref. */
 export function askDraftOf(ref: string, t: TranslateNS<'zotero'>): string {
-  return interpolate(t('askTemplate'), { ref })
+  return t('askTemplate', { ref })
 }
 
 /** The export prefill for one item's ref. */
 export function exportDraftOf(ref: string, t: TranslateNS<'zotero'>): string {
-  return interpolate(t('citeTemplate'), { ref })
+  return t('citeTemplate', { ref })
 }

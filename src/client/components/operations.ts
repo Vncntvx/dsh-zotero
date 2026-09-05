@@ -7,18 +7,15 @@
  */
 
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import { interpolate } from '../presenters.ts'
+import { joinNonEmpty } from '../presenters.ts'
 import type { OperationFacts } from '../sources/model.ts'
 
 /** The non-zero operation labels of one operation-facts record, in fixed order. */
 function operationsLabelsOf(operations: OperationFacts, t: TranslateNS<'zotero'>): string[] {
   const labels: string[] = []
-  if (operations.running > 0)
-    labels.push(interpolate(t('runningBadge'), { count: operations.running }))
-  if (operations.failed > 0)
-    labels.push(interpolate(t('failedBadge'), { count: operations.failed }))
-  if (operations.stopped > 0)
-    labels.push(interpolate(t('stoppedBadge'), { count: operations.stopped }))
+  if (operations.running > 0) labels.push(t('runningBadge', { count: operations.running }))
+  if (operations.failed > 0) labels.push(t('failedBadge', { count: operations.failed }))
+  if (operations.stopped > 0) labels.push(t('stoppedBadge', { count: operations.stopped }))
   return labels
 }
 
@@ -27,5 +24,5 @@ export function incompleteExportsNoteOf(
   operations: OperationFacts,
   t: TranslateNS<'zotero'>,
 ): string {
-  return operationsLabelsOf(operations, t).join(' · ')
+  return joinNonEmpty(...operationsLabelsOf(operations, t))
 }

@@ -10,13 +10,25 @@
  * @module dsh-zotero/client/presenters
  */
 
-import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { ToolCallBlock } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { asRecord, asString } from '../json.ts'
 import { REF_IN_TEXT_PATTERN } from '../ref-grammar.ts'
 
 export type ZoteroRowState = 'running' | 'ok' | 'error' | 'stopped'
 
+/**
+ * True when a call block carries its settled result. Local mirror of the
+ * harness's `isSettledTool`
+ * (`packages/client/ui-chat/src/client/contract/chat-nodes.ts`): that helper
+ * lives in a client entry whose runtime bundle requires the loader
+ * environment, so this shared module keeps its harness imports type-only and
+ * carries the one-line predicate locally instead of value-importing it.
+ */
+export function isSettledTool(
+  block: ToolCallBlock,
+): block is Extract<ToolCallBlock, { kind: 'tool-result' }> {
+  return 'kind' in block
+}
 /** One evidence passage from the retrieve projection. */
 export interface EvidenceItemView {
   readonly source: string
@@ -39,12 +51,12 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 
 /** The wire name of one tool call block (settled and running forms). */
 export function callNameOf(block: ToolCallBlock): string | null {
-  return 'kind' in block ? (block.call?.name ?? null) : block.name
+  return isSettledTool(block) ? (block.call?.name ?? null) : block.name
 }
 
 /** Stable order key: settled blocks by seq, in-flight calls after them by time. */
 export function orderKeyOf(block: ToolCallBlock): number {
-  return 'kind' in block ? block.seq : 1_000_000_000 + block.time
+  return isSettledTool(block) ? block.seq : 1_000_000_000 + block.time
 }
 
 /** Read a string field off a validated record. */
@@ -66,34 +78,44 @@ export function boolField(record: Record<string, unknown>, key: string): boolean
 
 /** The validated presentation-meta object, or null when absent or malformed. */
 export function metaOf(block: ToolCallBlock): Record<string, unknown> | null {
-  if (!('kind' in block)) return null
+  if (!isSettledTool(block)) return null
   return isRecord(block.meta) ? block.meta : null
 }
 
 /** Lifecycle state derived from the frozen block, independent of meta. */
 export function rowStateOf(block: ToolCallBlock): ZoteroRowState {
-  if (!('kind' in block)) return 'running'
+  if (!isSettledTool(block)) return 'running'
   if (block.error?.code === 'interrupted') return 'stopped'
   return block.isError ? 'error' : 'ok'
 }
 
-/** Flatten settled content blocks to display text (mirrors the harness resultText). */
+/**
+ * Flatten settled content blocks to display text. Settled semantics match the
+ * harness `resultText`
+ * (`packages/client/ui-tool/src/client/tool/models/tool-call-model.ts`)
+ * exactly: text blocks verbatim, other block shapes as pretty JSON, empty
+ * content on a failed call falling back to the structured error's
+ * `name: code` line, otherwise the empty string. Running blocks return null
+ * (the harness helper only accepts settled nodes); callers normalize with
+ * `?? ''`.
+ */
 export function resultTextOf(block: ToolCallBlock): string | null {
-  if (!('kind' in block)) return null
+  if (!isSettledTool(block)) return null
   const parts: string[] = []
   for (const item of block.content) {
     if (item.type === 'text') parts.push(item.text)
-    else parts.push(JSON.stringify(item as ContentBlock))
+    else parts.push(JSON.stringify(item, null, 2))
   }
   if (parts.length === 0 && block.error !== undefined) {
     parts.push(`${block.error.name}: ${block.error.code}`)
   }
-  return parts.length === 0 ? null : parts.join('\n')
+  if (parts.length === 0) return ''
+  return parts.join('\n')
 }
 
 /** The call arguments parsed from the frozen args string; null when malformed. */
 export function argsOf(block: ToolCallBlock): Record<string, unknown> | null {
-  const settled = 'kind' in block
+  const settled = isSettledTool(block)
   const raw = settled ? (block.call?.argsRaw ?? null) : block.argsRaw
   if (raw === null || raw === '') return null
   try {
@@ -133,14 +155,6 @@ export function evidenceItemsOf(meta: Record<string, unknown>): EvidenceItemView
     })
   }
   return rows
-}
-
-/** Interpolate the simple {name} placeholders of one locale string. */
-export function interpolate(template: string, values: Record<string, string | number>): string {
-  return template.replace(/\{(\w+)\}/g, (whole, key: string) => {
-    const value = values[key]
-    return value === undefined ? whole : String(value)
-  })
 }
 
 /** Join a metadata line's non-empty parts with the middot separator. */
