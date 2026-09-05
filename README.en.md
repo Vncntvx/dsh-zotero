@@ -10,6 +10,7 @@
   <a href="https://www.npmjs.com/package/dsh-zotero"><img src="https://img.shields.io/npm/v/dsh-zotero" alt="npm version" style="max-width:100%;"></a>
   <a href="https://www.npmjs.com/package/dsh-zotero"><img src="https://img.shields.io/npm/dm/dsh-zotero" alt="npm downloads" style="max-width:100%;"></a>
   <a href="https://www.npmjs.com/package/dsh-zotero"><img src="https://img.shields.io/npm/l/dsh-zotero" alt="license" style="max-width:100%;"></a>
+  <a href="https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.3-alpha.1"><img src="https://img.shields.io/badge/dsh-%3E%3D0.1.3--alpha.1-blue" alt="minimum dsh version" style="max-width:100%;"></a>
   <a href="https://awesome-dsh-plugin.com"><img src="https://awesome-dsh-plugin.com/badge.svg" alt="Awesome DSH Plugin"></a>
 </p>
 </div>
@@ -68,7 +69,7 @@ The plugin provides a settings card under **Settings → Plugins** where you can
 
 - Zotero ≥ 7 with local API enabled: **Settings → Advanced → "Allow other applications on this computer to communicate with Zotero"**
 - Node.js ≥ 22.19 (or ≥ 24)
-- dsh 0.1.2-alpha.1 series host (all `@deepseek-ai/dsh-*` peer dependencies are `^0.1.2-alpha.1`)
+- dsh 0.1.3-alpha.1 host (all `@deepseek-ai/dsh-*` peer dependencies are `^0.1.3-alpha.1`; only the latest alpha is supported until upstream stabilizes, no backward compatibility)
 - Local API at `http://127.0.0.1:23119/api`, unauthenticated, read-only
 
 ## Usage example
