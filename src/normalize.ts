@@ -15,7 +15,7 @@ import {
 } from './attachments.js'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { ZOTERO_UNEXPECTED, ZoteroError } from './errors.js'
-import { asRecord, asString, isObjectKey } from './json.js'
+import { asJsonValue, asRecord, asString, isObjectKey } from './json.js'
 import { formatRef, parseZoteroRelationUri, refForLibrary } from './refs.js'
 import type {
   SupportedLocalLibrary,
@@ -453,23 +453,6 @@ const CONSUMED_DATA_KEYS: ReadonlySet<string> = new Set([
   'conferenceName',
 ])
 
-/** True when the value survives lossless-JSON round-tripping unchanged. */
-export function isLosslessJson(value: unknown): value is JsonValue {
-  if (
-    value === null ||
-    typeof value === 'string' ||
-    typeof value === 'number' ||
-    typeof value === 'boolean'
-  ) {
-    return true
-  }
-  if (Array.isArray(value)) return value.every((entry) => isLosslessJson(entry))
-  if (typeof value === 'object') {
-    return Object.values(value).every((entry) => isLosslessJson(entry))
-  }
-  return false
-}
-
 /**
  * Collect the `data` fields the normalized model does not consume, sorted by
  * key for stable output. Non-JSON-safe values (undefined, functions) drop.
@@ -481,8 +464,11 @@ function extraFieldsOf(
   const out: Record<string, JsonValue> = {}
   for (const key of Object.keys(data).sort()) {
     if (CONSUMED_DATA_KEYS.has(key)) continue
-    const value = data[key]
-    if (value === undefined || !isLosslessJson(value)) continue
+    // `__proto__` assignment would mutate the prototype instead of defining an
+    // own property; external API keys are never trusted with it.
+    if (key === '__proto__') continue
+    const value = asJsonValue(data[key])
+    if (value === undefined) continue
     out[key] = value
   }
   return Object.keys(out).length > 0 ? out : undefined

@@ -53,6 +53,10 @@ const ATTACHMENT_OUTPUT_SCHEMA = {
 
 type AttachmentOutput = InferValue<typeof ATTACHMENT_OUTPUT_SCHEMA>
 
+function buildRequest(args: AttachmentArgs): { ref: ReturnType<typeof parseSupportedRef> } {
+  return { ref: parseSupportedRef(args.ref, ['item', 'attachment']) }
+}
+
 function renderAttachment(_args: AttachmentArgs, value: AttachmentOutput): ContentBlock[] {
   const label = value.title === '' ? value.ref : `${value.title} (${value.ref})`
   const target = value.kind === 'file' ? value.path : value.url
@@ -82,7 +86,7 @@ export function registerAttachmentTool(ctx: Context, service: ZoteroService): vo
       }),
       isConcurrencySafe: () => true,
       async execute(args, exec) {
-        const ref = parseSupportedRef(args.ref, ['item', 'attachment'])
+        const { ref } = buildRequest(args)
         return await withConnectivityAsk(ctx, exec, () => service.attachment(ref, exec.signal))
       },
     }),

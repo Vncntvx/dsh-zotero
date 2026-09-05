@@ -12,6 +12,7 @@
  */
 
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
+import { asJsonValue } from './json.js'
 import type {
   SupportedLocalLibrary,
   ZoteroAttachmentLocation,
@@ -22,8 +23,7 @@ import type {
   ZoteroRetrieveResult,
   ZoteroSearchResult,
 } from './types.js'
-import { parseRef } from './refs.js'
-import { isLosslessJson } from './normalize.js'
+import { parseRef, isSupportedLocalLibrary } from './refs.js'
 
 /** UTF-8 byte budget for one tool's presentation meta. */
 export const MAX_PRESENTATION_META_BYTES = 8192
@@ -218,10 +218,12 @@ function sourcesOf(evidence: ReadonlyArray<{ readonly source: string }>): Zotero
 }
 
 function libraryOfScope(scope: ZoteroResolvedScope): SupportedLocalLibrary {
-  if (scope.kind === 'library') return scope.library
+  if (scope.kind === 'library' || scope.kind === 'publications') return scope.library
   try {
-    const parsed = parseRef((scope as { ref: string }).ref)
-    return parsed.library as SupportedLocalLibrary
+    const parsed = parseRef(scope.ref)
+    if (!isSupportedLocalLibrary(parsed.library)) return { type: 'user', id: 0 }
+    if (parsed.library.type === 'group') return { type: 'group', id: parsed.library.id }
+    return { type: 'user', id: 0 }
   } catch {
     return { type: 'user', id: 0 }
   }
@@ -494,7 +496,8 @@ export function boundedPresentationMeta(meta: unknown, detailKeys: readonly stri
   if (presentationMetaBytes(record) <= MAX_PRESENTATION_META_BYTES) return meta as JsonValue
   const reduced: Record<string, JsonValue> = { detailOmitted: true }
   for (const [key, value] of Object.entries(record)) {
-    if (!detailKeys.includes(key) && isLosslessJson(value)) reduced[key] = value
+    const json = asJsonValue(value)
+    if (!detailKeys.includes(key) && json !== undefined) reduced[key] = json
   }
   // Structural widening only: every kept value already entered through a
   // JsonValue-typed projector; TypeScript has no index-signature way to

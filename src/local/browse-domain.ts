@@ -27,7 +27,6 @@ import {
 } from '../refs.js'
 import { requireTotalResults, nextOffsetOf } from './pagination.js'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import { isLosslessJson } from '../normalize.js'
 import type { ScopeDirectory } from './scope-directory.js'
 import type { ZoteroHttpClient } from '../http-client.js'
 import type { LocalApiLimits } from './limits.js'

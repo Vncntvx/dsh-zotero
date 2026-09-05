@@ -14,11 +14,21 @@ const TOKEN_PATTERN = /[\p{L}\p{N}]+/gu
 const BM25_K1 = 1.2
 const BM25_B = 0.75
 
-/** A word-granularity segmenter when the runtime provides one; the engine floor guarantees it, the check is defensive. */
+/** Shared word-granularity segmenter; constructed once (engine floor guarantees it).
+ * Cached by constructor so test-time `Intl.Segmenter` stubs re-resolve instead
+ * of reading a stale instance; the live engine never swaps the constructor, so
+ * the cache stays a singleton in production with no leak or race (single
+ * thread, stateless segmenter). */
+let sharedWordSegmenter: Intl.Segmenter | undefined
+let cachedSegmenterCtor: unknown
 function wordSegmenter(): Intl.Segmenter | undefined {
-  return typeof Intl.Segmenter === 'function'
-    ? new Intl.Segmenter(undefined, { granularity: 'word' })
-    : undefined
+  if (typeof Intl.Segmenter !== 'function') return undefined
+  if (sharedWordSegmenter !== undefined && cachedSegmenterCtor === Intl.Segmenter) {
+    return sharedWordSegmenter
+  }
+  sharedWordSegmenter = new Intl.Segmenter(undefined, { granularity: 'word' })
+  cachedSegmenterCtor = Intl.Segmenter
+  return sharedWordSegmenter
 }
 
 /**
