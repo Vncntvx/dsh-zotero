@@ -58,7 +58,7 @@ export const ZOTERO_INVOCATIONS: readonly InvocationDescriptor[] = [
     result: {
       mode: 'strict',
       typeSymbol: 'dsh-zotero#ZoteroStatusView',
-      schema: zoteroStatusSchema,
+      create: () => zoteroStatusSchema,
     },
   },
 ]

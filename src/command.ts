@@ -8,9 +8,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 // Type-only: pulls the `ctx.commands` Context merge into this program.
 import type {} from '@deepseek-ai/dsh-commands'
-// Brand constructor lives on the /brand outlet (the package main re-exports
-// the type but not the runtime helper at this pin).
-import { CommandDefinitionId } from '@deepseek-ai/dsh-commands/brand'
+import { CommandDefinitionId } from '@deepseek-ai/dsh-commands'
 import type { ZoteroService } from './service.js'
 import type { ZoteroStatus } from './types.js'
 

@@ -160,6 +160,8 @@ describe('zotero_create_note', () => {
     if (!result.isError) throw new Error('unreachable')
     expect(result.error.info?.code).toBe(ZOTERO_WRITE_UNAUTHORIZED)
     expect(result.error.message).toBe(WRITE_APPROVAL_UNAVAILABLE_MESSAGE)
+    // Mid-body throws map to `{ name, code }` only; reason is deny-path only.
+    expect(result.error.info?.reason).toBeUndefined()
     expect(lane.mock.requests.some((request) => request.method === 'POST')).toBe(false)
   })
 

@@ -58,6 +58,7 @@ import { registerSearchTool } from './tools/search.js'
 import { registerCreateNoteTool } from './tools/create-note.js'
 import { registerAddTagsTool } from './tools/add-tags.js'
 import { registerAddToCollectionTool } from './tools/add-to-collection.js'
+import { writePolicyDecision } from './tools/write-approval.js'
 import type {
   ZoteroAttachmentLocation,
   ZoteroBrowseRequest,
@@ -131,6 +132,21 @@ export class ZoteroService extends Service {
     registerExportTool(ctx, this)
     registerBrowseTool(ctx, this)
     registerChangesTool(ctx, this)
+    // Pre-dispatch write policy: deny with ToolErrorInfo.reason when the
+    // capability flipped off after the write tools were registered. The
+    // listener stays synchronous on the allow path so a non-write call (and a
+    // write call that passes) does not add an extra microtask before the tool
+    // body — that hop would let fiber disposal unregister tools first and turn
+    // an in-flight call into UNKNOWN_TOOL instead of its own domain result.
+    ctx.effect(
+      () =>
+        ctx.on('tools/pre-execute', (exec, next) => {
+          const decision = writePolicyDecision(this, exec)
+          if (decision !== undefined) return Promise.resolve(decision)
+          return next()
+        }),
+      'dsh-zotero: write policy gate',
+    )
     // The settings attach runs through a cordis fiber, never synchronously
     // inside the install: when a settings service is composed, setSource
     // switches the config authority and onChange rebuilds shortly after this

@@ -72,7 +72,11 @@ function buildCommitOf() {
  *  alongside react and the UI primitives instead of bundling zustand/immer.
  *  That harness list is this one's counterpart: anything in it that this bundle
  *  value-imports belongs here too, and `bundlePurityPlugin` below fails the
- *  build when a harness module slips into the artifact. */
+ *  build when a harness module slips into the artifact. At dsh 0.1.6-alpha.1
+ *  PLATFORM_MODULES also lists react-dom, @deepseek-ai/cordis, ui-slots, and
+ *  ui-dockkit — this bundle value-imports none of them today (cordis and
+ *  ui-slots are type-only), so they stay out of EXTERNALS and the purity
+ *  gate trips if a later value import needs them moved in. */
 const EXTERNALS = [
   'react',
   'react/jsx-runtime',

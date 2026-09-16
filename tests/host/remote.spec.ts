@@ -85,6 +85,8 @@ describe('the zotero typert manifest', () => {
       mode: 'strict',
       typeSymbol: 'dsh-zotero#ZoteroStatusView',
     })
+    // Strict codecs carry a lazy factory (dsh 0.1.6: TypertCodec.create).
+    expect(typeof (status?.result as { create?: unknown } | undefined)?.create).toBe('function')
   })
 
   it('claims the wire endpoint through the typert registry when one composes', async () => {

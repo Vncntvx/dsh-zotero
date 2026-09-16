@@ -178,7 +178,30 @@ function checkPin(manifest) {
   }
   for (const path of prosePaths) checkProse(path, pin)
   checkLock(pin)
+  checkOverrideNames(manifest)
   return pin
+}
+
+/**
+ * Report override / peer / dev keys that name a package the sibling monorepo
+ * no longer carries (upstream renames such as `dsh-code-runtime` →
+ * `dsh-ptc-runtime`). A stale key pins a package the tree can never pull, so
+ * it is silent rot until the rename's real name is missing from overrides.
+ */
+function checkOverrideNames(manifest) {
+  const known = harnessPackages()
+  if (known.size === 0) return
+  for (const section of [...EXACT_SECTIONS, ...RANGED_SECTIONS]) {
+    for (const name of Object.keys(manifest[section] ?? {})) {
+      if (!isDshPackage(name) || known.has(name)) continue
+      // Peer ranges may name packages the monorepo publishes under a path this
+      // walk already found; a true miss means the npm name is gone upstream.
+      notes.push(
+        `${section}["${name}"] names a package the sibling harness does not carry` +
+          ' — drop the key or rename it if upstream moved the package',
+      )
+    }
+  }
 }
 
 /** Every `@deepseek-ai/*` package the sibling monorepo carries, name to directory. */

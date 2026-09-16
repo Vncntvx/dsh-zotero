@@ -51,7 +51,7 @@ export const inject = ['locale', 'slots', 'connection', 'settingsScope', 'remote
  * reach it.
  *
  * The read goes through the service store (`ctx.reflect.get`), never through
- * the dotted child access `ctx.remote.zotero`. Re-checked at dsh 0.1.5-rc.1:
+ * the dotted child access `ctx.remote.zotero`. Re-checked at dsh 0.1.6-alpha.1:
  * that dotted form is a *service lookup by the full name* through the context
  * proxy, and `vendor/cordis/src/reflect.ts` refuses an undeclared name on any
  * fiber that carries a runtime — `cannot get property "remote.zotero" without
