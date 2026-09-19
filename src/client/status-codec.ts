@@ -11,15 +11,13 @@
  * Materializing here would either ship a second zod copy into `lib/client.js`
  * or invent browser-side validation the platform does not perform. The factory
  * refuses materialization loudly — that is the architectural claim, not a
- * silent no-op parse.
+ * silent no-op parse. The codec object is a single frozen module binding so
+ * both halves' structural parity tests observe one client result arm.
  * @module dsh-zotero/client/status-codec
  */
 
 import type { InvocationDescriptor } from '@deepseek-ai/dsh-typert-protocol'
-import {
-  ZOTERO_STATUS_TYPE_SYMBOL,
-  zoteroStatusInvocation,
-} from '../contract.ts'
+import { ZOTERO_STATUS_TYPE_SYMBOL, zoteroStatusInvocation } from '../contract.ts'
 
 /** Error when browser code incorrectly tries to materialize a host-owned codec. */
 export const HOST_OWNED_CODEC_MESSAGE =
@@ -27,20 +25,18 @@ export const HOST_OWNED_CODEC_MESSAGE =
 
 /**
  * Strict result codec the client contribution mounts. Same wire identity as
- * the host arm; `create` never returns a schema on this half.
- * @returns the host-owned strict codec for the status result.
+ * the host arm (`mode` + `typeSymbol`); `create` never returns a schema on
+ * this half — it throws {@link HOST_OWNED_CODEC_MESSAGE}.
  */
-export function hostOwnedStatusCodec(): InvocationDescriptor['result'] {
-  return {
-    mode: 'strict',
-    typeSymbol: ZOTERO_STATUS_TYPE_SYMBOL,
-    create: () => {
-      throw new Error(HOST_OWNED_CODEC_MESSAGE)
-    },
-  }
-}
+export const ZOTERO_STATUS_CLIENT_RESULT_CODEC = Object.freeze({
+  mode: 'strict',
+  typeSymbol: ZOTERO_STATUS_TYPE_SYMBOL,
+  create: (): never => {
+    throw new Error(HOST_OWNED_CODEC_MESSAGE)
+  },
+}) satisfies InvocationDescriptor['result']
 
 /** Client Remote contribution descriptors (structural identity + host-owned codec). */
-export const ZOTERO_CLIENT_INVOCATIONS: readonly InvocationDescriptor[] = [
-  zoteroStatusInvocation(hostOwnedStatusCodec()),
-]
+export const ZOTERO_CLIENT_INVOCATIONS: readonly InvocationDescriptor[] = Object.freeze([
+  zoteroStatusInvocation(ZOTERO_STATUS_CLIENT_RESULT_CODEC),
+])

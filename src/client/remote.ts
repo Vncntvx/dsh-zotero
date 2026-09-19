@@ -19,7 +19,6 @@ import { ZOTERO_REMOTE_PACKAGE, type ZoteroStatusView } from '../contract.ts'
 import { ZOTERO_CLIENT_INVOCATIONS } from './status-codec.ts'
 
 export type { ZoteroStatusView } from '../contract.ts'
-export { HOST_OWNED_CODEC_MESSAGE } from './status-codec.ts'
 
 /** The `zotero` namespace's client contribution. */
 export const ZOTERO_REMOTE: TypertRemoteContribution = {

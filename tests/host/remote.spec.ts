@@ -10,6 +10,7 @@ import { Context } from '@deepseek-ai/cordis'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import { afterEach, describe, expect, it } from 'vitest'
 import { ZoteroRuntime } from '../../src/remote.js'
+import { ZOTERO_STATUS_SERVICE_KEY } from '../../src/contract.js'
 import { TYPERT_MANIFEST } from '../../src/typert.js'
 import { type HostLane, setupHostLane } from '../helpers/lanes/host-lane.js'
 import { MemorySettings } from '../helpers/memory-settings.js'
@@ -112,8 +113,7 @@ describe('the zotero typert manifest', () => {
   it('materializes the host status schema through create()', () => {
     const status = TYPERT_MANIFEST.invocations.find((invocation) => invocation.method === 'status')
     const result = status?.result as
-      | { create: () => { parse: (value: unknown) => unknown } }
-      | undefined
+      { create: () => { parse: (value: unknown) => unknown } } | undefined
     expect(result).toBeDefined()
     const schema = result!.create()
     const valid = schema.parse({
@@ -159,7 +159,8 @@ describe('the zotero typert manifest', () => {
   })
 
   it('refuses browser-side materialization of the host-owned status codec', async () => {
-    const { ZOTERO_REMOTE, HOST_OWNED_CODEC_MESSAGE } = await import('../../src/client/remote.ts')
+    const { ZOTERO_REMOTE } = await import('../../src/client/remote.ts')
+    const { HOST_OWNED_CODEC_MESSAGE } = await import('../../src/client/status-codec.ts')
     const status = ZOTERO_REMOTE.descriptors.find((invocation) => invocation.method === 'status')
     const result = status?.result as { create?: () => unknown } | undefined
     expect(typeof result?.create).toBe('function')
@@ -179,6 +180,6 @@ describe('the zotero typert manifest', () => {
       })
     }
     const record = lane.ctx.typert.getPackage('dsh-zotero')
-    expect(record?.model.services[0]?.key).toBe('zoteroRemote')
+    expect(record?.model.services[0]?.key).toBe(ZOTERO_STATUS_SERVICE_KEY)
   })
 })

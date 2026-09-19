@@ -5,13 +5,16 @@
  */
 
 import { describe, expect, it } from 'vitest'
+import { ZOTERO_REMOTE } from '../../src/client/remote.ts'
 import {
   HOST_OWNED_CODEC_MESSAGE,
-  ZOTERO_REMOTE,
-} from '../../src/client/remote.ts'
+  ZOTERO_STATUS_CLIENT_RESULT_CODEC,
+} from '../../src/client/status-codec.ts'
 import {
   ZOTERO_REMOTE_PACKAGE,
   ZOTERO_STATUS_INVOCATION_ID,
+  ZOTERO_STATUS_INVOCATION_KIND,
+  ZOTERO_STATUS_METHOD,
   ZOTERO_STATUS_SERVICE_KEY,
   ZOTERO_STATUS_TYPE_SYMBOL,
   ZOTERO_STATUS_ENDPOINT,
@@ -27,9 +30,9 @@ describe('zotero Remote contract layering', () => {
       id: ZOTERO_STATUS_INVOCATION_ID,
       service: ZOTERO_STATUS_SERVICE_KEY,
       namespace: 'zotero',
-      method: 'status',
+      method: ZOTERO_STATUS_METHOD,
       parameters: [],
-      invocation: { kind: 'direct' },
+      invocation: { kind: ZOTERO_STATUS_INVOCATION_KIND },
     })
   })
 
@@ -43,7 +46,7 @@ describe('zotero Remote contract layering', () => {
       service: host!.service,
       namespace: host!.namespace,
       method: host!.method,
-      invocation: { kind: 'direct' },
+      invocation: { kind: ZOTERO_STATUS_INVOCATION_KIND },
       parameters: [],
     })
   })
@@ -66,19 +69,31 @@ describe('zotero Remote contract layering', () => {
     const clientCreate = (client!.result as { create: () => unknown }).create
     expect(typeof hostCreate).toBe('function')
     expect(hostCreate()).toBeDefined()
+    expect(client!.result).toBe(ZOTERO_STATUS_CLIENT_RESULT_CODEC)
     expect(() => clientCreate()).toThrow(HOST_OWNED_CODEC_MESSAGE)
   })
 
-  it('builds descriptors only through the shared factory', () => {
-    const probe = zoteroStatusInvocation({
-      mode: 'strict',
-      typeSymbol: ZOTERO_STATUS_TYPE_SYMBOL,
-      create: () => {
-        throw new Error('probe')
-      },
-    })
+  it('builds descriptors only through the shared factory without sharing mutable identity', () => {
+    const probe = zoteroStatusInvocation(ZOTERO_STATUS_CLIENT_RESULT_CODEC)
     expect(probe.id).toBe(ZOTERO_STATUS_INVOCATION_ID)
     expect(probe.service).toBe(ZOTERO_STATUS_SERVICE_KEY)
     expect(probe.namespace).toBe('zotero')
+    expect(probe.method).toBe(ZOTERO_STATUS_METHOD)
+    expect(probe.invocation).not.toBe(ZOTERO_STATUS_ENDPOINT.invocation)
+    expect(probe.parameters).not.toBe(ZOTERO_STATUS_ENDPOINT.parameters)
+    expect(probe.invocation).toEqual({ kind: ZOTERO_STATUS_INVOCATION_KIND })
+    expect(probe.parameters).toEqual([])
+  })
+
+  it('spells the host model service key from the shared contract constant', () => {
+    const service = TYPERT_MANIFEST.model.services.find(
+      (entry) => entry.key === ZOTERO_STATUS_SERVICE_KEY,
+    )
+    expect(service).toBeDefined()
+    expect(service?.members).toContainEqual({
+      kind: 'method',
+      name: ZOTERO_STATUS_METHOD,
+      signature: 'status(): Promise<ZoteroStatusView>',
+    })
   })
 })

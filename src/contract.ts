@@ -20,6 +20,9 @@
 import type { InvocationDescriptor } from '@deepseek-ai/dsh-typert-protocol'
 import { ZOTERO_SETTINGS_NAMESPACE } from './settings-namespace.js'
 
+/** Wire namespace both halves spell; re-exported so contract is one import site. */
+export { ZOTERO_SETTINGS_NAMESPACE }
+
 /** The zotero connectivity view the web tab renders (optional facts omitted when absent). */
 export interface ZoteroStatusView {
   readonly providerId: string
@@ -43,20 +46,32 @@ export const ZOTERO_STATUS_TYPE_SYMBOL = 'dsh-zotero#ZoteroStatusView'
 /** Globally stable invocation id for the status probe. */
 export const ZOTERO_STATUS_INVOCATION_ID = 'dsh-zotero#zotero/status'
 
-/** Cordis service key that owns the status method on the host half. */
+/**
+ * Cordis service key that owns the status method on the host half.
+ * The host Remote service (`src/remote.ts`) and the Typert model must both
+ * spell this key from here — never a second literal.
+ */
 export const ZOTERO_STATUS_SERVICE_KEY = 'zoteroRemote'
+
+/** Wire method name for the status probe. */
+export const ZOTERO_STATUS_METHOD = 'status'
+
+/** Invocation kind for the status probe (direct service call, no Context receiver). */
+export const ZOTERO_STATUS_INVOCATION_KIND = 'direct'
 
 /**
  * Structural identity of the `zotero/status` invocation. The only field both
  * halves fill differently is `result` (host owns the zod factory; client
- * mounts a host-owned non-materializing factory).
+ * mounts a host-owned non-materializing factory). Read-only reference for
+ * tests and documentation; descriptors are built through
+ * {@link zoteroStatusInvocation}, which copies every field.
  */
 export const ZOTERO_STATUS_ENDPOINT = {
   id: ZOTERO_STATUS_INVOCATION_ID,
   service: ZOTERO_STATUS_SERVICE_KEY,
   namespace: ZOTERO_SETTINGS_NAMESPACE,
-  method: 'status',
-  invocation: { kind: 'direct' },
+  method: ZOTERO_STATUS_METHOD,
+  invocation: { kind: ZOTERO_STATUS_INVOCATION_KIND },
   parameters: [],
 } as const satisfies Pick<
   InvocationDescriptor,
@@ -66,15 +81,21 @@ export const ZOTERO_STATUS_ENDPOINT = {
 /**
  * Build one status invocation descriptor around a result codec. Host and
  * client both call this so endpoint identity cannot drift; only the codec arm
- * differs by side.
+ * differs by side. Every structural field is copied — callers never share a
+ * mutable reference with {@link ZOTERO_STATUS_ENDPOINT}.
  * @param result - the strict (or dual-arm) result codec for {@link ZoteroStatusView}.
  * @returns a complete invocation descriptor.
  */
-export function zoteroStatusInvocation(result: InvocationDescriptor['result']): InvocationDescriptor {
+export function zoteroStatusInvocation(
+  result: InvocationDescriptor['result'],
+): InvocationDescriptor {
   return {
-    ...ZOTERO_STATUS_ENDPOINT,
-    invocation: ZOTERO_STATUS_ENDPOINT.invocation,
-    parameters: [...ZOTERO_STATUS_ENDPOINT.parameters],
+    id: ZOTERO_STATUS_INVOCATION_ID,
+    service: ZOTERO_STATUS_SERVICE_KEY,
+    namespace: ZOTERO_SETTINGS_NAMESPACE,
+    method: ZOTERO_STATUS_METHOD,
+    invocation: { kind: ZOTERO_STATUS_INVOCATION_KIND },
+    parameters: [],
     result,
   }
 }

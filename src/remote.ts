@@ -1,6 +1,7 @@
 /**
  * The dsh-zotero host Remote service (wire namespace `zotero`, cordis key
- * `zoteroRemote` — the `zotero` key is the research service's own).
+ * {@link ZOTERO_STATUS_SERVICE_KEY} — the `zotero` key is the research
+ * service's own).
  *
  * Registered as a TypertRemoteService so the Host Gateway can bind and
  * validate the service; the endpoints themselves are claimed by the strict
@@ -17,19 +18,22 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { LOCAL_PROVIDER_ID } from './constants.js'
-import type { ZoteroStatusView } from './contract.js'
+import {
+  ZOTERO_SETTINGS_NAMESPACE,
+  ZOTERO_STATUS_SERVICE_KEY,
+  type ZoteroStatusView,
+} from './contract.js'
 import type { ZoteroService } from './service.js'
-import { ZOTERO_SETTINGS_NAMESPACE } from './settings-namespace.js'
 
 /** The zotero settings page's host service: the web tab's connectivity probe. */
 export class ZoteroRuntime extends TypertRemoteService {
   /**
-   * Register the service under the `zoteroRemote` key bound to the `zotero`
+   * Register the service under the shared cordis key bound to the `zotero`
    * wire namespace.
    * @param ctx - owning cordis context.
    */
   constructor(ctx: Context) {
-    super(ctx, 'zoteroRemote', { namespace: ZOTERO_SETTINGS_NAMESPACE })
+    super(ctx, ZOTERO_STATUS_SERVICE_KEY, { namespace: ZOTERO_SETTINGS_NAMESPACE })
   }
 
   /**

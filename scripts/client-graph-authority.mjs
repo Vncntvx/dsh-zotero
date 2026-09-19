@@ -1,0 +1,112 @@
+/**
+ * Client-graph runtime authority for the dsh-zotero browser bundle.
+ *
+ * Pure predicates and the esbuild resolve/metafile plugin that keep host
+ * authority (zod codecs, Typert manifest, host services) out of
+ * `lib/client.js`. `scripts/build-client.mjs` consumes this module; unit
+ * tests drive the same rules against fixture graphs.
+ * @module dsh-zotero/scripts/client-graph-authority
+ */
+
+/**
+ * Local sources the browser graph may value-import.
+ *
+ * Written as **runtime authority**, not as a denylist of files that happen to
+ * import zod today:
+ *
+ * - `src/client/**` — the browser half.
+ * - Shared pure surfaces both halves already use: wire identity (`contract`),
+ *   settings wire name (`settings-namespace`), JSON guards (`json`), the
+ *   `zotero://` ref grammar (`ref-grammar`), export-key grammar
+ *   (`export-items`).
+ *
+ * Host codecs, the Typert manifest, the host Remote service, providers, tools,
+ * and the HTTP stack must never enter this graph. A new shared module joins
+ * this list deliberately and must stay free of host authority.
+ */
+export const CLIENT_SAFE_LOCAL =
+  /^src\/(?:client(?:\/|$)|contract\.(?:ts|js|mjs|cjs)$|settings-namespace\.(?:ts|js|mjs|cjs)$|json\.(?:ts|js|mjs|cjs)$|ref-grammar\.(?:ts|js|mjs|cjs)$|export-items\.(?:ts|js|mjs|cjs)$)/
+
+/**
+ * Packages the host half owns. Boundary schema materialization (zod) is host
+ * registration only; the client Remote face mounts structural descriptors.
+ */
+export const HOST_ONLY_PACKAGE_RESOLVE = /^zod(?:\/|$)/
+export const HOST_ONLY_PACKAGE_INPUT = /(?:^|\/)node_modules\/zod(?:\/|$)/
+
+/**
+ * Normalize an esbuild metafile input key to a posix `src/...` /
+ * `node_modules/...` spelling.
+ * @param key - raw metafile input path.
+ * @returns normalized key.
+ */
+function normalizeInputKey(key) {
+  return key.replaceAll('\\', '/').replace(/^\.\//, '')
+}
+
+/**
+ * Classify client-graph inputs against runtime authority.
+ * @param inputs - esbuild `metafile.inputs` (or equivalent path→record map).
+ * @returns violations, each naming the input and why it may not ship.
+ */
+export function clientGraphViolations(inputs) {
+  const violations = []
+  for (const raw of Object.keys(inputs ?? {})) {
+    const key = normalizeInputKey(raw)
+    if (HOST_ONLY_PACKAGE_INPUT.test(key)) {
+      violations.push({
+        kind: 'host-package',
+        key,
+        detail:
+          'host-owned package — boundary codecs materialize on the host half only (src/status-codec.ts)',
+      })
+      continue
+    }
+    if (!key.startsWith('src/')) continue
+    if (!CLIENT_SAFE_LOCAL.test(key)) {
+      violations.push({
+        kind: 'host-local',
+        key,
+        detail:
+          'not on the client-safe local allowlist (src/client/** + shared pure surfaces) — host authority stays on the host half',
+      })
+    }
+  }
+  return violations
+}
+
+/**
+ * Esbuild plugin: refuse host-only packages at resolve time, then re-check
+ * every local `src/**` input (and any `node_modules/zod`) via metafile on
+ * each successful build. Independent of minify and of path comments.
+ * @returns the `client-graph-authority` esbuild plugin.
+ */
+export function createClientAuthorityPlugin() {
+  return {
+    name: 'client-graph-authority',
+    setup(build) {
+      build.onResolve({ filter: HOST_ONLY_PACKAGE_RESOLVE }, (args) => {
+        return {
+          errors: [
+            {
+              text:
+                `client graph resolved host-owned package "${args.path}" from ${args.importer || '(entry)'}` +
+                ' — import structural identity from src/contract.ts;' +
+                ' host zod codecs live only in src/status-codec.ts and must never enter src/client',
+            },
+          ],
+        }
+      })
+      build.onEnd((result) => {
+        if (result.errors.length > 0) return
+        const violations = clientGraphViolations(result.metafile?.inputs)
+        if (violations.length === 0) return undefined
+        return {
+          errors: violations.map((violation) => ({
+            text: `client graph authority: ${violation.key} — ${violation.detail}`,
+          })),
+        }
+      })
+    },
+  }
+}

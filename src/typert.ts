@@ -11,12 +11,18 @@
  *
  * Invocations come from `status-codec.ts` (host zod factories + dual-arm
  * schema). Structural endpoint identity is shared with the client through
- * `contract.ts`; only this half materializes boundary schemas.
+ * `contract.ts`; only this half materializes boundary schemas. The model's
+ * service key spells {@link ZOTERO_STATUS_SERVICE_KEY} — the same constant
+ * the host Remote service and the invocation descriptor use.
  * @module dsh-zotero/typert
  */
 
 import type { TypertContribution } from '@deepseek-ai/dsh-typert-registry/types'
-import { ZOTERO_REMOTE_PACKAGE } from './contract.js'
+import {
+  ZOTERO_REMOTE_PACKAGE,
+  ZOTERO_STATUS_METHOD,
+  ZOTERO_STATUS_SERVICE_KEY,
+} from './contract.js'
 import { ZOTERO_INVOCATIONS } from './status-codec.js'
 
 /** The zotero namespace's host manifest (strict codecs owned by this half). */
@@ -27,14 +33,14 @@ export const TYPERT_MANIFEST: TypertContribution = {
   model: {
     services: [
       {
-        key: 'zoteroRemote',
+        key: ZOTERO_STATUS_SERVICE_KEY,
         exportName: 'ZoteroRuntime',
         description: 'Serves live Zotero connectivity facts to the dedicated web tab.',
         tags: [],
         members: [
           {
             kind: 'method',
-            name: 'status',
+            name: ZOTERO_STATUS_METHOD,
             signature: 'status(): Promise<ZoteroStatusView>',
           },
         ],
