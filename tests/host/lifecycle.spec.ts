@@ -1,4 +1,5 @@
 import { CommandId, type CommandInvocation, type CommandResult } from '@deepseek-ai/dsh-commands'
+import { readFileSync } from 'node:fs'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { afterEach, describe, expect, it } from 'vitest'
 import ZoteroService from '../../src/index.js'
@@ -66,6 +67,20 @@ describe('ZoteroService lifecycle', () => {
     expect(withoutCommands.ctx.get('zotero')).toBeInstanceOf(ZoteroService)
     await withoutCommands.ctx.fiber.dispose()
     await withoutCommands.teardown()
+  })
+
+  it('keeps definitionId as a plain string so 0.1.5-rc hosts can load', async () => {
+    lane = await setupHostLane(undefined, { commands: true })
+    const definition = lane.stub!.registered[0]!
+    // The brand constructor is an identity function; the wire value is the string.
+    // A value-import of CommandDefinitionId crashes module load on harness 0.1.5-rc.x.
+    expect(definition.definitionId).toBe('dsh-zotero/status')
+  })
+
+  it('ships lib/command.js without a value import of CommandDefinitionId', () => {
+    const built = readFileSync(new URL('../../lib/command.js', import.meta.url), 'utf8')
+    expect(built).not.toMatch(/import\s*\{[^}]*CommandDefinitionId/)
+    expect(built).toContain('dsh-zotero/status')
   })
 
   it('never touches Zotero while loading or disposing — the plugin is request-driven only', async () => {

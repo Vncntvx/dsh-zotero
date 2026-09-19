@@ -151,10 +151,31 @@ function checkLock(pin) {
   )
 }
 
+/**
+ * The install-facing harness range: explicit dual support when the manifest
+ * declares `dsh.harnessRange`, otherwise the single-pin form `^<pin>`.
+ * @param manifest - package.json contents.
+ * @param pin - exact devDependency pin.
+ * @returns the range engines.dsh and every dsh peer must equal.
+ */
+function harnessRange(manifest, pin) {
+  const declared = manifest.dsh?.harnessRange
+  if (typeof declared !== 'string' || declared.length === 0) return `^${pin}`
+  const arms = declared.split('||').map((arm) => arm.trim())
+  if (!arms.includes(`^${pin}`)) {
+    problems.push(
+      `dsh.harnessRange "${declared}" does not include the pin arm "^${pin}";` +
+        ' dual ranges must keep the typecheck pin as one alternative',
+    )
+  }
+  return declared
+}
+
 /** Check every derived form of the pin against the source of truth. */
 function checkPin(manifest) {
   const pin = pinnedVersion(manifest)
   if (pin === undefined) return undefined
+  const range = harnessRange(manifest, pin)
   for (const section of EXACT_SECTIONS) {
     for (const [name, version] of Object.entries(manifest[section] ?? {})) {
       if (isDshPackage(name) && version !== pin) {
@@ -164,13 +185,13 @@ function checkPin(manifest) {
   }
   for (const section of RANGED_SECTIONS) {
     for (const [name, version] of Object.entries(manifest[section] ?? {})) {
-      if (isDshPackage(name) && version !== `^${pin}`) {
-        problems.push(`${section}["${name}"] is "${version}", expected "^${pin}"`)
+      if (isDshPackage(name) && version !== range) {
+        problems.push(`${section}["${name}"] is "${version}", expected "${range}"`)
       }
     }
   }
-  if (manifest.engines?.dsh !== `^${pin}`) {
-    problems.push(`engines.dsh is "${manifest.engines?.dsh}", expected "^${pin}"`)
+  if (manifest.engines?.dsh !== range) {
+    problems.push(`engines.dsh is "${manifest.engines?.dsh}", expected "${range}"`)
   }
   const verified = manifest.dshWorkshop?.compatibility?.dshVersions
   if (!Array.isArray(verified) || !verified.includes(pin)) {
@@ -375,12 +396,24 @@ function writePin(version, previous) {
       if (isDshPackage(name)) manifest[section][name] = version
     }
   }
+  // Dual install ranges live in dsh.harnessRange; rewrite the pin arm in place
+  // instead of collapsing peers/engines back to a single ^version.
+  const priorRange = manifest.dsh?.harnessRange
+  const nextRange =
+    typeof priorRange === 'string' && priorRange.length > 0
+      ? priorRange
+          .split('||')
+          .map((arm) => arm.trim())
+          .map((arm) => (arm === `^${previous}` ? `^${version}` : arm))
+          .join(' || ')
+      : `^${version}`
+  if (manifest.dsh && typeof manifest.dsh === 'object') manifest.dsh.harnessRange = nextRange
   for (const section of RANGED_SECTIONS) {
     for (const name of Object.keys(manifest[section] ?? {})) {
-      if (isDshPackage(name)) manifest[section][name] = `^${version}`
+      if (isDshPackage(name)) manifest[section][name] = nextRange
     }
   }
-  manifest.engines = { ...manifest.engines, dsh: `^${version}` }
+  manifest.engines = { ...manifest.engines, dsh: nextRange }
   if (Array.isArray(manifest.dshWorkshop?.compatibility?.dshVersions)) {
     const verified = new Set(manifest.dshWorkshop.compatibility.dshVersions)
     verified.add(version)

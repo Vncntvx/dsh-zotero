@@ -46,6 +46,21 @@ const zoteroStatusSchema = z
   .strict()
   .readonly()
 
+/**
+ * Strict status codec, dual-shaped on purpose.
+ *
+ * Harness 0.1.5-rc.x reads a live `schema`; 0.1.6-alpha.1+ materializes through
+ * `create()`. Carrying both keeps the Remote mount working on either line
+ * without a version sniff at register time. The host pin's `TypertCodec` only
+ * names `create`, so the live-schema arm is an intentional excess property.
+ */
+const zoteroStatusCodec = {
+  mode: 'strict',
+  typeSymbol: 'dsh-zotero#ZoteroStatusView',
+  create: () => zoteroStatusSchema,
+  schema: zoteroStatusSchema,
+}
+
 /** The zotero Remote namespace's strict invocation descriptors. */
 export const ZOTERO_INVOCATIONS: readonly InvocationDescriptor[] = [
   {
@@ -55,10 +70,6 @@ export const ZOTERO_INVOCATIONS: readonly InvocationDescriptor[] = [
     method: 'status',
     invocation: { kind: 'direct' },
     parameters: [],
-    result: {
-      mode: 'strict',
-      typeSymbol: 'dsh-zotero#ZoteroStatusView',
-      create: () => zoteroStatusSchema,
-    },
+    result: zoteroStatusCodec as InvocationDescriptor['result'],
   },
 ]
