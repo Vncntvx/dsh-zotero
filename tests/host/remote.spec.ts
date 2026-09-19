@@ -33,13 +33,33 @@ describe('the zotero status endpoint', () => {
       ),
     )
     const runtime = lane.ctx.get('zoteroRemote') as ZoteroRuntime
-    await expect(runtime.status()).resolves.toEqual({
+    const status = await runtime.status()
+    expect(status).toEqual({
       providerId: 'local',
       connected: true,
       apiVersion: '3',
       schemaVersion: '37',
       serverId: 'S1',
       diagnosis: 'ok',
+    })
+    // A provider that wires no write capability reports no write block; the
+    // Remote must not invent one.
+    expect(status.write).toBeUndefined()
+  })
+
+  it('forwards the provider write state the web tab status strip renders', async () => {
+    lane = await setupHostLane({ writeEnabled: true }, { settings: {}, typert: true })
+    lane.mock.route('GET', '/api/', (_req, _res, helpers) =>
+      helpers.json({}, { 'Zotero-Server-ID': 'S-write' }),
+    )
+    const runtime = lane.ctx.get('zoteroRemote') as ZoteroRuntime
+    await expect(runtime.status()).resolves.toMatchObject({
+      providerId: 'local',
+      connected: true,
+      serverId: 'S-write',
+      diagnosis: 'ok',
+      // The capability is wired; no grant is stored yet.
+      write: { enabled: true, authorized: false },
     })
   })
 

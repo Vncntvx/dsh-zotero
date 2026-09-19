@@ -54,6 +54,7 @@ export class ZoteroRuntime extends TypertRemoteService {
       ...(status.serverId === undefined ? {} : { serverId: status.serverId }),
       ...(status.schemaVersion === undefined ? {} : { schemaVersion: status.schemaVersion }),
       ...(status.zoteroVersion === undefined ? {} : { zoteroVersion: status.zoteroVersion }),
+      ...(status.write === undefined ? {} : { write: status.write }),
       diagnosis: status.diagnosis,
     }
   }

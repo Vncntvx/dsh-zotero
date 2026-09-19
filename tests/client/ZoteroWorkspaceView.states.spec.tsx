@@ -23,6 +23,8 @@ import {
   zeroMatchFixture,
 } from './helpers/source-fixtures.ts'
 import { mountView } from './helpers/workspace-harness.tsx'
+import type { ConnectionView } from '../../src/client/components/workspace/connection.ts'
+import type { ZoteroStatusView } from '../../src/client/remote.ts'
 
 // The real primitives bundle pulls heavy dependencies (katex, shiki, the
 // portal machinery); the view needs the shared DOM face.
@@ -44,6 +46,30 @@ describe('toolbar', () => {
     expect(screen.getByText(/Zotero 版本 10\.0\.2-beta\.9/)).toBeDefined()
     expect(screen.getByText(/sPMHtLD6HHBd/)).toBeDefined()
     expect(screen.getByText(/上次检查 10:00:00/)).toBeDefined()
+    // The default connected fixture wires no write capability, so the menu
+    // carries no write row.
+    expect(screen.queryByText(new RegExp(zh.writeLabel))).toBeNull()
+    view.unmount()
+  })
+
+  it('shows the write state when the Remote status carries the write block', () => {
+    const connection: ConnectionView = {
+      kind: 'connected',
+      data: {
+        providerId: 'local',
+        connected: true,
+        apiVersion: '3',
+        serverId: 'sPMHtLD6HHBd',
+        write: { enabled: true, authorized: false },
+        diagnosis: 'ok',
+      } as ZoteroStatusView,
+      checkedAt: '10:00:00',
+    }
+    const { view } = mountView(singleFixture(), connection)
+    fireEvent.click(screen.getByLabelText(zh.detailsLabel))
+    expect(
+      screen.getByText(new RegExp(`${zh.writeLabel}.*${zh.writeUnauthorizedLabel}`)),
+    ).toBeDefined()
     view.unmount()
   })
 })
