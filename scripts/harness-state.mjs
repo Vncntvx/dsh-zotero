@@ -5,11 +5,10 @@
  *
  * 1. **The pin.** `package.json` carries one harness line in four derived forms
  *    (exact `dependencies` / `devDependencies` / `overrides`, `^`-ranged
- *    `peerDependencies`, and `engines.dsh`), plus the verified-version history
- *    the hub manifest reports (`dshWorkshop.compatibility.dshVersions`) and the
- *    version the READMEs and AGENTS.md state in prose. The exact
- *    `devDependencies` line is the source of truth; every other form is written
- *    from it. The tracked `package-lock.json` is held to the same pin.
+ *    `peerDependencies`, and `engines.dsh`), plus the version the READMEs and
+ *    AGENTS.md state in prose. The exact `devDependencies` line is the source
+ *    of truth; every other form is written from it. The tracked
+ *    `package-lock.json` is held to the same pin.
  *
  * 2. **The artifacts.** Upstream packages resolve through
  *    `node_modules/@deepseek-ai/*`, which `scripts/link-local-harness.mjs`
@@ -63,21 +62,6 @@ const encodeBadgeVersion = (version) => version.replaceAll('-', '--')
 /** Read and parse one JSON file. */
 function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'))
-}
-
-/** Order two versions by release, pre-release last. */
-function compareVersions(left, right) {
-  const core = (value) => value.split('-')[0].split('.').map(Number)
-  const [leftCore, rightCore] = [core(left), core(right)]
-  for (let index = 0; index < 3; index += 1) {
-    if (leftCore[index] !== rightCore[index]) return leftCore[index] - rightCore[index]
-  }
-  const leftPre = left.includes('-') ? left.slice(left.indexOf('-') + 1) : ''
-  const rightPre = right.includes('-') ? right.slice(right.indexOf('-') + 1) : ''
-  if (leftPre === rightPre) return 0
-  if (leftPre === '') return 1
-  if (rightPre === '') return -1
-  return leftPre < rightPre ? -1 : 1
 }
 
 /** The pinned harness version: the exact `devDependencies` line, validated. */
@@ -193,9 +177,10 @@ function checkPin(manifest) {
   if (manifest.engines?.dsh !== range) {
     problems.push(`engines.dsh is "${manifest.engines?.dsh}", expected "${range}"`)
   }
-  const verified = manifest.dshWorkshop?.compatibility?.dshVersions
-  if (!Array.isArray(verified) || !verified.includes(pin)) {
-    problems.push(`dshWorkshop.compatibility.dshVersions must list the verified "${pin}"`)
+  if (manifest.dshWorkshop !== undefined) {
+    problems.push(
+      'package.json still carries dshWorkshop; Workshop support was removed — delete the block',
+    )
   }
   for (const path of prosePaths) checkProse(path, pin)
   checkLock(pin)
@@ -414,11 +399,6 @@ function writePin(version, previous) {
     }
   }
   manifest.engines = { ...manifest.engines, dsh: nextRange }
-  if (Array.isArray(manifest.dshWorkshop?.compatibility?.dshVersions)) {
-    const verified = new Set(manifest.dshWorkshop.compatibility.dshVersions)
-    verified.add(version)
-    manifest.dshWorkshop.compatibility.dshVersions = [...verified].sort(compareVersions)
-  }
   writeFileSync(pkgPath, `${JSON.stringify(manifest, null, 2)}\n`)
   for (const path of prosePaths) {
     const before = readFileSync(path, 'utf8')

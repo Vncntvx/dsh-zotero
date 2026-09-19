@@ -75,50 +75,6 @@
     },
     "harnessRange": "^0.1.5-rc.1 || ^0.1.6-alpha.2"
   },
-  "dshWorkshop": {
-    "schema": "omdsh-workshop-package/v1",
-    "type": "plugin",
-    "integration": {
-      "protocol": "harness-profile",
-      "artifact": "cordis.patch.yml"
-    },
-    "install": {
-      "mode": "transactional",
-      "adapter": "profile-bundle",
-      "failurePolicy": "generation-rollback",
-      "touchesCurrentBeforeActivation": false
-    },
-    "lifecycle": {
-      "activation": "restart-profile",
-      "dispose": "supported"
-    },
-    "permissions": [
-      "network:loopback",
-      "filesystem:read",
-      "settings:write"
-    ],
-    "compatibility": {
-      "dshVersions": [
-        "0.1.5-alpha.1",
-        "0.1.5-rc.1",
-        "0.1.5-rc.2",
-        "0.1.6-alpha.1",
-        "0.1.6-alpha.2"
-      ]
-    },
-    "capability": {
-      "id": "zotero_search",
-      "kind": "tool",
-      "invocation": "call the registered zotero_search tool with a query against the local library",
-      "expected": "matching items from the connected local Zotero library, or the documented offline error when Zotero is unreachable"
-    },
-    "evidence": {
-      "install": "scripts/discovery-smoke.mjs",
-      "failureIsolation": null,
-      "hotReload": null,
-      "remove": null
-    }
-  },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.2",
     "@deepseek-ai/dsh-api-remotes": "^0.1.5-rc.1 || ^0.1.6-alpha.2",
