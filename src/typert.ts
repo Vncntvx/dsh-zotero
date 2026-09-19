@@ -8,15 +8,20 @@
  * `zotero/status` and needs no `@Remote` markers; avoiding the decorators
  * also keeps the source runnable under Node's plain TypeScript type
  * stripping, which rejects decorator syntax.
+ *
+ * Invocations come from `status-codec.ts` (host zod factories + dual-arm
+ * schema). Structural endpoint identity is shared with the client through
+ * `contract.ts`; only this half materializes boundary schemas.
  * @module dsh-zotero/typert
  */
 
 import type { TypertContribution } from '@deepseek-ai/dsh-typert-registry/types'
-import { ZOTERO_INVOCATIONS } from './contract.js'
+import { ZOTERO_REMOTE_PACKAGE } from './contract.js'
+import { ZOTERO_INVOCATIONS } from './status-codec.js'
 
-/** The zotero namespace's host manifest (strict codecs shared with the client). */
+/** The zotero namespace's host manifest (strict codecs owned by this half). */
 export const TYPERT_MANIFEST: TypertContribution = {
-  package: 'dsh-zotero',
+  package: ZOTERO_REMOTE_PACKAGE,
   face: 'host',
   schemas: [],
   model: {

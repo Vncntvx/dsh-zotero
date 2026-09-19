@@ -235,6 +235,16 @@ function verifyBundle() {
   if (typeof exported?.apply !== 'function' || !Array.isArray(exported?.inject)) {
     throw new Error('client bundle must export the apply/inject plugin face')
   }
+  // Host-owned boundary schemas (zod) must never reach the browser half.
+  // Client Remote contributions mount structural descriptors only; the host
+  // manifest materializes codecs. A regression that value-imports a zod-bearing
+  // module into src/client re-inlines the whole library and fails this gate.
+  if (/\bnode_modules\/zod\b/.test(source) || /from\s*["']zod["']/.test(source)) {
+    throw new Error(
+      'client bundle inlined zod — host-owned Typert codecs must stay out of src/client ' +
+        '(import structural identity from src/contract.ts and host codecs from src/status-codec.ts only on the host half)',
+    )
+  }
   console.log(
     `client bundle ok: lib/client.js (${source.length} bytes, ${EXTERNALS.join(', ')} external)`,
   )

@@ -109,6 +109,63 @@ describe('the zotero typert manifest', () => {
     expect(typeof (status?.result as { create?: unknown } | undefined)?.create).toBe('function')
   })
 
+  it('materializes the host status schema through create()', () => {
+    const status = TYPERT_MANIFEST.invocations.find((invocation) => invocation.method === 'status')
+    const result = status?.result as
+      | { create: () => { parse: (value: unknown) => unknown } }
+      | undefined
+    expect(result).toBeDefined()
+    const schema = result!.create()
+    const valid = schema.parse({
+      providerId: 'local',
+      connected: true,
+      diagnosis: 'ok',
+    })
+    expect(valid).toMatchObject({ providerId: 'local', connected: true, diagnosis: 'ok' })
+    expect(() => schema.parse({ providerId: 'local', connected: 'yes', diagnosis: 'ok' })).toThrow()
+  })
+
+  it('keeps the dual-arm live schema beside create for 0.1.5 hosts', () => {
+    const status = TYPERT_MANIFEST.invocations.find((invocation) => invocation.method === 'status')
+    const result = status?.result as { schema?: unknown; create?: unknown } | undefined
+    expect(typeof result?.create).toBe('function')
+    expect(result?.schema).toBeDefined()
+  })
+
+  it('matches the client contribution structural identity exactly', async () => {
+    const { ZOTERO_REMOTE } = await import('../../src/client/remote.ts')
+    const { TYPERT_MANIFEST: host } = await import('../../src/typert.ts')
+    const hostStatus = host.invocations.find((invocation) => invocation.method === 'status')
+    const clientStatus = ZOTERO_REMOTE.descriptors.find(
+      (invocation) => invocation.method === 'status',
+    )
+    expect(clientStatus).toBeDefined()
+    expect(clientStatus).toMatchObject({
+      id: hostStatus?.id,
+      service: hostStatus?.service,
+      namespace: hostStatus?.namespace,
+      method: hostStatus?.method,
+      invocation: hostStatus?.invocation,
+      parameters: [],
+    })
+    const clientResult = clientStatus?.result as { mode?: string; typeSymbol?: string } | undefined
+    expect(clientResult).toMatchObject({
+      mode: hostStatus?.result && 'mode' in hostStatus.result ? hostStatus.result.mode : undefined,
+      typeSymbol:
+        hostStatus?.result && 'typeSymbol' in hostStatus.result
+          ? hostStatus.result.typeSymbol
+          : undefined,
+    })
+  })
+
+  it('refuses browser-side materialization of the host-owned status codec', async () => {
+    const { ZOTERO_REMOTE, HOST_OWNED_CODEC_MESSAGE } = await import('../../src/client/remote.ts')
+    const status = ZOTERO_REMOTE.descriptors.find((invocation) => invocation.method === 'status')
+    const result = status?.result as { create?: () => unknown } | undefined
+    expect(typeof result?.create).toBe('function')
+    expect(() => result!.create!()).toThrow(HOST_OWNED_CODEC_MESSAGE)
+  })
+
   it('claims the wire endpoint through the typert registry when one composes', async () => {
     lane = await setupHostLane(
       { baseUrl: 'http://127.0.0.1:23119/api' },

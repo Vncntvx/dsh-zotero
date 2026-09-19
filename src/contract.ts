@@ -1,19 +1,22 @@
 /**
- * The zotero wire contract, shared verbatim by the host manifest
- * (`ctx.typert.register` in typert.ts) and the client contribution
- * (`ctx.remote.$mount` in client/remote.ts).
+ * The zotero wire contract's shared structural surface: types, wire identity,
+ * and the invocation factory both halves use. This module is dependency-free
+ * so the browser bundle can inline it without dragging host-only schema
+ * materialization (zod) into the client graph.
+ *
+ * Boundary codecs are **not** defined here. Host registration materializes
+ * strict zod schemas in `src/status-codec.ts`; the client Remote face mounts
+ * the same structural endpoint with a host-owned codec factory that never
+ * materializes in the browser (see `src/client/status-codec.ts`). Client
+ * Gateway returns `RemoteResult.value` unvalidated — result codecs are host
+ * registry/wire identity, not a second browser-side validator.
  *
  * The Remote namespace carries the one fact the settings plane does not: live
- * connectivity of the configured Zotero provider, which the dedicated web tab
- * renders as its status strip. The configuration surface no longer rides this
- * channel — the browser half reads and writes the `zotero` settings namespace
- * through the harness's own settings scope (`ctx.settingsScope`), which serves
- * every registered namespace — so the namespace view, patch, and
- * field-clearing endpoints are gone.
+ * connectivity of the configured Zotero provider. Configuration rides
+ * `ctx.settingsScope`, not this channel.
  * @module dsh-zotero/contract
  */
 
-import { z } from 'zod'
 import type { InvocationDescriptor } from '@deepseek-ai/dsh-typert-protocol'
 import { ZOTERO_SETTINGS_NAMESPACE } from './settings-namespace.js'
 
@@ -31,45 +34,47 @@ export interface ZoteroStatusView {
   readonly diagnosis: string
 }
 
-/** Wire codec: one status view (strict; absent optional facts stay absent). */
-const zoteroStatusSchema = z
-  .object({
-    providerId: z.string(),
-    connected: z.boolean(),
-    apiVersion: z.string().optional(),
-    serverId: z.string().optional(),
-    schemaVersion: z.string().optional(),
-    zoteroVersion: z.string().optional(),
-    write: z.object({ enabled: z.boolean(), authorized: z.boolean() }).strict().optional(),
-    diagnosis: z.string(),
-  })
-  .strict()
-  .readonly()
+/** Package identity every Typert contribution from this plugin claims. */
+export const ZOTERO_REMOTE_PACKAGE = 'dsh-zotero'
+
+/** Strict codec type symbol for {@link ZoteroStatusView}; host and client must agree. */
+export const ZOTERO_STATUS_TYPE_SYMBOL = 'dsh-zotero#ZoteroStatusView'
+
+/** Globally stable invocation id for the status probe. */
+export const ZOTERO_STATUS_INVOCATION_ID = 'dsh-zotero#zotero/status'
+
+/** Cordis service key that owns the status method on the host half. */
+export const ZOTERO_STATUS_SERVICE_KEY = 'zoteroRemote'
 
 /**
- * Strict status codec, dual-shaped on purpose.
- *
- * Harness 0.1.5-rc.x reads a live `schema`; 0.1.6-alpha.1+ materializes through
- * `create()`. Carrying both keeps the Remote mount working on either line
- * without a version sniff at register time. The host pin's `TypertCodec` only
- * names `create`, so the live-schema arm is an intentional excess property.
+ * Structural identity of the `zotero/status` invocation. The only field both
+ * halves fill differently is `result` (host owns the zod factory; client
+ * mounts a host-owned non-materializing factory).
  */
-const zoteroStatusCodec = {
-  mode: 'strict',
-  typeSymbol: 'dsh-zotero#ZoteroStatusView',
-  create: () => zoteroStatusSchema,
-  schema: zoteroStatusSchema,
-}
+export const ZOTERO_STATUS_ENDPOINT = {
+  id: ZOTERO_STATUS_INVOCATION_ID,
+  service: ZOTERO_STATUS_SERVICE_KEY,
+  namespace: ZOTERO_SETTINGS_NAMESPACE,
+  method: 'status',
+  invocation: { kind: 'direct' },
+  parameters: [],
+} as const satisfies Pick<
+  InvocationDescriptor,
+  'id' | 'service' | 'namespace' | 'method' | 'invocation' | 'parameters'
+>
 
-/** The zotero Remote namespace's strict invocation descriptors. */
-export const ZOTERO_INVOCATIONS: readonly InvocationDescriptor[] = [
-  {
-    id: 'dsh-zotero#zotero/status',
-    service: 'zoteroRemote',
-    namespace: ZOTERO_SETTINGS_NAMESPACE,
-    method: 'status',
-    invocation: { kind: 'direct' },
-    parameters: [],
-    result: zoteroStatusCodec as InvocationDescriptor['result'],
-  },
-]
+/**
+ * Build one status invocation descriptor around a result codec. Host and
+ * client both call this so endpoint identity cannot drift; only the codec arm
+ * differs by side.
+ * @param result - the strict (or dual-arm) result codec for {@link ZoteroStatusView}.
+ * @returns a complete invocation descriptor.
+ */
+export function zoteroStatusInvocation(result: InvocationDescriptor['result']): InvocationDescriptor {
+  return {
+    ...ZOTERO_STATUS_ENDPOINT,
+    invocation: ZOTERO_STATUS_ENDPOINT.invocation,
+    parameters: [...ZOTERO_STATUS_ENDPOINT.parameters],
+    result,
+  }
+}

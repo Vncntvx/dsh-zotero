@@ -1,11 +1,12 @@
 /**
  * The client-side Typert Remote contribution for the dsh-zotero host
- * service: mounts the shared strict descriptors into `ctx.remote.zotero`.
- * The descriptors and codecs come from the shared contract module, so the
- * browser bundle and the host manifest stay on one wire definition. The
- * namespace carries the single fact the settings plane does not — live
- * connectivity for the dedicated web tab's status strip; the configuration
- * surface reads and writes through the harness's settings scope instead.
+ * service: mounts the shared structural descriptors into `ctx.remote.zotero`.
+ *
+ * Endpoint identity comes from `../contract.ts` (types + wire factory, no
+ * zod). The result codec is the client host-owned arm
+ * (`./status-codec.ts`) — the browser never materializes boundary schemas;
+ * host registration owns the real zod factory. Configuration reads and writes
+ * through the harness settings scope, not this namespace.
  * @module dsh-zotero/client/remote
  */
 
@@ -14,15 +15,16 @@ import type {
   TypertRemoteContribution,
   TypertRemoteNamespaceMap,
 } from '@deepseek-ai/dsh-typert-protocol'
-import { ZOTERO_INVOCATIONS } from '../contract.ts'
-import type { ZoteroStatusView } from '../contract.ts'
+import { ZOTERO_REMOTE_PACKAGE, type ZoteroStatusView } from '../contract.ts'
+import { ZOTERO_CLIENT_INVOCATIONS } from './status-codec.ts'
 
 export type { ZoteroStatusView } from '../contract.ts'
+export { HOST_OWNED_CODEC_MESSAGE } from './status-codec.ts'
 
-/** The zotero Remote namespace's client contribution. */
+/** The `zotero` namespace's client contribution. */
 export const ZOTERO_REMOTE: TypertRemoteContribution = {
-  package: 'dsh-zotero',
-  descriptors: ZOTERO_INVOCATIONS,
+  package: ZOTERO_REMOTE_PACKAGE,
+  descriptors: ZOTERO_CLIENT_INVOCATIONS,
 }
 
 /** The mounted `zotero` namespace face (read through `mountedNamespace` in `./index.ts`). */
