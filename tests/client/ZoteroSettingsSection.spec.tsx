@@ -151,9 +151,10 @@ describe('ZoteroSettingsSection', () => {
     const timeout = document.querySelector('#zotero-settings-timeoutMs') as HTMLInputElement
     fireEvent.change(timeout, { target: { value: 'abc' } })
     expect(timeout.getAttribute('aria-invalid')).toBe('true')
-    // The invalid border rides a css-module class; its hashed name carries
-    // the source class name (`inputInvalid` per the official fields).
-    expect(timeout.className).toMatch(/inputInvalid/)
+    // Official invalid face: always `css.input`; border rides
+    // `[aria-invalid='true']`, not a second class.
+    expect(timeout.className).toMatch(/input/)
+    expect(timeout.className).not.toMatch(/inputInvalid/)
     expect(screen.getByText(zh.invalidNumber)).toBeDefined()
     expect(saveButton().disabled).toBe(true)
   })

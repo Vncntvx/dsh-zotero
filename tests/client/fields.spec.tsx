@@ -87,7 +87,19 @@ describe('ValueField', () => {
     const { container } = render(<ValueField {...valueBase} invalid text="abc" />)
     const input = container.querySelector('input#field-value')
     expect(input?.getAttribute('aria-invalid')).toBe('true')
-    expect(input?.className).toMatch(/inputInvalid/)
+    // Official face: the control always carries `css.input`; invalid rides
+    // `aria-invalid` (and CSS `[aria-invalid='true']`), not a second class.
+    expect(input?.className).toMatch(/input/)
+    expect(input?.className).not.toMatch(/inputInvalid/)
     expect(screen.getByText('请填数字。')).toBeDefined()
+  })
+
+  it('discloses optional help beside the label when the control receives one', () => {
+    render(<ValueField {...valueBase} help={{ label: '规则', content: <p>Loopback only.</p> }} />)
+    const button = screen.getByLabelText('规则')
+    expect(button.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(button)
+    expect(button.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByRole('region', { name: '规则' })).toBeDefined()
   })
 })

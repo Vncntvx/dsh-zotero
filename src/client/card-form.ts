@@ -14,11 +14,13 @@
  *
  * This is the same model the harness's own plugin cards use
  * (`packages/client/ui-settings-plugins/src/client/card-form.ts`, the file this
- * one mirrors); it is spelled here rather than imported because that package's
- * `./client` entry exports types only, and a client bundle must not
- * value-import another plugin's code (the loader module table would refuse it).
- * Diff against that file first when the harness reshapes its card internals;
- * this copy is deliberately narrower — no secret field, no generic form type.
+ * one mirrors; re-checked at dsh 0.1.6-alpha.2); it is spelled here rather
+ * than imported because that package's `./client` entry exports types only,
+ * and a client bundle must not value-import another plugin's code (the loader
+ * module table would refuse it). Diff against that file first when the harness
+ * reshapes its card internals; this copy is deliberately narrower — no secret
+ * field, no generic form type, and `save` returns its promise so callers can
+ * await settlement.
  * @module dsh-zotero/client/card-form
  */
 
@@ -51,7 +53,7 @@ export interface CardFieldState {
   invalid: boolean
 }
 
-/** Form state every plugin card shares. */
+/** Form state the settings page chrome shares. */
 export interface CardShell {
   /** False while the namespace is not served to this client; the card renders nothing. */
   available: boolean
@@ -67,7 +69,7 @@ export interface CardShell {
   failed: boolean
 }
 
-/** The write actions the card's slot entry injects. */
+/** The write actions the settings page's slot entry injects. */
 export interface CardActions {
   /** Stage draft text for one field. */
   edit: (field: string, text: string) => void
@@ -328,7 +330,7 @@ export class CardForm {
     const spec = this.specs.get(field)
     // Every call site names a field this card declared; a missing one is a
     // wiring mistake that must not degrade into a silently inert control.
-    if (spec === undefined) throw new Error(`plugin card has no field ${field}`)
+    if (spec === undefined) throw new Error(`settings form has no field ${field}`)
     return spec
   }
 

@@ -2,10 +2,12 @@
  * The Zotero settings form body: every field of the `zotero` namespace,
  * grouped into the families the host schema declares.
  *
- * The Plugins-tab card renders this body inside its disclosure, so the fields
- * behave and look like the harness's own plugin cards. The chrome around it
- * (card header, save footer) belongs to the card; this module owns only the
- * groups and the per-field controls.
+ * The page registers as a `settings.section` contribution (id `zotero`),
+ * because this namespace is a whole configuration surface and does not fit a
+ * Plugins-tab disclosure card. The section chrome (header, save footer)
+ * belongs to {@link ZoteroSettingsSection}; this module owns only the groups
+ * and the per-field controls. Control geometry still follows the harness's
+ * staged-form idiom (`fields.tsx` / `card-form.ts` mirrors).
  * @module dsh-zotero/client/ZoteroSettingsForm
  */
 

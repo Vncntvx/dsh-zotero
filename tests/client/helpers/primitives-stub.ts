@@ -60,6 +60,8 @@ export interface PrimitivesStub {
   readonly IconBrowseOutline16: (props: Record<string, unknown>) => ReactElement
   /** The glyph leading a clickable link. */
   readonly LinkIcon: (props: Record<string, unknown>) => ReactElement
+  /** The info glyph beside an optional help disclosure. */
+  readonly IconInfoOutline14: (props: Record<string, unknown>) => ReactElement
   /** The passthrough tooltip: its children render in place, without a portal. */
   readonly Tooltip: (props: { children?: ReactElement }) => ReactElement | undefined
   /** The tag capsule, as its DOM face. */
@@ -153,6 +155,7 @@ export function primitivesStub(overrides: Partial<PrimitivesStub> = {}): Primiti
     IconChevronRightOutline14: icon('chevron-right'),
     IconBrowseOutline16: icon('browse'),
     LinkIcon: icon('link'),
+    IconInfoOutline14: icon('info'),
     Tooltip: ({ children }) => children,
     Tag: TagStub,
     writeClipboard: vi.fn(async () => true),

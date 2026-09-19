@@ -7,16 +7,20 @@
  *
  * Structure, tokens, and geometry mirror the harness's official plugin fields
  * (`packages/client/ui-settings-plugins/src/client/fields.tsx` +
- * `fields.module.css`): native inputs (34px, radius 8, layer-3 surface),
- * `Tag` override badges, and `.field + .field` separators. Spelled here rather
- * than imported because a client bundle must not value-import another
- * plugin's code. The boolean toggle has no official atom (the official module
- * ships only `ValueField`/`SecretField`), so it keeps a native checkbox while
- * reusing the official badge/reset/hint language.
+ * `fields.module.css`, re-checked at dsh 0.1.6-alpha.2): native inputs
+ * (34px, radius 8, layer-3 surface), `Tag` override badges, `.field + .field`
+ * separators, optional `help` disclosure, and the official
+ * `aria-invalid` input face. Spelled here rather than imported because a
+ * client bundle must not value-import another plugin's code. The Zotero form
+ * itself does not pass `help` today — the control keeps the official shape so
+ * a later re-diff stays a no-op. The boolean toggle has no official atom
+ * (upstream ships `ValueField`/`SecretField` only), so it keeps a native
+ * checkbox while reusing the official badge/reset/hint language.
  * @module dsh-zotero/client/fields
  */
 
-import { Tag } from '@deepseek-ai/dsh-client-ui-primitives'
+import { useState, type ReactNode } from 'react'
+import { IconInfoOutline14, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import css from './fields.module.css'
 
 /** What every field control needs regardless of its value type. */
@@ -67,24 +71,53 @@ function OverrideControls(props: {
 /**
  * A staged value field. `numeric` only hints the keypad: which drafts a field
  * accepts is decided by its spec, so the control never silently rewrites what
- * the user typed.
+ * the user typed. `hint` and `help` follow the official control: an optional
+ * one-line note under the input, and an optional rules disclosure beside the
+ * label (the Zotero form passes neither `help` nor an empty hint today).
  * @param props - the field's copy, its staged text, and the edit actions.
  * @returns the labelled control.
  */
 export function ValueField(
-  props: FieldProps & {
+  props: Omit<FieldProps, 'hint'> & {
+    /** Optional explanation shown below the input. */
+    hint?: string
+    /** Rules disclosed by the information button beside the label. */
+    help?: { label: string; content: ReactNode }
     /** Hints a numeric keypad without narrowing what the control accepts. */
     numeric?: boolean
     /** Placeholder shown while the draft is empty. */
     placeholder?: string
   },
 ) {
+  const [helpOpen, setHelpOpen] = useState(false)
+  const helpId = `${props.id}-help`
+  const messageId = `${props.id}-message`
+  const hasMessage = props.invalid || Boolean(props.hint)
+  const description = [hasMessage ? messageId : '', helpOpen ? helpId : '']
+    .filter(Boolean)
+    .join(' ')
   return (
     <div className={css.field}>
       <div className={css.head}>
-        <label className={css.label} htmlFor={props.id}>
-          {props.label}
-        </label>
+        <div className={css.labelGroup}>
+          <label className={css.label} htmlFor={props.id}>
+            {props.label}
+          </label>
+          {props.help !== undefined ? (
+            <button
+              type="button"
+              className={css.helpButton}
+              aria-label={props.help.label}
+              aria-expanded={helpOpen}
+              aria-controls={helpId}
+              onClick={() => {
+                setHelpOpen(!helpOpen)
+              }}
+            >
+              <IconInfoOutline14 size={12} />
+            </button>
+          ) : null}
+        </div>
         {props.overridden ? (
           <OverrideControls
             overriddenLabel={props.overriddenLabel}
@@ -96,10 +129,11 @@ export function ValueField(
       </div>
       <input
         id={props.id}
-        className={props.invalid ? css.inputInvalid : css.input}
+        className={css.input}
         type="text"
         {...(props.numeric === true ? { inputMode: 'numeric' as const } : {})}
         {...(props.invalid ? { 'aria-invalid': true } : {})}
+        aria-describedby={description || undefined}
         value={props.text}
         placeholder={props.placeholder ?? ''}
         disabled={props.disabled}
@@ -107,9 +141,16 @@ export function ValueField(
           props.onEdit(event.target.value)
         }}
       />
-      <p className={props.invalid ? css.invalid : css.hint}>
-        {props.invalid ? props.invalidLabel : props.hint}
-      </p>
+      {hasMessage ? (
+        <p id={messageId} className={props.invalid ? css.invalid : css.hint}>
+          {props.invalid ? props.invalidLabel : props.hint}
+        </p>
+      ) : null}
+      {props.help !== undefined && helpOpen ? (
+        <div id={helpId} className={css.help} role="region" aria-label={props.help.label}>
+          {props.help.content}
+        </div>
+      ) : null}
     </div>
   )
 }

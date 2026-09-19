@@ -15,9 +15,9 @@ describe('locale bundles', () => {
 
   it('drops the retired lens/funnel/toolcard keys', () => {
     const retired: readonly string[] = [
-      // The config moved out of the Plugins-tab card into the Settings panel's
-      // left navigation: a page renders its whole form, so the disclosure
-      // affordance has no surface left to name.
+      // The config is a dedicated Settings-panel section (`settings.section`
+      // id `zotero`), not a Plugins-tab card. A page renders its whole form,
+      // so the disclosure affordance has no surface left to name.
       'expand',
       'collapse',
       // Copying the ref is a visible action-row button now, so the overflow
