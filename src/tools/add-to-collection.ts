@@ -114,7 +114,7 @@ export function registerAddToCollectionTool(ctx: Context, service: ZoteroService
     defineTool({
       name: 'zotero_add_to_collection',
       description:
-        'Add one Zotero item to a collection, by collection ref or exact name. Membership merges with the item\'s existing collections under a version precondition, so a concurrent edit fails as ZOTERO_WRITE_CONFLICT and a re-run reapplies; an already-member item returns added: false and writes nothing. An unknown collection name fails before anything is read. Every write shows a plan the user approves first; kind "declined" means the user answered the plan without approving and nothing was written — do not retry unasked.',
+        'Add one Zotero item to a collection, by collection ref or exact name. Membership merges with the item\'s existing collections under a version precondition, so a concurrent edit fails as ZOTERO_WRITE_CONFLICT and a re-run reapplies; an already-member item returns added: false and writes nothing. An unknown collection name fails before anything is read. When writeConfirm is on (the default) the write first shows a plan the user approves; kind "declined" means the user answered the plan without approving and nothing was written — do not retry unasked.',
       parameters: ADD_TO_COLLECTION_PARAMETERS,
       output: {
         schema: ADD_TO_COLLECTION_OUTPUT_SCHEMA,

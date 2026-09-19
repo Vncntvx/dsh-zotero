@@ -48,7 +48,7 @@ export const CONNECTIVITY_POLICY_SENTENCE =
  * reason — the lifecycle spec pins it.
  */
 export const WRITE_POLICY_SENTENCE =
-  'When writing (zotero_create_note, zotero_add_tags, zotero_add_to_collection): write note bodies in markdown — the plugin converts them to Zotero note HTML and escapes unknown syntax, so raw HTML never passes through; cite sources by their refs. Every write shows a plan the user approves first; kind "declined" means the user declined — stop, do not retry. ZOTERO_WRITE_CONFLICT means the item changed underneath the read — re-run the tool once, it re-reads and reapplies; ZOTERO_WRITE_UNAUTHORIZED means the user declined or revoked write access — stop and ask.'
+  'When writing (zotero_create_note, zotero_add_tags, zotero_add_to_collection): write note bodies in markdown — the plugin converts them to Zotero note HTML and escapes unknown syntax, so raw HTML never passes through; cite sources by their refs. Child notes never take collections (non-empty collections on a child-note call are refused before any plan). When writeConfirm is on (the default) the write first shows a plan the user approves; kind "declined" means the user declined — stop, do not retry. ZOTERO_WRITE_CONFLICT means the item changed underneath the read — re-run the tool once, it re-reads and reapplies; ZOTERO_WRITE_UNAUTHORIZED means the user declined or revoked write access — stop and ask.'
 
 /**
  * The policy body with the configured tool caps interpolated — the values

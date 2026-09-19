@@ -18,7 +18,11 @@ import {
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
 import { ZOTERO_WRITE_LIST_MAX_ITEMS, ZOTERO_WRITE_NOTE_MAX_CHARS } from '../constants.js'
-import { writeListTooLongMessage, writeNoteTooLongMessage } from '../errors.js'
+import {
+  WRITE_CHILD_COLLECTIONS_MESSAGE,
+  writeListTooLongMessage,
+  writeNoteTooLongMessage,
+} from '../errors.js'
 import { metaRecordOf } from './present.js'
 import { invalid, parseSupportedRef, REF_ARG_HINT } from './validate.js'
 import { askPlanApproval } from './write-approval.js'
@@ -40,7 +44,7 @@ const CREATE_NOTE_PARAMETERS = {
     type: 'array',
     items: { type: 'string' },
     description:
-      'Collections the note joins, as zotero://user/0/collection/<KEY> refs or exact names. Standalone notes only; ignored (refused) for child notes.',
+      "Collections the note joins, as zotero://user/0/collection/<KEY> refs or exact names. Standalone notes only; a child-note call that also passes non-empty collections is refused (they inherit the parent item's collections).",
   },
   tags: {
     type: 'array',
@@ -78,11 +82,20 @@ type CreateNoteOutput = InferValue<typeof CREATE_NOTE_OUTPUT_SCHEMA>
 /** The deterministic plan markdown the approval card renders. */
 export function createNotePlan(args: CreateNoteArgs): string {
   const preview = args.markdown.length > 400 ? `${args.markdown.slice(0, 400)}…` : args.markdown
+  // buildRequest already refused non-empty collections on a child note, so a
+  // planned child write never carries collections — the card must say what
+  // the domain will actually do (inherit), not echo a list that cannot land.
+  const collections =
+    args.parentItem !== undefined
+      ? '(inherited from parent item)'
+      : args.collections === undefined || args.collections.length === 0
+        ? '(none)'
+        : args.collections.join(', ')
   return [
     '**Create a Zotero research note**',
     '- Library: zotero://user/0 (the local personal library)',
     `- Kind: ${args.parentItem === undefined ? 'standalone note' : `child note under ${args.parentItem}`}`,
-    `- Collections: ${args.collections === undefined || args.collections.length === 0 ? '(none)' : args.collections.join(', ')}`,
+    `- Collections: ${collections}`,
     `- Tags: ${args.tags === undefined || args.tags.length === 0 ? '(none)' : args.tags.join(', ')}`,
     `- Sources: ${args.sourceRefs === undefined || args.sourceRefs.length === 0 ? '(none)' : args.sourceRefs.join(', ')}`,
     `- Body preview: ${preview}`,
@@ -90,6 +103,12 @@ export function createNotePlan(args: CreateNoteArgs): string {
   ].join('\n')
 }
 
+/**
+ * Turn model arguments into the domain request, refusing every combination
+ * the schema cannot express. Cross-field rules live here (and again in the
+ * write domain for non-tool callers) so a malformed ask fails before the
+ * plan card — never after the user approved a write that cannot run.
+ */
 function buildRequest(args: CreateNoteArgs): ZoteroCreateNoteRequest {
   if (args.markdown.length > ZOTERO_WRITE_NOTE_MAX_CHARS) {
     invalid(writeNoteTooLongMessage(ZOTERO_WRITE_NOTE_MAX_CHARS))
@@ -104,12 +123,19 @@ function buildRequest(args: CreateNoteArgs): ZoteroCreateNoteRequest {
       invalid(writeListTooLongMessage(name, ZOTERO_WRITE_LIST_MAX_ITEMS))
     }
   }
+  const parentItem = args.parentItem
+  const collections = args.collections
+  // Same constant the write domain throws — dual-end, one wording.
+  if (parentItem !== undefined && collections !== undefined && collections.length > 0) {
+    invalid(WRITE_CHILD_COLLECTIONS_MESSAGE)
+  }
   return {
     markdown: args.markdown,
-    ...(args.parentItem !== undefined
-      ? { parentItem: parseSupportedRef(args.parentItem, ['item']) }
-      : {}),
-    ...(args.collections !== undefined ? { collections: args.collections } : {}),
+    ...(parentItem !== undefined ? { parentItem: parseSupportedRef(parentItem, ['item']) } : {}),
+    // Empty list == absent: a standalone note with [] joins no collection;
+    // a child note with [] inherits the parent. Both leave the request
+    // without a collections key, which is what the domain applies.
+    ...(collections !== undefined && collections.length > 0 ? { collections } : {}),
     ...(args.tags !== undefined ? { tags: args.tags } : {}),
     ...(args.sourceRefs !== undefined
       ? { sourceRefs: args.sourceRefs.map((ref) => parseSupportedRef(ref, ['item'])) }
@@ -158,7 +184,7 @@ export function registerCreateNoteTool(ctx: Context, service: ZoteroService): ()
     defineTool({
       name: 'zotero_create_note',
       description:
-        'Create a research note in the Zotero personal library — standalone, or a child note under a parent item — with tags, collections, and source relations. The markdown body is converted to Zotero note HTML under an escape-unknown grammar (raw HTML is escaped, never executed). Collections apply to standalone notes only; child notes inherit their parent item\'s collections. Every write shows a plan the user approves first, and Zotero itself may show its authorization dialog on first use. kind "declined" means the user answered the plan without approving and nothing was written — do not retry unasked.',
+        'Create a research note in the Zotero personal library — standalone, or a child note under a parent item — with tags, collections, and source relations. The markdown body is converted to Zotero note HTML under an escape-unknown grammar (raw HTML is escaped, never executed). Collections apply to standalone notes only; a child-note call that also passes non-empty collections is refused as ZOTERO_INVALID_ARGUMENT before any plan is shown (child notes inherit their parent item\'s collections). When writeConfirm is on (the default) the write first shows a plan the user approves; Zotero itself may show its authorization dialog on first use. kind "declined" means the user answered the plan without approving and nothing was written — do not retry unasked.',
       parameters: CREATE_NOTE_PARAMETERS,
       output: {
         schema: CREATE_NOTE_OUTPUT_SCHEMA,

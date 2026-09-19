@@ -179,7 +179,18 @@ describe('write tool renders', () => {
       sourceRefs: ['zotero://user/0/item/SOURCE01'],
     })
     expect(childPlan).toContain('- Kind: child note under zotero://user/0/item/ITEMABC1')
+    expect(childPlan).toContain('- Collections: (inherited from parent item)')
     expect(childPlan).toContain('- Sources: zotero://user/0/item/SOURCE01')
+    // Even if a caller paints collections onto a child plan, the card must
+    // describe inheritance — buildRequest refuses that combination on the
+    // model path, and the domain refuses it on the non-tool path.
+    const paintedChildPlan = createNotePlan({
+      markdown: 'body',
+      parentItem: 'zotero://user/0/item/ITEMABC1',
+      collections: ['Methods'],
+    })
+    expect(paintedChildPlan).toContain('- Collections: (inherited from parent item)')
+    expect(paintedChildPlan).not.toContain('Methods')
     const tagPlan = addTagsPlan({ ref: 'zotero://user/0/item/ITEMABC1', tags: ['a'] })
     expect(tagPlan).toContain('- Tags to add: a')
     expect(tagPlan).toContain('zotero://user/0/item/ITEMABC1')
@@ -377,17 +388,6 @@ describe('approval-gate failure arms', () => {
     const longPlan = createNotePlan({ markdown: 'x'.repeat(401) })
     expect(longPlan).toContain('…')
     expect(longPlan).not.toContain('xxxxx'.repeat(100))
-    await setupHostLane({ writeEnabled: true }).then(async (lane) => {
-      // buildRequest parses parentItem/collections/tags before the approval gate.
-      const result = await lane.runTool('zotero_create_note', {
-        markdown: 'body',
-        parentItem: 'zotero://user/0/item/ITEMABC1',
-        collections: ['c'],
-        tags: ['t'],
-      })
-      expect(result.isError).toBe(true)
-      await lane.teardown()
-    })
   })
 
   it('covers the render and meta fallbacks with sparse applied outcomes', async () => {

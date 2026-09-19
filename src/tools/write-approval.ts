@@ -9,9 +9,10 @@
  *    `ToolErrorInfo.reason` — durable user-facing detail the harness keeps out
  *    of model-facing content.
  * 2. **Plan card** (`askPlanApproval`): the in-conversation confirmation
- *    every write shows while the capability is on. Argument validation runs
- *    first so a malformed call never bothers the user. The user's Zotero
- *    authorization dialog and its key remain the hard boundary.
+ *    every write shows while the capability is on and `writeConfirm` is set.
+ *    Argument validation runs first so a malformed call never bothers the
+ *    user. The user's Zotero authorization dialog and its key remain the hard
+ *    boundary.
  *
  * Both layers fail closed: the model never writes past an unanswered plan.
  * Mid-body domain failures throw `ZoteroError`; the registry maps those to

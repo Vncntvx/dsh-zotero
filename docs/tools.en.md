@@ -264,17 +264,17 @@ zotero_changes(since={serverId: "<from cursor>", library: {type: "user", id: 0},
 
 ## zotero_create_note
 
-Create a research note — standalone, or a child note under a parent item — with tags, collections, and source relations applied at creation. The plugin converts the markdown body to Zotero note HTML under a whitelisted grammar (paragraphs, headings to level four, bold/italic, inline and fenced code, quotes, one-level lists, pipe tables with a `---` separator row, links on `https://`/`http://`/`zotero://` only); **anything outside the grammar is escaped to literal text, and raw HTML never passes through**. Zotero's server converts nothing on write — markdown stored verbatim renders as raw markup, the failure mode community integrations hit — which is why the conversion lives in the plugin. Child notes inherit their parent item's collections; only standalone notes take `collections`. Sources are recorded as `dc:relation` links (Zotero's item relations), and the saved state comes back inside the batch's successful bucket, so no follow-up read is needed. Every write first shows a plan card for approval; Zotero 10 additionally shows its own authorization dialog on first use (Allow / Always Allow / Deny, Deny the default).
+Create a research note — standalone, or a child note under a parent item — with tags, collections, and source relations applied at creation. The plugin converts the markdown body to Zotero note HTML under a whitelisted grammar (paragraphs, headings to level four, bold/italic, inline and fenced code, quotes, one-level lists, pipe tables with a `---` separator row, links on `https://`/`http://`/`zotero://` only); **anything outside the grammar is escaped to literal text, and raw HTML never passes through**. Zotero's server converts nothing on write — markdown stored verbatim renders as raw markup, the failure mode community integrations hit — which is why the conversion lives in the plugin. Child notes inherit their parent item's collections; only standalone notes take `collections`, and a child-note call that also passes non-empty collections is refused before any plan card. Sources are recorded as `dc:relation` links (Zotero's item relations), and the saved state comes back inside the batch's successful bucket, so no follow-up read is needed. While `writeConfirm` is on (the default) the write first shows a plan card for approval; Zotero 10 additionally shows its own authorization dialog on first use (Allow / Always Allow / Deny, Deny the default).
 
 ### Parameters
 
-| Parameter     | Type     | Default | Description                                                                                     |
-| ------------- | -------- | ------- | ----------------------------------------------------------------------------------------------- |
-| `markdown`    | string   | —       | The note body (markdown, 65536-character bound)                                                 |
-| `parentItem`  | string   | —       | Parent item ref; omit for a standalone note                                                     |
-| `collections` | string[] | —       | Collection refs or exact names; standalone notes only — a child note plus this parameter errors |
-| `tags`        | string[] | —       | Tags applied at creation                                                                        |
-| `sourceRefs`  | string[] | —       | Source item refs, recorded as `dc:relation` links and echoed in the result                      |
+| Parameter     | Type     | Default | Description                                                                                                                                                                   |
+| ------------- | -------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `markdown`    | string   | —       | The note body (markdown, 65536-character bound)                                                                                                                               |
+| `parentItem`  | string   | —       | Parent item ref; omit for a standalone note                                                                                                                                   |
+| `collections` | string[] | —       | Collection refs or exact names; standalone notes only — a child-note call that also passes non-empty collections is refused as `ZOTERO_INVALID_ARGUMENT` before any plan card |
+| `tags`        | string[] | —       | Tags applied at creation                                                                                                                                                      |
+| `sourceRefs`  | string[] | —       | Source item refs, recorded as `dc:relation` links and echoed in the result                                                                                                    |
 
 ### Output
 
@@ -290,7 +290,7 @@ zotero_create_note(markdown="**Methods**: see section 2.", parentItem="zotero://
 
 ## zotero_add_tags
 
-Add tags to one item. Zotero's PATCH replaces arrays wholesale instead of merging, so the tool runs read-merge-write internally: it reads the item's tags and version, unions the additions (existing tags keep their colored/automatic types), and submits the merged list under `If-Unmodified-Since-Version`. When every requested tag is already present, **no write is sent at all** — the result reports `unchanged: true`. A lost precondition (the object changed after the read) fails as `ZOTERO_WRITE_CONFLICT`: re-run the tool once, and it re-reads and reapplies. Every write shows a plan card first.
+Add tags to one item. Zotero's PATCH replaces arrays wholesale instead of merging, so the tool runs read-merge-write internally: it reads the item's tags and version, unions the additions (existing tags keep their colored/automatic types), and submits the merged list under `If-Unmodified-Since-Version`. When every requested tag is already present, **no write is sent at all** — the result reports `unchanged: true`. A lost precondition (the object changed after the read) fails as `ZOTERO_WRITE_CONFLICT`: re-run the tool once, and it re-reads and reapplies. While `writeConfirm` is on (the default) the write first shows a plan card.
 
 ### Parameters
 
@@ -336,7 +336,7 @@ zotero_add_to_collection(ref="zotero://user/0/item/ABCD1234", collection="Method
 
 ## Write boundaries
 
-The three write tools register only while `writeEnabled` is on in the settings, and they write `zotero://user/0/` (the personal library) only. Every write passes a plan-review card on the dsh side (`writeConfirm`); Zotero 10's own authorization dialog and locally issued API keys are the hard boundary beneath it: writes must carry the instance id (428 without, 412 on mismatch) and a locally issued key (`/api/local/authorize`; an "Always Allow" grant can be stored in the host credentials store bound to the issuing instance, while a one-time key is consumed at authentication time — a failed batch burns it, so a 401 re-authorizes once and replays the same batch). There is no automatic retry; every write failure other than `ZOTERO_WRITE_CONFLICT` deserves a read before another action. Writes advance the library version, and `zotero_changes` sees them.
+The three write tools register only while `writeEnabled` is on in the settings, and they write `zotero://user/0/` (the personal library) only. While `writeConfirm` is on (the default) every write first shows a dsh-side plan-review card; argument validation runs before that card, so a malformed call is never treated as "unapproved". Zotero 10's own authorization dialog and locally issued API keys are the hard boundary beneath it: writes must carry the instance id (428 without, 412 on mismatch) and a locally issued key (`/api/local/authorize`; an "Always Allow" grant can be stored in the host credentials store bound to the issuing instance, while a one-time key is consumed at authentication time — a failed batch burns it, so a 401 re-authorizes once and replays the same batch). Apart from that single 401 re-authorization replay there is no automatic retry; every write failure other than `ZOTERO_WRITE_CONFLICT` deserves a read before another action. Writes advance the library version, and `zotero_changes` sees them.
 
 ---
 

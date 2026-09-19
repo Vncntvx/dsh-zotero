@@ -265,17 +265,17 @@ zotero_changes(since={serverId: "<from cursor>", library: {type: "user", id: 0},
 
 ## zotero_create_note
 
-创建研究笔记：独立笔记，或挂到某条目下的子笔记，创建时可同时带标签、合集与来源关系。markdown 由插件转换为 Zotero 笔记 HTML——白名单语法（段落、一至四级标题、粗斜体、行内与围栏代码、引用、一层列表、带 `---` 分隔行的管道表格、仅 `https://`/`http://`/`zotero://` 链接），**语法之外的任何内容一律转义为字面文本，原始 HTML 不透传**。Zotero 服务端对写入不做格式转换，markdown 原样存入就会显示为原始标记（社区集成踩过的坑），所以转换发生在插件侧。子笔记继承父条目的合集，只有独立笔记可携带 `collections`。来源以 `dc:relation` 关系记录（Zotero 的"关联条目"），创建后从批量写响应的 `successful` 桶读回保存态，无需再发 GET。每次写入先展示计划卡片等待批准；Zotero 10 首次写入还会弹它自己的授权对话框（允许 / 总是允许 / 拒绝，默认拒绝）。
+创建研究笔记：独立笔记，或挂到某条目下的子笔记，创建时可同时带标签、合集与来源关系。markdown 由插件转换为 Zotero 笔记 HTML——白名单语法（段落、一至四级标题、粗斜体、行内与围栏代码、引用、一层列表、带 `---` 分隔行的管道表格、仅 `https://`/`http://`/`zotero://` 链接），**语法之外的任何内容一律转义为字面文本，原始 HTML 不透传**。Zotero 服务端对写入不做格式转换，markdown 原样存入就会显示为原始标记（社区集成踩过的坑），所以转换发生在插件侧。子笔记继承父条目的合集，只有独立笔记可携带 `collections`；子笔记再传非空 `collections` 会在计划卡前被拒绝。来源以 `dc:relation` 关系记录（Zotero 的"关联条目"），创建后从批量写响应的 `successful` 桶读回保存态，无需再发 GET。`writeConfirm` 开启时（默认）每次写入先展示计划卡片等待批准；Zotero 10 首次写入还会弹它自己的授权对话框（允许 / 总是允许 / 拒绝，默认拒绝）。
 
 ### 参数
 
-| 参数          | 类型     | 默认值 | 说明                                                    |
-| ------------- | -------- | ------ | ------------------------------------------------------- |
-| `markdown`    | string   | —      | 笔记正文（markdown，上限 65536 字符）                   |
-| `parentItem`  | string   | —      | 父条目 ref；省略为独立笔记                              |
-| `collections` | string[] | —      | 合集 ref 或精确名称；仅独立笔记，子笔记传此参数直接报错 |
-| `tags`        | string[] | —      | 创建时应用的标签                                        |
-| `sourceRefs`  | string[] | —      | 来源条目 ref，记为 `dc:relation` 关系并回显             |
+| 参数          | 类型     | 默认值 | 说明                                                                                                      |
+| ------------- | -------- | ------ | --------------------------------------------------------------------------------------------------------- |
+| `markdown`    | string   | —      | 笔记正文（markdown，上限 65536 字符）                                                                     |
+| `parentItem`  | string   | —      | 父条目 ref；省略为独立笔记                                                                                |
+| `collections` | string[] | —      | 合集 ref 或精确名称；仅独立笔记，子笔记再传非空 collections 会在计划卡前以 `ZOTERO_INVALID_ARGUMENT` 拒绝 |
+| `tags`        | string[] | —      | 创建时应用的标签                                                                                          |
+| `sourceRefs`  | string[] | —      | 来源条目 ref，记为 `dc:relation` 关系并回显                                                               |
 
 ### 输出
 
@@ -291,7 +291,7 @@ zotero_create_note(markdown="**方法**：见第 2 节。", parentItem="zotero:/
 
 ## zotero_add_tags
 
-给一个条目加标签。Zotero 的 PATCH 对数组是整体替换而非合并，所以工具内部读-合并-写：先读条目现有标签与版本，把新增项并入（既有标签及其彩色/自动类型原样保留）后以 `If-Unmodified-Since-Version` 前置提交；所请求标签全部已存在时**不发任何写请求**，直接返回 `unchanged: true`。版本前置失败（对象在读取后被改动）报 `ZOTERO_WRITE_CONFLICT`——重跑一次工具即可，它会重新读取并在其上合并。每次写入先展示计划卡片。
+给一个条目加标签。Zotero 的 PATCH 对数组是整体替换而非合并，所以工具内部读-合并-写：先读条目现有标签与版本，把新增项并入（既有标签及其彩色/自动类型原样保留）后以 `If-Unmodified-Since-Version` 前置提交；所请求标签全部已存在时**不发任何写请求**，直接返回 `unchanged: true`。版本前置失败（对象在读取后被改动）报 `ZOTERO_WRITE_CONFLICT`——重跑一次工具即可，它会重新读取并在其上合并。`writeConfirm` 开启时（默认）每次写入先展示计划卡片。
 
 ### 参数
 
@@ -337,7 +337,7 @@ zotero_add_to_collection(ref="zotero://user/0/item/ABCD1234", collection="方法
 
 ## 写入边界
 
-三个写入工具只在设置的 `writeEnabled` 打开时注册，且都只写 `zotero://user/0/`（个人库）。每次写入前有 dsh 侧的计划卡片批准（`writeConfirm`），Zotero 10 自己的授权弹窗与本地 API key 是其下的硬边界：写请求必须携带实例 id（缺失 428、不匹配 412）与本地签发的 key（`/api/local/authorize`，弹窗可选"总是允许"持久化到宿主凭据库，单次 key 首次鉴权即被服务端消费——写失败也照样烧掉，所以 401 后自动重新授权并同批重放一次）。没有自动重试；`ZOTERO_WRITE_CONFLICT` 之外的写失败都应先理解再行动。写入会推进库版本，`zotero_changes` 会看到这批变更。
+三个写入工具只在设置的 `writeEnabled` 打开时注册，且都只写 `zotero://user/0/`（个人库）。`writeConfirm` 开启时（默认）每次写入前展示 dsh 侧计划卡片；参数校验在计划卡之前完成，畸形调用不会被当作「未批准」。Zotero 10 自己的授权弹窗与本地 API key 是其下的硬边界：写请求必须携带实例 id（缺失 428、不匹配 412）与本地签发的 key（`/api/local/authorize`，弹窗可选"总是允许"持久化到宿主凭据库，单次 key 首次鉴权即被服务端消费——写失败也照样烧掉，所以 401 后自动重新授权并同批重放一次）。除该次 401 重授权重放外没有自动重试；`ZOTERO_WRITE_CONFLICT` 之外的写失败都应先理解再行动。写入会推进库版本，`zotero_changes` 会看到这批变更。
 
 ---
 

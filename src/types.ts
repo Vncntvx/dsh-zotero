@@ -804,7 +804,13 @@ export interface ZoteroCreateNoteRequest {
   markdown: string
   /** Parent item ref: the note is created as that item's child note. */
   parentItem?: ZoteroObjectRef
-  /** Collections (refs or names) a standalone note joins; child notes inherit their parent's collections. */
+  /**
+   * Collections (refs or names) a standalone note joins. Must be omitted (or
+   * empty) when `parentItem` is set — child notes inherit their parent's
+   * collections; non-empty collections on a child note are refused with
+   * `WRITE_CHILD_COLLECTIONS_MESSAGE` at the tool `buildRequest` and again in
+   * the write domain for non-tool callers.
+   */
   collections?: string[]
   /** Tags applied at creation. */
   tags?: string[]

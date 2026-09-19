@@ -268,6 +268,14 @@ function objectRefusedError(refused: ZoteroWriteObjectFailure): ZoteroError {
  * body is converted to note HTML before it leaves this module; the created
  * note's saved state comes back inside the batch's `successful` bucket, so
  * no follow-up read is needed.
+ *
+ * Cross-field invariant at both ends of the call: a child note never carries
+ * collections. The model-facing tool refuses the combination in
+ * `tools/create-note.ts` `buildRequest` (before the plan card); this entry
+ * refuses it again for any caller that reaches the domain without that tool
+ * — `service.createNote` / provider direct use. Both ends throw the shared
+ * `WRITE_CHILD_COLLECTIONS_MESSAGE`. The entry-field assembly below is
+ * structural only (collections key only when standalone); it is not the gate.
  */
 export async function createNote(
   deps: WriteDomainDeps,

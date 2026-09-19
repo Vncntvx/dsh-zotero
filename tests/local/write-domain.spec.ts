@@ -219,7 +219,9 @@ describe('createNote', () => {
     expect(entry?.collections).toBeUndefined()
   })
 
-  it('refuses collections on a child note before any write request is sent', async () => {
+  it('refuses collections on a child note when the domain is called without the tool layer', async () => {
+    // Dual-end invariant: tools/create-note buildRequest already refuses this
+    // on the model path; this spec pins the domain gate for direct callers.
     const { deps, directory } = writeDeps()
     let thrown: unknown
     try {

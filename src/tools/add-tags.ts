@@ -117,7 +117,7 @@ export function registerAddTagsTool(ctx: Context, service: ZoteroService): () =>
     defineTool({
       name: 'zotero_add_tags',
       description:
-        'Add tags to one Zotero item. Tags merge with what the item already carries — existing tags and their types are preserved — and the union is written under a version precondition, so a concurrent edit fails as ZOTERO_WRITE_CONFLICT and a re-run reapplies. When every requested tag is already present nothing is written and unchanged is true. Every write shows a plan the user approves first; kind "declined" means the user answered the plan without approving and nothing was written — do not retry unasked.',
+        'Add tags to one Zotero item. Tags merge with what the item already carries — existing tags and their types are preserved — and the union is written under a version precondition, so a concurrent edit fails as ZOTERO_WRITE_CONFLICT and a re-run reapplies. When every requested tag is already present nothing is written and unchanged is true. When writeConfirm is on (the default) the write first shows a plan the user approves; kind "declined" means the user answered the plan without approving and nothing was written — do not retry unasked.',
       parameters: ADD_TAGS_PARAMETERS,
       output: {
         schema: ADD_TAGS_OUTPUT_SCHEMA,

@@ -7,7 +7,12 @@ import type {
 } from '@deepseek-ai/dsh-user-questions'
 import { expectValue, setupHostLane, type HostLane } from '../helpers/lanes/host-lane.js'
 import { MockZotero } from '../helpers/mock-zotero.js'
-import { WRITE_APPROVAL_UNAVAILABLE_MESSAGE, ZOTERO_WRITE_UNAUTHORIZED } from '../../src/errors.js'
+import {
+  WRITE_APPROVAL_UNAVAILABLE_MESSAGE,
+  WRITE_CHILD_COLLECTIONS_MESSAGE,
+  ZOTERO_INVALID_ARGUMENT,
+  ZOTERO_WRITE_UNAUTHORIZED,
+} from '../../src/errors.js'
 
 const SERVER_ID = 'srv-write-tools-001'
 const NEW_KEY = 'NEWNOTE1'
@@ -175,6 +180,68 @@ describe('zotero_create_note', () => {
     )
     expect(result.value).toMatchObject({ kind: 'applied', key: NEW_KEY })
     expect(scripted.asks).toHaveLength(0)
+  })
+
+  it('refuses non-empty collections on a child note before the plan card', async () => {
+    const lane = await bootLane({ writeEnabled: true })
+    const scripted = lane.ctx.get('userQuestions') as unknown as ScriptedQuestions
+    serveWrites(lane.mock)
+    const result = await lane.runTool('zotero_create_note', {
+      markdown: 'x',
+      parentItem: `zotero://user/0/item/${ITEM_KEY}`,
+      collections: ['方法论'],
+    })
+    expect(result.isError).toBe(true)
+    if (!result.isError) throw new Error('unreachable')
+    expect(result.error.info?.code).toBe(ZOTERO_INVALID_ARGUMENT)
+    expect(result.error.message).toBe(WRITE_CHILD_COLLECTIONS_MESSAGE)
+    expect(scripted.asks).toHaveLength(0)
+    expect(lane.mock.requests.some((request) => request.method === 'POST')).toBe(false)
+  })
+
+  it('treats empty collections on a child note as inherit, not as a write of collections', async () => {
+    const lane = await bootLane({ writeEnabled: true })
+    const scripted = lane.ctx.get('userQuestions') as unknown as ScriptedQuestions
+    serveWrites(lane.mock)
+    const result = expectValue(
+      await lane.runTool('zotero_create_note', {
+        markdown: 'child body',
+        parentItem: `zotero://user/0/item/${ITEM_KEY}`,
+        collections: [],
+      }),
+      'zotero_create_note',
+    )
+    expect(result.value).toMatchObject({ kind: 'applied', key: NEW_KEY })
+    expect(scripted.asks).toHaveLength(1)
+    expect(scripted.asks[0]?.questions[0]?.detail).toContain('(inherited from parent item)')
+    const post = lane.mock.requests.find(
+      (request) => request.method === 'POST' && request.pathname === '/api/users/0/items',
+    )
+    expect(post).toBeDefined()
+    const entry = JSON.parse(post?.body ?? '{}')[0] as Record<string, unknown>
+    expect(entry.parentItem).toBe(ITEM_KEY)
+    expect(entry.collections).toBeUndefined()
+  })
+
+  it('writes standalone collections after the plan, resolving names to keys', async () => {
+    const lane = await bootLane({ writeEnabled: true })
+    const scripted = lane.ctx.get('userQuestions') as unknown as ScriptedQuestions
+    serveWrites(lane.mock)
+    const standalone = expectValue(
+      await lane.runTool('zotero_create_note', {
+        markdown: 'standalone',
+        collections: ['方法论'],
+      }),
+      'zotero_create_note',
+    )
+    expect(standalone.value).toMatchObject({ kind: 'applied', key: NEW_KEY })
+    expect(scripted.asks).toHaveLength(1)
+    expect(scripted.asks[0]?.questions[0]?.detail).toContain('方法论')
+    const post = lane.mock.requests.find(
+      (request) => request.method === 'POST' && request.pathname === '/api/users/0/items',
+    )
+    const entry = JSON.parse(post?.body ?? '{}')[0] as Record<string, unknown>
+    expect(entry.collections).toEqual([COLLECTION_KEY])
   })
 })
 
