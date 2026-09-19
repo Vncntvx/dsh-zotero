@@ -46,7 +46,7 @@ zotero_search(query="transformer attention", mode="everything", tags=["deep-lear
 
 ## zotero_get
 
-读取单个条目的完整元数据。默认仅返回元数据；指定 `include` 后额外请求一次 `/children` 接口获取子内容。
+读取单个条目的完整元数据。默认仅返回元数据；指定 `include` 后额外读取子内容：`notes`/`attachments` 走裸 `/children`（仅笔记与附件），`annotations` 另走 `/children?itemType=annotation`——Zotero 本地 API 的裸 `/children` **从不**返回批注（批注挂在 PDF 附件下）。
 
 ### 参数
 
@@ -207,7 +207,7 @@ zotero_browse(kind="tags", q="review", match="contains")
 
 ## zotero_children
 
-探索条目或附件的子对象图。条目 ref 返回其直接笔记、附件，以及每个附件下的批注（Zotero 把批注存为 PDF 的子项而非条目的子项）；附件 ref 返回该文件自身的批注。先用它枚举结构，再用 `zotero_get` 读完整元数据。
+探索条目或附件的子对象。条目 ref：直接笔记与附件来自裸 `/children`；批注（挂在 PDF 下而非条目下）仅来自 `/children?itemType=annotation`。附件 ref：经同一过滤接口返回该文件自身的批注。先用它枚举结构，再用 `zotero_get` 读完整元数据。
 
 ### 参数
 

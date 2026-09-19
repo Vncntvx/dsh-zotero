@@ -19,7 +19,7 @@ src/
   concurrency.ts        # Bounded concurrency
   evidence.ts           # BM25 ranking
   attachments.ts        # Attachment selection
-  item-graph.ts         # Child object graph (notes/attachments/annotations)
+  local/children-wire.ts # Local API child-object contracts: bare /children (notes/attachments) and ?itemType=annotation (annotations)
   normalize.ts          # Zotero item → domain DTO normalization
   presentation-meta.ts  # Display projection of tool results
   refs.ts               # Zotero object reference syntax

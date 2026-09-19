@@ -46,7 +46,7 @@ zotero_search(query="transformer attention", mode="everything", tags=["deep-lear
 
 ## zotero_get
 
-Read a single item's full metadata. By default returns only metadata; specifying `include` triggers an additional `/children` call for child content.
+Read a single item's full metadata. By default returns only metadata; specifying `include` loads child content — `notes`/`attachments` from the bare `/children` listing (notes and attachments only), `annotations` from `/children?itemType=annotation`. Zotero's Local API never returns annotations from a bare children listing (they hang off PDF attachments).
 
 ### Parameters
 
@@ -206,7 +206,7 @@ zotero_browse(kind="tags", q="review", match="contains")
 
 ## zotero_children
 
-Explore one item's or attachment's child-object graph. An item ref returns its direct notes and attachments plus the annotations living under each attachment (Zotero stores annotations as children of the PDF, not of the paper); an attachment ref returns that file's own annotations. Enumerate structure here before reading full metadata with `zotero_get`.
+Explore one item's or attachment's child objects. An item ref: direct notes and attachments from bare `/children`; annotations (stored under PDF attachments, not the paper) only from `/children?itemType=annotation`. An attachment ref: that file's own annotations via the same filtered listing. Enumerate structure here before reading full metadata with `zotero_get`.
 
 ### Parameters
 

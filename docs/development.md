@@ -19,7 +19,7 @@ src/
   concurrency.ts        # 有界并发
   evidence.ts           # BM25 排名
   attachments.ts        # 附件选择
-  item-graph.ts         # 子对象图（笔记/附件/批注）
+  local/children-wire.ts # Local API 子对象契约：裸 /children（笔记/附件）与 ?itemType=annotation（批注）
   normalize.ts          # Zotero 条目 → 领域 DTO 归一化
   presentation-meta.ts  # 工具结果的展示投影
   refs.ts               # Zotero 对象引用语法
