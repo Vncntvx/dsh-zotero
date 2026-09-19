@@ -1,8 +1,10 @@
 /**
  * The `zotero_get` tool: read one item's metadata, with child notes,
  * annotations, and attachments included on request. The default call is a
- * single request; any include adds one lazy `/children` request for all
- * requested kinds. Ref provenance is checked by the provider.
+ * single request; any include reads the bare `/children` listing
+ * (notes/attachments), and an annotations include adds the
+ * `?itemType=annotation` listing — the Local API never returns annotations
+ * from the bare children endpoint. Ref provenance is checked by the provider.
  * @module dsh-zotero/tools/get
  */
 
@@ -32,7 +34,7 @@ const GET_PARAMETERS = {
     type: 'array',
     items: { type: 'string', enum: ['notes', 'annotations', 'attachments'] },
     description:
-      'Child content kinds to include. Omit for metadata only; any include adds one lazy /children request.',
+      'Child content kinds to include. Omit for metadata only. notes/attachments read the bare /children listing; annotations add /children?itemType=annotation (a bare listing never returns annotations).',
   },
   fields: {
     type: 'string',
@@ -255,7 +257,7 @@ export function registerGetTool(ctx: Context, service: ZoteroService): void {
       name: 'zotero_get',
       description: [
         'Read the metadata of one Zotero library item referenced by a zotero:// ref.',
-        'The default call fetches metadata only; request include to also return child notes, annotations, and attachments (one extra request covers all included kinds).',
+        'The default call fetches metadata only; request include to also return child notes, annotations, and attachments (direct children via /children; annotations via /children?itemType=annotation).',
         'When the item is a note, noteBody returns its own text (bounded by the configured budget; truncated flags the cut) — include governs child kinds only.',
         'Child notes carry parentRef, the parent item ref that produced them.',
         'Results echo the served instance in the ref, so refs can be reused safely.',

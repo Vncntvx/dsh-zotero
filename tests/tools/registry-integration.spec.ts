@@ -115,9 +115,14 @@ describe('registry integration: zotero_get schema + render', () => {
       },
     }
     mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) => helpers.json(parent))
-    mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) =>
-      helpers.json([child]),
-    )
+    // Annotations ride ?itemType=annotation; a bare children listing is empty.
+    mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers, search) => {
+      if (search.get('itemType') === 'annotation') {
+        helpers.json([child])
+        return
+      }
+      helpers.json([])
+    })
     const result = expectValue(
       await run('zotero_get', {
         ref: 'zotero://user/0/item/ABCD1234',

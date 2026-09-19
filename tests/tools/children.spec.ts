@@ -14,6 +14,7 @@ import {
   renderChildren,
 } from '../../src/tools/children.js'
 import { expectValue, type HostLane, setupHostLane } from '../helpers/lanes/host-lane.js'
+import { serveChildrenContract } from '../helpers/server/children-contract.js'
 import { annotationRow, attachment, noteRow } from '../helpers/server/objects.js'
 
 let lane: HostLane
@@ -43,12 +44,11 @@ describe('zotero_children tool', () => {
         { 'Zotero-Server-ID': 'S1' },
       ),
     )
-    mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) =>
-      helpers.json([noteRow(), attachment()]),
-    )
-    mock.route('GET', '/api/users/0/items/WXYZ6789/children', (req, res, helpers) =>
-      helpers.json([annotationRow()]),
-    )
+    serveChildrenContract(mock, '/api/users/0/items/ABCD1234/children', {
+      direct: [noteRow(), attachment()],
+      annotations: [annotationRow()],
+      headers: { 'Zotero-Server-ID': 'S1' },
+    })
     const result = expectValue(
       await runTool('zotero_children', {
         ref: 'zotero://user/0/item/ABCD1234',
@@ -81,9 +81,9 @@ describe('zotero_children tool', () => {
         data: { itemType: 'attachment', title: 'Full Text PDF', contentType: 'application/pdf' },
       }),
     )
-    mock.route('GET', '/api/users/0/items/WXYZ6789/children', (req, res, helpers) =>
-      helpers.json([annotationRow()]),
-    )
+    serveChildrenContract(mock, '/api/users/0/items/WXYZ6789/children', {
+      annotations: [annotationRow()],
+    })
     const result = expectValue(
       await runTool('zotero_children', { ref: 'zotero://user/0/attachment/WXYZ6789' }),
       'zotero_children',

@@ -180,7 +180,8 @@ export async function getAttachmentLocation(
 /**
  * Pick the attachment key an item ref resolves to: Zotero's own
  * `links.attachment` choice when present, otherwise the earliest PDF
- * child from a lazy `/children` fetch.
+ * child from a lazy bare `/children` fetch (notes/attachments only —
+ * annotations are not attachment candidates).
  * @throws {ZoteroError} `ZOTERO_NO_ATTACHMENT` when the item has none.
  */
 async function resolveAttachmentKey(

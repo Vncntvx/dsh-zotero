@@ -8,7 +8,7 @@ from, what an assertion is allowed to say, and what the guards will refuse.
 
 | Lane                 | Mirrors               | Holds                                                                                                                                                                                |
 | -------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `tests/unit/`        | `src/*.ts`            | pure modules: refs, normalize, search-text, evidence, attachments, item-graph, export mapping, presentation meta, config, errors, the recovery gate                                  |
+| `tests/unit/`        | `src/*.ts`            | pure modules: refs, normalize, search-text, evidence, attachments, export mapping, presentation meta, config, errors, the recovery gate                                              |
 | `tests/local/`       | `src/local/`          | the provider contract against the mocked Local API, one file per mechanism (search, the note scan, retrieve sources/ranking/notes/tolerance, browse, changes, get, export, identity) |
 | `tests/tools/`       | `src/tools/`          | one file per tool plus `validation`, `presentation`, `connectivity-ask`, `registry-integration`                                                                                      |
 | `tests/host/`        | the composition seams | lifecycle, composition, settings, remote, entry, provider gate, concurrency, doc examples, the HTTP client                                                                           |
@@ -37,7 +37,8 @@ a fixture that drifted from reality would still pass every gate.
 - `tests/helpers/server/serve.ts` — route installers. Absent field = canonical
   default; `null` = serve nothing there.
 - `tests/helpers/server/assert.ts` — `expectRequestPaths`,
-  `expectRequestPathsAnyOrder`, `expectRequestCount`,
+  `expectRequestPathsAnyOrder`, `expectRequestLines`,
+  `expectRequestLinesAnyOrder`, `expectRequestCount`,
   `expectHeaderOnEveryRequest`, `zoteroError`.
 - `tests/helpers/lanes/host-lane.ts` — the one boot for the tool and host
   specs.

@@ -79,10 +79,10 @@ export const ZOTERO_EXPORT_CONCURRENCY = 4
 export const ZOTERO_SEARCH_CONCURRENCY = 4
 
 /**
- * The bounded concurrency of the per-attachment `/children` requests the
- * item-graph walk issues when gathering annotations. A pool — not a bare
- * `Promise.all` — keeps the in-flight second-level requests small, so an
- * item with many attachments cannot storm the local server.
+ * The bounded concurrency of multi-attachment full-text reads in retrieve
+ * (`allIndexed` / `specified` policies). A pool — not a bare `Promise.all` —
+ * keeps the in-flight attachment requests small. Annotation children use the
+ * single `?itemType=annotation` listing instead of a per-attachment fan-out.
  */
 export const ZOTERO_GRAPH_CONCURRENCY = 4
 

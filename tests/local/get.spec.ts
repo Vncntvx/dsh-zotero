@@ -32,8 +32,9 @@ import {
 } from '../helpers/provider-harness.js'
 import {
   expectRequestCount,
+  expectRequestLines,
   expectRequestPaths,
-  requestPaths,
+  requestLines,
   zoteroError,
 } from '../helpers/server/assert.js'
 import {
@@ -54,7 +55,7 @@ import {
   paperItem,
   versionHeaders,
 } from '../helpers/server/objects.js'
-import { serveJson, serveText } from '../helpers/server/serve.js'
+import { serveItemGraph, serveJson, serveText } from '../helpers/server/serve.js'
 
 let mock: ProviderHarness['mock']
 let provider: LocalApiProvider
@@ -95,7 +96,7 @@ describe('getItem', () => {
   it('fetches only the parent when nothing is included', async () => {
     serveJson(mock, `${apiPath()}/items/${ITEM_KEY}`, PARENT_WITHOUT_COLLECTIONS, versionHeaders())
     const detail = await provider.getItem(getRequest())
-    expectRequestPaths(mock, ['/api/users/0/items/ABCD1234'])
+    expectRequestLines(mock, ['/api/users/0/items/ABCD1234'])
     expect(detail.ref).toBe('zotero://user/0/item/ABCD1234?server=S1')
     expect(detail.children.total).toBe(2)
     expect(detail.notes).toBeUndefined()
@@ -107,29 +108,21 @@ describe('getItem', () => {
   })
 
   it('fetches children lazily and resolves collection names once', async () => {
-    serveJson(mock, `${apiPath()}/items/${ITEM_KEY}`, PARENT, versionHeaders())
-    serveJson(
-      mock,
-      `${apiPath()}/items/${ITEM_KEY}/children`,
-      [noteRow(), attachment()],
-      versionHeaders(),
-    )
-    serveJson(
-      mock,
-      `${apiPath()}/items/${ATTACHMENT_KEY}/children`,
-      [annotationRow()],
-      versionHeaders(),
-    )
-    serveJson(mock, `${apiPath()}/collections`, [collectionRow()])
+    serveItemGraph(mock, {
+      parent: PARENT,
+      children: [noteRow(), attachment()],
+      annotations: [annotationRow()],
+      collections: [collectionRow()],
+    })
     const detail = await provider.getItem(getRequest(['notes', 'annotations', 'attachments']))
-    // The parent, its children, the attachment-level annotation walk, and one
-    // collections listing — the two independent arms may interleave.
-    const paths = requestPaths(mock)
-    expect(paths[0]).toBe('/api/users/0/items/ABCD1234')
-    expect(paths.slice(1).sort()).toEqual(
+    // Parent first; the two children contracts and the collections listing
+    // are independent once the parent has arrived.
+    const lines = requestLines(mock)
+    expect(lines[0]).toBe('/api/users/0/items/ABCD1234')
+    expect(lines.slice(1).sort()).toEqual(
       [
         '/api/users/0/items/ABCD1234/children',
-        '/api/users/0/items/WXYZ6789/children',
+        '/api/users/0/items/ABCD1234/children?itemType=annotation',
         '/api/users/0/collections',
       ].sort(),
     )
@@ -155,7 +148,7 @@ describe('getItem', () => {
   it('skips the collections listing for items without collections', async () => {
     serveJson(mock, `${apiPath()}/items/${ITEM_KEY}`, PARENT_WITHOUT_COLLECTIONS)
     await provider.getItem(getRequest())
-    expectRequestPaths(mock, ['/api/users/0/items/ABCD1234'])
+    expectRequestLines(mock, ['/api/users/0/items/ABCD1234'])
   })
 
   it('leaves collection names off when the listing lacks them', async () => {
@@ -184,23 +177,22 @@ describe('getItem', () => {
         data: {
           annotationText: `a ${i}`,
           annotationSortIndex: String(i).padStart(5, '0'),
-          parentItem: 'ATTA0001',
+          parentItem: ATTACHMENT_KEY,
         },
       }),
     )
-    serveJson(mock, `${apiPath()}/items/${ITEM_KEY}`, PARENT_WITHOUT_COLLECTIONS, versionHeaders())
-    serveJson(
-      mock,
-      `${apiPath()}/items/${ITEM_KEY}/children`,
-      [...notes, attachment({ key: 'ATTA0001' })],
-      versionHeaders(),
-    )
-    serveJson(mock, `${apiPath()}/items/ATTA0001/children`, annotations, versionHeaders())
+    serveItemGraph(mock, {
+      parent: PARENT_WITHOUT_COLLECTIONS,
+      children: [...notes, attachment()],
+      annotations,
+      collections: null,
+      attachmentItem: null,
+    })
     const capped = makeProvider({ maxNoteRecords: 2, maxAnnotationRecords: 1, maxNoteChars: 5 })
     const detail = await capped.getItem(getRequest(['notes', 'annotations']))
     expect(detail.notes).toMatchObject({ total: 7, returned: 2 })
     expect(detail.notes!.items[0]).toMatchObject({ text: 'note ', truncated: true })
-    // The merged cross-attachment corpus is capped as one collection.
+    // The merged annotation corpus is capped as one collection.
     expect(detail.annotations).toMatchObject({ total: 3, returned: 1 })
   })
 

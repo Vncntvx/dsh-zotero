@@ -1,14 +1,17 @@
 /**
  * The `zotero_get` and `zotero_children` domain: one item's detail with its
- * lazily loaded child rows, and the child-object graph exploration. Child
- * rows are shared with retrieve, which merges attachment-nested annotations
- * through the same {@link loadChildRows} walk.
+ * lazily loaded child rows, and child-object exploration. Child rows are
+ * shared with retrieve.
+ *
+ * Child objects ride two distinct Local API wire contracts
+ * ({@link ./children-wire.ts}): a bare `/children` listing is notes and
+ * attachments only; annotations appear solely under
+ * `/children?itemType=annotation`. Callers name which halves they need.
  * @module dsh-zotero/local/detail
  */
 
 import type { ZoteroHttpClient } from '../http-client.js'
-import { loadItemGraph } from '../item-graph.js'
-import { ZOTERO_GRAPH_CONCURRENCY, ZOTERO_SERVER_ID_HEADER } from '../constants.js'
+import { ZOTERO_SERVER_ID_HEADER } from '../constants.js'
 import { asRecord, asString } from '../json.js'
 import { ZOTERO_INVALID_ARGUMENT, ZoteroError } from '../errors.js'
 import type { NormalizeContext } from '../normalize.js'
@@ -23,6 +26,7 @@ import {
 import { formatRef, libraryPrefix, refForLibrary, requireSupportedLocalRef } from '../refs.js'
 import type { ScopeDirectory } from './scope-directory.js'
 import type { LocalApiLimits } from './limits.js'
+import { fetchAnnotationChildren, fetchDirectChildren } from './children-wire.js'
 import type {
   SupportedLocalLibrary,
   ZoteroChildrenRequest,
@@ -34,6 +38,14 @@ import type {
 } from '../types.js'
 
 const INCLUDE_ORDER: readonly ZoteroInclude[] = ['notes', 'annotations', 'attachments']
+
+/** Which child-object halves a read must fetch. */
+export interface ChildRowNeeds {
+  /** Bare `/children` — notes and attachments. */
+  readonly direct: boolean
+  /** `/children?itemType=annotation` — annotations under this key. */
+  readonly annotations: boolean
+}
 
 /**
  * The model-facing message for an attachment ref whose target is another item
@@ -47,12 +59,11 @@ export function attachmentTargetKindMessage(itemType: string): string {
  * Fetch one item's full detail. The parent is always fetched once; child
  * rows are fetched lazily only when the caller asked to include
  * notes/annotations/attachments — the Local API ignores `?include=` on
- * single-item responses, so children come from the dedicated `/children`
- * endpoint. Annotations live one level deeper (under each attachment), so
- * an annotations include additionally walks every attachment's own
- * `/children` under the bounded graph pool. Collection names resolve from
- * a cached full listing (one listing request per provider instance) only
- * when the item belongs to collections.
+ * single-item responses. Direct children (notes/attachments) come from the
+ * bare `/children` endpoint; annotations additionally require the
+ * `?itemType=annotation` listing under the same key. Collection names
+ * resolve from a cached full listing only when the item belongs to
+ * collections.
  */
 export async function getItem(
   deps: { client: ZoteroHttpClient; limits: LocalApiLimits },
@@ -74,14 +85,12 @@ export async function getItem(
   // throttling, so both ride the same await.
   const [children, collectionNames] = await Promise.all([
     includes.length > 0
-      ? loadChildRows(
-          deps,
-          ref.key,
-          ref.library as SupportedLocalLibrary,
-          serverId,
-          signal,
-          request.include.has('annotations'),
-        )
+      ? loadChildRows(deps, ref.key, ref.library as SupportedLocalLibrary, serverId, signal, {
+          // Detail always materializes notes/attachments/annotations from
+          // their own contracts once any include was requested.
+          direct: true,
+          annotations: request.include.has('annotations'),
+        })
       : undefined,
     keys.length > 0
       ? directory.collectionNamesFor(keys, ref.library as SupportedLocalLibrary, serverId, signal)
@@ -105,12 +114,12 @@ export async function getItem(
 }
 
 /**
- * Explore one item's or attachment's child-object graph. An item ref
- * yields its direct notes and attachments plus, when requested, every
- * attachment's annotations as one merged corpus; an attachment ref yields
- * its own annotations. The target row is always fetched first so the
- * whole result pins to one Server-ID and a non-attachment target of an
- * attachment ref fails with a typed error.
+ * Explore one item's or attachment's child-object graph. An item ref yields
+ * the requested direct notes/attachments and, when asked, annotations under
+ * the item (one filtered children listing); an attachment ref yields that
+ * file's annotations. The target row is always fetched first so the whole
+ * result pins to one Server-ID and a non-attachment target of an attachment
+ * ref fails with a typed error.
  */
 export async function children(
   deps: { client: ZoteroHttpClient; limits: LocalApiLimits },
@@ -130,8 +139,6 @@ export async function children(
   const itemType = asString(data?.itemType) ?? ''
   if (ref.kind === 'attachment' && itemType !== 'attachment') {
     throw new ZoteroError(
-      // The no-item-type arm stays inline: no spec asserts it, and naming it
-      // would put an uncovered function on this file's coverage floor.
       itemType === ''
         ? `The referenced object ${ref.key} could not be confirmed as an attachment.`
         : attachmentTargetKindMessage(itemType),
@@ -139,8 +146,16 @@ export async function children(
     )
   }
   if (ref.kind === 'attachment') {
-    // An attachment's own children are exactly its annotations.
-    const rows = await fetchChildRows(deps, ref.key, library, serverId, signal)
+    // An attachment's own child objects are its annotations, served only
+    // under the annotation-filtered listing.
+    if (!request.include.has('annotations')) {
+      return {
+        ref: formatRef(refForLibrary(library, 'attachment', ref.key, serverId)),
+        ...(itemType !== '' ? { itemType } : {}),
+        ...(ctx.serverId !== undefined ? { serverId: ctx.serverId } : {}),
+      }
+    }
+    const rows = await fetchAnnotationChildren(deps, ref.key, library, serverId, signal)
     const partitioned = partitionChildren(
       rows,
       ctx,
@@ -150,23 +165,17 @@ export async function children(
     return {
       ref: formatRef(refForLibrary(library, 'attachment', ref.key, serverId)),
       ...(itemType !== '' ? { itemType } : {}),
-      ...(request.include.has('annotations')
-        ? {
-            annotations: childCollection(partitioned.annotations, deps.limits.maxAnnotationRecords),
-          }
-        : {}),
+      annotations: childCollection(partitioned.annotations, deps.limits.maxAnnotationRecords),
       ...(ctx.serverId !== undefined ? { serverId: ctx.serverId } : {}),
     }
   }
+  const wantsDirect = request.include.has('notes') || request.include.has('attachments')
+  const wantsAnnotations = request.include.has('annotations')
   const graphRows = (
-    await loadChildRows(
-      deps,
-      ref.key,
-      library,
-      serverId,
-      signal,
-      request.include.has('annotations'),
-    )
+    await loadChildRows(deps, ref.key, library, serverId, signal, {
+      direct: wantsDirect,
+      annotations: wantsAnnotations,
+    })
   ).rows
   const kinds = new Set<ZoteroChildKind>()
   if (request.include.has('notes')) kinds.add('note')
@@ -198,11 +207,10 @@ export async function children(
 }
 
 /**
- * One item's child rows for get/retrieve. Without annotations this is the
- * single `/children` response; with them the walk descends into each
- * attachment and merges those annotation rows into one partition input.
- * The direct row count rides along so the detail's `children.total` stays
- * honest after the merge.
+ * One key's child rows for get/retrieve/children. Each half of the request
+ * rides its own wire contract; both may run in parallel. The direct row
+ * count rides along so a detail's `children.total` stays honest after
+ * annotation rows are merged in.
  */
 export async function loadChildRows(
   deps: { client: ZoteroHttpClient },
@@ -210,37 +218,18 @@ export async function loadChildRows(
   library: SupportedLocalLibrary,
   serverId: string | undefined,
   signal: AbortSignal | undefined,
-  withAnnotations: boolean,
+  needs: ChildRowNeeds,
 ): Promise<{ readonly rows: readonly unknown[]; readonly directCount: number }> {
-  const graph = await loadItemGraph({
-    parentKey: key,
-    fetchChildren: (childKey) => fetchChildRows(deps, childKey, library, serverId, signal),
-    concurrency: ZOTERO_GRAPH_CONCURRENCY,
-    withAnnotations,
-  })
-  const merged =
-    withAnnotations && graph.attachmentAnnotations.length > 0
-      ? [...graph.childRows, ...graph.attachmentAnnotations]
-      : graph.childRows
-  return { rows: merged, directCount: graph.childRows.length }
-}
-
-/** Fetch one item's child rows; undefined when the caller asked for none. */
-async function fetchChildRows(
-  deps: { client: ZoteroHttpClient },
-  key: string,
-  library: SupportedLocalLibrary,
-  serverId: string | undefined,
-  signal: AbortSignal | undefined,
-): Promise<readonly unknown[]> {
-  const prefix = libraryPrefix(library)
-  const children = await deps.client.getJson<unknown>(
-    `${prefix}/items/${key}/children`,
-    undefined,
-    {
-      signal,
-      serverId,
-    },
-  )
-  return Array.isArray(children.json) ? children.json : []
+  const [direct, annotations] = await Promise.all([
+    needs.direct
+      ? fetchDirectChildren(deps, key, library, serverId, signal)
+      : Promise.resolve([] as readonly unknown[]),
+    needs.annotations
+      ? fetchAnnotationChildren(deps, key, library, serverId, signal)
+      : Promise.resolve([] as readonly unknown[]),
+  ])
+  return {
+    rows: annotations.length > 0 ? [...direct, ...annotations] : direct,
+    directCount: direct.length,
+  }
 }

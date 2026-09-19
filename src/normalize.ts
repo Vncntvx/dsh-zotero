@@ -703,8 +703,8 @@ function childrenTotal(
 ): number {
   const numChildren = asInteger(meta?.numChildren)
   if (numChildren !== undefined && numChildren >= 0) return numChildren
-  // The merged array inflates the row count by the attachment-nested
-  // annotations, so prefer the caller's direct count when it rode along.
+  // The merged array inflates the row count by annotation rows from the
+  // filtered listing, so prefer the caller's direct count when it rode along.
   if (directChildCount !== undefined) return directChildCount
   return childrenRows?.length ?? 0
 }

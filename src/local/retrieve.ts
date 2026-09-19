@@ -150,14 +150,12 @@ export async function retrieve(
   let childrenRows: readonly unknown[] = []
   if (fetchChildren) {
     childrenRows = (
-      await loadChildRows(
-        deps,
-        ref.key,
-        ref.library as SupportedLocalLibrary,
-        serverId,
-        signal,
-        wantsAnnotations,
-      )
+      await loadChildRows(deps, ref.key, ref.library as SupportedLocalLibrary, serverId, signal, {
+        // Full-text fallback and note sources still read the bare listing;
+        // annotations ride their own filtered contract.
+        direct: true,
+        annotations: wantsAnnotations,
+      })
     ).rows
   }
 

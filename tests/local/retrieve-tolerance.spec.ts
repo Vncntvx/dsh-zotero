@@ -282,7 +282,7 @@ describe('retrieve tolerances', () => {
     serveItemGraph(mock, {
       parent: RETRIEVE_PARENT,
       children: RETRIEVE_CHILDREN,
-      attachmentChildren: RETRIEVE_ATTACHMENT_CHILDREN,
+      annotations: RETRIEVE_ATTACHMENT_CHILDREN,
       serverId: null,
     })
     serveFulltext(mock, ATTACHMENT_KEY, FULLTEXT_PAYLOAD)

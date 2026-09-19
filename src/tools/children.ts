@@ -1,10 +1,10 @@
 /**
  * The `zotero_children` tool: explore the Zotero object graph. An item ref
- * yields its direct notes and attachments plus every attachment's
- * annotations as one merged corpus; an attachment ref yields its own
- * annotations. This is the graph-exploration counterpart to `zotero_get`
- * (one object's detail) — use it when the model needs to walk structure
- * rather than read metadata.
+ * yields direct notes/attachments from bare `/children` plus, when
+ * requested, annotations under the item via `/children?itemType=annotation`;
+ * an attachment ref yields its own annotations through that filtered
+ * listing. Counterpart to `zotero_get` (one object's detail) — use it when
+ * the model needs to walk structure rather than read metadata.
  * @module dsh-zotero/tools/children
  */
 
@@ -36,7 +36,7 @@ const CHILDREN_PARAMETERS = {
     type: 'array',
     items: { type: 'string', enum: ['notes', 'attachments', 'annotations'] },
     description:
-      'Child kinds to return; omitted returns all three. Item refs yield notes+attachments+annotations (annotations gathered from each attachment); attachment refs yield their annotations.',
+      'Child kinds to return; omitted returns all three. Direct notes/attachments come from bare /children; annotations from /children?itemType=annotation (Zotero stores them under PDF attachments, and a bare listing never returns them). Attachment refs yield their annotations via that filtered read.',
   },
 } as const
 
@@ -198,8 +198,8 @@ export function registerChildrenTool(ctx: Context, service: ZoteroService): void
       name: 'zotero_children',
       description: [
         'Explore the child-object graph of one Zotero item or attachment.',
-        'An item ref returns its direct notes and attachments plus the annotations that live under each attachment (Zotero stores annotations as children of the PDF, not of the paper).',
-        "An attachment ref returns that file's own annotations.",
+        'An item ref returns direct notes and attachments from bare /children, plus annotations under the item via /children?itemType=annotation when requested (Zotero stores annotations as children of the PDF, not of the paper; a bare listing never returns them).',
+        "An attachment ref returns that file's own annotations through the same filtered listing.",
         "Use it to enumerate structure before reading; zotero_get remains the tool for one object's full metadata.",
       ].join(' '),
       parameters: CHILDREN_PARAMETERS,

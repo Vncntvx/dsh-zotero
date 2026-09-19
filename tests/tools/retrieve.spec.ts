@@ -24,6 +24,7 @@ import {
 } from '../../src/tools/retrieve.js'
 import { intRangeArgumentMessage } from '../../src/tools/validate.js'
 import { expectValue, type HostLane, setupHostLane } from '../helpers/lanes/host-lane.js'
+import { serveChildrenContract } from '../helpers/server/children-contract.js'
 import { searchHit } from '../helpers/server/objects.js'
 
 let lane: HostLane
@@ -96,12 +97,10 @@ describe('zotero_retrieve tool', () => {
     mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) =>
       helpers.json(RETRIEVE_PARENT, { 'Zotero-Server-ID': 'S1' }),
     )
-    mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) =>
-      helpers.json(RETRIEVE_CHILDREN),
-    )
-    mock.route('GET', '/api/users/0/items/WXYZ6789/children', (req, res, helpers) =>
-      helpers.json(RETRIEVE_ATTACHMENT_CHILDREN),
-    )
+    serveChildrenContract(mock, '/api/users/0/items/ABCD1234/children', {
+      direct: RETRIEVE_CHILDREN,
+      annotations: RETRIEVE_ATTACHMENT_CHILDREN,
+    })
     mock.route('GET', '/api/users/0/items/WXYZ6789/fulltext', (req, res, helpers) =>
       helpers.json({
         content: 'Flash attention is fast. Attention is all you need.',

@@ -17,7 +17,12 @@ import {
   teardownProvider,
   type ProviderHarness,
 } from '../helpers/provider-harness.js'
-import { expectRequestCount, expectRequestPaths, zoteroError } from '../helpers/server/assert.js'
+import {
+  expectRequestCount,
+  expectRequestLines,
+  expectRequestPaths,
+  zoteroError,
+} from '../helpers/server/assert.js'
 import { ITEM_KEY, NOTE_KEY, apiPath, attachmentRef, refOf } from '../helpers/server/keys.js'
 import {
   annotationRow,
@@ -54,7 +59,7 @@ describe('retrieve source selection', () => {
   it('fetches lazily per source: abstract-only evidence needs just the parent', async () => {
     serveJson(mock, `${apiPath()}/items/${ITEM_KEY}`, RETRIEVE_PARENT)
     const result = await provider.retrieve(retrieveRequest({ sources: ['abstract'], passages: 1 }))
-    expectRequestPaths(mock, ['/api/users/0/items/ABCD1234'])
+    expectRequestLines(mock, ['/api/users/0/items/ABCD1234'])
     expect(result.evidence.map((entry) => entry.source)).toEqual(['abstract'])
     expect(result.attachmentRef).toBeUndefined()
   })
@@ -63,13 +68,13 @@ describe('retrieve source selection', () => {
     serveItemGraph(mock, {
       parent: RETRIEVE_PARENT,
       children: RETRIEVE_CHILDREN,
-      attachmentChildren: RETRIEVE_ATTACHMENT_CHILDREN,
+      annotations: RETRIEVE_ATTACHMENT_CHILDREN,
       serverId: null,
     })
     const result = await provider.retrieve(
       retrieveRequest({ sources: ['note'], passages: 2, query: 'tiling' }),
     )
-    expectRequestPaths(mock, [
+    expectRequestLines(mock, [
       '/api/users/0/items/ABCD1234',
       '/api/users/0/items/ABCD1234/children',
     ])
@@ -77,10 +82,14 @@ describe('retrieve source selection', () => {
   })
 
   it('carries the parent attachment ref on annotation evidence', async () => {
+    // Annotations ride ?itemType=annotation — never the bare children listing.
     serveItemGraph(mock, {
       parent: RETRIEVE_PARENT,
-      children: [annotationRow({ data: { annotationText: 'parented' } })],
-      attachmentChildren: null,
+      children: [attachment({ data: { parentItem: ITEM_KEY } })],
+      annotations: [
+        annotationRow({ data: { annotationText: 'parented', parentItem: 'WXYZ6789' } }),
+      ],
+      serverId: 'S1',
     })
     const result = await provider.retrieve(
       retrieveRequest({ sources: ['annotation'], query: 'parented', passages: 1 }),
@@ -133,7 +142,7 @@ describe('retrieve source selection', () => {
     serveItemGraph(mock, {
       parent: RETRIEVE_PARENT,
       children: [...RETRIEVE_CHILDREN, secondPdf],
-      attachmentChildren: null,
+      annotations: null,
     })
     serveFulltext(mock, 'WXYZ6789', {
       content: 'publisher copy mentions tiling',
@@ -198,6 +207,8 @@ describe('retrieve source selection', () => {
     serveItemGraph(mock, {
       parent: item({ meta: { numChildren: 3 }, data: { abstractNote: undefined } }),
       children: [noteRow({ data: { note: 'queries' } })],
+      // No annotations under the filtered listing; bare children only has a note.
+      annotations: [],
       serverId: null,
     })
     const result = await provider.retrieve(

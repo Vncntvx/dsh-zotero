@@ -20,6 +20,36 @@ export function requestPaths(mock: MockZotero): string[] {
 }
 
 /**
+ * Every request as `pathname` plus its query string when present. Child-object
+ * specs distinguish the bare `/children` listing from
+ * `/children?itemType=annotation`, which pathname-only assertions cannot.
+ */
+export function requestLines(mock: MockZotero): string[] {
+  return mock.requests.map((entry) => {
+    const query = entry.search.toString()
+    return query === '' ? entry.pathname : `${entry.pathname}?${query}`
+  })
+}
+
+/**
+ * Assert the requests arrived at exactly these path+query lines, in order.
+ * @param mock - the server that recorded the requests.
+ * @param expected - the request lines, in order.
+ */
+export function expectRequestLines(mock: MockZotero, expected: readonly string[]): void {
+  expect(requestLines(mock)).toEqual([...expected])
+}
+
+/**
+ * Assert the requests are exactly this set of path+query lines, ignoring order.
+ * Use where the domain fans out independent halves (direct children and the
+ * annotation listing) and the API makes no arrival-order promise.
+ */
+export function expectRequestLinesAnyOrder(mock: MockZotero, expected: readonly string[]): void {
+  expect([...requestLines(mock)].sort()).toEqual([...expected].sort())
+}
+
+/**
  * Assert the requests arrived at exactly these paths, in this order. Use it
  * where the order is part of the contract — a lazy read that must not fetch
  * children before the parent.

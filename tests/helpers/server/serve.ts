@@ -83,16 +83,27 @@ export function serveStatus(
   )
 }
 
-/** Which parts of the item graph a test wants served. `null` leaves that route unregistered. */
+/**
+ * Which parts of the item graph a test wants served. `null` leaves that route
+ * unregistered. Handlers encode the real Local API partition: a bare
+ * `/children` listing never carries annotation rows; annotations appear only
+ * under `?itemType=annotation`.
+ */
 export interface ItemGraphSpec {
   /** The item itself; defaults to the canonical paper. */
   readonly parent?: WireObject
-  /** The attachment read as an item in its own right, which the graph walk needs; defaults to the canonical PDF. */
+  /** The attachment read as an item in its own right, when the walk needs it; defaults to the canonical PDF. */
   readonly attachmentItem?: WireObject | null
-  /** Its direct children — notes and attachments; defaults to one of each. */
+  /** DIRECT children — notes and attachments only; defaults to one of each. Never annotations. */
   readonly children?: readonly WireObject[] | null
-  /** The annotations under the canonical attachment; defaults to one. */
-  readonly attachmentChildren?: readonly WireObject[] | null
+  /** Annotations served only under `?itemType=annotation`; defaults to one. */
+  readonly annotations?: readonly WireObject[] | null
+  /**
+   * Annotations returned for the **parent** key under the filter. Defaults to
+   * `annotations` — the Local API expands a bibliographic item's filtered
+   * listing to annotations under its attachments.
+   */
+  readonly parentAnnotations?: readonly WireObject[] | null
   /** The collections listing that resolves `data.collections` names; defaults to the canonical collection. */
   readonly collections?: readonly WireObject[] | null
   /** The instance the answers claim; `null` omits the header, for the builds that report none. */
@@ -103,8 +114,8 @@ export interface ItemGraphSpec {
 
 /**
  * The key of the attachment one parent points at. Zotero's item read carries
- * the attachment as a link, and the annotations live under whatever that link
- * names, so the graph follows the link rather than assuming the canonical PDF.
+ * the attachment as a link, and filtered annotation listings hang off that
+ * key, so the graph follows the link rather than assuming the canonical PDF.
  * @param parent - the parent whose attachment link to read.
  * @returns the attachment key.
  */
@@ -115,11 +126,12 @@ function pdfKeyOf(parent: WireObject): string {
 }
 
 /**
- * Serve one item and its child graph the way Zotero partitions it: the item,
- * the notes and attachments directly under it, the annotations under its PDF
- * attachment, and the collections listing that turns collection keys into
- * names. Each route is registered separately, so a test that omits a route
- * gets the 404 the unregistered endpoint would really answer.
+ * Serve one item and its child-object contracts the way Zotero partitions
+ * them: the item; notes/attachments on a bare `/children` listing; and
+ * annotations only under `?itemType=annotation` for the parent key and for
+ * the attachment key. A bare listing of the attachment stays unregistered,
+ * so a regression that requests it fails the spec instead of silently
+ * receiving mock annotations.
  * @param mock - the server to register on.
  * @param spec - which parts to serve and under which instance.
  */
@@ -127,14 +139,15 @@ export function serveItemGraph(mock: MockZotero, spec: ItemGraphSpec = {}): void
   const library = spec.library ?? PERSONAL_LIBRARY
   const prefix = apiPath(library)
   const parent = spec.parent ?? paperItem()
-  // One key drives both attachment routes: the item read and the annotation
-  // walk must agree on which PDF the graph is about.
+  // One key drives both annotation routes: the item read and the filtered
+  // listing must agree on which PDF the graph is about.
   const pdfKey = spec.attachmentItem?.key ?? pdfKeyOf(parent)
   const attachmentItem =
     spec.attachmentItem === undefined ? attachment({ key: pdfKey }) : spec.attachmentItem
   const children = spec.children === undefined ? [noteRow(), attachment()] : spec.children
-  const attachmentChildren =
-    spec.attachmentChildren === undefined ? [annotationRow()] : spec.attachmentChildren
+  const annotations = spec.annotations === undefined ? [annotationRow()] : spec.annotations
+  const parentAnnotations =
+    spec.parentAnnotations === undefined ? annotations : spec.parentAnnotations
   const collections = spec.collections === undefined ? [collectionRow()] : spec.collections
   const headers = spec.serverId === null ? {} : versionHeaders(spec.serverId ?? SERVER_ID)
 
@@ -142,11 +155,26 @@ export function serveItemGraph(mock: MockZotero, spec: ItemGraphSpec = {}): void
   if (attachmentItem !== null) {
     serveJson(mock, `${prefix}/items/${pdfKey}`, attachmentItem, headers)
   }
-  if (children !== null) {
-    serveJson(mock, `${prefix}/items/${parent.key}/children`, children, headers)
+  if (children !== null || parentAnnotations !== null) {
+    // One handler per children path: the contract is the query, not the route.
+    mock.route('GET', `${prefix}/items/${parent.key}/children`, (req, res, helpers, search) => {
+      if (search.get('itemType') === 'annotation') {
+        helpers.json(parentAnnotations ?? [], headers)
+        return
+      }
+      helpers.json(children ?? [], headers)
+    })
   }
-  if (attachmentChildren !== null) {
-    serveJson(mock, `${prefix}/items/${pdfKey}/children`, attachmentChildren, headers)
+  if (annotations !== null) {
+    mock.route('GET', `${prefix}/items/${pdfKey}/children`, (req, res, helpers, search) => {
+      if (search.get('itemType') === 'annotation') {
+        helpers.json(annotations, headers)
+        return
+      }
+      // Bare attachment children are not part of the contract; 404 so a
+      // production regression cannot silently read mock annotations.
+      helpers.raw(404, { 'Content-Type': 'text/plain' }, 'Not found')
+    })
   }
   if (collections !== null) {
     serveJson(mock, `${prefix}/collections`, collections, headers)

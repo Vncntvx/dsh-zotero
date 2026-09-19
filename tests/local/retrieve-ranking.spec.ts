@@ -17,7 +17,7 @@ import {
   teardownProvider,
   type ProviderHarness,
 } from '../helpers/provider-harness.js'
-import { requestPaths } from '../helpers/server/assert.js'
+import { requestLines } from '../helpers/server/assert.js'
 import { ATTACHMENT_KEY, ITEM_KEY, apiPath } from '../helpers/server/keys.js'
 import { annotationRow, attachment } from '../helpers/server/objects.js'
 import { serveFulltext, serveJson, serveItemGraph } from '../helpers/server/serve.js'
@@ -52,7 +52,7 @@ function routeGraph(): void {
   serveItemGraph(mock, {
     parent: RETRIEVE_PARENT,
     children: RETRIEVE_CHILDREN,
-    attachmentChildren: RETRIEVE_ATTACHMENT_CHILDREN,
+    annotations: RETRIEVE_ATTACHMENT_CHILDREN,
     serverId: null,
   })
   serveFulltext(mock, ATTACHMENT_KEY, FULLTEXT_PAYLOAD)
@@ -63,17 +63,17 @@ describe('retrieve ranking', () => {
     serveItemGraph(mock, {
       parent: RETRIEVE_PARENT,
       children: RETRIEVE_CHILDREN,
-      attachmentChildren: RETRIEVE_ATTACHMENT_CHILDREN,
+      annotations: RETRIEVE_ATTACHMENT_CHILDREN,
     })
     serveFulltext(mock, ATTACHMENT_KEY, FULLTEXT_PAYLOAD)
     const result = await provider.retrieve(retrieveRequest())
-    // The parent gates everything; children and the linked fulltext then ride
-    // the same await and may arrive in either order.
-    const paths = requestPaths(mock)
-    expect(paths[0]).toBe('/api/users/0/items/ABCD1234')
-    expect(paths.slice(1).sort()).toEqual([
+    // The parent gates everything; the two children contracts and the linked
+    // fulltext then ride the same await and may arrive in either order.
+    const lines = requestLines(mock)
+    expect(lines[0]).toBe('/api/users/0/items/ABCD1234')
+    expect(lines.slice(1).sort()).toEqual([
       '/api/users/0/items/ABCD1234/children',
-      '/api/users/0/items/WXYZ6789/children',
+      '/api/users/0/items/ABCD1234/children?itemType=annotation',
       '/api/users/0/items/WXYZ6789/fulltext',
     ])
     expect(result.ref).toBe('zotero://user/0/item/ABCD1234?server=S1')
@@ -110,17 +110,18 @@ describe('retrieve ranking', () => {
   it('ranks an annotation on its reader comment and names the comment as the match', async () => {
     serveItemGraph(mock, {
       parent: RETRIEVE_PARENT,
-      children: [
+      children: [attachment()],
+      annotations: [
         annotationRow({
           key: 'ANNO2222',
           data: {
             annotationType: 'note',
             annotationText: '',
             annotationComment: 'the sampling method looks biased to me',
+            parentItem: ATTACHMENT_KEY,
           },
         }),
       ],
-      attachmentChildren: null,
       serverId: null,
     })
     const result = await provider.retrieve(
@@ -138,16 +139,17 @@ describe('retrieve ranking', () => {
   it('names both fields when the quote and the comment carry the terms', async () => {
     serveItemGraph(mock, {
       parent: RETRIEVE_PARENT,
-      children: [
+      children: [attachment()],
+      annotations: [
         annotationRow({
           key: 'ANNO3333',
           data: {
             annotationText: 'the sampling strategy',
             annotationComment: 'sampling here is biased',
+            parentItem: ATTACHMENT_KEY,
           },
         }),
       ],
-      attachmentChildren: null,
       serverId: null,
     })
     const result = await provider.retrieve(
@@ -217,7 +219,8 @@ describe('retrieve ranking', () => {
     const narrow = makeProvider({ maxEvidenceChars: 20 })
     serveItemGraph(mock, {
       parent: RETRIEVE_PARENT,
-      children: [
+      children: [attachment()],
+      annotations: [
         annotationRow({
           key: 'ANNO4444',
           data: {
@@ -225,10 +228,10 @@ describe('retrieve ranking', () => {
             // 12 characters of text plus this comment exceed the 20-character
             // budget; charging only the text would have let the comment in.
             annotationComment: 'a comment far longer than the budget allows',
+            parentItem: ATTACHMENT_KEY,
           },
         }),
       ],
-      attachmentChildren: null,
       serverId: null,
     })
     const result = await narrow.retrieve(
@@ -272,7 +275,7 @@ describe('retrieve ranking', () => {
     serveItemGraph(mock, {
       parent: RETRIEVE_PARENT_WITHOUT_ATTACHMENT,
       children: [...RETRIEVE_CHILDREN, secondPdf],
-      attachmentChildren: null,
+      annotations: null,
       serverId: null,
     })
     serveJson(mock, /^\/api\/users\/0\/items\/(SECD0001|WXYZ6789)\/fulltext$/, {

@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { expectedKindRefMessage, invalidRefMessage } from '../../src/refs.js'
 import { renderGet } from '../../src/tools/get.js'
 import { expectValue, type HostLane, setupHostLane } from '../helpers/lanes/host-lane.js'
+import { serveChildrenContract } from '../helpers/server/children-contract.js'
 import { annotationRow, attachment, collectionRow, noteRow } from '../helpers/server/objects.js'
 
 let lane: HostLane
@@ -142,12 +143,10 @@ describe('zotero_get tool', () => {
     mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) =>
       helpers.json(GET_PARENT, { 'Zotero-Server-ID': 'S1' }),
     )
-    mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) =>
-      helpers.json([noteRow(), attachment()]),
-    )
-    mock.route('GET', '/api/users/0/items/WXYZ6789/children', (req, res, helpers) =>
-      helpers.json([annotationRow()]),
-    )
+    serveChildrenContract(mock, '/api/users/0/items/ABCD1234/children', {
+      direct: [noteRow(), attachment()],
+      annotations: [annotationRow()],
+    })
     mock.route('GET', '/api/users/0/collections', (req, res, helpers) =>
       helpers.json([collectionRow()]),
     )
@@ -158,14 +157,17 @@ describe('zotero_get tool', () => {
       }),
       'zotero_get',
     )
-    // The parent, its children, the attachment-level annotation walk, and one
-    // collections listing — the two independent arms may interleave.
-    const paths = mock.requests.map((request) => request.pathname)
-    expect(paths[0]).toBe('/api/users/0/items/ABCD1234')
-    expect(paths.slice(1).sort()).toEqual(
+    // Parent first; the two children contracts and the collections listing
+    // are independent once the parent has arrived.
+    const lines = mock.requests.map((request) => {
+      const query = request.search.toString()
+      return query === '' ? request.pathname : `${request.pathname}?${query}`
+    })
+    expect(lines[0]).toBe('/api/users/0/items/ABCD1234')
+    expect(lines.slice(1).sort()).toEqual(
       [
         '/api/users/0/items/ABCD1234/children',
-        '/api/users/0/items/WXYZ6789/children',
+        '/api/users/0/items/ABCD1234/children?itemType=annotation',
         '/api/users/0/collections',
       ].sort(),
     )

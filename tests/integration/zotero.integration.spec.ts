@@ -331,6 +331,69 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', 
     }
   })
 
+  it('returns live annotations through /children?itemType=annotation', async () => {
+    // Seed one real annotation from the library listing, then prove the
+    // plugin surfaces that same row through both children contracts.
+    const seed = new ZoteroHttpClient({
+      baseUrl: BASE_URL,
+      timeoutMs: 10_000,
+      maxResponseBytes: 8 * 1024 * 1024,
+    })
+    const listing = await seed.getJson<unknown[]>(
+      'users/0/items',
+      new URLSearchParams({ itemType: 'annotation', limit: '1' }),
+    )
+    const rows = Array.isArray(listing.json) ? listing.json : []
+    if (rows.length === 0) {
+      console.log('[integration] library has no annotations; annotation contract pin skipped')
+      return
+    }
+    const annotationRow = rows[0] as {
+      key?: string
+      data?: { parentItem?: string; annotationText?: string; annotationComment?: string }
+    }
+    const annotationKey = annotationRow.key
+    const attachmentKey = annotationRow.data?.parentItem
+    expect(annotationKey).toBeTruthy()
+    expect(attachmentKey).toBeTruthy()
+    const attachment = await seed.getJson<{ data?: { parentItem?: string; itemType?: string } }>(
+      `users/0/items/${attachmentKey}`,
+    )
+    expect(attachment.json?.data?.itemType).toBe('attachment')
+    const itemKey = attachment.json?.data?.parentItem
+    expect(itemKey).toBeTruthy()
+
+    const itemGraph = await provider.children({
+      ref: parseRef(`zotero://user/0/item/${itemKey}`),
+      include: new Set(['annotations']),
+    })
+    const itemRefs = (itemGraph.annotations?.items ?? []).map((entry) => entry.ref)
+    expect(itemRefs.some((ref) => ref.includes(annotationKey!))).toBe(true)
+
+    const attachmentGraph = await provider.children({
+      ref: parseRef(`zotero://user/0/attachment/${attachmentKey}`),
+      include: new Set(['annotations']),
+    })
+    const attachmentRefs = (attachmentGraph.annotations?.items ?? []).map((entry) => entry.ref)
+    expect(attachmentRefs.some((ref) => ref.includes(annotationKey!))).toBe(true)
+
+    const query =
+      annotationRow.data?.annotationText ||
+      annotationRow.data?.annotationComment ||
+      annotationRow.data?.annotationText?.slice(0, 20) ||
+      ''
+    const retrieved = await provider.retrieve({
+      ref: parseRef(`zotero://user/0/item/${itemKey}`),
+      query: query === '' ? 'a' : query,
+      sources: ['annotation'],
+      passages: 8,
+    })
+    // Annotations exist under this item, so the filtered listing must not
+    // report the source as unavailable.
+    expect(retrieved.sourcesSkipped).not.toContain('annotation')
+    expect(retrieved.evidence.some((entry) => entry.source === 'annotation')).toBe(true)
+  })
+
   it('explores an item graph through children with attachment-nested annotations', async () => {
     const search = await provider.search({
       scope: { kind: 'library' },
