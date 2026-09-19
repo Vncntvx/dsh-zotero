@@ -96,7 +96,6 @@ export function chatOf(rows: ChatConversationViewNode[] = []): ChatSnapshot {
 export function sessionOf(overrides: Partial<SessionSnapshot> = {}): SessionSnapshot {
   return {
     sessionId: 's1' as unknown as SessionSnapshot['sessionId'],
-    queue: [],
     pendingSubmissions: [],
     running: false,
     subagent: null,

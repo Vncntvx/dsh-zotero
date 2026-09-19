@@ -9,7 +9,7 @@ dsh-zotero is a DSH plugin that lets agents search, read, and cite your local Zo
 - Zotero ≥ 7 desktop installed
 - Local API enabled: Settings → Advanced → check "Allow other applications on this computer to communicate with Zotero"
 - Node.js ≥ 22.19 or ≥ 24
-- DSH 0.1.6-alpha.1 (peer dependencies listed in package.json; only the latest pre-release line is supported until upstream stabilizes, with no backward compatibility)
+- DSH 0.1.6-alpha.2 (peer dependencies listed in package.json; only the latest pre-release line is supported until upstream stabilizes, with no backward compatibility)
 
 Version mapping:
 
@@ -20,11 +20,11 @@ Version mapping:
 | 0.6.0          | 0.1.2-alpha.5       |
 | 0.7.0          | 0.1.3-alpha.1       |
 | 0.7.1          | 0.1.3-alpha.1       |
-| 0.8.0          | 0.1.6-alpha.1       |
-| 0.8.1          | 0.1.6-alpha.1       |
-| 0.8.2          | 0.1.6-alpha.1       |
-| 0.8.3          | 0.1.6-alpha.1       |
-| 0.8.4          | 0.1.6-alpha.1       |
+| 0.8.0          | 0.1.6-alpha.2       |
+| 0.8.1          | 0.1.6-alpha.2       |
+| 0.8.2          | 0.1.6-alpha.2       |
+| 0.8.3          | 0.1.6-alpha.2       |
+| 0.8.4          | 0.1.6-alpha.2       |
 
 ## Install the plugin
 

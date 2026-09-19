@@ -10,7 +10,7 @@
   <a href="https://www.npmjs.com/package/dsh-zotero"><img src="https://img.shields.io/npm/v/dsh-zotero" alt="npm version" style="max-width:100%;"></a>
   <a href="https://www.npmjs.com/package/dsh-zotero"><img src="https://img.shields.io/npm/dm/dsh-zotero" alt="npm downloads" style="max-width:100%;"></a>
   <a href="https://www.npmjs.com/package/dsh-zotero"><img src="https://img.shields.io/npm/l/dsh-zotero" alt="license" style="max-width:100%;"></a>
-  <a href="https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.6-alpha.1"><img src="https://img.shields.io/badge/dsh-%3E%3D0.1.6--alpha.1-blue" alt="最低 dsh 版本" style="max-width:100%;"></a>
+  <a href="https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.6-alpha.2"><img src="https://img.shields.io/badge/dsh-%3E%3D0.1.6--alpha.2-blue" alt="最低 dsh 版本" style="max-width:100%;"></a>
   <a href="https://awesome-dsh-plugin.com"><img src="https://awesome-dsh-plugin.com/badge.svg" alt="Awesome DSH Plugin"></a>
 </p>
 </div>
@@ -69,7 +69,7 @@ dsh plugin --profile <name> add ./dsh-zotero-*.tgz
 
 - Zotero ≥ 7 桌面版，启用本地 API：**设置 → 高级 → "允许其他应用程序与 Zotero 通信"**
 - Node.js ≥ 22.19（或 ≥ 24）
-- 宿主 dsh 0.1.6-alpha.1（`@deepseek-ai/dsh-*` peer 依赖均为 `^0.1.6-alpha.1`，兼容范围另见 `engines.dsh`；上游发布稳定版之前只跟最新预发布线，不向后兼容）
+- 宿主 dsh 0.1.6-alpha.2（`@deepseek-ai/dsh-*` peer 依赖均为 `^0.1.6-alpha.2`，兼容范围另见 `engines.dsh`；上游发布稳定版之前只跟最新预发布线，不向后兼容）
 - 本地 API 地址 `http://127.0.0.1:23119/api`，无认证，只读
 
 ## 使用示例
