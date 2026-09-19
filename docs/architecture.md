@@ -27,7 +27,8 @@ graph LR
 - `ZoteroService` 扩展 `Service`，注册为 `ctx.zotero`
 - 负责 provider 选择、能力门控、领域方法
 - 配置是实时的：附加时使用 settings section，否则使用 composition entry
-- `rebuild()` 从当前配置创建 HTTP 客户端和 local provider
+- `rebuild()` 在**同一** `ZoteroService` 实例上，从当前配置重建 HTTP 客户端与 local provider；不替换服务实例
+- 连接恢复门（`ConnectivityRecovery` / `service.recovery`）与服务实例同寿命，**不**随 settings rebuild 重置（避免并发失败叠卡）
 - 请求驱动：加载从不触及 Zotero
 
 ### Provider 层 (`src/local/provider.ts`)

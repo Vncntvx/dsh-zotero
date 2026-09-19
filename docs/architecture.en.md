@@ -27,7 +27,8 @@ User → Agent → dsh Zotero Tools → ZoteroService → Provider → 127.0.0.1
 - `ZoteroService` extends `Service`, registered as `ctx.zotero`
 - Handles provider selection, capability gating, domain methods
 - Config is live: uses settings section when attached, otherwise composition entry
-- `rebuild()` creates HTTP client and local provider from current config
+- `rebuild()` rebuilds the HTTP client and local provider on the **same** `ZoteroService` instance from current config (never replaces the service)
+- The connectivity recovery gate (`ConnectivityRecovery` / `service.recovery`) lives for the service instance and is **not** reset by settings rebuilds (resetting would stack duplicate cards for concurrent failures)
 - Request-driven: loading never touches Zotero
 
 ### Provider layer (`src/local/provider.ts`)

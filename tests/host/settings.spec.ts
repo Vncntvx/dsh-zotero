@@ -75,6 +75,18 @@ describe('the zotero settings namespace', () => {
     expect(mock.requests.length).toBeGreaterThan(0)
   })
 
+  it('keeps the recovery gate identity across settings rebuilds', async () => {
+    // Settings commits rebuild transport on the same ZoteroService; recovery
+    // is a service-lifetime dedupe gate, not config-generation state. A new
+    // gate here would fork concurrent connectivity asks into stacked cards.
+    lane = await setupHostLane({ baseUrl: 'http://127.0.0.1:1/api' }, { settings: {} })
+    const recovery = lane.ctx.zotero.recovery
+    await applySettings({ timeoutMs: 7000, maxSearchResults: 5 })
+    expect(lane.ctx.zotero.config.timeoutMs).toBe(7000)
+    expect(lane.ctx.zotero.config.maxSearchResults).toBe(5)
+    expect(lane.ctx.zotero.recovery).toBe(recovery)
+  })
+
   it('refuses a write that violates the config constraints', async () => {
     lane = await setupHostLane({ baseUrl: 'http://127.0.0.1:1/api' }, { settings: {} })
     await expect(

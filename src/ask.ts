@@ -120,7 +120,8 @@ function questionOf(spec: FailureSpec): AskUserQuestionItem {
 }
 
 /**
- * One recovery conversation per failure kind, owned by one plugin instance.
+ * One recovery conversation per failure kind, owned by the plugin service
+ * instance that holds the gate.
  *
  * Tool calls run concurrently, and a Zotero that is down fails all of them:
  * five parallel reads used to put five identical cards in front of the user,
@@ -130,6 +131,12 @@ function questionOf(spec: FailureSpec): AskUserQuestionItem {
  * does not, on its own request. The entry is dropped as soon as the question
  * settles, so a later failure asks again instead of inheriting a stale
  * answer.
+ *
+ * Ownership is the service instance, not a transport generation. Callers pass
+ * `service.recovery`; `ZoteroService.rebuild()` replaces HTTP clients and the
+ * provider but intentionally keeps this gate so in-flight waiters and new
+ * failures stay on one conversation. Replacing the gate on a settings commit
+ * would stack cards — do not treat recovery as config-scoped state.
  */
 export class ConnectivityRecovery {
   private readonly asking = new Map<string, Promise<boolean>>()

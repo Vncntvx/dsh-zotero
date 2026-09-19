@@ -14,7 +14,9 @@
  * The effective config is live: while a settings service is composed, the
  * `zotero` settings namespace (composition entry as its base layer) is the
  * authority, and every committed section rebuilds the HTTP client and the
- * `local` provider so web-edited values apply without a restart.
+ * `local` provider so web-edited values apply without a restart. A settings
+ * commit runs `rebuild()` on this same instance — it never replaces
+ * `ctx.zotero` and never replaces the connectivity recovery gate.
  * @module dsh-zotero/service
  */
 
@@ -101,11 +103,22 @@ export class ZoteroService extends Service {
 
   private readonly providers = new Map<string, ZoteroProvider>()
   /**
-   * The instance's recovery gate. Concurrent calls that hit the same
-   * connectivity failure (Zotero down, API disabled, no shared API version,
-   * timeout) share one question instead of stacking a card per call. Owned
-   * per instance, so a settings edit — which builds a new instance — starts
-   * from a clean state.
+   * Connectivity recovery gate for this service instance.
+   *
+   * Concurrent tool calls that hit the same ask-worthy failure (Zotero down,
+   * local API disabled, no shared API version, timeout) share one question
+   * instead of stacking a card per call. The gate's Map holds only in-flight
+   * asks; each entry is deleted when that question settles, so a later
+   * failure asks again.
+   *
+   * Owned by the `ZoteroService` instance for the fiber lifetime — **not** by
+   * a config generation. A settings commit calls {@link rebuild}, which
+   * replaces HTTP clients and the `local` provider on this same instance; it
+   * must not replace this gate. Swapping recovery on rebuild would fork the
+   * conversation (in-flight waiters on the old gate, new failures on a new
+   * one) and stack duplicate cards — the opposite of this class's purpose.
+   * Retry paths re-enter `service.*` at call time and therefore see the
+   * rebuilt provider without touching the gate.
    */
   readonly recovery = new ConnectivityRecovery()
   /** Current config authority: the settings section while one is attached, the composition entry otherwise. */
@@ -190,10 +203,20 @@ export class ZoteroService extends Service {
   }
 
   /**
-   * Rebuild the HTTP clients and the `local` provider from the current
-   * config. The previous provider registration is disposed first so the
-   * duplicate-id guard never fires; a request already in flight finishes on
-   * the client it started with, and later calls resolve the fresh provider.
+   * Rebuild the live transport stack from the current config on **this**
+   * instance. The settings section's `onChange` (and the constructor's first
+   * pass) both call this — never a service replacement.
+   *
+   * **Rebuilt:** HTTP client, write client, write authorizer, the `local`
+   * provider registration (previous registration disposed first so the
+   * duplicate-id guard never fires), and the write-tool set when
+   * `writeEnabled` flips. A request already in flight finishes on the client
+   * it started with; later calls resolve the fresh provider.
+   *
+   * **Not rebuilt:** `ZoteroService` identity and the `ctx.zotero` binding,
+   * {@link recovery} (service-lifetime dedupe gate), read-tool registrations,
+   * the prompt section, `/zotero`, and the Typert manifest.
+   *
    * The write transport and authorizer exist only while `writeEnabled` is
    * set: without them the provider declares no `write` capability, so the
    * gate answers before any network happens.
