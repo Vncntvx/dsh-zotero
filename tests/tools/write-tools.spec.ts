@@ -12,7 +12,7 @@ import {
   WRITE_APPROVAL_UNAVAILABLE_MESSAGE,
   WRITE_CHILD_COLLECTIONS_MESSAGE,
   ZOTERO_INVALID_ARGUMENT,
-  ZOTERO_WRITE_UNAUTHORIZED,
+  ZOTERO_WRITE_APPROVAL_UNAVAILABLE,
 } from '../../src/errors.js'
 
 const SERVER_ID = 'srv-write-tools-001'
@@ -28,6 +28,8 @@ const ITEM_KEY = 'ITEMABC1'
 class ScriptedQuestions extends Service {
   /** The selected labels per ask, consumed in order; empty means "Apply". */
   static readonly script: string[][] = []
+  /** When set, the next ask rejects with this error (one-shot). */
+  static rejection: { code: string; message: string } | undefined
   readonly asks: AskUserQuestionRequest[] = []
 
   constructor(ctx: Context) {
@@ -36,6 +38,14 @@ class ScriptedQuestions extends Service {
 
   async ask(request: AskUserQuestionRequest): Promise<AskUserQuestionAnswer> {
     this.asks.push(request)
+    const rejection = ScriptedQuestions.rejection
+    if (rejection !== undefined) {
+      ScriptedQuestions.rejection = undefined
+      const error = new Error(rejection.message) as Error & { code: string; name: string }
+      error.name = 'UserQuestionError'
+      error.code = rejection.code
+      throw error
+    }
     const answers = ScriptedQuestions.script
     return {
       answers: request.questions.map((question: AskUserQuestionItem, index: number) => ({
@@ -94,6 +104,7 @@ function serveWrites(mock: MockZotero): void {
 
 beforeEach(() => {
   ScriptedQuestions.script.length = 0
+  ScriptedQuestions.rejection = undefined
 })
 
 afterEach(async () => {
@@ -133,7 +144,11 @@ describe('zotero_create_note', () => {
     })
     expect(scripted.asks).toHaveLength(1)
     const [ask] = scripted.asks
-    expect(ask.questions[0]?.intent).toEqual({ kind: 'plan-review', approve: 'Apply' })
+    expect(ask.questions[0]?.intent).toEqual({
+      kind: 'plan-review',
+      approve: 'Apply',
+      callId: expect.any(String),
+    })
     expect(ask.questions[0]?.detail).toContain('**方法**笔记')
     expect(ask.questions[0]?.detail).toContain('zotero://user/0')
     const post = lane.mock.requests.find(
@@ -164,10 +179,26 @@ describe('zotero_create_note', () => {
     const result = await lane.runTool('zotero_create_note', { markdown: 'x' })
     expect(result.isError).toBe(true)
     if (!result.isError) throw new Error('unreachable')
-    expect(result.error.info?.code).toBe(ZOTERO_WRITE_UNAUTHORIZED)
+    expect(result.error.info?.code).toBe(ZOTERO_WRITE_APPROVAL_UNAVAILABLE)
     expect(result.error.message).toBe(WRITE_APPROVAL_UNAVAILABLE_MESSAGE)
     // Mid-body throws map to `{ name, code }` only; reason is deny-path only.
     expect(result.error.info?.reason).toBeUndefined()
+    expect(lane.mock.requests.some((request) => request.method === 'POST')).toBe(false)
+  })
+
+  it('returns declined when the user dismisses the plan review (ASK_CANCELLED)', async () => {
+    const lane = await bootLane({ writeEnabled: true })
+    ScriptedQuestions.rejection = {
+      code: 'ASK_CANCELLED',
+      message: 'the user cancelled ask_user_question',
+    }
+    // Wire restoration surfaces UserQuestionError (a HarnessError) with this code.
+    serveWrites(lane.mock)
+    const result = expectValue(
+      await lane.runTool('zotero_create_note', { markdown: 'x' }),
+      'zotero_create_note',
+    )
+    expect(result.value).toEqual({ kind: 'declined' })
     expect(lane.mock.requests.some((request) => request.method === 'POST')).toBe(false)
   })
 
@@ -319,6 +350,38 @@ describe('zotero_add_tags and zotero_add_to_collection', () => {
       'zotero_add_tags',
     )
     expect(tagsResult.value).toEqual({ kind: 'declined' })
+    const collectionResult = expectValue(
+      await lane.runTool('zotero_add_to_collection', {
+        ref: `zotero://user/0/item/${ITEM_KEY}`,
+        collection: '方法论',
+      }),
+      'zotero_add_to_collection',
+    )
+    expect(collectionResult.value).toEqual({ kind: 'declined' })
+    expect(lane.mock.requests.some((request) => request.method === 'PATCH')).toBe(false)
+  })
+
+  it('returns declined for add_tags and add_to_collection when the user dismisses the plan review (ASK_CANCELLED)', async () => {
+    const lane = await bootLane({ writeEnabled: true })
+    serveWrites(lane.mock)
+    serveItem(lane.mock, { tags: [] })
+    ScriptedQuestions.rejection = {
+      code: 'ASK_CANCELLED',
+      message: 'the user cancelled ask_user_question',
+    }
+    const tagsResult = expectValue(
+      await lane.runTool('zotero_add_tags', {
+        ref: `zotero://user/0/item/${ITEM_KEY}`,
+        tags: ['new'],
+      }),
+      'zotero_add_tags',
+    )
+    expect(tagsResult.value).toEqual({ kind: 'declined' })
+
+    ScriptedQuestions.rejection = {
+      code: 'ASK_CANCELLED',
+      message: 'the user cancelled ask_user_question',
+    }
     const collectionResult = expectValue(
       await lane.runTool('zotero_add_to_collection', {
         ref: `zotero://user/0/item/${ITEM_KEY}`,

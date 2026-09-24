@@ -61,20 +61,44 @@ const CREATE_NOTE_PARAMETERS = {
 type CreateNoteArgs = InferArgs<typeof CREATE_NOTE_PARAMETERS>
 
 const CREATE_NOTE_OUTPUT_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    kind: { type: 'string', enum: ['applied', 'declined'], required: true },
-    ref: { type: 'string', description: 'The created note ref (provenance-qualified).' },
-    key: { type: 'string' },
-    version: { type: 'integer' },
-    parentItem: { type: 'string', description: 'The parent ref, for a child note.' },
-    collections: { type: 'array', items: { type: 'string' } },
-    tags: { type: 'array', items: { type: 'string' } },
-    sourceRefs: { type: 'array', items: { type: 'string' } },
-    libraryVersion: { type: 'integer', description: 'The library version the write advanced to.' },
-    serverId: { type: 'string' },
-  },
+  oneOf: [
+    {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        kind: { type: 'string', enum: ['declined'], required: true },
+      },
+    },
+    {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        kind: { type: 'string', enum: ['applied'], required: true },
+        ref: {
+          type: 'string',
+          required: true,
+          description: 'The created note ref (provenance-qualified).',
+        },
+        key: { type: 'string', required: true },
+        version: { type: 'integer', required: true },
+        parentItem: { type: 'string', description: 'The parent ref, for a child note.' },
+        collections: {
+          type: 'array',
+          items: { type: 'string' },
+          required: true,
+          description: 'Collections the note joined; empty for a child note.',
+        },
+        tags: { type: 'array', items: { type: 'string' }, required: true },
+        sourceRefs: { type: 'array', items: { type: 'string' }, required: true },
+        libraryVersion: {
+          type: 'integer',
+          required: true,
+          description: 'The library version the write advanced to.',
+        },
+        serverId: { type: 'string' },
+      },
+    },
+  ],
 } as const
 
 type CreateNoteOutput = InferValue<typeof CREATE_NOTE_OUTPUT_SCHEMA>
@@ -149,12 +173,9 @@ export function renderCreateNote(_args: CreateNoteArgs, value: CreateNoteOutput)
   }
   const lines = [`Created note ${value.ref} (version ${value.version}).`]
   if (value.parentItem !== undefined) lines.push(`Parent: ${value.parentItem}`)
-  const collections = value.collections ?? []
-  if (collections.length > 0) lines.push(`Collections: ${collections.join(', ')}`)
-  const tags = value.tags ?? []
-  if (tags.length > 0) lines.push(`Tags: ${tags.join(', ')}`)
-  const sources = value.sourceRefs ?? []
-  if (sources.length > 0) lines.push(`Sources: ${sources.join(', ')}`)
+  if (value.collections.length > 0) lines.push(`Collections: ${value.collections.join(', ')}`)
+  if (value.tags.length > 0) lines.push(`Tags: ${value.tags.join(', ')}`)
+  if (value.sourceRefs.length > 0) lines.push(`Sources: ${value.sourceRefs.join(', ')}`)
   lines.push(
     `Library version: ${value.libraryVersion}${value.serverId === undefined ? '' : ` (served by ${value.serverId})`}`,
   )
@@ -188,9 +209,9 @@ export function registerCreateNoteTool(ctx: Context, service: ZoteroService): ()
           value.kind === 'applied'
             ? {
                 kind: 'applied',
-                ref: value.ref ?? '',
-                key: value.key ?? '',
-                version: value.version ?? 0,
+                ref: value.ref,
+                key: value.key,
+                version: value.version,
               }
             : { kind: 'declined' },
       },

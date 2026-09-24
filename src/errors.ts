@@ -46,6 +46,13 @@ export const ZOTERO_WRITE_UNAUTHORIZED = 'ZOTERO_WRITE_UNAUTHORIZED'
 export const ZOTERO_WRITE_CONFLICT = 'ZOTERO_WRITE_CONFLICT'
 /** Zotero is rate-limiting write authorization requests (429 on the authorize endpoint). */
 export const ZOTERO_WRITE_RATE_LIMITED = 'ZOTERO_WRITE_RATE_LIMITED'
+/**
+ * Plan-review could not be asked: no user-questions channel, or the ask
+ * failed for a reason that is not a user decision. Distinct from
+ * `ZOTERO_WRITE_UNAUTHORIZED` (Zotero write auth) and from the non-error
+ * `declined` outcome (the user answered without approving).
+ */
+export const ZOTERO_WRITE_APPROVAL_UNAVAILABLE = 'ZOTERO_WRITE_APPROVAL_UNAVAILABLE'
 
 const ZOTERO_ERROR_CODES = [
   ZOTERO_NOT_RUNNING,
@@ -70,6 +77,7 @@ const ZOTERO_ERROR_CODES = [
   ZOTERO_WRITE_UNAUTHORIZED,
   ZOTERO_WRITE_CONFLICT,
   ZOTERO_WRITE_RATE_LIMITED,
+  ZOTERO_WRITE_APPROVAL_UNAVAILABLE,
 ] as const
 
 /** Every stable error code a `ZoteroError` may carry. */
@@ -220,11 +228,16 @@ export function writeListEmptyMessage(name: string): string {
   return `${name} must carry at least one item.`
 }
 
-/** Shown when no approval channel answers the plan-review question; writes fail closed. */
+/**
+ * Shown when plan-review could not be asked at all (no channel, or the ask
+ * failed for a non-user reason). Writes fail closed. This is not a user
+ * decline (`kind: "declined"`) and not Zotero write auth
+ * (`ZOTERO_WRITE_UNAUTHORIZED`).
+ */
 export const WRITE_APPROVAL_UNAVAILABLE_MESSAGE =
-  'The write was not approved: no approval channel answered the plan review. Writes require the ' +
-  'plan-review question to be answered by the user; run in a conversation where user questions are ' +
-  'available, and never write around an unanswered plan.'
+  'The write was not attempted: plan-review could not be asked. Writes require the plan-review ' +
+  'question to be answered by the user; run in a conversation where user questions are available, ' +
+  'and never write around an unanswered plan.'
 
 const UNREACHABLE_CODES = new Set([
   'ECONNREFUSED',

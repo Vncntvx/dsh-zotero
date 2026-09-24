@@ -40,17 +40,39 @@ const ADD_TO_COLLECTION_PARAMETERS = {
 type AddToCollectionArgs = InferArgs<typeof ADD_TO_COLLECTION_PARAMETERS>
 
 const ADD_TO_COLLECTION_OUTPUT_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    kind: { type: 'string', enum: ['applied', 'declined'], required: true },
-    ref: { type: 'string' },
-    version: { type: 'integer', description: "The item's version after the update." },
-    collections: { type: 'array', items: { type: 'string' } },
-    added: { type: 'boolean' },
-    libraryVersion: { type: 'integer' },
-    serverId: { type: 'string' },
-  },
+  oneOf: [
+    {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        kind: { type: 'string', enum: ['declined'], required: true },
+      },
+    },
+    {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        kind: { type: 'string', enum: ['applied'], required: true },
+        ref: { type: 'string', required: true },
+        version: {
+          type: 'integer',
+          required: true,
+          description: "The item's version after the update.",
+        },
+        collections: { type: 'array', items: { type: 'string' }, required: true },
+        added: {
+          type: 'boolean',
+          required: true,
+          description: 'True when the item was newly added; false when it was already a member.',
+        },
+        libraryVersion: {
+          type: 'integer',
+          description: 'The library version the write advanced to; absent when already a member.',
+        },
+        serverId: { type: 'string' },
+      },
+    },
+  ],
 } as const
 
 type AddToCollectionOutput = InferValue<typeof ADD_TO_COLLECTION_OUTPUT_SCHEMA>
@@ -82,7 +104,7 @@ export function renderAddToCollection(
       ? `Added ${value.ref} to the collection (version ${value.version}).`
       : `${value.ref} was already a member; nothing was written (version ${value.version}).`,
   ]
-  lines.push(`Collections now: ${(value.collections ?? []).join(', ')}`)
+  lines.push(`Collections now: ${value.collections.join(', ')}`)
   if (value.libraryVersion !== undefined) {
     lines.push(
       `Library version: ${value.libraryVersion}${value.serverId === undefined ? '' : ` (served by ${value.serverId})`}`,
@@ -118,9 +140,9 @@ export function registerAddToCollectionTool(ctx: Context, service: ZoteroService
           value.kind === 'applied'
             ? {
                 kind: 'applied',
-                ref: value.ref ?? '',
-                version: value.version ?? 0,
-                added: value.added ?? false,
+                ref: value.ref,
+                version: value.version,
+                added: value.added,
               }
             : { kind: 'declined' },
       },

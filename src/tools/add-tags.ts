@@ -43,18 +43,36 @@ const ADD_TAGS_PARAMETERS = {
 type AddTagsArgs = InferArgs<typeof ADD_TAGS_PARAMETERS>
 
 const ADD_TAGS_OUTPUT_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    kind: { type: 'string', enum: ['applied', 'declined'], required: true },
-    ref: { type: 'string' },
-    version: { type: 'integer', description: "The item's version after the update." },
-    tags: { type: 'array', items: { type: 'string' } },
-    added: { type: 'array', items: { type: 'string' } },
-    unchanged: { type: 'boolean' },
-    libraryVersion: { type: 'integer' },
-    serverId: { type: 'string' },
-  },
+  oneOf: [
+    {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        kind: { type: 'string', enum: ['declined'], required: true },
+      },
+    },
+    {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        kind: { type: 'string', enum: ['applied'], required: true },
+        ref: { type: 'string', required: true },
+        version: {
+          type: 'integer',
+          required: true,
+          description: "The item's version after the update.",
+        },
+        tags: { type: 'array', items: { type: 'string' }, required: true },
+        added: { type: 'array', items: { type: 'string' }, required: true },
+        unchanged: { type: 'boolean', required: true },
+        libraryVersion: {
+          type: 'integer',
+          description: 'The library version the write advanced to; absent when unchanged.',
+        },
+        serverId: { type: 'string' },
+      },
+    },
+  ],
 } as const
 
 type AddTagsOutput = InferValue<typeof ADD_TAGS_OUTPUT_SCHEMA>
@@ -82,13 +100,12 @@ export function renderAddTags(_args: AddTagsArgs, value: AddTagsOutput): Content
   if (value.kind === 'declined') {
     return renderDeclined()
   }
-  const unchanged = value.unchanged === true
   const lines = [
-    unchanged
-      ? `No change: ${value.ref ?? ''} already carries every requested tag (version ${value.version ?? 0}).`
-      : `Tagged ${value.ref ?? ''} (version ${value.version ?? 0}); added ${(value.added ?? []).join(', ')}.`,
+    value.unchanged
+      ? `No change: ${value.ref} already carries every requested tag (version ${value.version}).`
+      : `Tagged ${value.ref} (version ${value.version}); added ${value.added.join(', ')}.`,
   ]
-  lines.push(`Tags now: ${(value.tags ?? []).join(', ')}`)
+  lines.push(`Tags now: ${value.tags.join(', ')}`)
   if (value.libraryVersion !== undefined) {
     lines.push(
       `Library version: ${value.libraryVersion}${value.serverId === undefined ? '' : ` (served by ${value.serverId})`}`,
@@ -121,9 +138,9 @@ export function registerAddTagsTool(ctx: Context, service: ZoteroService): () =>
           value.kind === 'applied'
             ? {
                 kind: 'applied',
-                ref: value.ref ?? '',
-                version: value.version ?? 0,
-                addedCount: (value.added ?? []).length,
+                ref: value.ref,
+                version: value.version,
+                addedCount: value.added.length,
               }
             : { kind: 'declined' },
       },

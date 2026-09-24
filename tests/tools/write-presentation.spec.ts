@@ -11,7 +11,14 @@ import { setupHostLane } from '../helpers/lanes/host-lane.js'
 
 /** An approval channel that always answers "Apply"; the ask is recorded. */
 class ApprovingQuestions extends Service {
-  readonly asks: { questions: { id: string; detail?: string }[]; agent?: unknown }[] = []
+  readonly asks: {
+    questions: {
+      id: string
+      detail?: string
+      intent?: { kind: string; approve: string; callId?: unknown }
+    }[]
+    agent?: unknown
+  }[] = []
   /** When set, the channel answers with these labels instead of "Apply". */
   answers: string[][] | undefined
 
@@ -20,7 +27,11 @@ class ApprovingQuestions extends Service {
   }
 
   async ask(request: {
-    questions: { id: string; detail?: string }[]
+    questions: {
+      id: string
+      detail?: string
+      intent?: { kind: string; approve: string; callId?: unknown }
+    }[]
     agent?: unknown
   }): Promise<unknown> {
     this.asks.push({ questions: request.questions, agent: request.agent })
@@ -290,13 +301,25 @@ describe('approval-gate failure arms', () => {
     await lane.teardown()
   })
 
-  it('covers the defensive fallbacks in the applied-meta and render arms', async () => {
+  it('covers the optional-libraryVersion arms of the applied-meta and render paths', async () => {
     const lane = await setupHostLane({ writeEnabled: true })
     const tags = lane.tool('zotero_add_tags')!
-    expect(tags.output.presentationMeta?.({}, { kind: 'applied' })).toEqual({
+    expect(
+      tags.output.presentationMeta?.(
+        {},
+        {
+          kind: 'applied',
+          ref: 'zotero://user/0/item/ITEMABC1',
+          version: 10,
+          tags: ['a'],
+          added: [],
+          unchanged: true,
+        },
+      ),
+    ).toEqual({
       kind: 'applied',
-      ref: '',
-      version: 0,
+      ref: 'zotero://user/0/item/ITEMABC1',
+      version: 10,
       addedCount: 0,
     })
     const bareTags = textOf(
@@ -324,12 +347,21 @@ describe('approval-gate failure arms', () => {
     await lane.ctx.plugin(ApprovingQuestions)
     const scripted = lane.ctx.get('userQuestions') as unknown as ApprovingQuestions
     const agent = { id: 'agent-1' } as never
-    const exec = { agent, signal: new AbortController().signal } as unknown as ToolRunContext
+    const exec = {
+      callId: 'call-plan-1',
+      agent,
+      signal: new AbortController().signal,
+    } as unknown as ToolRunContext
     // The agent rides the request when present, and the answer names the card.
     const approved = await askPlanApproval(lane.ctx, exec, '- plan line')
     expect(approved).toBe(true)
     expect(scripted.asks.at(-1)?.agent).toBe(agent)
     expect(scripted.asks.at(-1)?.questions[0]?.detail).toBe('- plan line')
+    expect(scripted.asks.at(-1)?.questions[0]?.intent).toMatchObject({
+      kind: 'plan-review',
+      approve: 'Apply',
+      callId: 'call-plan-1',
+    })
     await lane.teardown()
   })
 
@@ -341,15 +373,15 @@ describe('approval-gate failure arms', () => {
     scripted.answers = [[]]
     const approved = await askPlanApproval(
       lane.ctx,
-      { signal: new AbortController().signal } as unknown as ToolRunContext,
+      { callId: 'call-1', signal: new AbortController().signal } as unknown as ToolRunContext,
       '- plan line',
     )
     expect(approved).toBe(false)
     await lane.teardown()
   })
 
-  it('covers the remaining defensive fallback arms of the applied renderers', async () => {
-    // The unchanged tag line without ref/version/tags; the added line without added.
+  it('covers complete applied renderers with omitted optional fields', async () => {
+    // Unchanged tag result: libraryVersion is absent when nothing was written.
     const sparse = textOf(
       renderAddTags(
         { ref: 'r', tags: ['a'] },
@@ -364,7 +396,8 @@ describe('approval-gate failure arms', () => {
       ),
     )
     expect(sparse).toContain('No change')
-    // The note renderer with every optional list absent.
+    expect(sparse).not.toContain('Library version:')
+    // Complete note result with empty lists and no optional parent/serverId.
     const bare = textOf(
       renderCreateNote(
         { markdown: 'x' },
@@ -381,61 +414,122 @@ describe('approval-gate failure arms', () => {
       ),
     )
     expect(bare).toContain('Created note r (version 7).')
-    // The meta fallbacks: an applied outcome with no key facts at all.
-    const note = { output: { presentationMeta: (_a: unknown, v: unknown) => v } }
-    void note
     // The plan preview truncates long markdown.
     const longPlan = createNotePlan({ markdown: 'x'.repeat(401) })
     expect(longPlan).toContain('…')
     expect(longPlan).not.toContain('xxxxx'.repeat(100))
   })
 
-  it('covers the render and meta fallbacks with sparse applied outcomes', async () => {
+  it('projects complete applied outcomes into presentation meta', async () => {
     const lane = await setupHostLane({ writeEnabled: true })
     const tags = lane.tool('zotero_add_tags')!
     expect(
-      textOf(renderAddTags({ ref: 'r', tags: ['a'] }, { kind: 'applied', unchanged: true })),
+      textOf(
+        renderAddTags(
+          { ref: 'r', tags: ['a'] },
+          {
+            kind: 'applied',
+            ref: 'zotero://user/0/item/ITEMABC1',
+            version: 10,
+            tags: ['a'],
+            added: [],
+            unchanged: true,
+          },
+        ),
+      ),
     ).toContain('No change')
     const note = lane.tool('zotero_create_note')!
     expect(
       textOf(
         renderCreateNote(
           { markdown: 'x' },
-          { kind: 'applied', ref: 'r', key: 'k', version: 1, libraryVersion: 1 },
+          {
+            kind: 'applied',
+            ref: 'r',
+            key: 'k',
+            version: 1,
+            collections: [],
+            tags: [],
+            sourceRefs: [],
+            libraryVersion: 1,
+          },
         ),
       ),
     ).toContain('Created note r (version 1).')
     const collection = lane.tool('zotero_add_to_collection')!
-    const sparseCollection = textOf(
+    const completeCollection = textOf(
       renderAddToCollection(
         { ref: 'r', collection: 'c' },
-        { kind: 'applied', ref: 'r', version: 1 },
+        {
+          kind: 'applied',
+          ref: 'zotero://user/0/item/ITEMABC1',
+          version: 1,
+          collections: ['zotero://user/0/collection/COLL1234'],
+          added: false,
+        },
       ),
     )
-    expect(sparseCollection).toContain('Collections now:')
-    expect(sparseCollection).not.toContain('Library version:')
-    expect(tags.output.presentationMeta?.({}, { kind: 'applied' })).toEqual({
+    expect(completeCollection).toContain('Collections now:')
+    expect(completeCollection).not.toContain('Library version:')
+    expect(
+      tags.output.presentationMeta?.(
+        {},
+        {
+          kind: 'applied',
+          ref: 'zotero://user/0/item/ITEMABC1',
+          version: 10,
+          tags: ['a'],
+          added: ['a'],
+          unchanged: false,
+        },
+      ),
+    ).toEqual({
       kind: 'applied',
-      ref: '',
-      version: 0,
-      addedCount: 0,
+      ref: 'zotero://user/0/item/ITEMABC1',
+      version: 10,
+      addedCount: 1,
     })
-    expect(collection.output.presentationMeta?.({}, { kind: 'applied' })).toEqual({
+    expect(
+      collection.output.presentationMeta?.(
+        {},
+        {
+          kind: 'applied',
+          ref: 'zotero://user/0/item/ITEMABC1',
+          version: 1,
+          collections: ['zotero://user/0/collection/COLL1234'],
+          added: false,
+        },
+      ),
+    ).toEqual({
       kind: 'applied',
-      ref: '',
-      version: 0,
+      ref: 'zotero://user/0/item/ITEMABC1',
+      version: 1,
       added: false,
     })
-    expect(note.output.presentationMeta?.({}, { kind: 'applied' })).toEqual({
+    expect(
+      note.output.presentationMeta?.(
+        {},
+        {
+          kind: 'applied',
+          ref: 'zotero://user/0/item/NEWNOTE1',
+          key: 'NEWNOTE1',
+          version: 3,
+          collections: [],
+          tags: [],
+          sourceRefs: [],
+          libraryVersion: 3,
+        },
+      ),
+    ).toEqual({
       kind: 'applied',
-      ref: '',
-      key: '',
-      version: 0,
+      ref: 'zotero://user/0/item/NEWNOTE1',
+      key: 'NEWNOTE1',
+      version: 3,
     })
     await lane.teardown()
   })
 
-  it('maps the aborted ask and the empty answer through the approval contract', async () => {
+  it('maps the aborted ask, ASK_CANCELLED, and the empty answer through the approval contract', async () => {
     const aborting = {
       get: () => ({
         ask: async () => {
@@ -443,16 +537,35 @@ describe('approval-gate failure arms', () => {
         },
       }),
     }
-    const exec = { signal: new AbortController().signal } as unknown as ToolRunContext
+    const exec = {
+      callId: 'call-1',
+      signal: new AbortController().signal,
+    } as unknown as ToolRunContext
     await expect(
       askPlanApproval(aborting as unknown as Context, exec, '- plan'),
     ).rejects.toMatchObject({ code: TOOL_ABORTED })
-    const empty = { get: () => ({ ask: async () => ({ answers: [] }) }) }
-    const approved = await askPlanApproval(
-      empty as unknown as Context,
-      { signal: new AbortController().signal } as unknown as ToolRunContext,
-      '- plan',
+    const cancelled = {
+      get: () => ({
+        ask: async () => {
+          throw new HarnessError('the user cancelled ask_user_question', 'ASK_CANCELLED')
+        },
+      }),
+    }
+    await expect(askPlanApproval(cancelled as unknown as Context, exec, '- plan')).resolves.toBe(
+      false,
     )
+    for (const name of ['HarnessError', 'UserQuestionError']) {
+      const wire = {
+        get: () => ({
+          ask: async () => {
+            throw Object.assign(new Error('cancel'), { name, code: 'ASK_CANCELLED' })
+          },
+        }),
+      }
+      await expect(askPlanApproval(wire as unknown as Context, exec, '- plan')).resolves.toBe(false)
+    }
+    const empty = { get: () => ({ ask: async () => ({ answers: [] }) }) }
+    const approved = await askPlanApproval(empty as unknown as Context, exec, '- plan')
     expect(approved).toBe(false)
   })
 
@@ -607,7 +720,7 @@ describe('write tool presentation records', () => {
     })
     expect(sourceArms.isError).toBe(true)
     if (!sourceArms.isError) throw new Error('unreachable')
-    expect(sourceArms.error.message).toContain('no approval channel')
+    expect(sourceArms.error.message).toContain('plan-review could not be asked')
     await lane.teardown()
   })
 })
