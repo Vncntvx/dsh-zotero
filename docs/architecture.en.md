@@ -59,7 +59,7 @@ User → Agent → dsh Zotero Tools → ZoteroService → Provider → 127.0.0.1
 
 ### Browser client (`src/client/`)
 
-- Settings page: `settings.section` slot (its own left-nav entry in the Settings panel), bound to `zotero` namespace via `settingsScope`
+- Settings page: `settings.section` slot (its own left-nav entry in the Settings panel), reading the `zotero` namespace's shared form via `ctx.configForms.get`
 - Sources tab: `conversation.view` slot, session snapshot of literature/evidence/exports
   - Sources sub-view: stable union of search hits and referenced items
   - Evidence sub-view: passages grouped by item, with Zotero page labels
@@ -75,13 +75,12 @@ User → Agent → dsh Zotero Tools → ZoteroService → Provider → 127.0.0.1
 
 ### Settings
 
-- Namespace `zotero` in `$DSH_HOME/settings.yaml`
-- `installSection` (via `ctx.inject(['settings'])`) as composition entry base layer
-- Hot-reload: `onChange` rebuilds HTTP client and provider
+- Namespace `zotero` lives on the Loader entry (the composition entry is the single authority)
+- Every field is `volatile`: settings commits land without remounting; `internal/config` vetoes violating commits, `loader/volatile-update` rebuilds the transport stack and the write-tool set
 
 ## Design boundaries
 
-- **Library**: read-only. No path modifies items, notes, tags, or collections.
+- **Library**: read-only by default; `writeEnabled` explicitly opts into writing the personal library (notes, tags, collection membership). See the write boundaries.
 - **Network**: loopback only (127.0.0.1, localhost, ::1). Redirects rejected.
 - **No background polling**, no telemetry, no persistent tasks.
 - **Evidence**: term-based BM25, ranking by query-word frequency match against passages.

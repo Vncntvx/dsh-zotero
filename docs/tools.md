@@ -345,7 +345,6 @@ zotero_add_to_collection(ref="zotero://user/0/item/ABCD1234", collection="方法
 
 | 错误码                          | 说明                                                                                     |
 | ------------------------------- | ---------------------------------------------------------------------------------------- |
-| `ZOTERO_WRITE_DISABLED`         | 插件设置未启用写入                                                                       |
 | `ZOTERO_WRITE_UNAUTHORIZED`     | Zotero 拒绝写入授权：key 缺失或失效（401）、用户在授权弹窗拒绝，或没有可用的计划批准通道 |
 | `ZOTERO_WRITE_CONFLICT`         | 写入的版本前置失败（412）：对象在读取后被修改，重跑工具即可                              |
 | `ZOTERO_WRITE_RATE_LIMITED`     | Zotero 对写入授权请求限速（429，含 Retry-After）                                         |

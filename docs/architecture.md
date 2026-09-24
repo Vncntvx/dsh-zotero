@@ -59,7 +59,7 @@ graph LR
 
 ### 浏览器客户端 (`src/client/`)
 
-- 配置页：`settings.section` 插槽（设置面板左侧导航的独立一项），通过 `settingsScope` 绑定 `zotero` 命名空间
+- 配置页：`settings.section` 插槽（设置面板左侧导航的独立一项），经 `ctx.configForms.get` 读 `zotero` 命名空间的共享表单
 - Sources tab：`conversation.view` 插槽，文献/证据/导出的会话快照
   - Sources 子视图：搜索命中和引用条目的稳定联合
   - Evidence 子视图：按文献分组的段落，带 Zotero 的页标签
@@ -75,13 +75,12 @@ graph LR
 
 ### 设置
 
-- 命名空间 `zotero` 在 `$DSH_HOME/settings.yaml` 中
-- `installSection`（经 `ctx.inject(['settings'])`）以 composition entry 作为基础层
-- 热重载：`onChange` 重建 HTTP 客户端和 provider
+- 命名空间 `zotero` 在 Loader entry（composition entry 即唯一权威）
+- 全字段 `volatile`：设置提交免重建落地；`internal/config` 否决非法提交，`loader/volatile-update` 重建传输栈与写工具集
 
 ## 设计边界
 
-- **文献库**：只读。没有路径修改条目、笔记、标签、分类。
+- **文献库**：默认只读；`writeEnabled` 显式打开后可写个人库（笔记、标签、入藏）。写路径见写入边界。
 - **网络**：仅回环（127.0.0.1, localhost, ::1）。拒绝重定向。
 - **无后台轮询**、无遥测、无常驻任务。
 - **证据**：基于词项的 BM25，按查询词与 passage 的词频匹配度排序。

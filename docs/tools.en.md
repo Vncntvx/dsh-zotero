@@ -344,7 +344,6 @@ The three write tools register only while `writeEnabled` is on in the settings, 
 
 | Error code                      | Description                                                                                                                           |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `ZOTERO_WRITE_DISABLED`         | Writing is disabled in the plugin settings                                                                                            |
 | `ZOTERO_WRITE_UNAUTHORIZED`     | Zotero refused write authorization: key missing or consumed (401), the dialog was declined, or no plan-approval channel is available  |
 | `ZOTERO_WRITE_CONFLICT`         | The write's version precondition failed (412): the object changed after the read — re-run the tool                                    |
 | `ZOTERO_WRITE_RATE_LIMITED`     | Zotero is rate-limiting write authorization requests (429, with Retry-After)                                                          |
