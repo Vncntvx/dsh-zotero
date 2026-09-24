@@ -93,6 +93,24 @@ function targetShortNames() {
 }
 
 /**
+ * Whether `dest` is a leftover local symlink to a non-package (upstream rename
+ * or a directory that dropped its `package.json`). A registry install is a
+ * real directory and is never pruned.
+ * @param dest - `node_modules/@deepseek-ai/<short>` path.
+ * @returns true when the entry is a stale local link.
+ */
+function isStaleLocalLink(dest) {
+  try {
+    const stat = lstatSync(dest)
+    if (!stat.isSymbolicLink()) return false
+    const target = resolve(dirname(dest), readlinkSync(dest))
+    return !existsSync(join(target, 'package.json'))
+  } catch {
+    return false
+  }
+}
+
+/**
  * Relink one package. Skips when the destination already points at source.
  * @returns 'ok' | 'relink' | 'link'
  */
@@ -137,9 +155,26 @@ function main() {
   let linked = 0
   let relinked = 0
   let kept = 0
+  let pruned = 0
   for (const short of targetShortNames()) {
     const source = map.get(`@deepseek-ai/${short}`)
     if (source === undefined) {
+      const dest = join(nmScope, short)
+      if (isStaleLocalLink(dest)) {
+        pruned += 1
+        if (checkOnly) {
+          console.log(`prune  @deepseek-ai/${short}`)
+          continue
+        }
+        try {
+          rmSync(dest, { recursive: true, force: true })
+        } catch (error) {
+          const detail = error instanceof Error ? error.message : String(error)
+          console.error(`failed to prune @deepseek-ai/${short}: ${detail}`)
+          process.exitCode = 1
+        }
+        continue
+      }
       kept += 1
       if (checkOnly) console.log(`keep   @deepseek-ai/${short}`)
       continue
@@ -150,7 +185,7 @@ function main() {
     else linked += 1
   }
   console.log(
-    `local-harness link: ${ok} ok, ${linked} linked, ${relinked} relinked, ${kept} kept from registry`,
+    `local-harness link: ${ok} ok, ${linked} linked, ${relinked} relinked, ${pruned} pruned stale, ${kept} kept from registry`,
   )
 }
 
