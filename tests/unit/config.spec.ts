@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { resolveConfig } from '../../src/config.js'
+import {
+  isSchemaComplete,
+  readResolvedConfig,
+  resolveConfig,
+  toLiveEntry,
+} from '../../src/config.js'
 
 describe('resolveConfig', () => {
   it('applies schema defaults for an empty config', () => {
@@ -136,5 +141,32 @@ describe('resolveConfig', () => {
   it('rejects empty provider and style strings', () => {
     expect(() => resolveConfig({ provider: '' })).toThrowError(/provider/)
     expect(() => resolveConfig({ defaultStyle: '  ' })).toThrowError(/defaultStyle/)
+  })
+})
+
+describe('readResolvedConfig', () => {
+  it('matches resolveConfig on a schema-complete entry and pins localhost', () => {
+    const complete = resolveConfig({ baseUrl: 'http://localhost:23119/api', timeoutMs: 9 })
+    expect(readResolvedConfig(complete)).toEqual(complete)
+    expect(readResolvedConfig(complete).baseUrl).toBe('http://127.0.0.1:23119/api')
+  })
+
+  it('refuses a partial entry instead of filling Schemastery defaults', () => {
+    expect(() => readResolvedConfig({ timeoutMs: 9 })).toThrowError(/baseUrl/)
+  })
+})
+
+describe('toLiveEntry', () => {
+  it('keeps a schema-complete entry so volatile commits stay live', () => {
+    const complete = resolveConfig({ timeoutMs: 9 })
+    expect(toLiveEntry(complete)).toBe(complete)
+    expect(isSchemaComplete(complete)).toBe(true)
+  })
+
+  it('freezes partial Options into a complete snapshot', () => {
+    const entry = toLiveEntry({ timeoutMs: 9 })
+    expect(isSchemaComplete(entry)).toBe(true)
+    expect(readResolvedConfig(entry).timeoutMs).toBe(9)
+    expect(readResolvedConfig(entry).maxSearchResults).toBe(20)
   })
 })

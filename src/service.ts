@@ -11,18 +11,22 @@
  * the tools, invoked because the user asked about their library, and
  * the `/zotero status` command the user invokes explicitly.
  *
- * The effective config is live: while a settings service is composed, the
- * `zotero` settings namespace (composition entry as its base layer) is the
- * authority, and every committed section rebuilds the HTTP client and the
- * `local` provider so web-edited values apply without a restart. A settings
- * commit runs `rebuild()` on this same instance — it never replaces
- * `ctx.zotero` and never replaces the connectivity recovery gate.
+ * The effective config is live: every schema field is `volatile`, so a
+ * settings commit lands in the running fiber's references without remounting
+ * and tools read it per request. Structural flips (transport fields, the
+ * write flags) rebuild on `loader/volatile-update` on this same instance —
+ * never a service replacement, and never a new `ConnectivityRecovery`
+ * (that gate is service-lifetime state; swapping it on rebuild would stack
+ * duplicate connectivity cards). A violating commit is vetoed in
+ * `internal/config` before it lands, so the live read only ever observes
+ * values `resolveConfig` accepts.
  * @module dsh-zotero/service
  */
 
-import { Service, type Context } from '@deepseek-ai/cordis'
-// Type-only: brings the `ctx.settings` Context merge into this program.
-import type {} from '@deepseek-ai/dsh-settings'
+import { Service, type Context, type Fiber } from '@deepseek-ai/cordis'
+// Type-only: brings the loader `loader/volatile-update` Events merge into
+// this program (the structural-flip reaction below).
+import type {} from '@deepseek-ai/cordis-plugin-loader'
 // Type-only: brings the `ctx.typert` Context merge into this program.
 import type {} from '@deepseek-ai/dsh-typert-registry'
 // Type-only: brings the `ctx.credentials` Context merge into this program.
@@ -36,8 +40,11 @@ import { WriteAuthorizer } from './write-auth.js'
 import { ZoteroWriteHttpClient } from './write-http.js'
 import {
   Config as ConfigSchema,
+  readResolvedConfig,
   resolveConfig,
+  toLiveEntry,
   type Config,
+  type Options,
   type ResolvedConfig,
 } from './config.js'
 import {
@@ -48,7 +55,6 @@ import {
 import { LocalApiProvider } from './local/provider.js'
 import type { LocalApiLimits } from './local/limits.js'
 import { registerPromptSection } from './prompt.js'
-import { ZOTERO_SETTINGS_NAMESPACE } from './settings-namespace.js'
 import { registerAttachmentTool } from './tools/attachment.js'
 import { registerBrowseTool } from './tools/browse.js'
 import { registerChangesTool } from './tools/changes.js'
@@ -60,7 +66,6 @@ import { registerSearchTool } from './tools/search.js'
 import { registerCreateNoteTool } from './tools/create-note.js'
 import { registerAddTagsTool } from './tools/add-tags.js'
 import { registerAddToCollectionTool } from './tools/add-to-collection.js'
-import { writePolicyDecision } from './tools/write-approval.js'
 import type {
   ZoteroAttachmentLocation,
   ZoteroBrowseRequest,
@@ -96,6 +101,20 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
+/**
+ * Whether an `internal/config` waterfall `this` is this plugin's fiber.
+ * The Loader passes the fiber itself; `ctx.plugin()` returns
+ * `Object.create(fiber)`, so the prototype-linked face counts as the same
+ * fiber. Anything else is another plugin's config resolution.
+ * @param thisArg - the waterfall's bound `this`.
+ * @param own - the fiber that owns this service.
+ * @returns true when the candidate config belongs to this plugin.
+ */
+function isOwnConfigFiber(thisArg: unknown, own: Fiber): boolean {
+  if (thisArg === own) return true
+  return typeof thisArg === 'object' && thisArg !== null && Object.getPrototypeOf(thisArg) === own
+}
+
 export class ZoteroService extends Service {
   static inject = ['tools', 'systemPrompt']
 
@@ -112,7 +131,7 @@ export class ZoteroService extends Service {
    * failure asks again.
    *
    * Owned by the `ZoteroService` instance for the fiber lifetime — **not** by
-   * a config generation. A settings commit calls {@link rebuild}, which
+   * a config generation. A volatile commit calls `buildTransport`, which
    * replaces HTTP clients and the `local` provider on this same instance; it
    * must not replace this gate. Swapping recovery on rebuild would fork the
    * conversation (in-flight waiters on the old gate, new failures on a new
@@ -121,20 +140,58 @@ export class ZoteroService extends Service {
    * rebuilt provider without touching the gate.
    */
   readonly recovery = new ConnectivityRecovery()
-  /** Current config authority: the settings section while one is attached, the composition entry otherwise. */
-  private source: () => ResolvedConfig
+  /**
+   * The live entry config: Loader-delivered volatile references (commits
+   * write those same refs) or a complete plain snapshot. Tools read through
+   * {@link config} per request so settings edits apply without a restart.
+   */
+  private readonly entry: Config | Options
   /** Disposer of the currently registered `local` provider, released before a rebuild re-registers it. */
   private providerDispose: (() => void) | undefined
   /** Disposers of the conditionally registered write tools, tracked for the writeEnabled flip. */
   private writeToolDisposes: Array<() => void> = []
+  /** The resolved config the transport stack was last built from. */
+  private lastBuilt: ResolvedConfig
 
-  constructor(ctx: Context, config: Config = {}) {
+  constructor(ctx: Context, config: Config | Options = {}) {
     super(ctx, 'zotero')
-    // Schemastery fills every schema default before the constructor runs; the
-    // extra constraints resolveConfig enforces are what make the entry sound.
-    const entry = resolveConfig(config)
-    this.source = () => entry
-    this.rebuild()
+    // Fail the load loud on a violating entry; the same gate vetoes
+    // violating settings commits in `internal/config` below.
+    resolveConfig(config)
+    this.entry = toLiveEntry(config)
+    this.lastBuilt = this.config
+    this.buildTransport(this.lastBuilt)
+    // Veto a settings commit the schema alone cannot refuse (loopback-only
+    // baseUrl, positive limits): throwing here refuses the commit before it
+    // lands, so the live read only ever observes accepted values. The guard
+    // scopes the veto to this plugin's fiber: the loader passes the fiber
+    // itself as the waterfall `this`, while `ctx.plugin()` returns
+    // `Object.create(fiber)` — a prototype-linked face of the same fiber.
+    ctx.on('internal/config', function (this: Fiber | null, _raw, next) {
+      const raw = next()
+      if (!isOwnConfigFiber(this, ctx.fiber)) return raw
+      resolveConfig(raw as Config | Options)
+      return raw
+    })
+    // Structural flips land without remounting: rebuild the transport stack
+    // and reconcile the write tools on this same instance. Limit-only edits
+    // need no reaction — tools read them per request. Loader emits
+    // `loader/volatile-update` fiber-filtered (`owner.fiber === fiber`), so a
+    // listener on this fiber's ctx receives own updates without `global`.
+    // Failures are logged, never thrown into the dispatch.
+    ctx.on('loader/volatile-update', (paths: readonly (readonly string[])[]) => {
+      if (!touchesTransport(paths)) return
+      try {
+        const config = this.config
+        if (sameTransportConfig(config, this.lastBuilt)) return
+        this.buildTransport(config)
+        this.reconcileWriteTools(config.writeEnabled)
+        this.lastBuilt = config
+      } catch (error) {
+        ctx.logger.error('dsh-zotero: failed to apply a configuration update')
+        ctx.logger.error(error)
+      }
+    })
     registerStatusCommand(ctx, this)
     registerPromptSection(ctx, () => this.config)
     registerSearchTool(ctx, this)
@@ -145,43 +202,9 @@ export class ZoteroService extends Service {
     registerExportTool(ctx, this)
     registerBrowseTool(ctx, this)
     registerChangesTool(ctx, this)
-    // Pre-dispatch write policy: deny with ToolErrorInfo.reason when the
-    // capability flipped off after the write tools were registered. The
-    // listener stays synchronous on the allow path so a non-write call (and a
-    // write call that passes) does not add an extra microtask before the tool
-    // body — that hop would let fiber disposal unregister tools first and turn
-    // an in-flight call into UNKNOWN_TOOL instead of its own domain result.
-    ctx.effect(
-      () =>
-        ctx.on('tools/pre-execute', (exec, next) => {
-          const decision = writePolicyDecision(this, exec)
-          if (decision !== undefined) return Promise.resolve(decision)
-          return next()
-        }),
-      'dsh-zotero: write policy gate',
-    )
-    // The settings attach runs through a cordis fiber, never synchronously
-    // inside the install: when a settings service is composed, setSource
-    // switches the config authority and onChange rebuilds shortly after this
-    // constructor — the entry-config build here serves headless compositions
-    // and the window before that attach.
-    ctx.inject(['settings'], (settingsCtx) => {
-      settingsCtx.settings.installSection(ctx, ZOTERO_SETTINGS_NAMESPACE, ConfigSchema, entry, {
-        validate: resolveConfig,
-        setSource: (current) => {
-          // The settings-resolved value carries every schema default and has
-          // passed the resolveConfig validate hook, so it is ResolvedConfig at
-          // runtime even though the seam types it as Config.
-          this.source = current as () => ResolvedConfig
-        },
-        onChange: () => {
-          this.rebuild()
-        },
-      })
-    })
-    // The settings page's data channel: the Remote service binds the wire
-    // namespace, and the strict manifest claims its endpoints. See typert.ts
-    // for why the manifest self-registers through ctx.inject(['typert']).
+    // The status channel: the Remote service binds the wire namespace, and
+    // the strict manifest claims its endpoints. See typert.ts for why the
+    // manifest self-registers through ctx.inject(['typert']).
     new ZoteroRuntime(ctx)
     ctx.inject(['typert'], (host) => {
       host.effect(() => {
@@ -191,40 +214,36 @@ export class ZoteroService extends Service {
         }
       }, 'dsh-zotero: typert manifest')
     })
+    this.reconcileWriteTools(this.config.writeEnabled)
   }
 
   /**
-   * The currently effective configuration: schema defaults, then the
-   * composition entry, then the settings document's `zotero:` section.
+   * The currently effective configuration, read live from the entry's
+   * volatile references on every access — tools call this per request, so
+   * settings edits apply without a restart. Commits only land after passing
+   * {@link resolveConfig} (load gate + `internal/config` veto), so the read
+   * observes accepted values. Schemastery is not re-applied here; see
+   * {@link readResolvedConfig}.
    * @returns the live resolved config.
    */
   get config(): ResolvedConfig {
-    return this.source()
+    return readResolvedConfig(this.entry)
   }
 
   /**
-   * Rebuild the live transport stack from the current config on **this**
-   * instance. The settings section's `onChange` (and the constructor's first
-   * pass) both call this — never a service replacement.
-   *
-   * **Rebuilt:** HTTP client, write client, write authorizer, the `local`
-   * provider registration (previous registration disposed first so the
-   * duplicate-id guard never fires), and the write-tool set when
-   * `writeEnabled` flips. A request already in flight finishes on the client
-   * it started with; later calls resolve the fresh provider.
-   *
-   * **Not rebuilt:** `ZoteroService` identity and the `ctx.zotero` binding,
-   * {@link recovery} (service-lifetime dedupe gate), read-tool registrations,
-   * the prompt section, `/zotero`, and the Typert manifest.
+   * Build the transport stack from the given config: HTTP client, write
+   * client, write authorizer, and the `local` provider registration (the
+   * previous registration is disposed first so the duplicate-id guard never
+   * fires). A request already in flight finishes on the client it started
+   * with; later calls resolve the fresh provider.
    *
    * The write transport and authorizer exist only while `writeEnabled` is
    * set: without them the provider declares no `write` capability, so the
    * gate answers before any network happens.
    */
-  private rebuild(): void {
+  private buildTransport(config: ResolvedConfig): void {
     this.providerDispose?.()
     this.providerDispose = undefined
-    const config = this.config
     const client = new ZoteroHttpClient({
       baseUrl: config.baseUrl,
       timeoutMs: config.timeoutMs,
@@ -249,15 +268,14 @@ export class ZoteroService extends Service {
     this.providerDispose = this.registerProvider(
       new LocalApiProvider(client, localProviderLimits(config), {}, writer, authorizer),
     )
-    this.reconcileWriteTools(config.writeEnabled)
   }
 
   /**
    * Register or retire the write tools as `writeEnabled` flips. When the
    * flag is off the tools are absent from the model's surface entirely — a
    * tool that can only ever answer "write capability is disabled" would
-   * invite the model to retry it — and a settings commit re-registers them
-   * without a restart, like the provider itself.
+   * invite the model to retry it. Runs once at construction and again on
+   * every structural volatile-update.
    */
   private reconcileWriteTools(enabled: boolean): void {
     if (enabled && this.writeToolDisposes.length === 0) {
@@ -517,8 +535,51 @@ export class ZoteroService extends Service {
 }
 
 /**
+ * Top-level config keys whose change rebuilds the transport stack: the HTTP
+ * client identity and bounds, and the write-capability flip (writer,
+ * authorizer, and tool set). `provider` and `writePersistKey` are live reads
+ * (`resolveProvider()` and the authorizer's `persistKey` callback) and never
+ * rebuild; limits and `writeConfirm`/`webEnabled` are read per request.
+ */
+export const TRANSPORT_CONFIG_KEYS: ReadonlySet<keyof ResolvedConfig> = new Set([
+  'baseUrl',
+  'timeoutMs',
+  'maxResponseBytes',
+  'writeEnabled',
+])
+
+/**
+ * Whether a `loader/volatile-update` path list touches a transport key.
+ * A root path (`[]`) means the whole config moved as one reference.
+ * @param paths - the changed field paths the loader reported.
+ * @returns true when the transport stack may need a rebuild.
+ */
+export function touchesTransport(paths: readonly (readonly string[])[]): boolean {
+  return paths.some(
+    (path) =>
+      path.length === 0 ||
+      (path[0] !== undefined && TRANSPORT_CONFIG_KEYS.has(path[0] as keyof ResolvedConfig)),
+  )
+}
+
+/**
+ * Whether two resolved configs agree on every field the transport stack is
+ * built from. Limits and display fields are read per request and never
+ * trigger a rebuild.
+ * @param current - the live resolved config.
+ * @param built - the config the transport was last built from.
+ * @returns true when no rebuild is needed.
+ */
+function sameTransportConfig(current: ResolvedConfig, built: ResolvedConfig): boolean {
+  for (const key of TRANSPORT_CONFIG_KEYS) {
+    if (current[key] !== built[key]) return false
+  }
+  return true
+}
+
+/**
  * Project one resolved config onto the `local` provider's limits. Shared by
- * the initial build and every live rebuild so both always agree.
+ * the initial build and every volatile-update rebuild so both always agree.
  * @param config - the resolved config to project.
  * @returns the provider limits the transport and ranking behavior read.
  */
