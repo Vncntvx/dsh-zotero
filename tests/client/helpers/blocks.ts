@@ -7,7 +7,7 @@
  */
 
 import type {
-  RunningToolCall,
+  StartedToolCall,
   ToolResultNode,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 
@@ -27,9 +27,10 @@ export function settled(overrides: Partial<ToolResultNode> = {}): ToolResultNode
   }
 }
 
-/** An in-flight `zotero_search` call; override `name`/`argsRaw` for other tools. */
-export function running(overrides: Partial<RunningToolCall> = {}): RunningToolCall {
+/** A dispatched `zotero_search` call; override `name`/`argsRaw` for other tools. */
+export function running(overrides: Partial<StartedToolCall> = {}): StartedToolCall {
   return {
+    phase: 'start',
     callId: 'c1',
     name: 'zotero_search',
     argsRaw: '{}',

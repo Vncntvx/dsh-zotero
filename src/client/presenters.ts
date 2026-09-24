@@ -108,10 +108,18 @@ export function resultTextOf(block: ToolCallBlock): string | null {
   return parts.join('\n')
 }
 
+/**
+ * The frozen args string for a call block. Preparing calls carry no
+ * arguments yet (`phase: 'preparing'`); started and settled calls do.
+ */
+function argsRawOf(block: ToolCallBlock): string | null {
+  if (isSettledTool(block)) return block.call?.argsRaw ?? null
+  return block.phase === 'start' ? block.argsRaw : null
+}
+
 /** The call arguments parsed from the frozen args string; null when malformed. */
 export function argsOf(block: ToolCallBlock): Record<string, unknown> | null {
-  const settled = isSettledTool(block)
-  const raw = settled ? (block.call?.argsRaw ?? null) : block.argsRaw
+  const raw = argsRawOf(block)
   if (raw === null || raw === '') return null
   try {
     const parsed = JSON.parse(raw) as unknown

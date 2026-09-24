@@ -6,7 +6,7 @@
  */
 
 import type {
-  RunningToolCall,
+  StartedToolCall,
   ToolResultNode,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
@@ -27,7 +27,7 @@ import {
 } from '../../src/client/presenters.ts'
 import { running as blockRunning, settled as blockSettled } from './helpers/blocks.ts'
 
-function running(overrides: Partial<RunningToolCall> = {}): RunningToolCall {
+function running(overrides: Partial<StartedToolCall> = {}): StartedToolCall {
   return blockRunning(overrides)
 }
 
@@ -121,6 +121,18 @@ describe('argsOf', () => {
     expect(argsOf(settled({ call: { name: 'zotero_get', argsRaw: '{' } }))).toBeNull()
     expect(argsOf(settled({ call: null }))).toBeNull()
     expect(argsOf(running({ argsRaw: '[1]' }))).toBeNull()
+    // Preparing calls carry no args yet on the 0.1.7 RunningToolCall union.
+    expect(
+      argsOf({
+        phase: 'preparing',
+        callId: 'p1',
+        name: 'zotero_search',
+        turn: 1,
+        step: 1,
+        time: 1,
+        subCalls: [],
+      }),
+    ).toBeNull()
   })
 })
 
