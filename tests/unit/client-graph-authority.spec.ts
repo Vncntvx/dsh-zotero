@@ -126,13 +126,13 @@ describe('client graph authority', () => {
   })
 })
 
-describe('harness inline-safe table (dsh-v0.1.7-rc.1)', () => {
-  it('accepts the rc.1 package names and rejects the retired agent-presets arm', () => {
+describe('harness inline-safe table (dsh-v0.1.7-rc.2)', () => {
+  it('accepts the rc.2 package names and rejects the retired agent-presets arm', () => {
     expect(isInlineSafeHarness('@deepseek-ai/dsh-agent-preset-registry/display')).toBe(true)
     expect(isInlineSafeHarness('@deepseek-ai/dsh-agent-presets/display')).toBe(false)
   })
 
-  it('covers the full rc.1 INLINE_SAFE arms', () => {
+  it('covers the full rc.2 INLINE_SAFE arms', () => {
     for (const specifier of [
       '@deepseek-ai/dsh-file-reference',
       '@deepseek-ai/dsh-session/client',
@@ -149,6 +149,8 @@ describe('harness inline-safe table (dsh-v0.1.7-rc.1)', () => {
       '@deepseek-ai/dsh-native-command/types',
       '@deepseek-ai/dsh-host-open-in-app/shared',
       '@deepseek-ai/dsh-plugin-manager/registry',
+      '@deepseek-ai/dsh-agent-preset-registry/display',
+      '@deepseek-ai/dsh-api-workspace-controller/default-workspace',
       '@deepseek-ai/dsh-spill-policy/notice',
       '@deepseek-ai/dsh-anything/remote',
       '@deepseek-ai/cosmokit',

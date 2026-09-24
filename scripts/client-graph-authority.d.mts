@@ -14,13 +14,13 @@ export declare const HOST_ONLY_PACKAGE_RESOLVE: RegExp
 /** Metafile-input filter for host-owned packages (zod). */
 export declare const HOST_ONLY_PACKAGE_INPUT: RegExp
 
-/** Counterpart of tsdown `INLINE_SAFE` at dsh-v0.1.7-rc.1. */
+/** Counterpart of tsdown `INLINE_SAFE` at dsh-v0.1.7-rc.2. */
 export declare const INLINE_SAFE: RegExp
 
-/** Counterpart of tsdown `GENERATED_REMOTE` at dsh-v0.1.7-rc.1. */
+/** Counterpart of tsdown `GENERATED_REMOTE` at dsh-v0.1.7-rc.2. */
 export declare const GENERATED_REMOTE: RegExp
 
-/** Counterpart of tsdown `VENDORED_LIBRARY` at dsh-v0.1.7-rc.1. */
+/** Counterpart of tsdown `VENDORED_LIBRARY` at dsh-v0.1.7-rc.2. */
 export declare const VENDORED_LIBRARY: RegExp
 
 /**
