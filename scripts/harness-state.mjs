@@ -88,12 +88,102 @@ function pinnedVersion(manifest) {
   return pin
 }
 
-/** Fail on any harness version in prose that is not the pin. */
+/**
+ * Start of the historical version-mapping section in getting-started docs.
+ * Pin moves must never rewrite those rows: they record what each plugin
+ * release required, not the current pin.
+ */
+const VERSION_MAP_HEADING = /^(?:版本对照|Version mapping)/
+
+/**
+ * Locate the version-mapping section inside a getting-started document.
+ * The section runs from its heading through the table, until the next `##`.
+ * @param lines - the document, split on newlines.
+ * @returns the half-open `[start, end)` line bounds, or `[-1, -1)` when absent.
+ */
+export function versionMapBounds(lines) {
+  const start = lines.findIndex((line) => VERSION_MAP_HEADING.test(line.trim()))
+  if (start < 0) return { start: -1, end: -1 }
+  let end = lines.length
+  for (let i = start + 1; i < lines.length; i++) {
+    if (lines[i].startsWith('## ')) {
+      end = i
+      break
+    }
+  }
+  return { start, end }
+}
+
+/**
+ * Replace every prose form of the old pin with the new one, leaving the
+ * historical version-mapping section untouched. A bare `replaceAll` of the
+ * version string is what previously rewrote release history inside the table.
+ */
+export function retargetProse(source, previous, next) {
+  const lines = source.split('\n')
+  const { start, end } = versionMapBounds(lines)
+  const move = (line) =>
+    line
+      .replaceAll(previous, next)
+      .replaceAll(
+        `%3E%3D${encodeBadgeVersion(previous)}-blue`,
+        `%3E%3D${encodeBadgeVersion(next)}-blue`,
+      )
+  return lines.map((line, i) => (i >= start && i < end ? line : move(line))).join('\n')
+}
+
+/** Parse one `| plugin | dsh |` version-mapping row into its two cells. */
+function versionMapRow(line) {
+  const match = /^\|\s*(\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?)\s*\|([^|]*)\|/.exec(line.trim())
+  if (match === null) return undefined
+  return { plugin: match[1], dsh: match[2].trim() }
+}
+
+/**
+ * The version-mapping table is historical; only its last row tracks the
+ * current release. That row must name `package.json`'s version and a dsh cell
+ * that contains the pin (a dual range lists the pin as one arm).
+ * @returns human-readable failures; empty when the tail row is current.
+ */
+export function checkVersionMap(path, source, packageVersion, pin) {
+  const errors = []
+  const lines = source.split('\n')
+  const { start, end } = versionMapBounds(lines)
+  if (start < 0) {
+    errors.push(`${relative(root, path)} has no version-mapping section`)
+    return errors
+  }
+  const rows = lines
+    .slice(start, end)
+    .map(versionMapRow)
+    .filter((row) => row !== undefined)
+  if (rows.length === 0) {
+    errors.push(`${relative(root, path)} version-mapping table has no release rows`)
+    return errors
+  }
+  const last = rows[rows.length - 1]
+  if (last.plugin !== packageVersion) {
+    errors.push(
+      `${relative(root, path)} version-mapping last row is "${last.plugin}", expected package version "${packageVersion}"`,
+    )
+  }
+  if (!last.dsh.includes(pin)) {
+    errors.push(
+      `${relative(root, path)} version-mapping last row dsh cell "${last.dsh}" does not include the pin "${pin}"`,
+    )
+  }
+  return errors
+}
+
+/** Fail on any harness version in current-pin prose that is not the pin. */
 function checkProse(path, pin) {
   const text = readFileSync(path, 'utf8')
+  const lines = text.split('\n')
+  const { start, end } = versionMapBounds(lines)
+  const prose = lines.filter((_, i) => i < start || i >= end).join('\n')
   const found = new Set()
   for (const pattern of PROSE_VERSION_PATTERNS) {
-    for (const match of text.matchAll(pattern)) found.add(decodeBadgeVersion(match[1]))
+    for (const match of prose.matchAll(pattern)) found.add(decodeBadgeVersion(match[1]))
   }
   if (found.size === 0) {
     problems.push(`${relative(root, path)} states no harness version; name the verified pin`)
@@ -183,6 +273,9 @@ function checkPin(manifest) {
     )
   }
   for (const path of prosePaths) checkProse(path, pin)
+  for (const path of docPaths) {
+    problems.push(...checkVersionMap(path, readFileSync(path, 'utf8'), manifest.version, pin))
+  }
   checkLock(pin)
   checkOverrideNames(manifest)
   return pin
@@ -355,16 +448,6 @@ function checkArtifacts(strict) {
   }
 }
 
-/** Replace every prose form of the old pin with the new one. */
-function retargetProse(source, previous, next) {
-  return source
-    .replaceAll(previous, next)
-    .replaceAll(
-      `%3E%3D${encodeBadgeVersion(previous)}-blue`,
-      `%3E%3D${encodeBadgeVersion(next)}-blue`,
-    )
-}
-
 /** Move the pin; the caller re-runs the check against what was written. */
 function writePin(version, previous) {
   if (previous === undefined || !VERSION_PATTERN.test(version)) {
@@ -425,23 +508,28 @@ function runCheck(strict) {
   return pin
 }
 
-const writeIndex = process.argv.indexOf('--write')
-if (writeIndex !== -1) {
-  const version = process.argv[writeIndex + 1]
-  if (version === undefined) {
-    console.error('usage: node scripts/harness-state.mjs --write <version>')
-    process.exitCode = 1
-  } else {
-    const previous = pinnedVersion(readJson(pkgPath))
-    writePin(version, previous)
-    if (problems.length > 0) {
-      report()
+const isMain =
+  process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+
+if (isMain) {
+  const writeIndex = process.argv.indexOf('--write')
+  if (writeIndex !== -1) {
+    const version = process.argv[writeIndex + 1]
+    if (version === undefined) {
+      console.error('usage: node scripts/harness-state.mjs --write <version>')
+      process.exitCode = 1
     } else {
-      console.log(`pin moved ${previous} -> ${version}`)
-      // Re-check what was written; a stale package-lock.json surfaces here.
-      runCheck(false)
+      const previous = pinnedVersion(readJson(pkgPath))
+      writePin(version, previous)
+      if (problems.length > 0) {
+        report()
+      } else {
+        console.log(`pin moved ${previous} -> ${version}`)
+        // Re-check what was written; a stale package-lock.json surfaces here.
+        runCheck(false)
+      }
     }
+  } else {
+    runCheck(process.argv.includes('--strict'))
   }
-} else {
-  runCheck(process.argv.includes('--strict'))
 }
