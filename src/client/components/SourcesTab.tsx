@@ -78,32 +78,30 @@ export function currentTime(): string {
 
 /**
  * A cheap content signature of the zotero-relevant slice: the visible
- * zotero tool-call row order plus the in-flight call ids. `snapshot.order`
- * is already the harness's presentation order, so the signature tracks it
- * directly — streaming chunk publications keep the order and the in-flight
- * set stable, so the call collection (and with it the workspace rebuild)
- * skips them. Only zotero rows contribute, so unrelated tool activity never
- * rebuilds the workspace. A nested dispatch appearing under an already
- * running call keeps that call's id, so it lands with the next signature
- * change — an accepted delay, not an omission. A settled block whose content
- * changes without an order or running-set change (presentation meta arriving
- * late) likewise waits one publication: harness evidence blocks are frozen
- * at settle, so the memo reuses the previous blocks until the next
- * signature change. Encoded with `JSON.stringify`
- * so arbitrary order keys and call ids (the harness never promises they
- * exclude control characters) cannot collide.
+ * zotero tool-call row order plus each in-flight call's `callId` and rc.1
+ * lifecycle `phase`. `snapshot.order` is already the harness's presentation
+ * order, so the signature tracks it directly. Streaming chunk publications
+ * keep order and phase stable and are skipped; a preparing→start transition
+ * changes `phase` (and with it the signature) so the workspace picks up
+ * `argsRaw` as soon as `tool/call` lands. Settled roots leave `running`.
+ * Only zotero rows contribute. A nested dispatch under an already running
+ * call lands with the next signature change — an accepted delay. A settled
+ * block whose content changes without an order/running change (late
+ * presentation meta) waits one publication: harness evidence blocks are
+ * frozen at settle. Encoded with `JSON.stringify` so arbitrary order keys
+ * and call ids cannot collide.
  * @param snapshot - the chat snapshot, undefined while none is open.
  * @returns the signature string.
  */
 export function sessionSignatureOf(snapshot: ChatSnapshot | undefined): string {
   if (snapshot === undefined) return ''
-  const running: string[] = []
+  const running: Array<{ callId: string; phase: 'preparing' | 'start' }> = []
   const order: string[] = []
   for (const { key, root } of visibleToolRoots(snapshot)) {
     if (!isZoteroRoot(root)) continue
     order.push(key)
-    // The tool row's root lifecycle value: settled roots carry `kind`, in-flight ones do not.
-    if (!isSettledTool(root)) running.push(root.callId)
+    // Settled roots carry `kind`; running arms carry the rc.1 `phase` discriminant.
+    if (!isSettledTool(root)) running.push({ callId: root.callId, phase: root.phase })
   }
   return JSON.stringify({ order, running })
 }

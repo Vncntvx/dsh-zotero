@@ -7,9 +7,24 @@
  */
 
 import type {
+  PreparingToolCall,
   StartedToolCall,
   ToolResultNode,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
+
+/** A named model call still preparing (no args yet); override `name`/`callId`. */
+export function preparing(overrides: Partial<PreparingToolCall> = {}): PreparingToolCall {
+  return {
+    phase: 'preparing',
+    callId: 'c1',
+    name: 'zotero_search',
+    turn: 1,
+    step: 1,
+    time: 1,
+    subCalls: [],
+    ...overrides,
+  }
+}
 
 /** A settled `zotero_search` result; override `call` to name other tools. */
 export function settled(overrides: Partial<ToolResultNode> = {}): ToolResultNode {

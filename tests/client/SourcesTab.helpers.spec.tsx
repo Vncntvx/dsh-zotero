@@ -21,7 +21,7 @@ import {
 import { connectionDiagnosisOf } from '../../src/client/components/workspace/connection.ts'
 import { callNameOf } from '../../src/client/presenters.ts'
 import { zh } from '../../src/client/locales.ts'
-import { running, settled } from './helpers/blocks.ts'
+import { preparing, running, settled } from './helpers/blocks.ts'
 import { CONNECTED, UNAVAILABLE, chatOf, toolRow } from './helpers/sources-tab-harness.tsx'
 
 import { mockT } from './helpers/mock-translate.ts'
@@ -85,14 +85,19 @@ describe('status projection helpers', () => {
     expect(currentTime()).toMatch(/^\d{2}:\d{2}:\d{2}$/)
   })
 
-  it('signs the zotero-relevant snapshot slice', () => {
+  it('signs the zotero-relevant snapshot slice with in-flight phase', () => {
     expect(sessionSignatureOf(undefined)).toBe('')
     const signed = sessionSignatureOf(
       chatOf([toolRow(settled({ seq: 3, callId: 'a' })), toolRow(running({ callId: 'b' }))]),
     )
-    expect(signed).toBe(JSON.stringify({ order: ['tool:a', 'tool:b'], running: ['b'] }))
+    expect(signed).toBe(
+      JSON.stringify({
+        order: ['tool:a', 'tool:b'],
+        running: [{ callId: 'b', phase: 'start' }],
+      }),
+    )
     // The same content signs identically; streaming publications change
-    // neither the visible zotero row order nor the in-flight ids.
+    // neither the visible zotero row order nor the in-flight phase.
     expect(
       sessionSignatureOf(
         chatOf([toolRow(settled({ seq: 3, callId: 'a' })), toolRow(running({ callId: 'b' }))]),
@@ -108,6 +113,16 @@ describe('status projection helpers', () => {
     expect(sessionSignatureOf(chatOf([toolRow(settled({ seq: 3, callId: 'a' })), bashRow]))).toBe(
       JSON.stringify({ order: ['tool:a'], running: [] }),
     )
+  })
+
+  it('changes the signature when a call moves preparing → start', () => {
+    const before = sessionSignatureOf(chatOf([toolRow(preparing({ callId: 'p' }))]))
+    const after = sessionSignatureOf(
+      chatOf([toolRow(running({ callId: 'p', argsRaw: '{"q":"x"}' }))]),
+    )
+    expect(before).not.toBe(after)
+    expect(before).toContain('"phase":"preparing"')
+    expect(after).toContain('"phase":"start"')
   })
 
   it('encodes control characters in keys without colliding', () => {
