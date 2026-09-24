@@ -10,7 +10,7 @@
   <a href="https://www.npmjs.com/package/dsh-zotero"><img src="https://img.shields.io/npm/v/dsh-zotero" alt="npm version" style="max-width:100%;"></a>
   <a href="https://www.npmjs.com/package/dsh-zotero"><img src="https://img.shields.io/npm/dm/dsh-zotero" alt="npm downloads" style="max-width:100%;"></a>
   <a href="https://www.npmjs.com/package/dsh-zotero"><img src="https://img.shields.io/npm/l/dsh-zotero" alt="license" style="max-width:100%;"></a>
-  <a href="https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.7-rc.1"><img src="https://img.shields.io/badge/dsh-0.1.7--rc.1-blue" alt="dsh version" style="max-width:100%;"></a>
+  <a href="https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.7-rc.2"><img src="https://img.shields.io/badge/dsh-0.1.7--rc.2-blue" alt="dsh version" style="max-width:100%;"></a>
   <a href="https://awesome-dsh-plugin.com"><img src="https://awesome-dsh-plugin.com/badge.svg" alt="Awesome DSH Plugin"></a>
 </p>
 </div>
@@ -69,7 +69,7 @@ The plugin provides a settings page under **Settings → Zotero** — a left-nav
 
 - Zotero ≥ 7 with local API enabled: **Settings → Advanced → "Allow other applications on this computer to communicate with Zotero"**
 - Node.js ≥ 22.19 (or ≥ 24)
-- dsh 0.1.7-rc.1 host (exactly this version: `engines.dsh` and every `@deepseek-ai/dsh-*` peer pin that exact version; no other dsh release is supported)
+- dsh 0.1.7-rc.2 host (exactly this version: `engines.dsh` and every `@deepseek-ai/dsh-*` peer pin that exact version; no other dsh release is supported)
 - Local API at `http://127.0.0.1:23119/api`, unauthenticated, read-only
 
 ## Usage example

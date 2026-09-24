@@ -78,8 +78,8 @@ export function currentTime(): string {
 
 /**
  * A cheap content signature of the zotero-relevant slice: the visible
- * zotero tool-call row order plus each in-flight call's `callId` and rc.1
- * lifecycle `phase`. `snapshot.order` is already the harness's presentation
+ * zotero tool-call row order plus each in-flight call's `callId` and lifecycle
+ * `phase`. `snapshot.order` is already the harness's presentation
  * order, so the signature tracks it directly. Streaming chunk publications
  * keep order and phase stable and are skipped; a preparing→start transition
  * changes `phase` (and with it the signature) so the workspace picks up
@@ -100,7 +100,7 @@ export function sessionSignatureOf(snapshot: ChatSnapshot | undefined): string {
   for (const { key, root } of visibleToolRoots(snapshot)) {
     if (!isZoteroRoot(root)) continue
     order.push(key)
-    // Settled roots carry `kind`; running arms carry the rc.1 `phase` discriminant.
+    // Settled roots carry `kind`; running arms carry the `phase` discriminant.
     if (!isSettledTool(root)) running.push({ callId: root.callId, phase: root.phase })
   }
   return JSON.stringify({ order, running })
