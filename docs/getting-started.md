@@ -9,7 +9,7 @@ dsh-zotero 是一个 DSH 插件，让 Agent 能够搜索、阅读和引用本地
 - Zotero >= 7 桌面版已安装
 - 本地 API 已启用：设置 -> 高级 -> 勾选「允许此计算机上的其他应用程序与 Zotero 通信」
 - Node.js >= 22.19 或 >= 24
-- DSH 0.1.7-rc.1（恰好该版本：`engines.dsh` 与全部 `@deepseek-ai/dsh-*` peer 均为 exact pin，不兼容其他 dsh 版本）
+- DSH 0.1.7-rc.2（恰好该版本：`engines.dsh` 与全部 `@deepseek-ai/dsh-*` peer 均为 exact pin，不兼容其他 dsh 版本）
 
 版本对照：
 
@@ -28,6 +28,7 @@ dsh-zotero 是一个 DSH 插件，让 Agent 能够搜索、阅读和引用本地
 | 0.9.0    | 0.1.5-rc.1 或 0.1.6-alpha.2 |
 | 0.9.1    | 0.1.7-alpha.2               |
 | 0.10.0   | 0.1.7-rc.1                  |
+| 0.10.1   | 0.1.7-rc.2                  |
 
 ## 安装插件
 
