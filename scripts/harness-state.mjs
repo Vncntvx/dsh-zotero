@@ -3,11 +3,11 @@
  *
  * Two derived facts have to agree, and both rot silently:
  *
- * 1. **The pin.** `package.json` carries one harness line in four derived forms
- *    (exact `dependencies` / `devDependencies` / `overrides`, `^`-ranged
- *    `peerDependencies`, and `engines.dsh`), plus the version the READMEs and
- *    AGENTS.md state in prose. The exact `devDependencies` line is the source
- *    of truth; every other form is written from it. The tracked
+ * 1. **The pin.** `package.json` carries one harness line in exact form only:
+ *    every `@deepseek-ai/dsh-*` in `dependencies` / `devDependencies` /
+ *    `overrides` / `peerDependencies`, plus `engines.dsh` and `dsh.harnessRange`.
+ *    No caret ranges, no dual arms. The exact `devDependencies` line is the
+ *    source of truth; every other form is written from it. The tracked
  *    `package-lock.json` is held to the same pin.
  *
  * 2. **The artifacts.** Upstream packages resolve through
@@ -40,17 +40,22 @@ const docPaths = ['docs/getting-started.md', 'docs/getting-started.en.md'].map((
 )
 /** Files whose prose restates the pin. */
 const prosePaths = [...readmePaths, ...docPaths, agentsPath]
-/** Exact-version sections; `peerDependencies` is ranged and handled separately. */
-const EXACT_SECTIONS = ['dependencies', 'devDependencies', 'overrides']
-const RANGED_SECTIONS = ['peerDependencies']
+/** Manifest sections whose every `@deepseek-ai/dsh-*` entry must equal the pin exactly. */
+const VERSION_SECTIONS = ['dependencies', 'devDependencies', 'overrides', 'peerDependencies']
 /** Source roots scanned for the upstream imports whose artifacts must be fresh. */
 const SCAN_ROOTS = ['src', 'tests']
 const VERSION_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/
-/** Prose forms of a harness version: `dsh 1.2.3`, `DSH 1.2.3`, `dsh-v1.2.3`, `dsh-%3E%3D1.2.3--rc.1-blue`. */
+/**
+ * Prose forms of the current pin. Badges are exact (`badge/dsh-0.1.7--rc.1-blue`);
+ * the `>=` badge form is recognized only so a stale one can be rejected.
+ */
 const PROSE_VERSION_PATTERNS = [
-  /dsh[- ]v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?)/gi,
-  /%3E%3D(\d+\.\d+\.\d+(?:--[0-9A-Za-z.]+)?)-blue/g,
+  // Exact badge first so `dsh-0.1.7--rc.1-blue` never yields a bare `0.1.7`.
+  /badge\/dsh-(\d+\.\d+\.\d+(?:--[0-9A-Za-z.]+)?)-blue/g,
+  /dsh[- ]v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)*)(?!-)/gi,
 ]
+/** Legacy `>=` badge: legal only as a migration leftover; current form is exact. */
+const LEGACY_GTE_BADGE = /%3E%3D(\d+\.\d+\.\d+(?:--[0-9A-Za-z.]+)?)-blue/g
 
 const problems = []
 const notes = []
@@ -122,13 +127,14 @@ export function versionMapBounds(lines) {
 export function retargetProse(source, previous, next) {
   const lines = source.split('\n')
   const { start, end } = versionMapBounds(lines)
+  const exactBadge = `dsh-${encodeBadgeVersion(next)}-blue`
   const move = (line) =>
     line
+      // Exact badge first (encoded prerelease uses `--`).
+      .replaceAll(`dsh-${encodeBadgeVersion(previous)}-blue`, exactBadge)
+      // Migrate a legacy `>=` badge to the exact current form in one step.
+      .replaceAll(`%3E%3D${encodeBadgeVersion(previous)}-blue`, `${encodeBadgeVersion(next)}-blue`)
       .replaceAll(previous, next)
-      .replaceAll(
-        `%3E%3D${encodeBadgeVersion(previous)}-blue`,
-        `%3E%3D${encodeBadgeVersion(next)}-blue`,
-      )
   return lines.map((line, i) => (i >= start && i < end ? line : move(line))).join('\n')
 }
 
@@ -142,7 +148,7 @@ function versionMapRow(line) {
 /**
  * The version-mapping table is historical; only its last row tracks the
  * current release. That row must name `package.json`'s version and a dsh cell
- * that contains the pin (a dual range lists the pin as one arm).
+ * equal to the exact pin.
  * @returns human-readable failures; empty when the tail row is current.
  */
 export function checkVersionMap(path, source, packageVersion, pin) {
@@ -167,9 +173,9 @@ export function checkVersionMap(path, source, packageVersion, pin) {
       `${relative(root, path)} version-mapping last row is "${last.plugin}", expected package version "${packageVersion}"`,
     )
   }
-  if (!last.dsh.includes(pin)) {
+  if (last.dsh !== pin) {
     errors.push(
-      `${relative(root, path)} version-mapping last row dsh cell "${last.dsh}" does not include the pin "${pin}"`,
+      `${relative(root, path)} version-mapping last row dsh cell "${last.dsh}" is not the exact pin "${pin}"`,
     )
   }
   return errors
@@ -181,6 +187,12 @@ function checkProse(path, pin) {
   const lines = text.split('\n')
   const { start, end } = versionMapBounds(lines)
   const prose = lines.filter((_, i) => i < start || i >= end).join('\n')
+  for (const match of prose.matchAll(LEGACY_GTE_BADGE)) {
+    problems.push(
+      `${relative(root, path)} still carries a ">= ${decodeBadgeVersion(match[1])}" badge;` +
+        ` the current form is the exact badge "dsh ${pin}"`,
+    )
+  }
   const found = new Set()
   for (const pattern of PROSE_VERSION_PATTERNS) {
     for (const match of prose.matchAll(pattern)) found.add(decodeBadgeVersion(match[1]))
@@ -221,52 +233,74 @@ function checkLock(pin) {
   problems.push(
     `package-lock.json resolves ${offenders.length} harness package(s) off the pin "${pin}":` +
       ` ${shown.join(', ')}${more} — add a missing name to overrides, then run:` +
-      ' npm install --package-lock-only',
+      ' npm install --package-lock-only' +
+      ' (if the registry has not published the pin yet, typecheck may still use npm run link:local-harness,' +
+      ' but the lock must not be hand-edited to fake the pin)',
   )
 }
 
 /**
- * The install-facing harness range: explicit dual support when the manifest
- * declares `dsh.harnessRange`, otherwise the single-pin form `^<pin>`.
- * @param manifest - package.json contents.
- * @param pin - exact devDependency pin.
- * @returns the range engines.dsh and every dsh peer must equal.
+ * Whether a declared harness face is the exact pin (never a range or dual arm).
+ * @param value - the declared string.
+ * @param pin - the exact pin.
+ * @returns true when the value is exactly the pin.
  */
-function harnessRange(manifest, pin) {
-  const declared = manifest.dsh?.harnessRange
-  if (typeof declared !== 'string' || declared.length === 0) return `^${pin}`
-  const arms = declared.split('||').map((arm) => arm.trim())
-  if (!arms.includes(`^${pin}`)) {
-    problems.push(
-      `dsh.harnessRange "${declared}" does not include the pin arm "^${pin}";` +
-        ' dual ranges must keep the typecheck pin as one alternative',
+function isExactPinFace(value, pin) {
+  return value === pin && VERSION_PATTERN.test(value)
+}
+
+/** Human-readable reason a harness face is not the exact pin. */
+function exactPinProblem(section, name, value, pin) {
+  const where = name === undefined ? section : `${section}["${name}"]`
+  if (typeof value !== 'string' || value.length === 0) {
+    return `${where} is missing; expected the exact pin "${pin}"`
+  }
+  if (value.includes('||') || /^[~^]|^[<>]/.test(value) || value.includes(' - ')) {
+    return `${where} is "${value}"; only the exact pin "${pin}" is allowed (no ranges, no dual arms)`
+  }
+  return `${where} is "${value}", expected the exact pin "${pin}"`
+}
+
+/**
+ * Every harness-face problem in a manifest relative to one exact pin.
+ * Pure: used by `checkPin` and unit-tested without the CLI side effects.
+ * @param manifest - parsed package.json.
+ * @param pin - the exact pin every face must equal.
+ * @returns human-readable problems; empty when every face is the pin.
+ */
+export function collectPinFaceProblems(manifest, pin) {
+  const found = []
+  const peers = Object.keys(manifest.peerDependencies ?? {}).filter(isDshPackage)
+  // rc.1's evaluatePluginCompatibility reads only peerDependencies — zero dsh
+  // peers would load on any runtime even when engines.dsh names the pin.
+  if (peers.length === 0) {
+    found.push(
+      'peerDependencies declares no @deepseek-ai/dsh-* entry;' +
+        ' at least one exact dsh peer is required so the runtime rejects other dsh lines',
     )
   }
-  return declared
+  for (const section of VERSION_SECTIONS) {
+    for (const [name, version] of Object.entries(manifest[section] ?? {})) {
+      if (!isDshPackage(name)) continue
+      if (!isExactPinFace(version, pin)) {
+        found.push(exactPinProblem(section, name, version, pin))
+      }
+    }
+  }
+  if (!isExactPinFace(manifest.engines?.dsh, pin)) {
+    found.push(exactPinProblem('engines.dsh', undefined, manifest.engines?.dsh, pin))
+  }
+  if (!isExactPinFace(manifest.dsh?.harnessRange, pin)) {
+    found.push(exactPinProblem('dsh.harnessRange', undefined, manifest.dsh?.harnessRange, pin))
+  }
+  return found
 }
 
 /** Check every derived form of the pin against the source of truth. */
 function checkPin(manifest) {
   const pin = pinnedVersion(manifest)
   if (pin === undefined) return undefined
-  const range = harnessRange(manifest, pin)
-  for (const section of EXACT_SECTIONS) {
-    for (const [name, version] of Object.entries(manifest[section] ?? {})) {
-      if (isDshPackage(name) && version !== pin) {
-        problems.push(`${section}["${name}"] is "${version}", expected the pin "${pin}"`)
-      }
-    }
-  }
-  for (const section of RANGED_SECTIONS) {
-    for (const [name, version] of Object.entries(manifest[section] ?? {})) {
-      if (isDshPackage(name) && version !== range) {
-        problems.push(`${section}["${name}"] is "${version}", expected "${range}"`)
-      }
-    }
-  }
-  if (manifest.engines?.dsh !== range) {
-    problems.push(`engines.dsh is "${manifest.engines?.dsh}", expected "${range}"`)
-  }
+  problems.push(...collectPinFaceProblems(manifest, pin))
   if (manifest.dshWorkshop !== undefined) {
     problems.push(
       'package.json still carries dshWorkshop; Workshop support was removed — delete the block',
@@ -290,11 +324,12 @@ function checkPin(manifest) {
 function checkOverrideNames(manifest) {
   const known = harnessPackages()
   if (known.size === 0) return
-  for (const section of [...EXACT_SECTIONS, ...RANGED_SECTIONS]) {
+  for (const section of VERSION_SECTIONS) {
     for (const name of Object.keys(manifest[section] ?? {})) {
       if (!isDshPackage(name) || known.has(name)) continue
-      // Peer ranges may name packages the monorepo publishes under a path this
-      // walk already found; a true miss means the npm name is gone upstream.
+      // A manifest key may name a package the sibling monorepo publishes under
+      // a path this walk already found; a true miss means the npm name is gone
+      // upstream.
       notes.push(
         `${section}["${name}"] names a package the sibling harness does not carry` +
           ' — drop the key or rename it if upstream moved the package',
@@ -448,6 +483,25 @@ function checkArtifacts(strict) {
   }
 }
 
+/**
+ * Rewrite every harness face of a manifest to one exact pin. Mutates
+ * `manifest` in place. Peers, engines, and harnessRange all become the
+ * pin itself — never a caret range and never a dual arm.
+ * @param manifest - parsed package.json (mutated in place).
+ * @param version - the exact new pin.
+ * @returns the same manifest for chaining/tests.
+ */
+export function applyPinToManifest(manifest, version) {
+  for (const section of VERSION_SECTIONS) {
+    for (const name of Object.keys(manifest[section] ?? {})) {
+      if (isDshPackage(name)) manifest[section][name] = version
+    }
+  }
+  if (manifest.dsh && typeof manifest.dsh === 'object') manifest.dsh.harnessRange = version
+  manifest.engines = { ...manifest.engines, dsh: version }
+  return manifest
+}
+
 /** Move the pin; the caller re-runs the check against what was written. */
 function writePin(version, previous) {
   if (previous === undefined || !VERSION_PATTERN.test(version)) {
@@ -458,30 +512,7 @@ function writePin(version, previous) {
     )
     return
   }
-  const manifest = readJson(pkgPath)
-  for (const section of EXACT_SECTIONS) {
-    for (const name of Object.keys(manifest[section] ?? {})) {
-      if (isDshPackage(name)) manifest[section][name] = version
-    }
-  }
-  // Dual install ranges live in dsh.harnessRange; rewrite the pin arm in place
-  // instead of collapsing peers/engines back to a single ^version.
-  const priorRange = manifest.dsh?.harnessRange
-  const nextRange =
-    typeof priorRange === 'string' && priorRange.length > 0
-      ? priorRange
-          .split('||')
-          .map((arm) => arm.trim())
-          .map((arm) => (arm === `^${previous}` ? `^${version}` : arm))
-          .join(' || ')
-      : `^${version}`
-  if (manifest.dsh && typeof manifest.dsh === 'object') manifest.dsh.harnessRange = nextRange
-  for (const section of RANGED_SECTIONS) {
-    for (const name of Object.keys(manifest[section] ?? {})) {
-      if (isDshPackage(name)) manifest[section][name] = nextRange
-    }
-  }
-  manifest.engines = { ...manifest.engines, dsh: nextRange }
+  const manifest = applyPinToManifest(readJson(pkgPath), version)
   writeFileSync(pkgPath, `${JSON.stringify(manifest, null, 2)}\n`)
   for (const path of prosePaths) {
     const before = readFileSync(path, 'utf8')

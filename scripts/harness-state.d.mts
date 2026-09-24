@@ -10,3 +10,25 @@ export declare function checkVersionMap(
   packageVersion: string,
   pin: string,
 ): string[]
+
+/**
+ * Rewrite every harness face of a manifest to one exact pin (mutates `manifest`).
+ * @param manifest - parsed package.json.
+ * @param version - the exact new pin.
+ * @returns the same manifest.
+ */
+export declare function applyPinToManifest<T extends Record<string, unknown>>(
+  manifest: T,
+  version: string,
+): T
+
+/**
+ * Every harness-face problem in a manifest relative to one exact pin.
+ * @param manifest - parsed package.json.
+ * @param pin - the exact pin every face must equal.
+ * @returns human-readable problems; empty when every face is the pin.
+ */
+export declare function collectPinFaceProblems(
+  manifest: Record<string, unknown>,
+  pin: string,
+): string[]

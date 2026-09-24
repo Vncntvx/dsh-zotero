@@ -6,6 +6,12 @@
     "allowImportingTsExtensions": true,
     "types": ["node"]
   },
-  "include": ["src", "tests", "scripts/client-graph-authority.d.mts", "vitest.config.ts"],
+  "include": [
+    "src",
+    "tests",
+    "scripts/client-graph-authority.d.mts",
+    "scripts/harness-state.d.mts",
+    "vitest.config.ts"
+  ],
   "exclude": ["src/client", "tests/client"]
 }
