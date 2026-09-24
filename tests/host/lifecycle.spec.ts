@@ -69,17 +69,16 @@ describe('ZoteroService lifecycle', () => {
     await withoutCommands.teardown()
   })
 
-  it('keeps definitionId as a plain string so 0.1.5-rc hosts can load', async () => {
+  it('brands the definitionId through the CommandDefinitionId constructor', async () => {
     lane = await setupHostLane(undefined, { commands: true })
     const definition = lane.stub!.registered[0]!
     // The brand constructor is an identity function; the wire value is the string.
-    // A value-import of CommandDefinitionId crashes module load on harness 0.1.5-rc.x.
     expect(definition.definitionId).toBe('dsh-zotero/status')
   })
 
-  it('ships lib/command.js without a value import of CommandDefinitionId', () => {
+  it('ships lib/command.js with a value import of CommandDefinitionId', () => {
     const built = readFileSync(new URL('../../lib/command.js', import.meta.url), 'utf8')
-    expect(built).not.toMatch(/import\s*\{[^}]*CommandDefinitionId/)
+    expect(built).toMatch(/import\s*\{[^}]*CommandDefinitionId/)
     expect(built).toContain('dsh-zotero/status')
   })
 
@@ -178,10 +177,11 @@ describe('prompt section', () => {
     expect(names.indexOf('zotero:policy')).toBeGreaterThan(0)
     // The pin guards the plugin-owned derivation (anchor + offset), not the
     // harness table: the anchor is the central placement name, the offset is
-    // the headroom over the band's sparsity. Either drifting fails here
-    // instead of passing by restatement.
+    // half the gap to the next first-party placement — 2900 + 50 = 2950 lands
+    // between TOOL_REPORT and TOOL_COMPUTER_USE (3000) instead of colliding
+    // with it. Either drifting fails here instead of passing by restatement.
     expect(ZOTERO_PROMPT_ANCHOR).toBe('TOOL_REPORT')
-    expect(ZOTERO_PROMPT_ORDER_OFFSET).toBe(100)
+    expect(ZOTERO_PROMPT_ORDER_OFFSET).toBe(50)
     expect(lane.ctx.systemPrompt.getSectionOrder(ZOTERO_PROMPT_ANCHOR)).toBe(2900)
     for (const tool of ZOTERO_TOOL_NAMES) {
       expect(section!.text).toContain(tool)

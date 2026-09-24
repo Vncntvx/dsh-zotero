@@ -4,6 +4,10 @@
  * @module dsh-zotero/concurrency
  */
 
+import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
+import { TOOL_ABORTED_MESSAGE } from './errors.js'
+
 /**
  * Map `items` through `worker` with at most `concurrency` calls in flight,
  * preserving the input order in the results. A worker rejection propagates
@@ -143,5 +147,28 @@ export class ConcurrencyGate {
       this.active += 1
       next.take()
     }
+  }
+}
+
+/**
+ * Take one gate slot, translating a queued abort into the same cancellation
+ * error a request aborted mid-flight produces — the caller cancelled, and
+ * how far the request had got is not part of the contract. `acquire` rejects
+ * in exactly one case (a queued holder whose signal was aborted), so the
+ * rejection is reported as that cancellation and carried along as its cause:
+ * a gate that ever failed for another reason stays visible there rather than
+ * being silently reclassified.
+ * @param gate - the gate to take the slot from.
+ * @param signal - the caller's cancellation.
+ * @returns the release function.
+ */
+export async function acquireSlot(
+  gate: ConcurrencyGate,
+  signal: AbortSignal | undefined,
+): Promise<() => void> {
+  try {
+    return await gate.acquire(signal)
+  } catch (error) {
+    throw new HarnessError(TOOL_ABORTED_MESSAGE, TOOL_ABORTED, { cause: error })
   }
 }

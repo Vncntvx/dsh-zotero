@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { CommandId } from '@deepseek-ai/dsh-commands'
 import type { CommandInvocation } from '@deepseek-ai/dsh-commands'
 import { setupHostLane, type HostLane } from '../helpers/lanes/host-lane.js'
-import { ZOTERO_SETTINGS_NAMESPACE } from '../../src/settings-namespace.js'
 import { WRITE_POLICY_SENTENCE } from '../../src/prompt.js'
 
 let lane: HostLane | undefined
@@ -42,20 +41,6 @@ describe('the write state across the status surfaces', () => {
     const offSection = offAssembly.sections.find((entry) => entry.name === 'zotero:policy')
     expect(offSection?.text).not.toContain(WRITE_POLICY_SENTENCE)
     await off.teardown()
-  })
-
-  it('registers and retires the write tools as writeEnabled flips live', async () => {
-    lane = await setupHostLane(
-      { baseUrl: 'http://127.0.0.1:1/api' },
-      { settings: { zotero: { writeEnabled: true } } },
-    )
-    expect(lane.tool('zotero_create_note')?.name).toBe('zotero_create_note')
-    await lane.ctx.settings.update(ZOTERO_SETTINGS_NAMESPACE, { writeEnabled: false })
-    expect(lane.tool('zotero_create_note')).toBeUndefined()
-    expect(lane.tool('zotero_add_tags')).toBeUndefined()
-    await lane.ctx.settings.update(ZOTERO_SETTINGS_NAMESPACE, { writeEnabled: true })
-    expect(lane.tool('zotero_create_note')?.name).toBe('zotero_create_note')
-    expect(lane.tool('zotero_add_to_collection')?.name).toBe('zotero_add_to_collection')
   })
 })
 

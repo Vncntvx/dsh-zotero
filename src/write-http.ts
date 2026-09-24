@@ -22,10 +22,8 @@
  * @module dsh-zotero/write-http
  */
 
-import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { deadline, timeoutOf } from '@deepseek-ai/dsh-timeout'
-import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
-import { ConcurrencyGate } from './concurrency.js'
+import { acquireSlot, ConcurrencyGate } from './concurrency.js'
 import {
   ZOTERO_API_VERSION_HEADER,
   ZOTERO_LIBRARY_VERSION_HEADER,
@@ -38,7 +36,6 @@ import {
   API_DISABLED_MESSAGE,
   NOT_RUNNING_MESSAGE,
   SERVER_MISMATCH_MESSAGE,
-  TOOL_ABORTED_MESSAGE,
   WRITE_AUTH_DENIED_MESSAGE,
   WRITE_AUTH_SHAPE_MESSAGE,
   WRITE_BATCH_REFUSED_MESSAGE,
@@ -48,7 +45,6 @@ import {
   WRITE_PRECONDITION_REFUSED_MESSAGE,
   WRITE_UNAUTHORIZED_MESSAGE,
   ZOTERO_API_DISABLED,
-  ZOTERO_NOT_FOUND,
   ZOTERO_SERVER_MISMATCH,
   ZOTERO_TIMEOUT,
   ZOTERO_UNEXPECTED,
@@ -60,13 +56,11 @@ import {
   writeRateLimitedMessage,
 } from './errors.js'
 import {
-  OBJECT_NOT_FOUND_MESSAGE,
-  REDIRECT_REFUSED_MESSAGE,
   SERVER_ID_MISMATCH_STATEMENT,
   UNPARSEABLE_RESPONSE_MESSAGE,
-  httpStatusMessage,
   readBody,
   readFailureStatement,
+  sharedHttpStatusError,
   translateFetchError,
 } from './http-client.js'
 import { asRecord, asString } from './json.js'
@@ -310,16 +304,11 @@ export class ZoteroWriteHttpClient {
   }
 
   /**
-   * Take the single write slot, translating a queued abort into the same
-   * cancellation error an in-flight abort produces — the caller cancelled,
-   * and how far the request had got is not part of the contract.
+   * Take the single write slot; a queued abort reports as the caller's
+   * cancellation.
    */
-  private async takeSlot(signal: AbortSignal | undefined): Promise<() => void> {
-    try {
-      return await this.gate.acquire(signal)
-    } catch (error) {
-      throw new HarnessError(TOOL_ABORTED_MESSAGE, TOOL_ABORTED, { cause: error })
-    }
+  private takeSlot(signal: AbortSignal | undefined): Promise<() => void> {
+    return acquireSlot(this.gate, signal)
   }
 
   /**
@@ -331,9 +320,6 @@ export class ZoteroWriteHttpClient {
    */
   private translateWriteStatus(response: Response, detail: string): never {
     const status = response.status
-    if (status >= 300 && status < 400) {
-      throw new ZoteroError(REDIRECT_REFUSED_MESSAGE, ZOTERO_UNEXPECTED)
-    }
     switch (status) {
       case 401:
         throw new ZoteroError(WRITE_UNAUTHORIZED_MESSAGE, ZOTERO_WRITE_UNAUTHORIZED)
@@ -353,8 +339,6 @@ export class ZoteroWriteHttpClient {
         }
         throw new ZoteroError(API_DISABLED_MESSAGE, ZOTERO_API_DISABLED)
       }
-      case 404:
-        throw new ZoteroError(OBJECT_NOT_FOUND_MESSAGE, ZOTERO_NOT_FOUND)
       case 412:
         if (detail.includes(SERVER_ID_MISMATCH_STATEMENT)) {
           throw new ZoteroError(SERVER_MISMATCH_MESSAGE, ZOTERO_SERVER_MISMATCH)
@@ -375,7 +359,7 @@ export class ZoteroWriteHttpClient {
       case 413:
         throw new ZoteroError(WRITE_BATCH_REFUSED_MESSAGE, ZOTERO_UNEXPECTED)
       default:
-        throw new ZoteroError(httpStatusMessage(status), ZOTERO_UNEXPECTED)
+        throw sharedHttpStatusError(status)
     }
   }
 

@@ -3,6 +3,7 @@
  * @module dsh-zotero/tools/present
  */
 
+import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { ToolResult } from '@deepseek-ai/dsh-tools'
 import { asRecord } from '../json.js'
 
@@ -37,4 +38,19 @@ export function formatSearchLine(
   itemType: string,
 ): string {
   return `${ref} — ${title}${year === undefined ? '' : ` (${year})`} [${itemType}]`
+}
+
+/**
+ * The declined-write content: the user answered the plan without approving,
+ * so nothing was written. Shared by the three write tools so the wording
+ * cannot drift between them.
+ * @returns the single declined text block.
+ */
+export function renderDeclined(): ContentBlock[] {
+  return [
+    {
+      type: 'text',
+      text: 'Declined: the user answered the plan without approving. Nothing was written.',
+    },
+  ]
 }

@@ -1,61 +1,35 @@
 /**
- * Plan-review approval and the pre-dispatch write policy gate.
+ * Plan-review approval for writes.
  *
- * Two layers sit in front of Zotero:
+ * Every write shows the plan card while the capability is on and
+ * `writeConfirm` is set (`askPlanApproval`): the in-conversation
+ * confirmation layer. Argument validation runs first so a malformed call
+ * never bothers the user. The user's Zotero authorization dialog and its key
+ * remain the hard boundary.
  *
- * 1. **Policy** (`tools/pre-execute`): when the live config has the write
- *    capability off, the call is denied before the tool body runs (a settings
- *    race after the tools were registered). The deny carries structured
- *    `ToolErrorInfo.reason` — durable user-facing detail the harness keeps out
- *    of model-facing content.
- * 2. **Plan card** (`askPlanApproval`): the in-conversation confirmation
- *    every write shows while the capability is on and `writeConfirm` is set.
- *    Argument validation runs first so a malformed call never bothers the
- *    user. The user's Zotero authorization dialog and its key remain the hard
- *    boundary.
- *
- * Both layers fail closed: the model never writes past an unanswered plan.
+ * The layer fails closed: the model never writes past an unanswered plan.
  * Mid-body domain failures throw `ZoteroError`; the registry maps those to
- * `{ name, code }` only — `errorInfo` does not extract `reason` from throws
- * at this harness line.
+ * `{ name, code }` only.
  * @module dsh-zotero/tools/write-approval
  */
 
 import type { Context } from '@deepseek-ai/cordis'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
-import {
-  TOOL_ABORTED,
-  type PreToolDecision,
-  type ToolExecution,
-  type ToolRunContext,
-} from '@deepseek-ai/dsh-tools'
+import { TOOL_ABORTED, type ToolRunContext } from '@deepseek-ai/dsh-tools'
 // Type-only: brings the `ctx.userQuestions` Context merge into this program.
 import type {} from '@deepseek-ai/dsh-user-questions'
 import {
   TOOL_ABORTED_MESSAGE,
   WRITE_APPROVAL_UNAVAILABLE_MESSAGE,
-  WRITE_DISABLED_MESSAGE,
-  ZOTERO_WRITE_DISABLED,
   ZOTERO_WRITE_UNAUTHORIZED,
   ZoteroError,
 } from '../errors.js'
-import type { ZoteroService } from '../service.js'
 
 /** The label the plan-review question is answered with to apply the write. */
 export const APPROVE_LABEL = 'Apply'
 
 /** The question id every write plan carries, so UIs can route on it. */
 export const WRITE_PLAN_QUESTION_ID = 'zotero-write-plan'
-
-/** Tool names the write policy gate covers. */
-export const WRITE_TOOL_NAMES = [
-  'zotero_create_note',
-  'zotero_add_tags',
-  'zotero_add_to_collection',
-] as const
-
-/** The structured error identity every write-policy denial carries. */
-const WRITE_DENIED_INFO_NAME = 'ZoteroError'
 
 /**
  * Show one write's plan and wait for the user's answer. The plan text is the
@@ -110,50 +84,4 @@ export async function askPlanApproval(
       cause: error,
     })
   }
-}
-
-/**
- * A pre-dispatch deny that keeps the model-facing text the tool's domain
- * message and parks the user-facing detail on `ToolErrorInfo.reason` (the
- * harness's durable-projection channel; never model content).
- */
-function writeDeny(
-  message: string,
-  code: typeof ZOTERO_WRITE_DISABLED | typeof ZOTERO_WRITE_UNAUTHORIZED,
-  reason: string,
-): PreToolDecision {
-  return {
-    kind: 'deny',
-    reason: message,
-    info: {
-      name: WRITE_DENIED_INFO_NAME,
-      code,
-      reason,
-    },
-  }
-}
-
-/**
- * Pre-dispatch policy for the write tools: deny before the body runs when the
- * live config has the write capability off (a settings race after the tools
- * were registered). Plan review and argument validation stay in the tool body
- * — a malformed call must not be denied as "unapproved", and a mid-body
- * domain failure still throws `ZoteroError` (the registry maps that to
- * `{ name, code }` only; `ToolErrorInfo.reason` is populated only on this
- * deny path at the current harness line).
- * @param service - the live plugin service (config authority).
- * @param exec - the pending call.
- * @returns the denial, or `undefined` to allow the body to run.
- */
-export function writePolicyDecision(
-  service: ZoteroService,
-  exec: Pick<ToolExecution, 'name'>,
-): PreToolDecision | undefined {
-  if (!(WRITE_TOOL_NAMES as readonly string[]).includes(exec.name)) return undefined
-  if (service.config.writeEnabled) return undefined
-  return writeDeny(
-    WRITE_DISABLED_MESSAGE,
-    ZOTERO_WRITE_DISABLED,
-    'The write capability is off in the Zotero settings page (writeEnabled: false); enable it before calling write tools.',
-  )
 }

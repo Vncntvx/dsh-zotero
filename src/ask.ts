@@ -133,10 +133,15 @@ function questionOf(spec: FailureSpec): AskUserQuestionItem {
  * answer.
  *
  * Ownership is the service instance, not a transport generation. Callers pass
- * `service.recovery`; `ZoteroService.rebuild()` replaces HTTP clients and the
- * provider but intentionally keeps this gate so in-flight waiters and new
- * failures stay on one conversation. Replacing the gate on a settings commit
- * would stack cards — do not treat recovery as config-scoped state.
+ * `service.recovery`; `ZoteroService.buildTransport()` replaces HTTP clients
+ * and the provider but intentionally keeps this gate so in-flight waiters and
+ * new failures stay on one conversation. Replacing the gate on a volatile
+ * commit would stack cards — do not treat recovery as config-scoped state.
+ *
+ * Only idempotent reads ride this helper: its contract re-runs `run` on
+ * retry, which a write cannot promise (retrying a timed-out note creation
+ * would create the note twice). Write tools surface domain failures directly
+ * instead.
  */
 export class ConnectivityRecovery {
   private readonly asking = new Map<string, Promise<boolean>>()
@@ -187,7 +192,7 @@ export async function withConnectivityAsk<T>(
     return await run()
   } catch (error) {
     if (!(error instanceof ZoteroError) || !isAskWorthyCode(error.code)) throw error
-    const questions = ctx.get('userQuestions') as UserQuestionService | undefined
+    const questions = ctx.get('userQuestions')
     if (questions === undefined) throw error
     const spec = FAILURE_SPECS[error.code]
     let retry: boolean

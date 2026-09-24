@@ -12,8 +12,8 @@
  * registry/wire identity, not a second browser-side validator.
  *
  * The Remote namespace carries the one fact the settings plane does not: live
- * connectivity of the configured Zotero provider. Configuration rides
- * `ctx.settingsScope`, not this channel.
+ * connectivity of the configured Zotero provider. Configuration rides the
+ * shared configuration form (`ctx.configForms`), not this channel.
  * @module dsh-zotero/contract
  */
 
@@ -83,7 +83,7 @@ export const ZOTERO_STATUS_ENDPOINT = {
  * client both call this so endpoint identity cannot drift; only the codec arm
  * differs by side. Every structural field is copied — callers never share a
  * mutable reference with {@link ZOTERO_STATUS_ENDPOINT}.
- * @param result - the strict (or dual-arm) result codec for {@link ZoteroStatusView}.
+ * @param result - the strict result codec for {@link ZoteroStatusView}.
  * @returns a complete invocation descriptor.
  */
 export function zoteroStatusInvocation(

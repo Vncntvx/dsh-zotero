@@ -27,12 +27,12 @@ const ZOTERO_PROMPT_SECTION_NAME = 'zotero:policy'
 export const ZOTERO_PROMPT_ANCHOR = 'TOOL_REPORT' as const
 
 /**
- * Headroom over the anchor: deliberate room above the placements' ≥ 10
- * sparsity so a first-party insertion between them cannot collide with this
- * section. Kept beside the anchor (not inlined at the call) so the pin in
- * tests/lifecycle.spec.ts guards it.
+ * Headroom over the anchor: half the gap to the next first-party placement
+ * (`TOOL_REPORT` 2900 → `TOOL_COMPUTER_USE` 3000), so a first-party insertion
+ * between them cannot collide with this section. Kept beside the anchor (not
+ * inlined at the call) so the pin in tests/lifecycle.spec.ts guards it.
  */
-export const ZOTERO_PROMPT_ORDER_OFFSET = 100
+export const ZOTERO_PROMPT_ORDER_OFFSET = 50
 
 /**
  * The connectivity sentence: what the plugin does on a connectivity failure

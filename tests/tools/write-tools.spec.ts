@@ -7,6 +7,7 @@ import type {
 } from '@deepseek-ai/dsh-user-questions'
 import { expectValue, setupHostLane, type HostLane } from '../helpers/lanes/host-lane.js'
 import { MockZotero } from '../helpers/mock-zotero.js'
+import type { Options } from '../../src/config.js'
 import {
   WRITE_APPROVAL_UNAVAILABLE_MESSAGE,
   WRITE_CHILD_COLLECTIONS_MESSAGE,
@@ -48,7 +49,7 @@ class ScriptedQuestions extends Service {
 /** The lanes booted in the current test; the module-level afterEach closes them. */
 const openLanes: HostLane[] = []
 
-async function bootLane(config: Record<string, unknown>, withQuestions = true): Promise<HostLane> {
+async function bootLane(config: Options, withQuestions = true): Promise<HostLane> {
   const lane = await setupHostLane(config, {
     compose: async (ctx) => {
       if (withQuestions) await ctx.plugin(ScriptedQuestions)

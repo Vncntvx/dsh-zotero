@@ -9,8 +9,7 @@
  * also keeps the source runnable under Node's plain TypeScript type
  * stripping, which rejects decorator syntax.
  *
- * Invocations come from `status-codec.ts` (host zod factories + dual-arm
- * schema). Structural endpoint identity is shared with the client through
+ * Invocations come from `status-codec.ts` (host zod factories). Structural endpoint identity is shared with the client through
  * `contract.ts`; only this half materializes boundary schemas. The model's
  * service key spells {@link ZOTERO_STATUS_SERVICE_KEY} — the same constant
  * the host Remote service and the invocation descriptor use.

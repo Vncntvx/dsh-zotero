@@ -19,7 +19,7 @@ import {
 } from '@deepseek-ai/dsh-tools'
 import { ZOTERO_WRITE_LIST_MAX_ITEMS } from '../constants.js'
 import { writeListEmptyMessage, writeListTooLongMessage } from '../errors.js'
-import { metaRecordOf } from './present.js'
+import { metaRecordOf, renderDeclined } from './present.js'
 import { invalid, parseSupportedRef, REF_ARG_HINT } from './validate.js'
 import { askPlanApproval } from './write-approval.js'
 import type { ZoteroService } from '../service.js'
@@ -80,12 +80,7 @@ function buildRequest(args: AddTagsArgs): ZoteroTagUpdateRequest {
 
 export function renderAddTags(_args: AddTagsArgs, value: AddTagsOutput): ContentBlock[] {
   if (value.kind === 'declined') {
-    return [
-      {
-        type: 'text',
-        text: 'Declined: the user answered the plan without approving. Nothing was written.',
-      },
-    ]
+    return renderDeclined()
   }
   const unchanged = value.unchanged === true
   const lines = [
@@ -140,6 +135,8 @@ export function registerAddTagsTool(ctx: Context, service: ZoteroService): () =>
       }),
       presentResult: presentAddTagsResult,
       async execute(args, exec) {
+        // No connectivity ask wraps the write: that helper retries, and only
+        // idempotent reads may be retried.
         const request = buildRequest(args)
         if (service.config.writeConfirm) {
           const approved = await askPlanApproval(ctx, exec, addTagsPlan(args))

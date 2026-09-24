@@ -11,6 +11,18 @@
  * @module dsh-zotero/local/scope-directory
  */
 
+/**
+ * Pin the serving identity from the response headers, falling back to the
+ * claim only when the build omits the header — storing the claim alone
+ * leaves a headerless first read unclaimable.
+ * @param headers - the response headers.
+ * @param claim - the identity the request was pinned to, if any.
+ * @returns the serving identity, or undefined when neither names one.
+ */
+function resolveServedBy(headers: Headers, claim: string | undefined): string | undefined {
+  return headers.get(ZOTERO_SERVER_ID_HEADER) ?? claim
+}
+
 import { ZOTERO_SCOPE_LISTING_TTL_MS, ZOTERO_SERVER_ID_HEADER } from '../constants.js'
 import {
   isNotFoundError,
@@ -130,7 +142,7 @@ export class ScopeDirectory {
       serverId: ctx.serverId,
     })
     const entries = (Array.isArray(json) ? json : []).map((row) => normalizeScopeEntry(row))
-    const servedBy = headers.get(ZOTERO_SERVER_ID_HEADER) ?? ctx.serverId
+    const servedBy = resolveServedBy(headers, ctx.serverId)
     const listing: ScopeListing =
       servedBy === undefined
         ? { entries, fetchedAt: Date.now() }
@@ -177,7 +189,7 @@ export class ScopeDirectory {
           ref.library as SupportedLocalLibrary,
           kind,
           entry.key,
-          headers.get(ZOTERO_SERVER_ID_HEADER) ?? ref.serverId,
+          resolveServedBy(headers, ref.serverId),
         ),
         name: entry.name,
       }
@@ -297,7 +309,7 @@ export class ScopeDirectory {
       // Pin the serving identity from the response headers (falling back to
       // the claim only when the build omits the header), like scopeListingOf —
       // storing the claim alone leaves a headerless first read unclaimable.
-      const servedBy = headers.get(ZOTERO_SERVER_ID_HEADER) ?? serverId
+      const servedBy = resolveServedBy(headers, serverId)
       this.collectionNodeCache.set(nodeCacheKey, {
         node,
         ...(servedBy !== undefined ? { serverId: servedBy } : {}),

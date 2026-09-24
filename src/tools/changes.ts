@@ -22,6 +22,7 @@ import {
 } from '@deepseek-ai/dsh-tools'
 import { withConnectivityAsk } from '../ask.js'
 import { asRecord } from '../json.js'
+import { DEFAULT_CHANGES_INCLUDES as DEFAULT_INCLUDES } from '../local/changes-domain.js'
 import { boundedPresentationMeta } from '../presentation-meta.js'
 import { metaRecordOf } from './present.js'
 import {
@@ -52,19 +53,12 @@ const ALL_INCLUDES = [
 type MissingInclude = Exclude<ZoteroChangesInclude, (typeof ALL_INCLUDES)[number]>
 const _includesComplete: MissingInclude extends never ? true : never = true
 
-/**
- * The kinds a call covers when the model names none. `fulltext` is excluded:
+/** The kinds a call covers when the model names none. `fulltext` is excluded:
  * its endpoint answers in the full-text index's own version counter, not the
  * library version this tool diffs on, so it cannot be part of the cursor story
- * and is only read when asked for by name. Mirrors `DEFAULT_CHANGES_INCLUDES`
- * in `src/local/changes-domain.ts`.
- */
-const DEFAULT_INCLUDES: ZoteroChangesInclude[] = [
-  'items',
-  'collections',
-  'savedSearches',
-  'deleted',
-]
+ * and is only read when asked for by name. Single-sourced from the domain
+ * (`DEFAULT_CHANGES_INCLUDES`) so the contract and the read agree by
+ * construction; the enum-completeness pins below guard the rest. */
 
 /** The library shape both the `library` parameter and a cursor's library use. */
 const LIBRARY_SCHEMA = {
@@ -100,7 +94,9 @@ const CHANGES_PARAMETERS = {
   include: {
     type: 'array',
     items: { type: 'string', enum: [...ALL_INCLUDES] },
-    default: DEFAULT_INCLUDES,
+    // The schema default must be mutable JSON; the domain's readonly source
+    // stays the single authority (buildRequest falls back to it directly).
+    default: [...DEFAULT_INCLUDES] as ZoteroChangesInclude[],
     description:
       'Resource kinds to diff; defaults to everything but fulltext. items covers the whole item space as Zotero partitions it — top-level items, child objects (notes, attachments, annotations) and items in the trash — and reports each as its own list, because a child object carries its own version: editing one advances the library without touching any top-level item. deleted lists tombstoned items, collections, saved searches and tag names. fulltext is a separate listing: its endpoint answers in the full-text index\u2019s own version counter, so its rows are not a delta on the library version and it is left out unless named explicitly.',
   },
@@ -241,14 +237,12 @@ function parseCursor(value: ChangesArgs['since']): ZoteroChangesCursor | undefin
 }
 
 function buildRequest(args: ChangesArgs): ZoteroChangesRequest {
-  const library = parseLibrary((args as Record<string, unknown>).library)
+  const library = parseLibrary(args.library)
   const since = parseCursor(args.since)
   if (args.include !== undefined) {
     assertNonEmptyList(args.include as readonly unknown[], CHANGES_INCLUDE_EMPTY_MESSAGE)
   }
-  const include = new Set<ZoteroChangesInclude>(
-    (args.include as ZoteroChangesInclude[] | undefined) ?? DEFAULT_INCLUDES,
-  )
+  const include = new Set<ZoteroChangesInclude>(args.include ?? DEFAULT_INCLUDES)
   return {
     ...(library !== undefined ? { library: library as SupportedLocalLibrary } : {}),
     ...(since !== undefined ? { since } : {}),

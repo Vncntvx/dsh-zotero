@@ -63,7 +63,7 @@ import type {
  * version header of its own. Such rows cannot be part of a library-version
  * delta, so they are only read when a caller asks for them explicitly.
  */
-const DEFAULT_CHANGES_INCLUDES: readonly ZoteroChangesInclude[] = [
+export const DEFAULT_CHANGES_INCLUDES: readonly ZoteroChangesInclude[] = [
   'items',
   'collections',
   'savedSearches',

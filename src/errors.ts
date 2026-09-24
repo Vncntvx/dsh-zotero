@@ -40,8 +40,6 @@ export const ZOTERO_CAPABILITY_UNAVAILABLE = 'ZOTERO_CAPABILITY_UNAVAILABLE'
 export const ZOTERO_PROVIDER_UNAVAILABLE = 'ZOTERO_PROVIDER_UNAVAILABLE'
 /** A response could not be parsed or behaved unexpectedly. */
 export const ZOTERO_UNEXPECTED = 'ZOTERO_UNEXPECTED'
-/** Writing is disabled in the plugin's settings. */
-export const ZOTERO_WRITE_DISABLED = 'ZOTERO_WRITE_DISABLED'
 /** Zotero refused a write for lack of a valid local API key (401), including a declined authorization dialog. */
 export const ZOTERO_WRITE_UNAUTHORIZED = 'ZOTERO_WRITE_UNAUTHORIZED'
 /** The object moved between the read backing the write and the write itself (412). */
@@ -69,7 +67,6 @@ const ZOTERO_ERROR_CODES = [
   ZOTERO_CAPABILITY_UNAVAILABLE,
   ZOTERO_PROVIDER_UNAVAILABLE,
   ZOTERO_UNEXPECTED,
-  ZOTERO_WRITE_DISABLED,
   ZOTERO_WRITE_UNAUTHORIZED,
   ZOTERO_WRITE_CONFLICT,
   ZOTERO_WRITE_RATE_LIMITED,
@@ -127,11 +124,6 @@ export const TOOL_ABORTED_MESSAGE = 'tool call aborted'
 export const RANGE_UNSUPPORTED_MESSAGE =
   'Zotero does not keep change history back to that version, so it cannot be read. ' +
   'Take a fresh reading and continue from there.'
-
-/** Shown when a write is requested while the plugin's write capability is disabled. */
-export const WRITE_DISABLED_MESSAGE =
-  'Writing to Zotero is disabled in the plugin settings. Ask the user to enable the write capability ' +
-  'in the Zotero settings page, then retry.'
 
 /** Shown when Zotero refuses a write for lack of a valid local API key (401); the plugin is about to re-authorize. */
 export const WRITE_UNAUTHORIZED_MESSAGE =

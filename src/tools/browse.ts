@@ -240,7 +240,7 @@ function buildRequest(args: BrowseArgs, config: { maxBrowseResults: number }): Z
   const limit = args.limit ?? 20
   assertIntInRange('offset', offset, 0, 1_000_000)
   assertIntInRange('limit', limit, 1, config.maxBrowseResults)
-  const library = parseLibrary((args as Record<string, unknown>).library)
+  const library = parseLibrary(args.library)
   // Fail-closed: libraries/itemTypes/itemFields are global; library param is not allowed
   if (
     (kind === 'libraries' || kind === 'itemTypes' || kind === 'itemFields') &&
@@ -248,7 +248,7 @@ function buildRequest(args: BrowseArgs, config: { maxBrowseResults: number }): Z
   ) {
     invalid(libraryNotAllowedMessage(kind))
   }
-  const itemType = (args as Record<string, unknown>).itemType as string | undefined
+  const itemType = args.itemType
   if (itemType !== undefined && kind !== 'itemFields') {
     invalid(ITEM_TYPE_SCOPE_MESSAGE)
   }
@@ -257,8 +257,8 @@ function buildRequest(args: BrowseArgs, config: { maxBrowseResults: number }): Z
       invalid(ITEM_FIELDS_ITEM_TYPE_MESSAGE)
     }
   }
-  const q = (args as Record<string, unknown>).q as string | undefined
-  const match = (args as Record<string, unknown>).match as 'contains' | 'startsWith' | undefined
+  const q = args.q
+  const match = args.match
   if ((q !== undefined || match !== undefined) && kind !== 'tags') {
     invalid(Q_MATCH_SCOPE_MESSAGE)
   }
@@ -266,17 +266,15 @@ function buildRequest(args: BrowseArgs, config: { maxBrowseResults: number }): Z
     invalid(MATCH_REQUIRES_Q_MESSAGE)
   }
   const query = q === undefined ? undefined : assertNonBlank('q', q)
-  const parentRef = (args as Record<string, unknown>).parentRef as string | undefined
+  const parentRef = args.parentRef
   if (parentRef !== undefined && kind !== 'collections') {
     invalid(PARENT_REF_SCOPE_MESSAGE)
   }
-  const tagScope = (args as Record<string, unknown>).tagScope as
-    'library' | 'collection' | 'publications' | undefined
-  const tagCollection = (args as Record<string, unknown>).tagCollection as string | undefined
-  const itemLevel = (args as Record<string, unknown>).itemLevel as 'top' | 'all' | undefined
-  const itemQuery = (args as Record<string, unknown>).itemQuery as string | undefined
-  const itemQueryMode = (args as Record<string, unknown>).itemQueryMode as
-    'titleCreatorYear' | 'everything' | undefined
+  const tagScope = args.tagScope
+  const tagCollection = args.tagCollection
+  const itemLevel = args.itemLevel
+  const itemQuery = args.itemQuery
+  const itemQueryMode = args.itemQueryMode
   if (
     (tagScope !== undefined ||
       itemLevel !== undefined ||

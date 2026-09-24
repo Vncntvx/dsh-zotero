@@ -2,9 +2,8 @@
  * Host-only strict boundary codec for `zotero/status`.
  *
  * Typert host registration (`ctx.typert.register`) materializes schemas
- * through `create()`, and harness 0.1.5-rc.x still reads a live `schema`
- * property — both arms live here so the browser bundle never imports zod.
- * Structural endpoint identity comes from `./contract.js`.
+ * through `create()` (upstream `perf(typert): materialize generated schemas
+ * on first use`). Structural endpoint identity comes from `./contract.js`.
  * @module dsh-zotero/status-codec
  */
 
@@ -32,21 +31,18 @@ export const zoteroStatusSchema = z
   .readonly()
 
 /**
- * Strict status codec, dual-shaped on purpose.
- *
- * Harness 0.1.5-rc.x reads a live `schema`; 0.1.6-alpha.1+ materializes through
- * `create()`. Carrying both keeps the Remote mount working on either line
- * without a version sniff at register time. The host pin's `TypertCodec` only
- * names `create`, so the live-schema arm is an intentional excess property.
+ * Strict status codec. The `TypertCodec` strict arm is exactly
+ * `{ mode, typeSymbol, create }` (plus optional `encode`/`decode` for
+ * byte-carrying results, which this pure-JSON view does not need) — no live
+ * `schema` property is carried.
  */
 export const zoteroStatusCodec = {
   mode: 'strict',
   typeSymbol: ZOTERO_STATUS_TYPE_SYMBOL,
   create: (): z.ZodType<ZoteroStatusView> => zoteroStatusSchema,
-  schema: zoteroStatusSchema,
 } as const
 
-/** Host Typert manifest invocations (real zod factories + dual-arm schema). */
+/** Host Typert manifest invocations (real zod factory). */
 export const ZOTERO_INVOCATIONS: readonly InvocationDescriptor[] = [
   zoteroStatusInvocation(zoteroStatusCodec as InvocationDescriptor['result']),
 ]

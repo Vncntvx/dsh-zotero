@@ -19,6 +19,7 @@ import {
 } from '@deepseek-ai/dsh-tools'
 import { withConnectivityAsk } from '../ask.js'
 import { boundedPresentationMeta, projectGetMeta } from '../presentation-meta.js'
+import { ANNOTATION_RECORD, ATTACHMENT_RECORD, NOTE_RECORD } from './child-records.js'
 import { formatSearchLine, metaRecordOf } from './present.js'
 import { parseSupportedRef, REF_ARG_HINT } from './validate.js'
 import type { ZoteroService } from '../service.js'
@@ -45,42 +46,6 @@ const GET_PARAMETERS = {
 } as const
 
 type GetArgs = InferArgs<typeof GET_PARAMETERS>
-
-const NOTE_RECORD = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    ref: { type: 'string', required: true },
-    text: { type: 'string', required: true },
-    truncated: { type: 'boolean', required: true },
-    parentRef: { type: 'string' },
-  },
-} as const
-
-const ANNOTATION_RECORD = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    ref: { type: 'string', required: true },
-    type: { type: 'string', required: true },
-    text: { type: 'string', required: true },
-    comment: { type: 'string' },
-    color: { type: 'string' },
-    pageLabel: { type: 'string' },
-    parentRef: { type: 'string' },
-  },
-} as const
-
-const ATTACHMENT_RECORD = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    ref: { type: 'string', required: true },
-    title: { type: 'string', required: true },
-    contentType: { type: 'string', required: true },
-    linkMode: { type: 'string' },
-  },
-} as const
 
 const GET_OUTPUT_SCHEMA = {
   type: 'object',

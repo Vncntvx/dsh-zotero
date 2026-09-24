@@ -8,11 +8,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 // Type-only: pulls the `ctx.commands` Context merge into this program.
 import type {} from '@deepseek-ai/dsh-commands'
-// Type-only on purpose. `CommandDefinitionId` is a runtime export only from
-// harness 0.1.6-alpha.1; a value import is fatal on 0.1.5-rc.x hosts (issue #5)
-// because ESM rejects a missing named export at module evaluation. The brand
-// constructor is an identity function — the plain string is the runtime value.
-import type { CommandDefinitionId } from '@deepseek-ai/dsh-commands'
+import { CommandDefinitionId } from '@deepseek-ai/dsh-commands'
 import type { ZoteroService } from './service.js'
 import type { ZoteroStatus } from './types.js'
 
@@ -71,7 +67,7 @@ function formatStatus(status: ZoteroStatus): string {
 export function registerStatusCommand(ctx: Context, service: ZoteroService): void {
   ctx.inject(['commands'], (commandCtx) => {
     commandCtx.commands.register({
-      definitionId: 'dsh-zotero/status' as CommandDefinitionId,
+      definitionId: CommandDefinitionId('dsh-zotero/status'),
       name: 'zotero',
       description: 'Check the local Zotero connection status',
       input: { hint: 'status' },

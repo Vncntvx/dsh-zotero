@@ -23,7 +23,7 @@ import {
   writeListTooLongMessage,
   writeNoteTooLongMessage,
 } from '../errors.js'
-import { metaRecordOf } from './present.js'
+import { metaRecordOf, renderDeclined } from './present.js'
 import { invalid, parseSupportedRef, REF_ARG_HINT } from './validate.js'
 import { askPlanApproval } from './write-approval.js'
 import type { ZoteroService } from '../service.js'
@@ -145,12 +145,7 @@ function buildRequest(args: CreateNoteArgs): ZoteroCreateNoteRequest {
 
 export function renderCreateNote(_args: CreateNoteArgs, value: CreateNoteOutput): ContentBlock[] {
   if (value.kind === 'declined') {
-    return [
-      {
-        type: 'text',
-        text: 'Declined: the user answered the plan without approving. Nothing was written.',
-      },
-    ]
+    return renderDeclined()
   }
   const lines = [`Created note ${value.ref} (version ${value.version}).`]
   if (value.parentItem !== undefined) lines.push(`Parent: ${value.parentItem}`)
@@ -208,7 +203,9 @@ export function registerCreateNoteTool(ctx: Context, service: ZoteroService): ()
       presentResult: presentCreateNoteResult,
       async execute(args, exec) {
         // Validate before the plan card: a malformed ask should never bother
-        // the user with an approval for a call that cannot run.
+        // the user with an approval for a call that cannot run. No
+        // connectivity ask wraps the write: that helper retries, and a
+        // retried note creation would create the note twice.
         const request = buildRequest(args)
         if (service.config.writeConfirm) {
           const approved = await askPlanApproval(ctx, exec, createNotePlan(args))

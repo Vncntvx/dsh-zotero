@@ -17,7 +17,7 @@ import {
   type ToolResult,
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
-import { metaRecordOf } from './present.js'
+import { metaRecordOf, renderDeclined } from './present.js'
 import { parseSupportedRef, REF_ARG_HINT } from './validate.js'
 import { askPlanApproval } from './write-approval.js'
 import type { ZoteroService } from '../service.js'
@@ -75,12 +75,7 @@ export function renderAddToCollection(
   value: AddToCollectionOutput,
 ): ContentBlock[] {
   if (value.kind === 'declined') {
-    return [
-      {
-        type: 'text',
-        text: 'Declined: the user answered the plan without approving. Nothing was written.',
-      },
-    ]
+    return renderDeclined()
   }
   const lines = [
     value.added
@@ -137,6 +132,8 @@ export function registerAddToCollectionTool(ctx: Context, service: ZoteroService
       }),
       presentResult: presentAddToCollectionResult,
       async execute(args, exec) {
+        // No connectivity ask wraps the write: that helper retries, and only
+        // idempotent reads may be retried.
         const request = buildRequest(args)
         if (service.config.writeConfirm) {
           const approved = await askPlanApproval(ctx, exec, addToCollectionPlan(args))

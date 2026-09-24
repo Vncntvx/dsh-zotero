@@ -30,9 +30,8 @@ import ToolRuntime, {
   type ToolExecutionSuccess,
 } from '@deepseek-ai/dsh-tools'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
-import type { Config } from '../../../src/config.js'
+import type { Options } from '../../../src/config.js'
 import ZoteroService from '../../../src/index.js'
-import { MemorySettings } from '../memory-settings.js'
 import { MockZotero } from '../mock-zotero.js'
 import { StubCommands } from '../stub-commands.js'
 
@@ -43,12 +42,6 @@ export interface HostLaneOptions {
    * command path registers; the registry itself is {@link HostLane.stub}.
    */
   readonly commands?: boolean
-  /**
-   * Compose the in-memory settings provider, seeded with this document (an
-   * empty one when omitted), so the plugin registers its settings section
-   * against a real seam instead of staying on its entry config.
-   */
-  readonly settings?: Record<string, unknown>
   /**
    * Compose the Typert registry before the plugin, so the host manifest
    * self-registers while the service is mounting (the optional inject waits
@@ -84,12 +77,12 @@ export interface HostLane {
 
 /**
  * Boot the lane: a fresh mock server and a plugin mounted over it.
- * @param config - plugin config merged over the mock's base URL.
+ * @param config - plugin options merged over the mock's base URL.
  * @param options - the optional services to compose before the plugin mounts.
  * @returns the booted lane; call {@link HostLane.teardown} when the test ends.
  */
 export async function setupHostLane(
-  config: Config = {},
+  config: Options = {},
   options: HostLaneOptions = {},
 ): Promise<HostLane> {
   const mock = await MockZotero.start()
@@ -98,9 +91,9 @@ export async function setupHostLane(
   await ctx.plugin(ToolRuntime, {})
   if (options.commands === true) await ctx.plugin(StubCommands)
   if (options.typert === true) await ctx.plugin(TypertRegistry)
-  if (options.settings !== undefined) await ctx.plugin(MemorySettings, options.settings)
   if (options.compose !== undefined) await options.compose(ctx)
-  const zoteroFiber = ctx.plugin(ZoteroService, { baseUrl: mock.baseUrl, ...config })
+  const entry: Options = { baseUrl: mock.baseUrl, ...config }
+  const zoteroFiber = ctx.plugin(ZoteroService, entry)
   await zoteroFiber
   let callCounter = 0
   return {

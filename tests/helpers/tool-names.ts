@@ -1,8 +1,11 @@
 /**
- * The plugin's eight registered tools, in the order `ZoteroService` registers
- * them (`registerSearchTool` … `registerChangesTool`). A ninth tool otherwise
- * means editing every host spec that names the set, and whichever one is
- * missed keeps asserting a stale list.
+ * The plugin's eight always-registered (read) tools, in the order
+ * `ZoteroService` registers them (`registerSearchTool` …
+ * `registerChangesTool`). The three write tools register only while
+ * `writeEnabled` is on, so the composition spec's write-off baseline asserts
+ * exactly this set. A ninth tool otherwise means editing every host spec
+ * that names the set, and whichever one is missed keeps asserting a stale
+ * list.
  *
  * The order is the source registration order, not a contract the assembled
  * registry owes: the composition spec sorts a copy because the Loader

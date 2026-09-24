@@ -10,7 +10,7 @@
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { deadline, timeoutOf } from '@deepseek-ai/dsh-timeout'
 import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
-import { ConcurrencyGate } from './concurrency.js'
+import { acquireSlot, ConcurrencyGate } from './concurrency.js'
 import {
   ZOTERO_API_VERSION_HEADER,
   ZOTERO_LOCAL_API_VERSION,
@@ -82,6 +82,24 @@ export const OBJECT_NOT_FOUND_MESSAGE = 'Zotero did not find the requested objec
 /** Shown when Zotero answers with an HTTP status this client has no translation for. */
 export function httpStatusMessage(status: number): string {
   return `Zotero local API returned HTTP ${status}.`
+}
+
+/**
+ * Statuses the read and write transports translate identically: redirects
+ * (never followed), a missing object, and anything else unmapped. Each
+ * transport's own switch handles its specific codes first and falls through
+ * here, so the shared arms cannot shadow a specific one.
+ * @param status - the response status.
+ * @returns the error to throw.
+ */
+export function sharedHttpStatusError(status: number): ZoteroError {
+  if (status >= 300 && status < 400) {
+    return new ZoteroError(REDIRECT_REFUSED_MESSAGE, ZOTERO_UNEXPECTED)
+  }
+  if (status === 404) {
+    return new ZoteroError(OBJECT_NOT_FOUND_MESSAGE, ZOTERO_NOT_FOUND)
+  }
+  return new ZoteroError(httpStatusMessage(status), ZOTERO_UNEXPECTED)
 }
 
 /** Shown when a response body is not the JSON the API documents. */
@@ -194,16 +212,11 @@ function translateHttpStatus(
   notImplementedDetail: string,
   path: string,
 ): never {
-  if (response.status >= 300 && response.status < 400) {
-    throw new ZoteroError(REDIRECT_REFUSED_MESSAGE, ZOTERO_UNEXPECTED)
-  }
   switch (response.status) {
     case 403:
       throw new ZoteroError(API_DISABLED_MESSAGE, ZOTERO_API_DISABLED)
     case 501:
       throw notImplementedError(response, notImplementedDetail, path)
-    case 404:
-      throw new ZoteroError(OBJECT_NOT_FOUND_MESSAGE, ZOTERO_NOT_FOUND)
     case 409:
       // A versioned read older than the history the server keeps. Zotero's own
       // sync client reads a 409 on `/deleted` the same way ("'since' value is
@@ -212,7 +225,7 @@ function translateHttpStatus(
       // what to make of it.
       throw new ZoteroError(RANGE_UNSUPPORTED_MESSAGE, ZOTERO_RANGE_UNSUPPORTED)
     default:
-      throw new ZoteroError(httpStatusMessage(response.status), ZOTERO_UNEXPECTED)
+      throw sharedHttpStatusError(response.status)
   }
 }
 
@@ -361,20 +374,10 @@ export class ZoteroHttpClient {
   }
 
   /**
-   * Take one gate slot, translating a queued abort into the same
-   * cancellation error a request aborted mid-flight produces — the caller
-   * cancelled, and how far the request had got is not part of the contract.
-   * `acquire` rejects in exactly one case (a queued holder whose signal was
-   * aborted), so the rejection is reported as that cancellation and carried
-   * along as its cause: a gate that ever failed for another reason stays
-   * visible there rather than being silently reclassified.
+   * Take one gate slot; a queued abort reports as the caller's cancellation.
    */
-  private async takeSlot(signal: AbortSignal | undefined): Promise<() => void> {
-    try {
-      return await this.gate.acquire(signal)
-    } catch (error) {
-      throw new HarnessError(TOOL_ABORTED_MESSAGE, TOOL_ABORTED, { cause: error })
-    }
+  private takeSlot(signal: AbortSignal | undefined): Promise<() => void> {
+    return acquireSlot(this.gate, signal)
   }
 
   /** Send one request and read its body; the caller holds a slot for this. */

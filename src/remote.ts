@@ -43,7 +43,7 @@ export class ZoteroRuntime extends TypertRemoteService {
    * @returns the connectivity view; the provider converges failures into it.
    */
   async status(): Promise<ZoteroStatusView> {
-    const status = await (this.ctx.get('zotero') as ZoteroService | undefined)?.status()
+    const status = await this.ctx.get('zotero')?.status()
     if (status === undefined) {
       return {
         providerId: LOCAL_PROVIDER_ID,

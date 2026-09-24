@@ -1,8 +1,8 @@
 /**
  * The zotero Remote service: the dedicated web tab's connectivity probe. The
- * configuration surface reads and writes the namespace through the harness's
- * settings scope instead, so the Remote carries only `status` — the one fact
- * the settings plane does not.
+ * configuration surface reads and writes the namespace through the shared
+ * configuration form instead, so the Remote carries only `status` — the one
+ * fact the settings plane does not.
  * @module tests/remote
  */
 
@@ -13,7 +13,6 @@ import { ZoteroRuntime } from '../../src/remote.js'
 import { ZOTERO_STATUS_SERVICE_KEY } from '../../src/contract.js'
 import { TYPERT_MANIFEST } from '../../src/typert.js'
 import { type HostLane, setupHostLane } from '../helpers/lanes/host-lane.js'
-import { MemorySettings } from '../helpers/memory-settings.js'
 
 /** The lane the current test booted; `afterEach` releases it. */
 let lane: HostLane | undefined
@@ -26,7 +25,7 @@ afterEach(async () => {
 
 describe('the zotero status endpoint', () => {
   it('serves the connectivity view with every reported fact', async () => {
-    lane = await setupHostLane(undefined, { settings: {}, typert: true })
+    lane = await setupHostLane(undefined, { typert: true })
     lane.mock.route('GET', '/api/', (_req, _res, helpers) =>
       helpers.json(
         {},
@@ -49,7 +48,7 @@ describe('the zotero status endpoint', () => {
   })
 
   it('forwards the provider write state the web tab status strip renders', async () => {
-    lane = await setupHostLane({ writeEnabled: true }, { settings: {}, typert: true })
+    lane = await setupHostLane({ writeEnabled: true }, { typert: true })
     lane.mock.route('GET', '/api/', (_req, _res, helpers) =>
       helpers.json({}, { 'Zotero-Server-ID': 'S-write' }),
     )
@@ -65,7 +64,7 @@ describe('the zotero status endpoint', () => {
   })
 
   it('strips absent optional facts and converges failures into the view', async () => {
-    lane = await setupHostLane(undefined, { settings: {}, typert: true })
+    lane = await setupHostLane(undefined, { typert: true })
     lane.mock.route('GET', '/api/', (_req, _res, helpers) => helpers.raw(503, {}, 'down'))
     const runtime = lane.ctx.get('zoteroRemote') as ZoteroRuntime
     const status = await runtime.status()
@@ -81,7 +80,6 @@ describe('the zotero status endpoint', () => {
     // the composition under test, so no lane can boot it.
     const context = new Context()
     await context.plugin(TypertRegistry)
-    await context.plugin(MemorySettings)
     new ZoteroRuntime(context)
     await expect(context.get('zoteroRemote')!.status()).resolves.toEqual({
       providerId: 'local',
@@ -106,7 +104,7 @@ describe('the zotero typert manifest', () => {
       mode: 'strict',
       typeSymbol: 'dsh-zotero#ZoteroStatusView',
     })
-    // Strict codecs carry a lazy factory (dsh 0.1.6: TypertCodec.create).
+    // Strict codecs carry a lazy factory (TypertCodec.create).
     expect(typeof (status?.result as { create?: unknown } | undefined)?.create).toBe('function')
   })
 
@@ -125,11 +123,13 @@ describe('the zotero typert manifest', () => {
     expect(() => schema.parse({ providerId: 'local', connected: 'yes', diagnosis: 'ok' })).toThrow()
   })
 
-  it('keeps the dual-arm live schema beside create for 0.1.5 hosts', () => {
+  it('carries no live schema beside create', () => {
+    // Single-arm strict codec: the host materializes through `create()` and
+    // carries no live `schema` property.
     const status = TYPERT_MANIFEST.invocations.find((invocation) => invocation.method === 'status')
     const result = status?.result as { schema?: unknown; create?: unknown } | undefined
     expect(typeof result?.create).toBe('function')
-    expect(result?.schema).toBeDefined()
+    expect(result).not.toHaveProperty('schema')
   })
 
   it('matches the client contribution structural identity exactly', async () => {
@@ -168,10 +168,7 @@ describe('the zotero typert manifest', () => {
   })
 
   it('claims the wire endpoint through the typert registry when one composes', async () => {
-    lane = await setupHostLane(
-      { baseUrl: 'http://127.0.0.1:23119/api' },
-      { settings: {}, typert: true },
-    )
+    lane = await setupHostLane({ baseUrl: 'http://127.0.0.1:23119/api' }, { typert: true })
     for (const invocation of TYPERT_MANIFEST.invocations) {
       // The registry keys endpoints as `<namespace>/<method>`.
       expect(lane.ctx.typert.local.get(`zotero/${invocation.method}`)).toMatchObject({

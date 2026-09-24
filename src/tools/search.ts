@@ -316,17 +316,17 @@ function buildRequest(args: SearchArgs, config: ResolvedConfig): ZoteroSearchReq
       invalid(`${TAGS_LITERAL_MESSAGE}: "${tag}"`)
     }
   }
-  for (const tag of ((args as Record<string, unknown>).excludeTags as string[] | undefined) ?? []) {
+  for (const tag of args.excludeTags ?? []) {
     if (tag.trim() === '' || tag.includes('||')) {
       invalid(`${EXCLUDE_TAGS_LITERAL_MESSAGE}; got "${tag}"`)
     }
   }
   // tagMatch's all|any enum is enforced by the parameter schema; the
   // cross-field rule below is what the schema cannot express.
-  const tagMatch = (args as Record<string, unknown>).tagMatch as 'all' | 'any' | undefined
+  const tagMatch = args.tagMatch
   if (tagMatch !== undefined && (args.tags === undefined || args.tags.length === 0))
     invalid(TAG_MATCH_REQUIRES_TAGS_MESSAGE)
-  const includeTrashed = (args as Record<string, unknown>).includeTrashed as boolean | undefined
+  const includeTrashed = args.includeTrashed
   if (includeTrashed === true && scope.kind !== 'library') {
     invalid(INCLUDE_TRASHED_SCOPE_MESSAGE)
   }
@@ -335,7 +335,7 @@ function buildRequest(args: SearchArgs, config: ResolvedConfig): ZoteroSearchReq
       invalid(`${ITEM_TYPES_LITERAL_MESSAGE}; got "${itemType}"`)
     }
   }
-  const library = parseLibrary((args as Record<string, unknown>).library)
+  const library = parseLibrary(args.library)
   return {
     query: query === '' ? undefined : query,
     mode: args.mode ?? SEARCH_DEFAULT_MODE,
@@ -349,9 +349,7 @@ function buildRequest(args: SearchArgs, config: ResolvedConfig): ZoteroSearchReq
     itemTypes: args.itemTypes,
     tags: args.tags,
     ...(tagMatch ? { tagMatch } : {}),
-    ...(((args as Record<string, unknown>).excludeTags as string[] | undefined)
-      ? { excludeTags: (args as Record<string, unknown>).excludeTags as string[] }
-      : {}),
+    ...(args.excludeTags ? { excludeTags: args.excludeTags } : {}),
     ...(includeTrashed ? { includeTrashed: true } : {}),
     sort: args.sort ?? SEARCH_DEFAULT_SORT,
     direction: args.direction ?? SEARCH_DEFAULT_DIRECTION,
