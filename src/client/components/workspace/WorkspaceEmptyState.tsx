@@ -5,7 +5,7 @@
  * @module dsh-zotero/client/components/workspace/WorkspaceEmptyState
  */
 
-import { IconBrowseOutline16, Pill } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconBrowseOutlineMedium, Pill } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import css from './workspace.module.css'
 
@@ -18,7 +18,7 @@ export interface WorkspaceEmptyStateProps {
 export function WorkspaceEmptyState({ t, setDraft }: WorkspaceEmptyStateProps) {
   return (
     <div className={css.empty}>
-      <IconBrowseOutline16 size={16} className={css.emptyIcon} />
+      <IconBrowseOutlineMedium size={16} className={css.emptyIcon} />
       <p className={css.emptyText}>{t('noSources')}</p>
       {setDraft !== undefined && (
         <div className={css.starterRow}>

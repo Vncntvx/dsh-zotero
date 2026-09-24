@@ -28,11 +28,13 @@ export const CLIENT_SAFE_LOCAL =
   /^src\/(?:client(?:\/|$)|contract\.(?:ts|js|mjs|cjs)$|settings-namespace\.(?:ts|js|mjs|cjs)$|json\.(?:ts|js|mjs|cjs)$|ref-grammar\.(?:ts|js|mjs|cjs)$|export-items\.(?:ts|js|mjs|cjs)$)/
 
 /**
- * Packages the host half owns. Boundary schema materialization (zod) is host
- * registration only; the client Remote face mounts structural descriptors.
+ * Packages the host half owns. Boundary schema materialization (zod for the
+ * Typert wire codecs, schemastery for Config schemas) is host registration
+ * only; the client Remote face mounts structural descriptors.
  */
-export const HOST_ONLY_PACKAGE_RESOLVE = /^zod(?:\/|$)/
-export const HOST_ONLY_PACKAGE_INPUT = /(?:^|\/)node_modules\/zod(?:\/|$)/
+export const HOST_ONLY_PACKAGE_RESOLVE = /^(?:zod|@deepseek-ai\/schemastery)(?:\/|$)/
+export const HOST_ONLY_PACKAGE_INPUT =
+  /(?:^|\/)node_modules\/(?:zod|@deepseek-ai\/schemastery)(?:\/|$)/
 
 /**
  * Normalize an esbuild metafile input key to a posix `src/...` /
@@ -92,7 +94,8 @@ export function createClientAuthorityPlugin() {
               text:
                 `client graph resolved host-owned package "${args.path}" from ${args.importer || '(entry)'}` +
                 ' — import structural identity from src/contract.ts;' +
-                ' host zod codecs live only in src/status-codec.ts and must never enter src/client',
+                ' host zod/schemastery codecs live only in src/status-codec.ts and src/config.ts' +
+                ' and must never enter src/client',
             },
           ],
         }

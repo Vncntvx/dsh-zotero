@@ -16,6 +16,7 @@ import {
   stringField,
   type EvidenceItemView,
 } from '../presenters.ts'
+import { stringArrayOf } from '../../json.ts'
 import type {
   ExportDocumentItem,
   SourceAvailabilityEntry,
@@ -80,12 +81,6 @@ export interface ExportMetaView {
   readonly refsOmitted: number
   /** The bounded per-document items; empty when the projection carried none. */
   readonly items: readonly ExportDocumentItem[]
-}
-
-/** String entries of an array-shaped field; anything else yields nothing. */
-function stringArrayOf(value: unknown): string[] {
-  if (!Array.isArray(value)) return []
-  return value.filter((entry): entry is string => typeof entry === 'string')
 }
 
 /** The bounded per-document items of an export projection; malformed rows are dropped. */

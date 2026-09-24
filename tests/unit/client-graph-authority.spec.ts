@@ -1,7 +1,8 @@
 /**
  * Client-graph authority unit rules: the browser bundle may only contain
  * client-safe local sources and platform modules. Host codecs, the Typert
- * manifest, and zod must fail at resolve time or via the metafile allowlist.
+ * manifest, zod, and schemastery must fail at resolve time or via the
+ * metafile allowlist.
  * @module tests/unit/client-graph-authority
  */
 
@@ -80,6 +81,15 @@ describe('client graph authority', () => {
     expect(violations[0]!.key).toContain('node_modules/zod')
   })
 
+  it('rejects schemastery package inputs', () => {
+    const violations = clientGraphViolations(
+      metafileOf(['src/client/index.ts', 'node_modules/@deepseek-ai/schemastery/lib/index.js']),
+    )
+    expect(violations).toHaveLength(1)
+    expect(violations[0]).toMatchObject({ kind: 'host-package' })
+    expect(violations[0]!.key).toContain('node_modules/@deepseek-ai/schemastery')
+  })
+
   it('rejects a client graph that value-imports the host status codec', async () => {
     await expect(
       authorityBuild(
@@ -94,6 +104,14 @@ describe('client graph authority', () => {
         `import { z } from 'zod'\nexport default { apply() {}, inject: [], s: z.object({ a: z.string() }) }\n`,
       ),
     ).rejects.toThrow(/host-owned package "zod"|client graph/i)
+  })
+
+  it('rejects a client graph that value-imports schemastery directly', async () => {
+    await expect(
+      authorityBuild(
+        `import Schema from '@deepseek-ai/schemastery'\nexport default { apply() {}, inject: [], s: Schema.string() }\n`,
+      ),
+    ).rejects.toThrow(/host-owned package "@deepseek-ai\/schemastery"|client graph/i)
   })
 
   it('allows the real client Remote contribution graph', async () => {

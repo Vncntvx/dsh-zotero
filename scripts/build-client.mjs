@@ -16,8 +16,9 @@
  *    purity rule allows (`bundlePurityPlugin`).
  * 3. This package's local sources may only enter the client graph when they
  *    are client-safe (`CLIENT_SAFE_LOCAL`: `src/client/**`, plus the
- *    dependency-free shared surfaces `contract` and `settings-namespace`).
- * 4. Host-only packages (`zod`) are refused at resolve time.
+ *    declared shared pure surfaces `contract`, `settings-namespace`, `json`,
+ *    `ref-grammar`, and `export-items`).
+ * 4. Host-only packages (`zod`, `schemastery`) are refused at resolve time.
  *
  * Gates 3–4 are re-checked against esbuild's metafile on every successful
  * build (one-shot and watch), so minify settings and path comments cannot
@@ -87,7 +88,7 @@ function buildCommitOf() {
  *  alongside react and the UI primitives instead of bundling zustand/immer.
  *  That harness list is this one's counterpart: anything in it that this bundle
  *  value-imports belongs here too, and `bundlePurityPlugin` below fails the
- *  build when a harness module slips into the artifact. At dsh 0.1.6-alpha.1
+ *  build when a harness module slips into the artifact. At dsh 0.1.7-alpha.2
  *  PLATFORM_MODULES also lists react-dom, @deepseek-ai/cordis, ui-slots, and
  *  ui-dockkit — this bundle value-imports none of them today (cordis and
  *  ui-slots are type-only), so they stay out of EXTERNALS and the purity
@@ -118,7 +119,11 @@ const INLINABLE_HARNESS_SPECIFIER =
  */
 
 /** Metafile artifact markers that mean host schema materialization leaked in. */
-const HOST_SCHEMA_ARTIFACT_MARKERS = [/\bZodError\b/, /\bnode_modules\/zod\b/]
+const HOST_SCHEMA_ARTIFACT_MARKERS = [
+  /\bZodError\b/,
+  /\bnode_modules\/zod\b/,
+  /\bnode_modules\/schemastery\b/,
+]
 
 /** Fails the build when a harness module reaches the artifact that may not be
  *  inlined: a second copy of a shell singleton (`ctx`, the store, the UI

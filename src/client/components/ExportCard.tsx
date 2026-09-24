@@ -13,7 +13,7 @@
 
 import { useMemo, useState } from 'react'
 import clsx from 'clsx'
-import { IconChevronDownOutline14 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconChevronDownOutlineMedium } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { bibTexKeysOf, citeCommandOf } from '../sources/bibtex.ts'
 import type { ExportArtifact } from '../sources/model.ts'
@@ -146,7 +146,7 @@ export function ExportCard({ artifact, t }: ExportCardProps) {
         >
           <span className={css.exportTitle}>{formatLabelOf(artifact.format, t)}</span>
           <span className={css.exportFacts}>{headFacts}</span>
-          <IconChevronDownOutline14 className={clsx(css.chevron, open && css.chevronOpen)} />
+          <IconChevronDownOutlineMedium className={clsx(css.chevron, open && css.chevronOpen)} />
         </button>
         <span className={css.lineActions}>
           <CopyButton value={artifact.text} label={t('copyExport')} copiedLabel={t('copied')} />

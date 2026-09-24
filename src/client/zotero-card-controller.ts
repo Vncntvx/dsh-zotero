@@ -1,18 +1,20 @@
 /**
- * The Zotero settings page's staged form over the `zotero` settings
- * namespace — every Config field, mirroring the host schema in `src/config.ts`
- * (spelled here rather than value-imported: the browser bundle must not pull
- * host modules in; the key set is bound to the host `ResolvedConfig` at
- * compile time below, and `tests/client/zotero-card-parity.spec.ts` binds the
- * per-field control kind against the same schema at runtime, so the two
- * surfaces cannot drift in either direction). The scope arrives through the
- * shared `SettingsScope` contract, so the form is indifferent to whether the
- * harness's settings RPC or the plugin's own Typert Remote endpoints back it.
+ * The Zotero settings page's staged form over the `zotero` namespace — every
+ * Config field, with the field table spelled here (the browser bundle must
+ * not value-import host modules; the key set is bound to the host
+ * `ResolvedConfig` at compile time below, and
+ * `tests/client/zotero-card-parity.spec.ts` binds the per-field control kind
+ * against the same schema at runtime, so the two surfaces cannot drift in
+ * either direction).
  *
- * The shape follows the harness's own card controllers
- * (`packages/client/ui-settings-plugins/src/client/bash-card-controller.ts`),
- * extended to a full field table because this namespace is a whole
- * configuration surface rather than one capability's settings.
+ * Staging rides the harness's own model (`SettingsFormModel` from
+ * `dsh-client-ui-primitives`, the same class every first-party card stages
+ * through): draft text per field, presence-based override badges, an atomic
+ * revision-fenced save, and discard. The namespace form arrives as the shared
+ * `ConfigForm` (`ctx.configForms.get`); a thin adapter presents it as the
+ * `SettingsFormScope` the model stages over. The boolean toggle has no
+ * official atom (upstream ships number/text fields only), so its spec lives
+ * here in the official `SettingsFieldSpec` shape.
  *
  * One field table drives the whole card: the field specs the form edits, the
  * state the page renders, the display groups, and the numeric hint set, so a
@@ -20,19 +22,20 @@
  * @module dsh-zotero/client/zotero-card-controller
  */
 
-import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
-import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { ResolvedConfig } from '../config.js'
 import {
-  CardForm,
-  booleanFieldSpec,
-  numberFieldSpec,
-  textFieldSpec,
-  type CardActions,
-  type CardFieldSpec,
-  type CardFieldState,
-  type CardShell,
-} from './card-form.ts'
+  SettingsFormModel,
+  settingsNumberField,
+  settingsTextField,
+  type SettingsFieldSpec,
+  type SettingsFieldState,
+  type SettingsFormActions,
+  type SettingsFormScope,
+  type SettingsFormShell,
+} from '@deepseek-ai/dsh-client-ui-primitives'
+import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
+import type { ResolvedConfig } from '../config.js'
 
 /**
  * The section fields this card edits — the host `Config` surface, all of it,
@@ -83,11 +86,34 @@ type MissingConfigField = Exclude<keyof ResolvedConfig, FieldKey>
 // `_configSurfaceComplete` `never`, so `true` stops being assignable.
 const _configSurfaceComplete: MissingConfigField extends never ? true : never = true
 
-const FIELDS: CardFieldSpec[] = FIELD_SPECS.map((spec) => {
-  if (spec.kind === 'number') return numberFieldSpec(spec.key)
-  if (spec.kind === 'boolean') return booleanFieldSpec(spec.key)
-  return textFieldSpec(spec.key)
-})
+/**
+ * A boolean field: the draft is the literal 'true'/'false' text a toggle
+ * control maps to a checked state. An empty draft clears the field.
+ * @param field - field name inside the settings section.
+ * @returns the field's conversion spec in the official shape.
+ */
+function booleanFieldSpec(field: string): SettingsFieldSpec {
+  return {
+    field,
+    format: (value) => (typeof value === 'boolean' ? String(value) : ''),
+    parse: (text) => {
+      const trimmed = text.trim()
+      if (trimmed === '') return { kind: 'clear' }
+      if (trimmed === 'true') return { kind: 'set', value: true }
+      if (trimmed === 'false') return { kind: 'set', value: false }
+      return undefined
+    },
+  }
+}
+
+/** Field specs built on first use: the official helpers resolve through the loader's module table, which only exists at factory-execution time (the bundle self-check stubs externals at import, so module-level calls would fail there). */
+function fieldSpecs(): SettingsFieldSpec[] {
+  return FIELD_SPECS.map((spec) => {
+    if (spec.kind === 'number') return settingsNumberField(spec.key)
+    if (spec.kind === 'boolean') return booleanFieldSpec(spec.key)
+    return settingsTextField(spec.key)
+  })
+}
 
 /** The page's field keys grouped by the host schema's families, in display order. */
 export const FIELD_GROUPS: readonly {
@@ -106,36 +132,62 @@ export const BOOLEAN_FIELD_KEYS: ReadonlySet<FieldKey> = new Set<FieldKey>(
 )
 
 /** What the Zotero page renders: the shell plus one control per field. */
-export type ZoteroCardState = CardShell & { readonly [K in FieldKey]: CardFieldState }
+export type ZoteroCardState = SettingsFormShell & { readonly [K in FieldKey]: SettingsFieldState }
 
 /** The registration-side face the card's slot entry injects. */
-export interface ZoteroCardFace extends CardActions {
+export interface ZoteroCardFace extends SettingsFormActions {
   hooks: {
     /** Card snapshot bound by the renderer as useZoteroCard. */
     zoteroCard: SnapshotStore<ZoteroCardState>
   }
 }
 
-/** Bridges the `zotero` scope onto the page's staged form. */
+/**
+ * Present the shared namespace form as the scope the staged model edits.
+ * The snapshots differ by one field (`mode`, a client transport fact the
+ * model never reads); the write edge is the same atomic revision-fenced
+ * mutation, with the path/value shapes narrowed to the JSON the wire takes.
+ * @param form - the shared form for the `zotero` namespace.
+ * @returns the scope the model stages over.
+ */
+function asFormScope(
+  form: ConfigForm<Record<string, unknown>>,
+): SettingsFormScope<Record<string, unknown>> {
+  return {
+    getSnapshot: () => {
+      const { mode: _mode, ...snapshot } = form.getSnapshot()
+      return snapshot
+    },
+    subscribe: (listener) => form.subscribe(listener),
+    mutate: (ops, expectedRevision) =>
+      form.mutate(
+        ops.map((op) =>
+          op.op === 'set'
+            ? { op: 'set' as const, path: [...op.path], value: op.value as JsonValue }
+            : { op: 'unset' as const, path: [...op.path] },
+        ),
+        expectedRevision,
+      ),
+  }
+}
+
+/** Bridges the `zotero` form onto the page's staged model. */
 export class ZoteroCardController {
-  private readonly form: CardForm
+  private readonly form: SettingsFormModel<Record<string, unknown>>
   private readonly store: SnapshotStore<ZoteroCardState>
 
   /**
-   * @param scope - the bound settings scope for the `zotero` namespace. The
-   *   seam types the section generically; the settings wire validates it
-   *   against the host Config schema, so reading it as a plain object record
-   *   is the contract the host registration established.
+   * @param form - the shared configuration form for the `zotero` namespace.
    */
-  constructor(scope: SettingsScope<unknown>) {
-    this.form = new CardForm(scope as SettingsScope<Record<string, unknown>>, FIELDS)
+  constructor(form: ConfigForm<Record<string, unknown>>) {
+    this.form = new SettingsFormModel(asFormScope(form), fieldSpecs())
     this.store = this.form.bind(() => this.projection())
   }
 
   private projection(): ZoteroCardState {
     const fields = Object.fromEntries(
       FIELD_SPECS.map((spec) => [spec.key, this.form.field(spec.key)]),
-    ) as { [K in FieldKey]: CardFieldState }
+    ) as { [K in FieldKey]: SettingsFieldState }
     return {
       ...this.form.shell(),
       ...fields,
@@ -148,6 +200,11 @@ export class ZoteroCardController {
    */
   inject(): ZoteroCardFace {
     return { hooks: { zoteroCard: this.store }, ...this.form.actions() }
+  }
+
+  /** Release the form's namespace subscription. */
+  dispose(): void {
+    this.form.dispose()
   }
 }
 

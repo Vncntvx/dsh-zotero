@@ -5,8 +5,7 @@
  * returns `RemoteResult.value` unvalidated
  * (`packages/api/gateway/src/client/index.ts` invoke path), while
  * `typert.remotes.register` only requires `typeof create === 'function'`.
- * Host registration carries the real zod factory (and the 0.1.5 live schema
- * arm) in `src/status-codec.ts`.
+ * Host registration carries the real zod factory in `src/status-codec.ts`.
  *
  * Materializing here would either ship a second zod copy into `lib/client.js`
  * or invent browser-side validation the platform does not perform. The factory

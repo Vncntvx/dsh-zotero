@@ -20,7 +20,6 @@ import {
   joinNonEmpty,
   metaOf,
   numberField,
-  orderKeyOf,
   resultTextOf,
   rowStateOf,
   shortKeyOf,
@@ -60,13 +59,11 @@ describe('field readers', () => {
   })
 })
 
-describe('callNameOf / orderKeyOf', () => {
-  it('names calls from both block forms and orders them stably', () => {
+describe('callNameOf', () => {
+  it('names calls from both block forms', () => {
     expect(callNameOf(running())).toBe('zotero_search')
     expect(callNameOf(settled())).toBe('zotero_search')
     expect(callNameOf(settled({ call: null }))).toBeNull()
-    expect(orderKeyOf(settled({ seq: 2 }))).toBe(2)
-    expect(orderKeyOf(running({ time: 5 }))).toBe(1_000_000_005)
   })
 })
 

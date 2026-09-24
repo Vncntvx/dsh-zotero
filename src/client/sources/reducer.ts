@@ -17,7 +17,6 @@ import {
   isRecord,
   isSettledTool,
   metaOf,
-  orderKeyOf,
   resultTextOf,
   rowStateOf,
   stringField,
@@ -426,8 +425,12 @@ export function buildSourceWorkspace(
     }
   }
 
-  for (const block of blocks) {
-    const seq = orderKeyOf(block)
+  for (const [index, block] of blocks.entries()) {
+    // Transcript order is the enumeration order: `blocks` arrives in
+    // `ChatSnapshot.order` sequence, so the index is the position. A synthetic
+    // key from `seq`/`time` would sort every in-flight call after all settled
+    // ones regardless of where it actually runs.
+    const seq = index
     const state = rowStateOf(block)
     const name = callNameOf(block)
     const args = argsOf(block)

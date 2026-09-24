@@ -25,9 +25,9 @@ import { makeTranslate } from './helpers/mock-translate.ts'
 
 // The real primitives bundle pulls heavy dependencies (katex, shiki); the page
 // only needs the pending capsule, so stub it with the shared DOM face.
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
-  const { primitivesStub } = await import('./helpers/primitives-stub.ts')
-  return primitivesStub()
+vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
+  const { primitivesWithRealForm } = await import('./helpers/primitives-stub.ts')
+  return primitivesWithRealForm(importOriginal)
 })
 
 /** The renderer's binding: a snapshot selector hook over the page's store. */
@@ -64,7 +64,9 @@ afterEach(() => {
   scope = undefined as unknown as FakeScope
 })
 
-const saveButton = (): HTMLButtonElement => screen.getByRole('button', { name: zh.save })
+/** The save control, whose label becomes `saving` while a save is in flight. */
+const saveButton = (): HTMLButtonElement =>
+  screen.getByRole('button', { name: new RegExp(`^(?:${zh.save}|${zh.saving})`) })
 
 const discardButton = (): HTMLButtonElement => screen.getByRole('button', { name: zh.discard })
 
@@ -151,10 +153,8 @@ describe('ZoteroSettingsSection', () => {
     const timeout = document.querySelector('#zotero-settings-timeoutMs') as HTMLInputElement
     fireEvent.change(timeout, { target: { value: 'abc' } })
     expect(timeout.getAttribute('aria-invalid')).toBe('true')
-    // Official invalid face: always `css.input`; border rides
-    // `[aria-invalid='true']`, not a second class.
-    expect(timeout.className).toMatch(/input/)
-    expect(timeout.className).not.toMatch(/inputInvalid/)
+    // The invalid face is behavioral (aria-invalid plus the invalid copy),
+    // not a second input class — the stub carries no stylesheet.
     expect(screen.getByText(zh.invalidNumber)).toBeDefined()
     expect(saveButton().disabled).toBe(true)
   })
@@ -170,16 +170,46 @@ describe('ZoteroSettingsSection', () => {
     )
   })
 
-  it('shows no override marker on the web toggle even when the user layer holds it', () => {
+  it('disables every field while a save is crossing the wire', async () => {
+    let release!: () => void
+    const pending = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    scope = fakeScope({ value: { timeoutMs: 5000 } })
+    const original = scope.mutate.bind(scope)
+    scope.mutate = async (ops, expectedRevision) => {
+      await pending
+      return original(ops, expectedRevision)
+    }
+    mount()
+    fireEvent.change(document.querySelector('#zotero-settings-timeoutMs') as HTMLInputElement, {
+      target: { value: '9000' },
+    })
+    fireEvent.click(saveButton())
+    await vi.waitFor(() => {
+      for (const input of document.querySelectorAll('input')) {
+        expect((input as HTMLInputElement).disabled).toBe(true)
+      }
+      expect(saveButton().disabled).toBe(true)
+      expect(discardButton().disabled).toBe(true)
+    })
+    release()
+    await vi.waitFor(() =>
+      expect(scope.writes).toEqual([{ op: 'set', field: 'timeoutMs', value: 9000 }]),
+    )
+  })
+
+  it('marks the web toggle overridden like every other field', () => {
     scope = fakeScope({
       value: { webEnabled: false },
       base: { webEnabled: true },
       user: { webEnabled: false },
     })
     mount()
-    // The toggle's own state is its undo: no badge, no reset, no marker row.
-    expect(screen.queryByText(zh.overridden)).toBeNull()
-    expect(screen.queryByText(zh.reset)).toBeNull()
+    // Presence in the user layer marks the override — the toggle carries the
+    // same badge and reset as every other field.
+    expect(screen.getByText(zh.overridden)).toBeDefined()
+    expect(screen.getByText(zh.reset)).toBeDefined()
   })
 
   it('resets an overridden value field back to the base from the action row', async () => {

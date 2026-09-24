@@ -11,7 +11,7 @@
 
 import { useMemo, useState } from 'react'
 import clsx from 'clsx'
-import { IconChevronDownOutline14 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconChevronDownOutlineMedium } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { shortKeyOf } from '../presenters.ts'
 import { citeCommandOf } from '../sources/bibtex.ts'
@@ -54,7 +54,7 @@ export function ExportDocumentRow({ doc, t }: ExportDocumentRowProps) {
           <span className={doc.key === undefined ? css.exportTitle : css.documentKey}>
             {doc.key ?? doc.title ?? formatLabelOf(doc.format, t)}
           </span>
-          <IconChevronDownOutline14 className={clsx(css.chevron, open && css.chevronOpen)} />
+          <IconChevronDownOutlineMedium className={clsx(css.chevron, open && css.chevronOpen)} />
         </button>
         <span className={css.lineActions}>
           {citeCommand !== '' && (

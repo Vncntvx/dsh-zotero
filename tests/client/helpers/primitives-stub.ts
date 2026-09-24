@@ -13,7 +13,14 @@
  * A spec that drives more of a primitive than the shared face offers passes
  * its own variant through `primitivesStub({ … })`, so the difference stays
  * visible at the spec's mock site instead of widening the shared stub for
- * every other file.
+ * every other file. Specs that stage through the real settings form model
+ * (the settings page and the entry wiring) keep the stubbed visuals but take
+ * the real form logic through `primitivesWithRealForm`:
+ *
+ *     vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
+ *       const { primitivesWithRealForm } = await import('./helpers/primitives-stub.ts')
+ *       return primitivesWithRealForm(importOriginal)
+ *     })
  * @module tests/client/helpers/primitives-stub
  */
 
@@ -42,8 +49,17 @@ export interface MenuStubProps {
 /** The real clipboard writer, reached through the mocked module. */
 type WriteClipboard = (typeof import('@deepseek-ai/dsh-client-ui-primitives'))['writeClipboard']
 
+/** The harness's own staged-form model and field specs, taken real. */
+type RealForm = Pick<
+  typeof import('@deepseek-ai/dsh-client-ui-primitives'),
+  'SettingsFormModel' | 'settingsNumberField' | 'settingsTextField' | 'SettingsValueField'
+>
+
 /** The DOM face one client spec installs in place of the primitives bundle. */
-export interface PrimitivesStub {
+export interface PrimitivesStub extends Omit<RealForm, 'SettingsValueField'> {
+  /** A staged value field with the official input contract (stubbed; see below). */
+  readonly SettingsValueField: (props: Record<string, unknown>) => ReactElement
+
   /** A state dot carrying the state name. */
   readonly StateDot: (props: { state: string }) => ReactElement
   /** A pill as the button the filter strip renders. */
@@ -51,17 +67,15 @@ export interface PrimitivesStub {
   /** The menu variant this stub installs. */
   readonly Menu: (props: MenuStubProps) => ReactElement
   /** The chevron that marks a disclosure. */
-  readonly IconChevronDownOutline14: (props: Record<string, unknown>) => ReactElement
+  readonly IconChevronDownOutlineMedium: (props: Record<string, unknown>) => ReactElement
   /** The chevron that marks the left edge of a scrollable strip. */
-  readonly IconChevronLeftOutline14: (props: Record<string, unknown>) => ReactElement
+  readonly IconChevronLeftOutlineMedium: (props: Record<string, unknown>) => ReactElement
   /** The chevron that marks the right edge of a scrollable strip. */
-  readonly IconChevronRightOutline14: (props: Record<string, unknown>) => ReactElement
+  readonly IconChevronRightOutlineMedium: (props: Record<string, unknown>) => ReactElement
   /** The browse glyph of a search entry. */
-  readonly IconBrowseOutline16: (props: Record<string, unknown>) => ReactElement
+  readonly IconBrowseOutlineMedium: (props: Record<string, unknown>) => ReactElement
   /** The glyph leading a clickable link. */
-  readonly LinkIcon: (props: Record<string, unknown>) => ReactElement
-  /** The info glyph beside an optional help disclosure. */
-  readonly IconInfoOutline14: (props: Record<string, unknown>) => ReactElement
+  readonly IconLinkOutlineMedium: (props: Record<string, unknown>) => ReactElement
   /** The passthrough tooltip: its children render in place, without a portal. */
   readonly Tooltip: (props: { children?: ReactElement }) => ReactElement | undefined
   /** The tag capsule, as its DOM face. */
@@ -150,16 +164,108 @@ export function primitivesStub(overrides: Partial<PrimitivesStub> = {}): Primiti
         children as never,
       ),
     Menu: staticMenu,
-    IconChevronDownOutline14: icon('chevron-down'),
-    IconChevronLeftOutline14: icon('chevron-left'),
-    IconChevronRightOutline14: icon('chevron-right'),
-    IconBrowseOutline16: icon('browse'),
-    LinkIcon: icon('link'),
-    IconInfoOutline14: icon('info'),
+    IconChevronDownOutlineMedium: icon('chevron-down'),
+    IconChevronLeftOutlineMedium: icon('chevron-left'),
+    IconChevronRightOutlineMedium: icon('chevron-right'),
+    IconBrowseOutlineMedium: icon('browse'),
+    IconLinkOutlineMedium: icon('link'),
+    SettingsValueField: (props) => {
+      // Faithful to the official control's input contract (label, input with
+      // draft text, hint/invalid copy, override badge with reset): the real
+      // component cannot render here because its bundle carries a second
+      // React copy, while the model and field specs behind it stay real
+      // (see `primitivesWithRealForm`). Tracks
+      // `ui-primitives/src/settings-form/fields.tsx` `SettingsValueField`.
+      const {
+        id,
+        label,
+        hint,
+        text,
+        overridden,
+        invalid,
+        overriddenLabel,
+        resetLabel,
+        invalidLabel,
+        disabled,
+        onEdit,
+        onReset,
+        numeric,
+        placeholder,
+      } = props as {
+        id: string
+        label: unknown
+        hint?: unknown
+        text: string
+        overridden: boolean
+        invalid: boolean
+        overriddenLabel: unknown
+        resetLabel: unknown
+        invalidLabel: unknown
+        disabled: boolean
+        onEdit: (text: string) => void
+        onReset: () => void
+        numeric?: boolean
+        placeholder?: string
+      }
+      return createElement(
+        'div',
+        null,
+        createElement('label', { htmlFor: id }, label as never),
+        overridden
+          ? createElement(
+              'span',
+              null,
+              createElement('span', null, overriddenLabel as never),
+              createElement(
+                'button',
+                { type: 'button', disabled, onClick: () => (onReset as () => void)() },
+                resetLabel as never,
+              ),
+            )
+          : null,
+        createElement('input', {
+          id,
+          type: 'text',
+          ...(numeric === true ? { inputMode: 'numeric' as const } : {}),
+          ...(invalid ? { 'aria-invalid': true } : {}),
+          value: text,
+          placeholder: placeholder ?? '',
+          disabled,
+          onChange: (event: { target: { value: string } }) => {
+            ;(onEdit as (text: string) => void)(event.target.value)
+          },
+        }),
+        invalid || hint !== undefined
+          ? createElement('p', null, (invalid ? invalidLabel : hint) as never)
+          : null,
+      )
+    },
     Tooltip: ({ children }) => children,
     Tag: TagStub,
     writeClipboard: vi.fn(async () => true),
     ...overrides,
+  } as PrimitivesStub
+}
+
+/**
+ * The stub module body with the real form logic: stubbed visuals (icons,
+ * Tag, Menu, Tooltip, clipboard) plus the harness's own staged-form model,
+ * field specs, and value control. Specs driving the settings page take this
+ * so their writes exercise the real save path instead of a re-implementation.
+ * @param importOriginal - the mock factory's original-module loader.
+ * @param overrides - per-spec visual variants, as in {@link primitivesStub}.
+ * @returns the module shape the spec's `vi.mock` factory returns.
+ */
+export async function primitivesWithRealForm(
+  importOriginal: () => Promise<typeof import('@deepseek-ai/dsh-client-ui-primitives')>,
+  overrides: Partial<PrimitivesStub> = {},
+): Promise<PrimitivesStub> {
+  const original = await importOriginal()
+  return {
+    ...primitivesStub(overrides),
+    SettingsFormModel: original.SettingsFormModel,
+    settingsNumberField: original.settingsNumberField,
+    settingsTextField: original.settingsTextField,
   }
 }
 

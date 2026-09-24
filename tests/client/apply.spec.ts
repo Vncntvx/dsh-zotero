@@ -1,9 +1,9 @@
 /**
- * Browser-half entry: the apply wiring registers the page dictionaries, binds
- * the zotero settings namespace through the injected settings scope, injects
- * the configuration page into the `settings.section` slot (one left-nav entry
- * in the Settings panel), and mounts the zotero Typert Remote namespace for
- * the conversation tab's live status, gating that tab on the namespace's
+ * Browser-half entry: the apply wiring registers the page dictionaries, reads
+ * the zotero namespace through the shared configuration form, injects the
+ * configuration page into the `settings.section` slot (one left-nav entry in
+ * the Settings panel), and mounts the zotero Typert Remote namespace for the
+ * conversation tab's live status, gating that tab on the namespace's
  * `webEnabled` flag.
  * @module tests/client/apply
  */
@@ -17,9 +17,9 @@ import { fakeScope } from './helpers/fake-scope.ts'
 
 // The page imports primitive icons; stub them with the shared DOM face so
 // this wiring-level spec does not load the real bundle (katex css, shiki, …).
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
-  const { primitivesStub } = await import('./helpers/primitives-stub.ts')
-  return primitivesStub()
+vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
+  const { primitivesWithRealForm } = await import('./helpers/primitives-stub.ts')
+  return primitivesWithRealForm(importOriginal)
 })
 
 interface FakeSlotsEntry {
@@ -44,7 +44,7 @@ interface FakeApplyWorld {
   effects: Array<unknown>
   mountDisposes: number
   injectDisposes: number
-  bindSpecs: Array<{ namespace: string; decode?: (section: unknown) => unknown }>
+  formIds: string[]
   scope: ReturnType<typeof fakeScope>
   /** Scripted namespace `status` result; defaults to ok. */
   status: () => Promise<unknown>
@@ -53,13 +53,13 @@ interface FakeApplyWorld {
 }
 
 /** A minimal context standing in for the browser kernel's plugin ctx. */
-function fakeWorld(mountFail = false): FakeApplyWorld {
+function fakeWorld(mountFail = false, mountRejects: unknown = undefined): FakeApplyWorld {
   const dictionaries: FakeApplyWorld['dictionaries'] = []
   const injected: FakeInjectedEntry[] = []
   const registered: FakeApplyWorld['registered'] = []
   const mounts: FakeApplyWorld['mounts'] = []
   const effects: FakeApplyWorld['effects'] = []
-  const bindSpecs: FakeApplyWorld['bindSpecs'] = []
+  const formIds: string[] = []
   const scope = fakeScope()
   // The world object is shared with the ctx closures (disposer counters
   // included), so the returned handle observes the disposers' side effects.
@@ -72,7 +72,7 @@ function fakeWorld(mountFail = false): FakeApplyWorld {
     effects,
     mountDisposes: 0,
     injectDisposes: 0,
-    bindSpecs,
+    formIds,
     scope,
     status: async () => ({ ok: true, value: { connected: true, diagnosis: 'ok' } }),
     reflectCalls: 0,
@@ -91,6 +91,7 @@ function fakeWorld(mountFail = false): FakeApplyWorld {
     remote: {
       $mount: async (contribution: unknown) => {
         mounts.push(contribution)
+        if (mountRejects !== undefined) throw mountRejects
         return () => {
           world.mountDisposes += 1
         }
@@ -116,9 +117,9 @@ function fakeWorld(mountFail = false): FakeApplyWorld {
             }
       },
     },
-    settingsScope: {
-      bind: (spec: { namespace: string; decode?: (section: unknown) => unknown }) => {
-        bindSpecs.push(spec)
+    configForms: {
+      get: (id: string) => {
+        formIds.push(id)
         return world.scope
       },
     },
@@ -142,8 +143,8 @@ function fakeWorld(mountFail = false): FakeApplyWorld {
 }
 
 /**
- * Await the Remote mount `apply` starts — its third effect, the only
- * asynchronous one (`src/client/index.ts`, `dsh-zotero: remote`; the other two
+ * Await the Remote mount `apply` starts — its fourth effect, the only
+ * asynchronous one (`src/client/index.ts`, `dsh-zotero: remote`; the others
  * register synchronously and are collected as their disposers). The promise
  * settles after the mount attempt, the namespace read through the service
  * store, and the fault log, so a test that awaits it reads `reflectCalls` and
@@ -151,16 +152,16 @@ function fakeWorld(mountFail = false): FakeApplyWorld {
  * @param world - the world `apply` was called on.
  */
 async function settleMount(world: FakeApplyWorld): Promise<void> {
-  const mount = world.effects[2]
+  const mount = world.effects[3]
   // Awaiting a disposer would resolve at once and turn this into a silent
   // no-op, so a rewiring of the effects fails here instead.
-  if (!(mount instanceof Promise)) throw new Error('the third effect is not the Remote mount')
+  if (!(mount instanceof Promise)) throw new Error('the fourth effect is not the Remote mount')
   await mount
 }
 
 describe('the browser-half entry', () => {
   it('declares the services it consumes', () => {
-    expect(inject).toEqual(['locale', 'slots', 'connection', 'settingsScope', 'remote'])
+    expect(inject).toEqual(['locale', 'slots', 'remote', 'configForms'])
   })
 
   it('registers the page dictionaries on apply', () => {
@@ -169,14 +170,10 @@ describe('the browser-half entry', () => {
     expect(world.dictionaries).toEqual([{ ns: 'zotero', dict: { zh, en } }])
   })
 
-  it('binds the settings scope to the shared namespace constant', () => {
+  it('reads the shared form for the shared namespace constant', () => {
     const world = fakeWorld()
     apply(world.ctx as Context)
-    expect(world.bindSpecs).toHaveLength(1)
-    expect(world.bindSpecs[0]?.namespace).toBe(ZOTERO_SETTINGS_NAMESPACE)
-    // The default decode (schema rehydrate + validate, fail-closed) is the
-    // authority — no lenient bypass.
-    expect(world.bindSpecs[0]?.decode).toBeUndefined()
+    expect(world.formIds).toEqual([ZOTERO_SETTINGS_NAMESPACE])
   })
 
   it('mounts the zotero Remote namespace contribution', () => {
@@ -232,6 +229,26 @@ describe('the browser-half entry', () => {
     await expect(face.status()).rejects.toThrow(/is not mounted \(mount settled\)/)
   })
 
+  it('keeps the tab and logs the fault when the mount itself rejects', async () => {
+    const world = fakeWorld(true, new Error('gateway offline'))
+    const errors: unknown[][] = []
+    const consoleError = console.error
+    console.error = (...args: unknown[]) => {
+      errors.push(args)
+    }
+    try {
+      apply(world.ctx as Context)
+      await settleMount(world)
+    } finally {
+      console.error = consoleError
+    }
+    // The tab stays: a rejected mount degrades the status strip instead of
+    // removing the tab.
+    expect(world.injected.some((entry) => entry.name === 'conversation.view')).toBe(true)
+    expect(errors.some((args) => String(args[0]).includes('gateway offline'))).toBe(true)
+    expect(errors.some((args) => String(args[0]).includes('mount failed'))).toBe(true)
+  })
+
   it('reads the namespace face through the service store, never the dotted child read', async () => {
     const world = fakeWorld()
     apply(world.ctx as Context)
@@ -254,8 +271,9 @@ describe('the browser-half entry', () => {
   it('disposes the mount and clears the face with the fiber', async () => {
     const world = fakeWorld()
     apply(world.ctx as Context)
-    // effects[0] is the dictionary registration, [1] the tab, [2] the mount.
-    const dispose = (await world.effects[2]) as () => void
+    // effects[0] is the dictionary registration, [1] the card form, [2] the
+    // tab, [3] the mount.
+    const dispose = (await world.effects[3]) as () => void
     expect(world.mountDisposes).toBe(0)
     dispose()
     expect(world.mountDisposes).toBe(1)
@@ -333,12 +351,18 @@ describe('the browser-half entry', () => {
   it('withdraws the tab with the fiber and unmounts the Remote', async () => {
     const world = fakeWorld()
     apply(world.ctx as Context)
-    // Two independent effects: the tab's (synchronous, disposer collected on
-    // the spot) and the mount's (an async effect, resolved on a later tick).
-    // effects[0] is the dictionary registration.
-    const disposeTab = world.effects[1] as () => void
-    const disposeRemote = (await world.effects[2]) as () => void
+    // Four effects: dictionaries, the card form, the tab (synchronous,
+    // disposers collected on the spot), and the mount (async, resolved on a
+    // later tick).
+    const disposeCard = world.effects[1] as () => void
+    const disposeTab = world.effects[2] as () => void
+    const disposeRemote = (await world.effects[3]) as () => void
+    expect(world.scope.unsubscribes).toBe(0)
     expect(world.injected.some((entry) => entry.name === 'conversation.view')).toBe(true)
+
+    // The card form goes with its own effect, releasing the subscription.
+    disposeCard()
+    expect(world.scope.unsubscribes).toBe(1)
 
     // The tab goes with its own effect, without waiting on the mount.
     disposeTab()

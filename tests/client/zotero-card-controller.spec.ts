@@ -4,7 +4,7 @@
  * @module tests/client/zotero-card-controller
  */
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { ZoteroCardController } from '../../src/client/zotero-card-controller.ts'
 import { fakeScope } from './helpers/fake-scope.ts'
 
@@ -69,5 +69,38 @@ describe('ZoteroCardController', () => {
     const controller = new ZoteroCardController(fakeScope({ status: 'unavailable' }))
     const state = controller.inject().hooks.zoteroCard.getSnapshot()
     expect(state.available).toBe(false)
+  })
+
+  it('rejects a boolean draft that is neither literal and blocks the save', async () => {
+    const scope = fakeScope({ value: { webEnabled: true } })
+    const controller = new ZoteroCardController(scope)
+    const face = controller.inject()
+    face.edit('webEnabled', 'maybe')
+    expect(face.hooks.zoteroCard.getSnapshot().webEnabled.invalid).toBe(true)
+    expect(face.hooks.zoteroCard.getSnapshot().invalid).toBe(true)
+    face.save()
+    await Promise.resolve()
+    expect(scope.writes).toEqual([])
+  })
+
+  it('saves a staged clear as an unset write', async () => {
+    const scope = fakeScope({
+      value: { timeoutMs: 5000 },
+      base: { timeoutMs: 5000 },
+      user: { timeoutMs: 5000 },
+    })
+    const controller = new ZoteroCardController(scope)
+    const face = controller.inject()
+    face.resetField('timeoutMs')
+    face.save()
+    await vi.waitFor(() => expect(scope.writes).toEqual([{ op: 'unset', field: 'timeoutMs' }]))
+  })
+
+  it('releases the namespace subscription on dispose', () => {
+    const scope = fakeScope({ value: {} })
+    const controller = new ZoteroCardController(scope)
+    expect(scope.unsubscribes).toBe(0)
+    controller.dispose()
+    expect(scope.unsubscribes).toBe(1)
   })
 })

@@ -5,28 +5,32 @@
  * the full configuration form so a namespace this wide is never read through
  * a collapsed card.
  *
- * The page reads and writes the `zotero` namespace through the harness's own
- * settings scope (`ctx.settingsScope`) — the seam that serves every
- * registered namespace — with the staged form the harness's own settings
- * surfaces use (stage locally, write only on save, mark user-layer presence
- * as overridden). The Typert Remote namespace carries only the live
- * connectivity probe the dedicated conversation tab renders. The namespace
- * spelling comes from the shared settings-namespace module, so the two halves
- * cannot drift apart.
+ * The page reads and writes the `zotero` namespace through the harness's
+ * shared configuration form (`ctx.configForms.get`) — the seam that serves
+ * every registered namespace — staged through the harness's own
+ * `SettingsFormModel` (stage locally, write atomically on save, mark
+ * user-layer presence as overridden). The Typert Remote namespace carries
+ * only the live connectivity probe the dedicated conversation tab renders.
+ * The namespace spelling comes from the shared settings-namespace module, so
+ * the two halves cannot drift apart.
  * @module dsh-zotero/client
  */
 
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 // Type-only Context merges: locale (ctx.locale) arrives through its package's
 // client declaration; the Remote face (ctx.remote) through the api-remotes
-// assembly; ui-settings supplies the `settingsScope` service and the
+// assembly; ui-settings supplies the `configForms` service and the
 // `settings.section` SlotMap row this page registers into; ui-renderer the
-// `slots` registry. Cross-plugin collaboration rides services and slot
-// declarations, never value imports (client bundle purity).
+// `slots` registry. `useSession`/`useChat` (the conversation tab's session
+// data) merge through ui-session and ui-chat. Cross-plugin collaboration
+// rides services and slot declarations, never value imports (client bundle
+// purity).
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type {} from '@deepseek-ai/dsh-client-ui-session/client'
+import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 // Type-only: the `conversation.view` SlotMap row (declared by the slot's
 // owning package) must be in the program for the tab registration to type.
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
@@ -43,15 +47,15 @@ import { en, zh } from './locales.ts'
 /** Dictionary namespace owned by this plugin. */
 const NS = 'zotero'
 
-/** Required services (cordis fiber inject): settingsScope's binder resolves the caller's connection and remote. */
-export const inject = ['locale', 'slots', 'connection', 'settingsScope', 'remote']
+/** Required services (cordis fiber inject): the shared configuration form plus slots/locale/remote. */
+export const inject = ['locale', 'slots', 'remote', 'configForms']
 
 /**
  * The mounted `zotero` namespace face, or `undefined` when this fiber cannot
  * reach it.
  *
  * The read goes through the service store (`ctx.reflect.get`), never through
- * the dotted child access `ctx.remote.zotero`. Re-checked at dsh 0.1.6-alpha.1:
+ * the dotted child access `ctx.remote.zotero`. Re-checked at dsh 0.1.7-alpha.2:
  * that dotted form is a *service lookup by the full name* through the context
  * proxy, and `vendor/cordis/src/reflect.ts` refuses an undeclared name on any
  * fiber that carries a runtime — `cannot get property "remote.zotero" without
@@ -67,46 +71,25 @@ function mountedNamespace(ctx: ClientContext): ZoteroRemoteFace | undefined {
 }
 
 /**
- * The `remote.*` service names this page currently holds, logged beside a
- * mount that finished without its namespace.
- *
- * The gateway installs namespaces through one serialized queue
- * (`api/gateway/src/client/index.ts` → `enqueue`), so an entry that never
- * settles starves every mount queued behind it. Naming what is already held
- * separates the two failures a bare "not mounted" cannot: an empty (or
- * app-only) set means the queue never advanced, while a set holding the other
- * plugins' namespaces means this one is the mount that failed.
- * @param ctx - the browser plugin context.
- * @returns a comma-separated list of held Remote namespaces, or `none`.
- */
-function heldNamespaces(ctx: ClientContext): string {
-  const store = (ctx.reflect as unknown as { store?: Record<string, unknown> }).store
-  const names =
-    store === undefined
-      ? []
-      : Object.keys(store)
-          .filter((key) => key.startsWith('remote.'))
-          .sort()
-  return names.length === 0 ? 'none' : names.join(', ')
-}
-
-/**
  * Mount the Zotero settings page into the Settings panel's left navigation.
  * @param ctx - the browser plugin context.
  */
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-zotero: page dictionaries')
-  // One binder for the namespace the host half registers; the card stages and
-  // saves through it. The default decode (schema rehydrate + validate,
-  // fail-closed to non-ready) is the authority — no lenient bypass. This entry
-  // declares only its own dependency (`webEnabled` for the tab gate); the card
-  // form owns the full field table through `ZoteroCardController` (which binds
-  // the same scope as a record), so the narrow type is the entry's read
-  // contract, not a truncation of the stored document.
-  const scope = ctx.settingsScope.bind<{ webEnabled?: boolean }>({
-    namespace: ZOTERO_SETTINGS_NAMESPACE,
-  })
-  const card = new ZoteroCardController(scope)
+  // The shared form for the namespace the host half registers; the card
+  // stages and saves through it with the harness's own staged model. The
+  // entry declares only its own dependency (`webEnabled` for the tab gate);
+  // the card form owns the full field table through `ZoteroCardController`
+  // (which reads the same form as a record), so the narrow type is the
+  // entry's read contract, not a truncation of the stored document.
+  const form = ctx.configForms.get<Record<string, unknown>>(ZOTERO_SETTINGS_NAMESPACE)
+  const card = new ZoteroCardController(form)
+  ctx.effect(
+    () => () => {
+      card.dispose()
+    },
+    'dsh-zotero: card form',
+  )
   // The nav label is shell chrome, so it is read through a bound reader at
   // registration time (the shell re-renders from the ledger bump when the
   // locale changes, not from its own subscription).
@@ -153,7 +136,7 @@ export function apply(ctx: ClientContext): void {
   let tabDispose: (() => void) | undefined
   const tabT = ctx.locale.bind(NS)
   const sync = (): void => {
-    const snapshot = scope.getSnapshot()
+    const snapshot = form.getSnapshot()
     const enabled = snapshot.status !== 'ready' || snapshot.value?.webEnabled !== false
     if (enabled && tabDispose === undefined) {
       tabDispose = ctx.slots.inject('conversation.view', () =>
@@ -177,7 +160,7 @@ export function apply(ctx: ClientContext): void {
     }
   }
   ctx.effect(() => {
-    const unsubscribe = scope.subscribe(sync)
+    const unsubscribe = form.subscribe(sync)
     sync()
     return () => {
       unsubscribe()
@@ -198,7 +181,11 @@ export function apply(ctx: ClientContext): void {
       console.error('dsh-zotero: mounting the zotero Remote namespace failed', error)
     }
     if (mountedNamespace(ctx) === undefined) {
-      console.error(`dsh-zotero: ${mountState}; holding: ${heldNamespaces(ctx)}`)
+      // Fail visible, never silent: the tab stays and its strip names the
+      // fault. The mount state alone is logged — enumerating the gateway's
+      // held namespaces would mean reaching into cordis's private reflect
+      // store, a coupling one log line is not worth.
+      console.error(`dsh-zotero: ${mountState}`)
     }
     return () => {
       dispose?.()

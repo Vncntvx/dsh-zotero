@@ -23,8 +23,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
-  IconChevronLeftOutline14,
-  IconChevronRightOutline14,
+  IconChevronLeftOutlineMedium,
+  IconChevronRightOutlineMedium,
   Pill,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
@@ -183,7 +183,7 @@ export function SourceSidebar({
               pageFilters(-1)
             }}
           >
-            <IconChevronLeftOutline14 />
+            <IconChevronLeftOutlineMedium />
           </button>
         )}
         {shownFiltersOf(filter, counts).map((entry) => {
@@ -210,7 +210,7 @@ export function SourceSidebar({
               pageFilters(1)
             }}
           >
-            <IconChevronRightOutline14 />
+            <IconChevronRightOutlineMedium />
           </button>
         )}
       </div>

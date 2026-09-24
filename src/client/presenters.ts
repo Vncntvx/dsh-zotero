@@ -54,11 +54,6 @@ export function callNameOf(block: ToolCallBlock): string | null {
   return isSettledTool(block) ? (block.call?.name ?? null) : block.name
 }
 
-/** Stable order key: settled blocks by seq, in-flight calls after them by time. */
-export function orderKeyOf(block: ToolCallBlock): number {
-  return isSettledTool(block) ? block.seq : 1_000_000_000 + block.time
-}
-
 /** Read a string field off a validated record. */
 export function stringField(record: Record<string, unknown>, key: string): string | undefined {
   return asString(record[key])

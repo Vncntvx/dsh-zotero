@@ -6,14 +6,16 @@
  * because this namespace is a whole configuration surface and does not fit a
  * Plugins-tab disclosure card. The section chrome (header, save footer)
  * belongs to {@link ZoteroSettingsSection}; this module owns only the groups
- * and the per-field controls. Control geometry still follows the harness's
- * staged-form idiom (`fields.tsx` / `card-form.ts` mirrors).
+ * and the per-field controls. Value inputs are the harness's own
+ * `SettingsValueField`; the toggle is local (upstream ships no boolean
+ * atom).
  * @module dsh-zotero/client/ZoteroSettingsForm
  */
 
 import type { ReactNode } from 'react'
-import { BooleanField, ValueField } from './fields.tsx'
-import type { CardActions } from './card-form.ts'
+import { SettingsValueField } from '@deepseek-ai/dsh-client-ui-primitives'
+import { BooleanField } from './fields.tsx'
+import type { SettingsFormActions } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
   BOOLEAN_FIELD_KEYS,
   FIELD_GROUPS,
@@ -25,7 +27,7 @@ import type { ZoteroLocaleKey } from './locales.ts'
 import css from './ZoteroSettingsForm.module.css'
 
 /** Field-editing actions a surface wires from its card face. */
-export type ZoteroFormActions = Pick<CardActions, 'edit' | 'resetField'>
+export type ZoteroFormActions = Pick<SettingsFormActions, 'edit' | 'resetField'>
 
 /** Props the form body needs from its surface: copy, snapshot, and actions. */
 export interface ZoteroSettingsFormProps {
@@ -73,11 +75,11 @@ function field(
   const shared = {
     overriddenLabel: t('overridden'),
     resetLabel: t('reset'),
-    disabled: !state.writable,
+    // Disabled while the Host is read-only **or** a save is crossing the wire:
+    // SettingsFormModel.save() clears every staged draft on success, so an edit
+    // typed during the round-trip would be dropped with them.
+    disabled: !state.writable || state.saving,
     ...state[key],
-    // The web tab toggle's own state is its undo, so it carries no override
-    // marker (no badge, no reset); every other field keeps it.
-    overridden: key === 'webEnabled' ? false : state[key].overridden,
     onEdit: (text: string) => {
       actions.edit(key, text)
     },
@@ -97,7 +99,7 @@ function field(
     )
   }
   return (
-    <ValueField
+    <SettingsValueField
       key={key}
       id={`zotero-settings-${key}`}
       label={t(key)}

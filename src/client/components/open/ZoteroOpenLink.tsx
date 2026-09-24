@@ -7,7 +7,7 @@
  * @module dsh-zotero/client/components/open/ZoteroOpenLink
  */
 
-import { LinkIcon } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconLinkOutlineMedium } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { OpenVerdict } from '../../actions/open-zotero.ts'
 import { externalHrefProps } from './external-href.ts'
@@ -24,7 +24,7 @@ export interface ZoteroOpenLinkProps {
 }
 
 /** One provenance-guarded text link: leading category glyph per the harness
- * clickable-link spec (`renderSafeLink` always leads with `<LinkIcon kind="url">`
+ * clickable-link spec (`renderSafeLink` always leads with `<IconLinkOutlineMedium>`
  * for destination links; `zotero://` is a destination, not a file path, so it
  * never goes through `classifyLinkPath`). External `http(s)` targets open in a
  * new tab with the safe rel; protocol links hand to the OS handler in place
@@ -33,7 +33,7 @@ export function ZoteroOpenLink({ url, verdict, label, t, className }: ZoteroOpen
   return (
     <span className={css.linkWrap}>
       <a className={className ?? css.link} href={url} {...externalHrefProps(url)}>
-        <LinkIcon kind="url" className={css.linkIcon} />
+        <IconLinkOutlineMedium className={css.linkIcon} />
         {label}
       </a>
       {verdict === 'unverified' && (

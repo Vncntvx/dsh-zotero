@@ -6,12 +6,12 @@
  * so a namespace with this many fields never has to be read through a
  * collapsed card.
  *
- * The page reads and writes through the harness's settings scope for the
- * namespace (bound in the client entry); staging follows the harness
- * convention: nothing writes until Save, and the footer's Discard drops the
- * staged edits. While the namespace is not served to this client the page
- * still renders — the left-nav entry exists either way — with its title and an
- * explanation instead of vanishing.
+ * The page reads and writes through the shared configuration form
+ * (`ctx.configForms.get`), staged through the harness's own
+ * `SettingsFormModel`; nothing writes until Save, and the footer's Discard
+ * drops the staged edits. While the namespace is not served to this client
+ * the page still renders — the left-nav entry exists either way — with its
+ * title and an explanation instead of vanishing.
  *
  * The chrome is spelled here rather than imported because a client bundle must
  * not value-import another plugin's code (the loader module table would refuse
