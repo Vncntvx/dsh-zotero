@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url'
 import {
   createClientAuthorityPlugin,
   clientGraphViolations,
+  isInlineSafeHarness,
 } from '../../scripts/client-graph-authority.mjs'
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../..')
@@ -122,5 +123,50 @@ describe('client graph authority', () => {
     expect(violations).toEqual([])
     const keys = Object.keys(result.metafile.inputs).map((key) => key.replaceAll('\\', '/'))
     expect(keys.some((key) => /src\/client\/remote\.(ts|js)$/.test(key))).toBe(true)
+  })
+})
+
+describe('harness inline-safe table (dsh-v0.1.7-rc.1)', () => {
+  it('accepts the rc.1 package names and rejects the retired agent-presets arm', () => {
+    expect(isInlineSafeHarness('@deepseek-ai/dsh-agent-preset-registry/display')).toBe(true)
+    expect(isInlineSafeHarness('@deepseek-ai/dsh-agent-presets/display')).toBe(false)
+  })
+
+  it('covers the full rc.1 INLINE_SAFE arms', () => {
+    for (const specifier of [
+      '@deepseek-ai/dsh-file-reference',
+      '@deepseek-ai/dsh-session/client',
+      '@deepseek-ai/dsh-llm',
+      '@deepseek-ai/dsh-tools/types',
+      '@deepseek-ai/dsh-brand',
+      '@deepseek-ai/dsh-deque',
+      '@deepseek-ai/dsh-output-retention',
+      '@deepseek-ai/dsh-typert-protocol',
+      '@deepseek-ai/dsh-util-crypto',
+      '@deepseek-ai/dsh-util-values',
+      '@deepseek-ai/dsh-util-workspace-path',
+      '@deepseek-ai/dsh-token-meter/client',
+      '@deepseek-ai/dsh-native-command/types',
+      '@deepseek-ai/dsh-host-open-in-app/shared',
+      '@deepseek-ai/dsh-plugin-manager/registry',
+      '@deepseek-ai/dsh-spill-policy/notice',
+      '@deepseek-ai/dsh-anything/remote',
+      '@deepseek-ai/cosmokit',
+      '@deepseek-ai/schemastery/utils',
+    ]) {
+      expect(isInlineSafeHarness(specifier), specifier).toBe(true)
+    }
+  })
+
+  it('rejects platform / host packages that must stay external or host-only', () => {
+    for (const specifier of [
+      '@deepseek-ai/dsh-client-ui-chat',
+      '@deepseek-ai/dsh-client-store',
+      '@deepseek-ai/dsh-client-ui-primitives',
+      'react',
+      'zod',
+    ]) {
+      expect(isInlineSafeHarness(specifier), specifier).toBe(false)
+    }
   })
 })

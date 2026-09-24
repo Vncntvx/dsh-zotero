@@ -37,6 +37,31 @@ export const HOST_ONLY_PACKAGE_INPUT =
   /(?:^|\/)node_modules\/(?:zod|@deepseek-ai\/schemastery)(?:\/|$)/
 
 /**
+ * Harness specifiers a client bundle may **inline**. Counterpart of the three
+ * constants in `packages/client/tsdown.client.ts` at **dsh-v0.1.7-rc.1**:
+ * `INLINE_SAFE`, `GENERATED_REMOTE`, `VENDORED_LIBRARY`. Keep this table in
+ * step with that file — never invent a fourth arm here.
+ */
+export const INLINE_SAFE =
+  /^(?:@deepseek-ai\/dsh-(?:file-reference|session|llm|tools|brand|deque|output-retention|typert-protocol|util-crypto|util-values|util-workspace-path)(?:\/|$)|@deepseek-ai\/dsh-token-meter\/client$|@deepseek-ai\/dsh-native-command\/types$|@deepseek-ai\/dsh-host-open-in-app\/shared$|@deepseek-ai\/dsh-plugin-manager\/registry$|@deepseek-ai\/dsh-agent-preset-registry\/display$|@deepseek-ai\/dsh-spill-policy\/notice$)/
+export const GENERATED_REMOTE = /^@deepseek-ai\/dsh-[a-z0-9]+(?:-[a-z0-9]+)*\/remote$/
+export const VENDORED_LIBRARY = /^@deepseek-ai\/(?:cosmokit|schemastery)(?:\/|$)/
+
+/**
+ * Whether a harness `@deepseek-ai/*` specifier may enter the client bundle by
+ * inlining (as opposed to the loader module table / `EXTERNALS`).
+ * @param specifier - the import specifier as resolved.
+ * @returns true when the harness purity rule allows an inline copy.
+ */
+export function isInlineSafeHarness(specifier) {
+  return (
+    INLINE_SAFE.test(specifier) ||
+    GENERATED_REMOTE.test(specifier) ||
+    VENDORED_LIBRARY.test(specifier)
+  )
+}
+
+/**
  * Normalize an esbuild metafile input key to a posix `src/...` /
  * `node_modules/...` spelling.
  * @param key - raw metafile input path.

@@ -14,6 +14,22 @@ export declare const HOST_ONLY_PACKAGE_RESOLVE: RegExp
 /** Metafile-input filter for host-owned packages (zod). */
 export declare const HOST_ONLY_PACKAGE_INPUT: RegExp
 
+/** Counterpart of tsdown `INLINE_SAFE` at dsh-v0.1.7-rc.1. */
+export declare const INLINE_SAFE: RegExp
+
+/** Counterpart of tsdown `GENERATED_REMOTE` at dsh-v0.1.7-rc.1. */
+export declare const GENERATED_REMOTE: RegExp
+
+/** Counterpart of tsdown `VENDORED_LIBRARY` at dsh-v0.1.7-rc.1. */
+export declare const VENDORED_LIBRARY: RegExp
+
+/**
+ * Whether a harness `@deepseek-ai/*` specifier may be inlined into the client bundle.
+ * @param specifier - the import specifier as resolved.
+ * @returns true when the harness purity rule allows an inline copy.
+ */
+export declare function isInlineSafeHarness(specifier: string): boolean
+
 /**
  * Classify client-graph inputs against runtime authority.
  * @param inputs - esbuild `metafile.inputs` map.

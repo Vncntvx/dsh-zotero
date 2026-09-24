@@ -39,7 +39,7 @@ import { fileURLToPath } from 'node:url'
 import vm from 'node:vm'
 import * as esbuild from 'esbuild'
 import { transform as transformCss } from 'lightningcss'
-import { createClientAuthorityPlugin } from './client-graph-authority.mjs'
+import { createClientAuthorityPlugin, isInlineSafeHarness } from './client-graph-authority.mjs'
 
 const require = createRequire(import.meta.url)
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -88,7 +88,7 @@ function buildCommitOf() {
  *  alongside react and the UI primitives instead of bundling zustand/immer.
  *  That harness list is this one's counterpart: anything in it that this bundle
  *  value-imports belongs here too, and `bundlePurityPlugin` below fails the
- *  build when a harness module slips into the artifact. At dsh 0.1.7-alpha.2
+ *  build when a harness module slips into the artifact. At dsh 0.1.7-rc.1
  *  PLATFORM_MODULES also lists react-dom, @deepseek-ai/cordis, ui-slots, and
  *  ui-dockkit — this bundle value-imports none of them today (cordis and
  *  ui-slots are type-only), so they stay out of EXTERNALS and the purity
@@ -101,21 +101,11 @@ const EXTERNALS = [
 ]
 
 /**
- * Harness specifiers a client bundle may **inline**, mirroring the harness's own
- * bundle-purity rule (`packages/client/tsdown.client.ts` `INLINE_SAFE` +
- * `GENERATED_REMOTE` + `VENDORED_LIBRARY`): contract layers and pure folds with
- * no runtime identity to share — no singleton, no Symbol/instanceof identity —
- * plus generated `.../remote` contributions and the two vendored libraries.
- * Everything else under `@deepseek-ai/` is either a module-table entry
- * (external) or a leak. Keep this in step with that rule.
- */
-const INLINABLE_HARNESS_SPECIFIER =
-  /^(?:@deepseek-ai\/dsh-(?:file-reference|session|llm|tools|brand|deque|output-retention|typert-protocol|util-crypto|util-values|util-workspace-path)(?:\/|$)|@deepseek-ai\/dsh-token-meter\/client$|@deepseek-ai\/dsh-host-open-in-app\/shared$|@deepseek-ai\/dsh-agent-presets\/display$|@deepseek-ai\/dsh-spill-policy\/notice$|@deepseek-ai\/dsh-[a-z0-9]+(?:-[a-z0-9]+)*\/remote$|@deepseek-ai\/(?:cosmokit|schemastery)(?:\/|$))/
-
-/**
- * Packages the host half owns. See `scripts/client-graph-authority.mjs` —
- * resolve-time and metafile enforcement live there so unit tests share one
- * rule source with the build.
+ * Harness inline-safety lives in `client-graph-authority.mjs`
+ * (`INLINE_SAFE` / `GENERATED_REMOTE` / `VENDORED_LIBRARY`), the counterpart of
+ * `packages/client/tsdown.client.ts` at dsh-v0.1.7-rc.1.
+ * Packages the host half owns also live there — resolve-time and metafile
+ * enforcement share one rule source with the unit tests.
  */
 
 /** Metafile artifact markers that mean host schema materialization leaked in. */
@@ -148,8 +138,7 @@ const harnessPurityPlugin = {
     build.onEnd((result) => {
       if (result.errors.length > 0) return
       const offenders = [...harnessSpecifiers].filter(
-        (specifier) =>
-          !EXTERNALS.includes(specifier) && !INLINABLE_HARNESS_SPECIFIER.test(specifier),
+        (specifier) => !EXTERNALS.includes(specifier) && !isInlineSafeHarness(specifier),
       )
       if (offenders.length > 0) {
         return {
