@@ -12,7 +12,7 @@
  * @module dsh-zotero/client/components/workspace/ZoteroWorkspaceView
  */
 
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import clsx from 'clsx'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SourceWorkspace } from '../../sources/model.ts'
@@ -126,7 +126,6 @@ export function ZoteroWorkspaceView({
   const [selection, setSelection] = useState<SelectionState>({ key: undefined, focusIndex: 0 })
   const [mobilePane, setMobilePane] = useState<MobilePane>('list')
   const [evidenceOpen, setEvidenceOpen] = useState(false)
-  const asideRef = useRef<HTMLElement>(null)
 
   const counts = useMemo(() => filterCountsOf(workspace.sources), [workspace.sources])
   const visible = useMemo(
@@ -244,7 +243,6 @@ export function ZoteroWorkspaceView({
             onOpenEvidence={() => {
               setEvidenceOpen(true)
             }}
-            asideRef={asideRef}
             t={t}
           />
           <SourceInspector

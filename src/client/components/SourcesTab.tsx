@@ -58,6 +58,31 @@ function isZoteroRoot(root: ToolCallBlock): boolean {
   return name !== null && name.startsWith('zotero_')
 }
 
+/**
+ * Walk the visible call tree once and hand each deduplicated Zotero call to
+ * `visit`. The signature and the workspace collector must observe the same
+ * recursion, depth bound, and order; keeping this traversal shared prevents a
+ * nested call from appearing in one projection but not the other.
+ */
+function visitVisibleZoteroCalls(
+  snapshot: ChatSnapshot | undefined,
+  visit: (block: ToolCallBlock, path: readonly string[]) => void,
+): void {
+  if (snapshot === undefined) return
+  const seen = new Set<string>()
+  const visitBlock = (block: ToolCallBlock, path: readonly string[], depth: number): void => {
+    if (depth > MAX_SUBCALL_DEPTH) return
+    if (isZoteroRoot(block) && !seen.has(block.callId)) {
+      seen.add(block.callId)
+      visit(block, path)
+    }
+    for (const child of block.subCalls) {
+      visitBlock(child, [...path, child.callId], depth + 1)
+    }
+  }
+  for (const { key, root } of visibleToolRoots(snapshot)) visitBlock(root, [key], 1)
+}
+
 /** The inject face the tab's slot entry provides. */
 export interface SourcesTabFace {
   /** Live connectivity view through the plugin's Remote namespace. */
@@ -78,31 +103,31 @@ export function currentTime(): string {
 
 /**
  * A cheap content signature of the zotero-relevant slice: the visible
- * zotero tool-call row order plus each in-flight call's `callId` and lifecycle
- * `phase`. `snapshot.order` is already the harness's presentation
- * order, so the signature tracks it directly. Streaming chunk publications
+ * zotero tool-call row order as structured call-id/path entries plus each
+ * in-flight call's `callId` and lifecycle `phase`. `snapshot.order` is already
+ * the harness's presentation order, so the signature tracks it directly.
+ * Streaming chunk publications
  * keep order and phase stable and are skipped; a preparing→start transition
  * changes `phase` (and with it the signature) so the workspace picks up
  * `argsRaw` as soon as `tool/call` lands. Settled roots leave `running`.
- * Only zotero rows contribute. A nested dispatch under an already running
- * call lands with the next signature change — an accepted delay. A settled
- * block whose content changes without an order/running change (late
- * presentation meta) waits one publication: harness evidence blocks are
- * frozen at settle. Encoded with `JSON.stringify` so arbitrary order keys
- * and call ids cannot collide.
+ * Only zotero rows contribute. Nested Zotero dispatches are included in the
+ * same walk as their visible roots, so their arrival or lifecycle change
+ * rebuilds the workspace. A settled block whose content changes without an
+ * order/running change (late presentation meta) waits one publication:
+ * harness evidence blocks are frozen at settle. Encoded with
+ * `JSON.stringify` so arbitrary order keys and call ids cannot collide.
  * @param snapshot - the chat snapshot, undefined while none is open.
  * @returns the signature string.
  */
 export function sessionSignatureOf(snapshot: ChatSnapshot | undefined): string {
   if (snapshot === undefined) return ''
   const running: Array<{ callId: string; phase: 'preparing' | 'start' }> = []
-  const order: string[] = []
-  for (const { key, root } of visibleToolRoots(snapshot)) {
-    if (!isZoteroRoot(root)) continue
-    order.push(key)
+  const order: Array<{ callId: string; path: readonly string[] }> = []
+  visitVisibleZoteroCalls(snapshot, (block, path) => {
+    order.push({ callId: block.callId, path })
     // Settled roots carry `kind`; running arms carry the `phase` discriminant.
-    if (!isSettledTool(root)) running.push({ callId: root.callId, phase: root.phase })
-  }
+    if (!isSettledTool(block)) running.push({ callId: block.callId, phase: block.phase })
+  })
   return JSON.stringify({ order, running })
 }
 
@@ -133,35 +158,31 @@ export function stateOf(result: RemoteResult<ZoteroStatusView>, checkedAt: strin
  * @returns the ordered zotero call blocks.
  */
 export function collectZoteroCalls(snapshot: ChatSnapshot | undefined): ToolCallBlock[] {
-  if (snapshot === undefined) return []
   const out: ToolCallBlock[] = []
-  const seen = new Set<string>()
-  const visit = (block: ToolCallBlock, depth: number): void => {
-    if (depth > MAX_SUBCALL_DEPTH) return
-    if (isZoteroRoot(block) && !seen.has(block.callId)) {
-      seen.add(block.callId)
-      out.push(block)
-    }
-    for (const child of block.subCalls) visit(child, depth + 1)
-  }
-  for (const { root } of visibleToolRoots(snapshot)) {
-    // The row's root block owns the whole recursive subcall tree (PTC mode).
-    visit(root, 1)
-  }
+  visitVisibleZoteroCalls(snapshot, (block) => {
+    out.push(block)
+  })
   return out
 }
 
 /**
  * Signature-gated Zotero call collection for the Sources panel.
  * @param chat - the chat snapshot, undefined while none is open.
+ * @param sessionId - the owning session identity; forked sessions must not share blocks.
  * @returns the ordered zotero call blocks.
  */
-export function useZoteroBlocks(chat: ChatSnapshot | undefined): ToolCallBlock[] {
-  const signature = useMemo(() => sessionSignatureOf(chat), [chat])
+export function useZoteroBlocks(
+  chat: ChatSnapshot | undefined,
+  sessionId?: string,
+): ToolCallBlock[] {
+  const signature = useMemo(
+    () => `${sessionId ?? ''}:${sessionSignatureOf(chat)}`,
+    [chat, sessionId],
+  )
   // Keyed on the signature, not on `chat`: streaming publications keep the
   // zotero order and in-flight set stable, so the deep collection below skips
-  // them. A nested dispatch under an already running call likewise waits for
-  // the next signature change (see `sessionSignatureOf`).
+  // them. Nested dispatch arrivals and lifecycle changes are part of that
+  // signature (see `sessionSignatureOf`).
   // eslint-disable-next-line react-hooks/exhaustive-deps -- signature is the intentional gate
   return useMemo(() => collectZoteroCalls(chat), [signature])
 }
@@ -181,12 +202,15 @@ export function SourcesTab({ status, t, useSession, useChat, inputActions }: Sou
   // drop it, or the workspace would rebuild twice per probe.
   const [serverId, setServerId] = useState<string | undefined>(undefined)
   // Streaming-stable zotero rows reuse the previous block array (signature gate).
-  const blocks = useZoteroBlocks(chat)
+  const blocks = useZoteroBlocks(chat, sessionId)
   const workspace = useMemo(
     () => buildSourceWorkspace(blocks, { currentServerId: serverId }),
     [blocks, serverId],
   )
-  const setDraft = inputActions?.setDraft.bind(inputActions)
+  const setDraft = useMemo(
+    () => (inputActions === undefined ? undefined : inputActions.setDraft.bind(inputActions)),
+    [inputActions],
+  )
 
   useEffect(() => {
     if (status === undefined) return

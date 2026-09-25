@@ -665,24 +665,6 @@
   gap: 2px;
 }
 
-/* The card stack: the evidence cards. */
-.cardStack {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-/* The export stack: artifact disclosure rows separated by hairlines — no
- * per-row border cards. */
-.exportStack {
-  display: flex;
-  flex-direction: column;
-}
-
-.exportStack > * + * {
-  border-top: 1px solid var(--dsw-alias-border-l2);
-}
-
 /* The quiet text toggle that reveals the search-detail facts. */
 .detailToggle {
   align-self: flex-start;

@@ -186,6 +186,17 @@
   gap: 2px;
 }
 
+/* The exports page stacks format sections with a quiet separator between
+ * them; this rule belongs to the cards sheet consumed by ExportSections. */
+.exportStack {
+  display: flex;
+  flex-direction: column;
+}
+
+.exportStack > * + * {
+  border-top: 1px solid var(--dsw-alias-border-l2);
+}
+
 .exportSectionHead {
   display: flex;
   align-items: center;

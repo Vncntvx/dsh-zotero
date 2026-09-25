@@ -83,7 +83,6 @@ describe('buildSourceWorkspace', () => {
       const summary = workspace.sources[0]!.retrievalSummary
       expect(summary).toEqual({
         runCount: 2,
-        latestCallId: 'r2',
         latestRetrievedAt: 2000,
         truncated: true,
       })

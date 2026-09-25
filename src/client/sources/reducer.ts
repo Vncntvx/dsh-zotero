@@ -339,7 +339,6 @@ export function buildSourceWorkspace(
       draft.successfulRetrieveCallIds.add(callId)
       draft.retrievalSummary = {
         runCount: draft.successfulRetrieveCallIds.size,
-        latestCallId: callId,
         latestRetrievedAt: time,
         truncated: false,
       }

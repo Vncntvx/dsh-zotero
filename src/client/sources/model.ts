@@ -182,8 +182,6 @@ export interface SourceRetrievalFacts {
  */
 interface RetrievalSummary {
   readonly runCount: number
-  /** Only internal diagnostics; never rendered. */
-  readonly latestCallId: string
   /** The settled result's event time (Unix epoch ms). */
   readonly latestRetrievedAt: number
   /** Any successful retrieve hit the passage/character budget. */

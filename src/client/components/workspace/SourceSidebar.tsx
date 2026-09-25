@@ -49,8 +49,6 @@ export interface SourceSidebarProps {
   readonly setSelection: (selection: SelectionState) => void
   readonly setMobilePane: (pane: MobilePane) => void
   readonly onOpenEvidence: () => void
-  /** Ref anchored on the sidebar `<aside>` (used by narrow-surface pane scroll). */
-  readonly asideRef: React.Ref<HTMLElement>
   readonly t: TranslateNS<'zotero'>
 }
 
@@ -76,7 +74,6 @@ export function SourceSidebar({
   setSelection,
   setMobilePane,
   onOpenEvidence,
-  asideRef,
   t,
 }: SourceSidebarProps) {
   const optionRefs = useRef<Array<HTMLDivElement | null>>([])
@@ -84,7 +81,6 @@ export function SourceSidebar({
   // its rows (their callbacks arrive as null), but indices past the new
   // length keep stale detached nodes that focusVisible could otherwise land on.
   optionRefs.current.length = visible.length
-  const asideRefLocal = asideRef
   const filterBarRef = useRef<HTMLDivElement>(null)
   const [filterEdges, setFilterEdges] = useState({ left: false, right: false })
 
@@ -167,7 +163,7 @@ export function SourceSidebar({
   }
 
   return (
-    <aside className={css.sidebar} ref={asideRefLocal}>
+    <aside className={css.sidebar}>
       <div
         className={css.filterBar}
         ref={filterBarRef}

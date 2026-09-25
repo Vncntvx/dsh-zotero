@@ -92,7 +92,10 @@ describe('status projection helpers', () => {
     )
     expect(signed).toBe(
       JSON.stringify({
-        order: ['tool:a', 'tool:b'],
+        order: [
+          { callId: 'a', path: ['tool:a'] },
+          { callId: 'b', path: ['tool:b'] },
+        ],
         running: [{ callId: 'b', phase: 'start' }],
       }),
     )
@@ -111,7 +114,7 @@ describe('status projection helpers', () => {
     // A non-zotero row does not count either.
     const bashRow = toolRow(settled({ seq: 6, callId: 'n', call: { name: 'bash', argsRaw: '{}' } }))
     expect(sessionSignatureOf(chatOf([toolRow(settled({ seq: 3, callId: 'a' })), bashRow]))).toBe(
-      JSON.stringify({ order: ['tool:a'], running: [] }),
+      JSON.stringify({ order: [{ callId: 'a', path: ['tool:a'] }], running: [] }),
     )
   })
 
@@ -129,7 +132,63 @@ describe('status projection helpers', () => {
     const tricky = sessionSignatureOf(chatOf([toolRow(settled({ seq: 1, callId: 'a\u0000b' }))]))
     const plain = sessionSignatureOf(chatOf([toolRow(settled({ seq: 1, callId: 'a' }))]))
     expect(tricky).not.toBe(plain)
-    expect(JSON.parse(tricky)).toEqual({ order: ['tool:a\u0000b'], running: [] })
+    expect(JSON.parse(tricky)).toEqual({
+      order: [{ callId: 'a\u0000b', path: ['tool:a\u0000b'] }],
+      running: [],
+    })
+  })
+
+  it('keeps structured traversal paths distinct for opaque call ids', () => {
+    const first = toolRow(
+      settled({
+        seq: 1,
+        callId: 'a',
+        call: { name: 'agent_call', argsRaw: '{}' },
+        subCalls: [settled({ seq: 2, callId: 'b/c', call: { name: 'zotero_get', argsRaw: '{}' } })],
+      }),
+    )
+    const second = toolRow(
+      settled({
+        seq: 1,
+        callId: 'a/b',
+        call: { name: 'agent_call', argsRaw: '{}' },
+        subCalls: [settled({ seq: 2, callId: 'c', call: { name: 'zotero_get', argsRaw: '{}' } })],
+      }),
+    )
+    expect(sessionSignatureOf(chatOf([first]))).not.toBe(sessionSignatureOf(chatOf([second])))
+  })
+
+  it('recursively signs nested subCalls for PTC mode', () => {
+    const nestedSettled = settled({
+      seq: 4,
+      callId: 'nested-zot',
+      call: { name: 'zotero_get', argsRaw: '{}' },
+    })
+    const nestedRunning = running({
+      callId: 'nested-run',
+      name: 'zotero_search',
+      argsRaw: '{}',
+    })
+    const outer = settled({
+      seq: 5,
+      callId: 'outer-agent',
+      call: { name: 'agent_call', argsRaw: '{}' },
+      subCalls: [nestedSettled, nestedRunning],
+    })
+    const signed = sessionSignatureOf(chatOf([toolRow(outer)]))
+    const parsed = JSON.parse(signed) as {
+      order: Array<{ callId: string; path: string[] }>
+      running: Array<{ callId: string; phase: string }>
+    }
+    expect(parsed.order).toContainEqual({
+      callId: 'nested-zot',
+      path: ['tool:outer-agent', 'nested-zot'],
+    })
+    expect(parsed.order).toContainEqual({
+      callId: 'nested-run',
+      path: ['tool:outer-agent', 'nested-run'],
+    })
+    expect(parsed.running).toEqual([{ callId: 'nested-run', phase: 'start' }])
   })
 
   it('collects in presentation order even when values disagree', () => {
@@ -152,7 +211,9 @@ describe('status projection helpers', () => {
     const withStale: ChatSnapshot = { ...chat, order: [...chat.order, 'stale-key'] }
     expect(() => collectZoteroCalls(withStale)).not.toThrow()
     expect(collectZoteroCalls(withStale)).toHaveLength(1)
-    expect(sessionSignatureOf(withStale)).toBe(JSON.stringify({ order: ['tool:a'], running: [] }))
+    expect(sessionSignatureOf(withStale)).toBe(
+      JSON.stringify({ order: [{ callId: 'a', path: ['tool:a'] }], running: [] }),
+    )
   })
 
   it('builds the failure diagnosis line', () => {
