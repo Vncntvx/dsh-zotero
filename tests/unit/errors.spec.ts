@@ -31,8 +31,9 @@ describe('errorCauseOf', () => {
     expect(errorCauseOf(withCause(cause))).toBe(cause)
   })
 
-  it('returns undefined for Error-less causes and non-Errors', () => {
-    expect(errorCauseOf(new Error('no cause'))).toBeUndefined()
+  it('returns the error itself when cause is absent, and undefined for non-Errors', () => {
+    const err = new Error('no cause')
+    expect(errorCauseOf(err)).toBe(err)
     expect(errorCauseOf('not an error')).toBeUndefined()
   })
 })

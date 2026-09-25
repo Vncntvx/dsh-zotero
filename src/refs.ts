@@ -12,7 +12,12 @@
  * @module dsh-zotero/refs
  */
 
-import { ZOTERO_INVALID_REF, ZoteroError } from './errors.js'
+import {
+  writeLibraryUnsupportedMessage,
+  ZOTERO_INVALID_ARGUMENT,
+  ZOTERO_INVALID_REF,
+  ZoteroError,
+} from './errors.js'
 import { isObjectKey } from './json.js'
 import {
   REF_PATTERN,
@@ -164,6 +169,26 @@ export function requireSupportedLocalRef(
 ): ZoteroObjectRef {
   assertSupportedLocalRef(ref)
   if (kinds !== undefined) assertKind(ref, kinds)
+  return ref
+}
+
+/**
+ * Assert the ref can be used by the write path: the supported local grammar,
+ * an allowed object kind, and the canonical personal library. Tool argument
+ * validation calls this before showing a plan; the write domain calls it again
+ * for non-tool callers.
+ */
+export function requireWritableRef(
+  ref: ZoteroObjectRef,
+  kinds?: readonly ZoteroKind[],
+): ZoteroObjectRef {
+  if (!isObjectKey(ref.key)) {
+    throw new ZoteroError(invalidRefKeyMessage(ref.key), ZOTERO_INVALID_REF)
+  }
+  requireSupportedLocalRef(ref, kinds)
+  if (ref.library.type !== 'user' || ref.library.id !== 0) {
+    throw new ZoteroError(writeLibraryUnsupportedMessage(ref.library), ZOTERO_INVALID_ARGUMENT)
+  }
   return ref
 }
 

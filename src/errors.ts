@@ -90,6 +90,8 @@ export type ZoteroErrorCode = (typeof ZOTERO_ERROR_CODES)[number]
  * code, but never raw HTTP internals (bodies, headers, engine text).
  */
 export class ZoteroError extends HarnessError {
+  declare readonly code: ZoteroErrorCode
+
   constructor(message: string, code: ZoteroErrorCode, options?: ErrorOptions) {
     super(message, code, options)
   }
@@ -192,9 +194,23 @@ export function writeRateLimitedMessage(waitSeconds: number | undefined): string
 export const WRITE_IDENTITY_UNSUPPORTED_MESSAGE =
   'The connected Zotero build does not report an instance id (Zotero-Server-ID). Writing requires Zotero 10 or newer.'
 
+/** Shown when a successful write response omits the instance id required by the protocol. */
+export const WRITE_RESPONSE_IDENTITY_MISSING_MESSAGE =
+  'Zotero accepted the write but did not report the serving instance id; the response does not match the documented write shape.'
+
 /** Shown when a read backing a write does not carry the object version the precondition needs. */
 export const WRITE_VERSION_MISSING_MESSAGE =
   'Zotero answered the read without the object version a write precondition needs; the response does not match the documented shape.'
+
+/** Shown when a read cannot prove the array state a whole-array PATCH must preserve. */
+export function writeObjectStateMissingMessage(field: 'tags' | 'collections'): string {
+  return `Zotero answered the item read without valid ${field} state; a safe whole-array merge is impossible.`
+}
+
+/** Shown when a direct write request carries blank text the tool schema cannot express. */
+export function writeNonBlankMessage(name: string): string {
+  return `${name} must be a non-empty string when provided`
+}
 
 /** Shown when collections are requested for a child note, which inherits its parent item's collections. */
 export const WRITE_CHILD_COLLECTIONS_MESSAGE =
@@ -257,9 +273,9 @@ export function errorMessageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-/** The chained cause of an Error; non-Error values have no cause. */
+/** The error's chained cause, or the error itself when it has no cause. */
 export function errorCauseOf(error: unknown): unknown {
-  return error instanceof Error ? error.cause : undefined
+  return error instanceof Error ? (error.cause ?? error) : undefined
 }
 
 /** The Errno-style code of an error's cause chain, when one exists. */

@@ -89,6 +89,12 @@ describe('plainNoteText', () => {
     expect(plainNoteText(42)).toBe('')
     expect(plainNoteText('<p></p>')).toBe('')
   })
+
+  it('does not double-decode entities in a single pass', () => {
+    expect(plainNoteText('<p>&amp;lt; &amp;gt; &amp;amp; &quot; &#39; &apos;</p>')).toBe(
+      "&lt; &gt; &amp; \" ' '",
+    )
+  })
 })
 
 describe('normalizeAnnotationRecord', () => {

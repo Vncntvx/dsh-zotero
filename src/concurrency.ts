@@ -10,39 +10,124 @@ import { TOOL_ABORTED_MESSAGE } from './errors.js'
 
 /**
  * Map `items` through `worker` with at most `concurrency` calls in flight,
- * preserving the input order in the results. A worker rejection propagates
- * immediately and stops the pool from starting further items; workers
- * already in flight keep running to completion.
+ * preserving the input order in the results.
+ *
+ * Failure is fail-fast and fail-closed: the first worker rejection aborts the
+ * pool's signal (so cooperative in-flight workers can cancel their I/O), stops
+ * further items from starting, and rethrows that rejection. `options.signal`
+ * links caller cancellation into the same pool signal.
  */
 export async function mapWithConcurrency<T, R>(
   items: readonly T[],
   concurrency: number,
-  worker: (item: T) => Promise<R>,
+  worker: (item: T, signal: AbortSignal) => Promise<R>,
+  options?: { signal?: AbortSignal },
 ): Promise<R[]> {
   if (!Number.isInteger(concurrency) || concurrency <= 0) {
     throw new Error(
       `mapWithConcurrency requires a positive integer concurrency, got ${concurrency}`,
     )
   }
+  const pool = new AbortController()
+  const outer = options?.signal
+  const onOuterAbort = (): void => {
+    pool.abort(outer?.reason)
+  }
+  if (outer !== undefined) {
+    if (outer.aborted) onOuterAbort()
+    else outer.addEventListener('abort', onOuterAbort, { once: true })
+  }
   const results = new Array<R>(items.length)
   let next = 0
   let failed = false
+  let firstError: unknown = undefined
   const run = async (): Promise<void> => {
     for (;;) {
-      if (failed) return
+      if (failed || pool.signal.aborted) return
       const index = next
       next += 1
       if (index >= items.length) return
       try {
-        results[index] = await worker(items[index]!)
+        results[index] = await worker(items[index]!, pool.signal)
       } catch (error) {
-        failed = true
+        if (!failed) {
+          failed = true
+          firstError = error
+          pool.abort(error)
+        }
         throw error
       }
     }
   }
-  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => run()))
-  return results
+  try {
+    const tasks = Array.from({ length: Math.min(concurrency, items.length) }, () => run())
+    await Promise.allSettled(tasks)
+    if (firstError !== undefined) {
+      throw firstError
+    }
+    if (outer?.aborted === true) {
+      throw new HarnessError(TOOL_ABORTED_MESSAGE, TOOL_ABORTED, { cause: outer.reason })
+    }
+    return results
+  } finally {
+    outer?.removeEventListener('abort', onOuterAbort)
+  }
+}
+
+/**
+ * An in-flight deduplicated operation shared across concurrent waiters.
+ * Tracks waiter count and aborts the underlying controller only when all
+ * waiters have detached before settlement.
+ */
+export interface SharedOperation<T> {
+  readonly controller: AbortController
+  promise: Promise<T>
+  waiters: number
+  settled: boolean
+}
+
+/**
+ * Await a shared in-flight operation without letting one cancelled waiter abort
+ * other live waiters. The underlying request is aborted only when the last waiter
+ * detaches.
+ */
+export async function awaitSharedOperation<T>(
+  operation: SharedOperation<T>,
+  signal: AbortSignal | undefined,
+): Promise<T> {
+  if (signal?.aborted) throw new HarnessError(TOOL_ABORTED_MESSAGE, TOOL_ABORTED)
+  operation.waiters += 1
+  let released = false
+  const release = (): void => {
+    if (released) return
+    released = true
+    operation.waiters -= 1
+    if (operation.waiters === 0 && !operation.settled) operation.controller.abort()
+  }
+  if (signal === undefined) {
+    try {
+      return await operation.promise
+    } finally {
+      release()
+    }
+  }
+
+  let rejectAborted!: (reason?: unknown) => void
+  const aborted = new Promise<never>((_, reject) => {
+    rejectAborted = reject
+  })
+  const onAbort = (): void => {
+    release()
+    rejectAborted(new HarnessError(TOOL_ABORTED_MESSAGE, TOOL_ABORTED))
+  }
+  signal.addEventListener('abort', onAbort, { once: true })
+  if (signal.aborted) onAbort()
+  try {
+    return await Promise.race([operation.promise, aborted])
+  } finally {
+    signal.removeEventListener('abort', onAbort)
+    release()
+  }
 }
 
 /** Thrown when a queued holder is aborted before it ever takes its slot. */

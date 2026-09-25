@@ -53,6 +53,17 @@ function parsedYearOf(parsedDate: string | undefined): number | undefined {
     : undefined
 }
 
+const HTML_ENTITIES: Record<string, string> = {
+  '&nbsp;': ' ',
+  '&lt;': '<',
+  '&gt;': '>',
+  '&quot;': '"',
+  '&#39;': "'",
+  '&apos;': "'",
+  '&amp;': '&',
+}
+const HTML_ENTITY_PATTERN = /&(?:nbsp|lt|gt|quot|#39|apos|amp);/gi
+
 /**
  * Reduce a Zotero note body to plain text: block-level tags become line
  * breaks, remaining tags are dropped, and the common HTML entities are
@@ -65,12 +76,7 @@ export function plainNoteText(value: unknown): string {
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/(?:p|li|div|h[1-6])\s*>/gi, '\n')
     .replace(/<[^>]*>/g, '')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;|&apos;/gi, "'")
+    .replace(HTML_ENTITY_PATTERN, (match) => HTML_ENTITIES[match.toLowerCase()] ?? match)
     .trim()
 }
 

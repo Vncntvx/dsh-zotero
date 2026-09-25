@@ -20,6 +20,7 @@ export type ZoteroCapability =
   | 'search'
   | 'metadata'
   | 'attachments'
+  /** Reserved for providers exposing raw full-text access; retrieval itself uses `retrieve`. */
   | 'fulltext'
   | 'citation'
   | 'browse'
@@ -40,11 +41,11 @@ export interface ZoteroLibraryRef {
   id: number
 }
 
-/** The local libraries this plugin contract supports: canonical personal + any group. */
 /** The canonical personal library: the local API's logged-in user. */
 export type PersonalLibrary = { type: 'user'; id: 0 }
 /** A synced group library by its positive group id. */
 export type GroupLibrary = { type: 'group'; id: number }
+/** The local libraries this plugin contract supports: canonical personal + any group. */
 export type SupportedLocalLibrary = PersonalLibrary | GroupLibrary
 
 /** The object kinds the reference grammar distinguishes. */
@@ -623,7 +624,9 @@ export type ZoteroChangesInclude =
  * all in another library. A cursor therefore carries its provenance, and
  * passing one back is the only way to diff from a previous read: the instance
  * travels with the request as `Zotero-Server-ID` (the server rejects a foreign
- * one with 412), and the library is checked before any read.
+ * one with 412), the library is checked before any read, and the covered
+ * resource kinds travel with the checkpoint so a later diff cannot silently
+ * switch streams and skip changes.
  */
 export interface ZoteroChangesCursor {
   /** The instance the version describes (`Zotero-Server-ID` of its responses). */
@@ -632,6 +635,8 @@ export interface ZoteroChangesCursor {
   library: SupportedLocalLibrary
   /** The library version the diff read through. */
   version: number
+  /** Resource kinds this checkpoint covered; reuse it with the same include set. */
+  include: ZoteroChangesInclude[]
 }
 
 export interface ZoteroChangesRequest {
@@ -717,10 +722,13 @@ export interface ZoteroChangesResult {
    * back as `since`. Absent means the caller must not advance from this
    * result. The version inside is the one the diff read through.
    *
-   * A kind that is `not-served` or `range-not-covered` does not withhold the
-   * cursor: those changes were never observable, so no version could account
-   * for them. An `unreadable` kind does, because there the rows exist and this
-   * call failed to read them.
+   * For a standalone resource, a kind that is `not-served` or
+   * `range-not-covered` does not withhold the cursor: those changes were never
+   * observable, so no version could account for them. The `items` kind is
+   * stricter — every top-level, live, and trash partition must succeed. An
+   * `unreadable` kind always withholds the cursor, because the rows exist and
+   * this call failed to read them. A result that explicitly includes
+   * independently versioned `fulltext` also omits the library cursor.
    */
   cursor?: ZoteroChangesCursor
   /**
@@ -827,15 +835,35 @@ export interface ZoteroCreateNoteResult {
   version: number
   /** The parent item ref, for a child note. */
   parentItem?: string
-  /** Collections the note joined, as refs; empty for a child note. */
+  /** Collections Zotero saved on the note, as refs; empty for a child note. Never filled from the request. */
   collections: string[]
-  /** Tags as Zotero saved them. */
+  /** Tags as Zotero saved them. Never filled from the request. */
   tags: string[]
-  /** The source relations as Zotero recorded them, echoed back as `zotero://...` refs. */
+  /** The source relations as Zotero recorded them, echoed back as `zotero://...` refs. Never filled from the request. */
   sourceRefs: string[]
   /** The library version the write advanced the library to. */
   libraryVersion: number
   serverId?: string
+}
+
+/**
+ * A note write that must be treated as committed for retry safety, although
+ * Zotero's response could not prove the complete saved state. This is
+ * deliberately not an ordinary retryable error: retrying can create a
+ * duplicate note. Reconcile by the returned key/ref when one is available.
+ */
+export interface ZoteroCreateNoteCommittedUnverified {
+  kind: 'committed-unverified'
+  /** The caller must not retry; for `commit-unknown` this is conservative. */
+  committed: true
+  retryable: false
+  reason: 'saved-state-unverified' | 'commit-unknown'
+  ref?: string
+  key?: string
+  version?: number
+  /** Present when the response supplied a trustworthy library version. */
+  libraryVersion?: number
+  serverId: string
 }
 
 export interface ZoteroTagUpdateRequest {
@@ -892,7 +920,10 @@ export interface ZoteroWriteDeclined {
   kind: 'declined'
 }
 
-export type ZoteroCreateNoteOutcome = ZoteroCreateNoteResult | ZoteroWriteDeclined
+export type ZoteroCreateNoteCommittedOutcome =
+  ZoteroCreateNoteResult | ZoteroCreateNoteCommittedUnverified
+
+export type ZoteroCreateNoteOutcome = ZoteroCreateNoteCommittedOutcome | ZoteroWriteDeclined
 export type ZoteroTagUpdateOutcome = ZoteroTagUpdateResult | ZoteroWriteDeclined
 export type ZoteroCollectionAddOutcome = ZoteroCollectionAddResult | ZoteroWriteDeclined
 
@@ -975,12 +1006,14 @@ export interface ZoteroProvider {
    * collections, and source relations.
    * @param request - the markdown body, optional parent, collections, tags, and sources.
    * @param signal - caller cancellation; forwarded to the transport.
-   * @returns the created note's ref, version, and the saved collections/tags/relations.
+   * @returns the created note's verified saved state, or an explicit
+   *   committed-unverified outcome when the response cannot prove the saved
+   *   state or the post-dispatch commit outcome.
    */
   createNote?(
     request: ZoteroCreateNoteRequest,
     signal?: AbortSignal,
-  ): Promise<ZoteroCreateNoteResult>
+  ): Promise<ZoteroCreateNoteCommittedOutcome>
   /**
    * Add tags to an item (read-merge-write; existing tags are preserved).
    * @param request - the item ref and the tags to add.
@@ -1002,9 +1035,8 @@ export interface ZoteroProvider {
 
 /**
  * A directly callable provider method name. Capability `metadata` gates both
- * `getItem` and `children`; `fulltext` is consumed internally by `retrieve`
- * (and by the `changes` fulltext resource), so neither maps 1:1 — call sites
- * name their method explicitly. Derived from the interface so a new domain
- * method cannot drift from this union.
+ * `getItem` and `children`; `retrieve` and `changes` consume full-text data
+ * internally, so call sites name their method explicitly. Derived from the interface so a new
+ * domain method cannot drift from this union.
  */
 export type ZoteroProviderMethod = Exclude<keyof ZoteroProvider, 'id' | 'capabilities' | 'status'>

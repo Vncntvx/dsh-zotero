@@ -28,6 +28,23 @@ export function stringArrayOf(value: unknown): string[] {
   return value.filter((entry): entry is string => typeof entry === 'string')
 }
 
+/** True only for a finite, non-negative safe integer carried as a JSON number. */
+export function isNonNegativeSafeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+}
+
+/**
+ * Parse a decimal HTTP-header counter. Empty, signed, fractional, non-finite,
+ * and unsafe-integer spellings are all malformed rather than coerced to zero.
+ */
+export function parseNonNegativeSafeInteger(raw: string | null | undefined): number | undefined {
+  if (raw === null || raw === undefined) return undefined
+  const text = raw.trim()
+  if (!/^\d+$/.test(text)) return undefined
+  const value = Number(text)
+  return isNonNegativeSafeInteger(value) ? value : undefined
+}
+
 /** True when the string is a Zotero object key: 8 uppercase alphanumerics. */
 export function isObjectKey(value: string): boolean {
   return OBJECT_KEY_PATTERN.test(value)

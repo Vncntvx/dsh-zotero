@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import { ConcurrencyGate, GateAbortedError, mapWithConcurrency } from '../../src/concurrency.js'
 import { deferred, progress } from '../helpers/sync.js'
 
@@ -32,6 +33,52 @@ describe('mapWithConcurrency', () => {
         return value
       }),
     ).rejects.toThrow('worker boom')
+  })
+
+  it('aborts the pool signal so in-flight cooperative workers can cancel', async () => {
+    const started: number[] = []
+    const aborted: number[] = []
+    const finish = new Map([1, 2, 3].map((value) => [value, deferred<void>()]))
+    const running = progress()
+    const walk = mapWithConcurrency([1, 2, 3], 2, async (value, signal) => {
+      started.push(value)
+      running.notify()
+      signal.addEventListener('abort', () => {
+        aborted.push(value)
+        finish.get(value)!.resolve()
+      })
+      await finish.get(value)!.promise
+      if (value === 1) throw new Error('first fails')
+      return value
+    })
+    await running.when(() => started.includes(1) && started.includes(2))
+    finish.get(1)!.resolve()
+    await expect(walk).rejects.toThrow('first fails')
+    // Item 2 was in flight and observed the pool abort; item 3 never started.
+    expect(aborted).toContain(2)
+    expect(started).not.toContain(3)
+  })
+
+  it('links caller cancellation into the pool signal', async () => {
+    const outer = new AbortController()
+    const started = progress()
+    const seen: AbortSignal[] = []
+    const walk = mapWithConcurrency(
+      [1, 2],
+      2,
+      async (_value, signal) => {
+        seen.push(signal)
+        started.notify()
+        await new Promise<void>((resolve) =>
+          signal.addEventListener('abort', () => resolve(), { once: true }),
+        )
+      },
+      { signal: outer.signal },
+    )
+    await started.when(() => seen.length === 2)
+    outer.abort()
+    await expect(walk).rejects.toMatchObject({ code: TOOL_ABORTED })
+    expect(seen.every((signal) => signal.aborted)).toBe(true)
   })
 
   it('rejects a non-integer or non-positive concurrency', async () => {
