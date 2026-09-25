@@ -44,7 +44,7 @@ export function formatDiagnosis(
   rawDiagnosis: string,
   t: TranslateNS<'zotero'>,
 ): FormattedDiagnosis {
-  if (!rawDiagnosis) {
+  if (rawDiagnosis.trim() === '') {
     return { message: t('diagnosisUnknown') }
   }
 

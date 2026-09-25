@@ -96,6 +96,21 @@ describe('ZoteroCardController', () => {
     await vi.waitFor(() => expect(scope.writes).toEqual([{ op: 'unset', field: 'timeoutMs' }]))
   })
 
+  it('treats an empty boolean draft as clear, not as false', async () => {
+    const scope = fakeScope({
+      value: { webEnabled: true },
+      base: { webEnabled: true },
+      user: { webEnabled: true },
+    })
+    const controller = new ZoteroCardController(scope)
+    const face = controller.inject()
+    face.edit('webEnabled', '   ')
+    // Whitespace parses as clear: valid draft that unsets, never `false`.
+    expect(face.hooks.zoteroCard.getSnapshot().webEnabled.invalid).toBe(false)
+    face.save()
+    await vi.waitFor(() => expect(scope.writes).toEqual([{ op: 'unset', field: 'webEnabled' }]))
+  })
+
   it('releases the namespace subscription on dispose', () => {
     const scope = fakeScope({ value: {} })
     const controller = new ZoteroCardController(scope)
