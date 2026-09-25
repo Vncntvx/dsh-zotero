@@ -90,6 +90,17 @@ describe('search: note-content scan', () => {
     ])
   })
 
+  it('does not treat a query token as a note-text substring', async () => {
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers, search) => {
+      if (search.get('itemType') === 'note') {
+        helpers.json([noteRow({ data: { note: 'The concatenate function' } })])
+      } else helpers.json([searchHit()], { 'Total-Results': '1', 'Zotero-Server-ID': SERVER_ID })
+    })
+
+    const result = await provider.search(request({ query: 'cat' }))
+    expect(result.supplemental).toBeUndefined()
+  })
+
   it('applies the literal tag filters to the note scan', async () => {
     const scanRows = [
       noteRow({

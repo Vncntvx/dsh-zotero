@@ -158,30 +158,38 @@ async function fetchExportItems(
   signal: AbortSignal | undefined,
 ): Promise<ZoteroExportItem[]> {
   let totalChars = text.length
-  const inputs = await mapWithConcurrency(refs, ZOTERO_EXPORT_CONCURRENCY, async (ref) => {
-    const search = new URLSearchParams()
-    search.set('itemKey', ref.key)
-    search.set('format', format)
-    const { body } = await deps.client.get(`${prefix}/items`, search, { signal, serverId })
-    if (body === '') {
-      throw new ZoteroError(
-        `Zotero did not return an item for ${formatRef(ref)}.`,
-        ZOTERO_NOT_FOUND,
-      )
-    }
-    // The batch body stays in the result, so it opens the account: peak
-    // memory is batch + singles, never singles alone. Workers race ahead by
-    // at most (concurrency - 1) in-flight bodies before the next check
-    // trips — a bounded overshoot on a fail-closed cap.
-    totalChars += body.length
-    if (totalChars > deps.limits.maxExportChars) {
-      throw new ZoteroError(
-        `Per-document export output of ${totalChars} characters exceeds the ${deps.limits.maxExportChars}-character export limit.`,
-        ZOTERO_OUTPUT_TOO_LARGE,
-      )
-    }
-    return { ref: formatRef(ref), key: ref.key, text: body }
-  })
+  const inputs = await mapWithConcurrency(
+    refs,
+    ZOTERO_EXPORT_CONCURRENCY,
+    async (ref, poolSignal) => {
+      const search = new URLSearchParams()
+      search.set('itemKey', ref.key)
+      search.set('format', format)
+      const { body } = await deps.client.get(`${prefix}/items`, search, {
+        signal: poolSignal,
+        serverId,
+      })
+      if (body === '') {
+        throw new ZoteroError(
+          `Zotero did not return an item for ${formatRef(ref)}.`,
+          ZOTERO_NOT_FOUND,
+        )
+      }
+      // The batch body stays in the result, so it opens the account: peak
+      // memory is batch + singles, never singles alone. Workers race ahead by
+      // at most (concurrency - 1) in-flight bodies before the next check
+      // trips — a bounded overshoot on a fail-closed cap.
+      totalChars += body.length
+      if (totalChars > deps.limits.maxExportChars) {
+        throw new ZoteroError(
+          `Per-document export output of ${totalChars} characters exceeds the ${deps.limits.maxExportChars}-character export limit.`,
+          ZOTERO_OUTPUT_TOO_LARGE,
+        )
+      }
+      return { ref: formatRef(ref), key: ref.key, text: body }
+    },
+    { signal },
+  )
   return locateExportItems(format, text, inputs)
 }
 

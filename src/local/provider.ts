@@ -11,7 +11,9 @@
  * health check is `status()`. Search semantics follow the Local API's
  * documented behavior (server-side paging over `/items/top`, client-side
  * scope-name resolution, literal tag escaping); first-page note-body
- * matches ride in `supplemental`, never inside the paged totals.
+ * matches ride in `supplemental`, never inside the paged totals. The
+ * provider keeps its limit projection live, so a limit-only settings edit
+ * does not rebuild its transport or discard its scope caches.
  * @module dsh-zotero/local/provider
  */
 
@@ -22,7 +24,8 @@ import {
   ZOTERO_VERSION_HEADER,
 } from '../constants.js'
 import { PERSONAL_LIBRARY } from '../refs.js'
-import { errorMessageOf, ZoteroError } from '../errors.js'
+import { errorChain } from '@deepseek-ai/dsh-llm'
+import { ZoteroError } from '../errors.js'
 import type { ZoteroHttpClient } from '../http-client.js'
 import type { LocalApiLimits, LocalApiProviderOptions } from './limits.js'
 import { ScopeDirectory } from './scope-directory.js'
@@ -34,14 +37,12 @@ import { exportItems as exportItemsDomain } from './export-domain.js'
 import { changes as changesDomain } from './changes-domain.js'
 import { runBrowse } from './browse-domain.js'
 import {
-  WRITE_CAPABILITY_UNAVAILABLE_CODE,
-  writeCapabilityUnavailableMessage,
-} from './write-domain.js'
-import {
   addToCollection as addToCollectionDomain,
   createNote as createNoteDomain,
   updateTags as updateTagsDomain,
   type WriteDomainDeps,
+  WRITE_CAPABILITY_UNAVAILABLE_CODE,
+  writeCapabilityUnavailableMessage,
 } from './write-domain.js'
 import type { WriteAuthorizer } from '../write-auth.js'
 import type { ZoteroWriteHttpClient } from '../write-http.js'
@@ -57,7 +58,7 @@ import type {
   ZoteroCollectionAddRequest,
   ZoteroCollectionAddResult,
   ZoteroCreateNoteRequest,
-  ZoteroCreateNoteResult,
+  ZoteroCreateNoteCommittedOutcome,
   ZoteroExportRequest,
   ZoteroExportResult,
   ZoteroGetRequest,
@@ -78,17 +79,19 @@ export class LocalApiProvider implements ZoteroProvider {
   readonly capabilities: ReadonlySet<ZoteroCapability>
 
   private readonly directory: ScopeDirectory
+  private readonly getLimits: () => LocalApiLimits
 
   constructor(
     private readonly client: ZoteroHttpClient,
-    private readonly limits: LocalApiLimits,
+    limits: LocalApiLimits | (() => LocalApiLimits),
     private readonly options: LocalApiProviderOptions = {},
     private readonly writer?: ZoteroWriteHttpClient,
     private readonly authorizer?: WriteAuthorizer,
   ) {
-    // The directory owns the scope-listing and breadcrumb caches; rebuilding
-    // the provider rebuilds it, so a settings commit starts a fresh
-    // cache generation.
+    this.getLimits = typeof limits === 'function' ? limits : () => limits
+    // The directory owns the scope-listing and breadcrumb caches; a
+    // structural provider rebuild starts a fresh cache generation, while
+    // limit-only settings edits keep this provider and its TTL caches alive.
     this.directory = new ScopeDirectory(
       client,
       this.options.scopeListingTtlMs ?? ZOTERO_SCOPE_LISTING_TTL_MS,
@@ -100,7 +103,6 @@ export class LocalApiProvider implements ZoteroProvider {
       'metadata',
       'search',
       'attachments',
-      'fulltext',
       'citation',
       'browse',
       'retrieve',
@@ -111,7 +113,7 @@ export class LocalApiProvider implements ZoteroProvider {
 
   /** One deps bundle per call keeps every domain signature explicit. */
   private deps(): { client: ZoteroHttpClient; limits: LocalApiLimits } {
-    return { client: this.client, limits: this.limits }
+    return { client: this.client, limits: this.getLimits() }
   }
 
   /**
@@ -137,7 +139,7 @@ export class LocalApiProvider implements ZoteroProvider {
    */
   private resolveCollection(refOrName: string, signal?: AbortSignal): Promise<ZoteroObjectRef> {
     return this.directory
-      .resolveNamed('collection', refOrName, PERSONAL_LIBRARY, signal)
+      .resolveNamed('collection', refOrName, PERSONAL_LIBRARY, signal, this.client.serverId)
       .then((resolved) => resolved.ref)
   }
 
@@ -174,9 +176,11 @@ export class LocalApiProvider implements ZoteroProvider {
       if (signal?.aborted) throw error
       // The code rides along in the diagnosis string so the model (and the
       // settings card) can route on it; routing still matches on the code,
-      // never by parsing the message.
+      // never by parsing the message. Non-domain failures render their full
+      // cause chain so a wrapped transport error is not reduced to its top
+      // message.
       const diagnosis =
-        error instanceof ZoteroError ? `${error.code}: ${error.message}` : errorMessageOf(error)
+        error instanceof ZoteroError ? `${error.code}: ${error.message}` : errorChain(error)
       return {
         providerId: this.id,
         connected: false,
@@ -269,7 +273,7 @@ export class LocalApiProvider implements ZoteroProvider {
   async createNote(
     request: ZoteroCreateNoteRequest,
     signal?: AbortSignal,
-  ): Promise<ZoteroCreateNoteResult> {
+  ): Promise<ZoteroCreateNoteCommittedOutcome> {
     return createNoteDomain(
       this.writeDeps(),
       (refOrName) => this.resolveCollection(refOrName, signal),

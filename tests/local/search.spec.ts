@@ -172,6 +172,13 @@ describe('search: library scope', () => {
     await zoteroError(provider.search(request({})), 'ZOTERO_UNEXPECTED', 'Total-Results')
   })
 
+  it('rejects an unsafe integer Total-Results value', async () => {
+    serveJson(mock, /^\/api\/users\/0\/items(\/top)?$/, [searchHit()], {
+      'Total-Results': '9007199254740992',
+    })
+    await zoteroError(provider.search(request({})), 'ZOTERO_UNEXPECTED', 'Total-Results')
+  })
+
   it('keeps the scope provenance when the items response omits the server id', async () => {
     serveJson(mock, '/api/users/0/collections/COLL1234', COLLECTIONS[0], {
       'Zotero-Server-ID': SERVER_ID,

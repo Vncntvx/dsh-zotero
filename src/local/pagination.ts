@@ -6,6 +6,7 @@
  * @module dsh-zotero/local/pagination
  */
 
+import { parseNonNegativeSafeInteger } from '../json.js'
 import { ZOTERO_UNEXPECTED, ZoteroError } from '../errors.js'
 
 /**
@@ -15,13 +16,14 @@ import { ZOTERO_UNEXPECTED, ZoteroError } from '../errors.js'
  */
 export function requireTotalResults(headers: Headers, what: string): number {
   const raw = headers.get('total-results') ?? headers.get('Total-Results')
-  if (raw === null || raw.trim() === '' || !/^\d+$/.test(raw.trim())) {
+  const total = parseNonNegativeSafeInteger(raw)
+  if (total === undefined) {
     throw new ZoteroError(
       `Zotero did not return a valid Total-Results header for ${what}`,
       ZOTERO_UNEXPECTED,
     )
   }
-  return Number(raw.trim())
+  return total
 }
 
 /**

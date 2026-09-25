@@ -13,14 +13,19 @@
  */
 
 import { expect } from 'vitest'
-import type { ZoteroChangesCursor } from '../../src/types.js'
+import { DEFAULT_CHANGES_INCLUDES } from '../../src/local/changes-domain.js'
+import type { ZoteroChangesCursor, ZoteroChangesInclude } from '../../src/types.js'
 import type { MockZotero, RouteHandler } from '../helpers/mock-zotero.js'
 import { PERSONAL_LIBRARY, SERVER_ID, apiPath } from '../helpers/server/keys.js'
 import { versionHeaders } from '../helpers/server/objects.js'
 
 /** The cursor the fixtures start from: instance S1, personal library, version 42. */
-export function at(version: number, serverId = SERVER_ID): ZoteroChangesCursor {
-  return { serverId, library: PERSONAL_LIBRARY, version }
+export function at(
+  version: number,
+  serverId = SERVER_ID,
+  include: readonly ZoteroChangesInclude[] = DEFAULT_CHANGES_INCLUDES,
+): ZoteroChangesCursor {
+  return { serverId, library: PERSONAL_LIBRARY, version, include: [...include] }
 }
 
 /** A key→version map shaped like `format=versions` responses. */
@@ -60,6 +65,8 @@ export interface ItemsFixture {
   readonly total?: Partial<Record<Endpoint, string>>
   /** Probe shape: versioned 200 (default), 200 without the header, or 404. */
   readonly probe?: 'ok' | 'unversioned' | 'not-found'
+  /** One partition whose diff response omits its library-version header. */
+  readonly unversionedDiff?: Endpoint
   /** Per-endpoint diff answers; defaults to a 200 map for all three. */
   readonly diff?: Partial<Record<Endpoint, DiffBehaviour>>
   /** Raw bodies that replace a computed map, for the shape tests. */
@@ -124,7 +131,9 @@ export function routeItems(mock: MockZotero, options: ItemsFixture = {}): void {
       options.total?.[endpoint] ??
       String(Array.isArray(body) ? body.length : Object.keys(body ?? {}).length)
     helpers.json(body, {
-      ...versionHeaders(serverId, Number(options.diffVersion ?? version)),
+      ...(options.unversionedDiff === endpoint
+        ? versionHeaders(serverId)
+        : versionHeaders(serverId, Number(options.diffVersion ?? version))),
       'Total-Results': total,
     })
   }

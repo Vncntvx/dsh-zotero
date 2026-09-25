@@ -23,9 +23,13 @@ function resolveServedBy(headers: Headers, claim: string | undefined): string | 
   return headers.get(ZOTERO_SERVER_ID_HEADER) ?? claim
 }
 
+import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import { ZOTERO_SCOPE_LISTING_TTL_MS, ZOTERO_SERVER_ID_HEADER } from '../constants.js'
+import { awaitSharedOperation, type SharedOperation } from '../concurrency.js'
 import {
   isNotFoundError,
+  TOOL_ABORTED_MESSAGE,
   ZOTERO_INVALID_ARGUMENT,
   ZOTERO_INVALID_REF,
   ZOTERO_NOT_FOUND,
@@ -69,15 +73,19 @@ export interface ScopeListing {
   readonly fetchedAt: number
 }
 
+interface ScopeListingOperation extends SharedOperation<ScopeListing> {
+  readonly generation: number
+}
+
 /** One collection node of a breadcrumb walk: its name and optional parent link. */
 interface CollectionNode {
   readonly name: string
   readonly parentKey?: string
 }
 
-/** A TTL-cached breadcrumb node with the identity that served it. */
+/** A TTL-cached breadcrumb node with the identity that served it. `node: undefined` is a cached 404. */
 interface CachedCollectionNode {
-  readonly node: CollectionNode
+  readonly node: CollectionNode | undefined
   readonly serverId?: string
   readonly fetchedAt: number
 }
@@ -102,8 +110,21 @@ export class ScopeDirectory {
   /** Cached full listings of the scope endpoints, partitioned by library. */
   private readonly scopeListingCache = new Map<string, ScopeListing>()
 
+  /** In-flight normal requests are shared; forced refreshes get their own key. */
+  private readonly scopeListingInFlight = new Map<string, ScopeListingOperation>()
+
+  /** Monotonic request generations prevent an older response from overwriting a newer one. */
+  private nextListingGeneration = 0
+  private readonly latestListingGeneration = new Map<string, number>()
+
   /** TTL-cached breadcrumb nodes for hierarchical collection walks. */
   private readonly collectionNodeCache = new Map<string, CachedCollectionNode>()
+
+  /** In-flight breadcrumb node reads, shared so a parallel ancestor walk fetches each key once. */
+  private readonly collectionNodeInFlight = new Map<
+    string,
+    SharedOperation<CollectionNode | undefined>
+  >()
 
   constructor(client: ZoteroHttpClient, ttlMs: number = ZOTERO_SCOPE_LISTING_TTL_MS) {
     this.client = client
@@ -126,6 +147,7 @@ export class ScopeDirectory {
     signal: AbortSignal | undefined,
     options: { force?: boolean } = {},
   ): Promise<ScopeListing> {
+    if (signal?.aborted) throw new HarnessError(TOOL_ABORTED_MESSAGE, TOOL_ABORTED)
     const key = cacheKey(ctx.library, plural)
     const cached = this.scopeListingCache.get(key)
     if (
@@ -136,6 +158,60 @@ export class ScopeDirectory {
     ) {
       return cached
     }
+    const forcedGeneration = options.force === true ? ++this.nextListingGeneration : undefined
+    const requestKey = `${key}:${ctx.serverId ?? ''}:${
+      forcedGeneration === undefined ? 'normal' : `force:${forcedGeneration}`
+    }`
+    const existing = this.scopeListingInFlight.get(requestKey)
+    const latestGeneration = this.latestListingGeneration.get(key)
+    // A normal operation may still be in flight when a forced refresh starts.
+    // Do not let a later normal caller join that older answer: generation
+    // ordering protects the cache, and the arriving caller must receive the
+    // same freshness guarantee as the cache.
+    const canShare =
+      existing !== undefined &&
+      !existing.controller.signal.aborted &&
+      !existing.settled &&
+      (latestGeneration === undefined || existing.generation >= latestGeneration)
+    if (existing !== undefined && canShare) {
+      return await this.awaitScopeListing(existing, signal)
+    }
+    if (existing !== undefined) this.scopeListingInFlight.delete(requestKey)
+    if (options.force === true) this.scopeListingCache.delete(key)
+
+    const generation = forcedGeneration ?? ++this.nextListingGeneration
+    this.latestListingGeneration.set(key, generation)
+    const operation: ScopeListingOperation = {
+      controller: new AbortController(),
+      generation,
+      promise: Promise.resolve({ entries: [], fetchedAt: 0 }),
+      waiters: 0,
+      settled: false,
+    }
+    operation.promise = this.fetchScopeListing(
+      plural,
+      ctx,
+      operation.controller.signal,
+      generation,
+    ).finally(() => {
+      operation.settled = true
+      if (this.scopeListingInFlight.get(requestKey) === operation) {
+        this.scopeListingInFlight.delete(requestKey)
+      }
+    })
+    // A sole cancelled waiter leaves nobody to consume the shared rejection.
+    void operation.promise.catch(() => undefined)
+    this.scopeListingInFlight.set(requestKey, operation)
+    return await this.awaitScopeListing(operation, signal)
+  }
+
+  /** Fetch and cache one full scope listing for all current waiters. */
+  private async fetchScopeListing(
+    plural: 'collections' | 'searches',
+    ctx: LocalReadContext,
+    signal: AbortSignal,
+    generation: number,
+  ): Promise<ScopeListing> {
     const prefix = libraryPrefix(ctx.library)
     const { json, headers } = await this.client.getJson<unknown>(`${prefix}/${plural}`, undefined, {
       signal,
@@ -147,8 +223,24 @@ export class ScopeDirectory {
       servedBy === undefined
         ? { entries, fetchedAt: Date.now() }
         : { entries, serverId: servedBy, fetchedAt: Date.now() }
-    this.scopeListingCache.set(key, listing)
+    const key = cacheKey(ctx.library, plural)
+    // A response from an older request must not replace a listing already
+    // refreshed by a later request. The caller still receives its own answer;
+    // only the shared cache follows freshness order.
+    const latest = this.latestListingGeneration.get(key)
+    if (latest === undefined || latest <= generation) {
+      this.latestListingGeneration.set(key, generation)
+      this.scopeListingCache.set(key, listing)
+    }
     return listing
+  }
+
+  /** Await a shared read; cancel it only after every waiter has detached. */
+  private async awaitScopeListing(
+    operation: ScopeListingOperation,
+    signal: AbortSignal | undefined,
+  ): Promise<ScopeListing> {
+    return await awaitSharedOperation(operation, signal)
   }
 
   /**
@@ -162,6 +254,7 @@ export class ScopeDirectory {
     refOrName: string,
     effectiveLibrary: SupportedLocalLibrary,
     signal?: AbortSignal,
+    claimServerId?: string,
   ): Promise<{ ref: ZoteroObjectRef; name: string }> {
     const plural = kind === 'collection' ? 'collections' : 'searches'
     if (isRefString(refOrName)) {
@@ -175,12 +268,13 @@ export class ScopeDirectory {
         )
       }
       const prefix = libraryPrefix(ref.library as SupportedLocalLibrary)
+      const claim = ref.serverId ?? claimServerId
       const { json, headers } = await this.client.getJson<unknown>(
         `${prefix}/${plural}/${ref.key}`,
         undefined,
         {
           signal,
-          serverId: ref.serverId,
+          serverId: claim,
         },
       )
       const entry = normalizeScopeEntry(json)
@@ -189,18 +283,25 @@ export class ScopeDirectory {
           ref.library as SupportedLocalLibrary,
           kind,
           entry.key,
-          resolveServedBy(headers, ref.serverId),
+          resolveServedBy(headers, claim),
         ),
         name: entry.name,
       }
     }
     // Name resolution matches over the effective library's full listing.
-    let listing = await this.scopeListingOf(plural, { library: effectiveLibrary }, signal)
+    let listing = await this.scopeListingOf(
+      plural,
+      { library: effectiveLibrary, serverId: claimServerId },
+      signal,
+    )
     let matched = matchScopeName(listing.entries, refOrName)
     if (matched.length === 0) {
-      listing = await this.scopeListingOf(plural, { library: effectiveLibrary }, signal, {
-        force: true,
-      })
+      listing = await this.scopeListingOf(
+        plural,
+        { library: effectiveLibrary, serverId: claimServerId },
+        signal,
+        { force: true },
+      )
       matched = matchScopeName(listing.entries, refOrName)
     }
     if (matched.length === 1) {
@@ -278,7 +379,9 @@ export class ScopeDirectory {
    * One collection node for breadcrumb walks, TTL-cached per library+key and
    * identity-checked like the scope listings. A missing collection resolves
    * to undefined (a phantom parent truncates the path) instead of failing
-   * the browse.
+   * the browse — and that miss is cached for the same TTL, so a phantom
+   * parent is not re-fetched on every page of the same walk. Concurrent
+   * lookups of the same key share one request.
    */
   private async collectionNodeOf(
     library: SupportedLocalLibrary,
@@ -286,6 +389,7 @@ export class ScopeDirectory {
     serverId: string | undefined,
     signal: AbortSignal | undefined,
   ): Promise<CollectionNode | undefined> {
+    if (signal?.aborted) throw new HarnessError(TOOL_ABORTED_MESSAGE, TOOL_ABORTED)
     const nodeCacheKey = `${cacheKey(library, 'collections')}:${key}`
     const cached = this.collectionNodeCache.get(nodeCacheKey)
     if (
@@ -295,6 +399,37 @@ export class ScopeDirectory {
     ) {
       return cached.node
     }
+    let operation = this.collectionNodeInFlight.get(nodeCacheKey)
+    if (operation === undefined || operation.settled || operation.controller.signal.aborted) {
+      const controller = new AbortController()
+      const op: SharedOperation<CollectionNode | undefined> = {
+        controller,
+        promise: Promise.resolve(undefined),
+        waiters: 0,
+        settled: false,
+      }
+      op.promise = this.fetchCollectionNode(library, key, serverId, controller.signal).finally(
+        () => {
+          op.settled = true
+          if (this.collectionNodeInFlight.get(nodeCacheKey) === op) {
+            this.collectionNodeInFlight.delete(nodeCacheKey)
+          }
+        },
+      )
+      void op.promise.catch(() => undefined)
+      this.collectionNodeInFlight.set(nodeCacheKey, op)
+      operation = op
+    }
+    return await awaitSharedOperation(operation, signal)
+  }
+
+  private async fetchCollectionNode(
+    library: SupportedLocalLibrary,
+    key: string,
+    serverId: string | undefined,
+    signal: AbortSignal | undefined,
+  ): Promise<CollectionNode | undefined> {
+    const nodeCacheKey = `${cacheKey(library, 'collections')}:${key}`
     try {
       const { json, headers } = await this.client.getJson<unknown>(
         `${libraryPrefix(library)}/collections/${key}`,
@@ -317,7 +452,14 @@ export class ScopeDirectory {
       })
       return node
     } catch (error) {
-      if (isNotFoundError(error)) return undefined
+      if (isNotFoundError(error)) {
+        this.collectionNodeCache.set(nodeCacheKey, {
+          node: undefined,
+          ...(serverId !== undefined ? { serverId } : {}),
+          fetchedAt: Date.now(),
+        })
+        return undefined
+      }
       throw error
     }
   }

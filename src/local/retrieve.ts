@@ -267,7 +267,7 @@ export async function retrieve(
       candidates = await mapWithConcurrency(
         [...distinct.values()],
         ZOTERO_GRAPH_CONCURRENCY,
-        async (wanted): Promise<{ key: string; contentType?: string }> => {
+        async (wanted, poolSignal): Promise<{ key: string; contentType?: string }> => {
           // The ref is a claim about where this text comes from. Reading a
           // same-key object out of the wrong library or the wrong database
           // would attach a stranger's words to this item, so the claim is
@@ -285,7 +285,7 @@ export async function retrieve(
           const row = await deps.client.getJson<unknown>(
             `${prefix}/items/${wanted.key}`,
             undefined,
-            { signal, serverId },
+            { signal: poolSignal, serverId },
           )
           const rowData = asRecord(asRecord(row.json)?.data)
           const rowType = asString(rowData?.itemType)
@@ -308,6 +308,7 @@ export async function retrieve(
           }
           return { key: wanted.key, contentType: asString(rowData?.contentType) }
         },
+        { signal },
       )
     }
     // An `allIndexed` selection can repeat a key only if the listing did; the
@@ -567,7 +568,7 @@ async function readFulltextSources(
   const results = await mapWithConcurrency(
     read,
     ZOTERO_GRAPH_CONCURRENCY,
-    async (candidate): Promise<FulltextSource> => {
+    async (candidate, poolSignal): Promise<FulltextSource> => {
       const base = {
         key: candidate.key,
         ...(candidate.contentType !== undefined ? { contentType: candidate.contentType } : {}),
@@ -579,7 +580,7 @@ async function readFulltextSources(
           candidate.key,
           ref.library as SupportedLocalLibrary,
           serverId,
-          signal,
+          poolSignal,
         )
       } catch (error) {
         if (error instanceof ZoteroError && error.code === ZOTERO_NO_FULLTEXT) {
@@ -601,6 +602,7 @@ async function readFulltextSources(
         ),
       }
     },
+    { signal },
   )
   return [
     ...results,

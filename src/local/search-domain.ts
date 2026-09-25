@@ -16,7 +16,6 @@ import { resolveScope, ScopeDirectory, type ResolvedScopeResult } from './scope-
 import { asRecord, asString } from '../json.js'
 import { collectionKeysOf, normalizeSearchItem, plainNoteText } from '../normalize.js'
 import { libraryPrefix, parseRef } from '../refs.js'
-import { normalizeForSearch } from '../search-text.js'
 import type { LocalApiLimits } from './limits.js'
 import type {
   SupportedLocalLibrary,
@@ -126,7 +125,19 @@ export async function runSearch(
           .map((row) => asString(asRecord(row)?.key))
           .filter((key): key is string => key !== undefined),
       )
-      const scan = await fetchNoteRows(deps, scope, request, signal)
+      const isSaturated = (scannedRows: readonly unknown[]): boolean => {
+        let count = 0
+        for (const row of scannedRows) {
+          const key = asString(asRecord(row)?.key)
+          if (key === undefined || seen.has(key)) continue
+          if (noteRowMatches(row, terms, request, scope.collectionKey)) {
+            count += 1
+            if (count >= headroom) return true
+          }
+        }
+        return false
+      }
+      const scan = await fetchNoteRows(deps, scope, request, signal, isSaturated)
       // Matched rows keep scan order; child notes wait here for the
       // parent-membership resolution below before they can join the page.
       const matched: { row: unknown; key: string; parentKey?: string }[] = []
@@ -217,6 +228,7 @@ async function fetchNoteRows(
   scope: ResolvedScopeResult,
   request: ZoteroSearchRequest,
   signal: AbortSignal | undefined,
+  shouldStop?: (accumulated: readonly unknown[]) => boolean,
 ): Promise<{ rows: readonly unknown[]; truncated: boolean }> {
   const libraryForScan = libraryOfResolvedScope(scope.resolved)
   let prefix = libraryPrefix(libraryForScan)
@@ -241,6 +253,7 @@ async function fetchNoteRows(
     const rows = Array.isArray(json) ? json : []
     if (rows.length === 0) break
     out.push(...rows.slice(0, wanted))
+    if (shouldStop?.(out) === true) break
     // Fewer rows than requested means the library has no more notes.
     if (rows.length < wanted) break
     start += rows.length
@@ -272,13 +285,13 @@ async function fetchParentCollections(
   const membershipsPerChunk = await mapWithConcurrency(
     chunks,
     ZOTERO_SEARCH_CONCURRENCY,
-    async (chunk) => {
+    async (chunk, poolSignal) => {
       const params = new URLSearchParams()
       params.set('itemKey', chunk.join(','))
       const { json } = await deps.client.getJson<unknown>(
         `${libraryPrefix(library)}/items`,
         params,
-        { signal, serverId },
+        { signal: poolSignal, serverId },
       )
       const memberships = new Map<string, Set<string>>()
       for (const row of Array.isArray(json) ? json : []) {
@@ -288,6 +301,7 @@ async function fetchParentCollections(
       }
       return memberships
     },
+    { signal },
   )
   const merged = new Map<string, Set<string>>()
   for (const memberships of membershipsPerChunk) {
@@ -357,9 +371,8 @@ function noteRowMatches(
       if (excludeTags.some((tag) => tagNames.has(tag))) return false
     }
   }
-  // The note side is folded exactly as the query tokens were (Zotero's own
-  // search normalization), so a note the server-side search matched by fold
-  // is not missed here.
-  const text = normalizeForSearch(plainNoteText(data?.note))
-  return terms.every((term) => text.includes(term))
+  // The note side is tokenized exactly as the query terms were, so a note
+  // the server-side search matched by token is not missed here.
+  const tokens = new Set(tokenize(plainNoteText(data?.note)))
+  return terms.every((term) => tokens.has(term))
 }

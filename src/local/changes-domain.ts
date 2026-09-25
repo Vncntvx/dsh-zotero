@@ -38,7 +38,12 @@ import {
   isNotFoundError,
   isRangeUnsupportedError,
 } from '../errors.js'
-import { asRecord, isObjectKey } from '../json.js'
+import {
+  asRecord,
+  isNonNegativeSafeInteger,
+  isObjectKey,
+  parseNonNegativeSafeInteger,
+} from '../json.js'
 import { libraryPrefix, PERSONAL_LIBRARY, sameLibrary } from '../refs.js'
 import type { LocalApiLimits } from './limits.js'
 import { ZoteroError } from '../errors.js'
@@ -70,6 +75,26 @@ export const DEFAULT_CHANGES_INCLUDES: readonly ZoteroChangesInclude[] = [
   'deleted',
 ]
 
+/** Canonical order for the coverage carried by a cursor. */
+export const ALL_CHANGES_INCLUDES: readonly ZoteroChangesInclude[] = [
+  'items',
+  'collections',
+  'savedSearches',
+  'fulltext',
+  'deleted',
+]
+
+function orderedIncludes(include: ReadonlySet<ZoteroChangesInclude>): ZoteroChangesInclude[] {
+  return ALL_CHANGES_INCLUDES.filter((kind) => include.has(kind))
+}
+
+function sameIncludes(
+  left: ReadonlySet<ZoteroChangesInclude>,
+  right: ReadonlySet<ZoteroChangesInclude>,
+): boolean {
+  return left.size === right.size && [...left].every((kind) => right.has(kind))
+}
+
 /** The tombstone payload's documented lists; anything else is counted, not read. */
 const TOMBSTONE_LISTS = ['items', 'collections', 'searches', 'tags'] as const
 
@@ -98,15 +123,14 @@ interface Tombstones {
   readonly other: number
 }
 
-/** A non-negative integer header reading, or undefined when absent or malformed. */
+/** A non-negative safe-integer header reading, or undefined when absent or malformed. */
 function numericHeader(headers: Headers, name: string): number | undefined {
-  const raw = headers.get(name)?.trim()
-  return raw !== undefined && raw !== '' && /^\d+$/.test(raw) ? Number(raw) : undefined
+  return parseNonNegativeSafeInteger(headers.get(name))
 }
 
-/** True for a version counter reading: a non-negative integer, never a string. */
+/** True for a version counter reading: a non-negative safe integer, never a string. */
 function isVersion(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 0
+  return isNonNegativeSafeInteger(value)
 }
 
 /** `user/0` or `group/42`, the way the model names a library. */
@@ -126,15 +150,22 @@ export function cursorLibraryMismatchMessage(
   return `This cursor belongs to ${cursorLibrary}, but the call diffs ${requestLibrary}. A library version is only meaningful in the library it came from — diff that library, or take a baseline reading here.`
 }
 
+/** A response identity is usable only when it is a non-blank string. */
+function observedServerId(value: string | null | undefined): string | undefined {
+  return value !== null && value !== undefined && value.trim() !== '' ? value : undefined
+}
+
 /** The cursor for `version`, or undefined when there is no instance to pin it to. */
 function cursorFor(
   serverId: string | undefined,
   library: SupportedLocalLibrary,
   version: number | undefined,
+  include: ReadonlySet<ZoteroChangesInclude>,
 ): ZoteroChangesCursor | undefined {
-  return serverId === undefined || version === undefined
+  const id = observedServerId(serverId)
+  return id === undefined || version === undefined
     ? undefined
-    : { serverId, library, version }
+    : { serverId: id, library, version, include: orderedIncludes(include) }
 }
 
 /**
@@ -172,6 +203,9 @@ export async function changes(
   const prefix = libraryPrefix(library)
   const cap = deps.limits.maxChangesResults
   const include = request.include ?? new Set(DEFAULT_CHANGES_INCLUDES)
+  if (include.size === 0) {
+    throw new ZoteroError('include must list at least one resource kind', ZOTERO_INVALID_ARGUMENT)
+  }
   const since = request.since
 
   // A version is a counter of one library's transactions, so a cursor only
@@ -183,6 +217,32 @@ export async function changes(
       cursorLibraryMismatchMessage(libraryLabel(since.library), libraryLabel(library)),
       ZOTERO_INVALID_ARGUMENT,
     )
+  }
+  if (since !== undefined && observedServerId(since.serverId) === undefined) {
+    throw new ZoteroError('since.serverId must be a non-blank instance id', ZOTERO_INVALID_ARGUMENT)
+  }
+  if (since !== undefined) {
+    const coverage = since.include
+    if (
+      !Array.isArray(coverage) ||
+      coverage.length === 0 ||
+      coverage.some((kind) => !ALL_CHANGES_INCLUDES.includes(kind)) ||
+      new Set(coverage).size !== coverage.length
+    ) {
+      throw new ZoteroError(
+        'since.include must list the resource kinds covered by the cursor',
+        ZOTERO_INVALID_ARGUMENT,
+      )
+    }
+    const cursorInclude = new Set(coverage)
+    for (const kind of include) {
+      if (!cursorInclude.has(kind)) {
+        throw new ZoteroError(
+          `since.include does not cover requested resource kind '${kind}'`,
+          ZOTERO_INVALID_ARGUMENT,
+        )
+      }
+    }
   }
 
   const unobservable: ZoteroChangesUnobservable[] = []
@@ -232,7 +292,7 @@ export async function changes(
       ...(claim === undefined ? {} : { serverId: claim }),
     })
     const version = numericHeader(response.headers, 'last-modified-version')
-    const observed = response.headers.get('zotero-server-id') ?? undefined
+    const observed = observedServerId(response.headers.get('zotero-server-id'))
     return {
       ...(version !== undefined ? { version } : {}),
       ...(observed !== undefined ? { serverId: observed } : {}),
@@ -247,7 +307,7 @@ export async function changes(
     const probe = await attempt(() => probeVersion())
     const observed = probe.status === 'ok' ? probe.value.serverId : undefined
     const version = probe.status === 'ok' ? probe.value.version : undefined
-    const cursor = cursorFor(observed, library, version)
+    const cursor = cursorFor(observed, library, version, include)
     return {
       library,
       ...(observed !== undefined ? { serverId: observed } : {}),
@@ -286,7 +346,11 @@ export async function changes(
    * no count, nothing for the cursor to certify) instead of being read as
    * "nothing changed".
    */
-  const readResource = async (path: string): Promise<ResourceRead> => {
+  const readResource = async (
+    path: string,
+    versioned = true,
+    requestSignal: AbortSignal | undefined = signal,
+  ): Promise<ResourceRead> => {
     const payload = await attempt(async () => {
       const params = new URLSearchParams()
       params.set('since', String(since.version))
@@ -295,7 +359,10 @@ export async function changes(
       // full, and a capped read could not be resumed (the API has no version
       // upper bound, and the reported version would already sit past the rows
       // the cap hid).
-      return await deps.client.getJson<unknown>(path, params, { signal, serverId: instance })
+      return await deps.client.getJson<unknown>(path, params, {
+        signal: requestSignal,
+        serverId: instance,
+      })
     })
     if (payload.status === 'failed') return payload
     const { json, headers } = payload.value
@@ -304,9 +371,23 @@ export async function changes(
     if (rows === undefined || !rows.every(([key, value]) => isObjectKey(key) && isVersion(value))) {
       return { status: 'failed', reason: 'unreadable' }
     }
-    const observed = headers.get('zotero-server-id') ?? undefined
+    const observed = observedServerId(headers.get('zotero-server-id'))
+    const rawTotal = headers.get('total-results')
     const headerTotal = numericHeader(headers, 'total-results')
+    const rawVersion = headers.get('last-modified-version')
     const version = numericHeader(headers, 'last-modified-version')
+    if (rawTotal !== null && headerTotal === undefined) {
+      return { status: 'failed', reason: 'unreadable' }
+    }
+    if (rawVersion !== null && version === undefined) {
+      return { status: 'failed', reason: 'unreadable' }
+    }
+    if (headerTotal !== undefined && headerTotal < rows.length) {
+      return { status: 'failed', reason: 'unreadable' }
+    }
+    if (versioned && version === undefined) {
+      return { status: 'failed', reason: 'unreadable' }
+    }
     return {
       status: 'ok',
       value: {
@@ -343,9 +424,14 @@ export async function changes(
    * Fold one successful read into the call: assert the answering instance,
    * fold its completeness and snapshot reading in, and keep its true count.
    */
-  const foldRead = (page: VersionsPage): void => {
+  const foldRead = (page: VersionsPage, versioned = true): void => {
     assertSameInstance(page.serverId, instance)
-    if (snapshot !== undefined && page.version !== undefined && page.version !== snapshot) {
+    if (
+      versioned &&
+      snapshot !== undefined &&
+      page.version !== undefined &&
+      page.version !== snapshot
+    ) {
       // A write landed while this call was reading, so no single version
       // describes the range this result reports.
       libraryChanged = true
@@ -359,13 +445,14 @@ export async function changes(
     kind: ZoteroChangesInclude,
     path: string,
     totalKey: keyof ZoteroChangesTotals,
+    versioned = true,
   ): Promise<ZoteroChangedObject[] | undefined> => {
-    const read = await readResource(path)
+    const read = await readResource(path, versioned)
     if (read.status === 'failed') {
       recordUnobservable(kind, read.reason)
       return undefined
     }
-    foldRead(read.value)
+    foldRead(read.value, versioned)
     totals[totalKey] = read.value.total
     return display(read.value.entries)
   }
@@ -377,32 +464,72 @@ export async function changes(
     // library version invisibly (item listings exclude the trash). A build
     // that serves only some of these reads leaves the kind unobservable as a
     // whole rather than reporting a slice of the item space as the item space.
-    const live = await readResource(`${prefix}/items`)
-    const top = await readResource(`${prefix}/items/top`)
-    const trash = await readResource(`${prefix}/items/trash`)
+    const itemController = new AbortController()
+    const forwardAbort = itemController.abort.bind(itemController)
+    signal?.addEventListener('abort', forwardAbort, { once: true })
+    // An abort event is not replayed. If cancellation happened after the probe
+    // resolved but before this fan-out attached its listener, propagate the
+    // already-aborted state explicitly instead of starting three live reads.
+    if (signal?.aborted) forwardAbort()
+    let settled: PromiseSettledResult<ResourceRead>[]
+    let firstFailure: { readonly error: unknown } | undefined
+    try {
+      const reads = [
+        readResource(`${prefix}/items`, true, itemController.signal),
+        readResource(`${prefix}/items/top`, true, itemController.signal),
+        readResource(`${prefix}/items/trash`, true, itemController.signal),
+      ].map((read) =>
+        read.catch((error: unknown) => {
+          // Preserve the failure that caused the sibling abort. Promise
+          // allSettled is ordered by input, not settlement time, so selecting
+          // its first rejected entry would turn a real 500/timeout into the
+          // sibling's later TOOL_ABORTED.
+          firstFailure ??= { error }
+          itemController.abort()
+          throw error
+        }),
+      )
+      settled = await Promise.allSettled(reads)
+    } finally {
+      signal?.removeEventListener('abort', forwardAbort)
+    }
+    if (firstFailure !== undefined) throw firstFailure.error
+    const [live, top, trash] = settled.map(
+      (result) => (result as PromiseFulfilledResult<ResourceRead>).value,
+    )
     if (live.status === 'ok' && top.status === 'ok' && trash.status === 'ok') {
       foldRead(live.value)
       foldRead(top.value)
       foldRead(trash.value)
-      const topKeys = new Set(top.value.entries.map((entry) => entry.key))
-      const childEntries = live.value.entries.filter((entry) => !topKeys.has(entry.key))
+      // The top-level listing is useful even when the build capped it, but a
+      // child list computed as `live - top` is not: a missing top-level key
+      // would be indistinguishable from a child object. Keep the independent
+      // top/trash digests, and withhold only the derived child split unless
+      // both whole reads prove it.
       changed.items = display(top.value.entries)
-      changed.childItems = display(childEntries)
       changed.trashedItems = display(trash.value.entries)
       totals.items = top.value.total
       totals.trashedItems = trash.value.total
-      // The split is a difference of two whole reads of one range, so it is
-      // the true count whenever neither read was capped — and a build that
-      // capped one of them leaves the call without a cursor anyway.
-      totals.childItems = childEntries.length
-    } else {
-      // The conjunction above failed, so one of the three carries the reason;
-      // the first one is it, and the kind is named once.
-      for (const read of [live, top, trash]) {
-        if (read.status !== 'failed') continue
-        recordUnobservable('items', read.reason)
-        break
+      if (live.value.complete && top.value.complete) {
+        const topKeys = new Set(top.value.entries.map((entry) => entry.key))
+        const childEntries = live.value.entries.filter((entry) => !topKeys.has(entry.key))
+        changed.childItems = display(childEntries)
+        // The split is a difference of two whole reads of one range, so it is
+        // the true count whenever neither read was capped.
+        totals.childItems = childEntries.length
       }
+    } else {
+      complete = false
+      // The conjunction above failed, so one of the three carries the reason;
+      // the kind is named once. Prefer an unreadable partition over a merely
+      // absent/range-limited one: it is the actionable diagnosis and avoids
+      // reporting `not-served` when a sibling did answer malformed data.
+      const failed = [live, top, trash].filter(
+        (read): read is Extract<typeof read, { status: 'failed' }> => read.status === 'failed',
+      )
+      const reason =
+        failed.find((read) => read.reason === 'unreadable')?.reason ?? failed[0]?.reason
+      if (reason !== undefined) recordUnobservable('items', reason)
     }
   }
   if (include.has('collections')) {
@@ -417,7 +544,7 @@ export async function changes(
     // The index listing, read only when asked for: unbounded and unversioned,
     // it answers in the full-text counter's own namespace, so its rows are a
     // listing for this library version rather than a delta on it.
-    const entries = await readKind('fulltext', `${prefix}/fulltext`, 'fulltextAttachments')
+    const entries = await readKind('fulltext', `${prefix}/fulltext`, 'fulltextAttachments', false)
     if (entries !== undefined) changed.fulltextAttachments = entries
   }
 
@@ -482,7 +609,7 @@ export async function changes(
         signal,
         serverId: instance,
       })
-      assertSameInstance(payload.headers.get('zotero-server-id') ?? undefined, instance)
+      assertSameInstance(observedServerId(payload.headers.get('zotero-server-id')), instance)
       return parseTombstones(payload.json)
     })
     const tombstones = read.status === 'ok' ? read.value : undefined
@@ -510,7 +637,12 @@ export async function changes(
   // answered. Every served resource was read whole (or the call would not be
   // complete) and none reported another version, so this cursor covers the
   // entire range the result reports — and only this library on this instance.
-  const cursor = complete ? cursorFor(instance, library, snapshot) : undefined
+  // Fulltext has an independent counter, so a library cursor cannot safely
+  // resume a result that mixes its rows with versioned library resources.
+  const cursor =
+    complete && !include.has('fulltext')
+      ? cursorFor(instance, library, snapshot, include)
+      : undefined
   return {
     library,
     serverId: instance,

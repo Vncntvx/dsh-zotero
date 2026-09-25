@@ -142,7 +142,7 @@ export async function runBrowse(
     if (request.itemType === undefined || !/^[A-Za-z][A-Za-z0-9]*$/.test(request.itemType)) {
       throw new ZoteroError(ITEM_FIELDS_ITEM_TYPE_MESSAGE, ZOTERO_INVALID_ARGUMENT)
     }
-    return await browseItemFields(deps, directory, request, signal)
+    return await browseItemFields(deps, request, signal)
   }
   if ((request.q !== undefined || request.match !== undefined) && request.kind !== 'tags') {
     throw new ZoteroError(Q_MATCH_SCOPE_MESSAGE, ZOTERO_INVALID_ARGUMENT)
@@ -175,15 +175,15 @@ export async function runBrowse(
   }
   switch (request.kind) {
     case 'libraries':
-      return await browseLibraries(deps, directory, request, signal)
+      return await browseLibraries(deps, request, signal)
     case 'collections':
       return await browseCollections(deps, directory, request, signal)
     case 'savedSearches':
-      return await browseSavedSearches(deps, directory, request, signal)
+      return await browseSavedSearches(deps, request, signal)
     case 'tags':
       return await browseTags(deps, directory, request, signal)
     case 'itemTypes':
-      return await browseItemTypes(deps, directory, request, signal)
+      return await browseItemTypes(deps, request, signal)
     default:
       throw new ZoteroError(
         unsupportedBrowseKindMessage((request as { kind: string }).kind),
@@ -193,8 +193,7 @@ export async function runBrowse(
 }
 
 async function browseLibraries(
-  deps: { client: ZoteroHttpClient; limits: LocalApiLimits },
-  directory: ScopeDirectory,
+  deps: { client: ZoteroHttpClient },
   request: ZoteroBrowseRequest,
   signal?: AbortSignal,
 ): Promise<ZoteroBrowseResult> {
@@ -224,7 +223,6 @@ async function browseLibraries(
       const name = nameRaw || `Group ${id}`
       items.push({ library: { type: 'group', id }, name })
     }
-    if (headers.get('zotero-server-id')) serverId = headers.get('zotero-server-id') ?? serverId
   } catch (error) {
     if (isNotFoundError(error)) {
       // older Zotero without groups listing: just personal
@@ -256,7 +254,7 @@ async function browseLibraries(
  * fail-closed instead of inventing one.
  */
 async function browseCollections(
-  deps: { client: ZoteroHttpClient; limits: LocalApiLimits },
+  deps: { client: ZoteroHttpClient },
   directory: ScopeDirectory,
   request: ZoteroBrowseRequest,
   signal?: AbortSignal,
@@ -280,29 +278,35 @@ async function browseCollections(
   const { json, headers } = await deps.client.getJson<unknown>(listPath, params, { signal })
   const serverId = headers.get('zotero-server-id') ?? undefined
   const total = requireTotalResults(headers, 'collections')
-  const items: ZoteroCollectionInfo[] = []
-  for (const row of Array.isArray(json) ? json : []) {
-    const entry = normalizeScopeEntry(row)
-    const ancestors = await directory.collectionAncestorNames(
-      library,
-      entry.key,
-      entry.parentKey,
-      serverId,
-      signal,
-    )
-    const path = [...ancestors, entry.name]
-    items.push({
-      ref: formatRef(refForLibrary(library, 'collection', entry.key, serverId)),
-      name: entry.name,
-      ...(entry.parentKey !== undefined
-        ? {
-            parentRef: formatRef(refForLibrary(library, 'collection', entry.parentKey, serverId)),
-          }
-        : {}),
-      path,
-      depth: path.length - 1,
-    })
-  }
+  const rows = Array.isArray(json) ? json : []
+  // Ancestor names resolve in parallel: each row's chain is its own TTL-cached
+  // walk, and a page of siblings shares most ancestors after the first fetch.
+  const resolved = await Promise.all(
+    rows.map(async (row) => {
+      const entry = normalizeScopeEntry(row)
+      const ancestors = await directory.collectionAncestorNames(
+        library,
+        entry.key,
+        entry.parentKey,
+        serverId,
+        signal,
+      )
+      const path = [...ancestors, entry.name]
+      const info: ZoteroCollectionInfo = {
+        ref: formatRef(refForLibrary(library, 'collection', entry.key, serverId)),
+        name: entry.name,
+        ...(entry.parentKey !== undefined
+          ? {
+              parentRef: formatRef(refForLibrary(library, 'collection', entry.parentKey, serverId)),
+            }
+          : {}),
+        path,
+        depth: path.length - 1,
+      }
+      return info
+    }),
+  )
+  const items = resolved
   // A page-local sort keeps output deterministic without re-sorting the
   // library; ordering across pages belongs to Zotero.
   items.sort((a, b) => a.name.localeCompare(b.name))
@@ -320,8 +324,7 @@ async function browseCollections(
 }
 
 async function browseSavedSearches(
-  deps: { client: ZoteroHttpClient; limits: LocalApiLimits },
-  directory: ScopeDirectory,
+  deps: { client: ZoteroHttpClient },
   request: ZoteroBrowseRequest,
   signal?: AbortSignal,
 ): Promise<ZoteroBrowseResult> {
@@ -386,7 +389,7 @@ async function browseSavedSearches(
  * narrow" a server-side round trip instead of client-side guessing.
  */
 async function browseTags(
-  deps: { client: ZoteroHttpClient; limits: LocalApiLimits },
+  deps: { client: ZoteroHttpClient },
   directory: ScopeDirectory,
   request: ZoteroBrowseRequest,
   signal?: AbortSignal,
@@ -465,8 +468,7 @@ async function browseTags(
 }
 
 async function browseItemTypes(
-  deps: { client: ZoteroHttpClient; limits: LocalApiLimits },
-  directory: ScopeDirectory,
+  deps: { client: ZoteroHttpClient },
   request: ZoteroBrowseRequest,
   signal?: AbortSignal,
 ): Promise<ZoteroBrowseResult> {
@@ -508,8 +510,7 @@ async function browseItemTypes(
  * what exists and ask for it by name.
  */
 async function browseItemFields(
-  deps: { client: ZoteroHttpClient; limits: LocalApiLimits },
-  directory: ScopeDirectory,
+  deps: { client: ZoteroHttpClient },
   request: ZoteroBrowseRequest,
   signal?: AbortSignal,
 ): Promise<ZoteroBrowseResult> {

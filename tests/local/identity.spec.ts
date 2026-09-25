@@ -8,6 +8,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import { ZoteroHttpClient } from '../../src/http-client.js'
 import { ZoteroWriteHttpClient } from '../../src/write-http.js'
 import { WriteAuthorizer } from '../../src/write-auth.js'
@@ -15,7 +16,8 @@ import {
   LocalApiProvider,
   type LocalApiProvider as LocalApiProviderType,
 } from '../../src/local/provider.js'
-import { parseRef } from '../../src/refs.js'
+import { parseRef, PERSONAL_LIBRARY } from '../../src/refs.js'
+import { ScopeDirectory } from '../../src/local/scope-directory.js'
 import {
   createProvider,
   setupProvider,
@@ -32,6 +34,7 @@ import {
 } from '../helpers/server/keys.js'
 import { collectionRow, item, versionHeaders } from '../helpers/server/objects.js'
 import { serveJson, serveStatus } from '../helpers/server/serve.js'
+import { deferred } from '../helpers/sync.js'
 
 let mock: ProviderHarness['mock']
 let provider: LocalApiProviderType
@@ -240,6 +243,158 @@ describe('Server-ID cache identity', () => {
     )
     const status = await writable.status()
     expect(status.write).toEqual({ enabled: true, authorized: false })
+  })
+
+  it('lets one cancelled waiter leave a shared scope read running for another', async () => {
+    const response = deferred<{ json: unknown; headers: Headers }>()
+    let reads = 0
+    const client = {
+      getJson: async () => {
+        reads += 1
+        return await response.promise
+      },
+    } as unknown as ZoteroHttpClient
+    const directory = new ScopeDirectory(client)
+    const alreadyAborted = new AbortController()
+    alreadyAborted.abort()
+    await expect(
+      directory.scopeListingOf('collections', { library: PERSONAL_LIBRARY }, alreadyAborted.signal),
+    ).rejects.toMatchObject({ code: TOOL_ABORTED })
+    expect(reads).toBe(0)
+    const controller = new AbortController()
+    const cancelled = directory.scopeListingOf(
+      'collections',
+      { library: PERSONAL_LIBRARY },
+      controller.signal,
+    )
+    const live = directory.scopeListingOf('collections', { library: PERSONAL_LIBRARY }, undefined)
+    controller.abort()
+    await expect(cancelled).rejects.toMatchObject({ code: TOOL_ABORTED })
+    response.resolve({ json: [], headers: new Headers() })
+    await expect(live).resolves.toMatchObject({ entries: [] })
+    expect(reads).toBe(1)
+  })
+
+  it('aborts a scope read when its sole waiter cancels', async () => {
+    let requestSignal: AbortSignal | undefined
+    const started = deferred<void>()
+    const client = {
+      getJson: async (
+        _path: string,
+        _query: URLSearchParams | undefined,
+        options: { signal?: AbortSignal } | undefined,
+      ) => {
+        requestSignal = options?.signal
+        started.resolve()
+        return await new Promise<{ json: unknown; headers: Headers }>((_, reject) => {
+          requestSignal?.addEventListener('abort', () => reject(new Error('aborted')), {
+            once: true,
+          })
+        })
+      },
+    } as unknown as ZoteroHttpClient
+    const directory = new ScopeDirectory(client)
+    const controller = new AbortController()
+    const pending = directory.scopeListingOf(
+      'collections',
+      { library: PERSONAL_LIBRARY },
+      controller.signal,
+    )
+    await started.promise
+    controller.abort()
+    await expect(pending).rejects.toMatchObject({ code: TOOL_ABORTED })
+    expect(requestSignal?.aborted).toBe(true)
+  })
+
+  it('does not serve a warm listing to an already-cancelled caller', async () => {
+    let reads = 0
+    const client = {
+      getJson: async () => {
+        reads += 1
+        return { json: [], headers: new Headers() }
+      },
+    } as unknown as ZoteroHttpClient
+    const directory = new ScopeDirectory(client)
+    await directory.scopeListingOf('collections', { library: PERSONAL_LIBRARY }, undefined)
+    const controller = new AbortController()
+    controller.abort()
+    await expect(
+      directory.scopeListingOf('collections', { library: PERSONAL_LIBRARY }, controller.signal),
+    ).rejects.toMatchObject({ code: TOOL_ABORTED })
+    expect(reads).toBe(1)
+  })
+
+  it('does not join a normal in-flight listing to a forced refresh', async () => {
+    const first = deferred<{ json: unknown; headers: Headers }>()
+    const second = deferred<{ json: unknown; headers: Headers }>()
+    const started = [deferred<void>(), deferred<void>()]
+    let reads = 0
+    const client = {
+      getJson: async () => {
+        const index = reads++
+        started[index]?.resolve()
+        return await (index === 0 ? first.promise : second.promise)
+      },
+    } as unknown as ZoteroHttpClient
+    const directory = new ScopeDirectory(client)
+    const normal = directory.scopeListingOf('collections', { library: PERSONAL_LIBRARY }, undefined)
+    await started[0]?.promise
+    const forced = directory.scopeListingOf(
+      'collections',
+      { library: PERSONAL_LIBRARY },
+      undefined,
+      { force: true },
+    )
+    await started[1]?.promise
+    expect(reads).toBe(2)
+    first.resolve({ json: [], headers: new Headers() })
+    second.resolve({ json: [], headers: new Headers() })
+    await expect(Promise.all([normal, forced])).resolves.toHaveLength(2)
+  })
+
+  it('keeps the newest forced listing when responses settle out of order', async () => {
+    const first = deferred<{ json: unknown; headers: Headers }>()
+    const second = deferred<{ json: unknown; headers: Headers }>()
+    const started = [deferred<void>(), deferred<void>()]
+    let reads = 0
+    const client = {
+      getJson: async () => {
+        const index = reads++
+        started[index]?.resolve()
+        return await (index === 0 ? first.promise : second.promise)
+      },
+    } as unknown as ZoteroHttpClient
+    const directory = new ScopeDirectory(client)
+    const firstForce = directory.scopeListingOf(
+      'collections',
+      { library: PERSONAL_LIBRARY },
+      undefined,
+      { force: true },
+    )
+    await started[0]?.promise
+    const secondForce = directory.scopeListingOf(
+      'collections',
+      { library: PERSONAL_LIBRARY },
+      undefined,
+      { force: true },
+    )
+    await started[1]?.promise
+    second.resolve({
+      json: [{ key: 'NEW12345', data: { name: 'new' } }],
+      headers: new Headers(),
+    })
+    first.resolve({
+      json: [{ key: 'OLD12345', data: { name: 'old' } }],
+      headers: new Headers(),
+    })
+    await expect(Promise.all([firstForce, secondForce])).resolves.toHaveLength(2)
+    const cached = await directory.scopeListingOf(
+      'collections',
+      { library: PERSONAL_LIBRARY },
+      undefined,
+    )
+    expect(cached.entries.map((entry) => entry.key)).toEqual(['NEW12345'])
+    expect(reads).toBe(2)
   })
 
   it('carries the error code in the status diagnosis so callers can route on it', async () => {

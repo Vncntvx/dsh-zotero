@@ -306,6 +306,35 @@ describe('browse: collections', () => {
     expect(rows.find((row) => row.name === 'Selfy')!.depth).toBe(0)
   })
 
+  it('caches a phantom parent 404 so a later page does not re-fetch it', async () => {
+    serveJson(
+      mock,
+      `${apiPath()}/collections/COLL0009/collections`,
+      [
+        collectionRow({
+          key: 'COLL0010',
+          data: { name: 'Orphan', parentCollection: 'MISSING1' },
+        }),
+      ],
+      { 'Total-Results': '1' },
+    )
+    await provider.browse({
+      kind: 'collections',
+      parentRef: 'zotero://user/0/collection/COLL0009',
+      offset: 0,
+      limit: 10,
+    })
+    await provider.browse({
+      kind: 'collections',
+      parentRef: 'zotero://user/0/collection/COLL0009',
+      offset: 0,
+      limit: 10,
+    })
+    expect(
+      mock.requests.filter((request) => request.pathname === `${apiPath()}/collections/MISSING1`),
+    ).toHaveLength(1)
+  })
+
   it('fails closed when parentRef library diverges from the request library', async () => {
     await zoteroError(
       provider.browse({
