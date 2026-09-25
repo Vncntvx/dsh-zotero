@@ -6,12 +6,17 @@
  * draft text is the literal 'true'/'false' the boolean spec round-trips;
  * checking the box stages the opposite value, and reset restages the
  * composition layer. Shared badge/reset/hint language matches the official
- * control.
+ * control. An optional risk gate intercepts enabling so sensitive flags
+ * (write access) cannot flip on without explicit acknowledgement.
  * @module dsh-zotero/client/fields
  */
 
-import { Tag } from '@deepseek-ai/dsh-client-ui-primitives'
+import { type ReactNode } from 'react'
+import { RiskConfirmation, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
+import { useRiskGate, type BooleanRiskCopy } from './risk-gate.ts'
 import css from './fields.module.css'
+
+export type { BooleanRiskCopy } from './risk-gate.ts'
 
 /** What the toggle needs: label, staged text, override state, and actions. */
 export interface BooleanFieldProps {
@@ -35,6 +40,8 @@ export interface BooleanFieldProps {
   onEdit: (text: string) => void
   /** Stage a clear so the field re-inherits the composition layer. */
   onReset: () => void
+  /** When set, enabling requires acknowledging this risk dialog first. */
+  risk?: BooleanRiskCopy
 }
 
 /**
@@ -42,7 +49,15 @@ export interface BooleanFieldProps {
  * @param props - the field's copy, its staged text, and the edit actions.
  * @returns the labelled toggle control.
  */
-export function BooleanField(props: BooleanFieldProps) {
+export function BooleanField(props: BooleanFieldProps): ReactNode {
+  const gate = useRiskGate()
+  const enabled = props.text === 'true'
+  const risk = props.risk
+
+  const stage = (next: boolean): void => {
+    props.onEdit(next ? 'true' : 'false')
+  }
+
   return (
     <div className={css.field}>
       <div className={css.toggleRow}>
@@ -50,10 +65,15 @@ export function BooleanField(props: BooleanFieldProps) {
           id={props.id}
           type="checkbox"
           className={css.toggle}
-          checked={props.text === 'true'}
+          checked={enabled}
           disabled={props.disabled}
           onChange={(event) => {
-            props.onEdit(event.target.checked ? 'true' : 'false')
+            const next = event.target.checked
+            if (next && risk !== undefined && !enabled) {
+              gate.request()
+              return
+            }
+            stage(next)
           }}
         />
         <label className={css.toggleLabel} htmlFor={props.id}>
@@ -74,6 +94,26 @@ export function BooleanField(props: BooleanFieldProps) {
         ) : null}
       </div>
       <p className={css.hint}>{props.hint}</p>
+      {risk !== undefined ? (
+        <RiskConfirmation
+          open={gate.confirming}
+          title={risk.title}
+          description={risk.description}
+          acknowledgeLabel={risk.acknowledgeLabel}
+          cancelLabel={risk.cancelLabel}
+          closeLabel={risk.closeLabel}
+          confirmLabel={risk.confirmLabel}
+          acknowledged={gate.acknowledged}
+          disabled={props.disabled}
+          onAcknowledgedChange={gate.setAcknowledged}
+          onCancel={gate.cancel}
+          onConfirm={() => {
+            gate.confirm(() => {
+              stage(true)
+            })
+          }}
+        />
+      ) : null}
     </div>
   )
 }

@@ -82,6 +82,30 @@ export interface PrimitivesStub extends Omit<RealForm, 'SettingsValueField'> {
   readonly Tag: typeof TagStub
   /** The clipboard spy assertions read back. */
   readonly writeClipboard: MockedFunction<WriteClipboard>
+  /** The switch toggle button. */
+  readonly Switch: (props: {
+    checked: boolean
+    onChange?: (next: boolean) => void
+    label: string
+    disabled?: boolean
+    title?: string
+    className?: string
+  }) => ReactElement
+  /** The risk acknowledgement dialog, as its DOM face. */
+  readonly RiskConfirmation: (props: {
+    open: boolean
+    title: string
+    description: string
+    acknowledgeLabel: string
+    cancelLabel: string
+    closeLabel: string
+    confirmLabel: string
+    acknowledged: boolean
+    disabled?: boolean
+    onAcknowledgedChange: (acknowledged: boolean) => void
+    onCancel: () => void
+    onConfirm: () => void
+  }) => ReactElement | null
 }
 
 /** The icon stubs: an inline glyph carrying the icon name. */
@@ -243,6 +267,61 @@ export function primitivesStub(overrides: Partial<PrimitivesStub> = {}): Primiti
     Tooltip: ({ children }) => children,
     Tag: TagStub,
     writeClipboard: vi.fn(async () => true),
+    Switch: ({ checked, onChange, label, disabled }) =>
+      createElement('input', {
+        type: 'checkbox',
+        role: 'switch',
+        'aria-label': label,
+        'aria-checked': checked,
+        checked,
+        disabled,
+        onChange: (event: { target: { checked: boolean } }) => {
+          onChange?.(event.target.checked)
+        },
+      }),
+    RiskConfirmation: ({
+      open,
+      title,
+      description,
+      acknowledgeLabel,
+      confirmLabel,
+      cancelLabel,
+      acknowledged,
+      disabled,
+      onAcknowledgedChange,
+      onCancel,
+      onConfirm,
+    }) => {
+      if (!open) return null
+      return createElement(
+        'div',
+        { 'data-risk-confirmation': 'open', role: 'dialog', 'aria-label': title },
+        createElement('p', null, description),
+        createElement(
+          'label',
+          null,
+          createElement('input', {
+            type: 'checkbox',
+            checked: acknowledged,
+            disabled,
+            onChange: (event: { target: { checked: boolean } }) => {
+              onAcknowledgedChange(event.target.checked)
+            },
+          }),
+          createElement('span', null, acknowledgeLabel),
+        ),
+        createElement('button', { type: 'button', onClick: onCancel }, cancelLabel),
+        createElement(
+          'button',
+          {
+            type: 'button',
+            disabled: disabled || !acknowledged,
+            onClick: onConfirm,
+          },
+          confirmLabel,
+        ),
+      )
+    },
     ...overrides,
   } as PrimitivesStub
 }

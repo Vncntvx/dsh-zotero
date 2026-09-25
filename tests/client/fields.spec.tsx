@@ -54,4 +54,46 @@ describe('BooleanField', () => {
     expect(screen.queryByText(t('overridden'))).toBeNull()
     expect(screen.queryByText(t('reset'))).toBeNull()
   })
+
+  it('requires risk acknowledgement before staging an enable', () => {
+    const onEdit = vi.fn()
+    const risk = {
+      title: t('writeRiskTitle'),
+      description: t('writeRiskDescription'),
+      acknowledgeLabel: t('writeRiskAcknowledge'),
+      cancelLabel: t('writeRiskCancel'),
+      closeLabel: t('writeRiskClose'),
+      confirmLabel: t('writeRiskConfirm'),
+    }
+    render(<BooleanField {...base} text="false" overridden={false} risk={risk} onEdit={onEdit} />)
+
+    fireEvent.click(screen.getByLabelText(base.label))
+    expect(onEdit).not.toHaveBeenCalled()
+    expect(screen.getByRole('dialog', { name: risk.title })).toBeDefined()
+
+    fireEvent.click(screen.getByRole('button', { name: risk.confirmLabel }))
+    expect(onEdit).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByLabelText(risk.acknowledgeLabel))
+    fireEvent.click(screen.getByRole('button', { name: risk.confirmLabel }))
+    expect(onEdit).toHaveBeenCalledWith('true')
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('disables without the risk dialog when the toggle is already on', () => {
+    const onEdit = vi.fn()
+    const risk = {
+      title: t('writeRiskTitle'),
+      description: t('writeRiskDescription'),
+      acknowledgeLabel: t('writeRiskAcknowledge'),
+      cancelLabel: t('writeRiskCancel'),
+      closeLabel: t('writeRiskClose'),
+      confirmLabel: t('writeRiskConfirm'),
+    }
+    render(<BooleanField {...base} text="true" overridden={false} risk={risk} onEdit={onEdit} />)
+
+    fireEvent.click(screen.getByLabelText(base.label))
+    expect(onEdit).toHaveBeenCalledWith('false')
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
 })

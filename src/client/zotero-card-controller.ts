@@ -41,10 +41,14 @@ import type { ResolvedConfig } from '../config.js'
  * The section fields this card edits — the host `Config` surface, all of it,
  * in display order. `group` names the page's display group (a locale key).
  * The Web toggle leads the page: it gates the whole conversation tab, so it
- * is the first thing a visitor sees.
+ * is the first thing a visitor sees. The write family sits immediately under
+ * it — the sensitive surface a visitor needs before the technical limits.
  */
 const FIELD_SPECS = [
   { key: 'webEnabled', kind: 'boolean', group: 'groupWeb' },
+  { key: 'writeEnabled', kind: 'boolean', group: 'groupWrite' },
+  { key: 'writeConfirm', kind: 'boolean', group: 'groupWrite' },
+  { key: 'writePersistKey', kind: 'boolean', group: 'groupWrite' },
   { key: 'baseUrl', kind: 'text', group: 'groupConnection' },
   { key: 'provider', kind: 'text', group: 'groupConnection' },
   { key: 'timeoutMs', kind: 'number', group: 'groupConnection' },
@@ -66,9 +70,6 @@ const FIELD_SPECS = [
   { key: 'maxChangesResults', kind: 'number', group: 'groupOutput' },
   { key: 'defaultStyle', kind: 'text', group: 'groupDefaults' },
   { key: 'defaultLocale', kind: 'text', group: 'groupDefaults' },
-  { key: 'writeEnabled', kind: 'boolean', group: 'groupWrite' },
-  { key: 'writeConfirm', kind: 'boolean', group: 'groupWrite' },
-  { key: 'writePersistKey', kind: 'boolean', group: 'groupWrite' },
 ] as const satisfies readonly {
   key: keyof ResolvedConfig
   kind: 'text' | 'number' | 'boolean'

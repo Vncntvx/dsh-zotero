@@ -15,6 +15,7 @@
 import type { ReactNode } from 'react'
 import { SettingsValueField } from '@deepseek-ai/dsh-client-ui-primitives'
 import { BooleanField } from './fields.tsx'
+import { writeRiskCopy } from './risk-gate.ts'
 import type { SettingsFormActions } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
   BOOLEAN_FIELD_KEYS,
@@ -94,6 +95,7 @@ function field(
         id={`zotero-settings-${key}`}
         label={t(key)}
         hint={t(`${key}Hint`)}
+        risk={key === 'writeEnabled' ? writeRiskCopy(t) : undefined}
         {...shared}
       />
     )
