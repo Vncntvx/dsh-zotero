@@ -510,7 +510,12 @@ describe('capability gating', () => {
         'changes',
         service.changes({
           library: { type: 'user', id: 0 },
-          since: { serverId: 'S1', library: { type: 'user', id: 0 }, version: 1 },
+          since: {
+            serverId: 'S1',
+            library: { type: 'user', id: 0 },
+            version: 1,
+            include: ['items', 'collections', 'savedSearches', 'deleted'],
+          },
         }),
       ],
     ]

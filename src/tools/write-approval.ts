@@ -40,10 +40,18 @@ export const APPROVE_LABEL = 'Apply'
 export const WRITE_PLAN_QUESTION_ID = 'zotero-write-plan'
 
 /**
+ * The shared model-facing sentence for the plan-review outcome. Every write
+ * tool appends this so the declined contract cannot drift between tools.
+ */
+export const WRITE_PLAN_OUTCOME_DESCRIPTION =
+  'When writeConfirm is on (the default) the write first shows a plan the user approves; kind "declined" means the user answered the plan without approving and nothing was written — do not retry unasked.'
+
+/**
  * Whether a settled ask rejection carries the given user-questions code.
  * The wire restores `UserQuestionError` (name + code); some paths surface a
- * `HarnessError` with the same code string. Match on name/code so a restored
- * value is recognized even if its class identity was lost in transit.
+ * `HarnessError` with the same code string. Match the exact code and the
+ * documented harness/user-question error names, including a transported
+ * value whose class identity was lost in transit.
  * @param error - the rejected ask value.
  * @param code - the stable code to match.
  * @returns true when the rejection is that ask settlement.
@@ -106,7 +114,10 @@ export async function askPlanApproval(
       ...(exec.agent !== undefined ? { agent: exec.agent } : {}),
       signal: exec.signal,
     })
-    return (answer.answers[0]?.selected ?? []).includes(APPROVE_LABEL)
+    const items = answer.answers.filter((a) => a.id === WRITE_PLAN_QUESTION_ID)
+    const item = items.length === 1 ? items[0] : undefined
+    if (item === undefined || item.custom !== undefined) return false
+    return item.selected.length === 1 && item.selected[0] === APPROVE_LABEL
   } catch (error) {
     if (isAskCode(error, 'ASK_ABORTED') || exec.signal.aborted) {
       throw new HarnessError(TOOL_ABORTED_MESSAGE, TOOL_ABORTED, { cause: error })

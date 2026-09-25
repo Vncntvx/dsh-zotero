@@ -331,8 +331,8 @@ export function renderBrowse(_args: BrowseArgs, value: BrowseOutput): ContentBlo
   const items = value.items as Array<Record<string, unknown>>
   items.forEach((it, idx) => {
     const n = idx + 1
-    if (asRecord(it.library) !== undefined) {
-      const lib = asRecord(it.library)!
+    const lib = asRecord(it.library)
+    if (lib !== undefined) {
       const libId = `${lib.type}/${lib.id}`
       const name = (it.name as string | undefined) ?? libId
       lines.push(`${n}. ${name} — ${libId}`)

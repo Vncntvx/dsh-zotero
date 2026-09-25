@@ -112,7 +112,7 @@ const COVERAGE_RECORD = {
   },
 } as const
 
-const ATTACHMENT_RECORD = {
+const RETRIEVE_ATTACHMENT_RECORD = {
   type: 'object',
   additionalProperties: false,
   properties: {
@@ -133,7 +133,7 @@ const RETRIEVE_OUTPUT_SCHEMA = {
     attachmentRef: { type: 'string' },
     attachmentContentType: { type: 'string' },
     coverage: COVERAGE_RECORD,
-    attachments: { type: 'array', items: ATTACHMENT_RECORD },
+    attachments: { type: 'array', items: RETRIEVE_ATTACHMENT_RECORD },
     evidence: { type: 'array', required: true, items: EVIDENCE_RECORD },
     truncated: { type: 'boolean', required: true },
     sourcesSkipped: {

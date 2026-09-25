@@ -23,11 +23,12 @@ import {
   writeListTooLongMessage,
   writeNoteTooLongMessage,
 } from '../errors.js'
+import { isRefString } from '../refs.js'
 import { metaRecordOf, renderDeclined } from './present.js'
-import { invalid, parseSupportedRef, REF_ARG_HINT } from './validate.js'
-import { askPlanApproval } from './write-approval.js'
+import { assertNonBlank, invalid, parseWritableRef, WRITE_REF_ARG_HINT } from './validate.js'
+import { askPlanApproval, WRITE_PLAN_OUTCOME_DESCRIPTION } from './write-approval.js'
 import type { ZoteroService } from '../service.js'
-import type { ZoteroCreateNoteRequest } from '../types.js'
+import type { ZoteroCreateNoteOutcome, ZoteroCreateNoteRequest } from '../types.js'
 
 const CREATE_NOTE_PARAMETERS = {
   markdown: {
@@ -38,7 +39,7 @@ const CREATE_NOTE_PARAMETERS = {
   },
   parentItem: {
     type: 'string',
-    description: `A ${REF_ARG_HINT} ref the note attaches under as a child note; omit for a standalone note. A child note inherits its parent's collections.`,
+    description: `A ${WRITE_REF_ARG_HINT} ref the note attaches under as a child note; omit for a standalone note. A child note inherits its parent's collections.`,
   },
   collections: {
     type: 'array',
@@ -54,7 +55,7 @@ const CREATE_NOTE_PARAMETERS = {
   sourceRefs: {
     type: 'array',
     items: { type: 'string' },
-    description: `Item ${REF_ARG_HINT} refs the note derives from; recorded as dc:relation source links and echoed in the result.`,
+    description: `Item ${WRITE_REF_ARG_HINT} refs the note derives from; recorded as dc:relation source links and echoed in the result.`,
   },
 } as const
 
@@ -98,6 +99,25 @@ const CREATE_NOTE_OUTPUT_SCHEMA = {
         serverId: { type: 'string' },
       },
     },
+    {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        kind: { type: 'string', enum: ['committed-unverified'], required: true },
+        committed: { type: 'boolean', enum: [true], required: true },
+        retryable: { type: 'boolean', enum: [false], required: true },
+        reason: {
+          type: 'string',
+          enum: ['saved-state-unverified', 'commit-unknown'],
+          required: true,
+        },
+        ref: { type: 'string' },
+        key: { type: 'string' },
+        version: { type: 'integer' },
+        libraryVersion: { type: 'integer' },
+        serverId: { type: 'string', required: true },
+      },
+    },
   ],
 } as const
 
@@ -114,13 +134,13 @@ export function createNotePlan(args: CreateNoteArgs): string {
       ? '(inherited from parent item)'
       : args.collections === undefined || args.collections.length === 0
         ? '(none)'
-        : args.collections.join(', ')
+        : args.collections.map((collection) => collection.trim()).join(', ')
   return [
     '**Create a Zotero research note**',
     '- Library: zotero://user/0 (the local personal library)',
     `- Kind: ${args.parentItem === undefined ? 'standalone note' : `child note under ${args.parentItem}`}`,
     `- Collections: ${collections}`,
-    `- Tags: ${args.tags === undefined || args.tags.length === 0 ? '(none)' : args.tags.join(', ')}`,
+    `- Tags: ${args.tags === undefined || args.tags.length === 0 ? '(none)' : args.tags.map((tag) => tag.trim()).join(', ')}`,
     `- Sources: ${args.sourceRefs === undefined || args.sourceRefs.length === 0 ? '(none)' : args.sourceRefs.join(', ')}`,
     `- Body preview: ${preview}`,
     'The markdown is converted to Zotero note HTML; unknown syntax is escaped, never executed.',
@@ -131,9 +151,11 @@ export function createNotePlan(args: CreateNoteArgs): string {
  * Turn model arguments into the domain request, refusing every combination
  * the schema cannot express. Cross-field rules live here (and again in the
  * write domain for non-tool callers) so a malformed ask fails before the
- * plan card — never after the user approved a write that cannot run.
+ * plan card. Collection names still resolve in the write domain after
+ * approval (they are a live lookup, not a malformed-ask condition).
  */
 function buildRequest(args: CreateNoteArgs): ZoteroCreateNoteRequest {
+  assertNonBlank('markdown', args.markdown)
   if (args.markdown.length > ZOTERO_WRITE_NOTE_MAX_CHARS) {
     invalid(writeNoteTooLongMessage(ZOTERO_WRITE_NOTE_MAX_CHARS))
   }
@@ -147,22 +169,27 @@ function buildRequest(args: CreateNoteArgs): ZoteroCreateNoteRequest {
       invalid(writeListTooLongMessage(name, ZOTERO_WRITE_LIST_MAX_ITEMS))
     }
   }
+  const collections = args.collections?.map((value) => {
+    const collection = assertNonBlank('collections', value)
+    if (isRefString(collection)) parseWritableRef(collection, ['collection'])
+    return collection
+  })
+  const tags = args.tags?.map((tag) => assertNonBlank('tags', tag))
   const parentItem = args.parentItem
-  const collections = args.collections
   // Same constant the write domain throws — dual-end, one wording.
   if (parentItem !== undefined && collections !== undefined && collections.length > 0) {
     invalid(WRITE_CHILD_COLLECTIONS_MESSAGE)
   }
   return {
     markdown: args.markdown,
-    ...(parentItem !== undefined ? { parentItem: parseSupportedRef(parentItem, ['item']) } : {}),
+    ...(parentItem !== undefined ? { parentItem: parseWritableRef(parentItem, ['item']) } : {}),
     // Empty list == absent: a standalone note with [] joins no collection;
     // a child note with [] inherits the parent. Both leave the request
     // without a collections key, which is what the domain applies.
     ...(collections !== undefined && collections.length > 0 ? { collections } : {}),
-    ...(args.tags !== undefined ? { tags: args.tags } : {}),
+    ...(tags !== undefined ? { tags } : {}),
     ...(args.sourceRefs !== undefined
-      ? { sourceRefs: args.sourceRefs.map((ref) => parseSupportedRef(ref, ['item'])) }
+      ? { sourceRefs: args.sourceRefs.map((ref) => parseWritableRef(ref, ['item'])) }
       : {}),
   }
 }
@@ -170,6 +197,23 @@ function buildRequest(args: CreateNoteArgs): ZoteroCreateNoteRequest {
 export function renderCreateNote(_args: CreateNoteArgs, value: CreateNoteOutput): ContentBlock[] {
   if (value.kind === 'declined') {
     return renderDeclined()
+  }
+  if (value.kind === 'committed-unverified') {
+    const identity =
+      value.key !== undefined
+        ? ` (key ${value.key})`
+        : value.ref !== undefined
+          ? ` (ref ${value.ref})`
+          : ''
+    const reconciliation =
+      value.key !== undefined || value.ref !== undefined
+        ? 'reconcile the note by its key/ref'
+        : 'reconcile by checking Zotero for the note before taking any further action'
+    const text =
+      value.reason === 'commit-unknown'
+        ? `Zotero may have committed the note${identity}, but the response did not prove the outcome. Do not retry; ${reconciliation}.`
+        : `Zotero committed the note${identity}, but its saved state could not be verified. Do not retry; ${reconciliation}.`
+    return [{ type: 'text', text }]
   }
   const lines = [`Created note ${value.ref} (version ${value.version}).`]
   if (value.parentItem !== undefined) lines.push(`Parent: ${value.parentItem}`)
@@ -191,6 +235,15 @@ function presentCreateNoteResult(
   if (record.kind === 'declined') {
     return { card: 'generic', title: 'Zotero note: declined, nothing written' }
   }
+  if (record.kind === 'committed-unverified') {
+    return {
+      card: 'generic',
+      title:
+        record.reason === 'commit-unknown'
+          ? 'Zotero note outcome unknown; do not retry'
+          : 'Zotero note committed but not verified; do not retry',
+    }
+  }
   const ref = typeof record.ref === 'string' ? record.ref : ''
   return { card: 'generic', title: `Zotero note created${ref === '' ? '' : `: ${ref}`}` }
 }
@@ -200,7 +253,9 @@ export function registerCreateNoteTool(ctx: Context, service: ZoteroService): ()
     defineTool({
       name: 'zotero_create_note',
       description:
-        'Create a research note in the Zotero personal library — standalone, or a child note under a parent item — with tags, collections, and source relations. The markdown body is converted to Zotero note HTML under an escape-unknown grammar (raw HTML is escaped, never executed). Collections apply to standalone notes only; a child-note call that also passes non-empty collections is refused as ZOTERO_INVALID_ARGUMENT before any plan is shown (child notes inherit their parent item\'s collections). When writeConfirm is on (the default) the write first shows a plan the user approves; Zotero itself may show its authorization dialog on first use. kind "declined" means the user answered the plan without approving and nothing was written — do not retry unasked.',
+        "Create a research note in the Zotero personal library — standalone, or a child note under a parent item — with tags, collections, and source relations. The markdown body is converted to Zotero note HTML under an escape-unknown grammar (raw HTML is escaped, never executed). Collections apply to standalone notes only; a child-note call that also passes non-empty collections is refused as ZOTERO_INVALID_ARGUMENT before any plan is shown (child notes inherit their parent item's collections). Zotero itself may show its authorization dialog on first use. " +
+        WRITE_PLAN_OUTCOME_DESCRIPTION +
+        ' kind "committed-unverified" means the write must be treated as committed although its response could not be verified; do not retry, reconcile by key/ref when available.',
       parameters: CREATE_NOTE_PARAMETERS,
       output: {
         schema: CREATE_NOTE_OUTPUT_SCHEMA,
@@ -213,7 +268,13 @@ export function registerCreateNoteTool(ctx: Context, service: ZoteroService): ()
                 key: value.key,
                 version: value.version,
               }
-            : { kind: 'declined' },
+            : value.kind === 'committed-unverified'
+              ? {
+                  kind: 'committed-unverified',
+                  reason: value.reason,
+                  ...(value.key === undefined ? {} : { key: value.key }),
+                }
+              : { kind: 'declined' },
       },
       presentCall: (args) => ({
         card: 'generic',
@@ -222,7 +283,9 @@ export function registerCreateNoteTool(ctx: Context, service: ZoteroService): ()
         rawInput: args.parentItem ?? '(standalone)',
       }),
       presentResult: presentCreateNoteResult,
-      async execute(args, exec) {
+      // timeoutMs is deliberately omitted: the plan-review card waits on user
+      // think time, which is not a stuck request.
+      async execute(args, exec): Promise<ZoteroCreateNoteOutcome> {
         // Validate before the plan card: a malformed ask should never bother
         // the user with an approval for a call that cannot run. No
         // connectivity ask wraps the write: that helper retries, and a

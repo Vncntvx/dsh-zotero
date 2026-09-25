@@ -17,6 +17,7 @@ import {
   CHANGES_NOT_ADVANCED_LIBRARY_MOVED,
   CHANGES_NOT_ADVANCED_NO_VERSION,
   CHANGES_NOT_ADVANCED_UNVERIFIED,
+  CHANGES_NOT_ADVANCED_FULLTEXT,
   FULLTEXT_COUNTER_NOTE,
   otherDeletedMessage,
   renderChanges,
@@ -81,6 +82,7 @@ describe('zotero_changes tool', () => {
       serverId: 'S1',
       library: { type: 'user', id: 0 },
       version: 42,
+      include: ['items', 'collections', 'savedSearches', 'deleted'],
     })
     expect(value.changed).toEqual({})
     const text = (result.content[0] as { text: string }).text
@@ -238,6 +240,7 @@ describe('zotero_changes tool', () => {
       serverId: 'S2',
       library: { type: 'group', id: 42 },
       version: 9,
+      include: ['items'],
     })
   })
 
@@ -477,12 +480,13 @@ describe('zotero_changes tool', () => {
     expect(reasonsText).toContain('collections')
     expect(reasonsText).toContain('fulltext')
 
-    const fulltext = renderChanges({}, {
+    const fulltext = renderChanges({ include: ['fulltext'] }, {
       fromVersion: 1,
-      cursor: { serverId: 'S1', library: { type: 'user', id: 0 }, version: 220 },
       changed: { fulltextAttachments: [{ key: 'WXYZ6789', version: 90071 }] },
       totals: { fulltextAttachments: 1 },
     } as never)
-    expect((fulltext[0] as { text: string }).text).toContain(FULLTEXT_COUNTER_NOTE)
+    const fulltextText = (fulltext[0] as { text: string }).text
+    expect(fulltextText).toContain(FULLTEXT_COUNTER_NOTE)
+    expect(fulltextText).toContain(CHANGES_NOT_ADVANCED_FULLTEXT)
   })
 })

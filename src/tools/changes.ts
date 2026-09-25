@@ -22,7 +22,10 @@ import {
 } from '@deepseek-ai/dsh-tools'
 import { withConnectivityAsk } from '../ask.js'
 import { asRecord } from '../json.js'
-import { DEFAULT_CHANGES_INCLUDES as DEFAULT_INCLUDES } from '../local/changes-domain.js'
+import {
+  ALL_CHANGES_INCLUDES,
+  DEFAULT_CHANGES_INCLUDES as DEFAULT_INCLUDES,
+} from '../local/changes-domain.js'
 import { boundedPresentationMeta } from '../presentation-meta.js'
 import { metaRecordOf } from './present.js'
 import {
@@ -41,13 +44,7 @@ import type {
 } from '../types.js'
 import type { ZoteroService } from '../service.js'
 
-const ALL_INCLUDES = [
-  'items',
-  'collections',
-  'savedSearches',
-  'fulltext',
-  'deleted',
-] as const satisfies readonly ZoteroChangesInclude[]
+const ALL_INCLUDES = ALL_CHANGES_INCLUDES
 
 /** Host kinds the tool's include enum does not offer; a non-empty union fails the build. */
 type MissingInclude = Exclude<ZoteroChangesInclude, (typeof ALL_INCLUDES)[number]>
@@ -70,14 +67,34 @@ const LIBRARY_SCHEMA = {
   },
 } as const
 
-/** The checkpoint the tool hands back and accepts, provenance included. */
-const CURSOR_SCHEMA = {
+/** The checkpoint the tool hands back, provenance and coverage included. */
+const CURSOR_OUTPUT_SCHEMA = {
   type: 'object',
   additionalProperties: false,
   properties: {
     serverId: { type: 'string', required: true },
     library: { ...LIBRARY_SCHEMA, required: true },
     version: { type: 'integer', required: true },
+    include: {
+      type: 'array',
+      items: { type: 'string', enum: [...ALL_INCLUDES] },
+      required: true,
+    },
+  },
+} as const
+
+/** The checkpoint passed into since: include is optional and defaults to call kinds. */
+const CURSOR_INPUT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    serverId: { type: 'string', required: true },
+    library: { ...LIBRARY_SCHEMA, required: true },
+    version: { type: 'integer', required: true },
+    include: {
+      type: 'array',
+      items: { type: 'string', enum: [...ALL_INCLUDES] },
+    },
   },
 } as const
 
@@ -87,9 +104,9 @@ const CHANGES_PARAMETERS = {
     description: 'Library to diff; omitted defaults to personal user/0.',
   },
   since: {
-    ...CURSOR_SCHEMA,
+    ...CURSOR_INPUT_SCHEMA,
     description:
-      'The cursor to diff from, passed back verbatim from an earlier zotero_changes result. It carries the instance, the library and the version it belongs to: a bare version number is not accepted, because the same number means an unrelated counter in another database or library. A cursor from another instance is rejected, and one for another library is an argument error. Never advance from a result without a cursor: that read did not verify the whole range. A cursor covers only the resource kinds the call that produced it included. Omit to take a baseline reading (current version, no diffs).',
+      'The cursor to diff from, passed back verbatim from an earlier zotero_changes result. It carries the instance, the library, the version, and the resource kinds it covers: a bare version number is not accepted, because the same number means an unrelated counter in another database or library. A cursor from another instance is rejected, one for another library is an argument error, and its include set must match this call. Never advance from a result without a cursor: that read did not verify the whole range. Omit to take a baseline reading (current version, no diffs).',
   },
   include: {
     type: 'array',
@@ -162,7 +179,7 @@ const CHANGES_OUTPUT_SCHEMA = {
     library: LIBRARY_SCHEMA,
     serverId: { type: 'string' },
     fromVersion: { type: 'integer' },
-    cursor: CURSOR_SCHEMA,
+    cursor: CURSOR_OUTPUT_SCHEMA,
     libraryChanged: { type: 'boolean' },
     versionUnavailable: { type: 'boolean' },
     changed: {
@@ -226,23 +243,35 @@ export const FULLTEXT_COUNTER_NOTE =
  * id, a version outside a counter's range, or a library this plugin does not
  * serve would otherwise pass through as an unpinned cursor.
  */
-function parseCursor(value: ChangesArgs['since']): ZoteroChangesCursor | undefined {
+function parseCursor(
+  value: ChangesArgs['since'],
+  callInclude?: readonly ZoteroChangesInclude[],
+): ZoteroChangesCursor | undefined {
   if (value === undefined) return undefined
   const serverId = value.serverId.trim()
   if (serverId === '') {
     invalid('since.serverId must be the instance id the cursor came from')
   }
   assertIntInRange('since.version', value.version, 0, Number.MAX_SAFE_INTEGER)
-  return { serverId, library: requireLibrary(value.library), version: value.version }
+  const include = value.include ?? callInclude ?? DEFAULT_INCLUDES
+  if (!Array.isArray(include) || include.length === 0 || new Set(include).size !== include.length) {
+    invalid('since.include must list the resource kinds covered by the cursor')
+  }
+  return {
+    serverId,
+    library: requireLibrary(value.library),
+    version: value.version,
+    include: [...include],
+  }
 }
 
 function buildRequest(args: ChangesArgs): ZoteroChangesRequest {
   const library = parseLibrary(args.library)
-  const since = parseCursor(args.since)
   if (args.include !== undefined) {
     assertNonEmptyList(args.include as readonly unknown[], CHANGES_INCLUDE_EMPTY_MESSAGE)
   }
-  const include = new Set<ZoteroChangesInclude>(args.include ?? DEFAULT_INCLUDES)
+  const since = parseCursor(args.since, args.include)
+  const include = new Set<ZoteroChangesInclude>(args.include ?? since?.include ?? DEFAULT_INCLUDES)
   return {
     ...(library !== undefined ? { library: library as SupportedLocalLibrary } : {}),
     ...(since !== undefined ? { since } : {}),
@@ -274,6 +303,8 @@ export const CHANGES_NOT_ADVANCED_NO_VERSION =
   'version not advanced: this Zotero build reported no library version for this read, so the diff cannot be pinned to one.'
 export const CHANGES_NOT_ADVANCED_UNVERIFIED =
   'version not advanced: the read did not verify the whole range — do not reuse a version from this call.'
+export const CHANGES_NOT_ADVANCED_FULLTEXT =
+  'version not advanced: fulltext uses an independent index counter, so this mixed listing has no library cursor; run a library-only diff when you need a resumable cursor.'
 
 /** The positive statement an observed, empty tombstone read renders. */
 export const CHANGES_NO_DELETIONS_MESSAGE = 'Deletions: none in this range.'
@@ -283,7 +314,7 @@ export function otherDeletedMessage(count: number): string {
   return `Other deleted objects: ${count} (kinds this tool does not report).`
 }
 
-export function renderChanges(_args: ChangesArgs, value: ChangesOutput): ContentBlock[] {
+export function renderChanges(args: ChangesArgs, value: ChangesOutput): ContentBlock[] {
   const lines = []
   const cursor = value.cursor
   if (value.fromVersion === undefined) {
@@ -300,6 +331,8 @@ export function renderChanges(_args: ChangesArgs, value: ChangesOutput): Content
     lines.push(`Changes ${value.fromVersion} → ${CHANGES_NOT_ADVANCED_LIBRARY_MOVED}`)
   } else if (value.versionUnavailable === true) {
     lines.push(`Changes ${value.fromVersion} → ${CHANGES_NOT_ADVANCED_NO_VERSION}`)
+  } else if (args.include?.includes('fulltext') === true) {
+    lines.push(`Changes ${value.fromVersion} → ${CHANGES_NOT_ADVANCED_FULLTEXT}`)
   } else {
     lines.push(`Changes ${value.fromVersion} → ${CHANGES_NOT_ADVANCED_UNVERIFIED}`)
   }

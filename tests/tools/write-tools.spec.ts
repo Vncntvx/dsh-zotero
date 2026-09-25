@@ -14,6 +14,7 @@ import {
   ZOTERO_INVALID_ARGUMENT,
   ZOTERO_WRITE_APPROVAL_UNAVAILABLE,
 } from '../../src/errors.js'
+import { WRITE_PLAN_QUESTION_ID } from '../../src/tools/write-approval.js'
 
 const SERVER_ID = 'srv-write-tools-001'
 const NEW_KEY = 'NEWNOTE1'
@@ -30,6 +31,8 @@ class ScriptedQuestions extends Service {
   static readonly script: string[][] = []
   /** When set, the next ask rejects with this error (one-shot). */
   static rejection: { code: string; message: string } | undefined
+  /** When set, returns this raw answer response directly. */
+  static customAnswers: AskUserQuestionAnswer | undefined
   readonly asks: AskUserQuestionRequest[] = []
 
   constructor(ctx: Context) {
@@ -45,6 +48,11 @@ class ScriptedQuestions extends Service {
       error.name = 'UserQuestionError'
       error.code = rejection.code
       throw error
+    }
+    if (ScriptedQuestions.customAnswers !== undefined) {
+      const answers = ScriptedQuestions.customAnswers
+      ScriptedQuestions.customAnswers = undefined
+      return answers
     }
     const answers = ScriptedQuestions.script
     return {
@@ -86,20 +94,37 @@ function serveWrites(mock: MockZotero): void {
       { key: COLLECTION_KEY, version: 3, data: { key: COLLECTION_KEY, name: '方法论' } },
     ]),
   )
-  mock.route('POST', '/api/users/0/items', (_req, res, helpers) =>
-    helpers.raw(
+  mock.route('POST', '/api/users/0/items', (_req, res, helpers) => {
+    const entry = JSON.parse(mock.requests[mock.requests.length - 1]?.body ?? '[]')[0] as Record<
+      string,
+      unknown
+    >
+    return helpers.raw(
       200,
       { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '42' },
       JSON.stringify({
         successful: {
-          '0': { key: NEW_KEY, version: 42, data: { key: NEW_KEY, version: 42, itemType: 'note' } },
+          '0': {
+            key: NEW_KEY,
+            version: 42,
+            data: {
+              key: NEW_KEY,
+              version: 42,
+              itemType: 'note',
+              note: '<p>x</p>',
+              ...(entry.parentItem === undefined ? {} : { parentItem: entry.parentItem }),
+              tags: entry.tags ?? [],
+              collections: entry.collections ?? [],
+              relations: entry.relations ?? { 'dc:relation': [] },
+            },
+          },
         },
         success: { '0': NEW_KEY },
         unchanged: {},
         failed: {},
       }),
-    ),
-  )
+    )
+  })
 }
 
 beforeEach(() => {
@@ -159,6 +184,71 @@ describe('zotero_create_note', () => {
       itemType: 'note',
       note: '<p><strong>方法</strong>笔记</p>',
     })
+  })
+
+  it('returns a non-retryable committed-unverified result for a committed note', async () => {
+    const lane = await bootLane({ writeEnabled: true })
+    lane.mock.route('GET', '/api/', (_req, res, helpers) =>
+      helpers.raw(200, { 'Zotero-Server-ID': SERVER_ID }, JSON.stringify({})),
+    )
+    lane.mock.route('POST', '/api/local/authorize', (_req, res, helpers) =>
+      helpers.raw(
+        200,
+        { 'Zotero-Server-ID': SERVER_ID },
+        JSON.stringify({ key: 'R'.repeat(32), remember: false }),
+      ),
+    )
+    lane.mock.route('POST', '/api/users/0/items', (_req, res, helpers) =>
+      helpers.raw(
+        200,
+        { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '42' },
+        JSON.stringify({
+          successful: { '0': { key: NEW_KEY, version: 42 } },
+          success: { '0': NEW_KEY },
+          unchanged: {},
+          failed: {},
+        }),
+      ),
+    )
+    const result = expectValue(
+      await lane.runTool('zotero_create_note', { markdown: 'x' }),
+      'zotero_create_note',
+    )
+    expect(result.value).toMatchObject({
+      kind: 'committed-unverified',
+      committed: true,
+      retryable: false,
+      key: NEW_KEY,
+      version: 42,
+    })
+  })
+
+  it('returns a non-retryable commit-unknown result when the response drops', async () => {
+    const lane = await bootLane({ writeEnabled: true })
+    lane.mock.route('GET', '/api/', (_req, res, helpers) =>
+      helpers.raw(200, { 'Zotero-Server-ID': SERVER_ID }, JSON.stringify({})),
+    )
+    lane.mock.route('POST', '/api/local/authorize', (_req, res, helpers) =>
+      helpers.raw(
+        200,
+        { 'Zotero-Server-ID': SERVER_ID },
+        JSON.stringify({ key: 'R'.repeat(32), remember: false }),
+      ),
+    )
+    lane.mock.route('POST', '/api/users/0/items', (_req, res) => {
+      res.destroy()
+    })
+    const result = expectValue(
+      await lane.runTool('zotero_create_note', { markdown: 'x' }),
+      'zotero_create_note',
+    )
+    expect(result.value).toMatchObject({
+      kind: 'committed-unverified',
+      committed: true,
+      retryable: false,
+      reason: 'commit-unknown',
+    })
+    expect(result.value).not.toHaveProperty('libraryVersion')
   })
 
   it('writes nothing when the user declines the plan', async () => {
@@ -306,7 +396,7 @@ describe('zotero_add_tags and zotero_add_to_collection', () => {
     const result = expectValue(
       await lane.runTool('zotero_add_tags', {
         ref: `zotero://user/0/item/${ITEM_KEY}`,
-        tags: ['new'],
+        tags: [' new '],
       }),
       'zotero_add_tags',
     )
@@ -323,7 +413,7 @@ describe('zotero_add_tags and zotero_add_to_collection', () => {
   it('adds an item to a collection by name after approval', async () => {
     const lane = await bootLane({ writeEnabled: true })
     serveWrites(lane.mock)
-    serveItem(lane.mock, { tags: [] })
+    serveItem(lane.mock, { tags: [], collections: [] })
     lane.mock.route('PATCH', `/api/users/0/items/${ITEM_KEY}`, (_req, res, helpers) =>
       helpers.raw(204, { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '12' }, ''),
     )
@@ -345,7 +435,7 @@ describe('zotero_add_tags and zotero_add_to_collection', () => {
     const tagsResult = expectValue(
       await lane.runTool('zotero_add_tags', {
         ref: `zotero://user/0/item/${ITEM_KEY}`,
-        tags: ['new'],
+        tags: [' new '],
       }),
       'zotero_add_tags',
     )
@@ -372,7 +462,7 @@ describe('zotero_add_tags and zotero_add_to_collection', () => {
     const tagsResult = expectValue(
       await lane.runTool('zotero_add_tags', {
         ref: `zotero://user/0/item/${ITEM_KEY}`,
-        tags: ['new'],
+        tags: [' new '],
       }),
       'zotero_add_tags',
     )
@@ -402,5 +492,118 @@ describe('zotero_add_tags and zotero_add_to_collection', () => {
     })
     expect(result.isError).toBe(true)
     expect(lane.mock.requests.some((request) => request.method === 'PATCH')).toBe(false)
+  })
+
+  it('refuses blank markdown, tags, or collections on create_note before the plan card', async () => {
+    const lane = await bootLane({ writeEnabled: true })
+    const scripted = lane.ctx.get('userQuestions') as unknown as ScriptedQuestions
+    serveWrites(lane.mock)
+
+    const blankMd = await lane.runTool('zotero_create_note', { markdown: '   ' })
+    expect(blankMd.isError).toBe(true)
+    if (!blankMd.isError) throw new Error('unreachable')
+    expect(blankMd.error.info?.code).toBe(ZOTERO_INVALID_ARGUMENT)
+
+    const blankTag = await lane.runTool('zotero_create_note', { markdown: 'valid', tags: ['   '] })
+    expect(blankTag.isError).toBe(true)
+    if (!blankTag.isError) throw new Error('unreachable')
+    expect(blankTag.error.info?.code).toBe(ZOTERO_INVALID_ARGUMENT)
+
+    const blankColl = await lane.runTool('zotero_create_note', {
+      markdown: 'valid',
+      collections: ['   '],
+    })
+    expect(blankColl.isError).toBe(true)
+    if (!blankColl.isError) throw new Error('unreachable')
+    expect(blankColl.error.info?.code).toBe(ZOTERO_INVALID_ARGUMENT)
+
+    expect(scripted.asks).toHaveLength(0)
+    expect(lane.mock.requests.some((request) => request.method === 'POST')).toBe(false)
+  })
+
+  it('refuses blank tags on add_tags and blank collection on add_to_collection', async () => {
+    const lane = await bootLane({ writeEnabled: true })
+    serveWrites(lane.mock)
+
+    const blankTag = await lane.runTool('zotero_add_tags', {
+      ref: `zotero://user/0/item/${ITEM_KEY}`,
+      tags: ['   '],
+    })
+    expect(blankTag.isError).toBe(true)
+    if (!blankTag.isError) throw new Error('unreachable')
+    expect(blankTag.error.info?.code).toBe(ZOTERO_INVALID_ARGUMENT)
+
+    const blankColl = await lane.runTool('zotero_add_to_collection', {
+      ref: `zotero://user/0/item/${ITEM_KEY}`,
+      collection: '   ',
+    })
+    expect(blankColl.isError).toBe(true)
+    if (!blankColl.isError) throw new Error('unreachable')
+    expect(blankColl.error.info?.code).toBe(ZOTERO_INVALID_ARGUMENT)
+
+    expect(lane.mock.requests.some((request) => request.method === 'PATCH')).toBe(false)
+  })
+
+  it('refuses group-library write refs before showing a plan', async () => {
+    const lane = await bootLane({ writeEnabled: true })
+    const scripted = lane.ctx.get('userQuestions') as unknown as ScriptedQuestions
+    const groupRef = 'zotero://group/55/item/ITEMABC1'
+    const cases = [
+      ['zotero_create_note', { markdown: 'x', sourceRefs: [groupRef] }],
+      [
+        'zotero_create_note',
+        { markdown: 'x', collections: ['zotero://group/55/collection/COLL1234'] },
+      ],
+      ['zotero_add_tags', { ref: groupRef, tags: ['review'] }],
+      [
+        'zotero_add_to_collection',
+        { ref: groupRef, collection: 'zotero://group/55/collection/COLL1234' },
+      ],
+    ] as const
+    for (const [name, args] of cases) {
+      const result = await lane.runTool(name, args)
+      expect(result.isError).toBe(true)
+      if (!result.isError) throw new Error('unreachable')
+      expect(result.error.info?.code).toBe(ZOTERO_INVALID_ARGUMENT)
+    }
+    expect(scripted.asks).toHaveLength(0)
+    expect(lane.mock.requests.some((request) => request.method === 'POST')).toBe(false)
+    expect(lane.mock.requests.some((request) => request.method === 'PATCH')).toBe(false)
+  })
+
+  it('locates approval by WRITE_PLAN_QUESTION_ID even if other answers precede it', async () => {
+    const lane = await bootLane({ writeEnabled: true })
+    serveWrites(lane.mock)
+    ScriptedQuestions.customAnswers = {
+      answers: [
+        { id: 'preceding_survey_question', selected: ['Reject'] },
+        { id: WRITE_PLAN_QUESTION_ID, selected: ['Apply'] },
+      ],
+    }
+    const result = expectValue(
+      await lane.runTool('zotero_create_note', { markdown: 'x' }),
+      'zotero_create_note',
+    )
+    expect(result.value).toMatchObject({ kind: 'applied', key: NEW_KEY })
+  })
+
+  it('treats approval response with custom text feedback as declined', async () => {
+    const lane = await bootLane({ writeEnabled: true })
+    serveWrites(lane.mock)
+    ScriptedQuestions.customAnswers = {
+      answers: [
+        {
+          id: WRITE_PLAN_QUESTION_ID,
+          selected: [],
+          custom: 'Please change the note content',
+        },
+      ],
+    }
+    const result = expectValue(
+      await lane.runTool('zotero_create_note', { markdown: 'x' }),
+      'zotero_create_note',
+    )
+    expect(result.value).toEqual({ kind: 'declined' })
+    expect(lane.mock.requests.some((request) => request.method === 'POST')).toBe(false)
   })
 })

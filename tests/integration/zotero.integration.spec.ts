@@ -509,7 +509,12 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', 
     // settings hot-reload or a host restart, where client memory is gone.
     await zoteroError(
       provider.changes({
-        since: { serverId: 'not-this-instance', library: { type: 'user', id: 0 }, version: 1 },
+        since: {
+          serverId: 'not-this-instance',
+          library: { type: 'user', id: 0 },
+          version: 1,
+          include: ['items'],
+        },
         include: new Set(['items']),
       }),
       'ZOTERO_SERVER_MISMATCH',
@@ -525,6 +530,7 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', 
           serverId: status.serverId ?? 'unknown',
           library: { type: 'user', id: 0 },
           version: 1,
+          include: ['items'],
         },
         include: new Set(['items']),
       }),

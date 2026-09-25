@@ -1,9 +1,9 @@
 /**
  * The `zotero_add_to_collection` tool: add one Zotero item to a collection,
- * by ref or by name. The domain validates the collection first, then runs
- * read-merge-write under a version precondition; an already-member item
- * writes nothing and reports added: false. The plan-review approval runs
- * before Zotero is contacted.
+ * by ref or by name. The domain validates the collection on execute (after
+ * plan approval if writeConfirm is enabled), then runs read-merge-write under
+ * a version precondition; an already-member item writes nothing and reports
+ * added: false. The plan-review approval runs before Zotero is contacted.
  * @module dsh-zotero/tools/add-to-collection
  */
 
@@ -18,22 +18,27 @@ import {
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
 import { metaRecordOf, renderDeclined } from './present.js'
-import { parseSupportedRef, REF_ARG_HINT } from './validate.js'
-import { askPlanApproval } from './write-approval.js'
+import { isRefString } from '../refs.js'
+import {
+  assertNonBlank,
+  parseWritableRef,
+  WRITE_COLLECTION_REF_ARG_HINT,
+  WRITE_REF_ARG_HINT,
+} from './validate.js'
+import { askPlanApproval, WRITE_PLAN_OUTCOME_DESCRIPTION } from './write-approval.js'
 import type { ZoteroService } from '../service.js'
-import type { ZoteroCollectionAddRequest } from '../types.js'
+import type { ZoteroCollectionAddOutcome, ZoteroCollectionAddRequest } from '../types.js'
 
 const ADD_TO_COLLECTION_PARAMETERS = {
   ref: {
     type: 'string',
     required: true,
-    description: `A ${REF_ARG_HINT} ref to add.`,
+    description: `A ${WRITE_REF_ARG_HINT} ref to add.`,
   },
   collection: {
     type: 'string',
     required: true,
-    description:
-      'The collection to add the item to: a zotero://user/0/collection/<KEY> ref or an exact collection name (zotero_browse lists them). An unknown name fails before any write.',
+    description: `The collection to add the item to: a ${WRITE_COLLECTION_REF_ARG_HINT} ref or an exact collection name (zotero_browse lists them). An unknown name fails before any write.`,
   },
 } as const
 
@@ -83,13 +88,15 @@ export function addToCollectionPlan(args: AddToCollectionArgs): string {
     '**Add a Zotero item to a collection**',
     '- Library: zotero://user/0 (the local personal library)',
     `- Item: ${args.ref}`,
-    `- Collection: ${args.collection}`,
+    `- Collection: ${args.collection.trim()}`,
     "The item's existing collections are preserved; the union is written under a version precondition.",
   ].join('\n')
 }
 
 function buildRequest(args: AddToCollectionArgs): ZoteroCollectionAddRequest {
-  return { item: parseSupportedRef(args.ref, ['item']), collection: args.collection }
+  const collection = assertNonBlank('collection', args.collection)
+  if (isRefString(collection)) parseWritableRef(collection, ['collection'])
+  return { item: parseWritableRef(args.ref, ['item']), collection }
 }
 
 export function renderAddToCollection(
@@ -131,7 +138,8 @@ export function registerAddToCollectionTool(ctx: Context, service: ZoteroService
     defineTool({
       name: 'zotero_add_to_collection',
       description:
-        'Add one Zotero item to a collection, by collection ref or exact name. Membership merges with the item\'s existing collections under a version precondition, so a concurrent edit fails as ZOTERO_WRITE_CONFLICT and a re-run reapplies; an already-member item returns added: false and writes nothing. An unknown collection name fails before anything is read. When writeConfirm is on (the default) the write first shows a plan the user approves; kind "declined" means the user answered the plan without approving and nothing was written — do not retry unasked.',
+        "Add one Zotero item to a collection, by collection ref or exact name. Membership merges with the item's existing collections under a version precondition, so a concurrent edit fails as ZOTERO_WRITE_CONFLICT and a re-run reapplies; an already-member item returns added: false and writes nothing. An unknown collection name fails when executed before any item write. " +
+        WRITE_PLAN_OUTCOME_DESCRIPTION,
       parameters: ADD_TO_COLLECTION_PARAMETERS,
       output: {
         schema: ADD_TO_COLLECTION_OUTPUT_SCHEMA,
@@ -153,7 +161,9 @@ export function registerAddToCollectionTool(ctx: Context, service: ZoteroService
         rawInput: args.collection,
       }),
       presentResult: presentAddToCollectionResult,
-      async execute(args, exec) {
+      // timeoutMs is deliberately omitted: the plan-review card waits on user
+      // think time, which is not a stuck request.
+      async execute(args, exec): Promise<ZoteroCollectionAddOutcome> {
         // No connectivity ask wraps the write: that helper retries, and only
         // idempotent reads may be retried.
         const request = buildRequest(args)

@@ -18,7 +18,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { createVolatile, updateVolatile, volatileEntries } from '@deepseek-ai/cosmokit'
 import { ZOTERO_PROVIDER_UNAVAILABLE } from '../../src/errors.js'
 import { intRangeArgumentMessage } from '../../src/tools/validate.js'
-import { type HostLane, setupHostLane } from '../helpers/lanes/host-lane.js'
+import { expectValue, type HostLane, setupHostLane } from '../helpers/lanes/host-lane.js'
 
 /** The lane the current test booted; `afterEach` releases it. */
 let lane: HostLane | undefined
@@ -163,5 +163,53 @@ describe('live configuration', () => {
     expect(lane.tool('zotero_add_to_collection')).toBeDefined()
     await commitLive({ writeEnabled: false })
     expect(lane.tool('zotero_create_note')).toBeUndefined()
+  })
+
+  it('live-applies provider limits to LocalApiProvider without rebuilding transport', async () => {
+    lane = await setupHostLane({ maxDetailChars: 100 })
+    lane.mock.route('GET', '/api/', (req, res, helpers) =>
+      helpers.json({}, { 'Zotero-Server-ID': 'S1', 'Zotero-API-Version': '3' }),
+    )
+    lane.mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) =>
+      helpers.json(
+        {
+          key: 'ABCD1234',
+          version: 1,
+          links: {
+            self: {
+              href: `${lane?.mock.baseUrl}/users/0/items/ABCD1234`,
+              type: 'application/json',
+            },
+          },
+          data: {
+            itemType: 'journalArticle',
+            title: 'Paper Title',
+            abstractNote: 'A'.repeat(200),
+          },
+        },
+        { 'Zotero-Server-ID': 'S1' },
+      ),
+    )
+
+    const initial = expectValue(
+      await lane.runTool('zotero_get', { ref: 'zotero://user/0/item/ABCD1234' }),
+      'zotero_get',
+    )
+    expect(initial.value).toMatchObject({
+      abstract: 'A'.repeat(100),
+      abstractTruncated: true,
+    })
+
+    await commitLive({ maxDetailChars: 500 })
+    expect(lane.ctx.zotero.config.maxDetailChars).toBe(500)
+
+    const updated = expectValue(
+      await lane.runTool('zotero_get', { ref: 'zotero://user/0/item/ABCD1234' }),
+      'zotero_get',
+    )
+    expect(updated.value).toMatchObject({
+      abstract: 'A'.repeat(200),
+      abstractTruncated: false,
+    })
   })
 })

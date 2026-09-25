@@ -6,11 +6,17 @@
  */
 
 import { ZOTERO_INVALID_ARGUMENT, ZoteroError } from '../errors.js'
-import { parseRef, requireSupportedLocalRef } from '../refs.js'
+import { parseRef, requireSupportedLocalRef, requireWritableRef } from '../refs.js'
 import type { ZoteroKind, ZoteroObjectRef, SupportedLocalLibrary } from '../types.js'
 
-/** The item-ref format the tool descriptions state verbatim, so the tools cannot drift apart. */
+/** The item-ref format for read tools that serve personal and group libraries. */
 export const REF_ARG_HINT = 'zotero://user/0/item/<KEY> or zotero://group/<id>/item/<KEY>'
+
+/** Write tools are deliberately narrower: personal-library item refs only. */
+export const WRITE_REF_ARG_HINT = 'zotero://user/0/item/<KEY>'
+
+/** Write collection refs share the same personal-library boundary. */
+export const WRITE_COLLECTION_REF_ARG_HINT = 'zotero://user/0/collection/<KEY>'
 
 /** Throw an argument error; the message is model-facing. */
 export function invalid(message: string): never {
@@ -83,6 +89,14 @@ export function assertNonEmptyList(values: readonly unknown[], message: string):
  */
 export function parseSupportedRef(value: string, kinds?: readonly ZoteroKind[]): ZoteroObjectRef {
   return requireSupportedLocalRef(parseRef(value), kinds)
+}
+
+/**
+ * Parse a ref for a write tool and reject a group target before the plan card.
+ * The write domain repeats the personal-library check for direct callers.
+ */
+export function parseWritableRef(value: string, kinds: readonly ZoteroKind[]): ZoteroObjectRef {
+  return requireWritableRef(parseRef(value), kinds)
 }
 
 /** The model-facing messages for the `library` argument's own rules. */

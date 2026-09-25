@@ -78,7 +78,7 @@ import type {
   ZoteroCollectionAddRequest,
   ZoteroCollectionAddResult,
   ZoteroCreateNoteRequest,
-  ZoteroCreateNoteResult,
+  ZoteroCreateNoteCommittedOutcome,
   ZoteroGetRequest,
   ZoteroItemDetail,
   ZoteroObjectRef,
@@ -152,6 +152,8 @@ export class ZoteroService extends Service {
   private writeToolDisposes: Array<() => void> = []
   /** The resolved config the transport stack was last built from. */
   private lastBuilt: ResolvedConfig
+  /** Cached resolved config; invalidated on any loader/volatile-update. */
+  private cachedConfig?: ResolvedConfig
 
   constructor(ctx: Context, config: Config | Options = {}) {
     super(ctx, 'zotero')
@@ -175,11 +177,13 @@ export class ZoteroService extends Service {
     })
     // Structural flips land without remounting: rebuild the transport stack
     // and reconcile the write tools on this same instance. Limit-only edits
-    // need no reaction — tools read them per request. Loader emits
+    // need no reaction — the provider's per-call limits getter reads them.
+    // Loader emits
     // `loader/volatile-update` fiber-filtered (`owner.fiber === fiber`), so a
     // listener on this fiber's ctx receives own updates without `global`.
     // Failures are logged, never thrown into the dispatch.
     ctx.on('loader/volatile-update', (paths: readonly (readonly string[])[]) => {
+      this.cachedConfig = undefined
       if (!touchesTransport(paths)) return
       try {
         const config = this.config
@@ -227,7 +231,10 @@ export class ZoteroService extends Service {
    * @returns the live resolved config.
    */
   get config(): ResolvedConfig {
-    return readResolvedConfig(this.entry)
+    if (this.cachedConfig === undefined) {
+      this.cachedConfig = readResolvedConfig(this.entry)
+    }
+    return this.cachedConfig
   }
 
   /**
@@ -262,11 +269,11 @@ export class ZoteroService extends Service {
         ? undefined
         : new WriteAuthorizer({
             client: writer,
-            credentials: this.credentials(),
+            credentials: () => this.credentials(),
             persistKey: () => this.config.writePersistKey,
           })
     this.providerDispose = this.registerProvider(
-      new LocalApiProvider(client, localProviderLimits(config), {}, writer, authorizer),
+      new LocalApiProvider(client, () => localProviderLimits(this.config), {}, writer, authorizer),
     )
   }
 
@@ -399,8 +406,8 @@ export class ZoteroService extends Service {
     signal?: AbortSignal,
   ): Promise<ZoteroRetrieveResult> {
     const provider = this.resolveProvider()
-    // Retrieve is ranked evidence across sources — a broader contract than
-    // raw fulltext access, so it gates on its own capability.
+    // Retrieve and changes consume full-text sources internally; the public
+    // domain gate is the capability for the requested operation, not a raw-text method.
     this.requireCapability(provider, 'retrieve')
     const retrieve = this.requireMethod(provider, 'retrieve')
     return await retrieve(request, signal)
@@ -451,7 +458,7 @@ export class ZoteroService extends Service {
   async createNote(
     request: ZoteroCreateNoteRequest,
     signal?: AbortSignal,
-  ): Promise<ZoteroCreateNoteResult> {
+  ): Promise<ZoteroCreateNoteCommittedOutcome> {
     const provider = this.resolveProvider()
     this.requireCapability(provider, 'write')
     const createNote = this.requireMethod(provider, 'createNote')
@@ -578,8 +585,9 @@ function sameTransportConfig(current: ResolvedConfig, built: ResolvedConfig): bo
 }
 
 /**
- * Project one resolved config onto the `local` provider's limits. Shared by
- * the initial build and every volatile-update rebuild so both always agree.
+ * Project one resolved config onto the `local` provider's limits. Called
+ * per request through the provider's live getter, so limit-only edits apply
+ * without rebuilding the transport.
  * @param config - the resolved config to project.
  * @returns the provider limits the transport and ranking behavior read.
  */

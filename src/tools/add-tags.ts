@@ -20,16 +20,16 @@ import {
 import { ZOTERO_WRITE_LIST_MAX_ITEMS } from '../constants.js'
 import { writeListEmptyMessage, writeListTooLongMessage } from '../errors.js'
 import { metaRecordOf, renderDeclined } from './present.js'
-import { invalid, parseSupportedRef, REF_ARG_HINT } from './validate.js'
-import { askPlanApproval } from './write-approval.js'
+import { assertNonBlank, invalid, parseWritableRef, WRITE_REF_ARG_HINT } from './validate.js'
+import { askPlanApproval, WRITE_PLAN_OUTCOME_DESCRIPTION } from './write-approval.js'
 import type { ZoteroService } from '../service.js'
-import type { ZoteroTagUpdateRequest } from '../types.js'
+import type { ZoteroTagUpdateOutcome, ZoteroTagUpdateRequest } from '../types.js'
 
 const ADD_TAGS_PARAMETERS = {
   ref: {
     type: 'string',
     required: true,
-    description: `A ${REF_ARG_HINT} ref to tag.`,
+    description: `A ${WRITE_REF_ARG_HINT} ref to tag.`,
   },
   tags: {
     type: 'array',
@@ -83,7 +83,7 @@ export function addTagsPlan(args: AddTagsArgs): string {
     '**Add tags to a Zotero item**',
     '- Library: zotero://user/0 (the local personal library)',
     `- Item: ${args.ref}`,
-    `- Tags to add: ${args.tags.join(', ')}`,
+    `- Tags to add: ${args.tags.map((tag) => tag.trim()).join(', ')}`,
     'Existing tags on the item are preserved; the union is written under a version precondition.',
   ].join('\n')
 }
@@ -93,7 +93,8 @@ function buildRequest(args: AddTagsArgs): ZoteroTagUpdateRequest {
   if (args.tags.length > ZOTERO_WRITE_LIST_MAX_ITEMS) {
     invalid(writeListTooLongMessage('tags', ZOTERO_WRITE_LIST_MAX_ITEMS))
   }
-  return { item: parseSupportedRef(args.ref, ['item']), tags: args.tags }
+  const tags = args.tags.map((tag) => assertNonBlank('tags', tag))
+  return { item: parseWritableRef(args.ref, ['item']), tags }
 }
 
 export function renderAddTags(_args: AddTagsArgs, value: AddTagsOutput): ContentBlock[] {
@@ -129,7 +130,8 @@ export function registerAddTagsTool(ctx: Context, service: ZoteroService): () =>
     defineTool({
       name: 'zotero_add_tags',
       description:
-        'Add tags to one Zotero item. Tags merge with what the item already carries — existing tags and their types are preserved — and the union is written under a version precondition, so a concurrent edit fails as ZOTERO_WRITE_CONFLICT and a re-run reapplies. When every requested tag is already present nothing is written and unchanged is true. When writeConfirm is on (the default) the write first shows a plan the user approves; kind "declined" means the user answered the plan without approving and nothing was written — do not retry unasked.',
+        'Add tags to one Zotero item. Tags merge with what the item already carries — existing tags and their types are preserved — and the union is written under a version precondition, so a concurrent edit fails as ZOTERO_WRITE_CONFLICT and a re-run reapplies. When every requested tag is already present nothing is written and unchanged is true. ' +
+        WRITE_PLAN_OUTCOME_DESCRIPTION,
       parameters: ADD_TAGS_PARAMETERS,
       output: {
         schema: ADD_TAGS_OUTPUT_SCHEMA,
@@ -151,7 +153,9 @@ export function registerAddTagsTool(ctx: Context, service: ZoteroService): () =>
         rawInput: args.tags.join(', '),
       }),
       presentResult: presentAddTagsResult,
-      async execute(args, exec) {
+      // timeoutMs is deliberately omitted: the plan-review card waits on user
+      // think time, which is not a stuck request.
+      async execute(args, exec): Promise<ZoteroTagUpdateOutcome> {
         // No connectivity ask wraps the write: that helper retries, and only
         // idempotent reads may be retried.
         const request = buildRequest(args)

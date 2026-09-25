@@ -6,8 +6,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-// Type-only: pulls the `ctx.commands` Context merge into this program.
-import type {} from '@deepseek-ai/dsh-commands'
+// Value + type: pulls the `ctx.commands` Context merge into this program.
 import { CommandDefinitionId } from '@deepseek-ai/dsh-commands'
 import type { ZoteroService } from './service.js'
 import type { ZoteroStatus } from './types.js'
@@ -38,7 +37,7 @@ export function statusLine(label: string, value: string | undefined): string {
 }
 
 /** Render a status record for the command's user-facing text. */
-function formatStatus(status: ZoteroStatus): string {
+export function formatStatus(status: ZoteroStatus): string {
   if (!status.connected) {
     return `${ZOTERO_STATUS_DISCONNECTED}\n${status.diagnosis}`
   }
@@ -54,9 +53,15 @@ function formatStatus(status: ZoteroStatus): string {
       ? undefined
       : statusLine(
           'Write',
-          status.write.authorized ? 'enabled (key stored)' : 'enabled (no key yet)',
+          !status.write.enabled
+            ? 'disabled'
+            : status.write.authorized
+              ? 'enabled (key stored)'
+              : 'enabled (no key yet)',
         ),
-  ].join('\n')
+  ]
+    .filter((line): line is string => line !== undefined)
+    .join('\n')
 }
 
 /**
