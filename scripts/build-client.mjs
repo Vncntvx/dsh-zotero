@@ -32,9 +32,8 @@
 
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
-import { basename } from 'node:path'
 import { createRequire } from 'node:module'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import vm from 'node:vm'
 import * as esbuild from 'esbuild'
@@ -223,7 +222,9 @@ const cssModulesPlugin = {
       })
       const names = {}
       for (const [original, info] of Object.entries(classMap)) names[original] = info.name
-      const id = `dsh-zotero/${basename(args.path)}`
+      // Path-relative id: basename alone collides when two directories
+      // ship the same module filename (e.g. `fields.module.css`).
+      const id = `dsh-zotero/${relative(root, args.path).split('\\').join('/')}`
       const style = code
         .toString('utf8')
         .replaceAll('\\', '\\\\')

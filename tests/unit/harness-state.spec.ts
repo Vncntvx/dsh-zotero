@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest'
 import {
   applyPinToManifest,
   checkVersionMap,
+  collectLockProblems,
   collectPinFaceProblems,
   retargetProse,
   versionMapBounds,
@@ -179,5 +180,51 @@ describe('collectPinFaceProblems', () => {
     // `dsh 0.1.7-rc.1-beta` must not be accepted as the pin `0.1.7-rc.1`.
     const moved = retargetProse('host dsh 0.1.7-rc.1-beta', '0.1.7-rc.1', '0.1.7-rc.1')
     expect(moved).toContain('0.1.7-rc.1-beta')
+  })
+})
+
+describe('collectLockProblems', () => {
+  const pin = '0.1.7-rc.2'
+  const validLock = {
+    packages: {
+      'node_modules/@deepseek-ai/dsh-tools': { version: pin },
+      'node_modules/@deepseek-ai/dsh-llm': { version: pin },
+      'node_modules/zod': { version: '3.22.4' },
+    },
+  }
+  const validManifest = {
+    overrides: {
+      '@deepseek-ai/dsh-tools': pin,
+      '@deepseek-ai/dsh-llm': pin,
+    },
+  }
+
+  it('accepts clean lock and complete overrides', () => {
+    expect(collectLockProblems(validLock, validManifest, pin)).toEqual([])
+  })
+
+  it('detects packages resolving off the pin', () => {
+    const staleLock = {
+      packages: {
+        'node_modules/@deepseek-ai/dsh-tools': { version: '0.1.7-rc.1' },
+      },
+    }
+    const problems = collectLockProblems(staleLock, validManifest, pin)
+    expect(problems.join('\n')).toMatch(
+      /resolves 1 harness package\(s\) off the pin "0\.1\.7-rc\.2"/,
+    )
+  })
+
+  it('detects when overrides is missing a dsh package from lockfile', () => {
+    const incompleteManifest = {
+      overrides: {
+        '@deepseek-ai/dsh-tools': pin,
+      },
+    }
+    const problems = collectLockProblems(validLock, incompleteManifest, pin)
+    expect(problems.join('\n')).toMatch(
+      /package\.json overrides is missing 1 @deepseek-ai\/dsh-\* package\(s\)/,
+    )
+    expect(problems.join('\n')).toContain('@deepseek-ai/dsh-llm')
   })
 })

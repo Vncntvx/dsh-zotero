@@ -18,27 +18,19 @@
  * Declarations are deliberately out of scope here: they come from
  * `npm run build` (`tsc`), which the publish path runs (`prepublishOnly` →
  * `release:check`), and `npm run verify:pack` proves they reached the tarball.
- * A tree that already carries a full build (`lib/index.d.ts`) is left
- * untouched, so `npm pack`/`npm publish` keep tsc's emit instead of having it
- * overwritten by this transpile; pass `--force` to rebuild anyway.
+ * A tree that already carries every full-build output (declarations, Node
+ * entry, and browser bundle) is left untouched, so `npm pack`/`npm publish`
+ * keep tsc's emit instead of overwriting it; pass `--force` to rebuild anyway.
  * @module scripts/build-prepare
  */
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import * as esbuild from 'esbuild'
 import { buildClientBundle } from './build-client.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-
-// `lib/index.d.ts` is emitted only by the full `tsc` build, so its presence
-// marks a tree whose artifacts are already complete.
-const FULL_BUILD_MARKER = join(root, 'lib', 'index.d.ts')
-if (!process.argv.includes('--force') && existsSync(FULL_BUILD_MARKER)) {
-  console.log('prepare skipped: a full build is already present (lib/index.d.ts)')
-  process.exit(0)
-}
 
 /** Source directory holding the Node half; `src/client` is the browser half. */
 const SOURCE_DIR = join(root, 'src')
@@ -58,6 +50,29 @@ function nodeSources(dir = SOURCE_DIR) {
     if (entry.name.endsWith('.ts')) found.push(path)
   }
   return found.sort()
+}
+
+/**
+ * Every artifact a full build must leave behind. Checking only the package
+ * entry can accept a tree whose internal module or declaration is missing;
+ * require the complete Node emit plus the browser bundle instead.
+ */
+function fullBuildOutputs() {
+  return [
+    ...nodeSources().flatMap((source) => {
+      const stem = relative(SOURCE_DIR, source).replace(/\.ts$/, '')
+      return [join(root, 'lib', `${stem}.js`), join(root, 'lib', `${stem}.d.ts`)]
+    }),
+    join(root, 'lib', 'client.js'),
+  ]
+}
+
+const FULL_BUILD_OUTPUTS = fullBuildOutputs()
+if (!process.argv.includes('--force') && FULL_BUILD_OUTPUTS.every((output) => existsSync(output))) {
+  console.log(
+    `prepare skipped: a full build is already present (${FULL_BUILD_OUTPUTS.length} outputs)`,
+  )
+  process.exit(0)
 }
 
 /**

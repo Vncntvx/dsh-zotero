@@ -32,3 +32,16 @@ export declare function collectPinFaceProblems(
   manifest: Record<string, unknown>,
   pin: string,
 ): string[]
+
+/**
+ * Every problem in a lockfile relative to the pin and the manifest's overrides.
+ * @param lock - parsed package-lock.json.
+ * @param manifest - parsed package.json.
+ * @param pin - the exact pin every face must equal.
+ * @returns human-readable problems; empty when lockfile matches pin and overrides is a superset.
+ */
+export declare function collectLockProblems(
+  lock: Record<string, unknown>,
+  manifest: Record<string, unknown> | undefined,
+  pin: string,
+): string[]

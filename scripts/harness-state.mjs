@@ -210,14 +210,9 @@ function checkProse(path, pin) {
   }
 }
 
-/** Fail when the lockfile resolves any harness package off the pin. */
-function checkLock(pin) {
-  const lockPath = join(root, 'package-lock.json')
-  if (!existsSync(lockPath)) {
-    problems.push('package-lock.json is missing; run: npm install --package-lock-only')
-    return
-  }
-  const lock = readJson(lockPath)
+/** Every problem in a lockfile relative to the pin and the manifest's overrides. */
+export function collectLockProblems(lock, manifest, pin) {
+  const problems = []
   const offenders = Object.entries(lock.packages ?? {})
     .filter(
       ([path, entry]) => path.includes('node_modules/@deepseek-ai/dsh-') && entry.version !== pin,
@@ -227,16 +222,48 @@ function checkLock(pin) {
         `${path.slice(path.lastIndexOf('node_modules/') + 'node_modules/'.length)}@${entry.version}`,
     )
     .sort()
-  if (offenders.length === 0) return
-  const shown = offenders.slice(0, 6)
-  const more = offenders.length > shown.length ? ` (+${offenders.length - shown.length} more)` : ''
-  problems.push(
-    `package-lock.json resolves ${offenders.length} harness package(s) off the pin "${pin}":` +
-      ` ${shown.join(', ')}${more} — add a missing name to overrides, then run:` +
-      ' npm install --package-lock-only' +
-      ' (if the registry has not published the pin yet, typecheck may still use npm run link:local-harness,' +
-      ' but the lock must not be hand-edited to fake the pin)',
-  )
+  if (offenders.length > 0) {
+    const shown = offenders.slice(0, 6)
+    const more =
+      offenders.length > shown.length ? ` (+${offenders.length - shown.length} more)` : ''
+    problems.push(
+      `package-lock.json resolves ${offenders.length} harness package(s) off the pin "${pin}":` +
+        ` ${shown.join(', ')}${more} — add a missing name to overrides, then run:` +
+        ' npm install --package-lock-only' +
+        ' (if the registry has not published the pin yet, typecheck may still use npm run link:local-harness,' +
+        ' but the lock must not be hand-edited to fake the pin)',
+    )
+  }
+
+  if (manifest !== undefined) {
+    const overrideKeys = new Set(Object.keys(manifest.overrides ?? {}))
+    const lockDshPackages = [
+      ...new Set(
+        Object.keys(lock.packages ?? {})
+          .filter((p) => p.includes('node_modules/@deepseek-ai/dsh-'))
+          .map((p) => p.slice(p.lastIndexOf('node_modules/') + 'node_modules/'.length)),
+      ),
+    ].sort()
+    const missingOverrides = lockDshPackages.filter((name) => !overrideKeys.has(name))
+    if (missingOverrides.length > 0) {
+      problems.push(
+        `package.json overrides is missing ${missingOverrides.length} @deepseek-ai/dsh-* package(s) from lockfile:` +
+          ` ${missingOverrides.join(', ')} — add them to overrides and run: npm install --package-lock-only`,
+      )
+    }
+  }
+  return problems
+}
+
+/** Fail when the lockfile resolves any harness package off the pin or overrides is not a superset. */
+function checkLock(pin, manifest) {
+  const lockPath = join(root, 'package-lock.json')
+  if (!existsSync(lockPath)) {
+    problems.push('package-lock.json is missing; run: npm install --package-lock-only')
+    return
+  }
+  const lock = readJson(lockPath)
+  problems.push(...collectLockProblems(lock, manifest, pin))
 }
 
 /**
@@ -310,7 +337,7 @@ function checkPin(manifest) {
   for (const path of docPaths) {
     problems.push(...checkVersionMap(path, readFileSync(path, 'utf8'), manifest.version, pin))
   }
-  checkLock(pin)
+  checkLock(pin, manifest)
   checkOverrideNames(manifest)
   return pin
 }

@@ -58,7 +58,6 @@ const ALLOWED_CONTROL = new Set([0x09, 0x0a, 0x0d])
 /**
  * Ratchet: the most lines one spec file may occupy. Lower it in the same
  * commit that splits a file, never preemptively.
- * Target: 800, now met. The ratchet holds the suite there.
  */
 const MAX_SPEC_LINES = 733
 

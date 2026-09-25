@@ -183,7 +183,7 @@ async function serveOnce(port) {
     // The boot graph composes content-addressed combo scripts: every
     // entry row carries the revisioned single-resource combo URL, and its id
     // must appear in a scheduling batch.
-    if (!entry.url.startsWith('/plugins/??dsh-zotero/client.js&rev=')) {
+    if (!entry.url.replace(/^\//, '').startsWith('plugins/??dsh-zotero/client.js&rev=')) {
       throw new Error(`unexpected bundle url: ${entry.url}`)
     }
     if (
@@ -194,7 +194,12 @@ async function serveOnce(port) {
     ) {
       throw new Error('__DSH_BOOT__ schedules no batch entry for dsh-zotero')
     }
-    const bundle = await fetchText(`http://127.0.0.1:${port}${entry.url}`, cookie)
+    const baseUrl = new URL(`http://127.0.0.1:${port}/`)
+    const bundleUrl = new URL(entry.url, baseUrl)
+    if (bundleUrl.origin !== baseUrl.origin) {
+      throw new Error(`bundle url leaves the local server: ${entry.url}`)
+    }
+    const bundle = await fetchText(bundleUrl.href, cookie)
     if (!bundle.includes('__ModuleLoader__.load')) {
       throw new Error('the served bundle does not carry the __ModuleLoader__.load handoff')
     }
