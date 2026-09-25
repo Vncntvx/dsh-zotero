@@ -50,6 +50,10 @@ interface FakeApplyWorld {
   status: () => Promise<unknown>
   /** How many times the entry read the namespace face through the service store. */
   reflectCalls: number
+  /** Conversation Node definitions registered through `uiConversation.events`. */
+  eventDefinitions: Array<{ kind: string }>
+  /** Disposers run for those definitions. */
+  eventDisposes: number
 }
 
 /** A minimal context standing in for the browser kernel's plugin ctx. */
@@ -76,6 +80,8 @@ function fakeWorld(mountFail = false, mountRejects: unknown = undefined): FakeAp
     scope,
     status: async () => ({ ok: true, value: { connected: true, diagnosis: 'ok' } }),
     reflectCalls: 0,
+    eventDefinitions: [],
+    eventDisposes: 0,
   }
   const ctx = {
     effect: (register: () => unknown): (() => void) => {
@@ -123,6 +129,16 @@ function fakeWorld(mountFail = false, mountRejects: unknown = undefined): FakeAp
         return world.scope
       },
     },
+    uiConversation: {
+      events: {
+        register: (definition: { kind: string }) => {
+          world.eventDefinitions.push(definition)
+          return () => {
+            world.eventDisposes += 1
+          }
+        },
+      },
+    },
     slots: {
       inject: (name: string, register: () => FakeSlotsEntry | undefined) => {
         const entry: FakeInjectedEntry = { name, register, active: true }
@@ -143,31 +159,47 @@ function fakeWorld(mountFail = false, mountRejects: unknown = undefined): FakeAp
 }
 
 /**
- * Await the Remote mount `apply` starts — its fourth effect, the only
- * asynchronous one (`src/client/index.ts`, `dsh-zotero: remote`; the others
- * register synchronously and are collected as their disposers). The promise
- * settles after the mount attempt, the namespace read through the service
- * store, and the fault log, so a test that awaits it reads `reflectCalls` and
- * the mount state as settled — nothing here waits for a duration.
+ * Await the Remote mount `apply` starts — the only asynchronous effect
+ * (`src/client/index.ts`, `dsh-zotero: remote`; the others register
+ * synchronously and are collected as their disposers). The promise settles
+ * after the mount attempt, the namespace read through the service store, and
+ * the fault log, so a test that awaits it reads `reflectCalls` and the mount
+ * state as settled — nothing here waits for a duration.
  * @param world - the world `apply` was called on.
+ * @returns the settled mount disposer.
  */
-async function settleMount(world: FakeApplyWorld): Promise<void> {
-  const mount = world.effects[3]
-  // Awaiting a disposer would resolve at once and turn this into a silent
+async function settleMount(world: FakeApplyWorld): Promise<() => void> {
+  const mount = world.effects.find((entry): entry is Promise<unknown> => entry instanceof Promise)
+  // A missing async effect would otherwise turn every await into a silent
   // no-op, so a rewiring of the effects fails here instead.
-  if (!(mount instanceof Promise)) throw new Error('the fourth effect is not the Remote mount')
-  await mount
+  if (mount === undefined) throw new Error('the Remote mount effect is not present')
+  return (await mount) as () => void
 }
 
 describe('the browser-half entry', () => {
   it('declares the services it consumes', () => {
-    expect(inject).toEqual(['locale', 'slots', 'remote', 'configForms'])
+    expect(inject).toEqual(['locale', 'slots', 'remote', 'configForms', 'uiConversation'])
   })
 
   it('registers the page dictionaries on apply', () => {
     const world = fakeWorld()
     apply(world.ctx as Context)
     expect(world.dictionaries).toEqual([{ ns: 'zotero', dict: { zh, en } }])
+  })
+
+  it('registers the zotero command-input projection and its chat node renderer', () => {
+    const world = fakeWorld()
+    apply(world.ctx as Context)
+    expect(world.eventDefinitions.map((definition) => definition.kind)).toEqual([
+      'zotero-command-input',
+    ])
+    const entry = world.injected.find((item) => item.name === 'conversation.chat.node')
+    expect(entry).toBeDefined()
+    expect(entry?.register()).toBeDefined()
+    const registration = world.registered.find((item) => item.name === 'conversation.chat.node')
+    expect(registration?.options.key).toBe('zotero-command-input')
+    expect(registration?.options.locale).toBe('zotero')
+    expect(typeof registration?.component).toBe('function')
   })
 
   it('reads the shared form for the shared namespace constant', () => {
@@ -187,9 +219,11 @@ describe('the browser-half entry', () => {
   it('injects the configuration page into the settings.section slot', () => {
     const world = fakeWorld()
     apply(world.ctx as Context)
-    // Both surfaces register synchronously: the page and the conversation tab
-    // (whose registration must not wait on the Remote mount).
+    // All surfaces register synchronously: the command-input projection, the
+    // page, the plugin-manager cards, and the conversation tab (whose
+    // registration must not wait on the Remote mount).
     expect(world.injected.map((entry) => entry.name)).toEqual([
+      'conversation.chat.node',
       'settings.section',
       'plugins.bundle.config',
       'plugins.detail.section',
@@ -285,6 +319,23 @@ describe('the browser-half entry', () => {
     expect(errors.some((args) => String(args[0]).includes('mount failed'))).toBe(true)
   })
 
+  it('names a non-Error mount rejection instead of dropping it', async () => {
+    const world = fakeWorld(true, 'gateway exploded')
+    const errors: unknown[][] = []
+    const consoleError = console.error
+    console.error = (...args: unknown[]) => {
+      errors.push(args)
+    }
+    try {
+      apply(world.ctx as Context)
+      await settleMount(world)
+    } finally {
+      console.error = consoleError
+    }
+    expect(errors.some((args) => String(args[0]).includes('gateway exploded'))).toBe(true)
+    expect(errors.some((args) => String(args[0]).includes('mount failed'))).toBe(true)
+  })
+
   it('reads the namespace face through the service store, never the dotted child read', async () => {
     const world = fakeWorld()
     apply(world.ctx as Context)
@@ -307,9 +358,7 @@ describe('the browser-half entry', () => {
   it('disposes the mount and clears the face with the fiber', async () => {
     const world = fakeWorld()
     apply(world.ctx as Context)
-    // effects[0] is the dictionary registration, [1] the card form, [2] the
-    // tab, [3] the mount.
-    const dispose = (await world.effects[3]) as () => void
+    const dispose = await settleMount(world)
     expect(world.mountDisposes).toBe(0)
     dispose()
     expect(world.mountDisposes).toBe(1)
@@ -360,6 +409,7 @@ describe('the browser-half entry', () => {
     apply(world.ctx as Context)
     await settleMount(world)
     expect(world.injected.map((entry) => entry.name)).toEqual([
+      'conversation.chat.node',
       'settings.section',
       'plugins.bundle.config',
       'plugins.detail.section',
@@ -391,14 +441,23 @@ describe('the browser-half entry', () => {
   it('withdraws the tab with the fiber and unmounts the Remote', async () => {
     const world = fakeWorld()
     apply(world.ctx as Context)
-    // Four effects: dictionaries, the card form, the tab (synchronous,
-    // disposers collected on the spot), and the mount (async, resolved on a
-    // later tick).
-    const disposeCard = world.effects[1] as () => void
-    const disposeTab = world.effects[2] as () => void
-    const disposeRemote = (await world.effects[3]) as () => void
+    // Synchronous effects return disposers on the spot; the Remote mount is
+    // the one async effect. Identify them by their side effects rather than
+    // by position, so inserting a registration cannot silently re-point a
+    // disposer at the wrong effect.
+    const syncDisposers = world.effects.filter(
+      (entry): entry is () => void => typeof entry === 'function',
+    )
+    const disposeProjection = syncDisposers[0]!
+    const disposeCard = syncDisposers[1]!
+    const disposeTab = syncDisposers[2]!
+    const disposeRemote = await settleMount(world)
     expect(world.scope.unsubscribes).toBe(0)
     expect(world.injected.some((entry) => entry.name === 'conversation.view')).toBe(true)
+
+    // The command-input projection goes with its own effect.
+    disposeProjection()
+    expect(world.eventDisposes).toBe(1)
 
     // The card form goes with its own effect, releasing the subscription.
     disposeCard()

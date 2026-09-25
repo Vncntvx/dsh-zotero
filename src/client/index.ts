@@ -32,8 +32,12 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 // Type-only: the `conversation.view` SlotMap row (declared by the slot's
-// owning package) must be in the program for the tab registration to type.
+// owning package) must be in the program for the tab registration to type;
+// `uiConversation` (the event registry the command-input projection uses)
+// merges through the same package.
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+import { zoteroCommandInputDefinition } from './zotero-command-input.ts'
+import { ZoteroCommandInputView } from './ZoteroCommandInputView.tsx'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { ZoteroSettingsSection } from './ZoteroSettingsSection.tsx'
 import { SourcesTab, type SourcesTabFace } from './components/SourcesTab.tsx'
@@ -50,8 +54,8 @@ import { en, zh } from './locales.ts'
 /** Dictionary namespace owned by this plugin. */
 const NS = 'zotero'
 
-/** Required services (cordis fiber inject): the shared configuration form plus slots/locale/remote. */
-export const inject = ['locale', 'slots', 'remote', 'configForms']
+/** Required services (cordis fiber inject): the shared configuration form plus slots/locale/remote and the conversation event registry. */
+export const inject = ['locale', 'slots', 'remote', 'configForms', 'uiConversation']
 
 /**
  * The mounted `zotero` namespace face, or `undefined` when this fiber cannot
@@ -79,6 +83,24 @@ function mountedNamespace(ctx: ClientContext): ZoteroRemoteFace | undefined {
  */
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-zotero: page dictionaries')
+  // `/zotero` command-input projection: a non-command Chat node is the
+  // designed way for a slash command to leave the blank Hero (see ui-goal's
+  // `command-input`). Without it, `command/run`+`command/done` log on a fresh
+  // session while the shell stays blank and the status result is invisible.
+  ctx.effect(
+    () => ctx.uiConversation.events.register(zoteroCommandInputDefinition),
+    'dsh-zotero: zotero command-input projection',
+  )
+  ctx.slots.inject('conversation.chat.node', () =>
+    ctx.slots.register(
+      {
+        name: 'conversation.chat.node',
+        key: 'zotero-command-input',
+        locale: NS,
+      },
+      ZoteroCommandInputView,
+    ),
+  )
   // The shared form for the namespace the host half registers; the card
   // stages and saves through it with the harness's own staged model. The
   // entry declares only its own dependency (`webEnabled` for the tab gate);

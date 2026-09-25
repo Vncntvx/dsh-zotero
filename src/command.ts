@@ -1,7 +1,18 @@
 /**
- * The `/zotero status` human command: the control-plane check for Zotero
- * connectivity. Search/notes/tags/collections stay agent-tool territory —
- * slash commands are not a second Zotero CLI.
+ * The `/zotero` human command (optional synonym `status`): the control-plane
+ * check for Zotero connectivity. Search/notes/tags/collections stay
+ * agent-tool territory — slash commands are not a second Zotero CLI.
+ *
+ * The `input` descriptor is what admits the optional `status` argument: the
+ * harness only routes a trailing word to a handler when the definition
+ * declares input. `/zotero` and `/zotero status` therefore share one handler;
+ * dropping `input` would silently demote `/zotero status` to a model prompt.
+ *
+ * `recordInput` stays at its default (`true`) so the durable `command/run`
+ * keeps `args` — the raw input after the command name. The client's
+ * command-input projection reads that field to echo the line the user typed;
+ * `recordInput: false` would strip it and the bubble would collapse to a bare
+ * `/zotero` even for `/zotero status`.
  * @module dsh-zotero/command
  */
 
@@ -12,7 +23,7 @@ import type { ZoteroService } from './service.js'
 import type { ZoteroStatus } from './types.js'
 
 /** The usage line an unknown `/zotero` subcommand is answered with. */
-export const ZOTERO_USAGE_MESSAGE = 'Usage: /zotero status'
+export const ZOTERO_USAGE_MESSAGE = 'Usage: /zotero [status]'
 
 /** The status header when the local API answered the probe. */
 export const ZOTERO_STATUS_CONNECTED = 'Zotero local API: connected'
@@ -65,7 +76,7 @@ export function formatStatus(status: ZoteroStatus): string {
 }
 
 /**
- * Register `/zotero status` when a command registry is composed. The
+ * Register `/zotero` when a command registry is composed. The
  * optional-dependency form keeps the plugin loadable in headless
  * compositions that have no `commands` service.
  */
@@ -75,8 +86,11 @@ export function registerStatusCommand(ctx: Context, service: ZoteroService): voi
       definitionId: CommandDefinitionId('dsh-zotero/status'),
       name: 'zotero',
       description: 'Check the local Zotero connection status',
+      // Required so `/zotero status` remains a command rather than a prompt;
+      // the handler treats the word as an optional synonym for the bare form.
+      // `recordInput` stays default-true: the command-input projection echoes
+      // `command/run.args`, and `recordInput: false` would strip that field.
       input: { hint: 'status' },
-      recordInput: false,
       handler: async (invocation) => {
         const arg = invocation.rawInput.trim()
         if (arg !== '' && arg !== 'status') {
