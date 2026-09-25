@@ -29,10 +29,14 @@ import {
   WRITE_IDENTITY_UNSUPPORTED_MESSAGE,
   WRITE_UNAUTHORIZED_AFTER_AUTH_MESSAGE,
   WRITE_VERSION_MISSING_MESSAGE,
-  writeLibraryUnsupportedMessage,
+  writeListEmptyMessage,
+  writeNonBlankMessage,
   writeObjectRefusedMessage,
+  writeObjectStateMissingMessage,
+  SERVER_MISMATCH_MESSAGE,
   ZOTERO_CAPABILITY_UNAVAILABLE,
   ZOTERO_INVALID_ARGUMENT,
+  ZOTERO_SERVER_MISMATCH,
   ZOTERO_NOT_FOUND,
   ZOTERO_NOT_IMPLEMENTED,
   ZOTERO_UNEXPECTED,
@@ -40,23 +44,37 @@ import {
   ZOTERO_WRITE_UNAUTHORIZED,
   ZoteroError,
 } from '../errors.js'
-import { asRecord, asString, stringArrayOf } from '../json.js'
+import {
+  asRecord,
+  asString,
+  isNonNegativeSafeInteger,
+  isObjectKey,
+  stringArrayOf,
+} from '../json.js'
 import {
   formatRef,
+  isRefString,
   libraryPrefix,
+  parseRef,
   parseZoteroRelationUri,
   PERSONAL_LIBRARY,
   refForLibrary,
-  requireSupportedLocalRef,
+  requireWritableRef,
 } from '../refs.js'
 import { markdownToNoteHtml } from './note-format.js'
 import type { WriteAuthorizer } from '../write-auth.js'
-import type { ZoteroWriteHttpClient, ZoteroWriteObjectFailure } from '../write-http.js'
+import {
+  ZoteroWriteCommitUnknownError,
+  type ZoteroBatchWrite,
+  type ZoteroWriteHttpClient,
+  type ZoteroWriteObjectFailure,
+} from '../write-http.js'
 import type {
   ZoteroCollectionAddRequest,
   ZoteroCollectionAddResult,
+  ZoteroCreateNoteCommittedUnverified,
+  ZoteroCreateNoteCommittedOutcome,
   ZoteroCreateNoteRequest,
-  ZoteroCreateNoteResult,
   ZoteroObjectRef,
   ZoteroTagUpdateRequest,
   ZoteroTagUpdateResult,
@@ -100,13 +118,13 @@ async function withWriteKey<T>(
     return await send(first.key)
   } catch (error) {
     if (!isWriteUnauthorized(error)) throw error
-    deps.authorizer.forget(first.key)
+    await deps.authorizer.invalidate(serverId, first.key)
     const second = await deps.authorizer.keyFor(serverId, signal)
     try {
       return await send(second.key)
     } catch (retried) {
       if (isWriteUnauthorized(retried)) {
-        deps.authorizer.forget(second.key)
+        await deps.authorizer.invalidate(serverId, second.key)
         throw new ZoteroError(WRITE_UNAUTHORIZED_AFTER_AUTH_MESSAGE, ZOTERO_WRITE_UNAUTHORIZED, {
           cause: retried,
         })
@@ -137,20 +155,36 @@ async function ensureServerId(deps: WriteDomainDeps, signal?: AbortSignal): Prom
   return id
 }
 
-/**
- * The ref a write targets: a supported local library, one of the requested
- * kinds, and always the personal library — the write contract covers
- * `zotero://user/0/...` and nothing else.
- */
-function requireWritableRef(
+/** Refuse a qualified ref that names another Zotero instance before any write. */
+function requireWritableRefAtServer(
   ref: ZoteroObjectRef,
   kinds: readonly ZoteroObjectRef['kind'][],
+  serverId: string,
 ): ZoteroObjectRef {
-  requireSupportedLocalRef(ref, kinds)
-  if (ref.library.type !== 'user' || ref.library.id !== 0) {
-    throw new ZoteroError(writeLibraryUnsupportedMessage(ref.library), ZOTERO_INVALID_ARGUMENT)
+  const checked = requireWritableRef(ref, kinds)
+  if (ref.serverId !== undefined && ref.serverId !== serverId) {
+    throw new ZoteroError(SERVER_MISMATCH_MESSAGE, ZOTERO_SERVER_MISMATCH)
   }
-  return ref
+  return checked
+}
+
+function requireNonBlank(name: string, value: string): string {
+  const trimmed = value.trim()
+  if (trimmed === '') {
+    throw new ZoteroError(writeNonBlankMessage(name), ZOTERO_INVALID_ARGUMENT)
+  }
+  return trimmed
+}
+
+function normalizeWriteList(name: string, values: readonly string[]): string[] {
+  return [...new Set(values.map((value) => requireNonBlank(name, value)))]
+}
+
+/** Validate a ref-shaped collection argument locally; names remain live lookups. */
+function normalizeCollectionInput(name: string, value: string): string {
+  const collection = requireNonBlank(name, value)
+  if (isRefString(collection)) requireWritableRef(parseRef(collection), ['collection'])
+  return collection
 }
 
 /** Read one item's write-relevant state, pinning the read to the instance the write will target. */
@@ -158,6 +192,7 @@ async function readItem(
   deps: WriteDomainDeps,
   ref: ZoteroObjectRef,
   serverId: string,
+  field: 'tags' | 'collections',
   signal?: AbortSignal,
 ): Promise<ItemSnapshot> {
   const { json, headers } = await deps.client.getJson<unknown>(
@@ -166,31 +201,70 @@ async function readItem(
     { signal, serverId },
   )
   const record = asRecord(json)
-  const version = typeof record?.version === 'number' ? record.version : undefined
+  const version = isNonNegativeSafeInteger(record?.version) ? record.version : undefined
   if (version === undefined) {
     throw new ZoteroError(WRITE_VERSION_MISSING_MESSAGE, ZOTERO_UNEXPECTED)
   }
   const data = asRecord(record?.data)
+  const responseKey = asString(record?.key)
+  const dataKey = asString(data?.key)
+  if (responseKey !== ref.key || dataKey !== ref.key) {
+    throw new ZoteroError(
+      `Zotero answered the write read with a different item than ${ref.key}; the response cannot be used for this write.`,
+      ZOTERO_UNEXPECTED,
+    )
+  }
+  if (
+    (field === 'tags' && data?.tags === undefined) ||
+    (field === 'collections' && data?.collections === undefined)
+  ) {
+    throw new ZoteroError(writeObjectStateMissingMessage(field), ZOTERO_UNEXPECTED)
+  }
+  const tags = field === 'tags' ? tagsOf(data) : []
+  const collectionKeys = field === 'collections' ? collectionKeysOf(data) : []
+  if (tags === undefined || collectionKeys === undefined) {
+    throw new ZoteroError(writeObjectStateMissingMessage(field), ZOTERO_UNEXPECTED)
+  }
+  const observedServerId = headers.get(ZOTERO_SERVER_ID_HEADER)
+  if (observedServerId !== serverId) {
+    throw new ZoteroError(SERVER_MISMATCH_MESSAGE, ZOTERO_SERVER_MISMATCH)
+  }
   return {
     version,
-    tags: tagsOf(data),
-    collectionKeys: stringArrayOf(data?.collections),
-    serverId: headers.get(ZOTERO_SERVER_ID_HEADER) ?? serverId,
+    tags,
+    collectionKeys,
+    serverId: observedServerId ?? serverId,
   }
 }
 
-function tagsOf(data: Record<string, unknown> | undefined): ItemSnapshot['tags'] {
+/** Parse a saved tag array strictly; undefined means malformed, absent means empty. */
+function tagsOf(data: Record<string, unknown> | undefined): ItemSnapshot['tags'] | undefined {
   const raw = data?.tags
-  if (!Array.isArray(raw)) return []
+  if (raw === undefined) return []
+  if (!Array.isArray(raw)) return undefined
   const entries: { tag: string; type?: number }[] = []
   for (const row of raw) {
     const record = asRecord(row)
     const tag = record === undefined ? asString(row) : asString(record.tag)
-    if (tag === undefined) continue
-    const type = record !== undefined && typeof record.type === 'number' ? record.type : undefined
+    if (tag === undefined || tag.trim() === '') return undefined
+    const type = record?.type
+    if (type !== undefined && !isNonNegativeSafeInteger(type)) return undefined
     entries.push(type === undefined ? { tag } : { tag, type })
   }
   return entries
+}
+
+/** Parse a saved collection-key array strictly; undefined means malformed. */
+function collectionKeysOf(data: Record<string, unknown> | undefined): string[] | undefined {
+  const raw = data?.collections
+  if (raw === undefined) return []
+  if (
+    !Array.isArray(raw) ||
+    raw.some((entry) => typeof entry !== 'string' || !isObjectKey(entry))
+  ) {
+    return undefined
+  }
+  return raw as string[]
 }
 
 /** The Zotero relations key carrying source-item links. */
@@ -200,8 +274,7 @@ function relationUrisOf(data: Record<string, unknown> | undefined): string[] {
   const relations = asRecord(data?.relations)
   const raw = relations === undefined ? undefined : relations[DC_RELATION]
   if (typeof raw === 'string') return [raw]
-  if (Array.isArray(raw)) return raw.filter((entry): entry is string => typeof entry === 'string')
-  return []
+  return stringArrayOf(raw)
 }
 
 /** Preserve each existing tag's type, add the new ones, and report what was added. */
@@ -223,7 +296,7 @@ function mergeTags(
   return { merged, added }
 }
 
-function noteRef(key: string, serverId: string): string {
+function itemRef(key: string, serverId: string): string {
   return formatRef(refForLibrary(PERSONAL_LIBRARY, 'item', key, serverId))
 }
 
@@ -262,6 +335,31 @@ function objectRefusedError(refused: ZoteroWriteObjectFailure): ZoteroError {
   }
 }
 
+function committedUnverifiedNote(
+  batch: ZoteroBatchWrite | undefined,
+  serverId: string,
+  key?: string,
+  version?: number,
+  reason: 'saved-state-unverified' | 'commit-unknown' = 'saved-state-unverified',
+): ZoteroCreateNoteCommittedUnverified {
+  const safeKey = key !== undefined && isObjectKey(key) ? key : undefined
+  return {
+    kind: 'committed-unverified',
+    committed: true,
+    retryable: false,
+    reason,
+    ...(safeKey !== undefined
+      ? {
+          key: safeKey,
+          ref: itemRef(safeKey, serverId),
+          ...(version !== undefined ? { version } : {}),
+        }
+      : {}),
+    ...(batch !== undefined ? { libraryVersion: batch.libraryVersion } : {}),
+    serverId,
+  }
+}
+
 /**
  * Create a research note: standalone or under a parent item, with tags,
  * collections (standalone only), and `dc:relation` source links. The note
@@ -282,18 +380,28 @@ export async function createNote(
   resolveCollection: (refOrName: string, signal?: AbortSignal) => Promise<ZoteroObjectRef>,
   request: ZoteroCreateNoteRequest,
   signal?: AbortSignal,
-): Promise<ZoteroCreateNoteResult> {
-  const serverId = await ensureServerId(deps, signal)
-  const parent =
+): Promise<ZoteroCreateNoteCommittedOutcome> {
+  requireNonBlank('markdown', request.markdown)
+  const localParent =
     request.parentItem === undefined ? undefined : requireWritableRef(request.parentItem, ['item'])
-  if (parent !== undefined && (request.collections?.length ?? 0) > 0) {
+  const collectionInputs = (request.collections ?? []).map((value) =>
+    normalizeCollectionInput('collections', value),
+  )
+  const localSources = (request.sourceRefs ?? []).map((ref) => requireWritableRef(ref, ['item']))
+  const tags = normalizeWriteList('tags', request.tags ?? [])
+  if (localParent !== undefined && collectionInputs.length > 0) {
     throw new ZoteroError(WRITE_CHILD_COLLECTIONS_MESSAGE, ZOTERO_INVALID_ARGUMENT)
   }
-  const collections: ZoteroObjectRef[] = await Promise.all(
-    (request.collections ?? []).map((refOrName) => resolveCollection(refOrName, signal)),
-  )
-  const sources = (request.sourceRefs ?? []).map((ref) => requireWritableRef(ref, ['item']))
-  const tags = [...new Set(request.tags ?? [])]
+
+  const serverId = await ensureServerId(deps, signal)
+  const parent =
+    localParent === undefined
+      ? undefined
+      : requireWritableRefAtServer(localParent, ['item'], serverId)
+  const collections: ZoteroObjectRef[] = (
+    await Promise.all(collectionInputs.map((value) => resolveCollection(value, signal)))
+  ).map((ref) => requireWritableRefAtServer(ref, ['collection'], serverId))
+  const sources = localSources.map((ref) => requireWritableRefAtServer(ref, ['item'], serverId))
   const entry: Record<string, unknown> = {
     itemType: 'note',
     note: markdownToNoteHtml(request.markdown),
@@ -307,40 +415,112 @@ export async function createNote(
       : {}),
   }
   return await withWriteKey(deps, serverId, signal, async (apiKey) => {
-    const batch = await deps.writer.batch(`${libraryPrefix(PERSONAL_LIBRARY)}/items`, [entry], {
-      serverId,
-      apiKey,
-      signal,
-    })
+    let batch: ZoteroBatchWrite
+    try {
+      batch = await deps.writer.batch(`${libraryPrefix(PERSONAL_LIBRARY)}/items`, [entry], {
+        serverId,
+        apiKey,
+        signal,
+      })
+    } catch (error) {
+      if (error instanceof ZoteroWriteCommitUnknownError) {
+        return committedUnverifiedNote(undefined, serverId, undefined, undefined, 'commit-unknown')
+      }
+      throw error
+    }
+    const has = (bucket: Record<string, unknown>, index: string): boolean =>
+      Object.prototype.hasOwnProperty.call(bucket, index)
+    const hasUnexpectedIndex = (bucket: Record<string, unknown>): boolean =>
+      Object.keys(bucket).some((index) => index !== '0')
+    const failed = has(batch.failed, '0')
+    const successful = has(batch.successful, '0')
+    const success = has(batch.success, '0')
+    const unchanged = has(batch.unchanged, '0')
+    if (
+      hasUnexpectedIndex(batch.failed) ||
+      hasUnexpectedIndex(batch.successful) ||
+      hasUnexpectedIndex(batch.success) ||
+      hasUnexpectedIndex(batch.unchanged) ||
+      (failed && (successful || success || unchanged)) ||
+      (unchanged && (successful || success)) ||
+      (!failed && !successful && !success && !unchanged)
+    ) {
+      return committedUnverifiedNote(batch, serverId, undefined, undefined, 'commit-unknown')
+    }
     const refused = batch.failed['0']
     if (refused !== undefined) throw objectRefusedError(refused)
     const written = batch.successful['0']
-    const key = written === undefined ? undefined : asString(written.key)
-    if (key === undefined) {
-      throw new ZoteroError(WRITE_VERSION_MISSING_MESSAGE, ZOTERO_UNEXPECTED)
+    const writtenKey = written === undefined ? undefined : asString(written.key)
+    const successKey = asString(batch.success['0'])
+    const key =
+      writtenKey !== undefined && isObjectKey(writtenKey)
+        ? writtenKey
+        : successKey !== undefined && isObjectKey(successKey)
+          ? successKey
+          : undefined
+    const keyConflict =
+      writtenKey !== undefined &&
+      successKey !== undefined &&
+      isObjectKey(writtenKey) &&
+      isObjectKey(successKey) &&
+      writtenKey !== successKey
+    if (
+      (writtenKey !== undefined && !isObjectKey(writtenKey)) ||
+      (successKey !== undefined && !isObjectKey(successKey)) ||
+      (written !== undefined && writtenKey === undefined) ||
+      keyConflict
+    ) {
+      return committedUnverifiedNote(batch, serverId, keyConflict ? undefined : key)
     }
-    const data = asRecord(written?.data)
-    const savedTags = tagsOf(data).map((tagged) => tagged.tag)
-    const savedCollectionKeys = stringArrayOf(data?.collections)
+    if (key === undefined) {
+      return committedUnverifiedNote(batch, serverId)
+    }
+    const version = isNonNegativeSafeInteger(written?.version) ? written.version : undefined
+    if (version === undefined) {
+      return committedUnverifiedNote(batch, serverId, key)
+    }
+    const data = asRecord(written.data)
+    if (data === undefined) {
+      return committedUnverifiedNote(batch, serverId, key, version)
+    }
+    if (
+      data.key !== key ||
+      data.version !== version ||
+      data.itemType !== 'note' ||
+      typeof data.note !== 'string'
+    ) {
+      return committedUnverifiedNote(batch, serverId, key, version)
+    }
+    // The requested parent is part of the saved-state claim too. Never fill a
+    // missing or contradictory parent from the request after Zotero has
+    // already committed the note; the caller must reconcile an unverified
+    // child-note result by its key instead of receiving a false guarantee.
+    if (
+      (parent !== undefined && data.parentItem !== parent.key) ||
+      (parent === undefined && data.parentItem !== undefined)
+    ) {
+      return committedUnverifiedNote(batch, serverId, key, version)
+    }
+    const savedTagState = tagsOf(data)
+    const savedCollectionState = collectionKeysOf(data)
+    if (savedTagState === undefined || savedCollectionState === undefined) {
+      return committedUnverifiedNote(batch, serverId, key, version)
+    }
+    const savedTags = savedTagState.map((tagged) => tagged.tag)
+    const savedCollectionKeys = savedCollectionState
     const savedRelations = relationUrisOf(data)
     return {
       kind: 'applied',
-      ref: noteRef(key, serverId),
+      ref: itemRef(key, serverId),
       key,
-      version: typeof written?.version === 'number' ? written.version : batch.libraryVersion,
-      ...(parent !== undefined ? { parentItem: noteRef(parent.key, serverId) } : {}),
+      version,
+      ...(parent !== undefined ? { parentItem: itemRef(parent.key, serverId) } : {}),
       collections:
         parent !== undefined
           ? []
-          : (savedCollectionKeys.length > 0
-              ? savedCollectionKeys
-              : collections.map((ref) => ref.key)
-            ).map((collectionKey) => collectionRef(collectionKey, serverId)),
-      tags: savedTags.length > 0 ? savedTags : tags,
-      sourceRefs:
-        savedRelations.length > 0
-          ? savedRelations.map((uri) => relationUriToRef(uri, serverId))
-          : sources.map((ref) => noteRef(ref.key, serverId)),
+          : savedCollectionKeys.map((collectionKey) => collectionRef(collectionKey, serverId)),
+      tags: savedTags,
+      sourceRefs: savedRelations.map((uri) => relationUriToRef(uri, serverId)),
       libraryVersion: batch.libraryVersion,
       serverId,
     }
@@ -352,7 +532,7 @@ function relationUriToRef(uri: string, serverId: string): string {
   const parsed = parseZoteroRelationUri(uri)
   if (parsed === null) return uri
   if (parsed.library.type !== 'user' || parsed.library.id !== 0) return uri
-  return noteRef(parsed.key, serverId)
+  return itemRef(parsed.key, serverId)
 }
 
 /**
@@ -367,11 +547,16 @@ export async function updateTags(
   request: ZoteroTagUpdateRequest,
   signal?: AbortSignal,
 ): Promise<ZoteroTagUpdateResult> {
-  const ref = requireWritableRef(request.item, ['item'])
+  const localRef = requireWritableRef(request.item, ['item'])
+  const additions = normalizeWriteList('tags', request.tags ?? [])
+  if (additions.length === 0) {
+    throw new ZoteroError(writeListEmptyMessage('tags'), ZOTERO_INVALID_ARGUMENT)
+  }
   const serverId = await ensureServerId(deps, signal)
-  const snapshot = await readItem(deps, ref, serverId, signal)
-  const { merged, added } = mergeTags(snapshot.tags, [...new Set(request.tags)])
-  const resultRef = noteRef(ref.key, snapshot.serverId ?? serverId)
+  const ref = requireWritableRefAtServer(localRef, ['item'], serverId)
+  const snapshot = await readItem(deps, ref, serverId, 'tags', signal)
+  const { merged, added } = mergeTags(snapshot.tags, additions)
+  const resultRef = itemRef(ref.key, snapshot.serverId ?? serverId)
   if (added.length === 0) {
     return {
       kind: 'applied',
@@ -418,12 +603,15 @@ export async function addToCollection(
   request: ZoteroCollectionAddRequest,
   signal?: AbortSignal,
 ): Promise<ZoteroCollectionAddResult> {
-  const ref = requireWritableRef(request.item, ['item'])
-  const target = await resolveCollection(request.collection, signal)
+  const localRef = requireWritableRef(request.item, ['item'])
+  const collectionInput = normalizeCollectionInput('collection', request.collection)
   const serverId = await ensureServerId(deps, signal)
-  const snapshot = await readItem(deps, ref, serverId, signal)
+  const target = await resolveCollection(collectionInput, signal)
+  requireWritableRefAtServer(target, ['collection'], serverId)
+  const ref = requireWritableRefAtServer(localRef, ['item'], serverId)
+  const snapshot = await readItem(deps, ref, serverId, 'collections', signal)
   const effectiveServerId = snapshot.serverId ?? serverId
-  const resultRef = noteRef(ref.key, effectiveServerId)
+  const resultRef = itemRef(ref.key, effectiveServerId)
   if (snapshot.collectionKeys.includes(target.key)) {
     return {
       kind: 'applied',

@@ -9,7 +9,7 @@ import {
   requestTimeoutMessage,
   responseTooLargeMessage,
 } from '../../src/http-client.js'
-import { ZoteroWriteHttpClient } from '../../src/write-http.js'
+import { ZoteroWriteHttpClient, ZoteroWriteCommitUnknownError } from '../../src/write-http.js'
 import {
   API_DISABLED_MESSAGE,
   SERVER_MISMATCH_MESSAGE,
@@ -20,6 +20,7 @@ import {
   WRITE_IDENTITY_MISSING_MESSAGE,
   WRITE_LIBRARY_VERSION_MISSING_MESSAGE,
   WRITE_PRECONDITION_REFUSED_MESSAGE,
+  WRITE_RESPONSE_IDENTITY_MISSING_MESSAGE,
   WRITE_UNAUTHORIZED_MESSAGE,
   ZOTERO_API_DISABLED,
   ZOTERO_NOT_FOUND,
@@ -263,6 +264,25 @@ describe('batch outcome buckets', () => {
     )
   })
 
+  it('refuses malformed library-version headers instead of coercing them', async () => {
+    let version = ''
+    mock.route('POST', '/api/users/0/items', (_req, res, helpers) =>
+      helpers.raw(
+        200,
+        { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': version },
+        JSON.stringify(batchBody()),
+      ),
+    )
+    for (const malformed of ['', '1.5', 'Infinity', '9007199254740992']) {
+      version = malformed
+      await expectZoteroError(
+        client.batch('users/0/items', [{ itemType: 'note' }], writeOptions()),
+        ZOTERO_UNEXPECTED,
+        WRITE_LIBRARY_VERSION_MISSING_MESSAGE,
+      )
+    }
+  })
+
   it('refuses a write answer without the documented library-version header', async () => {
     mock.route('POST', '/api/users/0/items', (_req, res, helpers) =>
       helpers.raw(200, { 'Zotero-Server-ID': SERVER_ID }, JSON.stringify(batchBody())),
@@ -292,6 +312,32 @@ describe('write status translations', () => {
       messagePart,
     )
   }
+
+  it('rejects a successful response served by a different instance', async () => {
+    mock.route('POST', '/api/users/0/items', (_req, res, helpers) =>
+      helpers.raw(
+        200,
+        { 'Zotero-Server-ID': 'srv-other', 'Last-Modified-Version': '42' },
+        JSON.stringify(batchBody()),
+      ),
+    )
+    await expectZoteroError(
+      client.batch('users/0/items', [{ itemType: 'note' }], writeOptions()),
+      ZOTERO_SERVER_MISMATCH,
+      SERVER_MISMATCH_MESSAGE,
+    )
+  })
+
+  it('rejects a successful response without the serving instance id', async () => {
+    mock.route('POST', '/api/users/0/items', (_req, res, helpers) =>
+      helpers.raw(200, { 'Last-Modified-Version': '42' }, JSON.stringify(batchBody())),
+    )
+    await expectZoteroError(
+      client.batch('users/0/items', [{ itemType: 'note' }], writeOptions()),
+      ZOTERO_UNEXPECTED,
+      WRITE_RESPONSE_IDENTITY_MISSING_MESSAGE,
+    )
+  })
 
   it('maps 401 onto the re-authorization path', async () => {
     await expectWriteStatus(
@@ -494,6 +540,52 @@ describe('cancellation and bounds', () => {
       responseTooLargeMessage(16),
     )
   })
+
+  it('refuses a batch response whose successful entry is not an object', async () => {
+    mock.route('POST', '/api/users/0/items', (_req, res, helpers) =>
+      helpers.raw(
+        200,
+        batchResponseHeaders(42),
+        JSON.stringify({ ...batchBody(), successful: { '0': 'not an object' } }),
+      ),
+    )
+    await expectZoteroError(
+      client.batch('users/0/items', [{ itemType: 'note' }], writeOptions()),
+      ZOTERO_UNEXPECTED,
+      writeBatchShapeMessage('successful'),
+    )
+  })
+
+  it('refuses a batch response whose failed entry is not an object', async () => {
+    mock.route('POST', '/api/users/0/items', (_req, res, helpers) =>
+      helpers.raw(
+        200,
+        batchResponseHeaders(42),
+        JSON.stringify({ ...batchBody(), failed: { '0': 'not an object' } }),
+      ),
+    )
+    await expectZoteroError(
+      client.batch('users/0/items', [{ itemType: 'note' }], writeOptions()),
+      ZOTERO_UNEXPECTED,
+      writeBatchShapeMessage('failed'),
+    )
+  })
+
+  it('marks a patch write as commit-unknown when the connection drops', async () => {
+    mock.route('PATCH', '/api/users/0/items/ITEM1234', (_req, res) => {
+      res.destroy()
+    })
+    await expect(
+      client.patch(
+        'users/0/items/ITEM1234',
+        { tags: [] },
+        {
+          ...writeOptions(),
+          ifUnmodifiedSinceVersion: 1,
+        },
+      ),
+    ).rejects.toBeInstanceOf(ZoteroWriteCommitUnknownError)
+  })
 })
 
 describe('authorize', () => {
@@ -540,6 +632,17 @@ describe('authorize', () => {
     )
   })
 
+  it('rejects a grant response without the serving instance id', async () => {
+    mock.route('POST', '/api/local/authorize', (_req, res, helpers) =>
+      helpers.raw(200, {}, JSON.stringify({ key: 'K'.repeat(32), remember: true })),
+    )
+    await expectZoteroError(
+      client.authorize('dsh (Zotero plugin)', { serverId: SERVER_ID }),
+      ZOTERO_UNEXPECTED,
+      WRITE_RESPONSE_IDENTITY_MISSING_MESSAGE,
+    )
+  })
+
   it('fails loud on a grant response without a key', async () => {
     mock.route('POST', '/api/local/authorize', (_req, res, helpers) =>
       helpers.raw(200, { 'Zotero-Server-ID': SERVER_ID }, JSON.stringify({ remember: false })),
@@ -547,6 +650,45 @@ describe('authorize', () => {
     await expectZoteroError(
       client.authorize('dsh (Zotero plugin)', { serverId: SERVER_ID }),
       ZOTERO_UNEXPECTED,
+    )
+  })
+
+  it('fails loud when authorization response is unparseable JSON', async () => {
+    mock.route('POST', '/api/local/authorize', (_req, res, helpers) =>
+      helpers.raw(200, { 'Zotero-Server-ID': SERVER_ID }, 'not-json'),
+    )
+    await expectZoteroError(
+      client.authorize('dsh (Zotero plugin)', { serverId: SERVER_ID }),
+      ZOTERO_UNEXPECTED,
+      UNPARSEABLE_RESPONSE_MESSAGE,
+    )
+  })
+
+  it('translates network drops during authorization without commit-unknown', async () => {
+    mock.route('POST', '/api/local/authorize', (_req, res) => {
+      res.destroy()
+    })
+    const promise = client.authorize('dsh (Zotero plugin)', { serverId: SERVER_ID })
+    await expect(promise).rejects.not.toBeInstanceOf(ZoteroWriteCommitUnknownError)
+  })
+
+  it('enforces the response byte bound on authorize responses', async () => {
+    const small = new ZoteroWriteHttpClient({
+      baseUrl: mock.baseUrl,
+      timeoutMs: 5000,
+      maxResponseBytes: 16,
+    })
+    mock.route('POST', '/api/local/authorize', (_req, res, helpers) =>
+      helpers.raw(
+        200,
+        { 'Zotero-Server-ID': SERVER_ID },
+        JSON.stringify({ key: 'K'.repeat(32), remember: true }),
+      ),
+    )
+    await expectZoteroError(
+      small.authorize('dsh', { serverId: SERVER_ID }),
+      ZOTERO_RESPONSE_TOO_LARGE,
+      responseTooLargeMessage(16),
     )
   })
 })

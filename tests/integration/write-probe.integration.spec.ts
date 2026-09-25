@@ -94,6 +94,7 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1' && process.env.ZOTERO_WRIT
         { markdown: 'probe note two' },
       )
       expect(result.kind).toBe('applied')
+      if (result.kind !== 'applied') throw new Error('expected an applied note')
       await expect(
         updateTags(
           { client, writer, authorizer },

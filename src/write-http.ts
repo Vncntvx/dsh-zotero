@@ -22,7 +22,9 @@
  * @module dsh-zotero/write-http
  */
 
-import { deadline, timeoutOf } from '@deepseek-ai/dsh-timeout'
+import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { deadline } from '@deepseek-ai/dsh-timeout'
+import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import { acquireSlot, ConcurrencyGate } from './concurrency.js'
 import {
   ZOTERO_API_VERSION_HEADER,
@@ -42,6 +44,7 @@ import {
   WRITE_CONFLICT_MESSAGE,
   WRITE_IDENTITY_MISSING_MESSAGE,
   WRITE_LIBRARY_VERSION_MISSING_MESSAGE,
+  WRITE_RESPONSE_IDENTITY_MISSING_MESSAGE,
   WRITE_PRECONDITION_REFUSED_MESSAGE,
   WRITE_UNAUTHORIZED_MESSAGE,
   ZOTERO_API_DISABLED,
@@ -52,18 +55,20 @@ import {
   ZOTERO_WRITE_RATE_LIMITED,
   ZOTERO_WRITE_UNAUTHORIZED,
   ZoteroError,
+  type ZoteroErrorCode,
   writeBatchShapeMessage,
   writeRateLimitedMessage,
 } from './errors.js'
 import {
   SERVER_ID_MISMATCH_STATEMENT,
+  UNEXPECTED_REQUEST_MESSAGE,
   UNPARSEABLE_RESPONSE_MESSAGE,
   readBody,
   readFailureStatement,
   sharedHttpStatusError,
   translateFetchError,
 } from './http-client.js'
-import { asRecord, asString } from './json.js'
+import { asRecord, asString, parseNonNegativeSafeInteger } from './json.js'
 
 export interface ZoteroWriteHttpClientOptions {
   readonly baseUrl: string
@@ -113,6 +118,36 @@ export interface ZoteroBatchWrite {
   readonly libraryVersion: number
 }
 
+/**
+ * A write request that reached the response/commit boundary but whose
+ * outcome could not be proven. Callers that create non-idempotent objects
+ * must surface this as a non-retryable, commit-unknown result rather than
+ * inviting a second write.
+ */
+export class ZoteroWriteCommitUnknownError extends ZoteroError {
+  constructor(message: string, code: ZoteroErrorCode, options?: ErrorOptions) {
+    super(message, code, options)
+    this.name = 'ZoteroWriteCommitUnknownError'
+  }
+}
+
+/** Preserve a typed error's code/message while marking its commit state unknown. */
+function asCommitUnknown(error: unknown): ZoteroWriteCommitUnknownError {
+  const code = (error instanceof ZoteroError ? error.code : ZOTERO_UNEXPECTED) as ZoteroErrorCode
+  const message = error instanceof Error ? error.message : UNEXPECTED_REQUEST_MESSAGE
+  return new ZoteroWriteCommitUnknownError(message, code, { cause: error })
+}
+
+/** Statuses whose response proves the write was refused before object commit. */
+const PRE_COMMIT_WRITE_STATUSES = new Set([
+  400, 401, 403, 404, 405, 409, 410, 412, 413, 415, 422, 426, 428, 429, 501,
+])
+
+/** Redirects are refused before dispatch, so they cannot represent a commit either. */
+function isPreCommitWriteStatus(status: number): boolean {
+  return (status >= 300 && status < 400) || PRE_COMMIT_WRITE_STATUSES.has(status)
+}
+
 export type ZoteroBatchWriteOptions = ZoteroWriteOptions
 
 export interface ZoteroPatchWriteOptions extends ZoteroWriteOptions {
@@ -139,12 +174,9 @@ function nextWriteToken(): string {
   return crypto.randomUUID().replaceAll('-', '')
 }
 
-/** Parse the library version off a write response, or undefined when absent. */
+/** Parse the library version off a write response, or undefined when absent or malformed. */
 function libraryVersionOf(headers: Headers): number | undefined {
-  const raw = headers.get(ZOTERO_LIBRARY_VERSION_HEADER)
-  if (raw === null) return undefined
-  const value = Number(raw)
-  return Number.isFinite(value) && value >= 0 ? value : undefined
+  return parseNonNegativeSafeInteger(headers.get(ZOTERO_LIBRARY_VERSION_HEADER))
 }
 
 /** Require the library version off a write response; absence is protocol drift. */
@@ -188,6 +220,8 @@ export class ZoteroWriteHttpClient {
       opts,
       { 'Zotero-Write-Token': writeToken },
       JSON.stringify(entries),
+      undefined,
+      true,
     )
     return this.parseBatchWrite(body, requireLibraryVersion(headers))
   }
@@ -208,6 +242,8 @@ export class ZoteroWriteHttpClient {
       opts,
       { 'If-Unmodified-Since-Version': String(opts.ifUnmodifiedSinceVersion) },
       JSON.stringify(body),
+      undefined,
+      true,
     )
     return { libraryVersion: requireLibraryVersion(headers) }
   }
@@ -254,6 +290,7 @@ export class ZoteroWriteHttpClient {
     extraHeaders: Record<string, string>,
     body: string,
     deadlineMs: number = this.options.timeoutMs,
+    commitSensitive = false,
   ): Promise<{ body: string; headers: Headers }> {
     if (opts.serverId === '') {
       throw new ZoteroError(WRITE_IDENTITY_MISSING_MESSAGE, ZOTERO_UNEXPECTED)
@@ -269,33 +306,76 @@ export class ZoteroWriteHttpClient {
       }
       if (opts.apiKey !== '') headers['Zotero-API-Key'] = opts.apiKey
       headers['Content-Type'] = 'application/json'
+      // If cancellation or the provider deadline won before dispatch, no write
+      // can have committed and the caller must see the ordinary cancellation or
+      // timeout rather than a false commit-unknown outcome.
+      if (opts.signal?.aborted || d.signal.aborted) {
+        translateFetchError(new Error(), d.signal, opts.signal, deadlineMs)
+      }
       let response: Response
       try {
         response = await fetch(url, { method, headers, body, redirect: 'manual', signal: d.signal })
       } catch (error) {
-        translateFetchError(error, d.signal, opts.signal, deadlineMs)
+        // Translate first so timeout/abort keep their typed codes; a
+        // commit-sensitive write then marks that typed failure as
+        // commit-unknown without collapsing the code to UNEXPECTED.
+        try {
+          translateFetchError(error, d.signal, opts.signal, deadlineMs)
+        } catch (translated) {
+          if (
+            opts.signal?.aborted ||
+            (translated instanceof HarnessError && translated.code === TOOL_ABORTED)
+          ) {
+            throw translated
+          }
+          if (commitSensitive) throw asCommitUnknown(translated)
+          throw translated
+        }
+      }
+      const observedServerId = response.headers.get(ZOTERO_SERVER_ID_HEADER)
+      // A response from another instance is never translated as this write's
+      // refusal. This check also covers error responses, whose bodies may use
+      // different wording than the read transport's identity statement.
+      if (observedServerId !== null && observedServerId !== opts.serverId) {
+        throw new ZoteroError(SERVER_MISMATCH_MESSAGE, ZOTERO_SERVER_MISMATCH)
       }
       if (!response.ok) {
         // Zotero states its refusals in the body for the statuses the write
         // path distinguishes (the 403 deny grant, the 412 identity-vs-version
         // fork); read those under the bound, everything else by status.
-        const detail =
-          response.status === 401 || response.status === 403 || response.status === 412
-            ? await readFailureStatement(
-                response,
-                this.options.maxResponseBytes,
-                d.signal,
-                opts.signal,
-                deadlineMs,
-              )
-            : ''
-        this.translateWriteStatus(response, detail)
+        let detail = ''
+        try {
+          detail =
+            response.status === 401 || response.status === 403 || response.status === 412
+              ? await readFailureStatement(
+                  response,
+                  this.options.maxResponseBytes,
+                  d.signal,
+                  opts.signal,
+                  deadlineMs,
+                )
+              : ''
+          this.translateWriteStatus(response, detail)
+        } catch (error) {
+          if (commitSensitive && !isPreCommitWriteStatus(response.status)) {
+            throw asCommitUnknown(error)
+          }
+          throw error
+        }
+      }
+      if (observedServerId === null) {
+        const error = new ZoteroError(WRITE_RESPONSE_IDENTITY_MISSING_MESSAGE, ZOTERO_UNEXPECTED)
+        throw commitSensitive ? asCommitUnknown(error) : error
       }
       let responseBody: string
       try {
         responseBody = await readBody(response, this.options.maxResponseBytes)
       } catch (error) {
-        translateFetchError(error, d.signal, opts.signal, deadlineMs)
+        try {
+          translateFetchError(error, d.signal, opts.signal, deadlineMs)
+        } catch (translated) {
+          throw commitSensitive ? asCommitUnknown(translated) : translated
+        }
       }
       return { body: responseBody, headers: response.headers }
     } finally {
