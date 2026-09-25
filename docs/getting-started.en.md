@@ -55,11 +55,13 @@ After installing, the plugin mounts as `zotero` and takes effect on the next dsh
 
 ## Verify the connection
 
-Run in a session:
+In the composer (including a brand-new session — the result appears in the conversation), run:
 
 ```
-/zotero status
+/zotero
 ```
+
+`/zotero status` is an equivalent spelling of the same command.
 
 Expected output:
 

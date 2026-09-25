@@ -29,6 +29,8 @@ User → Agent → dsh Zotero Tools → ZoteroService → Provider → 127.0.0.1
 - Config is live: uses settings section when attached, otherwise composition entry
 - Structural volatile updates call the private `buildTransport()` to rebuild the HTTP client, local provider, and write-tool set on the **same** `ZoteroService` instance; limit-only updates are read live and do not rebuild transport
 - The connectivity recovery gate (`ConnectivityRecovery` / `service.recovery`) lives for the service instance and is **not** reset by settings rebuilds (resetting would stack duplicate cards for concurrent failures)
+- The write gate sits on the **service seam**: the three write methods require a `ZoteroWriteCall` (plan markdown plus the asking agent and signal), answer the capability gate before the plan card, return `declined` without approving, and fail closed with no channel; the write tools no longer run the plan review themselves
+- A `tools/pre-execute` listener raises a shell command aimed at Zotero's local write API into a harness approval request (`src/shell-write-detector.ts`, no switch): a confirmation runs that one call, and a rejection / cancellation / `never` policy / missing channel runs nothing. Detection reads command text; see the write boundaries for its limits
 - Request-driven: loading never touches Zotero
 
 ### Provider layer (`src/local/provider.ts`)
@@ -36,6 +38,7 @@ User → Agent → dsh Zotero Tools → ZoteroService → Provider → 127.0.0.1
 - `LocalApiProvider` implements `ZoteroProvider`
 - Capabilities: search, metadata, attachments, citation, browse, retrieve, changes; optional write support is exposed only when its transport and authorizer are wired
 - Client-side scope resolution (Local API has no server-side name search)
+- Read-path fan-out is already parallel: one key's two children listings run through `Promise.all` (`src/local/detail.ts`), retrieve's attachment set runs under bounded concurrency (`ZOTERO_GRAPH_CONCURRENCY`), and browse/changes batch their multi-resource reads the same way; the write path's request minimum (one POST per note, no read-back) is stated in the [tools doc](./tools.en.md) write boundaries
 - Note body scan: client-side first page (offset 0), limited by maxNoteScanRecords
 - Evidence ranking: BM25 over passage corpus (annotations, notes, abstract, fulltext chunks)
 - Export: citation batches follow API's 50-key limit; translator formats capped at 50 refs

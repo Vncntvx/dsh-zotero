@@ -30,7 +30,6 @@ All configuration fields are defined in `src/config.ts`, with defaults provided 
 | `defaultStyle`         | `apa`                        | CSL citation style (must be built into Zotero)                                                 |
 | `defaultLocale`        | `en-US`                      | CSL citation locale                                                                            |
 | `writeEnabled`         | `false`                      | Whether to register and allow the three personal-library write tools                           |
-| `writeConfirm`         | `true`                       | Whether to show the dsh plan-approval card before every write                                  |
 | `writePersistKey`      | `true`                       | Whether Always-Allow write keys persist in the host credentials service                        |
 | `webEnabled`           | `true`                       | Whether to enable Zotero session tab in dsh web                                                |
 

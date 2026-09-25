@@ -55,11 +55,13 @@ dsh plugin --profile <profile-name> add ./dsh-zotero-*.tgz
 
 ## 验证连接
 
-在会话中执行：
+在会话输入框执行（新开的会话也可以，结果会直接出现在对话里）：
 
 ```
-/zotero status
+/zotero
 ```
+
+`/zotero status` 是同一命令的等价写法。
 
 正常输出示例：
 

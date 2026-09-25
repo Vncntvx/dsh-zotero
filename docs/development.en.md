@@ -28,11 +28,15 @@ src/
   export-mapping.ts     # Ref → batch item mapping
   ask.ts                # User-question fallback when the connection fails (one card per failure kind, shared by parallel calls)
   prompt.ts             # Model-facing policy section
-  command.ts            # /zotero status command
+  command.ts            # /zotero command (status is an equivalent spelling)
+  write-approval.ts     # Write plan card (the confirmation layer of the ctx.zotero seam)
+  write-auth.ts         # Zotero local write-key acquisition and persistence
+  write-http.ts         # Local API write transport (Server-ID + key + batches)
+  shell-write-detector.ts # Detector for shell writes to the local API (tools/pre-execute → ask)
   remote.ts             # Remote service for web tab
   typert.ts             # Typert manifest
   settings-namespace.ts # Settings namespace constants
-  tools/                # 8 model tools (search/get/children/attachment/retrieve/export/browse/changes) + present/validate shared pieces
+  tools/                # 11 model tools (8 read + create_note/add_tags/add_to_collection) + present/validate shared pieces
   client/               # Browser side (settings page, Sources tab, sources reducers, workspace views)
 tests/                  # Unit tests (mock Zotero server + browser page tests)
 ```

@@ -30,7 +30,6 @@
 | `defaultStyle`         | `apa`                        | CSL 引用样式（需 Zotero 内置）                                               |
 | `defaultLocale`        | `en-US`                      | CSL 引用语言                                                                 |
 | `writeEnabled`         | `false`                      | 是否注册并允许三个个人库写工具                                               |
-| `writeConfirm`         | `true`                       | 每次写入前是否展示 dsh 计划批准卡                                            |
 | `writePersistKey`      | `true`                       | Always-Allow 写 key 是否保存到宿主 credentials store                         |
 | `webEnabled`           | `true`                       | 是否在 dsh web 中启用 Zotero 会话标签页                                      |
 

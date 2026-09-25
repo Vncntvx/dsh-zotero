@@ -97,7 +97,7 @@ Agent 依次调用搜索、检索、导出三个工具完成用户请求。
 - `zotero_add_tags`：读取现有标签后安全合并，并在版本前置条件下写回
 - `zotero_add_to_collection`：读取现有合集后安全合并，并在版本前置条件下写回
 
-`writeConfirm` 默认开启，每次写入前显示计划卡；Zotero 10 随后通过本地授权对话框签发一次性或 Always-Allow key。写工具不会使用可重试的 connectivity ask。
+每次写入前都会显示计划卡（不可关闭）；Zotero 10 随后通过本地授权对话框签发一次性或 Always-Allow key。写工具不会使用可重试的 connectivity ask。
 
 ## 会话来源面板
 
@@ -125,7 +125,7 @@ BibTeX 导出视图：每条引用可展开查看完整条目，支持一键复�
 
 在设置面板的左侧导航中，dsh-zotero 提供独立的 **Zotero** 配置页（与 General、Models、Plugins 并列）。修改配置后保存即生效，无需重启——工具在每次请求时读取最新配置。
 
-可配置项包括：API 地址、各项读取/导出上限、引用样式和区域设置，以及 `writeEnabled`、`writeConfirm`、`writePersistKey` 与 `webEnabled`。详见 [配置文档](configuration.md)。
+可配置项包括：API 地址、各项读取/导出上限、引用样式和区域设置，以及 `writeEnabled`、`writePersistKey` 与 `webEnabled`。详见 [配置文档](configuration.md)。
 
 ## 边界说明
 

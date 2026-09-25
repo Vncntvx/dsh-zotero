@@ -29,6 +29,8 @@ graph LR
 - 配置是实时的：附加时使用 settings section，否则使用 composition entry
 - 结构性 volatile 更新通过私有 `buildTransport()` 在**同一** `ZoteroService` 实例上重建 HTTP client、local provider 与写工具集；纯限额更新由 provider 实时读取，不重建 transport
 - 连接恢复门（`ConnectivityRecovery` / `service.recovery`）与服务实例同寿命，**不**随 settings rebuild 重置（避免并发失败叠卡）
+- 写入闸门在**服务接缝**上：三个写方法要求一个 `ZoteroWriteCall`（计划文本 + 发起调用的 agent/信号），先过能力门再弹计划卡，未批准返回 `declined`，无通道则失败关闭；写工具不再自己发起计划审查
+- 通过 `tools/pre-execute` 监听器把 shell 直写 Zotero 本地接口的调用抬成 harness 审批请求（`src/shell-write-detector.ts`，无开关）：确认才执行一次，拒绝 / 取消 / 策略为 `never` / 无通道都不执行。检测只读命令文本，理由与盲区见写入边界
 - 请求驱动：加载从不触及 Zotero
 
 ### Provider 层 (`src/local/provider.ts`)
@@ -36,6 +38,7 @@ graph LR
 - `LocalApiProvider` 实现 `ZoteroProvider`
 - 能力：search、metadata、attachments、citation、browse、retrieve、changes；写入能力只在 transport 与 authorizer 均接线时提供
 - 客户端侧解析作用域（Local API 无服务端名称搜索）
+- 读路径的扇出已经并行：一个 key 的 children 两半走 `Promise.all`（`src/local/detail.ts`），retrieve 的附件集走有界并发（`ZOTERO_GRAPH_CONCURRENCY`），browse/changes 的多资源读同理；写路径的往返下限（建笔记一次 POST、不回读）见 [工具文档](./tools.md) 的写入边界
 - 笔记体扫描：客户端侧第一页（offset 0），受 maxNoteScanRecords 限制
 - 证据排名：基于 passage 语料库的 BM25（annotations、notes、abstract、fulltext chunks）
 - 导出：引用批次遵循 API 的 50 键上限；translator 格式最多 50 条引用

@@ -28,7 +28,11 @@ src/
   export-mapping.ts     # 引用 → 批量条目映射
   ask.ts                # 连接失败时的 user-question 交互（每类故障一次提问，并行调用共享同一张卡）
   prompt.ts             # 面向模型的 policy section
-  command.ts            # /zotero status 命令
+  command.ts            # /zotero 命令（status 为等价写法）
+  write-approval.ts     # 写入计划卡（ctx.zotero 接缝的确认层）
+  write-auth.ts         # Zotero 本地写 key 的获取与持久化
+  write-http.ts         # Local API 写传输（Server-ID + key + 批量）
+  shell-write-detector.ts # shell 直写本地 API 的检测（tools/pre-execute → ask）
   remote.ts             # Web tab 的 Remote 服务
   typert.ts             # Typert manifest
   settings-namespace.ts # 设置命名空间常量
@@ -125,3 +129,4 @@ npm run dev:client                # esbuild watch
 - `npm run build` 成功
 - tarball 安装后 smoke.mjs 通过
 - 有 Zotero 时集成测试通过
+- 按 [使用情景](scenarios.md) 跑过金路径（G1–G8）；启用写入时再跑 W1–W4

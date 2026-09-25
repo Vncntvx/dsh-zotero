@@ -97,7 +97,7 @@ After `writeEnabled` is explicitly enabled, three tools operate only on `zotero:
 - `zotero_add_tags` reads existing tags, merges safely, and writes under a version precondition.
 - `zotero_add_to_collection` reads existing memberships, merges safely, and writes under a version precondition.
 
-`writeConfirm` is on by default and shows a plan before every write. Zotero 10 then issues a one-time or Always-Allow key through its local authorization dialog. Write tools never use the retrying connectivity ask.
+Every write shows a plan card before it happens, with no way to turn that off. Zotero 10 then issues a one-time or Always-Allow key through its local authorization dialog. Write tools never use the retrying connectivity ask.
 
 ## Session Sources panel
 
@@ -125,7 +125,7 @@ BibTeX export view: each citation can be expanded to show the full entry, with o
 
 The Settings panel's left navigation carries a dedicated **Zotero** page (beside General, Models, and Plugins). Changes take effect on save — tools read the latest config on each request.
 
-Configurable items include the API address, read/export limits, citation style and locale, plus `writeEnabled`, `writeConfirm`, `writePersistKey`, and `webEnabled`. See [Configuration](configuration.en.md).
+Configurable items include the API address, read/export limits, citation style and locale, plus `writeEnabled`, `writePersistKey`, and `webEnabled`. See [Configuration](configuration.en.md).
 
 ## Design boundaries
 

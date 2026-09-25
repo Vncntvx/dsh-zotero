@@ -101,7 +101,7 @@ More examples in [Features](docs/features.en.md).
 
 ## Limits
 
-- **Read-only by default**: after `writeEnabled` is explicitly enabled, three write tools can create research notes, add tags, or add personal-library items to collections; writes also require the default-on `writeConfirm` plan and Zotero 10 local authorization
+- **Read-only by default**: after `writeEnabled` is explicitly enabled, three write tools can create research notes, add tags, or add personal-library items to collections; every write first shows a plan card for approval (there is no switch to turn it off), plus Zotero 10 local authorization
 - **Loopback only**: network requests go only to `127.0.0.1:23119`
 - **Evidence ranking is term-based**: BM25 ranks passages by query-term frequency match
 - **Exports are static text**: the tool returns text, and that is what the model reads; the Zotero panel offers one-click copy or file download (`.bib`, `.ris`, `.json`), so nothing has to be retyped

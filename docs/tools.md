@@ -273,7 +273,7 @@ zotero_changes(since={serverId: "<from cursor>", library: {type: "user", id: 0},
 
 ## zotero_create_note
 
-创建研究笔记：独立笔记，或挂到某条目下的子笔记，创建时可同时带标签、合集与来源关系。markdown 由插件转换为 Zotero 笔记 HTML——白名单语法（段落、一至四级标题、粗斜体、行内与围栏代码、引用、一层列表、带 `---` 分隔行的管道表格、仅 `https://`/`http://`/`zotero://` 链接），**语法之外的任何内容一律转义为字面文本，原始 HTML 不透传**。Zotero 服务端对写入不做格式转换，markdown 原样存入就会显示为原始标记（社区集成踩过的坑），所以转换发生在插件侧。子笔记继承父条目的合集，只有独立笔记可携带 `collections`；子笔记再传非空 `collections` 会在计划卡前被拒绝。来源以 `dc:relation` 关系记录（Zotero 的"关联条目"），创建后从批量写响应的 `successful` 桶读回保存态，无需再发 GET。`writeConfirm` 开启时（默认）每次写入先展示计划卡片等待批准；Zotero 10 首次写入还会弹它自己的授权对话框（允许 / 总是允许 / 拒绝，默认拒绝）。
+创建研究笔记：独立笔记，或挂到某条目下的子笔记，创建时可同时带标签、合集与来源关系。markdown 由插件转换为 Zotero 笔记 HTML——白名单语法（段落、一至四级标题、粗斜体、行内与围栏代码、引用、一层列表、带 `---` 分隔行的管道表格、仅 `https://`/`http://`/`zotero://` 链接），**语法之外的任何内容一律转义为字面文本，原始 HTML 不透传**。Zotero 服务端对写入不做格式转换，markdown 原样存入就会显示为原始标记（社区集成踩过的坑），所以转换发生在插件侧。子笔记继承父条目的合集，只有独立笔记可携带 `collections`；子笔记再传非空 `collections` 会在计划卡前被拒绝。来源以 `dc:relation` 关系记录（Zotero 的"关联条目"），创建后从批量写响应的 `successful` 桶读回保存态，无需再发 GET。每次写入都先展示计划卡片等待批准（这个确认没有关闭开关）；Zotero 10 首次写入还会弹它自己的授权对话框（允许 / 总是允许 / 拒绝，默认拒绝）。
 
 ### 参数
 
@@ -299,7 +299,7 @@ zotero_create_note(markdown="**方法**：见第 2 节。", parentItem="zotero:/
 
 ## zotero_add_tags
 
-给一个条目加标签。Zotero 的 PATCH 对数组是整体替换而非合并，所以工具内部读-合并-写：先读条目现有标签与版本，把新增项并入（既有标签及其彩色/自动类型原样保留）后以 `If-Unmodified-Since-Version` 前置提交；所请求标签全部已存在时**不发任何写请求**，直接返回 `unchanged: true`。版本前置失败（对象在读取后被改动）报 `ZOTERO_WRITE_CONFLICT`——重跑一次工具即可，它会重新读取并在其上合并。`writeConfirm` 开启时（默认）每次写入先展示计划卡片。
+给一个条目加标签。Zotero 的 PATCH 对数组是整体替换而非合并，所以工具内部读-合并-写：先读条目现有标签与版本，把新增项并入（既有标签及其彩色/自动类型原样保留）后以 `If-Unmodified-Since-Version` 前置提交；所请求标签全部已存在时**不发任何写请求**，直接返回 `unchanged: true`。版本前置失败（对象在读取后被改动）报 `ZOTERO_WRITE_CONFLICT`——重跑一次工具即可，它会重新读取并在其上合并。每次写入都先展示计划卡片等待批准（这个确认没有关闭开关）。
 
 ### 参数
 
@@ -345,7 +345,24 @@ zotero_add_to_collection(ref="zotero://user/0/item/ABCD1234", collection="方法
 
 ## 写入边界
 
-三个写入工具只在设置的 `writeEnabled` 打开时注册，且都只写 `zotero://user/0/`（个人库）。`writeConfirm` 开启时（默认）每次写入前展示 dsh 侧计划卡片；参数校验在计划卡之前完成，畸形调用不会被当作「未批准」。Zotero 10 自己的授权弹窗与本地 API key 是其下的硬边界：写请求必须携带实例 id（缺失 428、不匹配 412）与本地签发的 key（`/api/local/authorize`，弹窗可选"总是允许"持久化到宿主凭据库，单次 key 首次鉴权即被服务端消费——写失败也照样烧掉，所以 401 后自动重新授权并同批重放一次）。除该次 401 重授权重放外没有自动重试；`ZOTERO_WRITE_CONFLICT` 之外的写失败都应先理解再行动。写入会推进库版本，`zotero_changes` 会看到这批变更。
+三个写入工具只在设置的 `writeEnabled` 打开时注册，且都只写 `zotero://user/0/`（个人库）。每次写入前都展示 dsh 侧计划卡片，没有任何设置能跳过它；参数校验在计划卡之前完成，畸形调用不会被当作「未批准」。
+
+**闸门在服务接缝上，不在工具里。** 计划审查是 `ctx.zotero.createNote` / `updateTags` / `addToCollection` 自身的一部分：工具与任何其他消费方都要传一个 `ZoteroWriteCall`（计划文本 + 发起调用的 agent / 信号）。服务先过能力门（关闭时是 `ZOTERO_CAPABILITY_UNAVAILABLE`，且**不会**弹卡），再问用户（每次都问）；未批准返回 `{kind:"declined"}` 且一个字节都不发；没有可用交互通道时失败关闭（`ZOTERO_WRITE_APPROVAL_UNAVAILABLE`）。所以「插件内的某个调用方悄悄绕过闸门」不存在。
+
+**Zotero 10 自己的授权层是硬边界**（在回答请求的 10.0.3-beta.3 源码 `server_localAPI.js` 上核对）：写请求必须携带实例 id（缺失 428、不匹配 412）与本地签发的 key。`/api/local/authorize` 弹窗三个按钮是「允许」（`remember:false`）、「始终允许」（`remember:true`）、「拒绝」，默认按钮是**拒绝**，该端点限速 5 次/分钟。单次 key 在**鉴权时**即被删除——请求体还没被判断，所以写失败也照样烧掉，插件因此只在 401 后重新授权并同批重放一次（唯一的自动重试）。`remember:true` 的 key **不会被消耗**：它存在 `<Zotero 配置目录>/localAPIKeys.json`，可无限期重复使用，直到用户在 Zotero 里清除已保存的授权。也就是说「始终允许」授予的是一枚长期有效的库写入凭据——把它写进日志、脚本或对话，就等于把它泄漏了。
+
+**写路径的请求下限**（由回归测试钉住）：`zotero_create_note` 只发一次 `POST /api/users/0/items`，不回读（批量响应已带回 ref/key/版本）；`zotero_add_tags` 与 `zotero_add_to_collection` 各是一次读加一次 `PATCH`（按名指定合集再加一次解析）。实例身份与授权在进程内缓存，所以稳定状态下「建一条笔记」就是一次请求。
+
+**shell 直写也走确认，而不是另设开关。** 会话里的 `bash` 可以自己 `curl` 本地接口，绕过上面的服务闸门；harness 的审批策略本身只在沙箱升级时提问，而 `dsh-bash-sandbox` 只约束文件访问、不约束网络访问。所以插件不再提供「拦截 shell 写入」这个选项，而是把这个路由**变成必须确认**：`tools/pre-execute` 瀑布里检测到命令文本指向 Zotero 本地写入接口（授权端点，或对本机地址带写方法/请求体的请求）时，插件返回 `{kind:"ask"}`，由 harness 自己的审批请求在**工具体执行之前**裁决——
+
+- 用户确认（`allowed-once`）→ 只执行这一次；
+- 拒绝 / 取消 → 不执行；
+- 会话审批策略为 `never`（对每次 ask 自动拒绝）→ 不执行；
+- 没有任何审批通道 → 不执行。
+
+检测只读命令文本，因此它是**检测而非保证**：脚本文件（`bash x.sh`）、解释器（`python -c`、`node -e`）、环境变量里的 URL、其它 loopback 端口、以及任何混淆都能从它眼前过去。插件对模型的约束靠系统提示（写入只走写工具），对路由的约束靠这道确认；要让 shell 完全不能碰库，只能让该会话不带无约束 shell：按 agent 用 `tools.restrict({ deny: ["bash"] })`，或使用不含 shell 的预设。另外，被确认放行的原始写入**不经过插件的写域**——没有计划卡、没有版本前置、没有 markdown→note HTML 转换与 provenance，这是用户当场确认时接受的代价。
+
+写入会推进库版本，`zotero_changes` 会看到这批变更。
 
 ---
 
