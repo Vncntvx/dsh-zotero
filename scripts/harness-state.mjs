@@ -298,7 +298,7 @@ function exactPinProblem(section, name, value, pin) {
 export function collectPinFaceProblems(manifest, pin) {
   const found = []
   const peers = Object.keys(manifest.peerDependencies ?? {}).filter(isDshPackage)
-  // rc.1's evaluatePluginCompatibility reads only peerDependencies — zero dsh
+  // The harness evaluatePluginCompatibility reads only peerDependencies — zero dsh
   // peers would load on any runtime even when engines.dsh names the pin.
   if (peers.length === 0) {
     found.push(

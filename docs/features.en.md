@@ -2,7 +2,7 @@
 
 # Features
 
-dsh-zotero lets DSH's LLM conversations query your Zotero library directly. Eight tools cover the full workflow from search to export, and the web-side Sources panel shows literature, evidence, and citations in real time.
+dsh-zotero lets DSH's LLM conversations query your Zotero library directly. Eleven tools cover search, evidence extraction, exports, and optional personal-library writes; the three write tools are off by default and, once enabled, still require plan approval and Zotero 10 local authorization. The web-side Sources panel shows literature, evidence, and citations in real time.
 
 ## Search
 
@@ -89,6 +89,16 @@ Optional `style` and `locale` parameters set the citation style. In citation mod
 
 > **Note:** the tool returns exports as text; the panel offers copy and file download of the same content.
 
+## Optional personal-library writes
+
+After `writeEnabled` is explicitly enabled, three tools operate only on `zotero://user/0/`:
+
+- `zotero_create_note` creates a standalone or child research note, optionally with tags, collections, and `dc:relation` sources.
+- `zotero_add_tags` reads existing tags, merges safely, and writes under a version precondition.
+- `zotero_add_to_collection` reads existing memberships, merges safely, and writes under a version precondition.
+
+`writeConfirm` is on by default and shows a plan before every write. Zotero 10 then issues a one-time or Always-Allow key through its local authorization dialog. Write tools never use the retrying connectivity ask.
+
 ## Session Sources panel
 
 The dsh web Zotero tab contains three sub-views:
@@ -115,11 +125,11 @@ BibTeX export view: each citation can be expanded to show the full entry, with o
 
 The Settings panel's left navigation carries a dedicated **Zotero** page (beside General, Models, and Plugins). Changes take effect on save — tools read the latest config on each request.
 
-Configurable items include: API address, search result limits, evidence passage limits, export item limits, citation style, and locale. See [Configuration](configuration.md).
+Configurable items include the API address, read/export limits, citation style and locale, plus `writeEnabled`, `writeConfirm`, `writePersistKey`, and `webEnabled`. See [Configuration](configuration.en.md).
 
 ## Design boundaries
 
-- **Read-only:** dsh-zotero accesses the library in read-only mode.
+- **Read-only by default:** `writeEnabled` is off by default; when enabled, writes remain personal-library-only and still pass plan approval, version preconditions, and Zotero's local key protocol.
 - **Ranking:** Evidence uses BM25 (term frequency), ranking by query-word match against passages.
 - **Exports are text:** citations and bibliographies are returned as text; the panel can copy them or download them as a file.
 - **Sources panel is a snapshot:** The Sources panel shows items referenced in this session, independent per session.

@@ -11,18 +11,6 @@
  * @module dsh-zotero/local/scope-directory
  */
 
-/**
- * Pin the serving identity from the response headers, falling back to the
- * claim only when the build omits the header — storing the claim alone
- * leaves a headerless first read unclaimable.
- * @param headers - the response headers.
- * @param claim - the identity the request was pinned to, if any.
- * @returns the serving identity, or undefined when neither names one.
- */
-function resolveServedBy(headers: Headers, claim: string | undefined): string | undefined {
-  return headers.get(ZOTERO_SERVER_ID_HEADER) ?? claim
-}
-
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import { ZOTERO_SCOPE_LISTING_TTL_MS, ZOTERO_SERVER_ID_HEADER } from '../constants.js'
@@ -92,6 +80,18 @@ interface CachedCollectionNode {
 
 function cacheKey(library: SupportedLocalLibrary, plural: 'collections' | 'searches'): string {
   return `${library.type}:${library.id}:${plural}`
+}
+
+/**
+ * Pin the serving identity from the response headers, falling back to the
+ * claim only when the build omits the header — storing the claim alone
+ * leaves a headerless first read unclaimable.
+ * @param headers - the response headers.
+ * @param claim - the identity the request was pinned to, if any.
+ * @returns the serving identity, or undefined when neither names one.
+ */
+function resolveServedBy(headers: Headers, claim: string | undefined): string | undefined {
+  return headers.get(ZOTERO_SERVER_ID_HEADER) ?? claim
 }
 
 /** The result of resolving one search scope: its API path plus what it resolved to. */

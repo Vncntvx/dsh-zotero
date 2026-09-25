@@ -2,7 +2,7 @@
 
 # 功能概览
 
-dsh-zotero 让 DSH 的 LLM 对话直接查询你的 Zotero 文献库。八个工具覆盖从搜索到导出的完整工作流，配合 web 端的 Sources 面板实时展示会话中的文献、证据和引用。
+dsh-zotero 让 DSH 的 LLM 对话直接查询你的 Zotero 文献库。十一个工具覆盖从搜索、证据提取到导出的完整工作流；三个个人库写工具默认关闭，显式启用后仍需计划批准与 Zotero 10 本地授权。web 端 Sources 面板实时展示会话中的文献、证据和引用。
 
 ## 搜索文献
 
@@ -89,6 +89,16 @@ Agent 依次调用搜索、检索、导出三个工具完成用户请求。
 
 > **注意：** 工具以文本形式返回导出结果；面板提供复制与文件下载，两者内容一致。
 
+## 写入个人库（可选）
+
+设置中显式打开 `writeEnabled` 后，注册三个只面向 `zotero://user/0/` 的工具：
+
+- `zotero_create_note`：创建独立研究笔记或子笔记，可带标签、合集与 `dc:relation` 来源
+- `zotero_add_tags`：读取现有标签后安全合并，并在版本前置条件下写回
+- `zotero_add_to_collection`：读取现有合集后安全合并，并在版本前置条件下写回
+
+`writeConfirm` 默认开启，每次写入前显示计划卡；Zotero 10 随后通过本地授权对话框签发一次性或 Always-Allow key。写工具不会使用可重试的 connectivity ask。
+
 ## 会话来源面板
 
 dsh web 界面的 Zotero 选项卡包含三个子视图：
@@ -115,11 +125,11 @@ BibTeX 导出视图：每条引用可展开查看完整条目，支持一键复�
 
 在设置面板的左侧导航中，dsh-zotero 提供独立的 **Zotero** 配置页（与 General、Models、Plugins 并列）。修改配置后保存即生效，无需重启——工具在每次请求时读取最新配置。
 
-可配置项包括：API 地址、搜索结果上限、证据段落数上限、导出条目上限、引用样式和区域设置等。详见 [配置文档](configuration.md)。
+可配置项包括：API 地址、各项读取/导出上限、引用样式和区域设置，以及 `writeEnabled`、`writeConfirm`、`writePersistKey` 与 `webEnabled`。详见 [配置文档](configuration.md)。
 
 ## 边界说明
 
-- **只读：** dsh-zotero 只读访问文献库。
+- **默认只读：** `writeEnabled` 默认关闭；打开后也只写个人库，并继续受计划批准、版本前置与 Zotero 本地 key 协议约束。
 - **排序算法：** 证据排序使用 BM25（基于词频），按查询词与 passage 的匹配度排序。
 - **导出是文本：** 引用和参考文献以文本形式返回；面板可复制或下载为文件。
 - **来源面板是快照：** Sources 面板展示本次会话引用的条目，每次会话独立。

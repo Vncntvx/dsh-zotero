@@ -27,14 +27,14 @@ graph LR
 - `ZoteroService` 扩展 `Service`，注册为 `ctx.zotero`
 - 负责 provider 选择、能力门控、领域方法
 - 配置是实时的：附加时使用 settings section，否则使用 composition entry
-- `rebuild()` 在**同一** `ZoteroService` 实例上，从当前配置重建 HTTP 客户端与 local provider；不替换服务实例
+- 结构性 volatile 更新通过私有 `buildTransport()` 在**同一** `ZoteroService` 实例上重建 HTTP client、local provider 与写工具集；纯限额更新由 provider 实时读取，不重建 transport
 - 连接恢复门（`ConnectivityRecovery` / `service.recovery`）与服务实例同寿命，**不**随 settings rebuild 重置（避免并发失败叠卡）
 - 请求驱动：加载从不触及 Zotero
 
 ### Provider 层 (`src/local/provider.ts`)
 
 - `LocalApiProvider` 实现 `ZoteroProvider`
-- 能力：search、metadata、attachments、fulltext、citation、browse、retrieve、changes
+- 能力：search、metadata、attachments、citation、browse、retrieve、changes；写入能力只在 transport 与 authorizer 均接线时提供
 - 客户端侧解析作用域（Local API 无服务端名称搜索）
 - 笔记体扫描：客户端侧第一页（offset 0），受 maxNoteScanRecords 限制
 - 证据排名：基于 passage 语料库的 BM25（annotations、notes、abstract、fulltext chunks）
@@ -76,7 +76,7 @@ graph LR
 ### 设置
 
 - 命名空间 `zotero` 在 Loader entry（composition entry 即唯一权威）
-- 全字段 `volatile`：设置提交免重建落地；`internal/config` 否决非法提交，`loader/volatile-update` 重建传输栈与写工具集
+- 全字段 `volatile`：限额字段由 provider 实时读取；transport 字段或写入开关等结构字段变化时，`loader/volatile-update` 在同一服务实例上重建传输栈与写工具集，provider id 则在调用时实时选择
 
 ## 设计边界
 

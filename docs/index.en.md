@@ -4,7 +4,7 @@
 
 - [Getting Started](getting-started.en.md) — Installation, Zotero setup, connection verification
 - [Features](features.en.md) — Full workflow from search to export
-- [Tool Reference](tools.en.md) — Parameters, return values, and limits for all 8 tools
+- [Tool Reference](tools.en.md) — Parameters, return values, and limits for all 11 tools
 - [Configuration](configuration.en.md) — All config fields, defaults, and hot-reload behavior
 - [Architecture](architecture.en.md) — Data flow, provider layer, browser client, and session snapshots
 - [Development](development.en.md) — Build, test, local launch, browser-side development

@@ -27,14 +27,14 @@ User → Agent → dsh Zotero Tools → ZoteroService → Provider → 127.0.0.1
 - `ZoteroService` extends `Service`, registered as `ctx.zotero`
 - Handles provider selection, capability gating, domain methods
 - Config is live: uses settings section when attached, otherwise composition entry
-- `rebuild()` rebuilds the HTTP client and local provider on the **same** `ZoteroService` instance from current config (never replaces the service)
+- Structural volatile updates call the private `buildTransport()` to rebuild the HTTP client, local provider, and write-tool set on the **same** `ZoteroService` instance; limit-only updates are read live and do not rebuild transport
 - The connectivity recovery gate (`ConnectivityRecovery` / `service.recovery`) lives for the service instance and is **not** reset by settings rebuilds (resetting would stack duplicate cards for concurrent failures)
 - Request-driven: loading never touches Zotero
 
 ### Provider layer (`src/local/provider.ts`)
 
 - `LocalApiProvider` implements `ZoteroProvider`
-- Capabilities: search, metadata, attachments, fulltext, citation
+- Capabilities: search, metadata, attachments, citation, browse, retrieve, changes; optional write support is exposed only when its transport and authorizer are wired
 - Client-side scope resolution (Local API has no server-side name search)
 - Note body scan: client-side first page (offset 0), limited by maxNoteScanRecords
 - Evidence ranking: BM25 over passage corpus (annotations, notes, abstract, fulltext chunks)
@@ -76,7 +76,7 @@ User → Agent → dsh Zotero Tools → ZoteroService → Provider → 127.0.0.1
 ### Settings
 
 - Namespace `zotero` lives on the Loader entry (the composition entry is the single authority)
-- Every field is `volatile`: settings commits land without remounting; `internal/config` vetoes violating commits, `loader/volatile-update` rebuilds the transport stack and the write-tool set
+- Every field is `volatile`: limits are read live by the provider; when transport fields or the write gate change, `loader/volatile-update` rebuilds the transport stack and write-tool set on the same service instance, while provider id is selected live per call
 
 ## Design boundaries
 

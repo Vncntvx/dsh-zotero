@@ -12,25 +12,25 @@ Discover candidate entries in the library. Metadata mode searches title/author/y
 
 ### Parameters
 
-| Parameter        | Type                           | Default             | Description                                                                                               |
-| ---------------- | ------------------------------ | ------------------- | --------------------------------------------------------------------------------------------------------- |
-| `query`          | string                         | —                   | Free-text query; omit to browse the full library                                                          |
-| `mode`           | `"metadata"` \| `"everything"` | `"metadata"`        | Search scope                                                                                              |
-| `scope`          | object                         | `{kind: "library"}` | `{kind:"library"}` / `{kind:"collection", refOrName}` / `{kind:"savedSearch", refOrName}`                 |
-| `library`        | object                         | —                   | Library: `{type:"user",id:0}` or `{type:"group",id}`; for name scopes selects library, for ref must match |
-| `itemTypes`      | string[]                       | —                   | Zotero item type names (e.g. `journalArticle`), OR combined                                               |
-| `tags`           | string[]                       | —                   | Tag names, `tagMatch` controls AND/OR                                                                     |
-| `tagMatch`       | `"all"` \| `"any"`             | `"all"`             | How multiple tags combine                                                                                 |
-| `excludeTags`    | string[]                       | —                   | Tags to exclude (NOT)                                                                                     |
-| `includeTrashed` | boolean                        | `false`             | Include trashed items (only with `library` scope)                                                         |
-| `sort`           | string                         | `"dateModified"`    | Sort field: `dateModified` / `dateAdded` / `date` / `title` / `creator`                                   |
-| `direction`      | `"asc"` \| `"desc"`            | `"desc"`            | Sort direction                                                                                            |
-| `offset`         | integer                        | `0`                 | Pagination offset                                                                                         |
-| `limit`          | integer                        | `10`                | Max return count (capped by `maxSearchResults`, default 20)                                               |
+| Parameter        | Type                           | Default             | Description                                                                                                         |
+| ---------------- | ------------------------------ | ------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `query`          | string                         | —                   | Free-text query; omit to browse the full library                                                                    |
+| `mode`           | `"metadata"` \| `"everything"` | `"metadata"`        | Search scope                                                                                                        |
+| `scope`          | object                         | `{kind: "library"}` | `{kind:"library"}` / `{kind:"collection", refOrName}` / `{kind:"savedSearch", refOrName}` / `{kind:"publications"}` |
+| `library`        | object                         | —                   | Library: `{type:"user",id:0}` or `{type:"group",id}`; for name scopes selects library, for ref must match           |
+| `itemTypes`      | string[]                       | —                   | Zotero item type names (e.g. `journalArticle`), OR combined                                                         |
+| `tags`           | string[]                       | —                   | Tag names, `tagMatch` controls AND/OR                                                                               |
+| `tagMatch`       | `"all"` \| `"any"`             | `"all"`             | How multiple tags combine                                                                                           |
+| `excludeTags`    | string[]                       | —                   | Tags to exclude (NOT)                                                                                               |
+| `includeTrashed` | boolean                        | `false`             | Include trashed items (only with `library` scope)                                                                   |
+| `sort`           | string                         | `"dateModified"`    | Sort field: `dateModified` / `dateAdded` / `date` / `title` / `creator`                                             |
+| `direction`      | `"asc"` \| `"desc"`            | `"desc"`            | Sort direction                                                                                                      |
+| `offset`         | integer                        | `0`                 | Pagination offset                                                                                                   |
+| `limit`          | integer                        | `10`                | Max return count (capped by `maxSearchResults`, default 20)                                                         |
 
 ### Output
 
-`scope` (library scopes include `library` for pagination replay), `items` (primary hits only: ref, title, creatorSummary, year, itemType, bestAttachmentRef, bestAttachmentType), `total`, `offset`, `returned`, `nextOffset`, `supplemental` (optional: `{kind:"noteBody", items, scanned, truncated}`)
+`scope` (library scopes include `library` for pagination replay), `items` (primary hits only: ref, title, creatorSummary, year, itemType, parentRef, bestAttachmentRef, bestAttachmentType, attachmentSize), `total`, `offset`, `returned`, `nextOffset`, `supplemental` (optional: `{kind:"noteBody", items, scanned, truncated}`)
 
 ### Notes
 
@@ -50,14 +50,15 @@ Read a single item's full metadata. By default returns only metadata; specifying
 
 ### Parameters
 
-| Parameter | Type                                        | Required | Description                    |
-| --------- | ------------------------------------------- | -------- | ------------------------------ |
-| `ref`     | string                                      | ✓        | Item ref                       |
-| `include` | `("notes"\|"annotations"\|"attachments")[]` | —        | Child content types to include |
+| Parameter | Type                                        | Required | Description                                                                                                   |
+| --------- | ------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------- |
+| `ref`     | string                                      | ✓        | Item ref                                                                                                      |
+| `include` | `("notes"\|"annotations"\|"attachments")[]` | —        | Child content types to include                                                                                |
+| `fields`  | `"standard"` \| `"all"`                     | —        | `standard` (default) returns normalized model; `all` also returns `extraFields` with unconsumed native fields |
 
 ### Output
 
-`ref`, `itemType`, `title`, `creators`, `date`, `year`, `venue`, `doi`, `url`, `abstract`, `abstractTruncated`, `noteBody` (note items), `tags`, `collections`, `children`, `bestAttachment`, `relations` (as `dc:relation` etc, `targetRef` only when provably local), plus requested `notes`/`annotations`/`attachments` (with total, returned, items)
+`ref`, `itemType`, `title`, `creators`, `date`, `year`, `venue`, `doi`, `url`, `abstract`, `abstractTruncated`, `noteBody` (note items), `tags`, `collections`, `children`, `bestAttachment`, `relations` (as `dc:relation` etc, `targetRef` only when provably local), `extraFields` when `fields="all"`, plus requested `notes`/`annotations`/`attachments` (with total, returned, items)
 
 ### Example
 
@@ -84,7 +85,7 @@ Collect and query-rank evidence passages for a single item. Sources include: Zot
 
 ### Output
 
-`ref`, `attachmentRef`, `attachmentContentType`, `coverage` (indexedChars/totalChars/complete etc.), `attachments` (per-source facts under the multi-attachment policies), `evidence` (source, sourceRef, text, chunkIndex, chunkCount, comment, pageLabel, matchedFields), `truncated`, `sourcesSkipped`
+`ref`, `attachmentRef`, `attachmentContentType`, `coverage` (indexedChars/totalChars/complete etc.), `attachments` (per-source facts under the multi-attachment policies: `ref`, `contentType?`, `status`, `coverage?`, `inputTruncated?`, `passages?` — a full-text source list, not the child-attachment rows of `zotero_get`/`zotero_children`), `evidence` (source, sourceRef, text, chunkIndex, chunkCount, comment, pageLabel, matchedFields), `truncated`, `sourcesSkipped`
 
 ### Notes
 
@@ -175,16 +176,23 @@ zotero_export(refs=["zotero://user/0/item/ABC123", "zotero://user/0/item/DEF456"
 
 Discover library structure. Every `kind` pages with `offset/limit` (default `20`, capped by `maxBrowseResults` at 50) and returns `total/returned/nextOffset`.
 
-Pagination honesty applies uniformly: `zotero_search` and `zotero_browse` array listings require a valid `Total-Results` header and fail the whole call with `ZOTERO_UNEXPECTED` without it, instead of guessing totals from body length. `zotero_changes` takes a different route: it reads each resource whole (no `limit` — the local API answers an unbounded request in full; the item kind is three whole reads, `/items`, `/items/top` and `/items/trash`) and, when `Total-Results` is present, compares it against the map key count to decide whether that read was whole; without the header it trusts the unbounded request to be complete. The listing itself is capped at `maxChangesResults`, with the true counts in `totals`; the render hands the model that whole listing — there is no second cut — so entries beyond the cap are reached by raising `maxChangesResults`, not by re-running with another parameter. A body that is not a key→version map (an array, a string, a value that is not a non-negative integer) is never read as "nothing changed": the kind is recorded as unreadable (`unobservable` with reason `unreadable`) and withholds this call's cursor.
+Pagination honesty applies uniformly to server-paged listings: `zotero_search` and the `collections`, `savedSearches`, and `tags` arrays of `zotero_browse` require a valid `Total-Results` header and fail the whole call with `ZOTERO_UNEXPECTED` without it, instead of guessing totals from body length. `libraries`, `itemTypes`, and `itemFields` are complete local listings, so their `total` is the number of rows read. `zotero_changes` takes a different route: it reads each resource whole (no `limit` — the local API answers an unbounded request in full; the item kind is three whole reads, `/items`, `/items/top` and `/items/trash`) and, when `Total-Results` is present, compares it against the map key count to decide whether that read was whole; without the header it trusts the unbounded request to be complete. The listing itself is capped at `maxChangesResults`, with the true counts in `totals`; the render hands the model that whole listing — there is no second cut — so entries beyond the cap are reached by raising `maxChangesResults`, not by re-running with another parameter. A body that is not a key→version map (an array, a string, a value that is not a non-negative integer) is never read as "nothing changed": the kind is recorded as unreadable (`unobservable` with reason `unreadable`) and withholds this call's cursor.
 
-| Parameter | Type                                                                           | Default    | Description                                                 |
-| --------- | ------------------------------------------------------------------------------ | ---------- | ----------------------------------------------------------- |
-| `kind`    | `libraries`\|`collections`\|`savedSearches`\|`tags`\|`itemTypes`\|`itemFields` | —          | What to browse (`itemFields` requires `itemType`)           |
-| `library` | object `{type, id}`                                                            | `user/0`   | Target library (valid for `collections/savedSearches/tags`) |
-| `q`       | string                                                                         | —          | `tags` substring filter                                     |
-| `match`   | `contains`\|`startsWith`                                                       | `contains` | How `q` matches tags (requires `q`)                         |
-| `offset`  | integer                                                                        | `0`        | Pagination offset                                           |
-| `limit`   | integer                                                                        | `20`       | Return cap                                                  |
+| Parameter       | Type                                                                           | Default              | Description                                                                                      |
+| --------------- | ------------------------------------------------------------------------------ | -------------------- | ------------------------------------------------------------------------------------------------ |
+| `kind`          | `libraries`\|`collections`\|`savedSearches`\|`tags`\|`itemTypes`\|`itemFields` | —                    | What to browse (`itemFields` requires `itemType`)                                                |
+| `library`       | object `{type, id}`                                                            | `user/0`             | Target library (valid for `collections/savedSearches/tags`; rejected for others)                 |
+| `parentRef`     | string                                                                         | —                    | Collections only: a collection ref whose direct children to list; omit for top-level collections |
+| `tagScope`      | `"library"`\|`"collection"`\|`"publications"`                                  | `"library"`          | Tags only: item set to count tags over; collection/publications use scoped tag endpoints         |
+| `tagCollection` | string                                                                         | —                    | Tags only with `tagScope="collection"`: collection ref or exact name whose items to count        |
+| `itemLevel`     | `"top"`\|`"all"`                                                               | `"top"`              | Scoped tags only: `top` counts bibliographic items (default), `all` includes child items         |
+| `itemQuery`     | string                                                                         | —                    | Scoped tags only: count tags only on items matching query (facet discovery after search)         |
+| `itemQueryMode` | `"titleCreatorYear"`\|`"everything"`                                           | `"titleCreatorYear"` | Scoped tags with `itemQuery`: query matching mode                                                |
+| `itemType`      | string                                                                         | —                    | ItemFields only: item type whose valid fields and creators to list (e.g. `dataset`, `patent`)    |
+| `q`             | string                                                                         | —                    | `tags` substring filter                                                                          |
+| `match`         | `contains`\|`startsWith`                                                       | `contains`           | How `q` matches tags (requires `q`)                                                              |
+| `offset`        | integer                                                                        | `0`                  | Pagination offset                                                                                |
+| `limit`         | integer                                                                        | `20`                 | Return cap                                                                                       |
 
 ### Output
 
@@ -217,7 +225,7 @@ Explore one item's or attachment's child objects. An item ref: direct notes and 
 
 ### Output
 
-`{ref, itemType?, serverId?, notes?, attachments?, annotations?}`, each section a `{total, returned, items}` collection. Note items carry `parentRef` (the parent item ref that produced them).
+`{ref, itemType?, serverId?, notes?, attachments?, annotations?}`, each section a `{total, returned, items}` collection. Note items carry `parentRef` (the parent item ref that produced them). `attachments` rows are child-object listings (`ref`, `title`, `contentType`, `linkMode?`) — a different shape from the `attachments` rows `zotero_retrieve` lists under its full-text policy (`status`/`coverage`/`passages`).
 
 ### Example
 
@@ -233,7 +241,7 @@ See what changed in the library since a version. On the verified Zotero 10.0.2-b
 
 **The item space is read as Zotero partitions it**: the `items` kind covers three endpoints — `/items/top` (top-level items), `/items` (all live items) and `/items/trash` (the trash) — reported as `changed.items`, `changed.childItems` and `changed.trashedItems`. Child objects (notes, attachments, annotations) are the difference between the two live reads: they carry versions of their own, so editing one annotation advances the library version without touching any top-level item, and a diff over `/items/top` alone would drop it in silence. Zotero's item listings exclude the trash as well, so without the trash read a move to the trash is invisible. When any of the three reads is unavailable the whole kind is reported as unobservable rather than a slice of the item space being presented as the item space.
 
-**Cursor contract**: a returned `cursor` is safe by construction — it means this call read the whole changed set it reports and the library version did not move while it read, so it can be passed back as `since` directly. When the read was not whole (a build that caps the response) or a write landed mid-read (also flagged `libraryChanged: true`), no `cursor` is returned and the caller must not advance from that result. A cursor covers only the resource kinds the call that produced it included. Among `unobservable` reasons, `not-served` (the build has no such endpoint) and `range-not-covered` (the range is older than the history the build keeps) do **not** withhold the cursor — those changes were never observable in any range — while `unreadable` (the answer did not have the documented shape) does, because there the rows exist and this call failed to read them.
+**Cursor contract**: a returned `cursor` is safe by construction — it means this call read the whole changed set it reports and the library version did not move while it read, so it can be passed back as `since` directly. When the read was not whole (a build that caps the response) or a write landed mid-read (also flagged `libraryChanged: true`), no `cursor` is returned and the caller must not advance from that result. A cursor covers only the resource kinds the call that produced it included. For a standalone resource, `not-served` (the build has no such endpoint) and `range-not-covered` (the range is older than the history the build keeps) do **not** withhold the cursor — those changes were never observable in any range — while `unreadable` (the answer did not have the documented shape) does, because the rows exist and this call failed to read them. The `items` kind is stricter: its top-level, live-item, and trash partitions must all be read; any failed partition withholds the cursor so a later diff cannot skip a child-object or trash change.
 
 **How removals are read**: `deleted` present means observed — the four lists (`items`/`collections`/`savedSearches`/`tags`, the last holding tag names rather than keys) are always there when the read succeeded, and all four empty is the positive statement "nothing was removed in this range". When the endpoint answers 404 (Zotero 10.0.2-beta.9 has no `/deleted` route) or the payload is not the documented shape, `deleted` is absent as a whole and the kind is named in `unobservable` — "could not read" is never written as "nothing was deleted". Tombstone entries outside the documented four kinds (Zotero also syncs a settings list of its own) are counted in `totals.deletedOther`.
 
@@ -251,7 +259,7 @@ See what changed in the library since a version. On the verified Zotero 10.0.2-b
 
 ### Output
 
-`{library, serverId?, fromVersion?, cursor?, libraryChanged?, versionUnavailable?, changed: {items?, childItems?, trashedItems?, collections?, savedSearches?, fulltextAttachments?}, deleted?: {items, collections, savedSearches, tags}, totals?, unobservable?: {kind, reason}[], truncated?}`. Each resource is read whole (the item kind is three whole reads, one per endpoint), but every listing is capped at `maxChangesResults` (default 50) with `truncated` marking it as a digest; `totals` reports the true counts per resource (including `childItems`/`trashedItems`/`deletedItems`/`deletedCollections`/`deletedSavedSearches`/`deletedTags`/`deletedOther`) before that cap — a count being present is the statement that the kind was read, so coverage never has to be guessed from whether a list is empty. Each `unobservable` entry carries its reason: `not-served` (the build has no such endpoint — e.g. Zotero 10.0.2-beta.9 has no `/deleted` route), `range-not-covered` (`since` is older than the delete log the build keeps; answered 409), `unreadable` (the response was not the documented shape, so this call could not read it and returns no cursor).
+`{library, serverId?, fromVersion?, cursor?, libraryChanged?, versionUnavailable?, changed: {items?, childItems?, trashedItems?, collections?, savedSearches?, fulltextAttachments?}, deleted?: {items, collections, savedSearches, tags}, totals?, unobservable?: {kind, reason}[], truncated?}`. Each resource is read whole (the item kind is three whole reads, one per endpoint), but every listing is capped at `maxChangesResults` (default 50) with `truncated` marking it as a digest; `totals` reports the true counts per resource (including `childItems`/`trashedItems`/`deletedItems`/`deletedCollections`/`deletedSavedSearches`/`deletedTags`/`deletedOther`) before that cap — a count being present is the statement that the kind was read, so coverage never has to be guessed from whether a list is empty. Each `unobservable` entry carries its reason: `not-served` (the build has no such endpoint — e.g. Zotero 10.0.2-beta.9 has no `/deleted` route), `range-not-covered` (`since` is older than the delete log the build keeps; answered 409), `unreadable` (the response was not the documented shape, so this call could not read it and returns no cursor). For the `items` kind, any failed `/items`, `/items/top`, or `/items/trash` partition also returns no cursor. `fulltext` has an independent counter, so a result that includes it deliberately omits the library cursor.
 
 ### Example
 
@@ -268,17 +276,17 @@ Create a research note — standalone, or a child note under a parent item — w
 
 ### Parameters
 
-| Parameter     | Type     | Default | Description                                                                                                                                                                   |
-| ------------- | -------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `markdown`    | string   | —       | The note body (markdown, 65536-character bound)                                                                                                                               |
-| `parentItem`  | string   | —       | Parent item ref; omit for a standalone note                                                                                                                                   |
-| `collections` | string[] | —       | Collection refs or exact names; standalone notes only — a child-note call that also passes non-empty collections is refused as `ZOTERO_INVALID_ARGUMENT` before any plan card |
-| `tags`        | string[] | —       | Tags applied at creation                                                                                                                                                      |
-| `sourceRefs`  | string[] | —       | Source item refs, recorded as `dc:relation` links and echoed in the result                                                                                                    |
+| Parameter     | Type     | Default | Description                                                                                                                                                                                                                         |
+| ------------- | -------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `markdown`    | string   | —       | The note body (markdown, 65536-character bound)                                                                                                                                                                                     |
+| `parentItem`  | string   | —       | Personal-library parent item ref (`zotero://user/0/item/<KEY>`); omit for a standalone note                                                                                                                                         |
+| `collections` | string[] | —       | Personal-library collection refs (`zotero://user/0/collection/<KEY>`) or exact names; standalone notes only — a child-note call that also passes non-empty collections is refused as `ZOTERO_INVALID_ARGUMENT` before any plan card |
+| `tags`        | string[] | —       | Tags applied at creation                                                                                                                                                                                                            |
+| `sourceRefs`  | string[] | —       | Personal-library source item refs (`zotero://user/0/item/<KEY>`), recorded as `dc:relation` links and echoed in the result                                                                                                          |
 
 ### Output
 
-`{kind: "applied", ref, key, version, parentItem?, collections, tags, sourceRefs, libraryVersion, serverId?}`; `kind: "declined"` means the user answered the plan card without approving — nothing was written. That is a normal outcome, not an error; do not retry.
+`{kind: "applied", ref, key, version, parentItem?, collections, tags, sourceRefs, libraryVersion, serverId?}`. If the write must be treated as committed but the response cannot prove the complete state, the result is `{kind: "committed-unverified", committed: true, retryable: false, reason: "saved-state-unverified" | "commit-unknown", ref?, key?, version?, libraryVersion?, serverId}`; do not retry, reconcile by the available key/ref. `kind: "declined"` means the user answered the plan card without approving — nothing was written. That is a normal outcome, not an error; do not retry.
 
 ### Example
 
@@ -294,10 +302,10 @@ Add tags to one item. Zotero's PATCH replaces arrays wholesale instead of mergin
 
 ### Parameters
 
-| Parameter | Type     | Default | Description                                        |
-| --------- | -------- | ------- | -------------------------------------------------- |
-| `ref`     | string   | —       | The item ref to tag                                |
-| `tags`    | string[] | —       | Tags to add (at least 1, at most 50; deduplicated) |
+| Parameter | Type     | Default | Description                                                         |
+| --------- | -------- | ------- | ------------------------------------------------------------------- |
+| `ref`     | string   | —       | The personal-library item ref to tag (`zotero://user/0/item/<KEY>`) |
+| `tags`    | string[] | —       | Tags to add (at least 1, at most 50; deduplicated)                  |
 
 ### Output
 
@@ -313,7 +321,7 @@ zotero_add_tags(ref="zotero://user/0/item/ABCD1234", tags=["review", "to-read"])
 
 ## zotero_add_to_collection
 
-Add one item to a collection, by ref or exact name. The collection resolves first (names go through the cached collections listing; an unknown name fails with `ZOTERO_NOT_FOUND` before any read-modify-write), then the same read-merge-write as tags: the item's existing collections are preserved, the union is submitted under a version precondition, and an already-member item reports `added: false` without writing.
+Add one item to a collection, by ref or exact name. Collection names resolve via the local API during tool execution (unknown names fail with `ZOTERO_NOT_FOUND` before any read-modify-write mutations), followed by the same read-merge-write as tags: the item's existing collections are preserved, the union is submitted under a version precondition, and an already-member item reports `added: false` without writing.
 
 ### Parameters
 
@@ -342,26 +350,28 @@ The three write tools register only while `writeEnabled` is on in the settings, 
 
 ## Error codes
 
-| Error code                      | Description                                                                                                                           |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `ZOTERO_WRITE_UNAUTHORIZED`     | Zotero refused write authorization: key missing or consumed (401), the dialog was declined, or no plan-approval channel is available  |
-| `ZOTERO_WRITE_CONFLICT`         | The write's version precondition failed (412): the object changed after the read — re-run the tool                                    |
-| `ZOTERO_WRITE_RATE_LIMITED`     | Zotero is rate-limiting write authorization requests (429, with Retry-After)                                                          |
-| `ZOTERO_NOT_RUNNING`            | Zotero not running or local API unreachable                                                                                           |
-| `ZOTERO_API_DISABLED`           | Zotero running but local API disabled (403)                                                                                           |
-| `ZOTERO_API_VERSION`            | Zotero API version not supported                                                                                                      |
-| `ZOTERO_NOT_IMPLEMENTED`        | Zotero refused the request as unimplemented (501) with no version problem: the endpoint or output format is unavailable in this build |
-| `ZOTERO_SERVER_MISMATCH`        | Ref from a different Zotero instance                                                                                                  |
-| `ZOTERO_NOT_FOUND`              | Referenced item, collection, or saved search does not exist                                                                           |
-| `ZOTERO_NO_ATTACHMENT`          | Item has no attachment of the specified type                                                                                          |
-| `ZOTERO_NO_FULLTEXT`            | Attachment has no full-text index                                                                                                     |
-| `ZOTERO_FILE_MISSING`           | Local file reported by Zotero does not exist on disk                                                                                  |
-| `ZOTERO_INVALID_REF`            | Ref string does not match `zotero://` syntax or references unsupported library                                                        |
-| `ZOTERO_INVALID_ARGUMENT`       | Parameter violates domain constraints not expressible in schema                                                                       |
-| `ZOTERO_SCOPE_AMBIGUOUS`        | Collection or saved search name matched multiple objects                                                                              |
-| `ZOTERO_TIMEOUT`                | Provider internal timeout                                                                                                             |
-| `ZOTERO_RESPONSE_TOO_LARGE`     | Response stream exceeded resource limit                                                                                               |
-| `ZOTERO_OUTPUT_TOO_LARGE`       | Export output exceeded provider hard limit                                                                                            |
-| `ZOTERO_CAPABILITY_UNAVAILABLE` | Provider did not declare the required capability                                                                                      |
-| `ZOTERO_PROVIDER_UNAVAILABLE`   | Configured provider not registered, or declares a capability without implementing its method                                          |
-| `ZOTERO_UNEXPECTED`             | Response could not be parsed or behaved unexpectedly                                                                                  |
+| Error code                          | Description                                                                                                                           |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `ZOTERO_WRITE_UNAUTHORIZED`         | Zotero refused write authorization: key missing or consumed (401), or the authorization dialog was declined                           |
+| `ZOTERO_WRITE_APPROVAL_UNAVAILABLE` | Plan-review card could not be presented (no user questions channel or system ask failure, not a user decision)                        |
+| `ZOTERO_WRITE_CONFLICT`             | The write's version precondition failed (412): the object changed after the read — re-run the tool                                    |
+| `ZOTERO_WRITE_RATE_LIMITED`         | Zotero is rate-limiting write authorization requests (429, with Retry-After)                                                          |
+| `ZOTERO_NOT_RUNNING`                | Zotero not running or local API unreachable                                                                                           |
+| `ZOTERO_API_DISABLED`               | Zotero running but local API disabled (403)                                                                                           |
+| `ZOTERO_API_VERSION`                | Zotero API version not supported                                                                                                      |
+| `ZOTERO_NOT_IMPLEMENTED`            | Zotero refused the request as unimplemented (501) with no version problem: the endpoint or output format is unavailable in this build |
+| `ZOTERO_SERVER_MISMATCH`            | Ref from a different Zotero instance                                                                                                  |
+| `ZOTERO_NOT_FOUND`                  | Referenced item, collection, or saved search does not exist                                                                           |
+| `ZOTERO_RANGE_UNSUPPORTED`          | Server does not keep change history back to requested version (409)                                                                   |
+| `ZOTERO_NO_ATTACHMENT`              | Item has no attachment of the specified type                                                                                          |
+| `ZOTERO_NO_FULLTEXT`                | Attachment has no full-text index                                                                                                     |
+| `ZOTERO_FILE_MISSING`               | Local file reported by Zotero does not exist on disk                                                                                  |
+| `ZOTERO_INVALID_REF`                | Ref string does not match `zotero://` syntax or references unsupported library                                                        |
+| `ZOTERO_INVALID_ARGUMENT`           | Parameter violates domain constraints not expressible in schema                                                                       |
+| `ZOTERO_SCOPE_AMBIGUOUS`            | Collection or saved search name matched multiple objects                                                                              |
+| `ZOTERO_TIMEOUT`                    | Provider internal timeout                                                                                                             |
+| `ZOTERO_RESPONSE_TOO_LARGE`         | Response stream exceeded resource limit                                                                                               |
+| `ZOTERO_OUTPUT_TOO_LARGE`           | Export output exceeded provider hard limit                                                                                            |
+| `ZOTERO_CAPABILITY_UNAVAILABLE`     | Provider did not declare the required capability                                                                                      |
+| `ZOTERO_PROVIDER_UNAVAILABLE`       | Configured provider not registered, or declares a capability without implementing its method                                          |
+| `ZOTERO_UNEXPECTED`                 | Response could not be parsed or behaved unexpectedly                                                                                  |

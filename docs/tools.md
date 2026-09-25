@@ -12,25 +12,25 @@ dsh-zotero 注册 11 个工具（写入三工具需在设置中开启 `writeEnab
 
 ### 参数
 
-| 参数             | 类型                           | 默认值              | 说明                                                                                              |
-| ---------------- | ------------------------------ | ------------------- | ------------------------------------------------------------------------------------------------- |
-| `query`          | string                         | —                   | 自由文本查询；省略则浏览全库                                                                      |
-| `mode`           | `"metadata"` \| `"everything"` | `"metadata"`        | 搜索范围                                                                                          |
-| `scope`          | object                         | `{kind: "library"}` | `{kind:"library"}` / `{kind:"collection", refOrName}` / `{kind:"savedSearch", refOrName}`         |
-| `library`        | object                         | —                   | 库：`{type:"user",id:0}` 或 `{type:"group",id}`；`scope` 为 name 时作解析上下文，`ref` 时必须一致 |
-| `itemTypes`      | string[]                       | —                   | Zotero 条目类型名（如 `journalArticle`），OR 组合                                                 |
-| `tags`           | string[]                       | —                   | 标签名，`tagMatch` 控制 AND/OR                                                                    |
-| `tagMatch`       | `"all"` \| `"any"`             | `"all"`             | 多标签组合：`all`=AND，`any`=OR                                                                   |
-| `excludeTags`    | string[]                       | —                   | 需排除的标签（NOT）                                                                               |
-| `includeTrashed` | boolean                        | `false`             | 是否包含已删除条目（仅 `library` scope 允许）                                                     |
-| `sort`           | string                         | `"dateModified"`    | 排序字段：`dateModified` / `dateAdded` / `date` / `title` / `creator`                             |
-| `direction`      | `"asc"` \| `"desc"`            | `"desc"`            | 排序方向                                                                                          |
-| `offset`         | integer                        | `0`                 | 分页偏移                                                                                          |
-| `limit`          | integer                        | `10`                | 返回数量上限（受 `maxSearchResults` 限制，默认 20）                                               |
+| 参数             | 类型                           | 默认值              | 说明                                                                                                                |
+| ---------------- | ------------------------------ | ------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `query`          | string                         | —                   | 自由文本查询；省略则浏览全库                                                                                        |
+| `mode`           | `"metadata"` \| `"everything"` | `"metadata"`        | 搜索范围                                                                                                            |
+| `scope`          | object                         | `{kind: "library"}` | `{kind:"library"}` / `{kind:"collection", refOrName}` / `{kind:"savedSearch", refOrName}` / `{kind:"publications"}` |
+| `library`        | object                         | —                   | 库：`{type:"user",id:0}` 或 `{type:"group",id}`；`scope` 为 name 时作解析上下文，`ref` 时必须一致                   |
+| `itemTypes`      | string[]                       | —                   | Zotero 条目类型名（如 `journalArticle`），OR 组合                                                                   |
+| `tags`           | string[]                       | —                   | 标签名，`tagMatch` 控制 AND/OR                                                                                      |
+| `tagMatch`       | `"all"` \| `"any"`             | `"all"`             | 多标签组合：`all`=AND，`any`=OR                                                                                     |
+| `excludeTags`    | string[]                       | —                   | 需排除的标签（NOT）                                                                                                 |
+| `includeTrashed` | boolean                        | `false`             | 是否包含已删除条目（仅 `library` scope 允许）                                                                       |
+| `sort`           | string                         | `"dateModified"`    | 排序字段：`dateModified` / `dateAdded` / `date` / `title` / `creator`                                               |
+| `direction`      | `"asc"` \| `"desc"`            | `"desc"`            | 排序方向                                                                                                            |
+| `offset`         | integer                        | `0`                 | 分页偏移                                                                                                            |
+| `limit`          | integer                        | `10`                | 返回数量上限（受 `maxSearchResults` 限制，默认 20）                                                                 |
 
 ### 输出
 
-`scope`（`library` scope 含 `library` 字段，便于分页回放）, `items`（仅主结果：ref, title, creatorSummary, year, itemType, bestAttachmentRef, bestAttachmentType）, `total`, `offset`, `returned`, `nextOffset`, `supplemental`（可选：`{kind:"noteBody", items, scanned, truncated}`）
+`scope`（`library` scope 含 `library` 字段，便于分页回放）, `items`（仅主结果：ref, title, creatorSummary, year, itemType, parentRef, bestAttachmentRef, bestAttachmentType, attachmentSize）, `total`, `offset`, `returned`, `nextOffset`, `supplemental`（可选：`{kind:"noteBody", items, scanned, truncated}`）
 
 ### 注意事项
 
@@ -50,14 +50,15 @@ zotero_search(query="transformer attention", mode="everything", tags=["deep-lear
 
 ### 参数
 
-| 参数      | 类型                                        | 必填 | 说明                 |
-| --------- | ------------------------------------------- | ---- | -------------------- |
-| `ref`     | string                                      | ✓    | 条目 ref             |
-| `include` | `("notes"\|"annotations"\|"attachments")[]` | —    | 需要包含的子内容类型 |
+| 参数      | 类型                                        | 必填 | 说明                                                                                                       |
+| --------- | ------------------------------------------- | ---- | ---------------------------------------------------------------------------------------------------------- |
+| `ref`     | string                                      | ✓    | 条目 ref                                                                                                   |
+| `include` | `("notes"\|"annotations"\|"attachments")[]` | —    | 需要包含的子内容类型                                                                                       |
+| `fields`  | `"standard"` \| `"all"`                     | —    | 返回字段集合：`standard`（默认）返回规范化字段模型；`all` 额外返回 `extraFields`（保留特殊条目的原生字段） |
 
 ### 输出
 
-`ref`, `itemType`, `title`, `creators`, `date`, `year`, `venue`, `doi`, `url`, `abstract`, `abstractTruncated`, `noteBody`（笔记条目）, `tags`, `collections`, `children`, `bestAttachment`, `relations`（如 `dc:relation` 等，`targetRef` 仅同库可证时出现）, 以及请求的 `notes`/`annotations`/`attachments`（含 total、returned、items）
+`ref`, `itemType`, `title`, `creators`, `date`, `year`, `venue`, `doi`, `url`, `abstract`, `abstractTruncated`, `noteBody`（笔记条目）, `tags`, `collections`, `children`, `bestAttachment`, `relations`（如 `dc:relation` 等，`targetRef` 仅同库可证时出现）, `fields="all"` 时的 `extraFields`, 以及请求的 `notes`/`annotations`/`attachments`（含 total、returned、items）
 
 ### 示例
 
@@ -84,7 +85,7 @@ zotero_get(ref="zotero://user/0/item/ABC123", include=["notes", "annotations"])
 
 ### 输出
 
-`ref`, `attachmentRef`, `attachmentContentType`, `coverage`（indexedChars/totalChars/complete 等）, `attachments`（多附件策略下逐个附件的事实）, `evidence`（source, sourceRef, text, chunkIndex, chunkCount, comment, pageLabel, matchedFields）, `truncated`, `sourcesSkipped`
+`ref`, `attachmentRef`, `attachmentContentType`, `coverage`（indexedChars/totalChars/complete 等）, `attachments`（多附件策略下逐个附件的事实：`ref`, `contentType?`, `status`, `coverage?`, `inputTruncated?`, `passages?`——这是全文来源清单，不是 `zotero_get`/`zotero_children` 的子附件行）, `evidence`（source, sourceRef, text, chunkIndex, chunkCount, comment, pageLabel, matchedFields）, `truncated`, `sourcesSkipped`
 
 ### 注意事项
 
@@ -175,16 +176,23 @@ zotero_export(refs=["zotero://user/0/item/ABC123", "zotero://user/0/item/DEF456"
 
 发现库结构。所有 `kind` 均 `offset/limit` 分页（默认 `20`，受 `maxBrowseResults` 限制 50），返回 `total/returned/nextOffset`。
 
-分页诚实性对所有分页列表端点统一生效：`zotero_search` 与 `zotero_browse` 的数组型列表读取要求响应携带合法的 `Total-Results` 头，缺失或非法时整个调用以 `ZOTERO_UNEXPECTED` 失败，而不是用响应体长度猜测总数。`zotero_changes` 走另一条路：它按资源整批读取（不带 `limit`，本地 API 对无上限请求返回全集；条目种类是 `/items`、`/items/top`、`/items/trash` 三个端点各整批读一次），`Total-Results` 存在时用它与 map 键数比对来判定这一批是否读全，缺失时按「无上限请求即全集」信任；列表本身按 `maxChangesResults` 截断，真实条数进 `totals`；渲染给模型的就是这份列表的全部，不再二次截断——超出上限的部分要读就得提高 `maxChangesResults`，而不是换个参数重试。响应体不是 key→version map（如数组、字符串，或值不是非负整数）时不当作「没有变化」：该种类记为不可读（`unobservable` 的 `unreadable`）并否决本次游标。
+分页诚实性对所有服务端分页列表端点统一生效：`zotero_search` 以及 `zotero_browse` 的 `collections`、`savedSearches`、`tags` 数组型列表读取要求响应携带合法的 `Total-Results` 头，缺失或非法时整个调用以 `ZOTERO_UNEXPECTED` 失败，而不是用响应体长度猜测总数；`libraries`、`itemTypes`、`itemFields` 是本地构建的完整清单，直接以已读行数作为 `total`。`zotero_changes` 走另一条路：它按资源整批读取（不带 `limit`，本地 API 对无上限请求返回全集；条目种类是 `/items`、`/items/top`、`/items/trash` 三个端点各整批读一次），`Total-Results` 存在时用它与 map 键数比对来判定这一批是否读全，缺失时按「无上限请求即全集」信任；列表本身按 `maxChangesResults` 截断，真实条数进 `totals`；渲染给模型的就是这份列表的全部，不再二次截断——超出上限的部分要读就得提高 `maxChangesResults`，而不是换个参数重试。响应体不是 key→version map（如数组、字符串，或值不是非负整数）时不当作「没有变化」：该种类记为不可读（`unobservable` 的 `unreadable`）并否决本次游标。
 
-| 参数      | 类型                                                                           | 默认值     | 说明                                                                        |
-| --------- | ------------------------------------------------------------------------------ | ---------- | --------------------------------------------------------------------------- |
-| `kind`    | `libraries`\|`collections`\|`savedSearches`\|`tags`\|`itemTypes`\|`itemFields` | —          | 浏览类型（`itemFields` 需 `itemType`）                                      |
-| `library` | object `{type, id}`                                                            | `user/0`   | 目标库（`collections/savedSearches/tags` 有效；`libraries/itemTypes` 忽略） |
-| `q`       | string                                                                         | —          | `tags` 时 substring 过滤                                                    |
-| `match`   | `contains`\|`startsWith`                                                       | `contains` | `tags` 时 `q` 的匹配方式（需 `q`）                                          |
-| `offset`  | integer                                                                        | `0`        | 分页偏移                                                                    |
-| `limit`   | integer                                                                        | `20`       | 返回上限                                                                    |
+| 参数            | 类型                                                                           | 默认值               | 说明                                                                                      |
+| --------------- | ------------------------------------------------------------------------------ | -------------------- | ----------------------------------------------------------------------------------------- |
+| `kind`          | `libraries`\|`collections`\|`savedSearches`\|`tags`\|`itemTypes`\|`itemFields` | —                    | 浏览类型（`itemFields` 需 `itemType`）                                                    |
+| `library`       | object `{type, id}`                                                            | `user/0`             | 目标库（`collections/savedSearches/tags` 有效；`libraries/itemTypes/itemFields` 拒绝）    |
+| `parentRef`     | string                                                                         | —                    | 仅 `collections`：父集合 ref，列出其直接子集合；省略则列出顶层集合                        |
+| `tagScope`      | `"library"`\|`"collection"`\|`"publications"`                                  | `"library"`          | 仅 `tags`：标签统计作用域；`collection`/`publications` 调用作用域端点                     |
+| `tagCollection` | string                                                                         | —                    | 仅 `tags` 且 `tagScope="collection"`：集合 ref 或精确名称                                 |
+| `itemLevel`     | `"top"`\|`"all"`                                                               | `"top"`              | 仅有作用域的 `tags`：`top` 仅统计文献条目（默认），`all` 包含子条目                       |
+| `itemQuery`     | string                                                                         | —                    | 仅有作用域的 `tags`：仅统计匹配该查询词的条目标签（用于搜索后发现分面）                   |
+| `itemQueryMode` | `"titleCreatorYear"`\|`"everything"`                                           | `"titleCreatorYear"` | 仅有 `itemQuery` 的 `tags`：查询匹配模式                                                  |
+| `itemType`      | string                                                                         | —                    | 仅 `itemFields`：需要查询有效字段及创作者类型的 Zotero 条目类型（如 `dataset`, `patent`） |
+| `q`             | string                                                                         | —                    | `tags` 时 substring 过滤                                                                  |
+| `match`         | `contains`\|`startsWith`                                                       | `contains`           | `tags` 时 `q` 的匹配方式（需 `q`）                                                        |
+| `offset`        | integer                                                                        | `0`                  | 分页偏移                                                                                  |
+| `limit`         | integer                                                                        | `20`                 | 返回上限                                                                                  |
 
 ### 输出
 
@@ -218,7 +226,7 @@ zotero_browse(kind="tags", q="review", match="contains")
 
 ### 输出
 
-`{ref, itemType?, serverId?, notes?, attachments?, annotations?}`，每类为 `{total, returned, items}`。笔记项含 `parentRef`（产生它的父条目 ref）。
+`{ref, itemType?, serverId?, notes?, attachments?, annotations?}`，每类为 `{total, returned, items}`。笔记项含 `parentRef`（产生它的父条目 ref）。`attachments` 行是子对象清单（`ref`, `title`, `contentType`, `linkMode?`），与 `zotero_retrieve` 里按全文策略列出的 `attachments` 行（`status`/`coverage`/`passages`）不是同一结构。
 
 ### 示例
 
@@ -234,7 +242,7 @@ zotero_children(ref="zotero://user/0/item/ABC123", include=["annotations"])
 
 **条目空间按 Zotero 自己的划分读取**：`items` 一项覆盖三个端点——`/items/top`（顶层条目）、`/items`（全部活动条目）与 `/items/trash`（回收站），分别列为 `changed.items`、`changed.childItems`、`changed.trashedItems`。子对象（笔记、附件、批注）是 `/items` 与 `/items/top` 的差集：它们有自己的版本，编辑一条批注会推进库版本却不动任何顶层条目，只读 `/items/top` 的增量会静默漏掉它；Zotero 的条目列表同样排除回收站，不读 `/items/trash` 就看不到「移入回收站」这一变化。三者缺一时整个种类列为不可观测，而不是把条目空间的一部分当作全部报出去。
 
-**游标契约**：`cursor` 出现即安全——它表示该调用已把报告范围内的变更整批读完，且读取期间库版本没有前进，因此可以直接作为下次 `since`。读不全（该构建给响应加了上限）或读取期间有写入时不返回 `cursor`（后者另带 `libraryChanged: true`），此时不要从这次结果推进游标。游标只覆盖产生它的那次调用 `include` 的资源种类。`unobservable` 里 `not-served`（该构建没有这个端点）与 `range-not-covered`（范围早于该构建保留的删除日志）**不**否决游标——这些变更本来就不在任何区间可观测；`unreadable`（响应形状不合约）则否决，因为数据存在、只是这次调用没读到。
+**游标契约**：`cursor` 出现即安全——它表示该调用已把报告范围内的变更整批读完，且读取期间库版本没有前进，因此可以直接作为下次 `since`。读不全（该构建给响应加了上限）或读取期间有写入时不返回 `cursor`（后者另带 `libraryChanged: true`），此时不要从这次结果推进游标。游标只覆盖产生它的那次调用 `include` 的资源种类。对单一资源而言，`unobservable` 里的 `not-served`（该构建没有这个端点）与 `range-not-covered`（范围早于该构建保留的删除日志）**不**否决游标——这些变更本来就不在任何区间可观测；`unreadable`（响应形状不合约）则否决，因为数据存在、只是这次调用没读到。`items` 种类更严格：顶层条目、活动条目和回收站三个分区必须全部读到；任一分区失败都不返回游标，避免后续 diff 跳过子对象或回收站变更。
 
 **删除的读法**：`deleted` 出现即已观测——四个列表（`items`/`collections`/`savedSearches`/`tags`，最后一个存标签名而非 key）在读取成功时总是存在，全空即正面陈述「本区间没有删除」；端点 404（本机 Zotero 10.0.2-beta.9 没有 `/deleted` 路由）或响应形状不合约时 `deleted` 整体缺席，并在 `unobservable` 里点名，绝不把「没读到」写成「没有删除」。文档化的四类之外的墓碑条目（Zotero 自己也同步一份 settings 列表）计数进 `totals.deletedOther`。
 
@@ -252,7 +260,7 @@ zotero_children(ref="zotero://user/0/item/ABC123", include=["annotations"])
 
 ### 输出
 
-`{library, serverId?, fromVersion?, cursor?, libraryChanged?, versionUnavailable?, changed: {items?, childItems?, trashedItems?, collections?, savedSearches?, fulltextAttachments?}, deleted?: {items, collections, savedSearches, tags}, totals?, unobservable?: {kind, reason}[], truncated?}`。每种资源整批读取（条目是三个端点各整批读一次），但每个列表按 `maxChangesResults`（默认 50）截断，`truncated` 表示列表是摘要；`totals` 给出每种资源（含 `childItems`/`trashedItems`/`deletedItems`/`deletedCollections`/`deletedSavedSearches`/`deletedTags`/`deletedOther`）被截断前的真实条数——某个计数出现即表示该种类读过，读没读过不必从列表是否为空去猜。`unobservable` 的每项带原因：`not-served`（该构建没有这个端点，如本机 Zotero 10.0.2-beta.9 没有 `/deleted` 路由）、`range-not-covered`（`since` 早于该构建保留的删除日志，409）、`unreadable`（响应形状不是文档化的那个，本次没读到，游标也不归还）。
+`{library, serverId?, fromVersion?, cursor?, libraryChanged?, versionUnavailable?, changed: {items?, childItems?, trashedItems?, collections?, savedSearches?, fulltextAttachments?}, deleted?: {items, collections, savedSearches, tags}, totals?, unobservable?: {kind, reason}[], truncated?}`。每种资源整批读取（条目是三个端点各整批读一次），但每个列表按 `maxChangesResults`（默认 50）截断，`truncated` 表示列表是摘要；`totals` 给出每种资源（含 `childItems`/`trashedItems`/`deletedItems`/`deletedCollections`/`deletedSavedSearches`/`deletedTags`/`deletedOther`）被截断前的真实条数——某个计数出现即表示该种类读过，读没读过不必从列表是否为空去猜。`unobservable` 的每项带原因：`not-served`（该构建没有这个端点，如本机 Zotero 10.0.2-beta.9 没有 `/deleted` 路由）、`range-not-covered`（`since` 早于该构建保留的删除日志，409）、`unreadable`（响应形状不是文档化的那个，本次没读到，游标也不归还）。对 `items` 种类，`/items`、`/items/top` 或 `/items/trash` 任一分区失败也不返回游标；`fulltext` 使用独立计数器，因此包含 fulltext 的结果明确不返回库游标。
 
 ### 示例
 
@@ -269,17 +277,17 @@ zotero_changes(since={serverId: "<from cursor>", library: {type: "user", id: 0},
 
 ### 参数
 
-| 参数          | 类型     | 默认值 | 说明                                                                                                      |
-| ------------- | -------- | ------ | --------------------------------------------------------------------------------------------------------- |
-| `markdown`    | string   | —      | 笔记正文（markdown，上限 65536 字符）                                                                     |
-| `parentItem`  | string   | —      | 父条目 ref；省略为独立笔记                                                                                |
-| `collections` | string[] | —      | 合集 ref 或精确名称；仅独立笔记，子笔记再传非空 collections 会在计划卡前以 `ZOTERO_INVALID_ARGUMENT` 拒绝 |
-| `tags`        | string[] | —      | 创建时应用的标签                                                                                          |
-| `sourceRefs`  | string[] | —      | 来源条目 ref，记为 `dc:relation` 关系并回显                                                               |
+| 参数          | 类型     | 默认值 | 说明                                                                                                                                                 |
+| ------------- | -------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `markdown`    | string   | —      | 笔记正文（markdown，上限 65536 字符）                                                                                                                |
+| `parentItem`  | string   | —      | 个人库父条目 ref（`zotero://user/0/item/<KEY>`）；省略为独立笔记                                                                                     |
+| `collections` | string[] | —      | 个人库合集 ref（`zotero://user/0/collection/<KEY>`）或精确名称；仅独立笔记，子笔记再传非空 collections 会在计划卡前以 `ZOTERO_INVALID_ARGUMENT` 拒绝 |
+| `tags`        | string[] | —      | 创建时应用的标签                                                                                                                                     |
+| `sourceRefs`  | string[] | —      | 个人库来源条目 ref（`zotero://user/0/item/<KEY>`），记为 `dc:relation` 关系并回显                                                                    |
 
 ### 输出
 
-`{kind: "applied", ref, key, version, parentItem?, collections, tags, sourceRefs, libraryVersion, serverId?}`；`kind: "declined"` 表示用户在计划卡片上未批准——未写入任何内容，这是正常结果而非错误，不要重试。
+`{kind: "applied", ref, key, version, parentItem?, collections, tags, sourceRefs, libraryVersion, serverId?}`。若写入结果必须按已提交处理、但响应无法证明完整状态，则返回 `{kind: "committed-unverified", committed: true, retryable: false, reason: "saved-state-unverified" | "commit-unknown", ref?, key?, version?, libraryVersion?, serverId}`；不要重试，按可用的 key/ref 核对。`kind: "declined"` 表示用户在计划卡片上未批准——未写入任何内容，这是正常结果而非错误，不要重试。
 
 ### 示例
 
@@ -295,10 +303,10 @@ zotero_create_note(markdown="**方法**：见第 2 节。", parentItem="zotero:/
 
 ### 参数
 
-| 参数   | 类型     | 默认值 | 说明                                    |
-| ------ | -------- | ------ | --------------------------------------- |
-| `ref`  | string   | —      | 要打标签的条目 ref                      |
-| `tags` | string[] | —      | 要新增的标签（≥1 个，≤50 个；自动去重） |
+| 参数   | 类型     | 默认值 | 说明                                                     |
+| ------ | -------- | ------ | -------------------------------------------------------- |
+| `ref`  | string   | —      | 要打标签的个人库条目 ref（`zotero://user/0/item/<KEY>`） |
+| `tags` | string[] | —      | 要新增的标签（≥1 个，≤50 个；自动去重）                  |
 
 ### 输出
 
@@ -314,7 +322,7 @@ zotero_add_tags(ref="zotero://user/0/item/ABCD1234", tags=["综述", "待读"])
 
 ## zotero_add_to_collection
 
-把一个条目加入合集（ref 或精确名称）。合集先解析（名称走缓存的合集清单，未知名称在**任何读写发生前**报 `ZOTERO_NOT_FOUND`），随后与标签相同的读-合并-写：条目已有合集原样保留，合并后带版本前置提交；条目已是成员时 `added: false` 且不写。
+把一个条目加入合集（ref 或精确名称）。合集名称在执行时通过本地 API 解析（未知名称在任何读写修改发生前报 `ZOTERO_NOT_FOUND`），随后与标签相同的读-合并-写：条目已有合集原样保留，合并后带版本前置提交；条目已是成员时 `added: false` 且不写。
 
 ### 参数
 
@@ -343,26 +351,28 @@ zotero_add_to_collection(ref="zotero://user/0/item/ABCD1234", collection="方法
 
 ## 错误码
 
-| 错误码                          | 说明                                                                                     |
-| ------------------------------- | ---------------------------------------------------------------------------------------- |
-| `ZOTERO_WRITE_UNAUTHORIZED`     | Zotero 拒绝写入授权：key 缺失或失效（401）、用户在授权弹窗拒绝，或没有可用的计划批准通道 |
-| `ZOTERO_WRITE_CONFLICT`         | 写入的版本前置失败（412）：对象在读取后被修改，重跑工具即可                              |
-| `ZOTERO_WRITE_RATE_LIMITED`     | Zotero 对写入授权请求限速（429，含 Retry-After）                                         |
-| `ZOTERO_NOT_RUNNING`            | Zotero 未运行或本地 API 不可达                                                           |
-| `ZOTERO_API_DISABLED`           | Zotero 运行中但本地 API 被禁用（403）                                                    |
-| `ZOTERO_API_VERSION`            | Zotero API 版本不受支持                                                                  |
-| `ZOTERO_NOT_IMPLEMENTED`        | 本地 API 明确拒绝该请求（501）且非版本问题：端点或输出格式在本构建中不可用               |
-| `ZOTERO_SERVER_MISMATCH`        | ref 来自不同的 Zotero 实例                                                               |
-| `ZOTERO_NOT_FOUND`              | 引用的条目、集合或保存搜索不存在                                                         |
-| `ZOTERO_NO_ATTACHMENT`          | 条目没有指定类型的附件                                                                   |
-| `ZOTERO_NO_FULLTEXT`            | 附件没有全文索引                                                                         |
-| `ZOTERO_FILE_MISSING`           | Zotero 报告的本地文件在磁盘上不存在                                                      |
-| `ZOTERO_INVALID_REF`            | ref 字符串不符合 `zotero://` 语法或引用了不支持的库                                      |
-| `ZOTERO_INVALID_ARGUMENT`       | 参数违反了 schema 无法表达的领域约束                                                     |
-| `ZOTERO_SCOPE_AMBIGUOUS`        | 集合或保存搜索名称匹配到多个对象                                                         |
-| `ZOTERO_TIMEOUT`                | 提供方自身超时                                                                           |
-| `ZOTERO_RESPONSE_TOO_LARGE`     | 响应流式传输超出资源限制                                                                 |
-| `ZOTERO_OUTPUT_TOO_LARGE`       | 导出输出超过提供方硬上限                                                                 |
-| `ZOTERO_CAPABILITY_UNAVAILABLE` | 提供方未声明所需能力                                                                     |
-| `ZOTERO_PROVIDER_UNAVAILABLE`   | 配置的提供方未注册，或声明了能力却未实现对应方法                                         |
-| `ZOTERO_UNEXPECTED`             | 响应无法解析或行为异常                                                                   |
+| 错误码                              | 说明                                                                       |
+| ----------------------------------- | -------------------------------------------------------------------------- |
+| `ZOTERO_WRITE_UNAUTHORIZED`         | Zotero 拒绝写入授权：key 缺失或失效（401），或用户在授权弹窗拒绝           |
+| `ZOTERO_WRITE_APPROVAL_UNAVAILABLE` | 计划审查卡无法发起交互（无用户交互通道或系统级询问异常，非用户决策结果）   |
+| `ZOTERO_WRITE_CONFLICT`             | 写入的版本前置失败（412）：对象在读取后被修改，重跑工具即可                |
+| `ZOTERO_WRITE_RATE_LIMITED`         | Zotero 对写入授权请求限速（429，含 Retry-After）                           |
+| `ZOTERO_NOT_RUNNING`                | Zotero 未运行或本地 API 不可达                                             |
+| `ZOTERO_API_DISABLED`               | Zotero 运行中但本地 API 被禁用（403）                                      |
+| `ZOTERO_API_VERSION`                | Zotero API 版本不受支持                                                    |
+| `ZOTERO_NOT_IMPLEMENTED`            | 本地 API 明确拒绝该请求（501）且非版本问题：端点或输出格式在本构建中不可用 |
+| `ZOTERO_SERVER_MISMATCH`            | ref 来自不同的 Zotero 实例                                                 |
+| `ZOTERO_NOT_FOUND`                  | 引用的条目、集合或保存搜索不存在                                           |
+| `ZOTERO_RANGE_UNSUPPORTED`          | 服务端未保留所请求版本至今的变更历史（409）                                |
+| `ZOTERO_NO_ATTACHMENT`              | 条目没有指定类型的附件                                                     |
+| `ZOTERO_NO_FULLTEXT`                | 附件没有全文索引                                                           |
+| `ZOTERO_FILE_MISSING`               | Zotero 报告的本地文件在磁盘上不存在                                        |
+| `ZOTERO_INVALID_REF`                | ref 字符串不符合 `zotero://` 语法或引用了不支持的库                        |
+| `ZOTERO_INVALID_ARGUMENT`           | 参数违反了 schema 无法表达的领域约束                                       |
+| `ZOTERO_SCOPE_AMBIGUOUS`            | 集合或保存搜索名称匹配到多个对象                                           |
+| `ZOTERO_TIMEOUT`                    | 提供方自身超时                                                             |
+| `ZOTERO_RESPONSE_TOO_LARGE`         | 响应流式传输超出资源限制                                                   |
+| `ZOTERO_OUTPUT_TOO_LARGE`           | 导出输出超过提供方硬上限                                                   |
+| `ZOTERO_CAPABILITY_UNAVAILABLE`     | 提供方未声明所需能力                                                       |
+| `ZOTERO_PROVIDER_UNAVAILABLE`       | 配置的提供方未注册，或声明了能力却未实现对应方法                           |
+| `ZOTERO_UNEXPECTED`                 | 响应无法解析或行为异常                                                     |

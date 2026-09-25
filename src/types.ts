@@ -6,10 +6,6 @@
  * instance's identity as a provenance qualifier
  * (`?server=<Zotero-Server-ID>`). Everything in this module is a plain
  * lossless-JSON-safe DTO; tool `execute` bodies return these values directly
- * as canonical tool results.
- *
- * Terminology: the "v3" in `BREAKING CHANGE` remarks below denotes this
- * plugin's own DTO contract iteration, not the Zotero wire API version.
  * @module dsh-zotero/types
  */
 
@@ -96,9 +92,7 @@ export type ZoteroSearchScope =
 
 /**
  * Resolved scope echoed back to the Agent so pagination reuses a stable ref.
- * @remarks BREAKING CHANGE v3: `kind:"library"` now carries `library: SupportedLocalLibrary`
- * (previously `{kind:"library"}` without library). Consumers must handle the new field;
- * `SEARCH_DEFAULT_SCOPE` (`{kind:"library"}`) is normalized to `{kind:"library", library:{user:0}}`.
+ * The `library` property identifies the target personal (`user/0`) or group library.
  */
 export type ZoteroResolvedScope =
   | { kind: 'library'; library: PersonalLibrary }
@@ -429,9 +423,9 @@ export type ZoteroExportFormat =
   'citation' | 'bibliography' | 'bibtex' | 'biblatex' | 'ris' | 'csljson'
 
 /**
- * @remarks BREAKING CHANGE v3: Export is single-library only. All refs must belong to the same
- * `SupportedLocalLibrary` (personal user/0 or a single group). Mixed libraries throw
- * `ZOTERO_INVALID_ARGUMENT` with 0 HTTP; split by library.
+ * Export request for one or more items. Export is single-library only: all refs
+ * must belong to the same library (personal user/0 or a single group). Mixing
+ * libraries throws `ZOTERO_INVALID_ARGUMENT`.
  */
 export interface ZoteroExportRequest {
   refs: ZoteroObjectRef[]

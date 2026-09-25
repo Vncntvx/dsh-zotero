@@ -32,7 +32,7 @@ src/
   remote.ts             # Web tab 的 Remote 服务
   typert.ts             # Typert manifest
   settings-namespace.ts # 设置命名空间常量
-  tools/                # 8 个模型工具（search/get/children/attachment/retrieve/export/browse/changes）+ present/validate 共享件
+  tools/                # 11 个模型工具（8 个读取 + create_note/add_tags/add_to_collection 三个写入）+ present/validate 共享件
   client/               # 浏览器端（设置页、Sources tab、sources 归约、workspace 视图）
 tests/                  # 单元测试（mock Zotero server + 浏览器设置页测试）
 ```

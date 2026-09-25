@@ -29,6 +29,9 @@ All configuration fields are defined in `src/config.ts`, with defaults provided 
 | `maxChangesResults`    | `50`                         | Per-resource listing cap of one `zotero_changes` call (display only; the read is always whole) |
 | `defaultStyle`         | `apa`                        | CSL citation style (must be built into Zotero)                                                 |
 | `defaultLocale`        | `en-US`                      | CSL citation locale                                                                            |
+| `writeEnabled`         | `false`                      | Whether to register and allow the three personal-library write tools                           |
+| `writeConfirm`         | `true`                       | Whether to show the dsh plan-approval card before every write                                  |
+| `writePersistKey`      | `true`                       | Whether Always-Allow write keys persist in the host credentials service                        |
 | `webEnabled`           | `true`                       | Whether to enable Zotero session tab in dsh web                                                |
 
 ## Validation rules
@@ -55,14 +58,15 @@ The user layer (settings document) always overrides the base layer. Patch entry 
 The plugin registers a **Zotero** page in the Settings panel's left navigation (beside General, Models, and Plugins), bound to the `zotero` settings namespace.
 
 - Writes land in the `zotero:` section of `$DSH_HOME/settings.yaml`
-- Save takes effect immediately: transport and provider rebuild with the new values
+- Save takes effect immediately: structural transport or write-gate fields rebuild transport/provider/write tools on the same service instance; provider id remains a live selection, and limit-only fields are read live by the provider
 - Invalid values are rejected before write; the page retains the last valid draft
 - Fields overridden by the settings document show an "Overridden" badge, resettable with one click
 - External edits to `settings.yaml` also hot-reload
 
 ## Hot-reload behavior
 
-- Settings changes automatically rebuild the HTTP client and local provider
+- Transport-field or write-gate changes rebuild the HTTP client, local provider, and write-tool set on the same `ZoteroService` instance; a provider-id change only affects the next selection
+- Limit-only changes use the provider's live getter on the next call without rebuilding transport
 - The next tool call or `/zotero status` uses the new values, no restart needed
 - `webEnabled` toggle takes effect immediately: the tab shows/hides right away
 

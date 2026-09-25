@@ -61,16 +61,16 @@ dsh plugin --profile <name> add ./dsh-zotero-*.tgz
 
 After installing, start a new session so the agent picks up the Zotero tools.
 
-The plugin provides a settings page under **Settings → Zotero** — a left-nav entry beside General, Models, and Plugins — where you can adjust the API address, concurrency limits, full-text retrieval toggle, and more. Changes take effect on save. See [Configuration](docs/configuration.md).
+The plugin provides a settings page under **Settings → Zotero** — a left-nav entry beside General, Models, and Plugins — where you can adjust the API address, concurrency limits, full-text retrieval toggle, and more. Changes take effect on save. See [Configuration](docs/configuration.en.md).
 
-[Installation details →](docs/getting-started.md)
+[Installation details →](docs/getting-started.en.md)
 
 ## Requirements
 
-- Zotero ≥ 7 with local API enabled: **Settings → Advanced → "Allow other applications on this computer to communicate with Zotero"**
+- Zotero ≥ 7 supports reads; writes require Zotero 10. Enable the local API: **Settings → Advanced → "Allow other applications on this computer to communicate with Zotero"**
 - Node.js ≥ 22.19 (or ≥ 24)
 - dsh 0.1.7-rc.2 host (exactly this version: `engines.dsh` and every `@deepseek-ai/dsh-*` peer pin that exact version; no other dsh release is supported)
-- Local API at `http://127.0.0.1:23119/api`, unauthenticated, read-only
+- Local API at `http://127.0.0.1:23119/api`; reads are unauthenticated, while Zotero 10 writes use a locally issued write key
 
 ## Usage example
 
@@ -97,11 +97,11 @@ Agent → zotero_export(refs: ["zotero://user/0/item/ABCD1234",
        Generates BibTeX entries; the UI can download them, the model reads the same text
 ```
 
-More examples in [Features](docs/features.md).
+More examples in [Features](docs/features.en.md).
 
 ## Limits
 
-- **Read-only library**: all operations are reads; items, notes, tags, and collections are unchanged
+- **Read-only by default**: after `writeEnabled` is explicitly enabled, three write tools can create research notes, add tags, or add personal-library items to collections; writes also require the default-on `writeConfirm` plan and Zotero 10 local authorization
 - **Loopback only**: network requests go only to `127.0.0.1:23119`
 - **Evidence ranking is term-based**: BM25 ranks passages by query-term frequency match
 - **Exports are static text**: the tool returns text, and that is what the model reads; the Zotero panel offers one-click copy or file download (`.bib`, `.ris`, `.json`), so nothing has to be retyped
@@ -112,21 +112,21 @@ More examples in [Features](docs/features.md).
 
 - **Network**: HTTP requests go only to `http://127.0.0.1:23119/api` (redirects are not followed); `resolveConfig` enforces a loopback address
 - **Filesystem**: read-only — `zotero_attachment` verifies attachment paths with `existsSync`; no file writes
-- **Persistence**: the only write comes from the Zotero settings page in the left navigation, saved to the `zotero:` user layer of `$DSH_HOME/settings.yaml`
+- **Persistence**: settings save under the `zotero:` user layer of `$DSH_HOME/settings.yaml`; an Always-Allow Zotero write key is also stored in the host credentials service bound to its issuing instance
 - **No shell / native / background tasks**: the plugin runs no shell commands, loads no native modules, and starts no daemon
 - **Restart**: after installing or removing the plugin, restart dsh and start a new session; configuration changes hot-reload on save without a restart
 
 ## Documentation
 
-| Doc                                        | Covers                                                 |
-| ------------------------------------------ | ------------------------------------------------------ |
-| [Getting Started](docs/getting-started.md) | Installation, prerequisites, first verification        |
-| [Features](docs/features.md)               | Sources panel, chat integration, evidence, exports     |
-| [Tool Reference](docs/tools.md)            | Parameters, return values, error codes for all 8 tools |
-| [Configuration](docs/configuration.md)     | 22 config fields, defaults, hot-reload                 |
-| [Architecture](docs/architecture.md)       | Data flow, layer responsibilities, design boundaries   |
-| [Development](docs/development.md)         | Build, test, local development                         |
-| [Troubleshooting](docs/troubleshooting.md) | 11 common issues with symptoms and fixes               |
+| Doc                                           | Covers                                                  |
+| --------------------------------------------- | ------------------------------------------------------- |
+| [Getting Started](docs/getting-started.en.md) | Installation, prerequisites, first verification         |
+| [Features](docs/features.en.md)               | Sources panel, chat integration, evidence, exports      |
+| [Tool Reference](docs/tools.en.md)            | Parameters, return values, error codes for all 11 tools |
+| [Configuration](docs/configuration.en.md)     | 25 config fields, defaults, hot-reload                  |
+| [Architecture](docs/architecture.en.md)       | Data flow, layer responsibilities, design boundaries    |
+| [Development](docs/development.en.md)         | Build, test, local development                          |
+| [Troubleshooting](docs/troubleshooting.en.md) | 11 common issues with symptoms and fixes                |
 
 ## Development
 
