@@ -191,6 +191,8 @@ describe('the browser-half entry', () => {
     // (whose registration must not wait on the Remote mount).
     expect(world.injected.map((entry) => entry.name)).toEqual([
       'settings.section',
+      'plugins.bundle.config',
+      'plugins.detail.section',
       'conversation.view',
     ])
 
@@ -210,6 +212,40 @@ describe('the browser-half entry', () => {
       hooks: { zoteroCard: unknown }
     }
     expect(pageInject().hooks.zoteroCard).toBeDefined()
+  })
+
+  it('injects the bundle quick config into the plugins.bundle.config slot', () => {
+    const world = fakeWorld()
+    apply(world.ctx as Context)
+
+    const entry = world.injected.find((e) => e.name === 'plugins.bundle.config')
+    expect(entry).toBeDefined()
+    expect(entry?.register()).toBeDefined()
+
+    const config = world.registered.find((e) => e.name === 'plugins.bundle.config')
+    expect(config?.options.key).toBe('dsh-zotero')
+    expect(typeof config?.component).toBe('function')
+    const configInject = (config?.options.inject as () => { form: unknown; t: unknown })()
+    expect(configInject.form).toBe(world.scope)
+    expect(typeof configInject.t).toBe('function')
+  })
+
+  it('injects the detail section into the plugins.detail.section slot', () => {
+    const world = fakeWorld()
+    apply(world.ctx as Context)
+
+    const entry = world.injected.find((e) => e.name === 'plugins.detail.section')
+    expect(entry).toBeDefined()
+    expect(entry?.register()).toBeDefined()
+
+    const section = world.registered.find((e) => e.name === 'plugins.detail.section')
+    expect(section?.options.id).toBe('zotero-status')
+    expect(typeof section?.component).toBe('function')
+    const sectionInject = (
+      section?.options.inject as () => { probe: () => Promise<unknown>; t: unknown }
+    )()
+    expect(typeof sectionInject.probe).toBe('function')
+    expect(typeof sectionInject.t).toBe('function')
   })
 
   it('keeps the tab and reports the fault when the Remote namespace is not served', async () => {
@@ -323,7 +359,11 @@ describe('the browser-half entry', () => {
     })
     apply(world.ctx as Context)
     await settleMount(world)
-    expect(world.injected.map((entry) => entry.name)).toEqual(['settings.section'])
+    expect(world.injected.map((entry) => entry.name)).toEqual([
+      'settings.section',
+      'plugins.bundle.config',
+      'plugins.detail.section',
+    ])
   })
 
   it('withdraws the tab live when webEnabled turns off and restores it on', async () => {

@@ -40,8 +40,11 @@ import { SourcesTab, type SourcesTabFace } from './components/SourcesTab.tsx'
 import { ZOTERO_REMOTE } from './remote.ts'
 import type { ZoteroRemoteFace } from './remote.ts'
 import { ZoteroCardController } from './zotero-card-controller.ts'
-import type { ZoteroStatusView } from '../contract.js'
+import type { ZoteroStatusView } from '../contract.ts'
 import { ZOTERO_SETTINGS_NAMESPACE } from '../settings-namespace.ts'
+import type {} from './plugin-slots.d.ts'
+import { ZoteroBundleQuickConfig } from './components/plugin/ZoteroBundleQuickConfig.tsx'
+import { ZoteroPluginDetailSection } from './components/plugin/ZoteroPluginDetailSection.tsx'
 import { en, zh } from './locales.ts'
 
 /** Dictionary namespace owned by this plugin. */
@@ -128,6 +131,30 @@ export function apply(ctx: ClientContext): void {
     if (face !== undefined) return face.status()
     throw new Error(`dsh-zotero: the zotero Remote namespace is not mounted (${mountState})`)
   }
+
+  // Quick toggles in the plugin manager detail page (plugins.bundle.config)
+  ctx.slots.inject('plugins.bundle.config', () =>
+    ctx.slots.register(
+      {
+        name: 'plugins.bundle.config',
+        key: 'dsh-zotero',
+        inject: () => ({ form, t }),
+      },
+      ZoteroBundleQuickConfig,
+    ),
+  )
+
+  // Service status & quick start card at the bottom of the plugin manager detail page
+  ctx.slots.inject('plugins.detail.section', () =>
+    ctx.slots.register(
+      {
+        name: 'plugins.detail.section',
+        id: 'zotero-status',
+        inject: () => ({ t, probe }),
+      },
+      ZoteroPluginDetailSection,
+    ),
+  )
 
   // The dedicated Sources panel (a conversation tab) registers unless the
   // `webEnabled` namespace flag is explicitly off; before the first snapshot

@@ -227,12 +227,26 @@ describe('status projection helpers', () => {
       connectionDiagnosisOf(
         {
           kind: 'unavailable',
+          data: {
+            providerId: 'local',
+            connected: false,
+            diagnosis: 'ZOTERO_NOT_RUNNING: unreachable',
+          },
+          checkedAt: '10:00:00',
+        },
+        t,
+      ),
+    ).toBe(`诊断 ZOTERO_NOT_RUNNING: ${zh.diagnosisNotRunning}`)
+    expect(
+      connectionDiagnosisOf(
+        {
+          kind: 'unavailable',
           data: { providerId: 'local', connected: false, diagnosis: '' },
           checkedAt: '10:00:00',
         },
         t,
       ),
-    ).toBe(zh.statusUnavailable)
+    ).toBe(zh.diagnosisUnknown)
     expect(connectionDiagnosisOf({ kind: 'loading' }, t)).toBe('')
   })
 

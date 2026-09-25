@@ -51,16 +51,17 @@
 }
 
 /* The failure diagnosis: one muted-red line that gives way to the refresh
- * control instead of sprawling over the toolbar. */
+ * control instead of sprawling over the toolbar. Multi-line wrap on narrow
+ * widths so a localized sentence stays readable instead of ellipsizing. */
 .diagnosis {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   font-size: 12px;
   line-height: 18px;
   color: var(--dsw-alias-state-error-primary);
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .spacer {

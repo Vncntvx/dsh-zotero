@@ -19,7 +19,10 @@ export default defineConfig({
         'src/index.ts',
         'src/types.ts',
         'src/client/css-modules.d.ts',
+        'src/client/build-info-globals.d.ts',
+        'src/client/plugin-slots.d.ts',
         'src/client/sources/model.ts',
+        'src/client/components/plugin/types.ts',
       ],
       // Thresholds are **ratchets per layer**, not aspirations: each number is
       // set just under what that layer measures today, so any drop fails while
