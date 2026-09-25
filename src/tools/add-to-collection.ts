@@ -1,9 +1,9 @@
 /**
  * The `zotero_add_to_collection` tool: add one Zotero item to a collection,
- * by ref or by name. The domain validates the collection on execute (after
- * plan approval if writeConfirm is enabled), then runs read-merge-write under
- * a version precondition; an already-member item writes nothing and reports
- * added: false. The plan-review approval runs before Zotero is contacted.
+ * by ref or by name. The plan-review approval runs before Zotero is contacted,
+ * so a declined plan contacts nothing; after approval the domain validates the
+ * collection and runs read-merge-write under a version precondition, where an
+ * already-member item writes nothing and reports added: false.
  * @module dsh-zotero/tools/add-to-collection
  */
 
@@ -25,7 +25,7 @@ import {
   WRITE_COLLECTION_REF_ARG_HINT,
   WRITE_REF_ARG_HINT,
 } from './validate.js'
-import { askPlanApproval, WRITE_PLAN_OUTCOME_DESCRIPTION } from './write-approval.js'
+import { WRITE_PLAN_OUTCOME_DESCRIPTION } from '../write-approval.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroCollectionAddOutcome, ZoteroCollectionAddRequest } from '../types.js'
 
@@ -165,13 +165,10 @@ export function registerAddToCollectionTool(ctx: Context, service: ZoteroService
       // think time, which is not a stuck request.
       async execute(args, exec): Promise<ZoteroCollectionAddOutcome> {
         // No connectivity ask wraps the write: that helper retries, and only
-        // idempotent reads may be retried.
+        // idempotent reads may be retried. The plan review is the seam's
+        // (service.addToCollection), so no caller can skip it.
         const request = buildRequest(args)
-        if (service.config.writeConfirm) {
-          const approved = await askPlanApproval(ctx, exec, addToCollectionPlan(args))
-          if (!approved) return { kind: 'declined' } as const
-        }
-        return await service.addToCollection(request, exec.signal)
+        return await service.addToCollection(request, { exec, plan: addToCollectionPlan(args) })
       },
     }),
   )

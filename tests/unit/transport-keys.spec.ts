@@ -30,6 +30,6 @@ describe('touchesTransport', () => {
     expect(touchesTransport([['provider']])).toBe(false)
     expect(touchesTransport([['writePersistKey']])).toBe(false)
     expect(touchesTransport([['maxSearchResults'], ['timeoutMs']])).toBe(true)
-    expect(touchesTransport([['maxSearchResults'], ['writeConfirm']])).toBe(false)
+    expect(touchesTransport([['maxSearchResults'], ['defaultStyle']])).toBe(false)
   })
 })

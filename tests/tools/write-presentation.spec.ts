@@ -43,7 +43,7 @@ class ApprovingQuestions extends Service {
     }
   }
 }
-import { askPlanApproval } from '../../src/tools/write-approval.js'
+import { askPlanApproval } from '../../src/write-approval.js'
 import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
 
 const APPLIED_NOTE = {
@@ -353,14 +353,13 @@ describe('approval-gate failure arms', () => {
       signal: new AbortController().signal,
     } as unknown as ToolRunContext
     // The agent rides the request when present, and the answer names the card.
-    const approved = await askPlanApproval(lane.ctx, exec, '- plan line')
+    const approved = await askPlanApproval(lane.ctx, { exec, plan: '- plan line' })
     expect(approved).toBe(true)
     expect(scripted.asks.at(-1)?.agent).toBe(agent)
     expect(scripted.asks.at(-1)?.questions[0]?.detail).toBe('- plan line')
-    expect(scripted.asks.at(-1)?.questions[0]?.intent).toMatchObject({
+    expect(scripted.asks.at(-1)?.questions[0]?.intent).toEqual({
       kind: 'plan-review',
       approve: 'Apply',
-      callId: 'call-plan-1',
     })
     await lane.teardown()
   })
@@ -371,11 +370,10 @@ describe('approval-gate failure arms', () => {
 
     const scripted = lane.ctx.get('userQuestions') as unknown as ApprovingQuestions
     scripted.answers = [[]]
-    const approved = await askPlanApproval(
-      lane.ctx,
-      { callId: 'call-1', signal: new AbortController().signal } as unknown as ToolRunContext,
-      '- plan line',
-    )
+    const approved = await askPlanApproval(lane.ctx, {
+      exec: { signal: new AbortController().signal },
+      plan: '- plan line',
+    })
     expect(approved).toBe(false)
     await lane.teardown()
   })
@@ -542,7 +540,7 @@ describe('approval-gate failure arms', () => {
       signal: new AbortController().signal,
     } as unknown as ToolRunContext
     await expect(
-      askPlanApproval(aborting as unknown as Context, exec, '- plan'),
+      askPlanApproval(aborting as unknown as Context, { exec, plan: '- plan' }),
     ).rejects.toMatchObject({ code: TOOL_ABORTED })
     const cancelled = {
       get: () => ({
@@ -551,9 +549,9 @@ describe('approval-gate failure arms', () => {
         },
       }),
     }
-    await expect(askPlanApproval(cancelled as unknown as Context, exec, '- plan')).resolves.toBe(
-      false,
-    )
+    await expect(
+      askPlanApproval(cancelled as unknown as Context, { exec, plan: '- plan' }),
+    ).resolves.toBe(false)
     for (const name of ['HarnessError', 'UserQuestionError']) {
       const wire = {
         get: () => ({
@@ -562,23 +560,13 @@ describe('approval-gate failure arms', () => {
           },
         }),
       }
-      await expect(askPlanApproval(wire as unknown as Context, exec, '- plan')).resolves.toBe(false)
+      await expect(
+        askPlanApproval(wire as unknown as Context, { exec, plan: '- plan' }),
+      ).resolves.toBe(false)
     }
     const empty = { get: () => ({ ask: async () => ({ answers: [] }) }) }
-    const approved = await askPlanApproval(empty as unknown as Context, exec, '- plan')
+    const approved = await askPlanApproval(empty as unknown as Context, { exec, plan: '- plan' })
     expect(approved).toBe(false)
-  })
-
-  it('skips the plan card for add_to_collection when writeConfirm is off', async () => {
-    const lane = await setupHostLane({ writeEnabled: true, writeConfirm: false })
-    const result = await lane.runTool('zotero_add_to_collection', {
-      ref: 'zotero://user/0/item/ITEMABC1',
-      collection: 'c',
-    })
-    expect(result.isError).toBe(true)
-    if (!result.isError) throw new Error('unreachable')
-    expect(result.error.message).not.toContain('no approval channel')
-    await lane.teardown()
   })
 
   it('reports the declined outcome per tool from the meta record', async () => {

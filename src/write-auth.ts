@@ -20,6 +20,17 @@
  * discipline, and the memory slot only bridges the one-write lifetime of a
  * single-use grant. A rejected persisted key is tombstoned by identity; a
  * persistence failure propagates and leaves the grant pending for retry.
+ *
+ * Verified against Zotero 10.0.3-beta.3 (`server_localAPI.js`): the dialog's
+ * three buttons are Allow (`remember: false`), Always Allow
+ * (`remember: true`), and Deny, with Deny as the default button, and the
+ * endpoint is rate-limited to five prompts per minute. A single-use key is
+ * deleted inside the authentication check itself, before the request body is
+ * judged, so a refused write still burns it. A remembered key is never
+ * consumed: it lives in `<Zotero profile>/localAPIKeys.json` and authenticates
+ * indefinitely until the user discards the stored authorizations — which is
+ * why a persisted grant is treated here as a durable secret, and why the
+ * plugin never handles a raw key itself.
  * @module dsh-zotero/write-auth
  */
 

@@ -88,7 +88,7 @@ describe('ZoteroSettingsSection', () => {
     expect(screen.getByText(zh.description)).toBeDefined()
     // Every field of the namespace is on the page, with no disclosure to open
     // (now + maxChangesResults).
-    expect(document.querySelectorAll('input')).toHaveLength(25)
+    expect(document.querySelectorAll('input')).toHaveLength(24)
     expect(saveButton().disabled).toBe(true)
     expect(discardButton().disabled).toBe(true)
   })

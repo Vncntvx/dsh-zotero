@@ -1,11 +1,14 @@
 /**
- * Plan-review approval for writes.
+ * Plan-review approval for writes — the confirmation layer of the
+ * `ctx.zotero` seam.
  *
- * Every write shows the plan card while the capability is on and
- * `writeConfirm` is set (`askPlanApproval`): the in-conversation
- * confirmation layer. Argument validation runs first so a malformed call
- * never bothers the user. The user's Zotero authorization dialog and its key
- * remain the hard boundary.
+ * The gate lives here, not in a tool, because the service is the only door to
+ * the write domain: every in-process caller (the three write tools, and any
+ * consumer that resolves `ctx.zotero`) passes through `ZoteroService`'s write
+ * methods, so no caller can write without the plan the user approves. Argument
+ * validation still runs in the caller first, so a malformed call never bothers
+ * the user with an approval for a call that cannot run. The user's Zotero
+ * authorization dialog and its key remain the hard boundary.
  *
  * Settlement map (the only contract this layer owns):
  * - `ASK_ABORTED` → harness `TOOL_ABORTED` (caller cancelled).
@@ -18,12 +21,12 @@
  *
  * Mid-body domain failures throw `ZoteroError`; the registry maps those to
  * `{ name, code }` only.
- * @module dsh-zotero/tools/write-approval
+ * @module dsh-zotero/write-approval
  */
 
 import type { Context } from '@deepseek-ai/cordis'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
-import { TOOL_ABORTED, type ToolRunContext } from '@deepseek-ai/dsh-tools'
+import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 // Type-only: brings the `ctx.userQuestions` Context merge into this program.
 import type {} from '@deepseek-ai/dsh-user-questions'
 import {
@@ -31,7 +34,8 @@ import {
   WRITE_APPROVAL_UNAVAILABLE_MESSAGE,
   ZOTERO_WRITE_APPROVAL_UNAVAILABLE,
   ZoteroError,
-} from '../errors.js'
+} from './errors.js'
+import type { ZoteroWriteCall } from './types.js'
 
 /** The label the plan-review question is answered with to apply the write. */
 export const APPROVE_LABEL = 'Apply'
@@ -44,7 +48,7 @@ export const WRITE_PLAN_QUESTION_ID = 'zotero-write-plan'
  * tool appends this so the declined contract cannot drift between tools.
  */
 export const WRITE_PLAN_OUTCOME_DESCRIPTION =
-  'When writeConfirm is on (the default) the write first shows a plan the user approves; kind "declined" means the user answered the plan without approving and nothing was written — do not retry unasked.'
+  'Every write first shows a plan the user approves — the confirmation is not configurable; kind "declined" means the user answered the plan without approving and nothing was written — do not retry unasked.'
 
 /**
  * Whether a settled ask rejection carries the given user-questions code.
@@ -69,26 +73,24 @@ function isAskCode(error: unknown, code: 'ASK_ABORTED' | 'ASK_CANCELLED'): boole
 
 /**
  * Show one write's plan and wait for the user's answer. The plan text is the
- * tool's own deterministic markdown — what the user approves is exactly what
- * the tool passes to the domain.
+ * caller's deterministic markdown — what the user approves is exactly what the
+ * service passes to the domain.
  * @param ctx - the plugin context, whose user-questions service answers.
- * @param exec - the running tool call; its agent routes the question and its
- *   signal cancels it.
- * @param planDetail - the plan markdown the UI renders.
+ * @param call - the asking write call: its plan markdown, its agent (which
+ *   routes the question), and its signal (which cancels the question). The
+ *   plan-review intent carries no `callId` — see {@link ZoteroWriteCall}.
  * @returns true only when the user answered with {@link APPROVE_LABEL};
  *   `false` for every non-approve user settlement (including `ASK_CANCELLED`).
  * @throws {ZoteroError} `ZOTERO_WRITE_APPROVAL_UNAVAILABLE` when no channel
  *   can answer the question (fail closed).
  * @throws {HarnessError} the harness's own abort when the caller cancelled.
  */
-export async function askPlanApproval(
-  ctx: Context,
-  exec: ToolRunContext,
-  planDetail: string,
-): Promise<boolean> {
-  // `ctx.get`, not the property proxy: the execute fiber carries no inject
-  // declarations, so a property read would trip cordis's inject guard. The
-  // seam is optional at runtime — absent means fail closed below.
+export async function askPlanApproval(ctx: Context, call: ZoteroWriteCall): Promise<boolean> {
+  const { exec, plan } = call
+  // `ctx.get`, not the property proxy: the service fiber carries no inject
+  // declarations for this optional seam, so a property read would trip
+  // cordis's inject guard. The seam is optional at runtime — absent means fail
+  // closed below.
   const questions = ctx.get('userQuestions')
   if (questions === undefined) {
     throw new ZoteroError(WRITE_APPROVAL_UNAVAILABLE_MESSAGE, ZOTERO_WRITE_APPROVAL_UNAVAILABLE)
@@ -99,7 +101,7 @@ export async function askPlanApproval(
         {
           id: WRITE_PLAN_QUESTION_ID,
           question: 'Apply this write to your Zotero library?',
-          detail: planDetail,
+          detail: plan,
           options: [
             { label: APPROVE_LABEL, description: 'Write to the Zotero library now' },
             { label: 'Cancel', description: 'Discard this plan; nothing is written' },
@@ -107,7 +109,13 @@ export async function askPlanApproval(
           intent: {
             kind: 'plan-review',
             approve: APPROVE_LABEL,
-            callId: exec.callId,
+            // Deliberately no `callId`: that field names a LOGGED invocation
+            // whose ARGUMENTS carry the reviewed plan — what plan mode's own
+            // tool call is. A write tool's arguments carry the note body or the
+            // tag list, not a plan document, so naming the call here sends the
+            // client's plan panel looking for a document that does not exist
+            // ("无法读取计划 / 未找到这份计划"). Left out, the client shows the
+            // plan below as an in-band preview of exactly what was asked.
           },
         },
       ],

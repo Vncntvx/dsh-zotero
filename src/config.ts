@@ -66,12 +66,6 @@ export interface Config {
    */
   writeEnabled?: Volatile<boolean>
   /**
-   * Whether every write shows the plan-review question before Zotero is
-   * contacted. Zotero's own authorize dialog and key gate remain the hard
-   * boundary; this is the in-conversation confirmation layer.
-   */
-  writeConfirm?: Volatile<boolean>
-  /**
    * Whether an Always-Allow grant from Zotero's authorization dialog is
    * persisted into the host credentials store (bound to the Zotero instance
    * that issued it). One-time keys are never persisted regardless.
@@ -118,7 +112,6 @@ export const Config = Schema.object({
   defaultStyle: Schema.string().default('apa').volatile(),
   defaultLocale: Schema.string().default('en-US').volatile(),
   writeEnabled: Schema.boolean().default(false).volatile(),
-  writeConfirm: Schema.boolean().default(true).volatile(),
   writePersistKey: Schema.boolean().default(true).volatile(),
   webEnabled: Schema.boolean().default(true).volatile(),
 })
@@ -146,12 +139,22 @@ export interface ResolvedConfig {
   readonly defaultStyle: string
   readonly defaultLocale: string
   readonly writeEnabled: boolean
-  readonly writeConfirm: boolean
   readonly writePersistKey: boolean
   readonly webEnabled: boolean
 }
 
-const LOOPBACK_HOSTNAMES = new Set(['127.0.0.1', 'localhost', '::1', '[::1]'])
+/**
+ * Hostnames that are loopback by definition. `localhost` is pinned to the
+ * IPv4 literal before any request leaves the plugin; the set is the single
+ * spelling authority for validation and for the shell-write detector's
+ * host anchors, so the two can never drift.
+ */
+export const LOOPBACK_HOSTNAMES: ReadonlySet<string> = new Set([
+  '127.0.0.1',
+  'localhost',
+  '::1',
+  '[::1]',
+])
 
 /**
  * Pin a loopback hostname to a loopback IP literal. `localhost` would

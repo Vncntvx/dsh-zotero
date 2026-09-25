@@ -26,7 +26,7 @@ import {
 import { isRefString } from '../refs.js'
 import { metaRecordOf, renderDeclined } from './present.js'
 import { assertNonBlank, invalid, parseWritableRef, WRITE_REF_ARG_HINT } from './validate.js'
-import { askPlanApproval, WRITE_PLAN_OUTCOME_DESCRIPTION } from './write-approval.js'
+import { WRITE_PLAN_OUTCOME_DESCRIPTION } from '../write-approval.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroCreateNoteOutcome, ZoteroCreateNoteRequest } from '../types.js'
 
@@ -286,16 +286,13 @@ export function registerCreateNoteTool(ctx: Context, service: ZoteroService): ()
       // timeoutMs is deliberately omitted: the plan-review card waits on user
       // think time, which is not a stuck request.
       async execute(args, exec): Promise<ZoteroCreateNoteOutcome> {
-        // Validate before the plan card: a malformed ask should never bother
-        // the user with an approval for a call that cannot run. No
-        // connectivity ask wraps the write: that helper retries, and a
+        // Validate before the plan: a malformed ask should never bother the
+        // user with an approval for a call that cannot run. The plan review
+        // itself is the seam's (service.createNote), so no caller can skip it.
+        // No connectivity ask wraps the write: that helper retries, and a
         // retried note creation would create the note twice.
         const request = buildRequest(args)
-        if (service.config.writeConfirm) {
-          const approved = await askPlanApproval(ctx, exec, createNotePlan(args))
-          if (!approved) return { kind: 'declined' } as const
-        }
-        return await service.createNote(request, exec.signal)
+        return await service.createNote(request, { exec, plan: createNotePlan(args) })
       },
     }),
   )

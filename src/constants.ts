@@ -124,6 +124,25 @@ export const ZOTERO_WRITE_OBJECT_BATCH = 50
 export const ZOTERO_LIBRARY_VERSION_HEADER = 'last-modified-version'
 
 /**
+ * The three personal-library write tools. One list for the capability
+ * surface, the model-facing policy, and the shell-write detector's audit
+ * copy — a rename or a fourth write tool must not leave any of those three
+ * telling the user a different set.
+ */
+export const WRITE_TOOL_NAMES = [
+  'zotero_create_note',
+  'zotero_add_tags',
+  'zotero_add_to_collection',
+] as const
+
+/**
+ * The Local API path that exists only to issue write keys. The write
+ * transport joins it onto `/api/`; the shell-write detector matches the same
+ * spelling in command text so both sides recognize one endpoint.
+ */
+export const ZOTERO_AUTHORIZE_PATH = 'local/authorize'
+
+/**
  * Markdown character budget for one `zotero_create_note` call. The converted
  * HTML rides back inside the batch's successful bucket (bounded by
  * maxResponseBytes); this bound keeps one pathological note from dominating

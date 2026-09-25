@@ -14,7 +14,7 @@ import {
   ZOTERO_INVALID_ARGUMENT,
   ZOTERO_WRITE_APPROVAL_UNAVAILABLE,
 } from '../../src/errors.js'
-import { WRITE_PLAN_QUESTION_ID } from '../../src/tools/write-approval.js'
+import { WRITE_PLAN_QUESTION_ID } from '../../src/write-approval.js'
 
 const SERVER_ID = 'srv-write-tools-001'
 const NEW_KEY = 'NEWNOTE1'
@@ -169,11 +169,10 @@ describe('zotero_create_note', () => {
     })
     expect(scripted.asks).toHaveLength(1)
     const [ask] = scripted.asks
-    expect(ask.questions[0]?.intent).toEqual({
-      kind: 'plan-review',
-      approve: 'Apply',
-      callId: expect.any(String),
-    })
+    // No `callId`: that names a logged call whose ARGUMENTS hold the reviewed
+    // plan, and a write tool's arguments hold the note body. Naming this call
+    // made the client's plan panel look for a document that does not exist.
+    expect(ask.questions[0]?.intent).toEqual({ kind: 'plan-review', approve: 'Apply' })
     expect(ask.questions[0]?.detail).toContain('**方法**笔记')
     expect(ask.questions[0]?.detail).toContain('zotero://user/0')
     const post = lane.mock.requests.find(
@@ -292,8 +291,12 @@ describe('zotero_create_note', () => {
     expect(lane.mock.requests.some((request) => request.method === 'POST')).toBe(false)
   })
 
-  it('skips the plan card when writeConfirm is off', async () => {
-    const lane = await bootLane({ writeEnabled: true, writeConfirm: false })
+  it('shows the plan card even when a stale entry still carries writeConfirm: false', async () => {
+    // The confirmation has no off switch, and a leftover value in a profile
+    // patch must not become one: the schema no longer knows the field, so the
+    // card is shown and the write needs the user's approval as always.
+    const legacy = { writeEnabled: true, writeConfirm: false } as unknown as Options
+    const lane = await bootLane(legacy)
     const scripted = lane.ctx.get('userQuestions') as unknown as ScriptedQuestions
     serveWrites(lane.mock)
     const result = expectValue(
@@ -301,7 +304,7 @@ describe('zotero_create_note', () => {
       'zotero_create_note',
     )
     expect(result.value).toMatchObject({ kind: 'applied', key: NEW_KEY })
-    expect(scripted.asks).toHaveLength(0)
+    expect(scripted.asks).toHaveLength(1)
   })
 
   it('refuses non-empty collections on a child note before the plan card', async () => {

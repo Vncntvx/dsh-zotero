@@ -14,7 +14,7 @@
  * The effective config is live: every schema field is `volatile`, so a
  * settings commit lands in the running fiber's references without remounting
  * and tools read it per request. Structural flips (transport fields, the
- * write flags) rebuild on `loader/volatile-update` on this same instance —
+ * write capability) rebuild on `loader/volatile-update` on this same instance —
  * never a service replacement, and never a new `ConnectivityRecovery`
  * (that gate is service-lifetime state; swapping it on rebuild would stack
  * duplicate connectivity cards). A violating commit is vetoed in
@@ -55,6 +55,7 @@ import {
 import { LocalApiProvider } from './local/provider.js'
 import type { LocalApiLimits } from './local/limits.js'
 import { registerPromptSection } from './prompt.js'
+import { detectShellWrite, SHELL_TOOL_NAMES } from './shell-write-detector.js'
 import { registerAttachmentTool } from './tools/attachment.js'
 import { registerBrowseTool } from './tools/browse.js'
 import { registerChangesTool } from './tools/changes.js'
@@ -93,7 +94,10 @@ import type {
   ZoteroStatus,
   ZoteroTagUpdateRequest,
   ZoteroTagUpdateResult,
+  ZoteroWriteCall,
+  ZoteroWriteDeclined,
 } from './types.js'
+import { askPlanApproval } from './write-approval.js'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -198,6 +202,23 @@ export class ZoteroService extends Service {
     })
     registerStatusCommand(ctx, this)
     registerPromptSection(ctx, () => this.config)
+    // A shell command aimed at Zotero's own write API is not blocked outright:
+    // it is made to ask. The harness's own approval request decides it before
+    // the body runs, so the write happens only when the user confirms that one
+    // call — and not when they decline, cancel, run under the `never` policy,
+    // or have no approval channel. Registered as a listener on this fiber, so
+    // the plugin's disposal unwinds it. The name gate runs before any config
+    // read so non-shell tools never pay the detector (or the live getter).
+    ctx.on('tools/pre-execute', (execution, next) => {
+      if (!SHELL_TOOL_NAMES.has(execution.name)) return next()
+      const attempt = detectShellWrite(this.config, execution)
+      if (attempt === undefined) return next()
+      return Promise.resolve({
+        kind: 'ask',
+        reason: attempt.reason,
+        displayReason: attempt.displayReason,
+      })
+    })
     registerSearchTool(ctx, this)
     registerGetTool(ctx, this)
     registerChildrenTool(ctx, this)
@@ -449,52 +470,72 @@ export class ZoteroService extends Service {
   /**
    * Create a research note (standalone, or a child note under a parent item)
    * with tags, collections, and source relations. The write capability gate
-   * answers before any network; the plan-review approval the tool shows the
-   * user happens before this method is called.
+   * answers before any network; the plan-review the user approves happens
+   * here, at the seam, so no caller can skip it.
    * @param request - the markdown body, optional parent, collections, tags, and sources.
-   * @param signal - caller cancellation; forwarded to the provider.
-   * @returns the created note's ref, version, and the saved collections/tags/relations.
+   * @param call - the asking write call: its plan and its tool run.
+   * @returns the created note's ref, version, and the saved collections/tags/relations,
+   *   or `declined` when the user did not approve the plan.
    */
   async createNote(
     request: ZoteroCreateNoteRequest,
-    signal?: AbortSignal,
-  ): Promise<ZoteroCreateNoteCommittedOutcome> {
+    call: ZoteroWriteCall,
+  ): Promise<ZoteroCreateNoteCommittedOutcome | ZoteroWriteDeclined> {
     const provider = this.resolveProvider()
     this.requireCapability(provider, 'write')
+    // Method presence before the plan card: a provider that cannot serve the
+    // write must not spend the user's approval on a call that cannot run.
     const createNote = this.requireMethod(provider, 'createNote')
-    return await createNote(request, signal)
+    if (!(await this.approveWrite(call))) return { kind: 'declined' }
+    return await createNote(request, call.exec.signal)
   }
 
   /**
    * Add tags to an item, preserving what it already carries.
    * @param request - the item ref and the tags to add.
-   * @param signal - caller cancellation; forwarded to the provider.
-   * @returns the merged tag list, the additions, and the resulting versions.
+   * @param call - the asking write call: its plan and its tool run.
+   * @returns the merged tag list, the additions, and the resulting versions,
+   *   or `declined` when the user did not approve the plan.
    */
   async updateTags(
     request: ZoteroTagUpdateRequest,
-    signal?: AbortSignal,
-  ): Promise<ZoteroTagUpdateResult> {
+    call: ZoteroWriteCall,
+  ): Promise<ZoteroTagUpdateResult | ZoteroWriteDeclined> {
     const provider = this.resolveProvider()
     this.requireCapability(provider, 'write')
     const updateTags = this.requireMethod(provider, 'updateTags')
-    return await updateTags(request, signal)
+    if (!(await this.approveWrite(call))) return { kind: 'declined' }
+    return await updateTags(request, call.exec.signal)
   }
 
   /**
    * Add an item to a collection.
    * @param request - the item ref and the collection ref or name.
-   * @param signal - caller cancellation; forwarded to the provider.
-   * @returns the resulting collection list and whether the membership is new.
+   * @param call - the asking write call: its plan and its tool run.
+   * @returns the resulting collection list and whether the membership is new,
+   *   or `declined` when the user did not approve the plan.
    */
   async addToCollection(
     request: ZoteroCollectionAddRequest,
-    signal?: AbortSignal,
-  ): Promise<ZoteroCollectionAddResult> {
+    call: ZoteroWriteCall,
+  ): Promise<ZoteroCollectionAddResult | ZoteroWriteDeclined> {
     const provider = this.resolveProvider()
     this.requireCapability(provider, 'write')
     const addToCollection = this.requireMethod(provider, 'addToCollection')
-    return await addToCollection(request, signal)
+    if (!(await this.approveWrite(call))) return { kind: 'declined' }
+    return await addToCollection(request, call.exec.signal)
+  }
+
+  /**
+   * The one confirmation gate every write passes through. There is no opt-out
+   * and no config field behind it: a write that cannot show the user its plan
+   * does not happen. The ask itself fails closed too — a missing channel
+   * refuses the write rather than letting it through unapproved.
+   * @param call - the asking write call.
+   * @returns true when the write may proceed.
+   */
+  private async approveWrite(call: ZoteroWriteCall): Promise<boolean> {
+    return await askPlanApproval(this.ctx, call)
   }
 
   private resolveProvider(): ZoteroProvider {
@@ -546,7 +587,7 @@ export class ZoteroService extends Service {
  * client identity and bounds, and the write-capability flip (writer,
  * authorizer, and tool set). `provider` and `writePersistKey` are live reads
  * (`resolveProvider()` and the authorizer's `persistKey` callback) and never
- * rebuild; limits and `writeConfirm`/`webEnabled` are read per request.
+ * rebuild; limits and `webEnabled` are read per request.
  */
 export const TRANSPORT_CONFIG_KEYS: ReadonlySet<keyof ResolvedConfig> = new Set([
   'baseUrl',

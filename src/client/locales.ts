@@ -27,6 +27,7 @@ export type ZoteroLocaleKey =
   | `${FieldKey}Hint`
   | 'copy'
   | 'copied'
+  | 'commandInputAria'
   | 'checking'
   | 'statusUnavailable'
   | 'statusConnectedNote'
@@ -211,8 +212,6 @@ export const en: Record<ZoteroLocaleKey, string> = {
   writeRiskConfirm: 'Allow writes',
   writeRiskCancel: 'Cancel',
   writeRiskClose: 'Close',
-  writeConfirm: 'Confirm each write',
-  writeConfirmHint: 'Shows the planned change and waits for your approval before every write.',
   writePersistKey: 'Remember the Zotero write key',
   writePersistKeyHint:
     'Stores an "Always Allow" key from the Zotero dialog so writes stop asking every time. One-time approvals are never stored.',
@@ -265,6 +264,7 @@ export const en: Record<ZoteroLocaleKey, string> = {
     'Shows a Zotero literature tab at the top of conversations, with literature, passages, and exports.',
   copy: 'Copy',
   copied: 'Copied',
+  commandInputAria: 'Command input',
   checking: 'Checking…',
   statusUnavailable: 'Unavailable',
   statusConnectedNote: 'Connected to Zotero',
@@ -444,8 +444,6 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   writeRiskConfirm: '允许写入',
   writeRiskCancel: '取消',
   writeRiskClose: '关闭',
-  writeConfirm: '每次写入前确认',
-  writeConfirmHint: '写入前先展示变更计划，你批准后才会执行。',
   writePersistKey: '记住 Zotero 写入授权',
   writePersistKeyHint:
     '保存 Zotero 弹窗里「始终允许」的授权密钥，之后写入不再反复弹窗。一次性授权不会保存。',
@@ -497,6 +495,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   webEnabledHint: '在会话顶部显示 Zotero 文献标签，包括文献、相关片段和导出。',
   copy: '复制',
   copied: '已复制',
+  commandInputAria: '指令输入',
   checking: '检查中…',
   statusUnavailable: '不可用',
   statusConnectedNote: '已连接到 Zotero',

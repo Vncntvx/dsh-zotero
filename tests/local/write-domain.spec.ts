@@ -601,3 +601,94 @@ describe('the provider seam', () => {
     expect((thrown as Error).message).toBe(writeCapabilityUnavailableMessage('local'))
   })
 })
+
+/**
+ * What one sanctioned write costs on the wire. The plugin's answer to a slow
+ * write is the sanctioned path itself — a write is one tool call and one or two
+ * requests, while the improvised route re-derives the protocol in a dozen model
+ * round trips. These cases pin the request side of that claim so it cannot
+ * regress silently, and they show the steady state: once the instance identity
+ * and the grant are held, a note write is exactly one request.
+ */
+describe('request minimum', () => {
+  /** How many requests the mock served for one method and path. */
+  function count(method: string, pathname: string): number {
+    return mock.requests.filter(
+      (request) => request.method === method && request.pathname === pathname,
+    ).length
+  }
+
+  it('creates a note in one write request, and in exactly one request once identity and grant are held', async () => {
+    grantAuthorize(mock)
+    mock.route('POST', '/api/users/0/items', (_req, res, helpers) =>
+      helpers.raw(200, batchHeaders(42), batchBody(NEW_KEY, 42, {})),
+    )
+    const { deps, directory } = writeDeps(mock)
+
+    await createNote(deps, resolveThrough(directory), { markdown: 'first' })
+    // The first write pays the one-time identity probe and the authorize dialog.
+    expect(count('GET', '/api/')).toBe(1)
+    expect(count('POST', '/api/local/authorize')).toBe(1)
+    expect(count('POST', '/api/users/0/items')).toBe(1)
+    // A note write never pre-reads the item and never re-reads it afterwards:
+    // the batch response carries the saved state.
+    expect(count('GET', `/api/users/0/items/${ITEM_KEY}`)).toBe(0)
+
+    const before = mock.requests.length
+    await createNote(deps, resolveThrough(directory), { markdown: 'second' })
+    expect(
+      mock.requests.slice(before).map((request) => `${request.method} ${request.pathname}`),
+    ).toEqual(['POST /api/users/0/items'])
+  })
+
+  it('updates tags with one read and one patch', async () => {
+    grantAuthorize(mock)
+    mock.route('GET', '/api/', (_req, res, helpers) =>
+      helpers.raw(200, { 'Zotero-Server-ID': SERVER_ID }, JSON.stringify({})),
+    )
+    mock.route('GET', `/api/users/0/items/${ITEM_KEY}`, (_req, res, helpers) =>
+      helpers.raw(
+        200,
+        { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '10' },
+        JSON.stringify(itemJson(ITEM_KEY, 10, { tags: [] })),
+      ),
+    )
+    mock.route('PATCH', `/api/users/0/items/${ITEM_KEY}`, (_req, res, helpers) =>
+      helpers.raw(204, { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '11' }, ''),
+    )
+    const { deps } = writeDeps(mock)
+
+    await updateTags(deps, { item: ITEM_REF, tags: ['new'] })
+    expect(count('GET', `/api/users/0/items/${ITEM_KEY}`)).toBe(1)
+    expect(count('PATCH', `/api/users/0/items/${ITEM_KEY}`)).toBe(1)
+    // Merge semantics need the read; nothing else is contacted.
+    expect(count('POST', '/api/users/0/items')).toBe(0)
+    expect(count('GET', '/api/users/0/collections')).toBe(0)
+  })
+
+  it('adds to a collection by ref without resolving any name', async () => {
+    grantAuthorize(mock)
+    mock.route('GET', '/api/', (_req, res, helpers) =>
+      helpers.raw(200, { 'Zotero-Server-ID': SERVER_ID }, JSON.stringify({})),
+    )
+    mock.route('GET', `/api/users/0/items/${ITEM_KEY}`, (_req, res, helpers) =>
+      helpers.raw(
+        200,
+        { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '10' },
+        JSON.stringify(itemJson(ITEM_KEY, 10, { collections: [] })),
+      ),
+    )
+    mock.route('PATCH', `/api/users/0/items/${ITEM_KEY}`, (_req, res, helpers) =>
+      helpers.raw(204, { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '11' }, ''),
+    )
+    const { deps, directory } = writeDeps(mock)
+
+    await addToCollection(deps, resolveThrough(directory), {
+      item: ITEM_REF,
+      collection: `zotero://user/0/collection/${COLLECTION_KEY}`,
+    })
+    expect(count('GET', '/api/users/0/collections')).toBe(0)
+    expect(count('GET', `/api/users/0/items/${ITEM_KEY}`)).toBe(1)
+    expect(count('PATCH', `/api/users/0/items/${ITEM_KEY}`)).toBe(1)
+  })
+})

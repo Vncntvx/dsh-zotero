@@ -47,7 +47,6 @@ import type { ResolvedConfig } from '../config.js'
 const FIELD_SPECS = [
   { key: 'webEnabled', kind: 'boolean', group: 'groupWeb' },
   { key: 'writeEnabled', kind: 'boolean', group: 'groupWrite' },
-  { key: 'writeConfirm', kind: 'boolean', group: 'groupWrite' },
   { key: 'writePersistKey', kind: 'boolean', group: 'groupWrite' },
   { key: 'baseUrl', kind: 'text', group: 'groupConnection' },
   { key: 'provider', kind: 'text', group: 'groupConnection' },

@@ -5,10 +5,13 @@
  * `zotero://user/0/item/<KEY>` strings, optionally carrying the serving
  * instance's identity as a provenance qualifier
  * (`?server=<Zotero-Server-ID>`). Everything in this module is a plain
- * lossless-JSON-safe DTO; tool `execute` bodies return these values directly
+ * lossless-JSON-safe DTO; tool `execute` bodies return these values directly.
+ * The one exception is {@link ZoteroWriteCall}, which carries the asking tool
+ * run (agent, signal, call id) into the seam and never crosses the wire.
  * @module dsh-zotero/types
  */
 
+import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 
 /** A capability a provider may safely support. */
@@ -902,6 +905,28 @@ export interface ZoteroCollectionAddResult {
   /** The library version the write advanced the library to; absent when already a member. */
   libraryVersion?: number
   serverId?: string
+}
+
+/**
+ * Who is asking for one write, and the plan the user reviews.
+ *
+ * The gate lives at the `ctx.zotero` seam, so a write cannot reach the domain
+ * without a call like this: the service asks the user with
+ * {@link ZoteroWriteCall.plan} on every write, and fails closed when no
+ * channel can answer. `plan` is the caller's deterministic markdown —
+ * what the user approves is exactly what the service passes on. `exec` is
+ * structurally the two fields the ask needs (the asking agent and its
+ * cancellation signal), so a tool's `ToolRunContext` satisfies it directly
+ * and a test can build one. There is deliberately **no `callId`**: that field
+ * names a logged invocation whose arguments hold the reviewed plan, and a
+ * write tool's arguments hold the note body or the tag list — naming the call
+ * would send the client's plan panel after a document that does not exist.
+ */
+export interface ZoteroWriteCall {
+  /** The asking tool run: its agent routes the plan card, its signal cancels it. */
+  readonly exec: Pick<ToolRunContext, 'agent' | 'signal'>
+  /** The plan markdown the user reviews; it must describe exactly this request. */
+  readonly plan: string
 }
 
 /**

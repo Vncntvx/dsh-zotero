@@ -28,6 +28,7 @@ import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import { acquireSlot, ConcurrencyGate } from './concurrency.js'
 import {
   ZOTERO_API_VERSION_HEADER,
+  ZOTERO_AUTHORIZE_PATH,
   ZOTERO_LIBRARY_VERSION_HEADER,
   ZOTERO_LOCAL_API_VERSION,
   ZOTERO_MAX_WRITE_INFLIGHT_REQUESTS,
@@ -162,7 +163,7 @@ export interface ZoteroAuthorizeGrant {
 }
 
 /** The Local API endpoint that issues write keys; local-only, no web API analog. */
-const AUTHORIZE_PATH = 'local/authorize'
+const AUTHORIZE_PATH = ZOTERO_AUTHORIZE_PATH
 
 /**
  * Zotero documents 5–32 characters for `Zotero-Write-Token`; a UUID without

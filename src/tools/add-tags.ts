@@ -21,7 +21,7 @@ import { ZOTERO_WRITE_LIST_MAX_ITEMS } from '../constants.js'
 import { writeListEmptyMessage, writeListTooLongMessage } from '../errors.js'
 import { metaRecordOf, renderDeclined } from './present.js'
 import { assertNonBlank, invalid, parseWritableRef, WRITE_REF_ARG_HINT } from './validate.js'
-import { askPlanApproval, WRITE_PLAN_OUTCOME_DESCRIPTION } from './write-approval.js'
+import { WRITE_PLAN_OUTCOME_DESCRIPTION } from '../write-approval.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroTagUpdateOutcome, ZoteroTagUpdateRequest } from '../types.js'
 
@@ -157,13 +157,10 @@ export function registerAddTagsTool(ctx: Context, service: ZoteroService): () =>
       // think time, which is not a stuck request.
       async execute(args, exec): Promise<ZoteroTagUpdateOutcome> {
         // No connectivity ask wraps the write: that helper retries, and only
-        // idempotent reads may be retried.
+        // idempotent reads may be retried. The plan review is the seam's
+        // (service.updateTags), so no caller can skip it.
         const request = buildRequest(args)
-        if (service.config.writeConfirm) {
-          const approved = await askPlanApproval(ctx, exec, addTagsPlan(args))
-          if (!approved) return { kind: 'declined' } as const
-        }
-        return await service.updateTags(request, exec.signal)
+        return await service.updateTags(request, { exec, plan: addTagsPlan(args) })
       },
     }),
   )
