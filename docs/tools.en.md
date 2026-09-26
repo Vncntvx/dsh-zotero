@@ -85,7 +85,7 @@ Collect and query-rank evidence passages for a single item. Sources include: Zot
 
 ### Output
 
-`ref`, `attachmentRef`, `attachmentContentType`, `coverage` (indexedChars/totalChars/complete etc.), `attachments` (per-source facts under the multi-attachment policies: `ref`, `contentType?`, `status`, `coverage?`, `inputTruncated?`, `passages?` — a full-text source list, not the child-attachment rows of `zotero_get`/`zotero_children`), `evidence` (source, sourceRef, text, chunkIndex, chunkCount, comment, pageLabel, matchedFields), `truncated`, `sourcesSkipped`
+`ref`, `attachmentRef`, `attachmentContentType`, `coverage` (indexedChars/totalChars/complete etc.), `attachments` (per-source facts under the multi-attachment policies: `ref`, `contentType?`, `status`, `coverage?`, `inputTruncated?`, `passages?` — a full-text source list, not the child-attachment rows of `zotero_get`/`zotero_children`), `evidence` (source, sourceRef, attachmentRef, text, chunkIndex, chunkCount, comment, pageLabel, matchedFields), `truncated`, `sourcesSkipped`
 
 ### Notes
 
@@ -196,12 +196,14 @@ Pagination honesty applies uniformly to server-paged listings: `zotero_search` a
 
 ### Output
 
-- `libraries`: `{library, name}`
-- `collections`: `{ref, name, parentRef?, path: string[], depth}` (full breadcrumb path)
-- `savedSearches`: `{ref, name, conditions?}`
-- `tags`: `{tag, count?}`
+- `libraries`: `{library, name}` (personal library is fixed `My Library`; group names come from `GET /users/0/groups`; `serverId` is top-level)
+- `collections`: `{ref, name, parentRef?, path: string[], depth}` (the full collection graph shares a 30s TTL snapshot because breadcrumbs need every ancestor; `path` runs root to leaf)
+- `savedSearches`: `{ref, name, conditions?}` (`conditions` is Zotero's condition-row array; treated as absent when the shape differs; server-paged, fail-closed without `Total-Results`)
+- `tags`: `{tag, count?}` (`count` only when the server provides it; server-paged)
 - `itemTypes`: `{itemType, localized?}`
 - `itemFields`: `{field, localized?}` or `{creatorType, localized?}` for the given `itemType`
+
+Each `kind`'s row shape is a discriminated `oneOf` in the tool output schema. `collections` renders as an `A / B / C — ref` breadcrumb, `tags` carries `— N items`, and `savedSearches` carries `— N conditions`. A blank `q` is an argument error.
 
 ### Example
 
@@ -344,22 +346,22 @@ zotero_add_to_collection(ref="zotero://user/0/item/ABCD1234", collection="Method
 
 ## Write boundaries
 
-The three write tools register only while `writeEnabled` is on in the settings, and they write `zotero://user/0/` (the personal library) only. Every write first shows a dsh-side plan-review card, and there is no setting that can skip it; argument validation runs before that card, so a malformed call is never treated as "unapproved".
+The three write tools register only while `writeEnabled` is on in the settings, and they write `zotero://user/0/` (the personal library) only. Every write first shows a dsh-side plan-review card; no setting can skip it. Argument validation runs before that card, so a malformed call is never treated as "unapproved".
 
-**The gate is on the service seam, not in the tools.** The plan review is part of `ctx.zotero.createNote` / `updateTags` / `addToCollection`: the tools — and any other consumer — pass a `ZoteroWriteCall` (the plan markdown plus the asking agent and signal). The service answers the capability gate first (with `ZOTERO_CAPABILITY_UNAVAILABLE` when writes are off, and no card), then asks the user, always; a non-approve answer returns `{kind: "declined"}` without sending a byte, and a missing channel fails closed (`ZOTERO_WRITE_APPROVAL_UNAVAILABLE`). So no caller inside the plugin can slip past the gate.
+**The gate is on the service seam.** Plan review is part of `ctx.zotero.createNote` / `updateTags` / `addToCollection`. The tools and any other consumer must pass a `ZoteroWriteCall` (the plan markdown, plus the asking agent and signal). The service answers the capability gate first (`ZOTERO_CAPABILITY_UNAVAILABLE` when writes are off, with no card), then asks the user. A non-approve answer returns `{kind: "declined"}` without sending a request; a missing channel fails closed (`ZOTERO_WRITE_APPROVAL_UNAVAILABLE`). Every caller must pass this gate.
 
-**Zotero 10's own authorization layer is the hard boundary** (verified against `server_localAPI.js` in the 10.0.3-beta.3 build that answered): writes must carry the instance id (428 without, 412 on mismatch) and a locally issued key. The `/api/local/authorize` dialog offers Allow (`remember: false`), Always Allow (`remember: true`), and Deny, with Deny as the default button, and the endpoint is rate-limited to five prompts per minute. A one-time key is deleted during authentication — before the request body is judged — so a failed write still burns it, which is why the plugin re-authorizes once after a 401 and replays the same batch, and never retries otherwise. A `remember: true` key is never consumed: it lives in `<Zotero profile>/localAPIKeys.json` and authenticates indefinitely until the user discards the stored authorizations. "Always Allow" therefore grants a long-lived library-write credential — writing it into a log, a script, or a conversation leaks it.
+**Zotero 10's authorization layer is the hard boundary** (verified against `server_localAPI.js`, 10.0.3-beta.3): writes must carry the instance id (428 without, 412 on mismatch) and a locally issued key. The `/api/local/authorize` dialog offers Allow (`remember: false`), Always Allow (`remember: true`), and Deny, with Deny as the default button; the endpoint is rate-limited to five prompts per minute. A one-time key is deleted during authentication, before the request body is judged, so a failed write still consumes it. The plugin therefore re-authorizes once after a 401 and replays the same batch; that is the only automatic retry. A `remember: true` key is never consumed: it lives in `<Zotero profile>/localAPIKeys.json` and authenticates until the user discards the stored authorizations. "Always Allow" grants a long-lived library-write credential; writing it into a log, a script, or a conversation leaks it.
 
-**The write path's request minimum** (pinned by regression tests): `zotero_create_note` sends exactly one `POST /api/users/0/items` and never reads back (the batch response carries the ref, key, and versions); `zotero_add_tags` and `zotero_add_to_collection` are one read plus one `PATCH` (plus one name resolution when the collection is named). The instance identity and the grant are cached in-process, so in the steady state creating one note is one request.
+**The write path's request minimum** (pinned by regression tests): `zotero_create_note` sends exactly one `POST /api/users/0/items` and never reads back (the batch response carries the ref, key, and versions). `zotero_add_tags` and `zotero_add_to_collection` are one read plus one `PATCH` (plus one name resolution when the collection is named). Instance identity and the grant are cached in-process, so in the steady state creating one note is one request.
 
-**A shell write is confirmed too, rather than gated by a separate switch.** A `bash` call in the session can `curl` the local API itself and bypass the service gate; the harness's approval policy asks only for sandbox escalation, and `dsh-bash-sandbox` confines file access rather than network access. So the plugin offers no "intercept shell writes" option. It makes that route **require a confirmation**: when the `tools/pre-execute` waterfall sees command text that targets Zotero's local write API — the authorize endpoint, or a write-method/body request to the local API address — the plugin answers `{kind: "ask"}`, and the harness's own approval request decides it **before the tool body runs**:
+**A shell write is confirmed as well; there is no separate switch.** A `bash` call in the session can `curl` the local API and bypass the service gate. The harness's approval policy asks only for sandbox escalation, and `dsh-bash-sandbox` confines file access rather than network access. The plugin offers no "intercept shell writes" option. It makes that route require confirmation: when the `tools/pre-execute` waterfall sees command text that targets Zotero's local write API (the authorize endpoint, or a write-method/body request to the local API address), the plugin answers `{kind: "ask"}`, and the harness's approval request decides before the tool body runs.
 
-- the user confirms (`allowed-once`) → that one call runs;
-- rejected or cancelled → nothing runs;
-- the session's approval policy is `never` (which auto-rejects every ask) → nothing runs;
-- no approval channel at all → nothing runs.
+- the user confirms (`allowed-once`) → that one call runs
+- rejected or cancelled → nothing runs
+- the session's approval policy is `never` (which auto-rejects every ask) → nothing runs
+- no approval channel at all → nothing runs
 
-Detection reads command text, which makes it detection rather than a guarantee: a script file (`bash x.sh`), an interpreter (`python -c`, `node -e`), a URL in an environment variable, another loopback port, or any obfuscation passes it unseen. The prompt keeps the model on the write tools; this confirmation constrains the route. Keeping a shell from touching the library at all means running the session without an unconfined shell — per-agent `tools.restrict({ deny: ["bash"] })`, or a preset without a shell. And a confirmed raw write does **not** pass through the plugin's write domain: no plan card, no version preconditions, no markdown→note HTML conversion, no provenance — the price of the user's in-the-moment confirmation.
+Detection reads command text, so it is detection, not a guarantee. The following paths are not covered: a request written into a script and then run (`bash x.sh`); an interpreter call whose command text never spells the endpoint (`python -c` / `node -e` when the URL is assembled at runtime); a URL in an environment variable; and any obfuscation. An interpreter call that does spell the endpoint is still caught (for example `requests.post('http://127.0.0.1:23119/...')`). A write to the `/api/users/` path is caught on any loopback port, not only the configured one. The system prompt keeps the model on the write tools; this confirmation constrains the route. To keep a shell from touching the library at all, run the session without an unconfined shell: per-agent `tools.restrict({ deny: ["bash"] })`, or a preset without a shell. A confirmed raw write does not pass through the plugin's write domain: no plan card, no version preconditions, and no markdown→note HTML conversion or provenance.
 
 Writes advance the library version, and `zotero_changes` sees them.
 

@@ -1,147 +1,155 @@
 # AGENTS.md
 
-## Workspace and source of truth
+dsh-zotero is a DeepSeek Harness plugin that lets agents search, read, and cite a local Zotero library. This file is standing orders only; product and architecture detail live under `docs/`.
 
-- You work in `.` This repo is a standalone sibling to `../deepseek-harness`. You keep it beside the harness for local dev. Treat this as temp local layout, hard-coded for your machine.
-- You find the dsh source in `../deepseek-harness`. Read `../deepseek-harness/docs/AGENTS.md`, `../deepseek-harness/docs/architecture.md`, `../deepseek-harness/docs/user/develop/`, `../deepseek-harness/docs/subsystems/`, `../deepseek-harness/docs/cookbook/`, and `../deepseek-harness/packages/*/README.md` when you touch harness contracts.
-- You touch slots, services, the web shell, the client-module graph, or Typert, so you check harness source first. Harness source outranks this file.
+## Workspace
 
-## Git commit conventions
+- Work in `.`. This checkout is a **sibling** of `../deepseek-harness` (local layout on this machine — not a portable monorepo).
+- Harness contracts (slots, services, web shell, client module graph, Typert) are defined upstream. Read `../deepseek-harness/docs/AGENTS.md`, `../deepseek-harness/docs/architecture.md`, `../deepseek-harness/docs/user/develop/`, and relevant `packages/*/README.md` before changing anything that depends on them. **Harness source outranks this file.**
 
-Follow [Conventional Commits](https://www.conventionalcommits.org/): `<type>(<scope>): <subject>`, types lowercase (`feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `style`, `build`, `ci`, `revert`), subject in imperative mood, header under 72 chars. Optionally place an emoji matching the type right after the colon, before the subject. Body: blank line, bullet points only, each item wraps at 72, what and why.
+## Map
+
+| Path | Owns |
+| --- | --- |
+| `src/` | Host half: service, tools, Local API provider, HTTP, write domain |
+| `src/local/` | Local API domain pipelines (search/retrieve/export/changes/write/…) |
+| `src/tools/` | 11 model tools (8 read + `create_note` / `add_tags` / `add_to_collection`) |
+| `src/client/` | Browser half (settings page, Sources tab) → `lib/client.js` |
+| `tests/` | Specs by lane; `tests/README.md` is the test rulebook |
+| `docs/` | Product docs, zh/en pairs |
+| `scripts/` | Build, harness pin, client-graph authority, test lint |
+| `lib/` | Build output — never edit |
+
+## Sources of truth
+
+- Architecture and data flow: `docs/architecture.md`
+- Tool contracts, pagination/changes policy, write boundary, error codes: `docs/tools.md`
+- Config fields, validation, hot-reload: `docs/configuration.md`
+- Build details and release checklist: `docs/development.md`
+- Acceptance cases (G/S/R/E/C/N/W): `docs/scenarios.md`
+- Test layout and rules: `tests/README.md`
+- Harness contracts: sibling `../deepseek-harness/docs/`
+
+Keep zh/en doc pairs in lockstep when you edit one side. After machine tests pass, walk the `docs/scenarios.md` packs that cover a behavior change.
 
 ## Commands
 
 ```sh
-npm install                  # sibling at ../deepseek-harness; add --no-workspaces only for a nested copy
-npm run typecheck            # tsc --noEmit for the node, test, and client projects
-npm test                     # vitest unit tests against the mock Zotero server
-npm run test:coverage        # coverage gate on src/ (97 stmts / 95 branches / 98 funcs / 97 lines); pure re-export and types-only modules excluded, see vitest.config.ts
-npm run build                # tsc emits the node half into lib/; esbuild emits the browser half lib/client.js (with a loader-handoff self-check)
-npm run build:client         # rebuild the browser half only
-npm run verify:pack          # assert the packed tarball carries the declared entries
-npm run dev                  # tsc --watch
-npm run dev:client           # esbuild --watch for the browser half
-npm run format               # prettier --write across the repo
-npm run format:check         # verify formatting; run before committing
-npm run test:integration     # live Zotero at 127.0.0.1:23119; skipped unless ZOTERO_INTEGRATION=1
-npm run link:local-harness   # symlink node_modules/@deepseek-ai/* at ../deepseek-harness (registry lag)
+npm install                  # sibling layout; add --no-workspaces only for a nested copy
+npm test                     # test-lint + vitest (mock Zotero server)
+npx vitest run <spec>        # focused unit/client test while iterating
+npm run typecheck            # harness-state + tsc --noEmit (node, test, client)
+npm run test:coverage        # coverage ratchets (see vitest.config.ts)
+npm run build                # tsc → lib/ + esbuild → lib/client.js
+npm run build:client         # browser half only
+npm run format               # prettier --write
+npm run format:check         # prettier --check
+npm run harness:check        # version-pin consistency + upstream declaration freshness
+npm run harness:pin -- <ver> # move the whole pin in one step
+npm run verify:pack          # packed tarball must carry declared entries
+npm run release:check        # format + harness --strict + lint + typecheck + coverage + build + pack
+npm run test:integration     # live Zotero at 127.0.0.1:23119 (ZOTERO_INTEGRATION=1)
+npm run link:local-harness   # symlink node_modules/@deepseek-ai/* at ../deepseek-harness
+npm run dev                  # tsc --watch (host half)
+npm run dev:client           # esbuild --watch (browser half)
 ```
 
-`package.json` `overrides` pins every `@deepseek-ai/dsh-*` to one harness line. npm applies overrides only when this package is the install root, so the table is local-dev tree pinning; consumers of the published tarball do not inherit those pins. Peer ranges still describe the supported harness surface.
+## Local launch
 
-When the registry has not published the pinned line yet, run `npm run link:local-harness` after install (or before, for peers the registry never created).
+Two flows. Pick by what you are testing:
 
-## Plugin form
+- **Full plugin** (settings page + Zotero tab): only path that loads the browser half. Use for UI and end-to-end work.
+- **Host half only (HMR)**: tools and `/zotero` with in-process hot reload. No plugin UI.
 
-The loader mounts the default export (`ZoteroService`) with the row's validated config. `src/index.ts` stays a pure re-export entry.
-
-- `ZoteroService extends Service` with `static inject = ['tools', 'systemPrompt']` and `static Config = ConfigSchema`. You declare it as `ctx.zotero` ([plugin forms](../deepseek-harness/docs/user/develop/basic/index.md), [services](../deepseek-harness/docs/user/develop/framework/service.md)).
-- Every schema field is `volatile`, so the Loader entry is the single config authority and settings commits land live: the `config` getter re-resolves the entry's references per request (tools read it per request, so limits follow edits with no restart), an `internal/config` veto refuses commits the schema alone cannot express (loopback-only `baseUrl`, positive limits) before they land, and a global `loader/volatile-update` listener rebuilds the HTTP client, the `local` provider, and the write-tool set on the **same** `ZoteroService` instance when structural fields flip (transport fields, the write capability) — never a service replacement, and never a new `ConnectivityRecovery` (that gate is service-lifetime state; swapping it on rebuild would stack duplicate connectivity cards). The namespace constant lives in `src/settings-namespace.ts` and you share it with the browser half.
-- One package owns all three capability roles: definition (`ZoteroService` + the `ZoteroProvider` interface in `src/types.ts`), provider (`LocalApiProvider`), consumers (`src/tools/`). Split only when roles must evolve apart ([three-role design](../deepseek-harness/docs/user/develop/practice/index.md)).
-- You register providers through `registerProvider()`. The call is effect-scoped. Duplicate ids throw. The service selects a provider by the `provider` config id and gates every domain call on its declared `capabilities`. No fallback across providers.
-
-## Registrations are effects
-
-You register everything in the constructor. The fiber unwinds it when HMR replaces the instance; volatile config commits land live with no remount, and only non-volatile edits remount ([lifecycle](../deepseek-harness/docs/user/develop/framework/index.md)):
-
-- Tools: you call `ctx.tools.register(defineTool(...))` from `@deepseek-ai/dsh-tools` ([tool tutorial](../deepseek-harness/docs/user/develop/basic/tool.md)).
-- Prompt: you call `ctx.systemPrompt.section({ name, order, text })`.
-- Command: you call `ctx.inject(['commands'], ...)`. The optional-dependency form keeps the plugin loadable in headless compositions without `commands`.
-- Provider: you call `ctx.effect()`.
-- Browser surface (`src/client/`, esbuild emits `lib/client.js` in `__ModuleLoader__.load` handoff format): you ship one configuration page over the `zotero` namespace. You read and write through the shared configuration form (`ctx.configForms.get`) staged through the harness's own `SettingsFormModel`. You do not import values across plugins. The page registers into the `settings.section` slot under the id `zotero` — its own left-nav entry in the Settings panel, beside General, Models, and Plugins — with the nav `label` bound to the plugin dictionary. You render the staged form as one page; the namespace is too wide for the Plugins tab's disclosure cards, and that is why the config lives here rather than in the Plugins settings section. The host removed the keyed `settings.plugin.item` card plane in favor of Plugins-page `plugins.item` contributions — this plugin never used that plane, and the decision to keep a dedicated `settings.section` stands. You reuse the harness's staged-form model and value control, you do not value-import another plugin's chrome. Peer every `@deepseek-ai/*` package the program value-imports or type-merges through its `/client` entry (including type-only merges such as `dsh-client-ui-renderer`); keep them out of peers only when the host always supplies the module table identity and the package is never a consumer install requirement. The Typert Remote namespace carries only the `zotero/status` connectivity probe for the conversation tab. The tab reads `webEnabled` live. You subscribe it to the same form and it shows or hides as the flag changes. The tab's registration never waits on that probe: its Sources workspace reads the session's own tool calls, so a mount that fails degrades the status strip — and logs the fault — instead of removing the tab. Registering the tab behind the mount made a probe failure indistinguishable from a disabled feature.
-
-## Conventions
-
-- **Config**: you define `Config` interface (volatile references) plus a same-named Schemastery schema with defaults and `.volatile()` on every field, plus a plain `Options` spelling for human-written input. `resolveConfig` is the schema+constraint authority (load fail-loud, `internal/config` veto, Options). The service's live `config` getter is `readResolvedConfig` over the Loader-resolved entry — unwrap + constraints only, never a second Schemastery pass. You keep no hard-coded tunables ([configuration tutorial](../deepseek-harness/docs/user/develop/basic/config.md)).
-- **Tools**: you treat `parameters`/`output.schema` as the model contract. You enforce domain constraints beyond the schema in the `buildRequest` step. Throw `ZoteroError(ZOTERO_INVALID_ARGUMENT)` there. `execute` returns plain lossless-JSON DTOs from `src/types.ts`. `render` stays pure. Keep tool schemas in sync with those DTOs.
-- **Errors**: you throw `ZoteroError` with a stable code from `src/errors.ts`. Messages target the model. You never embed HTTP internals.
-
-## Local launch & dev
-
-You have two dev servers. Pick one based on what you test:
-
-- **Full plugin**: this is the only flow that loads the browser half (settings page + Zotero tab). Use it for UI work and end-to-end plugin tests.
-- **Host half only (HMR)**: you get tools and `/zotero` status with in-process hot reload. The plugin UI never loads here.
-
-### Full plugin (settings page + Zotero tab)
-
-You need both files in a scratch home. Credentials carry keys, `settings.yaml` carries custom providers (opencode-go under `llm-pi-ai.providers`). If you skip the latter, the UI shows only default DeepSeek though credentials are complete. Link this checkout into the web profile (bare package name, so the browser half loads), run both watchers, then launch the source CLI with `env DSH_HOME`. If you run `pnpm dsh web` without `env`, it ignores a sourced `DSH_HOME` and boots the real `~/.dsh` (the npm-installed row, not this checkout). The plugin then looks missing because you inspect the wrong home:
+### Full plugin
 
 ```sh
 export DSH_HOME=$(mktemp -d /tmp/dsh-zotero-dev-XXXX)
 cp ~/.dsh/.credentials.yaml ~/.dsh/settings.yaml "$DSH_HOME/"
 chmod 600 "$DSH_HOME/.credentials.yaml" "$DSH_HOME/settings.yaml"
-npm run build          # lib/client.js must exist before launch; link does not build it
-dsh plugin --profile web link .    # pnpm peer-dependency warnings are expected
-npm run dev &          # host half: tsc --watch → lib/
-npm run dev:client &   # browser half: esbuild --watch → lib/client.js
-cd ../deepseek-harness && env DSH_HOME="$DSH_HOME" node --import tsx/esm apps/cli/src/bin.ts web --port 3307
-# 3080 is the live GUI, never reuse it
+npm run build                    # lib/client.js must exist before launch
+dsh plugin --profile web add .   # pnpm links this checkout; peer warnings expected
+npm run dev &                    # host half: tsc --watch → lib/
+npm run dev:client &             # browser half: esbuild --watch → lib/client.js
+cd ../deepseek-harness && env DSH_HOME="$DSH_HOME" \
+  node --import tsx/esm apps/cli/src/bin.ts web --port 3307
 ```
 
-One-shot check (all four must pass):
+- Never reuse port **3080** (live GUI). Use 3307 (or another free port).
+- Without `env DSH_HOME=…`, `dsh web` boots the real `~/.dsh` and this checkout looks missing.
+- Browser half has no HMR: rebuild via watch, then refresh the page. Host half needs a dsh restart after `lib/` rebuilds.
+- One-shot check: `curl -w '%{http_code}' -o /dev/null http://127.0.0.1:3307` → `200`; `grep dsh-zotero "$DSH_HOME"/profiles/web/package.json`; `grep -c conversation.view lib/client.js` ≥ 1.
+
+### Host half only (HMR)
 
 ```sh
-curl -w '%{http_code}' -o /dev/null http://127.0.0.1:3307        # 200
-ps eww $(lsof -ti :3307) | grep -o 'DSH_HOME=[^ ]*'              # the scratch home
-grep dsh-zotero "$DSH_HOME"/profiles/web/package.json            # link: dependency
-grep -c conversation.view lib/client.js                          # ≥ 1
+npm run build                                 # once; also pnpm --dir ../deepseek-harness run build
+npm run dev &
+cp dev-lib.cordis.yml.example dev-lib.cordis.yml  # set absolute paths inside
+dsh web --patch ./dev-lib.cordis.yml --port 3307
 ```
 
-You edit `src/client`, esbuild watch rebuilds, you refresh the page. The browser half has no HMR. You edit the host half, tsc watch rebuilds `lib/`, you restart dsh to apply. Both home files hot-reload without restart. You can reuse a configured home as `DSH_HOME` and skip seeding and link. Remember `/tmp` wipes on reboot.
+`dev-lib.cordis.yml` re-enables loader HMR, disables the profile row, and loads this checkout from `lib/`. Its `name`/`base` must be absolute. That overlay carries **no** browser half — use the full-plugin flow for UI. Alternative: `dev.cordis.yml` from the `.example` loads `src/index.ts` via tsx (still no browser half).
 
-### Host half only (in-process HMR)
+More detail: `docs/development.md`.
 
-```sh
-npm run build          # once; also `pnpm run build` in ../deepseek-harness once (source CLI)
-npm run dev &          # host half: tsc --watch → lib/
-cp dev-lib.cordis.yml.example dev-lib.cordis.yml   # then set absolute paths inside (see file header)
-dsh web --patch ./dev-lib.cordis.yml --port 3307   # 3080 is the live GUI, never reuse it
-```
+## Invariants
 
-`dev-lib.cordis.yml` re-enables loader HMR (off in the production profile), disables the profile-installed row, and runs this checkout from `lib/`. You get hot-swap without restarting dsh when you rebuild. Its `name`/`base` are absolute. The loader resolves relative names beside the profile dir, so you must set them explicit. The file is gitignored, regenerate it from `dev-lib.cordis.yml.example` and replace the `<absolute-path-to-dsh-zotero>` placeholders. The overlay row is an absolute path, so it carries no browser half. That loads only for bare-package-name rows. No settings page and no Zotero tab there, use the full-plugin flow for UI work.
+### Harness pin
 
-Host-only alternative (tsx loads `src/index.ts`, no browser half): copy `dev.cordis.yml.example` to `dev.cordis.yml` (set `<absolute-path-to-dsh-zotero>` inside), then run `cd ../deepseek-harness && pnpm dsh web --patch ../dsh-zotero/dev.cordis.yml --port <X>`.
+- One exact version, currently `0.1.7-rc.2`. The `@deepseek-ai/dsh-*` line in `devDependencies` is the source of truth; `overrides`, `peerDependencies`, `engines.dsh`, and `dsh.harnessRange` are derived from it. READMEs and this file restate the same pin.
+- Never edit one form alone and never use `^` / `||` — `npm run harness:pin -- <version>`, then regenerate `package-lock.json`. `scripts/harness-state.mjs` rejects dual arms.
+- If the registry lags the pin, `npm run link:local-harness`. Never grant a profile `compatibility.json` exemption so this plugin runs on another dsh line.
 
-The DSH packages you launch above come from the sibling pnpm workspace at `../deepseek-harness` (dsh 0.1.7-rc.2). `package.json` derives every version from one pin — the exact `@deepseek-ai/dsh-*` `devDependencies` line — into `overrides`, `peerDependencies`, `engines.dsh`, and `dsh.harnessRange` as the **same exact version** (never `^`, never `||`), plus both READMEs and this file; move them all at once with `npm run harness:pin -- <version>`. The registry may lag that line; until it publishes it, run `npm run link:local-harness` after `npm install` so `node_modules/@deepseek-ai/*` symlinks at the sibling checkout (the harness package's own pnpm `node_modules` then resolves its `workspace:` peers). When the registry catches up, plain `npm install` is enough again.
+### Plugin form
 
-Upstream **types** come from those symlinked packages' built `lib/types`, exactly as a published consumer reads them: a sibling `git pull` does not regenerate them, so `npm run typecheck` first runs `node scripts/harness-state.mjs`, which reports — naming the package and the command — when a package this repo imports has `src` newer than its built declarations; `--strict` (the release check) escalates that report to a failure. Build the sibling (`pnpm --dir ../deepseek-harness run build`) after pulling a new harness line.
+- `src/index.ts` is a pure re-export. Default export is `ZoteroService` (`static inject`, `static Config`).
+- Register tools, the policy prompt, `/zotero`, and the provider in the constructor via effects (`ctx.tools.register`, `ctx.systemPrompt.section`, `ctx.inject(['commands'], …)`, `ctx.effect`). HMR unwinds them with the instance.
+- `/zotero` keeps `input: { hint: 'status' }` and default `recordInput: true` so the client command-input projection can echo the typed line.
+- The Typert manifest self-registers via `ctx.inject(['typert'], …)` — do not add a `./typert` package export.
 
-## Credentials
+### Config
 
-The default home already has `~/.dsh/.credentials.yaml`, you do nothing. For a scratch `DSH_HOME`, run `cp ~/.dsh/.credentials.yaml "$DSH_HOME/"` (hot-reloaded, no restart). Custom providers live in `settings.yaml`, not the credentials store, so a scratch home needs both (see Local launch & dev). One-off: `DEEPSEEK_API_KEY=... dsh web`. Precedence: launch env
+- `Config` interface + Schemastery schema (every field `.volatile()`) + plain `Options`. `resolveConfig` is the only constraint authority; the live `config` getter only unwraps the Loader entry. No hard-coded tunables.
 
-> `$DSH_HOME/.credentials.yaml` > `<cwd>/.env` > `$DSH_HOME/.env`
-> ([credentials-local](../deepseek-harness/packages/credentials/credentials-local/README.md)).
-> Never print or commit the value (file mode `0600`).
+### Client graph
 
-## Bundle
+- Browser code is `src/client/**` plus allowlisted pure surfaces (`contract`, `settings-namespace`, `json`, `ref-grammar`, `export-items` — `scripts/client-graph-authority.mjs`). Never value-import zod, schemastery, host codecs, `src/config.ts`, or `src/typert.ts` into that graph; `npm run build:client` fails the build if you do.
+- Read the mounted remote namespace via `mountedNamespace()` (`ctx.reflect.get('remote.zotero')`). Never use the dotted `ctx.remote.zotero` — it throws on a fiber that carries a runtime (`tests/client/apply.spec.ts`).
+- Keep `package.json` `dsh.client.inject` equal to the rows the client entry actually needs (locale, ui-renderer, ui-settings, ui-conversation, ui-session, ui-chat, api-remotes).
 
-`dsh.bundle.patch` points at `cordis.patch.yml`, which inserts one row: id `zotero`, name `dsh-zotero`, empty config. Keep the patch small. Defaults belong in the Config schema ([bundle manifest](../deepseek-harness/docs/user/develop/basic/publish.md)).
+### Writes
 
-## Release & upstream checklist
+- Write tools are off by default (`writeEnabled`) and write `zotero://user/0/` only.
+- Plan review belongs to the **`ctx.zotero` seam**, not to a tool: `createNote` / `updateTags` / `addToCollection` take a `ZoteroWriteCall`, answer the capability gate first, then the plan-review card. There is **no `writeConfirm` and no opt-out** — a write that cannot show its plan does not happen. Never move the gate back into a tool.
+- Shell writes to the local API are turned into a harness ask (`src/shell-write-detector.ts` on `tools/pre-execute`). Never add a config field or an "off" path. Detection is text-based and is **not** containment; blind spots are documented in `docs/tools.md`.
+- Writes never ride the connectivity-retry helper (a retried write is not idempotent).
 
-Start with `npm run harness:check`: it enforces the facts that rot silently — the version pin across manifest, lockfile, and prose, plus the freshness of the upstream declarations this repo typechecks against. Then work through every item when you align with a new deepseek-harness version or cut a release:
+### Zotero wire
 
-- **One pin, derived everywhere.** The exact `@deepseek-ai/dsh-*` line in `devDependencies` is the source of truth. `overrides`, `peerDependencies`, `engines.dsh`, and `dsh.harnessRange` are written from that pin as the **same exact version** (never `^`, never `||`) by `npm run harness:pin -- <version>`, along with both READMEs and this file. Keep **at least one** `@deepseek-ai/dsh-*` peer — rc.2's `evaluatePluginCompatibility` reads only `peerDependencies`, so a tree with zero dsh peers would load on any runtime even when `engines.dsh` names the pin. The getting-started version-mapping table is **historical**: `harness:pin` never rewrites those rows (only current-pin prose moves); add a new row when the plugin version moves, and keep the last row equal to `package.json`'s version plus a dsh cell equal to the exact pin. DSH Hub Workshop support was removed: do not reintroduce a `dshWorkshop` block in `package.json`. Keep `overrides` a superset of every `@deepseek-ai/dsh-*` name the tree pulls in, and regenerate the lock (`npm install --package-lock-only`) after a pin move — `harness:check` holds `package-lock.json` to the pin too. Never edit one of them alone.
-- **The published artifact is proven, not assumed.** `prepare` is the self-contained source-install build (`scripts/build-prepare.mjs`: transpile-only, no typecheck; it skips a tree only when the declarations, Node entry, and browser bundle are all present), while `npm run build` stays the full build the publish path runs. `npm run verify:pack` then asserts the tarball carries every path `main` / `exports` / `dsh.bundle.patch` declares. This matters because a tarball missing `lib/index.js` installs with pnpm exit 0 and is then removed by the harness's post-install validation, surfacing as "nothing installable … or ship no prebuilt artifacts". Git-source consumers still need the profile's `allowBuilds`; npm and tarball installs need nothing.
-- **Upstream declarations must be current.** Types resolve through the symlinked sibling checkout (see Local launch & dev), so a sibling `git pull` without a rebuild leaves `lib/types` older than `src` and typecheck silently validates against the wrong interface. `npm run harness:check` reports that (and `--strict`, which the release check runs, fails), naming the build to run.
-- `src/client/index.ts` reads the mounted namespace through `mountedNamespace()`, and that read goes **only** through the service store (`ctx.reflect.get('remote.zotero')`). The dotted child access `ctx.remote.zotero` is not usable and must not come back: `$mount` installs the namespace on the gateway's own context (`api/gateway/src/client/index.ts` → `$mount` → `createNamespace` → `this.ownerCtx.plugin(...)`), and at dsh 0.1.7-rc.2 the dotted form is a service lookup by full name through the context proxy, which `vendor/cordis/src/reflect.ts` answers with `cannot get property "remote.zotero" without inject` on any fiber carrying a runtime. The plugin cannot declare the name in `inject` either — the namespace only exists after this plugin's own `$mount`, so a static inject would park the plugin before it could mount. `tests/client/apply.spec.ts` pins this: its fixture's `ctx.remote.zotero` throws the guard, so readvertising the dotted arm fails the suite instead of silently killing the mount again.
-- `scripts/build-client.mjs` externalizes `@deepseek-ai/dsh-client-ui-primitives`, `@deepseek-ai/dsh-client-store`, `react`, and `react/jsx-runtime`, then polices the browser graph by **runtime authority** on every successful build (one-shot and watch, via `artifactVerifyPlugin` + esbuild `metafile`): (1) the loader handoff proves the factory's requires are answered only from `EXTERNALS`; (2) `harnessPurityPlugin` rejects any `@deepseek-ai/*` specifier the graph resolves that is neither in `EXTERNALS` nor on the harness's inline-safe rule (`INLINE_SAFE` + generated `.../remote` contributions + the vendored `cosmokit`/`schemastery`); (3) `clientAuthorityPlugin` refuses host-only packages (`zod`, `@deepseek-ai/schemastery`) at resolve time and re-checks every local `src/**` metafile input against `CLIENT_SAFE_LOCAL` (`src/client/**` plus the declared shared pure surfaces: `contract`, `settings-namespace`, `json`, `ref-grammar`, `export-items`) — host modules such as `src/status-codec.ts`, `src/config.ts`, and `src/typert.ts` fail the build even when minify strips path comments; a new shared module must be allowlisted deliberately and stay free of host authority; (4) `verifyBundle` re-scans the artifact for host-schema markers (`ZodError`, `node_modules/zod`, `node_modules/schemastery`) as a secondary tripwire. Counterpart list for (2) is `PLATFORM_MODULES` in the harness's `packages/client/web/src/platform.ts` (at dsh 0.1.7-rc.2: `react`, `react/jsx-runtime`, `react-dom`, `react-dom/client`, `@deepseek-ai/cordis`, `dsh-client-store`, `dsh-client-ui-slots`, `dsh-client-ui-primitives`, `dsh-client-ui-dockkit`). `EXTERNALS` must list every platform module this bundle actually value-imports; today cordis / ui-slots are type-only here. `tests/unit/client-graph-authority.spec.ts` pins the allowlist and drives the same plugins against fixture graphs. Field specs stay import-time pure: the official `settingsNumberField`/`settingsTextField` helpers resolve through the loader's module table, so `zotero-card-controller.ts` builds its spec table inside the constructor — module-level calls would fail the handoff self-check, which stubs externals at import.
-- `package.json` `dsh.client.inject` names the client rows whose factories must arrive before this one materializes: locale, `ui-renderer`, `ui-settings`, `ui-conversation`, `ui-session`, `ui-chat`, plus `api-remotes` for the `remote` service this entry injects. Keep it equal to the packages that serve the entry's own `inject` list (`['locale', 'slots', 'remote', 'configForms', 'uiConversation']`) **plus** the packages this entry type-merges through `/client` (`ui-conversation` / `ui-session` / `ui-chat` for the Sources tab) — an omission is only masked while those rows happen to be `immediately: true` stage-one entries. `@deepseek-ai/dsh-client-ui-slots` declares no `dsh.client` row at all (it is a types-and-helpers package), so listing it would create no edge; only `ui-renderer` serves `ctx.slots`. `ui-settings-general` declares `settings.section` but is not listed: `slots.inject` waits for the declaration, so no edge is required.
-- `src/client/components/SourcesTab.tsx` reads the tab's call blocks through the modern projection: `ChatSnapshot.order` walked with `nodes.get(key)`, narrowed to `kind: 'tool-call'` rows whose `data.root` carries the full call lifecycle (the visible-only filter matches the harness's chat projection). Re-checked at dsh 0.1.7-rc.2: `ToolChatData.root` is the three-stage union `PreparingToolCall | StartedToolCall | ToolResultNode` (`phase: 'preparing' | 'start'` on running arms; settled arms carry `kind: 'tool-result'`). `sessionSignatureOf` must include that `phase` so preparing→start rebuilds the workspace when args arrive. This is the client-half seam to re-check on any harness upgrade: the `tool-call` row kind, its `ToolChatData.root` shape in ui-chat's `ChatNodeDataMap`, and the visible-only convention. Nothing else consumes tool-call rows.
-- The Sources panel stays a **conversation-scoped** view (`conversation.view`, `ui-conversation`) rather than a root-scoped `main` panel. Its data source is the current Session's `zotero_*` tool calls (`ChatSnapshot` → `buildSourceWorkspace`), so its lifecycle belongs to that Session — and a keyed `main` entry is root-scoped with no implicit Session binding, i.e. no source to read. The app-level extension points added on the 0.1.5 rc line (`main` + `sidebar.panellist` / `sidebar.panellist.title` + `usePanelInfo`) are for a library-level workbench that browses the library with no conversation in play; that needs its own Remote endpoints first, so it is deliberately not built. If such a workbench is added, revisit this decision — not the tab registration.
-- The client settings surface reuses harness code it cannot otherwise import. Staging rides the harness's own `SettingsFormModel` (plus `settingsNumberField`/`settingsTextField`) from `@deepseek-ai/dsh-client-ui-primitives`, value controls render through its `SettingsValueField`, and only the boolean toggle lives here (`src/client/fields.tsx`, upstream ships no boolean atom) alongside the field table in `src/client/zotero-card-controller.ts` (bound at compile time to the host `ResolvedConfig`, with `tests/client/zotero-card-parity.spec.ts` pinning the per-field control kind at runtime). `src/client/ZoteroSettingsSection.tsx` mirrors the native section page idiom instead (`ui-settings-general`'s `SettingsRoot` for the panel geometry, `ui-settings-models` for the header/action row).
-- The single harness line is the whole compatibility story (`package.json` `dsh.harnessRange` is the exact pin `0.1.7-rc.2`; `engines.dsh` and every `@deepseek-ai/dsh-*` peer equal that same exact version, the exact line in `devDependencies` is the source of truth). No caret ranges, no dual arms — `scripts/harness-state.mjs` rejects both. rc.2's `evaluatePluginCompatibility` (`packages/boot/app-boot/src/plugin-compatibility.ts`) therefore admits only dsh `0.1.7-rc.2` without a profile `compatibility.json` exemption — never grant one for this plugin to run on another dsh line. Value-import harness exports freely — there is no older arm to protect.
-- The host manifest (`src/typert.ts` + `src/status-codec.ts`) self-registers through `ctx.inject(['typert'], ...)` instead of a `./typert` package export: dsh-typert-loader's auto-discovery resolves `<entry-name>/package.json` from the config-tree anchor, so it only reaches bare-package-name rows — the dev-overlay row spells an absolute file path and would silently lose the manifest, while a `./typert` export would double-register on the production profile where the plugin also self-registers. Re-checked at dsh 0.1.7-rc.2: the loader's package-resolution path is unchanged, but the wire codec shape is not — strict codecs now carry `create: () => TypertSchema` instead of a live `schema` (upstream `perf(typert): materialize generated schemas on first use`). Re-check both loader behaviors and the `TypertCodec` shape if upstream changes how entries resolve or how codecs are declared.
-- The Remote wire contract is layered by **runtime authority**, not by file convenience. `src/contract.ts` is the dependency-free structural surface (types, typeSymbol, endpoint constants including `ZOTERO_STATUS_SERVICE_KEY`, and `zoteroStatusInvocation`, which copies every structural field) shared by both halves. Host boundary codecs live only in `src/status-codec.ts` (zod, strict single-arm `create`); the client contribution mounts the same structural endpoint through `src/client/status-codec.ts` (`ZOTERO_STATUS_CLIENT_RESULT_CODEC` — frozen; `create` refuses materialization because Client Gateway never parses result schemas on the browser path and typert client registration only requires `typeof create === 'function'`). The host Remote service (`src/remote.ts`) and the Typert model (`src/typert.ts` `model.services[].key`) both spell `ZOTERO_STATUS_SERVICE_KEY` — never a second literal. Never value-import zod, schemastery (or host `src/status-codec.ts` / `src/config.ts`) from `src/client/`: `scripts/build-client.mjs` fails the **client graph** at resolve time and via the metafile allowlist (`CLIENT_SAFE_LOCAL`: `src/client/**` + shared pure surfaces `contract` / `settings-namespace` / `json` / `ref-grammar` / `export-items`), independent of minify. Host and client invocations stay structurally equal via the shared factory; only the result codec arm differs. The service key, method, and invocation kind are contract constants (`ZOTERO_STATUS_SERVICE_KEY`, `ZOTERO_STATUS_METHOD`, `ZOTERO_STATUS_INVOCATION_KIND`).
-- `discovery-smoke.mjs` rides the web-auth seam: it exchanges the boot token printed by `dsh web` for the page cookie and carries that cookie on every probe, and it matches the `globalThis["__DSH_BOOT__"]` injection spelling. Re-checked at dsh 0.1.7-rc.2 (`host/webserver` and `boot/app-boot` sources are unchanged; the `window.` spelling is only a browser-side read alias); re-check on a harness upgrade that touches webserver auth or the boot injection.
-- `docs/tools.md` states the pagination policy (array listings require a valid `Total-Results` header and fail loud; `zotero_changes` reads each resource whole with no `limit`, so its `cursor` (version + instance + library) is only emitted when that read was provably complete and the library version did not move mid-read — a capped listing is a display concern with true counts in `totals`). The same doc states the two coverage rules that go with it: the item kind is the API's own partition (`/items/top` for top-level items, `/items` minus that for child objects, `/items/trash` for the trash — a child object carries its own version, and item listings exclude the trash, so either read alone would advance past changes it never reported), and a kind that could not be covered is named in `unobservable` with its reason (`not-served` / `range-not-covered` do not withhold the cursor for a standalone resource; `unreadable` does, any failed partition of the `items` kind withholds it as well, and a result that includes independently versioned `fulltext` omits the library cursor entirely). `deleted` present means observed — an all-empty `deleted` is the positive statement "nothing was removed", and an unreadable tombstone payload is never reported as zero removals. Keep all of that true if you touch `src/local/pagination.ts` or `src/local/changes-domain.ts`.
-- Zotero-version facts are stated with their evidence: `status()` reports the answering build from `X-Zotero-Version` (the only version header that names a release), and the local provider is declared per capability rather than per Zotero version — the changes domain decides semantics per call from the responses (`versionUnavailable` when no library version is reported) instead of gating on a version number whose boundary is not verifiable here. Verified live at Zotero 10.0.2-beta.9: `/items/top?since=0&format=versions` keys == the no-`parentItem` set, `/items` adds the children, `/deleted` answers 404, `X-Zotero-Version` rides every response (404s included), and a forged `Zotero-Server-ID` is refused with 412. Re-verify with a running Zotero before restating any of it; do not add a version-boundary claim the current build cannot show.
-- Child-object reads ride two Local API wire contracts, encoded in `src/local/children-wire.ts`: a bare `GET .../items/{key}/children` is notes+attachments only (Zotero's `includeChildren` SQL unions `itemAttachments` and `itemNotes`, never `itemAnnotations`), and annotations appear solely under `GET .../items/{key}/children?itemType=annotation` (on a bibliographic item key that listing expands to annotations under its attachments). `meta.numChildren` never counts annotations (notes+attachments for regular items; hard-coded 0 for attachments). The plugin must not infer annotation presence from a bare children listing or from `numChildren`; mocks must not serve annotation rows on the bare path. Verified against Zotero 10.0.3 `server_localAPI.js` + `xpcom/data/search.js` and live curl on 9.0.6 (issue #4).
-- `src/search-text.ts` mirrors Zotero's own search folding, `Zotero.Utilities.Internal.normalizeForSearch` in `chrome/content/zotero/xpcom/utilities_internal.js` (10.0.2-beta.9): the formatting-tag whitelist stripped first, then NFKD with combining marks removed, lowercase, the explicit letter map (`ø œ æ ł đ ð þ ß ı ⁄`), typographic quotes and dashes folded to ASCII, then NFC so kana and Hangul recombine. Both of the plugin's own matching paths fold through it — `tokenize` (BM25 passage ranking) and the search note-body scan — because the server-side search folds, so anything the plugin matches on its own must fold identically or a query that found a paper returns nothing from inside it. Only the index side folds: returned text stays verbatim. Zotero's version of the function is extractable and runnable on its own (`new Function` over that file with stubbed `Zotero`/`ChromeUtils`/`Services`/`module` globals), which is how the mirror was proven equal over the samples and fuzzed corpus in `tests/unit/search-text.spec.ts`; re-run that comparison after a Zotero upgrade before restating the parity.
-- Disposing the plugin does **not** abort a request that is already in flight. The harness cancels a tool call only through the caller's signal — `fuseToolSignals` in `packages/core/tools/src/index.ts` fuses the caller's and any wrapper's signal, and no registry-level abort runs on unload (verified at dsh 0.1.7-rc.2). What keeps that from hanging the host is the provider deadline plus the response byte bound, pinned by `tests/lifecycle.spec.ts` (a disposed plugin's in-flight read still settles as `ZOTERO_TIMEOUT`). Re-check `fuseToolSignals` / `ToolDispatchExecution` if a harness upgrade adds an unload-time abort, and revisit the per-instance request gate in `src/http-client.ts` at the same time.
-- The write capability (v0.8.4+) is off by default (`writeEnabled`) and writes `zotero://user/0/` only. The dsh-side confirmation is a property of the **`ctx.zotero` seam, not of a tool**: `createNote` / `updateTags` / `addToCollection` each take a `ZoteroWriteCall` (`{ exec: Pick<ToolRunContext, 'agent' | 'signal'>, plan }`), answer the capability gate first, then run the plan-review card (harness `user-questions` with the `plan-review` intent — resolve the seam with `ctx.get`, never the property proxy, from the service fiber), return `{kind:'declined'}` on a non-approve answer, and fail closed with `ZOTERO_WRITE_APPROVAL_UNAVAILABLE` when no channel can answer. There is **no `writeConfirm` field and no opt-out**: a write that cannot show the user its plan does not happen, and a stale `writeConfirm: false` left in a profile patch is simply an unknown key the schema ignores (`tests/host/write-gate.spec.ts` and `tests/tools/write-tools.spec.ts` pin both halves). Never reintroduce a switch here — it is an unconfirmed-write path by construction. The tools only build the request and pass their deterministic plan; validation still runs before the plan, so a malformed call is never denied as unapproved. A caller that resolves `ctx.zotero` directly is gated identically — never move this gate back into a tool, and keep `tests/host/write-gate.spec.ts` pinning the seam. The model is told the capability state in both directions (`WRITE_POLICY_SENTENCE` when on, `WRITE_DISABLED_SENTENCE` when off — the off sentence names the way to enable writes and forbids the local-API/shell route even when the user asks directly), pinned by `tests/host/status-write.spec.ts`. The plan-review intent carries **no `callId`**: that field names a logged invocation whose _arguments_ hold the reviewed plan (plan mode's own call), and a write tool's arguments hold the note body or the tag list, so naming the call sends the client's plan panel after a document that does not exist ("无法读取计划 / 未找到这份计划"); without it the client renders the plan from the question's own `detail` as an in-band preview (`ui-plan` `review-preview.ts`), which is the text the user must actually read. Beneath it sit the write domain's version preconditions and Zotero 10's own local-API key protocol. Writes never ride the connectivity ask: that helper retries, and a retried write is not idempotent. Zotero 10.0.2 source facts (re-verified at 10.0.3-beta.3+80bc5565e; `omni.ja` `chrome/content/zotero/xpcom/server/server_localAPI.js`): batch writes are NOT atomic (per-object transactions; per-object failures land in a `failed` bucket while successes persist), the `successful` bucket returns full object JSON (no follow-up GET), single-object PATCH answers 204 with `Last-Modified-Version` only, PATCH replaces arrays wholesale (`mergePatchJSON`) so tags/collections are read-merge-write, every write requires `Zotero-Server-ID` (428 without, 412 on mismatch — the same 412 also carries version conflicts, distinguished by Zotero's statement in the body), `Zotero-Write-Token` is recorded regardless of outcome, and **single-use** keys from `/api/local/authorize` are consumed at authentication time (a failed batch burns the key; the 401 replay is the one legitimate retry and it runs once, in `withWriteKey`). A `remember:true` key — the "Always Allow" button — is **never** consumed: it lives in `<Zotero profile>/localAPIKeys.json` and authenticates indefinitely until the user discards the stored authorizations, so a key seen in a log or a script is a durable capability, not a spent one (this is why the 2026-09-25 incident's key kept working across a 400 and across turns). The dialog's three buttons are Allow (`remember:false`), Always Allow (`remember:true`), and Deny, with **Deny as the default**, and the endpoint is rate-limited to five prompts per minute. `/api/local/authorize` bypasses write auth by overriding `_initInternal` but still requires the server id on the base `init()` path. Re-verify against that file after a Zotero upgrade before restating any of it (the official local-write doc page was still 404 as of 2026-09-13); markdown→note HTML is the plugin's job (`src/local/note-format.ts`, escape-unknown), provenance rides `dc:relation`, and the live write probe double-gates on `ZOTERO_WRITE_PROBE=1` and confines all writes to its own `[dsh-zotero-probe]` collection.
-- **A shell write is confirmed, never gated by an option.** `dsh-bash-sandbox` confines file access rather than network access (`packages/shell/bash-sandbox/README.md`), so a session's `bash` can reach Zotero's local write API — that is how the 2026-09-25 incident wrote two notes with no plan card (and why the model-facing disabled-state sentence exists). The answer is not a switch and not a silent denial: the plugin registers one `tools/pre-execute` listener (`src/shell-write-detector.ts`) that turns a detected local-API write into `{kind: 'ask'}`, so the harness's own approval request decides it before the body runs — `allowed-once` runs that one call, while a rejection, a cancellation, the `never` policy (which auto-rejects every ask), or a missing approval channel runs nothing. Keep it that way: no config field, no `ctx.tools.guard` denial, and no "off" path, because "an unconfirmed write does not happen" is the invariant and a toggle would be an unconfirmed-write path by design. The detector is pure, total, and text-based, so it is detection rather than a guarantee (a script file, an interpreter, an env-var URL, another port, or an obfuscation passes unseen) — never describe it as containment, and never let it become the reason not to keep the model on the sanctioned route. True containment is compositional: a session without an unconfined shell (`tools.restrict({ deny: ['bash'] })` on an agent, or a preset with no shell), plus Zotero's own revocable authorization. A confirmed raw write bypasses the plugin's write domain entirely (no plan, no version preconditions, no note-HTML conversion); that is the user's in-the-moment choice, and `docs/tools.md` says so.
-- Do not introduce new reads of the synchronous Session history readers (`session.eventAt` / `snapshotEvents` / `ownEvents`). Upstream deprecated them on the 0.1.5 rc line after that pin (PR #3828; still deprecated at the current pin); the Sources tab must keep reading tool-call rows through `ChatSnapshot` / the session projection, never the raw event log.
+- `src/search-text.ts` must stay equal to Zotero's `normalizeForSearch` (index-side fold only; returned text stays verbatim). Re-prove after a Zotero upgrade (`tests/unit/search-text.spec.ts`).
+- Bare `GET .../items/{key}/children` is notes+attachments only. Annotations appear solely under `?itemType=annotation`. `meta.numChildren` never counts annotations. Mocks must not serve annotation rows on the bare path.
+- Paginated array listings require a valid `Total-Results` header (fail loud). `zotero_changes` emits a `cursor` only when the read was provably complete — full policy in `docs/tools.md`.
+
+### Sources tab
+
+- Read tool-call rows through `ChatSnapshot` / the session projection. Never reintroduce `session.eventAt` / `snapshotEvents` / `ownEvents` (deprecated upstream). Include tool-call `phase` in the session signature so preparing→start rebuilds the workspace.
+
+## Git
+
+[Conventional Commits](https://www.conventionalcommits.org/): `<type>(<scope>): <subject>` (lowercase type, imperative subject, header under 72). Optional emoji right after the colon. Body: blank line, bullet points only, wrap at 72 (what and why).
+
+## Validation
+
+- Iterate with `npx vitest run <spec>` and `npm run typecheck` (add `npm run build:client` for browser-only work).
+- Before calling a behavior change done: `npm test`, then walk the matching `docs/scenarios.md` packs.
+- Before release or a cross-cutting change: `npm run release:check`.
+- Coverage floors and test-size/lane ratchets only move down, in the same commit that makes the new value true (`vitest.config.ts`, `scripts/test-lint.mjs`, `tests/README.md`).
+
+## Safety
+
+- Network is loopback-only (`127.0.0.1:23119`); `resolveConfig` rejects anything else. Do not weaken that. No redirects, no background polling, no shell execution in the plugin itself.
+- `lib/` is generated. `dev.cordis.yml` / `dev-lib.cordis.yml` are gitignored local overlays; ship the `.example` templates instead.
+- A Zotero `remember:true` write key is a durable capability (stored in the Zotero profile), not a spent one — never log or commit it. Credentials live in `$DSH_HOME/.credentials.yaml` (mode `0600`).
+- Disposing the plugin does **not** abort in-flight requests; they settle via the provider deadline (`tests/host/lifecycle.spec.ts`). Do not assume unload aborts.
+- Zotero Local API facts (write-key protocol, batch non-atomicity, children partitions, `X-Zotero-Version`) are verified against specific builds. Re-verify after a Zotero upgrade before restating them.

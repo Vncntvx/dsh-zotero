@@ -23,9 +23,9 @@
 **3. API version incompatible**
 
 - **Symptom**: returns `ZOTERO_API_VERSION`, saying local API version 3 is not implemented
-- **Cause**: Zotero and the plugin share no local API version — either Zotero is older than version 3, or it is newer than this plugin line (say, offering only version 4). The message names the version that answered, which tells the two apart
+- **Cause**: Zotero and the plugin share no local API version. Either Zotero is older than version 3, or it is newer than this plugin line (say, offering only version 4). The message names the version that answered, which tells the two apart
 - **Fix**: upgrade Zotero when it is older than version 3; update dsh-zotero when it is newer
-- Not the same as `ZOTERO_NOT_IMPLEMENTED`: there Zotero states with 501 that the endpoint or output format itself is unimplemented — no version problem, and no upgrade to advise
+- Not the same as `ZOTERO_NOT_IMPLEMENTED`: there Zotero states with 501 that the endpoint or output format itself is unimplemented. That is not a version problem, and no upgrade is advised
 
 ---
 
@@ -63,7 +63,7 @@
     allowBuilds:
       dsh-zotero: true
     ```
-  - switch to a prebuilt channel (recommended): install from the npm package name or a local tarball — both carry the built `lib/` and need no allowance
+  - switch to a prebuilt channel (recommended): install from the npm package name or a local tarball. Both carry the built `lib/` and need no allowance
 
 ---
 

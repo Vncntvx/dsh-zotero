@@ -55,7 +55,7 @@ After installing, the plugin mounts as `zotero` and takes effect on the next dsh
 
 ## Verify the connection
 
-In the composer (including a brand-new session — the result appears in the conversation), run:
+In the composer (a brand-new session is fine; the result appears in the conversation), run:
 
 ```
 /zotero
@@ -99,7 +99,7 @@ allowBuilds:
 
 (Use the exact key pnpm printed. In pnpm 10 this setting is named `onlyBuiltDependencies` and takes an array. The file is `~/.dsh/profiles/<profile-name>/pnpm-workspace.yaml`.)
 
-> `nothing installable … need a build step (blocked by default, see allowBuilds) or ship no prebuilt artifacts` means exactly this: pick one of the two — allow the build as above, or use the npm/tarball channel.
+> `nothing installable … need a build step (blocked by default, see allowBuilds) or ship no prebuilt artifacts` means exactly this. Pick one of two options: allow the build as above, or use the npm/tarball channel.
 
 Pin to a specific commit for reproducibility:
 
@@ -107,4 +107,4 @@ Pin to a specific commit for reproducibility:
 dsh plugin --profile <profile-name> add github:Vncntvx/dsh-zotero#<commit-hash>
 ```
 
-Installing from a tarball needs no extra configuration — just point to the local `.tgz` file.
+Installing from a tarball needs no extra configuration. Point to the local `.tgz` file.

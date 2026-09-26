@@ -9,15 +9,19 @@ src/
   index.ts              # 插件入口（纯 re-export）
   service.ts            # ZoteroService（Cordis 服务）
   local/provider.ts     # LocalApiProvider（Zotero Local API）
-  local/*-domain.ts     # 领域管线（search/detail/retrieve/attachment/export/changes/browse）+ scope-directory/pagination/limits
+  local/*-domain.ts     # 领域管线（search/export/changes/browse/write 等）+ detail/retrieve/attachment-location
+  local/                # 另有 children-wire、note-format、identity、scope-directory、pagination、limits
   http-client.ts        # HTTP 传输层（loopback fetch）
-  config.ts             # Config schema 与校验
+  config.ts             # Config schema 与校验（LOOPBACK_HOSTNAMES 等校验常量）
   types.ts              # 领域类型（DTOs）
-  contract.ts           # Remote wire 契约（descriptor + 严格 codec）
+  contract.ts           # Remote wire 结构面（类型、端点常量；不含 codec）
+  status-codec.ts       # Host 侧严格 codec（zod）；client 对应 src/client/status-codec.ts
   errors.ts             # 错误类与错误码
-  json.ts               # 无损 JSON 读取helper
+  json.ts               # 无损 JSON 读取 helper
+  constants.ts          # 领域常量（写工具名、authorize 路径、限额等）
   concurrency.ts        # 有界并发
   evidence.ts           # BM25 排名
+  search-text.ts        # 与 Zotero normalizeForSearch 对齐的检索折叠
   attachments.ts        # 附件选择
   local/children-wire.ts # Local API 子对象契约：裸 /children（笔记/附件）与 ?itemType=annotation（批注）
   normalize.ts          # Zotero 条目 → 领域 DTO 归一化
@@ -49,7 +53,7 @@ npm test                     # 单元测试（mock Zotero server + browser card 
 npm run typecheck            # 上游依赖状态检查 + tsc --noEmit（node/test/client projects）
 npm run build                # tsc + esbuild（node lib/ + browser lib/client.js）
 npm run build:client         # 仅重新构建浏览器端
-npm run test:coverage        # 覆盖率门禁（97 语句 / 95 分支 / 98 函数 / 97 行）
+npm run test:coverage        # 覆盖率门禁（全局 97/95/98/97 + 分层 ratchet，见 vitest.config.ts）
 npm run harness:check        # 上游版本钉与声明新鲜度（typecheck 已内置这一步）
 npm run harness:pin -- <ver> # 把版本钉整体移到 <ver>（devDeps/overrides/peers/engines/README/AGENTS）
 npm run verify:pack          # 打包产物门禁（tarball 必含入口与 cordis.patch.yml）
@@ -115,7 +119,7 @@ npm run dev:client                # esbuild watch
 
 - 单元测试使用 MockZotero（mock HTTP server）
 - 浏览器设置页测试使用 jsdom + @testing-library/react
-- 覆盖率门禁见 `vitest.config.ts`（97 语句 / 95 分支 / 98 函数 / 97 行；`src/index.ts`、`src/types.ts`、`css-modules.d.ts`、`sources/model.ts` 为纯类型/重导出除外项）
+- 覆盖率门禁见 `vitest.config.ts`：全局 97 语句 / 95 分支 / 98 函数 / 97 行，并按层设 ratchet（`src/*.ts`、`src/local/**`、`src/tools/**`、`src/client/**` 等）。纯类型/重导出模块列入 exclude（`src/index.ts`、`src/types.ts`、`css-modules.d.ts`、`sources/model.ts` 等）
 - 集成测试运行在真实 Zotero 上，默认跳过
 
 ## 发布检查清单

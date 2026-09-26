@@ -2,7 +2,7 @@
 
 # Features
 
-dsh-zotero lets DSH's LLM conversations query your Zotero library directly. Eleven tools cover search, evidence extraction, exports, and optional personal-library writes; the three write tools are off by default and, once enabled, still require plan approval and Zotero 10 local authorization. The web-side Sources panel shows literature, evidence, and citations in real time.
+dsh-zotero lets DSH's LLM conversations query a Zotero library directly. Eleven tools cover search, evidence extraction, and export; three personal-library write tools are off by default and, once enabled, still require plan approval and Zotero 10 local authorization. The web-side Sources panel shows literature, evidence, and citations for the session.
 
 ## Search
 
@@ -13,13 +13,14 @@ dsh-zotero lets DSH's LLM conversations query your Zotero library directly. Elev
 - `metadata` (default) — matches title, author, year
 - `everything` — also searches indexed full text
 
-**Three search scopes:**
+**Four search scopes:**
 
 - Entire library (default)
+- Personal publications (`publications`)
 - By collection name or `zotero://` ref
 - By saved search name or ref
 
-The first page of results (offset 0) also scans note bodies. Matches are reported via `noteMatches` and do not count toward the pagination total. Search results return stable `zotero://` refs for use by subsequent tools.
+The first page of results (offset 0) also scans note bodies. Matches are listed under `supplemental` (`kind: "noteBody"`) and do not count toward the pagination total. Search results return stable `zotero://` refs for use by subsequent tools.
 
 ![Sources panel: search results and item action panel](images/zotero-sources-overview.png)
 Search results list and item action panel: title, author, year, type, and actions like "Open in Zotero", "Open PDF", "Ask about this paper", "Export citation".
@@ -50,11 +51,11 @@ Evidence passages: relevant text segments grouped by source, showing page labels
 | `abstract`   | Item abstract                                                                                                                                   |
 | `fulltext`   | Zotero-indexed full text, ranked by BM25 chunks                                                                                                 |
 
-**What evidence is:** Evidence is a ranked result of existing text segments within an item, based on BM25 term-frequency matching. BM25 only matches terms — if a query word does not appear in a chunk, it will not appear in the results even if the content is semantically related.
+Evidence is a ranked result of existing text segments within an item, based on BM25 term-frequency matching. BM25 matches terms only: a query word that does not appear in a chunk will not appear in the results even when the content is semantically related.
 
 Full-text index coverage is reported via the `coverage` field (indexed chars / total chars). When the index is incomplete, `complete: false` is flagged. Unavailable sources are logged in `sourcesSkipped`.
 
-Under a multi-attachment policy (`allIndexed` / `specified`), `attachments` reports every full-text source the call considered with its `status`: `indexed` (read; carries `coverage`, `passages`, and whether the character budget cut it), `unindexed` (no full text for that file in Zotero’s index), `unread` (the call was already at its attachment limit). An unindexed supplement is therefore a named coverage gap rather than a file with nothing to say.
+Under a multi-attachment policy (`allIndexed` / `specified`), `attachments` reports every full-text source the call considered with its `status`: `indexed` (read; carries `coverage`, `passages`, and whether the character budget cut it), `unindexed` (no full text for that file in Zotero’s index), `unread` (the call was already at its attachment limit). An unindexed supplement is recorded as a named coverage gap, never as "the supplement says nothing".
 
 ![Multi-step tool call flow in conversation](images/zotero-chat-workflow.png)
 The agent calls search, retrieve, and export tools in sequence to fulfill a user request.
@@ -105,7 +106,7 @@ The dsh web Zotero tab contains three sub-views:
 
 ### Sources
 
-Shows items referenced through search and read tools in the current session — a snapshot of items involved in this conversation.
+Shows items referenced through search and read tools in the current session: a snapshot of items involved in this conversation.
 
 ![Search results summary table in conversation](images/zotero-chat-summary.png)
 The agent formats search results into a structured table in the conversation.
@@ -123,7 +124,7 @@ BibTeX export view: each citation can be expanded to show the full entry, with o
 
 ## Settings page
 
-The Settings panel's left navigation carries a dedicated **Zotero** page (beside General, Models, and Plugins). Changes take effect on save — tools read the latest config on each request.
+The Settings panel's left navigation carries a dedicated **Zotero** page (beside General, Models, and Plugins). Changes take effect on save; tools read the latest config on each request.
 
 Configurable items include the API address, read/export limits, citation style and locale, plus `writeEnabled`, `writePersistKey`, and `webEnabled`. See [Configuration](configuration.en.md).
 

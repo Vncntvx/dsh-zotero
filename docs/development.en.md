@@ -9,15 +9,19 @@ src/
   index.ts              # Plugin entry (pure re-export)
   service.ts            # ZoteroService (Cordis service)
   local/provider.ts     # LocalApiProvider (Zotero Local API)
-  local/*-domain.ts     # Domain pipelines (search/detail/retrieve/attachment/export/changes/browse) + scope-directory/pagination/limits
+  local/*-domain.ts     # Domain pipelines (search/export/changes/browse/write, etc.) + detail/retrieve/attachment-location
+  local/                # Also children-wire, note-format, identity, scope-directory, pagination, limits
   http-client.ts        # HTTP transport (loopback fetch)
-  config.ts             # Config schema and validation
+  config.ts             # Config schema and validation (LOOPBACK_HOSTNAMES and friends)
   types.ts              # Domain types (DTOs)
-  contract.ts           # Remote wire contract (descriptors + strict codecs)
+  contract.ts           # Remote wire structural surface (types, endpoint constants; no codecs)
+  status-codec.ts       # Host-side strict codec (zod); the client arm lives in src/client/status-codec.ts
   errors.ts             # Error class and error codes
   json.ts               # Lossless JSON read helper
+  constants.ts          # Domain constants (write tool names, authorize path, limits)
   concurrency.ts        # Bounded concurrency
   evidence.ts           # BM25 ranking
+  search-text.ts        # Search folding aligned with Zotero normalizeForSearch
   attachments.ts        # Attachment selection
   local/children-wire.ts # Local API child-object contracts: bare /children (notes/attachments) and ?itemType=annotation (annotations)
   normalize.ts          # Zotero item → domain DTO normalization
@@ -49,7 +53,7 @@ npm test                     # unit tests (mock Zotero server + browser card tes
 npm run typecheck            # upstream dependency state check + tsc --noEmit (node/test/client projects)
 npm run build                # tsc + esbuild (node lib/ + browser lib/client.js)
 npm run build:client         # rebuild browser side only
-npm run test:coverage        # coverage gate (97 statements / 95 branches / 98 functions / 97 lines)
+npm run test:coverage        # coverage gate (global 97/95/98/97 plus per-layer ratchets, see vitest.config.ts)
 npm run harness:check        # upstream pin and declaration freshness (typecheck already runs it)
 npm run harness:pin -- <ver> # move the whole pin to <ver> (devDeps/overrides/peers/engines/README/AGENTS)
 npm run verify:pack          # assert the packed tarball carries the declared entries
@@ -115,7 +119,7 @@ npm run dev:client                # esbuild watch
 
 - Unit tests use MockZotero (mock HTTP server)
 - Browser card tests use jsdom + @testing-library/react
-- Coverage gate lives in `vitest.config.ts` (97 statements / 95 branches / 98 functions / 97 lines; `src/index.ts`, `src/types.ts`, `css-modules.d.ts`, `sources/model.ts` are types-only/re-export exclusions)
+- Coverage gate lives in `vitest.config.ts`: global 97 statements / 95 branches / 98 functions / 97 lines, plus per-layer ratchets (`src/*.ts`, `src/local/**`, `src/tools/**`, `src/client/**`, and others). Types-only and pure re-export modules are listed in `exclude` (`src/index.ts`, `src/types.ts`, `css-modules.d.ts`, `sources/model.ts`, and others)
 - Integration tests run against real Zotero, skipped by default
 
 ## Release checklist
@@ -129,3 +133,4 @@ npm run dev:client                # esbuild watch
 - `npm run build` succeeds
 - smoke.mjs passes after tarball install
 - Integration tests pass when Zotero is available
+- Walk the [scenarios](scenarios.en.md) golden path (G1–G8); run W1–W4 as well when write is enabled

@@ -23,7 +23,7 @@
 **3. API 版本不兼容**
 
 - **症状**：返回 `ZOTERO_API_VERSION` 错误，提示本地 API 版本 3 未被实现
-- **原因**：Zotero 与插件没有共同的本地 API 版本——Zotero 过旧（低于 3），或该 Zotero 比当前插件线更新（例如已只提供版本 4）。错误信息给出实际作答的版本号，据此判断方向
+- **原因**：Zotero 与插件没有共同的本地 API 版本。Zotero 过旧（低于 3），或该 Zotero 比当前插件线更新（例如已只提供版本 4）。错误信息给出实际作答的版本号，据此判断方向
 - **处理**：旧于版本 3 时升级 Zotero；新于版本 3 时更新 dsh-zotero
 - 与 `ZOTERO_NOT_IMPLEMENTED` 的区别：后者是 Zotero 以 501 明确表示"该端点或输出格式未实现"，不是版本问题，也不建议升级
 
@@ -95,4 +95,4 @@
 
 - **症状**：修改 `settings.yaml` 后工具行为未变
 - **原因**：配置文件路径错误，或 YAML 格式有误
-- **处理**：确认修改的是 `$DSH_HOME/settings.yaml` 中的 `zotero:` 小节；运行 `/zotero status` 验证
+- **处理**：确认修改的是 `$DSH_HOME/settings.yaml` 中的 `zotero:` 小节；运行 `/zotero` 验证

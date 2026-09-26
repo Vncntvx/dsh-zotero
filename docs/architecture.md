@@ -26,7 +26,7 @@ graph LR
 
 - `ZoteroService` 扩展 `Service`，注册为 `ctx.zotero`
 - 负责 provider 选择、能力门控、领域方法
-- 配置是实时的：附加时使用 settings section，否则使用 composition entry
+- 配置以 Loader entry（composition entry）为唯一权威；settings 提交经 `loader/volatile-update` 落到同一 entry
 - 结构性 volatile 更新通过私有 `buildTransport()` 在**同一** `ZoteroService` 实例上重建 HTTP client、local provider 与写工具集；纯限额更新由 provider 实时读取，不重建 transport
 - 连接恢复门（`ConnectivityRecovery` / `service.recovery`）与服务实例同寿命，**不**随 settings rebuild 重置（避免并发失败叠卡）
 - 写入闸门在**服务接缝**上：三个写方法要求一个 `ZoteroWriteCall`（计划文本 + 发起调用的 agent/信号），先过能力门再弹计划卡，未批准返回 `declined`，无通道则失败关闭；写工具不再自己发起计划审查
@@ -38,7 +38,7 @@ graph LR
 - `LocalApiProvider` 实现 `ZoteroProvider`
 - 能力：search、metadata、attachments、citation、browse、retrieve、changes；写入能力只在 transport 与 authorizer 均接线时提供
 - 客户端侧解析作用域（Local API 无服务端名称搜索）
-- 读路径的扇出已经并行：一个 key 的 children 两半走 `Promise.all`（`src/local/detail.ts`），retrieve 的附件集走有界并发（`ZOTERO_GRAPH_CONCURRENCY`），browse/changes 的多资源读同理；写路径的往返下限（建笔记一次 POST、不回读）见 [工具文档](./tools.md) 的写入边界
+- 读路径的扇出并行执行，机制按域不同：一个 key 的 children 两半走 `Promise.all`（`src/local/detail.ts`）；retrieve 的附件集与 export 的逐文档请求走有界并发（`ZOTERO_GRAPH_CONCURRENCY` / `ZOTERO_EXPORT_CONCURRENCY`）；browse 的祖先解析与 changes 的 items 三分区走 `Promise.all` / `Promise.allSettled`。写路径的往返下限（建笔记一次 POST、不回读）见 [工具文档](./tools.md) 的写入边界
 - 笔记体扫描：客户端侧第一页（offset 0），受 maxNoteScanRecords 限制
 - 证据排名：基于 passage 语料库的 BM25（annotations、notes、abstract、fulltext chunks）
 - 导出：引用批次遵循 API 的 50 键上限；translator 格式最多 50 条引用
@@ -89,4 +89,4 @@ graph LR
 - **证据**：基于词项的 BM25，按查询词与 passage 的词频匹配度排序。
 - **Sources tab**：会话快照，展示本次对话引用的条目。
 - **导出**：工具以文本形式返回（模型读到的就是它）；面板提供复制与文件下载。
-- **PDF 阅读**：附件返回路径/URL；进一步阅读需要宿主能力。路径属于**运行 Zotero 的那台机器**——loopback 限制保证插件与 Zotero 同机，但宿主的文件读取可能跑在别的执行环境（sandbox、容器、远程主机），那时该路径不可见，工具结果会注明环境；插件不会通过开放 Zotero 无认证端口来解决远端访问。
+- **PDF 阅读**：附件返回路径/URL；进一步阅读需要宿主能力。路径属于运行 Zotero 的那台机器。loopback 限制保证插件与 Zotero 同机，但宿主的文件读取可能跑在别的执行环境（sandbox、容器、远程主机），那时该路径不可见，工具结果会注明环境。插件不会通过开放 Zotero 无认证端口来解决远端访问。

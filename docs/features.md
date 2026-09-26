@@ -2,7 +2,7 @@
 
 # 功能概览
 
-dsh-zotero 让 DSH 的 LLM 对话直接查询你的 Zotero 文献库。十一个工具覆盖从搜索、证据提取到导出的完整工作流；三个个人库写工具默认关闭，显式启用后仍需计划批准与 Zotero 10 本地授权。web 端 Sources 面板实时展示会话中的文献、证据和引用。
+dsh-zotero 让 DSH 的 LLM 对话直接查询 Zotero 文献库。十一个工具覆盖搜索、证据提取与导出；其中三个个人库写工具默认关闭，显式启用后仍需计划批准与 Zotero 10 本地授权。web 端 Sources 面板展示会话中的文献、证据和引用。
 
 ## 搜索文献
 
@@ -13,13 +13,14 @@ dsh-zotero 让 DSH 的 LLM 对话直接查询你的 Zotero 文献库。十一个
 - `metadata`（默认）— 匹配标题、作者、年份
 - `everything` — 额外搜索已索引的全文
 
-**三种搜索范围：**
+**四种搜索范围：**
 
 - 整个文献库（默认）
+- 个人出版物（`publications`）
 - 按集合名或 `zotero://` ref 指定 collection
 - 按保存搜索的名称或 ref
 
-第一页结果（`offset 0`）会额外扫描笔记正文，命中数通过 `noteMatches` 报告，不计入分页总数。搜索结果返回稳定的 `zotero://` ref，供后续工具使用。
+第一页结果（`offset 0`）会额外扫描笔记正文，命中条目列在 `supplemental`（`kind: "noteBody"`），不计入分页总数。搜索结果返回稳定的 `zotero://` ref，供后续工具使用。
 
 ![文献来源概览：搜索结果列表与条目操作面板](images/zotero-sources-overview.png)
 搜索结果列表与条目操作面板：标题、作者、年份、类型，以及"在 Zotero 中打开""打开 PDF""问这篇""导出引用"等操作。
@@ -50,11 +51,11 @@ dsh-zotero 让 DSH 的 LLM 对话直接查询你的 Zotero 文献库。十一个
 | `abstract`   | 条目摘要                                                                                           |
 | `fulltext`   | Zotero 索引的全文，按 BM25 chunk 排序                                                              |
 
-**什么是证据：** 证据是条目内部已有文本片段的排序结果，基于 BM25 词频匹配。BM25 只匹配词项，如果查询词没有出现在某个 chunk 中，即使内容在语义上相关也不会出现。
+证据指条目内部已有文本片段的排序结果，基于 BM25 词频匹配。BM25 只匹配词项；查询词未出现在某个 chunk 中时，即使语义相关也不会进入结果。
 
 全文索引覆盖度通过 `coverage` 字段报告（已索引字符数/总字符数）。索引不完整时，`complete: false` 会明确标出。不可用的来源记入 `sourcesSkipped`。
 
-多附件检索（`attachmentPolicy` 为 `allIndexed` / `specified`）时，`attachments` 逐个附件给出 `status`：`indexed`（读到全文，含 `coverage`、`passages`、是否被字符预算截断）、`unindexed`（该文件在 Zotero 索引里没有全文）、`unread`（本次达到附件上限未读）。未索引的补充材料因此是明确的覆盖缺口，而不是"其中没有相关内容"。
+多附件检索（`attachmentPolicy` 为 `allIndexed` / `specified`）时，`attachments` 逐个附件给出 `status`：`indexed`（读到全文，含 `coverage`、`passages`、是否被字符预算截断）、`unindexed`（该文件在 Zotero 索引里没有全文）、`unread`（本次达到附件上限未读）。未索引的补充材料会记为明确的覆盖缺口，不会写成「其中没有相关内容」。
 
 ![对话中的多步工具调用流程](images/zotero-chat-workflow.png)
 Agent 依次调用搜索、检索、导出三个工具完成用户请求。
@@ -97,7 +98,7 @@ Agent 依次调用搜索、检索、导出三个工具完成用户请求。
 - `zotero_add_tags`：读取现有标签后安全合并，并在版本前置条件下写回
 - `zotero_add_to_collection`：读取现有合集后安全合并，并在版本前置条件下写回
 
-每次写入前都会显示计划卡（不可关闭）；Zotero 10 随后通过本地授权对话框签发一次性或 Always-Allow key。写工具不会使用可重试的 connectivity ask。
+每次写入前都会显示计划卡，该确认不可关闭。Zotero 10 随后通过本地授权对话框签发一次性或 Always-Allow key。写工具不会使用可重试的 connectivity ask。
 
 ## 会话来源面板
 
@@ -123,7 +124,7 @@ BibTeX 导出视图：每条引用可展开查看完整条目，支持一键复�
 
 ## 配置页
 
-在设置面板的左侧导航中，dsh-zotero 提供独立的 **Zotero** 配置页（与 General、Models、Plugins 并列）。修改配置后保存即生效，无需重启——工具在每次请求时读取最新配置。
+在设置面板的左侧导航中，dsh-zotero 提供独立的 **Zotero** 配置页（与 General、Models、Plugins 并列）。修改配置后保存即生效；工具在每次请求时读取最新配置。
 
 可配置项包括：API 地址、各项读取/导出上限、引用样式和区域设置，以及 `writeEnabled`、`writePersistKey` 与 `webEnabled`。详见 [配置文档](configuration.md)。
 

@@ -26,7 +26,7 @@ User → Agent → dsh Zotero Tools → ZoteroService → Provider → 127.0.0.1
 
 - `ZoteroService` extends `Service`, registered as `ctx.zotero`
 - Handles provider selection, capability gating, domain methods
-- Config is live: uses settings section when attached, otherwise composition entry
+- Config treats the Loader entry (the composition entry) as the single authority; settings commits land on that same entry through `loader/volatile-update`
 - Structural volatile updates call the private `buildTransport()` to rebuild the HTTP client, local provider, and write-tool set on the **same** `ZoteroService` instance; limit-only updates are read live and do not rebuild transport
 - The connectivity recovery gate (`ConnectivityRecovery` / `service.recovery`) lives for the service instance and is **not** reset by settings rebuilds (resetting would stack duplicate cards for concurrent failures)
 - The write gate sits on the **service seam**: the three write methods require a `ZoteroWriteCall` (plan markdown plus the asking agent and signal), answer the capability gate before the plan card, return `declined` without approving, and fail closed with no channel; the write tools no longer run the plan review themselves
@@ -38,7 +38,7 @@ User → Agent → dsh Zotero Tools → ZoteroService → Provider → 127.0.0.1
 - `LocalApiProvider` implements `ZoteroProvider`
 - Capabilities: search, metadata, attachments, citation, browse, retrieve, changes; optional write support is exposed only when its transport and authorizer are wired
 - Client-side scope resolution (Local API has no server-side name search)
-- Read-path fan-out is already parallel: one key's two children listings run through `Promise.all` (`src/local/detail.ts`), retrieve's attachment set runs under bounded concurrency (`ZOTERO_GRAPH_CONCURRENCY`), and browse/changes batch their multi-resource reads the same way; the write path's request minimum (one POST per note, no read-back) is stated in the [tools doc](./tools.en.md) write boundaries
+- Read-path fan-out is parallel, with a mechanism per domain: one key's two children listings use `Promise.all` (`src/local/detail.ts`); retrieve's attachment set and export's per-document requests use bounded concurrency (`ZOTERO_GRAPH_CONCURRENCY` / `ZOTERO_EXPORT_CONCURRENCY`); browse ancestor resolution and the changes item partitions use `Promise.all` / `Promise.allSettled`. The write path's request minimum (one POST per note, no read-back) is stated in the [tools doc](./tools.en.md) write boundaries
 - Note body scan: client-side first page (offset 0), limited by maxNoteScanRecords
 - Evidence ranking: BM25 over passage corpus (annotations, notes, abstract, fulltext chunks)
 - Export: citation batches follow API's 50-key limit; translator formats capped at 50 refs
@@ -48,7 +48,7 @@ User → Agent → dsh Zotero Tools → ZoteroService → Provider → 127.0.0.1
 - Pure loopback fetch, fixed API version (`Zotero-API-Version: 3`)
 - Instance identity protection (`Zotero-Server-ID` header)
 - Stream response byte limit (`maxResponseBytes`)
-- A per-instance in-flight request bound (`ZOTERO_MAX_INFLIGHT_REQUESTS`, default 8): each domain pool only bounds one call's fan-out and concurrent tool calls multiply it, so the HTTP client holds the slots itself — for the whole request, connection and streamed body included. A queued request is cancellable, and its deadline starts once it holds a slot, so waiting in the queue is never reported as Zotero timing out
+- A per-instance in-flight request bound (`ZOTERO_MAX_INFLIGHT_REQUESTS`, default 8): each domain pool only bounds one call's fan-out and concurrent tool calls multiply it, so the HTTP client holds the slots itself for the whole request, connection and streamed body included. A queued request is cancellable, and its deadline starts once it holds a slot, so waiting in the queue is never reported as Zotero timing out
 - No redirect following, no connection pooling, no background work
 - Timeout via deadline fusion with caller cancellation
 
@@ -89,4 +89,4 @@ User → Agent → dsh Zotero Tools → ZoteroService → Provider → 127.0.0.1
 - **Evidence**: term-based BM25, ranking by query-word frequency match against passages.
 - **Sources tab**: session snapshot, showing items referenced in this conversation.
 - **Exports**: the tool returns text (that is what the model reads); the panel offers copy and file download.
-- **PDF reading**: attachments return path/URL; further reading requires host capability. The path belongs to the **machine running Zotero** — the loopback pin keeps the plugin on that machine, but a host may run file access in another environment (sandbox, container, remote worker) where the path is not visible. The tool result states that environment, and the plugin never solves remote access by opening Zotero's unauthenticated port.
+- **PDF reading**: attachments return path/URL; further reading requires host capability. The path belongs to the machine running Zotero. The loopback pin keeps the plugin on that machine, but a host may run file access in another environment (sandbox, container, remote worker) where the path is not visible. The tool result states that environment, and the plugin never solves remote access by opening Zotero's unauthenticated port.

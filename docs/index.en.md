@@ -8,4 +8,5 @@
 - [Configuration](configuration.en.md) — All config fields, defaults, and hot-reload behavior
 - [Architecture](architecture.en.md) — Data flow, provider layer, browser client, and session snapshots
 - [Development](development.en.md) — Build, test, local launch, browser-side development
+- [Scenarios](scenarios.en.md) — Real conversation test cases and everyday prompts (golden path and capability packs)
 - [Troubleshooting](troubleshooting.en.md) — Common issues with symptoms, causes, and fixes

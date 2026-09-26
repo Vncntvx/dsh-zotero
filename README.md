@@ -111,7 +111,7 @@ Agent → zotero_export(refs: ["zotero://user/0/item/ABCD1234",
 ## 权限与外部副作用
 
 - **网络**：只向 `http://127.0.0.1:23119/api` 发起 HTTP 请求（不跟随重定向），`resolveConfig` 强制 loopback 地址
-- **文件**：只读，`zotero_attachment` 用 `existsSync` 校验 Zotero 返回的附件路径，不写文件系统
+- **文件**：只读，`zotero_attachment` 用异步 `stat` 校验 Zotero 返回的附件路径，不写文件系统
 - **持久化**：设置页保存到 `$DSH_HOME/settings.yaml` 的 `zotero:` 用户层；启用“总是允许”时，Zotero write key 还会按签发实例保存到宿主 credentials store
 - **无 Shell / native / 后台任务**：插件不执行 shell 命令、不加载 native 模块、不启动常驻进程
 - **重启**：安装或卸载插件后需要重启 dsh 并新建会话；配置修改保存即热更新，无需重启
@@ -123,9 +123,10 @@ Agent → zotero_export(refs: ["zotero://user/0/item/ABCD1234",
 | [快速上手](docs/getting-started.md) | 安装、前置条件、首次验证             |
 | [功能概览](docs/features.md)        | 来源面板、对话集成、证据提取、导出   |
 | [工具参考](docs/tools.md)           | 全部 11 个工具的参数、返回值、错误码 |
-| [配置](docs/configuration.md)       | 25 个配置字段、默认值、热更新        |
+| [配置](docs/configuration.md)       | 24 个配置字段、默认值、热更新        |
 | [架构](docs/architecture.md)        | 数据流、各层职责、设计边界           |
 | [开发指南](docs/development.md)     | 构建、测试、本地开发                 |
+| [使用情景](docs/scenarios.md)       | 真实对话验收用例与日常问法           |
 | [问题排查](docs/troubleshooting.md) | 11 个常见问题的症状和处理            |
 
 ## 开发

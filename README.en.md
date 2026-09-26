@@ -111,7 +111,7 @@ More examples in [Features](docs/features.en.md).
 ## Permissions and external side effects
 
 - **Network**: HTTP requests go only to `http://127.0.0.1:23119/api` (redirects are not followed); `resolveConfig` enforces a loopback address
-- **Filesystem**: read-only — `zotero_attachment` verifies attachment paths with `existsSync`; no file writes
+- **Filesystem**: read-only — `zotero_attachment` verifies attachment paths with async `stat`; no file writes
 - **Persistence**: settings save under the `zotero:` user layer of `$DSH_HOME/settings.yaml`; an Always-Allow Zotero write key is also stored in the host credentials service bound to its issuing instance
 - **No shell / native / background tasks**: the plugin runs no shell commands, loads no native modules, and starts no daemon
 - **Restart**: after installing or removing the plugin, restart dsh and start a new session; configuration changes hot-reload on save without a restart
@@ -123,9 +123,10 @@ More examples in [Features](docs/features.en.md).
 | [Getting Started](docs/getting-started.en.md) | Installation, prerequisites, first verification         |
 | [Features](docs/features.en.md)               | Sources panel, chat integration, evidence, exports      |
 | [Tool Reference](docs/tools.en.md)            | Parameters, return values, error codes for all 11 tools |
-| [Configuration](docs/configuration.en.md)     | 25 config fields, defaults, hot-reload                  |
+| [Configuration](docs/configuration.en.md)     | 24 config fields, defaults, hot-reload                  |
 | [Architecture](docs/architecture.en.md)       | Data flow, layer responsibilities, design boundaries    |
 | [Development](docs/development.en.md)         | Build, test, local development                          |
+| [Scenarios](docs/scenarios.en.md)             | Real-conversation acceptance cases and everyday prompts |
 | [Troubleshooting](docs/troubleshooting.en.md) | 11 common issues with symptoms and fixes                |
 
 ## Development

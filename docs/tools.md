@@ -85,7 +85,7 @@ zotero_get(ref="zotero://user/0/item/ABC123", include=["notes", "annotations"])
 
 ### 输出
 
-`ref`, `attachmentRef`, `attachmentContentType`, `coverage`（indexedChars/totalChars/complete 等）, `attachments`（多附件策略下逐个附件的事实：`ref`, `contentType?`, `status`, `coverage?`, `inputTruncated?`, `passages?`——这是全文来源清单，不是 `zotero_get`/`zotero_children` 的子附件行）, `evidence`（source, sourceRef, text, chunkIndex, chunkCount, comment, pageLabel, matchedFields）, `truncated`, `sourcesSkipped`
+`ref`, `attachmentRef`, `attachmentContentType`, `coverage`（indexedChars/totalChars/complete 等）, `attachments`（多附件策略下逐个附件的事实：`ref`, `contentType?`, `status`, `coverage?`, `inputTruncated?`, `passages?`——这是全文来源清单，不是 `zotero_get`/`zotero_children` 的子附件行）, `evidence`（source, sourceRef, attachmentRef, text, chunkIndex, chunkCount, comment, pageLabel, matchedFields）, `truncated`, `sourcesSkipped`
 
 ### 注意事项
 
@@ -123,7 +123,7 @@ zotero_retrieve(ref="zotero://user/0/item/ABC123", query="attention mechanism", 
 
 判别联合类型：
 
-- `{kind: "file", path, ref, title, contentType}` — 本地文件（经 `existsSync` 验证存在）。路径属于运行 Zotero 的那台机器；在沙箱、容器或远程主机中读取文件的调用方可能看不到它，渲染结果会注明该环境
+- `{kind: "file", path, ref, title, contentType}` — 本地文件（经异步 `stat` 验证存在）。路径属于运行 Zotero 的那台机器；在沙箱、容器或远程主机中读取文件的调用方可能看不到它，渲染结果会注明该环境
 - `{kind: "url", url, ref, title, contentType}` — 链接型附件
 
 条目 ref 首先跟随 Zotero 的 best-attachment 链接，回退到最早的 PDF 子项。文件型位置经异步 stat 验证存在后再返回。
@@ -201,6 +201,7 @@ zotero_export(refs=["zotero://user/0/item/ABC123", "zotero://user/0/item/DEF456"
 - `savedSearches`：`{ref, name, conditions?}`（`conditions` 为 Zotero 的条件行数组（非该形状时按缺省处理）；服务器端 `start/limit` 分页，缺 `Total-Results` 头则 fail-closed）
 - `tags`：`{tag, count?}`（`count` 仅服务端提供时；服务器端分页）
 - `itemTypes`：`{itemType, localized?}`
+- `itemFields`：给定 `itemType` 的 `{field, localized?}` 或 `{creatorType, localized?}`
 
 各 `kind` 的行结构在工具 output schema 中以判别式 `oneOf` 声明；`collections` 渲染为 `A / B / C — ref` 面包屑，`tags` 带 `— N items`，`savedSearches` 带 `— N conditions`。`q` 提供时必须非空白，否则报参数错误。
 
@@ -345,22 +346,22 @@ zotero_add_to_collection(ref="zotero://user/0/item/ABCD1234", collection="方法
 
 ## 写入边界
 
-三个写入工具只在设置的 `writeEnabled` 打开时注册，且都只写 `zotero://user/0/`（个人库）。每次写入前都展示 dsh 侧计划卡片，没有任何设置能跳过它；参数校验在计划卡之前完成，畸形调用不会被当作「未批准」。
+三个写入工具只在设置的 `writeEnabled` 打开时注册，且都只写 `zotero://user/0/`（个人库）。每次写入前都展示 dsh 侧计划卡片，没有任何设置能跳过它。参数校验在计划卡之前完成，畸形调用不会被当作「未批准」。
 
-**闸门在服务接缝上，不在工具里。** 计划审查是 `ctx.zotero.createNote` / `updateTags` / `addToCollection` 自身的一部分：工具与任何其他消费方都要传一个 `ZoteroWriteCall`（计划文本 + 发起调用的 agent / 信号）。服务先过能力门（关闭时是 `ZOTERO_CAPABILITY_UNAVAILABLE`，且**不会**弹卡），再问用户（每次都问）；未批准返回 `{kind:"declined"}` 且一个字节都不发；没有可用交互通道时失败关闭（`ZOTERO_WRITE_APPROVAL_UNAVAILABLE`）。所以「插件内的某个调用方悄悄绕过闸门」不存在。
+**闸门在服务接缝上。** 计划审查是 `ctx.zotero.createNote` / `updateTags` / `addToCollection` 的组成部分。工具与其他消费方都必须传入 `ZoteroWriteCall`（计划文本，以及发起调用的 agent 与 signal）。服务先过能力门（关闭时返回 `ZOTERO_CAPABILITY_UNAVAILABLE`，不弹卡），再向用户提问。未批准返回 `{kind:"declined"}`，不发送任何请求；没有可用交互通道时失败关闭（`ZOTERO_WRITE_APPROVAL_UNAVAILABLE`）。任何调用方都必须经过这道闸门。
 
-**Zotero 10 自己的授权层是硬边界**（在回答请求的 10.0.3-beta.3 源码 `server_localAPI.js` 上核对）：写请求必须携带实例 id（缺失 428、不匹配 412）与本地签发的 key。`/api/local/authorize` 弹窗三个按钮是「允许」（`remember:false`）、「始终允许」（`remember:true`）、「拒绝」，默认按钮是**拒绝**，该端点限速 5 次/分钟。单次 key 在**鉴权时**即被删除——请求体还没被判断，所以写失败也照样烧掉，插件因此只在 401 后重新授权并同批重放一次（唯一的自动重试）。`remember:true` 的 key **不会被消耗**：它存在 `<Zotero 配置目录>/localAPIKeys.json`，可无限期重复使用，直到用户在 Zotero 里清除已保存的授权。也就是说「始终允许」授予的是一枚长期有效的库写入凭据——把它写进日志、脚本或对话，就等于把它泄漏了。
+**Zotero 10 的授权层是硬边界**（对照源码 `server_localAPI.js`，10.0.3-beta.3）：写请求必须携带实例 id（缺失 428、不匹配 412）与本地签发的 key。`/api/local/authorize` 弹窗三个按钮是「允许」（`remember:false`）、「始终允许」（`remember:true`）、「拒绝」，默认按钮是「拒绝」，该端点限速 5 次/分钟。单次 key 在鉴权阶段即被删除，请求体尚未判定，写失败同样消耗该 key。插件因此只在 401 后重新授权并同批重放一次，这是唯一的自动重试。`remember:true` 的 key 不会被消耗：它保存在 `<Zotero 配置目录>/localAPIKeys.json`，可长期重复使用，直到用户在 Zotero 中清除已保存的授权。「始终允许」等价于一枚长期有效的库写入凭据，写入日志、脚本或对话会泄漏该凭据。
 
-**写路径的请求下限**（由回归测试钉住）：`zotero_create_note` 只发一次 `POST /api/users/0/items`，不回读（批量响应已带回 ref/key/版本）；`zotero_add_tags` 与 `zotero_add_to_collection` 各是一次读加一次 `PATCH`（按名指定合集再加一次解析）。实例身份与授权在进程内缓存，所以稳定状态下「建一条笔记」就是一次请求。
+**写路径的请求下限**（由回归测试钉住）：`zotero_create_note` 只发一次 `POST /api/users/0/items`，不回读（批量响应已带回 ref/key/版本）；`zotero_add_tags` 与 `zotero_add_to_collection` 各是一次读加一次 `PATCH`（按名指定合集时再加一次解析）。实例身份与授权在进程内缓存，稳定状态下建一条笔记就是一次请求。
 
-**shell 直写也走确认，而不是另设开关。** 会话里的 `bash` 可以自己 `curl` 本地接口，绕过上面的服务闸门；harness 的审批策略本身只在沙箱升级时提问，而 `dsh-bash-sandbox` 只约束文件访问、不约束网络访问。所以插件不再提供「拦截 shell 写入」这个选项，而是把这个路由**变成必须确认**：`tools/pre-execute` 瀑布里检测到命令文本指向 Zotero 本地写入接口（授权端点，或对本机地址带写方法/请求体的请求）时，插件返回 `{kind:"ask"}`，由 harness 自己的审批请求在**工具体执行之前**裁决——
+**shell 直写同样需要确认，不另设开关。** 会话内的 `bash` 可以直接 `curl` 本地接口，绕过服务闸门。harness 的审批策略本身只在沙箱升级时提问，`dsh-bash-sandbox` 只约束文件访问、不约束网络。插件不提供「拦截 shell 写入」选项，而是把该路由变成必须确认：`tools/pre-execute` 瀑布检测到命令文本指向 Zotero 本地写入接口（授权端点，或对本机地址带写方法/请求体的请求）时，插件返回 `{kind:"ask"}`，由 harness 的审批请求在工具体执行之前裁决。
 
-- 用户确认（`allowed-once`）→ 只执行这一次；
-- 拒绝 / 取消 → 不执行；
-- 会话审批策略为 `never`（对每次 ask 自动拒绝）→ 不执行；
-- 没有任何审批通道 → 不执行。
+- 用户确认（`allowed-once`）→ 只执行这一次
+- 拒绝或取消 → 不执行
+- 会话审批策略为 `never`（对每次 ask 自动拒绝）→ 不执行
+- 没有任何审批通道 → 不执行
 
-检测只读命令文本，因此它是**检测而非保证**：脚本文件（`bash x.sh`）、解释器（`python -c`、`node -e`）、环境变量里的 URL、其它 loopback 端口、以及任何混淆都能从它眼前过去。插件对模型的约束靠系统提示（写入只走写工具），对路由的约束靠这道确认；要让 shell 完全不能碰库，只能让该会话不带无约束 shell：按 agent 用 `tools.restrict({ deny: ["bash"] })`，或使用不含 shell 的预设。另外，被确认放行的原始写入**不经过插件的写域**——没有计划卡、没有版本前置、没有 markdown→note HTML 转换与 provenance，这是用户当场确认时接受的代价。
+检测只读命令文本，属于检测而非保证。下列路径无法覆盖：写入脚本后执行（`bash x.sh`）、命令文本中不出现端点的解释器调用（URL 在运行时拼出时的 `python -c` / `node -e`）、环境变量中的 URL，以及任何混淆写法。命令文本中写明端点的解释器调用仍会被检出（例如 `requests.post('http://127.0.0.1:23119/...')`）。对 `/api/users/` 的写请求在任意 loopback 端口都会被检出，不限于配置端口。系统提示约束模型只使用写工具，这道确认约束路由。若要 shell 完全不能触碰文献库，应让会话不带无约束 shell：按 agent 使用 `tools.restrict({ deny: ["bash"] })`，或使用不含 shell 的预设。被确认放行的原始写入不经过插件写域：无计划卡、无版本前置、无 markdown→note HTML 转换与 provenance。
 
 写入会推进库版本，`zotero_changes` 会看到这批变更。
 

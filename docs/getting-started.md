@@ -99,7 +99,7 @@ allowBuilds:
 
 （键名请用 pnpm 输出的那个；pnpm 10 中该设置的旧名为 `onlyBuiltDependencies`，取值是数组。文件位置即 `~/.dsh/profiles/<profile-name>/pnpm-workspace.yaml`。）
 
-> 看到 `nothing installable … need a build step (blocked by default, see allowBuilds) or ship no prebuilt artifacts` 就是这条：请二选一——按上面的片段授权构建，或改用 npm/tarball 通道。
+> 看到 `nothing installable … need a build step (blocked by default, see allowBuilds) or ship no prebuilt artifacts` 就是这条。二选一：按上面的片段授权构建，或改用 npm/tarball 通道。
 
 建议锁定到特定 commit 以确保可复现性：
 
