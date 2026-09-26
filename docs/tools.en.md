@@ -4,6 +4,10 @@
 
 dsh-zotero registers 11 tools that operate on the user's library through the local Zotero HTTP API (the three write tools register only while `writeEnabled` is on in the settings; they are off by default). All refs are stable identifiers in `zotero://user/0/item/<KEY>` (personal) or `zotero://group/<ID>/item/<KEY>` (group) format; personal is always `user/0` canonical.
 
+### Interactive Presentation (Chat Toolviews)
+
+In the DSH Web conversation stream, all 11 tools are backed by dedicated client `tool.call.toolview` cards (keyed by wire tool name). When a model invokes a tool, the chat UI renders a structured, compact read-only card with lifecycle indicators (preparing, running, success, stopped, error, declined), rather than a collapsed raw input/output JSON tree. Expanding a card displays formatted details, one-click copy actions for evidence or citations, and direct `zotero://` deep links to items and local PDFs.
+
 ---
 
 ## zotero_search

@@ -18,7 +18,7 @@ Numbering:
 Token budget for the conversation:
 
 1. State the answer format at the end of each prompt (line count, whether to explain) so the reply stays short.
-2. Do not ask the model to restate tool calls; the UI tool strip is the record.
+2. Do not ask the model to restate tool calls; check the dedicated tool call cards (Toolviews) and tool status in the UI instead.
 3. Each prompt tests one capability. On a wrong answer or an error, stop, record what happened, and skip later cases that depend on it.
 4. Run the numbered cases in order in one session; later cases refer to “the first item” or “the item above”.
 5. Copy each prompt from the code block as-is. Do not rewrite it while running.
@@ -27,7 +27,7 @@ Token budget for the conversation:
 
 Prerequisites: Zotero Desktop is running and the local API is enabled. The library should include several items, at least one item with PDF annotations or child notes, at least one collection, and some tags. In the session, `/zotero` (or the equivalent `/zotero status`) should report `connected`.
 
-Before the W cases, enable “Allow writes” in the settings page (off by default). The whole W group can be skipped. After the golden path, check the three pages of the Zotero tab (Literature / Passages / Exports).
+Before the W cases, enable “Allow writes” in the settings page (off by default). The whole W group can be skipped. After the golden path, observe the dedicated tool call cards generated in each step (item title/year badges, highlighted evidence passages, BibTeX export cards, etc.) and check the three pages of the Zotero tab (Literature / Passages / Exports).
 
 Record results as:
 

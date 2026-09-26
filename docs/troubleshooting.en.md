@@ -96,3 +96,13 @@
 - **Symptom**: tool behavior unchanged after editing `settings.yaml`
 - **Cause**: wrong config file path, or YAML syntax error
 - **Fix**: confirm you edited the `zotero:` section in `$DSH_HOME/settings.yaml`; run `/zotero status` to verify
+
+---
+
+**12. Tool cards not directly visible in chat (only final reply or timer summary bar shows)**
+
+- **Symptom**: The model invoked Zotero tools, but the chat timeline only shows the final answer or a collapsed turn summary bar with a timer (e.g. "Called tools · 2.1s") rather than expanded tool cards
+- **Cause**: DSH's "Work details" setting defaults to "Standard" mode, which automatically folds completed turn processes behind the turn header to keep the chat tidy
+- **Fix**:
+  - Click the turn summary bar with the timer icon above the message to expand the dedicated tool cards in place
+  - To keep tool cards expanded by default across history and active turns, set **Settings → General → Work details** to **"Verbose"** (`verbose`)

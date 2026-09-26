@@ -127,7 +127,7 @@ More examples in [Features](docs/features.en.md).
 | [Architecture](docs/architecture.en.md)       | Data flow, layer responsibilities, design boundaries    |
 | [Development](docs/development.en.md)         | Build, test, local development                          |
 | [Scenarios](docs/scenarios.en.md)             | Real-conversation acceptance cases and everyday prompts |
-| [Troubleshooting](docs/troubleshooting.en.md) | 11 common issues with symptoms and fixes                |
+| [Troubleshooting](docs/troubleshooting.en.md) | 12 common issues with symptoms and fixes                |
 
 ## Development
 

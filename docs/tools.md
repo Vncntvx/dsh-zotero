@@ -4,6 +4,10 @@
 
 dsh-zotero 注册 11 个工具（写入三工具需在设置中开启 `writeEnabled`，默认关闭），通过本地 Zotero HTTP API 操作用户的文献库。所有 ref 均为 `zotero://user/0/item/<KEY>`（个人库）或 `zotero://group/<ID>/item/<KEY>`（群组库）格式的稳定标识符，个人库恒为 `user/0` canonical。
 
+### 交互呈现（Chat Toolviews）
+
+在 DSH Web 对话流中，所有 11 个工具均挂载了专属的 `tool.call.toolview` 客户端卡片（按 wire tool name 键控分发）。模型调用工具时，用户界面呈现的是结构化、紧凑只读、带生命周期指示（准备中 / 运行中 / 成功 / 中断 / 错误 / 计划拒绝）的专属卡片，而非折叠的原始输入/输出 JSON。展开卡片可查看格式化细节、一键复制证据或引用，并通过 `zotero://` 协议直达文献与本地 PDF。
+
 ---
 
 ## zotero_search

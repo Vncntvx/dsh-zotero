@@ -100,6 +100,23 @@ After `writeEnabled` is explicitly enabled, three tools operate only on `zotero:
 
 Every write shows a plan card before it happens, with no way to turn that off. Zotero 10 then issues a one-time or Always-Allow key through its local authorization dialog. Write tools never use the retrying connectivity ask.
 
+## Chat Tool Cards (Toolviews)
+
+In the DSH conversation interface, when the agent invokes Zotero tools, it no longer falls back to generic collapsed JSON trees. Instead, dsh-zotero registers dedicated read-only views (`tool.call.toolview`) for all 11 model tools:
+
+- **Search (`zotero_search`)**: Displays the query and match count; expands to show item cards with title, author, year badge, item type, and direct deep links to open the item in Zotero or view its PDF.
+- **Evidence Retrieval (`zotero_retrieve`)**: Highlights BM25 evidence passages, matched fields, relevance score badges, and full-text index coverage progress bars.
+- **Export (`zotero_export`)**: Displays standard export format labels (BibTeX, CSL JSON, RIS, etc.), style, and locale tags, with formatted citation text, one-click copy, and file download.
+- **Item Details (`zotero_get`)**: Shows item title, author, year, abstract, tags, collection memberships, and deep links.
+- **Child Objects (`zotero_children`)**: Categorizes child notes, attachments, and PDF annotations with page labels and colors.
+- **Library Structure & Changes (`zotero_browse` / `zotero_changes`)**: Displays collection trees, saved searches, tag facets, or transactional version changes and cursors.
+- **Attachment Locator (`zotero_attachment`)**: Displays resolved local disk paths or URL links with one-click copy.
+- **Personal Library Writes (`zotero_create_note` / `zotero_add_tags` / `zotero_add_to_collection`)**: Clearly shows target item links, note summaries (extracted first line), added tags, or target collections, with explicit execution status badges (Success / Declined / Error).
+
+Cards default to a compact folded summary line and lazily render detailed payloads only upon expansion to ensure smooth UI scrolling, while providing full lifecycle awareness (Preparing, Running, Success, Stopped, Error, Declined).
+
+> **Integration with Work Details presentation:** DSH's General settings provide a "Work details" preference (`compact` / `standard` / `detailed` / `verbose`). In the default "Standard" mode, finished turns fold process rows behind the turn summary; clicking the timer bar above the message expands the tool cards in place. If you prefer tool cards to stay expanded by default in history, switch the preference to "Verbose".
+
 ## Session Sources panel
 
 The dsh web Zotero tab contains three sub-views:

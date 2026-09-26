@@ -127,7 +127,7 @@ Agent → zotero_export(refs: ["zotero://user/0/item/ABCD1234",
 | [架构](docs/architecture.md)        | 数据流、各层职责、设计边界           |
 | [开发指南](docs/development.md)     | 构建、测试、本地开发                 |
 | [使用情景](docs/scenarios.md)       | 真实对话验收用例与日常问法           |
-| [问题排查](docs/troubleshooting.md) | 11 个常见问题的症状和处理            |
+| [问题排查](docs/troubleshooting.md) | 12 个常见问题的症状和处理            |
 
 ## 开发
 

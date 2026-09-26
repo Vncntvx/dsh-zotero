@@ -68,6 +68,7 @@ User → Agent → dsh Zotero Tools → ZoteroService → Provider → 127.0.0.1
   - Evidence sub-view: passages grouped by item, with Zotero page labels
   - Exports sub-view: successful export artifacts with format/style/locale
 - Connection bar: probed once on tab open, once on refresh (no polling)
+- Tool call cards: dedicated `tool.call.toolview` cards (keyed by all 11 model tool names), providing compact, read-only collapsible views with inline copy actions and `zotero://` deep links for search, retrieval, exports, item details, children, and write operations
 - `zotero://` deep links: "Open in Zotero", "Open PDF", "Open annotation"
 - `webEnabled` toggle: takes effect immediately, no reload needed
 
