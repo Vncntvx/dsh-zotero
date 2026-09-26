@@ -9,16 +9,16 @@ dsh-zotero is a DeepSeek Harness plugin that lets agents search, read, and cite 
 
 ## Map
 
-| Path | Owns |
-| --- | --- |
-| `src/` | Host half: service, tools, Local API provider, HTTP, write domain |
-| `src/local/` | Local API domain pipelines (search/retrieve/export/changes/write/…) |
-| `src/tools/` | 11 model tools (8 read + `create_note` / `add_tags` / `add_to_collection`) |
-| `src/client/` | Browser half (settings page, Sources tab) → `lib/client.js` |
-| `tests/` | Specs by lane; `tests/README.md` is the test rulebook |
-| `docs/` | Product docs, zh/en pairs |
-| `scripts/` | Build, harness pin, client-graph authority, test lint |
-| `lib/` | Build output — never edit |
+| Path          | Owns                                                                       |
+| ------------- | -------------------------------------------------------------------------- |
+| `src/`        | Host half: service, tools, Local API provider, HTTP, write domain          |
+| `src/local/`  | Local API domain pipelines (search/retrieve/export/changes/write/…)        |
+| `src/tools/`  | 11 model tools (8 read + `create_note` / `add_tags` / `add_to_collection`) |
+| `src/client/` | Browser half (settings page, Sources tab) → `lib/client.js`                |
+| `tests/`      | Specs by lane; `tests/README.md` is the test rulebook                      |
+| `docs/`       | Product docs, zh/en pairs                                                  |
+| `scripts/`    | Build, harness pin, client-graph authority, test lint                      |
+| `lib/`        | Build output — never edit                                                  |
 
 ## Sources of truth
 
@@ -97,7 +97,7 @@ More detail: `docs/development.md`.
 
 ### Harness pin
 
-- One exact version, currently `0.1.7-rc.2`. The `@deepseek-ai/dsh-*` line in `devDependencies` is the source of truth; `overrides`, `peerDependencies`, `engines.dsh`, and `dsh.harnessRange` are derived from it. READMEs and this file restate the same pin.
+- One exact version, currently `dsh 0.1.7-rc.2`. The `@deepseek-ai/dsh-*` line in `devDependencies` is the source of truth; `overrides`, `peerDependencies`, `engines.dsh`, and `dsh.harnessRange` are derived from it. READMEs and this file restate the same pin.
 - Never edit one form alone and never use `^` / `||` — `npm run harness:pin -- <version>`, then regenerate `package-lock.json`. `scripts/harness-state.mjs` rejects dual arms.
 - If the registry lags the pin, `npm run link:local-harness`. Never grant a profile `compatibility.json` exemption so this plugin runs on another dsh line.
 
