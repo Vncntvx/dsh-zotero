@@ -69,6 +69,7 @@ User → Agent → dsh Zotero Tools → ZoteroService → Provider → 127.0.0.1
   - Exports sub-view: successful export artifacts with format/style/locale
 - Connection bar: probed once on tab open, once on refresh (no polling)
 - Tool call cards: dedicated `tool.call.toolview` cards (keyed by all 11 model tool names), providing compact, read-only collapsible views with inline copy actions and `zotero://` deep links for search, retrieval, exports, item details, children, and write operations
+- Slash command card: `conversation.chat.commandview` slot (keyed by `zotero`), providing a structured status card for `/zotero` command output with connectivity indicators, telemetry grid, offline diagnosis, and an in-place refresh action
 - `zotero://` deep links: "Open in Zotero", "Open PDF", "Open annotation"
 - `webEnabled` toggle: takes effect immediately, no reload needed
 

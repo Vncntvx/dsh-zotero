@@ -47,7 +47,7 @@ Run `/zotero` first, then ask:
 Browse my library structure: which top-level collections are there? Roughly how many tags? One line each, at most 8 lines.
 ```
 
-Expected tool: `zotero_browse` (collections, possibly tags). Acceptance: status is connected; collection names match the Zotero sidebar; a library-wide search does not replace browse. When to use: confirm library shape before choosing a search scope.
+Expected tool: `zotero_browse` (collections, possibly tags). Acceptance: `/zotero` renders a dedicated status card showing connected; collection names match the Zotero sidebar; a library-wide search does not replace browse. When to use: confirm library shape before choosing a search scope.
 
 ### G2 Bibliographic search
 

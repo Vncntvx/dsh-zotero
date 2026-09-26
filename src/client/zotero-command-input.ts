@@ -36,6 +36,23 @@ interface ZoteroCommandInputState extends ZoteroCommandInputData {
 }
 
 /**
+ * Format a command name and optional arguments into a normalized slash command string.
+ * When `name` is null or undefined, defaults to {@link ZOTERO_COMMAND} (`zotero`).
+ * When `args` is provided, normalizes whitespace so leading/trailing spaces do not corrupt formatting.
+ * @param name - The command name, falling back to 'zotero' if missing.
+ * @param args - Raw or trimmed argument string.
+ * @returns Normalized command string, e.g. `/zotero` or `/zotero status`.
+ */
+export function formatCommandLine(
+  name: string | null | undefined,
+  args: string | null | undefined,
+): string {
+  const commandName = name ?? ZOTERO_COMMAND
+  const trimmed = (args ?? '').trim()
+  return trimmed === '' ? `/${commandName}` : `/${commandName} ${trimmed}`
+}
+
+/**
  * Derive the visible command line from its structured durable run.
  *
  * `args` is the harness's raw input after the command name (the slice past
@@ -48,8 +65,7 @@ interface ZoteroCommandInputState extends ZoteroCommandInputData {
  * @returns the command line the user typed, normalized for display.
  */
 export function zoteroCommandText(event: SessionEvent<'command/run'>): string {
-  const args = (event.data.args ?? '').trim()
-  return args === '' ? `/${event.data.name}` : `/${event.data.name} ${args}`
+  return formatCommandLine(event.data.name, event.data.args)
 }
 
 /**

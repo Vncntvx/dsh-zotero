@@ -47,7 +47,7 @@
 浏览一下我的文献库结构：有哪些顶层合集？标签大概多少？各用一行，最多 8 行。
 ```
 
-期望工具：`zotero_browse`（collections，可能含 tags）。验收：status 为 connected；合集名称与 Zotero 侧栏一致；未以全库 search 替代 browse。适用场景：先确认库结构，再确定检索范围。
+期望工具：`zotero_browse`（collections，可能含 tags）。验收：`/zotero` 呈现专属状态卡片且显示 connected；合集名称与 Zotero 侧栏一致；未以全库 search 替代 browse。适用场景：先确认库结构，再确定检索范围。
 
 ### G2 书目检索
 

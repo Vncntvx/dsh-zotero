@@ -240,6 +240,7 @@ describe('the browser-half entry', () => {
       'settings.section',
       'plugins.bundle.config',
       'plugins.detail.section',
+      'conversation.chat.commandview',
       'conversation.view',
     ])
 
@@ -293,6 +294,22 @@ describe('the browser-half entry', () => {
     )()
     expect(typeof sectionInject.probe).toBe('function')
     expect(typeof sectionInject.t).toBe('function')
+  })
+
+  it('injects and registers the zotero command card into the conversation.chat.commandview slot', () => {
+    const world = fakeWorld()
+    apply(world.ctx as Context)
+
+    const entry = world.injected.find((e) => e.name === 'conversation.chat.commandview')
+    expect(entry).toBeDefined()
+    expect(entry?.register()).toBeDefined()
+
+    const card = world.registered.find((e) => e.name === 'conversation.chat.commandview')
+    expect(card?.options.key).toBe('zotero')
+    expect(card?.options.locale).toBe('zotero')
+    expect(typeof card?.component).toBe('function')
+    const cardInject = (card?.options.inject as () => { probe: () => Promise<unknown> })()
+    expect(typeof cardInject.probe).toBe('function')
   })
 
   it('keeps the tab and reports the fault when the Remote namespace is not served', async () => {
@@ -427,6 +444,7 @@ describe('the browser-half entry', () => {
       'settings.section',
       'plugins.bundle.config',
       'plugins.detail.section',
+      'conversation.chat.commandview',
     ])
   })
 

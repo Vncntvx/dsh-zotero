@@ -209,6 +209,10 @@ export type ZoteroLocaleKey =
   | 'toolNoResults'
   | 'toolDefaultNoteTitle'
   | 'badgeSuccess'
+  | 'commandChecking'
+  | 'commandFailed'
+  | 'statusServerIdUnreported'
+  | 'statusLocalApiAddress'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -485,6 +489,10 @@ export const en: Record<ZoteroLocaleKey, string> = {
   toolNoResults: 'No matching results found',
   toolDefaultNoteTitle: 'Note',
   badgeSuccess: 'OK',
+  commandChecking: 'Connecting to local API…',
+  commandFailed: 'Command failed',
+  statusServerIdUnreported: 'Not reported (this build does not identify database)',
+  statusLocalApiAddress: 'Local API Address',
 }
 
 /** Simplified Chinese copy. */
@@ -746,4 +754,8 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   toolNoResults: '未检索到匹配结果',
   toolDefaultNoteTitle: '笔记',
   badgeSuccess: '成功',
+  commandChecking: '正在探测连接…',
+  commandFailed: '执行失败',
+  statusServerIdUnreported: '未报告（当前构建不支持数据库标识）',
+  statusLocalApiAddress: '本地 API 地址',
 }

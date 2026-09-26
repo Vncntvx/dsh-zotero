@@ -117,6 +117,15 @@ Cards default to a compact folded summary line and lazily render detailed payloa
 
 > **Integration with Work Details presentation:** DSH's General settings provide a "Work details" preference (`compact` / `standard` / `detailed` / `verbose`). In the default "Standard" mode, finished turns fold process rows behind the turn summary; clicking the timer bar above the message expands the tool cards in place. If you prefer tool cards to stay expanded by default in history, switch the preference to "Verbose".
 
+## Slash Command Status Card (Commandview)
+
+When running `/zotero` (or `/zotero status`) in the chat composer, command execution output is rendered by a dedicated card registered in the `conversation.chat.commandview` slot (key: `zotero`):
+
+- **Status indicator & collapsed summary**: The folded summary line displays a connectivity indicator dot (green online / red offline), the executed command name (`/zotero`), and a concise status line;
+- **Structured metrics grid**: Expanding the card reveals the local endpoint (`127.0.0.1:23119`), Zotero client version, Local API version, schema version, database Server ID (if reported), and personal library write status (Enabled with stored key / Enabled without key / Disabled);
+- **Live re-probe action**: An inline "Refresh" button at the bottom of the expanded card triggers an immediate local probe to update all telemetry fields, with a yellow indicator during probing, without needing to retype the command;
+- **Offline diagnosis & guidance**: When disconnected or encountering errors, expanding the card displays actionable diagnosis hints (checking whether Zotero Desktop is running, verifying the local API toggle in Advanced preferences, etc.) and falls back to raw text for non-standard output.
+
 ## Session Sources panel
 
 The dsh web Zotero tab contains three sub-views:

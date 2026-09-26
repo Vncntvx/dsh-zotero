@@ -1,0 +1,140 @@
+/**
+ * Styles for the Zotero Slash command result card (conversation.chat.commandview).
+ * Conforms to DeepSeek Harness client design tokens.
+ */
+
+.root {
+  display: flex;
+  flex-direction: column;
+}
+
+.summarySep {
+  flex: none;
+  width: 2px;
+  height: 2px;
+  border-radius: 1px;
+  margin: 0 8px;
+  background: var(--dsw-alias-label-caption);
+}
+
+.summary {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  font-weight: 400;
+  line-height: calc(24px + var(--dsh-content-font-delta, 0px));
+  color: var(--dsw-alias-label-tertiary);
+  transition: color 100ms ease;
+}
+
+.summary[data-error='true'] {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.summaryBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dotGreen {
+  color: var(--dsw-alias-state-success-primary, #10b981);
+}
+
+.dotRed {
+  color: var(--dsw-alias-state-error-primary, #ef4444);
+}
+
+.dotYellow {
+  color: var(--dsw-alias-state-warn-primary, #f59e0b);
+}
+
+.bodyWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px 12px 12px 28px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px;
+}
+
+.cardItem {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 12px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md, 6px);
+  background: var(--dsw-alias-markdown-code-block, var(--dsw-alias-bg-layer-2));
+}
+
+.itemLabel {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.itemValue {
+  font-size: 12px;
+  font-weight: 500;
+  font-family: var(--dsw-font-code, monospace);
+  color: var(--dsw-alias-label-primary);
+  word-break: break-all;
+}
+
+.actionsRow {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.actionButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm, 4px);
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.actionButton:hover:not(:disabled) {
+  background: var(--dsw-alias-bg-layer-3);
+  color: var(--dsw-alias-label-primary);
+  border-color: var(--dsw-alias-border-l1);
+}
+
+.actionButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.errorBody {
+  margin: 0;
+  padding: 8px 12px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md, 6px);
+  background: var(--dsw-alias-markdown-code-block);
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 12px;
+  font-family: var(--dsw-font-code, monospace);
+  white-space: pre-wrap;
+}

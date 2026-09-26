@@ -38,6 +38,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { zoteroCommandInputDefinition } from './zotero-command-input.ts'
 import { ZoteroCommandInputView } from './ZoteroCommandInputView.tsx'
+import { ZoteroCommandCard } from './ZoteroCommandCard.tsx'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { ZoteroSettingsSection } from './ZoteroSettingsSection.tsx'
 import { SourcesTab, type SourcesTabFace } from './components/SourcesTab.tsx'
@@ -178,6 +179,19 @@ export function apply(ctx: ClientContext): void {
         inject: () => ({ t, probe }),
       },
       ZoteroPluginDetailSection,
+    ),
+  )
+
+  // Dedicated Slash command result card for `/zotero`
+  ctx.slots.inject('conversation.chat.commandview', () =>
+    ctx.slots.register(
+      {
+        name: 'conversation.chat.commandview',
+        key: 'zotero',
+        locale: NS,
+        inject: () => ({ probe }),
+      },
+      ZoteroCommandCard,
     ),
   )
 
