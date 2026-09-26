@@ -21,6 +21,13 @@ export interface ZoteroOpenLinkProps {
   readonly t: TranslateNS<'zotero'>
   /** The anchor's class; defaults to the shared text link. */
   readonly className?: string
+  /** Optional click handler (e.g. stopPropagation). */
+  readonly onClick?: (e: React.MouseEvent<HTMLAnchorElement>) => void
+  /**
+   * Stop event propagation to parent disclosures. Defaults to true to avoid
+   * accidentally toggling collapsible cards when opening links.
+   */
+  readonly stopPropagation?: boolean
 }
 
 /** One provenance-guarded text link: leading category glyph per the harness
@@ -29,10 +36,30 @@ export interface ZoteroOpenLinkProps {
  * never goes through `classifyLinkPath`). External `http(s)` targets open in a
  * new tab with the safe rel; protocol links hand to the OS handler in place
  * with no blank tab. */
-export function ZoteroOpenLink({ url, verdict, label, t, className }: ZoteroOpenLinkProps) {
+export function ZoteroOpenLink({
+  url,
+  verdict,
+  label,
+  t,
+  className,
+  onClick,
+  stopPropagation = true,
+}: ZoteroOpenLinkProps) {
+  const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (stopPropagation) {
+      e.stopPropagation()
+    }
+    onClick?.(e)
+  }
+
   return (
     <span className={css.linkWrap}>
-      <a className={className ?? css.link} href={url} {...externalHrefProps(url)}>
+      <a
+        className={className ?? css.link}
+        href={url}
+        {...externalHrefProps(url)}
+        onClick={handleClick}
+      >
         <IconLinkOutlineMedium className={css.linkIcon} />
         {label}
       </a>

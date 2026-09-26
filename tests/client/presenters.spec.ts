@@ -15,7 +15,9 @@ import {
   argsOf,
   boolField,
   callNameOf,
+  errorSummaryOf,
   evidenceItemsOf,
+  isDeclinedOf,
   isRecord,
   joinNonEmpty,
   metaOf,
@@ -198,5 +200,42 @@ describe('joinNonEmpty', () => {
   it('joins the non-empty parts with the middot separator', () => {
     expect(joinNonEmpty('Dao', 2023, '', undefined, 'ICLR')).toBe('Dao · 2023 · ICLR')
     expect(joinNonEmpty()).toBe('')
+  })
+})
+
+describe('errorSummaryOf', () => {
+  it('returns null when block is not in error state', () => {
+    expect(errorSummaryOf(settled({ isError: false }))).toBeNull()
+    expect(errorSummaryOf(running())).toBeNull()
+  })
+
+  it('extracts first line from settled error block or returns null', () => {
+    const blockWithText = settled({
+      isError: true,
+      content: [{ type: 'text', text: 'First error line\nSecond line' }],
+    })
+    expect(errorSummaryOf(blockWithText)).toBe('First error line')
+    expect(errorSummaryOf(blockWithText, 'Precomputed raw line\nsecond')).toBe(
+      'Precomputed raw line',
+    )
+
+    const blockEmpty = settled({
+      isError: true,
+      content: [],
+    })
+    expect(errorSummaryOf(blockEmpty)).toBeNull()
+  })
+})
+
+describe('isDeclinedOf', () => {
+  it('returns true when meta.kind is declined', () => {
+    expect(isDeclinedOf(settled({ meta: { kind: 'declined' } }))).toBe(true)
+  })
+
+  it('returns false when meta.kind is not declined or absent', () => {
+    expect(isDeclinedOf(settled({ meta: { kind: 'applied' } }))).toBe(false)
+    expect(isDeclinedOf(settled({ meta: {} }))).toBe(false)
+    expect(isDeclinedOf(settled())).toBe(false)
+    expect(isDeclinedOf(running())).toBe(false)
   })
 })

@@ -140,8 +140,19 @@ function fakeWorld(mountFail = false, mountRejects: unknown = undefined): FakeAp
       },
     },
     slots: {
-      inject: (name: string, register: () => FakeSlotsEntry | undefined) => {
-        const entry: FakeInjectedEntry = { name, register, active: true }
+      inject: (name: string, register: () => unknown) => {
+        const entry: FakeInjectedEntry = {
+          name,
+          register: () => {
+            const res = register()
+            if (res && typeof res === 'object' && Symbol.iterator in res) {
+              const list = [...(res as Iterable<FakeSlotsEntry>)]
+              return list[0]
+            }
+            return res as FakeSlotsEntry | undefined
+          },
+          active: true,
+        }
         injected.push(entry)
         return () => {
           entry.active = false
@@ -149,8 +160,9 @@ function fakeWorld(mountFail = false, mountRejects: unknown = undefined): FakeAp
         }
       },
       register: (options: Record<string, unknown>, component: unknown) => {
-        registered.push({ name: String(options.name), options, component })
-        return { id: String(options.id) }
+        const item = { name: String(options.name), options, component }
+        registered.push(item)
+        return item
       },
     },
   }
@@ -223,6 +235,7 @@ describe('the browser-half entry', () => {
     // page, the plugin-manager cards, and the conversation tab (whose
     // registration must not wait on the Remote mount).
     expect(world.injected.map((entry) => entry.name)).toEqual([
+      'tool.call.toolview',
       'conversation.chat.node',
       'settings.section',
       'plugins.bundle.config',
@@ -409,11 +422,40 @@ describe('the browser-half entry', () => {
     apply(world.ctx as Context)
     await settleMount(world)
     expect(world.injected.map((entry) => entry.name)).toEqual([
+      'tool.call.toolview',
       'conversation.chat.node',
       'settings.section',
       'plugins.bundle.config',
       'plugins.detail.section',
     ])
+  })
+
+  it('injects and registers all 11 tool views into the tool.call.toolview slot', () => {
+    const world = fakeWorld()
+    apply(world.ctx as Context)
+
+    const entry = world.injected.find((item) => item.name === 'tool.call.toolview')
+    expect(entry).toBeDefined()
+    entry?.register()
+
+    const toolRegistrations = world.registered.filter((item) => item.name === 'tool.call.toolview')
+    expect(toolRegistrations.map((item) => item.options.key)).toEqual([
+      'zotero_search',
+      'zotero_retrieve',
+      'zotero_export',
+      'zotero_get',
+      'zotero_children',
+      'zotero_attachment',
+      'zotero_create_note',
+      'zotero_add_tags',
+      'zotero_add_to_collection',
+      'zotero_browse',
+      'zotero_changes',
+    ])
+    for (const reg of toolRegistrations) {
+      expect(reg.options.locale).toBe('zotero')
+      expect(typeof reg.component).toBe('function')
+    }
   })
 
   it('withdraws the tab live when webEnabled turns off and restores it on', async () => {

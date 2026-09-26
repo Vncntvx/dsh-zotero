@@ -106,6 +106,32 @@ export interface PrimitivesStub extends Omit<RealForm, 'SettingsValueField'> {
     onCancel: () => void
     onConfirm: () => void
   }) => ReactElement | null
+  /** The disclosure row, as its DOM face. */
+  readonly DisclosureRow: (props: {
+    icon?: unknown
+    title?: string
+    open?: boolean
+    expandable?: boolean
+    onToggle?: () => void
+    collapsedContent?: unknown
+    children?: unknown
+    [key: string]: unknown
+  }) => ReactElement
+  /** Shimmering text indicator. */
+  readonly TextShimmer: (props: {
+    children?: unknown
+    active?: boolean
+    [key: string]: unknown
+  }) => ReactElement
+  readonly IconInspectOutlineRegular: (props: Record<string, unknown>) => ReactElement
+  readonly IconBrowseOutlineRegular: (props: Record<string, unknown>) => ReactElement
+  readonly IconRefreshOutlineRegular: (props: Record<string, unknown>) => ReactElement
+  readonly IconSearchOutlineRegular: (props: Record<string, unknown>) => ReactElement
+  readonly IconPlusOutlineRegular: (props: Record<string, unknown>) => ReactElement
+  readonly IconCopyOutlineRegular: (props: Record<string, unknown>) => ReactElement
+  readonly IconDeliverDocRegular: (props: Record<string, unknown>) => ReactElement
+  readonly IconBranchOutlineRegular: (props: Record<string, unknown>) => ReactElement
+  readonly IconEditOutlineRegular: (props: Record<string, unknown>) => ReactElement
 }
 
 /** The icon stubs: an inline glyph carrying the icon name. */
@@ -322,6 +348,45 @@ export function primitivesStub(overrides: Partial<PrimitivesStub> = {}): Primiti
         ),
       )
     },
+    DisclosureRow: ({
+      icon: leadingIcon,
+      title,
+      open,
+      expandable,
+      onToggle,
+      collapsedContent,
+      children,
+    }) =>
+      createElement(
+        'div',
+        {
+          'data-disclosure': open ? 'open' : 'closed',
+          'data-expandable': expandable ? 'true' : 'false',
+        },
+        createElement(
+          'div',
+          {
+            role: 'button',
+            'data-disclosure-trigger': 'true',
+            onClick: () => onToggle?.(),
+          },
+          leadingIcon as never,
+          createElement('span', { 'data-disclosure-title': 'true' }, title as never),
+          collapsedContent as never,
+        ),
+        open ? (children as never) : null,
+      ),
+    TextShimmer: ({ children, active }) =>
+      createElement('span', { 'data-shimmer': active ? 'true' : undefined }, children as never),
+    IconInspectOutlineRegular: icon('inspect'),
+    IconBrowseOutlineRegular: icon('browse-regular'),
+    IconRefreshOutlineRegular: icon('refresh-regular'),
+    IconSearchOutlineRegular: icon('search-regular'),
+    IconPlusOutlineRegular: icon('plus-regular'),
+    IconCopyOutlineRegular: icon('copy-regular'),
+    IconDeliverDocRegular: icon('deliver-doc'),
+    IconBranchOutlineRegular: icon('branch-regular'),
+    IconEditOutlineRegular: icon('edit-regular'),
     ...overrides,
   } as PrimitivesStub
 }

@@ -173,6 +173,42 @@ export type ZoteroLocaleKey =
   | 'starterEvidenceTemplate'
   | 'starterExportSelected'
   | 'starterExportSelectedTemplate'
+  | 'toolTitleSearch'
+  | 'toolTitleRetrieve'
+  | 'toolTitleExport'
+  | 'toolTitleGet'
+  | 'toolTitleChildren'
+  | 'toolTitleAttachment'
+  | 'toolTitleCreateNote'
+  | 'toolTitleAddTags'
+  | 'toolTitleAddToCollection'
+  | 'toolTitleBrowse'
+  | 'toolTitleChanges'
+  | 'toolRunning'
+  | 'toolFailed'
+  | 'toolStopped'
+  | 'toolDeclined'
+  | 'toolInspect'
+  | 'toolSearchRunning'
+  | 'toolRetrieveRunning'
+  | 'toolExportRunning'
+  | 'toolSummaryFound'
+  | 'toolSummaryFoundWithNotes'
+  | 'toolSummaryEvidence'
+  | 'toolSummaryExport'
+  | 'toolSummaryItem'
+  | 'toolSummaryChildren'
+  | 'toolSummaryAttachment'
+  | 'toolSummaryCreateNote'
+  | 'toolSummaryAddTags'
+  | 'toolSummaryAddToCollection'
+  | 'toolSummaryBrowse'
+  | 'toolSummaryChanges'
+  | 'toolParentItem'
+  | 'toolTags'
+  | 'toolNoResults'
+  | 'toolDefaultNoteTitle'
+  | 'badgeSuccess'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -413,6 +449,42 @@ export const en: Record<ZoteroLocaleKey, string> = {
   starterEvidenceTemplate: 'Find passages in this paper for the following question: ',
   starterExportSelected: 'Export citations for selected items…',
   starterExportSelectedTemplate: 'Export these items from my Zotero library as citations: ',
+  toolTitleSearch: 'Zotero Search',
+  toolTitleRetrieve: 'Zotero Retrieve Evidence',
+  toolTitleExport: 'Zotero Export Citation',
+  toolTitleGet: 'Zotero Item Details',
+  toolTitleChildren: 'Zotero Item Children',
+  toolTitleAttachment: 'Zotero Attachment',
+  toolTitleCreateNote: 'Zotero Create Note',
+  toolTitleAddTags: 'Zotero Add Tags',
+  toolTitleAddToCollection: 'Zotero Add to Collection',
+  toolTitleBrowse: 'Zotero Browse',
+  toolTitleChanges: 'Zotero Sync Changes',
+  toolRunning: 'Running…',
+  toolFailed: 'Failed',
+  toolStopped: 'Stopped',
+  toolDeclined: 'Write plan was declined; not executed',
+  toolInspect: 'Inspect',
+  toolSearchRunning: 'Searching Zotero library…',
+  toolRetrieveRunning: 'Retrieving evidence passages…',
+  toolExportRunning: 'Exporting citations…',
+  toolSummaryFound: 'found {count} items',
+  toolSummaryFoundWithNotes: 'found {count} items (+{notes} notes)',
+  toolSummaryEvidence: 'extracted {count} passages',
+  toolSummaryExport: 'exported {format} ({count} items)',
+  toolSummaryItem: '{title} ({year})',
+  toolSummaryChildren: '{count} child objects',
+  toolSummaryAttachment: 'Attachment: {title}',
+  toolSummaryCreateNote: 'Created note "{title}"',
+  toolSummaryAddTags: 'Added {count} tags',
+  toolSummaryAddToCollection: 'Added to collection "{name}"',
+  toolSummaryBrowse: 'Browse {category} ({count} items)',
+  toolSummaryChanges: 'Sync changes: {count} records',
+  toolParentItem: 'Parent Item',
+  toolTags: 'Tags',
+  toolNoResults: 'No matching results found',
+  toolDefaultNoteTitle: 'Note',
+  badgeSuccess: 'OK',
 }
 
 /** Simplified Chinese copy. */
@@ -638,4 +710,40 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   starterEvidenceTemplate: '在这篇文献中查找相关片段，问题是：',
   starterExportSelected: '导出选中条目的引用…',
   starterExportSelectedTemplate: '把下面几篇从我的 Zotero 库导出为引用：',
+  toolTitleSearch: 'Zotero 检索文献',
+  toolTitleRetrieve: 'Zotero 提取证据',
+  toolTitleExport: 'Zotero 导出引文',
+  toolTitleGet: 'Zotero 文献详情',
+  toolTitleChildren: 'Zotero 子项与附件',
+  toolTitleAttachment: 'Zotero 附件',
+  toolTitleCreateNote: 'Zotero 创建笔记',
+  toolTitleAddTags: 'Zotero 添加标签',
+  toolTitleAddToCollection: 'Zotero 添加到合集',
+  toolTitleBrowse: 'Zotero 浏览分类',
+  toolTitleChanges: 'Zotero 同步记录',
+  toolRunning: '执行中…',
+  toolFailed: '执行失败',
+  toolStopped: '已中断',
+  toolDeclined: '写操作未获批准，已取消执行',
+  toolInspect: '检查调用',
+  toolSearchRunning: '正在检索 Zotero 文献库…',
+  toolRetrieveRunning: '正在提取文献证据…',
+  toolExportRunning: '正在导出引文…',
+  toolSummaryFound: '找到 {count} 篇文献',
+  toolSummaryFoundWithNotes: '找到 {count} 篇文献 (+{notes} 条笔记)',
+  toolSummaryEvidence: '提取 {count} 条证据片段',
+  toolSummaryExport: '导出 {format} ({count} 篇)',
+  toolSummaryItem: '{title} ({year})',
+  toolSummaryChildren: '{count} 个子对象',
+  toolSummaryAttachment: '附件: {title}',
+  toolSummaryCreateNote: '已创建笔记 "{title}"',
+  toolSummaryAddTags: '已添加 {count} 个标签',
+  toolSummaryAddToCollection: '已加入合集 "{name}"',
+  toolSummaryBrowse: '浏览 {category} ({count} 项)',
+  toolSummaryChanges: '同步变更: {count} 条',
+  toolParentItem: '所属父条目',
+  toolTags: '标签',
+  toolNoResults: '未检索到匹配结果',
+  toolDefaultNoteTitle: '笔记',
+  badgeSuccess: '成功',
 }

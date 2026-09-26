@@ -108,6 +108,18 @@ export function resultTextOf(block: ToolCallBlock): string | null {
   return parts.join('\n')
 }
 
+/** Whether a settled write call was declined in plan review. */
+export function isDeclinedOf(block: ToolCallBlock): boolean {
+  return metaOf(block)?.kind === 'declined'
+}
+
+/** Single-line error summary derived from settled error content, or null when not errored. */
+export function errorSummaryOf(block: ToolCallBlock, rawText?: string | null): string | null {
+  if (rowStateOf(block) !== 'error') return null
+  const text = rawText !== undefined ? rawText : resultTextOf(block)
+  return text ? text.split('\n')[0]?.trim() || null : null
+}
+
 /**
  * The frozen args string for a call block. Preparing calls carry no
  * arguments yet (`phase: 'preparing'`); started and settled calls do.
