@@ -13,6 +13,7 @@ import { useState } from 'react'
 import { Menu, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { buildInfoOf } from '../../build-info.ts'
+import { writeStatusLabel } from '../write-label.ts'
 import { connectionDiagnosisOf, type ConnectionView } from './connection.ts'
 import css from './workspace.module.css'
 
@@ -44,13 +45,7 @@ export function WorkspaceToolbar({ connection, onRefresh, t }: WorkspaceToolbarP
       ? [
           {
             id: 'write',
-            label: `${t('writeLabel')} ${
-              data.write.enabled
-                ? data.write.authorized
-                  ? t('writeAuthorizedLabel')
-                  : t('writeUnauthorizedLabel')
-                : t('writeDisabledLabel')
-            }`,
+            label: `${t('writeLabel')} ${writeStatusLabel(data.write, t)}`,
             disabled: true,
           },
         ]

@@ -19,28 +19,35 @@
 import type { Context } from '@deepseek-ai/cordis'
 // Value + type: pulls the `ctx.commands` Context merge into this program.
 import { CommandDefinitionId } from '@deepseek-ai/dsh-commands'
+import {
+  ZOTERO_STATUS_CONNECTED,
+  ZOTERO_STATUS_DISCONNECTED,
+  ZOTERO_STATUS_NOT_REPORTED,
+  ZOTERO_STATUS_SERVER_ID_UNREPORTED,
+  ZOTERO_STATUS_FIELD_VERSION,
+  ZOTERO_STATUS_FIELD_API,
+  ZOTERO_STATUS_FIELD_SCHEMA,
+  ZOTERO_STATUS_FIELD_SERVER_ID,
+  ZOTERO_STATUS_FIELD_WRITE,
+  ZOTERO_STATUS_WRITE_DISABLED,
+  ZOTERO_STATUS_WRITE_ENABLED_STORED,
+  ZOTERO_STATUS_WRITE_ENABLED_PENDING,
+} from './contract.js'
 import type { ZoteroService } from './service.js'
 import type { ZoteroStatus } from './types.js'
 
+export {
+  ZOTERO_STATUS_CONNECTED,
+  ZOTERO_STATUS_DISCONNECTED,
+  ZOTERO_STATUS_NOT_REPORTED,
+  ZOTERO_STATUS_SERVER_ID_UNREPORTED,
+  ZOTERO_STATUS_WRITE_DISABLED,
+  ZOTERO_STATUS_WRITE_ENABLED_STORED,
+  ZOTERO_STATUS_WRITE_ENABLED_PENDING,
+}
+
 /** The usage line an unknown `/zotero` subcommand is answered with. */
 export const ZOTERO_USAGE_MESSAGE = 'Usage: /zotero [status]'
-
-/** The status header when the local API answered the probe. */
-export const ZOTERO_STATUS_CONNECTED = 'Zotero local API: connected'
-
-/** The status header when Zotero could not be reached at all. */
-export const ZOTERO_STATUS_DISCONNECTED = 'Zotero local API: not connected'
-
-/** The value a status line reports when the answering build named none. */
-export const ZOTERO_STATUS_NOT_REPORTED = 'not reported'
-
-/**
- * The Server-ID line for a build that does not identify its database. Refs and
- * cursors pin to that identity, so its absence is a fact about what this
- * Zotero can support rather than a missing detail.
- */
-export const ZOTERO_STATUS_SERVER_ID_UNREPORTED =
-  'Server ID: not reported — this build does not identify its database, so refs and cursors cannot be pinned to it'
 
 /** One `Label: value` status line, degraded to {@link ZOTERO_STATUS_NOT_REPORTED}. */
 export function statusLine(label: string, value: string | undefined): string {
@@ -54,21 +61,21 @@ export function formatStatus(status: ZoteroStatus): string {
   }
   return [
     ZOTERO_STATUS_CONNECTED,
-    statusLine('Zotero version', status.zoteroVersion),
-    statusLine('API version', status.apiVersion),
-    statusLine('Schema version', status.schemaVersion),
+    statusLine(ZOTERO_STATUS_FIELD_VERSION, status.zoteroVersion),
+    statusLine(ZOTERO_STATUS_FIELD_API, status.apiVersion),
+    statusLine(ZOTERO_STATUS_FIELD_SCHEMA, status.schemaVersion),
     status.serverId === undefined
       ? ZOTERO_STATUS_SERVER_ID_UNREPORTED
-      : statusLine('Server ID', status.serverId),
+      : statusLine(ZOTERO_STATUS_FIELD_SERVER_ID, status.serverId),
     status.write === undefined
       ? undefined
       : statusLine(
-          'Write',
+          ZOTERO_STATUS_FIELD_WRITE,
           !status.write.enabled
-            ? 'disabled'
+            ? ZOTERO_STATUS_WRITE_DISABLED
             : status.write.authorized
-              ? 'enabled (key stored)'
-              : 'enabled (no key yet)',
+              ? ZOTERO_STATUS_WRITE_ENABLED_STORED
+              : ZOTERO_STATUS_WRITE_ENABLED_PENDING,
         ),
   ]
     .filter((line): line is string => line !== undefined)

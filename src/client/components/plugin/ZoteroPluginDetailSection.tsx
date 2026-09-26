@@ -4,11 +4,12 @@
  * @module dsh-zotero/client/components/plugin/ZoteroPluginDetailSection
  */
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ZoteroStatusView } from '../../remote.ts'
-import { formatDiagnosis } from './diagnosis.ts'
+import { DiagnosisBox } from '../DiagnosisBox.tsx'
+import { useZoteroProbe } from '../useZoteroProbe.ts'
 import type { PluginDetailProps } from './types.ts'
 import css from './plugin-cards.module.css'
 
@@ -20,13 +21,6 @@ export interface ZoteroPluginDetailSectionProps extends PluginDetailProps {
 interface DetailSectionBodyProps {
   readonly t: TranslateNS<'zotero'>
   readonly probe: () => Promise<RemoteResult<ZoteroStatusView>>
-}
-
-interface ProbeSummary {
-  readonly loading: boolean
-  readonly connected?: boolean
-  readonly version?: string
-  readonly diagnosis?: string
 }
 
 /**
@@ -45,43 +39,13 @@ export function ZoteroPluginDetailSection({
 }
 
 function ZoteroPluginDetailSectionBody({ t, probe }: DetailSectionBodyProps): ReactNode {
-  const [state, setState] = useState<ProbeSummary>({ loading: true })
-  // Monotonic token: only the latest probe may write, so a slow refresh
-  // cannot overwrite a newer one.
-  const probeSeq = useRef(0)
+  const { state, runProbe } = useZoteroProbe(probe, {
+    initialAutoRun: true,
+  })
 
-  const runProbe = useCallback(async (): Promise<void> => {
-    const seq = ++probeSeq.current
-    setState((prev) => ({ ...prev, loading: true }))
-    try {
-      const res = await probe()
-      if (seq !== probeSeq.current) return
-      if (res.ok && res.value.connected) {
-        setState({
-          loading: false,
-          connected: true,
-          version: res.value.zoteroVersion,
-        })
-      } else {
-        setState({
-          loading: false,
-          connected: false,
-          diagnosis: res.ok ? res.value.diagnosis : res.error.message,
-        })
-      }
-    } catch (err) {
-      if (seq !== probeSeq.current) return
-      setState({
-        loading: false,
-        connected: false,
-        diagnosis: err instanceof Error ? err.message : String(err),
-      })
-    }
-  }, [probe])
-
-  useEffect(() => {
-    void runProbe()
-  }, [runProbe])
+  const connected = state.data?.connected ?? false
+  const version = state.data?.zoteroVersion
+  const diagnosis = state.error ?? state.data?.diagnosis
 
   const tips = ['tipNoKey', 'tipFulltext', 'tipSettingsNav'] as const
 
@@ -105,24 +69,21 @@ function ZoteroPluginDetailSectionBody({ t, probe }: DetailSectionBodyProps): Re
               {state.loading ? t('checking') : t('refresh')}
             </button>
           </div>
-          <div
-            className={css.statusRow}
-            data-state={state.connected ? 'connected' : 'disconnected'}
-          >
+          <div className={css.statusRow} data-state={connected ? 'connected' : 'disconnected'}>
             <span>
               {state.loading
                 ? `● ${t('checking')}`
-                : state.connected
+                : connected
                   ? `● ${t('statusConnectedNote')}`
                   : `○ ${t('statusUnavailable')}`}
             </span>
           </div>
-          {state.version ? (
+          {version ? (
             <p className={css.statusDetail}>
-              {t('zoteroVersionLabel')}: {state.version}
+              {t('zoteroVersionLabel')}: {version}
             </p>
           ) : null}
-          {state.diagnosis ? <DiagnosisBox diagnosis={state.diagnosis} t={t} /> : null}
+          {diagnosis ? <DiagnosisBox diagnosis={diagnosis} t={t} /> : null}
         </div>
 
         <div className={css.card}>
@@ -140,24 +101,5 @@ function ZoteroPluginDetailSectionBody({ t, probe }: DetailSectionBodyProps): Re
         </div>
       </div>
     </section>
-  )
-}
-
-function DiagnosisBox({
-  diagnosis,
-  t,
-}: {
-  readonly diagnosis: string
-  readonly t: TranslateNS<'zotero'>
-}): ReactNode {
-  const formatted = formatDiagnosis(diagnosis, t)
-  return (
-    <div className={css.diagnosisBox}>
-      <div className={css.diagnosisHead}>
-        <span className={css.diagnosisLabelText}>{t('diagnosisLabel')}:</span>
-        {formatted.rawCode ? <code className={css.diagnosisCode}>{formatted.rawCode}</code> : null}
-      </div>
-      <p className={css.diagnosisMessage}>{formatted.message}</p>
-    </div>
   )
 }

@@ -99,3 +99,32 @@ export function zoteroStatusInvocation(
     result,
   }
 }
+
+/** The status header when the local API answered the probe. */
+export const ZOTERO_STATUS_CONNECTED = 'Zotero local API: connected'
+
+/** The status header when Zotero could not be reached at all. */
+export const ZOTERO_STATUS_DISCONNECTED = 'Zotero local API: not connected'
+
+/** The value a status line reports when the answering build named none. */
+export const ZOTERO_STATUS_NOT_REPORTED = 'not reported'
+
+/**
+ * The Server-ID line for a build that does not identify its database. Refs and
+ * cursors pin to that identity, so its absence is a fact about what this
+ * Zotero can support rather than a missing detail.
+ */
+export const ZOTERO_STATUS_SERVER_ID_UNREPORTED =
+  'Server ID: not reported — this build does not identify its database, so refs and cursors cannot be pinned to it'
+
+/** Status line field labels shared between host formatting and client parsing. */
+export const ZOTERO_STATUS_FIELD_VERSION = 'Zotero version'
+export const ZOTERO_STATUS_FIELD_API = 'API version'
+export const ZOTERO_STATUS_FIELD_SCHEMA = 'Schema version'
+export const ZOTERO_STATUS_FIELD_SERVER_ID = 'Server ID'
+export const ZOTERO_STATUS_FIELD_WRITE = 'Write'
+
+/** Canonical status values for the Write field. */
+export const ZOTERO_STATUS_WRITE_DISABLED = 'disabled'
+export const ZOTERO_STATUS_WRITE_ENABLED_STORED = 'enabled (key stored)'
+export const ZOTERO_STATUS_WRITE_ENABLED_PENDING = 'enabled (no key yet)'

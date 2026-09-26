@@ -161,49 +161,6 @@
   margin: 0;
 }
 
-.diagnosisBox {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 8px 10px;
-  border-radius: var(--dsw-radius-md);
-  background: var(--dsw-alias-bg-layer-3);
-  border: 0.5px solid var(--dsw-alias-border-l2);
-  margin-top: 4px;
-}
-
-.diagnosisHead {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.diagnosisLabelText {
-  font-size: 11px;
-  line-height: 16px;
-  font-weight: 600;
-  color: var(--dsw-alias-label-secondary);
-}
-
-.diagnosisCode {
-  font-family: var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
-  font-size: 10px;
-  line-height: 14px;
-  padding: 1px 4px;
-  border-radius: var(--dsw-radius-sm);
-  background: var(--dsw-alias-bg-layer-4);
-  color: var(--dsw-alias-state-warn-label);
-}
-
-.diagnosisMessage {
-  margin: 0;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--dsw-alias-label-primary);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
 .tipList {
   margin: 0;
   padding: 0;
