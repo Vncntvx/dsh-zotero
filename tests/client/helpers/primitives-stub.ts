@@ -206,7 +206,7 @@ export function interactiveMenu({
  */
 export function primitivesStub(overrides: Partial<PrimitivesStub> = {}): PrimitivesStub {
   return {
-    StateDot: ({ state }) => createElement('span', { 'data-dot': state }),
+    StateDot: ({ state }) => createElement('span', { 'data-state': state }),
     Pill: ({ active, children, ...rest }) =>
       createElement(
         'button',

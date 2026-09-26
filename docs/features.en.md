@@ -126,6 +126,13 @@ When running `/zotero` (or `/zotero status`) in the chat composer, command execu
 - **Live re-probe action**: An inline "Refresh" button at the bottom of the expanded card triggers an immediate local probe to update all telemetry fields, with a yellow indicator during probing, without needing to retype the command;
 - **Offline diagnosis & guidance**: When disconnected or encountering errors, expanding the card displays actionable diagnosis hints (checking whether Zotero Desktop is running, verifying the local API toggle in Advanced preferences, etc.) and falls back to raw text for non-standard output.
 
+## Plugin Management & Activation Guidance
+
+dsh-zotero integrates deeply with the Harness Plugin Manager slots:
+
+- **Activation Guidance (`plugins.bundle.activation`)**: When enabling the plugin in the Plugins list or clicking "Enable Now" after installation, an onboarding modal pops up automatically. It runs live connectivity diagnostics and clearly explains how to enable "Allow other applications on this computer to communicate with Zotero" in Zotero Preferences → Advanced to avoid 403 errors, offering one-click "Check Again" and direct navigation to "Open Details";
+- **Quick Config & Status Section (`plugins.bundle.config` / `plugins.detail.section`)**: Provides quick switches on the plugin detail page for the Sources panel and write permission risk confirmation, alongside persistent API diagnostics and quick tips.
+
 ## Session Sources panel
 
 The dsh web Zotero tab contains three sub-views:

@@ -238,6 +238,7 @@ describe('the browser-half entry', () => {
       'tool.call.toolview',
       'conversation.chat.node',
       'settings.section',
+      'plugins.bundle.activation',
       'plugins.bundle.config',
       'plugins.detail.section',
       'conversation.chat.commandview',
@@ -260,6 +261,59 @@ describe('the browser-half entry', () => {
       hooks: { zoteroCard: unknown }
     }
     expect(pageInject().hooks.zoteroCard).toBeDefined()
+  })
+
+  it('injects the activation guide into the plugins.bundle.activation slot', () => {
+    const world = fakeWorld()
+    apply(world.ctx as Context)
+
+    const entry = world.injected.find((e) => e.name === 'plugins.bundle.activation')
+    expect(entry).toBeDefined()
+    expect(entry?.register()).toBeDefined()
+
+    const guide = world.registered.find((e) => e.name === 'plugins.bundle.activation')
+    expect(guide?.options.key).toBe('dsh-zotero')
+    expect(typeof guide?.component).toBe('function')
+    const guideInject = (
+      guide?.options.inject as () => { probe: () => Promise<unknown>; t: unknown }
+    )()
+    expect(typeof guideInject.probe).toBe('function')
+    expect(typeof guideInject.t).toBe('function')
+  })
+
+  it('deduplicates concurrent in-flight probe calls sharing the same remote request', async () => {
+    const world = fakeWorld()
+    let statusCallCount = 0
+    let resolveStatus!: (res: unknown) => void
+    world.status = () =>
+      new Promise((resolve) => {
+        statusCallCount += 1
+        resolveStatus = resolve
+      })
+    apply(world.ctx as Context)
+    await settleMount(world)
+
+    const guideEntry = world.injected.find((e) => e.name === 'plugins.bundle.activation')
+    guideEntry?.register()
+    const guide = world.registered.find((e) => e.name === 'plugins.bundle.activation')
+    const guideInject = (
+      guide?.options.inject as () => { probe: () => Promise<unknown>; t: unknown }
+    )()
+
+    const task1 = guideInject.probe()
+    const task2 = guideInject.probe()
+
+    expect(task1).toBe(task2)
+    expect(statusCallCount).toBe(1)
+
+    resolveStatus({ ok: true, value: { connected: true, diagnosis: 'ok' } })
+    await Promise.all([task1, task2])
+
+    const task3 = guideInject.probe()
+    expect(task3).not.toBe(task1)
+    expect(statusCallCount).toBe(2)
+    resolveStatus({ ok: true, value: { connected: true, diagnosis: 'ok' } })
+    await task3
   })
 
   it('injects the bundle quick config into the plugins.bundle.config slot', () => {
@@ -442,6 +496,7 @@ describe('the browser-half entry', () => {
       'tool.call.toolview',
       'conversation.chat.node',
       'settings.section',
+      'plugins.bundle.activation',
       'plugins.bundle.config',
       'plugins.detail.section',
       'conversation.chat.commandview',

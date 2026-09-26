@@ -25,7 +25,7 @@ Token budget for the conversation:
 
 ## Preparation
 
-Prerequisites: Zotero Desktop is running and the local API is enabled. The library should include several items, at least one item with PDF annotations or child notes, at least one collection, and some tags. In the session, `/zotero` (or the equivalent `/zotero status`) should report `connected`.
+Prerequisites: Zotero Desktop is running and the local API is enabled. The library should include several items, at least one item with PDF annotations or child notes, at least one collection, and some tags. When enabling the plugin in the Plugins list, observe the activation guidance modal; its self-check should show a green ready state and display the local version. In the session, `/zotero` (or the equivalent `/zotero status`) should report `connected`.
 
 Before the W cases, enable “Allow writes” in the settings page (off by default). The whole W group can be skipped. After the golden path, observe the dedicated tool call cards generated in each step (item title/year badges, highlighted evidence passages, BibTeX export cards, etc.) and check the three pages of the Zotero tab (Literature / Passages / Exports).
 

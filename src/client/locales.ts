@@ -61,6 +61,19 @@ export type ZoteroLocaleKey =
   | 'quickConfigTitle'
   | 'quickConfigHint'
   | 'detailSectionTitle'
+  | 'activationTitle'
+  | 'activationClose'
+  | 'activationDescription'
+  | 'activationStep1'
+  | 'activationStep2'
+  | 'activationStep2Note'
+  | 'activationStatusLabel'
+  | 'activationReady'
+  | 'activationReadyVersion'
+  | 'activationLater'
+  | 'activationDetails'
+  | 'activationDone'
+  | 'activationCheckAgain'
   | 'tipsLabel'
   | 'tipNoKey'
   | 'tipFulltext'
@@ -338,6 +351,22 @@ export const en: Record<ZoteroLocaleKey, string> = {
   quickConfigTitle: 'Quick settings',
   quickConfigHint: 'Toggle the core Zotero features here. Full settings live in Settings → Zotero.',
   detailSectionTitle: 'Service status & quick start',
+  activationTitle: 'Enable Zotero Plugin',
+  activationClose: 'Close guidance',
+  activationDescription:
+    'Before letting agents search and cite your library, please make sure your local environment is ready:',
+  activationStep1: 'Ensure local Zotero app (v7+) is running.',
+  activationStep2:
+    'In Zotero Settings → Advanced, check "Allow other applications on this computer to communicate with Zotero".',
+  activationStep2Note:
+    'Leaving this unchecked causes HTTP 403 Forbidden errors when connecting to the local API.',
+  activationStatusLabel: 'Connection status',
+  activationReady: 'Connected to local Zotero. Ready to use!',
+  activationReadyVersion: 'Connected to local Zotero ({version}). Ready to use!',
+  activationLater: 'Later',
+  activationDetails: 'Open Details',
+  activationDone: 'Done',
+  activationCheckAgain: 'Check Again',
   tipsLabel: 'Quick tips',
   tipNoKey: 'No API key needed: it talks to the Zotero app on this computer.',
   tipFulltext: 'Full-text search: index PDFs in Zotero so the agent can quote real passages.',
@@ -605,6 +634,20 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   quickConfigTitle: '常用快速设置',
   quickConfigHint: '在此快速开关核心功能。完整配置请前往 [设置 -> Zotero]。',
   detailSectionTitle: '服务状态与使用指南',
+  activationTitle: '启用 Zotero 插件',
+  activationClose: '关闭新手引导',
+  activationDescription: '在让智能体检索和引用本地文献库前，请确保完成以下准备工作：',
+  activationStep1: '确保本地 Zotero 客户端 (v7+) 处于运行状态。',
+  activationStep2:
+    '在 Zotero 的 [设置 -> 高级] 中勾选“允许此计算机上的其他应用程序与 Zotero 通信”。',
+  activationStep2Note: '若未勾选此项，本地 API 请求将直接返回 403 权限受阻错误。',
+  activationStatusLabel: '连通性自检',
+  activationReady: '已连接到本地 Zotero，服务就绪！',
+  activationReadyVersion: '已连接到本地 Zotero ({version})，服务就绪！',
+  activationLater: '稍后设置',
+  activationDetails: '前往配置详情',
+  activationDone: '完成',
+  activationCheckAgain: '重新检测',
   tipsLabel: '使用小贴士',
   tipNoKey: '免配 API Key：直接与本机 Zotero 通信，数据不经过云端。',
   tipFulltext: '全文检索：在 Zotero 中为 PDF 建立索引后，智能体可引用原文片段。',

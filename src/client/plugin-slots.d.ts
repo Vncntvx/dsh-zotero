@@ -11,8 +11,10 @@ import type {
   ToolResultNode,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {
+  PluginActivationOwnerProps,
   PluginConfigViewProps,
   PluginDetailProps,
+  ZoteroActivationGuideFace,
   ZoteroBundleQuickConfigFace,
   ZoteroDetailSectionFace,
 } from './components/plugin/types.ts'
@@ -37,6 +39,12 @@ export type ZoteroToolCallOwnerProps = ZoteroToolCallCommonProps & ZoteroToolCal
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
+    'plugins.bundle.activation': {
+      kind: 'keyed'
+      scope: 'root'
+      owner: PluginActivationOwnerProps
+      inject: ZoteroActivationGuideFace
+    }
     'plugins.bundle.config': {
       kind: 'keyed'
       scope: 'root'

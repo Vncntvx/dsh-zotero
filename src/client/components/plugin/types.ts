@@ -41,7 +41,20 @@ export interface ZoteroBundleQuickConfigFace {
   readonly t: TranslateNS<'zotero'>
 }
 
-export interface ZoteroDetailSectionFace {
+export interface ZoteroProbeFace {
   readonly t: TranslateNS<'zotero'>
   readonly probe: () => Promise<RemoteResult<ZoteroStatusView>>
+}
+
+export type ZoteroDetailSectionFace = ZoteroProbeFace
+export type ZoteroActivationGuideFace = ZoteroProbeFace
+
+/**
+ * Mirrored locally from upstream `@deepseek-ai/dsh-client-ui-plugin-manager` (slot-contract.ts)
+ * to avoid pulling in the full ui-plugin-manager package into client dependencies.
+ */
+export interface PluginActivationOwnerProps {
+  readonly packageName: string
+  readonly onDismiss: () => void
+  readonly onOpenDetails: () => void
 }

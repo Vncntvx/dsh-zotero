@@ -54,6 +54,8 @@ dsh plugin --profile <profile-name> add ./dsh-zotero-*.tgz
 
 After installing, the plugin mounts as `zotero` and takes effect on the next dsh startup. If the current session was created before the plugin loaded, start a new session after installation.
 
+When enabling the plugin in Harness's Plugins list (or clicking "Enable Now" after installation), a guidance modal appears automatically. It tests connectivity to local Zotero and guides you to enable the local API in Zotero preferences to avoid 403 Forbidden errors.
+
 ## Verify the connection
 
 In the composer (a brand-new session is fine; the result appears in the conversation), run:

@@ -45,9 +45,10 @@ import { SourcesTab, type SourcesTabFace } from './components/SourcesTab.tsx'
 import { ZOTERO_REMOTE } from './remote.ts'
 import type { ZoteroRemoteFace } from './remote.ts'
 import { ZoteroCardController } from './zotero-card-controller.ts'
-import type { ZoteroStatusView } from '../contract.ts'
+import { ZOTERO_REMOTE_PACKAGE, type ZoteroStatusView } from '../contract.ts'
 import { ZOTERO_SETTINGS_NAMESPACE } from '../settings-namespace.ts'
 import type {} from './plugin-slots.d.ts'
+import { ZoteroActivationGuide } from './components/plugin/ZoteroActivationGuide.tsx'
 import { ZoteroBundleQuickConfig } from './components/plugin/ZoteroBundleQuickConfig.tsx'
 import { ZoteroPluginDetailSection } from './components/plugin/ZoteroPluginDetailSection.tsx'
 import { registerZoteroToolviews } from './toolviews/index.ts'
@@ -152,18 +153,40 @@ export function apply(ctx: ClientContext): void {
   // service exists. The tab never waits on either outcome, because its Sources
   // workspace reads the session's own tool calls.
   let mountState = 'mount not attempted'
-  const probe = async (): Promise<RemoteResult<ZoteroStatusView>> => {
+  let inFlightProbe: Promise<RemoteResult<ZoteroStatusView>> | undefined
+  const probe = (): Promise<RemoteResult<ZoteroStatusView>> => {
+    if (inFlightProbe !== undefined) return inFlightProbe
     const face = mountedNamespace(ctx)
-    if (face !== undefined) return face.status()
-    throw new Error(`dsh-zotero: the zotero Remote namespace is not mounted (${mountState})`)
+    if (face === undefined) {
+      return Promise.reject(
+        new Error(`dsh-zotero: the zotero Remote namespace is not mounted (${mountState})`),
+      )
+    }
+    const task = face.status().finally(() => {
+      if (inFlightProbe === task) inFlightProbe = undefined
+    })
+    inFlightProbe = task
+    return task
   }
+
+  // Guidance modal on plugin activation (plugins.bundle.activation)
+  ctx.slots.inject('plugins.bundle.activation', () =>
+    ctx.slots.register(
+      {
+        name: 'plugins.bundle.activation',
+        key: ZOTERO_REMOTE_PACKAGE,
+        inject: () => ({ t, probe }),
+      },
+      ZoteroActivationGuide,
+    ),
+  )
 
   // Quick toggles in the plugin manager detail page (plugins.bundle.config)
   ctx.slots.inject('plugins.bundle.config', () =>
     ctx.slots.register(
       {
         name: 'plugins.bundle.config',
-        key: 'dsh-zotero',
+        key: ZOTERO_REMOTE_PACKAGE,
         inject: () => ({ form, t }),
       },
       ZoteroBundleQuickConfig,
