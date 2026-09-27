@@ -54,6 +54,7 @@ describe('client graph authority', () => {
         'src/json.ts',
         'src/ref-grammar.ts',
         'src/export-items.ts',
+        'src/browse-rows.ts',
         'node_modules/react/index.js',
       ]),
     )

@@ -18,14 +18,16 @@
  * - Shared pure surfaces both halves already use: wire identity (`contract`),
  *   settings wire name (`settings-namespace`), JSON guards (`json`), the
  *   `zotero://` ref grammar (`ref-grammar`), export-key grammar
- *   (`export-items`).
+ *   (`export-items`), the changes projection contract (`changes-contract`),
+ *   and the browse row classification (`browse-rows`) the
+ *   model-facing render and the Chat card both read their rows through.
  *
  * Host codecs, the Typert manifest, the host Remote service, providers, tools,
  * and the HTTP stack must never enter this graph. A new shared module joins
  * this list deliberately and must stay free of host authority.
  */
 export const CLIENT_SAFE_LOCAL =
-  /^src\/(?:client(?:\/|$)|contract\.(?:ts|js|mjs|cjs)$|settings-namespace\.(?:ts|js|mjs|cjs)$|json\.(?:ts|js|mjs|cjs)$|ref-grammar\.(?:ts|js|mjs|cjs)$|export-items\.(?:ts|js|mjs|cjs)$)/
+  /^src\/(?:client(?:\/|$)|contract\.(?:ts|js|mjs|cjs)$|settings-namespace\.(?:ts|js|mjs|cjs)$|json\.(?:ts|js|mjs|cjs)$|ref-grammar\.(?:ts|js|mjs|cjs)$|export-items\.(?:ts|js|mjs|cjs)$|changes-contract\.(?:ts|js|mjs|cjs)$|browse-rows\.(?:ts|js|mjs|cjs)$)/
 
 /**
  * Packages the host half owns. Boundary schema materialization (zod for the

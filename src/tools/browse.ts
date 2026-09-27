@@ -17,7 +17,7 @@ import {
 import { withConnectivityAsk } from '../ask.js'
 import { boundedPresentationMeta } from '../presentation-meta.js'
 import { metaRecordOf } from './present.js'
-import { asRecord } from '../json.js'
+import { browseRowOf, BROWSE_KINDS, type BrowseRow } from '../browse-rows.js'
 import { assertIntInRange, assertNonBlank, invalid, parseLibrary } from './validate.js'
 import {
   ITEM_FIELDS_ITEM_TYPE_MESSAGE,
@@ -30,15 +30,6 @@ import {
 } from '../local/browse-domain.js'
 import type { ZoteroService } from '../service.js'
 import type { SupportedLocalLibrary, ZoteroBrowseKind, ZoteroBrowseRequest } from '../types.js'
-
-const BROWSE_KINDS: readonly ZoteroBrowseKind[] = [
-  'libraries',
-  'collections',
-  'savedSearches',
-  'tags',
-  'itemTypes',
-  'itemFields',
-]
 
 const BROWSE_PARAMETERS = {
   kind: {
@@ -326,41 +317,47 @@ export function browseMoreMessage(nextOffset: number): string {
   return `More: browse again with offset ${nextOffset}`
 }
 
+/** One rendered row line, plus the continuation line only libraries need. */
+function browseRowLines(index: number, row: BrowseRow): string[] {
+  const n = index + 1
+  switch (row.kind) {
+    case 'library':
+      return [`${n}. ${row.name} — ${row.libraryId}`, `   library=${row.libraryId}`]
+    case 'collection': {
+      // The full breadcrumb is the useful line, not just the leaf name.
+      const breadcrumb = row.breadcrumb.join(' / ')
+      return [`${n}. ${breadcrumb}${row.ref === '' ? '' : ` — ${row.ref}`}`]
+    }
+    case 'savedSearch':
+      return [
+        `${n}. ${row.name}${row.conditionCount === null ? '' : ` — ${row.conditionCount} conditions`}${
+          row.ref === '' ? '' : ` — ${row.ref}`
+        }`,
+      ]
+    case 'tag':
+      return [`${n}. ${row.tag}${row.count === null ? '' : ` — ${row.count} items`}`]
+    case 'itemType':
+      return [`${n}. ${row.itemType}${row.localized === null ? '' : ` (${row.localized})`}`]
+    case 'field':
+      return [`${n}. field ${row.field}${row.localized === null ? '' : ` (${row.localized})`}`]
+    case 'creatorType':
+      return [
+        `${n}. creatorType ${row.creatorType}${row.localized === null ? '' : ` (${row.localized})`}`,
+      ]
+  }
+}
+
+/**
+ * The browse listing the model reads. The header states the page and the
+ * total, each row follows `browseRowOf`'s classification, and a further page
+ * closes with the offset to pass back. Row wording is this function's own;
+ * which row is which is `browse-rows.ts`'s, shared with the Chat card.
+ */
 export function renderBrowse(_args: BrowseArgs, value: BrowseOutput): ContentBlock[] {
   const lines = [`${value.kind}: ${value.returned} of ${value.total}`]
-  const items = value.items as Array<Record<string, unknown>>
-  items.forEach((it, idx) => {
-    const n = idx + 1
-    const lib = asRecord(it.library)
-    if (lib !== undefined) {
-      const libId = `${lib.type}/${lib.id}`
-      const name = (it.name as string | undefined) ?? libId
-      lines.push(`${n}. ${name} — ${libId}`)
-      lines.push(`   library=${libId}`)
-    } else if (Array.isArray(it.path)) {
-      // Collections: the full breadcrumb is the useful line, not just the leaf name.
-      const breadcrumb = (it.path as unknown[]).map(String).join(' / ')
-      const ref = (it.ref as string | undefined) ?? ''
-      lines.push(`${n}. ${breadcrumb}${ref ? ` — ${ref}` : ''}`)
-    } else if (typeof it.tag === 'string') {
-      const count = typeof it.count === 'number' ? ` — ${it.count} items` : ''
-      lines.push(`${n}. ${it.tag}${count}`)
-    } else if (typeof it.itemType === 'string') {
-      const localized = typeof it.localized === 'string' ? ` (${it.localized})` : ''
-      lines.push(`${n}. ${it.itemType}${localized}`)
-    } else if (typeof it.field === 'string') {
-      const localized = typeof it.localized === 'string' ? ` (${it.localized})` : ''
-      lines.push(`${n}. field ${it.field}${localized}`)
-    } else if (typeof it.creatorType === 'string') {
-      const localized = typeof it.localized === 'string' ? ` (${it.localized})` : ''
-      lines.push(`${n}. creatorType ${it.creatorType}${localized}`)
-    } else {
-      const conditions = Array.isArray(it.conditions) ? ` — ${it.conditions.length} conditions` : ''
-      const name =
-        (it.name as string | undefined) ?? (it.ref as string | undefined) ?? JSON.stringify(it)
-      const ref = (it.ref as string | undefined) ?? ''
-      lines.push(`${n}. ${name}${conditions}${ref ? ` — ${ref}` : ''}`)
-    }
+  const items = value.items as readonly unknown[]
+  items.forEach((item, index) => {
+    lines.push(...browseRowLines(index, browseRowOf(item)))
   })
   if (value.nextOffset !== undefined) lines.push(browseMoreMessage(value.nextOffset))
   return [{ type: 'text', text: lines.join('\n') }]

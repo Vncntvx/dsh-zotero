@@ -24,8 +24,22 @@ export function asString(value: unknown): string | undefined {
 
 /** String entries of an array-shaped field; anything else yields nothing. */
 export function stringArrayOf(value: unknown): string[] {
-  if (!Array.isArray(value)) return []
-  return value.filter((entry): entry is string => typeof entry === 'string')
+  return asStringArray(value) ?? []
+}
+
+/**
+ * String entries of an array-shaped field, or undefined when the field is not
+ * an array at all. The strict form matters wherever a field's *presence*
+ * classifies a value rather than merely contributing to it — a browse row is
+ * a collection because it carries `path`, and an empty `path` is still a
+ * collection, so "no entries" and "not an array" cannot collapse.
+ * @param value - candidate value to test.
+ * @returns the string entries, or undefined when the value is not an array.
+ */
+export function asStringArray(value: unknown): string[] | undefined {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === 'string')
+    : undefined
 }
 
 /** True only for a finite, non-negative safe integer carried as a JSON number. */
