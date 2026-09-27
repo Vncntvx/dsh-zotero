@@ -19,6 +19,10 @@ import {
 export const zoteroStatusSchema = z
   .object({
     providerId: z.string(),
+    // Optional on the wire because a service that is not composed dialled
+    // nothing; required of every answer that reached a provider, which is what
+    // `ZoteroStatus` (the provider's own record) carries.
+    endpoint: z.string().optional(),
     connected: z.boolean(),
     apiVersion: z.string().optional(),
     serverId: z.string().optional(),

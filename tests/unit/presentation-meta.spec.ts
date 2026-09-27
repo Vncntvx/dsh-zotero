@@ -1,7 +1,8 @@
 /**
- * Card-sized presentation projections: logical caps per tool, provenance
- * honesty (fulltext never gains a page locator), the UTF-8 byte budget with
- * multibyte boundaries, and the detail-dropping overflow behavior.
+ * Card-sized presentation projections: logical caps per tool and provenance
+ * honesty (fulltext never gains a page locator). The shared UTF-8 byte budget
+ * they all pass through has its own spec
+ * (`tests/unit/presentation-budget.spec.ts`).
  * @module tests/presentation-meta
  */
 
@@ -10,11 +11,8 @@ import type { ZoteroItemDetail, ZoteroRetrieveResult, ZoteroSearchResult } from 
 import {
   MAX_PRESENTATION_EVIDENCE_CHARS,
   MAX_PRESENTATION_GET_VENUE_CHARS,
-  MAX_PRESENTATION_META_BYTES,
   MAX_PRESENTATION_SEARCH_ROWS,
   MAX_PRESENTATION_SEARCH_ROWS_BYTES,
-  boundedPresentationMeta,
-  presentationMetaBytes,
   projectAttachmentMeta,
   projectExportMeta,
   projectGetMeta,
@@ -398,6 +396,37 @@ describe('projectRetrieveMeta', () => {
     expect(meta.items[2]!.pageLabel).toBeUndefined()
   })
 
+  it("carries which of an annotation's two fields carried the query", () => {
+    const meta = projectRetrieveMeta(
+      retrieveResult({
+        evidence: [
+          {
+            source: 'annotation',
+            sourceRef: 'zotero://user/0/annotation/ANN000001',
+            text: 'the annotator disagrees',
+            comment: 'this is only in the margin',
+            matchedFields: ['comment'],
+          },
+          {
+            source: 'annotation',
+            sourceRef: 'zotero://user/0/annotation/ANN000002',
+            text: 'the paper says it',
+            matchedFields: ['text'],
+          },
+          // A single-field source never reports matchedFields, and the
+          // projection must not invent an empty list for it.
+          { source: 'note', sourceRef: 'zotero://user/0/item/NOTE0001', text: 'my note' },
+        ],
+        truncated: false,
+        sourcesSkipped: [],
+      }),
+      ['annotation', 'note'],
+    )
+    expect(meta.items[0]!.matchedFields).toEqual(['comment'])
+    expect(meta.items[1]!.matchedFields).toEqual(['text'])
+    expect(meta.items[2]!.matchedFields).toBeUndefined()
+  })
+
   it('records per-source availability from the requested list', () => {
     const meta = projectRetrieveMeta(
       retrieveResult({
@@ -447,6 +476,10 @@ describe('projectRetrieveMeta', () => {
     expect(meta.items).toHaveLength(4)
     expect(meta.items[0]!.preview).toHaveLength(MAX_PRESENTATION_EVIDENCE_CHARS)
     expect(meta.items[0]!.previewTruncated).toBe(true)
+    // `count` stays the call's own total, not the cap: the Chat card states it
+    // in the collapsed line and derives the omitted number from it, so a `count`
+    // that tracked the cap would make the card claim it had found everything.
+    expect(meta.count).toBe(6)
   })
 })
 
@@ -628,62 +661,5 @@ describe('projectExportMeta', () => {
       refs: REFS,
       refsOmitted: 0,
     })
-  })
-})
-
-describe('boundedPresentationMeta', () => {
-  it('passes non-object inputs through untouched', () => {
-    expect(boundedPresentationMeta(null, ['items'])).toBeNull()
-    expect(boundedPresentationMeta('plain', ['items'])).toBe('plain')
-    expect(boundedPresentationMeta([1], ['items'])).toEqual([1])
-  })
-
-  it('keeps a projection inside the byte budget unchanged', () => {
-    const meta = { count: 1, items: [] }
-    expect(boundedPresentationMeta(meta, ['items'])).toEqual(meta)
-  })
-
-  it('measures UTF-8 bytes, not code units', () => {
-    // 3000 中文字符 = 9000 UTF-8 bytes but only 3000 code units.
-    const meta = { count: 1, items: [{ preview: '批'.repeat(3000) }] }
-    expect(presentationMetaBytes(meta)).toBeGreaterThan(MAX_PRESENTATION_META_BYTES)
-  })
-
-  it('drops exactly the detail keys on overflow and records detailOmitted', () => {
-    const filler = 'x'.repeat(MAX_PRESENTATION_META_BYTES)
-    const meta = {
-      count: 3,
-      title: 'kept',
-      items: [{ preview: filler }],
-      notesPreview: [{ preview: filler }],
-    }
-    const bounded = boundedPresentationMeta(meta, ['items', 'notesPreview'])
-    expect(bounded).toEqual({ detailOmitted: true, count: 3, title: 'kept' })
-  })
-
-  it('drops the export items and refs wholesale when the projection overflows', () => {
-    const filler = 'x'.repeat(MAX_PRESENTATION_META_BYTES)
-    const meta = projectExportMeta(
-      {
-        format: 'bibtex',
-        text: 'raw',
-        items: [{ ref: 'zotero://user/0/item/AAAAAAA1', key: 'a1', title: filler, start: 0 }],
-      },
-      ['zotero://user/0/item/AAAAAAA1'],
-    )
-    const bounded = boundedPresentationMeta(meta, ['refs', 'items'])
-    expect(bounded).toEqual({ detailOmitted: true, format: 'bibtex', requested: 1, refsOmitted: 0 })
-  })
-
-  it('honors the byte budget at the exact boundary', () => {
-    // Size the payload against the measured envelope so the fit is exact.
-    const envelope = Buffer.byteLength(JSON.stringify({ count: 1, title: '' }), 'utf8')
-    const slack = MAX_PRESENTATION_META_BYTES - envelope
-    const exact = { count: 1, title: 't'.repeat(slack) }
-    expect(presentationMetaBytes(exact)).toBe(MAX_PRESENTATION_META_BYTES)
-    expect(boundedPresentationMeta(exact, [])).toEqual(exact)
-    const over = { count: 1, title: 't'.repeat(slack + 1) }
-    // No detail keys were declared, so the overflow keeps every fact and only records the flag.
-    expect(boundedPresentationMeta(over, [])).toEqual({ detailOmitted: true, ...over })
   })
 })

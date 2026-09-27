@@ -56,3 +56,42 @@ export function openVerdictOf(item: SourceItem): OpenVerdict {
       return 'unverified'
   }
 }
+
+/** The two deep links one Zotero child row can offer. */
+export interface ChildRowLinks {
+  /** Open the row itself — a note or an annotation — in Zotero. */
+  readonly selectUrl: string | null
+  /**
+   * Open the PDF it lives in, at its page. Only an annotation's parent is a PDF;
+   * a note's parent is the item the card is already about, so it gets none.
+   */
+  readonly pdfUrl: string | null
+}
+
+/**
+ * The links one child row supports. An annotation is only reachable *through*
+ * its PDF, so that is the link worth offering for it; a note or an attachment
+ * opens on its own. The `zotero_children` card and the `zotero_get` card's
+ * previews both read their rows through here, so the two cannot disagree about
+ * what a given row can link to — including which parent is a PDF.
+ */
+export interface ChildLinkRow {
+  readonly ref: string
+  /** The row's parent, when the projection reported one. */
+  readonly parentRef?: string | null
+  /** The page the row sits on, for the PDF deep link. */
+  readonly pageLabel?: string | null
+  /** `annotation` means the parent is the PDF the annotation lives in. */
+  readonly kind?: string
+}
+
+export function childRowLinks(row: ChildLinkRow): ChildRowLinks {
+  const inPdf = row.kind === 'annotation'
+  return {
+    selectUrl: selectUrlOf(row.ref),
+    pdfUrl:
+      inPdf && row.parentRef != null
+        ? pdfUrlOf(row.parentRef, { page: row.pageLabel ?? undefined })
+        : null,
+  }
+}

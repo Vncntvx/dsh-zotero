@@ -10,7 +10,6 @@ export interface ZoteroProbeState {
 
 export interface UseZoteroProbeOptions {
   readonly initialAutoRun?: boolean
-  readonly initialLoading?: boolean
 }
 
 export interface UseZoteroProbeReturn {
@@ -22,9 +21,14 @@ export interface UseZoteroProbeReturn {
  * Shared hook to manage live Zotero connectivity probe state.
  *
  * Provides:
- * - In-flight guard to prevent multiple concurrent probes on rapid clicks.
- * - Monotonic sequence token so slow responses cannot overwrite newer ones.
- * - Unmount safety so asynchronous probe resolution never calls setState on an unmounted component.
+ * - An in-flight guard, so rapid clicks never stack probes. It is the only
+ *   concurrency mechanism here: a second call returns before it can start, so
+ *   there is never a second response to race the first.
+ * - Unmount safety, so an asynchronous probe resolution never calls setState on
+ *   an unmounted component. This one cannot be pinned by a test: React 18
+ *   removed the setState-on-unmounted warning, so a late resolution is
+ *   unobservable from outside the component. The guard is kept because it is
+ *   right, not because a spec proves it.
  * - Full ZoteroStatusView data preservation so all telemetry fields can update live.
  */
 export function useZoteroProbe(
@@ -32,12 +36,11 @@ export function useZoteroProbe(
   options?: UseZoteroProbeOptions,
 ): UseZoteroProbeReturn {
   const [state, setState] = useState<ZoteroProbeState>({
-    loading: options?.initialLoading ?? options?.initialAutoRun ?? false,
+    loading: options?.initialAutoRun ?? false,
   })
 
   const inFlightRef = useRef(false)
   const unmountedRef = useRef(false)
-  const probeSeq = useRef(0)
 
   useEffect(() => {
     unmountedRef.current = false
@@ -49,12 +52,11 @@ export function useZoteroProbe(
   const runProbe = useCallback(async (): Promise<void> => {
     if (!probe || inFlightRef.current) return
     inFlightRef.current = true
-    const seq = ++probeSeq.current
     setState((prev) => ({ ...prev, loading: true }))
 
     try {
       const res = await probe()
-      if (unmountedRef.current || seq !== probeSeq.current) return
+      if (unmountedRef.current) return
       if (res.ok) {
         setState({
           loading: false,
@@ -68,7 +70,7 @@ export function useZoteroProbe(
         })
       }
     } catch (err) {
-      if (unmountedRef.current || seq !== probeSeq.current) return
+      if (unmountedRef.current) return
       setState({
         loading: false,
         error: err instanceof Error ? err.message : String(err),

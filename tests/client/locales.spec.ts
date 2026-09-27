@@ -105,6 +105,18 @@ describe('locale bundles', () => {
       // The copy pass: the cross-source board's defensive scope note left
       // the page — the cards carry their own facts.
       'evidenceScopeNote',
+      // `zotero_browse`'s only label parameter is `kind`; the card read a
+      // `category` argument the tool has never had, so every browse row was
+      // captioned "items". The `{count}` it interpolated came from counting
+      // text lines, which no browse kind emits one-per-item.
+      'toolSummaryBrowse',
+      // Three cards report a bounded listing, and they had drifted into three
+      // spellings of "N of M" with five locale keys between them. One
+      // `countOfReturned` now backs all of them.
+      'toolChildCount',
+      'toolChildCountTotal',
+      'toolChildCountPartial',
+      'toolChangesListedOf',
     ]
     for (const key of retired) {
       expect(key in zh, key).toBe(false)

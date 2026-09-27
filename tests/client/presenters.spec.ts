@@ -17,7 +17,6 @@ import {
   callNameOf,
   errorSummaryOf,
   evidenceItemsOf,
-  isDeclinedOf,
   isRecord,
   joinNonEmpty,
   metaOf,
@@ -224,18 +223,5 @@ describe('errorSummaryOf', () => {
       content: [],
     })
     expect(errorSummaryOf(blockEmpty)).toBeNull()
-  })
-})
-
-describe('isDeclinedOf', () => {
-  it('returns true when meta.kind is declined', () => {
-    expect(isDeclinedOf(settled({ meta: { kind: 'declined' } }))).toBe(true)
-  })
-
-  it('returns false when meta.kind is not declined or absent', () => {
-    expect(isDeclinedOf(settled({ meta: { kind: 'applied' } }))).toBe(false)
-    expect(isDeclinedOf(settled({ meta: {} }))).toBe(false)
-    expect(isDeclinedOf(settled())).toBe(false)
-    expect(isDeclinedOf(running())).toBe(false)
   })
 })

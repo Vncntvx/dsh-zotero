@@ -29,6 +29,7 @@ import {
   ZOTERO_STATUS_FIELD_SCHEMA,
   ZOTERO_STATUS_FIELD_SERVER_ID,
   ZOTERO_STATUS_FIELD_WRITE,
+  ZOTERO_STATUS_FIELD_ENDPOINT,
   ZOTERO_STATUS_WRITE_DISABLED,
   ZOTERO_STATUS_WRITE_ENABLED_STORED,
   ZOTERO_STATUS_WRITE_ENABLED_PENDING,
@@ -56,11 +57,16 @@ export function statusLine(label: string, value: string | undefined): string {
 
 /** Render a status record for the command's user-facing text. */
 export function formatStatus(status: ZoteroStatus): string {
+  // The dialled address leads both arms. When the probe answered it is the
+  // endpoint the facts below came from; when it did not, it is the address
+  // that failed to answer — the first thing worth checking either way.
+  const endpoint = statusLine(ZOTERO_STATUS_FIELD_ENDPOINT, status.endpoint)
   if (!status.connected) {
-    return `${ZOTERO_STATUS_DISCONNECTED}\n${status.diagnosis}`
+    return `${ZOTERO_STATUS_DISCONNECTED}\n${endpoint}\n${status.diagnosis}`
   }
   return [
     ZOTERO_STATUS_CONNECTED,
+    endpoint,
     statusLine(ZOTERO_STATUS_FIELD_VERSION, status.zoteroVersion),
     statusLine(ZOTERO_STATUS_FIELD_API, status.apiVersion),
     statusLine(ZOTERO_STATUS_FIELD_SCHEMA, status.schemaVersion),

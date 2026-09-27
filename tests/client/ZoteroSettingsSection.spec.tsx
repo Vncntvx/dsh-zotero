@@ -87,8 +87,8 @@ describe('ZoteroSettingsSection', () => {
     expect(screen.getByRole('heading', { name: zh.title })).toBeDefined()
     expect(screen.getByText(zh.description)).toBeDefined()
     // Every field of the namespace is on the page, with no disclosure to open
-    // (now + maxChangesResults).
-    expect(document.querySelectorAll('input')).toHaveLength(24)
+    // (now + maxChangesResults + 3 background jobs fields).
+    expect(document.querySelectorAll('input')).toHaveLength(27)
     expect(saveButton().disabled).toBe(true)
     expect(discardButton().disabled).toBe(true)
   })

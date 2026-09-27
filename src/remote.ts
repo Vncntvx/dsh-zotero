@@ -39,7 +39,10 @@ export class ZoteroRuntime extends TypertRemoteService {
   /**
    * Live connectivity view for the dedicated web tab: the service's status
    * probe with absent optional facts stripped (the strict wire codec rejects
-   * undefined field keys).
+   * undefined field keys). The endpoint rides unconditionally — a provider that
+   * answered dialled something, and the card's live refresh replaces the parsed
+   * text with this view, so an endpoint dropped here would make the address
+   * disappear the moment the user clicked Refresh.
    * @returns the connectivity view; the provider converges failures into it.
    */
   async status(): Promise<ZoteroStatusView> {
@@ -53,6 +56,7 @@ export class ZoteroRuntime extends TypertRemoteService {
     }
     return {
       providerId: status.providerId,
+      endpoint: status.endpoint,
       connected: status.connected,
       ...(status.apiVersion === undefined ? {} : { apiVersion: status.apiVersion }),
       ...(status.serverId === undefined ? {} : { serverId: status.serverId }),

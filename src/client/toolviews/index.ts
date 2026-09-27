@@ -12,7 +12,12 @@ import { ChildrenToolView } from './ChildrenToolView.tsx'
 import { WriteToolView } from './WriteToolView.tsx'
 import { BrowseToolView } from './BrowseToolView.tsx'
 
-const REGISTRATIONS = [
+/**
+ * Every model tool's card, keyed by the wire tool name. Exported so a spec can
+ * walk the same table the plugin registers from — a tool added here without a
+ * card, or a card added without a tool, has to show up in one place.
+ */
+export const REGISTRATIONS = [
   ['zotero_search', SearchToolView],
   ['zotero_retrieve', RetrieveToolView],
   ['zotero_export', ExportToolView],

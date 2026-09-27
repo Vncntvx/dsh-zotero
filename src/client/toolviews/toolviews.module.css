@@ -57,7 +57,7 @@
   transition: color 100ms ease;
 }
 
-div[data-tool]:hover .summary:not(.errorSummary):not(.stoppedSummary):not(.declinedSummary),
+div[data-tool]:hover .summary:not(.errorSummary):not(.cautionSummary),
 div[data-tool]:hover .summarySuffix {
   color: var(--dsw-alias-label-primary);
 }
@@ -66,8 +66,10 @@ div[data-tool]:hover .summarySuffix {
   color: var(--dsh-color-danger, #ef4444);
 }
 
-.stoppedSummary,
-.declinedSummary {
+/* The three non-success outcomes share one caution colour: interrupted,
+   declined, and committed-but-unverified all mean the operation did not reach
+   a clean result, and none of them may read as an ordinary row. */
+.cautionSummary {
   color: var(--dsh-color-warning, #f59e0b);
 }
 
@@ -250,6 +252,25 @@ div[data-tool]:hover .summarySuffix {
   color: var(--dsw-alias-label-caption);
 }
 
+/* A browsed collection is only identifiable by where it sits, so a nested one
+   is indented to its depth. The view clamps the depth to these four steps, so
+   a deep tree stays readable in a narrow transcript. */
+.itemCard[data-depth='1'] {
+  margin-left: 10px;
+}
+
+.itemCard[data-depth='2'] {
+  margin-left: 20px;
+}
+
+.itemCard[data-depth='3'] {
+  margin-left: 30px;
+}
+
+.itemCard[data-depth='4'] {
+  margin-left: 40px;
+}
+
 .itemActions {
   display: flex;
   align-items: center;
@@ -355,6 +376,14 @@ div[data-tool]:hover .summarySuffix {
   background: rgba(245, 158, 11, 0.05);
 }
 
+/* A committed-but-unverified write wears the same warning tint as a declined
+   one: both are "the write boundary did not reach a clean outcome", and
+   neither may read as a plain success. */
+.receiptCard[data-state='unverified'] {
+  border-color: rgba(245, 158, 11, 0.4);
+  background: rgba(245, 158, 11, 0.05);
+}
+
 .receiptTitle {
   font-weight: 500;
   font-size: 13px;
@@ -377,6 +406,17 @@ div[data-tool]:hover .summarySuffix {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--dsw-alias-label-caption);
+}
+
+/* Zotero's own annotation colour, passed in as data (see ChildrenToolView).
+   A hairline ring keeps a pale highlight visible against the card surface. */
+.annotationSwatch {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--zotero-annotation, transparent);
+  box-shadow: inset 0 0 0 1px var(--dsw-alias-border-l2);
 }
 
 .tagPills {

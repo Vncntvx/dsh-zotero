@@ -61,9 +61,170 @@ describe('ZoteroCommandCard', () => {
     expect(screen.getByText('Usage: /zotero [status]')).toBeTruthy()
   })
 
+  it('names the endpoint the probe dialled, not a configured default', () => {
+    // `baseUrl` is a live config field, so a card that hardcoded
+    // 127.0.0.1:23119 would send a user of another address to the wrong port.
+    const rawText = [
+      'Zotero local API: connected',
+      'Local API: localhost:23119',
+      'Zotero version: 7.0.11',
+      'API version: 3',
+    ].join('\n')
+
+    const node = makeCommandNode({ outcome: { kind: 'success', text: rawText } })
+    const { container } = render(<ZoteroCommandCard node={node} t={mockT} />)
+
+    const trigger = container.querySelector('[data-disclosure-trigger]') as HTMLElement
+    fireEvent.click(trigger)
+
+    expect(screen.getByText('localhost:23119')).toBeTruthy()
+  })
+
+  it('takes the endpoint from a live probe over the parsed one', async () => {
+    const rawText = [
+      'Zotero local API: connected',
+      'Local API: 127.0.0.1:23119',
+      'Zotero version: 7.0.11',
+    ].join('\n')
+    const node = makeCommandNode({ outcome: { kind: 'success', text: rawText } })
+    const probe = vi.fn(async () => ({
+      ok: true as const,
+      value: {
+        providerId: 'local',
+        endpoint: '[::1]:23119',
+        connected: true,
+        diagnosis: '',
+      },
+    }))
+
+    const { container } = render(<ZoteroCommandCard node={node} t={mockT} probe={probe} />)
+    const trigger = container.querySelector('[data-disclosure-trigger]') as HTMLElement
+    fireEvent.click(trigger)
+
+    fireEvent.click(screen.getByRole('button', { name: zh.refresh }))
+
+    await act(async () => {})
+    // The probe's own address wins: it is the one that answered.
+    expect(screen.getByText('[::1]:23119')).toBeTruthy()
+    expect(screen.queryByText('127.0.0.1:23119')).toBeNull()
+  })
+
+  it('keeps the endpoint after a live probe reports Zotero offline', async () => {
+    // A probe that reaches Zotero and is told it is down sets *both* `data`
+    // and `error`, and that answer still carries the address it dialled. Gating
+    // the row on "no error" would blank it exactly when the user clicked
+    // Refresh to find out what was wrong — the one moment the address matters.
+    const rawText = [
+      'Zotero local API: not connected',
+      'Local API: 127.0.0.1:23119',
+      'ZOTERO_NOT_RUNNING: offline',
+    ].join('\n')
+    const node = makeCommandNode({ outcome: { kind: 'success', text: rawText } })
+    const probe = vi.fn(async () => ({
+      ok: true as const,
+      value: {
+        providerId: 'local',
+        endpoint: '127.0.0.1:23119',
+        connected: false,
+        diagnosis: 'ZOTERO_NOT_RUNNING: offline',
+      },
+    }))
+
+    const { container } = render(<ZoteroCommandCard node={node} t={mockT} probe={probe} />)
+    const trigger = container.querySelector('[data-disclosure-trigger]') as HTMLElement
+    fireEvent.click(trigger)
+    fireEvent.click(screen.getByRole('button', { name: zh.refresh }))
+
+    await act(async () => {})
+    expect(screen.getByText('127.0.0.1:23119')).toBeTruthy()
+    expect(screen.getByText(zh.diagnosisNotRunning)).toBeTruthy()
+  })
+
+  it('prefers a live probe address over the parsed one even when it is offline', async () => {
+    // The probe reports what it dialled, which need not be the address in the
+    // command's own text; the probe wins on both the connected and the
+    // disconnected arm.
+    const rawText = [
+      'Zotero local API: not connected',
+      'Local API: 127.0.0.1:23119',
+      'ZOTERO_NOT_RUNNING: offline',
+    ].join('\n')
+    const node = makeCommandNode({ outcome: { kind: 'success', text: rawText } })
+    const probe = vi.fn(async () => ({
+      ok: true as const,
+      value: {
+        providerId: 'local',
+        endpoint: 'localhost:23119',
+        connected: false,
+        diagnosis: 'ZOTERO_NOT_RUNNING: offline',
+      },
+    }))
+
+    const { container } = render(<ZoteroCommandCard node={node} t={mockT} probe={probe} />)
+    const trigger = container.querySelector('[data-disclosure-trigger]') as HTMLElement
+    fireEvent.click(trigger)
+    fireEvent.click(screen.getByRole('button', { name: zh.refresh }))
+
+    await act(async () => {})
+    expect(screen.getByText('localhost:23119')).toBeTruthy()
+    expect(screen.queryByText('127.0.0.1:23119')).toBeNull()
+  })
+
+  it('names the endpoint on a disconnected card, where it matters most', () => {
+    const rawText = [
+      'Zotero local API: not connected',
+      'Local API: 127.0.0.1:23119',
+      'ZOTERO_NOT_RUNNING: offline',
+    ].join('\n')
+    const node = makeCommandNode({ outcome: { kind: 'success', text: rawText } })
+    const { container } = render(<ZoteroCommandCard node={node} t={mockT} />)
+
+    const trigger = container.querySelector('[data-disclosure-trigger]') as HTMLElement
+    fireEvent.click(trigger)
+
+    // The address that did not answer is the first thing worth checking, so it
+    // is shown on the failure arm too.
+    expect(screen.getByText('127.0.0.1:23119')).toBeTruthy()
+    expect(screen.getByText(zh.diagnosisNotRunning)).toBeTruthy()
+  })
+
+  it('offers a re-probe on an errored card, not only on a parsed one', () => {
+    // The usage answer is the one card with no parsed status, and it is
+    // exactly where a user wants to try again.
+    const node = makeCommandNode({ outcome: { kind: 'error', text: 'Usage: /zotero [status]' } })
+    const probe = vi.fn(async () => ({
+      ok: false as const,
+      error: { message: 'no namespace' } as never,
+    }))
+
+    const { container } = render(<ZoteroCommandCard node={node} t={mockT} probe={probe} />)
+    const trigger = container.querySelector('[data-disclosure-trigger]') as HTMLElement
+    fireEvent.click(trigger)
+
+    expect(screen.getByText('Usage: /zotero [status]')).toBeTruthy()
+    expect(screen.getByRole('button', { name: zh.refresh })).toBeTruthy()
+  })
+
+  it('offers a re-probe on unrecognized output too', () => {
+    const rawText = 'Some unexpected console output from plugin'
+    const node = makeCommandNode({ name: 'zotero', outcome: { kind: 'success', text: rawText } })
+    const probe = vi.fn(async () => ({
+      ok: true as const,
+      value: { providerId: 'local', connected: true, diagnosis: '' },
+    }))
+
+    const { container } = render(<ZoteroCommandCard node={node} t={mockT} probe={probe} />)
+    const trigger = container.querySelector('[data-disclosure-trigger]') as HTMLElement
+    fireEvent.click(trigger)
+
+    expect(container.querySelector('pre')?.textContent).toBe(rawText)
+    expect(screen.getByRole('button', { name: zh.refresh })).toBeTruthy()
+  })
+
   it('renders connected status with full structured details', () => {
     const rawText = [
       'Zotero local API: connected',
+      'Local API: 127.0.0.1:23119',
       'Zotero version: 7.0.11',
       'API version: 3',
       'Schema version: 1',
@@ -129,6 +290,7 @@ describe('ZoteroCommandCard', () => {
   it('renders disconnected status with localized diagnosis code and message', () => {
     const rawText = [
       'Zotero local API: not connected',
+      'Local API: 127.0.0.1:23119',
       'ZOTERO_NOT_RUNNING: Zotero is offline',
     ].join('\n')
 
@@ -319,9 +481,8 @@ describe('ZoteroCommandCard', () => {
       fireEvent.click(refreshBtn)
     })
 
-    // Should NOT show the old '7.0.11' in the version metric cell anymore
+    // A refreshed probe that reports no version leaves the metric blank.
     expect(screen.queryByText('7.0.11')).toBeNull()
-    // Should show '-' for unprovided version and api/schema
     expect(screen.getAllByText('-').length).toBeGreaterThanOrEqual(1)
   })
 })

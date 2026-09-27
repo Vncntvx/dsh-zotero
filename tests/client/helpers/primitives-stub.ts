@@ -24,7 +24,7 @@
  * @module tests/client/helpers/primitives-stub
  */
 
-import { createElement, type ReactElement } from 'react'
+import { createElement, memo, type ReactElement } from 'react'
 import { vi, type MockedFunction } from 'vitest'
 import { TagStub } from './tag-stub.tsx'
 
@@ -198,6 +198,75 @@ export function interactiveMenu({
   )
 }
 
+/** The DOM face the `countingDisclosure` variant takes, as a memo boundary sees it. */
+interface DisclosureRowStubProps {
+  readonly icon?: unknown
+  readonly title?: string
+  readonly open?: boolean
+  readonly expandable?: boolean
+  readonly onToggle?: () => void
+  readonly collapsedContent?: unknown
+  readonly children?: unknown
+}
+
+/**
+ * The one `DisclosureRow` DOM face: the default stub, and the body the
+ * `countingDisclosure` variant wraps. Keeping a single tree means the variant
+ * that measures render identity still renders exactly what every other spec
+ * asserts on.
+ */
+function disclosureRowElement({
+  icon: leadingIcon,
+  title,
+  open,
+  expandable,
+  onToggle,
+  collapsedContent,
+  children,
+}: DisclosureRowStubProps): ReactElement {
+  return createElement(
+    'div',
+    {
+      'data-disclosure': open ? 'open' : 'closed',
+      'data-expandable': expandable ? 'true' : 'false',
+    },
+    createElement(
+      'div',
+      {
+        role: 'button',
+        'data-disclosure-trigger': 'true',
+        onClick: () => onToggle?.(),
+      },
+      leadingIcon as never,
+      createElement('span', { 'data-disclosure-title': 'true' }, title as never),
+      collapsedContent as never,
+    ),
+    open ? (children as never) : null,
+  )
+}
+
+/**
+ * The `DisclosureRow` variant that behaves like the real one about identity:
+ * the harness primitive is `memo`'d with a shallow prop comparison, so its DOM
+ * only changes when a prop's *identity* changes. This stub installs the same
+ * `memo` around the shared DOM face and counts how many times the body
+ * actually ran, which is the only way to assert that a card handed it stable
+ * props. A spec that needs the count opts in with
+ * `primitivesStub({ DisclosureRow: countingDisclosure() })` and reads it back
+ * through the returned handle.
+ */
+export function countingDisclosure(): {
+  DisclosureRow: PrimitivesStub['DisclosureRow']
+  renders: () => number
+} {
+  let renders = 0
+  const DisclosureRow = memo((props: DisclosureRowStubProps) => {
+    renders += 1
+    return disclosureRowElement(props)
+  }) as PrimitivesStub['DisclosureRow']
+  return { DisclosureRow, renders: () => renders }
+}
+
 /**
  * The stub module body: every primitives surface the client specs replace,
  * with a fresh clipboard spy per call (the mock registry is per test file).
@@ -348,34 +417,7 @@ export function primitivesStub(overrides: Partial<PrimitivesStub> = {}): Primiti
         ),
       )
     },
-    DisclosureRow: ({
-      icon: leadingIcon,
-      title,
-      open,
-      expandable,
-      onToggle,
-      collapsedContent,
-      children,
-    }) =>
-      createElement(
-        'div',
-        {
-          'data-disclosure': open ? 'open' : 'closed',
-          'data-expandable': expandable ? 'true' : 'false',
-        },
-        createElement(
-          'div',
-          {
-            role: 'button',
-            'data-disclosure-trigger': 'true',
-            onClick: () => onToggle?.(),
-          },
-          leadingIcon as never,
-          createElement('span', { 'data-disclosure-title': 'true' }, title as never),
-          collapsedContent as never,
-        ),
-        open ? (children as never) : null,
-      ),
+    DisclosureRow: disclosureRowElement,
     TextShimmer: ({ children, active }) =>
       createElement('span', { 'data-shimmer': active ? 'true' : undefined }, children as never),
     IconInspectOutlineRegular: icon('inspect'),

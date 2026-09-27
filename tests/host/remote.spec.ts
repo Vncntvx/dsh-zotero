@@ -36,6 +36,11 @@ describe('the zotero status endpoint', () => {
     const status = await runtime.status()
     expect(status).toEqual({
       providerId: 'local',
+      // The authority actually dialled — the mock server's own host:port, not
+      // the configured default. The card's live refresh replaces the parsed
+      // command text with this view, so an endpoint dropped here would blank
+      // the row the user just refreshed.
+      endpoint: new URL(lane.mock.baseUrl).host,
       connected: true,
       apiVersion: '3',
       schemaVersion: '37',
@@ -45,6 +50,18 @@ describe('the zotero status endpoint', () => {
     // A provider that wires no write capability reports no write block; the
     // Remote must not invent one.
     expect(status.write).toBeUndefined()
+  })
+
+  it('reports the dialled endpoint even when the probe failed', async () => {
+    lane = await setupHostLane(undefined, { typert: true })
+    const endpoint = new URL(lane.mock.baseUrl).host
+    // A refused connection is the ordinary offline case: the address that did
+    // not answer is the fact a user needs next, so the failure arm carries it.
+    await lane.mock.close()
+    const runtime = lane.ctx.get('zoteroRemote') as ZoteroRuntime
+    const status = await runtime.status()
+    expect(status.connected).toBe(false)
+    expect(status.endpoint).toBe(endpoint)
   })
 
   it('forwards the provider write state the web tab status strip renders', async () => {

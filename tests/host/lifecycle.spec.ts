@@ -143,7 +143,7 @@ describe('/zotero status command', () => {
   it('reports a disconnected Zotero with the actionable diagnosis', async () => {
     lane = await setupHostLane(undefined, { commands: true })
     // The plugin makes no request while loading, so closing the mock after the
-    // mount leaves the same dead endpoint this command has always probed.
+    // mount leaves a dead endpoint for the status probe to hit.
     await lane.mock.close()
     const definition = lane.stub!.registered[0]!
     const result = (await definition.handler(invocation('status'))) as CommandResult
@@ -287,7 +287,12 @@ describe('provider registration', () => {
     const foreign: ZoteroProvider = {
       id: 'local',
       capabilities: new Set(),
-      status: async () => ({ providerId: 'local', connected: false, diagnosis: 'test double' }),
+      status: async () => ({
+        providerId: 'local',
+        endpoint: '127.0.0.1:23119',
+        connected: false,
+        diagnosis: 'test double',
+      }),
       search: async () => {
         throw new Error('test double: must not be called')
       },
@@ -329,7 +334,12 @@ describe('provider registration', () => {
     const foreign: ZoteroProvider = {
       id: 'foreign',
       capabilities: new Set(),
-      status: async () => ({ providerId: 'foreign', connected: true, diagnosis: 'ok' }),
+      status: async () => ({
+        providerId: 'foreign',
+        endpoint: '127.0.0.1:23119',
+        connected: true,
+        diagnosis: 'ok',
+      }),
       search: async () => {
         throw new Error('test double: must not be called')
       },
@@ -373,7 +383,12 @@ describe('capability gating', () => {
     service.registerProvider({
       id: 'limited',
       capabilities: new Set(['metadata']),
-      status: async () => ({ providerId: 'limited', connected: true, diagnosis: 'ok' }),
+      status: async () => ({
+        providerId: 'limited',
+        endpoint: '127.0.0.1:23119',
+        connected: true,
+        diagnosis: 'ok',
+      }),
       search: async () => {
         throw new Error('test double: must not be called')
       },
@@ -423,7 +438,12 @@ describe('capability gating', () => {
     service.registerProvider({
       id: 'nocite',
       capabilities: new Set(['metadata']),
-      status: async () => ({ providerId: 'nocite', connected: true, diagnosis: 'ok' }),
+      status: async () => ({
+        providerId: 'nocite',
+        endpoint: '127.0.0.1:23119',
+        connected: true,
+        diagnosis: 'ok',
+      }),
       search: async () => {
         throw new Error('test double: must not be called')
       },
@@ -466,7 +486,12 @@ describe('capability gating', () => {
     service.registerProvider({
       id: 'searchonly',
       capabilities: new Set(['search']),
-      status: async () => ({ providerId: 'searchonly', connected: true, diagnosis: 'ok' }),
+      status: async () => ({
+        providerId: 'searchonly',
+        endpoint: '127.0.0.1:23119',
+        connected: true,
+        diagnosis: 'ok',
+      }),
       search: async () => {
         throw new Error('test double: must not be called')
       },

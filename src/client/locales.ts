@@ -150,6 +150,8 @@ export type ZoteroLocaleKey =
   | 'sourceAbstract'
   | 'sourceFulltext'
   | 'pageLabel'
+  | 'matchedInText'
+  | 'matchedInComment'
   | 'truncatedPreview'
   | 'retrievedMultiple'
   | 'coverageLabel'
@@ -157,6 +159,7 @@ export type ZoteroLocaleKey =
   | 'coverageChars'
   | 'coverageComplete'
   | 'coverageIncomplete'
+  | 'countOfReturned'
   | 'budgetLimitedNote'
   | 'availReturned'
   | 'availUnavailable'
@@ -201,6 +204,10 @@ export type ZoteroLocaleKey =
   | 'toolFailed'
   | 'toolStopped'
   | 'toolDeclined'
+  | 'toolUnverified'
+  | 'toolUnverifiedDetail'
+  | 'toolSummaryJobPending'
+  | 'toolOmittedPassages'
   | 'toolInspect'
   | 'toolSearchRunning'
   | 'toolRetrieveRunning'
@@ -214,14 +221,54 @@ export type ZoteroLocaleKey =
   | 'toolSummaryAttachment'
   | 'toolSummaryCreateNote'
   | 'toolSummaryAddTags'
+  | 'toolSummaryAddTagsRequested'
+  | 'toolNoTagsAdded'
   | 'toolSummaryAddToCollection'
-  | 'toolSummaryBrowse'
+  | 'toolSummaryAddToCollectionNoop'
+  | 'toolSummaryAddToCollectionRequested'
+  | 'toolSummaryBrowseKind'
+  | 'toolSummaryBrowsePage'
+  | 'toolBrowseNextPage'
   | 'toolSummaryChanges'
+  | 'toolChangesItems'
+  | 'toolChangesChildItems'
+  | 'toolChangesTrashedItems'
+  | 'toolChangesCollections'
+  | 'toolChangesSavedSearches'
+  | 'toolChangesFulltext'
+  | 'toolChangesCursor'
+  | 'toolChangesCursorValue'
+  | 'toolChangesRange'
+  | 'toolChangesRangeUnknown'
+  | 'toolChangesNoCursor'
+  | 'toolChangesWithheld'
+  | 'toolChangesFulltextCaveat'
+  | 'withheldNotServed'
+  | 'withheldRangeNotCovered'
+  | 'withheldUnreadable'
+  | 'withheldRemedyPermanent'
+  | 'withheldRemedyRebaseline'
+  | 'withheldRemedyRerun'
+  | 'toolDeletedTitle'
+  | 'toolDeletedNone'
+  | 'toolDeletedItems'
+  | 'toolDeletedCollections'
+  | 'toolDeletedSavedSearches'
+  | 'toolDeletedTags'
+  | 'toolDeletedOther'
+  | 'toolSummaryJobBackground'
+  | 'toolSummaryJobPromoted'
   | 'toolParentItem'
   | 'toolTags'
+  | 'toolChildrenNotes'
+  | 'toolChildrenAnnotations'
+  | 'toolChildrenAttachments'
+  | 'toolChildrenNone'
   | 'toolNoResults'
   | 'toolDefaultNoteTitle'
   | 'badgeSuccess'
+  | 'badgeNoOp'
+  | 'badgeUnreported'
   | 'commandChecking'
   | 'commandFailed'
   | 'statusServerIdUnreported'
@@ -311,6 +358,16 @@ export const en: Record<ZoteroLocaleKey, string> = {
   defaultStyleHint: 'CSL style id used for citations and bibliographies (e.g. apa).',
   defaultLocale: 'Default citation locale',
   defaultLocaleHint: 'CSL locale used for citations and bibliographies (e.g. en-US).',
+  groupJobs: 'Background tasks',
+  enableRunInBackground: 'Allow background tasks',
+  enableRunInBackgroundHint:
+    'Allow tools like export and changes to be started in the background via run_in_background. Slow-task promotion is controlled separately.',
+  promoteOnTimeout: 'Promote slow tasks to background',
+  promoteOnTimeoutHint:
+    'Automatically promote long-running operations to background jobs when foreground wait expires.',
+  foregroundWaitMs: 'Foreground wait timeout (ms)',
+  foregroundWaitMsHint:
+    'How long to wait synchronously before promoting an operation to a background job.',
   groupWeb: 'Literature tab',
   webEnabled: 'Show literature tab',
   webEnabledHint:
@@ -444,6 +501,8 @@ export const en: Record<ZoteroLocaleKey, string> = {
   sourceAbstract: 'Abstract',
   sourceFulltext: 'Full text',
   pageLabel: 'p.{label}',
+  matchedInText: 'match in text',
+  matchedInComment: 'match in comment',
   truncatedPreview: '(truncated)',
   retrievedMultiple: 'gathered across {count} retrieves',
   coverageLabel: 'Indexing coverage',
@@ -451,6 +510,7 @@ export const en: Record<ZoteroLocaleKey, string> = {
   coverageChars: '{indexed}/{total} chars',
   coverageComplete: ' · complete',
   coverageIncomplete: ' · incomplete',
+  countOfReturned: '{total} in total, {shown} shown',
   budgetLimitedNote: 'Results were limited by the global budget.',
   availReturned: '{count} matching passages',
   availUnavailable: 'unavailable',
@@ -497,6 +557,10 @@ export const en: Record<ZoteroLocaleKey, string> = {
   toolFailed: 'Failed',
   toolStopped: 'Stopped',
   toolDeclined: 'Write plan was declined; not executed',
+  toolUnverified: 'Committed, not verified; do not retry',
+  toolUnverifiedDetail: 'What Zotero reported',
+  toolSummaryJobPending: 'Still running; nothing to read yet.',
+  toolOmittedPassages: '{count} further passages are not listed here.',
   toolInspect: 'Inspect',
   toolSearchRunning: 'Searching Zotero library…',
   toolRetrieveRunning: 'Retrieving evidence passages…',
@@ -510,14 +574,55 @@ export const en: Record<ZoteroLocaleKey, string> = {
   toolSummaryAttachment: 'Attachment: {title}',
   toolSummaryCreateNote: 'Created note "{title}"',
   toolSummaryAddTags: 'Added {count} tags',
+  toolSummaryAddTagsRequested: 'Requested {count} tags',
+  toolNoTagsAdded: 'Every requested tag was already present; nothing was written',
   toolSummaryAddToCollection: 'Added to collection "{name}"',
-  toolSummaryBrowse: 'Browse {category} ({count} items)',
+  toolSummaryAddToCollectionNoop: 'Already in collection "{name}"; nothing was written',
+  toolSummaryAddToCollectionRequested: 'Requested membership in collection "{name}"',
+  toolSummaryBrowseKind: 'Browsing {kind}',
+  toolSummaryBrowsePage: 'Browsing {kind}: {returned} of {total}',
+  toolBrowseNextPage: 'More results start at offset {offset}',
   toolSummaryChanges: 'Sync changes: {count} records',
+  toolChangesItems: 'Items',
+  toolChangesChildItems: 'Child objects',
+  toolChangesTrashedItems: 'Items in the trash',
+  toolChangesCollections: 'Collections',
+  toolChangesSavedSearches: 'Saved searches',
+  toolChangesFulltext: 'Full-text reindexed',
+  toolChangesCursor: 'Cursor',
+  toolChangesCursorValue: 'version {version} on instance {serverId}',
+  toolChangesRange: 'Range: version {from} → {to}',
+  toolChangesRangeUnknown: 'an unverified end',
+  toolChangesNoCursor:
+    'This read withheld a cursor, so it is not a settled range and not safe to resume from.',
+  toolChangesWithheld: 'Not covered by this read',
+  toolChangesFulltextCaveat: 'Index versions count on their own, so these rows are a listing.',
+  withheldNotServed: 'not served by this Zotero build',
+  withheldRangeNotCovered: 'older than the change history this build keeps',
+  withheldUnreadable: 'the answer was unreadable',
+  withheldRemedyPermanent: 'nothing to do; this build never reports it',
+  withheldRemedyRebaseline: 'take a fresh baseline to track it from here',
+  withheldRemedyRerun: 'run the call again',
+  toolDeletedTitle: 'Deletions: {count}',
+  toolDeletedNone: 'Deletions: none in this range.',
+  toolDeletedItems: 'Deleted items',
+  toolDeletedCollections: 'Deleted collections',
+  toolDeletedSavedSearches: 'Deleted saved searches',
+  toolDeletedTags: 'Deleted tags',
+  toolDeletedOther: 'Other deleted objects',
+  toolSummaryJobBackground: 'background job {jobId}',
+  toolSummaryJobPromoted: 'promoted to job {jobId}',
   toolParentItem: 'Parent Item',
   toolTags: 'Tags',
+  toolChildrenNotes: 'Notes',
+  toolChildrenAnnotations: 'Annotations',
+  toolChildrenAttachments: 'Attachments',
+  toolChildrenNone: 'None of this kind.',
   toolNoResults: 'No matching results found',
   toolDefaultNoteTitle: 'Note',
   badgeSuccess: 'OK',
+  badgeNoOp: 'No change',
+  badgeUnreported: 'Outcome unreported',
   commandChecking: 'Connecting to local API…',
   commandFailed: 'Command failed',
   statusServerIdUnreported: 'Not reported (this build does not identify database)',
@@ -599,6 +704,14 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   defaultStyleHint: '引文与参考文献使用的 CSL 样式 id（如 apa）。',
   defaultLocale: '默认引文语言',
   defaultLocaleHint: '引文与参考文献使用的区域设置（如 en-US）。',
+  groupJobs: '后台任务',
+  enableRunInBackground: '允许后台任务',
+  enableRunInBackgroundHint:
+    '允许文献导出、变更扫描等工具通过 run_in_background 显式放入后台；超时自动提升由另一项单独控制。',
+  promoteOnTimeout: '超时自动转为后台任务',
+  promoteOnTimeoutHint: '当同步等待超时时，自动将耗时操作转为后台任务继续执行。',
+  foregroundWaitMs: '前台等待超时 (毫秒)',
+  foregroundWaitMsHint: '同步等待耗时操作完成的最大毫秒数，超出后转入后台任务。',
   groupWeb: '文献标签',
   webEnabled: '显示文献标签',
   webEnabledHint: '在会话顶部显示 Zotero 文献标签，包括文献、相关片段和导出。',
@@ -724,6 +837,8 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   sourceAbstract: '摘要',
   sourceFulltext: '全文',
   pageLabel: '第{label}页',
+  matchedInText: '命中原文',
+  matchedInComment: '命中批注',
   truncatedPreview: '(截断)',
   retrievedMultiple: '经 {count} 次检索取得',
   coverageLabel: '索引覆盖',
@@ -731,6 +846,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   coverageChars: '{indexed}/{total} 字符',
   coverageComplete: ' · 已完整',
   coverageIncomplete: ' · 未完整',
+  countOfReturned: '共 {total} 条，列出 {shown} 条',
   budgetLimitedNote: '结果受全局预算限制。',
   availReturned: '返回 {count} 条匹配',
   availUnavailable: '该来源不可用',
@@ -776,6 +892,10 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   toolFailed: '执行失败',
   toolStopped: '已中断',
   toolDeclined: '写操作未获批准，已取消执行',
+  toolUnverified: '已提交但未核验，请勿重试',
+  toolUnverifiedDetail: 'Zotero 的原始返回',
+  toolSummaryJobPending: '仍在运行中，暂时没有可读的结果。',
+  toolOmittedPassages: '另有 {count} 条证据片段未在此列出。',
   toolInspect: '检查调用',
   toolSearchRunning: '正在检索 Zotero 文献库…',
   toolRetrieveRunning: '正在提取文献证据…',
@@ -789,14 +909,54 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   toolSummaryAttachment: '附件: {title}',
   toolSummaryCreateNote: '已创建笔记 "{title}"',
   toolSummaryAddTags: '已添加 {count} 个标签',
+  toolSummaryAddTagsRequested: '请求添加 {count} 个标签',
+  toolNoTagsAdded: '请求的标签均已存在，未写入任何内容',
   toolSummaryAddToCollection: '已加入合集 "{name}"',
-  toolSummaryBrowse: '浏览 {category} ({count} 项)',
+  toolSummaryAddToCollectionNoop: '已在合集 "{name}" 中，未写入任何内容',
+  toolSummaryAddToCollectionRequested: '请求加入合集 "{name}"',
+  toolSummaryBrowseKind: '正在浏览 {kind}',
+  toolSummaryBrowsePage: '浏览 {kind}：{returned} / {total}',
+  toolBrowseNextPage: '更多结果从 offset {offset} 开始',
   toolSummaryChanges: '同步变更: {count} 条',
+  toolChangesItems: '条目',
+  toolChangesChildItems: '子对象',
+  toolChangesTrashedItems: '回收站中的条目',
+  toolChangesCollections: '合集',
+  toolChangesSavedSearches: '保存的检索',
+  toolChangesFulltext: '重新索引的全文',
+  toolChangesCursor: '游标',
+  toolChangesCursorValue: '版本 {version}，实例 {serverId}',
+  toolChangesRange: '区间：版本 {from} → {to}',
+  toolChangesRangeUnknown: '未核验的终点',
+  toolChangesNoCursor: '本次读取没有给出游标，因此区间并未落定，也不能作为续读起点。',
+  toolChangesWithheld: '本次读取未覆盖的对象',
+  toolChangesFulltextCaveat: '索引版本使用独立计数器，因此这些行只是一份清单。',
+  withheldNotServed: '当前 Zotero 构建未提供',
+  withheldRangeNotCovered: '早于该构建保留的变更历史',
+  withheldUnreadable: '返回内容无法读取',
+  withheldRemedyPermanent: '无需处理，该构建本就不报告这一项',
+  withheldRemedyRebaseline: '重新取一个基线，才能从此刻开始跟踪',
+  withheldRemedyRerun: '重新执行这次调用',
+  toolDeletedTitle: '删除: {count}',
+  toolDeletedNone: '删除: 此区间内没有删除。',
+  toolDeletedItems: '已删除的条目',
+  toolDeletedCollections: '已删除的合集',
+  toolDeletedSavedSearches: '已删除的保存检索',
+  toolDeletedTags: '已删除的标签',
+  toolDeletedOther: '其他已删除对象',
+  toolSummaryJobBackground: '后台任务 {jobId}',
+  toolSummaryJobPromoted: '已转为后台任务 {jobId}',
   toolParentItem: '所属父条目',
   toolTags: '标签',
+  toolChildrenNotes: '笔记',
+  toolChildrenAnnotations: '批注',
+  toolChildrenAttachments: '附件',
+  toolChildrenNone: '没有这一类子对象',
   toolNoResults: '未检索到匹配结果',
   toolDefaultNoteTitle: '笔记',
   badgeSuccess: '成功',
+  badgeNoOp: '无变更',
+  badgeUnreported: '结果未报告',
   commandChecking: '正在探测连接…',
   commandFailed: '执行失败',
   statusServerIdUnreported: '未报告（当前构建不支持数据库标识）',

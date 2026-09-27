@@ -69,6 +69,9 @@ const FIELD_SPECS = [
   { key: 'maxChangesResults', kind: 'number', group: 'groupOutput' },
   { key: 'defaultStyle', kind: 'text', group: 'groupDefaults' },
   { key: 'defaultLocale', kind: 'text', group: 'groupDefaults' },
+  { key: 'enableRunInBackground', kind: 'boolean', group: 'groupJobs' },
+  { key: 'promoteOnTimeout', kind: 'boolean', group: 'groupJobs' },
+  { key: 'foregroundWaitMs', kind: 'number', group: 'groupJobs' },
 ] as const satisfies readonly {
   key: keyof ResolvedConfig
   kind: 'text' | 'number' | 'boolean'

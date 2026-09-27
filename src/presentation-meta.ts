@@ -17,6 +17,7 @@ import type {
   SupportedLocalLibrary,
   ZoteroAttachmentLocation,
   ZoteroCoverage,
+  ZoteroEvidenceField,
   ZoteroEvidenceSource,
   ZoteroItemDetail,
   ZoteroResolvedScope,
@@ -127,6 +128,13 @@ interface ZoteroEvidencePresentationItem {
   readonly pageLabel?: string
   /** The annotation passage's parent attachment ref (its own PDF's deep-link key). */
   readonly attachmentRef?: string
+  /**
+   * Which of the annotation's two text fields carried the query terms. Absent
+   * means the passage's single field did, which is the ordinary case; a match
+   * found only in the annotator's own comment is a different claim about the
+   * paper and must not be read as one.
+   */
+  readonly matchedFields?: readonly ZoteroEvidenceField[]
 }
 
 /** Per-source availability facts: provable from the canonical result alone. */
@@ -366,6 +374,9 @@ export function projectRetrieveMeta(
       previewTruncated: entry.text.length > preview.length,
       ...(entry.pageLabel === undefined ? {} : { pageLabel: entry.pageLabel }),
       ...(entry.attachmentRef === undefined ? {} : { attachmentRef: entry.attachmentRef }),
+      ...(entry.matchedFields === undefined
+        ? {}
+        : { matchedFields: [...entry.matchedFields] as ZoteroEvidenceField[] }),
     }
   })
   const skipped = new Set(value.sourcesSkipped)

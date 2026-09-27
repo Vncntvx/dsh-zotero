@@ -86,9 +86,19 @@ export function sanitizeFileStem(stem: string): string {
   return cleaned.replace(/[/\\:*?"<>|\x00-\x1F]/g, '-')
 }
 
+/**
+ * The download filename of one translator format: `zotero-<format><ext>`.
+ * The stem is the translator id, never the display label — a localized
+ * "引文" is not a filename. Every download surface builds its name here so the
+ * three of them cannot drift.
+ */
+export function fileNameForFormat(format: string): string {
+  return `zotero-${sanitizeFileStem(format)}${extensionOf(format)}`
+}
+
 /** The download filename of one export artifact, from its translator format. */
 export function fileNameOf(artifact: ExportArtifact): string {
-  return `zotero-${sanitizeFileStem(artifact.format)}${extensionOf(artifact.format)}`
+  return fileNameForFormat(artifact.format)
 }
 
 /** Format the artifact's settled event time as an absolute HH:MM time. */

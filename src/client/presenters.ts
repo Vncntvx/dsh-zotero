@@ -38,6 +38,12 @@ export interface EvidenceItemView {
   readonly pageLabel?: string
   /** The annotation passage's parent attachment ref (its own PDF's deep-link key). */
   readonly attachmentRef?: string
+  /**
+   * Which of the annotation's two fields carried the query terms. Absent means
+   * the passage's single text field did — the ordinary case — so a card shows a
+   * badge only when the distinction is the one that matters.
+   */
+  readonly matchedFields?: readonly ('text' | 'comment')[]
 }
 
 /**
@@ -108,11 +114,6 @@ export function resultTextOf(block: ToolCallBlock): string | null {
   return parts.join('\n')
 }
 
-/** Whether a settled write call was declined in plan review. */
-export function isDeclinedOf(block: ToolCallBlock): boolean {
-  return metaOf(block)?.kind === 'declined'
-}
-
 /** Single-line error summary derived from settled error content, or null when not errored. */
 export function errorSummaryOf(block: ToolCallBlock, rawText?: string | null): string | null {
   if (rowStateOf(block) !== 'error') return null
@@ -160,6 +161,7 @@ export function evidenceItemsOf(meta: Record<string, unknown>): EvidenceItemView
     const previewTruncated = boolField(item, 'previewTruncated') === true
     const pageLabel = stringField(item, 'pageLabel')
     const attachmentRef = stringField(item, 'attachmentRef')
+    const matchedFields = matchedFieldsOf(item['matchedFields'])
     rows.push({
       source,
       sourceRef,
@@ -167,9 +169,23 @@ export function evidenceItemsOf(meta: Record<string, unknown>): EvidenceItemView
       previewTruncated,
       ...(pageLabel === undefined ? {} : { pageLabel }),
       ...(attachmentRef === undefined ? {} : { attachmentRef }),
+      ...(matchedFields === undefined ? {} : { matchedFields }),
     })
   }
   return rows
+}
+
+/**
+ * The two-field names a passage reports, keeping only the wire's own
+ * vocabulary. Anything else — an unknown name, a non-array — reads as absent,
+ * which is the single-field case the badge does not need to distinguish.
+ */
+function matchedFieldsOf(value: unknown): readonly ('text' | 'comment')[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const fields = value.filter(
+    (entry): entry is 'text' | 'comment' => entry === 'text' || entry === 'comment',
+  )
+  return fields.length === 0 ? undefined : fields
 }
 
 /** Join a metadata line's non-empty parts with the middot separator. */

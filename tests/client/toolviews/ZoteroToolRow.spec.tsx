@@ -188,6 +188,40 @@ describe('ZoteroToolRow', () => {
     expect(screen.getByText(zh.toolStopped)).toBeTruthy()
   })
 
+  it('classifies only a declined outcome as declined', () => {
+    // The two write verdicts read the outcome through the one decoder, so an
+    // absent or unrecognized `kind` is an ordinary settled call, never a
+    // declined one — the row's `data-state` is the observable form of that.
+    const stateOf = (meta: Record<string, unknown> | undefined, isError = false): string | null => {
+      const { useDisclosure } = createDisclosure(false)
+      const { container, unmount } = render(
+        <ZoteroToolRow
+          useDisclosure={useDisclosure}
+          t={mockT}
+          toolName="zotero_create_note"
+          block={settled({ ...(meta === undefined ? {} : { meta }), isError })}
+          icon={<span data-icon="edit" />}
+          title="Zotero 创建笔记"
+          summary="summary"
+        />,
+      )
+      const state = container
+        .querySelector('[data-tool="zotero_create_note"]')
+        ?.getAttribute('data-state')
+      unmount()
+      return state ?? null
+    }
+
+    expect(stateOf({ kind: 'declined' })).toBe('declined')
+    expect(stateOf({ kind: 'applied' })).toBe('ok')
+    expect(stateOf({ kind: 'committed-unverified' })).toBe('unverified')
+    // No meta at all, and a meta with no recognizable kind, are both an
+    // ordinary settled call rather than a write verdict.
+    expect(stateOf(undefined)).toBe('ok')
+    expect(stateOf({})).toBe('ok')
+    expect(stateOf({ kind: 'invented' })).toBe('ok')
+  })
+
   it('renders declined state without error override when declined in meta', () => {
     const { useDisclosure } = createDisclosure(false)
     const { container } = render(
@@ -207,6 +241,32 @@ describe('ZoteroToolRow', () => {
     expect(root?.getAttribute('data-state')).toBe('declined')
     expect(screen.getByText(mockT('toolDeclined'))).toBeTruthy()
     expect(screen.queryByText('Should not override declined summary')).toBeNull()
+  })
+
+  it('renders a committed-unverified write as its own caution state, not ok', () => {
+    const { useDisclosure } = createDisclosure(false)
+    const { container } = render(
+      <ZoteroToolRow
+        useDisclosure={useDisclosure}
+        t={mockT}
+        toolName="zotero_create_note"
+        block={settled({
+          meta: { kind: 'committed-unverified', reason: 'saved-state-unverified' },
+        })}
+        icon={<span data-icon="edit" />}
+        title="Zotero 创建笔记"
+        summary={'已创建笔记 "Reading"'}
+      />,
+    )
+
+    // The card's own summary claims a created note; the row must override it,
+    // because the write committed without its state ever being proven.
+    expect(container.querySelector('[data-tool]')?.getAttribute('data-state')).toBe('unverified')
+    expect(screen.getByText(mockT('toolUnverified'))).toBeTruthy()
+    expect(screen.queryByText('已创建笔记 "Reading"')).toBeNull()
+    // The caution colour is the visible difference from an ordinary row.
+    const caution = screen.getByText(mockT('toolUnverified')).closest('span[class]')
+    expect(caution?.getAttribute('class')).toContain('cautionSummary')
   })
 
   it('toggles expansion when clicking disclosure trigger', () => {

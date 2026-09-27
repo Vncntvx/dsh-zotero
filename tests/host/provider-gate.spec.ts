@@ -44,7 +44,12 @@ describe('provider seam double gate', () => {
     const stub: ZoteroProvider = {
       id: 'stub',
       capabilities: new Set(['search']),
-      status: async () => ({ providerId: 'stub', connected: true, diagnosis: 'ok' }),
+      status: async () => ({
+        providerId: 'stub',
+        endpoint: '127.0.0.1:23119',
+        connected: true,
+        diagnosis: 'ok',
+      }),
       search: async () => searchResult(),
     }
     service.registerProvider(stub)
@@ -64,7 +69,12 @@ describe('provider seam double gate', () => {
     service.registerProvider({
       id: 'stub',
       capabilities: new Set(['search']),
-      status: async () => ({ providerId: 'stub', connected: true, diagnosis: 'ok' }),
+      status: async () => ({
+        providerId: 'stub',
+        endpoint: '127.0.0.1:23119',
+        connected: true,
+        diagnosis: 'ok',
+      }),
       search: async () => searchResult(),
     })
     await zoteroError(
@@ -78,7 +88,12 @@ describe('provider seam double gate', () => {
     service.registerProvider({
       id: 'stub',
       capabilities: new Set(['metadata']),
-      status: async () => ({ providerId: 'stub', connected: true, diagnosis: 'ok' }),
+      status: async () => ({
+        providerId: 'stub',
+        endpoint: '127.0.0.1:23119',
+        connected: true,
+        diagnosis: 'ok',
+      }),
     })
     await zoteroError(
       service.get({ ref: parseRef('zotero://user/0/item/ABCD1234'), include: new Set() }),
@@ -94,7 +109,12 @@ describe('provider seam double gate', () => {
       readonly capabilities = new Set(['search'] as const) as ReadonlySet<'search'>
       calls = 0
       async status() {
-        return { providerId: 'stub', connected: true as const, diagnosis: 'ok' }
+        return {
+          providerId: 'stub',
+          endpoint: '127.0.0.1:23119',
+          connected: true as const,
+          diagnosis: 'ok',
+        }
       }
       async search() {
         this.calls += 1

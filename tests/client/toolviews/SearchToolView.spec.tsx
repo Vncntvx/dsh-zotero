@@ -168,6 +168,62 @@ describe('SearchToolView', () => {
     ).toBeTruthy()
   })
 
+  it("counts the call's hits, not the rows the card draws", () => {
+    // A deployment that raised `maxSearchResults` past the projection's own
+    // 20-row bound gets a longer page: the summary must still report every hit
+    // the call returned, and say how many the card is not listing.
+    const items = Array.from({ length: 20 }, (_, index) => ({
+      ref: `zotero://user/0/item/ITEM${String(index).padStart(4, '0')}`,
+      title: `Paper ${index}`,
+      creatorSummary: `Author ${index}`,
+    }))
+    const block = settled({
+      call: { name: 'zotero_search', argsRaw: JSON.stringify({ query: 'quantum' }) },
+      meta: { returned: 50, total: 500, displayed: 20, omitted: 30, noteMatches: null, items },
+    })
+
+    renderView({
+      callId: 'c1',
+      toolName: 'zotero_search',
+      phase: 'result',
+      block,
+      useDisclosure: mockUseDisclosure(true),
+      t: mockT,
+    })
+
+    expect(screen.getByText(mockT('toolSummaryFound', { count: 50 }))).toBeTruthy()
+    expect(screen.getByText(mockT('omittedRowsNote', { count: 30 }))).toBeTruthy()
+  })
+
+  it("names each hit's Zotero item type", () => {
+    const block = settled({
+      call: { name: 'zotero_search', argsRaw: JSON.stringify({ query: 'quantum' }) },
+      meta: {
+        returned: 1,
+        total: 1,
+        items: [
+          {
+            ref: 'zotero://user/0/item/ABCD1234',
+            title: 'Quantum Advantage',
+            creatorSummary: 'Alice',
+            itemType: 'journalArticle',
+          },
+        ],
+      },
+    })
+
+    renderView({
+      callId: 'c1',
+      toolName: 'zotero_search',
+      phase: 'result',
+      block,
+      useDisclosure: mockUseDisclosure(true),
+      t: mockT,
+    })
+
+    expect(screen.getByText('journalArticle')).toBeTruthy()
+  })
+
   it('renders empty result notice when 0 items returned', () => {
     const block = settled({
       call: {

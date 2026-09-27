@@ -75,6 +75,7 @@ describe('the write state across the status surfaces', () => {
 describe('formatStatus write line', () => {
   const connected: ZoteroStatus = {
     providerId: 'local',
+    endpoint: '127.0.0.1:23119',
     connected: true,
     diagnosis: 'ok',
     zoteroVersion: '10.0.2',
@@ -101,6 +102,26 @@ describe('formatStatus write line', () => {
 
   it('omits the write line when the provider serves no writes', () => {
     expect(formatStatus(connected)).not.toContain('Write:')
+  })
+
+  it('names the dialled endpoint on both the connected and the failed probe', () => {
+    // The address that did not answer is the first thing worth checking, so a
+    // disconnected status has to carry it too — not only the happy path.
+    expect(formatStatus(connected)).toContain('Local API: 127.0.0.1:23119')
+    const failed = formatStatus({
+      ...connected,
+      endpoint: 'localhost:23119',
+      connected: false,
+      diagnosis: 'ZOTERO_NOT_RUNNING: offline',
+    })
+    expect(failed).toContain('Local API: localhost:23119')
+    expect(failed).toContain('ZOTERO_NOT_RUNNING: offline')
+  })
+
+  it('leads the connected status with the endpoint so it is the first fact read', () => {
+    const lines = formatStatus(connected).split('\n')
+    expect(lines[0]).toBe('Zotero local API: connected')
+    expect(lines[1]).toBe('Local API: 127.0.0.1:23119')
   })
 })
 

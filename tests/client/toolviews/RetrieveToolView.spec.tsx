@@ -28,6 +28,149 @@ function renderView(props: Parameters<typeof createToolViewProps<'zotero_retriev
 }
 
 describe('RetrieveToolView', () => {
+  it('counts the passages the call found, not the rows the card draws', () => {
+    // The projection is capped at four regardless of `maxEvidencePassages`, so
+    // counting rows would report "4 passages" over a body listing 4 of 20 — the
+    // bounded-listing mistake the search card had.
+    const block = settled({
+      call: {
+        name: 'zotero_retrieve',
+        argsRaw: JSON.stringify({ ref: 'zotero://user/0/item/ABCD1234', query: 'attention' }),
+      },
+      meta: {
+        count: 20,
+        sources: ['annotation'],
+        truncated: true,
+        sourcesSkipped: [],
+        items: [
+          {
+            source: 'annotation',
+            sourceRef: 'zotero://user/0/annotation/ANN12345',
+            preview: 'one',
+            previewTruncated: false,
+          },
+          {
+            source: 'annotation',
+            sourceRef: 'zotero://user/0/annotation/ANN67890',
+            preview: 'two',
+            previewTruncated: false,
+          },
+        ],
+      },
+    })
+
+    renderView({
+      callId: 'c1',
+      toolName: 'zotero_retrieve',
+      phase: 'result',
+      block,
+      useDisclosure: mockUseDisclosure(true),
+      t: mockT,
+    })
+
+    expect(
+      screen.getAllByText(mockT('toolSummaryEvidence', { count: 20 })).length,
+    ).toBeGreaterThanOrEqual(1)
+    // And the reader is told which rows the card could not show.
+    expect(screen.getByText(mockT('toolOmittedPassages', { count: 18 }))).toBeTruthy()
+    expect(screen.queryByText(mockT('toolSummaryEvidence', { count: 2 }))).toBeNull()
+  })
+
+  it('notes no omitted passages when the listing is whole', () => {
+    const block = settled({
+      call: {
+        name: 'zotero_retrieve',
+        argsRaw: JSON.stringify({ ref: 'zotero://user/0/item/ABCD1234', query: 'attention' }),
+      },
+      meta: {
+        count: 1,
+        sources: ['annotation'],
+        truncated: false,
+        sourcesSkipped: [],
+        items: [
+          {
+            source: 'annotation',
+            sourceRef: 'zotero://user/0/annotation/ANN12345',
+            preview: 'one',
+            previewTruncated: false,
+          },
+        ],
+      },
+    })
+
+    renderView({
+      callId: 'c1',
+      toolName: 'zotero_retrieve',
+      phase: 'result',
+      block,
+      useDisclosure: mockUseDisclosure(true),
+      t: mockT,
+    })
+
+    // `mockT` resolves the zh dictionary, so the absence is asserted against
+    // that same copy. The second check widens to the copy's own wording rather
+    // than a hand-copied fragment, which would silently match nothing the day
+    // the string is reworded.
+    expect(screen.queryByText(mockT('toolOmittedPassages', { count: 1 }))).toBeNull()
+    const zhPrefix = zh.toolOmittedPassages.split('{count}')[0]!
+    expect(screen.queryByText(new RegExp(zhPrefix))).toBeNull()
+  })
+
+  it("badges a match that was found only in the annotator's own comment", () => {
+    // A comment hit is the annotator's view, not the paper's text; the text the
+    // model read already says so, and the badge must not let the card imply
+    // otherwise.
+    const block = settled({
+      call: {
+        name: 'zotero_retrieve',
+        argsRaw: JSON.stringify({ ref: 'zotero://user/0/item/ABCD1234', query: 'attention' }),
+      },
+      meta: {
+        count: 2,
+        sources: ['annotation'],
+        truncated: false,
+        sourcesSkipped: [],
+        items: [
+          {
+            source: 'annotation',
+            sourceRef: 'zotero://user/0/annotation/ANN12345',
+            preview: 'the annotator disagrees',
+            previewTruncated: false,
+            pageLabel: '3',
+            attachmentRef: 'zotero://user/0/attachment/WXYZ6789',
+            matchedFields: ['comment'],
+          },
+          {
+            source: 'annotation',
+            sourceRef: 'zotero://user/0/annotation/ANN67890',
+            preview: 'the paper says it',
+            previewTruncated: false,
+            pageLabel: '4',
+            matchedFields: ['text'],
+          },
+          {
+            source: 'note',
+            sourceRef: 'zotero://user/0/note/NOTE1234',
+            preview: 'a single-field source never badges',
+            previewTruncated: false,
+          },
+        ],
+      },
+    })
+
+    renderView({
+      callId: 'c1',
+      toolName: 'zotero_retrieve',
+      phase: 'result',
+      block,
+      useDisclosure: mockUseDisclosure(true),
+      t: mockT,
+    })
+
+    expect(screen.getByText(zh.matchedInComment)).toBeTruthy()
+    expect(screen.getByText(zh.matchedInText)).toBeTruthy()
+    expect(screen.queryAllByText(zh.matchedInComment)).toHaveLength(1)
+  })
   it('renders running state with retrieve running indicator', () => {
     const block = running({
       name: 'zotero_retrieve',

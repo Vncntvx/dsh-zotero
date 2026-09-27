@@ -18,12 +18,14 @@ import type {
   StartedToolCall,
   ToolResultNode,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { isDeclinedOf, rowStateOf } from '../presenters.ts'
+import { metaOf, rowStateOf } from '../presenters.ts'
+import { writeMetaOf } from '../sources/decoders.ts'
 import css from './toolviews.module.css'
 
 export interface ToolRowRenderContext {
   readonly isRunning: boolean
   readonly isDeclined: boolean
+  readonly isUnverified: boolean
   readonly state: 'preparing' | 'running' | 'ok' | 'error' | 'stopped'
 }
 
@@ -69,11 +71,24 @@ export function ZoteroToolRow({
   const { expanded, toggle: toggleExpand } = useDisclosure()
 
   const state = isPreparing ? 'preparing' : rowStateOf(block)
-  const isDeclined = isDeclinedOf(block)
+  // Both write verdicts read the outcome through the one decoder, so a fourth
+  // outcome added to the write projection cannot be classified here but not
+  // there. `isDeclined` used to be its own `presenters` helper reading
+  // `meta.kind` directly, which put a value-import cycle between `presenters`
+  // and `decoders` to save one line.
+  const writeKind = writeMetaOf(metaOf(block) ?? {}).kind
+  const isDeclined = writeKind === 'declined'
+  // A write that committed but could not be verified is neither a success nor
+  // a failure: the outcome is unproven, and the row has to say so before any
+  // body can pick the right receipt.
+  const isUnverified = !isDeclined && state === 'ok' && writeKind === 'committed-unverified'
 
   const failureLine = state === 'error' && !isDeclined ? (errorSummary ?? t('toolFailed')) : null
   const stoppedLine = state === 'stopped' ? t('toolStopped') : null
-  const displaySummary = isDeclined ? t('toolDeclined') : (failureLine ?? stoppedLine ?? summary)
+  const cautionLine = isUnverified ? t('toolUnverified') : null
+  const displaySummary = isDeclined
+    ? t('toolDeclined')
+    : (failureLine ?? stoppedLine ?? cautionLine ?? summary)
 
   const collapsedContent = useMemo(() => {
     if (!displaySummary && !isPreparing) return null
@@ -84,7 +99,7 @@ export function ZoteroToolRow({
           className={clsx(
             css.summary,
             state === 'error' && !isDeclined && css.errorSummary,
-            (state === 'stopped' || isDeclined) && css.declinedSummary,
+            (state === 'stopped' || isDeclined || isUnverified) && css.cautionSummary,
           )}
         >
           <TextShimmer active={isRunning}>{displaySummary}</TextShimmer>
@@ -94,14 +109,14 @@ export function ZoteroToolRow({
         )}
       </>
     )
-  }, [displaySummary, isDeclined, isPreparing, isRunning, state, summarySuffix])
+  }, [displaySummary, isDeclined, isUnverified, isPreparing, isRunning, state, summarySuffix])
 
   const expandable = !isPreparing && (children !== undefined || failureLine !== null)
   const open = expanded && expandable
 
   const renderContext = useMemo<ToolRowRenderContext>(
-    () => ({ isRunning, isDeclined, state }),
-    [isRunning, isDeclined, state],
+    () => ({ isRunning, isDeclined, isUnverified, state }),
+    [isRunning, isDeclined, isUnverified, state],
   )
 
   const content = useMemo(() => {
@@ -129,7 +144,10 @@ export function ZoteroToolRow({
   ) : null
 
   return (
-    <div data-tool={toolName} data-state={isDeclined ? 'declined' : state}>
+    <div
+      data-tool={toolName}
+      data-state={isDeclined ? 'declined' : isUnverified ? 'unverified' : state}
+    >
       <DisclosureRow
         icon={icon}
         title={title}

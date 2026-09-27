@@ -5,10 +5,11 @@
  * @module tests/client/toolviews/ExportToolView
  */
 
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { zh } from '../../../src/client/locales.ts'
 import { ExportToolView } from '../../../src/client/toolviews/ExportToolView.tsx'
+import { jobPromotedMessage, jobStartedMessage } from '../../../src/job-runner.ts'
 import { mockT } from '../helpers/mock-translate.ts'
 import { createToolViewProps, mockUseDisclosure } from '../helpers/mock-disclosure.ts'
 import { running, settled } from '../helpers/blocks.ts'
@@ -28,6 +29,85 @@ function renderView(props: Parameters<typeof createToolViewProps<'zotero_export'
 }
 
 describe('ExportToolView', () => {
+  it('names the CSL style and locale the call resolved, and downloads the format', () => {
+    // A citation's rendering is unknowable without its style and locale, and
+    // the Exports panel states both beside the format. The projection carried
+    // them from the start; the card ignored them.
+    const block = settled({
+      call: {
+        name: 'zotero_export',
+        argsRaw: JSON.stringify({
+          format: 'citation',
+          style: 'apa',
+          locale: 'en-US',
+          refs: ['zotero://user/0/item/ABCD1234'],
+        }),
+      },
+      meta: {
+        format: 'citation',
+        style: 'apa',
+        locale: 'en-US',
+        requested: 1,
+        count: 1,
+        refs: ['zotero://user/0/item/ABCD1234'],
+        refsOmitted: 0,
+      },
+      content: [{ type: 'text', text: '(Doe, 2026)' }],
+    })
+
+    renderView({
+      callId: 'c1',
+      toolName: 'zotero_export',
+      phase: 'result',
+      block,
+      useDisclosure: mockUseDisclosure(true),
+      t: mockT,
+    })
+
+    expect(screen.getByText('apa')).toBeTruthy()
+    expect(screen.getByText('en-US')).toBeTruthy()
+    // The download names its extension, exactly as the Exports panel's does.
+    expect(screen.getByRole('button', { name: `${zh.downloadArtifact} .txt` })).toBeTruthy()
+  })
+
+  it('writes the export body to a format-named file', () => {
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL')
+    const block = settled({
+      call: {
+        name: 'zotero_export',
+        argsRaw: JSON.stringify({ format: 'bibtex', refs: ['zotero://user/0/item/ABCD1234'] }),
+      },
+      meta: {
+        format: 'bibtex',
+        requested: 1,
+        refs: ['zotero://user/0/item/ABCD1234'],
+        refsOmitted: 0,
+      },
+      content: [{ type: 'text', text: '@article{doe2026}' }],
+    })
+
+    renderView({
+      callId: 'c1',
+      toolName: 'zotero_export',
+      phase: 'result',
+      block,
+      useDisclosure: mockUseDisclosure(true),
+      t: mockT,
+    })
+
+    const anchors: HTMLAnchorElement[] = []
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      anchors.push(this)
+    })
+    fireEvent.click(screen.getByRole('button', { name: `${zh.downloadArtifact} .bib` }))
+    expect(createObjectURL).toHaveBeenCalledTimes(1)
+    expect(anchors[0]?.getAttribute('download')).toBe('zotero-bibtex.bib')
+    click.mockRestore()
+    createObjectURL.mockRestore()
+  })
+
   it('renders running state with export running indicator', () => {
     const block = running({
       name: 'zotero_export',
@@ -253,5 +333,81 @@ describe('ExportToolView', () => {
     expect(
       screen.getByText(mockT('toolSummaryExport', { format: 'BibTeX', count: 0 })),
     ).toBeTruthy()
+  })
+
+  it('renders summary for background jobs', () => {
+    const block = settled({
+      call: {
+        name: 'zotero_export',
+        argsRaw: JSON.stringify({ format: 'bibtex', run_in_background: true }),
+      },
+      content: [{ type: 'text', text: jobStartedMessage('zotero-1') }],
+      meta: { kind: 'background', jobId: 'zotero-1' },
+    })
+
+    renderView({
+      callId: 'c1',
+      toolName: 'zotero_export',
+      phase: 'result',
+      block,
+      useDisclosure: mockUseDisclosure(false),
+      t: mockT,
+    })
+
+    expect(screen.getByText(mockT('toolSummaryJobBackground', { jobId: 'zotero-1' }))).toBeTruthy()
+  })
+
+  it('renders summary for promoted jobs', () => {
+    const block = settled({
+      call: {
+        name: 'zotero_export',
+        argsRaw: JSON.stringify({ format: 'bibtex' }),
+      },
+      content: [
+        {
+          type: 'text',
+          text: jobPromotedMessage('zotero-1', 4000),
+        },
+      ],
+      meta: { kind: 'promoted', jobId: 'zotero-1', timeoutMs: 4000 },
+    })
+
+    renderView({
+      callId: 'c1',
+      toolName: 'zotero_export',
+      phase: 'result',
+      block,
+      useDisclosure: mockUseDisclosure(false),
+      t: mockT,
+    })
+
+    expect(screen.getByText(mockT('toolSummaryJobPromoted', { jobId: 'zotero-1' }))).toBeTruthy()
+  })
+
+  it('does not present a job acknowledgement as export content', () => {
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL')
+    const block = settled({
+      call: {
+        name: 'zotero_export',
+        argsRaw: JSON.stringify({ format: 'bibtex', run_in_background: true }),
+      },
+      content: [{ type: 'text', text: jobStartedMessage('zotero-1') }],
+      meta: { kind: 'background', jobId: 'zotero-1' },
+    })
+
+    renderView({
+      callId: 'c1',
+      toolName: 'zotero_export',
+      phase: 'result',
+      block,
+      useDisclosure: mockUseDisclosure(true),
+      t: mockT,
+    })
+
+    expect(screen.getByText(mockT('toolSummaryJobPending', { jobId: 'zotero-1' }))).toBeTruthy()
+    expect(screen.queryByRole('button', { name: `${zh.downloadArtifact} .bib` })).toBeNull()
+    expect(screen.queryByRole('button', { name: zh.copy })).toBeNull()
+    expect(createObjectURL).not.toHaveBeenCalled()
+    createObjectURL.mockRestore()
   })
 })

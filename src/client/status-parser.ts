@@ -14,6 +14,7 @@ import {
   ZOTERO_STATUS_FIELD_SCHEMA,
   ZOTERO_STATUS_FIELD_SERVER_ID,
   ZOTERO_STATUS_FIELD_WRITE,
+  ZOTERO_STATUS_FIELD_ENDPOINT,
   ZOTERO_STATUS_WRITE_DISABLED,
   ZOTERO_STATUS_WRITE_ENABLED_STORED,
   ZOTERO_STATUS_WRITE_ENABLED_PENDING,
@@ -22,6 +23,8 @@ import {
 /** Structured result derived from formatted status text. */
 export interface ParsedZoteroStatus {
   readonly connected: boolean
+  /** The authority the probe dialled; absent when the text predates the field. */
+  readonly endpoint?: string
   readonly zoteroVersion?: string
   readonly apiVersion?: string
   readonly schemaVersion?: string
@@ -74,6 +77,7 @@ export function parseZoteroStatusText(text: string | undefined | null): ParsedZo
 
   const firstLine = lines[0]!
   if (firstLine.startsWith(ZOTERO_STATUS_CONNECTED)) {
+    let endpoint: string | undefined
     let zoteroVersion: string | undefined
     let apiVersion: string | undefined
     let schemaVersion: string | undefined
@@ -85,6 +89,11 @@ export function parseZoteroStatusText(text: string | undefined | null): ParsedZo
 
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i]!
+      const parsedEndpoint = parseField(line, ZOTERO_STATUS_FIELD_ENDPOINT)
+      if (parsedEndpoint !== undefined) {
+        endpoint = parsedEndpoint
+        continue
+      }
       const parsedVer = parseField(line, ZOTERO_STATUS_FIELD_VERSION)
       if (parsedVer !== undefined) {
         zoteroVersion = parsedVer
@@ -122,6 +131,7 @@ export function parseZoteroStatusText(text: string | undefined | null): ParsedZo
 
     return {
       connected: true,
+      ...(endpoint === undefined ? {} : { endpoint }),
       zoteroVersion,
       apiVersion,
       schemaVersion,
@@ -133,9 +143,19 @@ export function parseZoteroStatusText(text: string | undefined | null): ParsedZo
   }
 
   if (firstLine.startsWith(ZOTERO_STATUS_DISCONNECTED)) {
-    const diagnosis = lines.slice(1).join('\n').trim() || undefined
+    // Everything after the header is the address that failed to answer plus
+    // the diagnosis; both are facts, and the first line of the rest is the
+    // endpoint whenever the host emitted it.
+    const rest = lines.slice(1)
+    const parsedEndpoint = parseField(rest[0] ?? '', ZOTERO_STATUS_FIELD_ENDPOINT)
+    const diagnosis =
+      rest
+        .slice(parsedEndpoint === undefined ? 0 : 1)
+        .join('\n')
+        .trim() || undefined
     return {
       connected: false,
+      ...(parsedEndpoint === undefined ? {} : { endpoint: parsedEndpoint }),
       diagnosis,
       rawText: trimmed,
     }

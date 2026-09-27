@@ -26,6 +26,13 @@ export { ZOTERO_SETTINGS_NAMESPACE }
 /** The zotero connectivity view the web tab renders (optional facts omitted when absent). */
 export interface ZoteroStatusView {
   readonly providerId: string
+  /**
+   * The authority the probe dialled, e.g. `127.0.0.1:23119`. Optional on the
+   * wire view only because one answer has no endpoint to report: a service that
+   * is not composed at all dialled nothing. Every answer that reached a
+   * provider carries one, on the connected and the disconnected arm alike.
+   */
+  readonly endpoint?: string
   readonly connected: boolean
   readonly apiVersion?: string
   readonly serverId?: string
@@ -123,6 +130,8 @@ export const ZOTERO_STATUS_FIELD_API = 'API version'
 export const ZOTERO_STATUS_FIELD_SCHEMA = 'Schema version'
 export const ZOTERO_STATUS_FIELD_SERVER_ID = 'Server ID'
 export const ZOTERO_STATUS_FIELD_WRITE = 'Write'
+/** The dialled authority, reported on both the connected and the failed probe. */
+export const ZOTERO_STATUS_FIELD_ENDPOINT = 'Local API'
 
 /** Canonical status values for the Write field. */
 export const ZOTERO_STATUS_WRITE_DISABLED = 'disabled'

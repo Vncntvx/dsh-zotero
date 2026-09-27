@@ -6,7 +6,10 @@
 
 import { act, renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { useZoteroProbe } from '../../src/client/components/useZoteroProbe.ts'
+import type { ZoteroStatusView } from '../../src/contract.ts'
+import { deferred } from '../helpers/sync.ts'
 
 describe('useZoteroProbe', () => {
   it('initializes with loading false by default', () => {
@@ -113,12 +116,13 @@ describe('useZoteroProbe', () => {
   })
 
   it('guards against concurrent in-flight requests', async () => {
-    let resolveProbe: ((val: unknown) => void) | undefined
-    const probePromise = new Promise((resolve) => {
-      resolveProbe = resolve
-    })
+    // The in-flight guard is the hook's only concurrency mechanism: a second
+    // call returns before it starts, so there is never a second response that
+    // could overwrite the first. This is what the removed sequence token used
+    // to look like it was protecting.
+    const gate = deferred<RemoteResult<ZoteroStatusView>>()
 
-    const probe = vi.fn(async () => probePromise as Promise<never>)
+    const probe = vi.fn(async () => gate.promise)
     const { result } = renderHook(() => useZoteroProbe(probe))
 
     let p1: Promise<void> | undefined
@@ -133,10 +137,10 @@ describe('useZoteroProbe', () => {
     expect(result.current.state.loading).toBe(true)
 
     await act(async () => {
-      resolveProbe?.({
+      gate.resolve({
         ok: true,
         value: { providerId: 'local', connected: true, diagnosis: '' },
-      })
+      } as RemoteResult<ZoteroStatusView>)
       await p1
       await p2
     })
@@ -145,29 +149,51 @@ describe('useZoteroProbe', () => {
     expect(result.current.state.data?.connected).toBe(true)
   })
 
-  it('discards unmounted updates gracefully', async () => {
-    let resolveProbe: ((val: unknown) => void) | undefined
-    const probePromise = new Promise((resolve) => {
-      resolveProbe = resolve
+  it('accepts a fresh probe after the previous one settled', async () => {
+    // The guard releases on settle, so a card's Refresh button keeps working
+    // across repeated uses rather than latching after the first click.
+    const probe = vi.fn(async () => ({
+      ok: true as const,
+      value: { providerId: 'local', endpoint: '127.0.0.1:23119', connected: true, diagnosis: '' },
+    }))
+    const { result } = renderHook(() => useZoteroProbe(probe))
+
+    await act(async () => {
+      await result.current.runProbe()
+    })
+    await act(async () => {
+      await result.current.runProbe()
     })
 
-    const probe = vi.fn(async () => probePromise as Promise<never>)
+    expect(probe).toHaveBeenCalledTimes(2)
+  })
+
+  it('survives unmounting mid-flight without throwing', async () => {
+    // This is the whole claim, and it is deliberately modest: a probe that
+    // outlives its component must not throw while settling. Whether it also
+    // avoids a state update afterwards cannot be asserted from here — React 18
+    // removed the setState-on-an-unmounted-component warning, so a late
+    // resolution is unobservable from outside the component. The guard is kept
+    // because it is right, not because this test proves it, which is why
+    // `useZoteroProbe`'s docstring records it instead of leaving a test to
+    // imply it.
+    const gate = deferred<RemoteResult<ZoteroStatusView>>()
+    const probe = vi.fn(async () => gate.promise)
     const { result, unmount } = renderHook(() => useZoteroProbe(probe))
 
     act(() => {
       void result.current.runProbe()
     })
     expect(result.current.state.loading).toBe(true)
-
     unmount()
 
     await act(async () => {
-      resolveProbe?.({
+      gate.resolve({
         ok: true,
         value: { providerId: 'local', connected: true, diagnosis: '' },
-      })
+      } as RemoteResult<ZoteroStatusView>)
     })
 
-    // Unmount succeeded without throwing unhandled React state update errors
+    expect(probe).toHaveBeenCalledTimes(1)
   })
 })

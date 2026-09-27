@@ -27,7 +27,7 @@ export type SearchToolViewProps = PropsRuntime<'tool.call.toolview', 'zotero_sea
 export function SearchToolView(props: SearchToolViewProps) {
   const { toolName, block, useDisclosure, inspect, t } = props
 
-  const { query, summary, errorSummary, rows, rawText } = useMemo(() => {
+  const { icon, query, summary, errorSummary, rows, omitted, rawText } = useMemo(() => {
     const args = argsOf(block)
     const q = (stringField(args ?? {}, 'query') ?? '').trim()
     const meta = metaOf(block)
@@ -39,7 +39,11 @@ export function SearchToolView(props: SearchToolViewProps) {
     if ('phase' in block && block.phase === 'start') {
       sum = q ? `"${q}"` : t('toolSearchRunning')
     } else if (searchView?.rows !== null && searchView?.rows !== undefined) {
-      const count = searchView.rows.length
+      // The hit count is the call's, not the projection's: `rows` is the
+      // bounded page the card draws, which is capped independently of the
+      // search's own `maxSearchResults`. Counting rows read 20 on a
+      // deployment that raised the cap past the projection's.
+      const count = searchView.returned ?? searchView.rows.length
       sum =
         noteMatches > 0
           ? t('toolSummaryFoundWithNotes', { count, notes: noteMatches })
@@ -57,10 +61,12 @@ export function SearchToolView(props: SearchToolViewProps) {
     }))
 
     return {
+      icon: <IconSearchOutlineRegular size={14} />,
       query: q,
       summary: sum,
       errorSummary: errSummary,
       rows: items,
+      omitted: searchView?.omitted ?? 0,
       rawText: raw,
     }
   }, [block, t])
@@ -72,7 +78,7 @@ export function SearchToolView(props: SearchToolViewProps) {
       useDisclosure={useDisclosure}
       inspect={inspect}
       t={t}
-      icon={<IconSearchOutlineRegular size={14} />}
+      icon={icon}
       title={t('toolTitleSearch')}
       summary={summary}
       summarySuffix={query ? `"${query}"` : null}
@@ -85,42 +91,52 @@ export function SearchToolView(props: SearchToolViewProps) {
 
         if (rows.length > 0) {
           return (
-            <div className={css.cardList}>
-              {rows.map((row) => (
-                <div key={row.ref} className={css.itemCard}>
-                  <div className={css.itemHeader}>
-                    {row.year !== undefined && <span className={css.badge}>{row.year}</span>}
-                    {row.bestAttachmentType && (
-                      <span className={css.badge} data-tone="pdf">
-                        {t('badgePdf')}
-                      </span>
-                    )}
-                    <span className={css.itemTitle}>{row.title}</span>
+            <>
+              <div className={css.cardList}>
+                {rows.map((row) => (
+                  <div key={row.ref} className={css.itemCard}>
+                    <div className={css.itemHeader}>
+                      {row.year !== undefined && <span className={css.badge}>{row.year}</span>}
+                      {row.itemType !== undefined && (
+                        <span className={css.badge} data-tone="info">
+                          {row.itemType}
+                        </span>
+                      )}
+                      {row.bestAttachmentType && (
+                        <span className={css.badge} data-tone="pdf">
+                          {t('badgePdf')}
+                        </span>
+                      )}
+                      <span className={css.itemTitle}>{row.title}</span>
+                    </div>
+                    {row.creatorSummary && <div className={css.itemMeta}>{row.creatorSummary}</div>}
+                    <div className={css.itemActions}>
+                      {row.selectUrl && (
+                        <ZoteroOpenLink
+                          url={row.selectUrl}
+                          verdict="open"
+                          label={t('openInZotero')}
+                          t={t}
+                          className={css.actionLink}
+                        />
+                      )}
+                      {row.pdfUrl && (
+                        <ZoteroOpenLink
+                          url={row.pdfUrl}
+                          verdict="open"
+                          label={t('openPdf')}
+                          t={t}
+                          className={css.actionLink}
+                        />
+                      )}
+                    </div>
                   </div>
-                  {row.creatorSummary && <div className={css.itemMeta}>{row.creatorSummary}</div>}
-                  <div className={css.itemActions}>
-                    {row.selectUrl && (
-                      <ZoteroOpenLink
-                        url={row.selectUrl}
-                        verdict="open"
-                        label={t('openInZotero')}
-                        t={t}
-                        className={css.actionLink}
-                      />
-                    )}
-                    {row.pdfUrl && (
-                      <ZoteroOpenLink
-                        url={row.pdfUrl}
-                        verdict="open"
-                        label={t('openPdf')}
-                        t={t}
-                        className={css.actionLink}
-                      />
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+              {omitted > 0 && (
+                <div className={css.coverageNotice}>{t('omittedRowsNote', { count: omitted })}</div>
+              )}
+            </>
           )
         }
 

@@ -30,6 +30,7 @@ describe('parseZoteroStatusText', () => {
   it('parses a fully populated connected status string', () => {
     const raw = [
       'Zotero local API: connected',
+      'Local API: 127.0.0.1:23119',
       'Zotero version: 7.0.11',
       'API version: 3',
       'Schema version: 1',
@@ -40,6 +41,7 @@ describe('parseZoteroStatusText', () => {
     const result = parseZoteroStatusText(raw)
     expect(result).toEqual({
       connected: true,
+      endpoint: '127.0.0.1:23119',
       zoteroVersion: '7.0.11',
       apiVersion: '3',
       schemaVersion: '1',
@@ -48,6 +50,40 @@ describe('parseZoteroStatusText', () => {
       write: { enabled: true, authorized: true },
       rawText: raw,
     })
+  })
+
+  it('reads the dialled endpoint off a failed probe without eating the diagnosis', () => {
+    const raw = [
+      'Zotero local API: not connected',
+      'Local API: localhost:23119',
+      'ZOTERO_NOT_RUNNING: offline',
+    ].join('\n')
+    const result = parseZoteroStatusText(raw)
+    expect(result?.connected).toBe(false)
+    expect(result?.endpoint).toBe('localhost:23119')
+    expect(result?.diagnosis).toBe('ZOTERO_NOT_RUNNING: offline')
+  })
+
+  it('keeps parsing a status string that predates the endpoint line', () => {
+    // An older transcript's text has no endpoint; the rest of the status still
+    // parses rather than failing the whole card.
+    const raw = ['Zotero local API: connected', 'Zotero version: 7.0.11'].join('\n')
+    const result = parseZoteroStatusText(raw)
+    expect(result?.endpoint).toBeUndefined()
+    expect(result?.zoteroVersion).toBe('7.0.11')
+  })
+
+  it('keeps a multi-line diagnosis whole when the endpoint line is absent', () => {
+    const raw = [
+      'Zotero local API: not connected',
+      'ZOTERO_API_DISABLED: local API off',
+      'Turn it on in Zotero Settings → Advanced.',
+    ].join('\n')
+    const result = parseZoteroStatusText(raw)
+    expect(result?.endpoint).toBeUndefined()
+    expect(result?.diagnosis).toBe(
+      'ZOTERO_API_DISABLED: local API off\nTurn it on in Zotero Settings → Advanced.',
+    )
   })
 
   it('parses connected status with an unreported Server ID and disabled write', () => {

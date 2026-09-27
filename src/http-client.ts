@@ -335,6 +335,17 @@ export class ZoteroHttpClient {
   }
 
   /**
+   * The authority this client actually dials, e.g. `127.0.0.1:23119`. The
+   * connectivity probe reports it, so a status card names the endpoint it
+   * reached rather than a configured default that may not be this one. It is
+   * the dialled value, not a re-read of the configuration: a provider behind a
+   * different transport reports its own.
+   */
+  get endpoint(): string {
+    return new URL(this.baseUrlWithSlash).host
+  }
+
+  /**
    * GET a path relative to the API base (no leading slash; `''` is `/api/`).
    * @param path - relative path, e.g. `users/0/items/ABCD1234`.
    * @param search - query parameters, serialized verbatim.
