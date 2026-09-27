@@ -146,14 +146,17 @@ zotero_attachment(ref="zotero://user/0/item/ABC123")
 
 ### 参数
 
-| 参数     | 类型     | 默认值    | 说明                                                                            |
-| -------- | -------- | --------- | ------------------------------------------------------------------------------- |
-| `refs`   | string[] | —         | 条目 ref 列表（必填），受 `maxExportRefs` 限制（默认 50）                       |
-| `format` | string   | —         | `citation` / `bibliography` / `bibtex` / `biblatex` / `ris` / `csljson`（必填） |
-| `style`  | string   | 配置值    | CSL 样式 ID（仅 citation/bibliography）                                         |
-| `locale` | string   | `"en-US"` | CSL 区域设置（仅 citation/bibliography）                                        |
+| 参数                | 类型     | 默认值    | 说明                                                                            |
+| ------------------- | -------- | --------- | ------------------------------------------------------------------------------- |
+| `refs`              | string[] | —         | 条目 ref 列表（必填），受 `maxExportRefs` 限制（默认 50）                       |
+| `format`            | string   | —         | `citation` / `bibliography` / `bibtex` / `biblatex` / `ris` / `csljson`（必填） |
+| `style`             | string   | 配置值    | CSL 样式 ID（仅 citation/bibliography）                                         |
+| `locale`            | string   | `"en-US"` | CSL 区域设置（仅 citation/bibliography）                                        |
+| `run_in_background` | boolean  | `false`   | 是否作为后台任务启动（由 Harness `ctx.jobs` 管理）                              |
 
 ### 输出
+
+前台同步完成时：
 
 | format                              | 输出结构                                                     |
 | ----------------------------------- | ------------------------------------------------------------ |
@@ -161,17 +164,24 @@ zotero_attachment(ref="zotero://user/0/item/ABC123")
 | `bibliography`                      | `{text}`                                                     |
 | `bibtex`/`biblatex`/`ris`/`csljson` | `{text, items: [{ref, key, title, entryIndex, start, end}]}` |
 
+后台运行（`run_in_background=true`）或前台等待超时自动提升为后台任务时：
+
+`{kind: "background", jobId: string}` 或 `{kind: "promoted", jobId: string, timeoutMs: number, message: string}`
+
 ### 注意事项
 
 - `citation` 模式自动按 Zotero 的 50 键上限分批请求
 - `bibtex`/`biblatex`/`ris`/`csljson` 每次调用最多 50 条，超出需分批
 - 导出文本永远不会被截断——超过 `maxExportChars`（默认 1M）会报错
 - 单次导出仅允许同一 `library` 的 refs，跨库（`user/0` + `group` 或不同 `group`）会 `INVALID_ARGUMENT` 且 0 次 HTTP
+- 支持通过 `run_in_background=true` 直接作为后台 Job 启动，或在 `promoteOnTimeout: true`（默认）下当前台执行超过 `foregroundWaitMs` 时无损自动提升为后台 Job
+- 后台 Job 拥有独立的执行生命周期与取消控制；逐条目解析与导出进度实时上报至 Web 会话顶栏并写入日志环形缓冲区（`{ channel: 'log' }`），不污染模型上下文；完成后结果存于 Job 产物中，可通过 `job_output` 获取或通过界面 / `job_kill` 随时终止
 
 ### 示例
 
 ```
 zotero_export(refs=["zotero://user/0/item/ABC123", "zotero://user/0/item/DEF456"], format="bibtex")
+zotero_export(refs=["zotero://user/0/item/ABC123", "zotero://user/0/item/DEF456"], format="bibtex", run_in_background=true)
 ```
 
 ---
@@ -257,21 +267,31 @@ zotero_children(ref="zotero://user/0/item/ABC123", include=["annotations"])
 
 ### 参数
 
-| 参数      | 类型     | 默认值           | 说明                                                                                                                          |
-| --------- | -------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `library` | object   | —                | `{type, id}`，省略默认个人库 `user/0`                                                                                         |
-| `since`   | object   | —                | 起始游标 `{serverId, library, version}`：把早先结果的 `cursor` 原样传回；不接受裸版本号；省略取基线                           |
-| `include` | string[] | 除 fulltext 现有 | `items`（顶层条目 + 子对象 + 回收站，分列）/ `collections` / `savedSearches` / `fulltext` / `deleted`（显式空数组报参数错误） |
+| 参数                | 类型     | 默认值           | 说明                                                                                                                          |
+| ------------------- | -------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `library`           | object   | —                | `{type, id}`，省略默认个人库 `user/0`                                                                                         |
+| `since`             | object   | —                | 起始游标 `{serverId, library, version}`：把早先结果的 `cursor` 原样传回；不接受裸版本号；省略取基线                           |
+| `include`           | string[] | 除 fulltext 现有 | `items`（顶层条目 + 子对象 + 回收站，分列）/ `collections` / `savedSearches` / `fulltext` / `deleted`（显式空数组报参数错误） |
+| `run_in_background` | boolean  | `false`          | 是否作为后台任务启动（由 Harness `ctx.jobs` 管理）                                                                            |
 
 ### 输出
 
+前台同步完成时：
+
 `{library, serverId?, fromVersion?, cursor?, libraryChanged?, versionUnavailable?, changed: {items?, childItems?, trashedItems?, collections?, savedSearches?, fulltextAttachments?}, deleted?: {items, collections, savedSearches, tags}, totals?, unobservable?: {kind, reason}[], truncated?}`。每种资源整批读取（条目是三个端点各整批读一次），但每个列表按 `maxChangesResults`（默认 50）截断，`truncated` 表示列表是摘要；`totals` 给出每种资源（含 `childItems`/`trashedItems`/`deletedItems`/`deletedCollections`/`deletedSavedSearches`/`deletedTags`/`deletedOther`）被截断前的真实条数——某个计数出现即表示该种类读过，读没读过不必从列表是否为空去猜。`unobservable` 的每项带原因：`not-served`（该构建没有这个端点，如本机 Zotero 10.0.2-beta.9 没有 `/deleted` 路由）、`range-not-covered`（`since` 早于该构建保留的删除日志，409）、`unreadable`（响应形状不是文档化的那个，本次没读到，游标也不归还）。对 `items` 种类，`/items`、`/items/top` 或 `/items/trash` 任一分区失败也不返回游标；`fulltext` 使用独立计数器，因此包含 fulltext 的结果明确不返回库游标。
+
+后台运行（`run_in_background=true`）或前台等待超时自动提升为后台任务时：
+
+`{kind: "background", jobId: string}` 或 `{kind: "promoted", jobId: string, timeoutMs: number, message: string}`
+
+在后台执行期间，扫描进度（基线探测、条目空间三分区、集合、保存的搜索、全文索引、墓碑删除）实时上报至 Web 会话顶栏并记录于日志环形缓冲区（`{ channel: 'log' }`）。完成后可通过 `job_output` 获取完整变更结构，或通过顶栏 / `job_kill` 随时终止。
 
 ### 示例
 
 ```
 zotero_changes()
 zotero_changes(since={serverId: "<from cursor>", library: {type: "user", id: 0}, version: 1234}, include=["items", "deleted"])
+zotero_changes(include=["items", "collections", "deleted"], run_in_background=true)
 ```
 
 ---

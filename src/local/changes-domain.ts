@@ -56,6 +56,7 @@ import type {
   ZoteroChangesTotals,
   ZoteroChangesUnobservable,
   ZoteroChangesUnobservableReason,
+  ZoteroProgressEvent,
   SupportedLocalLibrary,
 } from '../types.js'
 
@@ -198,6 +199,7 @@ export async function changes(
   deps: { client: ZoteroHttpClient; limits: LocalApiLimits },
   request: ZoteroChangesRequest,
   signal?: AbortSignal,
+  onProgress?: (progress: ZoteroProgressEvent) => void,
 ): Promise<ZoteroChangesResult> {
   const library = request.library ?? PERSONAL_LIBRARY
   const prefix = libraryPrefix(library)
@@ -300,6 +302,7 @@ export async function changes(
   }
 
   if (since === undefined) {
+    onProgress?.({ phase: 'baseline', message: 'Reading library baseline version...' })
     // A baseline is one reading: the version a later call diffs from. A build
     // that reports none — no items read, or no version header on it — has no
     // changes story to tell, and the result says so rather than handing back a
@@ -323,6 +326,10 @@ export async function changes(
   // The cursor's instance is this call's identity: every request carries it,
   // and every response has to confirm it (below).
   const instance = since.serverId
+  onProgress?.({
+    phase: 'probe',
+    message: `Probing library version since ${since.version}...`,
+  })
   // The version this diff is pinned to. Every array resource reports the
   // library's *current* version in `Last-Modified-Version` — not the newest
   // version on its page — so any other reading means a write landed while this
@@ -458,6 +465,10 @@ export async function changes(
   }
 
   if (include.has('items')) {
+    onProgress?.({
+      phase: 'items',
+      message: 'Reading items partitions (/items, /items/top, /items/trash)...',
+    })
     // The item space in the API's own three reads. All three are needed for
     // the partition: without the top-level read no key can be told from a
     // child object, and without the trash read a trashing would advance the
@@ -533,14 +544,17 @@ export async function changes(
     }
   }
   if (include.has('collections')) {
+    onProgress?.({ phase: 'collections', message: 'Reading changed collections...' })
     const entries = await readKind('collections', `${prefix}/collections`, 'collections')
     if (entries !== undefined) changed.collections = entries
   }
   if (include.has('savedSearches')) {
+    onProgress?.({ phase: 'savedSearches', message: 'Reading changed saved searches...' })
     const entries = await readKind('savedSearches', `${prefix}/searches`, 'savedSearches')
     if (entries !== undefined) changed.savedSearches = entries
   }
   if (include.has('fulltext')) {
+    onProgress?.({ phase: 'fulltext', message: 'Reading reindexed full text...' })
     // The index listing, read only when asked for: unbounded and unversioned,
     // it answers in the full-text counter's own namespace, so its rows are a
     // listing for this library version rather than a delta on it.
@@ -602,6 +616,7 @@ export async function changes(
   // it can never make the read incomplete: it only shortens what is listed.
   let deleted: ZoteroChangesResult['deleted']
   if (include.has('deleted')) {
+    onProgress?.({ phase: 'deleted', message: 'Reading deleted tombstones...' })
     const read = await attempt(async () => {
       const params = new URLSearchParams()
       params.set('since', String(since.version))
@@ -643,6 +658,10 @@ export async function changes(
     complete && !include.has('fulltext')
       ? cursorFor(instance, library, snapshot, include)
       : undefined
+  onProgress?.({
+    phase: 'done',
+    message: `Changes reading completed at version ${snapshot ?? since.version}`,
+  })
   return {
     library,
     serverId: instance,

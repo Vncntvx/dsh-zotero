@@ -33,6 +33,9 @@ describe('resolveConfig', () => {
       writeEnabled: false,
       writePersistKey: true,
       webEnabled: true,
+      enableRunInBackground: true,
+      promoteOnTimeout: true,
+      foregroundWaitMs: 4000,
     })
   })
 
@@ -119,6 +122,10 @@ describe('resolveConfig', () => {
     expect(() => resolveConfig({ timeoutMs: 0 })).toThrowError(/timeoutMs/)
     expect(() => resolveConfig({ timeoutMs: -1 })).toThrowError(/timeoutMs/)
     expect(() => resolveConfig({ timeoutMs: Number.NaN })).toThrowError(/timeoutMs/)
+    expect(() => resolveConfig({ foregroundWaitMs: 0 })).toThrowError(/foregroundWaitMs/)
+    expect(() => resolveConfig({ foregroundWaitMs: -1 })).toThrowError(/foregroundWaitMs/)
+    expect(() => resolveConfig({ foregroundWaitMs: Number.NaN })).toThrowError(/foregroundWaitMs/)
+    expect(() => resolveConfig({ foregroundWaitMs: 1.5 })).toThrowError(/foregroundWaitMs/)
   })
 
   it('rejects non-finite or non-integer limits', () => {

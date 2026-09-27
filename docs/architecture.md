@@ -43,6 +43,14 @@ graph LR
 - 证据排名：基于 passage 语料库的 BM25（annotations、notes、abstract、fulltext chunks）
 - 导出：引用批次遵循 API 的 50 键上限；translator 格式最多 50 条引用
 
+### 后台长任务引擎 (`src/job-runner.ts`)
+
+- 适配 Harness 0.1.7 的 `ctx.jobs` 统一任务子系统
+- 支持显式后台执行（`run_in_background: true`）与超时自动提升（`promoteOnTimeout: true`，受 `foregroundWaitMs` 控制）
+- 信号分离：后台任务持有独立 `AbortController` 信号，调用方轮次超时不会强杀已提升的任务；调用方主动取消时显式触发 `registry.kill`
+- 通道隔离：流式进度上报走 `{ channel: 'log' }`，向 Web 会话顶栏与日志流实时汇报，避免污染模型上下文输出；任务最终产物安全写入 `JobOutcome.result`
+- 请求驱动：不启动后台常驻守护轮询，仅在工具调用请求时按需起止
+
 ### HTTP 传输层 (`src/http-client.ts`)
 
 - 纯回环 fetch，固定 API 版本（`Zotero-API-Version: 3`）
@@ -87,7 +95,7 @@ graph LR
 
 - **文献库**：默认只读；`writeEnabled` 显式打开后可写个人库（笔记、标签、入藏）。写路径见写入边界。
 - **网络**：仅回环（127.0.0.1, localhost, ::1）。拒绝重定向。
-- **无后台轮询**、无遥测、无常驻任务。
+- **无后台轮询**、无遥测、无常驻守护进程。耗时任务通过 `ctx.jobs` 按需创建并严格受生命周期管理。
 - **证据**：基于词项的 BM25，按查询词与 passage 的词频匹配度排序。
 - **Sources tab**：会话快照，展示本次对话引用的条目。
 - **导出**：工具以文本形式返回（模型读到的就是它）；面板提供复制与文件下载。

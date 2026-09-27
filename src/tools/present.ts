@@ -41,6 +41,14 @@ export function formatSearchLine(
 }
 
 /**
+ * Flatten render blocks to the plain text a job outcome stores.
+ * Non-text blocks are dropped — job_output is a text receipt.
+ */
+export function textOfBlocks(blocks: ContentBlock[]): string {
+  return blocks.map((block) => (block.type === 'text' ? block.text : '')).join('\n')
+}
+
+/**
  * The declined-write content: the user answered the plan without approving,
  * so nothing was written. Shared by the three write tools so the wording
  * cannot drift between them.

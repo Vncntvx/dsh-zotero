@@ -21,11 +21,21 @@ import {
 import type { ResolvedConfig } from '../config.js'
 import { withConnectivityAsk } from '../ask.js'
 import { boundedPresentationMeta, projectExportMeta } from '../presentation-meta.js'
-import { metaRecordOf } from './present.js'
+import { metaRecordOf, textOfBlocks } from './present.js'
 import { ZOTERO_ITEMKEY_BATCH } from '../constants.js'
 import { assertNonEmptyList, invalid, parseSupportedRef, REF_ARG_HINT } from './validate.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroExportFormat, ZoteroExportRequest } from '../types.js'
+import {
+  BACKGROUND_OUTPUT_PROPERTIES,
+  PROMOTED_OUTPUT_PROPERTIES,
+  ZoteroJobRunner,
+  executeWithJobs,
+  isJobArm,
+  jobPolicyOf,
+  presentJobArm,
+  renderJobArm,
+} from '../job-runner.js'
 
 const EXPORT_PARAMETERS = {
   refs: {
@@ -49,12 +59,27 @@ const EXPORT_PARAMETERS = {
     type: 'string',
     description: 'CSL locale for citation/bibliography (defaults to the configured locale).',
   },
+  run_in_background: {
+    type: 'boolean',
+    description:
+      'Run in the background and return a job id immediately (collect with job_output, stop with job_kill). Recommended for large export requests.',
+  },
 } as const
 
 type ExportArgs = InferArgs<typeof EXPORT_PARAMETERS>
 
 const EXPORT_OUTPUT_SCHEMA = {
   oneOf: [
+    {
+      type: 'object',
+      additionalProperties: false,
+      properties: BACKGROUND_OUTPUT_PROPERTIES,
+    },
+    {
+      type: 'object',
+      additionalProperties: false,
+      properties: PROMOTED_OUTPUT_PROPERTIES,
+    },
     {
       type: 'object',
       additionalProperties: false,
@@ -154,7 +179,8 @@ function buildRequest(args: ExportArgs, config: ResolvedConfig): ZoteroExportReq
   }
 }
 
-function renderExport(_args: ExportArgs, value: ExportOutput): ContentBlock[] {
+function renderExport(args: ExportArgs, value: ExportOutput): ContentBlock[] {
+  if (isJobArm(value)) return renderJobArm(value)
   if (value.format === 'citation') {
     return [
       {
@@ -177,6 +203,8 @@ function renderExport(_args: ExportArgs, value: ExportOutput): ContentBlock[] {
 function presentExportResult(_args: ExportArgs, result: ToolResult): ToolResultView | undefined {
   const record = metaRecordOf(result)
   if (record === undefined) return undefined
+  const jobArm = presentJobArm('Zotero export', record)
+  if (jobArm !== undefined) return jobArm
   if (typeof record.format !== 'string' || record.format === '') return undefined
   if (record.format === 'citation') {
     if (typeof record.count !== 'number') return undefined
@@ -209,8 +237,13 @@ export function registerExportTool(ctx: Context, service: ZoteroService): void {
         // The refs list and the per-document items are the long fields; the
         // shared byte budget drops them (with detailOmitted) rather than
         // mid-cutting the artifact facts.
-        presentationMeta: (args, value) =>
-          boundedPresentationMeta(projectExportMeta(value, args.refs), ['refs', 'items']),
+        presentationMeta: (args, value) => {
+          if (isJobArm(value)) return value
+          return boundedPresentationMeta(
+            projectExportMeta(value as Parameters<typeof projectExportMeta>[0], args.refs),
+            ['refs', 'items'],
+          )
+        },
       },
       presentCall: (args) => ({
         card: 'generic',
@@ -220,9 +253,19 @@ export function registerExportTool(ctx: Context, service: ZoteroService): void {
       presentResult: presentExportResult,
       isConcurrencySafe: () => true,
       async execute(args, exec) {
-        return await withConnectivityAsk(ctx, service.recovery, exec, () =>
-          service.export(buildRequest(args, service.config), exec.signal),
-        )
+        const request = buildRequest(args, service.config)
+        return await executeWithJobs({
+          runner: new ZoteroJobRunner(ctx.get('jobs')),
+          exec,
+          label: `zotero_export (${args.refs.length} refs, ${args.format})`,
+          run: (signal, onProgress) =>
+            withConnectivityAsk(ctx, service.recovery, { signal, agent: exec.agent }, () =>
+              service.export(request, signal, onProgress),
+            ),
+          renderResult: (value) => textOfBlocks(renderExport(args, value)),
+          runInBackground: args.run_in_background === true,
+          policy: jobPolicyOf(service.config),
+        })
       },
     }),
   )

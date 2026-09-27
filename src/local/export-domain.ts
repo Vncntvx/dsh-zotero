@@ -35,6 +35,7 @@ import type {
   ZoteroExportRequest,
   ZoteroExportResult,
   ZoteroObjectRef,
+  ZoteroProgressEvent,
 } from '../types.js'
 
 /**
@@ -56,6 +57,7 @@ export async function exportItems(
   deps: { client: ZoteroHttpClient; limits: LocalApiLimits },
   request: ZoteroExportRequest,
   signal?: AbortSignal,
+  onProgress?: (progress: ZoteroProgressEvent) => void,
 ): Promise<ZoteroExportResult> {
   for (const ref of request.refs) requireSupportedLocalRef(ref, ['item'])
   // Export is single-library (v3 lock): all refs must share the same SupportedLocalLibrary
@@ -84,7 +86,16 @@ export async function exportItems(
   const style = request.style ?? deps.limits.defaultStyle
   const locale = request.locale ?? deps.limits.defaultLocale
   if (request.format === 'citation') {
-    return await exportCitations(deps, request.refs, exportPrefix, serverId, style, locale, signal)
+    return await exportCitations(
+      deps,
+      request.refs,
+      exportPrefix,
+      serverId,
+      style,
+      locale,
+      signal,
+      onProgress,
+    )
   }
   // Duplicate refs name the same item; the translator formats fetch each
   // document on its own, so every unique key is requested once, keeping
@@ -103,6 +114,12 @@ export async function exportItems(
       ZOTERO_INVALID_ARGUMENT,
     )
   }
+  onProgress?.({
+    phase: 'fetch_batch',
+    current: 0,
+    total: refs.length,
+    message: `Fetching ${refs.length} items (${request.format})...`,
+  })
   const search = new URLSearchParams()
   search.set('itemKey', refs.map((ref) => ref.key).join(','))
   if (request.format === 'bibliography') {
@@ -133,6 +150,7 @@ export async function exportItems(
     exportPrefix,
     serverId,
     signal,
+    onProgress,
   )
   return { format: request.format, text: body, items }
 }
@@ -156,8 +174,10 @@ async function fetchExportItems(
   prefix: string,
   serverId: string | undefined,
   signal: AbortSignal | undefined,
+  onProgress?: (progress: ZoteroProgressEvent) => void,
 ): Promise<ZoteroExportItem[]> {
   let totalChars = text.length
+  let completed = 0
   const inputs = await mapWithConcurrency(
     refs,
     ZOTERO_EXPORT_CONCURRENCY,
@@ -186,6 +206,13 @@ async function fetchExportItems(
           ZOTERO_OUTPUT_TOO_LARGE,
         )
       }
+      completed += 1
+      onProgress?.({
+        phase: 'resolve_item',
+        current: completed,
+        total: refs.length,
+        message: `Resolving export items ${completed}/${refs.length} (${format})...`,
+      })
       return { ref: formatRef(ref), key: ref.key, text: body }
     },
     { signal },
@@ -207,10 +234,17 @@ async function exportCitations(
   style: string,
   locale: string,
   signal: AbortSignal | undefined,
+  onProgress?: (progress: ZoteroProgressEvent) => void,
 ): Promise<ZoteroExportResult> {
   const citationByKey = new Map<string, string>()
   for (let start = 0; start < refs.length; start += ZOTERO_ITEMKEY_BATCH) {
     const batch = refs.slice(start, start + ZOTERO_ITEMKEY_BATCH)
+    onProgress?.({
+      phase: 'citation_batch',
+      current: start,
+      total: refs.length,
+      message: `Exporting citations ${start}/${refs.length}...`,
+    })
     const batchCitations = await fetchCitationBatch(
       deps,
       batch,
@@ -222,6 +256,12 @@ async function exportCitations(
     )
     for (const [key, text] of batchCitations) citationByKey.set(key, text)
   }
+  onProgress?.({
+    phase: 'citation_batch',
+    current: refs.length,
+    total: refs.length,
+    message: `Exported ${refs.length}/${refs.length} citations`,
+  })
   const citations = refs.map((ref) => {
     const text = citationByKey.get(ref.key)
     if (text === undefined) {

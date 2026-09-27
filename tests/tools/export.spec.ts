@@ -13,8 +13,15 @@ import {
   EXPORT_STYLE_BLANK_MESSAGE,
   exportRefsOverCapMessage,
 } from '../../src/tools/export.js'
+import {
+  JOBS_UNAVAILABLE_MESSAGE,
+  RUN_IN_BACKGROUND_DISABLED_MESSAGE,
+  jobStartedMessage,
+  jobPromotedMessage,
+} from '../../src/job-runner.js'
 import { expectValue, type HostLane, setupHostLane } from '../helpers/lanes/host-lane.js'
 import { citationRow } from '../helpers/server/objects.js'
+import { TestJobRegistry } from '../helpers/fake-jobs.js'
 
 let lane: HostLane
 let mock: HostLane['mock']
@@ -219,5 +226,152 @@ describe('zotero_export tool', () => {
         .tool('zotero_export')!
         .isConcurrencySafe?.({ refs: ['zotero://user/0/item/ABCD1234'], format: 'bibtex' }),
     ).toBe(true)
+  })
+
+  describe('background jobs and promotion', () => {
+    it('refuses run_in_background when enableRunInBackground is disabled in config', async () => {
+      await lane.teardown()
+      lane = await setupHostLane({ enableRunInBackground: false })
+      runTool = lane.runTool
+
+      const result = await runTool('zotero_export', {
+        refs: ['zotero://user/0/item/ABCD1234'],
+        format: 'citation',
+        run_in_background: true,
+      })
+      expect(result.isError).toBe(true)
+      if (!result.isError) throw new Error('unreachable')
+      expect((result.content[0] as { text: string }).text).toBe(
+        `Error: ${RUN_IN_BACKGROUND_DISABLED_MESSAGE}`,
+      )
+    })
+
+    it('refuses run_in_background when ctx.jobs service is unavailable', async () => {
+      const result = await runTool('zotero_export', {
+        refs: ['zotero://user/0/item/ABCD1234'],
+        format: 'citation',
+        run_in_background: true,
+      })
+      expect(result.isError).toBe(true)
+      if (!result.isError) throw new Error('unreachable')
+      expect((result.content[0] as { text: string }).text).toBe(
+        `Error: ${JOBS_UNAVAILABLE_MESSAGE}`,
+      )
+    })
+
+    it('starts a background job and returns immediately when run_in_background is requested', async () => {
+      let jobRegistry!: TestJobRegistry
+      await lane.teardown()
+      lane = await setupHostLane(
+        {},
+        {
+          compose: async (ctx) => {
+            jobRegistry = new TestJobRegistry(ctx)
+          },
+        },
+      )
+      runTool = lane.runTool
+      lane.mock.route('GET', '/api/users/0/items', (req, res, helpers) =>
+        helpers.json([citationRow('ABCD1234', '<span>A, 2023</span>')]),
+      )
+
+      const result = expectValue(
+        await runTool('zotero_export', {
+          refs: ['zotero://user/0/item/ABCD1234'],
+          format: 'citation',
+          run_in_background: true,
+        }),
+        'zotero_export',
+      )
+
+      expect(result.value).toEqual({
+        kind: 'background',
+        jobId: 'zotero-1',
+      })
+      expect((result.content[0] as { text: string }).text).toBe(jobStartedMessage('zotero-1'))
+
+      const job = jobRegistry.jobs.get('zotero-1' as never)!
+      const outcome = await job.hooks.done
+      expect(outcome.status).toBe('completed')
+      expect(outcome.result).toContain('zotero://user/0/item/ABCD1234')
+
+      const toolDef = lane.tool('zotero_export')!
+      const view = toolDef.presentResult?.(
+        { refs: ['zotero://user/0/item/ABCD1234'], format: 'citation' },
+        result as never,
+      )
+      expect(view?.title).toBe('Zotero export: background job zotero-1')
+    })
+
+    it('promotes to a background job when execution exceeds foregroundWaitMs', async () => {
+      await lane.teardown()
+      lane = await setupHostLane(
+        { foregroundWaitMs: 20 },
+        {
+          compose: async (ctx) => {
+            await ctx.plugin(TestJobRegistry)
+          },
+        },
+      )
+      runTool = lane.runTool
+      lane.mock.route('GET', '/api/users/0/items', async (req, res, helpers) => {
+        await new Promise((resolve) => setTimeout(resolve, 100))
+        return helpers.json([citationRow('ABCD1234', '<span>A, 2023</span>')])
+      })
+
+      const result = expectValue(
+        await runTool('zotero_export', {
+          refs: ['zotero://user/0/item/ABCD1234'],
+          format: 'citation',
+        }),
+        'zotero_export',
+      )
+
+      expect(result.value).toEqual({
+        kind: 'promoted',
+        jobId: 'zotero-1',
+        timeoutMs: 20,
+        message: jobPromotedMessage('zotero-1', 20),
+      })
+      expect((result.content[0] as { text: string }).text).toBe(jobPromotedMessage('zotero-1', 20))
+
+      const toolDef = lane.tool('zotero_export')!
+      const view = toolDef.presentResult?.(
+        { refs: ['zotero://user/0/item/ABCD1234'], format: 'citation' },
+        result as never,
+      )
+      expect(view?.title).toBe('Zotero export: promoted to job zotero-1')
+    })
+
+    it('returns the foreground result when execution completes within foregroundWaitMs', async () => {
+      await lane.teardown()
+      lane = await setupHostLane(
+        { foregroundWaitMs: 1000 },
+        {
+          compose: async (ctx) => {
+            await ctx.plugin(TestJobRegistry)
+          },
+        },
+      )
+      runTool = lane.runTool
+      lane.mock.route('GET', '/api/users/0/items', (req, res, helpers) =>
+        helpers.json([citationRow('ABCD1234', '<span>A, 2023</span>')]),
+      )
+
+      const result = expectValue(
+        await runTool('zotero_export', {
+          refs: ['zotero://user/0/item/ABCD1234'],
+          format: 'citation',
+        }),
+        'zotero_export',
+      )
+
+      expect(result.value).toEqual({
+        format: 'citation',
+        style: 'apa',
+        locale: 'en-US',
+        citations: [{ ref: 'zotero://user/0/item/ABCD1234', text: '<span>A, 2023</span>' }],
+      })
+    })
   })
 })

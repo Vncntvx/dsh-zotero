@@ -43,6 +43,18 @@ import type {
   SupportedLocalLibrary,
 } from '../types.js'
 import type { ZoteroService } from '../service.js'
+import {
+  BACKGROUND_OUTPUT_PROPERTIES,
+  PROMOTED_OUTPUT_PROPERTIES,
+  ZoteroJobRunner,
+  executeWithJobs,
+  isJobArm,
+  jobPolicyOf,
+  presentJobArm,
+  renderJobArm,
+} from '../job-runner.js'
+import { textOfBlocks } from './present.js'
+import { CHANGE_SECTIONS, DELETED_OTHER_TOTAL_KEY, DELETION_SECTIONS } from '../changes-contract.js'
 
 const ALL_INCLUDES = ALL_CHANGES_INCLUDES
 
@@ -117,6 +129,11 @@ const CHANGES_PARAMETERS = {
     description:
       'Resource kinds to diff; defaults to everything but fulltext. items covers the whole item space as Zotero partitions it — top-level items, child objects (notes, attachments, annotations) and items in the trash — and reports each as its own list, because a child object carries its own version: editing one advances the library without touching any top-level item. deleted lists tombstoned items, collections, saved searches and tag names. fulltext is a separate listing: its endpoint answers in the full-text index\u2019s own version counter, so its rows are not a delta on the library version and it is left out unless named explicitly.',
   },
+  run_in_background: {
+    type: 'boolean',
+    description:
+      'Run in the background and return a job id immediately (collect with job_output, stop with job_kill). Recommended for large library scans or deep change diffs.',
+  },
 } as const
 
 type ChangesArgs = InferArgs<typeof CHANGES_PARAMETERS>
@@ -129,6 +146,52 @@ const CHANGED_OBJECT = {
     version: { type: 'integer', required: true },
   },
 } as const
+
+type ChangesArraySchema = { readonly type: 'array'; readonly items: typeof CHANGED_OBJECT }
+type DeletedArraySchema = {
+  readonly type: 'array'
+  readonly required: true
+  readonly items: { readonly type: 'string' }
+}
+type IntegerSchema = { readonly type: 'integer' }
+
+function changedSectionPropertiesOf<const T extends readonly { readonly key: string }[]>(
+  sections: T,
+): { [K in T[number]['key']]: ChangesArraySchema } {
+  return Object.fromEntries(
+    sections.map(({ key }) => [key, { type: 'array', items: CHANGED_OBJECT }]),
+  ) as { [K in T[number]['key']]: ChangesArraySchema }
+}
+
+function deletedSectionPropertiesOf<const T extends readonly { readonly key: string }[]>(
+  sections: T,
+): { [K in T[number]['key']]: DeletedArraySchema } {
+  return Object.fromEntries(
+    sections.map(({ key }) => [key, { type: 'array', required: true, items: { type: 'string' } }]),
+  ) as { [K in T[number]['key']]: DeletedArraySchema }
+}
+
+function totalPropertiesOf<
+  const C extends readonly { readonly key: string }[],
+  const D extends readonly { readonly totalKey: string }[],
+>(
+  changed: C,
+  deleted: D,
+): {
+  [K in C[number]['key'] | D[number]['totalKey'] | typeof DELETED_OTHER_TOTAL_KEY]: IntegerSchema
+} {
+  return Object.fromEntries([
+    ...changed.map(({ key }) => [key, { type: 'integer' }]),
+    ...deleted.map(({ totalKey }) => [totalKey, { type: 'integer' }]),
+    [DELETED_OTHER_TOTAL_KEY, { type: 'integer' }],
+  ]) as {
+    [K in C[number]['key'] | D[number]['totalKey'] | typeof DELETED_OTHER_TOTAL_KEY]: IntegerSchema
+  }
+}
+
+const changedSectionProperties = changedSectionPropertiesOf(CHANGE_SECTIONS)
+const deletedSectionProperties = deletedSectionPropertiesOf(DELETION_SECTIONS)
+const totalProperties = totalPropertiesOf(CHANGE_SECTIONS, DELETION_SECTIONS)
 
 /**
  * The ways a kind this call included can contribute nothing, each with the
@@ -173,58 +236,48 @@ const UNOBSERVABLE_ENTRY = {
 } as const
 
 const CHANGES_OUTPUT_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    library: LIBRARY_SCHEMA,
-    serverId: { type: 'string' },
-    fromVersion: { type: 'integer' },
-    cursor: CURSOR_OUTPUT_SCHEMA,
-    libraryChanged: { type: 'boolean' },
-    versionUnavailable: { type: 'boolean' },
-    changed: {
+  oneOf: [
+    {
       type: 'object',
       additionalProperties: false,
-      required: true,
-      properties: {
-        items: { type: 'array', items: CHANGED_OBJECT },
-        childItems: { type: 'array', items: CHANGED_OBJECT },
-        trashedItems: { type: 'array', items: CHANGED_OBJECT },
-        collections: { type: 'array', items: CHANGED_OBJECT },
-        savedSearches: { type: 'array', items: CHANGED_OBJECT },
-        fulltextAttachments: { type: 'array', items: CHANGED_OBJECT },
-      },
+      properties: BACKGROUND_OUTPUT_PROPERTIES,
     },
-    deleted: {
+    {
+      type: 'object',
+      additionalProperties: false,
+      properties: PROMOTED_OUTPUT_PROPERTIES,
+    },
+    {
       type: 'object',
       additionalProperties: false,
       properties: {
-        items: { type: 'array', required: true, items: { type: 'string' } },
-        collections: { type: 'array', required: true, items: { type: 'string' } },
-        savedSearches: { type: 'array', required: true, items: { type: 'string' } },
-        tags: { type: 'array', required: true, items: { type: 'string' } },
+        library: LIBRARY_SCHEMA,
+        serverId: { type: 'string' },
+        fromVersion: { type: 'integer' },
+        cursor: CURSOR_OUTPUT_SCHEMA,
+        libraryChanged: { type: 'boolean' },
+        versionUnavailable: { type: 'boolean' },
+        changed: {
+          type: 'object',
+          additionalProperties: false,
+          required: true,
+          properties: changedSectionProperties,
+        },
+        deleted: {
+          type: 'object',
+          additionalProperties: false,
+          properties: deletedSectionProperties,
+        },
+        totals: {
+          type: 'object',
+          additionalProperties: false,
+          properties: totalProperties,
+        },
+        unobservable: { type: 'array', items: UNOBSERVABLE_ENTRY },
+        truncated: { type: 'boolean' },
       },
     },
-    totals: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        items: { type: 'integer' },
-        childItems: { type: 'integer' },
-        trashedItems: { type: 'integer' },
-        collections: { type: 'integer' },
-        savedSearches: { type: 'integer' },
-        fulltextAttachments: { type: 'integer' },
-        deletedItems: { type: 'integer' },
-        deletedCollections: { type: 'integer' },
-        deletedSavedSearches: { type: 'integer' },
-        deletedTags: { type: 'integer' },
-        deletedOther: { type: 'integer' },
-      },
-    },
-    unobservable: { type: 'array', items: UNOBSERVABLE_ENTRY },
-    truncated: { type: 'boolean' },
-  },
+  ],
 } as const
 
 type ChangesOutput = InferValue<typeof CHANGES_OUTPUT_SCHEMA>
@@ -315,6 +368,7 @@ export function otherDeletedMessage(count: number): string {
 }
 
 export function renderChanges(args: ChangesArgs, value: ChangesOutput): ContentBlock[] {
+  if (isJobArm(value)) return renderJobArm(value)
   const lines = []
   const cursor = value.cursor
   if (value.fromVersion === undefined) {
@@ -420,6 +474,8 @@ export function renderChanges(args: ChangesArgs, value: ChangesOutput): ContentB
 function presentChangesResult(_args: ChangesArgs, result: ToolResult): ToolResultView | undefined {
   const record = metaRecordOf(result)
   if (record === undefined) return undefined
+  const jobArm = presentJobArm('Zotero changes', record)
+  if (jobArm !== undefined) return jobArm
   const changed = asRecord(record.changed)
   const deleted = asRecord(record.deleted)
   if (changed === undefined && deleted === undefined) {
@@ -477,7 +533,13 @@ export function registerChangesTool(ctx: Context, service: ZoteroService): void 
       output: {
         schema: CHANGES_OUTPUT_SCHEMA,
         render: renderChanges,
-        presentationMeta: (_args, value) => boundedPresentationMeta(value, ['changed', 'deleted']),
+        presentationMeta: (_args, value) => {
+          if (isJobArm(value)) return value
+          return boundedPresentationMeta(value as Parameters<typeof boundedPresentationMeta>[0], [
+            'changed',
+            'deleted',
+          ])
+        },
       },
       presentCall: (args) => ({
         card: 'generic',
@@ -488,9 +550,23 @@ export function registerChangesTool(ctx: Context, service: ZoteroService): void 
       presentResult: presentChangesResult,
       isConcurrencySafe: () => true,
       async execute(args, exec) {
-        return await withConnectivityAsk(ctx, service.recovery, exec, () =>
-          service.changes(buildRequest(args), exec.signal),
-        )
+        const request = buildRequest(args)
+        const label =
+          args.since === undefined
+            ? 'zotero_changes (baseline)'
+            : `zotero_changes (since v${args.since.version})`
+        return await executeWithJobs({
+          runner: new ZoteroJobRunner(ctx.get('jobs')),
+          exec,
+          label,
+          run: (signal, onProgress) =>
+            withConnectivityAsk(ctx, service.recovery, { signal, agent: exec.agent }, () =>
+              service.changes(request, signal, onProgress),
+            ),
+          renderResult: (value) => textOfBlocks(renderChanges(args, value)),
+          runInBackground: args.run_in_background === true,
+          policy: jobPolicyOf(service.config),
+        })
       },
     }),
   )

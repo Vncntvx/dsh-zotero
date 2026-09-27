@@ -13,6 +13,22 @@
 
 import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
+import type {} from '@deepseek-ai/dsh-jobs'
+import type { ChangeSectionKey, ChangeTotalKey, DeletionSectionKey } from './changes-contract.js'
+
+declare module '@deepseek-ai/dsh-jobs' {
+  interface JobKindMap {
+    zotero: 'zotero'
+  }
+}
+
+/** A progress event emitted by a domain operation (e.g. export, changes). */
+export interface ZoteroProgressEvent {
+  readonly phase: string
+  readonly current?: number
+  readonly total?: number
+  readonly message: string
+}
 
 /** A capability a provider may safely support. */
 export type ZoteroCapability =
@@ -65,6 +81,13 @@ export interface ZoteroObjectRef {
 /** Live connectivity facts for one provider, rendered by `/zotero status`. */
 export interface ZoteroStatus {
   providerId: string
+  /**
+   * The authority this provider dialled, e.g. `127.0.0.1:23119`. It is the
+   * endpoint the probe actually reached, which is the one fact a user needs
+   * when the probe failed — a status card naming a configured default instead
+   * would send them to the wrong place.
+   */
+  endpoint: string
   connected: boolean
   apiVersion?: string
   serverId?: string
@@ -687,25 +710,7 @@ export interface ZoteroChangesUnobservable {
  * capped listing it is not seeing. A count is present exactly when its kind
  * was read, so presence — not the value — is the coverage statement.
  */
-export interface ZoteroChangesTotals {
-  /** Changed live top-level items. */
-  items?: number
-  /** Changed live child objects: notes, attachments, annotations. */
-  childItems?: number
-  /** Changed items currently in the trash. */
-  trashedItems?: number
-  collections?: number
-  savedSearches?: number
-  /** Rows the full-text index listed — the index's counter, not the library version. */
-  fulltextAttachments?: number
-  deletedItems?: number
-  deletedCollections?: number
-  deletedSavedSearches?: number
-  /** Tombstoned tags (names, not keys). */
-  deletedTags?: number
-  /** Tombstoned entries of kinds this plugin does not model. */
-  deletedOther?: number
-}
+export type ZoteroChangesTotals = Partial<Record<ChangeTotalKey, number>>
 
 export interface ZoteroChangesResult {
   library: SupportedLocalLibrary
@@ -742,48 +747,13 @@ export interface ZoteroChangesResult {
    * no header that says which build serves versioned reads.
    */
   versionUnavailable?: boolean
-  changed: {
-    /**
-     * Changed live top-level items (`/items/top`), the entries a library
-     * listing shows.
-     */
-    items?: ZoteroChangedObject[]
-    /**
-     * Changed live child objects — notes, attachments, and annotations, read
-     * as the difference between `/items` and `/items/top`. They carry their
-     * own versions, so an edit to one of them advances the library without
-     * touching its parent; reporting only top-level items would drop them
-     * silently.
-     */
-    childItems?: ZoteroChangedObject[]
-    /**
-     * Changed items that are currently in the trash (`/items/trash`). Zotero's
-     * item listings exclude the trash, so without this read trashing an item
-     * would advance the library version invisibly.
-     */
-    trashedItems?: ZoteroChangedObject[]
-    collections?: ZoteroChangedObject[]
-    savedSearches?: ZoteroChangedObject[]
-    /**
-     * Attachments the full-text index mentions (`/fulltext?since=`). That
-     * endpoint filters on the index's own version counter rather than the
-     * library version, so these rows are a listing and not a delta on
-     * `cursor` — they are read only when a caller names `fulltext`.
-     */
-    fulltextAttachments?: ZoteroChangedObject[]
-  }
+  changed: Partial<Record<ChangeSectionKey, ZoteroChangedObject[]>>
   /**
    * Tombstoned objects, keyed by kind. Present exactly when the tombstone read
    * was observed — an empty object is the positive statement "nothing was
    * removed in this range", which is why it is never omitted for brevity.
    */
-  deleted?: {
-    items: string[]
-    collections: string[]
-    savedSearches: string[]
-    /** Tombstoned tag names; the endpoint lists names, not keys. */
-    tags: string[]
-  }
+  deleted?: Record<DeletionSectionKey, string[]>
   /** The uncapped changed counts behind `changed` and `deleted`. */
   totals?: ZoteroChangesTotals
   /**
@@ -994,7 +964,11 @@ export interface ZoteroProvider {
    * @param signal - caller cancellation; forwarded to the transport.
    * @returns changed/deleted keys plus the library's current version.
    */
-  changes?(request: ZoteroChangesRequest, signal?: AbortSignal): Promise<ZoteroChangesResult>
+  changes?(
+    request: ZoteroChangesRequest,
+    signal?: AbortSignal,
+    onProgress?: (progress: ZoteroProgressEvent) => void,
+  ): Promise<ZoteroChangesResult>
   /**
    * Resolve an item or attachment ref to a usable location.
    * @param ref - the item or attachment ref to resolve.
@@ -1018,7 +992,11 @@ export interface ZoteroProvider {
    * @param signal - caller cancellation; forwarded to the transport.
    * @returns per-ref citations or the joined export text.
    */
-  export?(request: ZoteroExportRequest, signal?: AbortSignal): Promise<ZoteroExportResult>
+  export?(
+    request: ZoteroExportRequest,
+    signal?: AbortSignal,
+    onProgress?: (progress: ZoteroProgressEvent) => void,
+  ): Promise<ZoteroExportResult>
   browse?(request: ZoteroBrowseRequest, signal?: AbortSignal): Promise<ZoteroBrowseResult>
   /**
    * Create a research note (standalone or under a parent item) with tags,

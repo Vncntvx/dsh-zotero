@@ -78,6 +78,15 @@ export interface Config {
    * `src/client/` gates on it. Do not branch host behavior on it.
    */
   webEnabled?: Volatile<boolean>
+  /**
+   * Allow the explicit `run_in_background` parameter on heavy tools. Timeout
+   * promotion is controlled separately by `promoteOnTimeout`.
+   */
+  enableRunInBackground?: Volatile<boolean>
+  /** Keep a tool call running as a background job when foreground wait times out. */
+  promoteOnTimeout?: Volatile<boolean>
+  /** How long a tool call waits in the foreground before promoting to a background job (ms). */
+  foregroundWaitMs?: Volatile<number>
 }
 
 /**
@@ -114,6 +123,9 @@ export const Config = Schema.object({
   writeEnabled: Schema.boolean().default(false).volatile(),
   writePersistKey: Schema.boolean().default(true).volatile(),
   webEnabled: Schema.boolean().default(true).volatile(),
+  enableRunInBackground: Schema.boolean().default(true).volatile(),
+  promoteOnTimeout: Schema.boolean().default(true).volatile(),
+  foregroundWaitMs: Schema.number().default(4000).volatile(),
 })
 
 export interface ResolvedConfig {
@@ -141,6 +153,9 @@ export interface ResolvedConfig {
   readonly writeEnabled: boolean
   readonly writePersistKey: boolean
   readonly webEnabled: boolean
+  readonly enableRunInBackground: boolean
+  readonly promoteOnTimeout: boolean
+  readonly foregroundWaitMs: number
 }
 
 /**
@@ -316,6 +331,7 @@ export function assertResolvedConfig(plain: Record<string, unknown>): ResolvedCo
   assertPositiveInteger('maxExportRefs', plain.maxExportRefs)
   assertPositiveInteger('maxBrowseResults', plain.maxBrowseResults)
   assertPositiveInteger('maxChangesResults', plain.maxChangesResults)
+  assertPositiveInteger('foregroundWaitMs', plain.foregroundWaitMs)
   // Every field above proved its type (schema application rejects mistyped
   // input; the asserts reject out-of-range values), so the spread is a
   // ResolvedConfig once the normalized URL is set.

@@ -43,6 +43,14 @@ User → Agent → dsh Zotero Tools → ZoteroService → Provider → 127.0.0.1
 - Evidence ranking: BM25 over passage corpus (annotations, notes, abstract, fulltext chunks)
 - Export: citation batches follow API's 50-key limit; translator formats capped at 50 refs
 
+### Background job engine (`src/job-runner.ts`)
+
+- Integrates with Harness 0.1.7's `ctx.jobs` unified task subsystem
+- Supports explicit background execution (`run_in_background: true`) and automatic promotion on timeout (`promoteOnTimeout: true`, governed by `foregroundWaitMs`)
+- Signal decoupling: background jobs run on their own `AbortController` signal so that agent turn expiry does not abort promoted jobs; caller-initiated abort explicitly invokes `registry.kill`
+- Channel partitioning: streaming progress updates use `{ channel: 'log' }` to report live status to the Web session topbar and log stream without cluttering model context; the final structured payload is safely recorded in `JobOutcome.result`
+- Request-driven: zero background daemon polling on boot, jobs only launch on demand via tool invocations
+
 ### HTTP transport layer (`src/http-client.ts`)
 
 - Pure loopback fetch, fixed API version (`Zotero-API-Version: 3`)
@@ -87,7 +95,7 @@ User → Agent → dsh Zotero Tools → ZoteroService → Provider → 127.0.0.1
 
 - **Library**: read-only by default; `writeEnabled` explicitly opts into writing the personal library (notes, tags, collection membership). See the write boundaries.
 - **Network**: loopback only (127.0.0.1, localhost, ::1). Redirects rejected.
-- **No background polling**, no telemetry, no persistent tasks.
+- **No background polling**, no telemetry, no persistent daemons. Long-running tasks launch on-demand as lifecycle-managed background Jobs via `ctx.jobs`.
 - **Evidence**: term-based BM25, ranking by query-word frequency match against passages.
 - **Sources tab**: session snapshot, showing items referenced in this conversation.
 - **Exports**: the tool returns text (that is what the model reads); the panel offers copy and file download.

@@ -85,6 +85,7 @@ import type {
   ZoteroObjectRef,
   ZoteroExportRequest,
   ZoteroExportResult,
+  ZoteroProgressEvent,
   ZoteroProvider,
   ZoteroProviderMethod,
   ZoteroRetrieveRequest,
@@ -438,13 +439,18 @@ export class ZoteroService extends Service {
    * Export citations, a bibliography, or translator formats for the requested items.
    * @param request - the item refs and the export format plus optional style/locale.
    * @param signal - caller cancellation; forwarded to the provider.
+   * @param onProgress - optional progress reporter.
    * @returns per-ref citations or the joined export text.
    */
-  async export(request: ZoteroExportRequest, signal?: AbortSignal): Promise<ZoteroExportResult> {
+  async export(
+    request: ZoteroExportRequest,
+    signal?: AbortSignal,
+    onProgress?: (progress: ZoteroProgressEvent) => void,
+  ): Promise<ZoteroExportResult> {
     const provider = this.resolveProvider()
     this.requireCapability(provider, 'citation')
     const doExport = this.requireMethod(provider, 'export')
-    return await doExport(request, signal)
+    return await doExport(request, signal, onProgress)
   }
 
   async browse(request: ZoteroBrowseRequest, signal?: AbortSignal): Promise<ZoteroBrowseResult> {
@@ -458,13 +464,18 @@ export class ZoteroService extends Service {
    * Diff the library against a local transaction version.
    * @param request - the baseline version and the resource kinds to diff.
    * @param signal - caller cancellation; forwarded to the provider.
+   * @param onProgress - optional progress reporter.
    * @returns changed/deleted keys plus the library's current version.
    */
-  async changes(request: ZoteroChangesRequest, signal?: AbortSignal): Promise<ZoteroChangesResult> {
+  async changes(
+    request: ZoteroChangesRequest,
+    signal?: AbortSignal,
+    onProgress?: (progress: ZoteroProgressEvent) => void,
+  ): Promise<ZoteroChangesResult> {
     const provider = this.resolveProvider()
     this.requireCapability(provider, 'changes')
     const changes = this.requireMethod(provider, 'changes')
-    return await changes(request, signal)
+    return await changes(request, signal, onProgress)
   }
 
   /**

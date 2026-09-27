@@ -146,14 +146,17 @@ Generate citations or formatted exports.
 
 ### Parameters
 
-| Parameter | Type     | Default   | Description                                                                        |
-| --------- | -------- | --------- | ---------------------------------------------------------------------------------- |
-| `refs`    | string[] | —         | Item ref list (required), capped by `maxExportRefs` (default 50)                   |
-| `format`  | string   | —         | `citation` / `bibliography` / `bibtex` / `biblatex` / `ris` / `csljson` (required) |
-| `style`   | string   | Config    | CSL style ID (citation/bibliography only)                                          |
-| `locale`  | string   | `"en-US"` | CSL locale (citation/bibliography only)                                            |
+| Parameter           | Type     | Default   | Description                                                                        |
+| ------------------- | -------- | --------- | ---------------------------------------------------------------------------------- |
+| `refs`              | string[] | —         | Item ref list (required), capped by `maxExportRefs` (default 50)                   |
+| `format`            | string   | —         | `citation` / `bibliography` / `bibtex` / `biblatex` / `ris` / `csljson` (required) |
+| `style`             | string   | Config    | CSL style ID (citation/bibliography only)                                          |
+| `locale`            | string   | `"en-US"` | CSL locale (citation/bibliography only)                                            |
+| `run_in_background` | boolean  | `false`   | Whether to launch as a background Job managed by Harness `ctx.jobs`                |
 
 ### Output
+
+When completed synchronously in the foreground:
 
 | Format                              | Output structure                                             |
 | ----------------------------------- | ------------------------------------------------------------ |
@@ -161,17 +164,24 @@ Generate citations or formatted exports.
 | `bibliography`                      | `{text}`                                                     |
 | `bibtex`/`biblatex`/`ris`/`csljson` | `{text, items: [{ref, key, title, entryIndex, start, end}]}` |
 
+When running in background (`run_in_background=true`) or promoted automatically upon exceeding foreground timeout:
+
+`{kind: "background", jobId: string}` or `{kind: "promoted", jobId: string, timeoutMs: number, message: string}`
+
 ### Notes
 
 - `citation` mode auto-batches requests per Zotero's 50-key limit
 - `bibtex`/`biblatex`/`ris`/`csljson` accept up to 50 items per call; split larger sets into batches
 - Export text is never truncated — exceeding `maxExportChars` (default 1M) raises an error
 - One export call allows refs from only one `library`; mixing `user/0` and `group` (or different groups) raises `INVALID_ARGUMENT` with 0 HTTP
+- Supports launching directly as a background Job via `run_in_background=true`, or automatic non-destructive promotion to a background Job when foreground wait exceeds `foregroundWaitMs` (with `promoteOnTimeout: true`, default)
+- Background Jobs run with an independent execution lifecycle and cancellation controller; per-item retrieval and export progress stream to the Web session topbar and log ring buffer (`{ channel: 'log' }`) without polluting model context; finished outcomes are preserved in the Job outcome and can be read via `job_output` or canceled via UI topbar / `job_kill`
 
 ### Example
 
 ```
 zotero_export(refs=["zotero://user/0/item/ABC123", "zotero://user/0/item/DEF456"], format="bibtex")
+zotero_export(refs=["zotero://user/0/item/ABC123", "zotero://user/0/item/DEF456"], format="bibtex", run_in_background=true)
 ```
 
 ---
@@ -257,21 +267,31 @@ See what changed in the library since a version. On the verified Zotero 10.0.2-b
 
 ### Parameters
 
-| Parameter | Type     | Default          | Description                                                                                                                                                                       |
-| --------- | -------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `library` | object   | —                | `{type, id}`; omitted defaults to personal `user/0`                                                                                                                               |
-| `since`   | object   | —                | The cursor to diff from, `{serverId, library, version}`: pass an earlier result's `cursor` back verbatim; a bare version number is not accepted; omitted takes a baseline reading |
-| `include` | string[] | all but fulltext | `items` (top-level items + child objects + trashed items, listed apart) / `collections` / `savedSearches` / `fulltext` / `deleted` (an explicit empty array is an argument error) |
+| Parameter           | Type     | Default          | Description                                                                                                                                                                       |
+| ------------------- | -------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `library`           | object   | —                | `{type, id}`; omitted defaults to personal `user/0`                                                                                                                               |
+| `since`             | object   | —                | The cursor to diff from, `{serverId, library, version}`: pass an earlier result's `cursor` back verbatim; a bare version number is not accepted; omitted takes a baseline reading |
+| `include`           | string[] | all but fulltext | `items` (top-level items + child objects + trashed items, listed apart) / `collections` / `savedSearches` / `fulltext` / `deleted` (an explicit empty array is an argument error) |
+| `run_in_background` | boolean  | `false`          | Whether to launch as a background Job managed by Harness `ctx.jobs`                                                                                                               |
 
 ### Output
 
+When completed synchronously in the foreground:
+
 `{library, serverId?, fromVersion?, cursor?, libraryChanged?, versionUnavailable?, changed: {items?, childItems?, trashedItems?, collections?, savedSearches?, fulltextAttachments?}, deleted?: {items, collections, savedSearches, tags}, totals?, unobservable?: {kind, reason}[], truncated?}`. Each resource is read whole (the item kind is three whole reads, one per endpoint), but every listing is capped at `maxChangesResults` (default 50) with `truncated` marking it as a digest; `totals` reports the true counts per resource (including `childItems`/`trashedItems`/`deletedItems`/`deletedCollections`/`deletedSavedSearches`/`deletedTags`/`deletedOther`) before that cap — a count being present is the statement that the kind was read, so coverage never has to be guessed from whether a list is empty. Each `unobservable` entry carries its reason: `not-served` (the build has no such endpoint — e.g. Zotero 10.0.2-beta.9 has no `/deleted` route), `range-not-covered` (`since` is older than the delete log the build keeps; answered 409), `unreadable` (the response was not the documented shape, so this call could not read it and returns no cursor). For the `items` kind, any failed `/items`, `/items/top`, or `/items/trash` partition also returns no cursor. `fulltext` has an independent counter, so a result that includes it deliberately omits the library cursor.
+
+When running in background (`run_in_background=true`) or promoted automatically upon exceeding foreground timeout:
+
+`{kind: "background", jobId: string}` or `{kind: "promoted", jobId: string, timeoutMs: number, message: string}`
+
+During background execution, progress across scanning phases (baseline probe, item space partitions, collections, searches, fulltext, deleted tombstones) streams to the Web session topbar and log ring buffer (`{ channel: 'log' }`). On completion, callers can inspect the full delta payload via `job_output` or cancel via UI topbar / `job_kill`.
 
 ### Example
 
 ```
 zotero_changes()
 zotero_changes(since={serverId: "<from cursor>", library: {type: "user", id: 0}, version: 1234}, include=["items", "deleted"])
+zotero_changes(include=["items", "collections", "deleted"], run_in_background=true)
 ```
 
 ---

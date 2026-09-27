@@ -64,6 +64,7 @@ import type {
   ZoteroGetRequest,
   ZoteroItemDetail,
   ZoteroObjectRef,
+  ZoteroProgressEvent,
   ZoteroProvider,
   ZoteroRetrieveRequest,
   ZoteroRetrieveResult,
@@ -164,6 +165,9 @@ export class LocalApiProvider implements ZoteroProvider {
             }
       return {
         providerId: this.id,
+        // The authority this provider dialled, reported whether or not the
+        // probe answered: when it did not, the address is what the user needs.
+        endpoint: this.client.endpoint,
         connected: true,
         apiVersion: headers.get('zotero-api-version') ?? undefined,
         serverId,
@@ -183,6 +187,9 @@ export class LocalApiProvider implements ZoteroProvider {
         error instanceof ZoteroError ? `${error.code}: ${error.message}` : errorChain(error)
       return {
         providerId: this.id,
+        // The address that did not answer is exactly the fact a user needs to
+        // check next, so the endpoint rides the failure arm too.
+        endpoint: this.client.endpoint,
         connected: false,
         diagnosis,
       }
@@ -202,8 +209,12 @@ export class LocalApiProvider implements ZoteroProvider {
    * Diff the library against a local transaction version. The domain logic
    * lives in `local/changes-domain`; this is the seam.
    */
-  async changes(request: ZoteroChangesRequest, signal?: AbortSignal): Promise<ZoteroChangesResult> {
-    return changesDomain(this.deps(), request, signal)
+  async changes(
+    request: ZoteroChangesRequest,
+    signal?: AbortSignal,
+    onProgress?: (progress: ZoteroProgressEvent) => void,
+  ): Promise<ZoteroChangesResult> {
+    return changesDomain(this.deps(), request, signal, onProgress)
   }
 
   /**
@@ -251,8 +262,12 @@ export class LocalApiProvider implements ZoteroProvider {
    * Export citations or formatted output for the requested items. The
    * domain logic lives in `local/export-domain`; this is the seam.
    */
-  async export(request: ZoteroExportRequest, signal?: AbortSignal): Promise<ZoteroExportResult> {
-    return exportItemsDomain(this.deps(), request, signal)
+  async export(
+    request: ZoteroExportRequest,
+    signal?: AbortSignal,
+    onProgress?: (progress: ZoteroProgressEvent) => void,
+  ): Promise<ZoteroExportResult> {
+    return exportItemsDomain(this.deps(), request, signal, onProgress)
   }
 
   /**
