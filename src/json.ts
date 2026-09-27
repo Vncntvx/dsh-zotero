@@ -17,9 +17,31 @@ export function asRecord(value: unknown): Record<string, unknown> | undefined {
     : undefined
 }
 
+/** True for plain objects (the validated shape every meta read requires). */
+export function isRecord(value: unknown): value is Record<string, unknown> {
+  return asRecord(value) !== undefined
+}
+
 /** Narrow any value to a string, or undefined. */
 export function asString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined
+}
+
+/** Read a string field off a validated record. */
+export function stringField(record: Record<string, unknown>, key: string): string | undefined {
+  return asString(record[key])
+}
+
+/** Read a number field off a validated record (finite numbers only). */
+export function numberField(record: Record<string, unknown>, key: string): number | undefined {
+  const value = record[key]
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+/** Read a boolean field off a validated record. */
+export function boolField(record: Record<string, unknown>, key: string): boolean | undefined {
+  const value = record[key]
+  return typeof value === 'boolean' ? value : undefined
 }
 
 /** String entries of an array-shaped field; anything else yields nothing. */

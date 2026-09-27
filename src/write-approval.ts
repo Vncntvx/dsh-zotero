@@ -1,16 +1,29 @@
 /**
- * Plan-review approval for writes — the confirmation layer of the
- * `ctx.zotero` seam.
+ * Approval gates for writes — the confirmation layer of the `ctx.zotero` seam.
+ *
+ * Two sequential gates, both owned here so no caller can skip either:
+ * 1. {@link requestWriteApproval} — the session approval policy
+ *    (`ctx.approval.request`). Honors `approval/policy: never` (auto-reject)
+ *    and writes the `approval/asked` + `approval/decided` audit pair.
+ * 2. {@link askPlanApproval} — the plan-review card (`userQuestions`).
+ *    The user approves the exact plan markdown the domain will apply.
  *
  * The gate lives here, not in a tool, because the service is the only door to
  * the write domain: every in-process caller (the three write tools, and any
  * consumer that resolves `ctx.zotero`) passes through `ZoteroService`'s write
- * methods, so no caller can write without the plan the user approves. Argument
- * validation still runs in the caller first, so a malformed call never bothers
- * the user with an approval for a call that cannot run. The user's Zotero
- * authorization dialog and its key remain the hard boundary.
+ * methods. Argument validation still runs in the caller first, so a malformed
+ * call never bothers the user with an approval for a call that cannot run.
+ * The user's Zotero authorization dialog and its key remain the hard boundary.
  *
- * Settlement map (the only contract this layer owns):
+ * Approval-settlement map ({@link requestWriteApproval}):
+ * - `allowed-once` → proceed to plan-review.
+ * - `rejected` / `cancelled` → `declined` (no plan card, no network).
+ * - `unavailable` / no agent / infrastructure failure →
+ *   `ZOTERO_WRITE_APPROVAL_UNAVAILABLE` (fail closed).
+ * - no `ctx.approval` composed → skip this gate (no `NEVER_SENTENCE` exists
+ *   then either); plan-review remains the sole confirmation.
+ *
+ * Plan-settlement map ({@link askPlanApproval}):
  * - `ASK_ABORTED` → harness `TOOL_ABORTED` (caller cancelled).
  * - `ASK_CANCELLED` → `false` (the user dismissed the plan review to talk;
  *   the official plan card settles the non-approve path this way, never as a
@@ -27,6 +40,9 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
+// Type-only: brings the `ctx.approval` Context merge into this program.
+import type {} from '@deepseek-ai/dsh-user-approval'
+import type { ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 // Type-only: brings the `ctx.userQuestions` Context merge into this program.
 import type {} from '@deepseek-ai/dsh-user-questions'
 import {
@@ -48,7 +64,12 @@ export const WRITE_PLAN_QUESTION_ID = 'zotero-write-plan'
  * tool appends this so the declined contract cannot drift between tools.
  */
 export const WRITE_PLAN_OUTCOME_DESCRIPTION =
-  'Every write first shows a plan the user approves — the confirmation is not configurable; kind "declined" means the user answered the plan without approving and nothing was written — do not retry unasked.'
+  'Every write first passes the session approval policy (a "never" session auto-rejects) and then shows a plan the user approves — neither confirmation is configurable; kind "declined" means the write was not approved and nothing was written — do not retry unasked.'
+
+/** The single reason string every write approval request logs. */
+function writeApprovalReason(call: ZoteroWriteCall): string {
+  return `Zotero library write: ${call.exec.name}`
+}
 
 /**
  * Whether a settled ask rejection carries the given user-questions code.
@@ -69,6 +90,65 @@ function isAskCode(error: unknown, code: 'ASK_ABORTED' | 'ASK_CANCELLED'): boole
       candidate.name === 'UserQuestionError' ||
       candidate.name === 'HarnessError')
   )
+}
+
+/**
+ * One write's outcome under the session approval policy, before any plan card.
+ *
+ * When `ctx.approval` is composed this is the deployment-level gate: `never`
+ * auto-rejects, `ask` routes to the composed answerers, and every request
+ * writes the `approval/asked` + `approval/decided` audit pair. When no
+ * approval service is composed there is no `NEVER_SENTENCE` either, so the
+ * gate is skipped and plan-review remains the sole confirmation.
+ * @param ctx - the plugin context, whose approval service decides.
+ * @param call - the asking write call (agent, signal, tool name, call id).
+ * @returns `'allowed'` to continue to plan-review; `'declined'` when the
+ *   session policy or the user refused; `'unavailable'` when the approval
+ *   channel cannot decide at all (fail closed).
+ * @throws {HarnessError} the harness's own abort when the caller cancelled.
+ */
+export async function requestWriteApproval(
+  ctx: Context,
+  call: ZoteroWriteCall,
+): Promise<'allowed' | 'declined' | 'unavailable'> {
+  const { exec } = call
+  const approval = ctx.get('approval')
+  // Absent approval service: no policy sentence exists for this composition.
+  // Absent agent: the request cannot be routed or audited. Production tools
+  // always carry an agent; tests may build a bare exec.
+  if (approval === undefined || exec.agent === undefined) return 'allowed'
+  let outcome: ApprovalOutcome
+  try {
+    outcome = await approval.request({
+      agent: exec.agent,
+      toolName: exec.name,
+      callId: exec.callId,
+      reason: writeApprovalReason(call),
+      displayReason: {
+        en: 'Allow this Zotero library write? A plan card follows for the exact change.',
+        zh: '允许这次 Zotero 库写入？随后会展示具体变更的计划卡。',
+      },
+      signal: exec.signal,
+    })
+  } catch (error) {
+    if (error instanceof HarnessError && error.code === TOOL_ABORTED) throw error
+    if (exec.signal.aborted) {
+      throw new HarnessError(TOOL_ABORTED_MESSAGE, TOOL_ABORTED, { cause: error })
+    }
+    // Outside-turn, audit-append failure, or a throwing answerer: the
+    // decision cannot be logged, so the write cannot proceed.
+    return 'unavailable'
+  }
+  switch (outcome) {
+    case 'allowed-once':
+      return 'allowed'
+    case 'rejected':
+    case 'cancelled':
+      return 'declined'
+    default:
+      // 'unavailable' and any rogue value: fail closed.
+      return 'unavailable'
+  }
 }
 
 /**

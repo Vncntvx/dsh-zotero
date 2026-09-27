@@ -11,8 +11,13 @@
  */
 
 import type { ToolCallBlock } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { asRecord, asString } from '../json.ts'
+import type { EvidenceItem, EvidenceField } from '../evidence-item.ts'
+import { boolField, isRecord, stringField } from '../json.ts'
 import { REF_IN_TEXT_PATTERN } from '../ref-grammar.ts'
+
+// Field readers live in json.ts (CLIENT_SAFE). Re-exported here so toolview
+// modules that already import block readers keep one import site.
+export { boolField, isRecord, numberField, stringField } from '../json.ts'
 
 export type ZoteroRowState = 'running' | 'ok' | 'error' | 'stopped'
 
@@ -29,52 +34,10 @@ export function isSettledTool(
 ): block is Extract<ToolCallBlock, { kind: 'tool-result' }> {
   return 'kind' in block
 }
-/** One evidence passage from the retrieve projection. */
-export interface EvidenceItemView {
-  readonly source: string
-  readonly sourceRef: string
-  readonly preview: string
-  readonly previewTruncated: boolean
-  readonly pageLabel?: string
-  /** The annotation passage's parent attachment ref (its own PDF's deep-link key). */
-  readonly attachmentRef?: string
-  /**
-   * Which of the annotation's two fields carried the query terms. Absent means
-   * the passage's single text field did — the ordinary case — so a card shows a
-   * badge only when the distinction is the one that matters.
-   */
-  readonly matchedFields?: readonly ('text' | 'comment')[]
-}
-
-/**
- * True for plain objects (the validated shape every meta read requires).
- * Semantic layer over json.ts for panel readers: decoders and the reducer
- * read through here so the validation entry point stays uniform.
- */
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return asRecord(value) !== undefined
-}
 
 /** The wire name of one tool call block (settled and running forms). */
 export function callNameOf(block: ToolCallBlock): string | null {
   return isSettledTool(block) ? (block.call?.name ?? null) : block.name
-}
-
-/** Read a string field off a validated record. */
-export function stringField(record: Record<string, unknown>, key: string): string | undefined {
-  return asString(record[key])
-}
-
-/** Read a number field off a validated record. */
-export function numberField(record: Record<string, unknown>, key: string): number | undefined {
-  const value = record[key]
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
-}
-
-/** Read a boolean field off a validated record. */
-export function boolField(record: Record<string, unknown>, key: string): boolean | undefined {
-  const value = record[key]
-  return typeof value === 'boolean' ? value : undefined
 }
 
 /** The validated presentation-meta object, or null when absent or malformed. */
@@ -148,10 +111,10 @@ export function shortKeyOf(value: string): string | null {
 }
 
 /** Evidence items from the retrieve projection; null when malformed. */
-export function evidenceItemsOf(meta: Record<string, unknown>): EvidenceItemView[] | null {
+export function evidenceItemsOf(meta: Record<string, unknown>): EvidenceItem[] | null {
   const items = meta['items']
   if (!Array.isArray(items)) return null
-  const rows: EvidenceItemView[] = []
+  const rows: EvidenceItem[] = []
   for (const item of items) {
     if (!isRecord(item)) return null
     const source = stringField(item, 'source')
@@ -163,7 +126,7 @@ export function evidenceItemsOf(meta: Record<string, unknown>): EvidenceItemView
     const attachmentRef = stringField(item, 'attachmentRef')
     const matchedFields = matchedFieldsOf(item['matchedFields'])
     rows.push({
-      source,
+      source: source as EvidenceItem['source'],
       sourceRef,
       preview,
       previewTruncated,
@@ -180,10 +143,10 @@ export function evidenceItemsOf(meta: Record<string, unknown>): EvidenceItemView
  * vocabulary. Anything else — an unknown name, a non-array — reads as absent,
  * which is the single-field case the badge does not need to distinguish.
  */
-function matchedFieldsOf(value: unknown): readonly ('text' | 'comment')[] | undefined {
+function matchedFieldsOf(value: unknown): readonly EvidenceField[] | undefined {
   if (!Array.isArray(value)) return undefined
   const fields = value.filter(
-    (entry): entry is 'text' | 'comment' => entry === 'text' || entry === 'comment',
+    (entry): entry is EvidenceField => entry === 'text' || entry === 'comment',
   )
   return fields.length === 0 ? undefined : fields
 }

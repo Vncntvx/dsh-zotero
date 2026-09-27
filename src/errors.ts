@@ -245,15 +245,15 @@ export function writeListEmptyMessage(name: string): string {
 }
 
 /**
- * Shown when plan-review could not be asked at all (no channel, or the ask
- * failed for a non-user reason). Writes fail closed. This is not a user
- * decline (`kind: "declined"`) and not Zotero write auth
+ * Shown when the approval gate or plan-review could not be asked at all (no
+ * channel, or the ask failed for a non-user reason). Writes fail closed. This
+ * is not a user decline (`kind: "declined"`) and not Zotero write auth
  * (`ZOTERO_WRITE_UNAUTHORIZED`).
  */
 export const WRITE_APPROVAL_UNAVAILABLE_MESSAGE =
-  'The write was not attempted: plan-review could not be asked. Writes require the plan-review ' +
-  'question to be answered by the user; run in a conversation where user questions are available, ' +
-  'and never write around an unanswered plan.'
+  'The write was not attempted: the approval gate or plan-review could not be asked. Writes require ' +
+  'those confirmations to be answered by the user; run in a conversation where approvals and user ' +
+  'questions are available, and never write around an unanswered plan.'
 
 const UNREACHABLE_CODES = new Set([
   'ECONNREFUSED',

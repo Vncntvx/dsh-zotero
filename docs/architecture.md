@@ -29,7 +29,7 @@ graph LR
 - 配置以 Loader entry（composition entry）为唯一权威；settings 提交经 `loader/volatile-update` 落到同一 entry
 - 结构性 volatile 更新通过私有 `buildTransport()` 在**同一** `ZoteroService` 实例上重建 HTTP client、local provider 与写工具集；纯限额更新由 provider 实时读取，不重建 transport
 - 连接恢复门（`ConnectivityRecovery` / `service.recovery`）与服务实例同寿命，**不**随 settings rebuild 重置（避免并发失败叠卡）
-- 写入闸门在**服务接缝**上：三个写方法要求一个 `ZoteroWriteCall`（计划文本 + 发起调用的 agent/信号），先过能力门再弹计划卡，未批准返回 `declined`，无通道则失败关闭；写工具不再自己发起计划审查
+- 写入闸门在**服务接缝**上：三个写方法要求一个 `ZoteroWriteCall`（计划文本 + agent/信号/tool name/call id），先过能力门，再 `ctx.approval.request`（服从 `approval/policy` 并写审计对），再弹计划卡；未批准返回 `declined`，无通道则失败关闭；写工具不再自己发起确认
 - 通过 `tools/pre-execute` 监听器把 shell 直写 Zotero 本地接口的调用抬成 harness 审批请求（`src/shell-write-detector.ts`，无开关）：确认才执行一次，拒绝 / 取消 / 策略为 `never` / 无通道都不执行。检测只读命令文本，理由与盲区见写入边界
 - 请求驱动：加载从不触及 Zotero
 

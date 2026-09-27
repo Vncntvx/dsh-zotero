@@ -252,7 +252,7 @@ Short cases; they can run back-to-back in one session. On failure, record the be
 
 ## Writes W
 
-Enable “Allow writes” in the Zotero settings page. Every write first shows a plan card; that confirmation cannot be turned off. Approve to write. Declining the plan card is a normal outcome. Zotero 10 may also show its own authorization dialog. Use dedicated test items and a test collection.
+Enable “Allow writes” in the Zotero settings page. Every write first passes the session approval policy (`approval/policy`; a `never` session auto-rejects with no plan card), then shows a plan card; that confirmation cannot be turned off. Approve to write. Declining either confirmation is a normal outcome. An interactive session may show two confirmations (permission + plan). Zotero 10 may also show its own authorization dialog. Use dedicated test items and a test collection.
 
 ### W1 Plan card and create note
 
@@ -260,7 +260,9 @@ Enable “Allow writes” in the Zotero settings page. Every write first shows a
 Create a child note on item "<test item>": markdown with a "## Methods" heading and two bullet points.
 ```
 
-Expected: the model calls `zotero_create_note`, then a plan card appears; the write happens only after approval. The note in Zotero should be formatted HTML, not raw `##` markers. Run again and decline: the result is `declined`, nothing is written, and the model does not retry. When to use: capture reading notes.
+Expected: the model calls `zotero_create_note`, then the approval/plan confirmations appear; the write happens only after approval. The note in Zotero should be formatted HTML, not raw `##` markers. Run again and decline: the result is `declined`, nothing is written, and the model does not retry. When to use: capture reading notes.
+
+**Policy rejection (W1 variant):** switch the session approval policy to `never` (or run unattended) and call a write tool. Expected: the result is `declined`, no plan card appears, and Zotero receives no write request; the session log carries `approval/asked` + `approval/decided` with outcome `rejected`.
 
 ### W2 Add tags
 

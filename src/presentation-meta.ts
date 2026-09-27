@@ -13,6 +13,7 @@
 
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { asJsonValue } from './json.js'
+import type { EvidenceItem } from './evidence-item.js'
 import type {
   SupportedLocalLibrary,
   ZoteroAttachmentLocation,
@@ -119,24 +120,6 @@ export interface ZoteroGetPresentationMeta {
   }[]
 }
 
-/** One ranked evidence passage with its provenance and source kind. */
-interface ZoteroEvidencePresentationItem {
-  readonly source: ZoteroEvidenceSource
-  readonly sourceRef: string
-  readonly preview: string
-  readonly previewTruncated: boolean
-  readonly pageLabel?: string
-  /** The annotation passage's parent attachment ref (its own PDF's deep-link key). */
-  readonly attachmentRef?: string
-  /**
-   * Which of the annotation's two text fields carried the query terms. Absent
-   * means the passage's single field did, which is the ordinary case; a match
-   * found only in the annotator's own comment is a different claim about the
-   * paper and must not be read as one.
-   */
-  readonly matchedFields?: readonly ZoteroEvidenceField[]
-}
-
 /** Per-source availability facts: provable from the canonical result alone. */
 interface ZoteroSourceAvailabilityView {
   readonly requested: boolean
@@ -149,7 +132,7 @@ export interface ZoteroRetrievePresentationMeta {
   readonly sources: ZoteroEvidenceSource[]
   readonly truncated: boolean
   readonly sourcesSkipped: ZoteroEvidenceSource[]
-  readonly items: ZoteroEvidencePresentationItem[]
+  readonly items: EvidenceItem[]
   /** The full-text attachment the retrieval read (the open-PDF deep-link key). */
   readonly attachmentRef?: string
   /** The content type of that attachment; tells a PDF from other kinds. */

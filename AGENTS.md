@@ -114,14 +114,14 @@ More detail: `docs/development.md`.
 
 ### Client graph
 
-- Browser code is `src/client/**` plus allowlisted pure surfaces (`contract`, `settings-namespace`, `json`, `ref-grammar`, `export-items` — `scripts/client-graph-authority.mjs`). Never value-import zod, schemastery, host codecs, `src/config.ts`, or `src/typert.ts` into that graph; `npm run build:client` fails the build if you do.
-- Read the mounted remote namespace via `mountedNamespace()` (`ctx.reflect.get('remote.zotero')`). Never use the dotted `ctx.remote.zotero` — it throws on a fiber that carries a runtime (`tests/client/apply.spec.ts`).
+- Browser code is `src/client/**` plus allowlisted pure surfaces. **`scripts/client-graph-authority.mjs` `CLIENT_SAFE_LOCAL` is the sole authority** (currently `contract`, `settings-namespace`, `json`, `ref-grammar`, `export-items`, `changes-contract`, `browse-rows`, `evidence-item`). When adding a pure surface, change the authority first and keep any narrative lists in step. Never value-import zod, schemastery, host codecs, `src/config.ts`, or `src/typert.ts` into that graph; `npm run build:client` fails the build if you do.
+- Read the mounted remote namespace via `mountedNamespace()` (`ctx.reflect.get('remote.zotero')`). Never use the dotted `ctx.remote.zotero` — it throws on a fiber that carries a runtime (`tests/client/apply.spec.ts`). This is the **only** approved `reflect.get('remote…')` site: it exists because the plugin both mounts and consumes `remote.zotero`, so a static `inject` cannot name a namespace that does not exist yet. New code must use the official `ctx.remote.<ns>` + `inject` form.
 - Keep `package.json` `dsh.client.inject` equal to the rows the client entry actually needs (locale, ui-renderer, ui-settings, ui-conversation, ui-session, ui-chat, api-remotes).
 
 ### Writes
 
 - Write tools are off by default (`writeEnabled`) and write `zotero://user/0/` only.
-- Plan review belongs to the **`ctx.zotero` seam**, not to a tool: `createNote` / `updateTags` / `addToCollection` take a `ZoteroWriteCall`, answer the capability gate first, then the plan-review card. There is **no `writeConfirm` and no opt-out** — a write that cannot show its plan does not happen. Never move the gate back into a tool.
+- Confirmation belongs to the **`ctx.zotero` seam**, not to a tool: `createNote` / `updateTags` / `addToCollection` take a `ZoteroWriteCall`, answer the capability gate first, then `ctx.approval.request` (session policy + `approval/asked`/`decided` audit; `never` auto-rejects), then the plan-review card. There is **no `writeConfirm` and no opt-out** — a write that cannot clear the policy or show its plan does not happen. Never move the gate back into a tool.
 - Shell writes to the local API are turned into a harness ask (`src/shell-write-detector.ts` on `tools/pre-execute`). Never add a config field or an "off" path. Detection is text-based and is **not** containment; blind spots are documented in `docs/tools.md`.
 - Writes never ride the connectivity-retry helper (a retried write is not idempotent).
 

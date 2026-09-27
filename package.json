@@ -99,6 +99,7 @@
     "@deepseek-ai/dsh-tools": "0.1.7-rc.2",
     "@deepseek-ai/dsh-typert-protocol": "0.1.7-rc.2",
     "@deepseek-ai/dsh-typert-registry": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-user-approval": "0.1.7-rc.2",
     "@deepseek-ai/dsh-user-questions": "0.1.7-rc.2",
     "@deepseek-ai/dsh-util-values": "0.1.7-rc.2"
   },
@@ -127,6 +128,7 @@
     "@deepseek-ai/dsh-system-prompt": "0.1.7-rc.2",
     "@deepseek-ai/dsh-timeout": "0.1.7-rc.2",
     "@deepseek-ai/dsh-tools": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-user-approval": "0.1.7-rc.2",
     "@deepseek-ai/dsh-user-questions": "0.1.7-rc.2",
     "@testing-library/react": "^16.3.0",
     "@types/react": "~18.3.1",

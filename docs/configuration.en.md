@@ -36,6 +36,8 @@ All configuration fields are defined in `src/config.ts`, with defaults provided 
 | `promoteOnTimeout`      | `true`                       | Whether to automatically promote foreground export/changes to a background Job on timeout                                                           |
 | `foregroundWaitMs`      | `4000`                       | Foreground wait ceiling (ms) before automatic promotion to background Job                                                                           |
 
+Note: `foregroundWaitMs` (default 4000) bounds the **foreground job wait**; `timeoutMs` (default 5000) bounds **one Zotero HTTP request**. They are independent. Whether promotion should fire before the provider deadline remains an open verification item (see `waitOrPromote` in `src/job-runner.ts` and `tests/unit/job-runner.spec.ts`); defaults are unchanged.
+
 ## Validation rules
 
 `resolveConfig` performs these checks at load time, throwing on invalid config:

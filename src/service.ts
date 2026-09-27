@@ -48,8 +48,10 @@ import {
   type ResolvedConfig,
 } from './config.js'
 import {
+  WRITE_APPROVAL_UNAVAILABLE_MESSAGE,
   ZOTERO_CAPABILITY_UNAVAILABLE,
   ZOTERO_PROVIDER_UNAVAILABLE,
+  ZOTERO_WRITE_APPROVAL_UNAVAILABLE,
   ZoteroError,
 } from './errors.js'
 import { LocalApiProvider } from './local/provider.js'
@@ -98,7 +100,7 @@ import type {
   ZoteroWriteCall,
   ZoteroWriteDeclined,
 } from './types.js'
-import { askPlanApproval } from './write-approval.js'
+import { askPlanApproval, requestWriteApproval } from './write-approval.js'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -538,14 +540,21 @@ export class ZoteroService extends Service {
   }
 
   /**
-   * The one confirmation gate every write passes through. There is no opt-out
-   * and no config field behind it: a write that cannot show the user its plan
-   * does not happen. The ask itself fails closed too — a missing channel
+   * The confirmation gates every write passes through, in order: the session
+   * approval policy (`ctx.approval` — `never` auto-rejects and the request is
+   * audited), then the plan-review card. There is no opt-out and no config
+   * field behind either: a write that cannot clear the policy or show the
+   * user its plan does not happen. Both asks fail closed — a missing channel
    * refuses the write rather than letting it through unapproved.
    * @param call - the asking write call.
    * @returns true when the write may proceed.
    */
   private async approveWrite(call: ZoteroWriteCall): Promise<boolean> {
+    const policy = await requestWriteApproval(this.ctx, call)
+    if (policy === 'declined') return false
+    if (policy === 'unavailable') {
+      throw new ZoteroError(WRITE_APPROVAL_UNAVAILABLE_MESSAGE, ZOTERO_WRITE_APPROVAL_UNAVAILABLE)
+    }
     return await askPlanApproval(this.ctx, call)
   }
 

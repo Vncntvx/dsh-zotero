@@ -17,7 +17,8 @@ src/
   contract.ts           # Remote wire structural surface (types, endpoint constants; no codecs)
   status-codec.ts       # Host-side strict codec (zod); the client arm lives in src/client/status-codec.ts
   errors.ts             # Error class and error codes
-  json.ts               # Lossless JSON read helper
+  json.ts               # Lossless JSON read helpers (isRecord/stringField/numberField/boolField)
+  evidence-item.ts      # Evidence-item projection shape (shared host/client, CLIENT_SAFE)
   constants.ts          # Domain constants (write tool names, authorize path, limits)
   concurrency.ts        # Bounded concurrency
   evidence.ts           # BM25 ranking
@@ -33,7 +34,7 @@ src/
   ask.ts                # User-question fallback when the connection fails (one card per failure kind, shared by parallel calls)
   prompt.ts             # Model-facing policy section
   command.ts            # /zotero command (status is an equivalent spelling)
-  write-approval.ts     # Write plan card (the confirmation layer of the ctx.zotero seam)
+  write-approval.ts     # Write confirmations (ctx.approval policy gate + plan card) on the ctx.zotero seam
   write-auth.ts         # Zotero local write-key acquisition and persistence
   write-http.ts         # Local API write transport (Server-ID + key + batches)
   shell-write-detector.ts # Detector for shell writes to the local API (tools/pre-execute → ask)

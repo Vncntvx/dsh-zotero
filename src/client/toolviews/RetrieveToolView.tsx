@@ -104,7 +104,7 @@ export function RetrieveToolView(props: RetrieveToolViewProps) {
                       <div className={css.evidenceBadges}>
                         <span
                           className={css.badge}
-                          data-tone={item.source === 'pdf' ? 'pdf' : 'info'}
+                          data-tone={item.source === 'fulltext' ? 'pdf' : 'info'}
                         >
                           {t(sourceLabelKeyOf(item.source))}
                         </span>

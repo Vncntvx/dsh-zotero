@@ -64,15 +64,21 @@ export const inject = ['locale', 'slots', 'remote', 'configForms', 'uiConversati
  * The mounted `zotero` namespace face, or `undefined` when this fiber cannot
  * reach it.
  *
- * The read goes through the service store (`ctx.reflect.get`), never through
- * the dotted child access `ctx.remote.zotero`. Re-checked at dsh 0.1.7-rc.2:
- * that dotted form is a *service lookup by the full name* through the context
- * proxy, and `vendor/cordis/src/reflect.ts` refuses an undeclared name on any
- * fiber that carries a runtime — `cannot get property "remote.zotero" without
- * inject`. A plugin fiber cannot declare the name up front either: the
- * namespace only exists after this plugin's own `$mount`, so a static inject
- * would park the plugin before it could ever mount anything. The store path
- * resolves the same service by key, across fiber branches, with no guard.
+ * **Intentional deviation** from the official `ctx.remote.<ns>.method` read
+ * (`docs/cookbook/adding-a-remote-api.md`). The dotted form is a *service
+ * lookup by the full name* through the context proxy, and
+ * `vendor/cordis/src/reflect.ts` refuses an undeclared name on any fiber that
+ * carries a runtime — `cannot get property "remote.zotero" without inject`.
+ * A plugin fiber cannot declare the name up front either: the namespace only
+ * exists after this plugin's own `$mount`, so a static inject would park the
+ * plugin before it could ever mount anything. The store path
+ * (`ctx.reflect.get`) resolves the same service by key, across fiber branches,
+ * with no guard. Re-checked at dsh 0.1.7-rc.2.
+ *
+ * Do not copy this for other namespaces: prefer `ctx.remote.<ns>` + `inject`
+ * whenever the namespace is not self-supplied by the same plugin. When
+ * upstream ships a client-safe self-mount namespace entry, switch this
+ * function to the official form and drop the exception in AGENTS.md.
  * @param ctx - the browser plugin context.
  * @returns the namespace face, or undefined while it is unmounted.
  */

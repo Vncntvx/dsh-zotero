@@ -371,7 +371,11 @@ describe('approval-gate failure arms', () => {
     const scripted = lane.ctx.get('userQuestions') as unknown as ApprovingQuestions
     scripted.answers = [[]]
     const approved = await askPlanApproval(lane.ctx, {
-      exec: { signal: new AbortController().signal },
+      exec: {
+        signal: new AbortController().signal,
+        name: 'zotero_create_note',
+        callId: 'call-plan-2' as never,
+      },
       plan: '- plan line',
     })
     expect(approved).toBe(false)
@@ -537,6 +541,7 @@ describe('approval-gate failure arms', () => {
     }
     const exec = {
       callId: 'call-1',
+      name: 'zotero_create_note',
       signal: new AbortController().signal,
     } as unknown as ToolRunContext
     await expect(

@@ -2,7 +2,7 @@
 
 # Features
 
-dsh-zotero lets DSH's LLM conversations query a Zotero library directly. Eleven tools cover search, evidence extraction, and export; three personal-library write tools are off by default and, once enabled, still require plan approval and Zotero 10 local authorization. The web-side Sources panel shows literature, evidence, and citations for the session.
+dsh-zotero lets DSH's LLM conversations query a Zotero library directly. Eleven tools cover search, evidence extraction, and export; three personal-library write tools are off by default and, once enabled, still require the session approval policy, a plan card, and Zotero 10 local authorization. The web-side Sources panel shows literature, evidence, and citations for the session.
 
 ## Search
 
@@ -163,7 +163,7 @@ Configurable items include the API address, read/export limits, citation style a
 
 ## Design boundaries
 
-- **Read-only by default:** `writeEnabled` is off by default; when enabled, writes remain personal-library-only and still pass plan approval, version preconditions, and Zotero's local key protocol.
+- **Read-only by default:** `writeEnabled` is off by default; when enabled, writes remain personal-library-only and still pass the session approval policy, plan approval, version preconditions, and Zotero's local key protocol.
 - **Ranking:** Evidence uses BM25 (term frequency), ranking by query-word match against passages.
 - **Exports are text:** citations and bibliographies are returned as text; the panel can copy them or download them as a file.
 - **Sources panel is a snapshot:** The Sources panel shows items referenced in this session, independent per session.

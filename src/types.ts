@@ -7,7 +7,8 @@
  * (`?server=<Zotero-Server-ID>`). Everything in this module is a plain
  * lossless-JSON-safe DTO; tool `execute` bodies return these values directly.
  * The one exception is {@link ZoteroWriteCall}, which carries the asking tool
- * run (agent, signal, call id) into the seam and never crosses the wire.
+ * run (agent, signal, tool name, call id) into the seam and never crosses the
+ * wire.
  * @module dsh-zotero/types
  */
 
@@ -15,6 +16,9 @@ import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type {} from '@deepseek-ai/dsh-jobs'
 import type { ChangeSectionKey, ChangeTotalKey, DeletionSectionKey } from './changes-contract.js'
+import type { EvidenceField, EvidenceSource } from './evidence-item.js'
+
+export type { EvidenceField, EvidenceSource } from './evidence-item.js'
 
 declare module '@deepseek-ai/dsh-jobs' {
   interface JobKindMap {
@@ -320,7 +324,7 @@ export interface ZoteroItemDetail {
 }
 
 /** Evidence sources `zotero_retrieve` can rank against the query. */
-export type ZoteroEvidenceSource = 'annotation' | 'note' | 'fulltext' | 'abstract'
+export type ZoteroEvidenceSource = EvidenceSource
 
 /**
  * How `zotero_retrieve` picks the attachment(s) whose full text enters
@@ -345,7 +349,7 @@ export interface ZoteroRetrieveRequest {
  * highlight a reader selected (`text`) and the comment they wrote on it
  * (`comment`).
  */
-export type ZoteroEvidenceField = 'text' | 'comment'
+export type ZoteroEvidenceField = EvidenceField
 
 /** One bounded evidence passage. Fulltext passages never carry page locators. */
 export interface ZoteroEvidence {
@@ -881,20 +885,24 @@ export interface ZoteroCollectionAddResult {
  * Who is asking for one write, and the plan the user reviews.
  *
  * The gate lives at the `ctx.zotero` seam, so a write cannot reach the domain
- * without a call like this: the service asks the user with
+ * without a call like this: the service runs the session approval policy
+ * (`ctx.approval.request` — `never` auto-rejects) and then asks the user with
  * {@link ZoteroWriteCall.plan} on every write, and fails closed when no
  * channel can answer. `plan` is the caller's deterministic markdown —
  * what the user approves is exactly what the service passes on. `exec` is
- * structurally the two fields the ask needs (the asking agent and its
- * cancellation signal), so a tool's `ToolRunContext` satisfies it directly
- * and a test can build one. There is deliberately **no `callId`**: that field
- * names a logged invocation whose arguments hold the reviewed plan, and a
- * write tool's arguments hold the note body or the tag list — naming the call
- * would send the client's plan panel after a document that does not exist.
+ * structurally the fields the asks need (agent, signal, tool name, call id),
+ * so a tool's `ToolRunContext` satisfies it directly and a test can build one.
+ *
+ * The approval request carries `toolName`/`callId` so the audit pair links to
+ * the already-logged tool call. The plan-review intent deliberately carries
+ * **no `callId`**: that field names a logged invocation whose arguments hold
+ * the reviewed plan, and a write tool's arguments hold the note body or the
+ * tag list — naming the call would send the client's plan panel after a
+ * document that does not exist.
  */
 export interface ZoteroWriteCall {
-  /** The asking tool run: its agent routes the plan card, its signal cancels it. */
-  readonly exec: Pick<ToolRunContext, 'agent' | 'signal'>
+  /** The asking tool run: agent routes the asks, signal cancels them, name/callId audit the approval. */
+  readonly exec: Pick<ToolRunContext, 'agent' | 'signal' | 'name' | 'callId'>
   /** The plan markdown the user reviews; it must describe exactly this request. */
   readonly plan: string
 }

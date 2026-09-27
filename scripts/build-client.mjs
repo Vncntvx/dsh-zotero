@@ -15,9 +15,11 @@
  * 2. Harness packages may only externalize or inline what the harness's own
  *    purity rule allows (`bundlePurityPlugin`).
  * 3. This package's local sources may only enter the client graph when they
- *    are client-safe (`CLIENT_SAFE_LOCAL`: `src/client/**`, plus the
- *    declared shared pure surfaces `contract`, `settings-namespace`, `json`,
- *    `ref-grammar`, and `export-items`).
+ *    are client-safe (`CLIENT_SAFE_LOCAL` in
+ *    `scripts/client-graph-authority.mjs` — that regex is the sole authority;
+ *    currently `src/client/**` plus the shared pure surfaces `contract`,
+ *    `settings-namespace`, `json`, `ref-grammar`, `export-items`,
+ *    `changes-contract`, `browse-rows`, and `evidence-item`).
  * 4. Host-only packages (`zod`, `schemastery`) are refused at resolve time.
  *
  * Gates 3–4 are re-checked against esbuild's metafile on every successful

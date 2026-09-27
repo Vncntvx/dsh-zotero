@@ -98,7 +98,7 @@ Agent 依次调用搜索、检索、导出三个工具完成用户请求。
 - `zotero_add_tags`：读取现有标签后安全合并，并在版本前置条件下写回
 - `zotero_add_to_collection`：读取现有合集后安全合并，并在版本前置条件下写回
 
-每次写入前都会显示计划卡，该确认不可关闭。Zotero 10 随后通过本地授权对话框签发一次性或 Always-Allow key。写工具不会使用可重试的 connectivity ask。
+每次写入先过会话审批策略，再显示计划卡；两道确认都不可关闭。Zotero 10 随后通过本地授权对话框签发一次性或 Always-Allow key。写工具不会使用可重试的 connectivity ask。
 
 ## 对话工具调用卡片（Toolviews）
 

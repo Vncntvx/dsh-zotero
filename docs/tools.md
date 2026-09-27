@@ -370,9 +370,14 @@ zotero_add_to_collection(ref="zotero://user/0/item/ABCD1234", collection="方法
 
 ## 写入边界
 
-三个写入工具只在设置的 `writeEnabled` 打开时注册，且都只写 `zotero://user/0/`（个人库）。每次写入前都展示 dsh 侧计划卡片，没有任何设置能跳过它。参数校验在计划卡之前完成，畸形调用不会被当作「未批准」。
+三个写入工具只在设置的 `writeEnabled` 打开时注册，且都只写 `zotero://user/0/`（个人库）。每次写入先过会话审批策略，再展示 dsh 侧计划卡片；没有任何设置能跳过这两步。参数校验在任何确认之前完成，畸形调用不会被当作「未批准」。
 
-**闸门在服务接缝上。** 计划审查是 `ctx.zotero.createNote` / `updateTags` / `addToCollection` 的组成部分。工具与其他消费方都必须传入 `ZoteroWriteCall`（计划文本，以及发起调用的 agent 与 signal）。服务先过能力门（关闭时返回 `ZOTERO_CAPABILITY_UNAVAILABLE`，不弹卡），再向用户提问。未批准返回 `{kind:"declined"}`，不发送任何请求；没有可用交互通道时失败关闭（`ZOTERO_WRITE_APPROVAL_UNAVAILABLE`）。任何调用方都必须经过这道闸门。
+**闸门在服务接缝上。** 确认链是 `ctx.zotero.createNote` / `updateTags` / `addToCollection` 的组成部分，顺序固定：
+
+1. **会话审批策略**（`ctx.approval.request`）：写入 `approval/asked` + `approval/decided` 审计对，并服从 `approval/policy`。`never` 会话自动拒绝；用户拒绝/取消 → `{kind:"declined"}`，不弹计划卡、不触网。未组合 ApprovalService 时跳过本闸（此时也不存在 `NEVER_SENTENCE`）。
+2. **计划审查**（`userQuestions` 的 plan-review 卡）：用户批准的计划 markdown 就是服务传给写域的那份。未批准返回 `{kind:"declined"}`。
+
+工具与其他消费方都必须传入 `ZoteroWriteCall`（计划文本，以及发起调用的 agent、signal、tool name、call id）。服务先过能力门（关闭时返回 `ZOTERO_CAPABILITY_UNAVAILABLE`，不弹卡）。任何一闸无法发起交互时失败关闭（`ZOTERO_WRITE_APPROVAL_UNAVAILABLE`）。交互会话下可能看到两次确认（权限 + 计划）——这是有意的双层：权限门服从部署策略与审计，计划卡保证用户看到精确变更。任何调用方都必须经过这道闸门。
 
 **Zotero 10 的授权层是硬边界**（对照源码 `server_localAPI.js`，10.0.3-beta.3）：写请求必须携带实例 id（缺失 428、不匹配 412）与本地签发的 key。`/api/local/authorize` 弹窗三个按钮是「允许」（`remember:false`）、「始终允许」（`remember:true`）、「拒绝」，默认按钮是「拒绝」，该端点限速 5 次/分钟。单次 key 在鉴权阶段即被删除，请求体尚未判定，写失败同样消耗该 key。插件因此只在 401 后重新授权并同批重放一次，这是唯一的自动重试。`remember:true` 的 key 不会被消耗：它保存在 `<Zotero 配置目录>/localAPIKeys.json`，可长期重复使用，直到用户在 Zotero 中清除已保存的授权。「始终允许」等价于一枚长期有效的库写入凭据，写入日志、脚本或对话会泄漏该凭据。
 

@@ -8,14 +8,9 @@
  * @module dsh-zotero/client/sources/decoders
  */
 
-import {
-  boolField,
-  evidenceItemsOf,
-  isRecord,
-  numberField,
-  stringField,
-  type EvidenceItemView,
-} from '../presenters.ts'
+import { evidenceItemsOf } from '../presenters.ts'
+import { boolField, isRecord, numberField, stringField } from '../../json.ts'
+import type { EvidenceItem } from '../../evidence-item.ts'
 import { stringArrayOf } from '../../json.ts'
 import { browseRowOf, isBrowseKind, type BrowseRow } from '../../browse-rows.ts'
 import {
@@ -126,7 +121,7 @@ function childPreviewsOf(value: unknown): ChildPreviewView[] {
 
 /** The retrieve projection view; `items === null` means malformed. */
 export interface RetrieveMetaView {
-  readonly items: readonly EvidenceItemView[] | null
+  readonly items: readonly EvidenceItem[] | null
   readonly count: number | null
   readonly truncated: boolean | null
   readonly attachmentRef: string | null

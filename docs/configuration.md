@@ -36,6 +36,8 @@
 | `promoteOnTimeout`      | `true`                       | 前台导出/变更同步超时时是否自动提升为后台任务                                                   |
 | `foregroundWaitMs`      | `4000`                       | 前台执行等待上限（毫秒），超时后自动提升为后台 Job                                              |
 
+注意：`foregroundWaitMs`（默认 4000）管的是**前台 job 等待**，`timeoutMs`（默认 5000）管的是**单次 Zotero HTTP 请求**。二者独立；promote 先于 provider deadline 触发是否为期望编排仍是开放验证项（见 `src/job-runner.ts` 的 `waitOrPromote` 与 `tests/unit/job-runner.spec.ts`），默认值暂不调整。
+
 ## 校验规则
 
 `resolveConfig` 在加载时执行以下检查，不合法则抛出错误：

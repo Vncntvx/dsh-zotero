@@ -17,7 +17,8 @@ src/
   contract.ts           # Remote wire 结构面（类型、端点常量；不含 codec）
   status-codec.ts       # Host 侧严格 codec（zod）；client 对应 src/client/status-codec.ts
   errors.ts             # 错误类与错误码
-  json.ts               # 无损 JSON 读取 helper
+  json.ts               # 无损 JSON 读取 helper（含 isRecord/stringField/numberField/boolField）
+  evidence-item.ts      # 证据段投影形状（host/client 共享，CLIENT_SAFE）
   constants.ts          # 领域常量（写工具名、authorize 路径、限额等）
   concurrency.ts        # 有界并发
   evidence.ts           # BM25 排名
@@ -33,7 +34,7 @@ src/
   ask.ts                # 连接失败时的 user-question 交互（每类故障一次提问，并行调用共享同一张卡）
   prompt.ts             # 面向模型的 policy section
   command.ts            # /zotero 命令（status 为等价写法）
-  write-approval.ts     # 写入计划卡（ctx.zotero 接缝的确认层）
+  write-approval.ts     # 写入确认层（ctx.approval 策略门 + 计划卡，ctx.zotero 接缝）
   write-auth.ts         # Zotero 本地写 key 的获取与持久化
   write-http.ts         # Local API 写传输（Server-ID + key + 批量）
   shell-write-detector.ts # shell 直写本地 API 的检测（tools/pre-execute → ask）
