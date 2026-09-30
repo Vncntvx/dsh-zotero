@@ -97,7 +97,7 @@ More detail: `docs/development.md`.
 
 ### Harness pin
 
-- One exact version, currently `dsh 0.1.7-rc.2`. The `@deepseek-ai/dsh-*` line in `devDependencies` is the source of truth; `overrides`, `peerDependencies`, `engines.dsh`, and `dsh.harnessRange` are derived from it. READMEs and this file restate the same pin.
+- One exact version, currently `dsh 0.1.7-rc.2`. The `@deepseek-ai/dsh-*` line in `devDependencies` is the source of truth; `overrides`, `peerDependencies`, `engines.dsh`, and `dsh.harnessRange` are derived from it. READMEs and this file restate the same pin. `dsh.harnessRange` is this plugin's own consistency face — harness does not read it; the real compatibility gate is `peerDependencies`.
 - Never edit one form alone and never use `^` / `||` — `npm run harness:pin -- <version>`, then regenerate `package-lock.json`. `scripts/harness-state.mjs` rejects dual arms.
 - If the registry lags the pin, `npm run link:local-harness`. Never grant a profile `compatibility.json` exemption so this plugin runs on another dsh line.
 

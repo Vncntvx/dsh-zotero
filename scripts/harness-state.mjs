@@ -6,6 +6,8 @@
  * 1. **The pin.** `package.json` carries one harness line in exact form only:
  *    every `@deepseek-ai/dsh-*` in `dependencies` / `devDependencies` /
  *    `overrides` / `peerDependencies`, plus `engines.dsh` and `dsh.harnessRange`.
+ *    `dsh.harnessRange` is this plugin's own consistency face (harness does
+ *    not read it); the real compatibility gate is `peerDependencies`.
  *    No caret ranges, no dual arms. The exact `devDependencies` line is the
  *    source of truth; every other form is written from it. The tracked
  *    `package-lock.json` is held to the same pin.
