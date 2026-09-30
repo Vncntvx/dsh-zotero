@@ -58,7 +58,7 @@ describe('requestWriteApproval', () => {
     }
   })
 
-  it('skips the approval gate without an approval service or without an agent', async () => {
+  it('skips the approval gate without an approval service', async () => {
     const bare = { get: () => undefined }
     const exec = {
       callId: 'call-2',
@@ -68,6 +68,9 @@ describe('requestWriteApproval', () => {
     await expect(
       requestWriteApproval(bare as unknown as Context, { exec, plan: '- plan' }),
     ).resolves.toBe('allowed')
+  })
+
+  it('fails closed when an approval service is composed but the call carries no agent', async () => {
     const noAgent = {
       get: () => ({ request: async () => 'rejected' as const }),
     }
@@ -76,6 +79,6 @@ describe('requestWriteApproval', () => {
         exec: { signal: new AbortController().signal, name: 'z', callId: 'c' } as never,
         plan: '- plan',
       }),
-    ).resolves.toBe('allowed')
+    ).resolves.toBe('unavailable')
   })
 })

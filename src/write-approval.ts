@@ -23,6 +23,10 @@
  * - no `ctx.approval` composed → skip this gate (no `NEVER_SENTENCE` exists
  *   then either); plan-review remains the sole confirmation.
  *
+ * A call that carries no agent while an approval service is composed is
+ * `unavailable`, never `allowed`: the request cannot be routed or audited,
+ * matching harness `serviceAsk` and sandbox escalation.
+ *
  * Plan-settlement map ({@link askPlanApproval}):
  * - `ASK_ABORTED` → harness `TOOL_ABORTED` (caller cancelled).
  * - `ASK_CANCELLED` → `false` (the user dismissed the plan review to talk;
@@ -113,10 +117,13 @@ export async function requestWriteApproval(
 ): Promise<'allowed' | 'declined' | 'unavailable'> {
   const { exec } = call
   const approval = ctx.get('approval')
-  // Absent approval service: no policy sentence exists for this composition.
-  // Absent agent: the request cannot be routed or audited. Production tools
-  // always carry an agent; tests may build a bare exec.
-  if (approval === undefined || exec.agent === undefined) return 'allowed'
+  // Absent approval service: no policy sentence exists for this composition,
+  // so this gate is skipped and plan-review remains the sole confirmation.
+  if (approval === undefined) return 'allowed'
+  // Absent agent: the request cannot be routed or audited. Fail closed —
+  // matching harness `serviceAsk` and sandbox escalation, which both deny
+  // an ask that has no agent to route it through.
+  if (exec.agent === undefined) return 'unavailable'
   let outcome: ApprovalOutcome
   try {
     outcome = await approval.request({
