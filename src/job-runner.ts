@@ -333,7 +333,22 @@ export class ZoteroJobRunner {
       },
     }
 
-    const { id, done } = this.start(wrappedTask)
+    // A registry that refuses admission (no controller for the owner, job
+    // limit) must not fail a healthy foreground call: run under the caller's
+    // own deadline instead, exactly as a composition without a registry does.
+    // Mirrors tool-bash's startJob catch → foreground fallback.
+    let started: { id: JobId; done: Promise<JobOutcome> } | undefined
+    try {
+      started = this.start(wrappedTask)
+    } catch {
+      const value = await task.run(
+        task.exec.signal,
+        () => {},
+        () => {},
+      )
+      return { kind: 'foreground', value }
+    }
+    const { id, done } = started
     const owner = task.exec.agent?.id
 
     let view: JobView

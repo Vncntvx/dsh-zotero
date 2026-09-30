@@ -189,6 +189,24 @@ describe('ZoteroJobRunner', () => {
       expect(outcome).toEqual({ kind: 'foreground', value: 'quick result' })
     })
 
+    it('falls back to a foreground run when the registry refuses admission', async () => {
+      const registry = new TestJobRegistry()
+      registry.start = (() => {
+        throw new Error('background jobs unavailable: no job controller serves this agent')
+      }) as typeof registry.start
+      const runner = new ZoteroJobRunner(registry as unknown as JobRegistry)
+      const outcome = await runner.waitOrPromote(
+        {
+          label: 'refused admission',
+          exec: fakeExec(),
+          run: async () => 'foreground fallback',
+        },
+        4000,
+      )
+
+      expect(outcome).toEqual({ kind: 'foreground', value: 'foreground fallback' })
+    })
+
     it('throws toolAborted if caller signal is already aborted before waiting', async () => {
       const registry = new TestJobRegistry()
       const runner = new ZoteroJobRunner(registry as unknown as JobRegistry)
