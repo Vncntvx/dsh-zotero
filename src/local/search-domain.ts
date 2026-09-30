@@ -10,8 +10,8 @@ import type { ZoteroHttpClient } from '../http-client.js'
 import { mapWithConcurrency } from '../concurrency.js'
 import { ZOTERO_ITEMKEY_BATCH, ZOTERO_SEARCH_CONCURRENCY } from '../constants.js'
 import { tokenize } from '../evidence.js'
-import { ZOTERO_INVALID_ARGUMENT, ZoteroError } from '../errors.js'
-import { nextOffsetOf, requireTotalResults } from './pagination.js'
+import { ZOTERO_INVALID_ARGUMENT, ZOTERO_UNEXPECTED, ZoteroError } from '../errors.js'
+import { nextOffsetOf, requireArrayBody, requireTotalResults } from './pagination.js'
 import { resolveScope, ScopeDirectory, type ResolvedScopeResult } from './scope-directory.js'
 import { asRecord, asString } from '../json.js'
 import { collectionKeysOf, normalizeSearchItem, plainNoteText } from '../normalize.js'
@@ -92,7 +92,7 @@ export async function runSearch(
       serverId: scope.serverId,
     },
   )
-  const rows = Array.isArray(json) ? json : []
+  const rows = requireArrayBody(json, 'items top listing')
   const responseServerId = headers.get('zotero-server-id') ?? scope.serverId
   const libraryForItems = libraryOfResolvedScope(scope.resolved)
   const ctxForSearch: { library: SupportedLocalLibrary; serverId?: string } = {
@@ -103,6 +103,14 @@ export async function runSearch(
   // Pagination honesty is uniform across every paged listing: without a
   // valid Total-Results header the call fails instead of guessing a total.
   const apiTotal = requireTotalResults(headers, 'items top listing')
+  // An empty page that still has range left is a body/header mismatch: the
+  // next cursor would stall at the same offset forever. Fail loud here.
+  if (items.length === 0 && request.offset < apiTotal) {
+    throw new ZoteroError(
+      `Zotero search returned an empty page at offset ${request.offset} but Total-Results is ${apiTotal}`,
+      ZOTERO_UNEXPECTED,
+    )
+  }
   // Zotero's index never searches note bodies, so the first page of a
   // queried search lists client-side note-content matches in `supplemental`
   // — a separate list beside the paged primary results, up to the primary

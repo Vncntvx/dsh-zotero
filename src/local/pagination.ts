@@ -27,14 +27,33 @@ export function requireTotalResults(headers: Headers, what: string): number {
 }
 
 /**
+ * Require a listing body to be an array. A non-array is a contract breach,
+ * not an empty page: folding it to `[]` would silently under-report and can
+ * stall pagination against a non-zero total.
+ * @param json - the response body.
+ * @param what - the listing name for the error message.
+ * @returns the array body.
+ */
+export function requireArrayBody(json: unknown, what: string): unknown[] {
+  if (!Array.isArray(json)) {
+    throw new ZoteroError(`Zotero returned a non-array body for ${what}`, ZOTERO_UNEXPECTED)
+  }
+  return json
+}
+
+/**
  * The next page's offset, or undefined when this page reached the reported
  * total. Omitting (rather than null) keeps the result a pure lossless-JSON
- * value for the tool output snapshot.
+ * value for the tool output snapshot. An empty page with a non-zero
+ * remaining range is a contract breach (the body did not deliver what the
+ * header promised), so it terminates pagination rather than stalling at the
+ * same offset forever.
  */
 export function nextOffsetOf(
   offset: number,
   returnedCount: number,
   total: number,
 ): number | undefined {
+  if (returnedCount === 0) return undefined
   return offset + returnedCount < total ? offset + returnedCount : undefined
 }

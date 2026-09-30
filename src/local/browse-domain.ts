@@ -25,7 +25,7 @@ import {
   PERSONAL_GROUPS_DISCOVERY,
   PERSONAL_LIBRARY,
 } from '../refs.js'
-import { requireTotalResults, nextOffsetOf } from './pagination.js'
+import { requireArrayBody, requireTotalResults, nextOffsetOf } from './pagination.js'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { ScopeDirectory } from './scope-directory.js'
 import type { ZoteroHttpClient } from '../http-client.js'
@@ -278,7 +278,7 @@ async function browseCollections(
   const { json, headers } = await deps.client.getJson<unknown>(listPath, params, { signal })
   const serverId = headers.get('zotero-server-id') ?? undefined
   const total = requireTotalResults(headers, 'collections')
-  const rows = Array.isArray(json) ? json : []
+  const rows = requireArrayBody(json, 'collections')
   // Ancestor names resolve in parallel: each row's chain is its own TTL-cached
   // walk, and a page of siblings shares most ancestors after the first fetch.
   const resolved = await Promise.all(
@@ -341,7 +341,7 @@ async function browseSavedSearches(
     signal,
   })
   const serverId = headers.get('zotero-server-id') ?? undefined
-  const rawRows = Array.isArray(json) ? json : []
+  const rawRows = requireArrayBody(json, 'saved searches')
   const total = requireTotalResults(headers, 'saved searches')
   const entries: ScopeNameEntry[] = rawRows.map((row) => normalizeScopeEntry(row))
   const condByKey = new Map<string, Record<string, JsonValue>[]>()
@@ -436,7 +436,7 @@ async function browseTags(
     ...(serverIdClaim !== undefined ? { serverId: serverIdClaim } : {}),
   })
   const serverId = headers.get('zotero-server-id') ?? serverIdClaim
-  const rawRows = Array.isArray(json) ? json : []
+  const rawRows = requireArrayBody(json, 'tags')
   const total = requireTotalResults(headers, 'tags')
   const items = rawRows
     .map((row) => {

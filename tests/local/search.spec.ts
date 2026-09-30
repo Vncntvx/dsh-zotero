@@ -179,6 +179,29 @@ describe('search: library scope', () => {
     await zoteroError(provider.search(request({})), 'ZOTERO_UNEXPECTED', 'Total-Results')
   })
 
+  it('fails loud on a non-array body instead of treating it as an empty page', async () => {
+    serveJson(
+      mock,
+      /^\/api\/users\/0\/items(\/top)?$/,
+      { message: 'not a list' },
+      {
+        'Total-Results': '3',
+      },
+    )
+    await zoteroError(provider.search(request({})), 'ZOTERO_UNEXPECTED', 'non-array body')
+  })
+
+  it('fails loud on an empty page that still has range left', async () => {
+    // Body/header mismatch: Total-Results promises more, the body delivers
+    // nothing. A next cursor would stall at the same offset forever.
+    serveJson(mock, /^\/api\/users\/0\/items(\/top)?$/, [], { 'Total-Results': '5' })
+    await zoteroError(
+      provider.search(request({ offset: 2, limit: 10 })),
+      'ZOTERO_UNEXPECTED',
+      'empty page',
+    )
+  })
+
   it('keeps the scope provenance when the items response omits the server id', async () => {
     serveJson(mock, '/api/users/0/collections/COLL1234', COLLECTIONS[0], {
       'Zotero-Server-ID': SERVER_ID,
@@ -340,12 +363,9 @@ describe('search: collection scope', () => {
     ).toHaveLength(2)
   })
 
-  it('treats a non-array items response as an empty result set', async () => {
+  it('fails loud on a non-array items response instead of folding it to an empty set', async () => {
     serveJson(mock, '/api/users/0/items/top', { key: ITEM_KEY }, { 'Total-Results': '0' })
-    const result = await provider.search(request({}))
-    expect(result.items).toEqual([])
-    expect(result.total).toBe(0)
-    expect(result.nextOffset).toBeUndefined()
+    await zoteroError(provider.search(request({})), 'ZOTERO_UNEXPECTED', 'non-array body')
   })
 
   it('treats a non-array scope listing as no matches', async () => {
