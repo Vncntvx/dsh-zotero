@@ -143,28 +143,94 @@ function questionOf(spec: FailureSpec): AskUserQuestionItem {
  * would create the note twice). Write tools surface domain failures directly
  * instead.
  */
+/**
+ * One in-flight shared question: the gate owns the abort that ends it, so
+ * a single waiter's cancellation cannot take the conversation down with it.
+ */
+interface SharedAsk {
+  readonly controller: AbortController
+  waiters: number
+  readonly promise: Promise<boolean>
+}
+
 export class ConnectivityRecovery {
-  private readonly asking = new Map<string, Promise<boolean>>()
+  private readonly asking = new Map<string, SharedAsk>()
 
   /**
    * Answer one failure kind, asking only when no question for it is in
-   * flight.
+   * flight. Concurrent callers share one question; a waiter whose own
+   * `waiterSignal` aborts detaches without cancelling the shared ask for
+   * the others. The shared question is aborted only when the last waiter
+   * leaves.
    * @param code - the failure kind the question belongs to.
-   * @param question - the ask to run when this caller is the first; resolves
-   *   true when the user chose to retry.
+   * @param question - the ask to run when this caller is the first; its
+   *   signal is the gate's own (never a single caller's). Resolves true when
+   *   the user chose to retry.
+   * @param waiterSignal - this caller's cancellation; aborts only this
+   *   waiter's wait, not the shared question while others remain.
    * @returns the answer this caller acts on.
    */
-  async ask(code: string, question: () => Promise<boolean>): Promise<boolean> {
-    const inFlight = this.asking.get(code)
-    if (inFlight !== undefined) return await inFlight
-    const answer = question()
-    this.asking.set(code, answer)
+  async ask(
+    code: string,
+    question: (signal: AbortSignal) => Promise<boolean>,
+    waiterSignal?: AbortSignal,
+  ): Promise<boolean> {
+    let shared = this.asking.get(code)
+    if (shared === undefined) {
+      const controller = new AbortController()
+      const entry: SharedAsk = {
+        controller,
+        waiters: 0,
+        promise: question(controller.signal),
+      }
+      shared = entry
+      this.asking.set(code, entry)
+      void entry.promise
+        .catch(() => undefined)
+        .finally(() => {
+          if (this.asking.get(code) === entry) this.asking.delete(code)
+        })
+    }
+    shared.waiters += 1
+    const entry = shared
     try {
-      return await answer
+      return await awaitSharedAsk(entry, waiterSignal)
     } finally {
-      this.asking.delete(code)
+      entry.waiters -= 1
+      if (entry.waiters === 0) {
+        // Last waiter left before the question settled: end the shared ask
+        // so no orphaned card stays in front of the user.
+        entry.controller.abort()
+      }
     }
   }
+}
+
+/**
+ * Wait for a shared question, or detach early when the waiter's own signal
+ * aborts. Detaching does not reject the shared promise for other waiters.
+ */
+function awaitSharedAsk(entry: SharedAsk, waiterSignal?: AbortSignal): Promise<boolean> {
+  if (waiterSignal === undefined) return entry.promise
+  if (waiterSignal.aborted) {
+    return Promise.reject(new HarnessError(TOOL_ABORTED_MESSAGE, TOOL_ABORTED))
+  }
+  return new Promise<boolean>((resolve, reject) => {
+    const onAbort = (): void => {
+      reject(new HarnessError(TOOL_ABORTED_MESSAGE, TOOL_ABORTED))
+    }
+    waiterSignal.addEventListener('abort', onAbort, { once: true })
+    entry.promise.then(
+      (value) => {
+        waiterSignal.removeEventListener('abort', onAbort)
+        resolve(value)
+      },
+      (error) => {
+        waiterSignal.removeEventListener('abort', onAbort)
+        reject(error)
+      },
+    )
+  })
 }
 
 /**
@@ -197,24 +263,31 @@ export async function withConnectivityAsk<T>(
     const spec = FAILURE_SPECS[error.code]
     let retry: boolean
     try {
-      retry = await recovery.ask(error.code, async () => {
-        const request: AskUserQuestionRequest = {
-          questions: [questionOf(spec)],
-          ...(exec.agent !== undefined ? { agent: exec.agent } : {}),
-          signal: exec.signal,
-        }
-        const answer: AskUserQuestionAnswer = await questions.ask(request)
-        const answerItem = answer.answers.find((item) => item.id === 'zotero-failure')
-        // Matched by label string because the answer protocol carries only
-        // selected labels (no stable option ids); the labels are code
-        // constants (FAILURE_SPECS), never i18n copy, so a rename breaks the
-        // build's contract visibly in one place. Revisit if the protocol
-        // gains option ids.
-        return (answerItem?.selected ?? []).includes(spec.retryLabel)
-      })
+      retry = await recovery.ask(
+        error.code,
+        async (signal) => {
+          const request: AskUserQuestionRequest = {
+            questions: [questionOf(spec)],
+            ...(exec.agent !== undefined ? { agent: exec.agent } : {}),
+            // The gate's own signal: one waiter's cancellation must not
+            // cancel a question the other waiters still need answered.
+            signal,
+          }
+          const answer: AskUserQuestionAnswer = await questions.ask(request)
+          const answerItem = answer.answers.find((item) => item.id === 'zotero-failure')
+          // Matched by label string because the answer protocol carries only
+          // selected labels (no stable option ids); the labels are code
+          // constants (FAILURE_SPECS), never i18n copy, so a rename breaks the
+          // build's contract visibly in one place. Revisit if the protocol
+          // gains option ids.
+          return (answerItem?.selected ?? []).includes(spec.retryLabel)
+        },
+        exec.signal,
+      )
     } catch {
       // A failed question (no provider, aborted ask, delegated caller) must
-      // never mask the underlying connectivity failure.
+      // never mask the underlying connectivity failure. This waiter's own
+      // abort still surfaces as TOOL_ABORTED for this call alone.
       if (exec.signal?.aborted) throw new HarnessError(TOOL_ABORTED_MESSAGE, TOOL_ABORTED)
       throw error
     }

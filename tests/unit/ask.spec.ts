@@ -145,7 +145,7 @@ describe('withConnectivityAsk question content', () => {
     })
   }
 
-  it('forwards the calling agent and signal with the question', async () => {
+  it('forwards the calling agent and a gate-owned signal with the question', async () => {
     const signal = new AbortController().signal
     const agent = { id: 'agent-1' } as unknown as NonNullable<ToolRunContext['agent']>
     const { ctx, calls } = fakeContext(() => retryAnswer('Retry (Recommended)'))
@@ -156,7 +156,10 @@ describe('withConnectivityAsk question content', () => {
       ),
     ).rejects.toBe(error)
     expect(calls[0]!.agent).toBe(agent)
-    expect(calls[0]!.signal).toBe(signal)
+    // The shared question is owned by the gate, not by any one caller: a
+    // waiter's abort must not cancel a question other waiters still need.
+    expect(calls[0]!.signal).toBeInstanceOf(AbortSignal)
+    expect(calls[0]!.signal).not.toBe(signal)
   })
 })
 
@@ -290,6 +293,32 @@ describe('concurrent failures share one recovery question', () => {
     }
     // Each caller retried its own request exactly once.
     expect(attempts).toBe(6)
+  })
+
+  it('keeps the shared question alive when one waiter aborts', async () => {
+    const recovery = new ConnectivityRecovery()
+    const { ctx, calls, release } = gatedContext()
+    const error = zoteroError(ZOTERO_NOT_RUNNING)
+    const aborted = new AbortController()
+    const live = new AbortController()
+    const first = withConnectivityAsk(ctx, recovery, { signal: aborted.signal }, async () =>
+      Promise.reject(error),
+    )
+    const second = withConnectivityAsk(ctx, recovery, { signal: live.signal }, async () =>
+      Promise.reject(error),
+    )
+    // Both callers must reach the shared ask before either aborts.
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(calls).toHaveLength(1)
+    // The first waiter cancels; the shared question must survive for the second.
+    aborted.abort()
+    await expect(first).rejects.toMatchObject({ name: 'HarnessError' })
+    // The shared question is still open (one card, not a cancelled ask).
+    expect(calls).toHaveLength(1)
+    release(['I started Zotero, retry (Recommended)'])
+    await expect(second).rejects.toBe(error)
   })
 
   it('gives a different failure kind its own question', async () => {
