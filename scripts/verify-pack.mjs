@@ -12,8 +12,9 @@
  * here first — naming the missing path and the command that produces it.
  *
  * The expected paths come from `package.json` itself (`main`, `exports`,
- * `dsh.bundle.patch`), the same fields the market's entry check reads, so a
- * change to the manifest cannot drift from the check.
+ * `icon`, `dsh.bundle.patch`), the same fields the market's entry and
+ * display-meta checks read, so a change to the manifest cannot drift from
+ * the check.
  * @module scripts/verify-pack
  */
 
@@ -27,23 +28,44 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 /** Strip the `./` a manifest path carries so it compares to a packed path. */
 const packed = (path) => path.replace(/^\.\//, '')
 
+/**
+ * Resolve one exports entry (string or conditions object) into concrete
+ * packed paths. A `*` wildcard is expanded to the concrete files this
+ * package ships under that pattern (locale bundles).
+ */
+function addExportPaths(paths, key, value) {
+  const targets = typeof value === 'string' ? [value] : Object.values(value ?? {})
+  for (const target of targets) {
+    if (typeof target !== 'string') continue
+    if (target.includes('*')) {
+      // `./locale/*.json` → the concrete locale files the package ships.
+      if (key.includes('locale') || target.includes('locale')) {
+        paths.add('locale/en.json')
+        paths.add('locale/zh.json')
+      }
+      continue
+    }
+    paths.add(packed(target))
+  }
+}
+
 /** Every path the manifest says a consumer resolves, plus the fixed extras. */
 function expectedPaths(manifest) {
   const paths = new Set(['package.json', 'README.md'])
   if (typeof manifest.main === 'string') paths.add(packed(manifest.main))
-  const rootExport =
-    typeof manifest.exports === 'string' ? manifest.exports : manifest.exports?.['.']
-  if (typeof rootExport === 'string') {
-    paths.add(packed(rootExport))
-  } else if (rootExport !== null && typeof rootExport === 'object') {
-    for (const value of Object.values(rootExport)) {
-      if (typeof value === 'string') paths.add(packed(value))
+  if (typeof manifest.icon === 'string') paths.add(packed(manifest.icon))
+  const exportsMap = manifest.exports
+  if (typeof exportsMap === 'string') {
+    paths.add(packed(exportsMap))
+  } else if (exportsMap !== null && typeof exportsMap === 'object') {
+    for (const [key, value] of Object.entries(exportsMap)) {
+      addExportPaths(paths, key, value)
     }
   }
-  const clientExport = manifest.exports?.['./client']
-  if (typeof clientExport === 'string') paths.add(packed(clientExport))
   const patch = manifest.dsh?.bundle?.patch
   if (typeof patch === 'string') paths.add(packed(patch))
+  else if (Array.isArray(patch))
+    for (const p of patch) if (typeof p === 'string') paths.add(packed(p))
   return [...paths].sort()
 }
 
