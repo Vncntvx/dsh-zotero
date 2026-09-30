@@ -278,7 +278,13 @@ export function errorCauseOf(error: unknown): unknown {
   return error instanceof Error ? (error.cause ?? error) : undefined
 }
 
-/** The Errno-style code of an error's cause chain, when one exists. */
+/**
+ * The Errno-style code of an error's cause chain, when one exists.
+ *
+ * Skips a `HarnessError`/`ZoteroError`'s own domain `code` (e.g.
+ * `ZOTERO_TIMEOUT`) so a wrapped transport failure still surfaces its
+ * underlying errno (`ETIMEDOUT`, `ECONNREFUSED`, …).
+ */
 export function errnoCodeOf(error: unknown): string | undefined {
   const seen = new Set<object>()
   const queue: unknown[] = [error]
@@ -287,7 +293,8 @@ export function errnoCodeOf(error: unknown): string | undefined {
     if (typeof current !== 'object' || current === null || seen.has(current)) continue
     seen.add(current)
     if ('code' in current && typeof current.code === 'string' && current.code !== '') {
-      return current.code
+      // A harness domain code is not an errno; keep walking the cause chain.
+      if (!(current instanceof HarnessError)) return current.code
     }
     if (current instanceof Error && current.cause !== undefined) queue.push(current.cause)
     if (current instanceof AggregateError) queue.push(...current.errors)

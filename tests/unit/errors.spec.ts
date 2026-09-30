@@ -64,6 +64,14 @@ describe('errnoCodeOf', () => {
     expect(errnoCodeOf(new Error('no cause'))).toBeUndefined()
     expect(errnoCodeOf(new AggregateError([new Error('plain')], 'empty'))).toBeUndefined()
   })
+
+  it('skips a domain code on the error itself and reads the errno from its cause', () => {
+    const wrapped = new ZoteroError('timeout', 'ZOTERO_TIMEOUT', {
+      cause: { code: 'ETIMEDOUT' },
+    })
+    expect(errnoCodeOf(wrapped)).toBe('ETIMEDOUT')
+    expect(isUnreachableCause(wrapped)).toBe(true)
+  })
 })
 
 describe('isUnreachableCause', () => {
