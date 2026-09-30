@@ -29,7 +29,7 @@ import {
   unsupportedBrowseKindMessage,
 } from '../local/browse-domain.js'
 import type { ZoteroService } from '../service.js'
-import type { SupportedLocalLibrary, ZoteroBrowseKind, ZoteroBrowseRequest } from '../types.js'
+import type { ZoteroBrowseKind, ZoteroBrowseRequest } from '../types.js'
 
 const BROWSE_PARAMETERS = {
   kind: {

@@ -60,7 +60,9 @@ const ALL_INCLUDES = ALL_CHANGES_INCLUDES
 
 /** Host kinds the tool's include enum does not offer; a non-empty union fails the build. */
 type MissingInclude = Exclude<ZoteroChangesInclude, (typeof ALL_INCLUDES)[number]>
-const _includesComplete: MissingInclude extends never ? true : never = true
+type AssertNever<T extends never> = T
+/** Compile-time exhaustiveness pin (exported so the type is "used"). */
+export type IncludesComplete = AssertNever<MissingInclude>
 
 /** The kinds a call covers when the model names none. `fulltext` is excluded:
  * its endpoint answers in the full-text index's own version counter, not the
@@ -219,7 +221,8 @@ type UnrenderedReason = Exclude<
   ZoteroChangesUnobservableReason,
   (typeof UNOBSERVABLE_HEADLINES)[number][0]
 >
-const _reasonsRendered: UnrenderedReason extends never ? true : never = true
+/** Compile-time exhaustiveness pin (exported so the type is "used"). */
+export type ReasonsRendered = AssertNever<UnrenderedReason>
 
 /** The reasons the wire schema admits, in render order. */
 const UNOBSERVABLE_REASONS: readonly ZoteroChangesUnobservableReason[] = UNOBSERVABLE_HEADLINES.map(

@@ -19,7 +19,6 @@ import { REGISTRATIONS } from '../../../src/client/toolviews/index.ts'
 import { mockT } from '../helpers/mock-translate.ts'
 import { createToolViewProps } from '../helpers/mock-disclosure.ts'
 import { settled } from '../helpers/blocks.ts'
-import { countingDisclosure } from '../helpers/primitives-stub.ts'
 
 // `vi.mock` factories are hoisted above the spec's imports, so the counter has
 // to be created inside the factory and read back through a `var` binding the

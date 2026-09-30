@@ -33,7 +33,6 @@ import {
 import type {
   EvidencePassage,
   ExportArtifact,
-  OperationFacts,
   SearchProvenance,
   SourceAttachment,
   SourceItem,

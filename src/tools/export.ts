@@ -179,7 +179,7 @@ function buildRequest(args: ExportArgs, config: ResolvedConfig): ZoteroExportReq
   }
 }
 
-function renderExport(args: ExportArgs, value: ExportOutput): ContentBlock[] {
+function renderExport(_args: ExportArgs, value: ExportOutput): ContentBlock[] {
   if (isJobArm(value)) return renderJobArm(value)
   if (value.format === 'citation') {
     return [

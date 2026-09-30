@@ -11,7 +11,6 @@ import type { ZoteroHttpClient } from '../http-client.js'
 import {
   errnoCodeOf,
   ZOTERO_FILE_MISSING,
-  ZOTERO_INVALID_ARGUMENT,
   ZOTERO_NO_ATTACHMENT,
   ZOTERO_UNEXPECTED,
   ZoteroError,

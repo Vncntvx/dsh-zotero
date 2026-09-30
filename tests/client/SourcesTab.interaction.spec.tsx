@@ -152,7 +152,6 @@ describe('filters', () => {
   })
 
   it('recovers from a filter that empties when the sources change under it', async () => {
-    const status = connectedProbe()
     const holder = { chat: chatOf([toolRow(searchResult())]) }
     const props = {
       t,
@@ -184,7 +183,6 @@ describe('filters', () => {
   })
 
   it('resets the filter when the session switches', async () => {
-    const status = connectedProbe()
     const retrieve = retrieveOf()
     const holder = { session: sessionOf() }
     const chat = chatOf([toolRow(searchResult()), toolRow(retrieve)])

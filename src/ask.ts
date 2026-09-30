@@ -21,7 +21,6 @@ import type {
   AskUserQuestionAnswer,
   AskUserQuestionItem,
   AskUserQuestionRequest,
-  UserQuestionService,
 } from '@deepseek-ai/dsh-user-questions'
 import { ZOTERO_LOCAL_API_VERSION } from './constants.js'
 import {

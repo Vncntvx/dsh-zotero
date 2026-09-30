@@ -46,7 +46,7 @@ export function scopeLabelOf(scope: SearchProvenance['scope'], t: TranslateNS<'z
 export function filterLineOf(
   itemTypes: readonly string[],
   tags: readonly string[],
-  t: TranslateNS<'zotero'>,
+  _t: TranslateNS<'zotero'>,
 ): string {
   const parts = [...itemTypes, ...tags]
   return parts.length === 0 ? '' : parts.join(' · ')

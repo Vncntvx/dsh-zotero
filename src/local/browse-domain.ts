@@ -6,12 +6,7 @@
  * @module dsh-zotero/local/browse-domain
  */
 
-import {
-  isNotFoundError,
-  ZOTERO_INVALID_ARGUMENT,
-  ZOTERO_UNEXPECTED,
-  ZoteroError,
-} from '../errors.js'
+import { isNotFoundError, ZOTERO_INVALID_ARGUMENT, ZoteroError } from '../errors.js'
 import { asRecord, asString, isObjectKey } from '../json.js'
 import { normalizeScopeEntry, type ScopeNameEntry } from '../normalize.js'
 import {
@@ -32,15 +27,12 @@ import type { ZoteroHttpClient } from '../http-client.js'
 import type { LocalApiLimits } from './limits.js'
 import type {
   SupportedLocalLibrary,
-  ZoteroBrowseKind,
   ZoteroBrowseRequest,
   ZoteroBrowseResult,
   ZoteroCollectionInfo,
   ZoteroCreatorTypeInfo,
   ZoteroItemFieldInfo,
-  ZoteroItemTypeInfo,
   ZoteroLibraryInfo,
-  ZoteroObjectRef,
 } from '../types.js'
 
 /**

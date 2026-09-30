@@ -7,7 +7,6 @@
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { SourceItem } from '../../src/client/sources/model.ts'
 import { zh } from '../../src/client/locales.ts'
 import { CopyButton } from '../../src/client/components/CopyButton.tsx'
 import { ZoteroOpenButton } from '../../src/client/components/open/ZoteroOpenButton.tsx'

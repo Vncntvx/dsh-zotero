@@ -46,8 +46,6 @@ import {
 import type { ZoteroHttpClient } from '../http-client.js'
 import { cacheEntryMatchesIdentity, type LocalReadContext } from './identity.js'
 import type {
-  GroupLibrary,
-  PersonalLibrary,
   SupportedLocalLibrary,
   ZoteroObjectRef,
   ZoteroSearchScope,

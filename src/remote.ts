@@ -23,7 +23,6 @@ import {
   ZOTERO_STATUS_SERVICE_KEY,
   type ZoteroStatusView,
 } from './contract.js'
-import type { ZoteroService } from './service.js'
 
 /** The zotero settings page's host service: the web tab's connectivity probe. */
 export class ZoteroRuntime extends TypertRemoteService {

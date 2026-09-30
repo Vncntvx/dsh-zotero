@@ -89,13 +89,6 @@ function orderedIncludes(include: ReadonlySet<ZoteroChangesInclude>): ZoteroChan
   return ALL_CHANGES_INCLUDES.filter((kind) => include.has(kind))
 }
 
-function sameIncludes(
-  left: ReadonlySet<ZoteroChangesInclude>,
-  right: ReadonlySet<ZoteroChangesInclude>,
-): boolean {
-  return left.size === right.size && [...left].every((kind) => right.has(kind))
-}
-
 /** The tombstone payload's documented lists; anything else is counted, not read. */
 const TOMBSTONE_LISTS = ['items', 'collections', 'searches', 'tags'] as const
 

@@ -85,9 +85,9 @@ export type GroupKey = (typeof FIELD_SPECS)[number]['group']
 
 /** Host Config fields the card does not list; a non-empty union fails the client build. */
 type MissingConfigField = Exclude<keyof ResolvedConfig, FieldKey>
-// The assignment check exists only for its type: a missing host field makes
-// `_configSurfaceComplete` `never`, so `true` stops being assignable.
-const _configSurfaceComplete: MissingConfigField extends never ? true : never = true
+type AssertNever<T extends never> = T
+/** Compile-time exhaustiveness pin (exported so the type is "used"). */
+export type ConfigSurfaceComplete = AssertNever<MissingConfigField>
 
 /**
  * A boolean field: the draft is the literal 'true'/'false' text a toggle

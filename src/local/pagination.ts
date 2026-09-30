@@ -15,7 +15,8 @@ import { ZOTERO_UNEXPECTED, ZoteroError } from '../errors.js'
  * an honest total would silently under-report.
  */
 export function requireTotalResults(headers: Headers, what: string): number {
-  const raw = headers.get('total-results') ?? headers.get('Total-Results')
+  // `Headers.get` is case-insensitive; one lookup covers both spellings.
+  const raw = headers.get('total-results')
   const total = parseNonNegativeSafeInteger(raw)
   if (total === undefined) {
     throw new ZoteroError(

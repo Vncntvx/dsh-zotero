@@ -34,7 +34,6 @@ import type {
   ZoteroGetRequest,
   ZoteroInclude,
   ZoteroItemDetail,
-  ZoteroObjectRef,
 } from '../types.js'
 
 const INCLUDE_ORDER: readonly ZoteroInclude[] = ['notes', 'annotations', 'attachments']
