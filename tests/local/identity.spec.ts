@@ -404,3 +404,42 @@ describe('Server-ID cache identity', () => {
     expect(status.diagnosis).toContain('ZOTERO_API_DISABLED')
   })
 })
+
+describe('scope read key consistency', () => {
+  it('refuses a scope read whose response names a different object than the request', async () => {
+    // The ref names COLL1234, but the body answers with another valid key:
+    // fail loud rather than silently re-pointing the scope (write-domain's
+    // readItem enforces the same rule).
+    const client = {
+      getJson: async () => ({
+        json: { key: 'DIFF1234', data: { name: 'renamed' } },
+        headers: new Headers(),
+      }),
+    } as unknown as ZoteroHttpClient
+    const directory = new ScopeDirectory(client)
+    await expect(
+      directory.resolveNamed(
+        'collection',
+        `zotero://user/0/collection/${COLLECTION_KEY}`,
+        PERSONAL_LIBRARY,
+      ),
+    ).rejects.toThrow(/different object than COLL1234/)
+  })
+
+  it('accepts a scope read whose response key matches the request', async () => {
+    const client = {
+      getJson: async () => ({
+        json: { key: COLLECTION_KEY, data: { name: 'Papers' } },
+        headers: new Headers(),
+      }),
+    } as unknown as ZoteroHttpClient
+    const directory = new ScopeDirectory(client)
+    const resolved = await directory.resolveNamed(
+      'collection',
+      `zotero://user/0/collection/${COLLECTION_KEY}`,
+      PERSONAL_LIBRARY,
+    )
+    expect(resolved.name).toBe('Papers')
+    expect(resolved.ref.key).toBe(COLLECTION_KEY)
+  })
+})

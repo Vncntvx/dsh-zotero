@@ -22,6 +22,7 @@ import {
   ZOTERO_INVALID_REF,
   ZOTERO_NOT_FOUND,
   ZOTERO_SCOPE_AMBIGUOUS,
+  ZOTERO_UNEXPECTED,
   ZoteroError,
 } from '../errors.js'
 import {
@@ -278,6 +279,15 @@ export class ScopeDirectory {
         },
       )
       const entry = normalizeScopeEntry(json)
+      // The ref is authority: an answer that names a different object is a
+      // contract breach, not a silent re-point (write-domain's readItem
+      // enforces the same rule).
+      if (entry.key !== ref.key) {
+        throw new ZoteroError(
+          `Zotero answered the scope read with a different object than ${ref.key}; the response cannot be used.`,
+          ZOTERO_UNEXPECTED,
+        )
+      }
       return {
         ref: refForLibrary(
           ref.library as SupportedLocalLibrary,
@@ -437,6 +447,12 @@ export class ScopeDirectory {
         { signal, serverId },
       )
       const entry = normalizeScopeEntry(json)
+      if (entry.key !== key) {
+        throw new ZoteroError(
+          `Zotero answered the collection read with a different object than ${key}; the response cannot be used.`,
+          ZOTERO_UNEXPECTED,
+        )
+      }
       const node: CollectionNode = {
         name: entry.name,
         ...(entry.parentKey !== undefined ? { parentKey: entry.parentKey } : {}),
