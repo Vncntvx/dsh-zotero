@@ -98,25 +98,33 @@ function entryEndOf(text: string, from: number): number {
 
 /**
  * Split a BibTeX/BibLaTeX body into its entries with their text spans. Each
- * entry runs from its `@type{` start to the next entry's start. The scan is
- * progressive and brace-aware: every entry's body is skipped to its closing
- * brace before the next start is searched, so an `@type{key,` shape inside a
- * field value, a quoted string, or a comment never starts a new entry.
+ * entry's `text` runs from its `@type{` start to its own closing brace, so
+ * trailing `%` comments or blank lines before the next entry never join the
+ * body — the content-equality pairing in {@link locateExportItems} needs the
+ * entry alone. The `end` offset still tiles the body to the next entry's
+ * start (or the body end) for UI span highlighting. The scan is progressive
+ * and brace-aware: every entry's body is skipped to its closing brace before
+ * the next start is searched, so an `@type{key,` shape inside a field value,
+ * a quoted string, or a comment never starts a new entry.
  * @param text - the export body (offsets are relative to this string).
  * @returns the entries in body order.
  */
 export function splitBibtexEntries(text: string): BatchEntry[] {
-  const starts: { readonly key?: string; readonly index: number }[] = []
+  const starts: { readonly key?: string; readonly index: number; readonly entryEnd: number }[] = []
   let cursor = 0
   for (;;) {
     ENTRY_START.lastIndex = cursor
     const start = ENTRY_START.exec(text)
     if (start === null) break
     const key = entryKeyOf(text, start.index + start[0].length)
-    starts.push({ ...(key === undefined ? {} : { key }), index: start.index })
-    const end = entryEndOf(text, start.index + start[0].length)
-    cursor = Math.max(end, start.index + start[0].length)
-    if (end >= text.length) break
+    const entryEnd = entryEndOf(text, start.index + start[0].length)
+    starts.push({
+      ...(key === undefined ? {} : { key }),
+      index: start.index,
+      entryEnd,
+    })
+    cursor = Math.max(entryEnd, start.index + start[0].length)
+    if (entryEnd >= text.length) break
   }
   const entries: BatchEntry[] = []
   for (let index = 0; index < starts.length; index += 1) {
@@ -126,7 +134,10 @@ export function splitBibtexEntries(text: string): BatchEntry[] {
       ...(start.key === undefined ? {} : { key: start.key }),
       start: start.index,
       end,
-      text: text.slice(start.index, end).trim(),
+      // Body alone (to the closing brace): inter-entry comments and blank
+      // lines stay out so content-equality pairing can match a single-item
+      // export. `end` still covers the gap for UI span highlighting.
+      text: text.slice(start.index, start.entryEnd).trim(),
     })
   }
   return entries

@@ -34,6 +34,28 @@ describe('splitBibtexEntries', () => {
     ])
   })
 
+  it('keeps inter-entry % comments out of the previous entry body', () => {
+    const text =
+      '@article{batchKeyOne,\n  title = {One},\n}\n% a comment between entries\n@article{batchKeyTwo,\n  title = {Two},\n}\n'
+    const entries = splitBibtexEntries(text)
+    const secondStart = text.indexOf('@article{batchKeyTwo,')
+    expect(entries).toEqual([
+      {
+        key: 'batchKeyOne',
+        start: 0,
+        end: secondStart,
+        // Body alone: the trailing `%` comment is not part of the entry text.
+        text: '@article{batchKeyOne,\n  title = {One},\n}',
+      },
+      {
+        key: 'batchKeyTwo',
+        start: secondStart,
+        end: text.length,
+        text: '@article{batchKeyTwo,\n  title = {Two},\n}',
+      },
+    ])
+  })
+
   it('returns nothing for a body without parseable entries', () => {
     expect(splitBibtexEntries('plain text')).toEqual([])
     expect(splitBibtexEntries('')).toEqual([])
@@ -233,6 +255,20 @@ describe('locateExportItems', () => {
     const secondStart = batch.indexOf('@article{batchKeyTwo,')
     const items = locateExportItems('bibtex', batch, [
       // The single-item context generates different citation keys.
+      { ref: R1, key: 'K1', text: '@article{singleKeyOne,\n  title = {One},\n}\n' },
+      { ref: R2, key: 'K2', text: '@article{singleKeyTwo,\n  title = {Two},\n}\n' },
+    ])
+    expect(items).toEqual([
+      { ref: R1, title: 'One', key: 'batchKeyOne', start: 0, end: secondStart },
+      { ref: R2, title: 'Two', key: 'batchKeyTwo', start: secondStart, end: batch.length },
+    ])
+  })
+
+  it('pairs BibTeX items by content even when the batch carries inter-entry comments', () => {
+    const batch =
+      '@article{batchKeyOne,\n  title = {One},\n}\n% note for the reader\n@article{batchKeyTwo,\n  title = {Two},\n}\n'
+    const secondStart = batch.indexOf('@article{batchKeyTwo,')
+    const items = locateExportItems('bibtex', batch, [
       { ref: R1, key: 'K1', text: '@article{singleKeyOne,\n  title = {One},\n}\n' },
       { ref: R2, key: 'K2', text: '@article{singleKeyTwo,\n  title = {Two},\n}\n' },
     ])
