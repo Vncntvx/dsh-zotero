@@ -223,6 +223,7 @@
   width: 20px;
   height: 20px;
   border-radius: 50%;
+  corner-shape: round;
   background: var(--dsw-alias-bg-layer-3);
   color: var(--dsw-alias-label-primary);
   font-size: 11px;

@@ -40,8 +40,8 @@
   line-height: 16px;
   color: var(--dsw-alias-label-secondary);
   background: transparent;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 6px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
   cursor: pointer;
   transition:
     background 120ms var(--ds-ease-in-out),
@@ -74,8 +74,8 @@
   flex-direction: column;
   gap: 6px;
   padding: 10px 12px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 8px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
   background: var(--dsw-alias-bg-layer-1);
   max-width: 900px;
 }
@@ -147,7 +147,7 @@
   align-items: center;
   height: 18px;
   padding: 0 6px;
-  border-radius: 4px;
+  border-radius: var(--dsw-radius-xs);
   font-size: 10px;
   line-height: 12px;
   font-weight: 650;
@@ -278,7 +278,7 @@
 .exportToggle:focus-visible {
   outline: 1px solid var(--dsw-alias-state-business-primary);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: var(--dsw-radius-xs);
 }
 
 .exportTitle {
@@ -313,8 +313,8 @@
  * entry scrolls inside, never stretching the row. */
 .exportCode {
   overflow: hidden;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 8px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
   background: var(--dsw-alias-bg-layer-2);
 }
 

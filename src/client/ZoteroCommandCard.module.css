@@ -12,7 +12,7 @@
   flex: none;
   width: 2px;
   height: 2px;
-  border-radius: 1px;
+  border-radius: var(--dsw-radius-xs);
   margin: 0 8px;
   background: var(--dsw-alias-label-caption);
 }

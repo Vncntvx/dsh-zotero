@@ -69,8 +69,8 @@
   line-height: 16px;
   color: var(--dsw-alias-label-secondary);
   background: transparent;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 6px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
   cursor: pointer;
   text-decoration: none;
   transition:

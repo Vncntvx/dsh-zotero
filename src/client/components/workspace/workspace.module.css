@@ -82,8 +82,8 @@
   line-height: 16px;
   color: var(--dsw-alias-label-secondary);
   background: transparent;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 6px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
   cursor: pointer;
   transition:
     background 120ms var(--ds-ease-in-out),
@@ -111,8 +111,8 @@
   line-height: 16px;
   color: var(--dsw-alias-label-secondary);
   background: transparent;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 6px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
   cursor: pointer;
   transition:
     background 120ms var(--ds-ease-in-out),
@@ -249,11 +249,12 @@
   width: 20px;
   height: 20px;
   padding: 0;
-  border: 1px solid var(--dsw-alias-border-l2-darkmode-thin);
+  border: 0;
   border-radius: 999px;
+  corner-shape: round;
   background: var(--dsw-specific-input-major);
   color: var(--dsw-alias-label-secondary);
-  box-shadow: var(--dsw-shadow-lv2);
+  box-shadow: var(--dsw-elevation-panel);
   cursor: pointer;
   transform: translateY(-50%);
 }
@@ -287,7 +288,7 @@
   color: var(--dsw-alias-link);
   background: transparent;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--dsw-radius-sm);
   cursor: pointer;
   text-decoration: none;
 }
@@ -340,8 +341,8 @@
   line-height: 16px;
   color: var(--dsw-alias-label-secondary);
   background: transparent;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 6px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
   cursor: pointer;
   transition:
     background 120ms var(--ds-ease-in-out),
@@ -376,7 +377,7 @@
   flex-direction: column;
   gap: 1px;
   padding: 6px 8px 6px 10px;
-  border-radius: 6px;
+  border-radius: var(--dsw-radius-sm);
   border-left: 2px solid transparent;
   cursor: pointer;
 }
@@ -425,7 +426,7 @@
   align-items: center;
   height: 18px;
   padding: 0 6px;
-  border-radius: 4px;
+  border-radius: var(--dsw-radius-xs);
   font-size: 10px;
   line-height: 12px;
   font-weight: 650;
@@ -602,8 +603,8 @@
   line-height: 16px;
   color: var(--dsw-alias-label-secondary);
   background: transparent;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 6px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
   cursor: pointer;
   transition:
     background 120ms var(--ds-ease-in-out),
@@ -648,7 +649,7 @@
   align-items: center;
   height: 18px;
   padding: 0 6px;
-  border-radius: 4px;
+  border-radius: var(--dsw-radius-xs);
   font-size: 10px;
   line-height: 12px;
   font-weight: 650;
@@ -772,8 +773,8 @@
     line-height: 16px;
     color: var(--dsw-alias-label-secondary);
     background: transparent;
-    border: 1px solid var(--dsw-alias-border-l2);
-    border-radius: 6px;
+    border: 0.5px solid var(--dsw-alias-border-l2);
+    border-radius: var(--dsw-radius-sm);
     cursor: pointer;
   }
 
