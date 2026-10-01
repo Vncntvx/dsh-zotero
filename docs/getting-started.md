@@ -40,11 +40,13 @@ dsh-zotero 是一个 DSH 插件，让 Agent 能够搜索、阅读和引用本地
 dsh plugin --profile <profile-name> add dsh-zotero
 ```
 
-从 GitHub 安装：
+从 GitHub 预构建分支安装（无需额外配置）：
 
 ```sh
-dsh plugin --profile <profile-name> add github:Vncntvx/dsh-zotero
+dsh plugin --profile <profile-name> add github:Vncntvx/dsh-zotero#release
 ```
+
+> **提示**：`#release` 分支已包含预构建产物，可直接一键安装。若省略 `#release` 直接从 main 源码分支安装，pnpm 会出于安全策略拦截构建脚本，需根据终端提示在 profile 的 `pnpm-workspace.yaml` 中将包名加入 `allowBuilds` 授权。
 
 从本地 tarball 安装：
 

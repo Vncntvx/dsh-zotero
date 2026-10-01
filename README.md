@@ -25,6 +25,35 @@ dsh-zotero 是面向 Agent 研究工作流的 [Zotero](https://www.zotero.org) �
   <img src="docs/images/header-collage.png" width="70%" alt="dsh-zotero 界面：来源面板、证据提取、导出视图">
 </p>
 
+## 安装
+
+从 npm 安装（推荐）：
+
+```sh
+dsh plugin --profile <name> add dsh-zotero
+```
+
+从 GitHub 预构建分支安装：
+
+```sh
+dsh plugin --profile <name> add github:Vncntvx/dsh-zotero#release
+```
+
+> **从 main 源码分支安装说明**：若直接从 `github:Vncntvx/dsh-zotero`（默认 main 分支）安装，由于需在本地运行 `prepare` 脚本编译源码，pnpm 会出于供应链安全策略拦截。需按终端提示将包名加入 profile 的 `pnpm-workspace.yaml` 中的 `allowBuilds`。推荐直接使用 `#release` 分支安装预构建版本。
+
+本地 tarball：
+
+```sh
+cd dsh-zotero && npm pack
+dsh plugin --profile <name> add ./dsh-zotero-*.tgz
+```
+
+安装后重启新建会话，Agent 即可使用 Zotero 工具。
+
+插件在 **设置 → Zotero** 中提供一个配置页（与 General、Models、Plugins 并列的左侧导航项），可调整 API 地址、并发限制、全文检索开关等参数，保存即生效。详见 [配置](docs/configuration.md)。
+
+[安装详情 →](docs/getting-started.md)
+
 ## 工具
 
 | 工具                | 用途                                                                                                          |
@@ -39,31 +68,6 @@ dsh-zotero 是面向 Agent 研究工作流的 [Zotero](https://www.zotero.org) �
 | `zotero_export`     | 生成引用、参考文献表、BibTeX/BibLaTeX/RIS/CSL JSON                                                            |
 
 [完整工具参考 →](docs/tools.md)
-
-## 安装
-
-```sh
-dsh plugin --profile <name> add dsh-zotero
-```
-
-从 GitHub 源码安装：
-
-```sh
-dsh plugin --profile <name> add github:Vncntvx/dsh-zotero
-```
-
-本地 tarball：
-
-```sh
-cd dsh-zotero && npm pack
-dsh plugin --profile <name> add ./dsh-zotero-*.tgz
-```
-
-安装后重启新建会话，Agent 即可使用 Zotero 工具。
-
-插件在 **设置 → Zotero** 中提供一个配置页（与 General、Models、Plugins 并列的左侧导航项），可调整 API 地址、并发限制、全文检索开关等参数，保存即生效。详见 [配置](docs/configuration.md)。
-
-[安装详情 →](docs/getting-started.md)
 
 ## 前置条件
 
@@ -125,19 +129,6 @@ Agent → zotero_export(refs: ["zotero://user/0/item/ABCD1234",
 | [开发指南](docs/development.md)     | 构建、测试、本地开发                 |
 | [使用情景](docs/scenarios.md)       | 真实对话验收用例与日常问法           |
 | [问题排查](docs/troubleshooting.md) | 12 个常见问题的症状和处理            |
-
-## 开发
-
-```sh
-npm install                  # 本仓库与 ../deepseek-harness 并列；仅嵌套在 harness 内时需加 --no-workspaces
-npm test                      # 单元测试（vitest，mock Zotero 服务器）
-npm run typecheck             # tsc --noEmit，覆盖 node、test、client 三个项目
-npm run build                 # tsc 编译 node 部分到 lib/，esbuild 编译浏览器部分到 lib/client.js
-npm run dev                   # tsc --watch，host half 热更新
-npm run dev:client            # esbuild --watch，浏览器部分热更新
-```
-
-`lib/` 放 Node 侧代码，`lib/client.js` 放浏览器侧代码（设置页和 Zotero tab）。你用 `dev-lib.cordis.yml` overlay 跑完整插件流程，见[开发指南](docs/development.md)。本仓库与 `../deepseek-harness` 并列，属本地暂存布局。
 
 ## 许可证
 

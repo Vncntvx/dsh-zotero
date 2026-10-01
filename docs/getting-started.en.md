@@ -40,11 +40,13 @@ From npm (recommended):
 dsh plugin --profile <profile-name> add dsh-zotero
 ```
 
-From GitHub:
+From GitHub prebuilt branch (zero configuration):
 
 ```sh
-dsh plugin --profile <profile-name> add github:Vncntvx/dsh-zotero
+dsh plugin --profile <profile-name> add github:Vncntvx/dsh-zotero#release
 ```
+
+> **Note**: The `#release` branch includes prebuilt outputs for seamless installation. If installed directly from the default main branch without `#release`, pnpm blocks the build script under supply-chain policies; you must add the package to `allowBuilds` in `pnpm-workspace.yaml` as prompted.
 
 From a local tarball:
 

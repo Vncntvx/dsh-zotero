@@ -25,6 +25,35 @@ dsh-zotero is a [Zotero](https://www.zotero.org) plugin designed for agent resea
   <img src="docs/images/header-collage.png" width="70%" alt="dsh-zotero UI: sources panel, evidence extraction, export view">
 </p>
 
+## Install
+
+From npm (recommended):
+
+```sh
+dsh plugin --profile <name> add dsh-zotero
+```
+
+From GitHub prebuilt branch:
+
+```sh
+dsh plugin --profile <name> add github:Vncntvx/dsh-zotero#release
+```
+
+> **Installing from main branch**: Installing directly from `github:Vncntvx/dsh-zotero` (default `main` source branch) runs the `prepare` build script locally, which pnpm blocks by default under supply-chain security policies until added to `allowBuilds` in `pnpm-workspace.yaml`. Use the `#release` branch for zero-configuration prebuilt installation.
+
+From a local tarball:
+
+```sh
+cd dsh-zotero && npm pack
+dsh plugin --profile <name> add ./dsh-zotero-*.tgz
+```
+
+After installing, start a new session so the agent picks up the Zotero tools.
+
+The plugin provides a settings page under **Settings → Zotero** — a left-nav entry beside General, Models, and Plugins — where you can adjust the API address, concurrency limits, full-text retrieval toggle, and more. Changes take effect on save. See [Configuration](docs/configuration.en.md).
+
+[Installation details →](docs/getting-started.en.md)
+
 ## Tools
 
 | Tool                | Purpose                                                                                                                              |
@@ -39,31 +68,6 @@ dsh-zotero is a [Zotero](https://www.zotero.org) plugin designed for agent resea
 | `zotero_export`     | Generate citations, bibliographies, BibTeX/BibLaTeX/RIS/CSL JSON                                                                     |
 
 [Full tool reference →](docs/tools.md)
-
-## Install
-
-```sh
-dsh plugin --profile <name> add dsh-zotero
-```
-
-From GitHub source:
-
-```sh
-dsh plugin --profile <name> add github:Vncntvx/dsh-zotero
-```
-
-From a local tarball:
-
-```sh
-cd dsh-zotero && npm pack
-dsh plugin --profile <name> add ./dsh-zotero-*.tgz
-```
-
-After installing, start a new session so the agent picks up the Zotero tools.
-
-The plugin provides a settings page under **Settings → Zotero** — a left-nav entry beside General, Models, and Plugins — where you can adjust the API address, concurrency limits, full-text retrieval toggle, and more. Changes take effect on save. See [Configuration](docs/configuration.en.md).
-
-[Installation details →](docs/getting-started.en.md)
 
 ## Requirements
 
@@ -125,19 +129,6 @@ More examples in [Features](docs/features.en.md).
 | [Development](docs/development.en.md)         | Build, test, local development                          |
 | [Scenarios](docs/scenarios.en.md)             | Real-conversation acceptance cases and everyday prompts |
 | [Troubleshooting](docs/troubleshooting.en.md) | 12 common issues with symptoms and fixes                |
-
-## Development
-
-```sh
-npm install                  # sibling of ../deepseek-harness; add --no-workspaces only for a nested copy
-npm test                      # vitest unit tests against the mock Zotero server
-npm run typecheck             # tsc --noEmit for node, test, and client projects
-npm run build                 # tsc emits node half into lib/; esbuild emits browser half lib/client.js
-npm run dev                   # tsc --watch for host half hot reload
-npm run dev:client            # esbuild --watch for browser half hot reload
-```
-
-Build output splits into `lib/` (Node side) and `lib/client.js` (browser side — settings page + Zotero tab). For full plugin development with both halves, use the `dev-lib.cordis.yml` overlay. See [Development](docs/development.md) for details.
 
 ## License
 

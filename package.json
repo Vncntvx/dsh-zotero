@@ -52,6 +52,7 @@
     "prepare": "node scripts/build-prepare.mjs",
     "prepublishOnly": "npm run release:check",
     "release:check": "npm run format:check && node scripts/harness-state.mjs --strict && npm run lint:test && npm run typecheck && npm run test:coverage && npm run build && npm run verify:pack",
+    "release:branch": "node scripts/publish-release-branch.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test:integration": "ZOTERO_INTEGRATION=1 vitest run tests/integration/zotero.integration.spec.ts",
