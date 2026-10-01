@@ -269,7 +269,7 @@ export function apply(ctx: ClientContext): void {
   }, 'dsh-zotero: conversation tab')
 
   ctx.effect(async () => {
-    let dispose: (() => void) | undefined
+    let dispose: (() => Promise<void>) | undefined
     mountState = 'mount pending'
     try {
       dispose = await ctx.remote.$mount(ZOTERO_REMOTE)
@@ -286,8 +286,8 @@ export function apply(ctx: ClientContext): void {
       // store, a coupling one log line is not worth.
       console.error(`dsh-zotero: ${mountState}`)
     }
-    return () => {
-      dispose?.()
+    return async () => {
+      await dispose?.()
     }
   }, 'dsh-zotero: remote')
 }
