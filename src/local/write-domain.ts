@@ -217,15 +217,13 @@ async function readLibraryVersion(
     throw new ZoteroError(WRITE_TAG_QUERY_REFUSED_MESSAGE, ZOTERO_UNEXPECTED)
   }
   const observed = response.headers.get(ZOTERO_SERVER_ID_HEADER)
-  if (observed !== null && observed !== serverId) {
-    throw new ZoteroError(SERVER_MISMATCH_MESSAGE, ZOTERO_SERVER_MISMATCH)
-  }
+  assertServerIdMatches(observed, serverId)
   return { libraryVersion, serverId: observed ?? serverId }
 }
 
-/** Refuse a qualified ref that names another Zotero instance than the write target. */
-function assertServerIdMatches(observed: string | undefined, serverId: string): void {
-  if (observed !== undefined && observed !== serverId) {
+/** Refuse an observed server ID that names another Zotero instance than the write target. */
+function assertServerIdMatches(observed: string | null | undefined, serverId: string): void {
+  if (observed !== undefined && observed !== null && observed !== serverId) {
     throw new ZoteroError(SERVER_MISMATCH_MESSAGE, ZOTERO_SERVER_MISMATCH)
   }
 }
@@ -385,9 +383,7 @@ async function readItem(
     throw new ZoteroError(writeObjectStateMissingMessage(missing), ZOTERO_UNEXPECTED)
   }
   const observedServerId = headers.get(ZOTERO_SERVER_ID_HEADER)
-  if (observedServerId !== serverId) {
-    throw new ZoteroError(SERVER_MISMATCH_MESSAGE, ZOTERO_SERVER_MISMATCH)
-  }
+  assertServerIdMatches(observedServerId, serverId)
   return {
     version,
     itemType,
@@ -430,9 +426,7 @@ async function readCollectionForDelete(
     throw new ZoteroError(WRITE_TAG_QUERY_REFUSED_MESSAGE, ZOTERO_UNEXPECTED)
   }
   const observed = headers.get(ZOTERO_SERVER_ID_HEADER)
-  if (observed !== serverId) {
-    throw new ZoteroError(SERVER_MISMATCH_MESSAGE, ZOTERO_SERVER_MISMATCH)
-  }
+  assertServerIdMatches(observed, serverId)
   return { libraryVersion, serverId: observed ?? serverId }
 }
 
@@ -904,9 +898,7 @@ async function listCollectionsFresh(
     )
   }
   const observed = headers.get(ZOTERO_SERVER_ID_HEADER)
-  if (observed !== null && observed !== serverId) {
-    throw new ZoteroError(SERVER_MISMATCH_MESSAGE, ZOTERO_SERVER_MISMATCH)
-  }
+  assertServerIdMatches(observed, serverId)
   const entries: { key: string; name: string; parentKey?: string }[] = []
   for (const row of json) {
     const record = asRecord(row)
@@ -1021,8 +1013,9 @@ export async function createCollection(
       serverId,
     }
   })
-  if (created.kind === 'applied') deps.onCollectionsChanged?.()
-  else if (created.key !== undefined) deps.onCollectionsChanged?.()
+  if (created.kind === 'applied' || created.key !== undefined) {
+    deps.onCollectionsChanged?.()
+  }
   return created
 }
 

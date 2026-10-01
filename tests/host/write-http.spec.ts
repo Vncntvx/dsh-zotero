@@ -23,6 +23,7 @@ import {
   WRITE_RESPONSE_IDENTITY_MISSING_MESSAGE,
   WRITE_UNAUTHORIZED_MESSAGE,
   ZOTERO_API_DISABLED,
+  ZOTERO_INVALID_ARGUMENT,
   ZOTERO_NOT_FOUND,
   ZOTERO_RESPONSE_TOO_LARGE,
   ZOTERO_SERVER_MISMATCH,
@@ -33,6 +34,7 @@ import {
   ZOTERO_WRITE_UNAUTHORIZED,
   writeBatchShapeMessage,
   writeRateLimitedMessage,
+  writeTagDeleteLimitMessage,
 } from '../../src/errors.js'
 import { MockZotero } from '../helpers/mock-zotero.js'
 import { testWriteClient } from '../helpers/test-clients.js'
@@ -402,6 +404,18 @@ describe('write status translations', () => {
       ZOTERO_UNEXPECTED,
       WRITE_BATCH_REFUSED_MESSAGE,
       '/api/users/0/items/batch-size',
+    )
+    mock.route('DELETE', '/api/users/0/tags', (_req, res, helpers) =>
+      helpers.raw(
+        413,
+        { 'Content-Type': 'text/plain' },
+        'Cannot delete more than 50 tags at a time',
+      ),
+    )
+    await expectZoteroError(
+      client.delete('users/0/tags', writeOptions()),
+      ZOTERO_INVALID_ARGUMENT,
+      writeTagDeleteLimitMessage(50, 'Cannot delete more than 50 tags at a time'),
     )
   })
 

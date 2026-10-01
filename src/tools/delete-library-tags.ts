@@ -17,7 +17,7 @@ import {
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
 import type { ResolvedConfig } from '../config.js'
-import { writeListEmptyMessage, writeListTooLongMessage } from '../errors.js'
+import { writeListEmptyMessage } from '../errors.js'
 import { metaRecordOf, renderDeclined } from './present.js'
 import { assertWriteList, invalid } from './validate.js'
 import { WRITE_PLAN_OUTCOME_DESCRIPTION } from '../write-approval.js'
@@ -90,9 +90,6 @@ function buildRequest(
   config: ResolvedConfig,
 ): ZoteroDeleteLibraryTagsRequest {
   if (args.tags.length === 0) invalid(writeListEmptyMessage('tags'))
-  if (args.tags.length > config.writeListMaxItems) {
-    invalid(writeListTooLongMessage('tags', config.writeListMaxItems))
-  }
   const tags = assertWriteList('tags', args.tags, config.writeListMaxItems)
   return { tags }
 }

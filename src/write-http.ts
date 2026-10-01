@@ -195,17 +195,6 @@ export function tagsQueryPath(names: readonly string[]): string {
 }
 
 /**
- * The collections query shape: keys joined with `,`.
- * Single-collection deletes address `users/0/collections/<key>` directly;
- * this helper names the multi-key query spelling for completeness.
- * @param keys - the collection keys.
- * @returns the API-relative collections path with a key query.
- */
-export function collectionsQueryPath(keys: readonly string[]): string {
-  return `users/0/collections?collectionKey=${keys.join(',')}`
-}
-
-/**
  * Zotero documents 5–32 characters for `Zotero-Write-Token`; a UUID without
  * its dashes is exactly 32 and unique per attempt, which is the contract the
  * token implements (a retried identical batch must reach Zotero as a new

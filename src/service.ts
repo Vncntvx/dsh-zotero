@@ -117,6 +117,16 @@ import type {
 } from './types.js'
 import { askPlanApproval, requestWriteApproval } from './write-approval.js'
 
+type ZoteroWriteMethod =
+  | 'createNote'
+  | 'updateItemTags'
+  | 'updateItemCollections'
+  | 'createCollection'
+  | 'deleteCollection'
+  | 'createItem'
+  | 'updateItem'
+  | 'deleteLibraryTags'
+
 declare module '@deepseek-ai/cordis' {
   interface Context {
     zotero: ZoteroService
@@ -500,8 +510,30 @@ export class ZoteroService extends Service {
   }
 
   /**
-   * Create a research note (standalone, or a child note under a parent item)
-   * with tags, collections, and source relations. The write capability gate
+   * Shared dispatch for personal library write operations: capability check,
+   * provider method presence assertion, user approval gate, and execution.
+   */
+  private async dispatchWrite<M extends ZoteroWriteMethod>(
+    call: ZoteroWriteCall,
+    methodName: M,
+    request: Parameters<NonNullable<ZoteroProvider[M]>>[0],
+  ): Promise<Awaited<ReturnType<NonNullable<ZoteroProvider[M]>>> | ZoteroWriteDeclined> {
+    const provider = this.resolveProvider()
+    this.requireCapability(provider, 'write')
+    // Method presence before the plan card: a provider that cannot serve the
+    // write must not spend the user's approval on a call that cannot run.
+    const method = this.requireMethod(provider, methodName)
+    if (!(await this.approveWrite(call))) return { kind: 'declined' }
+    return await (method as (req: unknown, signal?: AbortSignal) => Promise<any>)(
+      request,
+      call.exec.signal,
+    )
+  }
+
+  /**
+   * Create a note item, either standalone or attached to an existing item.
+   *
+   * Write boundary: personal library only (`zotero://user/0/...`); capability
    * answers before any network; the plan-review the user approves happens
    * here, at the seam, so no caller can skip it.
    * @param request - the markdown body, optional parent, collections, tags, and sources.
@@ -513,13 +545,7 @@ export class ZoteroService extends Service {
     request: ZoteroCreateNoteRequest,
     call: ZoteroWriteCall,
   ): Promise<ZoteroCreateNoteCommittedOutcome | ZoteroWriteDeclined> {
-    const provider = this.resolveProvider()
-    this.requireCapability(provider, 'write')
-    // Method presence before the plan card: a provider that cannot serve the
-    // write must not spend the user's approval on a call that cannot run.
-    const createNote = this.requireMethod(provider, 'createNote')
-    if (!(await this.approveWrite(call))) return { kind: 'declined' }
-    return await createNote(request, call.exec.signal)
+    return await this.dispatchWrite(call, 'createNote', request)
   }
 
   /**
@@ -533,11 +559,7 @@ export class ZoteroService extends Service {
     request: ZoteroUpdateItemTagsRequest,
     call: ZoteroWriteCall,
   ): Promise<ZoteroUpdateItemTagsResult | ZoteroWriteDeclined> {
-    const provider = this.resolveProvider()
-    this.requireCapability(provider, 'write')
-    const updateItemTags = this.requireMethod(provider, 'updateItemTags')
-    if (!(await this.approveWrite(call))) return { kind: 'declined' }
-    return await updateItemTags(request, call.exec.signal)
+    return await this.dispatchWrite(call, 'updateItemTags', request)
   }
 
   /**
@@ -551,11 +573,7 @@ export class ZoteroService extends Service {
     request: ZoteroUpdateItemCollectionsRequest,
     call: ZoteroWriteCall,
   ): Promise<ZoteroUpdateItemCollectionsResult | ZoteroWriteDeclined> {
-    const provider = this.resolveProvider()
-    this.requireCapability(provider, 'write')
-    const updateItemCollections = this.requireMethod(provider, 'updateItemCollections')
-    if (!(await this.approveWrite(call))) return { kind: 'declined' }
-    return await updateItemCollections(request, call.exec.signal)
+    return await this.dispatchWrite(call, 'updateItemCollections', request)
   }
 
   /**
@@ -568,11 +586,7 @@ export class ZoteroService extends Service {
     request: ZoteroCreateCollectionRequest,
     call: ZoteroWriteCall,
   ): Promise<ZoteroCreateCollectionCommittedOutcome | ZoteroWriteDeclined> {
-    const provider = this.resolveProvider()
-    this.requireCapability(provider, 'write')
-    const createCollection = this.requireMethod(provider, 'createCollection')
-    if (!(await this.approveWrite(call))) return { kind: 'declined' }
-    return await createCollection(request, call.exec.signal)
+    return await this.dispatchWrite(call, 'createCollection', request)
   }
 
   /**
@@ -585,11 +599,7 @@ export class ZoteroService extends Service {
     request: ZoteroDeleteCollectionRequest,
     call: ZoteroWriteCall,
   ): Promise<ZoteroDeleteCollectionResult | ZoteroWriteDeclined> {
-    const provider = this.resolveProvider()
-    this.requireCapability(provider, 'write')
-    const deleteCollection = this.requireMethod(provider, 'deleteCollection')
-    if (!(await this.approveWrite(call))) return { kind: 'declined' }
-    return await deleteCollection(request, call.exec.signal)
+    return await this.dispatchWrite(call, 'deleteCollection', request)
   }
 
   /**
@@ -602,11 +612,7 @@ export class ZoteroService extends Service {
     request: ZoteroCreateItemRequest,
     call: ZoteroWriteCall,
   ): Promise<ZoteroCreateItemCommittedOutcome | ZoteroWriteDeclined> {
-    const provider = this.resolveProvider()
-    this.requireCapability(provider, 'write')
-    const createItem = this.requireMethod(provider, 'createItem')
-    if (!(await this.approveWrite(call))) return { kind: 'declined' }
-    return await createItem(request, call.exec.signal)
+    return await this.dispatchWrite(call, 'createItem', request)
   }
 
   /**
@@ -619,11 +625,7 @@ export class ZoteroService extends Service {
     request: ZoteroUpdateItemRequest,
     call: ZoteroWriteCall,
   ): Promise<ZoteroUpdateItemResult | ZoteroWriteDeclined> {
-    const provider = this.resolveProvider()
-    this.requireCapability(provider, 'write')
-    const updateItem = this.requireMethod(provider, 'updateItem')
-    if (!(await this.approveWrite(call))) return { kind: 'declined' }
-    return await updateItem(request, call.exec.signal)
+    return await this.dispatchWrite(call, 'updateItem', request)
   }
 
   /**
@@ -636,11 +638,7 @@ export class ZoteroService extends Service {
     request: ZoteroDeleteLibraryTagsRequest,
     call: ZoteroWriteCall,
   ): Promise<ZoteroDeleteLibraryTagsResult | ZoteroWriteDeclined> {
-    const provider = this.resolveProvider()
-    this.requireCapability(provider, 'write')
-    const deleteLibraryTags = this.requireMethod(provider, 'deleteLibraryTags')
-    if (!(await this.approveWrite(call))) return { kind: 'declined' }
-    return await deleteLibraryTags(request, call.exec.signal)
+    return await this.dispatchWrite(call, 'deleteLibraryTags', request)
   }
 
   /**

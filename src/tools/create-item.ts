@@ -19,7 +19,6 @@ import {
 import {
   WRITE_ITEM_NEEDS_TITLE_OR_URL_MESSAGE,
   writeItemTypeUnsupportedMessage,
-  writeNonBlankMessage,
   ZOTERO_INVALID_ARGUMENT,
   ZoteroError,
 } from '../errors.js'
@@ -141,18 +140,8 @@ function buildRequest(args: CreateItemArgs): ZoteroCreateItemRequest {
   if (title === '' && url === '') {
     throw new ZoteroError(WRITE_ITEM_NEEDS_TITLE_OR_URL_MESSAGE, ZOTERO_INVALID_ARGUMENT)
   }
-  const optional = (
-    name: 'date' | 'doi' | 'abstractNote' | 'publicationTitle',
-    value: string | undefined,
-  ): string | undefined => {
-    if (value === undefined) return undefined
-    const trimmed = value.trim()
-    if (trimmed === '') invalid(writeNonBlankMessage(name))
-    return trimmed
-  }
   const creators = args.creators?.map((creator, index) => {
-    const creatorType = creator.creatorType.trim()
-    if (creatorType === '') invalid(writeNonBlankMessage(`creators[${index}].creatorType`))
+    const creatorType = assertNonBlank(`creators[${index}].creatorType`, creator.creatorType)
     const name = creator.name?.trim() ?? ''
     const firstName = creator.firstName?.trim() ?? ''
     const lastName = creator.lastName?.trim() ?? ''
@@ -170,8 +159,8 @@ function buildRequest(args: CreateItemArgs): ZoteroCreateItemRequest {
     itemType: itemType as ZoteroCreateItemRequest['itemType'],
     ...(title !== '' ? { title } : {}),
     ...(url !== '' ? { url } : {}),
-    ...(optional('date', args.date) !== undefined ? { date: optional('date', args.date)! } : {}),
-    ...(optional('doi', args.doi) !== undefined ? { doi: optional('doi', args.doi)! } : {}),
+    ...(args.date !== undefined ? { date: assertNonBlank('date', args.date) } : {}),
+    ...(args.doi !== undefined ? { doi: assertNonBlank('doi', args.doi) } : {}),
     ...(args.abstractNote !== undefined
       ? { abstractNote: assertNonBlank('abstractNote', args.abstractNote) }
       : {}),

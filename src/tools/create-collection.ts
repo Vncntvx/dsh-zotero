@@ -26,7 +26,6 @@ import {
 import { WRITE_PLAN_OUTCOME_DESCRIPTION } from '../write-approval.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroCreateCollectionOutcome, ZoteroCreateCollectionRequest } from '../types.js'
-import { writeNonBlankMessage } from '../errors.js'
 
 const CREATE_COLLECTION_PARAMETERS = {
   name: {
@@ -102,8 +101,7 @@ export function createCollectionPlan(args: CreateCollectionArgs): string {
 }
 
 function buildRequest(args: CreateCollectionArgs): ZoteroCreateCollectionRequest {
-  const name = args.name.trim()
-  if (name === '') invalid(writeNonBlankMessage('name'))
+  const name = assertNonBlank('name', args.name)
   let parent: string | undefined
   if (args.parent !== undefined) {
     parent = assertNonBlank('parent', args.parent)
