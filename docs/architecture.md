@@ -47,7 +47,7 @@ graph LR
 
 - 适配 Harness 的 `ctx.jobs` 统一任务子系统
 - 支持显式后台执行（`run_in_background: true`）与超时自动提升（`promoteOnTimeout: true`，受 `foregroundWaitMs` 控制）
-- 信号分离：后台任务持有独立 `AbortController` 信号，调用方轮次超时不会强杀已提升的任务；调用方主动取消时显式触发 `registry.kill`
+- 信号分离：后台任务持有独立 `AbortController` 信号，调用方轮次超时或主动取消都不会中止已发布给模型的任务；任务生命周期由 `ctx.jobs` 掌握（`job_kill` 经任务自有信号取消、owner 释放、服务卸载）。仅在前台等待阶段——job id 尚未交给模型时——调用方取消中止该次前台调用
 - 通道隔离：流式进度上报走 `{ channel: 'log' }`，向 Web 会话顶栏与日志流实时汇报，避免污染模型上下文输出；任务最终产物安全写入 `JobOutcome.result`
 - 请求驱动：不启动后台常驻守护轮询，仅在工具调用请求时按需起止
 

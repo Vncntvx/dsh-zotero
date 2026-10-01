@@ -11,6 +11,7 @@ import {
   ZoteroJobRunner,
   JOBS_UNAVAILABLE_MESSAGE,
   RUN_IN_BACKGROUND_DISABLED_MESSAGE,
+  executeWithJobs,
   jobStartedMessage,
   jobPromotedMessage,
   jobWaitFailedMessage,
@@ -151,42 +152,54 @@ describe('ZoteroJobRunner', () => {
       expect(signalObserved?.aborted).toBe(true)
     })
 
-    it('cancels an explicit background job when the caller aborts', async () => {
+    it('keeps an explicit background job running when the caller aborts after publish', async () => {
       const registry = new TestJobRegistry()
       const runner = new ZoteroJobRunner(registry as unknown as JobRegistry)
       const controller = new AbortController()
-      const { id } = runner.start(
-        {
-          label: 'caller cancelled background',
-          exec: fakeExec(controller.signal),
-          run: async (signal) =>
-            await new Promise<string>((_, reject) => {
-              signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
-            }),
+      let taskSignal: AbortSignal | undefined
+      const { id } = runner.start({
+        label: 'caller aborted background survives',
+        exec: fakeExec(controller.signal),
+        run: async (signal) => {
+          taskSignal = signal
+          return await new Promise<string>((resolve, reject) => {
+            signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
+            setTimeout(() => resolve('rendered survived'), 20)
+          })
         },
-        { cancelOnCallerAbort: true },
-      )
+        renderResult: (value) => value,
+      })
 
       controller.abort()
+      expect(registry.jobs.get(id)?.status).toBe('running')
       const outcome = await registry.jobs.get(id)!.hooks.done
-      expect(outcome.status).toBe('killed')
-      expect(outcome.detail).toBe('tool call aborted')
+      expect(outcome.status).toBe('completed')
+      expect(outcome.result).toBe('rendered survived')
+      expect(taskSignal?.aborted).toBe(false)
+      expect(registry.jobs.size).toBe(1)
     })
   })
 
   describe('waitOrPromote', () => {
     it('runs synchronously in foreground when registry is unavailable', async () => {
       const runner = new ZoteroJobRunner()
+      const seen: string[] = []
       const outcome = await runner.waitOrPromote(
         {
           label: 'export sync',
           exec: fakeExec(),
-          run: async () => 'quick result',
+          run: async (_signal, progress, log) => {
+            progress({ phase: 'page', message: 'sync progress' })
+            log('sync log')
+            seen.push('ran')
+            return 'quick result'
+          },
         },
         4000,
       )
 
       expect(outcome).toEqual({ kind: 'foreground', value: 'quick result' })
+      expect(seen).toEqual(['ran'])
     })
 
     it('falls back to a foreground run when the registry refuses admission', async () => {
@@ -195,16 +208,23 @@ describe('ZoteroJobRunner', () => {
         throw new Error('background jobs unavailable: no job controller serves this agent')
       }) as typeof registry.start
       const runner = new ZoteroJobRunner(registry as unknown as JobRegistry)
+      const seen: string[] = []
       const outcome = await runner.waitOrPromote(
         {
           label: 'refused admission',
           exec: fakeExec(),
-          run: async () => 'foreground fallback',
+          run: async (_signal, progress, log) => {
+            progress({ phase: 'page', message: 'fallback progress' })
+            log('fallback log')
+            seen.push('ran')
+            return 'foreground fallback'
+          },
         },
         4000,
       )
 
       expect(outcome).toEqual({ kind: 'foreground', value: 'foreground fallback' })
+      expect(seen).toEqual(['ran'])
     })
 
     it('throws toolAborted if caller signal is already aborted before waiting', async () => {
@@ -535,6 +555,30 @@ describe('ZoteroJobRunner', () => {
           1000,
         ),
       ).rejects.toThrow('Zotero operation cancelled: cancelled')
+    })
+  })
+
+  describe('executeWithJobs', () => {
+    it('runs the plain synchronous arm with no-op channels when promotion is off', async () => {
+      const runner = new ZoteroJobRunner()
+      const seen: string[] = []
+      const value = await executeWithJobs({
+        runner,
+        exec: fakeExec(),
+        label: 'sync export',
+        run: async (_signal, progress, log) => {
+          progress({ phase: 'page', message: 'plain progress' })
+          log('plain log')
+          seen.push('ran')
+          return 'done'
+        },
+        renderResult: (v: string) => v,
+        runInBackground: false,
+        policy: { enableRunInBackground: true, promoteOnTimeout: false, foregroundWaitMs: 4000 },
+      })
+
+      expect(value).toBe('done')
+      expect(seen).toEqual(['ran'])
     })
   })
 })

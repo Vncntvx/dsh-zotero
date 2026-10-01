@@ -172,7 +172,7 @@ export async function executeWithJobs<T>(options: {
     if (!runner.isAvailable) {
       throw new Error(JOBS_UNAVAILABLE_MESSAGE)
     }
-    const { id } = runner.start(task, { cancelOnCallerAbort: true })
+    const { id } = runner.start(task)
     return { kind: 'background', jobId: id }
   }
 
@@ -198,10 +198,7 @@ export class ZoteroJobRunner {
   /**
    * Start an asynchronous background job with `ctx.jobs`.
    */
-  start<T>(
-    task: ZoteroJobTask<T>,
-    options: { readonly cancelOnCallerAbort?: boolean } = {},
-  ): { id: JobId; done: Promise<JobOutcome> } {
+  start<T>(task: ZoteroJobTask<T>): { id: JobId; done: Promise<JobOutcome> } {
     if (!this.registry) {
       throw new Error(JOBS_UNAVAILABLE_MESSAGE)
     }
@@ -270,28 +267,6 @@ export class ZoteroJobRunner {
         }
       },
     })
-
-    const owner = task.exec.agent?.id
-    let removeCallerAbortListener: (() => void) | undefined
-    if (options.cancelOnCallerAbort) {
-      const cancelForCaller = (): void => {
-        try {
-          this.registry?.kill(id, owner, TOOL_ABORTED_MESSAGE)
-        } catch {
-          // The registry owns the job lifecycle. A concurrent settlement or
-          // owner disposal may make the cancellation request obsolete.
-        }
-      }
-      task.exec.signal.addEventListener('abort', cancelForCaller, { once: true })
-      removeCallerAbortListener = () => {
-        task.exec.signal.removeEventListener('abort', cancelForCaller)
-      }
-      if (task.exec.signal.aborted) cancelForCaller()
-      void donePromise.then(
-        () => removeCallerAbortListener?.(),
-        () => removeCallerAbortListener?.(),
-      )
-    }
 
     return { id, done: donePromise }
   }

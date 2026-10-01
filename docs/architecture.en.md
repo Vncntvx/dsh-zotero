@@ -47,7 +47,7 @@ User → Agent → dsh Zotero Tools → ZoteroService → Provider → 127.0.0.1
 
 - Integrates with the Harness `ctx.jobs` unified task subsystem
 - Supports explicit background execution (`run_in_background: true`) and automatic promotion on timeout (`promoteOnTimeout: true`, governed by `foregroundWaitMs`)
-- Signal decoupling: background jobs run on their own `AbortController` signal so that agent turn expiry does not abort promoted jobs; caller-initiated abort explicitly invokes `registry.kill`
+- Signal decoupling: background jobs run on their own `AbortController` signal, so neither agent turn expiry nor a caller cancellation aborts a job already published to the model; the task's lifetime belongs to `ctx.jobs` (`job_kill` cancels through the task-owned signal, owner disposal, service teardown). Only during the foreground wait — before the job id is handed to the model — does a caller cancellation stop that call
 - Channel partitioning: streaming progress updates use `{ channel: 'log' }` to report live status to the Web session topbar and log stream without cluttering model context; the final structured payload is safely recorded in `JobOutcome.result`
 - Request-driven: zero background daemon polling on boot, jobs only launch on demand via tool invocations
 
