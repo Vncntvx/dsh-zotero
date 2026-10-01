@@ -1,88 +1,88 @@
 <p align="right"><a href="configuration.md"><b>中文</b></a></p>
 
-# dsh-zotero Configuration Reference
+# Configuration Reference
 
-All configuration fields are defined in `src/config.ts`, with defaults provided by a Schemastery schema. `resolveConfig` performs runtime validation when the plugin loads. Invalid configuration prevents the plugin from loading.
+All configuration fields are defined in `src/config.ts`, with default values provided by a Schemastery schema. `resolveConfig` performs runtime validation during plugin loading. Invalid configuration will prevent the plugin from loading.
 
-## Field overview
+## Field List
 
-| Field                      | Default                      | Description                                                                                                                                         |
-| -------------------------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `baseUrl`                  | `http://127.0.0.1:23119/api` | Zotero Local API address, must be loopback HTTP with path `/api` or an `/api/` prefix (`localhost` is pinned to `127.0.0.1` at runtime)             |
-| `provider`                 | `local`                      | Selected provider id                                                                                                                                |
-| `timeoutMs`                | `5000`                       | Single request timeout (ms)                                                                                                                         |
-| `maxInFlightRequests`      | `8`                          | Max concurrent in-flight requests the plugin keeps against the Local API                                                                            |
-| `maxSearchResults`         | `20`                         | `zotero_search` max return count                                                                                                                    |
-| `maxNoteScanRecords`       | `200`                        | Max note items scanned during note content search                                                                                                   |
-| `searchConcurrency`        | `4`                          | Parallel parent-attribution queries a search's membership lookups keep in flight                                                                    |
-| `maxEvidenceChars`         | `6000`                       | Evidence passage total character budget                                                                                                             |
-| `maxEvidencePassages`      | `4`                          | Evidence passage count limit                                                                                                                        |
-| `maxDetailChars`           | `3000`                       | `zotero_get` abstract preview character budget                                                                                                      |
-| `maxNoteBodyChars`         | `30000`                      | Note body character budget                                                                                                                          |
-| `maxNoteChars`             | `2000`                       | `zotero_get` single note preview character budget                                                                                                   |
-| `maxNoteRecords`           | `50`                         | `zotero_get` max note count                                                                                                                         |
-| `maxAnnotationRecords`     | `100`                        | `zotero_get` max annotation count                                                                                                                   |
-| `fulltextChunkWords`       | `200`                        | Word count for full-text chunks entering ranking                                                                                                    |
-| `maxFulltextChars`         | `250000`                     | Max full-text characters one `zotero_retrieve` call accepts (shared across its attachments)                                                         |
-| `retrieveAttachmentCap`    | `16`                         | Max attachments one `zotero_retrieve` call ranks full text from                                                                                     |
-| `graphConcurrency`         | `4`                          | Parallel attachment reads one `zotero_retrieve` keeps in flight                                                                                     |
-| `maxResponseBytes`         | `16777216`                   | Single API response stream byte limit (16 MiB)                                                                                                      |
-| `maxExportChars`           | `1000000`                    | Export output hard limit (1M characters)                                                                                                            |
-| `maxExportRefs`            | `50`                         | Single `zotero_export` ref count limit                                                                                                              |
-| `exportConcurrency`        | `4`                          | Parallel single-item reads one `zotero_export` keeps in flight                                                                                      |
-| `maxBrowseResults`         | `50`                         | Single `zotero_browse` max return count                                                                                                             |
-| `maxChangesResults`        | `50`                         | Per-resource listing cap of one `zotero_changes` call (display only; the read is always whole)                                                      |
-| `scopeListingTtlMs`        | `30000`                      | How long a collections/searches scope listing stays cached (ms)                                                                                     |
-| `defaultStyle`             | `apa`                        | CSL citation style (must be built into Zotero)                                                                                                      |
-| `defaultLocale`            | `en-US`                      | CSL citation locale                                                                                                                                 |
-| `writeEnabled`             | `false`                      | Whether to register and allow the three personal-library write tools                                                                                |
-| `writePersistKey`          | `true`                       | Whether Always-Allow write keys persist in the host credentials service                                                                             |
-| `writeNoteMaxChars`        | `65536`                      | Character cap for one research note body                                                                                                            |
-| `writeListMaxItems`        | `50`                         | Max items in one write call's list arguments                                                                                                        |
-| `writeAuthorizeDeadlineMs` | `120000`                     | Deadline for the Zotero authorization dialog during a write (ms)                                                                                    |
-| `webEnabled`               | `true`                       | Whether to enable Zotero session tab in dsh web                                                                                                     |
-| `enableRunInBackground`    | `true`                       | Whether the explicit `run_in_background` tool parameter may start a background Job (timeout promotion is governed separately by `promoteOnTimeout`) |
-| `promoteOnTimeout`         | `true`                       | Whether to automatically promote foreground export/changes to a background Job on timeout                                                           |
-| `foregroundWaitMs`         | `4000`                       | Foreground wait ceiling (ms) before automatic promotion to background Job                                                                           |
+| Field                      | Default                      | Description                                                                                                               |
+| -------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `baseUrl`                  | `http://127.0.0.1:23119/api` | Zotero Local API address, must be loopback HTTP with an `/api` prefix (`localhost` is resolved to `127.0.0.1` at runtime) |
+| `provider`                 | `local`                      | Selected provider identifier                                                                                              |
+| `timeoutMs`                | `5000`                       | Single HTTP request timeout in milliseconds                                                                               |
+| `maxInFlightRequests`      | `8`                          | Maximum concurrent in-flight requests to the Local API                                                                    |
+| `maxSearchResults`         | `20`                         | Maximum items returned by `zotero_search`                                                                                 |
+| `maxNoteScanRecords`       | `200`                        | Maximum note records scanned for note content searches                                                                    |
+| `searchConcurrency`        | `4`                          | Concurrency limit for parent attribution queries in `zotero_search`                                                       |
+| `maxEvidenceChars`         | `6000`                       | Total character budget for evidence passages                                                                              |
+| `maxEvidencePassages`      | `4`                          | Maximum number of evidence passages returned                                                                              |
+| `maxDetailChars`           | `3000`                       | Character budget for abstract previews in `zotero_get`                                                                    |
+| `maxNoteBodyChars`         | `30000`                      | Character budget for note bodies                                                                                          |
+| `maxNoteChars`             | `2000`                       | Character budget for single note previews in `zotero_get`                                                                 |
+| `maxNoteRecords`           | `50`                         | Maximum note items returned by `zotero_get`                                                                               |
+| `maxAnnotationRecords`     | `100`                        | Maximum annotation items returned by `zotero_get`                                                                         |
+| `fulltextChunkWords`       | `200`                        | Word count for full-text chunks in ranking                                                                                |
+| `maxFulltextChars`         | `250000`                     | Maximum full-text characters accepted in a single `zotero_retrieve` call (shared across attachments)                      |
+| `retrieveAttachmentCap`    | `16`                         | Maximum attachments ranked for full text in a single `zotero_retrieve` call                                               |
+| `graphConcurrency`         | `4`                          | Concurrency limit for attachment reads in `zotero_retrieve`                                                               |
+| `maxResponseBytes`         | `16777216`                   | Streaming byte limit for a single API response (16 MiB)                                                                   |
+| `maxExportChars`           | `1000000`                    | Hard character limit for export output (1M characters)                                                                    |
+| `maxExportRefs`            | `50`                         | Maximum references in a single `zotero_export` call                                                                       |
+| `exportConcurrency`        | `4`                          | Concurrency limit for single-item reads in `zotero_export`                                                                |
+| `maxBrowseResults`         | `50`                         | Maximum items returned by a single `zotero_browse` call                                                                   |
+| `maxChangesResults`        | `50`                         | Display limit per resource kind in `zotero_changes`                                                                       |
+| `scopeListingTtlMs`        | `30000`                      | Cache TTL in milliseconds for collection and search scopes                                                                |
+| `defaultStyle`             | `apa`                        | CSL citation style (must be built into Zotero)                                                                            |
+| `defaultLocale`            | `en-US`                      | CSL citation locale                                                                                                       |
+| `writeEnabled`             | `false`                      | Whether to register and enable personal library write tools                                                               |
+| `writePersistKey`          | `true`                       | Whether to persist Always-Allow write keys in the host credentials store                                                  |
+| `writeNoteMaxChars`        | `65536`                      | Maximum characters for a research note body                                                                               |
+| `writeListMaxItems`        | `50`                         | Maximum list argument items in a single write call                                                                        |
+| `writeAuthorizeDeadlineMs` | `120000`                     | Timeout in milliseconds when waiting for Zotero authorization dialog                                                      |
+| `webEnabled`               | `true`                       | Whether to enable the Zotero session tab in DSH Web                                                                       |
+| `enableRunInBackground`    | `true`                       | Whether to allow the `run_in_background` tool parameter                                                                   |
+| `promoteOnTimeout`         | `true`                       | Whether to promote long foreground export or sync operations to background Jobs on timeout                                |
+| `foregroundWaitMs`         | `4000`                       | Foreground wait limit in milliseconds before automatic promotion to background Job                                        |
 
-Note: `foregroundWaitMs` (default 4000) bounds the **foreground job wait**; `timeoutMs` (default 5000) bounds **one Zotero HTTP request**. They are independent. Whether promotion should fire before the provider deadline remains an open verification item (see `waitOrPromote` in `src/job-runner.ts` and `tests/unit/job-runner.spec.ts`); defaults are unchanged.
+Note: `foregroundWaitMs` controls how long foreground operations wait before promoting to a background Job; `timeoutMs` controls individual Zotero HTTP request timeouts. They operate independently.
 
-## Validation rules
+## Validation Rules
 
-`resolveConfig` performs these checks at load time, throwing on invalid config:
+`resolveConfig` enforces the following rules at load time:
 
-- `baseUrl` must use `http:` protocol (Zotero Local API does not support HTTPS); it must not carry credentials (`user:pass@`), a query string (`?…`), or a fragment (`#…`)
-- `baseUrl` hostname must be a loopback address: `127.0.0.1`, `localhost`, `::1`, `[::1]`; `localhost` is pinned to `127.0.0.1` at runtime (the config and the settings page keep the original spelling; diagnostics show the dialed address)
-- `baseUrl` path must be `/api` or start with `/api/` (`/api`, `/api/`, and `/api/v3` all pass; `/`, `/v2`, and `/apis` are refused)
-- `timeoutMs` must be a positive finite number
-- All numeric limit fields and `foregroundWaitMs` must be positive integers
-- `provider`, `defaultStyle`, `defaultLocale` must be non-empty strings
+- `baseUrl` must use the `http:` protocol (Zotero Local API does not support HTTPS) and must not contain user credentials, query strings, or URL fragments;
+- `baseUrl` hostname must be a loopback address (`127.0.0.1`, `localhost`, `::1`, `[::1]`); `localhost` is resolved to `127.0.0.1` at runtime;
+- `baseUrl` path must be `/api` or start with `/api/`;
+- `timeoutMs` must be a positive finite number;
+- All numeric limit fields and `foregroundWaitMs` must be positive integers;
+- `provider`, `defaultStyle`, and `defaultLocale` must be non-empty strings.
 
-## Config priority
+## Configuration Priority
 
+```text
+Schema defaults → Composition entry config → settings.yaml user layer
 ```
-Schema defaults → composition entry config → settings.yaml user layer
-```
 
-The user layer (settings document) always overrides the base layer. Patch entry config is the base layer; the user layer can override freely.
+The user layer (`settings.yaml`) takes top priority, overriding schema defaults and composition entry configurations.
 
-## Settings page
+## Settings Page
 
-The plugin registers a **Zotero** page in the Settings panel's left navigation (beside General, Models, and Plugins), bound to the `zotero` settings namespace.
+The plugin registers a **Zotero** page in the left navigation of the Settings panel, bound to the `zotero` namespace:
 
-- Writes land in the `zotero:` section of `$DSH_HOME/settings.yaml`
-- Save takes effect immediately: structural transport or write-gate fields rebuild transport/provider/write tools on the same service instance; provider id remains a live selection, and limit-only fields are read live by the provider
-- Invalid values are rejected before write; the page retains the last valid draft
-- Fields overridden by the settings document show an "Overridden" badge, resettable with one click
-- External edits to `settings.yaml` also hot-reload
+- Edits persist to the `zotero:` section in `$DSH_HOME/settings.yaml`.
+- Changes take effect immediately: transport and write gate changes rebuild relevant components within the service instance; limit fields are read live by the provider.
+- Invalid entries are rejected before saving, preserving the last valid draft on the page.
+- Overridden fields display a badge with an inline reset option.
+- External edits to `settings.yaml` hot-reload automatically.
 
-## Hot-reload behavior
+## Hot-Reload Behavior
 
-- Transport-field or write-gate changes rebuild the HTTP client, local provider, and write-tool set on the same `ZoteroService` instance; a provider-id change only affects the next selection
-- Limit-only changes use the provider's live getter on the next call without rebuilding transport
-- The next tool call or `/zotero status` uses the new values, no restart needed
-- `webEnabled` toggle takes effect immediately: the tab shows/hides right away
+- Changes to transport fields or write gates rebuild the HTTP client, local provider, and write tools on the existing `ZoteroService` instance.
+- Limit modifications are read live on subsequent calls without rebuilding transport components.
+- The `webEnabled` toggle displays or hides the tab immediately upon save.
+- Nearly all configuration updates apply to the next tool invocation without restarting the host.
 
-## Compositions without settings service
+## Environments Without Settings Service
 
-Headless compositions (without the settings service) serve no content for the settings page; the plugin runs with the values from the patch entry config. The page still appears in the Settings panel and states that this deployment serves no Zotero settings.
+In headless environments lacking a settings service, the plugin runs using values from the entry composition configuration.

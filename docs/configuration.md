@@ -1,88 +1,88 @@
 <p align="right"><a href="configuration.en.md"><b>English</b></a></p>
 
-# dsh-zotero 配置参考
+# 配置参考
 
-所有配置字段均定义在 `src/config.ts`，由 Schemastery schema 提供默认值，`resolveConfig` 在插件加载时做运行时校验。配置不合法会阻止插件加载。
+所有配置字段均定义在 `src/config.ts`，由 Schemastery schema 提供默认值，并在插件加载时通过 `resolveConfig` 执行运行时校验。配置不合法将阻止插件加载。
 
-## 字段一览
+## 字段列表
 
-| 字段                       | 默认值                       | 说明                                                                                                               |
-| -------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `baseUrl`                  | `http://127.0.0.1:23119/api` | Zotero Local API 地址，必须为 loopback HTTP，路径为 `/api` 或 `/api/` 前缀（`localhost` 运行时钉扎为 `127.0.0.1`） |
-| `provider`                 | `local`                      | 选择的 provider id                                                                                                 |
-| `timeoutMs`                | `5000`                       | 单次请求超时（毫秒）                                                                                               |
-| `maxInFlightRequests`      | `8`                          | 插件对 Local API 的并发在途请求数上限                                                                              |
-| `maxSearchResults`         | `20`                         | `zotero_search` 返回条目上限                                                                                       |
-| `maxNoteScanRecords`       | `200`                        | 搜索笔记内容时扫描的笔记条目上限                                                                                   |
-| `searchConcurrency`        | `4`                          | `zotero_search` 归属查询的并发数（每次请求携带一个 itemKey 批次）                                                  |
-| `maxEvidenceChars`         | `6000`                       | 证据段落总字符预算                                                                                                 |
-| `maxEvidencePassages`      | `4`                          | 证据段落数量上限                                                                                                   |
-| `maxDetailChars`           | `3000`                       | `zotero_get` 摘要预览字符预算                                                                                      |
-| `maxNoteBodyChars`         | `30000`                      | 笔记自身正文字符预算                                                                                               |
-| `maxNoteChars`             | `2000`                       | `zotero_get` 单条笔记预览字符预算                                                                                  |
-| `maxNoteRecords`           | `50`                         | `zotero_get` 返回笔记条数上限                                                                                      |
-| `maxAnnotationRecords`     | `100`                        | `zotero_get` 返回批注条数上限                                                                                      |
-| `fulltextChunkWords`       | `200`                        | 进入排名的全文分块词数                                                                                             |
-| `maxFulltextChars`         | `250000`                     | `zotero_retrieve` **单次调用**接受的最大全文字符数（多附件时在各附件间均分）                                       |
-| `retrieveAttachmentCap`    | `16`                         | 单次 `zotero_retrieve` 参与全文排名的附件数上限                                                                    |
-| `graphConcurrency`         | `4`                          | `zotero_retrieve` 读取附件的并发数                                                                                 |
-| `maxResponseBytes`         | `16777216`                   | 单次 API 响应流式读取字节上限（16 MiB）                                                                            |
-| `maxExportChars`           | `1000000`                    | 导出输出硬上限（100 万字符）                                                                                       |
-| `maxExportRefs`            | `50`                         | 单次 `zotero_export` 引用条数上限                                                                                  |
-| `exportConcurrency`        | `4`                          | `zotero_export` 单条读取的并发数                                                                                   |
-| `maxBrowseResults`         | `50`                         | 单次 `zotero_browse` 返回条目上限                                                                                  |
-| `maxChangesResults`        | `50`                         | 单次 `zotero_changes` 每种资源列出的条目上限（仅呈现；读取始终整批）                                               |
-| `scopeListingTtlMs`        | `30000`                      | 集合/检索范围列表的缓存时长（毫秒）                                                                                |
-| `defaultStyle`             | `apa`                        | CSL 引用样式（需 Zotero 内置）                                                                                     |
-| `defaultLocale`            | `en-US`                      | CSL 引用语言                                                                                                       |
-| `writeEnabled`             | `false`                      | 是否注册并允许三个个人库写工具                                                                                     |
-| `writePersistKey`          | `true`                       | Always-Allow 写 key 是否保存到宿主 credentials store                                                               |
-| `writeNoteMaxChars`        | `65536`                      | 单条研究笔记正文字符上限                                                                                           |
-| `writeListMaxItems`        | `50`                         | 单次写入调用的列表参数条目上限                                                                                     |
-| `writeAuthorizeDeadlineMs` | `120000`                     | 写入时等待 Zotero 授权弹窗的时限（毫秒）                                                                           |
-| `webEnabled`               | `true`                       | 是否在 dsh web 中启用 Zotero 会话标签页                                                                            |
-| `enableRunInBackground`    | `true`                       | 是否允许工具参数 `run_in_background` 显式放入后台（超时自动提升由 `promoteOnTimeout` 单独控制）                    |
-| `promoteOnTimeout`         | `true`                       | 前台导出/变更同步超时时是否自动提升为后台任务                                                                      |
-| `foregroundWaitMs`         | `4000`                       | 前台执行等待上限（毫秒），超时后自动提升为后台 Job                                                                 |
+| 字段                       | 默认值                       | 说明                                                                                                      |
+| -------------------------- | ---------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `baseUrl`                  | `http://127.0.0.1:23119/api` | Zotero Local API 地址，必须为 loopback HTTP，路径以 `/api` 为前缀（`localhost` 运行时解析为 `127.0.0.1`） |
+| `provider`                 | `local`                      | 选用的 provider 标识                                                                                      |
+| `timeoutMs`                | `5000`                       | 单次 HTTP 请求超时时间（毫秒）                                                                            |
+| `maxInFlightRequests`      | `8`                          | 对 Local API 的并发在途请求数上限                                                                         |
+| `maxSearchResults`         | `20`                         | `zotero_search` 返回条目上限                                                                              |
+| `maxNoteScanRecords`       | `200`                        | 搜索笔记内容时扫描的笔记条目上限                                                                          |
+| `searchConcurrency`        | `4`                          | `zotero_search` 归属查询的并发数                                                                          |
+| `maxEvidenceChars`         | `6000`                       | 证据段落总字符预算                                                                                        |
+| `maxEvidencePassages`      | `4`                          | 证据段落数量上限                                                                                          |
+| `maxDetailChars`           | `3000`                       | `zotero_get` 摘要预览字符预算                                                                             |
+| `maxNoteBodyChars`         | `30000`                      | 笔记正文字符预算                                                                                          |
+| `maxNoteChars`             | `2000`                       | `zotero_get` 单条笔记预览字符预算                                                                         |
+| `maxNoteRecords`           | `50`                         | `zotero_get` 返回笔记条数上限                                                                             |
+| `maxAnnotationRecords`     | `100`                        | `zotero_get` 返回批注条数上限                                                                             |
+| `fulltextChunkWords`       | `200`                        | 进入排名的全文分块词数                                                                                    |
+| `maxFulltextChars`         | `250000`                     | `zotero_retrieve` 单次调用接受的最大全文字符数（多附件时均分）                                            |
+| `retrieveAttachmentCap`    | `16`                         | 单次 `zotero_retrieve` 参与全文排名的附件数上限                                                           |
+| `graphConcurrency`         | `4`                          | `zotero_retrieve` 读取附件的并发数                                                                        |
+| `maxResponseBytes`         | `16777216`                   | 单次 API 响应流式读取字节上限（16 MiB）                                                                   |
+| `maxExportChars`           | `1000000`                    | 导出输出字符硬上限（100 万字符）                                                                          |
+| `maxExportRefs`            | `50`                         | 单次 `zotero_export` 引用条数上限                                                                         |
+| `exportConcurrency`        | `4`                          | `zotero_export` 单条读取的并发数                                                                          |
+| `maxBrowseResults`         | `50`                         | 单次 `zotero_browse` 返回条目上限                                                                         |
+| `maxChangesResults`        | `50`                         | 单次 `zotero_changes` 每种资源列出的条目上限（仅影响展示）                                                |
+| `scopeListingTtlMs`        | `30000`                      | 合集与检索范围列表的缓存时长（毫秒）                                                                      |
+| `defaultStyle`             | `apa`                        | CSL 引用样式（需 Zotero 内置）                                                                            |
+| `defaultLocale`            | `en-US`                      | CSL 引用语言                                                                                              |
+| `writeEnabled`             | `false`                      | 是否注册并启用个人库写入工具                                                                              |
+| `writePersistKey`          | `true`                       | 是否将 Always-Allow 写入密钥保存到宿主凭据管理器                                                          |
+| `writeNoteMaxChars`        | `65536`                      | 单条研究笔记正文字符上限                                                                                  |
+| `writeListMaxItems`        | `50`                         | 单次写入调用的列表参数条目上限                                                                            |
+| `writeAuthorizeDeadlineMs` | `120000`                     | 写入时等待 Zotero 授权弹窗的时限（毫秒）                                                                  |
+| `webEnabled`               | `true`                       | 是否在 DSH Web 中启用 Zotero 会话标签页                                                                   |
+| `enableRunInBackground`    | `true`                       | 是否允许工具参数 `run_in_background` 显式放入后台                                                         |
+| `promoteOnTimeout`         | `true`                       | 前台导出或变更同步超时时是否自动提升为后台任务                                                            |
+| `foregroundWaitMs`         | `4000`                       | 前台执行等待上限（毫秒），超时后自动提升为后台 Job                                                        |
 
-注意：`foregroundWaitMs`（默认 4000）管的是**前台 job 等待**，`timeoutMs`（默认 5000）管的是**单次 Zotero HTTP 请求**。二者独立；promote 先于 provider deadline 触发是否为期望编排仍是开放验证项（见 `src/job-runner.ts` 的 `waitOrPromote` 与 `tests/unit/job-runner.spec.ts`），默认值暂不调整。
+说明：`foregroundWaitMs` 控制前台任务等待时长，超时后自动转为后台 Job；`timeoutMs` 控制单次 Zotero HTTP 请求超时，两者相互独立。
 
 ## 校验规则
 
-`resolveConfig` 在加载时执行以下检查，不合法则抛出错误：
+`resolveConfig` 在加载时执行以下校验：
 
-- `baseUrl` 必须使用 `http:` 协议（Zotero Local API 不支持 HTTPS）；不得携带凭据（`user:pass@`）、查询字符串（`?…`）或片段（`#…`）
-- `baseUrl` 主机名必须为 loopback 地址：`127.0.0.1`、`localhost`、`::1`、`[::1]`；`localhost` 在运行时钉扎为 `127.0.0.1`（配置与设置页保留原写法，诊断信息显示实际拨号地址）
-- `baseUrl` 路径必须为 `/api` 或以 `/api/` 开头（`/api`、`/api/`、`/api/v3` 均可；`/`、`/v2`、`/apis` 拒绝）
-- `timeoutMs` 必须为正有限数
-- 所有数值型上限字段及 `foregroundWaitMs` 必须为正整数
-- `provider`、`defaultStyle`、`defaultLocale` 必须为非空字符串
+- `baseUrl` 必须使用 `http:` 协议（Zotero Local API 不支持 HTTPS），且不得包含凭据信息、查询字符串或 URL 片段；
+- `baseUrl` 主机名必须为环回地址（`127.0.0.1`、`localhost`、`::1`、`[::1]`）；`localhost` 在运行时解析为 `127.0.0.1`；
+- `baseUrl` 路径必须为 `/api` 或以 `/api/` 开头；
+- `timeoutMs` 必须为正有限数；
+- 所有数值上限字段与 `foregroundWaitMs` 必须为正整数；
+- `provider`、`defaultStyle` 与 `defaultLocale` 必须为非空字符串。
 
 ## 配置优先级
 
+```text
+Schema 默认值 → Composition 入口配置 → settings.yaml 用户层
 ```
-Schema 默认值 → composition 入口配置 → settings.yaml 用户层
-```
 
-用户层（settings document）始终覆盖底层。patch 入口配置是 base 层，用户层可任意覆盖。
+用户层（`settings.yaml`）配置优先级最高，覆盖底层默认值与入口配置。
 
-## Settings 配置页
+## 设置页配置
 
-插件在 Settings 面板的左侧导航中注册一个 **Zotero** 配置页（与 General、Models、Plugins 并列），绑定 `zotero` settings namespace。
+插件在设置面板的左侧导航中注册 **Zotero** 配置页，绑定 `zotero` 命名空间：
 
-- 写入生效于 `$DSH_HOME/settings.yaml` 的 `zotero:` 段
-- 保存即时生效：结构性 transport 或写入开关在同一服务实例上重建 transport/provider/写工具；provider id 仍由下一次调用实时选择，纯限额字段由 provider 实时读取
-- 无效值在写入前被拒绝，配置页保留上次有效值的草稿
-- 被 settings document 覆盖的字段显示「Overridden」标记，一键可重置
-- `settings.yaml` 的外部编辑同样热生效
+- 修改结果保存至 `$DSH_HOME/settings.yaml` 的 `zotero:` 段；
+- 保存即时生效：传输层配置与写入开关变更时在服务实例内重建对应组件，纯限额字段由 provider 实时读取；
+- 无效配置在写入前会被拦截，设置页保留有效配置草稿；
+- 被用户层覆盖的字段显示标记，支持一键重置；
+- 直接编辑 `settings.yaml` 文件同样支持热重载。
 
-## 热更新行为
+## 热重载行为
 
-- transport 字段或写入开关变化时，在同一 `ZoteroService` 实例上重建 HTTP client、local provider 与写工具集；provider id 变化只影响下一次选择
-- 仅限额变化时由 provider 的实时 getter 在下一次调用读取，无需重建 transport
-- 下一次工具调用或 `/zotero status` 即使用新值，无需重启
-- `webEnabled` 开关即时生效：标签页立即显示/隐藏
+- 传输层配置或写入开关变更时，在同一 `ZoteroService` 实例上重建 HTTP 客户端、local provider 与写入工具集；
+- 限额配置变更由 provider 在下次调用时直接读取，无需重建传输层；
+- `webEnabled` 开关保存后即时显示或隐藏对应标签页；
+- 绝大多数配置更新均在下一次工具调用时生效，无需重启宿主。
 
-## 无 settings 服务的组合
+## 无设置服务的运行环境
 
-headless 组合（未包含 settings 服务）不会提供配置页的内容，插件以 patch 入口配置中的值运行；设置面板中该页仍会出现，并说明本部署没有提供 Zotero 设置项。
+在未集成设置服务的无界面（headless）环境中，插件以入口配置参数运行。

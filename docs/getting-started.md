@@ -1,15 +1,15 @@
 <p align="right"><a href="getting-started.en.md"><b>English</b></a></p>
 
-# dsh-zotero 快速入门
+# 快速入门
 
-dsh-zotero 是一个 DSH 插件，让 Agent 能够搜索、阅读和引用本地 Zotero 文献库。
+dsh-zotero 是面向 DeepSeek Harness 的 Zotero 插件，让 Agent 能够搜索、阅读和引用本地 Zotero 文献库。
 
 ## 前置条件
 
-- Zotero >= 7 桌面版已安装
-- 本地 API 已启用：设置 -> 高级 -> 勾选「允许此计算机上的其他应用程序与 Zotero 通信」
-- Node.js >= 22.19 或 >= 24
-- DSH >= 0.2.0-rc.2（`engines.dsh` 与全部 `@deepseek-ai/dsh-*` peer 声明为 `>= 0.2.0-rc.2`，兼容该版本及后续更高版本）
+- Zotero ≥ 7 桌面版已安装（读取需 Zotero ≥ 7，写入需 Zotero 10）
+- 本地 API 已启用：**设置 → 高级 → 勾选“允许此计算机上的其他应用程序与 Zotero 通信”**
+- Node.js ≥ 22.19 或 ≥ 24
+- 宿主 dsh >= 0.2.0-rc.2
 
 版本对照：
 
@@ -34,44 +34,55 @@ dsh-zotero 是一个 DSH 插件，让 Agent 能够搜索、阅读和引用本地
 
 ## 安装插件
 
-从 npm 包名安装（推荐）：
+从 npm 安装（推荐）：
 
 ```sh
 dsh plugin --profile <profile-name> add dsh-zotero
 ```
 
-从 GitHub 预构建分支安装（无需额外配置）：
+从 GitHub 预构建分支安装：
 
 ```sh
 dsh plugin --profile <profile-name> add github:Vncntvx/dsh-zotero#release
 ```
 
-> **提示**：`#release` 分支已包含预构建产物，可直接一键安装。若省略 `#release` 直接从 main 源码分支安装，pnpm 会出于安全策略拦截构建脚本，需根据终端提示在 profile 的 `pnpm-workspace.yaml` 中将包名加入 `allowBuilds` 授权。
-
 从本地 tarball 安装：
 
 ```sh
-npm pack
+cd dsh-zotero && npm pack
 dsh plugin --profile <profile-name> add ./dsh-zotero-*.tgz
 ```
 
-安装后插件以 id `zotero` 挂载，下次启动 dsh 时生效。如果当前会话是在插件加载之前创建的，安装/启用后需要新开一个会话。
+从 GitHub `main` 源码分支安装时，由于需要在本地执行 `prepare` 构建脚本，而 pnpm 默认拦截依赖构建，需在 profile 对应的 `~/.dsh/profiles/<profile-name>/pnpm-workspace.yaml` 中配置 `allowBuilds`：
 
-在 Harness 的插件管理列表（Plugins）中点击启用开关，或安装完成点击「立即启用」时，插件会自动弹出新手引导弹窗，检测本地 Zotero 连通状态，并引导开启 Zotero 本地 API 通信权限以避免 403 错误。
+```yaml
+allowBuilds:
+  dsh-zotero: true
+```
+
+若需固定特定版本或 commit，可在链接后附加 hash：
+
+```sh
+dsh plugin --profile <profile-name> add github:Vncntvx/dsh-zotero#<commit-hash>
+```
+
+安装后插件以 `zotero` 标识挂载。下次启动 dsh 时生效；若当前会话在插件加载前已存在，新建会话即可使用。
+
+在 Harness 插件管理列表中启用插件时，系统会自动进行本地连接探活，检测 Zotero 本地 API 通信状态。
 
 ## 验证连接
 
-在会话输入框执行（新开的会话也可以，结果会直接出现在对话里）：
+在会话输入框执行状态命令：
 
-```
+```text
 /zotero
 ```
 
-`/zotero status` 是同一命令的等价写法。
+或等价命令 `/zotero status`。
 
-正常输出示例：
+正常响应示例：
 
-```
+```text
 Zotero local API: connected
 Zotero version: 10.0.2-beta.9+c77df79af
 API version: 12
@@ -79,38 +90,15 @@ Schema version: 11
 Server ID: abc123def456
 ```
 
-常见问题：
+若提示无法连接，请检查：
 
-- **Zotero 未运行**：确保 Zotero 桌面版已打开
-- **本地 API 未启用**：回到 Zotero 设置确认勾选了「允许其他应用程序通信」选项
+1. Zotero 桌面版是否正常运行；
+2. Zotero 设置的高级面板中是否已勾选允许通信选项。
 
-## 第一个示例
+## 使用示例
 
-在会话中告诉 Agent：
+在对话中向 Agent 提问：
 
 > 帮我找 FlashAttention 相关论文
 
-Agent 会调用 `zotero_search` 搜索你的文献库，返回匹配的条目列表。然后可以用 `zotero_get` 查看摘要、笔记和附件详情，用 `zotero_retrieve` 按问题提取论文中的具体证据。
-
-## 从 GitHub 或 tarball 安装的特殊事项
-
-**npm 包名与 tarball 两条通道不需要任何授权**：它们分发的是已构建产物（`lib/` 随包发布），装完即可用。若之前从 GitHub 装过并失败，改用这两条通道即可直接绕过下面的构建授权。
-
-**GitHub 通道会拉取源码**，因此要在你的机器上跑一次 `prepare`（即 `npm run build`）：先类型检查 Node 端再打包浏览器端。pnpm ≥ 10 默认拦截依赖的构建脚本，所以首次 `add` 会失败并打印需要授权的包键；把该键写进**这个 profile 的** `pnpm-workspace.yaml` 后重跑：
-
-```yaml
-allowBuilds:
-  dsh-zotero: true
-```
-
-（键名请用 pnpm 输出的那个；pnpm 10 中该设置的旧名为 `onlyBuiltDependencies`，取值是数组。文件位置即 `~/.dsh/profiles/<profile-name>/pnpm-workspace.yaml`。）
-
-> 看到 `nothing installable … need a build step (blocked by default, see allowBuilds) or ship no prebuilt artifacts` 就是这条。二选一：按上面的片段授权构建，或改用 npm/tarball 通道。
-
-建议锁定到特定 commit 以确保可复现性：
-
-```sh
-dsh plugin --profile <profile-name> add github:Vncntvx/dsh-zotero#<commit-hash>
-```
-
-从 tarball 安装不需要额外配置，直接指向本地 `.tgz` 文件即可：
+Agent 会调用 `zotero_search` 检索文献库并返回匹配条目。随后可通过 `zotero_get` 读取文献元数据、摘要与笔记，或通过 `zotero_retrieve` 按问题提取正文与批注中的相关证据。

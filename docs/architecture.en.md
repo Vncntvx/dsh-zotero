@@ -4,9 +4,9 @@
 
 ## Overview
 
-dsh-zotero is a Cordis service plugin that exposes a `ctx.zotero` service boundary. The loader mounts the default export with the row's validated config.
+dsh-zotero is a Cordis service plugin exposing the `ctx.zotero` service boundary. The loader mounts the default `ZoteroService` export alongside its validated configuration.
 
-## Data flow
+## Data Flow
 
 ```mermaid
 graph LR
@@ -18,85 +18,71 @@ graph LR
     Z --> L[Zotero Library]
 ```
 
-User → Agent → dsh Zotero Tools → ZoteroService → Provider → 127.0.0.1 Zotero Local API → Zotero Library
+## Core Layers
 
-## Key layers
+### Service Layer (`src/service.ts`)
 
-### Service layer (`src/service.ts`)
+- `ZoteroService` extends Cordis `Service`, registered as `ctx.zotero`;
+- Orchestrates providers, capability gates, and unified domain entrypoints;
+- Treats the Loader entry as authoritative; settings commits apply via `loader/volatile-update` to the same entry;
+- Structural configuration updates (transports, write toggles) rebuild the HTTP client, provider, and write tools on the active instance; limit changes are read live without rebuilding;
+- The connectivity recovery gate (`ConnectivityRecovery`) shares the service instance lifetime to avoid stacking duplicate prompts during concurrent failures;
+- Write gates converge at the service boundary: all write calls receive a `ZoteroWriteCall` and must clear capability checks, session approval policy (`ctx.approval.request`), and plan review cards;
+- Listens on `tools/pre-execute` to detect shell commands targeting the local API and escalate them to Harness approval requests;
+- Request-driven architecture: plugin startup never issues background network requests.
 
-- `ZoteroService` extends `Service`, registered as `ctx.zotero`
-- Handles provider selection, capability gating, domain methods
-- Config treats the Loader entry (the composition entry) as the single authority; settings commits land on that same entry through `loader/volatile-update`
-- Structural volatile updates call the private `buildTransport()` to rebuild the HTTP client, local provider, and write-tool set on the **same** `ZoteroService` instance; limit-only updates are read live and do not rebuild transport
-- The connectivity recovery gate (`ConnectivityRecovery` / `service.recovery`) lives for the service instance and is **not** reset by settings rebuilds (resetting would stack duplicate cards for concurrent failures)
-- The write gate sits on the **service seam**: the three write methods require a `ZoteroWriteCall` (plan markdown plus agent, signal, tool name, call id), answer the capability gate first, then `ctx.approval.request` (honors `approval/policy` and writes the audit pair), then the plan card; they return `declined` without approving, and fail closed with no channel; the write tools no longer run the confirmations themselves
-- A `tools/pre-execute` listener raises a shell command aimed at Zotero's local write API into a harness approval request (`src/shell-write-detector.ts`, no switch): a confirmation runs that one call, and a rejection / cancellation / `never` policy / missing channel runs nothing. Detection reads command text; see the write boundaries for its limits
-- Request-driven: loading never touches Zotero
+### Provider Layer (`src/local/provider.ts`)
 
-### Provider layer (`src/local/provider.ts`)
+- `LocalApiProvider` implements the `ZoteroProvider` interface;
+- Exposes search, metadata, attachments, citation, browse, retrieve, and changes capabilities; write capabilities require explicit configuration and authorization;
+- Resolves search and browse scope names on the client side;
+- Bounded concurrency across fan-out operations avoids overloading the local API;
+- Note content scans execute within configured record limits on the initial page (offset 0);
+- Evidence passages rank via the BM25 term frequency algorithm;
+- Export operations adhere to local API batch size limits, using a zero-N+1 in-memory slicing engine for batch formats (`bibtex`, `biblatex`, `ris`, `csljson`) to complete exports in a single API call ($O(1)$ HTTP request) and eliminate secondary per-item fetching;
+- Write domain supports cross-library relations (`dc:relation`), automatically mapping group library items to canonical `http://zotero.org/groups/<id>/items/<key>` URIs.
 
-- `LocalApiProvider` implements `ZoteroProvider`
-- Capabilities: search, metadata, attachments, citation, browse, retrieve, changes; optional write support is exposed only when its transport and authorizer are wired
-- Client-side scope resolution (Local API has no server-side name search)
-- Read-path fan-out is parallel, with a mechanism per domain: one key's two children listings use `Promise.all` (`src/local/detail.ts`); retrieve's attachment set and export's per-document requests use bounded concurrency (`graphConcurrency` / `exportConcurrency`); browse ancestor resolution and the changes item partitions use `Promise.all` / `Promise.allSettled`. The write path's request minimum (one POST per note, no read-back) is stated in the [tools doc](./tools.en.md) write boundaries
-- Note body scan: client-side first page (offset 0), limited by maxNoteScanRecords
-- Evidence ranking: BM25 over passage corpus (annotations, notes, abstract, fulltext chunks)
-- Export: citation batches follow API's 50-key limit; translator formats capped at 50 refs
+### Background Job Engine (`src/job-runner.ts`)
 
-### Background job engine (`src/job-runner.ts`)
+- Integrates with Harness's `ctx.jobs` task subsystem;
+- Supports explicit background execution (`run_in_background: true`) and automatic timeout promotion (`promoteOnTimeout: true`, governed by `foregroundWaitMs`);
+- Signal decoupling: background jobs run under independent `AbortController` signals, ensuring turn timeouts or client cancellations do not abort active background jobs;
+- Channel isolation: progress updates stream through `{ channel: 'log' }` to the session header and log stream without polluting model context; completed payloads write to `JobOutcome.result`;
+- On-demand lifecycle: no persistent daemon polling processes.
 
-- Integrates with the Harness `ctx.jobs` unified task subsystem
-- Supports explicit background execution (`run_in_background: true`) and automatic promotion on timeout (`promoteOnTimeout: true`, governed by `foregroundWaitMs`)
-- Signal decoupling: background jobs run on their own `AbortController` signal, so neither agent turn expiry nor a caller cancellation aborts a job already published to the model; the task's lifetime belongs to `ctx.jobs` (`job_kill` cancels through the task-owned signal, owner disposal, service teardown). Only during the foreground wait — before the job id is handed to the model — does a caller cancellation stop that call
-- Channel partitioning: streaming progress updates use `{ channel: 'log' }` to report live status to the Web session topbar and log stream without cluttering model context; the final structured payload is safely recorded in `JobOutcome.result`
-- Request-driven: zero background daemon polling on boot, jobs only launch on demand via tool invocations
+### HTTP Transport Layer (`src/http-client.ts`)
 
-### HTTP transport layer (`src/http-client.ts`)
+- Restricts network calls to loopback HTTP, pinning the API version to 3;
+- Verifies instance identity using the `Zotero-Server-ID` header;
+- Enforces streaming response body size limits (`maxResponseBytes`);
+- Enforces a process-wide in-flight request bound (`maxInFlightRequests`, default 8), managing concurrency slots across all tools;
+- Follows no redirects and uses no persistent connections;
+- Coordinates timeouts through deadline fusion and caller cancellation signals.
 
-- Pure loopback fetch, fixed API version (`Zotero-API-Version: 3`)
-- Instance identity protection (`Zotero-Server-ID` header)
-- Stream response byte limit (`maxResponseBytes`)
-- A per-instance in-flight request bound (`maxInFlightRequests`, default 8): each domain pool only bounds one call's fan-out and concurrent tool calls multiply it, so the HTTP client holds the slots itself for the whole request, connection and streamed body included. A queued request is cancellable, and its deadline starts once it holds a slot, so waiting in the queue is never reported as Zotero timing out
-- No redirect following, no connection pooling, no background work
-- Timeout via deadline fusion with caller cancellation
+### Evidence Pipeline (`src/evidence.ts`)
 
-### Evidence pipeline (`src/evidence.ts`)
+- Tokenization: uses `Intl.Segmenter` (CJK-aware) with folding aligned to Zotero's `normalizeForSearch`; folding applies only to matching, preserving verbatim text in output;
+- BM25 ranking parameters: k1=1.2, b=0.75;
+- Document frequency evaluates against the item's own passage corpus;
+- Excludes zero-scoring passages to guarantee textual query relevance.
 
-- Tokenization: `Intl.Segmenter` word segmentation (CJK-aware), with tokens folded by Zotero's own `normalizeForSearch` (diacritics, NFKD-special letters, typographic quotes and dashes, formatting tags) so matching agrees with the server-side search; the fold never rewrites the returned text
-- BM25 ranking (k1=1.2, b=0.75) over passage corpus
-- Document frequency is passage-level (rarer in the item's own passages scores higher)
-- Ties preserve caller passage order (deterministic)
-- Zero-score passages excluded (passages with no query-term match do not enter results)
+### Browser Client (`src/client/`)
 
-### Browser client (`src/client/`)
+- Settings Page (`settings.section`): registers a dedicated Zotero page in the Settings panel left navigation;
+- Session Panel (`conversation.view`): provides Sources, Evidence, and Exports sub-views in the session tab;
+- Tool Cards (`tool.call.toolview`): renders compact, read-only collapsible cards for all 11 model tools, with inline copy actions and deep links;
+- Command Status Card (`conversation.chat.commandview`): renders connectivity status, telemetry, diagnostic tips, and an in-place refresh button for `/zotero`;
+- `webEnabled` takes effect immediately upon saving.
 
-- Settings page: `settings.section` slot (its own left-nav entry in the Settings panel), reading the `zotero` namespace's shared form via `ctx.configForms.get`
-- Sources tab: `conversation.view` slot, session snapshot of literature/evidence/exports
-  - Sources sub-view: stable union of search hits and referenced items
-  - Evidence sub-view: passages grouped by item, with Zotero page labels
-  - Exports sub-view: successful export artifacts with format/style/locale
-- Connection bar: probed once on tab open, once on refresh (no polling)
-- Tool call cards: dedicated `tool.call.toolview` cards (keyed by all 11 model tool names), providing compact, read-only collapsible views with inline copy actions and `zotero://` deep links for search, retrieval, exports, item details, children, and write operations
-- Slash command card: `conversation.chat.commandview` slot (keyed by `zotero`), providing a structured status card for `/zotero` command output with connectivity indicators, telemetry grid, offline diagnosis, and an in-place refresh action
-- `zotero://` deep links: "Open in Zotero", "Open PDF", "Open annotation"
-- `webEnabled` toggle: takes effect immediately, no reload needed
+### Remote Communication and Settings
 
-### Remote/Typert
+- `ZoteroRuntime` provides real-time state communication over the wire namespace;
+- All configuration fields are declared `volatile`, supporting hot reload.
 
-- `ZoteroRuntime` provides real-time connectivity for the web tab via the wire namespace
-- Strict manifest declares endpoints through the Typert registry
+## Design Boundaries
 
-### Settings
-
-- Namespace `zotero` lives on the Loader entry (the composition entry is the single authority)
-- Every field is `volatile`: limits are read live by the provider; when transport fields or the write gate change, `loader/volatile-update` rebuilds the transport stack and write-tool set on the same service instance, while provider id is selected live per call
-
-## Design boundaries
-
-- **Library**: read-only by default; `writeEnabled` explicitly opts into writing the personal library (notes, tags, collection membership). See the write boundaries.
-- **Network**: loopback only (127.0.0.1, localhost, ::1). Redirects rejected.
-- **No background polling**, no telemetry, no persistent daemons. Long-running tasks launch on-demand as lifecycle-managed background Jobs via `ctx.jobs`.
-- **Evidence**: term-based BM25, ranking by query-word frequency match against passages.
-- **Sources tab**: session snapshot, showing items referenced in this conversation.
-- **Exports**: the tool returns text (that is what the model reads); the panel offers copy and file download.
-- **PDF reading**: attachments return path/URL; further reading requires host capability. The path belongs to the machine running Zotero. The loopback pin keeps the plugin on that machine, but a host may run file access in another environment (sandbox, container, remote worker) where the path is not visible. The tool result states that environment, and the plugin never solves remote access by opening Zotero's unauthenticated port.
+- **Library Permissions**: read-only by default; `writeEnabled` allows writes to personal libraries (`zotero://user/0/`) only;
+- **Network Boundaries**: loopback only (`127.0.0.1`, `localhost`, `::1`); rejects external connections and redirects;
+- **Process Management**: no background daemon polling or telemetry collection; long-running tasks are managed on demand by `ctx.jobs`;
+- **Evidence Ranking**: based on BM25 term frequency matching rather than vector semantic embeddings;
+- **Session Snapshot**: Sources panel displays literature referenced within the active conversation.

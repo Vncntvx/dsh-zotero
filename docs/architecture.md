@@ -1,10 +1,10 @@
 <p align="right"><a href="architecture.en.md"><b>English</b></a></p>
 
-# 架构
+# 系统架构
 
 ## 概述
 
-dsh-zotero 是一个 Cordis 服务插件，提供 `ctx.zotero` 服务边界。加载器将默认导出与行的验证配置一起挂载。
+dsh-zotero 是基于 Cordis 的服务插件，向宿主环境暴露 `ctx.zotero` 服务边界。加载器将默认导出的 `ZoteroService` 与校验后的配置一同挂载。
 
 ## 数据流
 
@@ -18,85 +18,71 @@ graph LR
     Z --> L[Zotero 文献库]
 ```
 
-用户 → Agent → dsh Zotero 工具 → ZoteroService → Provider → 127.0.0.1 Zotero Local API → Zotero 文献库
-
-## 关键层
+## 核心分层
 
 ### 服务层 (`src/service.ts`)
 
-- `ZoteroService` 扩展 `Service`，注册为 `ctx.zotero`
-- 负责 provider 选择、能力门控、领域方法
-- 配置以 Loader entry（composition entry）为唯一权威；settings 提交经 `loader/volatile-update` 落到同一 entry
-- 结构性 volatile 更新通过私有 `buildTransport()` 在**同一** `ZoteroService` 实例上重建 HTTP client、local provider 与写工具集；纯限额更新由 provider 实时读取，不重建 transport
-- 连接恢复门（`ConnectivityRecovery` / `service.recovery`）与服务实例同寿命，**不**随 settings rebuild 重置（避免并发失败叠卡）
-- 写入闸门在**服务接缝**上：三个写方法要求一个 `ZoteroWriteCall`（计划文本 + agent/信号/tool name/call id），先过能力门，再 `ctx.approval.request`（服从 `approval/policy` 并写审计对），再弹计划卡；未批准返回 `declined`，无通道则失败关闭；写工具不再自己发起确认
-- 通过 `tools/pre-execute` 监听器把 shell 直写 Zotero 本地接口的调用抬成 harness 审批请求（`src/shell-write-detector.ts`，无开关）：确认才执行一次，拒绝 / 取消 / 策略为 `never` / 无通道都不执行。检测只读命令文本，理由与盲区见写入边界
-- 请求驱动：加载从不触及 Zotero
+- `ZoteroService` 扩展 Cordis `Service`，注册为 `ctx.zotero`；
+- 负责 Provider 调度、能力门控与领域操作统一入口；
+- 配置以 Loader entry 为基准，设置变更通过 `loader/volatile-update` 提交到同一 entry；
+- 结构性配置变更（如传输层与写入开关）在现有实例上重建 HTTP 客户端、Provider 与写工具集；限额变更由 Provider 实时读取，不触发重建；
+- 连通性恢复门控（`ConnectivityRecovery`）与服务实例同生命周期，避免并发失败堆叠询问；
+- 写入闸门统一收敛于服务接缝：所有写操作接收 `ZoteroWriteCall`，依次通过能力检查、会话审批策略（`ctx.approv al.request`）以及计划审查卡；
+- 注册 `tools/pre-execute` 监听器，检测直写本地 API 的 shell 命令并提升为审批请求；
+- 请求驱动架构：插件加载过程不发起任何外部或本地网络请求。
 
 ### Provider 层 (`src/local/provider.ts`)
 
-- `LocalApiProvider` 实现 `ZoteroProvider`
-- 能力：search、metadata、attachments、citation、browse、retrieve、changes；写入能力只在 transport 与 authorizer 均接线时提供
-- 客户端侧解析作用域（Local API 无服务端名称搜索）
-- 读路径的扇出并行执行，机制按域不同：一个 key 的 children 两半走 `Promise.all`（`src/local/detail.ts`）；retrieve 的附件集与 export 的逐文档请求走有界并发（`graphConcurrency` / `exportConcurrency`）；browse 的祖先解析与 changes 的 items 三分区走 `Promise.all` / `Promise.allSettled`。写路径的往返下限（建笔记一次 POST、不回读）见 [工具文档](./tools.md) 的写入边界
-- 笔记体扫描：客户端侧第一页（offset 0），受 maxNoteScanRecords 限制
-- 证据排名：基于 passage 语料库的 BM25（annotations、notes、abstract、fulltext chunks）
-- 导出：引用批次遵循 API 的 50 键上限；translator 格式最多 50 条引用
+- `LocalApiProvider` 实现 `ZoteroProvider` 接口；
+- 提供 search、metadata、attachments、citation、browse、retrieve、changes 等核心能力，写入能力仅在明确配置且授权就绪时提供；
+- 客户端侧解析搜索与浏览的作用域名称；
+- 读路径采用有界并发与分片并发控制，避免对本地 API 造成瞬时过载；
+- 笔记内容扫描在第一页（offset 0）按限额执行；
+- 证据片段基于 BM25 词频算法排序；
+- 导出服务遵循 Zotero 本地接口的单次请求限制，批量导出（`bibtex`、`biblatex`、`ris`、`csljson`）采用 Zero-N+1 内存切分引擎（$O(1)$ HTTP 请求），完全消除单条二次抓取；
+- 写入领域支持跨库文献关系（`dc:relation`），群组库条目自动映射至规范的 `http://zotero.org/groups/<id>/items/<key>` URI。
 
-### 后台长任务引擎 (`src/job-runner.ts`)
+### 后台任务引擎 (`src/job-runner.ts`)
 
-- 适配 Harness 的 `ctx.jobs` 统一任务子系统
-- 支持显式后台执行（`run_in_background: true`）与超时自动提升（`promoteOnTimeout: true`，受 `foregroundWaitMs` 控制）
-- 信号分离：后台任务持有独立 `AbortController` 信号，调用方轮次超时或主动取消都不会中止已发布给模型的任务；任务生命周期由 `ctx.jobs` 掌握（`job_kill` 经任务自有信号取消、owner 释放、服务卸载）。仅在前台等待阶段——job id 尚未交给模型时——调用方取消中止该次前台调用
-- 通道隔离：流式进度上报走 `{ channel: 'log' }`，向 Web 会话顶栏与日志流实时汇报，避免污染模型上下文输出；任务最终产物安全写入 `JobOutcome.result`
-- 请求驱动：不启动后台常驻守护轮询，仅在工具调用请求时按需起止
+- 深度集成 Harness `ctx.jobs` 任务子系统；
+- 支持显式后台执行（`run_in_background: true`）与前台等待超时自动提升（`promoteOnTimeout: true`，受 `foregroundWaitMs` 控制）；
+- 信号分离机制：后台任务拥有独立的 `AbortController` 信号，调用方轮次超时或取消不影响已发布的后台任务；
+- 通道隔离机制：流式进度通过 `{ channel: 'log' }` 向 Web 顶栏与日志流汇报，不污染模型上下文；任务完成后结果写入 `JobOutcome.result`；
+- 按需启动与释放，不运行常驻轮询守护进程。
 
 ### HTTP 传输层 (`src/http-client.ts`)
 
-- 纯回环 fetch，固定 API 版本（`Zotero-API-Version: 3`）
-- 实例身份保护（`Zotero-Server-ID` 头）
-- 流式响应字节上限（`maxResponseBytes`）
-- 全实例在途请求上限（`maxInFlightRequests`，默认 8）：各域并发池只约束单次调用的扇出，多个并行工具调用会相乘，因此由 HTTP 客户端统一持有槽位（连接、响应体、流式读取全程），排队请求可被调用方取消，请求超时从拿到槽位后开始计时（排队不计入超时）
-- 不跟随重定向、不保持连接、无后台工作
-- 超时通过 deadline 融合与调用者取消实现
+- 仅支持环回地址 HTTP 请求，固定 API 版本为 3；
+- 通过 `Zotero-Server-ID` 请求头校验实例身份一致性；
+- 强制限制流式响应读取大小（`maxResponseBytes`）；
+- 全局在途请求上限（`maxInFlightRequests`，默认 8），统一管理所有工具调用的并发槽位；
+- 严格禁止重定向，无持久长连接；
+- 超时通过 deadline 融合与调用方取消信号协同管理。
 
-### 证据管线 (`src/evidence.ts`)
+### 证据提取管线 (`src/evidence.ts`)
 
-- 分词：`Intl.Segmenter` 词分割（CJK 感知），词元先按 Zotero 自身的 `normalizeForSearch` 折叠（音调符号、NFKD 特殊字母、排版引号/破折号、格式标签），与服务器侧搜索的判据一致；折叠只作用于匹配侧，原文不被改写
-- BM25 排名（k1=1.2, b=0.75）在 passage 语料库上
-- 文档频率是 passage 级别（在条目自身 passages 中越罕见得分越高）
-- 平局保留调用者 passage 顺序（确定性）
-- 零分 passage 排除（未命中查询词的 passage 不进入结果）
+- 分词机制：采用 `Intl.Segmenter` 进行词分割（支持 CJK），词元经与 Zotero 保持一致的 `normalizeForSearch` 规则折叠；折叠仅作用于检索匹配侧，原文保持原样输出；
+- BM25 排序参数为 k1=1.2, b=0.75；
+- 词频统计以条目内部片段集合为语料基准；
+- 排除零分段落，确保输出与查询具有文本相关性。
 
 ### 浏览器客户端 (`src/client/`)
 
-- 配置页：`settings.section` 插槽（设置面板左侧导航的独立一项），经 `ctx.configForms.get` 读 `zotero` 命名空间的共享表单
-- Sources tab：`conversation.view` 插槽，文献/证据/导出的会话快照
-  - Sources 子视图：搜索命中和引用条目的稳定联合
-  - Evidence 子视图：按文献分组的段落，带 Zotero 的页标签
-  - Exports 子视图：成功导出的产物，带格式/样式/区域设置
-- 连接条：tab 打开时探测一次，刷新时再探测一次（无轮询）
-- 工具调用卡片：`tool.call.toolview` 专属卡片（按 11 个模型工具名称键控注册），为检索、提取、导出、文献详情、子项及写操作提供紧凑只读的可折叠视图，内联一键复制与 `zotero://` 深链接
-- Slash 命令卡片：`conversation.chat.commandview` 插槽（按 `zotero` 键控注册），为 `/zotero` 命令输出提供结构化状态卡片（状态指示灯、指标网格、离线诊断及就地刷新按钮）
-- `zotero://` 深链接："在 Zotero 中打开"、"打开 PDF"、"打开批注"
-- `webEnabled` 开关：实时生效，无需重新加载
+- 设置页（`settings.section`）：在设置面板左侧导航注册独立的 Zotero 配置页；
+- 会话面板（`conversation.view`）：在会话标签页提供文献（Sources）、证据（Evidence）与导出（Exports）三视图；
+- 工具卡片（`tool.call.toolview`）：为 11 个模型工具提供专属紧凑折叠卡片，展开展示结构化数据并支持复制和打开链接；
+- 命令状态卡片（`conversation.chat.commandview`）：为 `/zotero` 输出提供连接状态灯、指标面板、离线排查建议与就地刷新按钮；
+- `webEnabled` 开关保存后即时生效。
 
-### Remote/Typert
+### 远程通信与设置
 
-- `ZoteroRuntime` 通过 wire 命名空间为 web tab 提供实时连接性
-- 严格 manifest 通过 Typert 注册表声明端点
-
-### 设置
-
-- 命名空间 `zotero` 在 Loader entry（composition entry 即唯一权威）
-- 全字段 `volatile`：限额字段由 provider 实时读取；transport 字段或写入开关等结构字段变化时，`loader/volatile-update` 在同一服务实例上重建传输栈与写工具集，provider id 则在调用时实时选择
+- `ZoteroRuntime` 通过 wire 命名空间向 Web 端提供实时状态连接；
+- 配置全字段声明为 `volatile`，支持热重载。
 
 ## 设计边界
 
-- **文献库**：默认只读；`writeEnabled` 显式打开后可写个人库（笔记、标签、入藏）。写路径见写入边界。
-- **网络**：仅回环（127.0.0.1, localhost, ::1）。拒绝重定向。
-- **无后台轮询**、无遥测、无常驻守护进程。耗时任务通过 `ctx.jobs` 按需创建并严格受生命周期管理。
-- **证据**：基于词项的 BM25，按查询词与 passage 的词频匹配度排序。
-- **Sources tab**：会话快照，展示本次对话引用的条目。
-- **导出**：工具以文本形式返回（模型读到的就是它）；面板提供复制与文件下载。
-- **PDF 阅读**：附件返回路径/URL；进一步阅读需要宿主能力。路径属于运行 Zotero 的那台机器。loopback 限制保证插件与 Zotero 同机，但宿主的文件读取可能跑在别的执行环境（sandbox、容器、远程主机），那时该路径不可见，工具结果会注明环境。插件不会通过开放 Zotero 无认证端口来解决远端访问。
+- **文献库权限**：默认只读；开启 `writeEnabled` 后仅允许写入个人库（`zotero://user/0/`）；
+- **网络边界**：严格限制在环回地址（`127.0.0.1`、`localhost`、`::1`），拒绝任何外部网络访问与 HTTP 重定向；
+- **进程管理**：无后台轮询守护进程与遥测收集，长任务统一交由 `ctx.jobs` 按需管理；
+- **证据排序**：基于 BM25 词频匹配，非向量语义嵌入；
+- **会话快照**：Sources 面板展示当前会话涉及的文献快照。

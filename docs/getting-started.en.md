@@ -2,14 +2,14 @@
 
 # Getting Started
 
-dsh-zotero is a DSH plugin that lets agents search, read, and cite your local Zotero library.
+dsh-zotero is a Zotero plugin for DeepSeek Harness that enables agents to search, read, and cite your local Zotero library.
 
 ## Prerequisites
 
-- Zotero ≥ 7 desktop installed
-- Local API enabled: Settings → Advanced → check "Allow other applications on this computer to communicate with Zotero"
+- Zotero ≥ 7 desktop installed (reads require Zotero ≥ 7; writes require Zotero 10)
+- Local API enabled: **Settings → Advanced → check "Allow other applications on this computer to communicate with Zotero"**
 - Node.js ≥ 22.19 or ≥ 24
-- DSH >= 0.2.0-rc.2 (`engines.dsh` and every `@deepseek-ai/dsh-*` peer declare `>= 0.2.0-rc.2`, compatible with this and future higher versions)
+- Host dsh >= 0.2.0-rc.2
 
 Version mapping:
 
@@ -32,7 +32,7 @@ Version mapping:
 | 0.11.0         | 0.1.7-rc.2                  |
 | 0.12.0         | 0.2.0-rc.2                  |
 
-## Install the plugin
+## Installing the Plugin
 
 From npm (recommended):
 
@@ -40,38 +40,49 @@ From npm (recommended):
 dsh plugin --profile <profile-name> add dsh-zotero
 ```
 
-From GitHub prebuilt branch (zero configuration):
+From GitHub prebuilt branch:
 
 ```sh
 dsh plugin --profile <profile-name> add github:Vncntvx/dsh-zotero#release
 ```
 
-> **Note**: The `#release` branch includes prebuilt outputs for seamless installation. If installed directly from the default main branch without `#release`, pnpm blocks the build script under supply-chain policies; you must add the package to `allowBuilds` in `pnpm-workspace.yaml` as prompted.
-
 From a local tarball:
 
 ```sh
-npm pack
+cd dsh-zotero && npm pack
 dsh plugin --profile <profile-name> add ./dsh-zotero-*.tgz
 ```
 
-After installing, the plugin mounts as `zotero` and takes effect on the next dsh startup. If the current session was created before the plugin loaded, start a new session after installation.
+When installing directly from the GitHub `main` source branch, pnpm blocks build scripts by default. Add the package to `allowBuilds` in `~/.dsh/profiles/<profile-name>/pnpm-workspace.yaml`:
 
-When enabling the plugin in Harness's Plugins list (or clicking "Enable Now" after installation), a guidance modal appears automatically. It tests connectivity to local Zotero and guides you to enable the local API in Zotero preferences to avoid 403 Forbidden errors.
-
-## Verify the connection
-
-In the composer (a brand-new session is fine; the result appears in the conversation), run:
-
+```yaml
+allowBuilds:
+  dsh-zotero: true
 ```
+
+To pin to a specific commit for reproducibility:
+
+```sh
+dsh plugin --profile <profile-name> add github:Vncntvx/dsh-zotero#<commit-hash>
+```
+
+The plugin mounts under identifier `zotero` and takes effect on the next dsh startup. If your current session was created before the plugin loaded, start a new session.
+
+When enabling the plugin in Harness's plugin manager, an activation check runs automatically to verify Zotero local API connectivity.
+
+## Verifying Connection
+
+Run the status command in the chat composer:
+
+```text
 /zotero
 ```
 
-`/zotero status` is an equivalent spelling of the same command.
+Or the equivalent `/zotero status`.
 
-Expected output:
+Expected response:
 
-```
+```text
 Zotero local API: connected
 Zotero version: 10.0.2-beta.9+c77df79af
 API version: 12
@@ -79,38 +90,15 @@ Schema version: 11
 Server ID: abc123def456
 ```
 
-Common issues:
+If connection fails, verify:
 
-- **Zotero not running**: make sure the Zotero desktop app is open
-- **Local API not enabled**: go back to Zotero Settings and confirm the "Allow other applications" option is checked
+1. Zotero desktop application is running.
+2. "Allow other applications on this computer to communicate with Zotero" is checked in Zotero Preferences → Advanced.
 
-## First example
+## First Example
 
-Tell the agent in a session:
+Ask the agent in a conversation:
 
 > Find papers about FlashAttention
 
-The agent calls `zotero_search` to search your library and returns matching entries. You can then use `zotero_get` to view abstracts, notes, and attachment details, and `zotero_retrieve` to extract specific evidence from papers based on a query.
-
-## Notes for GitHub or tarball installs
-
-**The npm and tarball channels need no allowance at all**: they ship prebuilt artifacts (`lib/` is published with the package), so they work immediately. If a GitHub install already failed, switching to one of those two channels bypasses the build allowance below.
-
-**The GitHub channel pulls source**, so it runs `prepare` (`npm run build`) on your machine: typecheck the Node half, then bundle the browser half. pnpm ≥ 10 blocks dependency build scripts by default, so the first `add` fails and prints the package key to allow; copy that key into **this profile's** `pnpm-workspace.yaml` and re-run:
-
-```yaml
-allowBuilds:
-  dsh-zotero: true
-```
-
-(Use the exact key pnpm printed. In pnpm 10 this setting is named `onlyBuiltDependencies` and takes an array. The file is `~/.dsh/profiles/<profile-name>/pnpm-workspace.yaml`.)
-
-> `nothing installable … need a build step (blocked by default, see allowBuilds) or ship no prebuilt artifacts` means exactly this. Pick one of two options: allow the build as above, or use the npm/tarball channel.
-
-Pin to a specific commit for reproducibility:
-
-```sh
-dsh plugin --profile <profile-name> add github:Vncntvx/dsh-zotero#<commit-hash>
-```
-
-Installing from a tarball needs no extra configuration. Point to the local `.tgz` file.
+The agent calls `zotero_search` to query your library and returns matching entries. You can then use `zotero_get` to inspect metadata, abstracts, and notes, or `zotero_retrieve` to extract relevant evidence passages from indexed text and annotations.

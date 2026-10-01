@@ -2,11 +2,11 @@
 
 # dsh-zotero Documentation
 
-- [Getting Started](getting-started.en.md) — Installation, Zotero setup, connection verification
-- [Features](features.en.md) — Full workflow from search to export
-- [Tool Reference](tools.en.md) — Parameters, return values, and limits for all 11 tools
-- [Configuration](configuration.en.md) — All config fields, defaults, and hot-reload behavior
-- [Architecture](architecture.en.md) — Data flow, provider layer, browser client, and session snapshots
-- [Development](development.en.md) — Build, test, local launch, browser-side development
-- [Scenarios](scenarios.en.md) — Real conversation test cases and everyday prompts (golden path and capability packs)
-- [Troubleshooting](troubleshooting.en.md) — Common issues with symptoms, causes, and fixes
+- [Getting Started](getting-started.en.md): Installation, prerequisites, and connection verification
+- [Features](features.en.md): Sources panel, chat integration, evidence extraction, and export workflow
+- [Tool Reference](tools.en.md): Parameters, return values, and error codes for all 11 tools
+- [Configuration Reference](configuration.en.md): 36 configuration fields, default values, and hot-reload behavior
+- [Architecture](architecture.en.md): Data flow, layer responsibilities, and design boundaries
+- [Development Guide](development.en.md): Build, test, local development, and release workflow
+- [Scenarios](scenarios.en.md): Real-conversation acceptance cases and everyday usage prompts
+- [Troubleshooting](troubleshooting.en.md): Common issues, diagnostic steps, and fixes
