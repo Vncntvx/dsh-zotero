@@ -203,7 +203,7 @@ async function browseLibraries(
       },
     )
     serverId = headers.get('zotero-server-id') ?? undefined
-    const groups = Array.isArray(json) ? json : []
+    const groups = requireArrayBody(json, 'groups')
     for (const row of groups) {
       const rec = asRecord(row)
       const idRaw = rec?.id ?? rec?.groupID ?? asRecord(rec?.data)?.groupID
@@ -466,18 +466,15 @@ async function browseItemTypes(
 ): Promise<ZoteroBrowseResult> {
   const { json, headers } = await deps.client.getJson<unknown>('itemTypes', undefined, { signal })
   const serverId = headers.get('zotero-server-id') ?? undefined
-  let raw: { itemType: string; localized?: string }[] = []
-  if (Array.isArray(json)) {
-    raw = json
-      .map((row) => {
-        const rec = asRecord(row)
-        const it = asString(rec?.itemType) ?? asString(rec?.name)
-        if (it === undefined) return null
-        const loc = asString(rec?.localized) ?? asString(rec?.displayName)
-        return { itemType: it, ...(loc ? { localized: loc } : {}) }
-      })
-      .filter((x): x is { itemType: string; localized?: string } => x !== null)
-  }
+  const raw = requireArrayBody(json, 'item types')
+    .map((row) => {
+      const rec = asRecord(row)
+      const it = asString(rec?.itemType) ?? asString(rec?.name)
+      if (it === undefined) return null
+      const loc = asString(rec?.localized) ?? asString(rec?.displayName)
+      return { itemType: it, ...(loc ? { localized: loc } : {}) }
+    })
+    .filter((x): x is { itemType: string; localized?: string } => x !== null)
   raw.sort((a, b) => a.itemType.localeCompare(b.itemType))
   const items = raw
   const total = items.length
@@ -525,12 +522,12 @@ async function browseItemFields(
     }
   }
   const items: (ZoteroItemFieldInfo | ZoteroCreatorTypeInfo)[] = []
-  for (const row of Array.isArray(fields.json) ? fields.json : []) {
+  for (const row of requireArrayBody(fields.json, 'item type fields')) {
     const { field, localized } = localizedOf(row)
     if (field === undefined) continue
     items.push({ field, ...(localized !== undefined ? { localized } : {}) })
   }
-  for (const row of Array.isArray(creatorTypes.json) ? creatorTypes.json : []) {
+  for (const row of requireArrayBody(creatorTypes.json, 'creator types')) {
     const rec = asRecord(row)
     const creatorType = asString(rec?.creatorType)
     if (creatorType === undefined) continue
