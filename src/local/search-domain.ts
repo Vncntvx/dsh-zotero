@@ -8,7 +8,7 @@
 
 import type { ZoteroHttpClient } from '../http-client.js'
 import { mapWithConcurrency } from '../concurrency.js'
-import { ZOTERO_ITEMKEY_BATCH, ZOTERO_SEARCH_CONCURRENCY } from '../constants.js'
+import { ZOTERO_ITEMKEY_BATCH } from '../constants.js'
 import { tokenize } from '../evidence.js'
 import { ZOTERO_INVALID_ARGUMENT, ZOTERO_UNEXPECTED, ZoteroError } from '../errors.js'
 import { nextOffsetOf, requireArrayBody, requireTotalResults } from './pagination.js'
@@ -279,7 +279,7 @@ async function fetchNoteRows(
  * a non-member.
  */
 async function fetchParentCollections(
-  deps: { client: ZoteroHttpClient },
+  deps: { client: ZoteroHttpClient; limits: LocalApiLimits },
   library: SupportedLocalLibrary,
   parentKeys: readonly string[],
   serverId: string | undefined,
@@ -292,7 +292,7 @@ async function fetchParentCollections(
   }
   const membershipsPerChunk = await mapWithConcurrency(
     chunks,
-    ZOTERO_SEARCH_CONCURRENCY,
+    deps.limits.searchConcurrency,
     async (chunk, poolSignal) => {
       const params = new URLSearchParams()
       params.set('itemKey', chunk.join(','))

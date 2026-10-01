@@ -458,6 +458,29 @@ describe('export', () => {
     expect(maxInFlight).toBe(4)
   })
 
+  it('widens the single-item pool when exportConcurrency is raised', async () => {
+    const raised = createProvider(mock, { exportConcurrency: 8 })
+    let inFlight = 0
+    let maxInFlight = 0
+    mock.route('GET', `${apiPath()}/items`, async (req, res, helpers, search) => {
+      const keys = (search.get('itemKey') ?? '').split(',')
+      if (keys.length > 1) {
+        helpers.text('batch')
+        return
+      }
+      inFlight += 1
+      maxInFlight = Math.max(maxInFlight, inFlight)
+      await new Promise((resolve) => setTimeout(resolve, 30))
+      inFlight -= 1
+      helpers.text(`entry-of-${keys[0]}`)
+    })
+    const refs = Array.from({ length: 8 }, (_, i) =>
+      parseRef(`zotero://user/0/item/${String(i).padStart(4, '0')}ABCD`),
+    )
+    await raised.export(exportRequest({ refs, format: 'ris' }))
+    expect(maxInFlight).toBe(8)
+  })
+
   it('stops the pool when one single-item export fails', async () => {
     /** Resolvers of the responses the test holds open, in start order. */
     const held: Array<() => void> = []

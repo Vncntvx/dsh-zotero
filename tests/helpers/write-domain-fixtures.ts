@@ -5,38 +5,20 @@
  * @module dsh-zotero/tests/helpers/write-domain-fixtures
  */
 
-import { ZoteroHttpClient } from '../../src/http-client.js'
-import { ZoteroWriteHttpClient } from '../../src/write-http.js'
+import type { ZoteroHttpClient } from '../../src/http-client.js'
+import type { ZoteroWriteHttpClient } from '../../src/write-http.js'
 import { WriteAuthorizer } from '../../src/write-auth.js'
 import { ScopeDirectory } from '../../src/local/scope-directory.js'
-import type { LocalApiLimits } from '../../src/local/limits.js'
 import { parseRef } from '../../src/refs.js'
 import type { ZoteroObjectRef } from '../../src/types.js'
 import { MockZotero } from './mock-zotero.js'
+import { testHttpClient, testWriteClient } from './test-clients.js'
 
 export const SERVER_ID = 'srv-write-domain-1'
 export const ITEM_KEY = 'ITEMABC1'
 export const NEW_KEY = 'NEWNOTE1'
 export const COLLECTION_KEY = 'COLL1234'
 export const SECOND_COLLECTION_KEY = 'COLL5678'
-
-export const LIMITS: LocalApiLimits = {
-  maxNoteScanRecords: 200,
-  maxDetailChars: 500,
-  maxNoteBodyChars: 30_000,
-  maxNoteChars: 2000,
-  maxNoteRecords: 50,
-  maxAnnotationRecords: 100,
-  fulltextChunkWords: 200,
-  maxEvidenceChars: 6000,
-  maxEvidencePassages: 4,
-  maxFulltextChars: 100_000,
-  maxExportChars: 1_000_000,
-  defaultStyle: 'apa',
-  defaultLocale: 'en-US',
-  maxBrowseResults: 50,
-  maxChangesResults: 50,
-}
 
 export const ITEM_REF: ZoteroObjectRef = parseRef(`zotero://user/0/item/${ITEM_KEY}`)
 export const SOURCE_REF: ZoteroObjectRef = parseRef('zotero://user/0/item/SOURCE01')
@@ -80,20 +62,12 @@ export function writeDeps(mock: MockZotero): {
   directory: ScopeDirectory
   authorizer: WriteAuthorizer
 } {
-  const client = new ZoteroHttpClient({
-    baseUrl: mock.baseUrl,
-    timeoutMs: 5000,
-    maxResponseBytes: 1_000_000,
-  })
-  const writer = new ZoteroWriteHttpClient({
-    baseUrl: mock.baseUrl,
-    timeoutMs: 5000,
-    maxResponseBytes: 1_000_000,
-  })
+  const client = testHttpClient(mock.baseUrl, { maxResponseBytes: 1_000_000 })
+  const writer = testWriteClient(mock.baseUrl, { maxResponseBytes: 1_000_000 })
   const authorizer = new WriteAuthorizer({ client: writer, persistKey: () => true })
   return {
     deps: { client, writer, authorizer },
-    directory: new ScopeDirectory(client, 1000),
+    directory: new ScopeDirectory(client, () => 1000),
     authorizer,
   }
 }

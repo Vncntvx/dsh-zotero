@@ -62,44 +62,6 @@ export const SEARCH_DEFAULT_LIMIT = 10
 export const ZOTERO_ITEMKEY_BATCH = 50
 
 /**
- * The bounded concurrency of the per-document export requests a translator
- * export issues against the Local API. A pool — not a bare `Promise.all` —
- * keeps the in-flight single-item requests small, so a full 50-ref export
- * cannot storm the local server.
- */
-export const ZOTERO_EXPORT_CONCURRENCY = 4
-
-/**
- * The bounded concurrency of the parent-item attribution queries the search
- * domain issues in `ZOTERO_ITEMKEY_BATCH`-sized chunks. A pool — not a bare
- * `Promise.all` — keeps the in-flight membership requests small. Kept apart
- * from `ZOTERO_EXPORT_CONCURRENCY` (same value, different blast radius) so
- * tuning export throughput never silently retunes search attribution.
- */
-export const ZOTERO_SEARCH_CONCURRENCY = 4
-
-/**
- * The bounded concurrency of multi-attachment full-text reads in retrieve
- * (`allIndexed` / `specified` policies). A pool — not a bare `Promise.all` —
- * keeps the in-flight attachment requests small. Annotation children use the
- * single `?itemType=annotation` listing instead of a per-attachment fan-out.
- */
-export const ZOTERO_GRAPH_CONCURRENCY = 4
-
-/** How long a scope listing (collections/searches) is trusted before a re-fetch. */
-export const ZOTERO_SCOPE_LISTING_TTL_MS = 30_000
-
-/**
- * How many Zotero data requests one plugin instance keeps in flight. Each
- * domain pool bounds its own fan-out at 4, but pools multiply with every
- * concurrent tool call, so the HTTP client holds this process-wide slot
- * count as the real bound on what Zotero is asked to serve at once. Twice a
- * pool: two calls run at full width, and a burst of calls queues instead of
- * stacking its requests on the local server.
- */
-export const ZOTERO_MAX_INFLIGHT_REQUESTS = 8
-
-/**
  * The write transport keeps exactly one request in flight. Zotero stamps the
  * library version per committed object, and the plugin's tag/collection
  * updates are read-modify-write cycles — an overlapping write could interleave
@@ -141,36 +103,3 @@ export const WRITE_TOOL_NAMES = [
  * spelling in command text so both sides recognize one endpoint.
  */
 export const ZOTERO_AUTHORIZE_PATH = 'local/authorize'
-
-/**
- * Markdown character budget for one `zotero_create_note` call. The converted
- * HTML rides back inside the batch's successful bucket (bounded by
- * maxResponseBytes); this bound keeps one pathological note from dominating
- * a batch before conversion ever runs.
- */
-export const ZOTERO_WRITE_NOTE_MAX_CHARS = 65_536
-
-/**
- * Per-list bound for the write tools' array arguments (tags, collections,
- * source refs) — the same scale as the write batch cap, so one call can
- * never fan out into many protocol batches.
- */
-export const ZOTERO_WRITE_LIST_MAX_ITEMS = 50
-
-/**
- * The deadline for one `/api/local/authorize` request. Zotero shows its
- * authorization dialog for that request and the user answers it in person,
- * so the budget covers a human reading the dialog — deliberately far above
- * the per-request data deadline, which must not apply here.
- */
-export const ZOTERO_WRITE_AUTHORIZE_DEADLINE_MS = 120_000
-
-/**
- * How many attachments one `zotero_retrieve` call may rank full text from.
- * Each member costs a metadata read and a full-text read, and all of their
- * text enters one ranking — a bound on the call's own work, not on what a
- * work may have. `specified` rejects a longer list (the caller splits the
- * call); `allIndexed` reads the first entries in its selection order and
- * reports the rest as unread.
- */
-export const ZOTERO_RETRIEVE_ATTACHMENT_CAP = 16

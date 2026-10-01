@@ -33,7 +33,6 @@ import {
   ZOTERO_LOCAL_API_VERSION,
   ZOTERO_MAX_WRITE_INFLIGHT_REQUESTS,
   ZOTERO_SERVER_ID_HEADER,
-  ZOTERO_WRITE_AUTHORIZE_DEADLINE_MS,
 } from './constants.js'
 import {
   API_DISABLED_MESSAGE,
@@ -74,6 +73,11 @@ export interface ZoteroWriteHttpClientOptions {
   readonly baseUrl: string
   readonly timeoutMs: number
   readonly maxResponseBytes: number
+  /**
+   * Deadline for the Zotero authorization dialog: that request waits for a
+   * human, so it is independent of the per-request data deadline.
+   */
+  readonly authorizeDeadlineMs: number
 }
 
 /** Options every write carries: cancellation, the serving instance, the local API key. */
@@ -262,7 +266,7 @@ export class ZoteroWriteHttpClient {
       {},
       JSON.stringify({ appName }),
       // The dialog waits for a human: the data deadline must not cut it off.
-      ZOTERO_WRITE_AUTHORIZE_DEADLINE_MS,
+      this.options.authorizeDeadlineMs,
     )
     let json: unknown
     try {

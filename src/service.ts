@@ -279,6 +279,7 @@ export class ZoteroService extends Service {
       baseUrl: config.baseUrl,
       timeoutMs: config.timeoutMs,
       maxResponseBytes: config.maxResponseBytes,
+      maxInFlight: config.maxInFlightRequests,
     })
     const writeEnabled = config.writeEnabled
     const writer = writeEnabled
@@ -286,6 +287,7 @@ export class ZoteroService extends Service {
           baseUrl: config.baseUrl,
           timeoutMs: config.timeoutMs,
           maxResponseBytes: config.maxResponseBytes,
+          authorizeDeadlineMs: config.writeAuthorizeDeadlineMs,
         })
       : undefined
     const authorizer =
@@ -297,7 +299,7 @@ export class ZoteroService extends Service {
             persistKey: () => this.config.writePersistKey,
           })
     this.providerDispose = this.registerProvider(
-      new LocalApiProvider(client, () => localProviderLimits(this.config), {}, writer, authorizer),
+      new LocalApiProvider(client, () => localProviderLimits(this.config), writer, authorizer),
     )
   }
 
@@ -604,15 +606,21 @@ export class ZoteroService extends Service {
 
 /**
  * Top-level config keys whose change rebuilds the transport stack: the HTTP
- * client identity and bounds, and the write-capability flip (writer,
- * authorizer, and tool set). `provider` and `writePersistKey` are live reads
- * (`resolveProvider()` and the authorizer's `persistKey` callback) and never
- * rebuild; limits and `webEnabled` are read per request.
+ * client identity and bounds (`baseUrl`, `timeoutMs`, `maxResponseBytes`,
+ * `maxInFlightRequests` — the last sizes the client-wide concurrency gate),
+ * the write client's human-scale dialog budget (`writeAuthorizeDeadlineMs`),
+ * and the write-capability flip (writer, authorizer, and tool set).
+ * `provider` and `writePersistKey` are live reads (`resolveProvider()` and
+ * the authorizer's `persistKey` callback) and never rebuild; every remaining
+ * bound — the scope-listing TTL included — is read through the provider's
+ * live limits getter on the next call.
  */
 export const TRANSPORT_CONFIG_KEYS: ReadonlySet<keyof ResolvedConfig> = new Set([
   'baseUrl',
   'timeoutMs',
   'maxResponseBytes',
+  'maxInFlightRequests',
+  'writeAuthorizeDeadlineMs',
   'writeEnabled',
 ])
 
@@ -667,6 +675,11 @@ function localProviderLimits(config: ResolvedConfig): LocalApiLimits {
     maxExportChars: config.maxExportChars,
     maxBrowseResults: config.maxBrowseResults,
     maxChangesResults: config.maxChangesResults,
+    scopeListingTtlMs: config.scopeListingTtlMs,
+    searchConcurrency: config.searchConcurrency,
+    graphConcurrency: config.graphConcurrency,
+    exportConcurrency: config.exportConcurrency,
+    retrieveAttachmentCap: config.retrieveAttachmentCap,
     defaultStyle: config.defaultStyle,
     defaultLocale: config.defaultLocale,
   }

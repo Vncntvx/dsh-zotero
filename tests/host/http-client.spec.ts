@@ -31,6 +31,7 @@ import {
   ZOTERO_UNEXPECTED,
 } from '../../src/errors.js'
 import { MockZotero } from '../helpers/mock-zotero.js'
+import { testHttpClient } from '../helpers/test-clients.js'
 import { deferred, progress, type Progress } from '../helpers/sync.js'
 
 let mock: MockZotero
@@ -38,11 +39,7 @@ let client: ZoteroHttpClient
 
 beforeEach(async () => {
   mock = await MockZotero.start()
-  client = new ZoteroHttpClient({
-    baseUrl: mock.baseUrl,
-    timeoutMs: 5000,
-    maxResponseBytes: 1024 * 1024,
-  })
+  client = testHttpClient(mock.baseUrl)
 })
 
 afterEach(async () => {
@@ -70,11 +67,7 @@ async function expectZoteroError(
 describe('request shaping', () => {
   it('serializes repeated params and handles a base URL with a trailing slash', async () => {
     mock.route('GET', '/api/users/0/items', (req, res, helpers) => helpers.json([]))
-    const slashed = new ZoteroHttpClient({
-      baseUrl: `${mock.baseUrl}/`,
-      timeoutMs: 5000,
-      maxResponseBytes: 1024,
-    })
+    const slashed = testHttpClient(`${mock.baseUrl}/`, { maxResponseBytes: 1024 })
     await slashed.getJson(
       'users/0/items',
       new URLSearchParams([
@@ -180,11 +173,7 @@ describe('identity protection', () => {
   })
 
   it('keeps SERVER_MISMATCH when the identity refresh times out', async () => {
-    const fast = new ZoteroHttpClient({
-      baseUrl: mock.baseUrl,
-      timeoutMs: 50,
-      maxResponseBytes: 1024,
-    })
+    const fast = testHttpClient(mock.baseUrl, { timeoutMs: 50, maxResponseBytes: 1024 })
     mock.route('GET', '/api/', (req, res, helpers) => helpers.delayJson({}, 5000))
     routeServerMismatch()
     const error = await expectZoteroError(fast.getJson('users/0/items'), ZOTERO_SERVER_MISMATCH)
@@ -281,11 +270,7 @@ describe('http status translation', () => {
     // A body past the byte bound: the statement is unavailable, but the
     // status Zotero chose is still the finding — it is not re-reported as an
     // oversized response.
-    const bounded = new ZoteroHttpClient({
-      baseUrl: mock.baseUrl,
-      timeoutMs: 5000,
-      maxResponseBytes: 32,
-    })
+    const bounded = testHttpClient(mock.baseUrl, { maxResponseBytes: 32 })
     mock.route('GET', '/api/users/0/items', (req, res, helpers) =>
       helpers.raw(501, { 'Content-Type': 'text/plain' }, 'x'.repeat(200)),
     )
@@ -297,11 +282,7 @@ describe('http status translation', () => {
   })
 
   it('lets the deadline win over an unfinished 501 statement', async () => {
-    const slow = new ZoteroHttpClient({
-      baseUrl: mock.baseUrl,
-      timeoutMs: 40,
-      maxResponseBytes: 1024,
-    })
+    const slow = testHttpClient(mock.baseUrl, { timeoutMs: 40, maxResponseBytes: 1024 })
     mock.route('GET', '/api/users/0/items', (req, res) => {
       res.writeHead(501, { 'Content-Type': 'text/plain' })
       // Headers and a partial statement arrive; the rest never does, so the
@@ -364,11 +345,7 @@ describe('body handling', () => {
   })
 
   it('enforces the response byte bound while streaming', async () => {
-    const small = new ZoteroHttpClient({
-      baseUrl: mock.baseUrl,
-      timeoutMs: 5000,
-      maxResponseBytes: 100,
-    })
+    const small = testHttpClient(mock.baseUrl, { maxResponseBytes: 100 })
     mock.route('GET', '/api/users/0/items', (req, res, helpers) => helpers.text('x'.repeat(200)))
     await expectZoteroError(
       small.getJson('users/0/items'),
@@ -444,12 +421,7 @@ describe('in-flight bound', () => {
   }
 
   it('keeps no more than the configured requests in flight', async () => {
-    const gate = new ZoteroHttpClient({
-      baseUrl: mock.baseUrl,
-      timeoutMs: 5000,
-      maxResponseBytes: 1024,
-      maxInFlight: 2,
-    })
+    const gate = testHttpClient(mock.baseUrl, { maxResponseBytes: 1024, maxInFlight: 2 })
     const peak = { value: 0 }
     routeCounting(peak, 20)
     await Promise.all(
@@ -464,12 +436,7 @@ describe('in-flight bound', () => {
   })
 
   it('cancels a request that is still queued, without sending it', async () => {
-    const gate = new ZoteroHttpClient({
-      baseUrl: mock.baseUrl,
-      timeoutMs: 5000,
-      maxResponseBytes: 1024,
-      maxInFlight: 1,
-    })
+    const gate = testHttpClient(mock.baseUrl, { maxResponseBytes: 1024, maxInFlight: 1 })
     const route = routeHeld()
     const controller = new AbortController()
     const holding = gate.getJson('users/0/items/AAAA0001')
@@ -490,8 +457,7 @@ describe('in-flight bound', () => {
   })
 
   it('starts the request deadline after the slot, so queueing is not a timeout', async () => {
-    const gate = new ZoteroHttpClient({
-      baseUrl: mock.baseUrl,
+    const gate = testHttpClient(mock.baseUrl, {
       timeoutMs: 60,
       maxResponseBytes: 1024,
       maxInFlight: 1,
@@ -517,16 +483,12 @@ describe('failure translation', () => {
   it('maps connection refusal to NOT_RUNNING', async () => {
     const url = mock.baseUrl
     await mock.close()
-    const dead = new ZoteroHttpClient({ baseUrl: url, timeoutMs: 5000, maxResponseBytes: 1024 })
+    const dead = testHttpClient(url, { maxResponseBytes: 1024 })
     await expectZoteroError(dead.getJson(''), ZOTERO_NOT_RUNNING, NOT_RUNNING_MESSAGE)
   })
 
   it('maps the provider deadline to TIMEOUT while the caller signal stays live', async () => {
-    const slow = new ZoteroHttpClient({
-      baseUrl: mock.baseUrl,
-      timeoutMs: 50,
-      maxResponseBytes: 1024,
-    })
+    const slow = testHttpClient(mock.baseUrl, { timeoutMs: 50, maxResponseBytes: 1024 })
     mock.route('GET', '/api/', (req, res, helpers) => helpers.delayJson({}, 5000))
     const signal = new AbortController().signal
     await expectZoteroError(

@@ -38,7 +38,7 @@ User → Agent → dsh Zotero Tools → ZoteroService → Provider → 127.0.0.1
 - `LocalApiProvider` implements `ZoteroProvider`
 - Capabilities: search, metadata, attachments, citation, browse, retrieve, changes; optional write support is exposed only when its transport and authorizer are wired
 - Client-side scope resolution (Local API has no server-side name search)
-- Read-path fan-out is parallel, with a mechanism per domain: one key's two children listings use `Promise.all` (`src/local/detail.ts`); retrieve's attachment set and export's per-document requests use bounded concurrency (`ZOTERO_GRAPH_CONCURRENCY` / `ZOTERO_EXPORT_CONCURRENCY`); browse ancestor resolution and the changes item partitions use `Promise.all` / `Promise.allSettled`. The write path's request minimum (one POST per note, no read-back) is stated in the [tools doc](./tools.en.md) write boundaries
+- Read-path fan-out is parallel, with a mechanism per domain: one key's two children listings use `Promise.all` (`src/local/detail.ts`); retrieve's attachment set and export's per-document requests use bounded concurrency (`graphConcurrency` / `exportConcurrency`); browse ancestor resolution and the changes item partitions use `Promise.all` / `Promise.allSettled`. The write path's request minimum (one POST per note, no read-back) is stated in the [tools doc](./tools.en.md) write boundaries
 - Note body scan: client-side first page (offset 0), limited by maxNoteScanRecords
 - Evidence ranking: BM25 over passage corpus (annotations, notes, abstract, fulltext chunks)
 - Export: citation batches follow API's 50-key limit; translator formats capped at 50 refs
@@ -56,7 +56,7 @@ User → Agent → dsh Zotero Tools → ZoteroService → Provider → 127.0.0.1
 - Pure loopback fetch, fixed API version (`Zotero-API-Version: 3`)
 - Instance identity protection (`Zotero-Server-ID` header)
 - Stream response byte limit (`maxResponseBytes`)
-- A per-instance in-flight request bound (`ZOTERO_MAX_INFLIGHT_REQUESTS`, default 8): each domain pool only bounds one call's fan-out and concurrent tool calls multiply it, so the HTTP client holds the slots itself for the whole request, connection and streamed body included. A queued request is cancellable, and its deadline starts once it holds a slot, so waiting in the queue is never reported as Zotero timing out
+- A per-instance in-flight request bound (`maxInFlightRequests`, default 8): each domain pool only bounds one call's fan-out and concurrent tool calls multiply it, so the HTTP client holds the slots itself for the whole request, connection and streamed body included. A queued request is cancellable, and its deadline starts once it holds a slot, so waiting in the queue is never reported as Zotero timing out
 - No redirect following, no connection pooling, no background work
 - Timeout via deadline fusion with caller cancellation
 

@@ -17,7 +17,7 @@ import {
   type ToolResult,
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
-import { ZOTERO_WRITE_LIST_MAX_ITEMS, ZOTERO_WRITE_NOTE_MAX_CHARS } from '../constants.js'
+import type { ResolvedConfig } from '../config.js'
 import {
   WRITE_CHILD_COLLECTIONS_MESSAGE,
   writeListTooLongMessage,
@@ -154,10 +154,10 @@ export function createNotePlan(args: CreateNoteArgs): string {
  * plan card. Collection names still resolve in the write domain after
  * approval (they are a live lookup, not a malformed-ask condition).
  */
-function buildRequest(args: CreateNoteArgs): ZoteroCreateNoteRequest {
+function buildRequest(args: CreateNoteArgs, config: ResolvedConfig): ZoteroCreateNoteRequest {
   assertNonBlank('markdown', args.markdown)
-  if (args.markdown.length > ZOTERO_WRITE_NOTE_MAX_CHARS) {
-    invalid(writeNoteTooLongMessage(ZOTERO_WRITE_NOTE_MAX_CHARS))
+  if (args.markdown.length > config.writeNoteMaxChars) {
+    invalid(writeNoteTooLongMessage(config.writeNoteMaxChars))
   }
   const lists = [
     ['collections', args.collections],
@@ -165,8 +165,8 @@ function buildRequest(args: CreateNoteArgs): ZoteroCreateNoteRequest {
     ['sourceRefs', args.sourceRefs],
   ] as const
   for (const [name, list] of lists) {
-    if (list !== undefined && list.length > ZOTERO_WRITE_LIST_MAX_ITEMS) {
-      invalid(writeListTooLongMessage(name, ZOTERO_WRITE_LIST_MAX_ITEMS))
+    if (list !== undefined && list.length > config.writeListMaxItems) {
+      invalid(writeListTooLongMessage(name, config.writeListMaxItems))
     }
   }
   const collections = args.collections?.map((value) => {
@@ -291,7 +291,7 @@ export function registerCreateNoteTool(ctx: Context, service: ZoteroService): ()
         // itself is the seam's (service.createNote), so no caller can skip it.
         // No connectivity ask wraps the write: that helper retries, and a
         // retried note creation would create the note twice.
-        const request = buildRequest(args)
+        const request = buildRequest(args, service.config)
         return await service.createNote(request, { exec, plan: createNotePlan(args) })
       },
     }),

@@ -17,17 +17,12 @@
  * @module dsh-zotero/local/provider
  */
 
-import {
-  LOCAL_PROVIDER_ID,
-  ZOTERO_SCOPE_LISTING_TTL_MS,
-  ZOTERO_SERVER_ID_HEADER,
-  ZOTERO_VERSION_HEADER,
-} from '../constants.js'
+import { LOCAL_PROVIDER_ID, ZOTERO_SERVER_ID_HEADER, ZOTERO_VERSION_HEADER } from '../constants.js'
 import { PERSONAL_LIBRARY } from '../refs.js'
 import { errorChain } from '@deepseek-ai/dsh-llm'
 import { ZoteroError } from '../errors.js'
 import type { ZoteroHttpClient } from '../http-client.js'
-import type { LocalApiLimits, LocalApiProviderOptions } from './limits.js'
+import type { LocalApiLimits } from './limits.js'
 import { ScopeDirectory } from './scope-directory.js'
 import { runSearch } from './search-domain.js'
 import { getItem as getItemDomain, children as childrenDomain } from './detail.js'
@@ -85,18 +80,15 @@ export class LocalApiProvider implements ZoteroProvider {
   constructor(
     private readonly client: ZoteroHttpClient,
     limits: LocalApiLimits | (() => LocalApiLimits),
-    private readonly options: LocalApiProviderOptions = {},
     private readonly writer?: ZoteroWriteHttpClient,
     private readonly authorizer?: WriteAuthorizer,
   ) {
     this.getLimits = typeof limits === 'function' ? limits : () => limits
-    // The directory owns the scope-listing and breadcrumb caches; a
-    // structural provider rebuild starts a fresh cache generation, while
-    // limit-only settings edits keep this provider and its TTL caches alive.
-    this.directory = new ScopeDirectory(
-      client,
-      this.options.scopeListingTtlMs ?? ZOTERO_SCOPE_LISTING_TTL_MS,
-    )
+    // The directory owns the scope-listing and breadcrumb caches. It reads the
+    // TTL through the live limits, so a settings edit changes how long an
+    // existing cache entry is trusted instead of rebuilding this provider (and
+    // with it the HTTP client, the write client and the authorizer's grants).
+    this.directory = new ScopeDirectory(client, () => this.getLimits().scopeListingTtlMs)
     // `write` is declared only when the write collaborators are wired: a
     // capability without its method would be a gate that routes into
     // nothing.

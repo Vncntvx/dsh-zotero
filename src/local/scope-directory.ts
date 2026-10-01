@@ -13,7 +13,7 @@
 
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
-import { ZOTERO_SCOPE_LISTING_TTL_MS, ZOTERO_SERVER_ID_HEADER } from '../constants.js'
+import { ZOTERO_SERVER_ID_HEADER } from '../constants.js'
 import { awaitSharedOperation, type SharedOperation } from '../concurrency.js'
 import {
   isNotFoundError,
@@ -104,7 +104,7 @@ export interface ResolvedScopeResult {
 
 export class ScopeDirectory {
   private readonly client: ZoteroHttpClient
-  private readonly ttlMs: number
+  private readonly ttlMsOf: () => number
 
   /** Cached full listings of the scope endpoints, partitioned by library. */
   private readonly scopeListingCache = new Map<string, ScopeListing>()
@@ -125,9 +125,14 @@ export class ScopeDirectory {
     SharedOperation<CollectionNode | undefined>
   >()
 
-  constructor(client: ZoteroHttpClient, ttlMs: number = ZOTERO_SCOPE_LISTING_TTL_MS) {
+  /**
+   * @param client - the HTTP client every listing read rides.
+   * @param ttlMsOf - live read of the listing TTL; compared at each lookup,
+   * so a settings edit applies without rebuilding the directory.
+   */
+  constructor(client: ZoteroHttpClient, ttlMsOf: () => number) {
     this.client = client
-    this.ttlMs = ttlMs
+    this.ttlMsOf = ttlMsOf
   }
 
   /**
@@ -152,7 +157,7 @@ export class ScopeDirectory {
     if (
       !options.force &&
       cached !== undefined &&
-      Date.now() - cached.fetchedAt < this.ttlMs &&
+      Date.now() - cached.fetchedAt < this.ttlMsOf() &&
       cacheEntryMatchesIdentity(cached.serverId, ctx.serverId)
     ) {
       return cached
@@ -402,7 +407,7 @@ export class ScopeDirectory {
     const cached = this.collectionNodeCache.get(nodeCacheKey)
     if (
       cached !== undefined &&
-      Date.now() - cached.fetchedAt < this.ttlMs &&
+      Date.now() - cached.fetchedAt < this.ttlMsOf() &&
       cacheEntryMatchesIdentity(cached.serverId, serverId)
     ) {
       return cached.node

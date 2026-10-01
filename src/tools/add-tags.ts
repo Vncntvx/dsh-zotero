@@ -17,7 +17,7 @@ import {
   type ToolResult,
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
-import { ZOTERO_WRITE_LIST_MAX_ITEMS } from '../constants.js'
+import type { ResolvedConfig } from '../config.js'
 import { writeListEmptyMessage, writeListTooLongMessage } from '../errors.js'
 import { metaRecordOf, renderDeclined } from './present.js'
 import { assertNonBlank, invalid, parseWritableRef, WRITE_REF_ARG_HINT } from './validate.js'
@@ -88,10 +88,10 @@ export function addTagsPlan(args: AddTagsArgs): string {
   ].join('\n')
 }
 
-function buildRequest(args: AddTagsArgs): ZoteroTagUpdateRequest {
+function buildRequest(args: AddTagsArgs, config: ResolvedConfig): ZoteroTagUpdateRequest {
   if (args.tags.length === 0) invalid(writeListEmptyMessage('tags'))
-  if (args.tags.length > ZOTERO_WRITE_LIST_MAX_ITEMS) {
-    invalid(writeListTooLongMessage('tags', ZOTERO_WRITE_LIST_MAX_ITEMS))
+  if (args.tags.length > config.writeListMaxItems) {
+    invalid(writeListTooLongMessage('tags', config.writeListMaxItems))
   }
   const tags = args.tags.map((tag) => assertNonBlank('tags', tag))
   return { item: parseWritableRef(args.ref, ['item']), tags }
@@ -159,7 +159,7 @@ export function registerAddTagsTool(ctx: Context, service: ZoteroService): () =>
         // No connectivity ask wraps the write: that helper retries, and only
         // idempotent reads may be retried. The plan review is the seam's
         // (service.updateTags), so no caller can skip it.
-        const request = buildRequest(args)
+        const request = buildRequest(args, service.config)
         return await service.updateTags(request, { exec, plan: addTagsPlan(args) })
       },
     }),

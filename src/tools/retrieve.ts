@@ -18,7 +18,6 @@ import {
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
 import type { ResolvedConfig } from '../config.js'
-import { ZOTERO_RETRIEVE_ATTACHMENT_CAP } from '../constants.js'
 import { withConnectivityAsk } from '../ask.js'
 import { boundedPresentationMeta, projectRetrieveMeta } from '../presentation-meta.js'
 import { metaRecordOf } from './present.js'
@@ -74,7 +73,7 @@ const RETRIEVE_PARAMETERS = {
   attachmentRefs: {
     type: 'array',
     items: { type: 'string' },
-    description: `Required with attachmentPolicy="specified": zotero://.../attachment/<KEY> refs of the same library whose full text enters ranking. Each must be an attachment of ref (a child of that item) on the same Zotero instance; anything else fails the call. Repeats are read once; at most ${ZOTERO_RETRIEVE_ATTACHMENT_CAP} attachments enter one call.`,
+    description: `Required with attachmentPolicy="specified": zotero://.../attachment/<KEY> refs of the same library whose full text enters ranking. Each must be an attachment of ref (a child of that item) on the same Zotero instance; anything else fails the call. Repeats are read once; the number entering one call is capped by the configured retrieveAttachmentCap.`,
   },
 } as const
 
@@ -206,8 +205,8 @@ function buildRequest(args: RetrieveArgs, config: ResolvedConfig): ZoteroRetriev
       }
       attachmentRefs.push(attachmentRef)
     }
-    if (attachmentRefs.length > ZOTERO_RETRIEVE_ATTACHMENT_CAP) {
-      invalid(attachmentRefsOverCapMessage(attachmentRefs.length, ZOTERO_RETRIEVE_ATTACHMENT_CAP))
+    if (attachmentRefs.length > config.retrieveAttachmentCap) {
+      invalid(attachmentRefsOverCapMessage(attachmentRefs.length, config.retrieveAttachmentCap))
     }
   } else if (args.attachmentRefs !== undefined) {
     invalid(RETRIEVE_SPECIFIED_ONLY_MESSAGE)

@@ -38,7 +38,7 @@ graph LR
 - `LocalApiProvider` 实现 `ZoteroProvider`
 - 能力：search、metadata、attachments、citation、browse、retrieve、changes；写入能力只在 transport 与 authorizer 均接线时提供
 - 客户端侧解析作用域（Local API 无服务端名称搜索）
-- 读路径的扇出并行执行，机制按域不同：一个 key 的 children 两半走 `Promise.all`（`src/local/detail.ts`）；retrieve 的附件集与 export 的逐文档请求走有界并发（`ZOTERO_GRAPH_CONCURRENCY` / `ZOTERO_EXPORT_CONCURRENCY`）；browse 的祖先解析与 changes 的 items 三分区走 `Promise.all` / `Promise.allSettled`。写路径的往返下限（建笔记一次 POST、不回读）见 [工具文档](./tools.md) 的写入边界
+- 读路径的扇出并行执行，机制按域不同：一个 key 的 children 两半走 `Promise.all`（`src/local/detail.ts`）；retrieve 的附件集与 export 的逐文档请求走有界并发（`graphConcurrency` / `exportConcurrency`）；browse 的祖先解析与 changes 的 items 三分区走 `Promise.all` / `Promise.allSettled`。写路径的往返下限（建笔记一次 POST、不回读）见 [工具文档](./tools.md) 的写入边界
 - 笔记体扫描：客户端侧第一页（offset 0），受 maxNoteScanRecords 限制
 - 证据排名：基于 passage 语料库的 BM25（annotations、notes、abstract、fulltext chunks）
 - 导出：引用批次遵循 API 的 50 键上限；translator 格式最多 50 条引用
@@ -56,7 +56,7 @@ graph LR
 - 纯回环 fetch，固定 API 版本（`Zotero-API-Version: 3`）
 - 实例身份保护（`Zotero-Server-ID` 头）
 - 流式响应字节上限（`maxResponseBytes`）
-- 全实例在途请求上限（`ZOTERO_MAX_INFLIGHT_REQUESTS`，默认 8）：各域并发池只约束单次调用的扇出，多个并行工具调用会相乘，因此由 HTTP 客户端统一持有槽位（连接、响应体、流式读取全程），排队请求可被调用方取消，请求超时从拿到槽位后开始计时（排队不计入超时）
+- 全实例在途请求上限（`maxInFlightRequests`，默认 8）：各域并发池只约束单次调用的扇出，多个并行工具调用会相乘，因此由 HTTP 客户端统一持有槽位（连接、响应体、流式读取全程），排队请求可被调用方取消，请求超时从拿到槽位后开始计时（排队不计入超时）
 - 不跟随重定向、不保持连接、无后台工作
 - 超时通过 deadline 融合与调用者取消实现
 

@@ -10,7 +10,6 @@
 
 import type { ZoteroHttpClient } from '../http-client.js'
 import { mapWithConcurrency } from '../concurrency.js'
-import { ZOTERO_GRAPH_CONCURRENCY, ZOTERO_RETRIEVE_ATTACHMENT_CAP } from '../constants.js'
 import {
   isNotFoundError,
   NO_FULLTEXT_MESSAGE,
@@ -258,15 +257,15 @@ export async function retrieve(
         const identity = `${attachmentRef.library.type}/${attachmentRef.library.id}/${attachmentRef.key}?${attachmentRef.serverId ?? ''}`
         if (!distinct.has(identity)) distinct.set(identity, attachmentRef)
       }
-      if (distinct.size > ZOTERO_RETRIEVE_ATTACHMENT_CAP) {
+      if (distinct.size > deps.limits.retrieveAttachmentCap) {
         throw new ZoteroError(
-          `attachmentRefs lists ${distinct.size} attachments; at most ${ZOTERO_RETRIEVE_ATTACHMENT_CAP} can enter one ranking — split the work across calls.`,
+          `attachmentRefs lists ${distinct.size} attachments; at most ${deps.limits.retrieveAttachmentCap} can enter one ranking — split the work across calls.`,
           ZOTERO_INVALID_ARGUMENT,
         )
       }
       candidates = await mapWithConcurrency(
         [...distinct.values()],
-        ZOTERO_GRAPH_CONCURRENCY,
+        deps.limits.graphConcurrency,
         async (wanted, poolSignal): Promise<{ key: string; contentType?: string }> => {
           // The ref is a claim about where this text comes from. Reading a
           // same-key object out of the wrong library or the wrong database
@@ -547,7 +546,7 @@ function attachmentFactOf(source: FulltextSource): {
  * of the call's input budget.
  *
  * Three bounds meet here, all of them about the call rather than the work:
- * at most {@link ZOTERO_RETRIEVE_ATTACHMENT_CAP} attachments are read at all
+ * at most the configured `retrieveAttachmentCap` attachments are read at all
  * (the rest report `unread` instead of silently vanishing), the whole call
  * accepts at most `maxFulltextChars` characters — split evenly across the
  * sources it reads, so no single file can starve the others and the result
@@ -563,11 +562,11 @@ async function readFulltextSources(
   candidates: readonly { key: string; contentType?: string }[],
   signal: AbortSignal | undefined,
 ): Promise<FulltextSource[]> {
-  const read = candidates.slice(0, ZOTERO_RETRIEVE_ATTACHMENT_CAP)
+  const read = candidates.slice(0, deps.limits.retrieveAttachmentCap)
   const perSourceChars = Math.max(1, Math.floor(deps.limits.maxFulltextChars / read.length))
   const results = await mapWithConcurrency(
     read,
-    ZOTERO_GRAPH_CONCURRENCY,
+    deps.limits.graphConcurrency,
     async (candidate, poolSignal): Promise<FulltextSource> => {
       const base = {
         key: candidate.key,
@@ -606,7 +605,7 @@ async function readFulltextSources(
   )
   return [
     ...results,
-    ...candidates.slice(ZOTERO_RETRIEVE_ATTACHMENT_CAP).map((candidate): FulltextSource => ({
+    ...candidates.slice(deps.limits.retrieveAttachmentCap).map((candidate): FulltextSource => ({
       key: candidate.key,
       ...(candidate.contentType !== undefined ? { contentType: candidate.contentType } : {}),
       status: 'unread',

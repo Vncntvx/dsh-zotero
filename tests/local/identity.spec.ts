@@ -9,8 +9,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
-import { ZoteroHttpClient } from '../../src/http-client.js'
-import { ZoteroWriteHttpClient } from '../../src/write-http.js'
+import type { ZoteroHttpClient } from '../../src/http-client.js'
 import { WriteAuthorizer } from '../../src/write-auth.js'
 import {
   LocalApiProvider,
@@ -18,8 +17,10 @@ import {
 } from '../../src/local/provider.js'
 import { parseRef, PERSONAL_LIBRARY } from '../../src/refs.js'
 import { ScopeDirectory } from '../../src/local/scope-directory.js'
+import { testHttpClient, testWriteClient } from '../helpers/test-clients.js'
 import {
   createProvider,
+  PROVIDER_LIMITS,
   setupProvider,
   teardownProvider,
   type ProviderHarness,
@@ -205,36 +206,11 @@ describe('Server-ID cache identity', () => {
   })
 
   it('reports the write state with the stored-grant fact when the capability is wired', async () => {
-    const client = new ZoteroHttpClient({
-      baseUrl: mock.baseUrl,
-      timeoutMs: 5000,
-      maxResponseBytes: 1_000_000,
-    })
-    const writer = new ZoteroWriteHttpClient({
-      baseUrl: mock.baseUrl,
-      timeoutMs: 5000,
-      maxResponseBytes: 1_000_000,
-    })
+    const client = testHttpClient(mock.baseUrl, { maxResponseBytes: 1_000_000 })
+    const writer = testWriteClient(mock.baseUrl, { maxResponseBytes: 1_000_000 })
     const writable = new LocalApiProvider(
       client,
-      {
-        maxNoteScanRecords: 200,
-        maxDetailChars: 500,
-        maxNoteBodyChars: 30_000,
-        maxNoteChars: 2000,
-        maxNoteRecords: 50,
-        maxAnnotationRecords: 100,
-        fulltextChunkWords: 200,
-        maxEvidenceChars: 6000,
-        maxEvidencePassages: 4,
-        maxFulltextChars: 100_000,
-        maxExportChars: 1_000_000,
-        defaultStyle: 'apa',
-        defaultLocale: 'en-US',
-        maxBrowseResults: 50,
-        maxChangesResults: 50,
-      },
-      {},
+      PROVIDER_LIMITS,
       writer,
       new WriteAuthorizer({ client: writer, persistKey: () => true }),
     )
@@ -254,7 +230,7 @@ describe('Server-ID cache identity', () => {
         return await response.promise
       },
     } as unknown as ZoteroHttpClient
-    const directory = new ScopeDirectory(client)
+    const directory = new ScopeDirectory(client, () => PROVIDER_LIMITS.scopeListingTtlMs)
     const alreadyAborted = new AbortController()
     alreadyAborted.abort()
     await expect(
@@ -293,7 +269,7 @@ describe('Server-ID cache identity', () => {
         })
       },
     } as unknown as ZoteroHttpClient
-    const directory = new ScopeDirectory(client)
+    const directory = new ScopeDirectory(client, () => PROVIDER_LIMITS.scopeListingTtlMs)
     const controller = new AbortController()
     const pending = directory.scopeListingOf(
       'collections',
@@ -314,7 +290,7 @@ describe('Server-ID cache identity', () => {
         return { json: [], headers: new Headers() }
       },
     } as unknown as ZoteroHttpClient
-    const directory = new ScopeDirectory(client)
+    const directory = new ScopeDirectory(client, () => PROVIDER_LIMITS.scopeListingTtlMs)
     await directory.scopeListingOf('collections', { library: PERSONAL_LIBRARY }, undefined)
     const controller = new AbortController()
     controller.abort()
@@ -336,7 +312,7 @@ describe('Server-ID cache identity', () => {
         return await (index === 0 ? first.promise : second.promise)
       },
     } as unknown as ZoteroHttpClient
-    const directory = new ScopeDirectory(client)
+    const directory = new ScopeDirectory(client, () => PROVIDER_LIMITS.scopeListingTtlMs)
     const normal = directory.scopeListingOf('collections', { library: PERSONAL_LIBRARY }, undefined)
     await started[0]?.promise
     const forced = directory.scopeListingOf(
@@ -364,7 +340,7 @@ describe('Server-ID cache identity', () => {
         return await (index === 0 ? first.promise : second.promise)
       },
     } as unknown as ZoteroHttpClient
-    const directory = new ScopeDirectory(client)
+    const directory = new ScopeDirectory(client, () => PROVIDER_LIMITS.scopeListingTtlMs)
     const firstForce = directory.scopeListingOf(
       'collections',
       { library: PERSONAL_LIBRARY },
@@ -416,7 +392,7 @@ describe('scope read key consistency', () => {
         headers: new Headers(),
       }),
     } as unknown as ZoteroHttpClient
-    const directory = new ScopeDirectory(client)
+    const directory = new ScopeDirectory(client, () => PROVIDER_LIMITS.scopeListingTtlMs)
     await expect(
       directory.resolveNamed(
         'collection',
@@ -433,7 +409,7 @@ describe('scope read key consistency', () => {
         headers: new Headers(),
       }),
     } as unknown as ZoteroHttpClient
-    const directory = new ScopeDirectory(client)
+    const directory = new ScopeDirectory(client, () => PROVIDER_LIMITS.scopeListingTtlMs)
     const resolved = await directory.resolveNamed(
       'collection',
       `zotero://user/0/collection/${COLLECTION_KEY}`,

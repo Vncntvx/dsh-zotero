@@ -23,7 +23,6 @@ import {
   ITEM_KEY,
   ITEM_REF,
   itemJson,
-  LIMITS,
   NEW_KEY,
   resolveThrough,
   SECOND_COLLECTION_KEY,

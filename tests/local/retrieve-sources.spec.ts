@@ -12,6 +12,7 @@ import { ZOTERO_INVALID_ARGUMENT, ZOTERO_SERVER_MISMATCH } from '../../src/error
 import { type LocalApiProvider } from '../../src/local/provider.js'
 import { parseRef } from '../../src/refs.js'
 import {
+  createProvider,
   retrieveRequest,
   setupProvider,
   teardownProvider,
@@ -411,6 +412,63 @@ describe('retrieve source selection', () => {
       'at most 16 can enter one ranking',
     )
     expectRequestPaths(mock, ['/api/users/0/items/ABCD1234'])
+  })
+
+  it('reads past the default cap when retrieveAttachmentCap is raised', async () => {
+    const extraKeys = Array.from(
+      { length: 15 },
+      (_, index) => `EXTR${String(index).padStart(4, '0')}`,
+    )
+    serveItemGraph(mock, {
+      parent: RETRIEVE_PARENT,
+      children: [
+        ...RETRIEVE_CHILDREN,
+        ...extraKeys.map((key) => attachment({ key, data: { title: key } })),
+        attachment({ key: 'ZZZZ0015', data: { title: 'ZZZZ0015' } }),
+      ],
+      annotations: null,
+    })
+    // Sixteen extra PDFs share generic text; the seventeenth — whose key
+    // sorts last, so it falls outside the default 16 — is the only one
+    // mentioning the query term, making its presence in the evidence the
+    // observable of the cap having moved.
+    for (const key of extraKeys.slice(0, 15)) {
+      serveFulltext(mock, key, {
+        content: 'generic scholarly prose about attention',
+        indexedChars: 40,
+        totalChars: 40,
+      })
+    }
+    serveFulltext(mock, 'EXTR0015', {
+      content: 'generic scholarly prose about attention',
+      indexedChars: 40,
+      totalChars: 40,
+    })
+    serveFulltext(mock, 'ZZZZ0015', {
+      content: 'a zebra grazes near the library stacks',
+      indexedChars: 39,
+      totalChars: 39,
+    })
+    serveFulltext(mock, 'WXYZ6789', {
+      content: 'publisher copy about attention',
+      indexedChars: 30,
+      totalChars: 30,
+    })
+    const request = retrieveRequest({
+      sources: ['fulltext'],
+      query: 'zebra',
+      attachmentPolicy: 'allIndexed',
+    })
+    // At the default cap the seventeenth attachment is never read, so the
+    // query matches nothing it carries.
+    const defaultResult = await provider.retrieve(request)
+    expect(defaultResult.evidence.some((entry) => entry.sourceRef?.includes('ZZZZ0015'))).toBe(
+      false,
+    )
+    // With the cap raised the same call reads and ranks it.
+    const raised = createProvider(mock, { retrieveAttachmentCap: 17 })
+    const raisedResult = await raised.retrieve(request)
+    expect(raisedResult.evidence.some((entry) => entry.sourceRef?.includes('ZZZZ0015'))).toBe(true)
   })
 
   it('fails closed on a specified policy without refs before any request happens', async () => {

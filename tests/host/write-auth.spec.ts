@@ -15,6 +15,7 @@ import { ZoteroWriteHttpClient } from '../../src/write-http.js'
 import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import { WRITE_AUTH_DENIED_MESSAGE, ZOTERO_WRITE_UNAUTHORIZED } from '../../src/errors.js'
 import { MockZotero } from '../helpers/mock-zotero.js'
+import { testWriteClient } from '../helpers/test-clients.js'
 import { deferred } from '../helpers/sync.js'
 
 const SERVER_ID = 'srv-auth-spec-0001'
@@ -112,11 +113,7 @@ function authorizerWithoutSeam(): WriteAuthorizer {
 
 beforeEach(async () => {
   mock = await MockZotero.start()
-  client = new ZoteroWriteHttpClient({
-    baseUrl: mock.baseUrl,
-    timeoutMs: 5000,
-    maxResponseBytes: 1024 * 1024,
-  })
+  client = testWriteClient(mock.baseUrl)
   const ctx = new Context()
   const fiber: Fiber = ctx.plugin(MemoryCredentials)
   await fiber

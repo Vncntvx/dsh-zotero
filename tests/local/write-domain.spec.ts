@@ -34,7 +34,6 @@ import {
   ITEM_KEY,
   ITEM_REF,
   itemJson,
-  LIMITS,
   NEW_KEY,
   resolveThrough,
   SECOND_COLLECTION_KEY,
@@ -46,9 +45,9 @@ import {
 } from '../helpers/write-domain-fixtures.js'
 import { MockZotero } from '../helpers/mock-zotero.js'
 import { parseRef } from '../../src/refs.js'
-import { ZoteroHttpClient } from '../../src/http-client.js'
-import { ZoteroWriteHttpClient } from '../../src/write-http.js'
 import { WriteAuthorizer } from '../../src/write-auth.js'
+import { PROVIDER_LIMITS } from '../helpers/provider-harness.js'
+import { testHttpClient, testWriteClient } from '../helpers/test-clients.js'
 
 let mock: MockZotero
 
@@ -537,16 +536,11 @@ describe('createNote', () => {
     const rawMock = await MockZotero.start()
     rawMock.route('GET', '/api/', (_req, res, helpers) => helpers.raw(200, {}, JSON.stringify({})))
     try {
-      const bareClient = new ZoteroHttpClient({
-        baseUrl: rawMock.baseUrl,
+      const bareClient = testHttpClient(rawMock.baseUrl, {
         timeoutMs: 1000,
         maxResponseBytes: 1024,
       })
-      const writer = new ZoteroWriteHttpClient({
-        baseUrl: rawMock.baseUrl,
-        timeoutMs: 1000,
-        maxResponseBytes: 1024,
-      })
+      const writer = testWriteClient(rawMock.baseUrl, { timeoutMs: 1000, maxResponseBytes: 1024 })
       const authorizer = new WriteAuthorizer({ client: writer, persistKey: () => true })
       const bareDeps = { client: bareClient, writer, authorizer }
       await expect(
@@ -584,12 +578,8 @@ describe('createNote', () => {
 
 describe('the provider seam', () => {
   it('serves the write capability only when the write collaborators are wired', async () => {
-    const client = new ZoteroHttpClient({
-      baseUrl: mock.baseUrl,
-      timeoutMs: 1000,
-      maxResponseBytes: 1024,
-    })
-    const bare = new LocalApiProvider(client, LIMITS)
+    const client = testHttpClient(mock.baseUrl, { timeoutMs: 1000, maxResponseBytes: 1024 })
+    const bare = new LocalApiProvider(client, PROVIDER_LIMITS)
     expect(bare.capabilities.has('write')).toBe(false)
     let thrown: unknown
     try {

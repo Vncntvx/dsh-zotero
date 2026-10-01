@@ -1,7 +1,8 @@
 /**
  * Transport rebuild keys and the `loader/volatile-update` path filter: only
- * HTTP-client identity/bounds and the write-capability flip rebuild; provider
- * selection and `writePersistKey` are live reads.
+ * HTTP-client identity/bounds, the write client's dialog budget, and the
+ * write-capability flip rebuild; every other bound — the scope-listing TTL
+ * included — is read live through the provider's limits getter.
  * @module tests/unit/transport-keys
  */
 
@@ -12,8 +13,10 @@ describe('TRANSPORT_CONFIG_KEYS', () => {
   it('names only the fields baked into the transport stack', () => {
     expect([...TRANSPORT_CONFIG_KEYS].sort()).toEqual([
       'baseUrl',
+      'maxInFlightRequests',
       'maxResponseBytes',
       'timeoutMs',
+      'writeAuthorizeDeadlineMs',
       'writeEnabled',
     ])
   })
@@ -23,6 +26,8 @@ describe('touchesTransport', () => {
   it('reacts to transport fields and the whole-config root path', () => {
     expect(touchesTransport([['baseUrl']])).toBe(true)
     expect(touchesTransport([['writeEnabled']])).toBe(true)
+    expect(touchesTransport([['maxInFlightRequests']])).toBe(true)
+    expect(touchesTransport([['writeAuthorizeDeadlineMs']])).toBe(true)
     expect(touchesTransport([[]])).toBe(true)
   })
 
@@ -31,5 +36,11 @@ describe('touchesTransport', () => {
     expect(touchesTransport([['writePersistKey']])).toBe(false)
     expect(touchesTransport([['maxSearchResults'], ['timeoutMs']])).toBe(true)
     expect(touchesTransport([['maxSearchResults'], ['defaultStyle']])).toBe(false)
+    expect(touchesTransport([['searchConcurrency']])).toBe(false)
+    expect(touchesTransport([['graphConcurrency'], ['exportConcurrency']])).toBe(false)
+    expect(touchesTransport([['retrieveAttachmentCap']])).toBe(false)
+    // The scope-listing TTL is compared at each lookup through the live
+    // limits, so editing it must not tear the transport stack down.
+    expect(touchesTransport([['scopeListingTtlMs']])).toBe(false)
   })
 })

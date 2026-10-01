@@ -23,10 +23,24 @@ export interface Config {
   provider?: Volatile<string>
   /** Per-request provider deadline in milliseconds. */
   timeoutMs?: Volatile<number>
+  /**
+   * Upper bound for concurrent in-flight requests to the Local API. Each
+   * domain pool bounds one call's fan-out; this is the process-wide slot
+   * count, the real bound on what Zotero is asked to serve at once — two
+   * calls run at full width, and a burst queues instead of stacking.
+   */
+  maxInFlightRequests?: Volatile<number>
   /** Upper bound for `zotero_search` `limit`. */
   maxSearchResults?: Volatile<number>
   /** Upper bound for note records `zotero_search` scans for body matches. */
   maxNoteScanRecords?: Volatile<number>
+  /**
+   * Parallel parent-attribution queries `zotero_search` may keep in flight
+   * (`ZOTERO_ITEMKEY_BATCH` itemKeys each). Kept separate from
+   * `exportConcurrency` — same default, different blast radius — so tuning
+   * export throughput never silently retunes search attribution.
+   */
+  searchConcurrency?: Volatile<number>
   /** Total character budget for retrieved evidence passages. */
   maxEvidenceChars?: Volatile<number>
   /** Upper bound for the number of evidence passages. */
@@ -45,16 +59,30 @@ export interface Config {
   fulltextChunkWords?: Volatile<number>
   /** Character bound for full text accepted into `zotero_retrieve` ranking. */
   maxFulltextChars?: Volatile<number>
+  /**
+   * Upper bound for attachments one `zotero_retrieve` call ranks full text
+   * from: each member costs a metadata read and a full-text read and all of
+   * their text enters one ranking. `specified` rejects a longer list;
+   * `allIndexed` reads the first entries in selection order and reports the
+   * rest as unread.
+   */
+  retrieveAttachmentCap?: Volatile<number>
+  /** Parallel attachment reads `zotero_retrieve` may keep in flight; annotation children ride the single `?itemType=annotation` listing instead. */
+  graphConcurrency?: Volatile<number>
   /** Streaming byte bound for every API response body. */
   maxResponseBytes?: Volatile<number>
   /** Provider hard limit for export output; the model-facing inline budget is deployment spill policy. */
   maxExportChars?: Volatile<number>
   /** Upper bound for refs in one `zotero_export` call; citation batches up to this value, the other formats refuse to exceed the API's 50-key request cap. */
   maxExportRefs?: Volatile<number>
+  /** Parallel per-document export reads `zotero_export` may keep in flight, so a full 50-ref export cannot storm the local API. */
+  exportConcurrency?: Volatile<number>
   /** Upper bound for items a browse call may return */
   maxBrowseResults?: Volatile<number>
   /** Display cap for `zotero_changes` listings; the diff itself always reads the whole range. */
   maxChangesResults?: Volatile<number>
+  /** How long a collections/searches scope listing is trusted before a re-read (ms); the provider reads it live, so an edit applies to the next lookup without rebuilding the transport. */
+  scopeListingTtlMs?: Volatile<number>
   /** CSL style for citation/bibliography formats; must be bundled with Zotero (e.g. `apa`). */
   defaultStyle?: Volatile<string>
   /** CSL locale for citation/bibliography formats. */
@@ -71,6 +99,12 @@ export interface Config {
    * that issued it). One-time keys are never persisted regardless.
    */
   writePersistKey?: Volatile<boolean>
+  /** Character budget for one research note body write; the converted HTML rides the batch's successful bucket (bounded by `maxResponseBytes`), and this bound keeps one pathological note from dominating a batch. */
+  writeNoteMaxChars?: Volatile<number>
+  /** Upper bound for items in one tags/collection-membership write's list arguments — the same scale as the write batch cap, so one call cannot fan out into many protocol batches. */
+  writeListMaxItems?: Volatile<number>
+  /** Deadline for the Zotero authorization dialog during a write (ms). That request waits for a person to read the dialog, so it is independent of `timeoutMs` and deliberately far above it. */
+  writeAuthorizeDeadlineMs?: Volatile<number>
   /**
    * Whether the dedicated Zotero web view (tool cards in a conversation tab) is enabled.
    * Client-only: the host half never reads this (it shares the `zotero`
@@ -100,8 +134,10 @@ export const Config = Schema.object({
   baseUrl: Schema.string().default('http://127.0.0.1:23119/api').volatile(),
   provider: Schema.string().default(LOCAL_PROVIDER_ID).volatile(),
   timeoutMs: Schema.number().default(5000).volatile(),
+  maxInFlightRequests: Schema.number().default(8).volatile(),
   maxSearchResults: Schema.number().default(20).volatile(),
   maxNoteScanRecords: Schema.number().default(200).volatile(),
+  searchConcurrency: Schema.number().default(4).volatile(),
   maxEvidenceChars: Schema.number().default(6000).volatile(),
   maxEvidencePassages: Schema.number().default(4).volatile(),
   maxDetailChars: Schema.number().default(3000).volatile(),
@@ -111,17 +147,24 @@ export const Config = Schema.object({
   maxAnnotationRecords: Schema.number().default(100).volatile(),
   fulltextChunkWords: Schema.number().default(200).volatile(),
   maxFulltextChars: Schema.number().default(250_000).volatile(),
+  retrieveAttachmentCap: Schema.number().default(16).volatile(),
+  graphConcurrency: Schema.number().default(4).volatile(),
   maxResponseBytes: Schema.number()
     .default(16 * 1024 * 1024)
     .volatile(),
   maxExportChars: Schema.number().default(1_000_000).volatile(),
   maxExportRefs: Schema.number().default(50).volatile(),
+  exportConcurrency: Schema.number().default(4).volatile(),
   maxBrowseResults: Schema.number().default(50).volatile(),
   maxChangesResults: Schema.number().default(50).volatile(),
+  scopeListingTtlMs: Schema.number().default(30_000).volatile(),
   defaultStyle: Schema.string().default('apa').volatile(),
   defaultLocale: Schema.string().default('en-US').volatile(),
   writeEnabled: Schema.boolean().default(false).volatile(),
   writePersistKey: Schema.boolean().default(true).volatile(),
+  writeNoteMaxChars: Schema.number().default(65_536).volatile(),
+  writeListMaxItems: Schema.number().default(50).volatile(),
+  writeAuthorizeDeadlineMs: Schema.number().default(120_000).volatile(),
   webEnabled: Schema.boolean().default(true).volatile(),
   enableRunInBackground: Schema.boolean().default(true).volatile(),
   promoteOnTimeout: Schema.boolean().default(true).volatile(),
@@ -132,8 +175,10 @@ export interface ResolvedConfig {
   readonly baseUrl: string
   readonly provider: string
   readonly timeoutMs: number
+  readonly maxInFlightRequests: number
   readonly maxSearchResults: number
   readonly maxNoteScanRecords: number
+  readonly searchConcurrency: number
   readonly maxEvidenceChars: number
   readonly maxEvidencePassages: number
   readonly maxDetailChars: number
@@ -143,15 +188,22 @@ export interface ResolvedConfig {
   readonly maxAnnotationRecords: number
   readonly fulltextChunkWords: number
   readonly maxFulltextChars: number
+  readonly retrieveAttachmentCap: number
+  readonly graphConcurrency: number
   readonly maxResponseBytes: number
   readonly maxExportChars: number
   readonly maxExportRefs: number
+  readonly exportConcurrency: number
   readonly maxBrowseResults: number
   readonly maxChangesResults: number
+  readonly scopeListingTtlMs: number
   readonly defaultStyle: string
   readonly defaultLocale: string
   readonly writeEnabled: boolean
   readonly writePersistKey: boolean
+  readonly writeNoteMaxChars: number
+  readonly writeListMaxItems: number
+  readonly writeAuthorizeDeadlineMs: number
   readonly webEnabled: boolean
   readonly enableRunInBackground: boolean
   readonly promoteOnTimeout: boolean
@@ -315,8 +367,10 @@ export function assertResolvedConfig(plain: Record<string, unknown>): ResolvedCo
       `dsh-zotero: timeoutMs must be a positive finite number; got ${plain.timeoutMs}`,
     )
   }
+  assertPositiveInteger('maxInFlightRequests', plain.maxInFlightRequests)
   assertPositiveInteger('maxSearchResults', plain.maxSearchResults)
   assertPositiveInteger('maxNoteScanRecords', plain.maxNoteScanRecords)
+  assertPositiveInteger('searchConcurrency', plain.searchConcurrency)
   assertPositiveInteger('maxEvidenceChars', plain.maxEvidenceChars)
   assertPositiveInteger('maxEvidencePassages', plain.maxEvidencePassages)
   assertPositiveInteger('maxDetailChars', plain.maxDetailChars)
@@ -326,12 +380,19 @@ export function assertResolvedConfig(plain: Record<string, unknown>): ResolvedCo
   assertPositiveInteger('maxAnnotationRecords', plain.maxAnnotationRecords)
   assertPositiveInteger('fulltextChunkWords', plain.fulltextChunkWords)
   assertPositiveInteger('maxFulltextChars', plain.maxFulltextChars)
+  assertPositiveInteger('retrieveAttachmentCap', plain.retrieveAttachmentCap)
+  assertPositiveInteger('graphConcurrency', plain.graphConcurrency)
   assertPositiveInteger('maxResponseBytes', plain.maxResponseBytes)
   assertPositiveInteger('maxExportChars', plain.maxExportChars)
   assertPositiveInteger('maxExportRefs', plain.maxExportRefs)
+  assertPositiveInteger('exportConcurrency', plain.exportConcurrency)
   assertPositiveInteger('maxBrowseResults', plain.maxBrowseResults)
   assertPositiveInteger('maxChangesResults', plain.maxChangesResults)
+  assertPositiveInteger('scopeListingTtlMs', plain.scopeListingTtlMs)
   assertPositiveInteger('foregroundWaitMs', plain.foregroundWaitMs)
+  assertPositiveInteger('writeNoteMaxChars', plain.writeNoteMaxChars)
+  assertPositiveInteger('writeListMaxItems', plain.writeListMaxItems)
+  assertPositiveInteger('writeAuthorizeDeadlineMs', plain.writeAuthorizeDeadlineMs)
   // Every field above proved its type (schema application rejects mistyped
   // input; the asserts reject out-of-range values), so the spread is a
   // ResolvedConfig once the normalized URL is set.

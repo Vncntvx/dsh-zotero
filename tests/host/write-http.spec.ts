@@ -35,6 +35,7 @@ import {
   writeRateLimitedMessage,
 } from '../../src/errors.js'
 import { MockZotero } from '../helpers/mock-zotero.js'
+import { testWriteClient } from '../helpers/test-clients.js'
 import { progress } from '../helpers/sync.js'
 
 let mock: MockZotero
@@ -66,11 +67,7 @@ function writeOptions(): { serverId: string; apiKey: string } {
 
 beforeEach(async () => {
   mock = await MockZotero.start()
-  client = new ZoteroWriteHttpClient({
-    baseUrl: mock.baseUrl,
-    timeoutMs: 5000,
-    maxResponseBytes: 1024 * 1024,
-  })
+  client = testWriteClient(mock.baseUrl)
 })
 
 afterEach(async () => {
@@ -460,11 +457,7 @@ describe('write status translations', () => {
 
 describe('cancellation and bounds', () => {
   it('reports the provider deadline as a timeout', async () => {
-    const short = new ZoteroWriteHttpClient({
-      baseUrl: mock.baseUrl,
-      timeoutMs: 20,
-      maxResponseBytes: 1024 * 1024,
-    })
+    const short = testWriteClient(mock.baseUrl, { timeoutMs: 20 })
     mock.route('POST', '/api/users/0/items', (_req, res, helpers) =>
       helpers.delayJson(batchBody(), 2000),
     )
@@ -526,11 +519,7 @@ describe('cancellation and bounds', () => {
   })
 
   it('enforces the response byte bound on write responses', async () => {
-    const small = new ZoteroWriteHttpClient({
-      baseUrl: mock.baseUrl,
-      timeoutMs: 5000,
-      maxResponseBytes: 16,
-    })
+    const small = testWriteClient(mock.baseUrl, { maxResponseBytes: 16 })
     mock.route('POST', '/api/users/0/items', (_req, res, helpers) =>
       helpers.raw(200, batchResponseHeaders(), JSON.stringify(batchBody())),
     )
@@ -673,11 +662,7 @@ describe('authorize', () => {
   })
 
   it('enforces the response byte bound on authorize responses', async () => {
-    const small = new ZoteroWriteHttpClient({
-      baseUrl: mock.baseUrl,
-      timeoutMs: 5000,
-      maxResponseBytes: 16,
-    })
+    const small = testWriteClient(mock.baseUrl, { maxResponseBytes: 16 })
     mock.route('POST', '/api/local/authorize', (_req, res, helpers) =>
       helpers.raw(
         200,

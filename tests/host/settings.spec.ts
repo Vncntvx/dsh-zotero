@@ -212,4 +212,19 @@ describe('live configuration', () => {
       abstractTruncated: false,
     })
   })
+
+  it('live-applies the scope-listing TTL without rebuilding the transport', async () => {
+    // The TTL is a provider limit, not a transport key: `touchesTransport` is
+    // pinned false for it in the unit lane, and the local lane proves the
+    // directory comparison reads the committed value. This case pins the host
+    // wiring between them — the volatile commit reaches the config the
+    // provider's live limits getter projects.
+    lane = await setupHostLane({ scopeListingTtlMs: 30_000 })
+    const recovery = lane.ctx.zotero.recovery
+    await commitLive({ scopeListingTtlMs: 60_000 })
+    expect(lane.ctx.zotero.config.scopeListingTtlMs).toBe(60_000)
+    // Recovery is service-lifetime state, never swapped on a transport
+    // rebuild; its identity is the cheap "same instance" probe here.
+    expect(lane.ctx.zotero.recovery).toBe(recovery)
+  })
 })

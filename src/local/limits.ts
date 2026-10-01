@@ -1,15 +1,11 @@
 /**
- * The bounds the `local` provider reads from the resolved config, plus its
- * construction options. Declared apart from the provider class so every
- * domain module can type its dependencies without importing the facade.
+ * The deployment-varying bounds the `local` provider reads from the resolved
+ * config. Every member is a live read (or may be supplied as one), so a
+ * settings commit applies on the next call without rebuilding the transport.
+ * Declared apart from the provider class so every domain module can type its
+ * dependencies without importing the facade.
  * @module dsh-zotero/local/limits
  */
-
-/** Provider construction options; kept minimal so the harness default stays one call. */
-export interface LocalApiProviderOptions {
-  /** How long a scope listing stays fresh before a re-fetch. */
-  readonly scopeListingTtlMs?: number
-}
 
 /** Deployment-varying bounds the local provider needs beyond the HTTP client limits. */
 export interface LocalApiLimits {
@@ -43,4 +39,18 @@ export interface LocalApiLimits {
   readonly maxBrowseResults: number
   /** Per-resource listing cap for `zotero_changes`; a display bound, not a read bound. */
   readonly maxChangesResults: number
+  /**
+   * How long a scope listing (collections/searches) is trusted before a
+   * re-fetch. Compared at read time, so a settings edit applies to the next
+   * lookup — cached entries older than the new TTL simply expire.
+   */
+  readonly scopeListingTtlMs: number
+  /** Parallel parent-attribution queries the search domain may keep in flight (one `itemKey` batch each). */
+  readonly searchConcurrency: number
+  /** Parallel attachment reads the retrieve ranking may keep in flight; annotation children ride the single `?itemType=annotation` listing instead. */
+  readonly graphConcurrency: number
+  /** Parallel per-document export reads the export domain may keep in flight. */
+  readonly exportConcurrency: number
+  /** Upper bound for attachments one `zotero_retrieve` call may read; the ones past the bound report `unread` rather than vanishing. */
+  readonly retrieveAttachmentCap: number
 }

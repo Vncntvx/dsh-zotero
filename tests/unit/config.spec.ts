@@ -12,8 +12,10 @@ describe('resolveConfig', () => {
       baseUrl: 'http://127.0.0.1:23119/api',
       provider: 'local',
       timeoutMs: 5000,
+      maxInFlightRequests: 8,
       maxSearchResults: 20,
       maxNoteScanRecords: 200,
+      searchConcurrency: 4,
       maxEvidenceChars: 6000,
       maxEvidencePassages: 4,
       maxDetailChars: 3000,
@@ -23,15 +25,22 @@ describe('resolveConfig', () => {
       maxAnnotationRecords: 100,
       fulltextChunkWords: 200,
       maxFulltextChars: 250_000,
+      retrieveAttachmentCap: 16,
+      graphConcurrency: 4,
       maxResponseBytes: 16 * 1024 * 1024,
       maxExportChars: 1_000_000,
       maxExportRefs: 50,
+      exportConcurrency: 4,
       maxBrowseResults: 50,
       maxChangesResults: 50,
+      scopeListingTtlMs: 30_000,
       defaultStyle: 'apa',
       defaultLocale: 'en-US',
       writeEnabled: false,
       writePersistKey: true,
+      writeNoteMaxChars: 65_536,
+      writeListMaxItems: 50,
+      writeAuthorizeDeadlineMs: 120_000,
       webEnabled: true,
       enableRunInBackground: true,
       promoteOnTimeout: true,
@@ -142,6 +151,17 @@ describe('resolveConfig', () => {
     expect(() => resolveConfig({ maxNoteRecords: 1.5 })).toThrowError(/maxNoteRecords/)
     expect(() => resolveConfig({ maxAnnotationRecords: -2 })).toThrowError(/maxAnnotationRecords/)
     expect(() => resolveConfig({ fulltextChunkWords: 0 })).toThrowError(/fulltextChunkWords/)
+    expect(() => resolveConfig({ maxInFlightRequests: 0 })).toThrowError(/maxInFlightRequests/)
+    expect(() => resolveConfig({ searchConcurrency: 1.5 })).toThrowError(/searchConcurrency/)
+    expect(() => resolveConfig({ graphConcurrency: -1 })).toThrowError(/graphConcurrency/)
+    expect(() => resolveConfig({ exportConcurrency: 0 })).toThrowError(/exportConcurrency/)
+    expect(() => resolveConfig({ retrieveAttachmentCap: 0 })).toThrowError(/retrieveAttachmentCap/)
+    expect(() => resolveConfig({ scopeListingTtlMs: Number.NaN })).toThrowError(/scopeListingTtlMs/)
+    expect(() => resolveConfig({ writeNoteMaxChars: 0 })).toThrowError(/writeNoteMaxChars/)
+    expect(() => resolveConfig({ writeListMaxItems: -1 })).toThrowError(/writeListMaxItems/)
+    expect(() => resolveConfig({ writeAuthorizeDeadlineMs: 0 })).toThrowError(
+      /writeAuthorizeDeadlineMs/,
+    )
   })
 
   it('rejects empty provider and style strings', () => {

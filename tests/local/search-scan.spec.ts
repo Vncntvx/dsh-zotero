@@ -13,17 +13,19 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ZOTERO_INVALID_ARGUMENT } from '../../src/errors.js'
-import { type LocalApiProvider } from '../../src/local/provider.js'
+import { LocalApiProvider } from '../../src/local/provider.js'
 import { INCLUDE_TRASHED_SCOPE_MESSAGE } from '../../src/local/search-domain.js'
 import { MockZotero } from '../helpers/mock-zotero.js'
 import {
   createProvider,
+  PROVIDER_LIMITS,
   request,
   setupProvider,
   teardownProvider,
   zoteroError,
   type ProviderHarness,
 } from '../helpers/provider-harness.js'
+import { testHttpClient } from '../helpers/test-clients.js'
 import { expectRequestCount } from '../helpers/server/assert.js'
 import { SERVER_ID } from '../helpers/server/keys.js'
 import { attachment, collectionRow, item, noteRow, searchHit } from '../helpers/server/objects.js'
@@ -547,7 +549,7 @@ describe('search: note-content scan', () => {
   })
 
   it('re-fetches a scope listing once the TTL expires', async () => {
-    const ttlProvider = createProvider(mock, {}, { scopeListingTtlMs: 30 })
+    const ttlProvider = createProvider(mock, { scopeListingTtlMs: 30 })
     serveJson(mock, '/api/users/0/collections', COLLECTIONS, { 'Zotero-Server-ID': SERVER_ID })
     serveSearchPage(mock, {
       items: [],
@@ -571,6 +573,45 @@ describe('search: note-content scan', () => {
     expect(
       mock.requests.filter((entry) => entry.pathname === '/api/users/0/collections'),
     ).toHaveLength(2)
+  })
+
+  it('reads that TTL live: a raised TTL adopts the listing the last read cached', async () => {
+    // The directory compares the TTL at each lookup through the provider's
+    // live limits, so no rebuild is needed for the edit to apply — and the
+    // entries already cached keep their `fetchedAt`, which this test observes.
+    let scopeListingTtlMs = 0
+    const live = new LocalApiProvider(testHttpClient(mock.baseUrl), () => ({
+      ...PROVIDER_LIMITS,
+      scopeListingTtlMs,
+    }))
+    serveJson(mock, '/api/users/0/collections', COLLECTIONS, { 'Zotero-Server-ID': SERVER_ID })
+    serveSearchPage(mock, {
+      items: [],
+      total: 0,
+      path: '/api/users/0/collections/COLL1234/items/top',
+    })
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers, search) =>
+      search.get('itemType') === 'note'
+        ? helpers.json([])
+        : helpers.json([], { 'Total-Results': '0', 'Zotero-Server-ID': SERVER_ID }),
+    )
+    const searchByName = () =>
+      live.search(
+        request({ query: 'cascade', scope: { kind: 'collection', refOrName: 'LLM Papers' } }),
+      )
+    const listingReads = () =>
+      mock.requests.filter((entry) => entry.pathname === '/api/users/0/collections').length
+
+    // TTL 0: every resolution goes back to the server.
+    await searchByName()
+    await searchByName()
+    expect(listingReads()).toBe(2)
+
+    // Raised live: the entry the second read just cached is now inside its
+    // TTL, so the third resolution is served from the same directory.
+    scopeListingTtlMs = 30_000
+    await searchByName()
+    expect(listingReads()).toBe(2)
   })
 
   it('re-checks the scope listing once before failing an unknown collection name', async () => {

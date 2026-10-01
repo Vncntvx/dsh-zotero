@@ -16,6 +16,7 @@ import { ZoteroSettingsSection } from '../../src/client/ZoteroSettingsSection.ts
 import type { ZoteroSettingsSectionProps } from '../../src/client/ZoteroSettingsSection.tsx'
 import { en, zh } from '../../src/client/locales.ts'
 import {
+  FIELD_GROUPS,
   ZoteroCardController,
   type ZoteroCardFace,
   type ZoteroCardState,
@@ -86,9 +87,13 @@ describe('ZoteroSettingsSection', () => {
     mount()
     expect(screen.getByRole('heading', { name: zh.title })).toBeDefined()
     expect(screen.getByText(zh.description)).toBeDefined()
-    // Every field of the namespace is on the page, with no disclosure to open
-    // (now + maxChangesResults + 3 background jobs fields).
-    expect(document.querySelectorAll('input')).toHaveLength(27)
+    // Every field of the namespace is on the page, with no disclosure to open:
+    // one control per field table row (numeric/text inputs and boolean
+    // checkboxes alike). The count derives from that table, so a field added
+    // or dropped fails here instead of silently changing the page.
+    expect([...document.querySelectorAll('input')]).toHaveLength(
+      FIELD_GROUPS.flatMap((group) => group.fields).length,
+    )
     expect(saveButton().disabled).toBe(true)
     expect(discardButton().disabled).toBe(true)
   })

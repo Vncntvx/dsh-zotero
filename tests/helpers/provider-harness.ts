@@ -11,9 +11,8 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { ZoteroHttpClient } from '../../src/http-client.js'
 import { LocalApiProvider } from '../../src/local/provider.js'
-import type { LocalApiLimits, LocalApiProviderOptions } from '../../src/local/limits.js'
+import type { LocalApiLimits } from '../../src/local/limits.js'
 import { parseRef } from '../../src/refs.js'
 import type {
   ZoteroExportRequest,
@@ -22,9 +21,14 @@ import type {
   ZoteroSearchRequest,
 } from '../../src/types.js'
 import { MockZotero } from './mock-zotero.js'
+import { testHttpClient } from './test-clients.js'
 
-/** The limits every provider spec starts from; specs override per test. */
-const DEFAULT_PROVIDER_LIMITS: LocalApiLimits = {
+/**
+ * The limits every provider-facing spec starts from; a spec passes overrides
+ * through `createProvider`/`setupProvider` or a spread. Kept here as the one
+ * home so a new `LocalApiLimits` member costs one edit.
+ */
+export const PROVIDER_LIMITS: LocalApiLimits = {
   maxNoteScanRecords: 200,
   maxDetailChars: 500,
   maxNoteBodyChars: 30_000,
@@ -40,19 +44,19 @@ const DEFAULT_PROVIDER_LIMITS: LocalApiLimits = {
   defaultLocale: 'en-US',
   maxBrowseResults: 50,
   maxChangesResults: 50,
+  scopeListingTtlMs: 30_000,
+  searchConcurrency: 4,
+  graphConcurrency: 4,
+  exportConcurrency: 4,
+  retrieveAttachmentCap: 16,
 }
 
 /** A provider over the given mock server's base URL, with optional limit overrides. */
 export function createProvider(
   mock: MockZotero,
   limits: Partial<LocalApiLimits> = {},
-  options: LocalApiProviderOptions = {},
 ): LocalApiProvider {
-  return new LocalApiProvider(
-    new ZoteroHttpClient({ baseUrl: mock.baseUrl, timeoutMs: 5000, maxResponseBytes: 1024 * 1024 }),
-    { ...DEFAULT_PROVIDER_LIMITS, ...limits },
-    options,
-  )
+  return new LocalApiProvider(testHttpClient(mock.baseUrl), { ...PROVIDER_LIMITS, ...limits })
 }
 
 /** The per-test harness state: the mock server, the provider, and a temp dir. */

@@ -14,7 +14,6 @@ import { acquireSlot, ConcurrencyGate } from './concurrency.js'
 import {
   ZOTERO_API_VERSION_HEADER,
   ZOTERO_LOCAL_API_VERSION,
-  ZOTERO_MAX_INFLIGHT_REQUESTS,
   ZOTERO_SERVER_ID_HEADER,
 } from './constants.js'
 import {
@@ -42,12 +41,8 @@ export interface ZoteroHttpClientOptions {
   readonly baseUrl: string
   readonly timeoutMs: number
   readonly maxResponseBytes: number
-  /**
-   * How many data requests this client keeps in flight. Defaults to
-   * {@link ZOTERO_MAX_INFLIGHT_REQUESTS}; a caller that needs more requests
-   * at once (tests) may raise it, but no route through the plugin does.
-   */
-  readonly maxInFlight?: number
+  /** How many data requests this client keeps in flight. */
+  readonly maxInFlight: number
 }
 
 export interface ZoteroHttpGetOptions {
@@ -326,7 +321,7 @@ export class ZoteroHttpClient {
 
   constructor(private readonly options: ZoteroHttpClientOptions) {
     this.baseUrlWithSlash = options.baseUrl.endsWith('/') ? options.baseUrl : `${options.baseUrl}/`
-    this.gate = new ConcurrencyGate(options.maxInFlight ?? ZOTERO_MAX_INFLIGHT_REQUESTS)
+    this.gate = new ConcurrencyGate(options.maxInFlight)
   }
 
   /** The instance id remembered from the latest response carrying one (Zotero 10+). */

@@ -7,7 +7,7 @@
 
 import type { ZoteroHttpClient } from '../http-client.js'
 import { mapWithConcurrency } from '../concurrency.js'
-import { ZOTERO_EXPORT_CONCURRENCY, ZOTERO_ITEMKEY_BATCH } from '../constants.js'
+import { ZOTERO_ITEMKEY_BATCH } from '../constants.js'
 import {
   ZOTERO_INVALID_ARGUMENT,
   ZOTERO_NOT_FOUND,
@@ -180,7 +180,7 @@ async function fetchExportItems(
   let completed = 0
   const inputs = await mapWithConcurrency(
     refs,
-    ZOTERO_EXPORT_CONCURRENCY,
+    deps.limits.exportConcurrency,
     async (ref, poolSignal) => {
       const search = new URLSearchParams()
       search.set('itemKey', ref.key)

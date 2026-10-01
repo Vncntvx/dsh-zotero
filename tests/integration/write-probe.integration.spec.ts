@@ -18,11 +18,12 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest'
-import { ZoteroHttpClient } from '../../src/http-client.js'
-import { ZoteroWriteHttpClient } from '../../src/write-http.js'
+import type { ZoteroHttpClient } from '../../src/http-client.js'
+import type { ZoteroWriteHttpClient } from '../../src/write-http.js'
 import { WriteAuthorizer } from '../../src/write-auth.js'
 import { ScopeDirectory } from '../../src/local/scope-directory.js'
 import { createNote, updateTags } from '../../src/local/write-domain.js'
+import { testHttpClient, testWriteClient } from '../helpers/test-clients.js'
 
 const BASE_URL = process.env.ZOTERO_BASE_URL ?? 'http://127.0.0.1:23119/api'
 const PROBE_COLLECTION = '[dsh-zotero-probe]'
@@ -37,18 +38,18 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1' && process.env.ZOTERO_WRIT
     let serverId = ''
 
     beforeAll(async () => {
-      client = new ZoteroHttpClient({
-        baseUrl: BASE_URL,
+      client = testHttpClient(BASE_URL, {
         timeoutMs: 10_000,
         maxResponseBytes: 64 * 1024 * 1024,
       })
-      writer = new ZoteroWriteHttpClient({
-        baseUrl: BASE_URL,
+      writer = testWriteClient(BASE_URL, {
         timeoutMs: 10_000,
         maxResponseBytes: 64 * 1024 * 1024,
       })
       authorizer = new WriteAuthorizer({ client: writer, persistKey: () => true })
-      directory = new ScopeDirectory(client, 0)
+      // TTL 0: every listing read goes to the live server, so the probe never
+      // trusts a cache while it mutates the library.
+      directory = new ScopeDirectory(client, () => 0)
       await client.get('', undefined, {})
       serverId = client.serverId ?? ''
       expect(serverId).not.toBe('')

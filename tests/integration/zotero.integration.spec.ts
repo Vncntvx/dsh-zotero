@@ -18,10 +18,10 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest'
-import { ZoteroHttpClient } from '../../src/http-client.js'
 import { LocalApiProvider } from '../../src/local/provider.js'
 import { parseRef } from '../../src/refs.js'
-import { zoteroError } from '../helpers/provider-harness.js'
+import { PROVIDER_LIMITS, zoteroError } from '../helpers/provider-harness.js'
+import { testHttpClient } from '../helpers/test-clients.js'
 import type { ZoteroItemDetail } from '../../src/types.js'
 
 const BASE_URL = process.env.ZOTERO_BASE_URL ?? 'http://127.0.0.1:23119/api'
@@ -39,27 +39,13 @@ let firstItemRef: string | undefined
 describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', () => {
   beforeAll(() => {
     provider = new LocalApiProvider(
-      new ZoteroHttpClient({
-        baseUrl: BASE_URL,
-        timeoutMs: 10_000,
-        maxResponseBytes: 64 * 1024 * 1024,
-      }),
+      testHttpClient(BASE_URL, { timeoutMs: 10_000, maxResponseBytes: 64 * 1024 * 1024 }),
       {
-        maxNoteScanRecords: 200,
+        ...PROVIDER_LIMITS,
+        // The live lane reads real abstracts and real full text, so it takes
+        // the production-scale budgets for those two bounds.
         maxDetailChars: 3000,
-        maxNoteBodyChars: 30_000,
-        maxNoteChars: 2000,
-        maxNoteRecords: 50,
-        maxAnnotationRecords: 100,
-        fulltextChunkWords: 200,
-        maxEvidenceChars: 6000,
-        maxEvidencePassages: 4,
         maxFulltextChars: 250_000,
-        maxExportChars: 1_000_000,
-        defaultStyle: 'apa',
-        defaultLocale: 'en-US',
-        maxBrowseResults: 50,
-        maxChangesResults: 50,
       },
     )
   })
@@ -334,8 +320,7 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', 
   it('returns live annotations through /children?itemType=annotation', async () => {
     // Seed one real annotation from the library listing, then prove the
     // plugin surfaces that same row through both children contracts.
-    const seed = new ZoteroHttpClient({
-      baseUrl: BASE_URL,
+    const seed = testHttpClient(BASE_URL, {
       timeoutMs: 10_000,
       maxResponseBytes: 8 * 1024 * 1024,
     })
@@ -616,8 +601,7 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', 
     // resolve membership through the parent item. Fixture discovery walks
     // the same endpoints the provider's scan uses (notes listing, then the
     // parent item) instead of guessing from recent top items.
-    const client = new ZoteroHttpClient({
-      baseUrl: BASE_URL,
+    const client = testHttpClient(BASE_URL, {
       timeoutMs: 10_000,
       maxResponseBytes: 64 * 1024 * 1024,
     })
