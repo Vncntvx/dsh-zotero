@@ -126,7 +126,7 @@ npm run dev:client                # esbuild watch
 ## Release checklist
 
 - `npm run harness:check -- --strict` passes (pin consistent, upstream declarations not behind the sibling source)
-- `npm run verify:pack` passes (tarball carries `lib/index.js`, `lib/index.d.ts`, `lib/client.js`, `cordis.patch.yml`)
+- `npm run verify:pack` passes (tarball carries `lib/index.js`, `lib/index.d.ts`, `lib/client.js`, `cordis.patch.yml`, and every `locale/*.json` on disk; a declared locale wildcard with no dictionary fails the gate)
 - `npm test` passes
 - `npm run typecheck` passes
 - `npm run test:coverage` passes (gate above)

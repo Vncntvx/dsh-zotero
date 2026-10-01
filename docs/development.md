@@ -126,7 +126,7 @@ npm run dev:client                # esbuild watch
 ## 发布检查清单
 
 - `npm run harness:check -- --strict` 通过（版本钉一致，且上游声明不落后于 sibling 源码）
-- `npm run verify:pack` 通过（tarball 含 `lib/index.js`、`lib/index.d.ts`、`lib/client.js`、`cordis.patch.yml`）
+- `npm run verify:pack` 通过（tarball 含 `lib/index.js`、`lib/index.d.ts`、`lib/client.js`、`cordis.patch.yml` 与磁盘上实际存在的 `locale/*.json`；清单声明了 locale 通配却枚举不到字典时直接失败）
 - `npm test` 通过
 - `npm run typecheck` 通过
 - `npm run test:coverage` 通过（门禁见上）
