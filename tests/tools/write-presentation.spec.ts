@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest'
+import { approvalLane } from '../helpers/approval-stub.js'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { ToolResult } from '@deepseek-ai/dsh-tools'
 import { createNotePlan, renderCreateNote } from '../../src/tools/create-note.js'
 import { addTagsPlan, renderAddTags } from '../../src/tools/add-tags.js'
 import { addToCollectionPlan, renderAddToCollection } from '../../src/tools/add-to-collection.js'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { UserQuestionError } from '@deepseek-ai/dsh-user-questions'
+import { ZOTERO_WRITE_APPROVAL_UNAVAILABLE } from '../../src/errors.js'
 import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import { Context, Service } from '@deepseek-ai/cordis'
-import { setupHostLane } from '../helpers/lanes/host-lane.js'
 
 /** An approval channel that always answers "Apply"; the ask is recorded. */
 class ApprovingQuestions extends Service {
@@ -43,6 +45,7 @@ class ApprovingQuestions extends Service {
     }
   }
 }
+
 import { askPlanApproval } from '../../src/write-approval.js'
 import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
 
@@ -222,7 +225,7 @@ describe('approval-gate failure arms', () => {
   }
 
   it('maps an aborted ask onto the harness abort code', async () => {
-    const lane = await setupHostLane({ writeEnabled: true })
+    const lane = await approvalLane({ writeEnabled: true })
     await lane.ctx.plugin(AbortingQuestions)
     const result = await lane.runTool('zotero_create_note', { markdown: 'x' })
     expect(result.isError).toBe(true)
@@ -232,7 +235,7 @@ describe('approval-gate failure arms', () => {
   })
 
   it('renders the pending-call cards', async () => {
-    const lane = await setupHostLane({ writeEnabled: true })
+    const lane = await approvalLane({ writeEnabled: true })
     const note = lane.tool('zotero_create_note')!
     expect(note.presentCall?.({ markdown: 'x' })).toMatchObject({
       card: 'generic',
@@ -255,7 +258,7 @@ describe('approval-gate failure arms', () => {
   })
 
   it('falls back to the generic title when the meta record lacks a ref, or is absent', async () => {
-    const lane = await setupHostLane({ writeEnabled: true })
+    const lane = await approvalLane({ writeEnabled: true })
     const note = lane.tool('zotero_create_note')!
     expect(
       note.presentResult?.({ markdown: 'x' }, {
@@ -302,7 +305,7 @@ describe('approval-gate failure arms', () => {
   })
 
   it('covers the optional-libraryVersion arms of the applied-meta and render paths', async () => {
-    const lane = await setupHostLane({ writeEnabled: true })
+    const lane = await approvalLane({ writeEnabled: true })
     const tags = lane.tool('zotero_add_tags')!
     expect(
       tags.output.presentationMeta?.(
@@ -343,7 +346,7 @@ describe('approval-gate failure arms', () => {
   })
 
   it('covers the ask-plan approval contract directly', async () => {
-    const lane = await setupHostLane({ writeEnabled: true })
+    const lane = await approvalLane({ writeEnabled: true })
     await lane.ctx.plugin(ApprovingQuestions)
     const scripted = lane.ctx.get('userQuestions') as unknown as ApprovingQuestions
     const agent = { id: 'agent-1' } as never
@@ -365,7 +368,7 @@ describe('approval-gate failure arms', () => {
   })
 
   it('answers false when the answer carries no selection', async () => {
-    const lane = await setupHostLane({ writeEnabled: true })
+    const lane = await approvalLane({ writeEnabled: true })
     await lane.ctx.plugin(ApprovingQuestions)
 
     const scripted = lane.ctx.get('userQuestions') as unknown as ApprovingQuestions
@@ -423,7 +426,7 @@ describe('approval-gate failure arms', () => {
   })
 
   it('projects complete applied outcomes into presentation meta', async () => {
-    const lane = await setupHostLane({ writeEnabled: true })
+    const lane = await approvalLane({ writeEnabled: true })
     const tags = lane.tool('zotero_add_tags')!
     expect(
       textOf(
@@ -557,25 +560,35 @@ describe('approval-gate failure arms', () => {
     await expect(
       askPlanApproval(cancelled as unknown as Context, { exec, plan: '- plan' }),
     ).resolves.toBe(false)
-    for (const name of ['HarnessError', 'UserQuestionError']) {
-      const wire = {
-        get: () => ({
-          ask: async () => {
-            throw Object.assign(new Error('cancel'), { name, code: 'ASK_CANCELLED' })
-          },
-        }),
-      }
-      await expect(
-        askPlanApproval(wire as unknown as Context, { exec, plan: '- plan' }),
-      ).resolves.toBe(false)
+    // The ask() exit path restores the real UserQuestionError instance.
+    const restored = {
+      get: () => ({
+        ask: async () => {
+          throw new UserQuestionError('cancel', 'ASK_CANCELLED')
+        },
+      }),
     }
+    await expect(
+      askPlanApproval(restored as unknown as Context, { exec, plan: '- plan' }),
+    ).resolves.toBe(false)
+    // A plain error carrying the code is not an ask settlement: fail closed.
+    const rogue = {
+      get: () => ({
+        ask: async () => {
+          throw Object.assign(new Error('cancel'), { code: 'ASK_CANCELLED' })
+        },
+      }),
+    }
+    await expect(
+      askPlanApproval(rogue as unknown as Context, { exec, plan: '- plan' }),
+    ).rejects.toMatchObject({ code: ZOTERO_WRITE_APPROVAL_UNAVAILABLE })
     const empty = { get: () => ({ ask: async () => ({ answers: [] }) }) }
     const approved = await askPlanApproval(empty as unknown as Context, { exec, plan: '- plan' })
     expect(approved).toBe(false)
   })
 
   it('reports the declined outcome per tool from the meta record', async () => {
-    const lane = await setupHostLane({ writeEnabled: true })
+    const lane = await approvalLane({ writeEnabled: true })
     const note = lane.tool('zotero_create_note')!
     expect(
       note.presentResult?.({ markdown: 'x' }, {
@@ -612,7 +625,7 @@ describe('approval-gate failure arms', () => {
 
 describe('write tool presentation records', () => {
   it('projects the presentation meta per outcome and the card per meta record', async () => {
-    const lane = await setupHostLane({ writeEnabled: true })
+    const lane = await approvalLane({ writeEnabled: true })
     const note = lane.tool('zotero_create_note')!
     expect(note.output.presentationMeta?.({}, APPLIED_NOTE)).toEqual({
       kind: 'applied',
@@ -658,7 +671,7 @@ describe('write tool presentation records', () => {
   })
 
   it('wires the pending-call cards', async () => {
-    const lane = await setupHostLane({ writeEnabled: true })
+    const lane = await approvalLane({ writeEnabled: true })
     const note = lane.tool('zotero_create_note')!
     expect(note.presentCall?.({ markdown: 'x' })).toMatchObject({
       card: 'generic',
@@ -681,7 +694,7 @@ describe('write tool presentation records', () => {
   })
 
   it('enforces the note and list bounds before the approval gate', async () => {
-    const lane = await setupHostLane({ writeEnabled: true })
+    const lane = await approvalLane({ writeEnabled: true })
     const tooLong = await lane.runTool('zotero_create_note', { markdown: 'x'.repeat(65_537) })
     expect(tooLong.isError).toBe(true)
     if (!tooLong.isError) throw new Error('unreachable')

@@ -4,24 +4,21 @@
  * `requestWriteApproval` is the deployment-level door: it honors
  * `approval/policy` (a `never` session auto-rejects) and writes the
  * `approval/asked` + `approval/decided` audit pair. These cases pin the
- * outcome map and the skip rules (no approval service, no agent) without a
- * full host lane.
+ * outcome map and the fail-closed rules (no approval service, no agent)
+ * without a full host lane.
  * @module tests/tools/write-approval-policy
  */
 
 import { describe, expect, it } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
-import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
+import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { TOOL_ABORTED, type ToolRunContext } from '@deepseek-ai/dsh-tools'
+import type { ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 import { requestWriteApproval } from '../../src/write-approval.js'
 
 describe('requestWriteApproval', () => {
   it('covers the session approval gate outcomes', async () => {
-    const outcomes: Array<'allowed-once' | 'rejected' | 'cancelled' | 'unavailable'> = [
-      'allowed-once',
-      'rejected',
-      'cancelled',
-      'unavailable',
-    ]
+    const outcomes: ApprovalOutcome[] = ['allowed-once', 'rejected', 'cancelled', 'unavailable']
     for (const outcome of outcomes) {
       const approval = {
         get: (key: string) =>
@@ -58,7 +55,7 @@ describe('requestWriteApproval', () => {
     }
   })
 
-  it('skips the approval gate without an approval service', async () => {
+  it('fails closed without an approval service', async () => {
     const bare = { get: () => undefined }
     const exec = {
       callId: 'call-2',
@@ -67,7 +64,7 @@ describe('requestWriteApproval', () => {
     } as unknown as ToolRunContext
     await expect(
       requestWriteApproval(bare as unknown as Context, { exec, plan: '- plan' }),
-    ).resolves.toBe('allowed')
+    ).resolves.toBe('unavailable')
   })
 
   it('fails closed when an approval service is composed but the call carries no agent', async () => {
@@ -80,5 +77,70 @@ describe('requestWriteApproval', () => {
         plan: '- plan',
       }),
     ).resolves.toBe('unavailable')
+  })
+
+  it('fails closed when the approval ask itself throws', async () => {
+    const throwing = {
+      get: () => ({
+        request: async () => {
+          throw new Error('audit append failed')
+        },
+      }),
+    }
+    await expect(
+      requestWriteApproval(throwing as unknown as Context, {
+        exec: {
+          signal: new AbortController().signal,
+          name: 'z',
+          callId: 'c',
+          agent: { id: 'agent-1' } as never,
+        } as never,
+        plan: '- plan',
+      }),
+    ).resolves.toBe('unavailable')
+  })
+
+  it('rethrows a harness abort and wraps a lost abort as TOOL_ABORTED', async () => {
+    const aborting = {
+      get: () => ({
+        request: async () => {
+          throw new HarnessError('aborted by the UI', TOOL_ABORTED)
+        },
+      }),
+    }
+    await expect(
+      requestWriteApproval(aborting as unknown as Context, {
+        exec: {
+          signal: new AbortController().signal,
+          name: 'z',
+          callId: 'c',
+          agent: { id: 'agent-1' } as never,
+        } as never,
+        plan: '- plan',
+      }),
+    ).rejects.toMatchObject({ code: TOOL_ABORTED })
+
+    // The caller's signal aborted while the ask was failing: the abort is
+    // the truth even when the thrown value lost its class identity.
+    const controller = new AbortController()
+    const lostAbort = {
+      get: () => ({
+        request: async () => {
+          controller.abort()
+          throw new Error('fetch aborted')
+        },
+      }),
+    }
+    await expect(
+      requestWriteApproval(lostAbort as unknown as Context, {
+        exec: {
+          signal: controller.signal,
+          name: 'z',
+          callId: 'c',
+          agent: { id: 'agent-1' } as never,
+        } as never,
+        plan: '- plan',
+      }),
+    ).rejects.toMatchObject({ code: TOOL_ABORTED })
   })
 })

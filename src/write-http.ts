@@ -147,7 +147,11 @@ const PRE_COMMIT_WRITE_STATUSES = new Set([
   400, 401, 403, 404, 405, 409, 410, 412, 413, 415, 422, 426, 428, 429, 501,
 ])
 
-/** Redirects are refused before dispatch, so they cannot represent a commit either. */
+/**
+ * 3xx arrives as a response — the request is sent with `redirect: 'manual'`
+ * and never followed — so like the statuses above it proves the write was
+ * refused before any object commit.
+ */
 function isPreCommitWriteStatus(status: number): boolean {
   return (status >= 300 && status < 400) || PRE_COMMIT_WRITE_STATUSES.has(status)
 }

@@ -31,29 +31,20 @@ import type { ZoteroWriteCall } from '../../src/types.js'
 import { setupHostLane, type HostLane } from '../helpers/lanes/host-lane.js'
 import { MockZotero } from '../helpers/mock-zotero.js'
 import { zoteroError } from '../helpers/provider-harness.js'
+import {
+  approvalAsks,
+  resetApprovalStub,
+  setApprovalOutcome,
+  StubApproval,
+} from '../helpers/approval-stub.js'
 
 const SERVER_ID = 'srv-write-gate-001'
 const NEW_KEY = 'GATENOTE'
-
-/** The outcome vocabulary the approval registry routes on. */
-type ApprovalOutcome = 'allowed-once' | 'rejected' | 'cancelled' | 'unavailable'
-
-/** The request fields this lane inspects. */
-interface ApprovalAsk {
-  readonly toolName?: string
-  readonly callId?: unknown
-  readonly reason?: string
-  readonly displayReason?: { readonly en: string; readonly zh: string }
-}
 
 /** The selected labels per ask, consumed in order; empty means "Apply". */
 const script: string[][] = []
 /** Every plan-review ask the seam made, in order. */
 const asks: AskUserQuestionRequest[] = []
-/** Every approval request the seam made, in order. */
-const approvalAsks: ApprovalAsk[] = []
-/** The next outcome the stub approval service answers with. */
-let approvalOutcome: ApprovalOutcome = 'allowed-once'
 /** When true, the stub approval service is not composed. */
 let noApprovalService = false
 
@@ -74,21 +65,6 @@ class RecordingQuestions extends Service {
         selected: script[index] ?? ['Apply'],
       })),
     }
-  }
-}
-
-/**
- * The smallest approval seam the gate can find: records the request and
- * answers with the scripted outcome (or the `never` policy's auto-reject).
- */
-class RecordingApproval extends Service {
-  constructor(ctx: Context) {
-    super(ctx, 'approval')
-  }
-
-  async request(request: ApprovalAsk): Promise<ApprovalOutcome> {
-    approvalAsks.push(request)
-    return approvalOutcome
   }
 }
 
@@ -143,7 +119,7 @@ async function bootLane(
   const lane = await setupHostLane(config, {
     compose: async (ctx) => {
       if (withQuestions) await ctx.plugin(RecordingQuestions)
-      if (withApproval && !noApprovalService) await ctx.plugin(RecordingApproval)
+      if (withApproval && !noApprovalService) await ctx.plugin(StubApproval)
     },
   })
   openLanes.push(lane)
@@ -175,8 +151,7 @@ function itemWrites(mock: MockZotero): readonly { method: string; pathname: stri
 beforeEach(() => {
   script.length = 0
   asks.length = 0
-  approvalAsks.length = 0
-  approvalOutcome = 'allowed-once'
+  resetApprovalStub()
   noApprovalService = false
 })
 
@@ -285,7 +260,7 @@ describe('the session approval policy gate', () => {
   it('auto-rejects under never without a plan card or any network', async () => {
     const lane = await bootLane({ writeEnabled: true })
     serveWrites(lane.mock)
-    approvalOutcome = 'rejected' // what `approval/policy: never` settles every ask with
+    setApprovalOutcome('rejected') // what `approval/policy: never` settles every ask with
 
     const result = await lane.ctx.zotero.createNote({ markdown: 'x' }, callOf('- plan'))
 
@@ -301,7 +276,7 @@ describe('the session approval policy gate', () => {
   it('declines when the user rejects the permission ask', async () => {
     const lane = await bootLane({ writeEnabled: true })
     serveWrites(lane.mock)
-    approvalOutcome = 'rejected'
+    setApprovalOutcome('rejected')
 
     const result = await lane.ctx.zotero.createNote(
       { markdown: 'x' },
@@ -317,7 +292,7 @@ describe('the session approval policy gate', () => {
   it('fails closed when the approval channel is unavailable', async () => {
     const lane = await bootLane({ writeEnabled: true })
     serveWrites(lane.mock)
-    approvalOutcome = 'unavailable'
+    setApprovalOutcome('unavailable')
 
     await zoteroError(
       lane.ctx.zotero.createNote({ markdown: 'x' }, callOf('- plan')),
@@ -330,7 +305,7 @@ describe('the session approval policy gate', () => {
   it('runs plan-review only after allowed-once', async () => {
     const lane = await bootLane({ writeEnabled: true })
     serveWrites(lane.mock)
-    approvalOutcome = 'allowed-once'
+    setApprovalOutcome('allowed-once')
 
     const result = await lane.ctx.zotero.createNote({ markdown: 'x' }, callOf('- plan'))
 
@@ -341,23 +316,24 @@ describe('the session approval policy gate', () => {
     expect(itemWrites(lane.mock)).toHaveLength(1)
   })
 
-  it('skips the approval gate when no approval service is composed', async () => {
+  it('fails closed when no approval service is composed', async () => {
     noApprovalService = true
     const lane = await bootLane({ writeEnabled: true })
     serveWrites(lane.mock)
 
-    const result = await lane.ctx.zotero.createNote({ markdown: 'x' }, callOf('- plan'))
-
-    expect(result).toMatchObject({ kind: 'applied', key: NEW_KEY })
+    await zoteroError(
+      lane.ctx.zotero.createNote({ markdown: 'x' }, callOf('- plan')),
+      ZOTERO_WRITE_APPROVAL_UNAVAILABLE,
+    )
     expect(approvalAsks).toHaveLength(0)
-    expect(asks).toHaveLength(1)
-    expect(itemWrites(lane.mock)).toHaveLength(1)
+    expect(asks).toHaveLength(0)
+    expect(itemWrites(lane.mock)).toHaveLength(0)
   })
 
   it('declines without asking plan when the permission ask is cancelled', async () => {
     const lane = await bootLane({ writeEnabled: true })
     serveWrites(lane.mock)
-    approvalOutcome = 'cancelled'
+    setApprovalOutcome('cancelled')
 
     const result = await lane.ctx.zotero.createNote({ markdown: 'x' }, callOf('- plan'))
 

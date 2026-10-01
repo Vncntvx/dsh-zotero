@@ -98,12 +98,12 @@ zotero_get(ref="zotero://user/0/item/ABC123", include=["notes", "annotations"])
 - 只有 `annotation` 来源有 `pageLabel`；全文段落永远不携带页码
 - `truncated` 为 true 表示有更多证据被截断：超出段落数或字符预算的段落整段省略、不做改写。预算按"模型实际读到的内容"计费——段落正文，加上批注的评论
 - `attachmentPolicy="specified"` 的每个附件都必须能证明属于 `ref` 这条条目：`parentItem` 指向它、库与 Zotero 实例一致、回答中确有 `itemType: "attachment"`。任一条件无法证明即报错，不会退化成"同 key 的另一个对象"——跨条目或跨实例的附件不会进入当前条目的证据
-- 重复的 ref 只读一次；单次调用最多 16 个附件，超限报错而不是静默丢弃（拆成多次调用）
+- 重复的 ref 只读一次；单次调用最多读取 `retrieveAttachmentCap`（默认 16）个附件，超限报错而不是静默丢弃（拆成多次调用）
 - 需要另一条目的全文时按该条目单独调用 `zotero_retrieve`，而不是把它挂到当前条目的证据里
 - 排序用的词元与 Zotero 搜索使用同一套折叠（音调符号、排版引号/破折号、NFKD 分解），所以 `cafe` 能命中正文里的 `café`；返回的段落文本始终是原文，不被改写
 - 批注按"高亮原文 + 读者评论"一起参与排序，所以只写了评论、没有选中文字的批注也能被检索到；`matchedFields` 标明命中来自 `text` 还是 `comment`，只有评论命中时结果会明确提示那是批注者的话、不是论文原文（其余来源只有单一文本字段，不带该字段）
 - 多附件策略（`allIndexed` / `specified`）下 `attachments` 逐个列出这次真正考虑的全文来源：`indexed`（读到全文，附 `coverage`、`passages`、是否被字符预算截断）、`unindexed`（Zotero 索引里没有该文件）、`unread`（本次达到附件上限未读）。因此"补充材料没有索引"表现为明确缺口，而不是"其中没有相关内容"
-- `maxFulltextChars` 是**单次调用**的全文输入预算，在本次读取的附件之间均分：单个附件时即全额；多附件时各自按份内额度截断，并在 `attachments[].inputTruncated` 与 `truncated` 上报告。单次调用最多读取 16 个附件（见上）
+- `maxFulltextChars` 是**单次调用**的全文输入预算，在本次读取的附件之间均分：单个附件时即全额；多附件时各自按份内额度截断，并在 `attachments[].inputTruncated` 与 `truncated` 上报告。单次调用最多读取 `retrieveAttachmentCap`（默认 16）个附件（见上）
 
 ### 示例
 
@@ -304,7 +304,7 @@ zotero_changes(include=["items", "collections", "deleted"], run_in_background=tr
 
 | 参数          | 类型     | 默认值 | 说明                                                                                                                                                 |
 | ------------- | -------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `markdown`    | string   | —      | 笔记正文（markdown，上限 65536 字符）                                                                                                                |
+| `markdown`    | string   | —      | 笔记正文（markdown，上限为 `writeNoteMaxChars`，默认 65536 字符）                                                                                    |
 | `parentItem`  | string   | —      | 个人库父条目 ref（`zotero://user/0/item/<KEY>`）；省略为独立笔记                                                                                     |
 | `collections` | string[] | —      | 个人库合集 ref（`zotero://user/0/collection/<KEY>`）或精确名称；仅独立笔记，子笔记再传非空 collections 会在计划卡前以 `ZOTERO_INVALID_ARGUMENT` 拒绝 |
 | `tags`        | string[] | —      | 创建时应用的标签                                                                                                                                     |
@@ -328,10 +328,10 @@ zotero_create_note(markdown="**方法**：见第 2 节。", parentItem="zotero:/
 
 ### 参数
 
-| 参数   | 类型     | 默认值 | 说明                                                     |
-| ------ | -------- | ------ | -------------------------------------------------------- |
-| `ref`  | string   | —      | 要打标签的个人库条目 ref（`zotero://user/0/item/<KEY>`） |
-| `tags` | string[] | —      | 要新增的标签（≥1 个，≤50 个；自动去重）                  |
+| 参数   | 类型     | 默认值 | 说明                                                               |
+| ------ | -------- | ------ | ------------------------------------------------------------------ |
+| `ref`  | string   | —      | 要打标签的个人库条目 ref（`zotero://user/0/item/<KEY>`）           |
+| `tags` | string[] | —      | 要新增的标签（≥1 个，≤ `writeListMaxItems`，默认 50 个；自动去重） |
 
 ### 输出
 
@@ -374,7 +374,7 @@ zotero_add_to_collection(ref="zotero://user/0/item/ABCD1234", collection="方法
 
 **闸门在服务接缝上。** 确认链是 `ctx.zotero.createNote` / `updateTags` / `addToCollection` 的组成部分，顺序固定：
 
-1. **会话审批策略**（`ctx.approval.request`）：写入 `approval/asked` + `approval/decided` 审计对，并服从 `approval/policy`。`never` 会话自动拒绝；用户拒绝/取消 → `{kind:"declined"}`，不弹计划卡、不触网。未组合 ApprovalService 时跳过本闸（此时也不存在 `NEVER_SENTENCE`）。
+1. **会话审批策略**（`ctx.approval.request`）：写入 `approval/asked` + `approval/decided` 审计对，并服从 `approval/policy`。`never` 会话自动拒绝；用户拒绝/取消 → `{kind:"declined"}`，不弹计划卡、不触网。未组合 ApprovalService 时本闸失败关闭（`ZOTERO_WRITE_APPROVAL_UNAVAILABLE`），不会跳过。
 2. **计划审查**（`userQuestions` 的 plan-review 卡）：用户批准的计划 markdown 就是服务传给写域的那份。未批准返回 `{kind:"declined"}`。
 
 工具与其他消费方都必须传入 `ZoteroWriteCall`（计划文本，以及发起调用的 agent、signal、tool name、call id）。服务先过能力门（关闭时返回 `ZOTERO_CAPABILITY_UNAVAILABLE`，不弹卡）。任何一闸无法发起交互时失败关闭（`ZOTERO_WRITE_APPROVAL_UNAVAILABLE`）。交互会话下可能看到两次确认（权限 + 计划）——这是有意的双层：权限门服从部署策略与审计，计划卡保证用户看到精确变更。任何调用方都必须经过这道闸门。

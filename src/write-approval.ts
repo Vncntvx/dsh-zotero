@@ -20,8 +20,9 @@
  * - `rejected` / `cancelled` → `declined` (no plan card, no network).
  * - `unavailable` / no agent / infrastructure failure →
  *   `ZOTERO_WRITE_APPROVAL_UNAVAILABLE` (fail closed).
- * - no `ctx.approval` composed → skip this gate (no `NEVER_SENTENCE` exists
- *   then either); plan-review remains the sole confirmation.
+ * - no `ctx.approval` composed → `unavailable` as well: the decision cannot
+ *   be routed or audited, so the gate fails closed — plan-review never runs
+ *   without it.
  *
  * A call that carries no agent while an approval service is composed is
  * `unavailable`, never `allowed`: the request cannot be routed or audited,
@@ -77,23 +78,15 @@ function writeApprovalReason(call: ZoteroWriteCall): string {
 
 /**
  * Whether a settled ask rejection carries the given user-questions code.
- * The wire restores `UserQuestionError` (name + code); some paths surface a
- * `HarnessError` with the same code string. Match the exact code and the
- * documented harness/user-question error names, including a transported
- * value whose class identity was lost in transit.
+ * The ask() exit path restores `UserQuestionError` instances uniformly, and
+ * that class extends `HarnessError`, so class identity plus the stable code
+ * is the whole contract — the same judgment the official plan card makes.
  * @param error - the rejected ask value.
  * @param code - the stable code to match.
  * @returns true when the rejection is that ask settlement.
  */
 function isAskCode(error: unknown, code: 'ASK_ABORTED' | 'ASK_CANCELLED'): boolean {
-  if (typeof error !== 'object' || error === null) return false
-  const candidate = error as { name?: unknown; code?: unknown }
-  return (
-    candidate.code === code &&
-    (error instanceof HarnessError ||
-      candidate.name === 'UserQuestionError' ||
-      candidate.name === 'HarnessError')
-  )
+  return error instanceof HarnessError && error.code === code
 }
 
 /**
@@ -102,8 +95,9 @@ function isAskCode(error: unknown, code: 'ASK_ABORTED' | 'ASK_CANCELLED'): boole
  * When `ctx.approval` is composed this is the deployment-level gate: `never`
  * auto-rejects, `ask` routes to the composed answerers, and every request
  * writes the `approval/asked` + `approval/decided` audit pair. When no
- * approval service is composed there is no `NEVER_SENTENCE` either, so the
- * gate is skipped and plan-review remains the sole confirmation.
+ * approval service is composed the gate fails closed — the decision cannot
+ * be routed or audited, matching the user-approval package's stance for
+ * headless or incompletely composed deployments.
  * @param ctx - the plugin context, whose approval service decides.
  * @param call - the asking write call (agent, signal, tool name, call id).
  * @returns `'allowed'` to continue to plan-review; `'declined'` when the
@@ -117,9 +111,10 @@ export async function requestWriteApproval(
 ): Promise<'allowed' | 'declined' | 'unavailable'> {
   const { exec } = call
   const approval = ctx.get('approval')
-  // Absent approval service: no policy sentence exists for this composition,
-  // so this gate is skipped and plan-review remains the sole confirmation.
-  if (approval === undefined) return 'allowed'
+  // Absent approval service: the decision cannot be routed or audited.
+  // Fail closed, matching the user-approval package's fail-closed stance
+  // for headless or incompletely composed deployments.
+  if (approval === undefined) return 'unavailable'
   // Absent agent: the request cannot be routed or audited. Fail closed —
   // matching harness `serviceAsk` and sandbox escalation, which both deny
   // an ask that has no agent to route it through.

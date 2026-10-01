@@ -5,6 +5,8 @@ import type {
   AskUserQuestionItem,
   AskUserQuestionRequest,
 } from '@deepseek-ai/dsh-user-questions'
+import { UserQuestionError } from '@deepseek-ai/dsh-user-questions'
+import { StubApproval } from '../helpers/approval-stub.js'
 import { expectValue, setupHostLane, type HostLane } from '../helpers/lanes/host-lane.js'
 import { MockZotero } from '../helpers/mock-zotero.js'
 import type { Options } from '../../src/config.js'
@@ -30,7 +32,7 @@ class ScriptedQuestions extends Service {
   /** The selected labels per ask, consumed in order; empty means "Apply". */
   static readonly script: string[][] = []
   /** When set, the next ask rejects with this error (one-shot). */
-  static rejection: { code: string; message: string } | undefined
+  static rejection: UserQuestionError | undefined
   /** When set, returns this raw answer response directly. */
   static customAnswers: AskUserQuestionAnswer | undefined
   readonly asks: AskUserQuestionRequest[] = []
@@ -44,10 +46,7 @@ class ScriptedQuestions extends Service {
     const rejection = ScriptedQuestions.rejection
     if (rejection !== undefined) {
       ScriptedQuestions.rejection = undefined
-      const error = new Error(rejection.message) as Error & { code: string; name: string }
-      error.name = 'UserQuestionError'
-      error.code = rejection.code
-      throw error
+      throw rejection
     }
     if (ScriptedQuestions.customAnswers !== undefined) {
       const answers = ScriptedQuestions.customAnswers
@@ -70,6 +69,9 @@ const openLanes: HostLane[] = []
 async function bootLane(config: Options, withQuestions = true): Promise<HostLane> {
   const lane = await setupHostLane(config, {
     compose: async (ctx) => {
+      // The approval gate fails closed without a composed service, so the
+      // write-path lanes carry this one-shot approver.
+      await ctx.plugin(StubApproval)
       if (withQuestions) await ctx.plugin(ScriptedQuestions)
     },
   })
@@ -277,11 +279,11 @@ describe('zotero_create_note', () => {
 
   it('returns declined when the user dismisses the plan review (ASK_CANCELLED)', async () => {
     const lane = await bootLane({ writeEnabled: true })
-    ScriptedQuestions.rejection = {
-      code: 'ASK_CANCELLED',
-      message: 'the user cancelled ask_user_question',
-    }
-    // Wire restoration surfaces UserQuestionError (a HarnessError) with this code.
+    ScriptedQuestions.rejection = new UserQuestionError(
+      'the user cancelled ask_user_question',
+      'ASK_CANCELLED',
+    )
+    // The stub throws the real UserQuestionError the ask() exit restores.
     serveWrites(lane.mock)
     const result = expectValue(
       await lane.runTool('zotero_create_note', { markdown: 'x' }),
@@ -458,10 +460,10 @@ describe('zotero_add_tags and zotero_add_to_collection', () => {
     const lane = await bootLane({ writeEnabled: true })
     serveWrites(lane.mock)
     serveItem(lane.mock, { tags: [] })
-    ScriptedQuestions.rejection = {
-      code: 'ASK_CANCELLED',
-      message: 'the user cancelled ask_user_question',
-    }
+    ScriptedQuestions.rejection = new UserQuestionError(
+      'the user cancelled ask_user_question',
+      'ASK_CANCELLED',
+    )
     const tagsResult = expectValue(
       await lane.runTool('zotero_add_tags', {
         ref: `zotero://user/0/item/${ITEM_KEY}`,
@@ -471,10 +473,10 @@ describe('zotero_add_tags and zotero_add_to_collection', () => {
     )
     expect(tagsResult.value).toEqual({ kind: 'declined' })
 
-    ScriptedQuestions.rejection = {
-      code: 'ASK_CANCELLED',
-      message: 'the user cancelled ask_user_question',
-    }
+    ScriptedQuestions.rejection = new UserQuestionError(
+      'the user cancelled ask_user_question',
+      'ASK_CANCELLED',
+    )
     const collectionResult = expectValue(
       await lane.runTool('zotero_add_to_collection', {
         ref: `zotero://user/0/item/${ITEM_KEY}`,

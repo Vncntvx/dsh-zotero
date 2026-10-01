@@ -107,6 +107,9 @@ export async function setupHostLane(
         name,
         arguments: args,
         signal: new AbortController().signal,
+        // The agent loop always sets the caller; the write gate routes and
+        // audits by it, so the lane must carry one too.
+        agent: {} as never,
       })
     },
     tool(name) {

@@ -42,6 +42,13 @@ a fixture that drifted from reality would still pass every gate.
   `expectHeaderOnEveryRequest`, `zoteroError`.
 - `tests/helpers/lanes/host-lane.ts` — the one boot for the tool and host
   specs.
+- `tests/helpers/provider-harness.ts` — the provider lane's single import
+  surface: mock + provider boot, request builders, and `PROVIDER_LIMITS`, the
+  one `LocalApiLimits` base every spec overrides.
+- `tests/helpers/test-clients.ts` — `testHttpClient` / `testWriteClient`, the
+  suite's standard transport bounds; a spec passes only what it varies.
+- `tests/helpers/approval-stub.ts` — the one `approval` seam the write lanes
+  compose (`StubApproval`, its request ledger, and the scripted outcome).
 - `tests/helpers/sync.ts` — `deferred()` / `progress()` for tests that need to
   wait on the code rather than on a duration.
 - `tests/helpers/fixtures-dir.ts` — the captured response bodies under

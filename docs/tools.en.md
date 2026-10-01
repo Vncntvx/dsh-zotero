@@ -98,12 +98,12 @@ Collect and query-rank evidence passages for a single item. Sources include: Zot
 - Only `annotation` sources have `pageLabel`; full-text passages never carry page numbers
 - `truncated` true means more evidence was cut off: a passage over the passage-count or character budget is omitted whole, never edited. The budget charges what the model actually reads — the passage text plus, for an annotation, its comment
 - Every `attachmentPolicy="specified"` attachment must be provably this item's own: its `parentItem` names `ref`, its library and Zotero instance match, and the answer really says `itemType: "attachment"`. If any of that cannot be proven the call fails — a same-key object from another item, another library, or another instance never substitutes for the named one
-- A repeated ref is read once; one call ranks at most 16 attachments and fails rather than silently dropping the rest (split the work across calls)
+- A repeated ref is read once; one call ranks at most `retrieveAttachmentCap` (default 16) attachments and fails rather than silently dropping the rest (split the work across calls)
 - To gather evidence from another item, call `zotero_retrieve` for that item instead of attaching its files to this item's evidence
 - Ranking tokens are folded exactly as Zotero's own search folds text (diacritics, typographic quotes and dashes, NFKD decomposition), so `cafe` matches `café` in a passage; the passage text returned is always the original
 - An annotation ranks on its highlight and its reader comment together, so a comment-only annotation (no selected text) is still findable. `matchedFields` says whether the match came from `text` or `comment`, and a comment-only hit states plainly that those are the annotator's words rather than the paper's text; single-text sources carry no such field
 - Under the multi-attachment policies (`allIndexed` / `specified`) `attachments` lists every full-text source the call actually considered: `indexed` (full text read, with `coverage`, `passages`, and whether the character budget cut it), `unindexed` (Zotero's index has no text for that file), `unread` (not read — the call was already at its attachment limit). An unindexed supplement therefore reads as a named gap, never as "the supplement says nothing"
-- `maxFulltextChars` is the whole call's full-text input budget, shared evenly across the attachments it reads: a single source gets all of it, several are each cut to their share, reported per file in `attachments[].inputTruncated` and once in `truncated`. One call reads at most 16 attachments (see above)
+- `maxFulltextChars` is the whole call's full-text input budget, shared evenly across the attachments it reads: a single source gets all of it, several are each cut to their share, reported per file in `attachments[].inputTruncated` and once in `truncated`. One call reads at most `retrieveAttachmentCap` (default 16) attachments (see above)
 
 ### Example
 
@@ -304,7 +304,7 @@ Create a research note — standalone, or a child note under a parent item — w
 
 | Parameter     | Type     | Default | Description                                                                                                                                                                                                                         |
 | ------------- | -------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `markdown`    | string   | —       | The note body (markdown, 65536-character bound)                                                                                                                                                                                     |
+| `markdown`    | string   | —       | The note body (markdown, bounded by `writeNoteMaxChars`, default 65536 characters)                                                                                                                                                  |
 | `parentItem`  | string   | —       | Personal-library parent item ref (`zotero://user/0/item/<KEY>`); omit for a standalone note                                                                                                                                         |
 | `collections` | string[] | —       | Personal-library collection refs (`zotero://user/0/collection/<KEY>`) or exact names; standalone notes only — a child-note call that also passes non-empty collections is refused as `ZOTERO_INVALID_ARGUMENT` before any plan card |
 | `tags`        | string[] | —       | Tags applied at creation                                                                                                                                                                                                            |
@@ -328,10 +328,10 @@ Add tags to one item. Zotero's PATCH replaces arrays wholesale instead of mergin
 
 ### Parameters
 
-| Parameter | Type     | Default | Description                                                         |
-| --------- | -------- | ------- | ------------------------------------------------------------------- |
-| `ref`     | string   | —       | The personal-library item ref to tag (`zotero://user/0/item/<KEY>`) |
-| `tags`    | string[] | —       | Tags to add (at least 1, at most 50; deduplicated)                  |
+| Parameter | Type     | Default | Description                                                                     |
+| --------- | -------- | ------- | ------------------------------------------------------------------------------- |
+| `ref`     | string   | —       | The personal-library item ref to tag (`zotero://user/0/item/<KEY>`)             |
+| `tags`    | string[] | —       | Tags to add (at least 1, at most `writeListMaxItems`, default 50; deduplicated) |
 
 ### Output
 
@@ -374,7 +374,7 @@ The three write tools register only while `writeEnabled` is on in the settings, 
 
 **The gate is on the service seam.** The confirmation chain is part of `ctx.zotero.createNote` / `updateTags` / `addToCollection`, in fixed order:
 
-1. **Session approval policy** (`ctx.approval.request`): writes the `approval/asked` + `approval/decided` audit pair and honors `approval/policy`. A `never` session auto-rejects; a user rejection/cancel returns `{kind: "declined"}` with no plan card and no network. When no ApprovalService is composed this gate is skipped (and no `NEVER_SENTENCE` exists either).
+1. **Session approval policy** (`ctx.approval.request`): writes the `approval/asked` + `approval/decided` audit pair and honors `approval/policy`. A `never` session auto-rejects; a user rejection/cancel returns `{kind: "declined"}` with no plan card and no network. When no ApprovalService is composed this gate fails closed (`ZOTERO_WRITE_APPROVAL_UNAVAILABLE`); it is never skipped.
 2. **Plan review** (`userQuestions` plan-review card): the plan markdown the user approves is exactly what the service passes to the write domain. A non-approve answer returns `{kind: "declined"}`.
 
 The tools and any other consumer must pass a `ZoteroWriteCall` (plan markdown, plus the asking agent, signal, tool name, and call id). The service answers the capability gate first (`ZOTERO_CAPABILITY_UNAVAILABLE` when writes are off, with no card). When either gate cannot be asked at all, the write fails closed (`ZOTERO_WRITE_APPROVAL_UNAVAILABLE`). An interactive session may show two confirmations (permission + plan) — deliberate dual layer: the permission gate honors deployment policy and audit, the plan card shows the exact change. Every caller must pass this gate.
