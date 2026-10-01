@@ -2,15 +2,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LocalApiProvider } from '../../src/local/provider.js'
 import {
   WRITE_CAPABILITY_UNAVAILABLE_CODE,
-  addToCollection,
   createNote,
-  updateTags,
+  updateItemCollections,
+  updateItemTags,
   writeCapabilityUnavailableMessage,
 } from '../../src/local/write-domain.js'
 import {
   SERVER_MISMATCH_MESSAGE,
   WRITE_CHILD_COLLECTIONS_MESSAGE,
   WRITE_IDENTITY_UNSUPPORTED_MESSAGE,
+  WRITE_LIST_SELECTION_MESSAGE,
   WRITE_VERSION_MISSING_MESSAGE,
   WRITE_CONFLICT_MESSAGE,
   WRITE_UNAUTHORIZED_AFTER_AUTH_MESSAGE,
@@ -349,23 +350,20 @@ describe('createNote', () => {
     await expect(
       createNote(deps, resolveThrough(directory), { markdown: '   ' }),
     ).rejects.toMatchObject({ code: ZOTERO_INVALID_ARGUMENT })
-    await expect(updateTags(deps, { item: ITEM_REF, tags: ['   '] })).rejects.toMatchObject({
+    await expect(updateItemTags(deps, { item: ITEM_REF, add: ['   '] })).rejects.toMatchObject({
       code: ZOTERO_INVALID_ARGUMENT,
     })
     await expect(
-      addToCollection(deps, resolveThrough(directory), {
-        item: ITEM_REF,
-        collection: '   ',
-      }),
+      updateItemCollections(deps, resolveThrough(directory), { item: ITEM_REF, add: ['   '] }),
     ).rejects.toMatchObject({ code: ZOTERO_INVALID_ARGUMENT })
     expect(mock.requests).toHaveLength(0)
   })
   it('refuses a malformed direct-call key before any network request', async () => {
     const { deps } = writeDeps(mock)
     await expect(
-      updateTags(deps, {
+      updateItemTags(deps, {
         item: { ...ITEM_REF, key: '../../../groups/55/items/ABCDEFGH' },
-        tags: ['new'],
+        add: ['new'],
       }),
     ).rejects.toMatchObject({ code: 'ZOTERO_INVALID_REF' })
     expect(mock.requests).toHaveLength(0)
@@ -596,11 +594,11 @@ describe('createNote', () => {
     })
   })
 
-  it('refuses an empty tags list on updateTags', async () => {
+  it('refuses a tag update that neither adds nor removes', async () => {
     const { deps } = writeDeps(mock)
-    await expect(updateTags(deps, { item: ITEM_REF, tags: [] })).rejects.toMatchObject({
+    await expect(updateItemTags(deps, { item: ITEM_REF })).rejects.toMatchObject({
       code: ZOTERO_INVALID_ARGUMENT,
-      message: writeListEmptyMessage('tags'),
+      message: WRITE_LIST_SELECTION_MESSAGE,
     })
   })
 })
@@ -669,7 +667,7 @@ describe('request minimum', () => {
       helpers.raw(
         200,
         { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '10' },
-        JSON.stringify(itemJson(ITEM_KEY, 10, { tags: [] })),
+        JSON.stringify(itemJson(ITEM_KEY, 10, { tags: [], collections: [] })),
       ),
     )
     mock.route('PATCH', `/api/users/0/items/${ITEM_KEY}`, (_req, res, helpers) =>
@@ -677,7 +675,7 @@ describe('request minimum', () => {
     )
     const { deps } = writeDeps(mock)
 
-    await updateTags(deps, { item: ITEM_REF, tags: ['new'] })
+    await updateItemTags(deps, { item: ITEM_REF, add: ['new'] })
     expect(count('GET', `/api/users/0/items/${ITEM_KEY}`)).toBe(1)
     expect(count('PATCH', `/api/users/0/items/${ITEM_KEY}`)).toBe(1)
     // Merge semantics need the read; nothing else is contacted.
@@ -694,7 +692,7 @@ describe('request minimum', () => {
       helpers.raw(
         200,
         { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '10' },
-        JSON.stringify(itemJson(ITEM_KEY, 10, { collections: [] })),
+        JSON.stringify(itemJson(ITEM_KEY, 10, { tags: [], collections: [] })),
       ),
     )
     mock.route('PATCH', `/api/users/0/items/${ITEM_KEY}`, (_req, res, helpers) =>
@@ -702,9 +700,9 @@ describe('request minimum', () => {
     )
     const { deps, directory } = writeDeps(mock)
 
-    await addToCollection(deps, resolveThrough(directory), {
+    await updateItemCollections(deps, resolveThrough(directory), {
       item: ITEM_REF,
-      collection: `zotero://user/0/collection/${COLLECTION_KEY}`,
+      add: [`zotero://user/0/collection/${COLLECTION_KEY}`],
     })
     expect(count('GET', '/api/users/0/collections')).toBe(0)
     expect(count('GET', `/api/users/0/items/${ITEM_KEY}`)).toBe(1)

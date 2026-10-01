@@ -67,8 +67,13 @@ import { registerExportTool } from './tools/export.js'
 import { registerRetrieveTool } from './tools/retrieve.js'
 import { registerSearchTool } from './tools/search.js'
 import { registerCreateNoteTool } from './tools/create-note.js'
-import { registerAddTagsTool } from './tools/add-tags.js'
-import { registerAddToCollectionTool } from './tools/add-to-collection.js'
+import { registerUpdateItemTagsTool } from './tools/update-item-tags.js'
+import { registerUpdateItemCollectionsTool } from './tools/update-item-collections.js'
+import { registerCreateCollectionTool } from './tools/create-collection.js'
+import { registerDeleteCollectionTool } from './tools/delete-collection.js'
+import { registerCreateItemTool } from './tools/create-item.js'
+import { registerUpdateItemTool } from './tools/update-item.js'
+import { registerDeleteLibraryTagsTool } from './tools/delete-library-tags.js'
 import type {
   ZoteroAttachmentLocation,
   ZoteroBrowseRequest,
@@ -78,10 +83,16 @@ import type {
   ZoteroChangesResult,
   ZoteroChildrenRequest,
   ZoteroChildrenResult,
-  ZoteroCollectionAddRequest,
-  ZoteroCollectionAddResult,
+  ZoteroCreateCollectionCommittedOutcome,
+  ZoteroCreateCollectionRequest,
+  ZoteroCreateItemCommittedOutcome,
+  ZoteroCreateItemRequest,
   ZoteroCreateNoteRequest,
   ZoteroCreateNoteCommittedOutcome,
+  ZoteroDeleteCollectionRequest,
+  ZoteroDeleteCollectionResult,
+  ZoteroDeleteLibraryTagsRequest,
+  ZoteroDeleteLibraryTagsResult,
   ZoteroGetRequest,
   ZoteroItemDetail,
   ZoteroObjectRef,
@@ -95,8 +106,12 @@ import type {
   ZoteroSearchRequest,
   ZoteroSearchResult,
   ZoteroStatus,
-  ZoteroTagUpdateRequest,
-  ZoteroTagUpdateResult,
+  ZoteroUpdateItemCollectionsRequest,
+  ZoteroUpdateItemCollectionsResult,
+  ZoteroUpdateItemRequest,
+  ZoteroUpdateItemResult,
+  ZoteroUpdateItemTagsRequest,
+  ZoteroUpdateItemTagsResult,
   ZoteroWriteCall,
   ZoteroWriteDeclined,
 } from './types.js'
@@ -311,8 +326,13 @@ export class ZoteroService extends Service {
     if (enabled && this.writeToolDisposes.length === 0) {
       this.writeToolDisposes = [
         registerCreateNoteTool(this.ctx, this),
-        registerAddTagsTool(this.ctx, this),
-        registerAddToCollectionTool(this.ctx, this),
+        registerUpdateItemTagsTool(this.ctx, this),
+        registerUpdateItemCollectionsTool(this.ctx, this),
+        registerCreateCollectionTool(this.ctx, this),
+        registerDeleteCollectionTool(this.ctx, this),
+        registerCreateItemTool(this.ctx, this),
+        registerUpdateItemTool(this.ctx, this),
+        registerDeleteLibraryTagsTool(this.ctx, this),
       ]
     } else if (!enabled && this.writeToolDisposes.length > 0) {
       for (const dispose of this.writeToolDisposes) dispose()
@@ -503,39 +523,124 @@ export class ZoteroService extends Service {
   }
 
   /**
-   * Add tags to an item, preserving what it already carries.
-   * @param request - the item ref and the tags to add.
+   * Update one item's tags (add/remove in one write).
+   * @param request - the item ref and the tags to add/remove.
    * @param call - the asking write call: its plan and its tool run.
-   * @returns the merged tag list, the additions, and the resulting versions,
+   * @returns the merged tag list, the actual additions/removals, and versions,
    *   or `declined` when the user did not approve the plan.
    */
-  async updateTags(
-    request: ZoteroTagUpdateRequest,
+  async updateItemTags(
+    request: ZoteroUpdateItemTagsRequest,
     call: ZoteroWriteCall,
-  ): Promise<ZoteroTagUpdateResult | ZoteroWriteDeclined> {
+  ): Promise<ZoteroUpdateItemTagsResult | ZoteroWriteDeclined> {
     const provider = this.resolveProvider()
     this.requireCapability(provider, 'write')
-    const updateTags = this.requireMethod(provider, 'updateTags')
+    const updateItemTags = this.requireMethod(provider, 'updateItemTags')
     if (!(await this.approveWrite(call))) return { kind: 'declined' }
-    return await updateTags(request, call.exec.signal)
+    return await updateItemTags(request, call.exec.signal)
   }
 
   /**
-   * Add an item to a collection.
-   * @param request - the item ref and the collection ref or name.
+   * Update one item's collection membership (add/remove in one write).
+   * @param request - the item ref and the collections to add/remove.
    * @param call - the asking write call: its plan and its tool run.
-   * @returns the resulting collection list and whether the membership is new,
+   * @returns the resulting collections, the actual additions/removals, and versions,
    *   or `declined` when the user did not approve the plan.
    */
-  async addToCollection(
-    request: ZoteroCollectionAddRequest,
+  async updateItemCollections(
+    request: ZoteroUpdateItemCollectionsRequest,
     call: ZoteroWriteCall,
-  ): Promise<ZoteroCollectionAddResult | ZoteroWriteDeclined> {
+  ): Promise<ZoteroUpdateItemCollectionsResult | ZoteroWriteDeclined> {
     const provider = this.resolveProvider()
     this.requireCapability(provider, 'write')
-    const addToCollection = this.requireMethod(provider, 'addToCollection')
+    const updateItemCollections = this.requireMethod(provider, 'updateItemCollections')
     if (!(await this.approveWrite(call))) return { kind: 'declined' }
-    return await addToCollection(request, call.exec.signal)
+    return await updateItemCollections(request, call.exec.signal)
+  }
+
+  /**
+   * Create a collection, optionally under a parent.
+   * @param request - the name and the optional parent ref or name.
+   * @param call - the asking write call: its plan and its tool run.
+   * @returns the created collection, or `declined` when not approved.
+   */
+  async createCollection(
+    request: ZoteroCreateCollectionRequest,
+    call: ZoteroWriteCall,
+  ): Promise<ZoteroCreateCollectionCommittedOutcome | ZoteroWriteDeclined> {
+    const provider = this.resolveProvider()
+    this.requireCapability(provider, 'write')
+    const createCollection = this.requireMethod(provider, 'createCollection')
+    if (!(await this.approveWrite(call))) return { kind: 'declined' }
+    return await createCollection(request, call.exec.signal)
+  }
+
+  /**
+   * Delete a collection by ref or name.
+   * @param request - the collection ref or name.
+   * @param call - the asking write call: its plan and its tool run.
+   * @returns the deletion receipt, or `declined` when not approved.
+   */
+  async deleteCollection(
+    request: ZoteroDeleteCollectionRequest,
+    call: ZoteroWriteCall,
+  ): Promise<ZoteroDeleteCollectionResult | ZoteroWriteDeclined> {
+    const provider = this.resolveProvider()
+    this.requireCapability(provider, 'write')
+    const deleteCollection = this.requireMethod(provider, 'deleteCollection')
+    if (!(await this.approveWrite(call))) return { kind: 'declined' }
+    return await deleteCollection(request, call.exec.signal)
+  }
+
+  /**
+   * Create a bibliographic item from the closed field set.
+   * @param request - the itemType plus title/url/date/doi/abstract/publicationTitle/creators.
+   * @param call - the asking write call: its plan and its tool run.
+   * @returns the created item, or `declined` when not approved.
+   */
+  async createItem(
+    request: ZoteroCreateItemRequest,
+    call: ZoteroWriteCall,
+  ): Promise<ZoteroCreateItemCommittedOutcome | ZoteroWriteDeclined> {
+    const provider = this.resolveProvider()
+    this.requireCapability(provider, 'write')
+    const createItem = this.requireMethod(provider, 'createItem')
+    if (!(await this.approveWrite(call))) return { kind: 'declined' }
+    return await createItem(request, call.exec.signal)
+  }
+
+  /**
+   * Update one item's scalar metadata fields.
+   * @param request - the item ref and the closed-set field updates.
+   * @param call - the asking write call: its plan and its tool run.
+   * @returns the changed fields and versions, or `declined` when not approved.
+   */
+  async updateItem(
+    request: ZoteroUpdateItemRequest,
+    call: ZoteroWriteCall,
+  ): Promise<ZoteroUpdateItemResult | ZoteroWriteDeclined> {
+    const provider = this.resolveProvider()
+    this.requireCapability(provider, 'write')
+    const updateItem = this.requireMethod(provider, 'updateItem')
+    if (!(await this.approveWrite(call))) return { kind: 'declined' }
+    return await updateItem(request, call.exec.signal)
+  }
+
+  /**
+   * Delete tags library-wide. Irreversible.
+   * @param request - the tag names to delete.
+   * @param call - the asking write call: its plan and its tool run.
+   * @returns the deletion receipt, or `declined` when not approved.
+   */
+  async deleteLibraryTags(
+    request: ZoteroDeleteLibraryTagsRequest,
+    call: ZoteroWriteCall,
+  ): Promise<ZoteroDeleteLibraryTagsResult | ZoteroWriteDeclined> {
+    const provider = this.resolveProvider()
+    this.requireCapability(provider, 'write')
+    const deleteLibraryTags = this.requireMethod(provider, 'deleteLibraryTags')
+    if (!(await this.approveWrite(call))) return { kind: 'declined' }
+    return await deleteLibraryTags(request, call.exec.signal)
   }
 
   /**

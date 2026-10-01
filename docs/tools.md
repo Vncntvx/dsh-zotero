@@ -2,11 +2,11 @@
 
 # 工具参考
 
-dsh-zotero 注册 11 个工具，通过本地 Zotero HTTP API 与文献库交互。其中 3 个写入工具默认关闭，需在设置中显式启用 `writeEnabled`。所有文献引用（ref）均为 `zotero://user/0/item/<KEY>`（个人库）或 `zotero://group/<ID>/item/<KEY>`（群组库）格式的稳定标识符。
+dsh-zotero 注册 16 个工具（8 个读工具 + 8 个写工具），通过本地 Zotero HTTP API 与文献库交互。其中 8 个写入工具默认关闭，需在设置中显式启用 `writeEnabled`，且只操作个人库（`zotero://user/0/`）。所有文献引用（ref）均为 `zotero://user/0/item/<KEY>`（个人库）或 `zotero://group/<ID>/item/<KEY>`（群组库）格式的稳定标识符。
 
 ### 交互卡片（Toolviews）
 
-在 DSH Web 对话流中，所有 11 个工具均配备结构化只读卡片（`tool.call.toolview`）。调用工具时，界面展示包含状态指示（准备中、运行中、成功、中断、错误、已拒绝）的结构化卡片，支持展开查看详细数据、复制内容以及通过 `zotero://` 链接在本地 Zotero 或 PDF 阅读器中打开。
+在 DSH Web 对话流中，所有 16 个工具均配备结构化只读卡片（`tool.call.toolview`）。调用工具时，界面展示包含状态指示（准备中、运行中、成功、中断、错误、已拒绝、结果未核验）的结构化卡片，支持展开查看详细数据、复制内容以及通过 `zotero://` 链接在本地 Zotero 或 PDF 阅读器中打开。
 
 ---
 
@@ -186,21 +186,21 @@ zotero_export(refs=["zotero://user/0/item/ABC123", "zotero://user/0/item/DEF456"
 
 ### 参数
 
-| 参数            | 类型    | 默认值                  | 说明                                                                                                                         |
-| --------------- | ------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `kind`          | string  | —                       | 浏览类别：`libraries`、`collections`、`savedSearches`、`tags`、`itemTypes`、`itemFields`（必填）                             |
-| `library`       | object  | `{type: "user", id: 0}` | 目标库（适用于 collections、savedSearches、tags）                                                                            |
-| `parentRef`     | string  | —                       | 仅用于 `collections`：父集合 ref；省略则列出顶层集合                                                                         |
-| `tagScope`      | string  | `"library"`             | 仅用于 `tags`：统计范围，支持 `library`、`collection`、`publications`（`publications` 仅限个人库）                           |
-| `tagCollection` | string  | —                       | 仅用于 `tags` 且 `tagScope="collection"`：集合 ref 或精确名称                                                                |
-| `itemLevel`     | string  | `"top"`                 | 仅用于带作用域的 `tags`：`top` 仅统计文献条目；`all` 包含子条目（仅 `library`/`collection` 范围） |
-| `itemQuery`     | string  | —                       | 仅用于带作用域的 `tags`：仅统计匹配该查询词的条目标签                                                                        |
-| `itemQueryMode` | string  | `"titleCreatorYear"`    | 仅用于带作用域的 `tags`：`itemQuery` 的条目查询模式，支持 `titleCreatorYear` 或 `everything`（默认 `titleCreatorYear`）      |
-| `itemType`      | string  | —                       | 仅用于 `itemFields`：查询字段与创作者类型的条目类型名                                                                        |
-| `q`             | string  | —                       | 标签名称的子串过滤词                                                                                                         |
-| `match`         | string  | `"contains"`            | 标签过滤匹配方式：`contains` 或 `startsWith`                                                                                 |
-| `offset`        | integer | `0`                     | 分页偏移量                                                                                                                   |
-| `limit`         | integer | `20`                    | 返回条目数量上限（受配置项 `maxBrowseResults` 限制，默认 50）                                                                |
+| 参数            | 类型    | 默认值                  | 说明                                                                                                                    |
+| --------------- | ------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `kind`          | string  | —                       | 浏览类别：`libraries`、`collections`、`savedSearches`、`tags`、`itemTypes`、`itemFields`（必填）                        |
+| `library`       | object  | `{type: "user", id: 0}` | 目标库（适用于 collections、savedSearches、tags）                                                                       |
+| `parentRef`     | string  | —                       | 仅用于 `collections`：父集合 ref；省略则列出顶层集合                                                                    |
+| `tagScope`      | string  | `"library"`             | 仅用于 `tags`：统计范围，支持 `library`、`collection`、`publications`（`publications` 仅限个人库）                      |
+| `tagCollection` | string  | —                       | 仅用于 `tags` 且 `tagScope="collection"`：集合 ref 或精确名称                                                           |
+| `itemLevel`     | string  | `"top"`                 | 仅用于带作用域的 `tags`：`top` 仅统计文献条目；`all` 包含子条目（仅 `library`/`collection` 范围）                       |
+| `itemQuery`     | string  | —                       | 仅用于带作用域的 `tags`：仅统计匹配该查询词的条目标签                                                                   |
+| `itemQueryMode` | string  | `"titleCreatorYear"`    | 仅用于带作用域的 `tags`：`itemQuery` 的条目查询模式，支持 `titleCreatorYear` 或 `everything`（默认 `titleCreatorYear`） |
+| `itemType`      | string  | —                       | 仅用于 `itemFields`：查询字段与创作者类型的条目类型名                                                                   |
+| `q`             | string  | —                       | 标签名称的子串过滤词                                                                                                    |
+| `match`         | string  | `"contains"`            | 标签过滤匹配方式：`contains` 或 `startsWith`                                                                            |
+| `offset`        | integer | `0`                     | 分页偏移量                                                                                                              |
+| `limit`         | integer | `20`                    | 返回条目数量上限（受配置项 `maxBrowseResults` 限制，默认 50）                                                           |
 
 ### 输出
 
@@ -305,48 +305,185 @@ zotero_create_note(markdown="## 方法总结\n- 要点一\n- 要点二", parentI
 
 ---
 
-## zotero_add_tags
+## zotero_update_item_tags
 
-向指定文献条目添加标签。采用读-合并-写语义，保留现有标签及属性。
+在一次调用中完成条目标签的增删。读-合并-写语义：`add` 与 `remove` 同时生效，已存在的标签及其类型（彩色/自动）保留，`remove` 对同时出现在两个列表中的已存标签优先生效。
 
 ### 参数
 
-| 参数   | 类型     | 必填 | 说明                                                    |
-| ------ | -------- | ---- | ------------------------------------------------------- |
-| `ref`  | string   | ✓    | 目标条目 ref                                            |
-| `tags` | string[] | ✓    | 新增标签列表（受 `writeListMaxItems` 限制，默认 50 个） |
+| 参数     | 类型     | 必填 | 说明                                         |
+| -------- | -------- | ---- | -------------------------------------------- |
+| `ref`    | string   | ✓    | 目标条目 ref（`zotero://user/0/item/<KEY>`） |
+| `add`    | string[] | —    | 要新增的标签；与现有标签合并，重复项折叠     |
+| `remove` | string[] | —    | 要移除的标签，精确匹配；不存在的名称被忽略   |
+
+`add` 与 `remove` 之间至少要有一项（受 `writeListMaxItems` 限制，默认 50），否则拒绝。
 
 ### 输出
 
-返回 `{kind: "applied", ref, version, tags, added, unchanged, libraryVersion?, serverId?}`。若所请求标签均已存在，返回 `unchanged: true` 且不发起写入。
+- 实际发生变更：`{kind: "applied", ref, version, tags, added, removed, unchanged: false, libraryVersion, serverId?}`；
+- 请求未造成变化：`{kind: "applied", ..., unchanged: true}`，不发起 PATCH，`version` 为读到的版本；
+- 计划卡拒绝：`{kind: "declined"}`。
 
 ### 示例
 
 ```text
-zotero_add_tags(ref="zotero://user/0/item/ABCD1234", tags=["深度学习", "精读"])
+zotero_update_item_tags(ref="zotero://user/0/item/ABCD1234", add=["深度学习", "精读"], remove=["待读"])
 ```
 
 ---
 
-## zotero_add_to_collection
+## zotero_update_item_collections
 
-将文献条目添加至指定合集。采用读-合并-写语义，保留现有合集归属。
+在一次调用中完成条目在合集之间的加入与退出。合集参数可以是 `zotero://user/0/collection/<KEY>` ref 或精确名称（`zotero_browse` 可列出）；名称解析失败先于任何写入。
 
 ### 参数
 
-| 参数         | 类型   | 必填 | 说明                    |
-| ------------ | ------ | ---- | ----------------------- |
-| `ref`        | string | ✓    | 目标条目 ref            |
-| `collection` | string | ✓    | 目标合集 ref 或精确名称 |
+| 参数     | 类型     | 必填 | 说明                                            |
+| -------- | -------- | ---- | ----------------------------------------------- |
+| `ref`    | string   | ✓    | 目标条目 ref                                    |
+| `add`    | string[] | —    | 要加入的合集 ref 或精确名称                     |
+| `remove` | string[] | —    | 要退出的合集 ref 或精确名称；不存在的归属被忽略 |
+
+`add` 与 `remove` 之间至少要有一项（受 `writeListMaxItems` 限制），否则拒绝。
 
 ### 输出
 
-返回 `{kind: "applied", ref, version, collections, added, libraryVersion?, serverId?}`。若条目已在该合集中，返回 `added: false` 且不发起写入。
+- 实际发生变更：`{kind: "applied", ref, version, collections, added, removed, unchanged: false, libraryVersion, serverId?}`；
+- 归属本就一致：`{kind: "applied", ..., unchanged: true}`，不发起 PATCH；
+- 计划卡拒绝：`{kind: "declined"}`。
 
 ### 示例
 
 ```text
-zotero_add_to_collection(ref="zotero://user/0/item/ABCD1234", collection="方法论")
+zotero_update_item_collections(ref="zotero://user/0/item/ABCD1234", add=["方法论"], remove=["旧合集"])
+```
+
+---
+
+## zotero_create_collection
+
+创建合集（顶层或挂在某个父合集之下）。
+
+### 参数
+
+| 参数     | 类型   | 必填 | 说明                                                                          |
+| -------- | ------ | ---- | ----------------------------------------------------------------------------- |
+| `name`   | string | ✓    | 新合集名称（非空白）；同级同名时拒绝本次写入                                  |
+| `parent` | string | —    | 父合集：`zotero://user/0/collection/<KEY>` ref 或精确名称；省略则创建顶层合集 |
+
+### 输出
+
+- 成功创建：`{kind: "applied", ref, key, version, name, parentRef?, libraryVersion, serverId?}`；
+- 创建已提交但保存状态无法核验：`{kind: "committed-unverified", committed: true, retryable: false, reason: "saved-state-unverified" | "commit-unknown", ...}` —— **不可重试**，请按 key/ref 在 Zotero 中核对；
+- 计划卡拒绝：`{kind: "declined"}`。
+
+### 示例
+
+```text
+zotero_create_collection(name="田野笔记", parent="方法论")
+```
+
+---
+
+## zotero_delete_collection
+
+删除合集。**不可逆**：合集的组织结构被移除，条目仍保留在文献库中，子合集随父合集一起删除。计划卡会先列出该合集的条目数与子合集数（读取失败时显示 `unknown`），删除携带前置读到的库版本。
+
+### 参数
+
+| 参数         | 类型   | 必填 | 说明                                                            |
+| ------------ | ------ | ---- | --------------------------------------------------------------- |
+| `collection` | string | ✓    | 要删除的合集：`zotero://user/0/collection/<KEY>` ref 或精确名称 |
+
+### 输出
+
+- 删除成功：`{kind: "deleted", ref, key, deleted: true, libraryVersion, serverId?}`；
+- 计划卡拒绝：`{kind: "declined"}`。
+
+### 示例
+
+```text
+zotero_delete_collection(collection="田野笔记")
+```
+
+---
+
+## zotero_create_item
+
+从闭合字段集创建文献条目。**没有 BibTeX/CSL-JSON 入口**：Zotero 的 `POST /items` 只接受 Zotero 条目 JSON，因此字段逐个装配，闭集之外的内容不会离开本模块。
+
+### 参数
+
+| 参数               | 类型     | 必填 | 说明                                                                                                         |
+| ------------------ | -------- | ---- | ------------------------------------------------------------------------------------------------------------ |
+| `itemType`         | string   | ✓    | 条目类型：`webpage`、`journalArticle`、`book`、`conferencePaper`、`report`、`thesis`、`document`、`preprint` |
+| `title`            | string   | —    | 标题；`title` 与 `url` 至少提供其一                                                                          |
+| `url`              | string   | —    | 链接；`title` 与 `url` 至少提供其一                                                                          |
+| `date`             | string   | —    | 出版日期（按 Zotero 的存储形式）                                                                             |
+| `doi`              | string   | —    | DOI（写入 `DOI` 字段）                                                                                       |
+| `abstractNote`     | string   | —    | 摘要                                                                                                         |
+| `publicationTitle` | string   | —    | 刊名 / 会议录 / 站点名                                                                                       |
+| `creators`         | object[] | —    | 每项含 `creatorType`，以及 `name` 或 `firstName`/`lastName` 组合                                             |
+
+### 输出
+
+- 成功创建：`{kind: "applied", ref, key, version, itemType, title?, libraryVersion, serverId?}`；
+- 已提交但状态未核验：`{kind: "committed-unverified", committed: true, retryable: false, reason, ...}`，**不可重试**；
+- 计划卡拒绝：`{kind: "declined"}`。
+
+### 示例
+
+```text
+zotero_create_item(itemType="journalArticle", title="Attention Is All You Need", date="2017", doi="10.48550/arXiv.1706.03762", creators=[{"creatorType": "author", "name": "Vaswani, Ashish"}])
+```
+
+---
+
+## zotero_update_item
+
+订正条目的标量元数据。字段合法性以 Zotero 的 `itemTypeFields` 为准：某字段不被该条目类型接受时，在任何 PATCH 之前拒绝；值必须是非空文本。写入携带条目版本前置条件（`If-Unmodified-Since-Version`）。
+
+### 参数
+
+| 参数  | 类型   | 必填 | 说明                                                                                     |
+| ----- | ------ | ---- | ---------------------------------------------------------------------------------------- |
+| `ref` | string | ✓    | 目标条目 ref（`zotero://user/0/item/<KEY>`）                                             |
+| `set` | object | ✓    | 至少一个字段：`title`、`date`、`url`、`doi`、`abstractNote`、`publicationTitle`、`extra` |
+
+### 输出
+
+- 实际发生变更：`{kind: "applied", ref, version, changed, libraryVersion, serverId?}`（`changed` 为实际提交的字段名，按字典序）；
+- 计划卡拒绝：`{kind: "declined"}`；
+- 版本前置失败：`ZOTERO_WRITE_CONFLICT` —— 对象已被并发修改，重跑一次工具即可（重跑会重新读取版本）。
+
+### 示例
+
+```text
+zotero_update_item(ref="zotero://user/0/item/ABCD1234", set={"title": "Attention Is All You Need (2017)", "doi": "10.48550/arXiv.1706.03762"})
+```
+
+---
+
+## zotero_delete_library_tags
+
+按名称在**全库范围**删除标签。**不可逆**：标签会从文献库中的每个条目上移除。计划卡先列出每个标签的条目数（读取失败时显示 `unknown items`），删除携带前置读到的库版本；未命中的名称被静默忽略，因此重试是幂等的。
+
+### 参数
+
+| 参数   | 类型     | 必填 | 说明                                                              |
+| ------ | -------- | ---- | ----------------------------------------------------------------- |
+| `tags` | string[] | ✓    | 要删除的标签名（1..`writeListMaxItems`，单次不超过服务端上限 50） |
+
+### 输出
+
+- 删除成功：`{kind: "deleted", deletedTags, libraryVersion, serverId?}`（`deletedTags` 为按名称排序的请求列表）；
+- 计划卡拒绝：`{kind: "declined"}`。
+
+### 示例
+
+```text
+zotero_delete_library_tags(tags=["旧标签", "废弃"])
 ```
 
 ---

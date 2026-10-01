@@ -512,7 +512,7 @@ describe('the browser-half entry', () => {
     ])
   })
 
-  it('injects and registers all 11 tool views into the tool.call.toolview slot', () => {
+  it('injects and registers all 16 tool views into the tool.call.toolview slot', () => {
     const world = fakeWorld()
     apply(world.ctx as Context)
 
@@ -529,8 +529,13 @@ describe('the browser-half entry', () => {
       'zotero_children',
       'zotero_attachment',
       'zotero_create_note',
-      'zotero_add_tags',
-      'zotero_add_to_collection',
+      'zotero_update_item_tags',
+      'zotero_update_item_collections',
+      'zotero_create_collection',
+      'zotero_delete_collection',
+      'zotero_create_item',
+      'zotero_update_item',
+      'zotero_delete_library_tags',
       'zotero_browse',
       'zotero_changes',
     ])

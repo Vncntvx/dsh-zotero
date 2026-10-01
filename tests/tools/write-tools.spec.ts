@@ -17,6 +17,7 @@ import {
   ZOTERO_WRITE_APPROVAL_UNAVAILABLE,
 } from '../../src/errors.js'
 import { WRITE_PLAN_QUESTION_ID } from '../../src/write-approval.js'
+import { WRITE_TOOL_NAMES } from '../../src/constants.js'
 
 const SERVER_ID = 'srv-write-tools-001'
 const NEW_KEY = 'NEWNOTE1'
@@ -140,16 +141,15 @@ afterEach(async () => {
 })
 
 describe('registration gating', () => {
-  it('keeps the write tools off the surface until writeEnabled is set', async () => {
+  it('keeps every write tool off the surface until writeEnabled is set', async () => {
+    expect(WRITE_TOOL_NAMES).toHaveLength(8)
     const off = await bootLane({})
-    expect(off.tool('zotero_create_note')).toBeUndefined()
-    expect(off.tool('zotero_add_tags')).toBeUndefined()
-    expect(off.tool('zotero_add_to_collection')).toBeUndefined()
+    for (const name of WRITE_TOOL_NAMES) expect(off.tool(name)).toBeUndefined()
     await off.teardown()
     const on = await bootLane({ writeEnabled: true })
-    expect(on.tool('zotero_create_note')?.name).toBe('zotero_create_note')
-    expect(on.tool('zotero_add_tags')?.name).toBe('zotero_add_tags')
-    expect(on.tool('zotero_add_to_collection')?.name).toBe('zotero_add_to_collection')
+    for (const name of WRITE_TOOL_NAMES) expect(on.tool(name)?.name).toBe(name)
+    // The read surface stays mounted either way.
+    expect(on.tool('zotero_search')?.name).toBe('zotero_search')
     await on.teardown()
   })
 })
@@ -372,7 +372,7 @@ describe('zotero_create_note', () => {
   })
 })
 
-describe('zotero_add_tags and zotero_add_to_collection', () => {
+describe('zotero_update_item_tags and zotero_update_item_collections', () => {
   function serveItem(mock: MockZotero, data: Record<string, unknown>): void {
     mock.route('GET', `/api/users/0/items/${ITEM_KEY}`, (_req, res, helpers) =>
       helpers.raw(
@@ -381,13 +381,20 @@ describe('zotero_add_tags and zotero_add_to_collection', () => {
         JSON.stringify({
           key: ITEM_KEY,
           version: 10,
-          data: { key: ITEM_KEY, version: 10, itemType: 'journalArticle', ...data },
+          data: {
+            key: ITEM_KEY,
+            version: 10,
+            itemType: 'journalArticle',
+            tags: [],
+            collections: [],
+            ...data,
+          },
         }),
       ),
     )
   }
 
-  it('tags an item after approval, merging with existing tags', async () => {
+  it('merges tags into an item after approval, preserving existing tag types', async () => {
     const lane = await bootLane({ writeEnabled: true })
     serveWrites(lane.mock)
     serveItem(lane.mock, { tags: [{ tag: 'existing', type: 1 }] })
@@ -399,20 +406,47 @@ describe('zotero_add_tags and zotero_add_to_collection', () => {
       helpers.raw(204, { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '12' }, '')
     })
     const result = expectValue(
-      await lane.runTool('zotero_add_tags', {
+      await lane.runTool('zotero_update_item_tags', {
         ref: `zotero://user/0/item/${ITEM_KEY}`,
-        tags: [' new '],
+        add: [' new '],
       }),
-      'zotero_add_tags',
+      'zotero_update_item_tags',
     )
     expect(result.value).toMatchObject({
       kind: 'applied',
       version: 12,
       tags: ['existing', 'new'],
       added: ['new'],
+      removed: [],
       unchanged: false,
     })
     expect(patchBody).toEqual({ tags: [{ tag: 'existing', type: 1 }, { tag: 'new' }] })
+  })
+
+  it('removes tags and reports unchanged when nothing moves', async () => {
+    const lane = await bootLane({ writeEnabled: true })
+    serveWrites(lane.mock)
+    serveItem(lane.mock, { tags: [{ tag: 'existing', type: 1 }] })
+    lane.mock.route('PATCH', `/api/users/0/items/${ITEM_KEY}`, (_req, res, helpers) =>
+      helpers.raw(204, { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '12' }, ''),
+    )
+    const removing = expectValue(
+      await lane.runTool('zotero_update_item_tags', {
+        ref: `zotero://user/0/item/${ITEM_KEY}`,
+        remove: ['existing'],
+      }),
+      'zotero_update_item_tags',
+    )
+    expect(removing.value).toMatchObject({ kind: 'applied', removed: ['existing'], tags: [] })
+    const noop = expectValue(
+      await lane.runTool('zotero_update_item_tags', {
+        ref: `zotero://user/0/item/${ITEM_KEY}`,
+        add: ['existing'],
+      }),
+      'zotero_update_item_tags',
+    )
+    expect(noop.value).toMatchObject({ kind: 'applied', unchanged: true, version: 10 })
+    expect(lane.mock.requests.filter((request) => request.method === 'PATCH')).toHaveLength(1)
   })
 
   it('adds an item to a collection by name after approval', async () => {
@@ -423,40 +457,45 @@ describe('zotero_add_tags and zotero_add_to_collection', () => {
       helpers.raw(204, { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '12' }, ''),
     )
     const result = expectValue(
-      await lane.runTool('zotero_add_to_collection', {
+      await lane.runTool('zotero_update_item_collections', {
         ref: `zotero://user/0/item/${ITEM_KEY}`,
-        collection: '方法论',
+        add: ['方法论'],
       }),
-      'zotero_add_to_collection',
+      'zotero_update_item_collections',
     )
-    expect(result.value).toMatchObject({ kind: 'applied', added: true, version: 12 })
+    expect(result.value).toMatchObject({
+      kind: 'applied',
+      version: 12,
+      unchanged: false,
+      added: [`zotero://user/0/collection/${COLLECTION_KEY}?server=${SERVER_ID}`],
+    })
   })
 
-  it('returns declined for add_tags and add_to_collection without writing', async () => {
+  it('returns declined for the membership tools without writing', async () => {
     const lane = await bootLane({ writeEnabled: true })
     ScriptedQuestions.script.push(['Cancel', 'Cancel'])
     serveWrites(lane.mock)
     serveItem(lane.mock, { tags: [] })
     const tagsResult = expectValue(
-      await lane.runTool('zotero_add_tags', {
+      await lane.runTool('zotero_update_item_tags', {
         ref: `zotero://user/0/item/${ITEM_KEY}`,
-        tags: [' new '],
+        add: [' new '],
       }),
-      'zotero_add_tags',
+      'zotero_update_item_tags',
     )
     expect(tagsResult.value).toEqual({ kind: 'declined' })
     const collectionResult = expectValue(
-      await lane.runTool('zotero_add_to_collection', {
+      await lane.runTool('zotero_update_item_collections', {
         ref: `zotero://user/0/item/${ITEM_KEY}`,
-        collection: '方法论',
+        add: ['方法论'],
       }),
-      'zotero_add_to_collection',
+      'zotero_update_item_collections',
     )
     expect(collectionResult.value).toEqual({ kind: 'declined' })
     expect(lane.mock.requests.some((request) => request.method === 'PATCH')).toBe(false)
   })
 
-  it('returns declined for add_tags and add_to_collection when the user dismisses the plan review (ASK_CANCELLED)', async () => {
+  it('returns declined for the membership tools when the user dismisses the plan review (ASK_CANCELLED)', async () => {
     const lane = await bootLane({ writeEnabled: true })
     serveWrites(lane.mock)
     serveItem(lane.mock, { tags: [] })
@@ -465,11 +504,11 @@ describe('zotero_add_tags and zotero_add_to_collection', () => {
       'ASK_CANCELLED',
     )
     const tagsResult = expectValue(
-      await lane.runTool('zotero_add_tags', {
+      await lane.runTool('zotero_update_item_tags', {
         ref: `zotero://user/0/item/${ITEM_KEY}`,
-        tags: [' new '],
+        add: [' new '],
       }),
-      'zotero_add_tags',
+      'zotero_update_item_tags',
     )
     expect(tagsResult.value).toEqual({ kind: 'declined' })
 
@@ -478,24 +517,30 @@ describe('zotero_add_tags and zotero_add_to_collection', () => {
       'ASK_CANCELLED',
     )
     const collectionResult = expectValue(
-      await lane.runTool('zotero_add_to_collection', {
+      await lane.runTool('zotero_update_item_collections', {
         ref: `zotero://user/0/item/${ITEM_KEY}`,
-        collection: '方法论',
+        add: ['方法论'],
       }),
-      'zotero_add_to_collection',
+      'zotero_update_item_collections',
     )
     expect(collectionResult.value).toEqual({ kind: 'declined' })
     expect(lane.mock.requests.some((request) => request.method === 'PATCH')).toBe(false)
   })
 
-  it('refuses over-limit tags before any plan or network', async () => {
+  it('refuses over-limit or empty selections before any plan or network', async () => {
     const lane = await bootLane({ writeEnabled: true })
     serveWrites(lane.mock)
-    const result = await lane.runTool('zotero_add_tags', {
+    const overLimit = await lane.runTool('zotero_update_item_tags', {
       ref: `zotero://user/0/item/${ITEM_KEY}`,
-      tags: Array.from({ length: 51 }, (_, index) => `tag-${index}`),
+      add: Array.from({ length: 51 }, (_, index) => `tag-${index}`),
     })
-    expect(result.isError).toBe(true)
+    expect(overLimit.isError).toBe(true)
+    const empty = await lane.runTool('zotero_update_item_tags', {
+      ref: `zotero://user/0/item/${ITEM_KEY}`,
+    })
+    expect(empty.isError).toBe(true)
+    if (!empty.isError) throw new Error('unreachable')
+    expect(empty.error.info?.code).toBe(ZOTERO_INVALID_ARGUMENT)
     expect(lane.mock.requests.some((request) => request.method === 'PATCH')).toBe(false)
   })
 
@@ -526,21 +571,21 @@ describe('zotero_add_tags and zotero_add_to_collection', () => {
     expect(lane.mock.requests.some((request) => request.method === 'POST')).toBe(false)
   })
 
-  it('refuses blank tags on add_tags and blank collection on add_to_collection', async () => {
+  it('refuses blank selections on the membership tools before the plan card', async () => {
     const lane = await bootLane({ writeEnabled: true })
     serveWrites(lane.mock)
 
-    const blankTag = await lane.runTool('zotero_add_tags', {
+    const blankTag = await lane.runTool('zotero_update_item_tags', {
       ref: `zotero://user/0/item/${ITEM_KEY}`,
-      tags: ['   '],
+      add: ['   '],
     })
     expect(blankTag.isError).toBe(true)
     if (!blankTag.isError) throw new Error('unreachable')
     expect(blankTag.error.info?.code).toBe(ZOTERO_INVALID_ARGUMENT)
 
-    const blankColl = await lane.runTool('zotero_add_to_collection', {
+    const blankColl = await lane.runTool('zotero_update_item_collections', {
       ref: `zotero://user/0/item/${ITEM_KEY}`,
-      collection: '   ',
+      remove: ['   '],
     })
     expect(blankColl.isError).toBe(true)
     if (!blankColl.isError) throw new Error('unreachable')
@@ -559,11 +604,12 @@ describe('zotero_add_tags and zotero_add_to_collection', () => {
         'zotero_create_note',
         { markdown: 'x', collections: ['zotero://group/55/collection/COLL1234'] },
       ],
-      ['zotero_add_tags', { ref: groupRef, tags: ['review'] }],
+      ['zotero_update_item_tags', { ref: groupRef, add: ['review'] }],
       [
-        'zotero_add_to_collection',
-        { ref: groupRef, collection: 'zotero://group/55/collection/COLL1234' },
+        'zotero_update_item_collections',
+        { ref: groupRef, add: ['zotero://group/55/collection/COLL1234'] },
       ],
+      ['zotero_update_item', { ref: groupRef, set: { title: 'T' } }],
     ] as const
     for (const [name, args] of cases) {
       const result = await lane.runTool(name, args)

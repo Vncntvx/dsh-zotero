@@ -5,7 +5,7 @@
  * @module dsh-zotero/tools/validate
  */
 
-import { ZOTERO_INVALID_ARGUMENT, ZoteroError } from '../errors.js'
+import { ZOTERO_INVALID_ARGUMENT, writeListTooLongMessage, ZoteroError } from '../errors.js'
 import { parseRef, requireSupportedLocalRef, requireWritableRef } from '../refs.js'
 import type { ZoteroKind, ZoteroObjectRef, SupportedLocalLibrary } from '../types.js'
 
@@ -97,6 +97,22 @@ export function parseSupportedRef(value: string, kinds?: readonly ZoteroKind[]):
  */
 export function parseWritableRef(value: string, kinds: readonly ZoteroKind[]): ZoteroObjectRef {
   return requireWritableRef(parseRef(value), kinds)
+}
+
+/**
+ * Assert a write list argument fits its bound and carries no blank entries,
+ * returning the trimmed entries. Deduplication stays in the domain
+ * (`normalizeWriteList`), so the plan card shows what the model asked for.
+ */
+export function assertWriteList(
+  name: string,
+  values: readonly string[],
+  maxItems: number,
+): string[] {
+  if (values.length > maxItems) {
+    invalid(writeListTooLongMessage(name, maxItems))
+  }
+  return values.map((value) => assertNonBlank(name, value))
 }
 
 /** The model-facing messages for the `library` argument's own rules. */

@@ -2,11 +2,11 @@
 
 # Tool Reference
 
-dsh-zotero registers 11 tools that interact with your Zotero library through the local HTTP API. Three write tools are disabled by default and require enabling `writeEnabled` in configuration. All item references (refs) are stable identifiers in `zotero://user/0/item/<KEY>` (personal library) or `zotero://group/<ID>/item/<KEY>` (group library) format.
+dsh-zotero registers 16 tools (8 read tools and 8 write tools) that interact with your Zotero library through the local HTTP API. The 8 write tools are disabled by default and require enabling `writeEnabled` in configuration, and they operate only on the personal library (`zotero://user/0/`). All item references (refs) are stable identifiers in `zotero://user/0/item/<KEY>` (personal library) or `zotero://group/<ID>/item/<KEY>` (group library) format.
 
 ### Interactive Presentation (Toolviews)
 
-In the DSH Web conversation stream, all 11 tools feature structured, read-only cards (`tool.call.toolview`). During execution, the interface renders lifecycle status indicators (preparing, running, success, stopped, error, declined), collapsible structured views, quick copy actions, and deep links to open items or PDFs in local Zotero.
+In the DSH Web conversation stream, all 16 tools feature structured, read-only cards (`tool.call.toolview`). During execution, the interface renders lifecycle status indicators (preparing, running, success, stopped, error, declined, outcome unreported), collapsible structured views, quick copy actions, and deep links to open items or PDFs in local Zotero.
 
 ---
 
@@ -186,21 +186,21 @@ Discover library structure and taxonomy metadata with pagination support.
 
 ### Parameters
 
-| Parameter       | Type    | Default                 | Description                                                                                                                                             |
-| --------------- | ------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `kind`          | string  | —                       | Browse category: `libraries`, `collections`, `savedSearches`, `tags`, `itemTypes`, `itemFields` (required)                                              |
-| `library`       | object  | `{type: "user", id: 0}` | Target library (applicable to collections, savedSearches, tags)                                                                                         |
-| `parentRef`     | string  | —                       | `collections` only: parent collection ref; omit to list top-level collections                                                                           |
-| `tagScope`      | string  | `"library"`             | `tags` only: scope, supporting `library`, `collection`, `publications` (`publications` personal library only)                                           |
-| `tagCollection` | string  | —                       | `tags` with `tagScope="collection"`: collection ref or exact name                                                                                       |
-| `itemLevel`     | string  | `"top"`                 | Scoped `tags` only: `top` counts bibliographic items only; `all` includes child items (library/collection scopes only) |
-| `itemQuery`     | string  | —                       | Scoped `tags` only: count tags matching query term                                                                                                      |
-| `itemQueryMode` | string  | `"titleCreatorYear"`    | Scoped `tags` only: item-query mode for `itemQuery`: `titleCreatorYear` or `everything` (defaults to `titleCreatorYear`)                                |
-| `itemType`      | string  | —                       | `itemFields` only: item type to list fields and creator types for                                                                                       |
-| `q`             | string  | —                       | Substring filter for tags                                                                                                                               |
-| `match`         | string  | `"contains"`            | Tag matching method: `contains` or `startsWith`                                                                                                         |
-| `offset`        | integer | `0`                     | Pagination offset                                                                                                                                       |
-| `limit`         | integer | `20`                    | Maximum items returned (capped by `maxBrowseResults`, default 50)                                                                                       |
+| Parameter       | Type    | Default                 | Description                                                                                                              |
+| --------------- | ------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `kind`          | string  | —                       | Browse category: `libraries`, `collections`, `savedSearches`, `tags`, `itemTypes`, `itemFields` (required)               |
+| `library`       | object  | `{type: "user", id: 0}` | Target library (applicable to collections, savedSearches, tags)                                                          |
+| `parentRef`     | string  | —                       | `collections` only: parent collection ref; omit to list top-level collections                                            |
+| `tagScope`      | string  | `"library"`             | `tags` only: scope, supporting `library`, `collection`, `publications` (`publications` personal library only)            |
+| `tagCollection` | string  | —                       | `tags` with `tagScope="collection"`: collection ref or exact name                                                        |
+| `itemLevel`     | string  | `"top"`                 | Scoped `tags` only: `top` counts bibliographic items only; `all` includes child items (library/collection scopes only)   |
+| `itemQuery`     | string  | —                       | Scoped `tags` only: count tags matching query term                                                                       |
+| `itemQueryMode` | string  | `"titleCreatorYear"`    | Scoped `tags` only: item-query mode for `itemQuery`: `titleCreatorYear` or `everything` (defaults to `titleCreatorYear`) |
+| `itemType`      | string  | —                       | `itemFields` only: item type to list fields and creator types for                                                        |
+| `q`             | string  | —                       | Substring filter for tags                                                                                                |
+| `match`         | string  | `"contains"`            | Tag matching method: `contains` or `startsWith`                                                                          |
+| `offset`        | integer | `0`                     | Pagination offset                                                                                                        |
+| `limit`         | integer | `20`                    | Maximum items returned (capped by `maxBrowseResults`, default 50)                                                        |
 
 ### Output
 
@@ -305,48 +305,185 @@ zotero_create_note(markdown="## Methodology\n- Key point 1\n- Key point 2", pare
 
 ---
 
-## zotero_add_tags
+## zotero_update_item_tags
 
-Add tags to an item using read-merge-write semantics, preserving existing tags.
+Adds and removes tags on an item in a single call. Read-merge-write semantics: `add` and `remove` settle together, existing tags keep their properties (colored/automatic types), and `remove` wins for a saved tag named in both lists.
 
 ### Parameters
 
-| Parameter | Type     | Required | Description                                             |
-| --------- | -------- | -------- | ------------------------------------------------------- |
-| `ref`     | string   | ✓        | Target item reference                                   |
-| `tags`    | string[] | ✓        | Tags to add (capped by `writeListMaxItems`, default 50) |
+| Parameter | Type     | Required | Description                                                                |
+| --------- | -------- | -------- | -------------------------------------------------------------------------- |
+| `ref`     | string   | ✓        | Target item ref (`zotero://user/0/item/<KEY>`)                             |
+| `add`     | string[] | —        | Tags to add; they merge with the item's existing tags, duplicates collapse |
+| `remove`  | string[] | —        | Tags to remove, matched exactly; unknown names are ignored                 |
+
+`add` and `remove` must carry at least one entry between them (each list capped by `writeListMaxItems`, default 50), otherwise the call is refused.
 
 ### Output
 
-Returns `{kind: "applied", ref, version, tags, added, unchanged, libraryVersion?, serverId?}`. If all requested tags already exist, returns `unchanged: true` without sending a write request.
+- Something actually moved: `{kind: "applied", ref, version, tags, added, removed, unchanged: false, libraryVersion, serverId?}`;
+- Nothing would change: `{kind: "applied", ..., unchanged: true}` with no PATCH sent, `version` being the version that was read;
+- Declined on the plan card: `{kind: "declined"}`.
 
 ### Example
 
 ```text
-zotero_add_tags(ref="zotero://user/0/item/ABCD1234", tags=["deep-learning", "to-read"])
+zotero_update_item_tags(ref="zotero://user/0/item/ABCD1234", add=["deep-learning", "to-read"], remove=["stale"])
 ```
 
 ---
 
-## zotero_add_to_collection
+## zotero_update_item_collections
 
-Add an item to a collection using read-merge-write semantics, preserving existing memberships.
+Joins and leaves collections for an item in a single call. Collection arguments are `zotero://user/0/collection/<KEY>` refs or exact names (`zotero_browse` lists them); an unresolvable name fails before any write.
 
 ### Parameters
 
-| Parameter    | Type   | Required | Description                        |
-| ------------ | ------ | -------- | ---------------------------------- |
-| `ref`        | string | ✓        | Target item reference              |
-| `collection` | string | ✓        | Collection reference or exact name |
+| Parameter | Type     | Required | Description                                                            |
+| --------- | -------- | -------- | ---------------------------------------------------------------------- |
+| `ref`     | string   | ✓        | Target item ref                                                        |
+| `add`     | string[] | —        | Collections to join, as refs or exact names                            |
+| `remove`  | string[] | —        | Collections to leave, as refs or exact names; unknown ones are ignored |
+
+`add` and `remove` must carry at least one entry between them (capped by `writeListMaxItems`), otherwise the call is refused.
 
 ### Output
 
-Returns `{kind: "applied", ref, version, collections, added, libraryVersion?, serverId?}`. If the item is already a member, returns `added: false` without sending a write request.
+- Something actually moved: `{kind: "applied", ref, version, collections, added, removed, unchanged: false, libraryVersion, serverId?}`;
+- The membership already matched: `{kind: "applied", ..., unchanged: true}` with no PATCH sent;
+- Declined on the plan card: `{kind: "declined"}`.
 
 ### Example
 
 ```text
-zotero_add_to_collection(ref="zotero://user/0/item/ABCD1234", collection="Methodology")
+zotero_update_item_collections(ref="zotero://user/0/item/ABCD1234", add=["Methodology"], remove=["Old collection"])
+```
+
+---
+
+## zotero_create_collection
+
+Creates a collection, top-level or under a parent collection.
+
+### Parameters
+
+| Parameter | Type   | Required | Description                                                                                                       |
+| --------- | ------ | -------- | ----------------------------------------------------------------------------------------------------------------- |
+| `name`    | string | ✓        | The new collection name (non-blank); a sibling with the same name refuses the write                               |
+| `parent`  | string | —        | The parent collection: a `zotero://user/0/collection/<KEY>` ref or an exact name; omit for a top-level collection |
+
+### Output
+
+- Created: `{kind: "applied", ref, key, version, name, parentRef?, libraryVersion, serverId?}`;
+- Committed but the saved state could not be verified: `{kind: "committed-unverified", committed: true, retryable: false, reason: "saved-state-unverified" | "commit-unknown", ...}` — **not retryable**; reconcile by key/ref in Zotero;
+- Declined on the plan card: `{kind: "declined"}`.
+
+### Example
+
+```text
+zotero_create_collection(name="Field notes", parent="Methodology")
+```
+
+---
+
+## zotero_delete_collection
+
+Deletes a collection. **Irreversible**: the collection's structure goes away, the items stay in the library, and child collections are deleted with the parent. The plan card states the collection's item and subcollection counts first (shown as `unknown` when those preview reads fail), and the delete carries the library version of its preceding read.
+
+### Parameters
+
+| Parameter    | Type   | Required | Description                                                                         |
+| ------------ | ------ | -------- | ----------------------------------------------------------------------------------- |
+| `collection` | string | ✓        | The collection to delete: a `zotero://user/0/collection/<KEY>` ref or an exact name |
+
+### Output
+
+- Deleted: `{kind: "deleted", ref, key, deleted: true, libraryVersion, serverId?}`;
+- Declined on the plan card: `{kind: "declined"}`.
+
+### Example
+
+```text
+zotero_delete_collection(collection="Field notes")
+```
+
+---
+
+## zotero_create_item
+
+Creates a bibliographic item from a closed field set. **No BibTeX/CSL-JSON channel exists**: Zotero's `POST /items` only accepts Zotero item JSON, so the entry is assembled field by field and nothing outside the set leaves this module.
+
+### Parameters
+
+| Parameter          | Type     | Required | Description                                                                                                   |
+| ------------------ | -------- | -------- | ------------------------------------------------------------------------------------------------------------- |
+| `itemType`         | string   | ✓        | Item type: `webpage`, `journalArticle`, `book`, `conferencePaper`, `report`, `thesis`, `document`, `preprint` |
+| `title`            | string   | —        | The title; at least a title or a URL is required                                                              |
+| `url`              | string   | —        | The URL; at least a title or a URL is required                                                                |
+| `date`             | string   | —        | The publication date, as Zotero stores it                                                                     |
+| `doi`              | string   | —        | The DOI (stored in the `DOI` field)                                                                           |
+| `abstractNote`     | string   | —        | The abstract                                                                                                  |
+| `publicationTitle` | string   | —        | The venue (journal, proceedings, site)                                                                        |
+| `creators`         | object[] | —        | Each entry carries a `creatorType` and either a `name` or a `firstName`/`lastName` pair                       |
+
+### Output
+
+- Created: `{kind: "applied", ref, key, version, itemType, title?, libraryVersion, serverId?}`;
+- Committed but unverified: `{kind: "committed-unverified", committed: true, retryable: false, reason, ...}`, **not retryable**;
+- Declined on the plan card: `{kind: "declined"}`.
+
+### Example
+
+```text
+zotero_create_item(itemType="journalArticle", title="Attention Is All You Need", date="2017", doi="10.48550/arXiv.1706.03762", creators=[{"creatorType": "author", "name": "Vaswani, Ashish"}])
+```
+
+---
+
+## zotero_update_item
+
+Corrects an item's scalar metadata. Field validity comes from Zotero's `itemTypeFields`: a field the item type does not accept is refused before any PATCH, and values must be non-blank text. The write carries the item's version precondition (`If-Unmodified-Since-Version`).
+
+### Parameters
+
+| Parameter | Type   | Required | Description                                                                                 |
+| --------- | ------ | -------- | ------------------------------------------------------------------------------------------- |
+| `ref`     | string | ✓        | Target item ref (`zotero://user/0/item/<KEY>`)                                              |
+| `set`     | object | ✓        | At least one of: `title`, `date`, `url`, `doi`, `abstractNote`, `publicationTitle`, `extra` |
+
+### Output
+
+- Fields actually changed: `{kind: "applied", ref, version, changed, libraryVersion, serverId?}` (`changed` lists the submitted field names, sorted);
+- Declined on the plan card: `{kind: "declined"}`;
+- Lost precondition: `ZOTERO_WRITE_CONFLICT` — the object changed underneath the read; run the tool once more (the re-run re-reads the version).
+
+### Example
+
+```text
+zotero_update_item(ref="zotero://user/0/item/ABCD1234", set={"title": "Attention Is All You Need (2017)", "doi": "10.48550/arXiv.1706.03762"})
+```
+
+---
+
+## zotero_delete_library_tags
+
+Deletes tags **library-wide** by name. **Irreversible**: the tags come off every item in the library. The plan card states each tag's item count first (shown as `unknown items` when that preview read fails), the delete carries the library version of its preceding read, and unmatched names are silently ignored so a retry is idempotent.
+
+### Parameters
+
+| Parameter | Type     | Required | Description                                                                       |
+| --------- | -------- | -------- | --------------------------------------------------------------------------------- |
+| `tags`    | string[] | ✓        | Tag names to delete library-wide (1..`writeListMaxItems`, server cap 50 per call) |
+
+### Output
+
+- Deleted: `{kind: "deleted", deletedTags, libraryVersion, serverId?}` (`deletedTags` is the requested list, sorted by name);
+- Declined on the plan card: `{kind: "declined"}`.
+
+### Example
+
+```text
+zotero_delete_library_tags(tags=["stale", "obsolete"])
 ```
 
 ---

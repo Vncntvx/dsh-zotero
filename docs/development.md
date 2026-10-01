@@ -40,7 +40,7 @@ src/
   remote.ts             # Web 端 Remote 服务
   typert.ts             # Typert 清单
   settings-namespace.ts # 设置命名空间常量
-  tools/                # 11 个模型工具定义
+  tools/                # 16 个模型工具定义（8 读 + 8 写）
   client/               # 浏览器端（设置页、Sources 面板、工具卡片视图）
 tests/                  # 单元测试与端到端测试用例
 ```

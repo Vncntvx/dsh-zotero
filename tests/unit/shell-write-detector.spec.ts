@@ -12,6 +12,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { detectShellWrite } from '../../src/shell-write-detector.js'
+import { WRITE_TOOL_NAMES } from '../../src/constants.js'
 
 const BASE = 'http://127.0.0.1:23119/api'
 
@@ -121,13 +122,40 @@ describe('the shell-write detector', () => {
     }
   })
 
+  it('detects the DELETE verb, including the tag- and collection-key query shapes', () => {
+    // The write expansion added two query-addressed writes: the library-tag
+    // delete (`DELETE /tags?tag=…||…`) and collection writes reached through
+    // a `collectionKey=` query. A verb still decides, and a query alone never
+    // turns a read into one.
+    for (const command of [
+      `curl -X DELETE 'http://127.0.0.1:23119/api/users/0/tags?tag=to%20read||legacy'`,
+      `curl --request=DELETE 'http://localhost:23119/api/users/0/tags?tag=legacy'`,
+      `http DELETE 'http://127.0.0.1:23119/api/users/0/items?collectionKey=COLL1234&tag=legacy'`,
+      `python3 -c "import requests; requests.delete('http://127.0.0.1:23119/api/users/0/tags?tag=legacy')"`,
+      `Invoke-RestMethod -Method Delete -Uri http://127.0.0.1:23119/api/users/0/tags?tag=legacy`,
+      `curl -X POST 'http://127.0.0.1:23119/api/users/0/collections?collectionKey=COLL1234' -d '{"name":"x"}'`,
+    ]) {
+      const attempt = detectShellWrite(config, bash(command))
+      expect(attempt, command).toBeDefined()
+      expect(attempt?.reason, command).toContain('outside the plugin')
+    }
+    // The same URLs with a GET are reads: `?tag=`/`collectionKey=` alone is
+    // never a write signal.
+    for (const command of [
+      `curl -s 'http://127.0.0.1:23119/api/users/0/tags?tag=legacy'`,
+      `curl -s 'http://127.0.0.1:23119/api/users/0/items?collectionKey=COLL1234&limit=25'`,
+    ]) {
+      expect(detectShellWrite(config, bash(command)), command).toBeUndefined()
+    }
+  })
+
   it('names both the detected route and the sanctioned one', () => {
     const attempt = detectShellWrite(
       config,
       bash(`curl -X POST -d '{}' http://127.0.0.1:23119/api/users/0/items`),
     )
     expect(attempt?.reason).toContain('outside the plugin')
-    expect(attempt?.reason).toContain('zotero_add_tags')
+    for (const name of WRITE_TOOL_NAMES) expect(attempt?.reason, name).toContain(name)
     expect(attempt?.reason).toContain('approval policy is "never"')
     expect(attempt?.displayReason.en).toContain('local API')
     expect(attempt?.displayReason.zh).toContain('本地接口')

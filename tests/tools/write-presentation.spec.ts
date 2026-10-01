@@ -3,8 +3,11 @@ import { approvalLane } from '../helpers/approval-stub.js'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { ToolResult } from '@deepseek-ai/dsh-tools'
 import { createNotePlan, renderCreateNote } from '../../src/tools/create-note.js'
-import { addTagsPlan, renderAddTags } from '../../src/tools/add-tags.js'
-import { addToCollectionPlan, renderAddToCollection } from '../../src/tools/add-to-collection.js'
+import { updateItemTagsPlan, renderUpdateItemTags } from '../../src/tools/update-item-tags.js'
+import {
+  updateItemCollectionsPlan,
+  renderUpdateItemCollections,
+} from '../../src/tools/update-item-collections.js'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { UserQuestionError } from '@deepseek-ai/dsh-user-questions'
 import { ZOTERO_WRITE_APPROVAL_UNAVAILABLE } from '../../src/errors.js'
@@ -61,6 +64,30 @@ const APPLIED_NOTE = {
   serverId: 'srv',
 }
 
+const APPLIED_TAGS = {
+  kind: 'applied' as const,
+  ref: 'zotero://user/0/item/ITEMABC1',
+  version: 12,
+  tags: ['a', 'b'],
+  added: ['b'],
+  removed: ['gone'],
+  unchanged: false,
+  libraryVersion: 12,
+  serverId: 'srv',
+}
+
+const APPLIED_COLLECTIONS = {
+  kind: 'applied' as const,
+  ref: 'zotero://user/0/item/ITEMABC1',
+  version: 13,
+  collections: ['zotero://user/0/collection/COLL1234'],
+  added: ['zotero://user/0/collection/COLL1234'],
+  removed: [],
+  unchanged: false,
+  libraryVersion: 13,
+  serverId: 'srv',
+}
+
 function textOf(blocks: ContentBlock[]): string {
   return blocks.map((block) => (block.type === 'text' ? block.text : '')).join('\n')
 }
@@ -99,82 +126,80 @@ describe('write tool renders', () => {
     expect(bare).not.toContain('(served by')
   })
 
-  it('renders the declined outcome as a statement, not an error', () => {
+  it('renders the declined outcome of every membership tool as a statement', () => {
     expect(textOf(renderCreateNote({ markdown: 'x' }, { kind: 'declined' }))).toContain('Declined')
-    expect(textOf(renderAddTags({ ref: 'r', tags: ['x'] }, { kind: 'declined' }))).toContain(
+    expect(textOf(renderUpdateItemTags({ ref: 'r', add: ['x'] }, { kind: 'declined' }))).toContain(
       'Declined',
     )
     expect(
-      textOf(renderAddToCollection({ ref: 'r', collection: 'c' }, { kind: 'declined' })),
+      textOf(renderUpdateItemCollections({ ref: 'r', add: ['c'] }, { kind: 'declined' })),
     ).toContain('Declined')
   })
 
-  it('renders the tag update with its unchanged and added arms', () => {
+  it('renders the tag update with its unchanged, added, and removed arms', () => {
     const unchanged = textOf(
-      renderAddTags(
-        { ref: 'r', tags: ['a'] },
+      renderUpdateItemTags(
+        { ref: 'r', add: ['a'] },
         {
           kind: 'applied',
           ref: 'zotero://user/0/item/ITEMABC1',
           version: 10,
           tags: ['a'],
           added: [],
+          removed: [],
           unchanged: true,
         },
       ),
     )
     expect(unchanged).toContain('No change')
     expect(unchanged).not.toContain('Library version:')
-    const added = textOf(
-      renderAddTags(
-        { ref: 'r', tags: ['b'] },
-        {
-          kind: 'applied',
-          ref: 'zotero://user/0/item/ITEMABC1',
-          version: 12,
-          tags: ['a', 'b'],
-          added: ['b'],
-          unchanged: false,
-          libraryVersion: 12,
-          serverId: 'srv',
-        },
+    const changed = textOf(renderUpdateItemTags({ ref: 'r', add: ['b'] }, APPLIED_TAGS))
+    expect(changed).toContain('added b')
+    expect(changed).toContain('removed gone')
+    expect(changed).toContain('Tags now: a, b')
+    expect(changed).toContain('Library version: 12 (served by srv)')
+    const bareVersion = textOf(
+      renderUpdateItemTags(
+        { ref: 'r', add: ['b'] },
+        { ...APPLIED_TAGS, libraryVersion: 11, serverId: undefined },
       ),
     )
-    expect(added).toContain('added b')
-    expect(added).toContain('Tags now: a, b')
-    expect(added).toContain('Library version: 12 (served by srv)')
+    expect(bareVersion).toContain('Library version: 11')
+    expect(bareVersion).not.toContain('(served by')
   })
 
-  it('renders the collection add with both membership arms', () => {
-    const added = textOf(
-      renderAddToCollection(
-        { ref: 'r', collection: 'Methods' },
-        {
-          kind: 'applied',
-          ref: 'zotero://user/0/item/ITEMABC1',
-          version: 13,
-          collections: ['zotero://user/0/collection/COLL1234'],
-          added: true,
-          libraryVersion: 13,
-          serverId: 'srv',
-        },
-      ),
-    )
-    expect(added).toContain('Added ')
-    const member = textOf(
-      renderAddToCollection(
-        { ref: 'r', collection: 'Methods' },
+  it('renders the collection membership update with its unchanged and changed arms', () => {
+    const unchanged = textOf(
+      renderUpdateItemCollections(
+        { ref: 'r', add: ['Methods'] },
         {
           kind: 'applied',
           ref: 'zotero://user/0/item/ITEMABC1',
           version: 10,
           collections: ['zotero://user/0/collection/COLL1234'],
-          added: false,
-          serverId: 'srv',
+          added: [],
+          removed: [],
+          unchanged: true,
         },
       ),
     )
-    expect(member).toContain('already a member')
+    expect(unchanged).toContain('No change')
+    expect(unchanged).not.toContain('Library version:')
+    const changed = textOf(
+      renderUpdateItemCollections({ ref: 'r', add: ['Methods'] }, APPLIED_COLLECTIONS),
+    )
+    expect(changed).toContain('Updated collections on')
+    expect(changed).toContain('Collections now: zotero://user/0/collection/COLL1234')
+    expect(changed).toContain('Library version: 13 (served by srv)')
+    const emptyLists = textOf(
+      renderUpdateItemCollections(
+        { ref: 'r', remove: ['Methods'] },
+        { ...APPLIED_COLLECTIONS, collections: [], added: [], removed: [], libraryVersion: 14 },
+      ),
+    )
+    expect(emptyLists).toContain('Collections now: (none)')
+    expect(emptyLists).toContain('added (none)')
+    expect(emptyLists).toContain('removed (none)')
   })
 
   it('builds the plan cards deterministically from the arguments', () => {
@@ -205,11 +230,31 @@ describe('write tool renders', () => {
     })
     expect(paintedChildPlan).toContain('- Collections: (inherited from parent item)')
     expect(paintedChildPlan).not.toContain('Methods')
-    const tagPlan = addTagsPlan({ ref: 'zotero://user/0/item/ITEMABC1', tags: ['a'] })
+
+    const tagPlan = updateItemTagsPlan({
+      ref: 'zotero://user/0/item/ITEMABC1',
+      add: ['a'],
+      remove: ['b'],
+    })
     expect(tagPlan).toContain('- Tags to add: a')
+    expect(tagPlan).toContain('- Tags to remove: b')
     expect(tagPlan).toContain('zotero://user/0/item/ITEMABC1')
-    const collectionPlan = addToCollectionPlan({ ref: 'r', collection: 'Methods' })
-    expect(collectionPlan).toContain('- Collection: Methods')
+    expect(tagPlan).toContain('version precondition')
+    const emptyTagPlan = updateItemTagsPlan({ ref: 'r' })
+    expect(emptyTagPlan).toContain('- Tags to add: (none)')
+    expect(emptyTagPlan).toContain('- Tags to remove: (none)')
+
+    const collectionPlan = updateItemCollectionsPlan({
+      ref: 'zotero://user/0/item/ITEMABC1',
+      add: ['Methods'],
+      remove: ['Old'],
+    })
+    expect(collectionPlan).toContain('- Collections to add: Methods')
+    expect(collectionPlan).toContain('- Collections to remove: Old')
+    expect(collectionPlan).toContain('Names resolve before any write')
+    const emptyCollectionPlan = updateItemCollectionsPlan({ ref: 'r' })
+    expect(emptyCollectionPlan).toContain('- Collections to add: (none)')
+    expect(emptyCollectionPlan).toContain('- Collections to remove: (none)')
   })
 })
 
@@ -242,17 +287,19 @@ describe('approval-gate failure arms', () => {
       kind: 'edit',
       title: 'Create Zotero research note',
     })
-    const tags = lane.tool('zotero_add_tags')!
-    expect(tags.presentCall?.({ ref: 'r', tags: ['a'] })).toMatchObject({
+    const tags = lane.tool('zotero_update_item_tags')!
+    expect(tags.presentCall?.({ ref: 'r', add: ['a'], remove: ['b'] })).toMatchObject({
       card: 'generic',
       kind: 'edit',
-      title: 'Add Zotero tags',
+      title: 'Update Zotero item tags',
+      rawInput: 'a, b',
     })
-    const collection = lane.tool('zotero_add_to_collection')!
-    expect(collection.presentCall?.({ ref: 'r', collection: 'c' })).toMatchObject({
+    const membership = lane.tool('zotero_update_item_collections')!
+    expect(membership.presentCall?.({ ref: 'r', add: ['c'] })).toMatchObject({
       card: 'generic',
       kind: 'edit',
-      title: 'Add item to Zotero collection',
+      title: 'Update Zotero item collections',
+      rawInput: 'c',
     })
     await lane.teardown()
   })
@@ -269,9 +316,9 @@ describe('approval-gate failure arms', () => {
       card: 'generic',
       title: 'Zotero note created',
     })
-    const tags = lane.tool('zotero_add_tags')!
+    const tags = lane.tool('zotero_update_item_tags')!
     expect(
-      tags.presentResult?.({ ref: 'r', tags: ['a'] }, {
+      tags.presentResult?.({ ref: 'r', add: ['a'] }, {
         isError: false,
         meta: { kind: 'applied' },
       } as never),
@@ -279,24 +326,27 @@ describe('approval-gate failure arms', () => {
       card: 'generic',
       title: 'Zotero tags updated',
     })
-    const collection = lane.tool('zotero_add_to_collection')!
+    const membership = lane.tool('zotero_update_item_collections')!
     expect(
-      collection.presentResult?.({ ref: 'r', collection: 'c' }, {
+      membership.presentResult?.({ ref: 'r', add: ['c'] }, {
         isError: false,
         meta: { kind: 'applied' },
       } as never),
     ).toEqual({
       card: 'generic',
-      title: 'Zotero collection membership',
+      title: 'Zotero membership updated',
     })
     expect(
       note.presentResult?.({ markdown: 'x' }, { isError: false, meta: undefined } as never),
     ).toBeUndefined()
     expect(
-      tags.presentResult?.({ ref: 'r', tags: ['a'] }, { isError: false, meta: undefined } as never),
+      tags.presentResult?.({ ref: 'r', add: ['a'] }, {
+        isError: false,
+        meta: undefined,
+      } as never),
     ).toBeUndefined()
     expect(
-      collection.presentResult?.({ ref: 'r', collection: 'c' }, {
+      membership.presentResult?.({ ref: 'r', add: ['c'] }, {
         isError: false,
         meta: undefined,
       } as never),
@@ -306,7 +356,7 @@ describe('approval-gate failure arms', () => {
 
   it('covers the optional-libraryVersion arms of the applied-meta and render paths', async () => {
     const lane = await approvalLane({ writeEnabled: true })
-    const tags = lane.tool('zotero_add_tags')!
+    const tags = lane.tool('zotero_update_item_tags')!
     expect(
       tags.output.presentationMeta?.(
         {},
@@ -316,6 +366,7 @@ describe('approval-gate failure arms', () => {
           version: 10,
           tags: ['a'],
           added: [],
+          removed: [],
           unchanged: true,
         },
       ),
@@ -324,24 +375,9 @@ describe('approval-gate failure arms', () => {
       ref: 'zotero://user/0/item/ITEMABC1',
       version: 10,
       addedCount: 0,
+      removedCount: 0,
     })
-    const bareTags = textOf(
-      renderAddTags(
-        { ref: 'r', tags: ['a'] },
-        {
-          kind: 'applied',
-          ref: 'zotero://user/0/item/ITEMABC1',
-          version: 10,
-          tags: ['a'],
-          added: [],
-          unchanged: false,
-          libraryVersion: 11,
-          serverId: undefined,
-        },
-      ),
-    )
-    expect(bareTags).toContain('Library version: 11')
-    expect(bareTags).not.toContain('(served by')
+    expect(tags.output.presentationMeta?.({}, { kind: 'declined' })).toEqual({ kind: 'declined' })
     await lane.teardown()
   })
 
@@ -388,14 +424,15 @@ describe('approval-gate failure arms', () => {
   it('covers complete applied renderers with omitted optional fields', async () => {
     // Unchanged tag result: libraryVersion is absent when nothing was written.
     const sparse = textOf(
-      renderAddTags(
-        { ref: 'r', tags: ['a'] },
+      renderUpdateItemTags(
+        { ref: 'r', add: ['a'] },
         {
           kind: 'applied',
           ref: 'zotero://user/0/item/ITEMABC1',
           version: 10,
           tags: [],
           added: [],
+          removed: [],
           unchanged: true,
         },
       ),
@@ -427,90 +464,52 @@ describe('approval-gate failure arms', () => {
 
   it('projects complete applied outcomes into presentation meta', async () => {
     const lane = await approvalLane({ writeEnabled: true })
-    const tags = lane.tool('zotero_add_tags')!
-    expect(
-      textOf(
-        renderAddTags(
-          { ref: 'r', tags: ['a'] },
-          {
-            kind: 'applied',
-            ref: 'zotero://user/0/item/ITEMABC1',
-            version: 10,
-            tags: ['a'],
-            added: [],
-            unchanged: true,
-          },
-        ),
-      ),
-    ).toContain('No change')
-    const note = lane.tool('zotero_create_note')!
-    expect(
-      textOf(
-        renderCreateNote(
-          { markdown: 'x' },
-          {
-            kind: 'applied',
-            ref: 'r',
-            key: 'k',
-            version: 1,
-            collections: [],
-            tags: [],
-            sourceRefs: [],
-            libraryVersion: 1,
-          },
-        ),
-      ),
-    ).toContain('Created note r (version 1).')
-    const collection = lane.tool('zotero_add_to_collection')!
-    const completeCollection = textOf(
-      renderAddToCollection(
-        { ref: 'r', collection: 'c' },
-        {
-          kind: 'applied',
-          ref: 'zotero://user/0/item/ITEMABC1',
-          version: 1,
-          collections: ['zotero://user/0/collection/COLL1234'],
-          added: false,
-        },
-      ),
-    )
-    expect(completeCollection).toContain('Collections now:')
-    expect(completeCollection).not.toContain('Library version:')
+    const tags = lane.tool('zotero_update_item_tags')!
     expect(
       tags.output.presentationMeta?.(
         {},
         {
           kind: 'applied',
           ref: 'zotero://user/0/item/ITEMABC1',
-          version: 10,
+          version: 12,
           tags: ['a'],
           added: ['a'],
+          removed: ['b'],
           unchanged: false,
         },
       ),
     ).toEqual({
       kind: 'applied',
       ref: 'zotero://user/0/item/ITEMABC1',
-      version: 10,
+      version: 12,
       addedCount: 1,
+      removedCount: 1,
     })
+    const membership = lane.tool('zotero_update_item_collections')!
     expect(
-      collection.output.presentationMeta?.(
+      membership.output.presentationMeta?.(
         {},
         {
           kind: 'applied',
           ref: 'zotero://user/0/item/ITEMABC1',
-          version: 1,
+          version: 13,
           collections: ['zotero://user/0/collection/COLL1234'],
-          added: false,
+          added: ['zotero://user/0/collection/COLL1234'],
+          removed: [],
+          unchanged: false,
         },
       ),
     ).toEqual({
       kind: 'applied',
       ref: 'zotero://user/0/item/ITEMABC1',
-      version: 1,
-      added: false,
+      version: 13,
+      addedCount: 1,
+      removedCount: 0,
     })
+    expect(membership.output.presentationMeta?.({}, { kind: 'declined' })).toEqual({
+      kind: 'declined',
+    })
+    const note = lane.tool('zotero_create_note')!
     expect(
       note.output.presentationMeta?.(
         {},
@@ -599,9 +598,9 @@ describe('approval-gate failure arms', () => {
       card: 'generic',
       title: 'Zotero note: declined, nothing written',
     })
-    const tags = lane.tool('zotero_add_tags')!
+    const tags = lane.tool('zotero_update_item_tags')!
     expect(
-      tags.presentResult?.({ ref: 'r', tags: ['a'] }, {
+      tags.presentResult?.({ ref: 'r', add: ['a'] }, {
         isError: false,
         meta: { kind: 'declined' },
       } as never),
@@ -609,15 +608,15 @@ describe('approval-gate failure arms', () => {
       card: 'generic',
       title: 'Zotero tags: declined, nothing written',
     })
-    const collection = lane.tool('zotero_add_to_collection')!
+    const membership = lane.tool('zotero_update_item_collections')!
     expect(
-      collection.presentResult?.({ ref: 'r', collection: 'c' }, {
+      membership.presentResult?.({ ref: 'r', add: ['c'] }, {
         isError: false,
         meta: { kind: 'declined' },
       } as never),
     ).toEqual({
       card: 'generic',
-      title: 'Zotero collection add: declined, nothing written',
+      title: 'Zotero membership: declined, nothing written',
     })
     await lane.teardown()
   })
@@ -644,28 +643,23 @@ describe('write tool presentation records', () => {
       card: 'generic',
       title: `Zotero note created: ${APPLIED_NOTE.ref}`,
     })
-    const tags = lane.tool('zotero_add_tags')!
-    expect(tags.presentResult?.({ ref: 'r', tags: ['a'] }, resultOf({ kind: 'declined' }))).toEqual(
-      {
-        card: 'generic',
-        title: 'Zotero tags: declined, nothing written',
-      },
-    )
+    const tags = lane.tool('zotero_update_item_tags')!
+    expect(tags.presentResult?.({ ref: 'r', add: ['a'] }, resultOf({ kind: 'declined' }))).toEqual({
+      card: 'generic',
+      title: 'Zotero tags: declined, nothing written',
+    })
     expect(
-      tags.presentResult?.({ ref: 'r', tags: ['a'] }, resultOf({ kind: 'applied', ref: 'r' })),
+      tags.presentResult?.({ ref: 'r', add: ['a'] }, resultOf({ kind: 'applied', ref: 'r' })),
     ).toEqual({
       card: 'generic',
       title: 'Zotero tags updated: r',
     })
-    const collection = lane.tool('zotero_add_to_collection')!
+    const membership = lane.tool('zotero_update_item_collections')!
     expect(
-      collection.presentResult?.(
-        { ref: 'r', collection: 'c' },
-        resultOf({ kind: 'applied', ref: 'r' }),
-      ),
+      membership.presentResult?.({ ref: 'r', add: ['c'] }, resultOf({ kind: 'applied', ref: 'r' })),
     ).toEqual({
       card: 'generic',
-      title: 'Zotero collection membership: r',
+      title: 'Zotero membership updated: r',
     })
     await lane.teardown()
   })
@@ -678,17 +672,11 @@ describe('write tool presentation records', () => {
       kind: 'edit',
       title: 'Create Zotero research note',
     })
-    const tags = lane.tool('zotero_add_tags')!
-    expect(tags.presentCall?.({ ref: 'r', tags: ['a'] })).toMatchObject({
+    const tags = lane.tool('zotero_update_item_tags')!
+    expect(tags.presentCall?.({ ref: 'r', add: ['a'] })).toMatchObject({
       card: 'generic',
       kind: 'edit',
-      title: 'Add Zotero tags',
-    })
-    const collection = lane.tool('zotero_add_to_collection')!
-    expect(collection.presentCall?.({ ref: 'r', collection: 'c' })).toMatchObject({
-      card: 'generic',
-      kind: 'edit',
-      title: 'Add item to Zotero collection',
+      title: 'Update Zotero item tags',
     })
     await lane.teardown()
   })
@@ -699,16 +687,15 @@ describe('write tool presentation records', () => {
     expect(tooLong.isError).toBe(true)
     if (!tooLong.isError) throw new Error('unreachable')
     expect(tooLong.error.message).toContain('65536-character bound')
-    const emptyTags = await lane.runTool('zotero_add_tags', {
+    const emptySelection = await lane.runTool('zotero_update_item_tags', {
       ref: 'zotero://user/0/item/ITEMABC1',
-      tags: [],
     })
-    expect(emptyTags.isError).toBe(true)
-    if (!emptyTags.isError) throw new Error('unreachable')
-    expect(emptyTags.error.message).toContain('at least one item')
-    const tooManyTags = await lane.runTool('zotero_add_tags', {
+    expect(emptySelection.isError).toBe(true)
+    if (!emptySelection.isError) throw new Error('unreachable')
+    expect(emptySelection.error.message).toContain('at least one entry between them')
+    const tooManyTags = await lane.runTool('zotero_update_item_tags', {
       ref: 'zotero://user/0/item/ITEMABC1',
-      tags: Array.from({ length: 51 }, (_, index) => `t${index}`),
+      add: Array.from({ length: 51 }, (_, index) => `t${index}`),
     })
     expect(tooManyTags.isError).toBe(true)
     if (!tooManyTags.isError) throw new Error('unreachable')

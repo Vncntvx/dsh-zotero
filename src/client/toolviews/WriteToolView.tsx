@@ -1,7 +1,6 @@
 /**
- * Dedicated toolview cards for Zotero write operations:
- * `zotero_create_note`, `zotero_add_tags`, and `zotero_add_to_collection`.
- * Renders write receipts, tags, and plan-review decline notices.
+ * Dedicated toolview cards for Zotero write operations: the eight write
+ * tools. Renders write receipts, tags, and plan-review decline notices.
  * @module dsh-zotero/client/toolviews/WriteToolView
  */
 
@@ -28,7 +27,14 @@ import css from './toolviews.module.css'
 
 export type WriteToolViewProps = PropsRuntime<
   'tool.call.toolview',
-  'zotero_create_note' | 'zotero_add_tags' | 'zotero_add_to_collection'
+  | 'zotero_create_note'
+  | 'zotero_update_item_tags'
+  | 'zotero_update_item_collections'
+  | 'zotero_create_collection'
+  | 'zotero_delete_collection'
+  | 'zotero_create_item'
+  | 'zotero_update_item'
+  | 'zotero_delete_library_tags'
 > &
   PropsLocale<'zotero'>
 
@@ -42,11 +48,11 @@ export type WriteToolViewProps = PropsRuntime<
  *   landed, so the badge says so and the summary states only the request; the
  *   tool's own rendered text below carries whatever it did conclude.
  *
- * `zotero_create_note` has no `unreported` arm, and that asymmetry is
- * deliberate: a note's applied fact *is* the row's `ok` state, which the
- * settled block already carries, so there is no second field that could go
- * missing. The two merge writes each report a separate boolean beside that
- * state, so for them a missing field is a real gap in the evidence.
+ * Creates have no `unreported` arm, and that asymmetry is deliberate: a
+ * created object's applied fact *is* the row's `ok` state, which the settled
+ * block already carries, so there is no second field that could go missing.
+ * The two merge writes each report counts beside that state, so for them a
+ * missing field is a real gap in the evidence.
  */
 type ReceiptTone = 'applied' | 'noop' | 'unreported'
 
@@ -80,6 +86,10 @@ function noteTitleOf(markdown: string | undefined, defaultTitle: string): string
   return cleaned || defaultTitle
 }
 
+function stringList(value: unknown): string[] {
+  return Array.isArray(value) ? (value.filter((x) => typeof x === 'string') as string[]) : []
+}
+
 export function WriteToolView(props: WriteToolViewProps) {
   const { toolName, block, useDisclosure, inspect, t } = props
 
@@ -101,42 +111,84 @@ export function WriteToolView(props: WriteToolViewProps) {
     let tit = t('toolTitleCreateNote')
     let sum = ''
     let tone: ReceiptTone = 'applied'
+    let tags: string[] = []
+    let pRef: string | undefined
 
-    const tags = Array.isArray(args?.['tags'])
-      ? (args['tags'].filter((x) => typeof x === 'string') as string[])
-      : []
-    // Each write tool reports the fact only it knows: how many tags it
-    // actually added, whether it added the membership at all. The requested
-    // arguments are what the plan card showed the user, not what landed.
+    // Each write tool reports the fact only it knows. The requested arguments
+    // are what the plan card showed the user, not what landed.
     const meta = metaOf(block)
     const write = meta !== null ? writeMetaOf(meta) : null
 
-    if (toolName === 'zotero_add_tags') {
+    if (toolName === 'zotero_update_item_tags') {
       ic = <IconPlusOutlineRegular size={14} />
-      tit = t('toolTitleAddTags')
-      if (write === null || write.addedCount === null) {
-        sum = t('toolSummaryAddTagsRequested', { count: tags.length })
+      tit = t('toolTitleUpdateItemTags')
+      const requested = [...stringList(args?.['add']), ...stringList(args?.['remove'])]
+      tags = requested
+      pRef = stringField(args ?? {}, 'ref')
+      if (write === null || (write.addedCount === null && write.removedCount === null)) {
+        sum = t('toolSummaryUpdateItemTagsRequested', { count: requested.length })
         tone = 'unreported'
-      } else if (write.addedCount === 0) {
-        sum = t('toolNoTagsAdded')
-        tone = 'noop'
       } else {
-        sum = t('toolSummaryAddTags', { count: write.addedCount })
+        const added = write.addedCount ?? 0
+        const removed = write.removedCount ?? 0
+        if (added === 0 && removed === 0) {
+          sum = t('toolNoTagsChanged')
+          tone = 'noop'
+        } else {
+          sum = t('toolSummaryUpdateItemTags', { added, removed })
+        }
       }
-    } else if (toolName === 'zotero_add_to_collection') {
+    } else if (toolName === 'zotero_update_item_collections') {
       ic = <IconBranchOutlineRegular size={14} />
-      tit = t('toolTitleAddToCollection')
-      const collectionArg = stringField(args ?? {}, 'collection') ?? ''
-      const collectionName = shortKeyOf(collectionArg) ?? collectionArg.trim()
-      if (write?.added === false) {
-        sum = t('toolSummaryAddToCollectionNoop', { name: collectionName })
-        tone = 'noop'
-      } else if (write?.added === true) {
-        sum = t('toolSummaryAddToCollection', { name: collectionName })
+      tit = t('toolTitleUpdateItemCollections')
+      pRef = stringField(args ?? {}, 'ref')
+      const requested = [...stringList(args?.['add']), ...stringList(args?.['remove'])]
+      if (write === null || (write.addedCount === null && write.removedCount === null)) {
+        const name =
+          requested[0] !== undefined ? (shortKeyOf(requested[0]) ?? requested[0].trim()) : ''
+        sum = t('toolSummaryUpdateItemCollectionsRequested', { name })
+        tone = 'unreported'
       } else {
-        // The membership's fate is unknown, so the receipt cannot say it was
-        // added any more than it can say it was not.
-        sum = t('toolSummaryAddToCollectionRequested', { name: collectionName })
+        const added = write.addedCount ?? 0
+        const removed = write.removedCount ?? 0
+        if (added === 0 && removed === 0) {
+          sum = t('toolNoMembershipChanged')
+          tone = 'noop'
+        } else {
+          sum = t('toolSummaryUpdateItemCollections', { added, removed })
+        }
+      }
+    } else if (toolName === 'zotero_create_collection') {
+      ic = <IconBranchOutlineRegular size={14} />
+      tit = t('toolTitleCreateCollection')
+      const name = stringField(args ?? {}, 'name') ?? ''
+      pRef = stringField(args ?? {}, 'parent')
+      sum = t('toolSummaryCreateCollection', { name: name.trim() })
+    } else if (toolName === 'zotero_delete_collection') {
+      ic = <IconBranchOutlineRegular size={14} />
+      tit = t('toolTitleDeleteCollection')
+      const collectionArg = stringField(args ?? {}, 'collection') ?? ''
+      const name = shortKeyOf(collectionArg) ?? collectionArg.trim()
+      pRef = collectionArg
+      sum = t('toolSummaryDeleteCollection', { name })
+    } else if (toolName === 'zotero_create_item') {
+      ic = <IconEditOutlineRegular size={14} />
+      tit = t('toolTitleCreateItem')
+      const titleArg = stringField(args ?? {}, 'title') ?? stringField(args ?? {}, 'url') ?? ''
+      sum = t('toolSummaryCreateItem', { title: titleArg.trim() })
+    } else if (toolName === 'zotero_update_item') {
+      ic = <IconEditOutlineRegular size={14} />
+      tit = t('toolTitleUpdateItem')
+      pRef = stringField(args ?? {}, 'ref')
+      sum = t('toolSummaryUpdateItem', { ref: shortKeyOf(pRef ?? '') ?? (pRef ?? '').trim() })
+    } else if (toolName === 'zotero_delete_library_tags') {
+      ic = <IconPlusOutlineRegular size={14} />
+      tit = t('toolTitleDeleteLibraryTags')
+      tags = stringList(args?.['tags'])
+      if (write !== null && write.deletedCount !== null) {
+        sum = t('toolSummaryDeleteLibraryTags', { count: write.deletedCount })
+      } else {
+        sum = t('toolSummaryDeleteLibraryTagsRequested', { count: tags.length })
         tone = 'unreported'
       }
     } else {
@@ -144,10 +196,11 @@ export function WriteToolView(props: WriteToolViewProps) {
       const markdown = stringField(args ?? {}, 'markdown')
       const noteTitle = noteTitleOf(markdown, t('toolDefaultNoteTitle'))
       sum = t('toolSummaryCreateNote', { title: noteTitle })
+      tags = stringList(args?.['tags'])
+      pRef = stringField(args ?? {}, 'parentItem') ?? stringField(args ?? {}, 'ref')
     }
 
     const errSummary = errorSummaryOf(block, raw)
-    const pRef = stringField(args ?? {}, 'parentItem') ?? stringField(args ?? {}, 'ref')
     const pUrl = pRef ? selectUrlOf(pRef) : null
 
     return {

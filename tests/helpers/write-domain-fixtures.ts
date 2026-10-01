@@ -1,7 +1,8 @@
 /**
- * Shared fixtures for the write-domain specs (createNote / updateTags /
- * addToCollection). One source so the three specs cannot drift on mock
- * shape, key constants, or the authorizer wiring.
+ * Shared fixtures for the write-domain specs (the eight entries: createNote /
+ * updateItemTags / updateItemCollections / createCollection / deleteCollection
+ * / createItem / updateItem / deleteLibraryTags). One source so those specs
+ * cannot drift on mock shape, key constants, or the authorizer wiring.
  * @module dsh-zotero/tests/helpers/write-domain-fixtures
  */
 

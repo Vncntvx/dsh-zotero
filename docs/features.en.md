@@ -80,13 +80,18 @@ Optional `style` and `locale` parameters set the citation format. Requests excee
 
 ## Optional Personal-Library Writes
 
-When `writeEnabled` is turned on, the plugin registers three write tools restricted to the personal library (`zotero://user/0/`):
+When `writeEnabled` is turned on, the plugin registers 8 write tools restricted to the personal library (`zotero://user/0/`):
 
 - `zotero_create_note`: creates standalone notes or child notes with tags, collections, and `dc:relation` links;
-- `zotero_add_tags`: safely merges new tags into existing ones under a version precondition;
-- `zotero_add_to_collection`: adds items to collections under a version precondition.
+- `zotero_update_item_tags`: settles `add`/`remove` in one read-merge-write call, keeping existing tag types, under the item's version precondition;
+- `zotero_update_item_collections`: settles `add`/`remove` membership changes in one call, resolving names before any write;
+- `zotero_create_collection`: creates a top-level or child collection; a sibling with the same name refuses the write;
+- `zotero_delete_collection`: deletes a collection (irreversible — its structure and child collections go, the items stay); the plan card states the item and subcollection counts first;
+- `zotero_create_item`: creates an item from a closed field set (no BibTeX/CSL-JSON channel); an unknown type or a missing title and URL is refused;
+- `zotero_update_item`: corrects scalar metadata, with field validity taken from Zotero's `itemTypeFields`;
+- `zotero_delete_library_tags`: deletes tags library-wide by name (irreversible), stating each tag's item count first; unmatched names are ignored so a retry is idempotent.
 
-Every write requires passing session approval policy and user plan card review. Zotero 10 also prompts a local authorization dialog on first write.
+Every write requires passing session approval policy and user plan card review, and both deletion tools state their irreversibility on the card. Zotero 10 also prompts a local authorization dialog on first write.
 
 ## Chat Tool Cards (Toolviews)
 
@@ -99,7 +104,7 @@ In DSH conversations, Zotero tool calls render using dedicated read-only cards (
 - **Child Objects (`zotero_children`)**: partitions child notes, attachments, and highlighted PDF annotations by kind;
 - **Library Structure & Changes (`zotero_browse` / `zotero_changes`)**: `zotero_browse` renders collection trees and tag lists; `zotero_changes` displays versioned diffs, deletions, and reusable cursors;
 - **Attachment Locator (`zotero_attachment`)**: displays verified file paths or links with one-click copy and open actions;
-- **Personal Library Writes**: displays target items, note summaries, and tags or collections, with explicit outcome status.
+- **Personal Library Writes (all 8 write tools)**: displays target items, note summaries, planned tag and membership changes, collection/item creation and deletion, and library-wide tag deletion; receipts distinguish "applied", "no change", "outcome unreported", and "declined", with irreversible deletes declared on the plan card first.
 
 Cards use compact summary headers by default and lazily render details when expanded, tracking tool lifecycle states throughout execution.
 

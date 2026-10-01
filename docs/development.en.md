@@ -40,7 +40,7 @@ src/
   remote.ts             # Web client Remote service
   typert.ts             # Typert manifest
   settings-namespace.ts # Settings namespace constants
-  tools/                # 11 model tool definitions
+  tools/                # 16 model tool definitions (8 read + 8 write)
   client/               # Browser client (settings page, Sources panel, tool card views)
 tests/                  # Unit and end-to-end test suites
 ```

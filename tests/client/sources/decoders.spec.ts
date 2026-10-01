@@ -14,7 +14,6 @@ import {
   getMetaOf,
   retrieveMetaOf,
   searchMetaOf,
-  writeMetaOf,
 } from '../../../src/client/sources/decoders.ts'
 
 describe('searchMetaOf', () => {
@@ -668,49 +667,5 @@ describe('exportMetaOf', () => {
       { ref: 'zotero://user/0/item/AAAAAAA4' },
       { ref: 'zotero://user/0/item/AAAAAAA3' },
     ])
-  })
-})
-
-describe('writeMetaOf', () => {
-  it('reads the applied tag count an add_tags call reported', () => {
-    expect(
-      writeMetaOf({
-        kind: 'applied',
-        ref: 'zotero://user/0/item/AAAAAAA1',
-        version: 4,
-        addedCount: 2,
-      }),
-    ).toEqual({ kind: 'applied', addedCount: 2, added: null })
-  })
-
-  it('distinguishes an added membership from an already-a-member one', () => {
-    const read = writeMetaOf({ kind: 'applied', version: 4, added: false })
-    expect(read.added).toBe(false)
-    expect(writeMetaOf({ kind: 'applied', version: 4, added: true }).added).toBe(true)
-  })
-
-  it('keeps an unverified commit distinguishable from an applied one', () => {
-    // The unverified arm reports no applied fact, so a card reading a count off
-    // it sees nothing rather than a stale one. Which *reason* it was is left to
-    // the tool's own sentence, which the receipt shows verbatim.
-    expect(
-      writeMetaOf({ kind: 'committed-unverified', reason: 'commit-unknown', key: 'NOTE1234' }),
-    ).toEqual({ kind: 'committed-unverified', addedCount: null, added: null })
-  })
-
-  it('reads a declined arm as carrying no applied fact', () => {
-    expect(writeMetaOf({ kind: 'declined' })).toEqual({
-      kind: 'declined',
-      addedCount: null,
-      added: null,
-    })
-  })
-
-  it('reads an absent or malformed kind as applied with nothing applied proven', () => {
-    // An unrecognized kind must never read as a success claim: the applied
-    // fields stay null, so the card falls back to the tool's own text.
-    for (const meta of [{}, { kind: 7 }, { kind: 'surprise' }]) {
-      expect(writeMetaOf(meta)).toEqual({ kind: 'applied', addedCount: null, added: null })
-    }
   })
 })

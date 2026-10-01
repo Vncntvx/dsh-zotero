@@ -2,7 +2,7 @@
 
 # 功能概览
 
-dsh-zotero 让 DSH 的 LLM 对话能够直接查询和引用 Zotero 文献库。11 个工具覆盖文献搜索、证据提取、原文定位与格式化导出；3 个个人库写入工具默认关闭，启用后需经过会话审批与计划审查卡。Web 端 Sources 面板提供会话文献、证据与引用的汇总展示。
+dsh-zotero 让 DSH 的 LLM 对话能够直接查询和引用 Zotero 文献库。16 个工具（8 个读工具 + 8 个写工具）覆盖文献搜索、证据提取、原文定位、格式化导出，以及笔记、标签、合集、条目与全库标签的写入；8 个个人库写入工具默认关闭，启用后需经过会话审批与计划审查卡。Web 端 Sources 面板提供会话文献、证据与引用的汇总展示。
 
 ## 搜索文献
 
@@ -80,13 +80,18 @@ dsh-zotero 让 DSH 的 LLM 对话能够直接查询和引用 Zotero 文献库。
 
 ## 写入个人库（可选）
 
-在设置中显式启用 `writeEnabled` 后，插件注册 3 个仅面向个人库（`zotero://user/0/`）的写入工具：
+在设置中显式启用 `writeEnabled` 后，插件注册 8 个仅面向个人库（`zotero://user/0/`）的写入工具：
 
 - `zotero_create_note`：创建独立研究笔记或关联至条目的子笔记，支持标签、合集归属与 `dc:relation` 关联；
-- `zotero_add_tags`：读取既有标签后安全合并，在版本前置条件下提交；
-- `zotero_add_to_collection`：读取既有合集后安全合并，在版本前置条件下提交。
+- `zotero_update_item_tags`：`add`/`remove` 在一次调用内读-合并-写标签，保留既有标签类型，提交携带条目版本前置；
+- `zotero_update_item_collections`：`add`/`remove` 在一次调用内增删合集归属，名称解析失败先于任何写入；
+- `zotero_create_collection`：创建顶层或子合集，同级同名拒绝；
+- `zotero_delete_collection`：删除合集（不可逆：结构被移除、子合集随之删除，条目保留），计划卡先给出条目数与子合集数；
+- `zotero_create_item`：从闭合字段集建档（无 BibTeX/CSL-JSON 入口），未知类型或缺 title/url 一律拒绝；
+- `zotero_update_item`：订正标量元数据，字段合法性以 Zotero 的 `itemTypeFields` 为准；
+- `zotero_delete_library_tags`：按名称全库删除标签（不可逆），计划卡先给出每个标签的条目数，未命中的名称被忽略因而重试幂等。
 
-每次写入均需通过会话审批策略并确认计划卡片。Zotero 10 在首次写入时通过本地对话框请求授权。
+每次写入均需通过会话审批策略并确认计划卡片；两个删除工具的计划卡明确标注不可逆。Zotero 10 在首次写入时通过本地对话框请求授权。
 
 ## 对话工具调用卡片（Toolviews）
 
@@ -99,7 +104,7 @@ DSH 对话中，Zotero 工具调用由专用只读卡片（`tool.call.toolview`�
 - **子对象（`zotero_children`）**：按类型分区展示子笔记、附件与带颜色高亮的 PDF 批注；
 - **库结构与变更（`zotero_browse` / `zotero_changes`）**：`zotero_browse` 展示层级合集树、标签列表及分页信息；`zotero_changes` 展示版本区间内的增量条目、删除记录及安全游标；
 - **原文定位（`zotero_attachment`）**：展示定位到的文件路径或链接，提供复制与快速打开选项；
-- **个人库写操作**：展示目标条目、笔记摘要、待写标签或合集，明确标注执行结果状态。
+- **个人库写操作（8 个写工具）**：展示目标条目、笔记摘要、计划中的标签与合集增删、合集/条目创建与删除，以及全库标签删除；回执区分“已生效”“无变化（No change）”“结果未核验”与“已拒绝”，不可逆删除在计划卡上先行声明。
 
 卡片默认采用紧凑折叠摘要，展开时惰性渲染详情，并同步反映工具执行生命周期。
 
@@ -117,7 +122,7 @@ DSH 对话中，Zotero 工具调用由专用只读卡片（`tool.call.toolview`�
 插件适配 Harness 插件系统插槽：
 
 - **启用引导（`plugins.bundle.activation`）**：在插件管理列表中启用时弹出引导弹窗，自动执行本地连通性检查，并提示在 Zotero 高级设置中开启通信权限；
-- **详情页状态区（`plugins.bundle.config` / `plugins.detail.section`）**：在插件详情页提供 Sources 面板开关、写入确认选项与运行状态诊断。
+- **详情页状态区（`plugins.bundle.config` / `plugins.detail.section`）**：在插件详情页提供 Sources 面板开关、写入能力开关（`writeEnabled`）与运行状态诊断。
 
 ## 会话来源面板
 

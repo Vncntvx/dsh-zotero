@@ -1,16 +1,15 @@
 /**
  * The write gate lives at the `ctx.zotero` seam, not in a tool.
  *
- * The three write tools are only one door into the write domain; the service
+ * The eight write tools are only one door into the write domain; the service
  * method is the other, and a spec that goes through a tool can never show
- * whether the seam itself gates. These cases call `ctx.zotero.createNote`
- * directly, with no tool in the path, and pin the whole settlement map: the
+ * whether the seam itself gates. These cases call `ctx.zotero` directly, with
+ * no tool in the path, and pin the whole settlement map: the
  * session approval policy runs first (`never` auto-rejects, and every request
  * is audited), then the plan the user sees is exactly the caller's, a
  * non-approve answer writes nothing and contacts nothing, a missing channel
- * fails closed, a stale `writeConfirm: false` entry cannot opt out of the
- * ask, and the capability gate answers before the plan so a disabled write
- * never bothers the user.
+ * fails closed, and the capability gate answers before the plan so a disabled
+ * write never bothers the user.
  * @module tests/host/write-gate
  */
 
@@ -231,27 +230,58 @@ describe('the write gate at the service seam', () => {
   it('gates every write method, not just note creation', async () => {
     const lane = await bootLane({ writeEnabled: true })
     serveWrites(lane.mock)
-    script[0] = ['Cancel']
-    script[1] = ['Cancel']
-
-    const tags = await lane.ctx.zotero.updateTags(
-      { item: { library: { type: 'user', id: 0 }, kind: 'item', key: 'ITEMABC1' }, tags: ['a'] },
-      callOf('- tags plan'),
-    )
-    const collections = await lane.ctx.zotero.addToCollection(
-      {
-        item: { library: { type: 'user', id: 0 }, kind: 'item', key: 'ITEMABC1' },
-        collection: 'zotero://user/0/collection/COLL1234',
-      },
-      callOf('- collection plan'),
-    )
-
-    expect(tags).toEqual({ kind: 'declined' })
-    expect(collections).toEqual({ kind: 'declined' })
-    expect(asks.map((ask) => ask.questions[0]?.detail)).toEqual([
+    const item = { library: { type: 'user', id: 0 }, kind: 'item', key: 'ITEMABC1' } as const
+    const collection = 'zotero://user/0/collection/COLL1234'
+    // One plan string per seam method, answered with Cancel in order.
+    const plans = [
       '- tags plan',
-      '- collection plan',
-    ])
+      '- collections plan',
+      '- create collection plan',
+      '- delete collection plan',
+      '- create item plan',
+      '- update item plan',
+      '- delete library tags plan',
+      '- note plan',
+    ]
+    plans.forEach((_, index) => {
+      script[index] = ['Cancel']
+    })
+
+    const results = [
+      await lane.ctx.zotero.updateItemTags(
+        { item, add: ['a'] },
+        callOf(plans[0]!, 'zotero_update_item_tags'),
+      ),
+      await lane.ctx.zotero.updateItemCollections(
+        { item, add: [collection] },
+        callOf(plans[1]!, 'zotero_update_item_collections'),
+      ),
+      await lane.ctx.zotero.createCollection(
+        { name: 'Field notes' },
+        callOf(plans[2]!, 'zotero_create_collection'),
+      ),
+      await lane.ctx.zotero.deleteCollection(
+        { collection },
+        callOf(plans[3]!, 'zotero_delete_collection'),
+      ),
+      await lane.ctx.zotero.createItem(
+        { itemType: 'book', title: 'T' },
+        callOf(plans[4]!, 'zotero_create_item'),
+      ),
+      await lane.ctx.zotero.updateItem(
+        { item, set: { title: 'T' } },
+        callOf(plans[5]!, 'zotero_update_item'),
+      ),
+      await lane.ctx.zotero.deleteLibraryTags(
+        { tags: ['a'] },
+        callOf(plans[6]!, 'zotero_delete_library_tags'),
+      ),
+      await lane.ctx.zotero.createNote({ markdown: 'x' }, callOf(plans[7]!, 'zotero_create_note')),
+    ]
+
+    expect(results).toEqual(plans.map(() => ({ kind: 'declined' })))
+    expect(asks.map((ask) => ask.questions[0]?.detail)).toEqual(plans)
+    // A declined plan settles before any local API contact.
     expect(lane.mock.requests).toHaveLength(0)
   })
 })
@@ -280,11 +310,11 @@ describe('the session approval policy gate', () => {
 
     const result = await lane.ctx.zotero.createNote(
       { markdown: 'x' },
-      callOf('- plan', 'zotero_add_tags'),
+      callOf('- plan', 'zotero_update_item_tags'),
     )
 
     expect(result).toEqual({ kind: 'declined' })
-    expect(approvalAsks[0]?.toolName).toBe('zotero_add_tags')
+    expect(approvalAsks[0]?.toolName).toBe('zotero_update_item_tags')
     expect(asks).toHaveLength(0)
     expect(lane.mock.requests).toHaveLength(0)
   })

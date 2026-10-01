@@ -196,8 +196,13 @@ export type ZoteroLocaleKey =
   | 'toolTitleChildren'
   | 'toolTitleAttachment'
   | 'toolTitleCreateNote'
-  | 'toolTitleAddTags'
-  | 'toolTitleAddToCollection'
+  | 'toolTitleUpdateItemTags'
+  | 'toolTitleUpdateItemCollections'
+  | 'toolTitleCreateCollection'
+  | 'toolTitleDeleteCollection'
+  | 'toolTitleCreateItem'
+  | 'toolTitleUpdateItem'
+  | 'toolTitleDeleteLibraryTags'
   | 'toolTitleBrowse'
   | 'toolTitleChanges'
   | 'toolRunning'
@@ -220,12 +225,18 @@ export type ZoteroLocaleKey =
   | 'toolSummaryChildren'
   | 'toolSummaryAttachment'
   | 'toolSummaryCreateNote'
-  | 'toolSummaryAddTags'
-  | 'toolSummaryAddTagsRequested'
-  | 'toolNoTagsAdded'
-  | 'toolSummaryAddToCollection'
-  | 'toolSummaryAddToCollectionNoop'
-  | 'toolSummaryAddToCollectionRequested'
+  | 'toolSummaryUpdateItemTags'
+  | 'toolSummaryUpdateItemTagsRequested'
+  | 'toolNoTagsChanged'
+  | 'toolSummaryUpdateItemCollections'
+  | 'toolSummaryUpdateItemCollectionsRequested'
+  | 'toolNoMembershipChanged'
+  | 'toolSummaryCreateCollection'
+  | 'toolSummaryDeleteCollection'
+  | 'toolSummaryCreateItem'
+  | 'toolSummaryUpdateItem'
+  | 'toolSummaryDeleteLibraryTags'
+  | 'toolSummaryDeleteLibraryTagsRequested'
   | 'toolSummaryBrowseKind'
   | 'toolSummaryBrowsePage'
   | 'toolBrowseNextPage'
@@ -303,10 +314,10 @@ export const en: Record<ZoteroLocaleKey, string> = {
   groupDefaults: 'Citation defaults',
   groupWrite: 'Writing',
   writeEnabled: 'Allow writes',
-  writeEnabledHint: 'The agent can create notes, add tags, and put items into collections.',
+  writeEnabledHint: 'The agent can change the library: notes, tags, collections, and items.',
   writeRiskTitle: 'Enable writes?',
   writeRiskDescription:
-    'Turning this on lets the agent change your Zotero library — create notes, add tags, and move items into collections. AI can make mistakes; review before enabling.',
+    'Turning this on lets the agent change your Zotero library — notes, tags, collections, and items. Deletions cannot be undone. AI can make mistakes; review before enabling.',
   writeRiskAcknowledge:
     'I understand this will modify my Zotero library and that AI can make mistakes.',
   writeRiskConfirm: 'Allow writes',
@@ -566,8 +577,13 @@ export const en: Record<ZoteroLocaleKey, string> = {
   toolTitleChildren: 'Zotero Item Children',
   toolTitleAttachment: 'Zotero Attachment',
   toolTitleCreateNote: 'Zotero Create Note',
-  toolTitleAddTags: 'Zotero Add Tags',
-  toolTitleAddToCollection: 'Zotero Add to Collection',
+  toolTitleUpdateItemTags: 'Zotero Update Item Tags',
+  toolTitleUpdateItemCollections: 'Zotero Update Item Collections',
+  toolTitleCreateCollection: 'Zotero Create Collection',
+  toolTitleDeleteCollection: 'Zotero Delete Collection',
+  toolTitleCreateItem: 'Zotero Create Item',
+  toolTitleUpdateItem: 'Zotero Update Item',
+  toolTitleDeleteLibraryTags: 'Zotero Delete Library Tags',
   toolTitleBrowse: 'Zotero Browse',
   toolTitleChanges: 'Zotero Sync Changes',
   toolRunning: 'Running…',
@@ -590,12 +606,18 @@ export const en: Record<ZoteroLocaleKey, string> = {
   toolSummaryChildren: '{count} child objects',
   toolSummaryAttachment: 'Attachment: {title}',
   toolSummaryCreateNote: 'Created note "{title}"',
-  toolSummaryAddTags: 'Added {count} tags',
-  toolSummaryAddTagsRequested: 'Requested {count} tags',
-  toolNoTagsAdded: 'Every requested tag was already present; nothing was written',
-  toolSummaryAddToCollection: 'Added to collection "{name}"',
-  toolSummaryAddToCollectionNoop: 'Already in collection "{name}"; nothing was written',
-  toolSummaryAddToCollectionRequested: 'Requested membership in collection "{name}"',
+  toolSummaryUpdateItemTags: 'Updated tags: +{added} −{removed}',
+  toolSummaryUpdateItemTagsRequested: 'Requested {count} tag changes',
+  toolNoTagsChanged: 'The tag set already matches; nothing was written',
+  toolSummaryUpdateItemCollections: 'Updated membership: +{added} −{removed}',
+  toolSummaryUpdateItemCollectionsRequested: 'Requested membership in "{name}"',
+  toolNoMembershipChanged: 'The membership already matches; nothing was written',
+  toolSummaryCreateCollection: 'Created collection "{name}"',
+  toolSummaryDeleteCollection: 'Deleted collection "{name}"',
+  toolSummaryCreateItem: 'Created item "{title}"',
+  toolSummaryUpdateItem: 'Updated item {ref}',
+  toolSummaryDeleteLibraryTags: 'Deleted {count} library tags',
+  toolSummaryDeleteLibraryTagsRequested: 'Requested deletion of {count} library tags',
   toolSummaryBrowseKind: 'Browsing {kind}',
   toolSummaryBrowsePage: 'Browsing {kind}: {returned} of {total}',
   toolBrowseNextPage: 'More results start at offset {offset}',
@@ -667,10 +689,10 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   groupDefaults: '引文默认值',
   groupWrite: '写入',
   writeEnabled: '允许写入',
-  writeEnabledHint: '可创建笔记、添加标签、加入合集。',
+  writeEnabledHint: '可修改文库：笔记、标签、合集与条目。',
   writeRiskTitle: '开启写入？',
   writeRiskDescription:
-    '开启后智能体可以修改你的 Zotero 文献库：创建笔记、添加标签、把条目加入合集。AI 可能会出错，请确认后再开启。',
+    '开启后智能体可以修改你的 Zotero 文献库：笔记、标签、合集与条目。删除不可撤销。AI 可能会出错，请确认后再开启。',
   writeRiskAcknowledge: '我了解这会修改我的 Zotero 文献库，且 AI 可能出错',
   writeRiskConfirm: '允许写入',
   writeRiskCancel: '取消',
@@ -917,8 +939,13 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   toolTitleChildren: 'Zotero 子项与附件',
   toolTitleAttachment: 'Zotero 附件',
   toolTitleCreateNote: 'Zotero 创建笔记',
-  toolTitleAddTags: 'Zotero 添加标签',
-  toolTitleAddToCollection: 'Zotero 添加到合集',
+  toolTitleUpdateItemTags: 'Zotero 更新条目标签',
+  toolTitleUpdateItemCollections: 'Zotero 更新条目合集',
+  toolTitleCreateCollection: 'Zotero 创建合集',
+  toolTitleDeleteCollection: 'Zotero 删除合集',
+  toolTitleCreateItem: 'Zotero 创建条目',
+  toolTitleUpdateItem: 'Zotero 更新条目',
+  toolTitleDeleteLibraryTags: 'Zotero 删除全库标签',
   toolTitleBrowse: 'Zotero 浏览分类',
   toolTitleChanges: 'Zotero 同步记录',
   toolRunning: '执行中…',
@@ -941,12 +968,18 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   toolSummaryChildren: '{count} 个子对象',
   toolSummaryAttachment: '附件: {title}',
   toolSummaryCreateNote: '已创建笔记 "{title}"',
-  toolSummaryAddTags: '已添加 {count} 个标签',
-  toolSummaryAddTagsRequested: '请求添加 {count} 个标签',
-  toolNoTagsAdded: '请求的标签均已存在，未写入任何内容',
-  toolSummaryAddToCollection: '已加入合集 "{name}"',
-  toolSummaryAddToCollectionNoop: '已在合集 "{name}" 中，未写入任何内容',
-  toolSummaryAddToCollectionRequested: '请求加入合集 "{name}"',
+  toolSummaryUpdateItemTags: '已更新标签：新增 {added}，移除 {removed}',
+  toolSummaryUpdateItemTagsRequested: '请求修改 {count} 个标签',
+  toolNoTagsChanged: '标签集合已一致，未写入任何内容',
+  toolSummaryUpdateItemCollections: '已更新归属：新增 {added}，移除 {removed}',
+  toolSummaryUpdateItemCollectionsRequested: '请求加入合集 "{name}"',
+  toolNoMembershipChanged: '归属已一致，未写入任何内容',
+  toolSummaryCreateCollection: '已创建合集 "{name}"',
+  toolSummaryDeleteCollection: '已删除合集 "{name}"',
+  toolSummaryCreateItem: '已创建条目 "{title}"',
+  toolSummaryUpdateItem: '已更新条目 {ref}',
+  toolSummaryDeleteLibraryTags: '已删除全库标签 {count} 个',
+  toolSummaryDeleteLibraryTagsRequested: '请求删除全库标签 {count} 个',
   toolSummaryBrowseKind: '正在浏览 {kind}',
   toolSummaryBrowsePage: '浏览 {kind}：{returned} / {total}',
   toolBrowseNextPage: '更多结果从 offset {offset} 开始',

@@ -1,5 +1,5 @@
 /**
- * Zotero client toolviews: dedicated Chat cards for all 11 Zotero tools.
+ * Zotero client toolviews: dedicated Chat cards for all 16 Zotero tools.
  * @module dsh-zotero/client/toolviews
  */
 
@@ -25,14 +25,19 @@ export const REGISTRATIONS = [
   ['zotero_children', ChildrenToolView],
   ['zotero_attachment', ChildrenToolView],
   ['zotero_create_note', WriteToolView],
-  ['zotero_add_tags', WriteToolView],
-  ['zotero_add_to_collection', WriteToolView],
+  ['zotero_update_item_tags', WriteToolView],
+  ['zotero_update_item_collections', WriteToolView],
+  ['zotero_create_collection', WriteToolView],
+  ['zotero_delete_collection', WriteToolView],
+  ['zotero_create_item', WriteToolView],
+  ['zotero_update_item', WriteToolView],
+  ['zotero_delete_library_tags', WriteToolView],
   ['zotero_browse', BrowseToolView],
   ['zotero_changes', BrowseToolView],
 ] as const
 
 /**
- * Register all 11 Zotero tool views into the `tool.call.toolview` keyed slot.
+ * Register all 16 Zotero tool views into the `tool.call.toolview` keyed slot.
  * @param ctx - browser plugin context.
  */
 export function registerZoteroToolviews(ctx: ClientContext): void {

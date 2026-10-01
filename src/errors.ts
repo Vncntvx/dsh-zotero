@@ -202,6 +202,10 @@ export const WRITE_RESPONSE_IDENTITY_MISSING_MESSAGE =
 export const WRITE_VERSION_MISSING_MESSAGE =
   'Zotero answered the read without the object version a write precondition needs; the response does not match the documented shape.'
 
+/** Shown when a read backing a write does not carry the item type the field check needs. */
+export const WRITE_ITEM_TYPE_MISSING_MESSAGE =
+  'Zotero answered the item read without an itemType; the field set this write is allowed to touch cannot be established.'
+
 /** Shown when a read cannot prove the array state a whole-array PATCH must preserve. */
 export function writeObjectStateMissingMessage(field: 'tags' | 'collections'): string {
   return `Zotero answered the item read without valid ${field} state; a safe whole-array merge is impossible.`
@@ -242,6 +246,39 @@ export function writeListTooLongMessage(name: string, maxItems: number): string 
 /** Shown when a write tool's list argument is empty when at least one item is required. */
 export function writeListEmptyMessage(name: string): string {
   return `${name} must carry at least one item.`
+}
+
+/** Shown when an update tool's add/remove selection carries nothing to change. */
+export const WRITE_LIST_SELECTION_MESSAGE =
+  'add and remove must carry at least one entry between them; a call that changes nothing is refused.'
+
+/** Shown when a collection name already exists among the target siblings. */
+export function writeCollectionNameExistsMessage(name: string): string {
+  return `A collection named "${name}" already exists at that level; pick another name or work with the existing collection's ref.`
+}
+
+/** Shown when an item type is outside the closed creation whitelist. */
+export function writeItemTypeUnsupportedMessage(itemType: string): string {
+  return `Unknown itemType "${itemType}"; this tool creates only webpage, journalArticle, book, conferencePaper, report, thesis, document, and preprint items.`
+}
+
+/** Shown when item creation carries neither a title nor a URL. */
+export const WRITE_ITEM_NEEDS_TITLE_OR_URL_MESSAGE =
+  'A new item needs at least a title or a URL; both are missing.'
+
+/** Shown when an update field is not valid for the item's type. */
+export function writeFieldNotForItemTypeMessage(field: string, itemType: string): string {
+  return `Field "${field}" is not valid for item type "${itemType}"; check zotero_browse kind itemFields for what this type accepts.`
+}
+
+/** Shown when a library-tags delete response lacks the library version it must carry. */
+export const WRITE_TAG_QUERY_REFUSED_MESSAGE =
+  'Zotero answered the library-tags delete without the library version it advanced to; the response does not match the documented delete shape.'
+
+/** Shown when a library-tags delete names more tags than one request may carry. */
+export function writeTagDeleteLimitMessage(limit: number, detail: string): string {
+  const server = detail.trim() === '' ? '' : ` Zotero reported: ${detail.trim()}`
+  return `One library-tags delete carries at most ${limit} tags; split the call.${server}`
 }
 
 /** Shown when My Publications is requested for a group library. */

@@ -48,9 +48,10 @@ export type ZoteroCapability =
   /** Incremental library reads through local transaction versions (`?since=`). */
   | 'changes'
   /**
-   * Writes to the local personal library: research notes, tags, collection
-   * membership. Zotero 10 gates every write behind a locally issued API key
-   * and the serving instance id; the write domain owns that protocol.
+   * Writes to the local personal library: notes, item tags, collection
+   * membership, collections, items, and library tags. Zotero 10 gates every
+   * write behind a locally issued API key and the serving instance id; the
+   * write domain owns that protocol.
    */
   | 'write'
 
@@ -856,47 +857,216 @@ export interface ZoteroCreateNoteCommittedUnverified {
   serverId: string
 }
 
-export interface ZoteroTagUpdateRequest {
-  /** The item to tag. */
+export interface ZoteroUpdateItemTagsRequest {
+  /** The item whose tags change. */
   item: ZoteroObjectRef
-  /** Tags to add. Existing tags and their colored/automatic types are preserved. */
-  tags: string[]
+  /** Tags to add; merged with what the item already carries. */
+  add?: string[]
+  /** Tags to remove; matched exactly. */
+  remove?: string[]
 }
 
-export interface ZoteroTagUpdateResult {
+export interface ZoteroUpdateItemTagsResult {
   kind: 'applied'
   ref: string
-  /** The item's version after the update. */
+  /** The item's version after the update (or the read version when unchanged). */
   version: number
   /** The full tag list now on the item. */
   tags: string[]
-  /** The tags this call added. */
+  /** The tags this call actually added. */
   added: string[]
-  /** True when every requested tag was already present and nothing was written. */
+  /** The tags this call actually removed. */
+  removed: string[]
+  /** True when the merged list equalled the saved list and nothing was written. */
   unchanged: boolean
   /** The library version the write advanced the library to; absent when unchanged. */
   libraryVersion?: number
   serverId?: string
 }
 
-export interface ZoteroCollectionAddRequest {
-  /** The item to add. */
+export interface ZoteroUpdateItemCollectionsRequest {
+  /** The item whose membership changes. */
   item: ZoteroObjectRef
-  /** The collection to add it to, as a ref or a name. */
+  /** Collections to join, as refs or exact names. */
+  add?: string[]
+  /** Collections to leave, as refs or exact names. */
+  remove?: string[]
+}
+
+export interface ZoteroUpdateItemCollectionsResult {
+  kind: 'applied'
+  ref: string
+  /** The item's version after the update (or the read version when unchanged). */
+  version: number
+  /** The item's collections after the update, as refs. */
+  collections: string[]
+  /** The collection refs this call actually added. */
+  added: string[]
+  /** The collection refs this call actually removed. */
+  removed: string[]
+  /** True when the merged list equalled the saved list and nothing was written. */
+  unchanged: boolean
+  /** The library version the write advanced the library to; absent when unchanged. */
+  libraryVersion?: number
+  serverId?: string
+}
+
+export interface ZoteroCreateCollectionRequest {
+  /** The new collection's name (non-blank). */
+  name: string
+  /** The parent collection, as a ref or an exact name; omit for a top-level collection. */
+  parent?: string
+}
+
+export interface ZoteroCreateCollectionResult {
+  kind: 'applied'
+  ref: string
+  key: string
+  /** The collection's version; equals the library version it was written at. */
+  version: number
+  name: string
+  parentRef?: string
+  /** The library version the write advanced the library to. */
+  libraryVersion: number
+  serverId?: string
+}
+
+/**
+ * A collection write that must be treated as committed for retry safety,
+ * although Zotero's response could not prove the complete saved state.
+ * Never retry; reconcile by key/ref when available.
+ */
+export interface ZoteroCreateCollectionCommittedUnverified {
+  kind: 'committed-unverified'
+  committed: true
+  retryable: false
+  reason: 'saved-state-unverified' | 'commit-unknown'
+  ref?: string
+  key?: string
+  version?: number
+  libraryVersion?: number
+  serverId: string
+}
+
+export interface ZoteroDeleteCollectionRequest {
+  /** The collection to delete, as a ref or an exact name. */
   collection: string
 }
 
-export interface ZoteroCollectionAddResult {
+export interface ZoteroDeleteCollectionResult {
+  kind: 'deleted'
+  ref: string
+  key: string
+  deleted: true
+  /** The library version the delete advanced the library to. */
+  libraryVersion: number
+  serverId?: string
+}
+
+/** Item types `zotero_create_item` may create (closed whitelist). */
+export const ZOTERO_CREATABLE_ITEM_TYPES = [
+  'webpage',
+  'journalArticle',
+  'book',
+  'conferencePaper',
+  'report',
+  'thesis',
+  'document',
+  'preprint',
+] as const
+
+export type ZoteroCreatableItemType = (typeof ZOTERO_CREATABLE_ITEM_TYPES)[number]
+
+export interface ZoteroCreateItemCreator {
+  creatorType: string
+  name?: string
+  firstName?: string
+  lastName?: string
+}
+
+export interface ZoteroCreateItemRequest {
+  itemType: ZoteroCreatableItemType
+  title?: string
+  url?: string
+  date?: string
+  doi?: string
+  abstractNote?: string
+  publicationTitle?: string
+  creators?: ZoteroCreateItemCreator[]
+}
+
+export interface ZoteroCreateItemResult {
+  kind: 'applied'
+  ref: string
+  key: string
+  /** The item's version; equals the library version it was written at. */
+  version: number
+  itemType: string
+  title?: string
+  /** The library version the write advanced the library to. */
+  libraryVersion: number
+  serverId?: string
+}
+
+/**
+ * An item write that must be treated as committed for retry safety,
+ * although Zotero's response could not prove the complete saved state.
+ * Never retry; reconcile by key/ref when available.
+ */
+export interface ZoteroCreateItemCommittedUnverified {
+  kind: 'committed-unverified'
+  committed: true
+  retryable: false
+  reason: 'saved-state-unverified' | 'commit-unknown'
+  ref?: string
+  key?: string
+  version?: number
+  libraryVersion?: number
+  serverId: string
+}
+
+/** Scalar fields `zotero_update_item` may set (closed set). */
+export const ZOTERO_UPDATABLE_ITEM_FIELDS = [
+  'title',
+  'date',
+  'url',
+  'doi',
+  'abstractNote',
+  'publicationTitle',
+  'extra',
+] as const
+
+export type ZoteroUpdatableItemField = (typeof ZOTERO_UPDATABLE_ITEM_FIELDS)[number]
+
+export interface ZoteroUpdateItemRequest {
+  /** The item whose scalar fields change. */
+  item: ZoteroObjectRef
+  /** Field updates; at least one closed-set field, values are non-blank strings. */
+  set: Partial<Record<ZoteroUpdatableItemField, string>>
+}
+
+export interface ZoteroUpdateItemResult {
   kind: 'applied'
   ref: string
   /** The item's version after the update. */
   version: number
-  /** The item's collections after the add, as refs. */
-  collections: string[]
-  /** True when the item was newly added; false when it was already a member. */
-  added: boolean
-  /** The library version the write advanced the library to; absent when already a member. */
-  libraryVersion?: number
+  /** The fields this call changed. */
+  changed: string[]
+  /** The library version the write advanced the library to. */
+  libraryVersion: number
+  serverId?: string
+}
+
+export interface ZoteroDeleteLibraryTagsRequest {
+  /** Tag names to delete library-wide (1..writeListMaxItems). */
+  tags: string[]
+}
+
+export interface ZoteroDeleteLibraryTagsResult {
+  kind: 'deleted'
+  deletedTags: string[]
+  /** The library version the delete advanced the library to. */
+  libraryVersion: number
   serverId?: string
 }
 
@@ -940,8 +1110,19 @@ export type ZoteroCreateNoteCommittedOutcome =
   ZoteroCreateNoteResult | ZoteroCreateNoteCommittedUnverified
 
 export type ZoteroCreateNoteOutcome = ZoteroCreateNoteCommittedOutcome | ZoteroWriteDeclined
-export type ZoteroTagUpdateOutcome = ZoteroTagUpdateResult | ZoteroWriteDeclined
-export type ZoteroCollectionAddOutcome = ZoteroCollectionAddResult | ZoteroWriteDeclined
+export type ZoteroUpdateItemTagsOutcome = ZoteroUpdateItemTagsResult | ZoteroWriteDeclined
+export type ZoteroUpdateItemCollectionsOutcome =
+  ZoteroUpdateItemCollectionsResult | ZoteroWriteDeclined
+export type ZoteroCreateCollectionCommittedOutcome =
+  ZoteroCreateCollectionResult | ZoteroCreateCollectionCommittedUnverified
+export type ZoteroCreateCollectionOutcome =
+  ZoteroCreateCollectionCommittedOutcome | ZoteroWriteDeclined
+export type ZoteroDeleteCollectionOutcome = ZoteroDeleteCollectionResult | ZoteroWriteDeclined
+export type ZoteroCreateItemCommittedOutcome =
+  ZoteroCreateItemResult | ZoteroCreateItemCommittedUnverified
+export type ZoteroCreateItemOutcome = ZoteroCreateItemCommittedOutcome | ZoteroWriteDeclined
+export type ZoteroUpdateItemOutcome = ZoteroUpdateItemResult | ZoteroWriteDeclined
+export type ZoteroDeleteLibraryTagsOutcome = ZoteroDeleteLibraryTagsResult | ZoteroWriteDeclined
 
 /**
  * The storage side of the `ctx.zotero` seam. Providers declare which
@@ -1039,22 +1220,75 @@ export interface ZoteroProvider {
     signal?: AbortSignal,
   ): Promise<ZoteroCreateNoteCommittedOutcome>
   /**
-   * Add tags to an item (read-merge-write; existing tags are preserved).
-   * @param request - the item ref and the tags to add.
+   * Update one item's tags (read-merge-write; add and remove settle in one write).
+   * @param request - the item ref and the tags to add/remove.
    * @param signal - caller cancellation; forwarded to the transport.
-   * @returns the merged tag list, the additions, and the resulting versions.
+   * @returns the merged tag list, the actual additions/removals, and the versions.
    */
-  updateTags?(request: ZoteroTagUpdateRequest, signal?: AbortSignal): Promise<ZoteroTagUpdateResult>
-  /**
-   * Add an item to a collection (read-merge-write).
-   * @param request - the item ref and the collection ref or name.
-   * @param signal - caller cancellation; forwarded to the transport.
-   * @returns the resulting collection list and whether the membership is new.
-   */
-  addToCollection?(
-    request: ZoteroCollectionAddRequest,
+  updateItemTags?(
+    request: ZoteroUpdateItemTagsRequest,
     signal?: AbortSignal,
-  ): Promise<ZoteroCollectionAddResult>
+  ): Promise<ZoteroUpdateItemTagsResult>
+  /**
+   * Update one item's collection membership (read-merge-write).
+   * @param request - the item ref and the collections to add/remove (refs or names).
+   * @param signal - caller cancellation; forwarded to the transport.
+   * @returns the resulting collection list, the actual additions/removals, and the versions.
+   */
+  updateItemCollections?(
+    request: ZoteroUpdateItemCollectionsRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroUpdateItemCollectionsResult>
+  /**
+   * Create a collection, optionally under a parent.
+   * @param request - the name and the optional parent ref or name.
+   * @param signal - caller cancellation; forwarded to the transport.
+   * @returns the created collection's saved state, or committed-unverified.
+   */
+  createCollection?(
+    request: ZoteroCreateCollectionRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroCreateCollectionCommittedOutcome>
+  /**
+   * Delete a collection by ref or name.
+   * @param request - the collection ref or name.
+   * @param signal - caller cancellation; forwarded to the transport.
+   * @returns the deletion receipt with the library version it advanced to.
+   */
+  deleteCollection?(
+    request: ZoteroDeleteCollectionRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroDeleteCollectionResult>
+  /**
+   * Create a bibliographic item from the closed field set.
+   * @param request - the itemType plus title/url/date/doi/abstract/publicationTitle/creators.
+   * @param signal - caller cancellation; forwarded to the transport.
+   * @returns the created item's saved state, or committed-unverified.
+   */
+  createItem?(
+    request: ZoteroCreateItemRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroCreateItemCommittedOutcome>
+  /**
+   * Update one item's scalar metadata fields (read-merge-write).
+   * @param request - the item ref and the closed-set field updates.
+   * @param signal - caller cancellation; forwarded to the transport.
+   * @returns the changed fields and the resulting versions.
+   */
+  updateItem?(
+    request: ZoteroUpdateItemRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroUpdateItemResult>
+  /**
+   * Delete tags library-wide.
+   * @param request - the tag names to delete.
+   * @param signal - caller cancellation; forwarded to the transport.
+   * @returns the deleted names and the library version it advanced to.
+   */
+  deleteLibraryTags?(
+    request: ZoteroDeleteLibraryTagsRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroDeleteLibraryTagsResult>
 }
 
 /**

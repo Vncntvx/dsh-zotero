@@ -22,7 +22,7 @@ import type { ZoteroHttpClient } from '../../src/http-client.js'
 import type { ZoteroWriteHttpClient } from '../../src/write-http.js'
 import { WriteAuthorizer } from '../../src/write-auth.js'
 import { ScopeDirectory } from '../../src/local/scope-directory.js'
-import { createNote, updateTags } from '../../src/local/write-domain.js'
+import { createNote, updateItemTags } from '../../src/local/write-domain.js'
 import { testHttpClient, testWriteClient } from '../helpers/test-clients.js'
 
 const BASE_URL = process.env.ZOTERO_BASE_URL ?? 'http://127.0.0.1:23119/api'
@@ -97,11 +97,11 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1' && process.env.ZOTERO_WRIT
       expect(result.kind).toBe('applied')
       if (result.kind !== 'applied') throw new Error('expected an applied note')
       await expect(
-        updateTags(
+        updateItemTags(
           { client, writer, authorizer },
           {
             item: { library: { type: 'user', id: 0 }, kind: 'item', key: result.key },
-            tags: ['probe-tag-2'],
+            add: ['probe-tag-2'],
           },
         ),
       ).resolves.toMatchObject({ unchanged: false })

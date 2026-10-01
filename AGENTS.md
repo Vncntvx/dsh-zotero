@@ -9,16 +9,16 @@ dsh-zotero is a DeepSeek Harness plugin that lets agents search, read, and cite 
 
 ## Map
 
-| Path          | Owns                                                                       |
-| ------------- | -------------------------------------------------------------------------- |
-| `src/`        | Host half: service, tools, Local API provider, HTTP, write domain          |
-| `src/local/`  | Local API domain pipelines (search/retrieve/export/changes/write/…)        |
-| `src/tools/`  | 11 model tools (8 read + `create_note` / `add_tags` / `add_to_collection`) |
-| `src/client/` | Browser half (settings page, Sources tab) → `lib/client.js`                |
-| `tests/`      | Specs by lane; `tests/README.md` is the test rulebook                      |
-| `docs/`       | Product docs, zh/en pairs                                                  |
-| `scripts/`    | Build, harness pin, client-graph authority, test lint                      |
-| `lib/`        | Build output — never edit                                                  |
+| Path          | Owns                                                                                                                                                                                                  |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/`        | Host half: service, tools, Local API provider, HTTP, write domain                                                                                                                                     |
+| `src/local/`  | Local API domain pipelines (search/retrieve/export/changes/write/…)                                                                                                                                   |
+| `src/tools/`  | 16 model tools (8 read + 8 write: `create_note` / `update_item_tags` / `update_item_collections` / `create_collection` / `delete_collection` / `create_item` / `update_item` / `delete_library_tags`) |
+| `src/client/` | Browser half (settings page, Sources tab) → `lib/client.js`                                                                                                                                           |
+| `tests/`      | Specs by lane; `tests/README.md` is the test rulebook                                                                                                                                                 |
+| `docs/`       | Product docs, zh/en pairs                                                                                                                                                                             |
+| `scripts/`    | Build, harness pin, client-graph authority, test lint                                                                                                                                                 |
+| `lib/`        | Build output — never edit                                                                                                                                                                             |
 
 ## Sources of truth
 
@@ -121,7 +121,7 @@ More detail: `docs/development.md`.
 ### Writes
 
 - Write tools are off by default (`writeEnabled`) and write `zotero://user/0/` only.
-- Confirmation belongs to the **`ctx.zotero` seam**, not to a tool: `createNote` / `updateTags` / `addToCollection` take a `ZoteroWriteCall`, answer the capability gate first, then `ctx.approval.request` (session policy + `approval/asked`/`decided` audit; `never` auto-rejects), then the plan-review card. There is **no `writeConfirm` and no opt-out** — a write that cannot clear the policy or show its plan does not happen. Never move the gate back into a tool.
+- Confirmation belongs to the **`ctx.zotero` seam**, not to a tool: each of the eight write entries (`createNote`, `updateItemTags`, `updateItemCollections`, `createCollection`, `deleteCollection`, `createItem`, `updateItem`, `deleteLibraryTags`) takes a `ZoteroWriteCall`, answers the capability gate first, then `ctx.approval.request` (session policy + `approval/asked`/`decided` audit; `never` auto-rejects), then the plan-review card. There is **no `writeConfirm` and no opt-out** — a write that cannot clear the policy or show its plan does not happen. Never move the gate back into a tool.
 - Shell writes to the local API are turned into a harness ask (`src/shell-write-detector.ts` on `tools/pre-execute`). Never add a config field or an "off" path. Detection is text-based and is **not** containment; blind spots are documented in `docs/tools.md`.
 - Writes never ride the connectivity-retry helper (a retried write is not idempotent).
 

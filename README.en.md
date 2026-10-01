@@ -105,7 +105,7 @@ More examples in [Features](docs/features.en.md).
 
 ## Limitations
 
-- **Read-only by default**: Write tools (create note, add tags, add to collection) are available only when `writeEnabled` is turned on. Every write operation requires approval through the confirmation card and local Zotero authorization.
+- **Read-only by default**: 8 write tools (create note, add/remove item tags and collections, create/correct items and collections, delete a collection and library-wide tags) are available only when `writeEnabled` is turned on. Every write passes session approval and the plan review card first, plus Zotero’s local authorization dialog on the first write.
 - **Keyword-based retrieval**: Passage search uses BM25 term frequency matching. Full-text search relies on Zotero's local index; unindexed PDFs will not return text passages.
 - **Attachment handling**: `zotero_attachment` verifies and returns local attachment paths. Reading PDF contents depends on host environment capabilities.
 - **Export format**: Export tools return plain text (such as BibTeX, RIS, or CSL JSON), which can be copied or downloaded directly from the panel.
@@ -119,16 +119,16 @@ More examples in [Features](docs/features.en.md).
 
 ## Documentation
 
-| Document                                            | Covers                                                                    |
-| --------------------------------------------------- | ------------------------------------------------------------------------- |
-| [Getting Started](docs/getting-started.en.md)       | Installation, prerequisites, and connection verification                  |
-| [Features](docs/features.en.md)                     | Sources panel, chat integration, evidence extraction, and export workflow |
-| [Tool Reference](docs/tools.en.md)                  | Parameters, return values, and error codes for all 11 tools               |
-| [Configuration Reference](docs/configuration.en.md) | 36 configuration fields, default values, and hot-reload behavior          |
-| [Architecture](docs/architecture.en.md)             | Data flow, layer responsibilities, and design boundaries                  |
-| [Development Guide](docs/development.en.md)         | Build, test, local development, and release workflow                      |
-| [Scenarios](docs/scenarios.en.md)                   | Real-conversation acceptance cases and everyday usage prompts             |
-| [Troubleshooting](docs/troubleshooting.en.md)       | Common issues, diagnostic steps, and fixes                                |
+| Document                                            | Covers                                                                         |
+| --------------------------------------------------- | ------------------------------------------------------------------------------ |
+| [Getting Started](docs/getting-started.en.md)       | Installation, prerequisites, and connection verification                       |
+| [Features](docs/features.en.md)                     | Sources panel, chat integration, evidence extraction, and export workflow      |
+| [Tool Reference](docs/tools.en.md)                  | Parameters, return values, and error codes for all 16 tools (8 read + 8 write) |
+| [Configuration Reference](docs/configuration.en.md) | 36 configuration fields, default values, and hot-reload behavior               |
+| [Architecture](docs/architecture.en.md)             | Data flow, layer responsibilities, and design boundaries                       |
+| [Development Guide](docs/development.en.md)         | Build, test, local development, and release workflow                           |
+| [Scenarios](docs/scenarios.en.md)                   | Real-conversation acceptance cases and everyday usage prompts                  |
+| [Troubleshooting](docs/troubleshooting.en.md)       | Common issues, diagnostic steps, and fixes                                     |
 
 ## License
 

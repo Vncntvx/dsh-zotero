@@ -176,19 +176,23 @@ export function browseMetaOf(meta: Record<string, unknown>): BrowseMetaView {
  * - `declined` — the plan card was answered without approval; nothing written.
  * - `committed-unverified` — the write landed but its saved state was never
  *   proven, and the tool's own answer says not to retry.
- * - `applied` — the write reported its applied fact, and that fact is null on
- *   whichever tool (or malformed record) left it unreported.
+ * - `applied` — the write reported its applied fact, and counts are null on
+ *   whichever tool (or malformed record) left them unreported.
+ * - `deleted` — the delete reported its receipt; the count is null when
+ *   unreported.
  *
  * The unverified arm's `reason` and `key` are deliberately not decoded here:
  * the receipt shows the tool's own sentence, which already names both, and a
  * second copy of that wording is a second thing to keep in step.
  */
 export interface WriteMetaView {
-  readonly kind: 'declined' | 'applied' | 'committed-unverified'
-  /** Tags actually added by `zotero_add_tags`; null on every other tool. */
+  readonly kind: 'declined' | 'applied' | 'deleted' | 'committed-unverified'
+  /** Tags/collections actually added; null on every other tool. */
   readonly addedCount: number | null
-  /** Whether `zotero_add_to_collection` added the membership; null elsewhere. */
-  readonly added: boolean | null
+  /** Tags/collections actually removed; null on every other tool. */
+  readonly removedCount: number | null
+  /** Tags deleted library-wide; null on every other tool. */
+  readonly deletedCount: number | null
 }
 
 /** The export projection view; a record without refs itemizes none. */
@@ -720,7 +724,7 @@ export function exportMetaOf(meta: Record<string, unknown>): ExportMetaView {
   }
 }
 
-const WRITE_KINDS = new Set(['declined', 'applied', 'committed-unverified'])
+const WRITE_KINDS = new Set(['declined', 'applied', 'deleted', 'committed-unverified'])
 
 function writeKindOf(value: unknown): WriteMetaView['kind'] {
   return typeof value === 'string' && WRITE_KINDS.has(value)
@@ -729,7 +733,7 @@ function writeKindOf(value: unknown): WriteMetaView['kind'] {
 }
 
 /**
- * The three write projections decoded from one record. An unrecognized `kind`
+ * The write projections decoded from one record. An unrecognized `kind`
  * reads as `applied` with every applied field null: the write may or may not
  * have landed, and the receipt must not claim a count it cannot prove — the
  * tool's own rendered text carries the full statement either way.
@@ -738,6 +742,7 @@ export function writeMetaOf(meta: Record<string, unknown>): WriteMetaView {
   return {
     kind: writeKindOf(meta['kind']),
     addedCount: numberField(meta, 'addedCount') ?? null,
-    added: boolField(meta, 'added') ?? null,
+    removedCount: numberField(meta, 'removedCount') ?? null,
+    deletedCount: numberField(meta, 'deletedCount') ?? null,
   }
 }

@@ -32,9 +32,14 @@ import { exportItems as exportItemsDomain } from './export-domain.js'
 import { changes as changesDomain } from './changes-domain.js'
 import { runBrowse } from './browse-domain.js'
 import {
-  addToCollection as addToCollectionDomain,
+  createCollection as createCollectionDomain,
+  createItem as createItemDomain,
   createNote as createNoteDomain,
-  updateTags as updateTagsDomain,
+  deleteCollection as deleteCollectionDomain,
+  deleteLibraryTags as deleteLibraryTagsDomain,
+  updateItem as updateItemDomain,
+  updateItemCollections as updateItemCollectionsDomain,
+  updateItemTags as updateItemTagsDomain,
   type WriteDomainDeps,
   WRITE_CAPABILITY_UNAVAILABLE_CODE,
   writeCapabilityUnavailableMessage,
@@ -50,10 +55,16 @@ import type {
   ZoteroChangesResult,
   ZoteroChildrenRequest,
   ZoteroChildrenResult,
-  ZoteroCollectionAddRequest,
-  ZoteroCollectionAddResult,
+  ZoteroCreateCollectionCommittedOutcome,
+  ZoteroCreateCollectionRequest,
+  ZoteroCreateItemCommittedOutcome,
+  ZoteroCreateItemRequest,
   ZoteroCreateNoteRequest,
   ZoteroCreateNoteCommittedOutcome,
+  ZoteroDeleteCollectionRequest,
+  ZoteroDeleteCollectionResult,
+  ZoteroDeleteLibraryTagsRequest,
+  ZoteroDeleteLibraryTagsResult,
   ZoteroExportRequest,
   ZoteroExportResult,
   ZoteroGetRequest,
@@ -66,8 +77,12 @@ import type {
   ZoteroSearchRequest,
   ZoteroSearchResult,
   ZoteroStatus,
-  ZoteroTagUpdateRequest,
-  ZoteroTagUpdateResult,
+  ZoteroUpdateItemCollectionsRequest,
+  ZoteroUpdateItemCollectionsResult,
+  ZoteroUpdateItemRequest,
+  ZoteroUpdateItemResult,
+  ZoteroUpdateItemTagsRequest,
+  ZoteroUpdateItemTagsResult,
 } from '../types.js'
 
 export class LocalApiProvider implements ZoteroProvider {
@@ -113,7 +128,9 @@ export class LocalApiProvider implements ZoteroProvider {
    * The write collaborators, asserted: the service only reaches the write
    * methods through the `write` capability gate, which this provider declares
    * exactly when both collaborators exist — so this assertion guards direct
-   * provider callers, not the service path.
+   * provider callers, not the service path. Collection writes invalidate the
+   * scope directory through the injected callback, so a renamed cache never
+   * outlives the write that stale-dated it.
    */
   private writeDeps(): WriteDomainDeps {
     if (this.writer === undefined || this.authorizer === undefined) {
@@ -122,7 +139,12 @@ export class LocalApiProvider implements ZoteroProvider {
         WRITE_CAPABILITY_UNAVAILABLE_CODE,
       )
     }
-    return { client: this.client, writer: this.writer, authorizer: this.authorizer }
+    return {
+      client: this.client,
+      writer: this.writer,
+      authorizer: this.authorizer,
+      onCollectionsChanged: () => this.directory.invalidate(PERSONAL_LIBRARY, 'collections'),
+    }
   }
 
   /**
@@ -283,36 +305,101 @@ export class LocalApiProvider implements ZoteroProvider {
   ): Promise<ZoteroCreateNoteCommittedOutcome> {
     return createNoteDomain(
       this.writeDeps(),
-      (refOrName) => this.resolveCollection(refOrName, signal),
+      (refOrName: string) => this.resolveCollection(refOrName, signal),
       request,
       signal,
     )
   }
 
   /**
-   * Add tags to an item, preserving the tags it already carries. The domain
-   * logic lives in `local/write-domain`; this is the seam.
+   * Update one item's tags (add/remove in one write). The domain logic lives
+   * in `local/write-domain`; this is the seam.
    */
-  async updateTags(
-    request: ZoteroTagUpdateRequest,
+  async updateItemTags(
+    request: ZoteroUpdateItemTagsRequest,
     signal?: AbortSignal,
-  ): Promise<ZoteroTagUpdateResult> {
-    return updateTagsDomain(this.writeDeps(), request, signal)
+  ): Promise<ZoteroUpdateItemTagsResult> {
+    return updateItemTagsDomain(this.writeDeps(), request, signal)
   }
 
   /**
-   * Add an item to a collection. The domain logic lives in
+   * Update one item's collection membership (add/remove in one write). The
+   * domain logic lives in `local/write-domain`; this is the seam.
+   */
+  async updateItemCollections(
+    request: ZoteroUpdateItemCollectionsRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroUpdateItemCollectionsResult> {
+    return updateItemCollectionsDomain(
+      this.writeDeps(),
+      (refOrName: string) => this.resolveCollection(refOrName, signal),
+      request,
+      signal,
+    )
+  }
+
+  /**
+   * Create a collection, optionally under a parent. The domain logic lives in
    * `local/write-domain`; this is the seam.
    */
-  async addToCollection(
-    request: ZoteroCollectionAddRequest,
+  async createCollection(
+    request: ZoteroCreateCollectionRequest,
     signal?: AbortSignal,
-  ): Promise<ZoteroCollectionAddResult> {
-    return addToCollectionDomain(
+  ): Promise<ZoteroCreateCollectionCommittedOutcome> {
+    return createCollectionDomain(
       this.writeDeps(),
-      (refOrName) => this.resolveCollection(refOrName, signal),
+      (refOrName: string) => this.resolveCollection(refOrName, signal),
       request,
       signal,
     )
+  }
+
+  /**
+   * Delete a collection by ref or name. The domain logic lives in
+   * `local/write-domain`; this is the seam.
+   */
+  async deleteCollection(
+    request: ZoteroDeleteCollectionRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroDeleteCollectionResult> {
+    return deleteCollectionDomain(
+      this.writeDeps(),
+      (refOrName: string) => this.resolveCollection(refOrName, signal),
+      request,
+      signal,
+    )
+  }
+
+  /**
+   * Create a bibliographic item from the closed field set. The domain logic
+   * lives in `local/write-domain`; this is the seam.
+   */
+  async createItem(
+    request: ZoteroCreateItemRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroCreateItemCommittedOutcome> {
+    return createItemDomain(this.writeDeps(), request, signal)
+  }
+
+  /**
+   * Update one item's scalar metadata fields. The domain logic lives in
+   * `local/write-domain`; this is the seam.
+   */
+  async updateItem(
+    request: ZoteroUpdateItemRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroUpdateItemResult> {
+    return updateItemDomain(this.writeDeps(), request, signal)
+  }
+
+  /**
+   * Delete tags library-wide. The domain logic lives in
+   * `local/write-domain`; this is the seam.
+   */
+  async deleteLibraryTags(
+    request: ZoteroDeleteLibraryTagsRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroDeleteLibraryTagsResult> {
+    return deleteLibraryTagsDomain(this.writeDeps(), request, signal)
   }
 }

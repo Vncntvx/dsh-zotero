@@ -346,3 +346,19 @@ describe('tool presentation', () => {
     expect(definition('zotero_changes').presentResult!(changesArgs, ok({}))).toBeUndefined()
   })
 })
+
+describe('receipt text flattening', () => {
+  it('keeps only the text blocks when flattening a receipt', async () => {
+    const { textOfBlocks } = await import('../../src/tools/present.js')
+    // A job outcome stores plain text: a non-text block leaves an empty slot
+    // in the join instead of leaking its payload into the receipt.
+    expect(
+      textOfBlocks([
+        { type: 'text', text: 'line one' },
+        { type: 'reasoning', text: 'hidden reasoning' },
+        { type: 'text', text: 'line two' },
+      ]),
+    ).toBe('line one\n\nline two')
+    expect(textOfBlocks([{ type: 'reasoning', text: 'only reasoning' }])).toBe('')
+  })
+})

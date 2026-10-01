@@ -33,6 +33,7 @@ import {
   ZOTERO_LOCAL_API_VERSION,
   ZOTERO_MAX_WRITE_INFLIGHT_REQUESTS,
   ZOTERO_SERVER_ID_HEADER,
+  ZOTERO_WRITE_OBJECT_BATCH,
 } from './constants.js'
 import {
   API_DISABLED_MESSAGE,
@@ -47,6 +48,7 @@ import {
   WRITE_PRECONDITION_REFUSED_MESSAGE,
   WRITE_UNAUTHORIZED_MESSAGE,
   ZOTERO_API_DISABLED,
+  ZOTERO_INVALID_ARGUMENT,
   ZOTERO_SERVER_MISMATCH,
   ZOTERO_TIMEOUT,
   ZOTERO_UNEXPECTED,
@@ -57,6 +59,7 @@ import {
   type ZoteroErrorCode,
   writeBatchShapeMessage,
   writeRateLimitedMessage,
+  writeTagDeleteLimitMessage,
 } from './errors.js'
 import {
   SERVER_ID_MISMATCH_STATEMENT,
@@ -163,6 +166,15 @@ export interface ZoteroPatchWriteOptions extends ZoteroWriteOptions {
   readonly ifUnmodifiedSinceVersion: number
 }
 
+export interface ZoteroDeleteWriteOptions extends ZoteroWriteOptions {
+  /**
+   * The library version the caller read before the delete; Zotero refuses a
+   * stale delete with 412. Absence means no version precondition is sent —
+   * the domain always sends one, so absence here is only for tests.
+   */
+  readonly ifUnmodifiedSinceVersion?: number
+}
+
 export interface ZoteroAuthorizeGrant {
   readonly key: string
   /** True when the user picked "Always Allow"; the key persists until revoked in Zotero. */
@@ -171,6 +183,27 @@ export interface ZoteroAuthorizeGrant {
 
 /** The Local API endpoint that issues write keys; local-only, no web API analog. */
 const AUTHORIZE_PATH = ZOTERO_AUTHORIZE_PATH
+
+/**
+ * The library-tags delete path: `DELETE users/0/tags?tag=<enc1>||<enc2>...`.
+ * Each name is encoded on its own so the `||` separator survives intact.
+ * @param names - the tag names to delete.
+ * @returns the API-relative delete path.
+ */
+export function tagsQueryPath(names: readonly string[]): string {
+  return `users/0/tags?tag=${names.map((name) => encodeURIComponent(name)).join('||')}`
+}
+
+/**
+ * The collections query shape: keys joined with `,`.
+ * Single-collection deletes address `users/0/collections/<key>` directly;
+ * this helper names the multi-key query spelling for completeness.
+ * @param keys - the collection keys.
+ * @returns the API-relative collections path with a key query.
+ */
+export function collectionsQueryPath(keys: readonly string[]): string {
+  return `users/0/collections?collectionKey=${keys.join(',')}`
+}
 
 /**
  * Zotero documents 5–32 characters for `Zotero-Write-Token`; a UUID without
@@ -257,6 +290,31 @@ export class ZoteroWriteHttpClient {
   }
 
   /**
+   * DELETE one object or tag set. Zotero answers 204 with the library version
+   * the delete advanced to. Deletes are idempotent by key/name, so failures
+   * stay typed (never commit-unknown) and a retry is safe.
+   * @param path - the API-relative delete path (see {@link tagsQueryPath}).
+   * @param opts - the serving instance, the API key, and the library/object version precondition.
+   * @returns the library version the delete advanced to.
+   */
+  async delete(path: string, opts: ZoteroDeleteWriteOptions): Promise<{ libraryVersion: number }> {
+    const extraHeaders: Record<string, string> =
+      opts.ifUnmodifiedSinceVersion === undefined
+        ? {}
+        : { 'If-Unmodified-Since-Version': String(opts.ifUnmodifiedSinceVersion) }
+    const { headers } = await this.send(
+      path,
+      'DELETE',
+      opts,
+      extraHeaders,
+      undefined,
+      undefined,
+      false,
+    )
+    return { libraryVersion: requireLibraryVersion(headers) }
+  }
+
+  /**
    * Request a local write key. Zotero shows its user a dialog — Allow (the
    * key works once, then is consumed), Always Allow (persistent), or Deny.
    * A denial and every other refusal arrive as `ZoteroError`s with
@@ -293,10 +351,10 @@ export class ZoteroWriteHttpClient {
    */
   private async send(
     path: string,
-    method: 'POST' | 'PATCH',
+    method: 'POST' | 'PATCH' | 'DELETE',
     opts: ZoteroWriteOptions,
     extraHeaders: Record<string, string>,
-    body: string,
+    body?: string,
     deadlineMs: number = this.options.timeoutMs,
     commitSensitive = false,
   ): Promise<{ body: string; headers: Headers }> {
@@ -313,7 +371,7 @@ export class ZoteroWriteHttpClient {
         ...extraHeaders,
       }
       if (opts.apiKey !== '') headers['Zotero-API-Key'] = opts.apiKey
-      headers['Content-Type'] = 'application/json'
+      if (method !== 'DELETE') headers['Content-Type'] = 'application/json'
       // If cancellation or the provider deadline won before dispatch, no write
       // can have committed and the caller must see the ordinary cancellation or
       // timeout rather than a false commit-unknown outcome.
@@ -322,7 +380,13 @@ export class ZoteroWriteHttpClient {
       }
       let response: Response
       try {
-        response = await fetch(url, { method, headers, body, redirect: 'manual', signal: d.signal })
+        response = await fetch(url, {
+          method,
+          headers,
+          ...(body === undefined ? {} : { body }),
+          redirect: 'manual',
+          signal: d.signal,
+        })
       } catch (error) {
         // Translate first so timeout/abort keep their typed codes; a
         // commit-sensitive write then marks that typed failure as
@@ -350,11 +414,15 @@ export class ZoteroWriteHttpClient {
       if (!response.ok) {
         // Zotero states its refusals in the body for the statuses the write
         // path distinguishes (the 403 deny grant, the 412 identity-vs-version
-        // fork); read those under the bound, everything else by status.
+        // fork, and the 413 tag-delete limit); read those under the bound,
+        // everything else by status.
         let detail = ''
         try {
           detail =
-            response.status === 401 || response.status === 403 || response.status === 412
+            response.status === 401 ||
+            response.status === 403 ||
+            response.status === 412 ||
+            (method === 'DELETE' && response.status === 413)
               ? await readFailureStatement(
                   response,
                   this.options.maxResponseBytes,
@@ -363,7 +431,7 @@ export class ZoteroWriteHttpClient {
                   deadlineMs,
                 )
               : ''
-          this.translateWriteStatus(response, detail)
+          this.translateWriteStatus(response, detail, path)
         } catch (error) {
           if (commitSensitive && !isPreCommitWriteStatus(response.status)) {
             throw asCommitUnknown(error)
@@ -402,11 +470,12 @@ export class ZoteroWriteHttpClient {
   /**
    * Translate a non-2xx write response. The write path maps Zotero's own
    * statuses onto the plugin's write vocabulary: 401/403/429/412 carry
-   * write-specific codes, and the two statuses that cannot happen if the
-   * plugin is correct (428, 413) fail loud as protocol drift instead of
-   * being disguised as domain errors.
+   * write-specific codes, a 413 on the library-tags delete carries the tag
+   * limit, and the two statuses that cannot happen if the plugin is correct
+   * (428, batch 413) fail loud as protocol drift instead of being disguised
+   * as domain errors.
    */
-  private translateWriteStatus(response: Response, detail: string): never {
+  private translateWriteStatus(response: Response, detail: string, path?: string): never {
     const status = response.status
     switch (status) {
       case 401:
@@ -445,6 +514,12 @@ export class ZoteroWriteHttpClient {
         )
       }
       case 413:
+        if (path !== undefined && path.includes('/tags')) {
+          throw new ZoteroError(
+            writeTagDeleteLimitMessage(ZOTERO_WRITE_OBJECT_BATCH, detail),
+            ZOTERO_INVALID_ARGUMENT,
+          )
+        }
         throw new ZoteroError(WRITE_BATCH_REFUSED_MESSAGE, ZOTERO_UNEXPECTED)
       default:
         throw sharedHttpStatusError(status)

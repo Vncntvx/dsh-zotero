@@ -391,6 +391,32 @@ export class ScopeDirectory {
   }
 
   /**
+   * Drop cached scope state for one library after a collection write.
+   * Name→ref resolution reads through a TTL cache, so a deleted collection
+   * would otherwise keep resolving until the TTL lapses; creation has the
+   * symmetric staleness. Clearing the listing plus the breadcrumb nodes — and
+   * advancing the listing generation so an in-flight older response cannot
+   * refill the cache — is the only clean fix (`force` only triggers on a miss).
+   * @param library - the library whose scope state is stale.
+   * @param plural - the scope endpoint to drop; omitted drops both.
+   */
+  invalidate(library: SupportedLocalLibrary, plural?: 'collections' | 'searches'): void {
+    const plurals: readonly ('collections' | 'searches')[] =
+      plural === undefined ? (['collections', 'searches'] as const) : [plural]
+    for (const scope of plurals) {
+      const key = cacheKey(library, scope)
+      this.scopeListingCache.delete(key)
+      // Advance past any in-flight fetch so its older generation cannot
+      // repopulate the cache it just cleared.
+      this.latestListingGeneration.set(key, ++this.nextListingGeneration)
+    }
+    const prefix = `${library.type}:${library.id}:collections:`
+    for (const nodeKey of [...this.collectionNodeCache.keys()]) {
+      if (nodeKey.startsWith(prefix)) this.collectionNodeCache.delete(nodeKey)
+    }
+  }
+
+  /**
    * One collection node for breadcrumb walks, TTL-cached per library+key and
    * identity-checked like the scope listings. A missing collection resolves
    * to undefined (a phantom parent truncates the path) instead of failing

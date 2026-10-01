@@ -77,3 +77,27 @@ This document lists common issues, causes, and diagnostic steps when using dsh-z
 - **Symptom**: The model invokes tools, but the message timeline only displays a collapsed summary bar (e.g. "Called tools · 2.1s").
 - **Cause**: DSH's "Work details" setting defaults to standard mode, automatically folding completed tool cards.
 - **Fix**: Click the timer summary bar above the message to expand the tool cards. To keep tool cards expanded by default, navigate to **Settings → General → Work details** and select **Verbose** (`verbose`).
+
+## 13. A Write Is Refused Before Any Request Goes Out
+
+- **Symptom**: A write tool returns `ZOTERO_INVALID_ARGUMENT` immediately, with messages such as "a sibling collection of that name exists", "the item type is unsupported", "provide at least a title or a url", "the field is not valid for this item type", "at least one of add and remove", or "the tag query is refused".
+- **Cause**: These are argument and domain-constraint refusals issued **before any network request** — Zotero receives no write, and no plan card appears.
+- **Fix**: Correct the argument as the message says: rename the colliding collection; use an `itemType` from the closed set (`webpage` / `journalArticle` / `book` / `conferencePaper` / `report` / `thesis` / `document` / `preprint`); send only fields Zotero accepts for that item type in `set`; keep list arguments non-empty.
+
+## 14. Delete Preview Counts Show "unknown"
+
+- **Symptom**: The `zotero_delete_collection` or `zotero_delete_library_tags` plan card shows `unknown` for item, subcollection, or tag counts.
+- **Cause**: The preview reads before a delete are best-effort; a failed preview never blocks the plan. The delete itself still carries the library version of its preceding read.
+- **Fix**: Check the connection with `/zotero`, then decline the plan card and run again to get exact counts.
+
+## 15. A Write Returns ZOTERO_WRITE_CONFLICT (412)
+
+- **Symptom**: The write submission is refused with `ZOTERO_WRITE_CONFLICT`.
+- **Cause**: The object changed between the read and the commit, so the version precondition failed — expected safety behavior.
+- **Fix**: Run the tool once more; the re-run re-reads the version and redoes the merge.
+
+## 16. The Result Is committed-unverified
+
+- **Symptom**: A write tool returns `committed-unverified`, and the card shows a warning state instead of a success badge.
+- **Cause**: Zotero accepted the write, but its response could not prove the final state (commit unknown or the saved state unverified).
+- **Fix**: **Do not retry**; reconcile by key/ref in Zotero to check whether the object was created or changed.

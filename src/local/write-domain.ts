@@ -1,7 +1,7 @@
 /**
- * The write domain: research notes, tags, and collection membership against
- * the Local API's write endpoints. Every function here owns the full write
- * lifecycle the Zotero 10 protocol implies:
+ * The write domain: notes, item tags, collection membership, collections,
+ * items, and library tags against the Local API's write endpoints. Every
+ * function here owns the full write lifecycle the Zotero 10 protocol implies:
  *
  * - the target is always the personal library (`users/0`); a ref naming a
  *   group or a foreign user id is refused before any network happens;
@@ -10,25 +10,37 @@
  * - the API key comes from {@link WriteAuthorizer}, and a 401 replays the
  *   same request exactly once after a fresh authorization — single-use keys
  *   are consumed at authentication time, so a burned key is forgotten;
- * - tag and collection updates are read-merge-write under an
- *   `If-Unmodified-Since-Version` precondition: PATCH merges arrays
+ * - tag, collection-membership, and scalar updates are read-merge-write under
+ *   an `If-Unmodified-Since-Version` precondition: PATCH replaces arrays
  *   wholesale, so the merged list must be sent whole;
+ * - deletes carry the library version of their preceding read as the
+ *   precondition, so any concurrent write fails the delete rather than
+ *   slipping past it;
  * - one object per batch means a Zotero refusal surfaces as a typed error,
  *   never as a silently skipped entry in a bucket.
  *
  * There is no retry beyond the re-authorization replay, and a version
  * conflict (412) is reported as `ZOTERO_WRITE_CONFLICT` for the model to
  * re-run — the tool re-reads and reapplies on top of what is there now.
+ * Non-idempotent creates (note, item, collection) never retry: an unprovable
+ * commit surfaces as `committed-unverified` with `retryable: false`.
  * @module dsh-zotero/local/write-domain
  */
 
 import type { ZoteroHttpClient } from '../http-client.js'
-import { ZOTERO_SERVER_ID_HEADER } from '../constants.js'
+import { ZOTERO_LIBRARY_VERSION_HEADER, ZOTERO_SERVER_ID_HEADER } from '../constants.js'
 import {
   WRITE_CHILD_COLLECTIONS_MESSAGE,
   WRITE_IDENTITY_UNSUPPORTED_MESSAGE,
+  WRITE_ITEM_NEEDS_TITLE_OR_URL_MESSAGE,
+  WRITE_LIST_SELECTION_MESSAGE,
+  WRITE_TAG_QUERY_REFUSED_MESSAGE,
   WRITE_UNAUTHORIZED_AFTER_AUTH_MESSAGE,
+  WRITE_ITEM_TYPE_MISSING_MESSAGE,
   WRITE_VERSION_MISSING_MESSAGE,
+  writeCollectionNameExistsMessage,
+  writeFieldNotForItemTypeMessage,
+  writeItemTypeUnsupportedMessage,
   writeListEmptyMessage,
   writeNonBlankMessage,
   writeObjectRefusedMessage,
@@ -49,6 +61,7 @@ import {
   asString,
   isNonNegativeSafeInteger,
   isObjectKey,
+  parseNonNegativeSafeInteger,
   stringArrayOf,
 } from '../json.js'
 import {
@@ -66,20 +79,37 @@ import {
 import { markdownToNoteHtml } from './note-format.js'
 import type { WriteAuthorizer } from '../write-auth.js'
 import {
+  tagsQueryPath,
   ZoteroWriteCommitUnknownError,
   type ZoteroBatchWrite,
   type ZoteroWriteHttpClient,
   type ZoteroWriteObjectFailure,
 } from '../write-http.js'
-import type {
-  ZoteroCollectionAddRequest,
-  ZoteroCollectionAddResult,
-  ZoteroCreateNoteCommittedUnverified,
-  ZoteroCreateNoteCommittedOutcome,
-  ZoteroCreateNoteRequest,
-  ZoteroObjectRef,
-  ZoteroTagUpdateRequest,
-  ZoteroTagUpdateResult,
+import {
+  ZOTERO_CREATABLE_ITEM_TYPES,
+  ZOTERO_UPDATABLE_ITEM_FIELDS,
+  type ZoteroCreatableItemType,
+  type ZoteroCreateCollectionCommittedOutcome,
+  type ZoteroCreateCollectionCommittedUnverified,
+  type ZoteroCreateCollectionRequest,
+  type ZoteroCreateItemCommittedOutcome,
+  type ZoteroCreateItemCommittedUnverified,
+  type ZoteroCreateItemRequest,
+  type ZoteroCreateNoteCommittedOutcome,
+  type ZoteroCreateNoteCommittedUnverified,
+  type ZoteroCreateNoteRequest,
+  type ZoteroDeleteCollectionRequest,
+  type ZoteroDeleteCollectionResult,
+  type ZoteroDeleteLibraryTagsRequest,
+  type ZoteroDeleteLibraryTagsResult,
+  type ZoteroObjectRef,
+  type ZoteroUpdateItemCollectionsRequest,
+  type ZoteroUpdateItemCollectionsResult,
+  type ZoteroUpdateItemRequest,
+  type ZoteroUpdateItemResult,
+  type ZoteroUpdateItemTagsRequest,
+  type ZoteroUpdateItemTagsResult,
+  type ZoteroUpdatableItemField,
 } from '../types.js'
 
 /** The collaborators one write-domain call needs; built per call by the provider. */
@@ -87,11 +117,18 @@ export interface WriteDomainDeps {
   readonly client: ZoteroHttpClient
   readonly writer: ZoteroWriteHttpClient
   readonly authorizer: WriteAuthorizer
+  /**
+   * Called after a collection create or delete lands, so the scope directory
+   * drops its cached listings before the next name resolution. Wired by the
+   * provider; absent in direct-domain tests that own no directory.
+   */
+  readonly onCollectionsChanged?: () => void
 }
 
 /** One item's write-relevant state, read fresh for every read-merge-write. */
-interface ItemSnapshot {
+export interface ItemSnapshot {
   readonly version: number
+  readonly itemType: string
   readonly tags: readonly { readonly tag: string; readonly type?: number }[]
   readonly collectionKeys: readonly string[]
   readonly serverId: string | undefined
@@ -157,6 +194,35 @@ async function ensureServerId(deps: WriteDomainDeps, signal?: AbortSignal): Prom
   return id
 }
 
+/**
+ * The library's current transaction version, read cheaply for delete
+ * preconditions. One single-row listing; the version rides the response
+ * header, so the body is discarded. Absence is protocol drift.
+ */
+async function readLibraryVersion(
+  deps: WriteDomainDeps,
+  serverId: string,
+  signal?: AbortSignal,
+): Promise<{ libraryVersion: number; serverId: string }> {
+  const params = new URLSearchParams()
+  params.set('limit', '1')
+  const response = await deps.client.get(`${libraryPrefix(PERSONAL_LIBRARY)}/items/top`, params, {
+    signal,
+    serverId,
+  })
+  const libraryVersion = parseNonNegativeSafeInteger(
+    response.headers.get(ZOTERO_LIBRARY_VERSION_HEADER),
+  )
+  if (libraryVersion === undefined) {
+    throw new ZoteroError(WRITE_TAG_QUERY_REFUSED_MESSAGE, ZOTERO_UNEXPECTED)
+  }
+  const observed = response.headers.get(ZOTERO_SERVER_ID_HEADER)
+  if (observed !== null && observed !== serverId) {
+    throw new ZoteroError(SERVER_MISMATCH_MESSAGE, ZOTERO_SERVER_MISMATCH)
+  }
+  return { libraryVersion, serverId: observed ?? serverId }
+}
+
 /** Refuse a qualified ref that names another Zotero instance than the write target. */
 function assertServerIdMatches(observed: string | undefined, serverId: string): void {
   if (observed !== undefined && observed !== serverId) {
@@ -205,12 +271,84 @@ function normalizeCollectionInput(name: string, value: string): string {
   return collection
 }
 
-/** Read one item's write-relevant state, pinning the read to the instance the write will target. */
+/**
+ * Merge string lists: `merged = (existing − remove) ∪ (add − existing)`.
+ * Order is existing-first, then genuinely new additions in request order;
+ * duplicates collapse. `added`/`removed` name the actual changes, not the
+ * request, and `changed` is false exactly when nothing would move.
+ */
+export function mergeList(
+  existing: readonly string[],
+  remove: readonly string[],
+  add: readonly string[],
+): { merged: string[]; added: string[]; removed: string[]; changed: boolean } {
+  const existingSet = new Set(existing)
+  const removeSet = new Set(remove)
+  const remaining = existing.filter((entry) => !removeSet.has(entry))
+  const seen = new Set(remaining)
+  const merged = [...remaining]
+  const added: string[] = []
+  for (const entry of add) {
+    // (add − existing): an entry already present is not an addition, even when
+    // it was also removed — the removal wins for saved entries.
+    if (existingSet.has(entry)) continue
+    if (seen.has(entry)) continue
+    seen.add(entry)
+    merged.push(entry)
+    added.push(entry)
+  }
+  const mergedSet = new Set(merged)
+  const removed = existing.filter((entry) => !mergedSet.has(entry))
+  // Deduplicate the removed report while preserving first-seen order; the
+  // existing list itself should hold no duplicates, but a malformed saved
+  // state must not report one removal twice.
+  const dedupedRemoved = [...new Set(removed)]
+  return {
+    merged,
+    added,
+    removed: dedupedRemoved,
+    changed: added.length > 0 || dedupedRemoved.length > 0,
+  }
+}
+
+/**
+ * Merge tag entries, preserving each retained tag's type. New tags carry no
+ * type; removed tags are gone. Shape mirrors {@link mergeList} for the
+ * collection and tag tools to share one semantic.
+ */
+export function mergeTagList(
+  existing: readonly { readonly tag: string; readonly type?: number }[],
+  remove: readonly string[],
+  add: readonly string[],
+): {
+  merged: { tag: string; type?: number }[]
+  added: string[]
+  removed: string[]
+  changed: boolean
+} {
+  const names = existing.map((entry) => entry.tag)
+  const { merged, added, removed, changed } = mergeList(names, remove, add)
+  const typeOf = new Map(existing.map((entry) => [entry.tag, entry.type] as const))
+  return {
+    merged: merged.map((tag) => {
+      const type = typeOf.get(tag)
+      return type === undefined ? { tag } : { tag, type }
+    }),
+    added,
+    removed,
+    changed,
+  }
+}
+
+/**
+ * Read one item's write-relevant state, pinning the read to the instance the
+ * write will target. One read serves every read-merge-write: tags,
+ * collections, the object version, and the item type arrive together.
+ */
 async function readItem(
   deps: WriteDomainDeps,
   ref: ZoteroObjectRef,
   serverId: string,
-  field: 'tags' | 'collections',
   signal?: AbortSignal,
 ): Promise<ItemSnapshot> {
   const { json, headers } = await deps.client.getJson<unknown>(
@@ -232,16 +370,19 @@ async function readItem(
       ZOTERO_UNEXPECTED,
     )
   }
-  if (
-    (field === 'tags' && data?.tags === undefined) ||
-    (field === 'collections' && data?.collections === undefined)
-  ) {
-    throw new ZoteroError(writeObjectStateMissingMessage(field), ZOTERO_UNEXPECTED)
+  const itemType = asString(data?.itemType)
+  if (itemType === undefined || itemType === '') {
+    throw new ZoteroError(WRITE_ITEM_TYPE_MISSING_MESSAGE, ZOTERO_UNEXPECTED)
   }
-  const tags = field === 'tags' ? tagsOf(data) : []
-  const collectionKeys = field === 'collections' ? strictCollectionKeysOf(data) : []
+  if (data?.tags === undefined || data?.collections === undefined) {
+    const missing = data?.tags === undefined ? 'tags' : 'collections'
+    throw new ZoteroError(writeObjectStateMissingMessage(missing), ZOTERO_UNEXPECTED)
+  }
+  const tags = tagsOf(data)
+  const collectionKeys = strictCollectionKeysOf(data)
   if (tags === undefined || collectionKeys === undefined) {
-    throw new ZoteroError(writeObjectStateMissingMessage(field), ZOTERO_UNEXPECTED)
+    const missing = tags === undefined ? 'tags' : 'collections'
+    throw new ZoteroError(writeObjectStateMissingMessage(missing), ZOTERO_UNEXPECTED)
   }
   const observedServerId = headers.get(ZOTERO_SERVER_ID_HEADER)
   if (observedServerId !== serverId) {
@@ -249,10 +390,50 @@ async function readItem(
   }
   return {
     version,
+    itemType,
     tags,
     collectionKeys,
     serverId: observedServerId ?? serverId,
   }
+}
+
+/**
+ * Read one collection's delete precondition: proof it exists plus the library
+ * version the delete must carry. The object version is verified but the
+ * header version is the precondition — any concurrent write fails the delete.
+ */
+async function readCollectionForDelete(
+  deps: WriteDomainDeps,
+  key: string,
+  serverId: string,
+  signal?: AbortSignal,
+): Promise<{ libraryVersion: number; serverId: string }> {
+  const { json, headers } = await deps.client.getJson<unknown>(
+    `${libraryPrefix(PERSONAL_LIBRARY)}/collections/${key}`,
+    undefined,
+    { signal, serverId },
+  )
+  const record = asRecord(json)
+  const data = asRecord(record?.data)
+  const responseKey = asString(record?.key) ?? asString(data?.key)
+  if (responseKey !== key || asString(data?.key) !== key) {
+    throw new ZoteroError(
+      `Zotero answered the delete read with a different collection than ${key}; the response cannot be used for this delete.`,
+      ZOTERO_UNEXPECTED,
+    )
+  }
+  if (!isNonNegativeSafeInteger(record?.version)) {
+    throw new ZoteroError(WRITE_VERSION_MISSING_MESSAGE, ZOTERO_UNEXPECTED)
+  }
+  const libraryVersion = parseNonNegativeSafeInteger(headers.get(ZOTERO_LIBRARY_VERSION_HEADER))
+  if (libraryVersion === undefined) {
+    throw new ZoteroError(WRITE_TAG_QUERY_REFUSED_MESSAGE, ZOTERO_UNEXPECTED)
+  }
+  const observed = headers.get(ZOTERO_SERVER_ID_HEADER)
+  if (observed !== serverId) {
+    throw new ZoteroError(SERVER_MISMATCH_MESSAGE, ZOTERO_SERVER_MISMATCH)
+  }
+  return { libraryVersion, serverId: observed ?? serverId }
 }
 
 /** Parse a saved tag array strictly; undefined means malformed, absent means empty. */
@@ -295,25 +476,6 @@ function relationUrisOf(data: Record<string, unknown> | undefined): string[] {
   return stringArrayOf(raw)
 }
 
-/** Preserve each existing tag's type, add the new ones, and report what was added. */
-function mergeTags(
-  existing: ItemSnapshot['tags'],
-  additions: readonly string[],
-): { merged: { tag: string; type?: number }[]; added: string[] } {
-  const seen = new Set(existing.map((entry) => entry.tag))
-  const merged = existing.map((entry) =>
-    entry.type === undefined ? { tag: entry.tag } : { tag: entry.tag, type: entry.type },
-  )
-  const added: string[] = []
-  for (const tag of additions) {
-    if (seen.has(tag)) continue
-    seen.add(tag)
-    merged.push({ tag })
-    added.push(tag)
-  }
-  return { merged, added }
-}
-
 function itemRef(key: string, serverId: string): string {
   return formatRef(refForLibrary(PERSONAL_LIBRARY, 'item', key, serverId))
 }
@@ -353,14 +515,30 @@ function objectRefusedError(refused: ZoteroWriteObjectFailure): ZoteroError {
   }
 }
 
-function committedUnverifiedNote(
+type CommittedUnverifiedKind = 'note' | 'item' | 'collection'
+
+/**
+ * The shared non-retryable outcome for non-idempotent creates. Notes, items,
+ * and collections share one shape; only the ref builder differs (items and
+ * notes are item refs, collections are collection refs).
+ */
+function committedUnverified(
+  kind: CommittedUnverifiedKind,
   batch: ZoteroBatchWrite | undefined,
   serverId: string,
   key?: string,
   version?: number,
   reason: 'saved-state-unverified' | 'commit-unknown' = 'saved-state-unverified',
-): ZoteroCreateNoteCommittedUnverified {
+): ZoteroCreateNoteCommittedUnverified &
+  ZoteroCreateItemCommittedUnverified &
+  ZoteroCreateCollectionCommittedUnverified {
   const safeKey = key !== undefined && isObjectKey(key) ? key : undefined
+  const ref =
+    safeKey === undefined
+      ? undefined
+      : kind === 'collection'
+        ? collectionRef(safeKey, serverId)
+        : itemRef(safeKey, serverId)
   return {
     kind: 'committed-unverified',
     committed: true,
@@ -369,13 +547,23 @@ function committedUnverifiedNote(
     ...(safeKey !== undefined
       ? {
           key: safeKey,
-          ref: itemRef(safeKey, serverId),
+          ...(ref !== undefined ? { ref } : {}),
           ...(version !== undefined ? { version } : {}),
         }
       : {}),
     ...(batch !== undefined ? { libraryVersion: batch.libraryVersion } : {}),
     serverId,
   }
+}
+
+function committedUnverifiedNote(
+  batch: ZoteroBatchWrite | undefined,
+  serverId: string,
+  key?: string,
+  version?: number,
+  reason: 'saved-state-unverified' | 'commit-unknown' = 'saved-state-unverified',
+): ZoteroCreateNoteCommittedUnverified {
+  return committedUnverified('note', batch, serverId, key, version, reason)
 }
 
 /**
@@ -559,44 +747,47 @@ function relationUriToRef(uri: string, serverId: string): string {
 }
 
 /**
- * Add tags to an item. The merge is read-merge-write on purpose: a PATCH
- * replaces the whole tags array, so the union (existing types preserved,
- * additions appended) is sent under the version precondition. When every
- * requested tag is already present, nothing is written and `unchanged` says
- * so.
+ * Update one item's tags: add and remove settle in a single read-merge-write.
+ * `add` and `remove` share one call so the same array never suffers two
+ * competing preconditions; overlapping entries follow
+ * `next = existing − remove ∪ (add − existing)` (a saved entry named in both
+ * is removed, a new entry named in both is added).
  */
-export async function updateTags(
+export async function updateItemTags(
   deps: WriteDomainDeps,
-  request: ZoteroTagUpdateRequest,
+  request: ZoteroUpdateItemTagsRequest,
   signal?: AbortSignal,
-): Promise<ZoteroTagUpdateResult> {
+): Promise<ZoteroUpdateItemTagsResult> {
   const localRef = requireWritableRef(request.item, ['item'])
-  const additions = normalizeWriteList('tags', request.tags ?? [])
-  if (additions.length === 0) {
-    throw new ZoteroError(writeListEmptyMessage('tags'), ZOTERO_INVALID_ARGUMENT)
+  const add = normalizeWriteList('add', request.add ?? [])
+  const remove = normalizeWriteList('remove', request.remove ?? [])
+  if (add.length === 0 && remove.length === 0) {
+    throw new ZoteroError(WRITE_LIST_SELECTION_MESSAGE, ZOTERO_INVALID_ARGUMENT)
   }
   const serverId = await ensureServerId(deps, signal)
   const ref = requireWritableRefAtServer(localRef, ['item'], serverId)
-  const snapshot = await readItem(deps, ref, serverId, 'tags', signal)
-  const { merged, added } = mergeTags(snapshot.tags, additions)
-  const resultRef = itemRef(ref.key, snapshot.serverId ?? serverId)
-  if (added.length === 0) {
+  const snapshot = await readItem(deps, ref, serverId, signal)
+  const effectiveServerId = snapshot.serverId ?? serverId
+  const resultRef = itemRef(ref.key, effectiveServerId)
+  const { merged, added, removed, changed } = mergeTagList(snapshot.tags, remove, add)
+  if (!changed) {
     return {
       kind: 'applied',
       ref: resultRef,
       version: snapshot.version,
-      tags: merged.map((tagged) => tagged.tag),
+      tags: merged.map((entry) => entry.tag),
       added: [],
+      removed: [],
       unchanged: true,
-      serverId: snapshot.serverId ?? serverId,
+      serverId: effectiveServerId,
     }
   }
-  return await withWriteKey(deps, snapshot.serverId ?? serverId, signal, async (apiKey) => {
+  return await withWriteKey(deps, effectiveServerId, signal, async (apiKey) => {
     const { libraryVersion } = await deps.writer.patch(
       `${libraryPrefix(PERSONAL_LIBRARY)}/items/${ref.key}`,
       { tags: merged },
       {
-        serverId: snapshot.serverId ?? serverId,
+        serverId: effectiveServerId,
         apiKey,
         ifUnmodifiedSinceVersion: snapshot.version,
         signal,
@@ -606,46 +797,70 @@ export async function updateTags(
       kind: 'applied',
       ref: resultRef,
       version: libraryVersion,
-      tags: merged.map((tagged) => tagged.tag),
+      tags: merged.map((entry) => entry.tag),
       added,
+      removed,
       unchanged: false,
       libraryVersion,
-      serverId: snapshot.serverId ?? serverId,
+      serverId: effectiveServerId,
     }
   })
 }
 
 /**
- * Add an item to a collection, read-merge-write like the tag update. The
- * collection ref (or name) resolves first, so an unknown collection fails
- * before any read-modify-write cycle starts.
+ * Update one item's collection membership. Names resolve to keys before any
+ * item read, so an unknown or ambiguous name fails before the versioned cycle
+ * starts; the merged key list is then written whole under the version
+ * precondition.
  */
-export async function addToCollection(
+export async function updateItemCollections(
   deps: WriteDomainDeps,
   resolveCollection: (refOrName: string, signal?: AbortSignal) => Promise<ZoteroObjectRef>,
-  request: ZoteroCollectionAddRequest,
+  request: ZoteroUpdateItemCollectionsRequest,
   signal?: AbortSignal,
-): Promise<ZoteroCollectionAddResult> {
+): Promise<ZoteroUpdateItemCollectionsResult> {
   const localRef = requireWritableRef(request.item, ['item'])
-  const collectionInput = normalizeCollectionInput('collection', request.collection)
+  const addInputs = (request.add ?? []).map((value) => normalizeCollectionInput('add', value))
+  const removeInputs = (request.remove ?? []).map((value) =>
+    normalizeCollectionInput('remove', value),
+  )
+  if (addInputs.length === 0 && removeInputs.length === 0) {
+    throw new ZoteroError(WRITE_LIST_SELECTION_MESSAGE, ZOTERO_INVALID_ARGUMENT)
+  }
   const serverId = await ensureServerId(deps, signal)
-  const target = await resolveCollection(collectionInput, signal)
-  requireWritableRefAtServer(target, ['collection'], serverId)
   const ref = requireWritableRefAtServer(localRef, ['item'], serverId)
-  const snapshot = await readItem(deps, ref, serverId, 'collections', signal)
+  const [addTargets, removeTargets] = await Promise.all([
+    Promise.all(addInputs.map((value) => resolveCollection(value, signal))),
+    Promise.all(removeInputs.map((value) => resolveCollection(value, signal))),
+  ])
+  const addKeys = addTargets.map(
+    (target) => requireWritableRefAtServer(target, ['collection'], serverId).key,
+  )
+  const removeKeys = removeTargets.map(
+    (target) => requireWritableRefAtServer(target, ['collection'], serverId).key,
+  )
+  const snapshot = await readItem(deps, ref, serverId, signal)
   const effectiveServerId = snapshot.serverId ?? serverId
   const resultRef = itemRef(ref.key, effectiveServerId)
-  if (snapshot.collectionKeys.includes(target.key)) {
+  const { merged, added, removed, changed } = mergeList(
+    snapshot.collectionKeys,
+    removeKeys,
+    addKeys,
+  )
+  const toRefs = (keys: readonly string[]): string[] =>
+    keys.map((key) => collectionRef(key, effectiveServerId))
+  if (!changed) {
     return {
       kind: 'applied',
       ref: resultRef,
       version: snapshot.version,
-      collections: snapshot.collectionKeys.map((key) => collectionRef(key, effectiveServerId)),
-      added: false,
+      collections: toRefs(merged),
+      added: [],
+      removed: [],
+      unchanged: true,
       serverId: effectiveServerId,
     }
   }
-  const merged = [...snapshot.collectionKeys, target.key]
   return await withWriteKey(deps, effectiveServerId, signal, async (apiKey) => {
     const { libraryVersion } = await deps.writer.patch(
       `${libraryPrefix(PERSONAL_LIBRARY)}/items/${ref.key}`,
@@ -661,12 +876,468 @@ export async function addToCollection(
       kind: 'applied',
       ref: resultRef,
       version: libraryVersion,
-      collections: merged.map((key) => collectionRef(key, effectiveServerId)),
-      added: true,
+      collections: toRefs(merged),
+      added: toRefs(added),
+      removed: toRefs(removed),
+      unchanged: false,
       libraryVersion,
       serverId: effectiveServerId,
     }
   })
+}
+
+/** List all collections fresh (no directory cache) for sibling-name checks. */
+async function listCollectionsFresh(
+  deps: WriteDomainDeps,
+  serverId: string,
+  signal?: AbortSignal,
+): Promise<{ key: string; name: string; parentKey?: string }[]> {
+  const { json, headers } = await deps.client.getJson<unknown>(
+    `${libraryPrefix(PERSONAL_LIBRARY)}/collections`,
+    undefined,
+    { signal, serverId },
+  )
+  if (!Array.isArray(json)) {
+    throw new ZoteroError(
+      'Zotero answered the collections listing without a valid array; a safe sibling-name check is impossible.',
+      ZOTERO_UNEXPECTED,
+    )
+  }
+  const observed = headers.get(ZOTERO_SERVER_ID_HEADER)
+  if (observed !== null && observed !== serverId) {
+    throw new ZoteroError(SERVER_MISMATCH_MESSAGE, ZOTERO_SERVER_MISMATCH)
+  }
+  const entries: { key: string; name: string; parentKey?: string }[] = []
+  for (const row of json) {
+    const record = asRecord(row)
+    const key = asString(record?.key)
+    const data = asRecord(record?.data)
+    const name = asString(data?.name)
+    if (key === undefined || !isObjectKey(key) || name === undefined) continue
+    const parent = asString(data?.parentCollection)
+    entries.push({
+      key,
+      name,
+      ...(parent !== undefined && isObjectKey(parent) ? { parentKey: parent } : {}),
+    })
+  }
+  return entries
+}
+
+/**
+ * Create a collection, optionally under a parent. A sibling that already
+ * carries the name refuses the write before any POST — creating a second
+ * same-named sibling would only manufacture resolution ambiguity.
+ */
+export async function createCollection(
+  deps: WriteDomainDeps,
+  resolveCollection: (refOrName: string, signal?: AbortSignal) => Promise<ZoteroObjectRef>,
+  request: ZoteroCreateCollectionRequest,
+  signal?: AbortSignal,
+): Promise<ZoteroCreateCollectionCommittedOutcome> {
+  const name = requireNonBlank('name', request.name)
+  const parentInput =
+    request.parent === undefined ? undefined : normalizeCollectionInput('parent', request.parent)
+  const serverId = await ensureServerId(deps, signal)
+  const parent =
+    parentInput === undefined ? undefined : await resolveCollection(parentInput, signal)
+  const parentKey =
+    parent === undefined
+      ? undefined
+      : requireWritableRefAtServer(parent, ['collection'], serverId).key
+  const siblings = await listCollectionsFresh(deps, serverId, signal)
+  const clash = siblings.some(
+    (entry) => entry.name === name && (entry.parentKey ?? undefined) === parentKey,
+  )
+  if (clash) {
+    throw new ZoteroError(writeCollectionNameExistsMessage(name), ZOTERO_INVALID_ARGUMENT)
+  }
+  const entry: Record<string, unknown> = {
+    name,
+    ...(parentKey !== undefined ? { parentCollection: parentKey } : {}),
+  }
+  const created = await withWriteKey(deps, serverId, signal, async (apiKey) => {
+    let batch: ZoteroBatchWrite
+    try {
+      batch = await deps.writer.batch(`${libraryPrefix(PERSONAL_LIBRARY)}/collections`, [entry], {
+        serverId,
+        apiKey,
+        signal,
+      })
+    } catch (error) {
+      if (error instanceof ZoteroWriteCommitUnknownError) {
+        return committedUnverified(
+          'collection',
+          undefined,
+          serverId,
+          undefined,
+          undefined,
+          'commit-unknown',
+        )
+      }
+      throw error
+    }
+    const failed = batch.failed['0']
+    if (failed !== undefined) throw objectRefusedError(failed)
+    const written = batch.successful['0']
+    const writtenKey = written === undefined ? undefined : asString(written.key)
+    const successKey = asString(batch.success['0'])
+    const key =
+      writtenKey !== undefined && isObjectKey(writtenKey)
+        ? writtenKey
+        : successKey !== undefined && isObjectKey(successKey)
+          ? successKey
+          : undefined
+    if (key === undefined) {
+      return committedUnverified('collection', batch, serverId)
+    }
+    const version = isNonNegativeSafeInteger(written?.version) ? written.version : undefined
+    if (version === undefined) {
+      return committedUnverified('collection', batch, serverId, key)
+    }
+    const data = asRecord(written.data)
+    if (data === undefined || data.key !== key || data.version !== version) {
+      return committedUnverified('collection', batch, serverId, key, version)
+    }
+    if (asString(data.name) !== name) {
+      return committedUnverified('collection', batch, serverId, key, version)
+    }
+    const savedParent = asString(data.parentCollection)
+    if ((parentKey ?? undefined) !== (savedParent ?? undefined)) {
+      // Zotero echoes no parent key for top-level collections; any other
+      // mismatch means the saved state cannot be proven.
+      if (!(parentKey === undefined && savedParent === undefined)) {
+        return committedUnverified('collection', batch, serverId, key, version)
+      }
+    }
+    return {
+      kind: 'applied' as const,
+      ref: collectionRef(key, serverId),
+      key,
+      version,
+      name,
+      ...(parentKey !== undefined ? { parentRef: collectionRef(parentKey, serverId) } : {}),
+      libraryVersion: batch.libraryVersion,
+      serverId,
+    }
+  })
+  if (created.kind === 'applied') deps.onCollectionsChanged?.()
+  else if (created.key !== undefined) deps.onCollectionsChanged?.()
+  return created
+}
+
+/**
+ * Delete a collection by ref or name. The resolve proves existence; the
+ * collection read pins the library version the DELETE carries, so any
+ * concurrent write fails the delete instead of slipping past it. Entries keep
+ * their items (membership only); child collections go with the parent, per
+ * Zotero semantics.
+ */
+export async function deleteCollection(
+  deps: WriteDomainDeps,
+  resolveCollection: (refOrName: string, signal?: AbortSignal) => Promise<ZoteroObjectRef>,
+  request: ZoteroDeleteCollectionRequest,
+  signal?: AbortSignal,
+): Promise<ZoteroDeleteCollectionResult> {
+  const input = normalizeCollectionInput('collection', request.collection)
+  const serverId = await ensureServerId(deps, signal)
+  const target = await resolveCollection(input, signal)
+  const checked = requireWritableRefAtServer(target, ['collection'], serverId)
+  const { libraryVersion: precondition, serverId: effectiveServerId } =
+    await readCollectionForDelete(deps, checked.key, serverId, signal)
+  const resultRef = collectionRef(checked.key, effectiveServerId)
+  const { libraryVersion } = await withWriteKey(deps, effectiveServerId, signal, async (apiKey) => {
+    try {
+      return await deps.writer.delete(
+        `${libraryPrefix(PERSONAL_LIBRARY)}/collections/${checked.key}`,
+        { serverId: effectiveServerId, apiKey, ifUnmodifiedSinceVersion: precondition, signal },
+      )
+    } catch (error) {
+      if (error instanceof ZoteroError && error.code === ZOTERO_NOT_FOUND) {
+        throw new ZoteroError(
+          writeObjectRefusedMessage('The collection no longer exists.', 404),
+          ZOTERO_NOT_FOUND,
+        )
+      }
+      throw error
+    }
+  })
+  deps.onCollectionsChanged?.()
+  return {
+    kind: 'deleted',
+    ref: resultRef,
+    key: checked.key,
+    deleted: true,
+    libraryVersion,
+    serverId: effectiveServerId,
+  }
+}
+
+const CREATABLE_ITEM_TYPES: ReadonlySet<string> = new Set(ZOTERO_CREATABLE_ITEM_TYPES)
+
+function requireCreatableItemType(value: string): ZoteroCreatableItemType {
+  if (!CREATABLE_ITEM_TYPES.has(value)) {
+    throw new ZoteroError(writeItemTypeUnsupportedMessage(value), ZOTERO_INVALID_ARGUMENT)
+  }
+  return value as ZoteroCreatableItemType
+}
+
+function normalizeCreator(
+  creator: { creatorType?: string; name?: string; firstName?: string; lastName?: string },
+  index: number,
+): Record<string, string> {
+  const creatorType = (creator.creatorType ?? '').trim()
+  if (creatorType === '') {
+    throw new ZoteroError(
+      writeNonBlankMessage(`creators[${index}].creatorType`),
+      ZOTERO_INVALID_ARGUMENT,
+    )
+  }
+  const name = creator.name?.trim() ?? ''
+  const firstName = creator.firstName?.trim() ?? ''
+  const lastName = creator.lastName?.trim() ?? ''
+  if (name === '' && firstName === '' && lastName === '') {
+    throw new ZoteroError(
+      `creators[${index}] must carry a name or a firstName/lastName pair`,
+      ZOTERO_INVALID_ARGUMENT,
+    )
+  }
+  if (name !== '') return { creatorType, name }
+  return {
+    creatorType,
+    ...(firstName !== '' ? { firstName } : {}),
+    ...(lastName !== '' ? { lastName } : {}),
+  }
+}
+
+/**
+ * Create a bibliographic item from the closed field set. No BibTeX/CSL-JSON
+ * channel exists: `POST /items` only accepts Zotero item JSON, so the entry
+ * is assembled field-by-field and anything outside the set never leaves this
+ * module.
+ */
+export async function createItem(
+  deps: WriteDomainDeps,
+  request: ZoteroCreateItemRequest,
+  signal?: AbortSignal,
+): Promise<ZoteroCreateItemCommittedOutcome> {
+  const itemType = requireCreatableItemType(requireNonBlank('itemType', request.itemType))
+  const title = request.title?.trim() ?? ''
+  const url = request.url?.trim() ?? ''
+  if (title === '' && url === '') {
+    throw new ZoteroError(WRITE_ITEM_NEEDS_TITLE_OR_URL_MESSAGE, ZOTERO_INVALID_ARGUMENT)
+  }
+  const date = request.date?.trim() ?? ''
+  const doi = request.doi?.trim() ?? ''
+  const abstractNote = request.abstractNote?.trim() ?? ''
+  const publicationTitle = request.publicationTitle?.trim() ?? ''
+  const creators = (request.creators ?? []).map((creator, index) =>
+    normalizeCreator(creator, index),
+  )
+  const serverId = await ensureServerId(deps, signal)
+  const entry: Record<string, unknown> = {
+    itemType,
+    ...(title !== '' ? { title } : {}),
+    ...(url !== '' ? { url } : {}),
+    ...(date !== '' ? { date } : {}),
+    ...(doi !== '' ? { DOI: doi } : {}),
+    ...(abstractNote !== '' ? { abstractNote } : {}),
+    ...(publicationTitle !== '' ? { publicationTitle } : {}),
+    ...(creators.length > 0 ? { creators } : {}),
+  }
+  return await withWriteKey(deps, serverId, signal, async (apiKey) => {
+    let batch: ZoteroBatchWrite
+    try {
+      batch = await deps.writer.batch(`${libraryPrefix(PERSONAL_LIBRARY)}/items`, [entry], {
+        serverId,
+        apiKey,
+        signal,
+      })
+    } catch (error) {
+      if (error instanceof ZoteroWriteCommitUnknownError) {
+        return committedUnverified(
+          'item',
+          undefined,
+          serverId,
+          undefined,
+          undefined,
+          'commit-unknown',
+        )
+      }
+      throw error
+    }
+    const failed = batch.failed['0']
+    if (failed !== undefined) throw objectRefusedError(failed)
+    const written = batch.successful['0']
+    const writtenKey = written === undefined ? undefined : asString(written.key)
+    const successKey = asString(batch.success['0'])
+    const key =
+      writtenKey !== undefined && isObjectKey(writtenKey)
+        ? writtenKey
+        : successKey !== undefined && isObjectKey(successKey)
+          ? successKey
+          : undefined
+    if (key === undefined) {
+      return committedUnverified('item', batch, serverId)
+    }
+    const version = isNonNegativeSafeInteger(written?.version) ? written.version : undefined
+    if (version === undefined) {
+      return committedUnverified('item', batch, serverId, key)
+    }
+    const data = asRecord(written.data)
+    if (data === undefined || data.key !== key || data.version !== version) {
+      return committedUnverified('item', batch, serverId, key, version)
+    }
+    if (asString(data.itemType) !== itemType) {
+      return committedUnverified('item', batch, serverId, key, version)
+    }
+    const savedTitle = asString(data.title)
+    return {
+      kind: 'applied',
+      ref: itemRef(key, serverId),
+      key,
+      version,
+      itemType,
+      ...(savedTitle !== undefined ? { title: savedTitle } : title !== '' ? { title } : {}),
+      libraryVersion: batch.libraryVersion,
+      serverId,
+    }
+  })
+}
+
+const UPDATABLE_FIELDS: ReadonlySet<string> = new Set(ZOTERO_UPDATABLE_ITEM_FIELDS)
+
+/** Zotero's wire name for one updatable field (`doi` rides as `DOI`). */
+function wireFieldOf(field: ZoteroUpdatableItemField): string {
+  return field === 'doi' ? 'DOI' : field
+}
+
+/** Fetch the field names one item type accepts, for update pre-validation. */
+async function validFieldsFor(
+  deps: WriteDomainDeps,
+  itemType: string,
+  signal?: AbortSignal,
+): Promise<Set<string>> {
+  const params = new URLSearchParams()
+  params.set('itemType', itemType)
+  const { json } = await deps.client.getJson<unknown>('itemTypeFields', params, { signal })
+  if (!Array.isArray(json)) {
+    throw new ZoteroError(
+      `Zotero answered the item-type fields without a valid array; a safe field check is impossible.`,
+      ZOTERO_UNEXPECTED,
+    )
+  }
+  const valid = new Set<string>()
+  for (const row of json) {
+    const field = asString(asRecord(row)?.field)
+    if (field !== undefined) valid.add(field)
+  }
+  return valid
+}
+
+/**
+ * Update one item's scalar metadata. Every requested field must belong to the
+ * closed set and be valid for the item's own type (checked against
+ * `itemTypeFields`); the PATCH then carries only wire names under the version
+ * precondition. `creators`, `itemType`, `tags`, and `collections` have their
+ * own tools and never enter here.
+ */
+export async function updateItem(
+  deps: WriteDomainDeps,
+  request: ZoteroUpdateItemRequest,
+  signal?: AbortSignal,
+): Promise<ZoteroUpdateItemResult> {
+  const localRef = requireWritableRef(request.item, ['item'])
+  const entries = Object.entries(request.set ?? {})
+  if (entries.length === 0) {
+    throw new ZoteroError(writeListEmptyMessage('set'), ZOTERO_INVALID_ARGUMENT)
+  }
+  const updates = new Map<ZoteroUpdatableItemField, string>()
+  for (const [field, value] of entries) {
+    if (!UPDATABLE_FIELDS.has(field)) {
+      throw new ZoteroError(
+        `"${field}" is not an updatable field; updatable fields are ${ZOTERO_UPDATABLE_ITEM_FIELDS.join(', ')}.`,
+        ZOTERO_INVALID_ARGUMENT,
+      )
+    }
+    if (typeof value !== 'string' || value.trim() === '') {
+      throw new ZoteroError(writeNonBlankMessage(`set.${field}`), ZOTERO_INVALID_ARGUMENT)
+    }
+    updates.set(field as ZoteroUpdatableItemField, (value as string).trim())
+  }
+  const serverId = await ensureServerId(deps, signal)
+  const ref = requireWritableRefAtServer(localRef, ['item'], serverId)
+  const snapshot = await readItem(deps, ref, serverId, signal)
+  const effectiveServerId = snapshot.serverId ?? serverId
+  const valid = await validFieldsFor(deps, snapshot.itemType, signal)
+  const patch: Record<string, string> = {}
+  const changed: string[] = []
+  for (const [field, value] of updates) {
+    const wire = wireFieldOf(field)
+    if (!valid.has(wire)) {
+      throw new ZoteroError(
+        writeFieldNotForItemTypeMessage(field, snapshot.itemType),
+        ZOTERO_INVALID_ARGUMENT,
+      )
+    }
+    patch[wire] = value
+    changed.push(field)
+  }
+  changed.sort()
+  const resultRef = itemRef(ref.key, effectiveServerId)
+  const { libraryVersion } = await withWriteKey(deps, effectiveServerId, signal, async (apiKey) => {
+    return await deps.writer.patch(`${libraryPrefix(PERSONAL_LIBRARY)}/items/${ref.key}`, patch, {
+      serverId: effectiveServerId,
+      apiKey,
+      ifUnmodifiedSinceVersion: snapshot.version,
+      signal,
+    })
+  })
+  return {
+    kind: 'applied',
+    ref: resultRef,
+    version: libraryVersion,
+    changed,
+    libraryVersion,
+    serverId: effectiveServerId,
+  }
+}
+
+/**
+ * Delete tags library-wide. Names are idempotent (Zotero silently ignores
+ * unknown names), the precondition is the library version of a preceding
+ * read, and any concurrent write fails the delete rather than slipping past
+ * it. Irreversible: the plan card must state the blast radius first.
+ */
+export async function deleteLibraryTags(
+  deps: WriteDomainDeps,
+  request: ZoteroDeleteLibraryTagsRequest,
+  signal?: AbortSignal,
+): Promise<ZoteroDeleteLibraryTagsResult> {
+  const tags = normalizeWriteList('tags', request.tags ?? [])
+  if (tags.length === 0) {
+    throw new ZoteroError(writeListEmptyMessage('tags'), ZOTERO_INVALID_ARGUMENT)
+  }
+  const serverId = await ensureServerId(deps, signal)
+  const { libraryVersion: precondition, serverId: effectiveServerId } = await readLibraryVersion(
+    deps,
+    serverId,
+    signal,
+  )
+  const { libraryVersion } = await withWriteKey(deps, effectiveServerId, signal, async (apiKey) => {
+    return await deps.writer.delete(tagsQueryPath(tags), {
+      serverId: effectiveServerId,
+      apiKey,
+      ifUnmodifiedSinceVersion: precondition,
+      signal,
+    })
+  })
+  return {
+    kind: 'deleted',
+    deletedTags: [...tags].sort(),
+    libraryVersion,
+    serverId: effectiveServerId,
+  }
 }
 
 /**

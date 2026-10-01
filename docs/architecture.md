@@ -70,7 +70,7 @@ graph LR
 
 - 设置页（`settings.section`）：在设置面板左侧导航注册独立的 Zotero 配置页；
 - 会话面板（`conversation.view`）：在会话标签页提供文献（Sources）、证据（Evidence）与导出（Exports）三视图；
-- 工具卡片（`tool.call.toolview`）：为 11 个模型工具提供专属紧凑折叠卡片，展开展示结构化数据并支持复制和打开链接；
+- 工具卡片（`tool.call.toolview`）：为 16 个模型工具（8 读 + 8 写）提供专属紧凑折叠卡片，展开展示结构化数据并支持复制和打开链接；
 - 命令状态卡片（`conversation.chat.commandview`）：为 `/zotero` 输出提供连接状态灯、指标面板、离线排查建议与就地刷新按钮；
 - `webEnabled` 开关保存后即时生效。
 

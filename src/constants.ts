@@ -86,15 +86,20 @@ export const ZOTERO_WRITE_OBJECT_BATCH = 50
 export const ZOTERO_LIBRARY_VERSION_HEADER = 'last-modified-version'
 
 /**
- * The three personal-library write tools. One list for the capability
+ * The eight personal-library write tools. One list for the capability
  * surface, the model-facing policy, and the shell-write detector's audit
- * copy — a rename or a fourth write tool must not leave any of those three
+ * copy — a rename or a ninth write tool must not leave any of those three
  * telling the user a different set.
  */
 export const WRITE_TOOL_NAMES = [
   'zotero_create_note',
-  'zotero_add_tags',
-  'zotero_add_to_collection',
+  'zotero_update_item_tags',
+  'zotero_update_item_collections',
+  'zotero_create_collection',
+  'zotero_delete_collection',
+  'zotero_create_item',
+  'zotero_update_item',
+  'zotero_delete_library_tags',
 ] as const
 
 /**

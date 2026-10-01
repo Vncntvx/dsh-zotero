@@ -291,32 +291,74 @@ Create a child note on item "<test item>": markdown with a "## Methods" heading 
 
 **Unverified commit (W1 edge)**: If Zotero accepts a write but the response cannot verify final state, the operation returns `committed-unverified`. The card displays a warning state, presents the advisory ("do not retry; verify by key/ref"), and the model does not automatically retry. Used to verify that post-verification failures do not falsely report success.
 
-### W2 Add Tags
+### W2 Tag Add and Remove
 
 ```
-Add tags "acceptance" and "to-read" to "<test item>".
+Add the tag "acceptance" to "<test item>" and remove the tag "to-read".
 ```
 
-- Expected behavior: Follows a read-merge-write workflow, preserving existing tags. Re-adding the same tag set returns `unchanged: true` without errors;
+- Expected behavior: `zotero_update_item_tags` settles the read-merge-write in one call, with `add` and `remove` taking effect together; existing tags (including colored/automatic types) are preserved, and `remove` wins for a saved tag named in both lists;
+- Idempotence: repeating the same call returns `unchanged: true` without errors, and Zotero receives no PATCH;
+- `removed` must list the tags that actually came off rather than echoing the request; unmatched `remove` names are not counted;
 - When to use: Manage reading status and thematic tags.
 
-### W3 Add to Collection
+### W3 Collection Membership Add and Remove
 
 ```
-Put "<test item>" into collection "<test collection>".
+Put "<test item>" into collection "<test collection>" and take it out of "<old collection>".
 ```
 
-- Expected behavior: Resolves collection name then performs write. If the item is already in the collection, returns `added: false`; if the collection name does not exist, fails before issuing any write request;
+- Expected behavior: `zotero_update_item_collections` resolves the collection refs/names before writing; an item already in the target membership returns `unchanged: true` (membership idempotence), and an item not in the `remove` collection has that entry ignored;
+- An unresolvable collection name must fail before any write request is issued — Zotero receives nothing;
 - When to use: Archive retrieved literature into project collections.
 
-### W4 Post-Write Incremental Sync
+### W4 Collection Create and Delete
+
+```
+Create a subcollection "<new collection>" under "<test collection>"; then delete it.
+```
+
+- Same-name refusal: creating `<new collection>` when a sibling of that name already exists is refused, the error names the conflict, and no second collection appears;
+- Delete preview: the `zotero_delete_collection` plan card states the collection's item and subcollection counts first (shown as `unknown` when those reads fail) and marks the delete irreversible; once confirmed, the delete carries a library version precondition;
+- Resolution invalidates after deletion: repeating the W3 call with the just-deleted collection name must fail at the resolution stage, proving the invalidation took effect;
+- When to use: Tidy up and clean up project structure.
+
+### W5 Item Create and Correct
+
+```
+Create an item with itemType=journalArticle plus title, date and creators; then correct its date to 2026.
+```
+
+- Refusal paths: an `itemType` outside the closed set (e.g. `podcast`), neither a `title` nor a `url`, or a `set` field the item type does not accept — all are refused before any write;
+- A `committed-unverified` create must not be retried; reconcile by key/ref;
+- Correction: `zotero_update_item` submits under the item's version precondition and reports the fields in `changed`; a lost precondition returns `ZOTERO_WRITE_CONFLICT`, and running the tool once more succeeds (the re-run re-reads the version);
+- When to use: Fill in and correct bibliographic metadata.
+
+### W6 Library-Wide Tag Delete
+
+```
+Delete the tag "<obsolete tag>" from the library.
+```
+
+- Preview counts: the `zotero_delete_library_tags` plan card states the tag's item count first (shown as `unknown items` when that read fails) and marks the delete irreversible; once confirmed it runs `DELETE /tags?tag=` under a library version precondition;
+- Idempotent retry: repeating the same call silently ignores unmatched names, and the second run returns the same `deletedTags`;
+- When to use: Clean up import leftovers or mistaken tags.
+
+### W7 Post-Write Incremental Sync
 
 ```
 After those note/tag writes, can zotero_changes see them? Use the previous cursor.
 ```
 
-- Expected behavior: Calls `zotero_changes` passing the full cursor; `changed` or `totals` reflects the recent write;
+- Expected behavior: Calls `zotero_changes` passing the full cursor; `changed` or `totals` reflects the recent writes, covering all four write classes — notes, items, collections and tags;
 - When to use: Track recent library modifications incrementally.
+
+### W8 Negative Boundaries
+
+- Group library ref: using `zotero://group/<id>/item/<KEY>` as a write target returns a write-boundary error, and Zotero receives no write request;
+- Version conflict re-run: modify the same object from the Zotero client while the plan card is pending; the write returns `ZOTERO_WRITE_CONFLICT`, and one re-run succeeds;
+- `committed-unverified` is never retried: on that result the model must not re-send the write, only reconcile by key/ref;
+- The two confirmation tiers are independent: declining the plan card and a `never` policy are separate paths, and both must yield `declined` with zero writes.
 
 ## Execution Order
 
@@ -324,26 +366,28 @@ After those note/tag writes, can zotero_changes see them? Use the previous curso
 2. Execute Golden Path G1 through G8 sequentially in a single session, then inspect the Sources panel (Literature / Passages / Exports);
 3. Supplement with specific capability packs (S / R / E / C) for any failed golden path steps;
 4. Execute negative boundary cases N1 through N6;
-5. To verify write functionality, run W1 through W4 in a separate session.
+5. To verify write functionality, run W1 through W8 in a separate session.
 
 ## Coverage Map
 
-| Capability Dimension | Tool                                             | Associated Cases | Key Verification Points                                                |
-| -------------------- | ------------------------------------------------ | ---------------- | ---------------------------------------------------------------------- |
-| Service Connectivity | `/zotero`                                        | G1               | connected state, version acquisition                                   |
-| Library Shape        | `zotero_browse`                                  | G1, C1, C2, S5   | Collection tree, tag list, saved searches                              |
-| Bibliographic Search | `zotero_search`                                  | G2, S1–S4        | metadata/everything modes, collection/tag scopes, note hits            |
-| Metadata Reading     | `zotero_get`                                     | G3, R1           | Standard fields, child notes, truncation flags                         |
-| Child Object Reading | `zotero_children`                                | G4, R2           | Notes/attachments/annotations, dedicated annotation path               |
-| Evidence Extraction  | `zotero_retrieve`                                | G5, R3, R4       | Four source types, annotation page accuracy, multi-attachment coverage |
-| Attachment Path      | `zotero_attachment`                              | G6, N3           | Local absolute paths and URLs, missing attachment handling             |
-| Citation Export      | `zotero_export`                                  | G7, E1–E3        | Multi-format support, custom styles, batching and panel downloads      |
-| Incremental Sync     | `zotero_changes`                                 | C3, W4           | Cursor persistence, immediate visibility after write                   |
-| Content Writing      | `create_note` / `add_tags` / `add_to_collection` | W1–W3            | Approval and plan card, merge write, declined state                    |
-| Data Panel           | Sources panel                                    | G8               | Synchronization across Literature, Passages, and Exports pages         |
-| Boundary Defense     | Error handling and safeguards                    | N1–N6            | Error code accuracy, anti-hallucination, no silent degradation         |
+| Capability Dimension          | Tool                                                                      | Associated Cases | Key Verification Points                                                            |
+| ----------------------------- | ------------------------------------------------------------------------- | ---------------- | ---------------------------------------------------------------------------------- |
+| Service Connectivity          | `/zotero`                                                                 | G1               | connected state, version acquisition                                               |
+| Library Shape                 | `zotero_browse`                                                           | G1, C1, C2, S5   | Collection tree, tag list, saved searches                                          |
+| Bibliographic Search          | `zotero_search`                                                           | G2, S1–S4        | metadata/everything modes, collection/tag scopes, note hits                        |
+| Metadata Reading              | `zotero_get`                                                              | G3, R1           | Standard fields, child notes, truncation flags                                     |
+| Child Object Reading          | `zotero_children`                                                         | G4, R2           | Notes/attachments/annotations, dedicated annotation path                           |
+| Evidence Extraction           | `zotero_retrieve`                                                         | G5, R3, R4       | Four source types, annotation page accuracy, multi-attachment coverage             |
+| Attachment Path               | `zotero_attachment`                                                       | G6, N3           | Local absolute paths and URLs, missing attachment handling                         |
+| Citation Export               | `zotero_export`                                                           | G7, E1–E3        | Multi-format support, custom styles, batching and panel downloads                  |
+| Incremental Sync              | `zotero_changes`                                                          | C3, W4           | Cursor persistence, immediate visibility after write                               |
+| Content Writing               | `create_note` / `update_item_tags` / `update_item_collections`            | W1–W3            | Approval and plan card, merge write, declined state                                |
+| Structure and Metadata Writes | `create_collection` / `delete_collection` / `create_item` / `update_item` | W4, W5           | Same-name refusal, delete preview and invalidation, closed field set and whitelist |
+| Library-Wide Tag Delete       | `delete_library_tags`                                                     | W6               | Preview counts, library version precondition, idempotent retry                     |
+| Data Panel                    | Sources panel                                                             | G8               | Synchronization across Literature, Passages, and Exports pages                     |
+| Boundary Defense              | Error handling and safeguards                                             | N1–N6            | Error code accuracy, anti-hallucination, no silent degradation                     |
 
-Passing criteria: G1 through G8 all pass, and N1, N2, N4 produce no hallucinated content. Write features are optional; if enabled, W1 plan card confirmation and W2 idempotent writes must pass.
+Passing criteria: G1 through G8 all pass, and N1, N2, N4 produce no hallucinated content. Write features are optional; if enabled, the whole W pack (W1–W8) must pass in a separate session with writes enabled, with the W1 plan card confirmation and the W2/W3 idempotent writes mandatory.
 
 ## Symptom and Failure Diagnosis
 
