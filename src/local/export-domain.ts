@@ -128,7 +128,13 @@ export async function exportItems(
   } else {
     search.set('format', request.format)
   }
-  const { body } = await deps.client.get(`${exportPrefix}/items`, search, { signal, serverId })
+  const isBibtexFamily = request.format === 'bibtex' || request.format === 'biblatex'
+  const exportPromise = deps.client.get(`${exportPrefix}/items`, search, { signal, serverId })
+  const metaPromise = isBibtexFamily
+    ? fetchRawItemBatch(deps.client, exportPrefix, refs, signal, serverId)
+    : Promise.resolve<readonly Record<string, unknown>[]>([])
+
+  const [{ body }, rawItems] = await Promise.all([exportPromise, metaPromise])
   if (body.length > deps.limits.maxExportChars) {
     throw new ZoteroError(
       `Export output of ${body.length} characters exceeds the ${deps.limits.maxExportChars}-character export limit.`,
@@ -141,8 +147,31 @@ export async function exportItems(
   // The browser holds `text` with its leading whitespace trimmed (the
   // render strips it), so the entry offsets are measured on that same
   // trimmed body.
-  const items = locateExportItemsFromBatch(request.format, body.trimStart(), refs)
+  const items = locateExportItemsFromBatch(request.format, body.trimStart(), refs, rawItems)
   return { format: request.format, text: body, items }
+}
+
+async function fetchRawItemBatch(
+  client: ZoteroHttpClient,
+  prefix: string,
+  refs: readonly ZoteroObjectRef[],
+  signal: AbortSignal | undefined,
+  serverId: string | undefined,
+): Promise<readonly Record<string, unknown>[]> {
+  const search = new URLSearchParams()
+  search.set('itemKey', refs.map((ref) => ref.key).join(','))
+  try {
+    const { json } = await client.getJson<unknown>(`${prefix}/items`, search, { signal, serverId })
+    if (Array.isArray(json)) {
+      return json
+        .map(asRecord)
+        .filter((item): item is Record<string, unknown> => item !== undefined)
+    }
+  } catch {
+    // Fail-open for metadata: if raw JSON fetch fails, alignment still proceeds with
+    // available fields and direct keys without failing the export.
+  }
+  return []
 }
 
 /**

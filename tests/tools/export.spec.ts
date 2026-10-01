@@ -145,8 +145,8 @@ describe('zotero_export tool', () => {
         },
       ],
     })
-    // Zero N+1: the batch body is itemized in memory with exactly 1 request.
-    expect(mock.requests.length - before).toBe(1)
+    // Zero N+1: bibtex batch export uses 2 parallel batch requests (export text + raw metadata)
+    expect(mock.requests.length - before).toBe(2)
     // The model-visible render stays the merged body, not the itemization.
     expect((result.content[0] as { text: string }).text).toBe(batchText)
   })

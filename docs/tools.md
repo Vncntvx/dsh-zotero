@@ -168,7 +168,7 @@ zotero_attachment(ref="zotero://user/0/item/ABC123")
 ### 说明
 
 - `citation` 模式单次超过 50 个 key 时自动分批请求；
-- `bibtex`、`biblatex`、`ris`、`csljson` 采用 Zero-N+1 内存切分引擎：批量导出仅发起单次本地 API 请求（$O(1)$ HTTP 请求），引擎在内存中对返回数据进行语法感知解析并与请求的 refs 精确匹配切分，单次调用最多支持 50 条；
+- `bibtex`、`biblatex`、`ris`、`csljson` 采用 Zero-N+1 内存切分引擎：批量导出仅发起 $O(1)$ 本地 API 批处理请求（`ris`、`csljson` 单次请求；`bibtex`、`biblatex` 发起导出与元数据 2 次并行批处理请求以完成确定性字段对齐），引擎在内存中对返回数据进行语法感知解析并与请求的 refs 精确匹配切分，单次调用最多支持 50 条；
 - 单次导出仅允许同一 library 的 refs，不支持跨库混合导出。
 
 ### 示例

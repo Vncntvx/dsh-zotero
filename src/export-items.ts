@@ -29,16 +29,25 @@ export interface ExportItemFacts {
  */
 export const BIBTEX_KEY_SOURCE = '@[A-Za-z]+\\{([^,\\s{}]+),'
 const BIBTEX_KEY = new RegExp(BIBTEX_KEY_SOURCE)
-const BIBTEX_TITLE_FIELD = /\btitle\s*=\s*/i
+const KNOWN_FIELD_PATTERNS: Readonly<Record<string, RegExp>> = {
+  title: /\btitle\s*=\s*/i,
+  doi: /\bdoi\s*=\s*/i,
+  year: /\byear\s*=\s*/i,
+  date: /\bdate\s*=\s*/i,
+  author: /\bauthor\s*=\s*/i,
+}
 
 /**
- * The display title of one BibTeX entry: the field value after `title =`,
- * brace-aware (nested `{{…}}` included) or double-quoted. Display-only —
- * export pairing never reads it — so an unparseable value yields undefined
- * instead of failing the call.
+ * Extract the raw string value of a named field from a single BibTeX entry text,
+ * brace-aware (nested `{{...}}` included), double-quoted, or bare numeric/token value.
  */
-function bibtexTitleOf(text: string): string | undefined {
-  const field = BIBTEX_TITLE_FIELD.exec(text)
+export function bibtexFieldOf(
+  text: string,
+  fieldName: string,
+  allowBareToken = true,
+): string | undefined {
+  const pattern = KNOWN_FIELD_PATTERNS[fieldName] ?? new RegExp(`\\b${fieldName}\\s*=\\s*`, 'i')
+  const field = pattern.exec(text)
   if (field === null) return undefined
   let cursor = field.index + field[0].length
   while (cursor < text.length && /\s/.test(text[cursor]!)) cursor += 1
@@ -59,7 +68,21 @@ function bibtexTitleOf(text: string): string | undefined {
     const end = text.indexOf('"', cursor + 1)
     return end === -1 ? undefined : text.slice(cursor + 1, end)
   }
-  return undefined
+  if (!allowBareToken) return undefined
+  // Bare numbers or tokens (e.g. year = 2024,)
+  let end = cursor
+  while (end < text.length && !/[,\s{}]/.test(text[end]!)) end += 1
+  return end === cursor ? undefined : text.slice(cursor, end)
+}
+
+/**
+ * The display title of one BibTeX entry: the field value after `title =`,
+ * brace-aware (nested `{{…}}` included) or double-quoted. Display-only —
+ * export pairing never reads it — so an unparseable value yields undefined
+ * instead of failing the call.
+ */
+function bibtexTitleOf(text: string): string | undefined {
+  return bibtexFieldOf(text, 'title', false)
 }
 const RIS_TITLE = /^TI  - (.+?)\r?$/m
 

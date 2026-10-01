@@ -3,13 +3,18 @@
  * body's entry order belongs to Zotero, and citation keys are generated in
  * the export context, so the browser never guesses again: the provider
  * parses entries directly from the batch export body in memory, locating
- * each requested item by citation key, item key, or identifier.
+ * each requested item by deterministic multi-tier fingerprinting (DOI,
+ * normalized title, first author & year disambiguation, extra citekeys),
+ * item key, or identifier — strictly without positional guessing.
  * @module dsh-zotero/export-mapping
  */
 
-import { parseExportItem } from './export-items.js'
+import { bibtexFieldOf, parseExportItem } from './export-items.js'
+import { asRecord, asString } from './json.js'
 import { formatRef } from './refs.js'
 import type { ZoteroExportFormat, ZoteroObjectRef } from './types.js'
+
+export { bibtexFieldOf } from './export-items.js'
 
 /** One located entry of a translator export body. */
 export interface BatchEntry {
@@ -179,125 +184,211 @@ export function splitRisRecords(text: string): BatchEntry[] {
   return records
 }
 
-/**
- * Locate items directly from the batch export body in memory without
- * secondary HTTP calls. Match priority per ref is fixed:
- *
- * 1. Direct key match: a BibTeX/BibLaTeX entry whose citation key equals the
- *    ref key, an RIS record whose `ID` equals it, a CSL-JSON record whose
- *    `id` equals it bare or carries it after the last `/` (Zotero serves
- *    `http://zotero.org/…/items/<KEY>` ids).
- * 2. Mention match (BibTeX/BibLaTeX only): the key appears as a whole token
- *    inside the entry body — the export context mints custom citation keys,
- *    but the body still names the item key (file paths, `note` fields).
- *    Token means `[A-Za-z0-9_]+`, the same class `\b` uses, so matching is
- *    injection-safe and never equates `XABCD1234` with `ABCD1234`.
- * 3. Positional fallback only for the unambiguous case: exactly one ref and
- *    exactly one entry. Anything else unlocatable yields a bare `{ref}` —
- *    the call succeeds, the UI reports the gap per item instead of failing
- *    the whole export.
- *
- * Direct matches claim entries first (each entry serves at most one ref, in
- * requested order); mentions only consider still-unclaimed entries.
- * @param format - the translator format of the batch body.
- * @param text - the trimmed batch body, exactly as the browser will hold it.
- * @param refs - the requested refs, in order.
- * @returns the located items, one per ref.
- */
-export function locateExportItemsFromBatch(
-  format: ZoteroExportFormat,
-  text: string,
-  refs: readonly ZoteroObjectRef[],
-): LocatedExportItem[] {
-  if (format === 'bibtex' || format === 'biblatex') return locateBibtexFromBatch(text, refs, format)
-  if (format === 'ris') return locateRisFromBatch(text, refs)
-  if (format === 'csljson') return locateCslFromBatch(text, refs)
-  return refs.map((ref) => ({ ref: formatRef(ref) }))
+/** Normalize title for deterministic cross-format matching. */
+export function normalizeTitleForAlignment(title: string | undefined): string | undefined {
+  if (title === undefined) return undefined
+  let text = title
+  // Unwrap LaTeX formatting macros like \textbf{content} -> content before stripping braces
+  let prev: string
+  do {
+    prev = text
+    text = text.replace(/\\[a-zA-Z]+\{([^{}]*)\}/g, '$1')
+  } while (text !== prev)
+  const stripped = text
+    .replace(/\\[a-zA-Z]+/g, ' ')
+    .replace(/[{}]/g, '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return stripped === '' ? undefined : stripped
+}
+
+/** Normalize DOI for exact matching, stripping prefixes and query forms. */
+export function normalizeDoiForAlignment(doi: string | undefined): string | undefined {
+  if (doi === undefined) return undefined
+  const stripped = doi
+    .trim()
+    .toLowerCase()
+    .replace(/^(?:https?:\/\/)?(?:dx\.)?doi\.org\//i, '')
+    .replace(/^doi:\s*/i, '')
+    .trim()
+  return stripped === '' ? undefined : stripped
+}
+
+/** Normalize author name to primary surname for disambiguation. */
+export function normalizeAuthorForAlignment(author: string | undefined): string | undefined {
+  if (author === undefined) return undefined
+  const firstAuthor = author.split(/\s+and\s+/i)[0]!
+  const namePart = firstAuthor.includes(',')
+    ? firstAuthor.split(',')[0]!
+    : (firstAuthor.split(/\s+/).pop() ?? firstAuthor)
+  const stripped = namePart
+    .replace(/[{}]/g, '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]/gu, '')
+    .trim()
+  return stripped === '' ? undefined : stripped
+}
+
+/** Normalize date or year field to a 4-digit year string. */
+export function normalizeYearForAlignment(dateOrYear: string | undefined): string | undefined {
+  if (dateOrYear === undefined) return undefined
+  const match = /\b(\d{4})\b/.exec(dateOrYear)
+  return match?.[1]
+}
+
+interface RefFingerprint {
+  readonly ref: ZoteroObjectRef
+  readonly formattedRef: string
+  readonly key: string
+  readonly titleClean?: string
+  readonly doiClean?: string
+  readonly yearClean?: string
+  readonly authorClean?: string
+  readonly extraCiteKey?: string
+}
+
+interface EntryFingerprint {
+  readonly index: number
+  readonly entry: BatchEntry
+  readonly citeKey?: string
+  readonly title?: string
+  readonly titleClean?: string
+  readonly doiClean?: string
+  readonly yearClean?: string
+  readonly authorClean?: string
 }
 
 /**
- * Index batch entries for O(1) per-ref lookup: citation keys map to entry
- * indices, and whole-word mention tokens map to the entries containing them.
- * Built once per export body — refs then resolve without rescanning entry
- * text. The token index covers only the requested ref keys (≤50): indexing
- * every word in the body would be O(total body tokens) time and memory for
- * O(refs) lookups, bounded only by `maxExportChars`.
+ * Deterministically align BibTeX/BibLaTeX entries against requested refs
+ * using multi-tier ground-truth fingerprints (extra citekeys, DOI, cleaned
+ * title, first author & year). Positional guessing is strictly forbidden.
  */
-interface BatchIndex {
-  /** Entries whose citation key equals the map key, in body order. */
-  readonly byKey: ReadonlyMap<string, readonly number[]>
-  /** Entries whose body contains the map key as a whole token, in body order. */
-  readonly byToken: ReadonlyMap<string, readonly number[]>
-}
-
-function indexBibtexEntries(
-  entries: readonly BatchEntry[],
-  wanted: ReadonlySet<string>,
-): BatchIndex {
-  const byKey = new Map<string, number[]>()
-  const byToken = new Map<string, number[]>()
-  if (wanted.size === 0) return { byKey, byToken }
-  entries.forEach((entry, index) => {
-    if (entry.key !== undefined) {
-      const bucket = byKey.get(entry.key) ?? []
-      bucket.push(index)
-      byKey.set(entry.key, bucket)
-    }
-    // Split on non-word runs instead of a shared `/g` match: no mutable
-    // `lastIndex` state to reset, and the token class stays the `\b` class
-    // (`[A-Za-z0-9_]+`) so `XABCD1234` never equals `ABCD1234`.
-    const seen = new Set<string>()
-    for (const word of entry.text.split(/[^A-Za-z0-9_]+/)) {
-      if (word === '' || !wanted.has(word) || seen.has(word)) continue
-      seen.add(word)
-      const bucket = byToken.get(word) ?? []
-      bucket.push(index)
-      byToken.set(word, bucket)
-    }
-  })
-  return { byKey, byToken }
-}
-
-/** First index in `candidates` not yet claimed, or undefined when none remains. */
-function firstUnclaimed(
-  candidates: readonly number[] | undefined,
-  used: ReadonlySet<number>,
-): number | undefined {
-  if (candidates === undefined) return undefined
-  for (const index of candidates) {
-    if (!used.has(index)) return index
-  }
-  return undefined
-}
-
-function locateBibtexFromBatch(
+export function alignBibtexEntries(
   text: string,
   refs: readonly ZoteroObjectRef[],
-  format: ZoteroExportFormat,
+  rawItems?: readonly unknown[],
 ): LocatedExportItem[] {
   const batchEntries = splitBibtexEntries(text)
-  const wanted = new Set(refs.map((ref) => ref.key))
-  const { byKey, byToken } = indexBibtexEntries(batchEntries, wanted)
-  const used = new Set<number>()
-  return refs.map((ref) => {
-    const formattedRef = formatRef(ref)
-    // Fixed priority per ref: direct citation-key match, then whole-token
-    // mention in still-unclaimed entries, then the unambiguous 1×1 positional
-    // fallback. Each entry serves at most one ref, in requested order.
-    const foundIndex =
-      firstUnclaimed(byKey.get(ref.key), used) ??
-      firstUnclaimed(byToken.get(ref.key), used) ??
-      (refs.length === 1 && batchEntries.length === 1 && !used.has(0) ? 0 : undefined)
-    if (foundIndex === undefined) return { ref: formattedRef }
-    used.add(foundIndex)
-    const entry = batchEntries[foundIndex]!
-    const facts = parseExportItem(format, entry.text)
+  const rawItemsByKey = new Map<string, Record<string, unknown>>()
+  for (const item of rawItems ?? []) {
+    const asRec = asRecord(item)
+    if (asRec === undefined) continue
+    const data = asRecord(asRec['data'])
+    const key = asString(asRec['key']) ?? asString(data?.['key'])
+    if (key !== undefined) {
+      rawItemsByKey.set(key, asRec)
+    }
+  }
+
+  const refFingerprints: RefFingerprint[] = refs.map((ref) => {
+    const raw = rawItemsByKey.get(ref.key)
+    const data = asRecord(raw?.['data']) ?? raw
+    const title = asString(data?.['title'])
+    const doi = asString(data?.['DOI'])
+    const date = asString(data?.['date'])
+    const extra = asString(data?.['extra'])
+    const creators = Array.isArray(data?.['creators']) ? data!['creators'] : []
+    const firstCreator = asRecord(creators[0])
+    const authorName = asString(firstCreator?.['lastName'] ?? firstCreator?.['name'])
+    const extraCiteKey = extra?.match(/(?:Citation Key|citekey):\s*([^\r\n\s,]+)/i)?.[1]
     return {
-      ref: formattedRef,
-      ...(facts.title !== undefined ? { title: facts.title } : {}),
-      key: entry.key,
-      start: entry.start,
-      end: entry.end,
+      ref,
+      formattedRef: formatRef(ref),
+      key: ref.key,
+      titleClean: normalizeTitleForAlignment(title),
+      doiClean: normalizeDoiForAlignment(doi),
+      yearClean: normalizeYearForAlignment(date),
+      authorClean: normalizeAuthorForAlignment(authorName),
+      extraCiteKey,
+    }
+  })
+
+  const entryFingerprints: EntryFingerprint[] = batchEntries.map((entry, index) => {
+    const title = bibtexFieldOf(entry.text, 'title')
+    const doi = bibtexFieldOf(entry.text, 'doi')
+    const date = bibtexFieldOf(entry.text, 'year') ?? bibtexFieldOf(entry.text, 'date')
+    const author = bibtexFieldOf(entry.text, 'author')
+    return {
+      index,
+      entry,
+      citeKey: entry.key,
+      title,
+      titleClean: normalizeTitleForAlignment(title),
+      doiClean: normalizeDoiForAlignment(doi),
+      yearClean: normalizeYearForAlignment(date),
+      authorClean: normalizeAuthorForAlignment(author),
+    }
+  })
+
+  const matchedRefToEntry = new Map<number, number>()
+  const claimedEntries = new Set<number>()
+
+  const claimUniqueMatch = (
+    predicate: (r: RefFingerprint, e: EntryFingerprint) => boolean,
+    onMultiple?: (
+      candidates: EntryFingerprint[],
+      r: RefFingerprint,
+    ) => EntryFingerprint | undefined,
+  ): void => {
+    for (let rIdx = 0; rIdx < refFingerprints.length; rIdx++) {
+      if (matchedRefToEntry.has(rIdx)) continue
+      const r = refFingerprints[rIdx]!
+      const candidates = entryFingerprints.filter(
+        (e) => !claimedEntries.has(e.index) && predicate(r, e),
+      )
+      let match: EntryFingerprint | undefined
+      if (candidates.length === 1) {
+        match = candidates[0]!
+      } else if (candidates.length > 1 && onMultiple !== undefined) {
+        match = onMultiple(candidates, r)
+      }
+      if (match !== undefined) {
+        matchedRefToEntry.set(rIdx, match.index)
+        claimedEntries.add(match.index)
+      }
+    }
+  }
+
+  // Tier 1: Extra citeKey exact match
+  claimUniqueMatch((r, e) => r.extraCiteKey !== undefined && e.citeKey === r.extraCiteKey)
+
+  // Tier 2: DOI exact unique match
+  claimUniqueMatch((r, e) => r.doiClean !== undefined && e.doiClean === r.doiClean)
+
+  // Tier 3 & 4: Normalized title unique match, disambiguated by year and author
+  claimUniqueMatch(
+    (r, e) => r.titleClean !== undefined && e.titleClean === r.titleClean,
+    (candidates, r) => {
+      const refined = candidates.filter((c) => {
+        const yearOk = r.yearClean === undefined || c.yearClean === r.yearClean
+        const authorOk = r.authorClean === undefined || c.authorClean === r.authorClean
+        return yearOk && authorOk
+      })
+      return refined.length === 1 ? refined[0] : undefined
+    },
+  )
+
+  // Tier 5: Direct citeKey equals ref.key (for mock servers or custom citekey configs)
+  claimUniqueMatch((r, e) => e.citeKey === r.key)
+
+  // Tier 6: Whole-token mention inside entry body (e.g. note or URL contains the 8-char itemKey)
+  claimUniqueMatch((r, e) => new RegExp(`\\b${r.key}\\b`).test(e.entry.text))
+
+  // Final assembly: NEVER use positional guessing. Unmatched refs stay unlocated.
+  return refFingerprints.map((r, rIdx) => {
+    const entryIdx = matchedRefToEntry.get(rIdx)
+    if (entryIdx === undefined) {
+      return { ref: r.formattedRef }
+    }
+    const entryFp = entryFingerprints[entryIdx]!
+    return {
+      ref: r.formattedRef,
+      ...(entryFp.title !== undefined ? { title: entryFp.title } : {}),
+      key: entryFp.entry.key,
+      start: entryFp.entry.start,
+      end: entryFp.entry.end,
     }
   })
 }
@@ -330,33 +421,52 @@ function locateCslFromBatch(text: string, refs: readonly ZoteroObjectRef[]): Loc
   const list = Array.isArray(records) ? records : []
   const byId = new Map<string, { id: string; index: number; title?: string }>()
   const byKey = new Map<string, { id: string; index: number; title?: string }>()
+
   for (let i = 0; i < list.length; i++) {
-    const rec = list[i]
-    if (typeof rec === 'object' && rec !== null && !Array.isArray(rec)) {
-      const r = rec as Record<string, unknown>
-      if (typeof r.id === 'string') {
-        const entry = {
-          id: r.id,
-          index: i,
-          ...(typeof r.title === 'string' ? { title: r.title } : {}),
-        }
-        byId.set(r.id, entry)
-        const slash = r.id.lastIndexOf('/')
-        const key = slash !== -1 ? r.id.slice(slash + 1) : r.id
-        if (!byKey.has(key)) {
-          byKey.set(key, entry)
-        }
+    const rec = asRecord(list[i])
+    if (rec === undefined) continue
+    const id = asString(rec['id'])
+    if (id !== undefined) {
+      const title = asString(rec['title'])
+      const entry = {
+        id,
+        index: i,
+        ...(title !== undefined ? { title } : {}),
+      }
+      byId.set(id, entry)
+      const slash = id.lastIndexOf('/')
+      const key = slash !== -1 ? id.slice(slash + 1) : id
+      if (!byKey.has(key)) {
+        byKey.set(key, entry)
       }
     }
   }
-  const findMatch = (key: string) => byId.get(key) ?? byKey.get(key)
+
   return refs.map((ref) => {
     const formattedRef = formatRef(ref)
-    const found = findMatch(ref.key)
+    const found = byId.get(ref.key) ?? byKey.get(ref.key)
     return {
       ref: formattedRef,
       ...(found?.title !== undefined ? { title: found.title } : {}),
       ...(found !== undefined ? { key: found.id, entryIndex: found.index } : {}),
     }
   })
+}
+
+/**
+ * Locate items directly from the batch export body in memory without
+ * secondary per-document HTTP calls.
+ */
+export function locateExportItemsFromBatch(
+  format: ZoteroExportFormat,
+  text: string,
+  refs: readonly ZoteroObjectRef[],
+  rawItems?: readonly unknown[],
+): LocatedExportItem[] {
+  if (format === 'bibtex' || format === 'biblatex') {
+    return alignBibtexEntries(text, refs, rawItems)
+  }
+  if (format === 'ris') return locateRisFromBatch(text, refs)
+  if (format === 'csljson') return locateCslFromBatch(text, refs)
+  return refs.map((ref) => ({ ref: formatRef(ref) }))
 }

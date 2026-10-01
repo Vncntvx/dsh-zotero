@@ -7,7 +7,12 @@
 
 import { describe, expect, it } from 'vitest'
 import {
+  bibtexFieldOf,
   locateExportItemsFromBatch,
+  normalizeAuthorForAlignment,
+  normalizeDoiForAlignment,
+  normalizeTitleForAlignment,
+  normalizeYearForAlignment,
   splitBibtexEntries,
   splitRisRecords,
 } from '../../src/export-mapping.js'
@@ -256,7 +261,7 @@ describe('locateExportItemsFromBatch', () => {
   const ref1 = parseRef(R1)
   const ref2 = parseRef(R2)
 
-  it('matches BibTeX entries by key, mention, or positional fallback', () => {
+  it('matches BibTeX entries by key, mention, or metadata without positional guessing', () => {
     // 1. Direct key match
     const directText = '@article{AAAAAAA1,\n  title = {Paper One},\n}\n'
     const direct = locateExportItemsFromBatch('bibtex', directText, [ref1])
@@ -283,22 +288,162 @@ describe('locateExportItemsFromBatch', () => {
       },
     ])
 
-    // 3. Positional fallback when count matches and no key/mention matched
-    const posText = '@article{unrelated,\n  title = {Paper Pos},\n}\n'
-    const pos = locateExportItemsFromBatch('bibtex', posText, [ref1])
-    expect(pos).toEqual([
+    // 3. Metadata title match when key is arbitrary and not mentioned in text
+    const metaText = '@article{unrelatedCitekey,\n  title = {Paper Meta},\n}\n'
+    const meta = locateExportItemsFromBatch(
+      'bibtex',
+      metaText,
+      [ref1],
+      [{ key: 'AAAAAAA1', data: { title: 'Paper Meta' } }],
+    )
+    expect(meta).toEqual([
       {
         ref: R1,
-        title: 'Paper Pos',
-        key: 'unrelated',
+        title: 'Paper Meta',
+        key: 'unrelatedCitekey',
         start: 0,
-        end: posText.length,
+        end: metaText.length,
       },
     ])
 
-    // 4. Unlocated when entries length does not match refs
-    const unlocated = locateExportItemsFromBatch('bibtex', '@article{unrelated,\n}\n', [ref1, ref2])
+    // 4. Strictly unlocated when neither key, mention, nor metadata matches (no positional guessing)
+    const unlocated = locateExportItemsFromBatch(
+      'bibtex',
+      '@article{unrelatedCitekey,\n  title = {Unrelated},\n}\n',
+      [ref1, ref2],
+    )
     expect(unlocated).toEqual([{ ref: R1 }, { ref: R2 }])
+  })
+
+  it('deterministically pairs entries in reverse order with custom citekeys via metadata', () => {
+    const R3 = 'zotero://user/0/item/CCCCCCCC'
+    const ref3 = parseRef(R3)
+    // 3 items requested in order: ref1, ref2, ref3
+    // BibTeX exported in reverse alphabetical order: entry3 (Adams), entry2 (Brown), entry1 (Zhang)
+    const bibtex =
+      '@article{adams2017,\n  title = {{Attention} is All You Need},\n  author = {Adams, John},\n  year = {2017},\n  doi = {10.1000/adams}\n}\n\n' +
+      '@article{brown2022,\n  title = {Deep Residual Learning},\n  author = {Brown, Bob},\n  year = {2022},\n  doi = {10.1000/brown}\n}\n\n' +
+      '@article{zhang2023,\n  title = {Quantum Computing Foundations},\n  author = {Zhang, Wei},\n  year = {2023},\n  doi = {10.1000/zhang}\n}\n'
+
+    const secondStart = bibtex.indexOf('@article{brown2022,')
+    const thirdStart = bibtex.indexOf('@article{zhang2023,')
+
+    const rawItems = [
+      {
+        key: 'AAAAAAA1',
+        data: {
+          title: 'Quantum Computing Foundations',
+          DOI: '10.1000/zhang',
+          date: '2023',
+          creators: [{ creatorType: 'author', lastName: 'Zhang', firstName: 'Wei' }],
+        },
+      },
+      {
+        key: 'BBBBBBBB',
+        data: {
+          title: 'Deep Residual Learning',
+          DOI: '10.1000/brown',
+          date: '2022',
+          creators: [{ creatorType: 'author', lastName: 'Brown', firstName: 'Bob' }],
+        },
+      },
+      {
+        key: 'CCCCCCCC',
+        data: {
+          title: 'Attention is All You Need',
+          DOI: '10.1000/adams',
+          date: '2017',
+          creators: [{ creatorType: 'author', lastName: 'Adams', firstName: 'John' }],
+        },
+      },
+    ]
+
+    const items = locateExportItemsFromBatch('bibtex', bibtex, [ref1, ref2, ref3], rawItems)
+    expect(items).toEqual([
+      {
+        ref: R1,
+        key: 'zhang2023',
+        title: 'Quantum Computing Foundations',
+        start: thirdStart,
+        end: bibtex.length,
+      },
+      {
+        ref: R2,
+        key: 'brown2022',
+        title: 'Deep Residual Learning',
+        start: secondStart,
+        end: thirdStart,
+      },
+      {
+        ref: R3,
+        key: 'adams2017',
+        title: '{Attention} is All You Need',
+        start: 0,
+        end: secondStart,
+      },
+    ])
+  })
+
+  it('disambiguates homonymous entries using publication year and author', () => {
+    const bibtex =
+      '@article{editorial2021,\n  title = {Editorial Overview},\n  author = {Smith, Alice},\n  year = {2021},\n}\n\n' +
+      '@article{editorial2023,\n  title = {Editorial Overview},\n  author = {Jones, Bob},\n  year = {2023},\n}\n'
+    const secondStart = bibtex.indexOf('@article{editorial2023,')
+    const rawItems = [
+      {
+        key: 'AAAAAAA1',
+        data: {
+          title: 'Editorial Overview',
+          date: '2021-01-01',
+          creators: [{ creatorType: 'author', lastName: 'Smith' }],
+        },
+      },
+      {
+        key: 'BBBBBBBB',
+        data: {
+          title: 'Editorial Overview',
+          date: '2023-05-01',
+          creators: [{ creatorType: 'author', lastName: 'Jones' }],
+        },
+      },
+    ]
+
+    const items = locateExportItemsFromBatch('bibtex', bibtex, [ref1, ref2], rawItems)
+    expect(items).toEqual([
+      {
+        ref: R1,
+        key: 'editorial2021',
+        title: 'Editorial Overview',
+        start: 0,
+        end: secondStart,
+      },
+      {
+        ref: R2,
+        key: 'editorial2023',
+        title: 'Editorial Overview',
+        start: secondStart,
+        end: bibtex.length,
+      },
+    ])
+  })
+
+  it('leaves missing items unlocated without guessing or displacing others', () => {
+    const bibtex = '@article{adams2017,\n  title = {Attention is All You Need},\n}\n'
+    const rawItems = [
+      { key: 'AAAAAAA1', data: { title: 'Missing Paper' } },
+      { key: 'BBBBBBBB', data: { title: 'Attention is All You Need' } },
+    ]
+    const items = locateExportItemsFromBatch('bibtex', bibtex, [ref1, ref2], rawItems)
+    expect(items).toEqual([
+      { ref: R1 },
+      {
+        ref: R2,
+        key: 'adams2017',
+        title: 'Attention is All You Need',
+        start: 0,
+        end: bibtex.length,
+      },
+    ])
   })
 
   it('matches RIS records by ID and falls back gracefully', () => {
@@ -340,18 +485,36 @@ describe('locateExportItemsFromBatch', () => {
     expect(mixed).toEqual([{ ref: R1, key: 'AAAAAAA1', entryIndex: 5 }])
   })
 
-  it('never equates a key with a longer token containing it', () => {
-    // XAAAAAAA1 contains AAAAAAA1 as a substring but not as a whole token:
-    // mention matching must not claim the entry, and with 1 ref / 1 entry
-    // the 1×1 fallback still applies (unambiguous) — the token rule only
-    // decides priority between entries, never locateability itself.
+  it('never equates a key with a longer token containing it and refuses positional guessing', () => {
     const text = '@article{customKey,\n  note = {XAAAAAAA1},\n}\n'
     const items = locateExportItemsFromBatch('bibtex', text, [ref1])
-    expect(items).toEqual([{ ref: R1, key: 'customKey', start: 0, end: text.length }])
-    // Two refs, one entry carrying only the superstring: neither mentions the
-    // key, and the counts differ, so both stay bare.
+    expect(items).toEqual([{ ref: R1 }])
+
     const two = locateExportItemsFromBatch('bibtex', text, [ref1, ref2])
     expect(two).toEqual([{ ref: R1 }, { ref: R2 }])
+  })
+
+  it('matches BibTeX entries via extra citation key', () => {
+    const bibtex = '@article{customExtraKey,\n  title = {Different Title in Bib},\n}\n'
+    const rawItems = [
+      {
+        key: 'AAAAAAA1',
+        data: {
+          title: 'Paper Title',
+          extra: 'Citation Key: customExtraKey',
+        },
+      },
+    ]
+    const items = locateExportItemsFromBatch('bibtex', bibtex, [ref1], rawItems)
+    expect(items).toEqual([
+      {
+        ref: R1,
+        key: 'customExtraKey',
+        title: 'Different Title in Bib',
+        start: 0,
+        end: bibtex.length,
+      },
+    ])
   })
 
   it('claims each entry at most once across direct and mention matches', () => {
@@ -365,8 +528,100 @@ describe('locateExportItemsFromBatch', () => {
     expect(items[1]!.start).toBeGreaterThan(0)
   })
 
+  it('tolerates entries without title and leaves unlocatable homonyms unlocated', () => {
+    // 1. Entry without title field
+    const textNoTitle = '@article{keyNoTitle,\n  year = 2024,\n}\n'
+    const itemsNoTitle = locateExportItemsFromBatch(
+      'bibtex',
+      textNoTitle,
+      [ref1],
+      [{ key: 'AAAAAAA1', data: { extra: 'Citation Key: keyNoTitle' } }],
+    )
+    expect(itemsNoTitle[0]?.title).toBeUndefined()
+    expect(itemsNoTitle[0]?.key).toBe('keyNoTitle')
+
+    // 2. Homonyms with completely identical title, year, and author cannot be disambiguated -> stay unlocated
+    const homonymText =
+      '@article{keyA,\n  title = {Same},\n  author = {Smith},\n  year = 2020,\n}\n\n' +
+      '@article{keyB,\n  title = {Same},\n  author = {Smith},\n  year = 2020,\n}\n'
+    const rawSame = [
+      { key: 'AAAAAAA1', title: 'Same', date: '2020', creators: [{ lastName: 'Smith' }] },
+      null,
+      { data: { key: 'BBBBBBBB', title: 'Same', date: '2020', creators: [{ lastName: 'Smith' }] } },
+    ]
+    const itemsHomonym = locateExportItemsFromBatch('bibtex', homonymText, [ref1, ref2], rawSame)
+    expect(itemsHomonym).toEqual([{ ref: R1 }, { ref: R2 }])
+
+    // 3. RIS record without ID
+    const risNoId = 'TY  - JOUR\nTI  - No ID\nER  -\n'
+    expect(locateExportItemsFromBatch('ris', risNoId, [ref1])).toEqual([{ ref: R1 }])
+
+    // 4. CSL JSON duplicate keys
+    const cslDup = JSON.stringify([
+      { id: 'http://zotero.org/users/0/items/AAAAAAA1', title: 'First' },
+      { id: 'http://zotero.org/groups/1/items/AAAAAAA1', title: 'Duplicate' },
+    ])
+    const cslRes = locateExportItemsFromBatch('csljson', cslDup, [ref1])
+    expect(cslRes[0]?.key).toBe('http://zotero.org/users/0/items/AAAAAAA1')
+  })
+
   it('returns plain refs for non-per-document formats', () => {
     const items = locateExportItemsFromBatch('bibliography', '<div/>', [ref1])
     expect(items).toEqual([{ ref: R1 }])
+  })
+})
+
+describe('bibtexFieldOf', () => {
+  it('extracts braced values with nested braces', () => {
+    const text = '@article{key,\n  title = {{Nested {Braced} Value}},\n}\n'
+    expect(bibtexFieldOf(text, 'title')).toBe('{Nested {Braced} Value}')
+  })
+
+  it('extracts double-quoted values', () => {
+    const text = '@article{key,\n  author = "Doe, Jane and Smith, John",\n}\n'
+    expect(bibtexFieldOf(text, 'author')).toBe('Doe, Jane and Smith, John')
+  })
+
+  it('extracts bare numeric or token values', () => {
+    const text = '@article{key,\n  year = 2024,\n}\n'
+    expect(bibtexFieldOf(text, 'year')).toBe('2024')
+  })
+
+  it('returns undefined for absent fields, unclosed braces, or unclosed quotes', () => {
+    expect(bibtexFieldOf('@article{key,\n}\n', 'title')).toBeUndefined()
+    expect(bibtexFieldOf('title = {Unclosed', 'title')).toBeUndefined()
+    expect(bibtexFieldOf('title = "Unclosed', 'title')).toBeUndefined()
+  })
+})
+
+describe('normalization helpers', () => {
+  it('normalizes titles by stripping braces, LaTeX macros, and punctuation', () => {
+    expect(normalizeTitleForAlignment('{Deep} {Learning}: A \\textbf{New} Frontier!')).toBe(
+      'deep learning a new frontier',
+    )
+    expect(normalizeTitleForAlignment(undefined)).toBeUndefined()
+    expect(normalizeTitleForAlignment('   ')).toBeUndefined()
+  })
+
+  it('normalizes DOIs by stripping URL prefixes', () => {
+    expect(normalizeDoiForAlignment('https://doi.org/10.1234/XYZ')).toBe('10.1234/xyz')
+    expect(normalizeDoiForAlignment('http://dx.doi.org/10.1234/XYZ')).toBe('10.1234/xyz')
+    expect(normalizeDoiForAlignment('doi:10.1234/XYZ')).toBe('10.1234/xyz')
+    expect(normalizeDoiForAlignment(undefined)).toBeUndefined()
+    expect(normalizeDoiForAlignment('   ')).toBeUndefined()
+  })
+
+  it('normalizes authors to primary surname', () => {
+    expect(normalizeAuthorForAlignment('Vaswani, Ashish and Shazeer, Noam')).toBe('vaswani')
+    expect(normalizeAuthorForAlignment('Ashish Vaswani and Noam Shazeer')).toBe('vaswani')
+    expect(normalizeAuthorForAlignment(undefined)).toBeUndefined()
+    expect(normalizeAuthorForAlignment('   ')).toBeUndefined()
+  })
+
+  it('normalizes year to 4-digit string', () => {
+    expect(normalizeYearForAlignment('2023-07-28')).toBe('2023')
+    expect(normalizeYearForAlignment('circa 1999')).toBe('1999')
+    expect(normalizeYearForAlignment('no date')).toBeUndefined()
+    expect(normalizeYearForAlignment(undefined)).toBeUndefined()
   })
 })

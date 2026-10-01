@@ -39,7 +39,7 @@ graph LR
 - Bounded concurrency across fan-out operations avoids overloading the local API;
 - Note content scans execute within configured record limits on the initial page (offset 0);
 - Evidence passages rank via the BM25 term frequency algorithm;
-- Export operations adhere to local API batch size limits, using a zero-N+1 in-memory slicing engine for batch formats (`bibtex`, `biblatex`, `ris`, `csljson`) to complete exports in a single API call ($O(1)$ HTTP request) and eliminate secondary per-item fetching;
+- Export operations adhere to local API batch size limits, using a zero-N+1 in-memory slicing engine for batch formats (`bibtex`, `biblatex`, `ris`, `csljson`) to complete exports with $O(1)$ HTTP requests (a single batch call for `ris`/`csljson`; two parallel batch requests for `bibtex`/`biblatex`) and eliminate secondary per-item fetching;
 - Write domain supports cross-library relations (`dc:relation`), automatically mapping group library items to canonical `http://zotero.org/groups/<id>/items/<key>` URIs.
 
 ### Background Job Engine (`src/job-runner.ts`)

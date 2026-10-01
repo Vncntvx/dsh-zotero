@@ -168,7 +168,7 @@ Returns `{kind: "background", jobId}` or `{kind: "promoted", jobId, timeoutMs, m
 ### Notes
 
 - In `citation` mode, requests exceeding 50 keys batch automatically;
-- `bibtex`, `biblatex`, `ris`, and `csljson` utilize a zero-N+1 in-memory slicing engine: batch export executes in a single local API call ($O(1)$ HTTP request), where the engine syntax-awarely parses and slices entries in memory matching requested refs, supporting up to 50 items per call;
+- `bibtex`, `biblatex`, `ris`, and `csljson` utilize a zero-N+1 in-memory slicing engine: batch export executes with $O(1)$ local API batch requests (a single request for `ris` and `csljson`; two parallel batch requests for `bibtex` and `biblatex` for deterministic metadata alignment), where the engine syntax-awarely parses and slices entries in memory matching requested refs, supporting up to 50 items per call;
 - All refs in a single export call must belong to the same library.
 
 ### Example

@@ -135,39 +135,52 @@ describe('export', () => {
         { ref: 'zotero://user/0/item/ABCD1234' },
         { ref: 'zotero://user/0/item/BBBB1234' },
       ])
-      // Zero N+1: batch export makes exactly 1 HTTP request per format!
-      expect(mock.requests.length - before).toBe(1)
-      expect(mock.requests[before]!.search.get('format')).toBe(format)
+      const expectedRequests = format === 'bibtex' || format === 'biblatex' ? 2 : 1
+      const batchRequests = mock.requests.slice(before)
+      expect(batchRequests).toHaveLength(expectedRequests)
+      expect(batchRequests.some((r) => r.search.get('format') === format)).toBe(true)
+      if (format === 'bibtex' || format === 'biblatex') {
+        expect(batchRequests.some((r) => r.search.get('format') === null)).toBe(true)
+      }
     }
   })
 
   it('pairs each translator document with its batch entry and projects the span', async () => {
     const batchText =
-      '@article{ABCD1234,\n  title = {Carbon price forecasting},\n}\n\n' +
-      '@article{BBBB1234,\n  title = {Insight into heterogeneous risks},\n}\n'
-    const secondStart = batchText.indexOf('@article{BBBB1234,')
-    serveText(mock, `${apiPath()}/items`, batchText)
+      '@article{customKeyA,\n  title = {Carbon price forecasting},\n}\n\n' +
+      '@article{customKeyB,\n  title = {Insight into heterogeneous risks},\n}\n'
+    const secondStart = batchText.indexOf('@article{customKeyB,')
+    mock.route('GET', `${apiPath()}/items`, (req, res, helpers, search) => {
+      if (search.get('format') === 'bibtex') {
+        helpers.text(batchText)
+      } else {
+        helpers.json([
+          { key: 'ABCD1234', data: { key: 'ABCD1234', title: 'Carbon price forecasting' } },
+          { key: 'BBBB1234', data: { key: 'BBBB1234', title: 'Insight into heterogeneous risks' } },
+        ])
+      }
+    })
     const result = await provider.export(exportRequest({ format: 'bibtex' }))
     if (result.format !== 'bibtex') throw new Error('unreachable')
     expect(result.text).toBe(batchText)
     expect(result.items).toEqual([
       {
         ref: 'zotero://user/0/item/ABCD1234',
-        key: 'ABCD1234',
+        key: 'customKeyA',
         title: 'Carbon price forecasting',
         start: 0,
         end: secondStart,
       },
       {
         ref: 'zotero://user/0/item/BBBB1234',
-        key: 'BBBB1234',
+        key: 'customKeyB',
         title: 'Insight into heterogeneous risks',
         start: secondStart,
         end: batchText.length,
       },
     ])
-    // The export performs exactly 1 batch request without N+1 secondary requests.
-    expectRequestCount(mock, 1)
+    // The export performs 2 batch requests: 1 for bibtex text and 1 for raw metadata
+    expectRequestCount(mock, 2)
     expect(mock.requests[0]!.search.get('itemKey')).toBe('ABCD1234,BBBB1234')
     expect(mock.requests[0]!.search.get('format')).toBe('bibtex')
   })

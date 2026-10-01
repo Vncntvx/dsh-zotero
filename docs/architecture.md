@@ -39,7 +39,7 @@ graph LR
 - 读路径采用有界并发与分片并发控制，避免对本地 API 造成瞬时过载；
 - 笔记内容扫描在第一页（offset 0）按限额执行；
 - 证据片段基于 BM25 词频算法排序；
-- 导出服务遵循 Zotero 本地接口的单次请求限制，批量导出（`bibtex`、`biblatex`、`ris`、`csljson`）采用 Zero-N+1 内存切分引擎（$O(1)$ HTTP 请求），完全消除单条二次抓取；
+- 导出服务遵循 Zotero 本地接口的单次请求限制，批量导出（`bibtex`、`biblatex`、`ris`、`csljson`）采用 Zero-N+1 内存切分引擎（$O(1)$ HTTP 请求，`ris`/`csljson` 单次批请求，`bibtex`/`biblatex` 2 次并行批请求），完全消除单条二次抓取；
 - 写入领域支持跨库文献关系（`dc:relation`），群组库条目自动映射至规范的 `http://zotero.org/groups/<id>/items/<key>` URI。
 
 ### 后台任务引擎 (`src/job-runner.ts`)
