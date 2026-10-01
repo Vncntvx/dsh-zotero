@@ -12,7 +12,8 @@ export declare function checkVersionMap(
 ): string[]
 
 /**
- * Rewrite every harness face of a manifest to one exact pin (mutates `manifest`).
+ * Rewrite every harness face of a manifest to the pin (mutates `manifest`).
+ * Dev/overrides take the exact pin; peers, engines, and harnessRange become >=pin.
  * @param manifest - parsed package.json.
  * @param version - the exact new pin.
  * @returns the same manifest.
@@ -26,7 +27,7 @@ export declare function applyPinToManifest<T extends Record<string, unknown>>(
  * Every harness-face problem in a manifest relative to one exact pin.
  * @param manifest - parsed package.json.
  * @param pin - the exact pin every face must equal.
- * @returns human-readable problems; empty when every face is the pin.
+ * @returns human-readable problems; empty when every face satisfies its rule.
  */
 export declare function collectPinFaceProblems(
   manifest: Record<string, unknown>,

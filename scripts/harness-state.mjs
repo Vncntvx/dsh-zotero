@@ -3,14 +3,14 @@
  *
  * Two derived facts have to agree, and both rot silently:
  *
- * 1. **The pin.** `package.json` carries one harness line in exact form only:
+ * 1. **The pin.** `package.json` carries one harness line:
  *    every `@deepseek-ai/dsh-*` in `dependencies` / `devDependencies` /
- *    `overrides` / `peerDependencies`, plus `engines.dsh` and `dsh.harnessRange`.
- *    `dsh.harnessRange` is this plugin's own consistency face (harness does
- *    not read it); the real compatibility gate is `peerDependencies`.
+ *    `overrides` pins the exact tested version. `peerDependencies`,
+ *    `engines.dsh`, and `dsh.harnessRange` are declared as `>=` the pin
+ *    so the runtime compatibility gate admits forward releases.
  *    No caret ranges, no dual arms. The exact `devDependencies` line is the
  *    source of truth; every other form is written from it. The tracked
- *    `package-lock.json` is held to the same pin.
+ *    `package-lock.json` resolves the pinned packages.
  *
  * 2. **The artifacts.** Upstream packages resolve through
  *    `node_modules/@deepseek-ai/*`, which `scripts/link-local-harness.mjs`
@@ -44,18 +44,20 @@ const docPaths = ['docs/getting-started.md', 'docs/getting-started.en.md'].map((
 /** Files whose prose restates the pin. */
 const prosePaths = [...readmePaths, ...docPaths, agentsPath]
 /** Manifest sections whose every `@deepseek-ai/dsh-*` entry must equal the pin exactly. */
-const VERSION_SECTIONS = ['dependencies', 'devDependencies', 'overrides', 'peerDependencies']
+const EXACT_VERSION_SECTIONS = ['dependencies', 'devDependencies', 'overrides']
+/** All manifest sections that carry `@deepseek-ai/dsh-*` entries. */
+const VERSION_SECTIONS = [...EXACT_VERSION_SECTIONS, 'peerDependencies']
 /** Source roots scanned for the upstream imports whose artifacts must be fresh. */
 const SCAN_ROOTS = ['src', 'tests']
 const VERSION_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/
 /**
  * Prose forms of the current pin. Badges are exact (`badge/dsh-0.1.7--rc.1-blue`);
- * the `>=` badge form is recognized only so a stale one can be rejected.
+ * prose allows an optional `>=` prefix before the version.
  */
 const PROSE_VERSION_PATTERNS = [
   // Exact badge first so `dsh-0.1.7--rc.1-blue` never yields a bare `0.1.7`.
   /badge\/dsh-(\d+\.\d+\.\d+(?:--[0-9A-Za-z.]+)?)-blue/g,
-  /dsh[- ]v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)*)(?!-)/gi,
+  /dsh[- ](?:>=\s*|>=)?v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)*)(?!-)/gi,
 ]
 /** Legacy `>=` badge: legal only as a migration leftover; current form is exact. */
 const LEGACY_GTE_BADGE = /%3E%3D(\d+\.\d+\.\d+(?:--[0-9A-Za-z.]+)?)-blue/g
@@ -312,6 +314,16 @@ function isExactPinFace(value, pin) {
   return value === pin && VERSION_PATTERN.test(value)
 }
 
+/**
+ * Whether a declared compatibility face is >= the exact pin.
+ * @param value - the declared string.
+ * @param pin - the exact pin.
+ * @returns true when the value is >=pin.
+ */
+function isGtePinFace(value, pin) {
+  return value === `>=${pin}`
+}
+
 /** Human-readable reason a harness face is not the exact pin. */
 function exactPinProblem(section, name, value, pin) {
   const where = name === undefined ? section : `${section}["${name}"]`
@@ -324,12 +336,25 @@ function exactPinProblem(section, name, value, pin) {
   return `${where} is "${value}", expected the exact pin "${pin}"`
 }
 
+/** Human-readable reason a compatibility face is not >= the exact pin. */
+function gtePinProblem(section, name, value, pin) {
+  const where = name === undefined ? section : `${section}["${name}"]`
+  const expected = `>=${pin}`
+  if (typeof value !== 'string' || value.length === 0) {
+    return `${where} is missing; expected "${expected}"`
+  }
+  if (value.includes('||') || /^[~^]|^<| - /.test(value)) {
+    return `${where} is "${value}"; expected "${expected}" (no caret ranges, no dual arms)`
+  }
+  return `${where} is "${value}", expected "${expected}"`
+}
+
 /**
  * Every harness-face problem in a manifest relative to one exact pin.
  * Pure: used by `checkPin` and unit-tested without the CLI side effects.
  * @param manifest - parsed package.json.
  * @param pin - the exact pin every face must equal.
- * @returns human-readable problems; empty when every face is the pin.
+ * @returns human-readable problems; empty when every face satisfies its rule.
  */
 export function collectPinFaceProblems(manifest, pin) {
   const found = []
@@ -339,10 +364,10 @@ export function collectPinFaceProblems(manifest, pin) {
   if (peers.length === 0) {
     found.push(
       'peerDependencies declares no @deepseek-ai/dsh-* entry;' +
-        ' at least one exact dsh peer is required so the runtime rejects other dsh lines',
+        ' at least one dsh peer is required so the runtime checks compatibility',
     )
   }
-  for (const section of VERSION_SECTIONS) {
+  for (const section of EXACT_VERSION_SECTIONS) {
     for (const [name, version] of Object.entries(manifest[section] ?? {})) {
       if (!isDshPackage(name)) continue
       if (!isExactPinFace(version, pin)) {
@@ -350,11 +375,17 @@ export function collectPinFaceProblems(manifest, pin) {
       }
     }
   }
-  if (!isExactPinFace(manifest.engines?.dsh, pin)) {
-    found.push(exactPinProblem('engines.dsh', undefined, manifest.engines?.dsh, pin))
+  for (const [name, version] of Object.entries(manifest.peerDependencies ?? {})) {
+    if (!isDshPackage(name)) continue
+    if (!isGtePinFace(version, pin)) {
+      found.push(gtePinProblem('peerDependencies', name, version, pin))
+    }
   }
-  if (!isExactPinFace(manifest.dsh?.harnessRange, pin)) {
-    found.push(exactPinProblem('dsh.harnessRange', undefined, manifest.dsh?.harnessRange, pin))
+  if (!isGtePinFace(manifest.engines?.dsh, pin)) {
+    found.push(gtePinProblem('engines.dsh', undefined, manifest.engines?.dsh, pin))
+  }
+  if (!isGtePinFace(manifest.dsh?.harnessRange, pin)) {
+    found.push(gtePinProblem('dsh.harnessRange', undefined, manifest.dsh?.harnessRange, pin))
   }
   return found
 }
@@ -518,21 +549,24 @@ function checkArtifacts(strict) {
 }
 
 /**
- * Rewrite every harness face of a manifest to one exact pin. Mutates
- * `manifest` in place. Peers, engines, and harnessRange all become the
- * pin itself — never a caret range and never a dual arm.
+ * Rewrite every harness face of a manifest to the pin. Mutates
+ * `manifest` in place. Dev and overrides take the exact pin; peers,
+ * engines, and harnessRange become >=pin.
  * @param manifest - parsed package.json (mutated in place).
  * @param version - the exact new pin.
  * @returns the same manifest for chaining/tests.
  */
 export function applyPinToManifest(manifest, version) {
-  for (const section of VERSION_SECTIONS) {
+  for (const section of EXACT_VERSION_SECTIONS) {
     for (const name of Object.keys(manifest[section] ?? {})) {
       if (isDshPackage(name)) manifest[section][name] = version
     }
   }
-  if (manifest.dsh && typeof manifest.dsh === 'object') manifest.dsh.harnessRange = version
-  manifest.engines = { ...manifest.engines, dsh: version }
+  for (const name of Object.keys(manifest.peerDependencies ?? {})) {
+    if (isDshPackage(name)) manifest.peerDependencies[name] = `>=${version}`
+  }
+  if (manifest.dsh && typeof manifest.dsh === 'object') manifest.dsh.harnessRange = `>=${version}`
+  manifest.engines = { ...manifest.engines, dsh: `>=${version}` }
   return manifest
 }
 

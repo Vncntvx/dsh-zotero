@@ -69,7 +69,7 @@ The plugin provides a settings page under **Settings → Zotero** — a left-nav
 
 - Zotero ≥ 7 supports reads; writes require Zotero 10. Enable the local API: **Settings → Advanced → "Allow other applications on this computer to communicate with Zotero"**
 - Node.js ≥ 22.19 (or ≥ 24)
-- dsh 0.2.0-rc.2 host (exactly this version: `engines.dsh` and every `@deepseek-ai/dsh-*` peer pin that exact version; no other dsh release is supported)
+- dsh >= 0.2.0-rc.2 host (`engines.dsh` and every `@deepseek-ai/dsh-*` peer declare `>= 0.2.0-rc.2`, compatible with this and future higher versions)
 - Local API at `http://127.0.0.1:23119/api`; reads are unauthenticated, while Zotero 10 writes use a locally issued write key
 
 ## Usage example
@@ -99,22 +99,19 @@ Agent → zotero_export(refs: ["zotero://user/0/item/ABCD1234",
 
 More examples in [Features](docs/features.en.md).
 
-## Limits
+## Limitations
 
-- **Read-only by default**: after `writeEnabled` is explicitly enabled, three write tools can create research notes, add tags, or add personal-library items to collections; every write first shows a plan card for approval (there is no switch to turn it off), plus Zotero 10 local authorization
-- **Loopback only**: network requests go only to `127.0.0.1:23119`
-- **Evidence ranking is term-based**: BM25 ranks passages by query-term frequency match
-- **Exports are static text**: the tool returns text, and that is what the model reads; the Zotero panel offers one-click copy or file download (`.bib`, `.ris`, `.json`), so nothing has to be retyped
-- **Full-text evidence depends on Zotero's index**: unindexed PDFs yield no full-text passages
-- **Attachment depth depends on the harness**: `zotero_attachment` returns the file location; reading the PDF further needs a matching host capability
+- **Read-only by default**: Write tools (create note, add tags, add to collection) are available only when `writeEnabled` is turned on. Every write operation requires approval through the host confirmation card and local Zotero authorization.
+- **Keyword-based retrieval**: Passage search uses BM25 term matching rather than vector semantic search. Full-text search relies on Zotero's local index; unindexed PDFs will not return text passages.
+- **Attachment handling**: `zotero_attachment` verifies and returns local attachment paths. Reading or processing PDF contents depends on the host's document handling capabilities.
+- **Static exports**: Export tools return plain text (such as BibTeX, RIS, or CSL JSON), which can be copied or downloaded directly from the Zotero panel.
 
-## Permissions and external side effects
+## Permissions
 
-- **Network**: HTTP requests go only to `http://127.0.0.1:23119/api` (redirects are not followed); `resolveConfig` enforces a loopback address
-- **Filesystem**: read-only — `zotero_attachment` verifies attachment paths with async `stat`; no file writes
-- **Persistence**: settings save under the `zotero:` user layer of `$DSH_HOME/settings.yaml`; an Always-Allow Zotero write key is also stored in the host credentials service bound to its issuing instance
-- **No shell / native / background tasks**: the plugin runs no shell commands, loads no native modules, and starts no daemon
-- **Restart**: after installing or removing the plugin, restart dsh and start a new session; configuration changes hot-reload on save without a restart
+- **Network**: HTTP requests are restricted to the local `http://127.0.0.1:23119/api` loopback address. The plugin follows no redirects and makes no outbound network connections.
+- **Filesystem and processes**: Read-only access to local attachment paths (verified via async `stat`). The plugin executes no shell commands, loads no native binary modules, and spawns no background daemons.
+- **Persistence**: Plugin configuration is stored in `$DSH_HOME/settings.yaml`. If "Always Allow" is selected during write authorization, the issued key is stored in the host credentials store.
+- **Lifecycle**: Configuration changes hot-reload immediately upon save; installing or removing the plugin requires restarting the host application.
 
 ## Documentation
 

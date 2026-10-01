@@ -1,7 +1,7 @@
 /**
- * Pin-move prose rewriting and the exact single-line pin policy. The
- * historical version-mapping section must never be retargeted. Every harness
- * face is the exact pin: no caret peers, no dual `harnessRange` arms.
+ * Pin-move prose rewriting and the harness compatibility policy. The
+ * historical version-mapping section must never be retargeted. Dev and overrides
+ * take the exact pin; peers, engines, and harnessRange become >=pin.
  * @module tests/unit/harness-state
  */
 
@@ -112,13 +112,13 @@ describe('applyPinToManifest', () => {
     overrides: { '@deepseek-ai/dsh-tools': '0.1.7-alpha.2' },
   })
 
-  it('writes the exact pin into every harness face and drops ranges', () => {
+  it('writes the exact pin into dev/overrides and >=pin into peer/engines/harnessRange', () => {
     const next = applyPinToManifest(manifest(), '0.1.7-rc.1')
-    expect(next.engines.dsh).toBe('0.1.7-rc.1')
-    expect(next.dsh.harnessRange).toBe('0.1.7-rc.1')
+    expect(next.engines.dsh).toBe('>=0.1.7-rc.1')
+    expect(next.dsh.harnessRange).toBe('>=0.1.7-rc.1')
     expect(next.dependencies['@deepseek-ai/dsh-llm']).toBe('0.1.7-rc.1')
     expect(next.devDependencies['@deepseek-ai/dsh-tools']).toBe('0.1.7-rc.1')
-    expect(next.peerDependencies['@deepseek-ai/dsh-tools']).toBe('0.1.7-rc.1')
+    expect(next.peerDependencies['@deepseek-ai/dsh-tools']).toBe('>=0.1.7-rc.1')
     expect(next.overrides['@deepseek-ai/dsh-tools']).toBe('0.1.7-rc.1')
     expect(next.dependencies.zod).toBe('^4.4.3')
     expect(next.engines.node).toBe('>=22')
@@ -130,9 +130,9 @@ describe('applyPinToManifest', () => {
 
 describe('collectPinFaceProblems', () => {
   const exact = () => ({
-    engines: { dsh: '0.1.7-rc.1' },
-    dsh: { harnessRange: '0.1.7-rc.1' },
-    peerDependencies: { '@deepseek-ai/dsh-tools': '0.1.7-rc.1' },
+    engines: { dsh: '>=0.1.7-rc.1' },
+    dsh: { harnessRange: '>=0.1.7-rc.1' },
+    peerDependencies: { '@deepseek-ai/dsh-tools': '>=0.1.7-rc.1' },
   })
 
   it('rejects caret peers and dual harnessRange arms', () => {
@@ -141,22 +141,22 @@ describe('collectPinFaceProblems', () => {
       peerDependencies: { '@deepseek-ai/dsh-tools': '^0.1.7-rc.1' },
     }
     expect(collectPinFaceProblems(caret, '0.1.7-rc.1').join('\n')).toMatch(
-      /only the exact pin.*no ranges, no dual arms/,
+      /expected ">=0\.1\.7-rc\.1"/,
     )
     const dual = {
       ...exact(),
-      dsh: { harnessRange: '0.1.7-alpha.2 || 0.1.7-rc.1' },
+      dsh: { harnessRange: '>=0.1.7-alpha.2 || >=0.1.7-rc.1' },
     }
     expect(collectPinFaceProblems(dual, '0.1.7-rc.1').join('\n')).toMatch(/dsh\.harnessRange/)
   })
 
   it('rejects a wrong exact version and a missing engines/harnessRange face', () => {
     const wrong = {
-      engines: { dsh: '0.1.7-rc.2' },
+      engines: { dsh: '>=0.1.7-rc.2' },
       dsh: {},
     }
     const problems = collectPinFaceProblems(wrong, '0.1.7-rc.1')
-    expect(problems.join('\n')).toMatch(/engines\.dsh is "0\.1\.7-rc\.2"/)
+    expect(problems.join('\n')).toMatch(/engines\.dsh is ">=0\.1\.7-rc\.2"/)
     expect(problems.join('\n')).toMatch(/dsh\.harnessRange is missing/)
     // Zero dsh peers would load on any runtime (evaluatePluginCompatibility
     // reads only peerDependencies) — that is a policy hole, not a silent pass.
@@ -166,14 +166,14 @@ describe('collectPinFaceProblems', () => {
   it('rejects a manifest that dropped every dsh peer', () => {
     const problems = collectPinFaceProblems(
       {
-        engines: { dsh: '0.1.7-rc.1' },
-        dsh: { harnessRange: '0.1.7-rc.1' },
+        engines: { dsh: '>=0.1.7-rc.1' },
+        dsh: { harnessRange: '>=0.1.7-rc.1' },
         peerDependencies: { zod: '^4.4.3' },
       },
       '0.1.7-rc.1',
     )
     expect(problems.join('\n')).toMatch(/declares no @deepseek-ai\/dsh-\*/)
-    expect(problems.join('\n')).toMatch(/at least one exact dsh peer/)
+    expect(problems.join('\n')).toMatch(/at least one dsh peer/)
   })
 
   it('does not confuse a longer prerelease with the pin', () => {
