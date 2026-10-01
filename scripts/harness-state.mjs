@@ -30,6 +30,7 @@
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { collectHarnessPackages } from './shared/harness-packages.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const harnessRoot = resolve(process.env.DSH_HARNESS_ROOT ?? join(root, '../deepseek-harness'))
@@ -351,7 +352,7 @@ function checkPin(manifest) {
  * it is silent rot until the rename's real name is missing from overrides.
  */
 function checkOverrideNames(manifest) {
-  const known = harnessPackages()
+  const known = collectHarnessPackages(harnessRoot)
   if (known.size === 0) return
   for (const section of VERSION_SECTIONS) {
     for (const name of Object.keys(manifest[section] ?? {})) {
@@ -365,35 +366,6 @@ function checkOverrideNames(manifest) {
       )
     }
   }
-}
-
-/** Every `@deepseek-ai/*` package the sibling monorepo carries, name to directory. */
-function harnessPackages() {
-  const map = new Map()
-  const walk = (dir) => {
-    let entries
-    try {
-      entries = readdirSync(dir, { withFileTypes: true })
-    } catch {
-      return
-    }
-    for (const entry of entries) {
-      if (!entry.isDirectory() || entry.name === 'node_modules' || entry.name.startsWith('.'))
-        continue
-      const child = join(dir, entry.name)
-      const manifestPath = join(child, 'package.json')
-      if (!existsSync(manifestPath)) {
-        walk(child)
-        continue
-      }
-      const name = readJson(manifestPath).name
-      if (typeof name === 'string' && name.startsWith('@deepseek-ai/')) map.set(name, child)
-      else walk(child)
-    }
-  }
-  walk(join(harnessRoot, 'packages'))
-  walk(join(harnessRoot, 'vendor'))
-  return map
 }
 
 /** Collect every `@deepseek-ai/*` specifier this repo imports. */
@@ -474,7 +446,7 @@ function checkArtifacts(strict) {
     notes.push('sibling harness absent: upstream types come from the installed packages as-is')
     return
   }
-  const packages = harnessPackages()
+  const packages = collectHarnessPackages(harnessRoot)
   const stale = []
   const missing = []
   const outside = []

@@ -26,54 +26,12 @@ import {
 } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { collectHarnessPackages } from './shared/harness-packages.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const harnessRoot = resolve(root, '../deepseek-harness')
 const nmScope = join(root, 'node_modules', '@deepseek-ai')
 const checkOnly = process.argv.includes('--check')
-
-/** Read a directory's package.json scoped name, or undefined when absent/unreadable. */
-function packageNameOf(dir) {
-  const manifest = join(dir, 'package.json')
-  try {
-    const parsed = JSON.parse(readFileSync(manifest, 'utf8'))
-    return typeof parsed.name === 'string' && parsed.name.startsWith('@deepseek-ai/')
-      ? parsed.name
-      : undefined
-  } catch {
-    return undefined
-  }
-}
-
-/**
- * Every `@deepseek-ai/*` package the sibling monorepo publishes from
- * packages/ and vendor/ (flat vendor packages plus nested package trees).
- */
-function harnessPackages() {
-  const map = new Map()
-  const walk = (dir) => {
-    let entries
-    try {
-      entries = readdirSync(dir, { withFileTypes: true })
-    } catch {
-      return
-    }
-    for (const entry of entries) {
-      if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue
-      const child = join(dir, entry.name)
-      if (!entry.isDirectory()) continue
-      const name = packageNameOf(child)
-      if (name !== undefined) {
-        map.set(name, child)
-        continue
-      }
-      walk(child)
-    }
-  }
-  walk(join(harnessRoot, 'packages'))
-  walk(join(harnessRoot, 'vendor'))
-  return map
-}
 
 /** Short names already present under node_modules/@deepseek-ai, plus declared pins. */
 function targetShortNames() {
@@ -150,7 +108,7 @@ function main() {
     console.error(`sibling harness not found at ${harnessRoot}`)
     process.exit(1)
   }
-  const map = harnessPackages()
+  const map = collectHarnessPackages(harnessRoot)
   let ok = 0
   let linked = 0
   let relinked = 0
