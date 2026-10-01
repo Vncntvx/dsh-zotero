@@ -45,7 +45,7 @@ User → Agent → dsh Zotero Tools → ZoteroService → Provider → 127.0.0.1
 
 ### Background job engine (`src/job-runner.ts`)
 
-- Integrates with Harness 0.1.7's `ctx.jobs` unified task subsystem
+- Integrates with the Harness `ctx.jobs` unified task subsystem
 - Supports explicit background execution (`run_in_background: true`) and automatic promotion on timeout (`promoteOnTimeout: true`, governed by `foregroundWaitMs`)
 - Signal decoupling: background jobs run on their own `AbortController` signal so that agent turn expiry does not abort promoted jobs; caller-initiated abort explicitly invokes `registry.kill`
 - Channel partitioning: streaming progress updates use `{ channel: 'log' }` to report live status to the Web session topbar and log stream without cluttering model context; the final structured payload is safely recorded in `JobOutcome.result`

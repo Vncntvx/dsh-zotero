@@ -45,7 +45,7 @@ graph LR
 
 ### 后台长任务引擎 (`src/job-runner.ts`)
 
-- 适配 Harness 0.1.7 的 `ctx.jobs` 统一任务子系统
+- 适配 Harness 的 `ctx.jobs` 统一任务子系统
 - 支持显式后台执行（`run_in_background: true`）与超时自动提升（`promoteOnTimeout: true`，受 `foregroundWaitMs` 控制）
 - 信号分离：后台任务持有独立 `AbortController` 信号，调用方轮次超时不会强杀已提升的任务；调用方主动取消时显式触发 `registry.kill`
 - 通道隔离：流式进度上报走 `{ channel: 'log' }`，向 Web 会话顶栏与日志流实时汇报，避免污染模型上下文输出；任务最终产物安全写入 `JobOutcome.result`

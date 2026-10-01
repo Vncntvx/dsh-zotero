@@ -13,9 +13,8 @@ import {
   ZOTERO_STATUS_CONNECTED,
   ZOTERO_STATUS_DISCONNECTED,
   ZOTERO_STATUS_SERVER_ID_UNREPORTED,
-  ZOTERO_USAGE_MESSAGE,
-  statusLine,
-} from '../../src/command.js'
+} from '../../src/contract.js'
+import { ZOTERO_USAGE_MESSAGE, statusLine } from '../../src/command.js'
 import { parseRef } from '../../src/refs.js'
 import {
   CONNECTIVITY_POLICY_SENTENCE,
@@ -183,6 +182,7 @@ describe('prompt section', () => {
     expect(ZOTERO_PROMPT_ANCHOR).toBe('TOOL_REPORT')
     expect(ZOTERO_PROMPT_ORDER_OFFSET).toBe(50)
     expect(lane.ctx.systemPrompt.getSectionOrder(ZOTERO_PROMPT_ANCHOR)).toBe(2900)
+    expect(lane.ctx.systemPrompt.getSectionOrder('TOOL_COMPUTER_USE')).toBe(3000)
     for (const tool of ZOTERO_TOOL_NAMES) {
       expect(section!.text).toContain(tool)
     }

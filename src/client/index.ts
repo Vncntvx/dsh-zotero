@@ -73,7 +73,7 @@ export const inject = ['locale', 'slots', 'remote', 'configForms', 'uiConversati
  * exists after this plugin's own `$mount`, so a static inject would park the
  * plugin before it could ever mount anything. The store path
  * (`ctx.reflect.get`) resolves the same service by key, across fiber branches,
- * with no guard. Re-checked at dsh 0.1.7-rc.2.
+ * with no guard. Re-checked at dsh 0.2.0-rc.2.
  *
  * Do not copy this for other namespaces: prefer `ctx.remote.<ns>` + `inject`
  * whenever the namespace is not self-supplied by the same plugin. When

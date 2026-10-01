@@ -89,7 +89,7 @@ function buildCommitOf() {
  *  alongside react and the UI primitives instead of bundling zustand/immer.
  *  That harness list is this one's counterpart: anything in it that this bundle
  *  value-imports belongs here too, and `bundlePurityPlugin` below fails the
- *  build when a harness module slips into the artifact. At dsh 0.1.7-rc.2
+ *  build when a harness module slips into the artifact. At dsh 0.2.0-rc.2
  *  PLATFORM_MODULES also lists react-dom, @deepseek-ai/cordis, ui-slots, and
  *  ui-dockkit — this bundle value-imports none of them today (cordis and
  *  ui-slots are type-only), so they stay out of EXTERNALS and the purity
@@ -104,7 +104,7 @@ const EXTERNALS = [
 /**
  * Harness inline-safety lives in `client-graph-authority.mjs`
  * (`INLINE_SAFE` / `GENERATED_REMOTE` / `VENDORED_LIBRARY`), the counterpart of
- * `packages/client/tsdown.client.ts` at dsh-v0.1.7-rc.2.
+ * `packages/client/tsdown.client.ts` at dsh-v0.2.0-rc.2.
  * Packages the host half owns also live there — resolve-time and metafile
  * enforcement share one rule source with the unit tests.
  */
