@@ -10,7 +10,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/**/*.{ts,tsx}'],
-      // The package entry is a pure re-export module; `types.ts`, the
+      // The package entry is a pure re-export module; `src/types.ts`, the
       // sources domain model, and the ambient `css-modules.d.ts` are
       // types-only modules: none has runtime statements, so v8 reports them
       // as permanently uncovered. The global thresholds below are the gate;
@@ -22,7 +22,6 @@ export default defineConfig({
         'src/client/build-info-globals.d.ts',
         'src/client/plugin-slots.d.ts',
         'src/client/sources/model.ts',
-        'src/client/components/plugin/types.ts',
       ],
       // Thresholds are **ratchets per layer**, not aspirations: each number is
       // set just under what that layer measures today, so any drop fails while

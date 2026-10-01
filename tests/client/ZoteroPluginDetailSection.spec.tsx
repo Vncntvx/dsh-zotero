@@ -7,7 +7,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ZoteroPluginDetailSection } from '../../src/client/components/plugin/ZoteroPluginDetailSection.tsx'
-import type { PluginsSubject } from '../../src/client/components/plugin/types.ts'
+import type { PluginsSubject } from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import { RemoteError, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ZoteroStatusView } from '../../src/client/remote.ts'
 

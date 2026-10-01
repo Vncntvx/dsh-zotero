@@ -12,7 +12,7 @@ import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { ZOTERO_REMOTE_PACKAGE, type ZoteroStatusView } from '../../../contract.ts'
 import { DiagnosisBox } from '../DiagnosisBox.tsx'
 import { useZoteroProbe } from '../useZoteroProbe.ts'
-import type { PluginActivationOwnerProps } from './types.ts'
+import type { PluginActivationOwnerProps } from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import css from './plugin-cards.module.css'
 
 export interface ZoteroActivationGuideProps extends PluginActivationOwnerProps {

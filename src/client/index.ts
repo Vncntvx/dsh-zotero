@@ -45,6 +45,7 @@ import { SourcesTab, type SourcesTabFace } from './components/SourcesTab.tsx'
 import { ZOTERO_REMOTE } from './remote.ts'
 import type { ZoteroRemoteFace } from './remote.ts'
 import { ZoteroCardController } from './zotero-card-controller.ts'
+import { zoteroQuickConfigFace, type ZoteroProbeFace } from './components/plugin/faces.ts'
 import { ZOTERO_REMOTE_PACKAGE, type ZoteroStatusView } from '../contract.ts'
 import { ZOTERO_SETTINGS_NAMESPACE } from '../settings-namespace.ts'
 import type {} from './plugin-slots.d.ts'
@@ -181,19 +182,22 @@ export function apply(ctx: ClientContext): void {
       {
         name: 'plugins.bundle.activation',
         key: ZOTERO_REMOTE_PACKAGE,
-        inject: () => ({ t, probe }),
+        inject: (): ZoteroProbeFace => ({ t, probe }),
       },
       ZoteroActivationGuide,
     ),
   )
 
-  // Quick toggles in the plugin manager detail page (plugins.bundle.config)
+  // Quick toggles in the plugin manager detail page (plugins.bundle.config).
+  // The shared form is published as the face's bare observable source, so the
+  // renderer binds `useZoteroQuickConfig` from the one form the settings page
+  // and the card also edit — no mirror snapshot to keep in step.
   ctx.slots.inject('plugins.bundle.config', () =>
     ctx.slots.register(
       {
         name: 'plugins.bundle.config',
         key: ZOTERO_REMOTE_PACKAGE,
-        inject: () => ({ form, t }),
+        inject: () => zoteroQuickConfigFace(form, t),
       },
       ZoteroBundleQuickConfig,
     ),
@@ -205,7 +209,7 @@ export function apply(ctx: ClientContext): void {
       {
         name: 'plugins.detail.section',
         id: 'zotero-status',
-        inject: () => ({ t, probe }),
+        inject: (): ZoteroProbeFace => ({ t, probe }),
       },
       ZoteroPluginDetailSection,
     ),

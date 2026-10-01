@@ -10,7 +10,7 @@ import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ZoteroStatusView } from '../../remote.ts'
 import { DiagnosisBox } from '../DiagnosisBox.tsx'
 import { useZoteroProbe } from '../useZoteroProbe.ts'
-import type { PluginDetailProps } from './types.ts'
+import type { PluginDetailProps } from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import css from './plugin-cards.module.css'
 
 export interface ZoteroPluginDetailSectionProps extends PluginDetailProps {

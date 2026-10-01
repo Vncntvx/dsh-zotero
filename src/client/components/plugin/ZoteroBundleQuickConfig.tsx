@@ -5,23 +5,33 @@
  * @module dsh-zotero/client/components/plugin/ZoteroBundleQuickConfig
  */
 
-import { useCallback, useSyncExternalStore, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import { RiskConfirmation, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { PluginConfigViewProps } from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
+import type { ConfigFormSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-store'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { useRiskGate, writeRiskCopy } from '../../risk-gate.ts'
+import type { QuickConfigField } from './faces.ts'
 import css from './plugin-cards.module.css'
 
-export interface ZoteroBundleQuickConfigProps {
-  readonly view?: 'summary' | 'page'
-  readonly form?: ConfigForm<Record<string, unknown>>
+/**
+ * The upstream owner share minus `form`: the manager page supplies a
+ * `ConfigPageForm` only to `plugins.row.config` and `plugins.item` entries,
+ * never to a bundle's own config row, whose form arrives through this
+ * entry's `inject` face instead.
+ */
+export interface ZoteroBundleQuickConfigProps extends Omit<PluginConfigViewProps, 'form'> {
   readonly t?: TranslateNS<'zotero'>
+  readonly useZoteroQuickConfig?: SnapshotSelectorHook<ConfigFormSnapshot<Record<string, unknown>>>
+  readonly setField?: (field: QuickConfigField, value: boolean) => void
 }
 
-/** Required face once the slot has supplied form and translator. */
+/** Required face once the slot has supplied snapshot, translator and write edge. */
 interface QuickConfigBodyProps {
-  readonly form: ConfigForm<Record<string, unknown>>
   readonly t: TranslateNS<'zotero'>
+  readonly useZoteroQuickConfig: SnapshotSelectorHook<ConfigFormSnapshot<Record<string, unknown>>>
+  readonly setField: (field: QuickConfigField, value: boolean) => void
 }
 
 /**
@@ -30,30 +40,31 @@ interface QuickConfigBodyProps {
  */
 export function ZoteroBundleQuickConfig({
   view,
-  form,
   t,
+  useZoteroQuickConfig,
+  setField,
 }: ZoteroBundleQuickConfigProps): ReactNode {
-  if (view && view !== 'page') return null
-  if (!form || !t) return null
-  return <ZoteroBundleQuickConfigBody form={form} t={t} />
+  if (view !== 'page') return null
+  if (!useZoteroQuickConfig || !setField || !t) return null
+  return (
+    <ZoteroBundleQuickConfigBody
+      t={t}
+      useZoteroQuickConfig={useZoteroQuickConfig}
+      setField={setField}
+    />
+  )
 }
 
-function ZoteroBundleQuickConfigBody({ form, t }: QuickConfigBodyProps): ReactNode {
+function ZoteroBundleQuickConfigBody({
+  t,
+  useZoteroQuickConfig,
+  setField,
+}: QuickConfigBodyProps): ReactNode {
   const gate = useRiskGate()
-  const subscribe = useCallback(
-    (onStoreChange: () => void) => form.subscribe(onStoreChange),
-    [form],
-  )
-  const getSnapshot = useCallback(() => form.getSnapshot(), [form])
-  const snapshot = useSyncExternalStore(subscribe, getSnapshot)
+  const snapshot = useZoteroQuickConfig((s) => s)
   const ready = snapshot.status === 'ready'
   const webEnabled = snapshot.value?.webEnabled !== false
   const writeEnabled = snapshot.value?.writeEnabled === true
-
-  const setField = (path: 'webEnabled' | 'writeEnabled', value: boolean): void => {
-    const current = form.getSnapshot()
-    form.mutate([{ op: 'set', path: [path], value }], current.revision)
-  }
 
   const onToggleWrite = (next: boolean): void => {
     if (next && !writeEnabled) {

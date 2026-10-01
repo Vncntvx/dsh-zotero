@@ -1,12 +1,20 @@
 // @vitest-environment jsdom
 /**
  * Unit tests for ZoteroBundleQuickConfig component (plugins.bundle.config slot).
+ * The face publishes the fake form itself as the bare observable source; the
+ * fixture binds it with useSyncExternalStore the way the renderer would, then
+ * drives user gestures with testing-library's fireEvent.
  * @module tests/client/ZoteroBundleQuickConfig
  */
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { useSyncExternalStore } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ZoteroBundleQuickConfig } from '../../src/client/components/plugin/ZoteroBundleQuickConfig.tsx'
+import {
+  zoteroQuickConfigFace,
+  type ZoteroBundleQuickConfigFace,
+} from '../../src/client/components/plugin/faces.ts'
 import { fakeScope } from './helpers/fake-scope.ts'
 
 // The real primitives bundle pulls a second React through Modal; stub the
@@ -19,12 +27,25 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
 import { mockT } from './helpers/mock-translate.ts'
 const t = mockT
 
+/** The renderer's binding: a snapshot selector hook over the face's source. */
+function Harness({ face }: { face: ZoteroBundleQuickConfigFace }) {
+  const source = face.hooks.zoteroQuickConfig
+  const snapshot = useSyncExternalStore(source.subscribe, source.getSnapshot)
+  return (
+    <ZoteroBundleQuickConfig
+      view="page"
+      t={face.t}
+      useZoteroQuickConfig={(selector) => selector(snapshot)}
+      setField={face.setField}
+    />
+  )
+}
+
 afterEach(cleanup)
 
 describe('ZoteroBundleQuickConfig', () => {
   it('renders quick config title, hints, and switches with default state', () => {
-    const form = fakeScope()
-    render(<ZoteroBundleQuickConfig form={form} t={t} />)
+    render(<Harness face={zoteroQuickConfigFace(fakeScope(), t)} />)
 
     expect(screen.getByText(t('quickConfigTitle'))).toBeDefined()
     expect(screen.getByText(t('quickConfigHint'))).toBeDefined()
@@ -42,7 +63,7 @@ describe('ZoteroBundleQuickConfig', () => {
 
   it('triggers form mutation when toggling webEnabled', () => {
     const form = fakeScope({ value: { webEnabled: true } })
-    render(<ZoteroBundleQuickConfig form={form} t={t} />)
+    render(<Harness face={zoteroQuickConfigFace(form, t)} />)
 
     const switches = screen.getAllByRole('switch')
     fireEvent.click(switches[0])
@@ -52,7 +73,7 @@ describe('ZoteroBundleQuickConfig', () => {
 
   it('does not enable writeEnabled on a bare toggle', () => {
     const form = fakeScope({ value: { writeEnabled: false } })
-    render(<ZoteroBundleQuickConfig form={form} t={t} />)
+    render(<Harness face={zoteroQuickConfigFace(form, t)} />)
 
     const switches = screen.getAllByRole('switch')
     fireEvent.click(switches[1])
@@ -63,7 +84,7 @@ describe('ZoteroBundleQuickConfig', () => {
 
   it('disables switches when form is not ready', () => {
     const form = fakeScope({ status: 'loading' })
-    render(<ZoteroBundleQuickConfig form={form} t={t} />)
+    render(<Harness face={zoteroQuickConfigFace(form, t)} />)
 
     const switches = screen.getAllByRole('switch')
     expect(switches[0].hasAttribute('disabled')).toBe(true)
@@ -72,7 +93,7 @@ describe('ZoteroBundleQuickConfig', () => {
 
   it('gates enabling writeEnabled behind the risk acknowledgement', () => {
     const form = fakeScope({ value: { writeEnabled: false } })
-    render(<ZoteroBundleQuickConfig form={form} t={t} />)
+    render(<Harness face={zoteroQuickConfigFace(form, t)} />)
 
     const writeSwitch = screen.getAllByRole('switch')[1]
     fireEvent.click(writeSwitch)
@@ -93,7 +114,7 @@ describe('ZoteroBundleQuickConfig', () => {
 
   it('cancelling the write risk dialog leaves the flag off', () => {
     const form = fakeScope({ value: { writeEnabled: false } })
-    render(<ZoteroBundleQuickConfig form={form} t={t} />)
+    render(<Harness face={zoteroQuickConfigFace(form, t)} />)
 
     fireEvent.click(screen.getAllByRole('switch')[1])
     fireEvent.click(screen.getByRole('button', { name: t('writeRiskCancel') }))
@@ -103,7 +124,7 @@ describe('ZoteroBundleQuickConfig', () => {
 
   it('turns writeEnabled off without a dialog', () => {
     const form = fakeScope({ value: { writeEnabled: true } })
-    render(<ZoteroBundleQuickConfig form={form} t={t} />)
+    render(<Harness face={zoteroQuickConfigFace(form, t)} />)
 
     fireEvent.click(screen.getAllByRole('switch')[1])
     expect(form.writes).toEqual([{ op: 'set', field: 'writeEnabled', value: false }])

@@ -327,9 +327,18 @@ describe('the browser-half entry', () => {
     const config = world.registered.find((e) => e.name === 'plugins.bundle.config')
     expect(config?.options.key).toBe('dsh-zotero')
     expect(typeof config?.component).toBe('function')
-    const configInject = (config?.options.inject as () => { form: unknown; t: unknown })()
-    expect(configInject.form).toBe(world.scope)
+    const configInject = (
+      config?.options.inject as () => {
+        t: unknown
+        hooks: { zoteroQuickConfig: { subscribe: unknown; getSnapshot: unknown } }
+        setField: unknown
+      }
+    )()
+    // The face publishes the shared form itself as the bound source: one
+    // observable, no mirror store between the form and the hook.
+    expect(configInject.hooks.zoteroQuickConfig).toBe(world.scope)
     expect(typeof configInject.t).toBe('function')
+    expect(typeof configInject.setField).toBe('function')
   })
 
   it('injects the detail section into the plugins.detail.section slot', () => {
@@ -574,7 +583,9 @@ describe('the browser-half entry', () => {
     disposeProjection()
     expect(world.eventDisposes).toBe(1)
 
-    // The card form goes with its own effect, releasing the subscription.
+    // The card form is the only consumer that subscribes the shared form, so
+    // it releases the one subscription with its own effect. The quick config
+    // publishes the same form as a bare source and owns no subscription.
     disposeCard()
     expect(world.scope.unsubscribes).toBe(1)
 

@@ -6,7 +6,7 @@
 import { vi } from 'vitest'
 import type { UseDisclosure } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import type { ZoteroToolCallPhaseProps } from '../../../src/client/plugin-slots.d.ts'
+import type { ToolCallPhaseProps } from '@deepseek-ai/dsh-client-ui-tool/client'
 import { mockT } from './mock-translate.ts'
 
 export function mockUseDisclosure(expanded = true): UseDisclosure {
@@ -27,7 +27,7 @@ export type MockToolViewProps<TToolName extends string> = PropsRuntime<
 
 export function createToolViewProps<TToolName extends string>(props: {
   readonly toolName: TToolName
-  readonly block: ZoteroToolCallPhaseProps['block']
+  readonly block: ToolCallPhaseProps['block']
   readonly phase?: 'preparing' | 'start' | 'result'
   readonly useDisclosure?: UseDisclosure
   readonly inspect?: () => void
