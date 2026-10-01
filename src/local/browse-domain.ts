@@ -10,6 +10,7 @@ import { isNotFoundError, ZOTERO_INVALID_ARGUMENT, ZoteroError } from '../errors
 import { asRecord, asString, isObjectKey } from '../json.js'
 import { normalizeScopeEntry, type ScopeNameEntry } from '../normalize.js'
 import {
+  assertPublicationsSupported,
   formatRef,
   isRefString,
   libraryPrefix,
@@ -22,7 +23,7 @@ import {
 } from '../refs.js'
 import { requireArrayBody, requireTotalResults, nextOffsetOf } from './pagination.js'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import type { ScopeDirectory } from './scope-directory.js'
+import { itemsSegmentFor, publicationsTagsPath, type ScopeDirectory } from './scope-directory.js'
 import type { ZoteroHttpClient } from '../http-client.js'
 import type { LocalApiLimits } from './limits.js'
 import type {
@@ -388,7 +389,7 @@ async function browseTags(
 ): Promise<ZoteroBrowseResult> {
   const library: SupportedLocalLibrary = request.library ?? PERSONAL_LIBRARY
   const prefix = libraryPrefix(library)
-  const itemsSegment = request.itemLevel === 'all' ? 'items' : 'items/top'
+  const itemsSegment = itemsSegmentFor(request.itemLevel)
   let path = `${prefix}/tags`
   let serverIdClaim: string | undefined
   if (request.scope !== undefined) {
@@ -397,7 +398,8 @@ async function browseTags(
         path = `${prefix}/${itemsSegment}/tags`
         break
       case 'publications':
-        path = `${prefix}/publications/${itemsSegment}/tags`
+        assertPublicationsSupported(library)
+        path = publicationsTagsPath()
         break
       case 'collection': {
         const found = await directory.resolveNamed(

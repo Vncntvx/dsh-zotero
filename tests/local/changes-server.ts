@@ -137,9 +137,28 @@ export function routeItems(mock: MockZotero, options: ItemsFixture = {}): void {
       'Total-Results': total,
     })
   }
-  mock.route('GET', `${prefix}/items`, (req, res, helpers, search) =>
-    answer('live', helpers, search),
-  )
+  mock.route('GET', `${prefix}/items`, (req, res, helpers, search) => {
+    if (search.get('includeTrashed') === '1') {
+      const behaviour = options.diff?.trash ?? 'ok'
+      if (behaviour === 'not-found') {
+        helpers.raw(404, { 'Content-Type': 'text/plain' }, 'Not found')
+        return
+      }
+      if (behaviour === 'error') {
+        helpers.raw(500, { 'Content-Type': 'text/plain' }, 'boom')
+        return
+      }
+      const allBody = { ...bodies.live, ...bodies.trash }
+      helpers.json(allBody, {
+        ...(options.unversionedDiff === 'trash'
+          ? versionHeaders(serverId)
+          : versionHeaders(serverId, Number(options.diffVersion ?? version))),
+        'Total-Results': String(Object.keys(allBody).length),
+      })
+      return
+    }
+    answer('live', helpers, search)
+  })
   mock.route('GET', `${prefix}/items/top`, (req, res, helpers, search) =>
     answer('top', helpers, search),
   )

@@ -322,6 +322,10 @@ describe('zotero_search validation', () => {
       },
       { args: { library: { type: 'user', id: 1 } }, contains: PERSONAL_LIBRARY_MESSAGE },
       { args: { library: { type: 'group', id: 0 } }, contains: GROUP_ID_MESSAGE },
+      {
+        args: { scope: { kind: 'publications' }, library: { type: 'group', id: 123 } },
+        contains: 'My Publications scope is only valid for personal libraries.',
+      },
       // A "||" in a tag is not a tag: the API joins literal tags with it, so
       // one embedded in a name would silently become two conditions.
       { args: { excludeTags: ['a||b'] }, contains: EXCLUDE_TAGS_LITERAL_MESSAGE },
@@ -332,5 +336,20 @@ describe('zotero_search validation', () => {
       if (!result.isError) throw new Error('unreachable')
       expect((result.content[0] as { text: string }).text).toContain(c.contains)
     }
+  })
+
+  it('renders citation key in search results when available in extra', async () => {
+    const withKey = {
+      ...HIT,
+      data: {
+        ...HIT.data,
+        extra: 'Citation Key: dao2023flash\nOther: field',
+      },
+    }
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers) =>
+      helpers.json([withKey], { 'Total-Results': '1' }),
+    )
+    const result = expectValue(await runTool('zotero_search', {}), 'zotero_search')
+    expect((result.content[0] as { text: string }).text).toContain('[@dao2023flash]')
   })
 })

@@ -26,6 +26,7 @@ import {
   ZoteroError,
 } from '../errors.js'
 import {
+  assertPublicationsSupported,
   formatRef,
   isRefString,
   isSupportedLocalLibrary,
@@ -47,6 +48,7 @@ import type { ZoteroHttpClient } from '../http-client.js'
 import { cacheEntryMatchesIdentity, type LocalReadContext } from './identity.js'
 import type {
   SupportedLocalLibrary,
+  ZoteroItemLevel,
   ZoteroObjectRef,
   ZoteroSearchScope,
   ZoteroResolvedScope,
@@ -484,6 +486,30 @@ export class ScopeDirectory {
   }
 }
 
+/** Path segment for the requested item level: `items` for all items, `items/top` for top-level only. */
+export function itemsSegmentFor(itemLevel?: ZoteroItemLevel): string {
+  return itemLevel === 'all' ? 'items' : 'items/top'
+}
+
+/**
+ * My Publications item listing: the Local API mirrors the Web API's
+ * `/publications/items` scope without a `/top` partition. Pinned to the
+ * canonical personal library — callers assert personal-only first.
+ */
+export function publicationsItemsPath(): string {
+  return `${libraryPrefix(PERSONAL_LIBRARY)}/publications/items`
+}
+
+/** My Publications tag facet over the same listing. */
+export function publicationsTagsPath(): string {
+  return `${publicationsItemsPath()}/tags`
+}
+
+export interface ResolveScopeOptions {
+  readonly signal?: AbortSignal
+  readonly itemLevel?: ZoteroItemLevel
+}
+
 /**
  * Resolve a search scope to the API path the Local API serves it at, plus
  * the resolved shape echoed back to the Agent so pagination replays a stable
@@ -494,8 +520,9 @@ export async function resolveScope(
   directory: ScopeDirectory,
   scope: ZoteroSearchScope,
   library: SupportedLocalLibrary | undefined,
-  signal?: AbortSignal,
+  options: ResolveScopeOptions = {},
 ): Promise<ResolvedScopeResult> {
+  const { signal, itemLevel = 'top' } = options
   let effectiveLibrary: SupportedLocalLibrary
   if (library !== undefined) {
     effectiveLibrary = library
@@ -512,29 +539,24 @@ export async function resolveScope(
   } else {
     effectiveLibrary = PERSONAL_LIBRARY
   }
+  const itemsSegment = itemsSegmentFor(itemLevel)
   switch (scope.kind) {
     case 'library':
       return effectiveLibrary.type === 'user'
         ? {
-            path: `${libraryPrefix(PERSONAL_LIBRARY)}/items/top`,
+            path: `${libraryPrefix(PERSONAL_LIBRARY)}/${itemsSegment}`,
             resolved: { kind: 'library', library: { type: 'user', id: 0 } },
           }
         : {
-            path: `${libraryPrefix(effectiveLibrary)}/items/top`,
+            path: `${libraryPrefix(effectiveLibrary)}/${itemsSegment}`,
             resolved: { kind: 'library', library: { type: 'group', id: effectiveLibrary.id } },
           }
     case 'publications':
-      // My Publications: the Local API mirrors the Web API's
-      // /publications/items scope, so published works are one hop away.
-      return effectiveLibrary.type === 'user'
-        ? {
-            path: `${libraryPrefix(PERSONAL_LIBRARY)}/publications/items/top`,
-            resolved: { kind: 'publications', library: { type: 'user', id: 0 } },
-          }
-        : {
-            path: `${libraryPrefix(effectiveLibrary)}/publications/items/top`,
-            resolved: { kind: 'publications', library: { type: 'group', id: effectiveLibrary.id } },
-          }
+      assertPublicationsSupported(effectiveLibrary)
+      return {
+        path: publicationsItemsPath(),
+        resolved: { kind: 'publications', library: { type: 'user', id: 0 } },
+      }
     case 'collection': {
       const found = await directory.resolveNamed(
         'collection',
@@ -543,7 +565,7 @@ export async function resolveScope(
         signal,
       )
       return {
-        path: `${libraryPrefix(found.ref.library as SupportedLocalLibrary)}/collections/${found.ref.key}/items/top`,
+        path: `${libraryPrefix(found.ref.library as SupportedLocalLibrary)}/collections/${found.ref.key}/${itemsSegment}`,
         resolved: { kind: 'collection', ref: formatRef(found.ref), name: found.name },
         serverId: found.ref.serverId,
         collectionKey: found.ref.key,
@@ -556,6 +578,9 @@ export async function resolveScope(
         effectiveLibrary,
         signal,
       )
+      // Saved searches mirror publications: the endpoint serves one item
+      // listing with no /top partition, so itemLevel does not apply here —
+      // it governs library/collection scopes only.
       return {
         path: `${libraryPrefix(found.ref.library as SupportedLocalLibrary)}/searches/${found.ref.key}/items`,
         resolved: { kind: 'savedSearch', ref: formatRef(found.ref), name: found.name },

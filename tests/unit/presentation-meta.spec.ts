@@ -213,7 +213,10 @@ describe('projectGetMeta', () => {
         ref: 'zotero://user/0/item/ABCDEFGH',
         itemType: 'journalArticle',
         title: 'FlashAttention-2',
-        creators: ['Dao, Tri', 'Smith, Jane'],
+        creators: [
+          { creatorType: 'author', lastName: 'Dao', firstName: 'Tri' },
+          { creatorType: 'author', lastName: 'Smith', firstName: 'Jane' },
+        ],
         date: '2023-07-28',
         year: 2023,
         venue: 'ICLR',
@@ -268,7 +271,7 @@ describe('projectGetMeta', () => {
       }),
     )
     expect(meta.title).toBe('FlashAttention-2')
-    expect(meta.creators).toBe('Dao, Tri; Smith, Jane')
+    expect(meta.creators).toBe('Tri Dao; Jane Smith')
     expect(meta.year).toBe(2023)
     expect(meta.itemType).toBe('journalArticle')
     expect(meta.venue).toBe('ICLR')

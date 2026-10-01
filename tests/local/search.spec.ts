@@ -141,13 +141,26 @@ describe('search: library scope', () => {
     serveSearchPage(mock, {
       items: [searchHit()],
       total: 3,
-      path: '/api/users/0/publications/items/top',
+      path: '/api/users/0/publications/items',
     })
     const result = await provider.search(request({ scope: { kind: 'publications' } }))
     expect(result.scope).toEqual({ kind: 'publications', library: { type: 'user', id: 0 } })
-    expect(mock.requests[0]!.pathname).toBe('/api/users/0/publications/items/top')
+    expect(mock.requests[0]!.pathname).toBe('/api/users/0/publications/items')
     expect(result.total).toBe(3)
     expect(result.items).toHaveLength(1)
+  })
+
+  it('rejects publications scope on group libraries', async () => {
+    await zoteroError(
+      provider.search(
+        request({
+          scope: { kind: 'publications' },
+          library: { type: 'group', id: 123 },
+        }),
+      ),
+      ZOTERO_INVALID_ARGUMENT,
+      'My Publications scope is only valid for personal libraries.',
+    )
   })
 
   it('omits nextOffset when the page reaches the reported total', async () => {

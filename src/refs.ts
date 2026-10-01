@@ -13,9 +13,11 @@
  */
 
 import {
+  PUBLICATIONS_GROUP_UNSUPPORTED_MESSAGE,
   writeLibraryUnsupportedMessage,
   ZOTERO_INVALID_ARGUMENT,
   ZOTERO_INVALID_REF,
+  ZOTERO_UNEXPECTED,
   ZoteroError,
 } from './errors.js'
 import { isObjectKey } from './json.js'
@@ -24,7 +26,7 @@ import {
   ZOTERO_GROUP_ITEM_PATH_PATTERN,
   ZOTERO_USER_ITEM_PATH_PATTERN,
 } from './ref-grammar.js'
-import type { ZoteroKind, ZoteroObjectRef } from './types.js'
+import type { SupportedLocalLibrary, ZoteroKind, ZoteroObjectRef } from './types.js'
 
 /** True when the given string matches the ref grammar without fully parsing it. */
 export function isRefString(value: string): boolean {
@@ -214,4 +216,135 @@ export function parseZoteroRelationUri(
   const mg = ZOTERO_GROUP_ITEM_PATH_PATTERN.exec(url.pathname)
   if (mg) return { library: { type: 'group', id: Number(mg[1]!) }, key: mg[2]! }
   return null
+}
+
+/**
+ * The canonical relation URI for a supported-local source ref. The user arm
+ * pins `users/0` even for a hypothetical non-zero user id rather than
+ * interpolating it — mirroring {@link libraryPrefix}: the local contract
+ * addresses the logged-in user's library as `users/0`, and callers gate on
+ * `requireSupportedLocalRef` first, so a non-zero user id never reaches here.
+ */
+export function formatZoteroRelationUri(ref: Pick<ZoteroObjectRef, 'library' | 'key'>): string {
+  if (ref.library.type === 'group') {
+    return `http://zotero.org/groups/${ref.library.id}/items/${ref.key}`
+  }
+  return `http://zotero.org/users/0/items/${ref.key}`
+}
+
+export interface RelationTargetOptions {
+  /**
+   * The library containing the object whose relations these are. Group item
+   * URIs map only to this same group — a relation to another group stays a
+   * bare URI, so a target ref never implies locality its read did not have.
+   * Omitted with `personalContext` (the write echo) to allow group targets.
+   */
+  readonly library?: SupportedLocalLibrary
+  /**
+   * The containing object is provably in the personal library (e.g. a note
+   * the write domain just created under `users/0`) and this call only ever
+   * sends `users/0` outbound, so any `users/<id>` echo is Zotero's
+   * server-side canonicalization of that same `users/0` to the real numeric
+   * sync id — the alias is provable by context, not by matching the digits.
+   * Group targets are addressable cross-library refs and map as well.
+   */
+  readonly personalContext?: boolean
+  /**
+   * The containing record's real library id (`record.library.id`), when the
+   * read knows it: a `users/<id>` URI with this id is the personal library's
+   * sync alias and maps to `user/0`.
+   */
+  readonly parentLibraryId?: number
+}
+
+/**
+ * The local ref string a relation URI provably names, or undefined when the
+ * mapping cannot be proven — the caller keeps the bare URI. Group ids are
+ * never aliased, but they still map only within the containing library
+ * (or the write echo, where group targets are explicit cross-library refs).
+ * User URIs map when the id is the canonical `0`, the proven sync alias
+ * (`parentLibraryId`, `personalContext`): a foreign user id never maps,
+ * because it would resolve the same key against the wrong library.
+ * @param uri - the relation target URI from Zotero `data.relations`.
+ * @param serverId - the serving instance recorded as ref provenance.
+ */
+export function relationTargetRef(
+  uri: string,
+  serverId: string | undefined,
+  options: RelationTargetOptions = {},
+): string | undefined {
+  const parsed = parseZoteroRelationUri(uri)
+  if (parsed === null) return undefined
+  if (!isObjectKey(parsed.key)) return undefined
+  if (parsed.library.type === 'group') {
+    if (!Number.isSafeInteger(parsed.library.id) || parsed.library.id <= 0) return undefined
+    if (options.personalContext === true) {
+      return formatRef(
+        refForLibrary({ type: 'group', id: parsed.library.id }, 'item', parsed.key, serverId),
+      )
+    }
+    const library = options.library
+    if (library !== undefined && library.type === 'group' && parsed.library.id === library.id) {
+      return formatRef(refForLibrary(library, 'item', parsed.key, serverId))
+    }
+    return undefined
+  }
+  if (parsed.library.id === 0) {
+    return formatRef(refForLibrary(PERSONAL_LIBRARY, 'item', parsed.key, serverId))
+  }
+  if (options.personalContext === true) {
+    return formatRef(refForLibrary(PERSONAL_LIBRARY, 'item', parsed.key, serverId))
+  }
+  if (options.parentLibraryId !== undefined && parsed.library.id === options.parentLibraryId) {
+    return formatRef(refForLibrary(PERSONAL_LIBRARY, 'item', parsed.key, serverId))
+  }
+  return undefined
+}
+
+/**
+ * Ensure the library is supported for My Publications (personal libraries only).
+ * Policy lives here next to `isSupportedLocalLibrary`; the message stays in
+ * `errors.ts` with the other model-facing strings.
+ */
+export function assertPublicationsSupported(library: SupportedLocalLibrary | undefined): void {
+  if (library?.type === 'group') {
+    throw new ZoteroError(PUBLICATIONS_GROUP_UNSUPPORTED_MESSAGE, ZOTERO_INVALID_ARGUMENT)
+  }
+}
+
+/**
+ * The supported local library a ref string provably names, or undefined when
+ * the string does not parse or names an unsupported library. Single authority
+ * for the `library`/`publications` fast path plus the `parseRef` +
+ * `isSupportedLocalLibrary` composition the resolved-scope readers share —
+ * group ids pass through, personal aliases collapse to canonical `user/0`.
+ */
+export function supportedLibraryOfRef(value: string): SupportedLocalLibrary | undefined {
+  let parsed: ZoteroObjectRef
+  try {
+    parsed = parseRef(value)
+  } catch {
+    return undefined
+  }
+  if (!isSupportedLocalLibrary(parsed.library)) return undefined
+  if (parsed.library.type === 'group') return { type: 'group', id: parsed.library.id }
+  return { type: 'user', id: 0 }
+}
+
+/**
+ * Require the supported local library a resolved scope ref names. Unlike the
+ * fail-open projection helper above, a scope produced by `resolveScope` must
+ * always resolve — an unparseable or unsupported ref is a broken invariant,
+ * and answering it from the personal library would attribute another
+ * library's rows to this scope.
+ */
+export function requireSupportedLibraryOfRef(value: string): SupportedLocalLibrary {
+  const library = supportedLibraryOfRef(value)
+  if (library === undefined) {
+    throw new ZoteroError(
+      `Resolved scope carries a ref outside the local contract: ${value}.`,
+      ZOTERO_UNEXPECTED,
+    )
+  }
+  return library
 }

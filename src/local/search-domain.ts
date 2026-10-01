@@ -12,10 +12,15 @@ import { ZOTERO_ITEMKEY_BATCH } from '../constants.js'
 import { tokenize } from '../evidence.js'
 import { ZOTERO_INVALID_ARGUMENT, ZOTERO_UNEXPECTED, ZoteroError } from '../errors.js'
 import { nextOffsetOf, requireArrayBody, requireTotalResults } from './pagination.js'
-import { resolveScope, ScopeDirectory, type ResolvedScopeResult } from './scope-directory.js'
+import {
+  publicationsItemsPath,
+  resolveScope,
+  ScopeDirectory,
+  type ResolvedScopeResult,
+} from './scope-directory.js'
 import { asRecord, asString } from '../json.js'
 import { collectionKeysOf, normalizeSearchItem, plainNoteText } from '../normalize.js'
-import { libraryPrefix, parseRef } from '../refs.js'
+import { libraryPrefix, requireSupportedLibraryOfRef } from '../refs.js'
 import type { LocalApiLimits } from './limits.js'
 import type {
   SupportedLocalLibrary,
@@ -83,7 +88,10 @@ export async function runSearch(
   if (request.includeTrashed && request.scope.kind !== 'library') {
     throw new ZoteroError(INCLUDE_TRASHED_SCOPE_MESSAGE, ZOTERO_INVALID_ARGUMENT)
   }
-  const scope = await resolveScope(directory, request.scope, request.library, signal)
+  const scope = await resolveScope(directory, request.scope, request.library, {
+    signal,
+    itemLevel: request.itemLevel,
+  })
   const { json, headers } = await deps.client.getJson<unknown>(
     scope.path,
     buildSearchParams(request),
@@ -239,10 +247,12 @@ async function fetchNoteRows(
   shouldStop?: (accumulated: readonly unknown[]) => boolean,
 ): Promise<{ rows: readonly unknown[]; truncated: boolean }> {
   const libraryForScan = libraryOfResolvedScope(scope.resolved)
-  let prefix = libraryPrefix(libraryForScan)
   // A publications-scoped scan must stay inside My Publications; the bare
   // library prefix would leak note matches from outside the segment.
-  if (scope.resolved.kind === 'publications') prefix += '/publications'
+  const basePath =
+    scope.resolved.kind === 'publications'
+      ? publicationsItemsPath()
+      : `${libraryPrefix(libraryForScan)}/items`
   const out: unknown[] = []
   let start = 0
   while (out.length < deps.limits.maxNoteScanRecords) {
@@ -254,7 +264,7 @@ async function fetchNoteRows(
     params.set('start', String(start))
     params.set('limit', String(wanted))
     if (request.includeTrashed) params.set('includeTrashed', '1')
-    const { json } = await deps.client.getJson<unknown>(`${prefix}/items`, params, {
+    const { json } = await deps.client.getJson<unknown>(basePath, params, {
       signal,
       serverId: scope.serverId,
     })
@@ -332,7 +342,7 @@ function libraryOfResolvedScope(resolved: ZoteroResolvedScope): SupportedLocalLi
   if (resolved.kind !== 'collection' && resolved.kind !== 'savedSearch') {
     return resolved.library
   }
-  return parseRef(resolved.ref).library as SupportedLocalLibrary
+  return requireSupportedLibraryOfRef(resolved.ref)
 }
 
 /**

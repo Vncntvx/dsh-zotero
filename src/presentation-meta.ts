@@ -13,6 +13,7 @@
 
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { asJsonValue } from './json.js'
+import { formatCreatorsList } from './normalize.js'
 import type { EvidenceItem } from './evidence-item.js'
 import type {
   SupportedLocalLibrary,
@@ -25,7 +26,7 @@ import type {
   ZoteroRetrieveResult,
   ZoteroSearchResult,
 } from './types.js'
-import { parseRef, isSupportedLocalLibrary } from './refs.js'
+import { supportedLibraryOfRef } from './refs.js'
 
 /** UTF-8 byte budget for one tool's presentation meta. */
 export const MAX_PRESENTATION_META_BYTES = 8192
@@ -215,14 +216,7 @@ function sourcesOf(evidence: ReadonlyArray<{ readonly source: string }>): Zotero
 
 function libraryOfScope(scope: ZoteroResolvedScope): SupportedLocalLibrary | undefined {
   if (scope.kind === 'library' || scope.kind === 'publications') return scope.library
-  try {
-    const parsed = parseRef(scope.ref)
-    if (!isSupportedLocalLibrary(parsed.library)) return undefined
-    if (parsed.library.type === 'group') return { type: 'group', id: parsed.library.id }
-    return { type: 'user', id: 0 }
-  } catch {
-    return undefined
-  }
+  return supportedLibraryOfRef(scope.ref)
 }
 
 /**
@@ -302,7 +296,10 @@ function childPreviews(
 export function projectGetMeta(value: GetProjectionInput): ZoteroGetPresentationMeta {
   return {
     title: truncateChars(value.title, MAX_PRESENTATION_GET_TITLE_CHARS),
-    creators: truncateChars(value.creators.join('; '), MAX_PRESENTATION_GET_CREATORS_CHARS),
+    creators: truncateChars(
+      formatCreatorsList(value.creators),
+      MAX_PRESENTATION_GET_CREATORS_CHARS,
+    ),
     ...(value.year === undefined ? {} : { year: value.year }),
     ...(value.itemType === undefined ? {} : { itemType: value.itemType }),
     ...(value.ref === undefined ? {} : { ref: value.ref }),

@@ -27,7 +27,7 @@ dsh-zotero 注册 11 个工具，通过本地 Zotero HTTP API 与文献库交互
 | `tagMatch`       | `"all"` \| `"any"`             | `"all"`             | 多标签匹配逻辑：`all` 为 AND，`any` 为 OR（需与 `tags` 配合使用）                                                                                         |
 | `excludeTags`    | string[]                       | —                   | 排除的标签列表（NOT）                                                                                                                                     |
 | `includeTrashed` | boolean                        | `false`             | 是否包含回收站中的条目（仅限 `library` 范围）                                                                                                             |
-| `itemLevel`      | `"top"` \| `"all"`             | `"top"`             | 条目层级：`top` 仅检索顶层条目；`all` 同时检索子条目与附件                                                                                                |
+| `itemLevel`      | `"top"` \| `"all"`             | `"top"`             | 条目层级：`top` 仅检索顶层条目；`all` 同时检索子条目与附件（仅 `library`/`collection` 范围；`publications` 与已存搜索为单一列表）                         |
 | `sort`           | string                         | `"dateModified"`    | 排序字段：`dateModified`、`dateAdded`、`date`、`title`、`creator`                                                                                         |
 | `direction`      | `"asc"` \| `"desc"`            | `"desc"`            | 排序方向                                                                                                                                                  |
 | `offset`         | integer                        | `0`                 | 分页偏移量                                                                                                                                                |
@@ -186,21 +186,21 @@ zotero_export(refs=["zotero://user/0/item/ABC123", "zotero://user/0/item/DEF456"
 
 ### 参数
 
-| 参数            | 类型    | 默认值                  | 说明                                                                                                |
-| --------------- | ------- | ----------------------- | --------------------------------------------------------------------------------------------------- |
-| `kind`          | string  | —                       | 浏览类别：`libraries`、`collections`、`savedSearches`、`tags`、`itemTypes`、`itemFields`（必填）    |
-| `library`       | object  | `{type: "user", id: 0}` | 目标库（适用于 collections、savedSearches、tags）                                                   |
-| `parentRef`     | string  | —                       | 仅用于 `collections`：父集合 ref；省略则列出顶层集合                                                |
-| `tagScope`      | string  | `"library"`             | 仅用于 `tags`：统计范围，支持 `library`、`collection`、`publications`（`publications` 仅限个人库）  |
-| `tagCollection` | string  | —                       | 仅用于 `tags` 且 `tagScope="collection"`：集合 ref 或精确名称                                       |
-| `itemLevel`     | string  | `"top"`                 | 仅用于带作用域的 `tags`：`top` 仅统计文献条目；`all` 包含子条目                                     |
-| `itemQuery`     | string  | —                       | 仅用于带作用域的 `tags`：仅统计匹配该查询词的条目标签                                               |
-| `itemQueryMode` | string  | `"contains"`            | 仅用于带作用域的 `tags`：`itemQuery` 的匹配模式，支持 `contains` 或 `startsWith`（默认 `contains`） |
-| `itemType`      | string  | —                       | 仅用于 `itemFields`：查询字段与创作者类型的条目类型名                                               |
-| `q`             | string  | —                       | 标签名称的子串过滤词                                                                                |
-| `match`         | string  | `"contains"`            | 标签过滤匹配方式：`contains` 或 `startsWith`                                                        |
-| `offset`        | integer | `0`                     | 分页偏移量                                                                                          |
-| `limit`         | integer | `20`                    | 返回条目数量上限（受配置项 `maxBrowseResults` 限制，默认 50）                                       |
+| 参数            | 类型    | 默认值                  | 说明                                                                                                                         |
+| --------------- | ------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `kind`          | string  | —                       | 浏览类别：`libraries`、`collections`、`savedSearches`、`tags`、`itemTypes`、`itemFields`（必填）                             |
+| `library`       | object  | `{type: "user", id: 0}` | 目标库（适用于 collections、savedSearches、tags）                                                                            |
+| `parentRef`     | string  | —                       | 仅用于 `collections`：父集合 ref；省略则列出顶层集合                                                                         |
+| `tagScope`      | string  | `"library"`             | 仅用于 `tags`：统计范围，支持 `library`、`collection`、`publications`（`publications` 仅限个人库）                           |
+| `tagCollection` | string  | —                       | 仅用于 `tags` 且 `tagScope="collection"`：集合 ref 或精确名称                                                                |
+| `itemLevel`     | string  | `"top"`                 | 仅用于带作用域的 `tags`：`top` 仅统计文献条目；`all` 包含子条目（仅 `library`/`collection` 范围） |
+| `itemQuery`     | string  | —                       | 仅用于带作用域的 `tags`：仅统计匹配该查询词的条目标签                                                                        |
+| `itemQueryMode` | string  | `"titleCreatorYear"`    | 仅用于带作用域的 `tags`：`itemQuery` 的条目查询模式，支持 `titleCreatorYear` 或 `everything`（默认 `titleCreatorYear`）      |
+| `itemType`      | string  | —                       | 仅用于 `itemFields`：查询字段与创作者类型的条目类型名                                                                        |
+| `q`             | string  | —                       | 标签名称的子串过滤词                                                                                                         |
+| `match`         | string  | `"contains"`            | 标签过滤匹配方式：`contains` 或 `startsWith`                                                                                 |
+| `offset`        | integer | `0`                     | 分页偏移量                                                                                                                   |
+| `limit`         | integer | `20`                    | 返回条目数量上限（受配置项 `maxBrowseResults` 限制，默认 50）                                                                |
 
 ### 输出
 

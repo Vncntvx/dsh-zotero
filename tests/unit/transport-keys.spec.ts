@@ -37,7 +37,7 @@ describe('touchesTransport', () => {
     expect(touchesTransport([['maxSearchResults'], ['timeoutMs']])).toBe(true)
     expect(touchesTransport([['maxSearchResults'], ['defaultStyle']])).toBe(false)
     expect(touchesTransport([['searchConcurrency']])).toBe(false)
-    expect(touchesTransport([['graphConcurrency'], ['exportConcurrency']])).toBe(false)
+    expect(touchesTransport([['graphConcurrency']])).toBe(false)
     expect(touchesTransport([['retrieveAttachmentCap']])).toBe(false)
     // The scope-listing TTL is compared at each lookup through the live
     // limits, so editing it must not tear the transport stack down.

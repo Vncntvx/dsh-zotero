@@ -28,7 +28,14 @@ import {
 import { testHttpClient } from '../helpers/test-clients.js'
 import { expectRequestCount } from '../helpers/server/assert.js'
 import { SERVER_ID } from '../helpers/server/keys.js'
-import { attachment, collectionRow, item, noteRow, searchHit } from '../helpers/server/objects.js'
+import {
+  attachment,
+  collectionRow,
+  item,
+  noteRow,
+  searchHit,
+  versionHeaders,
+} from '../helpers/server/objects.js'
 import { serveJson, serveSearchPage } from '../helpers/server/serve.js'
 import { COLLECTIONS, SEARCHES, makeProvider } from './search-helpers.js'
 
@@ -176,20 +183,17 @@ describe('search: note-content scan', () => {
   })
 
   it('keeps the publications scan inside My Publications', async () => {
-    serveSearchPage(mock, {
-      items: [searchHit()],
-      total: 1,
-      path: '/api/users/0/publications/items/top',
-    })
+    const headers = { 'Total-Results': '1', ...versionHeaders(SERVER_ID) }
     mock.route('GET', '/api/users/0/publications/items', (req, res, helpers, search) => {
-      if (search.get('itemType') === 'note') helpers.json([NOTE_HIT])
-      else helpers.json([])
+      if (search.get('itemType') === 'note') helpers.json([NOTE_HIT], headers)
+      else helpers.json([searchHit()], headers)
     })
     const result = await provider.search(
       request({ query: 'cascade infrastructure', scope: { kind: 'publications' } }),
     )
     // The scan must hit the publications segment; the bare library prefix
     // would leak note matches from outside My Publications.
+    expect(mock.requests[0]!.pathname).toBe('/api/users/0/publications/items')
     expect(mock.requests[1]!.pathname).toBe('/api/users/0/publications/items')
     expect(result.supplemental?.items.map((entry) => entry.ref)).toEqual([
       'zotero://user/0/item/NOTE1111?server=S1',

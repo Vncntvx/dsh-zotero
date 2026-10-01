@@ -130,14 +130,14 @@ describe('zotero_retrieve tool', () => {
   })
 
   it('searches My Publications end to end through the tool', async () => {
-    mock.route('GET', '/api/users/0/publications/items/top', (req, res, helpers) =>
+    mock.route('GET', '/api/users/0/publications/items', (req, res, helpers) =>
       helpers.json([searchHit()], { 'Total-Results': '1' }),
     )
     const result = expectValue(
       await runTool('zotero_search', { scope: { kind: 'publications' } }),
       'zotero_search',
     )
-    expect(mock.requests[0]!.pathname).toBe('/api/users/0/publications/items/top')
+    expect(mock.requests[0]!.pathname).toBe('/api/users/0/publications/items')
     const value = result.value as { scope: { kind: string } }
     expect(value.scope.kind).toBe('publications')
   })

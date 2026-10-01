@@ -47,7 +47,6 @@ export const PROVIDER_LIMITS: LocalApiLimits = {
   scopeListingTtlMs: 30_000,
   searchConcurrency: 4,
   graphConcurrency: 4,
-  exportConcurrency: 4,
   retrieveAttachmentCap: 16,
 }
 

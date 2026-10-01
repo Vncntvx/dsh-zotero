@@ -29,7 +29,6 @@
 | `maxResponseBytes`         | `16777216`                   | 单次 API 响应流式读取字节上限（16 MiB）                                                                   |
 | `maxExportChars`           | `1000000`                    | 导出输出字符硬上限（100 万字符）                                                                          |
 | `maxExportRefs`            | `50`                         | 单次 `zotero_export` 引用条数上限                                                                         |
-| `exportConcurrency`        | `4`                          | `zotero_export` 单条读取的并发数                                                                          |
 | `maxBrowseResults`         | `50`                         | 单次 `zotero_browse` 返回条目上限                                                                         |
 | `maxChangesResults`        | `50`                         | 单次 `zotero_changes` 每种资源列出的条目上限（仅影响展示）                                                |
 | `scopeListingTtlMs`        | `30000`                      | 合集与检索范围列表的缓存时长（毫秒）                                                                      |

@@ -2,17 +2,14 @@
  * Server-side ref → batch-entry mapping for translator exports. The merged
  * body's entry order belongs to Zotero, and citation keys are generated in
  * the export context, so the browser never guesses again: the provider
- * splits the batch body once, matches each single-item export to its batch
- * entry — for BibTeX/BibLaTeX by content with the citation key stripped
- * (the same item exports identically in both contexts) — and projects the
- * located entry's real key and text span. RIS records identify themselves
- * by the item key and CSL JSON records by their id, so those formats match
- * on identity instead.
+ * parses entries directly from the batch export body in memory, locating
+ * each requested item by citation key, item key, or identifier.
  * @module dsh-zotero/export-mapping
  */
 
 import { parseExportItem } from './export-items.js'
-import type { ZoteroExportFormat } from './types.js'
+import { formatRef } from './refs.js'
+import type { ZoteroExportFormat, ZoteroObjectRef } from './types.js'
 
 /** One located entry of a translator export body. */
 export interface BatchEntry {
@@ -40,27 +37,12 @@ export interface LocatedExportItem {
   readonly end?: number
 }
 
-/** One per-item export the mapper pairs with the batch body. */
-export interface ExportItemInput {
-  /** The formatted `zotero://` ref of the item. */
-  readonly ref: string
-  /** The item's object key, which RIS records carry as their id. */
-  readonly key: string
-  /** The single-item export body. */
-  readonly text: string
-}
-
 /** The start of one entry: `@type{` in letters, anywhere in the body. */
 const ENTRY_START = /@[A-Za-z]+\{/g
 // Line endings ride along in `^…$` matches, so the terminator tolerates the
 // carriage return Zotero builds that emit CRLF leave behind.
 const RIS_RECORD_END = /^ER  -[ ]?\r?$/gm
 const RIS_ID = /^ID  - (.+?)\r?$/m
-
-/** Strip an entry's citation key so batch and single-item bodies compare by content. */
-function normalizeBibtexEntry(text: string): string {
-  return text.trim().replace(/^@[A-Za-z]+\{[^,\s{}]+,/, '@{,')
-}
 
 /** The entry's citation key: the run after `@type{` up to a comma, brace, or whitespace. */
 function entryKeyOf(text: string, from: number): string | undefined {
@@ -100,12 +82,12 @@ function entryEndOf(text: string, from: number): number {
  * Split a BibTeX/BibLaTeX body into its entries with their text spans. Each
  * entry's `text` runs from its `@type{` start to its own closing brace, so
  * trailing `%` comments or blank lines before the next entry never join the
- * body — the content-equality pairing in {@link locateExportItems} needs the
- * entry alone. The `end` offset still tiles the body to the next entry's
- * start (or the body end) for UI span highlighting. The scan is progressive
- * and brace-aware: every entry's body is skipped to its closing brace before
- * the next start is searched, so an `@type{key,` shape inside a field value,
- * a quoted string, or a comment never starts a new entry.
+ * body — each entry alone is what title parsing reads. The `end` offset
+ * still tiles the body to the next entry's start (or the body end) for UI
+ * span highlighting. The scan is progressive and brace-aware: every entry's
+ * body is skipped to its closing brace before the next start is searched, so
+ * an `@type{key,` shape inside a field value, a quoted string, or a comment
+ * never starts a new entry.
  * @param text - the export body (offsets are relative to this string).
  * @returns the entries in body order.
  */
@@ -135,8 +117,8 @@ export function splitBibtexEntries(text: string): BatchEntry[] {
       start: start.index,
       end,
       // Body alone (to the closing brace): inter-entry comments and blank
-      // lines stay out so content-equality pairing can match a single-item
-      // export. `end` still covers the gap for UI span highlighting.
+      // lines stay out so title parsing reads one entry. `end` still covers
+      // the gap for UI span highlighting.
       text: text.slice(start.index, start.entryEnd).trim(),
     })
   }
@@ -198,74 +180,183 @@ export function splitRisRecords(text: string): BatchEntry[] {
 }
 
 /**
- * Pair each single-item export with its entry in the batch body. The batch
- * body's own key wins for BibTeX/BibLaTeX (batch-context citation keys may
- * differ from single-item ones); a per-item body that matches no batch
- * entry yields an item without a location, which the UI reports individually
- * instead of failing the whole export.
+ * Locate items directly from the batch export body in memory without
+ * secondary HTTP calls. Match priority per ref is fixed:
+ *
+ * 1. Direct key match: a BibTeX/BibLaTeX entry whose citation key equals the
+ *    ref key, an RIS record whose `ID` equals it, a CSL-JSON record whose
+ *    `id` equals it bare or carries it after the last `/` (Zotero serves
+ *    `http://zotero.org/…/items/<KEY>` ids).
+ * 2. Mention match (BibTeX/BibLaTeX only): the key appears as a whole token
+ *    inside the entry body — the export context mints custom citation keys,
+ *    but the body still names the item key (file paths, `note` fields).
+ *    Token means `[A-Za-z0-9_]+`, the same class `\b` uses, so matching is
+ *    injection-safe and never equates `XABCD1234` with `ABCD1234`.
+ * 3. Positional fallback only for the unambiguous case: exactly one ref and
+ *    exactly one entry. Anything else unlocatable yields a bare `{ref}` —
+ *    the call succeeds, the UI reports the gap per item instead of failing
+ *    the whole export.
+ *
+ * Direct matches claim entries first (each entry serves at most one ref, in
+ * requested order); mentions only consider still-unclaimed entries.
  * @param format - the translator format of the batch body.
  * @param text - the trimmed batch body, exactly as the browser will hold it.
- * @param entries - the per-item exports, in the requested ref order.
- * @returns the located items, one per input entry.
+ * @param refs - the requested refs, in order.
+ * @returns the located items, one per ref.
  */
-export function locateExportItems(
+export function locateExportItemsFromBatch(
   format: ZoteroExportFormat,
   text: string,
-  entries: readonly ExportItemInput[],
+  refs: readonly ZoteroObjectRef[],
 ): LocatedExportItem[] {
-  if (format === 'bibtex' || format === 'biblatex') {
-    const batchEntries = splitBibtexEntries(text)
-    return entries.map(({ ref, text: itemText }) => {
-      const facts = parseExportItem(format, itemText)
-      const normalized = normalizeBibtexEntry(itemText)
-      const match = batchEntries.find((entry) => normalizeBibtexEntry(entry.text) === normalized)
-      return {
-        ref,
-        ...(facts.title === undefined ? {} : { title: facts.title }),
-        ...(match === undefined ? {} : { key: match.key, start: match.start, end: match.end }),
-      }
-    })
-  }
-  if (format === 'ris') {
-    const byId = new Map<string, BatchEntry>()
-    for (const record of splitRisRecords(text)) {
-      if (record.key !== undefined) byId.set(record.key, record)
+  if (format === 'bibtex' || format === 'biblatex') return locateBibtexFromBatch(text, refs, format)
+  if (format === 'ris') return locateRisFromBatch(text, refs)
+  if (format === 'csljson') return locateCslFromBatch(text, refs)
+  return refs.map((ref) => ({ ref: formatRef(ref) }))
+}
+
+/**
+ * Index batch entries for O(1) per-ref lookup: citation keys map to entry
+ * indices, and whole-word mention tokens map to the entries containing them.
+ * Built once per export body — refs then resolve without rescanning entry
+ * text. The token index covers only the requested ref keys (≤50): indexing
+ * every word in the body would be O(total body tokens) time and memory for
+ * O(refs) lookups, bounded only by `maxExportChars`.
+ */
+interface BatchIndex {
+  /** Entries whose citation key equals the map key, in body order. */
+  readonly byKey: ReadonlyMap<string, readonly number[]>
+  /** Entries whose body contains the map key as a whole token, in body order. */
+  readonly byToken: ReadonlyMap<string, readonly number[]>
+}
+
+function indexBibtexEntries(
+  entries: readonly BatchEntry[],
+  wanted: ReadonlySet<string>,
+): BatchIndex {
+  const byKey = new Map<string, number[]>()
+  const byToken = new Map<string, number[]>()
+  if (wanted.size === 0) return { byKey, byToken }
+  entries.forEach((entry, index) => {
+    if (entry.key !== undefined) {
+      const bucket = byKey.get(entry.key) ?? []
+      bucket.push(index)
+      byKey.set(entry.key, bucket)
     }
-    return entries.map(({ ref, key, text: itemText }) => {
-      const facts = parseExportItem(format, itemText)
-      const match = byId.get(key)
-      return {
-        ref,
-        ...(facts.title === undefined ? {} : { title: facts.title }),
-        ...(match === undefined ? {} : { start: match.start, end: match.end }),
-      }
-    })
-  }
-  if (format === 'csljson') {
-    let records: unknown
-    try {
-      records = JSON.parse(text)
-    } catch {
-      records = null
+    // Split on non-word runs instead of a shared `/g` match: no mutable
+    // `lastIndex` state to reset, and the token class stays the `\b` class
+    // (`[A-Za-z0-9_]+`) so `XABCD1234` never equals `ABCD1234`.
+    const seen = new Set<string>()
+    for (const word of entry.text.split(/[^A-Za-z0-9_]+/)) {
+      if (word === '' || !wanted.has(word) || seen.has(word)) continue
+      seen.add(word)
+      const bucket = byToken.get(word) ?? []
+      bucket.push(index)
+      byToken.set(word, bucket)
     }
-    const list = Array.isArray(records) ? records : []
-    return entries.map(({ ref, text: itemText }) => {
-      const facts = parseExportItem(format, itemText)
-      const index =
-        facts.key === undefined
-          ? -1
-          : list.findIndex(
-              (record) =>
-                typeof record === 'object' &&
-                record !== null &&
-                (record as Record<string, unknown>)['id'] === facts.key,
-            )
-      return {
-        ref,
-        ...(facts.title === undefined ? {} : { title: facts.title }),
-        ...(index === -1 ? {} : { key: facts.key, entryIndex: index }),
-      }
-    })
+  })
+  return { byKey, byToken }
+}
+
+/** First index in `candidates` not yet claimed, or undefined when none remains. */
+function firstUnclaimed(
+  candidates: readonly number[] | undefined,
+  used: ReadonlySet<number>,
+): number | undefined {
+  if (candidates === undefined) return undefined
+  for (const index of candidates) {
+    if (!used.has(index)) return index
   }
-  return entries.map(({ ref }) => ({ ref }))
+  return undefined
+}
+
+function locateBibtexFromBatch(
+  text: string,
+  refs: readonly ZoteroObjectRef[],
+  format: ZoteroExportFormat,
+): LocatedExportItem[] {
+  const batchEntries = splitBibtexEntries(text)
+  const wanted = new Set(refs.map((ref) => ref.key))
+  const { byKey, byToken } = indexBibtexEntries(batchEntries, wanted)
+  const used = new Set<number>()
+  return refs.map((ref) => {
+    const formattedRef = formatRef(ref)
+    // Fixed priority per ref: direct citation-key match, then whole-token
+    // mention in still-unclaimed entries, then the unambiguous 1×1 positional
+    // fallback. Each entry serves at most one ref, in requested order.
+    const foundIndex =
+      firstUnclaimed(byKey.get(ref.key), used) ??
+      firstUnclaimed(byToken.get(ref.key), used) ??
+      (refs.length === 1 && batchEntries.length === 1 && !used.has(0) ? 0 : undefined)
+    if (foundIndex === undefined) return { ref: formattedRef }
+    used.add(foundIndex)
+    const entry = batchEntries[foundIndex]!
+    const facts = parseExportItem(format, entry.text)
+    return {
+      ref: formattedRef,
+      ...(facts.title !== undefined ? { title: facts.title } : {}),
+      key: entry.key,
+      start: entry.start,
+      end: entry.end,
+    }
+  })
+}
+
+function locateRisFromBatch(text: string, refs: readonly ZoteroObjectRef[]): LocatedExportItem[] {
+  const byId = new Map<string, BatchEntry>()
+  for (const record of splitRisRecords(text)) {
+    if (record.key !== undefined) byId.set(record.key, record)
+  }
+  return refs.map((ref) => {
+    const formattedRef = formatRef(ref)
+    const match = byId.get(ref.key)
+    const facts = match !== undefined ? parseExportItem('ris', match.text) : undefined
+    return {
+      ref: formattedRef,
+      ...(match?.key !== undefined ? { key: match.key } : {}),
+      ...(facts?.title !== undefined ? { title: facts.title } : {}),
+      ...(match !== undefined ? { start: match.start, end: match.end } : {}),
+    }
+  })
+}
+
+function locateCslFromBatch(text: string, refs: readonly ZoteroObjectRef[]): LocatedExportItem[] {
+  let records: unknown
+  try {
+    records = JSON.parse(text)
+  } catch {
+    records = null
+  }
+  const list = Array.isArray(records) ? records : []
+  const byId = new Map<string, { id: string; index: number; title?: string }>()
+  const byKey = new Map<string, { id: string; index: number; title?: string }>()
+  for (let i = 0; i < list.length; i++) {
+    const rec = list[i]
+    if (typeof rec === 'object' && rec !== null && !Array.isArray(rec)) {
+      const r = rec as Record<string, unknown>
+      if (typeof r.id === 'string') {
+        const entry = {
+          id: r.id,
+          index: i,
+          ...(typeof r.title === 'string' ? { title: r.title } : {}),
+        }
+        byId.set(r.id, entry)
+        const slash = r.id.lastIndexOf('/')
+        const key = slash !== -1 ? r.id.slice(slash + 1) : r.id
+        if (!byKey.has(key)) {
+          byKey.set(key, entry)
+        }
+      }
+    }
+  }
+  const findMatch = (key: string) => byId.get(key) ?? byKey.get(key)
+  return refs.map((ref) => {
+    const formattedRef = formatRef(ref)
+    const found = findMatch(ref.key)
+    return {
+      ref: formattedRef,
+      ...(found?.title !== undefined ? { title: found.title } : {}),
+      ...(found !== undefined ? { key: found.id, entryIndex: found.index } : {}),
+    }
+  })
 }

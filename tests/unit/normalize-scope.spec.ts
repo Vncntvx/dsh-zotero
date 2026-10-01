@@ -8,6 +8,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   collectionKeysOf,
+  formatCreatorDisplayName,
   matchScopeName,
   nearScopeCandidates,
   normalizeCreators,
@@ -102,7 +103,11 @@ describe('normalizeCreators', () => {
           { creatorType: 'editor', name: 'OpenAI Research' },
         ],
       }),
-    ).toEqual(['Tri Dao', 'Fu', 'OpenAI Research'])
+    ).toEqual([
+      { creatorType: 'author', firstName: 'Tri', lastName: 'Dao' },
+      { creatorType: 'author', lastName: 'Fu' },
+      { creatorType: 'editor', name: 'OpenAI Research' },
+    ])
   })
 
   it('returns an empty list when creators are absent or not an array', () => {
@@ -112,11 +117,27 @@ describe('normalizeCreators', () => {
 
   it('fills missing first or last names from the other field', () => {
     expect(normalizeCreators({ creators: [{ creatorType: 'author', lastName: 'Dao' }] })).toEqual([
-      'Dao',
+      { creatorType: 'author', lastName: 'Dao' },
     ])
     expect(normalizeCreators({ creators: [{ creatorType: 'author', firstName: 'Tri' }] })).toEqual([
-      'Tri',
+      { creatorType: 'author', firstName: 'Tri' },
     ])
+  })
+})
+
+describe('formatCreatorDisplayName', () => {
+  it('formats creators with role suffixes and first/last names', () => {
+    expect(formatCreatorDisplayName({ creatorType: 'author', name: 'OpenAI' })).toBe('OpenAI')
+    expect(formatCreatorDisplayName({ creatorType: 'editor', name: 'OpenAI' })).toBe(
+      'OpenAI (editor)',
+    )
+    expect(
+      formatCreatorDisplayName({ creatorType: 'author', firstName: 'Tri', lastName: 'Dao' }),
+    ).toBe('Tri Dao')
+    expect(formatCreatorDisplayName({ creatorType: 'translator', lastName: 'Dao' })).toBe(
+      'Dao (translator)',
+    )
+    expect(formatCreatorDisplayName({ creatorType: 'author' })).toBe('')
   })
 })
 

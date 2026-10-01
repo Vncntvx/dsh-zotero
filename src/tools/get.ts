@@ -21,6 +21,7 @@ import { withConnectivityAsk } from '../ask.js'
 import { boundedPresentationMeta, projectGetMeta } from '../presentation-meta.js'
 import { ANNOTATION_RECORD, ATTACHMENT_RECORD, NOTE_RECORD } from './child-records.js'
 import { formatSearchLine, metaRecordOf } from './present.js'
+import { formatCreatorsList } from '../normalize.js'
 import { parseSupportedRef, REF_ARG_HINT } from './validate.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroGetRequest, ZoteroInclude } from '../types.js'
@@ -54,7 +55,21 @@ const GET_OUTPUT_SCHEMA = {
     ref: { type: 'string', required: true },
     itemType: { type: 'string', required: true },
     title: { type: 'string', required: true },
-    creators: { type: 'array', required: true, items: { type: 'string' } },
+    creators: {
+      type: 'array',
+      required: true,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          creatorType: { type: 'string', required: true },
+          name: { type: 'string' },
+          firstName: { type: 'string' },
+          lastName: { type: 'string' },
+        },
+      },
+    },
+    extra: { type: 'string' },
     date: { type: 'string' },
     year: { type: 'integer' },
     venue: { type: 'string' },
@@ -148,7 +163,11 @@ function buildRequest(args: GetArgs): ZoteroGetRequest {
 
 export function renderGet(_args: GetArgs, value: GetOutput): ContentBlock[] {
   const lines = [formatSearchLine(value.ref, value.title, value.year, value.itemType)]
-  if (value.creators.length > 0) lines.push(`Creators: ${value.creators.join('; ')}`)
+  const creators = formatCreatorsList(value.creators)
+  if (creators !== '') {
+    lines.push(`Creators: ${creators}`)
+  }
+  if (value.extra !== undefined) lines.push(`Extra: ${value.extra}`)
   const venueLine = [
     value.venue,
     value.date,

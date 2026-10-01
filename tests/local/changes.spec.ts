@@ -604,6 +604,32 @@ describe('changes', () => {
     expect(result.unobservable).toEqual([{ kind: 'items', reason: 'not-served' }])
   })
 
+  it('recovers trashed items via includeTrashed=1 when /items/trash is not served', async () => {
+    // A standard Zotero Web API v3 server that does not serve /items/trash with format=versions,
+    // but serves includeTrashed=1 on /items according to the official Syncing specification.
+    serveJson(mock, `${apiPath()}/items/top`, { TOP12345: 45 }, versionHeaders(SERVER_ID, 50))
+    mock.route('GET', `${apiPath()}/items`, (req, res, helpers, search) => {
+      if (search.get('limit') === '1') {
+        helpers.json([], versionHeaders(SERVER_ID, 50))
+        return
+      }
+      if (search.get('includeTrashed') === '1') {
+        helpers.json({ TOP12345: 45, TRSH1234: 48 }, versionHeaders(SERVER_ID, 50))
+      } else {
+        helpers.json({ TOP12345: 45 }, versionHeaders(SERVER_ID, 50))
+      }
+    })
+    serveStatus(mock, `${apiPath()}/items/trash`, 404, 'Not found')
+
+    const result = await provider.changes({
+      since: at(42, SERVER_ID, ['items']),
+      include: new Set(['items']),
+    })
+    expect(result.changed.items).toEqual([{ key: 'TOP12345', version: 45 }])
+    expect(result.changed.trashedItems).toEqual([{ key: 'TRSH1234', version: 48 }])
+    expect(result.unobservable).toBeUndefined()
+  })
+
   it('reports a versionless library as an empty, cursor-less diff', async () => {
     routeItems(mock, {
       probe: 'not-found',

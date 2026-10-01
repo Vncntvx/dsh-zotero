@@ -30,7 +30,6 @@ describe('resolveConfig', () => {
       maxResponseBytes: 16 * 1024 * 1024,
       maxExportChars: 1_000_000,
       maxExportRefs: 50,
-      exportConcurrency: 4,
       maxBrowseResults: 50,
       maxChangesResults: 50,
       scopeListingTtlMs: 30_000,
@@ -154,7 +153,6 @@ describe('resolveConfig', () => {
     expect(() => resolveConfig({ maxInFlightRequests: 0 })).toThrowError(/maxInFlightRequests/)
     expect(() => resolveConfig({ searchConcurrency: 1.5 })).toThrowError(/searchConcurrency/)
     expect(() => resolveConfig({ graphConcurrency: -1 })).toThrowError(/graphConcurrency/)
-    expect(() => resolveConfig({ exportConcurrency: 0 })).toThrowError(/exportConcurrency/)
     expect(() => resolveConfig({ retrieveAttachmentCap: 0 })).toThrowError(/retrieveAttachmentCap/)
     expect(() => resolveConfig({ scopeListingTtlMs: Number.NaN })).toThrowError(/scopeListingTtlMs/)
     expect(() => resolveConfig({ writeNoteMaxChars: 0 })).toThrowError(/writeNoteMaxChars/)

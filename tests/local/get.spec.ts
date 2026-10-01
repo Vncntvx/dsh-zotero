@@ -208,7 +208,7 @@ describe('getItem', () => {
           versionNumber: 2,
           archive: 'arXiv',
           libraryCatalog: 'Zotero',
-          extra: { nested: ['a', 1, true] },
+          customField: { nested: ['a', 1, true] },
         },
       }),
     )
@@ -220,7 +220,7 @@ describe('getItem', () => {
     // Consumed keys never leak into extraFields; unknown ones survive verbatim.
     expect(all.extraFields).toEqual({
       archive: 'arXiv',
-      extra: { nested: ['a', 1, true] },
+      customField: { nested: ['a', 1, true] },
       libraryCatalog: 'Zotero',
       repository: 'Zenodo',
       versionNumber: 2,

@@ -1,9 +1,9 @@
 /**
- * Per-document facts of a translator-format export, parsed from the
- * single-item export response Zotero returns for one ref. Parsing one entry
- * is trivial and deterministic — the merged batch body's entry order belongs
- * to Zotero, so refs are never indexed against it; the provider requests
- * each document on its own and pairs the refs itself.
+ * Per-document facts of a translator-format export, parsed from one entry of
+ * the merged batch body. Parsing one entry is trivial and deterministic —
+ * the batch body's entry order belongs to Zotero, so the provider locates
+ * each ref's entry in memory (`export-mapping.ts`) and reads its key/title
+ * here, never with a second HTTP request per document.
  * @module dsh-zotero/export-items
  */
 
@@ -100,9 +100,9 @@ function csljsonFactsOf(text: string): ExportItemFacts {
 }
 
 /**
- * Parse the per-document facts of one single-item translator export.
+ * Parse the per-document facts of one translator-format entry.
  * @param format - the requested translator format.
- * @param text - the single-item export response body.
+ * @param text - one entry of the batch export body.
  * @returns the parsed key/title facts; empty when the format is unsupported
  *   or the entry carries no usable facts.
  */

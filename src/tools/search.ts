@@ -27,6 +27,8 @@ import {
 } from '../constants.js'
 import type { ResolvedConfig } from '../config.js'
 import { withConnectivityAsk } from '../ask.js'
+import { citekeyOf } from '../normalize.js'
+import { assertPublicationsSupported } from '../refs.js'
 import { boundedPresentationMeta, projectSearchMeta } from '../presentation-meta.js'
 import { formatSearchLine, metaRecordOf } from './present.js'
 import { assertIntInRange, invalid, parseLibrary } from './validate.js'
@@ -118,6 +120,13 @@ const SEARCH_PARAMETERS = {
     type: 'boolean',
     description: 'Include trashed items (only with library scope); default false.',
   },
+  itemLevel: {
+    type: 'string',
+    enum: ['top', 'all'],
+    default: 'top',
+    description:
+      'top searches only top-level bibliographic items (default); all searches both top-level items and child notes/attachments.',
+  },
   sort: {
     type: 'string',
     enum: [...ZOTERO_SORT_FIELDS],
@@ -158,6 +167,7 @@ const SEARCH_ITEM_SCHEMA = {
     bestAttachmentRef: { type: 'string' },
     bestAttachmentType: { type: 'string' },
     attachmentSize: { type: 'integer' },
+    extra: { type: 'string' },
   },
 } as const
 
@@ -336,6 +346,9 @@ function buildRequest(args: SearchArgs, config: ResolvedConfig): ZoteroSearchReq
     }
   }
   const library = parseLibrary(args.library)
+  if (scope.kind === 'publications') {
+    assertPublicationsSupported(library)
+  }
   return {
     query: query === '' ? undefined : query,
     mode: args.mode ?? SEARCH_DEFAULT_MODE,
@@ -351,6 +364,7 @@ function buildRequest(args: SearchArgs, config: ResolvedConfig): ZoteroSearchReq
     ...(tagMatch ? { tagMatch } : {}),
     ...(args.excludeTags ? { excludeTags: args.excludeTags } : {}),
     ...(includeTrashed ? { includeTrashed: true } : {}),
+    itemLevel: args.itemLevel ?? 'top',
     sort: args.sort ?? SEARCH_DEFAULT_SORT,
     direction: args.direction ?? SEARCH_DEFAULT_DIRECTION,
     offset,
@@ -358,14 +372,23 @@ function buildRequest(args: SearchArgs, config: ResolvedConfig): ZoteroSearchReq
   }
 }
 
+/** One search hit as the model reads it: ref line plus citekey, creators, and PDF hint. */
+function formatSearchResultLine(
+  item: SearchOutput['items'][number],
+  index: number,
+  withPdfHint: boolean,
+): string {
+  const citekey = citekeyOf(item.extra)
+  const citeTag = citekey ? ` [@${citekey}]` : ''
+  const creator = item.creatorSummary === '' ? '' : ` — ${item.creatorSummary}`
+  const pdf = withPdfHint && item.bestAttachmentType === 'application/pdf' ? ' — PDF' : ''
+  return `${index + 1}. ${formatSearchLine(item.ref, item.title, item.year, item.itemType)}${citeTag}${creator}${pdf}`
+}
+
 export function renderSearch(_args: SearchArgs, value: SearchOutput): ContentBlock[] {
   const lines = [`Found ${value.returned} of ${value.total} results:`]
   value.items.forEach((item, index) => {
-    const creator = item.creatorSummary === '' ? '' : ` — ${item.creatorSummary}`
-    const pdf = item.bestAttachmentType === 'application/pdf' ? ' — PDF' : ''
-    lines.push(
-      `${index + 1}. ${formatSearchLine(item.ref, item.title, item.year, item.itemType)}${creator}${pdf}`,
-    )
+    lines.push(formatSearchResultLine(item, index, true))
   })
   if (value.nextOffset !== undefined) {
     lines.push(searchMoreMessage(value.nextOffset))
@@ -380,10 +403,7 @@ export function renderSearch(_args: SearchArgs, value: SearchOutput): ContentBlo
       ),
     )
     supplemental.items.forEach((item, index) => {
-      const creator = item.creatorSummary === '' ? '' : ` — ${item.creatorSummary}`
-      lines.push(
-        `${index + 1}. ${formatSearchLine(item.ref, item.title, item.year, item.itemType)}${creator}`,
-      )
+      lines.push(formatSearchResultLine(item, index, false))
     })
   }
   return [{ type: 'text', text: lines.join('\n') }]

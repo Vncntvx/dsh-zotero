@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { ZOTERO_INVALID_REF, ZoteroError } from '../../src/errors.js'
 import {
   formatRef,
+  formatZoteroRelationUri,
   isRefString,
   isSupportedLocalLibrary,
   libraryPrefix,
@@ -10,6 +11,7 @@ import {
   PERSONAL_GROUPS_DISCOVERY,
   PERSONAL_LIBRARY,
   refForLibrary,
+  relationTargetRef,
   requireSupportedLocalRef,
 } from '../../src/refs.js'
 import { ZOTERO_SORT_FIELDS } from '../../src/constants.js'
@@ -191,6 +193,63 @@ describe('parseZoteroRelationUri', () => {
     expect(parseZoteroRelationUri('http://zotero.org/users/0/items/badkey')).toBeNull()
     expect(parseZoteroRelationUri('http://zotero.org/groups/1/collections/ABCD1234')).toBeNull()
     expect(parseZoteroRelationUri('ftp://zotero.org/users/0/items/ABCD1234')).toBeNull()
+  })
+})
+
+describe('formatZoteroRelationUri', () => {
+  it('pins the user arm to users/0 and names groups by id', () => {
+    expect(formatZoteroRelationUri({ library: { type: 'user', id: 0 }, key: 'ABCD1234' })).toBe(
+      'http://zotero.org/users/0/items/ABCD1234',
+    )
+    expect(formatZoteroRelationUri({ library: { type: 'group', id: 42 }, key: 'ABCD1234' })).toBe(
+      'http://zotero.org/groups/42/items/ABCD1234',
+    )
+  })
+})
+
+describe('relationTargetRef', () => {
+  it('maps canonical user ids and same-library groups, never foreign users', () => {
+    expect(relationTargetRef('http://zotero.org/users/0/items/ABCD1234', 'S1')).toBe(
+      'zotero://user/0/item/ABCD1234?server=S1',
+    )
+    expect(
+      relationTargetRef('http://zotero.org/groups/42/items/ABCD1234', 'S1', {
+        library: { type: 'group', id: 42 },
+      }),
+    ).toBe('zotero://group/42/item/ABCD1234?server=S1')
+    // Another group stays bare: a target ref never implies foreign locality.
+    expect(
+      relationTargetRef('http://zotero.org/groups/99/items/ABCD1234', 'S1', {
+        library: { type: 'group', id: 42 },
+      }),
+    ).toBeUndefined()
+    // A foreign user id stays bare without proof — it would resolve the same
+    // key against the wrong library.
+    expect(relationTargetRef('http://zotero.org/users/987654/items/ABCD1234', 'S1')).toBeUndefined()
+    expect(relationTargetRef('not a uri', 'S1')).toBeUndefined()
+  })
+
+  it('maps the sync alias when the caller proves the personal context', () => {
+    // The write echo only ever sends users/0: any users/<id> in it is the
+    // server-side canonicalization of that same personal library.
+    expect(
+      relationTargetRef('http://zotero.org/users/987654/items/ABCD1234', 'S1', {
+        personalContext: true,
+      }),
+    ).toBe('zotero://user/0/item/ABCD1234?server=S1')
+    // A read proves the alias through the record's real library id.
+    expect(
+      relationTargetRef('http://zotero.org/users/123/items/ABCD1234', undefined, {
+        library: { type: 'user', id: 0 },
+        parentLibraryId: 123,
+      }),
+    ).toBe('zotero://user/0/item/ABCD1234')
+    expect(
+      relationTargetRef('http://zotero.org/users/999/items/ABCD1234', undefined, {
+        library: { type: 'user', id: 0 },
+        parentLibraryId: 123,
+      }),
+    ).toBeUndefined()
   })
 })
 

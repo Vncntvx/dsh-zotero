@@ -81,7 +81,7 @@ describe('normalizeItemDetail', () => {
       ref: 'zotero://user/0/item/ABCD1234?server=S1',
       itemType: 'journalArticle',
       title: 'FlashAttention-2',
-      creators: ['Tri Dao'],
+      creators: [{ creatorType: 'author', firstName: 'Tri', lastName: 'Dao' }],
       date: '2023-07-28',
       year: 2023,
       venue: 'ICML',
@@ -308,7 +308,7 @@ describe('normalizeItemDetail', () => {
     })
     expect(detail.tags).toEqual(['real'])
     expect(detail.venue).toBeUndefined()
-    expect(detail.creators).toEqual(['Tri Dao'])
+    expect(detail.creators).toEqual([{ creatorType: 'author', firstName: 'Tri', lastName: 'Dao' }])
     expect(detail.notes!.total).toBe(1)
     expect(detail.annotations!.total).toBe(0)
     expect(detail.attachments!.total).toBe(0)

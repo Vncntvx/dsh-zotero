@@ -29,7 +29,6 @@ All configuration fields are defined in `src/config.ts`, with default values pro
 | `maxResponseBytes`         | `16777216`                   | Streaming byte limit for a single API response (16 MiB)                                                                   |
 | `maxExportChars`           | `1000000`                    | Hard character limit for export output (1M characters)                                                                    |
 | `maxExportRefs`            | `50`                         | Maximum references in a single `zotero_export` call                                                                       |
-| `exportConcurrency`        | `4`                          | Concurrency limit for single-item reads in `zotero_export`                                                                |
 | `maxBrowseResults`         | `50`                         | Maximum items returned by a single `zotero_browse` call                                                                   |
 | `maxChangesResults`        | `50`                         | Display limit per resource kind in `zotero_changes`                                                                       |
 | `scopeListingTtlMs`        | `30000`                      | Cache TTL in milliseconds for collection and search scopes                                                                |

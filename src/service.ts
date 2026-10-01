@@ -675,7 +675,6 @@ function localProviderLimits(config: ResolvedConfig): LocalApiLimits {
     scopeListingTtlMs: config.scopeListingTtlMs,
     searchConcurrency: config.searchConcurrency,
     graphConcurrency: config.graphConcurrency,
-    exportConcurrency: config.exportConcurrency,
     retrieveAttachmentCap: config.retrieveAttachmentCap,
     defaultStyle: config.defaultStyle,
     defaultLocale: config.defaultLocale,

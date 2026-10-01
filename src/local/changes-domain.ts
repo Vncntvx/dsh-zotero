@@ -175,6 +175,49 @@ function assertSameInstance(observed: string | undefined, expected: string): voi
   }
 }
 
+/** One versions-resource reader, as `changes()` builds it per call. */
+type ReadResourceFn = (
+  path: string,
+  versioned?: boolean,
+  requestSignal?: AbortSignal,
+  options?: { includeTrashed?: boolean },
+) => Promise<ResourceRead>
+
+/**
+ * Resolve the trash partition, falling back when the build does not serve
+ * `/items/trash`. Official Zotero Syncing standard: query `/items` with
+ * `includeTrashed=1` and diff against the live listing. Completeness is the
+ * conjunction of both whole reads — a capped half cannot vouch for the
+ * derived split. Any other failure (or a failed fallback) returns the
+ * original read so the caller records one verdict for the item space.
+ */
+async function resolveTrashRead(
+  readResource: ReadResourceFn,
+  prefix: string,
+  signal: AbortSignal | undefined,
+  live: ResourceRead,
+  initialTrash: ResourceRead,
+): Promise<ResourceRead> {
+  if (initialTrash.status !== 'failed' || initialTrash.reason !== 'not-served') {
+    return initialTrash
+  }
+  if (live.status !== 'ok') return initialTrash
+  const allRead = await readResource(`${prefix}/items`, true, signal, { includeTrashed: true })
+  if (allRead.status !== 'ok') return initialTrash
+  const liveKeys = new Set(live.value.entries.map((entry) => entry.key))
+  const trashEntries = allRead.value.entries.filter((entry) => !liveKeys.has(entry.key))
+  return {
+    status: 'ok',
+    value: {
+      entries: trashEntries,
+      total: trashEntries.length,
+      complete: allRead.value.complete && live.value.complete,
+      ...(allRead.value.serverId !== undefined ? { serverId: allRead.value.serverId } : {}),
+      ...(allRead.value.version !== undefined ? { version: allRead.value.version } : {}),
+    },
+  }
+}
+
 /**
  * Diff the library against a local transaction version. On the verified build
  * (Zotero 10.0.2-beta.9) versions are local transactions: every object save
@@ -350,11 +393,15 @@ export async function changes(
     path: string,
     versioned = true,
     requestSignal: AbortSignal | undefined = signal,
+    options?: { includeTrashed?: boolean },
   ): Promise<ResourceRead> => {
     const payload = await attempt(async () => {
       const params = new URLSearchParams()
       params.set('since', String(since.version))
       params.set('format', 'versions')
+      if (options?.includeTrashed) {
+        params.set('includeTrashed', '1')
+      }
       // Deliberately no `limit`: the local API answers an unbounded request in
       // full, and a capped read could not be resumed (the API has no version
       // upper bound, and the reported version would already sit past the rows
@@ -498,9 +545,10 @@ export async function changes(
       signal?.removeEventListener('abort', forwardAbort)
     }
     if (firstFailure !== undefined) throw firstFailure.error
-    const [live, top, trash] = settled.map(
+    const [live, top, initialTrash] = settled.map(
       (result) => (result as PromiseFulfilledResult<ResourceRead>).value,
     )
+    const trash = await resolveTrashRead(readResource, prefix, signal, live, initialTrash)
     if (live.status === 'ok' && top.status === 'ok' && trash.status === 'ok') {
       foldRead(live.value)
       foldRead(top.value)

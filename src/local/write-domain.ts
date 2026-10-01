@@ -53,12 +53,14 @@ import {
 } from '../json.js'
 import {
   formatRef,
+  formatZoteroRelationUri,
   isRefString,
   libraryPrefix,
   parseRef,
-  parseZoteroRelationUri,
   PERSONAL_LIBRARY,
   refForLibrary,
+  relationTargetRef,
+  requireSupportedLocalRef,
   requireWritableRef,
 } from '../refs.js'
 import { markdownToNoteHtml } from './note-format.js'
@@ -155,6 +157,13 @@ async function ensureServerId(deps: WriteDomainDeps, signal?: AbortSignal): Prom
   return id
 }
 
+/** Refuse a qualified ref that names another Zotero instance than the write target. */
+function assertServerIdMatches(observed: string | undefined, serverId: string): void {
+  if (observed !== undefined && observed !== serverId) {
+    throw new ZoteroError(SERVER_MISMATCH_MESSAGE, ZOTERO_SERVER_MISMATCH)
+  }
+}
+
 /** Refuse a qualified ref that names another Zotero instance before any write. */
 function requireWritableRefAtServer(
   ref: ZoteroObjectRef,
@@ -162,9 +171,18 @@ function requireWritableRefAtServer(
   serverId: string,
 ): ZoteroObjectRef {
   const checked = requireWritableRef(ref, kinds)
-  if (ref.serverId !== undefined && ref.serverId !== serverId) {
-    throw new ZoteroError(SERVER_MISMATCH_MESSAGE, ZOTERO_SERVER_MISMATCH)
-  }
+  assertServerIdMatches(ref.serverId, serverId)
+  return checked
+}
+
+/** Refuse a qualified ref that names another Zotero instance before citing as relation source. */
+function requireSupportedRefAtServer(
+  ref: ZoteroObjectRef,
+  kinds: readonly ZoteroObjectRef['kind'][],
+  serverId: string,
+): ZoteroObjectRef {
+  const checked = requireSupportedLocalRef(ref, kinds)
+  assertServerIdMatches(ref.serverId, serverId)
   return checked
 }
 
@@ -221,7 +239,7 @@ async function readItem(
     throw new ZoteroError(writeObjectStateMissingMessage(field), ZOTERO_UNEXPECTED)
   }
   const tags = field === 'tags' ? tagsOf(data) : []
-  const collectionKeys = field === 'collections' ? collectionKeysOf(data) : []
+  const collectionKeys = field === 'collections' ? strictCollectionKeysOf(data) : []
   if (tags === undefined || collectionKeys === undefined) {
     throw new ZoteroError(writeObjectStateMissingMessage(field), ZOTERO_UNEXPECTED)
   }
@@ -255,7 +273,7 @@ function tagsOf(data: Record<string, unknown> | undefined): ItemSnapshot['tags']
 }
 
 /** Parse a saved collection-key array strictly; undefined means malformed. */
-function collectionKeysOf(data: Record<string, unknown> | undefined): string[] | undefined {
+function strictCollectionKeysOf(data: Record<string, unknown> | undefined): string[] | undefined {
   const raw = data?.collections
   if (raw === undefined) return []
   if (
@@ -304,9 +322,9 @@ function collectionRef(key: string, serverId: string): string {
   return formatRef(refForLibrary(PERSONAL_LIBRARY, 'collection', key, serverId))
 }
 
-/** The canonical relation URI for a personal-library source item. */
-function relationUriOf(key: string): string {
-  return `http://zotero.org/users/0/items/${key}`
+/** The canonical relation URI for a source item. */
+function relationUriOf(ref: ZoteroObjectRef): string {
+  return formatZoteroRelationUri(ref)
 }
 
 /** Map Zotero's per-object refusal onto the typed domain error it names. */
@@ -387,7 +405,9 @@ export async function createNote(
   const collectionInputs = (request.collections ?? []).map((value) =>
     normalizeCollectionInput('collections', value),
   )
-  const localSources = (request.sourceRefs ?? []).map((ref) => requireWritableRef(ref, ['item']))
+  const localSources = (request.sourceRefs ?? []).map((ref) =>
+    requireSupportedLocalRef(ref, ['item']),
+  )
   const tags = normalizeWriteList('tags', request.tags ?? [])
   if (localParent !== undefined && collectionInputs.length > 0) {
     throw new ZoteroError(WRITE_CHILD_COLLECTIONS_MESSAGE, ZOTERO_INVALID_ARGUMENT)
@@ -401,7 +421,7 @@ export async function createNote(
   const collections: ZoteroObjectRef[] = (
     await Promise.all(collectionInputs.map((value) => resolveCollection(value, signal)))
   ).map((ref) => requireWritableRefAtServer(ref, ['collection'], serverId))
-  const sources = localSources.map((ref) => requireWritableRefAtServer(ref, ['item'], serverId))
+  const sources = localSources.map((ref) => requireSupportedRefAtServer(ref, ['item'], serverId))
   const entry: Record<string, unknown> = {
     itemType: 'note',
     note: markdownToNoteHtml(request.markdown),
@@ -411,7 +431,7 @@ export async function createNote(
       ? { collections: collections.map((ref) => ref.key) }
       : {}),
     ...(sources.length > 0
-      ? { relations: { [DC_RELATION]: sources.map((ref) => relationUriOf(ref.key)) } }
+      ? { relations: { [DC_RELATION]: sources.map((ref) => relationUriOf(ref)) } }
       : {}),
   }
   return await withWriteKey(deps, serverId, signal, async (apiKey) => {
@@ -502,7 +522,7 @@ export async function createNote(
       return committedUnverifiedNote(batch, serverId, key, version)
     }
     const savedTagState = tagsOf(data)
-    const savedCollectionState = collectionKeysOf(data)
+    const savedCollectionState = strictCollectionKeysOf(data)
     if (savedTagState === undefined || savedCollectionState === undefined) {
       return committedUnverifiedNote(batch, serverId, key, version)
     }
@@ -527,12 +547,15 @@ export async function createNote(
   })
 }
 
-/** A saved relation URI back to the ref form the model uses; unparseable URIs stay verbatim. */
+/**
+ * A saved relation URI back to the ref form the model uses; unparseable or
+ * unprovable URIs stay verbatim. The echo of a personal note only ever
+ * carries `users/0` outbound, so any `users/<id>` in it is Zotero's
+ * canonicalization of that same personal library (see
+ * `refs.relationTargetRef`); group targets are explicit cross-library refs.
+ */
 function relationUriToRef(uri: string, serverId: string): string {
-  const parsed = parseZoteroRelationUri(uri)
-  if (parsed === null) return uri
-  if (parsed.library.type !== 'user' || parsed.library.id !== 0) return uri
-  return itemRef(parsed.key, serverId)
+  return relationTargetRef(uri, serverId, { personalContext: true }) ?? uri
 }
 
 /**

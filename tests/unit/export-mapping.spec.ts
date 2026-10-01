@@ -1,13 +1,17 @@
 /**
- * The server-side ref → batch-entry mapping: body splitting with text spans,
- * content-matched pairing for BibTeX/BibLaTeX (the batch's own citation key
- * wins over the single-item context's), identity matching for RIS and CSL
- * JSON, and the per-item fallback for entries that cannot be located.
+ * The in-memory ref → batch-entry mapping: body splitting with text spans,
+ * key/mention/1×1-fallback pairing for BibTeX/BibLaTeX, identity matching
+ * for RIS and CSL JSON, and bare refs for entries that cannot be located.
  * @module tests/export-mapping
  */
 
 import { describe, expect, it } from 'vitest'
-import { locateExportItems, splitBibtexEntries, splitRisRecords } from '../../src/export-mapping.js'
+import {
+  locateExportItemsFromBatch,
+  splitBibtexEntries,
+  splitRisRecords,
+} from '../../src/export-mapping.js'
+import { parseRef } from '../../src/refs.js'
 
 const R1 = 'zotero://user/0/item/AAAAAAA1'
 const R2 = 'zotero://user/0/item/BBBBBBBB'
@@ -248,94 +252,121 @@ describe('splitRisRecords', () => {
   })
 })
 
-describe('locateExportItems', () => {
-  it('pairs BibTeX items by content and projects the batch body key and span', () => {
-    const batch =
-      '@article{batchKeyOne,\n  title = {One},\n}\n\n@article{batchKeyTwo,\n  title = {Two},\n}\n'
-    const secondStart = batch.indexOf('@article{batchKeyTwo,')
-    const items = locateExportItems('bibtex', batch, [
-      // The single-item context generates different citation keys.
-      { ref: R1, key: 'K1', text: '@article{singleKeyOne,\n  title = {One},\n}\n' },
-      { ref: R2, key: 'K2', text: '@article{singleKeyTwo,\n  title = {Two},\n}\n' },
+describe('locateExportItemsFromBatch', () => {
+  const ref1 = parseRef(R1)
+  const ref2 = parseRef(R2)
+
+  it('matches BibTeX entries by key, mention, or positional fallback', () => {
+    // 1. Direct key match
+    const directText = '@article{AAAAAAA1,\n  title = {Paper One},\n}\n'
+    const direct = locateExportItemsFromBatch('bibtex', directText, [ref1])
+    expect(direct).toEqual([
+      {
+        ref: R1,
+        title: 'Paper One',
+        key: 'AAAAAAA1',
+        start: 0,
+        end: directText.length,
+      },
     ])
+
+    // 2. Mention match (key is custom citekey, but body mentions item key)
+    const mentionText = '@article{customCitekey,\n  title = {Paper One},\n  note = {AAAAAAA1},\n}\n'
+    const mention = locateExportItemsFromBatch('bibtex', mentionText, [ref1])
+    expect(mention).toEqual([
+      {
+        ref: R1,
+        title: 'Paper One',
+        key: 'customCitekey',
+        start: 0,
+        end: mentionText.length,
+      },
+    ])
+
+    // 3. Positional fallback when count matches and no key/mention matched
+    const posText = '@article{unrelated,\n  title = {Paper Pos},\n}\n'
+    const pos = locateExportItemsFromBatch('bibtex', posText, [ref1])
+    expect(pos).toEqual([
+      {
+        ref: R1,
+        title: 'Paper Pos',
+        key: 'unrelated',
+        start: 0,
+        end: posText.length,
+      },
+    ])
+
+    // 4. Unlocated when entries length does not match refs
+    const unlocated = locateExportItemsFromBatch('bibtex', '@article{unrelated,\n}\n', [ref1, ref2])
+    expect(unlocated).toEqual([{ ref: R1 }, { ref: R2 }])
+  })
+
+  it('matches RIS records by ID and falls back gracefully', () => {
+    const risText = 'TY  - JOUR\nTI  - One\nID  - AAAAAAA1\nER  -\n'
+    const items = locateExportItemsFromBatch('ris', risText, [ref1, ref2])
     expect(items).toEqual([
-      { ref: R1, title: 'One', key: 'batchKeyOne', start: 0, end: secondStart },
-      { ref: R2, title: 'Two', key: 'batchKeyTwo', start: secondStart, end: batch.length },
+      {
+        ref: R1,
+        title: 'One',
+        key: 'AAAAAAA1',
+        start: 0,
+        end: risText.length,
+      },
+      { ref: R2 },
     ])
   })
 
-  it('pairs BibTeX items by content even when the batch carries inter-entry comments', () => {
-    const batch =
-      '@article{batchKeyOne,\n  title = {One},\n}\n% note for the reader\n@article{batchKeyTwo,\n  title = {Two},\n}\n'
-    const secondStart = batch.indexOf('@article{batchKeyTwo,')
-    const items = locateExportItems('bibtex', batch, [
-      { ref: R1, key: 'K1', text: '@article{singleKeyOne,\n  title = {One},\n}\n' },
-      { ref: R2, key: 'K2', text: '@article{singleKeyTwo,\n  title = {Two},\n}\n' },
+  it('matches CSL-JSON records by bare ID or URI', () => {
+    const cslText = JSON.stringify([
+      { id: 'AAAAAAA1', title: 'Paper 1' },
+      { id: 'http://zotero.org/users/0/items/BBBBBBBB', title: 'Paper 2' },
     ])
+    const items = locateExportItemsFromBatch('csljson', cslText, [ref1, ref2])
     expect(items).toEqual([
-      { ref: R1, title: 'One', key: 'batchKeyOne', start: 0, end: secondStart },
-      { ref: R2, title: 'Two', key: 'batchKeyTwo', start: secondStart, end: batch.length },
+      { ref: R1, title: 'Paper 1', key: 'AAAAAAA1', entryIndex: 0 },
+      { ref: R2, title: 'Paper 2', key: 'http://zotero.org/users/0/items/BBBBBBBB', entryIndex: 1 },
     ])
+
+    // Malformed JSON falls back gracefully
+    const broken = locateExportItemsFromBatch('csljson', 'not json', [ref1])
+    expect(broken).toEqual([{ ref: R1 }])
+
+    // Non-object or non-matching records in JSON array
+    const mixed = locateExportItemsFromBatch(
+      'csljson',
+      JSON.stringify([null, 42, 'string', [], { other: 1 }, { id: 'AAAAAAA1' }]),
+      [ref1],
+    )
+    expect(mixed).toEqual([{ ref: R1, key: 'AAAAAAA1', entryIndex: 5 }])
   })
 
-  it('leaves a BibTeX item unlocated when its content matches no batch entry', () => {
-    const items = locateExportItems('biblatex', '@article{batchKeyOne,\n  title = {One},\n}\n', [
-      { ref: R1, key: 'K1', text: '@article{other,\n  title = {Different},\n}\n' },
-    ])
-    expect(items).toEqual([{ ref: R1, title: 'Different' }])
+  it('never equates a key with a longer token containing it', () => {
+    // XAAAAAAA1 contains AAAAAAA1 as a substring but not as a whole token:
+    // mention matching must not claim the entry, and with 1 ref / 1 entry
+    // the 1×1 fallback still applies (unambiguous) — the token rule only
+    // decides priority between entries, never locateability itself.
+    const text = '@article{customKey,\n  note = {XAAAAAAA1},\n}\n'
+    const items = locateExportItemsFromBatch('bibtex', text, [ref1])
+    expect(items).toEqual([{ ref: R1, key: 'customKey', start: 0, end: text.length }])
+    // Two refs, one entry carrying only the superstring: neither mentions the
+    // key, and the counts differ, so both stay bare.
+    const two = locateExportItemsFromBatch('bibtex', text, [ref1, ref2])
+    expect(two).toEqual([{ ref: R1 }, { ref: R2 }])
   })
 
-  it('pairs RIS items by record id', () => {
-    const batch =
-      'TY  - JOUR\nTI  - One\nID  - K1\nER  -\n\nTY  - JOUR\nTI  - Two\nID  - K2\nER  -\n'
-    const secondStart = batch.indexOf('TY  - JOUR\nTI  - Two')
-    const items = locateExportItems('ris', batch, [
-      { ref: R1, key: 'K1', text: 'TY  - JOUR\nTI  - One\nID  - K1\nER  -\n' },
-      { ref: R2, key: 'K2', text: 'TY  - JOUR\nTI  - Two\nID  - K2\nER  -\n' },
-    ])
-    expect(items).toEqual([
-      { ref: R1, title: 'One', start: 0, end: secondStart },
-      { ref: R2, title: 'Two', start: secondStart, end: batch.length },
-    ])
+  it('claims each entry at most once across direct and mention matches', () => {
+    const text =
+      '@article{AAAAAAA1,\n  title = {One},\n}\n\n' +
+      '@article{customKey,\n  title = {Two},\n  note = {BBBBBBBB},\n}\n'
+    const items = locateExportItemsFromBatch('bibtex', text, [ref1, ref2])
+    expect(items[0]!.key).toBe('AAAAAAA1')
+    expect(items[1]!.key).toBe('customKey')
+    expect(items[0]!.start).toBe(0)
+    expect(items[1]!.start).toBeGreaterThan(0)
   })
 
-  it('leaves an RIS item unlocated when its id is absent from the body', () => {
-    const items = locateExportItems('ris', 'TY  - JOUR\nTI  - One\nID  - K1\nER  -\n', [
-      { ref: R1, key: 'K9', text: 'TY  - JOUR\nTI  - One\nID  - K9\nER  -\n' },
-    ])
-    expect(items).toEqual([{ ref: R1, title: 'One' }])
-  })
-
-  it('pairs CSL JSON items by their id with the array index', () => {
-    const batch = JSON.stringify([
-      { id: 'one', title: 'One' },
-      { id: 'two', title: 'Two' },
-    ])
-    const items = locateExportItems('csljson', batch, [
-      { ref: R1, key: 'K1', text: '[{"id": "one", "title": "One"}]' },
-      { ref: R2, key: 'K2', text: '[{"id": "two", "title": "Two"}]' },
-    ])
-    expect(items).toEqual([
-      { ref: R1, title: 'One', key: 'one', entryIndex: 0 },
-      { ref: R2, title: 'Two', key: 'two', entryIndex: 1 },
-    ])
-  })
-
-  it('leaves CSL JSON items unlocated for unknown ids or malformed bodies', () => {
-    const items = locateExportItems('csljson', JSON.stringify([{ id: 'one' }]), [
-      { ref: R1, key: 'K1', text: '[{"id": "missing"}]' },
-    ])
-    expect(items).toEqual([{ ref: R1 }])
-    const malformed = locateExportItems('csljson', 'not json', [
-      { ref: R1, key: 'K1', text: '[{"id": "one"}]' },
-    ])
-    expect(malformed).toEqual([{ ref: R1 }])
-  })
-
-  it('keeps items unlocated for formats without per-document entries', () => {
-    const items = locateExportItems('bibliography', '<div>a</div>', [
-      { ref: R1, key: 'K1', text: 'x' },
-    ])
+  it('returns plain refs for non-per-document formats', () => {
+    const items = locateExportItemsFromBatch('bibliography', '<div/>', [ref1])
     expect(items).toEqual([{ ref: R1 }])
   })
 })

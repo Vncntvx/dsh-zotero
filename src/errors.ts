@@ -244,6 +244,10 @@ export function writeListEmptyMessage(name: string): string {
   return `${name} must carry at least one item.`
 }
 
+/** Shown when My Publications is requested for a group library. */
+export const PUBLICATIONS_GROUP_UNSUPPORTED_MESSAGE =
+  'My Publications scope is only valid for personal libraries.'
+
 /**
  * Shown when the approval gate or plan-review could not be asked at all (no
  * channel, or the ask failed for a non-user reason). Writes fail closed. This

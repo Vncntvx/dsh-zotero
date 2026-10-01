@@ -16,22 +16,22 @@ Search for candidate items in the library. Supports metadata matching and indexe
 
 ### Parameters
 
-| Parameter        | Type                           | Default             | Description                                                                                                                                                              |
-| ---------------- | ------------------------------ | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `query`          | string                         | —                   | Free-text query; omit to browse all items                                                                                                                                |
-| `mode`           | `"metadata"` \| `"everything"` | `"metadata"`        | Search mode: `metadata` matches title/author/year; `everything` also searches indexed full text                                                                          |
-| `scope`          | object                         | `{kind: "library"}` | Search scope: `{kind:"library"}`, `{kind:"collection", refOrName}`, `{kind:"savedSearch", refOrName}`, or `{kind:"publications"}` (`publications` personal library only) |
-| `library`        | object                         | —                   | Target library: `{type:"user", id:0}` or `{type:"group", id}`; sets context when scope specifies a name                                                                  |
-| `itemTypes`      | string[]                       | —                   | Zotero item types (e.g. `journalArticle`), combined with OR                                                                                                              |
-| `tags`           | string[]                       | —                   | Tag names, combined according to `tagMatch`                                                                                                                              |
-| `tagMatch`       | `"all"` \| `"any"`             | `"all"`             | Tag matching logic: `all` for AND, `any` for OR (used with `tags`)                                                                                                       |
-| `excludeTags`    | string[]                       | —                   | Tags to exclude (NOT)                                                                                                                                                    |
-| `includeTrashed` | boolean                        | `false`             | Whether to include items in the trash (library scope only)                                                                                                               |
-| `itemLevel`      | `"top"` \| `"all"`             | `"top"`             | Item hierarchy: `top` searches top-level items only; `all` includes child items and attachments                                                                          |
-| `sort`           | string                         | `"dateModified"`    | Sort field: `dateModified`, `dateAdded`, `date`, `title`, `creator`                                                                                                      |
-| `direction`      | `"asc"` \| `"desc"`            | `"desc"`            | Sort direction                                                                                                                                                           |
-| `offset`         | integer                        | `0`                 | Pagination offset                                                                                                                                                        |
-| `limit`          | integer                        | `10`                | Maximum items returned (capped by `maxSearchResults`, default 20)                                                                                                        |
+| Parameter        | Type                           | Default             | Description                                                                                                                                                                         |
+| ---------------- | ------------------------------ | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `query`          | string                         | —                   | Free-text query; omit to browse all items                                                                                                                                           |
+| `mode`           | `"metadata"` \| `"everything"` | `"metadata"`        | Search mode: `metadata` matches title/author/year; `everything` also searches indexed full text                                                                                     |
+| `scope`          | object                         | `{kind: "library"}` | Search scope: `{kind:"library"}`, `{kind:"collection", refOrName}`, `{kind:"savedSearch", refOrName}`, or `{kind:"publications"}` (`publications` personal library only)            |
+| `library`        | object                         | —                   | Target library: `{type:"user", id:0}` or `{type:"group", id}`; sets context when scope specifies a name                                                                             |
+| `itemTypes`      | string[]                       | —                   | Zotero item types (e.g. `journalArticle`), combined with OR                                                                                                                         |
+| `tags`           | string[]                       | —                   | Tag names, combined according to `tagMatch`                                                                                                                                         |
+| `tagMatch`       | `"all"` \| `"any"`             | `"all"`             | Tag matching logic: `all` for AND, `any` for OR (used with `tags`)                                                                                                                  |
+| `excludeTags`    | string[]                       | —                   | Tags to exclude (NOT)                                                                                                                                                               |
+| `includeTrashed` | boolean                        | `false`             | Whether to include items in the trash (library scope only)                                                                                                                          |
+| `itemLevel`      | `"top"` \| `"all"`             | `"top"`             | Item hierarchy: `top` searches top-level items only; `all` includes child items and attachments (library/collection scopes only; publications and saved searches serve one listing) |
+| `sort`           | string                         | `"dateModified"`    | Sort field: `dateModified`, `dateAdded`, `date`, `title`, `creator`                                                                                                                 |
+| `direction`      | `"asc"` \| `"desc"`            | `"desc"`            | Sort direction                                                                                                                                                                      |
+| `offset`         | integer                        | `0`                 | Pagination offset                                                                                                                                                                   |
+| `limit`          | integer                        | `10`                | Maximum items returned (capped by `maxSearchResults`, default 20)                                                                                                                   |
 
 ### Output
 
@@ -186,21 +186,21 @@ Discover library structure and taxonomy metadata with pagination support.
 
 ### Parameters
 
-| Parameter       | Type    | Default                 | Description                                                                                                   |
-| --------------- | ------- | ----------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `kind`          | string  | —                       | Browse category: `libraries`, `collections`, `savedSearches`, `tags`, `itemTypes`, `itemFields` (required)    |
-| `library`       | object  | `{type: "user", id: 0}` | Target library (applicable to collections, savedSearches, tags)                                               |
-| `parentRef`     | string  | —                       | `collections` only: parent collection ref; omit to list top-level collections                                 |
-| `tagScope`      | string  | `"library"`             | `tags` only: scope, supporting `library`, `collection`, `publications` (`publications` personal library only) |
-| `tagCollection` | string  | —                       | `tags` with `tagScope="collection"`: collection ref or exact name                                             |
-| `itemLevel`     | string  | `"top"`                 | Scoped `tags` only: `top` counts bibliographic items only; `all` includes child items                         |
-| `itemQuery`     | string  | —                       | Scoped `tags` only: count tags matching query term                                                            |
-| `itemQueryMode` | string  | `"contains"`            | Scoped `tags` only: matching mode for `itemQuery`: `contains` or `startsWith` (defaults to `contains`)        |
-| `itemType`      | string  | —                       | `itemFields` only: item type to list fields and creator types for                                             |
-| `q`             | string  | —                       | Substring filter for tags                                                                                     |
-| `match`         | string  | `"contains"`            | Tag matching method: `contains` or `startsWith`                                                               |
-| `offset`        | integer | `0`                     | Pagination offset                                                                                             |
-| `limit`         | integer | `20`                    | Maximum items returned (capped by `maxBrowseResults`, default 50)                                             |
+| Parameter       | Type    | Default                 | Description                                                                                                                                             |
+| --------------- | ------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `kind`          | string  | —                       | Browse category: `libraries`, `collections`, `savedSearches`, `tags`, `itemTypes`, `itemFields` (required)                                              |
+| `library`       | object  | `{type: "user", id: 0}` | Target library (applicable to collections, savedSearches, tags)                                                                                         |
+| `parentRef`     | string  | —                       | `collections` only: parent collection ref; omit to list top-level collections                                                                           |
+| `tagScope`      | string  | `"library"`             | `tags` only: scope, supporting `library`, `collection`, `publications` (`publications` personal library only)                                           |
+| `tagCollection` | string  | —                       | `tags` with `tagScope="collection"`: collection ref or exact name                                                                                       |
+| `itemLevel`     | string  | `"top"`                 | Scoped `tags` only: `top` counts bibliographic items only; `all` includes child items (library/collection scopes only) |
+| `itemQuery`     | string  | —                       | Scoped `tags` only: count tags matching query term                                                                                                      |
+| `itemQueryMode` | string  | `"titleCreatorYear"`    | Scoped `tags` only: item-query mode for `itemQuery`: `titleCreatorYear` or `everything` (defaults to `titleCreatorYear`)                                |
+| `itemType`      | string  | —                       | `itemFields` only: item type to list fields and creator types for                                                                                       |
+| `q`             | string  | —                       | Substring filter for tags                                                                                                                               |
+| `match`         | string  | `"contains"`            | Tag matching method: `contains` or `startsWith`                                                                                                         |
+| `offset`        | integer | `0`                     | Pagination offset                                                                                                                                       |
+| `limit`         | integer | `20`                    | Maximum items returned (capped by `maxBrowseResults`, default 50)                                                                                       |
 
 ### Output
 

@@ -73,7 +73,6 @@ const FIELD_SPECS = [
   { key: 'maxResponseBytes', kind: 'number', group: 'groupOutput' },
   { key: 'maxExportChars', kind: 'number', group: 'groupOutput' },
   { key: 'maxExportRefs', kind: 'number', group: 'groupOutput' },
-  { key: 'exportConcurrency', kind: 'number', group: 'groupOutput' },
   { key: 'maxBrowseResults', kind: 'number', group: 'groupOutput' },
   { key: 'maxChangesResults', kind: 'number', group: 'groupOutput' },
   { key: 'defaultStyle', kind: 'text', group: 'groupDefaults' },

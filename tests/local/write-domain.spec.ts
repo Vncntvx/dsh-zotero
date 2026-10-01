@@ -106,6 +106,35 @@ describe('createNote', () => {
       'dc:relation': ['http://zotero.org/users/0/items/SOURCE01'],
     })
   })
+  it('maps personal library relation URIs carrying the real numeric user ID back to local user/0 ref', async () => {
+    grantAuthorize(mock)
+    mock.route('POST', '/api/users/0/items', (_req, res, helpers) => {
+      helpers.raw(
+        200,
+        batchHeaders(42),
+        batchBody(NEW_KEY, 42, {
+          itemType: 'note',
+          tags: [],
+          relations: {
+            'dc:relation': [
+              'http://zotero.org/users/987654/items/SOURCE01',
+              'http://zotero.org/groups/42/items/GROUP001',
+            ],
+          },
+        }),
+      )
+    })
+    const { deps, directory } = writeDeps(mock)
+    const result = await createNote(deps, resolveThrough(directory), {
+      markdown: 'Relation test',
+    })
+    expect(result.kind).toBe('applied')
+    expectApplied(result)
+    expect(result.sourceRefs).toEqual([
+      `zotero://user/0/item/SOURCE01?server=${SERVER_ID}`,
+      `zotero://group/42/item/GROUP001?server=${SERVER_ID}`,
+    ])
+  })
   it('refuses a resolved collection ref from another Zotero instance', async () => {
     const staleCollection = parseRef(
       `zotero://user/0/collection/${COLLECTION_KEY}?server=OTHER1234`,

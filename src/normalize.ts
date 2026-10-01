@@ -16,13 +16,14 @@ import {
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { ZOTERO_UNEXPECTED, ZoteroError } from './errors.js'
 import { asJsonValue, asRecord, asString, isObjectKey, stringArrayOf } from './json.js'
-import { formatRef, parseZoteroRelationUri, refForLibrary } from './refs.js'
+import { formatRef, refForLibrary, relationTargetRef } from './refs.js'
 import type {
   SupportedLocalLibrary,
   ZoteroAnnotationRecord,
   ZoteroAttachmentRecord,
   ZoteroChildCollection,
   ZoteroCollectionRecord,
+  ZoteroCreator,
   ZoteroInclude,
   ZoteroItemDetail,
   ZoteroNoteRecord,
@@ -150,6 +151,8 @@ export function normalizeSearchItem(json: unknown, ctx?: NormalizeContext): Zote
   if (bestAttachmentType !== undefined) item.bestAttachmentType = bestAttachmentType
   if (typeof attachment?.attachmentSize === 'number')
     item.attachmentSize = attachment.attachmentSize
+  const extra = asString(data?.extra)?.trim()
+  if (extra !== undefined && extra !== '') item.extra = extra
   return item
 }
 
@@ -217,25 +220,67 @@ export function nearScopeCandidates(
 }
 
 /**
- * Format creator records as display names: a creator carrying a single
- * `name` field wins; otherwise first and last names are joined. Empty or
- * malformed entries are skipped.
+ * The creator role assumed when Zotero omits `creatorType`. Zotero creator
+ * rows always carry a type in practice; inventing `author` keeps a named
+ * creator instead of dropping research metadata over a missing role. Rows
+ * with no name at all are still skipped — the default never fabricates a
+ * creator, only a role.
  */
-export function normalizeCreators(data: Record<string, unknown> | undefined): string[] {
+export const DEFAULT_CREATOR_TYPE = 'author'
+
+/**
+ * Format creator records into structured ZoteroCreator objects.
+ * Empty or malformed entries are skipped.
+ */
+export function normalizeCreators(data: Record<string, unknown> | undefined): ZoteroCreator[] {
   const creators = Array.isArray(data?.creators) ? data.creators : []
-  const names: string[] = []
+  const out: ZoteroCreator[] = []
   for (const raw of creators) {
     const creator = asRecord(raw)
-    const name = asString(creator?.name)
-    if (name !== undefined && name !== '') {
-      names.push(name)
+    if (creator === undefined) continue
+    const creatorType = asString(creator.creatorType) ?? DEFAULT_CREATOR_TYPE
+    const name = asString(creator.name)?.trim() || undefined
+    if (name !== undefined) {
+      out.push({ creatorType, name })
       continue
     }
-    const combined =
-      `${asString(creator?.firstName) ?? ''} ${asString(creator?.lastName) ?? ''}`.trim()
-    if (combined !== '') names.push(combined)
+    const firstName = asString(creator.firstName)?.trim() || undefined
+    const lastName = asString(creator.lastName)?.trim() || undefined
+    if (firstName !== undefined || lastName !== undefined) {
+      out.push({
+        creatorType,
+        ...(firstName !== undefined ? { firstName } : {}),
+        ...(lastName !== undefined ? { lastName } : {}),
+      })
+    }
   }
-  return names
+  return out
+}
+
+/** Format a single creator into a display name with optional role suffix. */
+export function formatCreatorDisplayName(creator: ZoteroCreator): string {
+  const name = creator.name ?? `${creator.firstName ?? ''} ${creator.lastName ?? ''}`.trim()
+  if (name === '') return ''
+  return creator.creatorType !== DEFAULT_CREATOR_TYPE ? `${name} (${creator.creatorType})` : name
+}
+
+/**
+ * Format a list of creators, omitting any creators that have no display name,
+ * joined by semicolons.
+ */
+export function formatCreatorsList(creators: readonly ZoteroCreator[]): string {
+  return creators
+    .map(formatCreatorDisplayName)
+    .filter((s) => s !== '')
+    .join('; ')
+}
+
+/** Extract a Citation Key from unstructured extra text if present. */
+export function citekeyOf(extra?: string): string | undefined {
+  if (!extra) return undefined
+  const m = /(?:^|\n)Citation Key:\s*([^\r\n]+)/i.exec(extra)
+  const val = m?.[1]?.trim()
+  return val !== undefined && val !== '' ? val : undefined
 }
 
 /** The first non-empty publication venue field, in Zotero's own priority order. */
@@ -469,6 +514,7 @@ const CONSUMED_DATA_KEYS: ReadonlySet<string> = new Set([
   'bookTitle',
   'journalAbbreviation',
   'conferenceName',
+  'extra',
 ])
 
 /**
@@ -537,24 +583,13 @@ function normalizeRelations(
     const targets = Array.isArray(value) ? value : typeof value === 'string' ? [value] : []
     for (const target of targets) {
       if (typeof target !== 'string' || target === '') continue
-      const parsed = parseZoteroRelationUri(target)
-      let targetRef: string | undefined
-      if (parsed !== null) {
-        if (
-          parsed.library.type === 'group' &&
-          ctx.library.type === 'group' &&
-          parsed.library.id === ctx.library.id
-        ) {
-          targetRef = formatRef(refForLibrary(ctx.library, 'item', parsed.key, ctx.serverId))
-        } else if (parsed.library.type === 'user' && ctx.library.type === 'user') {
-          // Personal library: only canonicalize if URI's user id matches parent's real id or is 0
-          if (parsed.library.id === 0) {
-            targetRef = formatRef(refForLibrary(ctx.library, 'item', parsed.key, ctx.serverId))
-          } else if (parentLibraryId !== undefined && parsed.library.id === parentLibraryId) {
-            targetRef = formatRef(refForLibrary(ctx.library, 'item', parsed.key, ctx.serverId))
-          }
-        }
-      }
+      // One authority for URI → ref mapping (see refs.relationTargetRef):
+      // same-group URIs and provable personal aliases resolve, everything
+      // else stays a bare URI — never a guessed ref.
+      const targetRef = relationTargetRef(target, ctx.serverId, {
+        library: ctx.library,
+        parentLibraryId,
+      })
       out.push(
         targetRef === undefined
           ? { predicate, targetUri: target }
@@ -666,12 +701,14 @@ export function normalizeItemDetail(input: NormalizeItemDetailInput): ZoteroItem
   })()
   const relations = normalizeRelations(data, ctx, parentLibraryId)
   const extraFields = input.fields === 'all' ? extraFieldsOf(data) : undefined
+  const extra = asString(data?.extra)?.trim()
 
   return {
     ref: formatRef(refForLibrary(ctx.library, 'item', key, ctx.serverId)),
     itemType,
     title: asString(data?.title) ?? '',
     creators: normalizeCreators(data),
+    ...(extra !== undefined && extra !== '' ? { extra } : {}),
     abstractTruncated: abstract.truncated,
     tags,
     collections,

@@ -36,9 +36,7 @@ export interface Config {
   maxNoteScanRecords?: Volatile<number>
   /**
    * Parallel parent-attribution queries `zotero_search` may keep in flight
-   * (`ZOTERO_ITEMKEY_BATCH` itemKeys each). Kept separate from
-   * `exportConcurrency` — same default, different blast radius — so tuning
-   * export throughput never silently retunes search attribution.
+   * (`ZOTERO_ITEMKEY_BATCH` itemKeys each).
    */
   searchConcurrency?: Volatile<number>
   /** Total character budget for retrieved evidence passages. */
@@ -75,8 +73,6 @@ export interface Config {
   maxExportChars?: Volatile<number>
   /** Upper bound for refs in one `zotero_export` call; citation batches up to this value, the other formats refuse to exceed the API's 50-key request cap. */
   maxExportRefs?: Volatile<number>
-  /** Parallel per-document export reads `zotero_export` may keep in flight, so a full 50-ref export cannot storm the local API. */
-  exportConcurrency?: Volatile<number>
   /** Upper bound for items a browse call may return */
   maxBrowseResults?: Volatile<number>
   /** Display cap for `zotero_changes` listings; the diff itself always reads the whole range. */
@@ -154,7 +150,6 @@ export const Config = Schema.object({
     .volatile(),
   maxExportChars: Schema.number().default(1_000_000).volatile(),
   maxExportRefs: Schema.number().default(50).volatile(),
-  exportConcurrency: Schema.number().default(4).volatile(),
   maxBrowseResults: Schema.number().default(50).volatile(),
   maxChangesResults: Schema.number().default(50).volatile(),
   scopeListingTtlMs: Schema.number().default(30_000).volatile(),
@@ -193,7 +188,6 @@ export interface ResolvedConfig {
   readonly maxResponseBytes: number
   readonly maxExportChars: number
   readonly maxExportRefs: number
-  readonly exportConcurrency: number
   readonly maxBrowseResults: number
   readonly maxChangesResults: number
   readonly scopeListingTtlMs: number
@@ -385,7 +379,6 @@ export function assertResolvedConfig(plain: Record<string, unknown>): ResolvedCo
   assertPositiveInteger('maxResponseBytes', plain.maxResponseBytes)
   assertPositiveInteger('maxExportChars', plain.maxExportChars)
   assertPositiveInteger('maxExportRefs', plain.maxExportRefs)
-  assertPositiveInteger('exportConcurrency', plain.exportConcurrency)
   assertPositiveInteger('maxBrowseResults', plain.maxBrowseResults)
   assertPositiveInteger('maxChangesResults', plain.maxChangesResults)
   assertPositiveInteger('scopeListingTtlMs', plain.scopeListingTtlMs)

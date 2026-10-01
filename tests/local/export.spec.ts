@@ -120,14 +120,9 @@ describe('export', () => {
     })
   })
 
-  it('passes translator export bodies through and itemizes every ref', async () => {
+  it('passes translator export bodies through and itemizes every ref in a single request', async () => {
     mock.route('GET', `${apiPath()}/items`, (req, res, helpers, search) => {
-      const keys = (search.get('itemKey') ?? '').split(',')
-      if (keys.length > 1) {
-        helpers.text(`exported-as-${search.get('format')}`)
-        return
-      }
-      helpers.text(`entry-of-${search.get('format')}-${keys[0]}`)
+      helpers.text(`exported-as-${search.get('format')}`)
     })
     for (const format of ['bibtex', 'biblatex', 'ris', 'csljson'] as const) {
       const before = mock.requests.length
@@ -140,80 +135,73 @@ describe('export', () => {
         { ref: 'zotero://user/0/item/ABCD1234' },
         { ref: 'zotero://user/0/item/BBBB1234' },
       ])
-      const perItem = mock.requests.slice(before + 1)
-      expect(perItem).toHaveLength(2)
-      expect(new Set(perItem.map((entry) => entry.search.get('itemKey')))).toEqual(
-        new Set(['ABCD1234', 'BBBB1234']),
-      )
-      expect(perItem.every((entry) => entry.search.get('format') === format)).toBe(true)
+      // Zero N+1: batch export makes exactly 1 HTTP request per format!
+      expect(mock.requests.length - before).toBe(1)
+      expect(mock.requests[before]!.search.get('format')).toBe(format)
     }
   })
 
   it('pairs each translator document with its batch entry and projects the span', async () => {
     const batchText =
-      '@article{batchPan2022,\n  title = {Carbon price forecasting},\n}\n\n' +
-      '@article{batchZheng2025,\n  title = {Insight into heterogeneous risks},\n}\n'
-    const secondStart = batchText.indexOf('@article{batchZheng2025,')
-    mock.route('GET', `${apiPath()}/items`, (req, res, helpers, search) => {
-      const keys = (search.get('itemKey') ?? '').split(',')
-      if (keys.length > 1) {
-        helpers.text(batchText)
-        return
-      }
-      // The single-item context generates different citation keys; the
-      // mapping must still pair the entries by their content.
-      helpers.text(
-        keys[0] === 'ABCD1234'
-          ? '@article{singlePan2022,\n  title = {Carbon price forecasting},\n}\n'
-          : '@article{singleZheng2025,\n  title = {Insight into heterogeneous risks},\n}\n',
-      )
-    })
+      '@article{ABCD1234,\n  title = {Carbon price forecasting},\n}\n\n' +
+      '@article{BBBB1234,\n  title = {Insight into heterogeneous risks},\n}\n'
+    const secondStart = batchText.indexOf('@article{BBBB1234,')
+    serveText(mock, `${apiPath()}/items`, batchText)
     const result = await provider.export(exportRequest({ format: 'bibtex' }))
     if (result.format !== 'bibtex') throw new Error('unreachable')
     expect(result.text).toBe(batchText)
-    // The batch body's own citation keys win over the single-item context's.
     expect(result.items).toEqual([
       {
         ref: 'zotero://user/0/item/ABCD1234',
-        key: 'batchPan2022',
+        key: 'ABCD1234',
         title: 'Carbon price forecasting',
         start: 0,
         end: secondStart,
       },
       {
         ref: 'zotero://user/0/item/BBBB1234',
-        key: 'batchZheng2025',
+        key: 'BBBB1234',
         title: 'Insight into heterogeneous risks',
         start: secondStart,
         end: batchText.length,
       },
     ])
-    // The merged body stays one batch request; each ref then gets its own
-    // single-key request, so the pairing never indexes the batch's order.
-    expectRequestCount(mock, 3)
+    // The export performs exactly 1 batch request without N+1 secondary requests.
+    expectRequestCount(mock, 1)
     expect(mock.requests[0]!.search.get('itemKey')).toBe('ABCD1234,BBBB1234')
     expect(mock.requests[0]!.search.get('format')).toBe('bibtex')
-    const perItem = mock.requests.slice(1)
-    expect(new Set(perItem.map((entry) => entry.search.get('itemKey')))).toEqual(
-      new Set(['ABCD1234', 'BBBB1234']),
-    )
-    expect(perItem.every((entry) => entry.search.get('format') === 'bibtex')).toBe(true)
   })
 
-  it('fails with NOT_FOUND when a single-item export comes back empty', async () => {
-    mock.route('GET', `${apiPath()}/items`, (req, res, helpers, search) => {
-      const keys = (search.get('itemKey') ?? '').split(',')
-      if (keys.length > 1) {
-        helpers.text('@article{a1}\n@article{b1}\n')
-        return
-      }
-      helpers.text(keys[0] === 'ABCD1234' ? '@article{a1,\n  title = {A},\n}' : '')
-    })
-    await zoteroError(
-      provider.export(exportRequest({ format: 'bibtex' })),
-      ZOTERO_NOT_FOUND,
-      'BBBB1234',
-    )
+  it('pairs RIS translator documents with requested refs in memory', async () => {
+    const risText =
+      'TY  - JOUR\nTI  - First Paper\nID  - ABCD1234\nER  -\n\nTY  - JOUR\nTI  - Second Paper\nID  - BBBB1234\nER  -\n'
+    serveText(mock, `${apiPath()}/items`, risText)
+    const risResult = await provider.export(exportRequest({ format: 'ris' }))
+    if (risResult.format !== 'ris') throw new Error('unreachable')
+    expect(risResult.items).toHaveLength(2)
+    expect(risResult.items[0]!.ref).toBe('zotero://user/0/item/ABCD1234')
+    expect(risResult.items[0]!.key).toBe('ABCD1234')
+    expect(risResult.items[0]!.title).toBe('First Paper')
+    expect(risResult.items[1]!.ref).toBe('zotero://user/0/item/BBBB1234')
+    expect(risResult.items[1]!.key).toBe('BBBB1234')
+    expect(risResult.items[1]!.title).toBe('Second Paper')
+  })
+
+  it('pairs CSL-JSON translator documents with requested refs in memory', async () => {
+    const csljsonText = JSON.stringify([
+      { id: 'ABCD1234', title: 'Paper A' },
+      { id: 'http://zotero.org/users/0/items/BBBB1234', title: 'Paper B' },
+    ])
+    serveText(mock, `${apiPath()}/items`, csljsonText)
+    const cslResult = await provider.export(exportRequest({ format: 'csljson' }))
+    if (cslResult.format !== 'csljson') throw new Error('unreachable')
+    expect(cslResult.items).toHaveLength(2)
+    expect(cslResult.items[0]!.ref).toBe('zotero://user/0/item/ABCD1234')
+    expect(cslResult.items[0]!.key).toBe('ABCD1234')
+    expect(cslResult.items[0]!.title).toBe('Paper A')
+    expect(cslResult.items[1]!.ref).toBe('zotero://user/0/item/BBBB1234')
+    expect(cslResult.items[1]!.key).toBe('http://zotero.org/users/0/items/BBBB1234')
+    expect(cslResult.items[1]!.title).toBe('Paper B')
   })
 
   it('fails with OUTPUT_TOO_LARGE instead of truncating oversized exports', async () => {
@@ -352,37 +340,32 @@ describe('export', () => {
     expectRequestCount(mock, 0)
   })
 
-  it('counts unique items against the batch-breaking cap', async () => {
+  it('counts unique items against the batch-breaking cap in a single request', async () => {
     const refs = Array.from({ length: 50 }, (_, i) =>
       parseRef(`zotero://user/0/item/${String(i).padStart(4, '0')}ABCD`),
     )
     refs.push(refs[0]!)
-    mock.route('GET', `${apiPath()}/items`, (req, res, helpers, search) => {
-      const keys = (search.get('itemKey') ?? '').split(',')
-      if (keys.length > 1) {
-        helpers.text(keys.map((key) => `TY  - JOUR\nID  - ${key}\nER  -\n`).join('\n'))
-        return
-      }
-      helpers.text(`TY  - JOUR\nID  - ${keys[0]}\nER  -\n`)
-    })
-    // 51 refs with one duplicate are 50 unique items, so the export proceeds.
+    serveText(
+      mock,
+      `${apiPath()}/items`,
+      refs
+        .slice(0, 50)
+        .map((r) => `TY  - JOUR\nID  - ${r.key}\nER  -\n`)
+        .join('\n'),
+    )
+    // 51 refs with one duplicate are 50 unique items, so the export proceeds in 1 batch request.
     const result = await provider.export(exportRequest({ refs, format: 'ris' }))
     if (result.format !== 'ris') throw new Error('unreachable')
-    expectRequestCount(mock, 51)
+    expectRequestCount(mock, 1)
     expect(result.items).toHaveLength(50)
   })
 
   it('fetches each unique item once when refs repeat', async () => {
-    mock.route('GET', `${apiPath()}/items`, (req, res, helpers, search) => {
-      const keys = (search.get('itemKey') ?? '').split(',')
-      if (keys.length > 1) {
-        helpers.text(
-          keys.map((key) => `TY  - JOUR\nTI  - ${key}\nID  - ${key}\nER  -\n`).join('\n'),
-        )
-        return
-      }
-      helpers.text(`TY  - JOUR\nTI  - ${keys[0]}\nID  - ${keys[0]}\nER  -\n`)
-    })
+    serveText(
+      mock,
+      `${apiPath()}/items`,
+      'TY  - JOUR\nTI  - ABCD1234\nID  - ABCD1234\nER  -\n\nTY  - JOUR\nTI  - BBBB1234\nID  - BBBB1234\nER  -\n',
+    )
     const result = await provider.export(
       exportRequest({
         format: 'ris',
@@ -390,32 +373,23 @@ describe('export', () => {
       }),
     )
     if (result.format !== 'ris') throw new Error('unreachable')
-    // The batch request carries the deduplicated keys, and each unique item
-    // is fetched once — the repeated ref never becomes a second request.
-    expectRequestCount(mock, 3)
+    expectRequestCount(mock, 1)
     expect(mock.requests[0]!.search.get('itemKey')).toBe('ABCD1234,BBBB1234')
-    const perItem = mock.requests.slice(1)
-    expect(new Set(perItem.map((entry) => entry.search.get('itemKey')))).toEqual(
-      new Set(['ABCD1234', 'BBBB1234']),
-    )
     expect(result.items).toHaveLength(2)
   })
 
-  it('itemizes a full 50-ref translator export through the bounded pool', async () => {
-    mock.route('GET', `${apiPath()}/items`, (req, res, helpers, search) => {
-      const keys = (search.get('itemKey') ?? '').split(',')
-      if (keys.length > 1) {
-        helpers.text(keys.map((key) => `TY  - JOUR\nID  - ${key}\nER  -\n`).join('\n'))
-        return
-      }
-      helpers.text(`TY  - JOUR\nID  - ${keys[0]}\nER  -\n`)
-    })
+  it('itemizes a full 50-ref translator export in 1 batch request', async () => {
     const refs = Array.from({ length: 50 }, (_, i) =>
       parseRef(`zotero://user/0/item/${String(i).padStart(4, '0')}ABCD`),
     )
+    serveText(
+      mock,
+      `${apiPath()}/items`,
+      refs.map((r) => `TY  - JOUR\nID  - ${r.key}\nER  -\n`).join('\n'),
+    )
     const result = await provider.export(exportRequest({ refs, format: 'ris' }))
     if (result.format !== 'ris') throw new Error('unreachable')
-    expectRequestCount(mock, 51)
+    expectRequestCount(mock, 1)
     expect(result.items).toHaveLength(50)
     // Every item locates its batch record, in the requested ref order.
     expect(result.items.every((item) => item.start !== undefined && item.end !== undefined)).toBe(
@@ -424,167 +398,6 @@ describe('export', () => {
     expect(result.items.map((item) => item.ref)).toEqual(
       refs.map((ref) => `zotero://user/0/item/${ref.key}`),
     )
-  })
-
-  it('limits the single-item requests to a bounded concurrency', async () => {
-    let inFlight = 0
-    let maxInFlight = 0
-    mock.route('GET', `${apiPath()}/items`, async (req, res, helpers, search) => {
-      const keys = (search.get('itemKey') ?? '').split(',')
-      if (keys.length > 1) {
-        helpers.text('batch')
-        return
-      }
-      inFlight += 1
-      maxInFlight = Math.max(maxInFlight, inFlight)
-      await new Promise((resolve) => setTimeout(resolve, 30))
-      inFlight -= 1
-      helpers.text(`entry-of-${keys[0]}`)
-    })
-    const refs = Array.from({ length: 8 }, (_, i) =>
-      parseRef(`zotero://user/0/item/${String(i).padStart(4, '0')}ABCD`),
-    )
-    await provider.export(exportRequest({ refs, format: 'ris' }))
-    // The delay is the measurement, not a synchronization guess: the pool's
-    // fan-out is only visible as overlap at the server, and the client opens
-    // its connections asynchronously, so the wave an over-eager pool would
-    // send needs a window wide enough to land inside — the same instrument and
-    // the same reason as `routeCounting` in tests/host/http-client.spec.ts.
-    // Holding the responses and releasing them instead was tried and rejected:
-    // the first release then paces the rest of the wave, and a pool that
-    // ignored its bound never shows the extra requests. The pool keeps the
-    // concurrent single-item requests at its bound; a bare Promise.all would
-    // have put all eight in flight at once.
-    expect(maxInFlight).toBe(4)
-  })
-
-  it('widens the single-item pool when exportConcurrency is raised', async () => {
-    const raised = createProvider(mock, { exportConcurrency: 8 })
-    let inFlight = 0
-    let maxInFlight = 0
-    mock.route('GET', `${apiPath()}/items`, async (req, res, helpers, search) => {
-      const keys = (search.get('itemKey') ?? '').split(',')
-      if (keys.length > 1) {
-        helpers.text('batch')
-        return
-      }
-      inFlight += 1
-      maxInFlight = Math.max(maxInFlight, inFlight)
-      await new Promise((resolve) => setTimeout(resolve, 30))
-      inFlight -= 1
-      helpers.text(`entry-of-${keys[0]}`)
-    })
-    const refs = Array.from({ length: 8 }, (_, i) =>
-      parseRef(`zotero://user/0/item/${String(i).padStart(4, '0')}ABCD`),
-    )
-    await raised.export(exportRequest({ refs, format: 'ris' }))
-    expect(maxInFlight).toBe(8)
-  })
-
-  it('stops the pool when one single-item export fails', async () => {
-    /** Resolvers of the responses the test holds open, in start order. */
-    const held: Array<() => void> = []
-    const inFlight = progress()
-    mock.route('GET', `${apiPath()}/items`, async (req, res, helpers, search) => {
-      const keys = (search.get('itemKey') ?? '').split(',')
-      if (keys.length > 1) {
-        helpers.text('batch')
-        return
-      }
-      if (keys[0] === '0002ABCD') {
-        helpers.text('')
-        return
-      }
-      const slot = deferred()
-      held.push(slot.resolve)
-      inFlight.notify()
-      await slot.promise
-      if (res.destroyed || res.writableEnded) return
-      helpers.text(`entry-of-${keys[0]}`)
-    })
-    const refs = Array.from({ length: 8 }, (_, i) =>
-      parseRef(`zotero://user/0/item/${String(i).padStart(4, '0')}ABCD`),
-    )
-    const call = provider.export(exportRequest({ refs, format: 'ris' }))
-    // The expected failure is asserted through `zoteroError` first: the call
-    // attaches the handler immediately, so the rejection the wait below is
-    // written to expect never sits unhandled while that wait is pending.
-    const failure = zoteroError(call, ZOTERO_NOT_FOUND, '0002ABCD')
-    // Four workers open and only the failing item answers: the other three
-    // hold their responses, so the failure is processed with them still in
-    // flight — a pool that ignored it could start items 4..7 only once they
-    // complete, and the test decides when that happens.
-    await inFlight.when(() => held.length >= 3)
-    await failure
-    // Release the in-flight workers. Whether the pool starts a further item is
-    // decided as each one completes, so this settle is the measurement: "no
-    // further item was started" is an absence, and nothing after the release
-    // is a positive event to wait on — it is the time those completions need
-    // to reach the client and for a request they provoke to come back here.
-    for (const release of held.splice(0)) release()
-    await new Promise((resolve) => setTimeout(resolve, 60))
-    const requestedKeys = new Set(
-      mock.requests
-        .map((entry) => entry.search.get('itemKey'))
-        .filter((key): key is string => key !== null && key.split(',').length === 1),
-    )
-    for (const ref of refs.slice(4)) {
-      expect(requestedKeys.has(ref.key)).toBe(false)
-    }
-  })
-
-  it('applies the output cap to the per-document exports too', async () => {
-    const narrow = makeProvider({ maxExportChars: 20 })
-    mock.route('GET', `${apiPath()}/items`, (req, res, helpers, search) => {
-      const keys = (search.get('itemKey') ?? '').split(',')
-      if (keys.length > 1) {
-        helpers.text('small batch body')
-        return
-      }
-      helpers.text('x'.repeat(12))
-    })
-    // The batch body fits the cap, but the two single-item bodies together
-    // exceed it — the cumulative per-document budget fails the call closed.
-    await zoteroError(
-      narrow.export(exportRequest({ format: 'ris' })),
-      ZOTERO_OUTPUT_TOO_LARGE,
-      'Per-document',
-    )
-  })
-
-  it('propagates an abort while the per-document requests are in flight', async () => {
-    /** Resolvers of the responses the test holds open, in start order. */
-    const held: Array<() => void> = []
-    /** Set by the abort: requests answering after it are served instead of held. */
-    let cancelled = false
-    const inFlight = progress()
-    mock.route('GET', `${apiPath()}/items`, async (req, res, helpers, search) => {
-      const keys = (search.get('itemKey') ?? '').split(',')
-      if (keys.length > 1) {
-        helpers.text('batch')
-        return
-      }
-      // Held before the abort, so the request is on the wire and answering
-      // nothing when the caller cancels; served after it, so a call that
-      // ignored the cancellation cannot hide behind a response never sent.
-      if (!cancelled) {
-        const slot = deferred()
-        held.push(slot.resolve)
-        inFlight.notify()
-        await slot.promise
-      }
-      if (res.destroyed || res.writableEnded) return
-      helpers.text(`entry-of-${keys[0]}`)
-    })
-    const controller = new AbortController()
-    const call = provider.export(exportRequest({ format: 'ris' }), controller.signal)
-    // A per-document request has reached the mock: the abort below lands on a
-    // request in flight, never on a race against a delay.
-    await inFlight.when(() => held.length >= 1)
-    controller.abort()
-    cancelled = true
-    for (const release of held.splice(0)) release()
-    await expect(call).rejects.toThrow()
   })
 
   it('applies the output cap across citation batches', async () => {

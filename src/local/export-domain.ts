@@ -6,7 +6,6 @@
  */
 
 import type { ZoteroHttpClient } from '../http-client.js'
-import { mapWithConcurrency } from '../concurrency.js'
 import { ZOTERO_ITEMKEY_BATCH } from '../constants.js'
 import {
   ZOTERO_INVALID_ARGUMENT,
@@ -19,7 +18,7 @@ import {
 } from '../errors.js'
 import { asRecord, asString, isObjectKey } from '../json.js'
 import { ITEM_WITHOUT_KEY_MESSAGE } from '../normalize.js'
-import { locateExportItems } from '../export-mapping.js'
+import { locateExportItemsFromBatch } from '../export-mapping.js'
 import {
   formatRef,
   libraryPrefix,
@@ -46,11 +45,11 @@ import type {
  * (`bibtex`/`biblatex`/`ris`/`csljson`) export the whole set at once. The
  * batch-breaking formats refuse to exceed `ZOTERO_ITEMKEY_BATCH` — their
  * global ordering belongs to Zotero, so splitting them would silently
- * reorder the output. The translator formats additionally itemize each
- * document by requesting it on its own — through a bounded parallel pool,
- * one request per unique key, in the requested ref order — because the
- * merged body's entry order is Zotero's own and cannot be indexed against
- * the refs. Output that exceeds `maxExportChars` fails with
+ * reorder the output. The translator formats itemize each document by
+ * locating it directly within the batch body in memory — pairing each ref
+ * with its citation key, span offsets, and display title where possible,
+ * and falling back gracefully to a bare ref if an item is omitted by the
+ * translator output. Output that exceeds `maxExportChars` fails with
  * OUTPUT_TOO_LARGE — export text is never mid-truncated.
  */
 export async function exportItems(
@@ -142,82 +141,8 @@ export async function exportItems(
   // The browser holds `text` with its leading whitespace trimmed (the
   // render strips it), so the entry offsets are measured on that same
   // trimmed body.
-  const items = await fetchExportItems(
-    deps,
-    refs,
-    request.format,
-    body.trimStart(),
-    exportPrefix,
-    serverId,
-    signal,
-    onProgress,
-  )
+  const items = locateExportItemsFromBatch(request.format, body.trimStart(), refs)
   return { format: request.format, text: body, items }
-}
-
-/**
- * One single-item export per unique ref, in the requested order, paired
- * with its batch entry. The merged body's entry order belongs to Zotero,
- * so each document is requested on its own — through a bounded parallel
- * pool, so a full export cannot storm the local API — and matched to the
- * batch body server-side. The single-item bodies share the batch body's
- * output budget, and a missing or empty entry fails the whole call — the
- * same closed contract as the citation arm, instead of the batch body
- * silently omitting the item. Caller cancellation reaches every request
- * through the HTTP layer's fused signal.
- */
-async function fetchExportItems(
-  deps: { client: ZoteroHttpClient; limits: LocalApiLimits },
-  refs: readonly ZoteroObjectRef[],
-  format: ZoteroExportFormat,
-  text: string,
-  prefix: string,
-  serverId: string | undefined,
-  signal: AbortSignal | undefined,
-  onProgress?: (progress: ZoteroProgressEvent) => void,
-): Promise<ZoteroExportItem[]> {
-  let totalChars = text.length
-  let completed = 0
-  const inputs = await mapWithConcurrency(
-    refs,
-    deps.limits.exportConcurrency,
-    async (ref, poolSignal) => {
-      const search = new URLSearchParams()
-      search.set('itemKey', ref.key)
-      search.set('format', format)
-      const { body } = await deps.client.get(`${prefix}/items`, search, {
-        signal: poolSignal,
-        serverId,
-      })
-      if (body === '') {
-        throw new ZoteroError(
-          `Zotero did not return an item for ${formatRef(ref)}.`,
-          ZOTERO_NOT_FOUND,
-        )
-      }
-      // The batch body stays in the result, so it opens the account: peak
-      // memory is batch + singles, never singles alone. Workers race ahead by
-      // at most (concurrency - 1) in-flight bodies before the next check
-      // trips — a bounded overshoot on a fail-closed cap.
-      totalChars += body.length
-      if (totalChars > deps.limits.maxExportChars) {
-        throw new ZoteroError(
-          `Per-document export output of ${totalChars} characters exceeds the ${deps.limits.maxExportChars}-character export limit.`,
-          ZOTERO_OUTPUT_TOO_LARGE,
-        )
-      }
-      completed += 1
-      onProgress?.({
-        phase: 'resolve_item',
-        current: completed,
-        total: refs.length,
-        message: `Resolving export items ${completed}/${refs.length} (${format})...`,
-      })
-      return { ref: formatRef(ref), key: ref.key, text: body }
-    },
-    { signal },
-  )
-  return locateExportItems(format, text, inputs)
 }
 
 /**

@@ -49,8 +49,6 @@ export interface LocalApiLimits {
   readonly searchConcurrency: number
   /** Parallel attachment reads the retrieve ranking may keep in flight; annotation children ride the single `?itemType=annotation` listing instead. */
   readonly graphConcurrency: number
-  /** Parallel per-document export reads the export domain may keep in flight. */
-  readonly exportConcurrency: number
   /** Upper bound for attachments one `zotero_retrieve` call may read; the ones past the bound report `unread` rather than vanishing. */
   readonly retrieveAttachmentCap: number
 }

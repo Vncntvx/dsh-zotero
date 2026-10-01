@@ -650,7 +650,6 @@ describe('browse: tags', () => {
     }
     route(`${apiPath()}/items/top/tags`)
     route(`${apiPath()}/items/tags`)
-    route(`${apiPath()}/publications/items/top/tags`)
     route(`${apiPath()}/publications/items/tags`)
 
     await provider.browse({ kind: 'tags', scope: { kind: 'library' }, offset: 0, limit: 5 })
@@ -672,7 +671,7 @@ describe('browse: tags', () => {
     expect(routed).toEqual([
       `${apiPath()}/items/top/tags`,
       `${apiPath()}/items/tags`,
-      `${apiPath()}/publications/items/top/tags`,
+      `${apiPath()}/publications/items/tags`,
       `${apiPath()}/publications/items/tags`,
     ])
   })

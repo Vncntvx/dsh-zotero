@@ -24,8 +24,15 @@ import {
   writeNoteTooLongMessage,
 } from '../errors.js'
 import { isRefString } from '../refs.js'
+import { truncateText } from '../normalize.js'
 import { metaRecordOf, renderDeclined } from './present.js'
-import { assertNonBlank, invalid, parseWritableRef, WRITE_REF_ARG_HINT } from './validate.js'
+import {
+  assertNonBlank,
+  invalid,
+  parseSupportedRef,
+  parseWritableRef,
+  WRITE_REF_ARG_HINT,
+} from './validate.js'
 import { WRITE_PLAN_OUTCOME_DESCRIPTION } from '../write-approval.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroCreateNoteOutcome, ZoteroCreateNoteRequest } from '../types.js'
@@ -123,9 +130,13 @@ const CREATE_NOTE_OUTPUT_SCHEMA = {
 
 type CreateNoteOutput = InferValue<typeof CREATE_NOTE_OUTPUT_SCHEMA>
 
+/** Body characters shown on the approval card; the full markdown is what gets written. */
+const NOTE_PREVIEW_CHARS = 400
+
 /** The deterministic plan markdown the approval card renders. */
 export function createNotePlan(args: CreateNoteArgs): string {
-  const preview = args.markdown.length > 400 ? `${args.markdown.slice(0, 400)}…` : args.markdown
+  const { text, truncated } = truncateText(args.markdown, NOTE_PREVIEW_CHARS)
+  const preview = truncated ? `${text}…` : text
   // buildRequest already refused non-empty collections on a child note, so a
   // planned child write never carries collections — the card must say what
   // the domain will actually do (inherit), not echo a list that cannot land.
@@ -189,7 +200,7 @@ function buildRequest(args: CreateNoteArgs, config: ResolvedConfig): ZoteroCreat
     ...(collections !== undefined && collections.length > 0 ? { collections } : {}),
     ...(tags !== undefined ? { tags } : {}),
     ...(args.sourceRefs !== undefined
-      ? { sourceRefs: args.sourceRefs.map((ref) => parseWritableRef(ref, ['item'])) }
+      ? { sourceRefs: args.sourceRefs.map((ref) => parseSupportedRef(ref, ['item'])) }
       : {}),
   }
 }

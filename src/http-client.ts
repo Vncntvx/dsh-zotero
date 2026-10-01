@@ -24,6 +24,7 @@ import {
   TOOL_ABORTED_MESSAGE,
   ZOTERO_API_DISABLED,
   ZOTERO_API_VERSION,
+  ZOTERO_INVALID_ARGUMENT,
   ZOTERO_NOT_FOUND,
   ZOTERO_NOT_IMPLEMENTED,
   ZOTERO_NOT_RUNNING,
@@ -80,14 +81,18 @@ export function httpStatusMessage(status: number): string {
 }
 
 /**
- * Statuses the read and write transports translate identically: redirects
- * (never followed), a missing object, and anything else unmapped. Each
+ * Statuses the read and write transports translate identically: bad request
+ * (400 -> INVALID_ARGUMENT), redirects (never followed), a missing object
+ * (404 -> NOT_FOUND), and anything else unmapped (UNEXPECTED). Each
  * transport's own switch handles its specific codes first and falls through
  * here, so the shared arms cannot shadow a specific one.
  * @param status - the response status.
  * @returns the error to throw.
  */
 export function sharedHttpStatusError(status: number): ZoteroError {
+  if (status === 400) {
+    return new ZoteroError(httpStatusMessage(status), ZOTERO_INVALID_ARGUMENT)
+  }
   if (status >= 300 && status < 400) {
     return new ZoteroError(REDIRECT_REFUSED_MESSAGE, ZOTERO_UNEXPECTED)
   }

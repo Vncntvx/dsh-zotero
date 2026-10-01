@@ -554,7 +554,7 @@ describe('zotero_add_tags and zotero_add_to_collection', () => {
     const scripted = lane.ctx.get('userQuestions') as unknown as ScriptedQuestions
     const groupRef = 'zotero://group/55/item/ITEMABC1'
     const cases = [
-      ['zotero_create_note', { markdown: 'x', sourceRefs: [groupRef] }],
+      ['zotero_create_note', { markdown: 'x', parentItem: groupRef }],
       [
         'zotero_create_note',
         { markdown: 'x', collections: ['zotero://group/55/collection/COLL1234'] },

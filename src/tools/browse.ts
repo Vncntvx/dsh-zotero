@@ -18,6 +18,7 @@ import { withConnectivityAsk } from '../ask.js'
 import { boundedPresentationMeta } from '../presentation-meta.js'
 import { metaRecordOf } from './present.js'
 import { browseRowOf, BROWSE_KINDS, type BrowseRow } from '../browse-rows.js'
+import { assertPublicationsSupported } from '../refs.js'
 import { assertIntInRange, assertNonBlank, invalid, parseLibrary } from './validate.js'
 import {
   ITEM_FIELDS_ITEM_TYPE_MESSAGE,
@@ -79,7 +80,8 @@ const BROWSE_PARAMETERS = {
   itemQueryMode: {
     type: 'string',
     enum: ['titleCreatorYear', 'everything'],
-    description: 'Tags only with itemQuery: how itemQuery matches (default titleCreatorYear).',
+    description:
+      'Tags only with itemQuery: the Zotero item-query mode (titleCreatorYear or everything; default titleCreatorYear).',
   },
   itemType: {
     type: 'string',
@@ -280,6 +282,9 @@ function buildRequest(args: BrowseArgs, config: { maxBrowseResults: number }): Z
   }
   if (tagScope === 'collection' && tagCollection === undefined) {
     invalid(TAG_SCOPE_COLLECTION_MESSAGE)
+  }
+  if (tagScope === 'publications') {
+    assertPublicationsSupported(library)
   }
   const collection =
     tagCollection === undefined ? undefined : assertNonBlank('tagCollection', tagCollection)

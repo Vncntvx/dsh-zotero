@@ -22,6 +22,7 @@ import {
   TOOL_ABORTED_MESSAGE,
   ZOTERO_API_DISABLED,
   ZOTERO_API_VERSION,
+  ZOTERO_INVALID_ARGUMENT,
   ZOTERO_NOT_FOUND,
   ZOTERO_NOT_IMPLEMENTED,
   ZOTERO_NOT_RUNNING,
@@ -303,13 +304,13 @@ describe('http status translation', () => {
     )
   })
 
-  it('maps an unexpected 400 to UNEXPECTED', async () => {
+  it('maps a 400 Bad Request to INVALID_ARGUMENT', async () => {
     mock.route('GET', '/api/users/0/items', (req, res, helpers) =>
       helpers.raw(400, { 'Content-Type': 'text/plain' }, "Invalid 'sort' value"),
     )
     await expectZoteroError(
       client.getJson('users/0/items'),
-      ZOTERO_UNEXPECTED,
+      ZOTERO_INVALID_ARGUMENT,
       httpStatusMessage(400),
     )
   })

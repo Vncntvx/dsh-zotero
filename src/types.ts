@@ -159,7 +159,15 @@ export interface ZoteroSearchRequest {
   direction: ZoteroSortDirection
   offset: number
   limit: number
+  /** Scope level: top counts/searches top items only (default); all includes child items. Applies to library/collection scopes; publications and saved searches serve one listing. */
+  itemLevel?: ZoteroItemLevel
 }
+
+/** Scope level: top counts/searches top items only (default); all includes child items. Applies to library/collection scopes; publications and saved searches serve one listing. */
+export type ZoteroItemLevel = 'top' | 'all'
+
+/** The Zotero quick search mode for item queries in scoped tags. */
+export type ZoteroItemQueryMode = 'titleCreatorYear' | 'everything'
 
 /** One compact search hit. `bestAttachment*` come from Zotero's own attachment selection. */
 export interface ZoteroSearchItem {
@@ -173,6 +181,8 @@ export interface ZoteroSearchItem {
   bestAttachmentRef?: string
   bestAttachmentType?: string
   attachmentSize?: number
+  /** Extra metadata (e.g. Citation Key, arXiv ID, PMID). */
+  extra?: string
 }
 
 /**
@@ -290,11 +300,19 @@ export interface ZoteroChildCollection<T> {
   items: T[]
 }
 
+export interface ZoteroCreator {
+  creatorType: string
+  name?: string
+  firstName?: string
+  lastName?: string
+}
+
 export interface ZoteroItemDetail {
   ref: string
   itemType: string
   title: string
-  creators: string[]
+  creators: ZoteroCreator[]
+  extra?: string
   date?: string
   year?: number
   venue?: string
@@ -466,11 +484,12 @@ export interface ZoteroExportRequest {
 
 /**
  * One exported document inside a translator-format export, keyed to its ref
- * and located within the merged body. The provider maps each ref to its
- * batch entry on the server (by content for BibTeX/BibLaTeX, by record id
- * for RIS and CSL JSON), so the browser never guesses which entry belongs
- * to which ref — the merged body's entry order belongs to Zotero, and
- * citation keys are generated in the export context.
+ * and located within the merged body. The provider locates each ref's entry
+ * in the batch body in memory — BibTeX/BibLaTeX by citation key, whole-token
+ * mention, or unambiguous 1×1 positional fallback; RIS by record id; CSL
+ * JSON by bare id or trailing `/<key>` URI suffix — so the browser never
+ * guesses which entry belongs to which ref. The merged body's entry order
+ * belongs to Zotero, and citation keys are generated in the export context.
  */
 export interface ZoteroExportItem {
   /** The formatted `zotero://` ref the entry was exported for. */
@@ -555,12 +574,12 @@ export interface ZoteroBrowseRequest {
    * (search → scoped tags for the same query → narrow).
    */
   scope?: ZoteroTagScope
-  /** Tags only with a scope: `top` counts bibliographic items (default), `all` includes child items. */
-  itemLevel?: 'top' | 'all'
+  /** Tags only with a scope: `top` counts bibliographic items (default), `all` includes child items. Applies to library/collection scopes; publications tags serve one listing. */
+  itemLevel?: ZoteroItemLevel
   /** Tags only with a scope: count only tags of items matching this item query (`itemQ`). */
   itemQuery?: string
   /** Tags only with an itemQuery: the Zotero item-query mode (default titleCreatorYear). */
-  itemQueryMode?: 'titleCreatorYear' | 'everything'
+  itemQueryMode?: ZoteroItemQueryMode
   /** ItemFields only: the Zotero item type whose fields and creator types to list. */
   itemType?: string
   q?: string
