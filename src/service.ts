@@ -235,12 +235,9 @@ export class ZoteroService extends Service {
     // manifest self-registers through ctx.inject(['typert']).
     new ZoteroRuntime(ctx)
     ctx.inject(['typert'], (host) => {
-      host.effect(() => {
-        const dispose = host.typert.register(TYPERT_MANIFEST)
-        return () => {
-          void dispose()
-        }
-      }, 'dsh-zotero: typert manifest')
+      // register() is itself a fiber-scoped effect: the manifest unwinds with
+      // this inject fiber on unload, and no wrapper effect is needed.
+      host.typert.register(TYPERT_MANIFEST)
     })
     this.reconcileWriteTools(this.config.writeEnabled)
   }

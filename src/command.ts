@@ -37,16 +37,6 @@ import {
 import type { ZoteroService } from './service.js'
 import type { ZoteroStatus } from './types.js'
 
-export {
-  ZOTERO_STATUS_CONNECTED,
-  ZOTERO_STATUS_DISCONNECTED,
-  ZOTERO_STATUS_NOT_REPORTED,
-  ZOTERO_STATUS_SERVER_ID_UNREPORTED,
-  ZOTERO_STATUS_WRITE_DISABLED,
-  ZOTERO_STATUS_WRITE_ENABLED_STORED,
-  ZOTERO_STATUS_WRITE_ENABLED_PENDING,
-}
-
 /** The usage line an unknown `/zotero` subcommand is answered with. */
 export const ZOTERO_USAGE_MESSAGE = 'Usage: /zotero [status]'
 
