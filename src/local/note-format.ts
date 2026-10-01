@@ -14,10 +14,15 @@
  * - headings: ATX `#`–`####`; five or more hashes stay literal text;
  * - emphasis: `**bold**` and `*italic*`; `_underscore_` stays literal so
  *   identifiers like `max_export_refs` survive research notes;
+ * - highlights: `==highlight==` mapped to `<mark>`;
+ * - math: `$$` blocks mapped to `<math-display>` and `$math$` spans mapped to
+ *   `<math-inline>` for native Zotero 7+ KaTeX rendering;
  * - code: `` `spans` `` and ``` fenced blocks; no formatting inside;
  * - links: `[text](url)` with `https://`, `http://` or `zotero://` URLs;
  *   other schemes render as literal text;
  * - lists: `-`/`*` bullets and `1.`/`1)` numbers, one nesting level;
+ *   task list items `- [ ]` / `- [x]` map to `<ul class="task-list">` with
+ *   `<li class="task-list-item"><input type="checkbox" ... />`;
  * - quotes: `>` lines, one paragraph per block;
  * - tables: pipe tables with a `---` separator row; without one, the lines
  *   stay literal paragraph text;
@@ -38,31 +43,81 @@ function escapeHtml(text: string): string {
     .replaceAll("'", '&#39;')
 }
 
-/** Inline code spans: their content is escaped verbatim, never formatted. */
-function inlineWithCodeSpans(raw: string): string {
-  let out = ''
+const INLINE_MATH_PATTERN =
+  /(?<!\\|\$)\$(?!\s)((?:[^$\n\x00]|\\\$)+?)(?<!\\|\s)\$(?!\d|\$)/g
+const HIGHLIGHT_PATTERN = /(?<!=)==(?!=|\s)((?:[^=\n]|=(?!=))+?)(?<!\s)==(?!=)/g
+const CODE_RESTORE_PATTERN = /\x00CODE(\d+)\x00/g
+const MATH_RESTORE_PATTERN = /\x00MATH(\d+)\x00/g
+
+/**
+ * Format inline text: extracts protected spans (inline code and inline math)
+ * first so their delimiters and special characters (*, _, ==, <, >) are
+ * immune to markdown markup, escapes remaining text, applies rich formatting,
+ * and restores protected spans.
+ */
+function inlineFormatting(raw: string): string {
+  const codeTokens: string[] = []
+  let text = ''
   let rest = raw
+
+  // 1. Extract inline code spans
   for (;;) {
     const open = rest.indexOf('`')
     if (open === -1) {
-      out += inlineSpans(rest)
-      return out
+      text += rest
+      break
     }
     const close = rest.indexOf('`', open + 1)
     if (close === -1) {
-      out += inlineSpans(rest)
-      return out
+      text += rest
+      break
     }
-    out += inlineSpans(rest.slice(0, open))
-    out += `<code>${escapeHtml(rest.slice(open + 1, close))}</code>`
+    text += rest.slice(0, open)
+    const tokenIndex = codeTokens.length
+    codeTokens.push(rest.slice(open + 1, close))
+    text += `\x00CODE${tokenIndex}\x00`
     rest = rest.slice(close + 1)
   }
+
+  // 2. Extract inline math spans ($...$)
+  const mathTokens: string[] = []
+  if (text.includes('$')) {
+    text = text.replace(INLINE_MATH_PATTERN, (_, mathContent: string) => {
+      const tokenIndex = mathTokens.length
+      mathTokens.push(mathContent)
+      return `\x00MATH${tokenIndex}\x00`
+    })
+  }
+
+  // 3. Escape HTML of non-protected runs
+  let formatted = escapeHtml(text)
+
+  // 4. Inline rich markup
+  formatted = highlight(formatted)
+  formatted = bold(formatted)
+  formatted = italic(formatted)
+  formatted = linkify(formatted)
+
+  // 5. Restore protected tokens (guarded against unnecessary global scans)
+  if (codeTokens.length > 0) {
+    formatted = formatted.replace(CODE_RESTORE_PATTERN, (_, indexStr: string) => {
+      const idx = Number.parseInt(indexStr, 10)
+      return `<code>${escapeHtml(codeTokens[idx] ?? '')}</code>`
+    })
+  }
+
+  if (mathTokens.length > 0) {
+    formatted = formatted.replace(MATH_RESTORE_PATTERN, (_, indexStr: string) => {
+      const idx = Number.parseInt(indexStr, 10)
+      return `<math-inline>${escapeHtml(mathTokens[idx] ?? '')}</math-inline>`
+    })
+  }
+
+  return formatted
 }
 
-/** Bold, italic, and links over one escaped non-code text run. */
-function inlineSpans(text: string): string {
-  const escaped = escapeHtml(text)
-  return linkify(italic(bold(escaped)))
+function highlight(escaped: string): string {
+  return escaped.replace(HIGHLIGHT_PATTERN, '<mark>$1</mark>')
 }
 
 function bold(escaped: string): string {
@@ -83,10 +138,12 @@ function linkify(escaped: string): string {
 const HEADING = /^(#{1,4})\s+(.*)$/
 const FENCE_OPEN = /^```(.*)$/
 const FENCE_CLOSE = /^```\s*$/
+const MATH_BLOCK_OPEN = /^\s*\$\$(?!\$)(.*)$/
 const QUOTE = /^>\s?/
 const UNORDERED_ITEM = /^[-*]\s+/
 const ORDERED_ITEM = /^\d+[.)]\s+/
 const NESTED_ITEM = /^\s+([-*]|\d+[.)])\s+(.*)$/
+const TASK_MARKER = /^\[([ xX])\]\s+(.*)$/
 const RULE = /^\s*(-{3,}|\*{3,})\s*$/
 const TABLE_SEPARATOR = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/
 
@@ -94,6 +151,7 @@ function isBlockStart(line: string): boolean {
   return (
     HEADING.test(line) ||
     FENCE_OPEN.test(line) ||
+    MATH_BLOCK_OPEN.test(line) ||
     QUOTE.test(line) ||
     UNORDERED_ITEM.test(line) ||
     ORDERED_ITEM.test(line) ||
@@ -107,6 +165,35 @@ function tableCells(line: string): string[] {
   const bare = trimmed.startsWith('|') ? trimmed.slice(1) : trimmed
   const body = bare.endsWith('|') ? bare.slice(0, -1) : bare
   return body.split('|').map((cell) => cell.trim())
+}
+
+interface FormattedItem {
+  isTask: boolean
+  html: string
+}
+
+function formatListItem(rawText: string, subListHtml = '', trailingHtml = ''): FormattedItem {
+  const taskMatch = TASK_MARKER.exec(rawText)
+  if (taskMatch !== null) {
+    const isChecked = taskMatch[1] === 'x' || taskMatch[1] === 'X'
+    const body = taskMatch[2]
+    const checkedAttr = isChecked ? ' checked=""' : ''
+    const checkboxHtml = `<input type="checkbox"${checkedAttr} disabled="" /> `
+    return {
+      isTask: true,
+      html: `<li class="task-list-item">${checkboxHtml}${inlineFormatting(body)}${subListHtml}${trailingHtml}</li>`,
+    }
+  }
+  return {
+    isTask: false,
+    html: `<li>${inlineFormatting(rawText)}${subListHtml}${trailingHtml}</li>`,
+  }
+}
+
+function renderList(ordered: boolean, hasTask: boolean, innerHtml: string): string {
+  const tag = ordered ? 'ol' : 'ul'
+  const listClass = hasTask ? ' class="task-list"' : ''
+  return `<${tag}${listClass}>${innerHtml}</${tag}>`
 }
 
 /**
@@ -138,10 +225,43 @@ export function markdownToNoteHtml(markdown: string): string {
       continue
     }
 
+    const mathBlock = MATH_BLOCK_OPEN.exec(line)
+    if (mathBlock !== null) {
+      const firstLineRest = mathBlock[1].trim()
+      if (firstLineRest.endsWith('$$')) {
+        const mathContent = firstLineRest.slice(0, -2).trim()
+        blocks.push(`<math-display>${escapeHtml(mathContent)}</math-display>`)
+        index += 1
+        continue
+      }
+      const math: string[] = []
+      if (firstLineRest !== '') {
+        math.push(firstLineRest)
+      }
+      index += 1
+      while (index < lines.length) {
+        const curLine = lines[index]
+        const trimmed = curLine.trim()
+        if (trimmed === '$$') {
+          index += 1
+          break
+        }
+        if (trimmed.endsWith('$$')) {
+          math.push(curLine.slice(0, curLine.lastIndexOf('$$')).trimEnd())
+          index += 1
+          break
+        }
+        math.push(curLine)
+        index += 1
+      }
+      blocks.push(`<math-display>${escapeHtml(math.join('\n'))}</math-display>`)
+      continue
+    }
+
     const heading = HEADING.exec(line)
     if (heading !== null) {
       const level = heading[1].length
-      blocks.push(`<h${level}>${inlineWithCodeSpans(heading[2])}</h${level}>`)
+      blocks.push(`<h${level}>${inlineFormatting(heading[2])}</h${level}>`)
       index += 1
       continue
     }
@@ -158,7 +278,7 @@ export function markdownToNoteHtml(markdown: string): string {
         quoted.push(lines[index].replace(QUOTE, ''))
         index += 1
       }
-      blocks.push(`<blockquote><p>${inlineWithCodeSpans(quoted.join(' '))}</p></blockquote>`)
+      blocks.push(`<blockquote><p>${inlineFormatting(quoted.join(' '))}</p></blockquote>`)
       continue
     }
 
@@ -167,6 +287,7 @@ export function markdownToNoteHtml(markdown: string): string {
     if (unordered || ordered) {
       const marker = unordered ? UNORDERED_ITEM : ORDERED_ITEM
       const items: string[] = []
+      let hasTaskItem = false
       while (index < lines.length && marker.test(lines[index])) {
         let item = lines[index].replace(marker, '')
         index += 1
@@ -188,17 +309,23 @@ export function markdownToNoteHtml(markdown: string): string {
           }
           index += 1
         }
-        const subList =
-          nested.length === 0
-            ? ''
-            : nested[0].ordered
-              ? `<ol>${nested.map((n) => `<li>${inlineWithCodeSpans(n.text)}</li>`).join('')}</ol>`
-              : `<ul>${nested.map((n) => `<li>${inlineWithCodeSpans(n.text)}</li>`).join('')}</ul>`
+        let subList = ''
+        if (nested.length > 0) {
+          const nestedItems = nested.map((n) => formatListItem(n.text))
+          const nestedHasTask = nestedItems.some((n) => n.isTask)
+          subList = renderList(
+            nested[0].ordered,
+            nestedHasTask,
+            nestedItems.map((n) => n.html).join(''),
+          )
+        }
         const trailingHtml =
-          trailing.length === 0 ? '' : `<p>${inlineWithCodeSpans(trailing.join(' '))}</p>`
-        items.push(`<li>${inlineWithCodeSpans(item)}${subList}${trailingHtml}</li>`)
+          trailing.length === 0 ? '' : `<p>${inlineFormatting(trailing.join(' '))}</p>`
+        const itemResult = formatListItem(item, subList, trailingHtml)
+        if (itemResult.isTask) hasTaskItem = true
+        items.push(itemResult.html)
       }
-      blocks.push(ordered ? `<ol>${items.join('')}</ol>` : `<ul>${items.join('')}</ul>`)
+      blocks.push(renderList(ordered, hasTaskItem, items.join('')))
       continue
     }
 
@@ -212,11 +339,11 @@ export function markdownToNoteHtml(markdown: string): string {
         rows.push(tableCells(lines[index]))
         index += 1
       }
-      const headHtml = head.map((cell) => `<th>${inlineWithCodeSpans(cell)}</th>`).join('')
+      const headHtml = head.map((cell) => `<th>${inlineFormatting(cell)}</th>`).join('')
       const bodyHtml = rows
         .map((row) => {
           const cells = head.map((_, column) => row[column] ?? '')
-          return `<tr>${cells.map((cell) => `<td>${inlineWithCodeSpans(cell)}</td>`).join('')}</tr>`
+          return `<tr>${cells.map((cell) => `<td>${inlineFormatting(cell)}</td>`).join('')}</tr>`
         })
         .join('')
       blocks.push(`<table><thead><tr>${headHtml}</tr></thead><tbody>${bodyHtml}</tbody></table>`)
@@ -228,7 +355,7 @@ export function markdownToNoteHtml(markdown: string): string {
       paragraph.push(lines[index].trim())
       index += 1
     }
-    blocks.push(`<p>${inlineWithCodeSpans(paragraph.join(' '))}</p>`)
+    blocks.push(`<p>${inlineFormatting(paragraph.join(' '))}</p>`)
   }
 
   return blocks.join('\n')

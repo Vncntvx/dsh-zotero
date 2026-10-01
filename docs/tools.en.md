@@ -281,6 +281,18 @@ zotero_changes(since={serverId: "server1", library: {type: "user", id: 0}, versi
 
 Create a standalone research note or a child note under a specific item.
 
+### Supported Markdown Grammar
+
+Input `markdown` is converted into a restricted HTML whitelist natively supported by Zotero 7+ prior to storage (unknown syntax degrades safely to literal text, with no raw HTML passthrough or invented attributes):
+
+- **Paragraphs and Headings**: Blank-line separated paragraphs; soft-wrapped lines join with spaces; ATX headings `#`–`####` (five or more hashes stay literal text);
+- **Emphasis and Highlights**: `**bold**`, `*italic*` (underscores `_` stay literal to protect identifier names); `==highlight==` converted to `<mark>`;
+- **Math Expressions**: `$$...$$` blocks converted to `<math-display>` and inline `$formula$` converted to `<math-inline>` (native KaTeX rendering; formulas are immune to emphasis corruption; currency amounts like `$100` are protected);
+- **Lists and Task Lists**: `-`/`*` bullets and `1.`/`1)` numbers; `- [ ]` unchecked and `- [x]` checked task lists (rendered as native lists with checkbox controls and `task-list` classes, with nesting support);
+- **Code**: Inline `` `spans` `` and ``` fenced blocks (escaped verbatim with no formatting inside);
+- **Quotes and Tables**: `>` blockquotes; pipe tables with a `---` separator row;
+- **Links and Rules**: `[text](url)` (restricted to `https://`, `http://`, and `zotero://` schemes); `---` and `***` horizontal rules.
+
 ### Parameters
 
 | Parameter     | Type     | Required | Description                                                                                                                                                            |

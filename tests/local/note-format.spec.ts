@@ -183,3 +183,170 @@ describe('the escape-unknown guarantee', () => {
     )
   })
 })
+
+describe('task lists', () => {
+  it('renders unchecked and checked task list items with checkbox controls and classes', () => {
+    expect(markdownToNoteHtml('- [ ] todo\n- [x] done\n* [X] also done')).toBe(
+      '<ul class="task-list">' +
+        '<li class="task-list-item"><input type="checkbox" disabled="" /> todo</li>' +
+        '<li class="task-list-item"><input type="checkbox" checked="" disabled="" /> done</li>' +
+        '<li class="task-list-item"><input type="checkbox" checked="" disabled="" /> also done</li>' +
+        '</ul>',
+    )
+  })
+
+  it('renders a mixed list where only task items receive checkbox markup and the list carries task-list class', () => {
+    expect(markdownToNoteHtml('- [ ] task\n- plain item')).toBe(
+      '<ul class="task-list">' +
+        '<li class="task-list-item"><input type="checkbox" disabled="" /> task</li>' +
+        '<li>plain item</li>' +
+        '</ul>',
+    )
+  })
+
+  it('renders nested task lists with appropriate classes at each level', () => {
+    expect(markdownToNoteHtml('- [ ] parent\n  - [x] child\n  continued\n- next')).toBe(
+      '<ul class="task-list">' +
+        '<li class="task-list-item"><input type="checkbox" disabled="" /> parent' +
+        '<ul class="task-list"><li class="task-list-item"><input type="checkbox" checked="" disabled="" /> child</li></ul>' +
+        '<p>continued</p></li>' +
+        '<li>next</li></ul>',
+    )
+  })
+
+  it('keeps invalid task markers as literal list items', () => {
+    expect(markdownToNoteHtml('- [  ] spaced\n- [x]nospace')).toBe(
+      '<ul><li>[  ] spaced</li><li>[x]nospace</li></ul>',
+    )
+  })
+})
+
+describe('highlights', () => {
+  it('converts ==text== to <mark>text</mark>', () => {
+    expect(markdownToNoteHtml('This is ==important== text.')).toBe(
+      '<p>This is <mark>important</mark> text.</p>',
+    )
+  })
+
+  it('supports CJK characters and typographic punctuation inside highlights', () => {
+    expect(markdownToNoteHtml('关键结果：==显著优于基线模型（p < 0.01）==。')).toBe(
+      '<p>关键结果：<mark>显著优于基线模型（p &lt; 0.01）</mark>。</p>',
+    )
+  })
+
+  it('composes with bold, italic, and links in both directions', () => {
+    expect(markdownToNoteHtml('==**bold mark**== and **==marked bold==**')).toBe(
+      '<p><mark><strong>bold mark</strong></mark> and <strong><mark>marked bold</mark></strong></p>',
+    )
+    expect(markdownToNoteHtml('==*italic mark*==')).toBe('<p><mark><em>italic mark</em></mark></p>')
+    expect(markdownToNoteHtml('[==link text==](https://zotero.org)')).toBe(
+      '<p><a href="https://zotero.org"><mark>link text</mark></a></p>',
+    )
+    expect(markdownToNoteHtml('==[marked link](https://zotero.org)==')).toBe(
+      '<p><mark><a href="https://zotero.org">marked link</a></mark></p>',
+    )
+  })
+
+  it('leaves empty, adjacent, and unclosed markers literal', () => {
+    expect(markdownToNoteHtml('====')).toBe('<p>====</p>')
+    expect(markdownToNoteHtml('== unclosed')).toBe('<p>== unclosed</p>')
+    expect(markdownToNoteHtml('== spaced ==')).toBe('<p>== spaced ==</p>')
+  })
+
+  it('permits single equal signs inside highlights', () => {
+    expect(
+      markdownToNoteHtml('==accuracy = 95%== and ==a=b== and ==[link](https://a.io?q=1)=='),
+    ).toBe(
+      '<p><mark>accuracy = 95%</mark> and <mark>a=b</mark> and <mark><a href="https://a.io?q=1">link</a></mark></p>',
+    )
+  })
+})
+
+describe('math expressions', () => {
+  it('renders single-line display math blocks as <math-display>', () => {
+    expect(markdownToNoteHtml('$$ E = mc^2 $$')).toBe('<math-display>E = mc^2</math-display>')
+  })
+
+  it('renders multiline display math blocks preserving newlines and escaping special chars', () => {
+    expect(markdownToNoteHtml('$$\n\\begin{matrix}\na & b \\\\\nc < d\n\\end{matrix}\n$$')).toBe(
+      '<math-display>\\begin{matrix}\na &amp; b \\\\\nc &lt; d\n\\end{matrix}</math-display>',
+    )
+  })
+
+  it('renders multiline display math with content on the opening and closing fence lines', () => {
+    expect(markdownToNoteHtml('$$ \\alpha + \\beta\n\\gamma + \\delta $$')).toBe(
+      '<math-display>\\alpha + \\beta\n\\gamma + \\delta</math-display>',
+    )
+  })
+
+  it('shields display math from bold and italic corruption', () => {
+    expect(markdownToNoteHtml('$$\nf(x^*) = a * b * c\n$$')).toBe(
+      '<math-display>f(x^*) = a * b * c</math-display>',
+    )
+  })
+
+  it('consumes unterminated display math to the end of input', () => {
+    expect(markdownToNoteHtml('$$\nx = 1')).toBe('<math-display>x = 1</math-display>')
+  })
+
+  it('renders inline math as <math-inline> and protects formulas from emphasis', () => {
+    expect(markdownToNoteHtml('Formula $x^*_1 < x^*_2$ is valid.')).toBe(
+      '<p>Formula <math-inline>x^*_1 &lt; x^*_2</math-inline> is valid.</p>',
+    )
+  })
+
+  it('shields inline math with multiplication asterisks from italic', () => {
+    expect(markdownToNoteHtml('Compute $a * b * c$ now.')).toBe(
+      '<p>Compute <math-inline>a * b * c</math-inline> now.</p>',
+    )
+  })
+
+  it('leaves currency amounts and ranges literal without creating math spans', () => {
+    expect(markdownToNoteHtml('The item costs $50 and the tax is $10.')).toBe(
+      '<p>The item costs $50 and the tax is $10.</p>',
+    )
+    expect(markdownToNoteHtml('Expected range is $10-$20.')).toBe(
+      '<p>Expected range is $10-$20.</p>',
+    )
+    expect(markdownToNoteHtml('Price is $100.')).toBe('<p>Price is $100.</p>')
+    expect(markdownToNoteHtml('a $ b')).toBe('<p>a $ b</p>')
+  })
+
+  it('handles escaped dollars inside inline math correctly', () => {
+    expect(markdownToNoteHtml('$a = \\$b$')).toBe('<p><math-inline>a = \\$b</math-inline></p>')
+  })
+
+  it('accepts indented display math blocks and rejects triple dollars', () => {
+    expect(markdownToNoteHtml('  $$ E = mc^2 $$')).toBe('<math-display>E = mc^2</math-display>')
+    expect(markdownToNoteHtml('$$$\nnot math\n$$$')).toBe('<p>$$$ not math $$$</p>')
+  })
+
+  it('prevents inline math from crossing code span tokens or leaking control bytes', () => {
+    const html = markdownToNoteHtml('$a `code` b$')
+    expect(html).toContain('<code>code</code>')
+    expect(html).not.toContain('\x00')
+  })
+})
+
+describe('complex compositions', () => {
+  it('renders inline math and highlights inside table cells', () => {
+    expect(markdownToNoteHtml('| item | formula |\n|---|---|\n| ==key== | $x < y$ |')).toBe(
+      '<table><thead><tr><th>item</th><th>formula</th></tr></thead><tbody><tr><td><mark>key</mark></td><td><math-inline>x &lt; y</math-inline></td></tr></tbody></table>',
+    )
+  })
+
+  it('renders task items containing inline code, highlights, and math', () => {
+    expect(markdownToNoteHtml('- [ ] Verify `solver()` with ==fast== $O(n)$ check')).toBe(
+      '<ul class="task-list"><li class="task-list-item"><input type="checkbox" disabled="" /> Verify <code>solver()</code> with <mark>fast</mark> <math-inline>O(n)</math-inline> check</li></ul>',
+    )
+  })
+
+  it('keeps math and highlight delimiters literal inside code spans and blocks', () => {
+    expect(markdownToNoteHtml('`$x$` and `==y==` and `- [ ]`')).toBe(
+      '<p><code>$x$</code> and <code>==y==</code> and <code>- [ ]</code></p>',
+    )
+    expect(markdownToNoteHtml('```\n$$ not math $$\n== not highlight ==\n```')).toBe(
+      '<pre><code>$$ not math $$\n== not highlight ==</code></pre>',
+    )
+  })
+})
