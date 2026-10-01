@@ -227,4 +227,46 @@ describe('collectLockProblems', () => {
     )
     expect(problems.join('\n')).toContain('@deepseek-ai/dsh-llm')
   })
+
+  it('detects a manifest dsh package that the lockfile never resolves', () => {
+    const partialLock = {
+      packages: {
+        'node_modules/@deepseek-ai/dsh-tools': { version: pin },
+      },
+    }
+    const problems = collectLockProblems(partialLock, validManifest, pin)
+    expect(problems.join('\n')).toMatch(
+      /package-lock\.json is missing 1 @deepseek-ai\/dsh-\* package\(s\) the manifest declares/,
+    )
+    expect(problems.join('\n')).toContain('@deepseek-ai/dsh-llm')
+  })
+
+  it('detects a root lock entry whose dev/peer dsh keys drift from the manifest', () => {
+    const manifestWithDev = {
+      overrides: {
+        '@deepseek-ai/dsh-tools': pin,
+        '@deepseek-ai/dsh-llm': pin,
+      },
+      devDependencies: {
+        '@deepseek-ai/dsh-tools': pin,
+        '@deepseek-ai/dsh-llm': pin,
+      },
+    }
+    const driftedLock = {
+      packages: {
+        '': {
+          devDependencies: {
+            '@deepseek-ai/dsh-tools': pin,
+          },
+        },
+        'node_modules/@deepseek-ai/dsh-tools': { version: pin },
+        'node_modules/@deepseek-ai/dsh-llm': { version: pin },
+      },
+    }
+    const problems = collectLockProblems(driftedLock, manifestWithDev, pin)
+    expect(problems.join('\n')).toMatch(
+      /package-lock\.json root entry devDependencies drifts from package\.json/,
+    )
+    expect(problems.join('\n')).toContain('@deepseek-ai/dsh-llm')
+  })
 })

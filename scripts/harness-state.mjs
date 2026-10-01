@@ -213,7 +213,7 @@ function checkProse(path, pin) {
   }
 }
 
-/** Every problem in a lockfile relative to the pin and the manifest's overrides. */
+/** Every problem in a lockfile relative to the pin, the manifest's overrides and the manifest's dsh declarations. */
 export function collectLockProblems(lock, manifest, pin) {
   const problems = []
   const offenders = Object.entries(lock.packages ?? {})
@@ -253,6 +253,39 @@ export function collectLockProblems(lock, manifest, pin) {
         `package.json overrides is missing ${missingOverrides.length} @deepseek-ai/dsh-* package(s) from lockfile:` +
           ` ${missingOverrides.join(', ')} — add them to overrides and run: npm install --package-lock-only`,
       )
+    }
+
+    const declaredDsh = new Set(
+      VERSION_SECTIONS.flatMap((section) =>
+        Object.keys(manifest[section] ?? {}).filter(isDshPackage),
+      ),
+    )
+    const missingFromLock = [...declaredDsh]
+      .filter((name) => !Object.hasOwn(lock.packages ?? {}, `node_modules/${name}`))
+      .sort()
+    if (missingFromLock.length > 0) {
+      problems.push(
+        `package-lock.json is missing ${missingFromLock.length} @deepseek-ai/dsh-* package(s) the manifest declares:` +
+          ` ${missingFromLock.join(', ')} — run: npm install --package-lock-only`,
+      )
+    }
+
+    const rootEntry = (lock.packages ?? {})['']
+    if (rootEntry !== undefined) {
+      for (const section of ['devDependencies', 'peerDependencies']) {
+        const manifestKeys = new Set(Object.keys(manifest[section] ?? {}).filter(isDshPackage))
+        const lockKeys = new Set(Object.keys(rootEntry[section] ?? {}).filter(isDshPackage))
+        const missing = [...manifestKeys].filter((name) => !lockKeys.has(name)).sort()
+        const extra = [...lockKeys].filter((name) => !manifestKeys.has(name)).sort()
+        if (missing.length === 0 && extra.length === 0) continue
+        const sides = []
+        if (missing.length > 0) sides.push(`missing ${missing.join(', ')}`)
+        if (extra.length > 0) sides.push(`extra ${extra.join(', ')}`)
+        problems.push(
+          `package-lock.json root entry ${section} drifts from package.json (${sides.join('; ')})` +
+            ' — run: npm install --package-lock-only',
+        )
+      }
     }
   }
   return problems
