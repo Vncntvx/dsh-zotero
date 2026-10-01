@@ -2,7 +2,8 @@
  * The `zotero_delete_library_tags` tool: delete tags library-wide. Names are
  * idempotent (unknown names are silently ignored); the delete carries the
  * library version of its preceding read, so a concurrent write fails it.
- * Irreversible — the plan card states every tag's item count first.
+ * Irreversible — the plan card pages the whole tag listing first, so every
+ * requested name is either proven with its item count or proven absent.
  * @module dsh-zotero/tools/delete-library-tags
  */
 
@@ -19,6 +20,7 @@ import {
 import type { ResolvedConfig } from '../config.js'
 import { writeListEmptyMessage } from '../errors.js'
 import { metaRecordOf, renderDeclined } from './present.js'
+import { libraryVersionLine } from './write-present.js'
 import { assertWriteList, invalid } from './validate.js'
 import { WRITE_PLAN_OUTCOME_DESCRIPTION } from '../write-approval.js'
 import type { ZoteroService } from '../service.js'
@@ -61,23 +63,38 @@ const DELETE_LIBRARY_TAGS_OUTPUT_SCHEMA = {
 
 type DeleteLibraryTagsOutput = InferValue<typeof DELETE_LIBRARY_TAGS_OUTPUT_SCHEMA>
 
-/** The deterministic plan markdown the approval card renders, with per-tag counts. */
+/** The per-tag proven facts the plan card renders. */
+export interface TagPreview {
+  /** Item counts; a seen-but-uncounted tag maps to `undefined`, an unlisted name is absent. */
+  counts?: ReadonlyMap<string, number | undefined>
+  /** Requested names the full listing does not carry — Zotero will skip them. */
+  unknown?: readonly string[]
+}
+
+/**
+ * The deterministic plan markdown the approval card renders. A tag is shown
+ * with its item count when the listing proved one, as `unknown items` when
+ * the listing carried the tag without a count, and — only after the whole
+ * listing has been scanned — as a proven no-op under "Unmatched names".
+ */
 export function deleteLibraryTagsPlan(
   args: DeleteLibraryTagsArgs,
-  preview: { counts?: ReadonlyMap<string, number>; unknown?: readonly string[] } = {},
+  preview: TagPreview = {},
 ): string {
   const tags = (args.tags ?? []).map((tag) => tag.trim())
   const lines = [
     '**Delete Zotero tags library-wide**',
     '- Library: zotero://user/0 (the local personal library)',
-    '- Scope: every item carrying these tags (irreversible, all libraries of names are removed)',
+    '- Scope: every item carrying these tags (irreversible; every item carrying them loses them)',
   ]
   for (const tag of tags) {
     const count = preview.counts?.get(tag)
     lines.push(`- "${tag}": ${count === undefined ? 'unknown items' : `${count} items`}`)
   }
   if (preview.unknown !== undefined && preview.unknown.length > 0) {
-    lines.push(`- Unmatched names (treated as no-ops): ${preview.unknown.join(', ')}`)
+    lines.push(
+      `- Unmatched names (proven no-ops: the listing carries no such tag): ${preview.unknown.join(', ')}`,
+    )
   }
   lines.push(
     'This removes the tags from every item that carries them and cannot be undone; the delete carries a library-version precondition, so a concurrent change fails it.',
@@ -94,29 +111,48 @@ function buildRequest(
   return { tags }
 }
 
+/** The tag row shape the tags listing serves. */
+interface TagRow {
+  tag: string
+  count?: number
+}
+
 /**
- * Count the requested tags before the plan card via the library tags
- * listing. Best-effort — a listing that cannot be read leaves counts unknown
- * and the delete still carries its version precondition.
+ * Page the library tags listing until every requested name is found or the
+ * listing is exhausted, so the plan card never mistakes a tag beyond the
+ * first page for a no-op. A row without a count records `undefined` — the
+ * tag exists but its item count is unproven — and a name absent from the
+ * whole listing is reported as a proven no-op. Best-effort: a read that
+ * fails leaves every count unknown and the delete still carries its version
+ * precondition.
  */
 async function previewLibraryTags(
   service: ZoteroService,
   tags: readonly string[],
-): Promise<{ counts?: Map<string, number>; unknown?: string[] }> {
+): Promise<TagPreview> {
   try {
-    const browsed = await service.browse(
-      {
-        kind: 'tags',
-        scope: { kind: 'library' },
-        offset: 0,
-        limit: service.config.maxBrowseResults,
-      },
-      undefined,
-    )
-    const counts = new Map<string, number>()
-    for (const item of browsed.items) {
-      const row = item as ZoteroTagInfo
-      if (typeof row.tag === 'string') counts.set(row.tag, row.count ?? 0)
+    const wanted = new Set(tags)
+    const counts = new Map<string, number | undefined>()
+    let offset = 0
+    for (;;) {
+      const browsed = await service.browse(
+        {
+          kind: 'tags',
+          scope: { kind: 'library' },
+          offset,
+          limit: service.config.maxBrowseResults,
+        },
+        undefined,
+      )
+      for (const item of browsed.items) {
+        const row = item as TagRow
+        if (typeof row.tag === 'string' && wanted.has(row.tag) && !counts.has(row.tag)) {
+          counts.set(row.tag, typeof row.count === 'number' ? row.count : undefined)
+        }
+      }
+      const next = browsed.nextOffset
+      if (next === undefined || counts.size === wanted.size) break
+      offset = next
     }
     const unknown = tags.filter((tag) => !counts.has(tag))
     return {
@@ -140,7 +176,7 @@ export function renderDeleteLibraryTags(
       type: 'text',
       text: [
         `Deleted ${value.deletedTags.length} tags library-wide: ${value.deletedTags.join(', ')}.`,
-        `Library version: ${value.libraryVersion}${value.serverId === undefined ? '' : ` (served by ${value.serverId})`}`,
+        libraryVersionLine(value),
       ].join('\n'),
     },
   ]

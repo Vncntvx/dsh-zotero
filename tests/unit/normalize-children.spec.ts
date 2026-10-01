@@ -80,6 +80,10 @@ describe('normalizeNoteRecord', () => {
 })
 
 describe('plainNoteText', () => {
+  it('leaves unknown HTML entities verbatim while decoding the known ones', () => {
+    expect(plainNoteText('a &amp; b &nope; c')).toBe('a & b &nope; c')
+  })
+
   it('strips tags, turns block ends into newlines, and decodes entities', () => {
     expect(plainNoteText('<p>A &amp; B</p><p>C&nbsp;D<br/>E</p>')).toBe('A & B\nC D\nE')
   })

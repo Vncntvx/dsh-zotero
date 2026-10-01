@@ -1,6 +1,7 @@
 /** Stable error classes and codes for the Zotero domain. @module dsh-zotero/errors */
 
 import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { ZOTERO_UPDATABLE_ITEM_FIELDS } from './types.js'
 
 /** Zotero is not reachable on its local port. */
 export const ZOTERO_NOT_RUNNING = 'ZOTERO_NOT_RUNNING'
@@ -202,6 +203,14 @@ export const WRITE_RESPONSE_IDENTITY_MISSING_MESSAGE =
 export const WRITE_VERSION_MISSING_MESSAGE =
   'Zotero answered the read without the object version a write precondition needs; the response does not match the documented shape.'
 
+/**
+ * Shown when a read backing a write does not carry the library version the
+ * write's delete precondition derives from. Generic on purpose — several
+ * writes read one row (or one object) only for that header.
+ */
+export const WRITE_PRECONDITION_READ_LIBRARY_VERSION_MESSAGE =
+  'Zotero answered a write precondition read without the library version; the response does not match the documented shape.'
+
 /** Shown when a read backing a write does not carry the item type the field check needs. */
 export const WRITE_ITEM_TYPE_MISSING_MESSAGE =
   'Zotero answered the item read without an itemType; the field set this write is allowed to touch cannot be established.'
@@ -226,6 +235,16 @@ export function writeLibraryUnsupportedMessage(library: { type: string; id: numb
     'Writing is limited to the local personal library zotero://user/0/...; ' +
     `this ref names zotero://${library.type}/${library.id}.`
   )
+}
+
+/** Shown when one creator entry of an item create names no usable name fields. */
+export function writeCreatorNameMessage(index: number): string {
+  return `creators[${index}] must carry a name or a firstName/lastName pair`
+}
+
+/** Shown when an update field is outside the closed set of updatable fields. */
+export function writeFieldNotUpdatableMessage(field: string): string {
+  return `"${field}" is not an updatable field; updatable fields are ${ZOTERO_UPDATABLE_ITEM_FIELDS.join(', ')}.`
 }
 
 /** Shown when Zotero refuses one object of a write batch, with Zotero's own statement. */
@@ -270,10 +289,6 @@ export const WRITE_ITEM_NEEDS_TITLE_OR_URL_MESSAGE =
 export function writeFieldNotForItemTypeMessage(field: string, itemType: string): string {
   return `Field "${field}" is not valid for item type "${itemType}"; check zotero_browse kind itemFields for what this type accepts.`
 }
-
-/** Shown when a library-tags delete response lacks the library version it must carry. */
-export const WRITE_TAG_QUERY_REFUSED_MESSAGE =
-  'Zotero answered the library-tags delete without the library version it advanced to; the response does not match the documented delete shape.'
 
 /** Shown when a library-tags delete names more tags than one request may carry. */
 export function writeTagDeleteLimitMessage(limit: number, detail: string): string {

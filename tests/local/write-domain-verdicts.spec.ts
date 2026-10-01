@@ -38,7 +38,7 @@ import {
   batchBody,
   batchHeaders,
   grantAuthorize,
-  resolveThrough,
+  serveItemRead,
   startWriteDomainMock,
   writeDeps,
 } from '../helpers/write-domain-fixtures.js'
@@ -56,13 +56,6 @@ afterEach(async () => {
 /** Serve one collection object read under the standard identity. */
 function serveCollectionRead(key: string, body: unknown): void {
   mock.route('GET', `/api/users/0/collections/${key}`, (_req, res, helpers) =>
-    helpers.raw(200, { 'Zotero-Server-ID': SERVER_ID }, JSON.stringify(body)),
-  )
-}
-
-/** Serve one item object read under the standard identity. */
-function serveItemRead(key: string, body: unknown): void {
-  mock.route('GET', `/api/users/0/items/${key}`, (_req, res, helpers) =>
     helpers.raw(200, { 'Zotero-Server-ID': SERVER_ID }, JSON.stringify(body)),
   )
 }
@@ -85,9 +78,7 @@ describe('createNote verdicts', () => {
       }),
     )
     const { deps, directory } = writeDeps(mock)
-    await expect(
-      createNote(deps, resolveThrough(directory), { markdown: 'x' }),
-    ).resolves.toMatchObject({
+    await expect(createNote(deps, { markdown: 'x' })).resolves.toMatchObject({
       kind: 'committed-unverified',
       committed: true,
       retryable: false,
@@ -104,9 +95,7 @@ describe('createNote verdicts', () => {
       batchBody(NEW_KEY, 42, { tags: 'not-an-array', collections: [] }),
     )
     const { deps, directory } = writeDeps(mock)
-    await expect(
-      createNote(deps, resolveThrough(directory), { markdown: 'x' }),
-    ).resolves.toMatchObject({
+    await expect(createNote(deps, { markdown: 'x' })).resolves.toMatchObject({
       kind: 'committed-unverified',
       committed: true,
       retryable: false,
@@ -126,9 +115,7 @@ describe('createNote verdicts', () => {
       }),
     )
     const { deps, directory } = writeDeps(mock)
-    await expect(
-      createNote(deps, resolveThrough(directory), { markdown: 'x', tags: ['methods'] }),
-    ).resolves.toMatchObject({
+    await expect(createNote(deps, { markdown: 'x', tags: ['methods'] })).resolves.toMatchObject({
       kind: 'committed-unverified',
       reason: 'saved-state-unverified',
       key: NEW_KEY,
@@ -145,7 +132,7 @@ describe('createNote verdicts', () => {
       }),
     )
     const { deps, directory } = writeDeps(mock)
-    const result = await createNote(deps, resolveThrough(directory), {
+    const result = await createNote(deps, {
       markdown: 'x',
       sourceRefs: [SOURCE_REF],
     })
@@ -167,7 +154,7 @@ describe('createNote verdicts', () => {
       }),
     )
     const { deps, directory } = writeDeps(mock)
-    const result = await createNote(deps, resolveThrough(directory), { markdown: 'x' })
+    const result = await createNote(deps, { markdown: 'x' })
     expect(result).toMatchObject({
       kind: 'committed-unverified',
       committed: true,
@@ -190,9 +177,7 @@ describe('createNote verdicts', () => {
       }),
     )
     const { deps, directory } = writeDeps(mock)
-    await expect(
-      createNote(deps, resolveThrough(directory), { markdown: 'x' }),
-    ).rejects.toMatchObject({
+    await expect(createNote(deps, { markdown: 'x' })).rejects.toMatchObject({
       code: ZOTERO_WRITE_CONFLICT,
       message: writeObjectRefusedMessage('Item has changed since load', 412),
     })
@@ -201,10 +186,13 @@ describe('createNote verdicts', () => {
 
 describe('read-side verdicts', () => {
   it('fails loud when the item read answers with a different object', async () => {
-    serveItemRead(ITEM_KEY, {
-      key: 'OTHERKEY1',
-      version: 7,
-      data: { key: 'OTHERKEY1', itemType: 'journalArticle', tags: [], collections: [] },
+    serveItemRead(mock, {
+      key: ITEM_KEY,
+      body: {
+        key: 'OTHERKEY1',
+        version: 7,
+        data: { key: 'OTHERKEY1', itemType: 'journalArticle', tags: [], collections: [] },
+      },
     })
     const { deps } = writeDeps(mock)
     await expect(updateItemTags(deps, { item: ITEM_REF, add: ['methods'] })).rejects.toMatchObject({
@@ -214,10 +202,13 @@ describe('read-side verdicts', () => {
   })
 
   it('fails loud when the item read omits the item type', async () => {
-    serveItemRead(ITEM_KEY, {
+    serveItemRead(mock, {
       key: ITEM_KEY,
-      version: 7,
-      data: { key: ITEM_KEY, tags: [], collections: [] },
+      body: {
+        key: ITEM_KEY,
+        version: 7,
+        data: { key: ITEM_KEY, tags: [], collections: [] },
+      },
     })
     const { deps } = writeDeps(mock)
     await expect(updateItemTags(deps, { item: ITEM_REF, add: ['methods'] })).rejects.toMatchObject({
@@ -233,9 +224,7 @@ describe('read-side verdicts', () => {
       data: { key: 'OTHERCOL1', name: 'Second' },
     })
     const { deps, directory } = writeDeps(mock)
-    await expect(
-      deleteCollection(deps, resolveThrough(directory), { collection: 'Second' }),
-    ).rejects.toMatchObject({
+    await expect(deleteCollection(deps, { collection: 'Second' })).rejects.toMatchObject({
       code: ZOTERO_UNEXPECTED,
       message: expect.stringContaining(`a different collection than ${SECOND_COLLECTION_KEY}`),
     })
@@ -248,9 +237,10 @@ describe('read-side verdicts', () => {
       data: { key: SECOND_COLLECTION_KEY, name: 'Second' },
     })
     const { deps, directory } = writeDeps(mock)
-    await expect(
-      deleteCollection(deps, resolveThrough(directory), { collection: 'Second' }),
-    ).rejects.toMatchObject({ code: ZOTERO_UNEXPECTED, message: WRITE_VERSION_MISSING_MESSAGE })
+    await expect(deleteCollection(deps, { collection: 'Second' })).rejects.toMatchObject({
+      code: ZOTERO_UNEXPECTED,
+      message: WRITE_VERSION_MISSING_MESSAGE,
+    })
     expect(mock.requests.some((request) => request.method === 'DELETE')).toBe(false)
   })
 })
@@ -268,8 +258,8 @@ async function startListingMock(
   own.route('GET', '/api/', (_req, res, helpers) =>
     helpers.raw(200, { 'Zotero-Server-ID': SERVER_ID }, JSON.stringify({})),
   )
-  own.route('GET', '/api/users/0/collections', (_req, res, helpers) =>
-    helpers.json(rows, listingHeaders),
+  own.route('GET', '/api/users/0/collections/top', (_req, res, helpers) =>
+    helpers.json(rows, { ...listingHeaders, 'Total-Results': String(rows.length) }),
   )
   grantAuthorize(own)
   return own
@@ -280,9 +270,10 @@ describe('createCollection verdicts', () => {
     const own = await startListingMock([], { 'Zotero-Server-ID': 'srv-somewhere-else' })
     try {
       const { deps, directory } = writeDeps(own)
-      await expect(
-        createCollection(deps, resolveThrough(directory), { name: 'Field notes' }),
-      ).rejects.toMatchObject({ code: ZOTERO_SERVER_MISMATCH, message: SERVER_MISMATCH_MESSAGE })
+      await expect(createCollection(deps, { name: 'Field notes' })).rejects.toMatchObject({
+        code: ZOTERO_SERVER_MISMATCH,
+        message: SERVER_MISMATCH_MESSAGE,
+      })
       expect(own.requests.some((request) => request.method === 'POST')).toBe(false)
     } finally {
       await own.close()
@@ -301,7 +292,7 @@ describe('createCollection verdicts', () => {
         helpers.raw(200, batchHeaders(42), batchBody('NEWCOLL1', 42, { name: 'Field notes' })),
       )
       const { deps, directory } = writeDeps(own)
-      const result = await createCollection(deps, resolveThrough(directory), {
+      const result = await createCollection(deps, {
         name: 'Field notes',
       })
       expect(result).toMatchObject({ kind: 'applied', key: 'NEWCOLL1' })
@@ -310,19 +301,19 @@ describe('createCollection verdicts', () => {
     }
   })
 
-  it('answers a batch with no usable key as committed but unkeyed', async () => {
+  it('answers a batch with no outcome buckets as commit-unknown', async () => {
     grantAuthorize(mock)
     serveCreateBatch(
       '/api/users/0/collections',
       JSON.stringify({ successful: {}, success: {}, unchanged: {}, failed: {} }),
     )
-    const { deps, directory } = writeDeps(mock)
-    const result = await createCollection(deps, resolveThrough(directory), { name: 'Field notes' })
+    const { deps } = writeDeps(mock)
+    const result = await createCollection(deps, { name: 'Field notes' })
     expect(result).toMatchObject({
       kind: 'committed-unverified',
       committed: true,
       retryable: false,
-      reason: 'saved-state-unverified',
+      reason: 'commit-unknown',
       serverId: SERVER_ID,
     })
     expect('key' in result).toBe(false)
@@ -340,9 +331,7 @@ describe('createCollection verdicts', () => {
       }),
     )
     const { deps, directory } = writeDeps(mock)
-    await expect(
-      createCollection(deps, resolveThrough(directory), { name: 'Field notes' }),
-    ).resolves.toMatchObject({
+    await expect(createCollection(deps, { name: 'Field notes' })).resolves.toMatchObject({
       kind: 'committed-unverified',
       reason: 'saved-state-unverified',
       key: 'NEWCOLL1',
@@ -357,9 +346,7 @@ describe('createCollection verdicts', () => {
       batchBody('NEWCOLL1', 42, { name: 'Something else' }),
     )
     const { deps, directory } = writeDeps(mock)
-    await expect(
-      createCollection(deps, resolveThrough(directory), { name: 'Field notes' }),
-    ).resolves.toMatchObject({
+    await expect(createCollection(deps, { name: 'Field notes' })).resolves.toMatchObject({
       kind: 'committed-unverified',
       reason: 'saved-state-unverified',
       key: 'NEWCOLL1',
@@ -374,9 +361,7 @@ describe('createCollection verdicts', () => {
       batchBody('NEWCOLL1', 42, { name: 'Field notes', parentCollection: SECOND_COLLECTION_KEY }),
     )
     const { deps, directory } = writeDeps(mock)
-    await expect(
-      createCollection(deps, resolveThrough(directory), { name: 'Field notes' }),
-    ).resolves.toMatchObject({
+    await expect(createCollection(deps, { name: 'Field notes' })).resolves.toMatchObject({
       kind: 'committed-unverified',
       reason: 'saved-state-unverified',
       key: 'NEWCOLL1',
@@ -390,9 +375,10 @@ describe('createCollection verdicts', () => {
       helpers.raw(404, { 'Zotero-Server-ID': SERVER_ID }, JSON.stringify({})),
     )
     const { deps, directory } = writeDeps(mock)
-    await expect(
-      createCollection(deps, resolveThrough(directory), { name: 'Field notes' }),
-    ).rejects.toMatchObject({ code: ZOTERO_NOT_FOUND, message: OBJECT_NOT_FOUND_MESSAGE })
+    await expect(createCollection(deps, { name: 'Field notes' })).rejects.toMatchObject({
+      code: ZOTERO_NOT_FOUND,
+      message: OBJECT_NOT_FOUND_MESSAGE,
+    })
   })
 })
 

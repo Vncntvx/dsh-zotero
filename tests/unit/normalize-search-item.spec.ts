@@ -12,7 +12,7 @@
 import { describe, expect, it } from 'vitest'
 import { ZOTERO_UNEXPECTED, ZoteroError } from '../../src/errors.js'
 import { fixtureJson } from '../helpers/fixtures-dir.js'
-import { normalizeSearchItem } from '../../src/normalize.js'
+import { citekeyOf, normalizeSearchItem } from '../../src/normalize.js'
 import { ctx, expectUnexpected } from './normalize-helpers.js'
 
 /** One captured response body from `tests/fixtures/`. */
@@ -153,5 +153,31 @@ describe('normalization of hostile inputs', () => {
 
   it('tolerates non-string item types in search hits', () => {
     expect(normalizeSearchItem({ key: 'ABCD1234', data: { itemType: 42 } }).itemType).toBe('')
+  })
+})
+
+describe('citekeyOf — the one citation-key grammar', () => {
+  it('reads the canonical line-start label', () => {
+    expect(citekeyOf('Citation Key: dao2023flash\nDOI: 10.1/x')).toBe('dao2023flash')
+  })
+
+  it('accepts the lowercase alias and mid-line occurrences, as export alignment always has', () => {
+    expect(citekeyOf('citekey: daoLower')).toBe('daoLower')
+    expect(citekeyOf('see also citekey: daoInline, DOI on the next line')).toBe('daoInline')
+  })
+
+  it('takes the first token only: trailing prose on the same line is never the key', () => {
+    expect(citekeyOf('Citation Key: keyWith trailing words')).toBe('keyWith')
+  })
+
+  it('does not read a label embedded inside another word', () => {
+    expect(citekeyOf('notcitekey: bogus')).toBeUndefined()
+    expect(citekeyOf('prefixCitation Key: bogus')).toBeUndefined()
+  })
+
+  it('returns undefined for absent, empty, and labelless extra text', () => {
+    expect(citekeyOf(undefined)).toBeUndefined()
+    expect(citekeyOf('')).toBeUndefined()
+    expect(citekeyOf('arXiv: 2401.12345')).toBeUndefined()
   })
 })

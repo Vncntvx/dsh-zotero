@@ -72,9 +72,11 @@ export const ZOTERO_MAX_WRITE_INFLIGHT_REQUESTS = 1
 
 /**
  * The Local API's hard cap on objects per write batch (`MAX_WRITE_OBJECTS`,
- * `server_localAPI.js:95` at Zotero 10.0.2). The write domain refuses a
- * longer batch before the network, and the tool schemas cap `maxItems` at the
- * same number, so a 413 from Zotero can only mean protocol drift.
+ * `server_localAPI.js:95` at Zotero 10.0.2). The write tools enforce the same
+ * number at runtime (`assertWriteList` / `assertAddRemoveSelection`, because
+ * the bound is configurable and therefore cannot ride the static schemas),
+ * and the write domain refuses a longer batch before the network — so a 413
+ * from Zotero can only mean protocol drift.
  */
 export const ZOTERO_WRITE_OBJECT_BATCH = 50
 

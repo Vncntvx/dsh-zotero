@@ -365,6 +365,80 @@ export class ScopeDirectory {
   }
 
   /**
+   * Resolve a batch of collection refs, proving each key exists. One cached
+   * listing answers every key it carries — the same trust level scope-name
+   * resolution already gives writes — and only keys the listing lacks fall
+   * back to single-object reads, which also surface the typed 404. A
+   * 50-entry membership edit costs one request in the common case instead of
+   * one GET per ref. Input order is preserved; a ref naming another library
+   * than `library` fails closed before any read.
+   */
+  async resolveCollectionRefs(
+    refs: readonly ZoteroObjectRef[],
+    library: SupportedLocalLibrary,
+    signal: AbortSignal | undefined,
+    claimServerId: string | undefined,
+  ): Promise<ZoteroObjectRef[]> {
+    if (refs.length === 0) return []
+    const checked = refs.map((ref) => {
+      const supported = requireSupportedLocalRef(ref, ['collection'])
+      if (!sameLibrary(supported.library as SupportedLocalLibrary, library)) {
+        throw new ZoteroError(
+          `Library mismatch: scope ref is ${supported.library.type}/${supported.library.id} ` +
+            `but request library is ${library.type}/${library.id}.`,
+          ZOTERO_INVALID_ARGUMENT,
+        )
+      }
+      return supported
+    })
+    const listing = await this.scopeListingOf(
+      'collections',
+      { library, serverId: claimServerId },
+      signal,
+    )
+    const byKey = new Map(listing.entries.map((entry) => [entry.key, entry]))
+    const resolved: ZoteroObjectRef[] = new Array(checked.length)
+    const missing: { index: number; key: string; claim: string | undefined }[] = []
+    checked.forEach((ref, index) => {
+      // The listing may only answer a ref it can prove: a ref that claims a
+      // specific serving instance (`?server=`) must match the listing's own
+      // identity, or it falls through to a live read whose served-by identity
+      // the caller can judge — a cross-instance ref is never silently
+      // re-pointed at this instance's object.
+      const listed = byKey.get(ref.key)
+      const claim = ref.serverId ?? claimServerId
+      if (
+        listed !== undefined &&
+        (ref.serverId === undefined || ref.serverId === listing.serverId)
+      ) {
+        resolved[index] = refForLibrary(library, 'collection', ref.key, listing.serverId)
+      } else {
+        missing.push({ index, key: ref.key, claim })
+      }
+    })
+    await Promise.all(
+      missing.map(async ({ index, key, claim }) => {
+        const { json, headers } = await this.client.getJson<unknown>(
+          `${libraryPrefix(library)}/collections/${key}`,
+          undefined,
+          { signal, serverId: claim },
+        )
+        const entry = normalizeScopeEntry(json)
+        // The ref is authority: an answer that names a different object is a
+        // contract breach, not a silent re-point.
+        if (entry.key !== key) {
+          throw new ZoteroError(
+            `Zotero answered the collection read with a different object than ${key}; the response cannot be used.`,
+            ZOTERO_UNEXPECTED,
+          )
+        }
+        resolved[index] = refForLibrary(library, 'collection', key, resolveServedBy(headers, claim))
+      }),
+    )
+    return resolved
+  }
+
+  /**
    * The ancestor names of one collection, walking `parentCollection` links
    * upward from its immediate parent. The walk is sequential (one chain),
    * cycle-guarded by the keys already visited, and stops at an ancestor the
@@ -515,6 +589,54 @@ export class ScopeDirectory {
 /** Path segment for the requested item level: `items` for all items, `items/top` for top-level only. */
 export function itemsSegmentFor(itemLevel?: ZoteroItemLevel): string {
   return itemLevel === 'all' ? 'items' : 'items/top'
+}
+
+/**
+ * Resolve a mixed batch of collection ref strings and exact names through
+ * `directory`, preserving input order: ref strings go through
+ * {@link ScopeDirectory.resolveCollectionRefs} (one cached listing proves
+ * every key it carries, per-key reads only for the rest), names through
+ * {@link ScopeDirectory.resolveNamed} (ambiguity-checking, listing-based).
+ * Both arms run concurrently; an invalid ref string refuses the whole batch
+ * before any network happens.
+ */
+export async function resolveCollectionsMixed(
+  directory: ScopeDirectory,
+  inputs: readonly string[],
+  library: SupportedLocalLibrary,
+  signal?: AbortSignal,
+  claimServerId?: string,
+): Promise<ZoteroObjectRef[]> {
+  if (inputs.length === 0) return []
+  const refInputs: { index: number; ref: ZoteroObjectRef }[] = []
+  const nameInputs: { index: number; name: string }[] = []
+  inputs.forEach((input, index) => {
+    if (isRefString(input)) refInputs.push({ index, ref: parseRef(input) })
+    else nameInputs.push({ index, name: input })
+  })
+  const [refResults, nameResults] = await Promise.all([
+    directory.resolveCollectionRefs(
+      refInputs.map((entry) => entry.ref),
+      library,
+      signal,
+      claimServerId,
+    ),
+    Promise.all(
+      nameInputs.map((entry) =>
+        directory
+          .resolveNamed('collection', entry.name, library, signal, claimServerId)
+          .then((resolved) => resolved.ref),
+      ),
+    ),
+  ])
+  const results: ZoteroObjectRef[] = new Array(inputs.length)
+  refInputs.forEach((entry, position) => {
+    results[entry.index] = refResults[position]!
+  })
+  nameInputs.forEach((entry, position) => {
+    results[entry.index] = nameResults[position]!
+  })
+  return results
 }
 
 /**

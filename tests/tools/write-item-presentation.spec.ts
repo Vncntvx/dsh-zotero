@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { approvalLane } from '../helpers/approval-stub.js'
-import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { ToolResult } from '@deepseek-ai/dsh-tools'
+import { textOfBlocks } from '../../src/tools/present.js'
 import { createCollectionPlan, renderCreateCollection } from '../../src/tools/create-collection.js'
 import { deleteCollectionPlan, renderDeleteCollection } from '../../src/tools/delete-collection.js'
 import { createItemPlan, renderCreateItem } from '../../src/tools/create-item.js'
@@ -44,22 +44,18 @@ const UNVERIFIED = {
   serverId: 'srv',
 }
 
-function textOf(blocks: ContentBlock[]): string {
-  return blocks.map((block) => (block.type === 'text' ? block.text : '')).join('\n')
-}
-
 function resultOf(meta: Record<string, unknown>): ToolResult {
   return { content: [{ type: 'text', text: 'x' }], isError: false, meta } as unknown as ToolResult
 }
 
 describe('collection lifecycle presentation', () => {
   it('renders the created collection with its parent and library version', () => {
-    const text = textOf(renderCreateCollection({ name: '方法论' }, APPLIED_COLLECTION))
+    const text = textOfBlocks(renderCreateCollection({ name: '方法论' }, APPLIED_COLLECTION))
     expect(text).toContain(
       'Created collection zotero://user/0/collection/COLL1234?server=srv (version 7): 方法论.',
     )
     expect(text).toContain('Library version: 7 (served by srv)')
-    const withParent = textOf(
+    const withParent = textOfBlocks(
       renderCreateCollection(
         { name: '子合集' },
         {
@@ -75,28 +71,28 @@ describe('collection lifecycle presentation', () => {
   })
 
   it('tells the model never to retry an unverified or unknown collection commit', () => {
-    const unknown = textOf(
+    const unknown = textOfBlocks(
       renderCreateCollection({ name: 'x' }, { ...UNVERIFIED, key: 'COLL1234' }),
     )
     expect(unknown).toContain('may have created the collection')
     expect(unknown).toContain('Do not retry')
     expect(unknown).toContain('(key COLL1234)')
     expect(unknown).toContain('reconcile the collection by its key/ref')
-    const unverified = textOf(
+    const unverified = textOfBlocks(
       renderCreateCollection({ name: 'x' }, { ...UNVERIFIED, reason: 'saved-state-unverified' }),
     )
     expect(unverified).toContain('saved state could not be verified')
     expect(unverified).toContain('Do not retry')
-    const bare = textOf(renderCreateCollection({ name: 'x' }, UNVERIFIED))
+    const bare = textOfBlocks(renderCreateCollection({ name: 'x' }, UNVERIFIED))
     expect(bare).toContain('checking Zotero for the collection')
   })
 
   it('renders the declined and deleted collection outcomes', () => {
-    expect(textOf(renderCreateCollection({ name: 'x' }, { kind: 'declined' }))).toContain(
+    expect(textOfBlocks(renderCreateCollection({ name: 'x' }, { kind: 'declined' }))).toContain(
       'Declined',
     )
     expect(
-      textOf(
+      textOfBlocks(
         renderDeleteCollection(
           { collection: '方法论' },
           {
@@ -113,9 +109,9 @@ describe('collection lifecycle presentation', () => {
       'Deleted collection zotero://user/0/collection/COLL1234.\n' +
         'Library version: 9 (served by srv)',
     )
-    expect(textOf(renderDeleteCollection({ collection: 'x' }, { kind: 'declined' }))).toContain(
-      'Declined',
-    )
+    expect(
+      textOfBlocks(renderDeleteCollection({ collection: 'x' }, { kind: 'declined' })),
+    ).toContain('Declined')
   })
 
   it('builds the collection plans with the previewed blast radius', () => {
@@ -245,13 +241,13 @@ describe('collection lifecycle presentation', () => {
 
 describe('item create and update presentation', () => {
   it('renders the created item from the closed field set', () => {
-    const text = textOf(renderCreateItem({ itemType: 'journalArticle' }, APPLIED_ITEM))
+    const text = textOfBlocks(renderCreateItem({ itemType: 'journalArticle' }, APPLIED_ITEM))
     expect(text).toContain(
       'Created journalArticle item zotero://user/0/item/ITEMABC1?server=srv (version 5).',
     )
     expect(text).toContain('Title: A study')
     expect(text).toContain('Library version: 5 (served by srv)')
-    const bare = textOf(
+    const bare = textOfBlocks(
       renderCreateItem(
         { itemType: 'webpage' },
         { ...APPLIED_ITEM, itemType: 'webpage', title: undefined, serverId: undefined },
@@ -262,10 +258,10 @@ describe('item create and update presentation', () => {
   })
 
   it('tells the model never to retry an unverified or unknown item commit', () => {
-    const unknown = textOf(renderCreateItem({ itemType: 'book' }, UNVERIFIED))
+    const unknown = textOfBlocks(renderCreateItem({ itemType: 'book' }, UNVERIFIED))
     expect(unknown).toContain('may have created the item')
     expect(unknown).toContain('Do not retry')
-    const withKey = textOf(
+    const withKey = textOfBlocks(
       renderCreateItem(
         { itemType: 'book' },
         { ...UNVERIFIED, reason: 'saved-state-unverified', key: 'ITEMABC1' },
@@ -273,19 +269,19 @@ describe('item create and update presentation', () => {
     )
     expect(withKey).toContain('(key ITEMABC1)')
     expect(withKey).toContain('reconcile the item by its key/ref')
-    const withRef = textOf(
+    const withRef = textOfBlocks(
       renderCreateItem({ itemType: 'book' }, { ...UNVERIFIED, ref: 'zotero://user/0/item/X' }),
     )
     expect(withRef).toContain('(ref zotero://user/0/item/X)')
-    const bare = textOf(renderCreateItem({ itemType: 'book' }, UNVERIFIED))
+    const bare = textOfBlocks(renderCreateItem({ itemType: 'book' }, UNVERIFIED))
     expect(bare).toContain('checking Zotero for the item')
-    expect(textOf(renderCreateItem({ itemType: 'book' }, { kind: 'declined' }))).toContain(
+    expect(textOfBlocks(renderCreateItem({ itemType: 'book' }, { kind: 'declined' }))).toContain(
       'Declined',
     )
   })
 
   it('renders the updated item with the changed field names', () => {
-    const text = textOf(
+    const text = textOfBlocks(
       renderUpdateItem(
         { ref: 'r', set: { title: 'New' } },
         {
@@ -301,7 +297,7 @@ describe('item create and update presentation', () => {
     expect(text).toContain('Updated zotero://user/0/item/ITEMABC1 (version 11)')
     expect(text).toContain('changed date, title')
     expect(text).toContain('Library version: 11 (served by srv)')
-    expect(textOf(renderUpdateItem({ ref: 'r', set: {} }, { kind: 'declined' }))).toContain(
+    expect(textOfBlocks(renderUpdateItem({ ref: 'r', set: {} }, { kind: 'declined' }))).toContain(
       'Declined',
     )
   })
@@ -465,7 +461,7 @@ describe('item create and update presentation', () => {
 
 describe('library-wide tag deletion presentation', () => {
   it('renders the deleted tags with their library version', () => {
-    const text = textOf(
+    const text = textOfBlocks(
       renderDeleteLibraryTags(
         { tags: ['b', 'a'] },
         { kind: 'deleted', deletedTags: ['a', 'b'], libraryVersion: 21, serverId: 'srv' },
@@ -473,14 +469,14 @@ describe('library-wide tag deletion presentation', () => {
     )
     expect(text).toContain('Deleted 2 tags library-wide: a, b.')
     expect(text).toContain('Library version: 21 (served by srv)')
-    const bare = textOf(
+    const bare = textOfBlocks(
       renderDeleteLibraryTags(
         { tags: ['a'] },
         { kind: 'deleted', deletedTags: ['a'], libraryVersion: 22 },
       ),
     )
     expect(bare).not.toContain('(served by')
-    expect(textOf(renderDeleteLibraryTags({ tags: ['a'] }, { kind: 'declined' }))).toContain(
+    expect(textOfBlocks(renderDeleteLibraryTags({ tags: ['a'] }, { kind: 'declined' }))).toContain(
       'Declined',
     )
   })
@@ -491,8 +487,18 @@ describe('library-wide tag deletion presentation', () => {
       { counts: new Map([['methods', 7]]), unknown: ['legacy'] },
     )
     expect(known).toContain('- "methods": 7 items')
-    expect(known).toContain('- Unmatched names (treated as no-ops): legacy')
+    expect(known).toContain(
+      '- Unmatched names (proven no-ops: the listing carries no such tag): legacy',
+    )
     expect(known).toContain('cannot be undone')
+    // A tag the listing carried without a count is seen but unproven: it
+    // renders as unknown items, never as a false "0 items".
+    const uncounted = deleteLibraryTagsPlan(
+      { tags: ['methods'] },
+      { counts: new Map([['methods', undefined]]) },
+    )
+    expect(uncounted).toContain('- "methods": unknown items')
+    expect(uncounted).not.toContain('0 items')
     const unknown = deleteLibraryTagsPlan({ tags: ['methods'] })
     expect(unknown).toContain('- "methods": unknown items')
     expect(unknown).not.toContain('Unmatched names')

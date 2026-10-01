@@ -20,6 +20,7 @@ import {
   ITEM_REF,
   itemJson,
   SERVER_ID,
+  serveItemRead,
   startWriteDomainMock,
   writeDeps,
   expectApplied,
@@ -42,18 +43,7 @@ function serveItem(
   data: Record<string, unknown>,
   options: { serverId?: string; version?: number } = {},
 ): void {
-  mock.route('GET', `/api/users/0/items/${ITEM_KEY}`, (_req, res, helpers) =>
-    helpers.raw(
-      200,
-      {
-        'Zotero-Server-ID': options.serverId ?? SERVER_ID,
-        'Last-Modified-Version': String(options.version ?? 10),
-      },
-      JSON.stringify(
-        itemJson(ITEM_KEY, options.version ?? 10, { tags: [], collections: [], ...data }),
-      ),
-    ),
-  )
+  serveItemRead(mock, { data, ...options })
 }
 
 describe('createItem', () => {
@@ -148,7 +138,7 @@ describe('createItem', () => {
     })
   })
 
-  it('returns a non-retryable committed-unverified result when the saved state is missing', async () => {
+  it('answers an empty outcome-bucket set as commit-unknown', async () => {
     grantAuthorize(mock)
     const { deps } = writeDeps(mock)
     mock.route('POST', '/api/users/0/items', (_req, res, helpers) =>
@@ -163,7 +153,7 @@ describe('createItem', () => {
       kind: 'committed-unverified',
       committed: true,
       retryable: false,
-      reason: 'saved-state-unverified',
+      reason: 'commit-unknown',
       serverId: SERVER_ID,
     })
     expect(result.kind === 'committed-unverified' && result.key).toBeUndefined()

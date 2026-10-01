@@ -96,9 +96,10 @@ export async function exportItems(
       onProgress,
     )
   }
-  // Duplicate refs name the same item; the translator formats fetch each
-  // document on its own, so every unique key is requested once, keeping
-  // the first-seen order. Dedupe by canonical ref (library+key), not bare key.
+  // Duplicate refs name the same item, and Zotero caps one itemKey request
+  // at ZOTERO_ITEMKEY_BATCH keys anyway, so every unique key is requested
+  // exactly once, keeping the first-seen order. Dedupe by canonical ref
+  // (library+key), not bare key.
   const seen = new Set<string>()
   const refs: ZoteroObjectRef[] = []
   for (const ref of request.refs) {
@@ -135,6 +136,15 @@ export async function exportItems(
     : Promise.resolve<readonly Record<string, unknown>[]>([])
 
   const [{ body }, rawItems] = await Promise.all([exportPromise, metaPromise])
+  // Close the progress event the fetch opened: without this the receipt
+  // would sit at "Fetching N items…" forever, since the batched read has no
+  // per-item steps to report.
+  onProgress?.({
+    phase: 'fetch_batch',
+    current: refs.length,
+    total: refs.length,
+    message: `Fetched ${refs.length} items (${request.format}).`,
+  })
   if (body.length > deps.limits.maxExportChars) {
     throw new ZoteroError(
       `Export output of ${body.length} characters exceeds the ${deps.limits.maxExportChars}-character export limit.`,

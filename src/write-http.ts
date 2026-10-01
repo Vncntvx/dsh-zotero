@@ -173,6 +173,14 @@ export interface ZoteroDeleteWriteOptions extends ZoteroWriteOptions {
    * the domain always sends one, so absence here is only for tests.
    */
   readonly ifUnmodifiedSinceVersion?: number
+  /**
+   * Marks the delete payload as a bounded name list (the library-tags
+   * delete). A 413 then means the name list exceeded the server cap — a
+   * caller-facing argument error — instead of the batch-size protocol drift
+   * a 413 means everywhere else. The domain sets this on the tags path it
+   * builds; no caller should guess it from the URL.
+   */
+  readonly tagDeleteLimit?: boolean
 }
 
 export interface ZoteroAuthorizeGrant {
@@ -183,16 +191,6 @@ export interface ZoteroAuthorizeGrant {
 
 /** The Local API endpoint that issues write keys; local-only, no web API analog. */
 const AUTHORIZE_PATH = ZOTERO_AUTHORIZE_PATH
-
-/**
- * The library-tags delete path: `DELETE users/0/tags?tag=<enc1>||<enc2>...`.
- * Each name is encoded on its own so the `||` separator survives intact.
- * @param names - the tag names to delete.
- * @returns the API-relative delete path.
- */
-export function tagsQueryPath(names: readonly string[]): string {
-  return `users/0/tags?tag=${names.map((name) => encodeURIComponent(name)).join('||')}`
-}
 
 /**
  * Zotero documents 5–32 characters for `Zotero-Write-Token`; a UUID without
@@ -282,8 +280,10 @@ export class ZoteroWriteHttpClient {
    * DELETE one object or tag set. Zotero answers 204 with the library version
    * the delete advanced to. Deletes are idempotent by key/name, so failures
    * stay typed (never commit-unknown) and a retry is safe.
-   * @param path - the API-relative delete path (see {@link tagsQueryPath}).
-   * @param opts - the serving instance, the API key, and the library/object version precondition.
+   * @param path - the API-relative delete path, built by the domain.
+   * @param opts - the serving instance, the API key, the library/object version
+   *   precondition, and (for the library-tags delete) the `tagDeleteLimit` mark
+   *   that turns a 413 into the caller-facing tag-limit error.
    * @returns the library version the delete advanced to.
    */
   async delete(path: string, opts: ZoteroDeleteWriteOptions): Promise<{ libraryVersion: number }> {
@@ -299,6 +299,7 @@ export class ZoteroWriteHttpClient {
       undefined,
       undefined,
       false,
+      opts.tagDeleteLimit === true,
     )
     return { libraryVersion: requireLibraryVersion(headers) }
   }
@@ -346,6 +347,7 @@ export class ZoteroWriteHttpClient {
     body?: string,
     deadlineMs: number = this.options.timeoutMs,
     commitSensitive = false,
+    tagDeleteLimit = false,
   ): Promise<{ body: string; headers: Headers }> {
     if (opts.serverId === '') {
       throw new ZoteroError(WRITE_IDENTITY_MISSING_MESSAGE, ZOTERO_UNEXPECTED)
@@ -420,7 +422,7 @@ export class ZoteroWriteHttpClient {
                   deadlineMs,
                 )
               : ''
-          this.translateWriteStatus(response, detail, path)
+          this.translateWriteStatus(response, detail, tagDeleteLimit)
         } catch (error) {
           if (commitSensitive && !isPreCommitWriteStatus(response.status)) {
             throw asCommitUnknown(error)
@@ -459,12 +461,12 @@ export class ZoteroWriteHttpClient {
   /**
    * Translate a non-2xx write response. The write path maps Zotero's own
    * statuses onto the plugin's write vocabulary: 401/403/429/412 carry
-   * write-specific codes, a 413 on the library-tags delete carries the tag
-   * limit, and the two statuses that cannot happen if the plugin is correct
-   * (428, batch 413) fail loud as protocol drift instead of being disguised
-   * as domain errors.
+   * write-specific codes, a 413 on a delete the domain marked as a name-list
+   * payload carries the tag limit, and the two statuses that cannot happen
+   * if the plugin is correct (428, batch 413) fail loud as protocol drift
+   * instead of being disguised as domain errors.
    */
-  private translateWriteStatus(response: Response, detail: string, path?: string): never {
+  private translateWriteStatus(response: Response, detail: string, tagDeleteLimit: boolean): never {
     const status = response.status
     switch (status) {
       case 401:
@@ -503,7 +505,7 @@ export class ZoteroWriteHttpClient {
         )
       }
       case 413:
-        if (path !== undefined && path.includes('/tags')) {
+        if (tagDeleteLimit) {
           throw new ZoteroError(
             writeTagDeleteLimitMessage(ZOTERO_WRITE_OBJECT_BATCH, detail),
             ZOTERO_INVALID_ARGUMENT,

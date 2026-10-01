@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ZOTERO_INVALID_REF, ZoteroError } from '../../src/errors.js'
+import { ZOTERO_INVALID_REF, ZOTERO_UNEXPECTED, ZoteroError } from '../../src/errors.js'
 import {
   formatRef,
   formatZoteroRelationUri,
@@ -12,6 +12,7 @@ import {
   PERSONAL_LIBRARY,
   refForLibrary,
   relationTargetRef,
+  requireSupportedLibraryOfRef,
   requireSupportedLocalRef,
 } from '../../src/refs.js'
 import { ZOTERO_SORT_FIELDS } from '../../src/constants.js'
@@ -207,6 +208,26 @@ describe('formatZoteroRelationUri', () => {
   })
 })
 
+describe('requireSupportedLibraryOfRef', () => {
+  it('passes supported local refs through and refuses the rest with the scope message', () => {
+    expect(requireSupportedLibraryOfRef('zotero://user/0/collection/ABCD1234')).toEqual({
+      type: 'user',
+      id: 0,
+    })
+    let thrown: unknown
+    try {
+      requireSupportedLibraryOfRef('zotero://user/7/collection/ABCD1234')
+    } catch (error) {
+      thrown = error
+    }
+    expect(thrown).toBeInstanceOf(ZoteroError)
+    expect((thrown as ZoteroError).code).toBe(ZOTERO_UNEXPECTED)
+    expect((thrown as ZoteroError).message).toContain(
+      'Resolved scope carries a ref outside the local contract',
+    )
+  })
+})
+
 describe('relationTargetRef', () => {
   it('maps canonical user ids and same-library groups, never foreign users', () => {
     expect(relationTargetRef('http://zotero.org/users/0/items/ABCD1234', 'S1')).toBe(
@@ -227,6 +248,10 @@ describe('relationTargetRef', () => {
     // key against the wrong library.
     expect(relationTargetRef('http://zotero.org/users/987654/items/ABCD1234', 'S1')).toBeUndefined()
     expect(relationTargetRef('not a uri', 'S1')).toBeUndefined()
+    // A URI whose key breaks the object-key grammar, or a group id that is
+    // not a positive integer, is unprovable by definition.
+    expect(relationTargetRef('http://zotero.org/users/0/items/short', 'S1')).toBeUndefined()
+    expect(relationTargetRef('http://zotero.org/groups/0/items/ABCD1234', 'S1')).toBeUndefined()
   })
 
   it('maps the sync alias when the caller proves the personal context', () => {

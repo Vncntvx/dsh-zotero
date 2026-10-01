@@ -9,6 +9,7 @@ import { UserQuestionError } from '@deepseek-ai/dsh-user-questions'
 import { StubApproval } from '../helpers/approval-stub.js'
 import { expectValue, setupHostLane, type HostLane } from '../helpers/lanes/host-lane.js'
 import { MockZotero } from '../helpers/mock-zotero.js'
+import { serveItemRead } from '../helpers/write-domain-fixtures.js'
 import type { Options } from '../../src/config.js'
 import {
   WRITE_APPROVAL_UNAVAILABLE_MESSAGE,
@@ -372,28 +373,12 @@ describe('zotero_create_note', () => {
   })
 })
 
-describe('zotero_update_item_tags and zotero_update_item_collections', () => {
-  function serveItem(mock: MockZotero, data: Record<string, unknown>): void {
-    mock.route('GET', `/api/users/0/items/${ITEM_KEY}`, (_req, res, helpers) =>
-      helpers.raw(
-        200,
-        { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '10' },
-        JSON.stringify({
-          key: ITEM_KEY,
-          version: 10,
-          data: {
-            key: ITEM_KEY,
-            version: 10,
-            itemType: 'journalArticle',
-            tags: [],
-            collections: [],
-            ...data,
-          },
-        }),
-      ),
-    )
-  }
+/** Serve one item read carrying tags and collections, as Zotero always does. */
+function serveItem(mock: MockZotero, data: Record<string, unknown>): void {
+  serveItemRead(mock, { data, serverId: SERVER_ID })
+}
 
+describe('zotero_update_item_tags and zotero_update_item_collections', () => {
   it('merges tags into an item after approval, preserving existing tag types', async () => {
     const lane = await bootLane({ writeEnabled: true })
     serveWrites(lane.mock)

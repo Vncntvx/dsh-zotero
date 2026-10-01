@@ -38,7 +38,7 @@ export default defineConfig({
       // layer earns a higher floor by specifying more behavior, never by
       // touching branches to satisfy the number.
       thresholds: {
-        'src/*.ts': { statements: 98, branches: 96, functions: 99, lines: 98 },
+        'src/*.ts': { statements: 98, branches: 97, functions: 99, lines: 98 },
         'src/local/**': { statements: 98, branches: 93, functions: 99, lines: 98 },
         'src/tools/**': { statements: 98, branches: 95, functions: 99, lines: 99 },
         'src/client/sources/**': { statements: 96, branches: 94, functions: 97, lines: 97 },

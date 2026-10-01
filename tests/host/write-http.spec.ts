@@ -15,6 +15,7 @@ import {
   SERVER_MISMATCH_MESSAGE,
   TOOL_ABORTED_MESSAGE,
   WRITE_AUTH_DENIED_MESSAGE,
+  WRITE_AUTH_SHAPE_MESSAGE,
   WRITE_BATCH_REFUSED_MESSAGE,
   WRITE_CONFLICT_MESSAGE,
   WRITE_IDENTITY_MISSING_MESSAGE,
@@ -413,9 +414,18 @@ describe('write status translations', () => {
       ),
     )
     await expectZoteroError(
-      client.delete('users/0/tags', writeOptions()),
+      client.delete('users/0/tags', { ...writeOptions(), tagDeleteLimit: true }),
       ZOTERO_INVALID_ARGUMENT,
       writeTagDeleteLimitMessage(50, 'Cannot delete more than 50 tags at a time'),
+    )
+    // A 413 whose body carries no statement still names the limit alone.
+    mock.route('DELETE', '/api/users/0/tags/quiet', (_req, res, helpers) =>
+      helpers.raw(413, {}, ''),
+    )
+    await expectZoteroError(
+      client.delete('users/0/tags/quiet', { ...writeOptions(), tagDeleteLimit: true }),
+      ZOTERO_INVALID_ARGUMENT,
+      writeTagDeleteLimitMessage(50, ''),
     )
   })
 
@@ -633,6 +643,33 @@ describe('authorize', () => {
       ZOTERO_WRITE_RATE_LIMITED,
       writeRateLimitedMessage(12),
     )
+  })
+
+  it('joins the base URL correctly whether or not it carries the trailing slash', async () => {
+    const slashed = testWriteClient(`${mock.baseUrl}/`)
+    mock.route('POST', '/api/local/authorize', (_req, res, helpers) =>
+      helpers.raw(
+        200,
+        { 'Zotero-Server-ID': SERVER_ID },
+        JSON.stringify({ key: 'K'.repeat(32), remember: true }),
+      ),
+    )
+    await expect(
+      slashed.authorize('dsh (Zotero plugin)', { serverId: SERVER_ID }),
+    ).resolves.toEqual({ key: 'K'.repeat(32), remember: true })
+  })
+
+  it('rejects a grant whose key is missing or empty', async () => {
+    for (const body of [{ remember: true }, { key: '', remember: true }]) {
+      mock.route('POST', '/api/local/authorize', (_req, res, helpers) =>
+        helpers.raw(200, { 'Zotero-Server-ID': SERVER_ID }, JSON.stringify(body)),
+      )
+      await expectZoteroError(
+        client.authorize('dsh (Zotero plugin)', { serverId: SERVER_ID }),
+        ZOTERO_UNEXPECTED,
+        WRITE_AUTH_SHAPE_MESSAGE,
+      )
+    }
   })
 
   it('rejects a grant response without the serving instance id', async () => {

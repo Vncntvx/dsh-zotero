@@ -49,6 +49,11 @@ a fixture that drifted from reality would still pass every gate.
   suite's standard transport bounds; a spec passes only what it varies.
 - `tests/helpers/approval-stub.ts` — the one `approval` seam the write lanes
   compose (`StubApproval`, its request ledger, and the scripted outcome).
+- `tests/helpers/write-domain-fixtures.ts` — the write-domain specs' one home
+  for mock shape and constants: `itemJson`, `batchBody`/`batchHeaders`,
+  `writeDeps` (the full domain seam over a mock), `serveItemRead` (one item
+  read, parameterizable by key/data/body/serverId/version), `serveItemRead`'s
+  listing/authorize siblings, and `expectApplied`.
 - `tests/helpers/sync.ts` — `deferred()` / `progress()` for tests that need to
   wait on the code rather than on a duration.
 - `tests/helpers/fixtures-dir.ts` — the captured response bodies under

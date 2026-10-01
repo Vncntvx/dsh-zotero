@@ -115,6 +115,12 @@ describe('normalizeCreators', () => {
     expect(normalizeCreators({ creators: 'nope' })).toEqual([])
   })
 
+  it('skips rows that are not creator records instead of failing the item', () => {
+    expect(
+      normalizeCreators({ creators: [null, 42, { creatorType: 'author', name: 'Real' }] }),
+    ).toEqual([{ creatorType: 'author', name: 'Real' }])
+  })
+
   it('fills missing first or last names from the other field', () => {
     expect(normalizeCreators({ creators: [{ creatorType: 'author', lastName: 'Dao' }] })).toEqual([
       { creatorType: 'author', lastName: 'Dao' },

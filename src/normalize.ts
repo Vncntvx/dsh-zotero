@@ -275,11 +275,17 @@ export function formatCreatorsList(creators: readonly ZoteroCreator[]): string {
     .join('; ')
 }
 
-/** Extract a Citation Key from unstructured extra text if present. */
+/**
+ * Extract a citation key from unstructured extra text if present. One
+ * grammar serves every consumer — the `[@citekey]` display on search hits
+ * and the BibTeX/BibLaTeX alignment's first tier. The label matches
+ * case-insensitively as "Citation Key" or "citekey", and the value is the
+ * first token after the colon: a citation key is a single token, so any
+ * trailing prose on the same line is never part of it.
+ */
 export function citekeyOf(extra?: string): string | undefined {
   if (!extra) return undefined
-  const m = /(?:^|\n)Citation Key:\s*([^\r\n]+)/i.exec(extra)
-  const val = m?.[1]?.trim()
+  const val = /(?<![A-Za-z0-9_])(?:Citation Key|citekey):\s*([^\r\n\s,]+)/i.exec(extra)?.[1]
   return val !== undefined && val !== '' ? val : undefined
 }
 

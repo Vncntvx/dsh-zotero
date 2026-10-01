@@ -75,6 +75,16 @@ function serveCatalog(mock: MockZotero): void {
     ],
     { 'Zotero-Server-ID': SERVER_ID },
   )
+  // The sibling-name check pages the top level with an honest total.
+  serveJson(
+    mock,
+    '/api/users/0/collections/top',
+    [
+      { key: 'COLL1234', version: 3, data: { key: 'COLL1234', name: '方法论' } },
+      { key: COLLECTION_KEY, version: 4, data: { key: COLLECTION_KEY, name: 'Second' } },
+    ],
+    { 'Zotero-Server-ID': SERVER_ID, 'Total-Results': '2' },
+  )
 }
 
 beforeEach(() => {
@@ -337,6 +347,24 @@ describe('zotero_update_item', () => {
     expect(body).toEqual({ title: 'New title' })
     const patch = lane.mock.requests.find((request) => request.method === 'PATCH')
     expect(patch?.headers['if-unmodified-since-version']).toBe('10')
+
+    // The field set for one (instance, item type) is fetched once and
+    // memoized: the second update of the same type re-reads the item and
+    // re-patches, but never re-asks for the field list.
+    lane.mock.route('PATCH', `/api/users/0/items/${ITEM_KEY}`, (_req, res, helpers) => {
+      helpers.raw(204, { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '22' }, '')
+    })
+    expectValue(
+      await lane.runTool('zotero_update_item', {
+        ref: `zotero://user/0/item/${ITEM_KEY}`,
+        set: { title: 'Second title' },
+      }),
+      'zotero_update_item',
+    )
+    expect(
+      lane.mock.requests.filter((request) => request.pathname === '/api/itemTypeFields'),
+    ).toHaveLength(1)
+    expect(lane.mock.requests.filter((request) => request.method === 'PATCH')).toHaveLength(2)
   })
 })
 

@@ -18,22 +18,29 @@ import {
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
 import type { ResolvedConfig } from '../config.js'
-import {
-  WRITE_CHILD_COLLECTIONS_MESSAGE,
-  writeListTooLongMessage,
-  writeNoteTooLongMessage,
-} from '../errors.js'
+import { WRITE_CHILD_COLLECTIONS_MESSAGE, writeNoteTooLongMessage } from '../errors.js'
 import { isRefString } from '../refs.js'
 import { truncateText } from '../normalize.js'
-import { metaRecordOf, renderDeclined } from './present.js'
+import { renderDeclined } from './present.js'
+import {
+  COMMITTED_UNVERIFIED_VARIANT,
+  createWritePresentationMeta,
+  libraryVersionLine,
+  presentCreateResultView,
+  renderCommittedUnverified,
+} from './write-present.js'
 import {
   assertNonBlank,
+  assertWriteList,
   invalid,
   parseSupportedRef,
   parseWritableRef,
   WRITE_REF_ARG_HINT,
 } from './validate.js'
-import { WRITE_PLAN_OUTCOME_DESCRIPTION } from '../write-approval.js'
+import {
+  WRITE_COMMITTED_UNVERIFIED_DESCRIPTION,
+  WRITE_PLAN_OUTCOME_DESCRIPTION,
+} from '../write-approval.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroCreateNoteOutcome, ZoteroCreateNoteRequest } from '../types.js'
 
@@ -106,25 +113,7 @@ const CREATE_NOTE_OUTPUT_SCHEMA = {
         serverId: { type: 'string' },
       },
     },
-    {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        kind: { type: 'string', enum: ['committed-unverified'], required: true },
-        committed: { type: 'boolean', enum: [true], required: true },
-        retryable: { type: 'boolean', enum: [false], required: true },
-        reason: {
-          type: 'string',
-          enum: ['saved-state-unverified', 'commit-unknown'],
-          required: true,
-        },
-        ref: { type: 'string' },
-        key: { type: 'string' },
-        version: { type: 'integer' },
-        libraryVersion: { type: 'integer' },
-        serverId: { type: 'string', required: true },
-      },
-    },
+    COMMITTED_UNVERIFIED_VARIANT,
   ],
 } as const
 
@@ -170,22 +159,23 @@ function buildRequest(args: CreateNoteArgs, config: ResolvedConfig): ZoteroCreat
   if (args.markdown.length > config.writeNoteMaxChars) {
     invalid(writeNoteTooLongMessage(config.writeNoteMaxChars))
   }
-  const lists = [
-    ['collections', args.collections],
-    ['tags', args.tags],
-    ['sourceRefs', args.sourceRefs],
-  ] as const
-  for (const [name, list] of lists) {
-    if (list !== undefined && list.length > config.writeListMaxItems) {
-      invalid(writeListTooLongMessage(name, config.writeListMaxItems))
-    }
-  }
-  const collections = args.collections?.map((value) => {
-    const collection = assertNonBlank('collections', value)
-    if (isRefString(collection)) parseWritableRef(collection, ['collection'])
-    return collection
-  })
-  const tags = args.tags?.map((tag) => assertNonBlank('tags', tag))
+  // Bound and blank checks ride the shared assertWriteList; the ref parse
+  // below stays create-note's own (collections may arrive as names).
+  const collections =
+    args.collections === undefined
+      ? undefined
+      : assertWriteList('collections', args.collections, config.writeListMaxItems).map((value) => {
+          if (isRefString(value)) parseWritableRef(value, ['collection'])
+          return value
+        })
+  const tags =
+    args.tags === undefined
+      ? undefined
+      : assertWriteList('tags', args.tags, config.writeListMaxItems)
+  const sourceRefs =
+    args.sourceRefs === undefined
+      ? undefined
+      : assertWriteList('sourceRefs', args.sourceRefs, config.writeListMaxItems)
   const parentItem = args.parentItem
   // Same constant the write domain throws — dual-end, one wording.
   if (parentItem !== undefined && collections !== undefined && collections.length > 0) {
@@ -199,8 +189,8 @@ function buildRequest(args: CreateNoteArgs, config: ResolvedConfig): ZoteroCreat
     // without a collections key, which is what the domain applies.
     ...(collections !== undefined && collections.length > 0 ? { collections } : {}),
     ...(tags !== undefined ? { tags } : {}),
-    ...(args.sourceRefs !== undefined
-      ? { sourceRefs: args.sourceRefs.map((ref) => parseSupportedRef(ref, ['item'])) }
+    ...(sourceRefs !== undefined
+      ? { sourceRefs: sourceRefs.map((ref) => parseSupportedRef(ref, ['item'])) }
       : {}),
   }
 }
@@ -210,30 +200,14 @@ export function renderCreateNote(_args: CreateNoteArgs, value: CreateNoteOutput)
     return renderDeclined()
   }
   if (value.kind === 'committed-unverified') {
-    const identity =
-      value.key !== undefined
-        ? ` (key ${value.key})`
-        : value.ref !== undefined
-          ? ` (ref ${value.ref})`
-          : ''
-    const reconciliation =
-      value.key !== undefined || value.ref !== undefined
-        ? 'reconcile the note by its key/ref'
-        : 'reconcile by checking Zotero for the note before taking any further action'
-    const text =
-      value.reason === 'commit-unknown'
-        ? `Zotero may have committed the note${identity}, but the response did not prove the outcome. Do not retry; ${reconciliation}.`
-        : `Zotero committed the note${identity}, but its saved state could not be verified. Do not retry; ${reconciliation}.`
-    return [{ type: 'text', text }]
+    return renderCommittedUnverified(value, 'note', 'committed')
   }
   const lines = [`Created note ${value.ref} (version ${value.version}).`]
   if (value.parentItem !== undefined) lines.push(`Parent: ${value.parentItem}`)
   if (value.collections.length > 0) lines.push(`Collections: ${value.collections.join(', ')}`)
   if (value.tags.length > 0) lines.push(`Tags: ${value.tags.join(', ')}`)
   if (value.sourceRefs.length > 0) lines.push(`Sources: ${value.sourceRefs.join(', ')}`)
-  lines.push(
-    `Library version: ${value.libraryVersion}${value.serverId === undefined ? '' : ` (served by ${value.serverId})`}`,
-  )
+  lines.push(libraryVersionLine(value))
   return [{ type: 'text', text: lines.join('\n') }]
 }
 
@@ -241,22 +215,7 @@ function presentCreateNoteResult(
   _args: CreateNoteArgs,
   result: ToolResult,
 ): ToolResultView | undefined {
-  const record = metaRecordOf(result)
-  if (record === undefined) return undefined
-  if (record.kind === 'declined') {
-    return { card: 'generic', title: 'Zotero note: declined, nothing written' }
-  }
-  if (record.kind === 'committed-unverified') {
-    return {
-      card: 'generic',
-      title:
-        record.reason === 'commit-unknown'
-          ? 'Zotero note outcome unknown; do not retry'
-          : 'Zotero note committed but not verified; do not retry',
-    }
-  }
-  const ref = typeof record.ref === 'string' ? record.ref : ''
-  return { card: 'generic', title: `Zotero note created${ref === '' ? '' : `: ${ref}`}` }
+  return presentCreateResultView('note', 'committed', result)
 }
 
 export function registerCreateNoteTool(ctx: Context, service: ZoteroService): () => void {
@@ -266,26 +225,12 @@ export function registerCreateNoteTool(ctx: Context, service: ZoteroService): ()
       description:
         "Create a research note in the Zotero personal library — standalone, or a child note under a parent item — with tags, collections, and source relations. The markdown body is converted to Zotero note HTML under an escape-unknown grammar (raw HTML is escaped, never executed). Collections apply to standalone notes only; a child-note call that also passes non-empty collections is refused as ZOTERO_INVALID_ARGUMENT before any plan is shown (child notes inherit their parent item's collections). Zotero itself may show its authorization dialog on first use. " +
         WRITE_PLAN_OUTCOME_DESCRIPTION +
-        ' kind "committed-unverified" means the write must be treated as committed although its response could not be verified; do not retry, reconcile by key/ref when available.',
+        WRITE_COMMITTED_UNVERIFIED_DESCRIPTION,
       parameters: CREATE_NOTE_PARAMETERS,
       output: {
         schema: CREATE_NOTE_OUTPUT_SCHEMA,
         render: renderCreateNote,
-        presentationMeta: (_args, value): JsonValue =>
-          value.kind === 'applied'
-            ? {
-                kind: 'applied',
-                ref: value.ref,
-                key: value.key,
-                version: value.version,
-              }
-            : value.kind === 'committed-unverified'
-              ? {
-                  kind: 'committed-unverified',
-                  reason: value.reason,
-                  ...(value.key === undefined ? {} : { key: value.key }),
-                }
-              : { kind: 'declined' },
+        presentationMeta: (_args, value): JsonValue => createWritePresentationMeta(value),
       },
       presentCall: (args) => ({
         card: 'generic',

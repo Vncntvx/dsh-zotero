@@ -16,7 +16,7 @@ import {
   writeLibraryUnsupportedMessage,
   writeListTooLongMessage,
 } from '../../src/errors.js'
-import { nonBlankArgumentMessage } from '../../src/tools/validate.js'
+import { writeNonBlankMessage } from '../../src/errors.js'
 
 const ITEM_REF = 'zotero://user/0/item/ITEMABC1'
 const ADD_REF = 'zotero://user/0/collection/NEWCOLL1'
@@ -81,7 +81,7 @@ describe('zotero_update_item_collections argument refusals', () => {
   })
 
   it('refuses blank entries and group-library targets before any write', async () => {
-    expect(await refusal({ ref: ITEM_REF, add: ['   '] })).toContain(nonBlankArgumentMessage('add'))
+    expect(await refusal({ ref: ITEM_REF, add: ['   '] })).toContain(writeNonBlankMessage('add'))
     expect(
       await refusal({ ref: ITEM_REF, add: ['zotero://group/7/collection/OLDCOLL1'] }),
     ).toContain(writeLibraryUnsupportedMessage({ type: 'group', id: 7 }))

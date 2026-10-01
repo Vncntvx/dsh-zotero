@@ -19,6 +19,7 @@ import {
 } from '@deepseek-ai/dsh-tools'
 import { isRefString } from '../refs.js'
 import { metaRecordOf, renderDeclined } from './present.js'
+import { libraryVersionLine } from './write-present.js'
 import { assertNonBlank, parseWritableRef, WRITE_COLLECTION_REF_ARG_HINT } from './validate.js'
 import { WRITE_PLAN_OUTCOME_DESCRIPTION } from '../write-approval.js'
 import type { ZoteroService } from '../service.js'
@@ -140,10 +141,7 @@ export function renderDeleteCollection(
   return [
     {
       type: 'text',
-      text: [
-        `Deleted collection ${value.ref}.`,
-        `Library version: ${value.libraryVersion}${value.serverId === undefined ? '' : ` (served by ${value.serverId})`}`,
-      ].join('\n'),
+      text: [`Deleted collection ${value.ref}.`, libraryVersionLine(value)].join('\n'),
     },
   ]
 }

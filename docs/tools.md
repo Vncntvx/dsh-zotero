@@ -35,7 +35,7 @@ dsh-zotero 注册 16 个工具（8 个读工具 + 8 个写工具），通过本�
 
 ### 输出
 
-返回对象包含：`scope`、`items`（包含 ref、title、creatorSummary、year、itemType、parentRef、bestAttachmentRef、bestAttachmentType、attachmentSize、extra）、`total`、`offset`、`returned`、`nextOffset`，以及可选的 `supplemental`（包含笔记命中内容 `{kind:"noteBody", items, scanned, truncated}`）。在卡片呈现中，若 `extra` 包含 Citation Key，会以 `[@citekey]` 形式显示。
+返回对象包含：`scope`、`items`（包含 ref、title、creatorSummary、year、itemType、parentRef、bestAttachmentRef、bestAttachmentType、attachmentSize、extra）、`total`、`offset`、`returned`、`nextOffset`，以及可选的 `supplemental`（包含笔记命中内容 `{kind:"noteBody", items, scanned, truncated}`）。在卡片呈现中，若 `extra` 携带 Citation Key（大小写不敏感，含 `citekey` 别名，与导出对齐共用同一语法，取冒号后的首个 token），会以 `[@citekey]` 形式显示。
 
 ### 说明
 
@@ -479,7 +479,7 @@ zotero_update_item(ref="zotero://user/0/item/ABCD1234", set={"title": "Attention
 
 ## zotero_delete_library_tags
 
-按名称在**全库范围**删除标签。**不可逆**：标签会从文献库中的每个条目上移除。计划卡先列出每个标签的条目数（读取失败时显示 `unknown items`），删除携带前置读到的库版本；未命中的名称被静默忽略，因此重试是幂等的。
+按名称在**全库范围**删除标签。**不可逆**：标签会从文献库中的每个条目上移除。计划卡先翻页扫描**整个**标签列表，再列出每个标签的条目数：列表携带该标签但未给计数时显示 `unknown items`；整个列表都未出现的名称才会被列为「确证无效（proven no-ops）」——因此绝不会把第一页之外的标签误判为无效。读取失败时各项显示 `unknown items`，删除仍携带前置读到的库版本；未命中的名称被 Zotero 静默跳过，因此重试是幂等的。
 
 ### 参数
 

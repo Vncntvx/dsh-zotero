@@ -18,7 +18,7 @@ import {
   Q_MATCH_SCOPE_MESSAGE,
   libraryNotAllowedMessage,
 } from '../../src/local/browse-domain.js'
-import { nonBlankArgumentMessage } from '../../src/tools/validate.js'
+import { writeNonBlankMessage } from '../../src/errors.js'
 import { expectValue } from '../helpers/lanes/host-lane.js'
 import { MockZotero } from '../helpers/mock-zotero.js'
 
@@ -322,7 +322,7 @@ describe('registry integration: browse render exposes structured fields', () => 
   it('rejects a whitespace-only q instead of silently dropping match', async () => {
     const result = await run('zotero_browse', { kind: 'tags', q: '   ', match: 'startsWith' })
     expect(result.isError).toBe(true)
-    expect((result.content[0] as { text: string }).text).toContain(nonBlankArgumentMessage('q'))
+    expect((result.content[0] as { text: string }).text).toContain(writeNonBlankMessage('q'))
     expect(mock.requests.filter((entry) => entry.pathname === '/api/users/0/tags')).toEqual([])
   })
 })

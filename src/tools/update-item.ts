@@ -19,14 +19,15 @@ import {
 } from '@deepseek-ai/dsh-tools'
 import { writeListEmptyMessage, writeNonBlankMessage } from '../errors.js'
 import { metaRecordOf, renderDeclined } from './present.js'
+import { libraryVersionLine } from './write-present.js'
 import { invalid, parseWritableRef, WRITE_REF_ARG_HINT } from './validate.js'
+import { requireUpdatableField } from '../write-item-rules.js'
 import { WRITE_PLAN_OUTCOME_DESCRIPTION } from '../write-approval.js'
 import type { ZoteroService } from '../service.js'
-import {
-  ZOTERO_UPDATABLE_ITEM_FIELDS,
-  type ZoteroUpdateItemOutcome,
-  type ZoteroUpdateItemRequest,
-  type ZoteroUpdatableItemField,
+import type {
+  ZoteroUpdateItemOutcome,
+  ZoteroUpdateItemRequest,
+  ZoteroUpdatableItemField,
 } from '../types.js'
 
 const UPDATE_ITEM_PARAMETERS = {
@@ -99,11 +100,7 @@ function buildRequest(args: UpdateItemArgs): ZoteroUpdateItemRequest {
   if (entries.length === 0) invalid(writeListEmptyMessage('set'))
   const updates: Partial<Record<ZoteroUpdatableItemField, string>> = {}
   for (const [field, value] of entries) {
-    if (!(ZOTERO_UPDATABLE_ITEM_FIELDS as readonly string[]).includes(field)) {
-      invalid(
-        `"${field}" is not an updatable field; updatable fields are ${ZOTERO_UPDATABLE_ITEM_FIELDS.join(', ')}.`,
-      )
-    }
+    requireUpdatableField(field)
     if (typeof value !== 'string' || value.trim() === '') {
       invalid(writeNonBlankMessage(`set.${field}`))
     }
@@ -124,7 +121,7 @@ export function renderUpdateItem(_args: UpdateItemArgs, value: UpdateItemOutput)
       type: 'text',
       text: [
         `Updated ${value.ref} (version ${value.version}); changed ${value.changed.join(', ')}.`,
-        `Library version: ${value.libraryVersion}${value.serverId === undefined ? '' : ` (served by ${value.serverId})`}`,
+        libraryVersionLine(value),
       ].join('\n'),
     },
   ]

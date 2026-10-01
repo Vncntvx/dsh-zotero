@@ -486,11 +486,13 @@ export interface ZoteroExportRequest {
 /**
  * One exported document inside a translator-format export, keyed to its ref
  * and located within the merged body. The provider locates each ref's entry
- * in the batch body in memory — BibTeX/BibLaTeX by citation key, whole-token
- * mention, or unambiguous 1×1 positional fallback; RIS by record id; CSL
- * JSON by bare id or trailing `/<key>` URI suffix — so the browser never
- * guesses which entry belongs to which ref. The merged body's entry order
- * belongs to Zotero, and citation keys are generated in the export context.
+ * in the batch body in memory — BibTeX/BibLaTeX by the `extra` citation key,
+ * the entry's own citation key, DOI, normalized title (disambiguated by year
+ * and first author), or whole-token item-key mention; RIS by record id; CSL
+ * JSON by bare id or trailing `/<key>` URI suffix — and a ref it cannot
+ * prove stays unlocated, never positionally guessed. The merged body's entry
+ * order belongs to Zotero, and citation keys are generated in the export
+ * context.
  */
 export interface ZoteroExportItem {
   /** The formatted `zotero://` ref the entry was exported for. */
@@ -838,12 +840,17 @@ export interface ZoteroCreateNoteResult {
 }
 
 /**
- * A note write that must be treated as committed for retry safety, although
- * Zotero's response could not prove the complete saved state. This is
- * deliberately not an ordinary retryable error: retrying can create a
- * duplicate note. Reconcile by the returned key/ref when one is available.
+ * A create (note, item, or collection) that must be treated as committed for
+ * retry safety, although Zotero's response could not prove the complete saved
+ * state. This is deliberately not an ordinary retryable error: retrying can
+ * create a duplicate object. Reconcile by the returned key/ref when one is
+ * available.
+ *
+ * One shape serves all three creates on purpose: the kind of object created
+ * shows in the ref (item refs for notes and items, collection refs for
+ * collections), and the retry-safety contract must not drift between them.
  */
-export interface ZoteroCreateNoteCommittedUnverified {
+export interface ZoteroWriteCommittedUnverified {
   kind: 'committed-unverified'
   /** The caller must not retry; for `commit-unknown` this is conservative. */
   committed: true
@@ -931,23 +938,6 @@ export interface ZoteroCreateCollectionResult {
   serverId?: string
 }
 
-/**
- * A collection write that must be treated as committed for retry safety,
- * although Zotero's response could not prove the complete saved state.
- * Never retry; reconcile by key/ref when available.
- */
-export interface ZoteroCreateCollectionCommittedUnverified {
-  kind: 'committed-unverified'
-  committed: true
-  retryable: false
-  reason: 'saved-state-unverified' | 'commit-unknown'
-  ref?: string
-  key?: string
-  version?: number
-  libraryVersion?: number
-  serverId: string
-}
-
 export interface ZoteroDeleteCollectionRequest {
   /** The collection to delete, as a ref or an exact name. */
   collection: string
@@ -977,13 +967,6 @@ export const ZOTERO_CREATABLE_ITEM_TYPES = [
 
 export type ZoteroCreatableItemType = (typeof ZOTERO_CREATABLE_ITEM_TYPES)[number]
 
-export interface ZoteroCreateItemCreator {
-  creatorType: string
-  name?: string
-  firstName?: string
-  lastName?: string
-}
-
 export interface ZoteroCreateItemRequest {
   itemType: ZoteroCreatableItemType
   title?: string
@@ -992,7 +975,7 @@ export interface ZoteroCreateItemRequest {
   doi?: string
   abstractNote?: string
   publicationTitle?: string
-  creators?: ZoteroCreateItemCreator[]
+  creators?: ZoteroCreator[]
 }
 
 export interface ZoteroCreateItemResult {
@@ -1006,23 +989,6 @@ export interface ZoteroCreateItemResult {
   /** The library version the write advanced the library to. */
   libraryVersion: number
   serverId?: string
-}
-
-/**
- * An item write that must be treated as committed for retry safety,
- * although Zotero's response could not prove the complete saved state.
- * Never retry; reconcile by key/ref when available.
- */
-export interface ZoteroCreateItemCommittedUnverified {
-  kind: 'committed-unverified'
-  committed: true
-  retryable: false
-  reason: 'saved-state-unverified' | 'commit-unknown'
-  ref?: string
-  key?: string
-  version?: number
-  libraryVersion?: number
-  serverId: string
 }
 
 /** Scalar fields `zotero_update_item` may set (closed set). */
@@ -1107,19 +1073,19 @@ export interface ZoteroWriteDeclined {
 }
 
 export type ZoteroCreateNoteCommittedOutcome =
-  ZoteroCreateNoteResult | ZoteroCreateNoteCommittedUnverified
+  ZoteroCreateNoteResult | ZoteroWriteCommittedUnverified
 
 export type ZoteroCreateNoteOutcome = ZoteroCreateNoteCommittedOutcome | ZoteroWriteDeclined
 export type ZoteroUpdateItemTagsOutcome = ZoteroUpdateItemTagsResult | ZoteroWriteDeclined
 export type ZoteroUpdateItemCollectionsOutcome =
   ZoteroUpdateItemCollectionsResult | ZoteroWriteDeclined
 export type ZoteroCreateCollectionCommittedOutcome =
-  ZoteroCreateCollectionResult | ZoteroCreateCollectionCommittedUnverified
+  ZoteroCreateCollectionResult | ZoteroWriteCommittedUnverified
 export type ZoteroCreateCollectionOutcome =
   ZoteroCreateCollectionCommittedOutcome | ZoteroWriteDeclined
 export type ZoteroDeleteCollectionOutcome = ZoteroDeleteCollectionResult | ZoteroWriteDeclined
 export type ZoteroCreateItemCommittedOutcome =
-  ZoteroCreateItemResult | ZoteroCreateItemCommittedUnverified
+  ZoteroCreateItemResult | ZoteroWriteCommittedUnverified
 export type ZoteroCreateItemOutcome = ZoteroCreateItemCommittedOutcome | ZoteroWriteDeclined
 export type ZoteroUpdateItemOutcome = ZoteroUpdateItemResult | ZoteroWriteDeclined
 export type ZoteroDeleteLibraryTagsOutcome = ZoteroDeleteLibraryTagsResult | ZoteroWriteDeclined

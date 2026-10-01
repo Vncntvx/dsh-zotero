@@ -9,7 +9,7 @@
  *    The user approves the exact plan markdown the domain will apply.
  *
  * The gate lives here, not in a tool, because the service is the only door to
- * the write domain: every in-process caller (the three write tools, and any
+ * the write domain: every in-process caller (the write tools, and any
  * consumer that resolves `ctx.zotero`) passes through `ZoteroService`'s write
  * methods. Argument validation still runs in the caller first, so a malformed
  * call never bothers the user with an approval for a call that cannot run.
@@ -70,6 +70,13 @@ export const WRITE_PLAN_QUESTION_ID = 'zotero-write-plan'
  */
 export const WRITE_PLAN_OUTCOME_DESCRIPTION =
   'Every write first passes the session approval policy (a "never" session auto-rejects) and then shows a plan the user approves — neither confirmation is configurable; kind "declined" means the write was not approved and nothing was written — do not retry unasked.'
+
+/**
+ * Appended by every tool that can report a committed-unverified outcome, so
+ * the do-not-retry contract is stated once and cannot drift between tools.
+ */
+export const WRITE_COMMITTED_UNVERIFIED_DESCRIPTION =
+  ' kind "committed-unverified" means the write must be treated as committed although its response could not be verified; do not retry, reconcile by key/ref when available.'
 
 /** The single reason string every write approval request logs. */
 function writeApprovalReason(call: ZoteroWriteCall): string {

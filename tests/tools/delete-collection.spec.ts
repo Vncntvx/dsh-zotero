@@ -14,7 +14,7 @@ import {
   writeLibraryUnsupportedMessage,
 } from '../../src/errors.js'
 import { deleteCollectionPlan } from '../../src/tools/delete-collection.js'
-import { nonBlankArgumentMessage } from '../../src/tools/validate.js'
+import { writeNonBlankMessage } from '../../src/errors.js'
 
 const COLLECTION_REF = 'zotero://user/0/collection/ABCD1234'
 const SERVER_ID = 'srv-delete-collection-1'
@@ -57,7 +57,7 @@ const deletes = (requests: readonly { method: string }[]): readonly { method: st
 
 describe('zotero_delete_collection argument refusals', () => {
   it('refuses a blank target and a group-library ref', async () => {
-    expect(await refusal({ collection: '  ' })).toContain(nonBlankArgumentMessage('collection'))
+    expect(await refusal({ collection: '  ' })).toContain(writeNonBlankMessage('collection'))
     expect(await refusal({ collection: 'zotero://group/7/collection/ABCD1234' })).toContain(
       writeLibraryUnsupportedMessage({ type: 'group', id: 7 }),
     )

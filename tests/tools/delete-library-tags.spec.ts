@@ -15,7 +15,7 @@ import {
   writeListEmptyMessage,
   writeListTooLongMessage,
 } from '../../src/errors.js'
-import { nonBlankArgumentMessage } from '../../src/tools/validate.js'
+import { writeNonBlankMessage } from '../../src/errors.js'
 
 const SERVER_ID = 'srv-delete-tags-1'
 
@@ -65,17 +65,43 @@ describe('zotero_delete_library_tags argument refusals', () => {
   })
 
   it('refuses blank tag names', async () => {
-    expect(await refusal({ tags: ['   '] })).toContain(nonBlankArgumentMessage('tags'))
+    expect(await refusal({ tags: ['   '] })).toContain(writeNonBlankMessage('tags'))
     expect(deletes(lane.mock.requests)).toHaveLength(0)
   })
 })
 
 describe('zotero_delete_library_tags preview', () => {
-  it('counts what the listing carries, treats a countless row as zero, and names what it never saw', async () => {
-    // The preview listing: one row without a count, one with, and the request
-    // also names a tag the listing does not carry — the plan has to say so
-    // before the irreversible delete, and a failed gate must still send no
-    // DELETE.
+  // The plan card's rendering of these facts is pinned in
+  // write-item-presentation.spec; this lane carries no user-questions seam
+  // (the gate fails closed before the card), so the preview is observed
+  // through the listing reads it actually sends.
+
+  it('pages the listing until every requested name is found, so a page-two tag is never a false no-op', async () => {
+    // Page 1 carries only an unrelated tag; page 2 carries the requested one.
+    // maxBrowseResults is 50, so a second page request proves the loop walks.
+    lane.mock.route('GET', '/api/users/0/items/top/tags', (_req, res, helpers, params) => {
+      const rows =
+        Number(params.get('offset') ?? '0') === 0
+          ? [{ tag: 'unrelated', numItems: 1 }]
+          : [{ tag: 'methods', numItems: 7 }]
+      helpers.json(rows, {
+        'Total-Results': '2',
+        'Zotero-Server-ID': SERVER_ID,
+      })
+    })
+    const result = await lane.runTool('zotero_delete_library_tags', { tags: ['methods'] })
+    expect(result.isError).toBe(true)
+    expect((result.content[0] as { text: string }).text).toContain(
+      WRITE_APPROVAL_UNAVAILABLE_MESSAGE,
+    )
+    const listings = lane.mock.requests.filter((r) => r.pathname === '/api/users/0/items/top/tags')
+    // At least two listing reads: the loop walked to the page that proved the
+    // tag instead of reporting it as absent from the first page.
+    expect(listings.length).toBeGreaterThanOrEqual(2)
+    expect(deletes(lane.mock.requests)).toHaveLength(0)
+  })
+
+  it('shows a countless row as unknown items and, only after exhausting the listing, names proven no-ops', async () => {
     serveJson(
       lane.mock,
       '/api/users/0/items/top/tags',
@@ -83,15 +109,27 @@ describe('zotero_delete_library_tags preview', () => {
       { 'Total-Results': '2', 'Zotero-Server-ID': SERVER_ID },
     )
     const result = await lane.runTool('zotero_delete_library_tags', {
-      tags: ['methods', 'ghost'],
+      tags: ['methods', 'legacy', 'ghost'],
     })
     expect(result.isError).toBe(true)
     expect((result.content[0] as { text: string }).text).toContain(
       WRITE_APPROVAL_UNAVAILABLE_MESSAGE,
     )
-    const preview = lane.mock.requests.find((r) => r.pathname === '/api/users/0/items/top/tags')
-    expect(preview).toBeDefined()
     expect(deletes(lane.mock.requests)).toHaveLength(0)
+  })
+
+  it('stops paging once every requested name has been found', async () => {
+    // The listing reports more pages, but page 1 already names everything the
+    // call asked for — the preview must not walk the rest.
+    lane.mock.route('GET', '/api/users/0/items/top/tags', (_req, res, helpers) => {
+      helpers.json([{ tag: 'methods', numItems: 7 }], {
+        'Total-Results': '120',
+        'Zotero-Server-ID': SERVER_ID,
+      })
+    })
+    await lane.runTool('zotero_delete_library_tags', { tags: ['methods'] })
+    const listings = lane.mock.requests.filter((r) => r.pathname === '/api/users/0/items/top/tags')
+    expect(listings).toHaveLength(1)
   })
 })
 

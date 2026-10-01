@@ -23,10 +23,10 @@ import {
   Q_MATCH_SCOPE_MESSAGE,
   libraryNotAllowedMessage,
 } from '../../src/local/browse-domain.js'
+import { writeNonBlankMessage } from '../../src/errors.js'
 import {
   GROUP_ID_MESSAGE,
   intRangeArgumentMessage,
-  nonBlankArgumentMessage,
   PERSONAL_LIBRARY_MESSAGE,
 } from '../../src/tools/validate.js'
 import { type HostLane, setupHostLane } from '../helpers/lanes/host-lane.js'
@@ -76,14 +76,14 @@ describe('zotero_browse validation', () => {
       // match is only meaningful alongside q
       { args: { kind: 'tags', match: 'contains' }, contains: MATCH_REQUIRES_Q_MESSAGE },
       // blank free text is invalid wherever it is meaningful
-      { args: { kind: 'tags', q: '   ' }, contains: nonBlankArgumentMessage('q') },
+      { args: { kind: 'tags', q: '   ' }, contains: writeNonBlankMessage('q') },
       {
         args: { kind: 'tags', tagScope: 'library', itemQuery: '  ' },
-        contains: nonBlankArgumentMessage('itemQuery'),
+        contains: writeNonBlankMessage('itemQuery'),
       },
       {
         args: { kind: 'tags', tagScope: 'collection', tagCollection: ' ' },
-        contains: nonBlankArgumentMessage('tagCollection'),
+        contains: writeNonBlankMessage('tagCollection'),
       },
       // the global kinds refuse a library parameter
       {

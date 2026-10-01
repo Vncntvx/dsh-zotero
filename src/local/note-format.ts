@@ -43,8 +43,7 @@ function escapeHtml(text: string): string {
     .replaceAll("'", '&#39;')
 }
 
-const INLINE_MATH_PATTERN =
-  /(?<!\\|\$)\$(?!\s)((?:[^$\n\x00]|\\\$)+?)(?<!\\|\s)\$(?!\d|\$)/g
+const INLINE_MATH_PATTERN = /(?<!\\|\$)\$(?!\s)((?:[^$\n\x00]|\\\$)+?)(?<!\\|\s)\$(?!\d|\$)/g
 const HIGHLIGHT_PATTERN = /(?<!=)==(?!=|\s)((?:[^=\n]|=(?!=))+?)(?<!\s)==(?!=)/g
 const CODE_RESTORE_PATTERN = /\x00CODE(\d+)\x00/g
 const MATH_RESTORE_PATTERN = /\x00MATH(\d+)\x00/g

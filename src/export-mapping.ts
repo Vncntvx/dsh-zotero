@@ -11,10 +11,9 @@
 
 import { bibtexFieldOf, parseExportItem } from './export-items.js'
 import { asRecord, asString } from './json.js'
+import { citekeyOf } from './normalize.js'
 import { formatRef } from './refs.js'
 import type { ZoteroExportFormat, ZoteroObjectRef } from './types.js'
-
-export { bibtexFieldOf } from './export-items.js'
 
 /** One located entry of a translator export body. */
 export interface BatchEntry {
@@ -220,9 +219,11 @@ export function normalizeDoiForAlignment(doi: string | undefined): string | unde
 export function normalizeAuthorForAlignment(author: string | undefined): string | undefined {
   if (author === undefined) return undefined
   const firstAuthor = author.split(/\s+and\s+/i)[0]!
+  // `split` on a non-empty string always yields at least one element, so
+  // `pop()` here is always defined.
   const namePart = firstAuthor.includes(',')
     ? firstAuthor.split(',')[0]!
-    : (firstAuthor.split(/\s+/).pop() ?? firstAuthor)
+    : firstAuthor.split(/\s+/).pop()!
   const stripped = namePart
     .replace(/[{}]/g, '')
     .toLowerCase()
@@ -258,6 +259,8 @@ interface EntryFingerprint {
   readonly doiClean?: string
   readonly yearClean?: string
   readonly authorClean?: string
+  /** Alphanumeric tokens of the entry text, for the whole-token mention tier. */
+  readonly tokens: ReadonlySet<string>
 }
 
 /**
@@ -292,7 +295,6 @@ export function alignBibtexEntries(
     const creators = Array.isArray(data?.['creators']) ? data!['creators'] : []
     const firstCreator = asRecord(creators[0])
     const authorName = asString(firstCreator?.['lastName'] ?? firstCreator?.['name'])
-    const extraCiteKey = extra?.match(/(?:Citation Key|citekey):\s*([^\r\n\s,]+)/i)?.[1]
     return {
       ref,
       formattedRef: formatRef(ref),
@@ -301,7 +303,7 @@ export function alignBibtexEntries(
       doiClean: normalizeDoiForAlignment(doi),
       yearClean: normalizeYearForAlignment(date),
       authorClean: normalizeAuthorForAlignment(authorName),
-      extraCiteKey,
+      extraCiteKey: citekeyOf(extra),
     }
   })
 
@@ -319,6 +321,11 @@ export function alignBibtexEntries(
       doiClean: normalizeDoiForAlignment(doi),
       yearClean: normalizeYearForAlignment(date),
       authorClean: normalizeAuthorForAlignment(author),
+      // Whole-token mention lookup: ref keys are `[A-Z0-9]{8}` by the ref
+      // grammar (ref-grammar.ts REF_KEY_SOURCE), so a token-set probe is
+      // exactly the `\b<key>\b` test — underscores remain word characters,
+      // just as they do for `\b` — and no regex built per pair.
+      tokens: new Set(entry.text.split(/[^A-Za-z0-9_]+/)),
     }
   })
 
@@ -374,7 +381,7 @@ export function alignBibtexEntries(
   claimUniqueMatch((r, e) => e.citeKey === r.key)
 
   // Tier 6: Whole-token mention inside entry body (e.g. note or URL contains the 8-char itemKey)
-  claimUniqueMatch((r, e) => new RegExp(`\\b${r.key}\\b`).test(e.entry.text))
+  claimUniqueMatch((r, e) => e.tokens.has(r.key))
 
   // Final assembly: NEVER use positional guessing. Unmatched refs stay unlocated.
   return refFingerprints.map((r, rIdx) => {

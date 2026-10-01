@@ -17,12 +17,11 @@ import {
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
 import type { ResolvedConfig } from '../config.js'
-import { WRITE_LIST_SELECTION_MESSAGE, writeListTooLongMessage } from '../errors.js'
 import { isRefString } from '../refs.js'
 import { metaRecordOf, renderDeclined } from './present.js'
+import { libraryVersionLine, listUpdatePresentationMeta } from './write-present.js'
 import {
-  assertWriteList,
-  invalid,
+  assertAddRemoveSelection,
   parseWritableRef,
   WRITE_COLLECTION_REF_ARG_HINT,
   WRITE_REF_ARG_HINT,
@@ -108,16 +107,7 @@ function buildRequest(
   args: UpdateItemCollectionsArgs,
   config: ResolvedConfig,
 ): ZoteroUpdateItemCollectionsRequest {
-  const add =
-    args.add === undefined ? [] : assertWriteList('add', args.add, config.writeListMaxItems)
-  const remove =
-    args.remove === undefined
-      ? []
-      : assertWriteList('remove', args.remove, config.writeListMaxItems)
-  if (add.length + remove.length === 0) invalid(WRITE_LIST_SELECTION_MESSAGE)
-  if (add.length + remove.length > config.writeListMaxItems) {
-    invalid(writeListTooLongMessage('add and remove', config.writeListMaxItems))
-  }
+  const { add, remove } = assertAddRemoveSelection(args, config.writeListMaxItems)
   for (const collection of [...add, ...remove]) {
     if (isRefString(collection)) parseWritableRef(collection, ['collection'])
   }
@@ -145,7 +135,7 @@ export function renderUpdateItemCollections(
   )
   if (value.libraryVersion !== undefined) {
     lines.push(
-      `Library version: ${value.libraryVersion}${value.serverId === undefined ? '' : ` (served by ${value.serverId})`}`,
+      libraryVersionLine({ libraryVersion: value.libraryVersion, serverId: value.serverId }),
     )
   }
   return [{ type: 'text', text: lines.join('\n') }]
@@ -178,16 +168,7 @@ export function registerUpdateItemCollectionsTool(
       output: {
         schema: UPDATE_ITEM_COLLECTIONS_OUTPUT_SCHEMA,
         render: renderUpdateItemCollections,
-        presentationMeta: (_args, value): JsonValue =>
-          value.kind === 'applied'
-            ? {
-                kind: 'applied',
-                ref: value.ref,
-                version: value.version,
-                addedCount: value.added.length,
-                removedCount: value.removed.length,
-              }
-            : { kind: 'declined' },
+        presentationMeta: (_args, value): JsonValue => listUpdatePresentationMeta(value),
       },
       presentCall: (args) => ({
         card: 'generic',

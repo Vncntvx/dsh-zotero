@@ -5,7 +5,13 @@
  * @module dsh-zotero/tools/validate
  */
 
-import { ZOTERO_INVALID_ARGUMENT, writeListTooLongMessage, ZoteroError } from '../errors.js'
+import {
+  WRITE_LIST_SELECTION_MESSAGE,
+  ZOTERO_INVALID_ARGUMENT,
+  writeListTooLongMessage,
+  writeNonBlankMessage,
+  ZoteroError,
+} from '../errors.js'
 import { parseRef, requireSupportedLocalRef, requireWritableRef } from '../refs.js'
 import type { ZoteroKind, ZoteroObjectRef, SupportedLocalLibrary } from '../types.js'
 
@@ -21,11 +27,6 @@ export const WRITE_COLLECTION_REF_ARG_HINT = 'zotero://user/0/collection/<KEY>'
 /** Throw an argument error; the message is model-facing. */
 export function invalid(message: string): never {
   throw new ZoteroError(message, ZOTERO_INVALID_ARGUMENT)
-}
-
-/** The model-facing message for a blank free-text argument, naming what to fix. */
-export function nonBlankArgumentMessage(name: string): string {
-  return `${name} must be a non-empty string when provided`
 }
 
 /** The model-facing message for an integer argument outside `[min, max]`. */
@@ -50,7 +51,7 @@ export function intRangeArgumentMessage(
  */
 export function assertNonBlank(name: string, value: string): string {
   const trimmed = value.trim()
-  if (trimmed === '') invalid(nonBlankArgumentMessage(name))
+  if (trimmed === '') invalid(writeNonBlankMessage(name))
   return trimmed
 }
 
@@ -97,6 +98,25 @@ export function parseSupportedRef(value: string, kinds?: readonly ZoteroKind[]):
  */
 export function parseWritableRef(value: string, kinds: readonly ZoteroKind[]): ZoteroObjectRef {
   return requireWritableRef(parseRef(value), kinds)
+}
+
+/**
+ * Assert an update tool's add/remove selection: both lists fit their bound
+ * and carry no blank entries, the combined selection actually changes
+ * something, and the combined length stays within the bound one call may
+ * carry. The write domain enforces the same rules on its normalized lists.
+ */
+export function assertAddRemoveSelection(
+  args: { add?: readonly string[]; remove?: readonly string[] },
+  maxItems: number,
+): { add: string[]; remove: string[] } {
+  const add = args.add === undefined ? [] : assertWriteList('add', args.add, maxItems)
+  const remove = args.remove === undefined ? [] : assertWriteList('remove', args.remove, maxItems)
+  if (add.length + remove.length === 0) invalid(WRITE_LIST_SELECTION_MESSAGE)
+  if (add.length + remove.length > maxItems) {
+    invalid(writeListTooLongMessage('add and remove', maxItems))
+  }
+  return { add, remove }
 }
 
 /**

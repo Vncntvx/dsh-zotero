@@ -16,14 +16,24 @@ import {
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
 import { isRefString } from '../refs.js'
-import { metaRecordOf, renderDeclined } from './present.js'
+import { renderDeclined } from './present.js'
+import {
+  COMMITTED_UNVERIFIED_VARIANT,
+  createWritePresentationMeta,
+  libraryVersionLine,
+  presentCreateResultView,
+  renderCommittedUnverified,
+} from './write-present.js'
 import {
   assertNonBlank,
   invalid,
   parseWritableRef,
   WRITE_COLLECTION_REF_ARG_HINT,
 } from './validate.js'
-import { WRITE_PLAN_OUTCOME_DESCRIPTION } from '../write-approval.js'
+import {
+  WRITE_COMMITTED_UNVERIFIED_DESCRIPTION,
+  WRITE_PLAN_OUTCOME_DESCRIPTION,
+} from '../write-approval.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroCreateCollectionOutcome, ZoteroCreateCollectionRequest } from '../types.js'
 
@@ -65,25 +75,7 @@ const CREATE_COLLECTION_OUTPUT_SCHEMA = {
         serverId: { type: 'string' },
       },
     },
-    {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        kind: { type: 'string', enum: ['committed-unverified'], required: true },
-        committed: { type: 'boolean', enum: [true], required: true },
-        retryable: { type: 'boolean', enum: [false], required: true },
-        reason: {
-          type: 'string',
-          enum: ['saved-state-unverified', 'commit-unknown'],
-          required: true,
-        },
-        ref: { type: 'string' },
-        key: { type: 'string' },
-        version: { type: 'integer' },
-        libraryVersion: { type: 'integer' },
-        serverId: { type: 'string', required: true },
-      },
-    },
+    COMMITTED_UNVERIFIED_VARIANT,
   ],
 } as const
 
@@ -121,27 +113,11 @@ export function renderCreateCollection(
     return renderDeclined()
   }
   if (value.kind === 'committed-unverified') {
-    const identity =
-      value.key !== undefined
-        ? ` (key ${value.key})`
-        : value.ref !== undefined
-          ? ` (ref ${value.ref})`
-          : ''
-    const reconciliation =
-      value.key !== undefined || value.ref !== undefined
-        ? 'reconcile the collection by its key/ref'
-        : 'reconcile by checking Zotero for the collection before taking any further action'
-    const text =
-      value.reason === 'commit-unknown'
-        ? `Zotero may have created the collection${identity}, but the response did not prove the outcome. Do not retry; ${reconciliation}.`
-        : `Zotero created the collection${identity}, but its saved state could not be verified. Do not retry; ${reconciliation}.`
-    return [{ type: 'text', text }]
+    return renderCommittedUnverified(value, 'collection', 'created')
   }
   const lines = [`Created collection ${value.ref} (version ${value.version}): ${value.name}.`]
   if (value.parentRef !== undefined) lines.push(`Parent: ${value.parentRef}`)
-  lines.push(
-    `Library version: ${value.libraryVersion}${value.serverId === undefined ? '' : ` (served by ${value.serverId})`}`,
-  )
+  lines.push(libraryVersionLine(value))
   return [{ type: 'text', text: lines.join('\n') }]
 }
 
@@ -149,22 +125,7 @@ function presentCreateCollectionResult(
   _args: CreateCollectionArgs,
   result: ToolResult,
 ): ToolResultView | undefined {
-  const record = metaRecordOf(result)
-  if (record === undefined) return undefined
-  if (record.kind === 'declined') {
-    return { card: 'generic', title: 'Zotero collection: declined, nothing written' }
-  }
-  if (record.kind === 'committed-unverified') {
-    return {
-      card: 'generic',
-      title:
-        record.reason === 'commit-unknown'
-          ? 'Zotero collection outcome unknown; do not retry'
-          : 'Zotero collection created but not verified; do not retry',
-    }
-  }
-  const ref = typeof record.ref === 'string' ? record.ref : ''
-  return { card: 'generic', title: `Zotero collection created${ref === '' ? '' : `: ${ref}`}` }
+  return presentCreateResultView('collection', 'created', result)
 }
 
 export function registerCreateCollectionTool(ctx: Context, service: ZoteroService): () => void {
@@ -174,21 +135,12 @@ export function registerCreateCollectionTool(ctx: Context, service: ZoteroServic
       description:
         'Create a collection in the Zotero personal library, optionally under a parent (ref or exact name). A sibling collection that already carries the name refuses the write before any POST, so work with the existing ref instead. Zotero itself may show its authorization dialog on first use. ' +
         WRITE_PLAN_OUTCOME_DESCRIPTION +
-        ' kind "committed-unverified" means the write must be treated as committed although its response could not be verified; do not retry, reconcile by key/ref when available.',
+        WRITE_COMMITTED_UNVERIFIED_DESCRIPTION,
       parameters: CREATE_COLLECTION_PARAMETERS,
       output: {
         schema: CREATE_COLLECTION_OUTPUT_SCHEMA,
         render: renderCreateCollection,
-        presentationMeta: (_args, value): JsonValue =>
-          value.kind === 'applied'
-            ? { kind: 'applied', ref: value.ref, key: value.key, version: value.version }
-            : value.kind === 'committed-unverified'
-              ? {
-                  kind: 'committed-unverified',
-                  reason: value.reason,
-                  ...(value.key === undefined ? {} : { key: value.key }),
-                }
-              : { kind: 'declined' },
+        presentationMeta: (_args, value): JsonValue => createWritePresentationMeta(value),
       },
       presentCall: (args) => ({
         card: 'generic',

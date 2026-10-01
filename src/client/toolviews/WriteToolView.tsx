@@ -1,19 +1,24 @@
 /**
  * Dedicated toolview cards for Zotero write operations: the eight write
  * tools. Renders write receipts, tags, and plan-review decline notices.
+ * Each tool is one descriptor (icon, title key, summary builder) in the
+ * table below — the receipt body is shared, so adding a write tool means
+ * adding one descriptor, not another branch in the body.
  * @module dsh-zotero/client/toolviews/WriteToolView
  */
 
 import { useMemo } from 'react'
+import type { ReactNode } from 'react'
 import {
   IconBranchOutlineRegular,
   IconEditOutlineRegular,
   IconPlusOutlineRegular,
+  IconTrashOutlineRegular,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { ZoteroOpenLink } from '../components/open/ZoteroOpenLink.tsx'
 import { selectUrlOf } from '../actions/open-zotero.ts'
-import { writeMetaOf } from '../sources/decoders.ts'
+import { writeMetaOf, type WriteMetaView } from '../sources/decoders.ts'
 import {
   argsOf,
   errorSummaryOf,
@@ -25,8 +30,8 @@ import {
 import { RunningNotice, RawTextFallback, ZoteroToolRow } from './ZoteroToolRow.tsx'
 import css from './toolviews.module.css'
 
-export type WriteToolViewProps = PropsRuntime<
-  'tool.call.toolview',
+/** The eight write tools this view renders. */
+export type WriteToolName =
   | 'zotero_create_note'
   | 'zotero_update_item_tags'
   | 'zotero_update_item_collections'
@@ -35,7 +40,8 @@ export type WriteToolViewProps = PropsRuntime<
   | 'zotero_create_item'
   | 'zotero_update_item'
   | 'zotero_delete_library_tags'
-> &
+
+export type WriteToolViewProps = PropsRuntime<'tool.call.toolview', WriteToolName> &
   PropsLocale<'zotero'>
 
 /**
@@ -90,6 +96,177 @@ function stringList(value: unknown): string[] {
   return Array.isArray(value) ? (value.filter((x) => typeof x === 'string') as string[]) : []
 }
 
+/** What one tool's summary builder receives: the call, the projection, and the locale. */
+interface DescribeContext {
+  readonly args: Record<string, unknown> | null
+  readonly write: WriteMetaView | null
+  readonly t: WriteToolViewProps['t']
+}
+
+/** What one tool's receipt needs above the shared body. */
+interface DescribedReceipt {
+  readonly summary: string
+  readonly tone: ReceiptTone
+  readonly tags: string[]
+  readonly parentRef?: string
+}
+
+/**
+ * The per-tool row facts: icon, card title, and how to state the summary.
+ * The icon is a factory, not a stored element: the table is evaluated at
+ * module load, and building React elements belongs to render time.
+ */
+interface WriteDescriptor {
+  readonly icon: () => ReactNode
+  readonly titleKey: Parameters<WriteToolViewProps['t']>[0]
+  readonly describe: (context: DescribeContext) => DescribedReceipt
+}
+
+/**
+ * One entry per write tool. The requested arguments are what the plan card
+ * showed the user, not what landed; each tool names only the fact it knows.
+ */
+const WRITE_DESCRIPTORS: Record<WriteToolName, WriteDescriptor> = {
+  zotero_create_note: {
+    icon: () => <IconEditOutlineRegular size={14} />,
+    titleKey: 'toolTitleCreateNote',
+    describe: ({ args, t }) => ({
+      summary: t('toolSummaryCreateNote', {
+        title: noteTitleOf(stringField(args ?? {}, 'markdown'), t('toolDefaultNoteTitle')),
+      }),
+      tone: 'applied',
+      tags: stringList(args?.['tags']),
+      parentRef: stringField(args ?? {}, 'parentItem') ?? stringField(args ?? {}, 'ref'),
+    }),
+  },
+  zotero_update_item_tags: {
+    icon: () => <IconPlusOutlineRegular size={14} />,
+    titleKey: 'toolTitleUpdateItemTags',
+    describe: ({ args, write, t }) => {
+      const requested = [...stringList(args?.['add']), ...stringList(args?.['remove'])]
+      if (write === null || (write.addedCount === null && write.removedCount === null)) {
+        return {
+          summary: t('toolSummaryUpdateItemTagsRequested', { count: requested.length }),
+          tone: 'unreported',
+          tags: requested,
+          parentRef: stringField(args ?? {}, 'ref'),
+        }
+      }
+      const added = write.addedCount ?? 0
+      const removed = write.removedCount ?? 0
+      return {
+        summary:
+          added === 0 && removed === 0
+            ? t('toolNoTagsChanged')
+            : t('toolSummaryUpdateItemTags', { added, removed }),
+        tone: added === 0 && removed === 0 ? 'noop' : 'applied',
+        tags: requested,
+        parentRef: stringField(args ?? {}, 'ref'),
+      }
+    },
+  },
+  zotero_update_item_collections: {
+    icon: () => <IconBranchOutlineRegular size={14} />,
+    titleKey: 'toolTitleUpdateItemCollections',
+    describe: ({ args, write, t }) => {
+      const requested = [...stringList(args?.['add']), ...stringList(args?.['remove'])]
+      if (write === null || (write.addedCount === null && write.removedCount === null)) {
+        const name =
+          requested[0] !== undefined ? (shortKeyOf(requested[0]) ?? requested[0].trim()) : ''
+        return {
+          summary: t('toolSummaryUpdateItemCollectionsRequested', { name }),
+          tone: 'unreported',
+          tags: [],
+          parentRef: stringField(args ?? {}, 'ref'),
+        }
+      }
+      const added = write.addedCount ?? 0
+      const removed = write.removedCount ?? 0
+      return {
+        summary:
+          added === 0 && removed === 0
+            ? t('toolNoMembershipChanged')
+            : t('toolSummaryUpdateItemCollections', { added, removed }),
+        tone: added === 0 && removed === 0 ? 'noop' : 'applied',
+        tags: [],
+        parentRef: stringField(args ?? {}, 'ref'),
+      }
+    },
+  },
+  zotero_create_collection: {
+    icon: () => <IconBranchOutlineRegular size={14} />,
+    titleKey: 'toolTitleCreateCollection',
+    describe: ({ args, t }) => ({
+      summary: t('toolSummaryCreateCollection', {
+        name: (stringField(args ?? {}, 'name') ?? '').trim(),
+      }),
+      tone: 'applied',
+      tags: [],
+      parentRef: stringField(args ?? {}, 'parent'),
+    }),
+  },
+  zotero_delete_collection: {
+    icon: () => <IconBranchOutlineRegular size={14} />,
+    titleKey: 'toolTitleDeleteCollection',
+    describe: ({ args, t }) => {
+      const collectionArg = stringField(args ?? {}, 'collection') ?? ''
+      return {
+        summary: t('toolSummaryDeleteCollection', {
+          name: shortKeyOf(collectionArg) ?? collectionArg.trim(),
+        }),
+        tone: 'applied',
+        tags: [],
+        parentRef: collectionArg,
+      }
+    },
+  },
+  zotero_create_item: {
+    icon: () => <IconEditOutlineRegular size={14} />,
+    titleKey: 'toolTitleCreateItem',
+    describe: ({ args, t }) => ({
+      summary: t('toolSummaryCreateItem', {
+        title: (stringField(args ?? {}, 'title') ?? stringField(args ?? {}, 'url') ?? '').trim(),
+      }),
+      tone: 'applied',
+      tags: [],
+    }),
+  },
+  zotero_update_item: {
+    icon: () => <IconEditOutlineRegular size={14} />,
+    titleKey: 'toolTitleUpdateItem',
+    describe: ({ args, t }) => {
+      const ref = stringField(args ?? {}, 'ref')
+      return {
+        summary: t('toolSummaryUpdateItem', { ref: shortKeyOf(ref ?? '') ?? (ref ?? '').trim() }),
+        tone: 'applied',
+        tags: [],
+        parentRef: ref,
+      }
+    },
+  },
+  zotero_delete_library_tags: {
+    // A destructive glyph: this is the irreversible library-wide delete, and
+    // the icon must not read like any other edit.
+    icon: () => <IconTrashOutlineRegular size={14} />,
+    titleKey: 'toolTitleDeleteLibraryTags',
+    describe: ({ args, write, t }) => {
+      const tags = stringList(args?.['tags'])
+      if (write !== null && write.deletedCount !== null) {
+        return {
+          summary: t('toolSummaryDeleteLibraryTags', { count: write.deletedCount }),
+          tone: 'applied',
+          tags,
+        }
+      }
+      return {
+        summary: t('toolSummaryDeleteLibraryTagsRequested', { count: tags.length }),
+        tone: 'unreported',
+        tags,
+      }
+    },
+  },
+}
+
 export function WriteToolView(props: WriteToolViewProps) {
   const { toolName, block, useDisclosure, inspect, t } = props
 
@@ -104,114 +281,26 @@ export function WriteToolView(props: WriteToolViewProps) {
     tagsList,
     rawText,
   } = useMemo(() => {
+    // The runtime types the slot's tool name loosely; registrations pin it to
+    // the eight names, and anything unexpected falls back to the create-note
+    // arm exactly as the if/else chain's default once did.
+    const descriptor =
+      WRITE_DESCRIPTORS[toolName as WriteToolName] ?? WRITE_DESCRIPTORS.zotero_create_note
     const args = argsOf(block)
     const raw = (resultTextOf(block) ?? '').trim()
-
-    let ic = <IconEditOutlineRegular size={14} />
-    let tit = t('toolTitleCreateNote')
-    let sum = ''
-    let tone: ReceiptTone = 'applied'
-    let tags: string[] = []
-    let pRef: string | undefined
-
-    // Each write tool reports the fact only it knows. The requested arguments
-    // are what the plan card showed the user, not what landed.
     const meta = metaOf(block)
     const write = meta !== null ? writeMetaOf(meta) : null
-
-    if (toolName === 'zotero_update_item_tags') {
-      ic = <IconPlusOutlineRegular size={14} />
-      tit = t('toolTitleUpdateItemTags')
-      const requested = [...stringList(args?.['add']), ...stringList(args?.['remove'])]
-      tags = requested
-      pRef = stringField(args ?? {}, 'ref')
-      if (write === null || (write.addedCount === null && write.removedCount === null)) {
-        sum = t('toolSummaryUpdateItemTagsRequested', { count: requested.length })
-        tone = 'unreported'
-      } else {
-        const added = write.addedCount ?? 0
-        const removed = write.removedCount ?? 0
-        if (added === 0 && removed === 0) {
-          sum = t('toolNoTagsChanged')
-          tone = 'noop'
-        } else {
-          sum = t('toolSummaryUpdateItemTags', { added, removed })
-        }
-      }
-    } else if (toolName === 'zotero_update_item_collections') {
-      ic = <IconBranchOutlineRegular size={14} />
-      tit = t('toolTitleUpdateItemCollections')
-      pRef = stringField(args ?? {}, 'ref')
-      const requested = [...stringList(args?.['add']), ...stringList(args?.['remove'])]
-      if (write === null || (write.addedCount === null && write.removedCount === null)) {
-        const name =
-          requested[0] !== undefined ? (shortKeyOf(requested[0]) ?? requested[0].trim()) : ''
-        sum = t('toolSummaryUpdateItemCollectionsRequested', { name })
-        tone = 'unreported'
-      } else {
-        const added = write.addedCount ?? 0
-        const removed = write.removedCount ?? 0
-        if (added === 0 && removed === 0) {
-          sum = t('toolNoMembershipChanged')
-          tone = 'noop'
-        } else {
-          sum = t('toolSummaryUpdateItemCollections', { added, removed })
-        }
-      }
-    } else if (toolName === 'zotero_create_collection') {
-      ic = <IconBranchOutlineRegular size={14} />
-      tit = t('toolTitleCreateCollection')
-      const name = stringField(args ?? {}, 'name') ?? ''
-      pRef = stringField(args ?? {}, 'parent')
-      sum = t('toolSummaryCreateCollection', { name: name.trim() })
-    } else if (toolName === 'zotero_delete_collection') {
-      ic = <IconBranchOutlineRegular size={14} />
-      tit = t('toolTitleDeleteCollection')
-      const collectionArg = stringField(args ?? {}, 'collection') ?? ''
-      const name = shortKeyOf(collectionArg) ?? collectionArg.trim()
-      pRef = collectionArg
-      sum = t('toolSummaryDeleteCollection', { name })
-    } else if (toolName === 'zotero_create_item') {
-      ic = <IconEditOutlineRegular size={14} />
-      tit = t('toolTitleCreateItem')
-      const titleArg = stringField(args ?? {}, 'title') ?? stringField(args ?? {}, 'url') ?? ''
-      sum = t('toolSummaryCreateItem', { title: titleArg.trim() })
-    } else if (toolName === 'zotero_update_item') {
-      ic = <IconEditOutlineRegular size={14} />
-      tit = t('toolTitleUpdateItem')
-      pRef = stringField(args ?? {}, 'ref')
-      sum = t('toolSummaryUpdateItem', { ref: shortKeyOf(pRef ?? '') ?? (pRef ?? '').trim() })
-    } else if (toolName === 'zotero_delete_library_tags') {
-      ic = <IconPlusOutlineRegular size={14} />
-      tit = t('toolTitleDeleteLibraryTags')
-      tags = stringList(args?.['tags'])
-      if (write !== null && write.deletedCount !== null) {
-        sum = t('toolSummaryDeleteLibraryTags', { count: write.deletedCount })
-      } else {
-        sum = t('toolSummaryDeleteLibraryTagsRequested', { count: tags.length })
-        tone = 'unreported'
-      }
-    } else {
-      // zotero_create_note
-      const markdown = stringField(args ?? {}, 'markdown')
-      const noteTitle = noteTitleOf(markdown, t('toolDefaultNoteTitle'))
-      sum = t('toolSummaryCreateNote', { title: noteTitle })
-      tags = stringList(args?.['tags'])
-      pRef = stringField(args ?? {}, 'parentItem') ?? stringField(args ?? {}, 'ref')
-    }
-
-    const errSummary = errorSummaryOf(block, raw)
-    const pUrl = pRef ? selectUrlOf(pRef) : null
-
+    const described = descriptor.describe({ args, write, t })
+    const pUrl = described.parentRef ? selectUrlOf(described.parentRef) : null
     return {
-      icon: ic,
-      title: tit,
-      summary: sum,
-      tone,
-      errorSummary: errSummary,
-      parentRef: pRef,
+      icon: descriptor.icon(),
+      title: t(descriptor.titleKey),
+      summary: described.summary,
+      tone: described.tone,
+      errorSummary: errorSummaryOf(block, raw),
+      parentRef: described.parentRef,
       parentSelectUrl: pUrl,
-      tagsList: tags,
+      tagsList: described.tags,
       rawText: raw,
     }
   }, [block, t, toolName])

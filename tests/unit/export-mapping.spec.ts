@@ -1,13 +1,16 @@
 /**
  * The in-memory ref → batch-entry mapping: body splitting with text spans,
- * key/mention/1×1-fallback pairing for BibTeX/BibLaTeX, identity matching
- * for RIS and CSL JSON, and bare refs for entries that cannot be located.
+ * deterministic tier matching for BibTeX/BibLaTeX (extra citation key, DOI,
+ * normalized title with year+author disambiguation, own citation key,
+ * whole-token item-key mention — never positional guessing), identity
+ * matching for RIS and CSL JSON, and bare refs for entries that cannot be
+ * located.
  * @module tests/export-mapping
  */
 
 import { describe, expect, it } from 'vitest'
+import { bibtexFieldOf } from '../../src/export-items.js'
 import {
-  bibtexFieldOf,
   locateExportItemsFromBatch,
   normalizeAuthorForAlignment,
   normalizeDoiForAlignment,
@@ -494,6 +497,51 @@ describe('locateExportItemsFromBatch', () => {
     expect(two).toEqual([{ ref: R1 }, { ref: R2 }])
   })
 
+  it('treats underscores as part of a token during mention matching', () => {
+    const text = '@article{customKey,\n  note = {foo_AAAAAAA1_bar},\n}\n'
+    expect(locateExportItemsFromBatch('bibtex', text, [ref1])).toEqual([{ ref: R1 }])
+  })
+
+  it('matches BibTeX entries via the lowercase citekey alias, mid-line in extra', () => {
+    const bibtex = '@article{daoLowerKey,\n  title = {Alias Title},\n}\n'
+    const rawItems = [
+      {
+        key: 'AAAAAAA1',
+        data: {
+          title: 'Alias Paper',
+          extra: 'PMID: 12345\nsee citekey: daoLowerKey, and more prose',
+        },
+      },
+    ]
+    const items = locateExportItemsFromBatch('bibtex', bibtex, [ref1], rawItems)
+    expect(items).toEqual([
+      {
+        ref: R1,
+        key: 'daoLowerKey',
+        title: 'Alias Title',
+        start: 0,
+        end: bibtex.length,
+      },
+    ])
+  })
+
+  it('takes the citation key as one token, so trailing prose never becomes the key', () => {
+    const bibtex = '@article{daoToken,\n  title = {Token Title},\n}\n'
+    const rawItems = [
+      {
+        key: 'AAAAAAA1',
+        data: {
+          title: 'Token Paper',
+          extra: 'Citation Key: daoToken and then some',
+        },
+      },
+    ]
+    const items = locateExportItemsFromBatch('bibtex', bibtex, [ref1], rawItems)
+    expect(items).toEqual([
+      { ref: R1, key: 'daoToken', title: 'Token Title', start: 0, end: bibtex.length },
+    ])
+  })
+
   it('matches BibTeX entries via extra citation key', () => {
     const bibtex = '@article{customExtraKey,\n  title = {Different Title in Bib},\n}\n'
     const rawItems = [
@@ -585,6 +633,17 @@ describe('bibtexFieldOf', () => {
   it('extracts bare numeric or token values', () => {
     const text = '@article{key,\n  year = 2024,\n}\n'
     expect(bibtexFieldOf(text, 'year')).toBe('2024')
+  })
+
+  it('rejects a bare-token field that carries no token at all', () => {
+    // `year = ,` reaches the bare-token reader with an empty cursor.
+    expect(bibtexFieldOf('@article{key,\n  year = ,\n}\n', 'year')).toBeUndefined()
+  })
+
+  it('looks up field names outside the known set with the generic pattern', () => {
+    const text = '@article{key,\n  keywords = {alignment, bibtex},\n}\n'
+    expect(bibtexFieldOf(text, 'keywords')).toBe('alignment, bibtex')
+    expect(bibtexFieldOf(text, 'series')).toBeUndefined()
   })
 
   it('returns undefined for absent fields, unclosed braces, or unclosed quotes', () => {

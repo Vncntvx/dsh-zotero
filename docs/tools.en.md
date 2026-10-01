@@ -35,7 +35,7 @@ Search for candidate items in the library. Supports metadata matching and indexe
 
 ### Output
 
-Returns an object containing: `scope`, `items` (including ref, title, creatorSummary, year, itemType, parentRef, bestAttachmentRef, bestAttachmentType, attachmentSize, extra), `total`, `offset`, `returned`, `nextOffset`, and optional `supplemental` (containing note matches `{kind:"noteBody", items, scanned, truncated}`). In card presentations, if `extra` carries Citation Key, it is formatted as `[@citekey]`.
+Returns an object containing: `scope`, `items` (including ref, title, creatorSummary, year, itemType, parentRef, bestAttachmentRef, bestAttachmentType, attachmentSize, extra), `total`, `offset`, `returned`, `nextOffset`, and optional `supplemental` (containing note matches `{kind:"noteBody", items, scanned, truncated}`). In card presentations, if `extra` carries a Citation Key (case-insensitive, including the `citekey` alias — one shared grammar with export alignment, taking the first token after the colon), it is formatted as `[@citekey]`.
 
 ### Notes
 
@@ -479,7 +479,7 @@ zotero_update_item(ref="zotero://user/0/item/ABCD1234", set={"title": "Attention
 
 ## zotero_delete_library_tags
 
-Deletes tags **library-wide** by name. **Irreversible**: the tags come off every item in the library. The plan card states each tag's item count first (shown as `unknown items` when that preview read fails), the delete carries the library version of its preceding read, and unmatched names are silently ignored so a retry is idempotent.
+Deletes tags **library-wide** by name. **Irreversible**: the tags come off every item in the library. The plan card pages through the **whole** tag listing first, then states each tag's item count: a tag the listing carries without a count shows as `unknown items`, and only a name absent from the entire listing is listed as a proven no-op — so a tag beyond the first page is never mistaken for one. When a preview read fails every count shows `unknown items` and the delete still carries the library version of its preceding read; names Zotero does not know are silently skipped, so a retry is idempotent.
 
 ### Parameters
 

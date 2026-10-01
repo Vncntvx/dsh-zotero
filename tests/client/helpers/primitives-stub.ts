@@ -132,6 +132,7 @@ export interface PrimitivesStub extends Omit<RealForm, 'SettingsValueField'> {
   readonly IconDeliverDocRegular: (props: Record<string, unknown>) => ReactElement
   readonly IconBranchOutlineRegular: (props: Record<string, unknown>) => ReactElement
   readonly IconEditOutlineRegular: (props: Record<string, unknown>) => ReactElement
+  readonly IconTrashOutlineRegular: (props: Record<string, unknown>) => ReactElement
 }
 
 /** The icon stubs: an inline glyph carrying the icon name. */
@@ -429,6 +430,7 @@ export function primitivesStub(overrides: Partial<PrimitivesStub> = {}): Primiti
     IconDeliverDocRegular: icon('deliver-doc'),
     IconBranchOutlineRegular: icon('branch-regular'),
     IconEditOutlineRegular: icon('edit-regular'),
+    IconTrashOutlineRegular: icon('trash-regular'),
     ...overrides,
   } as PrimitivesStub
 }

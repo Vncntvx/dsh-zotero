@@ -524,10 +524,11 @@ export class ZoteroService extends Service {
     // write must not spend the user's approval on a call that cannot run.
     const method = this.requireMethod(provider, methodName)
     if (!(await this.approveWrite(call))) return { kind: 'declined' }
-    return await (method as (req: unknown, signal?: AbortSignal) => Promise<any>)(
-      request,
-      call.exec.signal,
-    )
+    const invoke = method as (
+      req: Parameters<NonNullable<ZoteroProvider[M]>>[0],
+      signal?: AbortSignal,
+    ) => Promise<Awaited<ReturnType<NonNullable<ZoteroProvider[M]>>>>
+    return await invoke(request, call.exec.signal)
   }
 
   /**

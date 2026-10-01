@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { approvalLane } from '../helpers/approval-stub.js'
-import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { ToolResult } from '@deepseek-ai/dsh-tools'
+import { textOfBlocks } from '../../src/tools/present.js'
 import { createNotePlan, renderCreateNote } from '../../src/tools/create-note.js'
 import { updateItemTagsPlan, renderUpdateItemTags } from '../../src/tools/update-item-tags.js'
 import {
@@ -88,17 +88,13 @@ const APPLIED_COLLECTIONS = {
   serverId: 'srv',
 }
 
-function textOf(blocks: ContentBlock[]): string {
-  return blocks.map((block) => (block.type === 'text' ? block.text : '')).join('\n')
-}
-
 function resultOf(meta: Record<string, unknown>): ToolResult {
   return { content: [{ type: 'text', text: 'x' }], isError: false, meta } as unknown as ToolResult
 }
 
 describe('write tool renders', () => {
   it('renders an applied note with its saved collections, tags, and sources', () => {
-    const text = textOf(renderCreateNote({ markdown: 'x' }, APPLIED_NOTE))
+    const text = textOfBlocks(renderCreateNote({ markdown: 'x' }, APPLIED_NOTE))
     expect(text).toContain(APPLIED_NOTE.ref)
     expect(text).toContain('zotero://user/0/collection/COLL1234')
     expect(text).toContain('Tags: methods')
@@ -107,14 +103,14 @@ describe('write tool renders', () => {
   })
 
   it('renders an applied note with the optional parent and without empty lists', () => {
-    const withParent = textOf(
+    const withParent = textOfBlocks(
       renderCreateNote(
         { markdown: 'x' },
         { ...APPLIED_NOTE, parentItem: 'zotero://user/0/item/ITEMABC1' },
       ),
     )
     expect(withParent).toContain('Parent: zotero://user/0/item/ITEMABC1')
-    const bare = textOf(
+    const bare = textOfBlocks(
       renderCreateNote(
         { markdown: 'x' },
         { ...APPLIED_NOTE, collections: [], tags: [], sourceRefs: [], serverId: undefined },
@@ -127,17 +123,19 @@ describe('write tool renders', () => {
   })
 
   it('renders the declined outcome of every membership tool as a statement', () => {
-    expect(textOf(renderCreateNote({ markdown: 'x' }, { kind: 'declined' }))).toContain('Declined')
-    expect(textOf(renderUpdateItemTags({ ref: 'r', add: ['x'] }, { kind: 'declined' }))).toContain(
+    expect(textOfBlocks(renderCreateNote({ markdown: 'x' }, { kind: 'declined' }))).toContain(
       'Declined',
     )
     expect(
-      textOf(renderUpdateItemCollections({ ref: 'r', add: ['c'] }, { kind: 'declined' })),
+      textOfBlocks(renderUpdateItemTags({ ref: 'r', add: ['x'] }, { kind: 'declined' })),
+    ).toContain('Declined')
+    expect(
+      textOfBlocks(renderUpdateItemCollections({ ref: 'r', add: ['c'] }, { kind: 'declined' })),
     ).toContain('Declined')
   })
 
   it('renders the tag update with its unchanged, added, and removed arms', () => {
-    const unchanged = textOf(
+    const unchanged = textOfBlocks(
       renderUpdateItemTags(
         { ref: 'r', add: ['a'] },
         {
@@ -153,12 +151,12 @@ describe('write tool renders', () => {
     )
     expect(unchanged).toContain('No change')
     expect(unchanged).not.toContain('Library version:')
-    const changed = textOf(renderUpdateItemTags({ ref: 'r', add: ['b'] }, APPLIED_TAGS))
+    const changed = textOfBlocks(renderUpdateItemTags({ ref: 'r', add: ['b'] }, APPLIED_TAGS))
     expect(changed).toContain('added b')
     expect(changed).toContain('removed gone')
     expect(changed).toContain('Tags now: a, b')
     expect(changed).toContain('Library version: 12 (served by srv)')
-    const bareVersion = textOf(
+    const bareVersion = textOfBlocks(
       renderUpdateItemTags(
         { ref: 'r', add: ['b'] },
         { ...APPLIED_TAGS, libraryVersion: 11, serverId: undefined },
@@ -169,7 +167,7 @@ describe('write tool renders', () => {
   })
 
   it('renders the collection membership update with its unchanged and changed arms', () => {
-    const unchanged = textOf(
+    const unchanged = textOfBlocks(
       renderUpdateItemCollections(
         { ref: 'r', add: ['Methods'] },
         {
@@ -185,13 +183,13 @@ describe('write tool renders', () => {
     )
     expect(unchanged).toContain('No change')
     expect(unchanged).not.toContain('Library version:')
-    const changed = textOf(
+    const changed = textOfBlocks(
       renderUpdateItemCollections({ ref: 'r', add: ['Methods'] }, APPLIED_COLLECTIONS),
     )
     expect(changed).toContain('Updated collections on')
     expect(changed).toContain('Collections now: zotero://user/0/collection/COLL1234')
     expect(changed).toContain('Library version: 13 (served by srv)')
-    const emptyLists = textOf(
+    const emptyLists = textOfBlocks(
       renderUpdateItemCollections(
         { ref: 'r', remove: ['Methods'] },
         { ...APPLIED_COLLECTIONS, collections: [], added: [], removed: [], libraryVersion: 14 },
@@ -423,7 +421,7 @@ describe('approval-gate failure arms', () => {
 
   it('covers complete applied renderers with omitted optional fields', async () => {
     // Unchanged tag result: libraryVersion is absent when nothing was written.
-    const sparse = textOf(
+    const sparse = textOfBlocks(
       renderUpdateItemTags(
         { ref: 'r', add: ['a'] },
         {
@@ -440,7 +438,7 @@ describe('approval-gate failure arms', () => {
     expect(sparse).toContain('No change')
     expect(sparse).not.toContain('Library version:')
     // Complete note result with empty lists and no optional parent/serverId.
-    const bare = textOf(
+    const bare = textOfBlocks(
       renderCreateNote(
         { markdown: 'x' },
         {

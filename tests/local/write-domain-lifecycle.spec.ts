@@ -6,7 +6,7 @@ import {
 } from '../../src/local/write-domain.js'
 import {
   SERVER_MISMATCH_MESSAGE,
-  WRITE_TAG_QUERY_REFUSED_MESSAGE,
+  WRITE_PRECONDITION_READ_LIBRARY_VERSION_MESSAGE,
   writeCollectionNameExistsMessage,
   writeObjectRefusedMessage,
   writeNonBlankMessage,
@@ -19,7 +19,6 @@ import {
 import {
   COLLECTION_KEY,
   grantAuthorize,
-  resolveThrough,
   SECOND_COLLECTION_KEY,
   SERVER_ID,
   startWriteDomainMock,
@@ -74,9 +73,7 @@ function serveCollection(
 describe('createCollection', () => {
   it('refuses a blank name before any network', async () => {
     const { deps, directory } = writeDeps(mock)
-    await expect(
-      createCollection(deps, resolveThrough(directory), { name: '   ' }),
-    ).rejects.toMatchObject({
+    await expect(createCollection(deps, { name: '   ' })).rejects.toMatchObject({
       code: ZOTERO_INVALID_ARGUMENT,
       message: writeNonBlankMessage('name'),
     })
@@ -87,7 +84,7 @@ describe('createCollection', () => {
     const { deps, directory } = writeDeps(mock)
     let thrown: unknown
     try {
-      await createCollection(deps, resolveThrough(directory), { name: '方法论' })
+      await createCollection(deps, { name: '方法论' })
     } catch (error) {
       thrown = error
     }
@@ -125,8 +122,8 @@ describe('createCollection', () => {
       )
     })
     // Warm the directory's listing cache first: the create must drop it.
-    await resolveThrough(directory)('方法论')
-    const result = await createCollection(scoped, resolveThrough(directory), {
+    await deps.resolveCollection('方法论')
+    const result = await createCollection(scoped, {
       name: 'Field notes',
     })
     expectApplied(result)
@@ -174,7 +171,7 @@ describe('createCollection', () => {
       )
       void body
     })
-    const result = await createCollection(deps, resolveThrough(directory), {
+    const result = await createCollection(deps, {
       name: 'Sub',
       parent: '方法论',
     })
@@ -209,7 +206,6 @@ describe('createCollection', () => {
     )
     const result = await createCollection(
       { ...deps, onCollectionsChanged },
-      resolveThrough(directory),
       { name: 'Field notes' },
     )
     expect(result).toMatchObject({
@@ -230,9 +226,7 @@ describe('createCollection', () => {
     mock.route('POST', '/api/users/0/collections', (_req, res) => {
       res.destroy()
     })
-    await expect(
-      createCollection(deps, resolveThrough(directory), { name: 'Field notes' }),
-    ).resolves.toMatchObject({
+    await expect(createCollection(deps, { name: 'Field notes' })).resolves.toMatchObject({
       kind: 'committed-unverified',
       committed: true,
       retryable: false,
@@ -257,9 +251,7 @@ describe('createCollection', () => {
         }),
       ),
     )
-    await expect(
-      createCollection(deps, resolveThrough(directory), { name: 'Field notes' }),
-    ).rejects.toMatchObject({
+    await expect(createCollection(deps, { name: 'Field notes' })).rejects.toMatchObject({
       code: ZOTERO_INVALID_ARGUMENT,
       message: writeObjectRefusedMessage('Invalid name', 400),
     })
@@ -273,13 +265,13 @@ describe('createCollection', () => {
       own.route('GET', '/api/', (_req, res, helpers) =>
         helpers.raw(200, { 'Zotero-Server-ID': SERVER_ID }, JSON.stringify({})),
       )
-      own.route('GET', '/api/users/0/collections', (_req, res, helpers) =>
-        helpers.json({ collections: [] }),
+      own.route('GET', '/api/users/0/collections/top', (_req, res, helpers) =>
+        helpers.json({ collections: [] }, { 'Zotero-Server-ID': SERVER_ID, 'Total-Results': '0' }),
       )
       const { deps, directory } = writeDeps(own)
-      await expect(
-        createCollection(deps, resolveThrough(directory), { name: 'Field notes' }),
-      ).rejects.toMatchObject({ code: ZOTERO_UNEXPECTED })
+      await expect(createCollection(deps, { name: 'Field notes' })).rejects.toMatchObject({
+        code: ZOTERO_UNEXPECTED,
+      })
       expect(
         own.requests.some(
           (request) => request.method === 'POST' && request.pathname.endsWith('/collections'),
@@ -294,9 +286,7 @@ describe('createCollection', () => {
 describe('deleteCollection', () => {
   it('refuses a blank collection before any network', async () => {
     const { deps, directory } = writeDeps(mock)
-    await expect(
-      deleteCollection(deps, resolveThrough(directory), { collection: '  ' }),
-    ).rejects.toMatchObject({
+    await expect(deleteCollection(deps, { collection: '  ' })).rejects.toMatchObject({
       code: ZOTERO_INVALID_ARGUMENT,
       message: writeNonBlankMessage('collection'),
     })
@@ -306,7 +296,7 @@ describe('deleteCollection', () => {
   it('fails a name that resolves to nothing before any delete', async () => {
     const { deps, directory } = writeDeps(mock)
     await expect(
-      deleteCollection(deps, resolveThrough(directory), { collection: 'no such collection' }),
+      deleteCollection(deps, { collection: 'no such collection' }),
     ).rejects.toMatchObject({ code: ZOTERO_NOT_FOUND })
     expect(mock.requests.some((request) => request.method === 'DELETE')).toBe(false)
   })
@@ -324,7 +314,6 @@ describe('deleteCollection', () => {
     const onCollectionsChanged = vi.fn()
     const result = await deleteCollection(
       { ...deps, onCollectionsChanged },
-      resolveThrough(directory),
       { collection: 'Second' },
     )
     expect(result).toEqual({
@@ -338,6 +327,9 @@ describe('deleteCollection', () => {
     const deleted = mock.requests.find((request) => request.method === 'DELETE')
     expect(deleted?.pathname).toBe(`/api/users/0/collections/${SECOND_COLLECTION_KEY}`)
     expect(deleted?.headers['if-unmodified-since-version']).toBe('30')
+    // Exactly one collection read: it proves the name resolution's answer and
+    // supplies the precondition — a second identical GET is a wasted round trip.
+    expect(count('GET', `/api/users/0/collections/${SECOND_COLLECTION_KEY}`)).toBe(1)
     expect(onCollectionsChanged).toHaveBeenCalledTimes(1)
     expect(count('POST', '/api/local/authorize')).toBe(1)
   })
@@ -346,11 +338,9 @@ describe('deleteCollection', () => {
     grantAuthorize(mock)
     serveCollection(SECOND_COLLECTION_KEY, 'Second')
     const { deps, directory } = writeDeps(mock)
-    await expect(
-      deleteCollection(deps, resolveThrough(directory), { collection: 'Second' }),
-    ).rejects.toMatchObject({
+    await expect(deleteCollection(deps, { collection: 'Second' })).rejects.toMatchObject({
       code: ZOTERO_UNEXPECTED,
-      message: WRITE_TAG_QUERY_REFUSED_MESSAGE,
+      message: WRITE_PRECONDITION_READ_LIBRARY_VERSION_MESSAGE,
     })
     expect(mock.requests.some((request) => request.method === 'DELETE')).toBe(false)
   })
@@ -361,9 +351,7 @@ describe('deleteCollection', () => {
       libraryVersion: 30,
     })
     const { deps, directory } = writeDeps(mock)
-    await expect(
-      deleteCollection(deps, resolveThrough(directory), { collection: 'Second' }),
-    ).rejects.toMatchObject({
+    await expect(deleteCollection(deps, { collection: 'Second' })).rejects.toMatchObject({
       code: ZOTERO_SERVER_MISMATCH,
       message: SERVER_MISMATCH_MESSAGE,
     })
@@ -384,9 +372,9 @@ describe('deleteCollection', () => {
         ),
     )
     const { deps, directory } = writeDeps(mock)
-    await expect(
-      deleteCollection(deps, resolveThrough(directory), { collection: 'Second' }),
-    ).rejects.toMatchObject({ code: ZOTERO_WRITE_CONFLICT })
+    await expect(deleteCollection(deps, { collection: 'Second' })).rejects.toMatchObject({
+      code: ZOTERO_WRITE_CONFLICT,
+    })
   })
 
   it('maps a vanished collection onto a typed not-found refusal', async () => {
@@ -398,9 +386,7 @@ describe('deleteCollection', () => {
       (_req, res, helpers) => helpers.raw(404, { 'Content-Type': 'text/plain' }, 'Not found'),
     )
     const { deps, directory } = writeDeps(mock)
-    await expect(
-      deleteCollection(deps, resolveThrough(directory), { collection: 'Second' }),
-    ).rejects.toMatchObject({
+    await expect(deleteCollection(deps, { collection: 'Second' })).rejects.toMatchObject({
       code: ZOTERO_NOT_FOUND,
       message: writeObjectRefusedMessage('The collection no longer exists.', 404),
     })
@@ -490,7 +476,7 @@ describe('deleteLibraryTags', () => {
     const { deps } = writeDeps(mock)
     await expect(deleteLibraryTags(deps, { tags: ['legacy'] })).rejects.toMatchObject({
       code: ZOTERO_UNEXPECTED,
-      message: WRITE_TAG_QUERY_REFUSED_MESSAGE,
+      message: WRITE_PRECONDITION_READ_LIBRARY_VERSION_MESSAGE,
     })
     expect(mock.requests.some((request) => request.method === 'DELETE')).toBe(false)
   })

@@ -18,7 +18,6 @@ import {
   ITEM_KEY,
   ITEM_REF,
   itemJson,
-  resolveThrough,
   SECOND_COLLECTION_KEY,
   SERVER_ID,
   startWriteDomainMock,
@@ -26,7 +25,6 @@ import {
   expectApplied,
 } from '../helpers/write-domain-fixtures.js'
 import type { MockZotero } from '../helpers/mock-zotero.js'
-import { parseRef } from '../../src/refs.js'
 
 let mock: MockZotero
 
@@ -39,15 +37,12 @@ afterEach(async () => {
 })
 
 describe('updateItemCollections', () => {
-  it('refuses a resolved collection ref from another Zotero instance', async () => {
-    const staleCollection = parseRef(
-      `zotero://user/0/collection/${COLLECTION_KEY}?server=OTHER1234`,
-    )
+  it('refuses a collection ref claiming another Zotero instance', async () => {
     const { deps } = writeDeps(mock)
     await expect(
-      updateItemCollections(deps, async () => staleCollection, {
+      updateItemCollections(deps, {
         item: ITEM_REF,
-        add: ['stale'],
+        add: [`zotero://user/0/collection/${COLLECTION_KEY}?server=OTHER1234`],
       }),
     ).rejects.toMatchObject({ code: ZOTERO_SERVER_MISMATCH })
     expect(mock.requests.some((request) => request.method === 'PATCH')).toBe(false)
@@ -57,10 +52,8 @@ describe('updateItemCollections', () => {
   })
 
   it('refuses a selection-free request before any network', async () => {
-    const { deps, directory } = writeDeps(mock)
-    await expect(
-      updateItemCollections(deps, resolveThrough(directory), { item: ITEM_REF }),
-    ).rejects.toMatchObject({
+    const { deps } = writeDeps(mock)
+    await expect(updateItemCollections(deps, { item: ITEM_REF })).rejects.toMatchObject({
       code: ZOTERO_INVALID_ARGUMENT,
       message: WRITE_LIST_SELECTION_MESSAGE,
     })
@@ -68,9 +61,9 @@ describe('updateItemCollections', () => {
   })
 
   it('refuses blank entries in add or remove before any network', async () => {
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     await expect(
-      updateItemCollections(deps, resolveThrough(directory), { item: ITEM_REF, add: ['  '] }),
+      updateItemCollections(deps, { item: ITEM_REF, add: ['  '] }),
     ).rejects.toMatchObject({
       code: ZOTERO_INVALID_ARGUMENT,
       message: writeNonBlankMessage('add'),
@@ -95,8 +88,8 @@ describe('updateItemCollections', () => {
       >
       helpers.raw(204, { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '13' }, '')
     })
-    const { deps, directory } = writeDeps(mock)
-    const result = await updateItemCollections(deps, resolveThrough(directory), {
+    const { deps } = writeDeps(mock)
+    const result = await updateItemCollections(deps, {
       item: ITEM_REF,
       add: ['方法论'],
     })
@@ -135,8 +128,8 @@ describe('updateItemCollections', () => {
       >
       helpers.raw(204, { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '14' }, '')
     })
-    const { deps, directory } = writeDeps(mock)
-    const result = await updateItemCollections(deps, resolveThrough(directory), {
+    const { deps } = writeDeps(mock)
+    const result = await updateItemCollections(deps, {
       item: ITEM_REF,
       remove: ['Second'],
     })
@@ -158,8 +151,8 @@ describe('updateItemCollections', () => {
         JSON.stringify(itemJson(ITEM_KEY, 10, { tags: [], collections: [COLLECTION_KEY] })),
       ),
     )
-    const { deps, directory } = writeDeps(mock)
-    const result = await updateItemCollections(deps, resolveThrough(directory), {
+    const { deps } = writeDeps(mock)
+    const result = await updateItemCollections(deps, {
       item: ITEM_REF,
       add: [`zotero://user/0/collection/${COLLECTION_KEY}`],
     })
@@ -171,10 +164,10 @@ describe('updateItemCollections', () => {
   })
 
   it('fails a collection name that resolves to nothing before any read-modify-write', async () => {
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     let code: string | undefined
     try {
-      await updateItemCollections(deps, resolveThrough(directory), {
+      await updateItemCollections(deps, {
         item: ITEM_REF,
         add: ['no such collection'],
       })
@@ -191,9 +184,9 @@ describe('updateItemCollections', () => {
     mock.route('GET', `/api/users/0/items/${ITEM_KEY}`, (_req, res, helpers) =>
       helpers.raw(200, { 'Zotero-Server-ID': SERVER_ID }, JSON.stringify([1, 2])),
     )
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     await expect(
-      updateItemCollections(deps, resolveThrough(directory), { item: ITEM_REF, add: ['方法论'] }),
+      updateItemCollections(deps, { item: ITEM_REF, add: ['方法论'] }),
     ).rejects.toMatchObject({
       code: ZOTERO_UNEXPECTED,
       message: WRITE_VERSION_MISSING_MESSAGE,
@@ -222,9 +215,9 @@ describe('updateItemCollections', () => {
     ]
     for (const testCase of cases) {
       data = testCase.data
-      const { deps, directory } = writeDeps(mock)
+      const { deps } = writeDeps(mock)
       await expect(
-        updateItemCollections(deps, resolveThrough(directory), {
+        updateItemCollections(deps, {
           item: ITEM_REF,
           add: ['方法论'],
         }),
@@ -252,10 +245,10 @@ describe('updateItemCollections', () => {
         'item has been modified since specified version (expected 10, found 11)',
       ),
     )
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     let thrown: unknown
     try {
-      await updateItemCollections(deps, resolveThrough(directory), {
+      await updateItemCollections(deps, {
         item: ITEM_REF,
         add: ['方法论'],
       })

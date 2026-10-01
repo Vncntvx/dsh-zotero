@@ -36,7 +36,6 @@ import {
   ITEM_REF,
   itemJson,
   NEW_KEY,
-  resolveThrough,
   SECOND_COLLECTION_KEY,
   SERVER_ID,
   SOURCE_REF,
@@ -81,7 +80,7 @@ describe('createNote', () => {
       )
     })
     const { deps, directory } = writeDeps(mock)
-    const result = await createNote(deps, resolveThrough(directory), {
+    const result = await createNote(deps, {
       markdown: '**方法**：见第 2 节。',
       collections: ['方法论'],
       tags: ['methods'],
@@ -126,7 +125,7 @@ describe('createNote', () => {
       )
     })
     const { deps, directory } = writeDeps(mock)
-    const result = await createNote(deps, resolveThrough(directory), {
+    const result = await createNote(deps, {
       markdown: 'Relation test',
     })
     expect(result.kind).toBe('applied')
@@ -136,15 +135,12 @@ describe('createNote', () => {
       `zotero://group/42/item/GROUP001?server=${SERVER_ID}`,
     ])
   })
-  it('refuses a resolved collection ref from another Zotero instance', async () => {
-    const staleCollection = parseRef(
-      `zotero://user/0/collection/${COLLECTION_KEY}?server=OTHER1234`,
-    )
+  it('refuses a collection ref claiming another Zotero instance', async () => {
     const { deps } = writeDeps(mock)
     await expect(
-      createNote(deps, async () => staleCollection, {
+      createNote(deps, {
         markdown: 'x',
-        collections: ['stale'],
+        collections: [`zotero://user/0/collection/${COLLECTION_KEY}?server=OTHER1234`],
       }),
     ).rejects.toMatchObject({ code: ZOTERO_SERVER_MISMATCH })
     expect(mock.requests.some((request) => request.method === 'POST')).toBe(false)
@@ -165,7 +161,7 @@ describe('createNote', () => {
     const before = mock.requests.filter(
       (request) => request.pathname === '/api/users/0/collections',
     ).length
-    const result = await createNote(deps, resolveThrough(directory), {
+    const result = await createNote(deps, {
       markdown: 'x',
       collections: ['方法论', 'Second'],
     })
@@ -191,9 +187,7 @@ describe('createNote', () => {
       ),
     )
     const { deps, directory } = writeDeps(mock)
-    await expect(
-      createNote(deps, resolveThrough(directory), { markdown: 'x' }),
-    ).resolves.toMatchObject({
+    await expect(createNote(deps, { markdown: 'x' })).resolves.toMatchObject({
       kind: 'committed-unverified',
       committed: true,
       retryable: false,
@@ -219,9 +213,7 @@ describe('createNote', () => {
       ),
     )
     const { deps, directory } = writeDeps(mock)
-    await expect(
-      createNote(deps, resolveThrough(directory), { markdown: 'x' }),
-    ).resolves.toMatchObject({
+    await expect(createNote(deps, { markdown: 'x' })).resolves.toMatchObject({
       kind: 'committed-unverified',
       key: NEW_KEY,
       reason: 'saved-state-unverified',
@@ -243,9 +235,7 @@ describe('createNote', () => {
       ),
     )
     const { deps, directory } = writeDeps(mock)
-    await expect(
-      createNote(deps, resolveThrough(directory), { markdown: 'x' }),
-    ).resolves.toMatchObject({
+    await expect(createNote(deps, { markdown: 'x' })).resolves.toMatchObject({
       kind: 'committed-unverified',
       key: NEW_KEY,
     })
@@ -257,7 +247,7 @@ describe('createNote', () => {
       res.destroy()
     })
     const { deps, directory } = writeDeps(mock)
-    const result = await createNote(deps, resolveThrough(directory), { markdown: 'x' })
+    const result = await createNote(deps, { markdown: 'x' })
     expect(result).toMatchObject({
       kind: 'committed-unverified',
       committed: true,
@@ -287,7 +277,7 @@ describe('createNote', () => {
     )
     const { deps, directory } = writeDeps(mock)
     await expect(
-      createNote(deps, resolveThrough(directory), {
+      createNote(deps, {
         markdown: 'x',
         parentItem: ITEM_REF,
       }),
@@ -317,7 +307,7 @@ describe('createNote', () => {
       )
     })
     const { deps, directory } = writeDeps(mock)
-    const result = await createNote(deps, resolveThrough(directory), {
+    const result = await createNote(deps, {
       markdown: 'reads it',
       parentItem: ITEM_REF,
       sourceRefs: [SOURCE_REF],
@@ -334,7 +324,7 @@ describe('createNote', () => {
     const { deps, directory } = writeDeps(mock)
     let thrown: unknown
     try {
-      await createNote(deps, resolveThrough(directory), {
+      await createNote(deps, {
         markdown: 'x',
         parentItem: ITEM_REF,
         collections: ['方法论'],
@@ -347,14 +337,14 @@ describe('createNote', () => {
   })
   it('rejects blank direct write arguments before any network request', async () => {
     const { deps, directory } = writeDeps(mock)
-    await expect(
-      createNote(deps, resolveThrough(directory), { markdown: '   ' }),
-    ).rejects.toMatchObject({ code: ZOTERO_INVALID_ARGUMENT })
+    await expect(createNote(deps, { markdown: '   ' })).rejects.toMatchObject({
+      code: ZOTERO_INVALID_ARGUMENT,
+    })
     await expect(updateItemTags(deps, { item: ITEM_REF, add: ['   '] })).rejects.toMatchObject({
       code: ZOTERO_INVALID_ARGUMENT,
     })
     await expect(
-      updateItemCollections(deps, resolveThrough(directory), { item: ITEM_REF, add: ['   '] }),
+      updateItemCollections(deps, { item: ITEM_REF, add: ['   '] }),
     ).rejects.toMatchObject({ code: ZOTERO_INVALID_ARGUMENT })
     expect(mock.requests).toHaveLength(0)
   })
@@ -373,7 +363,7 @@ describe('createNote', () => {
     const { deps, directory } = writeDeps(mock)
     let code: string | undefined
     try {
-      await createNote(deps, resolveThrough(directory), {
+      await createNote(deps, {
         markdown: 'x',
         parentItem: parseRef(`zotero://group/55/item/${ITEM_KEY}`),
       })
@@ -400,7 +390,7 @@ describe('createNote', () => {
     const { deps, directory } = writeDeps(mock)
     let thrown: unknown
     try {
-      await createNote(deps, resolveThrough(directory), {
+      await createNote(deps, {
         markdown: 'x',
         parentItem: ITEM_REF,
       })
@@ -429,7 +419,7 @@ describe('createNote', () => {
     )
     const { deps, directory, authorizer } = writeDeps(mock)
     const invalidate = vi.spyOn(authorizer, 'invalidate')
-    const result = await createNote(deps, resolveThrough(directory), { markdown: 'x' })
+    const result = await createNote(deps, { markdown: 'x' })
     expect(result.kind).toBe('applied')
     expectApplied(result)
     expect(posts).toBe(2)
@@ -456,9 +446,9 @@ describe('createNote', () => {
       ),
     )
     const { deps, directory } = writeDeps(mock)
-    await expect(
-      createNote(deps, resolveThrough(directory), { markdown: 'x' }),
-    ).rejects.toMatchObject({ code: ZOTERO_WRITE_CONFLICT })
+    await expect(createNote(deps, { markdown: 'x' })).rejects.toMatchObject({
+      code: ZOTERO_WRITE_CONFLICT,
+    })
   })
   it('escalates to the after-authorization guidance when a second 401 arrives', async () => {
     mock.route('POST', '/api/users/0/items', (_req, res, helpers) =>
@@ -474,7 +464,7 @@ describe('createNote', () => {
     const { deps, directory } = writeDeps(mock)
     let thrown: unknown
     try {
-      await createNote(deps, resolveThrough(directory), { markdown: 'x' })
+      await createNote(deps, { markdown: 'x' })
     } catch (error) {
       thrown = error
     }
@@ -497,9 +487,7 @@ describe('createNote', () => {
       ),
     )
     const { deps, directory } = writeDeps(mock)
-    await expect(
-      createNote(deps, resolveThrough(directory), { markdown: 'x' }),
-    ).rejects.toMatchObject({
+    await expect(createNote(deps, { markdown: 'x' })).rejects.toMatchObject({
       code: ZOTERO_INVALID_ARGUMENT,
       message: writeObjectRefusedMessage('Invalid payload', 400),
     })
@@ -520,9 +508,7 @@ describe('createNote', () => {
       ),
     )
     const { deps, directory } = writeDeps(mock)
-    await expect(
-      createNote(deps, resolveThrough(directory), { markdown: 'x' }),
-    ).rejects.toMatchObject({
+    await expect(createNote(deps, { markdown: 'x' })).rejects.toMatchObject({
       code: ZOTERO_UNEXPECTED,
       message: writeObjectRefusedMessage('Internal crash', 500),
     })
@@ -549,9 +535,7 @@ describe('createNote', () => {
       ),
     )
     const { deps, directory } = writeDeps(mock)
-    await expect(
-      createNote(deps, resolveThrough(directory), { markdown: 'x' }),
-    ).resolves.toMatchObject({
+    await expect(createNote(deps, { markdown: 'x' })).resolves.toMatchObject({
       kind: 'committed-unverified',
       key: NEW_KEY,
       version: 42,
@@ -563,16 +547,8 @@ describe('createNote', () => {
     const rawMock = await MockZotero.start()
     rawMock.route('GET', '/api/', (_req, res, helpers) => helpers.raw(200, {}, JSON.stringify({})))
     try {
-      const bareClient = testHttpClient(rawMock.baseUrl, {
-        timeoutMs: 1000,
-        maxResponseBytes: 1024,
-      })
-      const writer = testWriteClient(rawMock.baseUrl, { timeoutMs: 1000, maxResponseBytes: 1024 })
-      const authorizer = new WriteAuthorizer({ client: writer, persistKey: () => true })
-      const bareDeps = { client: bareClient, writer, authorizer }
-      await expect(
-        createNote(bareDeps, async () => ITEM_REF, { markdown: 'x' }),
-      ).rejects.toMatchObject({
+      const { deps: bareDeps } = writeDeps(rawMock)
+      await expect(createNote(bareDeps, { markdown: 'x' })).rejects.toMatchObject({
         code: ZOTERO_NOT_IMPLEMENTED,
         message: WRITE_IDENTITY_UNSUPPORTED_MESSAGE,
       })
@@ -584,7 +560,7 @@ describe('createNote', () => {
   it('refuses a ref tied to a different server instance', async () => {
     const { deps, directory } = writeDeps(mock)
     await expect(
-      createNote(deps, resolveThrough(directory), {
+      createNote(deps, {
         markdown: 'x',
         parentItem: parseRef(`zotero://user/0/item/${ITEM_KEY}?server=other-srv`),
       }),
@@ -642,7 +618,7 @@ describe('request minimum', () => {
     )
     const { deps, directory } = writeDeps(mock)
 
-    await createNote(deps, resolveThrough(directory), { markdown: 'first' })
+    await createNote(deps, { markdown: 'first' })
     // The first write pays the one-time identity probe and the authorize dialog.
     expect(count('GET', '/api/')).toBe(1)
     expect(count('POST', '/api/local/authorize')).toBe(1)
@@ -652,7 +628,7 @@ describe('request minimum', () => {
     expect(count('GET', `/api/users/0/items/${ITEM_KEY}`)).toBe(0)
 
     const before = mock.requests.length
-    await createNote(deps, resolveThrough(directory), { markdown: 'second' })
+    await createNote(deps, { markdown: 'second' })
     expect(
       mock.requests.slice(before).map((request) => `${request.method} ${request.pathname}`),
     ).toEqual(['POST /api/users/0/items'])
@@ -683,7 +659,7 @@ describe('request minimum', () => {
     expect(count('GET', '/api/users/0/collections')).toBe(0)
   })
 
-  it('adds to a collection by ref without resolving any name', async () => {
+  it('proves an added collection ref through the cached listing, not a per-ref read', async () => {
     grantAuthorize(mock)
     mock.route('GET', '/api/', (_req, res, helpers) =>
       helpers.raw(200, { 'Zotero-Server-ID': SERVER_ID }, JSON.stringify({})),
@@ -698,13 +674,16 @@ describe('request minimum', () => {
     mock.route('PATCH', `/api/users/0/items/${ITEM_KEY}`, (_req, res, helpers) =>
       helpers.raw(204, { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '11' }, ''),
     )
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
 
-    await updateItemCollections(deps, resolveThrough(directory), {
+    await updateItemCollections(deps, {
       item: ITEM_REF,
       add: [`zotero://user/0/collection/${COLLECTION_KEY}`],
     })
-    expect(count('GET', '/api/users/0/collections')).toBe(0)
+    // The ref is proven by the one cached listing (name resolution included);
+    // no single-collection read and no ambiguity walk happen.
+    expect(count('GET', '/api/users/0/collections')).toBe(1)
+    expect(count('GET', `/api/users/0/collections/${COLLECTION_KEY}`)).toBe(0)
     expect(count('GET', `/api/users/0/items/${ITEM_KEY}`)).toBe(1)
     expect(count('PATCH', `/api/users/0/items/${ITEM_KEY}`)).toBe(1)
   })

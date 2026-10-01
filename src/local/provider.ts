@@ -21,9 +21,9 @@ import { LOCAL_PROVIDER_ID, ZOTERO_SERVER_ID_HEADER, ZOTERO_VERSION_HEADER } fro
 import { PERSONAL_LIBRARY } from '../refs.js'
 import { errorChain } from '@deepseek-ai/dsh-llm'
 import { ZoteroError } from '../errors.js'
+import { resolveCollectionsMixed, ScopeDirectory } from './scope-directory.js'
 import type { ZoteroHttpClient } from '../http-client.js'
 import type { LocalApiLimits } from './limits.js'
-import { ScopeDirectory } from './scope-directory.js'
 import { runSearch } from './search-domain.js'
 import { getItem as getItemDomain, children as childrenDomain } from './detail.js'
 import { retrieve as retrieveDomain } from './retrieve.js'
@@ -37,6 +37,7 @@ import {
   createNote as createNoteDomain,
   deleteCollection as deleteCollectionDomain,
   deleteLibraryTags as deleteLibraryTagsDomain,
+  fetchItemTypeFields,
   updateItem as updateItemDomain,
   updateItemCollections as updateItemCollectionsDomain,
   updateItemTags as updateItemTagsDomain,
@@ -143,19 +144,60 @@ export class LocalApiProvider implements ZoteroProvider {
       client: this.client,
       writer: this.writer,
       authorizer: this.authorizer,
+      resolveCollection: (refOrName, signal) =>
+        this.resolveCollections([refOrName], signal).then((refs) => refs[0]!),
+      resolveCollections: (inputs, signal) => this.resolveCollections(inputs, signal),
+      itemTypeFields: (itemType, signal) => this.itemTypeFields(itemType, signal),
       onCollectionsChanged: () => this.directory.invalidate(PERSONAL_LIBRARY, 'collections'),
     }
   }
 
   /**
-   * Resolve a collection from a ref or a name through the cached scope
-   * directory — the write domain takes the resolver as a function, so the
-   * domain module stays free of the directory's cache semantics.
+   * Resolve a mixed batch of collection refs and exact names, preserving
+   * input order — the partition/ref-listing/name-resolution orchestration
+   * lives once in `scope-directory.resolveCollectionsMixed`.
    */
-  private resolveCollection(refOrName: string, signal?: AbortSignal): Promise<ZoteroObjectRef> {
-    return this.directory
-      .resolveNamed('collection', refOrName, PERSONAL_LIBRARY, signal, this.client.serverId)
-      .then((resolved) => resolved.ref)
+  private resolveCollections(
+    inputs: readonly string[],
+    signal?: AbortSignal,
+  ): Promise<ZoteroObjectRef[]> {
+    return resolveCollectionsMixed(
+      this.directory,
+      inputs,
+      PERSONAL_LIBRARY,
+      signal,
+      this.client.serverId,
+    )
+  }
+
+  /** Memoized field sets per (serving instance, item type), keyed for identity changes. */
+  private readonly itemTypeFieldsMemo = new Map<string, ReadonlySet<string>>()
+
+  /** In-flight field-set fetches, shared so parallel updates fetch each set once. */
+  private readonly itemTypeFieldsInFlight = new Map<string, Promise<ReadonlySet<string>>>()
+
+  /**
+   * The field names one item type accepts. The set is static for a running
+   * Zotero build, so each (instance, item type) pair is fetched once and
+   * memoized — a failed or aborted fetch is not cached, and a second update
+   * of the same item type costs no request.
+   */
+  private itemTypeFields(itemType: string, signal?: AbortSignal): Promise<ReadonlySet<string>> {
+    const cacheKey = `${this.client.serverId ?? ''}:${itemType}`
+    const memoized = this.itemTypeFieldsMemo.get(cacheKey)
+    if (memoized !== undefined) return Promise.resolve(memoized)
+    const inFlight = this.itemTypeFieldsInFlight.get(cacheKey)
+    if (inFlight !== undefined) return inFlight
+    const pending = fetchItemTypeFields({ client: this.client }, itemType, signal).then(
+      (fields) => {
+        this.itemTypeFieldsMemo.set(cacheKey, fields)
+        return fields
+      },
+    )
+    this.itemTypeFieldsInFlight.set(cacheKey, pending)
+    return pending.finally(() => {
+      this.itemTypeFieldsInFlight.delete(cacheKey)
+    })
   }
 
   /**
@@ -303,12 +345,7 @@ export class LocalApiProvider implements ZoteroProvider {
     request: ZoteroCreateNoteRequest,
     signal?: AbortSignal,
   ): Promise<ZoteroCreateNoteCommittedOutcome> {
-    return createNoteDomain(
-      this.writeDeps(),
-      (refOrName: string) => this.resolveCollection(refOrName, signal),
-      request,
-      signal,
-    )
+    return createNoteDomain(this.writeDeps(), request, signal)
   }
 
   /**
@@ -330,12 +367,7 @@ export class LocalApiProvider implements ZoteroProvider {
     request: ZoteroUpdateItemCollectionsRequest,
     signal?: AbortSignal,
   ): Promise<ZoteroUpdateItemCollectionsResult> {
-    return updateItemCollectionsDomain(
-      this.writeDeps(),
-      (refOrName: string) => this.resolveCollection(refOrName, signal),
-      request,
-      signal,
-    )
+    return updateItemCollectionsDomain(this.writeDeps(), request, signal)
   }
 
   /**
@@ -346,12 +378,7 @@ export class LocalApiProvider implements ZoteroProvider {
     request: ZoteroCreateCollectionRequest,
     signal?: AbortSignal,
   ): Promise<ZoteroCreateCollectionCommittedOutcome> {
-    return createCollectionDomain(
-      this.writeDeps(),
-      (refOrName: string) => this.resolveCollection(refOrName, signal),
-      request,
-      signal,
-    )
+    return createCollectionDomain(this.writeDeps(), request, signal)
   }
 
   /**
@@ -362,12 +389,7 @@ export class LocalApiProvider implements ZoteroProvider {
     request: ZoteroDeleteCollectionRequest,
     signal?: AbortSignal,
   ): Promise<ZoteroDeleteCollectionResult> {
-    return deleteCollectionDomain(
-      this.writeDeps(),
-      (refOrName: string) => this.resolveCollection(refOrName, signal),
-      request,
-      signal,
-    )
+    return deleteCollectionDomain(this.writeDeps(), request, signal)
   }
 
   /**

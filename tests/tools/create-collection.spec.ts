@@ -14,7 +14,7 @@ import {
   WRITE_APPROVAL_UNAVAILABLE_MESSAGE,
   writeLibraryUnsupportedMessage,
 } from '../../src/errors.js'
-import { nonBlankArgumentMessage } from '../../src/tools/validate.js'
+import { writeNonBlankMessage } from '../../src/errors.js'
 
 const PARENT_REF = 'zotero://user/0/collection/COLL1234'
 const SERVER_ID = 'srv-create-collection-1'
@@ -59,9 +59,9 @@ const posts = (requests: readonly { method: string; pathname: string }[]): reado
 
 describe('zotero_create_collection argument refusals', () => {
   it('refuses a blank name and a blank parent', async () => {
-    expect(await refusal({ name: '   ' })).toContain(nonBlankArgumentMessage('name'))
+    expect(await refusal({ name: '   ' })).toContain(writeNonBlankMessage('name'))
     expect(await refusal({ name: 'Field notes', parent: '  ' })).toContain(
-      nonBlankArgumentMessage('parent'),
+      writeNonBlankMessage('parent'),
     )
     expect(posts(lane.mock.requests)).toHaveLength(0)
   })

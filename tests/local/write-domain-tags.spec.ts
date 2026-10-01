@@ -20,10 +20,10 @@ import {
   ITEM_REF,
   itemJson,
   NEW_KEY,
-  resolveThrough,
   SECOND_COLLECTION_KEY,
   SERVER_ID,
   SOURCE_REF,
+  serveItemRead,
   startWriteDomainMock,
   writeDeps,
   expectApplied,
@@ -43,13 +43,7 @@ afterEach(async () => {
 
 /** Serve one item read; both write-relevant arrays are always present. */
 function serveItem(data: Record<string, unknown>): void {
-  mock.route('GET', `/api/users/0/items/${ITEM_KEY}`, (_req, res, helpers) =>
-    helpers.raw(
-      200,
-      { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '10' },
-      JSON.stringify(itemJson(ITEM_KEY, 10, { tags: [], collections: [], ...data })),
-    ),
-  )
+  serveItemRead(mock, { data })
 }
 
 describe('updateItemTags', () => {
@@ -242,7 +236,7 @@ describe('createNote saved-state trust', () => {
       )
     })
     const { deps, directory } = writeDeps(mock)
-    const result = await createNote(deps, resolveThrough(directory), {
+    const result = await createNote(deps, {
       markdown: 'x',
       collections: ['方法论'],
     })
@@ -266,7 +260,7 @@ describe('createNote saved-state trust', () => {
       ),
     )
     const { deps, directory } = writeDeps(mock)
-    const result = await createNote(deps, resolveThrough(directory), {
+    const result = await createNote(deps, {
       markdown: 'x',
       tags: ['requested-tag'],
       sourceRefs: [SOURCE_REF],
@@ -286,7 +280,7 @@ describe('createNote saved-state trust', () => {
       ),
     )
     const { deps, directory } = writeDeps(mock)
-    const result = await createNote(deps, resolveThrough(directory), {
+    const result = await createNote(deps, {
       markdown: 'x',
       collections: ['Second'],
     })

@@ -17,9 +17,9 @@ import {
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
 import type { ResolvedConfig } from '../config.js'
-import { WRITE_LIST_SELECTION_MESSAGE, writeListTooLongMessage } from '../errors.js'
 import { metaRecordOf, renderDeclined } from './present.js'
-import { assertWriteList, invalid, parseWritableRef, WRITE_REF_ARG_HINT } from './validate.js'
+import { libraryVersionLine, listUpdatePresentationMeta } from './write-present.js'
+import { assertAddRemoveSelection, parseWritableRef, WRITE_REF_ARG_HINT } from './validate.js'
 import { WRITE_PLAN_OUTCOME_DESCRIPTION } from '../write-approval.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroUpdateItemTagsOutcome, ZoteroUpdateItemTagsRequest } from '../types.js'
@@ -99,16 +99,7 @@ function buildRequest(
   args: UpdateItemTagsArgs,
   config: ResolvedConfig,
 ): ZoteroUpdateItemTagsRequest {
-  const add =
-    args.add === undefined ? [] : assertWriteList('add', args.add, config.writeListMaxItems)
-  const remove =
-    args.remove === undefined
-      ? []
-      : assertWriteList('remove', args.remove, config.writeListMaxItems)
-  if (add.length + remove.length === 0) invalid(WRITE_LIST_SELECTION_MESSAGE)
-  if (add.length + remove.length > config.writeListMaxItems) {
-    invalid(writeListTooLongMessage('add and remove', config.writeListMaxItems))
-  }
+  const { add, remove } = assertAddRemoveSelection(args, config.writeListMaxItems)
   return {
     item: parseWritableRef(args.ref, ['item']),
     ...(add.length > 0 ? { add } : {}),
@@ -131,7 +122,7 @@ export function renderUpdateItemTags(
   lines.push(`Tags now: ${value.tags.length === 0 ? '(none)' : value.tags.join(', ')}`)
   if (value.libraryVersion !== undefined) {
     lines.push(
-      `Library version: ${value.libraryVersion}${value.serverId === undefined ? '' : ` (served by ${value.serverId})`}`,
+      libraryVersionLine({ libraryVersion: value.libraryVersion, serverId: value.serverId }),
     )
   }
   return [{ type: 'text', text: lines.join('\n') }]
@@ -161,16 +152,7 @@ export function registerUpdateItemTagsTool(ctx: Context, service: ZoteroService)
       output: {
         schema: UPDATE_ITEM_TAGS_OUTPUT_SCHEMA,
         render: renderUpdateItemTags,
-        presentationMeta: (_args, value): JsonValue =>
-          value.kind === 'applied'
-            ? {
-                kind: 'applied',
-                ref: value.ref,
-                version: value.version,
-                addedCount: value.added.length,
-                removedCount: value.removed.length,
-              }
-            : { kind: 'declined' },
+        presentationMeta: (_args, value): JsonValue => listUpdatePresentationMeta(value),
       },
       presentCall: (args) => ({
         card: 'generic',

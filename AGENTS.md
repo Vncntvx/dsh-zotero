@@ -137,7 +137,7 @@ More detail: `docs/development.md`.
 
 ## Git
 
-[Conventional Commits](https://www.conventionalcommits.org/): `<type>(<scope>): <subject>` (lowercase type, imperative subject, header under 72). Optional emoji right after the colon. Body: blank line, bullet points only, wrap at 72 (what and why).
+[Conventional Commits](https://www.conventionalcommits.org/): `<type>(<scope>): <subject>` (lowercase type, imperative subject, header under 72). Optional emoji right after the colon. Body: blank line, bullet points only, one bullet per line — no hard wrapping (what and why).
 
 ## Validation
 
