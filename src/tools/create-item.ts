@@ -25,6 +25,7 @@ import { renderDeclined } from './present.js'
 import {
   COMMITTED_UNVERIFIED_VARIANT,
   createWritePresentationMeta,
+  DECLINED_OUTPUT_SCHEMA,
   libraryVersionLine,
   presentCreateResultView,
   renderCommittedUnverified,
@@ -71,13 +72,7 @@ type CreateItemArgs = InferArgs<typeof CREATE_ITEM_PARAMETERS>
 
 const CREATE_ITEM_OUTPUT_SCHEMA = {
   oneOf: [
-    {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        kind: { type: 'string', enum: ['declined'], required: true },
-      },
-    },
+    DECLINED_OUTPUT_SCHEMA,
     {
       type: 'object',
       additionalProperties: false,

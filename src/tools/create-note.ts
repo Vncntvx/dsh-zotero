@@ -25,6 +25,7 @@ import { renderDeclined } from './present.js'
 import {
   COMMITTED_UNVERIFIED_VARIANT,
   createWritePresentationMeta,
+  DECLINED_OUTPUT_SCHEMA,
   libraryVersionLine,
   presentCreateResultView,
   renderCommittedUnverified,
@@ -77,13 +78,7 @@ type CreateNoteArgs = InferArgs<typeof CREATE_NOTE_PARAMETERS>
 
 const CREATE_NOTE_OUTPUT_SCHEMA = {
   oneOf: [
-    {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        kind: { type: 'string', enum: ['declined'], required: true },
-      },
-    },
+    DECLINED_OUTPUT_SCHEMA,
     {
       type: 'object',
       additionalProperties: false,

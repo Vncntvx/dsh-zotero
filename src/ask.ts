@@ -280,8 +280,8 @@ export async function withConnectivityAsk<T>(
       }
     }
     const spec = FAILURE_SPECS[error.code]
-    const agentKey = exec.agent?.id ?? 'global'
-    const bucketKey = `${agentKey}:${error.code}`
+    const bucketKey =
+      exec.agent !== undefined ? `agent:${exec.agent.id}:${error.code}` : `global:${error.code}`
     let retry: boolean
     try {
       retry = await recovery.ask(

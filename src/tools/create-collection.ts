@@ -20,6 +20,7 @@ import { renderDeclined } from './present.js'
 import {
   COMMITTED_UNVERIFIED_VARIANT,
   createWritePresentationMeta,
+  DECLINED_OUTPUT_SCHEMA,
   libraryVersionLine,
   presentCreateResultView,
   renderCommittedUnverified,
@@ -49,13 +50,7 @@ type CreateCollectionArgs = InferArgs<typeof CREATE_COLLECTION_PARAMETERS>
 
 const CREATE_COLLECTION_OUTPUT_SCHEMA = {
   oneOf: [
-    {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        kind: { type: 'string', enum: ['declined'], required: true },
-      },
-    },
+    DECLINED_OUTPUT_SCHEMA,
     {
       type: 'object',
       additionalProperties: false,

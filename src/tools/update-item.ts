@@ -19,7 +19,11 @@ import {
 } from '@deepseek-ai/dsh-tools'
 import { writeListEmptyMessage, writeNonBlankMessage } from '../errors.js'
 import { metaRecordOf, renderDeclined } from './present.js'
-import { libraryVersionLine } from './write-present.js'
+import {
+  DECLINED_OUTPUT_SCHEMA,
+  libraryVersionLine,
+  presentUpdateResultView,
+} from './write-present.js'
 import { invalid, parseWritableRef, WRITE_REF_ARG_HINT } from './validate.js'
 import { requireUpdatableField } from '../write-item-rules.js'
 import { WRITE_PLAN_OUTCOME_DESCRIPTION } from '../write-approval.js'
@@ -58,13 +62,7 @@ type UpdateItemArgs = InferArgs<typeof UPDATE_ITEM_PARAMETERS>
 
 const UPDATE_ITEM_OUTPUT_SCHEMA = {
   oneOf: [
-    {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        kind: { type: 'string', enum: ['declined'], required: true },
-      },
-    },
+    DECLINED_OUTPUT_SCHEMA,
     {
       type: 'object',
       additionalProperties: false,
@@ -131,13 +129,7 @@ function presentUpdateItemResult(
   _args: UpdateItemArgs,
   result: ToolResult,
 ): ToolResultView | undefined {
-  const record = metaRecordOf(result)
-  if (record === undefined) return undefined
-  if (record.kind === 'declined') {
-    return { card: 'generic', title: 'Zotero item: declined, nothing written' }
-  }
-  const ref = typeof record.ref === 'string' ? record.ref : ''
-  return { card: 'generic', title: `Zotero item updated${ref === '' ? '' : `: ${ref}`}` }
+  return presentUpdateResultView('item', result)
 }
 
 export function registerUpdateItemTool(ctx: Context, service: ZoteroService): () => void {

@@ -19,10 +19,10 @@ import {
 import type { ResolvedConfig } from '../config.js'
 import { isRefString } from '../refs.js'
 import {
-  createUpdateListOutputSchema,
   listUpdatePresentationMeta,
-  presentUpdateListResultView,
+  presentUpdateResultView,
   renderUpdateList,
+  UPDATE_ITEM_COLLECTIONS_OUTPUT_SCHEMA,
 } from './write-present.js'
 import {
   assertAddRemoveSelection,
@@ -56,8 +56,6 @@ const UPDATE_ITEM_COLLECTIONS_PARAMETERS = {
 } as const
 
 type UpdateItemCollectionsArgs = InferArgs<typeof UPDATE_ITEM_COLLECTIONS_PARAMETERS>
-
-const UPDATE_ITEM_COLLECTIONS_OUTPUT_SCHEMA = createUpdateListOutputSchema('collections')
 
 type UpdateItemCollectionsOutput = InferValue<typeof UPDATE_ITEM_COLLECTIONS_OUTPUT_SCHEMA>
 
@@ -108,7 +106,7 @@ function presentUpdateItemCollectionsResult(
   _args: UpdateItemCollectionsArgs,
   result: ToolResult,
 ): ToolResultView | undefined {
-  return presentUpdateListResultView('membership', result)
+  return presentUpdateResultView('membership', result)
 }
 
 export function registerUpdateItemCollectionsTool(

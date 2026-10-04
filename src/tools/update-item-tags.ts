@@ -18,10 +18,10 @@ import {
 } from '@deepseek-ai/dsh-tools'
 import type { ResolvedConfig } from '../config.js'
 import {
-  createUpdateListOutputSchema,
   listUpdatePresentationMeta,
-  presentUpdateListResultView,
+  presentUpdateResultView,
   renderUpdateList,
+  UPDATE_ITEM_TAGS_OUTPUT_SCHEMA,
 } from './write-present.js'
 import { assertAddRemoveSelection, parseWritableRef, WRITE_REF_ARG_HINT } from './validate.js'
 import { WRITE_PLAN_OUTCOME_DESCRIPTION } from '../write-approval.js'
@@ -48,8 +48,6 @@ const UPDATE_ITEM_TAGS_PARAMETERS = {
 } as const
 
 type UpdateItemTagsArgs = InferArgs<typeof UPDATE_ITEM_TAGS_PARAMETERS>
-
-const UPDATE_ITEM_TAGS_OUTPUT_SCHEMA = createUpdateListOutputSchema('tags')
 
 type UpdateItemTagsOutput = InferValue<typeof UPDATE_ITEM_TAGS_OUTPUT_SCHEMA>
 
@@ -94,7 +92,7 @@ function presentUpdateItemTagsResult(
   _args: UpdateItemTagsArgs,
   result: ToolResult,
 ): ToolResultView | undefined {
-  return presentUpdateListResultView('tags', result)
+  return presentUpdateResultView('tags', result)
 }
 
 export function registerUpdateItemTagsTool(ctx: Context, service: ZoteroService): () => void {

@@ -19,7 +19,7 @@
  */
 
 import { execFileSync } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, extname, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -80,8 +80,11 @@ export function expectedPaths(manifest, baseDir = root) {
   const problems = []
   if (Array.isArray(manifest.files)) {
     for (const file of manifest.files) {
-      if (typeof file === 'string' && extname(file) !== '') {
-        paths.add(packed(file))
+      if (typeof file === 'string') {
+        const full = resolve(baseDir, file)
+        if (existsSync(full) ? statSync(full).isFile() : extname(file) !== '') {
+          paths.add(packed(file))
+        }
       }
     }
   }

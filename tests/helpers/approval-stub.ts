@@ -10,6 +10,8 @@
 import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
 import type { ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
+import type { AskUserQuestionAnswer, AskUserQuestionRequest } from '@deepseek-ai/dsh-user-questions'
+import { APPROVE_LABEL, WRITE_PLAN_QUESTION_ID } from '../../src/write-approval.js'
 import type { Options } from '../../src/config.js'
 import { setupHostLane, type HostLane } from './lanes/host-lane.js'
 
@@ -60,4 +62,18 @@ export async function approvalLane(config: Options): Promise<HostLane> {
       await ctx.plugin(StubApproval)
     },
   })
+}
+
+/** A stub questions service that records requests and automatically approves write plans. */
+export class ApprovingQuestions extends Service {
+  readonly asks: AskUserQuestionRequest[] = []
+
+  constructor(ctx: Context) {
+    super(ctx, 'userQuestions')
+  }
+
+  async ask(request: AskUserQuestionRequest): Promise<AskUserQuestionAnswer> {
+    this.asks.push(request)
+    return { answers: [{ id: WRITE_PLAN_QUESTION_ID, selected: [APPROVE_LABEL] }] }
+  }
 }

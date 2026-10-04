@@ -69,4 +69,18 @@ describe('browse: non-array bodies fail loud', () => {
       'non-array body for creator types',
     )
   })
+
+  it('refuses a tag listing containing a malformed tag row without a tag name', async () => {
+    mock.route('GET', '/api/users/0/tags', (_req, res, helpers) => {
+      helpers.json([{ data: {} }], {
+        'Total-Results': '1',
+        'Zotero-Server-ID': 'srv-1',
+      })
+    })
+    await zoteroError(
+      provider.browse({ kind: 'tags', offset: 0, limit: 10 }),
+      ZOTERO_UNEXPECTED,
+      'Zotero returned a malformed tag row without a tag name',
+    )
+  })
 })

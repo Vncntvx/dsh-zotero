@@ -312,7 +312,7 @@ async function fetchParentCollections(
         { signal: poolSignal, serverId },
       )
       const memberships = new Map<string, Set<string>>()
-      for (const row of Array.isArray(json) ? json : []) {
+      for (const row of requireArrayBody(json, 'parent item batch')) {
         const key = asString(asRecord(row)?.key)
         if (key === undefined) continue
         memberships.set(key, new Set(collectionKeysOf(row)))

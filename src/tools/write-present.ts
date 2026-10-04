@@ -207,21 +207,6 @@ export const UPDATE_ITEM_COLLECTIONS_OUTPUT_SCHEMA = {
   ],
 } as const
 
-/** Factory returning the output schema for tags or collections update tools. */
-export function createUpdateListOutputSchema(
-  propertyName: 'tags',
-): typeof UPDATE_ITEM_TAGS_OUTPUT_SCHEMA
-export function createUpdateListOutputSchema(
-  propertyName: 'collections',
-): typeof UPDATE_ITEM_COLLECTIONS_OUTPUT_SCHEMA
-export function createUpdateListOutputSchema(
-  propertyName: 'tags' | 'collections',
-): typeof UPDATE_ITEM_TAGS_OUTPUT_SCHEMA | typeof UPDATE_ITEM_COLLECTIONS_OUTPUT_SCHEMA {
-  return propertyName === 'tags'
-    ? UPDATE_ITEM_TAGS_OUTPUT_SCHEMA
-    : UPDATE_ITEM_COLLECTIONS_OUTPUT_SCHEMA
-}
-
 export interface UpdateListRenderOptions {
   readonly noun: string
   readonly unchangedTarget: string
@@ -264,8 +249,8 @@ export function renderUpdateList(
   return [{ type: 'text', text: lines.join('\n') }]
 }
 
-/** The result-card titles for tags or membership list updates. */
-export function presentUpdateListResultView(
+/** The result-card titles for item updates (tags, membership, or item fields). */
+export function presentUpdateResultView(
   noun: string,
   result: ToolResult,
 ): ToolResultView | undefined {
@@ -277,3 +262,6 @@ export function presentUpdateListResultView(
   const ref = typeof record.ref === 'string' ? record.ref : ''
   return { card: 'generic', title: `Zotero ${noun} updated${ref === '' ? '' : `: ${ref}`}` }
 }
+
+/** Backward-compatible alias for presentUpdateResultView. */
+export const presentUpdateListResultView = presentUpdateResultView

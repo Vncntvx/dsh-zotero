@@ -84,6 +84,12 @@ describe('checkProseText', () => {
     expect(problems).toEqual([])
   })
 
+  it('matches prose version containing multiple spaces before comparison operator', () => {
+    const text = '宿主 dsh  >= 0.2.0-rc.2'
+    const problems = checkProseText(text, '0.2.0-rc.2')
+    expect(problems).toEqual([])
+  })
+
   it('reports mismatch when unicode ≥ prose carries older pin', () => {
     const text = '宿主 dsh ≥ 0.1.6-alpha.2'
     const problems = checkProseText(text, '0.2.0-rc.2')

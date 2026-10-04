@@ -19,7 +19,7 @@ import {
 } from '@deepseek-ai/dsh-tools'
 import { isRefString } from '../refs.js'
 import { metaRecordOf, renderDeclined } from './present.js'
-import { libraryVersionLine } from './write-present.js'
+import { DECLINED_OUTPUT_SCHEMA, libraryVersionLine } from './write-present.js'
 import { assertNonBlank, parseWritableRef, WRITE_COLLECTION_REF_ARG_HINT } from './validate.js'
 import { WRITE_PLAN_OUTCOME_DESCRIPTION } from '../write-approval.js'
 import type { ZoteroService } from '../service.js'
@@ -37,13 +37,7 @@ type DeleteCollectionArgs = InferArgs<typeof DELETE_COLLECTION_PARAMETERS>
 
 const DELETE_COLLECTION_OUTPUT_SCHEMA = {
   oneOf: [
-    {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        kind: { type: 'string', enum: ['declined'], required: true },
-      },
-    },
+    DECLINED_OUTPUT_SCHEMA,
     {
       type: 'object',
       additionalProperties: false,
@@ -98,37 +92,60 @@ async function previewDeleteCollection(
 ): Promise<{ itemTotal?: number; childTotal?: number }> {
   let itemTotal: number | undefined
   let childTotal: number | undefined
-  let resolvedRef: string | undefined = isRefString(collection.trim())
-    ? collection.trim()
-    : undefined
-  try {
-    const searched = await service.search(
-      {
-        mode: 'metadata',
-        scope: { kind: 'collection', refOrName: collection },
-        sort: 'dateModified',
-        direction: 'desc',
-        offset: 0,
-        limit: 1,
-      },
-      undefined,
-    )
-    itemTotal = searched.total
-    if (searched.scope.kind === 'collection') {
-      resolvedRef = searched.scope.ref
+  const directRef = isRefString(collection.trim()) ? collection.trim() : undefined
+
+  if (directRef !== undefined) {
+    const [searchRes, browseRes] = await Promise.allSettled([
+      service.search(
+        {
+          mode: 'metadata',
+          scope: { kind: 'collection', refOrName: directRef },
+          sort: 'dateModified',
+          direction: 'desc',
+          offset: 0,
+          limit: 1,
+        },
+        undefined,
+      ),
+      service.browse({ kind: 'collections', parentRef: directRef, offset: 0, limit: 1 }, undefined),
+    ])
+    if (searchRes.status === 'fulfilled') {
+      itemTotal = searchRes.value.total
     }
-  } catch {
-    itemTotal = undefined
-  }
-  if (resolvedRef !== undefined) {
+    if (browseRes.status === 'fulfilled') {
+      childTotal = browseRes.value.total
+    }
+  } else {
+    let resolvedRef: string | undefined
     try {
-      const browsed = await service.browse(
-        { kind: 'collections', parentRef: resolvedRef, offset: 0, limit: 1 },
+      const searched = await service.search(
+        {
+          mode: 'metadata',
+          scope: { kind: 'collection', refOrName: collection },
+          sort: 'dateModified',
+          direction: 'desc',
+          offset: 0,
+          limit: 1,
+        },
         undefined,
       )
-      childTotal = browsed.total
+      itemTotal = searched.total
+      if (searched.scope.kind === 'collection') {
+        resolvedRef = searched.scope.ref
+      }
     } catch {
-      childTotal = undefined
+      itemTotal = undefined
+    }
+    if (resolvedRef !== undefined) {
+      try {
+        const browsed = await service.browse(
+          { kind: 'collections', parentRef: resolvedRef, offset: 0, limit: 1 },
+          undefined,
+        )
+        childTotal = browsed.total
+      } catch {
+        childTotal = undefined
+      }
     }
   }
   return {

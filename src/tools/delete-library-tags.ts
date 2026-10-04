@@ -20,7 +20,7 @@ import {
 import type { ResolvedConfig } from '../config.js'
 import { writeListEmptyMessage } from '../errors.js'
 import { metaRecordOf, renderDeclined } from './present.js'
-import { libraryVersionLine } from './write-present.js'
+import { DECLINED_OUTPUT_SCHEMA, libraryVersionLine } from './write-present.js'
 import { assertWriteList, invalid } from './validate.js'
 import { WRITE_PLAN_OUTCOME_DESCRIPTION } from '../write-approval.js'
 import type { ZoteroService } from '../service.js'
@@ -40,13 +40,7 @@ type DeleteLibraryTagsArgs = InferArgs<typeof DELETE_LIBRARY_TAGS_PARAMETERS>
 
 const DELETE_LIBRARY_TAGS_OUTPUT_SCHEMA = {
   oneOf: [
-    {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        kind: { type: 'string', enum: ['declined'], required: true },
-      },
-    },
+    DECLINED_OUTPUT_SCHEMA,
     {
       type: 'object',
       additionalProperties: false,

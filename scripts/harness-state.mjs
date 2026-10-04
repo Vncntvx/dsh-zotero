@@ -28,7 +28,7 @@
  */
 
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
-import { dirname, join, relative, resolve } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { collectHarnessPackages } from './shared/harness-packages.mjs'
 
@@ -57,7 +57,7 @@ const VERSION_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/
 export const PROSE_VERSION_PATTERNS = [
   // Exact badge first so `dsh-0.1.7--rc.1-blue` never yields a bare `0.1.7`.
   /badge\/dsh-(\d+\.\d+\.\d+(?:--[0-9A-Za-z.]+)?)-blue/g,
-  /dsh[- ](?:[≥>=]+\s*|\s*[≥>=]\s*)?v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)*)(?!-)/gi,
+  /dsh[- ]\s*(?:[≥>=]+\s*)?v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)*)(?!-)/gi,
 ]
 /** Legacy `>=` badge: legal only as a migration leftover; current form is exact. */
 const LEGACY_GTE_BADGE = /%3E%3D(\d+\.\d+\.\d+(?:--[0-9A-Za-z.]+)?)-blue/g
@@ -189,12 +189,13 @@ export function checkVersionMap(path, source, packageVersion, pin) {
 /** Fail on any harness version in current-pin prose that is not the pin. */
 export function checkProseText(text, pin, path = 'doc.md') {
   const fileProblems = []
+  const displayPath = isAbsolute(path) ? relative(root, path) : path
   const lines = text.split('\n')
   const { start, end } = versionMapBounds(lines)
   const prose = lines.filter((_, i) => i < start || i >= end).join('\n')
   for (const match of prose.matchAll(LEGACY_GTE_BADGE)) {
     fileProblems.push(
-      `${relative(root, path)} still carries a ">= ${decodeBadgeVersion(match[1])}" badge;` +
+      `${displayPath} still carries a ">= ${decodeBadgeVersion(match[1])}" badge;` +
         ` the current form is the exact badge "dsh ${pin}"`,
     )
   }
@@ -203,13 +204,13 @@ export function checkProseText(text, pin, path = 'doc.md') {
     for (const match of prose.matchAll(pattern)) found.add(decodeBadgeVersion(match[1]))
   }
   if (found.size === 0) {
-    fileProblems.push(`${relative(root, path)} states no harness version; name the verified pin`)
+    fileProblems.push(`${displayPath} states no harness version; name the verified pin`)
     return fileProblems
   }
   for (const version of found) {
     if (version !== pin) {
       fileProblems.push(
-        `${relative(root, path)} still states harness version "${version}" (the pin is "${pin}")`,
+        `${displayPath} still states harness version "${version}" (the pin is "${pin}")`,
       )
     }
   }

@@ -9,30 +9,13 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { ToolDefinition, ToolResult } from '@deepseek-ai/dsh-tools'
 import { type HostLane, setupHostLane } from '../helpers/lanes/host-lane.js'
-import { approvalAsks, approvalLane, resetApprovalStub } from '../helpers/approval-stub.js'
+import { approvalLane, resetApprovalStub, ApprovingQuestions } from '../helpers/approval-stub.js'
 import {
   WRITE_APPROVAL_UNAVAILABLE_MESSAGE,
   writeLibraryUnsupportedMessage,
 } from '../../src/errors.js'
 import { deleteCollectionPlan } from '../../src/tools/delete-collection.js'
 import { writeNonBlankMessage } from '../../src/errors.js'
-
-import { Service, type Context } from '@deepseek-ai/cordis'
-import type { AskUserQuestionAnswer, AskUserQuestionRequest } from '@deepseek-ai/dsh-user-questions'
-import { APPROVE_LABEL, WRITE_PLAN_QUESTION_ID } from '../../src/write-approval.js'
-
-class ApprovingQuestions extends Service {
-  readonly asks: AskUserQuestionRequest[] = []
-
-  constructor(ctx: Context) {
-    super(ctx, 'userQuestions')
-  }
-
-  async ask(request: AskUserQuestionRequest): Promise<AskUserQuestionAnswer> {
-    this.asks.push(request)
-    return { answers: [{ id: WRITE_PLAN_QUESTION_ID, selected: [APPROVE_LABEL] }] }
-  }
-}
 
 const COLLECTION_REF = 'zotero://user/0/collection/ABCD1234'
 const SERVER_ID = 'srv-delete-collection-1'
