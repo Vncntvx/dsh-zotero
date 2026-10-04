@@ -10,7 +10,7 @@
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { ToolResult, ToolResultView } from '@deepseek-ai/dsh-tools'
-import { metaRecordOf } from './present.js'
+import { metaRecordOf, renderDeclined } from './present.js'
 
 /**
  * The output-schema variant for the non-retryable committed-unverified
@@ -151,4 +151,129 @@ export function listUpdatePresentationMeta(
 /** The closing line of every write receipt: the library version and its serving instance. */
 export function libraryVersionLine(value: { libraryVersion: number; serverId?: string }): string {
   return `Library version: ${value.libraryVersion}${value.serverId === undefined ? '' : ` (served by ${value.serverId})`}`
+}
+
+export const DECLINED_OUTPUT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    kind: { type: 'string', enum: ['declined'], required: true },
+  },
+} as const
+
+const COMMON_UPDATE_LIST_PROPERTIES = {
+  kind: { type: 'string', enum: ['applied'], required: true },
+  ref: { type: 'string', required: true },
+  version: {
+    type: 'integer',
+    required: true,
+    description: "The item's version after the update (or the read version when unchanged).",
+  },
+  added: { type: 'array', items: { type: 'string' }, required: true },
+  removed: { type: 'array', items: { type: 'string' }, required: true },
+  unchanged: { type: 'boolean', required: true },
+  libraryVersion: {
+    type: 'integer',
+    description: 'The library version the write advanced to; absent when unchanged.',
+  },
+  serverId: { type: 'string' },
+} as const
+
+export const UPDATE_ITEM_TAGS_OUTPUT_SCHEMA = {
+  oneOf: [
+    DECLINED_OUTPUT_SCHEMA,
+    {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        ...COMMON_UPDATE_LIST_PROPERTIES,
+        tags: { type: 'array', items: { type: 'string' }, required: true },
+      },
+    },
+  ],
+} as const
+
+export const UPDATE_ITEM_COLLECTIONS_OUTPUT_SCHEMA = {
+  oneOf: [
+    DECLINED_OUTPUT_SCHEMA,
+    {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        ...COMMON_UPDATE_LIST_PROPERTIES,
+        collections: { type: 'array', items: { type: 'string' }, required: true },
+      },
+    },
+  ],
+} as const
+
+/** Factory returning the output schema for tags or collections update tools. */
+export function createUpdateListOutputSchema(
+  propertyName: 'tags',
+): typeof UPDATE_ITEM_TAGS_OUTPUT_SCHEMA
+export function createUpdateListOutputSchema(
+  propertyName: 'collections',
+): typeof UPDATE_ITEM_COLLECTIONS_OUTPUT_SCHEMA
+export function createUpdateListOutputSchema(
+  propertyName: 'tags' | 'collections',
+): typeof UPDATE_ITEM_TAGS_OUTPUT_SCHEMA | typeof UPDATE_ITEM_COLLECTIONS_OUTPUT_SCHEMA {
+  return propertyName === 'tags'
+    ? UPDATE_ITEM_TAGS_OUTPUT_SCHEMA
+    : UPDATE_ITEM_COLLECTIONS_OUTPUT_SCHEMA
+}
+
+export interface UpdateListRenderOptions {
+  readonly noun: string
+  readonly unchangedTarget: string
+  readonly currentLabel: string
+}
+
+/** Render the receipt blocks for a tags or collections update tool. */
+export function renderUpdateList(
+  value:
+    | { kind: 'declined' }
+    | {
+        kind: 'applied'
+        ref: string
+        version: number
+        added: readonly string[]
+        removed: readonly string[]
+        unchanged: boolean
+        items: readonly string[]
+        libraryVersion?: number
+        serverId?: string
+      },
+  options: UpdateListRenderOptions,
+): ContentBlock[] {
+  if (value.kind === 'declined') {
+    return renderDeclined()
+  }
+  const lines = [
+    value.unchanged
+      ? `No change: ${value.ref} already carries ${options.unchangedTarget} (version ${value.version}).`
+      : `Updated ${options.noun} on ${value.ref} (version ${value.version}); added ${value.added.length === 0 ? '(none)' : value.added.join(', ')}; removed ${value.removed.length === 0 ? '(none)' : value.removed.join(', ')}.`,
+  ]
+  lines.push(
+    `${options.currentLabel}: ${value.items.length === 0 ? '(none)' : value.items.join(', ')}`,
+  )
+  if (value.libraryVersion !== undefined) {
+    lines.push(
+      libraryVersionLine({ libraryVersion: value.libraryVersion, serverId: value.serverId }),
+    )
+  }
+  return [{ type: 'text', text: lines.join('\n') }]
+}
+
+/** The result-card titles for tags or membership list updates. */
+export function presentUpdateListResultView(
+  noun: string,
+  result: ToolResult,
+): ToolResultView | undefined {
+  const record = metaRecordOf(result)
+  if (record === undefined) return undefined
+  if (record.kind === 'declined') {
+    return { card: 'generic', title: `Zotero ${noun}: declined, nothing written` }
+  }
+  const ref = typeof record.ref === 'string' ? record.ref : ''
+  return { card: 'generic', title: `Zotero ${noun} updated${ref === '' ? '' : `: ${ref}`}` }
 }

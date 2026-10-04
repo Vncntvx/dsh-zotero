@@ -21,7 +21,6 @@ import {
   ZOTERO_CAPABILITY_UNAVAILABLE,
   ZOTERO_INVALID_ARGUMENT,
   ZOTERO_NOT_FOUND,
-  ZOTERO_NOT_IMPLEMENTED,
   ZOTERO_SERVER_MISMATCH,
   ZOTERO_UNEXPECTED,
   ZOTERO_WRITE_CONFLICT,
@@ -549,7 +548,7 @@ describe('createNote', () => {
     try {
       const { deps: bareDeps } = writeDeps(rawMock)
       await expect(createNote(bareDeps, { markdown: 'x' })).rejects.toMatchObject({
-        code: ZOTERO_NOT_IMPLEMENTED,
+        code: ZOTERO_UNEXPECTED,
         message: WRITE_IDENTITY_UNSUPPORTED_MESSAGE,
       })
     } finally {

@@ -2,6 +2,10 @@
 
 export declare function versionMapBounds(lines: string[]): { start: number; end: number }
 
+export declare const PROSE_VERSION_PATTERNS: RegExp[]
+
+export declare function checkProseText(text: string, pin: string, path?: string): string[]
+
 export declare function retargetProse(source: string, previous: string, next: string): string
 
 export declare function checkVersionMap(

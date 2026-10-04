@@ -374,6 +374,7 @@ export function renderChanges(args: ChangesArgs, value: ChangesOutput): ContentB
   if (isJobArm(value)) return renderJobArm(value)
   const lines = []
   const cursor = value.cursor
+  const effectiveIncludes = args.include ?? args.since?.include ?? DEFAULT_INCLUDES
   if (value.fromVersion === undefined) {
     if (cursor !== undefined) {
       lines.push(baselineCursorMessage(cursor.version, cursor.serverId))
@@ -388,7 +389,7 @@ export function renderChanges(args: ChangesArgs, value: ChangesOutput): ContentB
     lines.push(`Changes ${value.fromVersion} → ${CHANGES_NOT_ADVANCED_LIBRARY_MOVED}`)
   } else if (value.versionUnavailable === true) {
     lines.push(`Changes ${value.fromVersion} → ${CHANGES_NOT_ADVANCED_NO_VERSION}`)
-  } else if (args.include?.includes('fulltext') === true) {
+  } else if (effectiveIncludes.includes('fulltext')) {
     lines.push(`Changes ${value.fromVersion} → ${CHANGES_NOT_ADVANCED_FULLTEXT}`)
   } else {
     lines.push(`Changes ${value.fromVersion} → ${CHANGES_NOT_ADVANCED_UNVERIFIED}`)
@@ -559,7 +560,7 @@ export function registerChangesTool(ctx: Context, service: ZoteroService): void 
             ? 'zotero_changes (baseline)'
             : `zotero_changes (since v${args.since.version})`
         return await executeWithJobs({
-          runner: new ZoteroJobRunner(ctx.get('jobs')),
+          runner: new ZoteroJobRunner(ctx.get('jobs'), ctx.logger),
           exec,
           label,
           run: (signal, onProgress) =>

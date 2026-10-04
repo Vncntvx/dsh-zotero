@@ -98,15 +98,19 @@ export class ZoteroError extends HarnessError {
   }
 }
 
+/** Setting checkbox label in Zotero Preferences -> Advanced -> Allow other applications... */
+export const ZOTERO_ALLOW_OTHER_APPLICATIONS_HINT =
+  'Allow other applications on this computer to communicate with Zotero'
+
 /** Shown when Zotero cannot be reached at all. */
 export const NOT_RUNNING_MESSAGE =
   'Zotero is not running or its local API is unreachable. Start Zotero and enable ' +
-  '"Allow other applications on this computer to communicate with Zotero" in Settings → Advanced, then retry.'
+  `"${ZOTERO_ALLOW_OTHER_APPLICATIONS_HINT}" in Settings → Advanced, then retry.`
 
 /** Shown when Zotero runs but rejects the local API request. */
 export const API_DISABLED_MESSAGE =
   'Zotero rejected the request (403). Enable the local API in Zotero: Settings → Advanced → ' +
-  '"Allow other applications on this computer to communicate with Zotero".'
+  `"${ZOTERO_ALLOW_OTHER_APPLICATIONS_HINT}".`
 
 /** Shown when a ref's provenance no longer matches the running instance. */
 export const SERVER_MISMATCH_MESSAGE =

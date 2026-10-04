@@ -207,7 +207,8 @@ describe('ZoteroJobRunner', () => {
       registry.start = (() => {
         throw new Error('background jobs unavailable: no job controller serves this agent')
       }) as typeof registry.start
-      const runner = new ZoteroJobRunner(registry as unknown as JobRegistry)
+      const logger = { warn: vi.fn() }
+      const runner = new ZoteroJobRunner(registry as unknown as JobRegistry, logger)
       const seen: string[] = []
       const outcome = await runner.waitOrPromote(
         {
@@ -225,6 +226,11 @@ describe('ZoteroJobRunner', () => {
 
       expect(outcome).toEqual({ kind: 'foreground', value: 'foreground fallback' })
       expect(seen).toEqual(['ran'])
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining(
+          'zotero: job registration refused, running in the foreground: background jobs unavailable: no job controller serves this agent',
+        ),
+      )
     })
 
     it('throws toolAborted if caller signal is already aborted before waiting', async () => {

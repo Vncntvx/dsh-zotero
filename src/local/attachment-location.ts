@@ -22,6 +22,7 @@ import {
   selectAttachments,
 } from '../attachments.js'
 import { formatRef, libraryPrefix, refForLibrary, requireSupportedLocalRef } from '../refs.js'
+import { requireArrayBody } from './pagination.js'
 import type { LocalApiLimits } from './limits.js'
 import type { SupportedLocalLibrary, ZoteroAttachmentLocation, ZoteroObjectRef } from '../types.js'
 
@@ -204,7 +205,8 @@ async function resolveAttachmentKey(
       serverId: ref.serverId,
     },
   )
-  const pdf = selectAttachments(Array.isArray(children.json) ? children.json : [], 'pdf')[0]
+  const childrenRows = requireArrayBody(children.json, 'item children')
+  const pdf = selectAttachments(childrenRows, 'pdf')[0]
   if (pdf === undefined) {
     throw new ZoteroError(noAttachmentToResolveMessage(ref.key), ZOTERO_NO_ATTACHMENT)
   }

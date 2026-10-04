@@ -281,6 +281,33 @@ describe('createCollection', () => {
       await own.close()
     }
   })
+
+  it('fails loud when a sibling collection row is malformed', async () => {
+    const own = await MockZotero.start()
+    try {
+      own.route('GET', '/api/', (_req, res, helpers) =>
+        helpers.raw(200, { 'Zotero-Server-ID': SERVER_ID }, JSON.stringify({})),
+      )
+      own.route('GET', '/api/users/0/collections/top', (_req, res, helpers) =>
+        helpers.raw(
+          200,
+          {
+            'Zotero-Server-ID': SERVER_ID,
+            'Total-Results': '1',
+            'Last-Modified-Version': '10',
+          },
+          JSON.stringify([{ key: 'NOT_VALID_KEY', data: { name: 'Invalid' } }]),
+        ),
+      )
+      const { deps } = writeDeps(own)
+      await expect(createCollection(deps, { name: 'New Folder' })).rejects.toMatchObject({
+        code: ZOTERO_UNEXPECTED,
+        message: 'Zotero returned a malformed collection row in the sibling listing',
+      })
+    } finally {
+      await own.close()
+    }
+  })
 })
 
 describe('deleteCollection', () => {

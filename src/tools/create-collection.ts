@@ -24,12 +24,7 @@ import {
   presentCreateResultView,
   renderCommittedUnverified,
 } from './write-present.js'
-import {
-  assertNonBlank,
-  invalid,
-  parseWritableRef,
-  WRITE_COLLECTION_REF_ARG_HINT,
-} from './validate.js'
+import { assertNonBlank, parseWritableRef, WRITE_COLLECTION_REF_ARG_HINT } from './validate.js'
 import {
   WRITE_COMMITTED_UNVERIFIED_DESCRIPTION,
   WRITE_PLAN_OUTCOME_DESCRIPTION,

@@ -12,7 +12,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { ZOTERO_INVALID_ARGUMENT } from '../../src/errors.js'
+import { ZOTERO_INVALID_ARGUMENT, ZOTERO_UNEXPECTED } from '../../src/errors.js'
 import { LocalApiProvider } from '../../src/local/provider.js'
 import { INCLUDE_TRASHED_SCOPE_MESSAGE } from '../../src/local/search-domain.js'
 import { MockZotero } from '../helpers/mock-zotero.js'
@@ -401,7 +401,7 @@ describe('search: note-content scan', () => {
 
   it('treats an empty scan response as no note matches', async () => {
     mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers, search) => {
-      if (search.get('itemType') === 'note') helpers.json({})
+      if (search.get('itemType') === 'note') helpers.json([])
       else helpers.json([searchHit()], { 'Total-Results': '1', 'Zotero-Server-ID': SERVER_ID })
     })
     const result = await provider.search(request({ query: 'cascade' }))
@@ -669,5 +669,16 @@ describe('search: note-content scan', () => {
       ref: 'zotero://user/0/collection/COLL1234?server=S1',
       name: 'Brand New',
     })
+  })
+
+  it('fails loud when the note-scan response is not an array', async () => {
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers, search) => {
+      if (search.get('itemType') === 'note') helpers.json({ notAnArray: true })
+      else helpers.json([searchHit()], { 'Total-Results': '1', 'Zotero-Server-ID': SERVER_ID })
+    })
+    await zoteroError(
+      provider.search(request({ query: 'cascade infrastructure' })),
+      'ZOTERO_UNEXPECTED',
+    )
   })
 })

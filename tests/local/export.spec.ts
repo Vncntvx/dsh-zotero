@@ -466,9 +466,9 @@ describe('export', () => {
 })
 
 describe('export tolerances', () => {
-  it('treats a non-array citation response as missing items', async () => {
+  it('fails loud when a citation response is not an array', async () => {
     serveJson(mock, `${apiPath()}/items`, { key: ITEM_KEY })
-    await zoteroError(provider.export(exportRequest()), ZOTERO_NOT_FOUND, 'ABCD1234')
+    await zoteroError(provider.export(exportRequest()), ZOTERO_UNEXPECTED)
   })
 
   it('fails loud on a citation row without a valid key', async () => {

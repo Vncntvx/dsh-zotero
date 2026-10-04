@@ -16,7 +16,6 @@ import {
   type ToolResult,
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
-import { ZOTERO_INVALID_ARGUMENT, ZoteroError } from '../errors.js'
 import {
   normalizeCreator,
   requireCreatableItemType,
@@ -30,7 +29,7 @@ import {
   presentCreateResultView,
   renderCommittedUnverified,
 } from './write-present.js'
-import { assertNonBlank, invalid } from './validate.js'
+import { assertNonBlank } from './validate.js'
 import {
   WRITE_COMMITTED_UNVERIFIED_DESCRIPTION,
   WRITE_PLAN_OUTCOME_DESCRIPTION,

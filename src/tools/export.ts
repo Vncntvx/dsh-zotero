@@ -255,7 +255,7 @@ export function registerExportTool(ctx: Context, service: ZoteroService): void {
       async execute(args, exec) {
         const request = buildRequest(args, service.config)
         return await executeWithJobs({
-          runner: new ZoteroJobRunner(ctx.get('jobs')),
+          runner: new ZoteroJobRunner(ctx.get('jobs'), ctx.logger),
           exec,
           label: `zotero_export (${args.refs.length} refs, ${args.format})`,
           run: (signal, onProgress) =>

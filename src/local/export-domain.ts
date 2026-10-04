@@ -26,11 +26,10 @@ import {
   requireSupportedLocalRef,
   PERSONAL_LIBRARY,
 } from '../refs.js'
+import { requireArrayBody } from './pagination.js'
 import type { LocalApiLimits } from './limits.js'
 import type {
   SupportedLocalLibrary,
-  ZoteroExportFormat,
-  ZoteroExportItem,
   ZoteroExportRequest,
   ZoteroExportResult,
   ZoteroObjectRef,
@@ -266,7 +265,7 @@ async function fetchCitationBatch(
     serverId,
   })
   const citationByKey = new Map<string, string>()
-  for (const row of Array.isArray(json) ? json : []) {
+  for (const row of requireArrayBody(json, 'citation batch')) {
     const record = asRecord(row)
     const key = asString(record?.key)
     if (key === undefined || !isObjectKey(key)) {

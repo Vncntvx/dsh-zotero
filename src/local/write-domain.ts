@@ -32,7 +32,6 @@ import { ZOTERO_LIBRARY_VERSION_HEADER, ZOTERO_SERVER_ID_HEADER } from '../const
 import {
   WRITE_CHILD_COLLECTIONS_MESSAGE,
   WRITE_IDENTITY_UNSUPPORTED_MESSAGE,
-  WRITE_ITEM_NEEDS_TITLE_OR_URL_MESSAGE,
   WRITE_LIST_SELECTION_MESSAGE,
   WRITE_PRECONDITION_READ_LIBRARY_VERSION_MESSAGE,
   WRITE_UNAUTHORIZED_AFTER_AUTH_MESSAGE,
@@ -49,7 +48,6 @@ import {
   ZOTERO_INVALID_ARGUMENT,
   ZOTERO_SERVER_MISMATCH,
   ZOTERO_NOT_FOUND,
-  ZOTERO_NOT_IMPLEMENTED,
   ZOTERO_UNEXPECTED,
   ZOTERO_WRITE_CONFLICT,
   ZOTERO_WRITE_UNAUTHORIZED,
@@ -212,7 +210,7 @@ async function ensureServerId(deps: WriteDomainDeps, signal?: AbortSignal): Prom
   await deps.client.get('', undefined, { signal })
   const id = deps.client.serverId
   if (id === undefined) {
-    throw new ZoteroError(WRITE_IDENTITY_UNSUPPORTED_MESSAGE, ZOTERO_NOT_IMPLEMENTED)
+    throw new ZoteroError(WRITE_IDENTITY_UNSUPPORTED_MESSAGE, ZOTERO_UNEXPECTED)
   }
   return id
 }
@@ -1030,7 +1028,12 @@ async function listSiblingsFresh(
       const record = asRecord(row)
       const key = asString(record?.key)
       const name = asString(asRecord(record?.data)?.name)
-      if (key === undefined || !isObjectKey(key) || name === undefined) continue
+      if (key === undefined || !isObjectKey(key) || name === undefined) {
+        throw new ZoteroError(
+          'Zotero returned a malformed collection row in the sibling listing',
+          ZOTERO_UNEXPECTED,
+        )
+      }
       siblings.push({ key, name })
     }
     const next = nextOffsetOf(offset, rows.length, total)
@@ -1116,7 +1119,7 @@ export async function createCollection(
       serverId,
     }
   })
-  if (created.kind === 'applied' || created.key !== undefined) {
+  if (created.key !== undefined) {
     deps.onCollectionsChanged?.()
   }
   return created

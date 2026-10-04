@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { ZOTERO_FILE_MISSING, ZOTERO_NO_ATTACHMENT } from '../../src/errors.js'
+import { ZOTERO_FILE_MISSING, ZOTERO_NO_ATTACHMENT, ZOTERO_UNEXPECTED } from '../../src/errors.js'
 import { type LocalApiProvider } from '../../src/local/provider.js'
 import {
   attachmentTypeMessage,
@@ -481,11 +481,10 @@ describe('getAttachmentLocation', () => {
 })
 
 describe('getItem collections edge cases', () => {
-  it('treats a non-array collections listing as no names', async () => {
+  it('fails loud on a non-array collections listing', async () => {
     serveJson(mock, `${apiPath()}/items/${ITEM_KEY}`, PARENT)
     serveJson(mock, `${apiPath()}/collections`, { key: 'COLL1234' })
-    const detail = await provider.getItem(getRequest())
-    expect(detail.collections).toEqual([{ ref: 'zotero://user/0/collection/COLL1234' }])
+    await zoteroError(provider.getItem(getRequest()), 'ZOTERO_UNEXPECTED', 'non-array body')
   })
 })
 describe('getAttachmentLocation via item refs', () => {
@@ -550,9 +549,9 @@ describe('getAttachmentLocation via item refs', () => {
     )
   })
 
-  it('fails with NO_ATTACHMENT on a non-array children fallback', async () => {
+  it('fails loud with UNEXPECTED on a non-array children fallback', async () => {
     serveJson(mock, `${apiPath()}/items/${ITEM_KEY}`, item({ data: { title: 'T' } }))
     serveJson(mock, `${apiPath()}/items/${ITEM_KEY}/children`, { key: 'NOTE1111' })
-    await zoteroError(provider.getAttachmentLocation(parseRef(itemRef())), ZOTERO_NO_ATTACHMENT)
+    await zoteroError(provider.getAttachmentLocation(parseRef(itemRef())), ZOTERO_UNEXPECTED)
   })
 })

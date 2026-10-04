@@ -46,6 +46,7 @@ import {
 } from '../normalize.js'
 import type { ZoteroHttpClient } from '../http-client.js'
 import { cacheEntryMatchesIdentity, type LocalReadContext } from './identity.js'
+import { requireArrayBody } from './pagination.js'
 import type {
   SupportedLocalLibrary,
   ZoteroItemLevel,
@@ -223,7 +224,8 @@ export class ScopeDirectory {
       signal,
       serverId: ctx.serverId,
     })
-    const entries = (Array.isArray(json) ? json : []).map((row) => normalizeScopeEntry(row))
+    const rows = requireArrayBody(json, `${ctx.library.type} ${plural}`)
+    const entries = rows.map((row) => normalizeScopeEntry(row))
     const servedBy = resolveServedBy(headers, ctx.serverId)
     const listing: ScopeListing =
       servedBy === undefined

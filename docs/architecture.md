@@ -27,7 +27,7 @@ graph LR
 - 配置以 Loader entry 为基准，设置变更通过 `loader/volatile-update` 提交到同一 entry；
 - 结构性配置变更（如传输层与写入开关）在现有实例上重建 HTTP 客户端、Provider 与写工具集；限额变更由 Provider 实时读取，不触发重建；
 - 连通性恢复门控（`ConnectivityRecovery`）与服务实例同生命周期，避免并发失败堆叠询问；
-- 写入闸门统一收敛于服务接缝：所有写操作接收 `ZoteroWriteCall`，依次通过能力检查、会话审批策略（`ctx.approv al.request`）以及计划审查卡；
+- 写入闸门统一收敛于服务接缝：所有写操作接收 `ZoteroWriteCall`，依次通过能力检查、会话审批策略（`ctx.approval.request`）以及计划审查卡；
 - 注册 `tools/pre-execute` 监听器，检测直写本地 API 的 shell 命令并提升为审批请求；
 - 请求驱动架构：插件加载过程不发起任何外部或本地网络请求。
 

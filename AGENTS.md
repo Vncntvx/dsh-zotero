@@ -116,7 +116,7 @@ More detail: `docs/development.md`.
 
 - Browser code is `src/client/**` plus allowlisted pure surfaces. **`scripts/client-graph-authority.mjs` `CLIENT_SAFE_LOCAL` is the sole authority** (currently `contract`, `settings-namespace`, `json`, `ref-grammar`, `export-items`, `changes-contract`, `browse-rows`, `evidence-item`). When adding a pure surface, change the authority first and keep any narrative lists in step. Never value-import zod, schemastery, host codecs, `src/config.ts`, or `src/typert.ts` into that graph; `npm run build:client` fails the build if you do.
 - Read the mounted remote namespace via `mountedNamespace()` (`ctx.reflect.get('remote.zotero')`). Never use the dotted `ctx.remote.zotero` — it throws on a fiber that carries a runtime (`tests/client/apply.spec.ts`). This is the **only** approved `reflect.get('remote…')` site: it exists because the plugin both mounts and consumes `remote.zotero`, so a static `inject` cannot name a namespace that does not exist yet. New code must use the official `ctx.remote.<ns>` + `inject` form.
-- Keep `package.json` `dsh.client.inject` equal to the rows the client entry actually needs (locale, ui-renderer, ui-settings, ui-conversation, ui-session, ui-chat, api-remotes).
+- Keep `package.json` `dsh.client.inject` equal to the rows the client entry actually needs (locale, ui-renderer, ui-settings, ui-conversation, ui-session, ui-chat, ui-plugin-manager, ui-tool, api-remotes).
 
 ### Writes
 

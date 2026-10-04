@@ -25,7 +25,6 @@ import { assertWriteList, invalid } from './validate.js'
 import { WRITE_PLAN_OUTCOME_DESCRIPTION } from '../write-approval.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroDeleteLibraryTagsOutcome, ZoteroDeleteLibraryTagsRequest } from '../types.js'
-import type { ZoteroTagInfo } from '../types.js'
 
 const DELETE_LIBRARY_TAGS_PARAMETERS = {
   tags: {

@@ -9,12 +9,30 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { ToolDefinition, ToolResult } from '@deepseek-ai/dsh-tools'
 import { type HostLane, setupHostLane } from '../helpers/lanes/host-lane.js'
+import { approvalAsks, approvalLane, resetApprovalStub } from '../helpers/approval-stub.js'
 import {
   WRITE_APPROVAL_UNAVAILABLE_MESSAGE,
   writeLibraryUnsupportedMessage,
 } from '../../src/errors.js'
 import { deleteCollectionPlan } from '../../src/tools/delete-collection.js'
 import { writeNonBlankMessage } from '../../src/errors.js'
+
+import { Service, type Context } from '@deepseek-ai/cordis'
+import type { AskUserQuestionAnswer, AskUserQuestionRequest } from '@deepseek-ai/dsh-user-questions'
+import { APPROVE_LABEL, WRITE_PLAN_QUESTION_ID } from '../../src/write-approval.js'
+
+class ApprovingQuestions extends Service {
+  readonly asks: AskUserQuestionRequest[] = []
+
+  constructor(ctx: Context) {
+    super(ctx, 'userQuestions')
+  }
+
+  async ask(request: AskUserQuestionRequest): Promise<AskUserQuestionAnswer> {
+    this.asks.push(request)
+    return { answers: [{ id: WRITE_PLAN_QUESTION_ID, selected: [APPROVE_LABEL] }] }
+  }
+}
 
 const COLLECTION_REF = 'zotero://user/0/collection/ABCD1234'
 const SERVER_ID = 'srv-delete-collection-1'
@@ -93,6 +111,63 @@ describe('zotero_delete_collection preview', () => {
     expect(
       deleteCollectionPlan({ collection: 'Field notes' }, { itemTotal: 3, childTotal: 2 }),
     ).toContain('- Child collections: 2 (they are deleted with the parent)')
+  })
+
+  it('resolves childTotal in preview when collection is referenced by name', async () => {
+    await lane.teardown()
+    lane = await approvalLane({ writeEnabled: true })
+    resetApprovalStub()
+    await lane.ctx.plugin(ApprovingQuestions)
+    const scripted = lane.ctx.get('userQuestions') as unknown as ApprovingQuestions
+
+    lane.mock.route('GET', '/api/users/0/collections', (_req, res, helpers) => {
+      helpers.json([{ key: 'COLL9999', data: { name: 'My Target' } }], {
+        'Total-Results': '1',
+        'Zotero-Server-ID': SERVER_ID,
+      })
+    })
+    lane.mock.route('GET', '/api/users/0/collections/COLL9999/items/top', (_req, res, helpers) => {
+      helpers.json(
+        [
+          {
+            key: 'ITEM1111',
+            version: 1,
+            data: { key: 'ITEM1111', itemType: 'journalArticle', title: 'T' },
+          },
+        ],
+        { 'Total-Results': '5', 'Zotero-Server-ID': SERVER_ID },
+      )
+    })
+    lane.mock.route(
+      'GET',
+      '/api/users/0/collections/COLL9999/collections',
+      (_req, res, helpers) => {
+        helpers.json(
+          [
+            { key: 'SUB11111', data: { name: 'Sub 1' } },
+            { key: 'SUB22222', data: { name: 'Sub 2' } },
+          ],
+          { 'Total-Results': '2', 'Zotero-Server-ID': SERVER_ID },
+        )
+      },
+    )
+    lane.mock.route('GET', '/api/users/0/collections/COLL9999', (_req, res, helpers) => {
+      helpers.json(
+        { key: 'COLL9999', version: 10, data: { name: 'My Target' } },
+        {
+          'Zotero-Server-ID': SERVER_ID,
+        },
+      )
+    })
+    lane.mock.route('DELETE', '/api/users/0/collections/COLL9999', (_req, res, helpers) => {
+      helpers.raw(204, { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '11' }, '')
+    })
+
+    await lane.runTool('zotero_delete_collection', { collection: 'My Target' })
+    expect(scripted.asks).toHaveLength(1)
+    const plan = scripted.asks[0]?.questions[0]?.detail
+    expect(plan).toContain('- Items in this collection: 5')
+    expect(plan).toContain('- Child collections: 2')
   })
 })
 

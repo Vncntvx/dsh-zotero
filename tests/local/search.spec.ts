@@ -381,13 +381,13 @@ describe('search: collection scope', () => {
     await zoteroError(provider.search(request({})), 'ZOTERO_UNEXPECTED', 'non-array body')
   })
 
-  it('treats a non-array scope listing as no matches', async () => {
+  it('fails loud on a non-array scope listing instead of treating it as an empty set', async () => {
     serveJson(mock, '/api/users/0/collections', { key: COLLECTION_KEY })
-    const error = await zoteroError(
+    await zoteroError(
       provider.search(request({ scope: { kind: 'collection', refOrName: 'LLM Papers' } })),
-      ZOTERO_NOT_FOUND,
+      'ZOTERO_UNEXPECTED',
+      'non-array body',
     )
-    expect(error.message).not.toContain('Possible matches')
   })
 
   it('keeps the input ref provenance when the single-object response has no server id', async () => {

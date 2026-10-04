@@ -20,7 +20,7 @@
 
 import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { dirname, relative, resolve } from 'node:path'
+import { dirname, extname, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -78,6 +78,13 @@ function addExportPaths(paths, problems, key, value, baseDir) {
 export function expectedPaths(manifest, baseDir = root) {
   const paths = new Set(['package.json', 'README.md'])
   const problems = []
+  if (Array.isArray(manifest.files)) {
+    for (const file of manifest.files) {
+      if (typeof file === 'string' && extname(file) !== '') {
+        paths.add(packed(file))
+      }
+    }
+  }
   if (typeof manifest.main === 'string') paths.add(packed(manifest.main))
   if (typeof manifest.icon === 'string') paths.add(packed(manifest.icon))
   const exportsMap = manifest.exports

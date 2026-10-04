@@ -495,6 +495,24 @@ describe('zotero_changes tool', () => {
     const fulltextText = (fulltext[0] as { text: string }).text
     expect(fulltextText).toContain(FULLTEXT_COUNTER_NOTE)
     expect(fulltextText).toContain(CHANGES_NOT_ADVANCED_FULLTEXT)
+
+    const fulltextFromSince = renderChanges(
+      {
+        since: {
+          serverId: 'S1',
+          library: { type: 'user', id: 0 },
+          version: 1,
+          include: ['fulltext'],
+        },
+      },
+      {
+        fromVersion: 1,
+        changed: { fulltextAttachments: [{ key: 'WXYZ6789', version: 90071 }] },
+        totals: { fulltextAttachments: 1 },
+      } as never,
+    )
+    const fulltextFromSinceText = (fulltextFromSince[0] as { text: string }).text
+    expect(fulltextFromSinceText).toContain(CHANGES_NOT_ADVANCED_FULLTEXT)
   })
 
   describe('background jobs and promotion', () => {

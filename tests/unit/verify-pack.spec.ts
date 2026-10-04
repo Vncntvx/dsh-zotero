@@ -66,4 +66,20 @@ describe('expectedPaths', () => {
     expect(problems).toEqual([])
     expect(paths).toEqual(['README.md', 'lib/index.js', 'package.json'])
   })
+
+  it('includes non-directory entries from manifest.files such as README.en.md', () => {
+    const manifest = {
+      main: './lib/index.js',
+      files: ['lib', 'README.md', 'README.en.md', 'cordis.patch.yml', 'locale'],
+    }
+    const { paths, problems } = expectedPaths(manifest, '/nonexistent-root')
+    expect(problems).toEqual([])
+    expect(paths).toContain('README.en.md')
+    expect(paths).toContain('cordis.patch.yml')
+    expect(paths).toContain('README.md')
+    expect(paths).toContain('package.json')
+    expect(paths).toContain('lib/index.js')
+    expect(paths).not.toContain('lib')
+    expect(paths).not.toContain('locale')
+  })
 })

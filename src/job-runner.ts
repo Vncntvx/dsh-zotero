@@ -189,7 +189,10 @@ export async function executeWithJobs<T>(options: {
 }
 
 export class ZoteroJobRunner {
-  constructor(private readonly registry?: JobRegistry) {}
+  constructor(
+    private readonly registry?: JobRegistry,
+    private readonly logger?: { warn(message: string): void },
+  ) {}
 
   get isAvailable(): boolean {
     return this.registry !== undefined
@@ -315,7 +318,10 @@ export class ZoteroJobRunner {
     let started: { id: JobId; done: Promise<JobOutcome> } | undefined
     try {
       started = this.start(wrappedTask)
-    } catch {
+    } catch (error) {
+      this.logger?.warn?.(
+        `zotero: job registration refused, running in the foreground: ${error instanceof Error ? error.message : String(error)}`,
+      )
       const value = await task.run(
         task.exec.signal,
         () => {},

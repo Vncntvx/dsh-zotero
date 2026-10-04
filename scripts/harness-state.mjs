@@ -54,10 +54,10 @@ const VERSION_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/
  * Prose forms of the current pin. Badges are exact (`badge/dsh-0.1.7--rc.1-blue`);
  * prose allows an optional `>=` prefix before the version.
  */
-const PROSE_VERSION_PATTERNS = [
+export const PROSE_VERSION_PATTERNS = [
   // Exact badge first so `dsh-0.1.7--rc.1-blue` never yields a bare `0.1.7`.
   /badge\/dsh-(\d+\.\d+\.\d+(?:--[0-9A-Za-z.]+)?)-blue/g,
-  /dsh[- ](?:>=\s*|>=)?v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)*)(?!-)/gi,
+  /dsh[- ](?:[≥>=]+\s*|\s*[≥>=]\s*)?v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)*)(?!-)/gi,
 ]
 /** Legacy `>=` badge: legal only as a migration leftover; current form is exact. */
 const LEGACY_GTE_BADGE = /%3E%3D(\d+\.\d+\.\d+(?:--[0-9A-Za-z.]+)?)-blue/g
@@ -187,13 +187,13 @@ export function checkVersionMap(path, source, packageVersion, pin) {
 }
 
 /** Fail on any harness version in current-pin prose that is not the pin. */
-function checkProse(path, pin) {
-  const text = readFileSync(path, 'utf8')
+export function checkProseText(text, pin, path = 'doc.md') {
+  const fileProblems = []
   const lines = text.split('\n')
   const { start, end } = versionMapBounds(lines)
   const prose = lines.filter((_, i) => i < start || i >= end).join('\n')
   for (const match of prose.matchAll(LEGACY_GTE_BADGE)) {
-    problems.push(
+    fileProblems.push(
       `${relative(root, path)} still carries a ">= ${decodeBadgeVersion(match[1])}" badge;` +
         ` the current form is the exact badge "dsh ${pin}"`,
     )
@@ -203,16 +203,22 @@ function checkProse(path, pin) {
     for (const match of prose.matchAll(pattern)) found.add(decodeBadgeVersion(match[1]))
   }
   if (found.size === 0) {
-    problems.push(`${relative(root, path)} states no harness version; name the verified pin`)
-    return
+    fileProblems.push(`${relative(root, path)} states no harness version; name the verified pin`)
+    return fileProblems
   }
   for (const version of found) {
     if (version !== pin) {
-      problems.push(
+      fileProblems.push(
         `${relative(root, path)} still states harness version "${version}" (the pin is "${pin}")`,
       )
     }
   }
+  return fileProblems
+}
+
+function checkProse(path, pin) {
+  const text = readFileSync(path, 'utf8')
+  problems.push(...checkProseText(text, pin, path))
 }
 
 /** Every problem in a lockfile relative to the pin, the manifest's overrides and the manifest's dsh declarations. */

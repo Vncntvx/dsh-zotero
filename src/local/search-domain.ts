@@ -268,7 +268,7 @@ async function fetchNoteRows(
       signal,
       serverId: scope.serverId,
     })
-    const rows = Array.isArray(json) ? json : []
+    const rows = requireArrayBody(json, 'note scan')
     if (rows.length === 0) break
     out.push(...rows.slice(0, wanted))
     if (shouldStop?.(out) === true) break

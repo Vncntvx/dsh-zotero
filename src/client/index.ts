@@ -93,7 +93,7 @@ function mountedNamespace(ctx: ClientContext): ZoteroRemoteFace | undefined {
  */
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-zotero: page dictionaries')
-  // Dedicated Chat cards for all 11 Zotero tools in the tool.call.toolview slot
+  // Dedicated Chat cards for all 16 Zotero tools in the tool.call.toolview slot
   registerZoteroToolviews(ctx)
   // `/zotero` command-input projection: a non-command Chat node is the
   // designed way for a slash command to leave the blank Hero (see ui-goal's

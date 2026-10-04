@@ -39,7 +39,7 @@ Returns an object containing: `scope`, `items` (including ref, title, creatorSum
 
 ### Notes
 
-On the initial query (offset 0) with a `library` or `collection` scope, note bodies are scanned and matches are returned under `supplemental.items`. `items` and `total` count only primary bibliographic items.
+On the initial query (offset 0) with a `library`, `publications`, or `collection` scope, note bodies are scanned and matches are returned under `supplemental.items`. `items` and `total` count only primary bibliographic items.
 
 ### Example
 
@@ -236,6 +236,10 @@ List child objects belonging to an item or attachment.
 ### Output
 
 Returns `{ref, itemType?, serverId?, notes?, attachments?, annotations?}`, each with `total`, `returned`, and `items`.
+
+### Notes
+
+When an item has no subordinate child objects, an empty response from the underlying `/children` endpoint is treated as an empty children listing.
 
 ### Example
 

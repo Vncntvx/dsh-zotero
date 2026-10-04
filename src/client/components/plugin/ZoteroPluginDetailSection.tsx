@@ -8,6 +8,7 @@ import type { ReactNode } from 'react'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ZoteroStatusView } from '../../remote.ts'
+import { ZOTERO_REMOTE_PACKAGE } from '../../../contract.ts'
 import { DiagnosisBox } from '../DiagnosisBox.tsx'
 import { useZoteroProbe } from '../useZoteroProbe.ts'
 import type { PluginDetailProps } from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
@@ -32,7 +33,7 @@ export function ZoteroPluginDetailSection({
   t,
   probe,
 }: ZoteroPluginDetailSectionProps): ReactNode {
-  if (subject.kind !== 'bundle' || subject.pkg.name !== 'dsh-zotero') {
+  if (subject.kind !== 'bundle' || subject.pkg.name !== ZOTERO_REMOTE_PACKAGE) {
     return null
   }
   return <ZoteroPluginDetailSectionBody t={t} probe={probe} />

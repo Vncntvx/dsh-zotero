@@ -50,7 +50,7 @@ export function textOfBlocks(blocks: ContentBlock[]): string {
 
 /**
  * The declined-write content: the user answered the plan without approving,
- * so nothing was written. Shared by the three write tools so the wording
+ * so nothing was written. Shared by the eight write tools so the wording
  * cannot drift between them.
  * @returns the single declined text block.
  */

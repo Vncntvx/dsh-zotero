@@ -39,7 +39,7 @@ dsh-zotero 注册 16 个工具（8 个读工具 + 8 个写工具），通过本�
 
 ### 说明
 
-在初次查询（offset 0）且搜索范围为 `library` 或 `collection` 时，插件会扫描笔记正文，命中条目列入 `supplemental.items`。`items` 与 `total` 仅统计主结果条目。
+在初次查询（offset 0）且搜索范围为 `library`、`publications` 或 `collection` 时，插件会扫描笔记正文，命中条目列入 `supplemental.items`。`items` 与 `total` 仅统计主结果条目。
 
 ### 示例
 
@@ -236,6 +236,10 @@ zotero_browse(kind="tags", q="review", match="contains")
 ### 输出
 
 返回 `{ref, itemType?, serverId?, notes?, attachments?, annotations?}`，每类对象包含 `total`、`returned` 与 `items` 列表。
+
+### 说明
+
+若条目在本地无任何下属子条目，底层 `/children` 接口返回空响应时按空子列表处理。
 
 ### 示例
 

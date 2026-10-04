@@ -25,6 +25,7 @@ import type {
 import { ZOTERO_LOCAL_API_VERSION } from './constants.js'
 import {
   TOOL_ABORTED_MESSAGE,
+  ZOTERO_ALLOW_OTHER_APPLICATIONS_HINT,
   ZOTERO_API_DISABLED,
   ZOTERO_API_VERSION,
   ZOTERO_NOT_RUNNING,
@@ -64,8 +65,7 @@ const FAILURE_SPECS: Record<AskWorthyCode, FailureSpec> = {
   [ZOTERO_NOT_RUNNING]: {
     header: 'Zotero is not running',
     question: 'Zotero is not running, so I cannot read your library. What should I do?',
-    detail:
-      'Start Zotero, then in Settings → Advanced check "Allow other applications on this computer to communicate with Zotero".',
+    detail: `Start Zotero, then in Settings → Advanced check "${ZOTERO_ALLOW_OTHER_APPLICATIONS_HINT}".`,
     retryLabel: 'I started Zotero, retry (Recommended)',
     retryDescription: RETRY_DESCRIPTION,
     abortLabel: ABORT_LABEL,
@@ -74,8 +74,7 @@ const FAILURE_SPECS: Record<AskWorthyCode, FailureSpec> = {
   [ZOTERO_API_DISABLED]: {
     header: 'Zotero local API is disabled',
     question: 'Zotero is running but rejected the local API request (403).',
-    detail:
-      'In Zotero Settings → Advanced, check "Allow other applications on this computer to communicate with Zotero".',
+    detail: `In Zotero Settings → Advanced, check "${ZOTERO_ALLOW_OTHER_APPLICATIONS_HINT}".`,
     retryLabel: 'I enabled the local API, retry (Recommended)',
     retryDescription: RETRY_DESCRIPTION,
     abortLabel: ABORT_LABEL,
@@ -154,6 +153,19 @@ interface SharedAsk {
 
 export class ConnectivityRecovery {
   private readonly asking = new Map<string, SharedAsk>()
+  private disposed = false
+
+  get isDisposed(): boolean {
+    return this.disposed
+  }
+
+  dispose(): void {
+    this.disposed = true
+    for (const entry of this.asking.values()) {
+      entry.controller.abort()
+    }
+    this.asking.clear()
+  }
 
   /**
    * Answer one failure kind, asking only when no question for it is in
@@ -161,7 +173,7 @@ export class ConnectivityRecovery {
    * `waiterSignal` aborts detaches without cancelling the shared ask for
    * the others. The shared question is aborted only when the last waiter
    * leaves.
-   * @param code - the failure kind the question belongs to.
+   * @param key - the partition key (e.g. `${agentId}:${code}`) the question belongs to.
    * @param question - the ask to run when this caller is the first; its
    *   signal is the gate's own (never a single caller's). Resolves true when
    *   the user chose to retry.
@@ -170,11 +182,12 @@ export class ConnectivityRecovery {
    * @returns the answer this caller acts on.
    */
   async ask(
-    code: string,
+    key: string,
     question: (signal: AbortSignal) => Promise<boolean>,
     waiterSignal?: AbortSignal,
   ): Promise<boolean> {
-    let shared = this.asking.get(code)
+    if (this.disposed) return false
+    let shared = this.asking.get(key)
     if (shared === undefined) {
       const controller = new AbortController()
       const entry: SharedAsk = {
@@ -183,11 +196,11 @@ export class ConnectivityRecovery {
         promise: question(controller.signal),
       }
       shared = entry
-      this.asking.set(code, entry)
+      this.asking.set(key, entry)
       void entry.promise
         .catch(() => undefined)
         .finally(() => {
-          if (this.asking.get(code) === entry) this.asking.delete(code)
+          if (this.asking.get(key) === entry) this.asking.delete(key)
         })
     }
     shared.waiters += 1
@@ -257,13 +270,22 @@ export async function withConnectivityAsk<T>(
     return await run()
   } catch (error) {
     if (!(error instanceof ZoteroError) || !isAskWorthyCode(error.code)) throw error
+    if (recovery.isDisposed) throw error
     const questions = ctx.get('userQuestions')
     if (questions === undefined) throw error
+    if (exec.agent !== undefined) {
+      const agents = ctx.get('agents') as { roots(): readonly unknown[] } | undefined
+      if (agents !== undefined && !agents.roots().includes(exec.agent)) {
+        throw error
+      }
+    }
     const spec = FAILURE_SPECS[error.code]
+    const agentKey = exec.agent?.id ?? 'global'
+    const bucketKey = `${agentKey}:${error.code}`
     let retry: boolean
     try {
       retry = await recovery.ask(
-        error.code,
+        bucketKey,
         async (signal) => {
           const request: AskUserQuestionRequest = {
             questions: [questionOf(spec)],
@@ -274,12 +296,13 @@ export async function withConnectivityAsk<T>(
           }
           const answer: AskUserQuestionAnswer = await questions.ask(request)
           const answerItem = answer.answers.find((item) => item.id === 'zotero-failure')
-          // Matched by label string because the answer protocol carries only
-          // selected labels (no stable option ids); the labels are code
-          // constants (FAILURE_SPECS), never i18n copy, so a rename breaks the
-          // build's contract visibly in one place. Revisit if the protocol
-          // gains option ids.
-          return (answerItem?.selected ?? []).includes(spec.retryLabel)
+          // Matched strictly: exactly one option selected matching retryLabel, and no custom text
+          return (
+            answerItem !== undefined &&
+            answerItem.custom === undefined &&
+            answerItem.selected.length === 1 &&
+            answerItem.selected[0] === spec.retryLabel
+          )
         },
         exec.signal,
       )

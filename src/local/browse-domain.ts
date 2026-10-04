@@ -6,7 +6,12 @@
  * @module dsh-zotero/local/browse-domain
  */
 
-import { isNotFoundError, ZOTERO_INVALID_ARGUMENT, ZoteroError } from '../errors.js'
+import {
+  isNotFoundError,
+  ZOTERO_INVALID_ARGUMENT,
+  ZOTERO_UNEXPECTED,
+  ZoteroError,
+} from '../errors.js'
 import { asRecord, asString, isObjectKey } from '../json.js'
 import { normalizeScopeEntry, type ScopeNameEntry } from '../normalize.js'
 import {
@@ -432,23 +437,26 @@ async function browseTags(
   const serverId = headers.get('zotero-server-id') ?? serverIdClaim
   const rawRows = requireArrayBody(json, 'tags')
   const total = requireTotalResults(headers, 'tags')
-  const items = rawRows
-    .map((row) => {
-      const rec = asRecord(row)
-      const tag = asString(rec?.tag) ?? asString(asRecord(rec?.data)?.tag)
-      if (tag === undefined) return null
-      const metaCount = asRecord(rec?.meta)?.numItems
-      const directCount = rec?.numItems
-      const count =
-        typeof metaCount === 'number'
-          ? metaCount
-          : typeof directCount === 'number'
-            ? directCount
-            : undefined
-      return { tag, ...(count !== undefined ? { count } : {}) }
-    })
-    .filter((x): x is { tag: string; count?: number } => x !== null)
-  const next = nextOffsetOf(request.offset, items.length, total)
+  const items = rawRows.map((row) => {
+    const rec = asRecord(row)
+    const tag = asString(rec?.tag) ?? asString(asRecord(rec?.data)?.tag)
+    if (tag === undefined) {
+      throw new ZoteroError(
+        'Zotero returned a malformed tag row without a tag name',
+        ZOTERO_UNEXPECTED,
+      )
+    }
+    const metaCount = asRecord(rec?.meta)?.numItems
+    const directCount = rec?.numItems
+    const count =
+      typeof metaCount === 'number'
+        ? metaCount
+        : typeof directCount === 'number'
+          ? directCount
+          : undefined
+    return { tag, ...(count !== undefined ? { count } : {}) }
+  })
+  const next = nextOffsetOf(request.offset, rawRows.length, total)
   return {
     kind: 'tags',
     library,

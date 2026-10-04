@@ -117,4 +117,4 @@ Ensure all following checks pass before cutting a release:
 5. `npm run test:coverage`: Coverage meets all configured thresholds.
 6. `npm run format:check`: Code style conforms to formatting rules.
 7. `npm run build`: Production build succeeds.
-8. Verify golden path scenarios (G1 through G8) in [Scenarios](scenarios.en.md); verify W1 through W4 as well if write operations are enabled.
+8. Verify golden path scenarios (G1 through G8) in [Scenarios](scenarios.en.md); verify W1 through W8 as well if write operations are enabled.

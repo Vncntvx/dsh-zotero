@@ -8,6 +8,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyPinToManifest,
+  checkProseText,
   checkVersionMap,
   collectLockProblems,
   collectPinFaceProblems,
@@ -73,6 +74,21 @@ describe('retargetProse', () => {
   it('rewrites a document that carries no version map', () => {
     const moved = retargetProse('use dsh 0.1.6-alpha.2 here', '0.1.6-alpha.2', '0.1.7-rc.1')
     expect(moved).toBe('use dsh 0.1.7-rc.1 here')
+  })
+})
+
+describe('checkProseText', () => {
+  it('matches prose version containing unicode ≥ symbol', () => {
+    const text = '宿主 dsh ≥ 0.2.0-rc.2'
+    const problems = checkProseText(text, '0.2.0-rc.2')
+    expect(problems).toEqual([])
+  })
+
+  it('reports mismatch when unicode ≥ prose carries older pin', () => {
+    const text = '宿主 dsh ≥ 0.1.6-alpha.2'
+    const problems = checkProseText(text, '0.2.0-rc.2')
+    expect(problems).toHaveLength(1)
+    expect(problems[0]).toMatch(/still states harness version "0.1.6-alpha.2"/)
   })
 })
 

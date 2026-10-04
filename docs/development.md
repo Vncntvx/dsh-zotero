@@ -117,4 +117,4 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 5. `npm run test:coverage`：覆盖率达标；
 6. `npm run format:check`：代码格式规范；
 7. `npm run build`：生产构建成功；
-8. 验证 [使用场景](scenarios.md) 中的主流程用例（G1 至 G8），若启用写入需验证 W1 至 W4。
+8. 验证 [使用场景](scenarios.md) 中的主流程用例（G1 至 G8），若启用写入需验证 W1 至 W8。

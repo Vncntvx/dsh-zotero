@@ -17,8 +17,12 @@ import {
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
 import type { ResolvedConfig } from '../config.js'
-import { metaRecordOf, renderDeclined } from './present.js'
-import { libraryVersionLine, listUpdatePresentationMeta } from './write-present.js'
+import {
+  createUpdateListOutputSchema,
+  listUpdatePresentationMeta,
+  presentUpdateListResultView,
+  renderUpdateList,
+} from './write-present.js'
 import { assertAddRemoveSelection, parseWritableRef, WRITE_REF_ARG_HINT } from './validate.js'
 import { WRITE_PLAN_OUTCOME_DESCRIPTION } from '../write-approval.js'
 import type { ZoteroService } from '../service.js'
@@ -45,39 +49,7 @@ const UPDATE_ITEM_TAGS_PARAMETERS = {
 
 type UpdateItemTagsArgs = InferArgs<typeof UPDATE_ITEM_TAGS_PARAMETERS>
 
-const UPDATE_ITEM_TAGS_OUTPUT_SCHEMA = {
-  oneOf: [
-    {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        kind: { type: 'string', enum: ['declined'], required: true },
-      },
-    },
-    {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        kind: { type: 'string', enum: ['applied'], required: true },
-        ref: { type: 'string', required: true },
-        version: {
-          type: 'integer',
-          required: true,
-          description: "The item's version after the update (or the read version when unchanged).",
-        },
-        tags: { type: 'array', items: { type: 'string' }, required: true },
-        added: { type: 'array', items: { type: 'string' }, required: true },
-        removed: { type: 'array', items: { type: 'string' }, required: true },
-        unchanged: { type: 'boolean', required: true },
-        libraryVersion: {
-          type: 'integer',
-          description: 'The library version the write advanced to; absent when unchanged.',
-        },
-        serverId: { type: 'string' },
-      },
-    },
-  ],
-} as const
+const UPDATE_ITEM_TAGS_OUTPUT_SCHEMA = createUpdateListOutputSchema('tags')
 
 type UpdateItemTagsOutput = InferValue<typeof UPDATE_ITEM_TAGS_OUTPUT_SCHEMA>
 
@@ -111,34 +83,18 @@ export function renderUpdateItemTags(
   _args: UpdateItemTagsArgs,
   value: UpdateItemTagsOutput,
 ): ContentBlock[] {
-  if (value.kind === 'declined') {
-    return renderDeclined()
-  }
-  const lines = [
-    value.unchanged
-      ? `No change: ${value.ref} already carries the requested tag set (version ${value.version}).`
-      : `Updated tags on ${value.ref} (version ${value.version}); added ${value.added.length === 0 ? '(none)' : value.added.join(', ')}; removed ${value.removed.length === 0 ? '(none)' : value.removed.join(', ')}.`,
-  ]
-  lines.push(`Tags now: ${value.tags.length === 0 ? '(none)' : value.tags.join(', ')}`)
-  if (value.libraryVersion !== undefined) {
-    lines.push(
-      libraryVersionLine({ libraryVersion: value.libraryVersion, serverId: value.serverId }),
-    )
-  }
-  return [{ type: 'text', text: lines.join('\n') }]
+  return renderUpdateList(value.kind === 'declined' ? value : { ...value, items: value.tags }, {
+    noun: 'tags',
+    unchangedTarget: 'the requested tag set',
+    currentLabel: 'Tags now',
+  })
 }
 
 function presentUpdateItemTagsResult(
   _args: UpdateItemTagsArgs,
   result: ToolResult,
 ): ToolResultView | undefined {
-  const record = metaRecordOf(result)
-  if (record === undefined) return undefined
-  if (record.kind === 'declined') {
-    return { card: 'generic', title: 'Zotero tags: declined, nothing written' }
-  }
-  const ref = typeof record.ref === 'string' ? record.ref : ''
-  return { card: 'generic', title: `Zotero tags updated${ref === '' ? '' : `: ${ref}`}` }
+  return presentUpdateListResultView('tags', result)
 }
 
 export function registerUpdateItemTagsTool(ctx: Context, service: ZoteroService): () => void {

@@ -98,6 +98,9 @@ async function previewDeleteCollection(
 ): Promise<{ itemTotal?: number; childTotal?: number }> {
   let itemTotal: number | undefined
   let childTotal: number | undefined
+  let resolvedRef: string | undefined = isRefString(collection.trim())
+    ? collection.trim()
+    : undefined
   try {
     const searched = await service.search(
       {
@@ -111,13 +114,16 @@ async function previewDeleteCollection(
       undefined,
     )
     itemTotal = searched.total
+    if (searched.scope.kind === 'collection') {
+      resolvedRef = searched.scope.ref
+    }
   } catch {
     itemTotal = undefined
   }
-  if (isRefString(collection.trim())) {
+  if (resolvedRef !== undefined) {
     try {
       const browsed = await service.browse(
-        { kind: 'collections', parentRef: collection.trim(), offset: 0, limit: 1 },
+        { kind: 'collections', parentRef: resolvedRef, offset: 0, limit: 1 },
         undefined,
       )
       childTotal = browsed.total

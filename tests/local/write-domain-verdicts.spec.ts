@@ -280,7 +280,7 @@ describe('createCollection verdicts', () => {
     }
   })
 
-  it('skips sibling rows without a usable key or name instead of failing the create', async () => {
+  it('fails loud on sibling rows without a usable key or name instead of silently creating duplicates', async () => {
     const own = await startListingMock([
       { data: { name: 'Ghost' } },
       { key: 'not a key', data: { key: 'not a key', name: 'Broken' } },
@@ -288,14 +288,15 @@ describe('createCollection verdicts', () => {
       { key: 'COLL9999', version: 3, data: { key: 'COLL9999', name: 'Taken' } },
     ])
     try {
-      own.route('POST', '/api/users/0/collections', (_req, res, helpers) =>
-        helpers.raw(200, batchHeaders(42), batchBody('NEWCOLL1', 42, { name: 'Field notes' })),
-      )
-      const { deps, directory } = writeDeps(own)
-      const result = await createCollection(deps, {
-        name: 'Field notes',
+      const { deps } = writeDeps(own)
+      await expect(
+        createCollection(deps, {
+          name: 'Field notes',
+        }),
+      ).rejects.toMatchObject({
+        code: ZOTERO_UNEXPECTED,
+        message: 'Zotero returned a malformed collection row in the sibling listing',
       })
-      expect(result).toMatchObject({ kind: 'applied', key: 'NEWCOLL1' })
     } finally {
       await own.close()
     }

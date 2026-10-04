@@ -206,6 +206,35 @@ describe('withConnectivityAsk retry semantics', () => {
     expect(calls).toHaveLength(1)
   })
 
+  it('surfaces the original error when the user chose retry but also provided custom feedback', async () => {
+    const { ctx, calls } = fakeContext(() => ({
+      answers: [
+        {
+          id: 'zotero-failure',
+          selected: ['I started Zotero, retry (Recommended)'],
+          custom: 'not sure',
+        },
+      ],
+    }))
+    const error = zoteroError(ZOTERO_NOT_RUNNING)
+    await expect(ask(ctx, async () => Promise.reject(error))).rejects.toBe(error)
+    expect(calls).toHaveLength(1)
+  })
+
+  it('surfaces the original error when multiple options were selected', async () => {
+    const { ctx, calls } = fakeContext(() => ({
+      answers: [
+        {
+          id: 'zotero-failure',
+          selected: ['I started Zotero, retry (Recommended)', 'Abort this query'],
+        },
+      ],
+    }))
+    const error = zoteroError(ZOTERO_NOT_RUNNING)
+    await expect(ask(ctx, async () => Promise.reject(error))).rejects.toBe(error)
+    expect(calls).toHaveLength(1)
+  })
+
   it('surfaces the original error when the answer carries no matching question id', async () => {
     const { ctx, calls } = fakeContext(() => ({ answers: [] }))
     const error = zoteroError(ZOTERO_NOT_RUNNING)
@@ -356,5 +385,125 @@ describe('concurrent failures share one recovery question', () => {
     ).rejects.toBe(error)
     // A stale answer is never reused: the second failure asked on its own.
     expect(answered.calls).toHaveLength(2)
+  })
+})
+
+describe('agent partitioning and delegation', () => {
+  it('throws immediately without asking when the agent is a delegated child agent', async () => {
+    const rootAgent = { id: 'root-agent' } as any
+    const childAgent = { id: 'child-agent' } as any
+    const agentsService = {
+      roots: () => [rootAgent],
+    }
+    const calls: any[] = []
+    const ctx = {
+      get: (key: string) => {
+        if (key === 'agents') return agentsService
+        if (key === 'userQuestions') {
+          return {
+            ask: async (req: any) => {
+              calls.push(req)
+              return { answers: [] }
+            },
+          }
+        }
+        return undefined
+      },
+    } as unknown as Context
+
+    const error = zoteroError(ZOTERO_NOT_RUNNING)
+    await expect(
+      withConnectivityAsk(
+        ctx,
+        new ConnectivityRecovery(),
+        { signal: new AbortController().signal, agent: childAgent },
+        async () => {
+          throw error
+        },
+      ),
+    ).rejects.toBe(error)
+    expect(calls).toHaveLength(0)
+  })
+
+  it('partitions shared questions by agent identity so distinct agents get separate questions', async () => {
+    const recovery = new ConnectivityRecovery()
+    const calls: AskUserQuestionRequest[] = []
+    let releaseA: ((selected: string[]) => void) | undefined
+    let releaseB: ((selected: string[]) => void) | undefined
+    const answerA = new Promise<AskUserQuestionAnswer>((resolve) => {
+      releaseA = (selected) => resolve({ answers: [{ id: 'zotero-failure', selected }] })
+    })
+    const answerB = new Promise<AskUserQuestionAnswer>((resolve) => {
+      releaseB = (selected) => resolve({ answers: [{ id: 'zotero-failure', selected }] })
+    })
+
+    const ctx = {
+      get: (key: string) =>
+        key === 'userQuestions'
+          ? {
+              ask: async (req: AskUserQuestionRequest) => {
+                calls.push(req)
+                return req.agent?.id === 'agent-A' ? await answerA : await answerB
+              },
+            }
+          : undefined,
+    } as unknown as Context
+
+    const agentA = { id: 'agent-A' } as any
+    const agentB = { id: 'agent-B' } as any
+    const error = zoteroError(ZOTERO_NOT_RUNNING)
+
+    const first = withConnectivityAsk(
+      ctx,
+      recovery,
+      { signal: new AbortController().signal, agent: agentA },
+      async () => {
+        throw error
+      },
+    )
+    const second = withConnectivityAsk(
+      ctx,
+      recovery,
+      { signal: new AbortController().signal, agent: agentB },
+      async () => {
+        throw error
+      },
+    )
+    await Promise.resolve()
+
+    expect(calls).toHaveLength(2)
+    releaseA!(['Abort this query'])
+    releaseB!(['Abort this query'])
+    await expect(first).rejects.toBe(error)
+    await expect(second).rejects.toBe(error)
+  })
+})
+
+describe('recovery disposal', () => {
+  it('aborts in-flight questions when disposed', async () => {
+    const recovery = new ConnectivityRecovery()
+    let aborted = false
+    const questions = {
+      ask: (req: any) =>
+        new Promise((_resolve, reject) => {
+          req.signal.addEventListener('abort', () => {
+            aborted = true
+            reject(new Error('aborted'))
+          })
+        }),
+    }
+    const ctx = {
+      get: (key: string) => (key === 'userQuestions' ? questions : undefined),
+    } as unknown as Context
+    const error = zoteroError(ZOTERO_NOT_RUNNING)
+
+    const promise = withConnectivityAsk(ctx, recovery, exec, async () => {
+      throw error
+    })
+    await Promise.resolve()
+
+    recovery.dispose()
+    expect(aborted).toBe(true)
+    await expect(promise).rejects.toBe(error)
   })
 })

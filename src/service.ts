@@ -230,6 +230,7 @@ export class ZoteroService extends Service {
     })
     registerStatusCommand(ctx, this)
     registerPromptSection(ctx, () => this.config)
+    ctx.effect(() => () => this.recovery.dispose(), 'zotero: connectivity recovery abort')
     // A shell command aimed at Zotero's own write API is not blocked outright:
     // it is made to ask. The harness's own approval request decides it before
     // the body runs, so the write happens only when the user confirms that one
