@@ -43,7 +43,7 @@ import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { ZoteroSettingsSection } from './ZoteroSettingsSection.tsx'
 import { SourcesTab, type SourcesTabFace } from './components/SourcesTab.tsx'
 import { ZOTERO_REMOTE } from './remote.ts'
-import type { ZoteroRemoteFace } from './remote.ts'
+
 import { ZoteroCardController } from './zotero-card-controller.ts'
 import { zoteroQuickConfigFace, type ZoteroProbeFace } from './components/plugin/faces.ts'
 import { ZOTERO_REMOTE_PACKAGE, type ZoteroStatusView } from '../contract.ts'
@@ -58,40 +58,33 @@ import { en, zh } from './locales.ts'
 /** Dictionary namespace owned by this plugin. */
 const NS = 'zotero'
 
-/** Required services (cordis fiber inject): the shared configuration form plus slots/locale/remote and the conversation event registry. */
+/**
+ * Required services (cordis fiber inject): the shared configuration form plus
+ * slots/locale/remote and the conversation event registry.
+ *
+ * `remote` is the gateway this plugin mounts its own namespace through
+ * (`ctx.remote.$mount`). `remote.zotero` is deliberately **absent** here: a
+ * fiber parks until every declared name resolves, and this plugin is what
+ * creates that namespace, so naming it here would park the entry before it
+ * could ever mount. The namespace is declared by the UI fiber instead —
+ * `ctx.inject(['remote.zotero', …], registerUi)` in `apply`, the official
+ * consumer form (`docs/cookbook/adding-a-remote-api.md`, mirrored by
+ * `packages/experimental/client-ui-voice-input/src/client/mount.ts` and
+ * `packages/experimental/client-ui-claude-code-mods/src/client/mount.ts`).
+ */
 export const inject = ['locale', 'slots', 'remote', 'configForms', 'uiConversation']
 
 /**
- * The mounted `zotero` namespace face, or `undefined` when this fiber cannot
- * reach it.
+ * Register every browser surface: the page dictionaries, the 16 dedicated
+ * tool cards, the `/zotero` command-input projection, the settings page, the
+ * plugin-manager cards, and the conversation tab.
  *
- * **Intentional deviation** from the official `ctx.remote.<ns>.method` read
- * (`docs/cookbook/adding-a-remote-api.md`). The dotted form is a *service
- * lookup by the full name* through the context proxy, and
- * `vendor/cordis/src/reflect.ts` refuses an undeclared name on any fiber that
- * carries a runtime — `cannot get property "remote.zotero" without inject`.
- * A plugin fiber cannot declare the name up front either: the namespace only
- * exists after this plugin's own `$mount`, so a static inject would park the
- * plugin before it could ever mount anything. The store path
- * (`ctx.reflect.get`) resolves the same service by key, across fiber branches,
- * with no guard. Re-checked at dsh 0.2.0-rc.2.
- *
- * Do not copy this for other namespaces: prefer `ctx.remote.<ns>` + `inject`
- * whenever the namespace is not self-supplied by the same plugin. When
- * upstream ships a client-safe self-mount namespace entry, switch this
- * function to the official form and drop the exception in AGENTS.md.
- * @param ctx - the browser plugin context.
- * @returns the namespace face, or undefined while it is unmounted.
+ * Runs on a fiber that declares `remote.zotero`, so the namespace is readable
+ * through the official dotted form (`ctx.remote.zotero`) — the same shape the
+ * harness's own client plugins use.
+ * @param ctx - the browser plugin context, scoped to the declared services.
  */
-function mountedNamespace(ctx: ClientContext): ZoteroRemoteFace | undefined {
-  return ctx.reflect.get('remote.zotero') as ZoteroRemoteFace | undefined
-}
-
-/**
- * Mount the Zotero settings page into the Settings panel's left navigation.
- * @param ctx - the browser plugin context.
- */
-export function apply(ctx: ClientContext): void {
+function registerUi(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-zotero: page dictionaries')
   // Dedicated Chat cards for all 16 Zotero tools in the tool.call.toolview slot
   registerZoteroToolviews(ctx)
@@ -153,23 +146,15 @@ export function apply(ctx: ClientContext): void {
     ),
   )
 
-  // Live connectivity for the conversation tab's status strip. The Remote
-  // namespace mounts asynchronously, so the probe resolves it on every call
-  // rather than capturing it once: a mount that lands late — or whose promise
-  // never settles at all — still upgrades the strip the moment the namespace
-  // service exists. The tab never waits on either outcome, because its Sources
-  // workspace reads the session's own tool calls.
-  let mountState = 'mount not attempted'
+  // Live connectivity for the conversation tab's status strip. This fiber is
+  // only created once `$mount` published the namespace, so the call site reads
+  // it directly. Concurrent probes share one in-flight call: the strip and the
+  // command card can both ask in the same tick, and one status read per tick
+  // is the product behavior, not a workaround.
   let inFlightProbe: Promise<RemoteResult<ZoteroStatusView>> | undefined
   const probe = (): Promise<RemoteResult<ZoteroStatusView>> => {
     if (inFlightProbe !== undefined) return inFlightProbe
-    const face = mountedNamespace(ctx)
-    if (face === undefined) {
-      return Promise.reject(
-        new Error(`dsh-zotero: the zotero Remote namespace is not mounted (${mountState})`),
-      )
-    }
-    const task = face.status().finally(() => {
+    const task = ctx.remote.zotero.status().finally(() => {
       if (inFlightProbe === task) inFlightProbe = undefined
     })
     inFlightProbe = task
@@ -267,27 +252,44 @@ export function apply(ctx: ClientContext): void {
       tabDispose = undefined
     }
   }, 'dsh-zotero: conversation tab')
+}
 
-  ctx.effect(async () => {
-    let dispose: (() => Promise<void>) | undefined
-    mountState = 'mount pending'
-    try {
-      dispose = await ctx.remote.$mount(ZOTERO_REMOTE)
-      mountState = 'mount settled'
-    } catch (error) {
-      // Fail visible, never silent: the tab stays and its strip names the fault.
-      mountState = `mount failed: ${error instanceof Error ? error.message : String(error)}`
-      console.error('dsh-zotero: mounting the zotero Remote namespace failed', error)
-    }
-    if (mountedNamespace(ctx) === undefined) {
-      // Fail visible, never silent: the tab stays and its strip names the
-      // fault. The mount state alone is logged — enumerating the gateway's
-      // held namespaces would mean reaching into cordis's private reflect
-      // store, a coupling one log line is not worth.
-      console.error(`dsh-zotero: ${mountState}`)
-    }
-    return async () => {
-      await dispose?.()
-    }
-  }, 'dsh-zotero: remote')
+/**
+ * Mount the Zotero Remote namespace and register every browser surface that
+ * reads it.
+ *
+ * The two steps are ordered and one owns the other: `$mount` publishes
+ * `remote.zotero`, then the UI fiber declares that name and is parked until it
+ * resolves. An assembly failure is **not** swallowed — a mount that rejects, or
+ * a namespace that never appears, rejects this entry and the harness reports
+ * the plugin as failed to load, because a browser half whose status strip can
+ * never answer is not a working plugin. That is the official contract
+ * (`docs/cookbook/adding-a-remote-api.md`: "a Remote call does not reject, and
+ * an assembly mistake should crash"), and the shape
+ * `packages/experimental/client-ui-voice-input/src/client/mount.ts:60-64` and
+ * `packages/experimental/client-ui-claude-code-mods/src/client/mount.ts:117-130`
+ * both take.
+ *
+ * Disposal is symmetric and reverse-ordered: the UI fiber withdraws the slots
+ * and effects it registered, then the namespace is unmounted.
+ * @param ctx - the browser plugin context.
+ * @returns the disposer that withdraws both halves.
+ */
+export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
+  const disposeRemote = await ctx.remote.$mount(ZOTERO_REMOTE)
+  const ui = ctx.inject(
+    ['remote.zotero', 'locale', 'slots', 'configForms', 'uiConversation'],
+    registerUi,
+  )
+  try {
+    await ui
+  } catch (error) {
+    await ui.dispose()
+    await disposeRemote()
+    throw error
+  }
+  return async () => {
+    await ui.dispose()
+    await disposeRemote()
+  }
 }

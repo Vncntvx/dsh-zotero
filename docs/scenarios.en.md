@@ -273,6 +273,8 @@ Validates boundary conditions and error handling; can run continuously in a sing
 | N5 Cross-library export | (With a group library) export this personal item and that group item together as BibTeX. | Returns `ZOTERO_INVALID_ARGUMENT` and suggests separate exports                        |
 | N6 Ambiguous collection | (With duplicate collection names) search collection "<ambiguous name>".                  | Reports name ambiguity or asks for confirmation; does not choose arbitrarily           |
 
+**N7 Remote namespace mount failure (assembly error)**: the browser half mounts `remote.zotero` itself (`ctx.remote.$mount` + `ctx.inject(['remote.zotero', …])`). If that mount rejects (the gateway is not ready, the namespace name collides), the plugin entry rejects and the harness marks the plugin as failed to load — it does **not** silently degrade into "tab present, status strip reports a fault". To verify: the browser console shows the plugin load error, and neither `conversation.view` nor `plugins.detail.section` is registered (no half-assembled tab). This is the intended assembly contract: a surface whose status strip can never answer is not a working plugin. Used to confirm an assembly error is never swallowed.
+
 ## Write Cases (W)
 
 Enable "Allow writes" in "Settings → Zotero". Write operations must pass the session approval policy check (`approval/policy`; a policy of `never` auto-rejects without presenting a plan card), then display the plan review card (this confirmation cannot be bypassed). Writes execute only after user approval. Rejection at either tier is normal behavior. Interactive sessions may sequentially present permission confirmation and the plan card. Zotero Desktop may additionally show a local authorization dialog on the first write. Use dedicated test items and collections.
@@ -385,7 +387,7 @@ After those note/tag writes, can zotero_changes see them? Use the previous curso
 | Structure and Metadata Writes | `create_collection` / `delete_collection` / `create_item` / `update_item` | W4, W5           | Same-name refusal, delete preview and invalidation, closed field set and whitelist |
 | Library-Wide Tag Delete       | `delete_library_tags`                                                     | W6               | Preview counts, library version precondition, idempotent retry                     |
 | Data Panel                    | Sources panel                                                             | G8               | Synchronization across Literature, Passages, and Exports pages                     |
-| Boundary Defense              | Error handling and safeguards                                             | N1–N6            | Error code accuracy, anti-hallucination, no silent degradation                     |
+| Boundary Defense              | Error handling and safeguards                                             | N1–N7            | Error code accuracy, anti-hallucination, assembly errors never degrade silently    |
 
 Passing criteria: G1 through G8 all pass, and N1, N2, N4 produce no hallucinated content. Write features are optional; if enabled, the whole W pack (W1–W8) must pass in a separate session with writes enabled, with the W1 plan card confirmation and the W2/W3 idempotent writes mandatory.
 

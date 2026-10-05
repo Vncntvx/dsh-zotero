@@ -77,6 +77,7 @@ graph LR
 ### 远程通信与设置
 
 - `ZoteroRuntime` 通过 wire 命名空间向 Web 端提供实时状态连接；
+- 浏览器半侧自行挂载该命名空间：`apply` 先 `ctx.remote.$mount(ZOTERO_REMOTE)`，再在声明了 `remote.zotero` 的 fiber 上（`ctx.inject(['remote.zotero', …], registerUi)`）注册全部界面并直接读 `ctx.remote.zotero`。挂载失败不吞掉：入口 reject，由 harness 报告插件加载失败；
 - 配置全字段声明为 `volatile`，支持热重载。
 
 ## 设计边界

@@ -77,6 +77,7 @@ graph LR
 ### Remote Communication and Settings
 
 - `ZoteroRuntime` provides real-time state communication over the wire namespace;
+- The browser half mounts that namespace itself: `apply` awaits `ctx.remote.$mount(ZOTERO_REMOTE)`, then registers every surface on a fiber that declares `remote.zotero` (`ctx.inject(['remote.zotero', …], registerUi)`) and reads it as `ctx.remote.zotero`. A failed mount is not swallowed: the entry rejects and the harness reports the plugin as failed to load;
 - All configuration fields are declared `volatile`, supporting hot reload.
 
 ## Design Boundaries

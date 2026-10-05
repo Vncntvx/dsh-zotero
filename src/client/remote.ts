@@ -26,17 +26,14 @@ export const ZOTERO_REMOTE: TypertRemoteContribution = {
   descriptors: ZOTERO_CLIENT_INVOCATIONS,
 }
 
-/** The mounted `zotero` namespace face (read through `mountedNamespace` in `./index.ts`). */
+/** The mounted `zotero` namespace face (read as `ctx.remote.zotero` in `./index.ts`). */
 export type ZoteroRemoteFace = TypertRemoteNamespaceMap['zotero']
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
-  // Typed face of the mounted namespace. At runtime `mountedNamespace`
-  // (client/index.ts) reads only the service store (`ctx.reflect.get`):
-  // `$mount` installs the namespace child service on the gateway's own
-  // context, so the dotted form `ctx.remote.zotero` is a service lookup by
-  // full name and trips the inject guard on any fiber that carries a
-  // runtime. This declaration stays a required face for typing while the
-  // runtime value is genuinely optional.
+  // Typed face of the mounted namespace. `index.ts` mounts this contribution
+  // with `ctx.remote.$mount`, then registers the UI through
+  // `ctx.inject(['remote.zotero', …], registerUi)`, so the official dotted
+  // read `ctx.remote.zotero` resolves it on that fiber.
   /** The `zotero` namespace face mounted under `ctx.remote.zotero`. */
   interface TypertRemoteNamespace$7a6f7465726f {
     status: () => Promise<RemoteResult<ZoteroStatusView>>
