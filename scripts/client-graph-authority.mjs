@@ -40,7 +40,7 @@ export const HOST_ONLY_PACKAGE_INPUT =
 
 /**
  * Harness specifiers a client bundle may **inline**. Counterpart of the three
- * constants in `packages/client/tsdown.client.ts` at **dsh-v0.2.0-rc.2**:
+ * constants in `packages/client/tsdown.client.ts` at **dsh-v0.2.1-alpha.1**:
  * `INLINE_SAFE`, `GENERATED_REMOTE`, `VENDORED_LIBRARY`. Keep this table in
  * step with that file — never invent a fourth arm here.
  */

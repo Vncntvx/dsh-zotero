@@ -10,7 +10,7 @@
   <a href="https://www.npmjs.com/package/dsh-zotero"><img src="https://img.shields.io/npm/v/dsh-zotero" alt="npm version" style="max-width:100%;"></a>
   <a href="https://www.npmjs.com/package/dsh-zotero"><img src="https://img.shields.io/npm/dm/dsh-zotero" alt="npm downloads" style="max-width:100%;"></a>
   <a href="https://www.npmjs.com/package/dsh-zotero"><img src="https://img.shields.io/npm/l/dsh-zotero" alt="license" style="max-width:100%;"></a>
-  <a href="https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.0-rc.2"><img src="https://img.shields.io/badge/dsh-0.2.0--rc.2-blue" alt="dsh version" style="max-width:100%;"></a>
+  <a href="https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.1-alpha.1"><img src="https://img.shields.io/badge/dsh-0.2.1--alpha.1-blue" alt="dsh version" style="max-width:100%;"></a>
   <a href="https://awesome-dsh-plugin.com"><img src="https://awesome-dsh-plugin.com/badge.svg" alt="Awesome DSH Plugin"></a>
 </p>
 </div>
@@ -73,7 +73,7 @@ The plugin provides a configuration page under **Settings → Zotero**, supporti
 
 - Zotero ≥ 7 desktop (reads require Zotero ≥ 7; writes require Zotero 10). Enable local API: **Settings → Advanced → Allow other applications on this computer to communicate with Zotero**.
 - Node.js ≥ 22.19 or ≥ 24
-- Host dsh ≥ 0.2.0-rc.2
+- Host dsh ≥ 0.2.1-alpha.1
 - Local API at `http://127.0.0.1:23119/api`; reads require no authentication, while writes use a locally issued write key
 
 ## Usage Example

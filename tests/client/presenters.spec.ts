@@ -10,6 +10,7 @@ import type {
   ToolResultNode,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
+import { PartialArguments } from '@deepseek-ai/dsh-util-values'
 import { describe, expect, it } from 'vitest'
 import {
   argsOf,
@@ -132,6 +133,7 @@ describe('argsOf', () => {
         step: 1,
         time: 1,
         subCalls: [],
+        args: PartialArguments.EMPTY,
       }),
     ).toBeNull()
   })

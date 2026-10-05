@@ -97,7 +97,8 @@ More detail: `docs/development.md`.
 
 ### Harness pin
 
-- One baseline version, currently `dsh 0.2.0-rc.2`. The `@deepseek-ai/dsh-*` line in `devDependencies` is the source of truth; `overrides` pin the same exact version for reproducible builds and typechecking. `peerDependencies`, `engines.dsh`, and `dsh.harnessRange` are derived as `>=` the pin (e.g. `>=0.2.0-rc.2`) so the runtime plugin compatibility gate admits forward minor and rc releases. READMEs and this file restate the baseline pin.
+- One baseline version, currently `dsh 0.2.1-alpha.1`. The `@deepseek-ai/dsh-*` line in `devDependencies` is the source of truth; `overrides` pin the same exact version for reproducible builds and typechecking. `peerDependencies` is declared as `>=` the pin (e.g. `>=0.2.1-alpha.1`) and is the **only** runtime compatibility gate: harness `evaluatePluginCompatibility` reads nothing else. `engines.dsh` and `dsh.harnessRange` are derived from the same pin, but harness declares `engines` as "declarative until a reader enforces it" and never reads `dsh.harnessRange` at all — both are this repo's own consistency faces, kept in step by `scripts/harness-state.mjs`. READMEs and this file restate the baseline pin.
+- The **vendored framework line** moves with the pin and is not covered by `harness:pin`: `@deepseek-ai/cordis`, `cordis-plugin-include`, `cordis-plugin-loader`, `cosmokit`, and `schemastery` track the same release window, and every `0.2.1-alpha.1` package requires `cordis ~4.0.5-alpha.1`. Move them to the sibling's `vendor/*` versions in the same commit, or `npm install` fails ERESOLVE.
 - Never edit one form alone and never use `^` / `||` — `npm run harness:pin -- <version>`, then regenerate `package-lock.json`. `scripts/harness-state.mjs` maintains this mapping in one step.
 - If the registry lags the pin, `npm run link:local-harness`. Never grant a profile `compatibility.json` exemption so this plugin runs on another dsh line.
 

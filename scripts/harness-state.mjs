@@ -5,9 +5,12 @@
  *
  * 1. **The pin.** `package.json` carries one harness line:
  *    every `@deepseek-ai/dsh-*` in `dependencies` / `devDependencies` /
- *    `overrides` pins the exact tested version. `peerDependencies`,
- *    `engines.dsh`, and `dsh.harnessRange` are declared as `>=` the pin
- *    so the runtime compatibility gate admits forward releases.
+ *    `overrides` pins the exact tested version. `peerDependencies` is
+ *    declared as `>=` the pin and is the only runtime compatibility gate —
+ *    harness `evaluatePluginCompatibility` reads nothing else. `engines.dsh`
+ *    and `dsh.harnessRange` are written from the same pin but are this repo's
+ *    own consistency faces: harness calls `engines` declarative until a reader
+ *    enforces it and never reads `dsh.harnessRange` at all.
  *    No caret ranges, no dual arms. The exact `devDependencies` line is the
  *    source of truth; every other form is written from it. The tracked
  *    `package-lock.json` resolves the pinned packages.

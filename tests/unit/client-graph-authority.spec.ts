@@ -129,13 +129,13 @@ describe('client graph authority', () => {
   })
 })
 
-describe('harness inline-safe table (dsh-v0.2.0-rc.2)', () => {
-  it('accepts the rc.2 package names and rejects the retired agent-presets arm', () => {
+describe('harness inline-safe table (dsh-v0.2.1-alpha.1)', () => {
+  it('accepts the pinned package names and rejects the retired agent-presets arm', () => {
     expect(isInlineSafeHarness('@deepseek-ai/dsh-agent-preset-registry/display')).toBe(true)
     expect(isInlineSafeHarness('@deepseek-ai/dsh-agent-presets/display')).toBe(false)
   })
 
-  it('covers the full rc.2 INLINE_SAFE arms', () => {
+  it('covers the full pinned INLINE_SAFE arms', () => {
     for (const specifier of [
       '@deepseek-ai/dsh-file-reference',
       '@deepseek-ai/dsh-session/client',
