@@ -11,12 +11,12 @@ import { searchMetaOf } from '../sources/decoders.ts'
 import { selectUrlOf, pdfUrlOf } from '../actions/open-zotero.ts'
 import { ZoteroOpenLink } from '../components/open/ZoteroOpenLink.tsx'
 import {
-  argsOf,
+  argsViewOf,
   errorSummaryOf,
   metaOf,
   numberField,
   resultTextOf,
-  stringField,
+  textArg,
 } from '../presenters.ts'
 import { RunningNotice, RawTextFallback, ZoteroToolRow } from './ZoteroToolRow.tsx'
 import css from './toolviews.module.css'
@@ -28,8 +28,8 @@ export function SearchToolView(props: SearchToolViewProps) {
   const { toolName, block, useDisclosure, inspect, t } = props
 
   const { icon, query, summary, errorSummary, rows, omitted, rawText } = useMemo(() => {
-    const args = argsOf(block)
-    const q = (stringField(args ?? {}, 'query') ?? '').trim()
+    const args = argsViewOf(block)
+    const q = (textArg(args, 'query') ?? '').trim()
     const meta = metaOf(block)
     const searchView = meta !== null ? searchMetaOf(meta) : null
     const noteMatches = meta !== null ? (numberField(meta, 'noteMatches') ?? 0) : 0

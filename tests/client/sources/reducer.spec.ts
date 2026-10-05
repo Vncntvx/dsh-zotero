@@ -294,25 +294,47 @@ describe('buildSourceWorkspace', () => {
     })
 
     it('never folds searches whose arguments are unparseable', () => {
+      // Two calls whose payload merely failed to index are not the same
+      // search: folding them would merge distinct queries behind one row.
       const workspace = buildSourceWorkspace([
-        {
-          ...settled(),
+        settled({
           callId: 's1',
           seq: 1,
-          call: { name: 'zotero_search', argsRaw: '' },
+          call: { name: 'zotero_search', argsRaw: '{bad-json' },
           meta: searchMetaOf([{ ref: REF('A1') }]),
-        },
-        {
-          ...settled(),
+        }),
+        settled({
           callId: 's2',
           seq: 2,
-          call: { name: 'zotero_search', argsRaw: '' },
+          call: { name: 'zotero_search', argsRaw: '{bad-json' },
           meta: searchMetaOf([{ ref: REF('A2') }]),
-        },
+        }),
       ])
       expect(workspace.sources).toHaveLength(2)
       expect(workspace.sources[0]!.searches.map((entry) => entry.callId)).toEqual(['s1'])
       expect(workspace.sources[1]!.searches.map((entry) => entry.callId)).toEqual(['s2'])
+    })
+
+    it('folds searches whose arguments are an equally empty payload', () => {
+      // An empty payload is readable and means "no filters", so two of them
+      // are one logical search — unlike a payload that failed to index.
+      const workspace = buildSourceWorkspace([
+        settled({
+          callId: 's1',
+          seq: 1,
+          call: { name: 'zotero_search', argsRaw: '' },
+          meta: searchMetaOf([{ ref: REF('A1') }]),
+        }),
+        settled({
+          callId: 's2',
+          seq: 2,
+          call: { name: 'zotero_search', argsRaw: '' },
+          meta: searchMetaOf([{ ref: REF('A2') }]),
+        }),
+      ])
+      expect(workspace.sources).toHaveLength(2)
+      for (const source of workspace.sources)
+        expect(source.searches.map((entry) => entry.callId)).toEqual(['s1'])
     })
 
     it('distinguishes searches by itemTypes and tags, not just query and mode', () => {
@@ -560,26 +582,24 @@ describe('buildSourceWorkspace', () => {
 
     it('skips a get whose arguments and projection both lack a ref', () => {
       const workspace = buildSourceWorkspace([
-        {
-          ...settled(),
+        settled({
           callId: 'g1',
           seq: 1,
           call: { name: 'zotero_get', argsRaw: '' },
           meta: { title: 'Only Title' },
-        },
+        }),
       ])
       expect(workspace.sources).toEqual([])
     })
 
     it('attributes a get through the projection ref when the arguments are unusable', () => {
       const workspace = buildSourceWorkspace([
-        {
-          ...settled(),
+        settled({
           callId: 'g1',
           seq: 1,
           call: { name: 'zotero_get', argsRaw: '' },
           meta: { title: 'Attention Is All You Need', ref: REF('A1') },
-        },
+        }),
       ])
       expect(workspace.sources).toHaveLength(1)
       expect(workspace.sources[0]!.facts.inspected).toBe(true)

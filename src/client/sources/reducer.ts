@@ -10,16 +10,22 @@
  * @module dsh-zotero/client/sources/reducer
  */
 
-import type { ToolCallBlock } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { ToolArgs, ToolCallBlock } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import {
-  argsOf,
+  argsViewOf,
+  boolArg,
   callNameOf,
   isRecord,
   isSettledTool,
+  listArg,
   metaOf,
+  numberArg,
+  recordArg,
   resultTextOf,
   rowStateOf,
   stringField,
+  textArg,
+  valueArg,
   type ZoteroRowState,
 } from '../presenters.ts'
 import {
@@ -133,30 +139,37 @@ function emptyOperations(): DraftOperations {
  * fields. When the result's presentation meta resolved both the scope and the
  * library, they override the raw argument parse — the resolved values are
  * what Zotero actually served.
+ *
+ * A null identity means the arguments are not a readable object payload, so
+ * nothing can be compared: two calls whose payload merely failed to index are
+ * not the same search, and folding them would merge distinct queries. The
+ * view reports that through `invalid` (`packages/util/values/src/
+ * partial-json.ts`), which covers malformed JSON and every non-object payload
+ * (array, number, string, boolean, null).
  */
 function searchIdentityOf(
-  args: Record<string, unknown> | null,
+  args: ToolArgs,
   overrides?: {
     readonly resolvedScope: ZoteroResolvedScope
     readonly resolvedLibrary: SupportedLocalLibrary
   },
 ): string | null {
-  if (args === null) return null
-  const query = typeof args['query'] === 'string' ? args['query'] : ''
-  const mode = args['mode'] === 'everything' ? 'everything' : 'metadata'
-  const itemTypes = normalizedListOf(args['itemTypes'])
-  const tags = normalizedListOf(args['tags'])
-  const tagMatch = args['tagMatch'] === 'any' ? 'any' : 'all'
-  const excludeTags = normalizedListOf(args['excludeTags'])
-  const includeTrashed = args['includeTrashed'] === true
-  const sort = typeof args['sort'] === 'string' ? args['sort'] : ''
-  const direction = typeof args['direction'] === 'string' ? args['direction'] : ''
+  if (args.invalid) return null
+  const query = textArg(args, 'query') ?? ''
+  const mode = textArg(args, 'mode') === 'everything' ? 'everything' : 'metadata'
+  const itemTypes = normalizedListOf(listArg(args, 'itemTypes'))
+  const tags = normalizedListOf(listArg(args, 'tags'))
+  const tagMatch = textArg(args, 'tagMatch') === 'any' ? 'any' : 'all'
+  const excludeTags = normalizedListOf(listArg(args, 'excludeTags'))
+  const includeTrashed = boolArg(args, 'includeTrashed')
+  const sort = textArg(args, 'sort') ?? ''
+  const direction = textArg(args, 'direction') ?? ''
   const library =
     overrides?.resolvedLibrary ??
     (() => {
-      const l = args['library']
+      const l = recordArg(args, 'library')
       if (
-        isRecord(l) &&
+        l !== null &&
         (l['type'] === 'user' || l['type'] === 'group') &&
         typeof l['id'] === 'number'
       ) {
@@ -171,7 +184,7 @@ function searchIdentityOf(
     scope:
       overrides !== undefined
         ? resolvedToSourceScope(overrides.resolvedScope)
-        : scopeOf(args['scope']),
+        : scopeOf(valueArg(args, 'scope')),
     itemTypes,
     tags,
     tagMatch,
@@ -214,16 +227,13 @@ function resolvedToSourceScope(scope: ZoteroResolvedScope): SourceScope {
 }
 
 /** The offset argument of one search call, or the tool default. */
-function offsetOf(args: Record<string, unknown> | null): number {
-  if (args === null) return 0
-  const offset = args['offset']
-  return typeof offset === 'number' && Number.isFinite(offset) && offset >= 0 ? offset : 0
+function offsetOf(args: ToolArgs): number {
+  return numberArg(args, 'offset')
 }
 
 /** The ref argument of one ref-carrying call; null when absent or unusable. */
-function refArgOf(args: Record<string, unknown> | null): string | null {
-  if (args === null) return null
-  const ref = stringField(args, 'ref')
+function refArgOf(args: ToolArgs): string | null {
+  const ref = textArg(args, 'ref')
   return ref === undefined || ref === '' ? null : ref
 }
 
@@ -235,10 +245,10 @@ function refArgOf(args: Record<string, unknown> | null): string | null {
  */
 function exportRefsOf(
   metaView: ExportMetaView | null,
-  args: Record<string, unknown> | null,
+  args: ToolArgs,
 ): { readonly refs: readonly string[]; readonly refsOmitted: number } {
-  if (args !== null) {
-    const refs = args['refs']
+  if (args.has('refs')) {
+    const refs = args.value('refs')
     if (Array.isArray(refs)) {
       return {
         refs: refs.filter((entry): entry is string => typeof entry === 'string' && entry !== ''),
@@ -431,7 +441,7 @@ export function buildSourceWorkspace(
     const seq = index
     const state = rowStateOf(block)
     const name = callNameOf(block)
-    const args = argsOf(block)
+    const args = argsViewOf(block)
     const meta = metaOf(block)
 
     switch (name) {
@@ -449,7 +459,9 @@ export function buildSourceWorkspace(
             : searchIdentityOf(args)
         if (lastEpisode === null || identity === null || lastEpisode.identity !== identity) {
           const scopeForEpisode =
-            resolvedScope !== null ? resolvedToSourceScope(resolvedScope) : scopeOf(args?.['scope'])
+            resolvedScope !== null
+              ? resolvedToSourceScope(resolvedScope)
+              : scopeOf(valueArg(args, 'scope'))
           const libraryForEpisode: SupportedLocalLibrary | undefined =
             resolvedLibrary ??
             (() => {
@@ -457,8 +469,8 @@ export function buildSourceWorkspace(
               // scope decoder (user/0 or a positive safe-integer group id),
               // spelled inline: the client bundle must not value-import host
               // modules, so the check lives in both halves by design.
-              const libArg = args?.['library']
-              if (!isRecord(libArg)) return undefined
+              const libArg = recordArg(args, 'library')
+              if (libArg === null) return undefined
               const type = libArg['type']
               const id = libArg['id']
               if (type === 'user' && id === 0) return { type: 'user', id: 0 as const }
@@ -472,20 +484,19 @@ export function buildSourceWorkspace(
               }
               return undefined
             })()
+          const query = textArg(args, 'query')
           lastEpisode = {
             identity,
             callId: block.callId,
-            ...(typeof args?.['query'] === 'string' && args['query'] !== ''
-              ? { query: args['query'] }
-              : {}),
-            mode: args?.['mode'] === 'everything' ? 'everything' : 'metadata',
+            ...(query !== undefined && query !== '' ? { query } : {}),
+            mode: textArg(args, 'mode') === 'everything' ? 'everything' : 'metadata',
             scope: scopeForEpisode,
             ...(libraryForEpisode ? { library: libraryForEpisode } : {}),
-            itemTypes: normalizedListOf(args?.['itemTypes']),
-            tags: normalizedListOf(args?.['tags']),
-            tagMatch: args?.['tagMatch'] === 'any' ? 'any' : 'all',
-            excludeTags: normalizedListOf(args?.['excludeTags']),
-            includeTrashed: args?.['includeTrashed'] === true,
+            itemTypes: normalizedListOf(listArg(args, 'itemTypes')),
+            tags: normalizedListOf(listArg(args, 'tags')),
+            tagMatch: textArg(args, 'tagMatch') === 'any' ? 'any' : 'all',
+            excludeTags: normalizedListOf(listArg(args, 'excludeTags')),
+            includeTrashed: boolArg(args, 'includeTrashed'),
             offset: offsetOf(args),
             returned: 0,
             omitted: 0,

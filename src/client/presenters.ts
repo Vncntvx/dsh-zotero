@@ -2,15 +2,16 @@
  * Pure block readers shared by the Sources panel: the truth ladder from the
  * frozen call block. State comes from the block structure (kind/isError/
  * error.code); facts come from the tool's presentation projection via the
- * defensive field readers; args come from the frozen args string. Every
- * function here is deterministic over its inputs — the same log slice
- * renders the same panel — and nothing queries Zotero or any registry. Meta
- * is validated defensively: a malformed or absent record degrades to
- * nothing, never crashes the view.
+ * defensive field readers; args come from the harness's own lazy argument
+ * view (`block.args`). Every function here is deterministic over its inputs —
+ * the same log slice renders the same panel — and nothing queries Zotero or
+ * any registry. Meta is validated defensively: a malformed or absent record
+ * degrades to nothing, never crashes the view.
  * @module dsh-zotero/client/presenters
  */
 
-import type { ToolCallBlock } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
+import type { ToolArgs, ToolCallBlock } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { EvidenceItem, EvidenceField } from '../evidence-item.ts'
 import { boolField, isRecord, stringField } from '../json.ts'
 import { REF_IN_TEXT_PATTERN } from '../ref-grammar.ts'
@@ -85,24 +86,51 @@ export function errorSummaryOf(block: ToolCallBlock, rawText?: string | null): s
 }
 
 /**
- * The frozen args string for a call block. Preparing calls carry no
- * arguments yet (`phase: 'preparing'`); started and settled calls do.
+ * The harness's per-stage lazy argument view. Every block — preparing, start,
+ * and result — carries one (`packages/client/ui-conversation/src/client/
+ * contract/records.ts`: `ToolCallHead.args`, `ToolResultNode.args`), and a
+ * preparing view grows in place, so readers see fields as they stream instead
+ * of only after the call is dispatched.
+ * @param block - the call block to read.
+ * @returns the argument view; empty (never absent) when the call carries none.
  */
-function argsRawOf(block: ToolCallBlock): string | null {
-  if (isSettledTool(block)) return block.call?.argsRaw ?? null
-  return block.phase === 'start' ? block.argsRaw : null
+export function argsViewOf(block: ToolCallBlock): ToolArgs {
+  return block.args
 }
 
-/** The call arguments parsed from the frozen args string; null when malformed. */
-export function argsOf(block: ToolCallBlock): Record<string, unknown> | null {
-  const raw = argsRawOf(block)
-  if (raw === null || raw === '') return null
-  try {
-    const parsed = JSON.parse(raw) as unknown
-    return isRecord(parsed) ? parsed : null
-  } catch {
-    return null
-  }
+/** A string argument, including the streaming prefix while it is still open. */
+export function textArg(view: ToolArgs, key: string): string | undefined {
+  return view.text(key)
+}
+
+/** A non-string argument; undefined while that field is still open or absent. */
+export function valueArg(view: ToolArgs, key: string): JsonValue | undefined {
+  return view.value(key)
+}
+
+/** String entries of an array argument; empty when absent, incomplete, or not an array. */
+export function listArg(view: ToolArgs, key: string): string[] {
+  const value = valueArg(view, key)
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === 'string')
+    : []
+}
+
+/** A non-negative finite numeric argument, or `fallback` when absent or unusable. */
+export function numberArg(view: ToolArgs, key: string, fallback = 0): number {
+  const value = valueArg(view, key)
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : fallback
+}
+
+/** A boolean argument: true only for a completed JSON `true`. */
+export function boolArg(view: ToolArgs, key: string): boolean {
+  return valueArg(view, key) === true
+}
+
+/** A plain-object argument, or null when absent, incomplete, or not an object. */
+export function recordArg(view: ToolArgs, key: string): Record<string, unknown> | null {
+  const value = valueArg(view, key)
+  return isRecord(value) ? value : null
 }
 
 /** The 8-character object key of a zotero:// ref, or null for other strings. */

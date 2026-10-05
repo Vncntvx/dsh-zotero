@@ -13,7 +13,14 @@ import { ZoteroOpenLink } from '../components/open/ZoteroOpenLink.tsx'
 import { CopyButton } from '../components/CopyButton.tsx'
 import { extensionOf, fileNameForFormat, formatLabelOf, mimeOf } from '../components/ExportCard.tsx'
 import { downloadBlob } from '../download.ts'
-import { argsOf, errorSummaryOf, metaOf, resultTextOf, stringField } from '../presenters.ts'
+import {
+  argsViewOf,
+  errorSummaryOf,
+  listArg,
+  metaOf,
+  resultTextOf,
+  textArg,
+} from '../presenters.ts'
 import { RawTextFallback, RunningNotice, ZoteroToolRow } from './ZoteroToolRow.tsx'
 import css from './toolviews.module.css'
 
@@ -38,15 +45,14 @@ export function ExportToolView(props: ExportToolViewProps) {
   } = useMemo(() => {
     const raw = (resultTextOf(block) ?? '').trim()
     const errSummary = errorSummaryOf(block, raw)
-    const args = argsOf(block)
-    const formatArg = stringField(args ?? {}, 'format') ?? 'bibtex'
+    const args = argsViewOf(block)
+    const formatArg = textArg(args, 'format') ?? 'bibtex'
     const meta = metaOf(block)
     const exportView = meta !== null ? exportMetaOf(meta) : null
     const job = meta !== null ? jobArmOf(meta) : null
     const rawFmt = exportView?.format || formatArg
     const label = formatLabelOf(rawFmt, t)
-    const count =
-      exportView?.refs.length ?? (Array.isArray(args?.['refs']) ? args['refs'].length : 0)
+    const count = exportView?.refs.length ?? listArg(args, 'refs').length
 
     let sum = ''
     if ('phase' in block && block.phase === 'start') {

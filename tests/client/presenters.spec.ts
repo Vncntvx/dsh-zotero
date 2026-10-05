@@ -10,24 +10,36 @@ import type {
   ToolResultNode,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
-import { PartialArguments } from '@deepseek-ai/dsh-util-values'
 import { describe, expect, it } from 'vitest'
 import {
-  argsOf,
+  argsViewOf,
+  boolArg,
   boolField,
   callNameOf,
   errorSummaryOf,
   evidenceItemsOf,
   isRecord,
   joinNonEmpty,
+  listArg,
   metaOf,
+  numberArg,
   numberField,
+  recordArg,
   resultTextOf,
   rowStateOf,
   shortKeyOf,
   stringField,
+  textArg,
 } from '../../src/client/presenters.ts'
-import { running as blockRunning, settled as blockSettled } from './helpers/blocks.ts'
+import {
+  preparing as blockPreparing,
+  running as blockRunning,
+  settled as blockSettled,
+} from './helpers/blocks.ts'
+
+function preparing() {
+  return blockPreparing()
+}
 
 function running(overrides: Partial<StartedToolCall> = {}): StartedToolCall {
   return blockRunning(overrides)
@@ -114,28 +126,50 @@ describe('resultTextOf', () => {
   })
 })
 
-describe('argsOf', () => {
-  it('parses the frozen args string from both block forms, degrading to null', () => {
-    expect(argsOf(settled({ call: { name: 'zotero_get', argsRaw: '{"ref":"x"}' } }))).toEqual({
-      ref: 'x',
-    })
-    expect(argsOf(running({ argsRaw: '{"ref":"x"}' }))).toEqual({ ref: 'x' })
-    expect(argsOf(settled({ call: { name: 'zotero_get', argsRaw: '{' } }))).toBeNull()
-    expect(argsOf(settled({ call: null }))).toBeNull()
-    expect(argsOf(running({ argsRaw: '[1]' }))).toBeNull()
-    // Preparing calls carry no args yet on the 0.1.7 RunningToolCall union.
+describe('the lazy argument view facade', () => {
+  it('reads a field from both dispatched and settled blocks', () => {
     expect(
-      argsOf({
-        phase: 'preparing',
-        callId: 'p1',
-        name: 'zotero_search',
-        turn: 1,
-        step: 1,
-        time: 1,
-        subCalls: [],
-        args: PartialArguments.EMPTY,
+      textArg(argsViewOf(settled({ call: { name: 'zotero_get', argsRaw: '{"ref":"x"}' } })), 'ref'),
+    ).toBe('x')
+    expect(textArg(argsViewOf(running({ argsRaw: '{"ref":"x"}' })), 'ref')).toBe('x')
+  })
+
+  it('answers undefined — never throws — for malformed, empty, and non-object payloads', () => {
+    expect(
+      textArg(argsViewOf(settled({ call: { name: 'zotero_get', argsRaw: '{' } })), 'ref'),
+    ).toBeUndefined()
+    expect(textArg(argsViewOf(settled({ call: null })), 'ref')).toBeUndefined()
+    expect(textArg(argsViewOf(running({ argsRaw: '[1]' })), 'ref')).toBeUndefined()
+  })
+
+  it('reads a preparing view, which grows in place as fragments land', () => {
+    // A preparing block's arguments are still streaming, so the view carries
+    // what has arrived so far instead of nothing at all.
+    expect(preparing()).toBeDefined()
+    const view = argsViewOf(running({ argsRaw: '{"query":"quantum' }))
+    expect(textArg(view, 'query')).toBe('quantum')
+  })
+
+  it('reads non-string fields only once they close, and never invents values', () => {
+    const view = argsViewOf(
+      running({
+        argsRaw: '{"tags":["a",1],"offset":20,"includeTrashed":true,"scope":{"kind":"library"}}',
       }),
-    ).toBeNull()
+    )
+    expect(listArg(view, 'tags')).toEqual(['a'])
+    expect(numberArg(view, 'offset')).toBe(20)
+    expect(boolArg(view, 'includeTrashed')).toBe(true)
+    expect(recordArg(view, 'scope')).toEqual({ kind: 'library' })
+    expect(listArg(view, 'absent')).toEqual([])
+    expect(numberArg(view, 'absent')).toBe(0)
+    expect(boolArg(view, 'absent')).toBe(false)
+    expect(recordArg(view, 'absent')).toBeNull()
+    expect(textArg(view, 'absent')).toBeUndefined()
+  })
+
+  it('keeps a negative or non-finite number out of a numeric read', () => {
+    expect(numberArg(argsViewOf(running({ argsRaw: '{"offset":-1}' })), 'offset')).toBe(0)
+    expect(numberArg(argsViewOf(running({ argsRaw: '{"offset":"20"}' })), 'offset')).toBe(0)
   })
 })
 

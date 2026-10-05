@@ -108,8 +108,8 @@ export function currentTime(): string {
  * the harness's presentation order, so the signature tracks it directly.
  * Streaming chunk publications
  * keep order and phase stable and are skipped; a preparing→start transition
- * changes `phase` (and with it the signature) so the workspace picks up
- * `argsRaw` as soon as `tool/call` lands. Settled roots leave `running`.
+ * changes `phase` (and with it the signature) so the workspace re-renders and
+ * reads the call's grown argument view. Settled roots leave `running`.
  * Only zotero rows contribute. Nested Zotero dispatches are included in the
  * same walk as their visible roots, so their arrival or lifecycle change
  * rebuilds the workspace. A settled block whose content changes without an

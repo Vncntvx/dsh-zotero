@@ -18,12 +18,11 @@ describe('buildSourceWorkspace', () => {
   describe('export artifacts and attribution', () => {
     it('skips an export with neither projection refs nor usable arguments', () => {
       const workspace = buildSourceWorkspace([
-        {
-          ...settled(),
+        settled({
           callId: 'e1',
           seq: 1,
           call: { name: 'zotero_export', argsRaw: '' },
-        },
+        }),
       ])
       expect(workspace.sources).toEqual([])
       expect(workspace.exports).toEqual([])
@@ -144,14 +143,13 @@ describe('buildSourceWorkspace', () => {
 
     it('attributes an export through its meta refs even with unparseable arguments', () => {
       const workspace = buildSourceWorkspace([
-        {
-          ...settled(),
+        settled({
           callId: 'e1',
           seq: 1,
           call: { name: 'zotero_export', argsRaw: '' },
           meta: { format: 'ris', requested: 1, refs: [REF('A1')] },
           content: [{ type: 'text', text: 'TY - JOUR' }],
-        },
+        }),
       ])
       expect(workspace.exports[0]!.refs).toEqual([REF('A1')])
       expect(workspace.exports[0]!.refsOmitted).toBe(0)
@@ -241,14 +239,13 @@ describe('buildSourceWorkspace', () => {
         REF(`C${String(index).padStart(2, '0')}`),
       )
       const workspace = buildSourceWorkspace([
-        {
-          ...settled(),
+        settled({
           callId: 'e1',
           seq: 1,
           call: { name: 'zotero_export', argsRaw: '' },
           meta: { format: 'ris', requested: 25, refs: refs.slice(0, 20), refsOmitted: 5 },
           content: [{ type: 'text', text: 'TY - JOUR' }],
-        },
+        }),
       ])
       expect(workspace.exports[0]!.refs).toHaveLength(20)
       expect(workspace.exports[0]!.refsOmitted).toBe(5)

@@ -11,7 +11,7 @@ import { getMetaOf, type ChildCountView, type ChildPreviewView } from '../source
 import { childRowLinks, pdfUrlOf, selectUrlOf } from '../actions/open-zotero.ts'
 import { ZoteroOpenLink } from '../components/open/ZoteroOpenLink.tsx'
 import { countOfLabel, CHILD_KIND_LABEL } from '../evidence-labels.ts'
-import { argsOf, errorSummaryOf, metaOf, resultTextOf, stringField } from '../presenters.ts'
+import { argsViewOf, errorSummaryOf, metaOf, resultTextOf, textArg } from '../presenters.ts'
 import { RawTextFallback, RunningNotice, ZoteroToolRow } from './ZoteroToolRow.tsx'
 import css from './toolviews.module.css'
 
@@ -70,8 +70,8 @@ export function ItemToolView(props: ItemToolViewProps) {
     annotationPreviews,
     rawText,
   } = useMemo(() => {
-    const args = argsOf(block)
-    const itemRef = stringField(args ?? {}, 'ref') ?? ''
+    const args = argsViewOf(block)
+    const itemRef = textArg(args, 'ref') ?? ''
     const meta = metaOf(block)
     const view = meta !== null ? getMetaOf(meta) : null
     const raw = (resultTextOf(block) ?? '').trim()

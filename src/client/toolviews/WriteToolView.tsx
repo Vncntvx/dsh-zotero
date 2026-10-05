@@ -16,16 +16,18 @@ import {
   IconTrashOutlineRegular,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { ToolArgs } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { ZoteroOpenLink } from '../components/open/ZoteroOpenLink.tsx'
 import { selectUrlOf } from '../actions/open-zotero.ts'
 import { writeMetaOf, type WriteMetaView } from '../sources/decoders.ts'
 import {
-  argsOf,
+  argsViewOf,
   errorSummaryOf,
+  listArg,
   metaOf,
   resultTextOf,
   shortKeyOf,
-  stringField,
+  textArg,
 } from '../presenters.ts'
 import { RunningNotice, RawTextFallback, ZoteroToolRow } from './ZoteroToolRow.tsx'
 import css from './toolviews.module.css'
@@ -92,13 +94,9 @@ function noteTitleOf(markdown: string | undefined, defaultTitle: string): string
   return cleaned || defaultTitle
 }
 
-function stringList(value: unknown): string[] {
-  return Array.isArray(value) ? (value.filter((x) => typeof x === 'string') as string[]) : []
-}
-
 /** What one tool's summary builder receives: the call, the projection, and the locale. */
 interface DescribeContext {
-  readonly args: Record<string, unknown> | null
+  readonly args: ToolArgs
   readonly write: WriteMetaView | null
   readonly t: WriteToolViewProps['t']
 }
@@ -132,24 +130,24 @@ const WRITE_DESCRIPTORS: Record<WriteToolName, WriteDescriptor> = {
     titleKey: 'toolTitleCreateNote',
     describe: ({ args, t }) => ({
       summary: t('toolSummaryCreateNote', {
-        title: noteTitleOf(stringField(args ?? {}, 'markdown'), t('toolDefaultNoteTitle')),
+        title: noteTitleOf(textArg(args, 'markdown'), t('toolDefaultNoteTitle')),
       }),
       tone: 'applied',
-      tags: stringList(args?.['tags']),
-      parentRef: stringField(args ?? {}, 'parentItem') ?? stringField(args ?? {}, 'ref'),
+      tags: listArg(args, 'tags'),
+      parentRef: textArg(args, 'parentItem') ?? textArg(args, 'ref'),
     }),
   },
   zotero_update_item_tags: {
     icon: () => <IconPlusOutlineRegular size={14} />,
     titleKey: 'toolTitleUpdateItemTags',
     describe: ({ args, write, t }) => {
-      const requested = [...stringList(args?.['add']), ...stringList(args?.['remove'])]
+      const requested = [...listArg(args, 'add'), ...listArg(args, 'remove')]
       if (write === null || (write.addedCount === null && write.removedCount === null)) {
         return {
           summary: t('toolSummaryUpdateItemTagsRequested', { count: requested.length }),
           tone: 'unreported',
           tags: requested,
-          parentRef: stringField(args ?? {}, 'ref'),
+          parentRef: textArg(args, 'ref'),
         }
       }
       const added = write.addedCount ?? 0
@@ -161,7 +159,7 @@ const WRITE_DESCRIPTORS: Record<WriteToolName, WriteDescriptor> = {
             : t('toolSummaryUpdateItemTags', { added, removed }),
         tone: added === 0 && removed === 0 ? 'noop' : 'applied',
         tags: requested,
-        parentRef: stringField(args ?? {}, 'ref'),
+        parentRef: textArg(args, 'ref'),
       }
     },
   },
@@ -169,7 +167,7 @@ const WRITE_DESCRIPTORS: Record<WriteToolName, WriteDescriptor> = {
     icon: () => <IconBranchOutlineRegular size={14} />,
     titleKey: 'toolTitleUpdateItemCollections',
     describe: ({ args, write, t }) => {
-      const requested = [...stringList(args?.['add']), ...stringList(args?.['remove'])]
+      const requested = [...listArg(args, 'add'), ...listArg(args, 'remove')]
       if (write === null || (write.addedCount === null && write.removedCount === null)) {
         const name =
           requested[0] !== undefined ? (shortKeyOf(requested[0]) ?? requested[0].trim()) : ''
@@ -177,7 +175,7 @@ const WRITE_DESCRIPTORS: Record<WriteToolName, WriteDescriptor> = {
           summary: t('toolSummaryUpdateItemCollectionsRequested', { name }),
           tone: 'unreported',
           tags: [],
-          parentRef: stringField(args ?? {}, 'ref'),
+          parentRef: textArg(args, 'ref'),
         }
       }
       const added = write.addedCount ?? 0
@@ -189,7 +187,7 @@ const WRITE_DESCRIPTORS: Record<WriteToolName, WriteDescriptor> = {
             : t('toolSummaryUpdateItemCollections', { added, removed }),
         tone: added === 0 && removed === 0 ? 'noop' : 'applied',
         tags: [],
-        parentRef: stringField(args ?? {}, 'ref'),
+        parentRef: textArg(args, 'ref'),
       }
     },
   },
@@ -198,18 +196,18 @@ const WRITE_DESCRIPTORS: Record<WriteToolName, WriteDescriptor> = {
     titleKey: 'toolTitleCreateCollection',
     describe: ({ args, t }) => ({
       summary: t('toolSummaryCreateCollection', {
-        name: (stringField(args ?? {}, 'name') ?? '').trim(),
+        name: (textArg(args, 'name') ?? '').trim(),
       }),
       tone: 'applied',
       tags: [],
-      parentRef: stringField(args ?? {}, 'parent'),
+      parentRef: textArg(args, 'parent'),
     }),
   },
   zotero_delete_collection: {
     icon: () => <IconBranchOutlineRegular size={14} />,
     titleKey: 'toolTitleDeleteCollection',
     describe: ({ args, t }) => {
-      const collectionArg = stringField(args ?? {}, 'collection') ?? ''
+      const collectionArg = textArg(args, 'collection') ?? ''
       return {
         summary: t('toolSummaryDeleteCollection', {
           name: shortKeyOf(collectionArg) ?? collectionArg.trim(),
@@ -225,7 +223,7 @@ const WRITE_DESCRIPTORS: Record<WriteToolName, WriteDescriptor> = {
     titleKey: 'toolTitleCreateItem',
     describe: ({ args, t }) => ({
       summary: t('toolSummaryCreateItem', {
-        title: (stringField(args ?? {}, 'title') ?? stringField(args ?? {}, 'url') ?? '').trim(),
+        title: (textArg(args, 'title') ?? textArg(args, 'url') ?? '').trim(),
       }),
       tone: 'applied',
       tags: [],
@@ -235,7 +233,7 @@ const WRITE_DESCRIPTORS: Record<WriteToolName, WriteDescriptor> = {
     icon: () => <IconEditOutlineRegular size={14} />,
     titleKey: 'toolTitleUpdateItem',
     describe: ({ args, t }) => {
-      const ref = stringField(args ?? {}, 'ref')
+      const ref = textArg(args, 'ref')
       return {
         summary: t('toolSummaryUpdateItem', { ref: shortKeyOf(ref ?? '') ?? (ref ?? '').trim() }),
         tone: 'applied',
@@ -250,7 +248,7 @@ const WRITE_DESCRIPTORS: Record<WriteToolName, WriteDescriptor> = {
     icon: () => <IconTrashOutlineRegular size={14} />,
     titleKey: 'toolTitleDeleteLibraryTags',
     describe: ({ args, write, t }) => {
-      const tags = stringList(args?.['tags'])
+      const tags = listArg(args, 'tags')
       if (write !== null && write.deletedCount !== null) {
         return {
           summary: t('toolSummaryDeleteLibraryTags', { count: write.deletedCount }),
@@ -286,7 +284,7 @@ export function WriteToolView(props: WriteToolViewProps) {
     // arm exactly as the if/else chain's default once did.
     const descriptor =
       WRITE_DESCRIPTORS[toolName as WriteToolName] ?? WRITE_DESCRIPTORS.zotero_create_note
-    const args = argsOf(block)
+    const args = argsViewOf(block)
     const raw = (resultTextOf(block) ?? '').trim()
     const meta = metaOf(block)
     const write = meta !== null ? writeMetaOf(meta) : null

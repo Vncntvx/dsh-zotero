@@ -21,7 +21,14 @@ import {
 } from '../sources/decoders.ts'
 import type { BrowseRow } from '../../browse-rows.ts'
 import { countOfLabel } from '../evidence-labels.ts'
-import { argsOf, errorSummaryOf, metaOf, resultTextOf, stringField } from '../presenters.ts'
+import {
+  argsViewOf,
+  errorSummaryOf,
+  metaOf,
+  resultTextOf,
+  stringField,
+  textArg,
+} from '../presenters.ts'
 import { CopyButton } from '../components/CopyButton.tsx'
 import { RawTextFallback, RunningNotice, ZoteroToolRow } from './ZoteroToolRow.tsx'
 import css from './toolviews.module.css'
@@ -251,12 +258,12 @@ export function BrowseToolView(props: BrowseToolViewProps) {
     useMemo(() => {
       const raw = (resultTextOf(block) ?? '').trim()
       const errSummary = errorSummaryOf(block, raw)
-      const args = argsOf(block)
+      const args = argsViewOf(block)
       // The kind the call asked for is the only label available before the
       // result lands, and the fallback when a malformed replay record leaves the
       // projection without one. It is the tool's required parameter — the old
       // `category` fallback named a parameter the tool has never had.
-      const askedKind = stringField(args ?? {}, 'kind')
+      const askedKind = textArg(args, 'kind')
       const meta = metaOf(block)
 
       let sum = ''

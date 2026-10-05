@@ -19,7 +19,7 @@ import { childRowLinks, pdfUrlOf } from '../actions/open-zotero.ts'
 import { ZoteroOpenLink } from '../components/open/ZoteroOpenLink.tsx'
 import { CopyButton } from '../components/CopyButton.tsx'
 import { countOfLabel, CHILD_KIND_LABEL } from '../evidence-labels.ts'
-import { argsOf, errorSummaryOf, metaOf, resultTextOf, stringField } from '../presenters.ts'
+import { argsViewOf, errorSummaryOf, metaOf, resultTextOf, textArg } from '../presenters.ts'
 import { RawTextFallback, RunningNotice, ZoteroToolRow } from './ZoteroToolRow.tsx'
 import css from './toolviews.module.css'
 
@@ -123,8 +123,8 @@ export function ChildrenToolView(props: ChildrenToolViewProps) {
 
   const { icon, ref, summary, errorSummary, attachView, pdfUrl, sections, rawText } =
     useMemo(() => {
-      const args = argsOf(block)
-      const itemRef = stringField(args ?? {}, 'ref') ?? ''
+      const args = argsViewOf(block)
+      const itemRef = textArg(args, 'ref') ?? ''
       const meta = metaOf(block)
       const attachView = isAttachment && meta !== null ? attachmentMetaOf(meta) : null
       const children = !isAttachment && meta !== null ? childrenMetaOf(meta) : null
