@@ -9,6 +9,7 @@
   "include": [
     "src",
     "tests",
+    "scripts/build-client.d.mts",
     "scripts/client-graph-authority.d.mts",
     "scripts/harness-state.d.mts",
     "scripts/verify-pack.d.mts",

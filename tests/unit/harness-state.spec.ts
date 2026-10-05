@@ -1,7 +1,7 @@
 /**
  * Pin-move prose rewriting and the harness compatibility policy. The
  * historical version-mapping section must never be retargeted. Dev and overrides
- * take the exact pin; peers, engines, and harnessRange become >=pin.
+ * take the exact pin; peers and engines become >=pin.
  * @module tests/unit/harness-state
  */
 
@@ -75,6 +75,23 @@ describe('retargetProse', () => {
     const moved = retargetProse('use dsh 0.1.6-alpha.2 here', '0.1.6-alpha.2', '0.1.7-rc.1')
     expect(moved).toBe('use dsh 0.1.7-rc.1 here')
   })
+
+  it('does not rewrite a longer number the old pin is a substring of', () => {
+    // `0.1.6-alpha.2` is the tail of `10.1.6-alpha.2`; a bare replaceAll would
+    // rewrite that unrelated build number's digits.
+    const moved = retargetProse('built with qt 10.1.6-alpha.2', '0.1.6-alpha.2', '0.1.7-rc.1')
+    expect(moved).toBe('built with qt 10.1.6-alpha.2')
+  })
+
+  it('leaves a longer prerelease that merely starts with the old pin', () => {
+    const moved = retargetProse('host dsh 0.1.6-alpha.2-beta', '0.1.6-alpha.2', '0.1.7-rc.1')
+    expect(moved).toBe('host dsh 0.1.6-alpha.2-beta')
+  })
+
+  it('still rewrites a v-prefixed prose mention', () => {
+    const moved = retargetProse('requires dsh v0.1.6-alpha.2 today', '0.1.6-alpha.2', '0.1.7-rc.1')
+    expect(moved).toBe('requires dsh v0.1.7-rc.1 today')
+  })
 })
 
 describe('checkProseText', () => {
@@ -127,17 +144,16 @@ describe('checkVersionMap', () => {
 describe('applyPinToManifest', () => {
   const manifest = () => ({
     engines: { node: '>=22', dsh: '^0.1.7-alpha.2' },
-    dsh: { harnessRange: '^0.1.7-alpha.2 || ^0.1.7-rc.1' },
+    dsh: { manifestVersion: 1, bundle: { patch: './cordis.patch.yml' } },
     dependencies: { '@deepseek-ai/dsh-llm': '^0.1.7-alpha.2', zod: '^4.4.3' },
     devDependencies: { '@deepseek-ai/dsh-tools': '0.1.7-alpha.2' },
     peerDependencies: { '@deepseek-ai/dsh-tools': '^0.1.7-alpha.2' },
     overrides: { '@deepseek-ai/dsh-tools': '0.1.7-alpha.2' },
   })
 
-  it('writes the exact pin into dev/overrides and >=pin into peer/engines/harnessRange', () => {
+  it('writes the exact pin into dev/overrides and >=pin into peer/engines', () => {
     const next = applyPinToManifest(manifest(), '0.1.7-rc.1')
     expect(next.engines.dsh).toBe('>=0.1.7-rc.1')
-    expect(next.dsh.harnessRange).toBe('>=0.1.7-rc.1')
     expect(next.dependencies['@deepseek-ai/dsh-llm']).toBe('0.1.7-rc.1')
     expect(next.devDependencies['@deepseek-ai/dsh-tools']).toBe('0.1.7-rc.1')
     expect(next.peerDependencies['@deepseek-ai/dsh-tools']).toBe('>=0.1.7-rc.1')
@@ -148,16 +164,27 @@ describe('applyPinToManifest', () => {
     expect(JSON.stringify(next)).not.toContain('^0.1.7')
     expect(collectPinFaceProblems(next, '0.1.7-rc.1')).toEqual([])
   })
+
+  it('never writes a dsh.harnessRange face', () => {
+    // The field was self-invented: harness `evaluatePluginCompatibility`
+    // reads peerDependencies alone. The manifest keeps its dsh block intact.
+    const next = applyPinToManifest(manifest(), '0.1.7-rc.1')
+    expect(next.dsh).toEqual({ manifestVersion: 1, bundle: { patch: './cordis.patch.yml' } })
+    expect(JSON.stringify(next)).not.toContain('harnessRange')
+  })
 })
 
 describe('collectPinFaceProblems', () => {
   const exact = () => ({
     engines: { dsh: '>=0.1.7-rc.1' },
-    dsh: { harnessRange: '>=0.1.7-rc.1' },
     peerDependencies: { '@deepseek-ai/dsh-tools': '>=0.1.7-rc.1' },
   })
 
-  it('rejects caret peers and dual harnessRange arms', () => {
+  it('accepts a manifest with no dsh block when the faces agree', () => {
+    expect(collectPinFaceProblems(exact(), '0.1.7-rc.1')).toEqual([])
+  })
+
+  it('rejects caret peers', () => {
     const caret = {
       ...exact(),
       peerDependencies: { '@deepseek-ai/dsh-tools': '^0.1.7-rc.1' },
@@ -165,37 +192,39 @@ describe('collectPinFaceProblems', () => {
     expect(collectPinFaceProblems(caret, '0.1.7-rc.1').join('\n')).toMatch(
       /expected ">=0\.1\.7-rc\.1"/,
     )
-    const dual = {
-      ...exact(),
-      dsh: { harnessRange: '>=0.1.7-alpha.2 || >=0.1.7-rc.1' },
-    }
-    expect(collectPinFaceProblems(dual, '0.1.7-rc.1').join('\n')).toMatch(/dsh\.harnessRange/)
   })
 
-  it('rejects a wrong exact version and a missing engines/harnessRange face', () => {
+  it('rejects a wrong exact version and a missing engines face', () => {
     const wrong = {
       engines: { dsh: '>=0.1.7-rc.2' },
-      dsh: {},
     }
     const problems = collectPinFaceProblems(wrong, '0.1.7-rc.1')
     expect(problems.join('\n')).toMatch(/engines\.dsh is ">=0\.1\.7-rc\.2"/)
-    expect(problems.join('\n')).toMatch(/dsh\.harnessRange is missing/)
     // Zero dsh peers would load on any runtime (evaluatePluginCompatibility
     // reads only peerDependencies) — that is a policy hole, not a silent pass.
     expect(problems.join('\n')).toMatch(/declares no @deepseek-ai\/dsh-\*/)
+    expect(problems.join('\n')).not.toMatch(/harnessRange/)
   })
 
   it('rejects a manifest that dropped every dsh peer', () => {
     const problems = collectPinFaceProblems(
       {
         engines: { dsh: '>=0.1.7-rc.1' },
-        dsh: { harnessRange: '>=0.1.7-rc.1' },
         peerDependencies: { zod: '^4.4.3' },
       },
       '0.1.7-rc.1',
     )
     expect(problems.join('\n')).toMatch(/declares no @deepseek-ai\/dsh-\*/)
     expect(problems.join('\n')).toMatch(/at least one dsh peer/)
+  })
+
+  it('rejects a reintroduced dsh.harnessRange face', () => {
+    // The runtime never read it; the field was removed on purpose.
+    const leftover = {
+      ...exact(),
+      dsh: { harnessRange: '>=0.1.7-rc.1' },
+    }
+    expect(collectPinFaceProblems(leftover, '0.1.7-rc.1').join('\n')).toMatch(/dsh\.harnessRange/)
   })
 
   it('does not confuse a longer prerelease with the pin', () => {

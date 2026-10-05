@@ -24,6 +24,9 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 
+/** The plugin id the boot graph must carry, derived from the package manifest. */
+const PLUGIN_ID = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).name
+
 const execFileAsync = promisify(execFile)
 
 const PACKAGE_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -174,25 +177,25 @@ async function serveOnce(port) {
     const cookie = await exchangeTokenForCookie(port, token)
     const html = await waitForIndex(port, cookie)
     const graph = extractBootGraph(html)
-    const entry = graph.entries.find((candidate) => candidate.id === 'dsh-zotero')
+    const entry = graph.entries.find((candidate) => candidate.id === PLUGIN_ID)
     if (entry === undefined) {
       throw new Error(
-        `__DSH_BOOT__ has no dsh-zotero row; entries: ${graph.entries.map((row) => row.id).join(', ')}`,
+        `__DSH_BOOT__ has no ${PLUGIN_ID} row; entries: ${graph.entries.map((row) => row.id).join(', ')}`,
       )
     }
     // The boot graph composes content-addressed combo scripts: every
     // entry row carries the revisioned single-resource combo URL, and its id
     // must appear in a scheduling batch.
-    if (!entry.url.replace(/^\//, '').startsWith('plugins/??dsh-zotero/client.js&rev=')) {
+    if (!entry.url.replace(/^\//, '').startsWith(`plugins/??${PLUGIN_ID}/client.js&rev=`)) {
       throw new Error(`unexpected bundle url: ${entry.url}`)
     }
     if (
       !Array.isArray(graph.batches) ||
       !graph.batches.some(
-        (batch) => Array.isArray(batch.entries) && batch.entries.includes('dsh-zotero'),
+        (batch) => Array.isArray(batch.entries) && batch.entries.includes(PLUGIN_ID),
       )
     ) {
-      throw new Error('__DSH_BOOT__ schedules no batch entry for dsh-zotero')
+      throw new Error(`__DSH_BOOT__ schedules no batch entry for ${PLUGIN_ID}`)
     }
     const baseUrl = new URL(`http://127.0.0.1:${port}/`)
     const bundleUrl = new URL(entry.url, baseUrl)

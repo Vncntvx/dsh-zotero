@@ -9,6 +9,9 @@
  * @module tests/unit/verify-pack
  */
 
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { expectedPaths, packReportOf } from '../../scripts/verify-pack.mjs'
 
@@ -42,6 +45,16 @@ describe('packReportOf', () => {
   })
 })
 
+/** Run an assertion against a temporary directory cleaned at exit. */
+async function withTempDir(run: (dir: string) => Promise<void>): Promise<void> {
+  const dir = await mkdtemp(join(tmpdir(), 'verify-pack-'))
+  try {
+    await run(dir)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+}
+
 describe('expectedPaths', () => {
   it('enumerates the locale bundles the repository actually ships', () => {
     const { paths, problems } = expectedPaths(MANIFEST)
@@ -51,14 +64,39 @@ describe('expectedPaths', () => {
     expect(paths).toContain('lib/index.js')
   })
 
-  it('reports a declared locale wildcard with no bundle on disk', () => {
-    // A package root without `locale/`: the manifest still promises the
-    // dictionaries, so the gate must fail instead of asserting nothing.
-    const { paths, problems } = expectedPaths(MANIFEST, '/nonexistent-dsh-zotero-root')
-    expect(paths).not.toContain('locale/en.json')
-    expect(problems).toHaveLength(1)
-    expect(problems[0]).toContain('declares the locale export "./locale/*.json"')
-    expect(problems[0]).toContain('carries no *.json bundle')
+  it('reports a declared locale wildcard with an empty directory on disk', async () => {
+    // An empty `locale/`: the manifest still promises the dictionaries, so
+    // the gate must fail instead of asserting nothing.
+    await withTempDir(async (root) => {
+      await mkdir(join(root, 'lib'), { recursive: true })
+      await mkdir(join(root, 'locale'), { recursive: true })
+      const { paths, problems } = expectedPaths(MANIFEST, root)
+      expect(paths).not.toContain('locale/en.json')
+      expect(problems).toHaveLength(1)
+      expect(problems[0]).toContain('declares the locale export "./locale/*.json"')
+      expect(problems[0]).toContain('carries no *.json bundle')
+    })
+  })
+
+  it('reports a non-locale wildcard export whose directory is gone', async () => {
+    await withTempDir(async (root) => {
+      await writeFile(join(root, 'README.md'), 'x', 'utf8')
+      const manifest = { files: ['README.md'], exports: { './styles/*.css': './styles/*.css' } }
+      const { problems } = expectedPaths(manifest, root)
+      expect(problems).toEqual([
+        'the manifest declares the wildcard export "./styles/*.css" but ./styles does not exist' +
+          ' on disk — the tarball would ship an export that resolves to nothing',
+      ])
+    })
+  })
+
+  it('reports a files entry that the disk never had', async () => {
+    await withTempDir(async (root) => {
+      await writeFile(join(root, 'README.md'), 'x', 'utf8')
+      const manifest = { files: ['README.md', 'nodir'] }
+      const { problems } = expectedPaths(manifest, root)
+      expect(problems).toEqual(['the manifest "files" entry "nodir" does not exist on disk'])
+    })
   })
 
   it('leaves a manifest with no locale wildcard alone', () => {
@@ -67,19 +105,27 @@ describe('expectedPaths', () => {
     expect(paths).toEqual(['README.md', 'lib/index.js', 'package.json'])
   })
 
-  it('includes non-directory entries from manifest.files such as README.en.md', () => {
-    const manifest = {
-      main: './lib/index.js',
-      files: ['lib', 'README.md', 'README.en.md', 'cordis.patch.yml', 'locale'],
-    }
-    const { paths, problems } = expectedPaths(manifest, '/nonexistent-root')
-    expect(problems).toEqual([])
-    expect(paths).toContain('README.en.md')
-    expect(paths).toContain('cordis.patch.yml')
-    expect(paths).toContain('README.md')
-    expect(paths).toContain('package.json')
-    expect(paths).toContain('lib/index.js')
-    expect(paths).not.toContain('lib')
-    expect(paths).not.toContain('locale')
+  it('includes non-directory entries from manifest.files such as README.en.md', async () => {
+    await withTempDir(async (root) => {
+      await mkdir(join(root, 'lib'), { recursive: true })
+      await mkdir(join(root, 'locale'), { recursive: true })
+      await writeFile(join(root, 'lib', 'index.js'), 'x', 'utf8')
+      await writeFile(join(root, 'README.md'), 'x', 'utf8')
+      await writeFile(join(root, 'README.en.md'), 'x', 'utf8')
+      await writeFile(join(root, 'cordis.patch.yml'), 'x', 'utf8')
+      const manifest = {
+        main: './lib/index.js',
+        files: ['lib', 'README.md', 'README.en.md', 'cordis.patch.yml', 'locale'],
+      }
+      const { paths, problems } = expectedPaths(manifest, root)
+      expect(problems).toEqual([])
+      expect(paths).toContain('README.en.md')
+      expect(paths).toContain('cordis.patch.yml')
+      expect(paths).toContain('README.md')
+      expect(paths).toContain('package.json')
+      expect(paths).toContain('lib/index.js')
+      expect(paths).not.toContain('lib')
+      expect(paths).not.toContain('locale')
+    })
   })
 })

@@ -45,16 +45,29 @@ import { createClientAuthorityPlugin, isInlineSafeHarness } from './client-graph
 const require = createRequire(import.meta.url)
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 
-/** Plugin id stamped into the loader handoff; must equal the npm package name. */
-const PLUGIN_ID = 'dsh-zotero'
-
-/** The package version the bundle carries; `unknown` on an unreadable manifest. */
-function buildVersionOf() {
+// The package manifest is read once; the handoff id and the stamped version
+// are faces of it, so they cannot drift from `package.json` independently.
+const PLUGIN_MANIFEST = (() => {
   try {
-    const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
-    if (typeof manifest.version === 'string' && manifest.version !== '') return manifest.version
-  } catch {
-    // Fall through: a missing manifest must not fail the build.
+    return JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
+  } catch (error) {
+    throw new Error(
+      `client build cannot read package.json: ${error instanceof Error ? error.message : String(error)}`,
+    )
+  }
+})()
+
+/**
+ * Plugin id stamped into the loader handoff. Derived from the npm package
+ * name — the loader resolves the bundle by this id, so a rename here and a
+ * rename in `package.json` are one edit, not two.
+ */
+const PLUGIN_ID = PLUGIN_MANIFEST.name
+
+/** The package version the bundle carries; `unknown` on an unreadable value. */
+function buildVersionOf() {
+  if (typeof PLUGIN_MANIFEST.version === 'string' && PLUGIN_MANIFEST.version !== '') {
+    return PLUGIN_MANIFEST.version
   }
   return 'unknown'
 }
@@ -164,8 +177,8 @@ const harnessPurityPlugin = {
  * watch) through the verify plugin below.
  * @returns void; throws on a failed handoff or host-schema artifact marker.
  */
-export function verifyBundle() {
-  const source = readFileSync(join(root, 'lib/client.js'), 'utf8')
+export function verifyBundle(bundlePath = join(root, 'lib/client.js')) {
+  const source = readFileSync(bundlePath, 'utf8')
   let handoff
   const window = {
     __ModuleLoader__: {
@@ -204,7 +217,7 @@ export function verifyBundle() {
     }
   }
   console.log(
-    `client bundle ok: lib/client.js (${source.length} bytes, ${EXTERNALS.join(', ')} external)`,
+    `client bundle ok: ${bundlePath} (${source.length} bytes, ${EXTERNALS.join(', ')} external)`,
   )
 }
 
@@ -226,7 +239,7 @@ const cssModulesPlugin = {
       for (const [original, info] of Object.entries(classMap)) names[original] = info.name
       // Path-relative id: basename alone collides when two directories
       // ship the same module filename (e.g. `fields.module.css`).
-      const id = `dsh-zotero/${relative(root, args.path).split('\\').join('/')}`
+      const id = `${PLUGIN_ID}/${relative(root, args.path).split('\\').join('/')}`
       const style = code
         .toString('utf8')
         .replaceAll('\\', '\\\\')
@@ -267,15 +280,18 @@ const artifactVerifyPlugin = {
 
 /**
  * The esbuild plugin list the client graph always carries. Exported so tests
- * can drive the same authority rules against fixture graphs.
- * @returns harness purity + client authority + CSS modules + artifact verify.
+ * can drive the same authority rules against fixture graphs; `verify: false`
+ * drops the artifact-verify plugin, whose default bundle path is the real
+ * `lib/client.js` a fixture build must not be validated against.
+ * @returns harness purity + client authority + CSS modules (+ artifact verify
+ * unless `verify: false`).
  */
-export function clientBuildPlugins() {
+export function clientBuildPlugins({ verify = true } = {}) {
   return [
     harnessPurityPlugin,
     createClientAuthorityPlugin(),
     cssModulesPlugin,
-    artifactVerifyPlugin,
+    ...(verify ? [artifactVerifyPlugin] : []),
   ]
 }
 

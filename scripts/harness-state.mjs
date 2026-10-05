@@ -8,9 +8,8 @@
  *    `overrides` pins the exact tested version. `peerDependencies` is
  *    declared as `>=` the pin and is the only runtime compatibility gate —
  *    harness `evaluatePluginCompatibility` reads nothing else. `engines.dsh`
- *    and `dsh.harnessRange` are written from the same pin but are this repo's
- *    own consistency faces: harness calls `engines` declarative until a reader
- *    enforces it and never reads `dsh.harnessRange` at all.
+ *    is written from the same pin as this repo's own consistency face:
+ *    harness calls `engines` declarative until a reader enforces it.
  *    No caret ranges, no dual arms. The exact `devDependencies` line is the
  *    source of truth; every other form is written from it. The tracked
  *    `package-lock.json` resolves the pinned packages.
@@ -136,13 +135,21 @@ export function retargetProse(source, previous, next) {
   const lines = source.split('\n')
   const { start, end } = versionMapBounds(lines)
   const exactBadge = `dsh-${encodeBadgeVersion(next)}-blue`
+  // The bare prose rewrite is boundary-bounded, not a raw `replaceAll`: the
+  // old pin must not be rewritten where it is the tail of an unrelated longer
+  // number (`10.2.0-rc.2` contains `0.2.0-rc.2`), so a digit or dot may not
+  // precede the match — while a `v`/`dsh-` prefix still may. Nor may it stop
+  // inside a longer prerelease (`0.2.0-rc.2-beta`), so a letter, digit, or
+  // dash may not follow it.
+  const escaped = previous.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const bounded = new RegExp(`(?<![0-9.])${escaped}(?![0-9A-Za-z-])`, 'g')
   const move = (line) =>
     line
       // Exact badge first (encoded prerelease uses `--`).
       .replaceAll(`dsh-${encodeBadgeVersion(previous)}-blue`, exactBadge)
       // Migrate a legacy `>=` badge to the exact current form in one step.
       .replaceAll(`%3E%3D${encodeBadgeVersion(previous)}-blue`, `${encodeBadgeVersion(next)}-blue`)
-      .replaceAll(previous, next)
+      .replace(bounded, next)
   return lines.map((line, i) => (i >= start && i < end ? line : move(line))).join('\n')
 }
 
@@ -394,8 +401,13 @@ export function collectPinFaceProblems(manifest, pin) {
   if (!isGtePinFace(manifest.engines?.dsh, pin)) {
     found.push(gtePinProblem('engines.dsh', undefined, manifest.engines?.dsh, pin))
   }
-  if (!isGtePinFace(manifest.dsh?.harnessRange, pin)) {
-    found.push(gtePinProblem('dsh.harnessRange', undefined, manifest.dsh?.harnessRange, pin))
+  if (manifest.dsh?.harnessRange !== undefined) {
+    // Self-invented face: the runtime never read it and it was removed on
+    // purpose — the same rot guard as the retired dshWorkshop block.
+    found.push(
+      'package.json still carries dsh.harnessRange; harness never read it and it was' +
+        ' removed — delete the field',
+    )
   }
   return found
 }
@@ -560,8 +572,11 @@ function checkArtifacts(strict) {
 
 /**
  * Rewrite every harness face of a manifest to the pin. Mutates
- * `manifest` in place. Dev and overrides take the exact pin; peers,
- * engines, and harnessRange become >=pin.
+ * `manifest` in place. Dev and overrides take the exact pin; peers
+ * and engines become >=pin. The manifest carries no other derived
+ * face: harness `evaluatePluginCompatibility` reads peerDependencies
+ * alone, and `dsh.harnessRange` was a self-invented field the runtime
+ * never read (removed — do not reintroduce it).
  * @param manifest - parsed package.json (mutated in place).
  * @param version - the exact new pin.
  * @returns the same manifest for chaining/tests.
@@ -575,7 +590,6 @@ export function applyPinToManifest(manifest, version) {
   for (const name of Object.keys(manifest.peerDependencies ?? {})) {
     if (isDshPackage(name)) manifest.peerDependencies[name] = `>=${version}`
   }
-  if (manifest.dsh && typeof manifest.dsh === 'object') manifest.dsh.harnessRange = `>=${version}`
   manifest.engines = { ...manifest.engines, dsh: `>=${version}` }
   return manifest
 }

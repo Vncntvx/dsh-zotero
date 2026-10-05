@@ -20,7 +20,7 @@
 
 import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
-import { dirname, extname, relative, resolve } from 'node:path'
+import { dirname, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -61,6 +61,19 @@ function addExportPaths(paths, problems, key, value, baseDir) {
           )
         }
         for (const entry of bundles) paths.add(`locale/${entry}`)
+      } else {
+        // A non-locale wildcard must still resolve against the disk: the
+        // pattern's static part names a directory, and a rename or deletion
+        // on disk would ship an export that resolves to nothing.
+        const star = target.indexOf('*')
+        const slash = target.lastIndexOf('/', star)
+        const dir = slash === -1 ? '.' : target.slice(0, slash)
+        if (!existsSync(resolve(baseDir, dir))) {
+          problems.push(
+            `the manifest declares the wildcard export "${key}" but ${dir} does not exist` +
+              ' on disk — the tarball would ship an export that resolves to nothing',
+          )
+        }
       }
       continue
     }
@@ -80,12 +93,18 @@ export function expectedPaths(manifest, baseDir = root) {
   const problems = []
   if (Array.isArray(manifest.files)) {
     for (const file of manifest.files) {
-      if (typeof file === 'string') {
-        const full = resolve(baseDir, file)
-        if (existsSync(full) ? statSync(full).isFile() : extname(file) !== '') {
-          paths.add(packed(file))
-        }
+      if (typeof file !== 'string') continue
+      const full = resolve(baseDir, file)
+      if (!existsSync(full)) {
+        // Declared-but-absent is a broken release in the making, whatever the
+        // entry kind: a directory the tree dropped (or never had) must fail
+        // the gate, not silently ship less than the manifest promises.
+        problems.push(`the manifest "files" entry "${file}" does not exist on disk`)
+        continue
       }
+      if (statSync(full).isFile()) paths.add(packed(file))
+      // A directory entry contributes its tree at pack time; the tarball
+      // comparison below proves the concrete files arrived.
     }
   }
   if (typeof manifest.main === 'string') paths.add(packed(manifest.main))
@@ -138,11 +157,23 @@ function verifyPack() {
     return
   }
 
-  const stdout = execFileSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], {
-    cwd: root,
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'inherit'],
-  })
+  let stdout
+  try {
+    stdout = execFileSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'inherit'],
+    })
+  } catch (error) {
+    // npm pack can fail for environmental reasons (a permission-denied cache,
+    // an unavailable npm). That must exit through this gate's own channel with
+    // a one-line cause, not an uncaught exception's stack trace.
+    console.error(
+      `verify-pack: npm pack failed: ${error instanceof Error ? error.message : String(error)}`,
+    )
+    process.exitCode = 1
+    return
+  }
   const report = JSON.parse(packReportOf(stdout))
   // `npm pack --json` answers a name-keyed object (and an array on older npm),
   // so normalize both shapes to the one entry this package produced.

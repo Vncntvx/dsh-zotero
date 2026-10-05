@@ -17,7 +17,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
-import ZoteroService from 'dsh-zotero'
+import ZoteroService, { ZOTERO_TOOL_NAMES } from 'dsh-zotero'
 import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
 import { resolve } from 'node:path'
@@ -40,7 +40,10 @@ import { resolve } from 'node:path'
 const ctx = new Context()
 await ctx.plugin(SystemPrompt, {})
 await ctx.plugin(ToolRuntime, {})
-await ctx.plugin(ZoteroService, {})
+// Writes ride the production registration path too: `writeEnabled` registers
+// the eight write tools so the registry assertion below covers all sixteen.
+// Nothing dispatches them — the smoke only calls reads.
+await ctx.plugin(ZoteroService, { writeEnabled: true })
 const zotero = ctx.zotero
 
 /** Build a `ZoteroObjectRef` from a model-facing item ref string (the seam's public grammar). */
@@ -118,22 +121,23 @@ const assembly = await ctx.systemPrompt.assemble()
 if (assembly.sections.find((entry) => entry.name === 'zotero:policy') === undefined) {
   throw new Error('zotero:policy section missing')
 }
-for (const name of [
-  'zotero_search',
-  'zotero_get',
-  'zotero_children',
-  'zotero_retrieve',
-  'zotero_attachment',
-  'zotero_export',
-  'zotero_browse',
-  'zotero_changes',
-]) {
-  if (ctx.tools.get(name) === undefined) throw new Error(`tool ${name} not registered`)
+// The registry must carry exactly the plugin's vocabulary — every name the
+// shared list declares, and no zotero_* tool it does not — so a registration
+// that rots (a tool dropped, renamed, or added without the list) fails here.
+const registered = ctx.tools.schemas().map((schema) => schema.name)
+const missing = ZOTERO_TOOL_NAMES.filter((name) => !registered.includes(name))
+const extra = registered.filter(
+  (name) => name.startsWith('zotero_') && !ZOTERO_TOOL_NAMES.includes(name),
+)
+if (missing.length > 0 || extra.length > 0) {
+  throw new Error(
+    `tool registry out of step: missing [${missing.join(', ')}], unexpected [${extra.join(', ')}]`,
+  )
 }
 if (search.items.length === 0) {
-  console.log('assembly: zotero:policy present, all 8 tools registered')
+  console.log(`assembly: zotero:policy present, all ${ZOTERO_TOOL_NAMES.length} tools registered`)
   console.log('SMOKE PASS (empty library: item-level checks skipped, discovery covered)')
 } else {
-  console.log('assembly: zotero:policy present, all 8 tools registered')
+  console.log(`assembly: zotero:policy present, all ${ZOTERO_TOOL_NAMES.length} tools registered`)
   console.log('SMOKE PASS')
 }

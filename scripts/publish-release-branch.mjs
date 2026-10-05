@@ -89,14 +89,12 @@ try {
   runGit(['rm', '-rf', '.'], tempWorktree)
 
   // 4. Copy published files as declared in package.json "files"
-  const filesToCopy = [
-    'lib',
-    'cordis.patch.yml',
-    'locale',
-    'README.md',
-    'README.en.md',
-    'docs/images/icon.png',
-  ]
+  // The release branch carries exactly what the package ships; the manifest
+  // is already parsed above, so a files entry added there ships without this
+  // list ever being edited again.
+  const filesToCopy = Array.isArray(manifest.files)
+    ? manifest.files.filter((file) => typeof file === 'string')
+    : []
 
   for (const item of filesToCopy) {
     const srcPath = join(root, item)
