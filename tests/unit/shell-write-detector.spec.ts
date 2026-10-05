@@ -43,6 +43,34 @@ describe('the shell-write detector', () => {
     }
   })
 
+  it('never treats an authorize call against a non-loopback host as a library write', () => {
+    // Authorize mints a write key, so the shape needs no HTTP-client anchor —
+    // but it still requires a loopback host beside the match, exactly like the
+    // users path: the same URL against a cloud or third-party host is someone
+    // else's API, not this library's.
+    for (const command of [
+      `curl -s https://api.zotero.org/api/local/authorize`,
+      `curl -s -X POST -d '{"appName":"x"}' https://api.zotero.org/api/local/authorize`,
+      `curl -s https://example.com/api/local/authorize`,
+      `curl -s http://evil.local/api/local/authorize`,
+      `wget -q https://api.zotero.org/api/local/authorize -O -`,
+    ]) {
+      expect(detectShellWrite(config, bash(command)), command).toBeUndefined()
+    }
+  })
+
+  it('recognizes the authorize endpoint on any loopback port', () => {
+    for (const command of [
+      `curl -s http://127.0.0.1:9999/api/local/authorize`,
+      `curl -s http://localhost:9999/api/local/authorize`,
+      `curl -s 'http://[::1]:9999/api/local/authorize'`,
+    ]) {
+      const attempt = detectShellWrite(config, bash(command))
+      expect(attempt, command).toBeDefined()
+      expect(attempt?.reason).toContain('authorize endpoint')
+    }
+  })
+
   it('recognizes a write-shaped request against the configured local address', () => {
     for (const command of [
       `curl -X POST http://127.0.0.1:23119/api/users/0/items -H 'Content-Type: application/json' -d @/tmp/note.json`,

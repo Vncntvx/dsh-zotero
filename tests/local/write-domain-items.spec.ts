@@ -18,7 +18,6 @@ import {
   grantAuthorize,
   ITEM_KEY,
   ITEM_REF,
-  itemJson,
   SERVER_ID,
   serveItemRead,
   startWriteDomainMock,

@@ -235,7 +235,7 @@ describe('createNote saved-state trust', () => {
         batchBody(NEW_KEY, 46, { itemType: 'note', collections: [] }),
       )
     })
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     const result = await createNote(deps, {
       markdown: 'x',
       collections: ['方法论'],
@@ -259,7 +259,7 @@ describe('createNote saved-state trust', () => {
         }),
       ),
     )
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     const result = await createNote(deps, {
       markdown: 'x',
       tags: ['requested-tag'],
@@ -279,7 +279,7 @@ describe('createNote saved-state trust', () => {
         batchBody(NEW_KEY, 48, { itemType: 'note', collections: [SECOND_COLLECTION_KEY] }),
       ),
     )
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     const result = await createNote(deps, {
       markdown: 'x',
       collections: ['Second'],

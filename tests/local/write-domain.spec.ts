@@ -11,12 +11,8 @@ import {
   WRITE_CHILD_COLLECTIONS_MESSAGE,
   WRITE_IDENTITY_UNSUPPORTED_MESSAGE,
   WRITE_LIST_SELECTION_MESSAGE,
-  WRITE_VERSION_MISSING_MESSAGE,
-  WRITE_CONFLICT_MESSAGE,
   WRITE_UNAUTHORIZED_AFTER_AUTH_MESSAGE,
   writeObjectRefusedMessage,
-  writeObjectStateMissingMessage,
-  writeListEmptyMessage,
   ZOTERO_CAPABILITY_UNAVAILABLE,
   ZOTERO_INVALID_ARGUMENT,
   ZOTERO_NOT_FOUND,
@@ -43,9 +39,8 @@ import {
 } from '../helpers/write-domain-fixtures.js'
 import { MockZotero } from '../helpers/mock-zotero.js'
 import { parseRef } from '../../src/refs.js'
-import { WriteAuthorizer } from '../../src/write-auth.js'
 import { PROVIDER_LIMITS } from '../helpers/provider-harness.js'
-import { testHttpClient, testWriteClient } from '../helpers/test-clients.js'
+import { testHttpClient } from '../helpers/test-clients.js'
 
 let mock: MockZotero
 
@@ -77,7 +72,7 @@ describe('createNote', () => {
         }),
       )
     })
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     const result = await createNote(deps, {
       markdown: '**方法**：见第 2 节。',
       collections: ['方法论'],
@@ -122,7 +117,7 @@ describe('createNote', () => {
         }),
       )
     })
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     const result = await createNote(deps, {
       markdown: 'Relation test',
     })
@@ -155,7 +150,7 @@ describe('createNote', () => {
         }),
       ),
     )
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     const before = mock.requests.filter(
       (request) => request.pathname === '/api/users/0/collections',
     ).length
@@ -184,7 +179,7 @@ describe('createNote', () => {
         }),
       ),
     )
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     await expect(createNote(deps, { markdown: 'x' })).resolves.toMatchObject({
       kind: 'committed-unverified',
       committed: true,
@@ -210,7 +205,7 @@ describe('createNote', () => {
         }),
       ),
     )
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     await expect(createNote(deps, { markdown: 'x' })).resolves.toMatchObject({
       kind: 'committed-unverified',
       key: NEW_KEY,
@@ -232,7 +227,7 @@ describe('createNote', () => {
         }),
       ),
     )
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     await expect(createNote(deps, { markdown: 'x' })).resolves.toMatchObject({
       kind: 'committed-unverified',
       key: NEW_KEY,
@@ -244,7 +239,7 @@ describe('createNote', () => {
     mock.route('POST', '/api/users/0/items', (_req, res) => {
       res.destroy()
     })
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     const result = await createNote(deps, { markdown: 'x' })
     expect(result).toMatchObject({
       kind: 'committed-unverified',
@@ -273,7 +268,7 @@ describe('createNote', () => {
         }),
       ),
     )
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     await expect(
       createNote(deps, {
         markdown: 'x',
@@ -304,7 +299,7 @@ describe('createNote', () => {
         }),
       )
     })
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     const result = await createNote(deps, {
       markdown: 'reads it',
       parentItem: ITEM_REF,
@@ -319,7 +314,7 @@ describe('createNote', () => {
   it('refuses collections on a child note when the domain is called without the tool layer', async () => {
     // Dual-end invariant: tools/create-note buildRequest already refuses this
     // on the model path; this spec pins the domain gate for direct callers.
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     let thrown: unknown
     try {
       await createNote(deps, {
@@ -334,7 +329,7 @@ describe('createNote', () => {
     expect(mock.requests.some((request) => request.method === 'POST')).toBe(false)
   })
   it('rejects blank direct write arguments before any network request', async () => {
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     await expect(createNote(deps, { markdown: '   ' })).rejects.toMatchObject({
       code: ZOTERO_INVALID_ARGUMENT,
     })
@@ -358,7 +353,7 @@ describe('createNote', () => {
   })
 
   it('refuses a group-library target', async () => {
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     let code: string | undefined
     try {
       await createNote(deps, {
@@ -385,7 +380,7 @@ describe('createNote', () => {
         }),
       ),
     )
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     let thrown: unknown
     try {
       await createNote(deps, {
@@ -415,7 +410,7 @@ describe('createNote', () => {
         JSON.stringify({ key: 'R'.repeat(32), remember: true }),
       ),
     )
-    const { deps, directory, authorizer } = writeDeps(mock)
+    const { deps, authorizer } = writeDeps(mock)
     const invalidate = vi.spyOn(authorizer, 'invalidate')
     const result = await createNote(deps, { markdown: 'x' })
     expect(result.kind).toBe('applied')
@@ -443,7 +438,7 @@ describe('createNote', () => {
         JSON.stringify({ key: 'R'.repeat(32), remember: false }),
       ),
     )
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     await expect(createNote(deps, { markdown: 'x' })).rejects.toMatchObject({
       code: ZOTERO_WRITE_CONFLICT,
     })
@@ -459,7 +454,7 @@ describe('createNote', () => {
         JSON.stringify({ key: 'R'.repeat(32), remember: false }),
       ),
     )
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     let thrown: unknown
     try {
       await createNote(deps, { markdown: 'x' })
@@ -484,7 +479,7 @@ describe('createNote', () => {
         }),
       ),
     )
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     await expect(createNote(deps, { markdown: 'x' })).rejects.toMatchObject({
       code: ZOTERO_INVALID_ARGUMENT,
       message: writeObjectRefusedMessage('Invalid payload', 400),
@@ -505,7 +500,7 @@ describe('createNote', () => {
         }),
       ),
     )
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     await expect(createNote(deps, { markdown: 'x' })).rejects.toMatchObject({
       code: ZOTERO_UNEXPECTED,
       message: writeObjectRefusedMessage('Internal crash', 500),
@@ -532,7 +527,7 @@ describe('createNote', () => {
         }),
       ),
     )
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     await expect(createNote(deps, { markdown: 'x' })).resolves.toMatchObject({
       kind: 'committed-unverified',
       key: NEW_KEY,
@@ -556,7 +551,7 @@ describe('createNote', () => {
   })
 
   it('refuses a ref tied to a different server instance', async () => {
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     await expect(
       createNote(deps, {
         markdown: 'x',
@@ -614,7 +609,7 @@ describe('request minimum', () => {
     mock.route('POST', '/api/users/0/items', (_req, res, helpers) =>
       helpers.raw(200, batchHeaders(42), batchBody(NEW_KEY, 42, {})),
     )
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
 
     await createNote(deps, { markdown: 'first' })
     // The first write pays the one-time identity probe and the authorize dialog.

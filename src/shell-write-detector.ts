@@ -20,17 +20,18 @@
  *   (`python -c '...'`, `node -e '...'` with the URL assembled at runtime);
  * - the URL carried in an environment variable, a heredoc, or an encoding;
  * - a loopback port other than the configured one, except for writes to the
- *   users path (those are caught on any loopback port — see
- *   {@link USERS_WRITE});
+ *   users path and authorize calls (those are caught on any loopback port —
+ *   see {@link USERS_WRITE} and {@link AUTHORIZE_PATH});
  * - any binary of the user's own.
  *
  * The rule is a read-only allow: `GET` probes of the local API, debugging
  * curls, and requests to any other host are not writing, so they are left
  * alone. What it matches is the authorize endpoint (which exists only to
- * obtain a write key), and — only when an HTTP-client invocation is present —
- * a write method or body flag alongside the configured local API address.
- * Anchoring on the client is what keeps an ordinary command that merely names
- * the address, and uses an unrelated flag such as `rm -f`, from asking.
+ * obtain a write key) beside a loopback host, and — only when an HTTP-client
+ * invocation is present — a write method or body flag alongside the
+ * configured local API address. Anchoring on the client is what keeps an
+ * ordinary command that merely names the address, and uses an unrelated flag
+ * such as `rm -f`, from asking.
  *
  * Every proximity match is **segment-scoped**: shell separators (`;`, `&&`,
  * `|`, newlines) bound the steps one command runs, and a `POST` in a later
@@ -47,8 +48,14 @@ import { asRecord, asString } from './json.js'
 /** The shell tools whose command text this detector can read. */
 export const SHELL_TOOL_NAMES: ReadonlySet<string> = new Set(['bash', 'pwsh'])
 
-/** The endpoint that exists only to hand out a write key. */
-const AUTHORIZE_PATH = new RegExp(`/api/${ZOTERO_AUTHORIZE_PATH}\\b`)
+/**
+ * The endpoint that exists only to hand out a write key. Host-agnostic on
+ * purpose only about *port*, like {@link USERS_WRITE}: the shape requires a
+ * loopback host near the match, so an authorize call against
+ * `api.zotero.org` — or any third-party host — is never mistaken for a
+ * local one, while any loopback spelling still is.
+ */
+const AUTHORIZE_PATH = new RegExp(`/api/${ZOTERO_AUTHORIZE_PATH}\\b`, 'g')
 
 /** An explicit method flag: `curl -X POST`, `--request=DELETE`, `-Method Post`. */
 const EXPLICIT_METHOD = /(?:-X|--request|-Method)[\s=:]*['"]?(?:POST|PUT|PATCH|DELETE)\b/i
@@ -172,27 +179,27 @@ function namesLoopback(text: string): boolean {
 }
 
 /**
- * Whether `pattern` and the local address both appear in this step, within
- * {@link NEAR_WINDOW}. `pattern` must already carry the `g` flag; the walk is
- * segment-scoped so a match never crosses a shell separator.
+ * Whether `pattern` and an anchor satisfying `test` both appear in this step,
+ * within {@link NEAR_WINDOW}. `pattern` must already carry the `g` flag; the
+ * walk is segment-scoped so a match never crosses a shell separator.
  */
-function near(text: string, pattern: RegExp, aliases: readonly string[]): boolean {
+function nearMatch(text: string, pattern: RegExp, test: (window: string) => boolean): boolean {
   for (const match of text.matchAll(pattern)) {
     const from = Math.max(0, match.index - NEAR_WINDOW)
     const window = text.slice(from, match.index + match[0].length + NEAR_WINDOW)
-    if (namesAuthority(window, aliases)) return true
+    if (test(window)) return true
   }
   return false
 }
 
+/** Whether `pattern` and the local address both appear in this step, within {@link NEAR_WINDOW}. */
+function near(text: string, pattern: RegExp, aliases: readonly string[]): boolean {
+  return nearMatch(text, pattern, (window) => namesAuthority(window, aliases))
+}
+
 /** {@link near}, but the second anchor is any loopback host rather than the configured port. */
 function nearLoopback(text: string, pattern: RegExp): boolean {
-  for (const match of text.matchAll(pattern)) {
-    const from = Math.max(0, match.index - NEAR_WINDOW)
-    const window = text.slice(from, match.index + match[0].length + NEAR_WINDOW)
-    if (namesLoopback(window)) return true
-  }
-  return false
+  return nearMatch(text, pattern, namesLoopback)
 }
 
 /** Whether any shell step in `text` matches `probe`. */
@@ -208,9 +215,9 @@ const LABEL_WRITE_REQUEST: ShapeLabel = {
 
 /**
  * The matched shapes, most specific first. Each is deliberately anchored on
- * the configured local address, on a loopback host of the users path, or on
- * the authorize path — so an unrelated `curl -d` against another service is
- * never mistaken for a library write.
+ * the configured local address, or on a loopback host beside the users path
+ * or the authorize endpoint — so an unrelated `curl -d` against another
+ * service is never mistaken for a library write.
  */
 const WRITE_SHAPES: readonly WriteShape[] = [
   {
@@ -218,7 +225,10 @@ const WRITE_SHAPES: readonly WriteShape[] = [
       en: 'the local-API authorize endpoint',
       zh: '本地 API 的授权端点（/api/local/authorize）',
     },
-    test: (text) => AUTHORIZE_PATH.test(text),
+    // Loopback near the endpoint, not the configured port — the same shape
+    // as the users path below: authorize exists to mint a write key, and
+    // only a loopback host can be this library.
+    test: (text) => anySegment(text, (segment) => nearLoopback(segment, AUTHORIZE_PATH)),
   },
   {
     label: LABEL_WRITE_REQUEST,

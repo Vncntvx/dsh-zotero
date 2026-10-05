@@ -7,7 +7,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { ZOTERO_INVALID_ARGUMENT, ZOTERO_INVALID_REF } from '../../src/errors.js'
+import { ZOTERO_INVALID_ARGUMENT, ZOTERO_INVALID_REF, ZOTERO_UNEXPECTED } from '../../src/errors.js'
 import { attachmentTargetKindMessage } from '../../src/local/detail.js'
 import { type LocalApiProvider } from '../../src/local/provider.js'
 import { expectedKindRefMessage, parseRef } from '../../src/refs.js'
@@ -23,9 +23,15 @@ import {
   expectRequestLinesAnyOrder,
   zoteroError,
 } from '../helpers/server/assert.js'
-import { ATTACHMENT_KEY, ITEM_KEY, attachmentRef, itemRef } from '../helpers/server/keys.js'
+import {
+  ATTACHMENT_KEY,
+  ITEM_KEY,
+  apiPath,
+  attachmentRef,
+  itemRef,
+} from '../helpers/server/keys.js'
 import { annotationRow, attachment, item, noteRow } from '../helpers/server/objects.js'
-import { serveItemGraph } from '../helpers/server/serve.js'
+import { serveItemGraph, serveJson } from '../helpers/server/serve.js'
 
 let mock: ProviderHarness['mock']
 let provider: LocalApiProvider
@@ -193,5 +199,16 @@ describe('children', () => {
       expectedKindRefMessage(['item', 'attachment'], 'annotation'),
     )
     expectRequestCount(mock, 0)
+  })
+
+  it('fails loud with UNEXPECTED when a children listing is not an array', async () => {
+    // A non-array body is a contract breach on either wire: folding it to `[]`
+    // would silently under-report the graph.
+    serveJson(mock, `${apiPath()}/items/${ITEM_KEY}`, PARENT)
+    serveJson(mock, `${apiPath()}/items/${ITEM_KEY}/children`, { key: 'NOTE1111' })
+    serveJson(mock, `${apiPath()}/items/${ITEM_KEY}/children?itemType=annotation`, {
+      key: 'ANNO1111',
+    })
+    await zoteroError(provider.children(childrenRequest(itemRef())), ZOTERO_UNEXPECTED)
   })
 })

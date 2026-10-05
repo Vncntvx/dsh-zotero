@@ -5,8 +5,7 @@
  * @module tests/provider/get
  */
 
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -160,11 +159,12 @@ describe('getItem', () => {
     expect(detail.collections).toEqual([{ ref: 'zotero://user/0/collection/COLL1234' }])
   })
 
-  it('treats a non-array children response as no children', async () => {
+  it('fails loud with UNEXPECTED on a non-array children response', async () => {
+    // A non-array body is a contract breach, not an empty page: folding it to
+    // `[]` would silently under-report children on every item detail.
     serveJson(mock, `${apiPath()}/items/${ITEM_KEY}`, PARENT_WITHOUT_COLLECTIONS)
     serveJson(mock, `${apiPath()}/items/${ITEM_KEY}/children`, { key: 'NOTE1111' })
-    const detail = await provider.getItem(getRequest(['notes']))
-    expect(detail.notes).toEqual({ total: 0, returned: 0, items: [] })
+    await zoteroError(provider.getItem(getRequest(['notes'])), ZOTERO_UNEXPECTED)
   })
 
   it('applies the configured note and annotation record caps', async () => {

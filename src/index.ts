@@ -11,3 +11,8 @@
 export { default, ZoteroService } from './service.js'
 export type * from './types.js'
 export * from './errors.js'
+export {
+  ZOTERO_TOOL_NAMES,
+  ZOTERO_READ_TOOL_NAMES,
+  ZOTERO_WRITE_TOOL_NAMES,
+} from './tools/names.js'

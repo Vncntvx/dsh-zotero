@@ -14,7 +14,7 @@
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { asJsonValue } from './json.js'
 import { formatCreatorsList } from './normalize.js'
-import type { EvidenceItem } from './evidence-item.js'
+import { isEvidenceSource, type EvidenceItem } from './evidence-item.js'
 import type {
   SupportedLocalLibrary,
   ZoteroAttachmentLocation,
@@ -205,10 +205,10 @@ function sourcesOf(evidence: ReadonlyArray<{ readonly source: string }>): Zotero
   const seen = new Set<string>()
   const sources: ZoteroEvidenceSource[] = []
   for (const entry of evidence) {
-    if (!seen.has(entry.source)) {
+    if (!seen.has(entry.source) && isEvidenceSource(entry.source)) {
       seen.add(entry.source)
       // The output schema pins the source vocabulary; the projection reuses it.
-      sources.push(entry.source as ZoteroEvidenceSource)
+      sources.push(entry.source)
     }
   }
   return sources

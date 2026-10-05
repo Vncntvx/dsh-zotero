@@ -6,8 +6,6 @@
  * @module dsh-zotero/tests/helpers/write-domain-fixtures
  */
 
-import type { ZoteroHttpClient } from '../../src/http-client.js'
-import type { ZoteroWriteHttpClient } from '../../src/write-http.js'
 import { WriteAuthorizer } from '../../src/write-auth.js'
 import { resolveCollectionsMixed, ScopeDirectory } from '../../src/local/scope-directory.js'
 import { fetchItemTypeFields } from '../../src/local/write-domain.js'

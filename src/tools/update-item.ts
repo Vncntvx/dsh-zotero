@@ -18,7 +18,7 @@ import {
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
 import { writeListEmptyMessage, writeNonBlankMessage } from '../errors.js'
-import { metaRecordOf, renderDeclined } from './present.js'
+import { renderDeclined } from './present.js'
 import {
   DECLINED_OUTPUT_SCHEMA,
   libraryVersionLine,

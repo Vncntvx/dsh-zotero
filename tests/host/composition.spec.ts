@@ -23,7 +23,7 @@ import ZoteroService from '../../src/index.js'
 import { expectValue } from '../helpers/lanes/host-lane.js'
 import { MockZotero } from '../helpers/mock-zotero.js'
 import { StubCommands } from '../helpers/stub-commands.js'
-import { ZOTERO_TOOL_NAMES } from '../helpers/tool-names.js'
+import { ZOTERO_READ_TOOL_NAMES } from '../helpers/tool-names.js'
 
 let root: string | undefined
 let context: Context | undefined
@@ -93,7 +93,7 @@ describe('the shipped bundle patch through a real Loader composition', () => {
     const names = context.tools.schemas().map((schema) => schema.name)
     // Registration order is a dependency-resolution artifact, not a contract,
     // so the composition asserts the set the shared list declares.
-    expect([...names].sort()).toEqual([...ZOTERO_TOOL_NAMES].sort())
+    expect([...names].sort()).toEqual([...ZOTERO_READ_TOOL_NAMES].sort())
     const assembly = await context.systemPrompt.assemble()
     expect(assembly.sections.some((entry) => entry.name === 'zotero:policy')).toBe(true)
     const commands = context.get('commands') as StubCommands | undefined

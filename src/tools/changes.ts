@@ -55,14 +55,47 @@ import {
   renderJobArm,
 } from '../job-runner.js'
 import { textOfBlocks } from './present.js'
-import { CHANGE_SECTIONS, DELETED_OTHER_TOTAL_KEY, DELETION_SECTIONS } from '../changes-contract.js'
+import {
+  CHANGE_SECTIONS,
+  DELETED_OTHER_TOTAL_KEY,
+  DELETION_SECTIONS,
+  type ChangeSectionKey,
+  type DeletionSectionKey,
+} from '../changes-contract.js'
 
 const ALL_INCLUDES = ALL_CHANGES_INCLUDES
+
+/**
+ * The renderer's label per changed-section key, in contract order. `satisfies`
+ * is the real exhaustiveness pin: a section added to `CHANGE_SECTIONS`
+ * without a render label — or dropped from the contract while the renderer
+ * still names it — fails the build here, not as a silently missing line.
+ */
+const CHANGE_RENDER_LABELS = {
+  items: 'Items (top-level)',
+  childItems: 'Child objects (notes, attachments, annotations)',
+  trashedItems: 'Items in the trash',
+  collections: 'Collections',
+  savedSearches: 'Saved searches',
+  fulltextAttachments: 'Full-text reindexed',
+} as const satisfies Record<ChangeSectionKey, string>
+
+/** The deletion labels, pinned to `DELETION_SECTIONS` the same way. */
+const DELETION_RENDER_LABELS = {
+  items: 'Deleted items',
+  collections: 'Deleted collections',
+  savedSearches: 'Deleted saved searches',
+  tags: 'Deleted tags',
+} as const satisfies Record<DeletionSectionKey, string>
 
 /** Host kinds the tool's include enum does not offer; a non-empty union fails the build. */
 type MissingInclude = Exclude<ZoteroChangesInclude, (typeof ALL_INCLUDES)[number]>
 type AssertNever<T extends never> = T
-/** Compile-time exhaustiveness pin (exported so the type is "used"). */
+/**
+ * Compile-time exhaustiveness pin. The export is what keeps it alive under
+ * `noUnusedLocals`: nothing reads the alias, but a section added to the wire
+ * enum without joining `ALL_CHANGES_INCLUDES` fails the build here.
+ */
 export type IncludesComplete = AssertNever<MissingInclude>
 
 /** The kinds a call covers when the model names none. `fulltext` is excluded:
@@ -222,7 +255,11 @@ type UnrenderedReason = Exclude<
   ZoteroChangesUnobservableReason,
   (typeof UNOBSERVABLE_HEADLINES)[number][0]
 >
-/** Compile-time exhaustiveness pin (exported so the type is "used"). */
+/**
+ * Compile-time exhaustiveness pin. The export is what keeps it alive under
+ * `noUnusedLocals`: a reason added to the wire union without a headline in
+ * `UNOBSERVABLE_HEADLINES` fails the build here.
+ */
 export type ReasonsRendered = AssertNever<UnrenderedReason>
 
 /** The reasons the wire schema admits, in render order. */
@@ -396,30 +433,13 @@ export function renderChanges(args: ChangesArgs, value: ChangesOutput): ContentB
     lines.push(`Changes ${value.fromVersion} → ${CHANGES_NOT_ADVANCED_UNVERIFIED}`)
   }
   const totals = value.totals
-  const sections: [
-    string,
-    readonly { key: string; version: number }[] | undefined,
-    number | undefined,
-    string | undefined,
-  ][] = [
-    ['Items (top-level)', value.changed.items, totals?.items, undefined],
-    [
-      'Child objects (notes, attachments, annotations)',
-      value.changed.childItems,
-      totals?.childItems,
-      undefined,
-    ],
-    ['Items in the trash', value.changed.trashedItems, totals?.trashedItems, undefined],
-    ['Collections', value.changed.collections, totals?.collections, undefined],
-    ['Saved searches', value.changed.savedSearches, totals?.savedSearches, undefined],
-    [
-      'Full-text reindexed',
-      value.changed.fulltextAttachments,
-      totals?.fulltextAttachments,
-      FULLTEXT_COUNTER_NOTE,
-    ],
-  ]
-  for (const [label, entries, total, note] of sections) {
+  const sections = CHANGE_SECTIONS.map(({ key }) => ({
+    label: CHANGE_RENDER_LABELS[key],
+    entries: value.changed[key],
+    total: totals?.[key],
+    note: key === 'fulltextAttachments' ? FULLTEXT_COUNTER_NOTE : undefined,
+  }))
+  for (const { label, entries, total, note } of sections) {
     if (entries === undefined) continue
     const count = total ?? entries.length
     lines.push(
@@ -433,22 +453,21 @@ export function renderChanges(args: ChangesArgs, value: ChangesOutput): ContentB
     }
   }
   if (value.deleted !== undefined) {
-    const deletedSections: [string, readonly string[] | undefined, number | undefined][] = [
-      ['Deleted items', value.deleted.items, totals?.deletedItems],
-      ['Deleted collections', value.deleted.collections, totals?.deletedCollections],
-      ['Deleted saved searches', value.deleted.savedSearches, totals?.deletedSavedSearches],
-      ['Deleted tags', value.deleted.tags, totals?.deletedTags],
-    ]
+    const deletedSections = DELETION_SECTIONS.map(({ key, totalKey }) => ({
+      label: DELETION_RENDER_LABELS[key],
+      keys: value.deleted![key],
+      total: totals?.[totalKey],
+    }))
     // The tombstone read answered, so "nothing was removed" is a finding, not
     // a gap: it is stated rather than left to the absence of a listing.
     const removed = deletedSections.reduce(
-      (sum, [, keys, total]) => sum + (total ?? keys?.length ?? 0),
+      (sum, section) => sum + (section.total ?? section.keys?.length ?? 0),
       0,
     )
     if (removed === 0) {
       lines.push(CHANGES_NO_DELETIONS_MESSAGE)
     }
-    for (const [label, keys, total] of deletedSections) {
+    for (const { label, keys, total } of deletedSections) {
       if (keys === undefined || keys.length === 0) continue
       const count = total ?? keys.length
       lines.push(
@@ -545,10 +564,7 @@ export function registerChangesTool(
         render: renderChanges,
         presentationMeta: (_args, value) => {
           if (isJobArm(value)) return value
-          return boundedPresentationMeta(value as Parameters<typeof boundedPresentationMeta>[0], [
-            'changed',
-            'deleted',
-          ])
+          return boundedPresentationMeta(value, ['changed', 'deleted'])
         },
       },
       presentCall: (args) => ({

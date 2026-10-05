@@ -77,7 +77,7 @@ describe('createNote verdicts', () => {
         failed: { '0': { key: '', code: 500, message: 'boom' } },
       }),
     )
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     await expect(createNote(deps, { markdown: 'x' })).resolves.toMatchObject({
       kind: 'committed-unverified',
       committed: true,
@@ -94,7 +94,7 @@ describe('createNote verdicts', () => {
       '/api/users/0/items',
       batchBody(NEW_KEY, 42, { tags: 'not-an-array', collections: [] }),
     )
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     await expect(createNote(deps, { markdown: 'x' })).resolves.toMatchObject({
       kind: 'committed-unverified',
       committed: true,
@@ -114,7 +114,7 @@ describe('createNote verdicts', () => {
         collections: [],
       }),
     )
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     await expect(createNote(deps, { markdown: 'x', tags: ['methods'] })).resolves.toMatchObject({
       kind: 'committed-unverified',
       reason: 'saved-state-unverified',
@@ -131,7 +131,7 @@ describe('createNote verdicts', () => {
         relations: { 'dc:relation': 'http://zotero.org/users/0/items/SOURCE01' },
       }),
     )
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     const result = await createNote(deps, {
       markdown: 'x',
       sourceRefs: [SOURCE_REF],
@@ -153,7 +153,7 @@ describe('createNote verdicts', () => {
         failed: {},
       }),
     )
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     const result = await createNote(deps, { markdown: 'x' })
     expect(result).toMatchObject({
       kind: 'committed-unverified',
@@ -176,7 +176,7 @@ describe('createNote verdicts', () => {
         failed: { '0': { key: '', code: 412, message: 'Item has changed since load' } },
       }),
     )
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     await expect(createNote(deps, { markdown: 'x' })).rejects.toMatchObject({
       code: ZOTERO_WRITE_CONFLICT,
       message: writeObjectRefusedMessage('Item has changed since load', 412),
@@ -223,7 +223,7 @@ describe('read-side verdicts', () => {
       version: 6,
       data: { key: 'OTHERCOL1', name: 'Second' },
     })
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     await expect(deleteCollection(deps, { collection: 'Second' })).rejects.toMatchObject({
       code: ZOTERO_UNEXPECTED,
       message: expect.stringContaining(`a different collection than ${SECOND_COLLECTION_KEY}`),
@@ -236,7 +236,7 @@ describe('read-side verdicts', () => {
       key: SECOND_COLLECTION_KEY,
       data: { key: SECOND_COLLECTION_KEY, name: 'Second' },
     })
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     await expect(deleteCollection(deps, { collection: 'Second' })).rejects.toMatchObject({
       code: ZOTERO_UNEXPECTED,
       message: WRITE_VERSION_MISSING_MESSAGE,
@@ -269,7 +269,7 @@ describe('createCollection verdicts', () => {
   it('rejects a sibling listing served by another Zotero instance', async () => {
     const own = await startListingMock([], { 'Zotero-Server-ID': 'srv-somewhere-else' })
     try {
-      const { deps, directory } = writeDeps(own)
+      const { deps } = writeDeps(own)
       await expect(createCollection(deps, { name: 'Field notes' })).rejects.toMatchObject({
         code: ZOTERO_SERVER_MISMATCH,
         message: SERVER_MISMATCH_MESSAGE,
@@ -331,7 +331,7 @@ describe('createCollection verdicts', () => {
         failed: {},
       }),
     )
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     await expect(createCollection(deps, { name: 'Field notes' })).resolves.toMatchObject({
       kind: 'committed-unverified',
       reason: 'saved-state-unverified',
@@ -346,7 +346,7 @@ describe('createCollection verdicts', () => {
       '/api/users/0/collections',
       batchBody('NEWCOLL1', 42, { name: 'Something else' }),
     )
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     await expect(createCollection(deps, { name: 'Field notes' })).resolves.toMatchObject({
       kind: 'committed-unverified',
       reason: 'saved-state-unverified',
@@ -361,7 +361,7 @@ describe('createCollection verdicts', () => {
       '/api/users/0/collections',
       batchBody('NEWCOLL1', 42, { name: 'Field notes', parentCollection: SECOND_COLLECTION_KEY }),
     )
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     await expect(createCollection(deps, { name: 'Field notes' })).resolves.toMatchObject({
       kind: 'committed-unverified',
       reason: 'saved-state-unverified',
@@ -375,7 +375,7 @@ describe('createCollection verdicts', () => {
     mock.route('POST', '/api/users/0/collections', (_req, res, helpers) =>
       helpers.raw(404, { 'Zotero-Server-ID': SERVER_ID }, JSON.stringify({})),
     )
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     await expect(createCollection(deps, { name: 'Field notes' })).rejects.toMatchObject({
       code: ZOTERO_NOT_FOUND,
       message: OBJECT_NOT_FOUND_MESSAGE,

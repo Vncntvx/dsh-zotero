@@ -17,7 +17,6 @@ import {
 } from '../../src/local/browse-domain.js'
 import { LocalApiProvider } from '../../src/local/provider.js'
 import {
-  createProvider,
   setupProvider,
   teardownProvider,
   type ProviderHarness,
@@ -39,12 +38,6 @@ beforeEach(async () => {
 afterEach(async () => {
   await teardownProvider(harness)
 })
-
-function makeProvider(
-  limits: Partial<import('../../src/local/limits.js').LocalApiLimits> = {},
-): LocalApiProvider {
-  return createProvider(mock, limits)
-}
 
 describe('browse: validation', () => {
   it('rejects bad offset/limit and unsupported kind', async () => {

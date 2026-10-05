@@ -26,7 +26,7 @@ import {
   apiPath,
   attachmentRef,
 } from '../helpers/server/keys.js'
-import { attachment, noteRow, paperItem } from '../helpers/server/objects.js'
+import { attachment, paperItem } from '../helpers/server/objects.js'
 import { serveFulltext, serveJson, serveItemGraph, serveStatus } from '../helpers/server/serve.js'
 import {
   FULLTEXT_PAYLOAD,

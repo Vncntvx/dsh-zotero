@@ -10,6 +10,19 @@
 /** Evidence sources `zotero_retrieve` can rank against the query. */
 export type EvidenceSource = 'annotation' | 'note' | 'fulltext' | 'abstract'
 
+/** The source vocabulary as a runtime whitelist, for decoders on both sides. */
+export const EVIDENCE_SOURCES: ReadonlySet<string> = new Set<EvidenceSource>([
+  'annotation',
+  'note',
+  'fulltext',
+  'abstract',
+])
+
+/** Narrow a decoded source string over the whitelist. */
+export function isEvidenceSource(source: string): source is EvidenceSource {
+  return EVIDENCE_SOURCES.has(source)
+}
+
 /**
  * A ranked field of an evidence passage. Only an annotation has two: the
  * highlight a reader selected (`text`) and the comment they wrote on it

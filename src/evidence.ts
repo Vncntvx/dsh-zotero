@@ -143,7 +143,7 @@ export function chunkText(
 }
 
 /** A ranked passage: the caller's original text, position, and BM25 score. */
-export interface RankedChunk {
+interface RankedChunk {
   readonly text: string
   readonly index: number
   readonly score: number

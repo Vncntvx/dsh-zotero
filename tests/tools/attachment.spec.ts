@@ -12,7 +12,6 @@ import { pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   NOT_A_LOCAL_PATH_MESSAGE,
-  attachmentTypeMessage,
   missingAttachmentFileMessage,
 } from '../../src/local/attachment-location.js'
 import { expectedKindRefMessage, invalidRefMessage } from '../../src/refs.js'

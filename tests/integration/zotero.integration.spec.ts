@@ -22,7 +22,6 @@ import { LocalApiProvider } from '../../src/local/provider.js'
 import { parseRef } from '../../src/refs.js'
 import { PROVIDER_LIMITS, zoteroError } from '../helpers/provider-harness.js'
 import { testHttpClient } from '../helpers/test-clients.js'
-import type { ZoteroItemDetail } from '../../src/types.js'
 
 const BASE_URL = process.env.ZOTERO_BASE_URL ?? 'http://127.0.0.1:23119/api'
 

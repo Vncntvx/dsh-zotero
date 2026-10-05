@@ -7,7 +7,7 @@
  * @module tests/local/browse-fail-loud
  */
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, it } from 'vitest'
 import { ZOTERO_UNEXPECTED } from '../../src/errors.js'
 import { type LocalApiProvider } from '../../src/local/provider.js'
 import {

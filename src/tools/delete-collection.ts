@@ -89,6 +89,7 @@ function buildRequest(args: DeleteCollectionArgs): ZoteroDeleteCollectionRequest
 async function fetchItemPreview(
   service: ZoteroService,
   refOrName: string,
+  signal: AbortSignal | undefined,
 ): Promise<{ total?: number; ref?: string }> {
   try {
     const searched = await service.search(
@@ -100,7 +101,7 @@ async function fetchItemPreview(
         offset: 0,
         limit: 1,
       },
-      undefined,
+      signal,
     )
     return {
       total: searched.total,
@@ -114,11 +115,12 @@ async function fetchItemPreview(
 async function fetchChildPreview(
   service: ZoteroService,
   parentRef: string,
+  signal: AbortSignal | undefined,
 ): Promise<number | undefined> {
   try {
     const browsed = await service.browse(
       { kind: 'collections', parentRef, offset: 0, limit: 1 },
-      undefined,
+      signal,
     )
     return browsed.total
   } catch {
@@ -129,6 +131,7 @@ async function fetchChildPreview(
 async function previewDeleteCollection(
   service: ZoteroService,
   collection: string,
+  signal: AbortSignal | undefined,
 ): Promise<{ itemTotal?: number; childTotal?: number }> {
   const target = collection.trim()
   const directRef = isRefString(target) ? target : undefined
@@ -137,16 +140,16 @@ async function previewDeleteCollection(
 
   if (directRef !== undefined) {
     const [itemRes, childRes] = await Promise.all([
-      fetchItemPreview(service, directRef),
-      fetchChildPreview(service, directRef),
+      fetchItemPreview(service, directRef, signal),
+      fetchChildPreview(service, directRef, signal),
     ])
     itemTotal = itemRes.total
     childTotal = childRes
   } else {
-    const itemRes = await fetchItemPreview(service, target)
+    const itemRes = await fetchItemPreview(service, target, signal)
     itemTotal = itemRes.total
     if (itemRes.ref !== undefined) {
-      childTotal = await fetchChildPreview(service, itemRes.ref)
+      childTotal = await fetchChildPreview(service, itemRes.ref, signal)
     }
   }
   return {
@@ -208,7 +211,7 @@ export function registerDeleteCollectionTool(ctx: Context, service: ZoteroServic
       presentResult: presentDeleteCollectionResult,
       async execute(args, exec): Promise<ZoteroDeleteCollectionOutcome> {
         const request = buildRequest(args)
-        const preview = await previewDeleteCollection(service, request.collection)
+        const preview = await previewDeleteCollection(service, request.collection, exec.signal)
         return await service.deleteCollection(request, {
           exec,
           plan: deleteCollectionPlan(args, preview),

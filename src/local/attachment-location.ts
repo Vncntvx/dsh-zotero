@@ -22,7 +22,7 @@ import {
   selectAttachments,
 } from '../attachments.js'
 import { formatRef, libraryPrefix, refForLibrary, requireSupportedLocalRef } from '../refs.js'
-import { requireArrayBody } from './pagination.js'
+import { fetchDirectChildren } from './children-wire.js'
 import type { LocalApiLimits } from './limits.js'
 import type { SupportedLocalLibrary, ZoteroAttachmentLocation, ZoteroObjectRef } from '../types.js'
 
@@ -181,7 +181,8 @@ export async function getAttachmentLocation(
  * Pick the attachment key an item ref resolves to: Zotero's own
  * `links.attachment` choice when present, otherwise the earliest PDF
  * child from a lazy bare `/children` fetch (notes/attachments only —
- * annotations are not attachment candidates).
+ * annotations are not attachment candidates; a non-array body fails
+ * loud through the shared children wire).
  * @throws {ZoteroError} `ZOTERO_NO_ATTACHMENT` when the item has none.
  */
 async function resolveAttachmentKey(
@@ -190,22 +191,15 @@ async function resolveAttachmentKey(
   signal?: AbortSignal,
 ): Promise<string> {
   if (ref.kind === 'attachment') return ref.key
-  const prefix = libraryPrefix(ref.library as SupportedLocalLibrary)
+  const library = ref.library as SupportedLocalLibrary
+  const prefix = libraryPrefix(library)
   const parent = await deps.client.getJson<unknown>(`${prefix}/items/${ref.key}`, undefined, {
     signal,
     serverId: ref.serverId,
   })
   const link = bestAttachmentFromLinks(parent.json)
   if (link !== undefined) return link.key
-  const children = await deps.client.getJson<unknown>(
-    `${prefix}/items/${ref.key}/children`,
-    undefined,
-    {
-      signal,
-      serverId: ref.serverId,
-    },
-  )
-  const childrenRows = requireArrayBody(children.json, 'item children')
+  const childrenRows = await fetchDirectChildren(deps, ref.key, library, ref.serverId, signal)
   const pdf = selectAttachments(childrenRows, 'pdf')[0]
   if (pdf === undefined) {
     throw new ZoteroError(noAttachmentToResolveMessage(ref.key), ZOTERO_NO_ATTACHMENT)

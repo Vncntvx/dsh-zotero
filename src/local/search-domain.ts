@@ -141,33 +141,30 @@ export async function runSearch(
           .map((row) => asString(asRecord(row)?.key))
           .filter((key): key is string => key !== undefined),
       )
-      const isSaturated = (scannedRows: readonly unknown[]): boolean => {
-        let count = 0
-        for (const row of scannedRows) {
+      // One pass over the scan: the collector examines only each batch's own
+      // slice as it arrives — never the whole accumulated array again — and
+      // records the matches for the page below, so saturation and the
+      // supplement list share a single walk instead of O(batches × rows)
+      // rescans with a full re-tokenization per pass. Matched rows keep scan
+      // order; child notes wait here for the parent-membership resolution
+      // below before they can join the page.
+      const matched: { row: unknown; key: string; parentKey?: string }[] = []
+      const collect = (added: readonly unknown[]): boolean => {
+        for (const row of added) {
+          if (matched.length >= headroom) return true
           const key = asString(asRecord(row)?.key)
           if (key === undefined || seen.has(key)) continue
-          if (noteRowMatches(row, terms, request, scope.collectionKey)) {
-            count += 1
-            if (count >= headroom) return true
-          }
+          if (!noteRowMatches(row, terms, request, scope.collectionKey)) continue
+          seen.add(key)
+          const parentKey =
+            scope.collectionKey === undefined
+              ? undefined
+              : asString(asRecord(asRecord(row)?.data)?.parentItem)
+          matched.push({ row, key, ...(parentKey !== undefined ? { parentKey } : {}) })
         }
-        return false
+        return matched.length >= headroom
       }
-      const scan = await fetchNoteRows(deps, scope, request, signal, isSaturated)
-      // Matched rows keep scan order; child notes wait here for the
-      // parent-membership resolution below before they can join the page.
-      const matched: { row: unknown; key: string; parentKey?: string }[] = []
-      for (const row of scan.rows) {
-        if (matched.length >= headroom) break
-        const key = asString(asRecord(row)?.key)
-        if (key === undefined || seen.has(key)) continue
-        if (!noteRowMatches(row, terms, request, scope.collectionKey)) continue
-        const parentKey =
-          scope.collectionKey === undefined
-            ? undefined
-            : asString(asRecord(asRecord(row)?.data)?.parentItem)
-        matched.push({ row, key, ...(parentKey !== undefined ? { parentKey } : {}) })
-      }
+      const scan = await fetchNoteRows(deps, scope, request, signal, collect)
       let memberships: Map<string, Set<string>> | undefined
       const pendingParents = matched
         .map((entry) => entry.parentKey)
@@ -196,7 +193,7 @@ export async function runSearch(
         supplemental = {
           kind: 'noteBody',
           items: supplementItems,
-          scanned: scan.rows.length,
+          scanned: scan.scanned,
           truncated: scan.truncated,
         }
       }
@@ -244,8 +241,8 @@ async function fetchNoteRows(
   scope: ResolvedScopeResult,
   request: ZoteroSearchRequest,
   signal: AbortSignal | undefined,
-  shouldStop?: (accumulated: readonly unknown[]) => boolean,
-): Promise<{ rows: readonly unknown[]; truncated: boolean }> {
+  shouldStop?: (added: readonly unknown[]) => boolean,
+): Promise<{ scanned: number; truncated: boolean }> {
   const libraryForScan = libraryOfResolvedScope(scope.resolved)
   // A publications-scoped scan must stay inside My Publications; the bare
   // library prefix would leak note matches from outside the segment.
@@ -253,10 +250,10 @@ async function fetchNoteRows(
     scope.resolved.kind === 'publications'
       ? publicationsItemsPath()
       : `${libraryPrefix(libraryForScan)}/items`
-  const out: unknown[] = []
+  let scanned = 0
   let start = 0
-  while (out.length < deps.limits.maxNoteScanRecords) {
-    const wanted = Math.min(100, deps.limits.maxNoteScanRecords - out.length)
+  while (scanned < deps.limits.maxNoteScanRecords) {
+    const wanted = Math.min(100, deps.limits.maxNoteScanRecords - scanned)
     const params = new URLSearchParams()
     params.set('itemType', 'note')
     params.set('sort', 'dateModified')
@@ -270,13 +267,14 @@ async function fetchNoteRows(
     })
     const rows = requireArrayBody(json, 'note scan')
     if (rows.length === 0) break
-    out.push(...rows.slice(0, wanted))
-    if (shouldStop?.(out) === true) break
+    const added = rows.slice(0, wanted)
+    scanned += added.length
+    if (shouldStop?.(added) === true) break
     // Fewer rows than requested means the library has no more notes.
     if (rows.length < wanted) break
     start += rows.length
   }
-  return { rows: out, truncated: out.length >= deps.limits.maxNoteScanRecords }
+  return { scanned, truncated: scanned >= deps.limits.maxNoteScanRecords }
 }
 
 /**

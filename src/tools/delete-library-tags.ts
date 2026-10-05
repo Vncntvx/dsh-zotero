@@ -122,6 +122,7 @@ interface TagRow {
 async function previewLibraryTags(
   service: ZoteroService,
   tags: readonly string[],
+  signal: AbortSignal | undefined,
 ): Promise<TagPreview> {
   try {
     const wanted = new Set(tags)
@@ -135,7 +136,7 @@ async function previewLibraryTags(
           offset,
           limit: service.config.maxBrowseResults,
         },
-        undefined,
+        signal,
       )
       for (const item of browsed.items) {
         const row = item as TagRow
@@ -212,7 +213,7 @@ export function registerDeleteLibraryTagsTool(ctx: Context, service: ZoteroServi
       presentResult: presentDeleteLibraryTagsResult,
       async execute(args, exec): Promise<ZoteroDeleteLibraryTagsOutcome> {
         const request = buildRequest(args, service.config)
-        const preview = await previewLibraryTags(service, request.tags)
+        const preview = await previewLibraryTags(service, request.tags, exec.signal)
         return await service.deleteLibraryTags(request, {
           exec,
           plan: deleteLibraryTagsPlan(args, preview),

@@ -9,7 +9,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   ZOTERO_INVALID_ARGUMENT,
   ZOTERO_NOT_FOUND,
-  ZOTERO_OUTPUT_TOO_LARGE,
   ZOTERO_SERVER_MISMATCH,
   ZOTERO_UNEXPECTED,
 } from '../../src/errors.js'
@@ -36,7 +35,6 @@ import {
 } from '../helpers/server/keys.js'
 import { citationRow } from '../helpers/server/objects.js'
 import { serveJson, serveText } from '../helpers/server/serve.js'
-import { deferred, progress } from '../helpers/sync.js'
 
 let mock: ProviderHarness['mock']
 let provider: LocalApiProvider

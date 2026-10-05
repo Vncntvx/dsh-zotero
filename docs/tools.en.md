@@ -518,6 +518,15 @@ Write tools are disabled by default, require `writeEnabled` in configuration, an
 3. **Shell Write Interception**:
    - A pre-execution listener detects shell commands directed at local API write endpoints and escalates them to Harness approval requests, preventing unauthorized direct modifications.
 
+   Detection reads command text, which makes it **detection, not a guarantee**. The following paths pass it unseen:
+   - a request written into a script file and then executed (`bash build.sh`);
+   - an interpreter whose command text never spells the endpoint (`python -c '...'`, `node -e '...'` with the URL assembled at runtime) — an interpreter call that spells the endpoint in its command text is still detected;
+   - a URL carried in an environment variable, a heredoc, or an encoding;
+   - a loopback port other than the configured one (except writes to `/api/users/` and authorize calls, which are caught on any loopback port);
+   - any binary of the user's own.
+
+   The system prompt keeps the model on the write tools, and this confirmation gates the route. To make the library entirely unreachable from the shell, run the session without an unconstrained shell: use `tools.restrict({ deny: ["bash"] })` per agent, or a preset without a shell. A confirmed raw write also does **not** pass through the plugin's write domain — no plan card, no version preconditions, no markdown→note HTML conversion, no provenance; that is the price accepted at the moment of confirmation.
+
 ---
 
 ## Error Codes

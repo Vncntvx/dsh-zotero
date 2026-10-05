@@ -12,7 +12,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { ZOTERO_INVALID_ARGUMENT, ZOTERO_UNEXPECTED } from '../../src/errors.js'
+import { ZOTERO_INVALID_ARGUMENT } from '../../src/errors.js'
 import { LocalApiProvider } from '../../src/local/provider.js'
 import { INCLUDE_TRASHED_SCOPE_MESSAGE } from '../../src/local/search-domain.js'
 import { MockZotero } from '../helpers/mock-zotero.js'

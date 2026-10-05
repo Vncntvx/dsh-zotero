@@ -72,7 +72,7 @@ function serveCollection(
 
 describe('createCollection', () => {
   it('refuses a blank name before any network', async () => {
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     await expect(createCollection(deps, { name: '   ' })).rejects.toMatchObject({
       code: ZOTERO_INVALID_ARGUMENT,
       message: writeNonBlankMessage('name'),
@@ -81,7 +81,7 @@ describe('createCollection', () => {
   })
 
   it('refuses a sibling that already carries the name before any POST', async () => {
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     let thrown: unknown
     try {
       await createCollection(deps, { name: '方法论' })
@@ -95,7 +95,7 @@ describe('createCollection', () => {
 
   it('creates a top-level collection and invalidates the scope directory', async () => {
     grantAuthorize(mock)
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     const onCollectionsChanged = vi.fn()
     const scoped = { ...deps, onCollectionsChanged }
     let entry: Record<string, unknown> | undefined
@@ -142,7 +142,7 @@ describe('createCollection', () => {
 
   it('creates a child collection under a resolved parent', async () => {
     grantAuthorize(mock)
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     mock.route('POST', '/api/users/0/collections', (_req, res, helpers) => {
       const body = JSON.parse(mock.requests[mock.requests.length - 1]?.body ?? '[]') as Record<
         string,
@@ -190,7 +190,7 @@ describe('createCollection', () => {
 
   it('returns a non-retryable committed-unverified result when the saved state is missing', async () => {
     grantAuthorize(mock)
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     const onCollectionsChanged = vi.fn()
     mock.route('POST', '/api/users/0/collections', (_req, res, helpers) =>
       helpers.raw(
@@ -222,7 +222,7 @@ describe('createCollection', () => {
 
   it('returns a non-retryable commit-unknown result when the response drops', async () => {
     grantAuthorize(mock)
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     mock.route('POST', '/api/users/0/collections', (_req, res) => {
       res.destroy()
     })
@@ -238,7 +238,7 @@ describe('createCollection', () => {
 
   it('maps a per-object refusal onto the typed error its status names', async () => {
     grantAuthorize(mock)
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     mock.route('POST', '/api/users/0/collections', (_req, res, helpers) =>
       helpers.raw(
         200,
@@ -268,7 +268,7 @@ describe('createCollection', () => {
       own.route('GET', '/api/users/0/collections/top', (_req, res, helpers) =>
         helpers.json({ collections: [] }, { 'Zotero-Server-ID': SERVER_ID, 'Total-Results': '0' }),
       )
-      const { deps, directory } = writeDeps(own)
+      const { deps } = writeDeps(own)
       await expect(createCollection(deps, { name: 'Field notes' })).rejects.toMatchObject({
         code: ZOTERO_UNEXPECTED,
       })
@@ -312,7 +312,7 @@ describe('createCollection', () => {
 
 describe('deleteCollection', () => {
   it('refuses a blank collection before any network', async () => {
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     await expect(deleteCollection(deps, { collection: '  ' })).rejects.toMatchObject({
       code: ZOTERO_INVALID_ARGUMENT,
       message: writeNonBlankMessage('collection'),
@@ -321,7 +321,7 @@ describe('deleteCollection', () => {
   })
 
   it('fails a name that resolves to nothing before any delete', async () => {
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     await expect(
       deleteCollection(deps, { collection: 'no such collection' }),
     ).rejects.toMatchObject({ code: ZOTERO_NOT_FOUND })
@@ -337,7 +337,7 @@ describe('deleteCollection', () => {
       (_req, res, helpers) =>
         helpers.raw(204, { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '31' }, ''),
     )
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     const onCollectionsChanged = vi.fn()
     const result = await deleteCollection(
       { ...deps, onCollectionsChanged },
@@ -364,7 +364,7 @@ describe('deleteCollection', () => {
   it('fails loud when the delete read carries no library version', async () => {
     grantAuthorize(mock)
     serveCollection(SECOND_COLLECTION_KEY, 'Second')
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     await expect(deleteCollection(deps, { collection: 'Second' })).rejects.toMatchObject({
       code: ZOTERO_UNEXPECTED,
       message: WRITE_PRECONDITION_READ_LIBRARY_VERSION_MESSAGE,
@@ -377,7 +377,7 @@ describe('deleteCollection', () => {
       serverId: 'OTHER1234',
       libraryVersion: 30,
     })
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     await expect(deleteCollection(deps, { collection: 'Second' })).rejects.toMatchObject({
       code: ZOTERO_SERVER_MISMATCH,
       message: SERVER_MISMATCH_MESSAGE,
@@ -398,7 +398,7 @@ describe('deleteCollection', () => {
           'item has been modified since specified version (expected 30, found 31)',
         ),
     )
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     await expect(deleteCollection(deps, { collection: 'Second' })).rejects.toMatchObject({
       code: ZOTERO_WRITE_CONFLICT,
     })
@@ -412,7 +412,7 @@ describe('deleteCollection', () => {
       `/api/users/0/collections/${SECOND_COLLECTION_KEY}`,
       (_req, res, helpers) => helpers.raw(404, { 'Content-Type': 'text/plain' }, 'Not found'),
     )
-    const { deps, directory } = writeDeps(mock)
+    const { deps } = writeDeps(mock)
     await expect(deleteCollection(deps, { collection: 'Second' })).rejects.toMatchObject({
       code: ZOTERO_NOT_FOUND,
       message: writeObjectRefusedMessage('The collection no longer exists.', 404),

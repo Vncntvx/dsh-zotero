@@ -29,12 +29,13 @@
 
 import type { ZoteroHttpClient } from '../http-client.js'
 import { libraryPrefix } from '../refs.js'
+import { requireArrayBody } from './pagination.js'
 import type { SupportedLocalLibrary } from '../types.js'
 
 /** Query that surfaces annotation rows under one key. */
 const ANNOTATION_SEARCH = new URLSearchParams({ itemType: 'annotation' })
 
-/** GET one `/children` listing; a non-array body counts as no children. */
+/** GET one `/children` listing; a non-array body is a contract breach, not an empty page. */
 async function getChildrenJson(
   deps: { client: ZoteroHttpClient },
   key: string,
@@ -48,7 +49,10 @@ async function getChildrenJson(
     signal,
     serverId,
   })
-  return Array.isArray(children.json) ? children.json : []
+  return requireArrayBody(
+    children.json,
+    search === undefined ? 'item children' : 'item annotations',
+  )
 }
 
 /**
