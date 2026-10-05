@@ -49,7 +49,6 @@ export type MobilePane = 'list' | 'detail'
 export interface ZoteroWorkspaceViewProps {
   readonly workspace: SourceWorkspace
   readonly connection: ConnectionView
-  readonly sessionId: string
   /** Composer prefill; absent on surfaces without an input. */
   readonly setDraft?: (text: string) => void
   readonly onRefresh: () => void
@@ -116,7 +115,6 @@ export interface SourceItemLike {
 export function ZoteroWorkspaceView({
   workspace,
   connection,
-  sessionId,
   setDraft,
   onRefresh,
   t,
@@ -138,10 +136,6 @@ export function ZoteroWorkspaceView({
   )
   // The exports lens counts distinct exported documents, not export calls.
   const exportedCount = useMemo(() => exportedRefCountOf(workspace.exports), [workspace.exports])
-
-  // Session switches reset the whole surface: the parent keys this view by
-  // the session id, so this state never survives a session change.
-  void sessionId
 
   if (evidenceOpen) {
     return (

@@ -69,20 +69,18 @@ afterEach(() => {
 const saveButton = (): HTMLButtonElement =>
   screen.getByRole('button', { name: new RegExp(`^(?:${zh.save}|${zh.saving})`) })
 
-const discardButton = (): HTMLButtonElement => screen.getByRole('button', { name: zh.discard })
-
 describe('ZoteroSettingsSection', () => {
   it('keeps the nav entry and explains itself while the namespace is unavailable', () => {
     scope = fakeScope({ status: 'unavailable' })
     render(<Harness face={new ZoteroCardController(scope).inject()} />)
     // The left-nav label comes from the registration, so the page must not
-    // vanish: it states why it is empty instead.
+    // vanish: the official form chrome states why it is empty instead.
     expect(screen.getByText(zh.nav)).toBeDefined()
     expect(screen.getByRole('status').textContent).toContain(zh.unavailable)
     expect(document.querySelectorAll('input')).toHaveLength(0)
   })
 
-  it('renders the page header, the full grouped form, and the action row', () => {
+  it('renders the page header, the full grouped form, and the official save control', () => {
     scope = fakeScope({ value: { baseUrl: 'http://127.0.0.1:23119/api', timeoutMs: 5000 } })
     mount()
     expect(screen.getByRole('heading', { name: zh.title })).toBeDefined()
@@ -95,7 +93,6 @@ describe('ZoteroSettingsSection', () => {
       FIELD_GROUPS.flatMap((group) => group.fields).length,
     )
     expect(saveButton().disabled).toBe(true)
-    expect(discardButton().disabled).toBe(true)
   })
 
   it('renders the changes cap with the hint that says it is display-only', () => {
@@ -114,18 +111,7 @@ describe('ZoteroSettingsSection', () => {
     expect(screen.getByText(en.maxChangesResultsHint)).toBeDefined()
   })
 
-  it('marks the page as unsaved while a draft is staged', () => {
-    scope = fakeScope({ value: { timeoutMs: 5000 } })
-    mount()
-    expect(screen.queryByText(zh.unsaved)).toBeNull()
-    const timeout = document.querySelector('#zotero-settings-timeoutMs') as HTMLInputElement
-    fireEvent.change(timeout, { target: { value: '9000' } })
-    expect(screen.getByText(zh.unsaved)).toBeDefined()
-    fireEvent.click(discardButton())
-    expect(screen.queryByText(zh.unsaved)).toBeNull()
-  })
-
-  it('toggles the web tab and saves the boolean write from the action row', async () => {
+  it('toggles the web tab and saves the boolean write from the official save control', async () => {
     scope = fakeScope({ value: { webEnabled: true } })
     mount()
     const toggle = screen.getByLabelText(zh.webEnabled) as HTMLInputElement
@@ -196,7 +182,6 @@ describe('ZoteroSettingsSection', () => {
         expect((input as HTMLInputElement).disabled).toBe(true)
       }
       expect(saveButton().disabled).toBe(true)
-      expect(discardButton().disabled).toBe(true)
     })
     release()
     await vi.waitFor(() =>
@@ -229,15 +214,18 @@ describe('ZoteroSettingsSection', () => {
     await vi.waitFor(() => expect(scope.writes).toEqual([{ op: 'unset', field: 'timeoutMs' }]))
   })
 
-  it('discard drops the staged draft without writing', () => {
+  it('discards the staged draft when the page unmounts', () => {
+    // The official `<SettingsForm>` discards on unmount: leaving the page is
+    // the discard, so the staged draft never outlives the section.
     scope = fakeScope({ value: { timeoutMs: 5000 } })
-    mount()
+    const handle = render(<Harness face={new ZoteroCardController(scope).inject()} />)
     const timeout = document.querySelector('#zotero-settings-timeoutMs') as HTMLInputElement
     fireEvent.change(timeout, { target: { value: '9000' } })
-    fireEvent.click(discardButton())
+    handle.unmount()
     expect(scope.writes).toEqual([])
-    expect(timeout.value).toBe('5000')
-    expect(saveButton().disabled).toBe(true)
+    mount()
+    const fresh = document.querySelector('#zotero-settings-timeoutMs') as HTMLInputElement
+    expect(fresh.value).toBe('5000')
   })
 
   it('keeps the draft and reports failure when the write is refused', async () => {
@@ -260,6 +248,5 @@ describe('ZoteroSettingsSection', () => {
       expect(input.disabled).toBe(true)
     }
     expect(saveButton().disabled).toBe(true)
-    expect(discardButton().disabled).toBe(true)
   })
 })

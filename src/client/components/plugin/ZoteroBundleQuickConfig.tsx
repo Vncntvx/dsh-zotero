@@ -5,7 +5,7 @@
  * @module dsh-zotero/client/components/plugin/ZoteroBundleQuickConfig
  */
 
-import { type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { RiskConfirmation, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PluginConfigViewProps } from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import type { ConfigFormSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
@@ -24,14 +24,14 @@ import css from './plugin-cards.module.css'
 export interface ZoteroBundleQuickConfigProps extends Omit<PluginConfigViewProps, 'form'> {
   readonly t?: TranslateNS<'zotero'>
   readonly useZoteroQuickConfig?: SnapshotSelectorHook<ConfigFormSnapshot<Record<string, unknown>>>
-  readonly setField?: (field: QuickConfigField, value: boolean) => void
+  readonly setField?: (field: QuickConfigField, value: boolean) => Promise<boolean>
 }
 
 /** Required face once the slot has supplied snapshot, translator and write edge. */
 interface QuickConfigBodyProps {
   readonly t: TranslateNS<'zotero'>
   readonly useZoteroQuickConfig: SnapshotSelectorHook<ConfigFormSnapshot<Record<string, unknown>>>
-  readonly setField: (field: QuickConfigField, value: boolean) => void
+  readonly setField: (field: QuickConfigField, value: boolean) => Promise<boolean>
 }
 
 /**
@@ -61,17 +61,32 @@ function ZoteroBundleQuickConfigBody({
   setField,
 }: QuickConfigBodyProps): ReactNode {
   const gate = useRiskGate()
+  const [failed, setFailed] = useState(false)
   const snapshot = useZoteroQuickConfig((s) => s)
   const ready = snapshot.status === 'ready'
   const webEnabled = snapshot.value?.webEnabled !== false
   const writeEnabled = snapshot.value?.writeEnabled === true
+
+  // The write edge rejects on a transport failure and resolves false when the
+  // Host refuses the write — either way the mirror never lands it, the switch
+  // bounces back on the next snapshot, and the failure must be visible here
+  // (the official form spells the same surface through `state.failed`).
+  const apply = (field: QuickConfigField, value: boolean): void => {
+    setField(field, value)
+      .then((landed) => {
+        setFailed(!landed)
+      })
+      .catch(() => {
+        setFailed(true)
+      })
+  }
 
   const onToggleWrite = (next: boolean): void => {
     if (next && !writeEnabled) {
       gate.request()
       return
     }
-    setField('writeEnabled', next)
+    apply('writeEnabled', next)
   }
 
   return (
@@ -91,7 +106,7 @@ function ZoteroBundleQuickConfigBody({
             disabled={!ready}
             label={t('webEnabled')}
             onChange={(next) => {
-              setField('webEnabled', next)
+              apply('webEnabled', next)
             }}
           />
         </div>
@@ -108,6 +123,11 @@ function ZoteroBundleQuickConfigBody({
           />
         </div>
       </div>
+      {failed ? (
+        <p className={css.quickConfigFailed} role="status">
+          {t('saveFailed')}
+        </p>
+      ) : null}
       <RiskConfirmation
         open={gate.confirming}
         {...writeRiskCopy(t)}
@@ -117,7 +137,7 @@ function ZoteroBundleQuickConfigBody({
         onCancel={gate.cancel}
         onConfirm={() => {
           gate.confirm(() => {
-            setField('writeEnabled', true)
+            apply('writeEnabled', true)
           })
         }}
       />

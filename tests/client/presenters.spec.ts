@@ -229,6 +229,22 @@ describe('evidenceItemsOf', () => {
     expect(evidenceItemsOf({ items: [{ source: 'annotation' }] })).toBeNull()
     expect(evidenceItemsOf({ items: ['x'] })).toBeNull()
   })
+
+  it('rejects an unknown source instead of mislabeling its provenance', () => {
+    // A blind cast would pass the string through to the labels, which would
+    // read it as full text; the vocabulary is closed, so the meta is malformed.
+    expect(
+      evidenceItemsOf({
+        items: [
+          {
+            source: 'citation-graph',
+            sourceRef: 'zotero://user/0/item/ABCDEFGH',
+            preview: 'a',
+          },
+        ],
+      }),
+    ).toBeNull()
+  })
 })
 
 describe('joinNonEmpty', () => {

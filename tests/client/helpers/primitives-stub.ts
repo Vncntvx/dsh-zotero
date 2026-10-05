@@ -24,8 +24,9 @@
  * @module tests/client/helpers/primitives-stub
  */
 
-import { createElement, memo, type ReactElement } from 'react'
+import { Fragment, createElement, useEffect, memo, useRef, type ReactElement } from 'react'
 import { vi, type MockedFunction } from 'vitest'
+import type { SettingsFormLabels } from '@deepseek-ai/dsh-client-ui-primitives'
 import { TagStub } from './tag-stub.tsx'
 
 /** One selectable row of the `Menu` stub, as the workspace specs declare it. */
@@ -48,6 +49,22 @@ export interface MenuStubProps {
 
 /** The real clipboard writer, reached through the mocked module. */
 type WriteClipboard = (typeof import('@deepseek-ai/dsh-client-ui-primitives'))['writeClipboard']
+
+/** Props the `SettingsForm` stub reads: the official component's full surface. */
+export interface SettingsFormStubProps {
+  readonly labels: SettingsFormLabels
+  readonly state: {
+    readonly available: boolean
+    readonly writable: boolean
+    readonly dirty: boolean
+    readonly invalid: boolean
+    readonly saving: boolean
+    readonly failed: boolean
+  }
+  readonly onSave: () => void
+  readonly onDiscard: () => void
+  readonly children?: unknown
+}
 
 /** The harness's own staged-form model and field specs, taken real. */
 type RealForm = Pick<
@@ -91,6 +108,21 @@ export interface PrimitivesStub extends Omit<RealForm, 'SettingsValueField'> {
     title?: string
     className?: string
   }) => ReactElement
+  /** The labelled checkbox, as its DOM face (label wraps the input). */
+  readonly Checkbox: (props: {
+    checked: boolean
+    onChange?: (next: boolean) => void
+    label: string
+    disabled?: boolean
+    title?: string
+    className?: string
+  }) => ReactElement
+  /**
+   * The official settings-form chrome, as its DOM face: the
+   * unavailable/read-only/failed status lines, the save button, and the
+   * unmount discard.
+   */
+  readonly SettingsForm: (props: SettingsFormStubProps) => ReactElement
   /** The risk acknowledgement dialog, as its DOM face. */
   readonly RiskConfirmation: (props: {
     open: boolean
@@ -269,6 +301,51 @@ export function countingDisclosure(): {
 }
 
 /**
+ * The official `SettingsForm` chrome as a DOM face: the unavailable/read-only
+ * status lines, the failed line, the save button, and the unmount discard.
+ * The real component cannot render here (its bundle carries a second React
+ * copy), so specs drive this faithful mirror instead — tracks
+ * `ui-primitives/src/settings-form/SettingsForm.tsx`, including the hook
+ * order: the discard-on-unmount effect is unconditional, so it fires even
+ * when the namespace is unavailable.
+ */
+function SettingsFormFace({
+  labels,
+  state,
+  onSave,
+  onDiscard,
+  children,
+}: SettingsFormStubProps): ReactElement {
+  const discard = useRef(onDiscard)
+  discard.current = onDiscard
+  useEffect(
+    () => () => {
+      discard.current()
+    },
+    [],
+  )
+  if (!state.available) {
+    return createElement('p', { role: 'status' }, labels.unavailable)
+  }
+  return createElement(
+    Fragment,
+    null,
+    state.writable ? null : createElement('p', { role: 'status' }, labels.readOnly),
+    children as never,
+    state.failed ? createElement('p', { role: 'status' }, labels.saveFailed) : null,
+    createElement(
+      'button',
+      {
+        type: 'button',
+        disabled: !state.dirty || state.invalid || state.saving,
+        onClick: onSave,
+      },
+      state.saving ? labels.saving : labels.save,
+    ),
+  )
+}
+
+/**
  * The stub module body: every primitives surface the client specs replace,
  * with a fresh clipboard spy per call (the mock registry is per test file).
  * @param overrides - per-spec variants, e.g. the interactive `Menu`.
@@ -375,6 +452,21 @@ export function primitivesStub(overrides: Partial<PrimitivesStub> = {}): Primiti
           onChange?.(event.target.checked)
         },
       }),
+    Checkbox: ({ checked, onChange, label, disabled, title, className }) =>
+      createElement(
+        'label',
+        { title, ...(className !== undefined ? { className } : {}) },
+        createElement('input', {
+          type: 'checkbox',
+          checked,
+          disabled,
+          onChange: (event: { target: { checked: boolean } }) => {
+            onChange?.(event.target.checked)
+          },
+        }),
+        createElement('span', null, label),
+      ),
+    SettingsForm: SettingsFormFace,
     RiskConfirmation: ({
       open,
       title,

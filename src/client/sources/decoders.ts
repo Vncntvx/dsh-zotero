@@ -38,6 +38,16 @@ interface SearchRowMeta {
   readonly bestAttachmentType?: string
 }
 
+/**
+ * Whether the host's 8 KiB meta budget dropped this projection's detail keys:
+ * the summary facts stay (counts, totals) and `detailOmitted` stamps the cut,
+ * so a card can say "details were omitted" instead of showing fewer rows with
+ * no reason. See `presentation-meta.ts` (`boundedPresentationMeta`).
+ */
+export function detailOmittedOf(meta: Record<string, unknown>): boolean {
+  return boolField(meta, 'detailOmitted') === true
+}
+
 /** The search projection view; `rows === null` means malformed. */
 export interface SearchMetaView {
   readonly rows: readonly SearchRowMeta[] | null
@@ -48,6 +58,8 @@ export interface SearchMetaView {
   readonly omitted: number | null
   readonly scope: ZoteroResolvedScope | null
   readonly library: SupportedLocalLibrary | null
+  /** True when the meta budget dropped the detail rows behind these facts. */
+  readonly detailOmitted: boolean
 }
 
 /** One child collection's own page facts: how many exist, how many came back. */
@@ -78,6 +90,8 @@ export interface GetMetaView {
   readonly attachments: ChildCountView | null
   readonly notesPreview: readonly ChildPreviewView[]
   readonly annotationsPreview: readonly ChildPreviewView[]
+  /** True when the meta budget dropped the detail rows behind these facts. */
+  readonly detailOmitted: boolean
 }
 
 /**
@@ -128,6 +142,8 @@ export interface RetrieveMetaView {
   readonly attachmentContentType: string | null
   readonly coverage: SourceCoverage | null
   readonly sourceAvailability: Readonly<Record<string, SourceAvailabilityEntry>>
+  /** True when the meta budget dropped the detail rows behind these facts. */
+  readonly detailOmitted: boolean
 }
 
 /** The attachment projection view; a null field is absent or malformed. */
@@ -137,6 +153,8 @@ export interface AttachmentMetaView {
   readonly contentType: string | null
   readonly location: string | null
   readonly ref: string | null
+  /** True when the meta budget dropped the detail rows behind these facts. */
+  readonly detailOmitted: boolean
 }
 
 /**
@@ -152,6 +170,8 @@ export interface BrowseMetaView {
   readonly total: number | null
   readonly nextOffset: number | null
   readonly rows: readonly BrowseRow[] | null
+  /** True when the meta budget dropped the detail rows behind these facts. */
+  readonly detailOmitted: boolean
 }
 
 export function browseMetaOf(meta: Record<string, unknown>): BrowseMetaView {
@@ -165,6 +185,7 @@ export function browseMetaOf(meta: Record<string, unknown>): BrowseMetaView {
     total: numberField(meta, 'total') ?? null,
     nextOffset: nextOffset ?? null,
     rows,
+    detailOmitted: detailOmittedOf(meta),
   }
 }
 
@@ -204,6 +225,8 @@ export interface ExportMetaView {
   readonly refsOmitted: number
   /** The bounded per-document items; empty when the projection carried none. */
   readonly items: readonly ExportDocumentItem[]
+  /** True when the meta budget dropped the detail rows behind these facts. */
+  readonly detailOmitted: boolean
 }
 
 /** The bounded per-document items of an export projection; malformed rows are dropped. */
@@ -305,6 +328,7 @@ export function searchMetaOf(meta: Record<string, unknown>): SearchMetaView {
     omitted: numberField(meta, 'omitted') ?? null,
     scope: decodeResolvedScope(meta['scope']),
     library: decodeSupportedLibrary(meta['library']),
+    detailOmitted: detailOmittedOf(meta),
   }
 }
 
@@ -329,6 +353,7 @@ export function getMetaOf(meta: Record<string, unknown>): GetMetaView {
     attachments: childCountOf(meta['attachments']),
     notesPreview: childPreviewsOf(meta['notesPreview']),
     annotationsPreview: childPreviewsOf(meta['annotationsPreview']),
+    detailOmitted: detailOmittedOf(meta),
   }
 }
 
@@ -403,6 +428,8 @@ export interface ChildSection {
 export interface ChildrenMetaView {
   readonly itemType: string | null
   readonly sections: readonly ChildSection[]
+  /** True when the meta budget dropped the detail rows behind these facts. */
+  readonly detailOmitted: boolean
 }
 
 const CHILD_SECTIONS = [
@@ -453,7 +480,11 @@ export function childrenMetaOf(meta: Record<string, unknown>): ChildrenMetaView 
       : []
     sections.push({ kind, total: count.total, returned: count.returned, shown: rows.length, rows })
   }
-  return { itemType: stringField(meta, 'itemType') ?? null, sections }
+  return {
+    itemType: stringField(meta, 'itemType') ?? null,
+    sections,
+    detailOmitted: detailOmittedOf(meta),
+  }
 }
 
 /**
@@ -512,6 +543,8 @@ export interface ChangesMetaView {
   readonly changed: readonly ChangesSection[]
   readonly deletedTotal: number | null
   readonly deleted: readonly DeletionsSection[]
+  /** True when the meta budget dropped the detail rows behind these facts. */
+  readonly detailOmitted: boolean
 }
 
 /** One kind this diff could not cover, and the reason it could not. */
@@ -685,6 +718,7 @@ export function changesMetaOf(meta: Record<string, unknown>): ChangesMetaView {
       sumTotals(deletedTotalKeys) ??
       sumSections(deleted.map((section) => ({ total: section.total, size: section.keys.length }))),
     deleted,
+    detailOmitted: detailOmittedOf(meta),
   }
 }
 
@@ -698,6 +732,7 @@ export function retrieveMetaOf(meta: Record<string, unknown>): RetrieveMetaView 
     attachmentContentType: stringField(meta, 'attachmentContentType') ?? null,
     coverage: decodeCoverage(meta['coverage']),
     sourceAvailability: decodeSourceAvailability(meta['sourceAvailability']),
+    detailOmitted: detailOmittedOf(meta),
   }
 }
 
@@ -710,6 +745,7 @@ export function attachmentMetaOf(meta: Record<string, unknown>): AttachmentMetaV
     contentType: stringField(meta, 'contentType') ?? null,
     location: kind === null ? null : (stringField(meta, kind === 'file' ? 'path' : 'url') ?? null),
     ref: stringField(meta, 'ref') ?? null,
+    detailOmitted: detailOmittedOf(meta),
   }
 }
 
@@ -721,6 +757,7 @@ export function exportMetaOf(meta: Record<string, unknown>): ExportMetaView {
     refs: stringArrayOf(meta['refs']),
     refsOmitted: numberField(meta, 'refsOmitted') ?? 0,
     items: exportItemsOf(meta['items']),
+    detailOmitted: detailOmittedOf(meta),
   }
 }
 

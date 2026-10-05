@@ -27,49 +27,51 @@ export type SearchToolViewProps = PropsRuntime<'tool.call.toolview', 'zotero_sea
 export function SearchToolView(props: SearchToolViewProps) {
   const { toolName, block, useDisclosure, inspect, t } = props
 
-  const { icon, query, summary, errorSummary, rows, omitted, rawText } = useMemo(() => {
-    const args = argsViewOf(block)
-    const q = (textArg(args, 'query') ?? '').trim()
-    const meta = metaOf(block)
-    const searchView = meta !== null ? searchMetaOf(meta) : null
-    const noteMatches = meta !== null ? (numberField(meta, 'noteMatches') ?? 0) : 0
-    const raw = (resultTextOf(block) ?? '').trim()
+  const { icon, query, summary, errorSummary, rows, omitted, detailOmitted, rawText } =
+    useMemo(() => {
+      const args = argsViewOf(block)
+      const q = (textArg(args, 'query') ?? '').trim()
+      const meta = metaOf(block)
+      const searchView = meta !== null ? searchMetaOf(meta) : null
+      const noteMatches = meta !== null ? (numberField(meta, 'noteMatches') ?? 0) : 0
+      const raw = (resultTextOf(block) ?? '').trim()
 
-    let sum = ''
-    if ('phase' in block && block.phase === 'start') {
-      sum = q ? `"${q}"` : t('toolSearchRunning')
-    } else if (searchView?.rows !== null && searchView?.rows !== undefined) {
-      // The hit count is the call's, not the projection's: `rows` is the
-      // bounded page the card draws, which is capped independently of the
-      // search's own `maxSearchResults`. Counting rows read 20 on a
-      // deployment that raised the cap past the projection's.
-      const count = searchView.returned ?? searchView.rows.length
-      sum =
-        noteMatches > 0
-          ? t('toolSummaryFoundWithNotes', { count, notes: noteMatches })
-          : t('toolSummaryFound', { count })
-    } else {
-      sum = q ? `"${q}"` : t('toolTitleSearch')
-    }
+      let sum = ''
+      if ('phase' in block && block.phase === 'start') {
+        sum = q ? `"${q}"` : t('toolSearchRunning')
+      } else if (searchView?.rows !== null && searchView?.rows !== undefined) {
+        // The hit count is the call's, not the projection's: `rows` is the
+        // bounded page the card draws, which is capped independently of the
+        // search's own `maxSearchResults`. Counting rows read 20 on a
+        // deployment that raised the cap past the projection's.
+        const count = searchView.returned ?? searchView.rows.length
+        sum =
+          noteMatches > 0
+            ? t('toolSummaryFoundWithNotes', { count, notes: noteMatches })
+            : t('toolSummaryFound', { count })
+      } else {
+        sum = q ? `"${q}"` : t('toolTitleSearch')
+      }
 
-    const errSummary = errorSummaryOf(block, raw)
+      const errSummary = errorSummaryOf(block, raw)
 
-    const items = (searchView?.rows ?? []).map((row) => ({
-      ...row,
-      selectUrl: selectUrlOf(row.ref),
-      pdfUrl: row.bestAttachmentRef ? pdfUrlOf(row.bestAttachmentRef) : null,
-    }))
+      const items = (searchView?.rows ?? []).map((row) => ({
+        ...row,
+        selectUrl: selectUrlOf(row.ref),
+        pdfUrl: row.bestAttachmentRef ? pdfUrlOf(row.bestAttachmentRef) : null,
+      }))
 
-    return {
-      icon: <IconSearchOutlineRegular size={14} />,
-      query: q,
-      summary: sum,
-      errorSummary: errSummary,
-      rows: items,
-      omitted: searchView?.omitted ?? 0,
-      rawText: raw,
-    }
-  }, [block, t])
+      return {
+        icon: <IconSearchOutlineRegular size={14} />,
+        query: q,
+        summary: sum,
+        errorSummary: errSummary,
+        rows: items,
+        omitted: searchView?.omitted ?? 0,
+        detailOmitted: searchView?.detailOmitted === true,
+        rawText: raw,
+      }
+    }, [block, t])
 
   return (
     <ZoteroToolRow
@@ -89,61 +91,66 @@ export function SearchToolView(props: SearchToolViewProps) {
           return <RunningNotice text={t('toolSearchRunning')} />
         }
 
-        if (rows.length > 0) {
-          return (
-            <>
-              <div className={css.cardList}>
-                {rows.map((row) => (
-                  <div key={row.ref} className={css.itemCard}>
-                    <div className={css.itemHeader}>
-                      {row.year !== undefined && <span className={css.badge}>{row.year}</span>}
-                      {row.itemType !== undefined && (
-                        <span className={css.badge} data-tone="info">
-                          {row.itemType}
-                        </span>
+        return (
+          <>
+            {detailOmitted && <div className={css.coverageNotice}>{t('detailOmittedNote')}</div>}
+            {rows.length > 0 ? (
+              <>
+                <div className={css.cardList}>
+                  {rows.map((row) => (
+                    <div key={row.ref} className={css.itemCard}>
+                      <div className={css.itemHeader}>
+                        {row.year !== undefined && <span className={css.badge}>{row.year}</span>}
+                        {row.itemType !== undefined && (
+                          <span className={css.badge} data-tone="info">
+                            {row.itemType}
+                          </span>
+                        )}
+                        {row.bestAttachmentType && (
+                          <span className={css.badge} data-tone="pdf">
+                            {t('badgePdf')}
+                          </span>
+                        )}
+                        <span className={css.itemTitle}>{row.title}</span>
+                      </div>
+                      {row.creatorSummary && (
+                        <div className={css.itemMeta}>{row.creatorSummary}</div>
                       )}
-                      {row.bestAttachmentType && (
-                        <span className={css.badge} data-tone="pdf">
-                          {t('badgePdf')}
-                        </span>
-                      )}
-                      <span className={css.itemTitle}>{row.title}</span>
+                      <div className={css.itemActions}>
+                        {row.selectUrl && (
+                          <ZoteroOpenLink
+                            url={row.selectUrl}
+                            verdict="open"
+                            label={t('openInZotero')}
+                            t={t}
+                            className={css.actionLink}
+                          />
+                        )}
+                        {row.pdfUrl && (
+                          <ZoteroOpenLink
+                            url={row.pdfUrl}
+                            verdict="open"
+                            label={t('openPdf')}
+                            t={t}
+                            className={css.actionLink}
+                          />
+                        )}
+                      </div>
                     </div>
-                    {row.creatorSummary && <div className={css.itemMeta}>{row.creatorSummary}</div>}
-                    <div className={css.itemActions}>
-                      {row.selectUrl && (
-                        <ZoteroOpenLink
-                          url={row.selectUrl}
-                          verdict="open"
-                          label={t('openInZotero')}
-                          t={t}
-                          className={css.actionLink}
-                        />
-                      )}
-                      {row.pdfUrl && (
-                        <ZoteroOpenLink
-                          url={row.pdfUrl}
-                          verdict="open"
-                          label={t('openPdf')}
-                          t={t}
-                          className={css.actionLink}
-                        />
-                      )}
-                    </div>
+                  ))}
+                </div>
+                {omitted > 0 && (
+                  <div className={css.coverageNotice}>
+                    {t('omittedRowsNote', { count: omitted })}
                   </div>
-                ))}
-              </div>
-              {omitted > 0 && (
-                <div className={css.coverageNotice}>{t('omittedRowsNote', { count: omitted })}</div>
-              )}
-            </>
-          )
-        }
-
-        return rawText ? (
-          <RawTextFallback text={rawText} />
-        ) : (
-          <div className={css.coverageNotice}>{t('toolNoResults')}</div>
+                )}
+              </>
+            ) : rawText ? (
+              <RawTextFallback text={rawText} />
+            ) : (
+              <div className={css.coverageNotice}>{t('toolNoResults')}</div>
+            )}
+          </>
         )
       }}
     </ZoteroToolRow>

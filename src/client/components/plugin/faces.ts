@@ -32,7 +32,13 @@ export interface ZoteroBundleQuickConfigFace {
     /** Quick config snapshot bound by the renderer as useZoteroQuickConfig. */
     zoteroQuickConfig: ObservableSnapshot<ConfigFormSnapshot<Record<string, unknown>>>
   }
-  setField: (field: QuickConfigField, value: boolean) => void
+  /**
+   * The write edge, as `ConfigForm.set` spells it: a resolved `false` means
+   * the Host refused the write, and a transport failure rejects. The caller
+   * surfaces both — dropping the promise would leave a toggle that silently
+   * bounces back with no failure anywhere.
+   */
+  setField: (field: QuickConfigField, value: boolean) => Promise<boolean>
 }
 
 /**
@@ -51,8 +57,6 @@ export function zoteroQuickConfigFace(
   return {
     t,
     hooks: { zoteroQuickConfig: form },
-    setField: (field, value) => {
-      void form.set(field, value)
-    },
+    setField: (field, value) => form.set(field, value),
   }
 }

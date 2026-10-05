@@ -1,8 +1,10 @@
 /* The Zotero settings page: page chrome for the Settings panel's content
  * column. The shell owns the column, its padding, and its scroll
- * (`ui-settings-general`'s SettingsRoot `.options`), so this module only
- * stacks the header, the grouped form, and the action row. Tokens are the
- * shared `--dsw-alias-*` set the native settings surfaces use. */
+ * (`ui-settings-general`'s SettingsRoot `.options`); the form chrome —
+ * status lines, failed notice, save button — belongs to the official
+ * `<SettingsForm>`, so this module only stacks the header, the description,
+ * and the grouped body. Tokens are the shared `--dsw-alias-*` set the native
+ * settings surfaces use. */
 
 .page {
   display: flex;
@@ -25,84 +27,10 @@
   line-height: 1.3;
 }
 
-/* Capsule geometry and palette come from `Tag`; this only holds its seat. */
-.pending {
-  flex: none;
-}
-
 /* Matches the native section description (`ModelsSection` `.description`). */
 .description {
   margin: 4px 0 0;
   color: var(--dsw-alias-label-secondary);
   font-size: 14px;
   line-height: 24px;
-}
-
-.status {
-  margin: 12px 0 0;
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.footer {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 16px;
-  padding-top: 12px;
-  border-top: 0.5px solid var(--dsw-alias-border-l2);
-}
-
-.failed {
-  flex: 1;
-  min-width: 0;
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
-  /* Tracks the official `label-error` spelling so a future theme definition
-   * applies automatically; falls back to the defined `state-error-primary`
-   * (and `state-error-secondary` exists as the muted arm) until then. */
-  color: var(--dsw-alias-label-error, var(--dsw-alias-state-error-primary));
-}
-
-.discard,
-.save {
-  appearance: none;
-  border: 1px solid transparent;
-  border-radius: var(--dsw-radius-sm);
-  padding: 5px 14px;
-  font: inherit;
-  font-size: 13px;
-  line-height: 1.5;
-  cursor: pointer;
-}
-
-.discard {
-  border-color: var(--dsw-alias-border-l2);
-  background: none;
-  color: var(--dsw-alias-label-secondary);
-}
-
-.discard:hover:not(:disabled) {
-  color: var(--dsw-alias-label-primary);
-  border-color: var(--dsw-alias-label-dimmed);
-}
-
-.save {
-  background: var(--dsw-alias-label-primary);
-  color: var(--dsw-alias-bg-layer-3);
-}
-
-.discard:disabled,
-.save:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-.discard:focus-visible,
-.save:focus-visible {
-  outline: 2px solid var(--dsw-alias-brand-primary);
-  outline-offset: 1px;
 }

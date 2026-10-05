@@ -17,6 +17,11 @@ import {
 } from '../../../src/client/sources/decoders.ts'
 
 describe('searchMetaOf', () => {
+  it('reads the detailOmitted stamp the byte budget leaves on the meta', () => {
+    expect(searchMetaOf({ returned: 3, detailOmitted: true }).detailOmitted).toBe(true)
+    expect(searchMetaOf({ returned: 3 }).detailOmitted).toBe(false)
+  })
+
   const ROW = {
     ref: 'zotero://user/0/item/ABCDEFGH',
     title: 'Paper',
@@ -588,6 +593,7 @@ describe('attachmentMetaOf', () => {
       contentType: 'text/html',
       location: 'https://e.org',
       ref: null,
+      detailOmitted: false,
     })
   })
 
@@ -641,6 +647,7 @@ describe('exportMetaOf', () => {
       refs: [],
       refsOmitted: 0,
       items: [],
+      detailOmitted: false,
     })
   })
 

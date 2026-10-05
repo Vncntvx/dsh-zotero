@@ -4,11 +4,11 @@
  *
  * The page registers as a `settings.section` contribution (id `zotero`),
  * because this namespace is a whole configuration surface and does not fit a
- * Plugins-tab disclosure card. The section chrome (header, save footer)
- * belongs to {@link ZoteroSettingsSection}; this module owns only the groups
- * and the per-field controls. Value inputs are the harness's own
- * `SettingsValueField`; the toggle is local (upstream ships no boolean
- * atom).
+ * Plugins-tab disclosure card. The form chrome (status lines, failed notice,
+ * save button) belongs to the official `<SettingsForm>`; this module owns
+ * only the groups and the per-field controls. Value inputs are the harness's
+ * own `SettingsValueField`; booleans are the official `Checkbox` inside the
+ * local staged row (badge/reset/hint/risk have no upstream composite).
  * @module dsh-zotero/client/ZoteroSettingsForm
  */
 
@@ -92,7 +92,6 @@ function field(
     return (
       <BooleanField
         key={key}
-        id={`zotero-settings-${key}`}
         label={t(key)}
         hint={t(`${key}Hint`)}
         risk={key === 'writeEnabled' ? writeRiskCopy(t) : undefined}

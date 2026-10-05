@@ -1,18 +1,17 @@
 /**
- * The staged boolean control for the Zotero settings card: a checkbox toggle.
- * Value inputs ride the harness's own `SettingsValueField` (imported from
- * `dsh-client-ui-primitives` at the call site); only the toggle lives here
- * because upstream ships no boolean atom — value/secret fields only. The
- * draft text is the literal 'true'/'false' the boolean spec round-trips;
- * checking the box stages the opposite value, and reset restages the
- * composition layer. Shared badge/reset/hint language matches the official
- * control. An optional risk gate intercepts enabling so sensitive flags
- * (write access) cannot flip on without explicit acknowledgement.
+ * The staged boolean row for the Zotero settings card. The control itself is
+ * the harness's own `Checkbox` (visible and accessible label in one); value
+ * inputs ride the harness's `SettingsValueField` at the call site, and only
+ * the composite row stays local — override badge, reset, hint, and the risk
+ * gate that intercepts enabling so sensitive flags (write access) cannot flip
+ * on without explicit acknowledgement. The draft text is the literal
+ * 'true'/'false' the boolean spec round-trips: checking the box stages the
+ * opposite value, and reset restages the composition layer.
  * @module dsh-zotero/client/fields
  */
 
 import { type ReactNode } from 'react'
-import { RiskConfirmation, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Checkbox, RiskConfirmation, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useRiskGate, type BooleanRiskCopy } from './risk-gate.ts'
 import css from './fields.module.css'
 
@@ -20,9 +19,7 @@ export type { BooleanRiskCopy } from './risk-gate.ts'
 
 /** What the toggle needs: label, staged text, override state, and actions. */
 export interface BooleanFieldProps {
-  /** Stable id associating the label with its control. */
-  id: string
-  /** Visible label. */
+  /** Visible label; the official checkbox renders it as the accessible name. */
   label: string
   /** One-line explanation rendered under the control. */
   hint: string
@@ -45,9 +42,9 @@ export interface BooleanFieldProps {
 }
 
 /**
- * A staged boolean field rendered as a checkbox toggle.
+ * A staged boolean field rendered around the official checkbox.
  * @param props - the field's copy, its staged text, and the edit actions.
- * @returns the labelled toggle control.
+ * @returns the labelled toggle row.
  */
 export function BooleanField(props: BooleanFieldProps): ReactNode {
   const gate = useRiskGate()
@@ -61,14 +58,11 @@ export function BooleanField(props: BooleanFieldProps): ReactNode {
   return (
     <div className={css.field}>
       <div className={css.toggleRow}>
-        <input
-          id={props.id}
-          type="checkbox"
-          className={css.toggle}
+        <Checkbox
           checked={enabled}
           disabled={props.disabled}
-          onChange={(event) => {
-            const next = event.target.checked
+          label={props.label}
+          onChange={(next) => {
             if (next && risk !== undefined && !enabled) {
               gate.request()
               return
@@ -76,9 +70,6 @@ export function BooleanField(props: BooleanFieldProps): ReactNode {
             stage(next)
           }}
         />
-        <label className={css.toggleLabel} htmlFor={props.id}>
-          {props.label}
-        </label>
         {props.overridden ? (
           <span className={css.badges}>
             <Tag tone="neutral">{props.overriddenLabel}</Tag>

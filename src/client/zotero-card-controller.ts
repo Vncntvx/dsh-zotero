@@ -35,7 +35,7 @@ import {
 import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import type { ResolvedConfig } from '../config.js'
+import type { ResolvedConfig } from '../config.ts'
 
 /**
  * The section fields this card edits — the host `Config` surface, all of it,

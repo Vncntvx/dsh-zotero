@@ -42,6 +42,7 @@ export function ExportToolView(props: ExportToolViewProps) {
     items,
     rawText,
     job,
+    detailOmitted,
   } = useMemo(() => {
     const raw = (resultTextOf(block) ?? '').trim()
     const errSummary = errorSummaryOf(block, raw)
@@ -92,6 +93,7 @@ export function ExportToolView(props: ExportToolViewProps) {
       // supplies the completed translator text.
       rawText: job === null ? raw : '',
       job,
+      detailOmitted: exportView?.detailOmitted === true,
     }
   }, [block, t])
 
@@ -180,6 +182,8 @@ export function ExportToolView(props: ExportToolViewProps) {
                 </div>
               </div>
             )}
+
+            {detailOmitted && <div className={css.coverageNotice}>{t('detailOmittedNote')}</div>}
           </>
         )
       }}

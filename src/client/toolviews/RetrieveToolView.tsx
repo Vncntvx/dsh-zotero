@@ -22,52 +22,54 @@ export type RetrieveToolViewProps = PropsRuntime<'tool.call.toolview', 'zotero_r
 export function RetrieveToolView(props: RetrieveToolViewProps) {
   const { toolName, block, useDisclosure, inspect, t } = props
 
-  const { icon, summary, errorSummary, items, coverageLine, omittedNote, rawText } = useMemo(() => {
-    const raw = (resultTextOf(block) ?? '').trim()
-    const errSummary = errorSummaryOf(block, raw)
-    const meta = metaOf(block)
-    const retrieveView = meta !== null ? retrieveMetaOf(meta) : null
+  const { icon, summary, errorSummary, items, coverageLine, omittedNote, detailOmitted, rawText } =
+    useMemo(() => {
+      const raw = (resultTextOf(block) ?? '').trim()
+      const errSummary = errorSummaryOf(block, raw)
+      const meta = metaOf(block)
+      const retrieveView = meta !== null ? retrieveMetaOf(meta) : null
 
-    let sum = ''
-    if ('phase' in block && block.phase === 'start') {
-      sum = t('toolRetrieveRunning')
-    } else if (retrieveView?.items !== null && retrieveView?.items !== undefined) {
-      // `items` is the bounded page the card draws, capped at four regardless of
-      // `maxEvidencePassages`; `count` is the call's own total. Counting rows
-      // would report "4 passages" over a body listing 4 of 20 — the same
-      // bounded-listing mistake the search card had.
-      sum = t('toolSummaryEvidence', { count: retrieveView.count ?? retrieveView.items.length })
-    } else {
-      sum = t('toolTitleRetrieve')
-    }
+      let sum = ''
+      if ('phase' in block && block.phase === 'start') {
+        sum = t('toolRetrieveRunning')
+      } else if (retrieveView?.items !== null && retrieveView?.items !== undefined) {
+        // `items` is the bounded page the card draws, capped at four regardless of
+        // `maxEvidencePassages`; `count` is the call's own total. Counting rows
+        // would report "4 passages" over a body listing 4 of 20 — the same
+        // bounded-listing mistake the search card had.
+        sum = t('toolSummaryEvidence', { count: retrieveView.count ?? retrieveView.items.length })
+      } else {
+        sum = t('toolTitleRetrieve')
+      }
 
-    const covLine = retrieveView?.coverage ? coverageLineOf(retrieveView.coverage, t) : null
-    // Passages the call found but the projection could not carry. The card
-    // cannot show them, and a reader who sees "20 passages" above four rows
-    // deserves to be told the four are all the card kept.
-    const shown = retrieveView?.items?.length ?? 0
-    const omitted =
-      retrieveView?.count != null && retrieveView.count > shown ? retrieveView.count - shown : 0
-    const omittedNote = omitted > 0 ? t('toolOmittedPassages', { count: omitted }) : null
-    const mappedItems = (retrieveView?.items ?? []).map((item) => ({
-      ...item,
-      selectUrl: selectUrlOf(item.sourceRef),
-      pdfUrl: item.attachmentRef ? pdfUrlOf(item.attachmentRef, { page: item.pageLabel }) : null,
-    }))
+      const covLine = retrieveView?.coverage ? coverageLineOf(retrieveView.coverage, t) : null
+      // Passages the call found but the projection could not carry. The card
+      // cannot show them, and a reader who sees "20 passages" above four rows
+      // deserves to be told the four are all the card kept.
+      const shown = retrieveView?.items?.length ?? 0
+      const omitted =
+        retrieveView?.count != null && retrieveView.count > shown ? retrieveView.count - shown : 0
+      const omittedNote = omitted > 0 ? t('toolOmittedPassages', { count: omitted }) : null
+      const mappedItems = (retrieveView?.items ?? []).map((item) => ({
+        ...item,
+        selectUrl: selectUrlOf(item.sourceRef),
+        pdfUrl: item.attachmentRef ? pdfUrlOf(item.attachmentRef, { page: item.pageLabel }) : null,
+      }))
 
-    return {
-      // The icon rides the memo with the rest of the header, so a re-render
-      // that leaves this call's facts alone reuses the same node and the
-      // memo'd `DisclosureRow` above it can skip the work.
-      icon: <IconBrowseOutlineRegular size={14} />,
-      summary: sum,
-      errorSummary: errSummary,
-      items: mappedItems,
-      coverageLine: covLine,
-      omittedNote,
-      rawText: raw,
-    }
-  }, [block, t])
+      return {
+        // The icon rides the memo with the rest of the header, so a re-render
+        // that leaves this call's facts alone reuses the same node and the
+        // memo'd `DisclosureRow` above it can skip the work.
+        icon: <IconBrowseOutlineRegular size={14} />,
+        summary: sum,
+        errorSummary: errSummary,
+        items: mappedItems,
+        coverageLine: covLine,
+        omittedNote,
+        detailOmitted: retrieveView?.detailOmitted === true,
+        rawText: raw,
+      }
+    }, [block, t])
 
   return (
     <ZoteroToolRow
@@ -95,6 +97,8 @@ export function RetrieveToolView(props: RetrieveToolViewProps) {
                 so a card that listed the cap in its summary would leave the
                 reader unable to tell a short answer from a truncated one. */}
             {omittedNote && <div className={css.coverageNotice}>{omittedNote}</div>}
+
+            {detailOmitted && <div className={css.coverageNotice}>{t('detailOmittedNote')}</div>}
 
             {items.length > 0 ? (
               <div className={css.cardList}>

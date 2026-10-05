@@ -258,7 +258,6 @@ export function SourcesTab({ status, t, useSession, useChat, inputActions }: Sou
       key={sessionId ?? 'none'}
       workspace={workspace}
       connection={statusState}
-      sessionId={sessionId ?? 'none'}
       setDraft={setDraft}
       onRefresh={refresh}
       t={t}

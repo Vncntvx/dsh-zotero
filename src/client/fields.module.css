@@ -1,7 +1,8 @@
-/* Zotero toggle control: the boolean row upstream ships no atom for, so it
- * keeps a native checkbox while reusing the official badge/reset/hint
- * language. Value inputs render through the harness's own
- * `SettingsValueField`, which carries its own stylesheet. */
+/* Zotero staged boolean row: the control itself is the harness's own
+ * `Checkbox` (it carries its own stylesheet), and this module keeps only the
+ * row layout with the official badge/reset/hint language. Value inputs render
+ * through the harness's `SettingsValueField`, which carries its own
+ * stylesheet too. */
 
 .field {
   display: flex;
@@ -50,23 +51,4 @@
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.toggleLabel {
-  flex: 1;
-  min-width: 0;
-  color: var(--dsw-alias-label-primary);
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.5;
-  cursor: pointer;
-}
-
-.toggle {
-  width: 16px;
-  height: 16px;
-  margin: 0;
-  flex: none;
-  accent-color: var(--dsw-alias-state-business-primary);
-  cursor: pointer;
 }

@@ -121,7 +121,7 @@ export function ChildrenToolView(props: ChildrenToolViewProps) {
   const isAttachment = toolName === 'zotero_attachment'
   const title = isAttachment ? t('toolTitleAttachment') : t('toolTitleChildren')
 
-  const { icon, ref, summary, errorSummary, attachView, pdfUrl, sections, rawText } =
+  const { icon, ref, summary, errorSummary, attachView, pdfUrl, sections, detailOmitted, rawText } =
     useMemo(() => {
       const args = argsViewOf(block)
       const itemRef = textArg(args, 'ref') ?? ''
@@ -156,6 +156,7 @@ export function ChildrenToolView(props: ChildrenToolViewProps) {
         attachView: attachView,
         pdfUrl: pUrl,
         sections: children?.sections ?? [],
+        detailOmitted: (attachView?.detailOmitted ?? children?.detailOmitted) === true,
         rawText: raw,
       }
     }, [block, isAttachment, t, title])
@@ -180,6 +181,7 @@ export function ChildrenToolView(props: ChildrenToolViewProps) {
 
         return (
           <>
+            {detailOmitted && <div className={css.coverageNotice}>{t('detailOmittedNote')}</div>}
             {attachView && (
               <div className={css.itemCard}>
                 <div className={css.itemHeader}>

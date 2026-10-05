@@ -130,4 +130,40 @@ describe('ZoteroBundleQuickConfig', () => {
     expect(form.writes).toEqual([{ op: 'set', field: 'writeEnabled', value: false }])
     expect(screen.queryByRole('dialog')).toBeNull()
   })
+
+  it('reports a refused write instead of bouncing the switch silently', async () => {
+    const form = fakeScope({ value: { webEnabled: true }, rejectWrites: true })
+    render(<Harness face={zoteroQuickConfigFace(form, t)} />)
+
+    fireEvent.click(screen.getAllByRole('switch')[0])
+    await screen.findByText(t('saveFailed'))
+    // The mirror never landed the write, so the switch stays on its base value.
+    expect(screen.getAllByRole('switch')[0].getAttribute('aria-checked')).toBe('true')
+  })
+
+  it('reports a transport failure instead of leaking an unhandled rejection', async () => {
+    const form = fakeScope({ value: { webEnabled: true } })
+    form.set = async () => {
+      throw new Error('transport down')
+    }
+    render(<Harness face={zoteroQuickConfigFace(form, t)} />)
+
+    fireEvent.click(screen.getAllByRole('switch')[0])
+    await screen.findByText(t('saveFailed'))
+  })
+
+  it('clears the failure note once a write lands', async () => {
+    const form = fakeScope({ value: { webEnabled: true } })
+    const realSet = form.set.bind(form)
+    let refused = true
+    form.set = async (field, value) => (refused ? false : realSet(field, value))
+    render(<Harness face={zoteroQuickConfigFace(form, t)} />)
+
+    fireEvent.click(screen.getAllByRole('switch')[0])
+    await screen.findByText(t('saveFailed'))
+    refused = false
+    fireEvent.click(screen.getAllByRole('switch')[0])
+    await vi.waitFor(() => expect(screen.queryByText(t('saveFailed'))).toBeNull())
+    expect(form.writes).toEqual([{ op: 'set', field: 'webEnabled', value: false }])
+  })
 })

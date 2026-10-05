@@ -68,6 +68,7 @@ export function ItemToolView(props: ItemToolViewProps) {
     childCounts,
     notePreviews,
     annotationPreviews,
+    detailOmitted,
     rawText,
   } = useMemo(() => {
     const args = argsViewOf(block)
@@ -147,6 +148,7 @@ export function ItemToolView(props: ItemToolViewProps) {
         // exist" and "notes were not requested" are different facts.
         count === null ? [] : [{ key, label, count, shown }],
       ),
+      detailOmitted: view?.detailOmitted === true,
       notePreviews: notesPreviews.map((preview, index) => previewView(preview, index, 'note')),
       annotationPreviews: annotationPreviews.map((preview, index) =>
         previewView(preview, index, 'annotation'),
@@ -272,6 +274,8 @@ export function ItemToolView(props: ItemToolViewProps) {
             {previewSection(t(CHILD_KIND_LABEL.annotation), annotationPreviews)}
 
             {rawText && <RawTextFallback text={rawText} />}
+
+            {detailOmitted && <div className={css.coverageNotice}>{t('detailOmittedNote')}</div>}
           </>
         )
       }}

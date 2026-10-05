@@ -38,8 +38,8 @@ export interface OperationFacts {
  */
 export type EvidenceMatchStatus = 'verified' | 'unknown' | 'mismatch'
 
-import type { SupportedLocalLibrary } from '../../types.js'
-export type { SupportedLocalLibrary } from '../../types.js'
+import type { SupportedLocalLibrary } from '../../types.ts'
+export type { SupportedLocalLibrary } from '../../types.ts'
 
 /** The normalized search scope, free of raw tool arguments. */
 export type SourceScope =

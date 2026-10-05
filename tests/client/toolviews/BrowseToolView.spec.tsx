@@ -230,6 +230,7 @@ describe('BrowseToolView (zotero_browse & zotero_changes)', () => {
         mockT('toolSummaryBrowsePage', { kind: 'collections', returned: 20, total: 900 }),
       ),
     ).toBeTruthy()
+    expect(screen.getByText(mockT('detailOmittedNote'))).toBeTruthy()
     expect(container.querySelector('pre')?.textContent).toBe('collections: 20 of 900')
   })
 

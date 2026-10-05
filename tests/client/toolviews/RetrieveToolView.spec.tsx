@@ -216,7 +216,7 @@ describe('RetrieveToolView', () => {
       meta: {
         items: [
           {
-            source: 'pdf',
+            source: 'fulltext',
             sourceRef: 'zotero://user/0/item/ABCD1234',
             preview: 'Crucial evidence excerpt from page 5.',
             previewTruncated: false,
@@ -268,7 +268,7 @@ describe('RetrieveToolView', () => {
       meta: {
         items: [
           {
-            source: 'pdf',
+            source: 'fulltext',
             sourceRef: 'zotero://user/0/item/ABCD1234',
             preview: 'Long passage beginning here...',
             previewTruncated: true,
@@ -287,6 +287,27 @@ describe('RetrieveToolView', () => {
     })
 
     expect(screen.getByText(new RegExp(zh.truncatedPreview))).toBeTruthy()
+  })
+
+  it('reports when the byte budget dropped the meta detail', () => {
+    const block = settled({
+      call: {
+        name: 'zotero_retrieve',
+        argsRaw: JSON.stringify({ ref: 'zotero://user/0/item/ABCD1234' }),
+      },
+      meta: { items: [], count: 2, detailOmitted: true },
+    })
+
+    renderView({
+      callId: 'c1',
+      toolName: 'zotero_retrieve',
+      phase: 'result',
+      block,
+      useDisclosure: mockUseDisclosure(true),
+      t: mockT,
+    })
+
+    expect(screen.getByText(mockT('detailOmittedNote'))).toBeTruthy()
   })
 
   it('renders index coverage notice when coverage is present in meta', () => {

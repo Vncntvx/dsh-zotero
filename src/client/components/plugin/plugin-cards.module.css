@@ -71,6 +71,15 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+/* The failed-write line under the toggles; same error spelling as the
+ * settings page footer (`ZoteroSettingsSection.module.css` `.failed`). */
+.quickConfigFailed {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-error, var(--dsw-alias-state-error-primary));
+}
+
 .section {
   display: flex;
   flex-direction: column;

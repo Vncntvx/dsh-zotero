@@ -270,6 +270,33 @@ describe('SearchToolView', () => {
     expect(screen.getByText('Item 1: Fallback Raw Title')).toBeTruthy()
   })
 
+  it('renders detail omitted notice when presentation meta budget stripped the rows', () => {
+    const block = settled({
+      call: {
+        name: 'zotero_search',
+        argsRaw: JSON.stringify({ query: 'heavy' }),
+      },
+      content: [{ type: 'text', text: 'Item 1: Fallback Raw Title' }],
+      meta: {
+        returned: 20,
+        total: 50,
+        detailOmitted: true,
+      },
+    })
+
+    renderView({
+      callId: 'c1',
+      toolName: 'zotero_search',
+      phase: 'result',
+      block,
+      useDisclosure: mockUseDisclosure(true),
+      t: mockT,
+    })
+
+    expect(screen.getByText(mockT('detailOmittedNote'))).toBeTruthy()
+    expect(screen.getByText('Item 1: Fallback Raw Title')).toBeTruthy()
+  })
+
   it('renders error state when tool call failed', () => {
     const block = settled({
       call: {

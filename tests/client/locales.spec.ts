@@ -117,6 +117,17 @@ describe('locale bundles', () => {
       'toolChildCountTotal',
       'toolChildCountPartial',
       'toolChangesListedOf',
+      // The settings page rides the official `<SettingsForm>` chrome: its
+      // unmount-discard replaced the explicit discard button, and the dirty
+      // tag had no official counterpart (the save button's disabled state
+      // carries the same fact).
+      'discard',
+      'unsaved',
+      // Badge copy with no rendering site: every attachment row derives its
+      // labels from the row's own fields (`evidence-labels.ts`).
+      'bestAttachmentLabel',
+      'localFile',
+      'linkedUrl',
     ]
     for (const key of retired) {
       expect(key in zh, key).toBe(false)

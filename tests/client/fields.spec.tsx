@@ -23,7 +23,6 @@ const t = mockT
 afterEach(cleanup)
 
 const base = {
-  id: 'field-test',
   label: 'Test toggle',
   hint: 'A hint.',
   text: 'true',

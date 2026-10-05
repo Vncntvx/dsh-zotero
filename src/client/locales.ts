@@ -15,8 +15,6 @@ export type ZoteroLocaleKey =
   | 'overridden'
   | 'reset'
   | 'readOnly'
-  | 'discard'
-  | 'unsaved'
   | 'save'
   | 'saving'
   | 'saveFailed'
@@ -120,6 +118,7 @@ export type ZoteroLocaleKey =
   | 'filterScrollLeft'
   | 'filterScrollRight'
   | 'omittedRowsNote'
+  | 'detailOmittedNote'
   | 'noSources'
   | 'searchFrom'
   | 'searchFromBrowse'
@@ -131,9 +130,6 @@ export type ZoteroLocaleKey =
   | 'stoppedBadge'
   | 'badgePdf'
   | 'issuesBadge'
-  | 'bestAttachmentLabel'
-  | 'localFile'
-  | 'linkedUrl'
   | 'copyRef'
   | 'copyExport'
   | 'copyCite'
@@ -300,8 +296,6 @@ export const en: Record<ZoteroLocaleKey, string> = {
   overridden: 'Overridden',
   reset: 'Reset to default',
   readOnly: 'This deployment stores settings read-only.',
-  discard: 'Discard changes',
-  unsaved: 'Unsaved',
   save: 'Save',
   saving: 'Saving…',
   saveFailed: 'The deployment did not accept these values; they were left for you to correct.',
@@ -499,6 +493,8 @@ export const en: Record<ZoteroLocaleKey, string> = {
   filterScrollLeft: 'Scroll filters left',
   filterScrollRight: 'Scroll filters right',
   omittedRowsNote: '{count} more search results are not listed individually.',
+  detailOmittedNote:
+    'The card outgrew its byte budget, so its detail rows were omitted; the complete data stays in the result.',
   noSources: 'No Zotero papers in this session yet.',
   searchFrom: 'Search "{query}"',
   searchFromBrowse: 'Search without a query',
@@ -510,9 +506,6 @@ export const en: Record<ZoteroLocaleKey, string> = {
   stoppedBadge: '{count} stopped',
   badgePdf: 'PDF',
   issuesBadge: 'Issues',
-  bestAttachmentLabel: 'Best attachment',
-  localFile: 'Local file',
-  linkedUrl: 'Linked URL',
   copyRef: 'Copy ref',
   copyExport: 'Copy',
   copyCite: '\\cite{…}',
@@ -676,8 +669,6 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   overridden: '已覆盖',
   reset: '恢复默认',
   readOnly: '本部署的设置为只读。',
-  discard: '放弃修改',
-  unsaved: '未保存',
   save: '保存',
   saving: '保存中…',
   saveFailed: '本部署没有接受这些值，已保留供你修改。',
@@ -862,6 +853,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   filterScrollLeft: '向左滚动筛选',
   filterScrollRight: '向右滚动筛选',
   omittedRowsNote: '另有 {count} 条检索结果未逐条列出。',
+  detailOmittedNote: '结果超出卡片的字节预算，明细已省略；完整数据保留在原始结果中。',
   noSources: '本会话还没有 Zotero 文献。',
   searchFrom: '搜索 "{query}"',
   searchFromBrowse: '浏览检索',
@@ -873,9 +865,6 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   stoppedBadge: '已停止 {count}',
   badgePdf: 'PDF',
   issuesBadge: '异常',
-  bestAttachmentLabel: '最佳附件',
-  localFile: '本地文件',
-  linkedUrl: '链接地址',
   copyRef: '复制 ref',
   copyExport: '复制',
   copyCite: '\\cite{…}',

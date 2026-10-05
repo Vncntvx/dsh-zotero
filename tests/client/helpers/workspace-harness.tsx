@@ -41,7 +41,6 @@ export function mountView(
     <ZoteroWorkspaceView
       workspace={workspace}
       connection={connection}
-      sessionId="s1"
       setDraft={setDraft}
       onRefresh={onRefresh}
       t={mockT}

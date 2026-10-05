@@ -13,6 +13,7 @@
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { ToolArgs, ToolCallBlock } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { EvidenceItem, EvidenceField } from '../evidence-item.ts'
+import { isEvidenceSource } from '../evidence-item.ts'
 import { boolField, isRecord, stringField } from '../json.ts'
 import { REF_IN_TEXT_PATTERN } from '../ref-grammar.ts'
 
@@ -149,12 +150,16 @@ export function evidenceItemsOf(meta: Record<string, unknown>): EvidenceItem[] |
     const sourceRef = stringField(item, 'sourceRef')
     const preview = stringField(item, 'preview')
     if (source === undefined || sourceRef === undefined || preview === undefined) return null
+    // The source must be the wire's own vocabulary: an unchecked cast would
+    // let an unknown string through to the labels, which would misreport the
+    // passage's provenance instead of rejecting the malformed meta.
+    if (!isEvidenceSource(source)) return null
     const previewTruncated = boolField(item, 'previewTruncated') === true
     const pageLabel = stringField(item, 'pageLabel')
     const attachmentRef = stringField(item, 'attachmentRef')
     const matchedFields = matchedFieldsOf(item['matchedFields'])
     rows.push({
-      source: source as EvidenceItem['source'],
+      source,
       sourceRef,
       preview,
       previewTruncated,

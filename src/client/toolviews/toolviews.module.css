@@ -334,7 +334,7 @@ div[data-tool]:hover .summarySuffix {
   justify-content: space-between;
   padding: 6px 10px;
   background: var(--dsw-alias-bg-layer-1);
-  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
   min-height: 28px;
 }
 
