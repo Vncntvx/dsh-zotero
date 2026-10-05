@@ -20,7 +20,7 @@
 import { LOCAL_PROVIDER_ID, ZOTERO_SERVER_ID_HEADER, ZOTERO_VERSION_HEADER } from '../constants.js'
 import { PERSONAL_LIBRARY } from '../refs.js'
 import { errorChain } from '@deepseek-ai/dsh-llm'
-import { ZoteroError } from '../errors.js'
+import { ZoteroError, ZOTERO_CAPABILITY_UNAVAILABLE } from '../errors.js'
 import { resolveCollectionsMixed, ScopeDirectory } from './scope-directory.js'
 import type { ZoteroHttpClient } from '../http-client.js'
 import type { LocalApiLimits } from './limits.js'
@@ -42,7 +42,6 @@ import {
   updateItemCollections as updateItemCollectionsDomain,
   updateItemTags as updateItemTagsDomain,
   type WriteDomainDeps,
-  WRITE_CAPABILITY_UNAVAILABLE_CODE,
   writeCapabilityUnavailableMessage,
 } from './write-domain.js'
 import type { WriteAuthorizer } from '../write-auth.js'
@@ -137,7 +136,7 @@ export class LocalApiProvider implements ZoteroProvider {
     if (this.writer === undefined || this.authorizer === undefined) {
       throw new ZoteroError(
         writeCapabilityUnavailableMessage(this.id),
-        WRITE_CAPABILITY_UNAVAILABLE_CODE,
+        ZOTERO_CAPABILITY_UNAVAILABLE,
       )
     }
     return {

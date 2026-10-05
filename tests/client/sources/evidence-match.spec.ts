@@ -1,14 +1,14 @@
 /**
- * Item identity and provenance rules of the session source model.
- * @module tests/client/sources/provenance
+ * Item identity and instance match rules of the session source model.
+ * @module tests/client/sources/evidence-match
  */
 
 import { describe, expect, it } from 'vitest'
 import {
+  evidenceMatchOf,
   normalizeRefKey,
-  provenanceOf,
   serverIdOf,
-} from '../../../src/client/sources/provenance.ts'
+} from '../../../src/client/sources/evidence-match.ts'
 
 describe('normalizeRefKey', () => {
   it('strips the query qualifier and lowercases', () => {
@@ -40,20 +40,20 @@ describe('serverIdOf', () => {
   })
 })
 
-describe('provenanceOf', () => {
+describe('evidenceMatchOf', () => {
   it('is unknown without qualifiers or a current instance', () => {
-    expect(provenanceOf(new Set(), 'S1')).toBe('unknown')
-    expect(provenanceOf(new Set(['S1']), undefined)).toBe('unknown')
-    expect(provenanceOf(new Set(), undefined)).toBe('unknown')
+    expect(evidenceMatchOf(new Set(), 'S1')).toBe('unknown')
+    expect(evidenceMatchOf(new Set(['S1']), undefined)).toBe('unknown')
+    expect(evidenceMatchOf(new Set(), undefined)).toBe('unknown')
   })
 
   it('verifies when every qualifier matches the current instance', () => {
-    expect(provenanceOf(new Set(['S1']), 'S1')).toBe('verified')
-    expect(provenanceOf(new Set(['S1', 'S1']), 'S1')).toBe('verified')
+    expect(evidenceMatchOf(new Set(['S1']), 'S1')).toBe('verified')
+    expect(evidenceMatchOf(new Set(['S1', 'S1']), 'S1')).toBe('verified')
   })
 
   it('fails closed on any mismatching qualifier', () => {
-    expect(provenanceOf(new Set(['S2']), 'S1')).toBe('mismatch')
-    expect(provenanceOf(new Set(['S1', 'S2']), 'S1')).toBe('mismatch')
+    expect(evidenceMatchOf(new Set(['S2']), 'S1')).toBe('mismatch')
+    expect(evidenceMatchOf(new Set(['S1', 'S2']), 'S1')).toBe('mismatch')
   })
 })

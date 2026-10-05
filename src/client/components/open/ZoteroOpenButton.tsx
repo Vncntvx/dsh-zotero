@@ -24,7 +24,7 @@ export interface ZoteroOpenButtonProps {
   readonly className?: string
 }
 
-/** One provenance-guarded action button: leading destination glyph per the
+/** One instance-guarded action button: leading destination glyph per the
  * harness clickable-link spec (produced-file chips lead with `IconLinkOutlineMedium` even
  * on button geometry). External `http(s)` targets open in a new tab with the
  * safe rel; `zotero://` protocol links hand to the OS handler in place. */

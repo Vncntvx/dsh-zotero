@@ -36,7 +36,7 @@ export interface OperationFacts {
  * qualified ref belongs to a different instance, `unknown` when nothing
  * carries a qualifier or the current instance is unknown (offline).
  */
-export type ItemProvenance = 'verified' | 'unknown' | 'mismatch'
+export type EvidenceMatchStatus = 'verified' | 'unknown' | 'mismatch'
 
 import type { SupportedLocalLibrary } from '../../types.js'
 export type { SupportedLocalLibrary } from '../../types.js'
@@ -53,7 +53,7 @@ export type SourceScope =
  * mode, scope, and filter fields are the episode's own arguments — captured
  * at episode creation, never re-parsed from an identity string.
  */
-export interface SearchProvenance {
+export interface SearchOccurrence {
   readonly callId: string
   readonly query?: string
   /** The search's mode argument: metadata-only or full text. */
@@ -194,14 +194,14 @@ export interface SourceItem {
   readonly key: string
   /** First-seen full ref, the display and copy form. */
   readonly ref: string
-  readonly provenance: ItemProvenance
+  readonly evidenceMatch: EvidenceMatchStatus
   readonly title?: string
   readonly creators?: string
   readonly year?: number
   readonly venue?: string
   readonly facts: SourceFacts
   readonly operations: OperationFacts
-  readonly searches: readonly SearchProvenance[]
+  readonly searches: readonly SearchOccurrence[]
   readonly evidence: readonly EvidencePassage[]
   /** Zotero's attachment selection (search/get facts); never a resolved location. */
   readonly bestAttachment?: AttachmentHint

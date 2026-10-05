@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  isSchemaComplete,
-  readResolvedConfig,
-  resolveConfig,
-  toLiveEntry,
-} from '../../src/config.js'
+import { readResolvedConfig, resolveConfig, toLiveEntry } from '../../src/config.js'
 
 describe('resolveConfig', () => {
   it('applies schema defaults for an empty config', () => {
@@ -184,13 +179,12 @@ describe('toLiveEntry', () => {
   it('keeps a schema-complete entry so volatile commits stay live', () => {
     const complete = resolveConfig({ timeoutMs: 9 })
     expect(toLiveEntry(complete)).toBe(complete)
-    expect(isSchemaComplete(complete)).toBe(true)
   })
 
   it('freezes partial Options into a complete snapshot', () => {
     const entry = toLiveEntry({ timeoutMs: 9 })
-    expect(isSchemaComplete(entry)).toBe(true)
     expect(readResolvedConfig(entry).timeoutMs).toBe(9)
     expect(readResolvedConfig(entry).maxSearchResults).toBe(20)
+    expect(toLiveEntry(entry)).toBe(entry)
   })
 })

@@ -146,13 +146,13 @@ zotero_attachment(ref="zotero://user/0/item/ABC123")
 
 ### 参数
 
-| 参数                | 类型     | 默认值     | 说明                                                                                 |
-| ------------------- | -------- | ---------- | ------------------------------------------------------------------------------------ |
-| `refs`              | string[] | —          | 条目 ref 列表（必填，单次受 `maxExportRefs` 限制，默认 50）                          |
-| `format`            | string   | —          | 导出格式：`citation`、`bibliography`、`bibtex`、`biblatex`、`ris`、`csljson`（必填） |
-| `style`             | string   | 配置默认值 | CSL 样式标识（仅用于 citation 和 bibliography）                                      |
-| `locale`            | string   | `"en-US"`  | CSL 语言环境（仅用于 citation 和 bibliography）                                      |
-| `run_in_background` | boolean  | `false`    | 是否作为后台任务启动（由 Harness `ctx.jobs` 管理）                                   |
+| 参数                | 类型     | 默认值     | 说明                                                                                                                               |
+| ------------------- | -------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `refs`              | string[] | —          | 条目 ref 列表（必填，单次受 `maxExportRefs` 限制，默认 50）                                                                        |
+| `format`            | string   | —          | 导出格式：`citation`、`bibliography`、`bibtex`、`biblatex`、`ris`、`csljson`（必填）                                               |
+| `style`             | string   | 配置默认值 | CSL 样式标识（仅用于 citation 和 bibliography）                                                                                    |
+| `locale`            | string   | `"en-US"`  | CSL 语言环境（仅用于 citation 和 bibliography）                                                                                    |
+| `run_in_background` | boolean  | `false`    | 是否作为后台任务启动（由 Harness `ctx.jobs` 管理；仅在配置 `enableRunInBackground=true` 且宿主挂载 `jobs` 服务时动态暴露于参数中） |
 
 ### 输出
 
@@ -255,12 +255,12 @@ zotero_children(ref="zotero://user/0/item/ABC123", include=["annotations"])
 
 ### 参数
 
-| 参数                | 类型     | 默认值                  | 说明                                                                     |
-| ------------------- | -------- | ----------------------- | ------------------------------------------------------------------------ |
-| `library`           | object   | `{type: "user", id: 0}` | 目标库标识                                                               |
-| `since`             | object   | —                       | 起始游标 `{serverId, library, version}`；省略则获取初始基线              |
-| `include`           | string[] | 除 fulltext 外全部      | 监测范围：`items`、`collections`、`savedSearches`、`fulltext`、`deleted` |
-| `run_in_background` | boolean  | `false`                 | 是否作为后台任务启动                                                     |
+| 参数                | 类型     | 默认值                  | 说明                                                                                                                               |
+| ------------------- | -------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `library`           | object   | `{type: "user", id: 0}` | 目标库标识                                                                                                                         |
+| `since`             | object   | —                       | 起始游标 `{serverId, library, version}`；省略则获取初始基线                                                                        |
+| `include`           | string[] | 除 fulltext 外全部      | 监测范围：`items`、`collections`、`savedSearches`、`fulltext`、`deleted`                                                           |
+| `run_in_background` | boolean  | `false`                 | 是否作为后台任务启动（由 Harness `ctx.jobs` 管理；仅在配置 `enableRunInBackground=true` 且宿主挂载 `jobs` 服务时动态暴露于参数中） |
 
 ### 输出
 

@@ -23,7 +23,7 @@ export interface BlockedOpenActionProps {
 
 /** One blocked open action: disabled but focusable, with its reason exposed. */
 export function BlockedOpenAction({ label, t, className }: BlockedOpenActionProps) {
-  const reason = t('provenanceMismatch')
+  const reason = t('databaseMismatch')
   const reasonId = useId()
   return (
     <>

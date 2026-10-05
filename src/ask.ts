@@ -274,8 +274,8 @@ export async function withConnectivityAsk<T>(
     const questions = ctx.get('userQuestions')
     if (questions === undefined) throw error
     if (exec.agent !== undefined) {
-      const agents = ctx.get('agents') as { roots(): readonly unknown[] } | undefined
-      if (agents !== undefined && !agents.roots().includes(exec.agent)) {
+      const agents = ctx.get('agents') as { roots?(): readonly unknown[] } | undefined
+      if (typeof agents?.roots === 'function' && !agents.roots().includes(exec.agent)) {
         throw error
       }
     }

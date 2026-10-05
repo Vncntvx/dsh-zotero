@@ -123,7 +123,7 @@ export type ZoteroLocaleKey =
   | 'noSources'
   | 'searchFrom'
   | 'searchFromBrowse'
-  | 'provenanceMismatch'
+  | 'databaseMismatch'
   | 'evidenceBadge'
   | 'exportBadge'
   | 'failedBadge'
@@ -502,7 +502,7 @@ export const en: Record<ZoteroLocaleKey, string> = {
   noSources: 'No Zotero papers in this session yet.',
   searchFrom: 'Search "{query}"',
   searchFromBrowse: 'Search without a query',
-  provenanceMismatch: 'Belongs to a different Zotero database',
+  databaseMismatch: 'Belongs to a different Zotero database',
   evidenceBadge: '{count} passages',
   exportBadge: '{count} exports',
   failedBadge: '{count} failed',
@@ -865,7 +865,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   noSources: '本会话还没有 Zotero 文献。',
   searchFrom: '搜索 "{query}"',
   searchFromBrowse: '浏览检索',
-  provenanceMismatch: '属于另一个 Zotero 数据库',
+  databaseMismatch: '属于另一个 Zotero 数据库',
   evidenceBadge: '片段 {count}',
   exportBadge: '导出 {count}',
   failedBadge: '失败 {count}',

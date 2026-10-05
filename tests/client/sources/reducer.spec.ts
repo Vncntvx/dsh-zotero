@@ -1,7 +1,7 @@
 /**
  * The session source reducer's item-assembly rules: search episode folding,
  * the stable union of search rows and directly referenced items, the
- * provenance verdict per instance, and the degradation of unusable input. The
+ * evidence match verdict per instance, and the degradation of unusable input. The
  * reducer's per-call output rules live in `reducer-evidence.spec.ts` (the
  * evidence a retrieve folds in) and `reducer-outputs.spec.ts` (export
  * artifacts, attachment resolution and hint precedence, operation counters).
@@ -37,11 +37,11 @@ function searchMetaOf(
 }
 
 /**
- * The expected SearchProvenance of one episode: defaults mirror the reducer's
+ * The expected SearchOccurrence of one episode: defaults mirror the reducer's
  * argument normalization, so an episode created from plain `query` args
  * carries the library scope and empty filters.
  */
-function provenanceOf(
+function searchOccurrenceOf(
   overrides: Partial<{
     callId: string
     query?: string
@@ -69,7 +69,7 @@ function provenanceOf(
 }
 
 describe('buildSourceWorkspace', () => {
-  describe('search episodes and provenance', () => {
+  describe('search episodes and search records', () => {
     it('falls back to the args-derived library when the meta resolves none', () => {
       // Without a resolved library in the meta, the episode's library comes
       // from the args parse: an unparseable shape degrades to the default
@@ -85,15 +85,15 @@ describe('buildSourceWorkspace', () => {
         ),
       ])
       expect(invalid.sources).toHaveLength(1)
-      const invalidProvenance = invalid.sources[0]?.searches[0] as unknown as Record<
+      const invalidOccurrence = invalid.sources[0]?.searches[0] as unknown as Record<
         string,
         unknown
       >
-      expect(invalidProvenance.scope).toEqual({
+      expect(invalidOccurrence.scope).toEqual({
         kind: 'library',
         library: { type: 'user', id: 0 },
       })
-      expect(invalidProvenance).not.toHaveProperty('library')
+      expect(invalidOccurrence).not.toHaveProperty('library')
 
       const group = buildSourceWorkspace([
         block(
@@ -105,8 +105,8 @@ describe('buildSourceWorkspace', () => {
         ),
       ])
       expect(group.sources).toHaveLength(1)
-      const groupProvenance = group.sources[0]?.searches[0] as unknown as Record<string, unknown>
-      expect(groupProvenance.library).toEqual({ type: 'group', id: 5 })
+      const groupOccurrence = group.sources[0]?.searches[0] as unknown as Record<string, unknown>
+      expect(groupOccurrence.library).toEqual({ type: 'group', id: 5 })
     })
 
     it('keeps the hits of every distinct query', () => {
@@ -129,8 +129,8 @@ describe('buildSourceWorkspace', () => {
       expect(workspace.sources).toHaveLength(2)
       const first = workspace.sources.find((item) => item.key.includes('a1'))
       const second = workspace.sources.find((item) => item.key.includes('b1'))
-      expect(first?.searches).toEqual([provenanceOf({ callId: 's1', query: 'attention' })])
-      expect(second?.searches).toEqual([provenanceOf({ callId: 's2', query: 'diffusion' })])
+      expect(first?.searches).toEqual([searchOccurrenceOf({ callId: 's1', query: 'attention' })])
+      expect(second?.searches).toEqual([searchOccurrenceOf({ callId: 's2', query: 'diffusion' })])
     })
 
     it('folds pagination continuations into one logical search', () => {
@@ -152,7 +152,7 @@ describe('buildSourceWorkspace', () => {
       ])
       expect(workspace.sources).toHaveLength(3)
       for (const source of workspace.sources) {
-        expect(source.searches).toEqual([provenanceOf({ callId: 's1', query: 'attention' })])
+        expect(source.searches).toEqual([searchOccurrenceOf({ callId: 's1', query: 'attention' })])
       }
     })
 
@@ -222,18 +222,18 @@ describe('buildSourceWorkspace', () => {
       ])
       expect(workspace.sources).toHaveLength(6)
       expect(workspace.sources[0]!.searches).toEqual([
-        provenanceOf({ callId: 's1', query: 'attention' }),
+        searchOccurrenceOf({ callId: 's1', query: 'attention' }),
       ])
       expect(workspace.sources[1]!.searches).toEqual([
-        provenanceOf({
+        searchOccurrenceOf({
           callId: 's2',
           mode: 'everything',
           scope: { kind: 'savedSearch', name: 'Inbox' },
         }),
       ])
-      expect(workspace.sources[4]!.searches).toEqual([provenanceOf({ callId: 's5' })])
+      expect(workspace.sources[4]!.searches).toEqual([searchOccurrenceOf({ callId: 's5' })])
       expect(workspace.sources[5]!.searches).toEqual([
-        provenanceOf({
+        searchOccurrenceOf({
           callId: 's6',
           query: 'attention',
           scope: { kind: 'collection', ref: 'zotero://user/0/collection/C1' },
@@ -382,7 +382,7 @@ describe('buildSourceWorkspace', () => {
       ])
       expect(workspace.sources).toHaveLength(2)
       expect(workspace.sources[0]!.searches).toEqual([
-        provenanceOf({
+        searchOccurrenceOf({
           callId: 's1',
           query: 'transformer',
           itemTypes: ['journalArticle'],
@@ -390,7 +390,7 @@ describe('buildSourceWorkspace', () => {
         }),
       ])
       expect(workspace.sources[1]!.searches).toEqual([
-        provenanceOf({
+        searchOccurrenceOf({
           callId: 's2',
           query: 'transformer',
           itemTypes: ['journalArticle'],
@@ -516,10 +516,10 @@ describe('buildSourceWorkspace', () => {
       ])
       expect(workspace.sources).toHaveLength(2)
       expect(workspace.sources[0]!.searches).toEqual([
-        provenanceOf({ callId: 's1', query: 'x', tags: ['ml', 'review'] }),
+        searchOccurrenceOf({ callId: 's1', query: 'x', tags: ['ml', 'review'] }),
       ])
       expect(workspace.sources[1]!.searches).toEqual([
-        provenanceOf({ callId: 's1', query: 'x', tags: ['ml', 'review'] }),
+        searchOccurrenceOf({ callId: 's1', query: 'x', tags: ['ml', 'review'] }),
       ])
     })
   })
@@ -621,7 +621,7 @@ describe('buildSourceWorkspace', () => {
     })
   })
 
-  describe('provenance against the current instance', () => {
+  describe('instance match against the current instance', () => {
     it('marks one mismatch source for refs of different instances', () => {
       const blocks = [
         block(
@@ -635,7 +635,7 @@ describe('buildSourceWorkspace', () => {
       ]
       const mismatch = buildSourceWorkspace(blocks, { currentServerId: 'S1' })
       expect(mismatch.sources).toHaveLength(1)
-      expect(mismatch.sources[0]!.provenance).toBe('mismatch')
+      expect(mismatch.sources[0]!.evidenceMatch).toBe('mismatch')
 
       const matched = buildSourceWorkspace(
         [
@@ -649,7 +649,7 @@ describe('buildSourceWorkspace', () => {
         ],
         { currentServerId: 'S1' },
       )
-      expect(matched.sources[0]!.provenance).toBe('verified')
+      expect(matched.sources[0]!.evidenceMatch).toBe('verified')
     })
 
     it('stays unknown without qualifiers or a current instance', () => {
@@ -662,10 +662,10 @@ describe('buildSourceWorkspace', () => {
           { meta: searchMetaOf([{ ref: REF('A1') }]) },
         ),
       ]
-      expect(buildSourceWorkspace(blocks, { currentServerId: 'S1' }).sources[0]!.provenance).toBe(
-        'unknown',
-      )
-      expect(buildSourceWorkspace(blocks, {}).sources[0]!.provenance).toBe('unknown')
+      expect(
+        buildSourceWorkspace(blocks, { currentServerId: 'S1' }).sources[0]!.evidenceMatch,
+      ).toBe('unknown')
+      expect(buildSourceWorkspace(blocks, {}).sources[0]!.evidenceMatch).toBe('unknown')
     })
   })
 

@@ -58,7 +58,7 @@ export function SourceListItem({
       role="option"
       aria-selected={selected}
       tabIndex={focused ? 0 : -1}
-      data-provenance={item.provenance}
+      data-evidence-match={item.evidenceMatch}
       className={clsx(css.listItem, selected && css.listItemSelected)}
       onClick={onSelect}
       onKeyDown={(event) => {

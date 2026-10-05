@@ -86,66 +86,67 @@ function buildRequest(args: DeleteCollectionArgs): ZoteroDeleteCollectionRequest
  * browse. Best-effort — an unresolvable name leaves its count unknown and the
  * domain reports the miss after approval.
  */
+async function fetchItemPreview(
+  service: ZoteroService,
+  refOrName: string,
+): Promise<{ total?: number; ref?: string }> {
+  try {
+    const searched = await service.search(
+      {
+        mode: 'metadata',
+        scope: { kind: 'collection', refOrName },
+        sort: 'dateModified',
+        direction: 'desc',
+        offset: 0,
+        limit: 1,
+      },
+      undefined,
+    )
+    return {
+      total: searched.total,
+      ref: searched.scope.kind === 'collection' ? searched.scope.ref : undefined,
+    }
+  } catch {
+    return {}
+  }
+}
+
+async function fetchChildPreview(
+  service: ZoteroService,
+  parentRef: string,
+): Promise<number | undefined> {
+  try {
+    const browsed = await service.browse(
+      { kind: 'collections', parentRef, offset: 0, limit: 1 },
+      undefined,
+    )
+    return browsed.total
+  } catch {
+    return undefined
+  }
+}
+
 async function previewDeleteCollection(
   service: ZoteroService,
   collection: string,
 ): Promise<{ itemTotal?: number; childTotal?: number }> {
+  const target = collection.trim()
+  const directRef = isRefString(target) ? target : undefined
   let itemTotal: number | undefined
   let childTotal: number | undefined
-  const directRef = isRefString(collection.trim()) ? collection.trim() : undefined
 
   if (directRef !== undefined) {
-    const [searchRes, browseRes] = await Promise.allSettled([
-      service.search(
-        {
-          mode: 'metadata',
-          scope: { kind: 'collection', refOrName: directRef },
-          sort: 'dateModified',
-          direction: 'desc',
-          offset: 0,
-          limit: 1,
-        },
-        undefined,
-      ),
-      service.browse({ kind: 'collections', parentRef: directRef, offset: 0, limit: 1 }, undefined),
+    const [itemRes, childRes] = await Promise.all([
+      fetchItemPreview(service, directRef),
+      fetchChildPreview(service, directRef),
     ])
-    if (searchRes.status === 'fulfilled') {
-      itemTotal = searchRes.value.total
-    }
-    if (browseRes.status === 'fulfilled') {
-      childTotal = browseRes.value.total
-    }
+    itemTotal = itemRes.total
+    childTotal = childRes
   } else {
-    let resolvedRef: string | undefined
-    try {
-      const searched = await service.search(
-        {
-          mode: 'metadata',
-          scope: { kind: 'collection', refOrName: collection },
-          sort: 'dateModified',
-          direction: 'desc',
-          offset: 0,
-          limit: 1,
-        },
-        undefined,
-      )
-      itemTotal = searched.total
-      if (searched.scope.kind === 'collection') {
-        resolvedRef = searched.scope.ref
-      }
-    } catch {
-      itemTotal = undefined
-    }
-    if (resolvedRef !== undefined) {
-      try {
-        const browsed = await service.browse(
-          { kind: 'collections', parentRef: resolvedRef, offset: 0, limit: 1 },
-          undefined,
-        )
-        childTotal = browsed.total
-      } catch {
-        childTotal = undefined
-      }
+    const itemRes = await fetchItemPreview(service, target)
+    itemTotal = itemRes.total
+    if (itemRes.ref !== undefined) {
+      childTotal = await fetchChildPreview(service, itemRes.ref)
     }
   }
   return {

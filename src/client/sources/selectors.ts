@@ -10,20 +10,22 @@
  */
 
 import type { ExportArtifact, ExportDocumentItem, SourceItem } from './model.ts'
-import { normalizeRefKey } from './provenance.ts'
+import { normalizeRefKey } from './evidence-match.ts'
 import { hasPdf } from './source-capabilities.ts'
 
 /** The sources filters; every filter is a subset of the stable union. */
 export type SourceFilter = 'all' | 'pdf' | 'retrieved' | 'evidence' | 'exported' | 'issues'
 
 /**
- * Whether one source carries an issue: a failed or stopped call, or a
- * provenance mismatch. A running call is in flight, not an issue.
+ * Whether one source carries an issue: a failed or stopped call, or an
+ * instance mismatch. A running call is in flight, not an issue.
  * @param item - the source to probe.
  * @returns true when the source belongs in the issues filter.
  */
 export function hasIssue(item: SourceItem): boolean {
-  return item.operations.failed > 0 || item.operations.stopped > 0 || item.provenance === 'mismatch'
+  return (
+    item.operations.failed > 0 || item.operations.stopped > 0 || item.evidenceMatch === 'mismatch'
+  )
 }
 
 export function filterSources(
@@ -262,7 +264,7 @@ export function exportSectionsOf(exports: readonly ExportArtifact[]): readonly E
 
 /**
  * The distinct exported documents across the session: the refs of every
- * successful artifact, deduplicated across formats and server provenance.
+ * successful artifact, deduplicated across formats and server qualifiers.
  * This is the exports count the lens tab shows — documents, not calls.
  * @param exports - the successful export artifacts in transcript order.
  * @returns the number of distinct exported refs.

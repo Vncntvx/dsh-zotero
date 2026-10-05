@@ -1400,5 +1400,3 @@ export async function deleteLibraryTags(
 export function writeCapabilityUnavailableMessage(providerId: string): string {
   return `Zotero provider "${providerId}" does not support the write capability.`
 }
-
-export const WRITE_CAPABILITY_UNAVAILABLE_CODE = ZOTERO_CAPABILITY_UNAVAILABLE

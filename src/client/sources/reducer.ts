@@ -33,7 +33,7 @@ import {
 import type {
   EvidencePassage,
   ExportArtifact,
-  SearchProvenance,
+  SearchOccurrence,
   SourceAttachment,
   SourceItem,
   SourceRetrievalFacts,
@@ -41,7 +41,7 @@ import type {
   SourceWorkspace,
   SupportedLocalLibrary,
 } from './model.ts'
-import { normalizeRefKey, provenanceOf, serverIdOf } from './provenance.ts'
+import { evidenceMatchOf, normalizeRefKey, serverIdOf } from './evidence-match.ts'
 import type { ZoteroResolvedScope } from '../../types.ts'
 
 export interface BuildSourceWorkspaceOptions {
@@ -109,7 +109,7 @@ interface Draft {
   readonly successfulRetrieveCallIds: Set<string>
   exports: ExportArtifact[]
   readonly exportedCallIds: Set<string>
-  searches: SearchProvenance[]
+  searches: SearchOccurrence[]
   firstSeenAt: number
   lastTouchedAt: number
 }
@@ -611,7 +611,7 @@ export function buildSourceWorkspace(
   // Attribute each folded search to the items its rows surfaced, then freeze.
   for (const episode of episodes) {
     omittedRows += episode.omitted
-    const provenance: SearchProvenance = {
+    const searchRecord: SearchOccurrence = {
       callId: episode.callId,
       ...(episode.query === undefined ? {} : { query: episode.query }),
       mode: episode.mode,
@@ -625,7 +625,7 @@ export function buildSourceWorkspace(
     }
     for (const key of episode.keys) {
       // Every episode key entered through `draftOf`, so the draft exists.
-      byKey.get(key)!.searches.push(provenance)
+      byKey.get(key)!.searches.push(searchRecord)
     }
   }
 
@@ -639,7 +639,7 @@ export function buildSourceWorkspace(
       return {
         key: draft.key,
         ref: draft.ref,
-        provenance: provenanceOf(draft.serverIds, currentServerId),
+        evidenceMatch: evidenceMatchOf(draft.serverIds, currentServerId),
         ...(draft.title === undefined ? {} : { title: draft.title }),
         ...(draft.creators === undefined ? {} : { creators: draft.creators }),
         ...(draft.year === undefined ? {} : { year: draft.year }),

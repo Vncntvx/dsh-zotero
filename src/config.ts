@@ -279,7 +279,7 @@ const SCHEMA_DEFAULTS: Record<string, unknown> = unwrapConfig(Config({}) as Conf
  * same Schemastery schema before the constructor runs — and for a complete
  * `Options` object.
  */
-export function isSchemaComplete(config: Config | Options): boolean {
+function isSchemaComplete(config: Config | Options): boolean {
   const raw = unwrapConfig(config)
   return Object.keys(SCHEMA_DEFAULTS).every((key) => Object.hasOwn(raw, key))
 }
@@ -302,7 +302,7 @@ export function toLiveEntry(config: Config | Options): Config | Options {
  * unwrapped from a complete entry).
  * @throws {Error} on loopback/URL/limit violations.
  */
-export function assertResolvedConfig(plain: Record<string, unknown>): ResolvedConfig {
+function assertResolvedConfig(plain: Record<string, unknown>): ResolvedConfig {
   if (typeof plain.baseUrl !== 'string') {
     throw new Error(
       `dsh-zotero: invalid baseUrl ${JSON.stringify(plain.baseUrl)}; expected an http:// loopback URL like http://127.0.0.1:23119/api`,

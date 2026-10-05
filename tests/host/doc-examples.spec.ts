@@ -22,6 +22,7 @@ import ToolRuntime, {
 } from '@deepseek-ai/dsh-tools'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import ZoteroService from '../../src/index.js'
+import { TestJobRegistry } from '../helpers/fake-jobs.js'
 
 /**
  * The repo root, resolved from this spec's own location. Resolving from
@@ -161,6 +162,7 @@ describe('documented tool calls match the tool schemas', () => {
     ctx = new Context()
     await ctx.plugin(SystemPrompt, {})
     await ctx.plugin(ToolRuntime, {})
+    await ctx.plugin(TestJobRegistry)
     await ctx.plugin(ZoteroService, {
       baseUrl: 'http://127.0.0.1:23119/api',
       // The write tools document real examples; the gate validates them

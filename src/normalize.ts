@@ -226,7 +226,7 @@ export function nearScopeCandidates(
  * with no name at all are still skipped — the default never fabricates a
  * creator, only a role.
  */
-export const DEFAULT_CREATOR_TYPE = 'author'
+const DEFAULT_CREATOR_TYPE = 'author'
 
 /**
  * Format creator records into structured ZoteroCreator objects.

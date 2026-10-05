@@ -38,7 +38,7 @@ describe('source fixtures', () => {
     expect(counts.evidence).toBeGreaterThan(0)
     expect(counts.exported).toBeGreaterThan(0)
     expect(counts.issues).toBeGreaterThan(0)
-    expect(workspace.sources.some((item) => item.provenance === 'mismatch')).toBe(true)
+    expect(workspace.sources.some((item) => item.evidenceMatch === 'mismatch')).toBe(true)
     expect(workspace.sources.some((item) => item.operations.running > 0)).toBe(true)
   })
 
@@ -59,7 +59,7 @@ describe('source fixtures', () => {
   it('mismatch: the open action is blocked but the item still has a PDF', () => {
     const workspace = mismatchFixture()
     const item = workspace.sources[0]!
-    expect(item.provenance).toBe('mismatch')
+    expect(item.evidenceMatch).toBe('mismatch')
     expect(hasPdf(item)).toBe(true)
   })
 

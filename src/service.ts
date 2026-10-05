@@ -133,6 +133,10 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
+/** Cordis Fiber lifecycle states (cordis compiles FiberState as a const enum without a runtime object). */
+const FIBER_STATE_LOADING = 1
+const FIBER_STATE_ACTIVE = 2
+
 /**
  * Whether an `internal/config` waterfall `this` is this plugin's fiber.
  * The Loader passes the fiber itself; `ctx.plugin()` returns
@@ -182,6 +186,9 @@ export class ZoteroService extends Service {
   private providerDispose: (() => void) | undefined
   /** Disposers of the conditionally registered write tools, tracked for the writeEnabled flip. */
   private writeToolDisposes: Array<() => void> = []
+  /** Disposers of the conditionally registered heavy tools (export, changes), tracked for the background flip. */
+  private heavyToolDisposes: Array<() => void> = []
+  private heavyToolsBackgroundState: boolean | undefined = undefined
   /** The resolved config the transport stack was last built from. */
   private lastBuilt: ResolvedConfig
   /** Cached resolved config; invalidated on any loader/volatile-update. */
@@ -216,8 +223,11 @@ export class ZoteroService extends Service {
     // Failures are logged, never thrown into the dispatch.
     ctx.on('loader/volatile-update', (paths: readonly (readonly string[])[]) => {
       this.cachedConfig = undefined
-      if (!touchesTransport(paths)) return
       try {
+        if (touchesHeavyTools(paths)) {
+          this.reconcileHeavyTools()
+        }
+        if (!touchesTransport(paths)) return
         const config = this.config
         if (sameTransportConfig(config, this.lastBuilt)) return
         this.buildTransport(config)
@@ -231,6 +241,13 @@ export class ZoteroService extends Service {
     registerStatusCommand(ctx, this)
     registerPromptSection(ctx, () => this.config)
     ctx.effect(() => () => this.recovery.dispose(), 'zotero: connectivity recovery abort')
+    ctx.effect(
+      () => () => {
+        for (const dispose of this.heavyToolDisposes) dispose()
+        this.heavyToolDisposes = []
+      },
+      'zotero: heavy tools teardown',
+    )
     // A shell command aimed at Zotero's own write API is not blocked outright:
     // it is made to ask. The harness's own approval request decides it before
     // the body runs, so the write happens only when the user confirms that one
@@ -253,9 +270,14 @@ export class ZoteroService extends Service {
     registerChildrenTool(ctx, this)
     registerAttachmentTool(ctx, this)
     registerRetrieveTool(ctx, this)
-    registerExportTool(ctx, this)
     registerBrowseTool(ctx, this)
-    registerChangesTool(ctx, this)
+    this.reconcileHeavyTools()
+    ctx.inject(['jobs'], (jobCtx) => {
+      jobCtx.effect(() => {
+        this.reconcileHeavyTools()
+        return () => this.reconcileHeavyTools()
+      })
+    })
     // The status channel: the Remote service binds the wire namespace, and
     // the strict manifest claims its endpoints. See typert.ts for why the
     // manifest self-registers through ctx.inject(['typert']).
@@ -324,6 +346,35 @@ export class ZoteroService extends Service {
     this.providerDispose = this.registerProvider(
       new LocalApiProvider(client, () => localProviderLimits(this.config), writer, authorizer),
     )
+  }
+
+  /**
+   * Register or re-register the heavy tools (export, changes) dynamically as
+   * `enableRunInBackground` or `ctx.jobs` flips. Exposes the `run_in_background`
+   * parameter to the model only when background execution is actually usable.
+   */
+  private reconcileHeavyTools(): void {
+    // Cordis Fiber lifecycle: LOADING = 1, ACTIVE = 2. When unloading (5) or
+    // disposed (4), do not re-register tools onto the dying context.
+    if (
+      this.ctx.fiber.state !== FIBER_STATE_ACTIVE &&
+      this.ctx.fiber.state !== FIBER_STATE_LOADING
+    ) {
+      for (const dispose of this.heavyToolDisposes) dispose()
+      this.heavyToolDisposes = []
+      this.heavyToolsBackgroundState = undefined
+      return
+    }
+    const shouldEnable = this.config.enableRunInBackground && this.ctx.get('jobs') !== undefined
+    if (this.heavyToolsBackgroundState === shouldEnable) {
+      return
+    }
+    for (const dispose of this.heavyToolDisposes) dispose()
+    this.heavyToolDisposes = [
+      registerExportTool(this.ctx, this, shouldEnable),
+      registerChangesTool(this.ctx, this, shouldEnable),
+    ]
+    this.heavyToolsBackgroundState = shouldEnable
   }
 
   /**
@@ -737,6 +788,24 @@ export function touchesTransport(paths: readonly (readonly string[])[]): boolean
     (path) =>
       path.length === 0 ||
       (path[0] !== undefined && TRANSPORT_CONFIG_KEYS.has(path[0] as keyof ResolvedConfig)),
+  )
+}
+
+export const HEAVY_TOOL_CONFIG_KEYS: ReadonlySet<keyof ResolvedConfig> = new Set([
+  'enableRunInBackground',
+])
+
+/**
+ * Whether a `loader/volatile-update` path list touches the heavy tools' background capability.
+ * A root path (`[]`) means the whole config moved as one reference.
+ * @param paths - the changed field paths the loader reported.
+ * @returns true when heavy tools may need re-registration.
+ */
+export function touchesHeavyTools(paths: readonly (readonly string[])[]): boolean {
+  return paths.some(
+    (path) =>
+      path.length === 0 ||
+      (path[0] !== undefined && HEAVY_TOOL_CONFIG_KEYS.has(path[0] as keyof ResolvedConfig)),
   )
 }
 

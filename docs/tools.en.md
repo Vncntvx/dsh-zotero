@@ -146,13 +146,13 @@ Generate formatted citations, bibliographies, or export files.
 
 ### Parameters
 
-| Parameter           | Type     | Default      | Description                                                                                  |
-| ------------------- | -------- | ------------ | -------------------------------------------------------------------------------------------- |
-| `refs`              | string[] | —            | List of item references (required, capped by `maxExportRefs`, default 50)                    |
-| `format`            | string   | —            | Export format: `citation`, `bibliography`, `bibtex`, `biblatex`, `ris`, `csljson` (required) |
-| `style`             | string   | Config value | CSL style identifier (citation/bibliography only)                                            |
-| `locale`            | string   | `"en-US"`    | CSL locale (citation/bibliography only)                                                      |
-| `run_in_background` | boolean  | `false`      | Whether to launch as a background Job (managed by Harness `ctx.jobs`)                        |
+| Parameter           | Type     | Default      | Description                                                                                                                                             |
+| ------------------- | -------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `refs`              | string[] | —            | List of item references (required, capped by `maxExportRefs`, default 50)                                                                               |
+| `format`            | string   | —            | Export format: `citation`, `bibliography`, `bibtex`, `biblatex`, `ris`, `csljson` (required)                                                            |
+| `style`             | string   | Config value | CSL style identifier (citation/bibliography only)                                                                                                       |
+| `locale`            | string   | `"en-US"`    | CSL locale (citation/bibliography only)                                                                                                                 |
+| `run_in_background` | boolean  | `false`      | Whether to launch as a background Job (managed by Harness `ctx.jobs`; dynamically exposed only when `enableRunInBackground=true` and `jobs` is mounted) |
 
 ### Output
 
@@ -255,12 +255,12 @@ Inspect library modifications and deletions based on local transaction versions.
 
 ### Parameters
 
-| Parameter           | Type     | Default                 | Description                                                                     |
-| ------------------- | -------- | ----------------------- | ------------------------------------------------------------------------------- |
-| `library`           | object   | `{type: "user", id: 0}` | Target library                                                                  |
-| `since`             | object   | —                       | Starting cursor `{serverId, library, version}`; omit to get initial baseline    |
-| `include`           | string[] | All except fulltext     | Monitored kinds: `items`, `collections`, `savedSearches`, `fulltext`, `deleted` |
-| `run_in_background` | boolean  | `false`                 | Whether to launch as a background Job                                           |
+| Parameter           | Type     | Default                 | Description                                                                                                                                             |
+| ------------------- | -------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `library`           | object   | `{type: "user", id: 0}` | Target library                                                                                                                                          |
+| `since`             | object   | —                       | Starting cursor `{serverId, library, version}`; omit to get initial baseline                                                                            |
+| `include`           | string[] | All except fulltext     | Monitored kinds: `items`, `collections`, `savedSearches`, `fulltext`, `deleted`                                                                         |
+| `run_in_background` | boolean  | `false`                 | Whether to launch as a background Job (managed by Harness `ctx.jobs`; dynamically exposed only when `enableRunInBackground=true` and `jobs` is mounted) |
 
 ### Output
 

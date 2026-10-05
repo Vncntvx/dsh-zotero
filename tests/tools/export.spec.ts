@@ -221,6 +221,41 @@ describe('zotero_export tool', () => {
   })
 
   describe('background jobs and promotion', () => {
+    it('exposes run_in_background parameter only when enabled and jobs service is mounted', async () => {
+      const defaultTool = lane.tool('zotero_export')!
+      const defaultProps = (defaultTool.parameters as { properties?: Record<string, unknown> })
+        .properties
+      expect(defaultProps?.run_in_background).toBeUndefined()
+
+      await lane.teardown()
+      lane = await setupHostLane(
+        {},
+        {
+          compose: async (ctx) => {
+            await ctx.plugin(TestJobRegistry)
+          },
+        },
+      )
+      const mountedTool = lane.tool('zotero_export')!
+      const mountedProps = (mountedTool.parameters as { properties?: Record<string, unknown> })
+        .properties
+      expect(mountedProps?.run_in_background).toBeDefined()
+
+      await lane.teardown()
+      lane = await setupHostLane(
+        { enableRunInBackground: false },
+        {
+          compose: async (ctx) => {
+            await ctx.plugin(TestJobRegistry)
+          },
+        },
+      )
+      const disabledTool = lane.tool('zotero_export')!
+      const disabledProps = (disabledTool.parameters as { properties?: Record<string, unknown> })
+        .properties
+      expect(disabledProps?.run_in_background).toBeUndefined()
+    })
+
     it('refuses run_in_background when enableRunInBackground is disabled in config', async () => {
       await lane.teardown()
       lane = await setupHostLane({ enableRunInBackground: false })

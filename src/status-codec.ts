@@ -16,7 +16,7 @@ import {
 } from './contract.js'
 
 /** Wire codec: one status view (strict; absent optional facts stay absent). */
-export const zoteroStatusSchema = z
+const zoteroStatusSchema = z
   .object({
     providerId: z.string(),
     // Optional on the wire because a service that is not composed dialled
@@ -40,7 +40,7 @@ export const zoteroStatusSchema = z
  * byte-carrying results, which this pure-JSON view does not need) — no live
  * `schema` property is carried.
  */
-export const zoteroStatusCodec = {
+const zoteroStatusCodec = {
   mode: 'strict',
   typeSymbol: ZOTERO_STATUS_TYPE_SYMBOL,
   create: (): z.ZodType<ZoteroStatusView> => zoteroStatusSchema,

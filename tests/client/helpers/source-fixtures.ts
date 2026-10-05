@@ -3,7 +3,7 @@
  * Beyond the neutral `sourceOf`/`workspaceOf` builders (the spec convention,
  * same as blocks.ts), this module exports a deterministic fixture gallery of
  * eight named workspaces — one item, a mixed 12, a large 30, a zero-match
- * retrieve, a provenance mismatch, repeated retrieves with truncation, a
+ * retrieve, an instance mismatch, repeated retrieves with truncation, a
  * large BibTeX artifact, and a disconnected session with history. Each is
  * renderable as-is by `ZoteroWorkspaceView`, so visual iteration never needs
  * a live session or a real Zotero.
@@ -20,7 +20,7 @@ export function sourceOf(overrides: Partial<SourceItem> = {}): SourceItem {
   return {
     key: 'zotero://user/0/item/a',
     ref: 'zotero://user/0/item/A',
-    provenance: 'unknown',
+    evidenceMatch: 'unknown',
     facts: {
       inspected: false,
       evidenceCount: 0,
@@ -101,7 +101,7 @@ function pdfItemOf(overrides: Partial<SourceItem> = {}): SourceItem {
     creators: 'Xu, Wenjie',
     year: 2024,
     venue: 'Policy Studies Journal',
-    provenance: 'verified',
+    evidenceMatch: 'verified',
     facts: {
       inspected: true,
       evidenceCount: 2,
@@ -121,7 +121,7 @@ function pdfItemOf(overrides: Partial<SourceItem> = {}): SourceItem {
   })
 }
 
-/** A neutral search provenance; override per scenario. */
+/** A neutral search occurrence record; override per scenario. */
 export function searchOf(
   overrides: Partial<SourceItem['searches'][number]> = {},
 ): SourceItem['searches'][number] {
@@ -206,7 +206,7 @@ export function mixedFixture(): SourceWorkspace {
     if (i % 2 === 0) {
       // Even indexes: confirmed PDF with evidence.
       const evidenceCount = i % 4 === 0 ? 3 : 1
-      overrides.provenance = 'verified'
+      overrides.evidenceMatch = 'verified'
       overrides.facts = {
         inspected: true,
         evidenceCount,
@@ -234,7 +234,7 @@ export function mixedFixture(): SourceWorkspace {
       overrides.searches = [searchOf({ callId: 'call-2', query: 'mixed' })]
     } else if (i % 3 === 0) {
       // Every third index: a mismatch.
-      overrides.provenance = 'mismatch'
+      overrides.evidenceMatch = 'mismatch'
       overrides.bestAttachment = {
         ref: 'zotero://user/0/attachment/ABCD1234',
         contentType: 'application/pdf',
@@ -288,7 +288,7 @@ export function largeFixture(): SourceWorkspace {
       searches: [searchOf({ callId: `call-${i}`, query: 'large' })],
     }
     if (i % 2 === 0) {
-      overrides.provenance = 'verified'
+      overrides.evidenceMatch = 'verified'
       overrides.facts = {
         inspected: true,
         evidenceCount: 1,
@@ -338,7 +338,7 @@ export function zeroMatchFixture(): SourceWorkspace {
 }
 
 /**
- * 5/8 — a provenance mismatch: the open action is present but blocked, and
+ * 5/8 — an instance mismatch: the open action is present but blocked, and
  * the item still counts as "has PDF" for the badge and filter.
  */
 export function mismatchFixture(): SourceWorkspace {
@@ -349,7 +349,7 @@ export function mismatchFixture(): SourceWorkspace {
       title: 'Mismatched item',
       creators: 'Other, B.',
       year: 2020,
-      provenance: 'mismatch',
+      evidenceMatch: 'mismatch',
       facts: {
         inspected: true,
         evidenceCount: 1,

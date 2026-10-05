@@ -1,5 +1,5 @@
 /**
- * The open-in-Zotero deep links and verdicts: URL construction, provenance
+ * The open-in-Zotero deep links and verdicts: URL construction, instance match
  * gating, and the PDF capability of one source.
  * @module tests/client/actions/open-zotero
  */
@@ -49,9 +49,9 @@ describe('pdfUrlOf', () => {
 
 describe('openVerdictOf', () => {
   it('opens verified items, blocks mismatches, and caves the rest', () => {
-    expect(openVerdictOf(sourceOf({ provenance: 'verified' }))).toBe('open')
-    expect(openVerdictOf(sourceOf({ provenance: 'mismatch' }))).toBe('blocked')
-    expect(openVerdictOf(sourceOf({ provenance: 'unknown' }))).toBe('unverified')
+    expect(openVerdictOf(sourceOf({ evidenceMatch: 'verified' }))).toBe('open')
+    expect(openVerdictOf(sourceOf({ evidenceMatch: 'mismatch' }))).toBe('blocked')
+    expect(openVerdictOf(sourceOf({ evidenceMatch: 'unknown' }))).toBe('unverified')
   })
 })
 

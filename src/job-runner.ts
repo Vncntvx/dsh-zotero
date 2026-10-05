@@ -106,6 +106,17 @@ export const PROMOTED_OUTPUT_PROPERTIES = {
   message: { type: 'string', required: true },
 } as const
 
+/**
+ * Parameter schema for the `run_in_background` flag that heavy tools share.
+ */
+export const RUN_IN_BACKGROUND_PARAMETER = {
+  run_in_background: {
+    type: 'boolean',
+    description:
+      'Run in the background and return a job id immediately (collect with job_output, stop with job_kill).',
+  },
+} as const
+
 export interface ZoteroJobTask<T> {
   readonly label: string
   readonly exec: ToolExecution

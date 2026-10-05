@@ -46,6 +46,7 @@ import type { ZoteroService } from '../service.js'
 import {
   BACKGROUND_OUTPUT_PROPERTIES,
   PROMOTED_OUTPUT_PROPERTIES,
+  RUN_IN_BACKGROUND_PARAMETER,
   ZoteroJobRunner,
   executeWithJobs,
   isJobArm,
@@ -112,7 +113,7 @@ const CURSOR_INPUT_SCHEMA = {
   },
 } as const
 
-const CHANGES_PARAMETERS = {
+const BASE_CHANGES_PARAMETERS = {
   library: {
     ...LIBRARY_SCHEMA,
     description: 'Library to diff; omitted defaults to personal user/0.',
@@ -131,14 +132,14 @@ const CHANGES_PARAMETERS = {
     description:
       'Resource kinds to diff; defaults to everything but fulltext. items covers the whole item space as Zotero partitions it — top-level items, child objects (notes, attachments, annotations) and items in the trash — and reports each as its own list, because a child object carries its own version: editing one advances the library without touching any top-level item. deleted lists tombstoned items, collections, saved searches and tag names. fulltext is a separate listing: its endpoint answers in the full-text index\u2019s own version counter, so its rows are not a delta on the library version and it is left out unless named explicitly.',
   },
-  run_in_background: {
-    type: 'boolean',
-    description:
-      'Run in the background and return a job id immediately (collect with job_output, stop with job_kill). Recommended for large library scans or deep change diffs.',
-  },
 } as const
 
-type ChangesArgs = InferArgs<typeof CHANGES_PARAMETERS>
+const CHANGES_WITH_BACKGROUND_PARAMETERS = {
+  ...BASE_CHANGES_PARAMETERS,
+  ...RUN_IN_BACKGROUND_PARAMETER,
+} as const
+
+type ChangesArgs = InferArgs<typeof CHANGES_WITH_BACKGROUND_PARAMETERS>
 
 const CHANGED_OBJECT = {
   type: 'object',
@@ -523,8 +524,13 @@ function countArrayEntries(section: Record<string, unknown> | undefined): number
   return count
 }
 
-export function registerChangesTool(ctx: Context, service: ZoteroService): void {
-  ctx.tools.register(
+export function registerChangesTool(
+  ctx: Context,
+  service: ZoteroService,
+  enableBackground: boolean,
+): () => void {
+  const parameters = enableBackground ? CHANGES_WITH_BACKGROUND_PARAMETERS : BASE_CHANGES_PARAMETERS
+  return ctx.tools.register(
     defineTool({
       name: 'zotero_changes',
       description: [
@@ -533,7 +539,7 @@ export function registerChangesTool(ctx: Context, service: ZoteroService): void 
         'Listings are capped digests; totals reports the true counts behind them. A returned cursor always accounts for every change in the range it reports, so it is safe to pass back as since; a result without one is not. The cursor is pinned to the instance and library it came from, and a cursor from another database is refused instead of diffed against this one.',
         'unobservable names every kind this call could not cover, with the reason: a build that does not serve it, a range older than the history the build keeps, or an answer it could not read. Never read an absent listing as "nothing changed" before checking unobservable; deleted is present exactly when removals were actually observed. versionUnavailable means the build reports no library version at all, so no diff can be taken from it.',
       ].join(' '),
-      parameters: CHANGES_PARAMETERS,
+      parameters,
       output: {
         schema: CHANGES_OUTPUT_SCHEMA,
         render: renderChanges,
@@ -554,11 +560,12 @@ export function registerChangesTool(ctx: Context, service: ZoteroService): void 
       presentResult: presentChangesResult,
       isConcurrencySafe: () => true,
       async execute(args, exec) {
-        const request = buildRequest(args)
+        const changesArgs = args as ChangesArgs
+        const request = buildRequest(changesArgs)
         const label =
-          args.since === undefined
+          changesArgs.since === undefined
             ? 'zotero_changes (baseline)'
-            : `zotero_changes (since v${args.since.version})`
+            : `zotero_changes (since v${changesArgs.since.version})`
         return await executeWithJobs({
           runner: new ZoteroJobRunner(ctx.get('jobs'), ctx.logger),
           exec,
@@ -567,8 +574,8 @@ export function registerChangesTool(ctx: Context, service: ZoteroService): void 
             withConnectivityAsk(ctx, service.recovery, { signal, agent: exec.agent }, () =>
               service.changes(request, signal, onProgress),
             ),
-          renderResult: (value) => textOfBlocks(renderChanges(args, value)),
-          runInBackground: args.run_in_background === true,
+          renderResult: (value) => textOfBlocks(renderChanges(changesArgs, value)),
+          runInBackground: changesArgs.run_in_background === true,
           policy: jobPolicyOf(service.config),
         })
       },

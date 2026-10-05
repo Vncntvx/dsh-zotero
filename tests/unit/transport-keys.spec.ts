@@ -7,7 +7,12 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { touchesTransport, TRANSPORT_CONFIG_KEYS } from '../../src/service.js'
+import {
+  HEAVY_TOOL_CONFIG_KEYS,
+  touchesHeavyTools,
+  touchesTransport,
+  TRANSPORT_CONFIG_KEYS,
+} from '../../src/service.js'
 
 describe('TRANSPORT_CONFIG_KEYS', () => {
   it('names only the fields baked into the transport stack', () => {
@@ -19,6 +24,25 @@ describe('TRANSPORT_CONFIG_KEYS', () => {
       'writeAuthorizeDeadlineMs',
       'writeEnabled',
     ])
+  })
+})
+
+describe('HEAVY_TOOL_CONFIG_KEYS', () => {
+  it('names only the fields that flip background tool capabilities', () => {
+    expect([...HEAVY_TOOL_CONFIG_KEYS]).toEqual(['enableRunInBackground'])
+  })
+})
+
+describe('touchesHeavyTools', () => {
+  it('reacts to enableRunInBackground and the whole-config root path', () => {
+    expect(touchesHeavyTools([['enableRunInBackground']])).toBe(true)
+    expect(touchesHeavyTools([[]])).toBe(true)
+  })
+
+  it('ignores transport fields and limits', () => {
+    expect(touchesHeavyTools([['baseUrl']])).toBe(false)
+    expect(touchesHeavyTools([['maxSearchResults']])).toBe(false)
+    expect(touchesHeavyTools([['writeEnabled']])).toBe(false)
   })
 })
 

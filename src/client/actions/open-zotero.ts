@@ -5,7 +5,7 @@
  * platform, and the app's protocol handler is source-verified; no official
  * documentation page exists, so the UI words the capability accordingly and
  * always keeps a copy-ref fallback. The verdict follows the item's
- * provenance: a ref qualified for another instance must never silently open
+ * evidenceMatch: a ref qualified for another instance must never silently open
  * that database, an unverifiable ref may still be tried with a caveat.
  * @module dsh-zotero/client/actions/open-zotero
  */
@@ -47,7 +47,7 @@ export function pdfUrlOf(
 
 /** The item's verdict: verified opens, mismatch blocks, the rest tries with a caveat. */
 export function openVerdictOf(item: SourceItem): OpenVerdict {
-  switch (item.provenance) {
+  switch (item.evidenceMatch) {
     case 'verified':
       return 'open'
     case 'mismatch':

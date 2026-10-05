@@ -29,6 +29,7 @@ import type { ZoteroExportFormat, ZoteroExportRequest } from '../types.js'
 import {
   BACKGROUND_OUTPUT_PROPERTIES,
   PROMOTED_OUTPUT_PROPERTIES,
+  RUN_IN_BACKGROUND_PARAMETER,
   ZoteroJobRunner,
   executeWithJobs,
   isJobArm,
@@ -37,7 +38,7 @@ import {
   renderJobArm,
 } from '../job-runner.js'
 
-const EXPORT_PARAMETERS = {
+const BASE_EXPORT_PARAMETERS = {
   refs: {
     type: 'array',
     items: { type: 'string' },
@@ -59,14 +60,14 @@ const EXPORT_PARAMETERS = {
     type: 'string',
     description: 'CSL locale for citation/bibliography (defaults to the configured locale).',
   },
-  run_in_background: {
-    type: 'boolean',
-    description:
-      'Run in the background and return a job id immediately (collect with job_output, stop with job_kill). Recommended for large export requests.',
-  },
 } as const
 
-type ExportArgs = InferArgs<typeof EXPORT_PARAMETERS>
+const EXPORT_WITH_BACKGROUND_PARAMETERS = {
+  ...BASE_EXPORT_PARAMETERS,
+  ...RUN_IN_BACKGROUND_PARAMETER,
+} as const
+
+type ExportArgs = InferArgs<typeof EXPORT_WITH_BACKGROUND_PARAMETERS>
 
 const EXPORT_OUTPUT_SCHEMA = {
   oneOf: [
@@ -179,7 +180,7 @@ function buildRequest(args: ExportArgs, config: ResolvedConfig): ZoteroExportReq
   }
 }
 
-function renderExport(_args: ExportArgs, value: ExportOutput): ContentBlock[] {
+function renderExport(_args: unknown, value: ExportOutput): ContentBlock[] {
   if (isJobArm(value)) return renderJobArm(value)
   if (value.format === 'citation') {
     return [
@@ -221,8 +222,13 @@ function presentExportResult(_args: ExportArgs, result: ToolResult): ToolResultV
  * @param ctx - the plugin context.
  * @param service - the zotero service owning the request path.
  */
-export function registerExportTool(ctx: Context, service: ZoteroService): void {
-  ctx.tools.register(
+export function registerExportTool(
+  ctx: Context,
+  service: ZoteroService,
+  enableBackground: boolean,
+): () => void {
+  const parameters = enableBackground ? EXPORT_WITH_BACKGROUND_PARAMETERS : BASE_EXPORT_PARAMETERS
+  return ctx.tools.register(
     defineTool({
       name: 'zotero_export',
       description: [
@@ -230,7 +236,7 @@ export function registerExportTool(ctx: Context, service: ZoteroService): void {
         `Citation mode pairs each ref with its HTML citation in the requested order and batches past Zotero's ${ZOTERO_ITEMKEY_BATCH}-key request cap;`,
         `bibliography mode returns the joined CSL-sorted bibliography; bibtex/biblatex/ris/csljson return raw export text — those formats stay at one request (up to ${ZOTERO_ITEMKEY_BATCH} refs), their ordering remains Zotero's own, and every exported document is itemized with its ref, citation key, and title.`,
       ].join(' '),
-      parameters: EXPORT_PARAMETERS,
+      parameters,
       output: {
         schema: EXPORT_OUTPUT_SCHEMA,
         render: renderExport,
@@ -253,17 +259,18 @@ export function registerExportTool(ctx: Context, service: ZoteroService): void {
       presentResult: presentExportResult,
       isConcurrencySafe: () => true,
       async execute(args, exec) {
-        const request = buildRequest(args, service.config)
+        const exportArgs = args as ExportArgs
+        const request = buildRequest(exportArgs, service.config)
         return await executeWithJobs({
           runner: new ZoteroJobRunner(ctx.get('jobs'), ctx.logger),
           exec,
-          label: `zotero_export (${args.refs.length} refs, ${args.format})`,
+          label: `zotero_export (${exportArgs.refs.length} refs, ${exportArgs.format})`,
           run: (signal, onProgress) =>
             withConnectivityAsk(ctx, service.recovery, { signal, agent: exec.agent }, () =>
               service.export(request, signal, onProgress),
             ),
-          renderResult: (value) => textOfBlocks(renderExport(args, value)),
-          runInBackground: args.run_in_background === true,
+          renderResult: (value) => textOfBlocks(renderExport(exportArgs, value)),
+          runInBackground: exportArgs.run_in_background === true,
           policy: jobPolicyOf(service.config),
         })
       },

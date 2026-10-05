@@ -166,7 +166,7 @@ describe('sources states', () => {
     await act(async () => {})
     const lensTab = view.container.querySelector('[data-workspace-lens="sources"]')!
     expect(lensTab.getAttribute('aria-selected')).toBe('true')
-    expect(view.container.querySelectorAll('[data-provenance]')).toHaveLength(20)
+    expect(view.container.querySelectorAll('[data-evidence-match]')).toHaveLength(20)
     // The workflow stats strip is gone; the filter bar is the only count line.
     expect(screen.getByText(`${zh.filterAll} 20`)).toBeDefined()
     view.unmount()
@@ -204,10 +204,10 @@ describe('sources states', () => {
     expect(screen.getByText(zh.omittedRowsNote.replace('{count}', '5'))).toBeDefined()
     // The mismatch row carries the issues badge; the selected inspector shows
     // the warning line for the first (mismatched) source.
-    expect(screen.getAllByText(zh.provenanceMismatch).length).toBeGreaterThanOrEqual(1)
-    const row = view.container.querySelector('[data-provenance="mismatch"]')!
+    expect(screen.getAllByText(zh.databaseMismatch).length).toBeGreaterThanOrEqual(1)
+    const row = view.container.querySelector('[data-evidence-match="mismatch"]')!
     fireEvent.click(row)
-    expect(screen.getAllByText(zh.provenanceMismatch).length).toBeGreaterThanOrEqual(2)
+    expect(screen.getAllByText(zh.databaseMismatch).length).toBeGreaterThanOrEqual(2)
     view.unmount()
   })
 

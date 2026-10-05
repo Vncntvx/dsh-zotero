@@ -1,6 +1,6 @@
 /**
  * The source inspector: the detail surface of the selected source. Three
- * panels — Overview (identity and search provenance), Passages (the
+ * panels — Overview (identity and search records), Passages (the
  * retrieval summary, passages, and per-source availability), and Exports
  * (the item's export artifacts) — switch through the inspector's own tab
  * row: light text tabs (no pill chrome, so the three hierarchy levels —

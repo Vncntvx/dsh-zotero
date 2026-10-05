@@ -262,6 +262,3 @@ export function presentUpdateResultView(
   const ref = typeof record.ref === 'string' ? record.ref : ''
   return { card: 'generic', title: `Zotero ${noun} updated${ref === '' ? '' : `: ${ref}`}` }
 }
-
-/** Backward-compatible alias for presentUpdateResultView. */
-export const presentUpdateListResultView = presentUpdateResultView

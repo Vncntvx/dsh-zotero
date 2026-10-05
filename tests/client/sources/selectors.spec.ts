@@ -83,7 +83,7 @@ describe('hasIssue', () => {
   it('flags failed, stopped, and mismatched sources', () => {
     expect(hasIssue(sourceOf({ operations: { running: 0, failed: 1, stopped: 0 } }))).toBe(true)
     expect(hasIssue(sourceOf({ operations: { running: 0, failed: 0, stopped: 1 } }))).toBe(true)
-    expect(hasIssue(sourceOf({ provenance: 'mismatch' }))).toBe(true)
+    expect(hasIssue(sourceOf({ evidenceMatch: 'mismatch' }))).toBe(true)
   })
 
   it('does not flag a bare source or one with a call in flight', () => {
@@ -423,7 +423,7 @@ describe('exportedRefCountOf', () => {
     expect(exportedRefCountOf(exports)).toBe(2)
   })
 
-  it('deduplicates refs that differ only by server provenance', () => {
+  it('deduplicates refs that differ only by server qualifiers', () => {
     const exports = [
       artifactOf({ callId: 'e1', refs: ['zotero://user/0/item/QRST3456'] }),
       artifactOf({ callId: 'e2', refs: ['zotero://user/0/item/QRST3456?server=S1'] }),

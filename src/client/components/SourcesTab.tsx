@@ -197,7 +197,7 @@ export function SourcesTab({ status, t, useSession, useChat, inputActions }: Sou
   const chat = useChat((snapshot) => snapshot)
   const [statusState, setStatusState] = useState<ConnectionView>({ kind: 'loading' })
   const [requestId, setRequestId] = useState(0)
-  // The last verified instance id feeds the provenance verdicts. It updates
+  // The last verified instance id feeds the evidenceMatch verdicts. It updates
   // only when a connected probe settles — a refresh's loading flip must not
   // drop it, or the workspace would rebuild twice per probe.
   const [serverId, setServerId] = useState<string | undefined>(undefined)

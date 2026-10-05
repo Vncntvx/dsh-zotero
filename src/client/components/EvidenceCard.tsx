@@ -1,6 +1,6 @@
 /**
  * One source's evidence card: the header with open-in-Zotero actions (each
- * gated by the item's provenance verdict and the source's PDF capability),
+ * gated by the item's evidenceMatch verdict and the source's PDF capability),
  * the indexing coverage line, the budget note, the deduplicated passages
  * with their source tags and page labels, and the per-source availability
  * lines. Everything here is provable session facts — the panel never claims
@@ -93,7 +93,7 @@ export function EvidenceCard({ item, t }: EvidenceCardProps) {
   const availabilityEntries =
     item.retrievalFacts === undefined ? [] : Object.entries(item.retrievalFacts.sourceAvailability)
   return (
-    <section className={css.card} data-provenance={item.provenance}>
+    <section className={css.card} data-evidence-match={item.evidenceMatch}>
       <header className={css.cardHead}>
         <span className={css.cardTitle}>{item.title ?? item.ref}</span>
         <span className={css.note}>{joinNonEmpty(item.creators, item.year)}</span>

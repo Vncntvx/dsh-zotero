@@ -203,12 +203,12 @@ describe('inspector', () => {
     const { view } = mountView(mixedFixture())
     // Item index 3 is the mismatch branch of the mixed fixture.
     fireEvent.click(optionAt(view, 3))
-    expect(screen.getAllByText(zh.provenanceMismatch).length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText(zh.databaseMismatch).length).toBeGreaterThanOrEqual(1)
     const blocked = view.container.querySelector('button[aria-disabled="true"]')!
     expect(blocked).toBeDefined()
     // Clicking a blocked action stays inert — the block is the point.
     fireEvent.click(blocked)
-    expect(screen.getAllByText(zh.provenanceMismatch).length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText(zh.databaseMismatch).length).toBeGreaterThanOrEqual(1)
     view.unmount()
   })
 })

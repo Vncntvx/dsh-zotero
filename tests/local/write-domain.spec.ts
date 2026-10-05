@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LocalApiProvider } from '../../src/local/provider.js'
 import {
-  WRITE_CAPABILITY_UNAVAILABLE_CODE,
   createNote,
   updateItemCollections,
   updateItemTags,
@@ -589,7 +588,7 @@ describe('the provider seam', () => {
     } catch (error) {
       thrown = error
     }
-    expect((thrown as { code?: string }).code).toBe(WRITE_CAPABILITY_UNAVAILABLE_CODE)
+    expect((thrown as { code?: string }).code).toBe(ZOTERO_CAPABILITY_UNAVAILABLE)
     expect((thrown as Error).message).toBe(writeCapabilityUnavailableMessage('local'))
   })
 })

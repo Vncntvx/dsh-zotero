@@ -62,7 +62,7 @@ function expectPillActivated(label: string): void {
  */
 function expectFilteredTo(view: View, label: string, count: number): void {
   fireEvent.click(screen.getByText(label))
-  expect(view.container.querySelectorAll('[data-provenance]')).toHaveLength(count)
+  expect(view.container.querySelectorAll('[data-evidence-match]')).toHaveLength(count)
 }
 
 afterEach(cleanup)
@@ -110,14 +110,14 @@ describe('connectivity', () => {
     const { view } = mountTab(chatOf([toolRow(foreign)]), status)
     await act(async () => {})
     // Connected: the foreign qualifier is a mismatch against the verified id.
-    expect(view.container.querySelector('[data-provenance="mismatch"]')).not.toBeNull()
+    expect(view.container.querySelector('[data-evidence-match="mismatch"]')).not.toBeNull()
 
     fireEvent.click(screen.getByText(zh.refresh))
     await act(async () => {})
     // Unavailable: the instance is no longer verifiable, so the verdict
     // degrades to unknown instead of staying a stale mismatch.
-    expect(view.container.querySelector('[data-provenance="mismatch"]')).toBeNull()
-    expect(view.container.querySelector('[data-provenance="unknown"]')).not.toBeNull()
+    expect(view.container.querySelector('[data-evidence-match="mismatch"]')).toBeNull()
+    expect(view.container.querySelector('[data-evidence-match="unknown"]')).not.toBeNull()
     view.unmount()
   })
 })
@@ -139,7 +139,7 @@ describe('filters', () => {
     )
     await act(async () => {})
     // The search hit and the retrieve share one item; the failed get is its own.
-    expect(view.container.querySelectorAll('[data-provenance]')).toHaveLength(2)
+    expect(view.container.querySelectorAll('[data-evidence-match]')).toHaveLength(2)
 
     expectFilteredTo(view, `${zh.filterEvidence} 1`, 1)
     expect(screen.getByText(zh.evidenceBadge.replace('{count}', '1'))).toBeDefined()
@@ -209,7 +209,7 @@ describe('filters', () => {
 })
 
 describe('composer prefills', () => {
-  it('shows the inspector overview with search provenance and prefills from its actions', async () => {
+  it('shows the inspector overview with search records and prefills from its actions', async () => {
     const status = connectedProbe()
     const setDraft = vi.fn()
     const retrieve = retrieveOf()

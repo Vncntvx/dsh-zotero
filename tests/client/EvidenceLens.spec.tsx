@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * The evidence lens: grouping by literature, passage tags and labels,
- * coverage and availability honesty, dedup provenance, the open-in-Zotero
+ * coverage and availability honesty, passage dedup, the open-in-Zotero
  * verdict guard, and the copy fallback.
  * @module tests/client/EvidenceLens
  */
@@ -35,7 +35,7 @@ const EVIDENCE_ITEM: SourceItem = sourceOf({
   title: 'FlashAttention-2',
   creators: 'Dao',
   year: 2023,
-  provenance: 'verified',
+  evidenceMatch: 'verified',
   facts: {
     inspected: false,
     evidenceCount: 2,
@@ -118,7 +118,7 @@ describe('availabilityLineOf', () => {
 })
 
 describe('EvidenceCard', () => {
-  it('renders the passages with source tags, page labels, and dedup provenance', () => {
+  it('renders the passages with source tags, page labels, and passage dedup', () => {
     const { container } = render(<EvidenceCard item={EVIDENCE_ITEM} t={t} />)
     expect(screen.getByText(zh.sourceAnnotation)).toBeDefined()
     expect(screen.getByText(zh.pageLabel.replace('{label}', '7'))).toBeDefined()
@@ -235,16 +235,16 @@ describe('EvidenceCard', () => {
   it('blocks every open link for a mismatching item and keeps the copy fallback', () => {
     const mismatch = sourceOf({
       ...EVIDENCE_ITEM,
-      provenance: 'mismatch',
+      evidenceMatch: 'mismatch',
     })
     const { container } = render(<EvidenceCard item={mismatch} t={t} />)
     expect(container.querySelector('a')).toBeNull()
-    expect(screen.getAllByText(new RegExp(zh.provenanceMismatch)).length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText(new RegExp(zh.databaseMismatch)).length).toBeGreaterThanOrEqual(1)
     expect(screen.getByLabelText(zh.copyRef)).toBeDefined()
   })
 
   it('caves unverified items with an instance caveat', () => {
-    const unverified = sourceOf({ ...EVIDENCE_ITEM, provenance: 'unknown' })
+    const unverified = sourceOf({ ...EVIDENCE_ITEM, evidenceMatch: 'unknown' })
     const { container } = render(<EvidenceCard item={unverified} t={t} />)
     expect(container.querySelector('a')).not.toBeNull()
     expect(screen.getAllByText(new RegExp(zh.instanceUnverified)).length).toBeGreaterThanOrEqual(1)

@@ -37,7 +37,7 @@ describe('badgesOf', () => {
   })
 
   it('flags a mismatching instance under the issues badge', () => {
-    expect(badgesOf(sourceOf({ provenance: 'mismatch' }), t)).toEqual([zh.issuesBadge])
+    expect(badgesOf(sourceOf({ evidenceMatch: 'mismatch' }), t)).toEqual([zh.issuesBadge])
   })
 
   it('badges a PDF and stays silent for a resolved non-PDF attachment', () => {

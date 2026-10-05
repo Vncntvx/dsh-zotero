@@ -23,7 +23,7 @@ export interface ZoteroOpenLinkProps {
   readonly className?: string
 }
 
-/** One provenance-guarded text link: leading category glyph per the harness
+/** One instance-guarded text link: leading category glyph per the harness
  * clickable-link spec (`renderSafeLink` always leads with `<IconLinkOutlineMedium>`
  * for destination links; `zotero://` is a destination, not a file path, so it
  * never goes through `classifyLinkPath`). External `http(s)` targets open in a
