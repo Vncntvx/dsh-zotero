@@ -233,22 +233,6 @@ const SEARCH_OUTPUT_SCHEMA = {
           type: 'object',
           additionalProperties: false,
           properties: {
-            kind: { type: 'string', const: 'publications', required: true },
-            library: {
-              type: 'object',
-              required: true,
-              additionalProperties: false,
-              properties: {
-                type: { type: 'string', const: 'group', required: true },
-                id: { type: 'integer', required: true },
-              },
-            },
-          },
-        },
-        {
-          type: 'object',
-          additionalProperties: false,
-          properties: {
             kind: { type: 'string', const: 'collection', required: true },
             ref: { type: 'string', required: true },
             name: { type: 'string', required: true },

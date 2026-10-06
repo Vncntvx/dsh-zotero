@@ -12,7 +12,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { detectShellWrite } from '../../src/shell-write-detector.js'
-import { WRITE_TOOL_NAMES } from '../../src/constants.js'
+import { ZOTERO_WRITE_TOOL_NAMES } from '../../src/constants.js'
 
 const BASE = 'http://127.0.0.1:23119/api'
 
@@ -183,7 +183,7 @@ describe('the shell-write detector', () => {
       bash(`curl -X POST -d '{}' http://127.0.0.1:23119/api/users/0/items`),
     )
     expect(attempt?.reason).toContain('outside the plugin')
-    for (const name of WRITE_TOOL_NAMES) expect(attempt?.reason, name).toContain(name)
+    for (const name of ZOTERO_WRITE_TOOL_NAMES) expect(attempt?.reason, name).toContain(name)
     expect(attempt?.reason).toContain('approval policy is "never"')
     expect(attempt?.displayReason.en).toContain('local API')
     expect(attempt?.displayReason.zh).toContain('本地接口')

@@ -129,7 +129,6 @@ export type ZoteroResolvedScope =
   | { kind: 'library'; library: PersonalLibrary }
   | { kind: 'library'; library: GroupLibrary }
   | { kind: 'publications'; library: PersonalLibrary }
-  | { kind: 'publications'; library: GroupLibrary }
   | { kind: 'collection'; ref: string; name: string }
   | { kind: 'savedSearch'; ref: string; name: string }
 

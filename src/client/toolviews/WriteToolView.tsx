@@ -298,7 +298,7 @@ export function WriteToolView(props: WriteToolViewProps) {
       errorSummary: errorSummaryOf(block, raw),
       parentRef: described.parentRef,
       parentSelectUrl: pUrl,
-      tagsList: described.tags,
+      tagsList: Array.from(new Set(described.tags)),
       rawText: raw,
     }
   }, [block, t, toolName])

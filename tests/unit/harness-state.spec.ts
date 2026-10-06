@@ -232,6 +232,17 @@ describe('collectPinFaceProblems', () => {
     const moved = retargetProse('host dsh 0.1.7-rc.1-beta', '0.1.7-rc.1', '0.1.7-rc.1')
     expect(moved).toContain('0.1.7-rc.1-beta')
   })
+
+  it('rejects a client inject missing from peerDependencies', () => {
+    const missing = {
+      ...exact(),
+      dsh: { client: { inject: ['@deepseek-ai/dsh-client-ui-tool'] } },
+    }
+    const problems = collectPinFaceProblems(missing, '0.1.7-rc.1')
+    expect(problems.join('\n')).toMatch(
+      /peerDependencies is missing "@deepseek-ai\/dsh-client-ui-tool"/,
+    )
+  })
 })
 
 describe('collectLockProblems', () => {

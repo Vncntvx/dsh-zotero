@@ -11,8 +11,8 @@
 # be explicit). Rebuild with npm run build (or npm run dev) and the plugin
 # hot-swaps without restarting dsh.
 # The profile-installed dsh-zotero (id zotero) is disabled in this instance
-# so the watched copy takes its place; /zotero status and the eight tools
-# still work normally.
+# so the watched copy takes its place; /zotero status and the registered
+# model tools still work normally.
 # The name must be an absolute path to the BUILT entry (plain Node cannot
 # load src/index.ts). Adjust it if your checkout lives elsewhere.
 # The browser half (the settings page) loads only for rows whose name is a

@@ -40,6 +40,9 @@ export function jobStartedMessage(jobId: string): string {
   return `started background job ${jobId}`
 }
 
+/** Grace period for a cancelled job to settle before removing from the registry (ms). */
+const JOB_CANCELLATION_SETTLE_MS = 1000
+
 export function jobPromotedMessage(jobId: string, timeoutMs: number): string {
   return `operation timed out after ${timeoutMs}ms and was promoted to background job ${jobId}`
 }
@@ -409,7 +412,7 @@ export class ZoteroJobRunner {
       await done
       // LocalJobRegistry settles from the producer promise in a following
       // microtask; wait through its public view rather than racing remove.
-      const view = await this.registry.wait(id, 1000, owner)
+      const view = await this.registry.wait(id, JOB_CANCELLATION_SETTLE_MS, owner)
       if (view.status === 'completed' || view.status === 'failed' || view.status === 'killed') {
         this.registry.remove(id, owner)
       }

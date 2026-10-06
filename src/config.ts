@@ -243,6 +243,12 @@ function assertNonEmpty(name: string, value: unknown): asserts value is string {
   }
 }
 
+function assertBoolean(name: string, value: unknown): asserts value is boolean {
+  if (typeof value !== 'boolean') {
+    throw new Error(`dsh-zotero: ${name} must be a boolean; got ${typeof value}`)
+  }
+}
+
 /** Plain options as humans write them: every `Config` reference unwrapped. */
 export type Options = {
   [K in keyof Config]?: NonNullable<Config[K]> extends Volatile<infer T> ? T : never
@@ -352,6 +358,11 @@ function assertResolvedConfig(plain: Record<string, unknown>): ResolvedConfig {
   assertNonEmpty('provider', plain.provider)
   assertNonEmpty('defaultStyle', plain.defaultStyle)
   assertNonEmpty('defaultLocale', plain.defaultLocale)
+  assertBoolean('writeEnabled', plain.writeEnabled)
+  assertBoolean('writePersistKey', plain.writePersistKey)
+  assertBoolean('webEnabled', plain.webEnabled)
+  assertBoolean('enableRunInBackground', plain.enableRunInBackground)
+  assertBoolean('promoteOnTimeout', plain.promoteOnTimeout)
   if (
     typeof plain.timeoutMs !== 'number' ||
     !Number.isFinite(plain.timeoutMs) ||

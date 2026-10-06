@@ -171,10 +171,7 @@ export function collectZoteroCalls(snapshot: ChatSnapshot | undefined): ToolCall
  * @param sessionId - the owning session identity; forked sessions must not share blocks.
  * @returns the ordered zotero call blocks.
  */
-export function useZoteroBlocks(
-  chat: ChatSnapshot | undefined,
-  sessionId?: string,
-): ToolCallBlock[] {
+function useZoteroBlocks(chat: ChatSnapshot | undefined, sessionId?: string): ToolCallBlock[] {
   const signature = useMemo(
     () => `${sessionId ?? ''}:${sessionSignatureOf(chat)}`,
     [chat, sessionId],

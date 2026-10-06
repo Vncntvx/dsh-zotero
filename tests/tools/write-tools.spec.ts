@@ -18,7 +18,7 @@ import {
   ZOTERO_WRITE_APPROVAL_UNAVAILABLE,
 } from '../../src/errors.js'
 import { WRITE_PLAN_QUESTION_ID } from '../../src/write-approval.js'
-import { WRITE_TOOL_NAMES } from '../../src/constants.js'
+import { ZOTERO_WRITE_TOOL_NAMES } from '../../src/constants.js'
 
 const SERVER_ID = 'srv-write-tools-001'
 const NEW_KEY = 'NEWNOTE1'
@@ -143,12 +143,12 @@ afterEach(async () => {
 
 describe('registration gating', () => {
   it('keeps every write tool off the surface until writeEnabled is set', async () => {
-    expect(WRITE_TOOL_NAMES).toHaveLength(8)
+    expect(ZOTERO_WRITE_TOOL_NAMES).toHaveLength(8)
     const off = await bootLane({})
-    for (const name of WRITE_TOOL_NAMES) expect(off.tool(name)).toBeUndefined()
+    for (const name of ZOTERO_WRITE_TOOL_NAMES) expect(off.tool(name)).toBeUndefined()
     await off.teardown()
     const on = await bootLane({ writeEnabled: true })
-    for (const name of WRITE_TOOL_NAMES) expect(on.tool(name)?.name).toBe(name)
+    for (const name of ZOTERO_WRITE_TOOL_NAMES) expect(on.tool(name)?.name).toBe(name)
     // The read surface stays mounted either way.
     expect(on.tool('zotero_search')?.name).toBe('zotero_search')
     await on.teardown()
@@ -370,6 +370,24 @@ describe('zotero_create_note', () => {
     )
     const entry = JSON.parse(post?.body ?? '{}')[0] as Record<string, unknown>
     expect(entry.collections).toEqual([COLLECTION_KEY])
+  })
+
+  it('declares metadata parameters before markdown and guides argument generation order', async () => {
+    const lane = await bootLane({ writeEnabled: true })
+    const note = lane.tool('zotero_create_note')!
+    const props = (note.parameters as { properties?: Record<string, { description?: string }> })
+      .properties
+    expect(Object.keys(props ?? {})).toEqual([
+      'parentItem',
+      'collections',
+      'tags',
+      'sourceRefs',
+      'markdown',
+    ])
+    expect(props?.parentItem?.description).toContain(
+      'Provide metadata fields (parentItem, collections, tags, sourceRefs) before markdown in the arguments.',
+    )
+    await lane.teardown()
   })
 })
 

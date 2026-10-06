@@ -484,6 +484,28 @@ describe('projectRetrieveMeta', () => {
     // that tracked the cap would make the card claim it had found everything.
     expect(meta.count).toBe(6)
   })
+
+  it('filters out unrecognized evidence sources and dedupes valid ones in first-seen order', () => {
+    const meta = projectRetrieveMeta(
+      retrieveResult({
+        evidence: [
+          { source: 'annotation', sourceRef: 'zotero://user/0/annotation/ANN1', text: 'a' },
+          { source: 'unknown' as never, sourceRef: 'zotero://user/0/item/U1', text: 'u' },
+          { source: 'annotation', sourceRef: 'zotero://user/0/annotation/ANN2', text: 'b' },
+          { source: 'note', sourceRef: 'zotero://user/0/item/NOTE1', text: 'n' },
+          { source: 'invalid_source' as never, sourceRef: 'zotero://user/0/item/U2', text: 'u2' },
+          { source: 'fulltext', sourceRef: 'zotero://user/0/item/ABCDEFGH', text: 'f' },
+        ],
+        truncated: false,
+        sourcesSkipped: [],
+      }),
+      ['annotation', 'note', 'fulltext'],
+    )
+    expect(meta.sources).toEqual(['annotation', 'note', 'fulltext'])
+    expect(meta.sources).not.toContain('unknown')
+    expect(meta.sources).not.toContain('invalid_source')
+    expect(meta.count).toBe(6)
+  })
 })
 
 describe('projectAttachmentMeta', () => {

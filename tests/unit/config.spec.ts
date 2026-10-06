@@ -173,6 +173,16 @@ describe('readResolvedConfig', () => {
   it('refuses a partial entry instead of filling Schemastery defaults', () => {
     expect(() => readResolvedConfig({ timeoutMs: 9 })).toThrowError(/baseUrl/)
   })
+
+  it('rejects non-boolean flags on schema-complete entries', () => {
+    const base = resolveConfig({})
+    expect(() =>
+      readResolvedConfig({ ...base, writeEnabled: 'true' as unknown as boolean }),
+    ).toThrowError(/writeEnabled must be a boolean/)
+    expect(() => readResolvedConfig({ ...base, webEnabled: 1 as unknown as boolean })).toThrowError(
+      /webEnabled must be a boolean/,
+    )
+  })
 })
 
 describe('toLiveEntry', () => {

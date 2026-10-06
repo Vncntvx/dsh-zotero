@@ -398,6 +398,12 @@ export function collectPinFaceProblems(manifest, pin) {
       found.push(gtePinProblem('peerDependencies', name, version, pin))
     }
   }
+  const clientInjects = manifest.dsh?.client?.inject ?? []
+  for (const pkg of clientInjects) {
+    if (isDshPackage(pkg) && !Object.hasOwn(manifest.peerDependencies ?? {}, pkg)) {
+      found.push(`peerDependencies is missing "${pkg}" declared in dsh.client.inject`)
+    }
+  }
   if (!isGtePinFace(manifest.engines?.dsh, pin)) {
     found.push(gtePinProblem('engines.dsh', undefined, manifest.engines?.dsh, pin))
   }

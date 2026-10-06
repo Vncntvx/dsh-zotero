@@ -301,11 +301,11 @@ zotero_changes(since={serverId: "server1", library: {type: "user", id: 0}, versi
 
 | 参数          | 类型     | 必填 | 说明                                                                                                                                     |
 | ------------- | -------- | ---- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `markdown`    | string   | ✓    | 笔记正文 Markdown（字符上限受 `writeNoteMaxChars` 限制，默认 65536）                                                                     |
-| `parentItem`  | string   | —    | 父文献条目 ref；省略则创建独立笔记                                                                                                       |
+| `parentItem`  | string   | —    | 父文献条目 ref；省略则创建独立笔记。流式生成中应在 `markdown` 前提供元数据字段                                                           |
 | `collections` | string[] | —    | 所属合集 ref 或名称（仅限独立笔记；子笔记自动继承父条目合集）                                                                            |
 | `tags`        | string[] | —    | 笔记关联的标签列表                                                                                                                       |
 | `sourceRefs`  | string[] | —    | 关联来源条目 ref 列表，写入 `dc:relation` 关系（支持个人库与群组库条目，群组条目自动映射至 `http://zotero.org/groups/<id>/items/<key>`） |
+| `markdown`    | string   | ✓    | 笔记正文 Markdown（字符上限受 `writeNoteMaxChars` 限制，默认 65536）                                                                     |
 
 ### 输出
 
@@ -316,7 +316,7 @@ zotero_changes(since={serverId: "server1", library: {type: "user", id: 0}, versi
 ### 示例
 
 ```text
-zotero_create_note(markdown="## 方法总结\n- 要点一\n- 要点二", parentItem="zotero://user/0/item/ABCD1234", tags=["综述"])
+zotero_create_note(parentItem="zotero://user/0/item/ABCD1234", tags=["综述"], markdown="## 方法总结\n- 要点一\n- 要点二")
 ```
 
 ---

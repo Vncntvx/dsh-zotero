@@ -77,10 +77,6 @@ export function SourceSidebar({
   t,
 }: SourceSidebarProps) {
   const optionRefs = useRef<Array<HTMLDivElement | null>>([])
-  // Trim the tail the last render left behind: a shrinking filter unmounts
-  // its rows (their callbacks arrive as null), but indices past the new
-  // length keep stale detached nodes that focusVisible could otherwise land on.
-  optionRefs.current.length = visible.length
   const filterBarRef = useRef<HTMLDivElement>(null)
   const [filterEdges, setFilterEdges] = useState({ left: false, right: false })
 
@@ -97,6 +93,13 @@ export function SourceSidebar({
     const right = el.scrollLeft < el.scrollWidth - el.clientWidth - 1
     setFilterEdges((prev) => (prev.left === left && prev.right === right ? prev : { left, right }))
   }, [])
+
+  useLayoutEffect(() => {
+    // Trim the tail the last render left behind: a shrinking filter unmounts
+    // its rows (their callbacks arrive as null), but indices past the new
+    // length keep stale detached nodes that focusVisible could otherwise land on.
+    optionRefs.current.length = visible.length
+  }, [visible.length])
 
   useLayoutEffect(() => {
     updateFilterEdges()

@@ -296,18 +296,17 @@ function decodeSupportedLibrary(value: unknown): SupportedLocalLibrary | null {
 function decodeResolvedScope(value: unknown): ZoteroResolvedScope | null {
   if (!isRecord(value)) return null
   const kind = stringField(value, 'kind')
-  if (kind === 'library' || kind === 'publications') {
+  if (kind === 'library') {
     const lib = decodeSupportedLibrary(value['library'])
     if (lib === null) return null
-    // Split the personal/group arms so each matches its wire-contract shape.
-    if (lib.type === 'user') {
-      return kind === 'library'
-        ? { kind: 'library', library: { type: 'user', id: 0 } }
-        : { kind: 'publications', library: { type: 'user', id: 0 } }
-    }
-    return kind === 'library'
-      ? { kind: 'library', library: { type: 'group', id: lib.id } }
-      : { kind: 'publications', library: { type: 'group', id: lib.id } }
+    return lib.type === 'user'
+      ? { kind: 'library', library: lib }
+      : { kind: 'library', library: lib }
+  }
+  if (kind === 'publications') {
+    const lib = decodeSupportedLibrary(value['library'])
+    if (lib === null || lib.type !== 'user') return null
+    return { kind: 'publications', library: lib }
   }
   if (kind === 'collection' || kind === 'savedSearch') {
     const ref = stringField(value, 'ref')

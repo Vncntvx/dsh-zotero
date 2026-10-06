@@ -3,7 +3,7 @@ import { CommandId } from '@deepseek-ai/dsh-commands'
 import type { CommandInvocation } from '@deepseek-ai/dsh-commands'
 import { setupHostLane, type HostLane } from '../helpers/lanes/host-lane.js'
 import { formatStatus } from '../../src/command.js'
-import { WRITE_TOOL_NAMES } from '../../src/constants.js'
+import { ZOTERO_WRITE_TOOL_NAMES } from '../../src/constants.js'
 import { WRITE_DISABLED_SENTENCE, WRITE_POLICY_SENTENCE } from '../../src/prompt.js'
 import type { ZoteroStatus } from '../../src/types.js'
 
@@ -70,8 +70,8 @@ describe('the write state across the status surfaces', () => {
     expect(text).toContain('never ask for or reuse a local-API authorization key')
     expect(text).toContain('report only what it proves and do not re-read to verify it')
     // Every write tool the sanctioned path names, and nothing retired.
-    for (const name of WRITE_TOOL_NAMES) expect(text).toContain(name)
-    expect(WRITE_TOOL_NAMES).toHaveLength(8)
+    for (const name of ZOTERO_WRITE_TOOL_NAMES) expect(text).toContain(name)
+    expect(ZOTERO_WRITE_TOOL_NAMES).toHaveLength(8)
     await on.teardown()
   })
 })

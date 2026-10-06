@@ -15,7 +15,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { ResolvedConfig } from './config.js'
-import { WRITE_TOOL_NAMES } from './constants.js'
+import { ZOTERO_WRITE_TOOL_NAMES } from './constants.js'
 
 const ZOTERO_PROMPT_SECTION_NAME = 'zotero:policy'
 
@@ -45,10 +45,10 @@ export const CONNECTIVITY_POLICY_SENTENCE =
 
 /**
  * The write tool names as the model reads them. Spelled once from
- * {@link WRITE_TOOL_NAMES} so a rename cannot leave the policy naming tools
+ * {@link ZOTERO_WRITE_TOOL_NAMES} so a rename cannot leave the policy naming tools
  * the surface no longer serves.
  */
-const WRITE_TOOL_LIST = WRITE_TOOL_NAMES.join(', ')
+const WRITE_TOOL_LIST = ZOTERO_WRITE_TOOL_NAMES.join(', ')
 
 /**
  * The write policy sentence: the conversion contract, the approval gate, and

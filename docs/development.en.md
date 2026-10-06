@@ -57,9 +57,16 @@ npm run test:coverage        # Check coverage gates
 npm run harness:check        # Check upstream Harness version pin and declaration freshness
 npm run harness:pin -- <ver> # Update upstream Harness dependency pin across all surfaces
 npm run verify:pack          # Validate package tarball integrity
+npm run smoke                # Production-stack smoke: every read tool against a live Zotero from a dsh profile
+npm run smoke:discovery      # Packed tarball → throwaway profile → dsh web boot probe
+npm run release:branch       # Cut the publishable release branch (manifest-driven)
+npm run lint:test            # Run the test-lint guards only
+npm run test:watch           # vitest watch mode
 npm run format               # Format code with Prettier
 npm run format:check         # Check code formatting
 ```
+
+`prepare` (triggered by `npm install`) builds `lib/` from source; `prepublishOnly` runs `release:check` before a publish can go out.
 
 Note: This repository is typically developed as a sibling directory to `deepseek-harness`. Type declarations are resolved from upstream build artifacts via symlinks. If upstream code changes, run the upstream build first to synchronize declaration files.
 
@@ -95,9 +102,13 @@ cd ../deepseek-harness && env DSH_HOME="$DSH_HOME" \
 ### Host-Only Debugging (with HMR)
 
 ```sh
-npm run dev &
+npm run build                                    # Initial build of lib/
+npm run dev &                                    # Watch and incrementally compile to lib/
+cp dev-lib.cordis.yml.example dev-lib.cordis.yml # Copy template and fill absolute checkout paths
 dsh web --patch ./dev-lib.cordis.yml --port 3307
 ```
+
+> **Note**: The `dev-lib.cordis.yml` overlay points to the built entry using an absolute path (`<absolute-path-to-dsh-zotero>/lib/index.js`), enabling in-process Loader HMR for the host half (tools and `/zotero` command) without restarting dsh. However, the harness web client module loader only resolves plugins registered under bare package names. Consequently, this mode **does not load browser-side frontend modules (settings page or Sources tab)**. To develop and test the UI, use the "Full Plugin Debugging" workflow above (`dsh plugin --profile web add .` and `npm run dev:client`).
 
 ## Testing Standards
 

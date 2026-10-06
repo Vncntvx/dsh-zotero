@@ -524,33 +524,30 @@ async function browseItemFields(
     fields.headers.get('zotero-server-id') ??
     creatorTypes.headers.get('zotero-server-id') ??
     undefined
-  const localizedOf = (row: unknown): { field?: string; localized?: string } => {
-    const rec = asRecord(row)
-    return {
-      field: asString(rec?.field),
-      localized: asString(rec?.localized),
-    }
-  }
-  const items: (ZoteroItemFieldInfo | ZoteroCreatorTypeInfo)[] = []
+  const fieldItems: ZoteroItemFieldInfo[] = []
   for (const row of requireArrayBody(fields.json, 'item type fields')) {
-    const { field, localized } = localizedOf(row)
+    const rec = asRecord(row)
+    const field = asString(rec?.field)
     if (field === undefined) continue
-    items.push({ field, ...(localized !== undefined ? { localized } : {}) })
+    const localized = asString(rec?.localized)
+    fieldItems.push({ field, ...(localized !== undefined ? { localized } : {}) })
   }
+  fieldItems.sort((a, b) => a.field.localeCompare(b.field))
+
+  const creatorTypeItems: ZoteroCreatorTypeInfo[] = []
   for (const row of requireArrayBody(creatorTypes.json, 'creator types')) {
     const rec = asRecord(row)
     const creatorType = asString(rec?.creatorType)
     if (creatorType === undefined) continue
     const localized = asString(rec?.localized)
-    items.push({ creatorType, ...(localized !== undefined ? { localized } : {}) })
+    creatorTypeItems.push({ creatorType, ...(localized !== undefined ? { localized } : {}) })
   }
-  items.sort((a, b) =>
-    'field' in a && 'field' in b
-      ? a.field.localeCompare(b.field)
-      : 'creatorType' in a && 'creatorType' in b
-        ? a.creatorType.localeCompare(b.creatorType)
-        : 0,
-  )
+  creatorTypeItems.sort((a, b) => a.creatorType.localeCompare(b.creatorType))
+
+  const items: (ZoteroItemFieldInfo | ZoteroCreatorTypeInfo)[] = [
+    ...fieldItems,
+    ...creatorTypeItems,
+  ]
   const total = items.length
   const slice = items.slice(request.offset, request.offset + request.limit)
   const next = nextOffsetOf(request.offset, slice.length, total)

@@ -17,7 +17,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { createVolatile, updateVolatile, volatileEntries } from '@deepseek-ai/cosmokit'
 import { ZOTERO_PROVIDER_UNAVAILABLE } from '../../src/errors.js'
-import { WRITE_TOOL_NAMES } from '../../src/constants.js'
+import { ZOTERO_WRITE_TOOL_NAMES } from '../../src/constants.js'
 import { intRangeArgumentMessage } from '../../src/tools/validate.js'
 import { expectValue, type HostLane, setupHostLane } from '../helpers/lanes/host-lane.js'
 
@@ -158,11 +158,11 @@ describe('live configuration', () => {
   it('registers and retires the write tools as writeEnabled flips', async () => {
     lane = await setupHostLane()
     expect(lane.tool('zotero_create_note')).toBeUndefined()
-    for (const name of WRITE_TOOL_NAMES) expect(lane.tool(name)).toBeUndefined()
+    for (const name of ZOTERO_WRITE_TOOL_NAMES) expect(lane.tool(name)).toBeUndefined()
     await commitLive({ writeEnabled: true })
-    for (const name of WRITE_TOOL_NAMES) expect(lane.tool(name)).toBeDefined()
+    for (const name of ZOTERO_WRITE_TOOL_NAMES) expect(lane.tool(name)).toBeDefined()
     await commitLive({ writeEnabled: false })
-    for (const name of WRITE_TOOL_NAMES) expect(lane.tool(name)).toBeUndefined()
+    for (const name of ZOTERO_WRITE_TOOL_NAMES) expect(lane.tool(name)).toBeUndefined()
   })
 
   it('live-applies provider limits to LocalApiProvider without rebuilding transport', async () => {

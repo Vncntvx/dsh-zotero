@@ -93,7 +93,7 @@ export const ZOTERO_LIBRARY_VERSION_HEADER = 'last-modified-version'
  * copy — a rename or a ninth write tool must not leave any of those three
  * telling the user a different set.
  */
-export const WRITE_TOOL_NAMES = [
+export const ZOTERO_WRITE_TOOL_NAMES = [
   'zotero_create_note',
   'zotero_update_item_tags',
   'zotero_update_item_collections',
@@ -103,6 +103,25 @@ export const WRITE_TOOL_NAMES = [
   'zotero_update_item',
   'zotero_delete_library_tags',
 ] as const
+
+/**
+ * The eight read tools, in ZoteroService registration order (export and
+ * zotero_changes register unconditionally; only their run_in_background
+ * parameter waits on the jobs service).
+ */
+export const ZOTERO_READ_TOOL_NAMES = [
+  'zotero_search',
+  'zotero_get',
+  'zotero_children',
+  'zotero_attachment',
+  'zotero_retrieve',
+  'zotero_export',
+  'zotero_browse',
+  'zotero_changes',
+] as const
+
+/** Every tool the plugin can register, reads and writes together. */
+export const ZOTERO_TOOL_NAMES = [...ZOTERO_READ_TOOL_NAMES, ...ZOTERO_WRITE_TOOL_NAMES] as const
 
 /**
  * The Local API path that exists only to issue write keys. The write

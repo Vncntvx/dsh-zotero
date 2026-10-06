@@ -17,7 +17,7 @@ dsh-zotero is a DeepSeek Harness plugin that lets agents search, read, and cite 
 | `src/client/` | Browser half (settings page, Sources tab) → `lib/client.js`                                                                                                                                           |
 | `tests/`      | Specs by lane; `tests/README.md` is the test rulebook                                                                                                                                                 |
 | `docs/`       | Product docs, zh/en pairs                                                                                                                                                                             |
-| `scripts/`    | Build, harness pin, client-graph authority, test lint                                                                                                                                                 |
+| `scripts/`    | Build, smoke, harness pin, client-graph authority, test lint, pack verification, release branch                                                                                                       |
 | `lib/`        | Build output — never edit                                                                                                                                                                             |
 
 ## Sources of truth
@@ -52,7 +52,14 @@ npm run test:integration     # live Zotero at 127.0.0.1:23119 (ZOTERO_INTEGRATIO
 npm run link:local-harness   # symlink node_modules/@deepseek-ai/* at ../deepseek-harness
 npm run dev                  # tsc --watch (host half)
 npm run dev:client           # esbuild --watch (browser half)
+npm run smoke                # production-stack smoke against a live Zotero (profile cwd)
+npm run smoke:discovery      # packed tarball → fresh profile → dsh web boot probe
+npm run release:branch       # cut the publishable release branch (manifest-driven)
+npm run lint:test            # test-lint guards only (test-lint + vitest = npm test)
+npm run test:watch           # vitest watch mode
 ```
+
+`prepare` (npm install) builds `lib/` from source; `prepublishOnly` runs `release:check` before a publish can go out.
 
 ## Local launch
 
@@ -97,7 +104,7 @@ More detail: `docs/development.md`.
 
 ### Harness pin
 
-- One baseline version, currently `dsh 0.2.1-alpha.1`. The `@deepseek-ai/dsh-*` line in `devDependencies` is the source of truth; `overrides` pin the same exact version for reproducible builds and typechecking. `peerDependencies` is declared as `>=` the pin (e.g. `>=0.2.1-alpha.1`) and is the **only** runtime compatibility gate: harness `evaluatePluginCompatibility` reads nothing else. `engines.dsh` and `dsh.harnessRange` are derived from the same pin, but harness declares `engines` as "declarative until a reader enforces it" and never reads `dsh.harnessRange` at all — both are this repo's own consistency faces, kept in step by `scripts/harness-state.mjs`. READMEs and this file restate the baseline pin.
+- One baseline version, currently `dsh 0.2.1-alpha.1`. The `@deepseek-ai/dsh-*` line in `devDependencies` is the source of truth; `overrides` pin the same exact version for reproducible builds and typechecking. `peerDependencies` is declared as `>=` the pin (e.g. `>=0.2.1-alpha.1`) and is the **only** runtime compatibility gate: harness `evaluatePluginCompatibility` reads nothing else. `engines.dsh` is derived from the same pin, but harness declares `engines` as "declarative until a reader enforces it" — it is this repo's own consistency face, kept in step by `scripts/harness-state.mjs`. The manifest carries no other derived face: `dsh.harnessRange` was self-invented, never read by the harness, and was removed (`harness:check` rejects reintroducing it). READMEs and this file restate the baseline pin.
 - The **vendored framework line** moves with the pin and is not covered by `harness:pin`: `@deepseek-ai/cordis`, `cordis-plugin-include`, `cordis-plugin-loader`, `cosmokit`, and `schemastery` track the same release window, and every `0.2.1-alpha.1` package requires `cordis ~4.0.5-alpha.1`. Move them to the sibling's `vendor/*` versions in the same commit, or `npm install` fails ERESOLVE.
 - Never edit one form alone and never use `^` / `||` — `npm run harness:pin -- <version>`, then regenerate `package-lock.json`. `scripts/harness-state.mjs` maintains this mapping in one step.
 - If the registry lags the pin, `npm run link:local-harness`. Never grant a profile `compatibility.json` exemption so this plugin runs on another dsh line.

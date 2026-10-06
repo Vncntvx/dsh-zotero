@@ -57,9 +57,16 @@ npm run test:coverage        # 覆盖率门禁检查
 npm run harness:check        # 检查上游 Harness 版本钉与声明一致性
 npm run harness:pin -- <ver> # 统一更新 Harness 依赖版本钉
 npm run verify:pack          # 校验打包产物文件完整性
+npm run smoke                # 生产栈冒烟：在 dsh profile 内对真实 Zotero 调用全部读工具
+npm run smoke:discovery      # 打包产物 → 临时 profile → dsh web 启动探针
+npm run release:branch       # 切出可发布的 release 分支（清单驱动）
+npm run lint:test            # 仅运行测试规范守卫
+npm run test:watch           # vitest watch 模式
 npm run format               # 执行 Prettier 格式化
 npm run format:check         # 检查代码格式
 ```
+
+`prepare`（npm install 时触发）从源码构建 `lib/`；`prepublishOnly` 在发布前运行 `release:check`。
 
 说明：本仓库通常与 `deepseek-harness` 作为 sibling 目录并列开发。类型定义通过符号链接读取上游构建产物。若上游代码发生更新，需先在上游执行构建以同步声明文件。
 
@@ -95,9 +102,13 @@ cd ../deepseek-harness && env DSH_HOME="$DSH_HOME" \
 ### 仅 Host 端调试（支持 HMR）
 
 ```sh
-npm run dev &
+npm run build                                    # 首次构建 lib/ 目录
+npm run dev &                                    # 监听并自动增量编译至 lib/
+cp dev-lib.cordis.yml.example dev-lib.cordis.yml # 复制叠加层模板并配置实际绝对路径
 dsh web --patch ./dev-lib.cordis.yml --port 3307
 ```
+
+> **注意**：`dev-lib.cordis.yml` 叠加层通过配置构建入口的绝对路径（`<absolute-path-to-dsh-zotero>/lib/index.js`）加载插件，使得 Host 端（模型工具与 `/zotero` 命令行）能在 Loader 监视下实现免重启热重载；但 Harness 客户端模块加载器仅解析已注册的裸包名，因此该模式**不加载浏览器端前端组件（设置页与 Sources Tab）**。如需调试前端 UI，请使用上述「完整插件调试」流程（`dsh plugin --profile web add .` 与 `npm run dev:client`）。
 
 ## 测试规范
 

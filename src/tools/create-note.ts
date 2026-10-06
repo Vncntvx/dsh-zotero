@@ -46,15 +46,9 @@ import type { ZoteroService } from '../service.js'
 import type { ZoteroCreateNoteOutcome, ZoteroCreateNoteRequest } from '../types.js'
 
 const CREATE_NOTE_PARAMETERS = {
-  markdown: {
-    type: 'string',
-    required: true,
-    description:
-      'The note body in markdown. Supported: paragraphs, # to #### headings, **bold**, *italic*, `code`, fenced code, > quotes, - and 1. lists (one nesting level), pipe tables with a |---| separator row, [text](https://… or zotero://…) links. Anything else is escaped and shown as literal text — raw HTML never passes through, so write markdown, not HTML.',
-  },
   parentItem: {
     type: 'string',
-    description: `A ${WRITE_REF_ARG_HINT} ref the note attaches under as a child note; omit for a standalone note. A child note inherits its parent's collections.`,
+    description: `A ${WRITE_REF_ARG_HINT} ref the note attaches under as a child note; omit for a standalone note. A child note inherits its parent's collections. Provide metadata fields (parentItem, collections, tags, sourceRefs) before markdown in the arguments.`,
   },
   collections: {
     type: 'array',
@@ -71,6 +65,12 @@ const CREATE_NOTE_PARAMETERS = {
     type: 'array',
     items: { type: 'string' },
     description: `Item ${WRITE_REF_ARG_HINT} refs the note derives from; recorded as dc:relation source links and echoed in the result.`,
+  },
+  markdown: {
+    type: 'string',
+    required: true,
+    description:
+      'The note body in markdown. Supported: paragraphs, # to #### headings, **bold**, *italic*, `code`, fenced code, > quotes, - and 1. lists (one nesting level), pipe tables with a |---| separator row, [text](https://… or zotero://…) links. Anything else is escaped and shown as literal text — raw HTML never passes through, so write markdown, not HTML.',
   },
 } as const
 

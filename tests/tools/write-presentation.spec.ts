@@ -284,6 +284,15 @@ describe('approval-gate failure arms', () => {
       card: 'generic',
       kind: 'edit',
       title: 'Create Zotero research note',
+      rawInput: '(standalone)',
+    })
+    expect(
+      note.presentCall?.({ markdown: 'x', parentItem: 'zotero://user/0/item/PARENT01' }),
+    ).toMatchObject({
+      card: 'generic',
+      kind: 'edit',
+      title: 'Create Zotero research note',
+      rawInput: 'zotero://user/0/item/PARENT01',
     })
     const tags = lane.tool('zotero_update_item_tags')!
     expect(tags.presentCall?.({ ref: 'r', add: ['a'], remove: ['b'] })).toMatchObject({

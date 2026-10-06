@@ -301,11 +301,11 @@ Input `markdown` is converted into a restricted HTML whitelist natively supporte
 
 | Parameter     | Type     | Required | Description                                                                                                                                                            |
 | ------------- | -------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `markdown`    | string   | ✓        | Note body in Markdown (capped by `writeNoteMaxChars`, default 65536)                                                                                                   |
-| `parentItem`  | string   | —        | Parent item reference; omit for standalone note                                                                                                                        |
+| `parentItem`  | string   | —        | Parent item reference; omit for standalone note. In streaming generation, metadata fields should precede markdown                                                      |
 | `collections` | string[] | —        | Target collection refs or names (standalone notes only; child notes inherit parent collections)                                                                        |
 | `tags`        | string[] | —        | Tags to attach to the note                                                                                                                                             |
 | `sourceRefs`  | string[] | —        | Referenced source item refs, stored as `dc:relation` links (supports personal and group library items; group items map to `http://zotero.org/groups/<id>/items/<key>`) |
+| `markdown`    | string   | ✓        | Note body in Markdown (capped by `writeNoteMaxChars`, default 65536)                                                                                                   |
 
 ### Output
 
@@ -316,7 +316,7 @@ Input `markdown` is converted into a restricted HTML whitelist natively supporte
 ### Example
 
 ```text
-zotero_create_note(markdown="## Methodology\n- Key point 1\n- Key point 2", parentItem="zotero://user/0/item/ABCD1234", tags=["review"])
+zotero_create_note(parentItem="zotero://user/0/item/ABCD1234", tags=["review"], markdown="## Methodology\n- Key point 1\n- Key point 2")
 ```
 
 ---

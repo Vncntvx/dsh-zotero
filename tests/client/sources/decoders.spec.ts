@@ -109,10 +109,10 @@ describe('searchMetaOf', () => {
     expect(group.library).toEqual({ type: 'group', id: 42 })
     const publications = searchMetaOf({
       items: [],
-      scope: { kind: 'publications', library: { type: 'group', id: 7 } },
-      library: { type: 'group', id: 7 },
+      scope: { kind: 'publications', library: { type: 'user', id: 0 } },
+      library: { type: 'user', id: 0 },
     })
-    expect(publications.scope).toEqual({ kind: 'publications', library: { type: 'group', id: 7 } })
+    expect(publications.scope).toEqual({ kind: 'publications', library: { type: 'user', id: 0 } })
   })
 
   it('degrades unparseable or unsupported scope libraries to null, never personal', () => {
@@ -124,6 +124,12 @@ describe('searchMetaOf', () => {
     expect(searchMetaOf({ items: [], library: 'user/0' }).library).toBeNull()
     expect(searchMetaOf({ items: [] }).library).toBeNull()
     expect(searchMetaOf({ items: [], scope: { kind: 'library' } }).scope).toBeNull()
+    expect(
+      searchMetaOf({
+        items: [],
+        scope: { kind: 'publications', library: { type: 'group', id: 7 } },
+      }).scope,
+    ).toBeNull()
     expect(
       searchMetaOf({
         items: [],

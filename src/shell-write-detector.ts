@@ -42,7 +42,7 @@
 
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
 import { LOOPBACK_HOSTNAMES, type ResolvedConfig } from './config.js'
-import { WRITE_TOOL_NAMES, ZOTERO_AUTHORIZE_PATH } from './constants.js'
+import { ZOTERO_AUTHORIZE_PATH, ZOTERO_WRITE_TOOL_NAMES } from './constants.js'
 import { asRecord, asString } from './json.js'
 
 /** The shell tools whose command text this detector can read. */
@@ -302,7 +302,7 @@ function commandTextOf(execution: Pick<ToolExecution, 'name' | 'arguments'>): st
 function reasonOf(label: string): string {
   return [
     `a shell command runs ${label}, which would change the Zotero library outside the plugin`,
-    `library writes go through ${WRITE_TOOL_NAMES.join(', ')} only, where the user approves a plan first`,
+    `library writes go through ${ZOTERO_WRITE_TOOL_NAMES.join(', ')} only, where the user approves a plan first`,
     'this call needs an approval to run, and is denied when the user declines, when the session approval policy is "never", or when no approval channel is available',
   ].join('; ')
 }
@@ -314,8 +314,8 @@ function reasonOf(label: string): string {
  */
 function displayReasonOf(label: ShapeLabel): { en: string; zh: string } {
   return {
-    en: `Allow this command? It runs ${label.en}, changing your Zotero library directly through the local API — outside the plugin's write tools, so no plan is shown and no version checks apply. The plugin's write tools (${WRITE_TOOL_NAMES.join(', ')}) are the reviewed route.`,
-    zh: `允许这条命令吗？它执行的是${label.zh}，会绕过插件的写工具、直接通过本地接口修改你的 Zotero 文库——没有计划确认，也没有版本检查。插件的写工具（${WRITE_TOOL_NAMES.join('、')}）才是经过确认的路径。`,
+    en: `Allow this command? It runs ${label.en}, changing your Zotero library directly through the local API — outside the plugin's write tools, so no plan is shown and no version checks apply. The plugin's write tools (${ZOTERO_WRITE_TOOL_NAMES.join(', ')}) are the reviewed route.`,
+    zh: `允许这条命令吗？它执行的是${label.zh}，会绕过插件的写工具、直接通过本地接口修改你的 Zotero 文库——没有计划确认，也没有版本检查。插件的写工具（${ZOTERO_WRITE_TOOL_NAMES.join('、')}）才是经过确认的路径。`,
   }
 }
 

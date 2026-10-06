@@ -1,6 +1,6 @@
 /**
  * The test suite's mechanical guards: the rules that decay silently, checked
- * the way a reviewer cannot check them by hand across 55 files.
+ * the way a reviewer cannot check them by hand across the whole spec tree.
  *
  * Every check here exists because this repository actually hit the failure it
  * catches. The SourcesTab spec (since split into `SourcesTab.*.spec.tsx`) once
