@@ -25,13 +25,14 @@ import { asRecord } from '../json.js'
 import {
   ALL_CHANGES_INCLUDES,
   DEFAULT_CHANGES_INCLUDES as DEFAULT_INCLUDES,
-} from '../local/changes-domain.js'
+} from '../changes-contract.js'
 import { boundedPresentationMeta } from '../presentation-meta.js'
 import { metaRecordOf } from './present.js'
 import {
   assertIntInRange,
   assertNonEmptyList,
   invalid,
+  LIBRARY_SCHEMA,
   parseLibrary,
   requireLibrary,
 } from './validate.js'
@@ -97,23 +98,6 @@ type AssertNever<T extends never> = T
  * enum without joining `ALL_CHANGES_INCLUDES` fails the build here.
  */
 export type IncludesComplete = AssertNever<MissingInclude>
-
-/** The kinds a call covers when the model names none. `fulltext` is excluded:
- * its endpoint answers in the full-text index's own version counter, not the
- * library version this tool diffs on, so it cannot be part of the cursor story
- * and is only read when asked for by name. Single-sourced from the domain
- * (`DEFAULT_CHANGES_INCLUDES`) so the contract and the read agree by
- * construction; the enum-completeness pins below guard the rest. */
-
-/** The library shape both the `library` parameter and a cursor's library use. */
-const LIBRARY_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    type: { type: 'string', enum: ['user', 'group'], required: true },
-    id: { type: 'integer', required: true },
-  },
-} as const
 
 /** The checkpoint the tool hands back, provenance and coverage included. */
 const CURSOR_OUTPUT_SCHEMA = {

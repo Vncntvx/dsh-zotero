@@ -39,7 +39,7 @@ export function invalidRefMessage(value: string): string {
 }
 
 /** The model-facing message when a key is not 8 uppercase alphanumerics. */
-export function invalidRefKeyMessage(key: string): string {
+function invalidRefKeyMessage(key: string): string {
   return `Invalid Zotero key "${key}".`
 }
 

@@ -6,6 +6,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import {
   ZOTERO_INVALID_ARGUMENT,
   ZOTERO_NOT_FOUND,
@@ -24,6 +25,7 @@ import {
   type ProviderHarness,
 } from '../helpers/provider-harness.js'
 import { expectRequestCount, zoteroError } from '../helpers/server/assert.js'
+import { deferred } from '../helpers/sync.js'
 import {
   GROUP_ID,
   ITEM_KEY,
@@ -467,6 +469,28 @@ describe('export tolerances', () => {
   it('fails loud when a citation response is not an array', async () => {
     serveJson(mock, `${apiPath()}/items`, { key: ITEM_KEY })
     await zoteroError(provider.export(exportRequest()), ZOTERO_UNEXPECTED)
+  })
+
+  it('propagates caller cancellation out of the metadata read', async () => {
+    // The metadata read is fail-open for transport failures, but a caller
+    // abort is not a metadata failure: swallowing it would settle a body the
+    // caller stopped. Hold the metadata response unanswered so the abort is
+    // the only thing that can settle that arm.
+    const batchText = '@article{customKeyA,\n  title = {Carbon price forecasting},\n}\n'
+    const metaInFlight = deferred<void>()
+    mock.route('GET', `${apiPath()}/items`, (req, res, helpers, search) => {
+      if (search.get('format') === 'bibtex') {
+        helpers.text(batchText)
+        return
+      }
+      // The metadata batch: recorded as sent, deliberately never answered.
+      metaInFlight.resolve()
+    })
+    const controller = new AbortController()
+    const pending = provider.export(exportRequest({ format: 'bibtex' }), controller.signal)
+    await metaInFlight.promise
+    controller.abort()
+    await expect(pending).rejects.toMatchObject({ code: TOOL_ABORTED })
   })
 
   it('fails loud on a citation row without a valid key', async () => {

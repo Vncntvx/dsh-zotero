@@ -1,10 +1,11 @@
 /**
  * The `zotero_get` tool: read one item's metadata, with child notes,
  * annotations, and attachments included on request. The default call is a
- * single request; any include reads the bare `/children` listing
- * (notes/attachments), and an annotations include adds the
- * `?itemType=annotation` listing — the Local API never returns annotations
- * from the bare children endpoint. Ref provenance is checked by the provider.
+ * single request; a notes or attachments include reads the bare `/children`
+ * listing, and an annotations include adds the `?itemType=annotation`
+ * listing — the Local API never returns annotations from the bare children
+ * endpoint, so an annotations-only include reads no bare listing. Ref
+ * provenance is checked by the provider.
  * @module dsh-zotero/tools/get
  */
 

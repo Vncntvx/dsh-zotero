@@ -17,7 +17,13 @@
  * @module dsh-zotero/local/provider
  */
 
-import { LOCAL_PROVIDER_ID, ZOTERO_SERVER_ID_HEADER, ZOTERO_VERSION_HEADER } from '../constants.js'
+import {
+  LOCAL_PROVIDER_ID,
+  ZOTERO_API_VERSION_HEADER,
+  ZOTERO_SCHEMA_VERSION_HEADER,
+  ZOTERO_SERVER_ID_HEADER,
+  ZOTERO_VERSION_HEADER,
+} from '../constants.js'
 import { PERSONAL_LIBRARY } from '../refs.js'
 import { errorChain } from '@deepseek-ai/dsh-llm'
 import { ZoteroError, ZOTERO_CAPABILITY_UNAVAILABLE } from '../errors.js'
@@ -224,9 +230,9 @@ export class LocalApiProvider implements ZoteroProvider {
         // probe answered: when it did not, the address is what the user needs.
         endpoint: this.client.endpoint,
         connected: true,
-        apiVersion: headers.get('zotero-api-version') ?? undefined,
+        apiVersion: headers.get(ZOTERO_API_VERSION_HEADER) ?? undefined,
         serverId,
-        schemaVersion: headers.get('zotero-schema-version') ?? undefined,
+        schemaVersion: headers.get(ZOTERO_SCHEMA_VERSION_HEADER) ?? undefined,
         zoteroVersion: headers.get(ZOTERO_VERSION_HEADER) ?? undefined,
         ...(write !== undefined ? { write } : {}),
         diagnosis: 'ok',

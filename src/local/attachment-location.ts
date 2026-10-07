@@ -7,6 +7,7 @@
 
 import { access } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
+import { ZOTERO_SERVER_ID_HEADER } from '../constants.js'
 import type { ZoteroHttpClient } from '../http-client.js'
 import {
   errnoCodeOf,
@@ -23,7 +24,6 @@ import {
 } from '../attachments.js'
 import { formatRef, libraryPrefix, refForLibrary, requireSupportedLocalRef } from '../refs.js'
 import { fetchDirectChildren } from './children-wire.js'
-import type { LocalApiLimits } from './limits.js'
 import type { SupportedLocalLibrary, ZoteroAttachmentLocation, ZoteroObjectRef } from '../types.js'
 
 /** Shown when a reported file location cannot be expressed as a local path. */
@@ -109,7 +109,7 @@ function parseAttachmentLocation(
  * dead path.
  */
 export async function getAttachmentLocation(
-  deps: { client: ZoteroHttpClient; limits: LocalApiLimits },
+  deps: { client: ZoteroHttpClient },
   ref: ZoteroObjectRef,
   signal?: AbortSignal,
 ): Promise<ZoteroAttachmentLocation> {
@@ -126,7 +126,7 @@ export async function getAttachmentLocation(
     throw new ZoteroError(attachmentTypeMessage(itemType), ZOTERO_NO_ATTACHMENT)
   }
   const attachment = normalizeAttachmentRecord(item.json)
-  const serverId = item.headers.get('zotero-server-id') ?? local.serverId
+  const serverId = item.headers.get(ZOTERO_SERVER_ID_HEADER) ?? local.serverId
   const formattedRef = formatRef(
     refForLibrary(local.library as SupportedLocalLibrary, 'attachment', attachment.key, serverId),
   )

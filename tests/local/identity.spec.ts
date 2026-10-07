@@ -189,11 +189,23 @@ describe('Server-ID cache identity', () => {
     ).toHaveLength(2)
   })
 
-  it('exposes createProvider limits unchanged for identity specs', async () => {
-    // Pins that the shared harness still builds an independent provider per
-    // spec; the identity guard lives in provider state, not module state.
+  it('keeps provider state per instance: a fresh provider re-reads what one cached', async () => {
+    // The identity guard lives in provider state, not module state. A second
+    // provider over the same mock must therefore issue its own reads — if the
+    // scope cache were shared, this read would be answered from the first
+    // provider's warm entries and the count below would stay at one.
+    serveJson(mock, `${apiPath()}/items/${ITEM_KEY}`, PARENT, versionHeaders('A'))
+    serveJson(mock, `${apiPath()}/collections`, collectionListing('A'), versionHeaders('A'))
+    const read = async (): Promise<void> => {
+      await provider.getItem({ ref: parseRef(itemRef()), include: new Set() })
+    }
+    await read()
     const fresh = createProvider(mock)
-    expect(fresh.id).toBe(provider.id)
+    expect(fresh).not.toBe(provider)
+    const before = mock.requests.filter((request) => request.pathname.endsWith('/collections'))
+    await fresh.getItem({ ref: parseRef(itemRef()), include: new Set() })
+    const after = mock.requests.filter((request) => request.pathname.endsWith('/collections'))
+    expect(after.length).toBeGreaterThan(before.length)
   })
 
   it('reports no write state from a provider that wires no write capability', async () => {
@@ -328,7 +340,40 @@ describe('Server-ID cache identity', () => {
     await expect(Promise.all([normal, forced])).resolves.toHaveLength(2)
   })
 
-  it('keeps the newest forced listing when responses settle out of order', async () => {
+  it('shares one in-flight request across concurrent forced refreshes', async () => {
+    const first = deferred<{ json: unknown; headers: Headers }>()
+    const started = deferred<void>()
+    let reads = 0
+    const client = {
+      getJson: async () => {
+        reads += 1
+        started.resolve()
+        return await first.promise
+      },
+    } as unknown as ZoteroHttpClient
+    const directory = new ScopeDirectory(client, () => PROVIDER_LIMITS.scopeListingTtlMs)
+    const firstForce = directory.scopeListingOf(
+      'collections',
+      { library: PERSONAL_LIBRARY },
+      undefined,
+      { force: true },
+    )
+    await started.promise
+    const secondForce = directory.scopeListingOf(
+      'collections',
+      { library: PERSONAL_LIBRARY },
+      undefined,
+      { force: true },
+    )
+    first.resolve({ json: [], headers: new Headers() })
+    await expect(Promise.all([firstForce, secondForce])).resolves.toHaveLength(2)
+    // Both callers forced for the same reason (the cache missed), so they want
+    // the same fresh answer: one request serves both. A per-call key would
+    // have sent two.
+    expect(reads).toBe(1)
+  })
+
+  it('keeps the forced listing when a slower normal response settles after it', async () => {
     const first = deferred<{ json: unknown; headers: Headers }>()
     const second = deferred<{ json: unknown; headers: Headers }>()
     const started = [deferred<void>(), deferred<void>()]
@@ -341,20 +386,17 @@ describe('Server-ID cache identity', () => {
       },
     } as unknown as ZoteroHttpClient
     const directory = new ScopeDirectory(client, () => PROVIDER_LIMITS.scopeListingTtlMs)
-    const firstForce = directory.scopeListingOf(
-      'collections',
-      { library: PERSONAL_LIBRARY },
-      undefined,
-      { force: true },
-    )
+    const normal = directory.scopeListingOf('collections', { library: PERSONAL_LIBRARY }, undefined)
     await started[0]?.promise
-    const secondForce = directory.scopeListingOf(
+    const forced = directory.scopeListingOf(
       'collections',
       { library: PERSONAL_LIBRARY },
       undefined,
       { force: true },
     )
     await started[1]?.promise
+    // The forced read answers first and is the newer generation; the normal
+    // read that started earlier settles late and must not overwrite it.
     second.resolve({
       json: [{ key: 'NEW12345', data: { name: 'new' } }],
       headers: new Headers(),
@@ -363,7 +405,7 @@ describe('Server-ID cache identity', () => {
       json: [{ key: 'OLD12345', data: { name: 'old' } }],
       headers: new Headers(),
     })
-    await expect(Promise.all([firstForce, secondForce])).resolves.toHaveLength(2)
+    await expect(Promise.all([normal, forced])).resolves.toHaveLength(2)
     const cached = await directory.scopeListingOf(
       'collections',
       { library: PERSONAL_LIBRARY },

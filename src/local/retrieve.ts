@@ -8,21 +8,27 @@
  * @module dsh-zotero/local/retrieve
  */
 
+import { ZOTERO_SERVER_ID_HEADER } from '../constants.js'
 import type { ZoteroHttpClient } from '../http-client.js'
 import { mapWithConcurrency } from '../concurrency.js'
 import {
   isNotFoundError,
   NO_FULLTEXT_MESSAGE,
-  SERVER_MISMATCH_MESSAGE,
   ZOTERO_INVALID_ARGUMENT,
   ZOTERO_NO_FULLTEXT,
-  ZOTERO_SERVER_MISMATCH,
   ZoteroError,
 } from '../errors.js'
 import { chunkText, rankChunks, tokenize, type EvidenceChunk } from '../evidence.js'
 import { asRecord, asString } from '../json.js'
 import { selectAttachments, bestAttachmentFromLinks } from '../attachments.js'
-import { formatRef, libraryPrefix, refForLibrary, requireSupportedLocalRef } from '../refs.js'
+import {
+  formatRef,
+  libraryPrefix,
+  refForLibrary,
+  requireSupportedLocalRef,
+  sameLibrary,
+} from '../refs.js'
+import { assertServerIdMatches } from './identity.js'
 import {
   partitionChildren,
   plainNoteText,
@@ -120,7 +126,7 @@ export async function retrieve(
     signal,
     serverId: ref.serverId,
   })
-  const serverId = parent.headers.get('zotero-server-id') ?? ref.serverId
+  const serverId = parent.headers.get(ZOTERO_SERVER_ID_HEADER) ?? ref.serverId
   const record = asRecord(parent.json)
   const data = asRecord(record?.data)
   const itemType = asString(data?.itemType) ?? asString(record?.itemType)
@@ -254,7 +260,7 @@ export async function retrieve(
       // as if it named many.
       const distinct = new Map<string, ZoteroObjectRef>()
       for (const attachmentRef of request.attachmentRefs!) {
-        const identity = `${attachmentRef.library.type}/${attachmentRef.library.id}/${attachmentRef.key}?${attachmentRef.serverId ?? ''}`
+        const identity = formatRef(attachmentRef)
         if (!distinct.has(identity)) distinct.set(identity, attachmentRef)
       }
       if (distinct.size > deps.limits.retrieveAttachmentCap) {
@@ -272,15 +278,13 @@ export async function retrieve(
           // would attach a stranger's words to this item, so the claim is
           // checked against the ref itself before any read, and against the
           // object's own answer after it.
-          if (wanted.library.type !== ref.library.type || wanted.library.id !== ref.library.id) {
+          if (!sameLibrary(wanted.library, ref.library)) {
             throw new ZoteroError(
               `Attachment ref ${wanted.key} belongs to library ${wanted.library.type}/${wanted.library.id}, not to ${ref.library.type}/${ref.library.id}. Full text entering this item's evidence must come from this item's own library.`,
               ZOTERO_INVALID_ARGUMENT,
             )
           }
-          if (wanted.serverId !== undefined && wanted.serverId !== serverId) {
-            throw new ZoteroError(SERVER_MISMATCH_MESSAGE, ZOTERO_SERVER_MISMATCH)
-          }
+          assertServerIdMatches(wanted.serverId, serverId)
           const row = await deps.client.getJson<unknown>(
             `${prefix}/items/${wanted.key}`,
             undefined,

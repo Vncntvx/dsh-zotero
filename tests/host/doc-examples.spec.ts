@@ -45,6 +45,8 @@ const DOC_FILES = [
   'docs/configuration.en.md',
   'docs/architecture.md',
   'docs/architecture.en.md',
+  'docs/scenarios.md',
+  'docs/scenarios.en.md',
 ]
 
 /** The documents that carry call examples today. */

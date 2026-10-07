@@ -7,7 +7,7 @@
  * @module tests/local/browse-fail-loud
  */
 
-import { afterEach, beforeEach, describe, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ZOTERO_UNEXPECTED } from '../../src/errors.js'
 import { type LocalApiProvider } from '../../src/local/provider.js'
 import {
@@ -82,5 +82,68 @@ describe('browse: non-array bodies fail loud', () => {
       ZOTERO_UNEXPECTED,
       'Zotero returned a malformed tag row without a tag name',
     )
+  })
+})
+
+/**
+ * A server-paged listing that answers an in-range page with zero rows has
+ * contradicted the `Total-Results` it just sent. Terminating silently there
+ * would report a truncated listing as a complete one, which the caller cannot
+ * detect; the three server-paged kinds must fail loud instead. `libraries`,
+ * `itemTypes`, and `itemFields` are sliced client-side and are unaffected —
+ * a request past the end of a list already in hand is a legitimate empty page.
+ */
+describe('browse: empty pages with range left fail loud', () => {
+  it('refuses an empty collections page that still has range left', async () => {
+    mock.route('GET', '/api/users/0/collections/top', (_req, res, helpers) => {
+      helpers.json([], { 'Total-Results': '5', 'Zotero-Server-ID': 'srv-1' })
+    })
+    await zoteroError(
+      provider.browse({ kind: 'collections', offset: 2, limit: 10 }),
+      ZOTERO_UNEXPECTED,
+      'empty page for collections',
+    )
+  })
+
+  it('refuses an empty savedSearches page that still has range left', async () => {
+    mock.route('GET', '/api/users/0/searches', (_req, res, helpers) => {
+      helpers.json([], { 'Total-Results': '5', 'Zotero-Server-ID': 'srv-1' })
+    })
+    await zoteroError(
+      provider.browse({ kind: 'savedSearches', offset: 2, limit: 10 }),
+      ZOTERO_UNEXPECTED,
+      'empty page for saved searches',
+    )
+  })
+
+  it('refuses an empty tags page that still has range left', async () => {
+    mock.route('GET', '/api/users/0/tags', (_req, res, helpers) => {
+      helpers.json([], { 'Total-Results': '5', 'Zotero-Server-ID': 'srv-1' })
+    })
+    await zoteroError(
+      provider.browse({ kind: 'tags', offset: 2, limit: 10 }),
+      ZOTERO_UNEXPECTED,
+      'empty page for tags',
+    )
+  })
+
+  it('still ends a server-paged listing whose page is past the reported total', async () => {
+    // The offset is beyond the total, so the empty body agrees with the
+    // header: this is the end of the listing, not a breach.
+    mock.route('GET', '/api/users/0/tags', (_req, res, helpers) => {
+      helpers.json([], { 'Total-Results': '2', 'Zotero-Server-ID': 'srv-1' })
+    })
+    const page = await provider.browse({ kind: 'tags', offset: 2, limit: 10 })
+    expect(page.returned).toBe(0)
+    expect(page.nextOffset).toBeUndefined()
+  })
+
+  it('still serves an empty client-sliced page past the end of the list', async () => {
+    // itemTypes is sliced from a list already in hand; asking past its end is
+    // an ordinary empty page and must not be reported as a breach.
+    serveJson(mock, '/api/itemTypes', [{ itemType: 'journalArticle' }])
+    const page = await provider.browse({ kind: 'itemTypes', offset: 9, limit: 10 })
+    expect(page.returned).toBe(0)
+    expect(page.nextOffset).toBeUndefined()
   })
 })

@@ -18,6 +18,7 @@ import {
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
 import type { ResolvedConfig } from '../config.js'
+import { formatRef, sameLibrary } from '../refs.js'
 import { withConnectivityAsk } from '../ask.js'
 import { boundedPresentationMeta, projectRetrieveMeta } from '../presentation-meta.js'
 import { metaRecordOf } from './present.js'
@@ -194,13 +195,10 @@ function buildRequest(args: RetrieveArgs, config: ResolvedConfig): ZoteroRetriev
     const seen = new Set<string>()
     for (const value of raw) {
       const attachmentRef = parseSupportedRef(value, ['attachment'])
-      const identity = `${attachmentRef.library.type}/${attachmentRef.library.id}/${attachmentRef.key}?${attachmentRef.serverId ?? ''}`
+      const identity = formatRef(attachmentRef)
       if (seen.has(identity)) continue
       seen.add(identity)
-      if (
-        attachmentRef.library.type !== ref.library.type ||
-        attachmentRef.library.id !== ref.library.id
-      ) {
+      if (!sameLibrary(attachmentRef.library, ref.library)) {
         invalid(attachmentRefsLibraryMessage(`${ref.library.type}/${ref.library.id}`))
       }
       attachmentRefs.push(attachmentRef)

@@ -165,14 +165,16 @@ export class ScopeDirectory {
     ) {
       return cached
     }
-    const forcedGeneration = options.force === true ? ++this.nextListingGeneration : undefined
-    const requestKey = `${key}:${ctx.serverId ?? ''}:${
-      forcedGeneration === undefined ? 'normal' : `force:${forcedGeneration}`
-    }`
+    // A forced refresh must not join a normal read: that answer may predate
+    // what the caller is asking for (the caller forced precisely because the
+    // cached one missed). Two forced refreshes, by contrast, want the same
+    // fresh answer and share the one request — a per-call counter in this key
+    // would give each its own, defeating the in-flight map. A stable key keeps
+    // the two classes apart while letting each dedupe within itself.
+    const requestKey = `${key}:${ctx.serverId ?? ''}:${options.force === true ? 'force' : 'normal'}`
     const existing = this.scopeListingInFlight.get(requestKey)
     const latestGeneration = this.latestListingGeneration.get(key)
-    // A normal operation may still be in flight when a forced refresh starts.
-    // Do not let a later normal caller join that older answer: generation
+    // Do not let a later normal caller join an older answer: generation
     // ordering protects the cache, and the arriving caller must receive the
     // same freshness guarantee as the cache.
     const canShare =
@@ -186,7 +188,7 @@ export class ScopeDirectory {
     if (existing !== undefined) this.scopeListingInFlight.delete(requestKey)
     if (options.force === true) this.scopeListingCache.delete(key)
 
-    const generation = forcedGeneration ?? ++this.nextListingGeneration
+    const generation = ++this.nextListingGeneration
     this.latestListingGeneration.set(key, generation)
     const operation: ScopeListingOperation = {
       controller: new AbortController(),

@@ -8,8 +8,8 @@
 import {
   WRITE_LIST_SELECTION_MESSAGE,
   ZOTERO_INVALID_ARGUMENT,
+  requireNonBlank,
   writeListTooLongMessage,
-  writeNonBlankMessage,
   ZoteroError,
 } from '../errors.js'
 import { parseRef, requireSupportedLocalRef, requireWritableRef } from '../refs.js'
@@ -23,6 +23,16 @@ export const WRITE_REF_ARG_HINT = 'zotero://user/0/item/<KEY>'
 
 /** Write collection refs share the same personal-library boundary. */
 export const WRITE_COLLECTION_REF_ARG_HINT = 'zotero://user/0/collection/<KEY>'
+
+/** The JSON schema for a supported local library (personal or group). */
+export const LIBRARY_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    type: { type: 'string', enum: ['user', 'group'], required: true },
+    id: { type: 'integer', required: true },
+  },
+} as const
 
 /** Throw an argument error; the message is model-facing. */
 export function invalid(message: string): never {
@@ -44,16 +54,11 @@ export function intRangeArgumentMessage(
  * its trimmed form. Browse facet filters route through here; search and
  * export keep their own messages (blank query is omitted, blank tags/style
  * name their domain), so this stays scoped to genuinely blank-is-invalid
- * filters rather than pretending to cover every tool.
- * @param name - the argument name shown in the message.
- * @param value - the raw argument value.
- * @returns the trimmed value.
+ * filters rather than pretending to cover every tool. The rule and its
+ * message live in `errors.ts` (`requireNonBlank`), shared with the domain end
+ * of every write; this is the tool layer's spelling of the same guard.
  */
-export function assertNonBlank(name: string, value: string): string {
-  const trimmed = value.trim()
-  if (trimmed === '') invalid(writeNonBlankMessage(name))
-  return trimmed
-}
+export const assertNonBlank = requireNonBlank
 
 /**
  * Assert an integer within `[min, max]`, naming the argument and its value.

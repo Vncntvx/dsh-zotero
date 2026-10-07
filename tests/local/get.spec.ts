@@ -150,6 +150,36 @@ describe('getItem', () => {
     expectRequestLines(mock, ['/api/users/0/items/ABCD1234'])
   })
 
+  it('reads no bare children listing when only annotations were asked for', async () => {
+    // Annotations ride their own filtered contract, so the unfiltered
+    // children request would fetch notes and attachments this call never
+    // returns. Asking for annotations alone must not pay for that page.
+    serveItemGraph(mock, {
+      parent: PARENT,
+      children: [noteRow(), attachment()],
+      annotations: [annotationRow()],
+      collections: [collectionRow()],
+    })
+    const detail = await provider.getItem(getRequest(['annotations']))
+    expect(requestLines(mock)).not.toContain('/api/users/0/items/ABCD1234/children')
+    expect(requestLines(mock)).toContain('/api/users/0/items/ABCD1234/children?itemType=annotation')
+    expect(detail.annotations!.total).toBe(1)
+    expect(detail.notes).toBeUndefined()
+    expect(detail.attachments).toBeUndefined()
+  })
+
+  it('does not count annotations into children.total when numChildren is absent', async () => {
+    serveItemGraph(mock, {
+      parent: item({ meta: {} }),
+      children: [],
+      annotations: [annotationRow()],
+      collections: [],
+    })
+    const detail = await provider.getItem(getRequest(['annotations']))
+    expect(detail.annotations!.total).toBe(1)
+    expect(detail.children.total).toBe(0)
+  })
+
   it('leaves collection names off when the listing lacks them', async () => {
     serveJson(mock, `${apiPath()}/items/${ITEM_KEY}`, PARENT)
     serveJson(mock, `${apiPath()}/collections`, [

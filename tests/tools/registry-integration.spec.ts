@@ -17,8 +17,8 @@ import {
   PARENT_REF_SCOPE_MESSAGE,
   Q_MATCH_SCOPE_MESSAGE,
   libraryNotAllowedMessage,
-} from '../../src/local/browse-domain.js'
-import { writeNonBlankMessage } from '../../src/errors.js'
+  writeNonBlankMessage,
+} from '../../src/errors.js'
 import { expectValue } from '../helpers/lanes/host-lane.js'
 import { MockZotero } from '../helpers/mock-zotero.js'
 

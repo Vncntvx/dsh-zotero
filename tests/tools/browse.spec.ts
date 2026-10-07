@@ -10,8 +10,8 @@ import { browseMoreMessage, renderBrowse } from '../../src/tools/browse.js'
 import {
   MATCH_REQUIRES_Q_MESSAGE,
   libraryNotAllowedMessage,
-} from '../../src/local/browse-domain.js'
-import { writeNonBlankMessage } from '../../src/errors.js'
+  writeNonBlankMessage,
+} from '../../src/errors.js'
 import {
   GROUP_ID_MESSAGE,
   intRangeArgumentMessage,

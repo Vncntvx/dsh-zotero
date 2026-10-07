@@ -10,8 +10,9 @@ import type { ZoteroHttpClient } from '../http-client.js'
 import { mapWithConcurrency } from '../concurrency.js'
 import { ZOTERO_ITEMKEY_BATCH } from '../constants.js'
 import { tokenize } from '../evidence.js'
-import { ZOTERO_INVALID_ARGUMENT, ZOTERO_UNEXPECTED, ZoteroError } from '../errors.js'
-import { nextOffsetOf, requireArrayBody, requireTotalResults } from './pagination.js'
+import { ZOTERO_INVALID_ARGUMENT, ZoteroError } from '../errors.js'
+import { nextOffsetOrFail, requireArrayBody, requireTotalResults } from './pagination.js'
+import { ZOTERO_SERVER_ID_HEADER } from '../constants.js'
 import {
   publicationsItemsPath,
   resolveScope,
@@ -101,7 +102,7 @@ export async function runSearch(
     },
   )
   const rows = requireArrayBody(json, 'items top listing')
-  const responseServerId = headers.get('zotero-server-id') ?? scope.serverId
+  const responseServerId = headers.get(ZOTERO_SERVER_ID_HEADER) ?? scope.serverId
   const libraryForItems = libraryOfResolvedScope(scope.resolved)
   const ctxForSearch: { library: SupportedLocalLibrary; serverId?: string } = {
     library: libraryForItems,
@@ -111,14 +112,10 @@ export async function runSearch(
   // Pagination honesty is uniform across every paged listing: without a
   // valid Total-Results header the call fails instead of guessing a total.
   const apiTotal = requireTotalResults(headers, 'items top listing')
-  // An empty page that still has range left is a body/header mismatch: the
-  // next cursor would stall at the same offset forever. Fail loud here.
-  if (items.length === 0 && request.offset < apiTotal) {
-    throw new ZoteroError(
-      `Zotero search returned an empty page at offset ${request.offset} but Total-Results is ${apiTotal}`,
-      ZOTERO_UNEXPECTED,
-    )
-  }
+  // A server-paged listing that answers an in-range page with no rows has
+  // breached the total it just reported; `nextOffsetOrFail` fails loud here
+  // rather than letting the empty page read as the end of the results.
+  const nextOffset = nextOffsetOrFail(request.offset, items.length, apiTotal, 'search results')
   // Zotero's index never searches note bodies, so the first page of a
   // queried search lists client-side note-content matches in `supplemental`
   // — a separate list beside the paged primary results, up to the primary
@@ -209,7 +206,6 @@ export async function runSearch(
     returned: items.length,
   }
   if (supplemental !== undefined) result.supplemental = supplemental
-  const nextOffset = nextOffsetOf(request.offset, items.length, apiTotal)
   if (nextOffset !== undefined) result.nextOffset = nextOffset
   return result
 }

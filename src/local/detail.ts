@@ -85,9 +85,7 @@ export async function getItem(
   const [children, collectionNames] = await Promise.all([
     includes.length > 0
       ? loadChildRows(deps, ref.key, ref.library as SupportedLocalLibrary, serverId, signal, {
-          // Detail always materializes notes/attachments/annotations from
-          // their own contracts once any include was requested.
-          direct: true,
+          direct: request.include.has('notes') || request.include.has('attachments'),
           annotations: request.include.has('annotations'),
         })
       : undefined,
@@ -218,7 +216,7 @@ export async function loadChildRows(
   serverId: string | undefined,
   signal: AbortSignal | undefined,
   needs: ChildRowNeeds,
-): Promise<{ readonly rows: readonly unknown[]; readonly directCount: number }> {
+): Promise<{ readonly rows: readonly unknown[]; readonly directCount?: number }> {
   const [direct, annotations] = await Promise.all([
     needs.direct
       ? fetchDirectChildren(deps, key, library, serverId, signal)
@@ -229,6 +227,6 @@ export async function loadChildRows(
   ])
   return {
     rows: annotations.length > 0 ? [...direct, ...annotations] : direct,
-    directCount: direct.length,
+    directCount: needs.direct ? direct.length : undefined,
   }
 }

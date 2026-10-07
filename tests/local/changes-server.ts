@@ -13,7 +13,7 @@
  */
 
 import { expect } from 'vitest'
-import { DEFAULT_CHANGES_INCLUDES } from '../../src/local/changes-domain.js'
+import { DEFAULT_CHANGES_INCLUDES } from '../../src/changes-contract.js'
 import type { ZoteroChangesCursor, ZoteroChangesInclude } from '../../src/types.js'
 import type { MockZotero, RouteHandler } from '../helpers/mock-zotero.js'
 import { PERSONAL_LIBRARY, SERVER_ID, apiPath } from '../helpers/server/keys.js'
@@ -26,6 +26,22 @@ export function at(
   include: readonly ZoteroChangesInclude[] = DEFAULT_CHANGES_INCLUDES,
 ): ZoteroChangesCursor {
   return { serverId, library: PERSONAL_LIBRARY, version, include: [...include] }
+}
+
+/**
+ * Assert a diff request carries a well-formed `since` watermark.
+ *
+ * `expect(...).toBeDefined()` passes for `null` — the value `search.get()`
+ * returns when the parameter is absent — so it pins nothing. The contract the
+ * domain must meet is stronger: the watermark is the caller's library version
+ * serialized as a non-negative safe integer.
+ */
+function expectSinceCursor(search: URLSearchParams): void {
+  const since = search.get('since')
+  expect(since).not.toBeNull()
+  const version = Number(since)
+  expect(Number.isSafeInteger(version)).toBe(true)
+  expect(version).toBeGreaterThanOrEqual(0)
 }
 
 /** A key→version map shaped like `format=versions` responses. */
@@ -112,7 +128,7 @@ export function routeItems(mock: MockZotero, options: ItemsFixture = {}): void {
       )
       return
     }
-    expect(search.get('since')).toBeDefined()
+    expectSinceCursor(search)
     expect(search.get('format')).toBe('versions')
     // The diff is read unbounded: a page cap would report a version that
     // already sits past the rows it hid, which is the bug this pins.
@@ -182,7 +198,7 @@ export function routeVersions(
   headers: Record<string, string> = {},
 ): void {
   mock.route('GET', path, (req, res, helpers, search) => {
-    expect(search.get('since')).toBeDefined()
+    expectSinceCursor(search)
     expect(search.get('format')).toBe('versions')
     expect(search.get('limit')).toBeNull()
     helpers.json(body, { ...versionHeaders(), ...headers })
@@ -201,7 +217,7 @@ export function tombstones(overrides: Record<string, unknown> = {}): Record<stri
  */
 export function routeTombstones(mock: MockZotero, overrides: Record<string, unknown> = {}): void {
   mock.route('GET', `${apiPath()}/deleted`, (req, res, helpers, search) => {
-    expect(search.get('since')).toBeDefined()
+    expectSinceCursor(search)
     helpers.json(tombstones(overrides))
   })
 }

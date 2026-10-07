@@ -31,7 +31,7 @@ import { citekeyOf } from '../normalize.js'
 import { assertPublicationsSupported } from '../refs.js'
 import { boundedPresentationMeta, projectSearchMeta } from '../presentation-meta.js'
 import { formatSearchLine, metaRecordOf } from './present.js'
-import { assertIntInRange, invalid, parseLibrary } from './validate.js'
+import { assertIntInRange, invalid, LIBRARY_SCHEMA, parseLibrary } from './validate.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroSearchRequest } from '../types.js'
 
@@ -87,12 +87,7 @@ const SEARCH_PARAMETERS = {
       'Where to search. Defaults to the whole library; publications searches My Publications.',
   },
   library: {
-    type: 'object',
-    additionalProperties: false,
-    properties: {
-      type: { type: 'string', enum: ['user', 'group'], required: true },
-      id: { type: 'integer', required: true },
-    },
+    ...LIBRARY_SCHEMA,
     description:
       'Library to search (personal user/0 or group/<id>); omit defaults to user/0. For collection/savedSearch by name, this chooses the library; for ref scopes must match the ref.',
   },

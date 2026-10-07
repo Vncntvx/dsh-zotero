@@ -176,9 +176,12 @@ async function fetchRawItemBatch(
         .map(asRecord)
         .filter((item): item is Record<string, unknown> => item !== undefined)
     }
-  } catch {
+  } catch (error) {
     // Fail-open for metadata: if raw JSON fetch fails, alignment still proceeds with
-    // available fields and direct keys without failing the export.
+    // available fields and direct keys without failing the export. Cancellation is
+    // not a metadata failure: swallowing it would report a body the caller stopped
+    // as a settled success.
+    if (signal?.aborted) throw error
   }
   return []
 }

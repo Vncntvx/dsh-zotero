@@ -19,7 +19,13 @@ import { boundedPresentationMeta } from '../presentation-meta.js'
 import { metaRecordOf } from './present.js'
 import { browseRowOf, BROWSE_KINDS, type BrowseRow } from '../browse-rows.js'
 import { assertPublicationsSupported } from '../refs.js'
-import { assertIntInRange, assertNonBlank, invalid, parseLibrary } from './validate.js'
+import {
+  assertIntInRange,
+  assertNonBlank,
+  invalid,
+  LIBRARY_SCHEMA,
+  parseLibrary,
+} from './validate.js'
 import {
   ITEM_FIELDS_ITEM_TYPE_MESSAGE,
   ITEM_TYPE_SCOPE_MESSAGE,
@@ -28,7 +34,7 @@ import {
   Q_MATCH_SCOPE_MESSAGE,
   libraryNotAllowedMessage,
   unsupportedBrowseKindMessage,
-} from '../local/browse-domain.js'
+} from '../errors.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroBrowseKind, ZoteroBrowseRequest } from '../types.js'
 
@@ -41,12 +47,7 @@ const BROWSE_PARAMETERS = {
       'What to browse: libraries, collections, savedSearches, tags, itemTypes, itemFields (itemFields requires itemType)',
   },
   library: {
-    type: 'object',
-    additionalProperties: false,
-    properties: {
-      type: { type: 'string', enum: ['user', 'group'], required: true },
-      id: { type: 'integer', required: true },
-    },
+    ...LIBRARY_SCHEMA,
     description:
       'Library for collections/savedSearches/tags; omitted defaults to personal user/0. Not allowed for libraries/itemTypes/itemFields (fail-closed).',
   },
@@ -134,13 +135,8 @@ const BROWSE_OUTPUT_SCHEMA = {
             additionalProperties: false,
             properties: {
               library: {
-                type: 'object',
+                ...LIBRARY_SCHEMA,
                 required: true,
-                additionalProperties: false,
-                properties: {
-                  type: { type: 'string', enum: ['user', 'group'], required: true },
-                  id: { type: 'integer', required: true },
-                },
               },
               name: { type: 'string', required: true },
             },

@@ -113,16 +113,36 @@ describe('retrieve tolerances', () => {
     })
   })
 
-  it('treats a non-array children response as no annotation or note evidence', async () => {
+  it('reports a requested note source as skipped when the item has no children', async () => {
+    // `children: null` serves an empty listing, so the item genuinely has no
+    // notes to extract from; the requested note source is reported as
+    // skipped rather than silently absent.
     serveItemGraph(mock, { parent: RETRIEVE_PARENT, children: null, serverId: null })
-    // A non-array body is not a child listing any builder models.
-    serveJson(mock, `${apiPath()}/items/${ITEM_KEY}/children`, { key: NOTE_KEY })
     const result = await provider.retrieve(retrieveRequest({ sources: ['note'], passages: 2 }))
     expect(result.evidence).toEqual([])
     expect(result.truncated).toBe(false)
-    // A requested source the item cannot provide is reported, not silently
-    // absent: the malformed children response yields no notes.
     expect(result.sourcesSkipped).toEqual(['note'])
+  })
+
+  it('fails loud on a non-array children response instead of reporting no notes', async () => {
+    // A malformed body is a contract breach, not an item without notes. It
+    // must reject: folding it to `[]` would let a broken response read as
+    // "this item has no notes", which the model cannot tell from the truth.
+    // The parent is served alone so the malformed listing is the only
+    // children route registered — a graph helper would answer first and the
+    // breach would never arrive.
+    serveItemGraph(mock, {
+      parent: RETRIEVE_PARENT,
+      children: null,
+      parentAnnotations: null,
+      serverId: null,
+    })
+    serveJson(mock, `${apiPath()}/items/${ITEM_KEY}/children`, { key: NOTE_KEY })
+    await zoteroError(
+      provider.retrieve(retrieveRequest({ sources: ['note'], passages: 2 })),
+      ZOTERO_UNEXPECTED,
+      'non-array body for item children',
+    )
   })
 
   it('omits abstract evidence when the parent has no abstract', async () => {

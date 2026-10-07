@@ -755,5 +755,7 @@ function childrenTotal(
   // The merged array inflates the row count by annotation rows from the
   // filtered listing, so prefer the caller's direct count when it rode along.
   if (directChildCount !== undefined) return directChildCount
-  return childrenRows?.length ?? 0
+  if (childrenRows === undefined) return 0
+  return childrenRows.filter((row) => asRecord(asRecord(row)?.data)?.itemType !== 'annotation')
+    .length
 }

@@ -201,14 +201,33 @@ describe('children', () => {
     expectRequestCount(mock, 0)
   })
 
-  it('fails loud with UNEXPECTED when a children listing is not an array', async () => {
-    // A non-array body is a contract breach on either wire: folding it to `[]`
-    // would silently under-report the graph.
+  it('fails loud when the bare children listing is not an array', async () => {
+    // A non-array body is a contract breach, not an empty page: folding it to
+    // `[]` would silently under-report the graph. The two wires are asserted
+    // separately — a test that served both non-arrays at once would pass on
+    // whichever rejected first and could not tell the two contracts apart.
     serveJson(mock, `${apiPath()}/items/${ITEM_KEY}`, PARENT)
     serveJson(mock, `${apiPath()}/items/${ITEM_KEY}/children`, { key: 'NOTE1111' })
+    serveJson(mock, `${apiPath()}/items/${ITEM_KEY}/children?itemType=annotation`, [
+      annotationRow(),
+    ])
+    await zoteroError(
+      provider.children(childrenRequest(itemRef())),
+      ZOTERO_UNEXPECTED,
+      'item children',
+    )
+  })
+
+  it('fails loud when the filtered annotation listing is not an array', async () => {
+    serveJson(mock, `${apiPath()}/items/${ITEM_KEY}`, PARENT)
+    serveJson(mock, `${apiPath()}/items/${ITEM_KEY}/children`, [noteRow(), attachment()])
     serveJson(mock, `${apiPath()}/items/${ITEM_KEY}/children?itemType=annotation`, {
       key: 'ANNO1111',
     })
-    await zoteroError(provider.children(childrenRequest(itemRef())), ZOTERO_UNEXPECTED)
+    await zoteroError(
+      provider.children(childrenRequest(itemRef())),
+      ZOTERO_UNEXPECTED,
+      'item annotations',
+    )
   })
 })

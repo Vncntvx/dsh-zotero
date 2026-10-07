@@ -53,6 +53,52 @@ interface Route {
   readonly handler: RouteHandler
 }
 
+/**
+ * Whether one registered route answers this request.
+ *
+ * The query string is part of the contract the plugin holds Zotero to — a
+ * bare `/children` and `/children?itemType=annotation` are different reads —
+ * so a matcher that carries one must see it, or a spec registering the
+ * filtered route would silently be answered by the bare one:
+ *
+ * - a string matcher **with** a query matches only when pathname and query
+ *   are equal, so the two reads stay distinguishable;
+ * - a string matcher **without** one matches any query on that pathname,
+ *   which is the long-standing spelling for "this path, whatever the args";
+ * - a RegExp is tested against the pathname only (its patterns are anchored
+ *   path shapes today; test it against `pathname + search` if a future route
+ *   needs query regexes).
+ */
+function routeMatches(route: Route, method: string, url: URL): boolean {
+  if (route.method !== method) return false
+  if (typeof route.matcher !== 'string') return route.matcher.test(url.pathname)
+  const queryAt = route.matcher.indexOf('?')
+  if (queryAt === -1) return url.pathname === route.matcher
+  return url.pathname + url.search === route.matcher
+}
+
+/**
+ * The route answering one request, or undefined for a 404.
+ *
+ * A matcher that names a query is more specific than one that names only the
+ * path, so it wins: a spec can register the bare listing and the filtered one
+ * side by side — the two halves of the children contract — without depending
+ * on the order it happens to call them in. Otherwise the **first** matching
+ * registration wins, which is the long-standing convention across the suite
+ * (and what a spec relies on when it hand-registers a handler before a
+ * `route*` helper fills in defaults for the same path).
+ */
+function bestRoute(routes: readonly Route[], method: string, url: URL): Route | undefined {
+  let bare: Route | undefined
+  for (const route of routes) {
+    if (!routeMatches(route, method, url)) continue
+    const specific = typeof route.matcher === 'string' && route.matcher.includes('?')
+    if (specific) return route
+    bare ??= route
+  }
+  return bare
+}
+
 export class MockZotero {
   readonly requests: RecordedRequest[] = []
   /** `http://127.0.0.1:<port>/api` — the base URL to configure the plugin with. */
@@ -121,13 +167,7 @@ export class MockZotero {
         }, ms).unref()
       },
     }
-    const route = this.routes.find(
-      (candidate) =>
-        candidate.method === (req.method ?? 'GET') &&
-        (typeof candidate.matcher === 'string'
-          ? url.pathname === candidate.matcher
-          : candidate.matcher.test(url.pathname)),
-    )
+    const route = bestRoute(this.routes, req.method ?? 'GET', url)
     if (route === undefined) {
       helpers.raw(404, { 'Content-Type': 'text/plain' }, 'Not found')
       return

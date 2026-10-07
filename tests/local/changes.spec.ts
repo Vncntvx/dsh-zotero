@@ -10,6 +10,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import { cursorLibraryMismatchMessage } from '../../src/local/changes-domain.js'
 import { type LocalApiProvider } from '../../src/local/provider.js'
 import type { ZoteroChangesCursor, ZoteroChangesInclude } from '../../src/types.js'
@@ -307,7 +308,9 @@ describe('changes', () => {
 
   it('waits for the item fan-out to settle after one partition fails fatally', async () => {
     routeItems(mock, { diff: { live: 'error' } })
-    await expect(diff(at(42, SERVER_ID, ['items']))).rejects.toBeDefined()
+    await expect(diff(at(42, SERVER_ID, ['items']))).rejects.toMatchObject({
+      code: 'ZOTERO_UNEXPECTED',
+    })
   })
 
   it('preserves the partition failure that aborts its siblings', async () => {
@@ -351,7 +354,7 @@ describe('changes', () => {
         { since: at(42, SERVER_ID, ['items']), include: new Set(['items']) },
         controller.signal,
       ),
-    ).rejects.toBeDefined()
+    ).rejects.toMatchObject({ code: TOOL_ABORTED })
   })
 
   it('reads the diff but withholds the cursor when the probe reports no version', async () => {

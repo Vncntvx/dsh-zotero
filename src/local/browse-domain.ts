@@ -7,11 +7,26 @@
  */
 
 import {
+  ITEM_FIELDS_ITEM_TYPE_MESSAGE,
+  ITEM_LEVEL_REQUIRES_SCOPE_MESSAGE,
+  ITEM_TYPE_SCOPE_MESSAGE,
+  MATCH_REQUIRES_Q_MESSAGE,
+  OFFSET_NON_NEGATIVE_MESSAGE,
+  PARENT_REF_SCOPE_MESSAGE,
+  Q_MATCH_SCOPE_MESSAGE,
+  SCOPE_FACET_KIND_MESSAGE,
+  SCOPE_NAME_MESSAGE,
+  browseLimitMessage,
   isNotFoundError,
+  libraryNotAllowedMessage,
+  parentLibraryMismatchMessage,
+  unsupportedBrowseKindMessage,
   ZOTERO_INVALID_ARGUMENT,
   ZOTERO_UNEXPECTED,
   ZoteroError,
 } from '../errors.js'
+import { ZOTERO_SERVER_ID_HEADER } from '../constants.js'
+import { requireAgreedServerId } from './identity.js'
 import { asRecord, asString, isObjectKey } from '../json.js'
 import { normalizeScopeEntry, type ScopeNameEntry } from '../normalize.js'
 import {
@@ -26,13 +41,20 @@ import {
   PERSONAL_GROUPS_DISCOVERY,
   PERSONAL_LIBRARY,
 } from '../refs.js'
-import { requireArrayBody, requireTotalResults, nextOffsetOf } from './pagination.js'
+import {
+  requireArrayBody,
+  requireTotalResults,
+  nextOffsetOf,
+  nextOffsetOrFail,
+} from './pagination.js'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { itemsSegmentFor, publicationsTagsPath, type ScopeDirectory } from './scope-directory.js'
 import type { ZoteroHttpClient } from '../http-client.js'
 import type { LocalApiLimits } from './limits.js'
 import type {
   SupportedLocalLibrary,
+  ZoteroBrowseItem,
+  ZoteroBrowseKind,
   ZoteroBrowseRequest,
   ZoteroBrowseResult,
   ZoteroCollectionInfo,
@@ -40,68 +62,6 @@ import type {
   ZoteroItemFieldInfo,
   ZoteroLibraryInfo,
 } from '../types.js'
-
-/**
- * The model-facing messages the browse argument rules throw. The rules are
- * enforced at both ends of the call — the tool's `buildRequest` and this
- * entry — so the wording lives here, with the contract, and the tool imports
- * it. The one exception is the near-identical pair below: `TAG_FACET_SCOPE`
- * and `ITEM_LEVEL_SCOPE` name the *request* fields this layer validates,
- * while the tool's own messages name the model-facing arguments (`tagScope`,
- * `tagScope`) — different readers, so deliberately different strings.
- */
-
-/** The model-facing message for a kind outside the browse enum. */
-export function unsupportedBrowseKindMessage(kind: string): string {
-  return `Unsupported browse kind ${kind}`
-}
-
-/** The model-facing message for a library argument on a kind that is global. */
-export function libraryNotAllowedMessage(kind: string): string {
-  return `library is not allowed for kind ${kind}; omit library for libraries/itemTypes/itemFields`
-}
-
-/** The model-facing message for an item type passed to a kind that takes none. */
-export const ITEM_TYPE_SCOPE_MESSAGE = 'itemType is only valid when kind="itemFields"'
-
-/** The model-facing message for the item-fields kind without a well-formed item type. */
-export const ITEM_FIELDS_ITEM_TYPE_MESSAGE =
-  'kind="itemFields" requires a Zotero item type name (e.g. dataset, journalArticle)'
-
-/** The model-facing message for a tag query/match on a kind that counts no tags. */
-export const Q_MATCH_SCOPE_MESSAGE = 'q/match are only valid when kind="tags"'
-
-/** The model-facing message for a match mode with no query to apply it to. */
-export const MATCH_REQUIRES_Q_MESSAGE = 'match requires q'
-
-/** The model-facing message for a parentRef outside collection navigation. */
-export const PARENT_REF_SCOPE_MESSAGE = 'parentRef is only valid when kind="collections"'
-
-/** The model-facing message for facet fields (`scope`, `itemLevel`, `itemQuery`) on another kind. */
-export const SCOPE_FACET_KIND_MESSAGE = 'scope/itemLevel/itemQuery are only valid when kind="tags"'
-
-/** The model-facing message for facet fields with no scope to count over. */
-export const ITEM_LEVEL_REQUIRES_SCOPE_MESSAGE =
-  'itemLevel/itemQuery require a scope (library, collection, or publications)'
-
-/** The model-facing message for a collection scope that names nothing. */
-export const SCOPE_NAME_MESSAGE = 'scope.refOrName must be a non-empty string'
-
-/** The model-facing message for a negative offset. */
-export const OFFSET_NON_NEGATIVE_MESSAGE = 'offset must be a non-negative integer'
-
-/** The model-facing message for a limit outside the configured browse cap. */
-export function browseLimitMessage(maxBrowseResults: number): string {
-  return `limit must be integer 1..${maxBrowseResults}`
-}
-
-/** The model-facing message for a parentRef naming another library than the request. */
-export function parentLibraryMismatchMessage(
-  parentRef: { type: string; id: number },
-  library: { type: string; id: number },
-): string {
-  return `Library mismatch: parentRef is ${parentRef.type}/${parentRef.id} but request library is ${library.type}/${library.id}.`
-}
 
 export async function runBrowse(
   deps: { client: ZoteroHttpClient; limits: LocalApiLimits },
@@ -190,6 +150,37 @@ export async function runBrowse(
   }
 }
 
+/**
+ * The shared result envelope for a browse page.
+ *
+ * Every arm of this module returns the same shape, so a change to paging
+ * (an additional cursor field, a different omission rule) belongs here
+ * rather than in six places. `kind` decides the payload type, so callers
+ * pass the slice they actually return.
+ */
+function browsePage(
+  kind: ZoteroBrowseKind,
+  page: {
+    items: ZoteroBrowseItem[]
+    total: number
+    offset: number
+    next: number | undefined
+    library?: SupportedLocalLibrary
+    serverId?: string
+  },
+): ZoteroBrowseResult {
+  return {
+    kind,
+    ...(page.library !== undefined ? { library: page.library } : {}),
+    ...(page.serverId !== undefined && page.serverId !== '' ? { serverId: page.serverId } : {}),
+    items: page.items,
+    total: page.total,
+    offset: page.offset,
+    returned: page.items.length,
+    ...(page.next !== undefined ? { nextOffset: page.next } : {}),
+  }
+}
+
 async function browseLibraries(
   deps: { client: ZoteroHttpClient },
   request: ZoteroBrowseRequest,
@@ -208,7 +199,7 @@ async function browseLibraries(
         signal,
       },
     )
-    serverId = headers.get('zotero-server-id') ?? undefined
+    serverId = headers.get(ZOTERO_SERVER_ID_HEADER) ?? undefined
     const groups = requireArrayBody(json, 'groups')
     for (const row of groups) {
       const rec = asRecord(row)
@@ -230,16 +221,13 @@ async function browseLibraries(
   }
   const total = items.length
   const slice = items.slice(request.offset, request.offset + request.limit)
-  const next = nextOffsetOf(request.offset, slice.length, total)
-  return {
-    kind: 'libraries',
-    ...(serverId ? { serverId } : {}),
+  return browsePage('libraries', {
     items: slice,
     total,
     offset: request.offset,
-    returned: slice.length,
-    ...(next !== undefined ? { nextOffset: next } : {}),
-  }
+    next: nextOffsetOf(request.offset, slice.length, total),
+    ...(serverId !== undefined ? { serverId } : {}),
+  })
 }
 
 /**
@@ -274,7 +262,7 @@ async function browseCollections(
   params.set('start', String(request.offset))
   params.set('limit', String(request.limit))
   const { json, headers } = await deps.client.getJson<unknown>(listPath, params, { signal })
-  const serverId = headers.get('zotero-server-id') ?? undefined
+  const serverId = headers.get(ZOTERO_SERVER_ID_HEADER) ?? undefined
   const total = requireTotalResults(headers, 'collections')
   const rows = requireArrayBody(json, 'collections')
   // Ancestor names resolve in parallel: each row's chain is its own TTL-cached
@@ -308,17 +296,15 @@ async function browseCollections(
   // A page-local sort keeps output deterministic without re-sorting the
   // library; ordering across pages belongs to Zotero.
   items.sort((a, b) => a.name.localeCompare(b.name))
-  const next = nextOffsetOf(request.offset, items.length, total)
-  return {
-    kind: 'collections',
-    library,
-    ...(serverId ? { serverId } : {}),
+  return browsePage('collections', {
     items,
     total,
     offset: request.offset,
-    returned: items.length,
-    ...(next !== undefined ? { nextOffset: next } : {}),
-  }
+    // Server-paged: an in-range page with no rows contradicts the total.
+    next: nextOffsetOrFail(request.offset, items.length, total, 'collections'),
+    library,
+    ...(serverId !== undefined ? { serverId } : {}),
+  })
 }
 
 async function browseSavedSearches(
@@ -338,7 +324,7 @@ async function browseSavedSearches(
   const { json, headers } = await deps.client.getJson<unknown>(`${prefix}/searches`, params, {
     signal,
   })
-  const serverId = headers.get('zotero-server-id') ?? undefined
+  const serverId = headers.get(ZOTERO_SERVER_ID_HEADER) ?? undefined
   const rawRows = requireArrayBody(json, 'saved searches')
   const total = requireTotalResults(headers, 'saved searches')
   const entries: ScopeNameEntry[] = rawRows.map((row) => normalizeScopeEntry(row))
@@ -365,17 +351,14 @@ async function browseSavedSearches(
       ...(condByKey.has(entry.key) ? { conditions: condByKey.get(entry.key) } : {}),
     }))
     .sort((a, b) => a.name.localeCompare(b.name))
-  const next = nextOffsetOf(request.offset, items.length, total)
-  return {
-    kind: 'savedSearches',
-    library,
-    ...(serverId ? { serverId } : {}),
+  return browsePage('savedSearches', {
     items,
     total,
     offset: request.offset,
-    returned: items.length,
-    ...(next !== undefined ? { nextOffset: next } : {}),
-  }
+    next: nextOffsetOrFail(request.offset, items.length, total, 'saved searches'),
+    library,
+    ...(serverId !== undefined ? { serverId } : {}),
+  })
 }
 
 /**
@@ -434,7 +417,7 @@ async function browseTags(
     signal,
     ...(serverIdClaim !== undefined ? { serverId: serverIdClaim } : {}),
   })
-  const serverId = headers.get('zotero-server-id') ?? serverIdClaim
+  const serverId = headers.get(ZOTERO_SERVER_ID_HEADER) ?? serverIdClaim
   const rawRows = requireArrayBody(json, 'tags')
   const total = requireTotalResults(headers, 'tags')
   const items = rawRows.map((row) => {
@@ -456,17 +439,16 @@ async function browseTags(
           : undefined
     return { tag, ...(count !== undefined ? { count } : {}) }
   })
-  const next = nextOffsetOf(request.offset, rawRows.length, total)
-  return {
-    kind: 'tags',
-    library,
-    ...(serverId ? { serverId } : {}),
+  return browsePage('tags', {
     items,
     total,
     offset: request.offset,
-    returned: items.length,
-    ...(next !== undefined ? { nextOffset: next } : {}),
-  }
+    // Measured on the raw rows: a malformed row throws rather than being
+    // dropped, so raw and normalized row counts agree here.
+    next: nextOffsetOrFail(request.offset, rawRows.length, total, 'tags'),
+    library,
+    ...(serverId !== undefined ? { serverId } : {}),
+  })
 }
 
 async function browseItemTypes(
@@ -475,7 +457,7 @@ async function browseItemTypes(
   signal?: AbortSignal,
 ): Promise<ZoteroBrowseResult> {
   const { json, headers } = await deps.client.getJson<unknown>('itemTypes', undefined, { signal })
-  const serverId = headers.get('zotero-server-id') ?? undefined
+  const serverId = headers.get(ZOTERO_SERVER_ID_HEADER) ?? undefined
   const raw = requireArrayBody(json, 'item types')
     .map((row) => {
       const rec = asRecord(row)
@@ -489,16 +471,14 @@ async function browseItemTypes(
   const items = raw
   const total = items.length
   const slice = items.slice(request.offset, request.offset + request.limit)
-  const next = nextOffsetOf(request.offset, slice.length, total)
-  return {
-    kind: 'itemTypes',
-    ...(serverId ? { serverId } : {}),
+  return browsePage('itemTypes', {
     items: slice,
     total,
     offset: request.offset,
-    returned: slice.length,
-    ...(next !== undefined ? { nextOffset: next } : {}),
-  }
+    // Client-sliced: a request past the end of the list is legitimate.
+    next: nextOffsetOf(request.offset, slice.length, total),
+    ...(serverId !== undefined ? { serverId } : {}),
+  })
 }
 
 /**
@@ -520,10 +500,12 @@ async function browseItemFields(
     deps.client.getJson<unknown>('itemTypeFields', params, { signal }),
     deps.client.getJson<unknown>('itemTypeCreatorTypes', params, { signal }),
   ])
-  const serverId =
-    fields.headers.get('zotero-server-id') ??
-    creatorTypes.headers.get('zotero-server-id') ??
-    undefined
+  // Two parallel reads compose one result, so they must not straddle an
+  // instance switch: the rows would be attributed to whichever answered first.
+  const serverId = requireAgreedServerId(
+    fields.headers.get(ZOTERO_SERVER_ID_HEADER),
+    creatorTypes.headers.get(ZOTERO_SERVER_ID_HEADER),
+  )
   const fieldItems: ZoteroItemFieldInfo[] = []
   for (const row of requireArrayBody(fields.json, 'item type fields')) {
     const rec = asRecord(row)
@@ -550,14 +532,11 @@ async function browseItemFields(
   ]
   const total = items.length
   const slice = items.slice(request.offset, request.offset + request.limit)
-  const next = nextOffsetOf(request.offset, slice.length, total)
-  return {
-    kind: 'itemFields',
-    ...(serverId ? { serverId } : {}),
+  return browsePage('itemFields', {
     items: slice,
     total,
     offset: request.offset,
-    returned: slice.length,
-    ...(next !== undefined ? { nextOffset: next } : {}),
-  }
+    next: nextOffsetOf(request.offset, slice.length, total),
+    ...(serverId !== undefined ? { serverId } : {}),
+  })
 }

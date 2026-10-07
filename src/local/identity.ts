@@ -14,7 +14,46 @@
  * @module dsh-zotero/local/identity
  */
 
+import { SERVER_MISMATCH_MESSAGE, ZOTERO_SERVER_MISMATCH, ZoteroError } from '../errors.js'
 import type { SupportedLocalLibrary } from '../types.js'
+
+/**
+ * Assert a response or qualified ref came from the expected instance.
+ * Refuses foreign instance mismatches with `ZOTERO_SERVER_MISMATCH`.
+ */
+export function assertServerIdMatches(
+  observed: string | null | undefined,
+  expected: string | null | undefined,
+): void {
+  if (observed !== undefined && observed !== null && observed !== expected) {
+    throw new ZoteroError(SERVER_MISMATCH_MESSAGE, ZOTERO_SERVER_MISMATCH)
+  }
+}
+
+/**
+ * The instance id two responses composing one result agree on.
+ *
+ * Two reads issued in parallel can be served by different instances across a
+ * profile switch, and merging their rows would attribute one instance's data
+ * to the other's identity — the very mix this module forbids. A side that
+ * reports no id proves nothing and defers to the other; only two ids that
+ * disagree are a mismatch.
+ * @param first - the first response's `Zotero-Server-ID`, if it reported one.
+ * @param second - the second response's `Zotero-Server-ID`, if it reported one.
+ * @returns the agreed id, or undefined when neither side reported one.
+ */
+export function requireAgreedServerId(
+  first: string | null | undefined,
+  second: string | null | undefined,
+): string | undefined {
+  if (first !== undefined && first !== null && second !== undefined && second !== null) {
+    if (first !== second) {
+      throw new ZoteroError(SERVER_MISMATCH_MESSAGE, ZOTERO_SERVER_MISMATCH)
+    }
+    return first
+  }
+  return first ?? second ?? undefined
+}
 
 /**
  * The library a read targets plus the instance identity it is pinned to.

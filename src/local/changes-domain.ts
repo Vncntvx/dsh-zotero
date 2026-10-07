@@ -31,19 +31,20 @@
  */
 
 import type { ZoteroHttpClient } from '../http-client.js'
-import {
-  SERVER_MISMATCH_MESSAGE,
-  ZOTERO_INVALID_ARGUMENT,
-  ZOTERO_SERVER_MISMATCH,
-  isNotFoundError,
-  isRangeUnsupportedError,
-} from '../errors.js'
+import { ZOTERO_INVALID_ARGUMENT, isNotFoundError, isRangeUnsupportedError } from '../errors.js'
 import {
   asRecord,
   isNonNegativeSafeInteger,
   isObjectKey,
   parseNonNegativeSafeInteger,
 } from '../json.js'
+import { ALL_CHANGES_INCLUDES, DEFAULT_CHANGES_INCLUDES } from '../changes-contract.js'
+import {
+  ZOTERO_LIBRARY_VERSION_HEADER,
+  ZOTERO_SERVER_ID_HEADER,
+  ZOTERO_TOTAL_RESULTS_HEADER,
+} from '../constants.js'
+import { assertServerIdMatches } from './identity.js'
 import { libraryPrefix, PERSONAL_LIBRARY, sameLibrary } from '../refs.js'
 import type { LocalApiLimits } from './limits.js'
 import { ZoteroError } from '../errors.js'
@@ -59,31 +60,6 @@ import type {
   ZoteroProgressEvent,
   SupportedLocalLibrary,
 } from '../types.js'
-
-/**
- * The kinds a diff covers when the caller names none. `fulltext` is left out
- * on purpose: `/fulltext?since=` filters on `fulltextItems.version`, a counter
- * of its own (`fulltext_<libraryID>`, see Zotero's `fulltext.js`), not on the
- * library version — live-checked at Zotero 10.0.2-beta.9, where `since=0` and
- * `since=<library version>` return the same rows, and the endpoint sends no
- * version header of its own. Such rows cannot be part of a library-version
- * delta, so they are only read when a caller asks for them explicitly.
- */
-export const DEFAULT_CHANGES_INCLUDES: readonly ZoteroChangesInclude[] = [
-  'items',
-  'collections',
-  'savedSearches',
-  'deleted',
-]
-
-/** Canonical order for the coverage carried by a cursor. */
-export const ALL_CHANGES_INCLUDES: readonly ZoteroChangesInclude[] = [
-  'items',
-  'collections',
-  'savedSearches',
-  'fulltext',
-  'deleted',
-]
 
 function orderedIncludes(include: ReadonlySet<ZoteroChangesInclude>): ZoteroChangesInclude[] {
   return ALL_CHANGES_INCLUDES.filter((kind) => include.has(kind))
@@ -160,19 +136,6 @@ function cursorFor(
   return id === undefined || version === undefined
     ? undefined
     : { serverId: id, library, version, include: orderedIncludes(include) }
-}
-
-/**
- * Assert a response came from the instance this call is pinned to. The request
- * carries the claim, so the server refuses a foreign database first (412);
- * this is the second half of the same invariant — a result never mixes
- * databases, even if a build were to ignore the request header. A response
- * that names no instance leaves the claim as the call's identity.
- */
-function assertSameInstance(observed: string | undefined, expected: string): void {
-  if (observed !== undefined && observed !== expected) {
-    throw new ZoteroError(SERVER_MISMATCH_MESSAGE, ZOTERO_SERVER_MISMATCH)
-  }
 }
 
 /** One versions-resource reader, as `changes()` builds it per call. */
@@ -329,8 +292,8 @@ export async function changes(
       signal,
       ...(claim === undefined ? {} : { serverId: claim }),
     })
-    const version = numericHeader(response.headers, 'last-modified-version')
-    const observed = observedServerId(response.headers.get('zotero-server-id'))
+    const version = numericHeader(response.headers, ZOTERO_LIBRARY_VERSION_HEADER)
+    const observed = observedServerId(response.headers.get(ZOTERO_SERVER_ID_HEADER))
     return {
       ...(version !== undefined ? { version } : {}),
       ...(observed !== undefined ? { serverId: observed } : {}),
@@ -372,7 +335,7 @@ export async function changes(
   // call was reading, and the range cannot be attributed to one version.
   const probe = await attempt(() => probeVersion(instance))
   const probeValue = probe.status === 'ok' ? probe.value : undefined
-  assertSameInstance(probeValue?.serverId, instance)
+  assertServerIdMatches(probeValue?.serverId, instance)
   const snapshot = probeValue?.version
   let complete = snapshot !== undefined
   let libraryChanged = false
@@ -418,11 +381,11 @@ export async function changes(
     if (rows === undefined || !rows.every(([key, value]) => isObjectKey(key) && isVersion(value))) {
       return { status: 'failed', reason: 'unreadable' }
     }
-    const observed = observedServerId(headers.get('zotero-server-id'))
-    const rawTotal = headers.get('total-results')
-    const headerTotal = numericHeader(headers, 'total-results')
-    const rawVersion = headers.get('last-modified-version')
-    const version = numericHeader(headers, 'last-modified-version')
+    const observed = observedServerId(headers.get(ZOTERO_SERVER_ID_HEADER))
+    const rawTotal = headers.get(ZOTERO_TOTAL_RESULTS_HEADER)
+    const headerTotal = numericHeader(headers, ZOTERO_TOTAL_RESULTS_HEADER)
+    const rawVersion = headers.get(ZOTERO_LIBRARY_VERSION_HEADER)
+    const version = numericHeader(headers, ZOTERO_LIBRARY_VERSION_HEADER)
     if (rawTotal !== null && headerTotal === undefined) {
       return { status: 'failed', reason: 'unreadable' }
     }
@@ -472,7 +435,7 @@ export async function changes(
    * fold its completeness and snapshot reading in, and keep its true count.
    */
   const foldRead = (page: VersionsPage, versioned = true): void => {
-    assertSameInstance(page.serverId, instance)
+    assertServerIdMatches(page.serverId, instance)
     if (
       versioned &&
       snapshot !== undefined &&
@@ -665,7 +628,10 @@ export async function changes(
         signal,
         serverId: instance,
       })
-      assertSameInstance(observedServerId(payload.headers.get('zotero-server-id')), instance)
+      assertServerIdMatches(
+        observedServerId(payload.headers.get(ZOTERO_SERVER_ID_HEADER)),
+        instance,
+      )
       return parseTombstones(payload.json)
     })
     const tombstones = read.status === 'ok' ? read.value : undefined

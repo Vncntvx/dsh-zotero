@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { ZOTERO_INVALID_ARGUMENT } from '../../src/errors.js'
 import {
   ITEM_FIELDS_ITEM_TYPE_MESSAGE,
   ITEM_LEVEL_REQUIRES_SCOPE_MESSAGE,
@@ -10,11 +9,13 @@ import {
   Q_MATCH_SCOPE_MESSAGE,
   SCOPE_FACET_KIND_MESSAGE,
   SCOPE_NAME_MESSAGE,
+  ZOTERO_INVALID_ARGUMENT,
+  ZOTERO_SERVER_MISMATCH,
   browseLimitMessage,
   libraryNotAllowedMessage,
   parentLibraryMismatchMessage,
   unsupportedBrowseKindMessage,
-} from '../../src/local/browse-domain.js'
+} from '../../src/errors.js'
 import { LocalApiProvider } from '../../src/local/provider.js'
 import {
   setupProvider,
@@ -432,6 +433,34 @@ describe('browse: itemFields', () => {
     })
     expect(page.returned).toBe(2)
     expect(page.nextOffset).toBe(2)
+  })
+
+  it('refuses itemFields whose two reads report different instances', async () => {
+    // The field list and the creator types compose one result. Across a
+    // profile switch the two parallel reads can be served by different
+    // instances, and attributing either body to the other's identity would
+    // mix two libraries' schemas.
+    serveJson(mock, '/api/itemTypeFields', [{ field: 'a' }], { 'Zotero-Server-ID': 'S1' })
+    serveJson(mock, '/api/itemTypeCreatorTypes', [{ creatorType: 'author' }], {
+      'Zotero-Server-ID': 'S2',
+    })
+    await zoteroError(
+      provider.browse({ kind: 'itemFields', itemType: 'journalArticle', offset: 0, limit: 5 }),
+      ZOTERO_SERVER_MISMATCH,
+    )
+  })
+
+  it('takes the instance id from whichever itemFields read reports one', async () => {
+    serveJson(mock, '/api/itemTypeFields', [{ field: 'a' }], { 'Zotero-Server-ID': 'S1' })
+    serveJson(mock, '/api/itemTypeCreatorTypes', [{ creatorType: 'author' }])
+    const result = await provider.browse({
+      kind: 'itemFields',
+      itemType: 'journalArticle',
+      offset: 0,
+      limit: 5,
+    })
+    expect(result.serverId).toBe('S1')
+    expect(result.total).toBe(2)
   })
 
   it('fails closed without a well-formed item type or with a library', async () => {

@@ -657,8 +657,8 @@ export interface ZoteroBrowseResult {
 }
 
 /** The resource kinds `zotero_changes` can diff. */
-export type ZoteroChangesInclude =
-  'items' | 'collections' | 'savedSearches' | 'fulltext' | 'deleted'
+import type { ZoteroChangesInclude } from './changes-contract.js'
+export type { ZoteroChangesInclude }
 
 /**
  * An incremental checkpoint: the library version a diff read through, pinned

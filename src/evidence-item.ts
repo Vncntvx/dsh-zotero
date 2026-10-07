@@ -11,7 +11,7 @@
 export type EvidenceSource = 'annotation' | 'note' | 'fulltext' | 'abstract'
 
 /** The source vocabulary as a runtime whitelist, for decoders on both sides. */
-export const EVIDENCE_SOURCES: ReadonlySet<string> = new Set<EvidenceSource>([
+const EVIDENCE_SOURCES: ReadonlySet<string> = new Set<EvidenceSource>([
   'annotation',
   'note',
   'fulltext',

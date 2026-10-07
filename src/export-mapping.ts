@@ -268,7 +268,7 @@ interface EntryFingerprint {
  * using multi-tier ground-truth fingerprints (extra citekeys, DOI, cleaned
  * title, first author & year). Positional guessing is strictly forbidden.
  */
-export function alignBibtexEntries(
+function alignBibtexEntries(
   text: string,
   refs: readonly ZoteroObjectRef[],
   rawItems?: readonly unknown[],

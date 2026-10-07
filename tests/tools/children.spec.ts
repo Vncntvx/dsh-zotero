@@ -88,10 +88,17 @@ describe('zotero_children tool', () => {
       await runTool('zotero_children', { ref: 'zotero://user/0/attachment/WXYZ6789' }),
       'zotero_children',
     )
-    const value = result.value as { itemType?: string; notes?: unknown; annotations?: unknown }
+    const value = result.value as {
+      itemType?: string
+      notes?: unknown
+      annotations?: { total: number; items: { parentRef?: string }[] }
+    }
     expect(value.itemType).toBe('attachment')
     expect(value.notes).toBeUndefined()
-    expect(value.annotations).toBeDefined()
+    // The attachment's own annotation came back, and its provenance names the
+    // attachment — `toBeDefined` would pass on an empty collection too.
+    expect(value.annotations?.total).toBe(1)
+    expect(value.annotations?.items[0]?.parentRef).toBe('zotero://user/0/attachment/WXYZ6789')
   })
 
   it('rejects annotation refs and non-attachment targets before any request', async () => {

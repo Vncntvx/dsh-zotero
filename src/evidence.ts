@@ -173,6 +173,13 @@ export function rankChunks(query: string, chunks: readonly EvidenceChunk[]): Ran
     documents.length === 0
       ? 0
       : documents.reduce((sum, tokens) => sum + tokens.length, 0) / documents.length
+  const idfMap = new Map<string, number>()
+  for (const term of new Set(queryTokens)) {
+    const df = documentFrequency.get(term)
+    if (df !== undefined) {
+      idfMap.set(term, Math.log(1 + (documents.length - df + 0.5) / (df + 0.5)))
+    }
+  }
   const ranked = chunks.map((chunk, i) => {
     const tokens = documents[i]!
     const frequencies = termFrequency(tokens)
@@ -180,9 +187,7 @@ export function rankChunks(query: string, chunks: readonly EvidenceChunk[]): Ran
     for (const term of queryTokens) {
       const tf = frequencies.get(term)
       if (tf === undefined) continue
-      // A term present in this document was counted into the df map above.
-      const df = documentFrequency.get(term)!
-      const idf = Math.log(1 + (documents.length - df + 0.5) / (df + 0.5))
+      const idf = idfMap.get(term) ?? 0
       const denominator = tf + BM25_K1 * (1 - BM25_B + BM25_B * (tokens.length / averageLength))
       score += (idf * (tf * (BM25_K1 + 1))) / denominator
     }
