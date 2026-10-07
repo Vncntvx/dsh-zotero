@@ -172,7 +172,7 @@ Expected: Hits originate from note bodies (`supplemental` source), and the respo
 List my saved searches; then run the saved search named "<name>" for up to 5 results.
 ```
 
-Expected: Calls `zotero_browse(type="savedSearches")` to retrieve the list, then calls `zotero_search` scoped to that saved search.
+Expected: Calls `zotero_browse(kind="savedSearches")` to retrieve the list, then calls `zotero_search` scoped to that saved search.
 
 ### R Retrieval and Evidence Capability Pack
 
@@ -182,7 +182,7 @@ Expected: Calls `zotero_browse(type="savedSearches")` to retrieve the list, then
 Read the item about "<title keyword>". List each child note's point in one sentence, at most 3 notes.
 ```
 
-Expected: Calls `zotero_get(includeNotes=true)` or retrieves notes via `zotero_children`. If note content is truncated, it marks `truncated` and does not hallucinate unread content.
+Expected: Calls `zotero_get(ref="zotero://user/0/item/ABC123", include=["notes"])` (with the target item's ref) or retrieves notes via `zotero_children`. If note content is truncated, it marks `truncated` and does not hallucinate unread content.
 
 **R2 Annotations Only**
 
@@ -198,7 +198,7 @@ Expected: Annotations return via the dedicated annotation path; page numbers exi
 Only the relevant sentences from the abstract, for "<method word>", at most 2; no full text.
 ```
 
-Expected: Calls `zotero_retrieve(sources=["abstract"])`. Mixing in full-text passages is considered a failure.
+Expected: Calls `zotero_retrieve(ref="zotero://user/0/item/ABC123", query="method keywords", sources=["abstract"])`. Mixing in full-text passages is considered a failure.
 
 **R4 Multi-Attachment Coverage** (Run on items with supplementary materials or multiple attachments)
 
@@ -216,7 +216,7 @@ Expected: Full-text retrieval strategy is `allIndexed` or a specified list. Unin
 Export these 3 items as one bibliography, ready to paste at the end of a paper.
 ```
 
-Expected: Calls `zotero_export(format="bibliography")` to produce standard bibliography text.
+Expected: Calls `zotero_export(refs=["zotero://user/0/item/ABC123"], format="bibliography")` to produce standard bibliography text.
 
 **E2 Multiple Formats**
 
@@ -242,7 +242,7 @@ Expected: Calls `zotero_export` with `style` and `locale` parameters. If the sty
 List the child collection paths under "<top-level collection>", breadcrumb format, at most 10 lines.
 ```
 
-Expected: Calls `zotero_browse(type="collections")` and parses `parentRef` relationships into a hierarchical tree.
+Expected: Calls `zotero_browse(kind="collections")` and parses `parentRef` relationships into a hierarchical tree.
 
 **C2 Tag Distribution**
 
@@ -250,7 +250,7 @@ Expected: Calls `zotero_browse(type="collections")` and parses `parentRef` relat
 What are the 8 most common tags? Format: tag: N items.
 ```
 
-Expected: Calls `zotero_browse(type="tags")` to fetch the tag list. If tag counts are missing, numbers must not be fabricated.
+Expected: Calls `zotero_browse(kind="tags")` to fetch the tag list. If tag counts are missing, numbers must not be fabricated.
 
 **C3 Changes Baseline**
 

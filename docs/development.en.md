@@ -19,8 +19,11 @@ src/
   errors.ts             # Error classes and error codes
   json.ts               # Lossless JSON read helpers
   evidence-item.ts      # Evidence item projection definitions (shared across client/host)
+  browse-rows.ts        # Browse row classification (shared across client/host)
+  changes-contract.ts   # Shared wire descriptors for the changes projection
   constants.ts          # Constant definitions
   concurrency.ts        # Bounded concurrency controller
+  job-runner.ts         # ctx.jobs background-job adapter for the heavy tools
   evidence.ts           # BM25 ranking algorithm
   search-text.ts        # Search folding matching Zotero normalizeForSearch
   attachments.ts        # Attachment selection and priority logic
@@ -36,6 +39,7 @@ src/
   write-approval.ts     # Two-tier write confirmation (approval policy and plan review card)
   write-auth.ts         # Zotero local write key acquisition and persistence
   write-http.ts         # Local write HTTP request handling
+  write-item-rules.ts   # Write field and update rules (shared by tools and write domain)
   shell-write-detector.ts # Shell command interception for direct Local API writes
   remote.ts             # Web client Remote service
   typert.ts             # Typert manifest

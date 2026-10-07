@@ -172,7 +172,7 @@
 列出我的保存搜索；然后用名为「<名称>」的保存搜索出结果，最多 5 条。
 ```
 
-期望：调用 `zotero_browse(type="savedSearches")` 获取列表，再以该保存搜索为范围调用 `zotero_search`。
+期望：调用 `zotero_browse(kind="savedSearches")` 获取列表，再以该保存搜索为范围调用 `zotero_search`。
 
 ### R 读取与证据能力包
 
@@ -182,7 +182,7 @@
 读「<标题关键词>」那篇，把子笔记要点各用一句话列出，最多 3 条笔记。
 ```
 
-期望：调用 `zotero_get(includeNotes=true)` 或通过 `zotero_children` 后读取。若笔记内容发生截断，应标明 `truncated`，不得虚构未读取部分。
+期望：调用 `zotero_get(ref="zotero://user/0/item/ABC123", include=["notes"])`（ref 以目标条目为准）或通过 `zotero_children` 后读取。若笔记内容发生截断，应标明 `truncated`，不得虚构未读取部分。
 
 **R2 仅读取批注**
 
@@ -198,7 +198,7 @@
 只要摘要里的相关句，查「<方法词>」，最多 2 条；不要全文。
 ```
 
-期望：调用 `zotero_retrieve(sources=["abstract"])`。混入全文片段视为未达标。
+期望：调用 `zotero_retrieve(ref="zotero://user/0/item/ABC123", query="方法关键词", sources=["abstract"])`。混入全文片段视为未达标。
 
 **R4 多附件检索覆盖**（在包含补充材料等多个附件的条目上执行）
 
@@ -216,7 +216,7 @@
 把这 3 条导出成一条参考文献（bibliography），可直接贴进文末。
 ```
 
-期望：调用 `zotero_export(format="bibliography")` 生成标准参考文献文本。
+期望：调用 `zotero_export(refs=["zotero://user/0/item/ABC123"], format="bibliography")` 生成标准参考文献文本。
 
 **E2 多格式导出**
 
@@ -242,7 +242,7 @@
 列出「<顶层合集>」下的子合集路径，面包屑格式，最多 10 行。
 ```
 
-期望：调用 `zotero_browse(type="collections")` 并解析 `parentRef` 关系生成树状层级。
+期望：调用 `zotero_browse(kind="collections")` 并解析 `parentRef` 关系生成树状层级。
 
 **C2 标签分布**
 
@@ -250,7 +250,7 @@
 标签里数量最多的 8 个是什么？格式：标签: N 条。
 ```
 
-期望：调用 `zotero_browse(type="tags")` 获取标签列表。若标签缺乏频次计数，不得虚构数值。
+期望：调用 `zotero_browse(kind="tags")` 获取标签列表。若标签缺乏频次计数，不得虚构数值。
 
 **C3 增量基线**
 

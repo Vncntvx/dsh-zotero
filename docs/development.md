@@ -19,8 +19,11 @@ src/
   errors.ts             # 错误类与错误码
   json.ts               # 无损 JSON 读取辅助函数
   evidence-item.ts      # 证据项投影定义（端侧共享）
+  browse-rows.ts        # 浏览行分类（端侧共享）
+  changes-contract.ts   # changes 投影的共享 wire 描述符
   constants.ts          # 常量定义
   concurrency.ts        # 有界并发控制器
+  job-runner.ts         # 重型工具的 ctx.jobs 后台任务适配
   evidence.ts           # BM25 排序算法
   search-text.ts        # 与 Zotero normalizeForSearch 一致的搜索折叠
   attachments.ts        # 附件选择与优先级逻辑
@@ -36,6 +39,7 @@ src/
   write-approval.ts     # 写入双层确认（审批策略与计划审查卡）
   write-auth.ts         # Zotero 本地写入密钥获取与持久化
   write-http.ts         # 本地写入 HTTP 请求处理
+  write-item-rules.ts   # 写入字段与更新规则（工具与写域共享）
   shell-write-detector.ts # 直写本地 API 的 shell 命令拦截检测
   remote.ts             # Web 端 Remote 服务
   typert.ts             # Typert 清单

@@ -69,7 +69,7 @@ graph LR
 ### Browser Client (`src/client/`)
 
 - Settings Page (`settings.section`): registers a dedicated Zotero page in the Settings panel left navigation;
-- Session Panel (`conversation.view`): provides Sources, Evidence, and Exports sub-views in the session tab;
+- Session Panel (`conversation.view`): provides Sources and Exports views in the session tab, with Evidence as a panel inside each item's inspector;
 - Tool Cards (`tool.call.toolview`): renders compact, read-only collapsible cards for all 16 model tools (8 read and 8 write), with inline copy actions and deep links;
 - Command Status Card (`conversation.chat.commandview`): renders connectivity status, telemetry, diagnostic tips, and an in-place refresh button for `/zotero`;
 - `webEnabled` takes effect immediately upon saving.

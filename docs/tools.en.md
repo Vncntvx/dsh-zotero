@@ -191,7 +191,7 @@ Discover library structure and taxonomy metadata with pagination support.
 | `kind`          | string  | —                       | Browse category: `libraries`, `collections`, `savedSearches`, `tags`, `itemTypes`, `itemFields` (required)               |
 | `library`       | object  | `{type: "user", id: 0}` | Target library (applicable to collections, savedSearches, tags)                                                          |
 | `parentRef`     | string  | —                       | `collections` only: parent collection ref; omit to list top-level collections                                            |
-| `tagScope`      | string  | `"library"`             | `tags` only: scope, supporting `library`, `collection`, `publications` (`publications` personal library only)            |
+| `tagScope`      | string  | —                       | `tags` only: scope, supporting `library`, `collection`, `publications` (`publications` personal library only)            |
 | `tagCollection` | string  | —                       | `tags` with `tagScope="collection"`: collection ref or exact name                                                        |
 | `itemLevel`     | string  | `"top"`                 | Scoped `tags` only: `top` counts bibliographic items only; `all` includes child items (library/collection scopes only)   |
 | `itemQuery`     | string  | —                       | Scoped `tags` only: count tags matching query term                                                                       |

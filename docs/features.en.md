@@ -2,7 +2,7 @@
 
 # Features
 
-dsh-zotero allows DSH LLM conversations to search, inspect, and cite your local Zotero library. Eleven tools cover literature discovery, evidence extraction, source attachment location, and formatted export. Three personal-library write tools are disabled by default and require session approval and plan review when enabled. The web Sources panel aggregates literature, evidence, and exports referenced throughout the session.
+dsh-zotero allows DSH LLM conversations to search, inspect, and cite your local Zotero library. Sixteen tools cover literature discovery, evidence extraction, source attachment location, formatted export, and personal-library writes. Eight personal-library write tools are disabled by default and require session approval and plan review when enabled. The web Sources panel aggregates literature, evidence, and exports referenced throughout the session.
 
 ## Literature Search
 
@@ -126,10 +126,9 @@ The plugin integrates with Harness plugin slots:
 
 ## Session Sources Panel
 
-The Zotero tab in DSH Web includes three sub-views:
+The Zotero tab in DSH Web includes two sub-views (Sources, Exports); Evidence is a panel inside each item's inspector, with a session-wide overview entry when the session holds evidence for several items:
 
-- **Sources**: displays items referenced through search and read tools during the session;
-- **Evidence**: aggregates passages extracted by `zotero_retrieve`, grouped by item;
+- **Sources**: displays items referenced through search and read tools during the session; the item inspector carries an evidence panel grouping the passages `zotero_retrieve` extracted;
 - **Exports**: lists all generated citation and bibliography text, with copy and download actions.
 
 ## Design Boundaries
