@@ -10,17 +10,9 @@
  */
 
 /** Provable outcome facts; every field is produced by successful calls only. */
-interface SourceFacts {
-  /** A successful zotero_get read the item's detail. */
-  readonly inspected: boolean
-  /** Distinct evidence passages kept after dedup and preview budget. */
-  readonly evidenceCount: number
+export interface SourceFacts {
   /** Total evidence passages reported across all successful retrieves. */
   readonly reportedEvidenceCount: number
-  /** A successful zotero_attachment resolved a usable location. */
-  readonly attachmentResolved: boolean
-  /** Successful zotero_export artifacts whose ref list included the item. */
-  readonly exportCount: number
 }
 
 /** Non-successful call counts; never rendered as achievements. */
@@ -177,13 +169,10 @@ export interface SourceRetrievalFacts {
 /**
  * The retrieves on one item, summarized for the Evidence head. Run count is
  * the number of successful, ref-valid, presentation-meta-recognizable
- * retrieve calls; `latestRetrievedAt` is the settled result's event time
- * (Unix epoch ms), not a transcript position.
+ * retrieve calls.
  */
 interface RetrievalSummary {
   readonly runCount: number
-  /** The settled result's event time (Unix epoch ms). */
-  readonly latestRetrievedAt: number
   /** Any successful retrieve hit the passage/character budget. */
   readonly truncated: boolean
 }

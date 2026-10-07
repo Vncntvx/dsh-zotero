@@ -119,8 +119,13 @@ export function currentTime(): string {
  * @param snapshot - the chat snapshot, undefined while none is open.
  * @returns the signature string.
  */
+const SNAPSHOT_SIGNATURE_CACHE = new WeakMap<ChatSnapshot, string>()
+
 export function sessionSignatureOf(snapshot: ChatSnapshot | undefined): string {
   if (snapshot === undefined) return ''
+  const cached = SNAPSHOT_SIGNATURE_CACHE.get(snapshot)
+  if (cached !== undefined) return cached
+
   const running: Array<{ callId: string; phase: 'preparing' | 'start' }> = []
   const order: Array<{ callId: string; path: readonly string[] }> = []
   visitVisibleZoteroCalls(snapshot, (block, path) => {
@@ -128,7 +133,9 @@ export function sessionSignatureOf(snapshot: ChatSnapshot | undefined): string {
     // Settled roots carry `kind`; running arms carry the `phase` discriminant.
     if (!isSettledTool(block)) running.push({ callId: block.callId, phase: block.phase })
   })
-  return JSON.stringify({ order, running })
+  const signature = JSON.stringify({ order, running })
+  SNAPSHOT_SIGNATURE_CACHE.set(snapshot, signature)
+  return signature
 }
 
 /**
@@ -184,14 +191,26 @@ function useZoteroBlocks(chat: ChatSnapshot | undefined, sessionId?: string): To
   return useMemo(() => collectZoteroCalls(chat), [signature])
 }
 
+/**
+ * The chat-subscription equality the panel subscribes with: two snapshots are
+ * equivalent when their zotero-visible slice signs the same. Streaming
+ * publications (assistant tokens, streamed argument prefixes) then keep the
+ * previous snapshot identity, so the panel neither re-renders nor re-walks the
+ * tree for content that cannot change its output.
+ */
+function sameZoteroProjection(a: ChatSnapshot | undefined, b: ChatSnapshot | undefined): boolean {
+  return sessionSignatureOf(a) === sessionSignatureOf(b)
+}
+
 /** The Sources panel controller: probe, workspace build, and the view. */
 export function SourcesTab({ status, t, useSession, useChat, inputActions }: SourcesTabProps) {
   // The session selector takes the primitive id, so lifecycle churn during a
-  // turn (running flips, queue, error fields) never re-renders the panel; the
-  // chat selector takes the snapshot itself — its identity tracks the
-  // publication stream — and the signature below gates the rebuilds.
+  // turn (running flips, queue, error fields) never re-renders the panel. The
+  // chat selector takes the whole snapshot but compares it through the
+  // zotero signature, so a publication only re-renders the panel when the
+  // zotero-visible slice it renders actually moved.
   const sessionId = useSession((snapshot) => snapshot.sessionId)
-  const chat = useChat((snapshot) => snapshot)
+  const chat = useChat((snapshot) => snapshot, sameZoteroProjection)
   const [statusState, setStatusState] = useState<ConnectionView>({ kind: 'loading' })
   const [requestId, setRequestId] = useState(0)
   // The last verified instance id feeds the evidenceMatch verdicts. It updates

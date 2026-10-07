@@ -26,9 +26,8 @@ import css from './workspace.module.css'
 export function badgesOf(item: SourceItem, t: TranslateNS<'zotero'>): string[] {
   const badges: string[] = []
   if (hasPdf(item)) badges.push(t('badgePdf'))
-  if (item.facts.evidenceCount > 0)
-    badges.push(t('evidenceBadge', { count: item.facts.evidenceCount }))
-  if (item.facts.exportCount > 0) badges.push(t('exportBadge', { count: item.facts.exportCount }))
+  if (item.evidence.length > 0) badges.push(t('evidenceBadge', { count: item.evidence.length }))
+  if (item.exports.length > 0) badges.push(t('exportBadge', { count: item.exports.length }))
   if (hasIssue(item)) badges.push(t('issuesBadge'))
   return badges
 }

@@ -44,7 +44,7 @@ interface SearchRowMeta {
  * so a card can say "details were omitted" instead of showing fewer rows with
  * no reason. See `presentation-meta.ts` (`boundedPresentationMeta`).
  */
-export function detailOmittedOf(meta: Record<string, unknown>): boolean {
+function detailOmittedOf(meta: Record<string, unknown>): boolean {
   return boolField(meta, 'detailOmitted') === true
 }
 
@@ -56,6 +56,12 @@ export interface SearchMetaView {
   /** The whole hit count the scope carries, past the returned page. */
   readonly total: number | null
   readonly omitted: number | null
+  /**
+   * Note-body matches folded into the first page. `null` means the call made
+   * no note scan at all (the producer's `supplemental` is absent) — distinct
+   * from `0`, which says the scan ran and found nothing.
+   */
+  readonly noteMatches: number | null
   readonly scope: ZoteroResolvedScope | null
   readonly library: SupportedLocalLibrary | null
   /** True when the meta budget dropped the detail rows behind these facts. */
@@ -299,9 +305,7 @@ function decodeResolvedScope(value: unknown): ZoteroResolvedScope | null {
   if (kind === 'library') {
     const lib = decodeSupportedLibrary(value['library'])
     if (lib === null) return null
-    return lib.type === 'user'
-      ? { kind: 'library', library: lib }
-      : { kind: 'library', library: lib }
+    return { kind: 'library', library: lib } as ZoteroResolvedScope
   }
   if (kind === 'publications') {
     const lib = decodeSupportedLibrary(value['library'])
@@ -325,6 +329,7 @@ export function searchMetaOf(meta: Record<string, unknown>): SearchMetaView {
     returned: numberField(meta, 'returned') ?? null,
     total: numberField(meta, 'total') ?? null,
     omitted: numberField(meta, 'omitted') ?? null,
+    noteMatches: numberField(meta, 'noteMatches') ?? null,
     scope: decodeResolvedScope(meta['scope']),
     library: decodeSupportedLibrary(meta['library']),
     detailOmitted: detailOmittedOf(meta),

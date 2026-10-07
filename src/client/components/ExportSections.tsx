@@ -11,6 +11,7 @@
  * @module dsh-zotero/client/components/ExportSections
  */
 
+import { useMemo } from 'react'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ExportArtifact } from '../sources/model.ts'
 import { downloadBlob } from '../download.ts'
@@ -20,10 +21,10 @@ import { ExportDocumentRow } from './ExportDocumentRow.tsx'
 import {
   ExportCard,
   extensionOf,
+  fileNameForFormat,
   fileNameOf,
   formatLabelOf,
   mimeOf,
-  sanitizeFileStem,
 } from './ExportCard.tsx'
 import css from './cards.module.css'
 
@@ -39,13 +40,7 @@ export function sectionTextOf(section: ExportSection): string {
 
 /** Download one section's joined entries as a single file of the format's extension. */
 function downloadSection(section: ExportSection): void {
-  // A section with documents always carries a named translator format; the
-  // extension lookup keeps the fallback for unknown ids.
-  downloadBlob(
-    sectionTextOf(section),
-    `zotero-${sanitizeFileStem(section.format)}${extensionOf(section.format)}`,
-    mimeOf(section.format),
-  )
+  downloadBlob(sectionTextOf(section), fileNameForFormat(section.format), mimeOf(section.format))
 }
 
 /** Download one artifact's full merged body, for the unlocatable-items note. */
@@ -55,7 +50,9 @@ function downloadArtifact(artifact: ExportArtifact): void {
 
 /** The exports surface: format sections over the successful artifacts. */
 export function ExportSections({ exports, t }: ExportSectionsProps) {
-  const sections = exportSectionsOf(exports)
+  // Sectioning re-parses every artifact body (BibTeX/RIS spans, CSL JSON), so
+  // it is keyed on the artifacts rather than redone on each parent render.
+  const sections = useMemo(() => exportSectionsOf(exports), [exports])
   return (
     <div className={css.exportStack}>
       {sections.map((section) => (

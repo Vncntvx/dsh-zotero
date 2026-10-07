@@ -20,7 +20,7 @@
  * @module dsh-zotero/client/components/workspace/SourceSidebar
  */
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
   IconChevronLeftOutlineMedium,
@@ -79,6 +79,13 @@ export function SourceSidebar({
   const optionRefs = useRef<Array<HTMLDivElement | null>>([])
   const filterBarRef = useRef<HTMLDivElement>(null)
   const [filterEdges, setFilterEdges] = useState({ left: false, right: false })
+
+  // The board's own tally, keyed on the sources it counts rather than redone
+  // on every filter or selection change.
+  const evidencePassageTotal = useMemo(
+    () => evidencePassageTotalOf(workspace.sources),
+    [workspace.sources],
+  )
 
   // The pill strip follows the harness's composer-rail pattern: the
   // scrollbar stays hidden and overflow is announced by edge arrows paging
@@ -220,7 +227,7 @@ export function SourceSidebar({
       {counts.evidence >= 2 && (
         <button type="button" className={css.evidenceEntry} onClick={onOpenEvidence}>
           {t('evidenceEntryLabel', {
-            count: evidencePassageTotalOf(workspace.sources),
+            count: evidencePassageTotal,
           })}
         </button>
       )}

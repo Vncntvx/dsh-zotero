@@ -77,11 +77,7 @@ interface SearchEpisode {
 
 /** Mutable accumulator shapes; the frozen views come from `model.ts`. */
 interface DraftFacts {
-  inspected: boolean
-  evidenceCount: number
   reportedEvidenceCount: number
-  attachmentResolved: boolean
-  exportCount: number
 }
 
 interface DraftOperations {
@@ -122,11 +118,7 @@ interface Draft {
 
 function emptyFacts(): DraftFacts {
   return {
-    inspected: false,
-    evidenceCount: 0,
     reportedEvidenceCount: 0,
-    attachmentResolved: false,
-    exportCount: 0,
   }
 }
 
@@ -338,7 +330,6 @@ export function buildSourceWorkspace(
     meta: Record<string, unknown>,
     callId: string,
     seq: number,
-    time: number,
   ): void => {
     const view = retrieveMetaOf(meta)
     // A recognized projection always carries `count` (the byte budget may
@@ -348,7 +339,6 @@ export function buildSourceWorkspace(
       draft.successfulRetrieveCallIds.add(callId)
       draft.retrievalSummary = {
         runCount: draft.successfulRetrieveCallIds.size,
-        latestRetrievedAt: time,
         truncated: false,
       }
     }
@@ -421,12 +411,11 @@ export function buildSourceWorkspace(
           existing.passage.callIds.push(callId)
         }
       }
-      draft.facts.evidenceCount = draft.evidence.size
     }
     // Refresh the truncation flag after the merge, so the latest retrieve's
     // facts are reflected even when this call was already counted. The
     // creation block above guarantees a summary exists by this point; the
-    // kept/reported counters live on `facts` alone — one storage path.
+    // reported counter lives on `facts` alone, while kept passages live on `evidence`.
     draft.retrievalSummary = {
       ...draft.retrievalSummary!,
       truncated: draft.retrievalFacts?.truncated === true,
@@ -533,7 +522,6 @@ export function buildSourceWorkspace(
         if (state !== 'ok' || meta === null) break
         const view = getMetaOf(meta)
         if (view.title === null) break
-        draft.facts.inspected = true
         // The get projection is richer than a search row: it wins outright.
         draft.title = view.title
         if (view.creators !== null) draft.creators = view.creators
@@ -548,7 +536,7 @@ export function buildSourceWorkspace(
         const draft = draftOf(ref, seq)
         countOperation(draft, state)
         if (state === 'ok' && meta !== null) {
-          pushEvidence(draft, meta, block.callId, seq, eventTimeOf(block))
+          pushEvidence(draft, meta, block.callId, seq)
         }
         break
       }
@@ -560,7 +548,6 @@ export function buildSourceWorkspace(
         if (state !== 'ok' || meta === null) break
         const view = attachmentMetaOf(meta)
         if (view.kind === null || view.contentType === null) break
-        draft.facts.attachmentResolved = true
         draft.attachment = {
           kind: view.kind,
           contentType: view.contentType,
@@ -608,7 +595,6 @@ export function buildSourceWorkspace(
           const draft = byKey.get(normalizeRefKey(ref))
           if (draft !== undefined && !draft.exportedCallIds.has(block.callId)) {
             draft.exportedCallIds.add(block.callId)
-            draft.facts.exportCount += 1
             draft.exports.push(artifact)
           }
         }

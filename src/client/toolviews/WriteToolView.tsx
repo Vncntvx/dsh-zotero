@@ -278,12 +278,28 @@ export function WriteToolView(props: WriteToolViewProps) {
     parentSelectUrl,
     tagsList,
     rawText,
+    unknownTool,
   } = useMemo(() => {
-    // The runtime types the slot's tool name loosely; registrations pin it to
-    // the eight names, and anything unexpected falls back to the create-note
-    // arm exactly as the if/else chain's default once did.
-    const descriptor =
-      WRITE_DESCRIPTORS[toolName as WriteToolName] ?? WRITE_DESCRIPTORS.zotero_create_note
+    // The runtime types the slot's tool name loosely; the registrations pin it
+    // to the eight names, and the membership check keeps an unexpected name
+    // from borrowing the create-note receipt — a receipt that would claim a
+    // note was created by a tool that is not the note tool.
+    const descriptor = (WRITE_DESCRIPTORS as Record<string, WriteDescriptor | undefined>)[toolName]
+    if (descriptor === undefined) {
+      const raw = (resultTextOf(block) ?? '').trim()
+      return {
+        icon: null,
+        title: '',
+        summary: raw.split('\n', 1)[0] ?? '',
+        tone: 'unreported' as ReceiptTone,
+        errorSummary: errorSummaryOf(block, raw),
+        parentRef: null,
+        parentSelectUrl: null,
+        tagsList: [] as string[],
+        rawText: raw,
+        unknownTool: true,
+      }
+    }
     const args = argsViewOf(block)
     const raw = (resultTextOf(block) ?? '').trim()
     const meta = metaOf(block)
@@ -300,8 +316,34 @@ export function WriteToolView(props: WriteToolViewProps) {
       parentSelectUrl: pUrl,
       tagsList: Array.from(new Set(described.tags)),
       rawText: raw,
+      unknownTool: false,
     }
   }, [block, t, toolName])
+
+  if (unknownTool) {
+    // An unregistered write tool name: no receipt can be honest here, so the
+    // card carries only the tool's own text and no borrowed title or badge.
+    return (
+      <ZoteroToolRow
+        toolName={toolName}
+        block={block}
+        useDisclosure={useDisclosure}
+        inspect={inspect}
+        t={t}
+        icon={null}
+        title={toolName}
+        summary={summary}
+      >
+        {() =>
+          rawText ? (
+            <div className={css.receiptCard}>
+              <RawTextFallback text={rawText} />
+            </div>
+          ) : null
+        }
+      </ZoteroToolRow>
+    )
+  }
 
   return (
     <ZoteroToolRow

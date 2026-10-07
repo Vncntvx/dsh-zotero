@@ -113,7 +113,6 @@ describe('inspector', () => {
       sources: workspace.sources.map((item) => ({
         ...item,
         exports: [],
-        facts: { ...item.facts, exportCount: 0 },
       })),
     }
     const { view } = mountView(bare)
@@ -169,7 +168,7 @@ describe('inspector', () => {
       sources: workspace.sources.map((item) => ({
         ...item,
         evidence: [],
-        facts: { ...item.facts, evidenceCount: 0, reportedEvidenceCount: 5 },
+        facts: { ...item.facts, reportedEvidenceCount: 5 },
         retrievalFacts: {
           ...item.retrievalFacts!,
           truncated: true,
@@ -249,7 +248,6 @@ describe('evidence overview', () => {
       sources: workspace.sources.map((item) => ({
         ...item,
         evidence: [],
-        facts: { ...item.facts, evidenceCount: 0 },
       })),
     }
     const { view } = mountView(bare)

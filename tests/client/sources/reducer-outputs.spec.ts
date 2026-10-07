@@ -28,7 +28,7 @@ describe('buildSourceWorkspace', () => {
       expect(workspace.exports).toEqual([])
     })
 
-    it('creates an export artifact and exportCount only from a successful call', () => {
+    it('creates an export artifact only from a successful call', () => {
       const workspace = buildSourceWorkspace([
         block(
           'e1',
@@ -51,7 +51,7 @@ describe('buildSourceWorkspace', () => {
       })
       expect(workspace.sources).toHaveLength(2)
       for (const source of workspace.sources) {
-        expect(source.facts.exportCount).toBe(1)
+        expect(source.exports.length).toBe(1)
         expect(source.exports).toEqual([workspace.exports[0]])
       }
     })
@@ -138,7 +138,7 @@ describe('buildSourceWorkspace', () => {
         ),
       ])
       expect(workspace.sources).toHaveLength(1)
-      expect(workspace.sources[0]!.facts.exportCount).toBe(1)
+      expect(workspace.sources[0]!.exports.length).toBe(1)
     })
 
     it('attributes an export through its meta refs even with unparseable arguments', () => {
@@ -230,7 +230,7 @@ describe('buildSourceWorkspace', () => {
       expect(workspace.exports[0]!.refsOmitted).toBe(0)
       expect(workspace.sources).toHaveLength(50)
       for (const source of workspace.sources) {
-        expect(source.facts.exportCount).toBe(1)
+        expect(source.exports.length).toBe(1)
       }
     })
 
@@ -271,7 +271,7 @@ describe('buildSourceWorkspace', () => {
           },
         ),
       ])
-      expect(workspace.sources[0]!.facts.attachmentResolved).toBe(true)
+      expect(workspace.sources[0]!.attachment !== undefined).toBe(true)
       expect(workspace.sources[0]!.attachment).toEqual({
         ref: 'zotero://user/0/attachment/WXYZ6789',
         kind: 'file',
@@ -311,7 +311,7 @@ describe('buildSourceWorkspace', () => {
         block('a2', 2, 'zotero_attachment', { ref: REF('A2') }, { meta: { kind: 'other' } }),
       ])
       expect(workspace.sources).toHaveLength(2)
-      expect(workspace.sources.every((item) => item.facts.attachmentResolved === false)).toBe(true)
+      expect(workspace.sources.every((item) => item.attachment === undefined)).toBe(true)
     })
 
     it('resolves a degraded attachment without a title, location, or ref', () => {
@@ -324,7 +324,7 @@ describe('buildSourceWorkspace', () => {
           { meta: { kind: 'url', contentType: 'text/html' } },
         ),
       ])
-      expect(workspace.sources[0]!.facts.attachmentResolved).toBe(true)
+      expect(workspace.sources[0]!.attachment !== undefined).toBe(true)
       expect(workspace.sources[0]!.attachment).toEqual({
         kind: 'url',
         contentType: 'text/html',
@@ -417,11 +417,7 @@ describe('buildSourceWorkspace', () => {
       ])
       expect(workspace.sources).toHaveLength(1)
       expect(workspace.sources[0]!.facts).toEqual({
-        inspected: false,
-        evidenceCount: 0,
         reportedEvidenceCount: 0,
-        attachmentResolved: false,
-        exportCount: 0,
       })
       expect(workspace.sources[0]!.operations).toEqual({ running: 1, failed: 0, stopped: 0 })
     })
@@ -446,7 +442,7 @@ describe('buildSourceWorkspace', () => {
       const failed = workspace.sources.find((item) => item.key.includes('a1'))
       const stopped = workspace.sources.find((item) => item.key.includes('a2'))
       expect(failed?.operations).toEqual({ running: 0, failed: 1, stopped: 0 })
-      expect(failed?.facts.inspected).toBe(false)
+      expect(failed?.title).toBeUndefined()
       expect(stopped?.operations).toEqual({ running: 0, failed: 0, stopped: 1 })
     })
 
@@ -478,9 +474,9 @@ describe('buildSourceWorkspace', () => {
       const a1 = workspace.sources.find((item) => item.key.includes('a1'))
       const a2 = workspace.sources.find((item) => item.key.includes('a2'))
       expect(a1?.operations.running).toBe(1)
-      expect(a1?.facts.exportCount).toBe(0)
+      expect(a1?.exports.length).toBe(0)
       expect(a2?.operations.failed).toBe(1)
-      expect(a2?.facts.exportCount).toBe(0)
+      expect(a2?.exports.length).toBe(0)
     })
 
     it('creates no sources from a running export with unusable arguments', () => {

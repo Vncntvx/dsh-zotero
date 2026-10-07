@@ -99,13 +99,16 @@ describe('status projection helpers', () => {
         running: [{ callId: 'b', phase: 'start' }],
       }),
     )
-    // The same content signs identically; streaming publications change
-    // neither the visible zotero row order nor the in-flight phase.
-    expect(
-      sessionSignatureOf(
-        chatOf([toolRow(settled({ seq: 3, callId: 'a' })), toolRow(running({ callId: 'b' }))]),
-      ),
-    ).toBe(signed)
+    // A streaming publication — assistant tokens appended, and the in-flight
+    // call's arguments grown by the streamed prefix — changes neither the
+    // visible zotero row order nor the in-flight phase, so the signature must
+    // stay identical and the panel must not rebuild on it.
+    const streamed = chatOf([
+      toolRow(settled({ seq: 3, callId: 'a' })),
+      { kind: 'assistant', anchorSeq: 4 } as ChatConversationViewNode,
+      toolRow(running({ callId: 'b', argsRaw: '{"query":"a longer streamed prefix"}' })),
+    ])
+    expect(sessionSignatureOf(streamed)).toBe(signed)
     expect(sessionSignatureOf(chatOf())).toBe(JSON.stringify({ order: [], running: [] }))
     // A hidden row does not count.
     expect(sessionSignatureOf(chatOf([toolRow(settled({ callId: 'h' }), 'hidden')]))).toBe(

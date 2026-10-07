@@ -21,7 +21,14 @@ import {
 } from '../sources/decoders.ts'
 import type { BrowseRow } from '../../browse-rows.ts'
 import { countOfLabel } from '../evidence-labels.ts'
-import { argsViewOf, errorSummaryOf, metaOf, resultTextOf, textArg } from '../presenters.ts'
+import {
+  argsViewOf,
+  errorSummaryOf,
+  isToolRunning,
+  metaOf,
+  resultTextOf,
+  textArg,
+} from '../presenters.ts'
 import { CopyButton } from '../components/CopyButton.tsx'
 import { RawTextFallback, RunningNotice, ZoteroToolRow } from './ZoteroToolRow.tsx'
 import css from './toolviews.module.css'
@@ -281,7 +288,7 @@ export function BrowseToolView(props: BrowseToolViewProps) {
     let changesView: ChangesMetaView | null = null
     let job: JobArmView | null = null
 
-    if ('phase' in block && block.phase === 'start') {
+    if (isToolRunning(block)) {
       sum = t('toolRunning')
     } else if (isChanges) {
       // A long diff is handed to a background job rather than answered inline.

@@ -11,7 +11,7 @@ import { zh } from '../../src/client/locales.ts'
 import { CopyButton } from '../../src/client/components/CopyButton.tsx'
 import { ZoteroOpenButton } from '../../src/client/components/open/ZoteroOpenButton.tsx'
 import { badgesOf } from '../../src/client/components/workspace/SourceListItem.tsx'
-import { sourceOf } from './helpers/source-fixtures.ts'
+import { artifactOf, passageOf, sourceOf } from './helpers/source-fixtures.ts'
 
 // The real primitives bundle pulls heavy dependencies (katex, shiki, the
 // portal machinery); the row only needs the shared DOM face.
@@ -113,12 +113,10 @@ describe('badgesOf', () => {
     const badges = badgesOf(
       sourceOf({
         facts: {
-          inspected: false,
-          evidenceCount: 2,
           reportedEvidenceCount: 2,
-          attachmentResolved: false,
-          exportCount: 1,
         },
+        evidence: [passageOf(), passageOf({ text: 'A second passage on data retention.' })],
+        exports: [artifactOf()],
         operations: { running: 1, failed: 2, stopped: 3 },
       }),
       t,

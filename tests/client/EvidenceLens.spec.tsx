@@ -37,11 +37,7 @@ const EVIDENCE_ITEM: SourceItem = sourceOf({
   year: 2023,
   evidenceMatch: 'verified',
   facts: {
-    inspected: false,
-    evidenceCount: 2,
     reportedEvidenceCount: 2,
-    attachmentResolved: false,
-    exportCount: 0,
   },
   evidence: [
     passageOf({
@@ -156,11 +152,7 @@ describe('EvidenceCard', () => {
     const item = sourceOf({
       title: 'Budget Dropped',
       facts: {
-        inspected: false,
-        evidenceCount: 0,
         reportedEvidenceCount: 25,
-        attachmentResolved: false,
-        exportCount: 0,
       },
       retrievalFacts: {
         truncated: true,
@@ -275,11 +267,7 @@ describe('EvidenceOverview', () => {
       ref: 'zotero://user/0/item/OTHER',
       title: 'Another Paper',
       facts: {
-        inspected: false,
-        evidenceCount: 1,
         reportedEvidenceCount: 1,
-        attachmentResolved: false,
-        exportCount: 0,
       },
       evidence: [
         passageOf({

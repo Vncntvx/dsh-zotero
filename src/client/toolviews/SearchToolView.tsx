@@ -14,7 +14,7 @@ import {
   argsViewOf,
   errorSummaryOf,
   metaOf,
-  numberField,
+  isToolRunning,
   resultTextOf,
   textArg,
 } from '../presenters.ts'
@@ -33,11 +33,11 @@ export function SearchToolView(props: SearchToolViewProps) {
       const q = (textArg(args, 'query') ?? '').trim()
       const meta = metaOf(block)
       const searchView = meta !== null ? searchMetaOf(meta) : null
-      const noteMatches = meta !== null ? (numberField(meta, 'noteMatches') ?? 0) : 0
+      const noteMatches = searchView?.noteMatches ?? 0
       const raw = (resultTextOf(block) ?? '').trim()
 
       let sum = ''
-      if ('phase' in block && block.phase === 'start') {
+      if (isToolRunning(block)) {
         sum = q ? `"${q}"` : t('toolSearchRunning')
       } else if (searchView?.rows !== null && searchView?.rows !== undefined) {
         // The hit count is the call's, not the projection's: `rows` is the

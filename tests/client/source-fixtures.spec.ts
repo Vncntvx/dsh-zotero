@@ -25,8 +25,8 @@ describe('source fixtures', () => {
     expect(workspace.sources).toHaveLength(1)
     const item = workspace.sources[0]!
     expect(hasPdf(item)).toBe(true)
-    expect(item.facts.evidenceCount).toBe(2)
-    expect(item.facts.exportCount).toBe(1)
+    expect(item.evidence.length).toBe(2)
+    expect(item.exports.length).toBe(1)
     expect(workspace.exports).toHaveLength(1)
   })
 
@@ -52,7 +52,7 @@ describe('source fixtures', () => {
     const workspace = zeroMatchFixture()
     expect(workspace.sources).toHaveLength(1)
     const item = workspace.sources[0]!
-    expect(item.facts.evidenceCount).toBe(0)
+    expect(item.evidence.length).toBe(0)
     expect(item.retrievalFacts?.sourceAvailability.PDF?.unavailable).toBe(true)
   })
 
@@ -68,7 +68,7 @@ describe('source fixtures', () => {
     const item = workspace.sources[0]!
     expect(item.retrievalSummary?.runCount).toBe(3)
     expect(item.retrievalSummary?.truncated).toBe(true)
-    expect(item.facts.evidenceCount).toBe(3)
+    expect(item.evidence.length).toBe(3)
     expect(item.searches).toHaveLength(3)
   })
 

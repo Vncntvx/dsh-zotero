@@ -30,7 +30,7 @@ function retrievalSummaryLineOf(item: SourceItem, t: TranslateNS<'zotero'>): str
   // run bookkeeping.
   const parts = [
     t('retrievalRunCount', { count: summary.runCount }),
-    t('retrievalKeptCount', { count: item.facts.evidenceCount }),
+    t('retrievalKeptCount', { count: item.evidence.length }),
     t('retrievalReportedCount', { count: item.facts.reportedEvidenceCount }),
   ]
   if (summary.truncated) parts.push(t('budgetLimitedNote'))

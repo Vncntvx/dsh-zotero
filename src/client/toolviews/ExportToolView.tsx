@@ -16,6 +16,7 @@ import { downloadBlob } from '../download.ts'
 import {
   argsViewOf,
   errorSummaryOf,
+  isToolRunning,
   listArg,
   metaOf,
   resultTextOf,
@@ -56,7 +57,7 @@ export function ExportToolView(props: ExportToolViewProps) {
     const count = exportView?.refs.length ?? listArg(args, 'refs').length
 
     let sum = ''
-    if ('phase' in block && block.phase === 'start') {
+    if (isToolRunning(block)) {
       sum = t('toolExportRunning')
     } else {
       // A long call is handed to a background job rather than answered inline.

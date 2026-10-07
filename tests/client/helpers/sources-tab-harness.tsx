@@ -181,19 +181,38 @@ export function exportOf(): ToolResultNode {
   })
 }
 
-/** Render the tab with stubbed session/chat hooks and the status face. */
+/**
+ * Render the tab with stubbed session/chat hooks and the status face.
+ * @param chat - the snapshot the chat stub answers with.
+ * @param status - the connection probe face.
+ * @param inputActions - optional command-draft actions.
+ * @param session - the owning session snapshot.
+ * @param capture - receives the equality function the panel subscribes with,
+ *   so a spec can pin the re-render gate without a real snapshot store.
+ */
 export function mountTab(
   chat: ChatSnapshot | undefined,
   status: StatusProbe,
   inputActions?: { setDraft: (text: string) => void },
   session: SessionSnapshot | undefined = sessionOf(),
+  capture?: {
+    onChatEquality?: (
+      eq: (a: ChatSnapshot | undefined, b: ChatSnapshot | undefined) => boolean,
+    ) => void
+  },
 ): { view: ReturnType<typeof render> } {
   const props = {
     t: mockT,
     status,
     useSession: (sel: (snap: SessionSnapshot) => unknown) =>
       session === undefined ? undefined : sel(session),
-    useChat: (sel: (snap: ChatSnapshot) => unknown) => (chat === undefined ? undefined : sel(chat)),
+    useChat: (
+      sel: (snap: ChatSnapshot) => unknown,
+      eq?: (a: ChatSnapshot | undefined, b: ChatSnapshot | undefined) => boolean,
+    ) => {
+      if (capture?.onChatEquality !== undefined && eq !== undefined) capture.onChatEquality(eq)
+      return chat === undefined ? undefined : sel(chat)
+    },
     ...(inputActions === undefined ? {} : { inputActions }),
   } as unknown as SourcesTabProps
   const view = render(<SourcesTab {...props} />)

@@ -25,12 +25,9 @@ const SOURCES: readonly SourceItem[] = [
     firstSeenAt: 1,
     lastTouchedAt: 9,
     facts: {
-      inspected: false,
-      evidenceCount: 2,
       reportedEvidenceCount: 2,
-      attachmentResolved: false,
-      exportCount: 0,
     },
+    evidence: [passageOf(), passageOf({ text: 'A second passage on data retention.' })],
   }),
   sourceOf({
     key: 'c',
@@ -39,12 +36,9 @@ const SOURCES: readonly SourceItem[] = [
     firstSeenAt: 2,
     lastTouchedAt: 2,
     facts: {
-      inspected: false,
-      evidenceCount: 0,
       reportedEvidenceCount: 0,
-      attachmentResolved: true,
-      exportCount: 1,
     },
+    exports: [artifactOf()],
     bestAttachment: { ref: 'zotero://user/0/attachment/WXYZ6789', contentType: 'application/pdf' },
   }),
   sourceOf({
@@ -76,6 +70,10 @@ describe('filterSources', () => {
 
   it('returns empty for a filter with no matches', () => {
     expect(filterSources([SOURCES[0]!], 'evidence')).toEqual([])
+  })
+
+  it('falls back to all sources when given an unrecognized filter', () => {
+    expect(filterSources(SOURCES, 'unknown' as any)).toHaveLength(4)
   })
 })
 
@@ -121,21 +119,13 @@ describe('evidencePassageTotalOf', () => {
     const sources = [
       sourceOf({
         facts: {
-          inspected: false,
-          evidenceCount: 3,
           reportedEvidenceCount: 3,
-          attachmentResolved: false,
-          exportCount: 0,
         },
         evidence: [passageOf(), passageOf(), passageOf()],
       }),
       sourceOf({
         facts: {
-          inspected: false,
-          evidenceCount: 1,
           reportedEvidenceCount: 1,
-          attachmentResolved: false,
-          exportCount: 0,
         },
         evidence: [passageOf()],
       }),

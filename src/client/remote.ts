@@ -10,11 +10,7 @@
  * @module dsh-zotero/client/remote
  */
 
-import type {
-  RemoteResult,
-  TypertRemoteContribution,
-  TypertRemoteNamespaceMap,
-} from '@deepseek-ai/dsh-typert-protocol'
+import type { RemoteResult, TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
 import { ZOTERO_REMOTE_PACKAGE, type ZoteroStatusView } from '../contract.ts'
 import { ZOTERO_CLIENT_INVOCATIONS } from './status-codec.ts'
 
@@ -25,9 +21,6 @@ export const ZOTERO_REMOTE: TypertRemoteContribution = {
   package: ZOTERO_REMOTE_PACKAGE,
   descriptors: ZOTERO_CLIENT_INVOCATIONS,
 }
-
-/** The mounted `zotero` namespace face (read as `ctx.remote.zotero` in `./index.ts`). */
-export type ZoteroRemoteFace = TypertRemoteNamespaceMap['zotero']
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   // Typed face of the mounted namespace. `index.ts` mounts this contribution

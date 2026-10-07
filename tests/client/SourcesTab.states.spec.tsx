@@ -11,12 +11,12 @@
  */
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import type { ChatSnapshot } from '@deepseek-ai/dsh-client-ui-chat/client'
+import type { ChatConversationViewNode, ChatSnapshot } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { SessionSnapshot } from '@deepseek-ai/dsh-api-session-controller/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SourcesTab, type SourcesTabProps } from '../../src/client/components/SourcesTab.tsx'
 import { zh } from '../../src/client/locales.ts'
-import { settled } from './helpers/blocks.ts'
+import { preparing, running, settled } from './helpers/blocks.ts'
 import {
   CONNECTED,
   chatOf,
@@ -262,6 +262,32 @@ describe('sources states', () => {
       '1',
     )
     view.unmount()
+  })
+
+  it('subscribes with the zotero signature as its equality gate', () => {
+    // The panel hands the signature function to the chat hook as the equality
+    // comparator, so a streaming publication keeps the previous snapshot (no
+    // rebuild) while a phase or order change replaces it.
+    let eq: ((a: ChatSnapshot | undefined, b: ChatSnapshot | undefined) => boolean) | undefined
+    const base = chatOf([
+      toolRow(settled({ seq: 3, callId: 'a' })),
+      toolRow(running({ callId: 'b' })),
+    ])
+    const streamed = chatOf([
+      toolRow(settled({ seq: 3, callId: 'a' })),
+      { kind: 'assistant', anchorSeq: 4 } as ChatConversationViewNode,
+      toolRow(running({ callId: 'b', argsRaw: '{"query":"a longer streamed prefix"}' })),
+    ])
+    const phaseMoved = chatOf([
+      toolRow(settled({ seq: 3, callId: 'a' })),
+      toolRow(preparing({ callId: 'b' })),
+    ])
+    mountTab(base, connectedProbe(), undefined, undefined, {
+      onChatEquality: (given) => (eq = given),
+    })
+    expect(eq).toBeDefined()
+    expect(eq!(base, streamed)).toBe(true)
+    expect(eq!(base, phaseMoved)).toBe(false)
   })
 
   it('renders the sources list with a fallback key when the session id is missing', async () => {

@@ -34,11 +34,12 @@ const RETRIEVE_META = {
 
 describe('buildSourceWorkspace', () => {
   describe('retrieve facts and evidence merge', () => {
-    it('produces evidence facts from retrieve and never export facts', () => {
+    it('keeps evidence on the item and exports on the session, never cross-counted', () => {
       const workspace = buildSourceWorkspace([
         block('r1', 1, 'zotero_retrieve', { ref: REF('A1') }, { meta: RETRIEVE_META }),
       ])
-      expect(workspace.sources[0]!.facts).toMatchObject({ evidenceCount: 1, exportCount: 0 })
+      expect(workspace.sources[0]!.evidence).toHaveLength(1)
+      expect(workspace.sources[0]!.exports).toEqual([])
       expect(workspace.exports).toEqual([])
       expect(workspace.sources[0]!.retrievalFacts?.coverage).toEqual({
         indexedPages: 5,
@@ -83,11 +84,10 @@ describe('buildSourceWorkspace', () => {
       const summary = workspace.sources[0]!.retrievalSummary
       expect(summary).toEqual({
         runCount: 2,
-        latestRetrievedAt: 2000,
         truncated: true,
       })
       // The kept/reported counters live on facts alone — one storage path.
-      expect(workspace.sources[0]!.facts.evidenceCount).toBe(2)
+      expect(workspace.sources[0]!.evidence.length).toBe(2)
       expect(workspace.sources[0]!.facts.reportedEvidenceCount).toBe(3)
     })
 
@@ -99,7 +99,7 @@ describe('buildSourceWorkspace', () => {
         block('r1', 2, 'zotero_retrieve', { ref: REF('A1') }, { meta: RETRIEVE_META }),
       ])
       expect(workspace.sources[0]!.retrievalSummary?.runCount).toBe(1)
-      expect(workspace.sources[0]!.facts.evidenceCount).toBe(1)
+      expect(workspace.sources[0]!.evidence.length).toBe(1)
     })
 
     it('counts each successful retrieve once even when its meta arrives late', () => {
@@ -137,7 +137,7 @@ describe('buildSourceWorkspace', () => {
       expect(workspace.sources).toHaveLength(1)
       expect(workspace.sources[0]!.evidence).toHaveLength(1)
       expect(workspace.sources[0]!.evidence[0]!.callIds).toEqual(['r1', 'r2'])
-      expect(workspace.sources[0]!.facts.evidenceCount).toBe(1)
+      expect(workspace.sources[0]!.evidence.length).toBe(1)
     })
 
     it('decodes meta without the availability facts', () => {
@@ -196,7 +196,7 @@ describe('buildSourceWorkspace', () => {
           },
         ),
       ])
-      expect(workspace.sources[0]!.facts.evidenceCount).toBe(2)
+      expect(workspace.sources[0]!.evidence.length).toBe(2)
       expect(workspace.sources[0]!.retrievalFacts?.sourceAvailability).toEqual({})
       expect(workspace.sources[0]!.retrievalFacts?.coverage).toBeUndefined()
     })
@@ -206,7 +206,7 @@ describe('buildSourceWorkspace', () => {
         block('r1', 1, 'zotero_retrieve', { ref: REF('A1') }, { meta: { items: 'x' } }),
       ])
       expect(workspace.sources[0]!.retrievalFacts).toBeUndefined()
-      expect(workspace.sources[0]!.facts.evidenceCount).toBe(0)
+      expect(workspace.sources[0]!.evidence.length).toBe(0)
     })
 
     it('lets the latest retrieve facts win', () => {
@@ -375,7 +375,7 @@ describe('buildSourceWorkspace', () => {
         ),
       ])
       expect(workspace.sources[0]!.facts.reportedEvidenceCount).toBe(0)
-      expect(workspace.sources[0]!.facts.evidenceCount).toBe(1)
+      expect(workspace.sources[0]!.evidence.length).toBe(1)
     })
 
     it('leaves attachmentRef and coverage unset when no retrieve provides them', () => {
@@ -445,7 +445,7 @@ describe('buildSourceWorkspace', () => {
         'zotero://user/0/attachment/WXYZ6789',
       )
       expect(workspace.sources[0]!.facts.reportedEvidenceCount).toBe(25)
-      expect(workspace.sources[0]!.facts.evidenceCount).toBe(0)
+      expect(workspace.sources[0]!.evidence.length).toBe(0)
     })
 
     it('adopts the latest attachmentRef and pairs it with the latest coverage', () => {

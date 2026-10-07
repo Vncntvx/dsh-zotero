@@ -19,7 +19,14 @@ import { childRowLinks, pdfUrlOf } from '../actions/open-zotero.ts'
 import { ZoteroOpenLink } from '../components/open/ZoteroOpenLink.tsx'
 import { CopyButton } from '../components/CopyButton.tsx'
 import { countOfLabel, CHILD_KIND_LABEL } from '../evidence-labels.ts'
-import { argsViewOf, errorSummaryOf, metaOf, resultTextOf, textArg } from '../presenters.ts'
+import {
+  argsViewOf,
+  errorSummaryOf,
+  isToolRunning,
+  metaOf,
+  resultTextOf,
+  textArg,
+} from '../presenters.ts'
 import { RawTextFallback, RunningNotice, ZoteroToolRow } from './ZoteroToolRow.tsx'
 import css from './toolviews.module.css'
 
@@ -135,7 +142,7 @@ export function ChildrenToolView(props: ChildrenToolViewProps) {
       const childTotal = (children?.sections ?? []).reduce((sum, section) => sum + section.total, 0)
 
       let sum = ''
-      if ('phase' in block && block.phase === 'start') {
+      if (isToolRunning(block)) {
         sum = itemRef || title
       } else if (attachView?.title) {
         sum = t('toolSummaryAttachment', { title: attachView.title })

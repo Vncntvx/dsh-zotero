@@ -18,7 +18,7 @@ import type {
   StartedToolCall,
   ToolResultNode,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { metaOf, rowStateOf } from '../presenters.ts'
+import { isToolRunning, metaOf, rowStateOf } from '../presenters.ts'
 import { writeMetaOf } from '../sources/decoders.ts'
 import css from './toolviews.module.css'
 
@@ -66,8 +66,11 @@ export function ZoteroToolRow({
   inspect,
   children,
 }: ZoteroToolRowProps) {
+  // `preparing` keeps its own name: only the header's state label tells the
+  // two running phases apart, and that label comes from `rowStateOf`, which
+  // reports both as running.
   const isPreparing = 'phase' in block && block.phase === 'preparing'
-  const isRunning = ('phase' in block && block.phase === 'start') || isPreparing
+  const isRunning = isToolRunning(block)
   const { expanded, toggle: toggleExpand } = useDisclosure()
 
   const state = isPreparing ? 'preparing' : rowStateOf(block)

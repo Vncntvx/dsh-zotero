@@ -22,11 +22,7 @@ export function sourceOf(overrides: Partial<SourceItem> = {}): SourceItem {
     ref: 'zotero://user/0/item/A',
     evidenceMatch: 'unknown',
     facts: {
-      inspected: false,
-      evidenceCount: 0,
       reportedEvidenceCount: 0,
-      attachmentResolved: false,
-      exportCount: 0,
     },
     operations: { running: 0, failed: 0, stopped: 0 },
     searches: [],
@@ -103,11 +99,7 @@ function pdfItemOf(overrides: Partial<SourceItem> = {}): SourceItem {
     venue: 'Policy Studies Journal',
     evidenceMatch: 'verified',
     facts: {
-      inspected: true,
-      evidenceCount: 2,
       reportedEvidenceCount: 4,
-      attachmentResolved: true,
-      exportCount: 1,
     },
     bestAttachment: { ref: 'zotero://user/0/attachment/ABCD1234', contentType: 'application/pdf' },
     attachment: {
@@ -171,7 +163,6 @@ export function singleFixture(): SourceWorkspace {
         }),
         retrievalSummary: {
           runCount: 1,
-          latestRetrievedAt: 1720000000000,
           truncated: false,
         },
         searches: [searchOf()],
@@ -191,6 +182,14 @@ export function singleFixture(): SourceWorkspace {
  */
 export function mixedFixture(): SourceWorkspace {
   const items: SourceItem[] = []
+  // One session export covering the first three items; those items carry it
+  // in their own `exports` array, which is what the badge and the exported
+  // filter read. Fixture and session view stay the same fact.
+  const artifact = artifactOf({
+    callId: 'call-export-1',
+    refs: [0, 1, 2].map((i) => `zotero://user/0/item/${String.fromCharCode(65 + i)}`),
+  })
+  const exportedRefs = new Set(artifact.refs)
   for (let i = 0; i < 12; i += 1) {
     const letter = String.fromCharCode(65 + i)
     const overrides: Partial<MutableSourceItem> = {
@@ -208,11 +207,7 @@ export function mixedFixture(): SourceWorkspace {
       const evidenceCount = i % 4 === 0 ? 3 : 1
       overrides.evidenceMatch = 'verified'
       overrides.facts = {
-        inspected: true,
-        evidenceCount,
         reportedEvidenceCount: i % 4 === 0 ? 6 : 2,
-        attachmentResolved: true,
-        exportCount: i % 3 === 0 ? 1 : 0,
       }
       overrides.bestAttachment = {
         ref: 'zotero://user/0/attachment/ABCD1234',
@@ -232,6 +227,7 @@ export function mixedFixture(): SourceWorkspace {
         }),
       )
       overrides.searches = [searchOf({ callId: 'call-2', query: 'mixed' })]
+      if (exportedRefs.has(overrides.ref!)) overrides.exports = [artifact]
     } else if (i % 3 === 0) {
       // Every third index: a mismatch.
       overrides.evidenceMatch = 'mismatch'
@@ -244,11 +240,7 @@ export function mixedFixture(): SourceWorkspace {
         passageOf({ sourceRef: 'zotero://user/0/attachment/ABCD1234', callIds: ['call-3'] }),
       ]
       overrides.facts = {
-        inspected: true,
-        evidenceCount: 1,
         reportedEvidenceCount: 1,
-        attachmentResolved: false,
-        exportCount: 0,
       }
       overrides.searches = [searchOf({ callId: 'call-3', query: 'mismatch' })]
     } else {
@@ -261,11 +253,7 @@ export function mixedFixture(): SourceWorkspace {
   items[0] = sourceOf({ ...items[0], operations: { running: 0, failed: 1, stopped: 0 } })
   items[1] = sourceOf({ ...items[1], operations: { running: 0, failed: 0, stopped: 1 } })
   items[2] = sourceOf({ ...items[2], operations: { running: 1, failed: 0, stopped: 0 } })
-  return workspaceOf(items, {
-    exports: [
-      artifactOf({ callId: 'call-export-1', refs: items.slice(0, 3).map((item) => item.ref) }),
-    ],
-  })
+  return workspaceOf(items, { exports: [artifact] })
 }
 
 /**
@@ -290,11 +278,7 @@ export function largeFixture(): SourceWorkspace {
     if (i % 2 === 0) {
       overrides.evidenceMatch = 'verified'
       overrides.facts = {
-        inspected: true,
-        evidenceCount: 1,
         reportedEvidenceCount: 2,
-        attachmentResolved: true,
-        exportCount: 0,
       }
       overrides.bestAttachment = {
         ref: 'zotero://user/0/attachment/ABCD1234',
@@ -317,11 +301,7 @@ export function zeroMatchFixture(): SourceWorkspace {
   return workspaceOf([
     pdfItemOf({
       facts: {
-        inspected: true,
-        evidenceCount: 0,
         reportedEvidenceCount: 0,
-        attachmentResolved: true,
-        exportCount: 0,
       },
       evidence: [],
       retrievalFacts: retrievalFactsOf({
@@ -351,11 +331,7 @@ export function mismatchFixture(): SourceWorkspace {
       year: 2020,
       evidenceMatch: 'mismatch',
       facts: {
-        inspected: true,
-        evidenceCount: 1,
         reportedEvidenceCount: 1,
-        attachmentResolved: true,
-        exportCount: 0,
       },
       bestAttachment: {
         ref: 'zotero://user/0/attachment/EFGH9012',
@@ -387,11 +363,7 @@ export function mismatchFixture(): SourceWorkspace {
 export function repeatedRetrieveFixture(): SourceWorkspace {
   const item = pdfItemOf({
     facts: {
-      inspected: true,
-      evidenceCount: 3,
       reportedEvidenceCount: 7,
-      attachmentResolved: true,
-      exportCount: 0,
     },
     evidence: [
       passageOf({ callIds: ['call-1', 'call-2', 'call-3'] }),
@@ -410,7 +382,6 @@ export function repeatedRetrieveFixture(): SourceWorkspace {
     }),
     retrievalSummary: {
       runCount: 3,
-      latestRetrievedAt: 1720000002000,
       truncated: true,
     },
     searches: [

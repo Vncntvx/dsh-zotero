@@ -37,6 +37,17 @@ export function isSettledTool(
   return 'kind' in block
 }
 
+/**
+ * True while a call is still running, in either of the two running phases:
+ * `preparing` (arguments still streaming, so the card has no parsed args yet)
+ * and `start` (dispatched, awaiting its result). Cards use this to pick their
+ * in-progress copy; testing `phase === 'start'` alone would show a preparing
+ * call the settled fallback instead.
+ */
+export function isToolRunning(block: ToolCallBlock): boolean {
+  return !isSettledTool(block)
+}
+
 /** The wire name of one tool call block (settled and running forms). */
 export function callNameOf(block: ToolCallBlock): string | null {
   return isSettledTool(block) ? (block.call?.name ?? null) : block.name

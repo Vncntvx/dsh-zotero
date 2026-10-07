@@ -240,6 +240,11 @@ export function ZoteroWorkspaceView({
             t={t}
           />
           <SourceInspector
+            // A new selection opens on Overview: remounting on the key resets
+            // the panel during render, so the previous source's tab (e.g.
+            // Exports) never strands the next source on an empty panel. An
+            // effect would paint that stale tab first and correct it after.
+            key={selectedKey}
             workspace={workspace}
             selectedKey={selectedKey}
             selectionHidden={

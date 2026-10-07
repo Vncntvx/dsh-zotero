@@ -15,8 +15,6 @@ import { Checkbox, RiskConfirmation, Tag } from '@deepseek-ai/dsh-client-ui-prim
 import { useRiskGate, type BooleanRiskCopy } from './risk-gate.ts'
 import css from './fields.module.css'
 
-export type { BooleanRiskCopy } from './risk-gate.ts'
-
 /** What the toggle needs: label, staged text, override state, and actions. */
 export interface BooleanFieldProps {
   /** Visible label; the official checkbox renders it as the accessible name. */

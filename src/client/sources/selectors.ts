@@ -28,24 +28,31 @@ export function hasIssue(item: SourceItem): boolean {
   )
 }
 
+/**
+ * One predicate per filter id. Both the filter bar's counts and the filtered
+ * listing read this table, so a new filter is added once or the pill count
+ * and the listing disagree.
+ */
+const SOURCE_FILTER_PREDICATES = {
+  pdf: (item: SourceItem) => hasPdf(item),
+  retrieved: (item: SourceItem) => item.retrievalFacts !== undefined,
+  evidence: (item: SourceItem) => item.evidence.length > 0,
+  exported: (item: SourceItem) => item.exports.length > 0,
+  issues: (item: SourceItem) => hasIssue(item),
+} as const satisfies Record<Exclude<SourceFilter, 'all'>, (item: SourceItem) => boolean>
+
+/** The filter ids in their bar order, derived from the predicate table. */
+const FILTER_IDS = Object.keys(SOURCE_FILTER_PREDICATES) as Array<
+  keyof typeof SOURCE_FILTER_PREDICATES
+>
+
 export function filterSources(
   sources: readonly SourceItem[],
   filter: SourceFilter,
 ): readonly SourceItem[] {
-  switch (filter) {
-    case 'pdf':
-      return sources.filter((item) => hasPdf(item))
-    case 'retrieved':
-      return sources.filter((item) => item.retrievalFacts !== undefined)
-    case 'evidence':
-      return sources.filter((item) => item.facts.evidenceCount > 0)
-    case 'exported':
-      return sources.filter((item) => item.facts.exportCount > 0)
-    case 'issues':
-      return sources.filter((item) => hasIssue(item))
-    default:
-      return sources
-  }
+  if (filter === 'all') return sources
+  const predicate = SOURCE_FILTER_PREDICATES[filter]
+  return predicate !== undefined ? sources.filter(predicate) : sources
 }
 
 /** The per-filter item counts the filter bar displays; a zero count disables its filter. */
@@ -70,19 +77,13 @@ export function evidencePassageTotalOf(sources: readonly SourceItem[]): number {
 
 /** Count the sources matching each filter in one pass. */
 export function filterCountsOf(sources: readonly SourceItem[]): SourceFilterCounts {
-  let pdf = 0
-  let retrieved = 0
-  let evidence = 0
-  let exported = 0
-  let issues = 0
+  const counts = { all: sources.length, pdf: 0, retrieved: 0, evidence: 0, exported: 0, issues: 0 }
   for (const item of sources) {
-    if (hasPdf(item)) pdf += 1
-    if (item.retrievalFacts !== undefined) retrieved += 1
-    if (item.facts.evidenceCount > 0) evidence += 1
-    if (item.facts.exportCount > 0) exported += 1
-    if (hasIssue(item)) issues += 1
+    for (const id of FILTER_IDS) {
+      if (SOURCE_FILTER_PREDICATES[id](item)) counts[id] += 1
+    }
   }
-  return { all: sources.length, pdf, retrieved, evidence, exported, issues }
+  return counts
 }
 
 /**
@@ -145,22 +146,31 @@ interface ExportSectionDraft {
 /** The translator formats whose bodies itemize into per-document entries. */
 const DOCUMENT_FORMATS = new Set(['bibtex', 'biblatex', 'ris', 'csljson'])
 
+function parseCslRecords(artifact: ExportArtifact): readonly unknown[] | undefined {
+  if (artifact.format !== 'csljson') return undefined
+  try {
+    const records: unknown = JSON.parse(artifact.text)
+    return Array.isArray(records) ? records : undefined
+  } catch {
+    return undefined
+  }
+}
+
 /**
  * The entry text of one located item within the artifact's body. The
  * provider determined the location — a text span for the BibTeX family and
  * RIS, an array index for CSL JSON — so nothing is matched by guessing here.
  */
-function entryTextOf(artifact: ExportArtifact, item: ExportDocumentItem): string | undefined {
+function entryTextOf(
+  artifact: ExportArtifact,
+  item: ExportDocumentItem,
+  cslRecords?: readonly unknown[],
+): string | undefined {
   if (artifact.format === 'csljson') {
-    if (item.entryIndex === undefined) return undefined
-    try {
-      const records: unknown = JSON.parse(artifact.text)
-      const record = Array.isArray(records) ? records[item.entryIndex] : undefined
-      if (typeof record !== 'object' || record === null) return undefined
-      return JSON.stringify(record)
-    } catch {
-      return undefined
-    }
+    if (item.entryIndex === undefined || cslRecords === undefined) return undefined
+    const record = cslRecords[item.entryIndex]
+    if (typeof record !== 'object' || record === null) return undefined
+    return JSON.stringify(record)
   }
   if (item.start === undefined || item.end === undefined) return undefined
   return artifact.text.slice(item.start, item.end).trim()
@@ -186,10 +196,11 @@ function documentsOf(artifact: ExportArtifact):
   ) {
     return undefined
   }
+  const cslRecords = parseCslRecords(artifact)
   const documents: ExportedDocument[] = []
   const unresolved: ExportDocumentItem[] = []
   for (const item of artifact.items) {
-    const text = entryTextOf(artifact, item)
+    const text = entryTextOf(artifact, item, cslRecords)
     if (text === undefined) {
       unresolved.push(item)
       continue

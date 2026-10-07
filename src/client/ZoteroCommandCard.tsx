@@ -105,14 +105,13 @@ export function ZoteroCommandCard({ node, t, probe }: ZoteroCommandCardProps): R
   const effectiveServerId = effective('serverId', parsed?.serverId)
   const effectiveWrite = effective('write', parsed?.write)
   // "Unreported" is the absence of an id. When a probe won, that is the probe's
-  // own undefined `serverId`; only the parsed text carries the flag. Memo'd for
-  // the same reason `handleToggle` is: the body below lists it as a dependency,
-  // so a fresh identity each render would rebuild the whole card every render.
-  const effectiveServerIdUnreported = useCallback((): boolean => {
-    if (probeState.data !== undefined) return probeState.data.serverId === undefined
-    if (probeState.error !== undefined) return false
-    return parsed?.serverIdUnreported ?? false
-  }, [probeState.data, probeState.error, parsed])
+  // own undefined `serverId`; a failed probe has no id to report at all, and
+  // only the parsed text carries the flag. A plain boolean, not a memoized
+  // callback: it is read once, below.
+  const effectiveServerIdUnreported =
+    probeState.data !== undefined
+      ? probeState.data.serverId === undefined
+      : probeState.error === undefined && (parsed?.serverIdUnreported ?? false)
   const effectiveDiagnosis = probeState.error ?? probeState.data?.diagnosis ?? parsed?.diagnosis
 
   const headerPrefix = useMemo(() => {
@@ -253,7 +252,7 @@ export function ZoteroCommandCard({ node, t, probe }: ZoteroCommandCardProps): R
               <span className={css.itemLabel}>{t('serverIdLabel')}</span>
               <span className={css.itemValue}>
                 {effectiveServerId ??
-                  (effectiveServerIdUnreported() ? t('statusServerIdUnreported') : '-')}
+                  (effectiveServerIdUnreported ? t('statusServerIdUnreported') : '-')}
               </span>
             </div>
             <div className={css.cardItem}>

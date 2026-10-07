@@ -11,7 +11,7 @@
  * @module dsh-zotero/client/components/workspace/SourceInspector
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import clsx from 'clsx'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SourceItem, SourceWorkspace } from '../../sources/model.ts'
@@ -65,12 +65,6 @@ export function SourceInspector({
     () => workspace.sources.find((item) => item.key === selectedKey),
     [workspace.sources, selectedKey],
   )
-
-  // A new selection opens on Overview: the previous panel (e.g. Exports of a
-  // source that had exports) must not strand the next source on an empty tab.
-  useEffect(() => {
-    setPanel('overview')
-  }, [selectedKey])
 
   if (selected === undefined) {
     return (

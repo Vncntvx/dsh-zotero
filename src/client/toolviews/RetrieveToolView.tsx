@@ -12,7 +12,7 @@ import { pdfUrlOf, selectUrlOf } from '../actions/open-zotero.ts'
 import { ZoteroOpenLink } from '../components/open/ZoteroOpenLink.tsx'
 import { coverageLineOf, sourceLabelKeyOf } from '../evidence-labels.ts'
 import { CopyButton } from '../components/CopyButton.tsx'
-import { errorSummaryOf, metaOf, resultTextOf } from '../presenters.ts'
+import { errorSummaryOf, isToolRunning, metaOf, resultTextOf } from '../presenters.ts'
 import { RawTextFallback, RunningNotice, ZoteroToolRow } from './ZoteroToolRow.tsx'
 import css from './toolviews.module.css'
 
@@ -30,7 +30,7 @@ export function RetrieveToolView(props: RetrieveToolViewProps) {
       const retrieveView = meta !== null ? retrieveMetaOf(meta) : null
 
       let sum = ''
-      if ('phase' in block && block.phase === 'start') {
+      if (isToolRunning(block)) {
         sum = t('toolRetrieveRunning')
       } else if (retrieveView?.items !== null && retrieveView?.items !== undefined) {
         // `items` is the bounded page the card draws, capped at four regardless of

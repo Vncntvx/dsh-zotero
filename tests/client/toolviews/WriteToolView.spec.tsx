@@ -582,4 +582,33 @@ describe('WriteToolView argument and count fallbacks', () => {
       screen.getAllByText(mockT('toolSummaryCreateItem', { title: '' })).length,
     ).toBeGreaterThanOrEqual(1)
   })
+
+  it('renders an unregistered tool name from its own text instead of borrowing the note receipt', () => {
+    // The slot types the name loosely, so a name outside the eight can reach
+    // this view. Reusing the create-note descriptor there would file the
+    // result under a tool that never ran, claiming a note was written by
+    // whatever actually called it.
+    const block = settled({
+      call: { name: 'zotero_import_markdown', argsRaw: '{}' },
+      content: [{ type: 'text', text: 'Imported 3 notes' }],
+    })
+
+    const { container } = render(
+      <WriteToolView
+        {...createToolViewProps({
+          callId: 'c1',
+          toolName: 'zotero_import_markdown',
+          block,
+          useDisclosure: mockUseDisclosure(true),
+          t: mockT,
+        })}
+      />,
+    )
+
+    expect(screen.getByText('zotero_import_markdown')).toBeTruthy()
+    expect(container.textContent).toContain('Imported 3 notes')
+    // No receipt badge, and none of the create-note copy.
+    expect(screen.queryByText(zh.badgeSuccess)).toBeNull()
+    expect(screen.queryByText(zh.toolTitleCreateNote)).toBeNull()
+  })
 })

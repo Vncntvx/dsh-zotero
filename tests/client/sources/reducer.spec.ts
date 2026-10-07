@@ -562,20 +562,16 @@ describe('buildSourceWorkspace', () => {
       ])
       expect(workspace.sources).toHaveLength(3)
       const inspected = workspace.sources.find((item) => item.key.includes('a2'))
-      expect(inspected?.facts.inspected).toBe(true)
+      expect(inspected?.title).toBe('Attention Is All You Need')
     })
 
-    it('produces only inspected from a get, with no invented stage facts', () => {
+    it('produces title from a get, with no invented stage facts', () => {
       const workspace = buildSourceWorkspace([
         block('g1', 1, 'zotero_get', { ref: REF('A1') }, { meta: GET_META }),
       ])
       expect(workspace.sources).toHaveLength(1)
       expect(workspace.sources[0]!.facts).toEqual({
-        inspected: true,
-        evidenceCount: 0,
         reportedEvidenceCount: 0,
-        attachmentResolved: false,
-        exportCount: 0,
       })
       expect(workspace.sources[0]!.title).toBe('Attention Is All You Need')
     })
@@ -602,7 +598,7 @@ describe('buildSourceWorkspace', () => {
         }),
       ])
       expect(workspace.sources).toHaveLength(1)
-      expect(workspace.sources[0]!.facts.inspected).toBe(true)
+      expect(workspace.sources[0]!.title).toBe('Attention Is All You Need')
     })
 
     it('keeps the first-seen metadata and lets the get projection win outright', () => {
@@ -632,7 +628,6 @@ describe('buildSourceWorkspace', () => {
       const workspace = buildSourceWorkspace([
         block('g1', 1, 'zotero_get', { ref: REF('A1') }, { meta: { title: 'Only Title' } }),
       ])
-      expect(workspace.sources[0]!.facts.inspected).toBe(true)
       expect(workspace.sources[0]!.title).toBe('Only Title')
       expect(workspace.sources[0]!.creators).toBeUndefined()
       expect(workspace.sources[0]!.venue).toBeUndefined()
@@ -708,7 +703,7 @@ describe('buildSourceWorkspace', () => {
         block('g2', 3, 'zotero_get', { ref: REF('A2') }, {}),
       ])
       expect(workspace.sources).toHaveLength(2)
-      expect(workspace.sources.every((item) => item.facts.inspected === false)).toBe(true)
+      expect(workspace.sources.every((item) => item.title === undefined)).toBe(true)
     })
 
     it('ignores unknown tool names and handles the empty slice', () => {
