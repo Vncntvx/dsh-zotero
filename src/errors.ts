@@ -229,6 +229,20 @@ export function writeNonBlankMessage(name: string): string {
   return `${name} must be a non-empty string when provided`
 }
 
+/**
+ * Trim a required free-text value, refusing a blank one with `name`'s
+ * message. Both the tool end and the domain end of a write call guard the
+ * same arguments, so the rule lives with its message and both import it —
+ * two implementations would be two wordings waiting to drift.
+ */
+export function requireNonBlank(name: string, value: string): string {
+  const trimmed = value.trim()
+  if (trimmed === '') {
+    throw new ZoteroError(writeNonBlankMessage(name), ZOTERO_INVALID_ARGUMENT)
+  }
+  return trimmed
+}
+
 /** Shown when collections are requested for a child note, which inherits its parent item's collections. */
 export const WRITE_CHILD_COLLECTIONS_MESSAGE =
   'A child note inherits the collections of its parent item; pass collections only for a standalone note.'
@@ -314,6 +328,69 @@ export const WRITE_APPROVAL_UNAVAILABLE_MESSAGE =
   'The write was not attempted: the approval gate or plan-review could not be asked. Writes require ' +
   'those confirmations to be answered by the user; run in a conversation where approvals and user ' +
   'questions are available, and never write around an unanswered plan.'
+
+/**
+ * The model-facing messages the `zotero_browse` argument rules throw. The
+ * rules are enforced at both ends of the call — the tool's `buildRequest` and
+ * the browse domain entry — so the wording lives with the errors and both
+ * sides import it. The one exception is the near-identical pair in
+ * `tools/browse.ts` (`TAG_FACET_SCOPE_MESSAGE`, `ITEM_LEVEL_SCOPE_MESSAGE`):
+ * those name the *tool arguments* (`tagScope`, `itemLevel`), while the
+ * `SCOPE_FACET_KIND_MESSAGE`/`ITEM_LEVEL_REQUIRES_SCOPE_MESSAGE` below name
+ * the *request fields* the domain validates — different readers, so
+ * deliberately different strings.
+ */
+
+/** The model-facing message for a kind outside the browse enum. */
+export function unsupportedBrowseKindMessage(kind: string): string {
+  return `Unsupported browse kind ${kind}`
+}
+
+/** The model-facing message for a library argument on a kind that is global. */
+export function libraryNotAllowedMessage(kind: string): string {
+  return `library is not allowed for kind ${kind}; omit library for libraries/itemTypes/itemFields`
+}
+
+/** The model-facing message for an item type passed to a kind that takes none. */
+export const ITEM_TYPE_SCOPE_MESSAGE = 'itemType is only valid when kind="itemFields"'
+
+/** The model-facing message for the item-fields kind without a well-formed item type. */
+export const ITEM_FIELDS_ITEM_TYPE_MESSAGE =
+  'kind="itemFields" requires a Zotero item type name (e.g. dataset, journalArticle)'
+
+/** The model-facing message for a tag query/match on a kind that counts no tags. */
+export const Q_MATCH_SCOPE_MESSAGE = 'q/match are only valid when kind="tags"'
+
+/** The model-facing message for a match mode with no query to apply it to. */
+export const MATCH_REQUIRES_Q_MESSAGE = 'match requires q'
+
+/** The model-facing message for a parentRef outside collection navigation. */
+export const PARENT_REF_SCOPE_MESSAGE = 'parentRef is only valid when kind="collections"'
+
+/** The model-facing message for facet fields (`scope`, `itemLevel`, `itemQuery`) on another kind. */
+export const SCOPE_FACET_KIND_MESSAGE = 'scope/itemLevel/itemQuery are only valid when kind="tags"'
+
+/** The model-facing message for facet fields with no scope to count over. */
+export const ITEM_LEVEL_REQUIRES_SCOPE_MESSAGE =
+  'itemLevel/itemQuery require a scope (library, collection, or publications)'
+
+/** The model-facing message for a collection scope that names nothing. */
+export const SCOPE_NAME_MESSAGE = 'scope.refOrName must be a non-empty string'
+
+/** The model-facing message for a negative offset. */
+export const OFFSET_NON_NEGATIVE_MESSAGE = 'offset must be a non-negative integer'
+
+/** The model-facing message for a limit outside the configured browse cap. */
+export function browseLimitMessage(maxBrowseResults: number): string {
+  return `limit must be integer 1..${maxBrowseResults}`
+}
+
+export function parentLibraryMismatchMessage(
+  parentRef: { type: string; id: number },
+  library: { type: string; id: number },
+): string {
+  return `Library mismatch: parentRef is ${parentRef.type}/${parentRef.id} but request library is ${library.type}/${library.id}.`
+}
 
 const UNREACHABLE_CODES = new Set([
   'ECONNREFUSED',

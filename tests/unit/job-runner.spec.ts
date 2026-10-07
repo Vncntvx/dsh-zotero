@@ -16,6 +16,7 @@ import {
   jobPromotedMessage,
   jobWaitFailedMessage,
 } from '../../src/job-runner.js'
+import { ZOTERO_TIMEOUT, ZoteroError } from '../../src/errors.js'
 import { projectJobView, TestJobRegistry } from '../helpers/fake-jobs.js'
 
 function fakeExec(
@@ -345,6 +346,49 @@ describe('ZoteroJobRunner', () => {
           1000,
         ),
       ).rejects.toThrow('network down')
+      expect(registry.jobs.size).toBe(0)
+    })
+
+    it('rethrows the producer error itself, keeping its typed code', async () => {
+      // The registry reports a terminal view as a string. Throwing a fresh
+      // error from it would strip the code the model routes on, so the
+      // foreground arm prefers the object the producer actually threw.
+      const registry = new TestJobRegistry()
+      const runner = new ZoteroJobRunner(registry as unknown as JobRegistry)
+
+      await expect(
+        runner.waitOrPromote(
+          {
+            label: 'timed-out export',
+            exec: fakeExec(),
+            run: async () => {
+              throw new ZoteroError('Zotero did not answer in time', ZOTERO_TIMEOUT)
+            },
+          },
+          1000,
+        ),
+      ).rejects.toMatchObject({ name: 'ZoteroError', code: ZOTERO_TIMEOUT })
+      expect(registry.jobs.size).toBe(0)
+    })
+
+    it('falls back to the registry detail when the producer threw a non-Error', async () => {
+      // The harness contains a producer that rejects with a non-Error; the
+      // string detail is then the only fact left, and the arm must still fail.
+      const registry = new TestJobRegistry()
+      const runner = new ZoteroJobRunner(registry as unknown as JobRegistry)
+
+      await expect(
+        runner.waitOrPromote(
+          {
+            label: 'odd export',
+            exec: fakeExec(),
+            run: async () => {
+              throw 'plain string failure'
+            },
+          },
+          1000,
+        ),
+      ).rejects.toThrow('plain string failure')
       expect(registry.jobs.size).toBe(0)
     })
 

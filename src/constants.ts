@@ -36,6 +36,15 @@ export const ZOTERO_SERVER_ID_HEADER = 'zotero-server-id'
  */
 export const ZOTERO_VERSION_HEADER = 'x-zotero-version'
 
+/** The response header naming Zotero's data schema version. */
+export const ZOTERO_SCHEMA_VERSION_HEADER = 'zotero-schema-version'
+
+/** The response header carrying the total result count for paginated listings. */
+export const ZOTERO_TOTAL_RESULTS_HEADER = 'total-results'
+
+/** The response header specifying seconds to wait after a rate limit or server busy. */
+export const ZOTERO_RETRY_AFTER_HEADER = 'retry-after'
+
 /** The sort fields `zotero_search` accepts, in Zotero's own vocabulary. */
 export const ZOTERO_SORT_FIELDS: readonly ZoteroSortField[] = [
   'dateModified',
@@ -115,8 +124,8 @@ export const ZOTERO_READ_TOOL_NAMES = [
   'zotero_children',
   'zotero_attachment',
   'zotero_retrieve',
-  'zotero_export',
   'zotero_browse',
+  'zotero_export',
   'zotero_changes',
 ] as const
 

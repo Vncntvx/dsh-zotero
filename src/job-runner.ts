@@ -20,11 +20,11 @@ import type {
   JobRegistry,
   JobView,
 } from '@deepseek-ai/dsh-jobs'
-import { TOOL_ABORTED_MESSAGE } from './errors.js'
+import { errorMessageOf, TOOL_ABORTED_MESSAGE } from './errors.js'
 import type { ZoteroProgressEvent } from './types.js'
 
 /** Structured abort thrown when a tool call or job wait is cancelled by the caller. */
-export function toolAborted(): HarnessError {
+function toolAborted(): HarnessError {
   const error = new HarnessError(TOOL_ABORTED_MESSAGE, TOOL_ABORTED)
   error.name = 'AbortError'
   return error
@@ -43,13 +43,29 @@ export function jobStartedMessage(jobId: string): string {
 /** Grace period for a cancelled job to settle before removing from the registry (ms). */
 const JOB_CANCELLATION_SETTLE_MS = 1000
 
+/**
+ * The plugin's own view of a settled job: the harness `JobOutcome` plus the
+ * object a failed producer actually threw.
+ *
+ * The harness boundary is string-only (`JobOutcome.detail`, `JobView.detail`,
+ * `JobOutcome.result`), so `ZoteroError` identity cannot cross it. A foreground
+ * wait that settles inside the promotion window is the one case the plugin can
+ * still answer with the original error, because it holds this promise itself.
+ * Every other arm (background, promoted, cancellation) reports the harness's
+ * text and keeps the plugin's error out of reach — by design, not by omission.
+ */
+interface ZoteroJobOutcome extends JobOutcome {
+  /** The thrown producer error, present only on the `failed` arm. */
+  readonly error?: unknown
+}
+
 export function jobPromotedMessage(jobId: string, timeoutMs: number): string {
   return `operation timed out after ${timeoutMs}ms and was promoted to background job ${jobId}`
 }
 
 /** Honest promotion copy when the foreground wait itself failed, not a timeout. */
 export function jobWaitFailedMessage(jobId: string, error: unknown): string {
-  const reason = error instanceof Error ? error.message : String(error)
+  const reason = errorMessageOf(error)
   return `foreground wait failed (${reason}); the work continues as background job ${jobId}`
 }
 
@@ -215,7 +231,7 @@ export class ZoteroJobRunner {
   /**
    * Start an asynchronous background job with `ctx.jobs`.
    */
-  start<T>(task: ZoteroJobTask<T>): { id: JobId; done: Promise<JobOutcome> } {
+  start<T>(task: ZoteroJobTask<T>): { id: JobId; done: Promise<ZoteroJobOutcome> } {
     if (!this.registry) {
       throw new Error(JOBS_UNAVAILABLE_MESSAGE)
     }
@@ -225,8 +241,8 @@ export class ZoteroJobRunner {
     }
 
     const abortController = new AbortController()
-    let resolveOutcome!: (outcome: JobOutcome) => void
-    const donePromise = new Promise<JobOutcome>((resolve) => {
+    let resolveOutcome!: (outcome: ZoteroJobOutcome) => void
+    const donePromise = new Promise<ZoteroJobOutcome>((resolve) => {
       resolveOutcome = resolve
     })
 
@@ -267,10 +283,11 @@ export class ZoteroJobRunner {
                 detail: reason,
               })
             } else {
-              const message = error instanceof Error ? error.message : String(error)
+              const message = errorMessageOf(error)
               resolveOutcome({
                 status: 'failed',
                 detail: message,
+                error,
               })
             }
           }
@@ -329,12 +346,12 @@ export class ZoteroJobRunner {
     // limit) must not fail a healthy foreground call: run under the caller's
     // own deadline instead, exactly as a composition without a registry does.
     // Mirrors tool-bash's startJob catch → foreground fallback.
-    let started: { id: JobId; done: Promise<JobOutcome> } | undefined
+    let started: { id: JobId; done: Promise<ZoteroJobOutcome> } | undefined
     try {
       started = this.start(wrappedTask)
     } catch (error) {
       this.logger?.warn?.(
-        `zotero: job registration refused, running in the foreground: ${error instanceof Error ? error.message : String(error)}`,
+        `zotero: job registration refused, running in the foreground: ${errorMessageOf(error)}`,
       )
       const value = await task.run(
         task.exec.signal,
@@ -392,6 +409,12 @@ export class ZoteroJobRunner {
     this.registry.remove(id, owner)
 
     if (view.status === 'failed') {
+      // Prefer the producer's own error: the registry's `detail` is a string,
+      // and a `ZoteroError`'s code is what the model routes on. `done` is
+      // already settled here — the registry publishes its terminal view only
+      // after the producer promise resolves — so this await cannot block.
+      const settled = await done
+      if (settled.error instanceof Error) throw settled.error
       throw new Error(view.detail ?? 'Zotero operation failed')
     }
     if (view.status === 'killed') {
@@ -405,7 +428,7 @@ export class ZoteroJobRunner {
   private async removeAfterCancellation(
     id: JobId,
     owner: SessionId | undefined,
-    done: Promise<JobOutcome>,
+    done: Promise<ZoteroJobOutcome>,
   ): Promise<void> {
     if (!this.registry) return
     try {
