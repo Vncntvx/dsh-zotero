@@ -102,14 +102,20 @@ function buildCommitOf() {
  *  alongside react and the UI primitives instead of bundling zustand/immer.
  *  That harness list is this one's counterpart: anything in it that this bundle
  *  value-imports belongs here too, and `bundlePurityPlugin` below fails the
- *  build when a harness module slips into the artifact. At dsh 0.2.1-alpha.1
- *  PLATFORM_MODULES also lists react-dom, @deepseek-ai/cordis, ui-slots, and
- *  ui-dockkit — this bundle value-imports none of them today (cordis and
- *  ui-slots are type-only), so they stay out of EXTERNALS and the purity
- *  gate trips if a later value import needs them moved in. */
+ *  build when a harness module slips into the artifact.
+ *
+ *  Every OTHER member of PLATFORM_MODULES is covered by one of two rules, so
+ *  none of them can be silently inlined: `@deepseek-ai/cordis`, `ui-slots`,
+ *  and `ui-dockkit` match the purity plugin's `@deepseek-ai/*` filter, and
+ *  `react-dom` is listed here. At dsh 0.2.1-alpha.1 this bundle value-imports
+ *  none of them (cordis and ui-slots are type-only), so the entries are
+ *  forward cover: the day one becomes a value import it resolves through the
+ *  shell's one copy instead of a second copy bundled into the artifact. */
 const EXTERNALS = [
   'react',
   'react/jsx-runtime',
+  'react-dom',
+  'react-dom/client',
   '@deepseek-ai/dsh-client-store',
   '@deepseek-ai/dsh-client-ui-primitives',
 ]

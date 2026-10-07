@@ -44,8 +44,11 @@ export default defineConfig({
         'src/client/sources/**': { statements: 96, branches: 94, functions: 97, lines: 97 },
         // The weakest layer, and the reason a single global number hid the
         // shape of the suite: UI rendering leaves branches that only a test
-        // written to touch them would reach.
-        'src/client/components/**': { statements: 91, branches: 92, functions: 99, lines: 93 },
+        // written to touch them would reach. Floor re-tightened to the layer's
+        // measured 95.7/96.4/99.5/97.3 after it drifted ~4.5pp below what the
+        // layer actually specifies — a floor that loose hides whole-file
+        // regressions (one component sat at 50% lines inside the slack).
+        'src/client/components/**': { statements: 95, branches: 96, functions: 99, lines: 97 },
         'src/client/**': { statements: 97, branches: 96, functions: 97, lines: 97 },
         statements: 97,
         branches: 95,

@@ -39,6 +39,35 @@ export const HOST_ONLY_PACKAGE_INPUT =
   /(?:^|\/)node_modules\/(?:zod|@deepseek-ai\/schemastery)(?:\/|$)/
 
 /**
+ * The third-party packages this bundle may bring **into itself**, with no
+ * runtime dependency on the loader's module table. Every entry must be a
+ * package the browser bundle genuinely bundles; a package absent from both
+ * this list and `EXTERNALS` is refused, so a later import cannot slip in
+ * as a silent second copy of a module the shell already shares.
+ *
+ * `clsx` is the whole list: a tiny classname joiner with no module identity
+ * the shell needs to share. React and its family are the opposite case —
+ * they must stay external so every bundle sees one instance — and are
+ * therefore in `EXTERNALS`, not here.
+ */
+export const CLIENT_INLINE_PACKAGES = ['clsx']
+
+/**
+ * Whether a `node_modules/` graph input belongs to a package the allowlist
+ * admits. A file's package is the one that physically owns it, so a nested
+ * dependency (`node_modules/a/node_modules/b/...`) is judged as `b` — the
+ * package whose code would actually be bundled — and not as its parent. The
+ * leading `.*` is greedy precisely to select the last `node_modules/` segment.
+ * @param key - normalized metafile input key.
+ * @returns the package name when the input is inside one, else undefined.
+ */
+export function packageNameOf(key) {
+  const match = /^(?:.*\/)?node_modules\/(@[^/]+\/[^/]+|[^/]+)(?:\/|$)/.exec(key)
+  if (match === null || match[1] === undefined) return undefined
+  return match[1]
+}
+
+/**
  * Harness specifiers a client bundle may **inline**. Counterpart of the three
  * constants in `packages/client/tsdown.client.ts` at **dsh-v0.2.1-alpha.1**:
  * `INLINE_SAFE`, `GENERATED_REMOTE`, `VENDORED_LIBRARY`. Keep this table in
@@ -89,6 +118,31 @@ export function clientGraphViolations(inputs) {
         detail:
           'host-owned package — boundary codecs materialize on the host half only (src/status-codec.ts)',
       })
+      continue
+    }
+    const pkg = packageNameOf(key)
+    if (pkg !== undefined) {
+      // A bundled package must be a declared choice: either an allowed
+      // third-party module (CLIENT_INLINE_PACKAGES) or an inline-safe
+      // harness utility (isInlineSafeHarness). Anything else — including
+      // an `EXTERNALS` package that got inlined, which would give the page
+      // a second copy of a shared module — is refused.
+      if (
+        pkg !== 'zod' &&
+        pkg !== '@deepseek-ai/schemastery' &&
+        !CLIENT_INLINE_PACKAGES.includes(pkg) &&
+        !isInlineSafeHarness(pkg)
+      ) {
+        violations.push({
+          kind: 'unknown-package',
+          key,
+          detail:
+            `package "${pkg}" is neither externalized nor on CLIENT_INLINE_PACKAGES` +
+            ' — add it to EXTERNALS when the loader table serves it' +
+            ' (harness packages/client/web/src/platform.ts PLATFORM_MODULES),' +
+            ' or to CLIENT_INLINE_PACKAGES when the bundle should carry its only copy',
+        })
+      }
       continue
     }
     if (!key.startsWith('src/')) continue

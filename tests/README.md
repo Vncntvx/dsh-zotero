@@ -6,14 +6,14 @@ from, what an assertion is allowed to say, and what the guards will refuse.
 
 ## Layout: a spec's location is decided by what it tests
 
-| Lane                 | Mirrors               | Holds                                                                                                                                                                                |
-| -------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `tests/unit/`        | `src/*.ts`            | pure modules: refs, normalize, search-text, evidence, attachments, export mapping, presentation meta, config, errors, the recovery gate                                              |
-| `tests/local/`       | `src/local/`          | the provider contract against the mocked Local API, one file per mechanism (search, the note scan, retrieve sources/ranking/notes/tolerance, browse, changes, get, export, identity) |
-| `tests/tools/`       | `src/tools/`          | one file per tool plus `validation`, `presentation`, `connectivity-ask`, `registry-integration`                                                                                      |
-| `tests/host/`        | the composition seams | lifecycle, composition, settings, remote, entry, provider gate, concurrency, doc examples, the HTTP client                                                                           |
-| `tests/client/`      | `src/client/`         | the browser half, including one file per render surface                                                                                                                              |
-| `tests/integration/` | live Zotero           | opt-in (`npm run test:integration`, i.e. `ZOTERO_INTEGRATION=1`); the only place a real library answers                                                                              |
+| Lane                 | Mirrors               | Holds                                                                                                                                                                                                                                             |
+| -------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tests/unit/`        | `src/*.ts`            | pure modules: refs, normalize, search-text, evidence, attachments, export mapping, presentation meta, config, errors, the recovery gate                                                                                                           |
+| `tests/local/`       | `src/local/`          | the provider contract against the mocked Local API, one file per mechanism (search, the note scan, retrieve sources/ranking/notes/tolerance, browse, changes, get, export, identity)                                                              |
+| `tests/tools/`       | `src/tools/`          | a file per tool that carries its own behaviour (the write tools share `write-tools`, `write-presentation`, `write-item-presentation`, and `write-approval-policy`), plus `validation`, `presentation`, `connectivity-ask`, `registry-integration` |
+| `tests/host/`        | the composition seams | lifecycle, composition, settings, remote, entry, provider gate, concurrency, doc examples, the HTTP client                                                                                                                                        |
+| `tests/client/`      | `src/client/`         | the browser half, including one file per render surface                                                                                                                                                                                           |
+| `tests/integration/` | live Zotero           | opt-in (`npm run test:integration`, i.e. `ZOTERO_INTEGRATION=1`); the only place a real library answers                                                                                                                                           |
 
 Cross-cutting behaviour goes in the lane of the module it belongs to, as a
 file named for the behaviour (`presentation.spec.ts`, `connectivity-ask.spec.ts`),

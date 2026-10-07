@@ -15,27 +15,34 @@
  * suite carries at the time and only ever move down. A ratchet that never
  * tightens is a comment; one that tightens by itself would fail on the next
  * unrelated commit, so the numbers are reviewed here.
+ *
+ * The pure predicates below are exported and driven by `tests/unit/test-lint`
+ * so the guards themselves cannot decay — a regex that stopped matching the
+ * form its docstring names would otherwise fail the suite green.
  * @module scripts/test-lint
  */
 
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
-/** Directories that carry the project's source, tests, tooling, and prose. */
-const TEXT_ROOTS = ['src', 'tests', 'scripts', 'docs']
+/** Directories that carry the project's source, tests, tooling, prose, and locale copy. */
+export const TEXT_ROOTS = ['src', 'tests', 'scripts', 'docs', 'locale']
 
 /**
  * The extensions that contract to be text. Binary assets are not the target
  * of this check and never were: a `.png` under `docs/images/` is supposed to
  * hold arbitrary bytes, while a `.ts` file holding them is the corruption this
- * guard exists to catch.
+ * guard exists to catch. `.mts`/`.cts` are contract text like every other
+ * TypeScript flavor — the build gates read them.
  */
-const TEXT_EXTENSIONS = [
+export const TEXT_EXTENSIONS = [
   '.ts',
   '.tsx',
+  '.mts',
+  '.cts',
   '.js',
   '.mjs',
   '.cjs',
@@ -48,6 +55,14 @@ const TEXT_EXTENSIONS = [
   '.svg',
   '.txt',
 ]
+
+/**
+ * Extensions allowed to hold arbitrary bytes under the text roots. A new
+ * extension that is neither listed here nor in {@link TEXT_EXTENSIONS} fails
+ * the guard, so the next binary asset has to be declared rather than silently
+ * skipped.
+ */
+export const BINARY_EXTENSIONS = ['.png']
 
 /**
  * The control bytes a text file may contain: tab, newline, carriage return.
@@ -137,6 +152,37 @@ function checkTextFiles() {
   }
 }
 
+/**
+ * Every extension occurring under the text roots must be either a declared
+ * text extension or a declared binary one. A file type that is neither would
+ * otherwise be skipped by the control-byte guard without anyone deciding it
+ * should be.
+ */
+export function unscannedExtensionsOf(paths) {
+  const declared = new Set([...TEXT_EXTENSIONS, ...BINARY_EXTENSIONS])
+  const unscanned = new Set()
+  for (const path of paths) {
+    const dot = path.lastIndexOf('.')
+    if (dot === -1) continue
+    const extension = path.slice(dot)
+    if (!declared.has(extension)) unscanned.add(extension)
+  }
+  return [...unscanned].sort()
+}
+
+function checkExtensionCoverage() {
+  const paths = TEXT_ROOTS.flatMap((dir) => filesUnder(join(root, dir)))
+  const unscanned = unscannedExtensionsOf(paths)
+  for (const extension of unscanned) {
+    failures.push(
+      [
+        `files under ${TEXT_ROOTS.join('/')} carry the "${extension}" extension, which is neither a declared text nor binary extension`,
+        `  fix: add it to TEXT_EXTENSIONS (text, scanned for control bytes) or BINARY_EXTENSIONS (declared, skipped)`,
+      ].join('\n'),
+    )
+  }
+}
+
 /** No spec may outgrow the ratchet; the offenders are listed largest first. */
 function checkSpecSize() {
   const sized = specFiles().map((path) => ({ path, lines: lineCountOf(join(root, path)) }))
@@ -170,38 +216,142 @@ function checkLanes() {
 }
 
 /**
+ * Blank out comments and string/template bodies while preserving every
+ * character's offset, so match positions in the stripped text still map to
+ * real line numbers.
+ *
+ * Regex literals are deliberately not stripped: telling a division from a
+ * regex needs a full lexer, a mistake there would blank real code (hiding a
+ * violation), and a regex body containing `.only(`/`.skip(` does not occur in
+ * this suite.
+ * @param source - the file content.
+ * @returns same-length text with comments and string bodies blanked.
+ */
+export function stripCommentsAndStrings(source) {
+  const out = source.split('')
+  const n = source.length
+  let i = 0
+  while (i < n) {
+    const ch = source[i]
+    const next = i + 1 < n ? source[i + 1] : ''
+    if (ch === '/' && next === '/') {
+      while (i < n && source[i] !== '\n') {
+        out[i] = ' '
+        i += 1
+      }
+      continue
+    }
+    if (ch === '/' && next === '*') {
+      out[i] = ' '
+      out[i + 1] = ' '
+      i += 2
+      while (i < n) {
+        if (source[i] === '*' && source[i + 1] === '/') {
+          out[i] = ' '
+          out[i + 1] = ' '
+          i += 2
+          break
+        }
+        if (source[i] !== '\n') out[i] = ' '
+        i += 1
+      }
+      continue
+    }
+    if (ch === '"' || ch === "'" || ch === '`') {
+      const quote = ch
+      i += 1
+      while (i < n) {
+        if (source[i] === '\\') {
+          out[i] = ' '
+          if (source[i + 1] !== undefined && source[i + 1] !== '\n') out[i + 1] = ' '
+          i += 2
+          continue
+        }
+        if (source[i] === quote) {
+          out[i] = ' '
+          i += 1
+          break
+        }
+        if (source[i] !== '\n') out[i] = ' '
+        i += 1
+      }
+      continue
+    }
+    i += 1
+  }
+  return out.join('')
+}
+
+/**
  * A focused or disabled test is a decision that outlives its author: `.only`
  * silently removes every other case from the run, and `.skip`/`.todo` turn a
- * red test into a green suite. `runIf` is the supported way to gate a suite
- * (the live-Zotero specs use it), so only the call forms are rejected.
+ * red test into a green suite. The chain forms count too — `it.only.each`,
+ * `it.concurrent.only`, and a `.only` continued on the next line all focus or
+ * disable just as hard — so the scan runs over comment- and string-stripped
+ * content with a chain-aware pattern rather than one line at a time.
+ *
+ * `runIf` stays the sanctioned gate. Its unconditional-disable spelling,
+ * `runIf(false)`, is refused exactly like `skipIf(true)`: a conditional gate
+ * is the author's call, an unconditional one is a hidden decision.
+ * @param source - the file content.
+ * @returns each violation with its 1-based line and the construct named.
  */
+export function focusViolationsOf(source) {
+  const stripped = stripCommentsAndStrings(source)
+  const violations = []
+  const chain =
+    /\b(it|test|describe|suite)((?:\s*\.\s*[A-Za-z_$][\w$]*)*)\s*\.\s*(only|skip|todo)\b/g
+  for (const match of stripped.matchAll(chain)) {
+    violations.push({
+      line: stripped.slice(0, match.index).split('\n').length,
+      construct: `${match[1]}${match[2].replaceAll(/\s+/g, '')}.${match[3]}`,
+    })
+  }
+  const conditional = /\b(?:it|test|describe|suite)\s*\.\s*(skipIf|runIf)\s*\(\s*(true|false)\b/g
+  for (const match of stripped.matchAll(conditional)) {
+    if (
+      (match[1] === 'skipIf' && match[2] === 'true') ||
+      (match[1] === 'runIf' && match[2] === 'false')
+    ) {
+      violations.push({
+        line: stripped.slice(0, match.index).split('\n').length,
+        construct: `${match[1]}(${match[2]})`,
+      })
+    }
+  }
+  return violations.sort((a, b) => a.line - b.line)
+}
+
 function checkFocus() {
   for (const path of specFiles()) {
-    const lines = readFileSync(join(root, path), 'utf8').split('\n')
-    lines.forEach((line, index) => {
-      const match = /\b(it|test|describe)\.(only|skip|todo)\s*\(/.exec(line)
-      if (match === null) return
+    for (const violation of focusViolationsOf(readFileSync(join(root, path), 'utf8'))) {
       failures.push(
         [
-          `${path}:${index + 1} uses ${match[1]}.${match[2]}`,
+          `${path}:${violation.line} uses ${violation.construct}`,
           `  fix: delete the case or gate its suite with .runIf(...)`,
         ].join('\n'),
       )
-    })
+    }
   }
 }
 
-const largest = checkSpecSize()
-checkTextFiles()
-checkLanes()
-checkFocus()
+const invokedDirectly =
+  process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href
 
-if (failures.length > 0) {
-  process.stderr.write(`test-lint: ${failures.length} problem(s)\n\n`)
-  for (const failure of failures) process.stderr.write(`${failure}\n\n`)
-  process.exit(1)
+if (invokedDirectly) {
+  const largest = checkSpecSize()
+  checkTextFiles()
+  checkExtensionCoverage()
+  checkLanes()
+  checkFocus()
+
+  if (failures.length > 0) {
+    process.stderr.write(`test-lint: ${failures.length} problem(s)\n\n`)
+    for (const failure of failures) process.stderr.write(`${failure}\n\n`)
+    process.exit(1)
+  }
+
+  process.stdout.write(
+    `test-lint: ok — ${specFiles().length} specs, largest ${largest}, lane ratchet ${SPEC_LANES.map((name) => name || '.').join('/')}\n`,
+  )
 }
-
-process.stdout.write(
-  `test-lint: ok — ${specFiles().length} specs, largest ${largest}, lane ratchet ${SPEC_LANES.map((name) => name || '.').join('/')}\n`,
-)
