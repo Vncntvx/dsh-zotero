@@ -32,6 +32,7 @@ import {
   ZOTERO_LIBRARY_VERSION_HEADER,
   ZOTERO_LOCAL_API_VERSION,
   ZOTERO_MAX_WRITE_INFLIGHT_REQUESTS,
+  ZOTERO_RETRY_AFTER_HEADER,
   ZOTERO_SERVER_ID_HEADER,
   ZOTERO_WRITE_OBJECT_BATCH,
 } from './constants.js'
@@ -159,8 +160,6 @@ function isPreCommitWriteStatus(status: number): boolean {
   return (status >= 300 && status < 400) || PRE_COMMIT_WRITE_STATUSES.has(status)
 }
 
-export type ZoteroBatchWriteOptions = ZoteroWriteOptions
-
 export interface ZoteroPatchWriteOptions extends ZoteroWriteOptions {
   /** The object version the caller read; Zotero refuses a stale write with 412. */
   readonly ifUnmodifiedSinceVersion: number
@@ -239,7 +238,7 @@ export class ZoteroWriteHttpClient {
   async batch(
     path: string,
     entries: readonly unknown[],
-    opts: ZoteroBatchWriteOptions,
+    opts: ZoteroWriteOptions,
   ): Promise<ZoteroBatchWrite> {
     const writeToken = nextWriteToken()
     const { body, headers } = await this.send(
@@ -495,7 +494,7 @@ export class ZoteroWriteHttpClient {
       case 428:
         throw new ZoteroError(WRITE_PRECONDITION_REFUSED_MESSAGE, ZOTERO_UNEXPECTED)
       case 429: {
-        const raw = response.headers.get('retry-after')
+        const raw = response.headers.get(ZOTERO_RETRY_AFTER_HEADER)
         const waitSeconds = raw === null ? undefined : Number(raw)
         throw new ZoteroError(
           writeRateLimitedMessage(

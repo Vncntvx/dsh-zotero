@@ -86,7 +86,7 @@ export function presentCreateResultView(
   const record = metaRecordOf(result)
   if (record === undefined) return undefined
   if (record.kind === 'declined') {
-    return { card: 'generic', title: `Zotero ${noun}: declined, nothing written` }
+    return { card: 'generic', title: declinedTitle(noun) }
   }
   if (record.kind === 'committed-unverified') {
     return {
@@ -249,6 +249,11 @@ export function renderUpdateList(
   return [{ type: 'text', text: lines.join('\n') }]
 }
 
+/** The declined-arm title every write result card shares. */
+function declinedTitle(noun: string): string {
+  return `Zotero ${noun}: declined, nothing written`
+}
+
 /** The result-card titles for item updates (tags, membership, or item fields). */
 export function presentUpdateResultView(
   noun: string,
@@ -257,8 +262,32 @@ export function presentUpdateResultView(
   const record = metaRecordOf(result)
   if (record === undefined) return undefined
   if (record.kind === 'declined') {
-    return { card: 'generic', title: `Zotero ${noun}: declined, nothing written` }
+    return { card: 'generic', title: declinedTitle(noun) }
   }
   const ref = typeof record.ref === 'string' ? record.ref : ''
   return { card: 'generic', title: `Zotero ${noun} updated${ref === '' ? '' : `: ${ref}`}` }
+}
+
+/**
+ * The result-card titles for the delete tools: the shared declined arm, and
+ * the deleted receipt with its ref when the outcome carried one (a library
+ * tags delete has no single ref, so its receipt is the plain sentence).
+ *
+ * The two nouns are the two spellings the cards already use — the declined
+ * arm names the operation ("collection delete") and the receipt names the
+ * object ("collection"). Passing them separately keeps those pinned titles
+ * byte-identical instead of normalizing the wording in a "refactor".
+ */
+export function presentDeleteResultView(
+  declinedNoun: string,
+  deletedNoun: string,
+  result: ToolResult,
+): ToolResultView | undefined {
+  const record = metaRecordOf(result)
+  if (record === undefined) return undefined
+  if (record.kind === 'declined') {
+    return { card: 'generic', title: declinedTitle(declinedNoun) }
+  }
+  const ref = typeof record.ref === 'string' ? record.ref : ''
+  return { card: 'generic', title: `Zotero ${deletedNoun} deleted${ref === '' ? '' : `: ${ref}`}` }
 }

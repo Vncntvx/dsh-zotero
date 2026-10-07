@@ -40,12 +40,10 @@ import {
   writeCollectionNameExistsMessage,
   writeFieldNotForItemTypeMessage,
   writeListEmptyMessage,
-  writeNonBlankMessage,
   writeObjectRefusedMessage,
   writeObjectStateMissingMessage,
-  SERVER_MISMATCH_MESSAGE,
+  requireNonBlank,
   ZOTERO_INVALID_ARGUMENT,
-  ZOTERO_SERVER_MISMATCH,
   ZOTERO_NOT_FOUND,
   ZOTERO_UNEXPECTED,
   ZOTERO_WRITE_CONFLICT,
@@ -72,12 +70,13 @@ import {
   requireSupportedLocalRef,
   requireWritableRef,
 } from '../refs.js'
-import { nextOffsetOf, requireArrayBody, requireTotalResults } from './pagination.js'
+import { nextOffsetOrFail, requireArrayBody, requireTotalResults } from './pagination.js'
+import { assertServerIdMatches } from './identity.js'
 import {
   normalizeCreator,
   requireCreatableItemType,
   requireTitleOrUrl,
-  requireUpdatableField,
+  validateItemUpdateFields,
   wireFieldOf,
 } from '../write-item-rules.js'
 import { markdownToNoteHtml } from './note-format.js'
@@ -106,7 +105,6 @@ import {
   type ZoteroUpdateItemResult,
   type ZoteroUpdateItemTagsRequest,
   type ZoteroUpdateItemTagsResult,
-  type ZoteroUpdatableItemField,
   type ZoteroWriteCommittedUnverified,
 } from '../types.js'
 
@@ -241,13 +239,6 @@ async function readLibraryVersion(
   return { libraryVersion, serverId: observed ?? serverId }
 }
 
-/** Refuse an observed server ID that names another Zotero instance than the write target. */
-function assertServerIdMatches(observed: string | null | undefined, serverId: string): void {
-  if (observed !== undefined && observed !== null && observed !== serverId) {
-    throw new ZoteroError(SERVER_MISMATCH_MESSAGE, ZOTERO_SERVER_MISMATCH)
-  }
-}
-
 /** Refuse a qualified ref that names another Zotero instance before any write. */
 function requireWritableRefAtServer(
   ref: ZoteroObjectRef,
@@ -268,14 +259,6 @@ function requireSupportedRefAtServer(
   const checked = requireSupportedLocalRef(ref, kinds)
   assertServerIdMatches(ref.serverId, serverId)
   return checked
-}
-
-function requireNonBlank(name: string, value: string): string {
-  const trimmed = value.trim()
-  if (trimmed === '') {
-    throw new ZoteroError(writeNonBlankMessage(name), ZOTERO_INVALID_ARGUMENT)
-  }
-  return trimmed
 }
 
 function normalizeWriteList(name: string, values: readonly string[]): string[] {
@@ -992,23 +975,24 @@ export async function updateItemCollections(
 }
 
 /**
- * The sibling-name candidates for one create: the parent's children, or the
- * top-level collections. Fresh (no directory cache) and paginated to the
- * honest total — a check that stops at the first page would let a duplicate
- * beyond it slip through, which is exactly the ambiguity this check exists
- * to prevent.
+ * Refuse a create whose sibling already carries the target name. Reads the
+ * sibling listing fresh (no directory cache) — the parent's children, or the
+ * top-level collections — and throws on the first match, so the pages after
+ * it are never fetched. The read runs to the honest total, because a check
+ * that stopped at the first page would let a duplicate beyond it slip
+ * through, which is exactly the ambiguity this check exists to prevent.
  */
-async function listSiblingsFresh(
+async function assertNoSiblingWithName(
   deps: WriteDomainDeps,
+  name: string,
   parentKey: string | undefined,
   serverId: string,
   signal?: AbortSignal,
-): Promise<{ key: string; name: string }[]> {
+): Promise<void> {
   const listPath =
     parentKey === undefined
       ? `${libraryPrefix(PERSONAL_LIBRARY)}/collections/top`
       : `${libraryPrefix(PERSONAL_LIBRARY)}/collections/${parentKey}/collections`
-  const siblings: { key: string; name: string }[] = []
   let offset = 0
   for (;;) {
     const params = new URLSearchParams()
@@ -1026,17 +1010,19 @@ async function listSiblingsFresh(
     for (const row of rows) {
       const record = asRecord(row)
       const key = asString(record?.key)
-      const name = asString(asRecord(record?.data)?.name)
-      if (key === undefined || !isObjectKey(key) || name === undefined) {
+      const rowName = asString(asRecord(record?.data)?.name)
+      if (key === undefined || !isObjectKey(key) || rowName === undefined) {
         throw new ZoteroError(
           'Zotero returned a malformed collection row in the sibling listing',
           ZOTERO_UNEXPECTED,
         )
       }
-      siblings.push({ key, name })
+      if (rowName === name) {
+        throw new ZoteroError(writeCollectionNameExistsMessage(name), ZOTERO_INVALID_ARGUMENT)
+      }
     }
-    const next = nextOffsetOf(offset, rows.length, total)
-    if (next === undefined) return siblings
+    const next = nextOffsetOrFail(offset, rows.length, total, 'sibling collections')
+    if (next === undefined) return
     offset = next
   }
 }
@@ -1067,10 +1053,7 @@ export async function createCollection(
           serverId,
         )
   const parentKey = parent?.key
-  const siblings = await listSiblingsFresh(deps, parentKey, serverId, signal)
-  if (siblings.some((entry) => entry.name === name)) {
-    throw new ZoteroError(writeCollectionNameExistsMessage(name), ZOTERO_INVALID_ARGUMENT)
-  }
+  await assertNoSiblingWithName(deps, name, parentKey, serverId, signal)
   const entry: Record<string, unknown> = {
     name,
     ...(parentKey !== undefined ? { parentCollection: parentKey } : {}),
@@ -1298,18 +1281,7 @@ export async function updateItem(
   signal?: AbortSignal,
 ): Promise<ZoteroUpdateItemResult> {
   const localRef = requireWritableRef(request.item, ['item'])
-  const entries = Object.entries(request.set ?? {})
-  if (entries.length === 0) {
-    throw new ZoteroError(writeListEmptyMessage('set'), ZOTERO_INVALID_ARGUMENT)
-  }
-  const updates = new Map<ZoteroUpdatableItemField, string>()
-  for (const [field, value] of entries) {
-    requireUpdatableField(field)
-    if (typeof value !== 'string' || value.trim() === '') {
-      throw new ZoteroError(writeNonBlankMessage(`set.${field}`), ZOTERO_INVALID_ARGUMENT)
-    }
-    updates.set(field as ZoteroUpdatableItemField, (value as string).trim())
-  }
+  const updates = validateItemUpdateFields(request.set)
   return await withItemWrite(
     deps,
     localRef,

@@ -41,6 +41,7 @@ import {
 import {
   WRITE_COMMITTED_UNVERIFIED_DESCRIPTION,
   WRITE_PLAN_OUTCOME_DESCRIPTION,
+  WRITE_PLAN_LIBRARY_LINE,
 } from '../write-approval.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroCreateNoteOutcome, ZoteroCreateNoteRequest } from '../types.js'
@@ -132,7 +133,7 @@ export function createNotePlan(args: CreateNoteArgs): string {
         : args.collections.map((collection) => collection.trim()).join(', ')
   return [
     '**Create a Zotero research note**',
-    '- Library: zotero://user/0 (the local personal library)',
+    WRITE_PLAN_LIBRARY_LINE,
     `- Kind: ${args.parentItem === undefined ? 'standalone note' : `child note under ${args.parentItem}`}`,
     `- Collections: ${collections}`,
     `- Tags: ${args.tags === undefined || args.tags.length === 0 ? '(none)' : args.tags.map((tag) => tag.trim()).join(', ')}`,

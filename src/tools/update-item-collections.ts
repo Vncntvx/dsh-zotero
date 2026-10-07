@@ -30,7 +30,7 @@ import {
   WRITE_COLLECTION_REF_ARG_HINT,
   WRITE_REF_ARG_HINT,
 } from './validate.js'
-import { WRITE_PLAN_OUTCOME_DESCRIPTION } from '../write-approval.js'
+import { WRITE_PLAN_OUTCOME_DESCRIPTION, WRITE_PLAN_LIBRARY_LINE } from '../write-approval.js'
 import type { ZoteroService } from '../service.js'
 import type {
   ZoteroUpdateItemCollectionsOutcome,
@@ -65,7 +65,7 @@ export function updateItemCollectionsPlan(args: UpdateItemCollectionsArgs): stri
   const remove = args.remove ?? []
   return [
     '**Update a Zotero item\u2019s collections**',
-    '- Library: zotero://user/0 (the local personal library)',
+    WRITE_PLAN_LIBRARY_LINE,
     `- Item: ${args.ref}`,
     `- Collections to add: ${add.length === 0 ? '(none)' : add.map((c) => c.trim()).join(', ')}`,
     `- Collections to remove: ${remove.length === 0 ? '(none)' : remove.map((c) => c.trim()).join(', ')}`,

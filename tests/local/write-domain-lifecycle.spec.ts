@@ -308,6 +308,34 @@ describe('createCollection', () => {
       await own.close()
     }
   })
+
+  it('fails loud when the sibling listing returns an empty page with remaining range', async () => {
+    const own = await MockZotero.start()
+    try {
+      own.route('GET', '/api/', (_req, res, helpers) =>
+        helpers.raw(200, { 'Zotero-Server-ID': SERVER_ID }, JSON.stringify({})),
+      )
+      own.route('GET', '/api/users/0/collections/top', (_req, res, helpers) =>
+        helpers.raw(
+          200,
+          {
+            'Zotero-Server-ID': SERVER_ID,
+            'Total-Results': '10',
+            'Last-Modified-Version': '10',
+          },
+          JSON.stringify([]),
+        ),
+      )
+      const { deps } = writeDeps(own)
+      await expect(createCollection(deps, { name: 'New Folder' })).rejects.toMatchObject({
+        code: ZOTERO_UNEXPECTED,
+        message:
+          'Zotero returned an empty page for sibling collections at offset 0 but Total-Results is 10',
+      })
+    } finally {
+      await own.close()
+    }
+  })
 })
 
 describe('deleteCollection', () => {

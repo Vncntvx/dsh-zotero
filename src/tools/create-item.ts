@@ -34,6 +34,7 @@ import { assertNonBlank } from './validate.js'
 import {
   WRITE_COMMITTED_UNVERIFIED_DESCRIPTION,
   WRITE_PLAN_OUTCOME_DESCRIPTION,
+  WRITE_PLAN_LIBRARY_LINE,
 } from '../write-approval.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroCreateItemOutcome, ZoteroCreateItemRequest } from '../types.js'
@@ -97,7 +98,7 @@ type CreateItemOutput = InferValue<typeof CREATE_ITEM_OUTPUT_SCHEMA>
 export function createItemPlan(args: CreateItemArgs): string {
   const lines = [
     '**Create a Zotero item**',
-    '- Library: zotero://user/0 (the local personal library)',
+    WRITE_PLAN_LIBRARY_LINE,
     `- Type: ${(args.itemType as string).trim()}`,
     `- Title: ${args.title === undefined ? '(none)' : args.title.trim()}`,
     `- URL: ${args.url === undefined ? '(none)' : args.url.trim()}`,

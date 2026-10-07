@@ -11,6 +11,7 @@ import {
   writeCreatorNameMessage,
   writeFieldNotUpdatableMessage,
   writeItemTypeUnsupportedMessage,
+  writeListEmptyMessage,
   writeNonBlankMessage,
   ZOTERO_INVALID_ARGUMENT,
   ZoteroError,
@@ -71,10 +72,32 @@ export function normalizeCreator(creator: ZoteroCreator, index: number): ZoteroC
 }
 
 /** Refuse an update field outside the closed updatable set. */
-export function requireUpdatableField(field: string): void {
+export function requireUpdatableField(field: string): asserts field is ZoteroUpdatableItemField {
   if (!UPDATABLE_FIELDS.has(field)) {
     throw new ZoteroError(writeFieldNotUpdatableMessage(field), ZOTERO_INVALID_ARGUMENT)
   }
+}
+
+/**
+ * Validate and normalize the fields of an item update (`set`).
+ * Enforces non-empty set, updatable fields whitelist, and non-blank values.
+ */
+export function validateItemUpdateFields(
+  set: Record<string, unknown> | undefined,
+): Map<ZoteroUpdatableItemField, string> {
+  const entries = Object.entries(set ?? {})
+  if (entries.length === 0) {
+    throw new ZoteroError(writeListEmptyMessage('set'), ZOTERO_INVALID_ARGUMENT)
+  }
+  const updates = new Map<ZoteroUpdatableItemField, string>()
+  for (const [field, value] of entries) {
+    requireUpdatableField(field)
+    if (typeof value !== 'string' || value.trim() === '') {
+      throw new ZoteroError(writeNonBlankMessage(`set.${field}`), ZOTERO_INVALID_ARGUMENT)
+    }
+    updates.set(field, value.trim())
+  }
+  return updates
 }
 
 /** Zotero's wire name for one updatable field (`doi` rides as `DOI`). */

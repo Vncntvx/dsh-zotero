@@ -56,6 +56,7 @@ import {
   ZOTERO_WRITE_APPROVAL_UNAVAILABLE,
   ZoteroError,
 } from './errors.js'
+import { PERSONAL_LIBRARY } from './refs.js'
 import type { ZoteroWriteCall } from './types.js'
 
 /** The label the plan-review question is answered with to apply the write. */
@@ -77,6 +78,15 @@ export const WRITE_PLAN_OUTCOME_DESCRIPTION =
  */
 export const WRITE_COMMITTED_UNVERIFIED_DESCRIPTION =
   ' kind "committed-unverified" means the write must be treated as committed although its response could not be verified; do not retry, reconcile by key/ref when available.'
+
+/**
+ * The plan line every write tool prints naming the library it writes to.
+ *
+ * Composed from `PERSONAL_LIBRARY` rather than spelled so the plan cannot
+ * silently name a library the write boundary refuses: the seam only ever
+ * writes `zotero://user/0/`.
+ */
+export const WRITE_PLAN_LIBRARY_LINE = `- Library: zotero://${PERSONAL_LIBRARY.type}/${PERSONAL_LIBRARY.id} (the local personal library)`
 
 /** The single reason string every write approval request logs. */
 function writeApprovalReason(call: ZoteroWriteCall): string {

@@ -19,10 +19,14 @@ import {
 } from '@deepseek-ai/dsh-tools'
 import type { ResolvedConfig } from '../config.js'
 import { writeListEmptyMessage } from '../errors.js'
-import { metaRecordOf, renderDeclined } from './present.js'
-import { DECLINED_OUTPUT_SCHEMA, libraryVersionLine } from './write-present.js'
+import { renderDeclined } from './present.js'
+import {
+  DECLINED_OUTPUT_SCHEMA,
+  libraryVersionLine,
+  presentDeleteResultView,
+} from './write-present.js'
 import { assertWriteList, invalid } from './validate.js'
-import { WRITE_PLAN_OUTCOME_DESCRIPTION } from '../write-approval.js'
+import { WRITE_PLAN_OUTCOME_DESCRIPTION, WRITE_PLAN_LIBRARY_LINE } from '../write-approval.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroDeleteLibraryTagsOutcome, ZoteroDeleteLibraryTagsRequest } from '../types.js'
 
@@ -77,7 +81,7 @@ export function deleteLibraryTagsPlan(
   const tags = (args.tags ?? []).map((tag) => tag.trim())
   const lines = [
     '**Delete Zotero tags library-wide**',
-    '- Library: zotero://user/0 (the local personal library)',
+    WRITE_PLAN_LIBRARY_LINE,
     '- Scope: every item carrying these tags (irreversible; every item carrying them loses them)',
   ]
   for (const tag of tags) {
@@ -180,12 +184,7 @@ function presentDeleteLibraryTagsResult(
   _args: DeleteLibraryTagsArgs,
   result: ToolResult,
 ): ToolResultView | undefined {
-  const record = metaRecordOf(result)
-  if (record === undefined) return undefined
-  if (record.kind === 'declined') {
-    return { card: 'generic', title: 'Zotero tags delete: declined, nothing written' }
-  }
-  return { card: 'generic', title: 'Zotero library tags deleted' }
+  return presentDeleteResultView('tags delete', 'library tags', result)
 }
 
 export function registerDeleteLibraryTagsTool(ctx: Context, service: ZoteroService): () => void {

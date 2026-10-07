@@ -18,10 +18,14 @@ import {
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
 import { isRefString } from '../refs.js'
-import { metaRecordOf, renderDeclined } from './present.js'
-import { DECLINED_OUTPUT_SCHEMA, libraryVersionLine } from './write-present.js'
+import { renderDeclined } from './present.js'
+import {
+  DECLINED_OUTPUT_SCHEMA,
+  libraryVersionLine,
+  presentDeleteResultView,
+} from './write-present.js'
 import { assertNonBlank, parseWritableRef, WRITE_COLLECTION_REF_ARG_HINT } from './validate.js'
-import { WRITE_PLAN_OUTCOME_DESCRIPTION } from '../write-approval.js'
+import { WRITE_PLAN_OUTCOME_DESCRIPTION, WRITE_PLAN_LIBRARY_LINE } from '../write-approval.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroDeleteCollectionOutcome, ZoteroDeleteCollectionRequest } from '../types.js'
 
@@ -66,7 +70,7 @@ export function deleteCollectionPlan(
 ): string {
   return [
     '**Delete a Zotero collection**',
-    '- Library: zotero://user/0 (the local personal library)',
+    WRITE_PLAN_LIBRARY_LINE,
     `- Collection: ${args.collection.trim()}`,
     `- Items in this collection: ${formatCount(preview.itemTotal)} (they stay in the library, membership only)`,
     `- Child collections: ${formatCount(preview.childTotal)} (they are deleted with the parent)`,
@@ -177,13 +181,7 @@ function presentDeleteCollectionResult(
   _args: DeleteCollectionArgs,
   result: ToolResult,
 ): ToolResultView | undefined {
-  const record = metaRecordOf(result)
-  if (record === undefined) return undefined
-  if (record.kind === 'declined') {
-    return { card: 'generic', title: 'Zotero collection delete: declined, nothing written' }
-  }
-  const ref = typeof record.ref === 'string' ? record.ref : ''
-  return { card: 'generic', title: `Zotero collection deleted${ref === '' ? '' : `: ${ref}`}` }
+  return presentDeleteResultView('collection delete', 'collection', result)
 }
 
 export function registerDeleteCollectionTool(ctx: Context, service: ZoteroService): () => void {

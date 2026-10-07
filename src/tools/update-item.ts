@@ -17,16 +17,15 @@ import {
   type ToolResult,
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
-import { writeListEmptyMessage, writeNonBlankMessage } from '../errors.js'
 import { renderDeclined } from './present.js'
 import {
   DECLINED_OUTPUT_SCHEMA,
   libraryVersionLine,
   presentUpdateResultView,
 } from './write-present.js'
-import { invalid, parseWritableRef, WRITE_REF_ARG_HINT } from './validate.js'
-import { requireUpdatableField } from '../write-item-rules.js'
-import { WRITE_PLAN_OUTCOME_DESCRIPTION } from '../write-approval.js'
+import { parseWritableRef, WRITE_REF_ARG_HINT } from './validate.js'
+import { validateItemUpdateFields } from '../write-item-rules.js'
+import { WRITE_PLAN_OUTCOME_DESCRIPTION, WRITE_PLAN_LIBRARY_LINE } from '../write-approval.js'
 import type { ZoteroService } from '../service.js'
 import type {
   ZoteroUpdateItemOutcome,
@@ -85,7 +84,7 @@ export function updateItemPlan(args: UpdateItemArgs): string {
   const entries = Object.entries((args.set ?? {}) as Record<string, string>)
   return [
     '**Update a Zotero item**',
-    '- Library: zotero://user/0 (the local personal library)',
+    WRITE_PLAN_LIBRARY_LINE,
     `- Item: ${args.ref}`,
     ...entries.map(([field, value]) => `- ${field}: ${String(value).trim().slice(0, 200)}`),
     'Each field must be valid for the item type; an invalid field refuses the write before any PATCH.',
@@ -93,20 +92,10 @@ export function updateItemPlan(args: UpdateItemArgs): string {
 }
 
 function buildRequest(args: UpdateItemArgs): ZoteroUpdateItemRequest {
-  const set = (args.set ?? {}) as Record<string, unknown>
-  const entries = Object.entries(set)
-  if (entries.length === 0) invalid(writeListEmptyMessage('set'))
-  const updates: Partial<Record<ZoteroUpdatableItemField, string>> = {}
-  for (const [field, value] of entries) {
-    requireUpdatableField(field)
-    if (typeof value !== 'string' || value.trim() === '') {
-      invalid(writeNonBlankMessage(`set.${field}`))
-    }
-    updates[field as ZoteroUpdatableItemField] = (value as string).trim()
-  }
+  const updates = validateItemUpdateFields(args.set as Record<string, unknown> | undefined)
   return {
     item: parseWritableRef(args.ref, ['item']),
-    set: updates,
+    set: Object.fromEntries(updates) as Partial<Record<ZoteroUpdatableItemField, string>>,
   }
 }
 

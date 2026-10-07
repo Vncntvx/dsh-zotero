@@ -29,6 +29,7 @@ import { assertNonBlank, parseWritableRef, WRITE_COLLECTION_REF_ARG_HINT } from 
 import {
   WRITE_COMMITTED_UNVERIFIED_DESCRIPTION,
   WRITE_PLAN_OUTCOME_DESCRIPTION,
+  WRITE_PLAN_LIBRARY_LINE,
 } from '../write-approval.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroCreateCollectionOutcome, ZoteroCreateCollectionRequest } from '../types.js'
@@ -75,7 +76,7 @@ type CreateCollectionOutput = InferValue<typeof CREATE_COLLECTION_OUTPUT_SCHEMA>
 export function createCollectionPlan(args: CreateCollectionArgs): string {
   return [
     '**Create a Zotero collection**',
-    '- Library: zotero://user/0 (the local personal library)',
+    WRITE_PLAN_LIBRARY_LINE,
     `- Name: ${args.name.trim()}`,
     `- Parent: ${args.parent === undefined ? '(top level)' : args.parent.trim()}`,
     'A sibling collection with the same name refuses the write; the created collection carries the returned ref.',
