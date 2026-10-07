@@ -1,0 +1,42 @@
+name: Upstream Health Check
+
+on:
+  schedule:
+    # Run every Monday at 02:00 UTC (10:00 AM CST)
+    - cron: '0 2 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: upstream-health
+  cancel-in-progress: true
+
+jobs:
+  health-check:
+    name: Upstream Dependency & Health Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify release gate and test suites
+        run: npm run release:check
+
+      - name: Check upstream registry updates
+        run: |
+          PIN=$(node -p "require('./package.json').devDependencies['@deepseek-ai/dsh-tools']")
+          LATEST=$(npm view @deepseek-ai/dsh-tools version 2>/dev/null || echo "unknown")
+          echo "Current pinned harness baseline: $PIN"
+          echo "Latest published @deepseek-ai/dsh-tools on registry: $LATEST"
+          if [ "$LATEST" != "unknown" ] && [ "$LATEST" != "$PIN" ]; then
+            echo "::notice title=Upstream Update Detected::Harness on npm is at $LATEST while dsh-zotero is pinned to $PIN."
+          fi
