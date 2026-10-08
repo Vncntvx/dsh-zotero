@@ -162,7 +162,8 @@ export interface ShellWriteAttempt {
 
 /** Whether the text names the local API address in any of its loopback spellings. */
 function namesAuthority(text: string, aliases: readonly string[]): boolean {
-  return aliases.some((alias) => text.includes(alias))
+  const lower = text.toLowerCase()
+  return aliases.some((alias) => lower.includes(alias.toLowerCase()))
 }
 
 /**
@@ -172,8 +173,9 @@ function namesAuthority(text: string, aliases: readonly string[]): boolean {
  * write on another loopback port is still a library write.
  */
 function namesLoopback(text: string): boolean {
+  const lower = text.toLowerCase()
   for (const host of LOOPBACK_HOSTNAMES) {
-    if (text.includes(host)) return true
+    if (lower.includes(host.toLowerCase())) return true
   }
   return false
 }

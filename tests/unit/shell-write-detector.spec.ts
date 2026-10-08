@@ -241,6 +241,17 @@ describe('the shell-write detector', () => {
     ).toBeUndefined()
   })
 
+  it('recognizes loopback authorities and authorize endpoints with mixed case hostnames', () => {
+    for (const command of [
+      `curl -s -X POST http://Localhost:23119/api/users/0/items -d '{}'`,
+      `curl -s -X POST http://LOCALHOST:23119/api/local/authorize`,
+      `curl -X DELETE http://LocalHost:23119/api/users/0/collections/ABC`,
+    ]) {
+      const attempt = detectShellWrite(config, bash(command))
+      expect(attempt, command).toBeDefined()
+    }
+  })
+
   it('documents the shapes text matching cannot see', () => {
     // These get through by design; the plugin keeps the model on the sanctioned
     // route with the prompt, and the harness never sees them to ask about.

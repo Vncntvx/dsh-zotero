@@ -447,16 +447,18 @@ export class ZoteroHttpClient {
       // that statement is the difference between a version mismatch and an
       // unimplemented endpoint or format. It is read under the same bound;
       // caller cancellation and the deadline still win over the statement.
-      const detail =
-        response.status === 501
-          ? await readFailureStatement(
-              response,
-              this.options.maxResponseBytes,
-              d.signal,
-              opts.signal,
-              this.options.timeoutMs,
-            )
-          : ''
+      let detail = ''
+      if (response.status === 501) {
+        detail = await readFailureStatement(
+          response,
+          this.options.maxResponseBytes,
+          d.signal,
+          opts.signal,
+          this.options.timeoutMs,
+        )
+      } else {
+        void response.body?.cancel()
+      }
       translateHttpStatus(response, detail, relativePathOf(url, this.baseUrlWithSlash))
     }
     // Body reads can still fail mid-stream (connection resets, deadline

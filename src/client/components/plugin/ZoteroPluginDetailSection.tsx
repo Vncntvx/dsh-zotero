@@ -33,7 +33,8 @@ export function ZoteroPluginDetailSection({
   t,
   probe,
 }: ZoteroPluginDetailSectionProps): ReactNode {
-  if (subject.kind !== 'bundle' || subject.pkg.name !== ZOTERO_REMOTE_PACKAGE) {
+  const pkgName = subject.kind === 'bundle' || subject.kind === 'row' ? subject.pkg.name : undefined
+  if (pkgName !== ZOTERO_REMOTE_PACKAGE) {
     return null
   }
   return <ZoteroPluginDetailSectionBody t={t} probe={probe} />

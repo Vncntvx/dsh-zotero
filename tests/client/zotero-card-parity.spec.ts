@@ -13,13 +13,17 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { Config } from '../../src/config.ts'
+import { Config, type ResolvedConfig } from '../../src/config.ts'
 import {
   BOOLEAN_FIELD_KEYS,
   FIELD_GROUPS,
   NUMERIC_FIELD_KEYS,
   type FieldKey,
 } from '../../src/client/zotero-card-controller.ts'
+
+type MissingConfigField = Exclude<keyof ResolvedConfig, FieldKey>
+type AssertNever<T extends never> = T
+export type _ConfigSurfaceComplete = AssertNever<MissingConfigField>
 
 /** The control a host schema type must render as. */
 const CONTROL_OF_SCHEMA_TYPE = {

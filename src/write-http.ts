@@ -399,6 +399,7 @@ export class ZoteroWriteHttpClient {
       // refusal. This check also covers error responses, whose bodies may use
       // different wording than the read transport's identity statement.
       if (observedServerId !== null && observedServerId !== opts.serverId) {
+        void response.body?.cancel()
         throw new ZoteroError(SERVER_MISMATCH_MESSAGE, ZOTERO_SERVER_MISMATCH)
       }
       if (!response.ok) {
@@ -408,19 +409,22 @@ export class ZoteroWriteHttpClient {
         // everything else by status.
         let detail = ''
         try {
-          detail =
+          const needsBody =
             response.status === 401 ||
             response.status === 403 ||
             response.status === 412 ||
             (method === 'DELETE' && response.status === 413)
-              ? await readFailureStatement(
-                  response,
-                  this.options.maxResponseBytes,
-                  d.signal,
-                  opts.signal,
-                  deadlineMs,
-                )
-              : ''
+          if (needsBody) {
+            detail = await readFailureStatement(
+              response,
+              this.options.maxResponseBytes,
+              d.signal,
+              opts.signal,
+              deadlineMs,
+            )
+          } else {
+            void response.body?.cancel()
+          }
           this.translateWriteStatus(response, detail, tagDeleteLimit)
         } catch (error) {
           if (commitSensitive && !isPreCommitWriteStatus(response.status)) {

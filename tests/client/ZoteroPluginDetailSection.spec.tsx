@@ -53,7 +53,7 @@ const rowSubject: PluginsSubject = {
 }
 
 describe('ZoteroPluginDetailSection', () => {
-  it('returns null when subject is not bundle dsh-zotero', () => {
+  it('returns null when subject is for another package or item kind', () => {
     const probe = vi.fn(async (): Promise<RemoteResult<ZoteroStatusView>> => ({
       ok: true as const,
       value: { providerId: 'local', connected: true, diagnosis: 'ok' },
@@ -64,11 +64,24 @@ describe('ZoteroPluginDetailSection', () => {
     )
     expect(c1.innerHTML).toBe('')
 
+    const itemSubject: PluginsSubject = { kind: 'item', id: 'dsh-zotero' }
     const { container: c2 } = render(
-      <ZoteroPluginDetailSection subject={rowSubject} t={t} probe={probe} />,
+      <ZoteroPluginDetailSection subject={itemSubject} t={t} probe={probe} />,
     )
     expect(c2.innerHTML).toBe('')
     expect(probe).not.toHaveBeenCalled()
+  })
+
+  it('renders section when subject is a row belonging to dsh-zotero', () => {
+    const probe = vi.fn(async (): Promise<RemoteResult<ZoteroStatusView>> => ({
+      ok: true as const,
+      value: { providerId: 'local', connected: true, diagnosis: 'ok' },
+    }))
+
+    const { container } = render(
+      <ZoteroPluginDetailSection subject={rowSubject} t={t} probe={probe} />,
+    )
+    expect(container.querySelector('[data-zotero-plugin-section]')).not.toBeNull()
   })
 
   it('renders connected status and version when probe succeeds and connected is true', async () => {

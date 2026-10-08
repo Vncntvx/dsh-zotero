@@ -425,15 +425,12 @@ export class ZoteroService extends Service {
       )
     }
     const providers = this.providers
-    const dispose = this.ctx.effect(() => {
+    return this.ctx.effect(() => {
       providers.set(provider.id, provider)
       return () => {
         providers.delete(provider.id)
       }
     }, 'zotero.registerProvider()')
-    return () => {
-      void dispose()
-    }
   }
 
   /**

@@ -92,12 +92,8 @@ const DELETION_RENDER_LABELS = {
 /** Host kinds the tool's include enum does not offer; a non-empty union fails the build. */
 type MissingInclude = Exclude<ZoteroChangesInclude, (typeof ALL_INCLUDES)[number]>
 type AssertNever<T extends never> = T
-/**
- * Compile-time exhaustiveness pin. The export is what keeps it alive under
- * `noUnusedLocals`: nothing reads the alias, but a section added to the wire
- * enum without joining `ALL_CHANGES_INCLUDES` fails the build here.
- */
-export type IncludesComplete = AssertNever<MissingInclude>
+/** Compile-time exhaustiveness pin. */
+declare const _includesComplete: AssertNever<MissingInclude>
 
 /** The checkpoint the tool hands back, provenance and coverage included. */
 const CURSOR_OUTPUT_SCHEMA = {
@@ -239,12 +235,8 @@ type UnrenderedReason = Exclude<
   ZoteroChangesUnobservableReason,
   (typeof UNOBSERVABLE_HEADLINES)[number][0]
 >
-/**
- * Compile-time exhaustiveness pin. The export is what keeps it alive under
- * `noUnusedLocals`: a reason added to the wire union without a headline in
- * `UNOBSERVABLE_HEADLINES` fails the build here.
- */
-export type ReasonsRendered = AssertNever<UnrenderedReason>
+/** Compile-time exhaustiveness pin. */
+declare const _reasonsRendered: AssertNever<UnrenderedReason>
 
 /** The reasons the wire schema admits, in render order. */
 const UNOBSERVABLE_REASONS: readonly ZoteroChangesUnobservableReason[] = UNOBSERVABLE_HEADLINES.map(

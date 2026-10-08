@@ -94,8 +94,8 @@ export type GroupKey = (typeof FIELD_SPECS)[number]['group']
 /** Host Config fields the card does not list; a non-empty union fails the client build. */
 type MissingConfigField = Exclude<keyof ResolvedConfig, FieldKey>
 type AssertNever<T extends never> = T
-/** Compile-time exhaustiveness pin (exported so the type is "used"). */
-export type ConfigSurfaceComplete = AssertNever<MissingConfigField>
+/** Compile-time exhaustiveness pin (unexported declare). */
+declare const _configSurfaceComplete: AssertNever<MissingConfigField>
 
 /**
  * A boolean field: the draft is the literal 'true'/'false' text a toggle
