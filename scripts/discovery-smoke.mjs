@@ -1,11 +1,11 @@
 /**
  * Real client-discovery smoke: proves that a clean install of the packed
  * tarball into a fresh dsh profile makes the web composition serve the
- * plugin's browser bundle — package resolution, `dsh.client` discovery,
- * `exports["./client"]`, tarball contents, and the ClientModuleRegistry —
+ * plugin's browser bundle (package resolution, `dsh.client` discovery,
+ * `exports["./client"]`, tarball contents, and the ClientModuleRegistry)
  * without a browser.
  *
- * Steps: npm pack → temp profile → `dsh plugin add <tarball>` → `dsh web
+ * Steps: npm pack → temp profile → `dsh plugin --profile <name> add <tarball>` → `dsh web
  * --port 0` → read the boot token the CLI prints → exchange it for the page
  * cookie (instance auth gates the composition) → GET /
  * → parse the `globalThis["__DSH_BOOT__"]` manifest → assert the dsh-zotero

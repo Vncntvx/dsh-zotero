@@ -232,17 +232,36 @@ function checkProse(path, pin) {
   problems.push(...checkProseText(text, pin, path))
 }
 
+const NODE_MODULES_MARKER = 'node_modules/'
+
+/**
+ * Extracts the package name from a package-lock.json path key.
+ * Handles nested node_modules (e.g. `node_modules/a/node_modules/b` -> `b`).
+ * Returns undefined for paths outside node_modules, such as the root `""` or a workspace package.
+ *
+ * @param {string} path
+ * @returns {string | undefined}
+ */
+export function packageNameFromLockPath(path) {
+  const index = path.lastIndexOf(NODE_MODULES_MARKER)
+  if (index === -1) return undefined
+  return path.slice(index + NODE_MODULES_MARKER.length)
+}
+
 /** Every problem in a lockfile relative to the pin, the manifest's overrides and the manifest's dsh declarations. */
 export function collectLockProblems(lock, manifest, pin) {
   const problems = []
-  const offenders = Object.entries(lock.packages ?? {})
-    .filter(
-      ([path, entry]) => path.includes('node_modules/@deepseek-ai/dsh-') && entry.version !== pin,
-    )
-    .map(
-      ([path, entry]) =>
-        `${path.slice(path.lastIndexOf('node_modules/') + 'node_modules/'.length)}@${entry.version}`,
-    )
+  const dshLockEntries = []
+  for (const [path, entry] of Object.entries(lock.packages ?? {})) {
+    const name = packageNameFromLockPath(path)
+    if (name !== undefined && isDshPackage(name)) {
+      dshLockEntries.push({ name, version: entry.version })
+    }
+  }
+
+  const offenders = dshLockEntries
+    .filter(({ version }) => version !== pin)
+    .map(({ name, version }) => `${name}@${version}`)
     .sort()
   if (offenders.length > 0) {
     const shown = offenders.slice(0, 6)
@@ -259,13 +278,7 @@ export function collectLockProblems(lock, manifest, pin) {
 
   if (manifest !== undefined) {
     const overrideKeys = new Set(Object.keys(manifest.overrides ?? {}))
-    const lockDshPackages = [
-      ...new Set(
-        Object.keys(lock.packages ?? {})
-          .filter((p) => p.includes('node_modules/@deepseek-ai/dsh-'))
-          .map((p) => p.slice(p.lastIndexOf('node_modules/') + 'node_modules/'.length)),
-      ),
-    ].sort()
+    const lockDshPackages = [...new Set(dshLockEntries.map(({ name }) => name))].sort()
     const missingOverrides = lockDshPackages.filter((name) => !overrideKeys.has(name))
     if (missingOverrides.length > 0) {
       problems.push(

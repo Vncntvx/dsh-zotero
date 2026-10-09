@@ -50,3 +50,10 @@ export declare function collectLockProblems(
   manifest: Record<string, unknown> | undefined,
   pin: string,
 ): string[]
+
+/**
+ * Extracts the package name from a package-lock.json path key.
+ * Handles nested node_modules (e.g. `node_modules/a/node_modules/b` -> `b`).
+ * Returns undefined for paths outside node_modules, such as the root `""` or a workspace package.
+ */
+export declare function packageNameFromLockPath(path: string): string | undefined

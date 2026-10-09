@@ -273,12 +273,6 @@ export async function withConnectivityAsk<T>(
     if (recovery.isDisposed) throw error
     const questions = ctx.get('userQuestions')
     if (questions === undefined) throw error
-    if (exec.agent !== undefined) {
-      const agents = ctx.get('agents') as { roots?(): readonly unknown[] } | undefined
-      if (typeof agents?.roots === 'function' && !agents.roots().includes(exec.agent)) {
-        throw error
-      }
-    }
     const spec = FAILURE_SPECS[error.code]
     const bucketKey =
       exec.agent !== undefined ? `agent:${exec.agent.id}:${error.code}` : `global:${error.code}`

@@ -12,6 +12,7 @@ import {
   checkVersionMap,
   collectLockProblems,
   collectPinFaceProblems,
+  packageNameFromLockPath,
   retargetProse,
   versionMapBounds,
 } from '../../scripts/harness-state.mjs'
@@ -330,5 +331,41 @@ describe('collectLockProblems', () => {
       /package-lock\.json root entry devDependencies drifts from package\.json/,
     )
     expect(problems.join('\n')).toContain('@deepseek-ai/dsh-llm')
+  })
+
+  it('ignores root and non-node_modules package paths', () => {
+    const lockWithWorkspace = {
+      packages: {
+        '': {},
+        'packages/@deepseek-ai/dsh-tools': { version: '0.0.1' },
+        'packages/my-custom-plugin': { version: '1.0.0' },
+        'node_modules/@deepseek-ai/dsh-tools': { version: pin },
+        'node_modules/@deepseek-ai/dsh-llm': { version: pin },
+      },
+    }
+    expect(collectLockProblems(lockWithWorkspace, validManifest, pin)).toEqual([])
+  })
+})
+
+describe('packageNameFromLockPath', () => {
+  it('extracts the package name from a standard node_modules entry', () => {
+    expect(packageNameFromLockPath('node_modules/@deepseek-ai/dsh-tools')).toBe(
+      '@deepseek-ai/dsh-tools',
+    )
+  })
+
+  it('extracts the package name from nested node_modules', () => {
+    expect(packageNameFromLockPath('node_modules/foo/node_modules/@deepseek-ai/dsh-llm')).toBe(
+      '@deepseek-ai/dsh-llm',
+    )
+  })
+
+  it('returns undefined for the root package entry', () => {
+    expect(packageNameFromLockPath('')).toBeUndefined()
+  })
+
+  it('returns undefined for paths outside node_modules', () => {
+    expect(packageNameFromLockPath('packages/my-custom-plugin')).toBeUndefined()
+    expect(packageNameFromLockPath('packages/@deepseek-ai/dsh-tools')).toBeUndefined()
   })
 })

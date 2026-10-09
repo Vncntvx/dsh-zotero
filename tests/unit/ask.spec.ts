@@ -389,27 +389,11 @@ describe('concurrent failures share one recovery question', () => {
 })
 
 describe('agent partitioning and delegation', () => {
-  it('throws immediately without asking when the agent is a delegated child agent', async () => {
-    const rootAgent = { id: 'root-agent' } as any
+  it('surfaces the original error when userQuestions rejects a delegated child agent (DELEGATED_CALLER)', async () => {
     const childAgent = { id: 'child-agent' } as any
-    const agentsService = {
-      roots: () => [rootAgent],
-    }
-    const calls: any[] = []
-    const ctx = {
-      get: (key: string) => {
-        if (key === 'agents') return agentsService
-        if (key === 'userQuestions') {
-          return {
-            ask: async (req: any) => {
-              calls.push(req)
-              return { answers: [] }
-            },
-          }
-        }
-        return undefined
-      },
-    } as unknown as Context
+    const { ctx, calls } = fakeContext(() => {
+      throw new HarnessError('human interaction is unavailable', 'DELEGATED_CALLER')
+    })
 
     const error = zoteroError(ZOTERO_NOT_RUNNING)
     await expect(
@@ -422,7 +406,8 @@ describe('agent partitioning and delegation', () => {
         },
       ),
     ).rejects.toBe(error)
-    expect(calls).toHaveLength(0)
+    expect(calls).toHaveLength(1)
+    expect(calls[0].agent).toBe(childAgent)
   })
 
   it('partitions shared questions by agent identity so distinct agents get separate questions', async () => {

@@ -42,10 +42,10 @@ This document lists common issues, causes, and diagnostic steps when using dsh-z
 
 ## 7. Installation Error: nothing installable
 
-- **Symptom**: `dsh plugin add` fails with `nothing installable: the plugin(s) need a build step`.
+- **Symptom**: `dsh plugin --profile <profile> add` fails with `nothing installable: the plugin(s) need a build step`.
 - **Cause**: Installing from the GitHub source branch runs build scripts locally, which pnpm blocks by default.
 - **Fix**:
-  - Recommended: Install using the npm package name or the GitHub `#release` prebuilt branch;
+  - Recommended: Install using the npm package name or the GitHub `#release` prebuilt branch.
   - If building from source: add `dsh-zotero` to `allowBuilds` in the profile's `pnpm-workspace.yaml`.
 
 ## 8. Zotero Tab Does Not Appear

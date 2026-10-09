@@ -42,10 +42,10 @@
 
 ## 7. 安装提示 nothing installable
 
-- **现象**：执行 `dsh plugin add` 时报错 `nothing installable: the plugin(s) need a build step`。
+- **现象**：执行 `dsh plugin --profile <profile> add` 时报错 `nothing installable: the plugin(s) need a build step`。
 - **原因**：从 GitHub 源码分支安装时需在本地编译，而 pnpm 默认拦截依赖构建。
 - **排查**：
-  - 推荐：改用 npm 包名或 GitHub `#release` 预构建分支安装；
+  - 推荐：改用 npm 包名或 GitHub `#release` 预构建分支安装。
   - 若需从源码构建：在当前 profile 的 `pnpm-workspace.yaml` 中将 `dsh-zotero` 加入 `allowBuilds` 列表后重试。
 
 ## 8. Zotero 标签页不显示

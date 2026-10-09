@@ -207,7 +207,7 @@ describe('client graph authority', () => {
   })
 })
 
-describe('harness inline-safe table (dsh-v0.2.1-alpha.1)', () => {
+describe('harness inline-safe table (dsh-v0.2.1-alpha.2)', () => {
   it('accepts the pinned package names and rejects the retired agent-presets arm', () => {
     expect(isInlineSafeHarness('@deepseek-ai/dsh-agent-preset-registry/display')).toBe(true)
     expect(isInlineSafeHarness('@deepseek-ai/dsh-agent-presets/display')).toBe(false)
