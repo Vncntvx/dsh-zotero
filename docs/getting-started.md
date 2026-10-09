@@ -32,7 +32,8 @@ dsh-zotero 是面向 DeepSeek Harness 的 Zotero 插件，让 Agent 能够搜索
 | 0.11.0         | 0.1.7-rc.2                  |
 | 0.12.0         | 0.2.0-rc.2                  |
 | 0.12.1         | 0.2.1-alpha.1               |
-| 0.13.0-alpha.1 | 0.2.1-alpha.2               |
+| 0.13.0-alpha.1 | 0.2.1-alpha.1               |
+| 0.13.0-alpha.2 | 0.2.1-alpha.2               |
 
 ## 安装插件
 
