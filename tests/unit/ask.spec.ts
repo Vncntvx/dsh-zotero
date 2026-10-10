@@ -2,8 +2,8 @@
  * Unit tests for the connectivity-failure question bridge (`src/ask.ts`).
  *
  * The wrapper is exercised with a fake `userQuestions` service so every
- * branch — passthrough, question content, retry-once, abort, and
- * fail-closed degradation — is driven without the real UI provider.
+ * branch (passthrough, question content, retry-once, abort, and
+ * fail-closed degradation) is driven without the real UI provider.
  * @module tests/ask
  */
 
@@ -48,7 +48,7 @@ function fakeContext(
   }
 }
 
-/** A context with no question service at all — the headless composition. */
+/** A context with no question service at all: the headless composition. */
 function headlessContext(): Context {
   return { get: () => undefined } as unknown as Context
 }

@@ -132,7 +132,7 @@ describe('evidencePassageTotalOf', () => {
       sourceOf({}),
     ]
     expect(evidencePassageTotalOf(sources)).toBe(4)
-    // The same three sources count as two evidence-bearing sources — the
+    // The same three sources count as two evidence-bearing sources: the
     // filter pill count and the overview sum genuinely differ.
     expect(filterCountsOf(sources).evidence).toBe(2)
   })

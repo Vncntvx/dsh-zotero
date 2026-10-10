@@ -1,6 +1,6 @@
 /**
  * The blocked form of an open-in-Zotero action: a button that stays
- * focusable (`aria-disabled`, not native `disabled` — a native disabled
+ * focusable (`aria-disabled`, not native `disabled`, because a native disabled
  * button receives no pointer or focus events, so no tooltip could anchor to
  * it), explains the mismatch through a tooltip and a screen-reader
  * description, and never executes. The visible label is the accessible

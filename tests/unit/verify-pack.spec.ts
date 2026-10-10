@@ -3,7 +3,7 @@
  * JSON: a version-pinned npm runs `prepare` even under `--ignore-scripts` and
  * prints its output first, which used to fail `JSON.parse` on the whole
  * stream. The locator keeps the gate green on either kind of npm. The path
- * resolver enumerates wildcard exports from disk instead of restating them —
+ * resolver enumerates wildcard exports from disk instead of restating them,
  * and fails loud when a declared pattern has nothing behind it, so the gate
  * can never narrow itself to "assert only what exists".
  * @module tests/unit/verify-pack

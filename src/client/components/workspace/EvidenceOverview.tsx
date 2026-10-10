@@ -1,11 +1,11 @@
 /**
- * The passage overview: the cross-source board — every passage of the session
+ * The passage overview: the cross-source board, every passage of the session
  * grouped by literature, reached from the sidebar's aggregate entry ("片段总览
  * N"). This is the plugin's comparative value over a plain Zotero list:
  * passages from many items side by side, to weigh conflicting claims. The
  * default workflow stays on the master-detail sources view; this board is the
  * aggregation surface. One card per evidence-bearing source, and the cards
- * carry their own facts — no scope note is needed on the page itself.
+ * carry their own facts, so no scope note is needed on the page itself.
  * @module dsh-zotero/client/components/workspace/EvidenceOverview
  */
 

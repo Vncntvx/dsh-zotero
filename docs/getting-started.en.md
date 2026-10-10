@@ -87,11 +87,14 @@ Expected response:
 
 ```text
 Zotero local API: connected
-Zotero version: 10.0.2-beta.9+c77df79af
-API version: 12
-Schema version: 11
-Server ID: abc123def456
+Local API: 127.0.0.1:23119
+Zotero version: 10.0.6-beta.4+4d4c2c141
+API version: 3
+Schema version: 44
+Server ID: Cq1f76x70ESV
 ```
+
+The version lines come from the response headers of the Zotero build that answered, so they follow your Zotero install. `API version` is the local API version the plugin pins on every request (3); a build that does not speak it answers with 501 instead.
 
 If connection fails, verify:
 
@@ -104,4 +107,4 @@ Ask the agent in a conversation:
 
 > Find papers about FlashAttention
 
-The agent calls `zotero_search` to query your library and returns matching entries. You can then use `zotero_get` to inspect metadata, abstracts, and notes, or `zotero_retrieve` to extract relevant evidence passages from indexed text and annotations.
+The agent calls `zotero_search` to query your library and returns matching entries. You can then use `zotero_get` to inspect metadata, abstracts, and notes, or `zotero_retrieve` to extract relevant passages from indexed text and annotations.

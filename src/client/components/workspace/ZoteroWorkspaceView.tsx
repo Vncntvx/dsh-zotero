@@ -1,7 +1,7 @@
 /**
  * The workspace view: the Sources panel's pure presentation surface, driven
  * entirely by props (workspace, connection, session id, refresh, prefill).
- * Fixtures render it directly — visual iteration never needs a live session
+ * Fixtures render it directly, so visual iteration never needs a live session
  * or a real Zotero. The surface is a master-detail pair: the source sidebar
  * (filter bar plus a listbox of source rows) and the inspector (overview,
  * evidence, and exports panels of the selected source). The top lens bar
@@ -90,9 +90,9 @@ export const FILTERS: readonly {
 
 /**
  * Resolve the effective selection against the workspace union and the visible
- * rows. A selection a filter hid is kept — filtering narrows the left list
+ * rows. A selection a filter hid is kept: filtering narrows the left list
  * only, never the document the inspector is showing, which notes the hidden
- * state — and only a selection the workspace no longer contains falls back to
+ * state. Only a selection the workspace no longer contains falls back to
  * the first visible row.
  */
 export function effectiveSelectionOf(

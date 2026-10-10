@@ -29,8 +29,8 @@ export interface ZoteroCommandCardProps extends CommandRowOwnerProps {
  * The status facts a live probe and the parsed command text both carry, and so
  * the ones that can be swapped between them. `ParsedZoteroStatus` adds
  * `serverIdUnreported` and `rawText`, and `ZoteroStatusView` adds
- * `providerId`; neither is a probe-vs-text choice — one is derived (below) and
- * the other identifies the source.
+ * `providerId`; neither is a probe-vs-text choice, since one is derived (below)
+ * and the other identifies the source.
  */
 type SharedStatusKey =
   'connected' | 'endpoint' | 'zoteroVersion' | 'apiVersion' | 'schemaVersion' | 'serverId' | 'write'
@@ -75,7 +75,7 @@ export function ZoteroCommandCard({ node, t, probe }: ZoteroCommandCardProps): R
    *
    * The gate is "did the probe answer", *not* "is there an error": a probe that
    * reaches Zotero and is told it is offline sets **both** `data` and `error`,
-   * and that answer still carries the address it dialled — which is the one
+   * and that answer still carries the address it dialled, the one
    * fact worth reading on a disconnected card. Gating on `error` would drop
    * the row exactly when the user clicked Refresh to find out what was wrong.
    * A probe that failed outright (no `data`) has no facts to prefer, so the
@@ -192,8 +192,8 @@ export function ZoteroCommandCard({ node, t, probe }: ZoteroCommandCardProps): R
     if (!open) return null
 
     // The re-probe action sits outside the parsed branch on purpose: a card
-    // that expanded to raw text — an errored command, or output this version
-    // does not recognize — is exactly the case where a user most wants to try
+    // that expanded to raw text (an errored command, or output this version
+    // does not recognize) is exactly the case where a user most wants to try
     // again, and it used to be the one view with no way to.
     const actions =
       probe === undefined ? null : (

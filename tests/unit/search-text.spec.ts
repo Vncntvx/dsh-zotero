@@ -30,7 +30,7 @@ describe('normalizeForSearch', () => {
     )
     expect(normalizeForSearch('en–dash em—dash minus−sign')).toBe('en-dash em-dash minus-sign')
     // NFKD decomposes the double prime into two primes, and Zotero folds
-    // single quotes first — so the mirrored order yields two apostrophes.
+    // single quotes first, so the mirrored order yields two apostrophes.
     expect(normalizeForSearch('prime″ and ′minute')).toBe("prime'' and 'minute")
   })
 

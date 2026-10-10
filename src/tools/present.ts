@@ -42,7 +42,7 @@ export function formatSearchLine(
 
 /**
  * Flatten render blocks to the plain text a job outcome stores.
- * Non-text blocks are dropped — job_output is a text receipt.
+ * Non-text blocks are dropped, because job_output is a text receipt.
  */
 export function textOfBlocks(blocks: ContentBlock[]): string {
   return blocks.map((block) => (block.type === 'text' ? block.text : '')).join('\n')

@@ -1,7 +1,7 @@
 /**
- * The `zotero_browse` domain: the six bounded discovery kinds — libraries,
+ * The `zotero_browse` domain: the six bounded discovery kinds (libraries,
  * server-side collection navigation with breadcrumb walks, saved searches,
- * scoped tag facets, item types, and per-type metadata fields. Argument
+ * scoped tag facets, item types, and per-type metadata fields). Argument
  * cross-constraints fail closed at the entry before any request.
  * @module dsh-zotero/local/browse-domain
  */
@@ -233,9 +233,9 @@ async function browseLibraries(
 /**
  * Browse collections as real tree navigation: no `parentRef` lists
  * top-level collections (`/collections/top`), a `parentRef` lists that
- * collection's children — both server-side paged, so a page never depends
- * on the whole library graph. Breadcrumbs resolve lazily: each row's own
- * `parentCollection` field drives a per-key ancestor walk (TTL-cached,
+ * collection's children, and both are server-side paged, so a page never
+ * depends on the whole library graph. Breadcrumbs resolve lazily: each row's
+ * own `parentCollection` field drives a per-key ancestor walk (TTL-cached,
  * cycle-guarded), and an ancestor the API cannot serve truncates the path
  * fail-closed instead of inventing one.
  */
@@ -364,9 +364,9 @@ async function browseSavedSearches(
 /**
  * Browse tags, optionally scoped: without a scope this is the
  * whole-library `/tags` listing; with a scope the scoped tag endpoints
- * count tags over a faceted item set — a collection or My Publications,
+ * count tags over a faceted item set (a collection or My Publications,
  * top-level by default or all items, optionally narrowed to items matching
- * an item query. That makes "search → which tags do these hits carry →
+ * an item query). That makes "search → which tags do these hits carry →
  * narrow" a server-side round trip instead of client-side guessing.
  */
 async function browseTags(

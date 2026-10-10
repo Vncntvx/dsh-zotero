@@ -1,16 +1,16 @@
 /**
  * The write-authorization state of the plugin. Zotero 10 issues local write
- * keys through its own `/api/local/authorize` dialog — Allow (one write),
- * Always Allow (persistent), Deny — and consumes single-use keys at
- * authentication time, before the write runs. This module owns what that
+ * keys through its own `/api/local/authorize` dialog (Allow for one write,
+ * Always Allow for a persistent grant, or Deny) and consumes single-use keys
+ * at authentication time, before the write runs. This module owns what that
  * implies for the plugin:
  *
  * - the persisted grant lives in the host credentials seam as a `grant`
  *   record bound to the Zotero instance id it was granted by; a record that
  *   names another instance is stale and is tombstoned, never used;
  * - a one-time key lives only in this process's memory and is forgotten as
- *   soon as the write it authorized settles — the server has consumed it
- *   either way;
+ *   soon as the write it authorized settles, because the server has consumed
+ *   it either way;
  * - concurrent callers share one in-flight authorization. The dialog is the
  *   scarcest resource in the loop, and Zotero rate-limits the endpoint at
  *   five requests per minute.
@@ -28,9 +28,9 @@
  * deleted inside the authentication check itself, before the request body is
  * judged, so a refused write still burns it. A remembered key is never
  * consumed: it lives in `<Zotero profile>/localAPIKeys.json` and authenticates
- * indefinitely until the user discards the stored authorizations — which is
- * why a persisted grant is treated here as a durable secret, and why the
- * plugin never handles a raw key itself.
+ * indefinitely until the user discards the stored authorizations. That is why
+ * a persisted grant is treated here as a durable secret, and why the plugin
+ * never handles a raw key itself.
  * @module dsh-zotero/write-auth
  */
 
@@ -243,10 +243,11 @@ export class WriteAuthorizer {
   }
 
   /**
-   * Whether a grant for this Zotero instance is already available — the
+   * Whether a grant for this Zotero instance is already available: the
    * in-memory key of this process, or a persisted grant bound to the
-   * instance. A status fact for the settings card and the command output;
-   * never a capability: {@link keyFor} still runs the full resolution.
+   * instance. It is a status fact for the settings card and the command
+   * output, never a capability, since {@link keyFor} still runs the full
+   * resolution.
    */
   async hasGrant(serverId: string): Promise<boolean> {
     if (this.memory !== undefined && this.memory.serverId === serverId) return true
@@ -256,7 +257,7 @@ export class WriteAuthorizer {
 
   /**
    * Forget this process's copy of a key. Called by the domain when the write
-   * a one-time key authorized has settled — the server consumed the key at
+   * a one-time key authorized has settled: the server consumed the key at
    * authentication whether the write succeeded or failed, so the memory slot
    * must never answer with it again. Persisted grants are untouched.
    * @param key - the one-time key the domain is done with.
@@ -285,7 +286,7 @@ export class WriteAuthorizer {
    * The persisted grant for this instance, or undefined. The record is
    * re-read on every call (the credentials seam's own discipline: never
    * cache a secret across operations), and a grant bound to another Zotero
-   * instance is tombstoned rather than used — the next authorization then
+   * instance is tombstoned rather than used, so the next authorization
    * re-binds to the instance actually connected.
    */
   private async storedKey(serverId: string): Promise<string | undefined> {
@@ -375,10 +376,10 @@ export class WriteAuthorizer {
 
   /**
    * Run the authorize dialog. A grant the user marked Always Allow is
-   * persisted into the credentials seam — bound to this instance — when the
-   * seam is composed and the setting allows it; every grant is also kept in
-   * memory so the immediate next write does not re-open the dialog. If the
-   * seam is absent, persistence remains pending for a later key resolution.
+   * persisted into the credentials seam, bound to this instance, when the seam
+   * is composed and the setting allows it; every grant is also kept in memory
+   * so the immediate next write does not re-open the dialog. If the seam is
+   * absent, persistence remains pending for a later key resolution.
    */
   private async authorize(serverId: string, signal?: AbortSignal): Promise<ZoteroWriteKey> {
     const grant = await this.deps.client.authorize(WRITE_APP_NAME, { serverId, signal })

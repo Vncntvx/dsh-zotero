@@ -1,7 +1,7 @@
 /**
  * Dedicated toolview card for `zotero_children` and `zotero_attachment`.
- * Renders the child-object graph by kind — notes, attachments, and PDF
- * annotations with their page labels and Zotero colours — plus the resolved
+ * Renders the child-object graph by kind (notes, attachments, and PDF
+ * annotations with their page labels and Zotero colours) plus the resolved
  * location of a single attachment.
  * @module dsh-zotero/client/toolviews/ChildrenToolView
  */
@@ -43,7 +43,7 @@ const sectionLabelKeyOf = (kind: ChildRow['kind']): (typeof CHILD_KIND_LABEL)[Ch
 /**
  * Zotero's annotation colour is data, not a design decision, so it is carried
  * through as a custom property rather than mapped onto the badge's severity
- * tones — a red highlight is not an error. Only the lengths CSS actually reads
+ * tones (a red highlight is not an error). Only the lengths CSS actually reads
  * pass, so an unparseable value yields no swatch at all rather than an empty
  * box painted by the property's fallback.
  */
@@ -138,7 +138,7 @@ export function ChildrenToolView(props: ChildrenToolViewProps) {
       const raw = (resultTextOf(block) ?? '').trim()
 
       // A kind the call did not ask for is absent from the projection, so the
-      // count is over the kinds it did return — never a zero for an unasked kind.
+      // count is over the kinds it did return, never a zero for an unasked kind.
       const childTotal = (children?.sections ?? []).reduce((sum, section) => sum + section.total, 0)
 
       let sum = ''

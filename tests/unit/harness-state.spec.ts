@@ -202,7 +202,7 @@ describe('collectPinFaceProblems', () => {
     const problems = collectPinFaceProblems(wrong, '0.1.7-rc.1')
     expect(problems.join('\n')).toMatch(/engines\.dsh is ">=0\.1\.7-rc\.2"/)
     // Zero dsh peers would load on any runtime (evaluatePluginCompatibility
-    // reads only peerDependencies) — that is a policy hole, not a silent pass.
+    // reads only peerDependencies), that is a policy hole, not a silent pass.
     expect(problems.join('\n')).toMatch(/declares no @deepseek-ai\/dsh-\*/)
     expect(problems.join('\n')).not.toMatch(/harnessRange/)
   })

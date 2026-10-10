@@ -197,7 +197,8 @@ export function requireWritableRef(
 /**
  * Parse a Zotero canonical relation URI (http://zotero.org/users|groups/.../items/KEY)
  * into a library+key pair. Returns null for non-Zotero, malformed, or non-item URIs.
- * This never canonicalizes foreign user ids to user/0 — caller decides if mapping is provable.
+ * This never canonicalizes foreign user ids to user/0; the caller decides whether
+ * a mapping is provable.
  */
 export function parseZoteroRelationUri(
   uri: string,
@@ -221,7 +222,7 @@ export function parseZoteroRelationUri(
 /**
  * The canonical relation URI for a supported-local source ref. The user arm
  * pins `users/0` even for a hypothetical non-zero user id rather than
- * interpolating it — mirroring {@link libraryPrefix}: the local contract
+ * interpolating it, mirroring {@link libraryPrefix}: the local contract
  * addresses the logged-in user's library as `users/0`, and callers gate on
  * `requireSupportedLocalRef` first, so a non-zero user id never reaches here.
  */
@@ -235,8 +236,8 @@ export function formatZoteroRelationUri(ref: Pick<ZoteroObjectRef, 'library' | '
 export interface RelationTargetOptions {
   /**
    * The library containing the object whose relations these are. Group item
-   * URIs map only to this same group — a relation to another group stays a
-   * bare URI, so a target ref never implies locality its read did not have.
+   * URIs map only to this same group, and a relation to another group stays a
+   * bare URI, so a target ref never implies a locality its read did not have.
    * Omitted with `personalContext` (the write echo) to allow group targets.
    */
   readonly library?: SupportedLocalLibrary
@@ -245,7 +246,7 @@ export interface RelationTargetOptions {
    * the write domain just created under `users/0`) and this call only ever
    * sends `users/0` outbound, so any `users/<id>` echo is Zotero's
    * server-side canonicalization of that same `users/0` to the real numeric
-   * sync id — the alias is provable by context, not by matching the digits.
+   * sync id, so the alias is provable by context rather than by matching the digits.
    * Group targets are addressable cross-library refs and map as well.
    */
   readonly personalContext?: boolean
@@ -259,7 +260,7 @@ export interface RelationTargetOptions {
 
 /**
  * The local ref string a relation URI provably names, or undefined when the
- * mapping cannot be proven — the caller keeps the bare URI. Group ids are
+ * mapping cannot be proven, in which case the caller keeps the bare URI. Group ids are
  * never aliased, but they still map only within the containing library
  * (or the write echo, where group targets are explicit cross-library refs).
  * User URIs map when the id is the canonical `0`, the proven sync alias
@@ -316,8 +317,8 @@ export function assertPublicationsSupported(library: SupportedLocalLibrary | und
  * The supported local library a ref string provably names, or undefined when
  * the string does not parse or names an unsupported library. Single authority
  * for the `library`/`publications` fast path plus the `parseRef` +
- * `isSupportedLocalLibrary` composition the resolved-scope readers share —
- * group ids pass through, personal aliases collapse to canonical `user/0`.
+ * `isSupportedLocalLibrary` composition the resolved-scope readers share.
+ * Group ids pass through, personal aliases collapse to canonical `user/0`.
  */
 export function supportedLibraryOfRef(value: string): SupportedLocalLibrary | undefined {
   let parsed: ZoteroObjectRef
@@ -334,7 +335,7 @@ export function supportedLibraryOfRef(value: string): SupportedLocalLibrary | un
 /**
  * Require the supported local library a resolved scope ref names. Unlike the
  * fail-open projection helper above, a scope produced by `resolveScope` must
- * always resolve — an unparseable or unsupported ref is a broken invariant,
+ * always resolve: an unparseable or unsupported ref is a broken invariant,
  * and answering it from the personal library would attribute another
  * library's rows to this scope.
  */

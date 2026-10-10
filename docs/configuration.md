@@ -15,8 +15,8 @@
 | `maxSearchResults`         | `20`                         | `zotero_search` 返回条目上限                                                                                                                                                  |
 | `maxNoteScanRecords`       | `200`                        | 搜索笔记内容时扫描的笔记条目上限                                                                                                                                              |
 | `searchConcurrency`        | `4`                          | `zotero_search` 归属查询的并发数                                                                                                                                              |
-| `maxEvidenceChars`         | `6000`                       | 证据段落总字符预算                                                                                                                                                            |
-| `maxEvidencePassages`      | `4`                          | 证据段落数量上限                                                                                                                                                              |
+| `maxEvidenceChars`         | `6000`                       | 原文片段总字符预算                                                                                                                                                            |
+| `maxEvidencePassages`      | `4`                          | 原文片段数量上限                                                                                                                                                              |
 | `maxDetailChars`           | `3000`                       | `zotero_get` 摘要预览字符预算                                                                                                                                                 |
 | `maxNoteBodyChars`         | `30000`                      | 笔记正文字符预算                                                                                                                                                              |
 | `maxNoteChars`             | `2000`                       | `zotero_get` 单条笔记预览字符预算                                                                                                                                             |
@@ -31,7 +31,7 @@
 | `maxExportRefs`            | `50`                         | 单次 `zotero_export` 引用条数上限                                                                                                                                             |
 | `maxBrowseResults`         | `50`                         | 单次 `zotero_browse` 返回条目上限                                                                                                                                             |
 | `maxChangesResults`        | `50`                         | 单次 `zotero_changes` 每种资源列出的条目上限（仅影响展示）                                                                                                                    |
-| `scopeListingTtlMs`        | `30000`                      | 合集与检索范围列表的缓存时长（毫秒）                                                                                                                                          |
+| `scopeListingTtlMs`        | `30000`                      | 合集与检索范围列表的信任时长（毫秒），超时后重新读取                                                                                                                          |
 | `defaultStyle`             | `apa`                        | CSL 引用样式（需 Zotero 内置）                                                                                                                                                |
 | `defaultLocale`            | `en-US`                      | CSL 引用语言                                                                                                                                                                  |
 | `writeEnabled`             | `false`                      | 是否注册并启用个人库写入工具                                                                                                                                                  |
@@ -50,11 +50,12 @@
 
 `resolveConfig` 在加载时执行以下校验：
 
-- `baseUrl` 必须使用 `http:` 协议（Zotero Local API 不支持 HTTPS），且不得包含凭据信息、查询字符串或 URL 片段；
+- `baseUrl` 必须为字符串，且使用 `http:` 协议（Zotero Local API 不支持 HTTPS），不得包含凭据信息、查询字符串或 URL 片段；
 - `baseUrl` 主机名必须为环回地址（`127.0.0.1`、`localhost`、`::1`、`[::1]`）；`localhost` 在运行时解析为 `127.0.0.1`；
 - `baseUrl` 路径必须为 `/api` 或以 `/api/` 开头；
 - `timeoutMs` 必须为正有限数；
-- 所有数值上限字段与 `foregroundWaitMs` 必须为正整数；
+- 其余数值字段（并发、各类上限、`scopeListingTtlMs`、`foregroundWaitMs`、`writeNoteMaxChars`、`writeListMaxItems`、`writeAuthorizeDeadlineMs`）均必须为正整数；
+- `writeEnabled`、`writePersistKey`、`webEnabled`、`enableRunInBackground` 与 `promoteOnTimeout` 必须为布尔值；
 - `provider`、`defaultStyle` 与 `defaultLocale` 必须为非空字符串。
 
 ## 配置优先级
@@ -67,7 +68,7 @@ Schema 默认值 → Composition 入口配置 → settings.yaml 用户层
 
 ## 设置页配置
 
-插件在设置面板的左侧导航中注册 **Zotero** 配置页，绑定 `zotero` 命名空间：
+插件在设置面板的左侧导航中注册 Zotero 配置页，绑定 `zotero` 命名空间：
 
 - 修改结果保存至 `$DSH_HOME/settings.yaml` 的 `zotero:` 段；
 - 保存即时生效：传输层配置与写入开关变更时在服务实例内重建对应组件，纯限额字段由 provider 实时读取；

@@ -1,11 +1,11 @@
 /**
- * Approval gates for writes — the confirmation layer of the `ctx.zotero` seam.
+ * Approval gates for writes: the confirmation layer of the `ctx.zotero` seam.
  *
  * Two sequential gates, both owned here so no caller can skip either:
- * 1. {@link requestWriteApproval} — the session approval policy
+ * 1. {@link requestWriteApproval}, the session approval policy
  *    (`ctx.approval.request`). Honors `approval/policy: never` (auto-reject)
  *    and writes the `approval/asked` + `approval/decided` audit pair.
- * 2. {@link askPlanApproval} — the plan-review card (`userQuestions`).
+ * 2. {@link askPlanApproval}, the plan-review card (`userQuestions`).
  *    The user approves the exact plan markdown the domain will apply.
  *
  * The gate lives here, not in a tool, because the service is the only door to
@@ -21,8 +21,8 @@
  * - `unavailable` / no agent / infrastructure failure →
  *   `ZOTERO_WRITE_APPROVAL_UNAVAILABLE` (fail closed).
  * - no `ctx.approval` composed → `unavailable` as well: the decision cannot
- *   be routed or audited, so the gate fails closed — plan-review never runs
- *   without it.
+ *   be routed or audited, so the gate fails closed, and plan-review never
+ *   runs without it.
  *
  * A call that carries no agent while an approval service is composed is
  * `unavailable`, never `allowed`: the request cannot be routed or audited,
@@ -70,7 +70,7 @@ export const WRITE_PLAN_QUESTION_ID = 'zotero-write-plan'
  * tool appends this so the declined contract cannot drift between tools.
  */
 export const WRITE_PLAN_OUTCOME_DESCRIPTION =
-  'Every write first passes the session approval policy (a "never" session auto-rejects) and then shows a plan the user approves — neither confirmation is configurable; kind "declined" means the write was not approved and nothing was written — do not retry unasked.'
+  'Every write first passes the session approval policy (a "never" session auto-rejects) and then shows a plan the user approves; neither confirmation is configurable. Kind "declined" means the write was not approved and nothing was written: do not retry unasked.'
 
 /**
  * Appended by every tool that can report a committed-unverified outcome, so
@@ -97,7 +97,7 @@ function writeApprovalReason(call: ZoteroWriteCall): string {
  * Whether a settled ask rejection carries the given user-questions code.
  * The ask() exit path restores `UserQuestionError` instances uniformly, and
  * that class extends `HarnessError`, so class identity plus the stable code
- * is the whole contract — the same judgment the official plan card makes.
+ * is the whole contract, the same judgment the official plan card makes.
  * @param error - the rejected ask value.
  * @param code - the stable code to match.
  * @returns true when the rejection is that ask settlement.
@@ -112,9 +112,9 @@ function isAskCode(error: unknown, code: 'ASK_ABORTED' | 'ASK_CANCELLED'): boole
  * When `ctx.approval` is composed this is the deployment-level gate: `never`
  * auto-rejects, `ask` routes to the composed answerers, and every request
  * writes the `approval/asked` + `approval/decided` audit pair. When no
- * approval service is composed the gate fails closed — the decision cannot
- * be routed or audited, matching the user-approval package's stance for
- * headless or incompletely composed deployments.
+ * approval service is composed the gate fails closed: the decision cannot be
+ * routed or audited, matching the user-approval package's stance for headless
+ * or incompletely composed deployments.
  * @param ctx - the plugin context, whose approval service decides.
  * @param call - the asking write call (agent, signal, tool name, call id).
  * @returns `'allowed'` to continue to plan-review; `'declined'` when the
@@ -132,9 +132,9 @@ export async function requestWriteApproval(
   // Fail closed, matching the user-approval package's fail-closed stance
   // for headless or incompletely composed deployments.
   if (approval === undefined) return 'unavailable'
-  // Absent agent: the request cannot be routed or audited. Fail closed —
-  // matching harness `serviceAsk` and sandbox escalation, which both deny
-  // an ask that has no agent to route it through.
+  // Absent agent: the request cannot be routed or audited. Fail closed,
+  // matching harness `serviceAsk` and sandbox escalation, which both deny an
+  // ask that has no agent to route it through.
   if (exec.agent === undefined) return 'unavailable'
   let outcome: ApprovalOutcome
   try {
@@ -172,12 +172,12 @@ export async function requestWriteApproval(
 
 /**
  * Show one write's plan and wait for the user's answer. The plan text is the
- * caller's deterministic markdown — what the user approves is exactly what the
- * service passes to the domain.
+ * caller's deterministic markdown, so what the user approves is exactly what
+ * the service passes to the domain.
  * @param ctx - the plugin context, whose user-questions service answers.
  * @param call - the asking write call: its plan markdown, its agent (which
  *   routes the question), and its signal (which cancels the question). The
- *   plan-review intent carries no `callId` — see {@link ZoteroWriteCall}.
+ *   plan-review intent carries no `callId`; see {@link ZoteroWriteCall}.
  * @returns true only when the user answered with {@link APPROVE_LABEL};
  *   `false` for every non-approve user settlement (including `ASK_CANCELLED`).
  * @throws {ZoteroError} `ZOTERO_WRITE_APPROVAL_UNAVAILABLE` when no channel
@@ -188,8 +188,8 @@ export async function askPlanApproval(ctx: Context, call: ZoteroWriteCall): Prom
   const { exec, plan } = call
   // `ctx.get`, not the property proxy: the service fiber carries no inject
   // declarations for this optional seam, so a property read would trip
-  // cordis's inject guard. The seam is optional at runtime — absent means fail
-  // closed below.
+  // cordis's inject guard. The seam is optional at runtime, so absence means
+  // fail closed below.
   const questions = ctx.get('userQuestions')
   if (questions === undefined) {
     throw new ZoteroError(WRITE_APPROVAL_UNAVAILABLE_MESSAGE, ZOTERO_WRITE_APPROVAL_UNAVAILABLE)
@@ -209,8 +209,8 @@ export async function askPlanApproval(ctx: Context, call: ZoteroWriteCall): Prom
             kind: 'plan-review',
             approve: APPROVE_LABEL,
             // Deliberately no `callId`: that field names a LOGGED invocation
-            // whose ARGUMENTS carry the reviewed plan — what plan mode's own
-            // tool call is. A write tool's arguments carry the note body or the
+            // whose ARGUMENTS carry the reviewed plan, which is what plan mode's
+            // own tool call is. A write tool's arguments carry the note body or the
             // tag list, not a plan document, so naming the call here sends the
             // client's plan panel looking for a document that does not exist
             // ("无法读取计划 / 未找到这份计划"). Left out, the client shows the
@@ -230,14 +230,14 @@ export async function askPlanApproval(ctx: Context, call: ZoteroWriteCall): Prom
       throw new HarnessError(TOOL_ABORTED_MESSAGE, TOOL_ABORTED, { cause: error })
     }
     // The official plan card settles "Request changes / talk instead" as
-    // ASK_CANCELLED — a user decision, not a missing channel. Map it to the
+    // ASK_CANCELLED is a user decision, not a missing channel. Map it to the
     // same non-approve outcome as choosing Cancel on a generic question UI.
     if (isAskCode(error, 'ASK_CANCELLED')) {
       return false
     }
     // NO_PROVIDER, CALLER_NOT_LIVE, DELEGATED_CALLER, BAD_INTENT, and any
     // other infrastructure failure: no channel can answer, so the write
-    // cannot be approved — refuse it.
+    // cannot be approved, and the gate refuses it.
     throw new ZoteroError(WRITE_APPROVAL_UNAVAILABLE_MESSAGE, ZOTERO_WRITE_APPROVAL_UNAVAILABLE, {
       cause: error,
     })

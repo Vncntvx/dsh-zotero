@@ -1,6 +1,6 @@
 /**
  * The dsh-zotero host Remote service (wire namespace `zotero`, cordis key
- * {@link ZOTERO_STATUS_SERVICE_KEY} — the `zotero` key is the research
+ * {@link ZOTERO_STATUS_SERVICE_KEY}; the `zotero` key is the research
  * service's own).
  *
  * Registered as a TypertRemoteService so the Host Gateway can bind and
@@ -38,7 +38,7 @@ export class ZoteroRuntime extends TypertRemoteService {
   /**
    * Live connectivity view for the dedicated web tab: the service's status
    * probe with absent optional facts stripped (the strict wire codec rejects
-   * undefined field keys). The endpoint rides unconditionally — a provider that
+   * undefined field keys). The endpoint rides unconditionally: a provider that
    * answered dialled something, and the card's live refresh replaces the parsed
    * text with this view, so an endpoint dropped here would make the address
    * disappear the moment the user clicked Refresh.

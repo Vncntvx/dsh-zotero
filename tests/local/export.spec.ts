@@ -446,7 +446,7 @@ describe('export', () => {
   })
 
   it('refuses refs from two libraries of the same instance before any request', async () => {
-    // Two libraries on one instance are not a provenance mismatch — the
+    // Two libraries on one instance are not a provenance mismatch: the
     // question is which library the export is about, and the API takes one.
     await zoteroError(
       provider.export(

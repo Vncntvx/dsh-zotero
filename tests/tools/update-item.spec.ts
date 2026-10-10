@@ -1,7 +1,7 @@
 /**
  * `zotero_update_item`, the metadata correction tool: every refusal its
  * argument layer raises before a PATCH exists (empty `set`, unknown field,
- * blank value), the plan it shows, the receipt arms, and the card titles —
+ * blank value), the plan it shows, the receipt arms, and the card titles:
  * including the arm that claims nothing when the meta never arrived.
  * @module tests/tools/update-item
  */

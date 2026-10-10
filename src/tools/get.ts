@@ -3,7 +3,7 @@
  * annotations, and attachments included on request. The default call is a
  * single request; a notes or attachments include reads the bare `/children`
  * listing, and an annotations include adds the `?itemType=annotation`
- * listing — the Local API never returns annotations from the bare children
+ * listing, because the Local API never returns annotations from the bare children
  * endpoint, so an annotations-only include reads no bare listing. Ref
  * provenance is checked by the provider.
  * @module dsh-zotero/tools/get
@@ -43,7 +43,7 @@ const GET_PARAMETERS = {
     type: 'string',
     enum: ['standard', 'all'],
     description:
-      'standard (default) returns the normalized model; all additionally returns extraFields — every data field the model does not consume (repository, archive, number-of-pages, …), so special item types keep their metadata.',
+      'standard (default) returns the normalized model; all additionally returns extraFields, which is every data field the model does not consume (repository, archive, number-of-pages, …), so special item types keep their metadata.',
   },
 } as const
 
@@ -226,7 +226,7 @@ export function renderGet(_args: GetArgs, value: GetOutput): ContentBlock[] {
 /**
  * The completed item card: the item title plus its year when known. `meta`
  * is absent on nested code dispatch or malformed replay records, and a failed
- * call keeps the raw error content — both fall back to the generic card.
+ * call keeps the raw error content; both fall back to the generic card.
  */
 function presentGetResult(_args: GetArgs, result: ToolResult): ToolResultView | undefined {
   const record = metaRecordOf(result)
@@ -243,7 +243,7 @@ export function registerGetTool(ctx: Context, service: ZoteroService): void {
       description: [
         'Read the metadata of one Zotero library item referenced by a zotero:// ref.',
         'The default call fetches metadata only; request include to also return child notes, annotations, and attachments (direct children via /children; annotations via /children?itemType=annotation).',
-        'When the item is a note, noteBody returns its own text (bounded by the configured budget; truncated flags the cut) — include governs child kinds only.',
+        'When the item is a note, noteBody returns its own text (bounded by the configured budget; truncated flags the cut). include governs child kinds only.',
         'Child notes carry parentRef, the parent item ref that produced them.',
         'Results echo the served instance in the ref, so refs can be reused safely.',
       ].join(' '),

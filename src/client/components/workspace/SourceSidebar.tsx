@@ -1,6 +1,6 @@
 /**
  * The source sidebar: the master list of the workspace surface. The filter
- * bar (a subset of the stable union — clearing restores every source) sits
+ * bar (a subset of the stable union, so clearing restores every source) sits
  * above a listbox of source rows; rows carry no actions, only identification
  * and selection, so the whole row is the option. Zero-count filters are not
  * rendered at all (an entry with nothing to show is noise, not navigation),
@@ -14,7 +14,7 @@
  * bounded-projection limit honest. Selection follows the fixed invariants:
  * first visible row by default, kept across filter switches (a hidden
  * selection stays in the inspector with a note), and session switches reset
- * through the parent's `key`. The keyboard contract is listbox semantics —
+ * through the parent's `key`. The keyboard contract is listbox semantics:
  * ArrowUp/ArrowDown move and select, Home/End jump, and the focused row
  * keeps tabIndex 0 (roving tabindex).
  * @module dsh-zotero/client/components/workspace/SourceSidebar

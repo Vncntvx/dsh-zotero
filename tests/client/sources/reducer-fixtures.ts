@@ -2,7 +2,7 @@
  * The fixtures the `buildSourceWorkspace` specs share: the ref builder, the
  * settled tool-call block with JSON arguments, and the canonical get
  * projection every spec asserts against. What two or more of `reducer.spec.ts`,
- * `reducer-evidence.spec.ts`, and `reducer-outputs.spec.ts` use lives here —
+ * `reducer-evidence.spec.ts`, and `reducer-outputs.spec.ts` use lives here:
  * the search projection builder, the episode search occurrence builder, and the
  * retrieve projection stay with the one spec that reads them.
  * @module tests/client/sources/reducer-fixtures

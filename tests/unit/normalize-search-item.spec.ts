@@ -1,7 +1,7 @@
 /**
  * The compact search-hit projection `normalizeSearchItem` builds, plus the
- * whole-module contract that rides it: hostile input — null, an array, a
- * non-string item type — fails loud or degrades rather than throwing whatever
+ * whole-module contract that rides it: hostile input (null, an array, a
+ * non-string item type) fails loud or degrades rather than throwing whatever
  * the shape happened to cause. That contract is a whole-module one, so it
  * stays its own describe rather than folding into a function's block. The
  * detail projection `normalizeItemDetail`, its relation map, and the
@@ -156,7 +156,7 @@ describe('normalization of hostile inputs', () => {
   })
 })
 
-describe('citekeyOf — the one citation-key grammar', () => {
+describe('citekeyOf: the one citation-key grammar', () => {
   it('reads the canonical line-start label', () => {
     expect(citekeyOf('Citation Key: dao2023flash\nDOI: 10.1/x')).toBe('dao2023flash')
   })

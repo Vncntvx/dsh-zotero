@@ -2,7 +2,7 @@
  * The connection view: the pure-data shape of the status probe's outcome
  * that the workspace view renders. Loading, connected, unavailable (the
  * instance answered but reported no connection), and remote-error (the probe
- * itself failed) — `checkedAt` is the absolute acquisition time. This is the
+ * itself failed); `checkedAt` is the absolute acquisition time. This is the
  * boundary between the controller (probe, session reads) and the view
  * (fixture-renderable presentation).
  * @module dsh-zotero/client/components/workspace/connection

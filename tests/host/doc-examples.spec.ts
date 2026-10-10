@@ -7,7 +7,7 @@
  *
  * The check is schema-level on purpose. Whether an example's *values* would
  * succeed against a live library (a ref that exists, a style Zotero bundles)
- * is a different question the docs deliberately leave illustrative — the
+ * is a different question the docs deliberately leave illustrative: the
  * schema is the part a reader cannot see and the part that silently rots.
  * @module tests/doc-examples
  */
@@ -117,7 +117,7 @@ function callBody(line: string, openIndex: number): string | undefined {
 
 /**
  * Every parseable `zotero_*` example in one document. Lines that are not a
- * call — prose, result descriptions — are skipped, and so is a call whose
+ * call (prose, result descriptions) are skipped, and so is a call whose
  * arguments are placeholder text rather than values.
  */
 function examplesIn(file: string): DocExample[] {
@@ -181,7 +181,7 @@ describe('documented tool calls match the tool schemas', () => {
   it('finds examples in the documents that carry them', () => {
     // A parser that silently matched nothing would pass every later check;
     // these counts are the guard that this test still covers what it claims
-    // to. Other docs are still scanned — they simply have no calls today.
+    // to. Other docs are still scanned: they simply have no calls today.
     expect(examples.length).toBeGreaterThan(20)
     for (const file of EXPECTED_SOURCES) {
       expect(examples.filter((example) => example.file === file).length).toBeGreaterThan(0)

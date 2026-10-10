@@ -3,8 +3,8 @@
  * frozen call block. State comes from the block structure (kind/isError/
  * error.code); facts come from the tool's presentation projection via the
  * defensive field readers; args come from the harness's own lazy argument
- * view (`block.args`). Every function here is deterministic over its inputs —
- * the same log slice renders the same panel — and nothing queries Zotero or
+ * view (`block.args`). Every function here is deterministic over its inputs
+ * (the same log slice renders the same panel), and nothing queries Zotero or
  * any registry. Meta is validated defensively: a malformed or absent record
  * degrades to nothing, never crashes the view.
  * @module dsh-zotero/client/presenters
@@ -98,8 +98,8 @@ export function errorSummaryOf(block: ToolCallBlock, rawText?: string | null): s
 }
 
 /**
- * The harness's per-stage lazy argument view. Every block — preparing, start,
- * and result — carries one (`packages/client/ui-conversation/src/client/
+ * The harness's per-stage lazy argument view. Every block (preparing, start,
+ * and result) carries one (`packages/client/ui-conversation/src/client/
  * contract/records.ts`: `ToolCallHead.args`, `ToolResultNode.args`), and a
  * preparing view grows in place, so readers see fields as they stream instead
  * of only after the call is dispatched.
@@ -184,7 +184,7 @@ export function evidenceItemsOf(meta: Record<string, unknown>): EvidenceItem[] |
 
 /**
  * The two-field names a passage reports, keeping only the wire's own
- * vocabulary. Anything else — an unknown name, a non-array — reads as absent,
+ * vocabulary. Anything else (an unknown name, a non-array) reads as absent,
  * which is the single-field case the badge does not need to distinguish.
  */
 function matchedFieldsOf(value: unknown): readonly EvidenceField[] | undefined {

@@ -1,12 +1,12 @@
 /**
- * Research notes travel to Zotero as HTML — the note field is HTML, Zotero
+ * Research notes travel to Zotero as HTML: the note field is HTML, Zotero
  * performs no format conversion on writes, and markdown text stored verbatim
  * renders as raw markup (the failure mode community integrations hit). The
  * plugin therefore converts the model's markdown itself, under a restricted
  * grammar with one absolute rule: anything the grammar does not recognize is
  * HTML-escaped and shown as literal text. There is no raw-HTML passthrough,
  * no attribute inventing, and no scheme outside `https://`, `http://` and
- * `zotero://` can become a link — so a hostile or merely confused model
+ * `zotero://` can become a link, so a hostile or merely confused model
  * output degrades to visible text, never to markup.
  *
  * The grammar (documented for users in `docs/tools.md`):
@@ -158,7 +158,7 @@ function isBlockStart(line: string): boolean {
   )
 }
 
-/** Split one table row into trimmed cells; no escaped pipes — document that. */
+/** Split one table row into trimmed cells; no escaped pipes, as the docs state. */
 function tableCells(line: string): string[] {
   const trimmed = line.trim()
   const bare = trimmed.startsWith('|') ? trimmed.slice(1) : trimmed

@@ -1,8 +1,8 @@
 /**
  * Loader composition test: boots the REAL bundle patch (`cordis.patch.yml`)
- * through the Cordis Loader, so the production assembly path — row id
+ * through the Cordis Loader, so the production assembly path (row id
  * `zotero`, package-name resolution, config validation against the service's
- * static schema, dependency-driven activation, and patch-layer override — is
+ * static schema, dependency-driven activation, and patch-layer override) is
  * exercised end to end, not just the hand-built `ctx.plugin(...)` wiring.
  * @module tests/composition
  */
@@ -44,7 +44,7 @@ describe('the shipped bundle patch through a real Loader composition', () => {
     root = await mkdtemp(join(tmpdir(), 'dsh-zotero-loader-'))
     const configPath = join(root, 'cordis.yml')
     // The real bundle patch file is parsed with the include's own entry-list
-    // dialect — the same parse `boot()` performs on `--patch` layers — so the
+    // dialect (the same parse `boot()` performs on `--patch` layers), so the
     // shipped artifact's rows (id `zotero`, name `dsh-zotero`, empty config)
     // are what the composition validates.
     const bundlePatch = await readFile(new URL('../../cordis.patch.yml', import.meta.url), 'utf8')

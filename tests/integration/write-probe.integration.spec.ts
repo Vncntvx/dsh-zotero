@@ -1,6 +1,6 @@
 /**
- * The live write probe. Double-gated — `ZOTERO_INTEGRATION=1` AND
- * `ZOTERO_WRITE_PROBE=1` — because it writes to the connected library. All
+ * The live write probe. Double-gated (`ZOTERO_INTEGRATION=1` AND
+ * `ZOTERO_WRITE_PROBE=1`), because it writes to the connected library. All
  * writes stay inside one probe-owned collection (`[dsh-zotero-probe]`,
  * created on demand), so the blast radius is one collection the operator can
  * delete afterwards. The probe walks the full write path for real: the

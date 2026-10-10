@@ -1,9 +1,9 @@
 /**
  * One exported document as a disclosure row: the citation key in code type
- * as the main line (the title when the format carries no key — RIS records
+ * as the main line (the title when the format carries no key, as RIS records
  * have none), the paper title as the weak second line, and the per-document
- * actions — the `\cite{}` copy for the BibTeX family, the single-document
- * download — outside the toggle. The verbatim entry body sits behind the
+ * actions (the `\cite{}` copy for the BibTeX family, the single-document
+ * download) outside the toggle. The verbatim entry body sits behind the
  * toggle with the entry's copy action inside, so the row stays a document,
  * not a call.
  * @module dsh-zotero/client/components/ExportDocumentRow

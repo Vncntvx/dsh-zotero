@@ -34,7 +34,7 @@ const writeClipboard = await writeClipboardSpy()
 /** The rendered view; the helpers below read only its container. */
 type View = ReturnType<typeof render>
 
-/** The option row at `index` — the roving-selection target of the list sites. */
+/** The option row at `index`: the roving-selection target of the list sites. */
 function optionAt(view: View, index: number): Element {
   return view.container.querySelectorAll('[role="option"]')[index]!
 }
@@ -47,8 +47,8 @@ function tabOf(view: View, attribute: string, name: string): Element {
 /**
  * Press `key` on `target` and assert the element `selected` resolves to
  * afterwards carries `aria-selected="true"`. Every key site in this spec
- * asserts exactly this pair — the key delivered to the listbox, the tablist, or
- * the focused row, and the selection it must land on — so the interaction and
+ * asserts exactly this pair (the key delivered to the listbox, the tablist, or
+ * the focused row, and the selection it must land on), so the interaction and
  * its assertion travel together and no site can quietly lose one half. The
  * target is resolved after the key, where the inline query ran before.
  */
@@ -206,7 +206,7 @@ describe('inspector', () => {
     expect(screen.getAllByText(zh.databaseMismatch).length).toBeGreaterThanOrEqual(1)
     const blocked = view.container.querySelector('button[aria-disabled="true"]')!
     expect(blocked).toBeDefined()
-    // Clicking a blocked action stays inert — the block is the point.
+    // Clicking a blocked action stays inert: the block is the point.
     fireEvent.click(blocked)
     expect(screen.getAllByText(zh.databaseMismatch).length).toBeGreaterThanOrEqual(1)
     view.unmount()
@@ -257,7 +257,7 @@ describe('filter interplay', () => {
     const workspace = mixedFixture()
     const { view } = mountView(workspace)
     // Pick a fresh hit without evidence, then filter to evidence-bearing
-    // sources: the inspector keeps showing that same source with a note —
+    // sources: the inspector keeps showing that same source with a note,
     // the filter changed the list, not the document under inspection.
     fireEvent.click(optionAt(view, 1))
     fireEvent.click(
@@ -308,8 +308,8 @@ describe('evidence overview', () => {
   it('opens the cross-source board from the sidebar entry and returns', () => {
     const workspace = mixedFixture()
     const { view } = mountView(workspace)
-    // The aggregate entry carries the true passage sum — not the source
-    // count the filter pill shows — so the two numbers never conflate.
+    // The aggregate entry carries the true passage sum (not the source
+    // count the filter pill shows), so the two numbers never conflate.
     const total = evidencePassageTotalOf(workspace.sources)
     expect(total).toBeGreaterThan(filterCountsOf(workspace.sources).evidence)
     fireEvent.click(screen.getByText(zh.evidenceEntryLabel.replace('{count}', String(total))))

@@ -1,6 +1,6 @@
 /**
  * The inspector's exports panel: the selected source's exported documents
- * as per-format rows — same surface as the session-wide exports page. The
+ * as per-format rows, the same surface as the session-wide exports page. The
  * panel tab already carries the count, so the rows speak for themselves.
  * @module dsh-zotero/client/components/workspace/SourceExports
  */

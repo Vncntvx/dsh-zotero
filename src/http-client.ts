@@ -1,7 +1,7 @@
 /**
  * The Local API HTTP boundary: plain-loopback `fetch` with a pinned API
  * version, instance-identity protection, a streaming response byte bound,
- * and strict transport-error translation. Every request is request-driven —
+ * and strict transport-error translation. Every request is request-driven:
  * there is no keep-alive state, no background work, and no redirect
  * following, so a loopback endpoint can never be taken elsewhere.
  * @module dsh-zotero/http-client
@@ -124,8 +124,8 @@ export function upgradeZoteroRouteMessage(requiredVersion: string): string {
 
 /**
  * Shown when Zotero's local API does not implement the API version this plugin
- * requires. Both sides are named — the version Zotero refused and the version
- * it answered as — because the direction decides which side has to move.
+ * requires. Both sides are named, the version Zotero refused and the version
+ * it answered as, because the direction decides which side has to move.
  */
 export function apiVersionMismatchMessage(rejected: string, serverVersion: string | null): string {
   const speaks = serverVersion === null ? 'an unnamed version' : `version ${serverVersion}`
@@ -231,9 +231,8 @@ function translateHttpStatus(
 
 /**
  * Read what a 501 refused. Zotero's Local API refuses two different things
- * with that status — an API version it does not speak, and an output format
- * or method it does not implement — and only its own statement tells them
- * apart.
+ * with that status, an API version it does not speak and an output format or
+ * method it does not implement, and only its own statement tells them apart.
  *
  * Caller cancellation and the provider deadline still win: the request did
  * reach Zotero, but an aborted or expired read is the caller's own failure,
@@ -282,7 +281,7 @@ export async function readBody(response: Response, maxResponseBytes: number): Pr
  * with the write transport. Caller cancellation and the deadline still win
  * over the statement: the request did reach Zotero, but an aborted read is
  * the caller's failure, not a fact about the refusal. Any other read failure
- * leaves the statement unavailable — the status itself is still the finding.
+ * leaves the statement unavailable, and the status itself is still the finding.
  */
 export async function readFailureStatement(
   response: Response,
@@ -319,7 +318,7 @@ export class ZoteroHttpClient {
    * One gate for every data request this client makes. Pools bound each
    * call's fan-out, but nothing bounded their product: five concurrent tool
    * calls held twenty requests open against the local server at once. The
-   * slots are held for the whole request — connection, body, streamed read —
+   * slots are held for the whole request (connection, body, streamed read),
    * because the bytes are what the bound is for.
    */
   private readonly gate: ConcurrencyGate
@@ -359,7 +358,7 @@ export class ZoteroHttpClient {
   }
 
   /**
-   * GET with the single-refresh guard carried as a positional parameter —
+   * GET with the single-refresh guard carried as a positional parameter,
    * deliberately not part of `ZoteroHttpGetOptions`, so no caller can set
    * (or bypass) the identity-refresh recursion guard from outside.
    */
@@ -374,7 +373,7 @@ export class ZoteroHttpClient {
     // The identity refresh rides the slot of the request that triggered it
     // rather than taking one of its own: it is a single control request, and
     // a refresh that waited for a slot could sit behind the very holder it is
-    // refreshing — with every slot held by a request whose 412 is waiting on
+    // refreshing: with every slot held by a request whose 412 is waiting on
     // its own refresh, nothing would ever move.
     const release = isIdentityRefresh ? undefined : await this.takeSlot(opts.signal)
     try {
@@ -420,7 +419,7 @@ export class ZoteroHttpClient {
       // record so later diagnostics are accurate, but never replay the
       // original request: the ref's provenance no longer matches, and the
       // caller must search again. A failed refresh must not mask the
-      // mismatch itself — the original error stays stable and the refresh
+      // mismatch itself: the original error stays stable and the refresh
       // error rides along as its cause. Caller cancellation still wins, so
       // an aborted refresh aborts the call like any other.
       // Single-refresh guard: the identity refresh runs with

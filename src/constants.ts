@@ -1,9 +1,9 @@
 /**
  * Runtime constants of the Zotero domain. Kept out of `types.ts` so that
  * module stays types-only. `ZOTERO_SORT_FIELDS` is typed against the
- * `ZoteroSortField` union in `types.ts`, so the two cannot drift — the
+ * `ZoteroSortField` union in `types.ts`, so the two cannot drift: the
  * typecheck rejects a field absent from the union and a union member absent
- * from the array; `tests/refs.spec.ts` additionally pins the exact array
+ * from the array; `tests/unit/refs.spec.ts` additionally pins the exact array
  * because the search tool's `sort` enum derives from it.
  * @module dsh-zotero/constants
  */
@@ -73,8 +73,8 @@ export const ZOTERO_ITEMKEY_BATCH = 50
 /**
  * The write transport keeps exactly one request in flight. Zotero stamps the
  * library version per committed object, and the plugin's tag/collection
- * updates are read-modify-write cycles — an overlapping write could interleave
- * with another call's read and make both sides lose their version
+ * updates are read-modify-write cycles, where an overlapping write could
+ * interleave with another call's read and make both sides lose their version
  * preconditions. Serialization is the point, not a tuning knob.
  */
 export const ZOTERO_MAX_WRITE_INFLIGHT_REQUESTS = 1
@@ -84,7 +84,7 @@ export const ZOTERO_MAX_WRITE_INFLIGHT_REQUESTS = 1
  * `server_localAPI.js:95` at Zotero 10.0.2). The write tools enforce the same
  * number at runtime (`assertWriteList` / `assertAddRemoveSelection`, because
  * the bound is configurable and therefore cannot ride the static schemas),
- * and the write domain refuses a longer batch before the network — so a 413
+ * and the write domain refuses a longer batch before the network, so a 413
  * from Zotero can only mean protocol drift.
  */
 export const ZOTERO_WRITE_OBJECT_BATCH = 50
@@ -99,7 +99,7 @@ export const ZOTERO_LIBRARY_VERSION_HEADER = 'last-modified-version'
 /**
  * The eight personal-library write tools. One list for the capability
  * surface, the model-facing policy, and the shell-write detector's audit
- * copy — a rename or a ninth write tool must not leave any of those three
+ * copy, so a rename or a ninth write tool must not leave any of those three
  * telling the user a different set.
  */
 export const ZOTERO_WRITE_TOOL_NAMES = [

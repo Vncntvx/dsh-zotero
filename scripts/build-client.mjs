@@ -16,7 +16,7 @@
  *    purity rule allows (`bundlePurityPlugin`).
  * 3. This package's local sources may only enter the client graph when they
  *    are client-safe (`CLIENT_SAFE_LOCAL` in
- *    `scripts/client-graph-authority.mjs` — that regex is the sole authority;
+ *    `scripts/client-graph-authority.mjs`, that regex is the sole authority;
  *    currently `src/client/**` plus the shared pure surfaces `contract`,
  *    `settings-namespace`, `json`, `ref-grammar`, `export-items`,
  *    `changes-contract`, `browse-rows`, and `evidence-item`).
@@ -59,7 +59,7 @@ const PLUGIN_MANIFEST = (() => {
 
 /**
  * Plugin id stamped into the loader handoff. Derived from the npm package
- * name — the loader resolves the bundle by this id, so a rename here and a
+ * name: the loader resolves the bundle by this id, so a rename here and a
  * rename in `package.json` are one edit, not two.
  */
 const PLUGIN_ID = PLUGIN_MANIFEST.name
@@ -124,7 +124,7 @@ const EXTERNALS = [
  * Harness inline-safety lives in `client-graph-authority.mjs`
  * (`INLINE_SAFE` / `GENERATED_REMOTE` / `VENDORED_LIBRARY`), the counterpart of
  * `packages/client/tsdown.client.ts` at dsh-v0.2.1-alpha.1.
- * Packages the host half owns also live there — resolve-time and metafile
+ * Packages the host half owns also live there: resolve-time and metafile
  * enforcement share one rule source with the unit tests.
  */
 
@@ -138,8 +138,8 @@ const HOST_SCHEMA_ARTIFACT_MARKERS = [
 /** Fails the build when a harness module reaches the artifact that may not be
  *  inlined: a second copy of a shell singleton (`ctx`, the store, the UI
  *  primitives) carries no loader identity, so it would silently split state
- *  across two instances. Reads the specifiers the graph actually resolves — the
- *  same unit the harness's own rule is written in — so a symlinked sibling
+ *  across two instances. Reads the specifiers the graph actually resolves (the
+ *  same unit the harness's own rule is written in), so a symlinked sibling
  *  checkout and a registry install are policed identically. */
 const harnessPurityPlugin = {
   name: 'harness-bundle-purity',
@@ -358,7 +358,7 @@ export async function buildClientBundle({ watch = false } = {}) {
   }
   await esbuild.build(options)
   // artifactVerifyPlugin already ran verifyBundle; a second call is intentional
-  // only if the plugin was bypassed — keep the one-shot path honest by not
+  // only if the plugin was bypassed: keep the one-shot path honest by not
   // double-printing success. The plugin is the single verify path.
 }
 

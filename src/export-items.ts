@@ -1,7 +1,7 @@
 /**
  * Per-document facts of a translator-format export, parsed from one entry of
- * the merged batch body. Parsing one entry is trivial and deterministic —
- * the batch body's entry order belongs to Zotero, so the provider locates
+ * the merged batch body. Parsing one entry is trivial and deterministic. The
+ * batch body's entry order belongs to Zotero, so the provider locates
  * each ref's entry in memory (`export-mapping.ts`) and reads its key/title
  * here, never with a second HTTP request per document.
  * @module dsh-zotero/export-items
@@ -77,9 +77,9 @@ export function bibtexFieldOf(
 
 /**
  * The display title of one BibTeX entry: the field value after `title =`,
- * brace-aware (nested `{{…}}` included) or double-quoted. Display-only —
- * export pairing never reads it — so an unparseable value yields undefined
- * instead of failing the call.
+ * brace-aware (nested `{{…}}` included) or double-quoted. It is display-only,
+ * since export pairing never reads it, so an unparseable value yields
+ * undefined instead of failing the call.
  */
 function bibtexTitleOf(text: string): string | undefined {
   return bibtexFieldOf(text, 'title', false)

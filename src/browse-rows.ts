@@ -3,9 +3,9 @@
  *
  * The browse output is a seven-arm union: the model reads it through
  * `renderBrowse`, and the Chat card reads the same rows off the tool's
- * presentation projection. The classification order is the contract — which
- * field identifies a row decides what every reader calls it — so it lives
- * here instead of being written twice. `tests/unit/browse-rows.spec.ts` pins
+ * presentation projection. The classification order is the contract, because
+ * which field identifies a row decides what every reader calls it, so it
+ * lives here instead of being written twice. `tests/unit/browse-rows.spec.ts` pins
  * the order, and `renderBrowse` is built on this function rather than beside
  * it, so the two cannot drift.
  *
@@ -20,14 +20,14 @@ import { asRecord, asString, asStringArray } from './json.js'
 import type { ZoteroBrowseKind } from './types.js'
 
 /**
- * The seven arms a browse row can land in, in the order the tool's output schema
- * enumerates them — which is *not* the order `browseRowOf` tests them, since
- * the saved-search arm is that function's fallback and is tried last.
+ * The seven arms a browse row can land in, in the order the tool's output
+ * schema enumerates them. That is *not* the order `browseRowOf` tests them,
+ * since the saved-search arm is that function's fallback and is tried last.
  *
  * Two independent guards keep a new arm from shipping half-wired. The
  * `BROWSE_ROW_ARMS_COMPLETE` assertion below fails the build if an arm is added
- * to `BrowseRow` and not to this list, so `tests/unit/browse-rows.spec.ts` — which
- * walks one row per entry — cannot silently stop covering it. And the two
+ * to `BrowseRow` and not to this list, so `tests/unit/browse-rows.spec.ts`
+ * (which walks one row per entry) cannot silently stop covering it. The two
  * exhaustive `switch`es over `BrowseRow` (`browseRowLines` in
  * `src/tools/browse.ts`, `browseRowView` in the Chat card) have no `default` arm,
  * so an arm with no renderer fails to build.
@@ -89,7 +89,7 @@ export type BrowseRow =
     }
   | {
       readonly kind: 'collection'
-      /** The full breadcrumb, root first — the useful line, not just the leaf name. */
+      /** The full breadcrumb, root first: the useful line, not just the leaf name. */
       readonly breadcrumb: readonly string[]
       readonly ref: string
       /** Nesting depth below the top level; 0 for a root collection. */
@@ -176,7 +176,7 @@ export function browseRowOf(value: unknown): BrowseRow {
 
   // The schema's remaining arm, and the only one with no field of its own: a
   // saved search is identified by carrying a name and a ref. A row that names
-  // neither still renders — as its own JSON, so nothing is silently dropped.
+  // neither still renders: it falls back to its own JSON, so nothing is silently dropped.
   // The original value is stringified, not the normalized record: a non-record
   // input has no fields to lose, and echoing back `{}` would discard the very
   // thing the reader needed to see.

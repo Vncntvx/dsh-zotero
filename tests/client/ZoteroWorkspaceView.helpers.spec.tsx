@@ -1,8 +1,8 @@
 /**
  * The workspace view's pure projections, asserted on the functions themselves
- * with no render: the effective-selection rule (`effectiveSelectionOf`) and the
+ * with no render: the effective-selection rule (`effectiveSelectionOf`), and the
  * overview label helpers (`scopeLabelOf`, `filterLineOf`, `modeLabelOf`). The
- * rendered faces live in `ZoteroWorkspaceView.states` (mount and assert) and
+ * rendered faces live in `ZoteroWorkspaceView.states` (mount and assert), and
  * `ZoteroWorkspaceView.interaction` (clicks and keys driven to their output).
  * @module tests/client/ZoteroWorkspaceView.helpers
  */

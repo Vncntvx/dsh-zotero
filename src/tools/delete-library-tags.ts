@@ -2,7 +2,7 @@
  * The `zotero_delete_library_tags` tool: delete tags library-wide. Names are
  * idempotent (unknown names are silently ignored); the delete carries the
  * library version of its preceding read, so a concurrent write fails it.
- * Irreversible — the plan card pages the whole tag listing first, so every
+ * Irreversible. The plan card pages the whole tag listing first, so every
  * requested name is either proven with its item count or proven absent.
  * @module dsh-zotero/tools/delete-library-tags
  */
@@ -64,15 +64,15 @@ type DeleteLibraryTagsOutput = InferValue<typeof DELETE_LIBRARY_TAGS_OUTPUT_SCHE
 export interface TagPreview {
   /** Item counts; a seen-but-uncounted tag maps to `undefined`, an unlisted name is absent. */
   counts?: ReadonlyMap<string, number | undefined>
-  /** Requested names the full listing does not carry — Zotero will skip them. */
+  /** Requested names the full listing does not carry; Zotero will skip them. */
   unknown?: readonly string[]
 }
 
 /**
  * The deterministic plan markdown the approval card renders. A tag is shown
  * with its item count when the listing proved one, as `unknown items` when
- * the listing carried the tag without a count, and — only after the whole
- * listing has been scanned — as a proven no-op under "Unmatched names".
+ * the listing carried the tag without a count, and, only after the whole
+ * listing has been scanned, as a proven no-op under "Unmatched names".
  */
 export function deleteLibraryTagsPlan(
   args: DeleteLibraryTagsArgs,
@@ -117,8 +117,8 @@ interface TagRow {
 /**
  * Page the library tags listing until every requested name is found or the
  * listing is exhausted, so the plan card never mistakes a tag beyond the
- * first page for a no-op. A row without a count records `undefined` — the
- * tag exists but its item count is unproven — and a name absent from the
+ * first page for a no-op. A row without a count records `undefined`, since the
+ * tag exists but its item count is unproven, and a name absent from the
  * whole listing is reported as a proven no-op. Best-effort: a read that
  * fails leaves every count unknown and the delete still carries its version
  * precondition.

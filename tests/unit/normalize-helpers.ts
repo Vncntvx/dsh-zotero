@@ -1,10 +1,11 @@
 /**
  * The helpers the `normalize`-family unit specs share.
  *
- * These pieces used to sit at the top of one `normalize.spec.ts`; they moved
- * here when that spec split along the source modules, because a helper two
- * specs use cannot live in either of them. Anything only one spec uses stays
- * in that spec.
+ * The normalize specs are split along the source modules
+ * (`normalize-item-detail.spec.ts`, `normalize-search-item.spec.ts`,
+ * `normalize-children.spec.ts`, `normalize-scope.spec.ts`), so a helper two of
+ * them use cannot live inside either one. Anything only one spec uses stays in
+ * that spec.
  * @module tests/unit/normalize-helpers
  */
 

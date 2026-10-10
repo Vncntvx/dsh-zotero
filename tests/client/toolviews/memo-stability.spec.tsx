@@ -3,7 +3,7 @@
  * The tool cards hand `DisclosureRow` stable props.
  *
  * The harness primitive is `memo`'d with a shallow prop comparison, and in a
- * long transcript most rows are collapsed — the case where an unstable prop
+ * long transcript most rows are collapsed: the case where an unstable prop
  * re-renders every card on every unrelated parent update and buys nothing.
  * A tool view that builds its `icon` inline defeats the memo for exactly that
  * case, because the collapsed body is otherwise prop-identical.
@@ -22,7 +22,7 @@ import { settled } from '../helpers/blocks.ts'
 
 // `vi.mock` factories are hoisted above the spec's imports, so the counter has
 // to be created inside the factory and read back through a `var` binding the
-// factory assigns — the same shape `writeClipboardSpy` uses in reverse.
+// factory assigns: the same shape `writeClipboardSpy` uses in reverse.
 var counterRef: { renders: () => number } | undefined
 
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
@@ -83,7 +83,7 @@ describe('tool cards hand DisclosureRow stable props', () => {
     // impossible to add a tool without covering its card here.
     expect(Object.keys(ARGS).sort()).toEqual(REGISTRATIONS.map(([name]) => name).sort())
 
-    // The table is heterogeneous by design — each card has its own props type —
+    // The table is heterogeneous by design (each card has its own props type)
     // so the loop widens it once, through `any`, rather than pretending they
     // share a shape. Nothing here inspects a prop; the assertion is the render
     // count, which the props' types cannot affect.

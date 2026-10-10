@@ -14,7 +14,7 @@ import { BrowseToolView } from './BrowseToolView.tsx'
 
 /**
  * Every model tool's card, keyed by the wire tool name. Exported so a spec can
- * walk the same table the plugin registers from — a tool added here without a
+ * walk the same table the plugin registers from, so a tool added here without a
  * card, or a card added without a tool, has to show up in one place.
  */
 export const REGISTRATIONS = [

@@ -2,7 +2,7 @@
  * One open-in-Zotero deep link as an in-body text link, for the open and
  * unverified verdicts: the anchor hands the `zotero://` URL to the OS
  * protocol handler, and an unverified target keeps its caveat beside the
- * link. Blocked targets never render here — `BlockedOpenAction` is the
+ * link. Blocked targets never render here; `BlockedOpenAction` is the
  * blocked form, so a warning span can never break a button row.
  * @module dsh-zotero/client/components/open/ZoteroOpenLink
  */

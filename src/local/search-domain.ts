@@ -117,8 +117,8 @@ export async function runSearch(
   // rather than letting the empty page read as the end of the results.
   const nextOffset = nextOffsetOrFail(request.offset, items.length, apiTotal, 'search results')
   // Zotero's index never searches note bodies, so the first page of a
-  // queried search lists client-side note-content matches in `supplemental`
-  // — a separate list beside the paged primary results, up to the primary
+  // queried search lists client-side note-content matches in `supplemental`,
+  // a separate list beside the paged primary results, up to the primary
   // page's unused headroom. Pagination stays API-driven: later pages skip
   // the scan, and the paged fields never fold in supplement counts.
   let supplemental: ZoteroSearchSupplement | undefined
@@ -139,7 +139,7 @@ export async function runSearch(
           .filter((key): key is string => key !== undefined),
       )
       // One pass over the scan: the collector examines only each batch's own
-      // slice as it arrives — never the whole accumulated array again — and
+      // slice as it arrives (never the whole accumulated array again) and
       // records the matches for the page below, so saturation and the
       // supplement list share a single walk instead of O(batches × rows)
       // rescans with a full re-tokenization per pass. Matched rows keep scan
@@ -228,7 +228,7 @@ function shouldScanNotes(request: ZoteroSearchRequest, resolved: ZoteroResolvedS
  * bounded scanning policy; the Local API itself has no default/maximum
  * limit for local requests, so fewer rows than requested reliably means EOF.
  * Note scan uses `/{libraryPrefix}/items` (not `/items/top`) so child notes
- * are included. `truncated` is true when the cap — not EOF — ended the
+ * are included. `truncated` is true when the cap, not EOF, ended the
  * scan (the only way to leave the loop at exactly the cap is a full final
  * batch, so more notes may exist).
  */
@@ -277,8 +277,8 @@ async function fetchNoteRows(
  * Resolve collection membership for child notes through their parents in
  * batched requests: child notes belong to a collection only via the
  * parent bibliographic item. Keys are deduplicated and split into
- * `ZOTERO_ITEMKEY_BATCH`-sized chunks — the Local API's hard per-request
- * cap for `itemKey=` — fetched through the bounded pool. A parent missing
+ * `ZOTERO_ITEMKEY_BATCH`-sized chunks (the Local API's hard per-request
+ * cap for `itemKey=`) fetched through the bounded pool. A parent missing
  * from a response (e.g. trashed without `includeTrashed`) fails closed as
  * a non-member.
  */
@@ -330,7 +330,7 @@ async function fetchParentCollections(
  * `resolveScope` produced, and it is deliberately not wrapped in a fallback:
  * a scope whose ref does not parse is a broken invariant, and answering it
  * from the personal library would attribute another library's rows to this
- * scope — the same silent substitution a wrong object key would cause.
+ * scope, the same silent substitution a wrong object key would cause.
  */
 function libraryOfResolvedScope(resolved: ZoteroResolvedScope): SupportedLocalLibrary {
   if (resolved.kind !== 'collection' && resolved.kind !== 'savedSearch') {
@@ -345,7 +345,7 @@ function libraryOfResolvedScope(resolved: ZoteroResolvedScope): SupportedLocalLi
  * server tag semantics: tagMatch, excludeTags, includeTrashed.
  *
  * Collection scope checks membership on the note itself only for
- * standalone notes — Zotero child notes carry no `collections` of their
+ * standalone notes: Zotero child notes carry no `collections` of their
  * own (membership belongs to the parent item), so they pass here and the
  * caller resolves membership through `fetchParentCollections`.
  */

@@ -1,8 +1,8 @@
 /**
  * Transport rebuild keys and the `loader/volatile-update` path filter: only
  * HTTP-client identity/bounds, the write client's dialog budget, and the
- * write-capability flip rebuild; every other bound — the scope-listing TTL
- * included — is read live through the provider's limits getter.
+ * write-capability flip rebuild; every other bound (the scope-listing TTL
+ * included) is read live through the provider's limits getter.
  * @module tests/unit/transport-keys
  */
 

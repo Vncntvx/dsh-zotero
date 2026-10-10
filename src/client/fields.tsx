@@ -2,7 +2,7 @@
  * The staged boolean row for the Zotero settings card. The control itself is
  * the harness's own `Checkbox` (visible and accessible label in one); value
  * inputs ride the harness's `SettingsValueField` at the call site, and only
- * the composite row stays local — override badge, reset, hint, and the risk
+ * the composite row stays local: override badge, reset, hint, and the risk
  * gate that intercepts enabling so sensitive flags (write access) cannot flip
  * on without explicit acknowledgement. The draft text is the literal
  * 'true'/'false' the boolean spec round-trips: checking the box stages the

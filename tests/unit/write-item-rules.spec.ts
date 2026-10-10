@@ -1,7 +1,7 @@
 /**
- * `write-item-rules` — the dual-end item-shape rules the create/update tools
+ * `write-item-rules`: the dual-end item-shape rules the create/update tools
  * and the write domain share. One spec pins every refusal (message identity,
- * not just the error code) and every accepted shape, so the two ends cannot
+ * not just the error code), and every accepted shape, so the two ends cannot
  * drift and the rule module carries no untested arms.
  * @module tests/unit/write-item-rules
  */

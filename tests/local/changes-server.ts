@@ -5,7 +5,7 @@
  * `/items/top`, the non-items versions resources, `/deleted`, and the request
  * filter that separates the probe from the diffs.
  *
- * The handlers assert the read shapes the domain must use — `since` present,
+ * The handlers assert the read shapes the domain must use, `since` present,
  * `format` `versions`, and no `limit` on a diff, while the probe carries
  * `limit=1`. Those assertions are the contract: a versioned read that quietly
  * paginates fails here rather than pinning a version past the rows it hid.
@@ -31,8 +31,8 @@ export function at(
 /**
  * Assert a diff request carries a well-formed `since` watermark.
  *
- * `expect(...).toBeDefined()` passes for `null` — the value `search.get()`
- * returns when the parameter is absent — so it pins nothing. The contract the
+ * `expect(...).toBeDefined()` passes for `null`: the value `search.get()`
+ * returns when the parameter is absent, so it pins nothing. The contract the
  * domain must meet is stronger: the watermark is the caller's library version
  * serialized as a non-negative safe integer.
  */
@@ -66,7 +66,7 @@ export interface ItemsFixture {
   /** Changed top-level items (`/items/top`). */
   readonly top?: Record<string, number>
   /**
-   * Changed child objects — notes, attachments, annotations. Only `/items`
+   * Changed child objects: notes, attachments, annotations. Only `/items`
    * reports them, which is exactly the difference the diff splits on.
    */
   readonly children?: Record<string, number>
@@ -93,7 +93,7 @@ export interface ItemsFixture {
 
 /**
  * Serve the item space the way the API partitions it: `/items` (live items,
- * child objects included), `/items/top` (their top-level subset) and
+ * child objects included), `/items/top` (their top-level subset), and
  * `/items/trash`. `/items/top` also carries the pre-read version probe
  * (`?limit=1`, headers only), so the cursor claim depends on the two reporting
  * one version.

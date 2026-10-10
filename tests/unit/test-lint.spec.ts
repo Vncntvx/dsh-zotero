@@ -2,7 +2,7 @@
  * The test-lint guards' own rules, driven through the same functions the CLI
  * runs (`scripts/test-lint.mjs`). A guard whose regex stopped matching the
  * form its docstring names would fail the suite green, so each form the
- * docstring names has a case here — including the chained `.only` spellings
+ * docstring names has a case here, including the chained `.only` spellings
  * and the unconditional-disable forms of the conditional gates.
  * @module tests/unit/test-lint
  */

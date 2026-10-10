@@ -1,7 +1,7 @@
 /**
  * Pure selectors over the source workspace: filters, the per-filter counts,
  * and the exports view model (per-format sections of deduplicated documents
- * over the successful artifacts). Filters narrow the stable union — they
+ * over the successful artifacts). Filters narrow the stable union; they
  * never replace it, so clearing a filter restores every source. The "with
  * PDF" filter shares its single source of truth with the PDF badge and the
  * open-PDF action (`hasPdf`), and "issues" spans every non-running
@@ -68,7 +68,7 @@ export interface SourceFilterCounts {
 /**
  * Total passage count across the session: the actual kept passages, not the
  * number of sources that carry them. The sidebar's aggregate entry shows this
- * sum, while the "has passages" filter pill keeps the source count — the two
+ * sum, while the "has passages" filter pill keeps the source count. The two
  * numbers mean different things and should not be conflated.
  */
 export function evidencePassageTotalOf(sources: readonly SourceItem[]): number {
@@ -158,8 +158,8 @@ function parseCslRecords(artifact: ExportArtifact): readonly unknown[] | undefin
 
 /**
  * The entry text of one located item within the artifact's body. The
- * provider determined the location — a text span for the BibTeX family and
- * RIS, an array index for CSL JSON — so nothing is matched by guessing here.
+ * provider determined the location (a text span for the BibTeX family and
+ * RIS, an array index for CSL JSON), so nothing is matched by guessing here.
  */
 function entryTextOf(
   artifact: ExportArtifact,
@@ -221,8 +221,8 @@ function documentsOf(artifact: ExportArtifact):
 /**
  * The exports page's view model: per-format sections over the artifacts, in
  * first-seen format order. Repeated exports of the same (format, ref)
- * collapse into one document — the latest success is the current result,
- * the call history stays on the document — and exports without per-document
+ * collapse into one document, where the latest success is the current result
+ * and the call history stays on the document; exports without per-document
  * data (citation, bibliography) fall back to whole-text
  * artifact rows, while entries the provider could not locate are reported
  * individually.
@@ -276,7 +276,7 @@ export function exportSectionsOf(exports: readonly ExportArtifact[]): readonly E
 /**
  * The distinct exported documents across the session: the refs of every
  * successful artifact, deduplicated across formats and server qualifiers.
- * This is the exports count the lens tab shows — documents, not calls.
+ * This is the exports count the lens tab shows: documents, not calls.
  * @param exports - the successful export artifacts in transcript order.
  * @returns the number of distinct exported refs.
  */

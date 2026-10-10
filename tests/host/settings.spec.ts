@@ -8,7 +8,7 @@
  * cannot refuse (loopback-only baseUrl, positive limits), and
  * `loader/volatile-update` rebuilds transport and reconciles the write tools
  * on the same service instance. The tests drive that contract the way the
- * loader does — committed references plus the update event — through public
+ * loader does (committed references plus the update event) through public
  * seams only (`fiber.config` references, cosmokit's volatile helpers, and
  * cordis waterfall/emit).
  * @module tests/host/settings
@@ -65,8 +65,8 @@ describe('live configuration', () => {
   it('vetoes a commit that violates the config constraints', async () => {
     lane = await setupHostLane({ baseUrl: 'http://127.0.0.1:1/api' })
     const { zoteroFiber } = lane
-    // The waterfall runs on the owning fiber's context — the same object the
-    // service registered its veto on — so the candidate reaches the hook.
+    // The waterfall runs on the owning fiber's context (the same object the
+    // service registered its veto on), so the candidate reaches the hook.
     expect(() =>
       zoteroFiber.ctx.waterfall(
         zoteroFiber,
@@ -217,7 +217,7 @@ describe('live configuration', () => {
     // The TTL is a provider limit, not a transport key: `touchesTransport` is
     // pinned false for it in the unit lane, and the local lane proves the
     // directory comparison reads the committed value. This case pins the host
-    // wiring between them — the volatile commit reaches the config the
+    // wiring between them: the volatile commit reaches the config the
     // provider's live limits getter projects.
     lane = await setupHostLane({ scopeListingTtlMs: 30_000 })
     const recovery = lane.ctx.zotero.recovery

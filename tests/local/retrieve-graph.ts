@@ -26,7 +26,7 @@ export const RETRIEVE_PARENT = paperItem({
 })
 
 /**
- * The same paper with Zotero's attachment link absent — the state the `best`
+ * The same paper with Zotero's attachment link absent: the state the `best`
  * policy falls back to a PDF child for.
  */
 export const RETRIEVE_PARENT_WITHOUT_ATTACHMENT = item({

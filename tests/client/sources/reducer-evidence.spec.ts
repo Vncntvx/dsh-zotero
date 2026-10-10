@@ -1,7 +1,7 @@
 /**
  * The session source reducer's retrieval-evidence rules: the facts one
- * retrieve folds into its item — the merged retrieval facts, the run summary,
- * and the deduplicated evidence passages — and what an unusable retrieve
+ * retrieve folds into its item (the merged retrieval facts, the run summary,
+ * and the deduplicated evidence passages), and what an unusable retrieve
  * projection degrades to. The item-assembly half of the same reducer lives in
  * `reducer.spec.ts`; the export artifacts and operation counters live in
  * `reducer-outputs.spec.ts`.
@@ -86,7 +86,7 @@ describe('buildSourceWorkspace', () => {
         runCount: 2,
         truncated: true,
       })
-      // The kept/reported counters live on facts alone — one storage path.
+      // The kept/reported counters live on facts alone: one storage path.
       expect(workspace.sources[0]!.evidence.length).toBe(2)
       expect(workspace.sources[0]!.facts.reportedEvidenceCount).toBe(3)
     })

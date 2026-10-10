@@ -46,7 +46,7 @@ const MAX_BROWSE_DEPTH = 4
 interface BrowseRowView {
   readonly key: string
   readonly name: string
-  /** A scoped count, a library id, or a localized label — whatever the row carries. */
+  /** A scoped count, a library id, or a localized label: whatever the row carries. */
   readonly detail: string | null
   readonly ref: string | null
   /** Nesting depth below the top level; 0 for every other browsed kind. */
@@ -59,7 +59,7 @@ function shortRef(ref: string): string | null {
 
 /**
  * One browsed row, flattened for display. The classification is
- * `browse-rows.ts`'s — shared with the text the model reads — so this only
+ * `browse-rows.ts`'s, shared with the text the model reads, so this only
  * decides what each arm's name, detail, and ref are.
  */
 function browseRowView(row: BrowseRow, index: number): BrowseRowView {
@@ -127,7 +127,7 @@ const WITHHELD_REMEDY = {
  * Everything the tool's own text says about *how far the diff reached* is
  * rendered here too, not just the counts: a diff that withheld its cursor, or
  * that named a kind it could not observe, would otherwise read as a clean
- * "nothing changed" — the one reading `docs/tools.md` explicitly forbids.
+ * "nothing changed", the one reading `docs/tools.md` rules out.
  */
 function ChangesBody({
   changes,
@@ -206,7 +206,7 @@ function ChangesBody({
 
       {/* What this diff could not see. Absent a listing is not "nothing
           changed", so the kinds the read could not cover are named, with the
-          reason, before the cursor — whose absence this section explains. */}
+          reason, before the cursor, whose absence this section explains. */}
       {changes.withheld !== null && (
         <div className={css.notesSection} data-changes-withheld>
           <span className={css.sectionTitle}>{t('toolChangesWithheld')}</span>
@@ -273,8 +273,8 @@ export function BrowseToolView(props: BrowseToolViewProps) {
     const args = argsViewOf(block)
     // The kind the call asked for is the only label available before the
     // result lands, and the fallback when a malformed replay record leaves the
-    // projection without one. It is the tool's required parameter — the old
-    // `category` fallback named a parameter the tool has never had.
+    // projection without one. It is the tool's required parameter, unlike the
+    // old `category` fallback that named a parameter the tool never had.
     const askedKind = textArg(args, 'kind')
     const meta = metaOf(block)
 
@@ -398,8 +398,8 @@ export function BrowseToolView(props: BrowseToolViewProps) {
           if (empty) {
             return <div className={css.coverageNotice}>{t('toolNoResults')}</div>
           }
-          // The rows are unavailable — an over-budget projection, an absent
-          // meta, or a malformed record — so the tool's own text is all there is.
+          // The rows are unavailable (an over-budget projection, an absent
+          // meta, or a malformed record), so the tool's own text is all there is.
           return (
             <>
               {detailOmitted && <div className={css.coverageNotice}>{t('detailOmittedNote')}</div>}

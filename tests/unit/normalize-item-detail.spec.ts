@@ -448,7 +448,7 @@ describe('normalizeItemDetail', () => {
 describe('normalizeItemDetail relations', () => {
   /**
    * Fresh bounds for one relation case. Every relation test runs under the
-   * same limits and none of them is the subject, so they are stated once —
+   * same limits and none of them is the subject, so they are stated once:
    * built fresh per call rather than shared, so no test can hand the next one
    * a mutation.
    */
@@ -591,7 +591,7 @@ describe('normalizeItemDetail relations', () => {
       library: { type: 'user', id: 0 },
       ...bounds(),
     })
-    // Two values survive — the DOI and the Zotero URI; the empty string and
+    // Two values survive: the DOI and the Zotero URI; the empty string and
     // the non-string are dropped rather than turned into a guessed target.
     expect(detail.relations?.length).toBe(2)
     expect(detail.relations?.[0]?.predicate).toBe('unknown:pred')

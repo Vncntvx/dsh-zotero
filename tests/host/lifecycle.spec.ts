@@ -81,7 +81,7 @@ describe('ZoteroService lifecycle', () => {
     expect(built).toContain('dsh-zotero/status')
   })
 
-  it('never touches Zotero while loading or disposing — the plugin is request-driven only', async () => {
+  it('never touches Zotero while loading or disposing: the plugin is request-driven only', async () => {
     lane = await setupHostLane(undefined, { commands: true })
     expect(lane.mock.requests).toEqual([])
     await lane.zoteroFiber.dispose()
@@ -169,14 +169,14 @@ describe('prompt section', () => {
     const assembly = await lane.ctx.systemPrompt.assemble()
     const section = assembly.sections.find((entry) => entry.name === 'zotero:policy')
     expect(section).toBeDefined()
-    // Assemblies expose name/text only; order is observed through position —
+    // Assemblies expose name/text only; order is observed through position:
     // the policy lands after the identity/persona sections that open the
     // prompt and after every first-party per-tool section it complements.
     const names = assembly.sections.map((entry) => entry.name)
     expect(names.indexOf('zotero:policy')).toBeGreaterThan(0)
     // The pin guards the plugin-owned derivation (anchor + offset), not the
     // harness table: the anchor is the central placement name, the offset is
-    // half the gap to the next first-party placement — 2900 + 50 = 2950 lands
+    // half the gap to the next first-party placement: 2900 + 50 = 2950 lands
     // between TOOL_REPORT and TOOL_COMPUTER_USE (3000) instead of colliding
     // with it. Either drifting fails here instead of passing by restatement.
     expect(ZOTERO_PROMPT_ANCHOR).toBe('TOOL_REPORT')
@@ -225,7 +225,7 @@ describe('disposal unwinds registrations', () => {
     // Disposing the plugin does not abort a request that is already out: the
     // harness cancels a tool call through the caller's own signal, and nothing
     // unwinds it on unload. What has to hold is that such a request cannot
-    // hang the host — the provider deadline ends it, so a reload leaves no
+    // hang the host: the provider deadline ends it, so a reload leaves no
     // work waiting forever.
     lane = await setupHostLane({ timeoutMs: 60 }, { commands: true })
     lane.mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) =>

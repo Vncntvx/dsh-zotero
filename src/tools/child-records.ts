@@ -2,7 +2,7 @@
  * Shared child-object record schemas for the model contract.
  *
  * `zotero_get` (detail includes) and `zotero_children` (graph walk) serve the
- * same three shapes — note, annotation, attachment — and the output schema is
+ * same three shapes (note, annotation, attachment), and the output schema is
  * the model contract, so a drift between the two files would fork the
  * contract. A single source keeps them identical by construction.
  * @module dsh-zotero/tools/child-records

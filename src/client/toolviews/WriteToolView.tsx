@@ -2,7 +2,7 @@
  * Dedicated toolview cards for Zotero write operations: the eight write
  * tools. Renders write receipts, tags, and plan-review decline notices.
  * Each tool is one descriptor (icon, title key, summary builder) in the
- * table below — the receipt body is shared, so adding a write tool means
+ * table below; the receipt body is shared, so adding a write tool means
  * adding one descriptor, not another branch in the body.
  * @module dsh-zotero/client/toolviews/WriteToolView
  */
@@ -49,9 +49,9 @@ export type WriteToolViewProps = PropsRuntime<'tool.call.toolview', WriteToolNam
 /**
  * What the receipt may claim about the write:
  *
- * - `applied` — the projection reported the applied fact, and it was a change.
- * - `noop` — the projection reported it, and nothing changed.
- * - `unreported` — the projection carried no applied fact at all (a nested
+ * - `applied`: the projection reported the applied fact, and it was a change.
+ * - `noop`: the projection reported it, and nothing changed.
+ * - `unreported`: the projection carried no applied fact at all (a nested
  *   code dispatch or a malformed replay record). The write may or may not have
  *   landed, so the badge says so and the summary states only the request; the
  *   tool's own rendered text below carries whatever it did conclude.
@@ -282,7 +282,7 @@ export function WriteToolView(props: WriteToolViewProps) {
   } = useMemo(() => {
     // The runtime types the slot's tool name loosely; the registrations pin it
     // to the eight names, and the membership check keeps an unexpected name
-    // from borrowing the create-note receipt — a receipt that would claim a
+    // from borrowing the create-note receipt, a receipt that would claim a
     // note was created by a tool that is not the note tool.
     const descriptor = (WRITE_DESCRIPTORS as Record<string, WriteDescriptor | undefined>)[toolName]
     if (descriptor === undefined) {
@@ -375,7 +375,7 @@ export function WriteToolView(props: WriteToolViewProps) {
           // The tool's own sentence is the receipt: it names whether the
           // commit itself was unproven, and it carries the do-not-retry
           // instruction. Restating it here would be a second wording of the
-          // write boundary's most consequential message — and the collapsed
+          // write boundary's most consequential message, and the collapsed
           // line already carries the label, so the body adds only the detail.
           return (
             <div className={css.receiptCard} data-state="unverified">

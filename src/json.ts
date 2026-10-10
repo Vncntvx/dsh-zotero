@@ -52,8 +52,8 @@ export function stringArrayOf(value: unknown): string[] {
 /**
  * String entries of an array-shaped field, or undefined when the field is not
  * an array at all. The strict form matters wherever a field's *presence*
- * classifies a value rather than merely contributing to it — a browse row is
- * a collection because it carries `path`, and an empty `path` is still a
+ * classifies a value rather than merely contributing to it: a browse row is a
+ * collection because it carries `path`, and an empty `path` is still a
  * collection, so "no entries" and "not an array" cannot collapse.
  * @param value - candidate value to test.
  * @returns the string entries, or undefined when the value is not an array.

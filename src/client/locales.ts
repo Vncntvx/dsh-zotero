@@ -2,7 +2,7 @@
  * Locale bundles for the Zotero plugin: the Settings page (fixed chrome,
  * groups, and the field table) and the Sources panel. Both dictionaries are
  * typed `Record<ZoteroLocaleKey, string>`, so the key sets cannot drift; the
- * wording stays provable — no stage claims (精读/已引用) anywhere.
+ * wording stays provable, with no stage claims (精读/已引用) anywhere.
  */
 
 import type { FieldKey, GroupKey } from './zotero-card-controller.ts'
@@ -311,7 +311,7 @@ export const en: Record<ZoteroLocaleKey, string> = {
   writeEnabledHint: 'The agent can change the library: notes, tags, collections, and items.',
   writeRiskTitle: 'Enable writes?',
   writeRiskDescription:
-    'Turning this on lets the agent change your Zotero library — notes, tags, collections, and items. Deletions cannot be undone. AI can make mistakes; review before enabling.',
+    'Turning this on lets the agent change your Zotero library: notes, tags, collections, and items. Deletions cannot be undone. AI can make mistakes; review before enabling.',
   writeRiskAcknowledge:
     'I understand this will modify my Zotero library and that AI can make mistakes.',
   writeRiskConfirm: 'Allow writes',
@@ -373,7 +373,7 @@ export const en: Record<ZoteroLocaleKey, string> = {
   maxBrowseResultsHint: 'Most items one browse call returns.',
   maxChangesResults: 'Changes listing cap',
   maxChangesResultsHint:
-    'Most rows one changes listing shows per kind — display only; the diff still covers the whole range and totals report the true counts.',
+    'Most rows one changes listing shows per kind, display only; the diff still covers the whole range and totals report the true counts.',
   scopeListingTtlMs: 'Scope listing cache (ms)',
   scopeListingTtlMsHint: 'How long a collections/searches listing is trusted before a re-read.',
   defaultStyle: 'Default citation style',
@@ -564,7 +564,7 @@ export const en: Record<ZoteroLocaleKey, string> = {
   starterExportSelected: 'Export citations for selected items…',
   starterExportSelectedTemplate: 'Export these items from my Zotero library as citations: ',
   toolTitleSearch: 'Zotero Search',
-  toolTitleRetrieve: 'Zotero Retrieve Evidence',
+  toolTitleRetrieve: 'Zotero Retrieve Passages',
   toolTitleExport: 'Zotero Export Citation',
   toolTitleGet: 'Zotero Item Details',
   toolTitleChildren: 'Zotero Item Children',
@@ -589,7 +589,7 @@ export const en: Record<ZoteroLocaleKey, string> = {
   toolOmittedPassages: '{count} further passages are not listed here.',
   toolInspect: 'Inspect',
   toolSearchRunning: 'Searching Zotero library…',
-  toolRetrieveRunning: 'Retrieving evidence passages…',
+  toolRetrieveRunning: 'Retrieving passages…',
   toolExportRunning: 'Exporting citations…',
   toolSummaryFound: 'found {count} items',
   toolSummaryFoundWithNotes: 'found {count} items (+{notes} notes)',
@@ -922,7 +922,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   starterExportSelected: '导出选中条目的引用…',
   starterExportSelectedTemplate: '把下面几篇从我的 Zotero 库导出为引用：',
   toolTitleSearch: 'Zotero 检索文献',
-  toolTitleRetrieve: 'Zotero 提取证据',
+  toolTitleRetrieve: 'Zotero 检索原文片段',
   toolTitleExport: 'Zotero 导出引文',
   toolTitleGet: 'Zotero 文献详情',
   toolTitleChildren: 'Zotero 子项与附件',
@@ -944,14 +944,14 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   toolUnverified: '已提交但未核验，请勿重试',
   toolUnverifiedDetail: 'Zotero 的原始返回',
   toolSummaryJobPending: '仍在运行中，暂时没有可读的结果。',
-  toolOmittedPassages: '另有 {count} 条证据片段未在此列出。',
+  toolOmittedPassages: '另有 {count} 条原文片段未在此列出。',
   toolInspect: '检查调用',
   toolSearchRunning: '正在检索 Zotero 文献库…',
-  toolRetrieveRunning: '正在提取文献证据…',
+  toolRetrieveRunning: '正在检索原文片段…',
   toolExportRunning: '正在导出引文…',
   toolSummaryFound: '找到 {count} 篇文献',
   toolSummaryFoundWithNotes: '找到 {count} 篇文献 (+{notes} 条笔记)',
-  toolSummaryEvidence: '提取 {count} 条证据片段',
+  toolSummaryEvidence: '提取 {count} 条原文片段',
   toolSummaryExport: '导出 {format} ({count} 篇)',
   toolSummaryItem: '{title} ({year})',
   toolSummaryChildren: '{count} 个子对象',

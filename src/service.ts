@@ -1,9 +1,9 @@
 /**
  * `ctx.zotero`: the stable research-domain boundary of the plugin.
  *
- * The service owns provider selection (configured id must be registered —
- * there is no cross-provider fallback and no request replay), capability
- * gating, and the domain methods the model-facing tools consume. The HTTP
+ * The service owns provider selection (a configured id must be registered,
+ * with no cross-provider fallback and no request replay), capability gating,
+ * and the domain methods the model-facing tools consume. The HTTP
  * transport and the Zotero object model stay below this boundary.
  *
  * The plugin is request-driven by design: loading it never touches Zotero
@@ -14,10 +14,10 @@
  * The effective config is live: every schema field is `volatile`, so a
  * settings commit lands in the running fiber's references without remounting
  * and tools read it per request. Structural flips (transport fields, the
- * write capability) rebuild on `loader/volatile-update` on this same instance —
- * never a service replacement, and never a new `ConnectivityRecovery`
- * (that gate is service-lifetime state; swapping it on rebuild would stack
- * duplicate connectivity cards). A violating commit is vetoed in
+ * write capability) rebuild on `loader/volatile-update` on this same
+ * instance, never as a service replacement and never with a new
+ * `ConnectivityRecovery` (that gate is service-lifetime state; swapping it on
+ * rebuild would stack duplicate connectivity cards). A violating commit is vetoed in
  * `internal/config` before it lands, so the live read only ever observes
  * values `resolveConfig` accepts.
  * @module dsh-zotero/service
@@ -166,12 +166,12 @@ export class ZoteroService extends Service {
    * asks; each entry is deleted when that question settles, so a later
    * failure asks again.
    *
-   * Owned by the `ZoteroService` instance for the fiber lifetime — **not** by
+   * Owned by the `ZoteroService` instance for the fiber lifetime, **not** by
    * a config generation. A volatile commit calls `buildTransport`, which
    * replaces HTTP clients and the `local` provider on this same instance; it
    * must not replace this gate. Swapping recovery on rebuild would fork the
    * conversation (in-flight waiters on the old gate, new failures on a new
-   * one) and stack duplicate cards — the opposite of this class's purpose.
+   * one) and stack duplicate cards, the opposite of this class's purpose.
    * Retry paths re-enter `service.*` at call time and therefore see the
    * rebuilt provider without touching the gate.
    */
@@ -207,7 +207,7 @@ export class ZoteroService extends Service {
     // lands, so the live read only ever observes accepted values. The guard
     // scopes the veto to this plugin's fiber: the loader passes the fiber
     // itself as the waterfall `this`, while `ctx.plugin()` returns
-    // `Object.create(fiber)` — a prototype-linked face of the same fiber.
+    // `Object.create(fiber)`, a prototype-linked face of the same fiber.
     ctx.on('internal/config', function (this: Fiber | null, _raw, next) {
       const raw = next()
       if (!isOwnConfigFiber(this, ctx.fiber)) return raw
@@ -216,7 +216,7 @@ export class ZoteroService extends Service {
     })
     // Structural flips land without remounting: rebuild the transport stack
     // and reconcile the write tools on this same instance. Limit-only edits
-    // need no reaction — the provider's per-call limits getter reads them.
+    // need no reaction, because the provider's per-call limits getter reads them.
     // Loader emits
     // `loader/volatile-update` fiber-filtered (`owner.fiber === fiber`), so a
     // listener on this fiber's ctx receives own updates without `global`.
@@ -251,7 +251,7 @@ export class ZoteroService extends Service {
     // A shell command aimed at Zotero's own write API is not blocked outright:
     // it is made to ask. The harness's own approval request decides it before
     // the body runs, so the write happens only when the user confirms that one
-    // call — and not when they decline, cancel, run under the `never` policy,
+    // call, and not when they decline, cancel, run under the `never` policy,
     // or have no approval channel. Registered as a listener on this fiber, so
     // the plugin's disposal unwinds it. The name gate runs before any config
     // read so non-shell tools never pay the detector (or the live getter).
@@ -292,8 +292,8 @@ export class ZoteroService extends Service {
 
   /**
    * The currently effective configuration, read live from the entry's
-   * volatile references on every access — tools call this per request, so
-   * settings edits apply without a restart. Commits only land after passing
+   * volatile references on every access, so tools that call this per request
+   * see settings edits without a restart. Commits only land after passing
    * {@link resolveConfig} (load gate + `internal/config` veto), so the read
    * observes accepted values. Schemastery is not re-applied here; see
    * {@link readResolvedConfig}.
@@ -379,7 +379,7 @@ export class ZoteroService extends Service {
 
   /**
    * Register or retire the write tools as `writeEnabled` flips. When the
-   * flag is off the tools are absent from the model's surface entirely — a
+   * flag is off the tools are absent from the model's surface entirely. A
    * tool that can only ever answer "write capability is disabled" would
    * invite the model to retry it. Runs once at construction and again on
    * every structural volatile-update.
@@ -434,7 +434,7 @@ export class ZoteroService extends Service {
   }
 
   /**
-   * Connectivity probe — the only health check; ordinary calls fail with typed errors instead.
+   * Connectivity probe: the only health check. Ordinary calls fail with typed errors instead.
    * @param signal - caller cancellation; forwarded to the provider.
    * @returns live connectivity facts for the configured provider.
    */
@@ -693,11 +693,11 @@ export class ZoteroService extends Service {
 
   /**
    * The confirmation gates every write passes through, in order: the session
-   * approval policy (`ctx.approval` — `never` auto-rejects and the request is
-   * audited), then the plan-review card. There is no opt-out and no config
-   * field behind either: a write that cannot clear the policy or show the
-   * user its plan does not happen. Both asks fail closed — a missing channel
-   * refuses the write rather than letting it through unapproved.
+   * approval policy (`ctx.approval`, where `never` auto-rejects and the
+   * request is audited), then the plan-review card. There is no opt-out and no
+   * config field behind either: a write that cannot clear the policy or show
+   * the user its plan does not happen. Both asks fail closed, and a missing
+   * channel refuses the write rather than letting it through unapproved.
    * @param call - the asking write call.
    * @returns true when the write may proceed.
    */
@@ -757,13 +757,13 @@ export class ZoteroService extends Service {
 /**
  * Top-level config keys whose change rebuilds the transport stack: the HTTP
  * client identity and bounds (`baseUrl`, `timeoutMs`, `maxResponseBytes`,
- * `maxInFlightRequests` — the last sizes the client-wide concurrency gate),
- * the write client's human-scale dialog budget (`writeAuthorizeDeadlineMs`),
- * and the write-capability flip (writer, authorizer, and tool set).
- * `provider` and `writePersistKey` are live reads (`resolveProvider()` and
- * the authorizer's `persistKey` callback) and never rebuild; every remaining
- * bound — the scope-listing TTL included — is read through the provider's
- * live limits getter on the next call.
+ * `maxInFlightRequests`, the last of which sizes the client-wide concurrency
+ * gate), the write client's human-scale dialog budget
+ * (`writeAuthorizeDeadlineMs`), and the write-capability flip (writer,
+ * authorizer, and tool set). `provider` and `writePersistKey` are live reads
+ * (`resolveProvider()` and the authorizer's `persistKey` callback) and never
+ * rebuild; every remaining bound, the scope-listing TTL included, is read
+ * through the provider's live limits getter on the next call.
  */
 export const TRANSPORT_CONFIG_KEYS: ReadonlySet<keyof ResolvedConfig> = new Set([
   'baseUrl',

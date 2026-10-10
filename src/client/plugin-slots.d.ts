@@ -5,8 +5,8 @@
  * declared by `@deepseek-ai/dsh-client-ui-plugin-manager` (its client face
  * pulls in `slot-contract.ts`) and `tool.call.toolview` by
  * `@deepseek-ai/dsh-client-ui-tool`. These `import type {}` statements only
- * bring the upstream ambient declarations into the program — contracts merge
- * with `import type`, never with a runtime import (slots.md:194).
+ * bring the upstream ambient declarations into the program: contracts merge
+ * with `import type`, never with a runtime import (slots.md:200).
  *
  * The renderer supports an entry-level `inject` on every slot regardless of
  * whether the SlotMap row declares one, so the registrants in

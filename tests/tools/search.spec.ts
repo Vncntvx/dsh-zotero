@@ -175,7 +175,7 @@ describe('zotero_search tool', () => {
       scope: { kind: 'collection', refOrName: scope.ref },
       offset: 10,
     })
-    // The ref page fetches only that collection (for its name) — the full
+    // The ref page fetches only that collection (for its name): the full
     // listing is never re-requested after the name has been resolved once.
     expect(mock.requests.map((request) => request.pathname)).toEqual([
       '/api/users/0/collections',

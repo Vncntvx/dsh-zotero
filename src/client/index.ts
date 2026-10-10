@@ -1,13 +1,13 @@
 /**
- * Zotero settings, browser half — one surface over the `zotero` namespace:
+ * Zotero settings, browser half: one surface over the `zotero` namespace,
  * a page in the harness's Settings panel's left navigation
  * (`settings.section`, a sibling of General, Models, and Plugins), carrying
  * the full configuration form so a namespace this wide is never read through
  * a collapsed card.
  *
  * The page reads and writes the `zotero` namespace through the harness's
- * shared configuration form (`ctx.configForms.get`) — the seam that serves
- * every registered namespace — staged through the harness's own
+ * shared configuration form (`ctx.configForms.get`), the seam that serves
+ * every registered namespace, staged through the harness's own
  * `SettingsFormModel` (stage locally, write atomically on save, mark
  * user-layer presence as overridden). The Typert Remote namespace carries
  * only the live connectivity probe the dedicated conversation tab renders.
@@ -66,7 +66,7 @@ const NS = 'zotero'
  * (`ctx.remote.$mount`). `remote.zotero` is deliberately **absent** here: a
  * fiber parks until every declared name resolves, and this plugin is what
  * creates that namespace, so naming it here would park the entry before it
- * could ever mount. The namespace is declared by the UI fiber instead —
+ * could ever mount. The namespace is declared by the UI fiber instead:
  * `ctx.inject(['remote.zotero', …], registerUi)` in `apply`, the official
  * consumer form (`docs/cookbook/adding-a-remote-api.md`, mirrored by
  * `packages/experimental/client-ui-voice-input/src/client/mount.ts` and
@@ -80,7 +80,7 @@ export const inject = ['locale', 'slots', 'remote', 'configForms', 'uiConversati
  * plugin-manager cards, and the conversation tab.
  *
  * Runs on a fiber that declares `remote.zotero`, so the namespace is readable
- * through the official dotted form (`ctx.remote.zotero`) — the same shape the
+ * through the official dotted form (`ctx.remote.zotero`), the same shape the
  * harness's own client plugins use.
  * @param ctx - the browser plugin context, scoped to the declared services.
  */
@@ -130,8 +130,9 @@ function registerUi(ctx: ClientContext): void {
   // options and mounts the page in its content column; `slots.inject` waits
   // for the settings shell's declaration of `settings.section`, so the page
   // survives shell reloads and vanishes atomically with this fiber. Order 25
-  // keeps this page inside the shipped block (0–20) and clear of the
-  // third-party sections that start at 30.
+  // places it after the shipped sections this build registers (account -10,
+  // general 0, models 10, plugins 15, agent-presets 20) and before any
+  // higher-numbered contributor.
   ctx.slots.inject('settings.section', () =>
     ctx.slots.register(
       {
@@ -176,7 +177,7 @@ function registerUi(ctx: ClientContext): void {
   // Quick toggles in the plugin manager detail page (plugins.bundle.config).
   // The shared form is published as the face's bare observable source, so the
   // renderer binds `useZoteroQuickConfig` from the one form the settings page
-  // and the card also edit — no mirror snapshot to keep in step.
+  // and the card also edit, with no mirror snapshot to keep in step.
   ctx.slots.inject('plugins.bundle.config', () =>
     ctx.slots.register(
       {
@@ -260,14 +261,14 @@ function registerUi(ctx: ClientContext): void {
  *
  * The two steps are ordered and one owns the other: `$mount` publishes
  * `remote.zotero`, then the UI fiber declares that name and is parked until it
- * resolves. An assembly failure is **not** swallowed — a mount that rejects, or
+ * resolves. An assembly failure is **not** swallowed: a mount that rejects, or
  * a namespace that never appears, rejects this entry and the harness reports
  * the plugin as failed to load, because a browser half whose status strip can
  * never answer is not a working plugin. That is the official contract
  * (`docs/cookbook/adding-a-remote-api.md`: "a Remote call does not reject, and
  * an assembly mistake should crash"), and the shape
- * `packages/experimental/client-ui-voice-input/src/client/mount.ts:60-64` and
- * `packages/experimental/client-ui-claude-code-mods/src/client/mount.ts:117-130`
+ * `packages/experimental/client-ui-voice-input/src/client/mount.ts:63-67` and
+ * `packages/experimental/client-ui-claude-code-mods/src/client/mount.ts:117-131`
  * both take.
  *
  * Disposal is symmetric and reverse-ordered: the UI fiber withdraws the slots

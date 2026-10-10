@@ -48,7 +48,7 @@ function pillOf(label: string): HTMLElement {
 }
 
 /**
- * Click the filter pill carrying `label` and assert it ends up the active one —
+ * Click the filter pill carrying `label` and assert it ends up the active one:
  * the pill click and its assertion together, so a call site names only the pill.
  */
 function expectPillActivated(label: string): void {
@@ -58,7 +58,7 @@ function expectPillActivated(label: string): void {
 
 /**
  * Click the filter pill carrying `label` and assert how many sources it leaves
- * visible — the filter click and its row-count assertion together.
+ * visible: the filter click and its row-count assertion together.
  */
 function expectFilteredTo(view: View, label: string, count: number): void {
   fireEvent.click(screen.getByText(label))
@@ -164,7 +164,7 @@ describe('filters', () => {
     await act(async () => {})
     // Nothing is exported yet, so no pill can empty the list. A direct
     // sources change under an active filter is the one path that can leave
-    // an active filter with zero matches — the clear button recovers it.
+    // an active filter with zero matches: the clear button recovers it.
     const exportCall = exportOf()
     const withExport = chatOf([toolRow(searchResult()), toolRow(exportCall)])
     holder.chat = withExport

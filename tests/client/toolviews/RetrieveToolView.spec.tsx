@@ -30,7 +30,7 @@ function renderView(props: Parameters<typeof createToolViewProps<'zotero_retriev
 describe('RetrieveToolView', () => {
   it('counts the passages the call found, not the rows the card draws', () => {
     // The projection is capped at four regardless of `maxEvidencePassages`, so
-    // counting rows would report "4 passages" over a body listing 4 of 20 — the
+    // counting rows would report "4 passages" over a body listing 4 of 20: the
     // bounded-listing mistake the search card had.
     const block = settled({
       call: {

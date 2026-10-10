@@ -1,7 +1,7 @@
 /**
  * Right-aligned `/zotero` input bubble without ordinary message actions.
- * The echoed line decorates its leading `/zotero` token as a command chip —
- * the run this Node projects is the fact that that token was a command — and
+ * The echoed line decorates its leading `/zotero` token as a command chip
+ * (the run this Node projects is the fact that that token was a command) and
  * keeps any argument as plain text. Presenting this non-command node is what
  * activates a fresh Conversation shell so the paired result row is visible.
  * @module dsh-zotero/client/ZoteroCommandInputView

@@ -598,7 +598,7 @@ describe('browse: tags', () => {
     expect(r.returned).toBe(2)
     expect(r.total).toBe(5)
     expect(r.nextOffset).toBe(4)
-    // Each page is one server-paged request — never a whole-listing scan.
+    // Each page is one server-paged request: never a whole-listing scan.
     expect(mock.requests.filter((req) => req.pathname === `${apiPath()}/tags`)).toHaveLength(1)
     await provider.browse({ kind: 'tags', offset: 4, limit: 2 })
     expect(mock.requests.filter((req) => req.pathname === `${apiPath()}/tags`)).toHaveLength(2)

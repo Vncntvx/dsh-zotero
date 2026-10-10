@@ -5,8 +5,8 @@
  * The scan spec's own note fixtures stay in that spec, because the note bodies
  * are what its tests read; these three are what both files would otherwise
  * declare twice, in shapes that could drift apart. `COLLECTIONS` is the exact
- * listing the scope resolution reads — a name that matches twice must stay
- * ambiguous for the spec that proves it — so it is one value, not one per file.
+ * listing the scope resolution reads (a name that matches twice must stay
+ * ambiguous for the spec that proves it), so it is one value, not one per file.
  * @module tests/local/search-helpers
  */
 

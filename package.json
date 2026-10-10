@@ -1,7 +1,7 @@
 {
   "name": "dsh-zotero",
   "version": "0.13.0-alpha.2",
-  "description": "Let agents search, read, and cite your local Zotero library: find papers, browse notes and annotations, pull evidence by question, open the source document, generate citations.",
+  "description": "Zotero plugin for DeepSeek Harness: search papers, read full-text PDFs and notes, extract relevant passages, and inspect sources in the conversation tab.",
   "keywords": [
     "zotero",
     "dsh",

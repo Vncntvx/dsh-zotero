@@ -58,7 +58,7 @@ describe('connectivity strip states', () => {
 
   it('skips the probe when no status face is injected', async () => {
     // The whole-props cast keeps this test blind to the merged
-    // PropsRuntime surface — upstream merges stop breaking it.
+    // PropsRuntime surface: upstream merges stop breaking it.
     const props = {
       t,
       status: undefined,
@@ -267,7 +267,7 @@ describe('sources states', () => {
   it('subscribes with the zotero signature as its equality gate', () => {
     // The panel hands the signature function to the chat hook as the equality
     // comparator, so a streaming publication keeps the previous snapshot (no
-    // rebuild) while a phase or order change replaces it.
+    // rebuild), while a phase or order change replaces it.
     let eq: ((a: ChatSnapshot | undefined, b: ChatSnapshot | undefined) => boolean) | undefined
     const base = chatOf([
       toolRow(settled({ seq: 3, callId: 'a' })),

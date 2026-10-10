@@ -8,7 +8,7 @@
  * would force one of those to be wrong; a builder lets each spec name the
  * fields its behavior needs and inherit everything else from one definition.
  *
- * The base defaults are deliberately **minimal** — identity, an item type, a
+ * The base defaults are deliberately **minimal**: identity, an item type, a
  * title, a self link. Anything a spec does not ask for is not on the wire, so
  * a field can never arrive in a test by accident. That matters most for the
  * `fields: 'all'` pass-through tests, where an unconsumed field the fixture
@@ -161,8 +161,8 @@ export function noteRow(overrides: ObjectOverrides = {}): WireObject {
 
 /**
  * An annotation row. Unlike a note, an annotation always hangs off the
- * attachment it marks up — Zotero stores them as children of the PDF, never of
- * the bibliographic item — so the canonical shape carries that ownership
+ * attachment it marks up (Zotero stores them as children of the PDF, never of
+ * the bibliographic item), so the canonical shape carries that ownership
  * rather than leaving it to each caller to remember. The specs that assert a
  * `parentRef` depend on it, and the one that does not still gets a real object.
  * @param overrides - the sections to override.
@@ -212,8 +212,8 @@ export function savedSearchRow(overrides: ObjectOverrides = {}): WireObject {
 /**
  * One row of a citation export: an item key with the citation text Zotero
  * rendered for it. The export path pairs rows with the refs it asked about and
- * reorders them to the caller's order, so the pairing — not the row's position
- * in the response — is the fact under test.
+ * reorders them to the caller's order, so the pairing (not the row's position
+ * in the response) is the fact under test.
  * @param key - the item key the citation belongs to.
  * @param citation - the rendered citation text.
  * @returns the wire row.

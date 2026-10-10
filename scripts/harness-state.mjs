@@ -6,7 +6,7 @@
  * 1. **The pin.** `package.json` carries one harness line:
  *    every `@deepseek-ai/dsh-*` in `dependencies` / `devDependencies` /
  *    `overrides` pins the exact tested version. `peerDependencies` is
- *    declared as `>=` the pin and is the only runtime compatibility gate —
+ *    declared as `>=` the pin and is the only runtime compatibility gate:
  *    harness `evaluatePluginCompatibility` reads nothing else. `engines.dsh`
  *    is written from the same pin as this repo's own consistency face:
  *    harness calls `engines` declarative until a reader enforces it.
@@ -18,7 +18,7 @@
  *    `node_modules/@deepseek-ai/*`, which `scripts/link-local-harness.mjs`
  *    symlinks at the sibling `../deepseek-harness` checkout (AGENTS.md).
  *    TypeScript reads that checkout's built `lib/types/*.d.ts`, and a `git pull`
- *    does not regenerate it — a stale build would silently typecheck this repo
+ *    does not regenerate it: a stale build would silently typecheck this repo
  *    against an older interface than the one it runs on.
  *
  * Usage:
@@ -138,7 +138,7 @@ export function retargetProse(source, previous, next) {
   // The bare prose rewrite is boundary-bounded, not a raw `replaceAll`: the
   // old pin must not be rewritten where it is the tail of an unrelated longer
   // number (`10.2.0-rc.2` contains `0.2.0-rc.2`), so a digit or dot may not
-  // precede the match — while a `v`/`dsh-` prefix still may. Nor may it stop
+  // precede the match, while a `v`/`dsh-` prefix still may. Nor may it stop
   // inside a longer prerelease (`0.2.0-rc.2-beta`), so a letter, digit, or
   // dash may not follow it.
   const escaped = previous.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -389,7 +389,7 @@ function gtePinProblem(section, name, value, pin) {
 export function collectPinFaceProblems(manifest, pin) {
   const found = []
   const peers = Object.keys(manifest.peerDependencies ?? {}).filter(isDshPackage)
-  // The harness evaluatePluginCompatibility reads only peerDependencies — zero dsh
+  // The harness evaluatePluginCompatibility reads only peerDependencies: zero dsh
   // peers would load on any runtime even when engines.dsh names the pin.
   if (peers.length === 0) {
     found.push(
@@ -422,7 +422,7 @@ export function collectPinFaceProblems(manifest, pin) {
   }
   if (manifest.dsh?.harnessRange !== undefined) {
     // Self-invented face: the runtime never read it and it was removed on
-    // purpose — the same rot guard as the retired dshWorkshop block.
+    // purpose: the same rot guard as the retired dshWorkshop block.
     found.push(
       'package.json still carries dsh.harnessRange; harness never read it and it was' +
         ' removed — delete the field',
@@ -541,7 +541,7 @@ function declarationOf(pkgDir, specifier) {
 /**
  * Verify every imported upstream package's installed declarations are current:
  * missing declarations are always a failure (typecheck cannot resolve them),
- * stale ones fail only under `--strict` — a stale sibling build weakens the
+ * stale ones fail only under `--strict`: a stale sibling build weakens the
  * guarantee without blocking day-to-day work, and the release path is where the
  * guarantee has to hold.
  * @param strict - treat stale declarations as a failure.
@@ -595,7 +595,7 @@ function checkArtifacts(strict) {
  * and engines become >=pin. The manifest carries no other derived
  * face: harness `evaluatePluginCompatibility` reads peerDependencies
  * alone, and `dsh.harnessRange` was a self-invented field the runtime
- * never read (removed — do not reintroduce it).
+ * never read. Do not reintroduce it.
  * @param manifest - parsed package.json (mutated in place).
  * @param version - the exact new pin.
  * @returns the same manifest for chaining/tests.

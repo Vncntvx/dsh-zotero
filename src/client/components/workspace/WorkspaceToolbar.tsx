@@ -1,7 +1,7 @@
 /**
  * The workspace toolbar: the single-line connection strip. Connected shows a
  * green dot plus the connected note, a refresh action, and a `···` menu
- * (primitives Menu in portal mode — the workspace panes scroll, so an
+ * (primitives Menu in portal mode, because the workspace panes scroll and an
  * in-place list would be clipped) carrying the diagnostic facts (Server ID,
  * Zotero/API/schema versions, last checked time, build identity). Failures
  * render as one full-width error banner instead of a developer console: the

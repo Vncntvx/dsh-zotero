@@ -1,6 +1,6 @@
 /**
- * One source list item: a listbox option with no actions — identification
- * (title, metadata summary, the strict badge whitelist) and selection only.
+ * One source list item: a listbox option with no actions, only identification
+ * (title, metadata summary, the strict badge whitelist) and selection.
  * The row is the option, so the whole surface is the activation target;
  * the keyboard contract lives on the listbox (roving tabindex, arrows).
  * The selected visual is a light background plus a 2px primary line on the

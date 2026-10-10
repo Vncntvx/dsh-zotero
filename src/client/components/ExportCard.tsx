@@ -2,7 +2,7 @@
  * One export artifact as a disclosure row: format name in proper case
  * (BibTeX, not "bibtex"), scope facts and the settled time on the head
  * line, copy and download as the always-visible primary actions (the
- * download names its extension), and the verbatim body behind the toggle —
+ * download names its extension), and the verbatim body behind the toggle,
  * a layer-2 code surface with its own padding, rounding, and scroll, so a
  * long BibTeX or RIS body never stretches the row. The BibTeX keys and the
  * \cite convenience live inside the expanded body, not in the title. The
@@ -88,7 +88,7 @@ export function sanitizeFileStem(stem: string): string {
 
 /**
  * The download filename of one translator format: `zotero-<format><ext>`.
- * The stem is the translator id, never the display label — a localized
+ * The stem is the translator id, never the display label, because a localized
  * "引文" is not a filename. Every download surface builds its name here so the
  * three of them cannot drift.
  */

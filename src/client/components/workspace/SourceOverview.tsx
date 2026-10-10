@@ -1,12 +1,12 @@
 /**
  * The inspector's overview panel: what the user can do with the item first,
  * where it came from second. The action row leads (open in Zotero, open
- * PDF, ask, export citation, copy ref) as one flat row of visible actions —
+ * PDF, ask, export citation, copy ref) as one flat row of visible actions:
  * the copy belongs beside its siblings, not folded into an overflow menu
  * whose single item sat ~190px from its own trigger.
  * Below it the search occurrences show just the query
  * per episode; scope, mode, and filter fields wait behind the "search
- * details" disclosure, together with the raw ref — developer facts that
+ * details" disclosure, together with the raw ref, developer facts that
  * must not compete with the primary actions. The open actions are
  * instance-guarded exactly like the row actions.
  * @module dsh-zotero/client/components/workspace/SourceOverview

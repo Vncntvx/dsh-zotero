@@ -4,7 +4,7 @@
  * full-text chunks compete in one BM25-ranked passage corpus; the result
  * is capped by passage count and character budget with a `truncated` flag
  * instead of mid-passage edits. Full-text passages never carry invented
- * page locators — only annotations keep Zotero's own page label.
+ * page locators; only annotations keep Zotero's own page label.
  * @module dsh-zotero/tools/retrieve
  */
 
@@ -169,7 +169,7 @@ export function attachmentRefsLibraryMessage(library: string): string {
  * split point.
  */
 export function attachmentRefsOverCapMessage(count: number, cap: number): string {
-  return `attachmentRefs lists ${count} attachments; at most ${cap} can enter one ranking — split the work across calls`
+  return `attachmentRefs lists ${count} attachments; at most ${cap} can enter one ranking; split the work across calls`
 }
 
 function buildRequest(args: RetrieveArgs, config: ResolvedConfig): ZoteroRetrieveRequest {
@@ -250,7 +250,7 @@ function matchLine(fields: readonly ZoteroEvidenceField[]): string {
 export const ATTACHMENT_UNINDEXED_NOTE = "no full text in Zotero's index"
 
 /** The model-facing note for an attachment this call's cap left unread. */
-export const ATTACHMENT_LIMIT_NOTE = 'not read — this call was already at its attachment limit'
+export const ATTACHMENT_LIMIT_NOTE = 'not read: this call was already at its attachment limit'
 
 /**
  * The honesty line under the full-text sources: how many of them contributed
@@ -283,7 +283,7 @@ function attachmentSourceLine(source: NonNullable<RetrieveOutput['attachments']>
  * the call that reads the item's notes and annotations outside the budget.
  */
 export const RETRIEVE_TRUNCATED_MESSAGE =
-  'More evidence was available but omitted by the passage or character budget — a passage charges its text and, for an annotation, its comment.'
+  'More evidence was available but omitted by the passage or character budget: a passage charges its text and, for an annotation, its comment.'
 
 /** The remedy half of {@link RETRIEVE_TRUNCATED_MESSAGE}. */
 export const RETRIEVE_TRUNCATED_REMEDY =
@@ -295,7 +295,7 @@ export function renderRetrieve(_args: RetrieveArgs, value: RetrieveOutput): Cont
   ]
   if (value.evidence.length === 0) {
     lines.push(
-      'No passages matched the query — the item may still have content, but none of it ranked against these terms.',
+      'No passages matched the query; the item may still have content, but none of it ranked against these terms.',
     )
   }
   if (value.attachmentRef !== undefined) {
@@ -349,7 +349,7 @@ export function renderRetrieve(_args: RetrieveArgs, value: RetrieveOutput): Cont
 /**
  * The completed retrieve card: the evidence passage count plus whether the
  * budget cut the list. `meta` is absent on nested code dispatch or malformed
- * replay records, and a failed call keeps the raw error content — both fall
+ * replay records, and a failed call keeps the raw error content; both fall
  * back to the generic card.
  */
 function presentRetrieveResult(
@@ -377,11 +377,11 @@ export function registerRetrieveTool(ctx: Context, service: ZoteroService): void
       description: [
         'Gather evidence passages for one Zotero item and rank them against a query.',
         "Sources: annotations (with Zotero's own page labels), notes, the abstract, and BM25-ranked full-text chunks.",
-        "An annotation ranks on its highlight and its reader comment together, and matchedFields names which of the two carried the query terms — a hit found only in the comment is the annotator's view, not the paper's text.",
+        "An annotation ranks on its highlight and its reader comment together, and matchedFields names which of the two carried the query terms; a hit found only in the comment is the annotator's view, not the paper's text.",
         'A note item contributes its own body; child notes contribute every chunk of their full text (chunkIndex/chunkCount locate each passage).',
-        "attachmentPolicy picks the fulltext sources: best (default, Zotero's chosen PDF), allIndexed (every PDF child — use when a work has several files), or specified via attachmentRefs — and a specified attachment must provably be this item's own child.",
+        "attachmentPolicy picks the fulltext sources: best (default, Zotero's chosen PDF), allIndexed (every PDF child, use when a work has several files), or specified via attachmentRefs; a specified attachment must provably be this item's own child.",
         'Unavailable sources are skipped and listed in sourcesSkipped instead of failing the call.',
-        'Results are capped by passage count and character budget — a passage charges its text and, for an annotation, its comment; a truncated flag signals omitted evidence.',
+        'Results are capped by passage count and character budget: a passage charges its text and, for an annotation, its comment; a truncated flag signals omitted evidence.',
       ].join(' '),
       parameters: RETRIEVE_PARAMETERS,
       output: {

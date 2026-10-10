@@ -145,7 +145,7 @@ describe('ZoteroSettingsSection', () => {
     fireEvent.change(timeout, { target: { value: 'abc' } })
     expect(timeout.getAttribute('aria-invalid')).toBe('true')
     // The invalid face is behavioral (aria-invalid plus the invalid copy),
-    // not a second input class — the stub carries no stylesheet.
+    // not a second input class: the stub carries no stylesheet.
     expect(screen.getByText(zh.invalidNumber)).toBeDefined()
     expect(saveButton().disabled).toBe(true)
   })
@@ -196,7 +196,7 @@ describe('ZoteroSettingsSection', () => {
       user: { webEnabled: false },
     })
     mount()
-    // Presence in the user layer marks the override — the toggle carries the
+    // Presence in the user layer marks the override: the toggle carries the
     // same badge and reset as every other field.
     expect(screen.getByText(zh.overridden)).toBeDefined()
     expect(screen.getByText(zh.reset)).toBeDefined()

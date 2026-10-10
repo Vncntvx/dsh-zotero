@@ -5,7 +5,7 @@
  * Why it is not just `npm run build`: pnpm runs `prepare` inside the installed
  * dependency's own tree, where neither the sibling harness checkout nor a full
  * development toolchain is guaranteed. The harness's plugin-authoring guide
- * makes the requirement explicit — a `prepare` script must be self-contained
+ * makes the requirement explicit: a `prepare` script must be self-contained
  * and, in its cited working example, transpiles `src/` without project
  * references or typechecking. So this script only:
  *

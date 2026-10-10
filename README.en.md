@@ -3,7 +3,7 @@
 # dsh-zotero
 
 <img
-  src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=500&size=18&pause=2000&color=CC2936&center=true&vCenter=true&width=760&lines=%3E+Zotero+as+an+evidence+store+for+agents."
+  src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=500&size=18&pause=2000&color=CC2936&center=true&vCenter=true&width=760&lines=%3E+Search%2C+read%2C+and+cite+papers+from+local+Zotero."
   alt="dsh-zotero"
 />
 <p align="center">
@@ -19,11 +19,18 @@
   <a href="README.md"><b>中文</b></a> · <b>English</b>
 </p>
 
-dsh-zotero is a [Zotero](https://www.zotero.org) plugin designed for agent research workflows. Agents can search your library directly, read metadata and notes, extract relevant evidence passages, locate source PDFs, and generate citations and bibliographies.
+dsh-zotero is a local Zotero plugin for DeepSeek Harness. It allows chat agents to search your library, read PDF full text and notes, extract relevant passages, and generate academic citations.
 
-<p align="center">
-  <img src="docs/images/header-collage.png" width="70%" alt="dsh-zotero UI: sources panel, evidence extraction, export view">
-</p>
+All operations interact with the local Zotero API (`127.0.0.1:23119`); reads need no API key.
+
+## Features
+
+- **Library search and discovery**: Search papers by title, author, year, tags, or full text, with support for collection scopes and recently added items.
+- **PDF full text and note reading**: Agents can read structured bibliographic metadata, abstracts, personal notes, and parse local PDF attachments directly.
+- **Passage retrieval**: Query papers to locate relevant passages across full text, notes, and annotations; PDF annotations retain original page numbers for direct verification.
+- **Citation formatting and export**: Generate formatted citations or export selected items as BibTeX, RIS, or CSL JSON for copying or downloading.
+- **Dedicated conversation tab**: Papers referenced in chat automatically sync to the "Zotero" tab at the top of the session, where you can inspect item details, review passages, or open local PDFs.
+- **Two-way notes and organization**: Allow the agent to draft reading notes, add tags, and organize collections, with plan review and interactive approval for every write operation.
 
 ## Install
 
@@ -39,60 +46,32 @@ From GitHub prebuilt branch:
 dsh plugin --profile <name> add github:Vncntvx/dsh-zotero#release
 ```
 
-> **Installing from main branch**: Installing directly from `github:Vncntvx/dsh-zotero` (default `main` source branch) executes build scripts locally. Because pnpm blocks dependency builds by default, you must configure `allowBuilds` in `pnpm-workspace.yaml`. Use the `#release` branch for zero-configuration prebuilt installation.
+After installation, start a new session to use Zotero tools. The plugin provides a configuration page under **Settings → Zotero** to adjust API address, concurrency limits, and retrieval parameters.
 
-From a local tarball:
-
-```sh
-cd dsh-zotero && npm pack
-dsh plugin --profile <name> add ./dsh-zotero-*.tgz
-```
-
-After installation, start a new session to use Zotero tools.
-
-The plugin provides a configuration page under **Settings → Zotero**, supporting adjustments for API address, concurrency limits, full-text retrieval, and other parameters. Changes take effect on save. See [Configuration Reference](docs/configuration.en.md).
-
-[Getting Started →](docs/getting-started.en.md)
-
-## Tools
-
-| Tool                | Purpose                                                                                                            |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `zotero_search`     | Search by title, author, year, or full-text index across library, collection, saved-search, and publication scopes |
-| `zotero_browse`     | Discover library structure: libraries, collection tree, saved searches, tag facets, item types and fields          |
-| `zotero_get`        | Read structured metadata for a single item, optionally including notes, annotations, and attachments               |
-| `zotero_children`   | Explore an item's child-object graph: direct notes, attachments, and PDF annotations                               |
-| `zotero_retrieve`   | Extract query-ranked evidence passages using BM25, supporting multi-attachment retrieval                           |
-| `zotero_changes`    | Track incremental changes and deletions based on local transaction versions                                        |
-| `zotero_attachment` | Resolve an item or attachment ref to a verified local file path or URL                                             |
-| `zotero_export`     | Generate formatted citations, bibliographies, and BibTeX, BibLaTeX, RIS, or CSL JSON exports                       |
-
-[Tool Reference →](docs/tools.en.md)
+> Note: Installing directly from the main source branch requires local compilation. Because pnpm blocks dependency builds by default, use the `#release` branch to skip local build setup.
 
 ## Prerequisites
 
-- Zotero ≥ 7 desktop (reads require Zotero ≥ 7; writes require Zotero 10). Enable local API: **Settings → Advanced → Allow other applications on this computer to communicate with Zotero**.
-- Node.js ≥ 22.19 or ≥ 24
-- Host dsh ≥ 0.2.1-alpha.2
-- Local API at `http://127.0.0.1:23119/api`; reads require no authentication, while writes use a locally issued write key
+1. Zotero 7 or newer desktop app (writes require Zotero 10).
+2. Enable local API in Zotero: **Settings → Advanced → check "Allow other applications on this computer to communicate with Zotero"**.
 
-## Usage Example
+## Usage example
 
-The agent calls tools during the conversation as needed, using outputs as context for subsequent steps:
+The agent calls tools during conversation, and referenced papers update the Sources panel in real time:
 
 ```text
 User: Find papers about Risk
 Agent → zotero_search(query: "Risk", itemTypes: ["journalArticle"])
-       5 matches; user picks the first 3
+       5 matches; items populate the session's Zotero tab
 
 User: What does the first one's abstract say?
 Agent → zotero_get(ref: "zotero://user/0/item/ABCD1234")
-       Returns full abstract
+       Returns metadata and full abstract
 
 User: Find the methodology discussion in this paper
 Agent → zotero_retrieve(ref: "zotero://user/0/item/ABCD1234", query: "methodology",
-                        sources: ["fulltext", "note"])
-       Returns relevant passages with page labels and source tags
+                        sources: ["annotation", "fulltext"])
+       Returns ranked passages with source tags (annotations include page numbers)
 
 User: Export all three as BibTeX
 Agent → zotero_export(refs: ["zotero://user/0/item/ABCD1234",
@@ -101,34 +80,41 @@ Agent → zotero_export(refs: ["zotero://user/0/item/ABCD1234",
        Generates BibTeX entries; copy or download directly in the UI
 ```
 
-More examples in [Features](docs/features.en.md).
+## Tools
 
-## Limitations
+The plugin includes 8 read tools and 8 write tools. Write tools are disabled by default until `writeEnabled` is turned on in settings.
 
-- **Read-only by default**: 8 write tools (create note, add/remove item tags and collections, create/correct items and collections, delete a collection and library-wide tags) are available only when `writeEnabled` is turned on. Every write passes session approval and the plan review card first, plus Zotero’s local authorization dialog on the first write.
-- **Keyword-based retrieval**: Passage search uses BM25 term frequency matching. Full-text search relies on Zotero's local index; unindexed PDFs will not return text passages.
-- **Attachment handling**: `zotero_attachment` verifies and returns local attachment paths. Reading PDF contents depends on host environment capabilities.
-- **Export format**: Export tools return plain text (such as BibTeX, RIS, or CSL JSON), which can be copied or downloaded directly from the panel.
+| Tool                | Purpose                                                                                   |
+| ------------------- | ----------------------------------------------------------------------------------------- |
+| `zotero_search`     | Search by title, author, year, or full text across libraries, collections, and tags       |
+| `zotero_browse`     | Browse library hierarchy: collections tree, saved searches, and tags                      |
+| `zotero_get`        | Read structured metadata for an item, including abstract, notes, and attachment list      |
+| `zotero_children`   | List child items, including standalone notes, PDF attachments, and annotations            |
+| `zotero_retrieve`   | Query passages across full text, notes, and annotations (annotations retain page numbers) |
+| `zotero_changes`    | Check recently added, modified, or deleted items in the library                           |
+| `zotero_attachment` | Resolve an item to its local PDF file path                                                |
+| `zotero_export`     | Generate formatted citations or export BibTeX, RIS, and CSL JSON                          |
 
-## Permissions
+See [Tool reference](docs/tools.en.md) for complete parameter definitions of all 16 tools.
 
-- **Network**: HTTP requests are restricted to the local `http://127.0.0.1:23119/api` loopback address. The plugin follows no redirects and makes no outbound network connections.
-- **Filesystem and processes**: Read-only access to local attachment paths (verified via async `stat`). The plugin executes no shell commands, loads no native binary modules, and spawns no background daemons.
-- **Persistence**: Configuration is stored in `$DSH_HOME/settings.yaml`. If "Always Allow" is selected during write authorization, the issued key is stored in the host credentials store.
-- **Lifecycle**: Configuration changes take effect immediately on save. Installing or removing the plugin requires restarting the host application.
+## Security and privacy
+
+- Local requests: The plugin sends HTTP requests only to the local Zotero API (`http://127.0.0.1:23119/api`), without depending on Zotero cloud servers.
+- Filesystem access: The plugin only checks the existence of local attachment files, executing no shell commands and running no background daemons.
+- Write safety: Write tools are disabled by default. When enabled, any changes to your library present an approval card in the interface and require user confirmation before executing.
 
 ## Documentation
 
-| Document                                            | Covers                                                                         |
-| --------------------------------------------------- | ------------------------------------------------------------------------------ |
-| [Getting Started](docs/getting-started.en.md)       | Installation, prerequisites, and connection verification                       |
-| [Features](docs/features.en.md)                     | Sources panel, chat integration, evidence extraction, and export workflow      |
-| [Tool Reference](docs/tools.en.md)                  | Parameters, return values, and error codes for all 16 tools (8 read + 8 write) |
-| [Configuration Reference](docs/configuration.en.md) | 36 configuration fields, default values, and hot-reload behavior               |
-| [Architecture](docs/architecture.en.md)             | Data flow, layer responsibilities, and design boundaries                       |
-| [Development Guide](docs/development.en.md)         | Build, test, local development, and release workflow                           |
-| [Scenarios](docs/scenarios.en.md)                   | Real-conversation acceptance cases and everyday usage prompts                  |
-| [Troubleshooting](docs/troubleshooting.en.md)       | Common issues, diagnostic steps, and fixes                                     |
+| Document                                            | Covers                                                        |
+| --------------------------------------------------- | ------------------------------------------------------------- |
+| [Getting started](docs/getting-started.en.md)       | Installation, prerequisites, and connection verification      |
+| [Features](docs/features.en.md)                     | Sources panel, chat integration, and export workflows         |
+| [Tool reference](docs/tools.en.md)                  | Parameters, return values, and error codes for all 16 tools   |
+| [Configuration reference](docs/configuration.en.md) | 35 configuration fields and default values                    |
+| [Architecture](docs/architecture.en.md)             | Data flow, layer responsibilities, and design boundaries      |
+| [Development guide](docs/development.en.md)         | Build, test, local development, and release workflow          |
+| [Scenarios](docs/scenarios.en.md)                   | Real-conversation acceptance cases and everyday usage prompts |
+| [Troubleshooting](docs/troubleshooting.en.md)       | Common issues, diagnostic steps, and fixes                    |
 
 ## License
 

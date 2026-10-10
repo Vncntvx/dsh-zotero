@@ -219,7 +219,7 @@ describe('write tool renders', () => {
     expect(childPlan).toContain('- Collections: (inherited from parent item)')
     expect(childPlan).toContain('- Sources: zotero://user/0/item/SOURCE01')
     // Even if a caller paints collections onto a child plan, the card must
-    // describe inheritance — buildRequest refuses that combination on the
+    // describe inheritance: buildRequest refuses that combination on the
     // model path, and the domain refuses it on the non-tool path.
     const paintedChildPlan = createNotePlan({
       markdown: 'body',

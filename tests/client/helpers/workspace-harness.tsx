@@ -1,6 +1,6 @@
 /**
  * The ZoteroWorkspaceView specs' shared fixtures and mount: the connected
- * connection view the toolbar renders and `mountView` — the view mounted over a
+ * connection view the toolbar renders and `mountView`: the view mounted over a
  * fixture workspace with a spied refresh. The workspace fixture gallery itself
  * lives in `source-fixtures.ts`; `ZoteroWorkspaceView.helpers`, `.states` and
  * `.interaction` share this one copy of what sits on top of it.

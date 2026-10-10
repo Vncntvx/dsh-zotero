@@ -1,7 +1,7 @@
 /**
  * The workspace empty state: shown before the session has made any Zotero
- * call. The starter pills only prefill the composer (setDraft) — never
- * submit — and every starter names something the plugin can actually do.
+ * call. The starter pills only prefill the composer (setDraft) and never
+ * submit, and every starter names something the plugin can actually do.
  * @module dsh-zotero/client/components/workspace/WorkspaceEmptyState
  */
 

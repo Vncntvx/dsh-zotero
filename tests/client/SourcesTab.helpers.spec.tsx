@@ -4,7 +4,7 @@
  * the status projection with its clock, signature and diagnosis line
  * (`stateOf`, `currentTime`, `sessionSignatureOf`, `connectionDiagnosisOf`),
  * and call naming (`callNameOf`). The rendered faces of the same module are
- * covered by `SourcesTab.states` (mount and assert) and `SourcesTab.interaction`
+ * covered by `SourcesTab.states` (mount and assert), and `SourcesTab.interaction`
  * (a scripted probe or filter driven to its output).
  * @module tests/client/SourcesTab.helpers
  */
@@ -99,8 +99,8 @@ describe('status projection helpers', () => {
         running: [{ callId: 'b', phase: 'start' }],
       }),
     )
-    // A streaming publication — assistant tokens appended, and the in-flight
-    // call's arguments grown by the streamed prefix — changes neither the
+    // A streaming publication (assistant tokens appended, and the in-flight
+    // call's arguments grown by the streamed prefix) changes neither the
     // visible zotero row order nor the in-flight phase, so the signature must
     // stay identical and the panel must not rebuild on it.
     const streamed = chatOf([

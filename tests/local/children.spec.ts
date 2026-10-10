@@ -1,6 +1,6 @@
 /**
  * The `children()` provider contract: child-object exploration for item refs
- * (direct notes/attachments + annotations via the filtered listing) and
+ * (direct notes/attachments + annotations via the filtered listing), and
  * attachment refs (their own annotations), with identity pinning and
  * fail-closed kind checks.
  * @module tests/provider/children
@@ -204,7 +204,7 @@ describe('children', () => {
   it('fails loud when the bare children listing is not an array', async () => {
     // A non-array body is a contract breach, not an empty page: folding it to
     // `[]` would silently under-report the graph. The two wires are asserted
-    // separately — a test that served both non-arrays at once would pass on
+    // separately: a test that served both non-arrays at once would pass on
     // whichever rejected first and could not tell the two contracts apart.
     serveJson(mock, `${apiPath()}/items/${ITEM_KEY}`, PARENT)
     serveJson(mock, `${apiPath()}/items/${ITEM_KEY}/children`, { key: 'NOTE1111' })

@@ -1,9 +1,9 @@
 /* The workspace surface: a slim toolbar, the lens tab bar, and the
- * master-detail pair. Every business surface — the lens bar, the workspace
- * grid, the exports page, the passages board — shares one content axis
+ * master-detail pair. Every business surface (the lens bar, the workspace
+ * grid, the exports page, the passages board) shares one content axis
  * (full width up to 1440px, centered), so wide screens never split the
  * navigation from the content. The toolbar stays full-width dsh chrome.
- * Tokens only, no theme selectors — light/dark resolves through the
+ * Tokens only, no theme selectors; light/dark resolves through the
  * aliases. */
 
 .view {
@@ -135,7 +135,7 @@
 }
 
 /* The top lens bar: 文献 | 导出 as plain text tabs with an active
- * underline — page-level navigation, deliberately not pills (those belong
+ * underline, page-level navigation, deliberately not pills (those belong
  * to the filter bar one level down). */
 .lensBar {
   flex: none;
@@ -194,7 +194,7 @@
 }
 
 /* The sidebar: the filter bar above a scrollable listbox. Only the listbox
- * scrolls — one vertical scroll container per pane, never two. The bottom
+ * scrolls, one vertical scroll container per pane, never two. The bottom
  * padding clears the floating composer at every width. */
 .sidebar {
   min-height: 0;
@@ -479,8 +479,8 @@
 }
 
 /* The inspector's panel tabs: light text tabs (概览 / 相关片段 / 导出) with
- * counts — a third visual level, quieter than the top lens tabs and never
- * confused with the filter pills. */
+ * counts, a third visual level that stays quieter than the top lens tabs and
+ * is never confused with the filter pills. */
 .inspectorTabs {
   flex: none;
   display: flex;
@@ -584,8 +584,8 @@
 
 /* The guarded action row: open buttons, copy, and the composer prefills.
  * `.action` geometry intentionally duplicated with
- * `../open/open.module.css` `.button` and `../cards.module.css` `.lineAction`
- * — change all three together. */
+ * `../open/open.module.css` `.button` and `../cards.module.css` `.lineAction`,
+ * so change all three together. */
 .actionRow {
   display: flex;
   align-items: center;
@@ -738,14 +738,14 @@
 }
 
 /* Narrow surfaces (the pane, not the viewport): the workspace collapses to
- * one pane at a time — the sidebar list or the inspector detail — with the
+ * one pane at a time (the sidebar list or the inspector detail) with the
  * back action revealed.
  *
  * The threshold is the width at which the master-detail pair stops fitting,
  * not a comfortable one above it: the sidebar's floor is 280px (`.workspace`'s
  * clamp) and the inspector needs ~360px for its title, meta, panel tabs, and
  * action row, so 640px is the last width that holds both. Sitting higher than
- * that collapsed the pair on any ordinary column — the shell's right panel or
+ * that collapsed the pair on any ordinary column: the shell's right panel or
  * a half-screen window is enough to drop the pane under 760px while the window
  * itself is still wide, which reads as the layout giving up with room to
  * spare. */
@@ -796,7 +796,7 @@
     padding: 4px 8px 0;
   }
 
-  /* The composer clearance survives the tighter gutters — a narrower pane
+  /* The composer clearance survives the tighter gutters, so a narrower pane
    * does not move the floating composer out of the way. */
   .sidebar {
     padding: 8px 8px calc(var(--dsh-composer-height, 152px) + 16px);

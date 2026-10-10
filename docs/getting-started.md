@@ -87,11 +87,14 @@ dsh plugin --profile <profile-name> add github:Vncntvx/dsh-zotero#<commit-hash>
 
 ```text
 Zotero local API: connected
-Zotero version: 10.0.2-beta.9+c77df79af
-API version: 12
-Schema version: 11
-Server ID: abc123def456
+Local API: 127.0.0.1:23119
+Zotero version: 10.0.6-beta.4+4d4c2c141
+API version: 3
+Schema version: 44
+Server ID: Cq1f76x70ESV
 ```
+
+这些版本行取自应答 Zotero 返回的响应头，因此随你的 Zotero 版本变化。`API version` 是插件在每个请求上固定的本地 API 版本（3）；不支持该版本的 Zotero 构建会返回 501。
 
 若提示无法连接，请检查：
 
@@ -104,4 +107,4 @@ Server ID: abc123def456
 
 > 帮我找 FlashAttention 相关论文
 
-Agent 会调用 `zotero_search` 检索文献库并返回匹配条目。随后可通过 `zotero_get` 读取文献元数据、摘要与笔记，或通过 `zotero_retrieve` 按问题提取正文与批注中的相关证据。
+Agent 会调用 `zotero_search` 检索文献库并返回匹配条目。随后可通过 `zotero_get` 读取文献元数据、摘要与笔记，或通过 `zotero_retrieve` 按问题提取正文与批注中的原文片段。

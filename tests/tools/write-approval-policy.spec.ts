@@ -2,7 +2,7 @@
  * The session approval-policy gate that runs before any write plan card.
  *
  * `requestWriteApproval` is the deployment-level door: it honors
- * `approval/policy` (a `never` session auto-rejects) and writes the
+ * `approval/policy` (a `never` session auto-rejects), and writes the
  * `approval/asked` + `approval/decided` audit pair. These cases pin the
  * outcome map and the fail-closed rules (no approval service, no agent)
  * without a full host lane.

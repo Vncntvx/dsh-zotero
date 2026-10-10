@@ -42,14 +42,14 @@ import type {
  * API's itemKey cap when the request is larger), `format=bib` yields a
  * joined CSL-sorted bibliography, and the translator formats
  * (`bibtex`/`biblatex`/`ris`/`csljson`) export the whole set at once. The
- * batch-breaking formats refuse to exceed `ZOTERO_ITEMKEY_BATCH` — their
- * global ordering belongs to Zotero, so splitting them would silently
+ * batch-breaking formats refuse to exceed `ZOTERO_ITEMKEY_BATCH`, because
+ * their global ordering belongs to Zotero and splitting them would silently
  * reorder the output. The translator formats itemize each document by
- * locating it directly within the batch body in memory — pairing each ref
+ * locating it directly within the batch body in memory, pairing each ref
  * with its citation key, span offsets, and display title where possible,
  * and falling back gracefully to a bare ref if an item is omitted by the
  * translator output. Output that exceeds `maxExportChars` fails with
- * OUTPUT_TOO_LARGE — export text is never mid-truncated.
+ * OUTPUT_TOO_LARGE: export text is never mid-truncated.
  */
 export async function exportItems(
   deps: { client: ZoteroHttpClient; limits: LocalApiLimits },
@@ -189,7 +189,7 @@ async function fetchRawItemBatch(
 /**
  * Citation export: batches the refs into API-sized requests, merges the
  * per-key citations, and reorders them to the requested sequence. Order is
- * exact — each citation stays paired with its ref — so batching is
+ * exact (each citation stays paired with its ref), so batching is
  * invisible to the caller.
  */
 async function exportCitations(
@@ -248,7 +248,7 @@ async function exportCitations(
   return { format: 'citation', style, locale, citations }
 }
 
-/** One batch of per-key citations — at most `ZOTERO_ITEMKEY_BATCH` keys. */
+/** One batch of per-key citations, at most `ZOTERO_ITEMKEY_BATCH` keys. */
 async function fetchCitationBatch(
   deps: { client: ZoteroHttpClient },
   batch: readonly ZoteroObjectRef[],

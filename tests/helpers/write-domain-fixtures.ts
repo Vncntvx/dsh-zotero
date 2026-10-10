@@ -88,7 +88,7 @@ export function writeDeps(mock: MockZotero): {
 }
 
 /**
- * Serve one item read for a write precondition — the one home for this route
+ * Serve one item read for a write precondition: the one home for this route
  * so the write-domain specs cannot drift on mock shape. The default body is
  * the standard `itemJson` shape with both write-relevant arrays present;
  * `body` replaces it verbatim (malformed shapes), `serverId` varies the

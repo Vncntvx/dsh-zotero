@@ -2,7 +2,7 @@
  * Item identity and instance match rules of the session source model. Identity
  * is the normalized ref; evidenceMatch is the verdict of the item's qualified
  * refs against the currently connected Zotero instance. Same-key refs always
- * fold into one source record — a ref qualified for another instance marks
+ * fold into one source record, and a ref qualified for another instance marks
  * the record `mismatch` instead of splitting it.
  * @module dsh-zotero/client/sources/evidence-match
  */
@@ -26,8 +26,8 @@ export function serverIdOf(ref: string): string | undefined {
 /**
  * The instance match verdict of one item's qualified refs against the connected
  * instance. No qualifiers, or an unknown current instance, can never verify
- * anything — `unknown`. Any qualifier that differs from the current instance
- * fails the whole record closed — `mismatch`.
+ * anything, so the verdict is `unknown`. Any qualifier that differs from the
+ * current instance fails the whole record closed as `mismatch`.
  * @param serverIds - the distinct qualified Server IDs the item's refs carry.
  * @param currentServerId - the connected instance's Server ID, when known.
  * @returns the verdict.

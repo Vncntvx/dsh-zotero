@@ -1,8 +1,8 @@
 /**
  * The meta decoding layer of the session source model: each tool's
  * presentation projection read off a settled block. The shapes are the
- * current wire shapes (no legacy projection versions are carried — session
- * logs are per-session snapshots); reads are defensive, so an absent or
+ * current wire shapes (session logs are per-session snapshots, so no legacy
+ * projection versions are carried); reads are defensive, so an absent or
  * malformed field degrades to nothing instead of crashing the panel. Only
  * the fields the panel renders are decoded.
  * @module dsh-zotero/client/sources/decoders
@@ -32,7 +32,7 @@ interface SearchRowMeta {
   readonly title: string
   readonly creatorSummary: string
   readonly year?: number
-  /** The item's own Zotero type, e.g. `journalArticle` — what the row is, not just its title. */
+  /** The item's own Zotero type, e.g. `journalArticle`. */
   readonly itemType?: string
   readonly bestAttachmentRef?: string
   readonly bestAttachmentType?: string
@@ -51,15 +51,15 @@ function detailOmittedOf(meta: Record<string, unknown>): boolean {
 /** The search projection view; `rows === null` means malformed. */
 export interface SearchMetaView {
   readonly rows: readonly SearchRowMeta[] | null
-  /** Hits the call actually returned, including the note-body matches folded into the first page. */
+  /** Hits the paged primary listing returned; the note-body supplement is counted separately. */
   readonly returned: number | null
   /** The whole hit count the scope carries, past the returned page. */
   readonly total: number | null
   readonly omitted: number | null
   /**
    * Note-body matches folded into the first page. `null` means the call made
-   * no note scan at all (the producer's `supplemental` is absent) — distinct
-   * from `0`, which says the scan ran and found nothing.
+   * no note scan at all (the producer's `supplemental` is absent), which is
+   * distinct from `0`, the scan ran and found nothing.
    */
   readonly noteMatches: number | null
   readonly scope: ZoteroResolvedScope | null
@@ -167,7 +167,7 @@ export interface AttachmentMetaView {
  * The browse projection view. `returned`/`total`/`nextOffset` are the page
  * facts the summary and the pagination note read; they are never among the
  * keys the byte budget drops, so a summary stays exact even on a page too
- * heavy to itemize. `rows` is null exactly when the rows are unavailable —
+ * heavy to itemize. `rows` is null exactly when the rows are unavailable:
  * an over-budget projection, an absent meta, or a malformed `items`.
  */
 export interface BrowseMetaView {
@@ -200,12 +200,12 @@ export function browseMetaOf(meta: Record<string, unknown>): BrowseMetaView {
  * only field the shared row needs, so the arms below carry just the fact their
  * tool is the only one that can report:
  *
- * - `declined` — the plan card was answered without approval; nothing written.
- * - `committed-unverified` — the write landed but its saved state was never
+ * - `declined`: the plan card was answered without approval; nothing written.
+ * - `committed-unverified`: the write landed but its saved state was never
  *   proven, and the tool's own answer says not to retry.
- * - `applied` — the write reported its applied fact, and counts are null on
+ * - `applied`: the write reported its applied fact, and counts are null on
  *   whichever tool (or malformed record) left them unreported.
- * - `deleted` — the delete reported its receipt; the count is null when
+ * - `deleted`: the delete reported its receipt; the count is null when
  *   unreported.
  *
  * The unverified arm's `reason` and `key` are deliberately not decoded here:
@@ -511,7 +511,7 @@ export interface ChangesSection {
 
 /**
  * One tombstoned-object section: the keys removed, and the true count behind them.
- * `other` is the tool's own bucket for kinds it does not report individually —
+ * `other` is the tool's own bucket for kinds it does not report individually;
  * without it a removal summary would be smaller than the count the tool
  * states, while being presented as authoritative.
  */
@@ -581,7 +581,7 @@ function withheldOf(value: unknown): ChangesWithheldReason[] | null {
 // A changed kind's `totals` entry is spelled exactly as its `changed.<kind>`,
 // so the tables carry one key; a tombstone family prefixes it with `deleted`,
 // which is the one place a second name is needed. `other` has no listing of
-// its own — the tool counts removals of kinds it does not report individually —
+// its own (the tool counts removals of kinds it does not report individually),
 // so it contributes a count and no rows.
 function totalOf(totals: Record<string, unknown> | null, key: string): number | null {
   return totals === null ? null : (numberField(totals, key) ?? null)
@@ -589,8 +589,8 @@ function totalOf(totals: Record<string, unknown> | null, key: string): number | 
 
 /**
  * The changed keys of one section, each with its own version. A diff's
- * `changed.<kind>` is a bare array — unlike a children listing, which wraps
- * its rows in a counted section — so this reads the array directly.
+ * `changed.<kind>` is a bare array, unlike a children listing, which wraps
+ * its rows in a counted section, so this reads the array directly.
  */
 function changedEntriesOf(value: unknown): ChangesSection['entries'] {
   if (!Array.isArray(value)) return []
@@ -674,7 +674,7 @@ export function changesMetaOf(meta: Record<string, unknown>): ChangesMetaView {
   // A section's true count comes from `totals`; without it, the listing is all
   // there is and the count is the listing's own size. The two are summed
   // independently of the listings, because the byte budget drops `changed` and
-  // `deleted` on a heavy diff while keeping `totals` — an over-budget diff
+  // `deleted` on a heavy diff while keeping `totals`, so an over-budget diff
   // still reports exactly how much changed.
   const sumSections = (
     sections: readonly { total: number | null; size: number }[],
@@ -708,7 +708,7 @@ export function changesMetaOf(meta: Record<string, unknown>): ChangesMetaView {
     // Decoded unconditionally, and the cursor has nothing to do with it: for a
     // standalone resource, `not-served` and `range-not-covered` deliberately keep
     // the cursor (those changes were never observable in any range), so "cursor
-    // present" is the *normal* shape of a diff carrying a coverage gap — not a
+    // present" is the *normal* shape of a diff carrying a coverage gap, not a
     // sign the gap went away. Only `unreadable` withholds the cursor, and that
     // fact is the card's separate no-cursor notice.
     withheld: withheldOf(meta['unobservable']),
@@ -776,8 +776,8 @@ function writeKindOf(value: unknown): WriteMetaView['kind'] {
 /**
  * The write projections decoded from one record. An unrecognized `kind`
  * reads as `applied` with every applied field null: the write may or may not
- * have landed, and the receipt must not claim a count it cannot prove — the
- * tool's own rendered text carries the full statement either way.
+ * have landed, and the receipt must not claim a count it cannot prove, while
+ * the tool's own rendered text carries the full statement either way.
  */
 export function writeMetaOf(meta: Record<string, unknown>): WriteMetaView {
   return {

@@ -40,9 +40,9 @@ const INCLUDE_ORDER: readonly ZoteroInclude[] = ['notes', 'annotations', 'attach
 
 /** Which child-object halves a read must fetch. */
 export interface ChildRowNeeds {
-  /** Bare `/children` — notes and attachments. */
+  /** Bare `/children`: notes and attachments. */
   readonly direct: boolean
-  /** `/children?itemType=annotation` — annotations under this key. */
+  /** `/children?itemType=annotation`: annotations under this key. */
   readonly annotations: boolean
 }
 
@@ -57,7 +57,7 @@ export function attachmentTargetKindMessage(itemType: string): string {
 /**
  * Fetch one item's full detail. The parent is always fetched once; child
  * rows are fetched lazily only when the caller asked to include
- * notes/annotations/attachments — the Local API ignores `?include=` on
+ * notes/annotations/attachments, since the Local API ignores `?include=` on
  * single-item responses. Direct children (notes/attachments) come from the
  * bare `/children` endpoint; annotations additionally require the
  * `?itemType=annotation` listing under the same key. Collection names

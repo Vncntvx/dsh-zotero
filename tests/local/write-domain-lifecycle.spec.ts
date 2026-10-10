@@ -383,7 +383,7 @@ describe('deleteCollection', () => {
     expect(deleted?.pathname).toBe(`/api/users/0/collections/${SECOND_COLLECTION_KEY}`)
     expect(deleted?.headers['if-unmodified-since-version']).toBe('30')
     // Exactly one collection read: it proves the name resolution's answer and
-    // supplies the precondition — a second identical GET is a wasted round trip.
+    // supplies the precondition: a second identical GET is a wasted round trip.
     expect(count('GET', `/api/users/0/collections/${SECOND_COLLECTION_KEY}`)).toBe(1)
     expect(onCollectionsChanged).toHaveBeenCalledTimes(1)
     expect(count('POST', '/api/local/authorize')).toBe(1)

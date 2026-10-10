@@ -3,7 +3,7 @@
  * cursor), `?since=` diffs over the unbound versions-format reads, the item
  * space in the API's own three reads (top-level items, child objects, the
  * trash), the fulltext listing, tombstones from `/deleted`, display caps with
- * true counts in `totals`, and the cursor rules — a cursor is handed back only
+ * true counts in `totals`, and the cursor rules: a cursor is handed back only
  * when the whole range was read under one version on one instance, and it
  * carries the instance and library it belongs to.
  * @module tests/provider/changes
@@ -240,7 +240,7 @@ describe('changes', () => {
   })
 
   it('withholds the cursor when the build capped the read', async () => {
-    // The response carries fewer rows than the total it reports — a build that
+    // The response carries fewer rows than the total it reports: a build that
     // imposed its own page cap. The rows it hid sit below the version it
     // reports, so that version must not be resumable. `truncated` stays absent:
     // it speaks about the listing, and this listing is exactly the rows read.
@@ -705,7 +705,7 @@ describe('changes', () => {
 
   it('refuses a cursor that belongs to another library before any request', async () => {
     // Version counters are per library, so a cursor from user/0 says nothing
-    // about group/42 — and no response would reveal the mix-up.
+    // about group/42, and no response would reveal the mix-up.
     await zoteroError(
       provider.changes({ library: GROUP_LIBRARY, since: at(42) }),
       'ZOTERO_INVALID_ARGUMENT',
@@ -717,7 +717,7 @@ describe('changes', () => {
   it('fails loud when a response names an instance other than the claim', async () => {
     // The request carries the claim, so a real build rejects a foreign
     // database with 412. If one answers anyway, the result would mix two
-    // databases — that is a fault, not a diff.
+    // databases, that is a fault, not a diff.
     routeItems(mock, { top: versionMap([[ITEM_KEY, 44]]), serverId: 'S2' })
     await zoteroError(
       provider.changes({ since: at(42, SERVER_ID, ['items']), include: new Set(['items']) }),

@@ -4,7 +4,7 @@
  * Zotero 10+ stamps every response with a `Zotero-Server-ID`: the identity
  * of the running database instance. Object keys are unique per instance, not
  * globally, so a listing or record served by instance A must never be
- * consumed to answer a read pinned to instance B — after a profile or
+ * consumed to answer a read pinned to instance B. After a profile or
  * database switch, same-key objects are different objects.
  *
  * The provider-wide invariant: **all Zotero objects composing one result
@@ -35,7 +35,7 @@ export function assertServerIdMatches(
  *
  * Two reads issued in parallel can be served by different instances across a
  * profile switch, and merging their rows would attribute one instance's data
- * to the other's identity — the very mix this module forbids. A side that
+ * to the other's identity, the very mix this module forbids. A side that
  * reports no id proves nothing and defers to the other; only two ids that
  * disagree are a mismatch.
  * @param first - the first response's `Zotero-Server-ID`, if it reported one.
@@ -70,7 +70,7 @@ export interface LocalReadContext {
 /**
  * Whether a cached listing may answer a read carrying `claimed`. A read
  * without a claim accepts whatever is cached (its TTL bounds staleness); a
- * read with a claim accepts only an entry whose own identity matches — an
+ * read with a claim accepts only an entry whose own identity matches. An
  * entry without an identity cannot prove a match and fails closed.
  */
 export function cacheEntryMatchesIdentity(

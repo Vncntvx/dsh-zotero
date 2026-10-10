@@ -4,7 +4,7 @@
  * Zotero's Local API does **not** serve annotations from a bare
  * `GET /items/{key}/children`. That endpoint is backed by the same
  * `includeChildren` search expansion as `/items`, and that expansion's SQL
- * unions only `itemAttachments` and `itemNotes` — never `itemAnnotations`.
+ * unions only `itemAttachments` and `itemNotes`, never `itemAnnotations`.
  * Annotations hang off attachments (`itemAnnotations.parentItemID` →
  * attachment), so a bare children read of a PDF is empty even when the file
  * carries highlights.
@@ -17,8 +17,8 @@
  * item key therefore returns every annotation under that item's attachments
  * in one request; passing an attachment key returns that file's annotations.
  *
- * `meta.numChildren` never counts annotations either — for regular items it
- * is notes+attachments, for attachments it is hard-coded 0 — so nothing in
+ * `meta.numChildren` never counts annotations either: for regular items it
+ * is notes+attachments, for attachments it is hard-coded 0, so nothing in
  * this plugin may infer annotation presence from that field.
  *
  * These two functions are the only child-object reads the plugin issues.
@@ -57,7 +57,7 @@ async function getChildrenJson(
 
 /**
  * Direct children of one key: notes and attachments only.
- * Never annotations — that is the bare Local API contract.
+ * Never annotations, which is the bare Local API contract.
  */
 export async function fetchDirectChildren(
   deps: { client: ZoteroHttpClient },

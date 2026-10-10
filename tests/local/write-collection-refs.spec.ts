@@ -1,5 +1,5 @@
 /**
- * `ScopeDirectory.resolveCollectionRefs` — the write path's batch ref
+ * `ScopeDirectory.resolveCollectionRefs`: the write path's batch ref
  * resolution. One cached listing proves every key it carries; only keys the
  * listing lacks fall back to single-object reads (typed 404 included), and a
  * ref claiming another serving instance is never silently re-pointed at this
@@ -105,7 +105,7 @@ describe('resolveCollectionRefs', () => {
     const stale = parseRef('zotero://user/0/collection/COLL0001?server=OTHER1234')
     const resolved = await directory.resolveCollectionRefs([stale], LIBRARY, undefined, undefined)
     // The resolved ref carries the live answer's identity, never the stale
-    // claim — and the live read, not the listing, proved it.
+    // claim, and the live read, not the listing, proved it.
     expect(resolved[0]?.serverId).toBe(SERVER_ID)
     expect(
       mock.requests.filter((r) => r.pathname === '/api/users/0/collections/COLL0001'),

@@ -2,7 +2,7 @@
  * The SourcesTab specs' shared fixtures and mount: the two status views the
  * connectivity strip renders, the chat-row and session builders the collectors
  * read, the settled tool results the source workspace is built from, and
- * `mountTab` — the tab mounted with stubbed session/chat hooks and a scripted
+ * `mountTab`: the tab mounted with stubbed session/chat hooks and a scripted
  * status face. `SourcesTab.helpers`, `.states` and `.interaction` share this
  * one copy instead of carrying three drifting sets.
  * @module tests/client/helpers/sources-tab-harness
@@ -66,7 +66,7 @@ export function toolRow(
 
 /**
  * A chat snapshot whose node store carries the given rows; the other faces
- * stay opaque. Implements both `order` (presentation order) and `get`, the
+ * stay opaque. Implements both `order` (presentation order), and `get`, the
  * two faces the collectors read. `values` mirrors the same rows for store
  * shape completeness (the harness `ChatNodeStore` always provides it); the
  * production collector never reads it, and the order-vs-values test above

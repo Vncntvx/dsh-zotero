@@ -87,7 +87,7 @@ function fakeWorld(mountRejects: unknown = undefined): FakeApplyWorld {
     eventDisposes: 0,
   }
   // Effects registered while a fiber's callback runs belong to that fiber, so
-  // disposing the fiber unwinds exactly what it registered — the same
+  // disposing the fiber unwinds exactly what it registered: the same
   // ownership cordis gives `ctx.effect`.
   let collector: Array<() => void> | undefined
   const ctx = {
@@ -123,7 +123,7 @@ function fakeWorld(mountRejects: unknown = undefined): FakeApplyWorld {
     },
     /**
      * Start a fiber for `deps`, run its callback, and hand back the disposer
-     * that unwinds the effects it registered — the shape
+     * that unwinds the effects it registered: the shape
      * `vendor/cordis/src/registry.ts` gives `ctx.inject`.
      */
     inject: (deps: readonly string[], callback: (ctx: unknown) => void) => {
@@ -390,7 +390,7 @@ describe('the browser-half entry', () => {
     // reports the plugin as failed to load instead of leaving a status strip
     // that can never answer (`docs/cookbook/adding-a-remote-api.md`).
     await expect(applyEntry(world)).rejects.toThrow('gateway offline')
-    // The UI fiber is never started — it sits behind the mount — so nothing is
+    // The UI fiber is never started (it sits behind the mount), so nothing is
     // registered and nothing needs withdrawing.
     expect(world.injectDeps).toEqual([])
     expect(world.injected).toEqual([])
@@ -408,7 +408,7 @@ describe('the browser-half entry', () => {
     const world = fakeWorld()
     const dispose = await applyEntry(world)
     // The UI fiber declared `remote.zotero`, so `ctx.remote.zotero` is a legal
-    // service read there — the same shape the harness's own client plugins use.
+    // service read there: the same shape the harness's own client plugins use.
     expect(world.injectDeps).toEqual([
       ['remote.zotero', 'locale', 'slots', 'configForms', 'uiConversation'],
     ])
@@ -528,7 +528,7 @@ describe('the browser-half entry', () => {
 
     // Toggle the flag: the gate subscription withdraws the tab. The fake scope
     // publishes its listeners synchronously inside the write, so the awaited
-    // write is the whole wait — the tab is withdrawn by the time it resolves.
+    // write is the whole wait: the tab is withdrawn by the time it resolves.
     await world.scope.set('webEnabled', false)
     expect(world.injected.find((entry) => entry.name === 'conversation.view')?.active).toBe(false)
     expect(world.injectDisposes).toBe(1)

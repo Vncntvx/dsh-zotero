@@ -37,7 +37,7 @@ const zoteroStatusSchema = z
 /**
  * Strict status codec. The `TypertCodec` strict arm is exactly
  * `{ mode, typeSymbol, create }` (plus optional `encode`/`decode` for
- * byte-carrying results, which this pure-JSON view does not need) — no live
+ * byte-carrying results, which this pure-JSON view does not need), so no live
  * `schema` property is carried.
  */
 const zoteroStatusCodec = {

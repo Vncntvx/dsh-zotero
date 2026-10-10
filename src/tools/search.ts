@@ -1,7 +1,7 @@
 /**
  * The `zotero_search` tool: discover candidates in the user's library with
- * Zotero's own quick search. Output stays compact — refs, titles, creators,
- * years, and Zotero's best-attachment hint — so the Agent can escalate to
+ * Zotero's own quick search. Output stays compact (refs, titles, creators,
+ * years, and Zotero's best-attachment hint), so the Agent can escalate to
  * `zotero_get`/`zotero_retrieve` with stable refs.
  * @module dsh-zotero/tools/search
  */
@@ -396,7 +396,7 @@ function searchPresentationMeta(_args: SearchArgs, value: SearchOutput): JsonVal
 /**
  * The completed search card: a compact page summary. `meta` is absent on
  * nested code dispatch or malformed replay records, and a failed call keeps
- * the raw error content — both fall back to the generic card.
+ * the raw error content; both fall back to the generic card.
  */
 function presentSearchResult(_args: SearchArgs, result: ToolResult): ToolResultView | undefined {
   const record = metaRecordOf(result)
@@ -423,7 +423,7 @@ export function registerSearchTool(ctx: Context, service: ZoteroService): void {
       description: [
         "Search the user's local Zotero research library for candidate papers.",
         'metadata mode matches titles, creators, and years; everything mode also searches indexed full text.',
-        'On the first page of a library or collection scope (saved-search scopes never scan note bodies), a client-side note-body scan lists matching notes separately in supplemental — they fill unused page slots up to the limit, are ordered by dateModified desc, never displace a full primary result page, and are not part of the paged total/nextOffset; notes show a synthesized title from their first line.',
+        'On the first page of a library or collection scope (saved-search scopes never scan note bodies), a client-side note-body scan lists matching notes separately in supplemental; they fill unused page slots up to the limit, are ordered by dateModified desc, never displace a full primary result page, and are not part of the paged total/nextOffset; notes show a synthesized title from their first line.',
         "scope restricts the search to a collection or a Zotero saved search by name or zotero:// ref; additional filters combine with a saved search's own conditions.",
         'Results carry stable zotero:// refs for zotero_get/zotero_retrieve, and a scope ref for pagination via offset.',
       ].join(' '),

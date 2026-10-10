@@ -3,7 +3,7 @@
  * {@link ZoteroProvider}. Capabilities are declared only for what this
  * provider implements, so a capability gate can never route work into a
  * method that does not exist. Every domain pipeline lives beside it in
- * `local/*-domain.ts`; this class owns the wiring — the HTTP client, the
+ * `local/*-domain.ts`; this class owns the wiring: the HTTP client, the
  * projected limits, and the scope directory whose caches rebuild with the
  * provider on every settings commit.
  *
@@ -133,7 +133,7 @@ export class LocalApiProvider implements ZoteroProvider {
   /**
    * The write collaborators, asserted: the service only reaches the write
    * methods through the `write` capability gate, which this provider declares
-   * exactly when both collaborators exist — so this assertion guards direct
+   * exactly when both collaborators exist, so this assertion guards direct
    * provider callers, not the service path. Collection writes invalidate the
    * scope directory through the injected callback, so a renamed cache never
    * outlives the write that stale-dated it.
@@ -159,7 +159,7 @@ export class LocalApiProvider implements ZoteroProvider {
 
   /**
    * Resolve a mixed batch of collection refs and exact names, preserving
-   * input order — the partition/ref-listing/name-resolution orchestration
+   * input order. The partition/ref-listing/name-resolution orchestration
    * lives once in `scope-directory.resolveCollectionsMixed`.
    */
   private resolveCollections(
@@ -184,7 +184,7 @@ export class LocalApiProvider implements ZoteroProvider {
   /**
    * The field names one item type accepts. The set is static for a running
    * Zotero build, so each (instance, item type) pair is fetched once and
-   * memoized — a failed or aborted fetch is not cached, and a second update
+   * memoized: a failed or aborted fetch is not cached, and a second update
    * of the same item type costs no request.
    */
   private itemTypeFields(itemType: string, signal?: AbortSignal): Promise<ReadonlySet<string>> {

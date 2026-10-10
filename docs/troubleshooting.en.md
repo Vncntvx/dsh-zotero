@@ -28,9 +28,9 @@ This document lists common issues, causes, and diagnostic steps when using dsh-z
 - **Cause**: The current session was created before the plugin was loaded.
 - **Fix**: Start a new chat session to use the newly installed tools.
 
-## 5. Search Yields Results but Retrieve Returns No Full-Text Evidence
+## 5. Search Yields Results but Retrieve Returns No Full-Text Passages
 
-- **Symptom**: `zotero_retrieve` returns an empty evidence list, or `sourcesSkipped` includes `"fulltext"`.
+- **Symptom**: `zotero_retrieve` returns an empty passage list, or `sourcesSkipped` includes `"fulltext"`.
 - **Cause**: The PDF has not been indexed in Zotero yet.
 - **Fix**: Right-click the attachment in Zotero and select "Rebuild Index", or use `zotero_attachment` to obtain the local file path.
 
@@ -78,11 +78,12 @@ This document lists common issues, causes, and diagnostic steps when using dsh-z
 - **Cause**: DSH's "Work details" setting defaults to standard mode, automatically folding completed tool cards.
 - **Fix**: Click the timer summary bar above the message to expand the tool cards. To keep tool cards expanded by default, navigate to **Settings → General → Work details** and select **Verbose** (`verbose`).
 
-## 13. A Write Is Refused Before Any Request Goes Out
+## 13. A Write Is Refused with ZOTERO_INVALID_ARGUMENT
 
-- **Symptom**: A write tool returns `ZOTERO_INVALID_ARGUMENT` immediately, with messages such as "a sibling collection of that name exists", "the item type is unsupported", "provide at least a title or a url", "the field is not valid for this item type", "at least one of add and remove", or "the tag query is refused".
-- **Cause**: These are argument and domain-constraint refusals issued **before any network request** — Zotero receives no write, and no plan card appears.
-- **Fix**: Correct the argument as the message says: rename the colliding collection; use an `itemType` from the closed set (`webpage` / `journalArticle` / `book` / `conferencePaper` / `report` / `thesis` / `document` / `preprint`); send only fields Zotero accepts for that item type in `set`; keep list arguments non-empty.
+- **Symptom**: A write tool returns `ZOTERO_INVALID_ARGUMENT` right away, with messages such as `Unknown itemType "…"`, `A new item needs at least a title or a URL`, `add and remove must carry at least one entry between them`, or `tags must carry at least one item`.
+- **Cause**: These checks run in the tool layer before any network request, so no plan card appears and Zotero receives no write.
+- **Fix**: Correct the argument as the message says: use an `itemType` from the closed set (`webpage` / `journalArticle` / `book` / `conferencePaper` / `report` / `thesis` / `document` / `preprint`); keep list arguments non-empty; send only updatable fields in `set`.
+- A second class of `ZOTERO_INVALID_ARGUMENT` needs a read to decide and so arrives after approval and after those reads: `A collection named "…" already exists at that level`, or `Field "…" is not valid for item type "…"`. Neither issues a write, but the plan card has already appeared.
 
 ## 14. Delete Preview Counts Show "unknown"
 
@@ -93,11 +94,11 @@ This document lists common issues, causes, and diagnostic steps when using dsh-z
 ## 15. A Write Returns ZOTERO_WRITE_CONFLICT (412)
 
 - **Symptom**: The write submission is refused with `ZOTERO_WRITE_CONFLICT`.
-- **Cause**: The object changed between the read and the commit, so the version precondition failed — expected safety behavior.
+- **Cause**: The object changed between the read and the commit, so the version precondition failed. This is the expected safety behavior.
 - **Fix**: Run the tool once more; the re-run re-reads the version and redoes the merge.
 
 ## 16. The Result Is committed-unverified
 
 - **Symptom**: A write tool returns `committed-unverified`, and the card shows a warning state instead of a success badge.
 - **Cause**: Zotero accepted the write, but its response could not prove the final state (commit unknown or the saved state unverified).
-- **Fix**: **Do not retry**; reconcile by key/ref in Zotero to check whether the object was created or changed.
+- **Fix**: Do not retry. Reconcile by key/ref in Zotero to check whether the object was created or changed.

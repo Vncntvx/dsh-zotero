@@ -28,9 +28,9 @@
 - **原因**：当前会话创建于插件加载之前。
 - **排查**：新建对话会话即可使新安装的工具生效。
 
-## 5. 搜索有结果但无全文证据
+## 5. 搜索有结果但检索不到全文片段
 
-- **现象**：`zotero_retrieve` 返回空证据列表，或 `sourcesSkipped` 中包含 `"fulltext"`。
+- **现象**：`zotero_retrieve` 返回空片段列表，或 `sourcesSkipped` 中包含 `"fulltext"`。
 - **原因**：目标 PDF 在 Zotero 中尚未建立全文索引。
 - **排查**：在 Zotero 客户端中右键点击该附件，选择“重新建立索引”；或使用 `zotero_attachment` 获取本地文件路径进行查阅。
 
@@ -78,11 +78,12 @@
 - **原因**：DSH 通用设置中的“工作步骤展示”默认为标准模式，执行完毕后自动折叠过程卡片。
 - **排查**：点击消息上方的过程摘要栏即可就地展开卡片；若需始终默认展开，可在 **设置 → 通用设置 → 工作步骤展示**（`Settings → General → Work details`）中选择 **完全展开**（`verbose`）。
 
-## 13. 写入在发出请求前就被拒绝
+## 13. 写入被 `ZOTERO_INVALID_ARGUMENT` 拒绝
 
-- **现象**：写工具立即返回 `ZOTERO_INVALID_ARGUMENT`，消息形如「同级已存在同名合集」「item type 不在支持列表」「title 与 url 至少提供其一」「字段不被该条目类型接受」「add 与 remove 至少要有一项」「标签查询被拒绝」。
-- **原因**：这些是参数与领域约束在**任何网络请求之前**的拒绝 —— Zotero 没有收到写请求，计划卡也不会弹出。
-- **排查**：按消息修正参数：重名合集换一个名称；`itemType` 使用闭集（`webpage` / `journalArticle` / `book` / `conferencePaper` / `report` / `thesis` / `document` / `preprint`）；`set` 只写该条目类型在 Zotero 中接受的字段；列表参数非空。
+- **现象**：写工具立即返回 `ZOTERO_INVALID_ARGUMENT`，消息形如 `Unknown itemType "…"`、`A new item needs at least a title or a URL`、`add and remove must carry at least one entry between them`、`tags must carry at least one item`。
+- **原因**：这类检查在工具层完成，先于任何网络请求；因此不弹出计划卡，Zotero 也不会收到写入。
+- **排查**：按消息修正参数：`itemType` 使用闭集（`webpage` / `journalArticle` / `book` / `conferencePaper` / `report` / `thesis` / `document` / `preprint`）；列表参数非空；`set` 只写可更新字段。
+- 另一类 `ZOTERO_INVALID_ARGUMENT` 需要先读取才能判定，因此出现在批准与读取之后：`A collection named "…" already exists at that level`、`Field "…" is not valid for item type "…"`。两者仍不发写入请求，但计划卡已弹出。
 
 ## 14. 删除计划卡上的数量显示 unknown
 
@@ -93,11 +94,11 @@
 ## 15. 写入返回 ZOTERO_WRITE_CONFLICT (412)
 
 - **现象**：写入提交被拒绝，返回 `ZOTERO_WRITE_CONFLICT`。
-- **原因**：读取与提交之间对象被并发修改，版本前置条件未满足 —— 这是预期的安全行为。
+- **原因**：读取与提交之间对象被并发修改，版本前置条件未满足；这是预期的安全行为。
 - **排查**：重跑一次工具；重跑会重新读取版本并重新执行合并。
 
 ## 16. 结果为 committed-unverified（写入已提交但未核验）
 
-- **现象**：写工具返回 `committed-unverified`，卡片显示警示状态而非成功徽标。
+- **现象**：写工具返回 `committed-unverified`，卡片显示警示状态，不显示成功徽标。
 - **原因**：Zotero 已接受写入，但响应无法证明最终状态（提交未知或保存状态未核验）。
-- **排查**：**不要重试**；在 Zotero 中按 key/ref 核对对象是否已创建或变更。
+- **排查**：不要重试；在 Zotero 中按 key/ref 核对对象是否已创建或变更。

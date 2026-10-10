@@ -2,7 +2,7 @@
  * Shared presentation for the write tools: the committed-unverified output
  * variant, its render and card titles, the create tools' result meta, and
  * the library-version line every write receipt ends with. One wording per
- * sentence — the tools must not drift on the retry-safety contract they
+ * sentence, so the tools cannot drift on the retry-safety contract they
  * display.
  * @module dsh-zotero/tools/write-present
  */
@@ -50,7 +50,7 @@ export interface CommittedUnverifiedLike {
 /**
  * Render the committed-unverified receipt: what Zotero may have done (the
  * past verb differs per create), the identity hint when the response carried
- * one, and the reconciliation instruction — never a retry.
+ * one, and the reconciliation instruction, never a retry.
  */
 export function renderCommittedUnverified(
   value: CommittedUnverifiedLike,
@@ -273,7 +273,7 @@ export function presentUpdateResultView(
  * the deleted receipt with its ref when the outcome carried one (a library
  * tags delete has no single ref, so its receipt is the plain sentence).
  *
- * The two nouns are the two spellings the cards already use — the declined
+ * The two nouns are the two spellings the cards already use: the declined
  * arm names the operation ("collection delete") and the receipt names the
  * object ("collection"). Passing them separately keeps those pinned titles
  * byte-identical instead of normalizing the wording in a "refactor".

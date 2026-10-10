@@ -1,7 +1,7 @@
 /**
  * The `/zotero` human command (optional synonym `status`): the control-plane
  * check for Zotero connectivity. Search/notes/tags/collections stay
- * agent-tool territory — slash commands are not a second Zotero CLI.
+ * agent-tool territory, since slash commands are not a second Zotero CLI.
  *
  * The `input` descriptor is what admits the optional `status` argument: the
  * harness only routes a trailing word to a handler when the definition
@@ -9,7 +9,7 @@
  * dropping `input` would silently demote `/zotero status` to a model prompt.
  *
  * `recordInput` stays at its default (`true`) so the durable `command/run`
- * keeps `args` — the raw input after the command name. The client's
+ * keeps `args`, the raw input after the command name. The client's
  * command-input projection reads that field to echo the line the user typed;
  * `recordInput: false` would strip it and the bubble would collapse to a bare
  * `/zotero` even for `/zotero status`.
@@ -49,7 +49,7 @@ export function statusLine(label: string, value: string | undefined): string {
 export function formatStatus(status: ZoteroStatus): string {
   // The dialled address leads both arms. When the probe answered it is the
   // endpoint the facts below came from; when it did not, it is the address
-  // that failed to answer — the first thing worth checking either way.
+  // that failed to answer, the first thing worth checking either way.
   const endpoint = statusLine(ZOTERO_STATUS_FIELD_ENDPOINT, status.endpoint)
   if (!status.connected) {
     return `${ZOTERO_STATUS_DISCONNECTED}\n${endpoint}\n${status.diagnosis}`

@@ -6,7 +6,7 @@
  * headroom, cap, and pagination rules that bound it.
  *
  * These tests drive one route that answers two different bodies depending on
- * the query params — the primary listing or the note scan — so their handlers
+ * the query params (the primary listing or the note scan), so their handlers
  * are the subject, not an installer's option.
  * @module tests/local/search-scan
  */
@@ -283,7 +283,7 @@ describe('search: note-content scan', () => {
       total: 0,
       path: '/api/users/0/collections/COLL1234/items/top',
     })
-    // Zotero child notes carry no `collections` of their own — membership
+    // Zotero child notes carry no `collections` of their own: membership
     // belongs to the parent bibliographic item.
     const childIn = noteRow({
       data: { note: 'cascade risk note', parentItem: 'PARE1111', collections: [] },
@@ -332,7 +332,7 @@ describe('search: note-content scan', () => {
       total: 0,
       path: '/api/users/0/collections/COLL1234/items/top',
     })
-    // 60 matched child notes over 59 distinct parents — one parent shared by
+    // 60 matched child notes over 59 distinct parents: one parent shared by
     // two notes proves deduplication before batching.
     const notes = Array.from({ length: 60 }, (_, i) =>
       noteRow({
@@ -581,7 +581,7 @@ describe('search: note-content scan', () => {
 
   it('reads that TTL live: a raised TTL adopts the listing the last read cached', async () => {
     // The directory compares the TTL at each lookup through the provider's
-    // live limits, so no rebuild is needed for the edit to apply — and the
+    // live limits, so no rebuild is needed for the edit to apply, and the
     // entries already cached keep their `fetchedAt`, which this test observes.
     let scopeListingTtlMs = 0
     const live = new LocalApiProvider(testHttpClient(mock.baseUrl), () => ({
@@ -636,7 +636,7 @@ describe('search: note-content scan', () => {
 
   it('finds a collection created after the cached listing via the miss re-check', async () => {
     let created = false
-    // The listing answers per request: the first read (a miss) and the
+    // The listing answers per request: the first read (a miss), and the
     // re-check after `created` flips must see different bodies.
     mock.route('GET', '/api/users/0/collections', (req, res, helpers) =>
       helpers.json(created ? [collectionRow({ data: { name: 'Brand New' } })] : COLLECTIONS, {

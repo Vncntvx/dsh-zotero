@@ -3,8 +3,8 @@
  * measures, what it drops on overflow, and the per-tool pages whose card
  * depends on which keys survive.
  *
- * Split out of `presentation-meta.spec.ts` along its own seam — the budget is
- * one mechanism shared by every projector, not a property of any one of them —
+ * Split out of `presentation-meta.spec.ts` along its own seam: the budget is
+ * one mechanism shared by every projector, not a property of any one of them,
  * and that split is what keeps the projector spec under the size ratchet.
  * @module tests/unit/presentation-budget
  */

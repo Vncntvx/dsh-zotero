@@ -1,6 +1,6 @@
 /**
  * The `zotero_create_note` tool: create a research note in the personal
- * library — standalone, or a child note under a parent item — with tags,
+ * library, either standalone or a child note under a parent item, with tags,
  * collections, and source relations. The plan-review approval runs before
  * Zotero is contacted; the markdown body is converted to note HTML by the
  * write domain under the escape-unknown grammar.
@@ -71,7 +71,7 @@ const CREATE_NOTE_PARAMETERS = {
     type: 'string',
     required: true,
     description:
-      'The note body in markdown. Supported: paragraphs, # to #### headings, **bold**, *italic*, `code`, fenced code, > quotes, - and 1. lists (one nesting level), pipe tables with a |---| separator row, [text](https://… or zotero://…) links. Anything else is escaped and shown as literal text — raw HTML never passes through, so write markdown, not HTML.',
+      'The note body in markdown. Supported: paragraphs, # to #### headings, **bold**, *italic*, `code`, fenced code, > quotes, - and 1. lists (one nesting level), pipe tables with a |---| separator row, [text](https://… or zotero://…) links. Anything else is escaped and shown as literal text; raw HTML never passes through, so write markdown, not HTML.',
   },
 } as const
 
@@ -123,8 +123,8 @@ export function createNotePlan(args: CreateNoteArgs): string {
   const { text, truncated } = truncateText(args.markdown, NOTE_PREVIEW_CHARS)
   const preview = truncated ? `${text}…` : text
   // buildRequest already refused non-empty collections on a child note, so a
-  // planned child write never carries collections — the card must say what
-  // the domain will actually do (inherit), not echo a list that cannot land.
+  // planned child write never carries collections. The card must say what the
+  // domain will actually do (inherit), not echo a list that cannot land.
   const collections =
     args.parentItem !== undefined
       ? '(inherited from parent item)'
@@ -173,7 +173,7 @@ function buildRequest(args: CreateNoteArgs, config: ResolvedConfig): ZoteroCreat
       ? undefined
       : assertWriteList('sourceRefs', args.sourceRefs, config.writeListMaxItems)
   const parentItem = args.parentItem
-  // Same constant the write domain throws — dual-end, one wording.
+  // Same constant the write domain throws: one wording at both ends.
   if (parentItem !== undefined && collections !== undefined && collections.length > 0) {
     invalid(WRITE_CHILD_COLLECTIONS_MESSAGE)
   }
@@ -219,7 +219,7 @@ export function registerCreateNoteTool(ctx: Context, service: ZoteroService): ()
     defineTool({
       name: 'zotero_create_note',
       description:
-        "Create a research note in the Zotero personal library — standalone, or a child note under a parent item — with tags, collections, and source relations. The markdown body is converted to Zotero note HTML under an escape-unknown grammar (raw HTML is escaped, never executed). Collections apply to standalone notes only; a child-note call that also passes non-empty collections is refused as ZOTERO_INVALID_ARGUMENT before any plan is shown (child notes inherit their parent item's collections). Zotero itself may show its authorization dialog on first use. " +
+        "Create a research note in the Zotero personal library, either standalone or a child note under a parent item, with tags, collections, and source relations. The markdown body is converted to Zotero note HTML under an escape-unknown grammar (raw HTML is escaped, never executed). Collections apply to standalone notes only; a child-note call that also passes non-empty collections is refused as ZOTERO_INVALID_ARGUMENT before any plan is shown (child notes inherit their parent item's collections). Zotero itself may show its authorization dialog on first use. " +
         WRITE_PLAN_OUTCOME_DESCRIPTION +
         WRITE_COMMITTED_UNVERIFIED_DESCRIPTION,
       parameters: CREATE_NOTE_PARAMETERS,

@@ -1,9 +1,9 @@
 /**
  * The `zotero_changes` tool: incremental awareness of the local library. On
- * the verified build (Zotero 10.0.2-beta.9) versions are local transactions —
- * every object save advances the library counter and stamps the object — so a
- * `since` diff answers "what changed in my library" request-driven, without the
- * cloud and without background polling. The domain decides that per call from
+ * the verified build (Zotero 10.0.2-beta.9) versions are local transactions:
+ * every object save advances the library counter and stamps the object. A
+ * `since` diff therefore answers "what changed in my library" request-driven,
+ * without the cloud and without background polling. The domain decides that per call from
  * the responses (a build that reports no library version is `versionUnavailable`)
  * rather than from a version number, which no response header carries. A call
  * without `since` takes a baseline reading and mints the cursor (version plus
@@ -69,8 +69,8 @@ const ALL_INCLUDES = ALL_CHANGES_INCLUDES
 /**
  * The renderer's label per changed-section key, in contract order. `satisfies`
  * is the real exhaustiveness pin: a section added to `CHANGE_SECTIONS`
- * without a render label — or dropped from the contract while the renderer
- * still names it — fails the build here, not as a silently missing line.
+ * without a render label, or dropped from the contract while the renderer
+ * still names it, fails the build here rather than as a silently missing line.
  */
 const CHANGE_RENDER_LABELS = {
   items: 'Items (top-level)',
@@ -143,7 +143,7 @@ const BASE_CHANGES_PARAMETERS = {
     // stays the single authority (buildRequest falls back to it directly).
     default: [...DEFAULT_INCLUDES] as ZoteroChangesInclude[],
     description:
-      'Resource kinds to diff; defaults to everything but fulltext. items covers the whole item space as Zotero partitions it — top-level items, child objects (notes, attachments, annotations) and items in the trash — and reports each as its own list, because a child object carries its own version: editing one advances the library without touching any top-level item. deleted lists tombstoned items, collections, saved searches and tag names. fulltext is a separate listing: its endpoint answers in the full-text index\u2019s own version counter, so its rows are not a delta on the library version and it is left out unless named explicitly.',
+      'Resource kinds to diff; defaults to everything but fulltext. items covers the whole item space as Zotero partitions it: top-level items, child objects (notes, attachments, annotations), and items in the trash. Each is reported as its own list, because a child object carries its own version: editing one advances the library without touching any top-level item. deleted lists tombstoned items, collections, saved searches and tag names. fulltext is a separate listing: its endpoint answers in the full-text index\u2019s own version counter, so its rows are not a delta on the library version and it is left out unless named explicitly.',
   },
 } as const
 
@@ -309,7 +309,7 @@ export const FULLTEXT_COUNTER_NOTE =
 
 /**
  * Turn the schema-validated cursor argument into the domain value. The schema
- * owns the shape; what it cannot express is checked here — a blank instance
+ * owns the shape, and what it cannot express is checked here: a blank instance
  * id, a version outside a counter's range, or a library this plugin does not
  * serve would otherwise pass through as an unpinned cursor.
  */
@@ -363,16 +363,16 @@ export const BASELINE_CURSOR_REUSE =
   'Pass that cursor back as since on a later call to see what changed.'
 
 export const BASELINE_NO_VERSION_MESSAGE =
-  'Baseline reading: this Zotero build reports no library version, so there is no cursor to diff from — incremental changes cannot be read here.'
+  'Baseline reading: this Zotero build reports no library version, so there is no cursor to diff from, and incremental changes cannot be read here.'
 export const BASELINE_NO_INSTANCE_MESSAGE =
   'Baseline reading: the library is at a version, but the answering build named no instance to pin a cursor to, so there is nothing to pass back.'
 
 export const CHANGES_NOT_ADVANCED_LIBRARY_MOVED =
-  'version not advanced: the library changed while this call was reading — re-run for a settled cursor.'
+  'version not advanced: the library changed while this call was reading; re-run for a settled cursor.'
 export const CHANGES_NOT_ADVANCED_NO_VERSION =
   'version not advanced: this Zotero build reported no library version for this read, so the diff cannot be pinned to one.'
 export const CHANGES_NOT_ADVANCED_UNVERIFIED =
-  'version not advanced: the read did not verify the whole range — do not reuse a version from this call.'
+  'version not advanced: the read did not verify the whole range; do not reuse a version from this call.'
 export const CHANGES_NOT_ADVANCED_FULLTEXT =
   'version not advanced: fulltext uses an independent index counter, so this mixed listing has no library cursor; run a library-only diff when you need a resumable cursor.'
 
@@ -469,7 +469,7 @@ export function renderChanges(args: ChangesArgs, value: ChangesOutput): ContentB
  * The completed changes card: changed/deleted counts, or the baseline
  * version when the call took a baseline reading. `meta` is absent on nested
  * code dispatch or malformed replay records, and a failed call keeps the raw
- * error content — both fall back to the generic card.
+ * error content; both fall back to the generic card.
  */
 function presentChangesResult(_args: ChangesArgs, result: ToolResult): ToolResultView | undefined {
   const record = metaRecordOf(result)
@@ -530,7 +530,7 @@ export function registerChangesTool(
       name: 'zotero_changes',
       description: [
         'See what changed in the Zotero library since a version: new/edited items (top-level items, the notes/attachments/annotations under them, and trashed items, each listed apart), collections, saved searches, reindexed full text, and deletions.',
-        'Call without since first to take a baseline reading, then pass the cursor it returns back as since — fully local, no cloud.',
+        'Call without since first to take a baseline reading, then pass the cursor it returns back as since, fully local, no cloud.',
         'Listings are capped digests; totals reports the true counts behind them. A returned cursor always accounts for every change in the range it reports, so it is safe to pass back as since; a result without one is not. The cursor is pinned to the instance and library it came from, and a cursor from another database is refused instead of diffed against this one.',
         'unobservable names every kind this call could not cover, with the reason: a build that does not serve it, a range older than the history the build keeps, or an answer it could not read. Never read an absent listing as "nothing changed" before checking unobservable; deleted is present exactly when removals were actually observed. versionUnavailable means the build reports no library version at all, so no diff can be taken from it.',
       ].join(' '),

@@ -67,7 +67,7 @@ describe('client graph authority', () => {
   it('rejects a package that is neither external nor on the inline allowlist', () => {
     // The hole this closes: react-dom is a platform module the shell shares,
     // so bundling it would give the page a second React DOM. Nothing else
-    // refused it — it is not host-owned and its path is not `src/`.
+    // refused it: it is not host-owned and its path is not `src/`.
     const violations = clientGraphViolations(
       metafileOf([
         'src/client/index.ts',

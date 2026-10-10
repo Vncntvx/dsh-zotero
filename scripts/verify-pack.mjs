@@ -9,7 +9,7 @@
  * market's post-install validation finds no loadable entry, removes the
  * package, and reports "nothing installable … or ship no prebuilt artifacts".
  * A published tarball must never be in that state, so the release path fails
- * here first — naming the missing path and the command that produces it.
+ * here first, naming the missing path and the command that produces it.
  *
  * The expected paths come from `package.json` itself (`main`, `exports`,
  * `icon`, `dsh.bundle.patch`), the same fields the market's entry and

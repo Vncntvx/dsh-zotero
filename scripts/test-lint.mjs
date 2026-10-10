@@ -17,7 +17,7 @@
  * unrelated commit, so the numbers are reviewed here.
  *
  * The pure predicates below are exported and driven by `tests/unit/test-lint`
- * so the guards themselves cannot decay — a regex that stopped matching the
+ * so the guards themselves cannot decay: a regex that stopped matching the
  * form its docstring names would otherwise fail the suite green.
  * @module scripts/test-lint
  */
@@ -36,7 +36,7 @@ export const TEXT_ROOTS = ['src', 'tests', 'scripts', 'docs', 'locale']
  * of this check and never were: a `.png` under `docs/images/` is supposed to
  * hold arbitrary bytes, while a `.ts` file holding them is the corruption this
  * guard exists to catch. `.mts`/`.cts` are contract text like every other
- * TypeScript flavor — the build gates read them.
+ * TypeScript flavor: the build gates read them.
  */
 export const TEXT_EXTENSIONS = [
   '.ts',
@@ -285,9 +285,9 @@ export function stripCommentsAndStrings(source) {
 /**
  * A focused or disabled test is a decision that outlives its author: `.only`
  * silently removes every other case from the run, and `.skip`/`.todo` turn a
- * red test into a green suite. The chain forms count too — `it.only.each`,
+ * red test into a green suite. The chain forms count too (`it.only.each`,
  * `it.concurrent.only`, and a `.only` continued on the next line all focus or
- * disable just as hard — so the scan runs over comment- and string-stripped
+ * disable just as hard), so the scan runs over comment- and string-stripped
  * content with a chain-aware pattern rather than one line at a time.
  *
  * `runIf` stays the sanctioned gate. Its unconditional-disable spelling,

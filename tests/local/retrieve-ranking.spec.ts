@@ -89,7 +89,7 @@ describe('retrieve ranking', () => {
     expect(result.truncated).toBe(false)
     const sources = result.evidence.map((entry) => entry.source)
     // The full ranked order is contract: the fulltext chunk carries every
-    // query term (flash tf 1, attention tf 2) and the abstract only
+    // query term (flash tf 1, attention tf 2), and the abstract only
     // `attention`. The annotation and the note share no query term, so their
     // zero scores drop out instead of masquerading as ranked evidence.
     expect(sources).toEqual(['fulltext', 'abstract'])

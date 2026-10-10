@@ -48,7 +48,7 @@ export interface Progress {
  * whenever that state may have changed; the spec awaits {@link Progress.when}
  * with the state it wants to have reached. `when` reads the state before it
  * waits, so a notification that already happened is never lost, and the wait
- * is a promise the spec created — nothing about it depends on how long the
+ * is a promise the spec created, nothing about it depends on how long the
  * code under test takes.
  * @returns the notify/when pair.
  */

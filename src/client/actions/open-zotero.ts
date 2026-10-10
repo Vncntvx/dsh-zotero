@@ -1,8 +1,8 @@
 /**
  * Open-in-Zotero deep links, built purely from session facts (refs the
  * session's tool calls produced). The links are anchors the browser hands to
- * the OS protocol handler — Zotero registers `zotero://` on every desktop
- * platform, and the app's protocol handler is source-verified; no official
+ * the OS protocol handler: Zotero registers `zotero://` on every desktop
+ * platform, and the app's protocol handler is source-verified. No official
  * documentation page exists, so the UI words the capability accordingly and
  * always keeps a copy-ref fallback. The verdict follows the item's
  * evidenceMatch: a ref qualified for another instance must never silently open
@@ -59,7 +59,7 @@ export function openVerdictOf(item: SourceItem): OpenVerdict {
 
 /** The two deep links one Zotero child row can offer. */
 export interface ChildRowLinks {
-  /** Open the row itself — a note or an annotation — in Zotero. */
+  /** Open the row itself (a note or an annotation) in Zotero. */
   readonly selectUrl: string | null
   /**
    * Open the PDF it lives in, at its page. Only an annotation's parent is a PDF;
@@ -73,7 +73,7 @@ export interface ChildRowLinks {
  * its PDF, so that is the link worth offering for it; a note or an attachment
  * opens on its own. The `zotero_children` card and the `zotero_get` card's
  * previews both read their rows through here, so the two cannot disagree about
- * what a given row can link to — including which parent is a PDF.
+ * what a given row can link to, including which parent is a PDF.
  */
 export interface ChildLinkRow {
   readonly ref: string

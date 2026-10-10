@@ -113,7 +113,7 @@ export function ItemToolView(props: ItemToolViewProps) {
     // `shown` is what the card actually draws, not what the projection returned:
     // the preview lists are capped independently, so a paper with 50 notes
     // would otherwise be captioned "50 shown" over two preview rows. It is
-    // `null` for a kind this card draws no list of at all — attachments get a
+    // `null` for a kind this card draws no list of at all: attachments get a
     // count only, and pairing that count with a "shown" of zero would claim
     // nothing was drawn when the question was never on the table.
     const counts: readonly {

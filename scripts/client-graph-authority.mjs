@@ -14,7 +14,7 @@
  * Written as **runtime authority**, not as a denylist of files that happen to
  * import zod today:
  *
- * - `src/client/**` — the browser half.
+ * - `src/client/**`: the browser half.
  * - Shared pure surfaces both halves already use: wire identity (`contract`),
  *   settings wire name (`settings-namespace`), JSON guards (`json`), the
  *   `zotero://` ref grammar (`ref-grammar`), export-key grammar
@@ -46,8 +46,8 @@ export const HOST_ONLY_PACKAGE_INPUT =
  * as a silent second copy of a module the shell already shares.
  *
  * `clsx` is the whole list: a tiny classname joiner with no module identity
- * the shell needs to share. React and its family are the opposite case —
- * they must stay external so every bundle sees one instance — and are
+ * the shell needs to share. React and its family are the opposite case:
+ * they must stay external so every bundle sees one instance, and are
  * therefore in `EXTERNALS`, not here.
  */
 export const CLIENT_INLINE_PACKAGES = ['clsx']
@@ -55,8 +55,8 @@ export const CLIENT_INLINE_PACKAGES = ['clsx']
 /**
  * Whether a `node_modules/` graph input belongs to a package the allowlist
  * admits. A file's package is the one that physically owns it, so a nested
- * dependency (`node_modules/a/node_modules/b/...`) is judged as `b` — the
- * package whose code would actually be bundled — and not as its parent. The
+ * dependency (`node_modules/a/node_modules/b/...`) is judged as `b` (the
+ * package whose code would actually be bundled), and not as its parent. The
  * leading `.*` is greedy precisely to select the last `node_modules/` segment.
  * @param key - normalized metafile input key.
  * @returns the package name when the input is inside one, else undefined.
@@ -71,7 +71,7 @@ export function packageNameOf(key) {
  * Harness specifiers a client bundle may **inline**. Counterpart of the three
  * constants in `packages/client/tsdown.client.ts` at **dsh-v0.2.1-alpha.1**:
  * `INLINE_SAFE`, `GENERATED_REMOTE`, `VENDORED_LIBRARY`. Keep this table in
- * step with that file — never invent a fourth arm here.
+ * step with that file: never invent a fourth arm here.
  */
 export const INLINE_SAFE =
   /^(?:@deepseek-ai\/dsh-(?:file-reference|session|llm|tools|brand|deque|output-retention|typert-protocol|util-crypto|util-values|util-workspace-path)(?:\/|$)|@deepseek-ai\/dsh-token-meter\/client$|@deepseek-ai\/dsh-native-command\/types$|@deepseek-ai\/dsh-host-open-in-app\/shared$|@deepseek-ai\/dsh-plugin-manager\/registry$|@deepseek-ai\/dsh-agent-preset-registry\/display$|@deepseek-ai\/dsh-api-workspace-controller\/default-workspace$|@deepseek-ai\/dsh-spill-policy\/notice$)/
@@ -123,10 +123,10 @@ export function clientGraphViolations(inputs) {
     const pkg = packageNameOf(key)
     if (pkg !== undefined) {
       // A bundled package must be a declared choice: either an allowed
-      // third-party module (CLIENT_INLINE_PACKAGES) or an inline-safe
-      // harness utility (isInlineSafeHarness). Anything else — including
+      // third-party module (CLIENT_INLINE_PACKAGES), or an inline-safe
+      // harness utility (isInlineSafeHarness). Anything else (including
       // an `EXTERNALS` package that got inlined, which would give the page
-      // a second copy of a shared module — is refused.
+      // a second copy of a shared module) is refused.
       if (
         pkg !== 'zod' &&
         pkg !== '@deepseek-ai/schemastery' &&

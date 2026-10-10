@@ -1,7 +1,7 @@
 /* The Zotero settings page: page chrome for the Settings panel's content
  * column. The shell owns the column, its padding, and its scroll
- * (`ui-settings-general`'s SettingsRoot `.options`); the form chrome —
- * status lines, failed notice, save button — belongs to the official
+ * (`ui-settings-general`'s SettingsRoot `.options`); the form chrome
+ * (status lines, failed notice, save button) belongs to the official
  * `<SettingsForm>`, so this module only stacks the header, the description,
  * and the grouped body. Tokens are the shared `--dsw-alias-*` set the native
  * settings surfaces use. */

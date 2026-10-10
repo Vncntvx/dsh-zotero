@@ -2,7 +2,7 @@
 
 # 功能概览
 
-dsh-zotero 让 DSH 的 LLM 对话能够直接查询和引用 Zotero 文献库。16 个工具（8 个读工具 + 8 个写工具）覆盖文献搜索、证据提取、原文定位、格式化导出，以及笔记、标签、合集、条目与全库标签的写入；8 个个人库写入工具默认关闭，启用后需经过会话审批与计划审查卡。Web 端 Sources 面板提供会话文献、证据与引用的汇总展示。
+dsh-zotero 让 DSH 的 LLM 对话能够直接查询和引用 Zotero 文献库。16 个工具（8 个读工具 + 8 个写工具）覆盖文献搜索、原文片段检索、原文定位、格式化导出，以及笔记、标签、合集、条目与全库标签的写入；8 个个人库写入工具默认关闭，启用后需经过会话审批与计划审查卡。Web 端 Sources 面板提供会话文献、原文片段与引用的汇总展示。
 
 ## 搜索文献
 
@@ -17,7 +17,7 @@ dsh-zotero 让 DSH 的 LLM 对话能够直接查询和引用 Zotero 文献库。
   - 按名称或 ref 指定集合（`collection`）；
   - 按名称或 ref 指定保存的搜索（`savedSearch`）。
 
-首次查询（offset 0）会同步扫描笔记正文，命中条目列入 `supplemental`，不计入分页总数。搜索结果返回稳定的 `zotero://` 引用标识供后续工具使用。
+首次查询（offset 0）会分批扫描笔记正文，命中条目列入 `supplemental`，不计入分页总数。搜索结果返回稳定的 `zotero://` 引用标识供后续工具使用。
 
 ![文献来源概览：搜索结果列表与条目操作面板](images/zotero-sources-overview.png)
 
@@ -31,11 +31,11 @@ dsh-zotero 让 DSH 的 LLM 对话能够直接查询和引用 Zotero 文献库。
 - `annotations`：PDF 批注、高亮文本、读者评论与页码；
 - `attachments`：关联附件列表（文件类型与链接模式）。
 
-当笔记或批注超出返回预算时，对应字段标记 `truncated: true`。
+笔记正文超出字符预算时标记 `truncated: true`，摘要被截断时标记 `abstractTruncated: true`。
 
-![证据段落视图：按来源聚合的相关文本片段](images/zotero-evidence-passages.png)
+![原文片段视图：按来源聚合的论文文本片段](images/zotero-evidence-passages.png)
 
-## 提取证据
+## 检索原文片段
 
 `zotero_retrieve` 从文献的多来源中提取文本片段，并通过 BM25 算法按相关度排序：
 
@@ -98,7 +98,7 @@ dsh-zotero 让 DSH 的 LLM 对话能够直接查询和引用 Zotero 文献库。
 DSH 对话中，Zotero 工具调用由专用只读卡片（`tool.call.toolview`）呈现：
 
 - **搜索（`zotero_search`）**：展示查询词与命中总数，展开呈现文献卡片（题名、作者、年份徽标、类型与 PDF 标识）及直达链接；
-- **证据提取（`zotero_retrieve`）**：折叠摘要行显示提取片段总数，展开呈现排序证据片段、页码标签与全文覆盖信息；
+- **原文片段检索（`zotero_retrieve`）**：折叠摘要行显示提取片段总数，展开呈现排序后的原文片段、页码标签与全文覆盖信息；
 - **导出（`zotero_export`）**：展示导出格式、引用样式、条数徽标，支持文本复制与按格式下载；
 - **条目详情（`zotero_get`）**：展示基础元数据、发表信息、子项数量统计及内容预览；
 - **子对象（`zotero_children`）**：按类型分区展示子笔记、附件与带颜色高亮的 PDF 批注；
@@ -122,19 +122,19 @@ DSH 对话中，Zotero 工具调用由专用只读卡片（`tool.call.toolview`�
 插件适配 Harness 插件系统插槽：
 
 - **启用引导（`plugins.bundle.activation`）**：在插件管理列表中启用时弹出引导弹窗，自动执行本地连通性检查，并提示在 Zotero 高级设置中开启通信权限；
-- **详情页状态区（`plugins.bundle.config` / `plugins.detail.section`）**：在插件详情页提供 Sources 面板开关、写入能力开关（`writeEnabled`）与运行状态诊断。
+- **详情页状态区（`plugins.bundle.config` / `plugins.detail.section`）**：在插件详情页提供 Sources 面板开关与写入开关（`writeEnabled`），并给出实时运行状态卡片，报告连接状态、Zotero 版本与排查建议。
 
 ## 会话来源面板
 
-DSH Web 界面的 Zotero 标签页包含两个视图（Sources、Exports）；证据（Evidence）作为条目检查器中的面板呈现，并在会话包含多条目证据时提供会话级总览入口：
+DSH Web 界面的 Zotero 标签页包含两个视图（Sources、Exports）；原文片段（Passages）作为条目检查器中的面板呈现，并在会话包含多篇文献片段时提供会话级总览入口：
 
-- **Sources（文献）**：展示当前会话中通过搜索与读取工具引用的文献条目列表，条目检查器内含证据面板（按条目分组展示 `zotero_retrieve` 提取的证据段落）；
+- **Sources（文献）**：展示当前会话中通过搜索与读取工具引用的文献条目列表，条目检查器内含原文片段面板（按条目分组展示 `zotero_retrieve` 检索的原文片段）；
 - **Exports（导出）**：列出会话中所有导出操作生成的文本内容，支持复制与下载。
 
 ## 设计边界
 
 - **默认只读**：`writeEnabled` 默认关闭；开启后仅可写入个人库，并受双层确认与版本前置保护；
-- **词频排序**：证据检索使用 BM25 词频匹配，非向量语义匹配；
+- **词频排序**：原文片段检索使用 BM25 词频匹配，不使用向量语义检索；
 - **文本导出**：引用与参考文献以标准文本格式输出；
 - **会话隔离**：Sources 面板记录当前会话的引用快照；
 - **依赖全文索引**：全文检索与段落提取依赖 Zotero 本地已建立的索引数据。

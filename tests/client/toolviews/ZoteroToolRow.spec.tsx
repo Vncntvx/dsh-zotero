@@ -191,7 +191,7 @@ describe('ZoteroToolRow', () => {
   it('classifies only a declined outcome as declined', () => {
     // The two write verdicts read the outcome through the one decoder, so an
     // absent or unrecognized `kind` is an ordinary settled call, never a
-    // declined one — the row's `data-state` is the observable form of that.
+    // declined one: the row's `data-state` is the observable form of that.
     const stateOf = (meta: Record<string, unknown> | undefined, isError = false): string | null => {
       const { useDisclosure } = createDisclosure(false)
       const { container, unmount } = render(

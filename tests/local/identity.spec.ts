@@ -111,7 +111,7 @@ describe('Server-ID cache identity', () => {
       ref: parseRef(itemRef()),
       include: new Set(),
     })
-    // A second unclaimed read rides the cached listing — no identity claim,
+    // A second unclaimed read rides the cached listing: no identity claim,
     // so the entry's own TTL governs staleness as before.
     await provider.getItem({
       ref: parseRef(itemRef()),
@@ -191,7 +191,7 @@ describe('Server-ID cache identity', () => {
 
   it('keeps provider state per instance: a fresh provider re-reads what one cached', async () => {
     // The identity guard lives in provider state, not module state. A second
-    // provider over the same mock must therefore issue its own reads — if the
+    // provider over the same mock must therefore issue its own reads, if the
     // scope cache were shared, this read would be answered from the first
     // provider's warm entries and the count below would stay at one.
     serveJson(mock, `${apiPath()}/items/${ITEM_KEY}`, PARENT, versionHeaders('A'))

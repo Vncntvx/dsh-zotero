@@ -5,9 +5,9 @@
  * composition entry as its base layer) so the settings document
  * (`$DSH_HOME/settings.yaml`) can carry a `zotero:` section, and the wire
  * contract (`src/contract.ts`) references the same constant for the Remote
- * namespace. Kept in its own module — it is dependency-free, so the browser
- * bundle can inline it without dragging in the host implementation or host-only
- * Typert codecs.
+ * namespace. It is kept in its own module because it is dependency-free, so
+ * the browser bundle can inline it without dragging in the host
+ * implementation or host-only Typert codecs.
  * @module dsh-zotero/settings-namespace
  */
 

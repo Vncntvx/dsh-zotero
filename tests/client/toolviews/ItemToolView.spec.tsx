@@ -110,7 +110,7 @@ describe('ItemToolView (zotero_get)', () => {
     )
     expect(counts).toEqual([
       `${zh.toolChildrenNotes} ${mockT('countOfReturned', { total: 50, shown: 2 })}`,
-      // Attachments get a count only — this card draws no list of them — so the
+      // Attachments get a count only (this card draws no list of them), so the
       // badge states the count rather than pairing it with a "shown" of zero,
       // which would claim nothing was drawn when nothing was listed to begin
       // with.

@@ -6,7 +6,7 @@ dsh-zotero registers 16 tools (8 read tools and 8 write tools) that interact wit
 
 ### Interactive Presentation (Toolviews)
 
-In the DSH Web conversation stream, all 16 tools feature structured, read-only cards (`tool.call.toolview`). During execution, the interface renders lifecycle status indicators (preparing, running, success, stopped, error, declined, outcome unreported), collapsible structured views, quick copy actions, and deep links to open items or PDFs in local Zotero.
+In the DSH Web conversation stream, all 16 tools have structured, read-only cards (`tool.call.toolview`). During execution, the interface renders lifecycle status indicators (preparing, running, success, stopped, error, declined, outcome unreported), collapsible structured views, quick copy actions, and deep links to open items or PDFs in local Zotero.
 
 ---
 
@@ -35,7 +35,7 @@ Search for candidate items in the library. Supports metadata matching and indexe
 
 ### Output
 
-Returns an object containing: `scope`, `items` (including ref, title, creatorSummary, year, itemType, parentRef, bestAttachmentRef, bestAttachmentType, attachmentSize, extra), `total`, `offset`, `returned`, `nextOffset`, and optional `supplemental` (containing note matches `{kind:"noteBody", items, scanned, truncated}`). In card presentations, if `extra` carries a Citation Key (case-insensitive, including the `citekey` alias — one shared grammar with export alignment, taking the first token after the colon), it is formatted as `[@citekey]`.
+Returns an object containing: `scope`, `items` (including ref, title, creatorSummary, year, itemType, parentRef, bestAttachmentRef, bestAttachmentType, attachmentSize, extra), `total`, `offset`, `returned`, `nextOffset`, and optional `supplemental` (containing note matches `{kind:"noteBody", items, scanned, truncated}`). In card presentations, if `extra` carries a Citation Key (case-insensitive, including the `citekey` alias; one shared grammar with export alignment, taking the first token after the colon), it is formatted as `[@citekey]`.
 
 ### Notes
 
@@ -71,7 +71,7 @@ Returns a detailed item object:
 - `date`, `year`, `venue`, `doi`, `url`, `abstract`, `abstractTruncated`;
 - `tags`, `collections`, `children`, `bestAttachment`, `relations`;
 - `extraFields` when `fields="all"`;
-- Requested child collections: `notes`, `annotations`, `attachments` (each with total, returned, items).
+- Requested child sets: `notes`, `annotations`, `attachments` (each with total, returned, items).
 
 ### Example
 
@@ -90,7 +90,7 @@ Extract and rank relevant text passages from multiple data sources for a single 
 | Parameter          | Type     | Default  | Description                                                              |
 | ------------------ | -------- | -------- | ------------------------------------------------------------------------ |
 | `ref`              | string   | —        | Item reference (required)                                                |
-| `query`            | string   | —        | Search query for ranking evidence (required)                             |
+| `query`            | string   | —        | Search query for ranking passages (required)                             |
 | `sources`          | string[] | All 4    | Sources to search: `annotation`, `note`, `abstract`, `fulltext`          |
 | `passages`         | integer  | `4`      | Maximum passages returned (capped by `maxEvidencePassages`, default 4)   |
 | `attachmentPolicy` | string   | `"best"` | Full-text attachment selection policy: `best`, `allIndexed`, `specified` |
@@ -103,7 +103,7 @@ Returns an object containing: `ref`, `attachmentRef`, `attachmentContentType`, `
 ### Notes
 
 - Only `annotation` sources include `pageLabel`; full-text passages do not carry page numbers;
-- Unavailable or unindexed sources are logged under `sourcesSkipped`;
+- Unavailable or unindexed sources are listed in `sourcesSkipped`;
 - Annotations rank highlight text alongside user comments, with `matchedFields` indicating whether match occurred in `text` or `comment`;
 - In multi-attachment policies, unindexed files are marked `unindexed`, and files beyond the attachment limit are marked `unread`.
 
@@ -168,7 +168,7 @@ Returns `{kind: "background", jobId}` or `{kind: "promoted", jobId, timeoutMs, m
 ### Notes
 
 - In `citation` mode, requests exceeding 50 keys batch automatically;
-- `bibtex`, `biblatex`, `ris`, and `csljson` utilize a zero-N+1 in-memory slicing engine: batch export executes with $O(1)$ local API batch requests (a single request for `ris` and `csljson`; two parallel batch requests for `bibtex` and `biblatex` for deterministic metadata alignment), where the engine syntax-awarely parses and slices entries in memory matching requested refs, supporting up to 50 items per call;
+- `bibtex`, `biblatex`, `ris`, and `csljson` export the whole set through batch requests: `ris` and `csljson` send 1 local API batch request, while `bibtex` and `biblatex` run a 2nd batch request in parallel to fetch the items' raw metadata for field alignment. The returned text is parsed in memory, and each entry is matched to its ref by key or metadata fingerprint rather than by position; a ref that cannot be located comes back as a bare ref. One call carries at most 50 items;
 - All refs in a single export call must belong to the same library.
 
 ### Example
@@ -289,13 +289,13 @@ Create a standalone research note or a child note under a specific item.
 
 Input `markdown` is converted into a restricted HTML whitelist natively supported by Zotero 7+ prior to storage (unknown syntax degrades safely to literal text, with no raw HTML passthrough or invented attributes):
 
-- **Paragraphs and Headings**: Blank-line separated paragraphs; soft-wrapped lines join with spaces; ATX headings `#`–`####` (five or more hashes stay literal text);
-- **Emphasis and Highlights**: `**bold**`, `*italic*` (underscores `_` stay literal to protect identifier names); `==highlight==` converted to `<mark>`;
-- **Math Expressions**: `$$...$$` blocks converted to `<math-display>` and inline `$formula$` converted to `<math-inline>` (native KaTeX rendering; formulas are immune to emphasis corruption; currency amounts like `$100` are protected);
-- **Lists and Task Lists**: `-`/`*` bullets and `1.`/`1)` numbers; `- [ ]` unchecked and `- [x]` checked task lists (rendered as native lists with checkbox controls and `task-list` classes, with nesting support);
-- **Code**: Inline `` `spans` `` and ``` fenced blocks (escaped verbatim with no formatting inside);
-- **Quotes and Tables**: `>` blockquotes; pipe tables with a `---` separator row;
-- **Links and Rules**: `[text](url)` (restricted to `https://`, `http://`, and `zotero://` schemes); `---` and `***` horizontal rules.
+- Paragraphs and headings: Blank-line separated paragraphs; soft-wrapped lines join with spaces; ATX headings `#`–`####` (five or more hashes stay literal text);
+- Emphasis and highlights: `**bold**`, `*italic*` (underscores `_` stay literal to protect identifier names); `==highlight==` converted to `<mark>`;
+- Math expressions: `$$...$$` blocks converted to `<math-display>` and inline `$formula$` converted to `<math-inline>` (native KaTeX rendering; formulas are immune to emphasis corruption; currency amounts like `$100` are protected);
+- Lists and task lists: `-`/`*` bullets and `1.`/`1)` numbers; `- [ ]` unchecked and `- [x]` checked task lists (rendered as native lists with checkbox controls and `task-list` classes, with nesting support);
+- Code: Inline `` `spans` `` and ``` fenced blocks (escaped verbatim with no formatting inside);
+- Quotes and tables: `>` blockquotes; pipe tables with a `---` separator row;
+- Links and rules: `[text](url)` (restricted to `https://`, `http://`, and `zotero://` schemes); `---` and `***` horizontal rules.
 
 ### Parameters
 
@@ -391,7 +391,7 @@ Creates a collection, top-level or under a parent collection.
 ### Output
 
 - Created: `{kind: "applied", ref, key, version, name, parentRef?, libraryVersion, serverId?}`;
-- Committed but the saved state could not be verified: `{kind: "committed-unverified", committed: true, retryable: false, reason: "saved-state-unverified" | "commit-unknown", ...}` — **not retryable**; reconcile by key/ref in Zotero;
+- Committed but the saved state could not be verified: `{kind: "committed-unverified", committed: true, retryable: false, reason: "saved-state-unverified" | "commit-unknown", ...}`, **not retryable**; reconcile by key/ref in Zotero;
 - Declined on the plan card: `{kind: "declined"}`.
 
 ### Example
@@ -427,7 +427,7 @@ zotero_delete_collection(collection="Field notes")
 
 ## zotero_create_item
 
-Creates a bibliographic item from a closed field set. **No BibTeX/CSL-JSON channel exists**: Zotero's `POST /items` only accepts Zotero item JSON, so the entry is assembled field by field and nothing outside the set leaves this module.
+Creates a bibliographic item from a closed field set. Zotero's `POST /items` only accepts Zotero item JSON, so there is no BibTeX/CSL-JSON intake: the entry is assembled field by field and nothing outside the set leaves this module.
 
 ### Parameters
 
@@ -471,7 +471,7 @@ Corrects an item's scalar metadata. Field validity comes from Zotero's `itemType
 
 - Fields actually changed: `{kind: "applied", ref, version, changed, libraryVersion, serverId?}` (`changed` lists the submitted field names, sorted);
 - Declined on the plan card: `{kind: "declined"}`;
-- Lost precondition: `ZOTERO_WRITE_CONFLICT` — the object changed underneath the read; run the tool once more (the re-run re-reads the version).
+- Lost precondition: `ZOTERO_WRITE_CONFLICT`: the object changed underneath the read; run the tool once more (the re-run re-reads the version).
 
 ### Example
 
@@ -483,7 +483,7 @@ zotero_update_item(ref="zotero://user/0/item/ABCD1234", set={"title": "Attention
 
 ## zotero_delete_library_tags
 
-Deletes tags **library-wide** by name. **Irreversible**: the tags come off every item in the library. The plan card pages through the **whole** tag listing first, then states each tag's item count: a tag the listing carries without a count shows as `unknown items`, and only a name absent from the entire listing is listed as a proven no-op — so a tag beyond the first page is never mistaken for one. When a preview read fails every count shows `unknown items` and the delete still carries the library version of its preceding read; names Zotero does not know are silently skipped, so a retry is idempotent.
+Deletes tags library-wide by name. **Irreversible**: the tags come off every item in the library. The plan card pages through the entire tag listing first, then states each tag's item count: a tag the listing carries without a count shows as `unknown items`, and only a name absent from the entire listing counts as a proven no-op, so a tag beyond the first page is never mistaken for one. When a preview read fails every count shows `unknown items` and the delete still carries the library version of its preceding read; names Zotero does not know are silently skipped, so a retry is idempotent.
 
 ### Parameters
 
@@ -508,24 +508,24 @@ zotero_delete_library_tags(tags=["stale", "obsolete"])
 
 Write tools are disabled by default, require `writeEnabled` in configuration, and operate exclusively on personal libraries (`zotero://user/0/`).
 
-1. **Dual Confirmation**:
+1. Dual confirmation:
    - Session approval policy (`ctx.approval.request`): follows session policy; auto-declines if policy is `never`;
    - Plan review card: presents exact Markdown changes for user approval before writing; unapproved requests return `{kind: "declined"}`.
-2. **Local API Authentication**:
+2. Local API authentication:
    - Write operations require a locally issued Zotero API key;
    - Initial writes prompt Zotero's local authorization dialog (Allow, Always Allow, or Decline);
    - With `writePersistKey` enabled, Always-Allow persistent keys are stored securely in the host credentials manager.
-3. **Shell Write Interception**:
+3. Shell write interception:
    - A pre-execution listener detects shell commands directed at local API write endpoints and escalates them to Harness approval requests, preventing unauthorized direct modifications.
 
-   Detection reads command text, which makes it **detection, not a guarantee**. The following paths pass it unseen:
+   Detection reads command text, so it cannot cover every path. The following paths pass it unseen:
    - a request written into a script file and then executed (`bash build.sh`);
-   - an interpreter whose command text never spells the endpoint (`python -c '...'`, `node -e '...'` with the URL assembled at runtime) — an interpreter call that spells the endpoint in its command text is still detected;
+   - an interpreter whose command text never spells the endpoint (`python -c '...'`, `node -e '...'` with the URL assembled at runtime); an interpreter call that spells the endpoint in its command text is still detected;
    - a URL carried in an environment variable, a heredoc, or an encoding;
    - a loopback port other than the configured one (except writes to `/api/users/` and authorize calls, which are caught on any loopback port);
    - any binary of the user's own.
 
-   The system prompt keeps the model on the write tools, and this confirmation gates the route. To make the library entirely unreachable from the shell, run the session without an unconstrained shell: use `tools.restrict({ deny: ["bash"] })` per agent, or a preset without a shell. A confirmed raw write also does **not** pass through the plugin's write domain — no plan card, no version preconditions, no markdown→note HTML conversion, no provenance; that is the price accepted at the moment of confirmation.
+   The system prompt keeps the model on the write tools, and this confirmation gates the route. To make the library entirely unreachable from the shell, run the session without an unconstrained shell: use `tools.restrict({ deny: ["bash"] })` per agent, or a preset without a shell. A confirmed raw write also skips the plugin's write domain entirely: it carries no plan card, no version precondition, no Markdown-to-note HTML conversion, and no provenance. That is the price accepted at the moment of confirmation.
 
 ---
 

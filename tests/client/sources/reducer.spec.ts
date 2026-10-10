@@ -3,7 +3,7 @@
  * the stable union of search rows and directly referenced items, the
  * evidence match verdict per instance, and the degradation of unusable input. The
  * reducer's per-call output rules live in `reducer-evidence.spec.ts` (the
- * evidence a retrieve folds in) and `reducer-outputs.spec.ts` (export
+ * evidence a retrieve folds in), and `reducer-outputs.spec.ts` (export
  * artifacts, attachment resolution and hint precedence, operation counters).
  * @module tests/client/sources/reducer
  */
@@ -317,7 +317,7 @@ describe('buildSourceWorkspace', () => {
 
     it('folds searches whose arguments are an equally empty payload', () => {
       // An empty payload is readable and means "no filters", so two of them
-      // are one logical search — unlike a payload that failed to index.
+      // are one logical search: unlike a payload that failed to index.
       const workspace = buildSourceWorkspace([
         settled({
           callId: 's1',

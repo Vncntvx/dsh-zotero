@@ -1,7 +1,7 @@
 /**
  * The session source model: the domain vocabulary of the Sources panel. One
  * `SourceItem` aggregates everything the session proved about one library
- * item — only settled, successful, structurally valid tool calls produce
+ * item; only settled, successful, structurally valid tool calls produce
  * facts. Running, failed, and stopped calls count into `operations` and are
  * never rendered as achievements. The model carries no harness execution
  * objects (no tool-call blocks); call-level diagnostics stay with the
@@ -42,8 +42,8 @@ export type SourceScope =
 
 /**
  * One logical search (pagination continuations fold into one entry). The
- * mode, scope, and filter fields are the episode's own arguments — captured
- * at episode creation, never re-parsed from an identity string.
+ * mode, scope, and filter fields are the episode's own arguments, captured
+ * at episode creation and never re-parsed from an identity string.
  */
 export interface SearchOccurrence {
   readonly callId: string
@@ -125,7 +125,7 @@ export interface ExportArtifact {
   readonly settledAt?: number
   /**
    * The per-document itemization of a translator-format export (ref, key,
-   * title — never the entry text, which stays in the merged body); absent
+   * and title, never the entry text, which stays in the merged body); absent
    * for citation/bibliography artifacts, which have no per-document rows.
    */
   readonly items?: readonly ExportDocumentItem[]

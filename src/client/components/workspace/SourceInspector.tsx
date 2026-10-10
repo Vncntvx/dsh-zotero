@@ -1,10 +1,10 @@
 /**
  * The source inspector: the detail surface of the selected source. Three
- * panels — Overview (identity and search records), Passages (the
+ * panels, Overview (identity and search records), Passages (the
  * retrieval summary, passages, and per-source availability), and Exports
- * (the item's export artifacts) — switch through the inspector's own tab
- * row: light text tabs (no pill chrome, so the three hierarchy levels —
- * top lens tabs, filter pills, detail tabs — read differently at a glance)
+ * (the item's export artifacts), switch through the inspector's own tab
+ * row: light text tabs (no pill chrome, so the three hierarchy levels,
+ * top lens tabs, filter pills, and detail tabs, read differently at a glance)
  * carrying the panel's count when there is something to count. A selection
  * hidden by the current filter keeps rendering with a note instead of
  * vanishing. The narrow-surface back action returns to the list pane.
@@ -26,7 +26,7 @@ export type InspectorPanelId = 'overview' | 'evidence' | 'exports'
 
 /**
  * The panel tab entries of one item: id, locale key, and the count shown
- * beside the label (omitted when zero — an empty panel's onboarding note
+ * beside the label (omitted when zero, since an empty panel's onboarding note
  * states more than a "0" would).
  */
 function panelEntriesOf(item: SourceItem): readonly {

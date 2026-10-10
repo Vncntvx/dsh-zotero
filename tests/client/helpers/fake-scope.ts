@@ -1,8 +1,8 @@
 /**
  * In-memory `ConfigForm` stand-in for client tests: mirrors the shared-form
- * semantics the card relies on — a resolved value layer, a composition base,
+ * semantics the card relies on (a resolved value layer, a composition base,
  * and a raw user layer whose field PRESENCE marks overrides, plus an atomic
- * revision-fenced `mutate` — and records every write the form performs.
+ * revision-fenced `mutate`), and records every write the form performs.
  * @module tests/client/helpers/fake-scope
  */
 
@@ -88,7 +88,7 @@ export function fakeScope(options: FakeScopeOptions = {}): FakeScope {
     },
     set: async (field, value) => {
       // A refused Host write resolves without landing, leaving the section
-      // unchanged — which is what makes the model's save report failure.
+      // unchanged, which is what makes the model's save report failure.
       if (options.rejectWrites === true) return false
       writes.push({ op: 'set', field, value })
       applyWrite('set', field, value)

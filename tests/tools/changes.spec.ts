@@ -395,7 +395,7 @@ describe('zotero_changes tool', () => {
     } as never)
     const text = (incomplete[0] as { text: string }).text
     expect(text).toContain(CHANGES_NOT_ADVANCED_UNVERIFIED)
-    // A listing the read returned whole is printed whole — the 25th key and
+    // A listing the read returned whole is printed whole: the 25th key and
     // the 22nd tombstone included.
     expect(text).toContain('Items (top-level): 25 changed')
     expect(text).toContain('  - KEY0024 (v26)')

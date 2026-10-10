@@ -6,7 +6,7 @@ dsh-zotero 注册 16 个工具（8 个读工具 + 8 个写工具），通过本�
 
 ### 交互卡片（Toolviews）
 
-在 DSH Web 对话流中，所有 16 个工具均配备结构化只读卡片（`tool.call.toolview`）。调用工具时，界面展示包含状态指示（准备中、运行中、成功、中断、错误、已拒绝、结果未核验）的结构化卡片，支持展开查看详细数据、复制内容以及通过 `zotero://` 链接在本地 Zotero 或 PDF 阅读器中打开。
+在 DSH Web 对话流中，所有 16 个工具均配备结构化只读卡片（`tool.call.toolview`）。调用工具时，界面展示包含状态指示（准备中、运行中、成功、中断、错误、已拒绝、结果未报告）的结构化卡片，支持展开查看详细数据、复制内容以及通过 `zotero://` 链接在本地 Zotero 或 PDF 阅读器中打开。
 
 ---
 
@@ -83,14 +83,14 @@ zotero_get(ref="zotero://user/0/item/ABC123", include=["notes", "annotations"])
 
 ## zotero_retrieve
 
-从单篇文献的多数据源中提取与查询相关的文本证据片段，并基于 BM25 算法排序。
+从单篇文献的多数据源中提取与查询相关的原文片段，并基于 BM25 算法排序。
 
 ### 参数
 
 | 参数               | 类型     | 默认值    | 说明                                                      |
 | ------------------ | -------- | --------- | --------------------------------------------------------- |
 | `ref`              | string   | —         | 文献条目 ref（必填）                                      |
-| `query`            | string   | —         | 证据排序关键词（必填）                                    |
+| `query`            | string   | —         | 排序关键词（必填）                                        |
 | `sources`          | string[] | 全部 4 种 | 检索源：`annotation`、`note`、`abstract`、`fulltext`      |
 | `passages`         | integer  | `4`       | 返回段落数量上限（受 `maxEvidencePassages` 限制，默认 4） |
 | `attachmentPolicy` | string   | `"best"`  | 全文附件选取策略：`best`、`allIndexed`、`specified`       |
@@ -168,7 +168,7 @@ zotero_attachment(ref="zotero://user/0/item/ABC123")
 ### 说明
 
 - `citation` 模式单次超过 50 个 key 时自动分批请求；
-- `bibtex`、`biblatex`、`ris`、`csljson` 采用 Zero-N+1 内存切分引擎：批量导出仅发起 $O(1)$ 本地 API 批处理请求（`ris`、`csljson` 单次请求；`bibtex`、`biblatex` 发起导出与元数据 2 次并行批处理请求以完成确定性字段对齐），引擎在内存中对返回数据进行语法感知解析并与请求的 refs 精确匹配切分，单次调用最多支持 50 条；
+- `bibtex`、`biblatex`、`ris`、`csljson` 的批量导出全程使用批处理请求：`ris`、`csljson` 发起 1 次本地 API 批处理请求；`bibtex`、`biblatex` 在此基础上并行发起第 2 次批处理请求，读取条目原始元数据用于字段对齐。返回内容在内存中解析，每条记录按 key 或元数据指纹与 ref 配对，不按位置猜测；无法定位的 ref 在结果中只保留自身。单次调用最多支持 50 条；
 - 单次导出仅允许同一 library 的 refs，不支持跨库混合导出。
 
 ### 示例
@@ -289,13 +289,13 @@ zotero_changes(since={serverId: "server1", library: {type: "user", id: 0}, versi
 
 传入的 `markdown` 文本会在写入前转换为 Zotero 7+ 原生支持的受限 HTML 白名单（未知语法均安全退化为字面文本，无属性发明与原始 HTML 穿透）：
 
-- **段落与标题**：空行分隔段落，软折行以空格拼接；支持 ATX `#`–`####` 标题（五级及以上保留字面文本）；
-- **强调与高亮**：`**粗体**`、`*斜体*`（下划线 `_` 保持字面文本以保护变量名）；`==高亮==` 转换为 `<mark>`；
-- **数学公式**：单行或多行 `$$...$$` 块转换为 `<math-display>`，行内 `$formula$` 转换为 `<math-inline>`（原生 KaTeX 渲染，公式内部保护不被强调标记篡改；货币符号如 `$100` 自动规避）；
-- **列表与任务列表**：`-`/`*` 无序列表与 `1.`/`1)` 有序列表；支持 `- [ ]` 未完成与 `- [x]` 已完成任务列表（生成带有 Checkbox 控件与 `task-list` 类名的原生列表，支持嵌套）；
-- **代码**：行内 `` `代码` `` 与 ``` 围栏代码块（内部特殊字符转义，不执行格式化）；
-- **引用与表格**：`>` 引用段落；带 `---` 分割行的管道表格；
-- **链接与分割线**：`[text](url)`（仅限 `https://`、`http://` 与 `zotero://` 协议）；`---` 与 `***` 水平分割线。
+- 段落与标题：空行分隔段落，软折行以空格拼接；支持 ATX `#`–`####` 标题（五级及以上保留字面文本）；
+- 强调与高亮：`**粗体**`、`*斜体*`（下划线 `_` 保持字面文本以保护变量名）；`==高亮==` 转换为 `<mark>`；
+- 数学公式：单行或多行 `$$...$$` 块转换为 `<math-display>`，行内 `$formula$` 转换为 `<math-inline>`（原生 KaTeX 渲染，公式内部保护不被强调标记篡改；货币符号如 `$100` 自动规避）；
+- 列表与任务列表：`-`/`*` 无序列表与 `1.`/`1)` 有序列表；支持 `- [ ]` 未完成与 `- [x]` 已完成任务列表（生成带有 Checkbox 控件与 `task-list` 类名的原生列表，支持嵌套）；
+- 代码：行内 `` `代码` `` 与 ``` 围栏代码块（内部特殊字符转义，不执行格式化）；
+- 引用与表格：`>` 引用段落；带 `---` 分割行的管道表格；
+- 链接与分割线：`[text](url)`（仅限 `https://`、`http://` 与 `zotero://` 协议）；`---` 与 `***` 水平分割线。
 
 ### 参数
 
@@ -391,7 +391,7 @@ zotero_update_item_collections(ref="zotero://user/0/item/ABCD1234", add=["方法
 ### 输出
 
 - 成功创建：`{kind: "applied", ref, key, version, name, parentRef?, libraryVersion, serverId?}`；
-- 创建已提交但保存状态无法核验：`{kind: "committed-unverified", committed: true, retryable: false, reason: "saved-state-unverified" | "commit-unknown", ...}` —— **不可重试**，请按 key/ref 在 Zotero 中核对；
+- 创建已提交但保存状态无法核验：`{kind: "committed-unverified", committed: true, retryable: false, reason: "saved-state-unverified" | "commit-unknown", ...}`，**不可重试**，请按 key/ref 在 Zotero 中核对；
 - 计划卡拒绝：`{kind: "declined"}`。
 
 ### 示例
@@ -427,7 +427,7 @@ zotero_delete_collection(collection="田野笔记")
 
 ## zotero_create_item
 
-从闭合字段集创建文献条目。**没有 BibTeX/CSL-JSON 入口**：Zotero 的 `POST /items` 只接受 Zotero 条目 JSON，因此字段逐个装配，闭集之外的内容不会离开本模块。
+从闭合字段集创建文献条目。Zotero 的 `POST /items` 只接受 Zotero 条目 JSON，因此没有 BibTeX/CSL-JSON 入口，字段逐个装配，闭集之外的内容不会离开本模块。
 
 ### 参数
 
@@ -471,7 +471,7 @@ zotero_create_item(itemType="journalArticle", title="Attention Is All You Need",
 
 - 实际发生变更：`{kind: "applied", ref, version, changed, libraryVersion, serverId?}`（`changed` 为实际提交的字段名，按字典序）；
 - 计划卡拒绝：`{kind: "declined"}`；
-- 版本前置失败：`ZOTERO_WRITE_CONFLICT` —— 对象已被并发修改，重跑一次工具即可（重跑会重新读取版本）。
+- 版本前置失败：`ZOTERO_WRITE_CONFLICT`。对象已被并发修改，重跑一次工具即可（重跑会重新读取版本）。
 
 ### 示例
 
@@ -483,7 +483,7 @@ zotero_update_item(ref="zotero://user/0/item/ABCD1234", set={"title": "Attention
 
 ## zotero_delete_library_tags
 
-按名称在**全库范围**删除标签。**不可逆**：标签会从文献库中的每个条目上移除。计划卡先翻页扫描**整个**标签列表，再列出每个标签的条目数：列表携带该标签但未给计数时显示 `unknown items`；整个列表都未出现的名称才会被列为「确证无效（proven no-ops）」——因此绝不会把第一页之外的标签误判为无效。读取失败时各项显示 `unknown items`，删除仍携带前置读到的库版本；未命中的名称被 Zotero 静默跳过，因此重试是幂等的。
+按名称在全库范围删除标签。**不可逆**：标签会从文献库中的每个条目上移除。计划卡先翻页扫描整个标签列表，再列出每个标签的条目数：列表携带该标签但未给计数时显示 `unknown items`；只有整个列表都未出现的名称才会被列为「确证无效（proven no-ops）」，因此绝不会把第一页之外的标签误判为无效。读取失败时各项显示 `unknown items`，删除仍携带前置读到的库版本；未命中的名称被 Zotero 静默跳过，因此重试是幂等的。
 
 ### 参数
 
@@ -508,24 +508,24 @@ zotero_delete_library_tags(tags=["旧标签", "废弃"])
 
 写入工具默认不注册，需在配置中显式开启 `writeEnabled`，且仅操作个人库（`zotero://user/0/`）。
 
-1. **双层确认机制**：
+1. 双层确认机制：
    - 会话审批策略（`ctx.approval.request`）：遵循会话策略；若策略为 `never` 则自动拒绝；
    - 计划审查卡：向用户展示具体变更内容 Markdown，经用户确认后执行；未获批准返回 `{kind: "declined"}`。
-2. **本地 API 鉴权**：
+2. 本地 API 鉴权：
    - 写操作必须提供 Zotero 本地签发的 API key；
    - 首次写入需在 Zotero 本地授权弹窗中确认（允许、始终允许或拒绝）；
    - 开启 `writePersistKey` 时，“始终允许”签发的持久密钥会安全保存在宿主凭据管理器中。
-3. **Shell 写入拦截**：
+3. Shell 写入拦截：
    - 监听器检测指向本地 API 的写命令，拦截并提升为 Harness 审批请求，防止未授权脚本修改文献库。
 
-   检测只读命令文本，属于**检测而非保证**。下列路径无法覆盖：
+   检测只读命令文本，无法覆盖所有路径。下列路径无法被检出：
    - 写入脚本文件后再执行（`bash build.sh`）；
-   - 命令文本中不出现端点的解释器调用（URL 在运行时拼出时的 `python -c '...'`、`node -e '...'`）——命令文本中写明端点的解释器调用仍会被检出；
+   - 命令文本中不出现端点的解释器调用（URL 在运行时拼出时的 `python -c '...'`、`node -e '...'`）；命令文本中写明端点的解释器调用仍会被检出；
    - 藏在环境变量、heredoc 或编码中的 URL；
    - 配置端口之外的 loopback 端口（例外：对 `/api/users/` 的写请求与 authorize 调用在任意 loopback 端口都会被检出）；
    - 用户自有的任何二进制。
 
-   系统提示约束模型只使用写工具，这道确认约束路由。若要 shell 完全无法触碰文献库，应让会话不带无约束 shell：按 agent 使用 `tools.restrict({ deny: ["bash"] })`，或使用不含 shell 的预设。另外，被确认放行的原始写入**不经过插件的写域**——没有计划卡、没有版本前置、没有 markdown→note HTML 转换与 provenance，这是用户当场确认时接受的代价。
+   系统提示约束模型只使用写工具，这道确认约束路由。若要 shell 完全无法触碰文献库，应让会话不带无约束 shell：按 agent 使用 `tools.restrict({ deny: ["bash"] })`，或使用不含 shell 的预设。另外，被确认放行的原始写入完全绕开插件的写域：没有计划卡、没有版本前置、没有 Markdown 到笔记 HTML 的转换，也没有 provenance。这是用户当场确认时接受的代价。
 
 ---
 

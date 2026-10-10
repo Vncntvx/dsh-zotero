@@ -1,7 +1,7 @@
 /**
  * The verdict arms of the write domain: how each entry point settles when
  * Zotero's answer contradicts the request, omits the state the claim would
- * rest on, or refuses before commit. One case per arm — the read-side key and
+ * rest on, or refuses before commit. One case per arm: the read-side key and
  * version checks, the batch buckets that mean "committed but unverifiable",
  * the sibling-listing checks, and the pre-commit refusals that must rethrow
  * instead of being dressed up as an unknown commit.

@@ -120,7 +120,7 @@ describe('zotero_delete_library_tags preview', () => {
 
   it('stops paging once every requested name has been found', async () => {
     // The listing reports more pages, but page 1 already names everything the
-    // call asked for — the preview must not walk the rest.
+    // call asked for: the preview must not walk the rest.
     lane.mock.route('GET', '/api/users/0/items/top/tags', (_req, res, helpers) => {
       helpers.json([{ tag: 'methods', numItems: 7 }], {
         'Total-Results': '120',

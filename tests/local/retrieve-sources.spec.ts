@@ -83,7 +83,7 @@ describe('retrieve source selection', () => {
   })
 
   it('carries the parent attachment ref on annotation evidence', async () => {
-    // Annotations ride ?itemType=annotation — never the bare children listing.
+    // Annotations ride ?itemType=annotation: never the bare children listing.
     serveItemGraph(mock, {
       parent: RETRIEVE_PARENT,
       children: [attachment({ data: { parentItem: ITEM_KEY } })],
@@ -428,8 +428,8 @@ describe('retrieve source selection', () => {
       ],
       annotations: null,
     })
-    // Sixteen extra PDFs share generic text; the seventeenth — whose key
-    // sorts last, so it falls outside the default 16 — is the only one
+    // Sixteen extra PDFs share generic text; the seventeenth (whose key
+    // sorts last, so it falls outside the default 16) is the only one
     // mentioning the query term, making its presence in the evidence the
     // observable of the cap having moved.
     for (const key of extraKeys.slice(0, 15)) {

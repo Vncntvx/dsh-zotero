@@ -3,10 +3,10 @@
  * projector is a pure function of the canonical tool output (plus, for
  * export, the requested ref count) and feeds `output.presentationMeta`, so
  * the projected facts persist into the `tool/result` event's `meta` and
- * reach the browser as `block.meta` — the dedicated Zotero web view renders
- * from them. A single UTF-8 byte budget bounds the whole projection;
+ * reach the browser as `block.meta`, where the dedicated Zotero web view
+ * renders from them. A single UTF-8 byte budget bounds the whole projection;
  * over-budget projections drop their detail field and set `detailOmitted`
- * instead of inventing per-field truncation policy — the complete data stays
+ * instead of inventing a per-field truncation policy. The complete data stays
  * in the canonical result and the trajectory Inspect.
  * @module dsh-zotero/presentation-meta
  */
@@ -76,8 +76,8 @@ export interface ZoteroSearchPresentationMeta {
   readonly scope: ZoteroResolvedScope
   /**
    * The library the scope resolved to; absent when the scope ref is
-   * unparseable or names an unsupported library — callers omit the badge
-   * instead of mislabeling the page as personal.
+   * unparseable or names an unsupported library, and callers then omit the
+   * badge instead of mislabeling the page as personal.
    */
   readonly library?: SupportedLocalLibrary
 }
@@ -185,7 +185,7 @@ export interface ZoteroExportPresentationMeta {
   readonly refsOmitted: number
   /**
    * The bounded per-document items (first {@link MAX_PRESENTATION_EXPORT_REFS},
-   * without their entry text — the byte budget drops them wholesale rather
+   * without their entry text, which the byte budget drops wholesale rather
    * than mid-cutting); absent for exports without items or when the budget
    * dropped the detail.
    */
@@ -332,7 +332,7 @@ export function projectGetMeta(value: GetProjectionInput): ZoteroGetPresentation
 
 /**
  * Project one retrieval result into card-sized evidence facts. Fulltext
- * passages never carry page locators — the projection copies what the
+ * passages never carry page locators, so the projection copies what the
  * canonical record owns and nothing more. The per-source availability facts
  * come from the canonical result alone: `requested` is the caller's source
  * list, `unavailable` the skipped list, `returnedPassages` the evidence count
@@ -417,7 +417,7 @@ export function projectAttachmentMeta(
  * so they report the requested ref count instead of inventing an item count.
  * The exported ref list is itemized up to {@link MAX_PRESENTATION_EXPORT_REFS}
  * entries, and the translator formats carry their per-document items (ref,
- * key, title — never the entry text) in the same bound; the byte-budget
+ * key, and title, never the entry text) in the same bound. The byte-budget
  * guard may drop them entirely (see `boundedPresentationMeta`), never part
  * of it.
  * @param value - the canonical export result.
@@ -477,7 +477,7 @@ export function presentationMetaBytes(meta: Record<string, unknown>): number {
 /**
  * Enforce the shared byte budget. A projection that fits returns unchanged;
  * an over-budget one drops its detail keys (keeping the summary facts) and
- * records `detailOmitted` — no per-field truncation is invented here, the
+ * records `detailOmitted`. No per-field truncation is invented here, and the
  * complete data stays in the canonical result.
  * @param meta - one projector's output.
  * @param detailKeys - the keys holding per-item detail rows or long values.

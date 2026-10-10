@@ -2,7 +2,7 @@
 
 # Scenarios
 
-This document serves as the acceptance checklist for dsh-zotero in real conversations, validating model tool invocation behaviors and the usability of returned results. The prompts contained herein reflect everyday search and research queries and can be directly reused in daily workflows once verified.
+This document is the acceptance checklist for dsh-zotero in real conversations, validating model tool invocation behaviors and the usability of returned results. The prompts contained herein reflect everyday search and research queries and can be directly reused in daily workflows once verified.
 
 Because unit tests cannot fully cover reasoning discrepancies at the model level (such as substituting full-text search for bibliographic search, hallucinating missing item references, or treating annotator comments as paper body text), this document verifies those boundaries through standardized conversation cases.
 
@@ -32,7 +32,7 @@ Prerequisites:
 - Enable the plugin in Harness plugin management. The onboarding guidance window should show a green ready state with the local version displayed;
 - Run `/zotero` (or `/zotero status`) in a session; the status card should display `connected`.
 
-Before running the W group write cases, enable "Allow writes" in "Settings → Zotero" (disabled by default). After completing the golden path, observe the dedicated tool cards generated at each step (item title/year badges, highlighted evidence passages, BibTeX export cards, etc.) and inspect the three pages of the Sources panel (Literature / Passages / Exports).
+Before running the W group write cases, enable "Allow writes" in "Settings → Zotero" (disabled by default). After completing the golden path, observe the dedicated tool cards generated at each step (item title/year badges, highlighted passages, BibTeX export cards, etc.) and inspect the three pages of the Sources panel (Literature / Passages / Exports).
 
 Result recording format:
 
@@ -56,7 +56,9 @@ Browse my library structure: which top-level collections are there? Roughly how 
 - Acceptance criteria: `/zotero` renders a dedicated status card showing `connected`; collection names match the Zotero sidebar; a library-wide search does not replace browse;
 - When to use: Confirm library shape and search scope before querying.
 
-**Endpoint matches configuration (G1 edge)**: In "Settings → Zotero", change `baseUrl` to another local address (such as `http://localhost:23119/api`), then re-run `/zotero`. The status card endpoint should update to the probed address rather than remaining a fixed `127.0.0.1:23119`, and remains visible when disconnected. Purpose: confirms the card displays probe results rather than hardcoded constants.
+#### Endpoint matches configuration (G1 edge)
+
+In "Settings → Zotero", change `baseUrl` to another local address (such as `http://localhost:23119/api`), then re-run `/zotero`. The status card endpoint should update to the address actually probed instead of staying at a fixed `127.0.0.1:23119`, and it remains visible when disconnected. Purpose: confirms the card displays probe results and not hardcoded constants.
 
 ### G2 Bibliographic Search
 
@@ -88,15 +90,15 @@ What child notes, attachments, and annotations does the first item have? Types a
 - Acceptance criteria: Notes and attachments come from the child object list; annotations come from the annotation list under the PDF; `numChildren` is not used as proof that annotations exist;
 - When to use: Assess child object composition before deciding reading scope.
 
-### G5 Evidence Extraction
+### G5 Passage Retrieval
 
 ```
-For the first item, find passages about "method / experiment", at most 3 pieces of evidence. Each: source type | page (if the annotation has one) | 1-2 sentences of original text. No interpretation.
+For the first item, find passages about "method / experiment", at most 3 passages. Each: source type | page (if the annotation has one) | 1-2 sentences of original text. No interpretation.
 ```
 
 - Expected tool: `zotero_retrieve`;
 - Acceptance criteria: Source is one of annotation, note, abstract, or full text; full-text passages never hallucinate page numbers (only annotations carry `pageLabel`); hits on annotation comments are explicitly labeled as annotator commentary;
-- When to use: Extract verbatim text from papers as evidence or note material.
+- When to use: Extract verbatim text from papers for citation or note material.
 
 ### G6 Get Original Attachment Path
 
@@ -125,7 +127,7 @@ Using the 3 items you just found, make a 3-row related-work table: title | year 
 ```
 
 - Tool invocation: Model synthesizes response autonomously;
-- Acceptance criteria: Stops output after answering. Then inspect the Sources panel: Literature contains session items, Passages contains G5 evidence, Exports contains G7 citations;
+- Acceptance criteria: Stops output after answering. Then inspect the Sources panel: Literature contains session items, Passages contains G5 passages, Exports contains G7 citations;
 - When to use: Conclude a research query task and establish a traceable session snapshot.
 
 ## Independent Capability Packs
@@ -134,23 +136,23 @@ When a golden path step fails, use the corresponding capability pack for focused
 
 ### S Search Capability Pack
 
-**S1 Full-Text Mode**
+#### S1 Full-Text Mode
 
 ```
 Search the full text for "transformer" (not just titles), at most 5 hits, title + year.
 ```
 
-Expected: Calls `zotero_search(mode="everything")`. If the local full-text index is incomplete, it should indicate potential omissions rather than claiming complete results.
+Expected: Calls `zotero_search(mode="everything")`. If the local full-text index is incomplete, it should flag the possible omissions and must not claim the results are complete.
 
-**S2 Collection Scope**
+#### S2 Collection Scope
 
 ```
 Search only in collection "<your collection name>" for items related to "<topic word>", at most 5.
 ```
 
-Expected: Search scope is restricted to the specified collection. If the collection name is ambiguous, it should return an error or ask for confirmation rather than choosing arbitrarily.
+Expected: Search scope is restricted to the specified collection. If the collection name is ambiguous, it should return an error or ask for confirmation, and must not settle on one itself.
 
-**S3 Tag Filter**
+#### S3 Tag Filter
 
 ```
 Find items tagged "<tag name>", at most 5, titles only.
@@ -158,15 +160,15 @@ Find items tagged "<tag name>", at most 5, titles only.
 
 Expected: Search criteria includes the `tags` parameter. Phrased as "without tag X" when excluding tags.
 
-**S4 Note Body Hits**
+#### S4 Note Body Hits
 
 ```
 Search for "<a unique word you wrote in a note that is not in the title>" and see if it is found.
 ```
 
-Expected: Hits originate from note bodies (`supplemental` source), and the response clarifies that the hit came from a note rather than an item title.
+Expected: Hits originate from note bodies (`supplemental` source), and the response says the hit came from a note and not from an item title.
 
-**S5 Saved Searches**
+#### S5 Saved Searches
 
 ```
 List my saved searches; then run the saved search named "<name>" for up to 5 results.
@@ -174,9 +176,9 @@ List my saved searches; then run the saved search named "<name>" for up to 5 res
 
 Expected: Calls `zotero_browse(kind="savedSearches")` to retrieve the list, then calls `zotero_search` scoped to that saved search.
 
-### R Retrieval and Evidence Capability Pack
+### R Reading and Passage Retrieval Capability Pack
 
-**R1 Details with Notes**
+#### R1 Details with Notes
 
 ```
 Read the item about "<title keyword>". List each child note's point in one sentence, at most 3 notes.
@@ -184,7 +186,7 @@ Read the item about "<title keyword>". List each child note's point in one sente
 
 Expected: Calls `zotero_get(ref="zotero://user/0/item/ABC123", include=["notes"])` (with the target item's ref) or retrieves notes via `zotero_children`. If note content is truncated, it marks `truncated` and does not hallucinate unread content.
 
-**R2 Annotations Only**
+#### R2 Annotations Only
 
 ```
 What PDF annotations/highlights does "<title keyword>" have? Each: page | highlight or comment. At most 5.
@@ -192,7 +194,7 @@ What PDF annotations/highlights does "<title keyword>" have? Each: page | highli
 
 Expected: Annotations return via the dedicated annotation path; page numbers exist only on annotations.
 
-**R3 Specific Evidence Source**
+#### R3 Specific Passage Source
 
 ```
 Only the relevant sentences from the abstract, for "<method word>", at most 2; no full text.
@@ -200,7 +202,7 @@ Only the relevant sentences from the abstract, for "<method word>", at most 2; n
 
 Expected: Calls `zotero_retrieve(ref="zotero://user/0/item/ABC123", query="method keywords", sources=["abstract"])`. Mixing in full-text passages is considered a failure.
 
-**R4 Multi-Attachment Coverage** (Run on items with supplementary materials or multiple attachments)
+#### R4 Multi-Attachment Coverage (Run on items with supplementary materials or multiple attachments)
 
 ```
 Search every indexable attachment of "<multi-attachment item>" for "<keyword>", and say which attachment has a hit and which is unindexed.
@@ -210,7 +212,7 @@ Expected: Full-text retrieval strategy is `allIndexed` or a specified list. Unin
 
 ### E Export Capability Pack
 
-**E1 Bibliography**
+#### E1 Bibliography
 
 ```
 Export these 3 items as one bibliography, ready to paste at the end of a paper.
@@ -218,7 +220,7 @@ Export these 3 items as one bibliography, ready to paste at the end of a paper.
 
 Expected: Calls `zotero_export(refs=["zotero://user/0/item/ABC123"], format="bibliography")` to produce standard bibliography text.
 
-**E2 Multiple Formats**
+#### E2 Multiple Formats
 
 ```
 For the same 3 items, give a truncated first-chunk preview of RIS and of CSL-JSON (5 lines each). Use the export panel for the full files.
@@ -226,17 +228,17 @@ For the same 3 items, give a truncated first-chunk preview of RIS and of CSL-JSO
 
 Expected: Supports requested export formats. Full export content is downloaded from the Sources panel to avoid dumping large text blocks into chat.
 
-**E3 Citation Styles**
+#### E3 Citation Styles
 
 ```
 Give me an in-text citation for this 1 item in APA (or a Chinese style), locale en-US (or zh-CN).
 ```
 
-Expected: Calls `zotero_export` with `style` and `locale` parameters. If the style is unsupported or rendering fails, it returns an error rather than silently falling back to default styling.
+Expected: Calls `zotero_export` with `style` and `locale` parameters. If the style is unsupported or rendering fails, it returns an error and must not fall back to the default style on its own.
 
 ### C Library Structure and Changes Capability Pack
 
-**C1 Collection Tree**
+#### C1 Collection Tree
 
 ```
 List the child collection paths under "<top-level collection>", breadcrumb format, at most 10 lines.
@@ -244,7 +246,7 @@ List the child collection paths under "<top-level collection>", breadcrumb forma
 
 Expected: Calls `zotero_browse(kind="collections")` and parses `parentRef` relationships into a hierarchical tree.
 
-**C2 Tag Distribution**
+#### C2 Tag Distribution
 
 ```
 What are the 8 most common tags? Format: tag: N items.
@@ -252,13 +254,13 @@ What are the 8 most common tags? Format: tag: N items.
 
 Expected: Calls `zotero_browse(kind="tags")` to fetch the tag list. If tag counts are missing, numbers must not be fabricated.
 
-**C3 Changes Baseline**
+#### C3 Changes Baseline
 
 ```
 Record the current library version as a changes baseline.
 ```
 
-Expected: Calls `zotero_changes()` and retains the returned `cursor`. Subsequent queries for "changes since last baseline" must pass back the full cursor, not just a version number.
+Expected: Calls `zotero_changes()` and retains the returned `cursor`. A later query for "changes since last baseline" must pass back the full cursor; a version number alone is not enough.
 
 ## Negative Boundary Cases (N)
 
@@ -273,7 +275,9 @@ Validates boundary conditions and error handling; can run continuously in a sing
 | N5 Cross-library export | (With a group library) export this personal item and that group item together as BibTeX. | Returns `ZOTERO_INVALID_ARGUMENT` and suggests separate exports                        |
 | N6 Ambiguous collection | (With duplicate collection names) search collection "<ambiguous name>".                  | Reports name ambiguity or asks for confirmation; does not choose arbitrarily           |
 
-**N7 Remote namespace mount failure (assembly error)**: the browser half mounts `remote.zotero` itself (`ctx.remote.$mount` + `ctx.inject(['remote.zotero', …])`). If that mount rejects (the gateway is not ready, the namespace name collides), the plugin entry rejects and the harness marks the plugin as failed to load — it does **not** silently degrade into "tab present, status strip reports a fault". To verify: the browser console shows the plugin load error, and neither `conversation.view` nor `plugins.detail.section` is registered (no half-assembled tab). This is the intended assembly contract: a surface whose status strip can never answer is not a working plugin. Used to confirm an assembly error is never swallowed.
+### N7 Remote namespace mount failure (assembly error)
+
+The browser half mounts `remote.zotero` itself (`ctx.remote.$mount` + `ctx.inject(['remote.zotero', …])`). If that mount rejects (the gateway is not ready, the namespace name collides), the plugin entry rejects and the harness marks the plugin as failed to load; it does not fall back to a state where the tab is present and the status strip reports a fault. To verify: the browser console shows the plugin load error, and neither `conversation.view` nor `plugins.detail.section` is registered, so no half-assembled tab appears. This is the intended assembly contract: a surface whose status strip can never answer is not a working plugin. Used to confirm an assembly error is never swallowed.
 
 ## Write Cases (W)
 
@@ -285,13 +289,17 @@ Enable "Allow writes" in "Settings → Zotero". Write operations must pass the s
 Create a child note on item "<test item>": markdown with a "## Methods" heading and two bullet points.
 ```
 
-- Expected behavior: Model calls `zotero_create_note`, prompting the plan review card, and completes write after approval. The note in Zotero should be formatted HTML rather than raw Markdown markers;
+- Expected behavior: Model calls `zotero_create_note`, prompting the plan review card, and completes write after approval. The note in Zotero should be formatted HTML, with no raw Markdown markers;
 - Rejection test: Run again and click decline on the plan card; the operation returns `declined`, nothing is written, and the model does not retry;
 - When to use: Capture reading notes and literature summaries.
 
-**Policy rejection (W1 variant)**: Set the session approval policy to `never` (or run unattended) and call a write tool. Expected behavior: returns `declined`, no plan card appears, and Zotero receives no write request; session log records `approval/asked` and `approval/decided` (outcome: rejected).
+#### Policy rejection (W1 variant)
 
-**Unverified commit (W1 edge)**: If Zotero accepts a write but the response cannot verify final state, the operation returns `committed-unverified`. The card displays a warning state, presents the advisory ("do not retry; verify by key/ref"), and the model does not automatically retry. Used to verify that post-verification failures do not falsely report success.
+Set the session approval policy to `never` (or run unattended) and call a write tool. Expected behavior: returns `declined`, no plan card appears, and Zotero receives no write request; session log records `approval/asked` and `approval/decided` (outcome: rejected).
+
+#### Unverified commit (W1 edge)
+
+If Zotero accepts a write but the response cannot verify final state, the operation returns `committed-unverified`. The card displays a warning state, presents the advisory ("do not retry; verify by key/ref"), and the model does not automatically retry. Used to verify that post-verification failures do not falsely report success.
 
 ### W2 Tag Add and Remove
 
@@ -301,7 +309,7 @@ Add the tag "acceptance" to "<test item>" and remove the tag "to-read".
 
 - Expected behavior: `zotero_update_item_tags` settles the read-merge-write in one call, with `add` and `remove` taking effect together; existing tags (including colored/automatic types) are preserved, and `remove` wins for a saved tag named in both lists;
 - Idempotence: repeating the same call returns `unchanged: true` without errors, and Zotero receives no PATCH;
-- `removed` must list the tags that actually came off rather than echoing the request; unmatched `remove` names are not counted;
+- `removed` must list the tags that actually came off; echoing the request back does not count, and unmatched `remove` names are not counted either;
 - When to use: Manage reading status and thematic tags.
 
 ### W3 Collection Membership Add and Remove
@@ -311,7 +319,7 @@ Put "<test item>" into collection "<test collection>" and take it out of "<old c
 ```
 
 - Expected behavior: `zotero_update_item_collections` resolves the collection refs/names before writing; an item already in the target membership returns `unchanged: true` (membership idempotence), and an item not in the `remove` collection has that entry ignored;
-- An unresolvable collection name must fail before any write request is issued — Zotero receives nothing;
+- An unresolvable collection name must fail before any write request is issued, so Zotero receives nothing;
 - When to use: Archive retrieved literature into project collections.
 
 ### W4 Collection Create and Delete
@@ -331,7 +339,7 @@ Create a subcollection "<new collection>" under "<test collection>"; then delete
 Create an item with itemType=journalArticle plus title, date and creators; then correct its date to 2026.
 ```
 
-- Refusal paths: an `itemType` outside the closed set (e.g. `podcast`), neither a `title` nor a `url`, or a `set` field the item type does not accept — all are refused before any write;
+- Refusal paths: an `itemType` outside the closed set (e.g. `podcast`), neither a `title` nor a `url`, or a `set` field the item type does not accept. All are refused before any write;
 - A `committed-unverified` create must not be retried; reconcile by key/ref;
 - Correction: `zotero_update_item` submits under the item's version precondition and reports the fields in `changed`; a lost precondition returns `ZOTERO_WRITE_CONFLICT`, and running the tool once more succeeds (the re-run re-reads the version);
 - When to use: Fill in and correct bibliographic metadata.
@@ -352,7 +360,7 @@ Delete the tag "<obsolete tag>" from the library.
 After those note/tag writes, can zotero_changes see them? Use the previous cursor.
 ```
 
-- Expected behavior: Calls `zotero_changes` passing the full cursor; `changed` or `totals` reflects the recent writes, covering all four write classes — notes, items, collections and tags;
+- Expected behavior: Calls `zotero_changes` passing the full cursor; `changed` or `totals` reflects the recent writes across all four write classes: notes, items, collections and tags;
 - When to use: Track recent library modifications incrementally.
 
 ### W8 Negative Boundaries
@@ -367,7 +375,7 @@ After those note/tag writes, can zotero_changes see them? Use the previous curso
 1. Run `/zotero` to test connectivity. On failure, consult the [Troubleshooting Guide](troubleshooting.en.md) and stop;
 2. Execute Golden Path G1 through G8 sequentially in a single session, then inspect the Sources panel (Literature / Passages / Exports);
 3. Supplement with specific capability packs (S / R / E / C) for any failed golden path steps;
-4. Execute negative boundary cases N1 through N6;
+4. Execute negative boundary cases N1 through N7;
 5. To verify write functionality, run W1 through W8 in a separate session.
 
 ## Coverage Map
@@ -379,10 +387,10 @@ After those note/tag writes, can zotero_changes see them? Use the previous curso
 | Bibliographic Search          | `zotero_search`                                                           | G2, S1–S4        | metadata/everything modes, collection/tag scopes, note hits                        |
 | Metadata Reading              | `zotero_get`                                                              | G3, R1           | Standard fields, child notes, truncation flags                                     |
 | Child Object Reading          | `zotero_children`                                                         | G4, R2           | Notes/attachments/annotations, dedicated annotation path                           |
-| Evidence Extraction           | `zotero_retrieve`                                                         | G5, R3, R4       | Four source types, annotation page accuracy, multi-attachment coverage             |
+| Passage Retrieval             | `zotero_retrieve`                                                         | G5, R3, R4       | Four source types, annotation page accuracy, multi-attachment coverage             |
 | Attachment Path               | `zotero_attachment`                                                       | G6, N3           | Local absolute paths and URLs, missing attachment handling                         |
 | Citation Export               | `zotero_export`                                                           | G7, E1–E3        | Multi-format support, custom styles, batching and panel downloads                  |
-| Incremental Sync              | `zotero_changes`                                                          | C3, W4           | Cursor persistence, immediate visibility after write                               |
+| Incremental Sync              | `zotero_changes`                                                          | C3, W7           | Cursor persistence, immediate visibility after write                               |
 | Content Writing               | `create_note` / `update_item_tags` / `update_item_collections`            | W1–W3            | Approval and plan card, merge write, declined state                                |
 | Structure and Metadata Writes | `create_collection` / `delete_collection` / `create_item` / `update_item` | W4, W5           | Same-name refusal, delete preview and invalidation, closed field set and whitelist |
 | Library-Wide Tag Delete       | `delete_library_tags`                                                     | W6               | Preview counts, library version precondition, idempotent retry                     |
@@ -397,7 +405,7 @@ Passing criteria: G1 through G8 all pass, and N1, N2, N4 produce no hallucinated
 | ---------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | Answers without calling tools            | Check plugin installation; check if session was created after plugin loaded; run `/zotero status` |
 | Unexpected search results                | Inspect query terms, search mode, collection scope, quick-search syntax, and local index status   |
-| Page number on fulltext evidence         | Model misread fields (prompt to correct); if tool natively returned it, investigate parsing error |
+| Page number on fulltext passages         | Model misread fields (prompt to correct); if tool natively returned it, investigate parsing error |
 | Annotation comment treated as paper text | Check if labeled with `matchedFields=comment`, see [Tool Reference](tools.en.md)                  |
 | Export cannot be used in LaTeX           | Verify `format` is `bibtex` or `biblatex`; download via Sources panel instead                     |
 | Write fails without plan card            | Check if "Allow writes" is enabled; verify if arguments were rejected prior to plan review        |

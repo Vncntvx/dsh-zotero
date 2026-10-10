@@ -18,7 +18,7 @@ src/
   status-codec.ts       # Host-side status decoding (zod)
   errors.ts             # Error classes and error codes
   json.ts               # Lossless JSON read helpers
-  evidence-item.ts      # Evidence item projection definitions (shared across client/host)
+  evidence-item.ts      # Passage item projection definitions (shared across client/host)
   browse-rows.ts        # Browse row classification (shared across client/host)
   changes-contract.ts   # Shared wire descriptors for the changes projection
   constants.ts          # Constant definitions
@@ -84,8 +84,8 @@ Integration tests require a local Zotero instance running at `127.0.0.1:23119` w
 
 ## Build Artifacts
 
-- **Node artifact** (`lib/`): Compiled by `tsc`, containing service logic, tool definitions, provider, and transport layers.
-- **Browser artifact** (`lib/client.js`): Bundled by `esbuild`, containing the settings page, Sources panel, and session cards.
+- Node artifact (`lib/`): Compiled by `tsc`, containing service logic, tool definitions, provider, and transport layers.
+- Browser artifact (`lib/client.js`): Bundled by `esbuild`, containing the settings page, Sources panel, and session cards.
 
 ## Local Debugging
 
@@ -112,7 +112,7 @@ cp dev-lib.cordis.yml.example dev-lib.cordis.yml # Copy template and fill absolu
 dsh web --patch ./dev-lib.cordis.yml --port 3307
 ```
 
-> **Note**: The `dev-lib.cordis.yml` overlay points to the built entry using an absolute path (`<absolute-path-to-dsh-zotero>/lib/index.js`), enabling in-process Loader HMR for the host half (tools and `/zotero` command) without restarting dsh. However, the harness web client module loader only resolves plugins registered under bare package names. Consequently, this mode **does not load browser-side frontend modules (settings page or Sources tab)**. To develop and test the UI, use the "Full Plugin Debugging" workflow above (`dsh plugin --profile web add .` and `npm run dev:client`).
+> Note: the `dev-lib.cordis.yml` overlay points to the built entry using an absolute path (`<absolute-path-to-dsh-zotero>/lib/index.js`), enabling in-process Loader HMR for the host half (tools and `/zotero` command) without restarting dsh. However, the harness web client module loader only resolves plugins registered under bare package names. Consequently, this mode does not load browser-side frontend modules (settings page or Sources tab). To develop and test the UI, use the "Full Plugin Debugging" workflow above (`dsh plugin --profile web add .` and `npm run dev:client`).
 
 ## Testing Standards
 

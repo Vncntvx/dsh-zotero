@@ -42,7 +42,7 @@ export interface LocalApiLimits {
   /**
    * How long a scope listing (collections/searches) is trusted before a
    * re-fetch. Compared at read time, so a settings edit applies to the next
-   * lookup — cached entries older than the new TTL simply expire.
+   * lookup: cached entries older than the new TTL simply expire.
    */
   readonly scopeListingTtlMs: number
   /** Parallel parent-attribution queries the search domain may keep in flight (one `itemKey` batch each). */

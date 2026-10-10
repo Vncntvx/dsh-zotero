@@ -87,7 +87,7 @@ export function assertNonEmptyList(values: readonly unknown[], message: string):
 
 /**
  * Parse a model-provided ref string and gate it on the supported local
- * libraries plus the allowed object kinds — the shared entry every tool
+ * libraries plus the allowed object kinds: the shared entry every tool
  * uses to turn a `zotero://` argument into a domain ref.
  * @param value - the raw ref string argument.
  * @param kinds - allowed kinds; omit to accept any parsed kind.
@@ -165,8 +165,8 @@ export function parseLibrary(value: unknown): SupportedLocalLibrary | undefined 
 }
 
 /**
- * Parse a `library` argument that has no meaningful absent case — a cursor's
- * library, for one: a value without one cannot say which counter its version
+ * Parse a `library` argument that has no meaningful absent case, such as a
+ * cursor's library: a value without one cannot say which counter its version
  * belongs to, so absence fails loud instead of defaulting.
  * @throws {ZoteroError} `ZOTERO_INVALID_ARGUMENT` when absent or malformed.
  */

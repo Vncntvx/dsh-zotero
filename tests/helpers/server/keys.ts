@@ -1,9 +1,9 @@
 /**
  * The canonical identities every server fixture is built from.
  *
- * The suite had grown seven different objects named `ABCD1234` — a
+ * The suite had grown seven different objects named `ABCD1234` (a
  * `conferencePaper` in one spec, a `journalArticle` with two children in
- * another, a key-only stub in a malformed-payload test — so a reader could not
+ * another, a key-only stub in a malformed-payload test), so a reader could not
  * tell whether a difference between two tests was the point of one of them or
  * an accident of when it was written. `numChildren: 2` next to `numChildren: 3`
  * for the same key is exactly the drift that costs a debugging session.
@@ -46,7 +46,7 @@ export const NOTE_KEY = 'NOTE1111'
  */
 export const ANNOTATION_KEY = 'ANNO1111'
 
-/** A standalone note item — a note that is not a child of anything. */
+/** A standalone note item: a note that is not a child of anything. */
 export const NOTE_ITEM_KEY = 'NOTE9999'
 
 /** The canonical collection, `LLM Papers`. */

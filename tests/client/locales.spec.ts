@@ -81,7 +81,7 @@ describe('locale bundles', () => {
       'attachmentBadge',
       'reportedEvidenceBadge',
       'openBlockedNote',
-      // The 2026-08 UI audit: internal workflow language left the panel —
+      // The 2026-08 UI audit: internal workflow language left the panel,
       // candidates/inspected chips, the snapshot scope note, session facts,
       // and the static-export disclaimer all moved out of the main path.
       'lensEvidence',
@@ -103,7 +103,7 @@ describe('locale bundles', () => {
       'expandFullText',
       'collapseFullText',
       // The copy pass: the cross-source board's defensive scope note left
-      // the page — the cards carry their own facts.
+      // the page: the cards carry their own facts.
       'evidenceScopeNote',
       // `zotero_browse`'s only label parameter is `kind`; the card read a
       // `category` argument the tool has never had, so every browse row was
@@ -150,5 +150,6 @@ describe('locale bundles', () => {
     expect(allZh).not.toContain('整理我的库')
     expect(allZh).not.toContain('Personal library')
     expect(allZh).not.toContain('evidence passages')
+    expect(allZh).not.toContain('证据')
   })
 })

@@ -4,7 +4,7 @@
  * (callers pass the row's own class when they need the exact cadence); an
  * unverified target carries its caveat in the native title so the row never
  * grows an inline note that would break the button alignment. Blocked
- * targets never render here — `BlockedOpenAction` is the blocked form.
+ * targets never render here; `BlockedOpenAction` is the blocked form.
  * @module dsh-zotero/client/components/open/ZoteroOpenButton
  */
 

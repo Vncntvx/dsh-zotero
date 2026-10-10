@@ -2,7 +2,7 @@
 /**
  * The workspace view's render states: the toolbar's connected note and
  * diagnostic menu facts, the inspector panels (counts, the retrieved/never
- * retrieved onboards, the passage facts, the exports note) and the sidebar and
+ * retrieved onboards, the passage facts, the exports note), and the sidebar and
  * lens entries for a given workspace. Each test mounts a fixture and asserts
  * what that state renders; the flows that change a state under a click or a key
  * live in `ZoteroWorkspaceView.interaction`.
@@ -276,7 +276,7 @@ describe('exports lens count', () => {
         ],
       }),
     )
-    // Three export calls of the same document — the lens tab reads 1.
+    // Three export calls of the same document: the lens tab reads 1.
     expect(view.container.querySelector('[data-workspace-lens="exports"]')!.textContent).toContain(
       '1',
     )

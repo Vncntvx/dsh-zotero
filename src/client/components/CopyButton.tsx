@@ -1,8 +1,8 @@
 /**
  * A copy button with a brief copied-feedback window (cleared on unmount).
  * The shared copy leaf of the panel's rows and cards. The visible text is
- * the caller's own label — switching to `copiedLabel` while the feedback
- * window is open — so two copy buttons in one card never both read "Copy";
+ * the caller's own label, switching to `copiedLabel` while the feedback
+ * window is open, so two copy buttons in one card never both read "Copy";
  * `label` doubles as the accessible name.
  * @module dsh-zotero/client/components/CopyButton
  */

@@ -2,7 +2,7 @@
  * The build identity of the client bundle: the package version and commit
  * stamped in by esbuild's `define` at build time (see
  * scripts/build-client.mjs). The constants exist only inside the built
- * bundle — the npm artifact ships its stamped values, and a plain module
+ * bundle: the npm artifact ships its stamped values, and a plain module
  * environment (the test runner) degrades to `unknown` through the `typeof`
  * guards instead of throwing on the undeclared identifiers.
  * @module dsh-zotero/client/build-info

@@ -76,7 +76,7 @@ const BROWSE_PARAMETERS = {
   itemQuery: {
     type: 'string',
     description:
-      'Tags only with a scope: count only tags of items matching this query — the facet-discovery move after a search.',
+      'Tags only with a scope: count only tags of items matching this query, the facet-discovery move after a search.',
   },
   itemQueryMode: {
     type: 'string',
@@ -367,7 +367,7 @@ export function renderBrowse(_args: BrowseArgs, value: BrowseOutput): ContentBlo
 /**
  * The completed browse card: the browsed kind plus the page facts. `meta`
  * is absent on nested code dispatch or malformed replay records, and a failed
- * call keeps the raw error content — both fall back to the generic card.
+ * call keeps the raw error content; both fall back to the generic card.
  */
 function presentBrowseResult(_args: BrowseArgs, result: ToolResult): ToolResultView | undefined {
   const record = metaRecordOf(result)

@@ -3,8 +3,8 @@
  * states come apart honestly: an item never retrieved shows the onboarding
  * note (how passages come to exist), a retrieved item with no kept passage
  * says so without inventing a cause, and a retrieved item with passages
- * renders them. The head carries the RetrievalSummary — run count, kept/
- * reported passage counts, and the truncation note — then the deduplicated
+ * renders them. The head carries the RetrievalSummary (run count, kept and
+ * reported passage counts, and the truncation note), then the deduplicated
  * passages with their source tags and page labels, the indexing coverage
  * line, and the per-source availability list titled for the latest
  * retrieve. Facts only; nothing here implies the final answer used the
@@ -44,7 +44,7 @@ export interface SourceEvidenceProps {
 
 /** One passage row with its source tag, page label, and truncated note.
  * Kept separate from EvidenceCard's twin: different CSS module and no
- * annotation-deep-link action here — sharing would need class injection. */
+ * annotation-deep-link action here, since sharing would need class injection. */
 function PassageRow({
   passage,
   t,

@@ -3,8 +3,8 @@
  * panel: per-format sections of document rows. Each section head names the
  * format, counts its deduplicated documents, and carries the section-wide
  * copy-all / download-all actions (the joined latest entries); artifacts
- * without per-document data — citation and bibliography calls, legacy
- * projections — render as whole-text call rows inside their format's
+ * without per-document data (citation and bibliography calls, legacy
+ * projections) render as whole-text call rows inside their format's
  * section, and entries the provider could not locate get a light note with
  * the artifact's full text still downloadable, so a partial failure never
  * hides the documents that did resolve.
@@ -33,7 +33,7 @@ export interface ExportSectionsProps {
   readonly t: TranslateNS<'zotero'>
 }
 
-/** The joined entry text of one section, in display order — copy/download-all content. */
+/** The joined entry text of one section, in display order, for copy/download-all. */
 export function sectionTextOf(section: ExportSection): string {
   return section.documents.map((document) => document.text).join('\n\n')
 }

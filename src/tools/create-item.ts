@@ -1,7 +1,7 @@
 /**
  * The `zotero_create_item` tool: create a bibliographic item from the closed
- * field set. No BibTeX/CSL-JSON channel exists — `POST /items` only accepts
- * Zotero item JSON — so the entry is assembled field-by-field. The
+ * field set. No BibTeX/CSL-JSON channel exists: `POST /items` only accepts
+ * Zotero item JSON, so the entry is assembled field by field. The
  * plan-review approval runs before Zotero is contacted.
  * @module dsh-zotero/tools/create-item
  */

@@ -5,7 +5,7 @@
  * parses entries directly from the batch export body in memory, locating
  * each requested item by deterministic multi-tier fingerprinting (DOI,
  * normalized title, first author & year disambiguation, extra citekeys),
- * item key, or identifier — strictly without positional guessing.
+ * item key, or identifier. Positional guessing is never used.
  * @module dsh-zotero/export-mapping
  */
 
@@ -58,8 +58,8 @@ function entryKeyOf(text: string, from: number): string | undefined {
 /**
  * The offset just past the `}` closing the entry that starts at `from` (the
  * entry's opening `@type{` brace). Field values nest braces and may carry
- * quoted strings; a quote only opens at field-value level — inside braces it
- * is a literal character — and a body that never closes runs to the text end.
+ * quoted strings; a quote only opens at field-value level, and inside braces
+ * it is a literal character. A body that never closes runs to the text end.
  */
 function entryEndOf(text: string, from: number): number {
   let depth = 1
@@ -86,7 +86,7 @@ function entryEndOf(text: string, from: number): number {
  * Split a BibTeX/BibLaTeX body into its entries with their text spans. Each
  * entry's `text` runs from its `@type{` start to its own closing brace, so
  * trailing `%` comments or blank lines before the next entry never join the
- * body — each entry alone is what title parsing reads. The `end` offset
+ * body; each entry alone is what title parsing reads. The `end` offset
  * still tiles the body to the next entry's start (or the body end) for UI
  * span highlighting. The scan is progressive and brace-aware: every entry's
  * body is skipped to its closing brace before the next start is searched, so
@@ -148,8 +148,8 @@ function nextRecordStart(text: string, offset: number): number {
  * Split an RIS body into its records with their text spans. Each record
  * runs from the previous terminator (the body start for the first) to the
  * start of the next record, its `ER` terminator line and any blank lines
- * after it included — every record's own text is a complete RIS record,
- * and the slices tile the body exactly. A trailing record without a
+ * after it included. Every record's own text is a complete RIS record, and
+ * the slices tile the body exactly. A trailing record without a
  * terminator runs to the body end.
  * @param text - the export body (offsets are relative to this string).
  * @returns the records in body order.
@@ -323,8 +323,8 @@ function alignBibtexEntries(
       authorClean: normalizeAuthorForAlignment(author),
       // Whole-token mention lookup: ref keys are `[A-Z0-9]{8}` by the ref
       // grammar (ref-grammar.ts REF_KEY_SOURCE), so a token-set probe is
-      // exactly the `\b<key>\b` test — underscores remain word characters,
-      // just as they do for `\b` — and no regex built per pair.
+      // exactly the `\b<key>\b` test. Underscores remain word characters, just
+      // as they do for `\b`, and no regex is built per pair.
       tokens: new Set(entry.text.split(/[^A-Za-z0-9_]+/)),
     }
   })

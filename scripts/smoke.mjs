@@ -25,8 +25,8 @@ import { resolve } from 'node:path'
 // Fail loud when run from this repository instead of a dsh profile: the bare
 // import above must resolve to the profile's installed tarball (the
 // production stack), not to this checkout's devDependencies. Resolution is
-// anchored at the current working directory — which the header requires to
-// be the profile directory — not at this script's location.
+// anchored at the current working directory (which the header requires to
+// be the profile directory) not at this script's location.
 {
   const cwdRequire = createRequire(pathToFileURL(resolve(process.cwd(), 'package.json')).href)
   const resolved = cwdRequire.resolve('dsh-zotero/package.json')
@@ -42,7 +42,7 @@ await ctx.plugin(SystemPrompt, {})
 await ctx.plugin(ToolRuntime, {})
 // Writes ride the production registration path too: `writeEnabled` registers
 // the eight write tools so the registry assertion below covers all sixteen.
-// Nothing dispatches them — the smoke only calls reads.
+// Nothing dispatches them: the smoke only calls reads.
 await ctx.plugin(ZoteroService, { writeEnabled: true })
 const zotero = ctx.zotero
 
@@ -121,8 +121,8 @@ const assembly = await ctx.systemPrompt.assemble()
 if (assembly.sections.find((entry) => entry.name === 'zotero:policy') === undefined) {
   throw new Error('zotero:policy section missing')
 }
-// The registry must carry exactly the plugin's vocabulary — every name the
-// shared list declares, and no zotero_* tool it does not — so a registration
+// The registry must carry exactly the plugin's vocabulary (every name the
+// shared list declares, and no zotero_* tool it does not), so a registration
 // that rots (a tool dropped, renamed, or added without the list) fails here.
 const registered = ctx.tools.schemas().map((schema) => schema.name)
 const missing = ZOTERO_TOOL_NAMES.filter((name) => !registered.includes(name))

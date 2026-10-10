@@ -1,12 +1,12 @@
 /**
  * The Sources panel: the plugin's conversation tab (id `zotero`, order 30).
  * This module is the controller: it reads the session's identity (the id
- * only — lifecycle churn never re-renders the panel), the chat target's
+ * only, since lifecycle churn never re-renders the panel), the chat target's
  * tool-call rows, and the connectivity probe; it builds the source
  * workspace and renders the pure presentation
  * surface `ZoteroWorkspaceView` (fixture-renderable, no session or Zotero
- * needed). The probe runs once on mount and once per explicit refresh — no
- * timers — and its cancellation is ignore-stale: the Remote face carries no
+ * needed). The probe runs once on mount and once per explicit refresh, with no
+ * timers, and its cancellation is ignore-stale: the Remote face carries no
  * signal by contract, so the aborted probe's result is dropped after settle.
  * Session switches reset the whole surface through the view's `key`; the
  * view keeps its own filter and selection state. Composer prefills go
@@ -16,7 +16,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 // Session-scope standard props: `useSession` (lifecycle and identity) is
-// merged by ui-session, `useChat` (conversation data) by ui-chat — the named
+// merged by ui-session, `useChat` (conversation data) by ui-chat; the named
 // type imports pull both merges into the program.
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type { ChatNode, ChatSnapshot } from '@deepseek-ai/dsh-client-ui-chat/client'
@@ -140,7 +140,7 @@ export function sessionSignatureOf(snapshot: ChatSnapshot | undefined): string {
 
 /**
  * Project one settled Remote result into the connection view. The component
- * checks its own signal before calling this — an aborted request never
+ * checks its own signal before calling this, so an aborted request never
  * reaches it.
  * @param result - the settled remote result.
  * @param checkedAt - the absolute acquisition time to display.
@@ -157,10 +157,10 @@ export function stateOf(result: RemoteResult<ZoteroStatusView>, checkedAt: strin
 /**
  * Collect the session's Zotero tool calls: settled results and in-flight
  * calls, including nested dispatch (PTC mode), deduplicated by callId and
- * in transcript order. Only visible tool rows contribute — the same set the
+ * in transcript order. Only visible tool rows contribute, the same set the
  * harness's own chat projection carries (hidden rows never appear). Iterates
  * `snapshot.order` (already presentation order) instead of re-sorting. Pure
- * over the snapshot — the same log slice renders the same list.
+ * over the snapshot: the same log slice renders the same list.
  * @param snapshot - the chat snapshot, undefined while none is open.
  * @returns the ordered zotero call blocks.
  */
@@ -214,7 +214,7 @@ export function SourcesTab({ status, t, useSession, useChat, inputActions }: Sou
   const [statusState, setStatusState] = useState<ConnectionView>({ kind: 'loading' })
   const [requestId, setRequestId] = useState(0)
   // The last verified instance id feeds the evidenceMatch verdicts. It updates
-  // only when a connected probe settles — a refresh's loading flip must not
+  // only when a connected probe settles, since a refresh's loading flip must not
   // drop it, or the workspace would rebuild twice per probe.
   const [serverId, setServerId] = useState<string | undefined>(undefined)
   // Streaming-stable zotero rows reuse the previous block array (signature gate).

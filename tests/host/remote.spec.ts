@@ -1,7 +1,7 @@
 /**
  * The zotero Remote service: the dedicated web tab's connectivity probe. The
  * configuration surface reads and writes the namespace through the shared
- * configuration form instead, so the Remote carries only `status` — the one
+ * configuration form instead, so the Remote carries only `status`: the one
  * fact the settings plane does not.
  * @module tests/remote
  */
@@ -36,7 +36,7 @@ describe('the zotero status endpoint', () => {
     const status = await runtime.status()
     expect(status).toEqual({
       providerId: 'local',
-      // The authority actually dialled — the mock server's own host:port, not
+      // The authority actually dialled, the mock server's own host:port, not
       // the configured default. The card's live refresh replaces the parsed
       // command text with this view, so an endpoint dropped here would blank
       // the row the user just refreshed.

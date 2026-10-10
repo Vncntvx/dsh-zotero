@@ -1,6 +1,6 @@
 /**
  * The hand-written host Typert manifest for the zotero Remote. Registered
- * through `ctx.typert.register` in the plugin body — not via a `./typert`
+ * through `ctx.typert.register` in the plugin body, not via a `./typert`
  * export, because dsh-typert-loader's auto-discovery only resolves
  * bare-package-name rows and would double-register this manifest on the
  * production profile where the plugin also self-registers (see service.ts).
@@ -11,8 +11,8 @@
  *
  * Invocations come from `status-codec.ts` (host zod factories). Structural endpoint identity is shared with the client through
  * `contract.ts`; only this half materializes boundary schemas. The model's
- * service key spells {@link ZOTERO_STATUS_SERVICE_KEY} — the same constant
- * the host Remote service and the invocation descriptor use.
+ * service key spells {@link ZOTERO_STATUS_SERVICE_KEY}, the same constant the
+ * host Remote service and the invocation descriptor use.
  * @module dsh-zotero/typert
  */
 

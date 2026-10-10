@@ -15,8 +15,8 @@ describe('mapWithConcurrency', () => {
       await finish.get(value)!.promise
       return value * 10
     })
-    // The workers finish in the order 1, 2, 3 — not the order they were
-    // started in — so the results below can only be right if they follow the
+    // The workers finish in the order 1, 2, 3 (not the order they were
+    // started in), so the results below can only be right if they follow the
     // input positions rather than the order completions arrive in. The test
     // releases each worker itself instead of letting a sleep decide.
     for (const value of [1, 2, 3]) {
@@ -118,7 +118,7 @@ describe('ConcurrencyGate', () => {
     const all = Promise.all([1, 2, 3, 4].map(hold))
     // Two slots, four holders: the first two run, and each release below hands
     // its slot to the next waiter, so every holder is observed while it is
-    // actually inside the gate — the peak is never a function of timing.
+    // actually inside the gate: the peak is never a function of timing.
     for (const id of [1, 2, 3, 4]) {
       await inside.when(() => entered.has(id))
       entered.get(id)!()

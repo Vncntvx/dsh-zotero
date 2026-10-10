@@ -3,7 +3,7 @@
  * replace the real bundle (katex, shiki, the portal machinery) with the DOM
  * face they assert on. `vi.mock` factories are hoisted above the spec's
  * imports, so a spec must reach this module through a dynamic import inside
- * its own factory — a module-scope binding would be initialized too late:
+ * its own factory, a module-scope binding would be initialized too late:
  *
  *     vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
  *       const { primitivesStub } = await import('./helpers/primitives-stub.ts')
@@ -193,7 +193,7 @@ function staticMenu({ anchor, items, open }: MenuStubProps): ReactElement {
 
 /**
  * The `Menu` variant that keeps the primitive's contract: a row click invokes
- * `onSelect`, Escape invokes `onClose` — so the owning component's own
+ * `onSelect`, Escape invokes `onClose`, so the owning component's own
  * callbacks stay exercised without the real portal. Opt in where the spec
  * asserts on them: `primitivesStub({ Menu: interactiveMenu })`.
  */
@@ -304,9 +304,9 @@ export function countingDisclosure(): {
  * The official `SettingsForm` chrome as a DOM face: the unavailable/read-only
  * status lines, the failed line, the save button, and the unmount discard.
  * The real component cannot render here (its bundle carries a second React
- * copy), so specs drive this faithful mirror instead — tracks
- * `ui-primitives/src/settings-form/SettingsForm.tsx`, including the hook
- * order: the discard-on-unmount effect is unconditional, so it fires even
+ * copy), so specs drive this faithful mirror of
+ * `ui-primitives/src/settings-form/SettingsForm.tsx` instead. Its hook order
+ * matters: the discard-on-unmount effect is unconditional, so it fires even
  * when the namespace is unavailable.
  */
 function SettingsFormFace({

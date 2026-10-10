@@ -35,9 +35,9 @@ function renderBrowseView(
 /**
  * One settled `zotero_browse` call, built the way the tool builds it: the
  * arguments the schema accepts and the record its `presentationMeta` emits.
- * The listing *text* is the tool's own business — `tests/unit/browse-rows`
+ * The listing *text* is the tool's own business (`tests/unit/browse-rows`
  * pins that shape, and a host tool module has no place in this lane's
- * program — so this helper takes the text as the caller saw it.
+ * program), so this helper takes the text as the caller saw it.
  */
 function browseCall(options: {
   readonly kind: string
@@ -524,7 +524,7 @@ describe('BrowseToolView (zotero_browse & zotero_changes)', () => {
   it('names the job a long diff was handed to, instead of an empty diff', () => {
     // `zotero_changes` can be promoted to a background job. The diff shape has
     // nothing to draw in that case, so reading it as a diff would show an empty
-    // page and report no changes — the opposite of "still running".
+    // page and report no changes: the opposite of "still running".
     for (const kind of ['background', 'promoted'] as const) {
       const block = settled({
         call: { name: 'zotero_changes', argsRaw: JSON.stringify({ since: { version: 10 } }) },

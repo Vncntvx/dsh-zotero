@@ -1,7 +1,7 @@
 /**
  * BibTeX/BibLaTeX convenience helpers for the exports lens: citation-key
- * extraction and the `\cite{}` command. Extraction is best-effort — a body
- * the regex cannot parse leaves the artifact itself untouched, only the
+ * extraction and the `\cite{}` command. Extraction is best-effort: a body
+ * the regex cannot parse leaves the artifact itself untouched, and only the
  * convenience button disappears.
  * @module dsh-zotero/client/sources/bibtex
  */

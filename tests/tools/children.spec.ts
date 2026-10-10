@@ -96,7 +96,7 @@ describe('zotero_children tool', () => {
     expect(value.itemType).toBe('attachment')
     expect(value.notes).toBeUndefined()
     // The attachment's own annotation came back, and its provenance names the
-    // attachment — `toBeDefined` would pass on an empty collection too.
+    // attachment, `toBeDefined` would pass on an empty collection too.
     expect(value.annotations?.total).toBe(1)
     expect(value.annotations?.items[0]?.parentRef).toBe('zotero://user/0/attachment/WXYZ6789')
   })

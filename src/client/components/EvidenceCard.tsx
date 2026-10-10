@@ -3,7 +3,7 @@
  * gated by the item's evidenceMatch verdict and the source's PDF capability),
  * the indexing coverage line, the budget note, the deduplicated passages
  * with their source tags and page labels, and the per-source availability
- * lines. Everything here is provable session facts — the panel never claims
+ * lines. Everything here is provable session facts: the panel never claims
  * the passages supported the answer.
  * @module dsh-zotero/client/components/EvidenceCard
  */

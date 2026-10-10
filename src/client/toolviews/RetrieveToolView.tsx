@@ -35,7 +35,7 @@ export function RetrieveToolView(props: RetrieveToolViewProps) {
       } else if (retrieveView?.items !== null && retrieveView?.items !== undefined) {
         // `items` is the bounded page the card draws, capped at four regardless of
         // `maxEvidencePassages`; `count` is the call's own total. Counting rows
-        // would report "4 passages" over a body listing 4 of 20 — the same
+        // would report "4 passages" over a body listing 4 of 20, the same
         // bounded-listing mistake the search card had.
         sum = t('toolSummaryEvidence', { count: retrieveView.count ?? retrieveView.items.length })
       } else {

@@ -1,6 +1,6 @@
 /* Open actions shared by the sources and evidence surfaces: an in-body text
  * link, an action-area button, and the blocked variant. Tokens only, no
- * theme selectors — light/dark resolves through the inherited aliases. */
+ * theme selectors; light/dark resolves through the inherited aliases. */
 
 .linkWrap {
   display: inline-flex;
@@ -12,7 +12,7 @@
 /* Text-link language (mirrors the harness clickable-link spec:
  * `ui-primitives/src/markdown/MarkdownText.module.css` anchor + `.linkIcon`,
  * `ui-primitives/src/WebBlock.module.css` source/fetch links, and
- * `ui-deliverables/src/client/ProducedFiles.module.css` file buttons — link-blue
+ * `ui-deliverables/src/client/ProducedFiles.module.css` file buttons: link-blue
  * at rest, dotted underline + 3px offset on hover/focus, 1.1em/-0.25em/5px glyph
  * seat. Keep in sync with `../cards.module.css` `.link`: the esbuild css-modules
  * pipeline resolves each file independently, so `composes` across files would
@@ -57,7 +57,7 @@
 /* The action-area form: the row's bordered-button geometry, as an anchor.
  * Intentionally duplicated with `../cards.module.css` `.lineAction` and
  * `../workspace/workspace.module.css` `.action` (same 24px geometry per
- * surface; esbuild css-modules cannot `composes` across files) — change all
+ * surface; esbuild css-modules cannot `composes` across files), so change all
  * three together. */
 .button {
   display: inline-flex;

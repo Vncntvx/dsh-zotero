@@ -126,7 +126,7 @@ export function registerUpdateItemTool(ctx: Context, service: ZoteroService): ()
     defineTool({
       name: 'zotero_update_item',
       description:
-        "Update one item's scalar metadata (title, date, url, doi, abstractNote, publicationTitle, extra) under a version precondition. Each field must be valid for the item's type — check zotero_browse kind itemFields first; an invalid field fails as ZOTERO_INVALID_ARGUMENT before any write. Creators, itemType, tags, and collections have their own tools. " +
+        "Update one item's scalar metadata (title, date, url, doi, abstractNote, publicationTitle, extra) under a version precondition. Each field must be valid for the item's type; check zotero_browse kind itemFields first; an invalid field fails as ZOTERO_INVALID_ARGUMENT before any write. Creators, itemType, tags, and collections have their own tools. " +
         WRITE_PLAN_OUTCOME_DESCRIPTION,
       parameters: UPDATE_ITEM_PARAMETERS,
       output: {

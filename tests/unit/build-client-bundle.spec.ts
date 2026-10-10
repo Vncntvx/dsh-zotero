@@ -2,7 +2,7 @@
  * The client bundle's authority rules, driven through the same functions the
  * build gates on (`scripts/build-client.mjs`): the loader-handoff self-check
  * (`verifyBundle`) against fixture bundles, and the esbuild plugin list
- * (`clientBuildPlugins`) against fixture graphs — a host-package import is
+ * (`clientBuildPlugins`) against fixture graphs: a host-package import is
  * refused at resolve time, and a clean external-only graph builds.
  * @module tests/unit/build-client-bundle
  */

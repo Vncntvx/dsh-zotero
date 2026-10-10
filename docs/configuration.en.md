@@ -15,8 +15,8 @@ All configuration fields are defined in `src/config.ts`, with default values pro
 | `maxSearchResults`         | `20`                         | Maximum items returned by `zotero_search`                                                                                                                                                      |
 | `maxNoteScanRecords`       | `200`                        | Maximum note records scanned for note content searches                                                                                                                                         |
 | `searchConcurrency`        | `4`                          | Concurrency limit for parent attribution queries in `zotero_search`                                                                                                                            |
-| `maxEvidenceChars`         | `6000`                       | Total character budget for evidence passages                                                                                                                                                   |
-| `maxEvidencePassages`      | `4`                          | Maximum number of evidence passages returned                                                                                                                                                   |
+| `maxEvidenceChars`         | `6000`                       | Total character budget for retrieved passages                                                                                                                                                  |
+| `maxEvidencePassages`      | `4`                          | Maximum number of retrieved passages returned                                                                                                                                                  |
 | `maxDetailChars`           | `3000`                       | Character budget for abstract previews in `zotero_get`                                                                                                                                         |
 | `maxNoteBodyChars`         | `30000`                      | Character budget for note bodies                                                                                                                                                               |
 | `maxNoteChars`             | `2000`                       | Character budget for single note previews in `zotero_get`                                                                                                                                      |
@@ -31,7 +31,7 @@ All configuration fields are defined in `src/config.ts`, with default values pro
 | `maxExportRefs`            | `50`                         | Maximum references in a single `zotero_export` call                                                                                                                                            |
 | `maxBrowseResults`         | `50`                         | Maximum items returned by a single `zotero_browse` call                                                                                                                                        |
 | `maxChangesResults`        | `50`                         | Display limit per resource kind in `zotero_changes`                                                                                                                                            |
-| `scopeListingTtlMs`        | `30000`                      | Cache TTL in milliseconds for collection and search scopes                                                                                                                                     |
+| `scopeListingTtlMs`        | `30000`                      | How long a collection or saved-search scope listing is trusted before a re-read (ms)                                                                                                           |
 | `defaultStyle`             | `apa`                        | CSL citation style (must be built into Zotero)                                                                                                                                                 |
 | `defaultLocale`            | `en-US`                      | CSL citation locale                                                                                                                                                                            |
 | `writeEnabled`             | `false`                      | Whether to register and enable personal library write tools                                                                                                                                    |
@@ -50,11 +50,12 @@ Note: `foregroundWaitMs` controls how long foreground operations wait before pro
 
 `resolveConfig` enforces the following rules at load time:
 
-- `baseUrl` must use the `http:` protocol (Zotero Local API does not support HTTPS) and must not contain user credentials, query strings, or URL fragments;
+- `baseUrl` must be a string, must use the `http:` protocol (Zotero Local API does not support HTTPS), and must not contain user credentials, query strings, or URL fragments;
 - `baseUrl` hostname must be a loopback address (`127.0.0.1`, `localhost`, `::1`, `[::1]`); `localhost` is resolved to `127.0.0.1` at runtime;
 - `baseUrl` path must be `/api` or start with `/api/`;
 - `timeoutMs` must be a positive finite number;
-- All numeric limit fields and `foregroundWaitMs` must be positive integers;
+- Every other numeric field (concurrency, the various limits, `scopeListingTtlMs`, `foregroundWaitMs`, `writeNoteMaxChars`, `writeListMaxItems`, and `writeAuthorizeDeadlineMs`) must be a positive integer;
+- `writeEnabled`, `writePersistKey`, `webEnabled`, `enableRunInBackground`, and `promoteOnTimeout` must be booleans;
 - `provider`, `defaultStyle`, and `defaultLocale` must be non-empty strings.
 
 ## Configuration Priority
@@ -67,7 +68,7 @@ The user layer (`settings.yaml`) takes top priority, overriding schema defaults 
 
 ## Settings Page
 
-The plugin registers a **Zotero** page in the left navigation of the Settings panel, bound to the `zotero` namespace:
+The plugin registers a Zotero page in the left navigation of the Settings panel, bound to the `zotero` namespace:
 
 - Edits persist to the `zotero:` section in `$DSH_HOME/settings.yaml`.
 - Changes take effect immediately: transport and write gate changes rebuild relevant components within the service instance; limit fields are read live by the provider.

@@ -171,7 +171,7 @@ describe('useZoteroProbe', () => {
   it('survives unmounting mid-flight without throwing', async () => {
     // This is the whole claim, and it is deliberately modest: a probe that
     // outlives its component must not throw while settling. Whether it also
-    // avoids a state update afterwards cannot be asserted from here — React 18
+    // avoids a state update afterwards cannot be asserted from here: React 18
     // removed the setState-on-an-unmounted-component warning, so a late
     // resolution is unobservable from outside the component. The guard is kept
     // because it is right, not because this test proves it, which is why

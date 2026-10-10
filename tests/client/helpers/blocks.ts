@@ -8,7 +8,7 @@
  * (`packages/client/ui-conversation/src/client/contract/records.ts`:
  * `ToolCallHead.args`, `ToolResultNode.name`/`args`). These factories derive
  * both **after** the overrides merge, from whatever `argsRaw`/`call` the spec
- * ends up with — so a spec that overrides `call` or `argsRaw` cannot leave the
+ * ends up with, so a spec that overrides `call` or `argsRaw` cannot leave the
  * view describing the default payload instead. The harness's own builders keep
  * the same relationship (`ui-chat/src/client/conversation-nodes/tool.ts`:
  * `rootCall`, `rootResult`). Pass `args` explicitly to pin a view on purpose.
@@ -40,7 +40,7 @@ export function preparing(overrides: Partial<PreparingToolCall> = {}): Preparing
 /**
  * A settled `zotero_search` result; override `call` to name other tools.
  * `name` and `args` follow that call, and a `call: null` (a window cut before
- * the call landed) leaves both empty — exactly the harness's `rootResult`.
+ * the call landed) leaves both empty: exactly the harness's `rootResult`.
  */
 export function settled(overrides: Partial<ToolResultNode> = {}): ToolResultNode {
   const call = Object.hasOwn(overrides, 'call')

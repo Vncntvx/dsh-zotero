@@ -8,7 +8,7 @@
  * - the serving instance id is established (and pinned) before any read or
  *   write, because every write must carry `Zotero-Server-ID`;
  * - the API key comes from {@link WriteAuthorizer}, and a 401 replays the
- *   same request exactly once after a fresh authorization — single-use keys
+ *   same request exactly once after a fresh authorization: single-use keys
  *   are consumed at authentication time, so a burned key is forgotten;
  * - tag, collection-membership, and scalar updates are read-merge-write under
  *   an `If-Unmodified-Since-Version` precondition: PATCH replaces arrays
@@ -21,7 +21,7 @@
  *
  * There is no retry beyond the re-authorization replay, and a version
  * conflict (412) is reported as `ZOTERO_WRITE_CONFLICT` for the model to
- * re-run — the tool re-reads and reapplies on top of what is there now.
+ * re-run: the tool re-reads and reapplies on top of what is there now.
  * Non-idempotent creates (note, item, collection) never retry: an unprovable
  * commit surfaces as `committed-unverified` with `retryable: false`.
  * @module dsh-zotero/local/write-domain
@@ -132,7 +132,7 @@ export interface WriteDomainDeps {
   ) => Promise<ZoteroObjectRef[]>
   /**
    * The field names one item type accepts, memoized per (serving instance,
-   * item type) by the provider — the field set is static for a running build.
+   * item type) by the provider; the field set is static for a running build.
    */
   readonly itemTypeFields: (itemType: string, signal?: AbortSignal) => Promise<ReadonlySet<string>>
   /**
@@ -291,7 +291,7 @@ export function mergeList(
   const added: string[] = []
   for (const entry of add) {
     // (add − existing): an entry already present is not an addition, even when
-    // it was also removed — the removal wins for saved entries.
+    // it was also removed; the removal wins for saved entries.
     if (existingSet.has(entry)) continue
     if (seen.has(entry)) continue
     seen.add(entry)
@@ -399,7 +399,7 @@ async function readItem(
 /**
  * Read one collection's delete precondition: proof it exists plus the library
  * version the delete must carry. The object version is verified but the
- * header version is the precondition — any concurrent write fails the delete.
+ * header version is the precondition; any concurrent write fails the delete.
  */
 async function readCollectionForDelete(
   deps: WriteDomainDeps,
@@ -564,7 +564,7 @@ interface SettledEntry<P> {
 }
 
 /**
- * Settle a one-entry write batch — the single retry-safety contract for the
+ * Settle a one-entry write batch: the single retry-safety contract for the
  * three non-idempotent creates (note, item, collection). The flow:
  *
  * 1. the four outcome buckets must be mutually exclusive and carry no index
@@ -579,7 +579,7 @@ interface SettledEntry<P> {
  *    from the echo (requested parent, name, item type, …) and returning
  *    `undefined` leaves the commit unproven.
  *
- * Every doubt becomes a committed-unverified result — the caller never
+ * Every doubt becomes a committed-unverified result: the caller never
  * retries and never fills saved state from the request.
  */
 function settleSingleEntryBatch<P>(
@@ -678,7 +678,7 @@ function settleSingleEntryBatch<P>(
  * collections. The model-facing tool refuses the combination in
  * `tools/create-note.ts` `buildRequest` (before the plan card); this entry
  * refuses it again for any caller that reaches the domain without that tool
- * — `service.createNote` / provider direct use. Both ends throw the shared
+ * (`service.createNote` or provider direct use). Both ends throw the shared
  * `WRITE_CHILD_COLLECTIONS_MESSAGE`. The entry-field assembly below is
  * structural only (collections key only when standalone); it is not the gate.
  */
@@ -976,10 +976,10 @@ export async function updateItemCollections(
 
 /**
  * Refuse a create whose sibling already carries the target name. Reads the
- * sibling listing fresh (no directory cache) — the parent's children, or the
- * top-level collections — and throws on the first match, so the pages after
- * it are never fetched. The read runs to the honest total, because a check
- * that stopped at the first page would let a duplicate beyond it slip
+ * sibling listing fresh (no directory cache) of the parent's children, or of
+ * the top-level collections, and throws on the first match, so the pages
+ * after it are never fetched. The read runs to the honest total, because a
+ * check that stopped at the first page would let a duplicate beyond it slip
  * through, which is exactly the ambiguity this check exists to prevent.
  */
 async function assertNoSiblingWithName(
@@ -1027,12 +1027,15 @@ async function assertNoSiblingWithName(
   }
 }
 
-/** One page of the sibling listing; the largest limit Zotero's object listings honor. */
+/**
+ * One page of the sibling listing: a bounded page policy of this plugin, not
+ * a server limit. The search lane's note scan requests the same 100 rows.
+ */
 const SIBLING_PAGE_LIMIT = 100
 
 /**
  * Create a collection, optionally under a parent. A sibling that already
- * carries the name refuses the write before any POST — creating a second
+ * carries the name refuses the write before any POST: creating a second
  * same-named sibling would only manufacture resolution ambiguity.
  */
 export async function createCollection(
@@ -1111,7 +1114,7 @@ export async function createCollection(
  * Delete a collection by ref or name. One collection read serves both the
  * existence proof and the library-version precondition, so any concurrent
  * write fails the delete instead of slipping past it. A ref input skips name
- * resolution entirely — the read itself proves the ref; a name input
+ * resolution entirely, because the read itself proves the ref; a name input
  * resolves first, because ambiguity is a pre-read refusal. Entries keep
  * their items (membership only); child collections go with the parent, per
  * Zotero semantics.
@@ -1241,9 +1244,9 @@ export async function createItem(
 }
 
 /**
- * Fetch the field names one item type accepts. Uncached by design — the
+ * Fetch the field names one item type accepts. Uncached by design: the
  * provider wraps this with the per-(instance, item type) memo and injects it
- * as {@link WriteDomainDeps.itemTypeFields}; the field set is static for a
+ * as {@link WriteDomainDeps.itemTypeFields}. The field set is static for a
  * running build, but each Zotero instance may speak its own schema.
  */
 export async function fetchItemTypeFields(
@@ -1364,7 +1367,7 @@ export async function deleteLibraryTags(
 }
 
 /**
- * The typed error a write-capability-less provider raises — unreachable
+ * The typed error a write-capability-less provider raises. It is unreachable
  * through the service's capability gate, but the direct-provider contract
  * fails with the same code instead of crashing.
  */

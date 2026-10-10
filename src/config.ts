@@ -19,15 +19,15 @@ import { LOCAL_PROVIDER_ID } from './constants.js'
 export interface Config {
   /** Zotero Local API base URL. Must be plain loopback HTTP. */
   baseUrl?: Volatile<string>
-  /** Provider id to select; the V1 provider registers as `local`. */
+  /** Provider id to select; the built-in local provider registers as `local`. */
   provider?: Volatile<string>
   /** Per-request provider deadline in milliseconds. */
   timeoutMs?: Volatile<number>
   /**
    * Upper bound for concurrent in-flight requests to the Local API. Each
    * domain pool bounds one call's fan-out; this is the process-wide slot
-   * count, the real bound on what Zotero is asked to serve at once — two
-   * calls run at full width, and a burst queues instead of stacking.
+   * count, the real bound on what Zotero is asked to serve at once. Two calls
+   * run at full width, and a burst queues instead of stacking.
    */
   maxInFlightRequests?: Volatile<number>
   /** Upper bound for `zotero_search` `limit`. */
@@ -97,7 +97,7 @@ export interface Config {
   writePersistKey?: Volatile<boolean>
   /** Character budget for one research note body write; the converted HTML rides the batch's successful bucket (bounded by `maxResponseBytes`), and this bound keeps one pathological note from dominating a batch. */
   writeNoteMaxChars?: Volatile<number>
-  /** Upper bound for items in one tags/collection-membership write's list arguments — the same scale as the write batch cap, so one call cannot fan out into many protocol batches. */
+  /** Upper bound for items in one tags/collection-membership write's list arguments, the same scale as the write batch cap, so one call cannot fan out into many protocol batches. */
   writeListMaxItems?: Volatile<number>
   /** Deadline for the Zotero authorization dialog during a write (ms). That request waits for a person to read the dialog, so it is independent of `timeoutMs` and deliberately far above it. */
   writeAuthorizeDeadlineMs?: Volatile<number>
@@ -221,9 +221,9 @@ export const LOOPBACK_HOSTNAMES: ReadonlySet<string> = new Set([
  * Pin a loopback hostname to a loopback IP literal. `localhost` would
  * otherwise resolve through the system resolver, whose answer a hosts-file
  * change can redirect after validation; rewriting it here locks every
- * request to a verified loopback address. The pin is a plain string rewrite
- * — `localhost` to the IPv4 loopback literal, the address every mainstream
- * platform resolves it to — keeping validation synchronous and the resolver
+ * request to a verified loopback address. The pin is a plain string rewrite:
+ * `localhost` becomes the IPv4 loopback literal, the address every mainstream
+ * platform resolves it to. That keeps validation synchronous and the resolver
  * out of every request.
  */
 function pinLoopbackHostname(hostname: string): string {
@@ -281,8 +281,8 @@ const SCHEMA_DEFAULTS: Record<string, unknown> = unwrapConfig(Config({}) as Conf
 
 /**
  * Whether an entry already carries every `ResolvedConfig` field (after
- * unwrap). True for Loader/fiber-delivered config — that path applies the
- * same Schemastery schema before the constructor runs — and for a complete
+ * unwrap). True for Loader/fiber-delivered config, where that path applies
+ * the same Schemastery schema before the constructor runs, and for a complete
  * `Options` object.
  */
 function isSchemaComplete(config: Config | Options): boolean {
@@ -351,8 +351,8 @@ function assertResolvedConfig(plain: Record<string, unknown>): ResolvedConfig {
   const hostname = pinLoopbackHostname(url.hostname)
   if (hostname !== url.hostname) {
     // The pin only rewrites `localhost` (to the IPv4 loopback literal), so
-    // the assignment needs no bracket handling — IPv6 literals come back
-    // unchanged and never enter this branch.
+    // the assignment needs no bracket handling, because IPv6 literals come
+    // back unchanged and never enter this branch.
     url.hostname = hostname
   }
   assertNonEmpty('provider', plain.provider)
@@ -406,7 +406,7 @@ function assertResolvedConfig(plain: Record<string, unknown>): ResolvedConfig {
 /**
  * Live read of a schema-complete entry (the Loader/fiber contract: every
  * field is present as a stable volatile reference or a plain value that
- * already passed {@link resolveConfig}). Unwrap + constraint checks only —
+ * already passed {@link resolveConfig}). Unwrap and constraint checks only:
  * Schemastery is not re-applied on this path.
  * @throws {Error} on loopback/URL/limit violations, or when a field is missing.
  */
@@ -428,7 +428,7 @@ export function readResolvedConfig(entry: Config | Options): ResolvedConfig {
 export function resolveConfig(config: Config | Options): ResolvedConfig {
   // Unwrap both sides of the schema: the loader hands parsed config whose
   // volatile fields are already references, while commits and tests hand
-  // plain values — and application wraps every volatile field in a fresh
+  // plain values, and application wraps every volatile field in a fresh
   // reference either way. Validation below always reads plain values.
   const applied = unwrapConfig(Config(unwrapConfig(config)) as Config)
   return assertResolvedConfig(applied)

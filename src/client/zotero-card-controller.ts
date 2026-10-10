@@ -1,5 +1,5 @@
 /**
- * The Zotero settings page's staged form over the `zotero` namespace — every
+ * The Zotero settings page's staged form over the `zotero` namespace: every
  * Config field, with the field table spelled here (the browser bundle must
  * not value-import host modules; the key set is bound to the host
  * `ResolvedConfig` at compile time below, and
@@ -38,11 +38,11 @@ import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { ResolvedConfig } from '../config.ts'
 
 /**
- * The section fields this card edits — the host `Config` surface, all of it,
+ * The section fields this card edits: the host `Config` surface, all of it,
  * in display order. `group` names the page's display group (a locale key).
- * The Web toggle leads the page: it gates the whole conversation tab, so it
- * is the first thing a visitor sees. The write family sits immediately under
- * it — the sensitive surface a visitor needs before the technical limits.
+ * The Web toggle leads the page because it gates the whole conversation tab,
+ * so it is the first thing a visitor sees. The write family sits immediately
+ * under it, the sensitive surface a visitor needs before the technical limits.
  */
 const FIELD_SPECS = [
   { key: 'webEnabled', kind: 'boolean', group: 'groupWeb' },

@@ -68,7 +68,7 @@ function ZoteroBundleQuickConfigBody({
   const writeEnabled = snapshot.value?.writeEnabled === true
 
   // The write edge rejects on a transport failure and resolves false when the
-  // Host refuses the write — either way the mirror never lands it, the switch
+  // Host refuses the write. Either way the mirror never lands it, the switch
   // bounces back on the next snapshot, and the failure must be visible here
   // (the official form spells the same surface through `state.failed`).
   const apply = (field: QuickConfigField, value: boolean): void => {

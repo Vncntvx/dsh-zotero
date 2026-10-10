@@ -8,7 +8,7 @@
  * strict zod schemas in `src/status-codec.ts`; the client Remote face mounts
  * the same structural endpoint with a host-owned codec factory that never
  * materializes in the browser (see `src/client/status-codec.ts`). Client
- * Gateway returns `RemoteResult.value` unvalidated — result codecs are host
+ * Gateway returns `RemoteResult.value` unvalidated: result codecs are host
  * registry/wire identity, not a second browser-side validator.
  *
  * The Remote namespace carries the one fact the settings plane does not: live
@@ -56,7 +56,7 @@ export const ZOTERO_STATUS_INVOCATION_ID = 'dsh-zotero#zotero/status'
 /**
  * Cordis service key that owns the status method on the host half.
  * The host Remote service (`src/remote.ts`) and the Typert model must both
- * spell this key from here — never a second literal.
+ * spell this key from here, never as a second literal.
  */
 export const ZOTERO_STATUS_SERVICE_KEY = 'zoteroRemote'
 
@@ -88,7 +88,7 @@ export const ZOTERO_STATUS_ENDPOINT = {
 /**
  * Build one status invocation descriptor around a result codec. Host and
  * client both call this so endpoint identity cannot drift; only the codec arm
- * differs by side. Every structural field is copied — callers never share a
+ * differs by side. Every structural field is copied, so callers never share a
  * mutable reference with {@link ZOTERO_STATUS_ENDPOINT}.
  * @param result - the strict result codec for {@link ZoteroStatusView}.
  * @returns a complete invocation descriptor.

@@ -1,7 +1,7 @@
 /**
  * Shared pagination plumbing for every server-paged listing: the honest
  * `Total-Results` read and the next-page cursor. Search, browse, and the
- * changes diffs all page the same way, so the invariant lives in one place —
+ * changes diffs all page the same way, so the invariant lives in one place:
  * a listing without a valid total fails loud instead of guessing.
  * @module dsh-zotero/local/pagination
  */
@@ -12,7 +12,7 @@ import { ZOTERO_TOTAL_RESULTS_HEADER } from '../constants.js'
 
 /**
  * Read and validate the `Total-Results` header a server-paged list endpoint
- * must report. A missing or malformed header fails loud — pagination without
+ * must report. A missing or malformed header fails loud: pagination without
  * an honest total would silently under-report.
  */
 export function requireTotalResults(headers: Headers, what: string): number {
@@ -50,7 +50,7 @@ export function requireArrayBody(json: unknown, what: string): unknown[] {
  *
  * This is the client-sliced spelling: an empty slice simply means the request
  * started past the end of a list the caller already has in full. A page read
- * off the server must use {@link nextOffsetOrFail} instead — there an empty
+ * off the server must use {@link nextOffsetOrFail} instead, where an empty
  * page with range left is a body/header mismatch, not an ending.
  */
 export function nextOffsetOf(
@@ -67,7 +67,7 @@ export function nextOffsetOf(
  * body contradicts the header.
  *
  * A server that reports `Total-Results: 500` and then answers an in-range page
- * with zero rows has not ended the listing — it has breached the contract the
+ * with zero rows has not ended the listing; it has breached the contract the
  * total is. Silently terminating there reports a truncated result as a
  * complete one, and the model cannot tell the difference.
  * @param offset - the offset this page was requested at.

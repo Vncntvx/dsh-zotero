@@ -1,6 +1,6 @@
 /**
  * The scope directory: the cached, identity-checked view of the endpoints
- * that name Zotero's containers — collections and saved searches.
+ * that name Zotero's containers (collections and saved searches).
  *
  * Two caches live here, both TTL-bounded and pinned to the Server-ID that
  * served them (a listing from one instance never answers a read pinned to
@@ -86,7 +86,7 @@ function cacheKey(library: SupportedLocalLibrary, plural: 'collections' | 'searc
 
 /**
  * Pin the serving identity from the response headers, falling back to the
- * claim only when the build omits the header — storing the claim alone
+ * claim only when the build omits the header, since storing the claim alone
  * leaves a headerless first read unclaimable.
  * @param headers - the response headers.
  * @param claim - the identity the request was pinned to, if any.
@@ -144,7 +144,7 @@ export class ScopeDirectory {
    * `force` asks for a fresh answer. Always stored with the identity header
    * it was served under, so later calls keep the listing's own provenance.
    * A read pinned to one instance (a ref carrying `?server=`) never consumes
-   * an entry served by a different instance, even inside the TTL window —
+   * an entry served by a different instance, even inside the TTL window:
    * after a profile or database switch, same-key objects are different
    * objects.
    */
@@ -168,9 +168,9 @@ export class ScopeDirectory {
     // A forced refresh must not join a normal read: that answer may predate
     // what the caller is asking for (the caller forced precisely because the
     // cached one missed). Two forced refreshes, by contrast, want the same
-    // fresh answer and share the one request — a per-call counter in this key
-    // would give each its own, defeating the in-flight map. A stable key keeps
-    // the two classes apart while letting each dedupe within itself.
+    // fresh answer and share the one request, because a per-call counter in
+    // this key would give each its own, defeating the in-flight map. A stable
+    // key keeps the two classes apart while letting each dedupe within itself.
     const requestKey = `${key}:${ctx.serverId ?? ''}:${options.force === true ? 'force' : 'normal'}`
     const existing = this.scopeListingInFlight.get(requestKey)
     const latestGeneration = this.latestListingGeneration.get(key)
@@ -370,8 +370,8 @@ export class ScopeDirectory {
 
   /**
    * Resolve a batch of collection refs, proving each key exists. One cached
-   * listing answers every key it carries — the same trust level scope-name
-   * resolution already gives writes — and only keys the listing lacks fall
+   * listing answers every key it carries (the same trust level scope-name
+   * resolution already gives writes), and only keys the listing lacks fall
    * back to single-object reads, which also surface the typed 404. A
    * 50-entry membership edit costs one request in the common case instead of
    * one GET per ref. Input order is preserved; a ref naming another library
@@ -407,7 +407,7 @@ export class ScopeDirectory {
       // The listing may only answer a ref it can prove: a ref that claims a
       // specific serving instance (`?server=`) must match the listing's own
       // identity, or it falls through to a live read whose served-by identity
-      // the caller can judge — a cross-instance ref is never silently
+      // the caller can judge. A cross-instance ref is never silently
       // re-pointed at this instance's object.
       const listed = byKey.get(ref.key)
       const claim = ref.serverId ?? claimServerId
@@ -446,7 +446,7 @@ export class ScopeDirectory {
    * The ancestor names of one collection, walking `parentCollection` links
    * upward from its immediate parent. The walk is sequential (one chain),
    * cycle-guarded by the keys already visited, and stops at an ancestor the
-   * API cannot serve — the breadcrumb then reflects only provable names.
+   * API cannot serve, so the breadcrumb reflects only provable names.
    */
   async collectionAncestorNames(
     library: SupportedLocalLibrary,
@@ -472,9 +472,9 @@ export class ScopeDirectory {
    * Drop cached scope state for one library after a collection write.
    * Name→ref resolution reads through a TTL cache, so a deleted collection
    * would otherwise keep resolving until the TTL lapses; creation has the
-   * symmetric staleness. Clearing the listing plus the breadcrumb nodes — and
+   * symmetric staleness. Clearing the listing plus the breadcrumb nodes, and
    * advancing the listing generation so an in-flight older response cannot
-   * refill the cache — is the only clean fix (`force` only triggers on a miss).
+   * refill the cache, is the only clean fix (`force` only triggers on a miss).
    * @param library - the library whose scope state is stale.
    * @param plural - the scope endpoint to drop; omitted drops both.
    */
@@ -498,7 +498,7 @@ export class ScopeDirectory {
    * One collection node for breadcrumb walks, TTL-cached per library+key and
    * identity-checked like the scope listings. A missing collection resolves
    * to undefined (a phantom parent truncates the path) instead of failing
-   * the browse — and that miss is cached for the same TTL, so a phantom
+   * the browse, and that miss is cached for the same TTL, so a phantom
    * parent is not re-fetched on every page of the same walk. Concurrent
    * lookups of the same key share one request.
    */
@@ -567,7 +567,7 @@ export class ScopeDirectory {
         ...(entry.parentKey !== undefined ? { parentKey: entry.parentKey } : {}),
       }
       // Pin the serving identity from the response headers (falling back to
-      // the claim only when the build omits the header), like scopeListingOf —
+      // the claim only when the build omits the header), like scopeListingOf:
       // storing the claim alone leaves a headerless first read unclaimable.
       const servedBy = resolveServedBy(headers, serverId)
       this.collectionNodeCache.set(nodeCacheKey, {
@@ -646,7 +646,7 @@ export async function resolveCollectionsMixed(
 /**
  * My Publications item listing: the Local API mirrors the Web API's
  * `/publications/items` scope without a `/top` partition. Pinned to the
- * canonical personal library — callers assert personal-only first.
+ * canonical personal library; callers assert personal-only first.
  */
 export function publicationsItemsPath(): string {
   return `${libraryPrefix(PERSONAL_LIBRARY)}/publications/items`
@@ -666,7 +666,8 @@ export interface ResolveScopeOptions {
  * Resolve a search scope to the API path the Local API serves it at, plus
  * the resolved shape echoed back to the Agent so pagination replays a stable
  * ref. When `library` is omitted and the scope carries a group ref, the
- * library is inferred from the ref — fail-closed where it cannot be proven.
+ * library is inferred from the ref and the resolution fails closed where it
+ * cannot be proven.
  */
 export async function resolveScope(
   directory: ScopeDirectory,
@@ -731,8 +732,8 @@ export async function resolveScope(
         signal,
       )
       // Saved searches mirror publications: the endpoint serves one item
-      // listing with no /top partition, so itemLevel does not apply here —
-      // it governs library/collection scopes only.
+      // listing with no /top partition, so itemLevel does not apply here. It
+      // governs library/collection scopes only.
       return {
         path: `${libraryPrefix(found.ref.library as SupportedLocalLibrary)}/searches/${found.ref.key}/items`,
         resolved: { kind: 'savedSearch', ref: formatRef(found.ref), name: found.name },

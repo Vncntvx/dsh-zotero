@@ -242,7 +242,7 @@ describe('ChildrenToolView (zotero_children & zotero_attachment)', () => {
       `${zh.toolChildrenNotes} · 1`,
       `${zh.toolChildrenAttachments} · 1`,
       // The projection reported two annotations but carried one row, so the
-      // count is what the card can actually show next to the true total — never
+      // count is what the card can actually show next to the true total: never
       // a number the reader cannot find on the page.
       `${zh.toolChildrenAnnotations} · ${mockT('countOfReturned', { total: 4, shown: 1 })}`,
     ])
@@ -291,7 +291,7 @@ describe('ChildrenToolView (zotero_children & zotero_attachment)', () => {
 
   it('draws the swatch only for a colour the browser can actually paint', () => {
     // Zotero's own colour is data, so it is passed through as a custom
-    // property — which means a value CSS cannot read would render as a hollow
+    // property, which means a value CSS cannot read would render as a hollow
     // box painted by the property's `transparent` fallback. Every length CSS
     // accepts is drawn; the 5- and 7-digit forms it rejects are not.
     const swatchFor = (color: unknown): string | null =>

@@ -5,8 +5,8 @@
  * (not running, local API disabled, unsupported API version, timeout),
  * the caller is asked how to proceed through the `userQuestions` seam,
  * with the recommended action offered first. The ask happens only inside
- * a tool call that actually attempted a Zotero request — loading the
- * plugin never probes, and a tool that was never called never asks.
+ * a tool call that actually attempted a Zotero request: loading the plugin
+ * never probes, and a tool that was never called never asks.
  * Everything here fails closed: an absent question service, a failed
  * question, or a non-retry answer all surface the original typed
  * `ZoteroError`, so a broken question mechanism can never mask a broken
@@ -83,7 +83,7 @@ const FAILURE_SPECS: Record<AskWorthyCode, FailureSpec> = {
   [ZOTERO_API_VERSION]: {
     header: 'Zotero and this plugin share no API version',
     question: `The running Zotero does not implement local API version ${ZOTERO_LOCAL_API_VERSION}, which this plugin requires.`,
-    detail: `Upgrade Zotero to a version whose local API supports version ${ZOTERO_LOCAL_API_VERSION} — or update dsh-zotero if the running Zotero is newer than this plugin line.`,
+    detail: `Upgrade Zotero to a version whose local API supports version ${ZOTERO_LOCAL_API_VERSION}, or update dsh-zotero if the running Zotero is newer than this plugin line.`,
     retryLabel: 'I fixed the version, retry (Recommended)',
     retryDescription: RETRY_DESCRIPTION,
     abortLabel: ABORT_LABEL,
@@ -125,8 +125,8 @@ function questionOf(spec: FailureSpec): AskUserQuestionItem {
  * five parallel reads used to put five identical cards in front of the user,
  * each one demanding the same answer. The gate keeps one ask per failure
  * kind in flight and lets every other caller wait on that same answer, so a
- * single card decides for all of them — and each caller then retries, or
- * does not, on its own request. The entry is dropped as soon as the question
+ * single card decides for all of them, and each caller then retries, or does
+ * not, on its own request. The entry is dropped as soon as the question
  * settles, so a later failure asks again instead of inheriting a stale
  * answer.
  *
@@ -134,7 +134,7 @@ function questionOf(spec: FailureSpec): AskUserQuestionItem {
  * `service.recovery`; `ZoteroService.buildTransport()` replaces HTTP clients
  * and the provider but intentionally keeps this gate so in-flight waiters and
  * new failures stay on one conversation. Replacing the gate on a volatile
- * commit would stack cards — do not treat recovery as config-scoped state.
+ * commit would stack cards, so recovery is not config-scoped state.
  *
  * Only idempotent reads ride this helper: its contract re-runs `run` on
  * retry, which a write cannot promise (retrying a timed-out note creation

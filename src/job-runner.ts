@@ -52,7 +52,8 @@ const JOB_CANCELLATION_SETTLE_MS = 1000
  * wait that settles inside the promotion window is the one case the plugin can
  * still answer with the original error, because it holds this promise itself.
  * Every other arm (background, promoted, cancellation) reports the harness's
- * text and keeps the plugin's error out of reach — by design, not by omission.
+ * text and keeps the plugin's error out of reach. That is deliberate: nothing
+ * at those boundaries can carry an error object.
  */
 interface ZoteroJobOutcome extends JobOutcome {
   /** The thrown producer error, present only on the `failed` arm. */
@@ -411,8 +412,8 @@ export class ZoteroJobRunner {
     if (view.status === 'failed') {
       // Prefer the producer's own error: the registry's `detail` is a string,
       // and a `ZoteroError`'s code is what the model routes on. `done` is
-      // already settled here — the registry publishes its terminal view only
-      // after the producer promise resolves — so this await cannot block.
+      // already settled here, because the registry publishes its terminal view
+      // only after the producer promise resolves, so this await cannot block.
       const settled = await done
       if (settled.error instanceof Error) throw settled.error
       throw new Error(view.detail ?? 'Zotero operation failed')

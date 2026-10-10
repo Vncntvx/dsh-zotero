@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 /**
  * The exports lens: successful exports as per-format sections of deduplicated
- * documents — the format head with its count and copy-all / download-all
+ * documents: the format head with its count and copy-all / download-all
  * actions, per-document rows (citation key, weak title line, \cite copy,
- * single-document download, disclosure into the verbatim entry) — with
+ * single-document download, disclosure into the verbatim entry), with
  * artifacts without per-document data falling back to whole-text call rows,
  * and the incomplete-operations note. The static-export disclaimer is a
  * README concern, never a UI line.
@@ -114,7 +114,7 @@ afterEach(() => {
  * `downloadBlob` hands the object URL to a `window.setTimeout(…, 0)` callback
  * (`src/client/download.ts`: "the blob URL must not outlive the click"), so the
  * release is a macrotask, and the click that schedules it returns long before
- * that callback runs — a microtask flush would assert too early. This is the
+ * that callback runs: a microtask flush would assert too early. This is the
  * one wait in this file that a promise the test owns cannot express: the code
  * under test does not hand out the timer.
  */
@@ -343,7 +343,7 @@ describe('ExportSections', () => {
       ],
     })
     render(<ExportSections exports={[first, second]} t={t} />)
-    // One section, one document row — the latest entry wins, no duplicates.
+    // One section, one document row: the latest entry wins, no duplicates.
     expect(screen.getAllByText('dao2023')).toHaveLength(1)
     fireEvent.click(screen.getByLabelText(zh.copyAll))
     expect(writeClipboard).toHaveBeenCalledWith(updated)

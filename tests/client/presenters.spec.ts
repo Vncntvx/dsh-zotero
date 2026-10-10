@@ -1,6 +1,6 @@
 /**
  * Pure block readers shared by the Sources panel: the truth ladder,
- * defensive meta validation, and the degradation matrix — all deterministic
+ * defensive meta validation, and the degradation matrix: all deterministic
  * over the frozen block.
  * @module tests/client/presenters
  */
@@ -134,7 +134,7 @@ describe('the lazy argument view facade', () => {
     expect(textArg(argsViewOf(running({ argsRaw: '{"ref":"x"}' })), 'ref')).toBe('x')
   })
 
-  it('answers undefined — never throws — for malformed, empty, and non-object payloads', () => {
+  it('answers undefined, never throws, for malformed, empty, and non-object payloads', () => {
     expect(
       textArg(argsViewOf(settled({ call: { name: 'zotero_get', argsRaw: '{' } })), 'ref'),
     ).toBeUndefined()

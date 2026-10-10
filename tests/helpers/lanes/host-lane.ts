@@ -4,8 +4,8 @@
  * mounted over the mock's base URL.
  *
  * The lane is returned as one object rather than installed by a global setup
- * file, so each spec calls `setupHostLane()` in its own `beforeEach` — or in
- * the test body where the boot varies per case — and `teardown()` in its own
+ * file, so each spec calls `setupHostLane()` in its own `beforeEach` (or in
+ * the test body where the boot varies per case), and `teardown()` in its own
  * `afterEach`: the wiring is visible at the call site that depends on it.
  * `runTool` keeps the call-id scheme the tool specs were written against
  * (`tool-<n>`, counted per lane), so `ctx.tools` sees the assembly it always
@@ -49,7 +49,7 @@ export interface HostLaneOptions {
    */
   readonly typert?: boolean
   /**
-   * Compose any further service before the plugin mounts — a user-questions
+   * Compose any further service before the plugin mounts: a user-questions
    * stand-in, for one: a plugin fiber resolves services at call time, but a
    * seam the tools must find has to exist before the plugin's own fiber
    * snapshot is taken.
@@ -130,7 +130,7 @@ export async function setupHostLane(
  * still sees the arm that carries them.
  *
  * The returned result is the input object itself. A failure throws instead of
- * returning, so every assertion after the call runs only on a success — and
+ * returning, so every assertion after the call runs only on a success, and
  * the thrown message names the tool and carries the text a reader would
  * otherwise have to fetch from the result by hand: the registry's failure
  * message, its `{ name, code }` when the tool threw a `HarnessError`, and the

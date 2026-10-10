@@ -38,7 +38,7 @@ const UPDATE_ITEM_TAGS_PARAMETERS = {
     type: 'array',
     items: { type: 'string' },
     description:
-      "Tags to add. They merge with the item's existing tags — what is already there stays, including its colored/automatic types; duplicates collapse.",
+      "Tags to add. They merge with the item's existing tags: what is already there stays, including its colored/automatic types; duplicates collapse.",
   },
   remove: {
     type: 'array',

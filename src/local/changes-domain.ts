@@ -2,7 +2,7 @@
  * The `zotero_changes` domain: baseline version readings and `?since=` diffs
  * over the versions-format endpoints, with tombstones from /deleted. A kind
  * this Zotero build cannot serve (or cannot serve for the requested range)
- * degrades to absence — and is named, with the reason, in `unobservable` —
+ * degrades to absence, and is named, with the reason, in `unobservable`,
  * instead of failing the whole read.
  *
  * Every versions resource is read unbounded (no `limit`): the local API
@@ -12,7 +12,7 @@
  *
  * The item space is read as the API itself partitions it: `/items` (live
  * items), `/items/top` (their top-level subset) and `/items/trash` (the
- * trash). Zotero keeps child objects — notes, attachments, annotations — as
+ * trash). Zotero keeps child objects (notes, attachments, annotations) as
  * items with versions of their own, and excludes the trash from its item
  * listings, so a diff over `/items/top` alone would report a version advance
  * whose changes it never mentioned: editing one annotation moves the library
@@ -26,7 +26,7 @@
  * diffing this one's counter, and the library is checked before the first
  * read. The cursor is handed back only when the whole range was read, the
  * library version did not move during the fan-out, and the answering instance
- * is known — otherwise the caller must not advance at all.
+ * is known; otherwise the caller must not advance at all.
  * @module dsh-zotero/local/changes-domain
  */
 
@@ -89,7 +89,7 @@ interface Tombstones {
   readonly collections: string[]
   readonly savedSearches: string[]
   readonly tags: string[]
-  /** Entries in lists outside the documented four — counted, never interpreted. */
+  /** Entries in lists outside the documented four; counted, never interpreted. */
   readonly other: number
 }
 
@@ -117,7 +117,7 @@ export function cursorLibraryMismatchMessage(
   cursorLibrary: string,
   requestLibrary: string,
 ): string {
-  return `This cursor belongs to ${cursorLibrary}, but the call diffs ${requestLibrary}. A library version is only meaningful in the library it came from — diff that library, or take a baseline reading here.`
+  return `This cursor belongs to ${cursorLibrary}, but the call diffs ${requestLibrary}. A library version is only meaningful in the library it came from; diff that library, or take a baseline reading here.`
 }
 
 /** A response identity is usable only when it is a non-blank string. */
@@ -150,7 +150,7 @@ type ReadResourceFn = (
  * Resolve the trash partition, falling back when the build does not serve
  * `/items/trash`. Official Zotero Syncing standard: query `/items` with
  * `includeTrashed=1` and diff against the live listing. Completeness is the
- * conjunction of both whole reads — a capped half cannot vouch for the
+ * conjunction of both whole reads, because a capped half cannot vouch for the
  * derived split. Any other failure (or a failed fallback) returns the
  * original read so the caller records one verdict for the item space.
  */
@@ -186,9 +186,9 @@ async function resolveTrashRead(
  * (Zotero 10.0.2-beta.9) versions are local transactions: every object save
  * advances the library's counter and stamps the object, so `?since=` answers
  * "what changed here" without the cloud and without a background watcher. The
- * domain never assumes that from a build number — no response header names the
- * build, and one that reports no library version is reported as
- * `versionUnavailable` instead. Without `since` this is a baseline reading —
+ * domain never assumes that from a build number, because no response header
+ * names the build, and one that reports no library version is reported as
+ * `versionUnavailable` instead. Without `since` this is a baseline reading,
  * just the current version for the next call to diff from. `format=versions`
  * responses are key→version maps; `/deleted` returns tombstone key lists.
  * Each listing is capped at `maxChangesResults` entries with its true count
@@ -303,7 +303,7 @@ export async function changes(
   if (since === undefined) {
     onProgress?.({ phase: 'baseline', message: 'Reading library baseline version...' })
     // A baseline is one reading: the version a later call diffs from. A build
-    // that reports none — no items read, or no version header on it — has no
+    // that reports none (no items read, or no version header on it) has no
     // changes story to tell, and the result says so rather than handing back a
     // cursor pinned to nothing.
     const probe = await attempt(() => probeVersion())
@@ -315,7 +315,7 @@ export async function changes(
       ...(observed !== undefined ? { serverId: observed } : {}),
       // A baseline mints the cursor the next call diffs from. Without a
       // version, or without an instance to pin it to, there is nothing this
-      // call can hand back — a cursor-less result is the honest answer.
+      // call can hand back: a cursor-less result is the honest answer.
       ...(cursor !== undefined ? { cursor } : {}),
       ...(version === undefined ? { versionUnavailable: true } : {}),
       changed: {},
@@ -330,8 +330,8 @@ export async function changes(
     message: `Probing library version since ${since.version}...`,
   })
   // The version this diff is pinned to. Every array resource reports the
-  // library's *current* version in `Last-Modified-Version` — not the newest
-  // version on its page — so any other reading means a write landed while this
+  // library's *current* version in `Last-Modified-Version`, not the newest
+  // version on its page, so any other reading means a write landed while this
   // call was reading, and the range cannot be attributed to one version.
   const probe = await attempt(() => probeVersion(instance))
   const probeValue = probe.status === 'ok' ? probe.value : undefined
@@ -345,12 +345,11 @@ export async function changes(
    * objects before any listing cap, so a map carrying fewer keys than the
    * header promises means this build capped the response and the read is not
    * the whole range. Without the header the unbounded request is trusted to be
-   * whole — a short page is complete, and nothing more is knowable here.
+   * whole: a short page is complete, and nothing more is knowable here.
    *
-   * A body that is not a key→version map is a different matter: it is not a
-   * short answer but an unreadable one, so it is reported as such (no listing,
-   * no count, nothing for the cursor to certify) instead of being read as
-   * "nothing changed".
+   * A body that is not a key→version map is an unreadable answer rather than a
+   * short one, so it is reported as such (no listing, no count, nothing for
+   * the cursor to certify) instead of being read as "nothing changed".
    */
   const readResource = async (
     path: string,
@@ -415,7 +414,7 @@ export async function changes(
   }
 
   /**
-   * Record a kind this call could not observe — once per kind, which is what
+   * Record a kind this call could not observe, once per kind, which is what
    * every caller does: a kind whose endpoint is read more than once (the item
    * space) collapses its reads to one verdict before calling this. An
    * unreadable read also withholds the cursor: unlike a missing endpoint, the
@@ -567,8 +566,8 @@ export async function changes(
   }
 
   /**
-   * Parse the tombstone payload. Zotero documents four lists — items,
-   * collections, searches, tags — and its own sync reader walks whichever keys
+   * Parse the tombstone payload. Zotero documents four lists (items,
+   * collections, searches, tags), and its own sync reader walks whichever keys
    * the response carries, so a list the payload omits means "nothing of that
    * kind was removed", while a payload that is not the documented shape is
    * unreadable: removals are then unknown, never zero. Keys outside the
@@ -614,7 +613,7 @@ export async function changes(
     return { items, collections, savedSearches, tags, other }
   }
 
-  // When the tombstone read succeeds every list exists, possibly empty — the
+  // When the tombstone read succeeds every list exists, possibly empty: the
   // positive statement "nothing was removed in this range", which is why it is
   // never omitted for brevity. The endpoint carries no version of its own, so
   // it can never make the read incomplete: it only shortens what is listed.
@@ -658,7 +657,7 @@ export async function changes(
   // The next cursor is the snapshot reading, pinned to the instance that
   // answered. Every served resource was read whole (or the call would not be
   // complete) and none reported another version, so this cursor covers the
-  // entire range the result reports — and only this library on this instance.
+  // entire range the result reports, and only this library on this instance.
   // Fulltext has an independent counter, so a library cursor cannot safely
   // resume a result that mixes its rows with versioned library resources.
   const cursor =

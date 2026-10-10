@@ -1,8 +1,8 @@
 /**
  * Passage tokenization and BM25 ranking for `zotero_retrieve`.
  *
- * Evidence from every source — annotations, notes, the abstract, and
- * full-text chunks — is ranked uniformly as a small single-document corpus:
+ * Evidence from every source (annotations, notes, the abstract, and full-text
+ * chunks) is ranked uniformly as a small single-document corpus:
  * document frequencies are passage-level, so a term scores higher when it
  * is rare across the item's own passages. Ties keep the caller's passage
  * order, which makes the result deterministic. Terms are folded with
@@ -40,7 +40,7 @@ function wordSegmenter(): Intl.Segmenter | undefined {
  * Lowercase word tokens of a text, in order, folded the way Zotero folds its
  * own search index ({@link normalizeForSearch}) so a query the server matched
  * can also match passage text here. Word-aware segmentation keeps scripts
- * without spaces (CJK, Thai) queryable — a `\S+` tokenizer would treat a
+ * without spaces (CJK, Thai) queryable; a `\S+` tokenizer would treat a
  * whole unspaced run as one token and never match a single word.
  */
 export function tokenize(text: string): string[] {
@@ -94,7 +94,7 @@ function wordSpansOf(text: string): WordSpan[] {
  * interior whitespace) so passages stay verbatim. A chunk also never exceeds
  * `maxCharsPerChunk` when given: the word group closes before the next word
  * would cross the character limit, and a single overlong word is cut in
- * place — bounds that keep every chunk acceptable to a character budget.
+ * place: bounds that keep every chunk acceptable to a character budget.
  * @param text - the source text to chunk.
  * @param maxWords - hard word-count ceiling per chunk.
  * @param maxCharsPerChunk - optional character ceiling per chunk; omitted keeps

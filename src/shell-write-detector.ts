@@ -5,7 +5,7 @@
  * Zotero's write API without ever touching that seam. Nothing inside the
  * plugin can close that hole by itself: `approval/asked` fires only for what
  * the tool pipeline asks about, and the sandbox confines file effects rather
- * than network access. So the plugin does not try to *block* the route — it
+ * than network access. So the plugin does not try to *block* the route; it
  * makes the route ask. A detected command raises the harness's own approval
  * request before the body runs (`tools/pre-execute` → `{kind: 'ask'}`), so the
  * write happens only if the user confirms that one call, and does not happen
@@ -13,25 +13,27 @@
  * auto-rejects every ask), or have no approval channel at all.
  *
  * This module is the detector only: pure, synchronous, and total. It reads the
- * command text, which is why it is a detector rather than a guarantee — these
- * all pass it unseen:
+ * command text, which is why it is a detector rather than a guarantee. All of
+ * these pass it unseen:
  * - a request written into a script file and then executed (`bash build.sh`);
  * - an interpreter whose command text never spells the endpoint
  *   (`python -c '...'`, `node -e '...'` with the URL assembled at runtime);
  * - the URL carried in an environment variable, a heredoc, or an encoding;
  * - a loopback port other than the configured one, except for writes to the
- *   users path and authorize calls (those are caught on any loopback port —
+ *   users path and authorize calls (those are caught on any loopback port;
  *   see {@link USERS_WRITE} and {@link AUTHORIZE_PATH});
  * - any binary of the user's own.
  *
  * The rule is a read-only allow: `GET` probes of the local API, debugging
  * curls, and requests to any other host are not writing, so they are left
- * alone. What it matches is the authorize endpoint (which exists only to
- * obtain a write key) beside a loopback host, and — only when an HTTP-client
- * invocation is present — a write method or body flag alongside the
- * configured local API address. Anchoring on the client is what keeps an
- * ordinary command that merely names the address, and uses an unrelated flag
- * such as `rm -f`, from asking.
+ * alone. Five shapes do match, and {@link WRITE_SHAPES} lists them: the
+ * authorize endpoint (which exists only to obtain a write key) beside a
+ * loopback host; an explicit write method or body flag beside the configured
+ * local API address, and only when an HTTP-client invocation is present; a
+ * bare method token or a client-library write call beside that address; and a
+ * write to the users path beside any loopback host. Anchoring on the client is
+ * what keeps an ordinary command that merely names the address, and uses an
+ * unrelated flag such as `rm -f`, from asking.
  *
  * Every proximity match is **segment-scoped**: shell separators (`;`, `&&`,
  * `|`, newlines) bound the steps one command runs, and a `POST` in a later
@@ -52,8 +54,8 @@ export const SHELL_TOOL_NAMES: ReadonlySet<string> = new Set(['bash', 'pwsh'])
  * The endpoint that exists only to hand out a write key. Host-agnostic on
  * purpose only about *port*, like {@link USERS_WRITE}: the shape requires a
  * loopback host near the match, so an authorize call against
- * `api.zotero.org` — or any third-party host — is never mistaken for a
- * local one, while any loopback spelling still is.
+ * `api.zotero.org`, or any third-party host, is never mistaken for a local
+ * one, while any loopback spelling still is.
  */
 const AUTHORIZE_PATH = new RegExp(`/api/${ZOTERO_AUTHORIZE_PATH}\\b`, 'g')
 
@@ -63,7 +65,7 @@ const EXPLICIT_METHOD = /(?:-X|--request|-Method)[\s=:]*['"]?(?:POST|PUT|PATCH|D
 /**
  * An HTTP client invocation, which is what makes a nearby flag a *write*
  * intent. Without this anchor the rule matched any command that merely named
- * the local address and used a common flag somewhere — `rm -f` after a
+ * the local address and used a common flag somewhere: `rm -f` after a
  * `curl -s …?limit=1` read was enough to raise an approval prompt. The
  * `http`/`https` CLIs are deliberately absent: every URL contains the scheme,
  * so matching it would re-anchor the rule on nothing. The bare-method shape
@@ -96,7 +98,7 @@ function segmentsOf(text: string): readonly string[] {
 /**
  * curl's and wget's short body/upload flags, spelled case-sensitively: `-d`
  * (data), `-T` (upload-file), `-F` (form). Case-insensitivity here would make
- * `-D`, `-t`, and `-f` — `rm -f`, `grep -f`, `curl -f` — count as writes.
+ * `-D`, `-t`, and `-f` (`rm -f`, `grep -f`, `curl -f`) count as writes.
  */
 const SHORT_WRITE_FLAG = /(?:^|[\s'"=])(?:-d|-T|-F)\b/
 
@@ -169,7 +171,7 @@ function namesAuthority(text: string, aliases: readonly string[]): boolean {
 /**
  * Whether the text names any loopback host. Distinct from
  * {@link namesAuthority}: that asks about the *configured* `host:port`, this
- * asks about loopback at all — which is what the users-path shape needs, so a
+ * asks about loopback at all, which is what the users-path shape needs, so a
  * write on another loopback port is still a library write.
  */
 function namesLoopback(text: string): boolean {
@@ -218,7 +220,7 @@ const LABEL_WRITE_REQUEST: ShapeLabel = {
 /**
  * The matched shapes, most specific first. Each is deliberately anchored on
  * the configured local address, or on a loopback host beside the users path
- * or the authorize endpoint — so an unrelated `curl -d` against another
+ * or the authorize endpoint, so an unrelated `curl -d` against another
  * service is never mistaken for a library write.
  */
 const WRITE_SHAPES: readonly WriteShape[] = [
@@ -227,9 +229,9 @@ const WRITE_SHAPES: readonly WriteShape[] = [
       en: 'the local-API authorize endpoint',
       zh: '本地 API 的授权端点（/api/local/authorize）',
     },
-    // Loopback near the endpoint, not the configured port — the same shape
-    // as the users path below: authorize exists to mint a write key, and
-    // only a loopback host can be this library.
+    // Loopback near the endpoint, not the configured port: the same shape
+    // as the users path below, because authorize exists to mint a write key
+    // and only a loopback host can be this library.
     test: (text) => anySegment(text, (segment) => nearLoopback(segment, AUTHORIZE_PATH)),
   },
   {
@@ -272,7 +274,7 @@ const aliasCache = new Map<string, readonly string[]>()
 /**
  * The loopback spellings of the configured local API address. The config pins
  * a loopback hostname to an IP literal, so the aliases carry every equivalent
- * spelling a command might use. Memoized by the `baseUrl` string — the value
+ * spelling a command might use. Memoized by the `baseUrl` string, whose value
  * only moves when the Loader volatile entry is rebuilt.
  * @param baseUrl - the resolved `baseUrl`.
  * @returns the `host:port` spellings to match.
@@ -316,8 +318,8 @@ function reasonOf(label: string): string {
  */
 function displayReasonOf(label: ShapeLabel): { en: string; zh: string } {
   return {
-    en: `Allow this command? It runs ${label.en}, changing your Zotero library directly through the local API — outside the plugin's write tools, so no plan is shown and no version checks apply. The plugin's write tools (${ZOTERO_WRITE_TOOL_NAMES.join(', ')}) are the reviewed route.`,
-    zh: `允许这条命令吗？它执行的是${label.zh}，会绕过插件的写工具、直接通过本地接口修改你的 Zotero 文库——没有计划确认，也没有版本检查。插件的写工具（${ZOTERO_WRITE_TOOL_NAMES.join('、')}）才是经过确认的路径。`,
+    en: `Allow this command? It runs ${label.en}, changing your Zotero library directly through the local API, outside the plugin's write tools, so no plan is shown and no version checks apply. The plugin's write tools (${ZOTERO_WRITE_TOOL_NAMES.join(', ')}) are the reviewed route.`,
+    zh: `允许这条命令吗？它执行的是${label.zh}，会绕过插件的写工具、直接通过本地接口修改你的 Zotero 文库，没有计划确认，也没有版本检查。插件的写工具（${ZOTERO_WRITE_TOOL_NAMES.join('、')}）才是经过确认的路径。`,
   }
 }
 

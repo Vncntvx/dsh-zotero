@@ -3,7 +3,7 @@
  * is a contract breach, not an empty page: folding it to `[]` would tell the
  * model "this library has no item types" and hide the broken response. The
  * `libraries` case also pins that the breach travels through the 404-degrade
- * catch untouched — only a real 404 falls back to personal.
+ * catch untouched: only a real 404 falls back to personal.
  * @module tests/local/browse-fail-loud
  */
 
@@ -90,7 +90,7 @@ describe('browse: non-array bodies fail loud', () => {
  * contradicted the `Total-Results` it just sent. Terminating silently there
  * would report a truncated listing as a complete one, which the caller cannot
  * detect; the three server-paged kinds must fail loud instead. `libraries`,
- * `itemTypes`, and `itemFields` are sliced client-side and are unaffected —
+ * `itemTypes`, and `itemFields` are sliced client-side and are unaffected:
  * a request past the end of a list already in hand is a legitimate empty page.
  */
 describe('browse: empty pages with range left fail loud', () => {

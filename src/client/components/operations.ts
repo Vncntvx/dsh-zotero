@@ -1,7 +1,7 @@
 /**
  * The shared operation-count labels: one non-zero count per kind, in the
  * panel's fixed order (running, failed, stopped). Every surface that shows
- * operation facts — row badges, the dossier, and the exports lens — renders
+ * operation facts (row badges, the dossier, and the exports lens) renders
  * these same labels so the vocabulary cannot drift.
  * @module dsh-zotero/client/components/operations
  */

@@ -3,7 +3,7 @@
  * yields direct notes/attachments from bare `/children` plus, when
  * requested, annotations under the item via `/children?itemType=annotation`;
  * an attachment ref yields its own annotations through that filtered
- * listing. Counterpart to `zotero_get` (one object's detail) — use it when
+ * listing. It is the counterpart to `zotero_get` (one object's detail); use it when
  * the model needs to walk structure rather than read metadata.
  * @module dsh-zotero/tools/children
  */
@@ -144,7 +144,7 @@ export function renderChildren(_args: ChildrenArgs, value: ChildrenOutput): Cont
 /**
  * The completed children card: per-kind totals for the sections the call
  * returned. `meta` is absent on nested code dispatch or malformed replay
- * records, and a failed call keeps the raw error content — both fall back to
+ * records, and a failed call keeps the raw error content; both fall back to
  * the generic card.
  */
 function presentChildrenResult(

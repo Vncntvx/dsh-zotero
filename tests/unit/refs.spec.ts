@@ -244,7 +244,7 @@ describe('relationTargetRef', () => {
         library: { type: 'group', id: 42 },
       }),
     ).toBeUndefined()
-    // A foreign user id stays bare without proof — it would resolve the same
+    // A foreign user id stays bare without proof: it would resolve the same
     // key against the wrong library.
     expect(relationTargetRef('http://zotero.org/users/987654/items/ABCD1234', 'S1')).toBeUndefined()
     expect(relationTargetRef('not a uri', 'S1')).toBeUndefined()

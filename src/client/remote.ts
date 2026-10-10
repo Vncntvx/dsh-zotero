@@ -4,7 +4,7 @@
  *
  * Endpoint identity comes from `../contract.ts` (types + wire factory, no
  * zod). The result codec is the client host-owned arm
- * (`./status-codec.ts`) — the browser never materializes boundary schemas;
+ * (`./status-codec.ts`): the browser never materializes boundary schemas;
  * host registration owns the real zod factory. Configuration reads and writes
  * through the harness settings scope, not this namespace.
  * @module dsh-zotero/client/remote

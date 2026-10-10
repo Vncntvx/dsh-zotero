@@ -2,8 +2,8 @@
  * Forward-tolerant normalization of Zotero Local API JSON into the plugin's
  * domain records. External JSON is a compatibility boundary: unknown fields
  * are ignored, missing optional fields are tolerated, but a broken required
- * invariant (an object key that is not a Zotero key) fails loud — silently
- * returning partially incorrect research metadata is never acceptable.
+ * invariant (an object key that is not a Zotero key) fails loud, because
+ * silently returning partially incorrect research metadata is never acceptable.
  * @module dsh-zotero/normalize
  */
 
@@ -37,8 +37,8 @@ function nonEmpty(value: string | undefined): string | undefined {
 
 /**
  * Shown when an API row names no usable object key. Every normalized record
- * is addressed by its key, so a row without one cannot be represented at all
- * — the message is one rule and lives here, with the normalizer that owns it,
+ * is addressed by its key, so a row without one cannot be represented at all.
+ * The message is one rule and lives here, with the normalizer that owns it,
  * for every caller that has to refuse the same row.
  */
 export const ITEM_WITHOUT_KEY_MESSAGE = 'Zotero returned an item without a valid object key.'
@@ -223,7 +223,7 @@ export function nearScopeCandidates(
  * The creator role assumed when Zotero omits `creatorType`. Zotero creator
  * rows always carry a type in practice; inventing `author` keeps a named
  * creator instead of dropping research metadata over a missing role. Rows
- * with no name at all are still skipped — the default never fabricates a
+ * with no name at all are still skipped: the default never fabricates a
  * creator, only a role.
  */
 const DEFAULT_CREATOR_TYPE = 'author'
@@ -277,7 +277,7 @@ export function formatCreatorsList(creators: readonly ZoteroCreator[]): string {
 
 /**
  * Extract a citation key from unstructured extra text if present. One
- * grammar serves every consumer — the `[@citekey]` display on search hits
+ * grammar serves every consumer: the `[@citekey]` display on search hits
  * and the BibTeX/BibLaTeX alignment's first tier. The label matches
  * case-insensitively as "Citation Key" or "citekey", and the value is the
  * first token after the colon: a citation key is a single token, so any
@@ -318,7 +318,7 @@ export function truncateText(text: string, max: number): { text: string; truncat
 
 /**
  * Normalize one note child row. When `maxChars` is undefined the full body
- * is kept — retrieve chunks untruncated notes itself.
+ * is kept, because retrieve chunks untruncated notes itself.
  * @throws {ZoteroError} `ZOTERO_UNEXPECTED` when the row has no valid Zotero key.
  */
 export function normalizeNoteRecord(
@@ -415,10 +415,10 @@ function annotationSortIndex(row: unknown): string {
  * Partition child rows into notes, annotations, and attachments. Notes keep
  * API order and are truncated to `noteMaxChars` when given (undefined keeps
  * the full body); annotations are ordered by Zotero's `annotationSortIndex`.
- * Only the requested kinds are normalized — rows of other kinds are still
+ * Only the requested kinds are normalized: rows of other kinds are still
  * classified by their `itemType` but never read deeper. Unknown child kinds
- * are ignored — the plugin only claims the three kinds it understands — but
- * a malformed row of a requested kind fails loud.
+ * are ignored, since the plugin only claims the three kinds it understands,
+ * but a malformed row of a requested kind fails loud.
  * @param rows - raw child item JSON objects.
  * @param ctx - the library+serverId context.
  * @param noteMaxChars - per-note budget; undefined keeps the full body.
@@ -476,7 +476,7 @@ export interface NormalizeItemDetailInput {
   readonly childrenRows?: readonly unknown[]
   /**
    * The parent's direct child count when annotation rows gathered from
-   * attachments were merged into `childrenRows` — the merged array is longer
+   * attachments were merged into `childrenRows`. The merged array is longer
    * than the direct child set, so the fallback total needs the original count.
    */
   readonly directChildCount?: number
@@ -552,8 +552,8 @@ export function childCollection<T>(items: readonly T[], cap: number): ZoteroChil
 
 /**
  * The partition kinds an item detail needs: the requested note/annotation
- * kinds, plus attachments always — the best-attachment choice borrows the
- * child row's title even when the caller did not include attachments.
+ * kinds, plus attachments always, because the best-attachment choice borrows
+ * the child row's title even when the caller did not include attachments.
  */
 function detailChildKinds(include: ReadonlySet<ZoteroInclude>): ReadonlySet<ZoteroChildKind> {
   const kinds = new Set<ZoteroChildKind>(['attachment'])
@@ -590,8 +590,8 @@ function normalizeRelations(
     for (const target of targets) {
       if (typeof target !== 'string' || target === '') continue
       // One authority for URI → ref mapping (see refs.relationTargetRef):
-      // same-group URIs and provable personal aliases resolve, everything
-      // else stays a bare URI — never a guessed ref.
+      // same-group URIs and provable personal aliases resolve, and everything
+      // else stays a bare URI, never a guessed ref.
       const targetRef = relationTargetRef(target, ctx.serverId, {
         library: ctx.library,
         parentLibraryId,

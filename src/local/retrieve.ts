@@ -61,7 +61,7 @@ const SOURCE_ORDER: readonly ZoteroEvidenceSource[] = ['annotation', 'note', 'ab
  * as complete when the server reports both sides and they agree; the overall
  * answer is complete when at least one axis is reportable and every
  * reportable axis agrees. Anything else is an incomplete answer, never a
- * guess — so a full PDF index without char counts still reads complete.
+ * guess, so a full PDF index without char counts still reads complete.
  */
 function normalizeCoverage(payload: ZoteroFulltextPayload): ZoteroCoverage {
   const indexedChars = typeof payload.indexedChars === 'number' ? payload.indexedChars : undefined
@@ -88,25 +88,25 @@ function normalizeCoverage(payload: ZoteroFulltextPayload): ZoteroCoverage {
 /**
  * Gather ranked evidence for one item: annotations, notes, the abstract,
  * and full-text chunks are scored as one passage corpus with BM25. Fetch
- * stays lazy — children only when annotation/note sources (or a PDF
- * fallback) need them, fulltext only when requested (started concurrently
- * with children when the parent carries the attachment link). Annotations
+ * stays lazy: children only when annotation/note sources (or a PDF
+ * fallback) need them, fulltext only when requested, and under the `best`
+ * policy a linked fulltext starts concurrently with children. Annotations
  * live under each attachment, so annotation sources walk the graph's
  * second level and rank every attachment's annotations as one corpus; each
  * passage keeps its own attachment provenance. The `attachmentPolicy`
  * picks the fulltext sources: `best` (default) keeps Zotero's single
  * choice, `allIndexed` ranks every PDF child, and `specified` ranks the
- * named attachments — multi-attachment results speak through per-passage
+ * named attachments, so multi-attachment results speak through per-passage
  * refs instead of a result-level attachment. A named attachment is only
  * read once its ref is proven to describe an attachment of *this* item on
  * *this* instance: the same key in another library or another Zotero
  * database names a different object, and its text is not this item's
- * evidence. A note item's own body is its
- * note source; child notes contribute every chunk of their full text, so
- * long notes rank beyond their first chunk. Sources the item cannot
- * provide are skipped and reported in `sourcesSkipped` — retrieval degrades
- * instead of failing. Passage count and character budgets are enforced
- * with the `truncated` flag, never by silently editing passage text.
+ * evidence. A note item's own body is its note source; child notes
+ * contribute every chunk of their full text, so long notes rank beyond
+ * their first chunk. Sources the item cannot provide are skipped and
+ * reported in `sourcesSkipped`, so retrieval degrades instead of failing.
+ * Passage count and character budgets are enforced with the `truncated`
+ * flag, never by silently editing passage text.
  */
 export async function retrieve(
   deps: { client: ZoteroHttpClient; limits: LocalApiLimits },
@@ -265,7 +265,7 @@ export async function retrieve(
       }
       if (distinct.size > deps.limits.retrieveAttachmentCap) {
         throw new ZoteroError(
-          `attachmentRefs lists ${distinct.size} attachments; at most ${deps.limits.retrieveAttachmentCap} can enter one ranking — split the work across calls.`,
+          `attachmentRefs lists ${distinct.size} attachments; at most ${deps.limits.retrieveAttachmentCap} can enter one ranking; split the work across calls.`,
           ZOTERO_INVALID_ARGUMENT,
         )
       }
@@ -392,9 +392,9 @@ export async function retrieve(
         ...(annotation.pageLabel !== undefined ? { pageLabel: annotation.pageLabel } : {}),
         ...(annotation.parentRef === undefined ? {} : { attachmentRef: annotation.parentRef }),
         // A reader's comment is part of what the annotation says about the
-        // paper — "the method looks biased here" is a finding in its own
+        // paper ("the method looks biased here" is a finding in its own
         // right, and a highlight whose words say nothing about it must still
-        // be findable by the comment's terms. Both fields rank; the evidence
+        // be findable by the comment's terms). Both fields rank; the evidence
         // keeps them apart and names the one that matched.
         ...(annotation.comment === undefined
           ? {}
@@ -507,8 +507,8 @@ export async function retrieve(
  * coverage facts, its accepted chunks and whether this call's budget cut it;
  * an unindexed or unread one has nothing to report beyond the fact that it
  * contributed no text. The fetched payload is read in the worker and not
- * kept — the chunks are what survives, so a large body is released instead of
- * being held until the ranking pass.
+ * kept, because the chunks are what survives, so a large body is released
+ * instead of being held until the ranking pass.
  */
 type FulltextSource = {
   readonly key: string
@@ -552,9 +552,9 @@ function attachmentFactOf(source: FulltextSource): {
  * Three bounds meet here, all of them about the call rather than the work:
  * at most the configured `retrieveAttachmentCap` attachments are read at all
  * (the rest report `unread` instead of silently vanishing), the whole call
- * accepts at most `maxFulltextChars` characters — split evenly across the
+ * accepts at most `maxFulltextChars` characters, split evenly across the
  * sources it reads, so no single file can starve the others and the result
- * does not depend on which read finished first — and an unindexed member
+ * does not depend on which read finished first, and an unindexed member
  * degrades alone rather than failing the call. Each file is chunked as it
  * arrives, so its full text is released instead of being held for a ranking
  * pass at the end.
@@ -619,8 +619,8 @@ async function readFulltextSources(
 
 /**
  * Which of a passage's ranked fields carry query terms. An annotation is the
- * only two-field source — the highlight a reader selected and the comment
- * they wrote — and the comment is the reader's own view rather than the
+ * only two-field source (the highlight a reader selected and the comment
+ * they wrote), and the comment is the reader's own view rather than the
  * paper's, so the evidence names the field that matched. A ranked passage
  * always matched somewhere (`score > 0` means a query term sits in its
  * text-or-comment token stream, and a single field's tokens are a subset of

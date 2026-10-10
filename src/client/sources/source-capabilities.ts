@@ -3,8 +3,8 @@
  * action, and whether the openable target is Zotero's own reader (a
  * `zotero://open-pdf` deep link on a file attachment) or the web location
  * of a linked URL PDF. The capability is the single source of truth behind
- * the PDF badge, the "with PDF" filter, and the open-PDF action — one rule,
- * three consumers. Only facts Zotero proved qualify: a ref whose type is
+ * the PDF badge, the "with PDF" filter, and the open-PDF action: one rule,
+ * three consumers. Only facts Zotero proved qualify. A ref whose type is
  * unknown is never promised to be a PDF, and a web-linked URL attachment is
  * never handed to the protocol handler (it silently ignores non-file
  * attachments).
@@ -47,15 +47,15 @@ function isHttpUrl(value: string): boolean {
 
 /**
  * The PDF capability of one source, or null when nothing answers the
- * open-PDF action. Candidates are tried in precedence order — the resolved
+ * open-PDF action. Candidates are tried in precedence order (the resolved
  * attachment location, Zotero's own attachment selection, then the
- * attachment a retrieve read — each needing an `application/pdf` fact; a
+ * attachment a retrieve read), each needing an `application/pdf` fact; a
  * resolved web-linked URL attachment never qualifies for Zotero's reader
  * (the protocol handler silently ignores non-file attachments), but when it
  * is the only PDF fact its web location answers the action instead. A ref
  * whose type is unknown never yields a capability: an older session's
  * untyped hint is not promised to be a PDF. The final gate for file targets
- * is deep-link buildability — a ref `pdfUrlOf` cannot parse is no
+ * is deep-link buildability, so a ref `pdfUrlOf` cannot parse is no
  * capability at all.
  * @param item - the source to probe.
  * @returns the capability, or null.

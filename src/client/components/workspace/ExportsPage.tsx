@@ -1,7 +1,7 @@
 /**
  * The exports page: the session-wide exports lens over the successful
- * artifacts. Per-format sections of deduplicated documents — the format
- * head names the count and carries the copy-all / download-all actions —
+ * artifacts. Per-format sections of deduplicated documents, where the format
+ * head names the count and carries the copy-all / download-all actions,
  * with the non-successful calls listed separately as operations, never as
  * achievements. The static-export disclaimer lives in the README, not here:
  * a capability boundary is not something to restate under every success.

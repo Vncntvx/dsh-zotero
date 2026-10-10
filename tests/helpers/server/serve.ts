@@ -18,7 +18,7 @@
  *   call `mock.route` directly: a profile that switches mid-test is the
  *   subject of its test and reads better as a handler than as an option.
  *
- * Payloads that are deliberately malformed stay inline for the same reason —
+ * Payloads that are deliberately malformed stay inline for the same reason:
  * a keyless row or a non-array listing is not an object the builders model.
  * @module tests/helpers/server/serve
  */
@@ -55,7 +55,7 @@ export function serveJson(
 
 /**
  * A 200 plain-text answer. The Local API serves a few resources as text
- * rather than JSON — the attachment file URL among them — and a test that
+ * rather than JSON (the attachment file URL among them), and a test that
  * served those as JSON would exercise a different branch than the real one.
  * @param mock - the server to register on.
  * @param path - the pathname or pattern to answer.
@@ -94,13 +94,13 @@ export interface ItemGraphSpec {
   readonly parent?: WireObject
   /** The attachment read as an item in its own right, when the walk needs it; defaults to the canonical PDF. */
   readonly attachmentItem?: WireObject | null
-  /** DIRECT children — notes and attachments only; defaults to one of each. Never annotations. */
+  /** DIRECT children: notes and attachments only; defaults to one of each. Never annotations. */
   readonly children?: readonly WireObject[] | null
   /** Annotations served only under `?itemType=annotation`; defaults to one. */
   readonly annotations?: readonly WireObject[] | null
   /**
    * Annotations returned for the **parent** key under the filter. Defaults to
-   * `annotations` — the Local API expands a bibliographic item's filtered
+   * `annotations`: the Local API expands a bibliographic item's filtered
    * listing to annotations under its attachments.
    */
   readonly parentAnnotations?: readonly WireObject[] | null
@@ -187,7 +187,7 @@ export interface SearchPageSpec {
   readonly items: readonly WireObject[]
   /**
    * The total the header reports; defaults to the row count, and `null` omits
-   * the header entirely — the shape a build that does not report totals
+   * the header entirely: the shape a build that does not report totals
    * answers, which the paging contract must refuse rather than guess at.
    */
   readonly total?: number | null

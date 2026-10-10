@@ -590,7 +590,7 @@ describe('the provider seam', () => {
 
 /**
  * What one sanctioned write costs on the wire. The plugin's answer to a slow
- * write is the sanctioned path itself — a write is one tool call and one or two
+ * write is the sanctioned path itself: a write is one tool call and one or two
  * requests, while the improvised route re-derives the protocol in a dozen model
  * round trips. These cases pin the request side of that claim so it cannot
  * regress silently, and they show the steady state: once the instance identity

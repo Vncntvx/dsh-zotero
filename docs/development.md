@@ -18,7 +18,7 @@ src/
   status-codec.ts       # Host 端状态解码（zod）
   errors.ts             # 错误类与错误码
   json.ts               # 无损 JSON 读取辅助函数
-  evidence-item.ts      # 证据项投影定义（端侧共享）
+  evidence-item.ts      # 原文片段投影定义（端侧共享）
   browse-rows.ts        # 浏览行分类（端侧共享）
   changes-contract.ts   # changes 投影的共享 wire 描述符
   constants.ts          # 常量定义
@@ -84,8 +84,8 @@ npm run test:integration
 
 ## 构建产物
 
-- **Node 端产物**（`lib/`）：由 `tsc` 编译生成，包含服务逻辑、工具定义、Provider 与传输层；
-- **浏览器端产物**（`lib/client.js`）：由 `esbuild` 打包生成，包含设置页、Sources 面板与会话卡片。
+- Node 端产物（`lib/`）：由 `tsc` 编译生成，包含服务逻辑、工具定义、Provider 与传输层；
+- 浏览器端产物（`lib/client.js`）：由 `esbuild` 打包生成，包含设置页、Sources 面板与会话卡片。
 
 ## 本地调试
 
@@ -112,7 +112,7 @@ cp dev-lib.cordis.yml.example dev-lib.cordis.yml # 复制叠加层模板并配�
 dsh web --patch ./dev-lib.cordis.yml --port 3307
 ```
 
-> **注意**：`dev-lib.cordis.yml` 叠加层通过配置构建入口的绝对路径（`<absolute-path-to-dsh-zotero>/lib/index.js`）加载插件，使得 Host 端（模型工具与 `/zotero` 命令行）能在 Loader 监视下实现免重启热重载；但 Harness 客户端模块加载器仅解析已注册的裸包名，因此该模式**不加载浏览器端前端组件（设置页与 Sources Tab）**。如需调试前端 UI，请使用上述「完整插件调试」流程（`dsh plugin --profile web add .` 与 `npm run dev:client`）。
+> 注意：`dev-lib.cordis.yml` 叠加层通过配置构建入口的绝对路径（`<absolute-path-to-dsh-zotero>/lib/index.js`）加载插件，使得 Host 端（模型工具与 `/zotero` 命令行）能在 Loader 监视下实现免重启热重载；但 Harness 客户端模块加载器仅解析已注册的裸包名，因此该模式不加载浏览器端前端组件（设置页与 Sources Tab）。如需调试前端 UI，请使用上述「完整插件调试」流程（`dsh plugin --profile web add .` 与 `npm run dev:client`）。
 
 ## 测试规范
 

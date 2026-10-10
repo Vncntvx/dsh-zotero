@@ -2,7 +2,7 @@
  * The inject faces this plugin's Plugins-page entries publish. Each face is
  * what a registration's `inject` factory returns: plain members plus one
  * `hooks` compartment, whose values are bare `getSnapshot`/`subscribe`
- * sources the renderer binds to `use<Name>` selector hooks — the component
+ * sources the renderer binds to `use<Name>` selector hooks. The component
  * receives the hook, never the source (harness `docs/subsystems/slots.md`).
  * @module dsh-zotero/client/components/plugin/faces
  */
@@ -35,8 +35,8 @@ export interface ZoteroBundleQuickConfigFace {
   /**
    * The write edge, as `ConfigForm.set` spells it: a resolved `false` means
    * the Host refused the write, and a transport failure rejects. The caller
-   * surfaces both — dropping the promise would leave a toggle that silently
-   * bounces back with no failure anywhere.
+   * surfaces both, since dropping the promise would leave a toggle that
+   * silently bounces back with no failure anywhere.
    */
   setField: (field: QuickConfigField, value: boolean) => Promise<boolean>
 }
@@ -44,7 +44,7 @@ export interface ZoteroBundleQuickConfigFace {
 /**
  * Build the quick config's face over the shared namespace form. `ConfigForm`
  * is itself a bare `getSnapshot`/`subscribe` source, so it enters `hooks`
- * unwrapped — one observable, no mirror to keep in step. The write edge is
+ * unwrapped: one observable, no mirror to keep in step. The write edge is
  * `ConfigForm.set`, whose revision handling is the form's own.
  * @param form - the shared configuration form for the `zotero` namespace.
  * @param t - the bound translator for the plugin's locale namespace.

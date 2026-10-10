@@ -1,8 +1,8 @@
 /**
  * Assertions about what the plugin put on the wire.
  *
- * Every provider spec proves something about the requests it made — which
- * endpoints, in what order, with which headers — and each of them used to
+ * Every provider spec proves something about the requests it made (which
+ * endpoints, in what order, with which headers), and each of them used to
  * spell that out as `.map((entry) => entry.pathname)` next to an inline
  * `toEqual`. Naming the assertions makes the intent readable at the call site
  * and keeps the two arms that legitimately interleave (a children walk and a
@@ -43,7 +43,7 @@ export function expectRequestLines(mock: MockZotero, expected: readonly string[]
 /**
  * Assert the requests are exactly this set of path+query lines, ignoring order.
  * Use where the domain fans out independent halves (direct children and the
- * annotation listing) and the API makes no arrival-order promise.
+ * annotation listing), and the API makes no arrival-order promise.
  */
 export function expectRequestLinesAnyOrder(mock: MockZotero, expected: readonly string[]): void {
   expect([...requestLines(mock)].sort()).toEqual([...expected].sort())
@@ -51,7 +51,7 @@ export function expectRequestLinesAnyOrder(mock: MockZotero, expected: readonly 
 
 /**
  * Assert the requests arrived at exactly these paths, in this order. Use it
- * where the order is part of the contract — a lazy read that must not fetch
+ * where the order is part of the contract: a lazy read that must not fetch
  * children before the parent.
  * @param mock - the server that recorded the requests.
  * @param expected - the pathnames, in order.
@@ -63,7 +63,7 @@ export function expectRequestPaths(mock: MockZotero, expected: readonly string[]
 /**
  * Assert the requests are exactly this set, ignoring arrival order. Use it
  * where the domain fans out and the API makes no promise about which arm
- * answers first — the plugin must not depend on that order, and a test that
+ * answers first: the plugin must not depend on that order, and a test that
  * asserted one would fail on a scheduling change that broke nothing.
  * @param mock - the server that recorded the requests.
  * @param expected - the pathnames, as a set.

@@ -149,10 +149,10 @@ interface GateWaiter {
  * A counted gate: at most `limit` holders at a time, everyone else queues in
  * arrival order.
  *
- * Each pool bounds its own fan-out, but pools multiply — several concurrent
- * tool calls each start one — so the client that every request flows through
- * holds one gate as well, and the load on Zotero is bounded by that number
- * rather than by how many calls happen to run at once.
+ * Each pool bounds its own fan-out, but pools multiply, since several
+ * concurrent tool calls each start one. The client that every request flows
+ * through therefore holds one gate as well, and the load on Zotero is bounded
+ * by that number rather than by how many calls happen to run at once.
  *
  * The queue is abortable in both directions: a holder whose signal is already
  * aborted never takes a slot, and a queued one leaves the queue on abort
@@ -206,7 +206,7 @@ export class ConcurrencyGate {
       if (waiter.onAbort !== undefined) {
         waiter.signal?.addEventListener('abort', waiter.onAbort, { once: true })
         // The signal may have aborted between the check above and this
-        // listener, and an aborted signal never replays its event — a waiter
+        // listener, and an aborted signal never replays its event, so a waiter
         // left queued that way would wait for a slot it no longer wants.
         if (waiter.signal?.aborted === true) waiter.giveUp(new GateAbortedError())
       }
@@ -237,8 +237,8 @@ export class ConcurrencyGate {
 
 /**
  * Take one gate slot, translating a queued abort into the same cancellation
- * error a request aborted mid-flight produces — the caller cancelled, and
- * how far the request had got is not part of the contract. `acquire` rejects
+ * error a request aborted mid-flight produces. The caller cancelled, and how
+ * far the request had got is not part of the contract. `acquire` rejects
  * in exactly one case (a queued holder whose signal was aborted), so the
  * rejection is reported as that cancellation and carried along as its cause:
  * a gate that ever failed for another reason stays visible there rather than

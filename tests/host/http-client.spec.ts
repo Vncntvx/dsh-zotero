@@ -199,8 +199,8 @@ describe('identity protection', () => {
     routeServerMismatch()
     const controller = new AbortController()
     const pending = client.getJson('users/0/items', undefined, { signal: controller.signal })
-    // Abort while the refresh is on the wire — the request has reached the
-    // server and its response is still outstanding — so this drives the
+    // Abort while the refresh is on the wire (the request has reached the
+    // server and its response is still outstanding), so this drives the
     // cancellation path instead of racing a delay against it.
     await refreshing.promise
     controller.abort()
@@ -230,7 +230,7 @@ describe('http status translation', () => {
       apiVersionMismatchMessage('3', '4'),
     )
     // The answering build is newer than this plugin, so the fix is the
-    // plugin, not Zotero — the message says which way round it is.
+    // plugin, not Zotero: the message says which way round it is.
     expect(error.message).toContain('it answers as version 4')
     expect(error.message).toContain(NEWER_ZOTERO_ROUTE_MESSAGE)
   })
@@ -269,7 +269,7 @@ describe('http status translation', () => {
 
   it('keeps the 501 as the finding when its statement cannot be read', async () => {
     // A body past the byte bound: the statement is unavailable, but the
-    // status Zotero chose is still the finding — it is not re-reported as an
+    // status Zotero chose is still the finding: it is not re-reported as an
     // oversized response.
     const bounded = testHttpClient(mock.baseUrl, { maxResponseBytes: 32 })
     mock.route('GET', '/api/users/0/items', (req, res, helpers) =>
@@ -403,8 +403,8 @@ describe('in-flight bound', () => {
   /**
    * Hold every matching request's response until the test releases it. The
    * overlap counter above needs a response delay to see several requests at
-   * once — a delay long enough that an unbounded client's whole burst lands
-   * inside it — while a test that only needs one request on the wire waits for
+   * once (a delay long enough that an unbounded client's whole burst lands
+   * inside it), while a test that only needs one request on the wire waits for
    * the arrival itself, so nothing in it depends on such a delay.
    */
   function routeHeld(): HeldRoute {
@@ -444,7 +444,7 @@ describe('in-flight bound', () => {
     const queued = gate.getJson('users/0/items/AAAA0002', undefined, {
       signal: controller.signal,
     })
-    // The first request is on the wire — and holds the only slot — before the
+    // The first request is on the wire (and holds the only slot) before the
     // queued one is aborted: the abort lands on a waiter the client is already
     // holding, not on a race between a delay and the slot being taken.
     await route.arrived.when(() => route.pending() >= 1)
@@ -508,8 +508,8 @@ describe('failure translation', () => {
     })
     const controller = new AbortController()
     const pending = client.getJson('', undefined, { signal: controller.signal })
-    // Abort with the response still outstanding — long before the 5 s provider
-    // deadline — so the failure below is the caller's cancellation, never a
+    // Abort with the response still outstanding (long before the 5 s provider
+    // deadline), so the failure below is the caller's cancellation, never a
     // timeout that arrived first.
     await outstanding.promise
     controller.abort()

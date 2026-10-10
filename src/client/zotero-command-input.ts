@@ -2,7 +2,7 @@
  * `/zotero` command-input projection: the conversation node that leaves the
  * blank Hero. Ordinary command-only history stays Hero-ward (the shell's
  * `isActive` treats `command` rows as non-activity); a non-command node is
- * the designed activation edge — `/goal`'s `command-input` is the shipped
+ * the designed activation edge, with `/goal`'s `command-input` as the shipped
  * example. This Definition mirrors that pattern for `/zotero`, so a status
  * run on a fresh session becomes visible instead of logging behind the Hero.
  * The generic command Definition still owns the result row.
@@ -57,7 +57,7 @@ export function formatCommandLine(
  *
  * `args` is the harness's raw input after the command name (the slice past
  * `/zotero`, so it usually starts with the separating whitespace). It is
- * present only while `recordInput` is on — the default. Collapse the
+ * present only while `recordInput` is on, which is the default. Collapse the
  * surrounding whitespace and re-insert a single space so both the production
  * `args: ' status'` shape and a already-trimmed `'status'` render as
  * `/zotero status`, never `/zoterostatus`.

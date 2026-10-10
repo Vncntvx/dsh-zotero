@@ -3,7 +3,7 @@
  *
  * The detector is a pure function over command text, so its whole contract can
  * be pinned here without a server: what it recognizes as a write against
- * Zotero's own API, what it deliberately leaves alone, and that it is total —
+ * Zotero's own API, what it deliberately leaves alone, and that it is total:
  * it runs inside the `tools/pre-execute` waterfall before every tool body, so
  * a throw would break calls it was never meant to touch. The cases at the end
  * spell out the honest limits of text-based detection.
@@ -44,7 +44,7 @@ describe('the shell-write detector', () => {
   })
 
   it('never treats an authorize call against a non-loopback host as a library write', () => {
-    // Authorize mints a write key, so the shape needs no HTTP-client anchor —
+    // Authorize mints a write key, so the shape needs no HTTP-client anchor,
     // but it still requires a loopback host beside the match, exactly like the
     // users path: the same URL against a cloud or third-party host is someone
     // else's API, not this library's.
@@ -152,7 +152,7 @@ describe('the shell-write detector', () => {
 
   it('detects the DELETE verb, including the tag- and collection-key query shapes', () => {
     // The write expansion added two query-addressed writes: the library-tag
-    // delete (`DELETE /tags?tag=…||…`) and collection writes reached through
+    // delete (`DELETE /tags?tag=…||…`), and collection writes reached through
     // a `collectionKey=` query. A verb still decides, and a query alone never
     // turns a read into one.
     for (const command of [

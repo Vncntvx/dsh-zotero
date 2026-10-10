@@ -125,9 +125,11 @@ export const NO_FULLTEXT_MESSAGE =
 
 /**
  * Shown when the caller cancels a tool call. The plugin reports cancellation
- * as the harness's own `TOOL_ABORTED`, so the wording is the harness's; it is
- * spelled once here because three transports — the ask gate and both halves of
- * the HTTP client — have to raise the identical error.
+ * as the harness's own `TOOL_ABORTED`, so the wording is the harness's. It is
+ * spelled once here because every cancellation path in the plugin raises the
+ * identical error: the concurrency gate, both HTTP transports, the ask gate,
+ * the job runner, scope resolution, and the write-approval and write-auth
+ * paths.
  */
 export const TOOL_ABORTED_MESSAGE = 'tool call aborted'
 
@@ -209,7 +211,7 @@ export const WRITE_VERSION_MISSING_MESSAGE =
 
 /**
  * Shown when a read backing a write does not carry the library version the
- * write's delete precondition derives from. Generic on purpose — several
+ * write's delete precondition derives from. It is generic on purpose: several
  * writes read one row (or one object) only for that header.
  */
 export const WRITE_PRECONDITION_READ_LIBRARY_VERSION_MESSAGE =
@@ -232,8 +234,8 @@ export function writeNonBlankMessage(name: string): string {
 /**
  * Trim a required free-text value, refusing a blank one with `name`'s
  * message. Both the tool end and the domain end of a write call guard the
- * same arguments, so the rule lives with its message and both import it —
- * two implementations would be two wordings waiting to drift.
+ * same arguments, so the rule lives with its message and both import it. Two
+ * implementations would be two wordings waiting to drift.
  */
 export function requireNonBlank(name: string, value: string): string {
   const trimmed = value.trim()
@@ -331,14 +333,14 @@ export const WRITE_APPROVAL_UNAVAILABLE_MESSAGE =
 
 /**
  * The model-facing messages the `zotero_browse` argument rules throw. The
- * rules are enforced at both ends of the call — the tool's `buildRequest` and
- * the browse domain entry — so the wording lives with the errors and both
+ * rules are enforced at both ends of the call (the tool's `buildRequest` and
+ * the browse domain entry), so the wording lives with the errors and both
  * sides import it. The one exception is the near-identical pair in
  * `tools/browse.ts` (`TAG_FACET_SCOPE_MESSAGE`, `ITEM_LEVEL_SCOPE_MESSAGE`):
  * those name the *tool arguments* (`tagScope`, `itemLevel`), while the
  * `SCOPE_FACET_KIND_MESSAGE`/`ITEM_LEVEL_REQUIRES_SCOPE_MESSAGE` below name
- * the *request fields* the domain validates — different readers, so
- * deliberately different strings.
+ * the *request fields* the domain validates. Those are different readers, so
+ * the strings are deliberately different.
  */
 
 /** The model-facing message for a kind outside the browse enum. */

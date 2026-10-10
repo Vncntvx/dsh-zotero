@@ -1,7 +1,7 @@
 /**
  * The session source reducer: turns the session's zotero tool blocks into a
- * {@link SourceWorkspace}. The listed sources are the stable union — every
- * successful search's rows plus every directly referenced item — so viewing
+ * {@link SourceWorkspace}. The listed sources are the stable union (every
+ * successful search's rows plus every directly referenced item), so viewing
  * one item never shrinks the others, and no search supersedes an earlier
  * one. Facts come only from settled, successful, structurally valid calls;
  * running, failed, and stopped calls count into operations, never into
@@ -129,7 +129,7 @@ function emptyOperations(): DraftOperations {
 /**
  * The identity of one logical search: query, mode, scope, library and filter
  * fields. When the result's presentation meta resolved both the scope and the
- * library, they override the raw argument parse — the resolved values are
+ * library, they override the raw argument parse: the resolved values are
  * what Zotero actually served.
  *
  * A null identity means the arguments are not a readable object payload, so
@@ -318,7 +318,7 @@ export function buildSourceWorkspace(
   /**
    * The event time of a settled block. Guarded by isSettledTool (which
    * `rowStateOf` also funnels through), so an unsettled block never arrives
-   * here — the early return, not a cast, carries the proof.
+   * here: the early return, not a cast, carries the proof.
    */
   const eventTimeOf = (block: ToolCallBlock): number => {
     if (!isSettledTool(block)) return 0
@@ -441,7 +441,7 @@ export function buildSourceWorkspace(
         const resolvedScope = view.scope
         const resolvedLibrary = view.library
         // The resolved pair overrides the raw args only when both are
-        // present — exactly what Zotero served for this call.
+        // present, which is exactly what Zotero served for this call.
         const identity =
           resolvedScope !== null && resolvedLibrary !== null
             ? searchIdentityOf(args, { resolvedScope, resolvedLibrary })

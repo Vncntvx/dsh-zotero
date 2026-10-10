@@ -1,6 +1,6 @@
 /**
  * `zotero_create_collection`: refusals before any POST (blank name, blank or
- * group parent), the parent shapes it assembles, and the receipt arms —
+ * group parent), the parent shapes it assembles, and the receipt arms:
  * including both `committed-unverified` reasons the no-retry wording hangs
  * on.
  * @module tests/tools/create-collection

@@ -110,7 +110,7 @@ describe('formatStatus write line', () => {
 
   it('names the dialled endpoint on both the connected and the failed probe', () => {
     // The address that did not answer is the first thing worth checking, so a
-    // disconnected status has to carry it too — not only the happy path.
+    // disconnected status has to carry it too, not only the happy path.
     expect(formatStatus(connected)).toContain('Local API: 127.0.0.1:23119')
     const failed = formatStatus({
       ...connected,

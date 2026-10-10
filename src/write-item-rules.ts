@@ -2,7 +2,7 @@
  * The item-shape rules both ends of an item create or update enforce: the
  * tool end before the plan card, the domain end for any caller that reaches
  * the domain without that tool. One implementation per rule and one wording
- * per refusal — the two ends must never drift.
+ * per refusal, so the two ends never drift.
  * @module dsh-zotero/write-item-rules
  */
 

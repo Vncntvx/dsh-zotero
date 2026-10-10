@@ -103,7 +103,7 @@ describe('note-first-class paths', () => {
       retrieveRequest({ sources: ['note'], passages: 10, query: 'alpha gamma epsilon' }),
     )
     // BM25 ranks the shorter `epsilon` chunk above the tied longer ones, so
-    // the order is relevance order, not source order — every chunk must still
+    // the order is relevance order, not source order: every chunk must still
     // be present with its locators.
     expect(result.evidence.map((entry) => entry.source)).toEqual(['note', 'note', 'note'])
     expect(result.evidence.map((entry) => entry.text).sort()).toEqual([

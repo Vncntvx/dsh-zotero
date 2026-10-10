@@ -4,7 +4,7 @@
  * citation, ordered as requested; bibliography mode yields the joined
  * CSL-sorted bibliography; bibtex/biblatex/ris/csljson pass the translator
  * output through verbatim and itemize each exported document (its citation
- * key and title) paired with its ref. Export output is never mid-truncated —
+ * key and title) paired with its ref. Export output is never mid-truncated:
  * it either fits the provider's character limit or fails with a typed error.
  * @module dsh-zotero/tools/export
  */
@@ -152,7 +152,7 @@ export const EXPORT_REFS_EMPTY_MESSAGE = 'refs must list at least one zotero:// 
 
 /** The model-facing message for a refs list past the configured cap. */
 export function exportRefsOverCapMessage(maxExportRefs: number, requested: number): string {
-  return `refs must list at most ${maxExportRefs} item refs per call; got ${requested} — export in batches`
+  return `refs must list at most ${maxExportRefs} item refs per call; got ${requested}; export in batches`
 }
 
 /** The model-facing messages for a blank style or locale argument. */
@@ -199,7 +199,7 @@ function renderExport(_args: unknown, value: ExportOutput): ContentBlock[] {
  * The completed export card: the exported citation count in citation mode,
  * else the requested ref count with the translator format. `meta` is absent
  * on nested code dispatch or malformed replay records, and a failed call
- * keeps the raw error content — both fall back to the generic card.
+ * keeps the raw error content; both fall back to the generic card.
  */
 function presentExportResult(_args: ExportArgs, result: ToolResult): ToolResultView | undefined {
   const record = metaRecordOf(result)
@@ -234,7 +234,7 @@ export function registerExportTool(
       description: [
         'Export Zotero items as citations, a bibliography, or translator formats.',
         `Citation mode pairs each ref with its HTML citation in the requested order and batches past Zotero's ${ZOTERO_ITEMKEY_BATCH}-key request cap;`,
-        `bibliography mode returns the joined CSL-sorted bibliography; bibtex/biblatex/ris/csljson return raw export text — those formats stay at one request (up to ${ZOTERO_ITEMKEY_BATCH} refs), their ordering remains Zotero's own, and every exported document is itemized with its ref, citation key, and title.`,
+        `bibliography mode returns the joined CSL-sorted bibliography; bibtex/biblatex/ris/csljson return raw export text; those formats stay at one request (up to ${ZOTERO_ITEMKEY_BATCH} refs), their ordering remains Zotero's own, and every exported document is itemized with its ref, citation key, and title.`,
       ].join(' '),
       parameters,
       output: {

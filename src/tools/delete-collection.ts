@@ -87,7 +87,7 @@ function buildRequest(args: DeleteCollectionArgs): ZoteroDeleteCollectionRequest
 /**
  * Read the blast radius before the plan card: the item count via the
  * collection search scope and the child-collection count via the collections
- * browse. Best-effort — an unresolvable name leaves its count unknown and the
+ * browse. The count is best-effort: an unresolvable name leaves it unknown and the
  * domain reports the miss after approval.
  */
 async function fetchItemPreview(

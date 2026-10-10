@@ -2,7 +2,7 @@
  * Shared source fixtures for the panel specs and the visual baseline.
  * Beyond the neutral `sourceOf`/`workspaceOf` builders (the spec convention,
  * same as blocks.ts), this module exports a deterministic fixture gallery of
- * eight named workspaces — one item, a mixed 12, a large 30, a zero-match
+ * eight named workspaces: one item, a mixed 12, a large 30, a zero-match
  * retrieve, an instance mismatch, repeated retrieves with truncation, a
  * large BibTeX artifact, and a disconnected session with history. Each is
  * renderable as-is by `ZoteroWorkspaceView`, so visual iteration never needs
@@ -144,7 +144,7 @@ function retrievalFactsOf(
 }
 
 /**
- * 1/8 — one item, everything present: inspected, PDF, evidence, exports.
+ * 1/8 (one item, everything present): inspected, PDF, evidence, exports.
  * The smallest workspace the visual baseline renders.
  */
 export function singleFixture(): SourceWorkspace {
@@ -176,7 +176,7 @@ export function singleFixture(): SourceWorkspace {
 }
 
 /**
- * 2/8 — twelve items in mixed states: fresh, inspected, PDF vs no-PDF
+ * 2/8 (twelve items in mixed states): fresh, inspected, PDF vs no-PDF
  * (untyped hints are never promised), evidence, exports, issues, and a
  * mismatch. The main visual sweep.
  */
@@ -257,7 +257,7 @@ export function mixedFixture(): SourceWorkspace {
 }
 
 /**
- * 3/8 — thirty items: the large-list workspace for scrolling and density.
+ * 3/8 (thirty items): the large-list workspace for scrolling and density.
  * Half confirmed PDF with evidence, half fresh hits without a PDF promise.
  */
 export function largeFixture(): SourceWorkspace {
@@ -294,7 +294,7 @@ export function largeFixture(): SourceWorkspace {
 }
 
 /**
- * 4/8 — a retrieve that matched nothing: the item exists but no source
+ * 4/8 (a retrieve that matched nothing): the item exists but no source
  * returned passages. Exercises the zero-evidence empty states.
  */
 export function zeroMatchFixture(): SourceWorkspace {
@@ -318,7 +318,7 @@ export function zeroMatchFixture(): SourceWorkspace {
 }
 
 /**
- * 5/8 — an instance mismatch: the open action is present but blocked, and
+ * 5/8 (an instance mismatch): the open action is present but blocked, and
  * the item still counts as "has PDF" for the badge and filter.
  */
 export function mismatchFixture(): SourceWorkspace {
@@ -356,7 +356,7 @@ export function mismatchFixture(): SourceWorkspace {
 }
 
 /**
- * 6/8 — repeated retrieves with truncation: run count three, truncated once,
+ * 6/8 (repeated retrieves with truncation): run count three, truncated once,
  * evidence survives. Exercises the RetrievalSummary block and the truncated
  * hint without a truncated-badge regression.
  */
@@ -403,7 +403,7 @@ const LARGE_BIBTEX = Array.from(
 ).join('\n\n')
 
 /**
- * 7/8 — a large BibTeX artifact: the exports lens shows the file with a
+ * 7/8 (a large BibTeX artifact): the exports lens shows the file with a
  * bounded preview and a full-text expand, never a truncating layout. The
  * artifact stays item-less on purpose, so the page also exercises the
  * whole-text fallback row.
@@ -424,7 +424,7 @@ export function largeArtifactFixture(): SourceWorkspace {
 }
 
 /**
- * 8/8 — disconnected but with history: the workspace is fully populated
+ * 8/8 (disconnected but with history): the workspace is fully populated
  * while the connection view reports the probe's failure. The panel must
  * render the data, not an empty shell.
  */

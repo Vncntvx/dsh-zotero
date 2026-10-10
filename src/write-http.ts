@@ -8,7 +8,7 @@
  * - every write requires the `Zotero-Server-ID` header (428 without, 412 on
  *   mismatch) and a `Zotero-API-Key` issued by `/api/local/authorize`;
  * - single-use keys are consumed at authentication time, before the write
- *   runs — a failed batch still burns them, so 401 means "authorize again";
+ *   runs, so a failed batch still burns them and 401 means "authorize again";
  * - batches are NOT atomic: each object commits in its own transaction and
  *   per-object outcomes land in the response buckets, so callers map the
  *   buckets and never replay blindly;
@@ -113,7 +113,7 @@ export interface ZoteroWriteObjectFailure {
 
 /**
  * The per-object outcome buckets of a write batch. `successful` carries the
- * full response JSON of each written object (key, version, data) — the
+ * full response JSON of each written object (key, version, data), the
  * read-back Zotero performs for the caller, so no follow-up GET is needed
  * for created notes.
  */
@@ -152,9 +152,9 @@ const PRE_COMMIT_WRITE_STATUSES = new Set([
 ])
 
 /**
- * 3xx arrives as a response — the request is sent with `redirect: 'manual'`
- * and never followed — so like the statuses above it proves the write was
- * refused before any object commit.
+ * 3xx arrives as a response, because the request is sent with
+ * `redirect: 'manual'` and never followed, so like the statuses above it
+ * proves the write was refused before any object commit.
  */
 function isPreCommitWriteStatus(status: number): boolean {
   return (status >= 300 && status < 400) || PRE_COMMIT_WRITE_STATUSES.has(status)
@@ -168,15 +168,15 @@ export interface ZoteroPatchWriteOptions extends ZoteroWriteOptions {
 export interface ZoteroDeleteWriteOptions extends ZoteroWriteOptions {
   /**
    * The library version the caller read before the delete; Zotero refuses a
-   * stale delete with 412. Absence means no version precondition is sent —
-   * the domain always sends one, so absence here is only for tests.
+   * stale delete with 412. Absence means no version precondition is sent; the
+   * domain always sends one, so absence here is only for tests.
    */
   readonly ifUnmodifiedSinceVersion?: number
   /**
    * Marks the delete payload as a bounded name list (the library-tags
-   * delete). A 413 then means the name list exceeded the server cap — a
-   * caller-facing argument error — instead of the batch-size protocol drift
-   * a 413 means everywhere else. The domain sets this on the tags path it
+   * delete). A 413 then means the name list exceeded the server cap, a
+   * caller-facing argument error, instead of the batch-size protocol drift a
+   * 413 means everywhere else. The domain sets this on the tags path it
    * builds; no caller should guess it from the URL.
    */
   readonly tagDeleteLimit?: boolean
@@ -217,7 +217,7 @@ function requireLibraryVersion(headers: Headers): number {
 
 /**
  * The write transport of the Zotero Local API. One request in flight, no
- * retries, no identity refresh — the write path has exactly one legitimate
+ * retries, no identity refresh. The write path has exactly one legitimate
  * replay (re-authorize after 401, then send the same batch again) and that
  * replay belongs to the domain, not to transport heuristics.
  */
@@ -255,8 +255,8 @@ export class ZoteroWriteHttpClient {
 
   /**
    * PATCH a single object (merge semantics per the web API). Zotero answers
-   * 204 with the library version only — the written object's version is that
-   * same library version, so no follow-up GET is needed.
+   * 204 with the library version only, and the written object's version is
+   * that same library version, so no follow-up GET is needed.
    */
   async patch(
     path: string,
@@ -304,7 +304,7 @@ export class ZoteroWriteHttpClient {
   }
 
   /**
-   * Request a local write key. Zotero shows its user a dialog — Allow (the
+   * Request a local write key. Zotero shows its user a dialog: Allow (the
    * key works once, then is consumed), Always Allow (persistent), or Deny.
    * A denial and every other refusal arrive as `ZoteroError`s with
    * write-specific codes and messages; only a grant returns.

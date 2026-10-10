@@ -113,7 +113,7 @@ describe('ZoteroCommandCard', () => {
     // A probe that reaches Zotero and is told it is down sets *both* `data`
     // and `error`, and that answer still carries the address it dialled. Gating
     // the row on "no error" would blank it exactly when the user clicked
-    // Refresh to find out what was wrong — the one moment the address matters.
+    // Refresh to find out what was wrong: the one moment the address matters.
     const rawText = [
       'Zotero local API: not connected',
       'Local API: 127.0.0.1:23119',

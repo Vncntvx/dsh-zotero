@@ -328,7 +328,7 @@ describe('changesMetaOf', () => {
   it('counts the changed families and the deletions apart', () => {
     const meta = changesMetaOf(DIFF)
     // Four objects changed, two were deleted. Counting the `deleted*` totals
-    // into the changed total reported six — more changes than the library had.
+    // into the changed total reported six: more changes than the library had.
     expect(meta.changedTotal).toBe(5)
     expect(meta.deletedTotal).toBe(2)
     expect(meta.fromVersion).toBe(10)
@@ -440,7 +440,7 @@ describe('changesMetaOf', () => {
 
   it('keeps the unobservable list beside a cursor, which is the normal shape', () => {
     // For a standalone resource, `not-served` and `range-not-covered` do not
-    // withhold the cursor — those changes were never observable in any range —
+    // withhold the cursor (those changes were never observable in any range)
     // so a diff with a coverage gap and a cursor is the ordinary result, not an
     // edge case. Suppressing the list there would hide the gap in exactly the
     // case it exists to report.

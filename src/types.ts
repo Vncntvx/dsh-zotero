@@ -88,9 +88,9 @@ export interface ZoteroStatus {
   providerId: string
   /**
    * The authority this provider dialled, e.g. `127.0.0.1:23119`. It is the
-   * endpoint the probe actually reached, which is the one fact a user needs
-   * when the probe failed — a status card naming a configured default instead
-   * would send them to the wrong place.
+   * endpoint the provider actually dialled, which is the one fact a user
+   * needs when the probe failed. A status card naming a configured default
+   * instead would send them to the wrong place.
    */
   endpoint: string
   connected: boolean
@@ -98,17 +98,18 @@ export interface ZoteroStatus {
   serverId?: string
   schemaVersion?: string
   /**
-   * The answering Zotero build (`X-Zotero-Version`). The API version and the
-   * schema version are the same on every build that speaks API v3, so this is
-   * the only header that identifies which build is actually answering — the
-   * fact a version-scoped expectation has to be checked against.
+   * The answering Zotero build (`X-Zotero-Version`). This is the only one of
+   * the three version headers that distinguishes releases: `Zotero-API-Version`
+   * is 3 on every build that speaks API v3, and `Zotero-Schema-Version` moves
+   * with Zotero's data schema rather than with the release. It is the fact a
+   * version-scoped expectation has to be checked against.
    */
   zoteroVersion?: string
   /**
    * The write state of the answering provider, present only when the provider
    * wires the write capability at all. `authorized` says whether a grant for
-   * the connected instance is already stored — a diagnostic fact, never a
-   * capability: the gate still answers every write.
+   * the connected instance is already stored. That is a diagnostic fact, not
+   * a capability: the gate still answers every write.
    */
   write?: { enabled: boolean; authorized: boolean }
   diagnosis: string
@@ -203,9 +204,9 @@ export interface ZoteroSearchSupplement {
 
 export interface ZoteroSearchResult {
   scope: ZoteroResolvedScope
-  /** Primary API hits only — the collection `total`/`offset`/`returned`/`nextOffset` describe. */
+  /** Primary API hits only: the collection `total`/`offset`/`returned`/`nextOffset` describe. */
   items: ZoteroSearchItem[]
-  /** The paged API total — the count `offset` pagination walks; supplements are not part of it. */
+  /** The paged API total, the count `offset` pagination walks; supplements are not part of it. */
   total: number
   offset: number
   /** Primary hits on this page (`items.length`); supplements never inflate it. */
@@ -213,9 +214,9 @@ export interface ZoteroSearchResult {
   nextOffset?: number
   /**
    * On the first page of a library/collection-scope query (saved-search
-   * scopes never scan), note-body matches fill unused result slots — listed
-   * here, ordered by dateModified desc, capped by the page headroom and
-   * `maxNoteScanRecords`; omitted when none matched.
+   * scopes never scan), note-body matches fill unused result slots. They are
+   * listed here, ordered by dateModified desc, capped by the page headroom and
+   * `maxNoteScanRecords`, and omitted when none matched.
    */
   supplemental?: ZoteroSearchSupplement
 }
@@ -392,9 +393,9 @@ export interface ZoteroEvidence {
 }
 
 /**
- * How one attachment of a multi-attachment retrieval was accounted for:
- * `indexed` — its full text was read and entered the ranking; `unindexed` —
- * Zotero's index has no full text for it; `unread` — this call did not read
+ * How one attachment of a multi-attachment retrieval was accounted for.
+ * `indexed`: its full text was read and entered the ranking. `unindexed`:
+ * Zotero's index has no full text for it. `unread`: this call did not read
  * it, because the per-call attachment cap was already reached.
  */
 export type ZoteroRetrieveAttachmentStatus = 'indexed' | 'unindexed' | 'unread'
@@ -485,11 +486,11 @@ export interface ZoteroExportRequest {
 /**
  * One exported document inside a translator-format export, keyed to its ref
  * and located within the merged body. The provider locates each ref's entry
- * in the batch body in memory — BibTeX/BibLaTeX by the `extra` citation key,
- * the entry's own citation key, DOI, normalized title (disambiguated by year
- * and first author), or whole-token item-key mention; RIS by record id; CSL
- * JSON by bare id or trailing `/<key>` URI suffix — and a ref it cannot
- * prove stays unlocated, never positionally guessed. The merged body's entry
+ * in the batch body in memory. BibTeX/BibLaTeX are located by the `extra`
+ * citation key, the entry's own citation key, DOI, normalized title
+ * (disambiguated by year and first author), or whole-token item-key mention;
+ * RIS by record id; CSL JSON by bare id or trailing `/<key>` URI suffix. A ref
+ * it cannot prove stays unlocated, never positionally guessed. The merged body's entry
  * order belongs to Zotero, and citation keys are generated in the export
  * context.
  */
@@ -565,7 +566,7 @@ export interface ZoteroBrowseRequest {
   /**
    * Collections only: a collection ref whose children to list. Omitted lists
    * top-level collections (`/collections/top`); present lists that
-   * collection's children (`/collections/<key>/collections`) — real
+   * collection's children (`/collections/<key>/collections`), real
    * server-side tree navigation instead of one whole-library snapshot.
    */
   parentRef?: string
@@ -664,7 +665,7 @@ export type { ZoteroChangesInclude }
  * An incremental checkpoint: the library version a diff read through, pinned
  * to the instance and the library it came from.
  *
- * A library version is a counter of one database's transactions — the same
+ * A library version is a counter of one database's transactions. The same
  * integer means unrelated things in another Zotero instance, and nothing at
  * all in another library. A cursor therefore carries its provenance, and
  * passing one back is the only way to diff from a previous read: the instance
@@ -718,7 +719,7 @@ export type ZoteroChangesUnobservableReason =
   /**
    * The response arrived but did not carry the documented shape, so this call
    * cannot know what changed. Unlike the two above, the data exists and this
-   * call failed to read it — which is why this reason withholds the cursor.
+   * call failed to read it, which is why this reason withholds the cursor.
    */
   | 'unreadable'
 
@@ -733,7 +734,7 @@ export interface ZoteroChangesUnobservable {
  * A listing under `changed` / `deleted` may be capped for the model; these are
  * the totals behind it, and they are also what tells a caller how much of a
  * capped listing it is not seeing. A count is present exactly when its kind
- * was read, so presence — not the value — is the coverage statement.
+ * was read, so presence, not the value, is the coverage statement.
  */
 export type ZoteroChangesTotals = Partial<Record<ChangeTotalKey, number>>
 
@@ -743,16 +744,16 @@ export interface ZoteroChangesResult {
   /** The version the diff started from; absent on a baseline reading. */
   fromVersion?: number
   /**
-   * The checkpoint to diff from next — present only when this call verified
-   * the whole reported range, the library version did not move while it read,
-   * and the instance answering is known, which is what makes it safe to pass
-   * back as `since`. Absent means the caller must not advance from this
+   * The checkpoint to diff from next. It is present only when this call
+   * verified the whole reported range, the library version did not move while
+   * it read, and the instance answering is known, which is what makes it safe
+   * to pass back as `since`. Absent means the caller must not advance from this
    * result. The version inside is the one the diff read through.
    *
    * For a standalone resource, a kind that is `not-served` or
    * `range-not-covered` does not withhold the cursor: those changes were never
    * observable, so no version could account for them. The `items` kind is
-   * stricter — every top-level, live, and trash partition must succeed. An
+   * stricter: every top-level, live, and trash partition must succeed. An
    * `unreadable` kind always withholds the cursor, because the rows exist and
    * this call failed to read them. A result that explicitly includes
    * independently versioned `fulltext` also omits the library cursor.
@@ -766,8 +767,8 @@ export interface ZoteroChangesResult {
   libraryChanged?: boolean
   /**
    * The answering build reported no library version for this call, so no
-   * version can be read or advanced here — a Zotero build without local
-   * transaction versions cannot be diffed at all. This is decided per call
+   * version can be read or advanced here, because a Zotero build without
+   * local transaction versions cannot be diffed at all. This is decided per call
    * from what the responses carry, never from a version number: the wire has
    * no header that says which build serves versioned reads.
    */
@@ -775,7 +776,7 @@ export interface ZoteroChangesResult {
   changed: Partial<Record<ChangeSectionKey, ZoteroChangedObject[]>>
   /**
    * Tombstoned objects, keyed by kind. Present exactly when the tombstone read
-   * was observed — an empty object is the positive statement "nothing was
+   * was observed: an empty object is the positive statement "nothing was
    * removed in this range", which is why it is never omitted for brevity.
    */
   deleted?: Record<DeletionSectionKey, string[]>
@@ -806,8 +807,8 @@ export interface ZoteroCreateNoteRequest {
   parentItem?: ZoteroObjectRef
   /**
    * Collections (refs or names) a standalone note joins. Must be omitted (or
-   * empty) when `parentItem` is set — child notes inherit their parent's
-   * collections; non-empty collections on a child note are refused with
+   * empty) when `parentItem` is set, because child notes inherit their
+   * parent's collections; non-empty collections on a child note are refused with
    * `WRITE_CHILD_COLLECTIONS_MESSAGE` at the tool `buildRequest` and again in
    * the write domain for non-tool callers.
    */
@@ -1040,10 +1041,10 @@ export interface ZoteroDeleteLibraryTagsResult {
  *
  * The gate lives at the `ctx.zotero` seam, so a write cannot reach the domain
  * without a call like this: the service runs the session approval policy
- * (`ctx.approval.request` — `never` auto-rejects) and then asks the user with
- * {@link ZoteroWriteCall.plan} on every write, and fails closed when no
- * channel can answer. `plan` is the caller's deterministic markdown —
- * what the user approves is exactly what the service passes on. `exec` is
+ * (`ctx.approval.request`, where `never` auto-rejects) and then asks the user
+ * with {@link ZoteroWriteCall.plan} on every write, and fails closed when no
+ * channel can answer. `plan` is the caller's deterministic markdown, so what
+ * the user approves is exactly what the service passes on. `exec` is
  * structurally the fields the asks need (agent, signal, tool name, call id),
  * so a tool's `ToolRunContext` satisfies it directly and a test can build one.
  *
@@ -1051,7 +1052,7 @@ export interface ZoteroDeleteLibraryTagsResult {
  * the already-logged tool call. The plan-review intent deliberately carries
  * **no `callId`**: that field names a logged invocation whose arguments hold
  * the reviewed plan, and a write tool's arguments hold the note body or the
- * tag list — naming the call would send the client's plan panel after a
+ * tag list, so naming the call would send the client's plan panel after a
  * document that does not exist.
  */
 export interface ZoteroWriteCall {
@@ -1064,7 +1065,7 @@ export interface ZoteroWriteCall {
 /**
  * The outcome when the user answers the plan-review card without approving.
  * Nothing was written, nothing was contacted beyond the approval channel,
- * and the tool returns this instead of an error — declining is a normal
+ * and the tool returns this instead of an error. Declining is a normal
  * outcome, not a failure.
  */
 export interface ZoteroWriteDeclined {
@@ -1092,8 +1093,8 @@ export type ZoteroDeleteLibraryTagsOutcome = ZoteroDeleteLibraryTagsResult | Zot
 /**
  * The storage side of the `ctx.zotero` seam. Providers declare which
  * capabilities they safely support; the service gates every domain call on
- * that declaration first and on the corresponding method's presence second —
- * a provider that does not serve a domain simply omits the capability and
+ * that declaration first and on the corresponding method's presence second.
+ * A provider that does not serve a domain simply omits the capability and
  * leaves the method undefined, so no stub is required. The Agent never sees
  * which provider satisfied a request. `available()` is deliberately absent:
  * request-driven providers fail with typed domain errors, and only `status()`
@@ -1106,7 +1107,7 @@ export interface ZoteroProvider {
    * Probe connectivity and report the instance identity facts.
    * @param signal - caller cancellation; forwarded to the transport.
    * @returns the status record; failures are reported in `diagnosis`, never
-   *   thrown — except an explicit caller abort, which propagates so a cancel
+   *   thrown, except an explicit caller abort, which propagates so a cancel
    *   is never mistaken for a connectivity problem.
    */
   status(signal?: AbortSignal): Promise<ZoteroStatus>

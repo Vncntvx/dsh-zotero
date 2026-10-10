@@ -1,7 +1,7 @@
 /**
  * The browse row classification both halves read rows through: `renderBrowse`
  * for the model, the Chat card for the user. These cases establish the order
- * the tests run in — a row is named by the first field it carries — because
+ * the tests run in (a row is named by the first field it carries), because
  * that order is the contract; a reordering silently renames rows for both
  * readers at once.
  * @module tests/unit/browse-rows

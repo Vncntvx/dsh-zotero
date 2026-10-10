@@ -129,7 +129,7 @@ describe('retrieve tolerances', () => {
     // must reject: folding it to `[]` would let a broken response read as
     // "this item has no notes", which the model cannot tell from the truth.
     // The parent is served alone so the malformed listing is the only
-    // children route registered — a graph helper would answer first and the
+    // children route registered: a graph helper would answer first and the
     // breach would never arrive.
     serveItemGraph(mock, {
       parent: RETRIEVE_PARENT,

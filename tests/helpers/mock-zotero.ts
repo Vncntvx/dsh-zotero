@@ -2,7 +2,7 @@
  * Scripted in-process HTTP server that stands in for the Zotero Local API.
  *
  * Tests drive the real `fetch` code path of the plugin against this server:
- * every request is recorded (method, pathname, query, headers) so tests can
+ * every request is recorded (method, pathname, query, headers), so tests can
  * assert exact wire behavior. Routes are registered per test; unmatched
  * requests get a 404 like the real server's not-found responses.
  * @module tests/helpers/mock-zotero
@@ -56,8 +56,8 @@ interface Route {
 /**
  * Whether one registered route answers this request.
  *
- * The query string is part of the contract the plugin holds Zotero to — a
- * bare `/children` and `/children?itemType=annotation` are different reads —
+ * The query string is part of the contract the plugin holds Zotero to: a
+ * bare `/children` and `/children?itemType=annotation` are different reads,
  * so a matcher that carries one must see it, or a spec registering the
  * filtered route would silently be answered by the bare one:
  *
@@ -82,7 +82,7 @@ function routeMatches(route: Route, method: string, url: URL): boolean {
  *
  * A matcher that names a query is more specific than one that names only the
  * path, so it wins: a spec can register the bare listing and the filtered one
- * side by side — the two halves of the children contract — without depending
+ * side by side (the two halves of the children contract) without depending
  * on the order it happens to call them in. Otherwise the **first** matching
  * registration wins, which is the long-standing convention across the suite
  * (and what a spec relies on when it hand-registers a handler before a
@@ -101,7 +101,7 @@ function bestRoute(routes: readonly Route[], method: string, url: URL): Route | 
 
 export class MockZotero {
   readonly requests: RecordedRequest[] = []
-  /** `http://127.0.0.1:<port>/api` — the base URL to configure the plugin with. */
+  /** `http://127.0.0.1:<port>/api`, the base URL to configure the plugin with. */
   baseUrl = ''
   private server: Server | undefined
   private readonly routes: Route[] = []

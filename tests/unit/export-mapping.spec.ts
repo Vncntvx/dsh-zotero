@@ -2,7 +2,7 @@
  * The in-memory ref → batch-entry mapping: body splitting with text spans,
  * deterministic tier matching for BibTeX/BibLaTeX (extra citation key, DOI,
  * normalized title with year+author disambiguation, own citation key,
- * whole-token item-key mention — never positional guessing), identity
+ * whole-token item-key mention: never positional guessing), identity
  * matching for RIS and CSL JSON, and bare refs for entries that cannot be
  * located.
  * @module tests/export-mapping

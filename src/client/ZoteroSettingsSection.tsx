@@ -2,7 +2,7 @@
  * The Zotero settings page: one entry in the Settings panel's left navigation,
  * a sibling of General, Models, and Plugins, editing every field of the
  * `zotero` namespace the host half registers. The whole configuration lives
- * here — the page owns the header, the grouped form body rides the harness's
+ * here: the page owns the header, the grouped form body rides the harness's
  * official `<SettingsForm>` chrome (unavailable/read-only status, failed
  * notice, save button, and discard-on-unmount), so a namespace with this many
  * fields never has to be read through a collapsed card.
@@ -11,7 +11,7 @@
  * (`ctx.configForms.get`), staged through the harness's own
  * `SettingsFormModel`; nothing writes until Save, and leaving the page drops
  * the staged edits. While the namespace is not served to this client the page
- * still renders — the left-nav entry exists either way — with its title and
+ * still renders (the left-nav entry exists either way) with its title and
  * the form's own unavailable notice instead of vanishing.
  *
  * `SettingsForm` comes from `dsh-client-ui-primitives`, a platform module the
