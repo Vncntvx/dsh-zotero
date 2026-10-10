@@ -23,6 +23,7 @@ import type { ChatNode, ChatSnapshot } from '@deepseek-ai/dsh-client-ui-chat/cli
 import type { ToolCallBlock } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
+import type { ZoteroAttachmentLocationView } from '../../contract.ts'
 import type { ZoteroStatusView } from '../remote.ts'
 import { callNameOf, isSettledTool } from '../presenters.ts'
 import { buildSourceWorkspace } from '../sources/reducer.ts'
@@ -87,6 +88,10 @@ function visitVisibleZoteroCalls(
 export interface SourcesTabFace {
   /** Live connectivity view through the plugin's Remote namespace. */
   status: () => Promise<RemoteResult<ZoteroStatusView>>
+  /** Resolve an attachment ref into its local file path or web URL. */
+  resolveAttachment?: (ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>
+  /** Open a local file path (e.g. in the right sidebar). */
+  openFile?: (path: string, sessionId?: string) => void
 }
 
 /** Props the conversation view ring binds for this tab. */
@@ -203,7 +208,15 @@ function sameZoteroProjection(a: ChatSnapshot | undefined, b: ChatSnapshot | und
 }
 
 /** The Sources panel controller: probe, workspace build, and the view. */
-export function SourcesTab({ status, t, useSession, useChat, inputActions }: SourcesTabProps) {
+export function SourcesTab({
+  status,
+  resolveAttachment,
+  openFile,
+  t,
+  useSession,
+  useChat,
+  inputActions,
+}: SourcesTabProps) {
   // The session selector takes the primitive id, so lifecycle churn during a
   // turn (running flips, queue, error fields) never re-renders the panel. The
   // chat selector takes the whole snapshot but compares it through the
@@ -276,6 +289,8 @@ export function SourcesTab({ status, t, useSession, useChat, inputActions }: Sou
       connection={statusState}
       setDraft={setDraft}
       onRefresh={refresh}
+      openFile={openFile ? (path: string) => openFile(path, sessionId) : undefined}
+      resolveAttachment={resolveAttachment}
       t={t}
     />
   )

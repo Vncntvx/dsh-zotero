@@ -6,7 +6,7 @@
  * @module tests/client/EvidenceLens
  */
 
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { EvidenceCard } from '../../src/client/components/EvidenceCard.tsx'
 import {
@@ -176,14 +176,14 @@ describe('EvidenceCard', () => {
     expect(screen.getByText('No Retrieval')).toBeDefined()
   })
 
-  it('links open actions for a verified item with an attachment ref', () => {
+  it('renders in-app open actions for a verified item with an attachment ref', () => {
     const { container } = render(<EvidenceCard item={EVIDENCE_ITEM} t={t} />)
-    const links = Array.from(container.querySelectorAll('a')).map((anchor) =>
-      anchor.getAttribute('href'),
-    )
-    expect(links).toContain('zotero://select/library/items/ABCDEFGH')
-    expect(links).toContain('zotero://open-pdf/library/items/WXYZ6789')
-    expect(links).toContain('zotero://open-pdf/library/items/WXYZ6789?annotation=ANN00001')
+    expect(container.querySelectorAll('a[href^="zotero://"]')).toHaveLength(0)
+    expect(
+      screen.getAllByRole('button', { name: new RegExp(zh.readPdf) }).length,
+    ).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText(zh.copyTitle)).toBeDefined()
+    expect(screen.getAllByText(zh.copyZoteroLink).length).toBeGreaterThanOrEqual(1)
   })
 
   it('targets the annotation jump at the annotation own PDF attachment', () => {
@@ -196,17 +196,19 @@ describe('EvidenceCard', () => {
       ),
     })
     const { container } = render(<EvidenceCard item={item} t={t} />)
-    const links = Array.from(container.querySelectorAll('a')).map((anchor) =>
-      anchor.getAttribute('href'),
-    )
-    expect(links).toContain('zotero://open-pdf/library/items/WXYZ6789')
-    expect(links).toContain('zotero://open-pdf/library/items/XYZ99990?annotation=ANN00001')
+    expect(container.querySelectorAll('a[href^="zotero://"]')).toHaveLength(0)
+    expect(
+      screen.getAllByRole('button', { name: new RegExp(zh.readPdf) }).length,
+    ).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText(zh.copyZoteroLink).length).toBeGreaterThanOrEqual(1)
   })
 
   it('opens a resolved web PDF at its web location and offers no annotation jump', () => {
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null)
     const item = sourceOf({
       ...EVIDENCE_ITEM,
       retrievalFacts: undefined,
+      evidence: [],
       attachment: {
         ref: 'zotero://user/0/attachment/WEBLINK1',
         kind: 'url',
@@ -216,15 +218,14 @@ describe('EvidenceCard', () => {
       },
     })
     const { container } = render(<EvidenceCard item={item} t={t} />)
-    const links = Array.from(container.querySelectorAll('a')).map((anchor) =>
-      anchor.getAttribute('href'),
-    )
-    expect(links).toContain('https://e.org/paper.pdf')
-    expect(links).not.toContain('zotero://open-pdf/library/items/WEBLINK1')
-    expect(links.filter((url) => url !== null && url.includes('annotation'))).toHaveLength(0)
+    expect(container.querySelectorAll('a[href^="zotero://"]')).toHaveLength(0)
+    const readBtn = screen.getByRole('button', { name: new RegExp(zh.readPdf) })
+    fireEvent.click(readBtn)
+    expect(openSpy).toHaveBeenCalledWith('https://e.org/paper.pdf', '_blank', 'noopener,noreferrer')
+    openSpy.mockRestore()
   })
 
-  it('blocks every open link for a mismatching item and keeps the copy fallback', () => {
+  it('keeps copy actions active for a mismatching item while the read stays blocked', () => {
     const mismatch = sourceOf({
       ...EVIDENCE_ITEM,
       evidenceMatch: 'mismatch',
@@ -232,13 +233,19 @@ describe('EvidenceCard', () => {
     const { container } = render(<EvidenceCard item={mismatch} t={t} />)
     expect(container.querySelector('a')).toBeNull()
     expect(screen.getAllByText(new RegExp(zh.databaseMismatch)).length).toBeGreaterThanOrEqual(1)
-    expect(screen.getByLabelText(zh.copyRef)).toBeDefined()
+    expect(screen.getByRole('button', { name: zh.copyRef })).toBeDefined()
+    for (const readBtn of screen.getAllByRole('button', { name: zh.readPdf })) {
+      expect(readBtn.getAttribute('aria-disabled')).toBe('true')
+    }
+    for (const linkBtn of screen.getAllByRole('button', { name: zh.copyZoteroLink })) {
+      expect(linkBtn.getAttribute('aria-disabled')).toBeNull()
+    }
   })
 
   it('caves unverified items with an instance caveat', () => {
     const unverified = sourceOf({ ...EVIDENCE_ITEM, evidenceMatch: 'unknown' })
     const { container } = render(<EvidenceCard item={unverified} t={t} />)
-    expect(container.querySelector('a')).not.toBeNull()
+    expect(container.querySelectorAll('a[href^="zotero://"]')).toHaveLength(0)
     expect(screen.getAllByText(new RegExp(zh.instanceUnverified)).length).toBeGreaterThanOrEqual(1)
   })
 

@@ -255,11 +255,10 @@ describe('ChildrenToolView (zotero_children & zotero_attachment)', () => {
     expect(screen.getByText('3')).toBeTruthy()
     const swatch = container.querySelector('[data-child-row="annotation"] span[style]')
     expect(swatch?.getAttribute('style')).toContain('#ffd400')
-    // An annotation is only reachable through the PDF it lives in.
-    const pdfLink = Array.from(container.querySelectorAll('a')).find((a) =>
-      a.getAttribute('href')?.startsWith('zotero://open-pdf/'),
-    )
-    expect(pdfLink?.getAttribute('href')).toBe('zotero://open-pdf/library/items/WXYZ6789?page=3')
+    expect(container.querySelectorAll('a[href^="zotero://"]')).toHaveLength(0)
+    expect(
+      screen.getAllByRole('button', { name: new RegExp(zh.readPdf) }).length,
+    ).toBeGreaterThanOrEqual(1)
   })
 
   it('says a returned kind is empty rather than showing it as absent', () => {
@@ -358,8 +357,10 @@ describe('ChildrenToolView (zotero_children & zotero_attachment)', () => {
     expect(screen.getByText('application/pdf')).toBeTruthy()
     expect(screen.getByText('/path/to/FullTextPaper.pdf')).toBeTruthy()
 
-    const pdfLink = container.querySelector('a[href^="zotero://open-pdf/"]')
-    expect(pdfLink?.getAttribute('href')).toBe('zotero://open-pdf/library/items/WXYZ6789')
+    expect(container.querySelectorAll('a[href^="zotero://"]')).toHaveLength(0)
+    expect(
+      screen.getAllByRole('button', { name: new RegExp(zh.readPdf) }).length,
+    ).toBeGreaterThanOrEqual(1)
   })
 
   it('renders error state on attachment failure', () => {

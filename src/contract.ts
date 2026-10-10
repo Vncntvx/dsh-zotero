@@ -41,17 +41,51 @@ export interface ZoteroStatusView {
   readonly zoteroVersion?: string
   /** The write state; absent when the serving provider wires no write capability. */
   readonly write?: { readonly enabled: boolean; readonly authorized: boolean }
-  readonly diagnosis: string
+  /**
+   * What the probe wants explained, localized by the client. Present only when
+   * there is something to explain: a connected probe carries none. The
+   * host-internal status keeps a total field with the {@link ZOTERO_DIAGNOSIS_OK}
+   * sentinel; the wire producer strips it so a success never renders a
+   * diagnosis box.
+   */
+  readonly diagnosis?: string
+}
+
+/** The attachment location view returned by the resolveAttachment Remote invocation. */
+export interface ZoteroAttachmentLocationView {
+  readonly ref: string
+  readonly kind: 'file' | 'url'
+  readonly title: string
+  readonly contentType: string
+  readonly path?: string
+  readonly url?: string
 }
 
 /** Package identity every Typert contribution from this plugin claims. */
 export const ZOTERO_REMOTE_PACKAGE = 'dsh-zotero'
 
+/**
+ * Success sentinel the host status probe writes into its total `diagnosis`
+ * field (`src/local/provider.ts`). The wire view strips it — a connected probe
+ * has nothing to diagnose — so this constant is the single spelling both the
+ * writer and the stripper compare against.
+ */
+export const ZOTERO_DIAGNOSIS_OK = 'ok'
+
 /** Strict codec type symbol for {@link ZoteroStatusView}; host and client must agree. */
 export const ZOTERO_STATUS_TYPE_SYMBOL = 'dsh-zotero#ZoteroStatusView'
 
+/** Strict codec type symbol for the string ref parameter. */
+export const ZOTERO_REF_PARAM_TYPE_SYMBOL = 'dsh-zotero#AttachmentRef'
+
+/** Strict codec type symbol for {@link ZoteroAttachmentLocationView}. */
+export const ZOTERO_RESOLVE_ATTACHMENT_TYPE_SYMBOL = 'dsh-zotero#ZoteroAttachmentLocationView'
+
 /** Globally stable invocation id for the status probe. */
 export const ZOTERO_STATUS_INVOCATION_ID = 'dsh-zotero#zotero/status'
+
+/** Globally stable invocation id for resolveAttachment. */
+export const ZOTERO_RESOLVE_ATTACHMENT_INVOCATION_ID = 'dsh-zotero#zotero/resolveAttachment'
 
 /**
  * Cordis service key that owns the status method on the host half.
@@ -63,7 +97,10 @@ export const ZOTERO_STATUS_SERVICE_KEY = 'zoteroRemote'
 /** Wire method name for the status probe. */
 export const ZOTERO_STATUS_METHOD = 'status'
 
-/** Invocation kind for the status probe (direct service call, no Context receiver). */
+/** Wire method name for resolveAttachment. */
+export const ZOTERO_RESOLVE_ATTACHMENT_METHOD = 'resolveAttachment'
+
+/** Invocation kind for direct service calls (no Context receiver). */
 export const ZOTERO_STATUS_INVOCATION_KIND = 'direct'
 
 /**
@@ -103,6 +140,34 @@ export function zoteroStatusInvocation(
     method: ZOTERO_STATUS_METHOD,
     invocation: { kind: ZOTERO_STATUS_INVOCATION_KIND },
     parameters: [],
+    result,
+  }
+}
+
+/**
+ * Build one resolveAttachment invocation descriptor around parameter and result codecs.
+ * @param param - the strict parameter codec for the ref string.
+ * @param result - the strict result codec for {@link ZoteroAttachmentLocationView}.
+ * @returns a complete invocation descriptor.
+ */
+export function zoteroResolveAttachmentInvocation(
+  param: InvocationDescriptor['parameters'][number]['codec'],
+  result: InvocationDescriptor['result'],
+): InvocationDescriptor {
+  return {
+    id: ZOTERO_RESOLVE_ATTACHMENT_INVOCATION_ID,
+    service: ZOTERO_STATUS_SERVICE_KEY,
+    namespace: ZOTERO_SETTINGS_NAMESPACE,
+    method: ZOTERO_RESOLVE_ATTACHMENT_METHOD,
+    invocation: { kind: ZOTERO_STATUS_INVOCATION_KIND },
+    parameters: [
+      {
+        name: 'ref',
+        wire: 'ref',
+        source: 'json',
+        codec: param,
+      },
+    ],
     result,
   }
 }

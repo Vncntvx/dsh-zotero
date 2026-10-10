@@ -8,8 +8,8 @@ import { useMemo, type ReactNode } from 'react'
 import { IconDeliverDocRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { getMetaOf, type ChildCountView, type ChildPreviewView } from '../sources/decoders.ts'
-import { childRowLinks, pdfUrlOf, selectUrlOf } from '../actions/open-zotero.ts'
-import { ZoteroOpenLink } from '../components/open/ZoteroOpenLink.tsx'
+import { PdfReadButton } from '../components/open/PdfReadButton.tsx'
+import { ZoteroLocateActions } from '../components/open/ZoteroLocateActions.tsx'
 import { countOfLabel, CHILD_KIND_LABEL } from '../evidence-labels.ts'
 import {
   argsViewOf,
@@ -30,34 +30,18 @@ interface PreviewView {
   readonly key: string
   readonly preview: string
   readonly pageLabel: string | null
-  readonly selectUrl: string | null
-  /** Open the PDF an annotation lives in, at its page. */
-  readonly pdfUrl: string | null
+  readonly ref: string
+  readonly parentRef: string | null
 }
 
-/**
- * One child preview with the links its kind supports, through the shared
- * `childRowLinks`: a note's parent is the item this card is already about, so
- * only the note is worth linking, while an annotation's parent is its PDF,
- * which is where the reader wants to land.
- */
-function previewView(
-  preview: ChildPreviewView,
-  index: number,
-  kind: 'note' | 'annotation',
-): PreviewView {
-  const { selectUrl, pdfUrl } = childRowLinks({
-    ref: preview.ref,
-    parentRef: preview.parentRef,
-    pageLabel: preview.pageLabel,
-    kind,
-  })
+/** One child preview with the links its kind supports. */
+function previewView(preview: ChildPreviewView, index: number): PreviewView {
   return {
     key: `${preview.ref}-${index}`,
     preview: preview.preview,
     pageLabel: preview.pageLabel,
-    selectUrl,
-    pdfUrl,
+    ref: preview.ref,
+    parentRef: preview.parentRef ?? null,
   }
 }
 
@@ -70,8 +54,6 @@ export function ItemToolView(props: ItemToolViewProps) {
     summary,
     errorSummary,
     getItemView,
-    selectUrl,
-    pdfUrl,
     childCounts,
     notePreviews,
     annotationPreviews,
@@ -100,8 +82,6 @@ export function ItemToolView(props: ItemToolViewProps) {
     }
 
     const errSummary = errorSummaryOf(block, raw)
-    const sUrl = itemRef ? selectUrlOf(itemRef) : null
-    const pUrl = view?.bestAttachment?.ref ? pdfUrlOf(view.bestAttachment.ref) : null
 
     // The child counts and previews the projection already carried. The
     // Sources panel has always read them; the card now does too, so a reader
@@ -148,18 +128,14 @@ export function ItemToolView(props: ItemToolViewProps) {
       summary: sum,
       errorSummary: errSummary,
       getItemView: view,
-      selectUrl: sUrl,
-      pdfUrl: pUrl,
       childCounts: counts.flatMap(({ key, count, shown, label }) =>
         // A kind the call did not ask for is absent, not zero: "no notes
         // exist" and "notes were not requested" are different facts.
         count === null ? [] : [{ key, label, count, shown }],
       ),
       detailOmitted: view?.detailOmitted === true,
-      notePreviews: notesPreviews.map((preview, index) => previewView(preview, index, 'note')),
-      annotationPreviews: annotationPreviews.map((preview, index) =>
-        previewView(preview, index, 'annotation'),
-      ),
+      notePreviews: notesPreviews.map((preview, index) => previewView(preview, index)),
+      annotationPreviews: annotationPreviews.map((preview, index) => previewView(preview, index)),
       rawText: raw,
     }
   }, [block, t])
@@ -179,24 +155,22 @@ export function ItemToolView(props: ItemToolViewProps) {
                 <span className={css.itemMeta}>{preview.preview}</span>
               </div>
               <div className={css.itemActions}>
-                {preview.pdfUrl !== null && (
-                  <ZoteroOpenLink
-                    url={preview.pdfUrl}
-                    verdict="open"
-                    label={t('openPdf')}
+                {preview.parentRef !== null && (
+                  <PdfReadButton
+                    attachmentRef={preview.parentRef}
+                    onOpenFile={props.openFile}
+                    label={t('readPdf')}
                     t={t}
+                    variant="link"
                     className={css.actionLink}
                   />
                 )}
-                {preview.selectUrl !== null && (
-                  <ZoteroOpenLink
-                    url={preview.selectUrl}
-                    verdict="open"
-                    label={t('openInZotero')}
-                    t={t}
-                    className={css.actionLink}
-                  />
-                )}
+                <ZoteroLocateActions
+                  itemRef={preview.ref}
+                  variant="link"
+                  className={css.actionLink}
+                  t={t}
+                />
               </div>
             </div>
           ))}
@@ -256,24 +230,23 @@ export function ItemToolView(props: ItemToolViewProps) {
               )}
 
               <div className={css.itemActions}>
-                {selectUrl && (
-                  <ZoteroOpenLink
-                    url={selectUrl}
-                    verdict="open"
-                    label={t('openInZotero')}
+                {getItemView?.bestAttachment?.ref && (
+                  <PdfReadButton
+                    attachmentRef={getItemView.bestAttachment.ref}
+                    onOpenFile={props.openFile}
+                    label={t('readPdf')}
                     t={t}
+                    variant="link"
                     className={css.actionLink}
                   />
                 )}
-                {pdfUrl && (
-                  <ZoteroOpenLink
-                    url={pdfUrl}
-                    verdict="open"
-                    label={t('openPdf')}
-                    t={t}
-                    className={css.actionLink}
-                  />
-                )}
+                <ZoteroLocateActions
+                  title={getItemView?.title}
+                  itemRef={ref}
+                  t={t}
+                  variant="link"
+                  className={css.actionLink}
+                />
               </div>
             </div>
 

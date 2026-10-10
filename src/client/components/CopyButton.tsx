@@ -23,9 +23,11 @@ export interface CopyButtonProps {
    * beside the other actions keeps the row's rhythm.
    */
   readonly className?: string
+  /** Optional hover tooltip for extra guidance. */
+  readonly title?: string
 }
 
-export function CopyButton({ value, label, copiedLabel, className }: CopyButtonProps) {
+export function CopyButton({ value, label, copiedLabel, className, title }: CopyButtonProps) {
   const [copied, setCopied] = useState(false)
   // A click epoch: a slow clipboard promise resolving after a newer click
   // (or after unmount) must not flip the flag for a value it did not write.
@@ -44,7 +46,9 @@ export function CopyButton({ value, label, copiedLabel, className }: CopyButtonP
       type="button"
       className={className ?? css.lineAction}
       aria-label={label}
-      onClick={() => {
+      title={title ?? label}
+      onClick={(e) => {
+        e.stopPropagation()
         const mine = (epoch.current += 1)
         void writeClipboard(value).then((ok) => {
           // Only a successful write earns the feedback; a denial (iframe

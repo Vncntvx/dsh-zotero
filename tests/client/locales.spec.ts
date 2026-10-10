@@ -128,6 +128,11 @@ describe('locale bundles', () => {
       'bestAttachmentLabel',
       'localFile',
       'linkedUrl',
+      // Retired OS/external link actions replaced by in-app reading & clipboard actions
+      'openInZotero',
+      'openPdf',
+      'openAnnotation',
+      'openUnverifiedNote',
     ]
     for (const key of retired) {
       expect(key in zh, key).toBe(false)

@@ -186,8 +186,9 @@ describe('ExportToolView', () => {
     expect(screen.getByText(mockT('exportRefCount', { count: 1 }))).toBeTruthy()
     expect(screen.getByText('Quantum Test')).toBeTruthy()
 
-    const selectLink = container.querySelector('a[href^="zotero://select/"]')
-    expect(selectLink?.getAttribute('href')).toBe('zotero://select/library/items/ABCD1234')
+    expect(container.querySelectorAll('a[href^="zotero://"]')).toHaveLength(0)
+    expect(screen.getByText(zh.copyTitle)).toBeTruthy()
+    expect(screen.getAllByText(zh.copyZoteroLink).length).toBeGreaterThanOrEqual(1)
   })
 
   it('renders alternative export format such as CSLJSON', () => {

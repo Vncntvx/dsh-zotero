@@ -8,8 +8,8 @@ import { useMemo } from 'react'
 import { IconBrowseOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { retrieveMetaOf } from '../sources/decoders.ts'
-import { pdfUrlOf, selectUrlOf } from '../actions/open-zotero.ts'
-import { ZoteroOpenLink } from '../components/open/ZoteroOpenLink.tsx'
+import { PdfReadButton } from '../components/open/PdfReadButton.tsx'
+import { ZoteroLocateActions } from '../components/open/ZoteroLocateActions.tsx'
 import { coverageLineOf, sourceLabelKeyOf } from '../evidence-labels.ts'
 import { CopyButton } from '../components/CopyButton.tsx'
 import { errorSummaryOf, isToolRunning, metaOf, resultTextOf } from '../presenters.ts'
@@ -50,11 +50,6 @@ export function RetrieveToolView(props: RetrieveToolViewProps) {
       const omitted =
         retrieveView?.count != null && retrieveView.count > shown ? retrieveView.count - shown : 0
       const omittedNote = omitted > 0 ? t('toolOmittedPassages', { count: omitted }) : null
-      const mappedItems = (retrieveView?.items ?? []).map((item) => ({
-        ...item,
-        selectUrl: selectUrlOf(item.sourceRef),
-        pdfUrl: item.attachmentRef ? pdfUrlOf(item.attachmentRef, { page: item.pageLabel }) : null,
-      }))
 
       return {
         // The icon rides the memo with the rest of the header, so a re-render
@@ -63,7 +58,7 @@ export function RetrieveToolView(props: RetrieveToolViewProps) {
         icon: <IconBrowseOutlineRegular size={14} />,
         summary: sum,
         errorSummary: errSummary,
-        items: mappedItems,
+        items: retrieveView?.items ?? [],
         coverageLine: covLine,
         omittedNote,
         detailOmitted: retrieveView?.detailOmitted === true,
@@ -129,24 +124,22 @@ export function RetrieveToolView(props: RetrieveToolViewProps) {
                           copiedLabel={t('copied')}
                           className={css.lineAction}
                         />
-                        {item.pdfUrl && (
-                          <ZoteroOpenLink
-                            url={item.pdfUrl}
-                            verdict="open"
-                            label={t('openPdf')}
+                        {item.attachmentRef && (
+                          <PdfReadButton
+                            attachmentRef={item.attachmentRef}
+                            onOpenFile={props.openFile}
+                            label={t('readPdf')}
                             t={t}
+                            variant="link"
                             className={css.actionLink}
                           />
                         )}
-                        {item.selectUrl && (
-                          <ZoteroOpenLink
-                            url={item.selectUrl}
-                            verdict="open"
-                            label={t('openInZotero')}
-                            t={t}
-                            className={css.actionLink}
-                          />
-                        )}
+                        <ZoteroLocateActions
+                          itemRef={item.sourceRef}
+                          t={t}
+                          variant="link"
+                          className={css.actionLink}
+                        />
                       </div>
                     </div>
                     <div className={css.evidenceText}>

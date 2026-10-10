@@ -19,8 +19,10 @@ import type { Context } from '@deepseek-ai/cordis'
 import { TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { LOCAL_PROVIDER_ID } from './constants.js'
 import {
+  ZOTERO_DIAGNOSIS_OK,
   ZOTERO_SETTINGS_NAMESPACE,
   ZOTERO_STATUS_SERVICE_KEY,
+  type ZoteroAttachmentLocationView,
   type ZoteroStatusView,
 } from './contract.js'
 
@@ -41,7 +43,10 @@ export class ZoteroRuntime extends TypertRemoteService {
    * undefined field keys). The endpoint rides unconditionally: a provider that
    * answered dialled something, and the card's live refresh replaces the parsed
    * text with this view, so an endpoint dropped here would make the address
-   * disappear the moment the user clicked Refresh.
+   * disappear the moment the user clicked Refresh. The success sentinel
+   * `ZOTERO_DIAGNOSIS_OK` is stripped the same way: a connected probe has
+   * nothing to diagnose, so the card never renders a diagnosis box for a
+   * healthy service.
    * @returns the connectivity view; the provider converges failures into it.
    */
   async status(): Promise<ZoteroStatusView> {
@@ -62,7 +67,20 @@ export class ZoteroRuntime extends TypertRemoteService {
       ...(status.schemaVersion === undefined ? {} : { schemaVersion: status.schemaVersion }),
       ...(status.zoteroVersion === undefined ? {} : { zoteroVersion: status.zoteroVersion }),
       ...(status.write === undefined ? {} : { write: status.write }),
-      diagnosis: status.diagnosis,
+      ...(status.diagnosis === ZOTERO_DIAGNOSIS_OK ? {} : { diagnosis: status.diagnosis }),
     }
+  }
+
+  /**
+   * Resolve an attachment ref to its local file path or web URL for in-app reading.
+   * @param ref - the item or attachment ref string.
+   * @returns the resolved location view.
+   */
+  async resolveAttachment(ref: string): Promise<ZoteroAttachmentLocationView> {
+    const service = this.ctx.get('zotero')
+    if (service === undefined) {
+      throw new Error('The Zotero service is not composed.')
+    }
+    return await service.resolveAttachment(ref)
   }
 }

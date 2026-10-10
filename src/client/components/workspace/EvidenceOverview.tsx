@@ -18,11 +18,12 @@ import css from './workspace.module.css'
 export interface EvidenceOverviewProps {
   readonly workspace: SourceWorkspace
   readonly onBack: () => void
+  readonly openFile?: (path: string) => void
   readonly t: TranslateNS<'zotero'>
 }
 
 /** The evidence overview: one card per evidence-bearing source. */
-export function EvidenceOverview({ workspace, onBack, t }: EvidenceOverviewProps) {
+export function EvidenceOverview({ workspace, onBack, openFile, t }: EvidenceOverviewProps) {
   const sources = filterSources(workspace.sources, 'evidence')
   return (
     <div className={css.evidencePage}>
@@ -34,7 +35,7 @@ export function EvidenceOverview({ workspace, onBack, t }: EvidenceOverviewProps
       ) : (
         <>
           {sources.map((item) => (
-            <EvidenceCard key={item.key} item={item} t={t} />
+            <EvidenceCard key={item.key} item={item} openFile={openFile} t={t} />
           ))}
         </>
       )}

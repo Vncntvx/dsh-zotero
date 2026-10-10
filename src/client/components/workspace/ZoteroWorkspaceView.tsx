@@ -15,6 +15,8 @@
 import { useMemo, useState } from 'react'
 import clsx from 'clsx'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
+import type { ZoteroAttachmentLocationView } from '../../../contract.ts'
 import type { SourceWorkspace } from '../../sources/model.ts'
 import {
   exportedRefCountOf,
@@ -53,6 +55,8 @@ export interface ZoteroWorkspaceViewProps {
   readonly setDraft?: (text: string) => void
   readonly onRefresh: () => void
   readonly t: TranslateNS<'zotero'>
+  readonly openFile?: (path: string) => void
+  readonly resolveAttachment?: (ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>
 }
 
 /** The selected source's key, or undefined when nothing is selected. */
@@ -118,6 +122,8 @@ export function ZoteroWorkspaceView({
   setDraft,
   onRefresh,
   t,
+  openFile,
+  resolveAttachment,
 }: ZoteroWorkspaceViewProps) {
   const [lens, setLens] = useState<WorkspaceLensId>('sources')
   const [filter, setFilter] = useState<SourceFilter>('all')
@@ -143,6 +149,7 @@ export function ZoteroWorkspaceView({
         <WorkspaceToolbar connection={connection} onRefresh={onRefresh} t={t} />
         <EvidenceOverview
           workspace={workspace}
+          openFile={openFile}
           onBack={() => {
             setEvidenceOpen(false)
           }}
@@ -252,6 +259,8 @@ export function ZoteroWorkspaceView({
             }
             setMobilePane={setMobilePane}
             setDraft={setDraft}
+            openFile={openFile}
+            resolveAttachment={resolveAttachment}
             t={t}
           />
         </div>

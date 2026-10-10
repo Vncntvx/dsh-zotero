@@ -70,7 +70,7 @@ graph LR
 
 - Settings Page (`settings.section`): registers a dedicated Zotero page in the Settings panel left navigation;
 - Session Panel (`conversation.view`): the conversation tab shows one Zotero panel, with a top lens bar switching between the sources workspace and the session-wide exports page. Each source's inspector holds an Overview panel, a Passages panel for retrieved passages, and an Exports panel for that item's exported documents;
-- Tool Cards (`tool.call.toolview`): a compact, collapsible card for each of the 16 model tools (8 read and 8 write), with copy actions on the values worth copying and deep links into Zotero. A card renders output the tool already produced and never calls the tool itself;
+- Tool Cards (`tool.call.toolview`): a compact, collapsible card for each of the 16 model tools (8 read and 8 write), with copy actions on the values worth copying, sidebar PDF reading through the "Read PDF" action, and copy-to-locate actions for titles and canonical deep links. A card renders output the tool already produced and never calls the tool itself;
 - Command Status Card (`conversation.chat.commandview`): renders connectivity status, the version and Server ID details, diagnosis tips, and an in-place refresh button for `/zotero`;
 - `webEnabled` takes effect immediately upon saving.
 

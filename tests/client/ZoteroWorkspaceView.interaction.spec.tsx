@@ -167,6 +167,9 @@ describe('inspector', () => {
     expect(lensTab.getAttribute('role')).toBe('tab')
     expect(lensTab.getAttribute('aria-selected')).toBe('true')
     expectKeySelects(lensBar, 'ArrowRight', () => tabOf(view, 'data-workspace-lens', 'exports'))
+    expectKeySelects(lensBar, 'ArrowLeft', () => tabOf(view, 'data-workspace-lens', 'sources'))
+    expectKeySelects(lensBar, 'End', () => tabOf(view, 'data-workspace-lens', 'exports'))
+    expectKeySelects(lensBar, 'Home', () => tabOf(view, 'data-workspace-lens', 'sources'))
   })
 
   it('resets to the overview panel when the selection changes', () => {
@@ -199,16 +202,19 @@ describe('inspector', () => {
     view.unmount()
   })
 
-  it('keeps blocked open actions inert for a mismatched item', () => {
+  it('keeps the blocked read action inert for a mismatched item', () => {
     const { view } = mountView(mixedFixture())
     // Item index 3 is the mismatch branch of the mixed fixture.
     fireEvent.click(optionAt(view, 3))
     expect(screen.getAllByText(zh.databaseMismatch).length).toBeGreaterThanOrEqual(1)
-    const blocked = view.container.querySelector('button[aria-disabled="true"]')!
-    expect(blocked).toBeDefined()
+    const readBtn = screen.getByRole('button', { name: zh.readPdf })
+    expect(readBtn.getAttribute('aria-disabled')).toBe('true')
     // Clicking a blocked action stays inert: the block is the point.
-    fireEvent.click(blocked)
+    fireEvent.click(readBtn)
     expect(screen.getAllByText(zh.databaseMismatch).length).toBeGreaterThanOrEqual(1)
+    // Clipboard actions stay active: the title is data, not a call.
+    const titleBtn = screen.getByRole('button', { name: zh.copyTitle })
+    expect(titleBtn.getAttribute('aria-disabled')).toBeNull()
     view.unmount()
   })
 })

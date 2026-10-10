@@ -26,7 +26,6 @@ describe('useZoteroProbe', () => {
         providerId: 'local',
         connected: true,
         zoteroVersion: '7.0.11',
-        diagnosis: '',
       },
     }))
 
@@ -46,7 +45,6 @@ describe('useZoteroProbe', () => {
         providerId: 'local',
         connected: true,
         zoteroVersion: '7.0.15',
-        diagnosis: '',
       },
     }))
 
@@ -139,7 +137,7 @@ describe('useZoteroProbe', () => {
     await act(async () => {
       gate.resolve({
         ok: true,
-        value: { providerId: 'local', connected: true, diagnosis: '' },
+        value: { providerId: 'local', connected: true },
       } as RemoteResult<ZoteroStatusView>)
       await p1
       await p2
@@ -154,7 +152,7 @@ describe('useZoteroProbe', () => {
     // across repeated uses rather than latching after the first click.
     const probe = vi.fn(async () => ({
       ok: true as const,
-      value: { providerId: 'local', endpoint: '127.0.0.1:23119', connected: true, diagnosis: '' },
+      value: { providerId: 'local', endpoint: '127.0.0.1:23119', connected: true },
     }))
     const { result } = renderHook(() => useZoteroProbe(probe))
 
@@ -190,7 +188,7 @@ describe('useZoteroProbe', () => {
     await act(async () => {
       gate.resolve({
         ok: true,
-        value: { providerId: 'local', connected: true, diagnosis: '' },
+        value: { providerId: 'local', connected: true },
       } as RemoteResult<ZoteroStatusView>)
     })
 

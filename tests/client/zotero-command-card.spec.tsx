@@ -93,7 +93,6 @@ describe('ZoteroCommandCard', () => {
         providerId: 'local',
         endpoint: '[::1]:23119',
         connected: true,
-        diagnosis: '',
       },
     }))
 
@@ -210,7 +209,7 @@ describe('ZoteroCommandCard', () => {
     const node = makeCommandNode({ name: 'zotero', outcome: { kind: 'success', text: rawText } })
     const probe = vi.fn(async () => ({
       ok: true as const,
-      value: { providerId: 'local', connected: true, diagnosis: '' },
+      value: { providerId: 'local', connected: true },
     }))
 
     const { container } = render(<ZoteroCommandCard node={node} t={mockT} probe={probe} />)

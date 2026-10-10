@@ -11,10 +11,14 @@
  */
 
 import type { RemoteResult, TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
-import { ZOTERO_REMOTE_PACKAGE, type ZoteroStatusView } from '../contract.ts'
+import {
+  ZOTERO_REMOTE_PACKAGE,
+  type ZoteroAttachmentLocationView,
+  type ZoteroStatusView,
+} from '../contract.ts'
 import { ZOTERO_CLIENT_INVOCATIONS } from './status-codec.ts'
 
-export type { ZoteroStatusView } from '../contract.ts'
+export type { ZoteroAttachmentLocationView, ZoteroStatusView } from '../contract.ts'
 
 /** The `zotero` namespace's client contribution. */
 export const ZOTERO_REMOTE: TypertRemoteContribution = {
@@ -30,9 +34,11 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
   /** The `zotero` namespace face mounted under `ctx.remote.zotero`. */
   interface TypertRemoteNamespace$7a6f7465726f {
     status: () => Promise<RemoteResult<ZoteroStatusView>>
+    resolveAttachment: (ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>
   }
   interface TypertRemoteMap {
     'zotero/status': () => Promise<RemoteResult<ZoteroStatusView>>
+    'zotero/resolveAttachment': (ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>
   }
   interface TypertRemoteNamespaceMap {
     zotero: TypertRemoteNamespace$7a6f7465726f

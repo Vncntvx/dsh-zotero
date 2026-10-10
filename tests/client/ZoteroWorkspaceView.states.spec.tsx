@@ -61,7 +61,6 @@ describe('toolbar', () => {
         apiVersion: '3',
         serverId: 'sPMHtLD6HHBd',
         write: { enabled: true, authorized: false },
-        diagnosis: 'ok',
       } as ZoteroStatusView,
       checkedAt: '10:00:00',
     }

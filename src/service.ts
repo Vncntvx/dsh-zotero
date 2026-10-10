@@ -35,6 +35,8 @@ import { ConnectivityRecovery } from './ask.js'
 import { ZoteroHttpClient } from './http-client.js'
 import { registerStatusCommand } from './command.js'
 import { ZoteroRuntime } from './remote.js'
+import { parseRef } from './refs.js'
+import type { ZoteroAttachmentLocationView } from './contract.js'
 import { TYPERT_MANIFEST } from './typert.js'
 import { WriteAuthorizer } from './write-auth.js'
 import { ZoteroWriteHttpClient } from './write-http.js'
@@ -495,6 +497,27 @@ export class ZoteroService extends Service {
     this.requireCapability(provider, 'attachments')
     const getAttachmentLocation = this.requireMethod(provider, 'getAttachmentLocation')
     return await getAttachmentLocation(ref, signal)
+  }
+
+  /**
+   * Resolve an attachment ref string for the Typert Remote caller.
+   * @param ref - the item or attachment ref string to resolve.
+   * @param signal - caller cancellation; forwarded to the provider.
+   * @returns the resolved location view with local file path or web URL.
+   */
+  async resolveAttachment(
+    ref: string,
+    signal?: AbortSignal,
+  ): Promise<ZoteroAttachmentLocationView> {
+    const parsedRef = parseRef(ref)
+    const loc = await this.attachment(parsedRef, signal)
+    return {
+      ref: loc.ref,
+      kind: loc.kind,
+      title: loc.title,
+      contentType: loc.contentType,
+      ...(loc.kind === 'file' ? { path: loc.path } : { url: loc.url }),
+    }
   }
 
   /**

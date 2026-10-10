@@ -11,7 +11,7 @@
  * @module dsh-zotero/client/sources/source-capabilities
  */
 
-import { pdfUrlOf } from '../actions/open-zotero.ts'
+import { parseRefIdentity } from '../actions/open-zotero.ts'
 import type { SourceItem } from './model.ts'
 
 /** The content type that makes an attachment a PDF for the open action. */
@@ -21,10 +21,10 @@ const PDF_CONTENT_TYPE = 'application/pdf'
 export type PdfCapability =
   | {
       readonly kind: 'file'
-      /** The attachment ref the open-pdf deep link drives. */
+      /** The attachment ref to resolve into a local file path. */
       readonly ref: string
-      /** The `zotero://open-pdf` deep link. */
-      readonly url: string
+      /** The local filesystem path when already resolved. */
+      readonly filePath?: string
     }
   | {
       readonly kind: 'url'
@@ -38,6 +38,7 @@ interface AttachmentCandidate {
   readonly contentType?: string
   /** The resolved attachment's kind; absent for hints Zotero reported without a resolution. */
   readonly kind?: 'file' | 'url'
+  readonly filePath?: string
 }
 
 /** Whether a resolved web location is a plain HTTP(S) target the browser can open. */
@@ -55,8 +56,7 @@ function isHttpUrl(value: string): boolean {
  * is the only PDF fact its web location answers the action instead. A ref
  * whose type is unknown never yields a capability: an older session's
  * untyped hint is not promised to be a PDF. The final gate for file targets
- * is deep-link buildability, so a ref `pdfUrlOf` cannot parse is no
- * capability at all.
+ * is ref identity parseability, so an unparseable ref is no capability at all.
  * @param item - the source to probe.
  * @returns the capability, or null.
  */
@@ -67,6 +67,10 @@ export function pdfCapabilityOf(item: SourceItem): PdfCapability | null {
       ref: item.attachment.ref,
       contentType: item.attachment.contentType,
       kind: item.attachment.kind,
+      filePath:
+        item.attachment.kind === 'file' && item.attachment.location.length > 0
+          ? item.attachment.location
+          : undefined,
     })
   }
   if (item.bestAttachment !== undefined) {
@@ -81,8 +85,12 @@ export function pdfCapabilityOf(item: SourceItem): PdfCapability | null {
   for (const candidate of candidates) {
     if (candidate.ref === undefined || candidate.contentType !== PDF_CONTENT_TYPE) continue
     if (candidate.kind === 'url') continue
-    const url = pdfUrlOf(candidate.ref)
-    if (url !== null) return { ref: candidate.ref, url, kind: 'file' }
+    if (parseRefIdentity(candidate.ref) === null) continue
+    return {
+      kind: 'file',
+      ref: candidate.ref,
+      ...(candidate.filePath !== undefined ? { filePath: candidate.filePath } : {}),
+    }
   }
   // A resolved web PDF with no file candidate opens at its own location.
   const web = item.attachment

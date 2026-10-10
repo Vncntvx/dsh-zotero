@@ -73,8 +73,8 @@ export type ZoteroLocaleKey =
   | 'activationDone'
   | 'activationCheckAgain'
   | 'tipsLabel'
-  | 'tipNoKey'
-  | 'tipFulltext'
+  | 'tipWebTab'
+  | 'tipWriteGate'
   | 'tipSettingsNav'
   | 'lensSources'
   | 'lensExports'
@@ -171,11 +171,15 @@ export type ZoteroLocaleKey =
   | 'formatUnknown'
   | 'exportRefCount'
   | 'exportRefsOmitted'
-  | 'openInZotero'
-  | 'openPdf'
-  | 'openAnnotation'
+  | 'readPdf'
+  | 'readPdfInSidebar'
+  | 'copyTitle'
+  | 'copyTitleTooltip'
+  | 'copyZoteroLink'
+  | 'copyZoteroLinkTooltip'
+  | 'pdfResolving'
+  | 'pdfFileNotFound'
   | 'instanceUnverified'
-  | 'openUnverifiedNote'
   | 'availabilityEntry'
   | 'starterFind'
   | 'starterFindTemplate'
@@ -447,9 +451,12 @@ export const en: Record<ZoteroLocaleKey, string> = {
   activationDone: 'Done',
   activationCheckAgain: 'Check Again',
   tipsLabel: 'Quick tips',
-  tipNoKey: 'No API key needed: it talks to the Zotero app on this computer.',
-  tipFulltext: 'Full-text search: index PDFs in Zotero so the agent can quote real passages.',
-  tipSettingsNav: 'Fine-tune connection, limits, and citation style in Settings → Zotero.',
+  tipWebTab:
+    'Turn on "Show literature tab" and the Zotero tab appears at the top of conversations, with literature, passages, and exports.',
+  tipWriteGate:
+    'To let the agent write notes, tags, collections, or items, turn on "Allow writes" and approve the Zotero popup.',
+  tipSettingsNav:
+    'Connection, result caps, and citation style are fully configurable in Settings → Zotero.',
   lensSources: 'Literature',
   lensExports: 'Exports',
   lensBarLabel: 'Literature views',
@@ -549,11 +556,15 @@ export const en: Record<ZoteroLocaleKey, string> = {
   formatUnknown: 'Export',
   exportRefCount: '{count} refs',
   exportRefsOmitted: '{count} more not listed',
-  openInZotero: 'Open in Zotero',
-  openPdf: 'Open PDF',
-  openAnnotation: 'Open annotation',
+  readPdf: 'Read PDF',
+  readPdfInSidebar: 'Read in sidebar',
+  copyTitle: 'Copy title',
+  copyTitleTooltip: 'Paste into Zotero Quick Search (Cmd/Ctrl+F) to find the item',
+  copyZoteroLink: 'Copy link',
+  copyZoteroLinkTooltip: 'Canonical Zotero deep link, for notes or the address bar',
+  pdfResolving: 'Resolving attachment…',
+  pdfFileNotFound: 'Local PDF file not found',
   instanceUnverified: 'cannot verify the current Zotero instance',
-  openUnverifiedNote: ' ({detail})',
   availabilityEntry: '{source}: {detail}',
   starterFind: 'Find literature…',
   starterFindTemplate: 'Search my Zotero library for literature on: ',
@@ -808,9 +819,9 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   activationDone: '完成',
   activationCheckAgain: '重新检测',
   tipsLabel: '使用小贴士',
-  tipNoKey: '免配 API Key：直接与本机 Zotero 通信，数据不经过云端。',
-  tipFulltext: '全文检索：在 Zotero 中为 PDF 建立索引后，智能体可引用原文片段。',
-  tipSettingsNav: '连接、限制与引文格式可在 [设置 -> Zotero] 中调整。',
+  tipWebTab: '打开「显示文献标签」后，会话顶部出现 Zotero 标签页，文献、相关片段与导出都在其中。',
+  tipWriteGate: '智能体要写笔记、标签、合集或条目，需打开「允许写入」并在 Zotero 弹窗中授权。',
+  tipSettingsNav: '连接、结果上限与引文格式的完整设置在 [设置 -> Zotero]。',
   lensSources: '文献',
   lensExports: '导出',
   lensBarLabel: '文献视图',
@@ -907,11 +918,15 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   formatUnknown: '导出',
   exportRefCount: '{count} 条文献',
   exportRefsOmitted: '另有 {count} 条未列出',
-  openInZotero: '在 Zotero 中打开',
-  openPdf: '打开 PDF',
-  openAnnotation: '打开批注',
+  readPdf: '阅读 PDF',
+  readPdfInSidebar: '在侧边栏阅读',
+  copyTitle: '复制标题',
+  copyTitleTooltip: '粘贴到 Zotero 快捷搜索（Cmd/Ctrl+F）即可定位条目',
+  copyZoteroLink: '复制链接',
+  copyZoteroLinkTooltip: '规范 Zotero 深链，可粘贴到外部笔记或地址栏',
+  pdfResolving: '正在定位附件…',
+  pdfFileNotFound: '未找到本地 PDF 文件',
   instanceUnverified: '无法验证当前 Zotero 实例',
-  openUnverifiedNote: '（{detail}）',
   availabilityEntry: '{source}：{detail}',
   starterFind: '找文献…',
   starterFindTemplate: '帮我在 Zotero 文献库里检索这个主题的文献：',

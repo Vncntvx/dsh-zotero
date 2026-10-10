@@ -17,7 +17,7 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ToolArgs } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { ZoteroOpenLink } from '../components/open/ZoteroOpenLink.tsx'
+import { CopyButton } from '../components/CopyButton.tsx'
 import { selectUrlOf } from '../actions/open-zotero.ts'
 import { writeMetaOf, type WriteMetaView } from '../sources/decoders.ts'
 import {
@@ -406,14 +406,14 @@ export function WriteToolView(props: WriteToolViewProps) {
               <span className={css.receiptTitle}>{summary}</span>
             </div>
 
-            {parentSelectUrl && parentRef && (
+            {parentRef && (
               <div className={css.itemActions}>
                 <span className={css.itemMeta}>{t('toolParentItem')}:</span>
-                <ZoteroOpenLink
-                  url={parentSelectUrl}
-                  verdict="open"
+                <CopyButton
+                  value={parentSelectUrl ?? parentRef}
                   label={parentRef}
-                  t={t}
+                  copiedLabel={t('copied')}
+                  title={t('copyZoteroLinkTooltip')}
                   className={css.actionLink}
                 />
               </div>

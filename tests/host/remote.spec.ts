@@ -45,8 +45,11 @@ describe('the zotero status endpoint', () => {
       apiVersion: '3',
       schemaVersion: '37',
       serverId: 'S1',
-      diagnosis: 'ok',
     })
+    // A connected probe has nothing to diagnose: the `ZOTERO_DIAGNOSIS_OK`
+    // sentinel the host status carries is stripped at the wire, so the card
+    // never renders a diagnosis box for a healthy service.
+    expect(status.diagnosis).toBeUndefined()
     // A provider that wires no write capability reports no write block; the
     // Remote must not invent one.
     expect(status.write).toBeUndefined()
@@ -74,7 +77,6 @@ describe('the zotero status endpoint', () => {
       providerId: 'local',
       connected: true,
       serverId: 'S-write',
-      diagnosis: 'ok',
       // The capability is wired; no grant is stored yet.
       write: { enabled: true, authorized: false },
     })
@@ -111,7 +113,10 @@ describe('the zotero typert manifest', () => {
   it('declares the status endpoint under the zotero namespace', () => {
     expect(TYPERT_MANIFEST.package).toBe('dsh-zotero')
     expect(TYPERT_MANIFEST.face).toBe('host')
-    expect(TYPERT_MANIFEST.invocations.map((invocation) => invocation.method)).toEqual(['status'])
+    expect(TYPERT_MANIFEST.invocations.map((invocation) => invocation.method)).toEqual([
+      'status',
+      'resolveAttachment',
+    ])
     for (const invocation of TYPERT_MANIFEST.invocations) {
       expect(invocation.namespace).toBe('zotero')
       expect(invocation.service).toBe('zoteroRemote')
@@ -131,13 +136,18 @@ describe('the zotero typert manifest', () => {
       { create: () => { parse: (value: unknown) => unknown } } | undefined
     expect(result).toBeDefined()
     const schema = result!.create()
-    const valid = schema.parse({
+    // `diagnosis` is optional on the wire: a connected view carries none, and
+    // absence must parse rather than fall over the strict object.
+    const valid = schema.parse({ providerId: 'local', connected: true })
+    expect(valid).toEqual({ providerId: 'local', connected: true })
+    // A failure view keeps its code-bearing string.
+    const failed = schema.parse({
       providerId: 'local',
-      connected: true,
-      diagnosis: 'ok',
+      connected: false,
+      diagnosis: 'ZOTERO_NOT_RUNNING: down',
     })
-    expect(valid).toMatchObject({ providerId: 'local', connected: true, diagnosis: 'ok' })
-    expect(() => schema.parse({ providerId: 'local', connected: 'yes', diagnosis: 'ok' })).toThrow()
+    expect(failed).toMatchObject({ diagnosis: 'ZOTERO_NOT_RUNNING: down' })
+    expect(() => schema.parse({ providerId: 'local', connected: 'yes' })).toThrow()
   })
 
   it('carries no live schema beside create', () => {
@@ -184,6 +194,42 @@ describe('the zotero typert manifest', () => {
     expect(() => result!.create!()).toThrow(HOST_OWNED_CODEC_MESSAGE)
   })
 
+  it('materializes and validates the host resolveAttachment codecs', () => {
+    const resolve = TYPERT_MANIFEST.invocations.find((inv) => inv.method === 'resolveAttachment')
+    expect(resolve).toBeDefined()
+    const paramResult = resolve!.parameters[0]?.codec as {
+      create: () => { parse: (v: unknown) => unknown }
+    }
+    const resultResult = resolve!.result as { create: () => { parse: (v: unknown) => unknown } }
+    const paramSchema = paramResult.create()
+    expect(paramSchema.parse('zotero://user/0/items/ABCD1234')).toBe(
+      'zotero://user/0/items/ABCD1234',
+    )
+    expect(() => paramSchema.parse('')).toThrow()
+
+    const resSchema = resultResult.create()
+    const valid = resSchema.parse({
+      ref: 'zotero://user/0/items/ABCD1234',
+      kind: 'file',
+      title: 'test.pdf',
+      contentType: 'application/pdf',
+      path: '/path/to/test.pdf',
+    })
+    expect(valid).toMatchObject({ kind: 'file', path: '/path/to/test.pdf' })
+    expect(() => resSchema.parse({ ref: 'a', kind: 'other' })).toThrow()
+  })
+
+  it('refuses browser-side materialization of the host-owned resolveAttachment codecs', async () => {
+    const { ZOTERO_REMOTE } = await import('../../src/client/remote.ts')
+    const { HOST_OWNED_CODEC_MESSAGE } = await import('../../src/client/status-codec.ts')
+    const resolve = ZOTERO_REMOTE.descriptors.find((inv) => inv.method === 'resolveAttachment')
+    expect(resolve).toBeDefined()
+    const paramCodec = resolve!.parameters[0]?.codec as { create?: () => unknown }
+    const resultCodec = resolve!.result as { create?: () => unknown }
+    expect(() => paramCodec.create!()).toThrow(HOST_OWNED_CODEC_MESSAGE)
+    expect(() => resultCodec.create!()).toThrow(HOST_OWNED_CODEC_MESSAGE)
+  })
+
   it('claims the wire endpoint through the typert registry when one composes', async () => {
     lane = await setupHostLane({ baseUrl: 'http://127.0.0.1:23119/api' }, { typert: true })
     for (const invocation of TYPERT_MANIFEST.invocations) {
@@ -195,5 +241,59 @@ describe('the zotero typert manifest', () => {
     }
     const record = lane.ctx.typert.getPackage('dsh-zotero')
     expect(record?.model.services[0]?.key).toBe(ZOTERO_STATUS_SERVICE_KEY)
+  })
+})
+
+describe('the zotero resolveAttachment endpoint', () => {
+  it('throws an error when the zotero service is not composed', async () => {
+    const context = new Context()
+    await context.plugin(TypertRegistry)
+    new ZoteroRuntime(context)
+    await expect(
+      context.get('zoteroRemote')!.resolveAttachment('zotero://user/0/items/ITEMKEY1'),
+    ).rejects.toThrow('The Zotero service is not composed.')
+    await context.fiber.dispose()
+  })
+
+  it('delegates to the zotero service for file and url attachments', async () => {
+    lane = await setupHostLane(undefined, { typert: true })
+    const zotero = lane.ctx.get('zotero')!
+    const origAttachment = zotero.attachment.bind(zotero)
+    try {
+      zotero.attachment = async () => ({
+        ref: 'zotero://user/0/item/ITEMKEY1',
+        kind: 'file',
+        title: 'paper.pdf',
+        contentType: 'application/pdf',
+        path: '/storage/paper.pdf',
+      })
+      const runtime = lane.ctx.get('zoteroRemote') as ZoteroRuntime
+      const fileRes = await runtime.resolveAttachment('zotero://user/0/item/ITEMKEY1')
+      expect(fileRes).toEqual({
+        ref: 'zotero://user/0/item/ITEMKEY1',
+        kind: 'file',
+        title: 'paper.pdf',
+        contentType: 'application/pdf',
+        path: '/storage/paper.pdf',
+      })
+
+      zotero.attachment = async () => ({
+        ref: 'zotero://user/0/item/ITEMKEY1',
+        kind: 'url',
+        title: 'web.pdf',
+        contentType: 'application/pdf',
+        url: 'https://arxiv.org/abs/1234',
+      })
+      const urlRes = await runtime.resolveAttachment('zotero://user/0/item/ITEMKEY1')
+      expect(urlRes).toEqual({
+        ref: 'zotero://user/0/item/ITEMKEY1',
+        kind: 'url',
+        title: 'web.pdf',
+        contentType: 'application/pdf',
+        url: 'https://arxiv.org/abs/1234',
+      })
+    } finally {
+      zotero.attachment = origAttachment
+    }
   })
 })

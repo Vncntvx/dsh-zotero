@@ -247,16 +247,11 @@ describe('RetrieveToolView', () => {
     expect(screen.getByText(zh.sourceFulltext)).toBeTruthy()
     expect(screen.getByText('5')).toBeTruthy()
 
-    const links = container.querySelectorAll('a')
-    const pdfLink = Array.from(links).find((a) =>
-      a.getAttribute('href')?.startsWith('zotero://open-pdf/'),
-    )
-    const selectLink = Array.from(links).find((a) =>
-      a.getAttribute('href')?.startsWith('zotero://select/'),
-    )
-
-    expect(pdfLink?.getAttribute('href')).toBe('zotero://open-pdf/library/items/WXYZ6789?page=5')
-    expect(selectLink?.getAttribute('href')).toBe('zotero://select/library/items/ABCD1234')
+    expect(container.querySelectorAll('a[href^="zotero://"]')).toHaveLength(0)
+    expect(
+      screen.getAllByRole('button', { name: new RegExp(zh.readPdf) }).length,
+    ).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText(zh.copyZoteroLink).length).toBeGreaterThanOrEqual(1)
   })
 
   it('renders truncated preview indicator when passage was truncated', () => {

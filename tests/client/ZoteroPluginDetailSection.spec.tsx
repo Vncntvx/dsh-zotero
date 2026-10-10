@@ -56,7 +56,7 @@ describe('ZoteroPluginDetailSection', () => {
   it('returns null when subject is for another package or item kind', () => {
     const probe = vi.fn(async (): Promise<RemoteResult<ZoteroStatusView>> => ({
       ok: true as const,
-      value: { providerId: 'local', connected: true, diagnosis: 'ok' },
+      value: { providerId: 'local', connected: true },
     }))
 
     const { container: c1 } = render(
@@ -75,7 +75,7 @@ describe('ZoteroPluginDetailSection', () => {
   it('renders section when subject is a row belonging to dsh-zotero', () => {
     const probe = vi.fn(async (): Promise<RemoteResult<ZoteroStatusView>> => ({
       ok: true as const,
-      value: { providerId: 'local', connected: true, diagnosis: 'ok' },
+      value: { providerId: 'local', connected: true },
     }))
 
     const { container } = render(
@@ -87,26 +87,24 @@ describe('ZoteroPluginDetailSection', () => {
   it('renders connected status and version when probe succeeds and connected is true', async () => {
     const probe = vi.fn(async (): Promise<RemoteResult<ZoteroStatusView>> => ({
       ok: true,
-      value: {
-        providerId: 'local',
-        connected: true,
-        zoteroVersion: '7.0.5',
-        diagnosis: 'Zotero is running and responsive',
-      },
+      // The wire never carries a diagnosis on a connected probe: the success
+      // sentinel is stripped at the wire producer, so no diagnosis box renders.
+      value: { providerId: 'local', connected: true, zoteroVersion: '7.0.5' },
     }))
 
     render(<ZoteroPluginDetailSection subject={targetSubject} t={t} probe={probe} />)
 
     expect(screen.getByText(t('detailSectionTitle'))).toBeDefined()
     expect(screen.getByText(t('tipsLabel'))).toBeDefined()
-    expect(screen.getByText(t('tipNoKey'))).toBeDefined()
-    expect(screen.getByText(t('tipFulltext'))).toBeDefined()
+    expect(screen.getByText(t('tipWebTab'))).toBeDefined()
     expect(screen.getByText(t('tipSettingsNav'))).toBeDefined()
+    expect(screen.getByText(t('tipWriteGate'))).toBeDefined()
 
     await waitFor(() => {
       expect(screen.getByText(`● ${t('statusConnectedNote')}`)).toBeDefined()
     })
     expect(screen.getByText(`${t('zoteroVersionLabel')}: 7.0.5`)).toBeDefined()
+    expect(screen.queryByText(`${t('diagnosisLabel')}:`)).toBeNull()
   })
 
   it('renders disconnected status and diagnosis when connected is false', async () => {
@@ -188,7 +186,7 @@ describe('ZoteroPluginDetailSection', () => {
       }
       return {
         ok: true,
-        value: { providerId: 'local', connected: true, zoteroVersion: '7.1.0', diagnosis: 'ok' },
+        value: { providerId: 'local', connected: true, zoteroVersion: '7.1.0' },
       }
     })
 

@@ -6,7 +6,7 @@ dsh-zotero registers 16 tools (8 read tools and 8 write tools) that interact wit
 
 ### Interactive Presentation (Toolviews)
 
-In the DSH Web conversation stream, all 16 tools have structured, read-only cards (`tool.call.toolview`). During execution, the interface renders lifecycle status indicators (preparing, running, success, stopped, error, declined, outcome unreported), collapsible structured views, quick copy actions, and deep links to open items or PDFs in local Zotero.
+In the DSH conversation stream, all 16 tools have structured, read-only cards (`tool.call.toolview`). During execution, the interface renders lifecycle status indicators (preparing, running, success, stopped, error, declined, outcome unreported), collapsible structured views, a "Read PDF" action that opens the PDF in the sidebar reader, and copy actions for titles and deep links.
 
 ---
 

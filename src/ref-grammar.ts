@@ -34,6 +34,10 @@ export const ZOTERO_GROUP_ITEM_PATH_PATTERN = new RegExp(
 
 const LIBRARY = '(?<libraryType>user|group)/(?<libraryId>\\d+)'
 const KINDS = '(?<kind>item|attachment|annotation|collection|search)'
+
+/** The five object kinds the canonical Zotero ref grammar admits. */
+export type RefKind = 'item' | 'attachment' | 'annotation' | 'collection' | 'search'
+
 const SERVER_QUALIFIER = '\\?server=(?<serverId>[A-Za-z0-9_-]{1,64})'
 
 /** Full ref grammar, anchored: the whole string must be exactly one ref. */

@@ -44,6 +44,8 @@ import { ZoteroSettingsSection } from './ZoteroSettingsSection.tsx'
 import { SourcesTab, type SourcesTabFace } from './components/SourcesTab.tsx'
 import { ZOTERO_REMOTE } from './remote.ts'
 
+import { fileAddressFor } from '@deepseek-ai/dsh-util-workspace-path'
+import { getAttachmentResolver, setAttachmentResolver } from './actions/attachment-resolver.ts'
 import { ZoteroCardController } from './zotero-card-controller.ts'
 import { zoteroQuickConfigFace, type ZoteroProbeFace } from './components/plugin/faces.ts'
 import { ZOTERO_REMOTE_PACKAGE, type ZoteroStatusView } from '../contract.ts'
@@ -86,6 +88,15 @@ export const inject = ['locale', 'slots', 'remote', 'configForms', 'uiConversati
  */
 function registerUi(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-zotero: page dictionaries')
+  ctx.effect(() => {
+    const resolver = (ref: string) => ctx.remote.zotero.resolveAttachment(ref)
+    setAttachmentResolver(resolver)
+    return () => {
+      if (getAttachmentResolver() === resolver) {
+        setAttachmentResolver(undefined)
+      }
+    }
+  }, 'dsh-zotero: attachment resolver')
   // Dedicated Chat cards for all 16 Zotero tools in the tool.call.toolview slot
   registerZoteroToolviews(ctx)
   // `/zotero` command-input projection: a non-command Chat node is the
@@ -234,7 +245,25 @@ function registerUi(ctx: ClientContext): void {
             label: () => tabT('nav'),
             // Read through the mutable binding, so a probe that arrives after
             // the tab was mounted is the one the strip actually calls.
-            inject: (): SourcesTabFace => ({ status: () => probe() }),
+            inject: (): SourcesTabFace => ({
+              status: () => probe(),
+              resolveAttachment: (ref: string) => ctx.remote.zotero.resolveAttachment(ref),
+              openFile: (path: string, sessionId?: string) => {
+                const sidebar = ctx.get('sidebarRight') as
+                  { openResource: (url: string) => void } | undefined
+                if (!sidebar) return
+                const sessions = ctx.get('sessions') as
+                  | {
+                      currentId?: { getSnapshot: () => string | undefined }
+                      list?: { getSnapshot: () => { byId: Record<string, { cwd?: string }> } }
+                    }
+                  | undefined
+                const sid = sessionId ?? sessions?.currentId?.getSnapshot?.()
+                const cwd = sid ? sessions?.list?.getSnapshot?.().byId[sid]?.cwd : undefined
+                const url = fileAddressFor(sid ?? '', cwd, path)
+                sidebar.openResource(url)
+              },
+            }),
           },
           SourcesTab,
         ),

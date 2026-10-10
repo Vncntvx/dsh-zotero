@@ -38,7 +38,10 @@ export function connectionDiagnosisOf(
   if (connection.kind === 'remote-error') return diagnosisLine(connection.message, t)
   if (connection.kind === 'unavailable') {
     const diagnosis = connection.data.diagnosis
-    return diagnosis === '' ? t('diagnosisUnknown') : diagnosisLine(diagnosis, t)
+    // Absent (a view shape the wire never sends on a healthy probe) and empty
+    // both mean "nothing explainable": the localized unknown keeps the line
+    // total instead of rendering a bare fallback.
+    return diagnosis ? diagnosisLine(diagnosis, t) : t('diagnosisUnknown')
   }
   return ''
 }

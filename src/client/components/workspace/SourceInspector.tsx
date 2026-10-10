@@ -14,6 +14,8 @@
 import { useMemo, useState } from 'react'
 import clsx from 'clsx'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
+import type { ZoteroAttachmentLocationView } from '../../../contract.ts'
 import type { SourceItem, SourceWorkspace } from '../../sources/model.ts'
 import type { MobilePane } from './ZoteroWorkspaceView.tsx'
 import { SourceOverview } from './SourceOverview.tsx'
@@ -49,6 +51,8 @@ export interface SourceInspectorProps {
   readonly setMobilePane: (pane: MobilePane) => void
   readonly setDraft?: (text: string) => void
   readonly t: TranslateNS<'zotero'>
+  readonly openFile?: (path: string) => void
+  readonly resolveAttachment?: (ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>
 }
 
 /** The inspector: panel tabs plus the selected source's active panel. */
@@ -59,6 +63,8 @@ export function SourceInspector({
   setMobilePane,
   setDraft,
   t,
+  openFile,
+  resolveAttachment,
 }: SourceInspectorProps) {
   const [panel, setPanel] = useState<InspectorPanelId>('overview')
   const selected = useMemo(
@@ -150,7 +156,13 @@ export function SourceInspector({
       </div>
       <div className={css.inspectorBody}>
         {panel === 'overview' ? (
-          <SourceOverview item={selected} t={t} setDraft={setDraft} />
+          <SourceOverview
+            item={selected}
+            t={t}
+            setDraft={setDraft}
+            openFile={openFile}
+            resolveAttachment={resolveAttachment}
+          />
         ) : panel === 'evidence' ? (
           <SourceEvidence item={selected} t={t} />
         ) : (

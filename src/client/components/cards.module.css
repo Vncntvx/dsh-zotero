@@ -94,6 +94,19 @@
   color: var(--dsw-alias-label-primary);
 }
 
+.badge {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: var(--dsw-radius-xs);
+  font-size: 10px;
+  line-height: 12px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-bg-layer-2);
+}
+
 /* Text-link language (mirrors the harness clickable-link spec:
  * `ui-primitives/src/markdown/MarkdownText.module.css` anchor + `.linkIcon`,
  * `ui-primitives/src/WebBlock.module.css` source/fetch links, and

@@ -8,8 +8,7 @@ import { useMemo } from 'react'
 import { IconCopyOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { exportMetaOf, jobArmOf, jobSummaryKeyOf } from '../sources/decoders.ts'
-import { selectUrlOf } from '../actions/open-zotero.ts'
-import { ZoteroOpenLink } from '../components/open/ZoteroOpenLink.tsx'
+import { ZoteroLocateActions } from '../components/open/ZoteroLocateActions.tsx'
 import { CopyButton } from '../components/CopyButton.tsx'
 import { extensionOf, fileNameForFormat, formatLabelOf, mimeOf } from '../components/ExportCard.tsx'
 import { downloadBlob } from '../download.ts'
@@ -69,11 +68,6 @@ export function ExportToolView(props: ExportToolViewProps) {
           : t(jobSummaryKeyOf(job), { jobId: job.jobId })
     }
 
-    const mappedItems = (exportView?.items ?? []).map((item) => ({
-      ...item,
-      selectUrl: selectUrlOf(item.ref),
-    }))
-
     return {
       icon: <IconCopyOutlineRegular size={14} />,
       // The translator id, not its display label: the download's extension and
@@ -88,7 +82,7 @@ export function ExportToolView(props: ExportToolViewProps) {
       locale: exportView?.locale ?? null,
       summary: sum,
       errorSummary: errSummary,
-      items: mappedItems,
+      items: exportView?.items ?? [],
       // A job arm's text is only an acknowledgement, never an export
       // artifact. Keep it out of the code/download surface until job_output
       // supplies the completed translator text.
@@ -169,15 +163,13 @@ export function ExportToolView(props: ExportToolViewProps) {
                   {items.map((item) => (
                     <div key={item.ref} className={css.itemHeader}>
                       <span className={css.itemTitle}>{item.title || item.ref}</span>
-                      {item.selectUrl && (
-                        <ZoteroOpenLink
-                          url={item.selectUrl}
-                          verdict="open"
-                          label={t('openInZotero')}
-                          t={t}
-                          className={css.actionLink}
-                        />
-                      )}
+                      <ZoteroLocateActions
+                        title={item.title}
+                        itemRef={item.ref}
+                        t={t}
+                        variant="link"
+                        className={css.actionLink}
+                      />
                     </div>
                   ))}
                 </div>

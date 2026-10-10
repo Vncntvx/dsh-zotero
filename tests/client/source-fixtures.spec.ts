@@ -56,7 +56,7 @@ describe('source fixtures', () => {
     expect(item.retrievalFacts?.sourceAvailability.PDF?.unavailable).toBe(true)
   })
 
-  it('mismatch: the open action is blocked but the item still has a PDF', () => {
+  it('mismatch: the PDF read is blocked but the item still has a PDF', () => {
     const workspace = mismatchFixture()
     const item = workspace.sources[0]!
     expect(item.evidenceMatch).toBe('mismatch')

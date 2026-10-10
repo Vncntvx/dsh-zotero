@@ -8,8 +8,8 @@ import { useMemo } from 'react'
 import { IconSearchOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { searchMetaOf } from '../sources/decoders.ts'
-import { selectUrlOf, pdfUrlOf } from '../actions/open-zotero.ts'
-import { ZoteroOpenLink } from '../components/open/ZoteroOpenLink.tsx'
+import { PdfReadButton } from '../components/open/PdfReadButton.tsx'
+import { ZoteroLocateActions } from '../components/open/ZoteroLocateActions.tsx'
 import {
   argsViewOf,
   errorSummaryOf,
@@ -55,18 +55,12 @@ export function SearchToolView(props: SearchToolViewProps) {
 
       const errSummary = errorSummaryOf(block, raw)
 
-      const items = (searchView?.rows ?? []).map((row) => ({
-        ...row,
-        selectUrl: selectUrlOf(row.ref),
-        pdfUrl: row.bestAttachmentRef ? pdfUrlOf(row.bestAttachmentRef) : null,
-      }))
-
       return {
         icon: <IconSearchOutlineRegular size={14} />,
         query: q,
         summary: sum,
         errorSummary: errSummary,
-        rows: items,
+        rows: searchView?.rows ?? [],
         omitted: searchView?.omitted ?? 0,
         detailOmitted: searchView?.detailOmitted === true,
         rawText: raw,
@@ -117,24 +111,23 @@ export function SearchToolView(props: SearchToolViewProps) {
                         <div className={css.itemMeta}>{row.creatorSummary}</div>
                       )}
                       <div className={css.itemActions}>
-                        {row.selectUrl && (
-                          <ZoteroOpenLink
-                            url={row.selectUrl}
-                            verdict="open"
-                            label={t('openInZotero')}
+                        {row.bestAttachmentRef && (
+                          <PdfReadButton
+                            attachmentRef={row.bestAttachmentRef}
+                            onOpenFile={props.openFile}
+                            label={t('readPdf')}
                             t={t}
+                            variant="link"
                             className={css.actionLink}
                           />
                         )}
-                        {row.pdfUrl && (
-                          <ZoteroOpenLink
-                            url={row.pdfUrl}
-                            verdict="open"
-                            label={t('openPdf')}
-                            t={t}
-                            className={css.actionLink}
-                          />
-                        )}
+                        <ZoteroLocateActions
+                          title={row.title}
+                          itemRef={row.ref}
+                          t={t}
+                          variant="link"
+                          className={css.actionLink}
+                        />
                       </div>
                     </div>
                   ))}

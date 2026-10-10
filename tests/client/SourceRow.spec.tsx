@@ -9,7 +9,8 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { zh } from '../../src/client/locales.ts'
 import { CopyButton } from '../../src/client/components/CopyButton.tsx'
-import { ZoteroOpenButton } from '../../src/client/components/open/ZoteroOpenButton.tsx'
+import { PdfReadButton } from '../../src/client/components/open/PdfReadButton.tsx'
+import { ZoteroLocateActions } from '../../src/client/components/open/ZoteroLocateActions.tsx'
 import { badgesOf } from '../../src/client/components/workspace/SourceListItem.tsx'
 import { artifactOf, passageOf, sourceOf } from './helpers/source-fixtures.ts'
 
@@ -177,39 +178,91 @@ describe('CopyButton', () => {
   })
 })
 
-describe('ZoteroOpenButton', () => {
-  it('renders a bare action with the shared geometry when no class is given', () => {
-    render(
-      <ZoteroOpenButton
-        url="zotero://select/library/items/ABCDEFGH"
-        verdict="open"
-        label={zh.openInZotero}
-        t={t}
-      />,
+describe('PdfReadButton', () => {
+  it('renders a button and opens the local file path on click without any anchor tag', () => {
+    const onOpenFile = vi.fn()
+    const { container } = render(
+      <PdfReadButton filePath="/path/to/local/paper.pdf" onOpenFile={onOpenFile} t={t} />,
     )
-    const anchor = screen.getByText(zh.openInZotero)
-    expect(anchor.getAttribute('href')).toBe('zotero://select/library/items/ABCDEFGH')
-    // Protocol links hand to the OS handler in place per the harness
-    // `renderSafeLink` contract: no blank tab, no external rel.
-    expect(anchor.getAttribute('target')).toBeNull()
-    expect(anchor.getAttribute('rel')).toBeNull()
-    expect(anchor.getAttribute('title')).toBeNull()
-    // Leading destination glyph per the clickable-link spec.
-    const link = anchor.closest('a') ?? anchor
-    expect(link.querySelector('[data-icon="link"]')).not.toBeNull()
+    expect(container.querySelector('a')).toBeNull()
+    const button = screen.getByRole('button', { name: new RegExp(zh.readPdf) })
+    expect(button).toBeDefined()
+    fireEvent.click(button)
+    expect(onOpenFile).toHaveBeenCalledWith('/path/to/local/paper.pdf')
   })
 
-  it('opens http targets in a new tab with the safe rel', () => {
+  it('resolves the attachment on demand when filePath is not yet known', async () => {
+    const onOpenFile = vi.fn()
+    const resolveAttachment = vi.fn().mockResolvedValue({
+      ok: true,
+      value: { kind: 'file', path: '/resolved/path/paper.pdf' },
+    })
     render(
-      <ZoteroOpenButton
-        url="https://example.com/a.pdf"
-        verdict="open"
-        label={zh.openInZotero}
+      <PdfReadButton
+        attachmentRef="zotero://user/0/attachment/WXYZ6789"
+        resolveAttachment={resolveAttachment}
+        onOpenFile={onOpenFile}
         t={t}
       />,
     )
-    const anchor = screen.getByText(zh.openInZotero)
-    expect(anchor.getAttribute('target')).toBe('_blank')
-    expect(anchor.getAttribute('rel')).toBe('noopener noreferrer')
+    const button = screen.getByRole('button', { name: new RegExp(zh.readPdf) })
+    await act(async () => {
+      fireEvent.click(button)
+    })
+    expect(resolveAttachment).toHaveBeenCalledWith('zotero://user/0/attachment/WXYZ6789')
+    expect(onOpenFile).toHaveBeenCalledWith('/resolved/path/paper.pdf')
+  })
+
+  it('displays error feedback when attachment resolution fails', async () => {
+    const resolveAttachment = vi.fn().mockResolvedValue({
+      ok: false,
+      error: { code: 'not_found', message: zh.pdfFileNotFound },
+    })
+    render(
+      <PdfReadButton
+        attachmentRef="zotero://user/0/attachment/MISSING1"
+        resolveAttachment={resolveAttachment}
+        t={t}
+      />,
+    )
+    const button = screen.getByRole('button', { name: new RegExp(zh.readPdf) })
+    await act(async () => {
+      fireEvent.click(button)
+    })
+    expect(screen.getByText(zh.pdfFileNotFound)).toBeDefined()
+  })
+
+  it('opens web URLs in a new browser window/tab', () => {
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null)
+    render(<PdfReadButton webUrl="https://example.org/paper.pdf" t={t} />)
+    const button = screen.getByRole('button', { name: new RegExp(zh.readPdf) })
+    fireEvent.click(button)
+    expect(openSpy).toHaveBeenCalledWith(
+      'https://example.org/paper.pdf',
+      '_blank',
+      'noopener,noreferrer',
+    )
+    openSpy.mockRestore()
+  })
+})
+
+describe('ZoteroLocateActions', () => {
+  it('renders copy title and copy link buttons with zero external protocol anchors', () => {
+    const { container } = render(
+      <ZoteroLocateActions
+        title="Attention Is All You Need"
+        selectUrl="zotero://select/library/items/ABCDEFGH"
+        t={t}
+      />,
+    )
+    expect(container.querySelectorAll('a')).toHaveLength(0)
+    expect(screen.getByText(zh.copyTitle)).toBeDefined()
+    expect(screen.getByText(zh.copyZoteroLink)).toBeDefined()
+
+    fireEvent.click(screen.getByText(zh.copyTitle))
+    expect(writeClipboard).toHaveBeenCalledWith('Attention Is All You Need')
+
+    fireEvent.click(screen.getByText(zh.copyZoteroLink))
+    expect(writeClipboard).toHaveBeenCalledWith('zotero://select/library/items/ABCDEFGH')
   })
 })

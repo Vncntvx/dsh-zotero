@@ -15,8 +15,8 @@ import {
   type ChildRow,
   type ChildSection,
 } from '../sources/decoders.ts'
-import { childRowLinks, pdfUrlOf } from '../actions/open-zotero.ts'
-import { ZoteroOpenLink } from '../components/open/ZoteroOpenLink.tsx'
+import { PdfReadButton } from '../components/open/PdfReadButton.tsx'
+import { ZoteroLocateActions } from '../components/open/ZoteroLocateActions.tsx'
 import { CopyButton } from '../components/CopyButton.tsx'
 import { countOfLabel, CHILD_KIND_LABEL } from '../evidence-labels.ts'
 import {
@@ -62,9 +62,11 @@ function rowTextOf(row: ChildRow): string {
 function ChildSectionView({
   section,
   t,
+  onOpenFile,
 }: {
   readonly section: ChildSection
   readonly t: TranslateNS<'zotero'>
+  readonly onOpenFile?: (path: string) => void
 }): ReactNode {
   return (
     <div className={css.notesSection} data-child-kind={section.kind}>
@@ -76,7 +78,8 @@ function ChildSectionView({
       ) : (
         <div className={css.cardList}>
           {section.rows.map((row) => {
-            const { selectUrl, pdfUrl } = childRowLinks(row)
+            const targetPdfRef =
+              row.kind === 'annotation' ? row.parentRef : row.kind === 'attachment' ? row.ref : null
             const swatch = annotationColorVar(row.kind === 'annotation' ? row.color : null)
             return (
               <div key={row.ref} className={css.itemCard} data-child-row={row.kind}>
@@ -94,24 +97,22 @@ function ChildSectionView({
                   <span className={css.itemTitle}>{rowTextOf(row)}</span>
                 </div>
                 <div className={css.itemActions}>
-                  {pdfUrl && (
-                    <ZoteroOpenLink
-                      url={pdfUrl}
-                      verdict="open"
-                      label={t('openPdf')}
+                  {targetPdfRef && (
+                    <PdfReadButton
+                      attachmentRef={targetPdfRef}
+                      onOpenFile={onOpenFile}
+                      label={t('readPdf')}
                       t={t}
+                      variant="link"
                       className={css.actionLink}
                     />
                   )}
-                  {selectUrl && (
-                    <ZoteroOpenLink
-                      url={selectUrl}
-                      verdict="open"
-                      label={t('openInZotero')}
-                      t={t}
-                      className={css.actionLink}
-                    />
-                  )}
+                  <ZoteroLocateActions
+                    itemRef={row.ref}
+                    variant="link"
+                    className={css.actionLink}
+                    t={t}
+                  />
                 </div>
               </div>
             )
@@ -128,7 +129,7 @@ export function ChildrenToolView(props: ChildrenToolViewProps) {
   const isAttachment = toolName === 'zotero_attachment'
   const title = isAttachment ? t('toolTitleAttachment') : t('toolTitleChildren')
 
-  const { icon, ref, summary, errorSummary, attachView, pdfUrl, sections, detailOmitted, rawText } =
+  const { icon, ref, summary, errorSummary, attachView, sections, detailOmitted, rawText } =
     useMemo(() => {
       const args = argsViewOf(block)
       const itemRef = textArg(args, 'ref') ?? ''
@@ -153,7 +154,6 @@ export function ChildrenToolView(props: ChildrenToolViewProps) {
       }
 
       const errSummary = errorSummaryOf(block, raw)
-      const pUrl = attachView?.ref ? pdfUrlOf(attachView.ref) : null
 
       return {
         icon: <IconLinkOutlineMedium size={14} />,
@@ -161,7 +161,6 @@ export function ChildrenToolView(props: ChildrenToolViewProps) {
         summary: sum,
         errorSummary: errSummary,
         attachView: attachView,
-        pdfUrl: pUrl,
         sections: children?.sections ?? [],
         detailOmitted: (attachView?.detailOmitted ?? children?.detailOmitted) === true,
         rawText: raw,
@@ -214,12 +213,19 @@ export function ChildrenToolView(props: ChildrenToolViewProps) {
                       className={css.lineAction}
                     />
                   )}
-                  {pdfUrl && (
-                    <ZoteroOpenLink
-                      url={pdfUrl}
-                      verdict="open"
-                      label={t('openPdf')}
+                  {(attachView.ref || attachView.location) && (
+                    <PdfReadButton
+                      attachmentRef={attachView.ref ?? undefined}
+                      filePath={
+                        attachView.kind === 'file' ? (attachView.location ?? undefined) : undefined
+                      }
+                      webUrl={
+                        attachView.kind === 'url' ? (attachView.location ?? undefined) : undefined
+                      }
+                      onOpenFile={props.openFile}
+                      label={t('readPdf')}
                       t={t}
+                      variant="link"
                       className={css.actionLink}
                     />
                   )}
@@ -228,7 +234,12 @@ export function ChildrenToolView(props: ChildrenToolViewProps) {
             )}
 
             {sections.map((section) => (
-              <ChildSectionView key={section.kind} section={section} t={t} />
+              <ChildSectionView
+                key={section.kind}
+                section={section}
+                t={t}
+                onOpenFile={props.openFile}
+              />
             ))}
 
             {rawText && <RawTextFallback text={rawText} />}

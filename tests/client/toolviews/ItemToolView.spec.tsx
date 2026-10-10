@@ -159,12 +159,11 @@ describe('ItemToolView (zotero_get)', () => {
     expect(screen.getByText('The attention head is the whole paper.')).toBeTruthy()
     expect(screen.getByText('Scaled dot-product attention')).toBeTruthy()
     expect(screen.getByText('3')).toBeTruthy()
-    // An annotation's page is only reachable through its own PDF, so that is
-    // the link the card offers for it.
-    const pdfLink = Array.from(container.querySelectorAll('a')).find((a) =>
-      a.getAttribute('href')?.startsWith('zotero://open-pdf/'),
-    )
-    expect(pdfLink?.getAttribute('href')).toBe('zotero://open-pdf/library/items/WXYZ6789?page=3')
+    expect(container.querySelectorAll('a[href^="zotero://"]')).toHaveLength(0)
+    expect(
+      screen.getAllByRole('button', { name: new RegExp(zh.readPdf) }).length,
+    ).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText(zh.copyZoteroLink).length).toBeGreaterThanOrEqual(1)
   })
 
   it('renders running state with ref summary', () => {
@@ -236,16 +235,10 @@ describe('ItemToolView (zotero_get)', () => {
     expect(screen.getByText('2026')).toBeTruthy()
     expect(screen.getByText(zh.badgePdf)).toBeTruthy()
 
-    const links = container.querySelectorAll('a')
-    expect(links.length).toBe(2)
-    const selectLink = Array.from(links).find((a) =>
-      a.getAttribute('href')?.startsWith('zotero://select/'),
-    )
-    const pdfLink = Array.from(links).find((a) =>
-      a.getAttribute('href')?.startsWith('zotero://open-pdf/'),
-    )
-    expect(selectLink?.getAttribute('href')).toBe('zotero://select/library/items/ABCD1234')
-    expect(pdfLink?.getAttribute('href')).toBe('zotero://open-pdf/library/items/WXYZ6789')
+    expect(container.querySelectorAll('a[href^="zotero://"]')).toHaveLength(0)
+    expect(screen.getByRole('button', { name: new RegExp(zh.readPdf) })).toBeTruthy()
+    expect(screen.getByText(zh.copyTitle)).toBeTruthy()
+    expect(screen.getByText(zh.copyZoteroLink)).toBeTruthy()
   })
 
   it('renders raw text fallback when metadata is absent', () => {

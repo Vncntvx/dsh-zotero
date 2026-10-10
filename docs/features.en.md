@@ -97,7 +97,7 @@ Every write requires passing session approval policy and user plan card review, 
 
 In DSH conversations, Zotero tool calls render using dedicated read-only cards (`tool.call.toolview`):
 
-- **Search (`zotero_search`)**: displays queries, total hits, expandable item summaries, and deep links;
+- **Search (`zotero_search`)**: displays queries, total hits, expandable item summaries, plus the "Read PDF" and copy-to-locate actions;
 - **Passage Retrieval (`zotero_retrieve`)**: displays extracted passage counts, ranked excerpts, page numbers, and index coverage;
 - **Export (`zotero_export`)**: shows format badges, copy actions, and formatted download buttons;
 - **Item Details (`zotero_get`)**: displays bibliographic metadata, venue details, child item counts, and previews;

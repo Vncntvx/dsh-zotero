@@ -34,11 +34,10 @@ This document lists common issues, causes, and diagnostic steps when using dsh-z
 - **Cause**: The PDF has not been indexed in Zotero yet.
 - **Fix**: Right-click the attachment in Zotero and select "Rebuild Index", or use `zotero_attachment` to obtain the local file path.
 
-## 6. zotero:// Deep Links Do Not Open
+## 6. PDF Reading and Zotero Item Locating
 
-- **Symptom**: Clicking "Open in Zotero" or related protocol links has no effect.
-- **Cause**: The operating system or browser lacks a valid protocol handler for `zotero://`.
-- **Fix**: Copy the item ref or file path and search directly within Zotero.
+- **Native Reading**: Clicking the "Read PDF" button in a panel or tool card opens the PDF in DeepSeek Harness's right sidebar viewer, so no external application is involved. Desktop and Web behave the same.
+- **Quick Locating**: To find an item in the local Zotero app, click "Copy title" and paste it into Zotero Quick Search (`Cmd+F` or `Ctrl+F`). To reference the item in notes or an address bar, click "Copy link" for the canonical deep link; it works for both personal and group libraries.
 
 ## 7. Installation Error: nothing installable
 

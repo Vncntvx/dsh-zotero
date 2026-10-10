@@ -80,7 +80,7 @@ function fakeWorld(mountRejects: unknown = undefined): FakeApplyWorld {
     injectDisposes: 0,
     formIds,
     scope,
-    status: async () => ({ ok: true, value: { connected: true, diagnosis: 'ok' } }),
+    status: async () => ({ ok: true, value: { connected: true } }),
     injectDeps: [],
     uiDisposes: 0,
     eventDefinitions: [],
@@ -315,13 +315,13 @@ describe('the browser-half entry', () => {
     expect(task1).toBe(task2)
     expect(statusCallCount).toBe(1)
 
-    resolveStatus({ ok: true, value: { connected: true, diagnosis: 'ok' } })
+    resolveStatus({ ok: true, value: { connected: true } })
     await Promise.all([task1, task2])
 
     const task3 = guideInject.probe()
     expect(task3).not.toBe(task1)
     expect(statusCallCount).toBe(2)
-    resolveStatus({ ok: true, value: { connected: true, diagnosis: 'ok' } })
+    resolveStatus({ ok: true, value: { connected: true } })
     await task3
   })
 
@@ -418,7 +418,7 @@ describe('the browser-half entry', () => {
     const face = (registration?.options.inject as () => { status: () => Promise<unknown> })()
     await expect(face.status()).resolves.toEqual({
       ok: true,
-      value: { connected: true, diagnosis: 'ok' },
+      value: { connected: true },
     })
     await dispose()
   })

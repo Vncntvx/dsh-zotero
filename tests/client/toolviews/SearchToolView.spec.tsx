@@ -122,17 +122,13 @@ describe('SearchToolView', () => {
     expect(screen.getByText('2024')).toBeTruthy()
     expect(screen.getByText(zh.badgePdf)).toBeTruthy()
 
-    // Links
-    const links = container.querySelectorAll('a')
-    expect(links.length).toBe(2)
-    const selectLink = Array.from(links).find((a) =>
-      a.getAttribute('href')?.startsWith('zotero://select/'),
-    )
-    const pdfLink = Array.from(links).find((a) =>
-      a.getAttribute('href')?.startsWith('zotero://open-pdf/'),
-    )
-    expect(selectLink?.getAttribute('href')).toBe('zotero://select/library/items/ABCD1234')
-    expect(pdfLink?.getAttribute('href')).toBe('zotero://open-pdf/library/items/WXYZ6789')
+    // Zero external protocol anchors
+    expect(container.querySelectorAll('a[href^="zotero://"]')).toHaveLength(0)
+
+    // In-app actions: read PDF and locate in Zotero
+    expect(screen.getByRole('button', { name: new RegExp(zh.readPdf) })).toBeTruthy()
+    expect(screen.getByText(zh.copyTitle)).toBeTruthy()
+    expect(screen.getByText(zh.copyZoteroLink)).toBeTruthy()
   })
 
   it('renders summary with note matches when noteMatches > 0', () => {

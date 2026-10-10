@@ -16,11 +16,17 @@
  */
 
 import type { InvocationDescriptor } from '@deepseek-ai/dsh-typert-protocol'
-import { ZOTERO_STATUS_TYPE_SYMBOL, zoteroStatusInvocation } from '../contract.ts'
+import {
+  ZOTERO_REF_PARAM_TYPE_SYMBOL,
+  ZOTERO_RESOLVE_ATTACHMENT_TYPE_SYMBOL,
+  ZOTERO_STATUS_TYPE_SYMBOL,
+  zoteroResolveAttachmentInvocation,
+  zoteroStatusInvocation,
+} from '../contract.ts'
 
 /** Error when browser code incorrectly tries to materialize a host-owned codec. */
 export const HOST_OWNED_CODEC_MESSAGE =
-  'dsh-zotero: ZoteroStatusView strict codec is host-owned; the client Remote face never materializes boundary schemas'
+  'dsh-zotero: strict codec is host-owned; the client Remote face never materializes boundary schemas'
 
 /**
  * Strict result codec the client contribution mounts. Same wire identity as
@@ -35,7 +41,27 @@ export const ZOTERO_STATUS_CLIENT_RESULT_CODEC = Object.freeze({
   },
 }) satisfies InvocationDescriptor['result']
 
+export const ZOTERO_REF_CLIENT_PARAM_CODEC = Object.freeze({
+  mode: 'strict',
+  typeSymbol: ZOTERO_REF_PARAM_TYPE_SYMBOL,
+  create: (): never => {
+    throw new Error(HOST_OWNED_CODEC_MESSAGE)
+  },
+}) satisfies InvocationDescriptor['parameters'][number]['codec']
+
+export const ZOTERO_RESOLVE_ATTACHMENT_CLIENT_RESULT_CODEC = Object.freeze({
+  mode: 'strict',
+  typeSymbol: ZOTERO_RESOLVE_ATTACHMENT_TYPE_SYMBOL,
+  create: (): never => {
+    throw new Error(HOST_OWNED_CODEC_MESSAGE)
+  },
+}) satisfies InvocationDescriptor['result']
+
 /** Client Remote contribution descriptors (structural identity + host-owned codec). */
 export const ZOTERO_CLIENT_INVOCATIONS: readonly InvocationDescriptor[] = Object.freeze([
   zoteroStatusInvocation(ZOTERO_STATUS_CLIENT_RESULT_CODEC),
+  zoteroResolveAttachmentInvocation(
+    ZOTERO_REF_CLIENT_PARAM_CODEC,
+    ZOTERO_RESOLVE_ATTACHMENT_CLIENT_RESULT_CODEC,
+  ),
 ])

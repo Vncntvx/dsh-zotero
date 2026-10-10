@@ -19,6 +19,7 @@
 import type { TypertContribution } from '@deepseek-ai/dsh-typert-registry/types'
 import {
   ZOTERO_REMOTE_PACKAGE,
+  ZOTERO_RESOLVE_ATTACHMENT_METHOD,
   ZOTERO_STATUS_METHOD,
   ZOTERO_STATUS_SERVICE_KEY,
 } from './contract.js'
@@ -41,6 +42,11 @@ export const TYPERT_MANIFEST: TypertContribution = {
             kind: 'method',
             name: ZOTERO_STATUS_METHOD,
             signature: 'status(): Promise<ZoteroStatusView>',
+          },
+          {
+            kind: 'method',
+            name: ZOTERO_RESOLVE_ATTACHMENT_METHOD,
+            signature: 'resolveAttachment(ref: string): Promise<ZoteroAttachmentLocationView>',
           },
         ],
         types: [],

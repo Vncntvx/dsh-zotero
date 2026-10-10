@@ -49,7 +49,7 @@ function ZoteroPluginDetailSectionBody({ t, probe }: DetailSectionBodyProps): Re
   const version = state.data?.zoteroVersion
   const diagnosis = state.error ?? state.data?.diagnosis
 
-  const tips = ['tipNoKey', 'tipFulltext', 'tipSettingsNav'] as const
+  const tips = ['tipWebTab', 'tipSettingsNav', 'tipWriteGate'] as const
 
   return (
     <section className={css.section} data-zotero-plugin-section>

@@ -318,7 +318,7 @@ export function zeroMatchFixture(): SourceWorkspace {
 }
 
 /**
- * 5/8 (an instance mismatch): the open action is present but blocked, and
+ * 5/8 (an instance mismatch): the PDF read is present but blocked, and
  * the item still counts as "has PDF" for the badge and filter.
  */
 export function mismatchFixture(): SourceWorkspace {

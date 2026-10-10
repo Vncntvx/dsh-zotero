@@ -25,6 +25,7 @@ import {
   ZOTERO_VERSION_HEADER,
 } from '../constants.js'
 import { PERSONAL_LIBRARY } from '../refs.js'
+import { ZOTERO_DIAGNOSIS_OK } from '../contract.js'
 import { errorChain } from '@deepseek-ai/dsh-llm'
 import { ZoteroError, ZOTERO_CAPABILITY_UNAVAILABLE } from '../errors.js'
 import { resolveCollectionsMixed, ScopeDirectory } from './scope-directory.js'
@@ -235,7 +236,7 @@ export class LocalApiProvider implements ZoteroProvider {
         schemaVersion: headers.get(ZOTERO_SCHEMA_VERSION_HEADER) ?? undefined,
         zoteroVersion: headers.get(ZOTERO_VERSION_HEADER) ?? undefined,
         ...(write !== undefined ? { write } : {}),
-        diagnosis: 'ok',
+        diagnosis: ZOTERO_DIAGNOSIS_OK,
       }
     } catch (error) {
       if (signal?.aborted) throw error

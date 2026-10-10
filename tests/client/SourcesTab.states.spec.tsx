@@ -207,7 +207,9 @@ describe('sources states', () => {
     expect(screen.getAllByText(zh.databaseMismatch).length).toBeGreaterThanOrEqual(1)
     const row = view.container.querySelector('[data-evidence-match="mismatch"]')!
     fireEvent.click(row)
-    expect(screen.getAllByText(zh.databaseMismatch).length).toBeGreaterThanOrEqual(2)
+    // The warning line is the mismatch explanation; this source has no PDF,
+    // so the gated read action adds no second occurrence.
+    expect(screen.getAllByText(zh.databaseMismatch)).toHaveLength(1)
     view.unmount()
   })
 

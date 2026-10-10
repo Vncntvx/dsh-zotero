@@ -1,20 +1,90 @@
 /**
- * The open-in-Zotero deep links and verdicts: URL construction, instance match
- * gating, and the PDF capability of one source.
+ * The canonical Zotero deep links: URL construction, ref parsing, and
+ * group-library support, plus the PDF capability of one source.
  * @module tests/client/actions/open-zotero
  */
 
-import { describe, expect, it } from 'vitest'
-import { openVerdictOf, pdfUrlOf, selectUrlOf } from '../../../src/client/actions/open-zotero.ts'
-import { externalHrefProps } from '../../../src/client/components/open/external-href.ts'
+import { beforeEach, describe, expect, it } from 'vitest'
+import {
+  clearRefIdentityCacheForTesting,
+  parseRefIdentity,
+  pdfUrlOf,
+  selectUrlOf,
+} from '../../../src/client/actions/open-zotero.ts'
 import { hasPdf, pdfCapabilityOf } from '../../../src/client/sources/source-capabilities.ts'
 import type { SourceAttachment } from '../../../src/client/sources/model.ts'
 import { sourceOf } from '../helpers/source-fixtures.ts'
+
+describe('parseRefIdentity', () => {
+  beforeEach(() => {
+    clearRefIdentityCacheForTesting()
+  })
+
+  it('parses personal-library item and attachment refs', () => {
+    expect(parseRefIdentity('zotero://user/0/item/ABCDEFGH?server=S1')).toEqual({
+      libraryType: 'user',
+      libraryId: '0',
+      kind: 'item',
+      key: 'ABCDEFGH',
+    })
+    expect(parseRefIdentity('zotero://user/0/attachment/WXYZ6789')).toEqual({
+      libraryType: 'user',
+      libraryId: '0',
+      kind: 'attachment',
+      key: 'WXYZ6789',
+    })
+  })
+
+  it('parses group-library item and attachment refs', () => {
+    expect(parseRefIdentity('zotero://group/12345/item/GRP00001')).toEqual({
+      libraryType: 'group',
+      libraryId: '12345',
+      kind: 'item',
+      key: 'GRP00001',
+    })
+    expect(parseRefIdentity('zotero://group/987654/attachment/GRPATT01')).toEqual({
+      libraryType: 'group',
+      libraryId: '987654',
+      kind: 'attachment',
+      key: 'GRPATT01',
+    })
+  })
+
+  it('returns null for unparseable or malformed refs', () => {
+    expect(parseRefIdentity('not a ref')).toBeNull()
+    expect(parseRefIdentity('')).toBeNull()
+    expect(parseRefIdentity('zotero://invalid/0/item/ABC')).toBeNull()
+  })
+
+  it('serves cached results and handles eviction at cache limit', () => {
+    const ref = 'zotero://user/0/item/CACHED01'
+    const first = parseRefIdentity(ref)
+    const second = parseRefIdentity(ref)
+    expect(first).toBe(second) // exact same cached object reference
+
+    // Fill cache past 500 limit to verify FIFO eviction does not crash or corrupt
+    for (let i = 0; i < 505; i++) {
+      parseRefIdentity(`zotero://user/0/item/ITEM${i.toString().padStart(4, '0')}`)
+    }
+
+    // Verify clearRefIdentityCacheForTesting clears cache
+    clearRefIdentityCacheForTesting()
+    const third = parseRefIdentity(ref)
+    expect(third).toEqual(first)
+    expect(third).not.toBe(first)
+  })
+})
 
 describe('selectUrlOf', () => {
   it('builds the select deep link for a personal-library item ref', () => {
     expect(selectUrlOf('zotero://user/0/item/ABCDEFGH?server=S1')).toBe(
       'zotero://select/library/items/ABCDEFGH',
+    )
+  })
+
+  it('builds the select deep link for a group-library item ref', () => {
+    expect(selectUrlOf('zotero://group/12345/item/GRP00001')).toBe(
+      'zotero://select/groups/12345/items/GRP00001',
     )
   })
 
@@ -24,7 +94,7 @@ describe('selectUrlOf', () => {
 })
 
 describe('pdfUrlOf', () => {
-  it('builds the open-pdf deep link with page and annotation parameters', () => {
+  it('builds the open-pdf deep link for personal library with page and annotation parameters', () => {
     expect(pdfUrlOf('zotero://user/0/attachment/WXYZ6789')).toBe(
       'zotero://open-pdf/library/items/WXYZ6789',
     )
@@ -42,26 +112,27 @@ describe('pdfUrlOf', () => {
     )
   })
 
+  it('builds the open-pdf deep link for group library with page and annotation parameters', () => {
+    expect(pdfUrlOf('zotero://group/54321/attachment/GRPATT01')).toBe(
+      'zotero://open-pdf/groups/54321/items/GRPATT01',
+    )
+    expect(pdfUrlOf('zotero://group/54321/attachment/GRPATT01', { page: '3' })).toBe(
+      'zotero://open-pdf/groups/54321/items/GRPATT01?page=3',
+    )
+  })
+
   it('returns null for an unparseable ref', () => {
     expect(pdfUrlOf('junk')).toBeNull()
   })
 })
 
-describe('openVerdictOf', () => {
-  it('opens verified items, blocks mismatches, and caves the rest', () => {
-    expect(openVerdictOf(sourceOf({ evidenceMatch: 'verified' }))).toBe('open')
-    expect(openVerdictOf(sourceOf({ evidenceMatch: 'mismatch' }))).toBe('blocked')
-    expect(openVerdictOf(sourceOf({ evidenceMatch: 'unknown' }))).toBe('unverified')
-  })
-})
-
 /** A resolved attachment fixture; the content type is always present (possibly empty). */
-function attachmentOf(contentType: string): SourceAttachment {
+function attachmentOf(contentType: string, location = ''): SourceAttachment {
   return {
     ref: 'zotero://user/0/attachment/RESOLVED',
     kind: 'file',
     title: '',
-    location: '',
+    location,
     contentType,
   }
 }
@@ -81,10 +152,11 @@ describe('pdfCapabilityOf', () => {
   const PDF_REF = 'zotero://user/0/attachment/RESOLVED'
   const HINT_REF = 'zotero://user/0/attachment/HINT0001'
   const FULLTEXT_REF = 'zotero://user/0/attachment/FULLTEXT'
+
   it('confirms the resolved attachment ahead of the hint and the retrieve attachment', () => {
     const capability = pdfCapabilityOf(
       sourceOf({
-        attachment: attachmentOf('application/pdf'),
+        attachment: attachmentOf('application/pdf', '/local/path/to/resolved.pdf'),
         bestAttachment: { ref: HINT_REF, contentType: 'application/pdf' },
         retrievalFacts: {
           attachmentRef: FULLTEXT_REF,
@@ -97,7 +169,7 @@ describe('pdfCapabilityOf', () => {
     expect(capability).toEqual({
       kind: 'file',
       ref: PDF_REF,
-      url: 'zotero://open-pdf/library/items/RESOLVED',
+      filePath: '/local/path/to/resolved.pdf',
     })
   })
 
@@ -109,7 +181,6 @@ describe('pdfCapabilityOf', () => {
     ).toEqual({
       kind: 'file',
       ref: HINT_REF,
-      url: 'zotero://open-pdf/library/items/HINT0001',
     })
     expect(
       pdfCapabilityOf(
@@ -125,7 +196,6 @@ describe('pdfCapabilityOf', () => {
     ).toEqual({
       kind: 'file',
       ref: FULLTEXT_REF,
-      url: 'zotero://open-pdf/library/items/FULLTEXT',
     })
   })
 
@@ -140,7 +210,6 @@ describe('pdfCapabilityOf', () => {
     ).toEqual({
       kind: 'file',
       ref: HINT_REF,
-      url: 'zotero://open-pdf/library/items/HINT0001',
     })
   })
 
@@ -148,7 +217,7 @@ describe('pdfCapabilityOf', () => {
     expect(pdfCapabilityOf(sourceOf({ attachment: attachmentOf('text/html') }))).toBeNull()
   })
 
-  it('never hands a resolved web PDF to the open-pdf protocol when a file fact answers', () => {
+  it('never hands a resolved web PDF to the file candidate when a file fact answers', () => {
     expect(
       pdfCapabilityOf(
         sourceOf({
@@ -159,7 +228,6 @@ describe('pdfCapabilityOf', () => {
     ).toEqual({
       kind: 'file',
       ref: HINT_REF,
-      url: 'zotero://open-pdf/library/items/HINT0001',
     })
     expect(
       pdfCapabilityOf(
@@ -176,7 +244,6 @@ describe('pdfCapabilityOf', () => {
     ).toEqual({
       kind: 'file',
       ref: FULLTEXT_REF,
-      url: 'zotero://open-pdf/library/items/FULLTEXT',
     })
   })
 
@@ -241,23 +308,5 @@ describe('hasPdf', () => {
     ).toBe(true)
     expect(hasPdf(sourceOf({ attachment: attachmentOf('text/html') }))).toBe(false)
     expect(hasPdf(sourceOf({}))).toBe(false)
-  })
-})
-
-describe('externalHrefProps', () => {
-  it('opens http(s) destinations in a new tab with the safe rel', () => {
-    expect(externalHrefProps('https://example.org/paper')).toEqual({
-      target: '_blank',
-      rel: 'noopener noreferrer',
-    })
-    expect(externalHrefProps('http://127.0.0.1:23119')).toEqual({
-      target: '_blank',
-      rel: 'noopener noreferrer',
-    })
-  })
-
-  it('keeps protocol and malformed destinations in place', () => {
-    expect(externalHrefProps('zotero://select/library/items/ABC')).toEqual({})
-    expect(externalHrefProps('not a url')).toEqual({})
   })
 })

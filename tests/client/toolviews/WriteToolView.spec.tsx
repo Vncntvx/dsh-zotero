@@ -98,8 +98,8 @@ describe('WriteToolView (create_note)', () => {
       screen.getAllByText(mockT('toolSummaryCreateNote', { title: 'Meeting Notes 2026' })).length,
     ).toBeGreaterThanOrEqual(1)
 
-    const parentLink = container.querySelector('a[href^="zotero://select/"]')
-    expect(parentLink?.getAttribute('href')).toBe('zotero://select/library/items/ABCD1234')
+    expect(container.querySelectorAll('a[href^="zotero://"]')).toHaveLength(0)
+    expect(screen.getByText('zotero://user/0/item/ABCD1234')).toBeTruthy()
   })
 
   it('falls back to the default title for a titleless or malformed note call', () => {
@@ -158,11 +158,9 @@ describe('WriteToolView (zotero_update_item_tags)', () => {
     expect(
       screen.getAllByText(mockT('toolSummaryUpdateItemTags', { added: 1, removed: 1 })).length,
     ).toBeGreaterThanOrEqual(1)
-    expect(screen.getByText(zh.badgeSuccess)).toBeTruthy()
-    // The pills list what the plan card showed the user.
     for (const tag of ['AI', 'Quantum', 'Physics']) expect(screen.getByText(tag)).toBeTruthy()
-    const link = container.querySelector('a[href^="zotero://select/"]')
-    expect(link?.getAttribute('href')).toBe('zotero://select/library/items/ABCD1234')
+    expect(container.querySelectorAll('a[href^="zotero://"]')).toHaveLength(0)
+    expect(screen.getByText('zotero://user/0/item/ABCD1234')).toBeTruthy()
   })
 
   it('reports a no-op tag merge as writing nothing', () => {
@@ -216,9 +214,8 @@ describe('WriteToolView (zotero_update_item_collections)', () => {
       screen.getAllByText(mockT('toolSummaryUpdateItemCollections', { added: 1, removed: 0 }))
         .length,
     ).toBeGreaterThanOrEqual(1)
-    expect(screen.getByText(zh.badgeSuccess)).toBeTruthy()
-    const link = container.querySelector('a[href^="zotero://select/"]')
-    expect(link?.getAttribute('href')).toBe('zotero://select/library/items/ABCD1234')
+    expect(container.querySelectorAll('a[href^="zotero://"]')).toHaveLength(0)
+    expect(screen.getByText('zotero://user/0/item/ABCD1234')).toBeTruthy()
   })
 
   it('reports an already-a-member merge as writing nothing', () => {
@@ -278,7 +275,8 @@ describe('WriteToolView (collections and items)', () => {
     expect(
       screen.getAllByText(mockT('toolSummaryCreateCollection', { name: 'Field notes' })).length,
     ).toBeGreaterThanOrEqual(1)
-    expect(container.querySelector('a[href^="zotero://select/"]')).toBeTruthy()
+    expect(container.querySelectorAll('a[href^="zotero://"]')).toHaveLength(0)
+    expect(screen.getByText('zotero://user/0/item/ABCD1234')).toBeTruthy()
   })
 
   it('names the deleted collection by ref key or by its exact name', () => {
@@ -333,7 +331,7 @@ describe('WriteToolView (collections and items)', () => {
     ).toBeGreaterThanOrEqual(1)
   })
 
-  it('renders an updated item keyed by its short ref, with the open link', () => {
+  it('renders an updated item keyed by its short ref, with the copy link action', () => {
     const block = settledWrite('zotero_update_item', {
       args: { ref: REF, set: { title: 'A study' } },
       text: 'Updated',
@@ -345,7 +343,8 @@ describe('WriteToolView (collections and items)', () => {
     expect(
       screen.getAllByText(mockT('toolSummaryUpdateItem', { ref: 'ABCD1234' })).length,
     ).toBeGreaterThanOrEqual(1)
-    expect(container.querySelector('a[href^="zotero://select/"]')).toBeTruthy()
+    expect(container.querySelectorAll('a[href^="zotero://"]')).toHaveLength(0)
+    expect(screen.getByText('zotero://user/0/item/ABCD1234')).toBeTruthy()
   })
 })
 
