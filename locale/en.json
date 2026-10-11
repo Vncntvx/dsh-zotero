@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "dsh-zotero",
+    "description": "Zotero plugin for DeepSeek Harness: search papers, read full-text PDFs and notes, extract relevant passages, and inspect sources in the conversation tab."
+  }
+}
