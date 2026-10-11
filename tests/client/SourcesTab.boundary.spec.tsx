@@ -11,6 +11,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ChatSnapshot } from '@deepseek-ai/dsh-client-ui-chat/client'
 import { SourcesTab, type SourcesTabProps } from '../../src/client/components/SourcesTab.tsx'
 import { ZoteroSurfaceBoundary } from '../../src/client/components/ZoteroSurfaceBoundary.tsx'
+import { setErrorReporter } from '../../src/client/actions/error-reporter.ts'
+import type { ZoteroClientErrorReport, ZoteroReportResultView } from '../../src/client/remote.ts'
+import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { zh } from '../../src/client/locales.ts'
 import {
   chatOf,
@@ -46,7 +49,7 @@ function Bomb(): never {
 describe('ZoteroSurfaceBoundary', () => {
   it('renders its children untouched while nothing throws', () => {
     const view = render(
-      <ZoteroSurfaceBoundary t={mockT}>
+      <ZoteroSurfaceBoundary t={mockT} surface="sources">
         <p>panel body</p>
       </ZoteroSurfaceBoundary>,
     )
@@ -57,7 +60,7 @@ describe('ZoteroSurfaceBoundary', () => {
   it('keeps the surface mounted and names the failure when a child throws', () => {
     const logged = captureConsoleError()
     const view = render(
-      <ZoteroSurfaceBoundary t={mockT}>
+      <ZoteroSurfaceBoundary t={mockT} surface="sources">
         <Bomb />
       </ZoteroSurfaceBoundary>,
     )
@@ -80,7 +83,7 @@ describe('ZoteroSurfaceBoundary', () => {
       throw 'a bare string failure'
     }
     const view = render(
-      <ZoteroSurfaceBoundary t={mockT}>
+      <ZoteroSurfaceBoundary t={mockT} surface="sources">
         <ThrowString />
       </ZoteroSurfaceBoundary>,
     )
@@ -95,7 +98,7 @@ describe('ZoteroSurfaceBoundary', () => {
       throw new Error('')
     }
     const view = render(
-      <ZoteroSurfaceBoundary t={mockT}>
+      <ZoteroSurfaceBoundary t={mockT} surface="sources">
         <ThrowEmpty />
       </ZoteroSurfaceBoundary>,
     )
@@ -109,14 +112,14 @@ describe('ZoteroSurfaceBoundary', () => {
       return <p>healthy body</p>
     }
     const view = render(
-      <ZoteroSurfaceBoundary t={mockT} resetKey="s1">
+      <ZoteroSurfaceBoundary t={mockT} surface="sources" resetKey="s1">
         <Flaky shouldThrow={true} />
       </ZoteroSurfaceBoundary>,
     )
     expect(view.container.querySelector('[data-zotero-surface-error]')).not.toBeNull()
 
     view.rerender(
-      <ZoteroSurfaceBoundary t={mockT} resetKey="s2">
+      <ZoteroSurfaceBoundary t={mockT} surface="sources" resetKey="s2">
         <Flaky shouldThrow={false} />
       </ZoteroSurfaceBoundary>,
     )
@@ -132,7 +135,7 @@ describe('ZoteroSurfaceBoundary', () => {
       return <p>recovered body</p>
     }
     const view = render(
-      <ZoteroSurfaceBoundary t={mockT}>
+      <ZoteroSurfaceBoundary t={mockT} surface="sources">
         <Flaky />
       </ZoteroSurfaceBoundary>,
     )
@@ -205,5 +208,80 @@ describe('the Sources tab keeps its registration when its body throws', () => {
     const { view } = mountTab(chatOf([toolRow(searchResult())]), connectedProbe())
     expect(view.container.querySelector('[data-zotero-surface-error]')).toBeNull()
     expect(view.container.querySelectorAll('[role="option"]')).toHaveLength(1)
+  })
+})
+
+describe('ZoteroSurfaceBoundary crash reporting', () => {
+  it('files the crash into the host ring under its surface name', () => {
+    captureConsoleError()
+    const report =
+      vi.fn<(report: ZoteroClientErrorReport) => Promise<RemoteResult<ZoteroReportResultView>>>()
+    report.mockResolvedValue({ ok: true as const, value: { seq: 7 } })
+    setErrorReporter(report)
+    try {
+      render(
+        <ZoteroSurfaceBoundary t={mockT} surface="sources">
+          <Bomb />
+        </ZoteroSurfaceBoundary>,
+      )
+      expect(report).toHaveBeenCalledTimes(1)
+      const filed = report.mock.calls[0]?.[0]
+      expect(filed).toMatchObject({
+        surface: 'sources',
+        message: 'render failed: cannot read properties of undefined',
+      })
+      expect(filed?.componentStack).toBeDefined()
+    } finally {
+      setErrorReporter(undefined)
+    }
+  })
+
+  it('files an empty failure under a non-empty message the intake accepts', () => {
+    captureConsoleError()
+    const report =
+      vi.fn<(report: ZoteroClientErrorReport) => Promise<RemoteResult<ZoteroReportResultView>>>()
+    report.mockResolvedValue({ ok: true as const, value: { seq: 8 } })
+    setErrorReporter(report)
+    try {
+      // `new Error('')` falls back to the error's string form; a literally
+      // empty thrown string falls back to the placeholder. The intake's
+      // wire contract refuses an empty message, so neither may file one.
+      function ThrowEmptyError(): never {
+        throw new Error('')
+      }
+      function ThrowEmptyString(): never {
+        throw ''
+      }
+      render(
+        <ZoteroSurfaceBoundary t={mockT} surface="sources">
+          <ThrowEmptyError />
+        </ZoteroSurfaceBoundary>,
+      )
+      expect(report).toHaveBeenCalledTimes(1)
+      expect(report.mock.calls[0]?.[0]).toMatchObject({ surface: 'sources', message: 'Error' })
+
+      render(
+        <ZoteroSurfaceBoundary t={mockT} surface="sources">
+          <ThrowEmptyString />
+        </ZoteroSurfaceBoundary>,
+      )
+      expect(report).toHaveBeenCalledTimes(2)
+      expect(report.mock.calls[1]?.[0]).toMatchObject({
+        surface: 'sources',
+        message: 'unknown failure',
+      })
+    } finally {
+      setErrorReporter(undefined)
+    }
+  })
+
+  it('stays silent and still renders the fallback when no reporter is wired', () => {
+    captureConsoleError()
+    const view = render(
+      <ZoteroSurfaceBoundary t={mockT} surface="sources">
+        <Bomb />
+      </ZoteroSurfaceBoundary>,
+    )
+    expect(view.container.querySelector('[data-zotero-surface-error]')).not.toBeNull()
   })
 })

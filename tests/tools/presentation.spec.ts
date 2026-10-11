@@ -99,7 +99,12 @@ describe('tool presentation', () => {
       title: 'Read Zotero changes',
       rawInput: 'baseline',
     })
-    const cursor = { serverId: 'S1', library: { type: 'user', id: 0 }, version: 42 }
+    const cursor = {
+      serverId: 'S1',
+      library: { type: 'user', id: 0 },
+      version: 42,
+      unserved: [] as string[],
+    }
     expect(definition('zotero_changes').presentCall!({ since: cursor })).toMatchObject({
       rawInput: '42',
     })

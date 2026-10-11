@@ -14,11 +14,20 @@ import type { RemoteResult, TypertRemoteContribution } from '@deepseek-ai/dsh-ty
 import {
   ZOTERO_REMOTE_PACKAGE,
   type ZoteroAttachmentLocationView,
+  type ZoteroClientErrorReport,
+  type ZoteroDiagnosticsView,
+  type ZoteroReportResultView,
   type ZoteroStatusView,
 } from '../contract.ts'
 import { ZOTERO_CLIENT_INVOCATIONS } from './status-codec.ts'
 
-export type { ZoteroAttachmentLocationView, ZoteroStatusView } from '../contract.ts'
+export type {
+  ZoteroAttachmentLocationView,
+  ZoteroClientErrorReport,
+  ZoteroDiagnosticsView,
+  ZoteroReportResultView,
+  ZoteroStatusView,
+} from '../contract.ts'
 
 /** The `zotero` namespace's client contribution. */
 export const ZOTERO_REMOTE: TypertRemoteContribution = {
@@ -35,10 +44,18 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
   interface TypertRemoteNamespace$7a6f7465726f {
     status: () => Promise<RemoteResult<ZoteroStatusView>>
     resolveAttachment: (ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>
+    diagnostics: () => Promise<RemoteResult<ZoteroDiagnosticsView>>
+    reportClientError: (
+      report: ZoteroClientErrorReport,
+    ) => Promise<RemoteResult<ZoteroReportResultView>>
   }
   interface TypertRemoteMap {
     'zotero/status': () => Promise<RemoteResult<ZoteroStatusView>>
     'zotero/resolveAttachment': (ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>
+    'zotero/diagnostics': () => Promise<RemoteResult<ZoteroDiagnosticsView>>
+    'zotero/reportClientError': (
+      report: ZoteroClientErrorReport,
+    ) => Promise<RemoteResult<ZoteroReportResultView>>
   }
   interface TypertRemoteNamespaceMap {
     zotero: TypertRemoteNamespace$7a6f7465726f

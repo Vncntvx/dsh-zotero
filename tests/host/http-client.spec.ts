@@ -31,7 +31,9 @@ import {
   ZOTERO_TIMEOUT,
   ZOTERO_UNEXPECTED,
 } from '../../src/errors.js'
+import { expectZoteroError } from '../helpers/error-expectations.js'
 import { MockZotero } from '../helpers/mock-zotero.js'
+import { recordingSink } from '../helpers/recording-sink.js'
 import { testHttpClient } from '../helpers/test-clients.js'
 import { deferred, progress, type Progress } from '../helpers/sync.js'
 
@@ -46,24 +48,6 @@ beforeEach(async () => {
 afterEach(async () => {
   await mock.close()
 })
-
-async function expectZoteroError(
-  promise: Promise<unknown>,
-  code: string,
-  messagePart?: string,
-): Promise<HarnessError> {
-  let thrown: unknown
-  try {
-    await promise
-  } catch (error) {
-    thrown = error
-  }
-  expect(thrown).toBeInstanceOf(HarnessError)
-  const harnessError = thrown as HarnessError
-  expect(harnessError.code).toBe(code)
-  if (messagePart !== undefined) expect(harnessError.message).toContain(messagePart)
-  return harnessError
-}
 
 describe('request shaping', () => {
   it('serializes repeated params and handles a base URL with a trailing slash', async () => {
@@ -514,5 +498,81 @@ describe('failure translation', () => {
     await outstanding.promise
     controller.abort()
     await expectZoteroError(pending, TOOL_ABORTED, TOOL_ABORTED_MESSAGE)
+  })
+})
+
+describe('diagnostics logging', () => {
+  it('logs a successful request line at debug with timing facts', async () => {
+    mock.route('GET', '/api/users/0/items', (req, res, helpers) => helpers.json([]))
+    const { sink, lines } = recordingSink()
+    const observed = testHttpClient(mock.baseUrl, { sink })
+    await observed.getJson('users/0/items')
+    const line = lines.find((candidate) => candidate.event === 'http.request')
+    expect(line).toMatchObject({ level: 'debug', message: 'GET users/0/items' })
+    expect(line?.detail?.status).toBe(200)
+    expect(typeof line?.detail?.ms).toBe('number')
+    expect(line?.detail?.bodyChars).toBe(2)
+  })
+
+  it('keeps the query string in the debug request line alone', async () => {
+    mock.route('GET', '/api/users/0/items', (req, res, helpers) => helpers.json([]))
+    const { sink, lines } = recordingSink()
+    const observed = testHttpClient(mock.baseUrl, { sink })
+    await observed.getJson('users/0/items', new URLSearchParams([['q', 'flash attention']]))
+    const line = lines.find((candidate) => candidate.event === 'http.request')
+    expect(line?.level).toBe('debug')
+    expect(line?.message).toBe('GET users/0/items?q=flash+attention')
+  })
+
+  it('leaves the query string out of a failure line at the default threshold', async () => {
+    mock.route('GET', '/api/users/0/items', (_req, _res, helpers) =>
+      helpers.raw(500, { 'Content-Type': 'text/plain' }, 'no'),
+    )
+    const { sink, lines } = recordingSink()
+    const observed = testHttpClient(mock.baseUrl, { sink })
+    await expectZoteroError(
+      observed.getJson('users/0/items', new URLSearchParams([['q', 'flash attention']])),
+      ZOTERO_UNEXPECTED,
+    )
+    const line = lines.find((candidate) => candidate.event === 'http.failure')
+    expect(line?.level).toBe('error')
+    // The path names the request; the search text stays out of the record.
+    expect(line?.message).toContain('GET users/0/items:')
+    expect(line?.message).not.toContain('flash')
+  })
+
+  it('logs a transport failure at error with the stable code', async () => {
+    mock.route('GET', '/api/users/0/items', (_req, _res, helpers) =>
+      helpers.raw(500, { 'Content-Type': 'text/plain' }, 'no'),
+    )
+    const { sink, lines } = recordingSink()
+    const observed = testHttpClient(mock.baseUrl, { sink })
+    await expectZoteroError(observed.getJson('users/0/items'), ZOTERO_UNEXPECTED)
+    const line = lines.find((candidate) => candidate.event === 'http.failure')
+    expect(line?.level).toBe('error')
+    expect(line?.message).toContain('GET users/0/items')
+    expect(line?.detail?.errorCode).toBe(ZOTERO_UNEXPECTED)
+  })
+
+  it('logs the provider deadline at warn and a caller abort at debug', async () => {
+    const { sink, lines } = recordingSink()
+    const fast = testHttpClient(mock.baseUrl, { timeoutMs: 50, sink })
+    mock.route('GET', '/api/users/0/items', (req, res, helpers) => helpers.delayJson({}, 5000))
+    await expectZoteroError(fast.getJson('users/0/items'), ZOTERO_TIMEOUT)
+    expect(lines.find((candidate) => candidate.event === 'http.timeout')?.level).toBe('warn')
+
+    const outstanding = deferred()
+    const controller = new AbortController()
+    mock.route('GET', '/api/users/0/collects', (req, res, helpers) => {
+      outstanding.resolve()
+      helpers.delayJson({}, 5000)
+    })
+    const pending = testHttpClient(mock.baseUrl, { sink }).getJson('users/0/collects', undefined, {
+      signal: controller.signal,
+    })
+    await outstanding.promise
+    controller.abort()
+    await expectZoteroError(pending, TOOL_ABORTED, TOOL_ABORTED_MESSAGE)
+    expect(lines.find((candidate) => candidate.event === 'http.abort')?.level).toBe('debug')
   })
 })

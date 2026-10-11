@@ -10,7 +10,9 @@
  * `runTool` keeps the call-id scheme the tool specs were written against
  * (`tool-<n>`, counted per lane), so `ctx.tools` sees the assembly it always
  * did. {@link expectValue} lives here too: it settles the success arm of one
- * `runTool` result, which is the one assertion every tool spec needs.
+ * `runTool` result, which is the one assertion every tool spec needs, and
+ * {@link commitLive} is the live-commit path the settings and diagnostics
+ * specs share.
  *
  * The optional compositions are the seams the host specs exercise beyond the
  * tool lane. Each one mounts before the plugin, because the plugin resolves
@@ -21,6 +23,7 @@
  */
 
 import { Context, type Fiber } from '@deepseek-ai/cordis'
+import { createVolatile, updateVolatile, volatileEntries } from '@deepseek-ai/cosmokit'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, {
@@ -148,6 +151,29 @@ export function expectValue(result: ToolExecutionResult, tool: string): ToolExec
 function failureCode(result: ToolExecutionFailure): string {
   const info = result.error.info
   return info === undefined ? '' : ` [${info.name}: ${info.code}]`
+}
+
+/**
+ * Commit one live config edit the way the loader does: write the fiber's
+ * volatile references, then dispatch the update event the service reacts to.
+ * Values are already validated at this point (the veto gate refuses a
+ * violating commit before it lands), exactly as a landed commit is.
+ * @param lane - the booted lane whose plugin fiber receives the commit.
+ * @param patch - top-level field values to commit.
+ */
+export async function commitLive(lane: HostLane, patch: Record<string, unknown>): Promise<void> {
+  const refs = new Map(
+    volatileEntries(lane.zoteroFiber.config).map(({ path, ref }) => [path.join('.'), ref]),
+  )
+  for (const [field, value] of Object.entries(patch)) {
+    const ref = refs.get(field)
+    if (ref === undefined) throw new Error(`no volatile reference for ${field}`)
+    updateVolatile(ref, createVolatile(value))
+  }
+  await lane.zoteroFiber.ctx.emit(
+    'loader/volatile-update',
+    Object.keys(patch).map((field) => [field]),
+  )
 }
 
 /**

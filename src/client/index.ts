@@ -46,14 +46,21 @@ import { ZOTERO_REMOTE } from './remote.ts'
 
 import { fileAddressFor } from '@deepseek-ai/dsh-util-workspace-path'
 import { getAttachmentResolver, setAttachmentResolver } from './actions/attachment-resolver.ts'
+import { getErrorReporter, setErrorReporter } from './actions/error-reporter.ts'
 import { ZoteroCardController } from './zotero-card-controller.ts'
 import { zoteroQuickConfigFace, type ZoteroProbeFace } from './components/plugin/faces.ts'
-import { ZOTERO_REMOTE_PACKAGE, type ZoteroStatusView } from '../contract.ts'
+import {
+  ZOTERO_REMOTE_PACKAGE,
+  type ZoteroClientErrorReport,
+  type ZoteroDiagnosticsView,
+  type ZoteroStatusView,
+} from '../contract.ts'
 import { ZOTERO_SETTINGS_NAMESPACE } from '../settings-namespace.ts'
 import type {} from './plugin-slots.d.ts'
 import { ZoteroActivationGuide } from './components/plugin/ZoteroActivationGuide.tsx'
 import { ZoteroBundleQuickConfig } from './components/plugin/ZoteroBundleQuickConfig.tsx'
 import { ZoteroPluginDetailSection } from './components/plugin/ZoteroPluginDetailSection.tsx'
+import { DiagnosticsCard } from './components/DiagnosticsCard.tsx'
 import { registerZoteroToolviews } from './toolviews/index.ts'
 import { en, zh } from './locales.ts'
 
@@ -97,6 +104,19 @@ function registerUi(ctx: ClientContext): void {
       }
     }
   }, 'dsh-zotero: attachment resolver')
+  // The crash-report intake the render boundaries call: wired once here so
+  // every surface (Sources tab, tool cards, detail section) files into the
+  // host diagnostics ring without a face threaded through the slot renderer.
+  ctx.effect(() => {
+    const reporter = (report: ZoteroClientErrorReport) =>
+      ctx.remote.zotero.reportClientError(report)
+    setErrorReporter(reporter)
+    return () => {
+      if (getErrorReporter() === reporter) {
+        setErrorReporter(undefined)
+      }
+    }
+  }, 'dsh-zotero: client error reporter')
   // Dedicated Chat cards for all 16 Zotero tools in the tool.call.toolview slot
   registerZoteroToolviews(ctx)
   // `/zotero` command-input projection: a non-command Chat node is the
@@ -209,6 +229,22 @@ function registerUi(ctx: ClientContext): void {
         inject: (): ZoteroProbeFace => ({ t, probe }),
       },
       ZoteroPluginDetailSection,
+    ),
+  )
+
+  // The diagnostics panel, beside the status card: the host ring the seams
+  // write, polled while the page shows it. It lives in the settings plane so
+  // it survives the conversation tab's own crashes.
+  const diagnostics = (): Promise<RemoteResult<ZoteroDiagnosticsView>> =>
+    ctx.remote.zotero.diagnostics()
+  ctx.slots.inject('plugins.detail.section', () =>
+    ctx.slots.register(
+      {
+        name: 'plugins.detail.section',
+        id: 'zotero-diagnostics',
+        inject: () => ({ t, probe, diagnostics }),
+      },
+      DiagnosticsCard,
     ),
   )
 

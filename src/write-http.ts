@@ -26,6 +26,8 @@ import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { deadline } from '@deepseek-ai/dsh-timeout'
 import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import { acquireSlot, ConcurrencyGate } from './concurrency.js'
+import type { DiagnosticSink } from './diagnostics.js'
+import { logTransportFailure, type TransportFailureEvents } from './transport-diagnostics.js'
 import {
   ZOTERO_API_VERSION_HEADER,
   ZOTERO_AUTHORIZE_PATH,
@@ -73,6 +75,13 @@ import {
 } from './http-client.js'
 import { asRecord, asString, parseNonNegativeSafeInteger } from './json.js'
 
+/** The write transport's failure event names. */
+const WRITE_FAILURE_EVENTS: TransportFailureEvents = {
+  abort: 'write.abort',
+  timeout: 'write.timeout',
+  failure: 'write.failure',
+}
+
 export interface ZoteroWriteHttpClientOptions {
   readonly baseUrl: string
   readonly timeoutMs: number
@@ -82,6 +91,8 @@ export interface ZoteroWriteHttpClientOptions {
    * human, so it is independent of the per-request data deadline.
    */
   readonly authorizeDeadlineMs: number
+  /** Diagnostics sink for write attempts and outcomes; absent means silently unobserved. */
+  readonly sink?: DiagnosticSink
 }
 
 /** Options every write carries: cancellation, the serving instance, the local API key. */
@@ -353,6 +364,9 @@ export class ZoteroWriteHttpClient {
     }
     const url = new URL(path, this.baseUrlWithSlash)
     const release = await this.takeSlot(opts.signal)
+    const startedAt = Date.now()
+    const target = `${method} ${path}`
+    this.options.sink?.info('write.attempt', target)
     try {
       using d = deadline(opts.signal, deadlineMs, ZOTERO_TIMEOUT)
       const headers: Record<string, string> = {
@@ -447,7 +461,24 @@ export class ZoteroWriteHttpClient {
           throw commitSensitive ? asCommitUnknown(translated) : translated
         }
       }
+      this.options.sink?.info('write.outcome', target, {
+        status: response.status,
+        ms: Date.now() - startedAt,
+        bodyChars: responseBody.length,
+      })
       return { body: responseBody, headers: response.headers }
+    } catch (error) {
+      // Commit-unknown outcomes log as ordinary failures here; their
+      // distinguishing wrapper is the caller's concern.
+      logTransportFailure(
+        this.options.sink,
+        WRITE_FAILURE_EVENTS,
+        target,
+        startedAt,
+        error,
+        opts.signal,
+      )
+      throw error
     } finally {
       release()
     }

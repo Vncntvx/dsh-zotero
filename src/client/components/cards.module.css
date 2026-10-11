@@ -455,6 +455,34 @@
   overflow-wrap: anywhere;
 }
 
+/* Render-boundary fallback display for one tool card: a compact degraded
+   row that reads only strings, so the fallback itself cannot throw. */
+.cardError {
+  margin: 4px 0;
+  padding: 6px 10px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-3);
+  border: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+.cardErrorTitle {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+}
+
+.cardErrorDetail {
+  margin: 2px 0 0;
+  font-family: var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .chevron,
   .lineAction {

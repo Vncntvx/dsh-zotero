@@ -127,6 +127,15 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 
 > Note: the `dev-lib.cordis.yml` overlay points to the built entry using an absolute path (`<absolute-path-to-dsh-zotero>/lib/index.js`), enabling in-process Loader HMR for the host half (tools and `/zotero` command) without restarting dsh. However, the harness web client module loader only resolves plugins registered under bare package names. Consequently, this mode does not load browser-side frontend modules (settings page or Sources tab). To develop and test the UI, use the "Full Plugin Debugging" workflow above (`dsh plugin --profile web add .` and `npm run dev:client`).
 
+### Diagnostics Panel and Diagnostics Bundle
+
+To inspect runtime behavior or investigate issues, open the "Diagnostics" card at the bottom of "Settings → Plugins → dsh-zotero":
+
+- **Record retention and filtering**: The panel records error, warn, and info events by default, with severity filtering available ("Problems" selects warn and error). Entries are listed in reverse chronological order, and consecutive identical messages are coalesced with a repeat counter;
+- **Verbose mode**: To capture request paths and invocation parameters, enable "Verbose diagnostics" under the Diagnostics configuration group before reproducing the issue;
+- **Client crash reporting**: When browser-side components (such as the Sources tab, tool cards, or detail panels) encounter a render crash, error boundaries automatically log the event and identify the failing surface in the `surface` field (for example, `sources` or `tool:zotero_search`);
+- **Exporting records**: Clicking "Copy diagnostics" exports a text bundle containing the plugin version, Zotero endpoint and version, debug state, and all buffered log entries for bug reports.
+
 ## Testing Standards
 
 - Unit tests run against a mock Zotero HTTP service (`MockZotero`).

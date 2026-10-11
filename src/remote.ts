@@ -8,10 +8,11 @@
  * manifest in typert.ts (`ctx.typert.register`), which is the gateway's
  * preferred resolution path and needs no `@Remote` markers. Avoiding the
  * decorators also keeps the source runnable under Node's plain TypeScript
- * type stripping, which rejects decorator syntax. The one endpoint serves the
- * web tab's live connectivity probe; the settings page reads and writes the
- * namespace through the harness's own settings scope instead, so this service
- * no longer carries the namespace view or any user-layer mutation.
+ * type stripping, which rejects decorator syntax. The endpoints serve the
+ * web tab's live connectivity probe, the plugin's diagnostics snapshot, and
+ * the client-error intake; the settings page reads and writes the namespace
+ * through the harness's own settings scope instead, so this service carries
+ * no user-layer mutation.
  * @module dsh-zotero/remote
  */
 
@@ -19,12 +20,23 @@ import type { Context } from '@deepseek-ai/cordis'
 import { TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { LOCAL_PROVIDER_ID } from './constants.js'
 import {
+  DIAGNOSTIC_DETAIL_VALUE_MAX_CHARS,
+  DIAGNOSTIC_MESSAGE_MAX_CHARS,
+  clampText,
+} from './diagnostics.js'
+import {
   ZOTERO_DIAGNOSIS_OK,
   ZOTERO_SETTINGS_NAMESPACE,
   ZOTERO_STATUS_SERVICE_KEY,
   type ZoteroAttachmentLocationView,
+  type ZoteroClientErrorReport,
+  type ZoteroDiagnosticsView,
+  type ZoteroReportResultView,
   type ZoteroStatusView,
 } from './contract.js'
+
+/** Newest entries one diagnostics snapshot serves; the panel renders fewer. */
+const SNAPSHOT_SERVE_LIMIT = 200
 
 /** The zotero settings page's host service: the web tab's connectivity probe. */
 export class ZoteroRuntime extends TypertRemoteService {
@@ -82,5 +94,67 @@ export class ZoteroRuntime extends TypertRemoteService {
       throw new Error('The Zotero service is not composed.')
     }
     return await service.resolveAttachment(ref)
+  }
+
+  /**
+   * Newest-first diagnostics snapshot for the web panel: the ring's retained
+   * entries, cut to the serving limit, plus the live `debug` fact so the card
+   * can say which verbosity it is looking at. Served even while degraded:
+   * the reader consults this record once something broke.
+   * @returns the snapshot view.
+   */
+  async diagnostics(): Promise<ZoteroDiagnosticsView> {
+    const service = this.ctx.get('zotero')
+    if (service === undefined) {
+      return { entries: [], total: 0, truncated: false, debug: false }
+    }
+    const snapshot = service.diagnostics.snapshot(SNAPSHOT_SERVE_LIMIT)
+    return {
+      entries: snapshot.entries.map((entry) => ({
+        seq: entry.seq,
+        ts: entry.ts,
+        level: entry.level,
+        event: entry.event,
+        message: entry.message,
+        count: entry.count,
+        ...(entry.detail === undefined ? {} : { detail: entry.detail }),
+      })),
+      total: snapshot.total,
+      truncated: snapshot.truncated,
+      debug: this.debugEnabled(),
+    }
+  }
+
+  /**
+   * Receive one client-side crash report into the same ring the host seams
+   * write, so the diagnostics panel shows both halves in one place. Stacks
+   * are clamped host-side; the ring's own bounds apply on top.
+   * @param report - the crashed surface's report.
+   * @returns the ring sequence the report was assigned.
+   */
+  async reportClientError(report: ZoteroClientErrorReport): Promise<ZoteroReportResultView> {
+    const service = this.ctx.get('zotero')
+    if (service === undefined) {
+      throw new Error('The Zotero service is not composed.')
+    }
+    const detail: Record<string, string> = {}
+    if (report.stack !== undefined && report.stack !== '') {
+      detail.stack = clampText(report.stack, DIAGNOSTIC_DETAIL_VALUE_MAX_CHARS)
+    }
+    if (report.componentStack !== undefined && report.componentStack !== '') {
+      detail.componentStack = clampText(report.componentStack, DIAGNOSTIC_DETAIL_VALUE_MAX_CHARS)
+    }
+    const seq = service.diagnostics.push({
+      level: 'error',
+      event: 'client.render',
+      message: clampText(`${report.surface}: ${report.message}`, DIAGNOSTIC_MESSAGE_MAX_CHARS),
+      ...(Object.keys(detail).length > 0 ? { detail } : {}),
+    })
+    return { seq }
+  }
+
+  /** The live `debug` flag, so the snapshot names the verbosity it was taken at. */
+  private debugEnabled(): boolean {
+    return this.ctx.get('zotero')?.config.debug === true
   }
 }

@@ -15,11 +15,15 @@
  */
 
 import { afterEach, describe, expect, it } from 'vitest'
-import { createVolatile, updateVolatile, volatileEntries } from '@deepseek-ai/cosmokit'
 import { ZOTERO_PROVIDER_UNAVAILABLE } from '../../src/errors.js'
 import { ZOTERO_WRITE_TOOL_NAMES } from '../../src/constants.js'
 import { intRangeArgumentMessage } from '../../src/tools/validate.js'
-import { expectValue, type HostLane, setupHostLane } from '../helpers/lanes/host-lane.js'
+import {
+  commitLive,
+  expectValue,
+  type HostLane,
+  setupHostLane,
+} from '../helpers/lanes/host-lane.js'
 
 /** The lane the current test booted; `afterEach` releases it. */
 let lane: HostLane | undefined
@@ -29,29 +33,6 @@ afterEach(async () => {
   await lane?.teardown()
   lane = undefined
 })
-
-/**
- * Commit one live edit the way the loader does: write the fiber's volatile
- * references, then dispatch the update event the service reacts to. Values
- * are already validated at this point (the veto test below covers the
- * refusal path), exactly as a landed commit is.
- * @param patch - top-level field values to commit.
- */
-async function commitLive(patch: Record<string, unknown>): Promise<void> {
-  const { zoteroFiber } = lane as HostLane
-  const refs = new Map(
-    volatileEntries(zoteroFiber.config).map(({ path, ref }) => [path.join('.'), ref]),
-  )
-  for (const [field, value] of Object.entries(patch)) {
-    const ref = refs.get(field)
-    if (ref === undefined) throw new Error(`no volatile reference for ${field}`)
-    updateVolatile(ref, createVolatile(value))
-  }
-  await zoteroFiber.ctx.emit(
-    'loader/volatile-update',
-    Object.keys(patch).map((field) => [field]),
-  )
-}
 
 describe('live configuration', () => {
   it('applies the composition entry at boot', async () => {
@@ -94,7 +75,7 @@ describe('live configuration', () => {
     )
     const { ctx, mock } = lane
     expect((await ctx.zotero.status()).connected).toBe(false)
-    await commitLive({ baseUrl: mock.baseUrl })
+    await commitLive(lane as HostLane, { baseUrl: mock.baseUrl })
     expect(ctx.zotero.config.baseUrl).toBe(mock.baseUrl)
     const status = await ctx.zotero.status()
     expect(status.connected).toBe(true)
@@ -108,7 +89,7 @@ describe('live configuration', () => {
     // gate here would fork concurrent connectivity asks into stacked cards.
     lane = await setupHostLane({ baseUrl: 'http://127.0.0.1:1/api' })
     const recovery = lane.ctx.zotero.recovery
-    await commitLive({ timeoutMs: 7000, maxSearchResults: 5 })
+    await commitLive(lane as HostLane, { timeoutMs: 7000, maxSearchResults: 5 })
     expect(lane.ctx.zotero.config.timeoutMs).toBe(7000)
     expect(lane.ctx.zotero.config.maxSearchResults).toBe(5)
     expect(lane.ctx.zotero.recovery).toBe(recovery)
@@ -118,7 +99,7 @@ describe('live configuration', () => {
     lane = await setupHostLane()
     // `provider` is a live lookup in `resolveProvider()`; it is not a
     // transport key, so the edit must land through the entry read alone.
-    await commitLive({ provider: 'missing' })
+    await commitLive(lane as HostLane, { provider: 'missing' })
     await expect(
       lane.ctx.zotero.search({
         scope: { kind: 'library' },
@@ -129,14 +110,14 @@ describe('live configuration', () => {
         limit: 5,
       }),
     ).rejects.toMatchObject({ code: ZOTERO_PROVIDER_UNAVAILABLE })
-    await commitLive({ provider: 'local' })
+    await commitLive(lane as HostLane, { provider: 'local' })
     expect(lane.ctx.zotero.config.provider).toBe('local')
   })
 
   it('live-applies writePersistKey without rebuilding the transport', async () => {
     lane = await setupHostLane({ writeEnabled: true })
     const recovery = lane.ctx.zotero.recovery
-    await commitLive({ writePersistKey: false })
+    await commitLive(lane as HostLane, { writePersistKey: false })
     expect(lane.ctx.zotero.config.writePersistKey).toBe(false)
     // Recovery is service-lifetime state and is never swapped on rebuild;
     // its identity is also the cheap "same instance" probe here.
@@ -146,7 +127,7 @@ describe('live configuration', () => {
 
   it('live-applies a tool validation limit', async () => {
     lane = await setupHostLane({ baseUrl: 'http://127.0.0.1:1/api' })
-    await commitLive({ maxSearchResults: 5 })
+    await commitLive(lane as HostLane, { maxSearchResults: 5 })
     const result = await lane.runTool('zotero_search', { query: 'x', limit: 10 })
     expect(result.isError).toBe(true)
     if (!result.isError) throw new Error('unreachable')
@@ -159,9 +140,9 @@ describe('live configuration', () => {
     lane = await setupHostLane()
     expect(lane.tool('zotero_create_note')).toBeUndefined()
     for (const name of ZOTERO_WRITE_TOOL_NAMES) expect(lane.tool(name)).toBeUndefined()
-    await commitLive({ writeEnabled: true })
+    await commitLive(lane as HostLane, { writeEnabled: true })
     for (const name of ZOTERO_WRITE_TOOL_NAMES) expect(lane.tool(name)).toBeDefined()
-    await commitLive({ writeEnabled: false })
+    await commitLive(lane as HostLane, { writeEnabled: false })
     for (const name of ZOTERO_WRITE_TOOL_NAMES) expect(lane.tool(name)).toBeUndefined()
   })
 
@@ -200,7 +181,7 @@ describe('live configuration', () => {
       abstractTruncated: true,
     })
 
-    await commitLive({ maxDetailChars: 500 })
+    await commitLive(lane as HostLane, { maxDetailChars: 500 })
     expect(lane.ctx.zotero.config.maxDetailChars).toBe(500)
 
     const updated = expectValue(
@@ -221,7 +202,7 @@ describe('live configuration', () => {
     // provider's live limits getter projects.
     lane = await setupHostLane({ scopeListingTtlMs: 30_000 })
     const recovery = lane.ctx.zotero.recovery
-    await commitLive({ scopeListingTtlMs: 60_000 })
+    await commitLive(lane as HostLane, { scopeListingTtlMs: 60_000 })
     expect(lane.ctx.zotero.config.scopeListingTtlMs).toBe(60_000)
     // Recovery is service-lifetime state, never swapped on a transport
     // rebuild; its identity is the cheap "same instance" probe here.

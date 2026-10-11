@@ -22,6 +22,7 @@
 | `maxNoteChars`             | `2000`                       | `zotero_get` 单条笔记预览字符预算                                                                                                                                             |
 | `maxNoteRecords`           | `50`                         | `zotero_get` 返回笔记条数上限                                                                                                                                                 |
 | `maxAnnotationRecords`     | `100`                        | `zotero_get` 返回批注条数上限                                                                                                                                                 |
+| `maxAttachmentRecords`     | `50`                         | `zotero_get`/`zotero_children` 返回附件条数上限                                                                                                                               |
 | `fulltextChunkWords`       | `200`                        | 进入排名的全文分块词数                                                                                                                                                        |
 | `maxFulltextChars`         | `250000`                     | `zotero_retrieve` 单次调用接受的最大全文字符数（多附件时均分）                                                                                                                |
 | `retrieveAttachmentCap`    | `16`                         | 单次 `zotero_retrieve` 参与全文排名的附件数上限                                                                                                                               |
@@ -43,6 +44,7 @@
 | `enableRunInBackground`    | `true`                       | 是否允许工具参数 `run_in_background` 显式放入后台                                                                                                                             |
 | `promoteOnTimeout`         | `true`                       | 前台导出或变更同步超时时是否自动提升为后台任务                                                                                                                                |
 | `foregroundWaitMs`         | `4000`                       | 前台执行等待上限（毫秒），超时后自动提升为后台 Job                                                                                                                            |
+| `debug`                    | `false`                      | 诊断面板是否记录请求路径与工具调用的细节条目；日志仅保存在进程内存中，不持久化到磁盘，亦不向外发送                                                                            |
 
 说明：`foregroundWaitMs` 控制前台任务等待时长，超时后自动转为后台 Job；`timeoutMs` 控制单次 Zotero HTTP 请求超时，两者相互独立。
 
@@ -55,7 +57,7 @@
 - `baseUrl` 路径必须为 `/api` 或以 `/api/` 开头；
 - `timeoutMs` 必须为正有限数；
 - 其余数值字段（并发、各类上限、`scopeListingTtlMs`、`foregroundWaitMs`、`writeNoteMaxChars`、`writeListMaxItems`、`writeAuthorizeDeadlineMs`）均必须为正整数；
-- `writeEnabled`、`writePersistKey`、`webEnabled`、`enableRunInBackground` 与 `promoteOnTimeout` 必须为布尔值；
+- `writeEnabled`、`writePersistKey`、`webEnabled`、`enableRunInBackground`、`promoteOnTimeout` 与 `debug` 必须为布尔值；
 - `provider`、`defaultStyle` 与 `defaultLocale` 必须为非空字符串。
 
 ## 配置优先级
@@ -81,6 +83,7 @@ Schema 默认值 → Composition 入口配置 → settings.yaml 用户层
 - 传输层配置或写入开关变更时，在同一 `ZoteroService` 实例上重建 HTTP 客户端、local provider 与写入工具集；
 - 限额配置变更由 provider 在下次调用时直接读取，无需重建传输层；
 - `webEnabled` 开关保存后即时显示或隐藏对应标签页；
+- `debug` 开关保存后即时生效，调整诊断日志的保留级别，无需重新初始化组件；
 - 绝大多数配置更新均在下一次工具调用时生效，无需重启宿主。
 
 ## 无设置服务的运行环境

@@ -106,6 +106,7 @@ export async function getItem(
     maxNoteChars: deps.limits.maxNoteChars,
     maxNoteRecords: deps.limits.maxNoteRecords,
     maxAnnotationRecords: deps.limits.maxAnnotationRecords,
+    maxAttachmentRecords: deps.limits.maxAttachmentRecords,
     fields: request.fields,
   })
 }
@@ -195,7 +196,7 @@ export async function children(
       ? {
           attachments: childCollection(
             partitioned.attachments.map((candidate) => attachmentRecordOf(candidate, ctx)),
-            partitioned.attachments.length,
+            deps.limits.maxAttachmentRecords,
           ),
         }
       : {}),

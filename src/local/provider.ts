@@ -29,6 +29,7 @@ import { ZOTERO_DIAGNOSIS_OK } from '../contract.js'
 import { errorChain } from '@deepseek-ai/dsh-llm'
 import { ZoteroError, ZOTERO_CAPABILITY_UNAVAILABLE } from '../errors.js'
 import { resolveCollectionsMixed, ScopeDirectory } from './scope-directory.js'
+import type { DiagnosticSink } from '../diagnostics.js'
 import type { ZoteroHttpClient } from '../http-client.js'
 import type { LocalApiLimits } from './limits.js'
 import { runSearch } from './search-domain.js'
@@ -104,13 +105,14 @@ export class LocalApiProvider implements ZoteroProvider {
     limits: LocalApiLimits | (() => LocalApiLimits),
     private readonly writer?: ZoteroWriteHttpClient,
     private readonly authorizer?: WriteAuthorizer,
+    sink?: DiagnosticSink,
   ) {
     this.getLimits = typeof limits === 'function' ? limits : () => limits
     // The directory owns the scope-listing and breadcrumb caches. It reads the
     // TTL through the live limits, so a settings edit changes how long an
     // existing cache entry is trusted instead of rebuilding this provider (and
     // with it the HTTP client, the write client and the authorizer's grants).
-    this.directory = new ScopeDirectory(client, () => this.getLimits().scopeListingTtlMs)
+    this.directory = new ScopeDirectory(client, () => this.getLimits().scopeListingTtlMs, sink)
     // `write` is declared only when the write collaborators are wired: a
     // capability without its method would be a gate that routes into
     // nothing.

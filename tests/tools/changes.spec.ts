@@ -90,6 +90,7 @@ describe('zotero_changes tool', () => {
       library: { type: 'user', id: 0 },
       version: 42,
       include: ['items', 'collections', 'savedSearches', 'deleted'],
+      unserved: [],
     })
     expect(value.changed).toEqual({})
     const text = (result.content[0] as { text: string }).text
@@ -132,7 +133,7 @@ describe('zotero_changes tool', () => {
   })
 
   it('refuses a cursor this plugin would diff against the wrong counter', async () => {
-    const cursor = { serverId: 'S1', library: { type: 'user', id: 0 }, version: 42 }
+    const cursor = { serverId: 'S1', library: { type: 'user', id: 0 }, version: 42, unserved: [] }
     // A version is a counter of one library, so a cursor from user/0 says
     // nothing about group/42; the mix-up is refused before any read.
     const crossLibrary = await runTool('zotero_changes', {
@@ -189,7 +190,7 @@ describe('zotero_changes tool', () => {
     })
     const result = expectValue(
       await runTool('zotero_changes', {
-        since: { serverId: 'S1', library: { type: 'user', id: 0 }, version: 42 },
+        since: { serverId: 'S1', library: { type: 'user', id: 0 }, version: 42, unserved: [] },
         include: ['items', 'deleted'],
       }),
       'zotero_changes',
@@ -233,7 +234,7 @@ describe('zotero_changes tool', () => {
     const result = expectValue(
       await runTool('zotero_changes', {
         library: { type: 'group', id: 42 },
-        since: { serverId: 'S2', library: { type: 'group', id: 42 }, version: 3 },
+        since: { serverId: 'S2', library: { type: 'group', id: 42 }, version: 3, unserved: [] },
         include: ['items'],
       }),
       'zotero_changes',
@@ -248,6 +249,7 @@ describe('zotero_changes tool', () => {
       library: { type: 'group', id: 42 },
       version: 9,
       include: ['items'],
+      unserved: [],
     })
   })
 
@@ -272,7 +274,7 @@ describe('zotero_changes tool', () => {
     )
     const result = expectValue(
       await runTool('zotero_changes', {
-        since: { serverId: 'S1', library: { type: 'user', id: 0 }, version: 42 },
+        since: { serverId: 'S1', library: { type: 'user', id: 0 }, version: 42, unserved: [] },
       }),
       'zotero_changes',
     )
@@ -307,7 +309,7 @@ describe('zotero_changes tool', () => {
     )
     const result = expectValue(
       await runTool('zotero_changes', {
-        since: { serverId: 'S1', library: { type: 'user', id: 0 }, version: 42 },
+        since: { serverId: 'S1', library: { type: 'user', id: 0 }, version: 42, unserved: [] },
         include: ['items', 'deleted'],
       }),
       'zotero_changes',
@@ -332,7 +334,7 @@ describe('zotero_changes tool', () => {
 
   it('rejects an explicit empty include before any request', async () => {
     const result = await runTool('zotero_changes', {
-      since: { serverId: 'S1', library: { type: 'user', id: 0 }, version: 42 },
+      since: { serverId: 'S1', library: { type: 'user', id: 0 }, version: 42, unserved: [] },
       include: [],
     })
     expect(result.isError).toBe(true)
@@ -503,6 +505,7 @@ describe('zotero_changes tool', () => {
           library: { type: 'user', id: 0 },
           version: 1,
           include: ['fulltext'],
+          unserved: [],
         },
       },
       {

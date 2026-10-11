@@ -22,6 +22,7 @@ All configuration fields are defined in `src/config.ts`, with default values pro
 | `maxNoteChars`             | `2000`                       | Character budget for single note previews in `zotero_get`                                                                                                                                      |
 | `maxNoteRecords`           | `50`                         | Maximum note items returned by `zotero_get`                                                                                                                                                    |
 | `maxAnnotationRecords`     | `100`                        | Maximum annotation items returned by `zotero_get`                                                                                                                                              |
+| `maxAttachmentRecords`     | `50`                         | Maximum attachment items returned by `zotero_get`/`zotero_children`                                                                                                                            |
 | `fulltextChunkWords`       | `200`                        | Word count for full-text chunks in ranking                                                                                                                                                     |
 | `maxFulltextChars`         | `250000`                     | Maximum full-text characters accepted in a single `zotero_retrieve` call (shared across attachments)                                                                                           |
 | `retrieveAttachmentCap`    | `16`                         | Maximum attachments ranked for full text in a single `zotero_retrieve` call                                                                                                                    |
@@ -43,6 +44,7 @@ All configuration fields are defined in `src/config.ts`, with default values pro
 | `enableRunInBackground`    | `true`                       | Whether to allow the `run_in_background` tool parameter                                                                                                                                        |
 | `promoteOnTimeout`         | `true`                       | Whether to promote long foreground export or sync operations to background Jobs on timeout                                                                                                     |
 | `foregroundWaitMs`         | `4000`                       | Foreground wait limit in milliseconds before automatic promotion to background Job                                                                                                             |
+| `debug`                    | `false`                      | Whether the diagnostics panel records request paths and tool-call details; entries remain in memory only and are never saved to disk or transmitted externally                                 |
 
 Note: `foregroundWaitMs` controls how long foreground operations wait before promoting to a background Job; `timeoutMs` controls individual Zotero HTTP request timeouts. They operate independently.
 
@@ -55,7 +57,7 @@ Note: `foregroundWaitMs` controls how long foreground operations wait before pro
 - `baseUrl` path must be `/api` or start with `/api/`;
 - `timeoutMs` must be a positive finite number;
 - Every other numeric field (concurrency, the various limits, `scopeListingTtlMs`, `foregroundWaitMs`, `writeNoteMaxChars`, `writeListMaxItems`, and `writeAuthorizeDeadlineMs`) must be a positive integer;
-- `writeEnabled`, `writePersistKey`, `webEnabled`, `enableRunInBackground`, and `promoteOnTimeout` must be booleans;
+- `writeEnabled`, `writePersistKey`, `webEnabled`, `enableRunInBackground`, `promoteOnTimeout`, and `debug` must be booleans;
 - `provider`, `defaultStyle`, and `defaultLocale` must be non-empty strings.
 
 ## Configuration Priority
@@ -81,6 +83,7 @@ The plugin registers a Zotero page in the left navigation of the Settings panel,
 - Changes to transport fields or write gates rebuild the HTTP client, local provider, and write tools on the existing `ZoteroService` instance.
 - Limit modifications are read live on subsequent calls without rebuilding transport components.
 - The `webEnabled` toggle displays or hides the tab immediately upon save.
+- The `debug` setting takes effect immediately upon saving to adjust diagnostic logging levels without component reinitialization.
 - Nearly all configuration updates apply to the next tool invocation without restarting the host.
 
 ## Environments Without Settings Service

@@ -492,6 +492,8 @@ export interface NormalizeItemDetailInput {
   readonly maxNoteRecords: number
   /** Upper bound for returned annotation records. */
   readonly maxAnnotationRecords: number
+  /** Upper bound for returned attachment records. */
+  readonly maxAttachmentRecords: number
   /** `all` passes through `data` fields the normalized model does not consume. */
   readonly fields?: 'standard' | 'all'
 }
@@ -674,7 +676,7 @@ export function normalizeItemDetail(input: NormalizeItemDetailInput): ZoteroItem
       )
     if (input.include.has('attachments')) {
       const records = partitioned.attachments.map((candidate) => attachmentRecordOf(candidate, ctx))
-      childCollections.attachments = childCollection(records, records.length)
+      childCollections.attachments = childCollection(records, input.maxAttachmentRecords)
     }
   }
 

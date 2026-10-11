@@ -18,6 +18,7 @@ describe('resolveConfig', () => {
       maxNoteChars: 2000,
       maxNoteRecords: 50,
       maxAnnotationRecords: 100,
+      maxAttachmentRecords: 50,
       fulltextChunkWords: 200,
       maxFulltextChars: 250_000,
       retrieveAttachmentCap: 16,
@@ -39,6 +40,7 @@ describe('resolveConfig', () => {
       enableRunInBackground: true,
       promoteOnTimeout: true,
       foregroundWaitMs: 4000,
+      debug: false,
     })
   })
 
@@ -144,6 +146,7 @@ describe('resolveConfig', () => {
     expect(() => resolveConfig({ maxExportRefs: -2 })).toThrowError(/maxExportRefs/)
     expect(() => resolveConfig({ maxNoteRecords: 1.5 })).toThrowError(/maxNoteRecords/)
     expect(() => resolveConfig({ maxAnnotationRecords: -2 })).toThrowError(/maxAnnotationRecords/)
+    expect(() => resolveConfig({ maxAttachmentRecords: 0 })).toThrowError(/maxAttachmentRecords/)
     expect(() => resolveConfig({ fulltextChunkWords: 0 })).toThrowError(/fulltextChunkWords/)
     expect(() => resolveConfig({ maxInFlightRequests: 0 })).toThrowError(/maxInFlightRequests/)
     expect(() => resolveConfig({ searchConcurrency: 1.5 })).toThrowError(/searchConcurrency/)
@@ -182,6 +185,9 @@ describe('readResolvedConfig', () => {
     expect(() => readResolvedConfig({ ...base, webEnabled: 1 as unknown as boolean })).toThrowError(
       /webEnabled must be a boolean/,
     )
+    expect(() => readResolvedConfig({ ...base, debug: 'yes' as unknown as boolean })).toThrowError(
+      /debug must be a boolean/,
+    )
   })
 })
 
@@ -196,5 +202,11 @@ describe('toLiveEntry', () => {
     expect(readResolvedConfig(entry).timeoutMs).toBe(9)
     expect(readResolvedConfig(entry).maxSearchResults).toBe(20)
     expect(toLiveEntry(entry)).toBe(entry)
+  })
+
+  it('fills schema defaults around a single handwritten flag', () => {
+    const entry = toLiveEntry({ debug: true })
+    expect(readResolvedConfig(entry).debug).toBe(true)
+    expect(readResolvedConfig(entry).foregroundWaitMs).toBe(4000)
   })
 })

@@ -8,6 +8,7 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { messageOf } from '../error-text.ts'
+import { reportCrashedSurface } from '../actions/error-reporter.ts'
 import css from './cards.module.css'
 
 export interface ZoteroSurfaceBoundaryProps {
@@ -15,6 +16,11 @@ export interface ZoteroSurfaceBoundaryProps {
   readonly children: ReactNode
   /** Identity-compared between renders; a change clears the caught fault. */
   readonly resetKey?: string | number
+  /**
+   * Which surface this boundary guards, as the crash report names it: the
+   * client-error intake files the entry under this key (`sources`, `detail`).
+   */
+  readonly surface: string
 }
 
 interface ZoteroSurfaceBoundaryState {
@@ -35,8 +41,11 @@ export class ZoteroSurfaceBoundary extends Component<
   }
 
   override componentDidCatch(error: unknown, info: ErrorInfo): void {
-    // Logs the failure with plugin context for diagnostics.
+    // Logs the failure with plugin context for diagnostics, and files it into
+    // the host ring through the error-reporter binding, so the crash stays
+    // readable in the diagnostics panel after this console line is gone.
     console.error('dsh-zotero: the Zotero panel failed to render:', messageOf(error), info)
+    reportCrashedSurface(this.props.surface, error, info)
   }
 
   override componentDidUpdate(prevProps: ZoteroSurfaceBoundaryProps): void {

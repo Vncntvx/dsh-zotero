@@ -24,8 +24,15 @@ export function at(
   version: number,
   serverId = SERVER_ID,
   include: readonly ZoteroChangesInclude[] = DEFAULT_CHANGES_INCLUDES,
+  unserved: readonly ZoteroChangesInclude[] = [],
 ): ZoteroChangesCursor {
-  return { serverId, library: PERSONAL_LIBRARY, version, include: [...include] }
+  return {
+    serverId,
+    library: PERSONAL_LIBRARY,
+    version,
+    include: [...include],
+    unserved: [...unserved],
+  }
 }
 
 /**

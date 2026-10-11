@@ -16,7 +16,8 @@ import {
   jobPromotedMessage,
   jobWaitFailedMessage,
 } from '../../src/job-runner.js'
-import { ZOTERO_TIMEOUT, ZoteroError } from '../../src/errors.js'
+import { ZOTERO_NOT_RUNNING, ZOTERO_TIMEOUT, ZoteroError } from '../../src/errors.js'
+import type { DiagnosticSink } from '../../src/diagnostics.js'
 import { projectJobView, TestJobRegistry } from '../helpers/fake-jobs.js'
 
 function fakeExec(
@@ -35,6 +36,47 @@ function fakeExec(
 }
 
 describe('ZoteroJobRunner', () => {
+  it('reports settled outcomes to the sink with the stable code when one exists', async () => {
+    const sink = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+    const runner = new ZoteroJobRunner(new TestJobRegistry() as unknown as JobRegistry, sink)
+
+    const completed = runner.start({
+      label: 'sunny job',
+      exec: fakeExec(),
+      run: async () => 'done',
+    })
+    await completed.done
+    expect(sink.info).toHaveBeenCalledWith('job.outcome', 'sunny job completed')
+
+    const zoteroFailure = runner.start({
+      label: 'zotero job',
+      exec: fakeExec(),
+      run: async () => {
+        throw new ZoteroError('nope', ZOTERO_NOT_RUNNING)
+      },
+    })
+    await zoteroFailure.done
+    expect(sink.error).toHaveBeenCalledWith(
+      'job.outcome',
+      expect.stringContaining('zotero job failed: nope'),
+      { errorCode: ZOTERO_NOT_RUNNING },
+    )
+
+    const plainFailure = runner.start({
+      label: 'plain job',
+      exec: fakeExec(),
+      run: async () => {
+        throw new Error('plain boom')
+      },
+    })
+    await plainFailure.done
+    expect(sink.error).toHaveBeenCalledWith(
+      'job.outcome',
+      expect.stringContaining('plain job failed: plain boom'),
+      undefined,
+    )
+  })
+
   it('reports availability based on registry presence', () => {
     expect(new ZoteroJobRunner().isAvailable).toBe(false)
     expect(new ZoteroJobRunner(new TestJobRegistry() as unknown as JobRegistry).isAvailable).toBe(
@@ -208,7 +250,12 @@ describe('ZoteroJobRunner', () => {
       registry.start = (() => {
         throw new Error('background jobs unavailable: no job controller serves this agent')
       }) as typeof registry.start
-      const logger = { warn: vi.fn() }
+      const logger: DiagnosticSink = {
+        debug: vi.fn(),
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      }
       const runner = new ZoteroJobRunner(registry as unknown as JobRegistry, logger)
       const seen: string[] = []
       const outcome = await runner.waitOrPromote(
@@ -228,8 +275,9 @@ describe('ZoteroJobRunner', () => {
       expect(outcome).toEqual({ kind: 'foreground', value: 'foreground fallback' })
       expect(seen).toEqual(['ran'])
       expect(logger.warn).toHaveBeenCalledWith(
+        'job.refused',
         expect.stringContaining(
-          'zotero: job registration refused, running in the foreground: background jobs unavailable: no job controller serves this agent',
+          'job registration refused, running in the foreground: background jobs unavailable: no job controller serves this agent',
         ),
       )
     })

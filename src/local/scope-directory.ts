@@ -15,6 +15,7 @@ import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import { ZOTERO_SERVER_ID_HEADER } from '../constants.js'
 import { awaitSharedOperation, type SharedOperation } from '../concurrency.js'
+import type { DiagnosticSink } from '../diagnostics.js'
 import {
   isNotFoundError,
   TOOL_ABORTED_MESSAGE,
@@ -132,8 +133,14 @@ export class ScopeDirectory {
    * @param client - the HTTP client every listing read rides.
    * @param ttlMsOf - live read of the listing TTL; compared at each lookup,
    * so a settings edit applies without rebuilding the directory.
+   * @param sink - optional diagnostics sink; a TTL cache hit is a debug fact,
+   * since a stale listing is a common answer to a page looking out of date.
    */
-  constructor(client: ZoteroHttpClient, ttlMsOf: () => number) {
+  constructor(
+    client: ZoteroHttpClient,
+    ttlMsOf: () => number,
+    private readonly sink?: DiagnosticSink,
+  ) {
     this.client = client
     this.ttlMsOf = ttlMsOf
   }
@@ -163,6 +170,9 @@ export class ScopeDirectory {
       Date.now() - cached.fetchedAt < this.ttlMsOf() &&
       cacheEntryMatchesIdentity(cached.serverId, ctx.serverId)
     ) {
+      this.sink?.debug('scope.cache', `served the cached ${plural} listing`, {
+        ageMs: Date.now() - cached.fetchedAt,
+      })
       return cached
     }
     // A forced refresh must not join a normal read: that answer may predate
@@ -516,6 +526,9 @@ export class ScopeDirectory {
       Date.now() - cached.fetchedAt < this.ttlMsOf() &&
       cacheEntryMatchesIdentity(cached.serverId, serverId)
     ) {
+      this.sink?.debug('scope.cache', 'served a cached collection node', {
+        ageMs: Date.now() - cached.fetchedAt,
+      })
       return cached.node
     }
     let operation = this.collectionNodeInFlight.get(nodeCacheKey)

@@ -681,8 +681,15 @@ export interface ZoteroChangesCursor {
   library: SupportedLocalLibrary
   /** The library version the diff read through. */
   version: number
-  /** Resource kinds this checkpoint covered; reuse it with the same include set. */
+  /** Resource kinds this checkpoint tracked; reuse it with the same include set. */
   include: ZoteroChangesInclude[]
+  /**
+   * Kinds this call included that the answering build does not serve at all.
+   * They are never claimable as covered, but resuming them is safe — the next
+   * diff meets the same absence — so they ride the cursor instead of being
+   * dropped. Disjoint from `include`.
+   */
+  unserved: ZoteroChangesInclude[]
 }
 
 export interface ZoteroChangesRequest {

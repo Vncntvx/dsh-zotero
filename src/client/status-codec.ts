@@ -17,9 +17,14 @@
 
 import type { InvocationDescriptor } from '@deepseek-ai/dsh-typert-protocol'
 import {
+  ZOTERO_CLIENT_ERROR_REPORT_TYPE_SYMBOL,
+  ZOTERO_DIAGNOSTICS_TYPE_SYMBOL,
   ZOTERO_REF_PARAM_TYPE_SYMBOL,
+  ZOTERO_REPORT_RESULT_TYPE_SYMBOL,
   ZOTERO_RESOLVE_ATTACHMENT_TYPE_SYMBOL,
   ZOTERO_STATUS_TYPE_SYMBOL,
+  zoteroDiagnosticsInvocation,
+  zoteroReportClientErrorInvocation,
   zoteroResolveAttachmentInvocation,
   zoteroStatusInvocation,
 } from '../contract.ts'
@@ -57,11 +62,40 @@ export const ZOTERO_RESOLVE_ATTACHMENT_CLIENT_RESULT_CODEC = Object.freeze({
   },
 }) satisfies InvocationDescriptor['result']
 
+export const ZOTERO_DIAGNOSTICS_CLIENT_RESULT_CODEC = Object.freeze({
+  mode: 'strict',
+  typeSymbol: ZOTERO_DIAGNOSTICS_TYPE_SYMBOL,
+  create: (): never => {
+    throw new Error(HOST_OWNED_CODEC_MESSAGE)
+  },
+}) satisfies InvocationDescriptor['result']
+
+export const ZOTERO_CLIENT_ERROR_REPORT_CLIENT_PARAM_CODEC = Object.freeze({
+  mode: 'strict',
+  typeSymbol: ZOTERO_CLIENT_ERROR_REPORT_TYPE_SYMBOL,
+  create: (): never => {
+    throw new Error(HOST_OWNED_CODEC_MESSAGE)
+  },
+}) satisfies InvocationDescriptor['parameters'][number]['codec']
+
+export const ZOTERO_REPORT_RESULT_CLIENT_RESULT_CODEC = Object.freeze({
+  mode: 'strict',
+  typeSymbol: ZOTERO_REPORT_RESULT_TYPE_SYMBOL,
+  create: (): never => {
+    throw new Error(HOST_OWNED_CODEC_MESSAGE)
+  },
+}) satisfies InvocationDescriptor['result']
+
 /** Client Remote contribution descriptors (structural identity + host-owned codec). */
 export const ZOTERO_CLIENT_INVOCATIONS: readonly InvocationDescriptor[] = Object.freeze([
   zoteroStatusInvocation(ZOTERO_STATUS_CLIENT_RESULT_CODEC),
   zoteroResolveAttachmentInvocation(
     ZOTERO_REF_CLIENT_PARAM_CODEC,
     ZOTERO_RESOLVE_ATTACHMENT_CLIENT_RESULT_CODEC,
+  ),
+  zoteroDiagnosticsInvocation(ZOTERO_DIAGNOSTICS_CLIENT_RESULT_CODEC),
+  zoteroReportClientErrorInvocation(
+    ZOTERO_CLIENT_ERROR_REPORT_CLIENT_PARAM_CODEC,
+    ZOTERO_REPORT_RESULT_CLIENT_RESULT_CODEC,
   ),
 ])

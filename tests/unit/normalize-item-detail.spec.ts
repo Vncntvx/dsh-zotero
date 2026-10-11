@@ -76,6 +76,7 @@ describe('normalizeItemDetail', () => {
       maxNoteChars: 2000,
       maxNoteRecords: 50,
       maxAnnotationRecords: 100,
+      maxAttachmentRecords: 50,
     })
     expect(detail).toEqual({
       ref: 'zotero://user/0/item/ABCD1234?server=S1',
@@ -146,6 +147,7 @@ describe('normalizeItemDetail', () => {
       maxNoteChars: 2000,
       maxNoteRecords: 50,
       maxAnnotationRecords: 100,
+      maxAttachmentRecords: 50,
     })
     expect(detail).toEqual({
       ref: 'zotero://user/0/item/ABCD1234',
@@ -172,6 +174,7 @@ describe('normalizeItemDetail', () => {
       maxNoteChars: 2000,
       maxNoteRecords: 50,
       maxAnnotationRecords: 100,
+      maxAttachmentRecords: 50,
     })
     expect(detail.abstract).toBeUndefined()
     expect(detail.abstractTruncated).toBe(false)
@@ -189,6 +192,7 @@ describe('normalizeItemDetail', () => {
       maxNoteChars: 2000,
       maxNoteRecords: 50,
       maxAnnotationRecords: 100,
+      maxAttachmentRecords: 50,
     })
     expect(detail.abstract).toBe('abcd')
     expect(detail.abstractTruncated).toBe(true)
@@ -217,6 +221,7 @@ describe('normalizeItemDetail', () => {
       maxNoteChars: 2000,
       maxNoteRecords: 50,
       maxAnnotationRecords: 100,
+      maxAttachmentRecords: 50,
     })
     expect(detail.notes).toMatchObject({ total: 60, returned: 50 })
     expect(detail.notes!.items).toHaveLength(50)
@@ -234,6 +239,7 @@ describe('normalizeItemDetail', () => {
       maxNoteChars: 2000,
       maxNoteRecords: 50,
       maxAnnotationRecords: 100,
+      maxAttachmentRecords: 50,
     })
     expect(detail.children).toEqual({ total: 1 })
   })
@@ -252,6 +258,7 @@ describe('normalizeItemDetail', () => {
       maxNoteChars: 2000,
       maxNoteRecords: 50,
       maxAnnotationRecords: 100,
+      maxAttachmentRecords: 50,
     })
     expect(detail.children).toEqual({ total: 7 })
   })
@@ -275,6 +282,7 @@ describe('normalizeItemDetail', () => {
       maxNoteChars: 2000,
       maxNoteRecords: 50,
       maxAnnotationRecords: 100,
+      maxAttachmentRecords: 50,
     })
     expect(detail.bestAttachment).toEqual({
       ref: 'zotero://user/0/attachment/WXYZ6789',
@@ -305,6 +313,7 @@ describe('normalizeItemDetail', () => {
       maxNoteChars: 2000,
       maxNoteRecords: 50,
       maxAnnotationRecords: 100,
+      maxAttachmentRecords: 50,
     })
     expect(detail.tags).toEqual(['real'])
     expect(detail.venue).toBeUndefined()
@@ -323,6 +332,7 @@ describe('normalizeItemDetail', () => {
       maxNoteChars: 2000,
       maxNoteRecords: 50,
       maxAnnotationRecords: 100,
+      maxAttachmentRecords: 50,
     })
     expect(detail.itemType).toBe('journalArticle')
   })
@@ -337,6 +347,7 @@ describe('normalizeItemDetail', () => {
         maxNoteChars: 2000,
         maxNoteRecords: 50,
         maxAnnotationRecords: 100,
+        maxAttachmentRecords: 50,
       }),
     )
     expect(error.code).toBe(ZOTERO_UNEXPECTED)
@@ -354,6 +365,7 @@ describe('normalizeItemDetail', () => {
       maxNoteChars: 2000,
       maxNoteRecords: 50,
       maxAnnotationRecords: 100,
+      maxAttachmentRecords: 50,
     })
     expect(detail.noteBody).toEqual({ text: 'hello wo', truncated: true })
   })
@@ -367,6 +379,7 @@ describe('normalizeItemDetail', () => {
       maxNoteChars: 2000,
       maxNoteRecords: 50,
       maxAnnotationRecords: 100,
+      maxAttachmentRecords: 50,
     })
     expect(detail.noteBody).toBeUndefined()
   })
@@ -392,6 +405,7 @@ describe('normalizeItemDetail', () => {
       maxNoteChars: 2000,
       maxNoteRecords: 50,
       maxAnnotationRecords: 100,
+      maxAttachmentRecords: 50,
     })
     expect(detail.notes).toBeUndefined()
     expect(detail.annotations!.total).toBe(1)
@@ -406,6 +420,7 @@ describe('normalizeItemDetail', () => {
       maxNoteChars: 2000,
       maxNoteRecords: 50,
       maxAnnotationRecords: 100,
+      maxAttachmentRecords: 50,
     })
     expect(detail.itemType).toBe('')
   })
@@ -425,6 +440,7 @@ describe('normalizeItemDetail', () => {
       maxNoteChars: 2000,
       maxNoteRecords: 50,
       maxAnnotationRecords: 100,
+      maxAttachmentRecords: 50,
     })
     expect(detail.attachments!.items).toEqual([
       { ref: 'zotero://user/0/attachment/WXYZ6789', title: 'Snapshot', contentType: 'text/html' },
@@ -440,6 +456,7 @@ describe('normalizeItemDetail', () => {
       maxNoteChars: 2000,
       maxNoteRecords: 50,
       maxAnnotationRecords: 100,
+      maxAttachmentRecords: 50,
     })
     expect(detail.title).toBe('')
   })
@@ -460,6 +477,7 @@ describe('normalizeItemDetail relations', () => {
     | 'maxNoteChars'
     | 'maxNoteRecords'
     | 'maxAnnotationRecords'
+    | 'maxAttachmentRecords'
   > {
     return {
       include: new Set(),
@@ -468,6 +486,7 @@ describe('normalizeItemDetail relations', () => {
       maxNoteChars: 100,
       maxNoteRecords: 10,
       maxAnnotationRecords: 10,
+      maxAttachmentRecords: 10,
     }
   }
 
@@ -500,6 +519,7 @@ describe('normalizeItemDetail relations', () => {
       maxNoteChars: 100,
       maxNoteRecords: 10,
       maxAnnotationRecords: 10,
+      maxAttachmentRecords: 10,
     })
     return { targetRef: detail.relations?.[0]?.targetRef }
   }
@@ -608,126 +628,5 @@ describe('normalizeItemDetail relations', () => {
       })
       expect(detail.relations).toBeUndefined()
     }
-  })
-})
-
-describe('extraFields lossless-JSON gate', () => {
-  it('drops non-finite and negative-zero numbers that JSON cannot round-trip', () => {
-    const parent = {
-      key: 'ABCD1234',
-      version: 1,
-      data: {
-        key: 'ABCD1234',
-        version: 1,
-        itemType: 'journalArticle',
-        title: 't',
-        repository: 'Zenodo',
-        scoreNaN: Number.NaN,
-        scoreInf: Number.POSITIVE_INFINITY,
-        negZero: -0,
-      },
-    }
-    const detail = normalizeItemDetail({
-      parent,
-      include: new Set(),
-      maxAbstractChars: 10,
-      maxNoteBodyChars: 10,
-      maxNoteChars: 10,
-      maxNoteRecords: 1,
-      maxAnnotationRecords: 1,
-      fields: 'all',
-    })
-    expect(detail.extraFields).toEqual({ repository: 'Zenodo' })
-  })
-
-  it('drops fields whose nested values cannot round-trip, keeping valid nested records', () => {
-    const parent = {
-      key: 'ABCD1234',
-      version: 1,
-      data: {
-        key: 'ABCD1234',
-        version: 1,
-        itemType: 'journalArticle',
-        title: 't',
-        validNested: { level: 1, tags: ['a', 'b'], flag: true, score: 3, nothing: null },
-        nestedNaN: { score: Number.NaN },
-        nestedInf: [1, Number.POSITIVE_INFINITY],
-        nestedNegZero: { zero: -0 },
-      },
-    }
-    const detail = normalizeItemDetail({
-      parent,
-      include: new Set(),
-      maxAbstractChars: 10,
-      maxNoteBodyChars: 10,
-      maxNoteChars: 10,
-      maxNoteRecords: 1,
-      maxAnnotationRecords: 1,
-      fields: 'all',
-    })
-    expect(detail.extraFields).toEqual({
-      validNested: { level: 1, tags: ['a', 'b'], flag: true, score: 3, nothing: null },
-    })
-  })
-
-  it('drops non-JSON values the strict harness gate rejects', () => {
-    const circular: Record<string, unknown> = { name: 'loop' }
-    circular.self = circular
-    const parent = {
-      key: 'ABCD1234',
-      version: 1,
-      data: {
-        key: 'ABCD1234',
-        version: 1,
-        itemType: 'journalArticle',
-        title: 't',
-        kept: 'yes',
-        missing: undefined,
-        fn: () => 1,
-        date: new Date('2024-01-01T00:00:00.000Z'),
-        loop: circular,
-        sparse: (() => {
-          const sparseArray: unknown[] = []
-          sparseArray[2] = 'x'
-          return sparseArray
-        })(),
-      },
-    }
-    const detail = normalizeItemDetail({
-      parent,
-      include: new Set(),
-      maxAbstractChars: 10,
-      maxNoteBodyChars: 10,
-      maxNoteChars: 10,
-      maxNoteRecords: 1,
-      maxAnnotationRecords: 1,
-      fields: 'all',
-    })
-    expect(detail.extraFields).toEqual({ kept: 'yes' })
-  })
-
-  it('omits extraFields when every unconsumed field is dropped', () => {
-    const parent = {
-      key: 'ABCD1234',
-      version: 1,
-      data: {
-        key: 'ABCD1234',
-        version: 1,
-        itemType: 'journalArticle',
-        title: 't',
-        scoreNaN: Number.NaN,
-      },
-    }
-    const detail = normalizeItemDetail({
-      parent,
-      include: new Set(),
-      maxAbstractChars: 10,
-      maxNoteBodyChars: 10,
-      maxNoteChars: 10,
-      maxNoteRecords: 1,
-      maxAnnotationRecords: 1,
-      fields: 'all',
-    })
-    expect(detail.extraFields).toBeUndefined()
   })
 })

@@ -272,3 +272,150 @@
   align-items: center;
   gap: 8px;
 }
+
+/* Diagnostics card (plugins.detail.section): filter toolbar, newest-first
+ * entry list, and footer facts. Entries reuse the caption scale; the level
+ * dot borrows the status row's state colors. */
+.diagToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.diagFilter {
+  display: flex;
+  gap: 4px;
+}
+
+.diagFilterButton {
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-lg);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 16px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.diagFilterButton[aria-pressed='true'] {
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-primary);
+}
+
+.diagList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 320px;
+  overflow-y: auto;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+  padding-top: 8px;
+}
+
+.diagRow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.diagTime {
+  flex: none;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.diagDot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dsw-alias-label-tertiary);
+}
+
+.diagDot[data-level='error'] {
+  background: var(--dsw-alias-label-error, var(--dsw-alias-state-error-primary));
+}
+
+.diagDot[data-level='warn'] {
+  background: var(--dsw-alias-state-warn-label);
+}
+
+.diagDot[data-level='info'] {
+  background: var(--dsw-alias-state-success-secondary);
+}
+
+.diagBody {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.diagEvent {
+  font-family: var(--dsw-font-mono, monospace);
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.diagCount {
+  font-size: 10px;
+  line-height: 14px;
+  color: var(--dsw-alias-label-tertiary);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-lg);
+  padding: 0 4px;
+}
+
+.diagMessage {
+  margin: 0;
+  width: 100%;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-primary);
+  overflow-wrap: anywhere;
+}
+
+.diagDetail summary {
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+.diagDetail pre {
+  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 16px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.diagEmpty {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.diagFetchError {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-error, var(--dsw-alias-state-error-primary));
+}
+
+.diagFooter {
+  margin: 0;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+}

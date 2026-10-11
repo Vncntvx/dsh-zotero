@@ -32,6 +32,9 @@ import type {} from '@deepseek-ai/dsh-typert-registry'
 // Type-only: brings the `ctx.credentials` Context merge into this program.
 import type { CredentialProvider } from '@deepseek-ai/dsh-credentials'
 import { ConnectivityRecovery } from './ask.js'
+import { DiagnosticsRecorder, logMessageToPush, loggerNameMatches } from './diagnostics.js'
+import type { DiagnosticDetail } from './diagnostics.js'
+import type { ToolExecutionResult } from '@deepseek-ai/dsh-tools'
 import { ZoteroHttpClient } from './http-client.js'
 import { registerStatusCommand } from './command.js'
 import { ZoteroRuntime } from './remote.js'
@@ -54,6 +57,7 @@ import {
   ZOTERO_CAPABILITY_UNAVAILABLE,
   ZOTERO_PROVIDER_UNAVAILABLE,
   ZOTERO_WRITE_APPROVAL_UNAVAILABLE,
+  errorMessageOf,
   ZoteroError,
 } from './errors.js'
 import { LocalApiProvider } from './local/provider.js'
@@ -139,16 +143,38 @@ declare module '@deepseek-ai/cordis' {
 const FIBER_STATE_LOADING = 1
 const FIBER_STATE_ACTIVE = 2
 
+/** Cordis `LoggerLevel.DEBUG` (the same const-enum-without-runtime situation as `FiberState`). */
+const LOGGER_LEVEL_DEBUG = 3
+
+/**
+ * One-line digest of a tool call for the debug ring: the wire name plus the
+ * argument JSON, bounded so a pathological argument cannot dominate an
+ * entry. Arguments can quote the user's library content; they reach the ring
+ * only at `debug`, which the `debug` config flag gates.
+ */
+function toolCallDigest(execution: { name: string; arguments: unknown }): string {
+  let digest = ''
+  try {
+    digest = JSON.stringify(execution.arguments) ?? ''
+  } catch {
+    digest = ''
+  }
+  const args = digest.length > 300 ? `${digest.slice(0, 299)}…` : digest
+  return args === '' ? execution.name : `${execution.name} ${args}`
+}
+
 /**
  * Whether an `internal/config` waterfall `this` is this plugin's fiber.
  * The Loader passes the fiber itself; `ctx.plugin()` returns
  * `Object.create(fiber)`, so the prototype-linked face counts as the same
- * fiber. Anything else is another plugin's config resolution.
+ * fiber. Anything else is another plugin's config resolution. Exported for
+ * the unit lane: the false arms need a foreign `this` no in-lane waterfall
+ * can carry.
  * @param thisArg - the waterfall's bound `this`.
  * @param own - the fiber that owns this service.
  * @returns true when the candidate config belongs to this plugin.
  */
-function isOwnConfigFiber(thisArg: unknown, own: Fiber): boolean {
+export function isOwnConfigFiber(thisArg: unknown, own: Fiber): boolean {
   if (thisArg === own) return true
   return typeof thisArg === 'object' && thisArg !== null && Object.getPrototypeOf(thisArg) === own
 }
@@ -195,12 +221,40 @@ export class ZoteroService extends Service {
   private lastBuilt: ResolvedConfig
   /** Cached resolved config; invalidated on any loader/volatile-update. */
   private cachedConfig?: ResolvedConfig
+  /**
+   * The plugin's own diagnostics record: ring, threshold, and the sink every
+   * instrumented seam holds. Public so the remote endpoints (and the tools,
+   * for degradation facts) can read it without a second service.
+   */
+  readonly diagnostics = new DiagnosticsRecorder()
+  /** Last observed probe connectivity; `undefined` until the first probe, so the initial state always records. */
+  private lastProbeConnected: boolean | undefined = undefined
 
   constructor(ctx: Context, config: Config | Options = {}) {
     super(ctx, 'zotero')
+    // Diagnostics come first: the exporter is a process-wide tap disposed
+    // with this fiber, filtering this subtree's logger names into the ring.
+    // Both spellings match: the explicit `zotero.*` names the seams choose,
+    // and the fiber-derived `zotero-service` spelling under which Cordis
+    // reports this fiber's own lifecycle failures. `levels.default` at DEBUG
+    // defeats the INFO-only fallback that silently drops warn/debug
+    // harness-wide, so even a plain `ctx.logger.error` from anywhere in the
+    // subtree is recorded.
+    ctx.logger.exporter({
+      colors: false,
+      levels: { default: LOGGER_LEVEL_DEBUG },
+      export: (message) => {
+        if (!loggerNameMatches(message.name)) return
+        this.diagnostics.push(logMessageToPush(message))
+      },
+    })
     // Fail the load loud on a violating entry; the same gate vetoes
-    // violating settings commits in `internal/config` below.
-    resolveConfig(config)
+    // violating settings commits in `internal/config` below. A load-time
+    // rejection is deliberately not logged into the ring: the ring dies with
+    // this fiber, so the record nobody can read would be pretend work, and
+    // the veto path below is the rejection a reader can actually observe.
+    const resolved = resolveConfig(config)
+    this.diagnostics.setThreshold(resolved.debug ? 'debug' : 'info')
     this.entry = toLiveEntry(config)
     this.lastBuilt = this.config
     this.buildTransport(this.lastBuilt)
@@ -210,10 +264,16 @@ export class ZoteroService extends Service {
     // scopes the veto to this plugin's fiber: the loader passes the fiber
     // itself as the waterfall `this`, while `ctx.plugin()` returns
     // `Object.create(fiber)`, a prototype-linked face of the same fiber.
+    const recorder = this.diagnostics
     ctx.on('internal/config', function (this: Fiber | null, _raw, next) {
       const raw = next()
       if (!isOwnConfigFiber(this, ctx.fiber)) return raw
-      resolveConfig(raw as Config | Options)
+      try {
+        resolveConfig(raw as Config | Options)
+      } catch (error) {
+        recorder.sink.error('config.rejected', errorMessageOf(error), { scope: 'settings-commit' })
+        throw error
+      }
       return raw
     })
     // Structural flips land without remounting: rebuild the transport stack
@@ -225,19 +285,26 @@ export class ZoteroService extends Service {
     // Failures are logged, never thrown into the dispatch.
     ctx.on('loader/volatile-update', (paths: readonly (readonly string[])[]) => {
       this.cachedConfig = undefined
+      // The debug flag is volatile like every other field: sync the ring's
+      // threshold on any commit so a settings flip applies to the next
+      // emission without a rebuild.
+      this.diagnostics.setThreshold(this.config.debug ? 'debug' : 'info')
       try {
         if (touchesHeavyTools(paths)) {
           this.reconcileHeavyTools()
         }
-        if (!touchesTransport(paths)) return
-        const config = this.config
-        if (sameTransportConfig(config, this.lastBuilt)) return
-        this.buildTransport(config)
-        this.reconcileWriteTools(config.writeEnabled)
-        this.lastBuilt = config
+        if (touchesTransport(paths)) {
+          const config = this.config
+          if (!sameTransportConfig(config, this.lastBuilt)) {
+            this.buildTransport(config)
+            this.reconcileWriteTools(config.writeEnabled)
+            this.lastBuilt = config
+          }
+        }
       } catch (error) {
-        ctx.logger.error('dsh-zotero: failed to apply a configuration update')
-        ctx.logger.error(error)
+        // Into the diagnostics ring, never thrown into the dispatch: a
+        // failing rebuild leaves the previous transport serving.
+        this.diagnostics.sink.error('config.apply.failed', errorMessageOf(error))
       }
     })
     registerStatusCommand(ctx, this)
@@ -261,11 +328,56 @@ export class ZoteroService extends Service {
       if (!SHELL_TOOL_NAMES.has(execution.name)) return next()
       const attempt = detectShellWrite(this.config, execution)
       if (attempt === undefined) return next()
+      this.diagnostics.sink.warn('shell.intercepted', attempt.reason, { tool: execution.name })
       return Promise.resolve({
         kind: 'ask',
         reason: attempt.reason,
         displayReason: attempt.displayReason,
       })
+    })
+    // One observe-only wrapper covers every tool: the dispatch waterfall's
+    // `next()` is the actual tool body, so wrapping it times the call and
+    // records the outcome without touching a single tool file. A successful
+    // call is debug-level (the conversation already shows it); a typed
+    // failure result is a warn; an unexpected throw is an error.
+    ctx.on('tools/execute', async (execution, next) => {
+      if (!execution.name.startsWith('zotero_')) return await next()
+      const startedAt = Date.now()
+      // The digest JSON-stringifies the arguments; building it below the
+      // debug threshold would be spent work, so the gate is read before
+      // construction.
+      if (this.diagnostics.admits('debug')) {
+        this.diagnostics.sink.debug('tool.call', toolCallDigest(execution))
+      }
+      try {
+        const result: ToolExecutionResult = await next()
+        const ms = Date.now() - startedAt
+        if (result.isError) {
+          // The registry parks the stable error code at `error.info.code`
+          // (a plain throw folds without one); recording it gives the panel
+          // the same grep anchor the transport failure lines carry.
+          const detail: DiagnosticDetail = { ms }
+          const code = result.error.info?.code
+          if (code !== undefined) detail.errorCode = code
+          this.diagnostics.sink.warn(
+            'tool.result',
+            `${execution.name} failed: ${result.error.message}`,
+            detail,
+          )
+        } else {
+          this.diagnostics.sink.debug('tool.result', `${execution.name} completed`, { ms })
+        }
+        return result
+      } catch (error) {
+        this.diagnostics.sink.error(
+          'tool.result',
+          `${execution.name} threw: ${errorMessageOf(error)}`,
+          {
+            ms: Date.now() - startedAt,
+          },
+        )
+        throw error
+      }
     })
     registerSearchTool(ctx, this)
     registerGetTool(ctx, this)
@@ -327,6 +439,7 @@ export class ZoteroService extends Service {
       timeoutMs: config.timeoutMs,
       maxResponseBytes: config.maxResponseBytes,
       maxInFlight: config.maxInFlightRequests,
+      sink: this.diagnostics.sink,
     })
     const writeEnabled = config.writeEnabled
     const writer = writeEnabled
@@ -335,6 +448,7 @@ export class ZoteroService extends Service {
           timeoutMs: config.timeoutMs,
           maxResponseBytes: config.maxResponseBytes,
           authorizeDeadlineMs: config.writeAuthorizeDeadlineMs,
+          sink: this.diagnostics.sink,
         })
       : undefined
     const authorizer =
@@ -346,8 +460,15 @@ export class ZoteroService extends Service {
             persistKey: () => this.config.writePersistKey,
           })
     this.providerDispose = this.registerProvider(
-      new LocalApiProvider(client, () => localProviderLimits(this.config), writer, authorizer),
+      new LocalApiProvider(
+        client,
+        () => localProviderLimits(this.config),
+        writer,
+        authorizer,
+        this.diagnostics.sink,
+      ),
     )
+    this.diagnostics.sink.info('transport.built', 'Zotero transport stack built', { writeEnabled })
   }
 
   /**
@@ -441,7 +562,21 @@ export class ZoteroService extends Service {
    * @returns live connectivity facts for the configured provider.
    */
   async status(signal?: AbortSignal): Promise<ZoteroStatus> {
-    return this.resolveProvider().status(signal)
+    const status = await this.resolveProvider().status(signal)
+    // Record flips only: a flapping connection shows as a short list of
+    // transitions instead of one entry per probe, and the first probe always
+    // records because `lastProbeConnected` starts unset.
+    if (status.connected !== this.lastProbeConnected) {
+      this.diagnostics.sink.info(
+        'probe.changed',
+        status.connected
+          ? 'Zotero connected'
+          : `Zotero unreachable: ${status.diagnosis ?? 'unknown reason'}`,
+        { connected: status.connected },
+      )
+      this.lastProbeConnected = status.connected
+    }
+    return status
   }
 
   /**
@@ -726,11 +861,23 @@ export class ZoteroService extends Service {
    */
   private async approveWrite(call: ZoteroWriteCall): Promise<boolean> {
     const policy = await requestWriteApproval(this.ctx, call)
+    this.diagnostics.sink.info('write.gate', `write policy decision: ${policy}`, {
+      tool: call.exec.name,
+    })
     if (policy === 'declined') return false
     if (policy === 'unavailable') {
+      this.diagnostics.sink.error('write.gate', 'approval channel unavailable; write refused', {
+        tool: call.exec.name,
+      })
       throw new ZoteroError(WRITE_APPROVAL_UNAVAILABLE_MESSAGE, ZOTERO_WRITE_APPROVAL_UNAVAILABLE)
     }
-    return await askPlanApproval(this.ctx, call)
+    const approved = await askPlanApproval(this.ctx, call)
+    this.diagnostics.sink.info(
+      'write.gate',
+      approved ? 'plan review approved' : 'plan review declined',
+      { tool: call.exec.name },
+    )
+    return approved
   }
 
   private resolveProvider(): ZoteroProvider {
@@ -746,6 +893,11 @@ export class ZoteroService extends Service {
 
   private requireCapability(provider: ZoteroProvider, capability: ZoteroCapability): void {
     if (!provider.capabilities.has(capability)) {
+      this.diagnostics.sink.warn(
+        'capability.denied',
+        `Zotero provider "${provider.id}" does not support the ${capability} capability.`,
+        { capability, provider: provider.id },
+      )
       throw new ZoteroError(
         `Zotero provider "${provider.id}" does not support the ${capability} capability.`,
         ZOTERO_CAPABILITY_UNAVAILABLE,
@@ -859,6 +1011,7 @@ function localProviderLimits(config: ResolvedConfig): LocalApiLimits {
     maxNoteChars: config.maxNoteChars,
     maxNoteRecords: config.maxNoteRecords,
     maxAnnotationRecords: config.maxAnnotationRecords,
+    maxAttachmentRecords: config.maxAttachmentRecords,
     fulltextChunkWords: config.fulltextChunkWords,
     maxEvidenceChars: config.maxEvidenceChars,
     maxEvidencePassages: config.maxEvidencePassages,

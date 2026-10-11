@@ -540,6 +540,7 @@ describe('capability gating', () => {
             library: { type: 'user', id: 0 },
             version: 1,
             include: ['items', 'collections', 'savedSearches', 'deleted'],
+            unserved: [],
           },
         }),
       ],

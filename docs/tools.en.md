@@ -258,7 +258,7 @@ Inspect library modifications and deletions based on local transaction versions.
 | Parameter           | Type     | Default                 | Description                                                                                                                                             |
 | ------------------- | -------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `library`           | object   | `{type: "user", id: 0}` | Target library                                                                                                                                          |
-| `since`             | object   | —                       | Starting cursor `{serverId, library, version}`; omit to get initial baseline                                                                            |
+| `since`             | object   | —                       | Starting cursor `{serverId, library, version, include, unserved}`; omit to get initial baseline                                                         |
 | `include`           | string[] | All except fulltext     | Monitored kinds: `items`, `collections`, `savedSearches`, `fulltext`, `deleted`                                                                         |
 | `run_in_background` | boolean  | `false`                 | Whether to launch as a background Job (managed by Harness `ctx.jobs`; dynamically exposed only when `enableRunInBackground=true` and `jobs` is mounted) |
 
@@ -269,14 +269,14 @@ When completed in the foreground:
 
 - `changed`: changed objects categorized by resource type (`items`, `childItems`, `trashedItems`, `collections`, `savedSearches`, `fulltextAttachments`);
 - `deleted`: keys or tag names of deleted records;
-- `cursor`: returned only when the read range is completely observed and unmodified during the read, safe for subsequent incremental queries;
-- `unobservable`: resources that cannot be monitored along with reasons.
+- `cursor`: Returned only when the current batch was read completely without concurrent writes during the read, for use in subsequent incremental requests. `cursor.include` lists only resource categories that the active Zotero build supports tracking. Categories without an associated endpoint (such as builds lacking a `/deleted` route) appear in `cursor.unserved` and are excluded from coverage claims, but may be passed back unchanged in subsequent requests.
+- `unobservable`: Identifies resource categories that cannot be observed due to version or endpoint constraints, along with the cause. Missing endpoints (`not-served`) do not prevent cursor generation. Conversely, unsupported key ranges (`range-not-covered`) or fetch failures (`unreadable`) suppress the cursor for the current batch, preventing undetected data loss that would occur if the cursor advanced past unread entries.
 
 ### Example
 
 ```text
 zotero_changes()
-zotero_changes(since={serverId: "server1", library: {type: "user", id: 0}, version: 1234}, include=["items", "deleted"])
+zotero_changes(since={serverId: "server1", library: {type: "user", id: 0}, version: 1234, include: ["items", "deleted"], unserved: []}, include=["items", "deleted"])
 ```
 
 ---
@@ -294,7 +294,7 @@ Input `markdown` is converted into a restricted HTML whitelist natively supporte
 - Math expressions: `$$...$$` blocks converted to `<math-display>` and inline `$formula$` converted to `<math-inline>` (native KaTeX rendering; formulas are immune to emphasis corruption; currency amounts like `$100` are protected);
 - Lists and task lists: `-`/`*` bullets and `1.`/`1)` numbers; `- [ ]` unchecked and `- [x]` checked task lists (rendered as native lists with checkbox controls and `task-list` classes, with nesting support);
 - Code: Inline `` `spans` `` and ``` fenced blocks (escaped verbatim with no formatting inside);
-- Quotes and tables: `>` blockquotes; pipe tables with a `---` separator row;
+- Quotes and tables: `>` blockquotes; pipe tables with a `---` separator row (body rows follow GFM rules: missing cells are padded, excess cells are dropped, and column counts conform to the header row);
 - Links and rules: `[text](url)` (restricted to `https://`, `http://`, and `zotero://` schemes); `---` and `***` horizontal rules.
 
 ### Parameters

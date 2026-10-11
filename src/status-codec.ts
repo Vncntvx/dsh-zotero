@@ -10,12 +10,20 @@
 import { z } from 'zod'
 import type { InvocationDescriptor } from '@deepseek-ai/dsh-typert-protocol'
 import {
+  ZOTERO_CLIENT_ERROR_REPORT_TYPE_SYMBOL,
+  ZOTERO_DIAGNOSTICS_TYPE_SYMBOL,
   ZOTERO_REF_PARAM_TYPE_SYMBOL,
+  ZOTERO_REPORT_RESULT_TYPE_SYMBOL,
   ZOTERO_RESOLVE_ATTACHMENT_TYPE_SYMBOL,
   ZOTERO_STATUS_TYPE_SYMBOL,
+  zoteroDiagnosticsInvocation,
+  zoteroReportClientErrorInvocation,
   zoteroResolveAttachmentInvocation,
   zoteroStatusInvocation,
   type ZoteroAttachmentLocationView,
+  type ZoteroClientErrorReport,
+  type ZoteroDiagnosticsView,
+  type ZoteroReportResultView,
   type ZoteroStatusView,
 } from './contract.js'
 
@@ -81,11 +89,74 @@ export const zoteroAttachmentLocationCodec = {
   create: (): z.ZodType<ZoteroAttachmentLocationView> => zoteroAttachmentLocationSchema,
 } as const
 
+/** Wire codec: one diagnostics snapshot (strict; the ring pre-strips absent optionals). */
+const zoteroDiagnosticsSchema = z
+  .object({
+    entries: z
+      .array(
+        z
+          .object({
+            seq: z.number(),
+            ts: z.number(),
+            level: z.enum(['debug', 'info', 'warn', 'error']),
+            event: z.string(),
+            message: z.string(),
+            count: z.number(),
+            detail: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
+          })
+          .strict()
+          .readonly(),
+      )
+      .readonly(),
+    total: z.number(),
+    truncated: z.boolean(),
+    debug: z.boolean(),
+  })
+  .strict()
+  .readonly()
+
+export const zoteroDiagnosticsCodec = {
+  mode: 'strict',
+  typeSymbol: ZOTERO_DIAGNOSTICS_TYPE_SYMBOL,
+  create: (): z.ZodType<ZoteroDiagnosticsView> => zoteroDiagnosticsSchema,
+} as const
+
+/** Wire codec: reportClientError parameter (surface + message required, stacks optional). */
+const zoteroClientErrorReportSchema = z
+  .object({
+    surface: z.string().min(1),
+    message: z.string().min(1),
+    stack: z.string().optional(),
+    componentStack: z.string().optional(),
+  })
+  .strict()
+  .readonly()
+
+export const zoteroClientErrorReportCodec = {
+  mode: 'strict',
+  typeSymbol: ZOTERO_CLIENT_ERROR_REPORT_TYPE_SYMBOL,
+  create: (): z.ZodType<ZoteroClientErrorReport> => zoteroClientErrorReportSchema,
+} as const
+
+/** Wire codec: reportClientError result (the ring sequence the report was assigned). */
+const zoteroReportResultSchema = z.object({ seq: z.number() }).strict().readonly()
+
+export const zoteroReportResultCodec = {
+  mode: 'strict',
+  typeSymbol: ZOTERO_REPORT_RESULT_TYPE_SYMBOL,
+  create: (): z.ZodType<ZoteroReportResultView> => zoteroReportResultSchema,
+} as const
+
 /** Host Typert manifest invocations (real zod factory). */
 export const ZOTERO_INVOCATIONS: readonly InvocationDescriptor[] = [
   zoteroStatusInvocation(zoteroStatusCodec as InvocationDescriptor['result']),
   zoteroResolveAttachmentInvocation(
     zoteroRefParamCodec as InvocationDescriptor['parameters'][number]['codec'],
     zoteroAttachmentLocationCodec as InvocationDescriptor['result'],
+  ),
+  zoteroDiagnosticsInvocation(zoteroDiagnosticsCodec as InvocationDescriptor['result']),
+  zoteroReportClientErrorInvocation(
+    zoteroClientErrorReportCodec as InvocationDescriptor['parameters'][number]['codec'],
+    zoteroReportResultCodec as InvocationDescriptor['result'],
   ),
 ]

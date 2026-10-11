@@ -258,7 +258,7 @@ zotero_children(ref="zotero://user/0/item/ABC123", include=["annotations"])
 | 参数                | 类型     | 默认值                  | 说明                                                                                                                               |
 | ------------------- | -------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | `library`           | object   | `{type: "user", id: 0}` | 目标库标识                                                                                                                         |
-| `since`             | object   | —                       | 起始游标 `{serverId, library, version}`；省略则获取初始基线                                                                        |
+| `since`             | object   | —                       | 起始游标 `{serverId, library, version, include, unserved}`；省略则获取初始基线                                                     |
 | `include`           | string[] | 除 fulltext 外全部      | 监测范围：`items`、`collections`、`savedSearches`、`fulltext`、`deleted`                                                           |
 | `run_in_background` | boolean  | `false`                 | 是否作为后台任务启动（由 Harness `ctx.jobs` 管理；仅在配置 `enableRunInBackground=true` 且宿主挂载 `jobs` 服务时动态暴露于参数中） |
 
@@ -269,14 +269,14 @@ zotero_children(ref="zotero://user/0/item/ABC123", include=["annotations"])
 
 - `changed`：按资源类型列出变更对象（`items`、`childItems`、`trashedItems`、`collections`、`savedSearches`、`fulltextAttachments`）；
 - `deleted`：包含已删除条目的 key 或标签名；
-- `cursor`：仅在当前批次完整读取且期间未发生并发写入时返回，用于后续增量请求；
-- `unobservable`：标明因版本或端点原因无法观测的资源类别与原因。
+- `cursor`：仅在当前批次完整读取且期间未发生并发写入时返回，用于后续增量请求。`cursor.include` 仅包含当前 Zotero 版本实际支持跟踪的资源类别；未提供对应端点的类别（如缺少 `/deleted` 路由的旧版本）会记入 `cursor.unserved`，不计入覆盖声明，但后续增量请求仍可原样带回；
+- `unobservable`：标明因版本或端点限制无法观测的资源类别及原因。端点未提供（`not-served`）不影响游标生成；若存在不支持的键范围（`range-not-covered`）或读取失败（`unreadable`），当前批次将不返回游标，防止推进游标时遗漏未成功读取的变更行。
 
 ### 示例
 
 ```text
 zotero_changes()
-zotero_changes(since={serverId: "server1", library: {type: "user", id: 0}, version: 1234}, include=["items", "deleted"])
+zotero_changes(since={serverId: "server1", library: {type: "user", id: 0}, version: 1234, include: ["items", "deleted"], unserved: []}, include=["items", "deleted"])
 ```
 
 ---
@@ -294,7 +294,7 @@ zotero_changes(since={serverId: "server1", library: {type: "user", id: 0}, versi
 - 数学公式：单行或多行 `$$...$$` 块转换为 `<math-display>`，行内 `$formula$` 转换为 `<math-inline>`（原生 KaTeX 渲染，公式内部保护不被强调标记篡改；货币符号如 `$100` 自动规避）；
 - 列表与任务列表：`-`/`*` 无序列表与 `1.`/`1)` 有序列表；支持 `- [ ]` 未完成与 `- [x]` 已完成任务列表（生成带有 Checkbox 控件与 `task-list` 类名的原生列表，支持嵌套）；
 - 代码：行内 `` `代码` `` 与 ``` 围栏代码块（内部特殊字符转义，不执行格式化）；
-- 引用与表格：`>` 引用段落；带 `---` 分割行的管道表格；
+- 引用与表格：`>` 引用段落；带 `---` 分割行的管道表格（表格行遵循 GFM 规范对齐表头：缺失单元格自动补空，多余单元格予以舍弃，表格列数统一以表头为准）；
 - 链接与分割线：`[text](url)`（仅限 `https://`、`http://` 与 `zotero://` 协议）；`---` 与 `***` 水平分割线。
 
 ### 参数

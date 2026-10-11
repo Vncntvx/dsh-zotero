@@ -13,6 +13,7 @@ import { type LocalApiProvider } from '../../src/local/provider.js'
 import { expectedKindRefMessage, parseRef } from '../../src/refs.js'
 import type { ZoteroChildrenRequest } from '../../src/types.js'
 import {
+  createProvider,
   setupProvider,
   teardownProvider,
   type ProviderHarness,
@@ -126,6 +127,24 @@ describe('children', () => {
     expect(result.annotations?.items[0]!.parentRef).toBe(
       'zotero://user/0/attachment/WXYZ6789?server=S1',
     )
+  })
+
+  it('caps the attachment listing at the configured record bound with honest totals', async () => {
+    // Attachments are the one child kind whose records come in open-ended
+    // batches (multi-file items), so their cap is a config field like the
+    // note and annotation ones — not the row count itself.
+    const capped = createProvider(mock, { maxAttachmentRecords: 1 })
+    serveItemGraph(mock, {
+      parent: PARENT,
+      children: [attachment(), attachment({ key: 'ATTA2222' })],
+      serverId: 'S1',
+    })
+    const result = await capped.children(childrenRequest(itemRef(), ['attachments']))
+    expect(result.attachments).toEqual({
+      total: 2,
+      returned: 1,
+      items: [expect.objectContaining({ ref: 'zotero://user/0/attachment/WXYZ6789?server=S1' })],
+    })
   })
 
   it('reads only the bare children listing when annotations are not requested', async () => {

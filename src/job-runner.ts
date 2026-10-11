@@ -20,7 +20,8 @@ import type {
   JobRegistry,
   JobView,
 } from '@deepseek-ai/dsh-jobs'
-import { errorMessageOf, TOOL_ABORTED_MESSAGE } from './errors.js'
+import { errorMessageOf, TOOL_ABORTED_MESSAGE, ZoteroError } from './errors.js'
+import type { DiagnosticSink } from './diagnostics.js'
 import type { ZoteroProgressEvent } from './types.js'
 
 /** Structured abort thrown when a tool call or job wait is cancelled by the caller. */
@@ -222,7 +223,7 @@ export async function executeWithJobs<T>(options: {
 export class ZoteroJobRunner {
   constructor(
     private readonly registry?: JobRegistry,
-    private readonly logger?: { warn(message: string): void },
+    private readonly sink?: DiagnosticSink,
   ) {}
 
   get isAvailable(): boolean {
@@ -266,6 +267,7 @@ export class ZoteroJobRunner {
               },
             )
             const result = task.renderResult ? task.renderResult(value) : undefined
+            this.sink?.info('job.outcome', `${task.label} completed`)
             resolveOutcome({
               status: 'completed',
               detail: task.label,
@@ -279,12 +281,19 @@ export class ZoteroJobRunner {
                   : abortController.signal.reason instanceof Error
                     ? abortController.signal.reason.message
                     : 'cancelled'
+              this.sink?.info('job.outcome', `${task.label} cancelled: ${reason}`)
               resolveOutcome({
                 status: 'killed',
                 detail: reason,
               })
             } else {
               const message = errorMessageOf(error)
+              const code = error instanceof ZoteroError ? error.code : undefined
+              this.sink?.error(
+                'job.outcome',
+                `${task.label} failed: ${message}`,
+                code === undefined ? undefined : { errorCode: code },
+              )
               resolveOutcome({
                 status: 'failed',
                 detail: message,
@@ -351,8 +360,9 @@ export class ZoteroJobRunner {
     try {
       started = this.start(wrappedTask)
     } catch (error) {
-      this.logger?.warn?.(
-        `zotero: job registration refused, running in the foreground: ${errorMessageOf(error)}`,
+      this.sink?.warn(
+        'job.refused',
+        `job registration refused, running in the foreground: ${errorMessageOf(error)}`,
       )
       const value = await task.run(
         task.exec.signal,
@@ -388,6 +398,13 @@ export class ZoteroJobRunner {
       // The job is still live and the id is the only handle. Hand it back as a
       // promotion so the model can collect or kill it, rather than rethrowing
       // and leaving unowned work in the registry.
+      this.sink?.warn(
+        'job.promoted',
+        `${task.label} handed to the background after a wait failure`,
+        {
+          jobId: id,
+        },
+      )
       return {
         kind: 'promoted',
         jobId: id,
@@ -398,6 +415,10 @@ export class ZoteroJobRunner {
 
     if (view.status === 'running' || view.status === 'stopping') {
       // Timed out: job is promoted to background.
+      this.sink?.info('job.promoted', `${task.label} promoted to the background`, {
+        jobId: id,
+        waitMs: waitTimeoutMs,
+      })
       return {
         kind: 'promoted',
         jobId: id,

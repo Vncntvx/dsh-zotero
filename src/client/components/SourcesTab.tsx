@@ -213,7 +213,7 @@ export function SourcesTab(props: SourcesTabProps) {
   // Wraps SourcesTabBody in an error boundary that resets whenever sessionId changes.
   const sessionId = props.useSession((snapshot) => snapshot.sessionId)
   return (
-    <ZoteroSurfaceBoundary resetKey={sessionId} t={props.t}>
+    <ZoteroSurfaceBoundary resetKey={sessionId} t={props.t} surface="sources">
       <SourcesTabBody {...props} />
     </ZoteroSurfaceBoundary>
   )

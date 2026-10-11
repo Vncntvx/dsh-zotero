@@ -41,7 +41,12 @@ a fixture that drifted from reality would still pass every gate.
   `expectRequestLinesAnyOrder`, `expectRequestCount`,
   `expectHeaderOnEveryRequest`, `zoteroError`.
 - `tests/helpers/lanes/host-lane.ts`: the one boot for the tool and host
-  specs.
+  specs, plus `commitLive` (the loader-shaped live config commit the settings
+  and diagnostics specs share) and `expectValue` (the success-arm settle).
+- `tests/helpers/error-expectations.ts`: `expectZoteroError`, the one
+  stable-code rejection assertion the transport specs share.
+- `tests/helpers/recording-sink.ts`: `recordingSink`, the line-capturing
+  `DiagnosticSink` the transport diagnostics specs assert against.
 - `tests/helpers/provider-harness.ts`: the provider lane's single import
   surface: mock + provider boot, request builders, and `PROVIDER_LIMITS`, the
   one `LocalApiLimits` base every spec overrides.

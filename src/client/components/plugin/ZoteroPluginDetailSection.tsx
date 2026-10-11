@@ -12,6 +12,7 @@ import { ZOTERO_REMOTE_PACKAGE } from '../../../contract.ts'
 import { DiagnosisBox } from '../DiagnosisBox.tsx'
 import { useZoteroProbe } from '../useZoteroProbe.ts'
 import type { PluginDetailProps } from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
+import { ZoteroSurfaceBoundary } from '../ZoteroSurfaceBoundary.tsx'
 import css from './plugin-cards.module.css'
 
 export interface ZoteroPluginDetailSectionProps extends PluginDetailProps {
@@ -37,7 +38,11 @@ export function ZoteroPluginDetailSection({
   if (pkgName !== ZOTERO_REMOTE_PACKAGE) {
     return null
   }
-  return <ZoteroPluginDetailSectionBody t={t} probe={probe} />
+  return (
+    <ZoteroSurfaceBoundary t={t} surface="detail" resetKey={pkgName}>
+      <ZoteroPluginDetailSectionBody t={t} probe={probe} />
+    </ZoteroSurfaceBoundary>
+  )
 }
 
 function ZoteroPluginDetailSectionBody({ t, probe }: DetailSectionBodyProps): ReactNode {

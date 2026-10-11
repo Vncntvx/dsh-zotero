@@ -101,3 +101,13 @@ This document lists common issues, causes, and diagnostic steps when using dsh-z
 - **Symptom**: A write tool returns `committed-unverified`, and the card shows a warning state instead of a success badge.
 - **Cause**: Zotero accepted the write, but its response could not prove the final state (commit unknown or the saved state unverified).
 - **Fix**: Do not retry. Reconcile by key/ref in Zotero to check whether the object was created or changed.
+
+## 17. How to Collect Diagnostics
+
+When error messages alone are insufficient to diagnose an issue (such as silent failures, rendering errors in tabs or cards, or unexpected behavior), collect the diagnostic bundle as follows:
+
+1. Open the "Diagnostics" card at the bottom of "Settings → Plugins → dsh-zotero", click "Copy diagnostics", and attach the copied content to your issue report.
+2. If request-level detail is needed, enable "Verbose diagnostics" on the settings page before reproducing the issue.
+3. The diagnostic bundle includes the plugin version, Zotero endpoint and version, debug flag state, and buffered log entries in reverse chronological order (including frontend component render errors).
+
+Note: Diagnostic entries are kept in memory only and are cleared when the host process restarts. Copy the diagnostic bundle before restarting the host if you need to preserve the record.

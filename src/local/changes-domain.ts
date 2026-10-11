@@ -125,17 +125,32 @@ function observedServerId(value: string | null | undefined): string | undefined 
   return value !== null && value !== undefined && value.trim() !== '' ? value : undefined
 }
 
-/** The cursor for `version`, or undefined when there is no instance to pin it to. */
+/**
+ * The cursor for `version`, or undefined when there is no instance to pin it
+ * to, or when every requested kind ended up unserved and there is nothing to
+ * checkpoint. The cursor certifies only the kinds it actually tracked: kinds
+ * the build structurally does not serve ride `unserved`, never `include`, so
+ * the coverage claim stays true and a later call can still resume them — the
+ * answer will be the same absence.
+ */
 function cursorFor(
   serverId: string | undefined,
   library: SupportedLocalLibrary,
   version: number | undefined,
   include: ReadonlySet<ZoteroChangesInclude>,
+  unserved: ReadonlySet<ZoteroChangesInclude>,
 ): ZoteroChangesCursor | undefined {
   const id = observedServerId(serverId)
-  return id === undefined || version === undefined
-    ? undefined
-    : { serverId: id, library, version, include: orderedIncludes(include) }
+  if (id === undefined || version === undefined) return undefined
+  const tracked = [...include].filter((kind) => !unserved.has(kind))
+  if (tracked.length === 0) return undefined
+  return {
+    serverId: id,
+    library,
+    version,
+    include: orderedIncludes(new Set(tracked)),
+    unserved: orderedIncludes(unserved),
+  }
 }
 
 /** One versions-resource reader, as `changes()` builds it per call. */
@@ -235,9 +250,25 @@ export async function changes(
         ZOTERO_INVALID_ARGUMENT,
       )
     }
+    // The kinds a cursor could not observe ride alongside its coverage. They
+    // must stay outside it: a kind that is both covered and unserved would
+    // make the coverage claim unreadable.
+    const unserved = since.unserved
+    if (
+      !Array.isArray(unserved) ||
+      unserved.some((kind) => !ALL_CHANGES_INCLUDES.includes(kind)) ||
+      new Set(unserved).size !== unserved.length ||
+      unserved.some((kind) => coverage.includes(kind))
+    ) {
+      throw new ZoteroError(
+        'since.unserved must list resource kinds the cursor could not observe, outside its coverage',
+        ZOTERO_INVALID_ARGUMENT,
+      )
+    }
     const cursorInclude = new Set(coverage)
+    const cursorUnserved = new Set(unserved)
     for (const kind of include) {
-      if (!cursorInclude.has(kind)) {
+      if (!cursorInclude.has(kind) && !cursorUnserved.has(kind)) {
         throw new ZoteroError(
           `since.include does not cover requested resource kind '${kind}'`,
           ZOTERO_INVALID_ARGUMENT,
@@ -247,6 +278,7 @@ export async function changes(
   }
 
   const unobservable: ZoteroChangesUnobservable[] = []
+  const unservedKinds = new Set<ZoteroChangesInclude>()
   const changed: ZoteroChangesResult['changed'] = {}
   const totals: ZoteroChangesTotals = {}
   let truncated = false
@@ -309,7 +341,7 @@ export async function changes(
     const probe = await attempt(() => probeVersion())
     const observed = probe.status === 'ok' ? probe.value.serverId : undefined
     const version = probe.status === 'ok' ? probe.value.version : undefined
-    const cursor = cursorFor(observed, library, version, include)
+    const cursor = cursorFor(observed, library, version, include, new Set())
     return {
       library,
       ...(observed !== undefined ? { serverId: observed } : {}),
@@ -416,17 +448,23 @@ export async function changes(
   /**
    * Record a kind this call could not observe, once per kind, which is what
    * every caller does: a kind whose endpoint is read more than once (the item
-   * space) collapses its reads to one verdict before calling this. An
-   * unreadable read also withholds the cursor: unlike a missing endpoint, the
-   * rows exist and this call failed to read them, so advancing would step over
-   * them.
+   * space) collapses its reads to one verdict before calling this. A read
+   * that failed for any reason other than absence also withholds the cursor:
+   * the rows exist (or their existence is unknown) and this call did not read
+   * them, so advancing would step over them. A missing endpoint is the one
+   * exception: the kind is structurally unobservable on this build, so the
+   * cursor keeps resuming it — listed in `unserved`, never claimed as covered.
    */
   const recordUnobservable = (
     kind: ZoteroChangesInclude,
     reason: ZoteroChangesUnobservableReason,
   ): void => {
     unobservable.push({ kind, reason })
-    if (reason === 'unreadable') complete = false
+    if (reason === 'not-served') {
+      unservedKinds.add(kind)
+      return
+    }
+    complete = false
   }
 
   /**
@@ -655,14 +693,15 @@ export async function changes(
 
   const served = Object.keys(totals).length > 0
   // The next cursor is the snapshot reading, pinned to the instance that
-  // answered. Every served resource was read whole (or the call would not be
+  // answered. Every tracked resource was read whole (or the call would not be
   // complete) and none reported another version, so this cursor covers the
-  // entire range the result reports, and only this library on this instance.
-  // Fulltext has an independent counter, so a library cursor cannot safely
-  // resume a result that mixes its rows with versioned library resources.
+  // entire range the result reports, and only this library on this instance;
+  // kinds the build does not serve ride `unserved` instead. Fulltext has an
+  // independent counter, so a library cursor cannot safely resume a result
+  // that mixes its rows with versioned library resources.
   const cursor =
     complete && !include.has('fulltext')
-      ? cursorFor(instance, library, snapshot, include)
+      ? cursorFor(instance, library, snapshot, include, unservedKinds)
       : undefined
   onProgress?.({
     phase: 'done',

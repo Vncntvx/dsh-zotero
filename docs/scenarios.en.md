@@ -396,29 +396,20 @@ After those note/tag writes, can zotero_changes see them? Use the previous curso
 | Library-Wide Tag Delete       | `delete_library_tags`                                                     | W6               | Preview counts, library version precondition, idempotent retry                     |
 | Data Panel                    | Sources panel                                                             | G8               | Synchronization across Literature, Passages, and Exports pages                     |
 | Boundary Defense              | Error handling and safeguards                                             | N1–N7            | Error code accuracy, anti-hallucination, assembly errors never degrade silently    |
+| Runtime Diagnostics           | Diagnostics card (plugin detail page)                                     | Annex            | Crash funnel, level filter, bundle copy                                            |
 
 Passing criteria: G1 through G8 all pass, and N1, N2, N4 produce no hallucinated content. Write features are optional; if enabled, the whole W pack (W1–W8) must pass in a separate session with writes enabled, with the W1 plan card confirmation and the W2/W3 idempotent writes mandatory.
 
 ## Symptom and Failure Diagnosis
 
-| Symptom                                  | Diagnosis Direction                                                                               |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Answers without calling tools            | Check plugin installation; check if session was created after plugin loaded; run `/zotero status` |
-| Unexpected search results                | Inspect query terms, search mode, collection scope, quick-search syntax, and local index status   |
-| Page number on fulltext passages         | Model misread fields (prompt to correct); if tool natively returned it, investigate parsing error |
-| Annotation comment treated as paper text | Check if labeled with `matchedFields=comment`, see [Tool Reference](tools.en.md)                  |
-| Export cannot be used in LaTeX           | Verify `format` is `bibtex` or `biblatex`; download via Sources panel instead                     |
-| Write fails without plan card            | Check if "Allow writes" is enabled; verify if arguments were rejected prior to plan review        |
-| Model retries after plan rejection       | Model behavioral fault: `declined` is a terminal state and should not trigger auto-retries        |
-| Sources panel pages are empty            | Check `webEnabled` configuration; check if session called tools; refresh browser page             |
-
-## Division of Labor with Automated Testing
-
-| Verification Tier                       | Testing Method                      | Core Coverage                                                   |
-| --------------------------------------- | ----------------------------------- | --------------------------------------------------------------- |
-| Protocol contracts and type definitions | `npm run release:check`             | Interface compatibility, client module graph, package integrity |
-| Dependency integration and lifecycle    | `smoke.mjs` / `discovery-smoke.mjs` | Tool registration, production installation                      |
-| Real Local API wire protocols           | `npm run test:integration`          | Local HTTP communication, real data boundaries                  |
-| Model behavior and user experience      | This scenarios document             | Invocation reasoning, interactive cards, panel sync, usability  |
-
-After all automated machine tests pass, this document completes final human-model interaction and scenario usability acceptance.
+| Symptom                                  | Diagnosis Direction                                                                                                                   |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Answers without calling tools            | Check plugin installation; check if session was created after plugin loaded; run `/zotero status`                                     |
+| Unexpected search results                | Inspect query terms, search mode, collection scope, quick-search syntax, and local index status                                       |
+| Page number on fulltext passages         | Model misread fields (prompt to correct); if tool natively returned it, investigate parsing error                                     |
+| Annotation comment treated as paper text | Check if labeled with `matchedFields=comment`, see [Tool Reference](tools.en.md)                                                      |
+| Export cannot be used in LaTeX           | Verify `format` is `bibtex` or `biblatex`; download via Sources panel instead                                                         |
+| Write fails without plan card            | Check if "Allow writes" is enabled; verify if arguments were rejected prior to plan review                                            |
+| Model retries after plan rejection       | Model behavioral fault: `declined` is a terminal state and should not trigger auto-retries                                            |
+| Sources panel pages are empty            | Check `webEnabled` configuration; check if session called tools; refresh browser page                                                 |
+| Unexplained misbehavior                  | Open the "Diagnostics" card on the plugin detail page; enable "Verbose diagnostics" first and reproduce once for request-level detail |

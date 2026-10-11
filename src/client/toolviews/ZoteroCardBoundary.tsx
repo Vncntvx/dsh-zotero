@@ -1,6 +1,8 @@
 /**
  * Error boundary for Zotero tool cards.
- * Catches rendering exceptions in individual cards and displays a fallback tool row.
+ * Catches rendering exceptions inside a card's own tree and degrades that one
+ * card in place, so the harness's slot boundary — which would retire the
+ * crashed entry for good — never sees the failure.
  * @module dsh-zotero/client/toolviews/ZoteroCardBoundary
  */
 
@@ -11,10 +13,10 @@ import {
   type FunctionComponent,
   type ReactNode,
 } from 'react'
-import { IconBrowseOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { messageOf } from '../error-text.ts'
-import { RawTextFallback, ZoteroToolRow } from './ZoteroToolRow.tsx'
+import { reportCrashedSurface } from '../actions/error-reporter.ts'
+import css from '../components/cards.module.css'
 
 export type AnyToolViewProps = PropsRuntime<'tool.call.toolview'> & PropsLocale<'zotero'>
 
@@ -42,29 +44,26 @@ export class ZoteroCardBoundary extends Component<
 
   override componentDidCatch(error: unknown, info: ErrorInfo): void {
     console.error('dsh-zotero: tool card failed to render:', messageOf(error), info)
+    // One entry per crashed card, filed under its wire name so the panel
+    // names the tool whose card broke.
+    reportCrashedSurface(`tool:${this.props.props.toolName}`, error, info)
   }
 
   override render(): ReactNode {
     const { message } = this.state
     if (message === null) return this.props.children
     const { props } = this.props
+    // The fallback reads only strings. `block` is the likeliest thing that
+    // crashed the card (malformed meta, hostile shapes), so a fallback built
+    // on the shared row — which reads the block — could crash in turn, escape
+    // to the harness's slot boundary, and retire the card for good. Nothing
+    // here can throw.
     return (
-      <div data-zotero-card-error>
-        <ZoteroToolRow
-          useDisclosure={props.useDisclosure}
-          t={props.t}
-          toolName={props.toolName}
-          block={props.block}
-          // The neutral glyph is deliberate: the crashing card's own icon
-          // logic is part of what threw, so the fallback never runs it.
-          icon={<IconBrowseOutlineRegular size={14} />}
-          title={props.toolName}
-          summary={props.t('renderFailed')}
-          errorSummary={message}
-          inspect={props.inspect}
-        >
-          <RawTextFallback text={message} />
-        </ZoteroToolRow>
+      <div data-zotero-card-error className={css.cardError}>
+        <p className={css.cardErrorTitle}>
+          {props.toolName} · {props.t('renderFailed')}
+        </p>
+        <p className={css.cardErrorDetail}>{message}</p>
       </div>
     )
   }

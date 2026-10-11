@@ -18,7 +18,9 @@
 
 import type { TypertContribution } from '@deepseek-ai/dsh-typert-registry/types'
 import {
+  ZOTERO_DIAGNOSTICS_METHOD,
   ZOTERO_REMOTE_PACKAGE,
+  ZOTERO_REPORT_CLIENT_ERROR_METHOD,
   ZOTERO_RESOLVE_ATTACHMENT_METHOD,
   ZOTERO_STATUS_METHOD,
   ZOTERO_STATUS_SERVICE_KEY,
@@ -47,6 +49,17 @@ export const TYPERT_MANIFEST: TypertContribution = {
             kind: 'method',
             name: ZOTERO_RESOLVE_ATTACHMENT_METHOD,
             signature: 'resolveAttachment(ref: string): Promise<ZoteroAttachmentLocationView>',
+          },
+          {
+            kind: 'method',
+            name: ZOTERO_DIAGNOSTICS_METHOD,
+            signature: 'diagnostics(): Promise<ZoteroDiagnosticsView>',
+          },
+          {
+            kind: 'method',
+            name: ZOTERO_REPORT_CLIENT_ERROR_METHOD,
+            signature:
+              'reportClientError(report: ZoteroClientErrorReport): Promise<ZoteroReportResultView>',
           },
         ],
         types: [],

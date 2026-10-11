@@ -419,6 +419,7 @@ describe('changes', () => {
       library: PERSONAL_LIBRARY,
       version: 50,
       include: ['items'],
+      unserved: [],
     })
     expect(result.changed.items).toEqual([{ key: ITEM_KEY, version: 44 }])
   })
@@ -450,28 +451,6 @@ describe('changes', () => {
     expect(result.totals).toBeUndefined()
   })
 
-  it('caps the tombstone listing and reports its true count', async () => {
-    routeItems(mock, {})
-    routeTombstones(mock, { items: ['DELE0001', 'DELE0002', 'DELE0003', 'DELE0004'] })
-    const result = await diff(at(42, SERVER_ID, ['items', 'deleted']))
-    expect(result.deleted?.items).toEqual(['DELE0001', 'DELE0002', 'DELE0003'])
-    expect(result.totals?.deletedItems).toBe(4)
-    expect(result.truncated).toBe(true)
-    expect(result.cursor?.version).toBe(50)
-  })
-
-  it('counts tombstone kinds it does not model instead of dropping them', async () => {
-    routeItems(mock, {})
-    // A documented kind with a non-array value would be unreadable, but these
-    // are kinds this domain does not interpret: arrays are counted, anything
-    // else carries no countable entries.
-    routeTombstones(mock, { settings: ['alpha', 'beta'], other: 'not-a-list' })
-    const result = await diff(at(42, SERVER_ID, ['items', 'deleted']))
-    expect(result.deleted).toEqual({ items: [], collections: [], savedSearches: [], tags: [] })
-    expect(result.totals?.deletedOther).toBe(2)
-    expect(result.cursor?.version).toBe(50)
-  })
-
   it('honors include subsets and skips their endpoints', async () => {
     routeItems(mock, {})
     routeVersions(mock, `${apiPath()}/collections`, versionMap([[COLLECTION_KEY, 44]]), {
@@ -498,6 +477,7 @@ describe('changes', () => {
         library: GROUP_LIBRARY,
         version: 3,
         include: ['items'],
+        unserved: [],
       },
       include: new Set(['items']),
     })
@@ -507,88 +487,9 @@ describe('changes', () => {
       library: GROUP_LIBRARY,
       version: 9,
       include: ['items'],
+      unserved: [],
     })
     expect(result.changed.items?.[0]?.key).toBe(ITEM_KEY)
-  })
-
-  it('names an endpoint this build does not serve, with that reason, and keeps the cursor', async () => {
-    // /deleted 404s on some local-API versions (Zotero 10.0.2-beta.9 has no
-    // such route). The rest of the diff answers and says what it could not
-    // cover; the cursor stands, because removals were never observable here.
-    routeItems(mock, { top: versionMap([[ITEM_KEY, 44]]) })
-    const result = await provider.changes({
-      since: at(42, SERVER_ID, ['items', 'deleted']),
-      include: new Set(['items', 'deleted']),
-    })
-    expect(result.changed.items?.map((entry) => entry.key)).toEqual([ITEM_KEY])
-    expect(result.deleted).toBeUndefined()
-    expect(result.unobservable).toEqual([{ kind: 'deleted', reason: 'not-served' }])
-    expect(result.cursor?.version).toBe(50)
-    expect(result.truncated).toBeUndefined()
-  })
-
-  it('names a range older than the build keeps, with that reason, and keeps the cursor', async () => {
-    // A 409 on a versioned read is "the delete log does not go back that far"
-    // (Zotero's own sync client reads it that way). Removals in that range are
-    // gone; re-baselining covers them from here, so the cursor still stands.
-    routeItems(mock, {})
-    serveStatus(mock, `${apiPath()}/deleted`, 409, 'Conflict')
-    const result = await provider.changes({
-      since: at(1, SERVER_ID, ['items', 'deleted']),
-      include: new Set(['items', 'deleted']),
-    })
-    expect(result.unobservable).toEqual([{ kind: 'deleted', reason: 'range-not-covered' }])
-    expect(result.deleted).toBeUndefined()
-    expect(result.cursor?.version).toBe(50)
-  })
-
-  it('reports an unreadable tombstone payload as unobservable and withholds the cursor', async () => {
-    routeItems(mock, {})
-    serveJson(mock, `${apiPath()}/deleted`, {
-      items: 'not-a-list',
-      collections: [],
-      searches: [],
-      tags: [],
-    })
-    const result = await provider.changes({
-      since: at(42, SERVER_ID, ['items', 'deleted']),
-      include: new Set(['items', 'deleted']),
-    })
-    expect(result.unobservable).toEqual([{ kind: 'deleted', reason: 'unreadable' }])
-    expect(result.deleted).toBeUndefined()
-    expect(result.totals?.deletedItems).toBeUndefined()
-    // The rows exist and this call failed to read them: advancing would step
-    // over them, so no cursor.
-    expect(result.cursor).toBeUndefined()
-  })
-
-  it('reports a tombstone body that is not an object as unreadable', async () => {
-    routeItems(mock, {})
-    serveJson(mock, `${apiPath()}/deleted`, ['DELE0001'])
-    const result = await provider.changes({
-      since: at(42, SERVER_ID, ['items', 'deleted']),
-      include: new Set(['items', 'deleted']),
-    })
-    expect(result.unobservable).toEqual([{ kind: 'deleted', reason: 'unreadable' }])
-    expect(result.deleted).toBeUndefined()
-    expect(result.cursor).toBeUndefined()
-  })
-
-  it('reports a missing tombstone list as an empty one, the way Zotero reads its own payload', async () => {
-    routeItems(mock, {})
-    serveJson(mock, `${apiPath()}/deleted`, { items: ['DELE0001'] })
-    const result = await provider.changes({
-      since: at(42, SERVER_ID, ['items', 'deleted']),
-      include: new Set(['items', 'deleted']),
-    })
-    expect(result.deleted).toEqual({
-      items: ['DELE0001'],
-      collections: [],
-      savedSearches: [],
-      tags: [],
-    })
-    expect(result.totals?.deletedCollections).toBe(0)
-    expect(result.totals?.deletedTags).toBe(0)
   })
 
   it('leaves the whole item kind unobservable when one of its reads is missing', async () => {

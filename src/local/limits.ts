@@ -21,6 +21,8 @@ export interface LocalApiLimits {
   readonly maxNoteRecords: number
   /** Upper bound for annotation records returned by `zotero_get`. */
   readonly maxAnnotationRecords: number
+  /** Upper bound for attachment records returned by `zotero_get` and `zotero_children`. */
+  readonly maxAttachmentRecords: number
   /** Word count of each full-text passage entering evidence ranking. */
   readonly fulltextChunkWords: number
   /** Total character budget for retrieved evidence passages. */

@@ -61,6 +61,46 @@ export interface ZoteroAttachmentLocationView {
   readonly url?: string
 }
 
+/** Severity of one diagnostics entry, mirroring the host ring's levels. */
+export type ZoteroDiagnosticLevel = 'debug' | 'info' | 'warn' | 'error'
+
+/** One retained diagnostics entry, newest-first within the snapshot. */
+export interface ZoteroDiagnosticEntry {
+  readonly seq: number
+  readonly ts: number
+  readonly level: ZoteroDiagnosticLevel
+  readonly event: string
+  readonly message: string
+  /** Consecutive repeats of the same `(event, level, message)` coalesce into a count. */
+  readonly count: number
+  readonly detail?: { readonly [key: string]: string | number | boolean }
+}
+
+/** The diagnostics snapshot the web panel renders. */
+export interface ZoteroDiagnosticsView {
+  readonly entries: readonly ZoteroDiagnosticEntry[]
+  /** Entries currently retained (after capacity eviction, before this snapshot's limit). */
+  readonly total: number
+  /** Whether `entries` was cut to the endpoint's serving limit. */
+  readonly truncated: boolean
+  /** Whether the host ring currently retains debug-level entries (the `debug` config flag). */
+  readonly debug: boolean
+}
+
+/** What a crashed client surface reports back into the host ring. */
+export interface ZoteroClientErrorReport {
+  /** Which UI surface crashed, e.g. `sources`, a tool wire name, or `detail`. */
+  readonly surface: string
+  readonly message: string
+  readonly stack?: string
+  readonly componentStack?: string
+}
+
+/** The host's receipt for a client error report: the ring sequence it was assigned. */
+export interface ZoteroReportResultView {
+  readonly seq: number
+}
+
 /** Package identity every Typert contribution from this plugin claims. */
 export const ZOTERO_REMOTE_PACKAGE = 'dsh-zotero'
 
@@ -81,11 +121,26 @@ export const ZOTERO_REF_PARAM_TYPE_SYMBOL = 'dsh-zotero#AttachmentRef'
 /** Strict codec type symbol for {@link ZoteroAttachmentLocationView}. */
 export const ZOTERO_RESOLVE_ATTACHMENT_TYPE_SYMBOL = 'dsh-zotero#ZoteroAttachmentLocationView'
 
+/** Strict codec type symbol for {@link ZoteroDiagnosticsView}. */
+export const ZOTERO_DIAGNOSTICS_TYPE_SYMBOL = 'dsh-zotero#ZoteroDiagnosticsView'
+
+/** Strict codec type symbol for {@link ZoteroClientErrorReport}. */
+export const ZOTERO_CLIENT_ERROR_REPORT_TYPE_SYMBOL = 'dsh-zotero#ZoteroClientErrorReport'
+
+/** Strict codec type symbol for {@link ZoteroReportResultView}. */
+export const ZOTERO_REPORT_RESULT_TYPE_SYMBOL = 'dsh-zotero#ZoteroReportResultView'
+
 /** Globally stable invocation id for the status probe. */
 export const ZOTERO_STATUS_INVOCATION_ID = 'dsh-zotero#zotero/status'
 
 /** Globally stable invocation id for resolveAttachment. */
 export const ZOTERO_RESOLVE_ATTACHMENT_INVOCATION_ID = 'dsh-zotero#zotero/resolveAttachment'
+
+/** Globally stable invocation id for the diagnostics snapshot. */
+export const ZOTERO_DIAGNOSTICS_INVOCATION_ID = 'dsh-zotero#zotero/diagnostics'
+
+/** Globally stable invocation id for the client error report. */
+export const ZOTERO_REPORT_CLIENT_ERROR_INVOCATION_ID = 'dsh-zotero#zotero/reportClientError'
 
 /**
  * Cordis service key that owns the status method on the host half.
@@ -99,6 +154,12 @@ export const ZOTERO_STATUS_METHOD = 'status'
 
 /** Wire method name for resolveAttachment. */
 export const ZOTERO_RESOLVE_ATTACHMENT_METHOD = 'resolveAttachment'
+
+/** Wire method name for the diagnostics snapshot. */
+export const ZOTERO_DIAGNOSTICS_METHOD = 'diagnostics'
+
+/** Wire method name for the client error report. */
+export const ZOTERO_REPORT_CLIENT_ERROR_METHOD = 'reportClientError'
 
 /** Invocation kind for direct service calls (no Context receiver). */
 export const ZOTERO_STATUS_INVOCATION_KIND = 'direct'
@@ -164,6 +225,55 @@ export function zoteroResolveAttachmentInvocation(
       {
         name: 'ref',
         wire: 'ref',
+        source: 'json',
+        codec: param,
+      },
+    ],
+    result,
+  }
+}
+
+/**
+ * Build one diagnostics invocation descriptor around a result codec. Zero
+ * parameters, like the status probe: the endpoint serves its own capped
+ * newest-first slice and the `debug` fact.
+ * @param result - the strict result codec for {@link ZoteroDiagnosticsView}.
+ * @returns a complete invocation descriptor.
+ */
+export function zoteroDiagnosticsInvocation(
+  result: InvocationDescriptor['result'],
+): InvocationDescriptor {
+  return {
+    id: ZOTERO_DIAGNOSTICS_INVOCATION_ID,
+    service: ZOTERO_STATUS_SERVICE_KEY,
+    namespace: ZOTERO_SETTINGS_NAMESPACE,
+    method: ZOTERO_DIAGNOSTICS_METHOD,
+    invocation: { kind: ZOTERO_STATUS_INVOCATION_KIND },
+    parameters: [],
+    result,
+  }
+}
+
+/**
+ * Build one reportClientError invocation descriptor around parameter and result codecs.
+ * @param param - the strict parameter codec for {@link ZoteroClientErrorReport}.
+ * @param result - the strict result codec for {@link ZoteroReportResultView}.
+ * @returns a complete invocation descriptor.
+ */
+export function zoteroReportClientErrorInvocation(
+  param: InvocationDescriptor['parameters'][number]['codec'],
+  result: InvocationDescriptor['result'],
+): InvocationDescriptor {
+  return {
+    id: ZOTERO_REPORT_CLIENT_ERROR_INVOCATION_ID,
+    service: ZOTERO_STATUS_SERVICE_KEY,
+    namespace: ZOTERO_SETTINGS_NAMESPACE,
+    method: ZOTERO_REPORT_CLIENT_ERROR_METHOD,
+    invocation: { kind: ZOTERO_STATUS_INVOCATION_KIND },
+    parameters: [
+      {
+        name: 'report',
+        wire: 'report',
         source: 'json',
         codec: param,
       },

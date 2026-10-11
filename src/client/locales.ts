@@ -54,6 +54,17 @@ export type ZoteroLocaleKey =
   | 'diagnosisProviderUnavailable'
   | 'diagnosisCapabilityUnavailable'
   | 'diagnosisUnknown'
+  | 'diagnosticsTitle'
+  | 'diagnosticsLogLabel'
+  | 'diagnosticsEmpty'
+  | 'diagnosticsNoProblems'
+  | 'diagnosticsLevelAll'
+  | 'diagnosticsLevelProblems'
+  | 'diagnosticsShowLatest'
+  | 'diagnosticsCopyBundle'
+  | 'diagnosticsDebugOn'
+  | 'diagnosticsDebugOff'
+  | 'diagnosticsDetail'
   | 'renderFailed'
   | 'refresh'
   | 'lastCheckedLabel'
@@ -360,6 +371,8 @@ export const en: Record<ZoteroLocaleKey, string> = {
   maxNoteRecordsHint: 'Most notes returned for one item.',
   maxAnnotationRecords: 'Annotation record cap',
   maxAnnotationRecordsHint: 'Most annotations returned for one item.',
+  maxAttachmentRecords: 'Attachment record cap',
+  maxAttachmentRecordsHint: 'Most attachments returned for one item.',
   fulltextChunkWords: 'Full-text chunk words',
   fulltextChunkWordsHint: 'Word count of each full-text chunk entering passage ranking.',
   maxFulltextChars: 'Full-text character bound',
@@ -399,13 +412,28 @@ export const en: Record<ZoteroLocaleKey, string> = {
   webEnabled: 'Show literature tab',
   webEnabledHint:
     'Shows a Zotero literature tab at the top of conversations, with literature, passages, and exports.',
+  groupDiagnostics: 'Diagnostics',
+  debug: 'Verbose diagnostics',
+  debugHint:
+    'Retains per-request and per-call detail entries in the diagnostics panel. When off, only state changes and failures are kept. Entries live in this process only.',
+  diagnosticsTitle: 'Diagnostics',
+  diagnosticsLogLabel: 'Diagnostics log',
+  diagnosticsEmpty: 'No entries yet. State changes, degradations, and failures will appear here.',
+  diagnosticsNoProblems: 'No warn or error entries in the current record.',
+  diagnosticsLevelAll: 'All levels',
+  diagnosticsLevelProblems: 'Problems',
+  diagnosticsShowLatest: 'Showing the latest {shown} of {total} entries.',
+  diagnosticsCopyBundle: 'Copy diagnostics',
+  diagnosticsDebugOn: 'Verbose diagnostics: on',
+  diagnosticsDebugOff: 'Verbose diagnostics: off',
+  diagnosticsDetail: 'Detail',
   copy: 'Copy',
   copied: 'Copied',
   commandInputAria: 'Command input',
   checking: 'Checking…',
   statusUnavailable: 'Unavailable',
   statusConnectedNote: 'Connected to Zotero',
-  detailsLabel: 'Diagnostics',
+  detailsLabel: 'Status details',
   apiVersionLabel: 'API version',
   schemaVersionLabel: 'Schema version',
   zoteroVersionLabel: 'Zotero version',
@@ -738,6 +766,8 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   maxNoteRecordsHint: '单个条目最多返回的笔记条数。',
   maxAnnotationRecords: '批注条数上限',
   maxAnnotationRecordsHint: '单个条目最多返回的批注条数。',
+  maxAttachmentRecords: '附件条数上限',
+  maxAttachmentRecordsHint: '单个条目最多返回的附件条数。',
   fulltextChunkWords: '全文分块词数',
   fulltextChunkWordsHint: '全文按词数分块后参与相关片段排序。',
   maxFulltextChars: '全文字符上限',
@@ -774,6 +804,21 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   groupWeb: '文献标签',
   webEnabled: '显示文献标签',
   webEnabledHint: '在会话顶部显示 Zotero 文献标签，包括文献、相关片段和导出。',
+  groupDiagnostics: '诊断',
+  debug: '详细诊断',
+  debugHint:
+    '开启后，诊断面板额外保留每次请求与工具调用的细节条目；关闭时仅保留状态变化与失败记录。记录仅保存在本机进程内。',
+  diagnosticsTitle: '诊断',
+  diagnosticsLogLabel: '诊断记录',
+  diagnosticsEmpty: '暂无记录。状态变化、降级与失败会出现在这里。',
+  diagnosticsNoProblems: '当前记录中没有警告或错误条目。',
+  diagnosticsLevelAll: '全部级别',
+  diagnosticsLevelProblems: '仅问题',
+  diagnosticsShowLatest: '仅显示最新 {shown} / {total} 条。',
+  diagnosticsCopyBundle: '复制诊断信息',
+  diagnosticsDebugOn: '详细诊断：开',
+  diagnosticsDebugOff: '详细诊断：关',
+  diagnosticsDetail: '详情',
   copy: '复制',
   copied: '已复制',
   commandInputAria: '指令输入',

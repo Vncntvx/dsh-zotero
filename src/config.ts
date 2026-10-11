@@ -53,6 +53,8 @@ export interface Config {
   maxNoteRecords?: Volatile<number>
   /** Upper bound for annotation records returned by `zotero_get`. */
   maxAnnotationRecords?: Volatile<number>
+  /** Upper bound for attachment records returned by `zotero_get` and `zotero_children`. */
+  maxAttachmentRecords?: Volatile<number>
   /** Word count of each full-text passage entering evidence ranking. */
   fulltextChunkWords?: Volatile<number>
   /** Character bound for full text accepted into `zotero_retrieve` ranking. */
@@ -117,6 +119,13 @@ export interface Config {
   promoteOnTimeout?: Volatile<boolean>
   /** How long a tool call waits in the foreground before promoting to a background job (ms). */
   foregroundWaitMs?: Volatile<number>
+  /**
+   * Whether the local diagnostics ring also retains `debug` entries (HTTP
+   * request lines, tool argument digests, cache hits). The ring itself is
+   * in-process memory served only over the loopback remote face; nothing is
+   * written to a file or sent anywhere at either setting.
+   */
+  debug?: Volatile<boolean>
 }
 
 /**
@@ -141,6 +150,7 @@ export const Config = Schema.object({
   maxNoteChars: Schema.number().default(2000).volatile(),
   maxNoteRecords: Schema.number().default(50).volatile(),
   maxAnnotationRecords: Schema.number().default(100).volatile(),
+  maxAttachmentRecords: Schema.number().default(50).volatile(),
   fulltextChunkWords: Schema.number().default(200).volatile(),
   maxFulltextChars: Schema.number().default(250_000).volatile(),
   retrieveAttachmentCap: Schema.number().default(16).volatile(),
@@ -164,6 +174,7 @@ export const Config = Schema.object({
   enableRunInBackground: Schema.boolean().default(true).volatile(),
   promoteOnTimeout: Schema.boolean().default(true).volatile(),
   foregroundWaitMs: Schema.number().default(4000).volatile(),
+  debug: Schema.boolean().default(false).volatile(),
 })
 
 export interface ResolvedConfig {
@@ -181,6 +192,7 @@ export interface ResolvedConfig {
   readonly maxNoteChars: number
   readonly maxNoteRecords: number
   readonly maxAnnotationRecords: number
+  readonly maxAttachmentRecords: number
   readonly fulltextChunkWords: number
   readonly maxFulltextChars: number
   readonly retrieveAttachmentCap: number
@@ -202,6 +214,7 @@ export interface ResolvedConfig {
   readonly enableRunInBackground: boolean
   readonly promoteOnTimeout: boolean
   readonly foregroundWaitMs: number
+  readonly debug: boolean
 }
 
 /**
@@ -363,6 +376,7 @@ function assertResolvedConfig(plain: Record<string, unknown>): ResolvedConfig {
   assertBoolean('webEnabled', plain.webEnabled)
   assertBoolean('enableRunInBackground', plain.enableRunInBackground)
   assertBoolean('promoteOnTimeout', plain.promoteOnTimeout)
+  assertBoolean('debug', plain.debug)
   if (
     typeof plain.timeoutMs !== 'number' ||
     !Number.isFinite(plain.timeoutMs) ||
@@ -383,6 +397,7 @@ function assertResolvedConfig(plain: Record<string, unknown>): ResolvedConfig {
   assertPositiveInteger('maxNoteChars', plain.maxNoteChars)
   assertPositiveInteger('maxNoteRecords', plain.maxNoteRecords)
   assertPositiveInteger('maxAnnotationRecords', plain.maxAnnotationRecords)
+  assertPositiveInteger('maxAttachmentRecords', plain.maxAttachmentRecords)
   assertPositiveInteger('fulltextChunkWords', plain.fulltextChunkWords)
   assertPositiveInteger('maxFulltextChars', plain.maxFulltextChars)
   assertPositiveInteger('retrieveAttachmentCap', plain.retrieveAttachmentCap)

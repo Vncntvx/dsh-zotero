@@ -66,6 +66,7 @@ const FIELD_SPECS = [
   { key: 'maxNoteChars', kind: 'number', group: 'groupSearch' },
   { key: 'maxNoteRecords', kind: 'number', group: 'groupSearch' },
   { key: 'maxAnnotationRecords', kind: 'number', group: 'groupSearch' },
+  { key: 'maxAttachmentRecords', kind: 'number', group: 'groupSearch' },
   { key: 'fulltextChunkWords', kind: 'number', group: 'groupSearch' },
   { key: 'maxFulltextChars', kind: 'number', group: 'groupSearch' },
   { key: 'retrieveAttachmentCap', kind: 'number', group: 'groupSearch' },
@@ -80,6 +81,7 @@ const FIELD_SPECS = [
   { key: 'enableRunInBackground', kind: 'boolean', group: 'groupJobs' },
   { key: 'promoteOnTimeout', kind: 'boolean', group: 'groupJobs' },
   { key: 'foregroundWaitMs', kind: 'number', group: 'groupJobs' },
+  { key: 'debug', kind: 'boolean', group: 'groupDiagnostics' },
 ] as const satisfies readonly {
   key: keyof ResolvedConfig
   kind: 'text' | 'number' | 'boolean'

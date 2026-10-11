@@ -79,13 +79,24 @@ graph LR
 - **Argument access**: Tool cards and the Sources reducer read `block.args` through `argsViewOf(block)` in `src/client/presenters.ts`; the upstream Harness `0.2.1-alpha.2` contract guarantees a non-optional `ToolArgs` (`PartialArguments`) on every call head and result.
 - **Dual error boundaries**: The plugin registers two error boundaries:
   - **Surface (`ZoteroSurfaceBoundary`)**: Wraps the Sources tab (`conversation.view`); on a render error it displays an inline notice with an in-place "Refresh" (`t('refresh')`) button, and `resetKey={sessionId}` resets it automatically when the session changes;
-  - **Card (`ZoteroCardBoundary` / `withCardBoundary`)**: Wraps all 16 tool cards (`tool.call.toolview`). A card that fails to render degrades in place to a compact warning row and stays in the chat stream.
+  - **Card (`ZoteroCardBoundary` / `withCardBoundary`)**: Wraps all 16 tool cards (`tool.call.toolview`). A card that fails to render degrades in place to a compact warning row and remains in the chat stream. The fallback view reads only plain strings (tool name, copy, and error message) and never accesses block properties. Because malformed block data causes most card failures, the fallback must not throw, which prevents unhandled errors from bubbling up to the slot boundary and disabling the card slot permanently.
 
 ### Remote Communication and Settings
 
-- The host half registers `ZoteroRuntime` under the `zotero` wire namespace. Its one endpoint returns the live connectivity view; configuration reads and writes travel through the harness's shared settings form, not this channel;
+- The host half registers `ZoteroRuntime` under the `zotero` wire namespace. Its endpoints return the live connectivity view (`status`), attachment location resolution (`resolveAttachment`), the diagnostics snapshot (`diagnostics`), and the client crash report intake (`reportClientError`); configuration reads and writes travel through the harness's shared settings form, not this channel;
 - The browser half mounts that namespace itself: `apply` awaits `ctx.remote.$mount(ZOTERO_REMOTE)`, then registers every surface on a fiber that declares `remote.zotero` (`ctx.inject(['remote.zotero', …], registerUi)`) and reads it as `ctx.remote.zotero`. A failed mount is not swallowed: the entry rejects and the harness reports the plugin as failed to load;
 - All configuration fields are declared `volatile`, supporting hot reload.
+
+### Diagnostics and Logging
+
+The plugin maintains an in-process ring buffer of up to 500 entries (`src/diagnostics.ts`) to track runtime errors, degraded features, and render crashes:
+
+- **Sources**: Integration seams (HTTP calls, tool invocations, job status changes, configuration updates, write gates, shell intercepts, connection probes, and fallback handlers) write structured records through `DiagnosticSink`. At startup, the service also registers a fiber-scoped logger exporter that captures `ctx.logger` output matching the plugin's namespace (both explicit `zotero.*` categories and Cordis-derived `zotero-service` records for anonymous access and lifecycle events).
+- **Retention**: Records include error, warn, and info events by default. Enabling `debug` appends request paths and invocation summaries. Consecutive identical entries merge into a single item with an incrementing `count` to avoid filling the buffer during error loops. Entry messages and detail fields enforce fixed length limits.
+- **Reading endpoint**: The `zotero/diagnostics` route returns entries in reverse chronological order, along with total counts, truncation flags, and debug state. Because the host event-forwarding allowlist is inaccessible to plugins, the frontend diagnostics card polls this endpoint periodically while visible.
+- **Frontend error reporting**: Component error boundaries forward caught render errors (surface identifier, message, and stack trace) to the buffer via a module-level reporter, centralizing host and client failures in one view.
+- **Card presentation**: The plugin detail page provides a diagnostics card with severity filtering, truncation notices, and an action to copy the full diagnostic bundle (plugin version, Zotero connection details, debug setting, and buffered records).
+- **Data boundaries**: Records remain in memory only, without disk persistence or telemetry export. Credentials never enter the buffer. HTTP entries record only the method, path, status, and duration; query strings are collected only in `debug` mode with length caps, and response bodies and library contents are excluded entirely.
 
 ## Design Boundaries
 

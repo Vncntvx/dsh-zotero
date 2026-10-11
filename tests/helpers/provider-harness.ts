@@ -35,6 +35,7 @@ export const PROVIDER_LIMITS: LocalApiLimits = {
   maxNoteChars: 2000,
   maxNoteRecords: 50,
   maxAnnotationRecords: 100,
+  maxAttachmentRecords: 50,
   fulltextChunkWords: 200,
   maxEvidenceChars: 6000,
   maxEvidencePassages: 4,

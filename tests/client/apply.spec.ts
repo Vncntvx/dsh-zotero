@@ -9,6 +9,7 @@
  */
 
 import { describe, expect, it, vi } from 'vitest'
+import { getErrorReporter } from '../../src/client/actions/error-reporter.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import { apply, inject } from '../../src/client/index.ts'
 import { en, zh } from '../../src/client/locales.ts'
@@ -48,6 +49,7 @@ interface FakeApplyWorld {
   scope: ReturnType<typeof fakeScope>
   /** Scripted namespace `status` result; defaults to ok. */
   status: () => Promise<unknown>
+  resolveAttachment: (ref: string) => Promise<unknown>
   /** Dependency lists each `ctx.inject` call declared, in call order. */
   injectDeps: string[][]
   /** Fibers disposed through the entry's disposer. */
@@ -81,6 +83,7 @@ function fakeWorld(mountRejects: unknown = undefined): FakeApplyWorld {
     formIds,
     scope,
     status: async () => ({ ok: true, value: { connected: true } }),
+    resolveAttachment: async (ref: string) => ({ ok: true, value: { ref, kind: 'file' } }),
     injectDeps: [],
     uiDisposes: 0,
     eventDefinitions: [],
@@ -119,6 +122,14 @@ function fakeWorld(mountRejects: unknown = undefined): FakeApplyWorld {
        */
       zotero: {
         status: () => world.status(),
+        resolveAttachment: (ref: string) => world.resolveAttachment(ref),
+        diagnostics: async () =>
+          ({
+            ok: true as const,
+            value: { entries: [], total: 0, truncated: false, debug: false },
+          }) as unknown,
+        reportClientError: async (report: { surface: string; message: string }) =>
+          ({ ok: true as const, value: { seq: 1, report } }) as unknown,
       },
     },
     /**
@@ -251,6 +262,7 @@ describe('the browser-half entry', () => {
       'plugins.bundle.activation',
       'plugins.bundle.config',
       'plugins.detail.section',
+      'plugins.detail.section',
       'conversation.chat.commandview',
       'conversation.view',
     ])
@@ -368,6 +380,44 @@ describe('the browser-half entry', () => {
     expect(typeof sectionInject.t).toBe('function')
   })
 
+  it('injects the diagnostics card as the second plugins.detail.section entry', async () => {
+    const world = fakeWorld()
+    await applyEntry(world)
+
+    for (const entry of world.injected.filter((e) => e.name === 'plugins.detail.section')) {
+      entry.register()
+    }
+    const sections = world.registered.filter((e) => e.name === 'plugins.detail.section')
+    expect(sections).toHaveLength(2)
+    const diagnostics = sections.find((e) => e.options.id === 'zotero-diagnostics')
+    expect(diagnostics).toBeDefined()
+    const face = (
+      diagnostics?.options.inject as () => {
+        probe: () => Promise<unknown>
+        diagnostics: () => Promise<unknown>
+        t: unknown
+      }
+    )()
+    expect(typeof face.diagnostics).toBe('function')
+    expect(typeof face.probe).toBe('function')
+    expect(typeof face.t).toBe('function')
+  })
+
+  it('wires and unwires the client error reporter with the fiber', async () => {
+    const world = fakeWorld()
+    const dispose = await applyEntry(world)
+    expect(getErrorReporter()).toBeDefined()
+    // The diagnostics face reads the mounted namespace through the same
+    // reporter the boundaries call.
+    await expect(
+      getErrorReporter()!({ surface: 'sources', message: 'boom' }),
+    ).resolves.toMatchObject({
+      ok: true,
+    })
+    await dispose()
+    expect(getErrorReporter()).toBeUndefined()
+  })
+
   it('injects and registers the zotero command card into the conversation.chat.commandview slot', async () => {
     const world = fakeWorld()
     await applyEntry(world)
@@ -483,6 +533,7 @@ describe('the browser-half entry', () => {
       'settings.section',
       'plugins.bundle.activation',
       'plugins.bundle.config',
+      'plugins.detail.section',
       'plugins.detail.section',
       'conversation.chat.commandview',
     ])

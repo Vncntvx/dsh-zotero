@@ -10,7 +10,7 @@ import { Context } from '@deepseek-ai/cordis'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import { afterEach, describe, expect, it } from 'vitest'
 import { ZoteroRuntime } from '../../src/remote.js'
-import { ZOTERO_STATUS_SERVICE_KEY } from '../../src/contract.js'
+import { ZOTERO_STATUS_SERVICE_KEY, type ZoteroDiagnosticEntry } from '../../src/contract.js'
 import { TYPERT_MANIFEST } from '../../src/typert.js'
 import { type HostLane, setupHostLane } from '../helpers/lanes/host-lane.js'
 
@@ -94,6 +94,45 @@ describe('the zotero status endpoint', () => {
     expect(status.diagnosis).not.toBe('')
   })
 
+  it('serves an empty diagnostics view without the zotero service composed', async () => {
+    const context = new Context()
+    await context.plugin(TypertRegistry)
+    new ZoteroRuntime(context)
+    await expect(context.get('zoteroRemote')!.diagnostics()).resolves.toEqual({
+      entries: [],
+      total: 0,
+      truncated: false,
+      debug: false,
+    })
+    await context.fiber.dispose()
+  })
+
+  it('accepts a minimal client error report without optional stacks', async () => {
+    lane = await setupHostLane(undefined, { typert: true })
+    const receipt = await lane.ctx.get('zoteroRemote')!.reportClientError({
+      surface: 'detail',
+      message: 'boom',
+    })
+    expect(receipt.seq).toBeGreaterThan(0)
+    const view = await lane.ctx.get('zoteroRemote')!.diagnostics()
+    const entry = (view.entries as ZoteroDiagnosticEntry[]).find(
+      (candidate) => candidate.event === 'client.render',
+    )
+    expect(entry?.message).toBe('detail: boom')
+    // Both optional stacks absent: the entry carries no detail at all.
+    expect(entry?.detail).toBeUndefined()
+  })
+
+  it('refuses the client error report without the zotero service composed', async () => {
+    const context = new Context()
+    await context.plugin(TypertRegistry)
+    new ZoteroRuntime(context)
+    await expect(
+      context.get('zoteroRemote')!.reportClientError({ surface: 'sources', message: 'boom' }),
+    ).rejects.toThrow('The Zotero service is not composed.')
+    await context.fiber.dispose()
+  })
+
   it('reports unavailable without the zotero service composed', async () => {
     // Deliberately hand-built rather than a lane: the service being absent is
     // the composition under test, so no lane can boot it.
@@ -116,6 +155,8 @@ describe('the zotero typert manifest', () => {
     expect(TYPERT_MANIFEST.invocations.map((invocation) => invocation.method)).toEqual([
       'status',
       'resolveAttachment',
+      'diagnostics',
+      'reportClientError',
     ])
     for (const invocation of TYPERT_MANIFEST.invocations) {
       expect(invocation.namespace).toBe('zotero')

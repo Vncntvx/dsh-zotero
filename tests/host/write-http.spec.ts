@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import {
   OBJECT_NOT_FOUND_MESSAGE,
@@ -37,6 +36,7 @@ import {
   writeRateLimitedMessage,
   writeTagDeleteLimitMessage,
 } from '../../src/errors.js'
+import { expectZoteroError } from '../helpers/error-expectations.js'
 import { MockZotero } from '../helpers/mock-zotero.js'
 import { testWriteClient } from '../helpers/test-clients.js'
 import { progress } from '../helpers/sync.js'
@@ -76,24 +76,6 @@ beforeEach(async () => {
 afterEach(async () => {
   await mock.close()
 })
-
-async function expectZoteroError(
-  promise: Promise<unknown>,
-  code: string,
-  messagePart?: string,
-): Promise<HarnessError> {
-  let thrown: unknown
-  try {
-    await promise
-  } catch (error) {
-    thrown = error
-  }
-  expect(thrown).toBeInstanceOf(HarnessError)
-  const harnessError = thrown as HarnessError
-  expect(harnessError.code).toBe(code)
-  if (messagePart !== undefined) expect(harnessError.message).toContain(messagePart)
-  return harnessError
-}
 
 describe('request shaping', () => {
   it('sends the write headers: API version, instance id, API key, write token, JSON body', async () => {

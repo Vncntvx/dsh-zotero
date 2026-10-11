@@ -79,13 +79,24 @@ graph LR
 - **参数读取**：卡片与 Sources 归约器统一通过 `src/client/presenters.ts` 的 `argsViewOf(block)` 读取 `block.args`；上游 Harness `0.2.1-alpha.2` 契约保证调用头与结果块均携带非可选的 `ToolArgs`（`PartialArguments`）。
 - **双层错误边界**：插件注册两层错误边界：
   - **Surface 级（`ZoteroSurfaceBoundary`）**：包裹 Sources 标签页（`conversation.view`），渲染异常时就地显示错误提示与「刷新」（`t('refresh')`）按钮，并通过 `resetKey={sessionId}` 在会话切换时自动重置；
-  - **Card 级（`ZoteroCardBoundary` / `withCardBoundary`）**：包装全部 16 个工具卡片（`tool.call.toolview`）。卡片渲染异常时就地降级为紧凑警告行，卡片保留在对话流中。
+  - **Card 级（`ZoteroCardBoundary` / `withCardBoundary`）**：包装全部 16 个工具卡片（`tool.call.toolview`）。卡片渲染异常时就地降级为紧凑警告行，保留在对话流中。降级视图仅读取工具名、文案与错误消息等纯字符串，不访问 block 字段；卡片异常大多由块数据异常引发，降级视图本身不抛错，可避免未捕获异常逃逸至上游插槽边界导致卡片停用。
 
 ### 远程通信与设置
 
-- 宿主半侧在 `zotero` wire 命名空间下注册 `ZoteroRuntime`，其唯一端点返回实时连接视图；配置读写走 harness 的共享设置表单，不经过该通道；
+- 宿主半侧在 `zotero` wire 命名空间下注册 `ZoteroRuntime`，端点返回实时连接视图（`status`）、附件落点解析（`resolveAttachment`）、诊断快照（`diagnostics`）与客户端崩溃上报（`reportClientError`）；配置读写走 harness 的共享设置表单，不经过该通道；
 - 浏览器半侧自行挂载该命名空间：`apply` 先 `ctx.remote.$mount(ZOTERO_REMOTE)`，再在声明了 `remote.zotero` 的 fiber 上（`ctx.inject(['remote.zotero', …], registerUi)`）注册全部界面并直接读 `ctx.remote.zotero`。挂载失败不吞掉：入口 reject，由 harness 报告插件加载失败；
 - 配置全字段声明为 `volatile`，支持热重载。
+
+### 诊断与日志
+
+插件维护一份容量为 500 条的进程内诊断环形缓冲（`src/diagnostics.ts`），集中记录运行时错误、功能降级与渲染崩溃：
+
+- **记录来源**：各关键接缝（HTTP 请求、工具调用、Job 状态、配置变更、写门禁、Shell 拦截、连接探测、降级事件）通过 `DiagnosticSink` 写入结构化条目。服务在装配时挂载随 fiber 生命周期的日志导出器，按名称前缀捕获插件子树产生的 `ctx.logger` 输出（涵盖接缝使用的 `zotero.*` 以及 Cordis 派生的 `zotero-service` 命名空间），收集匿名访问与生命周期相关日志；
+- **保留级别**：默认记录 error、warn 与 info 级别；启用 `debug` 配置后额外记录请求行与调用摘要等细节。连续出现的相同条目会合并并递增 `count`，避免重复报错刷屏，单条消息和详情字段均设有长度限制；
+- **读取接口**：`zotero/diagnostics` 端点按时间倒序返回快照（包含总数、截断标记与 debug 开关状态）。因 Harness 转发事件白名单未向插件开放，前端诊断卡仅在面板可见时通过定时轮询更新状态；
+- **前端异常上报**：两层错误边界的 `componentDidCatch` 通过注册阶段绑定的错误上报模块，将捕获的渲染异常（触发界面、错误消息与调用栈）写入同一环形缓冲，统一汇总宿主与前端报错；
+- **界面呈现**：插件详情页的诊断卡支持日志级别过滤、展示最新条目与截断提示，并提供诊断包一键复制功能（包含插件版本、Zotero 连接信息、debug 状态及全部缓冲条目）；
+- **数据安全**：所有记录仅保存在内存中，不落盘、不外发遥测。敏感凭据不经过接缝；HTTP 记录仅包含请求方法、路径、状态码与耗时，查询参数仅在 `debug` 级别记录且受长度截断，响应体与文献正文一律不进入缓冲区。
 
 ## 设计边界
 

@@ -108,6 +108,11 @@ const CURSOR_OUTPUT_SCHEMA = {
       items: { type: 'string', enum: [...ALL_INCLUDES] },
       required: true,
     },
+    unserved: {
+      type: 'array',
+      items: { type: 'string', enum: [...ALL_INCLUDES] },
+      required: true,
+    },
   },
 } as const
 
@@ -123,6 +128,11 @@ const CURSOR_INPUT_SCHEMA = {
       type: 'array',
       items: { type: 'string', enum: [...ALL_INCLUDES] },
     },
+    unserved: {
+      type: 'array',
+      items: { type: 'string', enum: [...ALL_INCLUDES] },
+      required: true,
+    },
   },
 } as const
 
@@ -134,7 +144,7 @@ const BASE_CHANGES_PARAMETERS = {
   since: {
     ...CURSOR_INPUT_SCHEMA,
     description:
-      'The cursor to diff from, passed back verbatim from an earlier zotero_changes result. It carries the instance, the library, the version, and the resource kinds it covers: a bare version number is not accepted, because the same number means an unrelated counter in another database or library. A cursor from another instance is rejected, one for another library is an argument error, and its include set must match this call. Never advance from a result without a cursor: that read did not verify the whole range. Omit to take a baseline reading (current version, no diffs).',
+      'The cursor to diff from, passed back verbatim from an earlier zotero_changes result. It carries the instance, the library, the version, the resource kinds it covers, and the kinds the build cannot serve (`unserved`): a bare version number is not accepted, because the same number means an unrelated counter in another database or library. A cursor from another instance is rejected, one for another library is an argument error, and every kind this call asks for must appear in the cursor\u2019s include or unserved list. Never advance from a result without a cursor: that read did not verify the whole range. Omit to take a baseline reading (current version, no diffs).',
   },
   include: {
     type: 'array',
@@ -327,11 +337,21 @@ function parseCursor(
   if (!Array.isArray(include) || include.length === 0 || new Set(include).size !== include.length) {
     invalid('since.include must list the resource kinds covered by the cursor')
   }
+  const unserved = value.unserved
+  if (
+    new Set(unserved).size !== unserved.length ||
+    unserved.some((kind) => (include as readonly ZoteroChangesInclude[]).includes(kind))
+  ) {
+    invalid(
+      'since.unserved must list resource kinds the cursor could not observe, outside its coverage',
+    )
+  }
   return {
     serverId,
     library: requireLibrary(value.library),
     version: value.version,
     include: [...include],
+    unserved: [...unserved],
   }
 }
 
@@ -559,13 +579,28 @@ export function registerChangesTool(
             ? 'zotero_changes (baseline)'
             : `zotero_changes (since v${changesArgs.since.version})`
         return await executeWithJobs({
-          runner: new ZoteroJobRunner(ctx.get('jobs'), ctx.logger),
+          runner: new ZoteroJobRunner(ctx.get('jobs'), service.diagnostics.sink),
           exec,
           label,
-          run: (signal, onProgress) =>
-            withConnectivityAsk(ctx, service.recovery, { signal, agent: exec.agent }, () =>
-              service.changes(request, signal, onProgress),
-            ),
+          run: async (signal, onProgress) => {
+            const value = await withConnectivityAsk(
+              ctx,
+              service.recovery,
+              { signal, agent: exec.agent },
+              () => service.changes(request, signal, onProgress),
+            )
+            // A kind that contributed nothing is a degradation the model sees
+            // inline, but the reason (a short history, a 404) is what a
+            // "changes look incomplete" question needs from the record.
+            for (const gap of value.unobservable ?? []) {
+              service.diagnostics.sink.warn(
+                'degraded.unobservable',
+                `${gap.kind} contributed nothing to the diff: ${gap.reason}`,
+                { kind: gap.kind, reason: gap.reason },
+              )
+            }
+            return value
+          },
           renderResult: (value) => textOfBlocks(renderChanges(changesArgs, value)),
           runInBackground: changesArgs.run_in_background === true,
           policy: jobPolicyOf(service.config),

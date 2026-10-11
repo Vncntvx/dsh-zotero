@@ -11,6 +11,8 @@ import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { deadline, timeoutOf } from '@deepseek-ai/dsh-timeout'
 import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import { acquireSlot, ConcurrencyGate } from './concurrency.js'
+import type { DiagnosticSink } from './diagnostics.js'
+import { logTransportFailure, type TransportFailureEvents } from './transport-diagnostics.js'
 import {
   ZOTERO_API_VERSION_HEADER,
   ZOTERO_LOCAL_API_VERSION,
@@ -44,6 +46,8 @@ export interface ZoteroHttpClientOptions {
   readonly maxResponseBytes: number
   /** How many data requests this client keeps in flight. */
   readonly maxInFlight: number
+  /** Diagnostics sink for request lines and failures; absent means silently unobserved. */
+  readonly sink?: DiagnosticSink
 }
 
 export interface ZoteroHttpGetOptions {
@@ -188,6 +192,25 @@ function relativePathOf(url: URL, baseUrlWithSlash: string): string {
   return url.href.startsWith(baseUrlWithSlash)
     ? url.href.slice(baseUrlWithSlash.length)
     : url.pathname
+}
+
+/**
+ * The same relative path with any query string cut off. The `debug` request
+ * line is the only diagnostics record that quotes a query (search terms are
+ * library content); thrown status errors and failure lines name the path
+ * alone, so a default-threshold record never carries one.
+ */
+function relativePathOnlyOf(url: URL, baseUrlWithSlash: string): string {
+  const path = relativePathOf(url, baseUrlWithSlash)
+  const query = path.indexOf('?')
+  return query === -1 ? path : path.slice(0, query)
+}
+
+/** The read transport's failure event names. */
+const HTTP_FAILURE_EVENTS: TransportFailureEvents = {
+  abort: 'http.abort',
+  timeout: 'http.timeout',
+  failure: 'http.failure',
 }
 
 /**
@@ -396,80 +419,107 @@ export class ZoteroHttpClient {
     opts: ZoteroHttpGetOptions,
     isIdentityRefresh: boolean,
   ): Promise<ZoteroHttpResponse> {
-    // The deadline fuses caller cancellation with the provider timeout; its
-    // TimeoutReason later distinguishes our timeout from caller aborts. It
-    // starts here, after the slot was taken, so time spent queued behind the
-    // gate is never reported as Zotero failing to respond in time.
-    using d = deadline(opts.signal, this.options.timeoutMs, ZOTERO_TIMEOUT)
-    const headers: Record<string, string> = {
-      [ZOTERO_API_VERSION_HEADER]: ZOTERO_LOCAL_API_VERSION,
-    }
-    const serverId =
-      opts.serverId ?? (opts.sendServerId === false ? undefined : this.currentServerId)
-    if (serverId !== undefined) headers[ZOTERO_SERVER_ID_HEADER] = serverId
-    let response: Response
+    const startedAt = Date.now()
+    // The debug request line is the only record that quotes the query string
+    // (`relativePathOf` reads `url.href`), bounded by the ring's own clamps;
+    // thrown errors and failure lines name the path alone.
+    const target = `GET ${relativePathOf(url, this.baseUrlWithSlash)}`
     try {
-      response = await fetch(url, { method: 'GET', headers, redirect: 'manual', signal: d.signal })
-    } catch (error) {
-      translateFetchError(error, d.signal, opts.signal, this.options.timeoutMs)
-    }
-    this.rememberServerId(response.headers)
-    if (response.status === 412) {
-      // The instance identity changed mid-session. Refresh the identity
-      // record so later diagnostics are accurate, but never replay the
-      // original request: the ref's provenance no longer matches, and the
-      // caller must search again. A failed refresh must not mask the
-      // mismatch itself: the original error stays stable and the refresh
-      // error rides along as its cause. Caller cancellation still wins, so
-      // an aborted refresh aborts the call like any other.
-      // Single-refresh guard: the identity refresh runs with
-      // `isIdentityRefresh`, so a refresh endpoint that also 412s fails loud
-      // instead of recursing into an unbounded 412→refresh→412 loop.
-      if (isIdentityRefresh) {
-        throw new ZoteroError(SERVER_MISMATCH_MESSAGE, ZOTERO_SERVER_MISMATCH)
+      // The deadline fuses caller cancellation with the provider timeout; its
+      // TimeoutReason later distinguishes our timeout from caller aborts. It
+      // starts here, after the slot was taken, so time spent queued behind the
+      // gate is never reported as Zotero failing to respond in time.
+      using d = deadline(opts.signal, this.options.timeoutMs, ZOTERO_TIMEOUT)
+      const headers: Record<string, string> = {
+        [ZOTERO_API_VERSION_HEADER]: ZOTERO_LOCAL_API_VERSION,
       }
-      let refreshError: unknown
+      const serverId =
+        opts.serverId ?? (opts.sendServerId === false ? undefined : this.currentServerId)
+      if (serverId !== undefined) headers[ZOTERO_SERVER_ID_HEADER] = serverId
+      let response: Response
       try {
-        await this.refreshIdentity(opts.signal)
+        response = await fetch(url, {
+          method: 'GET',
+          headers,
+          redirect: 'manual',
+          signal: d.signal,
+        })
       } catch (error) {
-        if (opts.signal?.aborted) throw error
-        refreshError = error
+        translateFetchError(error, d.signal, opts.signal, this.options.timeoutMs)
       }
-      throw new ZoteroError(
-        SERVER_MISMATCH_MESSAGE,
-        ZOTERO_SERVER_MISMATCH,
-        refreshError === undefined ? undefined : { cause: refreshError },
-      )
-    }
-    if (!response.ok) {
-      // Only a 501 needs its body: Zotero states there what it refused, and
-      // that statement is the difference between a version mismatch and an
-      // unimplemented endpoint or format. It is read under the same bound;
-      // caller cancellation and the deadline still win over the statement.
-      let detail = ''
-      if (response.status === 501) {
-        detail = await readFailureStatement(
-          response,
-          this.options.maxResponseBytes,
-          d.signal,
-          opts.signal,
-          this.options.timeoutMs,
+      this.rememberServerId(response.headers)
+      if (response.status === 412) {
+        // The instance identity changed mid-session. Refresh the identity
+        // record so later diagnostics are accurate, but never replay the
+        // original request: the ref's provenance no longer matches, and the
+        // caller must search again. A failed refresh must not mask the
+        // mismatch itself: the original error stays stable and the refresh
+        // error rides along as its cause. Caller cancellation still wins, so
+        // an aborted refresh aborts the call like any other.
+        // Single-refresh guard: the identity refresh runs with
+        // `isIdentityRefresh`, so a refresh endpoint that also 412s fails loud
+        // instead of recursing into an unbounded 412→refresh→412 loop.
+        if (isIdentityRefresh) {
+          throw new ZoteroError(SERVER_MISMATCH_MESSAGE, ZOTERO_SERVER_MISMATCH)
+        }
+        let refreshError: unknown
+        try {
+          await this.refreshIdentity(opts.signal)
+        } catch (error) {
+          if (opts.signal?.aborted) throw error
+          refreshError = error
+        }
+        throw new ZoteroError(
+          SERVER_MISMATCH_MESSAGE,
+          ZOTERO_SERVER_MISMATCH,
+          refreshError === undefined ? undefined : { cause: refreshError },
         )
-      } else {
-        void response.body?.cancel()
       }
-      translateHttpStatus(response, detail, relativePathOf(url, this.baseUrlWithSlash))
-    }
-    // Body reads can still fail mid-stream (connection resets, deadline
-    // expiring during transfer, caller abort); route them through the same
-    // translation as connection establishment.
-    let body: string
-    try {
-      body = await readBody(response, this.options.maxResponseBytes)
+      if (!response.ok) {
+        // Only a 501 needs its body: Zotero states there what it refused, and
+        // that statement is the difference between a version mismatch and an
+        // unimplemented endpoint or format. It is read under the same bound;
+        // caller cancellation and the deadline still win over the statement.
+        let detail = ''
+        if (response.status === 501) {
+          detail = await readFailureStatement(
+            response,
+            this.options.maxResponseBytes,
+            d.signal,
+            opts.signal,
+            this.options.timeoutMs,
+          )
+        } else {
+          void response.body?.cancel()
+        }
+        translateHttpStatus(response, detail, relativePathOnlyOf(url, this.baseUrlWithSlash))
+      }
+      // Body reads can still fail mid-stream (connection resets, deadline
+      // expiring during transfer, caller abort); route them through the same
+      // translation as connection establishment.
+      let body: string
+      try {
+        body = await readBody(response, this.options.maxResponseBytes)
+      } catch (error) {
+        translateFetchError(error, d.signal, opts.signal, this.options.timeoutMs)
+      }
+      this.options.sink?.debug('http.request', target, {
+        status: response.status,
+        ms: Date.now() - startedAt,
+        bodyChars: body.length,
+      })
+      return { body, headers: response.headers }
     } catch (error) {
-      translateFetchError(error, d.signal, opts.signal, this.options.timeoutMs)
+      logTransportFailure(
+        this.options.sink,
+        HTTP_FAILURE_EVENTS,
+        `GET ${relativePathOnlyOf(url, this.baseUrlWithSlash)}`,
+        startedAt,
+        error,
+        opts.signal,
+      )
+      throw error
     }
-    return { body, headers: response.headers }
   }
 
   /** GET and parse a JSON response. */
