@@ -71,6 +71,15 @@ export const SEARCH_DEFAULT_LIMIT = 10
 export const ZOTERO_ITEMKEY_BATCH = 50
 
 /**
+ * One page of the plugin's own bounded listings: the note-body scan's batch
+ * (`fetchNoteRows`) and the write domain's sibling listing both request this
+ * many rows. The Local API has no default or maximum limit for local
+ * requests, so fewer rows than this means EOF — the invariant both readers
+ * lean on, kept in one place so it cannot drift apart.
+ */
+export const ZOTERO_LIST_PAGE_ROWS = 100
+
+/**
  * The write transport keeps exactly one request in flight. Zotero stamps the
  * library version per committed object, and the plugin's tag/collection
  * updates are read-modify-write cycles, where an overlapping write could

@@ -28,7 +28,11 @@
  */
 
 import type { ZoteroHttpClient } from '../http-client.js'
-import { ZOTERO_LIBRARY_VERSION_HEADER, ZOTERO_SERVER_ID_HEADER } from '../constants.js'
+import {
+  ZOTERO_LIBRARY_VERSION_HEADER,
+  ZOTERO_LIST_PAGE_ROWS,
+  ZOTERO_SERVER_ID_HEADER,
+} from '../constants.js'
 import {
   WRITE_CHILD_COLLECTIONS_MESSAGE,
   WRITE_IDENTITY_UNSUPPORTED_MESSAGE,
@@ -70,7 +74,7 @@ import {
   requireSupportedLocalRef,
   requireWritableRef,
 } from '../refs.js'
-import { nextOffsetOrFail, requireArrayBody, requireTotalResults } from './pagination.js'
+import { nextOffsetOrFail, requireArrayBody, requireTotalResults, setPage } from './pagination.js'
 import { assertServerIdMatches } from './identity.js'
 import {
   normalizeCreator,
@@ -996,8 +1000,7 @@ async function assertNoSiblingWithName(
   let offset = 0
   for (;;) {
     const params = new URLSearchParams()
-    params.set('start', String(offset))
-    params.set('limit', String(SIBLING_PAGE_LIMIT))
+    setPage(params, offset, ZOTERO_LIST_PAGE_ROWS)
     const { json, headers } = await deps.client.getJson<unknown>(listPath, params, {
       signal,
       serverId,
@@ -1026,12 +1029,6 @@ async function assertNoSiblingWithName(
     offset = next
   }
 }
-
-/**
- * One page of the sibling listing: a bounded page policy of this plugin, not
- * a server limit. The search lane's note scan requests the same 100 rows.
- */
-const SIBLING_PAGE_LIMIT = 100
 
 /**
  * Create a collection, optionally under a parent. A sibling that already

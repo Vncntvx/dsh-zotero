@@ -37,6 +37,15 @@ import type {
 } from '../types.js'
 
 /**
+ * The `itemKey=` value for one batch: Zotero splits the comma-joined list
+ * itself (`new Set(...split(','))`, `server_localAPI.js:1117-1129`), so this
+ * one spelling is the whole wire contract. Every batched read builds it here.
+ */
+function itemKeyList(refs: readonly ZoteroObjectRef[]): string {
+  return refs.map((ref) => ref.key).join(',')
+}
+
+/**
  * Export the requested items through the Local API's format pipeline:
  * `include=citation` pairs each item with its HTML citation (batched to the
  * API's itemKey cap when the request is larger), `format=bib` yields a
@@ -120,7 +129,7 @@ export async function exportItems(
     message: `Fetching ${refs.length} items (${request.format})...`,
   })
   const search = new URLSearchParams()
-  search.set('itemKey', refs.map((ref) => ref.key).join(','))
+  search.set('itemKey', itemKeyList(refs))
   if (request.format === 'bibliography') {
     search.set('format', 'bib')
     search.set('style', style)
@@ -168,7 +177,7 @@ async function fetchRawItemBatch(
   serverId: string | undefined,
 ): Promise<readonly Record<string, unknown>[]> {
   const search = new URLSearchParams()
-  search.set('itemKey', refs.map((ref) => ref.key).join(','))
+  search.set('itemKey', itemKeyList(refs))
   try {
     const { json } = await client.getJson<unknown>(`${prefix}/items`, search, { signal, serverId })
     if (Array.isArray(json)) {
@@ -259,7 +268,7 @@ async function fetchCitationBatch(
   signal: AbortSignal | undefined,
 ): Promise<Map<string, string>> {
   const search = new URLSearchParams()
-  search.set('itemKey', batch.map((ref) => ref.key).join(','))
+  search.set('itemKey', itemKeyList(batch))
   search.set('include', 'citation')
   search.set('style', style)
   search.set('locale', locale)

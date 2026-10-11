@@ -90,3 +90,18 @@ export function nextOffsetOrFail(
   }
   return nextOffsetOf(offset, returnedCount, total)
 }
+
+/**
+ * Write the request's paging window onto the query. The Local API spells the
+ * window `start`/`limit`, and every server-paged reader requests it the same
+ * way; one setter keeps the wire spelling in one place.
+ * @param params - the query being built.
+ * @param offset - the page's first row.
+ * @param limit - the page's row budget.
+ * @returns the same `params`, for call-site readability.
+ */
+export function setPage(params: URLSearchParams, offset: number, limit: number): URLSearchParams {
+  params.set('start', String(offset))
+  params.set('limit', String(limit))
+  return params
+}

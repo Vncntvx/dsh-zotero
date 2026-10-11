@@ -71,7 +71,7 @@ const CREATE_NOTE_PARAMETERS = {
     type: 'string',
     required: true,
     description:
-      'The note body in markdown. Supported: paragraphs, # to #### headings, **bold**, *italic*, `code`, fenced code, > quotes, - and 1. lists (one nesting level), pipe tables with a |---| separator row, [text](https://… or zotero://…) links. Anything else is escaped and shown as literal text; raw HTML never passes through, so write markdown, not HTML.',
+      'The note body in markdown. Supported: paragraphs, # to #### headings, **bold**, *italic*, `code`, fenced code, > quotes, - and 1. lists (one nesting level), pipe tables with a |---| separator row (body rows align to the header per GFM: missing cells pad empty, excess cells are dropped), [text](https://… or zotero://…) links. Anything else is escaped and shown as literal text; raw HTML never passes through, so write markdown, not HTML.',
   },
 } as const
 

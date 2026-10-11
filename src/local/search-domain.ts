@@ -8,10 +8,10 @@
 
 import type { ZoteroHttpClient } from '../http-client.js'
 import { mapWithConcurrency } from '../concurrency.js'
-import { ZOTERO_ITEMKEY_BATCH } from '../constants.js'
+import { ZOTERO_ITEMKEY_BATCH, ZOTERO_LIST_PAGE_ROWS } from '../constants.js'
 import { tokenize } from '../evidence.js'
 import { ZOTERO_INVALID_ARGUMENT, ZoteroError } from '../errors.js'
-import { nextOffsetOrFail, requireArrayBody, requireTotalResults } from './pagination.js'
+import { nextOffsetOrFail, requireArrayBody, requireTotalResults, setPage } from './pagination.js'
 import { ZOTERO_SERVER_ID_HEADER } from '../constants.js'
 import {
   publicationsItemsPath,
@@ -75,8 +75,7 @@ export function buildSearchParams(request: ZoteroSearchRequest): URLSearchParams
   if (request.includeTrashed) params.set('includeTrashed', '1')
   params.set('sort', request.sort)
   params.set('direction', request.direction)
-  params.set('start', String(request.offset))
-  params.set('limit', String(request.limit))
+  setPage(params, request.offset, request.limit)
   return params
 }
 
@@ -123,8 +122,11 @@ export async function runSearch(
   // the scan, and the paged fields never fold in supplement counts.
   let supplemental: ZoteroSearchSupplement | undefined
   const query = request.query?.trim()
-  if (query !== undefined && query !== '' && shouldScanNotes(request, scope.resolved)) {
-    const terms = tokenize(query)
+  // `shouldScanNotes` is the scan's single authority, query emptiness
+  // included; the tokenizer below tolerates a blank query (zero terms) and
+  // the guard inside turns it off.
+  if (shouldScanNotes(request, scope.resolved)) {
+    const terms = tokenize(query ?? '')
     // A query whose tokens are all punctuation/emoji/whitespace matches
     // every note (the empty token list is vacuously present), so the scan
     // stays disabled for it.
@@ -228,9 +230,10 @@ function shouldScanNotes(request: ZoteroSearchRequest, resolved: ZoteroResolvedS
  * bounded scanning policy; the Local API itself has no default/maximum
  * limit for local requests, so fewer rows than requested reliably means EOF.
  * Note scan uses `/{libraryPrefix}/items` (not `/items/top`) so child notes
- * are included. `truncated` is true when the cap, not EOF, ended the
- * scan (the only way to leave the loop at exactly the cap is a full final
- * batch, so more notes may exist).
+ * are included. `truncated` is true only when the cap stopped the scan with
+ * notes still unread: a short page is EOF, and a scan that filled the cap
+ * exactly is decided by a one-row probe at the cursor, because a library
+ * whose note count divides the cap must not read as truncated.
  */
 async function fetchNoteRows(
   deps: { client: ZoteroHttpClient; limits: LocalApiLimits },
@@ -246,31 +249,50 @@ async function fetchNoteRows(
     scope.resolved.kind === 'publications'
       ? publicationsItemsPath()
       : `${libraryPrefix(libraryForScan)}/items`
-  let scanned = 0
-  let start = 0
-  while (scanned < deps.limits.maxNoteScanRecords) {
-    const wanted = Math.min(100, deps.limits.maxNoteScanRecords - scanned)
+  const cap = deps.limits.maxNoteScanRecords
+  const readRows = async (start: number, limit: number): Promise<readonly unknown[]> => {
     const params = new URLSearchParams()
     params.set('itemType', 'note')
     params.set('sort', 'dateModified')
     params.set('direction', 'desc')
-    params.set('start', String(start))
-    params.set('limit', String(wanted))
+    setPage(params, start, limit)
     if (request.includeTrashed) params.set('includeTrashed', '1')
     const { json } = await deps.client.getJson<unknown>(basePath, params, {
       signal,
       serverId: scope.serverId,
     })
-    const rows = requireArrayBody(json, 'note scan')
-    if (rows.length === 0) break
+    return requireArrayBody(json, 'note scan')
+  }
+  let scanned = 0
+  let start = 0
+  let endedByEof = false
+  while (scanned < cap) {
+    const wanted = Math.min(ZOTERO_LIST_PAGE_ROWS, cap - scanned)
+    const rows = await readRows(start, wanted)
+    if (rows.length === 0) {
+      endedByEof = true
+      break
+    }
     const added = rows.slice(0, wanted)
     scanned += added.length
     if (shouldStop?.(added) === true) break
     // Fewer rows than requested means the library has no more notes.
-    if (rows.length < wanted) break
+    if (rows.length < wanted) {
+      endedByEof = true
+      break
+    }
     start += rows.length
   }
-  return { scanned, truncated: scanned >= deps.limits.maxNoteScanRecords }
+  let truncated = false
+  if (!endedByEof && scanned >= cap) {
+    // The cap ended the scan on a full page, so EOF was never observed: one
+    // one-row probe at the cursor decides between "more notes exist" and
+    // "the library ends exactly here". Without it, a library whose note
+    // count divides the cap would report a truncation that never happened.
+    const rest = await readRows(start, 1)
+    truncated = rest.length > 0
+  }
+  return { scanned, truncated }
 }
 
 /**

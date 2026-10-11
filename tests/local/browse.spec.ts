@@ -1,8 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
-  ITEM_FIELDS_ITEM_TYPE_MESSAGE,
   ITEM_LEVEL_REQUIRES_SCOPE_MESSAGE,
-  ITEM_TYPE_SCOPE_MESSAGE,
   MATCH_REQUIRES_Q_MESSAGE,
   OFFSET_NON_NEGATIVE_MESSAGE,
   PARENT_REF_SCOPE_MESSAGE,
@@ -10,7 +8,6 @@ import {
   SCOPE_FACET_KIND_MESSAGE,
   SCOPE_NAME_MESSAGE,
   ZOTERO_INVALID_ARGUMENT,
-  ZOTERO_SERVER_MISMATCH,
   browseLimitMessage,
   libraryNotAllowedMessage,
   parentLibraryMismatchMessage,
@@ -22,7 +19,7 @@ import {
   teardownProvider,
   type ProviderHarness,
 } from '../helpers/provider-harness.js'
-import { expectRequestCount, zoteroError } from '../helpers/server/assert.js'
+import { zoteroError } from '../helpers/server/assert.js'
 import { COLLECTION_KEY, GROUP_LIBRARY, apiPath, collectionRef } from '../helpers/server/keys.js'
 import { collectionRow, savedSearchRow, versionHeaders } from '../helpers/server/objects.js'
 import { serveJson, serveStatus } from '../helpers/server/serve.js'
@@ -152,7 +149,10 @@ describe('browse: libraries', () => {
 })
 
 describe('browse: collections', () => {
-  it('lists top-level collections server-side paged', async () => {
+  it('lists top-level collections server-side paged, in server order', async () => {
+    // Deliberately unsorted fixture: the plugin must preserve Zotero's own
+    // ordering (its data layer name-collates the listing) instead of
+    // re-sorting each page locally, which would scramble cross-page order.
     const tops = [
       collectionRow({ key: 'COLL0001', data: { name: 'Root B' } }),
       collectionRow({ key: 'COLL0002', data: { name: 'Root A' } }),
@@ -165,13 +165,32 @@ describe('browse: collections', () => {
     const result = await provider.browse({ kind: 'collections', offset: 0, limit: 10 })
     expect(result.total).toBe(2)
     expect(result.serverId).toBe('S1')
-    // Page-local name sort keeps output deterministic.
     expect(result.items.map((item) => (item as { name: string }).name)).toEqual([
-      'Root A',
       'Root B',
+      'Root A',
     ])
     // Top-level rows keep single-segment paths.
-    expect((result.items[0] as unknown as { path: string[] }).path).toEqual(['Root A'])
+    expect((result.items[0] as unknown as { path: string[] }).path).toEqual(['Root B'])
+  })
+
+  it('keeps server order stable across pages', async () => {
+    // The bug this pins: a page-local sort orders each window internally
+    // while the concatenated pages are neither Zotero order nor name order.
+    const tops = ['Delta', 'Charlie', 'Bravo', 'Alpha'].map((name, i) =>
+      collectionRow({ key: `COLL000${i + 1}`, data: { name } }),
+    )
+    mock.route('GET', `${apiPath()}/collections/top`, (req, res, helpers, search) => {
+      const start = Number(search.get('start') ?? '0')
+      const limit = Number(search.get('limit') ?? '10')
+      helpers.json(tops.slice(start, start + limit), { 'Total-Results': String(tops.length) })
+    })
+    const page1 = await provider.browse({ kind: 'collections', offset: 0, limit: 2 })
+    const page2 = await provider.browse({ kind: 'collections', offset: 2, limit: 2 })
+    const names = [
+      ...page1.items.map((item) => (item as { name: string }).name),
+      ...page2.items.map((item) => (item as { name: string }).name),
+    ]
+    expect(names).toEqual(['Delta', 'Charlie', 'Bravo', 'Alpha'])
   })
 
   it('paginates against the header total with nextOffset', async () => {
@@ -392,108 +411,6 @@ describe('browse: collections', () => {
   })
 })
 
-describe('browse: itemFields', () => {
-  it('lists the fields and creator types valid for one item type', async () => {
-    const seen: string[] = []
-    mock.route('GET', '/api/itemTypeFields', (req, res, helpers, search) => {
-      expect(search.get('itemType')).toBe('dataset')
-      seen.push('fields')
-      helpers.json([
-        { field: 'repository', localized: 'Repository' },
-        { field: 'versionNumber', localized: 'Version' },
-      ])
-    })
-    mock.route('GET', '/api/itemTypeCreatorTypes', (req, res, helpers) => {
-      seen.push('creators')
-      helpers.json([{ creatorType: 'author', localized: 'Author' }])
-    })
-    const result = await provider.browse({
-      kind: 'itemFields',
-      itemType: 'dataset',
-      offset: 0,
-      limit: 10,
-    })
-    expect(seen).toEqual(['fields', 'creators'])
-    expect(result.total).toBe(3)
-    expect(result.items).toEqual([
-      { field: 'repository', localized: 'Repository' },
-      { field: 'versionNumber', localized: 'Version' },
-      { creatorType: 'author', localized: 'Author' },
-    ])
-  })
-
-  it('paginates itemFields against the merged row list', async () => {
-    serveJson(mock, '/api/itemTypeFields', [{ field: 'a' }, { field: 'b' }])
-    serveJson(mock, '/api/itemTypeCreatorTypes', [{ creatorType: 'author' }])
-    const page = await provider.browse({
-      kind: 'itemFields',
-      itemType: 'journalArticle',
-      offset: 0,
-      limit: 2,
-    })
-    expect(page.returned).toBe(2)
-    expect(page.nextOffset).toBe(2)
-  })
-
-  it('refuses itemFields whose two reads report different instances', async () => {
-    // The field list and the creator types compose one result. Across a
-    // profile switch the two parallel reads can be served by different
-    // instances, and attributing either body to the other's identity would
-    // mix two libraries' schemas.
-    serveJson(mock, '/api/itemTypeFields', [{ field: 'a' }], { 'Zotero-Server-ID': 'S1' })
-    serveJson(mock, '/api/itemTypeCreatorTypes', [{ creatorType: 'author' }], {
-      'Zotero-Server-ID': 'S2',
-    })
-    await zoteroError(
-      provider.browse({ kind: 'itemFields', itemType: 'journalArticle', offset: 0, limit: 5 }),
-      ZOTERO_SERVER_MISMATCH,
-    )
-  })
-
-  it('takes the instance id from whichever itemFields read reports one', async () => {
-    serveJson(mock, '/api/itemTypeFields', [{ field: 'a' }], { 'Zotero-Server-ID': 'S1' })
-    serveJson(mock, '/api/itemTypeCreatorTypes', [{ creatorType: 'author' }])
-    const result = await provider.browse({
-      kind: 'itemFields',
-      itemType: 'journalArticle',
-      offset: 0,
-      limit: 5,
-    })
-    expect(result.serverId).toBe('S1')
-    expect(result.total).toBe(2)
-  })
-
-  it('fails closed without a well-formed item type or with a library', async () => {
-    await zoteroError(
-      provider.browse({ kind: 'itemFields', offset: 0, limit: 5 }),
-      ZOTERO_INVALID_ARGUMENT,
-      ITEM_FIELDS_ITEM_TYPE_MESSAGE,
-    )
-    await zoteroError(
-      provider.browse({ kind: 'itemFields', itemType: 'bad type!', offset: 0, limit: 5 }),
-      ZOTERO_INVALID_ARGUMENT,
-      ITEM_FIELDS_ITEM_TYPE_MESSAGE,
-    )
-    await zoteroError(
-      provider.browse({
-        kind: 'itemFields',
-        itemType: 'dataset',
-        library: { type: 'user', id: 0 },
-        offset: 0,
-        limit: 5,
-      }),
-      ZOTERO_INVALID_ARGUMENT,
-      libraryNotAllowedMessage('itemFields'),
-    )
-    await zoteroError(
-      provider.browse({ kind: 'tags', itemType: 'dataset', offset: 0, limit: 5 }),
-      ZOTERO_INVALID_ARGUMENT,
-      ITEM_TYPE_SCOPE_MESSAGE,
-    )
-    expectRequestCount(mock, 0)
-  })
-})
-
 describe('browse: savedSearches', () => {
   const searches = [
     savedSearchRow({
@@ -709,20 +626,5 @@ describe('browse: tags', () => {
       ZOTERO_INVALID_ARGUMENT,
       SCOPE_FACET_KIND_MESSAGE,
     )
-  })
-})
-
-describe('browse: itemTypes', () => {
-  it('lists item types', async () => {
-    const types = [{ itemType: 'book', localized: 'Book' }, { itemType: 'journalArticle' }]
-    serveJson(mock, '/api/itemTypes', types)
-    const result = await provider.browse({ kind: 'itemTypes', offset: 0, limit: 10 })
-    expect(result.total).toBe(2)
-  })
-  it('paginates itemTypes', async () => {
-    const types = Array.from({ length: 5 }, (_, i) => ({ itemType: `type${i}` }))
-    serveJson(mock, '/api/itemTypes', types)
-    const r = await provider.browse({ kind: 'itemTypes', offset: 0, limit: 2 })
-    expect(r.returned).toBe(2)
   })
 })

@@ -200,7 +200,12 @@ function renderList(ordered: boolean, hasTask: boolean, innerHtml: string): stri
  * syntax never becomes markup: it is escaped and shown as written.
  */
 export function markdownToNoteHtml(markdown: string): string {
-  const lines = markdown.replaceAll('\r\n', '\n').split('\n')
+  // NUL never reaches the pipeline: it is the inline-token sentinel, so an
+  // input that carried one could impersonate `\x00CODE0\x00` and have its
+  // literal text replaced by the first code span's contents. Markdown gives
+  // NUL no meaning; dropping it is the math pattern's own exclusion (`\x00`
+  // in `INLINE_MATH_PATTERN`) applied once at the door for both sentinels.
+  const lines = markdown.replaceAll('\r\n', '\n').replaceAll('\x00', '').split('\n')
   const blocks: string[] = []
   let index = 0
 

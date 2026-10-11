@@ -42,10 +42,11 @@ import {
   PERSONAL_LIBRARY,
 } from '../refs.js'
 import {
-  requireArrayBody,
-  requireTotalResults,
   nextOffsetOf,
   nextOffsetOrFail,
+  requireArrayBody,
+  requireTotalResults,
+  setPage,
 } from './pagination.js'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { itemsSegmentFor, publicationsTagsPath, type ScopeDirectory } from './scope-directory.js'
@@ -60,6 +61,7 @@ import type {
   ZoteroCollectionInfo,
   ZoteroCreatorTypeInfo,
   ZoteroItemFieldInfo,
+  ZoteroItemTypeInfo,
   ZoteroLibraryInfo,
 } from '../types.js'
 
@@ -259,8 +261,7 @@ async function browseCollections(
     listPath = `${prefix}/collections/${parentRef.key}/collections`
   }
   const params = new URLSearchParams()
-  params.set('start', String(request.offset))
-  params.set('limit', String(request.limit))
+  setPage(params, request.offset, request.limit)
   const { json, headers } = await deps.client.getJson<unknown>(listPath, params, { signal })
   const serverId = headers.get(ZOTERO_SERVER_ID_HEADER) ?? undefined
   const total = requireTotalResults(headers, 'collections')
@@ -293,9 +294,10 @@ async function browseCollections(
     }),
   )
   const items = resolved
-  // A page-local sort keeps output deterministic without re-sorting the
-  // library; ordering across pages belongs to Zotero.
-  items.sort((a, b) => a.name.localeCompare(b.name))
+  // Ordering belongs to Zotero: its data layer already name-collates the top
+  // listing (`Zotero.Collections.getByLibrary` sorts by `localeCompare`), and
+  // a page-local re-sort of a server-paged window would order each page
+  // internally while scrambling the sequence across pages.
   return browsePage('collections', {
     items,
     total,
@@ -319,8 +321,7 @@ async function browseSavedSearches(
   // acquisition strategies stay separate so a browse page never has to
   // fetch the whole library just to show `limit` rows.
   const params = new URLSearchParams()
-  params.set('start', String(request.offset))
-  params.set('limit', String(request.limit))
+  setPage(params, request.offset, request.limit)
   const { json, headers } = await deps.client.getJson<unknown>(`${prefix}/searches`, params, {
     signal,
   })
@@ -344,13 +345,14 @@ async function browseSavedSearches(
       condByKey.set(key, cond as Record<string, JsonValue>[])
     }
   }
-  const items = entries
-    .map((entry) => ({
-      ref: formatRef(refForLibrary(library, 'search', entry.key, serverId)),
-      name: entry.name,
-      ...(condByKey.has(entry.key) ? { conditions: condByKey.get(entry.key) } : {}),
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name))
+  const items = entries.map((entry) => ({
+    ref: formatRef(refForLibrary(library, 'search', entry.key, serverId)),
+    name: entry.name,
+    ...(condByKey.has(entry.key) ? { conditions: condByKey.get(entry.key) } : {}),
+  }))
+  // Ordering belongs to Zotero: `Zotero.Searches.getAll` name-collates the
+  // listing, and a page-local re-sort of a server-paged window would order
+  // each page internally while scrambling the sequence across pages.
   return browsePage('savedSearches', {
     items,
     total,
@@ -411,8 +413,7 @@ async function browseTags(
     params.set('itemQ', request.itemQuery)
     params.set('itemQMode', request.itemQueryMode ?? 'titleCreatorYear')
   }
-  params.set('start', String(request.offset))
-  params.set('limit', String(request.limit))
+  setPage(params, request.offset, request.limit)
   const { json, headers } = await deps.client.getJson<unknown>(path, params, {
     signal,
     ...(serverIdClaim !== undefined ? { serverId: serverIdClaim } : {}),
@@ -468,17 +469,7 @@ async function browseItemTypes(
     })
     .filter((x): x is { itemType: string; localized?: string } => x !== null)
   raw.sort((a, b) => a.itemType.localeCompare(b.itemType))
-  const items = raw
-  const total = items.length
-  const slice = items.slice(request.offset, request.offset + request.limit)
-  return browsePage('itemTypes', {
-    items: slice,
-    total,
-    offset: request.offset,
-    // Client-sliced: a request past the end of the list is legitimate.
-    next: nextOffsetOf(request.offset, slice.length, total),
-    ...(serverId !== undefined ? { serverId } : {}),
-  })
+  return clientSlicedPage('itemTypes', raw, request, serverId)
 }
 
 /**
@@ -530,13 +521,27 @@ async function browseItemFields(
     ...fieldItems,
     ...creatorTypeItems,
   ]
-  const total = items.length
+  return clientSlicedPage('itemFields', items, request, serverId)
+}
+
+/**
+ * The client-sliced tail shared by the catalog listings: the whole list is in
+ * memory, so pagination is slicing, and a request past the end is legitimate
+ * (unlike a server-paged page, where it would contradict the total).
+ */
+function clientSlicedPage(
+  kind: 'itemTypes' | 'itemFields',
+  items: readonly (ZoteroItemTypeInfo | ZoteroItemFieldInfo | ZoteroCreatorTypeInfo)[],
+  request: ZoteroBrowseRequest,
+  serverId: string | undefined,
+): ZoteroBrowseResult {
   const slice = items.slice(request.offset, request.offset + request.limit)
-  return browsePage('itemFields', {
+  return browsePage(kind, {
     items: slice,
-    total,
+    total: items.length,
     offset: request.offset,
-    next: nextOffsetOf(request.offset, slice.length, total),
+    // Client-sliced: a request past the end of the list is legitimate.
+    next: nextOffsetOf(request.offset, slice.length, items.length),
     ...(serverId !== undefined ? { serverId } : {}),
   })
 }

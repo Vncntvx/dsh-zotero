@@ -59,6 +59,18 @@ describe('emphasis and code', () => {
   it('consumes an unterminated fence to the end of the input', () => {
     expect(markdownToNoteHtml('```\nnever closed')).toBe('<pre><code>never closed</code></pre>')
   })
+
+  it('strips NUL so input text cannot impersonate an inline token', () => {
+    // `\x00CODE<n>\x00` is the pipeline's own sentinel. A note body carrying
+    // one must not have its literal text swapped for the first code span's
+    // contents; NUL is dropped at the door instead.
+    expect(markdownToNoteHtml('a \x00CODE0\x00 b `real code`')).toBe(
+      '<p>a CODE0 b <code>real code</code></p>',
+    )
+    expect(markdownToNoteHtml('a \x00MATH0\x00 b $x$')).toBe(
+      '<p>a MATH0 b <math-inline>x</math-inline></p>',
+    )
+  })
 })
 
 describe('links', () => {

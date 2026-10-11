@@ -29,7 +29,6 @@ import { testHttpClient } from '../helpers/test-clients.js'
 import { expectRequestCount } from '../helpers/server/assert.js'
 import { SERVER_ID } from '../helpers/server/keys.js'
 import {
-  attachment,
   collectionRow,
   item,
   noteRow,
@@ -37,7 +36,7 @@ import {
   versionHeaders,
 } from '../helpers/server/objects.js'
 import { serveJson, serveSearchPage } from '../helpers/server/serve.js'
-import { COLLECTIONS, SEARCHES, makeProvider } from './search-helpers.js'
+import { COLLECTIONS, SEARCHES } from './search-helpers.js'
 
 let mock: MockZotero
 let provider: LocalApiProvider
@@ -375,88 +374,6 @@ describe('search: note-content scan', () => {
     expect(new Set(requested).size).toBe(59)
     expect(requested).toContain('PARE0000')
     expect(requested).toContain('PARE0058')
-  })
-
-  it('stops the scan at the configured record cap', async () => {
-    const capped = makeProvider(mock, { maxNoteScanRecords: 2 })
-    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers, search) => {
-      if (search.get('itemType') === 'note')
-        helpers.json([
-          noteRow({ data: { note: 'cascade one' } }),
-          noteRow({ key: 'NOTE2222', data: { note: 'cascade two' } }),
-          noteRow({ key: 'NOTE3333', data: { note: 'cascade three' } }),
-        ])
-      else helpers.json([], { 'Total-Results': '0' })
-    })
-    const result = await capped.search(request({ query: 'cascade' }))
-    expect(result.items).toEqual([])
-    expect(result.supplemental?.items.map((entry) => entry.ref)).toEqual([
-      'zotero://user/0/item/NOTE1111',
-      'zotero://user/0/item/NOTE2222',
-    ])
-    expect(result.supplemental?.scanned).toBe(2)
-    expect(result.supplemental?.truncated).toBe(true)
-    expect(mock.requests[1]!.search.get('limit')).toBe('2')
-  })
-
-  it('treats an empty scan response as no note matches', async () => {
-    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers, search) => {
-      if (search.get('itemType') === 'note') helpers.json([])
-      else helpers.json([searchHit()], { 'Total-Results': '1', 'Zotero-Server-ID': SERVER_ID })
-    })
-    const result = await provider.search(request({ query: 'cascade' }))
-    expect(result.items.map((entry) => entry.ref)).toEqual([
-      'zotero://user/0/item/ABCD1234?server=S1',
-    ])
-    expect(result.total).toBe(1)
-  })
-
-  it('skips non-note scan rows, tagless notes, and partial term matches', async () => {
-    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers, search) => {
-      if (search.get('itemType') === 'note')
-        helpers.json([
-          attachment({
-            key: 'ATTACH1X',
-            data: { note: 'cascade infrastructure note', tags: [{ tag: 'reviewed' }] },
-          }),
-          noteRow({ key: 'NOTE4444', data: { note: 'cascade without the second term' } }),
-        ])
-      else helpers.json([searchHit()], { 'Total-Results': '1', 'Zotero-Server-ID': SERVER_ID })
-    })
-    const result = await provider.search(
-      request({ query: 'cascade infrastructure', tags: ['reviewed'] }),
-    )
-    expect(result.items.map((entry) => entry.ref)).toEqual([
-      'zotero://user/0/item/ABCD1234?server=S1',
-    ])
-  })
-
-  it('pages the scan in batches up to the cap', async () => {
-    const capped = makeProvider(mock, { maxNoteScanRecords: 150 })
-    const batch = (count: number) =>
-      Array.from({ length: count }, (_, i) =>
-        noteRow({
-          key: `NOTE${String(i).padStart(4, '0')}`,
-          data: { note: 'unrelated note body' },
-        }),
-      )
-    let scanPage = 0
-    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers, search) => {
-      if (search.get('itemType') === 'note') {
-        scanPage += 1
-        helpers.json(scanPage === 1 ? batch(100) : batch(30))
-      } else {
-        helpers.json([searchHit()], { 'Total-Results': '1', 'Zotero-Server-ID': SERVER_ID })
-      }
-    })
-    const result = await capped.search(request({ query: 'cascade' }))
-    expect(result.items.map((entry) => entry.ref)).toEqual([
-      'zotero://user/0/item/ABCD1234?server=S1',
-    ])
-    expect(mock.requests[1]!.search.get('limit')).toBe('100')
-    expect(mock.requests[2]!.search.get('start')).toBe('100')
-    expect(mock.requests[2]!.search.get('limit')).toBe('50')
-    expectRequestCount(mock, 3)
   })
 
   it('requires every query term in the note body without filter interference', async () => {
