@@ -58,7 +58,7 @@ npm run typecheck            # Run type checking (Node, test, and client project
 npm run build                # Compile all artifacts (tsc → lib/, esbuild → lib/client.js)
 npm run build:client         # Build browser client artifact only
 npm run test:coverage        # Check coverage gates
-npm run harness:check        # Check upstream Harness version pin and declaration freshness
+npm run harness:check        # Check upstream Harness version pin and artifact freshness
 npm run harness:pin -- <ver> # Update upstream Harness dependency pin across all surfaces
 npm run verify:pack          # Validate package tarball integrity
 npm run smoke                # Production-stack smoke: every read tool against a live Zotero from a dsh profile
@@ -73,6 +73,19 @@ npm run format:check         # Check code formatting
 `prepare` (triggered by `npm install`) builds `lib/` from source; `prepublishOnly` runs `release:check` before a publish can go out.
 
 Note: This repository is typically developed as a sibling directory to `deepseek-harness`. Type declarations are resolved from upstream build artifacts via symlinks. If upstream code changes, run the upstream build first to synchronize declaration files.
+
+### Upstream artifact freshness check
+
+`npm run harness:check` validates the freshness of upstream build artifacts:
+
+1. Declarations versus source: verifies that `lib/types/*.d.ts` is newer than the corresponding upstream source files, preventing type checking against outdated declarations.
+2. Browser runtime versus declarations: verifies that `lib/client.js` is newer than its declaration files, preventing runtime bundles from lagging behind declared interfaces.
+
+The second check prints a note in regular checks and causes a failure under `--strict` during `release:check`. To update upstream browser artifacts:
+
+```sh
+pnpm --dir ../deepseek-harness run build:lib:client   # rebuild the upstream browser artifacts
+```
 
 ## Integration Tests
 

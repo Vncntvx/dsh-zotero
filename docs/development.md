@@ -58,7 +58,7 @@ npm run typecheck            # 类型检查（包含 Node、测试与浏览器�
 npm run build                # 编译全部产物（tsc → lib/，esbuild → lib/client.js）
 npm run build:client         # 仅构建浏览器端产物
 npm run test:coverage        # 覆盖率门禁检查
-npm run harness:check        # 检查上游 Harness 版本钉与声明一致性
+npm run harness:check        # 检查上游 Harness 版本钉与产物一致性
 npm run harness:pin -- <ver> # 统一更新 Harness 依赖版本钉
 npm run verify:pack          # 校验打包产物文件完整性
 npm run smoke                # 生产栈冒烟：在 dsh profile 内对真实 Zotero 调用全部读工具
@@ -73,6 +73,19 @@ npm run format:check         # 检查代码格式
 `prepare`（npm install 时触发）从源码构建 `lib/`；`prepublishOnly` 在发布前运行 `release:check`。
 
 说明：本仓库通常与 `deepseek-harness` 作为 sibling 目录并列开发。类型定义通过符号链接读取上游构建产物。若上游代码发生更新，需先在上游执行构建以同步声明文件。
+
+### 上游产物一致性门禁
+
+`npm run harness:check` 校验上游构建产物的新鲜度：
+
+1. 声明与源码：检查 `lib/types/*.d.ts` 是否晚于对应的上游源码，防止类型检查依赖过期的声明文件。
+2. 浏览器运行时与声明：检查客户端包的 `lib/client.js` 是否晚于其声明文件，防止运行时包落后于声明定义。
+
+日常检查中第 2 项输出为提示；在发布检查（`release:check`）的 `--strict` 模式下将作为错误拦截。更新上游浏览器产物命令：
+
+```sh
+pnpm --dir ../deepseek-harness run build:lib:client   # 重建上游浏览器产物
+```
 
 ## 集成测试
 

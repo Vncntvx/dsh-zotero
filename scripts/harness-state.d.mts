@@ -57,3 +57,36 @@ export declare function collectLockProblems(
  * Returns undefined for paths outside node_modules, such as the root `""` or a workspace package.
  */
 export declare function packageNameFromLockPath(path: string): string | undefined
+
+/** One stale browser artifact: the package whose runtime bundle lags its declarations. */
+export interface StaleClientRuntime {
+  /** The `@deepseek-ai/*` package name. */
+  readonly name: string
+  /** The runtime bundle's path relative to the harness root. */
+  readonly runtime: string
+}
+
+/** The categorized artifact findings; the caller decides what fails a run. */
+export interface ArtifactProblems {
+  /** Imported specifiers whose declarations are older than the package's `src`. */
+  readonly stale: string[]
+  /** Packages whose browser runtime is older than their own client declarations. */
+  readonly staleRuntime: StaleClientRuntime[]
+  /** Imported specifiers with no resolvable installed declaration. */
+  readonly missing: string[]
+  /** Imported specifiers that resolve outside the sibling harness checkout. */
+  readonly outside: string[]
+}
+
+/**
+ * Classify every imported upstream specifier against the sibling checkout's
+ * installed artifacts, on both freshness axes: declarations versus `src`, and
+ * the browser runtime versus its own client declarations.
+ * @param harnessRoot - the sibling harness checkout root.
+ * @param specifiers - every `@deepseek-ai/*` specifier this repository imports.
+ * @returns the categorized findings.
+ */
+export declare function collectArtifactProblems(
+  harnessRoot: string,
+  specifiers: string[],
+): ArtifactProblems

@@ -21,6 +21,10 @@
  *    does not regenerate it: a stale build would silently typecheck this repo
  *    against an older interface than the one it runs on.
  *
+ *    The check verifies both declarations against source, and prebuilt
+ *    browser bundles (`lib/client.js`) against their client declarations,
+ *    ensuring runtime bundles stay synchronized with declared types.
+ *
  * Usage:
  *   node scripts/harness-state.mjs                 # check every fact, then exit
  *   node scripts/harness-state.mjs --strict        # stale declarations fail too
@@ -539,37 +543,98 @@ function declarationOf(pkgDir, specifier) {
 }
 
 /**
- * Verify every imported upstream package's installed declarations are current:
- * missing declarations are always a failure (typecheck cannot resolve them),
+ * Resolves the browser runtime file for a package from its `./client` export.
+ * @param pkgDir - installed package directory.
+ * @returns absolute client runtime path, or undefined when absent.
+ */
+function clientRuntimeOf(pkgDir) {
+  const manifest = readJson(join(pkgDir, 'package.json'))
+  const entry = manifest.exports?.['./client']
+  const runtime = typeof entry === 'string' ? entry : entry?.default
+  if (typeof runtime !== 'string') return undefined
+  const path = join(pkgDir, runtime)
+  return existsSync(path) ? path : undefined
+}
+
+/**
+ * Classifies imported upstream specifiers against installed artifacts in the
+ * sibling checkout across two axes:
+ * 1. Declarations vs src: whether generated types reflect the latest source.
+ * 2. Client runtime vs declarations: whether prebuilt browser bundles are up to
+ *    date with their client declarations.
+ * @param harnessRoot - the sibling harness checkout root.
+ * @param specifiers - upstream specifiers imported by this repository.
+ * @returns categorized findings.
+ */
+export function collectArtifactProblems(harnessRoot, specifiers) {
+  const packages = collectHarnessPackages(harnessRoot)
+  const stale = []
+  const staleRuntime = []
+  const missing = []
+  const outside = []
+  const sourceMtimeCache = new Map()
+  const checkedClientPackages = new Set()
+  for (const specifier of specifiers) {
+    const name = specifier.split('/').slice(0, 2).join('/')
+    const pkgDir = packages.get(name)
+    if (pkgDir === undefined) {
+      outside.push(specifier)
+      continue
+    }
+    // The declaration the compiler resolves for *this* specifier: it decides
+    // whether the import the plugin actually writes is backed by fresh types.
+    const declaration = declarationOf(pkgDir, specifier)
+    if (declaration === undefined || !existsSync(declaration)) {
+      missing.push(specifier)
+      continue
+    }
+    const declarationMtime = statSync(declaration).mtimeMs
+    // Cache the walk even when it finds nothing: a package whose `src/` is
+    // absent stores `undefined`, and a `.get() === undefined` probe alone
+    // would re-walk it for every specifier the plugin imports from it.
+    if (!sourceMtimeCache.has(pkgDir)) {
+      sourceMtimeCache.set(pkgDir, newestMtime(join(pkgDir, 'src')))
+    }
+    const sourceNewest = sourceMtimeCache.get(pkgDir)
+    if (sourceNewest !== undefined && declarationMtime < sourceNewest) stale.push(specifier)
+    // The browser arm answers the package, not the specifier, so report it once
+    // however many of the package's faces this plugin imports. Its freshness is
+    // judged against its own declarations (the client arm's), which is the pair
+    // the page and the compiler respectively consume.
+    if (!checkedClientPackages.has(name)) {
+      checkedClientPackages.add(name)
+      const runtime = clientRuntimeOf(pkgDir)
+      if (runtime !== undefined) {
+        const clientDeclaration = declarationOf(pkgDir, `${name}/client`)
+        if (clientDeclaration !== undefined && existsSync(clientDeclaration)) {
+          if (statSync(runtime).mtimeMs < statSync(clientDeclaration).mtimeMs) {
+            staleRuntime.push({ name, runtime: relative(harnessRoot, runtime) })
+          }
+        }
+      }
+    }
+  }
+  return { stale, staleRuntime, missing, outside }
+}
+
+/**
+ * Verify every imported upstream package's installed artifacts are current.
+ *
+ * Missing declarations are always a failure (typecheck cannot resolve them);
  * stale ones fail only under `--strict`: a stale sibling build weakens the
  * guarantee without blocking day-to-day work, and the release path is where the
  * guarantee has to hold.
- * @param strict - treat stale declarations as a failure.
+ * @param strict - treat stale artifacts as a failure.
  */
 function checkArtifacts(strict) {
   if (!existsSync(harnessRoot)) {
     notes.push('sibling harness absent: upstream types come from the installed packages as-is')
     return
   }
-  const packages = collectHarnessPackages(harnessRoot)
-  const stale = []
-  const missing = []
-  const outside = []
-  for (const specifier of importedSpecifiers()) {
-    const pkgDir = packages.get(specifier.split('/').slice(0, 2).join('/'))
-    if (pkgDir === undefined) {
-      outside.push(specifier)
-      continue
-    }
-    const declaration = declarationOf(pkgDir, specifier)
-    if (declaration === undefined || !existsSync(declaration)) {
-      missing.push(specifier)
-      continue
-    }
-    const sourceNewest = newestMtime(join(pkgDir, 'src'))
-    if (sourceNewest !== undefined && statSync(declaration).mtimeMs < sourceNewest)
-      stale.push(specifier)
-  }
+  const { stale, staleRuntime, missing, outside } = collectArtifactProblems(
+    harnessRoot,
+    importedSpecifiers(),
+  )
   if (missing.length > 0) {
     problems.push(
       `installed declarations missing for: ${missing.join(', ')}` +
@@ -581,6 +646,14 @@ function checkArtifacts(strict) {
       `${stale.length} imported upstream package(s) have src newer than their built declarations` +
       ` (${stale.join(', ')}); typecheck resolves the older declarations` +
       ' — refresh with: pnpm --dir ../deepseek-harness run build'
+    if (strict) problems.push(detail)
+    else notes.push(detail)
+  }
+  if (staleRuntime.length > 0) {
+    const detail =
+      `${staleRuntime.length} imported upstream package(s) have a browser runtime older than their` +
+      ` client declarations (${staleRuntime.map((entry) => `${entry.name} -> ${entry.runtime}`).join(', ')});` +
+      ' rebuild with: pnpm --dir ../deepseek-harness run build:lib:client'
     if (strict) problems.push(detail)
     else notes.push(detail)
   }

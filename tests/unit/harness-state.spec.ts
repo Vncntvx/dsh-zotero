@@ -5,11 +5,15 @@
  * @module tests/unit/harness-state
  */
 
-import { describe, expect, it } from 'vitest'
+import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   applyPinToManifest,
   checkProseText,
   checkVersionMap,
+  collectArtifactProblems,
   collectLockProblems,
   collectPinFaceProblems,
   packageNameFromLockPath,
@@ -367,5 +371,144 @@ describe('packageNameFromLockPath', () => {
   it('returns undefined for paths outside node_modules', () => {
     expect(packageNameFromLockPath('packages/my-custom-plugin')).toBeUndefined()
     expect(packageNameFromLockPath('packages/@deepseek-ai/dsh-tools')).toBeUndefined()
+  })
+})
+
+describe('collectArtifactProblems', () => {
+  /**
+   * A synthesized sibling checkout. The real checkout freshness depends on when
+   * this machine last built it, which is the variable under test, so each case
+   * writes the mtimes it asserts on without depending on local checkout state.
+   */
+  let tree: string
+
+  beforeEach(() => {
+    tree = mkdtempSync(join(tmpdir(), 'dsh-harness-state-'))
+  })
+
+  afterEach(() => {
+    rmSync(tree, { recursive: true, force: true })
+  })
+
+  /**
+   * Write one client package: `packages/client/<dir>` with a `./client` export,
+   * the declarations that export points at, a source file, and the runtime
+   * bundle. `null` omits that file; each remaining value is its age in seconds
+   * before now, so a larger number is older.
+   */
+  function writePackage(
+    name: string,
+    times: { source?: number | null; declaration?: number | null; runtime?: number | null },
+  ): void {
+    const dir = join(tree, 'packages/client', name)
+    const manifest = {
+      name: `@deepseek-ai/${name}`,
+      exports: {
+        './client': { types: './lib/types/client/index.d.ts', default: './lib/client.js' },
+      },
+    }
+    const files: Record<string, string> = {
+      'package.json': JSON.stringify(manifest),
+      'src/panel.ts': 'export const panel = 1\n',
+      'lib/types/client/index.d.ts': 'export declare const panel: number\n',
+      'lib/client.js': 'window.__ModuleLoader__?.load({})\n',
+    }
+    const ages: Record<string, number | null | undefined> = {
+      'src/panel.ts': times.source,
+      'lib/types/client/index.d.ts': times.declaration,
+      'lib/client.js': times.runtime,
+    }
+    mkdirSync(join(dir, 'src'), { recursive: true })
+    mkdirSync(join(dir, 'lib/types/client'), { recursive: true })
+    for (const [rel, content] of Object.entries(files)) {
+      const age = ages[rel]
+      if (age === null) continue
+      const path = join(dir, rel)
+      writeFileSync(path, content)
+      if (age !== undefined) {
+        const when = new Date(Date.now() - age * 1000)
+        utimesSync(path, when, when)
+      }
+    }
+  }
+
+  it('reports a runtime bundle older than its own client declarations', () => {
+    writePackage('dsh-client-ui-chat', { source: 300, declaration: 200, runtime: 400 })
+    const found = collectArtifactProblems(tree, ['@deepseek-ai/dsh-client-ui-chat/client'])
+    expect(found.staleRuntime.map((entry) => entry.name)).toEqual([
+      '@deepseek-ai/dsh-client-ui-chat',
+    ])
+    expect(found.staleRuntime[0]?.runtime).toBe('packages/client/dsh-client-ui-chat/lib/client.js')
+    // Fresh declarations keep the declarations-vs-src axis quiet.
+    expect(found.stale).toEqual([])
+    expect(found.missing).toEqual([])
+  })
+
+  it('accepts a runtime bundle built after its declarations', () => {
+    writePackage('dsh-client-ui-chat', { source: 300, declaration: 200, runtime: 100 })
+    const found = collectArtifactProblems(tree, ['@deepseek-ai/dsh-client-ui-chat/client'])
+    expect(found.staleRuntime).toEqual([])
+  })
+
+  it('reports declarations older than their source', () => {
+    writePackage('dsh-client-ui-chat', { source: 100, declaration: 200, runtime: 50 })
+    const found = collectArtifactProblems(tree, ['@deepseek-ai/dsh-client-ui-chat/client'])
+    expect(found.stale).toEqual(['@deepseek-ai/dsh-client-ui-chat/client'])
+  })
+
+  it('ignores packages that serve no client arm', () => {
+    // A host-only package has no browser face: its `lib/index.js` is never
+    // loaded into the page, so a stale one is a host concern rather than a
+    // client-contract break. Reporting it would train the reader to ignore
+    // the gate. Here its declaration is also absent, which is the honest
+    // report: the import cannot be resolved at all.
+    const dir = join(tree, 'packages/core/dsh-tools')
+    mkdirSync(join(dir, 'src'), { recursive: true })
+    writeFileSync(
+      join(dir, 'package.json'),
+      JSON.stringify({
+        name: '@deepseek-ai/dsh-tools',
+        exports: { '.': { types: './lib/types/index.d.ts', default: './lib/index.js' } },
+      }),
+    )
+    const found = collectArtifactProblems(tree, ['@deepseek-ai/dsh-tools'])
+    expect(found.staleRuntime).toEqual([])
+    expect(found.missing).toEqual(['@deepseek-ai/dsh-tools'])
+  })
+
+  it('reports a missing declaration as missing rather than stale', () => {
+    writePackage('dsh-client-ui-chat', { source: 100, declaration: null, runtime: 50 })
+    const found = collectArtifactProblems(tree, ['@deepseek-ai/dsh-client-ui-chat/client'])
+    expect(found.missing).toEqual(['@deepseek-ai/dsh-client-ui-chat/client'])
+    expect(found.staleRuntime).toEqual([])
+  })
+
+  it('reports a specifier with no sibling package as outside', () => {
+    writePackage('dsh-client-ui-chat', { source: 300, declaration: 200, runtime: 100 })
+    const found = collectArtifactProblems(tree, [
+      '@deepseek-ai/dsh-client-ui-chat/client',
+      '@deepseek-ai/dsh-not-in-tree',
+    ])
+    expect(found.outside).toEqual(['@deepseek-ai/dsh-not-in-tree'])
+  })
+
+  it('reports one entry per package however many of its faces are imported', () => {
+    writePackage('dsh-client-ui-chat', { source: 300, declaration: 200, runtime: 400 })
+    const dir = join(tree, 'packages/client/dsh-client-ui-chat')
+    writeFileSync(
+      join(dir, 'package.json'),
+      JSON.stringify({
+        name: '@deepseek-ai/dsh-client-ui-chat',
+        exports: {
+          './client': { types: './lib/types/client/index.d.ts', default: './lib/client.js' },
+          '.': { types: './lib/types/client/index.d.ts', default: './lib/client.js' },
+        },
+      }),
+    )
+    const found = collectArtifactProblems(tree, [
+      '@deepseek-ai/dsh-client-ui-chat',
+      '@deepseek-ai/dsh-client-ui-chat/client',
+    ])
+    expect(found.staleRuntime).toHaveLength(1)
   })
 })
