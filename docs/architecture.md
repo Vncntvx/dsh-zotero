@@ -74,6 +74,13 @@ graph LR
 - 命令状态卡片（`conversation.chat.commandview`）：为 `/zotero` 输出提供连接状态灯、版本与 Server ID 明细、离线排查建议与就地刷新按钮；
 - `webEnabled` 开关保存后即时生效。
 
+#### 工具参数读取与双层错误边界
+
+- **参数读取**：卡片与 Sources 归约器统一通过 `src/client/presenters.ts` 的 `argsViewOf(block)` 读取 `block.args`；上游 Harness `0.2.1-alpha.2` 契约保证调用头与结果块均携带非可选的 `ToolArgs`（`PartialArguments`）。
+- **双层错误边界**：插件注册两层错误边界：
+  - **Surface 级（`ZoteroSurfaceBoundary`）**：包裹 Sources 标签页（`conversation.view`），渲染异常时就地显示错误提示与「刷新」（`t('refresh')`）按钮，并通过 `resetKey={sessionId}` 在会话切换时自动重置；
+  - **Card 级（`ZoteroCardBoundary` / `withCardBoundary`）**：包装全部 16 个工具卡片（`tool.call.toolview`）。卡片渲染异常时就地降级为紧凑警告行，卡片保留在对话流中。
+
 ### 远程通信与设置
 
 - 宿主半侧在 `zotero` wire 命名空间下注册 `ZoteroRuntime`，其唯一端点返回实时连接视图；配置读写走 harness 的共享设置表单，不经过该通道；

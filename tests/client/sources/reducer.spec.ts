@@ -11,62 +11,7 @@
 import { describe, expect, it } from 'vitest'
 import { settled, running } from '../helpers/blocks.ts'
 import { buildSourceWorkspace } from '../../../src/client/sources/reducer.ts'
-import type { SourceScope } from '../../../src/client/sources/model.ts'
-import { GET_META, REF, block } from './reducer-fixtures.ts'
-
-/** A search projection with one row per ref. */
-function searchMetaOf(
-  rows: Array<{ ref: string; title?: string }>,
-  omitted = 0,
-): Record<string, unknown> {
-  return {
-    returned: rows.length,
-    total: rows.length,
-    nextOffset: null,
-    displayed: rows.length,
-    omitted,
-    noteMatches: null,
-    items: rows.map(({ ref, title }) => ({
-      ref,
-      title: title ?? `Paper ${ref.slice(-1)}`,
-      creatorSummary: 'Creator',
-      year: 2020,
-      itemType: 'journalArticle',
-    })),
-  }
-}
-
-/**
- * The expected SearchOccurrence of one episode: defaults mirror the reducer's
- * argument normalization, so an episode created from plain `query` args
- * carries the library scope and empty filters.
- */
-function searchOccurrenceOf(
-  overrides: Partial<{
-    callId: string
-    query?: string
-    mode: 'metadata' | 'everything'
-    scope: SourceScope
-    library?: { type: 'user' | 'group'; id: number }
-    itemTypes: string[]
-    tags: string[]
-    tagMatch?: 'all' | 'any'
-    excludeTags?: string[]
-    includeTrashed?: boolean
-  }> = {},
-): Record<string, unknown> {
-  return {
-    callId: 's1',
-    mode: 'metadata',
-    scope: { kind: 'library', library: { type: 'user', id: 0 } },
-    itemTypes: [],
-    tags: [],
-    tagMatch: 'all',
-    excludeTags: [],
-    includeTrashed: false,
-    ...overrides,
-  }
-}
+import { GET_META, REF, block, searchMetaOf, searchOccurrenceOf } from './reducer-fixtures.ts'
 
 describe('buildSourceWorkspace', () => {
   describe('search episodes and search records', () => {

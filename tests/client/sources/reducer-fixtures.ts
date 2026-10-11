@@ -1,15 +1,17 @@
 /**
  * The fixtures the `buildSourceWorkspace` specs share: the ref builder, the
- * settled tool-call block with JSON arguments, and the canonical get
- * projection every spec asserts against. What two or more of `reducer.spec.ts`,
- * `reducer-evidence.spec.ts`, and `reducer-outputs.spec.ts` use lives here:
- * the search projection builder, the episode search occurrence builder, and the
- * retrieve projection stay with the one spec that reads them.
+ * settled tool-call block with JSON arguments, the canonical get projection
+ * every spec asserts against, and the search projection / episode occurrence
+ * builders both `reducer.spec.ts` and `reducer-scopes.spec.ts` walk. What two
+ * or more of the reducer specs use lives here; single-spec projections (the
+ * retrieve projection) stay with the one spec that reads them.
  * @module tests/client/sources/reducer-fixtures
  */
 
 import type { ToolResultNode } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { SourceScope } from '../../../src/client/sources/model.ts'
 import { settled } from '../helpers/blocks.ts'
+import { CANONICAL_ATTACHMENT_REF, CANONICAL_ITEM_REF } from '../helpers/toolview-fixtures.ts'
 
 /** One item/attachment/annotation ref in the specs' spelling. */
 export const REF = (key: string, serverId?: string): string =>
@@ -35,4 +37,85 @@ export const GET_META = {
   itemType: 'journalArticle',
   notesPreview: [],
   annotationsPreview: [],
+}
+
+/** The search projection one real `zotero_search` returns for one hit. */
+export const CANONICAL_SEARCH_META = {
+  returned: 1,
+  total: 1,
+  displayed: 1,
+  omitted: 0,
+  items: [
+    {
+      ref: CANONICAL_ITEM_REF,
+      title: 'Proactive resource request for disaster response',
+      creatorSummary: 'Zhang 等',
+      year: 2024,
+      itemType: 'journalArticle',
+      bestAttachmentRef: CANONICAL_ATTACHMENT_REF,
+      bestAttachmentType: 'application/pdf',
+    },
+  ],
+  scope: { kind: 'library', library: { type: 'user', id: 0 } },
+  library: { type: 'user', id: 0 },
+}
+
+/**
+ * A search projection with one row per ref. `resolved` carries the meta's
+ * scope-resolution fields (`scope`, `library`), which only the scope specs
+ * assert on; leaving it empty keeps the projection args-shaped.
+ */
+export function searchMetaOf(
+  rows: Array<{ ref: string; title?: string }>,
+  omitted = 0,
+  resolved: { scope?: Record<string, unknown>; library?: Record<string, unknown> } = {},
+): Record<string, unknown> {
+  return {
+    returned: rows.length,
+    total: rows.length,
+    nextOffset: null,
+    displayed: rows.length,
+    omitted,
+    noteMatches: null,
+    items: rows.map(({ ref, title }) => ({
+      ref,
+      title: title ?? `Paper ${ref.slice(-1)}`,
+      creatorSummary: 'Creator',
+      year: 2020,
+      itemType: 'journalArticle',
+    })),
+    ...resolved,
+  }
+}
+
+/**
+ * The expected SearchOccurrence of one episode: defaults mirror the reducer's
+ * argument normalization, so an episode created from plain `query` args
+ * carries the library scope and empty filters.
+ */
+export function searchOccurrenceOf(
+  overrides: Partial<{
+    callId: string
+    query?: string
+    mode: 'metadata' | 'everything'
+    scope: SourceScope
+    library?: { type: 'user' | 'group'; id: number }
+    itemTypes: string[]
+    tags: string[]
+    tagMatch?: 'all' | 'any'
+    excludeTags?: string[]
+    includeTrashed?: boolean
+  }> = {},
+): Record<string, unknown> {
+  return {
+    callId: 's1',
+    mode: 'metadata',
+    scope: { kind: 'library', library: { type: 'user', id: 0 } },
+    itemTypes: [],
+    tags: [],
+    tagMatch: 'all',
+    excludeTags: [],
+    includeTrashed: false,
+    ...overrides,
+  }
 }

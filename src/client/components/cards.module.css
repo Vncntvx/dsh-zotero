@@ -401,6 +401,60 @@
   color: var(--dsw-alias-label-caption);
 }
 
+/* Render-boundary fallback display for the Zotero Sources panel. */
+.surfaceError {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 16px;
+  padding: 12px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-3);
+  border: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+.surfaceErrorHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.surfaceErrorTitle {
+  margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+}
+
+.surfaceRetryButton {
+  appearance: none;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-sm, 4px);
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-primary);
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 500;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.surfaceRetryButton:hover {
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.surfaceErrorDetail {
+  margin: 0;
+  font-family: var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .chevron,
   .lineAction {

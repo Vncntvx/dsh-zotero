@@ -22,6 +22,8 @@ const targetSubject: PluginsSubject = {
     name: 'dsh-zotero',
     version: '0.1.0',
     installed: true,
+    availability: 'profile',
+    official: false,
     enabled: true,
     rows: [],
   },
@@ -32,6 +34,8 @@ const otherSubject: PluginsSubject = {
   pkg: {
     name: 'other-plugin',
     installed: true,
+    availability: 'profile',
+    official: false,
     enabled: true,
     rows: [],
   },
@@ -42,6 +46,8 @@ const rowSubject: PluginsSubject = {
   pkg: {
     name: 'dsh-zotero',
     installed: true,
+    availability: 'profile',
+    official: false,
     enabled: true,
     rows: [],
   },

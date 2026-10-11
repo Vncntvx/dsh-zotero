@@ -1,12 +1,6 @@
 /**
- * Pure block readers shared by the Sources panel: the truth ladder from the
- * frozen call block. State comes from the block structure (kind/isError/
- * error.code); facts come from the tool's presentation projection via the
- * defensive field readers; args come from the harness's own lazy argument
- * view (`block.args`). Every function here is deterministic over its inputs
- * (the same log slice renders the same panel), and nothing queries Zotero or
- * any registry. Meta is validated defensively: a malformed or absent record
- * degrades to nothing, never crashes the view.
+ * Pure block readers shared by the Sources panel.
+ * Extracts call state, presentation facts, and tool arguments from frozen blocks.
  * @module dsh-zotero/client/presenters
  */
 
@@ -98,13 +92,10 @@ export function errorSummaryOf(block: ToolCallBlock, rawText?: string | null): s
 }
 
 /**
- * The harness's per-stage lazy argument view. Every block (preparing, start,
- * and result) carries one (`packages/client/ui-conversation/src/client/
- * contract/records.ts`: `ToolCallHead.args`, `ToolResultNode.args`), and a
- * preparing view grows in place, so readers see fields as they stream instead
- * of only after the call is dispatched.
- * @param block - the call block to read.
- * @returns the argument view; empty (never absent) when the call carries none.
+ * The block's argument view, materialized by the harness on every call head
+ * and result (`ToolCallHead.args` / `ToolResultNode.args`).
+ * @param block - call block to read.
+ * @returns the block's argument view.
  */
 export function argsViewOf(block: ToolCallBlock): ToolArgs {
   return block.args

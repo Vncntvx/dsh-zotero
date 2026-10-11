@@ -4,6 +4,7 @@
  */
 
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
+import { withCardBoundary } from './ZoteroCardBoundary.tsx'
 import { SearchToolView } from './SearchToolView.tsx'
 import { RetrieveToolView } from './RetrieveToolView.tsx'
 import { ExportToolView } from './ExportToolView.tsx'
@@ -43,7 +44,10 @@ export const REGISTRATIONS = [
 export function registerZoteroToolviews(ctx: ClientContext): void {
   ctx.slots.inject('tool.call.toolview', function* () {
     for (const [key, component] of REGISTRATIONS) {
-      yield ctx.slots.register({ name: 'tool.call.toolview', key, locale: 'zotero' }, component)
+      yield ctx.slots.register(
+        { name: 'tool.call.toolview', key, locale: 'zotero' },
+        withCardBoundary(component),
+      )
     }
   })
 }

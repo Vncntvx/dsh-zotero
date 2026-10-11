@@ -54,6 +54,7 @@ export type ZoteroLocaleKey =
   | 'diagnosisProviderUnavailable'
   | 'diagnosisCapabilityUnavailable'
   | 'diagnosisUnknown'
+  | 'renderFailed'
   | 'refresh'
   | 'lastCheckedLabel'
   | 'quickConfigTitle'
@@ -429,6 +430,7 @@ export const en: Record<ZoteroLocaleKey, string> = {
   diagnosisCapabilityUnavailable:
     'The selected Zotero provider does not serve this capability. Switch provider or enable the feature.',
   diagnosisUnknown: 'Connection error',
+  renderFailed: 'Render failed',
   refresh: 'Refresh',
   lastCheckedLabel: 'Last checked',
   quickConfigTitle: 'Quick settings',
@@ -799,6 +801,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   diagnosisProviderUnavailable: '配置的 Zotero 提供方未注册。请到 [设置 -> Zotero] 检查提供方 ID。',
   diagnosisCapabilityUnavailable: '当前 Zotero 提供方不支持该能力。请切换提供方或启用对应功能。',
   diagnosisUnknown: '连接异常',
+  renderFailed: '渲染失败',
   refresh: '刷新',
   lastCheckedLabel: '上次检查',
   quickConfigTitle: '常用快速设置',

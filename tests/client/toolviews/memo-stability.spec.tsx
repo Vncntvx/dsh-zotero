@@ -55,27 +55,10 @@ const stableCollapsed = (() => {
   })
 })()
 
-const REF = 'zotero://user/0/item/ABCD1234'
+import { canonicalToolArgs } from '../helpers/toolview-fixtures.ts'
 
 /** The arguments each tool needs for a settled, collapsed card. */
-const ARGS: Record<string, Record<string, unknown>> = {
-  zotero_search: { query: 'quantum' },
-  zotero_retrieve: { ref: REF, query: 'attention' },
-  zotero_export: { format: 'bibtex', refs: [REF] },
-  zotero_get: { ref: REF },
-  zotero_children: { ref: REF },
-  zotero_attachment: { ref: 'zotero://user/0/attachment/WXYZ6789' },
-  zotero_create_note: { markdown: '# Note' },
-  zotero_update_item_tags: { ref: REF, add: ['ai'] },
-  zotero_update_item_collections: { ref: REF, add: ['Reading'] },
-  zotero_create_collection: { name: 'Reading' },
-  zotero_delete_collection: { collection: 'Reading' },
-  zotero_create_item: { itemType: 'book', title: 'A study' },
-  zotero_update_item: { ref: REF, set: { title: 'A study' } },
-  zotero_delete_library_tags: { tags: ['ai'] },
-  zotero_browse: { kind: 'collections' },
-  zotero_changes: { since: { version: 10, serverId: 'abc' } },
-}
+const ARGS = canonicalToolArgs()
 
 describe('tool cards hand DisclosureRow stable props', () => {
   it("registers a card for every one of the plugin's tools, and each holds its memo", () => {

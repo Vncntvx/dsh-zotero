@@ -42,6 +42,22 @@ describe('verifyBundle', () => {
     })
   })
 
+  it('runs the factory against real react modules seeded by the platform', async () => {
+    // Platform modules allow evaluating class components extending React.Component.
+    const boundaryBundle = `window.__ModuleLoader__.load({ id: 'dsh-zotero', factory: (require) => {
+  var React = require('react')
+  class SurfaceBoundary extends React.Component {
+    static getDerivedStateFromError() { return { failed: true } }
+    render() { return this.props.children }
+  }
+  var probe = new SurfaceBoundary({ children: null })
+  return { apply() {}, inject: ['locale'], boundary: SurfaceBoundary, probed: probe !== undefined }
+} });`
+    await withBundle(boundaryBundle, (path) => {
+      expect(() => verifyBundle(path)).not.toThrow()
+    })
+  })
+
   it('rejects a handoff id that is not the npm package name', async () => {
     await withBundle(GOOD_BUNDLE.replace("id: 'dsh-zotero'", "id: 'other-plugin'"), (path) => {
       expect(() => verifyBundle(path)).toThrow(/dsh-zotero/)

@@ -27,6 +27,7 @@ import type { ZoteroAttachmentLocationView } from '../../contract.ts'
 import type { ZoteroStatusView } from '../remote.ts'
 import { callNameOf, isSettledTool } from '../presenters.ts'
 import { buildSourceWorkspace } from '../sources/reducer.ts'
+import { ZoteroSurfaceBoundary } from './ZoteroSurfaceBoundary.tsx'
 import type { ConnectionView } from './workspace/connection.ts'
 import { ZoteroWorkspaceView } from './workspace/ZoteroWorkspaceView.tsx'
 
@@ -208,7 +209,18 @@ function sameZoteroProjection(a: ChatSnapshot | undefined, b: ChatSnapshot | und
 }
 
 /** The Sources panel controller: probe, workspace build, and the view. */
-export function SourcesTab({
+export function SourcesTab(props: SourcesTabProps) {
+  // Wraps SourcesTabBody in an error boundary that resets whenever sessionId changes.
+  const sessionId = props.useSession((snapshot) => snapshot.sessionId)
+  return (
+    <ZoteroSurfaceBoundary resetKey={sessionId} t={props.t}>
+      <SourcesTabBody {...props} />
+    </ZoteroSurfaceBoundary>
+  )
+}
+
+/** The panel body: probe, workspace build, and the pure view. */
+function SourcesTabBody({
   status,
   resolveAttachment,
   openFile,

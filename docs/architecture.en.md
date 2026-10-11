@@ -74,6 +74,13 @@ graph LR
 - Command Status Card (`conversation.chat.commandview`): renders connectivity status, the version and Server ID details, diagnosis tips, and an in-place refresh button for `/zotero`;
 - `webEnabled` takes effect immediately upon saving.
 
+#### Tool Argument Access and Dual Error Boundaries
+
+- **Argument access**: Tool cards and the Sources reducer read `block.args` through `argsViewOf(block)` in `src/client/presenters.ts`; the upstream Harness `0.2.1-alpha.2` contract guarantees a non-optional `ToolArgs` (`PartialArguments`) on every call head and result.
+- **Dual error boundaries**: The plugin registers two error boundaries:
+  - **Surface (`ZoteroSurfaceBoundary`)**: Wraps the Sources tab (`conversation.view`); on a render error it displays an inline notice with an in-place "Refresh" (`t('refresh')`) button, and `resetKey={sessionId}` resets it automatically when the session changes;
+  - **Card (`ZoteroCardBoundary` / `withCardBoundary`)**: Wraps all 16 tool cards (`tool.call.toolview`). A card that fails to render degrades in place to a compact warning row and stays in the chat stream.
+
 ### Remote Communication and Settings
 
 - The host half registers `ZoteroRuntime` under the `zotero` wire namespace. Its one endpoint returns the live connectivity view; configuration reads and writes travel through the harness's shared settings form, not this channel;

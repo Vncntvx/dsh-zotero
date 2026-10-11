@@ -179,6 +179,24 @@ const harnessPurityPlugin = {
 }
 
 /**
+ * Static platform modules this verification seeds into the loader's table.
+ * The react family resolves to real modules because evaluating the bundle's
+ * class components (the error boundaries) requires a real `React.Component`;
+ * every `@deepseek-ai/*` external returns an empty stub. That is deliberately
+ * narrower than the harness shell's own seed table, which answers harness
+ * modules too: this local gate only needs class-component evaluability, and
+ * the stub keeps the bundle's harness wiring out of the verified surface.
+ * @returns mapping of external specifier to module entity.
+ */
+function platformModuleTable() {
+  const table = {}
+  for (const specifier of EXTERNALS) {
+    if (!specifier.startsWith('@deepseek-ai/')) table[specifier] = require(specifier)
+  }
+  return table
+}
+
+/**
  * Artifact + handoff verification. Runs on every successful build (including
  * watch) through the verify plugin below.
  * @returns void; throws on a failed handoff or host-schema artifact marker.
@@ -201,10 +219,12 @@ export function verifyBundle(bundlePath = join(root, 'lib/client.js')) {
     throw new Error('client bundle factory is not a function')
   }
   // The factory requires its externals from the loader's module table when it
-  // runs; stubbing those and refusing everything else proves the bundle's
-  // only runtime dependencies are the platform modules the table answers.
+  // runs; answering those with the shell's own seed entities and refusing
+  // everything else proves the bundle's only runtime dependencies are the
+  // platform modules the table answers.
+  const platform = platformModuleTable()
   const exported = handoff.factory((specifier) => {
-    if (EXTERNALS.includes(specifier)) return {}
+    if (EXTERNALS.includes(specifier)) return platform[specifier] ?? {}
     throw new Error(`bundle required non-external ${specifier} at load time`)
   })
   if (typeof exported?.apply !== 'function' || !Array.isArray(exported?.inject)) {
