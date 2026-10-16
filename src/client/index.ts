@@ -1,7 +1,6 @@
 /**
  * Zotero settings, browser half: one surface over the `zotero` namespace,
- * a page in the harness's Settings panel's left navigation
- * (`settings.section`, a sibling of General, Models, and Plugins), carrying
+ * rendered in the plugin manager detail page (`plugins.bundle.config`), carrying
  * the full configuration form so a namespace this wide is never read through
  * a collapsed card.
  *
@@ -19,8 +18,7 @@
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 // Type-only Context merges: locale (ctx.locale) arrives through its package's
 // client declaration; the Remote face (ctx.remote) through the api-remotes
-// assembly; ui-settings supplies the `configForms` service and the
-// `settings.section` SlotMap row this page registers into; ui-renderer the
+// assembly; ui-settings supplies the `configForms` service; ui-renderer the
 // `slots` registry. `useSession`/`useChat` (the conversation tab's session
 // data) merge through ui-session and ui-chat. Cross-plugin collaboration
 // rides services and slot declarations, never value imports (client bundle
@@ -48,7 +46,7 @@ import { fileAddressFor } from '@deepseek-ai/dsh-util-workspace-path'
 import { getAttachmentResolver, setAttachmentResolver } from './actions/attachment-resolver.ts'
 import { getErrorReporter, setErrorReporter } from './actions/error-reporter.ts'
 import { ZoteroCardController } from './zotero-card-controller.ts'
-import { zoteroQuickConfigFace, type ZoteroProbeFace } from './components/plugin/faces.ts'
+import type { ZoteroProbeFace } from './components/plugin/faces.ts'
 import {
   ZOTERO_REMOTE_PACKAGE,
   type ZoteroClientErrorReport,
@@ -58,7 +56,6 @@ import {
 import { ZOTERO_SETTINGS_NAMESPACE } from '../settings-namespace.ts'
 import type {} from './plugin-slots.d.ts'
 import { ZoteroActivationGuide } from './components/plugin/ZoteroActivationGuide.tsx'
-import { ZoteroBundleQuickConfig } from './components/plugin/ZoteroBundleQuickConfig.tsx'
 import { ZoteroPluginDetailSection } from './components/plugin/ZoteroPluginDetailSection.tsx'
 import { DiagnosticsCard } from './components/DiagnosticsCard.tsx'
 import { registerZoteroToolviews } from './toolviews/index.ts'
@@ -85,8 +82,8 @@ export const inject = ['locale', 'slots', 'remote', 'configForms', 'uiConversati
 
 /**
  * Register every browser surface: the page dictionaries, the 16 dedicated
- * tool cards, the `/zotero` command-input projection, the settings page, the
- * plugin-manager cards, and the conversation tab.
+ * tool cards, the `/zotero` command-input projection, the bundle configuration
+ * page, the plugin-manager cards, and the conversation tab.
  *
  * Runs on a fiber that declares `remote.zotero`, so the namespace is readable
  * through the official dotted form (`ctx.remote.zotero`), the same shape the
@@ -151,33 +148,10 @@ function registerUi(ctx: ClientContext): void {
     },
     'dsh-zotero: card form',
   )
-  // The nav label is shell chrome, so it is read through a bound reader at
-  // registration time (the shell re-renders from the ledger bump when the
-  // locale changes, not from its own subscription).
+  // Bound once at registration time: the inject faces below hand this reader
+  // to the shell, which re-renders from its own ledger bump when the locale
+  // changes rather than subscribing to the namespace.
   const t = ctx.locale.bind(NS)
-
-  // The configuration page: one left-nav entry in the Settings panel, beside
-  // General, Models, and Plugins. The shell renders the nav label from these
-  // options and mounts the page in its content column; `slots.inject` waits
-  // for the settings shell's declaration of `settings.section`, so the page
-  // survives shell reloads and vanishes atomically with this fiber. Order 25
-  // places it after the shipped sections this build registers (account -10,
-  // general 0, models 10, plugins 15, agent-presets 20) and before any
-  // higher-numbered contributor.
-  ctx.slots.inject('settings.section', () =>
-    ctx.slots.register(
-      {
-        name: 'settings.section',
-        id: 'zotero',
-        order: 25,
-        label: () => t('nav'),
-        locale: NS,
-        inject: () => card.inject(),
-      },
-      ZoteroSettingsSection,
-    ),
-  )
-
   // Live connectivity for the conversation tab's status strip. This fiber is
   // only created once `$mount` published the namespace, so the call site reads
   // it directly. Concurrent probes share one in-flight call: the strip and the
@@ -205,18 +179,18 @@ function registerUi(ctx: ClientContext): void {
     ),
   )
 
-  // Quick toggles in the plugin manager detail page (plugins.bundle.config).
-  // The shared form is published as the face's bare observable source, so the
-  // renderer binds `useZoteroQuickConfig` from the one form the settings page
-  // and the card also edit, with no mirror snapshot to keep in step.
+  // Bundle configuration rendered in the plugin manager detail page (plugins.bundle.config).
+  // The page renders the full configuration form via ZoteroSettingsSection and stages
+  // edits through the harness's SettingsFormModel (card.inject()).
   ctx.slots.inject('plugins.bundle.config', () =>
     ctx.slots.register(
       {
         name: 'plugins.bundle.config',
         key: ZOTERO_REMOTE_PACKAGE,
-        inject: () => zoteroQuickConfigFace(form, t),
+        locale: NS,
+        inject: () => card.inject(),
       },
-      ZoteroBundleQuickConfig,
+      ZoteroSettingsSection,
     ),
   )
 

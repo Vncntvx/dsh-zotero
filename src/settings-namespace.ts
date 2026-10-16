@@ -1,9 +1,10 @@
 /**
  * Settings namespace hosting the plugin's web-editable configuration section.
  *
- * The host half registers this namespace (with the `Config` schema and the
- * composition entry as its base layer) so the settings document
- * (`$DSH_HOME/settings.yaml`) can carry a `zotero:` section, and the wire
+ * The installed bundle declares its profile entry as `zotero` (carrying the
+ * `Config` schema, with the composition entry as its base layer), so the
+ * harness settings forms address the section by this id and persist edits
+ * into the active profile's Cordis patch (`cordis.patch.yml`). The wire
  * contract (`src/contract.ts`) references the same constant for the Remote
  * namespace. It is kept in its own module because it is dependency-free, so
  * the browser bundle can inline it without dragging in the host

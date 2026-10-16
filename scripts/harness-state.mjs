@@ -5,11 +5,11 @@
  *
  * 1. **The pin.** `package.json` carries one harness line:
  *    every `@deepseek-ai/dsh-*` in `dependencies` / `devDependencies` /
- *    `overrides` pins the exact tested version. `peerDependencies` is
- *    declared as `>=` the pin and is the only runtime compatibility gate:
- *    harness `evaluatePluginCompatibility` reads nothing else. `engines.dsh`
- *    is written from the same pin as this repo's own consistency face:
- *    harness calls `engines` declarative until a reader enforces it.
+ *    `overrides` pins the exact tested version. `engines.dsh` is declared as
+ *    `>=` the pin and is the primary runtime compatibility gate (harness
+ *    `evaluatePluginCompatibility` evaluates `engines.dsh` first).
+ *    `peerDependencies` is declared as `>=` the pin for package manager
+ *    resolution and peer checking.
  *    No caret ranges, no dual arms. The exact `devDependencies` line is the
  *    source of truth; every other form is written from it. The tracked
  *    `package-lock.json` resolves the pinned packages.
@@ -47,8 +47,12 @@ const agentsPath = join(root, 'AGENTS.md')
 const docPaths = ['docs/getting-started.md', 'docs/getting-started.en.md'].map((name) =>
   join(root, name),
 )
+/** Contract-baseline notes that cite the pin in prose. */
+const architecturePaths = ['docs/architecture.md', 'docs/architecture.en.md'].map((name) =>
+  join(root, name),
+)
 /** Files whose prose restates the pin. */
-const prosePaths = [...readmePaths, ...docPaths, agentsPath]
+const prosePaths = [...readmePaths, ...docPaths, ...architecturePaths, agentsPath]
 /** Manifest sections whose every `@deepseek-ai/dsh-*` entry must equal the pin exactly. */
 const EXACT_VERSION_SECTIONS = ['dependencies', 'devDependencies', 'overrides']
 /** All manifest sections that carry `@deepseek-ai/dsh-*` entries. */
@@ -393,12 +397,13 @@ function gtePinProblem(section, name, value, pin) {
 export function collectPinFaceProblems(manifest, pin) {
   const found = []
   const peers = Object.keys(manifest.peerDependencies ?? {}).filter(isDshPackage)
-  // The harness evaluatePluginCompatibility reads only peerDependencies: zero dsh
-  // peers would load on any runtime even when engines.dsh names the pin.
+  // Harness evaluatePluginCompatibility evaluates engines.dsh first, but peerDependencies
+  // remains required for npm peer checking and package manager resolution: zero dsh
+  // peers would degrade dependency resolution.
   if (peers.length === 0) {
     found.push(
       'peerDependencies declares no @deepseek-ai/dsh-* entry;' +
-        ' at least one dsh peer is required so the runtime checks compatibility',
+        ' at least one dsh peer is required so package managers check peer compatibility',
     )
   }
   for (const section of EXACT_VERSION_SECTIONS) {
@@ -666,9 +671,8 @@ function checkArtifacts(strict) {
  * Rewrite every harness face of a manifest to the pin. Mutates
  * `manifest` in place. Dev and overrides take the exact pin; peers
  * and engines become >=pin. The manifest carries no other derived
- * face: harness `evaluatePluginCompatibility` reads peerDependencies
- * alone, and `dsh.harnessRange` was a self-invented field the runtime
- * never read. Do not reintroduce it.
+ * face: `dsh.harnessRange` was a self-invented field the runtime never
+ * read. Do not reintroduce it.
  * @param manifest - parsed package.json (mutated in place).
  * @param version - the exact new pin.
  * @returns the same manifest for chaining/tests.

@@ -33,7 +33,6 @@ src/
   ref-grammar.ts        # 引用语法校验模式
   export-items.ts       # 逐文档导出解析
   export-mapping.ts     # 引用与批量条目映射
-  ask.ts                # 连接失败时的用户交互提示与重试协调
   prompt.ts             # 面向模型的系统提示词
   command.ts            # /zotero 状态命令
   write-approval.ts     # 写入双层确认（审批策略与计划审查卡）
@@ -45,7 +44,7 @@ src/
   typert.ts             # Typert 清单
   settings-namespace.ts # 设置命名空间常量
   tools/                # 16 个模型工具定义（8 读 + 8 写）
-  client/               # 浏览器端（设置页、Sources 面板、工具卡片视图）
+  client/               # 浏览器端（配置页、Sources 面板、工具卡片视图）
 tests/                  # 单元测试与端到端测试用例
 ```
 
@@ -98,7 +97,7 @@ npm run test:integration
 ## 构建产物
 
 - Node 端产物（`lib/`）：由 `tsc` 编译生成，包含服务逻辑、工具定义、Provider 与传输层；
-- 浏览器端产物（`lib/client.js`）：由 `esbuild` 打包生成，包含设置页、Sources 面板与会话卡片。
+- 浏览器端产物（`lib/client.js`）：由 `esbuild` 打包生成，包含配置页、Sources 面板与会话卡片。
 
 ## 本地调试
 
@@ -106,8 +105,8 @@ npm run test:integration
 
 ```sh
 export DSH_HOME=$(mktemp -d /tmp/dsh-zotero-dev-XXXX)
-cp ~/.dsh/.credentials.yaml ~/.dsh/settings.yaml "$DSH_HOME/"
-chmod 600 "$DSH_HOME/.credentials.yaml" "$DSH_HOME/settings.yaml"
+cp ~/.dsh/.credentials.yaml "$DSH_HOME/"   # 仅预置写入凭据；插件配置见块后说明
+chmod 600 "$DSH_HOME/.credentials.yaml"
 npm run build
 dsh plugin --profile web add .
 npm run dev &        # 监听 Node 端变更
@@ -115,6 +114,8 @@ npm run dev:client & # 监听浏览器端变更
 cd ../deepseek-harness && env DSH_HOME="$DSH_HOME" \
   node --import tsx/esm apps/cli/src/bin.ts web --port 3307
 ```
+
+> 说明：alpha.4 起插件配置持久化在当前 profile 的 `cordis.patch.yml`（`zotero` 条目），`~/.dsh/settings.yaml` 只会在启动时被一次性导入。Zotero 连接等配置首次在临时实例的插件管理器中打开 **dsh-zotero** 配置区填写一次即可（也可从现有 profile 的 `cordis.patch.yml` 拷入 `zotero` 条目的 `config`）。
 
 ### 仅 Host 端调试（支持 HMR）
 
@@ -125,21 +126,21 @@ cp dev-lib.cordis.yml.example dev-lib.cordis.yml # 复制叠加层模板并配�
 dsh web --patch ./dev-lib.cordis.yml --port 3307
 ```
 
-> 注意：`dev-lib.cordis.yml` 叠加层通过配置构建入口的绝对路径（`<absolute-path-to-dsh-zotero>/lib/index.js`）加载插件，使得 Host 端（模型工具与 `/zotero` 命令行）能在 Loader 监视下实现免重启热重载；但 Harness 客户端模块加载器仅解析已注册的裸包名，因此该模式不加载浏览器端前端组件（设置页与 Sources Tab）。如需调试前端 UI，请使用上述「完整插件调试」流程（`dsh plugin --profile web add .` 与 `npm run dev:client`）。
+> 注意：`dev-lib.cordis.yml` 叠加层通过配置构建入口的绝对路径（`<absolute-path-to-dsh-zotero>/lib/index.js`）加载插件，使得 Host 端（模型工具与 `/zotero` 命令行）能在 Loader 监视下实现免重启热重载；但 Harness 客户端模块加载器仅解析已注册的裸包名，因此该模式不加载浏览器端前端组件（配置页与 Sources Tab）。如需调试前端 UI，请使用上述「完整插件调试」流程（`dsh plugin --profile web add .` 与 `npm run dev:client`）。
 
 ### 诊断面板与诊断包
 
-排查插件运行问题时，可在「设置 → 插件 → dsh-zotero」详情页底部的「诊断」卡片中查看运行时状态与日志：
+排查插件运行问题时，可在插件管理器中 **dsh-zotero** 详情页底部的「诊断」卡片中查看运行时状态与日志：
 
 - **日志收集与过滤**：默认保留 error、warn 与 info 级别的条目，支持按级别筛选（「仅问题」筛选 warn 与 error）。条目按时间倒序排列，连续出现的重复记录会自动合并计数；
-- **详细诊断**：如需记录请求路径与工具调用的具体参数，可在设置页「诊断」配置组中开启「详细诊断」后再复现问题；
+- **详细诊断**：如需记录请求路径与工具调用的具体参数，可在 dsh-zotero 配置区的「诊断」配置组中开启「详细诊断」后再复现问题；
 - **前端异常捕获**：前端界面（Sources 标签页、工具卡片、详情面板等）发生渲染崩溃时，错误边界会自动记录异常信息，并在 `surface` 字段标明触发位置（如 `sources`、`tool:zotero_search`）；
 - **导出诊断包**：点击「复制诊断信息」可生成包含插件版本、Zotero 端点与版本、debug 状态及全部缓冲记录的文本包，便于粘贴至问题报告。
 
 ## 测试规范
 
 - 单元测试运行于模拟 Zotero HTTP 服务（MockZotero）上；
-- 浏览器设置页测试基于 JSDOM 与 `@testing-library/react`；
+- 浏览器配置页测试基于 JSDOM 与 `@testing-library/react`；
 - 覆盖率阈值定义在 `vitest.config.ts` 中，对各核心分层分别设置门禁指标；
 - 集成测试针对真实运行的 Zotero 实例验证网络协议与真实数据。
 

@@ -18,7 +18,6 @@ import {
   type ToolResult,
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
-import { withConnectivityAsk } from '../ask.js'
 import { boundedPresentationMeta, projectGetMeta } from '../presentation-meta.js'
 import { ANNOTATION_RECORD, ATTACHMENT_RECORD, NOTE_RECORD } from './child-records.js'
 import { formatSearchLine, metaRecordOf } from './present.js'
@@ -267,9 +266,7 @@ export function registerGetTool(ctx: Context, service: ZoteroService): void {
       presentResult: presentGetResult,
       isConcurrencySafe: () => true,
       async execute(args, exec) {
-        return await withConnectivityAsk(ctx, service.recovery, exec, () =>
-          service.get(buildRequest(args), exec.signal),
-        )
+        return await service.get(buildRequest(args), exec.signal)
       },
     }),
   )

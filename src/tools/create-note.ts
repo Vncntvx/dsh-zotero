@@ -241,8 +241,8 @@ export function registerCreateNoteTool(ctx: Context, service: ZoteroService): ()
         // Validate before the plan: a malformed ask should never bother the
         // user with an approval for a call that cannot run. The plan review
         // itself is the seam's (service.createNote), so no caller can skip it.
-        // No connectivity ask wraps the write: that helper retries, and a
-        // retried note creation would create the note twice.
+        // Writes never retry: a retried note creation would create the note
+        // twice.
         const request = buildRequest(args, service.config)
         return await service.createNote(request, { exec, plan: createNotePlan(args) })
       },

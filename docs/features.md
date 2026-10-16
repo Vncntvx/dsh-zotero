@@ -122,7 +122,7 @@ DSH 对话中，Zotero 工具调用由专用只读卡片（`tool.call.toolview`�
 插件适配 Harness 插件系统插槽：
 
 - **启用引导（`plugins.bundle.activation`）**：在插件管理列表中启用时弹出引导弹窗，自动执行本地连通性检查，并提示在 Zotero 高级设置中开启通信权限；
-- **详情页状态区（`plugins.bundle.config` / `plugins.detail.section`）**：在插件详情页提供 Sources 面板开关与写入开关（`writeEnabled`），并给出实时运行状态卡片，报告连接状态、Zotero 版本与排查建议。
+- **详情页配置与状态区（`plugins.bundle.config` / `plugins.detail.section`）**：`plugins.bundle.config` 在插件详情页承载完整的 Zotero 配置表单（含 `webEnabled`、`writeEnabled` 等全部字段，经 harness 官方 `SettingsForm` 保存）；`plugins.detail.section` 给出实时运行状态卡片，报告连接状态、Zotero 版本与排查建议。
 
 ## 会话来源面板
 

@@ -6,13 +6,13 @@
  * Registered as a TypertRemoteService so the Host Gateway can bind and
  * validate the service; the endpoints themselves are claimed by the strict
  * manifest in typert.ts (`ctx.typert.register`), which is the gateway's
- * preferred resolution path and needs no `@Remote` markers. Avoiding the
- * decorators also keeps the source runnable under Node's plain TypeScript
- * type stripping, which rejects decorator syntax. The endpoints serve the
- * web tab's live connectivity probe, the plugin's diagnostics snapshot, and
- * the client-error intake; the settings page reads and writes the namespace
- * through the harness's own settings scope instead, so this service carries
- * no user-layer mutation.
+ * preferred resolution path and needs no `@Remote` markers. The manifest is
+ * hand-written because Typert's generator requires an in-repo workspace root
+ * (`tsconfig.host.json` plus `packages/`) that this standalone checkout does
+ * not have. The endpoints serve the web tab's live connectivity probe, the
+ * plugin's diagnostics snapshot, and the client-error intake; the settings
+ * page reads and writes the namespace through the harness's own settings
+ * scope instead, so this service carries no user-layer mutation.
  * @module dsh-zotero/remote
  */
 

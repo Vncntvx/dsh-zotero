@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 /**
- * The Zotero settings page in the Settings panel's left navigation, rendered
- * through a driven fixture runtime: the test binds the controller's snapshot
- * source with useSyncExternalStore, feeds the component plain props, and drives
- * user gestures with testing-library's fireEvent. The page renders its whole
- * grouped form at once (no disclosure chrome), so no test point has to open it
- * first.
+ * The Zotero configuration page (the plugin manager's `plugins.bundle.config`
+ * slot), rendered through a driven fixture runtime: the test binds the
+ * controller's snapshot source with useSyncExternalStore, feeds the component
+ * plain props, and drives user gestures with testing-library's fireEvent. The
+ * page renders its whole grouped form at once (no disclosure chrome), so no
+ * test point has to open it first.
  * @module tests/client/ZoteroSettingsSection
  */
 
@@ -38,6 +38,8 @@ function Harness({ face, dictionary = zh }: { face: ZoteroCardFace; dictionary?:
     face.hooks.zoteroCard.getSnapshot,
   )
   const props = {
+    // `plugins.bundle.config` renders its entries with `view: 'page'` only.
+    view: 'page',
     // The page resolves its copy through the locale runtime, so the fixture
     // binds the shipped dictionary with the shared translate stub.
     t: makeTranslate(dictionary),
@@ -70,12 +72,10 @@ const saveButton = (): HTMLButtonElement =>
   screen.getByRole('button', { name: new RegExp(`^(?:${zh.save}|${zh.saving})`) })
 
 describe('ZoteroSettingsSection', () => {
-  it('keeps the nav entry and explains itself while the namespace is unavailable', () => {
+  it('explains itself while the namespace is unavailable', () => {
     scope = fakeScope({ status: 'unavailable' })
     render(<Harness face={new ZoteroCardController(scope).inject()} />)
-    // The left-nav label comes from the registration, so the page must not
-    // vanish: the official form chrome states why it is empty instead.
-    expect(screen.getByText(zh.nav)).toBeDefined()
+    expect(screen.getByRole('heading', { name: zh.title })).toBeDefined()
     expect(screen.getByRole('status').textContent).toContain(zh.unavailable)
     expect(document.querySelectorAll('input')).toHaveLength(0)
   })

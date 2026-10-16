@@ -26,7 +26,6 @@ graph LR
 - 负责 Provider 调度、能力门控与领域操作统一入口；
 - 配置以 Loader entry 为基准，设置变更通过 `loader/volatile-update` 提交到同一 entry；
 - 结构性配置变更会在现有实例上重建 HTTP 客户端、Provider 与写工具集，触发条件是 `TRANSPORT_CONFIG_KEYS` 中的六个键（`baseUrl`、`timeoutMs`、`maxResponseBytes`、`maxInFlightRequests`、`writeAuthorizeDeadlineMs`、`writeEnabled`）；其余限额由 Provider 实时读取，不触发重建；
-- 连通性恢复门控（`ConnectivityRecovery`）与服务实例同生命周期，避免并发失败堆叠询问；
 - 写入闸门统一收敛于服务接缝：所有写操作接收 `ZoteroWriteCall`，依次通过能力检查、会话审批策略（`ctx.approval.request`）以及计划审查卡；
 - 注册 `tools/pre-execute` 监听器，检测直写本地 API 的 shell 命令并提升为审批请求；
 - 请求驱动架构：插件加载过程不发起任何外部或本地网络请求。
@@ -68,7 +67,7 @@ graph LR
 
 ### 浏览器客户端 (`src/client/`)
 
-- 设置页（`settings.section`）：在设置面板左侧导航注册独立的 Zotero 配置页；
+- 组合包配置（`plugins.bundle.config`）：在插件管理器详情页注册完整的 Zotero 配置表单，通过 harness 官方 `SettingsForm` 与 `SettingsFormModel` 统一管理；
 - 会话面板（`conversation.view`）：会话标签页只有一个 Zotero 面板，顶部透镜栏在文献工作区与会话级导出页之间切换；每个条目的检查器内含概览（Overview）、原文片段（Passages）与该条目导出结果（Exports）三个面板；
 - 工具卡片（`tool.call.toolview`）：为 16 个模型工具（8 读 + 8 写）各提供紧凑折叠卡片，对值得复制的取值提供复制按钮，通过“阅读 PDF”在侧边栏阅读原文，并提供复制标题或规范深链的定位操作。卡片只渲染工具已有的输出，自身不调用工具；
 - 命令状态卡片（`conversation.chat.commandview`）：为 `/zotero` 输出提供连接状态灯、版本与 Server ID 明细、离线排查建议与就地刷新按钮；

@@ -83,16 +83,15 @@ describe('live configuration', () => {
     expect(mock.requests.length).toBeGreaterThan(0)
   })
 
-  it('keeps the recovery gate identity across transport rebuilds', async () => {
-    // Volatile commits rebuild transport on the same ZoteroService; recovery
-    // is a service-lifetime dedupe gate, not config-generation state. A new
-    // gate here would fork concurrent connectivity asks into stacked cards.
+  it('keeps the service instance identity across transport rebuilds', async () => {
+    // Volatile commits rebuild transport on the same ZoteroService instance,
+    // not replacing the service.
     lane = await setupHostLane({ baseUrl: 'http://127.0.0.1:1/api' })
-    const recovery = lane.ctx.zotero.recovery
+    const diagnostics = lane.ctx.zotero.diagnostics
     await commitLive(lane as HostLane, { timeoutMs: 7000, maxSearchResults: 5 })
     expect(lane.ctx.zotero.config.timeoutMs).toBe(7000)
     expect(lane.ctx.zotero.config.maxSearchResults).toBe(5)
-    expect(lane.ctx.zotero.recovery).toBe(recovery)
+    expect(lane.ctx.zotero.diagnostics).toBe(diagnostics)
   })
 
   it('live-applies a provider selection change without rebuilding the transport', async () => {
@@ -116,12 +115,10 @@ describe('live configuration', () => {
 
   it('live-applies writePersistKey without rebuilding the transport', async () => {
     lane = await setupHostLane({ writeEnabled: true })
-    const recovery = lane.ctx.zotero.recovery
+    const diagnostics = lane.ctx.zotero.diagnostics
     await commitLive(lane as HostLane, { writePersistKey: false })
     expect(lane.ctx.zotero.config.writePersistKey).toBe(false)
-    // Recovery is service-lifetime state and is never swapped on rebuild;
-    // its identity is also the cheap "same instance" probe here.
-    expect(lane.ctx.zotero.recovery).toBe(recovery)
+    expect(lane.ctx.zotero.diagnostics).toBe(diagnostics)
     expect(lane.tool('zotero_create_note')).toBeDefined()
   })
 
@@ -201,11 +198,9 @@ describe('live configuration', () => {
     // wiring between them: the volatile commit reaches the config the
     // provider's live limits getter projects.
     lane = await setupHostLane({ scopeListingTtlMs: 30_000 })
-    const recovery = lane.ctx.zotero.recovery
+    const diagnostics = lane.ctx.zotero.diagnostics
     await commitLive(lane as HostLane, { scopeListingTtlMs: 60_000 })
     expect(lane.ctx.zotero.config.scopeListingTtlMs).toBe(60_000)
-    // Recovery is service-lifetime state, never swapped on a transport
-    // rebuild; its identity is the cheap "same instance" probe here.
-    expect(lane.ctx.zotero.recovery).toBe(recovery)
+    expect(lane.ctx.zotero.diagnostics).toBe(diagnostics)
   })
 })

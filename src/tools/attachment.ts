@@ -14,7 +14,6 @@ import {
   type ToolResult,
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
-import { withConnectivityAsk } from '../ask.js'
 import { boundedPresentationMeta, projectAttachmentMeta } from '../presentation-meta.js'
 import { metaRecordOf } from './present.js'
 import { parseSupportedRef } from './validate.js'
@@ -132,9 +131,7 @@ export function registerAttachmentTool(ctx: Context, service: ZoteroService): vo
       isConcurrencySafe: () => true,
       async execute(args, exec) {
         const { ref } = buildRequest(args)
-        return await withConnectivityAsk(ctx, service.recovery, exec, () =>
-          service.attachment(ref, exec.signal),
-        )
+        return await service.attachment(ref, exec.signal)
       },
     }),
   )

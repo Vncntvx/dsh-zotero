@@ -63,20 +63,20 @@
 ## 配置优先级
 
 ```text
-Schema 默认值 → Composition 入口配置 → settings.yaml 用户层
+Schema 默认值 → Composition 入口配置 → 当前 profile 的 Cordis patch 覆盖层
 ```
 
-用户层（`settings.yaml`）配置优先级最高，覆盖底层默认值与入口配置。
+覆盖层（当前 profile 的 `cordis.patch.yml`）优先级最高，覆盖 Schema 默认值与入口配置；home patch 与命令行 overlay 优先于它，会被它们覆盖的表单写入将被拒绝。
 
-## 设置页配置
+## 插件配置页
 
-插件在设置面板的左侧导航中注册 Zotero 配置页，绑定 `zotero` 命名空间：
+在插件管理器中打开 **dsh-zotero** 的详情页，其配置区承载完整的 `zotero` 命名空间表单（通过 harness 官方 `SettingsForm` 与 `SettingsFormModel`）：
 
-- 修改结果保存至 `$DSH_HOME/settings.yaml` 的 `zotero:` 段；
+- 修改结果写入当前 profile 的 `cordis.patch.yml` 中 `zotero` 条目的 `config` 覆盖层；
 - 保存即时生效：传输层配置与写入开关变更时在服务实例内重建对应组件，纯限额字段由 provider 实时读取；
-- 无效配置在写入前会被拦截，设置页保留有效配置草稿；
-- 被用户层覆盖的字段显示标记，支持一键重置；
-- 直接编辑 `settings.yaml` 文件同样支持热重载。
+- 无效配置在写入前会被拦截，配置页保留有效配置草稿；
+- 被覆盖层显式设置的字段显示标记，支持一键重置；
+- 表单写入受 revision 栅栏保护（过期草稿会被拒绝）；home patch 与命令行 overlay 会覆盖的写入同样不会落盘。
 
 ## 热重载行为
 

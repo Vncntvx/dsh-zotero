@@ -167,10 +167,7 @@ function asFormScope(
   form: ConfigForm<Record<string, unknown>>,
 ): SettingsFormScope<Record<string, unknown>> {
   return {
-    getSnapshot: () => {
-      const { mode: _mode, ...snapshot } = form.getSnapshot()
-      return snapshot
-    },
+    getSnapshot: () => form.getSnapshot(),
     subscribe: (listener) => form.subscribe(listener),
     mutate: (ops, expectedRevision) =>
       form.mutate(

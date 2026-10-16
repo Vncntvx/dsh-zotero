@@ -2,9 +2,8 @@
  * The Zotero settings form body: every field of the `zotero` namespace,
  * grouped into the families the host schema declares.
  *
- * The page registers as a `settings.section` contribution (id `zotero`),
- * because this namespace is a whole configuration surface and does not fit a
- * Plugins-tab disclosure card. The form chrome (status lines, failed notice,
+ * The form renders inside the `plugins.bundle.config` slot on the Zotero
+ * plugin details page. The form chrome (status lines, failed notice,
  * save button) belongs to the official `<SettingsForm>`; this module owns
  * only the groups and the per-field controls. Value inputs are the harness's
  * own `SettingsValueField`; booleans are the official `Checkbox` inside the

@@ -51,7 +51,7 @@ This document lists common issues, causes, and diagnostic steps when using dsh-z
 
 - **Symptom**: No Zotero tab appears at the top of the web interface.
 - **Cause**: `webEnabled` is set to `false`, or the plugin failed to load.
-- **Fix**: Check the `webEnabled` toggle under **Settings → Zotero** and confirm the plugin is enabled.
+- **Fix**: Open the **dsh-zotero** detail page in the plugin manager and check the `webEnabled` toggle in its configuration section; confirm the plugin is enabled.
 
 ## 9. Export Exceeds 50-Item Limit
 
@@ -67,9 +67,9 @@ This document lists common issues, causes, and diagnostic steps when using dsh-z
 
 ## 11. Configuration Changes Do Not Take Effect
 
-- **Symptom**: Tool behavior remains unchanged after editing `settings.yaml`.
-- **Cause**: Incorrect file path or invalid YAML indentation.
-- **Fix**: Confirm edits are in the `zotero:` block of `$DSH_HOME/settings.yaml`, and run `/zotero` to verify.
+- **Symptom**: Plugin behavior stays unchanged after editing a config file.
+- **Cause**: The file or location is wrong: since alpha.4 the user layer lives in the active profile's `cordis.patch.yml` (the `zotero` entry's `config`); the old `$DSH_HOME/settings.yaml` is imported once on the first boot after upgrade and renamed to `settings.yaml.imported`. It can also be a YAML nesting mistake, or the field is overridden by a home patch or command-line overlay.
+- **Fix**: Save once from the **dsh-zotero** configuration section in the plugin manager (the write lands in the active profile's `cordis.patch.yml`), then run `/zotero` to verify.
 
 ## 12. Tool Cards Do Not Automatically Expand
 
@@ -106,8 +106,8 @@ This document lists common issues, causes, and diagnostic steps when using dsh-z
 
 When error messages alone are insufficient to diagnose an issue (such as silent failures, rendering errors in tabs or cards, or unexpected behavior), collect the diagnostic bundle as follows:
 
-1. Open the "Diagnostics" card at the bottom of "Settings → Plugins → dsh-zotero", click "Copy diagnostics", and attach the copied content to your issue report.
-2. If request-level detail is needed, enable "Verbose diagnostics" on the settings page before reproducing the issue.
+1. Open the **dsh-zotero** detail page in the plugin manager and click "Copy diagnostics" in the "Diagnostics" card at the bottom, then attach the copied content to your issue report.
+2. If request-level detail is needed, enable "Verbose diagnostics" in that page's configuration section before reproducing the issue.
 3. The diagnostic bundle includes the plugin version, Zotero endpoint and version, debug flag state, and buffered log entries in reverse chronological order (including frontend component render errors).
 
 Note: Diagnostic entries are kept in memory only and are cleared when the host process restarts. Copy the diagnostic bundle before restarting the host if you need to preserve the record.

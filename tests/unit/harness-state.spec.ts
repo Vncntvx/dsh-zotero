@@ -171,8 +171,8 @@ describe('applyPinToManifest', () => {
   })
 
   it('never writes a dsh.harnessRange face', () => {
-    // The field was self-invented: harness `evaluatePluginCompatibility`
-    // reads peerDependencies alone. The manifest keeps its dsh block intact.
+    // The field was self-invented: harness compatibility evaluation never
+    // read it. The manifest keeps its dsh block intact.
     const next = applyPinToManifest(manifest(), '0.1.7-rc.1')
     expect(next.dsh).toEqual({ manifestVersion: 1, bundle: { patch: './cordis.patch.yml' } })
     expect(JSON.stringify(next)).not.toContain('harnessRange')
@@ -205,8 +205,8 @@ describe('collectPinFaceProblems', () => {
     }
     const problems = collectPinFaceProblems(wrong, '0.1.7-rc.1')
     expect(problems.join('\n')).toMatch(/engines\.dsh is ">=0\.1\.7-rc\.2"/)
-    // Zero dsh peers would load on any runtime (evaluatePluginCompatibility
-    // reads only peerDependencies), that is a policy hole, not a silent pass.
+    // Zero dsh peers would skip npm peer checks and degrade package manager
+    // dependency resolution; that is a policy hole, not a silent pass.
     expect(problems.join('\n')).toMatch(/declares no @deepseek-ai\/dsh-\*/)
     expect(problems.join('\n')).not.toMatch(/harnessRange/)
   })

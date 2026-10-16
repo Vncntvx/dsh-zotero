@@ -19,7 +19,6 @@ import {
 } from '@deepseek-ai/dsh-tools'
 import type { ResolvedConfig } from '../config.js'
 import { formatRef, sameLibrary } from '../refs.js'
-import { withConnectivityAsk } from '../ask.js'
 import { boundedPresentationMeta, projectRetrieveMeta } from '../presentation-meta.js'
 import { metaRecordOf } from './present.js'
 import {
@@ -401,9 +400,7 @@ export function registerRetrieveTool(ctx: Context, service: ZoteroService): void
       presentResult: presentRetrieveResult,
       isConcurrencySafe: () => true,
       async execute(args, exec) {
-        return await withConnectivityAsk(ctx, service.recovery, exec, () =>
-          service.retrieve(buildRequest(args, service.config), exec.signal),
-        )
+        return await service.retrieve(buildRequest(args, service.config), exec.signal)
       },
     }),
   )

@@ -17,7 +17,6 @@ import {
   type ToolResult,
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
-import { withConnectivityAsk } from '../ask.js'
 import { asRecord } from '../json.js'
 import { boundedPresentationMeta } from '../presentation-meta.js'
 import { ANNOTATION_RECORD, ATTACHMENT_RECORD, NOTE_RECORD } from './child-records.js'
@@ -189,9 +188,7 @@ export function registerChildrenTool(ctx: Context, service: ZoteroService): void
       presentResult: presentChildrenResult,
       isConcurrencySafe: () => true,
       async execute(args, exec) {
-        return await withConnectivityAsk(ctx, service.recovery, exec, () =>
-          service.children(buildRequest(args), exec.signal),
-        )
+        return await service.children(buildRequest(args), exec.signal)
       },
     }),
   )

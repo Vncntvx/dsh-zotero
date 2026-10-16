@@ -1,84 +1,8 @@
-/* Styles for the plugin manager detail page contributions:
- * Quick config toggles (plugins.bundle.config) and
- * Status & Quick start section (plugins.detail.section). */
-
-.quickConfig {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 14px 16px;
-  border: 0.5px solid var(--dsw-alias-border-l3);
-  border-radius: var(--dsw-radius-lg);
-  background: var(--dsw-alias-bg-layer-2);
-}
-
-.quickConfigHead {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.quickConfigTitle {
-  margin: 0;
-  font-size: 13px;
-  line-height: 18px;
-  font-weight: 600;
-  color: var(--dsw-alias-label-primary);
-}
-
-.quickConfigDesc {
-  margin: 0;
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.quickConfigList {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.toggleRow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 8px 0;
-}
-
-.toggleRow + .toggleRow {
-  border-top: 0.5px solid var(--dsw-alias-border-l2);
-}
-
-.toggleInfo {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.toggleLabel {
-  font-size: 13px;
-  line-height: 18px;
-  font-weight: 500;
-  color: var(--dsw-alias-label-primary);
-}
-
-.toggleHint {
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--dsw-alias-label-tertiary);
-}
-
-/* The failed-write line under the toggles; same error spelling as the
- * settings page footer (`ZoteroSettingsSection.module.css` `.failed`). */
-.quickConfigFailed {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--dsw-alias-label-error, var(--dsw-alias-state-error-primary));
-}
+/* Styles for the plugin manager detail page contributions: the status card
+ * (`plugins.detail.section`, `ZoteroPluginDetailSection.tsx`), the activation
+ * guide (`plugins.bundle.activation`, `ZoteroActivationGuide.tsx`), and the
+ * diagnostics card (`DiagnosticsCard.tsx`). The configuration page's own
+ * chrome lives in `ZoteroSettingsSection.module.css`. */
 
 .section {
   display: flex;

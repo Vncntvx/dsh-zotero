@@ -32,7 +32,7 @@ Prerequisites:
 - Enable the plugin in Harness plugin management. The onboarding guidance window should show a green ready state with the local version displayed;
 - Run `/zotero` (or `/zotero status`) in a session; the status card should display `connected`.
 
-Before running the W group write cases, enable "Allow writes" in "Settings → Zotero" (disabled by default). After completing the golden path, observe the dedicated tool cards generated at each step (item title/year badges, highlighted passages, BibTeX export cards, etc.) and inspect the three pages of the Sources panel (Literature / Passages / Exports).
+Before running the W group write cases, enable "Allow writes" in the dsh-zotero detail page's configuration section in the plugin manager (disabled by default). After completing the golden path, observe the dedicated tool cards generated at each step (item title/year badges, highlighted passages, BibTeX export cards, etc.) and inspect the three pages of the Sources panel (Literature / Passages / Exports).
 
 Result recording format:
 
@@ -58,7 +58,7 @@ Browse my library structure: which top-level collections are there? Roughly how 
 
 #### Endpoint matches configuration (G1 edge)
 
-In "Settings → Zotero", change `baseUrl` to another local address (such as `http://localhost:23119/api`), then re-run `/zotero`. The status card endpoint should update to the address actually probed instead of staying at a fixed `127.0.0.1:23119`, and it remains visible when disconnected. Purpose: confirms the card displays probe results and not hardcoded constants.
+In the dsh-zotero detail page's configuration section in the plugin manager, change `baseUrl` to another local address (such as `http://localhost:23119/api`), then re-run `/zotero`. The status card endpoint should update to the address actually probed instead of staying at a fixed `127.0.0.1:23119`, and it remains visible when disconnected. Purpose: confirms the card displays probe results and not hardcoded constants.
 
 ### G2 Bibliographic Search
 
@@ -281,7 +281,7 @@ The browser half mounts `remote.zotero` itself (`ctx.remote.$mount` + `ctx.injec
 
 ## Write Cases (W)
 
-Enable "Allow writes" in "Settings → Zotero". Write operations must pass the session approval policy check (`approval/policy`; a policy of `never` auto-rejects without presenting a plan card), then display the plan review card (this confirmation cannot be bypassed). Writes execute only after user approval. Rejection at either tier is normal behavior. Interactive sessions may sequentially present permission confirmation and the plan card. Zotero Desktop may additionally show a local authorization dialog on the first write. Use dedicated test items and collections.
+Enable "Allow writes" in the dsh-zotero detail page's configuration section in the plugin manager. Write operations must pass the session approval policy check (`approval/policy`; a policy of `never` auto-rejects without presenting a plan card), then display the plan review card (this confirmation cannot be bypassed). Writes execute only after user approval. Rejection at either tier is normal behavior. Interactive sessions may sequentially present permission confirmation and the plan card. Zotero Desktop may additionally show a local authorization dialog on the first write. Use dedicated test items and collections.
 
 ### W1 Plan Review Card and Create Note
 

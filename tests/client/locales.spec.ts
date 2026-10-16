@@ -15,8 +15,8 @@ describe('locale bundles', () => {
 
   it('drops the retired lens/funnel/toolcard keys', () => {
     const retired: readonly string[] = [
-      // The config is a dedicated Settings-panel section (`settings.section`
-      // id `zotero`), not a Plugins-tab card. A page renders its whole form,
+      // The config lives in `plugins.bundle.config`
+      // on the plugin detail page, not a collapsed card. A page renders its whole form,
       // so the disclosure affordance has no surface left to name.
       'expand',
       'collapse',
@@ -133,6 +133,11 @@ describe('locale bundles', () => {
       'openPdf',
       'openAnnotation',
       'openUnverifiedNote',
+      // The `plugins.bundle.config` page renders the whole form through the
+      // official settings chrome, so the collapsed quick-config card (and its
+      // heading/hint) has no surface left to render on.
+      'quickConfigTitle',
+      'quickConfigHint',
     ]
     for (const key of retired) {
       expect(key in zh, key).toBe(false)
@@ -156,5 +161,12 @@ describe('locale bundles', () => {
     expect(allZh).not.toContain('Personal library')
     expect(allZh).not.toContain('evidence passages')
     expect(allZh).not.toContain('证据')
+  })
+
+  it('never points at the removed Settings location', () => {
+    for (const value of [...Object.values(zh), ...Object.values(en)]) {
+      expect(value).not.toContain('设置 -> Zotero')
+      expect(value).not.toContain('Settings → Zotero')
+    }
   })
 })

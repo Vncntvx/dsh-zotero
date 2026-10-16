@@ -68,8 +68,6 @@ export type ZoteroLocaleKey =
   | 'renderFailed'
   | 'refresh'
   | 'lastCheckedLabel'
-  | 'quickConfigTitle'
-  | 'quickConfigHint'
   | 'detailSectionTitle'
   | 'activationTitle'
   | 'activationClose'
@@ -454,15 +452,13 @@ export const en: Record<ZoteroLocaleKey, string> = {
   diagnosisNotComposed:
     'The Zotero plugin service is not loaded in this session. Open Plugins and enable dsh-zotero, then refresh.',
   diagnosisProviderUnavailable:
-    'The configured Zotero provider is not registered. Check the provider id in Settings → Zotero.',
+    'The configured Zotero provider is not registered. Check the provider id in the dsh-zotero configuration on the Plugins page.',
   diagnosisCapabilityUnavailable:
     'The selected Zotero provider does not serve this capability. Switch provider or enable the feature.',
   diagnosisUnknown: 'Connection error',
   renderFailed: 'Render failed',
   refresh: 'Refresh',
   lastCheckedLabel: 'Last checked',
-  quickConfigTitle: 'Quick settings',
-  quickConfigHint: 'Toggle the core Zotero features here. Full settings live in Settings → Zotero.',
   detailSectionTitle: 'Service status & quick start',
   activationTitle: 'Enable Zotero Plugin',
   activationClose: 'Close guidance',
@@ -486,7 +482,7 @@ export const en: Record<ZoteroLocaleKey, string> = {
   tipWriteGate:
     'To let the agent write notes, tags, collections, or items, turn on "Allow writes" and approve the Zotero popup.',
   tipSettingsNav:
-    'Connection, result caps, and citation style are fully configurable in Settings → Zotero.',
+    'Connection, result caps, and citation style are fully configurable in the dsh-zotero configuration on the Plugins page.',
   lensSources: 'Literature',
   lensExports: 'Exports',
   lensBarLabel: 'Literature views',
@@ -843,14 +839,13 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   diagnosisApiVersion: '本地 Zotero API 版本不兼容，本插件需要与 Zotero 7 及以上版本配合使用。',
   diagnosisTimeout: '连接本地 Zotero 实例超时，请检查 Zotero 是否正在响应或端口被占用。',
   diagnosisNotComposed: '本会话尚未装载 Zotero 插件服务。请在插件页启用 dsh-zotero 后刷新。',
-  diagnosisProviderUnavailable: '配置的 Zotero 提供方未注册。请到 [设置 -> Zotero] 检查提供方 ID。',
+  diagnosisProviderUnavailable:
+    '配置的 Zotero 提供方未注册。请在插件页的 dsh-zotero 配置区检查提供方 ID。',
   diagnosisCapabilityUnavailable: '当前 Zotero 提供方不支持该能力。请切换提供方或启用对应功能。',
   diagnosisUnknown: '连接异常',
   renderFailed: '渲染失败',
   refresh: '刷新',
   lastCheckedLabel: '上次检查',
-  quickConfigTitle: '常用快速设置',
-  quickConfigHint: '在此快速开关核心功能。完整配置请前往 [设置 -> Zotero]。',
   detailSectionTitle: '服务状态与使用指南',
   activationTitle: '启用 Zotero 插件',
   activationClose: '关闭新手引导',
@@ -869,7 +864,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   tipsLabel: '使用小贴士',
   tipWebTab: '打开「显示文献标签」后，会话顶部出现 Zotero 标签页，文献、相关片段与导出都在其中。',
   tipWriteGate: '智能体要写笔记、标签、合集或条目，需打开「允许写入」并在 Zotero 弹窗中授权。',
-  tipSettingsNav: '连接、结果上限与引文格式的完整设置在 [设置 -> Zotero]。',
+  tipSettingsNav: '连接、结果上限与引文格式的完整设置在插件页的 dsh-zotero 配置区。',
   lensSources: '文献',
   lensExports: '导出',
   lensBarLabel: '文献视图',

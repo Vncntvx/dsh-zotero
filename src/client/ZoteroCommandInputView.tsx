@@ -7,9 +7,9 @@
  * @module dsh-zotero/client/ZoteroCommandInputView
  */
 
-import { projectUserText } from '@deepseek-ai/dsh-client-ui-primitives'
+import { ReferenceChip, UserTextRun } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import { ZOTERO_COMMAND, type ZoteroCommandInputData } from './zotero-command-input.ts'
+import { type ZoteroCommandInputData } from './zotero-command-input.ts'
 import css from './ZoteroCommandInputView.module.css'
 
 type ZoteroCommandInputViewProps = PropsRuntime<'conversation.chat.node', 'zotero-command-input'> &
@@ -36,8 +36,8 @@ export function ZoteroCommandInputView({ node, t }: ZoteroCommandInputViewProps)
     <div className={css.row} data-command-input="" role="group" aria-label={t('commandInputAria')}>
       <div className={css.stack}>
         <div className={css.bubble}>
-          {projectUserText(head, [], [ZOTERO_COMMAND], 'command')}
-          {rest !== '' && projectUserText(rest, [])}
+          <ReferenceChip appearance="command" label={head} title={head} />
+          {rest !== '' && <UserTextRun text={rest} />}
         </div>
       </div>
     </div>

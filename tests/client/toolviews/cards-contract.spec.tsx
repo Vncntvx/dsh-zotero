@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * Verification that all 16 registered Zotero tool views render conformantly
- * against the upstream 0.2.1-alpha.2 ToolCallBlock contract.
+ * against the upstream 0.2.1-alpha.4 ToolCallBlock contract.
  *
  * Each card is rendered in both collapsed and expanded states with canonical
  * arguments and presentation metadata, verifying structure, disclosure, and

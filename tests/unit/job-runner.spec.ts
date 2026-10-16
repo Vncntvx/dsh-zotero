@@ -143,6 +143,7 @@ describe('ZoteroJobRunner', () => {
       expect(entry).toBeDefined()
       expect(entry.spec.label).toBe('export items')
       expect(entry.spec.owner).toBe('session-123')
+      expect(entry.spec.toolCall).toEqual({ callId: 'call-1', rootCallId: 'call-1' })
 
       const outcome = await entry.hooks.done
       expect(outcome.status).toBe('completed')
@@ -152,6 +153,21 @@ describe('ZoteroJobRunner', () => {
         { text: '[progress] exporting 1/2\n', channel: 'log' },
         { text: 'diagnostics row\n', channel: 'log' },
       ])
+    })
+
+    it('forwards the tool call identity, keeping a PTC sub-call paired with its root', async () => {
+      const registry = new TestJobRegistry()
+      const runner = new ZoteroJobRunner(registry as unknown as JobRegistry)
+
+      const { id } = runner.start({
+        label: 'ptc export',
+        exec: { ...fakeExec(), callId: 'call-1:ptc:0' as never },
+        run: async () => 'done',
+      })
+
+      const entry = registry.jobs.get(id)!
+      expect(entry.spec.toolCall).toEqual({ callId: 'call-1:ptc:0', rootCallId: 'call-1' })
+      await entry.hooks.done
     })
 
     it('settles as failed when run throws an error', async () => {

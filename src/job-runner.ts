@@ -183,7 +183,7 @@ export function jobPolicyOf(config: Pick<JobPolicy, keyof JobPolicy>): JobPolicy
 /**
  * Shared execute policy for heavy tools: explicit background start, promote
  * on foreground timeout, or a plain synchronous run. Tools supply the domain
- * call (already wrapped in `withConnectivityAsk`) and the text renderer.
+ * call and the text renderer.
  */
 export async function executeWithJobs<T>(options: {
   readonly runner: ZoteroJobRunner
@@ -251,6 +251,7 @@ export class ZoteroJobRunner {
     const id = this.registry.start({
       kind: 'zotero',
       label: task.label,
+      toolCall: { callId: task.exec.callId, rootCallId: task.exec.rootCallId },
       ...(task.exec.agent ? { owner: task.exec.agent.id } : {}),
       ...(task.outputLimitBytes !== undefined ? { outputLimitBytes: task.outputLimitBytes } : {}),
       run: (job: JobHandle): JobHooks => {

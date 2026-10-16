@@ -56,7 +56,6 @@ export function fakeScope(options: FakeScopeOptions = {}): FakeScope {
     user: options.user,
     revision: 1,
     writable: options.writable ?? true,
-    mode: 'host',
   }
   const listeners = new Set<() => void>()
   const writes: FakeWrite[] = []

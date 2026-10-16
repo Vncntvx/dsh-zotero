@@ -63,20 +63,20 @@ Note: `foregroundWaitMs` controls how long foreground operations wait before pro
 ## Configuration Priority
 
 ```text
-Schema defaults → Composition entry config → settings.yaml user layer
+Schema defaults → Composition entry config → the active profile's Cordis patch layer
 ```
 
-The user layer (`settings.yaml`) takes top priority, overriding schema defaults and composition entry configurations.
+The override layer (the active profile's `cordis.patch.yml`) takes top priority over schema defaults and composition entry config; a home patch or command-line overlay outranks it, and a form write they would override is refused.
 
-## Settings Page
+## Plugin Configuration Page
 
-The plugin registers a Zotero page in the left navigation of the Settings panel, bound to the `zotero` namespace:
+Open the **dsh-zotero** detail page in the plugin manager; its configuration section carries the whole `zotero` namespace form (through the harness's official `SettingsForm` and `SettingsFormModel`):
 
-- Edits persist to the `zotero:` section in `$DSH_HOME/settings.yaml`.
+- Edits persist into the `zotero` entry's `config` override in the active profile's `cordis.patch.yml`.
 - Changes take effect immediately: transport and write gate changes rebuild relevant components within the service instance; limit fields are read live by the provider.
 - Invalid entries are rejected before saving, preserving the last valid draft on the page.
 - Overridden fields display a badge with an inline reset option.
-- External edits to `settings.yaml` hot-reload automatically.
+- Form writes are revision-fenced (a draft submitted against a stale revision is refused), and a write a home patch or command-line overlay would override never lands.
 
 ## Hot-Reload Behavior
 

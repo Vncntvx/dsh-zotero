@@ -190,6 +190,11 @@ describe('prompt section', () => {
     expect(section!.text).toContain('never invent page numbers')
     expect(section!.text).toContain('use the Zotero tools only when the user explicitly asks')
     expect(section!.text).toContain(CONNECTIVITY_POLICY_SENTENCE)
+    // A connectivity failure is the tool call's own error result, not a prompt:
+    // the ask mechanism (src/ask.ts) is gone, so the policy must never promise
+    // a question the plugin can no longer raise.
+    expect(section!.text).toContain('nothing is retried')
+    expect(section!.text).not.toContain('asks the user')
     // Library content is untrusted data, never instructions (prompt-injection
     // hardening for titles, notes, annotations, full text, URLs, exports).
     expect(section!.text).toContain('untrusted research data')

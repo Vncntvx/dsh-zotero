@@ -1,8 +1,8 @@
 /**
  * Browser-half entry: the apply wiring registers the page dictionaries, reads
  * the zotero namespace through the shared configuration form, injects the
- * configuration page into the `settings.section` slot (one left-nav entry in
- * the Settings panel), and mounts the zotero Typert Remote namespace for the
+ * configuration page into the `plugins.bundle.config` slot on the plugins
+ * manager detail page, and mounts the zotero Typert Remote namespace for the
  * conversation tab's live status, gating that tab on the namespace's
  * `webEnabled` flag.
  * @module tests/client/apply
@@ -249,16 +249,15 @@ describe('the browser-half entry', () => {
     expect(contribution.package).toBe('dsh-zotero')
   })
 
-  it('injects the configuration page into the settings.section slot', async () => {
+  it('registers all plugin surfaces synchronously on apply', async () => {
     const world = fakeWorld()
     await applyEntry(world)
     // All surfaces register synchronously: the command-input projection, the
-    // page, the plugin-manager cards, and the conversation tab (whose
+    // bundle config page, the plugin-manager cards, and the conversation tab (whose
     // registration must not wait on the Remote mount).
     expect(world.injected.map((entry) => entry.name)).toEqual([
       'tool.call.toolview',
       'conversation.chat.node',
-      'settings.section',
       'plugins.bundle.activation',
       'plugins.bundle.config',
       'plugins.detail.section',
@@ -266,23 +265,6 @@ describe('the browser-half entry', () => {
       'conversation.chat.commandview',
       'conversation.view',
     ])
-
-    const pageEntry = world.injected.find((entry) => entry.name === 'settings.section')
-    expect(pageEntry?.register()).toBeDefined()
-
-    const page = world.registered.find((entry) => entry.name === 'settings.section')
-    // The left-nav identity: a stable key, a position inside the shipped
-    // block, and registrant-localized nav text.
-    expect(page?.options.id).toBe('zotero')
-    expect(page?.options.order).toBe(25)
-    expect(page?.options.locale).toBe('zotero')
-    expect((page?.options.label as () => string)()).toBe('nav')
-    expect(typeof page?.component).toBe('function')
-    // The page's inject face carries the staged form's store.
-    const pageInject = page?.options.inject as () => {
-      hooks: { zoteroCard: unknown }
-    }
-    expect(pageInject().hooks.zoteroCard).toBeDefined()
   })
 
   it('injects the activation guide into the plugins.bundle.activation slot', async () => {
@@ -337,7 +319,7 @@ describe('the browser-half entry', () => {
     await task3
   })
 
-  it('injects the bundle quick config into the plugins.bundle.config slot', async () => {
+  it('injects the bundle configuration page into the plugins.bundle.config slot', async () => {
     const world = fakeWorld()
     await applyEntry(world)
 
@@ -347,19 +329,14 @@ describe('the browser-half entry', () => {
 
     const config = world.registered.find((e) => e.name === 'plugins.bundle.config')
     expect(config?.options.key).toBe('dsh-zotero')
+    expect(config?.options.locale).toBe('zotero')
     expect(typeof config?.component).toBe('function')
     const configInject = (
       config?.options.inject as () => {
-        t: unknown
-        hooks: { zoteroQuickConfig: { subscribe: unknown; getSnapshot: unknown } }
-        setField: unknown
+        hooks: { zoteroCard: unknown }
       }
     )()
-    // The face publishes the shared form itself as the bound source: one
-    // observable, no mirror store between the form and the hook.
-    expect(configInject.hooks.zoteroQuickConfig).toBe(world.scope)
-    expect(typeof configInject.t).toBe('function')
-    expect(typeof configInject.setField).toBe('function')
+    expect(configInject.hooks.zoteroCard).toBeDefined()
   })
 
   it('injects the detail section into the plugins.detail.section slot', async () => {
@@ -530,7 +507,6 @@ describe('the browser-half entry', () => {
     expect(world.injected.map((entry) => entry.name)).toEqual([
       'tool.call.toolview',
       'conversation.chat.node',
-      'settings.section',
       'plugins.bundle.activation',
       'plugins.bundle.config',
       'plugins.detail.section',
@@ -617,9 +593,9 @@ describe('the browser-half entry', () => {
       value: { baseUrl: 'http://127.0.0.1:23119/api', timeoutMs: 5000 },
     })
     await applyEntry(world)
-    const entry = world.injected.find((entry) => entry.name === 'settings.section')
+    const entry = world.injected.find((entry) => entry.name === 'plugins.bundle.config')
     expect(entry?.register()).toBeDefined()
-    const registration = world.registered.find((entry) => entry.name === 'settings.section')
+    const registration = world.registered.find((entry) => entry.name === 'plugins.bundle.config')
     const injectFn = registration?.options.inject as () => {
       hooks: { zoteroCard: { getSnapshot: () => unknown } }
     }

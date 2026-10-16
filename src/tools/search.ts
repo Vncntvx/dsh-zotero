@@ -26,7 +26,6 @@ import {
   ZOTERO_SORT_FIELDS,
 } from '../constants.js'
 import type { ResolvedConfig } from '../config.js'
-import { withConnectivityAsk } from '../ask.js'
 import { citekeyOf } from '../normalize.js'
 import { assertPublicationsSupported } from '../refs.js'
 import { boundedPresentationMeta, projectSearchMeta } from '../presentation-meta.js'
@@ -442,9 +441,7 @@ export function registerSearchTool(ctx: Context, service: ZoteroService): void {
       presentResult: presentSearchResult,
       isConcurrencySafe: () => true,
       async execute(args, exec) {
-        return await withConnectivityAsk(ctx, service.recovery, exec, () =>
-          service.search(buildRequest(args, service.config), exec.signal),
-        )
+        return await service.search(buildRequest(args, service.config), exec.signal)
       },
     }),
   )

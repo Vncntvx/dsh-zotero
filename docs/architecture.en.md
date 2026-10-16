@@ -26,7 +26,6 @@ graph LR
 - Orchestrates providers, capability gates, and unified domain entrypoints;
 - Treats the Loader entry as authoritative; settings commits apply via `loader/volatile-update` to the same entry;
 - Structural configuration updates rebuild the HTTP client, provider, and write tools on the active instance: the six keys in `TRANSPORT_CONFIG_KEYS` (`baseUrl`, `timeoutMs`, `maxResponseBytes`, `maxInFlightRequests`, `writeAuthorizeDeadlineMs`, `writeEnabled`). Every other limit is read live through the provider and does not rebuild;
-- The connectivity recovery gate (`ConnectivityRecovery`) shares the service instance lifetime to avoid stacking duplicate prompts during concurrent failures;
 - Write gates converge at the service boundary: all write calls receive a `ZoteroWriteCall` and must clear capability checks, session approval policy (`ctx.approval.request`), and plan review cards;
 - Listens on `tools/pre-execute` to detect shell commands targeting the local API and escalate them to Harness approval requests;
 - Request-driven architecture: plugin startup never issues background network requests.
@@ -68,7 +67,7 @@ graph LR
 
 ### Browser Client (`src/client/`)
 
-- Settings Page (`settings.section`): registers a dedicated Zotero page in the Settings panel left navigation;
+- Bundle Configuration (`plugins.bundle.config`): registers the full Zotero configuration form in the Plugin Manager detail page, managed through harness official `SettingsForm` and `SettingsFormModel`;
 - Session Panel (`conversation.view`): the conversation tab shows one Zotero panel, with a top lens bar switching between the sources workspace and the session-wide exports page. Each source's inspector holds an Overview panel, a Passages panel for retrieved passages, and an Exports panel for that item's exported documents;
 - Tool Cards (`tool.call.toolview`): a compact, collapsible card for each of the 16 model tools (8 read and 8 write), with copy actions on the values worth copying, sidebar PDF reading through the "Read PDF" action, and copy-to-locate actions for titles and canonical deep links. A card renders output the tool already produced and never calls the tool itself;
 - Command Status Card (`conversation.chat.commandview`): renders connectivity status, the version and Server ID details, diagnosis tips, and an in-place refresh button for `/zotero`;

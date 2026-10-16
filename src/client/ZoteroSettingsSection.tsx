@@ -1,18 +1,23 @@
 /**
- * The Zotero settings page: one entry in the Settings panel's left navigation,
- * a sibling of General, Models, and Plugins, editing every field of the
- * `zotero` namespace the host half registers. The whole configuration lives
- * here: the page owns the header, the grouped form body rides the harness's
- * official `<SettingsForm>` chrome (unavailable/read-only status, failed
- * notice, save button, and discard-on-unmount), so a namespace with this many
- * fields never has to be read through a collapsed card.
+ * The Zotero settings page: rendered in the Plugins manager detail page
+ * (`plugins.bundle.config` slot, keyed by package name), editing every field
+ * of the `zotero` namespace the host half registers. The whole configuration
+ * lives here: the page owns the header, the grouped form body rides the
+ * harness's official `<SettingsForm>` chrome (unavailable/read-only status,
+ * failed notice, save button, and discard-on-unmount), so a namespace with
+ * this many fields never has to be read through a collapsed card.
+ *
+ * The slot declares a `view` discriminator, but `plugins.bundle.config` is
+ * rendered only with `view: 'page'` (the harness page hardcodes it; `summary`
+ * belongs to `plugins.item` and `plugins.row.config`), so the page has no
+ * early-out and its hooks always run on every render.
  *
  * The page reads and writes through the shared configuration form
  * (`ctx.configForms.get`), staged through the harness's own
  * `SettingsFormModel`; nothing writes until Save, and leaving the page drops
  * the staged edits. While the namespace is not served to this client the page
- * still renders (the left-nav entry exists either way) with its title and
- * the form's own unavailable notice instead of vanishing.
+ * still renders with its title and the form's own unavailable notice instead of
+ * vanishing.
  *
  * `SettingsForm` comes from `dsh-client-ui-primitives`, a platform module the
  * shell shares with every bundle (`PLATFORM_MODULES`), so value-importing it
@@ -28,16 +33,12 @@ import type {
   PropsRuntime,
   TranslateNS,
 } from '@deepseek-ai/dsh-client-ui-slots'
-// Type-only: the `settings.section` slot this page registers into is declared
-// by the settings domain's client contract; importing its types rides the
-// SlotMap merge into this program without a runtime dependency.
-import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import { ZoteroSettingsForm } from './ZoteroSettingsForm.tsx'
 import type { ZoteroCardFace } from './zotero-card-controller.ts'
 import css from './ZoteroSettingsSection.module.css'
 
-/** Props the renderer binds for the Zotero settings page. */
-export type ZoteroSettingsSectionProps = PropsRuntime<'settings.section'> &
+/** Props the renderer binds for the Zotero settings page in plugins.bundle.config. */
+export type ZoteroSettingsSectionProps = PropsRuntime<'plugins.bundle.config'> &
   PropsLocale<'zotero'> &
   InjectFace<ZoteroCardFace>
 
@@ -62,7 +63,7 @@ export function ZoteroSettingsSection(props: ZoteroSettingsSectionProps): ReactN
   const state = props.useZoteroCard((snapshot) => snapshot)
   const labels = useMemo(() => formLabels(t), [t])
   return (
-    <div className={css.page}>
+    <div className={css.page} data-zotero-config-page>
       <div className={css.head}>
         <h2 className={css.title}>{t('title')}</h2>
       </div>

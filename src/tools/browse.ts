@@ -14,7 +14,6 @@ import {
   type ToolResult,
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
-import { withConnectivityAsk } from '../ask.js'
 import { boundedPresentationMeta } from '../presentation-meta.js'
 import { metaRecordOf } from './present.js'
 import { browseRowOf, BROWSE_KINDS, type BrowseRow } from '../browse-rows.js'
@@ -406,9 +405,7 @@ export function registerBrowseTool(ctx: Context, service: ZoteroService): void {
       presentResult: presentBrowseResult,
       isConcurrencySafe: () => true,
       async execute(args, exec) {
-        return await withConnectivityAsk(ctx, service.recovery, exec, () =>
-          service.browse(buildRequest(args, service.config), exec.signal),
-        )
+        return await service.browse(buildRequest(args, service.config), exec.signal)
       },
     }),
   )

@@ -19,7 +19,6 @@ import {
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
 import type { ResolvedConfig } from '../config.js'
-import { withConnectivityAsk } from '../ask.js'
 import { boundedPresentationMeta, projectExportMeta } from '../presentation-meta.js'
 import { metaRecordOf, textOfBlocks } from './present.js'
 import { ZOTERO_ITEMKEY_BATCH } from '../constants.js'
@@ -265,10 +264,7 @@ export function registerExportTool(
           runner: new ZoteroJobRunner(ctx.get('jobs'), service.diagnostics.sink),
           exec,
           label: `zotero_export (${exportArgs.refs.length} refs, ${exportArgs.format})`,
-          run: (signal, onProgress) =>
-            withConnectivityAsk(ctx, service.recovery, { signal, agent: exec.agent }, () =>
-              service.export(request, signal, onProgress),
-            ),
+          run: (signal, onProgress) => service.export(request, signal, onProgress),
           renderResult: (value) => textOfBlocks(renderExport(exportArgs, value)),
           runInBackground: exportArgs.run_in_background === true,
           policy: jobPolicyOf(service.config),

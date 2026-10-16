@@ -46,7 +46,7 @@ From GitHub prebuilt branch:
 dsh plugin --profile <name> add github:Vncntvx/dsh-zotero#release
 ```
 
-After installation, start a new session to use Zotero tools. The plugin provides a configuration page under **Settings → Zotero** to adjust API address, concurrency limits, and retrieval parameters.
+After installation, start a new session to use Zotero tools. Open the **dsh-zotero** detail page in the plugin manager: its configuration section carries the full form for the API address, concurrency limits, and retrieval parameters.
 
 > Note: Installing directly from the main source branch requires local compilation. Because pnpm blocks dependency builds by default, use the `#release` branch to skip local build setup.
 

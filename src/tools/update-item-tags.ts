@@ -118,9 +118,9 @@ export function registerUpdateItemTagsTool(ctx: Context, service: ZoteroService)
       // timeoutMs is deliberately omitted: the plan-review card waits on user
       // think time, which is not a stuck request.
       async execute(args, exec): Promise<ZoteroUpdateItemTagsOutcome> {
-        // No connectivity ask wraps the write: that helper retries, and only
-        // idempotent reads may be retried. The plan review is the seam's
-        // (service.updateItemTags), so no caller can skip it.
+        // Writes never retry: only idempotent reads may be retried. The plan
+        // review is the seam's (service.updateItemTags), so no caller can skip
+        // it.
         const request = buildRequest(args, service.config)
         return await service.updateItemTags(request, { exec, plan: updateItemTagsPlan(args) })
       },

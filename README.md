@@ -46,7 +46,7 @@ dsh plugin --profile <name> add dsh-zotero
 dsh plugin --profile <name> add github:Vncntvx/dsh-zotero#release
 ```
 
-安装完成后新建会话即可使用。插件在 **设置 → Zotero** 中提供配置表单，支持调整 API 地址、并发限制与检索参数。
+安装完成后新建会话即可使用。在插件管理器中打开 **dsh-zotero** 详情页，其配置区提供完整配置表单，支持调整 API 地址、并发限制与检索参数。
 
 > 提示：从 main 源码分支直接安装需要本地执行构建。pnpm 默认拦截依赖构建，使用 `#release` 分支可免除构建配置直接安装。
 

@@ -20,7 +20,6 @@ import {
   type ToolResult,
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
-import { withConnectivityAsk } from '../ask.js'
 import { asRecord } from '../json.js'
 import {
   ALL_CHANGES_INCLUDES,
@@ -583,12 +582,7 @@ export function registerChangesTool(
           exec,
           label,
           run: async (signal, onProgress) => {
-            const value = await withConnectivityAsk(
-              ctx,
-              service.recovery,
-              { signal, agent: exec.agent },
-              () => service.changes(request, signal, onProgress),
-            )
+            const value = await service.changes(request, signal, onProgress)
             // A kind that contributed nothing is a degradation the model sees
             // inline, but the reason (a short history, a 404) is what a
             // "changes look incomplete" question needs from the record.

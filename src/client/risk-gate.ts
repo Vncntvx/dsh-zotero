@@ -41,8 +41,7 @@ export interface RiskGate {
 }
 
 /**
- * One enable-risk acknowledgement machine shared by the quick-config switch
- * and the settings boolean toggle.
+ * One enable-risk acknowledgement machine for the settings boolean toggle.
  * @returns the gate's state and transitions.
  */
 export function useRiskGate(): RiskGate {

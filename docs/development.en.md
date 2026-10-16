@@ -33,7 +33,6 @@ src/
   ref-grammar.ts        # Reference syntax validation patterns
   export-items.ts       # Per-document export parsing
   export-mapping.ts     # Reference and batch item mapping
-  ask.ts                # User interaction prompt and retry coordination on connection failure
   prompt.ts             # Model-facing system prompt section
   command.ts            # /zotero status command
   write-approval.ts     # Two-tier write confirmation (approval policy and plan review card)
@@ -45,7 +44,7 @@ src/
   typert.ts             # Typert manifest
   settings-namespace.ts # Settings namespace constants
   tools/                # 16 model tool definitions (8 read + 8 write)
-  client/               # Browser client (settings page, Sources panel, tool card views)
+  client/               # Browser client (configuration page, Sources panel, tool card views)
 tests/                  # Unit and end-to-end test suites
 ```
 
@@ -98,7 +97,7 @@ Integration tests require a local Zotero instance running at `127.0.0.1:23119` w
 ## Build Artifacts
 
 - Node artifact (`lib/`): Compiled by `tsc`, containing service logic, tool definitions, provider, and transport layers.
-- Browser artifact (`lib/client.js`): Bundled by `esbuild`, containing the settings page, Sources panel, and session cards.
+- Browser artifact (`lib/client.js`): Bundled by `esbuild`, containing the configuration page, Sources panel, and session cards.
 
 ## Local Debugging
 
@@ -106,8 +105,8 @@ Integration tests require a local Zotero instance running at `127.0.0.1:23119` w
 
 ```sh
 export DSH_HOME=$(mktemp -d /tmp/dsh-zotero-dev-XXXX)
-cp ~/.dsh/.credentials.yaml ~/.dsh/settings.yaml "$DSH_HOME/"
-chmod 600 "$DSH_HOME/.credentials.yaml" "$DSH_HOME/settings.yaml"
+cp ~/.dsh/.credentials.yaml "$DSH_HOME/"   # seeds write credentials only; see the note below
+chmod 600 "$DSH_HOME/.credentials.yaml"
 npm run build
 dsh plugin --profile web add .
 npm run dev &        # Watch Node-side changes
@@ -115,6 +114,8 @@ npm run dev:client & # Watch browser-side changes
 cd ../deepseek-harness && env DSH_HOME="$DSH_HOME" \
   node --import tsx/esm apps/cli/src/bin.ts web --port 3307
 ```
+
+> Note: since alpha.4 the plugin's configuration persists in the active profile's `cordis.patch.yml` (the `zotero` entry), and `~/.dsh/settings.yaml` is imported once at startup only. Fill the Zotero connection settings once in the temp instance's plugin manager under the **dsh-zotero** configuration section (or copy the `zotero` entry's `config` from one of your existing profiles' `cordis.patch.yml`).
 
 ### Host-Only Debugging (with HMR)
 
@@ -125,21 +126,21 @@ cp dev-lib.cordis.yml.example dev-lib.cordis.yml # Copy template and fill absolu
 dsh web --patch ./dev-lib.cordis.yml --port 3307
 ```
 
-> Note: the `dev-lib.cordis.yml` overlay points to the built entry using an absolute path (`<absolute-path-to-dsh-zotero>/lib/index.js`), enabling in-process Loader HMR for the host half (tools and `/zotero` command) without restarting dsh. However, the harness web client module loader only resolves plugins registered under bare package names. Consequently, this mode does not load browser-side frontend modules (settings page or Sources tab). To develop and test the UI, use the "Full Plugin Debugging" workflow above (`dsh plugin --profile web add .` and `npm run dev:client`).
+> Note: the `dev-lib.cordis.yml` overlay points to the built entry using an absolute path (`<absolute-path-to-dsh-zotero>/lib/index.js`), enabling in-process Loader HMR for the host half (tools and `/zotero` command) without restarting dsh. However, the harness web client module loader only resolves plugins registered under bare package names. Consequently, this mode does not load browser-side frontend modules (configuration page or Sources tab). To develop and test the UI, use the "Full Plugin Debugging" workflow above (`dsh plugin --profile web add .` and `npm run dev:client`).
 
 ### Diagnostics Panel and Diagnostics Bundle
 
-To inspect runtime behavior or investigate issues, open the "Diagnostics" card at the bottom of "Settings → Plugins → dsh-zotero":
+To inspect runtime behavior or investigate issues, open the **dsh-zotero** detail page in the plugin manager; the "Diagnostics" card at the bottom shows runtime state and logs:
 
 - **Record retention and filtering**: The panel records error, warn, and info events by default, with severity filtering available ("Problems" selects warn and error). Entries are listed in reverse chronological order, and consecutive identical messages are coalesced with a repeat counter;
-- **Verbose mode**: To capture request paths and invocation parameters, enable "Verbose diagnostics" under the Diagnostics configuration group before reproducing the issue;
+- **Verbose mode**: To capture request paths and invocation parameters, enable "Verbose diagnostics" in the "Diagnostics" group of the dsh-zotero configuration section before reproducing the issue;
 - **Client crash reporting**: When browser-side components (such as the Sources tab, tool cards, or detail panels) encounter a render crash, error boundaries automatically log the event and identify the failing surface in the `surface` field (for example, `sources` or `tool:zotero_search`);
 - **Exporting records**: Clicking "Copy diagnostics" exports a text bundle containing the plugin version, Zotero endpoint and version, debug state, and all buffered log entries for bug reports.
 
 ## Testing Standards
 
 - Unit tests run against a mock Zotero HTTP service (`MockZotero`).
-- Browser settings page tests use JSDOM and `@testing-library/react`.
+- Browser configuration page tests use JSDOM and `@testing-library/react`.
 - Coverage thresholds are defined in `vitest.config.ts`, with separate gates enforced for each core layer.
 - Integration tests validate wire protocols and real data against an active Zotero instance.
 

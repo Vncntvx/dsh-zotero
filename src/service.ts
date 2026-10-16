@@ -15,9 +15,7 @@
  * settings commit lands in the running fiber's references without remounting
  * and tools read it per request. Structural flips (transport fields, the
  * write capability) rebuild on `loader/volatile-update` on this same
- * instance, never as a service replacement and never with a new
- * `ConnectivityRecovery` (that gate is service-lifetime state; swapping it on
- * rebuild would stack duplicate connectivity cards). A violating commit is vetoed in
+ * instance, never as a service replacement. A violating commit is vetoed in
  * `internal/config` before it lands, so the live read only ever observes
  * values `resolveConfig` accepts.
  * @module dsh-zotero/service
@@ -31,7 +29,6 @@ import type {} from '@deepseek-ai/cordis-plugin-loader'
 import type {} from '@deepseek-ai/dsh-typert-registry'
 // Type-only: brings the `ctx.credentials` Context merge into this program.
 import type { CredentialProvider } from '@deepseek-ai/dsh-credentials'
-import { ConnectivityRecovery } from './ask.js'
 import { DiagnosticsRecorder, logMessageToPush, loggerNameMatches } from './diagnostics.js'
 import type { DiagnosticDetail } from './diagnostics.js'
 import type { ToolExecutionResult } from '@deepseek-ai/dsh-tools'
@@ -186,25 +183,6 @@ export class ZoteroService extends Service {
 
   private readonly providers = new Map<string, ZoteroProvider>()
   /**
-   * Connectivity recovery gate for this service instance.
-   *
-   * Concurrent tool calls that hit the same ask-worthy failure (Zotero down,
-   * local API disabled, no shared API version, timeout) share one question
-   * instead of stacking a card per call. The gate's Map holds only in-flight
-   * asks; each entry is deleted when that question settles, so a later
-   * failure asks again.
-   *
-   * Owned by the `ZoteroService` instance for the fiber lifetime, **not** by
-   * a config generation. A volatile commit calls `buildTransport`, which
-   * replaces HTTP clients and the `local` provider on this same instance; it
-   * must not replace this gate. Swapping recovery on rebuild would fork the
-   * conversation (in-flight waiters on the old gate, new failures on a new
-   * one) and stack duplicate cards, the opposite of this class's purpose.
-   * Retry paths re-enter `service.*` at call time and therefore see the
-   * rebuilt provider without touching the gate.
-   */
-  readonly recovery = new ConnectivityRecovery()
-  /**
    * The live entry config: Loader-delivered volatile references (commits
    * write those same refs) or a complete plain snapshot. Tools read through
    * {@link config} per request so settings edits apply without a restart.
@@ -309,7 +287,6 @@ export class ZoteroService extends Service {
     })
     registerStatusCommand(ctx, this)
     registerPromptSection(ctx, () => this.config)
-    ctx.effect(() => () => this.recovery.dispose(), 'zotero: connectivity recovery abort')
     ctx.effect(
       () => () => {
         for (const dispose of this.heavyToolDisposes) dispose()
