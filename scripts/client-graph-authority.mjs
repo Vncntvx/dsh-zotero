@@ -30,13 +30,12 @@ export const CLIENT_SAFE_LOCAL =
   /^src\/(?:client(?:\/|$)|contract\.(?:ts|js|mjs|cjs)$|settings-namespace\.(?:ts|js|mjs|cjs)$|json\.(?:ts|js|mjs|cjs)$|ref-grammar\.(?:ts|js|mjs|cjs)$|export-items\.(?:ts|js|mjs|cjs)$|changes-contract\.(?:ts|js|mjs|cjs)$|browse-rows\.(?:ts|js|mjs|cjs)$|evidence-item\.(?:ts|js|mjs|cjs)$)/
 
 /**
- * Packages the host half owns. Boundary schema materialization (zod for the
- * Typert wire codecs, schemastery for Config schemas) is host registration
- * only; the client Remote face mounts structural descriptors.
+ * Packages the host half owns. Boundary schema materialization (schemastery
+ * for Config schemas) is host registration only; the client Remote face
+ * mounts structural descriptors. Zod is externalized as a shared platform module.
  */
-export const HOST_ONLY_PACKAGE_RESOLVE = /^(?:zod|@deepseek-ai\/schemastery)(?:\/|$)/
-export const HOST_ONLY_PACKAGE_INPUT =
-  /(?:^|\/)node_modules\/(?:zod|@deepseek-ai\/schemastery)(?:\/|$)/
+export const HOST_ONLY_PACKAGE_RESOLVE = /^@deepseek-ai\/schemastery(?:\/|$)/
+export const HOST_ONLY_PACKAGE_INPUT = /(?:^|\/)node_modules\/@deepseek-ai\/schemastery(?:\/|$)/
 
 /**
  * The third-party packages this bundle may bring **into itself**, with no
@@ -69,7 +68,7 @@ export function packageNameOf(key) {
 
 /**
  * Harness specifiers a client bundle may **inline**. Counterpart of the three
- * constants in `packages/client/tsdown.client.ts` at **dsh-v0.2.1-alpha.1**:
+ * constants in `packages/client/tsdown.client.ts` at **dsh-v0.2.1-alpha.4**:
  * `INLINE_SAFE`, `GENERATED_REMOTE`, `VENDORED_LIBRARY`. Keep this table in
  * step with that file: never invent a fourth arm here.
  */
@@ -128,7 +127,6 @@ export function clientGraphViolations(inputs) {
       // an `EXTERNALS` package that got inlined, which would give the page
       // a second copy of a shared module) is refused.
       if (
-        pkg !== 'zod' &&
         pkg !== '@deepseek-ai/schemastery' &&
         !CLIENT_INLINE_PACKAGES.includes(pkg) &&
         !isInlineSafeHarness(pkg)

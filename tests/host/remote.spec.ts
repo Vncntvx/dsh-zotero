@@ -226,13 +226,18 @@ describe('the zotero typert manifest', () => {
     })
   })
 
-  it('refuses browser-side materialization of the host-owned status codec', async () => {
+  it('materializes browser-side status codec', async () => {
     const { ZOTERO_REMOTE } = await import('../../src/client/remote.ts')
-    const { HOST_OWNED_CODEC_MESSAGE } = await import('../../src/client/status-codec.ts')
     const status = ZOTERO_REMOTE.descriptors.find((invocation) => invocation.method === 'status')
-    const result = status?.result as { create?: () => unknown } | undefined
+    const result = status?.result as
+      { create?: () => { parse: (v: unknown) => unknown } } | undefined
     expect(typeof result?.create).toBe('function')
-    expect(() => result!.create!()).toThrow(HOST_OWNED_CODEC_MESSAGE)
+    const schema = result!.create!()
+    expect(schema.parse({ providerId: 'local', connected: true })).toMatchObject({
+      providerId: 'local',
+      connected: true,
+    })
+    expect(() => schema.parse({ connected: 'not-a-bool' })).toThrow()
   })
 
   it('materializes and validates the host resolveAttachment codecs', () => {
@@ -260,15 +265,30 @@ describe('the zotero typert manifest', () => {
     expect(() => resSchema.parse({ ref: 'a', kind: 'other' })).toThrow()
   })
 
-  it('refuses browser-side materialization of the host-owned resolveAttachment codecs', async () => {
+  it('materializes browser-side resolveAttachment codecs', async () => {
     const { ZOTERO_REMOTE } = await import('../../src/client/remote.ts')
-    const { HOST_OWNED_CODEC_MESSAGE } = await import('../../src/client/status-codec.ts')
     const resolve = ZOTERO_REMOTE.descriptors.find((inv) => inv.method === 'resolveAttachment')
     expect(resolve).toBeDefined()
-    const paramCodec = resolve!.parameters[0]?.codec as { create?: () => unknown }
-    const resultCodec = resolve!.result as { create?: () => unknown }
-    expect(() => paramCodec.create!()).toThrow(HOST_OWNED_CODEC_MESSAGE)
-    expect(() => resultCodec.create!()).toThrow(HOST_OWNED_CODEC_MESSAGE)
+    const paramCodec = resolve!.parameters[0]?.codec as {
+      create?: () => { parse: (v: unknown) => unknown }
+    }
+    const resultCodec = resolve!.result as {
+      create?: () => { parse: (v: unknown) => unknown }
+    }
+    expect(paramCodec.create!().parse('zotero://user/0/items/ABCD1234')).toBe(
+      'zotero://user/0/items/ABCD1234',
+    )
+    expect(() => paramCodec.create!().parse('')).toThrow()
+    expect(
+      resultCodec.create!().parse({
+        ref: 'zotero://user/0/items/ABCD1234',
+        kind: 'file',
+        title: 'test.pdf',
+        contentType: 'application/pdf',
+        path: '/path/to/test.pdf',
+      }),
+    ).toMatchObject({ kind: 'file', path: '/path/to/test.pdf' })
+    expect(() => resultCodec.create!().parse({ ref: 'a', kind: 'other' })).toThrow()
   })
 
   it('claims the wire endpoint through the typert registry when one composes', async () => {

@@ -5,11 +5,17 @@
  * materialization (zod) into the client graph.
  *
  * Boundary codecs are **not** defined here. Host registration materializes
- * strict zod schemas in `src/status-codec.ts`; the client Remote face mounts
- * the same structural endpoint with a host-owned codec factory that never
- * materializes in the browser (see `src/client/status-codec.ts`). Client
- * Gateway returns `RemoteResult.value` unvalidated: result codecs are host
- * registry/wire identity, not a second browser-side validator.
+ * strict zod schemas in `src/status-codec.ts`; the client Remote face
+ * materializes the structurally identical schemas in
+ * `src/client/status-codec.ts`, in the `{ mode, typeSymbol, create }` shape the
+ * typert generator emits, so `zod` stays a platform module the shell serves.
+ *
+ * The two arms do not validate alike. Client Gateway decodes a unary result
+ * only through `descriptor.result.decode`, which the generator emits solely for
+ * byte-carrying boundaries; a pure-JSON result therefore reaches the browser as
+ * `RemoteResult.value` unvalidated and the client factory is never called
+ * there. Strict validation of JSON inputs is the host gateway's own `decode`
+ * step, not this module's.
  *
  * The Remote namespace carries the one fact the settings plane does not: live
  * connectivity of the configured Zotero provider. Configuration rides the
@@ -134,13 +140,13 @@ export const ZOTERO_REPORT_RESULT_TYPE_SYMBOL = 'dsh-zotero#ZoteroReportResultVi
 export const ZOTERO_STATUS_INVOCATION_ID = 'dsh-zotero#zotero/status'
 
 /** Globally stable invocation id for resolveAttachment. */
-export const ZOTERO_RESOLVE_ATTACHMENT_INVOCATION_ID = 'dsh-zotero#zotero/resolveAttachment'
+const ZOTERO_RESOLVE_ATTACHMENT_INVOCATION_ID = 'dsh-zotero#zotero/resolveAttachment'
 
 /** Globally stable invocation id for the diagnostics snapshot. */
-export const ZOTERO_DIAGNOSTICS_INVOCATION_ID = 'dsh-zotero#zotero/diagnostics'
+const ZOTERO_DIAGNOSTICS_INVOCATION_ID = 'dsh-zotero#zotero/diagnostics'
 
 /** Globally stable invocation id for the client error report. */
-export const ZOTERO_REPORT_CLIENT_ERROR_INVOCATION_ID = 'dsh-zotero#zotero/reportClientError'
+const ZOTERO_REPORT_CLIENT_ERROR_INVOCATION_ID = 'dsh-zotero#zotero/reportClientError'
 
 /**
  * Cordis service key that owns the status method on the host half.
@@ -166,9 +172,9 @@ export const ZOTERO_STATUS_INVOCATION_KIND = 'direct'
 
 /**
  * Structural identity of the `zotero/status` invocation. The only field both
- * halves fill differently is `result` (host owns the zod factory; client
- * mounts a host-owned non-materializing factory). Read-only reference for
- * tests and documentation; descriptors are built through
+ * halves fill differently is `result` (each half supplies its own schema
+ * factory for the same wire identity). Read-only reference for tests and
+ * documentation; descriptors are built through
  * {@link zoteroStatusInvocation}, which copies every field.
  */
 export const ZOTERO_STATUS_ENDPOINT = {

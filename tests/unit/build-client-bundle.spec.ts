@@ -65,8 +65,8 @@ describe('verifyBundle', () => {
   })
 
   it('rejects a factory whose load-time requires leave the platform modules', async () => {
-    await withBundle(GOOD_BUNDLE.replace("require('react')", "require('zod')"), (path) => {
-      expect(() => verifyBundle(path)).toThrow(/non-external zod/)
+    await withBundle(GOOD_BUNDLE.replace("require('react')", "require('lodash')"), (path) => {
+      expect(() => verifyBundle(path)).toThrow(/non-external lodash/)
     })
   })
 
@@ -77,7 +77,7 @@ describe('verifyBundle', () => {
   })
 
   it('rejects host-schema runtime text that shipped without a graph edge', async () => {
-    await withBundle(`${GOOD_BUNDLE}\n// pasted codec: ZodError`, (path) => {
+    await withBundle(`${GOOD_BUNDLE}\n// pasted codec: node_modules/schemastery`, (path) => {
       expect(() => verifyBundle(path)).toThrow(/host-schema marker/)
     })
   })

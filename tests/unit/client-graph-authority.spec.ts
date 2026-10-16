@@ -38,7 +38,7 @@ function authorityBuild(contents: string) {
     target: 'es2022',
     jsx: 'automatic',
     metafile: true,
-    external: ['react', 'react/jsx-runtime'],
+    external: ['react', 'react/jsx-runtime', 'zod'],
     plugins: [createClientAuthorityPlugin()],
   })
 }
@@ -133,12 +133,12 @@ describe('client graph authority', () => {
     expect(violations.every((entry) => entry.kind === 'host-local')).toBe(true)
   })
 
-  it('rejects zod package inputs', () => {
+  it('rejects inlined zod package inputs when not externalized', () => {
     const violations = clientGraphViolations(
       metafileOf(['src/client/index.ts', 'node_modules/zod/v4/classic/external.js']),
     )
     expect(violations).toHaveLength(1)
-    expect(violations[0]).toMatchObject({ kind: 'host-package' })
+    expect(violations[0]).toMatchObject({ kind: 'unknown-package' })
     expect(violations[0]!.key).toContain('node_modules/zod')
   })
 
@@ -156,15 +156,15 @@ describe('client graph authority', () => {
       authorityBuild(
         `import { ZOTERO_INVOCATIONS } from '../status-codec.ts'\nexport default { apply() {}, inject: [], invocations: ZOTERO_INVOCATIONS }\n`,
       ),
-    ).rejects.toThrow(/zod|status-codec|host-owned|client graph/i)
+    ).rejects.toThrow(/status-codec|host-local|client graph/i)
   })
 
-  it('rejects a client graph that value-imports zod directly', async () => {
-    await expect(
-      authorityBuild(
-        `import { z } from 'zod'\nexport default { apply() {}, inject: [], s: z.object({ a: z.string() }) }\n`,
-      ),
-    ).rejects.toThrow(/host-owned package "zod"|client graph/i)
+  it('allows a client graph that value-imports zod through external platform module', async () => {
+    const result = await authorityBuild(
+      `import { z } from 'zod'\nexport default { apply() {}, inject: [], s: z.object({ a: z.string() }) }\n`,
+    )
+    const violations = clientGraphViolations(result.metafile.inputs)
+    expect(violations).toEqual([])
   })
 
   it('rejects a client graph that value-imports schemastery directly', async () => {
@@ -207,7 +207,7 @@ describe('client graph authority', () => {
   })
 })
 
-describe('harness inline-safe table (dsh-v0.2.1-alpha.2)', () => {
+describe('harness inline-safe table (dsh-v0.2.1-alpha.4)', () => {
   it('accepts the pinned package names and rejects the retired agent-presets arm', () => {
     expect(isInlineSafeHarness('@deepseek-ai/dsh-agent-preset-registry/display')).toBe(true)
     expect(isInlineSafeHarness('@deepseek-ai/dsh-agent-presets/display')).toBe(false)

@@ -1,20 +1,23 @@
 /**
- * Client-side strict codec arm for `zotero/status`.
+ * Client-side strict codecs for Zotero Typert remotes.
  *
- * The browser Remote face never materializes result schemas: Client Gateway
- * returns `RemoteResult.value` unvalidated
- * (`packages/api/gateway/src/client/index.ts` invoke path), while
- * `typert.remotes.register` only requires `typeof create === 'function'`.
- * Host registration carries the real zod factory in `src/status-codec.ts`.
+ * Each codec carries the `{ mode, typeSymbol, create }` shape the typert
+ * generator emits, and `create()` returns a module-level frozen zod schema:
+ * the same strict schema the host arm registers in `src/status-codec.ts`, so
+ * the two halves stay structurally identical without the browser importing
+ * host code.
  *
- * Materializing here would either ship a second zod copy into `lib/client.js`
- * or invent browser-side validation the platform does not perform. The factory
- * refuses materialization loudly; that is the architectural claim, not a
- * silent no-op parse. The codec object is a single frozen module binding so
- * both halves' structural parity tests observe one client result arm.
+ * Materialization here is not browser-side validation. Client Gateway decodes
+ * a unary result only through `descriptor.result.decode` — which the generator
+ * emits for byte-carrying boundaries alone — so a pure-JSON result reaches the
+ * caller as `RemoteResult.value` and `create()` is never invoked at runtime.
+ * These schemas are the structural counterpart and the fixture the parity
+ * tests read. `zod` itself is the external platform module the shell serves
+ * (`PLATFORM_MODULES`), so no second copy enters this bundle.
  * @module dsh-zotero/client/status-codec
  */
 
+import { z } from 'zod'
 import type { InvocationDescriptor } from '@deepseek-ai/dsh-typert-protocol'
 import {
   ZOTERO_CLIENT_ERROR_REPORT_TYPE_SYMBOL,
@@ -27,66 +30,116 @@ import {
   zoteroReportClientErrorInvocation,
   zoteroResolveAttachmentInvocation,
   zoteroStatusInvocation,
+  type ZoteroAttachmentLocationView,
+  type ZoteroClientErrorReport,
+  type ZoteroDiagnosticsView,
+  type ZoteroReportResultView,
+  type ZoteroStatusView,
 } from '../contract.ts'
 
-/** Error when browser code incorrectly tries to materialize a host-owned codec. */
-export const HOST_OWNED_CODEC_MESSAGE =
-  'dsh-zotero: strict codec is host-owned; the client Remote face never materializes boundary schemas'
+const zoteroStatusSchema = z
+  .object({
+    providerId: z.string(),
+    endpoint: z.string().optional(),
+    connected: z.boolean(),
+    apiVersion: z.string().optional(),
+    serverId: z.string().optional(),
+    schemaVersion: z.string().optional(),
+    zoteroVersion: z.string().optional(),
+    write: z.object({ enabled: z.boolean(), authorized: z.boolean() }).strict().optional(),
+    diagnosis: z.string().optional(),
+  })
+  .strict()
+  .readonly()
 
-/**
- * Strict result codec the client contribution mounts. Same wire identity as
- * the host arm (`mode` + `typeSymbol`); `create` never returns a schema on
- * this half, it throws {@link HOST_OWNED_CODEC_MESSAGE}.
- */
 export const ZOTERO_STATUS_CLIENT_RESULT_CODEC = Object.freeze({
   mode: 'strict',
   typeSymbol: ZOTERO_STATUS_TYPE_SYMBOL,
-  create: (): never => {
-    throw new Error(HOST_OWNED_CODEC_MESSAGE)
-  },
+  create: (): z.ZodType<ZoteroStatusView> => zoteroStatusSchema,
 }) satisfies InvocationDescriptor['result']
+
+const zoteroRefSchema = z.string().min(1)
 
 export const ZOTERO_REF_CLIENT_PARAM_CODEC = Object.freeze({
   mode: 'strict',
   typeSymbol: ZOTERO_REF_PARAM_TYPE_SYMBOL,
-  create: (): never => {
-    throw new Error(HOST_OWNED_CODEC_MESSAGE)
-  },
+  create: (): z.ZodType<string> => zoteroRefSchema,
 }) satisfies InvocationDescriptor['parameters'][number]['codec']
+
+const zoteroAttachmentLocationSchema = z
+  .object({
+    ref: z.string(),
+    kind: z.enum(['file', 'url']),
+    title: z.string(),
+    contentType: z.string(),
+    path: z.string().optional(),
+    url: z.string().optional(),
+  })
+  .strict()
+  .readonly()
 
 export const ZOTERO_RESOLVE_ATTACHMENT_CLIENT_RESULT_CODEC = Object.freeze({
   mode: 'strict',
   typeSymbol: ZOTERO_RESOLVE_ATTACHMENT_TYPE_SYMBOL,
-  create: (): never => {
-    throw new Error(HOST_OWNED_CODEC_MESSAGE)
-  },
+  create: (): z.ZodType<ZoteroAttachmentLocationView> => zoteroAttachmentLocationSchema,
 }) satisfies InvocationDescriptor['result']
+
+const zoteroDiagnosticsSchema = z
+  .object({
+    entries: z
+      .array(
+        z
+          .object({
+            seq: z.number(),
+            ts: z.number(),
+            level: z.enum(['debug', 'info', 'warn', 'error']),
+            event: z.string(),
+            message: z.string(),
+            count: z.number(),
+            detail: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
+          })
+          .strict()
+          .readonly(),
+      )
+      .readonly(),
+    total: z.number(),
+    truncated: z.boolean(),
+    debug: z.boolean(),
+  })
+  .strict()
+  .readonly()
 
 export const ZOTERO_DIAGNOSTICS_CLIENT_RESULT_CODEC = Object.freeze({
   mode: 'strict',
   typeSymbol: ZOTERO_DIAGNOSTICS_TYPE_SYMBOL,
-  create: (): never => {
-    throw new Error(HOST_OWNED_CODEC_MESSAGE)
-  },
+  create: (): z.ZodType<ZoteroDiagnosticsView> => zoteroDiagnosticsSchema,
 }) satisfies InvocationDescriptor['result']
+
+const zoteroClientErrorReportSchema = z
+  .object({
+    surface: z.string().min(1),
+    message: z.string().min(1),
+    stack: z.string().optional(),
+    componentStack: z.string().optional(),
+  })
+  .strict()
+  .readonly()
 
 export const ZOTERO_CLIENT_ERROR_REPORT_CLIENT_PARAM_CODEC = Object.freeze({
   mode: 'strict',
   typeSymbol: ZOTERO_CLIENT_ERROR_REPORT_TYPE_SYMBOL,
-  create: (): never => {
-    throw new Error(HOST_OWNED_CODEC_MESSAGE)
-  },
+  create: (): z.ZodType<ZoteroClientErrorReport> => zoteroClientErrorReportSchema,
 }) satisfies InvocationDescriptor['parameters'][number]['codec']
+
+const zoteroReportResultSchema = z.object({ seq: z.number() }).strict().readonly()
 
 export const ZOTERO_REPORT_RESULT_CLIENT_RESULT_CODEC = Object.freeze({
   mode: 'strict',
   typeSymbol: ZOTERO_REPORT_RESULT_TYPE_SYMBOL,
-  create: (): never => {
-    throw new Error(HOST_OWNED_CODEC_MESSAGE)
-  },
+  create: (): z.ZodType<ZoteroReportResultView> => zoteroReportResultSchema,
 }) satisfies InvocationDescriptor['result']
 
-/** Client Remote contribution descriptors (structural identity + host-owned codec). */
+/** Client Remote contribution descriptors (structural identity + real zod codec). */
 export const ZOTERO_CLIENT_INVOCATIONS: readonly InvocationDescriptor[] = Object.freeze([
   zoteroStatusInvocation(ZOTERO_STATUS_CLIENT_RESULT_CODEC),
   zoteroResolveAttachmentInvocation(

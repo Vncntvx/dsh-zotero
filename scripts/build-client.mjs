@@ -20,7 +20,8 @@
  *    currently `src/client/**` plus the shared pure surfaces `contract`,
  *    `settings-namespace`, `json`, `ref-grammar`, `export-items`,
  *    `changes-contract`, `browse-rows`, and `evidence-item`).
- * 4. Host-only packages (`zod`, `schemastery`) are refused at resolve time.
+ * 4. Host-only packages (`@deepseek-ai/schemastery`) are refused at resolve time;
+ *    `zod` is externalized as a shared platform module.
  *
  * Gates 3–4 are re-checked against esbuild's metafile on every successful
  * build (one-shot and watch), so minify settings and path comments cannot
@@ -104,18 +105,21 @@ function buildCommitOf() {
  *  value-imports belongs here too, and `bundlePurityPlugin` below fails the
  *  build when a harness module slips into the artifact.
  *
- *  Every OTHER member of PLATFORM_MODULES is covered by one of two rules, so
- *  none of them can be silently inlined: `@deepseek-ai/cordis`, `ui-slots`,
- *  and `ui-dockkit` match the purity plugin's `@deepseek-ai/*` filter, and
- *  `react-dom` is listed here. At dsh 0.2.1-alpha.1 this bundle value-imports
- *  none of them (cordis and ui-slots are type-only), so the entries are
- *  forward cover: the day one becomes a value import it resolves through the
- *  shell's one copy instead of a second copy bundled into the artifact. */
+ *  No PLATFORM_MODULES member can be silently inlined: `@deepseek-ai/cordis`,
+ *  `ui-slots`, and `ui-dockkit` match the purity plugin's `@deepseek-ai/*`
+ *  filter; `react-dom` is listed here as forward cover; and
+ *  `@tanstack/react-virtual` (new on the platform table in dsh 0.2.1-alpha.4)
+ *  is refused by the graph-authority metafile check until a real value import
+ *  externalizes it here. At dsh 0.2.1-alpha.4 this bundle value-imports none
+ *  of them (cordis and ui-slots are type-only), so the day one becomes a
+ *  value import it resolves through the shell's one copy instead of a second
+ *  copy bundled into the artifact. */
 const EXTERNALS = [
   'react',
   'react/jsx-runtime',
   'react-dom',
   'react-dom/client',
+  'zod',
   '@deepseek-ai/dsh-client-store',
   '@deepseek-ai/dsh-client-ui-primitives',
 ]
@@ -123,17 +127,13 @@ const EXTERNALS = [
 /**
  * Harness inline-safety lives in `client-graph-authority.mjs`
  * (`INLINE_SAFE` / `GENERATED_REMOTE` / `VENDORED_LIBRARY`), the counterpart of
- * `packages/client/tsdown.client.ts` at dsh-v0.2.1-alpha.1.
+ * `packages/client/tsdown.client.ts` at dsh-v0.2.1-alpha.4.
  * Packages the host half owns also live there: resolve-time and metafile
  * enforcement share one rule source with the unit tests.
  */
 
 /** Metafile artifact markers that mean host schema materialization leaked in. */
-const HOST_SCHEMA_ARTIFACT_MARKERS = [
-  /\bZodError\b/,
-  /\bnode_modules\/zod\b/,
-  /\bnode_modules\/schemastery\b/,
-]
+const HOST_SCHEMA_ARTIFACT_MARKERS = [/\bnode_modules\/zod\b/, /\bnode_modules\/schemastery\b/]
 
 /** Fails the build when a harness module reaches the artifact that may not be
  *  inlined: a second copy of a shell singleton (`ctx`, the store, the UI
@@ -237,8 +237,9 @@ export function verifyBundle(bundlePath = join(root, 'lib/client.js')) {
     if (marker.test(source)) {
       throw new Error(
         `client bundle carries host-schema marker ${String(marker)} — ` +
-          'client Remote contributions mount structural descriptors only; ' +
-          'host zod codecs belong in src/status-codec.ts',
+          'an inlined zod or schemastery copy would split schema identity ' +
+          'from the host; keep zod external (EXTERNALS / PLATFORM_MODULES) and ' +
+          'host schema factories in src/status-codec.ts',
       )
     }
   }
