@@ -58,6 +58,10 @@ interface FakeApplyWorld {
   eventDefinitions: Array<{ kind: string }>
   /** Disposers run for those definitions. */
   eventDisposes: number
+  /** Session catalog rows the `sessions` service reports, keyed by id. */
+  sessionRows: Record<string, { cwd?: string }>
+  /** Every address the `sidebarRight` service was asked to open. */
+  openResourceCalls: string[]
 }
 
 /** A minimal context standing in for the browser kernel's plugin ctx. */
@@ -88,6 +92,8 @@ function fakeWorld(mountRejects: unknown = undefined): FakeApplyWorld {
     uiDisposes: 0,
     eventDefinitions: [],
     eventDisposes: 0,
+    sessionRows: {},
+    openResourceCalls: [],
   }
   // Effects registered while a fiber's callback runs belong to that fiber, so
   // disposing the fiber unwinds exactly what it registered: the same
@@ -168,6 +174,22 @@ function fakeWorld(mountRejects: unknown = undefined): FakeApplyWorld {
         },
       },
     },
+    // The tab's `openFile` reads both: the session catalog for a Session's
+    // workspace root, and the sidebar to open the resolved address. Both are
+    // plain records here; the address grammar itself is the harness's.
+    sessions: {
+      list: {
+        getSnapshot: () => ({
+          ids: Object.keys(world.sessionRows),
+          byId: world.sessionRows,
+        }),
+      },
+    },
+    sidebarRight: {
+      openResource: (url: string) => {
+        world.openResourceCalls.push(url)
+      },
+    },
     slots: {
       inject: (name: string, register: () => unknown) => {
         const entry: FakeInjectedEntry = {
@@ -211,7 +233,15 @@ async function applyEntry(world: FakeApplyWorld): Promise<() => Promise<void>> {
 
 describe('the browser-half entry', () => {
   it('declares the services it consumes', () => {
-    expect(inject).toEqual(['locale', 'slots', 'remote', 'configForms', 'uiConversation'])
+    expect(inject).toEqual([
+      'locale',
+      'slots',
+      'remote',
+      'configForms',
+      'uiConversation',
+      'sessions',
+      'sidebarRight',
+    ])
   })
 
   it('registers the page dictionaries on apply', async () => {
@@ -437,7 +467,15 @@ describe('the browser-half entry', () => {
     // The UI fiber declared `remote.zotero`, so `ctx.remote.zotero` is a legal
     // service read there: the same shape the harness's own client plugins use.
     expect(world.injectDeps).toEqual([
-      ['remote.zotero', 'locale', 'slots', 'configForms', 'uiConversation'],
+      [
+        'remote.zotero',
+        'locale',
+        'slots',
+        'configForms',
+        'uiConversation',
+        'sessions',
+        'sidebarRight',
+      ],
     ])
     const tab = world.injected.find((entry) => entry.name === 'conversation.view')
     tab?.register()
@@ -495,6 +533,43 @@ describe('the browser-half entry', () => {
         `tab on ${status}`,
       ).toBe(true)
     }
+  })
+
+  it('resolves openFile into a session-scoped address with the session cwd', async () => {
+    const world = fakeWorld()
+    world.sessionRows = { 'sess-1': { cwd: '/ws/project' } }
+    await applyEntry(world)
+    const tab = world.injected.find((entry) => entry.name === 'conversation.view')
+    tab?.register()
+    const registration = world.registered.find((entry) => entry.name === 'conversation.view')
+    const face = registration?.options.inject as () => {
+      openFile: (path: string, sessionId: string) => void
+    }
+    // A path inside the Session's workspace root is stripped of that root, so
+    // the address carries the workspace-relative spelling and stays in the
+    // session scope: the sidebar resolves it against the root it holds for the
+    // Session rather than the filesystem's.
+    face().openFile('/ws/project/storage/paper.pdf', 'sess-1')
+    expect(world.openResourceCalls).toEqual([
+      'dsh-resource://file/session/sess-1/storage/paper.pdf',
+    ])
+  })
+
+  it('opens no address for openFile without a session', async () => {
+    const world = fakeWorld()
+    world.sessionRows = { 'sess-1': { cwd: '/ws/project' } }
+    await applyEntry(world)
+    const tab = world.injected.find((entry) => entry.name === 'conversation.view')
+    tab?.register()
+    const registration = world.registered.find((entry) => entry.name === 'conversation.view')
+    const face = registration?.options.inject as () => {
+      openFile: (path: string, sessionId?: string) => void
+    }
+    // A session-less call cannot build a session-scoped address at all: an
+    // empty id is not a resource any tab type accepts, so the call is dropped
+    // rather than sent to the sidebar as a wiring mistake.
+    face().openFile('/storage/paper.pdf')
+    expect(world.openResourceCalls).toEqual([])
   })
 
   it('skips the tab when the namespace disables webEnabled', async () => {

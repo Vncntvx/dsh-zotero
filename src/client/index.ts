@@ -34,6 +34,13 @@ import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 // `uiConversation` (the event registry the command-input projection uses)
 // merges through the same package.
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+// Type-only: the `sidebarRight` service and the `sessions` session list the
+// tab's `openFile` reads, so the session-scoped file address is built through
+// the official seam instead of a hand-written shape (the same import
+// `packages/client/ui-chat/src/client/apply.ts:10` carries).
+import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
+// Type-only: the `SessionId` brand the session catalog is keyed by.
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { zoteroCommandInputDefinition } from './zotero-command-input.ts'
 import { ZoteroCommandInputView } from './ZoteroCommandInputView.tsx'
 import { ZoteroCommandCard } from './ZoteroCommandCard.tsx'
@@ -43,6 +50,13 @@ import { SourcesTab, type SourcesTabFace } from './components/SourcesTab.tsx'
 import { ZOTERO_REMOTE } from './remote.ts'
 
 import { fileAddressFor } from '@deepseek-ai/dsh-util-workspace-path'
+// The session catalog is keyed by branded id, so the raw string the slot scope
+// carries is branded before the lookup. `brandString` is the official brand
+// primitive (an inline-safe wire package), the same import
+// `packages/client/ui-user-questions/src/client/index.ts:27` makes; the
+// `SessionId` brand helper itself lives on the host `dsh-session` entry, which
+// must never enter the client graph.
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { getAttachmentResolver, setAttachmentResolver } from './actions/attachment-resolver.ts'
 import { getErrorReporter, setErrorReporter } from './actions/error-reporter.ts'
 import { ZoteroCardController } from './zotero-card-controller.ts'
@@ -66,7 +80,9 @@ const NS = 'zotero'
 
 /**
  * Required services (cordis fiber inject): the shared configuration form plus
- * slots/locale/remote and the conversation event registry.
+ * slots/locale/remote, the conversation event registry, and the two services
+ * the tab's `openFile` reads — `sessions` for a Session's workspace root and
+ * `sidebarRight` to open the resolved address in the right sidebar.
  *
  * `remote` is the gateway this plugin mounts its own namespace through
  * (`ctx.remote.$mount`). `remote.zotero` is deliberately **absent** here: a
@@ -78,7 +94,15 @@ const NS = 'zotero'
  * `packages/experimental/client-ui-voice-input/src/client/mount.ts` and
  * `packages/experimental/client-ui-claude-code-mods/src/client/mount.ts`).
  */
-export const inject = ['locale', 'slots', 'remote', 'configForms', 'uiConversation']
+export const inject = [
+  'locale',
+  'slots',
+  'remote',
+  'configForms',
+  'uiConversation',
+  'sessions',
+  'sidebarRight',
+]
 
 /**
  * Register every browser surface: the page dictionaries, the 16 dedicated
@@ -258,20 +282,23 @@ function registerUi(ctx: ClientContext): void {
             inject: (): SourcesTabFace => ({
               status: () => probe(),
               resolveAttachment: (ref: string) => ctx.remote.zotero.resolveAttachment(ref),
-              openFile: (path: string, sessionId?: string) => {
-                const sidebar = ctx.get('sidebarRight') as
-                  { openResource: (url: string) => void } | undefined
-                if (!sidebar) return
-                const sessions = ctx.get('sessions') as
-                  | {
-                      currentId?: { getSnapshot: () => string | undefined }
-                      list?: { getSnapshot: () => { byId: Record<string, { cwd?: string }> } }
-                    }
-                  | undefined
-                const sid = sessionId ?? sessions?.currentId?.getSnapshot?.()
-                const cwd = sid ? sessions?.list?.getSnapshot?.().byId[sid]?.cwd : undefined
-                const url = fileAddressFor(sid ?? '', cwd, path)
-                sidebar.openResource(url)
+              openFile: (path: string, sessionId: string) => {
+                // The face carries the owning session: `conversation.view`
+                // renders in that session's scope, so there is no "current
+                // session" to look up here. Without one the address cannot be
+                // built at all (`fileAddressFor` would emit an empty id that
+                // no resource type accepts), so the call is dropped rather
+                // than sent to the sidebar as a wiring mistake.
+                if (sessionId === undefined) return
+                // The session-scoped address is resolved against the Session's
+                // own workspace root, the same read
+                // `packages/client/ui-chat/src/client/apply.ts:259-262` and
+                // `packages/client/ui-skill/src/client/index.ts:204,208` make.
+                // The catalog is keyed by branded id, so the raw string the
+                // slot scope carries is branded before the lookup.
+                const cwd =
+                  ctx.sessions.list.getSnapshot().byId[brandString<SessionId>(sessionId)]?.cwd
+                ctx.sidebarRight.openResource(fileAddressFor(sessionId, cwd, path))
               },
             }),
           },
@@ -318,7 +345,15 @@ function registerUi(ctx: ClientContext): void {
 export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
   const disposeRemote = await ctx.remote.$mount(ZOTERO_REMOTE)
   const ui = ctx.inject(
-    ['remote.zotero', 'locale', 'slots', 'configForms', 'uiConversation'],
+    [
+      'remote.zotero',
+      'locale',
+      'slots',
+      'configForms',
+      'uiConversation',
+      'sessions',
+      'sidebarRight',
+    ],
     registerUi,
   )
   try {

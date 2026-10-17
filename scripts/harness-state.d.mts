@@ -17,7 +17,10 @@ export declare function checkVersionMap(
 
 /**
  * Rewrite every harness face of a manifest to the pin (mutates `manifest`).
- * Dev/overrides take the exact pin; peers, engines, and harnessRange become >=pin.
+ * Dev/overrides take the exact pin; peers and engines become >=pin. The
+ * manifest carries no other derived face: `dsh.harnessRange` was a
+ * self-invented field the runtime never read, and `collectPinFaceProblems`
+ * refuses it rather than rewriting it.
  * @param manifest - parsed package.json.
  * @param version - the exact new pin.
  * @returns the same manifest.

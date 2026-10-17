@@ -171,6 +171,17 @@ describe('the zotero typert manifest', () => {
     expect(typeof (status?.result as { create?: unknown } | undefined)?.create).toBe('function')
   })
 
+  it('declares exactly the methods the client contribution mounts', async () => {
+    // The host manifest and the browser contribution are two spellings of one
+    // endpoint set. Each method is cross-checked below by identity, but that
+    // per-method shape would still pass if a method were added to only one
+    // side: the set itself is asserted here.
+    const { ZOTERO_REMOTE } = await import('../../src/client/remote.ts')
+    const hostMethods = TYPERT_MANIFEST.invocations.map((invocation) => invocation.method)
+    const clientMethods = ZOTERO_REMOTE.descriptors.map((descriptor) => descriptor.method)
+    expect(clientMethods).toEqual(hostMethods)
+  })
+
   it('materializes the host status schema through create()', () => {
     const status = TYPERT_MANIFEST.invocations.find((invocation) => invocation.method === 'status')
     const result = status?.result as

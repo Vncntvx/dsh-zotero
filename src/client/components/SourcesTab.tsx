@@ -91,8 +91,13 @@ export interface SourcesTabFace {
   status: () => Promise<RemoteResult<ZoteroStatusView>>
   /** Resolve an attachment ref into its local file path or web URL. */
   resolveAttachment?: (ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>
-  /** Open a local file path (e.g. in the right sidebar). */
-  openFile?: (path: string, sessionId?: string) => void
+  /**
+   * Open a local file path in the right sidebar, resolved against the given
+   * Session's workspace root. The session is always the tab's own: the
+   * `conversation.view` slot renders inside that session's scope, so the face
+   * has no session-less form.
+   */
+  openFile?: (path: string, sessionId: string) => void
 }
 
 /** Props the conversation view ring binds for this tab. */
