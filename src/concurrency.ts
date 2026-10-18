@@ -6,7 +6,7 @@
 
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
-import { TOOL_ABORTED_MESSAGE } from './errors.js'
+import { TOOL_ABORTED_MESSAGE } from './abort.js'
 
 /**
  * Map `items` through `worker` with at most `concurrency` calls in flight,

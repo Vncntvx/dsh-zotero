@@ -409,12 +409,14 @@ describe('zotero_delete_library_tags', () => {
     expect(deleted?.search.get('tag')).toBe('methods||legacy')
   })
 
-  it('leaves the counts unknown when the preview listing fails, and names unmatched tags', async () => {
+  it('leaves the counts unknown when the target does not exist, and names unmatched tags', async () => {
     const lane = await bootLane()
     serveCatalog(lane.mock)
-    // The preview listing answers without its Total-Results header, so the
-    // preview gives up; the write path itself still reads a version.
-    serveJson(lane.mock, '/api/users/0/items/top/tags', [], { 'Zotero-Server-ID': SERVER_ID })
+    // The preview listing answers 404, the miss the preview may degrade: the
+    // plan reads "unknown items" and the write path still reads a version.
+    lane.mock.route('GET', '/api/users/0/items/top/tags', (_req, res, helpers) =>
+      helpers.raw(404, { 'Content-Type': 'text/plain' }, 'Not found'),
+    )
     serveJson(lane.mock, '/api/users/0/items/top', [], {
       'Zotero-Server-ID': SERVER_ID,
       'Last-Modified-Version': '88',
@@ -428,5 +430,24 @@ describe('zotero_delete_library_tags', () => {
     )
     expect(result.value).toMatchObject({ kind: 'deleted', deletedTags: ['absent'] })
     expect(lastPlan(lane)).toContain('- "absent": unknown items')
+  })
+
+  it('refuses the call when the preview listing breaks its protocol shape', async () => {
+    const lane = await bootLane()
+    serveCatalog(lane.mock)
+    // A listing without its Total-Results header is a protocol fault, not an
+    // inconclusive target: degrading it to "unknown items" would hide a broken
+    // response behind a plan card the user is asked to approve.
+    serveJson(lane.mock, '/api/users/0/items/top/tags', [], { 'Zotero-Server-ID': SERVER_ID })
+    serveJson(lane.mock, '/api/users/0/items/top', [], {
+      'Zotero-Server-ID': SERVER_ID,
+      'Last-Modified-Version': '88',
+    })
+    const result = await lane.runTool('zotero_delete_library_tags', { tags: ['absent'] })
+    expect(result.isError).toBe(true)
+    expect(JSON.stringify(result)).toContain('ZOTERO_UNEXPECTED')
+    // Nothing was deleted and no plan was ever shown.
+    expect(lane.mock.requests.filter((request) => request.method === 'DELETE')).toHaveLength(0)
+    expect(lastPlan(lane)).toBe('')
   })
 })

@@ -7,6 +7,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import type { ToolDefinition, ToolResult } from '@deepseek-ai/dsh-tools'
 import { type HostLane, setupHostLane } from '../helpers/lanes/host-lane.js'
 import { serveJson } from '../helpers/server/serve.js'
@@ -116,6 +117,60 @@ describe('zotero_delete_library_tags preview', () => {
       WRITE_APPROVAL_UNAVAILABLE_MESSAGE,
     )
     expect(deletes(lane.mock.requests)).toHaveLength(0)
+  })
+
+  it('degrades a missing target to unknown counts instead of refusing the call', async () => {
+    // ZOTERO_NOT_FOUND is one of the two misses the preview may degrade: the
+    // plan renders "unknown items" and the delete still carries its version
+    // precondition, so the call reaches the plan gate rather than failing here.
+    lane.mock.route('GET', '/api/users/0/items/top/tags', (_req, res, helpers) =>
+      helpers.raw(404, { 'Content-Type': 'text/plain' }, 'Not found'),
+    )
+    const result = await lane.runTool('zotero_delete_library_tags', { tags: ['methods'] })
+    expect(result.isError).toBe(true)
+    expect((result.content[0] as { text: string }).text).toContain(
+      WRITE_APPROVAL_UNAVAILABLE_MESSAGE,
+    )
+    expect(deletes(lane.mock.requests)).toHaveLength(0)
+  })
+
+  it('rethrows a preview deadline instead of degrading it to an unknown plan', async () => {
+    // A deadline is a real fault, not an inconclusive preview: it must surface
+    // as ZOTERO_TIMEOUT rather than ask the user to approve a plan that reads
+    // "unknown items".
+    await lane.teardown()
+    lane = await setupHostLane({ writeEnabled: true, timeoutMs: 20 })
+    lane.mock.route('GET', '/api/users/0/items/top/tags', (_req, _res, helpers) => {
+      helpers.delayJson([{ tag: 'methods', numItems: 1 }], 200, {
+        'Total-Results': '1',
+        'Zotero-Server-ID': SERVER_ID,
+      })
+    })
+    const result = await lane.runTool('zotero_delete_library_tags', { tags: ['methods'] })
+    expect(result.isError).toBe(true)
+    expect(JSON.stringify(result)).toContain('ZOTERO_TIMEOUT')
+    expect(JSON.stringify(result)).not.toContain(WRITE_APPROVAL_UNAVAILABLE_MESSAGE)
+  })
+
+  it('reports caller cancellation as the harness abort instead of a plan', async () => {
+    // Cancellation outranks the best-effort degradation: a caller that aborted
+    // mid-listing is never asked to approve the plan it already abandoned.
+    const caller = new AbortController()
+    const tool = definition('zotero_delete_library_tags')
+    lane.mock.route('GET', '/api/users/0/items/top/tags', (_req, res, helpers) => {
+      caller.abort()
+      helpers.raw(404, { 'Content-Type': 'text/plain' }, 'Not found')
+    })
+    const result = await lane.ctx.tools.execute({
+      callId: 'tool-aborted-tags-preview' as never,
+      name: tool.name,
+      arguments: { tags: ['methods'] },
+      signal: caller.signal,
+      agent: {} as never,
+    })
+    expect(result.isError).toBe(true)
+    expect(JSON.stringify(result)).toContain(TOOL_ABORTED)
+    expect(JSON.stringify(result)).not.toContain(WRITE_APPROVAL_UNAVAILABLE_MESSAGE)
   })
 
   it('stops paging once every requested name has been found', async () => {

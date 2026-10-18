@@ -8,7 +8,8 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
-import { ZOTERO_API_DISABLED, ZOTERO_TIMEOUT, TOOL_ABORTED_MESSAGE } from '../../src/errors.js'
+import { TOOL_ABORTED_MESSAGE } from '../../src/abort.js'
+import { ZOTERO_API_DISABLED, ZOTERO_TIMEOUT } from '../../src/errors.js'
 import { expectZoteroError } from '../helpers/error-expectations.js'
 import { MockZotero } from '../helpers/mock-zotero.js'
 import { recordingSink } from '../helpers/recording-sink.js'

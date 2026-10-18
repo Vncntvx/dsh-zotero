@@ -20,7 +20,8 @@ import type {
   JobRegistry,
   JobView,
 } from '@deepseek-ai/dsh-jobs'
-import { errorMessageOf, TOOL_ABORTED_MESSAGE, ZoteroError } from './errors.js'
+import { TOOL_ABORTED_MESSAGE } from './abort.js'
+import { errorMessageOf, ZoteroError } from './errors.js'
 import type { DiagnosticSink } from './diagnostics.js'
 import type { ZoteroProgressEvent } from './types.js'
 

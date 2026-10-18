@@ -18,6 +18,7 @@ import {
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
 import { isRefString } from '../refs.js'
+import { previewOutcomeOf } from './degradable.js'
 import { renderDeclined } from './present.js'
 import {
   DECLINED_OUTPUT_SCHEMA,
@@ -87,8 +88,12 @@ function buildRequest(args: DeleteCollectionArgs): ZoteroDeleteCollectionRequest
 /**
  * Read the blast radius before the plan card: the item count via the
  * collection search scope and the child-collection count via the collections
- * browse. The count is best-effort: an unresolvable name leaves it unknown and the
- * domain reports the miss after approval.
+ * browse. Best-effort only where it is genuinely inconclusive: a target that
+ * does not exist or a name that matches several collections leaves the count
+ * unknown, and the domain reports the miss after approval. Every other failure
+ * (a timeout, a transport fault, a protocol change) is rethrown, and a caller
+ * cancellation reaches the harness as `TOOL_ABORTED` instead of being folded
+ * into a plan (see {@link previewOutcomeOf}).
  */
 async function fetchItemPreview(
   service: ZoteroService,
@@ -111,8 +116,10 @@ async function fetchItemPreview(
       total: searched.total,
       ref: searched.scope.kind === 'collection' ? searched.scope.ref : undefined,
     }
-  } catch {
-    return {}
+  } catch (error) {
+    const outcome = previewOutcomeOf(error, signal, {})
+    if (outcome.kind === 'degrade') return outcome.value
+    throw outcome.error
   }
 }
 
@@ -127,8 +134,10 @@ async function fetchChildPreview(
       signal,
     )
     return browsed.total
-  } catch {
-    return undefined
+  } catch (error) {
+    const outcome = previewOutcomeOf(error, signal, undefined)
+    if (outcome.kind === 'degrade') return outcome.value
+    throw outcome.error
   }
 }
 

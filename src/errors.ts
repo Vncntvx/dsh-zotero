@@ -123,15 +123,11 @@ export const NO_FULLTEXT_MESSAGE =
   'if needed, right-click the attachment in Zotero and choose "Reindex Item". ' +
   'You can also use zotero_attachment to access the original file.'
 
-/**
- * Shown when the caller cancels a tool call. The plugin reports cancellation
- * as the harness's own `TOOL_ABORTED`, so the wording is the harness's. It is
- * spelled once here because every cancellation path in the plugin raises the
- * identical error: the concurrency gate, both HTTP transports, the ask gate,
- * the job runner, scope resolution, and the write-approval and write-auth
- * paths.
- */
-export const TOOL_ABORTED_MESSAGE = 'tool call aborted'
+// The caller-cancellation wording lives in `src/abort.ts`. This module is
+// re-exported wholesale by `src/index.ts`, and the harness owns both the code
+// (`TOOL_ABORTED`) and the canonical `Error: tool call aborted` result it
+// renders. Internal cancellation paths share their spelling through
+// `src/abort.ts` to avoid widening this public surface.
 
 /**
  * Shown when Zotero refuses a version range it cannot reach back to. Zotero's

@@ -19,6 +19,7 @@ import {
 } from '@deepseek-ai/dsh-tools'
 import type { ResolvedConfig } from '../config.js'
 import { writeListEmptyMessage } from '../errors.js'
+import { previewOutcomeOf } from './degradable.js'
 import { renderDeclined } from './present.js'
 import {
   DECLINED_OUTPUT_SCHEMA,
@@ -119,9 +120,12 @@ interface TagRow {
  * listing is exhausted, so the plan card never mistakes a tag beyond the
  * first page for a no-op. A row without a count records `undefined`, since the
  * tag exists but its item count is unproven, and a name absent from the
- * whole listing is reported as a proven no-op. Best-effort: a read that
- * fails leaves every count unknown and the delete still carries its version
- * precondition.
+ * whole listing is reported as a proven no-op. Best-effort only where it is
+ * genuinely inconclusive: a target that does not exist or a name that matches
+ * several tags leaves every count unknown, and the delete still carries its
+ * version precondition. Every other failure is rethrown, and a caller
+ * cancellation reaches the harness as `TOOL_ABORTED` instead of being folded
+ * into a plan (see {@link previewOutcomeOf}).
  */
 async function previewLibraryTags(
   service: ZoteroService,
@@ -157,8 +161,10 @@ async function previewLibraryTags(
       counts,
       ...(unknown.length > 0 ? { unknown } : {}),
     }
-  } catch {
-    return {}
+  } catch (error) {
+    const outcome = previewOutcomeOf(error, signal, {})
+    if (outcome.kind === 'degrade') return outcome.value
+    throw outcome.error
   }
 }
 

@@ -9,10 +9,10 @@ import {
   responseTooLargeMessage,
 } from '../../src/http-client.js'
 import { ZoteroWriteHttpClient, ZoteroWriteCommitUnknownError } from '../../src/write-http.js'
+import { TOOL_ABORTED_MESSAGE } from '../../src/abort.js'
 import {
   API_DISABLED_MESSAGE,
   SERVER_MISMATCH_MESSAGE,
-  TOOL_ABORTED_MESSAGE,
   WRITE_AUTH_DENIED_MESSAGE,
   WRITE_AUTH_SHAPE_MESSAGE,
   WRITE_BATCH_REFUSED_MESSAGE,

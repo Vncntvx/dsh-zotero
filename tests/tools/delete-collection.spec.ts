@@ -7,6 +7,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import type { ToolDefinition, ToolResult } from '@deepseek-ai/dsh-tools'
 import { type HostLane, setupHostLane } from '../helpers/lanes/host-lane.js'
 import { approvalLane, resetApprovalStub, ApprovingQuestions } from '../helpers/approval-stub.js'
@@ -67,10 +68,16 @@ describe('zotero_delete_collection argument refusals', () => {
 })
 
 describe('zotero_delete_collection preview', () => {
-  it('leaves both counts unknown when the preview reads fail, then stops at the plan gate', async () => {
-    // No preview routes are registered: the item search and the child listing
-    // both fail, and the plan the card would show carries `unknown` for both
-    // counts rather than a refusal.
+  it('leaves both counts unknown when the target does not exist, then stops at the plan gate', async () => {
+    // The item search and the child listing both answer 404, the two misses the
+    // preview is allowed to degrade: the plan the card would show carries
+    // `unknown` for both counts rather than a refusal.
+    lane.mock.route('GET', '/api/users/0/collections/ABCD1234/items/top', (_req, res, helpers) =>
+      helpers.raw(404, { 'Content-Type': 'text/plain' }, 'Not found'),
+    )
+    lane.mock.route('GET', '/api/users/0/collections/ABCD1234/collections', (_req, res, helpers) =>
+      helpers.raw(404, { 'Content-Type': 'text/plain' }, 'Not found'),
+    )
     const result = await lane.runTool('zotero_delete_collection', {
       collection: COLLECTION_REF,
     })
@@ -79,6 +86,115 @@ describe('zotero_delete_collection preview', () => {
       WRITE_APPROVAL_UNAVAILABLE_MESSAGE,
     )
     expect(deletes(lane.mock.requests)).toHaveLength(0)
+  })
+
+  it('rethrows a non-degradable child-listing failure instead of rendering unknown', async () => {
+    // The child-collection read answers 500 — a protocol/server fault, not an
+    // inconclusive target — so the preview must not fold it into an "unknown"
+    // radius and ask the user to approve the delete anyway.
+    const headers = { 'Zotero-Server-ID': SERVER_ID }
+    lane.mock.route('GET', '/api/users/0/collections/ABCD1234', (_req, res, helpers) =>
+      helpers.json(
+        { key: 'ABCD1234', version: 3, data: { key: 'ABCD1234', name: 'Target' } },
+        headers,
+      ),
+    )
+    lane.mock.route('GET', '/api/users/0/collections/ABCD1234/collections', (_req, res, helpers) =>
+      helpers.raw(500, { 'Content-Type': 'text/plain' }, 'boom'),
+    )
+    const result = await lane.runTool('zotero_delete_collection', {
+      collection: COLLECTION_REF,
+    })
+    expect(result.isError).toBe(true)
+    expect(JSON.stringify(result)).toContain('ZOTERO_UNEXPECTED')
+    expect(JSON.stringify(result)).not.toContain(WRITE_APPROVAL_UNAVAILABLE_MESSAGE)
+    expect(deletes(lane.mock.requests)).toHaveLength(0)
+  })
+
+  it('degrades an ambiguous name to unknown counts instead of refusing the call', async () => {
+    // Two collections share the requested name: the scope resolver reports
+    // ZOTERO_SCOPE_AMBIGUOUS, the other miss the preview may degrade.
+    lane.mock.route('GET', '/api/users/0/collections', (_req, res, helpers) => {
+      helpers.json(
+        [
+          { key: 'COLL1111', data: { name: 'My Target' } },
+          { key: 'COLL2222', data: { name: 'My Target' } },
+        ],
+        { 'Total-Results': '2', 'Zotero-Server-ID': SERVER_ID },
+      )
+    })
+    const result = await lane.runTool('zotero_delete_collection', { collection: 'My Target' })
+    expect(result.isError).toBe(true)
+    expect((result.content[0] as { text: string }).text).toContain(
+      WRITE_APPROVAL_UNAVAILABLE_MESSAGE,
+    )
+    expect(deletes(lane.mock.requests)).toHaveLength(0)
+  })
+
+  it('rethrows a preview deadline instead of degrading it to an unknown plan', async () => {
+    // A deadline is a real fault, not an inconclusive preview: the call must
+    // surface ZOTERO_TIMEOUT rather than ask the user to approve a plan whose
+    // radius reads "unknown".
+    await lane.teardown()
+    lane = await setupHostLane({ writeEnabled: true, timeoutMs: 20 })
+    lane.mock.route('GET', '/api/users/0/collections/ABCD1234', (_req, _res, helpers) => {
+      helpers.delayJson({ key: 'ABCD1234', data: { name: 'Target' } }, 200, {
+        'Zotero-Server-ID': SERVER_ID,
+      })
+    })
+    const result = await lane.runTool('zotero_delete_collection', {
+      collection: COLLECTION_REF,
+    })
+    expect(result.isError).toBe(true)
+    expect(JSON.stringify(result)).toContain('ZOTERO_TIMEOUT')
+    expect(JSON.stringify(result)).not.toContain(WRITE_APPROVAL_UNAVAILABLE_MESSAGE)
+  })
+
+  it('reports caller cancellation as the harness abort instead of a plan', async () => {
+    // The caller cancelled mid-preview: cancellation outranks the best-effort
+    // degradation, so the user is never asked to approve a plan for a call that
+    // was already abandoned, and the harness reports its own TOOL_ABORTED.
+    const caller = new AbortController()
+    const definition = lane.tool('zotero_delete_collection')!
+    lane.mock.route('GET', '/api/users/0/collections/ABCD1234', (req, res, helpers) => {
+      caller.abort()
+      helpers.raw(404, { 'Content-Type': 'text/plain' }, 'Not found')
+    })
+    const result = await lane.ctx.tools.execute({
+      callId: 'tool-aborted-preview' as never,
+      name: definition.name,
+      arguments: { collection: COLLECTION_REF },
+      signal: caller.signal,
+      agent: {} as never,
+    })
+    expect(result.isError).toBe(true)
+    expect(JSON.stringify(result)).toContain(TOOL_ABORTED)
+    expect(JSON.stringify(result)).not.toContain(WRITE_APPROVAL_UNAVAILABLE_MESSAGE)
+  })
+
+  it('reports the harness abort even when the late failure was a mere miss', async () => {
+    // The harder cancellation shape: the caller's signal is already aborted
+    // when the preview read fails with something *other* than a miss — here a
+    // 500, which the degrade rule would rethrow as a domain error. The abort
+    // still wins, because the harness must render its own TOOL_ABORTED for a
+    // cancelled call, and the 500 rides along as the error's cause.
+    const caller = new AbortController()
+    caller.abort()
+    const definition = lane.tool('zotero_delete_collection')!
+    lane.mock.route('GET', '/api/users/0/collections/ABCD1234', (_req, res, helpers) =>
+      helpers.raw(500, { 'Content-Type': 'text/plain' }, 'boom'),
+    )
+    const result = await lane.ctx.tools.execute({
+      callId: 'tool-late-fault-after-abort' as never,
+      name: definition.name,
+      arguments: { collection: COLLECTION_REF },
+      signal: caller.signal,
+      agent: {} as never,
+    })
+    expect(result.isError).toBe(true)
+    expect(JSON.stringify(result)).toContain(TOOL_ABORTED)
+    // A protocol fault must not be laundered into an approval prompt either.
+    expect(JSON.stringify(result)).not.toContain(WRITE_APPROVAL_UNAVAILABLE_MESSAGE)
   })
 
   it('states both counts when the preview reads succeed, and unknown when they do not', () => {

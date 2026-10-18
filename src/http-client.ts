@@ -10,6 +10,7 @@
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { deadline, timeoutOf } from '@deepseek-ai/dsh-timeout'
 import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
+import { TOOL_ABORTED_MESSAGE } from './abort.js'
 import { acquireSlot, ConcurrencyGate } from './concurrency.js'
 import type { DiagnosticSink } from './diagnostics.js'
 import { logTransportFailure, type TransportFailureEvents } from './transport-diagnostics.js'
@@ -23,7 +24,6 @@ import {
   NOT_RUNNING_MESSAGE,
   RANGE_UNSUPPORTED_MESSAGE,
   SERVER_MISMATCH_MESSAGE,
-  TOOL_ABORTED_MESSAGE,
   ZOTERO_API_DISABLED,
   ZOTERO_API_VERSION,
   ZOTERO_INVALID_ARGUMENT,

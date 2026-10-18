@@ -50,8 +50,8 @@ import type {} from '@deepseek-ai/dsh-user-approval'
 import type { ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 // Type-only: brings the `ctx.userQuestions` Context merge into this program.
 import type {} from '@deepseek-ai/dsh-user-questions'
+import { TOOL_ABORTED_MESSAGE } from './abort.js'
 import {
-  TOOL_ABORTED_MESSAGE,
   WRITE_APPROVAL_UNAVAILABLE_MESSAGE,
   ZOTERO_WRITE_APPROVAL_UNAVAILABLE,
   ZoteroError,

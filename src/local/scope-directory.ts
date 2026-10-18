@@ -16,9 +16,9 @@ import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import { ZOTERO_SERVER_ID_HEADER } from '../constants.js'
 import { awaitSharedOperation, type SharedOperation } from '../concurrency.js'
 import type { DiagnosticSink } from '../diagnostics.js'
+import { TOOL_ABORTED_MESSAGE } from '../abort.js'
 import {
   isNotFoundError,
-  TOOL_ABORTED_MESSAGE,
   ZOTERO_INVALID_ARGUMENT,
   ZOTERO_INVALID_REF,
   ZOTERO_NOT_FOUND,

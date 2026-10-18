@@ -15,11 +15,11 @@ import {
   NEWER_ZOTERO_ROUTE_MESSAGE,
 } from '../../src/http-client.js'
 import { ZOTERO_LOCAL_API_VERSION } from '../../src/constants.js'
+import { TOOL_ABORTED_MESSAGE } from '../../src/abort.js'
 import {
   API_DISABLED_MESSAGE,
   NOT_RUNNING_MESSAGE,
   SERVER_MISMATCH_MESSAGE,
-  TOOL_ABORTED_MESSAGE,
   ZOTERO_API_DISABLED,
   ZOTERO_API_VERSION,
   ZOTERO_INVALID_ARGUMENT,

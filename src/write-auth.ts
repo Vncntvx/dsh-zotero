@@ -41,7 +41,7 @@ import {
 } from '@deepseek-ai/dsh-credentials'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
-import { TOOL_ABORTED_MESSAGE } from './errors.js'
+import { TOOL_ABORTED_MESSAGE } from './abort.js'
 import { asRecord, asString } from './json.js'
 import { awaitSharedOperation, type SharedOperation } from './concurrency.js'
 import { ZoteroWriteHttpClient } from './write-http.js'
