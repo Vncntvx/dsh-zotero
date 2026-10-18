@@ -9,7 +9,7 @@ dsh-zotero 是面向 DeepSeek Harness 的 Zotero 插件，让 Agent 能够搜索
 - Zotero ≥ 7 桌面版已安装（读取需 Zotero ≥ 7，写入需 Zotero 10）
 - 本地 API 已启用：**设置 → 高级 → 勾选“允许此计算机上的其他应用程序与 Zotero 通信”**
 - Node.js ≥ 22.19 或 ≥ 24
-- 宿主 dsh >= 0.2.1-alpha.2
+- 宿主 dsh >= 0.2.1-rc.2
 
 版本对照：
 
@@ -35,6 +35,7 @@ dsh-zotero 是面向 DeepSeek Harness 的 Zotero 插件，让 Agent 能够搜索
 | 0.13.0-alpha.1 | 0.2.1-alpha.1               |
 | 0.13.0-alpha.2 | 0.2.1-alpha.2               |
 | 0.13.0-alpha.3 | 0.2.1-alpha.2               |
+| 0.13.0         | 0.2.1-rc.2                  |
 
 ## 安装插件
 

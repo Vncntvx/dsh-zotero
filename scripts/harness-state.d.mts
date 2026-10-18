@@ -82,6 +82,31 @@ export interface ArtifactProblems {
 }
 
 /**
+ * Every vendored framework dependency whose declared floor is not the version
+ * the sibling checkout carries, plus every vendored package named in
+ * `overrides`.
+ *
+ * Vendored packages (`cordis`, `cosmokit`, `schemastery`, `cordis-plugin-*`)
+ * are published from the sibling's `vendor/` tree and version independently of
+ * the harness release, so the pin does not cover them. A `^X.Y.Z-alpha.N` floor
+ * resolves to the prerelease even after upstream ships `X.Y.Z`, and the profile
+ * then loads two copies of the same framework package. The floor agreement is
+ * only expressible in `dependencies` / `devDependencies` / `peerDependencies`,
+ * so an `overrides` entry naming a vendored package is a finding on its own:
+ * every other check skips non-`dsh-*` names, and nothing else would catch it.
+ *
+ * A missing or empty sibling checkout yields no findings: nothing was installed
+ * to compare against, which is a note rather than a failure.
+ * @param harnessRoot - the sibling harness checkout root.
+ * @param manifest - parsed package.json.
+ * @returns human-readable problems; empty when every vendored dependency agrees.
+ */
+export declare function collectVendorProblems(
+  harnessRoot: string,
+  manifest: Record<string, unknown>,
+): string[]
+
+/**
  * Classify every imported upstream specifier against the sibling checkout's
  * installed artifacts, on both freshness axes: declarations versus `src`, and
  * the browser runtime versus its own client declarations.
