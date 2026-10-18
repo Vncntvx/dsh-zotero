@@ -82,7 +82,7 @@ const MAX_SPEC_LINES = 733
  * it tests rather than by when it was written. Nested lanes such as
  * `client/sources` are covered by their first segment.
  */
-const SPEC_LANES = ['unit', 'local', 'tools', 'host', 'client', 'integration']
+const SPEC_LANES = ['unit', 'local', 'tools', 'host', 'client', 'integration', 'scholarly']
 
 const failures = []
 

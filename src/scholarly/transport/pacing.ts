@@ -1,0 +1,102 @@
+/**
+ * Per-host request pacing: at most one request in flight per host, spaced by
+ * that host's declared interval.
+ *
+ * Intervals come from `hosts.ts`; this module owns no host list of its own.
+ *
+ * @module dsh-zotero/scholarly/transport/pacing
+ */
+
+import { intervalForHost } from './hosts.js'
+
+/**
+ * Sleep that a caller's cancellation can cut short.
+ * @param ms - milliseconds to wait.
+ * @param signal - the caller's cancellation.
+ * @returns resolution after the wait, or rejection on cancellation.
+ */
+export function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted === true) {
+      reject(signal.reason ?? new Error('Operation aborted'))
+      return
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort)
+      resolve()
+    }, ms)
+
+    const onAbort = (): void => {
+      clearTimeout(timer)
+      reject(signal?.reason ?? new Error('Operation aborted'))
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
+  })
+}
+
+/**
+ * Serializes requests per host and spaces them by the host's interval.
+ *
+ * The per-host tail is a promise chain, but every link resolves: a rejected
+ * link would poison the host for the rest of the process, so the release step
+ * is reached through `finally` and the chain never carries a rejection.
+ */
+export class HostPacer {
+  private readonly tails = new Map<string, Promise<void>>()
+  private readonly lastRequestTime = new Map<string, number>()
+  private readonly overrides: Readonly<Record<string, number>>
+
+  /**
+   * @param overrides - per-host interval overrides; a test sets `0` to disable
+   *   spacing without touching the production table.
+   */
+  constructor(overrides: Record<string, number> = {}) {
+    this.overrides = overrides
+  }
+
+  /**
+   * The interval this pacer applies to one host.
+   * @param host - the URL host, possibly with a port.
+   * @returns the interval in milliseconds; `0` means unspaced.
+   */
+  intervalOf(host: string): number {
+    const override = this.overrides[host]
+    if (override !== undefined) return override
+    return intervalForHost(host)
+  }
+
+  /**
+   * Wait until this host may be called, then reserve the slot.
+   * @param host - the URL host.
+   * @param signal - the caller's cancellation; aborting rejects instead of
+   *   waiting for the slot.
+   * @returns resolution once the caller may issue its request.
+   */
+  async pace(host: string, signal?: AbortSignal): Promise<void> {
+    const interval = this.intervalOf(host)
+    if (interval <= 0) return
+
+    const previous = this.tails.get(host) ?? Promise.resolve()
+    let release = (): void => {}
+    const held = new Promise<void>((resolve) => {
+      release = resolve
+    })
+
+    // Every link resolves, so one abandoned wait cannot reject the host's chain.
+    this.tails.set(
+      host,
+      previous.then(() => held).catch(() => {}),
+    )
+
+    await previous
+
+    try {
+      const last = this.lastRequestTime.get(host) ?? 0
+      const waitTime = interval - (Date.now() - last)
+      if (waitTime > 0) await abortableSleep(waitTime, signal)
+    } finally {
+      this.lastRequestTime.set(host, Date.now())
+      release()
+    }
+  }
+}

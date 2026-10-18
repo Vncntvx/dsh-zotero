@@ -1,0 +1,245 @@
+/**
+ * The `scholarly_search` tool: multi-source literature retrieval across 6 academic indexes.
+ * Supports intelligent routing, weighted RRF fusion, collision check against Zotero, and background promotion.
+ * @module dsh-zotero/scholarly/tools/search
+ */
+
+import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
+import {
+  formatPaperItem,
+  fuseRankedLists,
+  postProcessRanked,
+  type RankedSourceList,
+} from '../fusion.js'
+import { routeQuery } from '../router.js'
+import { SOURCE_SEARCHERS } from '../sources/index.js'
+import type { ScholarlyHttp } from '../transport/http.js'
+import {
+  SCHOLARLY_SOURCE_IDS,
+  SCHOLARLY_SOURCE_NAMES,
+  type ScholarlyKeys,
+  type ScholarlyQuery,
+} from '../types.js'
+import { attachLibraryStatus, type ZoteroServiceLike } from '../zotero-link.js'
+
+export interface ScholarlyToolHost {
+  http: ScholarlyHttp
+  keys(): ScholarlyKeys
+  maxResults(): number
+  zoteroService?(): ZoteroServiceLike | undefined
+}
+
+/**
+ * The one output shape every scholarly tool declares: a text body.
+ *
+ * There is deliberately no `presentationMeta`. It projected a
+ * `kind: 'scholarly-papers'` card that no client component registered, so the
+ * projection was persisted into every session log and read by nobody — and it
+ * carried an unbounded `papers` array past the 8 KiB budget the host's own
+ * projectors respect. A specialized card is a `tool.call.toolview`
+ * registration plus a component and a locale dictionary; until that exists,
+ * the generic card is the honest surface.
+ */
+export const SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR = {
+  schema: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      text: { type: 'string', required: true },
+    },
+  },
+  render: (_args: unknown, value: { text: string }) => [
+    { type: 'text' as const, text: value.text },
+  ],
+} as const
+
+const CITE_HINT = 'Tip: Cite a paper from these results using its title link or ID.'
+
+export function createScholarlySearchTool(host: ScholarlyToolHost): ToolDefinition {
+  return defineTool({
+    name: 'scholarly_search',
+    description:
+      'Search global scholarly literature across arXiv, OpenAlex, Crossref, Semantic Scholar, PubMed, Europe PMC, and DBLP. ' +
+      'Deduplicates records across indexes into unified entries with citations, open-access status, and local Zotero library markers. ' +
+      'Use this for academic papers, preprints, and journals (not general web pages).',
+    parameters: {
+      query: {
+        type: 'string',
+        required: true,
+        description: 'Topic keywords, a paper title, or author with topic in English.',
+      },
+      sources: {
+        type: 'array',
+        items: { type: 'string', enum: [...SCHOLARLY_SOURCE_IDS] },
+        description:
+          'Optional: limit to specific indexes. Default routes automatically by topic keyword semantics.',
+      },
+      year_from: { type: 'integer', description: 'Published in this year or later.' },
+      year_to: { type: 'integer', description: 'Published in this year or earlier.' },
+      open_access: { type: 'boolean', description: 'Only return papers with free full text.' },
+      sort: {
+        type: 'string',
+        enum: ['relevance', 'date', 'citations'],
+        default: 'relevance',
+        description: 'Result order: relevance, date (newest first), citations (most cited first).',
+      },
+      categories: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'arXiv categories like cs.CL, stat.ML (applies to arXiv).',
+      },
+      limit: { type: 'integer', default: 8, description: 'How many papers to return (default 8).' },
+      abstract: {
+        type: 'string',
+        enum: ['none', 'snippet', 'full'],
+        default: 'snippet',
+        description: 'How much abstract to display in the text summary.',
+      },
+    },
+    output: SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR,
+    isConcurrencySafe: () => true,
+    timeoutMs: 180_000,
+    async execute(args, exec): Promise<{ text: string }> {
+      const input = args as {
+        query: string
+        sources?: string[]
+        year_from?: number
+        year_to?: number
+        open_access?: boolean
+        sort?: 'relevance' | 'date' | 'citations'
+        categories?: string[]
+        limit?: number
+        abstract?: 'none' | 'snippet' | 'full'
+      }
+
+      const text = input.query.trim()
+      if (!text) throw new Error('query parameter cannot be empty.')
+
+      const limit = Math.min(
+        host.maxResults(),
+        Math.max(1, input.limit ?? Math.min(8, host.maxResults())),
+      )
+      const selectedSources = routeQuery(text, input.sources)
+      const thisYear = new Date().getFullYear()
+      const isDateSort = input.sort === 'date'
+
+      const yearFrom = input.year_from ?? (isDateSort ? thisYear - 1 : undefined)
+      const yearTo =
+        yearFrom === undefined && input.year_to === undefined
+          ? undefined
+          : Math.min(input.year_to ?? thisYear + 1, thisYear + 1)
+
+      const queryObj: ScholarlyQuery = {
+        query: text,
+        sort: input.sort === 'citations' ? 'relevance' : (input.sort ?? 'relevance'),
+        limit: Math.min(
+          50,
+          input.sort === 'citations'
+            ? limit * 4
+            : selectedSources.length === 1
+              ? limit
+              : Math.max(5, Math.ceil(limit * 0.8)),
+        ),
+        ...(yearFrom !== undefined ? { yearFrom } : {}),
+        ...(yearTo !== undefined ? { yearTo } : {}),
+        ...(input.open_access ? { openAccess: true } : {}),
+        ...(input.categories && input.categories.length > 0
+          ? { categories: input.categories }
+          : {}),
+      }
+
+      const keys = host.keys()
+      const failedSources: string[] = []
+
+      const sourceResults = await Promise.all(
+        selectedSources.map(async (sourceId) => {
+          try {
+            // Total over `ScholarlySourceId`: the registry and the id union are
+            // declared together, so this lookup cannot be undefined.
+            const searcher = SOURCE_SEARCHERS[sourceId]
+            const queryForSource =
+              isDateSort && sourceId !== 'arxiv'
+                ? { ...queryObj, sort: 'relevance' as const, limit: Math.min(50, limit * 3) }
+                : queryObj
+
+            const papers = await searcher(queryForSource, host.http, keys, exec.signal)
+            const weight =
+              sourceId === 'arxiv' || sourceId === 'dblp'
+                ? 1.2
+                : sourceId === 'pubmed' || sourceId === 'europepmc'
+                  ? 1.2
+                  : 1.0
+
+            return {
+              sourceId,
+              weight,
+              papers,
+            } satisfies RankedSourceList
+          } catch (error) {
+            if (exec.signal.aborted) throw error
+            const msg = error instanceof Error ? error.message : String(error)
+            failedSources.push(`${SCHOLARLY_SOURCE_NAMES[sourceId]} (${msg})`)
+            return {
+              sourceId,
+              weight: 1.0,
+              papers: [],
+            } satisfies RankedSourceList
+          }
+        }),
+      )
+
+      // 1. Fuse multiple ranked lists with Match Lattice & Weighted RRF
+      let papers = fuseRankedLists(sourceResults)
+
+      // 2. Post-process rankings (title exact match, date/citation sorting, OA filter, limit slice)
+      papers = postProcessRanked(papers, { ...queryObj, limit, sort: input.sort ?? 'relevance' })
+
+      // 3. Cross-component collision check against local Zotero library (Top N only)
+      const zotero = host.zoteroService?.()
+      let libraryNotice = ''
+      if (zotero && papers.length > 0) {
+        const library = await attachLibraryStatus(papers, zotero)
+        if (library.failed > 0) {
+          // An unrun lookup is not evidence of absence: say so, instead of
+          // leaving the hit unmarked where a reader would infer "not held".
+          libraryNotice =
+            `\nLibrary status unavailable for ${library.failed} of ${papers.length} results ` +
+            `(local Zotero lookup failed).`
+        }
+      }
+
+      if (papers.length === 0) {
+        const attempted = selectedSources.map((s) => SCHOLARLY_SOURCE_NAMES[s]).join(', ')
+        const failureNotice =
+          failedSources.length > 0 ? `\nUnanswered sources: ${failedSources.join('; ')}.` : ''
+        return {
+          text: `No papers found for "${text}" across ${attempted}.${failureNotice} Try fewer or alternative keywords.`,
+        }
+      }
+
+      const answeredSources = selectedSources
+        .filter((_, idx) => sourceResults[idx]!.papers.length > 0)
+        .map((s) => SCHOLARLY_SOURCE_NAMES[s])
+
+      const abstractChars = input.abstract === 'none' ? 0 : input.abstract === 'full' ? 4000 : 300
+      const summaryHeader = `${papers.length} papers found for "${text}" (via ${answeredSources.join(
+        ', ',
+      )}).`
+      const failureNote = failedSources.length > 0 ? `\nNotice: ${failedSources.join('; ')}.` : ''
+
+      const formattedLines = papers
+        .map((p, idx) => formatPaperItem(p, idx + 1, abstractChars))
+        .join('\n\n')
+
+      return {
+        text: `${summaryHeader}${failureNote}${libraryNotice}\n${CITE_HINT}\n\n${formattedLines}`,
+      }
+    },
+    presentCall: (args) => ({
+      card: 'generic',
+      title: 'Search scholarly literature',
+      rawInput: String((args as { query?: string }).query ?? ''),
+      kind: 'search',
+    }),
+  })
+}
