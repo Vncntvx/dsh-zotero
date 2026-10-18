@@ -18,7 +18,6 @@ import {
   ZOTERO_REMOTE_PACKAGE,
   ZOTERO_REPORT_RESULT_TYPE_SYMBOL,
   ZOTERO_RESOLVE_ATTACHMENT_TYPE_SYMBOL,
-  ZOTERO_STATUS_ENDPOINT,
   ZOTERO_STATUS_INVOCATION_ID,
   ZOTERO_STATUS_INVOCATION_KIND,
   ZOTERO_STATUS_METHOD,
@@ -32,7 +31,10 @@ describe('zotero Remote contract layering', () => {
   it('shares package and structural endpoint identity across halves', () => {
     expect(ZOTERO_REMOTE.package).toBe(ZOTERO_REMOTE_PACKAGE)
     expect(TYPERT_MANIFEST.package).toBe(ZOTERO_REMOTE_PACKAGE)
-    expect(ZOTERO_STATUS_ENDPOINT).toMatchObject({
+    // Both halves build the descriptor through the factory, so its structural
+    // identity is asserted on a real descriptor rather than on a second,
+    // hand-maintained copy of the same fields.
+    expect(zoteroStatusInvocation(ZOTERO_STATUS_CLIENT_RESULT_CODEC)).toMatchObject({
       id: ZOTERO_STATUS_INVOCATION_ID,
       service: ZOTERO_STATUS_SERVICE_KEY,
       namespace: 'zotero',
@@ -89,8 +91,10 @@ describe('zotero Remote contract layering', () => {
     expect(probe.service).toBe(ZOTERO_STATUS_SERVICE_KEY)
     expect(probe.namespace).toBe('zotero')
     expect(probe.method).toBe(ZOTERO_STATUS_METHOD)
-    expect(probe.invocation).not.toBe(ZOTERO_STATUS_ENDPOINT.invocation)
-    expect(probe.parameters).not.toBe(ZOTERO_STATUS_ENDPOINT.parameters)
+    // Two builds never share the mutable structural members.
+    const other = zoteroStatusInvocation(ZOTERO_STATUS_CLIENT_RESULT_CODEC)
+    expect(probe.invocation).not.toBe(other.invocation)
+    expect(probe.parameters).not.toBe(other.parameters)
     expect(probe.invocation).toEqual({ kind: ZOTERO_STATUS_INVOCATION_KIND })
     expect(probe.parameters).toEqual([])
   })

@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { CommandId } from '@deepseek-ai/dsh-commands'
-import type { CommandInvocation } from '@deepseek-ai/dsh-commands'
 import { setupHostLane, type HostLane } from '../helpers/lanes/host-lane.js'
+import { STUB_EVENT_SEQ, stubCommandInvocation } from '../helpers/stub-commands.js'
 import { formatStatus } from '../../src/command.js'
 import { ZOTERO_WRITE_TOOL_NAMES } from '../../src/constants.js'
 import { WRITE_DISABLED_SENTENCE, WRITE_POLICY_SENTENCE } from '../../src/prompt.js'
@@ -25,12 +24,24 @@ describe('the write state across the status surfaces', () => {
       helpers.json({}, { 'Zotero-Server-ID': 'srv-status-write1', 'X-Zotero-Version': '10.0.2' }),
     )
     const definition = lane.stub!.registered[0]!
-    const result = (await definition.handler(invocation('status'))) as {
+    const call = stubCommandInvocation('status')
+    const result = (await definition.handler(call)) as {
       kind: string
       text?: string
+      sourceEventSeq?: number
     }
     expect(result.kind).toBe('success')
     expect(result.text).toContain('Write: enabled (no key yet)')
+    // The structured status travels as its own durable event, and the handler
+    // names that event's seq so the client card reads the projection instead
+    // of re-parsing the text. Both halves are the contract.
+    expect(call.appended).toHaveLength(1)
+    const [event] = call.appended
+    expect(event?.type).toBe('zotero/status')
+    const data = event?.data as { version: number; status: { connected: boolean } }
+    expect(data.version).toBe(1)
+    expect(data.status.connected).toBe(true)
+    expect(result.sourceEventSeq).toBe(STUB_EVENT_SEQ)
   })
 
   it('states the write policy in the prompt only while writes are enabled', async () => {
@@ -128,13 +139,3 @@ describe('formatStatus write line', () => {
     expect(lines[1]).toBe('Local API: 127.0.0.1:23119')
   })
 })
-
-function invocation(command: string): CommandInvocation {
-  return {
-    commandId: CommandId('test-command'),
-    agent: {} as never,
-    rawInput: command,
-    signal: new AbortController().signal,
-    attachments: [],
-  }
-}

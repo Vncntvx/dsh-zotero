@@ -10,48 +10,73 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { DisclosureRow, IconRefreshOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { CommandRowOwnerProps } from '@deepseek-ai/dsh-client-ui-chat/client'
-import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ZoteroStatusView } from '../contract.ts'
 import { DiagnosisBox } from './components/DiagnosisBox.tsx'
 import { useZoteroProbe } from './components/useZoteroProbe.ts'
 import { writeStatusLabel } from './components/write-label.ts'
-import { parseZoteroStatusText, type ParsedZoteroStatus } from './status-parser.ts'
+// Type-only: the `SessionProjectionMap` entry that makes
+// `useProjection('zoteroStatus')` resolve. The merge lives in a
+// dependency-free host module the client graph admits.
+import type {} from '../projection-keys.ts'
+
 import { formatCommandLine } from './zotero-command-input.ts'
 import css from './ZoteroCommandCard.module.css'
 
-export interface ZoteroCommandCardProps extends CommandRowOwnerProps {
+/**
+ * The inject face this card declares: the translate function plus the optional
+ * live probe. The projected snapshot is *not* a face member — it arrives with
+ * the slot's standard kit (`useProjection`), so a composition without the
+ * projection registry still renders the card with the probe and the command
+ * text as its only sources.
+ */
+export interface ZoteroCommandCardFace {
   readonly t: TranslateNS<'zotero'>
   readonly probe?: () => Promise<RemoteResult<ZoteroStatusView>>
 }
 
-/**
- * The status facts a live probe and the parsed command text both carry, and so
- * the ones that can be swapped between them. `ParsedZoteroStatus` adds
- * `serverIdUnreported` and `rawText`, and `ZoteroStatusView` adds
- * `providerId`; neither is a probe-vs-text choice, since one is derived (below)
- * and the other identifies the source.
- */
+export type ZoteroCommandCardProps = PropsRuntime<'conversation.chat.commandview'> &
+  ZoteroCommandCardFace
+
+/** The status facts a live probe and the projected snapshot both carry. */
 type SharedStatusKey =
   'connected' | 'endpoint' | 'zoteroVersion' | 'apiVersion' | 'schemaVersion' | 'serverId' | 'write'
 
-/** One fact, from whichever source won. */
-type SharedStatusFact<K extends SharedStatusKey> =
-  ZoteroStatusView[K] | ParsedZoteroStatus[K] | undefined
-
 /**
  * Dedicated result card for `/zotero` command invocations.
+ *
+ * Structured facts come from the `zoteroStatus` session projection the host
+ * half registers and the command handler points at with `sourceEventSeq`; the
+ * command text is rendered verbatim as the human answer and is never parsed.
+ * A live re-probe outranks the projection, because it is the newer answer, and
+ * a session that never ran the command simply has no projection.
+ *
+ * `useProjection` arrives with the slot's standard kit rather than through
+ * {@link ZoteroCommandCardFace}, and its three answers degrade in order:
+ * `undefined` means the composition has no projection registry at all (the
+ * host unit unmounted), `null` means the session never recorded a probe, and a
+ * view is a real snapshot. Neither of the first two is a fact source — the card
+ * falls back to the live probe, then to the command text — and all three are
+ * exercised by `tests/client/zotero-command-card.spec.tsx`.
  */
-export function ZoteroCommandCard({ node, t, probe }: ZoteroCommandCardProps): ReactNode {
+export function ZoteroCommandCard({
+  node,
+  t,
+  probe,
+  useProjection,
+}: ZoteroCommandCardProps): ReactNode {
   const [expanded, setExpanded] = useState(false)
   const { state: probeState, runProbe } = useZoteroProbe(probe)
+
+  // The projected snapshot the handler logged for this run. `undefined` or `null`
+  // when this session never recorded one (or the composition has no projection
+  // registry), which the card treats as "no facts beyond the live probe".
+  const projected = useProjection('zoteroStatus')
 
   const outcome = node.outcome
   const isRunning = outcome === null
   const isError = outcome?.kind === 'error'
   const rawText = outcome?.text ?? ''
-
-  const parsed = useMemo(() => parseZoteroStatusText(rawText), [rawText])
 
   const handleRecheck = useCallback(
     (e: React.MouseEvent): void => {
@@ -71,48 +96,49 @@ export function ZoteroCommandCard({ node, t, probe }: ZoteroCommandCardProps): R
   const title = useMemo(() => formatCommandLine(node.name, node.args), [node.name, node.args])
 
   /**
-   * Read one status field, preferring a live probe over the parsed command text.
+   * Read one status field, preferring a live probe over the projected snapshot.
    *
    * The gate is "did the probe answer", *not* "is there an error": a probe that
    * reaches Zotero and is told it is offline sets **both** `data` and `error`,
-   * and that answer still carries the address it dialled, the one
-   * fact worth reading on a disconnected card. Gating on `error` would drop
-   * the row exactly when the user clicked Refresh to find out what was wrong.
-   * A probe that failed outright (no `data`) has no facts to prefer, so the
-   * parsed text stands.
+   * and that answer still carries the address it dialled, the one fact worth
+   * reading on a disconnected card. Gating on `error` would drop the row
+   * exactly when the user clicked Refresh to find out what was wrong. A probe
+   * that failed outright (no `data`) has no facts to prefer, so the projection
+   * stands.
    *
    * @param key - the status field to read.
-   * @param fallback - the parsed-text value, used when no probe has answered.
-   * @returns the probe's value, the parsed value, or undefined.
+   * @returns the probe's value, the projected value, or undefined.
    */
-  const effective = <K extends SharedStatusKey>(
-    key: K,
-    fallback: ParsedZoteroStatus[K] | undefined,
-  ): SharedStatusFact<K> =>
-    probeState.data !== undefined
-      ? probeState.data[key]
-      : probeState.error === undefined
-        ? fallback
-        : undefined
+  const effective = <K extends SharedStatusKey>(key: K): ZoteroStatusView[K] | undefined =>
+    probeState.data !== undefined ? probeState.data[key] : projected?.[key]
 
-  const effectiveConnected = effective('connected', parsed?.connected) === true
+  const effectiveConnected =
+    probeState.data !== undefined
+      ? probeState.data.connected
+      : probeState.error !== undefined
+        ? false
+        : projected?.connected === true
   // The dialled endpoint, not a configured default: the probe reports the
   // address it actually reached, which is the one to check when it failed.
-  const effectiveEndpoint = effective('endpoint', parsed?.endpoint)
-  const effectiveVersion = effective('zoteroVersion', parsed?.zoteroVersion)
-  const effectiveApiVersion = effective('apiVersion', parsed?.apiVersion)
-  const effectiveSchemaVersion = effective('schemaVersion', parsed?.schemaVersion)
-  const effectiveServerId = effective('serverId', parsed?.serverId)
-  const effectiveWrite = effective('write', parsed?.write)
-  // "Unreported" is the absence of an id. When a probe won, that is the probe's
-  // own undefined `serverId`; a failed probe has no id to report at all, and
-  // only the parsed text carries the flag. A plain boolean, not a memoized
-  // callback: it is read once, below.
+  const effectiveEndpoint = effective('endpoint')
+  const effectiveVersion = effective('zoteroVersion')
+  const effectiveApiVersion = effective('apiVersion')
+  const effectiveSchemaVersion = effective('schemaVersion')
+  const effectiveServerId = effective('serverId')
+  const effectiveWrite = effective('write')
+  // "Unreported" is the absence of an id in an answer that was given at all.
+  // A failed probe has no id to report; only a settled view can be called
+  // unreported. A plain boolean, not a memoized callback: it is read once.
   const effectiveServerIdUnreported =
     probeState.data !== undefined
       ? probeState.data.serverId === undefined
-      : probeState.error === undefined && (parsed?.serverIdUnreported ?? false)
-  const effectiveDiagnosis = probeState.error ?? probeState.data?.diagnosis ?? parsed?.diagnosis
+      : probeState.error === undefined && projected != null && projected.serverId === undefined
+  const effectiveDiagnosis = probeState.error ?? probeState.data?.diagnosis ?? projected?.diagnosis
+  // A settled answer is the only thing that can carry facts: a live probe that
+  // answered, or a projection this session recorded. `projected` is undefined
+  // when the composition has no projection registry and null when the session
+  // never ran the command; neither is a fact source.
+  const hasFacts = probeState.data !== undefined || projected != null
 
   const headerPrefix = useMemo(() => {
     let dotClass = css.dotGreen
@@ -154,7 +180,7 @@ export function ZoteroCommandCard({ node, t, probe }: ZoteroCommandCardProps): R
       )
     }
 
-    if (parsed) {
+    if (hasFacts) {
       const summaryText = effectiveConnected
         ? `${effectiveVersion ?? t('badgeSuccess')}`
         : `${effectiveDiagnosis ?? t('statusUnavailable')}`
@@ -175,7 +201,7 @@ export function ZoteroCommandCard({ node, t, probe }: ZoteroCommandCardProps): R
   }, [
     isRunning,
     isError,
-    parsed,
+    hasFacts,
     effectiveConnected,
     effectiveVersion,
     effectiveDiagnosis,
@@ -185,16 +211,16 @@ export function ZoteroCommandCard({ node, t, probe }: ZoteroCommandCardProps): R
 
   const writeDisplay = useMemo(() => writeStatusLabel(effectiveWrite, t), [effectiveWrite, t])
 
-  const expandable = !isRunning && (parsed !== null || rawText !== '')
+  const expandable = !isRunning && (hasFacts || rawText !== '')
   const open = expanded && expandable
 
   const body = useMemo(() => {
     if (!open) return null
 
-    // The re-probe action sits outside the parsed branch on purpose: a card
-    // that expanded to raw text (an errored command, or output this version
-    // does not recognize) is exactly the case where a user most wants to try
-    // again, and it used to be the one view with no way to.
+    // The re-probe action sits outside the fact branch on purpose: a card that
+    // expanded to raw text (an errored command, or a session that logged no
+    // snapshot) is exactly the case where a user most wants to try again, and
+    // it used to be the one view with no way to.
     const actions =
       probe === undefined ? null : (
         <div className={css.actionsRow}>
@@ -221,7 +247,10 @@ export function ZoteroCommandCard({ node, t, probe }: ZoteroCommandCardProps): R
         </div>
       )
 
-    if (!parsed) {
+    if (
+      !hasFacts ||
+      (isError && node.outcome?.sourceEventSeq === undefined && probeState.data === undefined)
+    ) {
       return (
         <div className={css.bodyWrap}>
           <pre className={css.errorBody}>{rawText}</pre>
@@ -272,7 +301,9 @@ export function ZoteroCommandCard({ node, t, probe }: ZoteroCommandCardProps): R
     )
   }, [
     open,
-    parsed,
+    hasFacts,
+    isError,
+    node.outcome?.sourceEventSeq,
     effectiveConnected,
     effectiveEndpoint,
     effectiveVersion,

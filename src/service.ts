@@ -21,7 +21,13 @@
  * @module dsh-zotero/service
  */
 
-import { Service, type Context, type Fiber } from '@deepseek-ai/cordis'
+import {
+  Service,
+  type Context,
+  type Fiber,
+  type FiberState,
+  type LoggerLevel,
+} from '@deepseek-ai/cordis'
 // Type-only: brings the loader `loader/volatile-update` Events merge into
 // this program (the structural-flip reaction below).
 import type {} from '@deepseek-ai/cordis-plugin-loader'
@@ -29,6 +35,10 @@ import type {} from '@deepseek-ai/cordis-plugin-loader'
 import type {} from '@deepseek-ai/dsh-typert-registry'
 // Type-only: brings the `ctx.credentials` Context merge into this program.
 import type { CredentialProvider } from '@deepseek-ai/dsh-credentials'
+// Type-only: brings the `ctx.sessionProjections` Context merge into this program.
+import type {} from '@deepseek-ai/dsh-session-projection'
+// Type-only: brings the `ctx.settings` Context merge into this program.
+import type {} from '@deepseek-ai/dsh-settings'
 import { DiagnosticsRecorder, logMessageToPush, loggerNameMatches } from './diagnostics.js'
 import type { DiagnosticDetail } from './diagnostics.js'
 import type { ToolExecutionResult } from '@deepseek-ai/dsh-tools'
@@ -37,6 +47,7 @@ import { registerStatusCommand } from './command.js'
 import { ZoteroRuntime } from './remote.js'
 import { parseRef } from './refs.js'
 import type { ZoteroAttachmentLocationView } from './contract.js'
+import { ZOTERO_STATUS_PROJECTION } from './status-projection.js'
 import { TYPERT_MANIFEST } from './typert.js'
 import { WriteAuthorizer } from './write-auth.js'
 import { ZoteroWriteHttpClient } from './write-http.js'
@@ -136,12 +147,23 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-/** Cordis Fiber lifecycle states (cordis compiles FiberState as a const enum without a runtime object). */
-const FIBER_STATE_LOADING = 1
-const FIBER_STATE_ACTIVE = 2
+/**
+ * Runtime mirror of Cordis's `FiberState`.
+ *
+ * Cordis compiles `FiberState` as a `const enum`, so no runtime object exists to
+ * import across packages. The values are anchored to the enum members instead
+ * of spelled as bare numbers (`1 as FiberState.LOADING`), the same mirror
+ * `packages/host/plugin-inventory/src/index.ts` keeps: a member that moves or
+ * disappears then fails the typecheck rather than silently shifting the state
+ * this plugin compares against.
+ */
+const FIBER_STATE = {
+  LOADING: 1 as FiberState.LOADING,
+  ACTIVE: 2 as FiberState.ACTIVE,
+} as const
 
-/** Cordis `LoggerLevel.DEBUG` (the same const-enum-without-runtime situation as `FiberState`). */
-const LOGGER_LEVEL_DEBUG = 3
+/** Runtime mirror of Cordis's `LoggerLevel`, anchored the same way as {@link FIBER_STATE}. */
+const LOGGER_LEVEL = { DEBUG: 3 as LoggerLevel.DEBUG } as const
 
 /**
  * One-line digest of a tool call for the debug ring: the wire name plus the
@@ -220,7 +242,7 @@ export class ZoteroService extends Service {
     // subtree is recorded.
     ctx.logger.exporter({
       colors: false,
-      levels: { default: LOGGER_LEVEL_DEBUG },
+      levels: { default: LOGGER_LEVEL.DEBUG },
       export: (message) => {
         if (!loggerNameMatches(message.name)) return
         this.diagnostics.push(logMessageToPush(message))
@@ -378,6 +400,22 @@ export class ZoteroService extends Service {
       // this inject fiber on unload, and no wrapper effect is needed.
       host.typert.register(TYPERT_MANIFEST)
     })
+    // The durable half of `/zotero`: the command handler appends a
+    // `zotero/status` event and the card reads it back through this
+    // projection instead of re-parsing the text it was handed. Optional seam:
+    // a composition without the registry keeps the live probe as the only
+    // source, and the card says nothing it cannot prove.
+    ctx.inject(['sessionProjections'], (projectionCtx) => {
+      projectionCtx.effect(() =>
+        projectionCtx.sessionProjections.register(ZOTERO_STATUS_PROJECTION),
+      )
+    })
+    // A plugin that ships its own settings page owns that page's presentation;
+    // the automatic schema-generated one would be a second, conflicting
+    // surface for the same namespace (`packages/settings/settings/README.md`).
+    ctx.inject(['settings'], (settingsCtx) => {
+      settingsCtx.effect(() => settingsCtx.settings.configure({ auto: false }, ctx.fiber))
+    })
     this.reconcileWriteTools(this.config.writeEnabled)
   }
 
@@ -457,8 +495,8 @@ export class ZoteroService extends Service {
     // Cordis Fiber lifecycle: LOADING = 1, ACTIVE = 2. When unloading (5) or
     // disposed (4), do not re-register tools onto the dying context.
     if (
-      this.ctx.fiber.state !== FIBER_STATE_ACTIVE &&
-      this.ctx.fiber.state !== FIBER_STATE_LOADING
+      this.ctx.fiber.state !== FIBER_STATE.ACTIVE &&
+      this.ctx.fiber.state !== FIBER_STATE.LOADING
     ) {
       for (const dispose of this.heavyToolDisposes) dispose()
       this.heavyToolDisposes = []

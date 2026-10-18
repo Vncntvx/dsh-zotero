@@ -27,7 +27,7 @@
  * this list deliberately and must stay free of host authority.
  */
 export const CLIENT_SAFE_LOCAL =
-  /^src\/(?:client(?:\/|$)|contract\.(?:ts|js|mjs|cjs)$|settings-namespace\.(?:ts|js|mjs|cjs)$|json\.(?:ts|js|mjs|cjs)$|ref-grammar\.(?:ts|js|mjs|cjs)$|export-items\.(?:ts|js|mjs|cjs)$|changes-contract\.(?:ts|js|mjs|cjs)$|browse-rows\.(?:ts|js|mjs|cjs)$|evidence-item\.(?:ts|js|mjs|cjs)$)/
+  /^src\/(?:client(?:\/|$)|contract\.(?:ts|js|mjs|cjs)$|projection-keys\.(?:ts|js|mjs|cjs)$|settings-namespace\.(?:ts|js|mjs|cjs)$|json\.(?:ts|js|mjs|cjs)$|ref-grammar\.(?:ts|js|mjs|cjs)$|export-items\.(?:ts|js|mjs|cjs)$|changes-contract\.(?:ts|js|mjs|cjs)$|browse-rows\.(?:ts|js|mjs|cjs)$|evidence-item\.(?:ts|js|mjs|cjs)$)/
 
 /**
  * Packages the host half owns. Boundary schema materialization (schemastery
@@ -68,9 +68,14 @@ export function packageNameOf(key) {
 
 /**
  * Harness specifiers a client bundle may **inline**. Counterpart of the three
- * constants in `packages/client/tsdown.client.ts` at **dsh-v0.2.1-alpha.4**:
+ * constants in `packages/client/tsdown.client.ts` at **dsh-v0.2.1-rc.2**:
  * `INLINE_SAFE`, `GENERATED_REMOTE`, `VENDORED_LIBRARY`. Keep this table in
  * step with that file: never invent a fourth arm here.
+ *
+ * The three patterns below are a verbatim copy of the upstream constants, so a
+ * harness bump that touches them has to be taken from a diff of that file
+ * rather than from memory: the upstream file is the only definition, this is
+ * its mirror.
  */
 export const INLINE_SAFE =
   /^(?:@deepseek-ai\/dsh-(?:file-reference|session|llm|tools|brand|deque|output-retention|typert-protocol|util-crypto|util-values|util-workspace-path)(?:\/|$)|@deepseek-ai\/dsh-token-meter\/client$|@deepseek-ai\/dsh-native-command\/types$|@deepseek-ai\/dsh-host-open-in-app\/shared$|@deepseek-ai\/dsh-plugin-manager\/registry$|@deepseek-ai\/dsh-agent-preset-registry\/display$|@deepseek-ai\/dsh-api-workspace-controller\/default-workspace$|@deepseek-ai\/dsh-spill-policy\/notice$)/

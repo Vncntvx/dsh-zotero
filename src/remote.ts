@@ -24,8 +24,8 @@ import {
   DIAGNOSTIC_MESSAGE_MAX_CHARS,
   clampText,
 } from './diagnostics.js'
+import { toStatusView } from './session-events.js'
 import {
-  ZOTERO_DIAGNOSIS_OK,
   ZOTERO_SETTINGS_NAMESPACE,
   ZOTERO_STATUS_SERVICE_KEY,
   type ZoteroAttachmentLocationView,
@@ -70,17 +70,7 @@ export class ZoteroRuntime extends TypertRemoteService {
         diagnosis: 'The Zotero service is not composed.',
       }
     }
-    return {
-      providerId: status.providerId,
-      endpoint: status.endpoint,
-      connected: status.connected,
-      ...(status.apiVersion === undefined ? {} : { apiVersion: status.apiVersion }),
-      ...(status.serverId === undefined ? {} : { serverId: status.serverId }),
-      ...(status.schemaVersion === undefined ? {} : { schemaVersion: status.schemaVersion }),
-      ...(status.zoteroVersion === undefined ? {} : { zoteroVersion: status.zoteroVersion }),
-      ...(status.write === undefined ? {} : { write: status.write }),
-      ...(status.diagnosis === ZOTERO_DIAGNOSIS_OK ? {} : { diagnosis: status.diagnosis }),
-    }
+    return toStatusView(status)
   }
 
   /**

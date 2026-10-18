@@ -28,7 +28,7 @@ import {
 } from './contract.js'
 
 /** Wire codec: one status view (strict; absent optional facts stay absent). */
-const zoteroStatusSchema = z
+export const zoteroStatusSchema = z
   .object({
     providerId: z.string(),
     // Optional on the wire because a service that is not composed dialled

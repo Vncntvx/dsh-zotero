@@ -19,30 +19,54 @@
 import type { Context } from '@deepseek-ai/cordis'
 // Value + type: pulls the `ctx.commands` Context merge into this program.
 import { CommandDefinitionId } from '@deepseek-ai/dsh-commands'
-import {
-  ZOTERO_STATUS_CONNECTED,
-  ZOTERO_STATUS_DISCONNECTED,
-  ZOTERO_STATUS_NOT_REPORTED,
-  ZOTERO_STATUS_SERVER_ID_UNREPORTED,
-  ZOTERO_STATUS_FIELD_VERSION,
-  ZOTERO_STATUS_FIELD_API,
-  ZOTERO_STATUS_FIELD_SCHEMA,
-  ZOTERO_STATUS_FIELD_SERVER_ID,
-  ZOTERO_STATUS_FIELD_WRITE,
-  ZOTERO_STATUS_FIELD_ENDPOINT,
-  ZOTERO_STATUS_WRITE_DISABLED,
-  ZOTERO_STATUS_WRITE_ENABLED_STORED,
-  ZOTERO_STATUS_WRITE_ENABLED_PENDING,
-} from './contract.js'
 import type { ZoteroService } from './service.js'
+import { toStatusView } from './session-events.js'
 import type { ZoteroStatus } from './types.js'
 
 /** The usage line an unknown `/zotero` subcommand is answered with. */
 export const ZOTERO_USAGE_MESSAGE = 'Usage: /zotero [status]'
 
-/** One `Label: value` status line, degraded to {@link ZOTERO_STATUS_NOT_REPORTED}. */
+/*
+ * The status text. These are **human-facing output only**: the model reads the
+ * command's reply and a user reads the card, but no client parses them. The
+ * structured facts travel as the `zotero/status` session event, so the wording
+ * here is free to change without breaking a consumer.
+ */
+
+/** The value a status line reports when the answering build named none. */
+const STATUS_NOT_REPORTED = 'not reported'
+
+/** Status line field labels. */
+const FIELD_VERSION = 'Zotero version'
+const FIELD_API = 'API version'
+const FIELD_SCHEMA = 'Schema version'
+const FIELD_SERVER_ID = 'Server ID'
+const FIELD_WRITE = 'Write'
+/** The dialled authority, reported on both the connected and the failed probe. */
+const FIELD_ENDPOINT = 'Local API'
+
+/** The status header when the local API answered the probe. */
+export const ZOTERO_STATUS_CONNECTED = 'Zotero local API: connected'
+
+/** The status header when Zotero could not be reached at all. */
+export const ZOTERO_STATUS_DISCONNECTED = 'Zotero local API: not connected'
+
+/**
+ * The Server-ID line for a build that does not identify its database. Refs and
+ * cursors pin to that identity, so its absence limits what this Zotero can
+ * support.
+ */
+export const ZOTERO_STATUS_SERVER_ID_UNREPORTED =
+  'Server ID: not reported — this build does not identify its database, so refs and cursors cannot be pinned to it'
+
+/** Canonical status values for the Write field. */
+const WRITE_DISABLED = 'disabled'
+const WRITE_ENABLED_STORED = 'enabled (key stored)'
+const WRITE_ENABLED_PENDING = 'enabled (no key yet)'
+
+/** One `Label: value` status line, degraded to {@link STATUS_NOT_REPORTED}. */
 export function statusLine(label: string, value: string | undefined): string {
-  return `${label}: ${value ?? ZOTERO_STATUS_NOT_REPORTED}`
+  return `${label}: ${value ?? STATUS_NOT_REPORTED}`
 }
 
 /** Render a status record for the command's user-facing text. */
@@ -50,28 +74,28 @@ export function formatStatus(status: ZoteroStatus): string {
   // The dialled address leads both arms. When the probe answered it is the
   // endpoint the facts below came from; when it did not, it is the address
   // that failed to answer, the first thing worth checking either way.
-  const endpoint = statusLine(ZOTERO_STATUS_FIELD_ENDPOINT, status.endpoint)
+  const endpoint = statusLine(FIELD_ENDPOINT, status.endpoint)
   if (!status.connected) {
     return `${ZOTERO_STATUS_DISCONNECTED}\n${endpoint}\n${status.diagnosis}`
   }
   return [
     ZOTERO_STATUS_CONNECTED,
     endpoint,
-    statusLine(ZOTERO_STATUS_FIELD_VERSION, status.zoteroVersion),
-    statusLine(ZOTERO_STATUS_FIELD_API, status.apiVersion),
-    statusLine(ZOTERO_STATUS_FIELD_SCHEMA, status.schemaVersion),
+    statusLine(FIELD_VERSION, status.zoteroVersion),
+    statusLine(FIELD_API, status.apiVersion),
+    statusLine(FIELD_SCHEMA, status.schemaVersion),
     status.serverId === undefined
       ? ZOTERO_STATUS_SERVER_ID_UNREPORTED
-      : statusLine(ZOTERO_STATUS_FIELD_SERVER_ID, status.serverId),
+      : statusLine(FIELD_SERVER_ID, status.serverId),
     status.write === undefined
       ? undefined
       : statusLine(
-          ZOTERO_STATUS_FIELD_WRITE,
+          FIELD_WRITE,
           !status.write.enabled
-            ? ZOTERO_STATUS_WRITE_DISABLED
+            ? WRITE_DISABLED
             : status.write.authorized
-              ? ZOTERO_STATUS_WRITE_ENABLED_STORED
-              : ZOTERO_STATUS_WRITE_ENABLED_PENDING,
+              ? WRITE_ENABLED_STORED
+              : WRITE_ENABLED_PENDING,
         ),
   ]
     .filter((line): line is string => line !== undefined)
@@ -100,7 +124,20 @@ export function registerStatusCommand(ctx: Context, service: ZoteroService): voi
           return { kind: 'error', text: ZOTERO_USAGE_MESSAGE }
         }
         const status = await service.status(invocation.signal)
-        return { kind: 'success', text: formatStatus(status) }
+        // The text stays the human answer; the structured facts travel as the
+        // session event the card reads back through the `zoteroStatus`
+        // projection. `sourceEventSeq` is the documented way for a command to
+        // point at a domain projection, so the card never parses this text
+        // (`docs/subsystems/commands.md`: "without parsing `text`").
+        const event = invocation.agent.session.append('zotero/status', {
+          version: 1,
+          status: toStatusView(status),
+        })
+        return {
+          kind: 'success',
+          text: formatStatus(status),
+          sourceEventSeq: event.seq,
+        }
       },
     })
   })
