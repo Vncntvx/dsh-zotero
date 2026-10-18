@@ -1,4 +1,4 @@
-import { CommandId, type CommandInvocation, type CommandResult } from '@deepseek-ai/dsh-commands'
+import type { CommandResult } from '@deepseek-ai/dsh-commands'
 import { readFileSync } from 'node:fs'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -13,16 +13,19 @@ import {
   ZOTERO_STATUS_CONNECTED,
   ZOTERO_STATUS_DISCONNECTED,
   ZOTERO_STATUS_SERVER_ID_UNREPORTED,
-} from '../../src/contract.js'
-import { ZOTERO_USAGE_MESSAGE, statusLine } from '../../src/command.js'
+  ZOTERO_USAGE_MESSAGE,
+  statusLine,
+} from '../../src/command.js'
 import { parseRef } from '../../src/refs.js'
 import {
   CONNECTIVITY_POLICY_SENTENCE,
-  ZOTERO_PROMPT_ANCHOR,
+  ZOTERO_PROMPT_CEILING,
+  ZOTERO_PROMPT_FLOOR,
   ZOTERO_PROMPT_ORDER_OFFSET,
 } from '../../src/prompt.js'
 import type { ZoteroProvider } from '../../src/types.js'
 import { type HostLane, setupHostLane } from '../helpers/lanes/host-lane.js'
+import { STUB_EVENT_SEQ, stubCommandInvocation } from '../helpers/stub-commands.js'
 import { ZOTERO_TOOL_NAMES } from '../helpers/tool-names.js'
 
 /** The lane the current test booted; `afterEach` releases it. */
@@ -33,19 +36,6 @@ afterEach(async () => {
   await lane?.teardown()
   lane = undefined
 })
-
-function invocation(
-  rawInput: string,
-  signal: AbortSignal = new AbortController().signal,
-): CommandInvocation {
-  return {
-    commandId: CommandId('test-command'),
-    agent: {} as never,
-    rawInput,
-    signal,
-    attachments: [],
-  }
-}
 
 describe('ZoteroService lifecycle', () => {
   it('provides ctx.zotero and removes it when its fiber is disposed', async () => {
@@ -113,9 +103,16 @@ describe('/zotero status command', () => {
       ),
     )
     const definition = lane.stub!.registered[0]!
-    const result = (await definition.handler(invocation('status'))) as CommandResult
+    const call = stubCommandInvocation('status')
+    const result = (await definition.handler(call)) as CommandResult
     expect(result.kind).toBe('success')
     if (result.kind !== 'success') throw new Error('unreachable')
+    // The structured status is a durable session event, and the result names
+    // its seq so the client card reads the projection instead of re-parsing
+    // this text. Both halves are the contract.
+    expect(call.appended).toHaveLength(1)
+    expect(call.appended[0]?.type).toBe('zotero/status')
+    expect(result.sourceEventSeq).toBe(STUB_EVENT_SEQ)
     expect(result.text).toContain(ZOTERO_STATUS_CONNECTED)
     expect(result.text).toContain(statusLine('API version', '3'))
     expect(result.text).toContain(statusLine('Schema version', '25'))
@@ -129,7 +126,7 @@ describe('/zotero status command', () => {
     lane = await setupHostLane(undefined, { commands: true })
     lane.mock.route('GET', '/api/', (req, res, helpers) => helpers.json({}))
     const definition = lane.stub!.registered[0]!
-    const result = (await definition.handler(invocation('status'))) as CommandResult
+    const result = (await definition.handler(stubCommandInvocation('status'))) as CommandResult
     expect(result.kind).toBe('success')
     if (result.kind !== 'success') throw new Error('unreachable')
     expect(result.text).toContain(ZOTERO_STATUS_CONNECTED)
@@ -145,7 +142,7 @@ describe('/zotero status command', () => {
     // mount leaves a dead endpoint for the status probe to hit.
     await lane.mock.close()
     const definition = lane.stub!.registered[0]!
-    const result = (await definition.handler(invocation('status'))) as CommandResult
+    const result = (await definition.handler(stubCommandInvocation('status'))) as CommandResult
     expect(result.kind).toBe('success')
     if (result.kind !== 'success') throw new Error('unreachable')
     expect(result.text).toContain(ZOTERO_STATUS_DISCONNECTED)
@@ -158,7 +155,7 @@ describe('/zotero status command', () => {
       helpers.json({}, { 'Zotero-API-Version': '3' }),
     )
     const definition = lane.stub!.registered[0]!
-    const result = (await definition.handler(invocation('open'))) as CommandResult
+    const result = (await definition.handler(stubCommandInvocation('open'))) as CommandResult
     expect(result).toEqual({ kind: 'error', text: ZOTERO_USAGE_MESSAGE })
   })
 })
@@ -174,15 +171,37 @@ describe('prompt section', () => {
     // prompt and after every first-party per-tool section it complements.
     const names = assembly.sections.map((entry) => entry.name)
     expect(names.indexOf('zotero:policy')).toBeGreaterThan(0)
-    // The pin guards the plugin-owned derivation (anchor + offset), not the
-    // harness table: the anchor is the central placement name, the offset is
-    // half the gap to the next first-party placement: 2900 + 50 = 2950 lands
-    // between TOOL_REPORT and TOOL_COMPUTER_USE (3000) instead of colliding
-    // with it. Either drifting fails here instead of passing by restatement.
-    expect(ZOTERO_PROMPT_ANCHOR).toBe('TOOL_REPORT')
+    // The pin guards the plugin-owned derivation, not the harness table, and
+    // it reads the registered position instead of restating the formula: two
+    // probe sections are registered at the band's own edges, so the policy must
+    // assemble strictly between them. A range, not a number, because the offset
+    // is read downward from the ceiling (TOOL_COMPUTER_USE) precisely so a
+    // first-party section inserted inside the band pushes this policy along
+    // instead of colliding with it.
+    expect(ZOTERO_PROMPT_FLOOR).toBe('TOOL_REPORT')
+    expect(ZOTERO_PROMPT_CEILING).toBe('TOOL_COMPUTER_USE')
     expect(ZOTERO_PROMPT_ORDER_OFFSET).toBe(50)
-    expect(lane.ctx.systemPrompt.getSectionOrder(ZOTERO_PROMPT_ANCHOR)).toBe(2900)
-    expect(lane.ctx.systemPrompt.getSectionOrder('TOOL_COMPUTER_USE')).toBe(3000)
+    const probes = [
+      lane.ctx.systemPrompt.section({
+        name: 'test:band-floor',
+        order: lane.ctx.systemPrompt.getSectionOrder('TOOL_REPORT'),
+        text: '',
+      }),
+      lane.ctx.systemPrompt.section({
+        name: 'test:band-ceiling',
+        order: lane.ctx.systemPrompt.getSectionOrder(ZOTERO_PROMPT_CEILING),
+        text: '',
+      }),
+    ]
+    try {
+      const pinned = await lane.ctx.systemPrompt.assemble()
+      const positionOf = (name: string): number =>
+        pinned.sections.findIndex((entry) => entry.name === name)
+      expect(positionOf('zotero:policy')).toBeGreaterThan(positionOf('test:band-floor'))
+      expect(positionOf('zotero:policy')).toBeLessThan(positionOf('test:band-ceiling'))
+    } finally {
+      for (const dispose of probes) dispose()
+    }
     for (const tool of ZOTERO_TOOL_NAMES) {
       expect(section!.text).toContain(tool)
     }

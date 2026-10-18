@@ -9,7 +9,7 @@
  * @module dsh-zotero/export-mapping
  */
 
-import { bibtexFieldOf, parseExportItem } from './export-items.js'
+import { bibtexFieldOf } from './export-items.js'
 import { asRecord, asString } from './json.js'
 import { citekeyOf } from './normalize.js'
 import { formatRef } from './refs.js'
@@ -47,6 +47,8 @@ const ENTRY_START = /@[A-Za-z]+\{/g
 // carriage return Zotero builds that emit CRLF leave behind.
 const RIS_RECORD_END = /^ER  -[ ]?\r?$/gm
 const RIS_ID = /^ID  - (.+?)\r?$/m
+/** The RIS title line: records carry no citation key, so the title is the only fact to display. */
+const RIS_TITLE = /^TI  - (.+?)\r?$/m
 
 /** The entry's citation key: the run after `@type{` up to a comma, brace, or whitespace. */
 function entryKeyOf(text: string, from: number): string | undefined {
@@ -408,11 +410,11 @@ function locateRisFromBatch(text: string, refs: readonly ZoteroObjectRef[]): Loc
   return refs.map((ref) => {
     const formattedRef = formatRef(ref)
     const match = byId.get(ref.key)
-    const facts = match !== undefined ? parseExportItem('ris', match.text) : undefined
+    const title = match === undefined ? undefined : RIS_TITLE.exec(match.text)?.[1]
     return {
       ref: formattedRef,
       ...(match?.key !== undefined ? { key: match.key } : {}),
-      ...(facts?.title !== undefined ? { title: facts.title } : {}),
+      ...(title !== undefined ? { title } : {}),
       ...(match !== undefined ? { start: match.start, end: match.end } : {}),
     }
   })

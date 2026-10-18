@@ -16,11 +16,15 @@ src/
   types.ts              # Domain DTOs and type definitions
   contract.ts           # Remote wire protocol surface and constants
   status-codec.ts       # Host-side status decoding (zod)
+  abort.ts              # The one spelling of the caller-cancellation error (harness TOOL_ABORTED)
   errors.ts             # Error classes and error codes
   json.ts               # Lossless JSON read helpers
   evidence-item.ts      # Passage item projection definitions (shared across client/host)
   browse-rows.ts        # Browse row classification (shared across client/host)
   changes-contract.ts   # Shared wire descriptors for the changes projection
+  projection-keys.ts    # The zoteroStatus projection key and its type merge (shared across client/host)
+  session-events.ts     # The zotero/status session event and the status-to-wire view fold
+  status-projection.ts  # The zoteroStatus session projection unit (last-value fold)
   constants.ts          # Constant definitions
   concurrency.ts        # Bounded concurrency controller
   job-runner.ts         # ctx.jobs background-job adapter for the heavy tools
@@ -31,7 +35,7 @@ src/
   presentation-meta.ts  # Presentation projection for tool results
   refs.ts               # Zotero ref syntax parsing and formatting
   ref-grammar.ts        # Reference syntax validation patterns
-  export-items.ts       # Per-document export parsing
+  export-items.ts       # BibTeX key grammar and field extraction
   export-mapping.ts     # Reference and batch item mapping
   prompt.ts             # Model-facing system prompt section
   command.ts            # /zotero status command
@@ -44,6 +48,7 @@ src/
   typert.ts             # Typert manifest
   settings-namespace.ts # Settings namespace constants
   tools/                # 16 model tool definitions (8 read + 8 write)
+  tools/degradable.ts   # The degrade rule for write-tool plan previews (only unreachable or ambiguous targets)
   client/               # Browser client (configuration page, Sources panel, tool card views)
 tests/                  # Unit and end-to-end test suites
 ```
@@ -75,16 +80,19 @@ Note: This repository is typically developed as a sibling directory to `deepseek
 
 ### Upstream artifact freshness check
 
-`npm run harness:check` validates the freshness of upstream build artifacts:
+`npm run harness:check` checks whether upstream build artifacts are up to date. The two checks are independent.
 
-1. Declarations versus source: verifies that `lib/types/*.d.ts` is newer than the corresponding upstream source files, preventing type checking against outdated declarations.
-2. Browser runtime versus declarations: verifies that `lib/client.js` is newer than its declaration files, preventing runtime bundles from lagging behind declared interfaces.
-
-The second check prints a note in regular checks and causes a failure under `--strict` during `release:check`. To update upstream browser artifacts:
+1. Declarations versus source: verifies that `lib/types/*.d.ts` is newer than the corresponding upstream source files, so type checking never reads an interface compiled from older source. Remedy: rebuild both the declarations and the Node-side artifacts.
+2. Browser runtime versus declarations: verifies that a client package's `lib/client.js` is newer than its own client declarations, so the runtime the page loads is not older than the declarations the compiler read. Remedy: rebuild the browser artifacts only.
 
 ```sh
-pnpm --dir ../deepseek-harness run build:lib:client   # rebuild the upstream browser artifacts
+pnpm --dir ../deepseek-harness run build            # check 1: declarations and Node-side artifacts
+pnpm --dir ../deepseek-harness run build:lib:client # check 2: browser artifacts only
 ```
+
+Without `--strict`, both checks print a note. With `--strict` (the mode `release:check` uses), both become errors that fail the run. Missing declarations fail in both modes because type checking cannot resolve them at all.
+
+The same script also gates the vendored framework packages: the floor of every `cordis`, `cosmokit`, `schemastery`, and `cordis-plugin-*` range in `dependencies` / `devDependencies` / `peerDependencies` must equal the version in the sibling's `vendor/<pkg>/package.json`, and a mismatch fails in both modes. These packages do not follow the harness pin, and a `^X.Y.Z-alpha.N` floor leaves two copies of `cordis` in one profile.
 
 ## Integration Tests
 
@@ -146,13 +154,15 @@ To inspect runtime behavior or investigate issues, open the **dsh-zotero** detai
 
 ## Release Checklist
 
-Ensure all following checks pass before cutting a release:
+`release:check` in `package.json` defines the release gate. It runs the first seven steps in order and stops at the first failure:
 
-1. `npm run harness:check -- --strict`: Version pin and upstream declarations are strictly aligned.
-2. `npm run verify:pack`: Packed tarball includes all required files.
-3. `npm test`: All tests pass.
-4. `npm run typecheck`: Type check passes.
-5. `npm run test:coverage`: Coverage meets all configured thresholds.
-6. `npm run format:check`: Code style conforms to formatting rules.
-7. `npm run build`: Production build succeeds.
+1. `npm run format:check`: Prettier formatting check.
+2. `npm run harness:check -- --strict`: version pin, upstream declarations, and vendored framework versions must align; stale artifacts become errors in this mode (`release:check` invokes the same script directly as `node scripts/harness-state.mjs --strict`).
+3. `npm run lint:test`: test-specification guards (lanes, `.only`/`.skip`, spec line ratchet).
+4. `npm run typecheck`: type checking across the Node, test, and client projects.
+5. `npm run test:coverage`: the full vitest suite plus the per-layer coverage gates.
+6. `npm run build`: production build (`tsc` → `lib/`, esbuild → `lib/client.js`).
+7. `npm run verify:pack`: validate the required files in the packed tarball.
 8. Verify golden path scenarios (G1 through G8) in [Scenarios](scenarios.en.md); verify W1 through W8 as well if write operations are enabled.
+
+`npm test` is not the release gate: it runs `node scripts/test-lint.mjs` plus `vitest run` without coverage thresholds, which is the day-to-day regression command. The release path splits those two concerns into steps 3 and 5.

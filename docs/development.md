@@ -16,11 +16,15 @@ src/
   types.ts              # 领域 DTO 与类型定义
   contract.ts           # Remote wire 协议面与常量
   status-codec.ts       # Host 端状态解码（zod）
+  abort.ts              # 调用方取消错误的唯一拼写（harness TOOL_ABORTED）
   errors.ts             # 错误类与错误码
   json.ts               # 无损 JSON 读取辅助函数
   evidence-item.ts      # 原文片段投影定义（端侧共享）
   browse-rows.ts        # 浏览行分类（端侧共享）
   changes-contract.ts   # changes 投影的共享 wire 描述符
+  projection-keys.ts    # zoteroStatus 投影键与类型合并（端侧共享）
+  session-events.ts     # zotero/status 会话事件与状态→wire 视图折叠
+  status-projection.ts  # zoteroStatus 会话投影单元（last-value fold）
   constants.ts          # 常量定义
   concurrency.ts        # 有界并发控制器
   job-runner.ts         # 重型工具的 ctx.jobs 后台任务适配
@@ -31,7 +35,7 @@ src/
   presentation-meta.ts  # 工具结果的展示投影
   refs.ts               # Zotero ref 语法解析与格式化
   ref-grammar.ts        # 引用语法校验模式
-  export-items.ts       # 逐文档导出解析
+  export-items.ts       # BibTeX 条目键语法与字段提取
   export-mapping.ts     # 引用与批量条目映射
   prompt.ts             # 面向模型的系统提示词
   command.ts            # /zotero 状态命令
@@ -44,6 +48,7 @@ src/
   typert.ts             # Typert 清单
   settings-namespace.ts # 设置命名空间常量
   tools/                # 16 个模型工具定义（8 读 + 8 写）
+  tools/degradable.ts   # 写工具计划预览的降级规则（不可达/歧义才降级）
   client/               # 浏览器端（配置页、Sources 面板、工具卡片视图）
 tests/                  # 单元测试与端到端测试用例
 ```
@@ -75,16 +80,19 @@ npm run format:check         # 检查代码格式
 
 ### 上游产物一致性门禁
 
-`npm run harness:check` 校验上游构建产物的新鲜度：
+`npm run harness:check` 检查上游构建产物是否过期。两项检查互相独立。
 
-1. 声明与源码：检查 `lib/types/*.d.ts` 是否晚于对应的上游源码，防止类型检查依赖过期的声明文件。
-2. 浏览器运行时与声明：检查客户端包的 `lib/client.js` 是否晚于其声明文件，防止运行时包落后于声明定义。
-
-日常检查中第 2 项输出为提示；在发布检查（`release:check`）的 `--strict` 模式下将作为错误拦截。更新上游浏览器产物命令：
+1. 声明与源码：检查 `lib/types/*.d.ts` 是否晚于对应的上游源码，防止类型检查对着不是当前源码编译出来的接口。补救命令是重建声明与 Node 端产物。
+2. 浏览器运行时与声明：检查客户端包的 `lib/client.js` 是否晚于其客户端声明，防止页面加载的运行时落后于编译器读到的声明。补救命令是只重建浏览器产物。
 
 ```sh
-pnpm --dir ../deepseek-harness run build:lib:client   # 重建上游浏览器产物
+pnpm --dir ../deepseek-harness run build             # 第 1 项：重建声明与 Node 端产物
+pnpm --dir ../deepseek-harness run build:lib:client   # 第 2 项：只重建浏览器产物
 ```
+
+不带 `--strict` 时，两项检查输出 note（提示）。带 `--strict` 时（`release:check` 使用此模式），两项都升级为 problem（拦截）。声明文件缺失则在两种模式下都是 problem，因为类型检查根本解析不到。
+
+同一脚本还校验 vendored 框架包：`dependencies` / `devDependencies` / `peerDependencies` 中 `cordis`、`cosmokit`、`schemastery`、`cordis-plugin-*` 的区间下界，必须等于 sibling `vendor/<pkg>/package.json` 的 version，不符时两种模式都直接失败。这类包不跟随 Harness 版本钉，下界写成 `^X.Y.Z-alpha.N` 会在同一个 profile 里留下两份 `cordis`。
 
 ## 集成测试
 
@@ -146,13 +154,15 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 
 ## 发布检查清单
 
-在发布版本前，请确保以下检查全部通过：
+`package.json` 的 `release:check` 定义了发布门禁。它按顺序执行前七步，任一步失败即中断：
 
-1. `npm run harness:check -- --strict`：版本钉及上游声明无偏差；
-2. `npm run verify:pack`：打包 tarball 包含全部必须文件；
-3. `npm test`：全部测试通过；
-4. `npm run typecheck`：类型检查通过；
-5. `npm run test:coverage`：覆盖率达标；
-6. `npm run format:check`：代码格式规范；
-7. `npm run build`：生产构建成功；
-8. 验证 [使用场景](scenarios.md) 中的主流程用例（G1 至 G8），若启用写入需验证 W1 至 W8。
+1. `npm run format:check`：Prettier 格式检查；
+2. `npm run harness:check -- --strict`：版本钉、上游声明与 vendored 框架版本须对齐，过期产物在该模式下变为错误（`release:check` 直接以 `node scripts/harness-state.mjs --strict` 调用同一脚本）；
+3. `npm run lint:test`：测试规范守卫（lane、`.only`/`.skip`、spec 行数棘轮）；
+4. `npm run typecheck`：Node、测试与浏览器端三个工程的类型检查；
+5. `npm run test:coverage`：全量 vitest 测试与分层覆盖率门禁；
+6. `npm run build`：生产构建（`tsc` → `lib/`，esbuild → `lib/client.js`）；
+7. `npm run verify:pack`：校验打包 tarball 的必需文件；
+8. 人工验证 [使用场景](scenarios.md) 中的主流程用例（G1 至 G8），若启用写入需验证 W1 至 W8。
+
+`npm test` 与发布门禁不等价：它执行 `node scripts/test-lint.mjs` 加 `vitest run`（不跑覆盖率门禁），是日常回归命令；发布路径把这两件事分别交给第 3 步和第 5 步。

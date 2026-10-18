@@ -1,93 +1,62 @@
 /**
- * The single-item export facts parser: citation keys and titles pulled from
- * one entry at a time, never from the merged batch body.
+ * The shared BibTeX field grammar: the key source the client's exports lens
+ * compiles with `g`, and the brace/quote-aware field reader the host's entry
+ * fingerprinting uses.
  * @module tests/export-items
  */
 
 import { describe, expect, it } from 'vitest'
-import { parseExportItem } from '../../src/export-items.js'
+import { BIBTEX_KEY_SOURCE, bibtexFieldOf } from '../../src/export-items.js'
 
-describe('parseExportItem', () => {
-  it('extracts the citation key and title from a BibTeX entry', () => {
-    expect(
-      parseExportItem(
-        'bibtex',
-        '@article{panCarbonPriceForecasting2022,\n  title = {Carbon price forecasting},\n}',
-      ),
-    ).toEqual({ key: 'panCarbonPriceForecasting2022', title: 'Carbon price forecasting' })
+describe('BIBTEX_KEY_SOURCE', () => {
+  it('captures the citation key of an entry header', () => {
+    expect(BIBTEX_KEY_SOURCE).toBe('@[A-Za-z]+\\{([^,\\s{}]+),')
+    // The client compiles the same source with `g` for `matchAll`; the host
+    // compiles it without, so the string must carry no flags of its own.
+    const scanned = new RegExp(BIBTEX_KEY_SOURCE, 'g')
+    const keys = [...'@article{alpha,\n}\n@book{beta,\n}'.matchAll(scanned)].map((m) => m[1])
+    expect(keys).toEqual(['alpha', 'beta'])
+  })
+})
+
+describe('bibtexFieldOf', () => {
+  it('reads braced values including nested braces, without unwrapping them', () => {
+    // The reader returns the field's raw value: the outer pair delimits it, the
+    // inner braces belong to the value (BibTeX case protection).
+    expect(bibtexFieldOf('@article{k,\n  title = {{Nested {Braced} Value}},\n}', 'title')).toBe(
+      '{Nested {Braced} Value}',
+    )
   })
 
-  it('parses biblatex entries the same way', () => {
-    expect(
-      parseExportItem('biblatex', '@article{zheng2025,\n  title = {Heterogeneous risks},\n}'),
-    ).toEqual({ key: 'zheng2025', title: 'Heterogeneous risks' })
+  it('reads quoted values', () => {
+    expect(bibtexFieldOf('@article{k,\n  title = "Quoted title",\n}', 'title')).toBe('Quoted title')
   })
 
-  it('keeps a title whose entry has no citation key', () => {
-    expect(parseExportItem('bibtex', 'title = {Untitled to a key}')).toEqual({
-      title: 'Untitled to a key',
-    })
+  it('reads bare numeric values', () => {
+    expect(bibtexFieldOf('@article{k,\n  year = 2024,\n}', 'year')).toBe('2024')
   })
 
-  it('reads nested-brace and quoted BibTeX titles', () => {
-    expect(parseExportItem('bibtex', '@article{k,\n  title = {{Carbon} price},\n}')).toEqual({
-      key: 'k',
-      title: '{Carbon} price',
-    })
-    expect(parseExportItem('bibtex', '@article{k,\n  title = "Quoted title",\n}')).toEqual({
-      key: 'k',
-      title: 'Quoted title',
-    })
-    expect(parseExportItem('bibtex', '@article{k,\n  title = {Unclosed,\n')).toEqual({ key: 'k' })
-    expect(parseExportItem('bibtex', '@article{k,\n  title = "Unclosed,\n}')).toEqual({
-      key: 'k',
-    })
-    expect(parseExportItem('bibtex', '@article{k,\n  title = 5,\n}')).toEqual({ key: 'k' })
-    expect(parseExportItem('bibtex', 'TY  - JOUR')).toEqual({})
+  it('keeps commas, braces, and spaces inside a braced value', () => {
+    expect(bibtexFieldOf('@article{k,\n  author = {Doe, Jane and Smith, John},\n}', 'author')).toBe(
+      'Doe, Jane and Smith, John',
+    )
   })
 
-  it('omits the key when a BibTeX entry has none', () => {
-    expect(parseExportItem('bibtex', 'plain text without fields')).toEqual({})
+  it('falls back to a generic pattern for a field outside the known set', () => {
+    expect(bibtexFieldOf('@article{k,\n  keywords = {alignment, bibtex},\n}', 'keywords')).toBe(
+      'alignment, bibtex',
+    )
   })
 
-  it('extracts only the title from a RIS record (records carry no citation key)', () => {
-    expect(parseExportItem('ris', 'TY  - JOUR\nTI  - Heterogeneous risks\nER  -\n')).toEqual({
-      title: 'Heterogeneous risks',
-    })
+  it('returns undefined for an absent field, an empty value, and unclosed values', () => {
+    expect(bibtexFieldOf('@article{k,\n}\n', 'title')).toBeUndefined()
+    expect(bibtexFieldOf('@article{k,\n  year = ,\n}\n', 'year')).toBeUndefined()
+    expect(bibtexFieldOf('title = {Unclosed', 'title')).toBeUndefined()
+    expect(bibtexFieldOf('title = "Unclosed', 'title')).toBeUndefined()
   })
 
-  it('returns nothing for a RIS record without a title', () => {
-    expect(parseExportItem('ris', 'TY  - JOUR\nER  -\n')).toEqual({})
-  })
-
-  it('extracts id and title from a CSL JSON array of one record', () => {
-    expect(parseExportItem('csljson', '[{"id": "wang2023", "title": "Carbon trading"}]')).toEqual({
-      key: 'wang2023',
-      title: 'Carbon trading',
-    })
-  })
-
-  it('returns nothing for malformed or non-array CSL JSON', () => {
-    expect(parseExportItem('csljson', 'not json')).toEqual({})
-    expect(parseExportItem('csljson', '{}')).toEqual({})
-    expect(parseExportItem('csljson', '[]')).toEqual({})
-  })
-
-  it('returns nothing for non-record CSL JSON array members', () => {
-    expect(parseExportItem('csljson', '[null]')).toEqual({})
-    expect(parseExportItem('csljson', '[42]')).toEqual({})
-    expect(parseExportItem('csljson', '["x"]')).toEqual({})
-    expect(parseExportItem('csljson', '[[]]')).toEqual({})
-    expect(parseExportItem('csljson', '[{}]')).toEqual({})
-  })
-
-  it('drops non-string CSL JSON id and title fields', () => {
-    expect(parseExportItem('csljson', '[{"id": 7, "title": "T"}]')).toEqual({ title: 'T' })
-    expect(parseExportItem('csljson', '[{"id": "k", "title": 7}]')).toEqual({ key: 'k' })
-  })
-
-  it('returns nothing for formats without per-item entries', () => {
-    expect(parseExportItem('citation', 'x')).toEqual({})
-    expect(parseExportItem('bibliography', 'x')).toEqual({})
+  it('refuses a bare token when allowBareToken is false', () => {
+    expect(bibtexFieldOf('@article{k,\n  title = 5,\n}', 'title', false)).toBeUndefined()
+    expect(bibtexFieldOf('@article{k,\n  title = {Braced},\n}', 'title', false)).toBe('Braced')
   })
 })

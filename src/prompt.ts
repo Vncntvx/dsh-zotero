@@ -20,25 +20,35 @@ import { ZOTERO_WRITE_TOOL_NAMES } from './constants.js'
 const ZOTERO_PROMPT_SECTION_NAME = 'zotero:policy'
 
 /**
- * Central placement anchor the policy trails: the tail of the first-party
- * tool-guidance band (`TOOL_*` placements end here, the SDK section follows
- * far later), so the policy reads after every per-tool section it
- * complements.
+ * The next first-party placement above the guidance band: the order ceiling
+ * this section computes its placement from.
  */
-export const ZOTERO_PROMPT_ANCHOR = 'TOOL_REPORT' as const
+export const ZOTERO_PROMPT_CEILING = 'TOOL_COMPUTER_USE' as const
 
 /**
- * Headroom over the anchor: half the gap to the next first-party placement
- * (`TOOL_REPORT` 2900 → `TOOL_COMPUTER_USE` 3000), so a first-party insertion
- * between them cannot collide with this section. Kept beside the anchor (not
- * inlined at the call) so the pin in tests/host/lifecycle.spec.ts guards it.
+ * The placement the policy trails: the tail of the first-party tool-guidance
+ * band. Kept for specs asserting the section sits strictly above it.
+ */
+export const ZOTERO_PROMPT_FLOOR = 'TOOL_REPORT' as const
+
+/**
+ * Headroom below the next first-party placement: half the gap between
+ * {@link ZOTERO_PROMPT_FLOOR} (2900) and {@link ZOTERO_PROMPT_CEILING} (3000),
+ * so an insertion anywhere above cannot collide with this section.
+ *
+ * The order derives from the **upper bound** ({@link ZOTERO_PROMPT_CEILING}) and
+ * not from {@link ZOTERO_PROMPT_FLOOR}: anchoring on the last band placement
+ * would run off the end of the band as soon as the harness adds one more
+ * `TOOL_*` name, while the ceiling keeps the policy strictly inside the band.
+ * Kept beside the floor (not inlined at the call) so the pin in
+ * tests/host/lifecycle.spec.ts guards it.
  */
 export const ZOTERO_PROMPT_ORDER_OFFSET = 50
 
 /**
  * The connectivity sentence: what the plugin does on a connectivity failure.
- * The failure surfaces as the tool call's own typed error result — no human
- * prompt is raised and nothing is retried — so the model reports it rather
+ * The failure surfaces as the tool call's own typed error result (no human
+ * prompt is raised and nothing is retried), so the model reports it rather
  * than waiting on a question. Its own export because the lifecycle spec pins
  * this sentence to the policy text.
  */
@@ -114,7 +124,7 @@ function zoteroPromptTextOf(
 export function registerPromptSection(ctx: Context, config: () => ResolvedConfig): void {
   ctx.systemPrompt.section({
     name: ZOTERO_PROMPT_SECTION_NAME,
-    order: ctx.systemPrompt.getSectionOrder(ZOTERO_PROMPT_ANCHOR) + ZOTERO_PROMPT_ORDER_OFFSET,
+    order: ctx.systemPrompt.getSectionOrder(ZOTERO_PROMPT_CEILING) - ZOTERO_PROMPT_ORDER_OFFSET,
     text: () => zoteroPromptTextOf(config()),
   })
 }

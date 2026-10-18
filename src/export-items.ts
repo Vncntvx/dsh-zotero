@@ -1,25 +1,16 @@
 /**
- * Per-document facts of a translator-format export, parsed from one entry of
- * the merged batch body. Parsing one entry is trivial and deterministic. The
- * batch body's entry order belongs to Zotero, so the provider locates
- * each ref's entry in memory (`export-mapping.ts`) and reads its key/title
- * here, never with a second HTTP request per document.
+ * The BibTeX/BibLaTeX entry field grammar, shared by the host's entry
+ * fingerprinting (`export-mapping.ts`) and the client's exports lens.
+ *
+ * This module is the one home of the shared *source* string: the two halves
+ * need different flags for the same key grammar, so the grammar travels as a
+ * string and each side compiles its own `RegExp`. Field extraction lives beside
+ * it because the host reads titles, DOIs, years, and authors out of one entry
+ * with it. RIS and CSL JSON entries are parsed by the locators in
+ * `export-mapping.ts`, which are their only readers: a per-format parser here
+ * served call paths that no longer exist.
  * @module dsh-zotero/export-items
  */
-
-import type { ZoteroExportFormat } from './types.js'
-
-/** The parsed per-document facts of one single-item export. */
-export interface ExportItemFacts {
-  /**
-   * The format-local identifier: the BibTeX/BibLaTeX citation key or the
-   * CSL JSON id; absent when the format has none (RIS) or it cannot be
-   * parsed.
-   */
-  readonly key?: string
-  /** The item's title for display, when the entry carries one. */
-  readonly title?: string
-}
 
 /**
  * The BibTeX/BibLaTeX entry-header key grammar, shared as a source string
@@ -28,7 +19,7 @@ export interface ExportItemFacts {
  * `matchAll` (which requires `g`).
  */
 export const BIBTEX_KEY_SOURCE = '@[A-Za-z]+\\{([^,\\s{}]+),'
-const BIBTEX_KEY = new RegExp(BIBTEX_KEY_SOURCE)
+
 const KNOWN_FIELD_PATTERNS: Readonly<Record<string, RegExp>> = {
   title: /\btitle\s*=\s*/i,
   doi: /\bdoi\s*=\s*/i,
@@ -40,6 +31,10 @@ const KNOWN_FIELD_PATTERNS: Readonly<Record<string, RegExp>> = {
 /**
  * Extract the raw string value of a named field from a single BibTeX entry text,
  * brace-aware (nested `{{...}}` included), double-quoted, or bare numeric/token value.
+ * @param text - one BibTeX/BibLaTeX entry body.
+ * @param fieldName - the field to read; unknown names fall back to a generic pattern.
+ * @param allowBareToken - whether a bare `year = 2024` value counts, or only braced and quoted ones.
+ * @returns the raw field value, or undefined when the entry has no such usable field.
  */
 export function bibtexFieldOf(
   text: string,
@@ -73,65 +68,4 @@ export function bibtexFieldOf(
   let end = cursor
   while (end < text.length && !/[,\s{}]/.test(text[end]!)) end += 1
   return end === cursor ? undefined : text.slice(cursor, end)
-}
-
-/**
- * The display title of one BibTeX entry: the field value after `title =`,
- * brace-aware (nested `{{…}}` included) or double-quoted. It is display-only,
- * since export pairing never reads it, so an unparseable value yields
- * undefined instead of failing the call.
- */
-function bibtexTitleOf(text: string): string | undefined {
-  return bibtexFieldOf(text, 'title', false)
-}
-const RIS_TITLE = /^TI  - (.+?)\r?$/m
-
-/** The BibTeX/BibLaTeX facts: the citation key plus the first title field. */
-function bibtexFactsOf(text: string): ExportItemFacts {
-  const key = BIBTEX_KEY.exec(text)?.[1]
-  const title = bibtexTitleOf(text)
-  return {
-    ...(key === undefined ? {} : { key }),
-    ...(title === undefined ? {} : { title }),
-  }
-}
-
-/** The RIS facts: records carry no citation key, only the title line. */
-function risFactsOf(text: string): ExportItemFacts {
-  const title = RIS_TITLE.exec(text)?.[1]
-  return title === undefined ? {} : { title }
-}
-
-/** The CSL JSON facts: the export is an array of one record, `id`/`title`. */
-function csljsonFactsOf(text: string): ExportItemFacts {
-  let records: unknown
-  try {
-    records = JSON.parse(text)
-  } catch {
-    return {}
-  }
-  if (!Array.isArray(records) || records.length === 0) return {}
-  const first: unknown = records[0]
-  if (typeof first !== 'object' || first === null || Array.isArray(first)) return {}
-  const record = first as Record<string, unknown>
-  const key = typeof record['id'] === 'string' ? record['id'] : undefined
-  const title = typeof record['title'] === 'string' ? record['title'] : undefined
-  return {
-    ...(key === undefined ? {} : { key }),
-    ...(title === undefined ? {} : { title }),
-  }
-}
-
-/**
- * Parse the per-document facts of one translator-format entry.
- * @param format - the requested translator format.
- * @param text - one entry of the batch export body.
- * @returns the parsed key/title facts; empty when the format is unsupported
- *   or the entry carries no usable facts.
- */
-export function parseExportItem(format: ZoteroExportFormat, text: string): ExportItemFacts {
-  if (format === 'bibtex' || format === 'biblatex') return bibtexFactsOf(text)
-  if (format === 'ris') return risFactsOf(text)
-  if (format === 'csljson') return csljsonFactsOf(text)
-  return {}
 }
