@@ -70,12 +70,12 @@ graph LR
 - 组合包配置（`plugins.bundle.config`）：在插件管理器详情页注册完整的 Zotero 配置表单，通过 harness 官方 `SettingsForm` 与 `SettingsFormModel` 统一管理；
 - 会话面板（`conversation.view`）：会话标签页只有一个 Zotero 面板，顶部透镜栏在文献工作区与会话级导出页之间切换；每个条目的检查器内含概览（Overview）、原文片段（Passages）与该条目导出结果（Exports）三个面板；
 - 工具卡片（`tool.call.toolview`）：为 16 个模型工具（8 读 + 8 写）各提供紧凑折叠卡片，对值得复制的取值提供复制按钮，通过“阅读 PDF”在侧边栏阅读原文，并提供复制标题或规范深链的定位操作。卡片只渲染工具已有的输出，自身不调用工具；
-- 命令状态卡片（`conversation.chat.commandview`）：为 `/zotero` 输出提供连接状态灯、版本与 Server ID 明细、离线排查建议与就地刷新按钮；
+- 命令状态卡片（`conversation.chat.commandview`）：为 `/zotero` 输出提供连接状态灯、版本与 Server ID 明细、离线排查建议与就地刷新按钮。结构化事实来自宿主注册的 `zoteroStatus` 会话投影：命令处理器将同一份状态投影为 `zotero/status` 会话事件并以 `sourceEventSeq` 指向它，卡片经 `useProjection` 读回，命令文本只作人类可读答案、不再被解析。就地刷新发起的实时探测优先于投影（它是更新的答案）；
 - `webEnabled` 开关保存后即时生效。
 
 #### 工具参数读取与双层错误边界
 
-- **参数读取**：卡片与 Sources 归约器统一通过 `src/client/presenters.ts` 的 `argsViewOf(block)` 读取 `block.args`；上游 Harness `0.2.1-alpha.2` 契约保证调用头与结果块均携带非可选的 `ToolArgs`（`PartialArguments`）。
+- **参数读取**：卡片与 Sources 归约器统一通过 `src/client/presenters.ts` 的 `argsViewOf(block)` 读取 `block.args`；上游 dsh 0.2.1-rc.2 契约保证调用头与结果块均携带非可选的 `ToolArgs`（`PartialArguments`）。
 - **双层错误边界**：插件注册两层错误边界：
   - **Surface 级（`ZoteroSurfaceBoundary`）**：包裹 Sources 标签页（`conversation.view`），渲染异常时就地显示错误提示与「刷新」（`t('refresh')`）按钮，并通过 `resetKey={sessionId}` 在会话切换时自动重置；
   - **Card 级（`ZoteroCardBoundary` / `withCardBoundary`）**：包装全部 16 个工具卡片（`tool.call.toolview`）。卡片渲染异常时就地降级为紧凑警告行，保留在对话流中。降级视图仅读取工具名、文案与错误消息等纯字符串，不访问 block 字段；卡片异常大多由块数据异常引发，降级视图本身不抛错，可避免未捕获异常逃逸至上游插槽边界导致卡片停用。
@@ -93,7 +93,9 @@ graph LR
 - **记录来源**：各关键接缝（HTTP 请求、工具调用、Job 状态、配置变更、写门禁、Shell 拦截、连接探测、降级事件）通过 `DiagnosticSink` 写入结构化条目。服务在装配时挂载随 fiber 生命周期的日志导出器，按名称前缀捕获插件子树产生的 `ctx.logger` 输出（涵盖接缝使用的 `zotero.*` 以及 Cordis 派生的 `zotero-service` 命名空间），收集匿名访问与生命周期相关日志；
 - **保留级别**：默认记录 error、warn 与 info 级别；启用 `debug` 配置后额外记录请求行与调用摘要等细节。连续出现的相同条目会合并并递增 `count`，避免重复报错刷屏，单条消息和详情字段均设有长度限制；
 - **读取接口**：`zotero/diagnostics` 端点按时间倒序返回快照（包含总数、截断标记与 debug 开关状态）。因 Harness 转发事件白名单未向插件开放，前端诊断卡仅在面板可见时通过定时轮询更新状态；
-- **前端异常上报**：两层错误边界的 `componentDidCatch` 通过注册阶段绑定的错误上报模块，将捕获的渲染异常（触发界面、错误消息与调用栈）写入同一环形缓冲，统一汇总宿主与前端报错；
+- **前端异常上报**：两条通道覆盖两组互不相交的崩溃，均写入同一环形缓冲，使宿主与前端报错集中可查：
+  - **组件错误边界**：`ZoteroSurfaceBoundary` 与 `ZoteroCardBoundary` 就地隔离各自包含的渲染崩溃，经注册期绑定的上报接口记录异常（触发界面、错误消息与调用栈）。class 组件由插槽渲染器挂载、拿不到注入 face，模块级绑定是它们到达网关的唯一通道；
+  - **Slot 监督通道**：`ctx.slots.onEntryError` 兜底记录边界看不到的崩溃（`inject` 工厂抛错、无自有边界表面的抛错、Factory occurrence），按注册时盖的 `registrant` 所有权戳过滤，只认本插件条目。React 的错误边界在抛错点向上找最近的 class 边界，因此被插件边界包含的崩溃不会到达外层 harness 边界，反之亦然；
 - **界面呈现**：插件详情页的诊断卡支持日志级别过滤、展示最新条目与截断提示，并提供诊断包一键复制功能（包含插件版本、Zotero 连接信息、debug 状态及全部缓冲条目）；
 - **数据安全**：所有记录仅保存在内存中，不落盘、不外发遥测。敏感凭据不经过接缝；HTTP 记录仅包含请求方法、路径、状态码与耗时，查询参数仅在 `debug` 级别记录且受长度截断，响应体与文献正文一律不进入缓冲区。
 

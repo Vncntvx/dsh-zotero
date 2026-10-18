@@ -22,6 +22,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type { ChatNode, ChatSnapshot } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { ToolCallBlock } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import { fileAddressFor } from '@deepseek-ai/dsh-util-workspace-path'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ZoteroAttachmentLocationView } from '../../contract.ts'
 import type { ZoteroStatusView } from '../remote.ts'
@@ -92,12 +93,13 @@ export interface SourcesTabFace {
   /** Resolve an attachment ref into its local file path or web URL. */
   resolveAttachment?: (ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>
   /**
-   * Open a local file path in the right sidebar, resolved against the given
-   * Session's workspace root. The session is always the tab's own: the
-   * `conversation.view` slot renders inside that session's scope, so the face
-   * has no session-less form.
+   * Reveal one resolved resource address in the right sidebar. The tab builds
+   * the address itself (it holds the Session identity and reads the workspace
+   * root through the standard `useSessions` source); the face only opens it,
+   * because the plugin fiber cannot: on this side the `ctx.sessions` Context
+   * key is the host `SessionStore`, not the client `ISessions` catalog.
    */
-  openFile?: (path: string, sessionId: string) => void
+  openResource?: (url: string) => void
 }
 
 /** Props the conversation view ring binds for this tab. */
@@ -228,10 +230,11 @@ export function SourcesTab(props: SourcesTabProps) {
 function SourcesTabBody({
   status,
   resolveAttachment,
-  openFile,
+  openResource,
   t,
   useSession,
   useChat,
+  useSessions,
   inputActions,
 }: SourcesTabProps) {
   // The session selector takes the primitive id, so lifecycle churn during a
@@ -240,6 +243,11 @@ function SourcesTabBody({
   // zotero signature, so a publication only re-renders the panel when the
   // zotero-visible slice it renders actually moved.
   const sessionId = useSession((snapshot) => snapshot.sessionId)
+  // The workspace root for file address resolution. Read from the standard
+  // session catalog (`useSessions`) because on the browser side `ctx.sessions`
+  // resolves to the host `SessionStore` (both client and host share the program,
+  // and the host `ISessions` declaration takes precedence).
+  const cwd = useSessions((snapshot) => snapshot.byId[sessionId]?.cwd)
   const chat = useChat((snapshot) => snapshot, sameZoteroProjection)
   const [statusState, setStatusState] = useState<ConnectionView>({ kind: 'loading' })
   const [requestId, setRequestId] = useState(0)
@@ -306,7 +314,11 @@ function SourcesTabBody({
       connection={statusState}
       setDraft={setDraft}
       onRefresh={refresh}
-      openFile={openFile ? (path: string) => openFile(path, sessionId) : undefined}
+      openFile={
+        openResource === undefined
+          ? undefined
+          : (path: string) => openResource(fileAddressFor(sessionId, cwd, path))
+      }
       resolveAttachment={resolveAttachment}
       t={t}
     />

@@ -11,13 +11,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RemoteError, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { PluginsSubject } from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import { DiagnosticsCard } from '../../src/client/components/DiagnosticsCard.tsx'
-import { setErrorReporter } from '../../src/client/actions/error-reporter.ts'
-import type {
-  ZoteroClientErrorReport,
-  ZoteroDiagnosticsView,
-  ZoteroReportResultView,
-  ZoteroStatusView,
-} from '../../src/client/remote.ts'
+import type { ZoteroDiagnosticsView, ZoteroStatusView } from '../../src/client/remote.ts'
 import { zh } from '../../src/client/locales.ts'
 import { deferred, type Deferred } from '../helpers/sync.js'
 import { mockT } from './helpers/mock-translate.ts'
@@ -204,15 +198,14 @@ describe('DiagnosticsCard', () => {
     expect(container.textContent).not.toContain(zh.diagnosticsEmpty)
   })
 
-  it('files a crash under the diagnostics surface through its own boundary', async () => {
+  it('contains a crash in its own boundary and names the failure', async () => {
+    // The card's locale lookup is the render throw; the fallback strings still
+    // resolve through the stub. Reporting is the slot registry's job now
+    // (`ctx.slots.onEntryError`, covered by `slot-crash-intake.spec.ts`), so
+    // this case pins what the boundary itself still owes: containment, and a
+    // fallback that names the failure without throwing again.
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const report =
-      vi.fn<(report: ZoteroClientErrorReport) => Promise<RemoteResult<ZoteroReportResultView>>>()
-    report.mockResolvedValue({ ok: true as const, value: { seq: 3 } })
-    setErrorReporter(report)
     try {
-      // The card title's locale lookup is the render throw; the boundary's
-      // own fallback strings still resolve through the stub.
       const explodingT: typeof t = (key, params) => {
         if (key === 'diagnosticsTitle') throw new Error('locale exploded')
         return t(key, params)
@@ -228,12 +221,13 @@ describe('DiagnosticsCard', () => {
       await waitFor(() =>
         expect(container.querySelector('[data-zotero-surface-error]')).not.toBeNull(),
       )
-      expect(report).toHaveBeenCalledTimes(1)
-      const filed = report.mock.calls[0]?.[0]
-      expect(filed).toMatchObject({ surface: 'diagnostics', message: 'locale exploded' })
-      expect(filed?.componentStack).toBeDefined()
+      expect(container.textContent).toContain('locale exploded')
+      expect(
+        errorSpy.mock.calls.some((call) =>
+          String(call[0]).includes('dsh-zotero: the Zotero panel failed to render'),
+        ),
+      ).toBe(true)
     } finally {
-      setErrorReporter(undefined)
       errorSpy.mockRestore()
     }
   })

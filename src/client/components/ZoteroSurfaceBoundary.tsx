@@ -41,11 +41,15 @@ export class ZoteroSurfaceBoundary extends Component<
   }
 
   override componentDidCatch(error: unknown, info: ErrorInfo): void {
-    // Logs the failure with plugin context for diagnostics, and files it into
-    // the host ring through the error-reporter binding, so the crash stays
-    // readable in the diagnostics panel after this console line is gone.
-    console.error('dsh-zotero: the Zotero panel failed to render:', messageOf(error), info)
-    reportCrashedSurface(this.props.surface, error, info)
+    console.error(
+      `dsh-zotero: the Zotero panel failed to render (${this.props.surface}):`,
+      messageOf(error),
+      info,
+    )
+    reportCrashedSurface(this.props.surface, error, {
+      kind: 'componentStack',
+      componentStack: info.componentStack,
+    })
   }
 
   override componentDidUpdate(prevProps: ZoteroSurfaceBoundaryProps): void {

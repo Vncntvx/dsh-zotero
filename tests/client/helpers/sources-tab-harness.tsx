@@ -138,6 +138,32 @@ export function searchResult(overrides: Partial<ToolResultNode> = {}): ToolResul
   })
 }
 
+/**
+ * A settled `zotero_attachment` result: one item whose PDF resolves to a local
+ * file, which is what gives the overview a "Read PDF" button to press.
+ * @param path - the resolved local path; absolute by default.
+ * @returns the settled tool result.
+ */
+export function attachmentResult(path = '/storage/paper.pdf'): ToolResultNode {
+  return settled({
+    seq: 5,
+    callId: 'a1',
+    call: {
+      name: 'zotero_attachment',
+      argsRaw: '{"ref":"zotero://user/0/item/AAAAAAA1"}',
+    },
+    meta: {
+      // A Zotero key is eight characters; a shorter one fails the ref grammar
+      // and the capability is dropped, leaving the row with no read action.
+      ref: 'zotero://user/0/attachment/ATTACH01',
+      kind: 'file',
+      title: 'paper.pdf',
+      contentType: 'application/pdf',
+      path,
+    },
+  })
+}
+
 /** A settled zotero_retrieve on the standard item ref, carrying one passage. */
 export function retrieveOf(): ToolResultNode {
   return settled({
@@ -182,13 +208,39 @@ export function exportOf(): ToolResultNode {
 }
 
 /**
- * Render the tab with stubbed session/chat hooks and the status face.
+ * The session catalog the standard `useSessions` source answers with: one row
+ * per Session, carrying the workspace root the tab resolves file addresses
+ * against.
+ */
+export interface SessionsStub {
+  readonly ids: readonly string[]
+  readonly byId: Readonly<Record<string, { readonly cwd?: string }>>
+}
+
+/**
+ * A catalog with one row, so `useSessions` resolves a workspace root.
+ * @param sessionId - the row's id.
+ * @param cwd - the workspace root; omit for a Session that reports none.
+ * @returns the catalog snapshot.
+ */
+export function sessionsOf(sessionId = 's1', cwd?: string): SessionsStub {
+  return {
+    ids: [sessionId],
+    byId: { [sessionId]: cwd === undefined ? {} : { cwd } },
+  }
+}
+
+/**
+ * Render the tab with stubbed session/chat/sessions hooks and the status face.
  * @param chat - the snapshot the chat stub answers with.
  * @param status - the connection probe face.
  * @param inputActions - optional command-draft actions.
  * @param session - the owning session snapshot.
  * @param capture - receives the equality function the panel subscribes with,
- *   so a spec can pin the re-render gate without a real snapshot store.
+ *   so a spec can pin the re-render gate without a real snapshot store; and
+ *   the selector `useSessions` is called with, so a spec can pin the row the
+ *   file address resolves against.
+ * @param sessions - the catalog snapshot `useSessions` answers from.
  */
 export function mountTab(
   chat: ChatSnapshot | undefined,
@@ -200,12 +252,17 @@ export function mountTab(
       eq: (a: ChatSnapshot | undefined, b: ChatSnapshot | undefined) => boolean,
     ) => void
   },
+  sessions: SessionsStub = sessionsOf(),
 ): { view: ReturnType<typeof render> } {
   const props = {
     t: mockT,
     status,
     useSession: (sel: (snap: SessionSnapshot) => unknown) =>
       session === undefined ? undefined : sel(session),
+    // The standard session catalog the tab reads its workspace root from. Its
+    // rows are addressed by the raw session id, exactly as the real store keys
+    // them, so a spec can assert the selector resolved this Session's own root.
+    useSessions: (sel: (snapshot: SessionsStub) => unknown) => sel(sessions),
     useChat: (
       sel: (snap: ChatSnapshot) => unknown,
       eq?: (a: ChatSnapshot | undefined, b: ChatSnapshot | undefined) => boolean,

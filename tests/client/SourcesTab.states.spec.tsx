@@ -25,6 +25,7 @@ import {
   mountTab,
   searchResult,
   sessionOf,
+  sessionsOf,
   toolRow,
 } from './helpers/sources-tab-harness.tsx'
 
@@ -63,6 +64,7 @@ describe('connectivity strip states', () => {
       t,
       status: undefined,
       useSession: (sel: (snap: SessionSnapshot) => unknown) => sel(sessionOf()),
+      useSessions: (sel: (snapshot: ReturnType<typeof sessionsOf>) => unknown) => sel(sessionsOf()),
       useChat: (sel: (snap: ChatSnapshot) => unknown) => sel(chatOf()),
     } as unknown as SourcesTabProps
     const view = render(<SourcesTab {...props} />)

@@ -15,9 +15,7 @@ import {
 import { registerZoteroToolviews, REGISTRATIONS } from '../../../src/client/toolviews/index.ts'
 import { settled } from '../helpers/blocks.ts'
 import { createToolViewProps } from '../helpers/mock-disclosure.ts'
-import { getErrorReporter, setErrorReporter } from '../../../src/client/actions/error-reporter.ts'
-import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
-import type { ZoteroClientErrorReport, ZoteroReportResultView } from '../../../src/client/remote.ts'
+import { setErrorReporter } from '../../../src/client/actions/error-reporter.ts'
 import { zh } from '../../../src/client/locales.ts'
 
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
@@ -26,6 +24,7 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
 })
 
 afterEach(() => {
+  setErrorReporter(undefined)
   cleanup()
   vi.restoreAllMocks()
 })
@@ -121,38 +120,6 @@ describe('ZoteroCardBoundary', () => {
     ).toBe(true)
   })
 
-  it('files a non-Error crash without a stack when a reporter is wired', () => {
-    captureConsoleError()
-    const report =
-      vi.fn<(report: ZoteroClientErrorReport) => Promise<RemoteResult<ZoteroReportResultView>>>()
-    report.mockResolvedValue({ ok: true as const, value: { seq: 2 } })
-    setErrorReporter(report)
-    try {
-      const props = createToolViewProps({
-        toolName: 'zotero_get',
-        block: settled(),
-      })
-      const ThrowString = (): never => {
-        throw 'bare string card failure'
-      }
-      render(
-        <ZoteroCardBoundary props={props}>
-          <ThrowString />
-        </ZoteroCardBoundary>,
-      )
-      expect(report).toHaveBeenCalledTimes(1)
-      const filed = report.mock.calls[0]?.[0]
-      expect(filed).toMatchObject({
-        surface: 'tool:zotero_get',
-        message: 'bare string card failure',
-      })
-      // A thrown string has no stack to file.
-      expect(filed?.stack).toBeUndefined()
-    } finally {
-      setErrorReporter(undefined)
-    }
-  })
-
   it('handles non-Error throws and empty error messages', () => {
     captureConsoleError()
     const props = createToolViewProps({
@@ -186,33 +153,28 @@ describe('ZoteroCardBoundary', () => {
     expect(Anonymous.displayName).toBe('Guarded(ToolView)')
   })
 
-  it('files a crash report under the tool wire name when a reporter is wired', () => {
-    captureConsoleError()
-    expect(getErrorReporter()).toBeUndefined()
-    const report =
-      vi.fn<(report: ZoteroClientErrorReport) => Promise<RemoteResult<ZoteroReportResultView>>>()
-    report.mockResolvedValue({ ok: true as const, value: { seq: 1 } })
-    setErrorReporter(report)
-    try {
-      const props = createToolViewProps({
-        toolName: 'zotero_search',
-        block: settled(),
-      })
-      render(
-        <ZoteroCardBoundary props={props}>
-          <Bomb />
-        </ZoteroCardBoundary>,
-      )
-      expect(report).toHaveBeenCalledTimes(1)
-      const filed = report.mock.calls[0]?.[0]
-      expect(filed).toMatchObject({
+  it('contains the crash locally and reports to the active error reporter', () => {
+    const logged = captureConsoleError()
+    const reportFn = vi.fn(async () => {})
+    setErrorReporter(reportFn)
+    const props = createToolViewProps({
+      toolName: 'zotero_search',
+      block: settled(),
+    })
+    const view = render(
+      <ZoteroCardBoundary props={props}>
+        <Bomb />
+      </ZoteroCardBoundary>,
+    )
+    expect(view.container.querySelector('[data-zotero-card-error]')).not.toBeNull()
+    expect(logged).toHaveBeenCalled()
+    expect(reportFn).toHaveBeenCalledTimes(1)
+    expect(reportFn).toHaveBeenCalledWith(
+      expect.objectContaining({
         surface: 'tool:zotero_search',
         message: 'card render failed: unexpected data error',
-      })
-      expect(filed?.stack).toBeDefined()
-    } finally {
-      setErrorReporter(undefined)
-    }
+      }),
+    )
   })
 
   it('withCardBoundary creates a wrapped component with Guarded displayName', () => {

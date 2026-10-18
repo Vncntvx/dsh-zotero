@@ -26,7 +26,9 @@ import {
   retrieveOf,
   searchResult,
   sessionOf,
+  sessionsOf,
   toolRow,
+  type SessionsStub,
 } from './helpers/sources-tab-harness.tsx'
 
 // The real primitives bundle pulls heavy dependencies (katex, shiki, the
@@ -157,6 +159,9 @@ describe('filters', () => {
       t,
       status: async () => ({ ok: true, value: CONNECTED }),
       useSession: (sel: (snap: SessionSnapshot) => unknown) => sel(sessionOf()),
+      // The standard session catalog the tab resolves file addresses against;
+      // no file is opened here, so a rootless row is enough.
+      useSessions: (sel: (snapshot: SessionsStub) => unknown) => sel(sessionsOf()),
       useChat: (sel: (snap: ChatSnapshot) => unknown) =>
         holder.chat === undefined ? undefined : sel(holder.chat),
     } as unknown as SourcesTabProps
@@ -190,6 +195,8 @@ describe('filters', () => {
       t,
       status: async () => ({ ok: true, value: CONNECTED }),
       useSession: (sel: (snap: SessionSnapshot) => unknown) => sel(holder.session),
+      useSessions: (sel: (snapshot: SessionsStub) => unknown) =>
+        sel(sessionsOf(String(holder.session.sessionId))),
       useChat: (sel: (snap: ChatSnapshot) => unknown) => sel(chat),
     } as unknown as SourcesTabProps
     const view = render(<SourcesTab {...props} />)

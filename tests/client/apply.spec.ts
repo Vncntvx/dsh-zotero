@@ -9,12 +9,12 @@
  */
 
 import { describe, expect, it, vi } from 'vitest'
-import { getErrorReporter } from '../../src/client/actions/error-reporter.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import { apply, inject } from '../../src/client/index.ts'
 import { en, zh } from '../../src/client/locales.ts'
 import { ZOTERO_SETTINGS_NAMESPACE } from '../../src/settings-namespace.ts'
 import { fakeScope } from './helpers/fake-scope.ts'
+import { fakeEntryErrorSeam, type EntryErrorListener } from './helpers/slot-crash-seam.ts'
 
 // The page imports primitive icons; stub them with the shared DOM face so
 // this wiring-level spec does not load the real bundle (katex css, shiki, …).
@@ -58,10 +58,10 @@ interface FakeApplyWorld {
   eventDefinitions: Array<{ kind: string }>
   /** Disposers run for those definitions. */
   eventDisposes: number
-  /** Session catalog rows the `sessions` service reports, keyed by id. */
-  sessionRows: Record<string, { cwd?: string }>
   /** Every address the `sidebarRight` service was asked to open. */
   openResourceCalls: string[]
+  /** Supervision listeners the entry registered through `slots.onEntryError`. */
+  entryErrorListeners: EntryErrorListener[]
 }
 
 /** A minimal context standing in for the browser kernel's plugin ctx. */
@@ -72,6 +72,8 @@ function fakeWorld(mountRejects: unknown = undefined): FakeApplyWorld {
   const mounts: FakeApplyWorld['mounts'] = []
   const effects: FakeApplyWorld['effects'] = []
   const formIds: string[] = []
+  const seam = fakeEntryErrorSeam()
+  const entryErrorListeners: EntryErrorListener[] = seam.listeners
   const scope = fakeScope()
   // The world object is shared with the ctx closures (disposer counters
   // included), so the returned handle observes the disposers' side effects.
@@ -92,8 +94,8 @@ function fakeWorld(mountRejects: unknown = undefined): FakeApplyWorld {
     uiDisposes: 0,
     eventDefinitions: [],
     eventDisposes: 0,
-    sessionRows: {},
     openResourceCalls: [],
+    entryErrorListeners,
   }
   // Effects registered while a fiber's callback runs belong to that fiber, so
   // disposing the fiber unwinds exactly what it registered: the same
@@ -174,17 +176,6 @@ function fakeWorld(mountRejects: unknown = undefined): FakeApplyWorld {
         },
       },
     },
-    // The tab's `openFile` reads both: the session catalog for a Session's
-    // workspace root, and the sidebar to open the resolved address. Both are
-    // plain records here; the address grammar itself is the harness's.
-    sessions: {
-      list: {
-        getSnapshot: () => ({
-          ids: Object.keys(world.sessionRows),
-          byId: world.sessionRows,
-        }),
-      },
-    },
     sidebarRight: {
       openResource: (url: string) => {
         world.openResourceCalls.push(url)
@@ -211,10 +202,21 @@ function fakeWorld(mountRejects: unknown = undefined): FakeApplyWorld {
         }
       },
       register: (options: Record<string, unknown>, component: unknown) => {
-        const item = { name: String(options.name), options, component }
+        // The renderer stamps `options.registrant ?? ctx.fiber?.name` onto the
+        // stored entry; the plugin declares it explicitly, so the stored shape
+        // here reproduces that stamp rather than the raw options.
+        const item = {
+          name: String(options.name),
+          options,
+          component,
+          registrant: (options.registrant as string | undefined) ?? 'dsh-zotero',
+        }
         registered.push(item)
         return item
       },
+      // The crash supervision seam: the entry subscribes here, and a spec can
+      // fire it to drive the intake without mounting a crashing entry.
+      onEntryError: seam.onEntryError,
     },
   }
   world.ctx = ctx
@@ -239,7 +241,6 @@ describe('the browser-half entry', () => {
       'remote',
       'configForms',
       'uiConversation',
-      'sessions',
       'sidebarRight',
     ])
   })
@@ -410,21 +411,6 @@ describe('the browser-half entry', () => {
     expect(typeof face.t).toBe('function')
   })
 
-  it('wires and unwires the client error reporter with the fiber', async () => {
-    const world = fakeWorld()
-    const dispose = await applyEntry(world)
-    expect(getErrorReporter()).toBeDefined()
-    // The diagnostics face reads the mounted namespace through the same
-    // reporter the boundaries call.
-    await expect(
-      getErrorReporter()!({ surface: 'sources', message: 'boom' }),
-    ).resolves.toMatchObject({
-      ok: true,
-    })
-    await dispose()
-    expect(getErrorReporter()).toBeUndefined()
-  })
-
   it('injects and registers the zotero command card into the conversation.chat.commandview slot', async () => {
     const world = fakeWorld()
     await applyEntry(world)
@@ -467,15 +453,7 @@ describe('the browser-half entry', () => {
     // The UI fiber declared `remote.zotero`, so `ctx.remote.zotero` is a legal
     // service read there: the same shape the harness's own client plugins use.
     expect(world.injectDeps).toEqual([
-      [
-        'remote.zotero',
-        'locale',
-        'slots',
-        'configForms',
-        'uiConversation',
-        'sessions',
-        'sidebarRight',
-      ],
+      ['remote.zotero', 'locale', 'slots', 'configForms', 'uiConversation', 'sidebarRight'],
     ])
     const tab = world.injected.find((entry) => entry.name === 'conversation.view')
     tab?.register()
@@ -514,6 +492,10 @@ describe('the browser-half entry', () => {
     expect(registration?.options.order).toBe(30)
     expect(registration?.options.locale).toBe('zotero')
     expect((registration?.options.label as () => string)()).toBe('nav')
+    // The ownership stamp the crash intake filters on: declared explicitly
+    // rather than inherited from the fiber name, so a harness-side rename
+    // cannot silently move which crashes the intake claims.
+    expect(registration?.options.registrant).toBe('dsh-zotero')
     const face = registration?.options.inject as () => {
       status: () => Promise<unknown>
     }
@@ -535,41 +517,52 @@ describe('the browser-half entry', () => {
     }
   })
 
-  it('resolves openFile into a session-scoped address with the session cwd', async () => {
+  it('subscribes to the slot crash intake on the fiber and withdraws it', async () => {
     const world = fakeWorld()
-    world.sessionRows = { 'sess-1': { cwd: '/ws/project' } }
+    const dispose = await applyEntry(world)
+    // One listener, registered through the registry's own supervision seam
+    // rather than from a render boundary: the entry is what wires the intake.
+    expect(world.entryErrorListeners).toHaveLength(1)
+    await dispose()
+    expect(world.entryErrorListeners).toHaveLength(0)
+  })
+
+  it('opens the resource address the tab hands it, verbatim', async () => {
+    const world = fakeWorld()
     await applyEntry(world)
     const tab = world.injected.find((entry) => entry.name === 'conversation.view')
     tab?.register()
     const registration = world.registered.find((entry) => entry.name === 'conversation.view')
     const face = registration?.options.inject as () => {
-      openFile: (path: string, sessionId: string) => void
+      openResource: (url: string) => void
     }
-    // A path inside the Session's workspace root is stripped of that root, so
-    // the address carries the workspace-relative spelling and stays in the
-    // session scope: the sidebar resolves it against the root it holds for the
-    // Session rather than the filesystem's.
-    face().openFile('/ws/project/storage/paper.pdf', 'sess-1')
+    // The tab owns the Session identity and the workspace root, so it builds
+    // the whole session-scoped address itself (through `useSessions` +
+    // `fileAddressFor`) and hands the face a ready URL. The face only opens it:
+    // this fiber cannot resolve a cwd, because on the browser side the
+    // `ctx.sessions` Context key carries the host `SessionStore`, not the
+    // client `ISessions` catalog.
+    face().openResource('dsh-resource://file/session/sess-1/storage/paper.pdf')
     expect(world.openResourceCalls).toEqual([
       'dsh-resource://file/session/sess-1/storage/paper.pdf',
     ])
   })
 
-  it('opens no address for openFile without a session', async () => {
+  it('passes the address through without reading any session state', async () => {
     const world = fakeWorld()
-    world.sessionRows = { 'sess-1': { cwd: '/ws/project' } }
+    // The fake world carries no session catalog at all: the fiber does not
+    // declare `sessions`, so a face that consulted one would find nothing and
+    // could not resolve a workspace root — its output would differ from the
+    // input URL. Passing it through verbatim is the whole contract.
     await applyEntry(world)
     const tab = world.injected.find((entry) => entry.name === 'conversation.view')
     tab?.register()
     const registration = world.registered.find((entry) => entry.name === 'conversation.view')
     const face = registration?.options.inject as () => {
-      openFile: (path: string, sessionId?: string) => void
+      openResource: (url: string) => void
     }
-    // A session-less call cannot build a session-scoped address at all: an
-    // empty id is not a resource any tab type accepts, so the call is dropped
-    // rather than sent to the sidebar as a wiring mistake.
-    face().openFile('/storage/paper.pdf')
-    expect(world.openResourceCalls).toEqual([])
+    face().openResource('dsh-resource://file/session/sess-9/notes/a.md')
+    expect(world.openResourceCalls).toEqual(['dsh-resource://file/session/sess-9/notes/a.md'])
   })
 
   it('skips the tab when the namespace disables webEnabled', async () => {

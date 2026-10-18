@@ -11,16 +11,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ChatSnapshot } from '@deepseek-ai/dsh-client-ui-chat/client'
 import { SourcesTab, type SourcesTabProps } from '../../src/client/components/SourcesTab.tsx'
 import { ZoteroSurfaceBoundary } from '../../src/client/components/ZoteroSurfaceBoundary.tsx'
-import { setErrorReporter } from '../../src/client/actions/error-reporter.ts'
-import type { ZoteroClientErrorReport, ZoteroReportResultView } from '../../src/client/remote.ts'
-import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { zh } from '../../src/client/locales.ts'
 import {
+  attachmentResult,
   chatOf,
   connectedProbe,
   mountTab,
   searchResult,
+  sessionsOf,
   toolRow,
+  type SessionsStub,
 } from './helpers/sources-tab-harness.tsx'
 import { mockT } from './helpers/mock-translate.ts'
 
@@ -189,6 +189,10 @@ describe('the Sources tab keeps its registration when its body throws', () => {
       status: connectedProbe(),
       useSession: (sel: (snap: { sessionId: string }) => unknown) =>
         sel({ sessionId: currentSessionId }),
+      // The standard catalog the tab resolves file addresses against; it
+      // follows the session switch like the real store does.
+      useSessions: (sel: (snapshot: SessionsStub) => unknown) =>
+        sel(sessionsOf(currentSessionId, '/ws/project')),
       useChat: (sel: (snap: ChatSnapshot) => unknown) => sel(currentChat),
     } as unknown as SourcesTabProps
 
@@ -204,6 +208,62 @@ describe('the Sources tab keeps its registration when its body throws', () => {
     expect(view.container.querySelectorAll('[role="option"]')).toHaveLength(1)
   })
 
+  it('resolves a read action against the owning session workspace root', async () => {
+    // The tab, not the plugin fiber, builds the address: it holds the Session
+    // identity (`useSession`) and the workspace root (`useSessions`), so the
+    // sidebar receives an address already scoped to this Session's root. The
+    // tab hands it to the workspace as the plain `openFile(path)` seat the
+    // components already speak, and this is where the root is applied.
+    const openResource = vi.fn<(url: string) => void>()
+    const props = {
+      t: mockT,
+      status: connectedProbe(),
+      openResource,
+      useSession: (sel: (snap: { sessionId: string }) => unknown) => sel({ sessionId: 'sess-1' }),
+      useSessions: (sel: (snapshot: SessionsStub) => unknown) =>
+        sel(sessionsOf('sess-1', '/ws/project')),
+      useChat: (sel: (snap: ChatSnapshot) => unknown) =>
+        sel(chatOf([toolRow(attachmentResult('/ws/project/storage/paper.pdf'))])),
+    } as unknown as SourcesTabProps
+
+    const view = render(<SourcesTab {...props} />)
+    const readButton = await screen.findByRole('button', { name: mockT('readPdf') })
+    fireEvent.click(readButton)
+    // A path inside the session's workspace root is stripped of that root, so
+    // the address carries the workspace-relative spelling and stays in the
+    // session scope: the sidebar resolves it against the root it holds for this
+    // Session rather than the filesystem's.
+    expect(openResource).toHaveBeenCalledWith(
+      'dsh-resource://file/session/sess-1/storage/paper.pdf',
+    )
+    view.unmount()
+  })
+
+  it('keeps a resolved address session-scoped for a Session without a root', async () => {
+    // A Session that reports no workspace root still gets a session-scoped
+    // address: `fileAddressFor` falls back to the absolute path, so the call
+    // is never dropped and never leaves the Session's scope.
+    const openResource = vi.fn<(url: string) => void>()
+    const props = {
+      t: mockT,
+      status: connectedProbe(),
+      openResource,
+      useSession: (sel: (snap: { sessionId: string }) => unknown) => sel({ sessionId: 'sess-2' }),
+      useSessions: (sel: (snapshot: SessionsStub) => unknown) => sel(sessionsOf('sess-2')),
+      useChat: (sel: (snap: ChatSnapshot) => unknown) => sel(chatOf([toolRow(attachmentResult())])),
+    } as unknown as SourcesTabProps
+
+    const view = render(<SourcesTab {...props} />)
+    const readButton = await screen.findByRole('button', { name: mockT('readPdf') })
+    fireEvent.click(readButton)
+    const opened = openResource.mock.calls[0]?.[0] ?? ''
+    // Still session-scoped, never a bare filesystem path: the sidebar resolves
+    // it against the Session, which is the invariant the root would have set.
+    expect(opened.startsWith('dsh-resource://file/session/sess-2/')).toBe(true)
+    expect(opened.endsWith('storage/paper.pdf')).toBe(true)
+    view.unmount()
+  })
+
   it('still renders the normal workspace when nothing throws', () => {
     const { view } = mountTab(chatOf([toolRow(searchResult())]), connectedProbe())
     expect(view.container.querySelector('[data-zotero-surface-error]')).toBeNull()
@@ -211,75 +271,50 @@ describe('the Sources tab keeps its registration when its body throws', () => {
   })
 })
 
-describe('ZoteroSurfaceBoundary crash reporting', () => {
-  it('files the crash into the host ring under its surface name', () => {
-    captureConsoleError()
-    const report =
-      vi.fn<(report: ZoteroClientErrorReport) => Promise<RemoteResult<ZoteroReportResultView>>>()
-    report.mockResolvedValue({ ok: true as const, value: { seq: 7 } })
-    setErrorReporter(report)
-    try {
-      render(
-        <ZoteroSurfaceBoundary t={mockT} surface="sources">
-          <Bomb />
-        </ZoteroSurfaceBoundary>,
-      )
-      expect(report).toHaveBeenCalledTimes(1)
-      const filed = report.mock.calls[0]?.[0]
-      expect(filed).toMatchObject({
-        surface: 'sources',
-        message: 'render failed: cannot read properties of undefined',
-      })
-      expect(filed?.componentStack).toBeDefined()
-    } finally {
-      setErrorReporter(undefined)
-    }
-  })
-
-  it('files an empty failure under a non-empty message the intake accepts', () => {
-    captureConsoleError()
-    const report =
-      vi.fn<(report: ZoteroClientErrorReport) => Promise<RemoteResult<ZoteroReportResultView>>>()
-    report.mockResolvedValue({ ok: true as const, value: { seq: 8 } })
-    setErrorReporter(report)
-    try {
-      // `new Error('')` falls back to the error's string form; a literally
-      // empty thrown string falls back to the placeholder. The intake's
-      // wire contract refuses an empty message, so neither may file one.
-      function ThrowEmptyError(): never {
-        throw new Error('')
-      }
-      function ThrowEmptyString(): never {
-        throw ''
-      }
-      render(
-        <ZoteroSurfaceBoundary t={mockT} surface="sources">
-          <ThrowEmptyError />
-        </ZoteroSurfaceBoundary>,
-      )
-      expect(report).toHaveBeenCalledTimes(1)
-      expect(report.mock.calls[0]?.[0]).toMatchObject({ surface: 'sources', message: 'Error' })
-
-      render(
-        <ZoteroSurfaceBoundary t={mockT} surface="sources">
-          <ThrowEmptyString />
-        </ZoteroSurfaceBoundary>,
-      )
-      expect(report).toHaveBeenCalledTimes(2)
-      expect(report.mock.calls[1]?.[0]).toMatchObject({
-        surface: 'sources',
-        message: 'unknown failure',
-      })
-    } finally {
-      setErrorReporter(undefined)
-    }
-  })
-
-  it('stays silent and still renders the fallback when no reporter is wired', () => {
-    captureConsoleError()
+describe('ZoteroSurfaceBoundary containment', () => {
+  it('contains the crash, logs it with the surface name, and renders the fallback', () => {
+    // Reporting is the slot registry's job (`ctx.slots.onEntryError`, covered by
+    // `slot-crash-intake.spec.ts`), which also observes a crashed `inject`
+    // factory that no boundary of ours runs for. This boundary's own contract is
+    // containment plus a diagnosable console line: the surface stays mounted and
+    // the crash never reaches the harness boundary that would retire the entry.
+    const logged = captureConsoleError()
     const view = render(
       <ZoteroSurfaceBoundary t={mockT} surface="sources">
         <Bomb />
+      </ZoteroSurfaceBoundary>,
+    )
+    expect(view.container.querySelector('[data-zotero-surface-error]')).not.toBeNull()
+    expect(
+      logged.mock.calls.some(
+        (call) =>
+          String(call[0]).includes('dsh-zotero: the Zotero panel failed to render') &&
+          String(call[0]).includes('sources'),
+      ),
+    ).toBe(true)
+  })
+
+  it('renders an empty failure under the same fallback as any other', () => {
+    captureConsoleError()
+    // `new Error('')` and a literally empty thrown string both reach the
+    // fallback: the display text is the boundary's `messageOf` result, and the
+    // non-empty placeholder belongs to the intake (asserted there), not here.
+    function ThrowEmptyError(): never {
+      throw new Error('')
+    }
+    function ThrowEmptyString(): never {
+      throw ''
+    }
+    const view = render(
+      <ZoteroSurfaceBoundary t={mockT} surface="sources">
+        <ThrowEmptyError />
+      </ZoteroSurfaceBoundary>,
+    )
+    expect(view.container.querySelector('[data-zotero-surface-error]')).not.toBeNull()
+
+    view.rerender(
+      <ZoteroSurfaceBoundary t={mockT} surface="sources" resetKey="again">
+        <ThrowEmptyString />
       </ZoteroSurfaceBoundary>,
     )
     expect(view.container.querySelector('[data-zotero-surface-error]')).not.toBeNull()

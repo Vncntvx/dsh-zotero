@@ -44,9 +44,10 @@ export class ZoteroCardBoundary extends Component<
 
   override componentDidCatch(error: unknown, info: ErrorInfo): void {
     console.error('dsh-zotero: tool card failed to render:', messageOf(error), info)
-    // One entry per crashed card, filed under its wire name so the panel
-    // names the tool whose card broke.
-    reportCrashedSurface(`tool:${this.props.props.toolName}`, error, info)
+    reportCrashedSurface(`tool:${this.props.props.toolName}`, error, {
+      kind: 'componentStack',
+      componentStack: info.componentStack,
+    })
   }
 
   override render(): ReactNode {

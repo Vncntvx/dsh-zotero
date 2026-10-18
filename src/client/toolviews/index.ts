@@ -38,6 +38,13 @@ export const REGISTRATIONS = [
 ] as const
 
 /**
+ * The registrant stamped on every tool-card entry: the harness's own ownership
+ * field, declared explicitly so the client crash intake claims exactly these 16
+ * entries (`registry.ts` stamps `options.registrant ?? ctx.fiber?.name`).
+ */
+const REGISTRANT = 'dsh-zotero'
+
+/**
  * Register all 16 Zotero tool views into the `tool.call.toolview` keyed slot.
  * @param ctx - browser plugin context.
  */
@@ -45,7 +52,7 @@ export function registerZoteroToolviews(ctx: ClientContext): void {
   ctx.slots.inject('tool.call.toolview', function* () {
     for (const [key, component] of REGISTRATIONS) {
       yield ctx.slots.register(
-        { name: 'tool.call.toolview', key, locale: 'zotero' },
+        { name: 'tool.call.toolview', key, locale: 'zotero', registrant: REGISTRANT },
         withCardBoundary(component),
       )
     }
