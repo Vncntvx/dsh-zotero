@@ -104,17 +104,15 @@ const REGISTRANT = ZOTERO_REMOTE_PACKAGE
  * Ownership is read from the registrant stamp, never inferred from key or name
  * substrings: a foreign registration that merely mentions "zotero" would
  * otherwise pollute the Zotero diagnostics ring, and an own registration whose
- * key carries no "zotero" would be silently dropped. A Factory occurrence
- * crash names the factory rather than a registrant, and the seam spells its key
- * `factory:<name>` (`SlotCore.reportFactoryError`), so a non-object
- * registration falls back to that key shape.
+ * key carries no "zotero" would be silently dropped. Ownership is governed
+ * strictly by the registrant stamp matching REGISTRANT.
  */
-function isZoteroRegistration(key: string, registration: unknown): boolean {
+function isZoteroRegistration(_key: string, registration: unknown): boolean {
   if (registration !== null && typeof registration === 'object') {
     const registrant = (registration as { registrant?: unknown }).registrant
     if (registrant === REGISTRANT) return true
   }
-  return key.startsWith('factory:')
+  return false
 }
 
 /**

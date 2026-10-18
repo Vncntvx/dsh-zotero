@@ -168,12 +168,16 @@ describe('the slot crash intake', () => {
     const world = intakeWorld([])
     await mountIntake(world)
 
-    // A Factory occurrence crash names the factory, and the registration it
-    // hands the listener is the factory definition, which carries no
-    // registrant stamp of its own: the key shape is what identifies the arm.
-    world.crash('factory:zotero-card', { component: () => null }, new Error('boom'), {
-      abdicated: false,
-    })
+    // A Factory occurrence crash names the factory, and ui-renderer stamps
+    // the registrant onto the stored factory definition.
+    world.crash(
+      'factory:zotero-card',
+      { registrant: REGISTRANT, component: () => null },
+      new Error('boom'),
+      {
+        abdicated: false,
+      },
+    )
     await Promise.resolve()
 
     expect(world.reports[0]?.surface).toBe('factory:zotero-card')
@@ -264,6 +268,27 @@ describe('the slot crash intake', () => {
       { registrant: 'another-plugin', component: () => null },
       new Error('editor crash'),
       { abdicated: true },
+    )
+    await Promise.resolve()
+
+    expect(world.reports).toHaveLength(0)
+  })
+
+  it('ignores crashes from foreign or anonymous factory occurrences', async () => {
+    const world = intakeWorld([])
+    await mountIntake(world)
+
+    world.crash(
+      'factory:pdf-viewer',
+      { registrant: 'some-other-plugin', component: () => null },
+      new Error('foreign factory crash'),
+      { abdicated: false },
+    )
+    world.crash(
+      'factory:anonymous',
+      { component: () => null },
+      new Error('anonymous factory crash'),
+      { abdicated: false },
     )
     await Promise.resolve()
 
