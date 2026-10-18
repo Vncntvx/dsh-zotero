@@ -4,6 +4,12 @@
 
 dsh-zotero 让 DSH 的 LLM 对话能够直接查询和引用 Zotero 文献库。16 个工具（8 个读工具 + 8 个写工具）覆盖文献搜索、原文片段检索、原文定位、格式化导出，以及笔记、标签、合集、条目与全库标签的写入；8 个个人库写入工具默认关闭，启用后需经过会话审批与计划审查卡。Web 端 Sources 面板提供会话文献、原文片段与引用的汇总展示。
 
+## 学术文献检索（可选组件）
+
+启用 `dsh-zotero/scholarly` 组件后，模型可以检索本地库之外的学术文献：跨 arXiv、OpenAlex、Crossref、Semantic Scholar、PubMed、Europe PMC 与 DBLP 七索引检索并按相关度融合去重，按 DOI / arXiv ID / PMID / PMCID 读取开放获取全文并做段落级定位，追踪引文网络，从 DOI 注册中心取标准引用格式（BibTeX、RIS、CSL JSON、CSL 样式文本），以及核验一份参考文献列表的真伪与字段一致性。
+
+它与本地库能力互补而非替代：检索结果会标出「已在本地库」的条目，但只读；组件默认关闭，因为检索会向外部服务发起请求。
+
 ## 搜索文献
 
 `zotero_search` 调用 Zotero 本地快速搜索：

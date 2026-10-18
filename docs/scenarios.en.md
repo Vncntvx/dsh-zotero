@@ -400,6 +400,18 @@ After those note/tag writes, can zotero_changes see them? Use the previous curso
 
 Passing criteria: G1 through G8 all pass, and N1, N2, N4 produce no hallucinated content. Write features are optional; if enabled, the whole W pack (W1–W8) must pass in a separate session with writes enabled, with the W1 plan card confirmation and the W2/W3 idempotent writes mandatory.
 
+## Scholarly Cases (S)
+
+Run with the `dsh-zotero/scholarly` component enabled. These cases verify **what the tool says when it fails**, not only the happy path: a tool that reports a rate limit as "does not exist" makes a user delete a correct citation.
+
+- **S1 An unreachable registry must not read as "does not exist"**: with the network cut (or Crossref answering 5xx), run `scholarly_verify` on a reference that genuinely exists. Expect `UNVERIFIED` with a note naming `Crossref lookup failed` and the status; `NOT FOUND` must not appear. Acceptance: the summary reads `0 not found` and `1 unverified`.
+- **S2 A genuine absence still reads NOT FOUND**: use a DOI that does not exist and whose Crossref title search returns nothing. Expect `NOT FOUND` with `No matching publication record found in Crossref.` S1 and S2 must be distinguishable.
+- **S3 An absent library annotation is not "not held"**: make local Zotero unreachable (quit Zotero) and run `scholarly_search`. Expect `Library status unavailable for N of M results`; the hits must not silently all lack the `In Zotero` mark.
+- **S4 In-library hit**: search the title of a paper already in the library. That row must carry `[In Zotero: <collection>]`, or `Root` when the item has no collection.
+- **S5 Paywall and transport failure stay distinct**: run `scholarly_read` on a paper with no open-access copy. Expect every attempted route listed (`Tried: …`), and — when a route failed at the transport — a note that the copy may merely be unreachable and worth retrying. It must not claim only "likely behind a paywall".
+- **S6 The full-text cache can be off or reused**: read one open-access paper twice. The second read hits the cache (no second outbound request in diagnostics). When the cache directory is unwritable the read must still succeed, recording one `scholarly.store.write-failed`.
+- **S7 The component is off by default**: without the `dsh-zotero/scholarly` row, `ctx.scholarly` does not exist and none of the six tools register; with it enabled they appear and collide with none of the 16 `zotero_*` tools.
+
 ## Symptom and Failure Diagnosis
 
 | Symptom                                  | Diagnosis Direction                                                                                                                   |

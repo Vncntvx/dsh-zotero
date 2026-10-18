@@ -32,6 +32,7 @@ All operations interact with the local Zotero API (`127.0.0.1:23119`); reads nee
 - **Citation formatting and export**: Generate formatted citations or export selected items as BibTeX, RIS, or CSL JSON for copying or downloading.
 - **Dedicated conversation tab**: Papers referenced in chat automatically sync to the "Zotero" tab at the top of the session, where you can inspect item details, review passages, or open local PDFs.
 - **Two-way notes and organization**: Allow the agent to draft reading notes, add tags, and organize collections, with plan review and interactive approval for every write operation.
+- **Scholarly literature retrieval (optional component)**: With `dsh-zotero/scholarly` enabled, search across arXiv, OpenAlex, Crossref, Semantic Scholar, PubMed, Europe PMC, and DBLP, read open-access full texts, and verify reference lists; the component ships disabled because it makes outbound requests.
 
 ## Install
 

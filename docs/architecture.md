@@ -65,6 +65,17 @@ graph LR
 - 词频统计以条目内部片段集合为语料基准；
 - 排除零分段落：与查询没有任何词项重合的段落不计入结果，因此无重合的查询返回空列表，而不是任意摘录。
 
+### 学术文献子系统 (`src/scholarly/`，可选组件)
+
+`dsh-zotero/scholarly` 是一个独立的 bundle 组件（`cordis.patch.yml` 中默认 `disabled: true`），注册 `ctx.scholarly` 与六个检索工具。它与 Zotero 本地路径完全隔离：所有请求发往外部学术索引，与 `ctx.zotero` 的唯一交叉点是「这封信是否已在本地库」的只读标注。
+
+- **主机白名单**：`src/scholarly/transport/hosts.ts` 是唯一真源。允许的 host 集合与每主机限流间隔都从 `SCHOLARLY_HOSTS` 派生，`allowlist.ts` 不再自带一份列表——两份列表曾经互相矛盾（最忙的 `api.openalex.org` 没有限流条目，而适配器实际调用的是 `export.arxiv.org`）。
+- **传输层**：截止时间用 `@deepseek-ai/dsh-timeout` 的 `deadline()` / `timeoutOf()`，因此「provider 超时」与「调用方取消」是两件可分辨的事（后者不重试）；响应体上限用共享的 `src/transport-bounds.ts`，与本地传输同一实现、同一 16 MiB 上限；在飞请求数由 `ConcurrencyGate` 约束。
+- **凭证**：三个 `role('secret')` 声明的 API Key 中，Semantic Scholar 与 OpenAlex 走请求头（`x-api-key` / `Authorization: Bearer`）；NCBI E-utilities 只接受 query 参数，因此该密钥经 URL 传递，代价由传输层承担——`ScholarlyHttpError` 只携带 host，拒绝消息也只报 hostname，绝不内插完整 URL。
+- **全文缓存**：`src/scholarly/fulltext/store.ts` 在 `dshCachePath('zotero-scholarly')` 下按 key 存一份 JSON 正文，内存只保留 8 条索引。不使用 `ctx.storageDomain`：其 `KvTable.get()` 是整表常驻内存的同步读，而单篇正文可达 200 KB。读结果分三态（`hit` / `miss` / `corrupt`），损坏条目会被驱逐并记录，不会被当作「没有」。
+- **失败语义**：全文解析的每条路由各自记录失败原因，终态错误逐条列出（`Tried: …`）；`scholarly_verify` 用四值结论（`verified` / `check` / `not_found` / `unverified`）区分「注册表说没有」与「注册表联系不上」——后者若报成前者，用户会删掉一条正确的引用。
+- **公开面**：`src/scholarly/index.ts` 只导出服务类、配置 schema 与领域类型；传输、主机表、存储与融合内部实现均不导出。
+
 ### 浏览器客户端 (`src/client/`)
 
 - 组合包配置（`plugins.bundle.config`）：在插件管理器详情页注册完整的 Zotero 配置表单，通过 harness 官方 `SettingsForm` 与 `SettingsFormModel` 统一管理；

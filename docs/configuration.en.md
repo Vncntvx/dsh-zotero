@@ -89,3 +89,20 @@ Open the **dsh-zotero** detail page in the plugin manager; its configuration sec
 ## Environments Without Settings Service
 
 In headless environments lacking a settings service, the plugin runs using values from the entry composition configuration.
+
+---
+
+## Scholarly Literature Component Configuration (`dsh-zotero/scholarly`)
+
+The component row in `cordis.patch.yml` ships with `disabled: true`; set `disabled: false` to enable it. Fields go in that row's `config` (the component has no settings-page form, so a change takes effect on the next profile start):
+
+| Field             | Default | Description                                                                                        |
+| ----------------- | ------- | -------------------------------------------------------------------------------------------------- |
+| `email`           | —       | Contact email sent to Crossref, OpenAlex, and NCBI/Europe PMC (polite pool for higher rate limits) |
+| `s2Key`           | —       | Semantic Scholar API Key (optional, avoids shared-pool rate limiting)                              |
+| `ncbiKey`         | —       | NCBI / PubMed API Key (optional, raises limit from 3 to 10 req/s)                                  |
+| `openalexKey`     | —       | OpenAlex API Key (optional, raises rate limit to 100 req/s)                                        |
+| `maxResults`      | `20`    | Maximum number of papers returned in a single search (1–100)                                       |
+| `maxContentChars` | `12000` | Character ceiling for chunked full-text reading (1,000–50,000)                                     |
+
+Full texts are cached as one JSON document per key under `$DSH_HOME/cache/zotero-scholarly/` (not controlled by this table, no separate switch).

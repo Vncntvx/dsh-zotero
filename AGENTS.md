@@ -10,16 +10,17 @@ dsh-zotero is a DeepSeek Harness plugin enabling agents to search, read, cite, a
 
 ## Repository map
 
-| Path          | Ownership                                                                            |
-| ------------- | ------------------------------------------------------------------------------------ |
-| `src/`        | Host runtime: Cordis service (`ZoteroService`), HTTP client, provider, tools, jobs   |
-| `src/local/`  | Local API domain pipelines (search, browse, retrieve, export, changes, write)        |
-| `src/tools/`  | 16 model tools (8 read + 8 write; write tools disabled by default)                   |
-| `src/client/` | Browser half (settings page, Sources/Exports tabs, toolviews) → `lib/client.js`      |
-| `tests/`      | Test suite organized into declared lanes (`tests/README.md`)                         |
-| `docs/`       | Product and technical documentation, maintained in paired zh/en files                |
-| `scripts/`    | Tooling for build, pack verification, harness pinning, test linting, and smoke tests |
-| `lib/`        | Generated build output (`tsc` and `esbuild`) — never edit directly                   |
+| Path             | Ownership                                                                            |
+| ---------------- | ------------------------------------------------------------------------------------ |
+| `src/`           | Host runtime: Cordis service (`ZoteroService`), HTTP client, provider, tools, jobs   |
+| `src/local/`     | Local API domain pipelines (search, browse, retrieve, export, changes, write)        |
+| `src/scholarly/` | External literature retrieval subsystem (search, fusion, fulltext, citations)        |
+| `src/tools/`     | 16 model tools (8 read + 8 write; write tools disabled by default)                   |
+| `src/client/`    | Browser half (settings page, Sources/Exports tabs, toolviews) → `lib/client.js`      |
+| `tests/`         | Test suite organized into declared lanes (`tests/README.md`)                         |
+| `docs/`          | Product and technical documentation, maintained in paired zh/en files                |
+| `scripts/`       | Tooling for build, pack verification, harness pinning, test linting, and smoke tests |
+| `lib/`           | Generated build output (`tsc` and `esbuild`) — never edit directly                   |
 
 ## Sources of truth
 
@@ -73,7 +74,7 @@ Refer to `docs/development.md` for interactive local launch workflows (full plug
 
 ## Safety
 
-- **Loopback isolation**: All HTTP traffic is strictly loopback (`127.0.0.1:23119`); `resolveConfig` rejects non-loopback addresses. No external calls, redirects, or background polling daemons.
+- **Loopback isolation**: All Zotero HTTP traffic is strictly loopback (`127.0.0.1:23119`); `resolveConfig` rejects non-loopback addresses. The optional `dsh-zotero/scholarly` bundle component makes rate-limited, allowlisted external requests with loopback SSRF guards. No background polling daemons.
 - **Credentials**: Zotero write keys are durable capabilities stored in `$DSH_HOME/.credentials.yaml` (`0600`). Never log, commit, or expose them.
 - **Generated code**: Never edit `lib/` directly. Never commit local debug overlays (`dev.cordis.yml`, `dev-lib.cordis.yml`); edit `.example` templates instead.
 - **Lifecycle teardown**: Disposing the plugin does not abort in-flight HTTP requests; operations settle via provider deadlines.

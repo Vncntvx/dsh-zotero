@@ -279,6 +279,18 @@
 
 浏览器半侧自行挂载 `remote.zotero`（`ctx.remote.$mount` + `ctx.inject(['remote.zotero', …])`）。若挂载被拒绝（例如网关尚未就绪、命名空间名冲突），插件入口会以 reject 结束，harness 将插件标记为加载失败，不会降级成「标签页在但状态栏报错」的半可用状态。验证方式：在浏览器控制台确认插件加载报错，且 `conversation.view`/`plugins.detail.section` 未注册（不出现半装配的标签页）。这是刻意的装配契约：状态栏永远无法作答的界面不算可用插件。用于确认装配错误不会被吞掉。
 
+## 学术检索用例（S）
+
+启用 `dsh-zotero/scholarly` 组件后执行。这些用例验证的是**失败时的说法**，而不只是成功路径：一个把限速报成「不存在」的工具，会让用户删掉正确的引用。
+
+- **S1 注册表不可达不得报成「不存在」**：断开网络（或让 Crossref 返回 5xx）后运行 `scholarly_verify`，一条真实存在的参考文献。期望结论为 `UNVERIFIED`，附注含 `Crossref lookup failed` 与状态码；**不得**出现 `NOT FOUND`。验收点：工具文本中 `0 not found` 且 `1 unverified`。
+- **S2 真实缺失仍报 NOT FOUND**：用一条 DOI 不存在、且 Crossref 书目检索为空的引用。期望 `NOT FOUND`，附注 `No matching publication record found in Crossref.`。S1 与 S2 的文案必须能区分。
+- **S3 本地库标注缺席不等于未收藏**：让本地 Zotero 不可达（关闭 Zotero），运行 `scholarly_search`。期望结果末尾出现 `Library status unavailable for N of M results`；不得让所有条目静默地不带 `In Zotero` 标记。
+- **S4 库内命中**：本地已收藏一篇论文，检索其标题。期望该行含 `[In Zotero: <合集名>]`；合集为空时显示 `Root`。
+- **S5 付费墙与传输失败必须区分**：对一篇无开放获取副本的论文运行 `scholarly_read`。期望错误逐条列出尝试过的路由（`Tried: …`），并在某条路由是传输失败时提示「可能只是暂时不可达，先重试」。**不得**只说「likely behind a paywall」。
+- **S6 全文缓存可关闭也可复用**：同一篇开放获取论文连续两次 `scholarly_read`。第二次应命中缓存（诊断中无第二次外部请求）。缓存目录不可写时，读取仍必须成功，仅记录一条 `scholarly.store.write-failed`。
+- **S7 组件默认可关闭**：未启用 `dsh-zotero/scholarly` 行时，`ctx.scholarly` 不存在，六个工具均不注册；启用后出现且不与 16 个 `zotero_*` 工具重名。
+
 ## 写入用例（W）
 
 在「插件管理器 → dsh-zotero 详情页配置区」中开启「允许写入」。写入操作必须先经过会话审批策略检查（`approval/policy`；策略为 `never` 时自动拒绝且不弹出计划审查卡），再展示计划审查卡（此项确认不可跳过）。用户确认后方执行写入。任何一级确认被拒绝均属正常行为。交互会话中可能依次展示权限确认与计划审查卡。Zotero 客户端在初次写入时可能额外弹出本地授权对话框。测试时建议使用专用的测试条目与合集。

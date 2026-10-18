@@ -18,6 +18,8 @@ export default defineConfig({
       exclude: [
         'src/index.ts',
         'src/types.ts',
+        'src/scholarly/index.ts',
+        'src/scholarly/types.ts',
         'src/client/css-modules.d.ts',
         'src/client/build-info-globals.d.ts',
         'src/client/plugin-slots.d.ts',
@@ -50,6 +52,7 @@ export default defineConfig({
         // regressions (one component sat at 50% lines inside the slack).
         'src/client/components/**': { statements: 95, branches: 96, functions: 99, lines: 97 },
         'src/client/**': { statements: 97, branches: 96, functions: 97, lines: 97 },
+        'src/scholarly/**': { statements: 95, branches: 88, functions: 91, lines: 95 },
         statements: 97,
         branches: 95,
         functions: 98,

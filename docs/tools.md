@@ -556,3 +556,98 @@ zotero_delete_library_tags(tags=["旧标签", "废弃"])
 | `ZOTERO_WRITE_APPROVAL_UNAVAILABLE` | 计划审查卡无法发起交互（无交互通道或系统级异常）        |
 | `ZOTERO_WRITE_CONFLICT`             | 写入版本前置条件冲突（412），对象已被外部修改           |
 | `ZOTERO_WRITE_RATE_LIMITED`         | Zotero 授权端点限速（429）                              |
+
+---
+
+## 学术文献检索组件工具 (`dsh-zotero/scholarly`)
+
+启用 bundle 组件 `dsh-zotero/scholarly`（该行默认 `disabled: true`）时提供以下 6 个模型工具：
+
+### scholarly_search
+
+跨 arXiv、OpenAlex、Crossref、Semantic Scholar、PubMed、Europe PMC 与 DBLP 的多源文献检索。支持语义自动路由、多路 RRF 融合去重，并自动检查当前本地 Zotero 库中的收藏状态。
+
+#### 参数
+
+| 参数          | 类型     | 默认值        | 说明                                                                                                                                  |
+| ------------- | -------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `query`       | string   | — (必填)      | 检索主题词、论文标题或作者名                                                                                                          |
+| `sources`     | string[] | —             | 可选限制检索的数据源列表（`arxiv`、`openalex`、`crossref`、`semanticscholar`、`pubmed`、`europepmc`、`dblp`）；默认按主题语义自动路由 |
+| `year_from`   | integer  | —             | 发表起始年份                                                                                                                          |
+| `year_to`     | integer  | —             | 发表截止年份                                                                                                                          |
+| `open_access` | boolean  | —             | 是否仅返回具有免费开放获取全文的文献                                                                                                  |
+| `sort`        | string   | `"relevance"` | 排序方式：`relevance`（相关度）、`date`（最新优先）、`citations`（引用最多优先）                                                      |
+| `categories`  | string[] | —             | arXiv 分类过滤（如 `cs.CL`、`stat.ML`）                                                                                               |
+| `limit`       | integer  | `8`           | 返回论文数量上限                                                                                                                      |
+| `abstract`    | string   | `"snippet"`   | 摘要展示程度：`none`、`snippet`、`full`                                                                                               |
+
+---
+
+### scholarly_get
+
+通过 DOI、arXiv ID、PMID、PMCID、URL 或精确标题直接聚合获取单篇论文的完整学术图谱元数据（作者、出版物、摘要、引用次数、开放获取全文链接与本地 Zotero 库匹配状态）。
+
+#### 参数
+
+| 参数 | 类型   | 默认值   | 说明                                                                                     |
+| ---- | ------ | -------- | ---------------------------------------------------------------------------------------- |
+| `id` | string | — (必填) | DOI（如 `10.1038/nature1234`）、arXiv ID（如 `2301.07041`）、PMID、PMCID、URL 或精确标题 |
+
+---
+
+### scholarly_citations
+
+追踪论文引文网络：检索引用该文献的论文列表（citations）、该文献的参考文献列表（references）或相似关联文献（related）。
+
+#### 参数
+
+| 参数        | 类型    | 默认值   | 说明                                                                                                       |
+| ----------- | ------- | -------- | ---------------------------------------------------------------------------------------------------------- |
+| `id`        | string  | — (必填) | DOI、arXiv ID 或 PMID                                                                                      |
+| `direction` | string  | — (必填) | 追溯方向：`citations`（引用该论文的文献）、`references`（该论文引用的参考文献）、`related`（语义关联论文） |
+| `limit`     | integer | `10`     | 返回论文数量上限                                                                                           |
+
+---
+
+### scholarly_read
+
+合法开放获取全文分层读取与段落级 BM25 证据定位。支持目录大纲提取（outline）、章节精准读取（section）与基于自然语言问题的 BM25 证据段落匹配（query）。
+
+#### 参数
+
+| 参数        | 类型    | 默认值   | 说明                                                             |
+| ----------- | ------- | -------- | ---------------------------------------------------------------- |
+| `id`        | string  | — (必填) | arXiv ID、DOI、PMID、PMCID 或 PDF 直链                           |
+| `outline`   | boolean | —        | 设为 `true` 仅返回多级章节目录与字符跨度                         |
+| `section`   | string  | —        | 指定章节编号或标题进行精读（如 `"2"` 或 `"Methodology"`）        |
+| `query`     | string  | —        | 自然语言问题，基于 BM25 算法在全文段落中排序检索最相关的证据片段 |
+| `passages`  | integer | `5`      | `query` 模式下返回的最优段落数量（1-12）                         |
+| `start`     | integer | `0`      | 分块阅读起始字符偏移量                                           |
+| `max_chars` | integer | 配置上限 | 单次读取的最大字符数                                             |
+
+---
+
+### scholarly_cite
+
+从 DOI 官方注册中心（Crossref、DataCite）通过内容协商直接获取标准引用格式。
+
+#### 参数
+
+| 参数     | 类型     | 默认值   | 说明                                                                                                                |
+| -------- | -------- | -------- | ------------------------------------------------------------------------------------------------------------------- |
+| `ids`    | string[] | — (必填) | DOI、arXiv ID 或 PMID 列表（单次最多 30 篇）                                                                        |
+| `format` | string   | — (必填) | 引用格式：`bibtex`、`ris`、`csljson`、`text`（格式化引文）                                                          |
+| `style`  | string   | `"apa"`  | 当 `format="text"` 时的 CSL 样式 ID（如 `apa`、`ieee`、`nature`、`china-national-standard-gb-t-7714-2015-numeric`） |
+| `locale` | string   | —        | 语言代码（如 `zh-CN`、`en-US`）                                                                                     |
+
+---
+
+### scholarly_verify
+
+参考文献真实性与准确性核验工具。解析参考文献文本中的作者、年份、标题与 DOI，对照 Crossref 官方注册数据库进行逐项比对，检测伪造文献、DOI 错配、年份差错及撤稿状态。
+
+#### 参数
+
+| 参数         | 类型     | 默认值   | 说明                                       |
+| ------------ | -------- | -------- | ------------------------------------------ |
+| `references` | string[] | — (必填) | 待核验的参考文献文本列表（单次最多 40 篇） |

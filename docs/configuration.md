@@ -89,3 +89,20 @@ Schema 默认值 → Composition 入口配置 → 当前 profile 的 Cordis patc
 ## 无设置服务的运行环境
 
 在未集成设置服务的无界面（headless）环境中，插件以入口配置参数运行。
+
+---
+
+## 学术文献检索组件配置 (`dsh-zotero/scholarly`)
+
+组件行在 `cordis.patch.yml` 中默认 `disabled: true`；把该行改为 `disabled: false` 即启用。字段在该行的 `config` 中设置（该组件没有设置页表单，因此改动需重启 profile 生效）：
+
+| 字段              | 默认值  | 说明                                                                                               |
+| ----------------- | ------- | -------------------------------------------------------------------------------------------------- |
+| `email`           | —       | 联系邮箱，附加于 Crossref、OpenAlex 和 NCBI/Europe PMC 请求头（加入 Polite Pool 获得更优限速配额） |
+| `s2Key`           | —       | Semantic Scholar API Key（可选，避免共享 IP 池限速）                                               |
+| `ncbiKey`         | —       | NCBI / PubMed API Key（可选，将每秒请求上限从 3 提升至 10）                                        |
+| `openalexKey`     | —       | OpenAlex API Key（可选，将每秒请求上限提升至 100）                                                 |
+| `maxResults`      | `20`    | 单次检索返回的最大论文数量（1-100）                                                                |
+| `maxContentChars` | `12000` | 全文分块读取字符数上限（1,000-50,000）                                                             |
+
+全文缓存在 `$DSH_HOME/cache/zotero-scholarly/` 下按 key 存一份 JSON 正文（不受本表控制，无独立开关）。

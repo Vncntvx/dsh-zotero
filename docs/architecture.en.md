@@ -65,6 +65,17 @@ graph LR
 - Document frequency evaluates against the item's own passage corpus;
 - Excludes zero-scoring passages: a passage that shares no term with the query is not considered relevant, so a query with no overlap returns an empty list rather than arbitrary excerpts.
 
+### Scholarly Literature Subsystem (`src/scholarly/`, optional component)
+
+`dsh-zotero/scholarly` is a separate bundle component (`disabled: true` by default in `cordis.patch.yml`) that registers `ctx.scholarly` and six retrieval tools. It is isolated from the local Zotero path: every request goes to an external index, and its only crossing with `ctx.zotero` is the read-only "is this paper already held" annotation.
+
+- **Host allowlist**: `src/scholarly/transport/hosts.ts` is the single source. Both the accepted host set and the per-host pacing interval derive from `SCHOLARLY_HOSTS`, so `allowlist.ts` no longer carries its own list — the two used to disagree (the busiest index, `api.openalex.org`, had no pacing entry while the adapter actually called `export.arxiv.org`).
+- **Transport**: deadlines come from `@deepseek-ai/dsh-timeout`'s `deadline()` / `timeoutOf()`, so a provider timeout and a caller abort stay distinguishable (the latter is never retried); the response ceiling comes from the shared `src/transport-bounds.ts` — one implementation and one 16 MiB bound for both transports; in-flight requests are bounded by `ConcurrencyGate`.
+- **Credentials**: of the three `role('secret')` keys, Semantic Scholar and OpenAlex travel in headers (`x-api-key` / `Authorization: Bearer`); NCBI E-utilities accept `api_key` only as a query parameter, so that key does cross the URL and the transport absorbs the cost — `ScholarlyHttpError` carries the host only, and rejection messages name the hostname, never the full URL.
+- **Full-text cache**: `src/scholarly/fulltext/store.ts` keeps one JSON document per key under `dshCachePath('zotero-scholarly')` and only eight index entries in memory. It does not use `ctx.storageDomain`: that seam's `KvTable.get()` is a synchronous read of a fully resident table, and one paper body reaches 200 KB. Reads have three outcomes (`hit` / `miss` / `corrupt`); a corrupt entry is evicted and recorded, never reported as absent.
+- **Failure semantics**: each full-text route records why it failed and the terminal error lists them (`Tried: …`); `scholarly_verify` reports four verdicts (`verified` / `check` / `not_found` / `unverified`) so "the registry answered and holds no such work" stays distinct from "the registry could not be reached" — reporting the second as the first makes a user delete a correct citation.
+- **Public surface**: `src/scholarly/index.ts` exports only the service class, the config schema, and the domain types; the transport, host table, store, and fusion internals are not exported.
+
 ### Browser Client (`src/client/`)
 
 - Bundle Configuration (`plugins.bundle.config`): registers the full Zotero configuration form in the Plugin Manager detail page, managed through harness official `SettingsForm` and `SettingsFormModel`;

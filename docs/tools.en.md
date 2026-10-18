@@ -556,3 +556,98 @@ Write tools are disabled by default, require `writeEnabled` in configuration, an
 | `ZOTERO_WRITE_APPROVAL_UNAVAILABLE` | Plan review card failed to initialize interactive session                      |
 | `ZOTERO_WRITE_CONFLICT`             | Version precondition conflict (412); object was modified externally            |
 | `ZOTERO_WRITE_RATE_LIMITED`         | Zotero authorization endpoint rate limited (429)                               |
+
+---
+
+## Scholarly Literature Component Tools (`dsh-zotero/scholarly`)
+
+Enabling the bundle component `dsh-zotero/scholarly` (its row ships `disabled: true`) registers the following 6 model tools:
+
+### scholarly_search
+
+Cross-repository scholarly literature retrieval across arXiv, OpenAlex, Crossref, Semantic Scholar, PubMed, Europe PMC, and DBLP. Features automatic semantic routing, multi-list RRF deduplication, and collision detection against the local Zotero library.
+
+#### Parameters
+
+| Parameter     | Type     | Default       | Description                                                                                                                                        |
+| ------------- | -------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `query`       | string   | — (required)  | Topic keywords, paper title, or author name                                                                                                        |
+| `sources`     | string[] | —             | Optional source filter (`arxiv`, `openalex`, `crossref`, `semanticscholar`, `pubmed`, `europepmc`, `dblp`); defaults to automatic semantic routing |
+| `year_from`   | integer  | —             | Minimum publication year                                                                                                                           |
+| `year_to`     | integer  | —             | Maximum publication year                                                                                                                           |
+| `open_access` | boolean  | —             | Filter for papers with free open-access full text                                                                                                  |
+| `sort`        | string   | `"relevance"` | Result ranking: `relevance`, `date` (newest first), `citations` (most cited first)                                                                 |
+| `categories`  | string[] | —             | arXiv categories filter (e.g. `cs.CL`, `stat.ML`)                                                                                                  |
+| `limit`       | integer  | `8`           | Maximum number of papers returned                                                                                                                  |
+| `abstract`    | string   | `"snippet"`   | Abstract display verbosity: `none`, `snippet`, `full`                                                                                              |
+
+---
+
+### scholarly_get
+
+Aggregates complete scholarly metadata for a single paper by DOI, arXiv ID, PMID, PMCID, URL, or exact title across all indexes (authors, venue, abstract, citation counts, open-access link, and Zotero presence).
+
+#### Parameters
+
+| Parameter | Type   | Default      | Description                                                                                     |
+| --------- | ------ | ------------ | ----------------------------------------------------------------------------------------------- |
+| `id`      | string | — (required) | DOI (e.g. `10.1038/nature1234`), arXiv ID (e.g. `2301.07041`), PMID, PMCID, URL, or exact title |
+
+---
+
+### scholarly_citations
+
+Explores a paper's citation graph: papers that cite this work (citations), bibliography list (references), or semantically similar works (related).
+
+#### Parameters
+
+| Parameter   | Type    | Default      | Description                                                 |
+| ----------- | ------- | ------------ | ----------------------------------------------------------- |
+| `id`        | string  | — (required) | DOI, arXiv ID, or PMID                                      |
+| `direction` | string  | — (required) | Exploration direction: `citations`, `references`, `related` |
+| `limit`     | integer | `10`         | Maximum number of papers returned                           |
+
+---
+
+### scholarly_read
+
+Reads lawful open-access full text with hierarchical outline navigation and passage-level BM25 evidence ranking. Supports table-of-contents extraction (`outline`), section-targeted reading (`section`), and question-driven BM25 passage matching (`query`).
+
+#### Parameters
+
+| Parameter   | Type    | Default        | Description                                                                  |
+| ----------- | ------- | -------------- | ---------------------------------------------------------------------------- |
+| `id`        | string  | — (required)   | arXiv ID, DOI, PMID, PMCID, or direct open-access PDF URL                    |
+| `outline`   | boolean | —              | Set to `true` to view the table of contents with section character offsets   |
+| `section`   | string  | —              | Read a specific section by number or title (e.g. `"2"` or `"Methodology"`)   |
+| `query`     | string  | —              | Natural-language query to locate the most relevant passages via BM25 ranking |
+| `passages`  | integer | `5`            | Maximum passages returned under `query` mode (1–12)                          |
+| `start`     | integer | `0`            | Starting character offset for chunked reading                                |
+| `max_chars` | integer | config default | Maximum characters read per chunk                                            |
+
+---
+
+### scholarly_cite
+
+Fetches official citations directly from DOI registration agencies (Crossref, DataCite) via HTTP content negotiation.
+
+#### Parameters
+
+| Parameter | Type     | Default      | Description                                                                                                       |
+| --------- | -------- | ------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `ids`     | string[] | — (required) | List of DOIs, arXiv IDs, or PMIDs (up to 30 items)                                                                |
+| `format`  | string   | — (required) | Citation format: `bibtex`, `ris`, `csljson`, `text` (formatted reference)                                         |
+| `style`   | string   | `"apa"`      | CSL style ID for `format="text"` (e.g. `apa`, `ieee`, `nature`, `china-national-standard-gb-t-7714-2015-numeric`) |
+| `locale`  | string   | —            | Language locale code (e.g. `zh-CN`, `en-US`)                                                                      |
+
+---
+
+### scholarly_verify
+
+Bibliography verification and fact-checking tool. Parses authors, year, title, and DOI from reference text and checks against official Crossref records to catch hallucinated references, mismatched DOIs, erroneous publication years, and retracted papers.
+
+#### Parameters
+
+| Parameter    | Type     | Default      | Description                                                      |
+| ------------ | -------- | ------------ | ---------------------------------------------------------------- |
+| `references` | string[] | — (required) | List of bibliography reference strings to check (up to 40 items) |
