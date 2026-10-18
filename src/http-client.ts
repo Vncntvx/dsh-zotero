@@ -9,6 +9,7 @@
 
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { deadline, timeoutOf } from '@deepseek-ai/dsh-timeout'
+import { ResponseTooLargeError, readBoundedText } from './transport-bounds.js'
 import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import { TOOL_ABORTED_MESSAGE } from './abort.js'
 import { acquireSlot, ConcurrencyGate } from './concurrency.js'
@@ -279,24 +280,16 @@ function notImplementedError(response: Response, detail: string, path: string): 
  * which applies the same bound to every write response.
  */
 export async function readBody(response: Response, maxResponseBytes: number): Promise<string> {
-  const reader = response.body?.getReader()
-  if (reader === undefined) return ''
-  const parts: string[] = []
-  let total = 0
-  const decoder = new TextDecoder()
-  for (;;) {
-    const { done, value } = await reader.read()
-    if (done) break
-    total += value.byteLength
-    if (total > maxResponseBytes) {
-      await reader.cancel()
+  try {
+    return await readBoundedText(response, maxResponseBytes)
+  } catch (error) {
+    // The shared reader reports the ceiling generically; this transport owns
+    // the Zotero error vocabulary its callers branch on.
+    if (error instanceof ResponseTooLargeError) {
       throw new ZoteroError(responseTooLargeMessage(maxResponseBytes), ZOTERO_RESPONSE_TOO_LARGE)
     }
-    parts.push(decoder.decode(value, { stream: true }))
+    throw error
   }
-  // Concatenating the decoded chunks once avoids quadratic string copies on
-  // large bodies (the bound above is 16 MiB).
-  return parts.join('') + decoder.decode()
 }
 
 /**

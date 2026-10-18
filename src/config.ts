@@ -14,7 +14,7 @@
 import type { Volatile } from '@deepseek-ai/cordis'
 import { isVolatile } from '@deepseek-ai/cosmokit'
 import Schema from '@deepseek-ai/schemastery'
-import { LOCAL_PROVIDER_ID } from './constants.js'
+import { DEFAULT_MAX_RESPONSE_BYTES, LOCAL_PROVIDER_ID } from './constants.js'
 
 export interface Config {
   /** Zotero Local API base URL. Must be plain loopback HTTP. */
@@ -155,9 +155,7 @@ export const Config = Schema.object({
   maxFulltextChars: Schema.number().default(250_000).volatile(),
   retrieveAttachmentCap: Schema.number().default(16).volatile(),
   graphConcurrency: Schema.number().default(4).volatile(),
-  maxResponseBytes: Schema.number()
-    .default(16 * 1024 * 1024)
-    .volatile(),
+  maxResponseBytes: Schema.number().default(DEFAULT_MAX_RESPONSE_BYTES).volatile(),
   maxExportChars: Schema.number().default(1_000_000).volatile(),
   maxExportRefs: Schema.number().default(50).volatile(),
   maxBrowseResults: Schema.number().default(50).volatile(),

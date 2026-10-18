@@ -147,3 +147,13 @@ export const ZOTERO_TOOL_NAMES = [...ZOTERO_READ_TOOL_NAMES, ...ZOTERO_WRITE_TOO
  * spelling in command text so both sides recognize one endpoint.
  */
 export const ZOTERO_AUTHORIZE_PATH = 'local/authorize'
+
+/**
+ * Default byte ceiling for one response body, shared by both transports.
+ *
+ * The local Zotero API and the scholarly hosts bound bodies for the same
+ * reason (a hostile or misconfigured endpoint must not decide how much memory
+ * one request takes), so they read one number: two bounds would drift and the
+ * larger one would silently become the real policy.
+ */
+export const DEFAULT_MAX_RESPONSE_BYTES = 16 * 1024 * 1024
