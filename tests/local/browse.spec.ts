@@ -125,6 +125,51 @@ describe('browse: libraries', () => {
     expect(result.items.length).toBe(3)
     expect(result.serverId).toBe('S1')
   })
+  it('reads the exact group shape Zotero serializes', async () => {
+    // Ground truth: `Zotero.Group.prototype.toResponseJSON` under the local
+    // API's `includeGroupDetails` emits
+    // `{ id, version, links, meta, data: { id, version, name, description } }`
+    // (Zotero 10 app/omni.ja → xpcom/data/group.js). The id rides the top
+    // level; the name only the inner `data` block, which is the level this
+    // fixture exercises — the serializer never puts `name` at the top.
+    serveJson(
+      mock,
+      `${apiPath()}/groups`,
+      [
+        {
+          id: 42,
+          version: 17,
+          links: { self: { href: 'http://127.0.0.1:23119/api/groups/42' } },
+          meta: { numItems: 3 },
+          data: { id: 42, version: 17, name: 'Research Group', description: 'Lab library' },
+        },
+      ],
+      versionHeaders('S1'),
+    )
+    const result = await provider.browse({ kind: 'libraries', offset: 0, limit: 10 })
+    expect(result.kind).toBe('libraries')
+    expect(result.total).toBe(2)
+    const group = (
+      result.items as Array<{ library: { type: string; id: number }; name: string }>
+    ).find((item) => item.library.type === 'group')
+    expect(group).toBeDefined()
+    expect(group!.library).toEqual({ type: 'group', id: 42 })
+    expect(group!.name).toBe('Research Group')
+  })
+  it('skips a group row whose shape it does not recognize', async () => {
+    // A row carrying only the JS-side property spelling (`groupID`) is not a
+    // wire shape: it is skipped rather than guessed at, so an API change
+    // surfaces as a missing library instead of a mislabelled one.
+    serveJson(
+      mock,
+      `${apiPath()}/groups`,
+      [{ groupID: 7, groupName: 'Mystery Group' }],
+      versionHeaders('S1'),
+    )
+    const result = await provider.browse({ kind: 'libraries', offset: 0, limit: 10 })
+    expect(result.total).toBe(1)
+    expect(result.items.length).toBe(1)
+  })
   it('falls back to personal when groups 404', async () => {
     serveStatus(mock, `${apiPath()}/groups`, 404, 'not found')
     const result = await provider.browse({ kind: 'libraries', offset: 0, limit: 10 })

@@ -493,6 +493,36 @@ describe('export tolerances', () => {
     await expect(pending).rejects.toMatchObject({ code: TOOL_ABORTED })
   })
 
+  it('keeps the export when the metadata arm fails, leaving refs bare', async () => {
+    // The metadata batch only sharpens entry-to-ref pairing. Its failure is
+    // fail-open: the delivered bibliography survives and the refs it could
+    // not sharpen stay bare, so a reader sees "unpaired" rather than losing
+    // the whole export. A caller abort is the one error that still escapes.
+    const batchText =
+      '@article{customKeyA,\n  title = {Carbon price forecasting},\n}\n\n' +
+      '@article{customKeyB,\n  title = {Insight into heterogeneous risks},\n}\n'
+    mock.route('GET', `${apiPath()}/items`, (req, res, helpers, search) => {
+      if (search.get('format') === 'bibtex') {
+        helpers.text(batchText)
+        return
+      }
+      // The metadata batch: the request is made and the server refuses it.
+      helpers.raw(500, { 'Content-Type': 'text/plain' }, 'boom')
+    })
+    const result = await provider.export(exportRequest({ format: 'bibtex' }))
+    if (result.format !== 'bibtex') throw new Error('unreachable')
+    // The bibliography body is delivered untouched.
+    expect(result.text).toBe(batchText)
+    // No metadata arrived, so no ref could be paired: every ref stays bare
+    // rather than being positionally guessed into an entry.
+    expect(result.items).toEqual([
+      { ref: 'zotero://user/0/item/ABCD1234' },
+      { ref: 'zotero://user/0/item/BBBB1234' },
+    ])
+    // Both arms were still attempted: the failure is a fallback, not a skip.
+    expectRequestCount(mock, 2)
+  })
+
   it('fails loud on a citation row without a valid key', async () => {
     serveJson(mock, `${apiPath()}/items`, [{ citation: 'x' }])
     await zoteroError(provider.export(exportRequest()), ZOTERO_UNEXPECTED, ITEM_WITHOUT_KEY_MESSAGE)

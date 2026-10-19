@@ -32,9 +32,9 @@ describe('chunkText', () => {
     const words = Array.from({ length: 12 }, (_, i) => `w${i}`).join(' ')
     const chunks = chunkText(words, 5)
     expect(chunks).toHaveLength(3)
-    expect(chunks[0]).toEqual({ text: 'w0 w1 w2 w3 w4', index: 0 })
-    expect(chunks[1]).toEqual({ text: 'w5 w6 w7 w8 w9', index: 1 })
-    expect(chunks[2]).toEqual({ text: 'w10 w11', index: 2 })
+    expect(chunks[0]).toEqual({ text: 'w0 w1 w2 w3 w4', index: 0, start: 0, end: 14 })
+    expect(chunks[1]).toEqual({ text: 'w5 w6 w7 w8 w9', index: 1, start: 15, end: 29 })
+    expect(chunks[2]).toEqual({ text: 'w10 w11', index: 2, start: 30, end: 37 })
   })
 
   it('returns no chunks for empty text', () => {

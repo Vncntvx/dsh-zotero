@@ -58,6 +58,8 @@ export function tokenize(text: string): string[] {
 export interface EvidenceChunk {
   readonly text: string
   readonly index: number
+  readonly start?: number
+  readonly end?: number
 }
 
 /** A word span in the source text: `[start, end)` character offsets. */
@@ -128,14 +130,24 @@ export function chunkText(
       let pos = span.start
       while (pos < span.end) {
         const stop = Math.min(pos + characterLimit, span.end)
-        chunks.push({ text: text.slice(pos, stop), index: chunks.length })
+        chunks.push({
+          text: text.slice(pos, stop),
+          index: chunks.length,
+          start: pos,
+          end: stop,
+        })
         pos = stop
       }
       start += 1
     } else {
       const first = spans[start]!
       const last = spans[end - 1]!
-      chunks.push({ text: text.slice(first.start, last.end), index: chunks.length })
+      chunks.push({
+        text: text.slice(first.start, last.end),
+        index: chunks.length,
+        start: first.start,
+        end: last.end,
+      })
       start = end
     }
   }

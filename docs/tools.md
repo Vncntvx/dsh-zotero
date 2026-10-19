@@ -168,7 +168,7 @@ zotero_attachment(ref="zotero://user/0/item/ABC123")
 ### 说明
 
 - `citation` 模式单次超过 50 个 key 时自动分批请求；
-- `bibtex`、`biblatex`、`ris`、`csljson` 的批量导出全程使用批处理请求：`ris`、`csljson` 发起 1 次本地 API 批处理请求；`bibtex`、`biblatex` 在此基础上并行发起第 2 次批处理请求，读取条目原始元数据用于字段对齐。返回内容在内存中解析，每条记录按 key 或元数据指纹与 ref 配对，不按位置猜测；无法定位的 ref 在结果中只保留自身。单次调用最多支持 50 条；
+- `bibtex`、`biblatex`、`ris`、`csljson` 的批量导出全程使用批处理请求：`ris`、`csljson` 发起 1 次本地 API 批处理请求；`bibtex`、`biblatex` 在此基础上并行发起第 2 次批处理请求，读取条目原始元数据用于字段对齐。返回内容在内存中解析，每条记录按 key 或元数据指纹与 ref 配对，不按位置猜测；无法定位的 ref 在结果中只保留自身。第 2 次元数据请求失败（如 Zotero 返回 5xx）时导出照常完成：正文原样返回，未能配对的 ref 保持仅有 `ref` 的裸形状。调用方取消（abort）不属于这类降级，仍照常抛出。单次调用最多支持 50 条；
 - 单次导出仅允许同一 library 的 refs，不支持跨库混合导出。
 
 ### 示例

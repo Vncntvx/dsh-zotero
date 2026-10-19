@@ -204,15 +204,22 @@ async function browseLibraries(
     serverId = headers.get(ZOTERO_SERVER_ID_HEADER) ?? undefined
     const groups = requireArrayBody(json, 'groups')
     for (const row of groups) {
+      // Zotero serializes each group as `{ id, version, links, meta, data: {
+      // id, version, name, description } }` — `Zotero.Group.prototype
+      // .toResponseJSON` under the local API's `includeGroupDetails`, verified
+      // against the Zotero 10 bundle (app/omni.ja →
+      // chrome/content/zotero/xpcom/data/group.js). The id is read from the
+      // top level and the name from the inner `data` block, the two places the
+      // serializer puts them. No other spelling is read: an unrecognized row
+      // is skipped rather than guessed at, so a future shape change fails
+      // loudly instead of silently mislabelling a library.
       const rec = asRecord(row)
-      const idRaw = rec?.id ?? rec?.groupID ?? asRecord(rec?.data)?.groupID
-      const nameRaw =
-        asString(rec?.name) ?? asString(asRecord(rec?.data)?.name) ?? asString(rec?.groupName) ?? ''
+      const idRaw = rec?.id
+      const name = asString(rec?.name) ?? asString(asRecord(rec?.data)?.name) ?? ''
       const id =
         typeof idRaw === 'number' ? idRaw : typeof idRaw === 'string' ? Number(idRaw) : undefined
       if (id === undefined || !Number.isInteger(id) || id <= 0) continue
-      const name = nameRaw || `Group ${id}`
-      items.push({ library: { type: 'group', id }, name })
+      items.push({ library: { type: 'group', id }, name: name || `Group ${id}` })
     }
   } catch (error) {
     if (isNotFoundError(error)) {

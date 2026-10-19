@@ -168,7 +168,7 @@ Returns `{kind: "background", jobId}` or `{kind: "promoted", jobId, timeoutMs, m
 ### Notes
 
 - In `citation` mode, requests exceeding 50 keys batch automatically;
-- `bibtex`, `biblatex`, `ris`, and `csljson` export the whole set through batch requests: `ris` and `csljson` send 1 local API batch request, while `bibtex` and `biblatex` run a 2nd batch request in parallel to fetch the items' raw metadata for field alignment. The returned text is parsed in memory, and each entry is matched to its ref by key or metadata fingerprint rather than by position; a ref that cannot be located comes back as a bare ref. One call carries at most 50 items;
+- `bibtex`, `biblatex`, `ris`, and `csljson` export the whole set through batch requests: `ris` and `csljson` send 1 local API batch request, while `bibtex` and `biblatex` run a 2nd batch request in parallel to fetch the items' raw metadata for field alignment. The returned text is parsed in memory, and each entry is matched to its ref by key or metadata fingerprint rather than by position; a ref that cannot be located comes back as a bare ref. If the metadata request fails (e.g. Zotero answers 5xx), the export still completes: the body is returned as-is and the unpaired refs stay bare. A caller abort is not such a degradation and still propagates. One call carries at most 50 items;
 - All refs in a single export call must belong to the same library.
 
 ### Example
