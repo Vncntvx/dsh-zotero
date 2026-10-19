@@ -94,7 +94,7 @@ In headless environments lacking a settings service, the plugin runs using value
 
 ## Scholarly Literature Component Configuration (`dsh-zotero/scholarly`)
 
-The component row in `cordis.patch.yml` ships with `disabled: true`; set `disabled: false` to enable it. Fields go in that row's `config` (the component has no settings-page form, so a change takes effect on the next profile start):
+The component row in `cordis.patch.yml` ships with `disabled: true`; set `disabled: false` to enable it. Fields can be edited through the "Configure" button on the `dsh-zotero#scholarly` row in the Plugins manager, or written directly under that row's `config` in `cordis.patch.yml`. A change takes effect on the next tool call, without restarting the profile:
 
 | Field             | Default | Description                                                                                        |
 | ----------------- | ------- | -------------------------------------------------------------------------------------------------- |

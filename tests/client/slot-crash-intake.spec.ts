@@ -113,7 +113,13 @@ function intakeWorld(journal: ZoteroClientErrorReport[]): IntakeWorld {
       }
       return Object.assign(Promise.resolve({ dispose }), { dispose })
     },
-    configForms: { get: () => scope },
+    configForms: {
+      get: () => scope,
+      whileServed: (
+        namespaces: readonly string[],
+        register: (served: ReadonlySet<string>) => () => void,
+      ) => register(new Set(namespaces)),
+    },
     uiConversation: { events: { register: () => () => {} } },
     slots: {
       inject: () => () => {},

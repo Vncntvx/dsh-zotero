@@ -1,60 +1,272 @@
 /**
- * The Zotero settings form body: every field of the `zotero` namespace,
- * grouped into the families the host schema declares.
+ * The Zotero settings form body: 4 partitioned tabs holding all 37 Zotero
+ * configuration fields, as elevated cards.
+ *
+ * Tab 1: General & Features (conversation tab, personal library write gate, default style/locale)
+ * Tab 2: Local Connection (API URL, timeout, max requests, cache TTL)
+ * Tab 3: Local Search & Passages (query/concurrency quotas, passage and fulltext limits)
+ * Tab 4: Advanced & Tasks (output limits, background job policy, diagnostics)
  *
  * The form renders inside the `plugins.bundle.config` slot on the Zotero
- * plugin details page. The form chrome (status lines, failed notice,
- * save button) belongs to the official `<SettingsForm>`; this module owns
- * only the groups and the per-field controls. Value inputs are the harness's
- * own `SettingsValueField`; booleans are the official `Checkbox` inside the
- * local staged row (badge/reset/hint/risk have no upstream composite).
+ * plugin details page. The official `<SettingsForm>` supplies the chrome
+ * (status lines, failed notice, save button); this module owns the segmented
+ * tabs, group cards, and per-field controls.
  * @module dsh-zotero/client/ZoteroSettingsForm
  */
 
-import type { ReactNode } from 'react'
-import { SettingsValueField } from '@deepseek-ai/dsh-client-ui-primitives'
+import { useMemo, useState, type ReactNode } from 'react'
+import {
+  SegmentedTabs,
+  SettingsValueField,
+  type SegmentedTab,
+  type SettingsFormActions,
+} from '@deepseek-ai/dsh-client-ui-primitives'
 import { BooleanField } from './fields.tsx'
 import { writeRiskCopy } from './risk-gate.ts'
-import type { SettingsFormActions } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
   BOOLEAN_FIELD_KEYS,
   FIELD_GROUPS,
   NUMERIC_FIELD_KEYS,
+  SEARCH_SUBGROUPS,
   type FieldKey,
+  type GroupKey,
+  type SettingsTabId,
   type ZoteroCardState,
 } from './zotero-card-controller.ts'
 import type { ZoteroLocaleKey } from './locales.ts'
 import css from './ZoteroSettingsForm.module.css'
 
-/** Field-editing actions a surface wires from its card face. */
+/** Field-editing actions, wired from the surface's card face. */
 export type ZoteroFormActions = Pick<SettingsFormActions, 'edit' | 'resetField'>
 
-/** Props the form body needs from its surface: copy, snapshot, and actions. */
+/** What the form body needs from its surface: copy, snapshot, and actions. */
 export interface ZoteroSettingsFormProps {
   /** Locale reader bound to the plugin dictionary. */
   t: (key: ZoteroLocaleKey) => string
-  /** The card snapshot the surface's bound selector produces. */
+  /** The card snapshot, from the surface's bound selector. */
   state: ZoteroCardState
   /** The form's staged-edit actions. */
   actions: ZoteroFormActions
+  /** Controlled active tab identifier. */
+  activeTab?: SettingsTabId
+  /** Fired when the active tab changes. */
+  onTabChange?: (tab: SettingsTabId) => void
 }
 
+/** Field map by group key, for quick lookups. */
+const FIELDS_BY_GROUP: ReadonlyMap<GroupKey, readonly FieldKey[]> = new Map(
+  FIELD_GROUPS.map(({ key, fields }) => [key, fields]),
+)
+
 /**
- * Render every group of the namespace's fields.
+ * Render the 4-tab settings view.
  * @param props - copy, snapshot, and staged-edit actions.
- * @returns the group sections.
+ * @returns the tabbed form view.
  */
 export function ZoteroSettingsForm(props: ZoteroSettingsFormProps) {
   const { t, state, actions } = props
+  const [internalTab, setInternalTab] = useState<SettingsTabId>('features')
+  const activeTab = props.activeTab ?? internalTab
+
+  const handleTabChange = (next: string) => {
+    const tabId = next as SettingsTabId
+    if (props.onTabChange) {
+      props.onTabChange(tabId)
+    } else {
+      setInternalTab(tabId)
+    }
+  }
+
+  const tabItems: readonly [SegmentedTab<SettingsTabId>, ...SegmentedTab<SettingsTabId>[]] =
+    useMemo(
+      () => [
+        {
+          value: 'features',
+          label: t('tabFeatures'),
+          id: 'zotero-tab-features',
+          panelId: 'zotero-panel-features',
+        },
+        {
+          value: 'connection',
+          label: t('tabConnection'),
+          id: 'zotero-tab-connection',
+          panelId: 'zotero-panel-connection',
+        },
+        {
+          value: 'search',
+          label: t('tabSearch'),
+          id: 'zotero-tab-search',
+          panelId: 'zotero-panel-search',
+        },
+        {
+          value: 'advanced',
+          label: t('tabAdvanced'),
+          id: 'zotero-tab-advanced',
+          panelId: 'zotero-panel-advanced',
+        },
+      ],
+      [t],
+    )
+
+  const groupFieldsOf = (group: GroupKey): readonly FieldKey[] => FIELDS_BY_GROUP.get(group) ?? []
+
   return (
     <>
-      {FIELD_GROUPS.map(({ key: groupKey, fields: keys }) => (
-        <section key={groupKey} className={css.group} aria-label={t(groupKey)}>
-          <h3 className={css.groupTitle}>{t(groupKey)}</h3>
-          <div className={css.fields}>{keys.map((key) => field(t, state, actions, key))}</div>
-        </section>
-      ))}
+      <div className={css.tabsContainer}>
+        <SegmentedTabs
+          items={tabItems}
+          value={activeTab}
+          onChange={handleTabChange}
+          label={t('configTabsLabel')}
+        />
+      </div>
+
+      {/* Tab 1: General & Features */}
+      <div
+        role="tabpanel"
+        id="zotero-panel-features"
+        aria-labelledby="zotero-tab-features"
+        hidden={activeTab !== 'features'}
+        className={css.tabPanel}
+      >
+        {renderGroupCard(t, state, actions, 'groupWeb', groupFieldsOf('groupWeb'), 'groupWebDesc')}
+        {renderGroupCard(
+          t,
+          state,
+          actions,
+          'groupWrite',
+          groupFieldsOf('groupWrite'),
+          'groupWriteDesc',
+        )}
+        {renderGroupCard(
+          t,
+          state,
+          actions,
+          'groupDefaults',
+          groupFieldsOf('groupDefaults'),
+          'groupDefaultsDesc',
+        )}
+      </div>
+
+      {/* Tab 2: Local Connection */}
+      <div
+        role="tabpanel"
+        id="zotero-panel-connection"
+        aria-labelledby="zotero-tab-connection"
+        hidden={activeTab !== 'connection'}
+        className={css.tabPanel}
+      >
+        {renderGroupCard(
+          t,
+          state,
+          actions,
+          'groupConnection',
+          groupFieldsOf('groupConnection'),
+          'groupConnectionDesc',
+        )}
+      </div>
+
+      {/* Tab 3: Local Search & Passages */}
+      <div
+        role="tabpanel"
+        id="zotero-panel-search"
+        aria-labelledby="zotero-tab-search"
+        hidden={activeTab !== 'search'}
+        className={css.tabPanel}
+      >
+        {renderCustomCard(
+          t,
+          state,
+          actions,
+          'groupSearchQuery',
+          t('groupSearchQuery'),
+          t('groupSearchQueryDesc'),
+          SEARCH_SUBGROUPS.query,
+        )}
+        {renderCustomCard(
+          t,
+          state,
+          actions,
+          'groupSearchEvidence',
+          t('groupSearchEvidence'),
+          t('groupSearchEvidenceDesc'),
+          SEARCH_SUBGROUPS.evidence,
+        )}
+      </div>
+
+      {/* Tab 4: Advanced & Tasks */}
+      <div
+        role="tabpanel"
+        id="zotero-panel-advanced"
+        aria-labelledby="zotero-tab-advanced"
+        hidden={activeTab !== 'advanced'}
+        className={css.tabPanel}
+      >
+        {renderGroupCard(
+          t,
+          state,
+          actions,
+          'groupOutput',
+          groupFieldsOf('groupOutput'),
+          'groupOutputDesc',
+        )}
+        {renderGroupCard(
+          t,
+          state,
+          actions,
+          'groupJobs',
+          groupFieldsOf('groupJobs'),
+          'groupJobsDesc',
+        )}
+        {renderGroupCard(
+          t,
+          state,
+          actions,
+          'groupDiagnostics',
+          groupFieldsOf('groupDiagnostics'),
+          'groupDiagnosticsDesc',
+        )}
+      </div>
     </>
+  )
+}
+
+function renderGroupCard(
+  t: (key: ZoteroLocaleKey) => string,
+  state: ZoteroCardState,
+  actions: ZoteroFormActions,
+  groupKey: GroupKey,
+  fields: readonly FieldKey[],
+  descKey: ZoteroLocaleKey,
+): ReactNode {
+  return (
+    <section key={groupKey} className={css.groupCard} aria-label={t(groupKey)}>
+      <div className={css.cardHeader}>
+        <h3 className={css.groupTitle}>{t(groupKey)}</h3>
+        <p className={css.groupDescription}>{t(descKey)}</p>
+      </div>
+      <div className={css.fields}>{fields.map((key) => field(t, state, actions, key))}</div>
+    </section>
+  )
+}
+
+function renderCustomCard(
+  t: (key: ZoteroLocaleKey) => string,
+  state: ZoteroCardState,
+  actions: ZoteroFormActions,
+  id: string,
+  title: string,
+  desc: string,
+  fields: readonly FieldKey[],
+): ReactNode {
+  return (
+    <section key={id} className={css.groupCard} aria-label={title}>
+      <div className={css.cardHeader}>
+        <h3 className={css.groupTitle}>{title}</h3>
+        <p className={css.groupDescription}>{desc}</p>
+      </div>
+      <div className={css.fields}>{fields.map((key) => field(t, state, actions, key))}</div>
+    </section>
   )
 }
 

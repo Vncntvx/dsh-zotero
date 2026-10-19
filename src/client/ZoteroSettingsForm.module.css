@@ -1,22 +1,46 @@
-/* Zotero settings form groups: the families the host schema declares. Spacing
- * follows the harness plugin fields (`fields.module.css` `.field` padding
- * 12px 0 with `.field + .field` separators): groups stack without extra gaps,
- * fields inside a group stack tight; the card body owns the outer margins. */
+/* Zotero settings form layout:
+ * Segmented tabs navigation and elevated group cards aligned with
+ * DeepSeek Harness design language. */
 
-.group {
+.tabsContainer {
+  margin: 16px 0 20px;
+}
+
+.tabPanel {
   display: flex;
   flex-direction: column;
 }
 
+.groupCard {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 20px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-lg);
+  background: var(--dsw-alias-bg-layer-2);
+  margin-bottom: 16px;
+}
+
+.cardHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .groupTitle {
   margin: 0;
-  padding: 10px 0 4px;
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 12px;
+  font-size: 14px;
+  line-height: 20px;
   font-weight: 600;
-  line-height: 1.4;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  color: var(--dsw-alias-label-primary);
+}
+
+.groupDescription {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
 }
 
 .fields {

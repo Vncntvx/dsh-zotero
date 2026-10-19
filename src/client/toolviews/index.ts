@@ -4,6 +4,7 @@
  */
 
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
+import { ZOTERO_REMOTE_PACKAGE } from '../../contract.js'
 import { withCardBoundary } from './ZoteroCardBoundary.tsx'
 import { SearchToolView } from './SearchToolView.tsx'
 import { RetrieveToolView } from './RetrieveToolView.tsx'
@@ -42,7 +43,7 @@ export const REGISTRATIONS = [
  * field, declared explicitly so the client crash intake claims exactly these 16
  * entries (`registry.ts` stamps `options.registrant ?? ctx.fiber?.name`).
  */
-const REGISTRANT = 'dsh-zotero'
+const REGISTRANT = ZOTERO_REMOTE_PACKAGE
 
 /**
  * Register all 16 Zotero tool views into the `tool.call.toolview` keyed slot.

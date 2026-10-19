@@ -215,13 +215,17 @@ function sameZoteroProjection(a: ChatSnapshot | undefined, b: ChatSnapshot | und
   return sessionSignatureOf(a) === sessionSignatureOf(b)
 }
 
+interface SourcesTabBodyProps extends SourcesTabProps {
+  readonly sessionId: SourcesTabProps['sessionId']
+}
+
 /** The Sources panel controller: probe, workspace build, and the view. */
 export function SourcesTab(props: SourcesTabProps) {
-  // Wraps SourcesTabBody in an error boundary that resets whenever sessionId changes.
+  // The body sits inside an error boundary that resets when the session changes.
   const sessionId = props.useSession((snapshot) => snapshot.sessionId)
   return (
     <ZoteroSurfaceBoundary resetKey={sessionId} t={props.t} surface="sources">
-      <SourcesTabBody {...props} />
+      <SourcesTabBody {...props} sessionId={sessionId} />
     </ZoteroSurfaceBoundary>
   )
 }
@@ -232,17 +236,11 @@ function SourcesTabBody({
   resolveAttachment,
   openResource,
   t,
-  useSession,
+  sessionId,
   useChat,
   useSessions,
   inputActions,
-}: SourcesTabProps) {
-  // The session selector takes the primitive id, so lifecycle churn during a
-  // turn (running flips, queue, error fields) never re-renders the panel. The
-  // chat selector takes the whole snapshot but compares it through the
-  // zotero signature, so a publication only re-renders the panel when the
-  // zotero-visible slice it renders actually moved.
-  const sessionId = useSession((snapshot) => snapshot.sessionId)
+}: SourcesTabBodyProps) {
   // The workspace root for file address resolution. Read from the standard
   // session catalog (`useSessions`) because on the browser side `ctx.sessions`
   // resolves to the host `SessionStore` (both client and host share the program,

@@ -12,7 +12,11 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import { apply, inject } from '../../src/client/index.ts'
 import { en, zh } from '../../src/client/locales.ts'
-import { ZOTERO_SETTINGS_NAMESPACE } from '../../src/settings-namespace.ts'
+import {
+  SCHOLARLY_SETTINGS_NAMESPACE,
+  ZOTERO_SETTINGS_NAMESPACE,
+} from '../../src/settings-namespace.ts'
+import { getAttachmentResolver } from '../../src/client/actions/attachment-resolver.ts'
 import { fakeScope } from './helpers/fake-scope.ts'
 import { fakeEntryErrorSeam, type EntryErrorListener } from './helpers/slot-crash-seam.ts'
 
@@ -62,6 +66,10 @@ interface FakeApplyWorld {
   openResourceCalls: string[]
   /** Supervision listeners the entry registered through `slots.onEntryError`. */
   entryErrorListeners: EntryErrorListener[]
+  /** Namespaces currently served by the host; defaults to both zotero and scholarly. */
+  servedNamespaces?: Set<string>
+  whileServedRegistrations: Array<{ namespaces: readonly string[] }>
+  whileServedDisposes: number
 }
 
 /** A minimal context standing in for the browser kernel's plugin ctx. */
@@ -75,6 +83,7 @@ function fakeWorld(mountRejects: unknown = undefined): FakeApplyWorld {
   const seam = fakeEntryErrorSeam()
   const entryErrorListeners: EntryErrorListener[] = seam.listeners
   const scope = fakeScope()
+  const whileServedRegistrations: FakeApplyWorld['whileServedRegistrations'] = []
   // The world object is shared with the ctx closures (disposer counters
   // included), so the returned handle observes the disposers' side effects.
   const world: FakeApplyWorld = {
@@ -96,6 +105,8 @@ function fakeWorld(mountRejects: unknown = undefined): FakeApplyWorld {
     eventDisposes: 0,
     openResourceCalls: [],
     entryErrorListeners,
+    whileServedRegistrations,
+    whileServedDisposes: 0,
   }
   // Effects registered while a fiber's callback runs belong to that fiber, so
   // disposing the fiber unwinds exactly what it registered: the same
@@ -164,6 +175,21 @@ function fakeWorld(mountRejects: unknown = undefined): FakeApplyWorld {
       get: (id: string) => {
         formIds.push(id)
         return world.scope
+      },
+      whileServed: (
+        namespaces: readonly string[],
+        register: (served: ReadonlySet<string>) => () => void,
+      ) => {
+        world.whileServedRegistrations.push({ namespaces })
+        const served =
+          world.servedNamespaces ??
+          new Set([ZOTERO_SETTINGS_NAMESPACE, SCHOLARLY_SETTINGS_NAMESPACE])
+        if (!namespaces.some((ns) => served.has(ns))) return () => {}
+        const disposer = register(served)
+        return () => {
+          world.whileServedDisposes += 1
+          disposer?.()
+        }
       },
     },
     uiConversation: {
@@ -269,7 +295,7 @@ describe('the browser-half entry', () => {
   it('reads the shared form for the shared namespace constant', async () => {
     const world = fakeWorld()
     await applyEntry(world)
-    expect(world.formIds).toEqual([ZOTERO_SETTINGS_NAMESPACE])
+    expect(world.formIds).toEqual([ZOTERO_SETTINGS_NAMESPACE, SCHOLARLY_SETTINGS_NAMESPACE])
   })
 
   it('mounts the zotero Remote namespace contribution', async () => {
@@ -284,13 +310,14 @@ describe('the browser-half entry', () => {
     const world = fakeWorld()
     await applyEntry(world)
     // All surfaces register synchronously: the command-input projection, the
-    // bundle config page, the plugin-manager cards, and the conversation tab (whose
-    // registration must not wait on the Remote mount).
+    // bundle config page, the scholarly row config, the plugin-manager cards,
+    // and the conversation tab (whose registration must not wait on the Remote mount).
     expect(world.injected.map((entry) => entry.name)).toEqual([
       'tool.call.toolview',
       'conversation.chat.node',
       'plugins.bundle.activation',
       'plugins.bundle.config',
+      'plugins.row.config',
       'plugins.detail.section',
       'plugins.detail.section',
       'conversation.chat.commandview',
@@ -370,6 +397,26 @@ describe('the browser-half entry', () => {
     expect(configInject.hooks.zoteroCard).toBeDefined()
   })
 
+  it('guards scholarly row config with whileServed so it registers only when served', async () => {
+    const worldServed = fakeWorld()
+    await applyEntry(worldServed)
+    expect(worldServed.whileServedRegistrations).toEqual([
+      { namespaces: [SCHOLARLY_SETTINGS_NAMESPACE] },
+    ])
+    const rowEntry = worldServed.injected.find((e) => e.name === 'plugins.row.config')
+    expect(rowEntry?.register()).toBeDefined()
+    const config = worldServed.registered.find((e) => e.name === 'plugins.row.config')
+    expect(config?.options.key).toBe('dsh-zotero#scholarly')
+    expect(config?.options.locale).toBe('zotero')
+    const face = (config?.options.inject as () => { hooks: { scholarlyCard: unknown } })()
+    expect(face.hooks.scholarlyCard).toBeDefined()
+
+    const worldUnserved = fakeWorld()
+    worldUnserved.servedNamespaces = new Set([ZOTERO_SETTINGS_NAMESPACE])
+    await applyEntry(worldUnserved)
+    expect(worldUnserved.injected.some((e) => e.name === 'plugins.row.config')).toBe(false)
+  })
+
   it('injects the detail section into the plugins.detail.section slot', async () => {
     const world = fakeWorld()
     await applyEntry(world)
@@ -407,6 +454,7 @@ describe('the browser-half entry', () => {
       }
     )()
     expect(typeof face.diagnostics).toBe('function')
+    await face.diagnostics()
     expect(typeof face.probe).toBe('function')
     expect(typeof face.t).toBe('function')
   })
@@ -535,6 +583,8 @@ describe('the browser-half entry', () => {
     const registration = world.registered.find((entry) => entry.name === 'conversation.view')
     const face = registration?.options.inject as () => {
       openResource: (url: string) => void
+      resolveAttachment: (ref: string) => Promise<unknown>
+      status: () => Promise<unknown>
     }
     // The tab owns the Session identity and the workspace root, so it builds
     // the whole session-scoped address itself (through `useSessions` +
@@ -546,6 +596,9 @@ describe('the browser-half entry', () => {
     expect(world.openResourceCalls).toEqual([
       'dsh-resource://file/session/sess-1/storage/paper.pdf',
     ])
+    await face().resolveAttachment('item-123')
+    await face().status()
+    await getAttachmentResolver()?.('item-123')
   })
 
   it('passes the address through without reading any session state', async () => {
@@ -577,6 +630,7 @@ describe('the browser-half entry', () => {
       'conversation.chat.node',
       'plugins.bundle.activation',
       'plugins.bundle.config',
+      'plugins.row.config',
       'plugins.detail.section',
       'plugins.detail.section',
       'conversation.chat.commandview',
@@ -649,7 +703,7 @@ describe('the browser-half entry', () => {
     // mount.
     await dispose()
     expect(world.eventDisposes).toBe(1)
-    expect(world.scope.unsubscribes).toBe(2)
+    expect(world.scope.unsubscribes).toBe(3)
     expect(world.uiDisposes).toBe(1)
     expect(world.injected.find((entry) => entry.name === 'conversation.view')?.active).toBe(false)
     expect(world.mountDisposes).toBe(1)

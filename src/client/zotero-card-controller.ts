@@ -1,20 +1,19 @@
 /**
  * The Zotero settings page's staged form over the `zotero` namespace: every
- * Config field, with the field table spelled here (the browser bundle must
- * not value-import host modules; the key set is bound to the host
- * `ResolvedConfig` at compile time below, and
- * `tests/client/zotero-card-parity.spec.ts` binds the per-field control kind
- * against the same schema at runtime, so the two surfaces cannot drift in
- * either direction).
+ * Config field, with the field table spelled here. The browser bundle cannot
+ * value-import host modules, so the key set is pinned to the host
+ * `ResolvedConfig` at compile time below; `tests/client/zotero-card-parity.spec.ts`
+ * checks the per-field control kind against the same schema at runtime, so the
+ * two surfaces cannot drift in either direction.
  *
  * Staging rides the harness's own model (`SettingsFormModel` from
  * `dsh-client-ui-primitives`, the same class every first-party card stages
  * through): draft text per field, presence-based override badges, an atomic
  * revision-fenced save, and discard. The namespace form arrives as the shared
  * `ConfigForm` (`ctx.configForms.get`); a thin adapter presents it as the
- * `SettingsFormScope` the model stages over. The boolean toggle has no
- * official atom (upstream ships number/text fields only), so its spec lives
- * here in the official `SettingsFieldSpec` shape.
+ * `SettingsFormScope` the model stages over. Upstream ships number and text
+ * fields only, so the boolean toggle's spec lives here in the official
+ * `SettingsFieldSpec` shape.
  *
  * One field table drives the whole card: the field specs the form edits, the
  * state the page renders, the display groups, and the numeric hint set, so a
@@ -29,20 +28,19 @@ import {
   type SettingsFieldSpec,
   type SettingsFieldState,
   type SettingsFormActions,
-  type SettingsFormScope,
   type SettingsFormShell,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { ResolvedConfig } from '../config.ts'
+import { asFormScope } from './helpers/form-scope.ts'
 
 /**
  * The section fields this card edits: the host `Config` surface, all of it,
  * in display order. `group` names the page's display group (a locale key).
  * The Web toggle leads the page because it gates the whole conversation tab,
- * so it is the first thing a visitor sees. The write family sits immediately
- * under it, the sensitive surface a visitor needs before the technical limits.
+ * so a visitor sees it first. The write family sits under it: the sensitive
+ * surface a visitor should see before the technical limits.
  */
 const FIELD_SPECS = [
   { key: 'webEnabled', kind: 'boolean', group: 'groupWeb' },
@@ -119,7 +117,11 @@ function booleanFieldSpec(field: string): SettingsFieldSpec {
   }
 }
 
-/** Field specs built on first use: the official helpers resolve through the loader's module table, which only exists at factory-execution time (the bundle self-check stubs externals at import, so module-level calls would fail there). */
+/**
+ * Field specs, built on first use. The official helpers resolve through the
+ * loader's module table, which only exists once the factory runs: the bundle
+ * self-check stubs externals at import, so module-level calls would fail there.
+ */
 function fieldSpecs(): SettingsFieldSpec[] {
   return FIELD_SPECS.map((spec) => {
     if (spec.kind === 'number') return settingsNumberField(spec.key)
@@ -139,6 +141,71 @@ export const NUMERIC_FIELD_KEYS: ReadonlySet<FieldKey> = new Set<FieldKey>(
   FIELD_SPECS.filter((spec) => spec.kind === 'number').map((spec) => spec.key),
 )
 
+/** The tab partition identifiers for the 4-tab settings view. */
+export type SettingsTabId = 'features' | 'connection' | 'search' | 'advanced'
+
+/** Description of one tab partition and the configuration groups it carries. */
+export interface SettingsTabDescriptor {
+  readonly id: SettingsTabId
+  readonly labelKey: 'tabFeatures' | 'tabConnection' | 'tabSearch' | 'tabAdvanced'
+  readonly descKey: 'tabFeaturesDesc' | 'tabConnectionDesc' | 'tabSearchDesc' | 'tabAdvancedDesc'
+  readonly groupKeys: readonly GroupKey[]
+}
+
+/**
+ * The four tab partitions, in display order. `groupKeys` lists the
+ * configuration groups each one carries.
+ */
+export const SETTINGS_TABS: readonly SettingsTabDescriptor[] = [
+  {
+    id: 'features',
+    labelKey: 'tabFeatures',
+    descKey: 'tabFeaturesDesc',
+    groupKeys: ['groupWeb', 'groupWrite', 'groupDefaults'],
+  },
+  {
+    id: 'connection',
+    labelKey: 'tabConnection',
+    descKey: 'tabConnectionDesc',
+    groupKeys: ['groupConnection'],
+  },
+  {
+    id: 'search',
+    labelKey: 'tabSearch',
+    descKey: 'tabSearchDesc',
+    groupKeys: ['groupSearch'],
+  },
+  {
+    id: 'advanced',
+    labelKey: 'tabAdvanced',
+    descKey: 'tabAdvancedDesc',
+    groupKeys: ['groupOutput', 'groupJobs', 'groupDiagnostics'],
+  },
+] as const
+
+/** The search tab's two cards: query-side limits and evidence-side limits. */
+export const SEARCH_SUBGROUPS = {
+  query: [
+    'maxSearchResults',
+    'maxNoteScanRecords',
+    'searchConcurrency',
+    'graphConcurrency',
+    'retrieveAttachmentCap',
+  ] as const,
+  evidence: [
+    'maxEvidenceChars',
+    'maxEvidencePassages',
+    'maxDetailChars',
+    'maxNoteBodyChars',
+    'maxNoteChars',
+    'maxNoteRecords',
+    'maxAnnotationRecords',
+    'maxAttachmentRecords',
+    'fulltextChunkWords',
+    'maxFulltextChars',
+  ] as const,
+} as const
+
 /** The boolean fields, rendered as toggles. */
 export const BOOLEAN_FIELD_KEYS: ReadonlySet<FieldKey> = new Set<FieldKey>(
   FIELD_SPECS.filter((spec) => spec.kind === 'boolean').map((spec) => spec.key),
@@ -152,32 +219,6 @@ export interface ZoteroCardFace extends SettingsFormActions {
   hooks: {
     /** Card snapshot bound by the renderer as useZoteroCard. */
     zoteroCard: SnapshotStore<ZoteroCardState>
-  }
-}
-
-/**
- * Present the shared namespace form as the scope the staged model edits.
- * The snapshots differ by one field (`mode`, a client transport fact the
- * model never reads); the write edge is the same atomic revision-fenced
- * mutation, with the path/value shapes narrowed to the JSON the wire takes.
- * @param form - the shared form for the `zotero` namespace.
- * @returns the scope the model stages over.
- */
-function asFormScope(
-  form: ConfigForm<Record<string, unknown>>,
-): SettingsFormScope<Record<string, unknown>> {
-  return {
-    getSnapshot: () => form.getSnapshot(),
-    subscribe: (listener) => form.subscribe(listener),
-    mutate: (ops, expectedRevision) =>
-      form.mutate(
-        ops.map((op) =>
-          op.op === 'set'
-            ? { op: 'set' as const, path: [...op.path], value: op.value as JsonValue }
-            : { op: 'unset' as const, path: [...op.path] },
-        ),
-        expectedRevision,
-      ),
   }
 }
 

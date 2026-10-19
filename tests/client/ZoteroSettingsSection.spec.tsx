@@ -14,6 +14,7 @@ import { useSyncExternalStore } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ZoteroSettingsSection } from '../../src/client/ZoteroSettingsSection.tsx'
 import type { ZoteroSettingsSectionProps } from '../../src/client/ZoteroSettingsSection.tsx'
+import { ZoteroSettingsForm } from '../../src/client/ZoteroSettingsForm.tsx'
 import { en, zh } from '../../src/client/locales.ts'
 import {
   FIELD_GROUPS,
@@ -248,5 +249,103 @@ describe('ZoteroSettingsSection', () => {
       expect(input.disabled).toBe(true)
     }
     expect(saveButton().disabled).toBe(true)
+  })
+
+  it('renders SegmentedTabs with all 4 tabs and features as default selected tab', () => {
+    scope = fakeScope({ value: {} })
+    mount()
+
+    const tabList = screen.getByRole('tablist', { name: zh.configTabsLabel })
+    expect(tabList).toBeDefined()
+
+    const tabs = screen.getAllByRole('tab')
+    expect(tabs).toHaveLength(4)
+    expect(tabs.map((tab) => tab.textContent)).toEqual([
+      zh.tabFeatures,
+      zh.tabConnection,
+      zh.tabSearch,
+      zh.tabAdvanced,
+    ])
+
+    const featuresTab = screen.getByRole('tab', { name: zh.tabFeatures })
+    expect(featuresTab.getAttribute('aria-selected')).toBe('true')
+    expect(featuresTab.getAttribute('aria-controls')).toBe('zotero-panel-features')
+
+    const featuresPanel = document.getElementById('zotero-panel-features')
+    expect(featuresPanel?.getAttribute('hidden')).toBeNull()
+
+    const connectionPanel = document.getElementById('zotero-panel-connection')
+    expect(connectionPanel?.getAttribute('hidden')).toBe('')
+  })
+
+  it('switches active tab on click, toggling aria-selected and hidden attribute on panels', () => {
+    scope = fakeScope({ value: {} })
+    mount()
+
+    const connectionTab = screen.getByRole('tab', { name: zh.tabConnection })
+    fireEvent.click(connectionTab)
+
+    expect(connectionTab.getAttribute('aria-selected')).toBe('true')
+    const featuresTab = screen.getByRole('tab', { name: zh.tabFeatures })
+    expect(featuresTab.getAttribute('aria-selected')).toBe('false')
+
+    const connectionPanel = document.getElementById('zotero-panel-connection')
+    expect(connectionPanel?.getAttribute('hidden')).toBeNull()
+    const featuresPanel = document.getElementById('zotero-panel-features')
+    expect(featuresPanel?.getAttribute('hidden')).toBe('')
+
+    const advancedTab = screen.getByRole('tab', { name: zh.tabAdvanced })
+    fireEvent.click(advancedTab)
+    expect(advancedTab.getAttribute('aria-selected')).toBe('true')
+    const advancedPanel = document.getElementById('zotero-panel-advanced')
+    expect(advancedPanel?.getAttribute('hidden')).toBeNull()
+  })
+
+  it('renders structured card headers with titles and descriptions across groups', () => {
+    scope = fakeScope({ value: {} })
+    mount()
+
+    expect(screen.getByText(zh.groupWeb)).toBeDefined()
+    expect(screen.getByText(zh.groupWebDesc)).toBeDefined()
+    expect(screen.getByText(zh.groupWrite)).toBeDefined()
+    expect(screen.getByText(zh.groupWriteDesc)).toBeDefined()
+    expect(screen.getByText(zh.groupDefaults)).toBeDefined()
+    expect(screen.getByText(zh.groupDefaultsDesc)).toBeDefined()
+    expect(screen.getByText(zh.groupConnection)).toBeDefined()
+    expect(screen.getByText(zh.groupConnectionDesc)).toBeDefined()
+    expect(screen.getByText(zh.groupSearchQuery)).toBeDefined()
+    expect(screen.getByText(zh.groupSearchQueryDesc)).toBeDefined()
+    expect(screen.getByText(zh.groupSearchEvidence)).toBeDefined()
+    expect(screen.getByText(zh.groupSearchEvidenceDesc)).toBeDefined()
+    expect(screen.getByText(zh.groupOutput)).toBeDefined()
+    expect(screen.getByText(zh.groupOutputDesc)).toBeDefined()
+    expect(screen.getByText(zh.groupJobs)).toBeDefined()
+    expect(screen.getByText(zh.groupJobsDesc)).toBeDefined()
+    expect(screen.getByText(zh.groupDiagnostics)).toBeDefined()
+    expect(screen.getByText(zh.groupDiagnosticsDesc)).toBeDefined()
+  })
+
+  it('fires onTabChange callback when controlled tab changes', () => {
+    const onTabChange = vi.fn()
+    scope = fakeScope({ value: {} })
+    const controller = new ZoteroCardController(scope)
+    const face = controller.inject()
+    const state = face.hooks.zoteroCard.getSnapshot()
+
+    render(
+      <ZoteroSettingsForm
+        t={makeTranslate(zh)}
+        state={state}
+        actions={face}
+        activeTab="features"
+        onTabChange={onTabChange}
+      />,
+    )
+
+    const searchTab = screen.getByRole('tab', { name: zh.tabSearch })
+    fireEvent.click(searchTab)
+    expect(onTabChange).toHaveBeenCalledWith('search')
+
+    controller.dispose()
   })
 })

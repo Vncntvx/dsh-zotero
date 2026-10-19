@@ -42,6 +42,7 @@ import { ZoteroCommandInputView } from './ZoteroCommandInputView.tsx'
 import { ZoteroCommandCard } from './ZoteroCommandCard.tsx'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { ZoteroSettingsSection } from './ZoteroSettingsSection.tsx'
+import { ScholarlySettingsSection } from './ScholarlySettingsSection.tsx'
 import { SourcesTab, type SourcesTabFace } from './components/SourcesTab.tsx'
 import { ZOTERO_REMOTE } from './remote.ts'
 import { getAttachmentResolver, setAttachmentResolver } from './actions/attachment-resolver.ts'
@@ -51,6 +52,7 @@ import {
   setErrorReporter,
 } from './actions/error-reporter.ts'
 import { ZoteroCardController } from './zotero-card-controller.ts'
+import { ScholarlyFormController } from './scholarly-form-controller.ts'
 import type { ZoteroProbeFace } from './components/plugin/faces.ts'
 import {
   ZOTERO_REMOTE_PACKAGE,
@@ -58,7 +60,7 @@ import {
   type ZoteroDiagnosticsView,
   type ZoteroStatusView,
 } from '../contract.ts'
-import { ZOTERO_SETTINGS_NAMESPACE } from '../settings-namespace.ts'
+import { SCHOLARLY_SETTINGS_NAMESPACE, ZOTERO_SETTINGS_NAMESPACE } from '../settings-namespace.ts'
 import type {} from './plugin-slots.d.ts'
 import { ZoteroActivationGuide } from './components/plugin/ZoteroActivationGuide.tsx'
 import { ZoteroPluginDetailSection } from './components/plugin/ZoteroPluginDetailSection.tsx'
@@ -181,19 +183,20 @@ function registerUi(ctx: ClientContext): void {
       ZoteroCommandInputView,
     ),
   )
-  // The shared form for the namespace the host half registers; the card
-  // stages and saves through it with the harness's own staged model. The
-  // entry declares only its own dependency (`webEnabled` for the tab gate);
-  // the card form owns the full field table through `ZoteroCardController`
-  // (which reads the same form as a record), so the narrow type is the
-  // entry's read contract, not a truncation of the stored document.
+  // One form controller per settings namespace. The bundle configuration page
+  // edits both at once; the dedicated scholarly row edits the scholarly one.
+  // Both live as long as the client fiber.
   const form = ctx.configForms.get<Record<string, unknown>>(ZOTERO_SETTINGS_NAMESPACE)
+  const scholarlyForm = ctx.configForms.get<Record<string, unknown>>(SCHOLARLY_SETTINGS_NAMESPACE)
   const card = new ZoteroCardController(form)
+  const scholarlyCard = new ScholarlyFormController(scholarlyForm)
+
   ctx.effect(
     () => () => {
       card.dispose()
+      scholarlyCard.dispose()
     },
-    'dsh-zotero: card form',
+    'dsh-zotero: card forms',
   )
   // Bound once at registration time: the inject faces below hand this reader
   // to the shell, which re-renders from its own ledger bump when the locale
@@ -227,9 +230,9 @@ function registerUi(ctx: ClientContext): void {
     ),
   )
 
-  // Bundle configuration rendered in the plugin manager detail page (plugins.bundle.config).
-  // The page renders the full configuration form via ZoteroSettingsSection and stages
-  // edits through the harness's SettingsFormModel (card.inject()).
+  // Bundle configuration on the plugin manager detail page (plugins.bundle.config).
+  // The page renders the 4-tab form through ZoteroSettingsSection and stages edits
+  // over the zotero namespace via card.inject().
   ctx.slots.inject('plugins.bundle.config', () =>
     ctx.slots.register(
       {
@@ -241,6 +244,28 @@ function registerUi(ctx: ClientContext): void {
       },
       ZoteroSettingsSection,
     ),
+  )
+
+  // Dedicated row configuration for the scholarly subsystem (plugins.row.config).
+  // It opens from the "Configure" button on the dsh-zotero#scholarly row.
+  // Guarded by whileServed so it registers only while the host serves the scholarly namespace.
+  ctx.effect(
+    () =>
+      ctx.configForms.whileServed([SCHOLARLY_SETTINGS_NAMESPACE], () =>
+        ctx.slots.inject('plugins.row.config', () =>
+          ctx.slots.register(
+            {
+              name: 'plugins.row.config',
+              key: `${ZOTERO_REMOTE_PACKAGE}#scholarly`,
+              locale: NS,
+              registrant: REGISTRANT,
+              inject: () => scholarlyCard.inject(),
+            },
+            ScholarlySettingsSection,
+          ),
+        ),
+      ),
+    'dsh-zotero: scholarly row config',
   )
 
   // Service status & quick start card at the bottom of the plugin manager detail page

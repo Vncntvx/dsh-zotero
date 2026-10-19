@@ -38,10 +38,6 @@ export interface ZoteroCommandCardFace {
 export type ZoteroCommandCardProps = PropsRuntime<'conversation.chat.commandview'> &
   ZoteroCommandCardFace
 
-/** The status facts a live probe and the projected snapshot both carry. */
-type SharedStatusKey =
-  'connected' | 'endpoint' | 'zoteroVersion' | 'apiVersion' | 'schemaVersion' | 'serverId' | 'write'
-
 /**
  * Dedicated result card for `/zotero` command invocations.
  *
@@ -95,49 +91,33 @@ export function ZoteroCommandCard({
 
   const title = useMemo(() => formatCommandLine(node.name, node.args), [node.name, node.args])
 
-  /**
-   * Read one status field, preferring a live probe over the projected snapshot.
-   *
-   * The gate is "did the probe answer", *not* "is there an error": a probe that
-   * reaches Zotero and is told it is offline sets **both** `data` and `error`,
-   * and that answer still carries the address it dialled, the one fact worth
-   * reading on a disconnected card. Gating on `error` would drop the row
-   * exactly when the user clicked Refresh to find out what was wrong. A probe
-   * that failed outright (no `data`) has no facts to prefer, so the projection
-   * stands.
-   *
-   * @param key - the status field to read.
-   * @returns the probe's value, the projected value, or undefined.
-   */
-  const effective = <K extends SharedStatusKey>(key: K): ZoteroStatusView[K] | undefined =>
-    probeState.data !== undefined ? probeState.data[key] : projected?.[key]
+  const effectiveStatus = useMemo(() => {
+    const raw = probeState.data ?? projected
+    return {
+      connected:
+        probeState.data !== undefined
+          ? probeState.data.connected
+          : probeState.error !== undefined
+            ? false
+            : projected?.connected === true,
+      endpoint: raw?.endpoint,
+      version: raw?.zoteroVersion,
+      apiVersion: raw?.apiVersion,
+      schemaVersion: raw?.schemaVersion,
+      serverId: raw?.serverId,
+      serverIdUnreported:
+        probeState.data !== undefined
+          ? probeState.data.serverId === undefined
+          : probeState.error === undefined && projected != null && projected.serverId === undefined,
+      write: raw?.write,
+      diagnosis: probeState.error ?? probeState.data?.diagnosis ?? projected?.diagnosis,
+    }
+  }, [probeState.data, probeState.error, projected])
 
-  const effectiveConnected =
-    probeState.data !== undefined
-      ? probeState.data.connected
-      : probeState.error !== undefined
-        ? false
-        : projected?.connected === true
-  // The dialled endpoint, not a configured default: the probe reports the
-  // address it actually reached, which is the one to check when it failed.
-  const effectiveEndpoint = effective('endpoint')
-  const effectiveVersion = effective('zoteroVersion')
-  const effectiveApiVersion = effective('apiVersion')
-  const effectiveSchemaVersion = effective('schemaVersion')
-  const effectiveServerId = effective('serverId')
-  const effectiveWrite = effective('write')
-  // "Unreported" is the absence of an id in an answer that was given at all.
-  // A failed probe has no id to report; only a settled view can be called
-  // unreported. A plain boolean, not a memoized callback: it is read once.
-  const effectiveServerIdUnreported =
-    probeState.data !== undefined
-      ? probeState.data.serverId === undefined
-      : probeState.error === undefined && projected != null && projected.serverId === undefined
-  const effectiveDiagnosis = probeState.error ?? probeState.data?.diagnosis ?? projected?.diagnosis
-  // A settled answer is the only thing that can carry facts: a live probe that
-  // answered, or a projection this session recorded. `projected` is undefined
-  // when the composition has no projection registry and null when the session
-  // never ran the command; neither is a fact source.
+  // One settled answer is the only fact source: a live probe that answered, or
+  // a projection this session recorded. `projected` is undefined when the
+  // composition has no projection registry, and null when the session never
+  // ran the command; neither counts.
   const hasFacts = probeState.data !== undefined || projected != null
 
   const headerPrefix = useMemo(() => {
@@ -146,7 +126,7 @@ export function ZoteroCommandCard({
       dotClass = css.dotYellow
     } else if (isRunning) {
       dotClass = css.dotYellow
-    } else if (isError || !effectiveConnected) {
+    } else if (isError || !effectiveStatus.connected) {
       dotClass = css.dotRed
     }
 
@@ -157,7 +137,7 @@ export function ZoteroCommandCard({
         </span>
       </span>
     )
-  }, [probeState.loading, isRunning, isError, effectiveConnected])
+  }, [probeState.loading, isRunning, isError, effectiveStatus.connected])
 
   const headerSummary = useMemo(() => {
     if (isRunning) {
@@ -181,9 +161,9 @@ export function ZoteroCommandCard({
     }
 
     if (hasFacts) {
-      const summaryText = effectiveConnected
-        ? `${effectiveVersion ?? t('badgeSuccess')}`
-        : `${effectiveDiagnosis ?? t('statusUnavailable')}`
+      const summaryText = effectiveStatus.connected
+        ? `${effectiveStatus.version ?? t('badgeSuccess')}`
+        : `${effectiveStatus.diagnosis ?? t('statusUnavailable')}`
       return (
         <>
           <span className={css.summarySep} aria-hidden />
@@ -202,14 +182,17 @@ export function ZoteroCommandCard({
     isRunning,
     isError,
     hasFacts,
-    effectiveConnected,
-    effectiveVersion,
-    effectiveDiagnosis,
+    effectiveStatus.connected,
+    effectiveStatus.version,
+    effectiveStatus.diagnosis,
     rawText,
     t,
   ])
 
-  const writeDisplay = useMemo(() => writeStatusLabel(effectiveWrite, t), [effectiveWrite, t])
+  const writeDisplay = useMemo(
+    () => writeStatusLabel(effectiveStatus.write, t),
+    [effectiveStatus.write, t],
+  )
 
   const expandable = !isRunning && (hasFacts || rawText !== '')
   const open = expanded && expandable
@@ -240,10 +223,10 @@ export function ZoteroCommandCard({
     // failed, the address that did not answer is the fact. One element, both
     // arms, so a later edit cannot land in one branch and not the other.
     const endpointRow =
-      effectiveEndpoint === undefined ? null : (
+      effectiveStatus.endpoint === undefined ? null : (
         <div className={css.cardItem}>
           <span className={css.itemLabel}>{t('statusLocalApiAddress')}</span>
-          <span className={css.itemValue}>{effectiveEndpoint}</span>
+          <span className={css.itemValue}>{effectiveStatus.endpoint}</span>
         </div>
       )
 
@@ -261,27 +244,27 @@ export function ZoteroCommandCard({
 
     return (
       <div className={css.bodyWrap} data-zotero-command-card-body>
-        {effectiveConnected ? (
+        {effectiveStatus.connected ? (
           <div className={css.cardGrid}>
             {endpointRow}
             <div className={css.cardItem}>
               <span className={css.itemLabel}>{t('zoteroVersionLabel')}</span>
-              <span className={css.itemValue}>{effectiveVersion ?? '-'}</span>
+              <span className={css.itemValue}>{effectiveStatus.version ?? '-'}</span>
             </div>
             <div className={css.cardItem}>
               <span className={css.itemLabel}>{t('apiVersionLabel')}</span>
               <span className={css.itemValue}>
-                {effectiveApiVersion ?? '-'}
-                {effectiveSchemaVersion !== undefined
-                  ? ` (${t('schemaVersionLabel')}: ${effectiveSchemaVersion})`
+                {effectiveStatus.apiVersion ?? '-'}
+                {effectiveStatus.schemaVersion !== undefined
+                  ? ` (${t('schemaVersionLabel')}: ${effectiveStatus.schemaVersion})`
                   : ''}
               </span>
             </div>
             <div className={css.cardItem}>
               <span className={css.itemLabel}>{t('serverIdLabel')}</span>
               <span className={css.itemValue}>
-                {effectiveServerId ??
-                  (effectiveServerIdUnreported ? t('statusServerIdUnreported') : '-')}
+                {effectiveStatus.serverId ??
+                  (effectiveStatus.serverIdUnreported ? t('statusServerIdUnreported') : '-')}
               </span>
             </div>
             <div className={css.cardItem}>
@@ -292,7 +275,9 @@ export function ZoteroCommandCard({
         ) : (
           <div className={css.cardGrid}>
             {endpointRow}
-            {effectiveDiagnosis && <DiagnosisBox diagnosis={effectiveDiagnosis} t={t} />}
+            {effectiveStatus.diagnosis && (
+              <DiagnosisBox diagnosis={effectiveStatus.diagnosis} t={t} />
+            )}
           </div>
         )}
 
@@ -304,15 +289,8 @@ export function ZoteroCommandCard({
     hasFacts,
     isError,
     node.outcome?.sourceEventSeq,
-    effectiveConnected,
-    effectiveEndpoint,
-    effectiveVersion,
-    effectiveApiVersion,
-    effectiveSchemaVersion,
-    effectiveServerId,
-    effectiveServerIdUnreported,
+    effectiveStatus,
     writeDisplay,
-    effectiveDiagnosis,
     probe,
     probeState.loading,
     handleRecheck,

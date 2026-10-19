@@ -20,6 +20,48 @@ export type ZoteroLocaleKey =
   | 'saveFailed'
   | 'unavailable'
   | 'invalidNumber'
+  | 'tabFeatures'
+  | 'tabFeaturesDesc'
+  | 'tabConnection'
+  | 'tabConnectionDesc'
+  | 'tabSearch'
+  | 'tabSearchDesc'
+  | 'tabScholarly'
+  | 'tabScholarlyDesc'
+  | 'tabAdvanced'
+  | 'tabAdvancedDesc'
+  | 'configTabsLabel'
+  | 'groupWebDesc'
+  | 'groupWriteDesc'
+  | 'groupDefaultsDesc'
+  | 'groupConnectionDesc'
+  | 'groupSearchQuery'
+  | 'groupSearchQueryDesc'
+  | 'groupSearchEvidence'
+  | 'groupSearchEvidenceDesc'
+  | 'groupScholarlyAuth'
+  | 'groupScholarlyAuthDesc'
+  | 'groupScholarlyLimits'
+  | 'groupScholarlyLimitsDesc'
+  | 'groupOutputDesc'
+  | 'groupJobsDesc'
+  | 'groupDiagnosticsDesc'
+  | 'scholarlyEmail'
+  | 'scholarlyEmailHint'
+  | 'scholarlyS2Key'
+  | 'scholarlyS2KeyHint'
+  | 'scholarlyNcbiKey'
+  | 'scholarlyNcbiKeyHint'
+  | 'scholarlyOpenalexKey'
+  | 'scholarlyOpenalexKeyHint'
+  | 'scholarlyMaxResults'
+  | 'scholarlyMaxResultsHint'
+  | 'scholarlyMaxContentChars'
+  | 'scholarlyMaxContentCharsHint'
+  | 'secretConfigured'
+  | 'secretNotConfigured'
+  | 'scholarlyRowConfigTitle'
+  | 'scholarlyRowConfigDesc'
   | GroupKey
   | FieldKey
   | `${FieldKey}Hint`
@@ -316,6 +358,57 @@ export const en: Record<ZoteroLocaleKey, string> = {
   unavailable:
     'This deployment does not serve the Zotero settings namespace, so there is nothing to configure here.',
   invalidNumber: 'Enter a number, or leave blank to use the default.',
+  tabFeatures: 'General & Features',
+  tabFeaturesDesc: 'Conversation tab visibility, library write gates, and citation defaults.',
+  tabConnection: 'Local Connection',
+  tabConnectionDesc: 'Local Zotero API address, timeout, concurrency, and cache TTL.',
+  tabSearch: 'Local Search & Passages',
+  tabSearchDesc:
+    'Local search quotas, note and fulltext scan limits, and passage extraction budgets.',
+  tabScholarly: 'Scholarly Literature',
+  tabScholarlyDesc:
+    'Multi-source external academic literature search, API keys, and full-text cache.',
+  tabAdvanced: 'Advanced & Tasks',
+  tabAdvancedDesc: 'Export buffer sizes, background task scheduling policies, and diagnostics.',
+  configTabsLabel: 'Zotero configuration tabs',
+  groupWebDesc: 'Toggle conversation literature tab visibility in session views.',
+  groupWriteDesc:
+    'Manage write access, authorizations, and safety gates for your personal library.',
+  groupDefaultsDesc:
+    'Default citation style and locale code for generated references and bibliographies.',
+  groupConnectionDesc:
+    'Configure HTTP API parameters for communicating with the running local Zotero instance.',
+  groupSearchQuery: 'Search & Concurrency',
+  groupSearchQueryDesc: 'Search result quotas, concurrency, and scan/retrieval limits.',
+  groupSearchEvidence: 'Passages & Fulltext Extraction',
+  groupSearchEvidenceDesc: 'Passage length, passage count, notes, and full-text chunk sizes.',
+  groupScholarlyAuth: 'API Credentials & Identification',
+  groupScholarlyAuthDesc: 'Contact email for the Polite Pool and optional academic API keys.',
+  groupScholarlyLimits: 'Search & Full-text Quotas',
+  groupScholarlyLimitsDesc:
+    'Maximum results per search, full-text reading limit, and local cache folder.',
+  groupOutputDesc: 'Response buffer sizes and batch export caps.',
+  groupJobsDesc: 'Background task offloading policies and automatic timeout escalation.',
+  groupDiagnosticsDesc: 'Diagnostics logging and verbose troubleshooting traces.',
+  scholarlyEmail: 'Contact email',
+  scholarlyEmailHint:
+    'Contact email sent to Crossref, OpenAlex, and NCBI/Europe PMC for the polite pool and higher rate limits.',
+  scholarlyS2Key: 'Semantic Scholar API key',
+  scholarlyS2KeyHint: 'Optional; avoids shared-pool rate limiting.',
+  scholarlyNcbiKey: 'NCBI / PubMed API key',
+  scholarlyNcbiKeyHint: 'Optional; raises rate limit from 3 to 10 req/s.',
+  scholarlyOpenalexKey: 'OpenAlex API key',
+  scholarlyOpenalexKeyHint: 'Optional; raises rate limit to 100 req/s.',
+  scholarlyMaxResults: 'Max papers per search',
+  scholarlyMaxResultsHint: 'Maximum number of papers returned in a single search (1-100).',
+  scholarlyMaxContentChars: 'Max full-text characters',
+  scholarlyMaxContentCharsHint:
+    'Character ceiling for chunked open-access full-text reading (1,000-50,000).',
+  secretConfigured: 'Configured',
+  secretNotConfigured: 'Not configured',
+  scholarlyRowConfigTitle: 'Scholarly Literature',
+  scholarlyRowConfigDesc:
+    'Configure external literature search (arXiv, Crossref, OpenAlex, etc.) credentials, rate limits, and full-text cache.',
   groupConnection: 'Connection',
   groupSearch: 'Search limits',
   groupOutput: 'Output limits',
@@ -711,6 +804,51 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   saveFailed: '本部署没有接受这些值，已保留供你修改。',
   unavailable: '本部署没有提供 Zotero 设置项，这里暂无可配置内容。',
   invalidNumber: '请填数字；留空表示使用默认值。',
+  tabFeatures: '常规与功能',
+  tabFeaturesDesc: '管理会话顶栏文献面板、本地文库写入授权与默认引文格式。',
+  tabConnection: '本地连接',
+  tabConnectionDesc: 'Zotero 本地 API 地址、通信超时、并发限制与缓存时间。',
+  tabSearch: '本地检索与片段',
+  tabSearchDesc: '本地文献检索上限、笔记与全文扫描配额、原文相关片段规模。',
+  tabScholarly: '学术文献检索',
+  tabScholarlyDesc: '跨 arXiv、Crossref、OpenAlex、PubMed 等全网学术文献检索、API 密钥与全文缓存。',
+  tabAdvanced: '高级与任务',
+  tabAdvancedDesc: '导出与响应体缓冲区配额、后台任务调度策略与排错诊断。',
+  configTabsLabel: 'Zotero 设置分区',
+  groupWebDesc: '控制会话顶部的文献与导出面板展示。',
+  groupWriteDesc: '管理对本地 Zotero 文库的写入、授权与安全门禁。',
+  groupDefaultsDesc: '设定生成引文与参考文献时使用的默认样式与语言代码。',
+  groupConnectionDesc: '配置与当前运行的本机 Zotero 实例的 HTTP API 通信参数。',
+  groupSearchQuery: '检索与并发',
+  groupSearchQueryDesc: '检索条数配额、搜索并发与全文/图谱检索上限。',
+  groupSearchEvidence: '片段与全文提取',
+  groupSearchEvidenceDesc: '原文片段长度、段落数、笔记正文及全文切片上限。',
+  groupScholarlyAuth: '数据源身份与密钥',
+  groupScholarlyAuthDesc:
+    '配置邮箱以加入 Polite Pool 获得更优限速配额，以及可选的外部学术 API 密钥。',
+  groupScholarlyLimits: '学术检索与全文配额',
+  groupScholarlyLimitsDesc: '全网检索最大返回篇数、全文提取字符上限与本地缓存目录。',
+  groupOutputDesc: '数据序列化缓冲区与批量导出规模限制。',
+  groupJobsDesc: '耗时操作的后台异步执行策略与超时自动提升。',
+  groupDiagnosticsDesc: '本地排错与详细运行日志输出。',
+  scholarlyEmail: '联系邮箱',
+  scholarlyEmailHint:
+    '附加于 Crossref、OpenAlex 和 NCBI/Europe PMC 请求头，加入 Polite Pool 获得更高限速配额。',
+  scholarlyS2Key: 'Semantic Scholar API 密钥',
+  scholarlyS2KeyHint: '可选；避免共享 IP 池限速。',
+  scholarlyNcbiKey: 'NCBI / PubMed API 密钥',
+  scholarlyNcbiKeyHint: '可选；将请求上限从每秒 3 次提升至 10 次。',
+  scholarlyOpenalexKey: 'OpenAlex API 密钥',
+  scholarlyOpenalexKeyHint: '可选；将请求上限提升至每秒 100 次。',
+  scholarlyMaxResults: '单次检索论文数上限',
+  scholarlyMaxResultsHint: '单次全网检索返回的最大论文数量（1-100）。',
+  scholarlyMaxContentChars: '全文读取字符数上限',
+  scholarlyMaxContentCharsHint: '开放获取全文分块读取的字符数上限（1,000-50,000）。',
+  secretConfigured: '已配置',
+  secretNotConfigured: '未配置',
+  scholarlyRowConfigTitle: '学术文献检索',
+  scholarlyRowConfigDesc:
+    '配置多源外部文献检索（arXiv、Crossref、OpenAlex 等）的 API 凭据、速率限制与本地缓存。',
   groupConnection: '连接',
   groupSearch: '检索限制',
   groupOutput: '输出限制',

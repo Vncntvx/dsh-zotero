@@ -123,6 +123,21 @@ export interface PrimitivesStub extends Omit<RealForm, 'SettingsValueField'> {
    * unmount discard.
    */
   readonly SettingsForm: (props: SettingsFormStubProps) => ReactElement
+  /** The segmented tabs bar, as its DOM face. */
+  readonly SegmentedTabs: (props: {
+    readonly items: readonly {
+      readonly value: string
+      readonly label: unknown
+      readonly id: string
+      readonly panelId: string
+    }[]
+    readonly value: string
+    readonly onChange: (value: string) => void
+    readonly label: string
+    readonly className?: string
+  }) => ReactElement
+  /** A staged secret field, which masks the value it holds. */
+  readonly SettingsSecretField: (props: Record<string, unknown>) => ReactElement
   /** The risk acknowledgement dialog, as its DOM face. */
   readonly RiskConfirmation: (props: {
     open: boolean
@@ -435,6 +450,77 @@ export function primitivesStub(overrides: Partial<PrimitivesStub> = {}): Primiti
         invalid || hint !== undefined
           ? createElement('p', null, (invalid ? invalidLabel : hint) as never)
           : null,
+      )
+    },
+    SettingsSecretField: (props) => {
+      const { id, label, hint, text, disabled, onEdit, configured, stateLabel } = props as {
+        id: string
+        label: unknown
+        hint?: unknown
+        text: string
+        disabled?: boolean
+        onEdit: (text: string) => void
+        configured: boolean
+        stateLabel: string
+      }
+      return createElement(
+        'div',
+        { 'data-secret-field': id },
+        createElement('label', { htmlFor: id }, label as never),
+        createElement(
+          'span',
+          null,
+          createElement(
+            'span',
+            { 'data-configured': configured ? 'true' : 'false' },
+            stateLabel as never,
+          ),
+        ),
+        createElement('input', {
+          id,
+          type: 'password',
+          value: text,
+          disabled,
+          onChange: (event: { target: { value: string } }) => {
+            onEdit(event.target.value)
+          },
+        }),
+        hint !== undefined ? createElement('p', null, hint as never) : null,
+      )
+    },
+    SegmentedTabs: ({
+      items,
+      value,
+      onChange,
+      label,
+      className,
+    }: {
+      items: readonly { value: string; label: unknown; id: string; panelId: string }[]
+      value: string
+      onChange: (value: string) => void
+      label: string
+      className?: string
+    }) => {
+      return createElement(
+        'div',
+        { role: 'tablist', 'aria-label': label, className },
+        items.map((item) =>
+          createElement(
+            'button',
+            {
+              key: item.value,
+              type: 'button',
+              role: 'tab',
+              id: item.id,
+              'aria-selected': item.value === value,
+              'aria-controls': item.panelId,
+              onClick: () => {
+                onChange(item.value)
+              },
+            },
+            item.label as never,
+          ),
+        ),
       )
     },
     Tooltip: ({ children }) => children,

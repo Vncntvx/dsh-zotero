@@ -14,3 +14,6 @@
 
 /** Settings namespace of the plugin's configuration section. */
 export const ZOTERO_SETTINGS_NAMESPACE = 'zotero'
+
+/** Settings namespace of the scholarly component's configuration section. */
+export const SCHOLARLY_SETTINGS_NAMESPACE = 'scholarly'
