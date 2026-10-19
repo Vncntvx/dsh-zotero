@@ -573,10 +573,10 @@ Cross-repository scholarly literature retrieval across arXiv, OpenAlex, Crossref
 | ------------- | -------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `query`       | string   | — (required)  | Topic keywords, paper title, or author name                                                                                                        |
 | `sources`     | string[] | —             | Optional source filter (`arxiv`, `openalex`, `crossref`, `semanticscholar`, `pubmed`, `europepmc`, `dblp`); defaults to automatic semantic routing |
-| `year_from`   | integer  | —             | Minimum publication year                                                                                                                           |
+| `year_from`   | integer  | —             | Minimum publication year. With `sort="date"` and this omitted, defaults to the past 2 years.                                                       |
 | `year_to`     | integer  | —             | Maximum publication year                                                                                                                           |
 | `open_access` | boolean  | —             | Filter for papers with free open-access full text                                                                                                  |
-| `sort`        | string   | `"relevance"` | Result ranking: `relevance`, `date` (newest first), `citations` (most cited first)                                                                 |
+| `sort`        | string   | `"relevance"` | Result ranking: `relevance`, `date` (newest first, defaults to the past 2 years when `year_from` is omitted), `citations` (most cited first)       |
 | `categories`  | string[] | —             | arXiv categories filter (e.g. `cs.CL`, `stat.ML`)                                                                                                  |
 | `limit`       | integer  | `8`           | Maximum number of papers returned                                                                                                                  |
 | `abstract`    | string   | `"snippet"`   | Abstract display verbosity: `none`, `snippet`, `full`                                                                                              |
@@ -592,6 +592,10 @@ Aggregates complete scholarly metadata for a single paper by DOI, arXiv ID, PMID
 | Parameter | Type   | Default      | Description                                                                                     |
 | --------- | ------ | ------------ | ----------------------------------------------------------------------------------------------- |
 | `id`      | string | — (required) | DOI (e.g. `10.1038/nature1234`), arXiv ID (e.g. `2301.07041`), PMID, PMCID, URL, or exact title |
+
+#### Failure semantics
+
+When an index cannot answer (rate limit, timeout, server error), the result lists it as `Unanswered sources: <name> (<reason>)`, and a successful hit carries `Notice: <name> (<reason>)` for the sources that stayed silent. An unreachable index is not proof the paper does not exist: only when every index answered and none holds the work does the tool ask you to verify the identifier.
 
 ---
 
@@ -651,3 +655,7 @@ Bibliography verification and fact-checking tool. Parses authors, year, title, a
 | Parameter    | Type     | Default      | Description                                                      |
 | ------------ | -------- | ------------ | ---------------------------------------------------------------- |
 | `references` | string[] | — (required) | List of bibliography reference strings to check (up to 40 items) |
+
+#### Verdicts
+
+Each reference returns one of four verdicts: `VERIFIED` (the registry holds the work and every compared field agrees), `CHECK` (the registry holds the work but a field disagrees, or it is retracted), `NOT FOUND` (the registry answered and holds no such work), `UNVERIFIED` (the registry could not be reached, so nothing is known). An unreachable registry is never reported as `NOT FOUND`.

@@ -51,6 +51,29 @@ export function parsePaperIdentifier(raw: string): PaperIdentifier | undefined {
   return undefined
 }
 
+/**
+ * The OpenAlex lookup id for a parsed paper identifier.
+ *
+ * `scholarly_get` and `scholarly_citations` both need this spelling, and it
+ * is the one place the arXiv-as-DOI convention is stated: OpenAlex holds an
+ * arXiv preprint under `doi:10.48550/arXiv.<id>`, so the resolver that maps
+ * an identifier to an index id is the same one the tools route through.
+ * @param id - the parsed identifier.
+ * @returns the OpenAlex id, or undefined for kinds it cannot address.
+ */
+export function openAlexIdOf(id: PaperIdentifier): string | undefined {
+  switch (id.kind) {
+    case 'arxiv':
+      return `doi:10.48550/arXiv.${id.id}`
+    case 'doi':
+      return `doi:${id.id}`
+    case 'pmid':
+      return `pmid:${id.id}`
+    default:
+      return undefined
+  }
+}
+
 /** Why one PDF attempt produced no readable text. */
 type PdfFailure = 'not-a-pdf' | 'too-short' | 'fetch' | 'parse'
 

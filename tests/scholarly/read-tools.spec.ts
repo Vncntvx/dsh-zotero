@@ -529,6 +529,85 @@ describe('scholarly_get identifier branches', () => {
     expect(seen.some((url) => url.includes('api.openalex.org'))).toBe(true)
   })
 
+  it('resolves a PMCID through Europe PMC and escalates to OpenAlex when DOI is present', async () => {
+    const seen: string[] = []
+    const host = createMockHost(
+      createMockHttp((url) => {
+        const value = String(url)
+        seen.push(value)
+        if (value.includes('www.ebi.ac.uk/europepmc/webservices/rest/search')) {
+          return new Response(
+            JSON.stringify({
+              resultList: {
+                result: [
+                  {
+                    id: 'PMC1234567',
+                    pmcid: 'PMC1234567',
+                    title: 'A PMCID Paper',
+                    authorString: 'Doe J',
+                    pubYear: '2021',
+                    doi: '10.1234/frompmcid',
+                  },
+                ],
+              },
+            }),
+            { headers: { 'content-type': 'application/json' } },
+          )
+        }
+        if (value.includes('api.openalex.org')) {
+          return new Response(
+            JSON.stringify({ id: 'https://openalex.org/W9', display_name: 'A PMCID Paper' }),
+            { headers: { 'content-type': 'application/json' } },
+          )
+        }
+        return new Response('{}', { headers: { 'content-type': 'application/json' } })
+      }),
+    )
+    const tool = createScholarlyGetTool(host)
+    const result = (await tool.execute({ id: 'PMC1234567' }, EXEC_CONTEXT as any)) as {
+      text: string
+    }
+    expect(result.text).toContain('PMCID Paper')
+    expect(seen.some((url) => url.includes('www.ebi.ac.uk'))).toBe(true)
+    expect(seen.some((url) => url.includes('api.openalex.org'))).toBe(true)
+  })
+
+  it('resolves a PMCID through Europe PMC when DOI is absent', async () => {
+    const seen: string[] = []
+    const host = createMockHost(
+      createMockHttp((url) => {
+        const value = String(url)
+        seen.push(value)
+        if (value.includes('www.ebi.ac.uk/europepmc/webservices/rest/search')) {
+          return new Response(
+            JSON.stringify({
+              resultList: {
+                result: [
+                  {
+                    id: 'PMC7654321',
+                    pmcid: 'PMC7654321',
+                    title: 'A PMCID Only Paper',
+                    authorString: 'Smith A',
+                    pubYear: '2020',
+                  },
+                ],
+              },
+            }),
+            { headers: { 'content-type': 'application/json' } },
+          )
+        }
+        return new Response('{}', { headers: { 'content-type': 'application/json' } })
+      }),
+    )
+    const tool = createScholarlyGetTool(host)
+    const result = (await tool.execute({ id: 'PMC7654321' }, EXEC_CONTEXT as any)) as {
+      text: string
+    }
+    expect(result.text).toContain('PMCID Only Paper')
+    expect(seen.some((url) => url.includes('www.ebi.ac.uk'))).toBe(true)
+    expect(seen.some((url) => url.includes('api.openalex.org'))).toBe(false)
+  })
+
   it('resolves a DOI across four indexes in one pass', async () => {
     const seen: string[] = []
     const tool = createScholarlyGetTool(hostOf(seen))
@@ -552,7 +631,9 @@ describe('scholarly_get identifier branches', () => {
     expect(seen.some((url) => url.includes('export.arxiv.org'))).toBe(true)
   })
 
-  it('reports a title search that finds nothing', async () => {
+  it('reports an unanswered title search instead of claiming no such paper', async () => {
+    // A title search queries OpenAlex only, so its 404 is the whole answer:
+    // "no record" and "index unreachable" must not share one sentence.
     const host = createMockHost(createMockHttp(() => new Response('{}', { status: 404 })))
     const tool = createScholarlyGetTool(host)
     const result = (await tool.execute(
@@ -560,6 +641,8 @@ describe('scholarly_get identifier branches', () => {
       EXEC_CONTEXT as any,
     )) as { text: string }
     expect(result.text).toContain('No scholarly index found a paper matching')
+    expect(result.text).toContain('Unanswered sources: OpenAlex (HTTP 404 from api.openalex.org)')
+    expect(result.text).not.toContain('Please verify the identifier')
   })
 
   it('labels a title-derived hit as a closest match', async () => {

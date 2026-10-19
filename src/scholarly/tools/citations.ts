@@ -5,9 +5,9 @@
 
 import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
 import { formatPaperItem, fuseRankedLists } from '../fusion.js'
-import { parsePaperIdentifier } from '../fulltext/resolve.js'
+import { openAlexIdOf, parsePaperIdentifier } from '../fulltext/resolve.js'
 import { lookupOpenAlex, openalexLinkedWorks } from '../sources/openalex.js'
-import { attachLibraryStatus } from '../zotero-link.js'
+import { annotateWithLibraryStatus } from '../zotero-link.js'
 import { SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR, type ScholarlyToolHost } from './search.js'
 
 export function createScholarlyCitationsTool(host: ScholarlyToolHost): ToolDefinition {
@@ -46,7 +46,8 @@ export function createScholarlyCitationsTool(host: ScholarlyToolHost): ToolDefin
       }
       const raw = input.id.trim()
       const parsedId = parsePaperIdentifier(raw)
-      if (!parsedId || parsedId.kind === 'url') {
+      const openAlexLookupId = parsedId ? openAlexIdOf(parsedId) : undefined
+      if (!openAlexLookupId) {
         throw new Error('Please provide a valid DOI, an arXiv ID, or a PMID.')
       }
 
@@ -55,13 +56,6 @@ export function createScholarlyCitationsTool(host: ScholarlyToolHost): ToolDefin
         Math.max(1, input.limit ?? Math.min(10, host.maxResults())),
       )
       const keys = host.keys()
-
-      const openAlexLookupId =
-        parsedId.kind === 'arxiv'
-          ? `doi:10.48550/arXiv.${parsedId.id}`
-          : parsedId.kind === 'doi'
-            ? `doi:${parsedId.id}`
-            : `pmid:${parsedId.id}`
 
       const work = await lookupOpenAlex(openAlexLookupId, host.http, keys, exec.signal)
       if (!work?.openalex) {
@@ -102,14 +96,11 @@ export function createScholarlyCitationsTool(host: ScholarlyToolHost): ToolDefin
       const fused = fuseRankedLists([{ sourceId: 'openalex', papers }])
 
       // Check collision with Zotero
-      const zotero = host.zoteroService?.()
-      let libraryNotice = ''
-      if (zotero) {
-        const library = await attachLibraryStatus(fused, zotero)
-        if (library.failed > 0) {
-          libraryNotice = `\n\nLibrary status unavailable for ${library.failed} of ${fused.length} results (local Zotero lookup failed).`
-        }
-      }
+      const { notice: libraryNotice } = await annotateWithLibraryStatus(
+        fused,
+        host.zoteroService?.(),
+        exec.signal,
+      )
 
       const countDesc =
         total !== undefined && total > fused.length

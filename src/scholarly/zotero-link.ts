@@ -5,14 +5,14 @@
  * Two rules shape this module:
  *
  * 1. **The ref grammar has one owner.** `src/refs.ts` decides what a
- *    `zotero://` ref is; this module never recovers an identity from a string
- *    that `parseRef` rejected. A hit whose `ref` is outside the grammar is not
- *    a match — it is skipped, because inventing a key (and defaulting its
+ *    `zotero://` ref is, and this module never recovers an identity from a
+ *    string that `parseRef` rejected. A hit whose `ref` is outside the grammar
+ *    is not a match, so it is skipped: inventing a key (and defaulting its
  *    library to personal `0`) would assert group-library membership the record
  *    never stated, and the detail seam only accepts the parsed object.
  * 2. **Absence is not evidence.** A lookup that could not run is counted in
  *    {@link LibraryStatusReport}, so the caller reports "library status
- *    unavailable" instead of leaving every hit unmarked — which a reader would
+ *    unavailable" instead of leaving every hit unmarked, which a reader would
  *    take for "not in the library".
  *
  * @module dsh-zotero/scholarly/zotero-link
@@ -79,16 +79,17 @@ function compactRecordMatches(
 }
 
 /**
- * Checks a list of search hits against the local Zotero library, annotating
- * matches in place. A per-hit failure never throws: the report says how many
- * lookups could not run.
- * @param papers - hits to annotate.
+ * Annotate a set of papers with their library status, and report what the
+ * pass determined: how many matched, how many lookups failed, and how many
+ * refs fell outside the grammar.
+ * @param papers - hits to annotate in place.
  * @param zoteroService - the library service, when the host provides one.
  * @returns what the pass determined.
  */
 export async function attachLibraryStatus(
   papers: ScholarlyPaper[],
   zoteroService?: ZoteroServiceLike,
+  signal?: AbortSignal,
 ): Promise<LibraryStatusReport> {
   const report = { matched: 0, failed: 0, unparseable: 0 }
   if (zoteroService === undefined || typeof zoteroService.search !== 'function') {
@@ -100,15 +101,18 @@ export async function attachLibraryStatus(
       const queryTerm = paper.doi ?? paper.title
       let res: ZoteroSearchResult
       try {
-        res = await zoteroService.search({
-          query: queryTerm,
-          mode: 'metadata',
-          scope: { kind: 'library' },
-          sort: 'dateModified',
-          direction: 'desc',
-          offset: 0,
-          limit: 3,
-        })
+        res = await zoteroService.search(
+          {
+            query: queryTerm,
+            mode: 'metadata',
+            scope: { kind: 'library' },
+            sort: 'dateModified',
+            direction: 'desc',
+            offset: 0,
+            limit: 3,
+          },
+          signal,
+        )
       } catch {
         report.failed += 1
         return
@@ -130,9 +134,11 @@ export async function attachLibraryStatus(
         let isMatch = compactRecordMatches(paper, item, paperDoi)
         let collections: string[] = []
 
-        if (typeof zoteroService.get === 'function') {
+        // When the compact record does not match and the paper has no DOI, the
+        // detail lookup can match neither the DOI nor the title, so it is skipped.
+        if (typeof zoteroService.get === 'function' && (isMatch || paperDoi !== undefined)) {
           try {
-            const detail = await zoteroService.get({ ref, include: new Set() })
+            const detail = await zoteroService.get({ ref, include: new Set() }, signal)
             const detailDoi = detail.doi?.trim().toLowerCase()
             if (paperDoi !== undefined && detailDoi !== undefined && paperDoi === detailDoi) {
               isMatch = true
@@ -165,4 +171,34 @@ export async function attachLibraryStatus(
   )
 
   return report
+}
+
+/**
+ * Annotate papers with their library status and, when any lookup failed,
+ * format the notice the caller appends. A failed lookup is not evidence of
+ * absence, so the notice says "unavailable" rather than leaving hits unmarked.
+ * @param papers - papers to annotate in place.
+ * @param zoteroService - optional local library service.
+ * @param signal - optional cancellation signal.
+ * @param style - 'batch' reports counts (search, citations); 'item' reports one result (get).
+ * @returns the notice and the raw status report.
+ */
+export async function annotateWithLibraryStatus(
+  papers: ScholarlyPaper[],
+  zoteroService?: ZoteroServiceLike,
+  signal?: AbortSignal,
+  style: 'batch' | 'item' = 'batch',
+): Promise<{ notice: string; report: LibraryStatusReport }> {
+  if (papers.length === 0 || !zoteroService) {
+    return { notice: '', report: { matched: 0, failed: 0, unparseable: 0 } }
+  }
+  const report = await attachLibraryStatus(papers, zoteroService, signal)
+  let notice = ''
+  if (report.failed > 0) {
+    notice =
+      style === 'item'
+        ? '\n\nLibrary status unavailable (local Zotero lookup failed).'
+        : `\n\nLibrary status unavailable for ${report.failed} of ${papers.length} results (local Zotero lookup failed).`
+  }
+  return { notice, report }
 }

@@ -131,6 +131,35 @@ describe('scholarly_verify verdict details', () => {
     expect(result.text).toContain('CHECK')
   })
 
+  it('flags a short title mismatch when registry paper title has fewer than 3 tokens', async () => {
+    const host = createMockHost(
+      createMockHttp(
+        () =>
+          new Response(
+            JSON.stringify({
+              status: 'ok',
+              message: {
+                DOI: '10.1234/short.1',
+                title: ['Deep Learning'],
+                author: [{ family: 'Doe', given: 'J' }],
+                'published-print': { 'date-parts': [[2015]] },
+              },
+            }),
+            { headers: { 'content-type': 'application/json' } },
+          ),
+      ),
+    )
+    const tool = createScholarlyVerifyTool(host)
+    const result = (await tool.execute(
+      {
+        references: ['Doe, J. (2015). Quantum Computing Principles. doi:10.1234/short.1'],
+      },
+      EXEC_CONTEXT as never,
+    )) as { text: string }
+    expect(result.text).toContain('CHECK')
+    expect(result.text).toContain('DOI mismatch')
+  })
+
   it('flags an author mismatch', async () => {
     const host = createMockHost(
       createMockHttp(

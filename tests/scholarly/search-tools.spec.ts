@@ -220,7 +220,9 @@ describe('scholarly_get tool', () => {
     expect(result.text).toContain('Deep Learning Nature')
   })
 
-  it('reports failure when no index finds matching paper', async () => {
+  it('reports an unanswered index instead of claiming no such paper', async () => {
+    // Every source answers 404, so nothing is known about the identifier —
+    // the output must not read as proof that no index holds it.
     const mockHttp = createMockHttp(() => new Response('Not found', { status: 404 }))
     const host = createMockHost(mockHttp)
     const tool = createScholarlyGetTool(host)
@@ -229,6 +231,59 @@ describe('scholarly_get tool', () => {
       text: string
     }
     expect(result.text).toContain('No scholarly index found a paper matching')
+    expect(result.text).toContain('Unanswered sources:')
+    expect(result.text).toContain('Europe PMC (HTTP 404 from www.ebi.ac.uk)')
+    expect(result.text).not.toContain('Please verify the identifier')
+  })
+
+  it('keeps answering sources in the result when others fail', async () => {
+    // One index holds the work while two others fail: the hit survives and
+    // the failures ride along as a notice, never as a silent absence.
+    const mockHttp = createMockHttp((url) => {
+      if (url.includes('api.crossref.org')) {
+        return new Response('{}', { status: 500 })
+      }
+      if (url.includes('api.semanticscholar.org')) {
+        return new Response('{}', { status: 503 })
+      }
+      if (url.includes('api.openalex.org')) {
+        return new Response(
+          JSON.stringify({
+            id: 'https://openalex.org/W99',
+            doi: 'https://doi.org/10.1038/nature1234',
+            display_name: 'Deep Learning Nature',
+            publication_year: 2015,
+            authorships: [{ author: { display_name: 'Yann LeCun' } }],
+          }),
+          { headers: { 'content-type': 'application/json' } },
+        )
+      }
+      return new Response('{}', { headers: { 'content-type': 'application/json' } })
+    })
+    const host = createMockHost(mockHttp)
+    const tool = createScholarlyGetTool(host)
+
+    const result = (await tool.execute({ id: '10.1038/nature1234' }, EXEC_CONTEXT as any)) as {
+      text: string
+    }
+    expect(result.text).toContain('Deep Learning Nature')
+    expect(result.text).toContain('Notice:')
+    expect(result.text).toContain('Crossref (HTTP 500 from api.crossref.org)')
+    expect(result.text).toContain('Semantic Scholar (HTTP 503 from api.semanticscholar.org)')
+  })
+
+  it('propagates a caller abort instead of recording a failed source', async () => {
+    const controller = new AbortController()
+    const mockHttp = createMockHttp(() => {
+      controller.abort()
+      return new Response('{}', { status: 500 })
+    })
+    const host = createMockHost(mockHttp)
+    const tool = createScholarlyGetTool(host)
+
+    await expect(
+      tool.execute({ id: '10.1038/nature1234' }, { signal: controller.signal } as any),
+    ).rejects.toThrow()
   })
 })
 

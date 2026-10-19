@@ -5,15 +5,16 @@
 
 import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
 import { bestIdentifierOf, formatPaperDetail, fuseRankedLists } from '../fusion.js'
-import { parsePaperIdentifier } from '../fulltext/resolve.js'
+import { openAlexIdOf, parsePaperIdentifier } from '../fulltext/resolve.js'
 import { lookupArxiv } from '../sources/arxiv.js'
 import { lookupCrossref } from '../sources/crossref.js'
 import { lookupOpenAlex, searchOpenAlex } from '../sources/openalex.js'
 import { lookupEuropePmc } from '../sources/pmc.js'
 import { lookupSemanticScholar } from '../sources/semanticscholar.js'
 import { titleKey } from '../normalize.js'
-import type { ScholarlyPaper } from '../types.js'
-import { attachLibraryStatus } from '../zotero-link.js'
+import { SCHOLARLY_SOURCE_NAMES, type ScholarlyPaper, type ScholarlySourceId } from '../types.js'
+import { annotateWithLibraryStatus } from '../zotero-link.js'
+import { failureTextOf } from './failure.js'
 import { SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR, type ScholarlyToolHost } from './search.js'
 
 export function createScholarlyGetTool(host: ScholarlyToolHost): ToolDefinition {
@@ -41,6 +42,36 @@ export function createScholarlyGetTool(host: ScholarlyToolHost): ToolDefinition 
       const id = parsePaperIdentifier(raw)
       const keys = host.keys()
       const foundLists: Array<{ sourceId: string; papers: ScholarlyPaper[] }> = []
+      /**
+       * Sources that could not answer, in `${display name} (${reason})` form,
+       * the same wording `scholarly_search` reports, so a reader learns one
+       * failure vocabulary for the whole subsystem. A source that answered and
+       * simply holds no record is not a failure and stays out of this list.
+       */
+      const failedSources: string[] = []
+
+      /**
+       * Await one index read, folding its rejection into `failedSources`.
+       *
+       * `undefined` means the index answered without holding the work, the
+       * legitimate absence a fusion race relies on. Anything else that throws
+       * is a transport or registry failure: swallowing it would let a rate
+       * limit or a timeout read as "no such paper exists", the exact reading
+       * `scholarly_verify` refuses to report. A caller abort is neither and
+       * propagates.
+       */
+      const attempt = async <T>(
+        sourceId: ScholarlySourceId,
+        read: () => Promise<T>,
+      ): Promise<T | undefined> => {
+        try {
+          return await read()
+        } catch (error) {
+          if (exec.signal.aborted) throw error
+          failedSources.push(`${SCHOLARLY_SOURCE_NAMES[sourceId]} (${failureTextOf(error)})`)
+          return undefined
+        }
+      }
 
       const addHit = (sourceId: string, paper?: ScholarlyPaper): void => {
         if (paper && paper.title) {
@@ -49,10 +80,10 @@ export function createScholarlyGetTool(host: ScholarlyToolHost): ToolDefinition 
       }
 
       if (id !== undefined && id.kind === 'url') {
-        // A bare URL names a resource, not a work: searching an index for the
-        // URL string as a *title* returns whatever happens to match, and the
-        // result then reads like an exact hit. Point at the tool that reads a
-        // URL instead of guessing.
+        // A bare URL names a resource, not a work. Searching an index for the
+        // URL string as a title returns whatever happens to match, and the
+        // result then reads like an exact hit, so point at the tool that reads
+        // a URL instead of guessing.
         throw new Error(
           'A URL has no scholarly record to look up. Use scholarly_read with that URL to read its text, ' +
             'or pass a DOI, arXiv ID, PMID, or PMCID instead.',
@@ -60,25 +91,31 @@ export function createScholarlyGetTool(host: ScholarlyToolHost): ToolDefinition 
       }
 
       if (id === undefined) {
-        // Not a structured ID: search OpenAlex for closest match by title.
-        const hits = await searchOpenAlex(
-          { query: raw, limit: 3, sort: 'relevance' },
-          host.http,
-          keys,
-          exec.signal,
-        ).catch(() => [])
+        // Not a structured ID, so search OpenAlex for the closest match by
+        // title. This branch queries one source only, so its failure cannot
+        // hide behind a race: an empty hit list with a failed source is
+        // reported as unanswered, never as "no such paper".
+        const hits =
+          (await attempt('openalex', () =>
+            searchOpenAlex(
+              { query: raw, limit: 3, sort: 'relevance' },
+              host.http,
+              keys,
+              exec.signal,
+            ),
+          )) ?? []
 
         const wanted = titleKey(raw)
         const exact = hits.find((h) => titleKey(h.title) === wanted)
         addHit('openalex', exact ?? hits[0])
       } else if (id.kind === 'arxiv') {
         const [arx, s2, oa] = await Promise.all([
-          lookupArxiv(id.id, host.http, exec.signal).catch(() => undefined),
-          lookupSemanticScholar(`ARXIV:${id.id}`, host.http, keys, exec.signal).catch(
-            () => undefined,
+          attempt('arxiv', () => lookupArxiv(id.id, host.http, exec.signal)),
+          attempt('semanticscholar', () =>
+            lookupSemanticScholar(`ARXIV:${id.id}`, host.http, keys, exec.signal),
           ),
-          lookupOpenAlex(`doi:10.48550/arXiv.${id.id}`, host.http, keys, exec.signal).catch(
-            () => undefined,
+          attempt('openalex', () =>
+            lookupOpenAlex(openAlexIdOf(id)!, host.http, keys, exec.signal),
           ),
         ])
         addHit('arxiv', arx)
@@ -86,29 +123,39 @@ export function createScholarlyGetTool(host: ScholarlyToolHost): ToolDefinition 
         addHit('openalex', oa)
       } else if (id.kind === 'doi') {
         const [cr, oa, s2, pmc] = await Promise.all([
-          lookupCrossref(id.id, host.http, keys, exec.signal).catch(() => undefined),
-          lookupOpenAlex(`doi:${id.id}`, host.http, keys, exec.signal).catch(() => undefined),
-          lookupSemanticScholar(`DOI:${id.id}`, host.http, keys, exec.signal).catch(
-            () => undefined,
+          attempt('crossref', () => lookupCrossref(id.id, host.http, keys, exec.signal)),
+          attempt('openalex', () =>
+            lookupOpenAlex(openAlexIdOf(id)!, host.http, keys, exec.signal),
           ),
-          lookupEuropePmc({ doi: id.id }, host.http, keys, exec.signal).catch(() => undefined),
+          attempt('semanticscholar', () =>
+            lookupSemanticScholar(`DOI:${id.id}`, host.http, keys, exec.signal),
+          ),
+          attempt('europepmc', () => lookupEuropePmc({ doi: id.id }, host.http, keys, exec.signal)),
         ])
         addHit('crossref', cr)
         addHit('openalex', oa)
         addHit('semanticscholar', s2)
         addHit('europepmc', pmc)
-      } else if (id.kind === 'pmid' || id.kind === 'pmcid') {
-        const pmc = await lookupEuropePmc(
-          id.kind === 'pmid' ? { pmid: id.id } : { pmcid: id.id },
-          host.http,
-          keys,
-          exec.signal,
-        ).catch(() => undefined)
+      } else if (id.kind === 'pmid') {
+        const [pmc, oa] = await Promise.all([
+          attempt('europepmc', () =>
+            lookupEuropePmc({ pmid: id.id }, host.http, keys, exec.signal),
+          ),
+          attempt('openalex', () =>
+            lookupOpenAlex(openAlexIdOf(id)!, host.http, keys, exec.signal),
+          ),
+        ])
+        addHit('europepmc', pmc)
+        addHit('openalex', oa)
+      } else if (id.kind === 'pmcid') {
+        const pmc = await attempt('europepmc', () =>
+          lookupEuropePmc({ pmcid: id.id }, host.http, keys, exec.signal),
+        )
         addHit('europepmc', pmc)
 
         if (pmc?.doi) {
-          const oa = await lookupOpenAlex(`doi:${pmc.doi}`, host.http, keys, exec.signal).catch(
-            () => undefined,
+          const oa = await attempt('openalex', () =>
+            lookupOpenAlex(`doi:${pmc.doi}`, host.http, keys, exec.signal),
           )
           addHit('openalex', oa)
         }
@@ -118,26 +165,33 @@ export function createScholarlyGetTool(host: ScholarlyToolHost): ToolDefinition 
       const paper = fused[0]
 
       if (!paper) {
+        // Three distinct facts stay distinct. Every index was reached and none
+        // holds the work; every index failed, so nothing is known; or a mix.
+        // Only the first may say "verify the identifier".
+        const unanswered =
+          failedSources.length > 0 ? ` Unanswered sources: ${failedSources.join('; ')}.` : ''
+        const remedy = failedSources.length > 0 ? '' : ' Please verify the identifier.'
         return {
-          text: `No scholarly index found a paper matching "${raw}". Please verify the identifier.`,
+          text: `No scholarly index found a paper matching "${raw}".${unanswered}${remedy}`,
         }
       }
 
       // Check collision with Zotero
-      const zotero = host.zoteroService?.()
-      let libraryNotice = ''
-      if (zotero) {
-        const library = await attachLibraryStatus([paper], zotero)
-        if (library.failed > 0) {
-          libraryNotice = '\n\nLibrary status unavailable (local Zotero lookup failed).'
-        }
-      }
+      const { notice: libraryNotice } = await annotateWithLibraryStatus(
+        [paper],
+        host.zoteroService?.(),
+        exec.signal,
+        'item',
+      )
 
       const idHint = bestIdentifierOf(paper)
       const titlePrefix = id === undefined ? 'Closest match found by title:\n\n' : ''
+      // A hit that arrived while other indexes were silent carries their
+      // failure forward: the reader must not take silence for "not held".
+      const failureNote = failedSources.length > 0 ? `\nNotice: ${failedSources.join('; ')}.` : ''
 
       return {
-        text: `${titlePrefix}${formatPaperDetail(paper)}\n\nCanonical ID for other scholarly tools: ${idHint}${libraryNotice}`,
+        text: `${titlePrefix}${formatPaperDetail(paper)}\n\nCanonical ID for other scholarly tools: ${idHint}${failureNote}${libraryNotice}`,
       }
     },
     presentCall: (args) => ({

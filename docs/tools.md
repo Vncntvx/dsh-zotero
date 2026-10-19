@@ -573,10 +573,10 @@ zotero_delete_library_tags(tags=["旧标签", "废弃"])
 | ------------- | -------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `query`       | string   | — (必填)      | 检索主题词、论文标题或作者名                                                                                                          |
 | `sources`     | string[] | —             | 可选限制检索的数据源列表（`arxiv`、`openalex`、`crossref`、`semanticscholar`、`pubmed`、`europepmc`、`dblp`）；默认按主题语义自动路由 |
-| `year_from`   | integer  | —             | 发表起始年份                                                                                                                          |
+| `year_from`   | integer  | —             | 发表起始年份；`sort="date"` 且省略此参数时，默认只取近 2 年                                                                           |
 | `year_to`     | integer  | —             | 发表截止年份                                                                                                                          |
 | `open_access` | boolean  | —             | 是否仅返回具有免费开放获取全文的文献                                                                                                  |
-| `sort`        | string   | `"relevance"` | 排序方式：`relevance`（相关度）、`date`（最新优先）、`citations`（引用最多优先）                                                      |
+| `sort`        | string   | `"relevance"` | 排序方式：`relevance`（相关度）、`date`（最新优先，省略 `year_from` 时默认只取近 2 年）、`citations`（引用最多优先）                  |
 | `categories`  | string[] | —             | arXiv 分类过滤（如 `cs.CL`、`stat.ML`）                                                                                               |
 | `limit`       | integer  | `8`           | 返回论文数量上限                                                                                                                      |
 | `abstract`    | string   | `"snippet"`   | 摘要展示程度：`none`、`snippet`、`full`                                                                                               |
@@ -585,13 +585,17 @@ zotero_delete_library_tags(tags=["旧标签", "废弃"])
 
 ### scholarly_get
 
-通过 DOI、arXiv ID、PMID、PMCID、URL 或精确标题直接聚合获取单篇论文的完整学术图谱元数据（作者、出版物、摘要、引用次数、开放获取全文链接与本地 Zotero 库匹配状态）。
+通过 DOI、arXiv ID、PMID、PMCID、URL 或精确标题直接聚合获取单篇论文的完整学术图谱元数据（作者、出版物、摘要、引用次数、开放获取全文链接与本地 Zotero库匹配状态）。
 
 #### 参数
 
 | 参数 | 类型   | 默认值   | 说明                                                                                     |
 | ---- | ------ | -------- | ---------------------------------------------------------------------------------------- |
 | `id` | string | — (必填) | DOI（如 `10.1038/nature1234`）、arXiv ID（如 `2301.07041`）、PMID、PMCID、URL 或精确标题 |
+
+#### 失败语义
+
+某个索引无法应答（限流、超时、服务错误）时，结果中会以 `Unanswered sources: <索引名> (<原因>)` 列出该索引，成功命中的结果附带 `Notice: <索引名> (<原因>)`。索引不可用不等于论文不存在：只有全部索引均正常应答且无匹配时，才提示核对标识符。
 
 ---
 
@@ -651,3 +655,7 @@ zotero_delete_library_tags(tags=["旧标签", "废弃"])
 | 参数         | 类型     | 默认值   | 说明                                       |
 | ------------ | -------- | -------- | ------------------------------------------ |
 | `references` | string[] | — (必填) | 待核验的参考文献文本列表（单次最多 40 篇） |
+
+#### 核验结论
+
+每条参考文献返回四态之一：`VERIFIED`（注册记录存在且各字段一致）、`CHECK`（记录存在但存在差异或已撤稿）、`NOT FOUND`（注册库已应答且无此记录）、`UNVERIFIED`（注册库不可达，对该条目无任何结论）。注册库不可达永远不会报告为 `NOT FOUND`。

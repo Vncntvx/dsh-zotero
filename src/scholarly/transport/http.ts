@@ -82,6 +82,24 @@ export class ScholarlyCircuitOpenError extends Error {
 
 export { ScholarlySecurityError } from './allowlist.js'
 
+/**
+ * Extract an HTTP status code from an error, without unchecked type casts.
+ *
+ * Every adapter's 404 path needs this: "the index answered and holds no such
+ * work" is a legitimate absence, while any other status is a failure that must
+ * reach the model as one. A cast cannot tell the two apart, so the status is
+ * read through the error type that owns it.
+ * @param error - the rejection from a transport or registry read.
+ * @returns the status code, or undefined when the error carries none.
+ */
+export function httpStatusOf(error: unknown): number | undefined {
+  if (error instanceof ScholarlyHttpError) return error.status
+  if (typeof (error as { status?: unknown })?.status === 'number') {
+    return (error as { status: number }).status
+  }
+  return undefined
+}
+
 export interface ScholarlyRequestOptions {
   headers?: Record<string, string>
   signal?: AbortSignal

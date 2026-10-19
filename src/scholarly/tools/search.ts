@@ -20,7 +20,7 @@ import {
   type ScholarlyKeys,
   type ScholarlyQuery,
 } from '../types.js'
-import { attachLibraryStatus, type ZoteroServiceLike } from '../zotero-link.js'
+import { annotateWithLibraryStatus, type ZoteroServiceLike } from '../zotero-link.js'
 
 export interface ScholarlyToolHost {
   http: ScholarlyHttp
@@ -74,14 +74,19 @@ export function createScholarlySearchTool(host: ScholarlyToolHost): ToolDefiniti
         description:
           'Optional: limit to specific indexes. Default routes automatically by topic keyword semantics.',
       },
-      year_from: { type: 'integer', description: 'Published in this year or later.' },
+      year_from: {
+        type: 'integer',
+        description:
+          'Published in this year or later. If omitted with sort="date", defaults to the previous year.',
+      },
       year_to: { type: 'integer', description: 'Published in this year or earlier.' },
       open_access: { type: 'boolean', description: 'Only return papers with free full text.' },
       sort: {
         type: 'string',
         enum: ['relevance', 'date', 'citations'],
         default: 'relevance',
-        description: 'Result order: relevance, date (newest first), citations (most cited first).',
+        description:
+          'Result order: relevance, date (newest first; defaults to past 2 years if year_from omitted), citations (most cited first).',
       },
       categories: {
         type: 'array',
@@ -194,19 +199,14 @@ export function createScholarlySearchTool(host: ScholarlyToolHost): ToolDefiniti
       // 2. Post-process rankings (title exact match, date/citation sorting, OA filter, limit slice)
       papers = postProcessRanked(papers, { ...queryObj, limit, sort: input.sort ?? 'relevance' })
 
-      // 3. Cross-component collision check against local Zotero library (Top N only)
-      const zotero = host.zoteroService?.()
-      let libraryNotice = ''
-      if (zotero && papers.length > 0) {
-        const library = await attachLibraryStatus(papers, zotero)
-        if (library.failed > 0) {
-          // An unrun lookup is not evidence of absence: say so, instead of
-          // leaving the hit unmarked where a reader would infer "not held".
-          libraryNotice =
-            `\nLibrary status unavailable for ${library.failed} of ${papers.length} results ` +
-            `(local Zotero lookup failed).`
-        }
-      }
+      // 3. Cross-component collision check against the local Zotero library (top N only).
+      //    A lookup that could not run reports "unavailable" instead of leaving
+      //    hits unmarked, where a reader would take them for "not held".
+      const { notice: libraryNotice } = await annotateWithLibraryStatus(
+        papers,
+        host.zoteroService?.(),
+        exec.signal,
+      )
 
       if (papers.length === 0) {
         const attempted = selectedSources.map((s) => SCHOLARLY_SOURCE_NAMES[s]).join(', ')
