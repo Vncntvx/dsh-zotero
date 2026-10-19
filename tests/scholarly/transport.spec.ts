@@ -415,6 +415,34 @@ describe('scholarly transport deadline and gate behavior', () => {
       /temporarily unavailable after repeated failures/,
     )
   })
+
+  it('reopens circuit when probe fails in HALF_OPEN state', async () => {
+    const transitions: string[] = []
+    const breaker = new CircuitBreaker({
+      failureThreshold: 1,
+      cooldownMs: 5,
+      windowMs: 60_000,
+      onStateChange: (_host, from, to) => transitions.push(`${from}->${to}`),
+    })
+    breaker.recordFailure('api.crossref.org', 500)
+    expect(transitions).toEqual(['CLOSED->OPEN'])
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    breaker.beforeRequest('api.crossref.org')
+    expect(transitions).toEqual(['CLOSED->OPEN', 'OPEN->HALF_OPEN'])
+    breaker.recordFailure('api.crossref.org', 500)
+    expect(transitions).toEqual(['CLOSED->OPEN', 'OPEN->HALF_OPEN', 'HALF_OPEN->OPEN'])
+  })
+
+  it('prunes healthy ad-hoc circuits and expired pacer request timestamps', async () => {
+    const breaker = new CircuitBreaker({ maxTrackedCircuits: 1 })
+    breaker.beforeRequest('adhoc-1.org')
+    breaker.beforeRequest('adhoc-2.org')
+    breaker.beforeRequest('adhoc-3.org')
+
+    const pacer = new HostPacer({ 'adhoc.org': 0 }, 1)
+    await pacer.pace('adhoc.org')
+    await pacer.pace('adhoc-2.org')
+  })
 })
 
 describe('abortableSleep', () => {

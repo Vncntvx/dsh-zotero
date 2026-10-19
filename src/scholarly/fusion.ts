@@ -5,10 +5,10 @@
 
 import {
   canonicalKeysOf,
-  isFuzzyTitleMatch,
   mergePaperInto,
   normalizePaper,
   titleKey,
+  titleTokens,
 } from './normalize.js'
 import {
   SCHOLARLY_SOURCE_NAMES,
@@ -18,7 +18,7 @@ import {
 } from './types.js'
 
 export interface RankedSourceList {
-  sourceId: string
+  sourceId: ScholarlySourceId | string
   weight?: number
   papers: readonly ScholarlyPaper[]
 }
@@ -26,6 +26,7 @@ export interface RankedSourceList {
 interface MergedEntry {
   paper: ScholarlyPaper
   score: number
+  titleTokens?: ReadonlySet<string>
 }
 
 const RRF_K = 60
@@ -42,7 +43,8 @@ export function fuseRankedLists(
 
   for (const list of lists) {
     const weight = list.weight ?? 1.0
-    const sourceName = SCHOLARLY_SOURCE_NAMES[list.sourceId as ScholarlySourceId] ?? list.sourceId
+    const sourceName =
+      (SCHOLARLY_SOURCE_NAMES as Record<string, string | undefined>)[list.sourceId] ?? list.sourceId
 
     list.papers.forEach((raw, rank) => {
       const paper = normalizePaper(raw)
@@ -59,9 +61,26 @@ export function fuseRankedLists(
       }
 
       // L2: Check fuzzy title match across existing entries
-      if (!entry) {
+      if (!entry && paper.title.length >= 10) {
+        const paperKey = titleKey(paper.title)
+        const paperTokens = titleTokens(paper.title)
         for (const existing of merged) {
-          if (isFuzzyTitleMatch(existing.paper, paper)) {
+          if (existing.paper.title.length < 10) continue
+          const existingKey = titleKey(existing.paper.title)
+          if (existingKey === paperKey) {
+            entry = existing
+            break
+          }
+          if (!existing.titleTokens) {
+            existing.titleTokens = titleTokens(existing.paper.title)
+          }
+          const tokensA = existing.titleTokens
+          let overlap = 0
+          for (const t of paperTokens) {
+            if (tokensA.has(t)) overlap++
+          }
+          const minTokens = Math.min(tokensA.size, paperTokens.size)
+          if (minTokens >= 3 && overlap / minTokens >= 0.75) {
             entry = existing
             break
           }
@@ -117,8 +136,12 @@ export function postProcessRanked(
   // Exact query-title match boost: if user query directly matches paper title, pin to top
   const wanted = titleKey(query.query)
   if (query.sort === 'relevance' && wanted.length >= 10) {
-    const exact = result.filter((p) => titleKey(p.title) === wanted)
-    const rest = result.filter((p) => titleKey(p.title) !== wanted)
+    const exact: ScholarlyPaper[] = []
+    const rest: ScholarlyPaper[] = []
+    for (const p of result) {
+      if (titleKey(p.title) === wanted) exact.push(p)
+      else rest.push(p)
+    }
     result = [...exact, ...rest]
   }
 

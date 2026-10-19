@@ -4,7 +4,7 @@
  * @module dsh-zotero/scholarly/fulltext/markup
  */
 
-import { decodeEntities } from '../sources/helpers.js'
+import { decodeEntities, plain } from '../sources/helpers.js'
 export { decodeEntities }
 
 function tidy(text: string): string {
@@ -14,11 +14,6 @@ function tidy(text: string): string {
     .replace(/\n{3,}/g, '\n\n')
     .trim()
 }
-
-const inlineText = (html: string): string =>
-  decodeEntities(html.replace(/<[^>]+>/g, ' '))
-    .replace(/\s+/g, ' ')
-    .trim()
 
 /**
  * Extracts and converts the <article> section of an arXiv HTML page to Markdown.
@@ -39,11 +34,11 @@ export function arxivHtmlToMarkdown(html: string): string | undefined {
     .replace(
       /<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1>/gi,
       (_all, level: string, inner: string) =>
-        `\n\n${'#'.repeat(Number(level))} ${inlineText(inner)}\n\n`,
+        `\n\n${'#'.repeat(Number(level))} ${plain(inner)}\n\n`,
     )
     .replace(
       /<figcaption\b[^>]*>([\s\S]*?)<\/figcaption>/gi,
-      (_all, inner: string) => `\n[${inlineText(inner)}]\n`,
+      (_all, inner: string) => `\n[${plain(inner)}]\n`,
     )
     .replace(/<\/t[dh]>/gi, ' | ')
     .replace(/<\/tr>/gi, '\n')
@@ -84,7 +79,7 @@ export function jatsToMarkdown(xml: string): string | undefined {
           .replace(/<label\b[\s\S]*?<\/label>/i, '')
           .replace(/<\/t[dh]>/gi, ' | ')
           .replace(/<\/tr>/gi, '\n')
-        return `\n[${inlineText(`${label} ${caption}`)}]\n${rows}\n`
+        return `\n[${plain(`${label} ${caption}`)}]\n${rows}\n`
       })
       .replace(
         /<sec\b[^>]*>|<\/sec>|<title\b[^>]*>([\s\S]*?)<\/title>/gi,
@@ -97,7 +92,7 @@ export function jatsToMarkdown(xml: string): string | undefined {
             depth--
             return '\n'
           }
-          return `\n\n${'#'.repeat(Math.min(6, Math.max(2, depth + 1)))} ${inlineText(inner ?? '')}\n\n`
+          return `\n\n${'#'.repeat(Math.min(6, Math.max(2, depth + 1)))} ${plain(inner ?? '')}\n\n`
         },
       )
       .replace(/<\/(p|list-item|ref)>/gi, '\n\n')
@@ -105,7 +100,7 @@ export function jatsToMarkdown(xml: string): string | undefined {
   }
 
   const parts = [
-    title === undefined ? '' : `# ${inlineText(title)}`,
+    title === undefined ? '' : `# ${plain(title)}`,
     abstract === undefined ? '' : `## Abstract\n\n${tidy(block(abstract, 2))}`,
     tidy(block(body, 0)),
     references === undefined
@@ -118,16 +113,13 @@ export function jatsToMarkdown(xml: string): string | undefined {
 }
 
 /**
- * Extracts plain text from a PDF buffer using unpdf (pdf.js).
+ * Extract plain text from a PDF buffer, one `[page n]` block per page, through
+ * unpdf (pdf.js).
  *
- * Teardown is `loadingTask.destroy()`: that is the pdf.js API that releases
- * the worker and transport, and it is what unpdf itself calls. `PDFDocumentProxy`
- * has no `destroy` of its own — the earlier code called one that does not
- * exist and swallowed the resulting TypeError — and `cleanup()`, which does
- * exist, only releases page resources, which `destroy()` supersedes.
- *
- * @param data - the PDF bytes.
- * @returns one `[page n]` block per page.
+ * Teardown is `loadingTask.destroy()`: that is the pdf.js call that releases
+ * the worker and transport, and it is what unpdf itself calls.
+ * `PDFDocumentProxy` has no `destroy` of its own. `cleanup()` exists but only
+ * releases page resources, which `destroy()` supersedes.
  */
 export async function extractPdfText(data: Uint8Array): Promise<string> {
   const { extractText, getDocumentProxy } = await import('unpdf')

@@ -5,8 +5,13 @@
 
 import { XMLParser } from 'fast-xml-parser'
 import type { ScholarlyHttp } from '../transport/http.js'
-import type { ScholarlyKeys, ScholarlyPaper, ScholarlyQuery } from '../types.js'
-import { cleanDoi, encodeQueryParams, parseYear, plain, stripEmptyFields } from './helpers.js'
+import {
+  SCHOLARLY_SOURCE_NAMES,
+  type ScholarlyKeys,
+  type ScholarlyPaper,
+  type ScholarlyQuery,
+} from '../types.js'
+import { cleanDoi, encodeQueryParams, parseYear, stripEmptyFields, xmlTextVal } from './helpers.js'
 
 const pubmedParser = new XMLParser({
   ignoreAttributes: false,
@@ -14,13 +19,6 @@ const pubmedParser = new XMLParser({
   stopNodes: ['*.ArticleTitle', '*.AbstractText'],
   isArray: (name) => ['PubmedArticle', 'Author', 'AbstractText', 'ArticleId'].includes(name),
 })
-
-const textVal = (value: unknown): string => {
-  if (typeof value === 'object' && value !== null) {
-    return plain(String((value as { '#text'?: unknown })['#text'] ?? ''))
-  }
-  return plain(String(value ?? ''))
-}
 
 export function parsePubmedXml(xml: string): ScholarlyPaper[] {
   const parsed = pubmedParser.parse(xml) as {
@@ -47,7 +45,7 @@ export function parsePubmedXml(xml: string): ScholarlyPaper[] {
           typeof part === 'object' && part !== null
             ? (part as { '@Label'?: string })['@Label']
             : undefined
-        return `${label ? `${label}: ` : ''}${textVal(part)}`
+        return `${label ? `${label}: ` : ''}${xmlTextVal(part)}`
       })
       const abstract = abstractParts.filter(Boolean).join(' ')
 
@@ -67,15 +65,15 @@ export function parsePubmedXml(xml: string): ScholarlyPaper[] {
         .filter(Boolean)
 
       return stripEmptyFields({
-        title: textVal(article.ArticleTitle).replace(/\.$/, ''),
+        title: xmlTextVal(article.ArticleTitle).replace(/\.$/, ''),
         authors,
         year: parseYear(rawYear),
         venue: typeof article.Journal?.Title === 'string' ? article.Journal.Title : undefined,
         abstract: abstract || undefined,
         doi: cleanDoi(getId('doi')),
-        pmid: textVal(citation.PMID) || getId('pubmed'),
+        pmid: xmlTextVal(citation.PMID) || getId('pubmed'),
         pmcid: getId('pmc'),
-        sources: ['PubMed'],
+        sources: [SCHOLARLY_SOURCE_NAMES.pubmed],
       })
     })
     .filter((p) => (p.title ?? '') !== '')

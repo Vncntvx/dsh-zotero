@@ -1,7 +1,7 @@
 /**
  * Resilient HTTP client for external scholarly services.
  *
- * Composes the pieces the harness already supplies rather than restating them:
+ * It composes pieces the harness already supplies instead of restating them:
  *
  * - **Deadlines** come from `@deepseek-ai/dsh-timeout`'s `deadline()` /
  *   `timeoutOf()`, so a provider timeout and a caller abort stay
@@ -13,9 +13,8 @@
  * - **In-flight bounds** come from `ConcurrencyGate`, so a seven-source fan-out
  *   cannot outrun the process-wide slot budget.
  *
- * A redirect is not a success: the old code called `recordSuccess` on every 3xx,
- * which reset the breaker's failure count once per hop for a redirect-looping
- * host.
+ * A redirect is not a success. Counting each 3xx as one resets the breaker's
+ * failure count once per hop for a redirect-looping host.
  *
  * @module dsh-zotero/scholarly/transport/http
  */
@@ -23,10 +22,9 @@
 import { deadline, timeoutOf } from '@deepseek-ai/dsh-timeout'
 import { ConcurrencyGate } from '../../concurrency.js'
 import { DEFAULT_MAX_RESPONSE_BYTES } from '../../constants.js'
-import { readBoundedBytes } from '../../transport-bounds.js'
-import { ResponseTooLargeError } from '../../transport-bounds.js'
+import { readBoundedBytes, readBoundedText, ResponseTooLargeError } from '../../transport-bounds.js'
 import { assertAllowedScholarlyUrl, ScholarlySecurityError } from './allowlist.js'
-import { CircuitBreaker } from './circuit-breaker.js'
+import { CircuitBreaker, ScholarlyCircuitOpenError } from './circuit-breaker.js'
 import { HostPacer, abortableSleep } from './pacing.js'
 
 export type FetchFunction = (input: string, init?: RequestInit) => Promise<Response>
@@ -66,29 +64,12 @@ export class ScholarlyHttpError extends Error {
 }
 
 /** Raised when a host is refusing requests after repeated failures. */
-export class ScholarlyCircuitOpenError extends Error {
-  constructor(
-    public readonly host: string,
-    public readonly cooldownRemainingMs: number,
-  ) {
-    super(
-      `${host} is temporarily unavailable after repeated failures (${Math.ceil(
-        cooldownRemainingMs / 1_000,
-      )}s remaining).`,
-    )
-    this.name = 'ScholarlyCircuitOpenError'
-  }
-}
+export { ScholarlyCircuitOpenError } from './circuit-breaker.js'
 
 export { ScholarlySecurityError } from './allowlist.js'
 
 /**
  * Extract an HTTP status code from an error, without unchecked type casts.
- *
- * Every adapter's 404 path needs this: "the index answered and holds no such
- * work" is a legitimate absence, while any other status is a failure that must
- * reach the model as one. A cast cannot tell the two apart, so the status is
- * read through the error type that owns it.
  * @param error - the rejection from a transport or registry read.
  * @returns the status code, or undefined when the error carries none.
  */
@@ -152,10 +133,11 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions = {}): S
   const pacer = options.pacer ?? new HostPacer()
   const gate = new ConcurrencyGate(options.maxInFlight ?? 8)
 
-  const bytes = async (
+  const requestWithReader = async <T>(
     url: string,
     reqOptions: ScholarlyRequestOptions = {},
-  ): Promise<Uint8Array> => {
+    reader: (response: Response, maxBytes: number) => Promise<T>,
+  ): Promise<T> => {
     let currentUrl = url
     let redirectCount = 0
     const maxRedirects = 5
@@ -172,14 +154,7 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions = {}): S
       assertAllowedScholarlyUrl(currentUrl, reqOptions.allowPublicPdf ?? false)
       const host = new URL(currentUrl).host
 
-      try {
-        circuitBreaker.beforeRequest(host)
-      } catch (error) {
-        throw new ScholarlyCircuitOpenError(
-          host,
-          Number((error as { cooldownRemainingMs?: number }).cooldownRemainingMs ?? 0),
-        )
-      }
+      circuitBreaker.beforeRequest(host)
 
       await pacer.pace(host, reqOptions.signal)
 
@@ -215,7 +190,7 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions = {}): S
 
         if (response.ok) {
           circuitBreaker.recordSuccess(host)
-          return await readBoundedBytes(response, maxBytes)
+          return await reader(response, maxBytes)
         }
 
         const status = response.status
@@ -264,10 +239,11 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions = {}): S
     }
   }
 
-  const text = async (url: string, reqOptions?: ScholarlyRequestOptions): Promise<string> => {
-    const raw = await bytes(url, reqOptions)
-    return new TextDecoder().decode(raw)
-  }
+  const bytes = (url: string, reqOptions?: ScholarlyRequestOptions): Promise<Uint8Array> =>
+    requestWithReader(url, reqOptions, readBoundedBytes)
+
+  const text = (url: string, reqOptions?: ScholarlyRequestOptions): Promise<string> =>
+    requestWithReader(url, reqOptions, readBoundedText)
 
   const json = async <T = unknown>(
     url: string,

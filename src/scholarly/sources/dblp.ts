@@ -4,7 +4,7 @@
  */
 
 import type { ScholarlyHttp } from '../transport/http.js'
-import type { ScholarlyPaper, ScholarlyQuery } from '../types.js'
+import { SCHOLARLY_SOURCE_NAMES, type ScholarlyPaper, type ScholarlyQuery } from '../types.js'
 import { extractArxivId } from './arxiv.js'
 import { cleanDoi, encodeQueryParams, parseYear, plain, stripEmptyFields } from './helpers.js'
 
@@ -49,7 +49,7 @@ export function paperFromDblp(hit: DblpHit): ScholarlyPaper {
     doi,
     arxiv,
     url: !doi ? (eeLink ?? info.url) : undefined,
-    sources: ['DBLP'],
+    sources: [SCHOLARLY_SOURCE_NAMES.dblp],
   })
 }
 

@@ -45,13 +45,15 @@ export class HostPacer {
   private readonly tails = new Map<string, Promise<void>>()
   private readonly lastRequestTime = new Map<string, number>()
   private readonly overrides: Readonly<Record<string, number>>
+  private readonly maxTrackedHosts: number
 
   /**
    * @param overrides - per-host interval overrides; a test sets `0` to disable
    *   spacing without touching the production table.
    */
-  constructor(overrides: Record<string, number> = {}) {
+  constructor(overrides: Record<string, number> = {}, maxTrackedHosts = 200) {
     this.overrides = overrides
+    this.maxTrackedHosts = maxTrackedHosts
   }
 
   /**
@@ -63,6 +65,16 @@ export class HostPacer {
     const override = this.overrides[host]
     if (override !== undefined) return override
     return intervalForHost(host)
+  }
+
+  private pruneLastRequestTimes(): void {
+    if (this.lastRequestTime.size <= this.maxTrackedHosts) return
+    const now = Date.now()
+    for (const [h, t] of this.lastRequestTime.entries()) {
+      if (now - t > 60_000) {
+        this.lastRequestTime.delete(h)
+      }
+    }
   }
 
   /**
@@ -83,10 +95,8 @@ export class HostPacer {
     })
 
     // Every link resolves, so one abandoned wait cannot reject the host's chain.
-    this.tails.set(
-      host,
-      previous.then(() => held).catch(() => {}),
-    )
+    const tailPromise = previous.then(() => held).catch(() => {})
+    this.tails.set(host, tailPromise)
 
     await previous
 
@@ -97,6 +107,10 @@ export class HostPacer {
     } finally {
       this.lastRequestTime.set(host, Date.now())
       release()
+      if (this.tails.get(host) === tailPromise) {
+        this.tails.delete(host)
+      }
+      this.pruneLastRequestTimes()
     }
   }
 }

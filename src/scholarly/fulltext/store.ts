@@ -25,7 +25,7 @@
  * @module dsh-zotero/scholarly/fulltext/store
  */
 
-import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { dshCachePath } from '@deepseek-ai/dsh-home-paths'
 
@@ -196,19 +196,5 @@ export class ScholarlyTextStore {
     if (this.memory.size <= this.memoryItems) return
     const oldest = this.memory.keys().next().value
     if (oldest !== undefined) this.memory.delete(oldest)
-  }
-
-  /**
-   * Total bytes the cache directory occupies, for diagnostics and tests.
-   * @returns summed file sizes of the store's own documents.
-   */
-  async sizeBytes(): Promise<number> {
-    const path = join(this.root, fileNameOf('probe'))
-    try {
-      const stats = await stat(path)
-      return stats.size
-    } catch {
-      return 0
-    }
   }
 }

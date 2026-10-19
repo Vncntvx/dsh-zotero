@@ -1,10 +1,10 @@
 /**
  * Lawful Open Access full-text resolver.
  *
- * Tries, in order: arXiv HTML -> ar5iv HTML -> the arXiv PDF; PMC JATS XML via
- * Europe PMC; then an open-access PDF located through OpenAlex, Unpaywall, or
+ * Tries, in order: arXiv HTML, ar5iv HTML, the arXiv PDF, PMC JATS XML via
+ * Europe PMC, then an open-access PDF located through OpenAlex, Unpaywall, or
  * Semantic Scholar. Every attempt records why it failed, so the terminal error
- * can name the causes instead of asserting "likely a paywall" — a 429, an
+ * can name the causes instead of asserting "likely a paywall": a 429, an
  * oversized PDF, and an absent copy are three different facts.
  * @module dsh-zotero/scholarly/fulltext/resolve
  */
@@ -51,16 +51,6 @@ export function parsePaperIdentifier(raw: string): PaperIdentifier | undefined {
   return undefined
 }
 
-/**
- * The OpenAlex lookup id for a parsed paper identifier.
- *
- * `scholarly_get` and `scholarly_citations` both need this spelling, and it
- * is the one place the arXiv-as-DOI convention is stated: OpenAlex holds an
- * arXiv preprint under `doi:10.48550/arXiv.<id>`, so the resolver that maps
- * an identifier to an index id is the same one the tools route through.
- * @param id - the parsed identifier.
- * @returns the OpenAlex id, or undefined for kinds it cannot address.
- */
 export function openAlexIdOf(id: PaperIdentifier): string | undefined {
   switch (id.kind) {
     case 'arxiv':
@@ -211,13 +201,18 @@ async function resolveArxivFullText(
   return { reasons }
 }
 
+export interface ScholarlyResolutionContext {
+  readonly http: ScholarlyHttp
+  readonly keys?: ScholarlyKeys
+  readonly store?: ScholarlyTextStore
+  readonly signal?: AbortSignal
+}
+
 export async function resolveScholarlyFullText(
   target: PaperIdentifier,
-  http: ScholarlyHttp,
-  keys?: ScholarlyKeys,
-  store?: ScholarlyTextStore,
-  signal?: AbortSignal,
+  context: ScholarlyResolutionContext,
 ): Promise<FullTextRecord> {
+  const { http, keys, store, signal } = context
   const cacheKey = `${target.kind}-${target.id}`
   const reasons: string[] = []
 
@@ -225,16 +220,16 @@ export async function resolveScholarlyFullText(
     const cached = await store.get(cacheKey)
     if (cached.kind === 'hit') return cached.record
     if (cached.kind === 'corrupt') {
-      // A corrupt entry is evicted and re-fetched; it is a fact worth naming,
-      // not a silent miss.
+      // The corrupt entry is evicted and re-fetched. It is a fact worth naming
+      // in the terminal error, not a silent miss.
       reasons.push(`cache: evicted an unusable entry (${cached.reason})`)
     }
   }
 
   /**
-   * Persist one record. A store that refuses the write must not fail the read
-   * it served: the text is in hand, so the cache is an optimization whose
-   * failure leaves a record behind for diagnostics, not a lost answer.
+   * Persist one record. The cache is an optimization: a store that refuses the
+   * write must not fail the read it just served, so the failure only lands in
+   * the reasons list.
    */
   const remember = async (record: FullTextRecord): Promise<FullTextRecord> => {
     if (store !== undefined) {
@@ -330,15 +325,36 @@ export async function resolveScholarlyFullText(
   const attemptedArxivIds = new Set<string>()
 
   if (doi !== undefined) {
-    // OpenAlex may name a preprint that carries the same work
-    let work: Awaited<ReturnType<typeof lookupOpenAlex>>
-    try {
-      work = await lookupOpenAlex(`doi:${doi}`, http, keys, signal)
-    } catch (error) {
-      work = undefined
-      reasons.push(`OpenAlex lookup: ${errorMessageOf(error)}`)
-    }
-    if (work !== undefined) {
+    const openAlexPromise = lookupOpenAlex(`doi:${doi}`, http, keys, signal)
+      .then((work) => ({ kind: 'openalex' as const, work }))
+      .catch((error) => {
+        reasons.push(`OpenAlex lookup: ${errorMessageOf(error)}`)
+        return undefined
+      })
+
+    const unpaywallPromise =
+      keys?.email !== undefined
+        ? http
+            .json<{
+              best_oa_location?: { url_for_pdf?: string | null } | null
+              oa_locations?: Array<{ url_for_pdf?: string | null }>
+            }>(
+              `https://api.unpaywall.org/v2/${encodeURIComponent(doi)}?email=${encodeURIComponent(
+                keys.email,
+              )}`,
+              { signal, timeoutMs: 25_000 },
+            )
+            .then((oa) => ({ kind: 'unpaywall' as const, oa }))
+            .catch((error) => {
+              reasons.push(`Unpaywall lookup: ${errorMessageOf(error)}`)
+              return undefined
+            })
+        : Promise.resolve(undefined)
+
+    const [openAlexRes, unpaywallRes] = await Promise.all([openAlexPromise, unpaywallPromise])
+
+    if (openAlexRes?.work !== undefined) {
+      const work = openAlexRes.work
       const preprintId = work.arxiv ?? (work.pdfUrl ? extractArxivId(work.pdfUrl) : undefined)
       if (preprintId !== undefined) {
         attemptedArxivIds.add(preprintId)
@@ -356,23 +372,10 @@ export async function resolveScholarlyFullText(
       }
     }
 
-    if (keys?.email !== undefined) {
-      try {
-        const oa = await http.json<{
-          best_oa_location?: { url_for_pdf?: string | null } | null
-          oa_locations?: Array<{ url_for_pdf?: string | null }>
-        }>(
-          `https://api.unpaywall.org/v2/${encodeURIComponent(doi)}?email=${encodeURIComponent(
-            keys.email,
-          )}`,
-          { signal, timeoutMs: 25_000 },
-        )
-        const pdf = oa.best_oa_location?.url_for_pdf
-        if (pdf !== undefined && pdf !== null && !candidatePdfUrls.some((c) => c.url === pdf)) {
-          candidatePdfUrls.push({ url: pdf, from: 'Unpaywall' })
-        }
-      } catch (error) {
-        reasons.push(`Unpaywall lookup: ${errorMessageOf(error)}`)
+    if (unpaywallRes?.oa !== undefined) {
+      const pdf = unpaywallRes.oa.best_oa_location?.url_for_pdf
+      if (pdf !== undefined && pdf !== null && !candidatePdfUrls.some((c) => c.url === pdf)) {
+        candidatePdfUrls.push({ url: pdf, from: 'Unpaywall' })
       }
     }
 

@@ -3,8 +3,13 @@
  * @module dsh-zotero/scholarly/sources/openalex
  */
 
-import type { ScholarlyHttp } from '../transport/http.js'
-import type { ScholarlyKeys, ScholarlyPaper, ScholarlyQuery } from '../types.js'
+import { httpStatusOf, type ScholarlyHttp } from '../transport/http.js'
+import {
+  SCHOLARLY_SOURCE_NAMES,
+  type ScholarlyKeys,
+  type ScholarlyPaper,
+  type ScholarlyQuery,
+} from '../types.js'
 import { extractArxivId } from './arxiv.js'
 import { cleanDoi, encodeQueryParams, plain, stripEmptyFields } from './helpers.js'
 
@@ -72,7 +77,7 @@ export function paperFromOpenAlex(work: OpenAlexWork): ScholarlyPaper {
     openAccess: work.open_access?.is_oa,
     citations: work.cited_by_count,
     retracted: work.is_retracted === true ? true : undefined,
-    sources: ['OpenAlex'],
+    sources: [SCHOLARLY_SOURCE_NAMES.openalex],
   })
 }
 
@@ -157,8 +162,7 @@ export async function lookupOpenAlex(
     })
     return paperFromOpenAlex(work)
   } catch (error) {
-    const status = (error as { status?: number }).status
-    if (status === 404) return undefined
+    if (httpStatusOf(error) === 404) return undefined
     throw error
   }
 }

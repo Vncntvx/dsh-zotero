@@ -43,6 +43,21 @@ export function plain(value: unknown): string {
     .trim()
 }
 
+/**
+ * Pull the text out of a parsed XML node: either the string itself, or the
+ * `#text` member when the parser split it into attributes.
+ * @param value - the parsed node or primitive value.
+ * @returns cleaned plain string.
+ */
+export function xmlTextVal(value: unknown): string {
+  if (typeof value === 'string') return plain(value)
+  if (typeof value === 'number') return String(value)
+  if (typeof value === 'object' && value !== null) {
+    return plain(String((value as { '#text'?: unknown })['#text'] ?? ''))
+  }
+  return ''
+}
+
 export function parseYear(value: unknown): number | undefined {
   const match = /\b(19|20)\d{2}\b/.exec(String(value ?? ''))
   const year = match ? Number(match[0]) : undefined
@@ -52,7 +67,7 @@ export function parseYear(value: unknown): number | undefined {
 /**
  * Drop the fields an index did not supply.
  *
- * A record with `title: ''` is not a record with a title: adapters filter on
+ * A record with `title: ''` is not a record with a title. Adapters filter on
  * `(title ?? '') !== ''`, so an empty string must leave the field absent rather
  * than present-and-empty. `Object.entries` erases the per-key type, so the
  * result is rebuilt through a typed accumulator instead of a blanket cast.

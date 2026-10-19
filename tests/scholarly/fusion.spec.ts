@@ -7,40 +7,10 @@ import {
   fuseRankedLists,
   postProcessRanked,
 } from '../../src/scholarly/fusion.js'
-import {
-  isFuzzyTitleMatch,
-  jaccardSimilarity,
-  mergePaperInto,
-  titleTokens,
-} from '../../src/scholarly/normalize.js'
+import { mergePaperInto } from '../../src/scholarly/normalize.js'
 import type { ScholarlyPaper } from '../../src/scholarly/types.js'
 
 describe('scholarly normalization & matching', () => {
-  it('computes Jaccard similarity and fuzzy title matching', () => {
-    const tokensA = titleTokens('Attention Is All You Need')
-    const tokensB = titleTokens('Attention Is All You Need: A Transformer Architecture')
-    const sim = jaccardSimilarity(tokensA, tokensB)
-    expect(sim).toBeGreaterThanOrEqual(0.6)
-
-    const paper1: ScholarlyPaper = {
-      title: 'Deep Residual Learning for Image Recognition',
-      authors: ['Kaiming He'],
-      year: 2016,
-      sources: ['arXiv'],
-    }
-    const paper2: ScholarlyPaper = {
-      title: 'Deep Residual Learning for Image Recognition: Extended Study',
-      authors: ['Kaiming He'],
-      year: 2016,
-      sources: ['Crossref'],
-    }
-    expect(isFuzzyTitleMatch(paper1, paper2)).toBe(true)
-
-    // Year mismatch (> 1 year difference) prevents false-positive matching
-    const paper3: ScholarlyPaper = { ...paper2, year: 2020 }
-    expect(isFuzzyTitleMatch(paper1, paper3)).toBe(false)
-  })
-
   it('merges paper fields giving precedence to published DOI and richer data', () => {
     const target: ScholarlyPaper = {
       title: 'Attention Is All You Need',
@@ -115,6 +85,61 @@ describe('weighted RRF fusion', () => {
     expect(fused[0].title).toBe('Transformer Multi-Source Paper')
     expect(fused[0].sources).toContain('arXiv')
     expect(fused[0].sources).toContain('OpenAlex')
+  })
+
+  it('merges two spellings of one title that share no identifier', () => {
+    // The L2 rule: same title key, or token containment of at least 0.75 over
+    // three or more shared tokens, fuses the pair even when every canonical
+    // key differs. Two indexes describing one work under slightly different
+    // wording must not reach the model as two papers.
+    const fromArxiv: ScholarlyPaper = {
+      title: 'Attention Is All You Need: A Transformer Architecture',
+      authors: ['Ashish Vaswani'],
+      year: 2017,
+      arxiv: '1706.03762',
+      sources: ['arXiv'],
+    }
+    const fromOpenAlex: ScholarlyPaper = {
+      title: 'Attention Is All You Need Transformer Architecture',
+      authors: ['A. Vaswani'],
+      year: 2017,
+      doi: '10.5555/neurips.2017.1',
+      sources: ['OpenAlex'],
+    }
+
+    const fused = fuseRankedLists([
+      { sourceId: 'arxiv', weight: 1.0, papers: [fromArxiv] },
+      { sourceId: 'openalex', weight: 1.0, papers: [fromOpenAlex] },
+    ])
+
+    expect(fused).toHaveLength(1)
+    expect(fused[0].sources).toContain('arXiv')
+    expect(fused[0].sources).toContain('OpenAlex')
+    expect(fused[0].doi).toBe('10.5555/neurips.2017.1')
+    expect(fused[0].arxiv).toBe('1706.03762')
+  })
+
+  it('keeps two distinct works apart when their titles share little', () => {
+    // The same L2 rule must not over-merge: titles sharing a single common
+    // token stay separate, because containment over fewer than three tokens
+    // is below the bar.
+    const one: ScholarlyPaper = {
+      title: 'Deep Learning for Image Recognition',
+      authors: ['Kaiming He'],
+      sources: ['arXiv'],
+    }
+    const two: ScholarlyPaper = {
+      title: 'Deep Reinforcement Learning for Robotics',
+      authors: ['Sergey Levine'],
+      sources: ['OpenAlex'],
+    }
+
+    const fused = fuseRankedLists([
+      { sourceId: 'arxiv', weight: 1.0, papers: [one] },
+      { sourceId: 'openalex', weight: 1.0, papers: [two] },
+    ])
+
+    expect(fused).toHaveLength(2)
   })
 
   it('boosts exact title matches and handles date/citation sorting', () => {

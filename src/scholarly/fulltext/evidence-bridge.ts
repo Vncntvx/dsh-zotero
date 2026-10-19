@@ -123,44 +123,17 @@ export function rankPassagesWithBM25(
   if (chunks.length === 0) return []
 
   const ranked = rankChunks(query, chunks)
-  const spans = chunkSpansOf(chunks, text)
 
   return ranked
     .filter((entry) => entry.score > 0)
     .slice(0, limit)
     .map((entry) => {
-      const span = spans[entry.index]
+      const chunk = chunks[entry.index]
       return {
-        start: span?.start ?? 0,
-        end: span?.end ?? 0,
+        start: chunk?.start ?? 0,
+        end: chunk?.end ?? 0,
         text: entry.text,
         score: entry.score,
       }
     })
-}
-
-/**
- * The character span each chunk occupies in the source text.
- *
- * `chunkText` returns only text, so the span is recovered by walking the
- * chunks in order and locating each one after the previous match. A chunk that
- * cannot be located keeps the previous position rather than inventing one.
- * @param chunks - the ordered chunks.
- * @param text - the source text they came from.
- * @returns one span per chunk, in the same order.
- */
-function chunkSpansOf(
-  chunks: ReturnType<typeof chunkText>,
-  text: string,
-): Array<{ start: number; end: number }> {
-  const spans: Array<{ start: number; end: number }> = []
-  let cursor = 0
-  for (const chunk of chunks) {
-    const found = text.indexOf(chunk.text, cursor)
-    const start = found >= 0 ? found : cursor
-    const end = start + chunk.text.length
-    spans.push({ start, end })
-    cursor = end
-  }
-  return spans
 }

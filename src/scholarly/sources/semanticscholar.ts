@@ -4,8 +4,13 @@
  * @module dsh-zotero/scholarly/sources/semanticscholar
  */
 
-import type { ScholarlyHttp } from '../transport/http.js'
-import type { ScholarlyKeys, ScholarlyPaper, ScholarlyQuery } from '../types.js'
+import { httpStatusOf, type ScholarlyHttp } from '../transport/http.js'
+import {
+  SCHOLARLY_SOURCE_NAMES,
+  type ScholarlyKeys,
+  type ScholarlyPaper,
+  type ScholarlyQuery,
+} from '../types.js'
 import { cleanDoi, encodeQueryParams, parseYear, plain, stripEmptyFields } from './helpers.js'
 
 interface S2Paper {
@@ -60,7 +65,7 @@ export function paperFromS2(paper: S2Paper): ScholarlyPaper {
           : undefined,
     pdfUrl: paper.openAccessPdf?.url || undefined,
     citations: paper.citationCount,
-    sources: ['Semantic Scholar'],
+    sources: [SCHOLARLY_SOURCE_NAMES.semanticscholar],
   })
 }
 
@@ -99,7 +104,7 @@ export async function searchSemanticScholar(
     })
     return (body.data ?? []).map(paperFromS2).filter((p) => (p.title ?? '') !== '')
   } catch (error) {
-    const status = (error as { status?: number }).status
+    const status = httpStatusOf(error)
     if (status === 429 || status === 404 || status === 400) return []
     throw error
   }
@@ -123,7 +128,7 @@ export async function lookupSemanticScholar(
     })
     return paperFromS2(body)
   } catch (error) {
-    const status = (error as { status?: number }).status
+    const status = httpStatusOf(error)
     if (status === 404 || status === 429 || status === 400) return undefined
     throw error
   }

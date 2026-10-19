@@ -3,8 +3,13 @@
  * @module dsh-zotero/scholarly/sources/pmc
  */
 
-import type { ScholarlyHttp } from '../transport/http.js'
-import type { ScholarlyKeys, ScholarlyPaper, ScholarlyQuery } from '../types.js'
+import { httpStatusOf, type ScholarlyHttp } from '../transport/http.js'
+import {
+  SCHOLARLY_SOURCE_NAMES,
+  type ScholarlyKeys,
+  type ScholarlyPaper,
+  type ScholarlyQuery,
+} from '../types.js'
 import { cleanDoi, encodeQueryParams, parseYear, plain, stripEmptyFields } from './helpers.js'
 
 export interface EpmcResult {
@@ -61,7 +66,7 @@ export function paperFromEpmc(result: EpmcResult): ScholarlyPaper {
     pdfUrl: pdf,
     openAccess: result.isOpenAccess === 'Y' ? true : undefined,
     citations: result.citedByCount,
-    sources: ['Europe PMC'],
+    sources: [SCHOLARLY_SOURCE_NAMES.europepmc],
   })
 }
 
@@ -153,8 +158,7 @@ export async function fetchPmcFullTextXml(
     )}/fullTextXML`
     return await http.text(url, { signal, timeoutMs: 35_000 })
   } catch (error) {
-    const status = (error as { status?: number }).status
-    if (status === 404) return undefined
+    if (httpStatusOf(error) === 404) return undefined
     throw error
   }
 }

@@ -3,8 +3,13 @@
  * @module dsh-zotero/scholarly/sources/crossref
  */
 
-import type { ScholarlyHttp } from '../transport/http.js'
-import type { ScholarlyKeys, ScholarlyPaper, ScholarlyQuery } from '../types.js'
+import { httpStatusOf, type ScholarlyHttp } from '../transport/http.js'
+import {
+  SCHOLARLY_SOURCE_NAMES,
+  type ScholarlyKeys,
+  type ScholarlyPaper,
+  type ScholarlyQuery,
+} from '../types.js'
 import { cleanDoi, encodeQueryParams, parseYear, plain, stripEmptyFields } from './helpers.js'
 
 export interface CrossrefWork {
@@ -56,7 +61,7 @@ export function paperFromCrossref(work: CrossrefWork): ScholarlyPaper {
     url: doi ? `https://doi.org/${doi}` : work.URL,
     citations: work['is-referenced-by-count'],
     retracted: isRetracted ? true : undefined,
-    sources: ['Crossref'],
+    sources: [SCHOLARLY_SOURCE_NAMES.crossref],
   })
 }
 
@@ -115,8 +120,7 @@ export async function lookupCrossref(
     })
     return body.message ? paperFromCrossref(body.message) : undefined
   } catch (error) {
-    const status = (error as { status?: number }).status
-    if (status === 404) return undefined
+    if (httpStatusOf(error) === 404) return undefined
     throw error
   }
 }

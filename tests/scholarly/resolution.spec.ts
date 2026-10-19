@@ -103,7 +103,7 @@ describe('PDF text extraction & fulltext resolution', () => {
 
     const store = new ScholarlyTextStore(mkdtempSync(join(tmpdir(), 'scholarly-resolve-')))
     const target = parsePaperIdentifier('2301.07041')!
-    const res = await resolveScholarlyFullText(target, mockHttp, undefined, store)
+    const res = await resolveScholarlyFullText(target, { http: mockHttp, store })
     expect(res).toBeDefined()
     expect(res.source).toContain('arXiv')
     expect(res.text).toContain('# Arxiv Test')
@@ -128,7 +128,7 @@ describe('PDF text extraction & fulltext resolution', () => {
 
     const store = new ScholarlyTextStore(mkdtempSync(join(tmpdir(), 'scholarly-resolve-')))
     const target = parsePaperIdentifier('PMC12345')!
-    const res = await resolveScholarlyFullText(target, mockHttp, undefined, store)
+    const res = await resolveScholarlyFullText(target, { http: mockHttp, store })
     expect(res).toBeDefined()
     expect(res.source).toContain('PMC')
     expect(res.text).toContain('# PMC Title')
@@ -155,7 +155,7 @@ describe('PDF text extraction & fulltext resolution', () => {
 
     const store = new ScholarlyTextStore(mkdtempSync(join(tmpdir(), 'scholarly-resolve-')))
     const target = parsePaperIdentifier('https://example.com/test.pdf')!
-    const res = await resolveScholarlyFullText(target, mockHttp, undefined, store)
+    const res = await resolveScholarlyFullText(target, { http: mockHttp, store })
     expect(res).toBeDefined()
     expect(res.source).toContain('PDF')
     expect(res.text).toContain('[page 1]')
@@ -181,7 +181,7 @@ describe('scholarly full-text resolution failure reporting', () => {
     // All three routes fail; the error must enumerate them.
     const http = httpOf(() => new Response('missing', { status: 404 }))
     const target = parsePaperIdentifier('2301.07041')!
-    await expect(resolveScholarlyFullText(target, http)).rejects.toThrow(
+    await expect(resolveScholarlyFullText(target, { http })).rejects.toThrow(
       /Tried: .*arXiv's HTML version.*ar5iv.*arXiv PDF/s,
     )
   })
@@ -189,7 +189,7 @@ describe('scholarly full-text resolution failure reporting', () => {
   it('reports a URL that is not a PDF by its reason', async () => {
     const http = httpOf(() => new Response('<html>not a pdf</html>', { status: 200 }))
     const target = parsePaperIdentifier('https://example.com/paper.pdf')!
-    await expect(resolveScholarlyFullText(target, http)).rejects.toThrow(/not-a-pdf/)
+    await expect(resolveScholarlyFullText(target, { http })).rejects.toThrow(/not-a-pdf/)
   })
 
   it('reports a PDF with no extractable text by its reason', async () => {
@@ -198,7 +198,7 @@ describe('scholarly full-text resolution failure reporting', () => {
       '%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]>>endobj\ntrailer<</Size 4/Root 1 0 R>>\n%%EOF'
     const http = httpOf(() => new Response(Buffer.from(emptyPdf), { status: 200 }))
     const target = parsePaperIdentifier('https://example.com/blank.pdf')!
-    await expect(resolveScholarlyFullText(target, http)).rejects.toThrow(/too-short|parse/)
+    await expect(resolveScholarlyFullText(target, { http })).rejects.toThrow(/too-short|parse/)
   })
 
   it('records a cache write failure without failing the read it served', async () => {
@@ -217,7 +217,7 @@ describe('scholarly full-text resolution failure reporting', () => {
     })
 
     const target = parsePaperIdentifier('2301.07041')!
-    const record = await resolveScholarlyFullText(target, http, undefined, store)
+    const record = await resolveScholarlyFullText(target, { http, store })
     expect(record.text).toContain('# Cache Test')
   })
 
@@ -235,7 +235,7 @@ describe('scholarly full-text resolution failure reporting', () => {
     })
 
     const target = parsePaperIdentifier('2301.07041')!
-    const record = await resolveScholarlyFullText(target, http, undefined, store)
+    const record = await resolveScholarlyFullText(target, { http, store })
     expect(record.text).toContain('# Refetched')
   })
 })
@@ -310,7 +310,7 @@ describe('DOI routes: preprint escalation, Unpaywall, and Semantic Scholar', () 
     )
 
     const target = parsePaperIdentifier('10.1234/preprint.1')!
-    const record = await resolveScholarlyFullText(target, http)
+    const record = await resolveScholarlyFullText(target, { http })
     expect(record.source).toContain('preprint of this paper')
     expect(record.text).toContain('# Preprint Copy')
     expect(seen.some((url) => url.includes('arxiv.org/html/2401.00001'))).toBe(true)
@@ -342,7 +342,10 @@ describe('DOI routes: preprint escalation, Unpaywall, and Semantic Scholar', () 
     )
 
     const target = parsePaperIdentifier('10.1234/unpaywall.1')!
-    const record = await resolveScholarlyFullText(target, http, { email: 'user@example.com' })
+    const record = await resolveScholarlyFullText(target, {
+      http,
+      keys: { email: 'user@example.com' },
+    })
     expect(record.source).toContain('Unpaywall')
     expect(seen.some((url) => url.includes('api.unpaywall.org'))).toBe(true)
   })
@@ -355,7 +358,7 @@ describe('DOI routes: preprint escalation, Unpaywall, and Semantic Scholar', () 
     ])
 
     const target = parsePaperIdentifier('10.1234/nothing.1')!
-    await expect(resolveScholarlyFullText(target, http)).rejects.toThrow(
+    await expect(resolveScholarlyFullText(target, { http })).rejects.toThrow(
       /Semantic Scholar lookup|OpenAlex lookup/,
     )
   })
@@ -381,7 +384,7 @@ describe('DOI routes: preprint escalation, Unpaywall, and Semantic Scholar', () 
     ])
 
     const target = parsePaperIdentifier('pmid:12345678')!
-    const record = await resolveScholarlyFullText(target, http)
+    const record = await resolveScholarlyFullText(target, { http })
     expect(record.text).toContain('# PMID Paper')
   })
 })
@@ -444,7 +447,58 @@ describe('PDF candidate discovery order', () => {
       ],
     ])
 
-    const record = await resolveScholarlyFullText(parsePaperIdentifier('10.1234/openalex.1')!, http)
+    const record = await resolveScholarlyFullText(parsePaperIdentifier('10.1234/openalex.1')!, {
+      http,
+    })
+    expect(record.source).toContain('OpenAlex')
+  })
+
+  it('deduplicates candidate PDF URLs across OpenAlex and Unpaywall', async () => {
+    const http = routed([
+      [
+        'www.ebi.ac.uk/europepmc/webservices/rest/search',
+        () =>
+          new Response(JSON.stringify({ resultList: { result: [] } }), {
+            headers: { 'content-type': 'application/json' },
+          }),
+      ],
+      [
+        'api.openalex.org/works/doi%3A',
+        () =>
+          new Response(
+            JSON.stringify({
+              id: 'https://openalex.org/W1',
+              display_name: 'A Work',
+              best_oa_location: { pdf_url: 'https://repo.example.org/dup.pdf' },
+            }),
+            { headers: { 'content-type': 'application/json' } },
+          ),
+      ],
+      [
+        'api.unpaywall.org/v2/',
+        () =>
+          new Response(
+            JSON.stringify({
+              doi: '10.1234/dup.1',
+              is_oa: true,
+              best_oa_location: { url_for_pdf: 'https://repo.example.org/dup.pdf' },
+            }),
+            { headers: { 'content-type': 'application/json' } },
+          ),
+      ],
+      [
+        'repo.example.org/dup.pdf',
+        () =>
+          new Response(Buffer.from(readablePdf()), {
+            headers: { 'content-type': 'application/pdf' },
+          }),
+      ],
+    ])
+
+    const record = await resolveScholarlyFullText(parsePaperIdentifier('10.1234/dup.1')!, {
+      http,
+      keys: { email: 'user@example.com' },
+    })
     expect(record.source).toContain('OpenAlex')
   })
 
@@ -462,8 +516,9 @@ describe('PDF candidate discovery order', () => {
     ])
 
     await expect(
-      resolveScholarlyFullText(parsePaperIdentifier('10.1234/unpay.2')!, http, {
-        email: 'user@example.com',
+      resolveScholarlyFullText(parsePaperIdentifier('10.1234/unpay.2')!, {
+        http,
+        keys: { email: 'user@example.com' },
       }),
     ).rejects.toThrow(/Unpaywall lookup/)
   })
@@ -500,7 +555,7 @@ describe('PDF candidate discovery order', () => {
       ],
     ])
 
-    const record = await resolveScholarlyFullText(parsePaperIdentifier('10.1234/s2.9')!, http)
+    const record = await resolveScholarlyFullText(parsePaperIdentifier('10.1234/s2.9')!, { http })
     expect(record.source).toContain('Semantic Scholar')
     expect(record.text).toContain('[page 1]')
   })
@@ -529,7 +584,7 @@ describe('resolver reason composition', () => {
       ['ar5iv', () => new Response('<html><body>no article here</body></html>')],
     ])
     await expect(
-      resolveScholarlyFullText(parsePaperIdentifier('2301.07042')!, http),
+      resolveScholarlyFullText(parsePaperIdentifier('2301.07042')!, { http }),
     ).rejects.toThrow(/no article body found/)
   })
 
@@ -560,7 +615,7 @@ describe('resolver reason composition', () => {
     ])
 
     await expect(
-      resolveScholarlyFullText(parsePaperIdentifier('10.1234/preprint.fail')!, http),
+      resolveScholarlyFullText(parsePaperIdentifier('10.1234/preprint.fail')!, { http }),
     ).rejects.toThrow(/arXiv:2301\.09999/)
   })
 
@@ -589,7 +644,7 @@ describe('resolver reason composition', () => {
     ])
 
     await expect(
-      resolveScholarlyFullText(parsePaperIdentifier('10.1234/notpdf.1')!, http),
+      resolveScholarlyFullText(parsePaperIdentifier('10.1234/notpdf.1')!, { http }),
     ).rejects.toThrow(/not-a-pdf/)
   })
 
@@ -605,7 +660,7 @@ describe('resolver reason composition', () => {
     ])
     // A PMCID target with no full text and no DOI leaves nothing to try.
     await expect(
-      resolveScholarlyFullText(parsePaperIdentifier('PMC0000000')!, http),
+      resolveScholarlyFullText(parsePaperIdentifier('PMC0000000')!, { http }),
     ).rejects.toThrow(/no route was available/)
   })
 })

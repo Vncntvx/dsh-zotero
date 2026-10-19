@@ -5,8 +5,8 @@
 
 import { XMLParser } from 'fast-xml-parser'
 import type { ScholarlyHttp } from '../transport/http.js'
-import type { ScholarlyPaper, ScholarlyQuery } from '../types.js'
-import { cleanDoi, encodeQueryParams, parseYear, plain, stripEmptyFields } from './helpers.js'
+import { SCHOLARLY_SOURCE_NAMES, type ScholarlyPaper, type ScholarlyQuery } from '../types.js'
+import { cleanDoi, encodeQueryParams, parseYear, stripEmptyFields, xmlTextVal } from './helpers.js'
 import { SCHOLARLY_STOPWORDS } from '../normalize.js'
 
 const NEW_ARXIV_ID = /(\d{4}\.\d{4,5})(v\d+)?/
@@ -31,15 +31,6 @@ const parser = new XMLParser({
     name === 'entry' || name === 'author' || name === 'category' || name === 'link',
 })
 
-const textVal = (value: unknown): string => {
-  if (typeof value === 'string') return value
-  if (typeof value === 'number') return String(value)
-  if (typeof value === 'object' && value !== null) {
-    return String((value as { '#text'?: unknown })['#text'] ?? '')
-  }
-  return ''
-}
-
 export interface ArxivAtomEntry {
   id: string
   title: string
@@ -56,22 +47,22 @@ export function parseArxivAtom(xml: string): ArxivAtomEntry[] {
   const entries: ArxivAtomEntry[] = []
 
   for (const entry of feed?.entry ?? []) {
-    const rawId = /abs\/(.+)$/.exec(textVal(entry.id))?.[1] ?? ''
+    const rawId = /abs\/(.+)$/.exec(xmlTextVal(entry.id))?.[1] ?? ''
     const id = rawId.replace(/v\d+$/, '')
-    const title = plain(textVal(entry.title))
+    const title = xmlTextVal(entry.title)
     if (!id || !title || title === 'Error') continue
 
-    const doi = cleanDoi(textVal(entry['arxiv:doi']))
-    const journalRef = textVal(entry['arxiv:journal_ref'])
-    const published = textVal(entry.published)
+    const doi = cleanDoi(xmlTextVal(entry['arxiv:doi']))
+    const journalRef = xmlTextVal(entry['arxiv:journal_ref'])
+    const published = xmlTextVal(entry.published)
 
     entries.push({
       id,
       title,
       authors: ((entry.author as Array<{ name?: unknown }> | undefined) ?? [])
-        .map((a) => plain(textVal(a.name)))
+        .map((a) => xmlTextVal(a.name))
         .filter(Boolean),
-      abstract: plain(textVal(entry.summary)),
+      abstract: xmlTextVal(entry.summary),
       published,
       ...(doi ? { doi } : {}),
       ...(journalRef ? { journalRef } : {}),
@@ -97,7 +88,7 @@ export function paperFromArxiv(entry: ArxivAtomEntry): ScholarlyPaper {
     url: `https://arxiv.org/abs/${entry.id}`,
     pdfUrl: `https://arxiv.org/pdf/${entry.id}`,
     openAccess: true,
-    sources: ['arXiv'],
+    sources: [SCHOLARLY_SOURCE_NAMES.arxiv],
   })
 }
 

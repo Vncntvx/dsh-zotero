@@ -44,42 +44,6 @@ export function titleTokens(title: string): Set<string> {
   return new Set(words)
 }
 
-export function jaccardSimilarity(setA: Set<string>, setB: Set<string>): number {
-  if (setA.size === 0 && setB.size === 0) return 1.0
-  if (setA.size === 0 || setB.size === 0) return 0.0
-
-  let intersection = 0
-  for (const item of setA) {
-    if (setB.has(item)) intersection++
-  }
-  const union = setA.size + setB.size - intersection
-  return union === 0 ? 0 : intersection / union
-}
-
-export function isFuzzyTitleMatch(paperA: ScholarlyPaper, paperB: ScholarlyPaper): boolean {
-  const tkA = titleKey(paperA.title)
-  const tkB = titleKey(paperB.title)
-  if (tkA === tkB && tkA.length >= 10) return true
-
-  // Year check: if both have years, they must not diverge by more than 1
-  if (
-    paperA.year !== undefined &&
-    paperB.year !== undefined &&
-    Math.abs(paperA.year - paperB.year) > 1
-  ) {
-    return false
-  }
-
-  // Prefix containment check (e.g. "Title: Subtitle" vs "Title")
-  if ((tkA.startsWith(tkB) || tkB.startsWith(tkA)) && Math.min(tkA.length, tkB.length) >= 20) {
-    return true
-  }
-
-  const tokensA = titleTokens(paperA.title)
-  const tokensB = titleTokens(paperB.title)
-  return jaccardSimilarity(tokensA, tokensB) >= 0.7
-}
-
 /**
  * Derives canonical identifier keys for exact index mapping.
  */
@@ -105,9 +69,9 @@ export function normalizePaper(paper: ScholarlyPaper): ScholarlyPaper {
 
   // Align arXiv DOI and arXiv ID
   if (!out.arxiv && out.doi) {
-    const matched = /^10\.48550\/arxiv\.(.+)$/i.exec(out.doi)?.[1]
-    if (matched) {
-      out.arxiv = extractArxivId(matched) ?? matched
+    const arxiv = extractArxivId(out.doi)
+    if (arxiv) {
+      out.arxiv = arxiv
     }
   }
 

@@ -4,21 +4,26 @@
  * @module dsh-zotero/scholarly/transport/circuit-breaker
  */
 
+import { isScholarlyHost } from './hosts.js'
+
 export type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN'
 
-export class CircuitOpenError extends Error {
+export class ScholarlyCircuitOpenError extends Error {
   constructor(
     public readonly host: string,
     public readonly cooldownRemainingMs: number,
   ) {
     super(
-      `Circuit breaker is OPEN for ${host} due to repeated rate limiting. Cooldown remaining: ${Math.ceil(
-        cooldownRemainingMs / 1000,
-      )}s.`,
+      `${host} is temporarily unavailable after repeated failures (${Math.ceil(
+        cooldownRemainingMs / 1_000,
+      )}s remaining).`,
     )
-    this.name = 'CircuitOpenError'
+    this.name = 'ScholarlyCircuitOpenError'
   }
 }
+
+/** Old name for the circuit-open error, kept for existing imports. */
+export { ScholarlyCircuitOpenError as CircuitOpenError }
 
 interface HostCircuit {
   state: CircuitState
@@ -31,6 +36,7 @@ export interface CircuitBreakerOptions {
   failureThreshold?: number
   cooldownMs?: number
   windowMs?: number
+  maxTrackedCircuits?: number
   /** Observer for state changes; the transport records these in diagnostics. */
   onStateChange?: (host: string, from: CircuitState, to: CircuitState, reason?: string) => void
 }
@@ -40,6 +46,7 @@ export class CircuitBreaker {
   private readonly failureThreshold: number
   private readonly cooldownMs: number
   private readonly windowMs: number
+  private readonly maxTrackedCircuits: number
   private readonly onStateChange?: (
     host: string,
     from: CircuitState,
@@ -51,12 +58,23 @@ export class CircuitBreaker {
     this.failureThreshold = options.failureThreshold ?? 3
     this.cooldownMs = options.cooldownMs ?? 60_000
     this.windowMs = options.windowMs ?? 60_000
+    this.maxTrackedCircuits = options.maxTrackedCircuits ?? 200
     this.onStateChange = options.onStateChange
+  }
+
+  private pruneDynamicCircuits(): void {
+    if (this.circuits.size <= this.maxTrackedCircuits) return
+    for (const [h, c] of this.circuits.entries()) {
+      if (!isScholarlyHost(h) && c.state === 'CLOSED' && c.consecutiveFailures === 0) {
+        this.circuits.delete(h)
+      }
+    }
   }
 
   private getCircuit(host: string): HostCircuit {
     let circuit = this.circuits.get(host)
     if (!circuit) {
+      this.pruneDynamicCircuits()
       circuit = {
         state: 'CLOSED',
         consecutiveFailures: 0,
@@ -91,7 +109,7 @@ export class CircuitBreaker {
     const circuit = this.getCircuit(host)
     if (state === 'OPEN') {
       const remaining = Math.max(0, circuit.cooldownEndsAt - Date.now())
-      throw new CircuitOpenError(host, remaining)
+      throw new ScholarlyCircuitOpenError(host, remaining)
     }
   }
 
@@ -101,14 +119,18 @@ export class CircuitBreaker {
       circuit.consecutiveFailures = 0
       this.transition(host, circuit, 'CLOSED', 'Host recovered with successful response')
     }
+    // A healthy ad-hoc host has no reason to stay in memory indefinitely.
+    if (!isScholarlyHost(host) && circuit.state === 'CLOSED' && circuit.consecutiveFailures === 0) {
+      this.circuits.delete(host)
+    }
   }
 
   /**
    * Record one failed request.
    *
-   * Every failure counts, not only 429/503: a host answering 500 for a minute,
-   * or refusing connections, is exactly the host a breaker exists to rest. The
-   * point of the breaker is to stop stacking waits on an unhealthy host, and
+   * Every failure counts, not only 429 and 503. A host answering 500 for a
+   * minute, or refusing connections, is exactly the host a breaker exists to
+   * rest: the point is to stop stacking waits on an unhealthy host, and
    * "unhealthy" is not limited to one status code.
    * @param host - the host that failed.
    * @param status - the HTTP status, or undefined for a transport-level failure.

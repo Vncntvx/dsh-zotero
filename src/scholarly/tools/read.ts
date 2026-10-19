@@ -76,13 +76,12 @@ export function createScholarlyReadTool(host: ScholarlyReadHost): ToolDefinition
         throw new Error('Please provide a valid arXiv ID, DOI, PMID, PMCID, or public PDF URL.')
       }
 
-      const fullText = await resolveScholarlyFullText(
-        parsedId,
-        host.http,
-        host.keys(),
-        host.cache,
-        exec.signal,
-      )
+      const fullText = await resolveScholarlyFullText(parsedId, {
+        http: host.http,
+        keys: host.keys(),
+        store: host.cache,
+        signal: exec.signal,
+      })
 
       const sections = fullText.structured ? extractOutline(fullText.text) : []
       const header = `${raw} — ${fullText.text.length} characters (source: ${fullText.source})${
