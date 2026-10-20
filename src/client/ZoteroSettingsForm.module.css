@@ -11,6 +11,10 @@
   flex-direction: column;
 }
 
+.tabPanel[hidden] {
+  display: none !important;
+}
+
 .groupCard {
   display: flex;
   flex-direction: column;
