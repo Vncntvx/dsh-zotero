@@ -34,3 +34,16 @@
   font-size: 14px;
   line-height: 24px;
 }
+
+.tabsContainer {
+  margin: 16px 0 20px;
+}
+
+.tabPanel {
+  display: flex;
+  flex-direction: column;
+}
+
+.tabPanel[hidden] {
+  display: none !important;
+}

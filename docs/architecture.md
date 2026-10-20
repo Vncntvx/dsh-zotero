@@ -78,7 +78,7 @@ graph LR
 
 ### 浏览器客户端 (`src/client/`)
 
-- 组合包配置（`plugins.bundle.config`）：在插件管理器详情页注册完整的 Zotero 配置表单，通过 harness 官方 `SettingsForm` 与 `SettingsFormModel` 统一管理；
+- 组合包配置（`plugins.bundle.config`）：在插件管理器详情页注册统一的 5 标签页配置界面（基础设置、本地连接、检索提取、学术检索、高级选项），通过 harness 官方 `SettingsForm` 与 `SettingsFormModel` 统一管理 Zotero 主命名空间与 Scholarly 学术检索命名空间，支持双通道互通呈现与草稿防丢弃隔离；
 - 会话面板（`conversation.view`）：会话标签页只有一个 Zotero 面板，顶部透镜栏在文献工作区与会话级导出页之间切换；每个条目的检查器内含概览（Overview）、原文片段（Passages）与该条目导出结果（Exports）三个面板；
 - 工具卡片（`tool.call.toolview`）：为 16 个模型工具（8 读 + 8 写）各提供紧凑折叠卡片，对值得复制的取值提供复制按钮，通过“阅读 PDF”在侧边栏阅读原文，并提供复制标题或规范深链的定位操作。卡片只渲染工具已有的输出，自身不调用工具；
 - 命令状态卡片（`conversation.chat.commandview`）：为 `/zotero` 输出提供连接状态灯、版本与 Server ID 明细、离线排查建议与就地刷新按钮。结构化事实来自宿主注册的 `zoteroStatus` 会话投影：命令处理器将同一份状态投影为 `zotero/status` 会话事件并以 `sourceEventSeq` 指向它，卡片经 `useProjection` 读回，命令文本只作人类可读答案、不再被解析。就地刷新发起的实时探测优先于投影（它是更新的答案）；

@@ -51,6 +51,8 @@ export interface ZoteroSettingsFormProps {
   activeTab?: SettingsTabId
   /** Fired when the active tab changes. */
   onTabChange?: (tab: SettingsTabId) => void
+  /** Whether to render the internal SegmentedTabs (false when hoisted). */
+  showTabs?: boolean
 }
 
 /** Field map by group key, for quick lookups. */
@@ -64,7 +66,7 @@ const FIELDS_BY_GROUP: ReadonlyMap<GroupKey, readonly FieldKey[]> = new Map(
  * @returns the tabbed form view.
  */
 export function ZoteroSettingsForm(props: ZoteroSettingsFormProps) {
-  const { t, state, actions } = props
+  const { t, state, actions, showTabs = true } = props
   const [internalTab, setInternalTab] = useState<SettingsTabId>('features')
   const activeTab = props.activeTab ?? internalTab
 
@@ -112,14 +114,16 @@ export function ZoteroSettingsForm(props: ZoteroSettingsFormProps) {
 
   return (
     <>
-      <div className={css.tabsContainer}>
-        <SegmentedTabs
-          items={tabItems}
-          value={activeTab}
-          onChange={handleTabChange}
-          label={t('configTabsLabel')}
-        />
-      </div>
+      {showTabs && (
+        <div className={css.tabsContainer}>
+          <SegmentedTabs
+            items={tabItems}
+            value={activeTab}
+            onChange={handleTabChange}
+            label={t('configTabsLabel')}
+          />
+        </div>
+      )}
 
       {/* Tab 1: General & Features */}
       <div

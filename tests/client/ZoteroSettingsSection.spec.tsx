@@ -22,6 +22,11 @@ import {
   type ZoteroCardFace,
   type ZoteroCardState,
 } from '../../src/client/zotero-card-controller.ts'
+import {
+  ScholarlyFormController,
+  type ScholarlyCardFace,
+  type ScholarlyCardState,
+} from '../../src/client/scholarly-form-controller.ts'
 import { fakeScope, type FakeScope } from './helpers/fake-scope.ts'
 import { makeTranslate } from './helpers/mock-translate.ts'
 
@@ -33,10 +38,22 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
 })
 
 /** The renderer's binding: a snapshot selector hook over the page's store. */
-function Harness({ face, dictionary = zh }: { face: ZoteroCardFace; dictionary?: typeof zh }) {
+function Harness({
+  face,
+  scholarlyFace,
+  dictionary = zh,
+}: {
+  face: ZoteroCardFace
+  scholarlyFace?: ScholarlyCardFace
+  dictionary?: typeof zh
+}) {
   const state = useSyncExternalStore(
     face.hooks.zoteroCard.subscribe,
     face.hooks.zoteroCard.getSnapshot,
+  )
+  const scholarlyState = useSyncExternalStore(
+    scholarlyFace ? scholarlyFace.hooks.scholarlyCard.subscribe : () => () => {},
+    scholarlyFace ? scholarlyFace.hooks.scholarlyCard.getSnapshot : () => undefined as any,
   )
   const props = {
     // `plugins.bundle.config` renders its entries with `view: 'page'` only.
@@ -46,19 +63,25 @@ function Harness({ face, dictionary = zh }: { face: ZoteroCardFace; dictionary?:
     t: makeTranslate(dictionary),
     // The shell supplies `close`; the page never uses it, so the fixture omits it.
     useZoteroCard: (selector: (snapshot: ZoteroCardState) => unknown) => selector(state),
+    useScholarlyCard: scholarlyFace
+      ? (selector: (snapshot: ScholarlyCardState) => unknown) => selector(scholarlyState)
+      : undefined,
     edit: face.edit,
     resetField: face.resetField,
     save: face.save,
     discard: face.discard,
+    scholarly: scholarlyFace,
   } as unknown as ZoteroSettingsSectionProps
   return <ZoteroSettingsSection {...props} />
 }
 
 let scope: FakeScope
 
-function mount(dictionary: typeof zh = zh): void {
+function mount(dictionary: typeof zh = zh, scholarlyFace?: ScholarlyCardFace): void {
   const controller = new ZoteroCardController(scope)
-  render(<Harness face={controller.inject()} dictionary={dictionary} />)
+  render(
+    <Harness face={controller.inject()} scholarlyFace={scholarlyFace} dictionary={dictionary} />,
+  )
 }
 
 afterEach(() => {
@@ -251,7 +274,7 @@ describe('ZoteroSettingsSection', () => {
     expect(saveButton().disabled).toBe(true)
   })
 
-  it('renders SegmentedTabs with all 4 tabs and features as default selected tab', () => {
+  it('renders SegmentedTabs with all 5 tabs and features as default selected tab', () => {
     scope = fakeScope({ value: {} })
     mount()
 
@@ -259,11 +282,12 @@ describe('ZoteroSettingsSection', () => {
     expect(tabList).toBeDefined()
 
     const tabs = screen.getAllByRole('tab')
-    expect(tabs).toHaveLength(4)
+    expect(tabs).toHaveLength(5)
     expect(tabs.map((tab) => tab.textContent)).toEqual([
       zh.tabFeatures,
       zh.tabConnection,
       zh.tabSearch,
+      zh.tabScholarly,
       zh.tabAdvanced,
     ])
 
@@ -294,11 +318,69 @@ describe('ZoteroSettingsSection', () => {
     const featuresPanel = document.getElementById('zotero-panel-features')
     expect(featuresPanel?.getAttribute('hidden')).toBe('')
 
+    const scholarlyTab = screen.getByRole('tab', { name: zh.tabScholarly })
+    fireEvent.click(scholarlyTab)
+    expect(scholarlyTab.getAttribute('aria-selected')).toBe('true')
+    const scholarlyPanel = document.getElementById('zotero-panel-scholarly')
+    expect(scholarlyPanel?.getAttribute('hidden')).toBeNull()
+
     const advancedTab = screen.getByRole('tab', { name: zh.tabAdvanced })
     fireEvent.click(advancedTab)
     expect(advancedTab.getAttribute('aria-selected')).toBe('true')
     const advancedPanel = document.getElementById('zotero-panel-advanced')
     expect(advancedPanel?.getAttribute('hidden')).toBeNull()
+  })
+
+  it('renders scholarly controls on Tab 4 when scholarly card is provided', () => {
+    scope = fakeScope({ value: {} })
+    const scholarlyScope = fakeScope({
+      value: { email: 'scholar@example.com', maxResults: 15 },
+    })
+    const scholarlyController = new ScholarlyFormController(scholarlyScope)
+    mount(zh, scholarlyController.inject())
+
+    const scholarlyTab = screen.getByRole('tab', { name: zh.tabScholarly })
+    fireEvent.click(scholarlyTab)
+
+    expect(screen.getByLabelText(zh.scholarlyEmail)).toBeDefined()
+    expect(screen.getByLabelText(zh.scholarlyMaxResults)).toBeDefined()
+    expect((screen.getByLabelText(zh.scholarlyEmail) as HTMLInputElement).value).toBe(
+      'scholar@example.com',
+    )
+    scholarlyController.dispose()
+  })
+
+  it('preserves uncommitted edits across tab transitions without unmount-discard', () => {
+    scope = fakeScope({ value: { timeoutMs: 5000 } })
+    const scholarlyScope = fakeScope({ value: { email: 'initial@example.com' } })
+    const scholarlyController = new ScholarlyFormController(scholarlyScope)
+    mount(zh, scholarlyController.inject())
+
+    // 1. Edit a Zotero field on Tab 2 (Connection)
+    const connectionTab = screen.getByRole('tab', { name: zh.tabConnection })
+    fireEvent.click(connectionTab)
+    const timeoutInput = screen.getByLabelText(zh.timeoutMs) as HTMLInputElement
+    fireEvent.change(timeoutInput, { target: { value: '9999' } })
+    expect(timeoutInput.value).toBe('9999')
+
+    // 2. Switch to Tab 4 (Scholarly) and edit a Scholarly field
+    const scholarlyTab = screen.getByRole('tab', { name: zh.tabScholarly })
+    fireEvent.click(scholarlyTab)
+    const emailInput = screen.getByLabelText(zh.scholarlyEmail) as HTMLInputElement
+    fireEvent.change(emailInput, { target: { value: 'updated@example.com' } })
+    expect(emailInput.value).toBe('updated@example.com')
+
+    // 3. Switch back to Tab 2 (Connection) - Zotero edit must be preserved!
+    fireEvent.click(connectionTab)
+    const timeoutInputAgain = screen.getByLabelText(zh.timeoutMs) as HTMLInputElement
+    expect(timeoutInputAgain.value).toBe('9999')
+
+    // 4. Switch back to Tab 4 (Scholarly) - Scholarly edit must be preserved!
+    fireEvent.click(scholarlyTab)
+    const emailInputAgain = screen.getByLabelText(zh.scholarlyEmail) as HTMLInputElement
+    expect(emailInputAgain.value).toBe('updated@example.com')
+
+    scholarlyController.dispose()
   })
 
   it('renders structured card headers with titles and descriptions across groups', () => {

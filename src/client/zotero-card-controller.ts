@@ -141,20 +141,26 @@ export const NUMERIC_FIELD_KEYS: ReadonlySet<FieldKey> = new Set<FieldKey>(
   FIELD_SPECS.filter((spec) => spec.kind === 'number').map((spec) => spec.key),
 )
 
-/** The tab partition identifiers for the 4-tab settings view. */
-export type SettingsTabId = 'features' | 'connection' | 'search' | 'advanced'
+/** The tab partition identifiers for the 5-tab settings view. */
+export type SettingsTabId = 'features' | 'connection' | 'search' | 'scholarly' | 'advanced'
 
 /** Description of one tab partition and the configuration groups it carries. */
 export interface SettingsTabDescriptor {
   readonly id: SettingsTabId
-  readonly labelKey: 'tabFeatures' | 'tabConnection' | 'tabSearch' | 'tabAdvanced'
-  readonly descKey: 'tabFeaturesDesc' | 'tabConnectionDesc' | 'tabSearchDesc' | 'tabAdvancedDesc'
+  readonly labelKey: 'tabFeatures' | 'tabConnection' | 'tabSearch' | 'tabScholarly' | 'tabAdvanced'
+  readonly descKey:
+    | 'tabFeaturesDesc'
+    | 'tabConnectionDesc'
+    | 'tabSearchDesc'
+    | 'tabScholarlyDesc'
+    | 'tabAdvancedDesc'
   readonly groupKeys: readonly GroupKey[]
 }
 
 /**
- * The four tab partitions, in display order. `groupKeys` lists the
- * configuration groups each one carries.
+ * The five tab partitions, in display order. `groupKeys` lists the
+ * configuration groups each one carries (scholarly has empty groupKeys here
+ * as it is managed by ScholarlyFormController).
  */
 export const SETTINGS_TABS: readonly SettingsTabDescriptor[] = [
   {
@@ -174,6 +180,12 @@ export const SETTINGS_TABS: readonly SettingsTabDescriptor[] = [
     labelKey: 'tabSearch',
     descKey: 'tabSearchDesc',
     groupKeys: ['groupSearch'],
+  },
+  {
+    id: 'scholarly',
+    labelKey: 'tabScholarly',
+    descKey: 'tabScholarlyDesc',
+    groupKeys: [],
   },
   {
     id: 'advanced',

@@ -231,8 +231,8 @@ function registerUi(ctx: ClientContext): void {
   )
 
   // Bundle configuration on the plugin manager detail page (plugins.bundle.config).
-  // The page renders the 4-tab form through ZoteroSettingsSection and stages edits
-  // over the zotero namespace via card.inject().
+  // The page renders the unified 5-tab form through ZoteroSettingsSection and stages edits
+  // over both zotero and scholarly namespaces.
   ctx.slots.inject('plugins.bundle.config', () =>
     ctx.slots.register(
       {
@@ -240,7 +240,18 @@ function registerUi(ctx: ClientContext): void {
         key: ZOTERO_REMOTE_PACKAGE,
         locale: NS,
         registrant: REGISTRANT,
-        inject: () => card.inject(),
+        inject: () => {
+          const zoteroFace = card.inject()
+          const scholarlyFace = scholarlyCard.inject()
+          return {
+            ...zoteroFace,
+            hooks: {
+              zoteroCard: zoteroFace.hooks.zoteroCard,
+              scholarlyCard: scholarlyFace.hooks.scholarlyCard,
+            },
+            scholarly: scholarlyFace,
+          }
+        },
       },
       ZoteroSettingsSection,
     ),

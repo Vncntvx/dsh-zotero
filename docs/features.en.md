@@ -128,7 +128,7 @@ Running `/zotero` (or `/zotero status`) in the chat composer renders a dedicated
 The plugin integrates with Harness plugin slots:
 
 - **Activation Guidance (`plugins.bundle.activation`)**: opens an onboarding modal when enabling the plugin, checking local API connectivity and guiding users to enable communications in Zotero preferences;
-- **Detail Page Configuration and Status (`plugins.bundle.config` / `plugins.detail.section`)**: `plugins.bundle.config` carries the whole Zotero configuration form on the plugin detail page (every field, including `webEnabled` and `writeEnabled`, saved through the harness's official `SettingsForm`); `plugins.detail.section` renders the live readiness card that reports connection state, the Zotero version, and diagnostic tips;
+- **Detail Page Configuration and Status (`plugins.bundle.config` / `plugins.detail.section`)**: `plugins.bundle.config` carries the unified 5-tab configuration form on the plugin detail page (covering General, Connection, Search & Extraction, Scholarly Search, and Advanced, synchronized across dual channels with the Scholarly sub-row configuration); `plugins.detail.section` renders the live readiness card that reports connection state, the Zotero version, and diagnostic tips;
 
 ## Session Sources Panel
 

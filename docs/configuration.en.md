@@ -94,7 +94,7 @@ In headless environments lacking a settings service, the plugin runs using value
 
 ## Scholarly Literature Component Configuration (`dsh-zotero/scholarly`)
 
-The component row in `cordis.patch.yml` ships enabled by default alongside the plugin; set `disabled: true` to disable it. Fields can be edited through the "Configure" button on the `dsh-zotero#scholarly` row in the Plugins manager, or written directly under that row's `config` in `cordis.patch.yml`. A change takes effect on the next tool call, without restarting the profile:
+The component row in `cordis.patch.yml` ships enabled by default alongside the plugin; set `disabled: true` to disable it. Fields can be edited through three paths: directly on the "Scholarly Search" tab of the main Zotero plugin settings page, via the "Configure" button on the `dsh-zotero#scholarly` row in the Plugins manager, or written directly under that row's `config` in `cordis.patch.yml`. The main settings page and the sub-row shortcut share the same live form state across both channels. A change takes effect on the next tool call, without restarting the profile:
 
 | Field             | Default | Description                                                                                        |
 | ----------------- | ------- | -------------------------------------------------------------------------------------------------- |
