@@ -4,11 +4,11 @@
 
 dsh-zotero allows DSH LLM conversations to search, inspect, and cite your local Zotero library. Sixteen tools cover literature discovery, passage retrieval, source attachment location, formatted export, and personal-library writes. Eight personal-library write tools are disabled by default and require session approval and plan review when enabled. The web Sources panel aggregates literature, relevant passages, and exports referenced throughout the session.
 
-## Scholarly Literature Retrieval (optional component)
+## Scholarly Literature Retrieval
 
-With the `dsh-zotero/scholarly` component enabled, the model can search beyond the local library: across seven indexes (arXiv, OpenAlex, Crossref, Semantic Scholar, PubMed, Europe PMC, DBLP) with fused, deduplicated ranking; read open-access full texts by DOI / arXiv ID / PMID / PMCID with passage-level location; follow citation networks; pull canonical citation formats from DOI registration agencies (BibTeX, RIS, CSL JSON, CSL-styled text); and verify a reference list for fabricated entries and field mismatches.
+With the `dsh-zotero/scholarly` component enabled alongside the plugin by default, the model can search beyond the local library: across seven indexes (arXiv, OpenAlex, Crossref, Semantic Scholar, PubMed, Europe PMC, DBLP) with fused, deduplicated ranking; read open-access full texts by DOI / arXiv ID / PMID / PMCID with passage-level location; follow citation networks; pull canonical citation formats from DOI registration agencies (BibTeX, RIS, CSL JSON, CSL-styled text); and verify a reference list for fabricated entries and field mismatches.
 
-It complements the local-library capabilities rather than replacing them: hits are annotated when already held, read-only. The component ships disabled because retrieval makes outbound requests.
+It complements the local-library capabilities rather than replacing them: hits are annotated when already held, read-only.
 
 ## Literature Search
 

@@ -67,7 +67,7 @@ graph LR
 
 ### 学术文献子系统 (`src/scholarly/`，可选组件)
 
-`dsh-zotero/scholarly` 是一个独立的 bundle 组件（`cordis.patch.yml` 中默认 `disabled: true`），注册 `ctx.scholarly` 与六个检索工具。它与 Zotero 本地路径完全隔离：所有请求发往外部学术索引，与 `ctx.zotero` 的唯一交叉点是「这封信是否已在本地库」的只读标注。
+`dsh-zotero/scholarly` 是一个独立的 bundle 组件（`cordis.patch.yml` 中默认随插件一同启用），注册 `ctx.scholarly` 与六个检索工具。它与 Zotero 本地路径完全隔离：所有请求发往外部学术索引，与 `ctx.zotero` 的唯一交叉点是「这封信是否已在本地库」的只读标注。
 
 - **主机白名单**：`src/scholarly/transport/hosts.ts` 是唯一真源。允许的 host 集合与每主机限流间隔都从 `SCHOLARLY_HOSTS` 派生，`allowlist.ts` 不再自带一份列表——两份列表曾经互相矛盾（最忙的 `api.openalex.org` 没有限流条目，而适配器实际调用的是 `export.arxiv.org`）。
 - **传输层**：截止时间用 `@deepseek-ai/dsh-timeout` 的 `deadline()` / `timeoutOf()`，因此「provider 超时」与「调用方取消」是两件可分辨的事（后者不重试）；响应体上限用共享的 `src/transport-bounds.ts`，与本地传输同一实现、同一 16 MiB 上限；在飞请求数由 `ConcurrencyGate` 约束。
@@ -102,12 +102,12 @@ graph LR
 插件维护一份容量为 500 条的进程内诊断环形缓冲（`src/diagnostics.ts`），集中记录运行时错误、功能降级与渲染崩溃：
 
 - **记录来源**：各关键接缝（HTTP 请求、工具调用、Job 状态、配置变更、写门禁、Shell 拦截、连接探测、降级事件）通过 `DiagnosticSink` 写入结构化条目。服务在装配时挂载随 fiber 生命周期的日志导出器，按名称前缀捕获插件子树产生的 `ctx.logger` 输出（涵盖接缝使用的 `zotero.*` 以及 Cordis 派生的 `zotero-service` 命名空间），收集匿名访问与生命周期相关日志；
-- **保留级别**：默认记录 error、warn 与 info 级别；启用 `debug` 配置后额外记录请求行与调用摘要等细节。连续出现的相同条目会合并并递增 `count`，避免重复报错刷屏，单条消息和详情字段均设有长度限制；
-- **读取接口**：`zotero/diagnostics` 端点按时间倒序返回快照（包含总数、截断标记与 debug 开关状态）。因 Harness 转发事件白名单未向插件开放，前端诊断卡仅在面板可见时通过定时轮询更新状态；
+- **保留级别**：默认不开启诊断模式时不显示诊断面板；在设置中开启「诊断模式」（`debug`）后在详情页底部显示诊断卡片，并额外记录请求行与调用摘要等细节。连续出现的相同条目会合并并递增 `count`，避免重复报错刷屏，单条消息和详情字段均设有长度限制；
+- **读取接口**：`zotero/diagnostics` 端点按时间倒序返回快照（包含总数、截断标记与 debug 开关状态）。因 Harness 转发事件白名单未向插件开放，前端诊断卡仅在开启诊断且面板可见时通过定时轮询更新状态；
 - **前端异常上报**：两条通道覆盖两组互不相交的崩溃，均写入同一环形缓冲，使宿主与前端报错集中可查：
   - **组件错误边界**：`ZoteroSurfaceBoundary` 与 `ZoteroCardBoundary` 就地隔离各自包含的渲染崩溃，经注册期绑定的上报接口记录异常（触发界面、错误消息与调用栈）。class 组件由插槽渲染器挂载、拿不到注入 face，模块级绑定是它们到达网关的唯一通道；
   - **Slot 监督通道**：`ctx.slots.onEntryError` 兜底记录边界看不到的崩溃（`inject` 工厂抛错、无自有边界表面的抛错、Factory occurrence），按注册时盖的 `registrant` 所有权戳过滤，只认本插件条目。React 的错误边界在抛错点向上找最近的 class 边界，因此被插件边界包含的崩溃不会到达外层 harness 边界，反之亦然；
-- **界面呈现**：插件详情页的诊断卡支持日志级别过滤、展示最新条目与截断提示，并提供诊断包一键复制功能（包含插件版本、Zotero 连接信息、debug 状态及全部缓冲条目）；
+- **界面呈现**：开启诊断后，插件详情页底部的诊断卡支持日志级别过滤、展示最新条目与截断提示，并提供诊断包一键复制功能（包含插件版本、Zotero 连接信息、debug 状态及全部缓冲条目）；
 - **数据安全**：所有记录仅保存在内存中，不落盘、不外发遥测。敏感凭据不经过接缝；HTTP 记录仅包含请求方法、路径、状态码与耗时，查询参数仅在 `debug` 级别记录且受长度截断，响应体与文献正文一律不进入缓冲区。
 
 ## 设计边界

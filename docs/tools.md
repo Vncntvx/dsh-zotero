@@ -561,7 +561,7 @@ zotero_delete_library_tags(tags=["旧标签", "废弃"])
 
 ## 学术文献检索组件工具 (`dsh-zotero/scholarly`)
 
-启用 bundle 组件 `dsh-zotero/scholarly`（该行默认 `disabled: true`）时提供以下 6 个模型工具：
+bundle 组件 `dsh-zotero/scholarly` 随插件默认启用，提供以下 6 个模型工具：
 
 ### scholarly_search
 

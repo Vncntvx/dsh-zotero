@@ -20,10 +20,11 @@ import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import ZoteroService from '../../src/index.js'
+import ScholarlyService from '../../src/scholarly/index.js'
 import { expectValue } from '../helpers/lanes/host-lane.js'
 import { MockZotero } from '../helpers/mock-zotero.js'
 import { StubCommands } from '../helpers/stub-commands.js'
-import { ZOTERO_READ_TOOL_NAMES } from '../helpers/tool-names.js'
+import { SCHOLARLY_TOOL_NAMES, ZOTERO_READ_TOOL_NAMES } from '../helpers/tool-names.js'
 
 let root: string | undefined
 let context: Context | undefined
@@ -68,6 +69,7 @@ describe('the shipped bundle patch through a real Loader composition', () => {
       ['@deepseek-ai/dsh-tools', ToolRuntime],
       ['test-stub-commands', StubCommands],
       ['dsh-zotero', ZoteroService],
+      ['dsh-zotero/scholarly', ScholarlyService],
     ])
     context.loader.internal = {
       version: 'v2',
@@ -90,10 +92,11 @@ describe('the shipped bundle patch through a real Loader composition', () => {
     await context.loader.await()
 
     expect(context.get('zotero')).toBeInstanceOf(ZoteroService)
+    expect(context.get('scholarly')).toBeInstanceOf(ScholarlyService)
     const names = context.tools.schemas().map((schema) => schema.name)
     // Registration order is a dependency-resolution artifact, not a contract,
     // so the composition asserts the set the shared list declares.
-    expect([...names].sort()).toEqual([...ZOTERO_READ_TOOL_NAMES].sort())
+    expect([...names].sort()).toEqual([...ZOTERO_READ_TOOL_NAMES, ...SCHOLARLY_TOOL_NAMES].sort())
     const assembly = await context.systemPrompt.assemble()
     expect(assembly.sections.some((entry) => entry.name === 'zotero:policy')).toBe(true)
     const commands = context.get('commands') as StubCommands | undefined
@@ -128,6 +131,7 @@ describe('the shipped bundle patch through a real Loader composition', () => {
     // Disposal unwinds every registration owned by the composed tree.
     await context.fiber.dispose()
     expect(context.get('zotero')).toBeUndefined()
+    expect(context.get('scholarly')).toBeUndefined()
     expect(context.get('tools')).toBeUndefined()
     expect(commands?.registered).toEqual([])
   })

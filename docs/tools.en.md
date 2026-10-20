@@ -561,7 +561,7 @@ Write tools are disabled by default, require `writeEnabled` in configuration, an
 
 ## Scholarly Literature Component Tools (`dsh-zotero/scholarly`)
 
-Enabling the bundle component `dsh-zotero/scholarly` (its row ships `disabled: true`) registers the following 6 model tools:
+The bundle component `dsh-zotero/scholarly` ships enabled by default, registering the following 6 model tools:
 
 ### scholarly_search
 

@@ -44,7 +44,7 @@
 | `enableRunInBackground`    | `true`                       | 是否允许工具参数 `run_in_background` 显式放入后台                                                                                                                             |
 | `promoteOnTimeout`         | `true`                       | 前台导出或变更同步超时时是否自动提升为后台任务                                                                                                                                |
 | `foregroundWaitMs`         | `4000`                       | 前台执行等待上限（毫秒），超时后自动提升为后台 Job                                                                                                                            |
-| `debug`                    | `false`                      | 诊断面板是否记录请求路径与工具调用的细节条目；日志仅保存在进程内存中，不持久化到磁盘，亦不向外发送                                                                            |
+| `debug`                    | `false`                      | 是否开启诊断模式；开启后在插件详情页底部显示诊断面板并记录请求路径与工具调用细节；日志仅保存在进程内存中，不持久化到磁盘，亦不向外发送                                        |
 
 说明：`foregroundWaitMs` 控制前台任务等待时长，超时后自动转为后台 Job；`timeoutMs` 控制单次 Zotero HTTP 请求超时，两者相互独立。
 
@@ -83,7 +83,7 @@ Schema 默认值 → Composition 入口配置 → 当前 profile 的 Cordis patc
 - 传输层配置或写入开关变更时，在同一 `ZoteroService` 实例上重建 HTTP 客户端、local provider 与写入工具集；
 - 限额配置变更由 provider 在下次调用时直接读取，无需重建传输层；
 - `webEnabled` 开关保存后即时显示或隐藏对应标签页；
-- `debug` 开关保存后即时生效，调整诊断日志的保留级别，无需重新初始化组件；
+- `debug` 开关保存后即时生效，控制详情页底部诊断面板的显示与诊断日志保留，无需重新初始化组件；
 - 绝大多数配置更新均在下一次工具调用时生效，无需重启宿主。
 
 ## 无设置服务的运行环境
@@ -94,7 +94,7 @@ Schema 默认值 → Composition 入口配置 → 当前 profile 的 Cordis patc
 
 ## 学术文献检索组件配置 (`dsh-zotero/scholarly`)
 
-组件行在 `cordis.patch.yml` 中默认 `disabled: true`；把该行改为 `disabled: false` 即启用。字段有两种配置方式：插件管理中 `dsh-zotero#scholarly` 行的“配置”按钮提供可视化编辑，也可以直接写在 `cordis.patch.yml` 该行的 `config` 下。字段变更在下一次工具调用时生效，无需重启 profile：
+组件行在 `cordis.patch.yml` 中默认随插件启用；如需关闭可设为 `disabled: true`。字段有两种配置方式：插件管理中 `dsh-zotero#scholarly` 行的“配置”按钮提供可视化编辑，也可以直接写在 `cordis.patch.yml` 该行的 `config` 下。字段变更在下一次工具调用时生效，无需重启 profile：
 
 | 字段              | 默认值  | 说明                                                                                               |
 | ----------------- | ------- | -------------------------------------------------------------------------------------------------- |

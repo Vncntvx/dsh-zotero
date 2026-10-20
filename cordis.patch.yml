@@ -4,11 +4,8 @@
     - id: zotero
       name: dsh-zotero
       config: {}
-    # The scholarly component is optional: it reaches external indexes, which
-    # is a deployment decision, not a default. A profile enables it by setting
-    # `disabled: false` on this row (projection: the plugin manager writes the
-    # same literal `disabled` value).
+    # The scholarly component provides external academic literature retrieval
+    # (arXiv, OpenAlex, Crossref, Semantic Scholar, PubMed).
     - id: scholarly
       name: dsh-zotero/scholarly
       config: {}
-      disabled: true
