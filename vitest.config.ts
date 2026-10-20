@@ -5,6 +5,13 @@ export default defineConfig({
     jsx: { runtime: 'automatic' },
   },
   test: {
+    // The published harness client packages ship their CSS modules and keep
+    // their runtime third-party imports in `devDependencies` (the shell bundles
+    // them). A registry install must be transformed here: left external, Node
+    // loads `lib/index.js` directly and throws ERR_UNKNOWN_FILE_EXTENSION on
+    // `.module.css`, while its bare imports need the devDependencies that
+    // mirror them in this manifest.
+    server: { deps: { inline: [/@deepseek-ai\/dsh-client-/] } },
     include: ['tests/**/*.spec.{ts,tsx}'],
     setupFiles: ['tests/client/setup.ts'],
     coverage: {

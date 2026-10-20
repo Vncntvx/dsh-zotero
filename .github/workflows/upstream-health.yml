@@ -17,10 +17,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: 'npm'
@@ -34,9 +34,11 @@ jobs:
       - name: Check upstream registry updates
         run: |
           PIN=$(node -p "require('./package.json').devDependencies['@deepseek-ai/dsh-tools']")
-          LATEST=$(npm view @deepseek-ai/dsh-tools version 2>/dev/null || echo "unknown")
+          # The harness publishes its mainline under `next`; `npm view <pkg>
+          # version` would read `latest`, which tracks a different, older line.
+          LATEST=$(npm view @deepseek-ai/dsh-tools@next version 2>/dev/null || echo "unknown")
           echo "Current pinned harness baseline: $PIN"
-          echo "Latest published @deepseek-ai/dsh-tools on registry: $LATEST"
+          echo "Latest mainline @deepseek-ai/dsh-tools (next tag): $LATEST"
           if [ "$LATEST" != "unknown" ] && [ "$LATEST" != "$PIN" ]; then
-            echo "::notice title=Upstream Update Detected::Harness on npm is at $LATEST while dsh-zotero is pinned to $PIN."
+            echo "::notice title=Upstream Update Detected::Harness mainline (npm next tag) is at $LATEST while dsh-zotero is pinned to $PIN."
           fi
