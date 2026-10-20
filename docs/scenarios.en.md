@@ -414,14 +414,14 @@ Run with the `dsh-zotero/scholarly` component enabled. These cases verify **what
 
 ## Symptom and Failure Diagnosis
 
-| Symptom                                  | Diagnosis Direction                                                                                                                   |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| Answers without calling tools            | Check plugin installation; check if session was created after plugin loaded; run `/zotero status`                                     |
-| Unexpected search results                | Inspect query terms, search mode, collection scope, quick-search syntax, and local index status                                       |
-| Page number on fulltext passages         | Model misread fields (prompt to correct); if tool natively returned it, investigate parsing error                                     |
-| Annotation comment treated as paper text | Check if labeled with `matchedFields=comment`, see [Tool Reference](tools.en.md)                                                      |
-| Export cannot be used in LaTeX           | Verify `format` is `bibtex` or `biblatex`; download via Sources panel instead                                                         |
-| Write fails without plan card            | Check if "Allow writes" is enabled; verify if arguments were rejected prior to plan review                                            |
-| Model retries after plan rejection       | Model behavioral fault: `declined` is a terminal state and should not trigger auto-retries                                            |
-| Sources panel pages are empty            | Check `webEnabled` configuration; check if session called tools; refresh browser page                                                 |
-| Unexplained misbehavior                  | Open the "Diagnostics" card on the plugin detail page; enable "Verbose diagnostics" first and reproduce once for request-level detail |
+| Symptom                                  | Diagnosis Direction                                                                                                                  |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Answers without calling tools            | Check plugin installation; check if session was created after plugin loaded; run `/zotero status`                                    |
+| Unexpected search results                | Inspect query terms, search mode, collection scope, quick-search syntax, and local index status                                      |
+| Page number on fulltext passages         | Model misread fields (prompt to correct); if tool natively returned it, investigate parsing error                                    |
+| Annotation comment treated as paper text | Check if labeled with `matchedFields=comment`, see [Tool Reference](tools.en.md)                                                     |
+| Export cannot be used in LaTeX           | Verify `format` is `bibtex` or `biblatex`; download via Sources panel instead                                                        |
+| Write fails without plan card            | Check if "Allow writes" is enabled; verify if arguments were rejected prior to plan review                                           |
+| Model retries after plan rejection       | Model behavioral fault: `declined` is a terminal state and should not trigger auto-retries                                           |
+| Sources panel pages are empty            | Check `webEnabled` configuration; check if session called tools; refresh browser page                                                |
+| Unexplained misbehavior                  | Enable "Diagnostic mode" in configuration and save, then inspect the "Diagnostics" card at the bottom of the page and reproduce once |

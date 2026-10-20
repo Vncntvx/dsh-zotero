@@ -117,6 +117,10 @@ function DiagnosticsCardBody({ t, probe, diagnostics }: DiagnosticsCardBodyProps
   useEffect(() => () => window.clearTimeout(copyTimerRef.current), [])
 
   const data = feed.data
+  if (data !== undefined && !data.debug) {
+    return null
+  }
+
   const filtered =
     data?.entries.filter(
       (entry) => !problemsOnly || entry.level === 'warn' || entry.level === 'error',

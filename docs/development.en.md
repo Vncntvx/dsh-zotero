@@ -78,6 +78,8 @@ npm run format:check         # Check code formatting
 
 Note: This repository is typically developed as a sibling directory to `deepseek-harness`. Type declarations are resolved from upstream build artifacts via symlinks. If upstream code changes, run the upstream build first to synchronize declaration files.
 
+Published `@deepseek-ai/dsh-client-*` packages declare their third-party runtime dependencies in their own `devDependencies` (the shell supplies them when bundling) and reference `.module.css` files directly from `lib/`. This repository therefore mirrors those third-party dependencies in `devDependencies` and lists `@deepseek-ai/dsh-client-*` as inlined in `vitest.config.ts`, so the client test lane also loads them in an environment with only a registry install and no sibling checkout (CI).
+
 ### Upstream artifact freshness check
 
 `npm run harness:check` checks whether upstream build artifacts are up to date. The two checks are independent.
@@ -138,10 +140,10 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 
 ### Diagnostics Panel and Diagnostics Bundle
 
-To inspect runtime behavior or investigate issues, open the **dsh-zotero** detail page in the plugin manager; the "Diagnostics" card at the bottom shows runtime state and logs:
+To inspect runtime behavior or investigate issues, enable "Diagnostic mode" in configuration; the "Diagnostics" card at the bottom of the **dsh-zotero** detail page shows runtime state and logs:
 
-- **Record retention and filtering**: The panel records error, warn, and info events by default, with severity filtering available ("Problems" selects warn and error). Entries are listed in reverse chronological order, and consecutive identical messages are coalesced with a repeat counter;
-- **Verbose mode**: To capture request paths and invocation parameters, enable "Verbose diagnostics" in the "Diagnostics" group of the dsh-zotero configuration section before reproducing the issue;
+- **Record retention and filtering**: When diagnostic mode is enabled, relevant events are collected with severity filtering available ("Problems" selects warn and error). Entries are listed in reverse chronological order, and consecutive identical messages are coalesced with a repeat counter;
+- **Diagnostic mode**: Enable "Diagnostic mode" in the "Diagnostics" group of the dsh-zotero configuration section and save to display the diagnostics card at the bottom and collect detailed troubleshooting records;
 - **Client crash reporting**: When browser-side components (such as the Sources tab, tool cards, or detail panels) encounter a render crash, error boundaries automatically log the event and identify the failing surface in the `surface` field (for example, `sources` or `tool:zotero_search`);
 - **Exporting records**: Clicking "Copy diagnostics" exports a text bundle containing the plugin version, Zotero endpoint and version, debug state, and all buffered log entries for bug reports.
 

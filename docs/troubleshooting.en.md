@@ -106,8 +106,8 @@ This document lists common issues, causes, and diagnostic steps when using dsh-z
 
 When error messages alone are insufficient to diagnose an issue (such as silent failures, rendering errors in tabs or cards, or unexpected behavior), collect the diagnostic bundle as follows:
 
-1. Open the **dsh-zotero** detail page in the plugin manager and click "Copy diagnostics" in the "Diagnostics" card at the bottom, then attach the copied content to your issue report.
-2. If request-level detail is needed, enable "Verbose diagnostics" in that page's configuration section before reproducing the issue.
+1. Open the **dsh-zotero** detail page in the plugin manager; if troubleshooting is needed, enable "Diagnostic mode" in the "Advanced & Tasks" configuration group and save.
+2. Once enabled, the "Diagnostics" card appears at the bottom of the details page; reproduce the issue and click "Copy diagnostics" to attach to your report.
 3. The diagnostic bundle includes the plugin version, Zotero endpoint and version, debug flag state, and buffered log entries in reverse chronological order (including frontend component render errors).
 
 Note: Diagnostic entries are kept in memory only and are cleared when the host process restarts. Copy the diagnostic bundle before restarting the host if you need to preserve the record.

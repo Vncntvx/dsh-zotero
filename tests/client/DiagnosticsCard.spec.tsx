@@ -54,7 +54,7 @@ function okView(
       entries: [],
       total: 0,
       truncated: false,
-      debug: false,
+      debug: true,
       ...overrides,
     },
   }
@@ -81,6 +81,16 @@ describe('DiagnosticsCard', () => {
     expect(diagnostics).not.toHaveBeenCalled()
   })
 
+  it('returns null and does not render when diagnostics is disabled (debug: false)', async () => {
+    const diagnostics = vi.fn(async () => okView({ debug: false }))
+    const { container } = render(
+      <DiagnosticsCard subject={targetSubject} t={t} probe={fakeProbe} diagnostics={diagnostics} />,
+    )
+    await waitFor(() => expect(diagnostics).toHaveBeenCalled())
+    expect(container.querySelector('[data-zotero-diagnostics]')).toBeNull()
+    expect(container.innerHTML).toBe('')
+  })
+
   it('renders entries newest-first with event, count badge, and detail', async () => {
     const diagnostics = vi.fn(async (): Promise<RemoteResult<ZoteroDiagnosticsView>> =>
       okView({
@@ -102,7 +112,7 @@ describe('DiagnosticsCard', () => {
     const text = container.textContent ?? ''
     expect(text.indexOf('tool.result')).toBeGreaterThanOrEqual(0)
     expect(text.indexOf('tool.result')).toBeLessThan(text.indexOf('transport.built'))
-    expect(container.textContent).toContain(zh.diagnosticsDebugOff)
+    expect(container.textContent).toContain(zh.diagnosticsDebugOn)
     // The section header and the card head carry two distinct labels, so the
     // page never stacks the same word twice.
     expect(container.textContent).toContain(zh.diagnosticsTitle)

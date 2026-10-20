@@ -283,7 +283,8 @@ function registerUi(ctx: ClientContext): void {
 
   // The diagnostics panel, beside the status card: the host ring the seams
   // write, polled while the page shows it. It lives in the settings plane so
-  // it survives the conversation tab's own crashes.
+  // it survives the conversation tab's own crashes. The card component renders
+  // only when diagnostic mode (the `debug` config flag) is enabled.
   const diagnostics = (): Promise<RemoteResult<ZoteroDiagnosticsView>> =>
     ctx.remote.zotero.diagnostics()
   ctx.slots.inject('plugins.detail.section', () =>
