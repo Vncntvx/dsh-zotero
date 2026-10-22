@@ -222,6 +222,7 @@ export function registerDeleteLibraryTagsTool(ctx: Context, service: ZoteroServi
         return await service.deleteLibraryTags(request, {
           exec,
           plan: deleteLibraryTagsPlan(args, preview),
+          risk: 'irreversible-delete',
         })
       },
     }),

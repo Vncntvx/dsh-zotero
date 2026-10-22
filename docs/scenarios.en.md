@@ -370,6 +370,13 @@ After those note/tag writes, can zotero_changes see them? Use the previous curso
 - `committed-unverified` is never retried: on that result the model must not re-send the write, only reconcile by key/ref;
 - The two confirmation tiers are independent: declining the plan card and a `never` policy are separate paths, and both must yield `declined` with zero writes.
 
+#### W8 Batch Receipts and Trash
+
+- Complete create review: submit more than ten creates and verify the plan card shows every index and every supplied field, especially `collections`; after approval, model-facing output includes each successful item's input index and saved ref/key;
+- Create settlement: exercise missing, duplicate, contradictory, and out-of-range Zotero batch indices, plus a lost success response. Every requested index must appear in `created`, `failed`, or `unverified`; `unverified.retryable` is `false`, and the model must not resubmit it;
+- Recoverable deletion: delete an item with child notes, an attachment, and PDF annotations. Verify the root and every descendant appear in Zotero Trash and their refs are returned; no permanent-delete request is sent;
+- Partial completion: cause a version conflict while writing a child. The result must list acknowledged Trash objects in `failed.completedRefs` and must not claim the complete graph succeeded.
+
 ## Execution Order
 
 1. Run `/zotero` to test connectivity. On failure, consult the [Troubleshooting Guide](troubleshooting.en.md) and stop;
@@ -394,6 +401,7 @@ After those note/tag writes, can zotero_changes see them? Use the previous curso
 | Content Writing               | `create_note` / `update_item_tags` / `update_item_collections`            | W1–W3            | Approval and plan card, merge write, declined state                                |
 | Structure and Metadata Writes | `create_collection` / `delete_collection` / `create_item` / `update_item` | W4, W5           | Same-name refusal, delete preview and invalidation, closed field set and whitelist |
 | Library-Wide Tag Delete       | `delete_library_tags`                                                     | W6               | Preview counts, library version precondition, idempotent retry                     |
+| Batch Item Writes             | `zotero_batch_items`                                                      | W8               | Complete plan and create receipts, non-retryable unknown commits, cascading Trash  |
 | Data Panel                    | Sources panel                                                             | G8               | Synchronization across Literature, Passages, and Exports pages                     |
 | Boundary Defense              | Error handling and safeguards                                             | N1–N7            | Error code accuracy, anti-hallucination, assembly errors never degrade silently    |
 | Runtime Diagnostics           | Diagnostics card (plugin detail page)                                     | Annex            | Crash funnel, level filter, bundle copy                                            |

@@ -222,6 +222,7 @@ export function registerDeleteCollectionTool(ctx: Context, service: ZoteroServic
         return await service.deleteCollection(request, {
           exec,
           plan: deleteCollectionPlan(args, preview),
+          risk: 'irreversible-delete',
         })
       },
     }),

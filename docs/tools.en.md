@@ -2,11 +2,11 @@
 
 # Tool Reference
 
-dsh-zotero registers 16 tools (8 read tools and 8 write tools) that interact with your Zotero library through the local HTTP API. The 8 write tools are disabled by default and require enabling `writeEnabled` in configuration, and they operate only on the personal library (`zotero://user/0/`). All item references (refs) are stable identifiers in `zotero://user/0/item/<KEY>` (personal library) or `zotero://group/<ID>/item/<KEY>` (group library) format.
+dsh-zotero registers 17 tools (8 read tools and 9 write tools) that interact with your Zotero library through the local HTTP API. The 9 write tools are disabled by default and require enabling `writeEnabled` in configuration, and they operate only on the personal library (`zotero://user/0/`). All item references (refs) are stable identifiers in `zotero://user/0/item/<KEY>` (personal library) or `zotero://group/<ID>/item/<KEY>` (group library) format.
 
 ### Interactive Presentation (Toolviews)
 
-In the DSH conversation stream, all 16 tools have structured, read-only cards (`tool.call.toolview`). During execution, the interface renders lifecycle status indicators (preparing, running, success, stopped, error, declined, outcome unreported), collapsible structured views, a "Read PDF" action that opens the PDF in the sidebar reader, and copy actions for titles and deep links.
+In the DSH conversation stream, all 17 tools have structured, read-only cards (`tool.call.toolview`). During execution, the interface renders lifecycle status indicators (preparing, running, success, stopped, error, declined, outcome unreported), collapsible structured views, a "Read PDF" action that opens the PDF in the sidebar reader, and copy actions for titles and deep links.
 
 ---
 
@@ -500,6 +500,50 @@ Deletes tags library-wide by name. **Irreversible**: the tags come off every ite
 
 ```text
 zotero_delete_library_tags(tags=["stale", "obsolete"])
+```
+
+---
+
+## zotero_batch_items
+
+Creates items, updates tags and collections, and moves items with their child notes, attachments, and annotations to Trash in one call. Item deletion uses versioned PATCH requests to mark the complete object graph as deleted, then reads the graph again to verify it. If part of a graph fails, `failed.completedRefs` lists the objects confirmed in Trash. This operation is recoverable from Zotero Trash, not a permanent erase. One plan card reviews every operation and includes every supplied field for every create, including collection destinations; it never hides creates after the tenth item.
+
+The total number of operations across create, update, and delete is capped by `writeListMaxItems` (default 50). Each create receipt is tied to its input index and includes the saved Zotero ref, key, version, and available title/URL. If a create's commit or saved state cannot be verified, it appears in `unverified` with `retryable: false`; do not submit it again, and reconcile using its ref/key. Missing, duplicate, contradictory, or out-of-range batch indices are reported as unverified instead of being silently dropped. Item-level conflicts (such as version mismatches) are recorded in the `failed` array without stopping remaining operations.
+
+### Parameters
+
+| Parameter | Type     | Required | Description                                                                                                                     |
+| --------- | -------- | -------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `create`  | object[] | —        | Items to create. Each item specifies `itemType` (required), `title` or `url`, plus optional tags, collections, and creators.    |
+| `update`  | object[] | —        | Item updates. Each item specifies target `ref` (required), plus `addTags`, `removeTags`, `addCollections`, `removeCollections`. |
+| `delete`  | string[] | —        | Item refs to move to Trash (`zotero://user/0/item/<KEY>`).                                                                      |
+| `reason`  | string   | —        | Explanation displayed on the plan card.                                                                                         |
+
+At least one operation across `create`, `update`, or `delete` must be specified, and the combined count cannot exceed `writeListMaxItems`.
+
+### Output
+
+- Execution outcome: `{kind: "applied", total, created: [...], updated: [...], deleted: [...], unverified: [...], failed: [...], libraryVersion?, serverId?}`
+  - `created`: `[{index, ref, key, version, itemType, title?, url?}]`, using the saved object returned by Zotero;
+  - `updated`: `[{ref, unchanged, addedTags, removedTags, addedCollections, removedCollections}]`
+  - `deleted`: `[{ref, key, deleted: true, version, children: [ref...]}]`, listing the root item and all descendants verified in Trash;
+  - `unverified`: `[{op: "create", index, committed: true, retryable: false, reason, key?, ref?, version?, libraryVersion?, serverId}]`;
+  - `failed`: `[{op, index?, ref?, code, message, completedRefs?}]`; `completedRefs` lists objects confirmed in Trash when a deletion only partly completes;
+- Plan card declined: `{kind: "declined"}`.
+
+### Example
+
+```text
+zotero_batch_items(
+  reason="Batch organizing machine learning papers and trashing obsolete draft",
+  create=[
+    {"itemType": "journalArticle", "title": "Attention Is All You Need", "tags": ["Transformer"]}
+  ],
+  update=[
+    {"ref": "zotero://user/0/item/ABCD1234", "addTags": ["LLM", "Survey"], "removeTags": ["ToRead"]}
+  ],
+  delete=["zotero://user/0/item/OLD00001"]
+)
 ```
 
 ---

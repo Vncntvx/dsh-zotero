@@ -80,7 +80,7 @@ graph LR
 
 - 组合包配置（`plugins.bundle.config`）：在插件管理器详情页注册统一的 5 标签页配置界面（基础设置、本地连接、检索提取、学术检索、高级选项），通过 harness 官方 `SettingsForm` 与 `SettingsFormModel` 统一管理 Zotero 主命名空间与 Scholarly 学术检索命名空间，支持双通道互通呈现与草稿防丢弃隔离；
 - 会话面板（`conversation.view`）：会话标签页只有一个 Zotero 面板，顶部透镜栏在文献工作区与会话级导出页之间切换；每个条目的检查器内含概览（Overview）、原文片段（Passages）与该条目导出结果（Exports）三个面板；
-- 工具卡片（`tool.call.toolview`）：为 16 个模型工具（8 读 + 8 写）各提供紧凑折叠卡片，对值得复制的取值提供复制按钮，通过“阅读 PDF”在侧边栏阅读原文，并提供复制标题或规范深链的定位操作。卡片只渲染工具已有的输出，自身不调用工具；
+- 工具卡片（`tool.call.toolview`）：为 17 个模型工具（8 读 + 9 写）各提供紧凑折叠卡片，对值得复制的取值提供复制按钮，通过“阅读 PDF”在侧边栏阅读原文，并提供复制标题或规范深链的定位操作。卡片只渲染工具已有的输出，自身不调用工具；
 - 命令状态卡片（`conversation.chat.commandview`）：为 `/zotero` 输出提供连接状态灯、版本与 Server ID 明细、离线排查建议与就地刷新按钮。结构化事实来自宿主注册的 `zoteroStatus` 会话投影：命令处理器将同一份状态投影为 `zotero/status` 会话事件并以 `sourceEventSeq` 指向它，卡片经 `useProjection` 读回，命令文本只作人类可读答案、不再被解析。就地刷新发起的实时探测优先于投影（它是更新的答案）；
 - `webEnabled` 开关保存后即时生效。
 
@@ -89,7 +89,7 @@ graph LR
 - **参数读取**：卡片与 Sources 归约器统一通过 `src/client/presenters.ts` 的 `argsViewOf(block)` 读取 `block.args`；上游 dsh 0.2.1-rc.2 契约保证调用头与结果块均携带非可选的 `ToolArgs`（`PartialArguments`）。
 - **双层错误边界**：插件注册两层错误边界：
   - **Surface 级（`ZoteroSurfaceBoundary`）**：包裹 Sources 标签页（`conversation.view`），渲染异常时就地显示错误提示与「刷新」（`t('refresh')`）按钮，并通过 `resetKey={sessionId}` 在会话切换时自动重置；
-  - **Card 级（`ZoteroCardBoundary` / `withCardBoundary`）**：包装全部 16 个工具卡片（`tool.call.toolview`）。卡片渲染异常时就地降级为紧凑警告行，保留在对话流中。降级视图仅读取工具名、文案与错误消息等纯字符串，不访问 block 字段；卡片异常大多由块数据异常引发，降级视图本身不抛错，可避免未捕获异常逃逸至上游插槽边界导致卡片停用。
+  - **Card 级（`ZoteroCardBoundary` / `withCardBoundary`）**：包装全部 17 个工具卡片（`tool.call.toolview`）。卡片渲染异常时就地降级为紧凑警告行，保留在对话流中。降级视图仅读取工具名、文案与错误消息等纯字符串，不访问 block 字段；卡片异常大多由块数据异常引发，降级视图本身不抛错，可避免未捕获异常逃逸至上游插槽边界导致卡片停用。
 
 ### 远程通信与设置
 

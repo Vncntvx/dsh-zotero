@@ -291,3 +291,125 @@ export function presentDeleteResultView(
   const ref = typeof record.ref === 'string' ? record.ref : ''
   return { card: 'generic', title: `Zotero ${deletedNoun} deleted${ref === '' ? '' : `: ${ref}`}` }
 }
+
+export const BATCH_ITEMS_OUTPUT_SCHEMA = {
+  oneOf: [
+    DECLINED_OUTPUT_SCHEMA,
+    {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        kind: { type: 'string', enum: ['applied'], required: true },
+        total: { type: 'integer', required: true },
+        created: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              index: { type: 'integer', required: true },
+              ref: { type: 'string', required: true },
+              key: { type: 'string', required: true },
+              version: { type: 'integer', required: true },
+              itemType: { type: 'string', required: true },
+              title: { type: 'string' },
+              url: { type: 'string' },
+            },
+          },
+          required: true,
+        },
+        updated: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              ref: { type: 'string', required: true },
+              version: { type: 'integer', required: true },
+              addedTags: { type: 'array', items: { type: 'string' }, required: true },
+              removedTags: { type: 'array', items: { type: 'string' }, required: true },
+              addedCollections: { type: 'array', items: { type: 'string' }, required: true },
+              removedCollections: { type: 'array', items: { type: 'string' }, required: true },
+              unchanged: { type: 'boolean', required: true },
+            },
+          },
+          required: true,
+        },
+        deleted: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              ref: { type: 'string', required: true },
+              key: { type: 'string', required: true },
+              deleted: { type: 'boolean', enum: [true], required: true },
+              version: { type: 'integer', required: true },
+              children: { type: 'array', items: { type: 'string' }, required: true },
+            },
+          },
+          required: true,
+        },
+        unverified: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              op: { type: 'string', enum: ['create'], required: true },
+              index: { type: 'integer', required: true },
+              committed: { type: 'boolean', enum: [true], required: true },
+              retryable: { type: 'boolean', enum: [false], required: true },
+              reason: {
+                type: 'string',
+                enum: ['saved-state-unverified', 'commit-unknown'],
+                required: true,
+              },
+              key: { type: 'string' },
+              ref: { type: 'string' },
+              version: { type: 'integer' },
+              libraryVersion: { type: 'integer' },
+              serverId: { type: 'string', required: true },
+            },
+          },
+          required: true,
+        },
+        failed: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              op: { type: 'string', enum: ['create', 'update', 'delete'], required: true },
+              ref: { type: 'string' },
+              index: { type: 'integer' },
+              code: { type: 'string', required: true },
+              message: { type: 'string', required: true },
+              completedRefs: { type: 'array', items: { type: 'string' } },
+            },
+          },
+          required: true,
+        },
+        libraryVersion: { type: 'integer' },
+        serverId: { type: 'string' },
+      },
+    },
+  ],
+} as const
+
+export function presentBatchItemsResultView(result: ToolResult): ToolResultView | undefined {
+  const record = metaRecordOf(result)
+  if (record === undefined) return undefined
+  if (record.kind === 'declined') {
+    return { card: 'generic', title: 'Zotero batch items: declined, nothing written' }
+  }
+  const created = typeof record.createdCount === 'number' ? record.createdCount : 0
+  const updated = typeof record.updatedCount === 'number' ? record.updatedCount : 0
+  const deleted = typeof record.deletedCount === 'number' ? record.deletedCount : 0
+  const unverified = typeof record.unverifiedCount === 'number' ? record.unverifiedCount : 0
+  const failed = typeof record.failedCount === 'number' ? record.failedCount : 0
+  return {
+    card: 'generic',
+    title: `Zotero batch items applied: ${created} created, ${updated} updated, ${deleted} trashed${failed > 0 ? `, ${failed} failed` : ''}${unverified > 0 ? `, ${unverified} unverified; do not retry` : ''}`,
+  }
+}

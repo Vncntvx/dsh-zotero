@@ -84,7 +84,7 @@ Agent → zotero_export(refs: ["zotero://user/0/item/ABCD1234",
 
 ## Tools
 
-The plugin includes 8 read tools and 8 write tools. Write tools are disabled by default until `writeEnabled` is turned on in settings.
+The plugin includes 8 read tools and 9 write tools. Write tools are disabled by default until `writeEnabled` is turned on in settings.
 
 | Tool                | Purpose                                                                                   |
 | ------------------- | ----------------------------------------------------------------------------------------- |
@@ -97,7 +97,7 @@ The plugin includes 8 read tools and 8 write tools. Write tools are disabled by 
 | `zotero_attachment` | Resolve an item to its local PDF file path                                                |
 | `zotero_export`     | Generate formatted citations or export BibTeX, RIS, and CSL JSON                          |
 
-See [Tool reference](docs/tools.en.md) for complete parameter definitions of all 16 tools.
+See [Tool reference](docs/tools.en.md) for complete parameter definitions of all 17 tools.
 
 ## Security and privacy
 
@@ -111,7 +111,7 @@ See [Tool reference](docs/tools.en.md) for complete parameter definitions of all
 | --------------------------------------------------- | ------------------------------------------------------------- |
 | [Getting started](docs/getting-started.en.md)       | Installation, prerequisites, and connection verification      |
 | [Features](docs/features.en.md)                     | Sources panel, chat integration, and export workflows         |
-| [Tool reference](docs/tools.en.md)                  | Parameters, return values, and error codes for all 16 tools   |
+| [Tool reference](docs/tools.en.md)                  | Parameters, return values, and error codes for all 17 tools   |
 | [Configuration reference](docs/configuration.en.md) | 35 configuration fields and default values                    |
 | [Architecture](docs/architecture.en.md)             | Data flow, layer responsibilities, and design boundaries      |
 | [Development guide](docs/development.en.md)         | Build, test, local development, and release workflow          |

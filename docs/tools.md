@@ -2,11 +2,11 @@
 
 # 工具参考
 
-dsh-zotero 注册 16 个工具（8 个读工具 + 8 个写工具），通过本地 Zotero HTTP API 与文献库交互。其中 8 个写入工具默认关闭，需在设置中显式启用 `writeEnabled`，且只操作个人库（`zotero://user/0/`）。所有文献引用（ref）均为 `zotero://user/0/item/<KEY>`（个人库）或 `zotero://group/<ID>/item/<KEY>`（群组库）格式的稳定标识符。
+dsh-zotero 注册 17 个工具（8 个读工具 + 9 个写工具），通过本地 Zotero HTTP API 与文献库交互。其中 9 个写入工具默认关闭，需在设置中显式启用 `writeEnabled`，且只操作个人库（`zotero://user/0/`）。所有文献引用（ref）均为 `zotero://user/0/item/<KEY>`（个人库）或 `zotero://group/<ID>/item/<KEY>`（群组库）格式的稳定标识符。
 
 ### 交互卡片（Toolviews）
 
-在 DSH 对话流中，所有 16 个工具均配备结构化只读卡片（`tool.call.toolview`）。调用工具时，界面展示包含状态指示（准备中、运行中、成功、中断、错误、已拒绝、结果未报告）的结构化卡片，支持展开查看详细数据、通过“阅读 PDF”在侧边栏阅读原文，以及复制标题或深链快速定位。
+在 DSH 对话流中，所有 17 个工具均配备结构化只读卡片（`tool.call.toolview`）。调用工具时，界面展示包含状态指示（准备中、运行中、成功、中断、错误、已拒绝、结果未报告）的结构化卡片，支持展开查看详细数据、通过“阅读 PDF”在侧边栏阅读原文，以及复制标题或深链快速定位。
 
 ---
 
@@ -504,13 +504,57 @@ zotero_delete_library_tags(tags=["旧标签", "废弃"])
 
 ---
 
+## zotero_batch_items
+
+在单次调用中批量创建文献、更新标签与合集归属，或将条目及其子笔记、附件和批注移至回收站。条目删除通过版本化 PATCH 将整个对象图标记为已删除，完成后重新读取并核验；部分失败时 `failed.completedRefs` 列出已确认移入回收站的对象。此操作可从 Zotero 回收站恢复，不是永久擦除。所有操作合并为一张计划卡确认；卡片完整列出每个创建请求的全部字段（包括合集归属），不会省略第 11 项及之后的条目。
+
+单次操作总数（创建、更新与删除之和）受 `writeListMaxItems` 限制（默认 50 项）。每项创建的回执按输入索引列出 Zotero 保存后的 ref、key、版本及可用的标题/URL。若某项创建的提交或已保存状态无法核实，它会出现在 `unverified` 中并标记 `retryable: false`；不得再次提交，应按 ref/key 核对。未返回、重复、矛盾或越界的批次索引不会被静默丢弃，而会作为未核实结果报告。单个条目的版本冲突（HTTP 412）会记录到 `failed` 数组中，不影响其余条目执行。
+
+### 参数
+
+| 参数     | 类型     | 必填 | 说明                                                                                                                          |
+| -------- | -------- | ---- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `create` | object[] | —    | 批量创建的条目列表。每项包含 `itemType`（必填）、`title` 或 `url`，可选提供 `tags`、`collections`、`creators` 等字段          |
+| `update` | object[] | —    | 批量更新标签或合集的条目列表。每项包含 `ref`（必填），可选提供 `addTags`、`removeTags`、`addCollections`、`removeCollections` |
+| `delete` | string[] | —    | 移至回收站（Trash）的条目 ref 列表（`zotero://user/0/item/<KEY>`）                                                            |
+| `reason` | string   | —    | 操作说明，展示在计划卡中                                                                                                      |
+
+`create`、`update` 与 `delete` 至少提供一项，总数不得超过上限。
+
+### 输出
+
+- 批量执行结果：`{kind: "applied", total, created: [...], updated: [...], deleted: [...], unverified: [...], failed: [...], libraryVersion?, serverId?}`；
+  - `created`: `[{index, ref, key, version, itemType, title?, url?}]`，字段来自 Zotero 保存后的对象；
+  - `updated`: `[{ref, unchanged, addedTags, removedTags, addedCollections, removedCollections}]`
+  - `deleted`: `[{ref, key, deleted: true, version, children: [ref...]}]`，列出已核验移入回收站的根条目与所有后代；
+  - `unverified`: `[{op: "create", index, committed: true, retryable: false, reason, key?, ref?, version?, libraryVersion?, serverId}]`；
+  - `failed`: `[{op, index?, ref?, code, message, completedRefs?}]`，记录单项失败；删除部分完成时 `completedRefs` 列出已确认移入回收站的对象；
+- 计划卡拒绝：`{kind: "declined"}`。
+
+### 示例
+
+```text
+zotero_batch_items(
+  reason="整理机器学习相关文献并清理废弃草稿",
+  create=[
+    {"itemType": "journalArticle", "title": "Attention Is All You Need", "tags": ["Transformer"]}
+  ],
+  update=[
+    {"ref": "zotero://user/0/item/ABCD1234", "addTags": ["LLM", "Survey"], "removeTags": ["ToRead"]}
+  ],
+  delete=["zotero://user/0/item/OLD00001"]
+)
+```
+
+---
+
 ## 写入边界与安全机制
 
 写入工具默认不注册，需在配置中显式开启 `writeEnabled`，且仅操作个人库（`zotero://user/0/`）。
 
 1. 双层确认机制：
-   - 会话审批策略（`ctx.approval.request`）：遵循会话策略；若策略为 `never` 则自动拒绝；
-   - 计划审查卡：向用户展示具体变更内容 Markdown，经用户确认后执行；未获批准返回 `{kind: "declined"}`。
+   - 会话审批策略（`ctx.approval.request`）：遵循会话策略；若策略为 `never` 则自动拒绝。提示文案按影响面区分：普通新增/修改、可恢复的移入回收站、不可撤销的删除；
+   - 计划审查卡：向用户展示具体变更内容 Markdown，经用户确认后执行；未获批准返回 `{kind: "declined"}`。计划正文只使用宿主渲染器支持的 Markdown 子集。
 2. 本地 API 鉴权：
    - 写操作必须提供 Zotero 本地签发的 API key；
    - 首次写入需在 Zotero 本地授权弹窗中确认（允许、始终允许或拒绝）；

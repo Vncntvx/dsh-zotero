@@ -115,6 +115,7 @@ export const ZOTERO_WRITE_TOOL_NAMES = [
   'zotero_create_note',
   'zotero_update_item_tags',
   'zotero_update_item_collections',
+  'zotero_batch_items',
   'zotero_create_collection',
   'zotero_delete_collection',
   'zotero_create_item',

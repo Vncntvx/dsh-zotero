@@ -15,6 +15,7 @@ import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { TOOL_ABORTED, type ToolRunContext } from '@deepseek-ai/dsh-tools'
 import type { ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 import { requestWriteApproval } from '../../src/write-approval.js'
+import type { ZoteroWriteRisk } from '../../src/types.js'
 
 describe('requestWriteApproval', () => {
   it('covers the session approval gate outcomes', async () => {
@@ -142,5 +143,43 @@ describe('requestWriteApproval', () => {
         plan: '- plan',
       }),
     ).rejects.toMatchObject({ code: TOOL_ABORTED })
+  })
+
+  it('opens with the blast radius the call declares', async () => {
+    const prompts: Array<{ en: string; zh: string }> = []
+    const approval = {
+      get: () => ({
+        request: async (request: { displayReason: { en: string; zh: string } }) => {
+          prompts.push(request.displayReason)
+          return 'allowed-once' as const
+        },
+      }),
+    }
+    const exec = {
+      signal: new AbortController().signal,
+      name: 'zotero_delete_collection',
+      callId: 'c',
+      agent: { id: 'agent-1' } as never,
+    } as never
+    const calls: Array<ZoteroWriteRisk | undefined> = [
+      undefined,
+      'recoverable-delete',
+      'irreversible-delete',
+    ]
+    for (const risk of calls) {
+      await requestWriteApproval(
+        approval as unknown as Context,
+        risk === undefined ? { exec, plan: '- plan' } : { exec, plan: '- plan', risk },
+      )
+    }
+    // A plain mutation keeps the original sentence.
+    expect(prompts[0]?.zh).toContain('允许这次 Zotero 库写入')
+    // A recoverable delete says where the items go and that they come back.
+    expect(prompts[1]?.zh).toContain('回收站')
+    expect(prompts[1]?.en).toContain('Trash')
+    // An irreversible delete never borrows the additive vocabulary.
+    expect(prompts[2]?.zh).toContain('不可撤销')
+    expect(prompts[2]?.en).toContain('cannot be undone')
+    expect(prompts[2]?.zh).not.toContain('库写入')
   })
 })

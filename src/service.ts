@@ -88,6 +88,7 @@ import { registerDeleteCollectionTool } from './tools/delete-collection.js'
 import { registerCreateItemTool } from './tools/create-item.js'
 import { registerUpdateItemTool } from './tools/update-item.js'
 import { registerDeleteLibraryTagsTool } from './tools/delete-library-tags.js'
+import { registerBatchItemsTool } from './tools/batch-items.js'
 import type {
   ZoteroAttachmentLocation,
   ZoteroBrowseRequest,
@@ -126,6 +127,8 @@ import type {
   ZoteroUpdateItemResult,
   ZoteroUpdateItemTagsRequest,
   ZoteroUpdateItemTagsResult,
+  ZoteroBatchItemsOutcome,
+  ZoteroBatchItemsRequest,
   ZoteroWriteCall,
   ZoteroWriteDeclined,
 } from './types.js'
@@ -135,6 +138,7 @@ type ZoteroWriteMethod =
   | 'createNote'
   | 'updateItemTags'
   | 'updateItemCollections'
+  | 'batchItems'
   | 'createCollection'
   | 'deleteCollection'
   | 'createItem'
@@ -528,6 +532,7 @@ export class ZoteroService extends Service {
         registerCreateNoteTool(this.ctx, this),
         registerUpdateItemTagsTool(this.ctx, this),
         registerUpdateItemCollectionsTool(this.ctx, this),
+        registerBatchItemsTool(this.ctx, this),
         registerCreateCollectionTool(this.ctx, this),
         registerDeleteCollectionTool(this.ctx, this),
         registerCreateItemTool(this.ctx, this),
@@ -862,6 +867,19 @@ export class ZoteroService extends Service {
     call: ZoteroWriteCall,
   ): Promise<ZoteroDeleteLibraryTagsResult | ZoteroWriteDeclined> {
     return await this.dispatchWrite(call, 'deleteLibraryTags', request)
+  }
+
+  /**
+   * Batch items operation: create/import, update tags/collections, delete.
+   * @param request - the batch operations.
+   * @param call - the asking write call: its plan and its tool run.
+   * @returns the outcome describing created, updated, and deleted items, or declined.
+   */
+  async batchItems(
+    request: ZoteroBatchItemsRequest,
+    call: ZoteroWriteCall,
+  ): Promise<ZoteroBatchItemsOutcome> {
+    return await this.dispatchWrite(call, 'batchItems', request)
   }
 
   /**

@@ -47,7 +47,7 @@ src/
   remote.ts             # Web 端 Remote 服务
   typert.ts             # Typert 清单
   settings-namespace.ts # 设置命名空间常量
-  tools/                # 16 个模型工具定义（8 读 + 8 写）
+  tools/                # 17 个模型工具定义（8 读 + 9 写）
   tools/degradable.ts   # 写工具计划预览的降级规则（不可达/歧义才降级）
   client/               # 浏览器端（配置页、Sources 面板、工具卡片视图）
 tests/                  # 单元测试与端到端测试用例

@@ -4,7 +4,10 @@
  * Two sequential gates, both owned here so no caller can skip either:
  * 1. {@link requestWriteApproval}, the session approval policy
  *    (`ctx.approval.request`). Honors `approval/policy: never` (auto-reject)
- *    and writes the `approval/asked` + `approval/decided` audit pair.
+ *    and writes the `approval/asked` + `approval/decided` audit pair. Its
+ *    prompt names the call's blast radius (plain mutation, recoverable Trash
+ *    deletion, or irreversible deletion), because that prompt is read before
+ *    the plan card exists.
  * 2. {@link askPlanApproval}, the plan-review card (`userQuestions`).
  *    The user approves the exact plan markdown the domain will apply.
  *
@@ -57,7 +60,7 @@ import {
   ZoteroError,
 } from './errors.js'
 import { PERSONAL_LIBRARY } from './refs.js'
-import type { ZoteroWriteCall } from './types.js'
+import type { ZoteroWriteCall, ZoteroWriteRisk } from './types.js'
 
 /** The label the plan-review question is answered with to apply the write. */
 export const APPROVE_LABEL = 'Apply'
@@ -91,6 +94,35 @@ export const WRITE_PLAN_LIBRARY_LINE = `- Library: zotero://${PERSONAL_LIBRARY.t
 /** The single reason string every write approval request logs. */
 function writeApprovalReason(call: ZoteroWriteCall): string {
   return `Zotero library write: ${call.exec.name}`
+}
+
+/**
+ * The prompt each blast radius opens with. The plan card carries the detail,
+ * but the first prompt is read on its own, so an irreversible deletion must
+ * not be described with the same sentence an additive write uses.
+ */
+const WRITE_APPROVAL_PROMPT: Record<ZoteroWriteRisk, { en: string; zh: string }> = {
+  mutation: {
+    en: 'Allow this Zotero library write? A plan card follows for the exact change.',
+    zh: '允许这次 Zotero 库写入？随后会展示具体变更的计划卡。',
+  },
+  'recoverable-delete': {
+    en: 'Allow this Zotero library write? The listed items move to Zotero Trash, where you can restore them; a plan card follows for the exact change.',
+    zh: '允许这次 Zotero 库写入？列出的条目会被移入 Zotero 回收站（可从回收站恢复），随后展示具体变更的计划卡。',
+  },
+  'irreversible-delete': {
+    en: 'Allow this Zotero library deletion? It cannot be undone; a plan card follows with the exact scope.',
+    zh: '允许这次 Zotero 库删除？此操作不可撤销，随后展示具体影响范围的计划卡。',
+  },
+}
+
+/**
+ * The prompt shown for one call's blast radius.
+ * @param call - the asking write call, whose optional risk names the outcome.
+ * @returns the localized prompt for that risk, defaulting to a plain mutation.
+ */
+function writeApprovalDisplayReason(call: ZoteroWriteCall): { en: string; zh: string } {
+  return WRITE_APPROVAL_PROMPT[call.risk ?? 'mutation']
 }
 
 /**
@@ -143,10 +175,7 @@ export async function requestWriteApproval(
       toolName: exec.name,
       callId: exec.callId,
       reason: writeApprovalReason(call),
-      displayReason: {
-        en: 'Allow this Zotero library write? A plan card follows for the exact change.',
-        zh: '允许这次 Zotero 库写入？随后会展示具体变更的计划卡。',
-      },
+      displayReason: writeApprovalDisplayReason(call),
       signal: exec.signal,
     })
   } catch (error) {

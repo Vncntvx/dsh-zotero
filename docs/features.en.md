@@ -2,7 +2,7 @@
 
 # Features
 
-dsh-zotero allows DSH LLM conversations to search, inspect, and cite your local Zotero library. Sixteen tools cover literature discovery, passage retrieval, source attachment location, formatted export, and personal-library writes. Eight personal-library write tools are disabled by default and require session approval and plan review when enabled. The web Sources panel aggregates literature, relevant passages, and exports referenced throughout the session.
+dsh-zotero allows DSH LLM conversations to search, inspect, and cite your local Zotero library. Seventeen tools cover literature discovery, passage retrieval, source attachment location, formatted export, and personal-library writes. Nine personal-library write tools are disabled by default and require session approval and plan review when enabled. The web Sources panel aggregates literature, relevant passages, and exports referenced throughout the session.
 
 ## Scholarly Literature Retrieval
 
@@ -86,7 +86,7 @@ Optional `style` and `locale` parameters set the citation format. Requests excee
 
 ## Optional Personal-Library Writes
 
-When `writeEnabled` is turned on, the plugin registers 8 write tools restricted to the personal library (`zotero://user/0/`):
+When `writeEnabled` is turned on, the plugin registers 9 write tools restricted to the personal library (`zotero://user/0/`):
 
 - `zotero_create_note`: creates standalone notes or child notes with tags, collections, and `dc:relation` links;
 - `zotero_update_item_tags`: settles `add`/`remove` in one read-merge-write call, keeping existing tag types, under the item's version precondition;
@@ -95,9 +95,10 @@ When `writeEnabled` is turned on, the plugin registers 8 write tools restricted 
 - `zotero_delete_collection`: deletes a collection (irreversible: its structure and child collections go, the items stay); the plan card states the item and subcollection counts first;
 - `zotero_create_item`: creates an item from a closed field set (no BibTeX/CSL-JSON channel); an unknown type or a missing title and URL is refused;
 - `zotero_update_item`: corrects scalar metadata, with field validity taken from Zotero's `itemTypeFields`;
-- `zotero_delete_library_tags`: deletes tags library-wide by name (irreversible), stating each tag's item count first; unmatched names are ignored so a retry is idempotent.
+- `zotero_delete_library_tags`: deletes tags library-wide by name (irreversible), stating each tag's item count first; unmatched names are ignored so a retry is idempotent;
+- `zotero_batch_items`: creates items, updates tags and collections, and moves items to trash in a single call under one plan card.
 
-Every write requires passing session approval policy and user plan card review, and both deletion tools state their irreversibility on the card. Zotero 10 also prompts a local authorization dialog on first write.
+Every write requires passing session approval policy and plan card review. Deletion cards state whether items are moved to trash or removed permanently. Zotero 10 also prompts a local authorization dialog on first write.
 
 ## Chat Tool Cards (Toolviews)
 
@@ -110,7 +111,7 @@ In DSH conversations, Zotero tool calls render using dedicated read-only cards (
 - **Child Objects (`zotero_children`)**: partitions child notes, attachments, and highlighted PDF annotations by kind;
 - **Library Structure & Changes (`zotero_browse` / `zotero_changes`)**: `zotero_browse` renders collection trees and tag lists; `zotero_changes` displays versioned diffs, deletions, and reusable cursors;
 - **Attachment Locator (`zotero_attachment`)**: displays verified file paths or links with one-click copy and open actions;
-- **Personal Library Writes (all 8 write tools)**: displays target items, note summaries, planned tag and membership changes, collection/item creation and deletion, and library-wide tag deletion; receipts distinguish "applied", "no change", "outcome unreported", and "declined", with irreversible deletes declared on the plan card first.
+- **Personal Library Writes (all 9 write tools)**: displays target items, note summaries, planned tag and membership changes, collection/item creation and deletion, and library-wide tag deletion; receipts distinguish "applied", "no change", "outcome unreported", and "declined", with irreversible deletes declared on the plan card first.
 
 Cards use compact summary headers by default and lazily render details when expanded, tracking tool lifecycle states throughout execution.
 

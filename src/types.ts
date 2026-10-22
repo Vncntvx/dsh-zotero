@@ -1136,6 +1136,13 @@ export interface ZoteroBatchItemsResult {
 }
 
 /**
+ * How destructive the reviewed write is, so the approval prompt can name the
+ * blast radius before the plan card shows the detail. Omitted means a plain
+ * mutation (create or update), which is the common case.
+ */
+export type ZoteroWriteRisk = 'mutation' | 'recoverable-delete' | 'irreversible-delete'
+
+/**
  * Who is asking for one write, and the plan the user reviews.
  *
  * The gate lives at the `ctx.zotero` seam, so a write cannot reach the domain
@@ -1159,6 +1166,12 @@ export interface ZoteroWriteCall {
   readonly exec: Pick<ToolRunContext, 'agent' | 'signal' | 'name' | 'callId'>
   /** The plan markdown the user reviews; it must describe exactly this request. */
   readonly plan: string
+  /**
+   * The blast radius the approval prompt states. Only deletions set it: a
+   * destructive write must not open with the same sentence an additive one
+   * uses, because the first prompt is read without the plan detail.
+   */
+  readonly risk?: ZoteroWriteRisk
 }
 
 /**

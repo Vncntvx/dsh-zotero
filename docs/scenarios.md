@@ -382,6 +382,13 @@
 - `committed-unverified` 不重试：出现该结果时模型不得自动重发写入，只按 key/ref 核对；
 - 两级确认各自独立：拒绝计划卡与策略 `never` 是两条路径，都必须 `declined` 且零写入。
 
+#### W8 批量条目收据与回收站
+
+- 创建计划完整性：提交 11 条以上创建请求，检查计划卡逐项展示所有索引和完整字段（尤其 `collections`）；批准后每个成功条目的模型输出均包含输入索引及已保存 ref/key；
+- 创建结果结算：模拟/观察缺失、重复、矛盾或越界的 Zotero 批量索引，以及成功响应丢失的情况。每个请求索引必须出现在 `created`、`failed` 或 `unverified` 之一；`unverified.retryable` 必须为 `false`，模型不得重发；
+- 可恢复删除：删除包含子笔记、附件和 PDF 批注的条目。确认根条目和所有后代进入 Zotero Trash 且回执列出其 refs；不得出现永久删除请求；
+- 部分完成：在子对象写入期间制造版本冲突，结果必须列出 `failed.completedRefs` 中已确认进入 Trash 的对象，且不得报告整棵对象图成功。
+
 ## 执行顺序
 
 1. 执行 `/zotero` 检查连接。若连接失败，请参考 [排错指南](troubleshooting.md) 排查，不要继续执行后续用例；
@@ -406,6 +413,7 @@
 | 内容写入         | `create_note` / `update_item_tags` / `update_item_collections`            | W1–W3          | 审批与计划卡、合并写入、declined 状态             |
 | 结构与元数据写入 | `create_collection` / `delete_collection` / `create_item` / `update_item` | W4, W5         | 重名拒绝、删除预览与失效、字段闭集与白名单        |
 | 库级标签删除     | `delete_library_tags`                                                     | W6             | 预览计数、库版本前置、幂等重试                    |
+| 批量条目写入     | `zotero_batch_items`                                                      | W8             | 完整计划与创建回执、未知提交不可重试、级联回收站  |
 | 数据面板         | Sources 面板                                                              | G8             | 文献 / 原文片段 / 导出三页数据联动                |
 | 边界保护         | 错误处理与防御                                                            | N1–N7          | 错误码准确性、防虚构、装配错误不静默降级          |
 | 运行诊断         | 诊断卡（插件详情页）                                                      | 附则           | 崩溃回流、级别过滤、诊断包复制                    |
