@@ -40,6 +40,7 @@ import { exportItems as exportItemsDomain } from './export-domain.js'
 import { changes as changesDomain } from './changes-domain.js'
 import { runBrowse } from './browse-domain.js'
 import {
+  batchItems as batchItemsDomain,
   createCollection as createCollectionDomain,
   createItem as createItemDomain,
   createNote as createNoteDomain,
@@ -73,6 +74,8 @@ import type {
   ZoteroDeleteCollectionResult,
   ZoteroDeleteLibraryTagsRequest,
   ZoteroDeleteLibraryTagsResult,
+  ZoteroBatchItemsRequest,
+  ZoteroBatchItemsResult,
   ZoteroExportRequest,
   ZoteroExportResult,
   ZoteroGetRequest,
@@ -431,5 +434,15 @@ export class LocalApiProvider implements ZoteroProvider {
     signal?: AbortSignal,
   ): Promise<ZoteroDeleteLibraryTagsResult> {
     return deleteLibraryTagsDomain(this.writeDeps(), request, signal)
+  }
+
+  /**
+   * Batch items operation: create/import, update tags/collections, delete.
+   */
+  async batchItems(
+    request: ZoteroBatchItemsRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroBatchItemsResult> {
+    return batchItemsDomain(this.writeDeps(), request, signal)
   }
 }

@@ -1043,6 +1043,98 @@ export interface ZoteroDeleteLibraryTagsResult {
   serverId?: string
 }
 
+export interface ZoteroBatchCreateItemInput {
+  itemType: ZoteroCreatableItemType
+  title?: string
+  url?: string
+  date?: string
+  doi?: string
+  abstractNote?: string
+  publicationTitle?: string
+  creators?: ZoteroCreator[]
+  tags?: string[]
+  collections?: (string | ZoteroObjectRef)[]
+}
+
+export interface ZoteroBatchUpdateItemInput {
+  ref: ZoteroObjectRef
+  addTags?: string[]
+  removeTags?: string[]
+  addCollections?: (string | ZoteroObjectRef)[]
+  removeCollections?: (string | ZoteroObjectRef)[]
+}
+
+export interface ZoteroBatchItemsRequest {
+  create?: ZoteroBatchCreateItemInput[]
+  update?: ZoteroBatchUpdateItemInput[]
+  delete?: ZoteroObjectRef[]
+}
+
+export interface ZoteroBatchCreateItemResult {
+  index: number
+  ref: string
+  key: string
+  version: number
+  itemType: string
+  title?: string
+  url?: string
+}
+
+export interface ZoteroBatchUpdateItemResult {
+  ref: string
+  version: number
+  addedTags: string[]
+  removedTags: string[]
+  addedCollections: string[]
+  removedCollections: string[]
+  unchanged: boolean
+}
+
+export interface ZoteroBatchDeleteItemResult {
+  ref: string
+  key: string
+  deleted: true
+  version: number
+  /** All verified descendant refs, including notes, attachments and annotations. */
+  children: string[]
+}
+
+export interface ZoteroBatchOperationFailure {
+  op: 'create' | 'update' | 'delete'
+  ref?: string
+  index?: number
+  code: string
+  message: string
+  /** Trash PATCHes already acknowledged before this operation failed. */
+  completedRefs?: string[]
+}
+
+/** A non-retryable create whose commit or saved state cannot be proven. */
+export interface ZoteroBatchCreateUnverified {
+  op: 'create'
+  index: number
+  committed: true
+  retryable: false
+  reason: 'saved-state-unverified' | 'commit-unknown'
+  key?: string
+  ref?: string
+  version?: number
+  libraryVersion?: number
+  serverId: string
+}
+
+export interface ZoteroBatchItemsResult {
+  kind: 'applied'
+  total: number
+  created: ZoteroBatchCreateItemResult[]
+  updated: ZoteroBatchUpdateItemResult[]
+  deleted: ZoteroBatchDeleteItemResult[]
+  unverified: ZoteroBatchCreateUnverified[]
+  failed: ZoteroBatchOperationFailure[]
+  libraryVersion?: number
+  serverId?: string
+}
+
 /**
  * Who is asking for one write, and the plan the user reviews.
  *
@@ -1096,6 +1188,7 @@ export type ZoteroCreateItemCommittedOutcome =
 export type ZoteroCreateItemOutcome = ZoteroCreateItemCommittedOutcome | ZoteroWriteDeclined
 export type ZoteroUpdateItemOutcome = ZoteroUpdateItemResult | ZoteroWriteDeclined
 export type ZoteroDeleteLibraryTagsOutcome = ZoteroDeleteLibraryTagsResult | ZoteroWriteDeclined
+export type ZoteroBatchItemsOutcome = ZoteroBatchItemsResult | ZoteroWriteDeclined
 
 /**
  * The storage side of the `ctx.zotero` seam. Providers declare which
@@ -1262,6 +1355,16 @@ export interface ZoteroProvider {
     request: ZoteroDeleteLibraryTagsRequest,
     signal?: AbortSignal,
   ): Promise<ZoteroDeleteLibraryTagsResult>
+  /**
+   * Perform batch item mutations (create/import, update tags/collections, delete).
+   * @param request - the create, update, and delete item operations.
+   * @param signal - caller cancellation; forwarded to the transport.
+   * @returns the outcome detailing created, updated, deleted, and failed operations.
+   */
+  batchItems?(
+    request: ZoteroBatchItemsRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroBatchItemsResult>
 }
 
 /**

@@ -30,6 +30,9 @@
 import type { ZoteroHttpClient } from '../http-client.js'
 import { libraryPrefix } from '../refs.js'
 import { requireArrayBody } from './pagination.js'
+import { nextOffsetOrFail, requireTotalResults, setPage } from './pagination.js'
+import { ZOTERO_LIST_PAGE_ROWS, ZOTERO_SERVER_ID_HEADER } from '../constants.js'
+import { assertServerIdMatches } from './identity.js'
 import type { SupportedLocalLibrary } from '../types.js'
 
 /** Query that surfaces annotation rows under one key. */
@@ -83,4 +86,36 @@ export async function fetchAnnotationChildren(
   signal: AbortSignal | undefined,
 ): Promise<readonly unknown[]> {
   return getChildrenJson(deps, key, library, serverId, signal, ANNOTATION_SEARCH)
+}
+
+/** Read every child, including trashed rows, before a versioned Trash operation. */
+export async function fetchChildrenForTrash(
+  deps: { client: ZoteroHttpClient },
+  key: string,
+  serverId: string,
+  annotations: boolean,
+  signal?: AbortSignal,
+): Promise<unknown[]> {
+  const rows: unknown[] = []
+  let offset = 0
+  for (;;) {
+    const params = setPage(
+      new URLSearchParams({ includeTrashed: '1' }),
+      offset,
+      ZOTERO_LIST_PAGE_ROWS,
+    )
+    if (annotations) params.set('itemType', 'annotation')
+    const { json, headers } = await deps.client.getJson<unknown>(
+      `users/0/items/${key}/children`,
+      params,
+      { serverId, signal },
+    )
+    assertServerIdMatches(headers.get(ZOTERO_SERVER_ID_HEADER), serverId)
+    const page = requireArrayBody(json, 'children to move to Trash')
+    const total = requireTotalResults(headers, 'children to move to Trash')
+    rows.push(...page)
+    const next = nextOffsetOrFail(offset, page.length, total, 'children to move to Trash')
+    if (next === undefined) return rows
+    offset = next
+  }
 }

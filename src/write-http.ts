@@ -261,7 +261,13 @@ export class ZoteroWriteHttpClient {
       undefined,
       true,
     )
-    return this.parseBatchWrite(body, requireLibraryVersion(headers))
+    // The POST has crossed the commit boundary. A malformed receipt or a
+    // missing version cannot prove that any requested create was refused.
+    try {
+      return this.parseBatchWrite(body, requireLibraryVersion(headers))
+    } catch (error) {
+      throw asCommitUnknown(error)
+    }
   }
 
   /**

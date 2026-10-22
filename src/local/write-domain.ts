@@ -13,9 +13,9 @@
  * - tag, collection-membership, and scalar updates are read-merge-write under
  *   an `If-Unmodified-Since-Version` precondition: PATCH replaces arrays
  *   wholesale, so the merged list must be sent whole;
- * - deletes carry the library version of their preceding read as the
- *   precondition, so any concurrent write fails the delete rather than
- *   slipping past it;
+ * - collection and tag deletes carry the library version of their preceding
+ *   read; item Trash PATCHes carry each object's version while processing its
+ *   complete child graph, so concurrent changes fail closed;
  * - one object per batch means a Zotero refusal surfaces as a typed error,
  *   never as a silently skipped entry in a bucket.
  *
@@ -32,6 +32,7 @@ import {
   ZOTERO_LIBRARY_VERSION_HEADER,
   ZOTERO_LIST_PAGE_ROWS,
   ZOTERO_SERVER_ID_HEADER,
+  ZOTERO_WRITE_OBJECT_BATCH,
 } from '../constants.js'
 import {
   WRITE_CHILD_COLLECTIONS_MESSAGE,
@@ -44,6 +45,7 @@ import {
   writeCollectionNameExistsMessage,
   writeFieldNotForItemTypeMessage,
   writeListEmptyMessage,
+  writeListTooLongMessage,
   writeObjectRefusedMessage,
   writeObjectStateMissingMessage,
   requireNonBlank,
@@ -84,6 +86,7 @@ import {
   wireFieldOf,
 } from '../write-item-rules.js'
 import { markdownToNoteHtml } from './note-format.js'
+import { readTrashGraph } from './trash-item.js'
 import type { WriteAuthorizer } from '../write-auth.js'
 import {
   ZoteroWriteCommitUnknownError,
@@ -110,6 +113,13 @@ import {
   type ZoteroUpdateItemTagsRequest,
   type ZoteroUpdateItemTagsResult,
   type ZoteroWriteCommittedUnverified,
+  type ZoteroBatchItemsRequest,
+  type ZoteroBatchItemsResult,
+  type ZoteroBatchCreateItemResult,
+  type ZoteroBatchUpdateItemResult,
+  type ZoteroBatchDeleteItemResult,
+  type ZoteroBatchCreateUnverified,
+  type ZoteroBatchOperationFailure,
 } from '../types.js'
 
 /**
@@ -483,6 +493,97 @@ function itemRef(key: string, serverId: string): string {
 
 function collectionRef(key: string, serverId: string): string {
   return formatRef(refForLibrary(PERSONAL_LIBRARY, 'collection', key, serverId))
+}
+
+function batchCreateUnverified(
+  index: number,
+  reason: ZoteroBatchCreateUnverified['reason'],
+  serverId: string,
+  key?: string,
+  version?: number,
+): ZoteroBatchCreateUnverified {
+  return {
+    op: 'create',
+    index,
+    committed: true,
+    retryable: false,
+    reason,
+    serverId,
+    ...(key !== undefined && isObjectKey(key) ? { key, ref: itemRef(key, serverId) } : {}),
+    ...(version !== undefined ? { version } : {}),
+  }
+}
+
+/** Settle every requested index using the same proof rules as a single create. */
+function settleBatchCreates(
+  batch: ZoteroBatchWrite,
+  creates: readonly { readonly itemType: string }[],
+  serverId: string,
+  created: ZoteroBatchCreateItemResult[],
+  unverified: ZoteroBatchCreateUnverified[],
+  failed: ZoteroBatchOperationFailure[],
+): void {
+  const indices = new Set(creates.map((_, index) => String(index)))
+  const buckets = [batch.successful, batch.success, batch.failed, batch.unchanged]
+  const unexpectedIndex = buckets.some((bucket) =>
+    Object.keys(bucket).some((index) => !indices.has(index)),
+  )
+  const owners = new Map<string, Set<number>>()
+  for (let index = 0; index < creates.length; index++) {
+    for (const key of [asString(batch.successful[index]?.key), batch.success[index]]) {
+      if (key === undefined || !isObjectKey(key)) continue
+      const indicesForKey = owners.get(key) ?? new Set<number>()
+      indicesForKey.add(index)
+      owners.set(key, indicesForKey)
+    }
+  }
+  const at = <T>(bucket: Record<string, T>, index: number): Record<string, T> =>
+    Object.hasOwn(bucket, String(index)) ? { '0': bucket[index] } : {}
+  for (let index = 0; index < creates.length; index++) {
+    const duplicateKey = [asString(batch.successful[index]?.key), batch.success[index]].some(
+      (key) => key !== undefined && (owners.get(key)?.size ?? 0) > 1,
+    )
+    if (unexpectedIndex || duplicateKey) {
+      unverified.push(batchCreateUnverified(index, 'commit-unknown', serverId))
+      continue
+    }
+    try {
+      const settled = settleSingleEntryBatch(
+        {
+          successful: at(batch.successful, index),
+          success: at(batch.success, index),
+          failed: at(batch.failed, index),
+          unchanged: at(batch.unchanged, index),
+          libraryVersion: batch.libraryVersion,
+        },
+        'item',
+        serverId,
+        (data) => {
+          const itemType = asString(data.itemType)
+          if (itemType !== creates[index].itemType) return undefined
+          return { itemType, title: asString(data.title), url: asString(data.url) }
+        },
+      )
+      if (settled.status === 'unverified') {
+        const { kind: _kind, ...receipt } = settled.result
+        unverified.push({ ...receipt, op: 'create', index })
+      } else {
+        const { key, version, payload } = settled.entry
+        created.push({
+          index,
+          ref: itemRef(key, serverId),
+          key,
+          version,
+          itemType: payload.itemType,
+          ...(payload.title !== undefined ? { title: payload.title } : {}),
+          ...(payload.url !== undefined ? { url: payload.url } : {}),
+        })
+      }
+    } catch (error) {
+      if (!(error instanceof ZoteroError)) throw error
+      failed.push({ op: 'create', index, code: error.code, message: error.message })
+    }
+  }
 }
 
 /** The canonical relation URI for a source item. */
@@ -1360,6 +1461,320 @@ export async function deleteLibraryTags(
     deletedTags: [...tags].sort(),
     libraryVersion,
     serverId: effectiveServerId,
+  }
+}
+
+/**
+ * Execute a batch of item operations: creates, updates, and deletes.
+ * Operations are bounded by deps.config.writeListMaxItems.
+ * Creates land via a single multi-entry POST; updates and deletes run
+ * sequentially under per-item version preconditions to avoid concurrency races.
+ */
+export async function batchItems(
+  deps: WriteDomainDeps,
+  request: ZoteroBatchItemsRequest,
+  signal?: AbortSignal,
+): Promise<ZoteroBatchItemsResult> {
+  const creates = request.create ?? []
+  const updates = request.update ?? []
+  const deletes = request.delete ?? []
+  const total = creates.length + updates.length + deletes.length
+
+  if (total === 0) {
+    throw new ZoteroError(WRITE_LIST_SELECTION_MESSAGE, ZOTERO_INVALID_ARGUMENT)
+  }
+  if (total > ZOTERO_WRITE_OBJECT_BATCH) {
+    throw new ZoteroError(
+      writeListTooLongMessage('batch items', ZOTERO_WRITE_OBJECT_BATCH),
+      ZOTERO_INVALID_ARGUMENT,
+    )
+  }
+
+  const serverId = await ensureServerId(deps, signal)
+
+  // 1. Pre-validate deletes
+  const checkedDeletes = deletes.map((ref) => {
+    const writable = requireWritableRef(ref, ['item'])
+    return requireWritableRefAtServer(writable, ['item'], serverId)
+  })
+
+  // 2. Pre-validate updates
+  const checkedUpdates = updates.map((u) => {
+    const writable = requireWritableRef(u.ref, ['item'])
+    const ref = requireWritableRefAtServer(writable, ['item'], serverId)
+    const addTags = normalizeWriteList('addTags', u.addTags ?? [])
+    const removeTags = normalizeWriteList('removeTags', u.removeTags ?? [])
+    const addColInputs = (u.addCollections ?? []).map((c) =>
+      typeof c === 'string' ? normalizeCollectionInput('addCollections', c) : formatRef(c),
+    )
+    const removeColInputs = (u.removeCollections ?? []).map((c) =>
+      typeof c === 'string' ? normalizeCollectionInput('removeCollections', c) : formatRef(c),
+    )
+    if (
+      addTags.length === 0 &&
+      removeTags.length === 0 &&
+      addColInputs.length === 0 &&
+      removeColInputs.length === 0
+    ) {
+      throw new ZoteroError(WRITE_LIST_SELECTION_MESSAGE, ZOTERO_INVALID_ARGUMENT)
+    }
+    return {
+      ref,
+      addTags,
+      removeTags,
+      addColInputs,
+      removeColInputs,
+    }
+  })
+
+  // 3. Pre-validate creates
+  const checkedCreates = creates.map((c) => {
+    const itemType = requireCreatableItemType(requireNonBlank('itemType', c.itemType))
+    const title = c.title?.trim() ?? ''
+    const url = c.url?.trim() ?? ''
+    requireTitleOrUrl(title, url)
+    const tags = normalizeWriteList('tags', c.tags ?? [])
+    const colInputs = (c.collections ?? []).map((col) =>
+      typeof col === 'string' ? normalizeCollectionInput('collections', col) : formatRef(col),
+    )
+    const creators = (c.creators ?? []).map((cr, idx) => normalizeCreator(cr, idx))
+    return {
+      itemType,
+      title: title !== '' ? title : undefined,
+      url: url !== '' ? url : undefined,
+      date: c.date?.trim() || undefined,
+      doi: c.doi?.trim() || undefined,
+      abstractNote: c.abstractNote?.trim() || undefined,
+      publicationTitle: c.publicationTitle?.trim() || undefined,
+      creators: creators.length > 0 ? creators : undefined,
+      tags,
+      colInputs,
+    }
+  })
+
+  // 4. Batch resolve all collections referenced across creates and updates
+  const allColInputs = [
+    ...checkedCreates.flatMap((c) => c.colInputs),
+    ...checkedUpdates.flatMap((u) => [...u.addColInputs, ...u.removeColInputs]),
+  ]
+  const uniqueColInputs = [...new Set(allColInputs)]
+  const resolvedColsMap = new Map<string, string>()
+  if (uniqueColInputs.length > 0) {
+    const resolved = await deps.resolveCollections(uniqueColInputs, signal)
+    for (let i = 0; i < uniqueColInputs.length; i++) {
+      const key = requireWritableRefAtServer(resolved[i], ['collection'], serverId).key
+      resolvedColsMap.set(uniqueColInputs[i], key)
+    }
+  }
+
+  const createdResults: ZoteroBatchCreateItemResult[] = []
+  const updatedResults: ZoteroBatchUpdateItemResult[] = []
+  const deletedResults: ZoteroBatchDeleteItemResult[] = []
+  const unverifiedResults: ZoteroBatchCreateUnverified[] = []
+  const failedResults: ZoteroBatchOperationFailure[] = []
+  let latestLibraryVersion: number | undefined
+
+  // Phase 1: Creates (Native POST batch)
+  if (checkedCreates.length > 0) {
+    const entries = checkedCreates.map((c) => {
+      const colKeys = c.colInputs
+        .map((input) => resolvedColsMap.get(input))
+        .filter((k): k is string => k !== undefined)
+      return {
+        itemType: c.itemType,
+        ...(c.title !== undefined ? { title: c.title } : {}),
+        ...(c.url !== undefined ? { url: c.url } : {}),
+        ...(c.date !== undefined ? { date: c.date } : {}),
+        ...(c.doi !== undefined ? { DOI: c.doi } : {}),
+        ...(c.abstractNote !== undefined ? { abstractNote: c.abstractNote } : {}),
+        ...(c.publicationTitle !== undefined ? { publicationTitle: c.publicationTitle } : {}),
+        ...(c.creators !== undefined ? { creators: c.creators } : {}),
+        ...(c.tags.length > 0 ? { tags: c.tags.map((tag) => ({ tag })) } : {}),
+        ...(colKeys.length > 0 ? { collections: colKeys } : {}),
+      }
+    })
+
+    try {
+      const batch = await withWriteKey(deps, serverId, signal, (apiKey) =>
+        deps.writer.batch(`${libraryPrefix(PERSONAL_LIBRARY)}/items`, entries, {
+          serverId,
+          apiKey,
+          signal,
+        }),
+      )
+      latestLibraryVersion = batch.libraryVersion
+
+      settleBatchCreates(
+        batch,
+        checkedCreates,
+        serverId,
+        createdResults,
+        unverifiedResults,
+        failedResults,
+      )
+    } catch (err) {
+      if (isWriteUnauthorized(err)) throw err
+      if (err instanceof ZoteroWriteCommitUnknownError) {
+        for (let i = 0; i < checkedCreates.length; i++) {
+          unverifiedResults.push(batchCreateUnverified(i, 'commit-unknown', serverId))
+        }
+      } else {
+        signal?.throwIfAborted()
+        for (let i = 0; i < checkedCreates.length; i++) {
+          failedResults.push({
+            op: 'create',
+            index: i,
+            code: err instanceof ZoteroError ? err.code : 'ZOTERO_UNEXPECTED',
+            message: err instanceof Error ? err.message : String(err),
+          })
+        }
+      }
+    }
+  }
+
+  // Phase 2: Updates (Sequential read-modify-write)
+  for (const u of checkedUpdates) {
+    try {
+      const res = await withItemWrite(
+        deps,
+        u.ref,
+        signal,
+        async ({ snapshot, serverId: effServerId, resultRef, send }) => {
+          let tagsChanged = false
+          let nextTags = snapshot.tags
+          let addedTags: string[] = []
+          let removedTags: string[] = []
+          if (u.addTags.length > 0 || u.removeTags.length > 0) {
+            const merged = mergeTagList(snapshot.tags, u.removeTags, u.addTags)
+            tagsChanged = merged.changed
+            nextTags = merged.merged
+            addedTags = merged.added
+            removedTags = merged.removed
+          }
+
+          let colsChanged = false
+          let nextColKeys = snapshot.collectionKeys
+          let addedCols: string[] = []
+          let removedCols: string[] = []
+          if (u.addColInputs.length > 0 || u.removeColInputs.length > 0) {
+            const addKeys = u.addColInputs
+              .map((input) => resolvedColsMap.get(input))
+              .filter((k): k is string => k !== undefined)
+            const removeKeys = u.removeColInputs
+              .map((input) => resolvedColsMap.get(input))
+              .filter((k): k is string => k !== undefined)
+            const mergedCols = mergeList(snapshot.collectionKeys, removeKeys, addKeys)
+            colsChanged = mergedCols.changed
+            nextColKeys = mergedCols.merged
+            addedCols = mergedCols.added
+            removedCols = mergedCols.removed
+          }
+
+          const changed = tagsChanged || colsChanged
+          if (!changed) {
+            return {
+              ref: resultRef,
+              version: snapshot.version,
+              addedTags: [],
+              removedTags: [],
+              addedCollections: [],
+              removedCollections: [],
+              unchanged: true,
+            }
+          }
+
+          const patchBody: Record<string, unknown> = {}
+          if (tagsChanged) patchBody.tags = nextTags
+          if (colsChanged) patchBody.collections = nextColKeys
+
+          const { libraryVersion } = await send(patchBody)
+          latestLibraryVersion = libraryVersion
+          return {
+            ref: resultRef,
+            version: libraryVersion,
+            addedTags,
+            removedTags,
+            addedCollections: addedCols.map((k) => collectionRef(k, effServerId)),
+            removedCollections: removedCols.map((k) => collectionRef(k, effServerId)),
+            unchanged: false,
+          }
+        },
+      )
+      updatedResults.push(res)
+    } catch (err) {
+      failedResults.push({
+        op: 'update',
+        ref: itemRef(u.ref.key, serverId),
+        code: err instanceof ZoteroError ? err.code : 'ZOTERO_UNEXPECTED',
+        message: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+
+  // Phase 3: Move complete item graphs to Trash under object versions.
+  for (const delRef of checkedDeletes) {
+    const completedRefs: string[] = []
+    try {
+      const graph = await readTrashGraph(deps.client, delRef.key, serverId, signal)
+      for (const node of graph) {
+        if (node.deleted) continue
+        const { libraryVersion } = await withWriteKey(deps, serverId, signal, (apiKey) =>
+          deps.writer.patch(
+            `${libraryPrefix(PERSONAL_LIBRARY)}/items/${node.key}`,
+            { deleted: 1 },
+            {
+              serverId,
+              apiKey,
+              ifUnmodifiedSinceVersion: node.version,
+              signal,
+            },
+          ),
+        )
+        latestLibraryVersion = libraryVersion
+        completedRefs.push(itemRef(node.key, serverId))
+      }
+      const saved = await readTrashGraph(deps.client, delRef.key, serverId, signal)
+      const keys = new Set(graph.map((node) => node.key))
+      if (
+        saved.length !== graph.length ||
+        saved.some((node) => !node.deleted || !keys.has(node.key))
+      ) {
+        throw new ZoteroError(
+          `Zotero did not verify the complete graph for ${delRef.key} in Trash. Check the completed refs before further action.`,
+          ZOTERO_UNEXPECTED,
+        )
+      }
+      const version = saved[saved.length - 1].version
+      deletedResults.push({
+        ref: itemRef(delRef.key, serverId),
+        key: delRef.key,
+        deleted: true,
+        version,
+        children: graph
+          .filter((node) => node.key !== delRef.key)
+          .map((node) => itemRef(node.key, serverId)),
+      })
+    } catch (err) {
+      failedResults.push({
+        op: 'delete',
+        ref: itemRef(delRef.key, serverId),
+        code: err instanceof ZoteroError ? err.code : 'ZOTERO_UNEXPECTED',
+        message: err instanceof Error ? err.message : String(err),
+        ...(completedRefs.length > 0 ? { completedRefs } : {}),
+      })
+    }
+  }
+
+  return {
+    kind: 'applied',
+    total,
+    created: createdResults,
+    updated: updatedResults,
+    deleted: deletedResults,
+    unverified: unverifiedResults,
+    failed: failedResults,
+    ...(latestLibraryVersion !== undefined ? { libraryVersion: latestLibraryVersion } : {}),
+    serverId,
   }
 }
 
