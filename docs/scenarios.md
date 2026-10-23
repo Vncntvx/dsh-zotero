@@ -13,6 +13,7 @@
 - **G**：主流程（Golden Path）。在同一会话中依序执行 G1 至 G8，覆盖 8 个只读工具与 Sources 面板；
 - **S / R / E / C**：独立能力包。当主流程某环节异常时，单独测试对应能力（搜索、读取、导出、库结构）；
 - **N**：负面边界用例。验证异常输入与边界条件下的错误处理与防幻觉表现；
+- **SC**：学术检索用例。显式启用 `dsh-zotero/scholarly` 组件后执行，验证工具在失败时的说法，而不只是成功路径；
 - **W**：写入用例。需先在设置中启用「允许写入」，建议在独立会话中执行。
 
 执行建议：
@@ -279,17 +280,17 @@
 
 浏览器半侧自行挂载 `remote.zotero`（`ctx.remote.$mount` + `ctx.inject(['remote.zotero', …])`）。若挂载被拒绝（例如网关尚未就绪、命名空间名冲突），插件入口会以 reject 结束，harness 将插件标记为加载失败，不会降级成「标签页在但状态栏报错」的半可用状态。验证方式：在浏览器控制台确认插件加载报错，且 `conversation.view`/`plugins.detail.section` 未注册（不出现半装配的标签页）。这是刻意的装配契约：状态栏永远无法作答的界面不算可用插件。用于确认装配错误不会被吞掉。
 
-## 学术检索用例（S）
+## 学术检索用例（SC）
 
 启用 `dsh-zotero/scholarly` 组件后执行。这些用例验证的是**失败时的说法**，而不只是成功路径：一个把限速报成「不存在」的工具，会让用户删掉正确的引用。
 
-- **S1 注册表不可达不得报成「不存在」**：断开网络（或让 Crossref 返回 5xx）后运行 `scholarly_verify`，一条真实存在的参考文献。期望结论为 `UNVERIFIED`，附注含 `Crossref lookup failed` 与状态码；**不得**出现 `NOT FOUND`。验收点：工具文本中 `0 not found` 且 `1 unverified`。
-- **S2 真实缺失仍报 NOT FOUND**：用一条 DOI 不存在、且 Crossref 书目检索为空的引用。期望 `NOT FOUND`，附注 `No matching publication record found in Crossref.`。S1 与 S2 的文案必须能区分。
-- **S3 本地库标注缺席不等于未收藏**：让本地 Zotero 不可达（关闭 Zotero），运行 `scholarly_search`。期望结果末尾出现 `Library status unavailable for N of M results`；不得让所有条目静默地不带 `In Zotero` 标记。
-- **S4 库内命中**：本地已收藏一篇论文，检索其标题。期望该行含 `[In Zotero: <合集名>]`；合集为空时显示 `Root`。
-- **S5 付费墙与传输失败必须区分**：对一篇无开放获取副本的论文运行 `scholarly_read`。期望错误逐条列出尝试过的路由（`Tried: …`），并在某条路由是传输失败时提示「可能只是暂时不可达，先重试」。**不得**只说「likely behind a paywall」。
-- **S6 全文缓存可关闭也可复用**：同一篇开放获取论文连续两次 `scholarly_read`。第二次应命中缓存（诊断中无第二次外部请求）。缓存目录不可写时，读取仍必须成功，结果附注中出现 `cache: write failed (<原因>)`。
-- **S7 组件默认可关闭**：未启用 `dsh-zotero/scholarly` 行时，`ctx.scholarly` 不存在，七个工具均不注册；启用后出现且不与 23 个 `zotero_*` 工具重名。
+- **SC1 注册表不可达不得报成「不存在」**：断开网络（或让 Crossref 返回 5xx）后运行 `scholarly_verify`，一条真实存在的参考文献。期望结论为 `UNVERIFIED`，附注含 `Crossref lookup failed` 与状态码；**不得**出现 `NOT FOUND`。验收点：工具文本中 `0 not found` 且 `1 unverified`。
+- **SC2 真实缺失仍报 NOT FOUND**：用一条 DOI 不存在、且 Crossref 书目检索为空的引用。期望 `NOT FOUND`，附注 `No matching publication record found in Crossref.`。SC1 与 SC2 的文案必须能区分。
+- **SC3 本地库标注缺席不等于未收藏**：让本地 Zotero 不可达（关闭 Zotero），运行 `scholarly_search`。期望结果末尾出现 `Library status unavailable for N of M results`；不得让所有条目静默地不带 `In Zotero` 标记。
+- **SC4 库内命中**：本地已收藏一篇论文，检索其标题。期望该行含 `[In Zotero: <合集名>]`；合集为空时显示 `Root`。
+- **SC5 付费墙与传输失败必须区分**：对一篇无开放获取副本的论文运行 `scholarly_read`。期望错误逐条列出尝试过的路由（`Tried: …`），并在某条路由是传输失败时提示「可能只是暂时不可达，先重试」。**不得**只说「likely behind a paywall」。
+- **SC6 全文缓存可关闭也可复用**：同一篇开放获取论文连续两次 `scholarly_read`。第二次应命中缓存（诊断中无第二次外部请求）。缓存目录不可写时，读取仍必须成功，结果附注中出现 `cache: write failed (<原因>)`。
+- **SC7 组件默认可关闭**：未启用 `dsh-zotero/scholarly` 行时，`ctx.scholarly` 不存在，七个工具均不注册；启用后出现且不与 23 个 `zotero_*` 工具重名。
 
 ## 写入用例（W）
 
@@ -411,25 +412,26 @@
 
 ## 覆盖映射
 
-| 能力维度         | 对应工具                                                                  | 关联用例       | 重点验证项                                             |
-| ---------------- | ------------------------------------------------------------------------- | -------------- | ------------------------------------------------------ |
-| 服务连接         | `/zotero`                                                                 | G1             | connected 状态、版本号获取                             |
-| 库结构           | `zotero_browse`                                                           | G1, C1, C2, S5 | 合集树、标签列表、保存搜索                             |
-| 文献检索         | `zotero_search`                                                           | G2, S1–S4      | metadata/everything 模式、合集/标签范围、笔记命中      |
-| 元数据读取       | `zotero_get`                                                              | G3, R1         | 标准字段、子笔记读取、截断标记                         |
-| 子对象读取       | `zotero_children`                                                         | G4, R2         | 笔记/附件/批注三类对象、批注独立路径                   |
-| 原文片段检索     | `zotero_retrieve`                                                         | G5, R3, R4     | 四类来源检索、批注页码准确性、多附件覆盖               |
-| 附件路径         | `zotero_attachment`                                                       | G6, N3         | 本地绝对路径与 URL、无附件处理                         |
-| 格式导出         | `zotero_export`                                                           | G7, E1–E3      | 多格式支持、样式指定、分批与面板下载                   |
-| 增量感知         | `zotero_changes`                                                          | C3, W7         | cursor 保持、写后即时感知                              |
-| 内容写入         | `create_note` / `update_item_tags` / `update_item_collections`            | W1–W3          | 审批与计划卡、合并写入、declined 状态                  |
-| 结构与元数据写入 | `create_collection` / `delete_collection` / `create_item` / `update_item` | W4, W5         | 重名拒绝、删除预览与失效、字段闭集与白名单             |
-| 库级标签删除     | `delete_library_tags`                                                     | W6             | 预览计数、库版本前置、幂等重试                         |
-| 批量条目写入     | `zotero_batch_items`                                                      | W8             | 完整计划与创建回执、未知提交不可重试、级联回收站       |
-| 子对象写入与恢复 | `update_note` / `restore_items` / `scholarly_save_to_zotero`              | W9             | 子对象版本读取、逐项回执、长度限制、状态回放及双语文案 |
-| 数据面板         | Sources 面板                                                              | G8             | 文献 / 原文片段 / 导出三页数据联动                     |
-| 边界保护         | 错误处理与防御                                                            | N1–N7          | 错误码准确性、防虚构、装配错误不静默降级               |
-| 运行诊断         | 诊断卡（插件详情页）                                                      | 附则           | 崩溃回流、级别过滤、诊断包复制                         |
+| 能力维度         | 对应工具                                                                                                                           | 关联用例               | 重点验证项                                                   |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | ------------------------------------------------------------ |
+| 服务连接         | `/zotero`                                                                                                                          | G1                     | connected 状态、版本号获取                                   |
+| 库结构           | `zotero_browse`                                                                                                                    | G1, C1, C2, S5         | 合集树、标签列表、保存搜索                                   |
+| 文献检索         | `zotero_search`                                                                                                                    | G2, S1–S4              | metadata/everything 模式、合集/标签范围、笔记命中            |
+| 元数据读取       | `zotero_get`                                                                                                                       | G3, R1                 | 标准字段、子笔记读取、截断标记                               |
+| 子对象读取       | `zotero_children`                                                                                                                  | G4, R2                 | 笔记/附件/批注三类对象、批注独立路径                         |
+| 原文片段检索     | `zotero_retrieve`                                                                                                                  | G5, R3, R4             | 四类来源检索、批注页码准确性、多附件覆盖                     |
+| 附件路径         | `zotero_attachment`                                                                                                                | G6, N3                 | 本地绝对路径与 URL、无附件处理                               |
+| 格式导出         | `zotero_export`                                                                                                                    | G7, E1–E3              | 多格式支持、样式指定、分批与面板下载                         |
+| 增量感知         | `zotero_changes`                                                                                                                   | C3, W7                 | cursor 保持、写后即时感知                                    |
+| 内容写入         | `zotero_create_note` / `zotero_update_note` / `zotero_update_item_tags` / `zotero_update_item_collections`                         | W1–W3, W9              | 审批与计划卡、合并写入、declined 状态、子对象版本读取        |
+| 结构与元数据写入 | `zotero_create_collection` / `zotero_update_collection` / `zotero_delete_collection` / `zotero_create_item` / `zotero_update_item` | W4, W5, W9             | 重名拒绝、删除预览与失效、字段闭集与白名单、合集重命名与移动 |
+| 保存搜索写入     | `zotero_create_saved_search` / `zotero_update_saved_search` / `zotero_delete_saved_search`                                         | W9                     | 条件闭集、版本前置、未核验创建不重复提交                     |
+| 库级标签删除     | `zotero_delete_library_tags`                                                                                                       | W6                     | 预览计数、库版本前置、幂等重试                               |
+| 批量条目写入     | `zotero_batch_items`                                                                                                               | W8                     | 完整计划与创建回执、未知提交不可重试、级联回收站             |
+| 回收与学术保存   | `zotero_restore_items` / `scholarly_save_to_zotero`                                                                                | W9                     | 逐项回执、长度限制、状态回放及双语文案                       |
+| 数据面板         | Sources 面板                                                                                                                       | G8                     | 文献 / 原文片段 / 导出三页数据联动                           |
+| 边界保护         | 错误处理与防御                                                                                                                     | N1–N7                  | 错误码准确性、防虚构、装配错误不静默降级                     |
+| 运行诊断         | 诊断卡（插件详情页）                                                                                                               | 见《故障排查》第 17 项 | 崩溃回流、级别过滤、诊断包复制                               |
 
 通过标准：G1 至 G8 全部通过，且 N1、N2、N4 无虚构内容。写入功能为可选；若启用，W 组（W1 至 W9）须在启用写入的独立会话中全部通过，其中 W1 的计划卡确认与 W2/W3 的幂等写入必须通过。
 

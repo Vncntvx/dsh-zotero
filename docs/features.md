@@ -8,7 +8,7 @@ dsh-zotero 让 DSH 的 LLM 对话能够直接查询和引用 Zotero 文献库。
 
 显式启用 `dsh-zotero/scholarly` 组件后，模型可以检索本地库之外的学术文献：跨 arXiv、OpenAlex、Crossref、Semantic Scholar、PubMed、Europe PMC 与 DBLP 七索引检索并按相关度融合去重，按 DOI / arXiv ID / PMID / PMCID 读取开放获取全文并做段落级定位，追踪引文网络，从 DOI 注册中心取标准引用格式（BibTeX、RIS、CSL JSON、CSL 样式文本），核验一份参考文献列表的真伪与字段一致性，并在用户明确要求时保存到本地 Zotero。
 
-它与本地库能力互补而非替代：检索结果会标出「已在本地库」的条目，但只读。
+它与本地库能力互补而非替代：检索结果会标出「已在本地库」的条目，该标注只读。
 
 ## 搜索文献
 
@@ -20,7 +20,7 @@ dsh-zotero 让 DSH 的 LLM 对话能够直接查询和引用 Zotero 文献库。
 - 搜索范围：
   - 整个文献库（默认）；
   - 个人出版物（`publications`）；
-  - 按名称或 ref 指定集合（`collection`）；
+  - 按名称或 ref 指定合集（`collection`）；
   - 按名称或 ref 指定保存的搜索（`savedSearch`）。
 
 首次查询（offset 0）会分批扫描笔记正文，命中条目列入 `supplemental`，不计入分页总数。搜索结果返回稳定的 `zotero://` 引用标识供后续工具使用。
@@ -82,7 +82,7 @@ dsh-zotero 让 DSH 的 LLM 对话能够直接查询和引用 Zotero 文献库。
 | `ris`          | RIS 格式文本                             |
 | `csljson`      | CSL-JSON 数据                            |
 
-可选通过 `style` 和 `locale` 参数指定引用样式与语言环境。`citation` 模式超过 50 个 key 时自动分批请求。
+可选通过 `style` 和 `locale` 参数指定引用样式与语言环境。除 `citation` 外的五种格式单次最多导出 50 篇；`citation` 是唯一会分批的格式，需将 `maxExportRefs` 调至 50 以上才会触发分批。
 
 ## 写入个人库（可选）
 
@@ -115,7 +115,7 @@ DSH 对话中，Zotero 工具调用由专用只读卡片（`tool.call.toolview`�
 - **子对象（`zotero_children`）**：按类型分区展示子笔记、附件与带颜色高亮的 PDF 批注；
 - **库结构与变更（`zotero_browse` / `zotero_changes`）**：`zotero_browse` 展示层级合集树、标签列表及分页信息；`zotero_changes` 展示版本区间内的增量条目、删除记录及安全游标；
 - **原文定位（`zotero_attachment`）**：展示定位到的文件路径或链接，提供复制与快速打开选项；
-- **个人库写操作（15 个写工具）**：展示目标条目、笔记摘要、计划中的标签与合集增删、合集/条目创建与删除、Trash 恢复、保存搜索与全库标签删除；回执区分“已生效”“无变化（No change）”“结果未核验”与“已拒绝”，不可逆删除在计划卡上先行声明。
+- **个人库写操作（15 个写工具）**：展示目标条目、笔记摘要、计划中的标签与合集增删、合集/条目创建与删除、Trash 恢复、保存搜索与全库标签删除；回执区分“已生效”“无变更（No change）”“结果未报告”与“已拒绝”，不可逆删除在计划卡上先行声明。
 
 卡片默认采用紧凑折叠摘要，展开时惰性渲染详情，并同步反映工具执行生命周期。
 

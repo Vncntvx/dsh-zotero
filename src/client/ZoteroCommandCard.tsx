@@ -202,8 +202,7 @@ export function ZoteroCommandCard({
 
     // The re-probe action sits outside the fact branch on purpose: a card that
     // expanded to raw text (an errored command, or a session that logged no
-    // snapshot) is exactly the case where a user most wants to try again, and
-    // it used to be the one view with no way to.
+    // snapshot) is exactly the case where a user most wants to try again.
     const actions =
       probe === undefined ? null : (
         <div className={css.actionsRow}>

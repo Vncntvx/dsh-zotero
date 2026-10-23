@@ -8,7 +8,7 @@ dsh-zotero allows DSH LLM conversations to search, inspect, and cite your local 
 
 When the `dsh-zotero/scholarly` component is explicitly enabled, the model can search beyond the local library: across seven indexes (arXiv, OpenAlex, Crossref, Semantic Scholar, PubMed, Europe PMC, DBLP) with fused, deduplicated ranking; read open-access full texts by DOI / arXiv ID / PMID / PMCID with passage-level location; follow citation networks; pull canonical citation formats from DOI registration agencies (BibTeX, RIS, CSL JSON, CSL-styled text); verify a reference list for fabricated entries and field mismatches; and save an external result to local Zotero only when explicitly requested.
 
-It complements the local-library capabilities rather than replacing them: hits are annotated when already held, read-only.
+It complements the local-library capabilities rather than replacing them: hits already in the library are annotated, and the annotation is read-only.
 
 ## Literature Search
 
@@ -82,7 +82,7 @@ Note: Reading PDF content depends on host environment capabilities; dsh-zotero r
 | `ris`          | RIS text                                        |
 | `csljson`      | CSL-JSON data                                   |
 
-Optional `style` and `locale` parameters set the citation format. Requests exceeding 50 keys in `citation` mode are automatically batched.
+Optional `style` and `locale` parameters set the citation format. The five non-`citation` formats accept at most 50 items per call; `citation` is the only format that batches, and it does so only once `maxExportRefs` is raised above 50.
 
 ## Optional Personal-Library Writes
 

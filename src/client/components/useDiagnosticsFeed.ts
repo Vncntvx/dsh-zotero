@@ -1,3 +1,11 @@
+/**
+ * The diagnostics card's live feed over the `zotero/diagnostics` snapshot
+ * endpoint. Polling lives here rather than in the card so the interval, the
+ * visibility check, and the in-flight guard have one owner.
+ *
+ * @module dsh-zotero/client/useDiagnosticsFeed
+ */
+
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ZoteroDiagnosticsView } from '../../contract.ts'

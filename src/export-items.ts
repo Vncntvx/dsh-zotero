@@ -7,8 +7,8 @@
  * string and each side compiles its own `RegExp`. Field extraction lives beside
  * it because the host reads titles, DOIs, years, and authors out of one entry
  * with it. RIS and CSL JSON entries are parsed by the locators in
- * `export-mapping.ts`, which are their only readers: a per-format parser here
- * served call paths that no longer exist.
+ * `export-mapping.ts`, which are their only readers; this module holds no
+ * per-format parser.
  * @module dsh-zotero/export-items
  */
 

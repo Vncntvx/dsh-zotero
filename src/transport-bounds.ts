@@ -2,11 +2,10 @@
  * Bounded response-body readers shared by the local Zotero transport and the
  * scholarly transport.
  *
- * One implementation, because two would disagree: the scholarly stack used to
- * accumulate `Uint8Array` chunks and copy them into a fresh buffer, while the
- * Zotero stack decoded incrementally — and the scholarly default bound was
- * twice the size. These helpers decode as they read, so a large body costs one
- * pass and one string.
+ * One implementation, because two would disagree: a stack that accumulates
+ * `Uint8Array` chunks and copies them into a fresh buffer also carries its own
+ * default ceiling, and the two ceilings drift apart. These helpers decode as
+ * they read, so a large body costs one pass and one string.
  *
  * @module dsh-zotero/transport-bounds
  */

@@ -15,6 +15,7 @@ src/
   config.ts             # 配置 Schema 与校验逻辑
   types.ts              # 领域 DTO 与类型定义
   contract.ts           # Remote wire 协议面与常量
+  diagnostics.ts        # 进程内诊断环形缓冲、条目模型与接收器
   status-codec.ts       # Host 端状态解码（zod）
   abort.ts              # 调用方取消错误的唯一拼写（harness TOOL_ABORTED）
   errors.ts             # 错误类与错误码
@@ -24,8 +25,10 @@ src/
   changes-contract.ts   # changes 投影的共享 wire 描述符
   projection-keys.ts    # zoteroStatus 投影键与类型合并（端侧共享）
   session-events.ts     # zotero/status 会话事件与状态→wire 视图折叠
-  status-projection.ts  # zoteroStatus 会话投影单元（last-value fold）
-  constants.ts          # 常量定义
+  status-projection.ts     # zoteroStatus 会话投影单元（last-value fold）
+  transport-bounds.ts      # 本地与学术两套传输共用的响应体上限判定
+  transport-diagnostics.ts # 传输层诊断行记录（请求行、取消与降级）
+  constants.ts             # 常量定义
   concurrency.ts        # 有界并发控制器
   job-runner.ts         # 重型工具的 ctx.jobs 后台任务适配
   evidence.ts           # BM25 排序算法
@@ -68,6 +71,10 @@ npm run verify:pack          # 校验打包产物文件完整性
 npm run smoke                # 生产栈冒烟：在 dsh profile 内对真实 Zotero 调用全部读工具
 npm run smoke:discovery      # 打包产物 → 临时 profile → dsh web 启动探针
 npm run release:branch       # 切出可发布的 release 分支（清单驱动）
+npm run release:check        # 发布门禁：格式、版本钉、测试、类型、覆盖率、构建、打包
+npm run link:local-harness   # 将 @deepseek-ai/dsh-* 依赖链接到 sibling 检出
+npm run dev                  # 监听 Node 端源码并增量编译
+npm run dev:client           # 监听浏览器端源码并增量打包
 npm run lint:test            # 仅运行测试规范守卫
 npm run test:watch           # vitest watch 模式
 npm run format               # 执行 Prettier 格式化
@@ -156,7 +163,7 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 
 ## 发布检查清单
 
-`package.json` 的 `release:check` 定义了发布门禁。它按顺序执行前七步，任一步失败即中断：
+`package.json` 的 `release:check` 定义了发布门禁。下列第 1 至 7 步由该脚本按顺序执行，任一步失败即中断；第 8 项为脚本之外的人工验证：
 
 1. `npm run format:check`：Prettier 格式检查；
 2. `npm run harness:check -- --strict`：版本钉、上游声明与 vendored 框架版本须对齐，过期产物在该模式下变为错误（`release:check` 直接以 `node scripts/harness-state.mjs --strict` 调用同一脚本）；
@@ -165,6 +172,6 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 5. `npm run test:coverage`：全量 vitest 测试与分层覆盖率门禁；
 6. `npm run build`：生产构建（`tsc` → `lib/`，esbuild → `lib/client.js`）；
 7. `npm run verify:pack`：校验打包 tarball 的必需文件；
-8. 人工验证 [使用场景](scenarios.md) 中的主流程用例（G1 至 G8），若启用写入需验证 W1 至 W8。
+8. 人工验证 [使用场景](scenarios.md) 中的主流程用例（G1 至 G8），若启用写入需验证 W1 至 W9。
 
 `npm test` 与发布门禁不等价：它执行 `node scripts/test-lint.mjs` 加 `vitest run`（不跑覆盖率门禁），是日常回归命令；发布路径把这两件事分别交给第 3 步和第 5 步。

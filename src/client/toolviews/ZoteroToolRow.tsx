@@ -76,9 +76,8 @@ export function ZoteroToolRow({
   const state = isPreparing ? 'preparing' : rowStateOf(block)
   // Both write verdicts read the outcome through the one decoder, so a fourth
   // outcome added to the write projection cannot be classified here but not
-  // there. `isDeclined` used to be its own `presenters` helper reading
-  // `meta.kind` directly, which put a value-import cycle between `presenters`
-  // and `decoders` to save one line.
+  // there. Reading `meta.kind` directly instead would put a value-import
+  // cycle between `presenters` and `decoders` to save one line.
   const writeKind = writeMetaOf(metaOf(block) ?? {}).kind
   const isDeclined = writeKind === 'declined'
   // A write that committed but could not be verified is neither a success nor

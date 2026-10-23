@@ -97,7 +97,27 @@ Agent → zotero_export(refs: ["zotero://user/0/item/ABCD1234",
 | `zotero_attachment` | 获取文献关联的本地 PDF 文件路径                            |
 | `zotero_export`     | 生成格式化引用、参考文献列表，或导出 BibTeX、RIS、CSL JSON |
 
-全部 23 个宿主工具的参数定义见 [工具参考](docs/tools.md)。
+写入工具（默认关闭，开启后仅写入个人库）：
+
+| 工具                             | 用途                                                   |
+| -------------------------------- | ------------------------------------------------------ |
+| `zotero_create_note`             | 创建独立笔记或条目子笔记，支持标签、合集与来源关联     |
+| `zotero_update_note`             | 按版本前置替换已有笔记正文，创建与更新共用同一字符上限 |
+| `zotero_update_item_tags`        | 在一次调用中增删条目标签，保留既有标签类型             |
+| `zotero_update_item_collections` | 在一次调用中增删条目的合集归属                         |
+| `zotero_create_collection`       | 创建顶层或子合集，同级同名拒绝                         |
+| `zotero_update_collection`       | 重命名合集或移动其父合集                               |
+| `zotero_delete_collection`       | 删除合集（不可逆），计划卡先给出条目数与子合集数       |
+| `zotero_create_item`             | 从闭合字段集创建文献条目                               |
+| `zotero_update_item`             | 订正条目标量元数据，字段合法性按条目类型校验           |
+| `zotero_restore_items`           | 将回收站条目恢复为活动状态，逐项返回回执               |
+| `zotero_create_saved_search`     | 创建保存搜索，至少需要一个条件                         |
+| `zotero_update_saved_search`     | 更新保存搜索的名称或条件                               |
+| `zotero_delete_saved_search`     | 删除保存搜索                                           |
+| `zotero_delete_library_tags`     | 按名称全库删除标签（不可逆），未命中的名称可安全重试   |
+| `zotero_batch_items`             | 批量创建文献、更新标签与合集归属、移入回收站，合并确认 |
+
+全部 23 个宿主工具的参数定义见 [工具参考](docs/tools.md)。学术文献检索另属 `dsh-zotero/scholarly` 组件，默认关闭。
 
 ## 安全与隐私
 
@@ -112,7 +132,7 @@ Agent → zotero_export(refs: ["zotero://user/0/item/ABCD1234",
 | [快速入门](docs/getting-started.md) | 安装步骤、前置条件与连接验证             |
 | [功能概览](docs/features.md)        | Sources 来源面板、对话集成与导出工作流   |
 | [工具参考](docs/tools.md)           | 全部 23 个宿主工具的参数、返回值与错误码 |
-| [配置参考](docs/configuration.md)   | 35 个配置项说明与默认值                  |
+| [配置参考](docs/configuration.md)   | 37 个配置项说明与默认值                  |
 | [系统架构](docs/architecture.md)    | 数据流、分层职责与设计边界               |
 | [开发指南](docs/development.md)     | 构建、测试、调试与发布流程               |
 | [使用场景](docs/scenarios.md)       | 典型对话用例与使用示例                   |

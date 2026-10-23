@@ -167,7 +167,8 @@ Returns `{kind: "background", jobId}` or `{kind: "promoted", jobId, timeoutMs, m
 
 ### Notes
 
-- In `citation` mode, requests exceeding 50 keys batch automatically;
+- The ref count is capped by `maxExportRefs` (default 50) first. The five non-`citation` formats (`bibliography`, `bibtex`, `biblatex`, `ris`, `csljson`) accept at most 50 items per call, which is Zotero's `itemKey` request cap, and are refused above it rather than batched;
+- `citation` is the only format that batches: above 50 refs it sends 50-key requests one after another. The default `maxExportRefs` is also 50, so batching only takes effect once that setting is raised above 50;
 - `bibtex`, `biblatex`, `ris`, and `csljson` export the whole set through batch requests: `ris` and `csljson` send 1 local API batch request, while `bibtex` and `biblatex` run a 2nd batch request in parallel to fetch the items' raw metadata for field alignment. The returned text is parsed in memory, and each entry is matched to its ref by key or metadata fingerprint rather than by position; a ref that cannot be located comes back as a bare ref. If the metadata request fails (e.g. Zotero answers 5xx), the export still completes: the body is returned as-is and the unpaired refs stay bare. A caller abort is not such a degradation and still propagates. One call carries at most 50 items;
 - All refs in a single export call must belong to the same library.
 
@@ -477,7 +478,7 @@ Success returns `{kind: "applied", ref, version, libraryVersion, serverId?}`. A 
 
 ## zotero_update_collection
 
-Updates a collection name or parent collection. Omitting `parent` preserves the current parent; native callers may pass `null` to move it to the top level. Writes use the collection object version as the precondition.
+Updates a collection name or parent collection. The call is refused when neither `name` nor `parent` is given, when the name is blank, when the target does not exist, when the parent is outside the personal library, or when the version precondition fails. Omitting `parent` preserves the current parent; native callers may pass `null` to move it to the top level. Writes use the collection object version as the precondition.
 
 ### Parameters and output
 
@@ -618,7 +619,7 @@ zotero_batch_items(
 Write tools are disabled by default, require `writeEnabled` in configuration, and operate exclusively on personal libraries (`zotero://user/0/`).
 
 1. Dual confirmation:
-   - Session approval policy (`ctx.approval.request`): follows session policy; auto-declines if policy is `never`;
+   - Session approval policy (`ctx.approval.request`): follows session policy; auto-declines if policy is `never`; the prompt copy varies by blast radius: a plain add or change, a recoverable move to Trash, or an irreversible deletion;
    - Plan review card: presents exact Markdown changes for user approval before writing; unapproved requests return `{kind: "declined"}`.
 2. Local API authentication:
    - Write operations require a locally issued Zotero API key;
@@ -674,7 +675,7 @@ The bundle component `dsh-zotero/scholarly` is available but disabled by default
 
 ### scholarly_search
 
-Cross-repository scholarly literature retrieval across arXiv, OpenAlex, Crossref, Semantic Scholar, PubMed, Europe PMC, and DBLP. Features automatic semantic routing, multi-list RRF deduplication, and collision detection against the local Zotero library.
+Cross-repository scholarly literature retrieval across arXiv, OpenAlex, Crossref, Semantic Scholar, PubMed, Europe PMC, and DBLP. Features automatic semantic routing, RRF fusion with cross-index deduplication, and markers for papers already in the local Zotero library.
 
 #### Parameters
 
@@ -682,10 +683,10 @@ Cross-repository scholarly literature retrieval across arXiv, OpenAlex, Crossref
 | ------------- | -------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `query`       | string   | — (required)  | Topic keywords, paper title, or author name                                                                                                        |
 | `sources`     | string[] | —             | Optional source filter (`arxiv`, `openalex`, `crossref`, `semanticscholar`, `pubmed`, `europepmc`, `dblp`); defaults to automatic semantic routing |
-| `year_from`   | integer  | —             | Minimum publication year. With `sort="date"` and this omitted, defaults to the past 2 years.                                                       |
+| `year_from`   | integer  | —             | Minimum publication year. With `sort="date"` and this omitted, defaults to the previous year.                                                      |
 | `year_to`     | integer  | —             | Maximum publication year                                                                                                                           |
 | `open_access` | boolean  | —             | Filter for papers with free open-access full text                                                                                                  |
-| `sort`        | string   | `"relevance"` | Result ranking: `relevance`, `date` (newest first, defaults to the past 2 years when `year_from` is omitted), `citations` (most cited first)       |
+| `sort`        | string   | `"relevance"` | Result ranking: `relevance`, `date` (newest first, defaults to the previous year when `year_from` is omitted), `citations` (most cited first)      |
 | `categories`  | string[] | —             | arXiv categories filter (e.g. `cs.CL`, `stat.ML`)                                                                                                  |
 | `limit`       | integer  | `8`           | Maximum number of papers returned                                                                                                                  |
 | `abstract`    | string   | `"snippet"`   | Abstract display verbosity: `none`, `snippet`, `full`                                                                                              |

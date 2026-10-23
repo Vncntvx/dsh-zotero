@@ -97,7 +97,27 @@ The plugin includes 8 read tools and 15 write tools. Write tools are disabled by
 | `zotero_attachment` | Resolve an item to its local PDF file path                                                |
 | `zotero_export`     | Generate formatted citations or export BibTeX, RIS, and CSL JSON                          |
 
-See [Tool reference](docs/tools.en.md) for complete parameter definitions of all 17 tools.
+Write tools (disabled by default; they write to the personal library only):
+
+| Tool                             | Purpose                                                                                        |
+| -------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `zotero_create_note`             | Create a standalone note or a child note, with tags, collections, and sources                  |
+| `zotero_update_note`             | Replace an existing note body under a version precondition, same character ceiling as creation |
+| `zotero_update_item_tags`        | Add and remove an item's tags in one call, preserving existing tag types                       |
+| `zotero_update_item_collections` | Add and remove an item's collection membership in one call                                     |
+| `zotero_create_collection`       | Create a top-level or nested collection; same-name siblings are refused                        |
+| `zotero_update_collection`       | Rename a collection or move it under a different parent                                        |
+| `zotero_delete_collection`       | Delete a collection (irreversible); the plan card reports item and child counts                |
+| `zotero_create_item`             | Create an item from a closed field set                                                         |
+| `zotero_update_item`             | Correct an item's scalar metadata, validated against its type                                  |
+| `zotero_restore_items`           | Restore items from the Trash, reporting each entry separately                                  |
+| `zotero_create_saved_search`     | Create a saved search, which needs at least one condition                                      |
+| `zotero_update_saved_search`     | Update a saved search name or its conditions                                                   |
+| `zotero_delete_saved_search`     | Delete a saved search                                                                          |
+| `zotero_delete_library_tags`     | Delete tags library-wide by name (irreversible); missed names are safe to retry                |
+| `zotero_batch_items`             | Create, retag, recollection, or trash items in one call, under one plan card                   |
+
+See [Tool reference](docs/tools.en.md) for complete parameter definitions of all 23 host tools. The scholarly literature tools belong to the `dsh-zotero/scholarly` component, which is off by default.
 
 ## Security and privacy
 
@@ -112,7 +132,7 @@ See [Tool reference](docs/tools.en.md) for complete parameter definitions of all
 | [Getting started](docs/getting-started.en.md)       | Installation, prerequisites, and connection verification      |
 | [Features](docs/features.en.md)                     | Sources panel, chat integration, and export workflows         |
 | [Tool reference](docs/tools.en.md)                  | Parameters, return values, and error codes for all 17 tools   |
-| [Configuration reference](docs/configuration.en.md) | 35 configuration fields and default values                    |
+| [Configuration reference](docs/configuration.en.md) | 37 configuration fields and default values                    |
 | [Architecture](docs/architecture.en.md)             | Data flow, layer responsibilities, and design boundaries      |
 | [Development guide](docs/development.en.md)         | Build, test, local development, and release workflow          |
 | [Scenarios](docs/scenarios.en.md)                   | Real-conversation acceptance cases and everyday usage prompts |

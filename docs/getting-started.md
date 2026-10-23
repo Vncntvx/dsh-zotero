@@ -96,7 +96,7 @@ Schema version: 44
 Server ID: Cq1f76x70ESV
 ```
 
-这些版本行取自应答 Zotero 返回的响应头，因此随你的 Zotero 版本变化。`API version` 是插件在每个请求上固定的本地 API 版本（3）；不支持该版本的 Zotero 构建会返回 501。
+这些版本行取自 Zotero 应答的响应头，因此随你的 Zotero 版本变化。`API version` 是插件在每个请求上固定的本地 API 版本（3）；不支持该版本的 Zotero 构建会返回 501。
 
 若提示无法连接，请检查：
 

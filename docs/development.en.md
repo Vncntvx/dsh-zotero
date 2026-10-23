@@ -15,6 +15,7 @@ src/
   config.ts             # Configuration schema and validation logic
   types.ts              # Domain DTOs and type definitions
   contract.ts           # Remote wire protocol surface and constants
+  diagnostics.ts        # In-process diagnostics ring buffer, entry model, and sink
   status-codec.ts       # Host-side status decoding (zod)
   abort.ts              # The one spelling of the caller-cancellation error (harness TOOL_ABORTED)
   errors.ts             # Error classes and error codes
@@ -24,8 +25,10 @@ src/
   changes-contract.ts   # Shared wire descriptors for the changes projection
   projection-keys.ts    # The zoteroStatus projection key and its type merge (shared across client/host)
   session-events.ts     # The zotero/status session event and the status-to-wire view fold
-  status-projection.ts  # The zoteroStatus session projection unit (last-value fold)
-  constants.ts          # Constant definitions
+  status-projection.ts     # The zoteroStatus session projection unit (last-value fold)
+  transport-bounds.ts      # Response-body ceiling shared by the local and scholarly transports
+  transport-diagnostics.ts # Transport-layer diagnostic line recording (requests, cancellation, degradation)
+  constants.ts             # Constant definitions
   concurrency.ts        # Bounded concurrency controller
   job-runner.ts         # ctx.jobs background-job adapter for the heavy tools
   evidence.ts           # BM25 ranking algorithm
@@ -68,6 +71,10 @@ npm run verify:pack          # Validate package tarball integrity
 npm run smoke                # Production-stack smoke: every read tool against a live Zotero from a dsh profile
 npm run smoke:discovery      # Packed tarball → throwaway profile → dsh web boot probe
 npm run release:branch       # Cut the publishable release branch (manifest-driven)
+npm run release:check        # Release gate: format, version pin, tests, types, coverage, build, pack
+npm run link:local-harness   # Link @deepseek-ai/dsh-* dependencies to the sibling checkout
+npm run dev                  # Watch Node-half sources and compile incrementally
+npm run dev:client           # Watch browser-half sources and bundle incrementally
 npm run lint:test            # Run the test-lint guards only
 npm run test:watch           # vitest watch mode
 npm run format               # Format code with Prettier
@@ -156,7 +163,7 @@ To inspect runtime behavior or investigate issues, enable "Diagnostic mode" in c
 
 ## Release Checklist
 
-`release:check` in `package.json` defines the release gate. It runs the first seven steps in order and stops at the first failure:
+`release:check` in `package.json` defines the release gate. It runs steps 1 through 7 in order and stops at the first failure; step 8 is the manual verification outside the script:
 
 1. `npm run format:check`: Prettier formatting check.
 2. `npm run harness:check -- --strict`: version pin, upstream declarations, and vendored framework versions must align; stale artifacts become errors in this mode (`release:check` invokes the same script directly as `node scripts/harness-state.mjs --strict`).
@@ -165,6 +172,6 @@ To inspect runtime behavior or investigate issues, enable "Diagnostic mode" in c
 5. `npm run test:coverage`: the full vitest suite plus the per-layer coverage gates.
 6. `npm run build`: production build (`tsc` → `lib/`, esbuild → `lib/client.js`).
 7. `npm run verify:pack`: validate the required files in the packed tarball.
-8. Verify golden path scenarios (G1 through G8) in [Scenarios](scenarios.en.md); verify W1 through W8 as well if write operations are enabled.
+8. Verify golden path scenarios (G1 through G8) in [Scenarios](scenarios.en.md); verify W1 through W9 as well if write operations are enabled.
 
 `npm test` is not the release gate: it runs `node scripts/test-lint.mjs` plus `vitest run` without coverage thresholds, which is the day-to-day regression command. The release path splits those two concerns into steps 3 and 5.

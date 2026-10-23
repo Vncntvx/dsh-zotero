@@ -91,7 +91,7 @@ export function createScholarlySearchTool(host: ScholarlyToolHost): ToolDefiniti
         enum: ['relevance', 'date', 'citations'],
         default: 'relevance',
         description:
-          'Result order: relevance, date (newest first; defaults to past 2 years if year_from omitted), citations (most cited first).',
+          'Result order: relevance, date (newest first; defaults to the previous year if year_from omitted), citations (most cited first).',
       },
       categories: {
         type: 'array',

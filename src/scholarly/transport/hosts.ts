@@ -1,15 +1,12 @@
 /**
  * The one declaration of every scholarly host.
  *
- * Three tables used to answer "which hosts do we talk to" — the allowlist, the
- * pacer's interval map, and the adapters' own literals — and they disagreed:
- * `api.openalex.org` (the busiest index, reached by every routing branch) had
- * no pacing entry while `arxiv.org` was paced even though the adapter calls
- * `export.arxiv.org`. A host list that exists three times has three answers.
- *
- * This table is the single source: the allowlist derives its accepted set from
- * it, and the pacer derives its intervals from it. A host that wants to be
- * fetched must be added here, which is exactly the review this list needs.
+ * A host list that exists three times has three answers: an allowlist entry
+ * without a pacing entry leaves a busy index unthrottled, and a paced host the
+ * adapter never calls throttles nothing. This table is the single source: the
+ * allowlist derives its accepted set from it, and the pacer derives its
+ * intervals from it. A host that wants to be fetched must be added here, which
+ * is exactly the review this list needs.
  *
  * @module dsh-zotero/scholarly/transport/hosts
  */

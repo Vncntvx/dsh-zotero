@@ -1,3 +1,12 @@
+/**
+ * The shared live-probe hook behind the `/zotero` command card and the
+ * plugin-detail status card. Both read the same `zoteroStatus` endpoint and
+ * neither may stack calls on it, so the in-flight and unmount guards live here
+ * rather than in each caller.
+ *
+ * @module dsh-zotero/client/useZoteroProbe
+ */
+
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ZoteroStatusView } from '../../contract.ts'

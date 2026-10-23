@@ -56,8 +56,8 @@
 ## 9. 单次导出超过 50 篇限制
 
 - **现象**：工具调用返回 `ZOTERO_INVALID_ARGUMENT` 错误，提示 refs 数量超出限制。
-- **原因**：BibTeX、BibLaTeX、RIS 与 CSL JSON 格式单次最多支持导出 50 篇条目。
-- **排查**：分批次调用 `zotero_export`，每批控制在 50 篇以内；`citation` 格式会自动分批。
+- **原因**：除 `citation` 外的五种格式（`bibliography`、BibTeX、BibLaTeX、RIS 与 CSL JSON）单次最多导出 50 篇条目，来源是 Zotero `itemKey` 的请求上限。
+- **排查**：分批次调用 `zotero_export`，每批控制在 50 篇以内；或改用 `citation` 格式，它按 50 一组自动分批，但需先将 `maxExportRefs` 调至 50 以上。
 
 ## 10. Server ID 或 ref 不匹配
 

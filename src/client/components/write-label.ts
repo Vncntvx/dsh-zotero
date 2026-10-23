@@ -1,3 +1,12 @@
+/**
+ * The one rendering of the write-capability pair (enabled, authorized) into a
+ * localized label. The three states are mutually exclusive, so every surface
+ * that reports write readiness reads them from here instead of restating the
+ * branch.
+ *
+ * @module dsh-zotero/client/write-label
+ */
+
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 
 /**

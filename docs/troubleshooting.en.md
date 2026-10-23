@@ -56,8 +56,8 @@ This document lists common issues, causes, and diagnostic steps when using dsh-z
 ## 9. Export Exceeds 50-Item Limit
 
 - **Symptom**: Tool calls return `ZOTERO_INVALID_ARGUMENT`, indicating too many references.
-- **Cause**: BibTeX, BibLaTeX, RIS, and CSL JSON formats accept at most 50 items per call.
-- **Fix**: Split the export into batches of 50 or fewer; `citation` format batches automatically.
+- **Cause**: The five non-`citation` formats (`bibliography`, BibTeX, BibLaTeX, RIS, and CSL JSON) accept at most 50 items per call, which is Zotero's `itemKey` request cap.
+- **Fix**: Call `zotero_export` in batches of at most 50 items, or switch to the `citation` format, which batches automatically in groups of 50 once `maxExportRefs` is raised above 50.
 
 ## 10. Server ID or Ref Mismatch
 

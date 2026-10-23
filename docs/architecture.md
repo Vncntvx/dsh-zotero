@@ -38,7 +38,7 @@ graph LR
 - 读路径的并发由 `searchConcurrency`、`graphConcurrency` 两个限额约束，避免单次调用对本地 API 造成瞬时过载；
 - 笔记内容扫描在第一页（offset 0）按限额执行；
 - 原文片段基于 BM25 词频算法排序；
-- 导出服务遵循 Zotero 本地接口的单次请求限制：`bibtex`、`biblatex`、`ris`、`csljson` 四种批量格式都只分批取一次条目（`itemKey` 单次上限 50 条），不再为每条单独抓取；`ris`/`csljson` 只需该次批请求，`bibtex`/`biblatex` 另外并行发出一次元数据批请求（`fetchRawItemBatch`），用于把导出结果对齐到各条目；
+- 导出服务遵循 Zotero 本地接口的单次请求限制：除 `citation` 外的五种格式（`bibliography`、`bibtex`、`biblatex`、`ris`、`csljson`）都在单次请求内取回全部条目（`itemKey` 单次上限 50 条），不再为每条单独抓取，超出 50 条直接拒绝；`ris`/`csljson` 只需该次批请求，`bibtex`/`biblatex` 另外并行发出一次元数据批请求（`fetchRawItemBatch`），用于把导出结果对齐到各条目；`citation` 是唯一分批的格式，按 50 一组发出多个请求；
 - 写入领域支持跨库文献关系（`dc:relation`），群组库条目自动映射至规范的 `http://zotero.org/groups/<id>/items/<key>` URI。
 
 ### 后台任务引擎 (`src/job-runner.ts`)
@@ -69,7 +69,7 @@ graph LR
 
 `dsh-zotero/scholarly` 是一个独立的 bundle 组件（`cordis.patch.yml` 中默认随插件一同启用），注册 `ctx.scholarly` 与七个检索工具。它与 Zotero 本地路径完全隔离：所有请求发往外部学术索引，与 `ctx.zotero` 的唯一交叉点是「这封信是否已在本地库」的只读标注。
 
-- **主机白名单**：`src/scholarly/transport/hosts.ts` 是唯一真源。允许的 host 集合与每主机限流间隔都从 `SCHOLARLY_HOSTS` 派生，`allowlist.ts` 不再自带一份列表——两份列表曾经互相矛盾（最忙的 `api.openalex.org` 没有限流条目，而适配器实际调用的是 `export.arxiv.org`）。
+- **主机白名单**：`src/scholarly/transport/hosts.ts` 是唯一真源。允许的 host 集合与每主机限流间隔都从 `SCHOLARLY_HOSTS` 派生。白名单收录了主机却没配限流间隔，繁忙索引便会失去限流；为适配器从不调用的主机配上限流间隔，也约束不了任何请求。要新增抓取目标必须登记到这张表。
 - **传输层**：截止时间用 `@deepseek-ai/dsh-timeout` 的 `deadline()` / `timeoutOf()`，因此「provider 超时」与「调用方取消」是两件可分辨的事（后者不重试）；响应体上限用共享的 `src/transport-bounds.ts`，与本地传输同一实现、同一 16 MiB 上限；在飞请求数由 `ConcurrencyGate` 约束。
 - **凭证**：三个 `role('secret')` 声明的 API Key 中，Semantic Scholar 与 OpenAlex 走请求头（`x-api-key` / `Authorization: Bearer`）；NCBI E-utilities 只接受 query 参数，因此该密钥经 URL 传递，代价由传输层承担——`ScholarlyHttpError` 只携带 host，拒绝消息也只报 hostname，绝不内插完整 URL。
 - **全文缓存**：`src/scholarly/fulltext/store.ts` 在 `dshCachePath('zotero-scholarly')` 下按 key 存一份 JSON 正文，内存只保留 8 条索引。不使用 `ctx.storageDomain`：其 `KvTable.get()` 是整表常驻内存的同步读，而单篇正文可达 200 KB。读结果分三态（`hit` / `miss` / `corrupt`），损坏条目会被驱逐并记录，不会被当作「没有」。

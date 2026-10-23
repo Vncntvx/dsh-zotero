@@ -13,6 +13,7 @@ Case numbering conventions:
 - **G**: Golden Path. Executed sequentially from G1 to G8 in a single session, covering all 8 read tools and the Sources panel;
 - **S / R / E / C**: Independent capability packs. Used to test specific domains when a golden path step fails (search, retrieval, export, library structure);
 - **N**: Negative boundary cases. Validates error handling and anti-hallucination behavior under abnormal inputs and boundary conditions;
+- **SC**: Scholarly cases. Run with the `dsh-zotero/scholarly` component explicitly enabled; they verify what the tools say when they fail, not only the happy path;
 - **W**: Write cases. Requires enabling "Allow writes" in settings first; recommended for execution in an isolated session.
 
 Execution guidelines:
@@ -279,6 +280,18 @@ Validates boundary conditions and error handling; can run continuously in a sing
 
 The browser half mounts `remote.zotero` itself (`ctx.remote.$mount` + `ctx.inject(['remote.zotero', …])`). If that mount rejects (the gateway is not ready, the namespace name collides), the plugin entry rejects and the harness marks the plugin as failed to load; it does not fall back to a state where the tab is present and the status strip reports a fault. To verify: the browser console shows the plugin load error, and neither `conversation.view` nor `plugins.detail.section` is registered, so no half-assembled tab appears. This is the intended assembly contract: a surface whose status strip can never answer is not a working plugin. Used to confirm an assembly error is never swallowed.
 
+## Scholarly Cases (SC)
+
+Run with the `dsh-zotero/scholarly` component enabled. These cases verify **what the tool says when it fails**, not only the happy path: a tool that reports a rate limit as "does not exist" makes a user delete a correct citation.
+
+- **SC1 An unreachable registry must not read as "does not exist"**: with the network cut (or Crossref answering 5xx), run `scholarly_verify` on a reference that genuinely exists. Expect `UNVERIFIED` with a note naming `Crossref lookup failed` and the status; `NOT FOUND` must not appear. Acceptance: the summary reads `0 not found` and `1 unverified`.
+- **SC2 A genuine absence still reads NOT FOUND**: use a DOI that does not exist and whose Crossref title search returns nothing. Expect `NOT FOUND` with `No matching publication record found in Crossref.` SC1 and SC2 must be distinguishable.
+- **SC3 An absent library annotation is not "not held"**: make local Zotero unreachable (quit Zotero) and run `scholarly_search`. Expect `Library status unavailable for N of M results`; the hits must not silently all lack the `In Zotero` mark.
+- **SC4 In-library hit**: search the title of a paper already in the library. That row must carry `[In Zotero: <collection>]`, or `Root` when the item has no collection.
+- **SC5 Paywall and transport failure stay distinct**: run `scholarly_read` on a paper with no open-access copy. Expect every attempted route listed (`Tried: …`), and — when a route failed at the transport — a note that the copy may merely be unreachable and worth retrying. It must not claim only "likely behind a paywall".
+- **SC6 The full-text cache can be off or reused**: read one open-access paper twice. The second read hits the cache (no second outbound request in diagnostics). When the cache directory is unwritable the read must still succeed, and the result's notes carry `cache: write failed (<reason>)`.
+- **SC7 The component is off by default**: without the `dsh-zotero/scholarly` row, `ctx.scholarly` does not exist and none of the seven tools register; with it enabled they appear and collide with none of the 23 `zotero_*` tools.
+
 ## Write Cases (W)
 
 Enable "Allow writes" in the dsh-zotero detail page's configuration section in the plugin manager. Write operations must pass the session approval policy check (`approval/policy`; a policy of `never` auto-rejects without presenting a plan card), then display the plan review card (this confirmation cannot be bypassed). Writes execute only after user approval. Rejection at either tier is normal behavior. Interactive sessions may sequentially present permission confirmation and the plan card. Zotero Desktop may additionally show a local authorization dialog on the first write. Use dedicated test items and collections.
@@ -399,39 +412,28 @@ Run the live write probe with `ZOTERO_INTEGRATION=1 ZOTERO_WRITE_PROBE=1 npx vit
 
 ## Coverage Map
 
-| Capability Dimension          | Tool                                                                      | Associated Cases | Key Verification Points                                                              |
-| ----------------------------- | ------------------------------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------ |
-| Service Connectivity          | `/zotero`                                                                 | G1               | connected state, version acquisition                                                 |
-| Library Shape                 | `zotero_browse`                                                           | G1, C1, C2, S5   | Collection tree, tag list, saved searches                                            |
-| Bibliographic Search          | `zotero_search`                                                           | G2, S1–S4        | metadata/everything modes, collection/tag scopes, note hits                          |
-| Metadata Reading              | `zotero_get`                                                              | G3, R1           | Standard fields, child notes, truncation flags                                       |
-| Child Object Reading          | `zotero_children`                                                         | G4, R2           | Notes/attachments/annotations, dedicated annotation path                             |
-| Passage Retrieval             | `zotero_retrieve`                                                         | G5, R3, R4       | Four source types, annotation page accuracy, multi-attachment coverage               |
-| Attachment Path               | `zotero_attachment`                                                       | G6, N3           | Local absolute paths and URLs, missing attachment handling                           |
-| Citation Export               | `zotero_export`                                                           | G7, E1–E3        | Multi-format support, custom styles, batching and panel downloads                    |
-| Incremental Sync              | `zotero_changes`                                                          | C3, W7           | Cursor persistence, immediate visibility after write                                 |
-| Content Writing               | `create_note` / `update_item_tags` / `update_item_collections`            | W1–W3            | Approval and plan card, merge write, declined state                                  |
-| Structure and Metadata Writes | `create_collection` / `delete_collection` / `create_item` / `update_item` | W4, W5           | Same-name refusal, delete preview and invalidation, closed field set and whitelist   |
-| Library-Wide Tag Delete       | `delete_library_tags`                                                     | W6               | Preview counts, library version precondition, idempotent retry                       |
-| Batch Item Writes             | `zotero_batch_items`                                                      | W8               | Complete plan and create receipts, non-retryable unknown commits, cascading Trash    |
-| Child Writes and Restoration  | `update_note` / `restore_items` / `scholarly_save_to_zotero`              | W9               | Child version reads, itemized receipts, body limits, replay states, bilingual labels |
-| Data Panel                    | Sources panel                                                             | G8               | Synchronization across Literature, Passages, and Exports pages                       |
-| Boundary Defense              | Error handling and safeguards                                             | N1–N7            | Error code accuracy, anti-hallucination, assembly errors never degrade silently      |
-| Runtime Diagnostics           | Diagnostics card (plugin detail page)                                     | Annex            | Crash funnel, level filter, bundle copy                                              |
+| Capability Dimension           | Tool                                                                                                                               | Associated Cases        | Key Verification Points                                                                                        |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Service Connectivity           | `/zotero`                                                                                                                          | G1                      | connected state, version acquisition                                                                           |
+| Library Shape                  | `zotero_browse`                                                                                                                    | G1, C1, C2, S5          | Collection tree, tag list, saved searches                                                                      |
+| Bibliographic Search           | `zotero_search`                                                                                                                    | G2, S1–S4               | metadata/everything modes, collection/tag scopes, note hits                                                    |
+| Metadata Reading               | `zotero_get`                                                                                                                       | G3, R1                  | Standard fields, child notes, truncation flags                                                                 |
+| Child Object Reading           | `zotero_children`                                                                                                                  | G4, R2                  | Notes/attachments/annotations, dedicated annotation path                                                       |
+| Passage Retrieval              | `zotero_retrieve`                                                                                                                  | G5, R3, R4              | Four source types, annotation page accuracy, multi-attachment coverage                                         |
+| Attachment Path                | `zotero_attachment`                                                                                                                | G6, N3                  | Local absolute paths and URLs, missing attachment handling                                                     |
+| Citation Export                | `zotero_export`                                                                                                                    | G7, E1–E3               | Multi-format support, custom styles, batching and panel downloads                                              |
+| Incremental Sync               | `zotero_changes`                                                                                                                   | C3, W7                  | Cursor persistence, immediate visibility after write                                                           |
+| Content Writing                | `zotero_create_note` / `zotero_update_note` / `zotero_update_item_tags` / `zotero_update_item_collections`                         | W1–W3, W9               | Approval and plan card, merge write, declined state, child version reads                                       |
+| Structure and Metadata Writes  | `zotero_create_collection` / `zotero_update_collection` / `zotero_delete_collection` / `zotero_create_item` / `zotero_update_item` | W4, W5, W9              | Same-name refusal, delete preview and invalidation, closed field set and whitelist, collection rename and move |
+| Saved-Search Writes            | `zotero_create_saved_search` / `zotero_update_saved_search` / `zotero_delete_saved_search`                                         | W9                      | Closed condition set, version precondition, unverified creation is not resubmitted                             |
+| Library-Wide Tag Delete        | `zotero_delete_library_tags`                                                                                                       | W6                      | Preview counts, library version precondition, idempotent retry                                                 |
+| Batch Item Writes              | `zotero_batch_items`                                                                                                               | W8                      | Complete plan and create receipts, non-retryable unknown commits, cascading Trash                              |
+| Restoration and Scholarly Save | `zotero_restore_items` / `scholarly_save_to_zotero`                                                                                | W9                      | Itemized receipts, body limits, replay states, bilingual labels                                                |
+| Data Panel                     | Sources panel                                                                                                                      | G8                      | Synchronization across Literature, Passages, and Exports pages                                                 |
+| Boundary Defense               | Error handling and safeguards                                                                                                      | N1–N7                   | Error code accuracy, anti-hallucination, assembly errors never degrade silently                                |
+| Runtime Diagnostics            | Diagnostics card (plugin detail page)                                                                                              | See Troubleshooting §17 | Crash funnel, level filter, bundle copy                                                                        |
 
 Passing criteria: G1 through G8 all pass, and N1, N2, N4 produce no hallucinated content. Write features are optional; if enabled, the whole W pack (W1–W9) must pass in a separate session with writes enabled, with the W1 plan card confirmation and the W2/W3 idempotent writes mandatory.
-
-## Scholarly Cases (S)
-
-Run with the `dsh-zotero/scholarly` component enabled. These cases verify **what the tool says when it fails**, not only the happy path: a tool that reports a rate limit as "does not exist" makes a user delete a correct citation.
-
-- **S1 An unreachable registry must not read as "does not exist"**: with the network cut (or Crossref answering 5xx), run `scholarly_verify` on a reference that genuinely exists. Expect `UNVERIFIED` with a note naming `Crossref lookup failed` and the status; `NOT FOUND` must not appear. Acceptance: the summary reads `0 not found` and `1 unverified`.
-- **S2 A genuine absence still reads NOT FOUND**: use a DOI that does not exist and whose Crossref title search returns nothing. Expect `NOT FOUND` with `No matching publication record found in Crossref.` S1 and S2 must be distinguishable.
-- **S3 An absent library annotation is not "not held"**: make local Zotero unreachable (quit Zotero) and run `scholarly_search`. Expect `Library status unavailable for N of M results`; the hits must not silently all lack the `In Zotero` mark.
-- **S4 In-library hit**: search the title of a paper already in the library. That row must carry `[In Zotero: <collection>]`, or `Root` when the item has no collection.
-- **S5 Paywall and transport failure stay distinct**: run `scholarly_read` on a paper with no open-access copy. Expect every attempted route listed (`Tried: …`), and — when a route failed at the transport — a note that the copy may merely be unreachable and worth retrying. It must not claim only "likely behind a paywall".
-- **S6 The full-text cache can be off or reused**: read one open-access paper twice. The second read hits the cache (no second outbound request in diagnostics). When the cache directory is unwritable the read must still succeed, and the result's notes carry `cache: write failed (<reason>)`.
-- **S7 The component is off by default**: without the `dsh-zotero/scholarly` row, `ctx.scholarly` does not exist and none of the seven tools register; with it enabled they appear and collide with none of the 23 `zotero_*` tools.
 
 ## Symptom and Failure Diagnosis
 

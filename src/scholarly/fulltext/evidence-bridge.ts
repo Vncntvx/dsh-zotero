@@ -2,10 +2,10 @@
  * Fulltext outline extraction and BM25 passage ranking for `scholarly_read`.
  *
  * Segmentation and ranking are **the host's**: `chunkText` and `rankChunks`
- * from `src/evidence.ts`. This module used to carry its own 1200-character
- * splitter, which put a `scholarly_read query=` hit and a `zotero_retrieve` hit
- * over the same paper on different boundaries — two answers to "what is a
- * passage" for one library. It adds section addressing on top, nothing else.
+ * from `src/evidence.ts`. A second splitter here would cut a
+ * `scholarly_read query=` hit and a `zotero_retrieve` hit over the same paper
+ * on different boundaries, two answers to "what is a passage" for one library.
+ * This module adds section addressing on top, nothing else.
  *
  * The offsets reported here are character spans of the source text, labelled
  * as such: `zotero_retrieve` reports ranked chunks, and a bare `offset` would

@@ -167,7 +167,8 @@ zotero_attachment(ref="zotero://user/0/item/ABC123")
 
 ### 说明
 
-- `citation` 模式单次超过 50 个 key 时自动分批请求；
+- refs 总数先受 `maxExportRefs` 拦截（默认 50）。除 `citation` 外的 5 种格式（`bibliography`、`bibtex`、`biblatex`、`ris`、`csljson`）单次调用最多 50 条，这是 Zotero `itemKey` 请求的上限，超出即报错，不会自动分批；
+- `citation` 是唯一会分批的格式：refs 数超过 50 时按 50 一组分批请求。默认 `maxExportRefs` 同为 50，因此需先将该配置调至 50 以上，分批才会实际发生；
 - `bibtex`、`biblatex`、`ris`、`csljson` 的批量导出全程使用批处理请求：`ris`、`csljson` 发起 1 次本地 API 批处理请求；`bibtex`、`biblatex` 在此基础上并行发起第 2 次批处理请求，读取条目原始元数据用于字段对齐。返回内容在内存中解析，每条记录按 key 或元数据指纹与 ref 配对，不按位置猜测；无法定位的 ref 在结果中只保留自身。第 2 次元数据请求失败（如 Zotero 返回 5xx）时导出照常完成：正文原样返回，未能配对的 ref 保持仅有 `ref` 的裸形状。调用方取消（abort）不属于这类降级，仍照常抛出。单次调用最多支持 50 条；
 - 单次导出仅允许同一 library 的 refs，不支持跨库混合导出。
 
@@ -190,9 +191,9 @@ zotero_export(refs=["zotero://user/0/item/ABC123", "zotero://user/0/item/DEF456"
 | --------------- | ------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | `kind`          | string  | —                       | 浏览类别：`libraries`、`collections`、`savedSearches`、`tags`、`itemTypes`、`itemFields`（必填）                        |
 | `library`       | object  | `{type: "user", id: 0}` | 目标库（适用于 collections、savedSearches、tags）                                                                       |
-| `parentRef`     | string  | —                       | 仅用于 `collections`：父集合 ref；省略则列出顶层集合                                                                    |
+| `parentRef`     | string  | —                       | 仅用于 `collections`：父合集 ref；省略则列出顶层合集                                                                    |
 | `tagScope`      | string  | —                       | 仅用于 `tags`：统计范围，支持 `library`、`collection`、`publications`（`publications` 仅限个人库）                      |
-| `tagCollection` | string  | —                       | 仅用于 `tags` 且 `tagScope="collection"`：集合 ref 或精确名称                                                           |
+| `tagCollection` | string  | —                       | 仅用于 `tags` 且 `tagScope="collection"`：合集 ref 或精确名称                                                           |
 | `itemLevel`     | string  | `"top"`                 | 仅用于带作用域的 `tags`：`top` 仅统计文献条目；`all` 包含子条目（仅 `library`/`collection` 范围）                       |
 | `itemQuery`     | string  | —                       | 仅用于带作用域的 `tags`：仅统计匹配该查询词的条目标签                                                                   |
 | `itemQueryMode` | string  | `"titleCreatorYear"`    | 仅用于带作用域的 `tags`：`itemQuery` 的条目查询模式，支持 `titleCreatorYear` 或 `everything`（默认 `titleCreatorYear`） |
@@ -477,7 +478,7 @@ zotero_create_item(itemType="journalArticle", title="Attention Is All You Need",
 
 ## zotero_update_collection
 
-更新合集名称或父合集。名称为空、目标不存在、父合集不属于个人库或版本前置条件失效时拒绝写入；`parent` 省略表示保留现有父级，原生调用可传 `null` 将其移到顶层。
+更新合集名称或父合集。`name` 与 `parent` 均未提供、名称为空、目标不存在、父合集不属于个人库或版本前置条件失效时拒绝写入；`parent` 省略表示保留现有父级，原生调用可传 `null` 将其移到顶层。
 
 ### 参数与输出
 
@@ -634,7 +635,7 @@ zotero_batch_items(
    - 配置端口之外的 loopback 端口（例外：对 `/api/users/` 的写请求与 authorize 调用在任意 loopback 端口都会被检出）；
    - 用户自有的任何二进制。
 
-   系统提示约束模型只使用写工具，这道确认约束路由。若要 shell 完全无法触碰文献库，应让会话不带无约束 shell：按 agent 使用 `tools.restrict({ deny: ["bash"] })`，或使用不含 shell 的预设。另外，被确认放行的原始写入完全绕开插件的写域：没有计划卡、没有版本前置、没有 Markdown 到笔记 HTML 的转换，也没有 provenance。这是用户当场确认时接受的代价。
+   系统提示约束模型只使用写工具；绕开写工具的 shell 直写，由上述拦截与审批把关。若要 shell 完全无法触碰文献库，应让会话不带无约束 shell：按 agent 使用 `tools.restrict({ deny: ["bash"] })`，或使用不含 shell 的预设。另外，被确认放行的原始写入完全绕开插件的写域：没有计划卡、没有版本前置、没有 Markdown 到笔记 HTML 的转换，也没有 provenance。这是用户当场确认时接受的代价。
 
 ---
 
@@ -682,10 +683,10 @@ bundle 组件 `dsh-zotero/scholarly` 可随插件加载，但默认关闭；将�
 | ------------- | -------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `query`       | string   | — (必填)      | 检索主题词、论文标题或作者名                                                                                                          |
 | `sources`     | string[] | —             | 可选限制检索的数据源列表（`arxiv`、`openalex`、`crossref`、`semanticscholar`、`pubmed`、`europepmc`、`dblp`）；默认按主题语义自动路由 |
-| `year_from`   | integer  | —             | 发表起始年份；`sort="date"` 且省略此参数时，默认只取近 2 年                                                                           |
+| `year_from`   | integer  | —             | 发表起始年份；`sort="date"` 且省略此参数时，默认只取上一年                                                                            |
 | `year_to`     | integer  | —             | 发表截止年份                                                                                                                          |
 | `open_access` | boolean  | —             | 是否仅返回具有免费开放获取全文的文献                                                                                                  |
-| `sort`        | string   | `"relevance"` | 排序方式：`relevance`（相关度）、`date`（最新优先，省略 `year_from` 时默认只取近 2 年）、`citations`（引用最多优先）                  |
+| `sort`        | string   | `"relevance"` | 排序方式：`relevance`（相关度）、`date`（最新优先，省略 `year_from` 时默认只取上一年）、`citations`（引用最多优先）                   |
 | `categories`  | string[] | —             | arXiv 分类过滤（如 `cs.CL`、`stat.ML`）                                                                                               |
 | `limit`       | integer  | `8`           | 返回论文数量上限                                                                                                                      |
 | `abstract`    | string   | `"snippet"`   | 摘要展示程度：`none`、`snippet`、`full`                                                                                               |
@@ -694,7 +695,7 @@ bundle 组件 `dsh-zotero/scholarly` 可随插件加载，但默认关闭；将�
 
 ### scholarly_get
 
-通过 DOI、arXiv ID、PMID、PMCID、URL 或精确标题直接聚合获取单篇论文的完整学术图谱元数据（作者、出版物、摘要、引用次数、开放获取全文链接与本地 Zotero库匹配状态）。
+通过 DOI、arXiv ID、PMID、PMCID、URL 或精确标题直接聚合获取单篇论文的完整学术图谱元数据（作者、出版物、摘要、引用次数、开放获取全文链接与本地 Zotero 库匹配状态）。
 
 #### 参数
 

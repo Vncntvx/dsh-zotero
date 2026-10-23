@@ -107,8 +107,10 @@ mechanical rules; each one exists because this repository hit it:
 `vitest.config.ts` holds coverage ratchets per layer, each set just under
 what that layer measures today. They are not aspirations: a layer earns a
 higher floor by specifying more behaviour, never by touching branches to
-satisfy a number. `src/local` branches (94.82%) sit below the old global gate
-of 95%, a fact one global average had been hiding.
+satisfy a number. `src/local` measured 94.82% branches while the global read
+96.43%: a layer under the 95% the global gate carries, hidden by layers far
+above it. It now carries its own floor of 93, named in the open rather than
+averaged away.
 
 Both ratchets only move in one direction, and they move in the same commit that
 makes the new value true: splitting a spec lowers the size limit, deleting
