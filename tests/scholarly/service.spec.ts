@@ -234,9 +234,9 @@ describe('scholarly tool declarations', () => {
     }
   })
 
-  it('renders the text body as a single text block', async () => {
+  it('renders read tools’ text bodies as a single text block', async () => {
     const tools = createAllScholarlyTools(createMockHost(createMockHttp(() => new Response('{}'))))
-    for (const tool of tools) {
+    for (const tool of tools.filter((tool) => tool.name !== 'scholarly_save_to_zotero')) {
       expect(tool.output.render({}, { text: 'body' }), tool.name).toEqual([
         { type: 'text', text: 'body' },
       ])

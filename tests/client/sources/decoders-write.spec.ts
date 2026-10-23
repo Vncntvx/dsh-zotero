@@ -9,6 +9,13 @@ import { describe, expect, it } from 'vitest'
 import { writeMetaOf } from '../../../src/client/sources/decoders.ts'
 
 describe('writeMetaOf', () => {
+  it('decodes restoration as its own outcome with actual success and failure counts', () => {
+    expect(writeMetaOf({ kind: 'restored', restoredCount: 2, failedCount: 1 })).toMatchObject({
+      kind: 'restored',
+      restoredCount: 2,
+      failedCount: 1,
+    })
+  })
   it('reads the applied tag and membership counts a merge call reported', () => {
     expect(
       writeMetaOf({
@@ -21,6 +28,8 @@ describe('writeMetaOf', () => {
     ).toEqual({
       kind: 'applied',
       addedCount: 2,
+      restoredCount: null,
+      failedCount: null,
       removedCount: 1,
       deletedCount: null,
     })
@@ -29,6 +38,8 @@ describe('writeMetaOf', () => {
   it('reads the deleted count a library-wide tag delete reported', () => {
     expect(writeMetaOf({ kind: 'deleted', deletedCount: 3 })).toEqual({
       kind: 'deleted',
+      restoredCount: null,
+      failedCount: null,
       addedCount: null,
       removedCount: null,
       deletedCount: 3,
@@ -43,6 +54,8 @@ describe('writeMetaOf', () => {
       writeMetaOf({ kind: 'committed-unverified', reason: 'commit-unknown', key: 'NOTE1234' }),
     ).toEqual({
       kind: 'committed-unverified',
+      restoredCount: null,
+      failedCount: null,
       addedCount: null,
       removedCount: null,
       deletedCount: null,
@@ -52,6 +65,8 @@ describe('writeMetaOf', () => {
   it('reads a declined arm as carrying no applied fact', () => {
     expect(writeMetaOf({ kind: 'declined' })).toEqual({
       kind: 'declined',
+      restoredCount: null,
+      failedCount: null,
       addedCount: null,
       removedCount: null,
       deletedCount: null,
@@ -64,6 +79,8 @@ describe('writeMetaOf', () => {
     for (const meta of [{}, { kind: 7 }, { kind: 'surprise' }]) {
       expect(writeMetaOf(meta)).toEqual({
         kind: 'applied',
+        restoredCount: null,
+        failedCount: null,
         addedCount: null,
         removedCount: null,
         deletedCount: null,

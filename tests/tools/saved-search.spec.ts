@@ -360,7 +360,7 @@ describe('saved-search execution through the approval seam', () => {
     expect(rendered.text).toContain(
       `Zotero saved-search operation applied for ${SERVED_SEARCH_REF}.`,
     )
-    expect(rendered.text).toContain('Library version: 8.')
+    expect(rendered.text).toContain('Library version: 8')
     const renderedDelete = remove.output.render(
       { search: SEARCH_REF },
       { kind: 'deleted', key: SEARCH_KEY },
@@ -473,6 +473,17 @@ describe('saved-search execution through the approval seam', () => {
       reason: 'saved-state-unverified',
       key: SEARCH_KEY,
     })
+    expect(result.meta).toMatchObject({
+      kind: 'committed-unverified',
+      key: SEARCH_KEY,
+      retryable: false,
+    })
+    const text = result.content
+      .flatMap((block) => (block.type === 'text' ? [block.text] : []))
+      .join('\n')
+    expect(text).toContain(SEARCH_KEY)
+    expect(text).toContain(SERVED_SEARCH_REF)
+    expect(text).toContain('saved state could not be verified')
   })
 
   it('refuses a delete whose read carried no version', async () => {

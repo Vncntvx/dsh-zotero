@@ -24,6 +24,7 @@ import {
 import { renderDeclined } from './present.js'
 import {
   COMMITTED_UNVERIFIED_VARIANT,
+  CREATED_ITEM_VARIANT,
   createWritePresentationMeta,
   DECLINED_OUTPUT_SCHEMA,
   libraryVersionLine,
@@ -78,26 +79,7 @@ const CREATE_ITEM_PARAMETERS = {
 type CreateItemArgs = InferArgs<typeof CREATE_ITEM_PARAMETERS>
 
 const CREATE_ITEM_OUTPUT_SCHEMA = {
-  oneOf: [
-    DECLINED_OUTPUT_SCHEMA,
-    {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        kind: { type: 'string', enum: ['applied'], required: true },
-        ref: { type: 'string', required: true },
-        key: { type: 'string', required: true },
-        version: { type: 'integer', required: true },
-        itemType: { type: 'string', required: true },
-        title: { type: 'string' },
-        tags: { type: 'array', items: { type: 'string' } },
-        collections: { type: 'array', items: { type: 'string' } },
-        libraryVersion: { type: 'integer', required: true },
-        serverId: { type: 'string' },
-      },
-    },
-    COMMITTED_UNVERIFIED_VARIANT,
-  ],
+  oneOf: [DECLINED_OUTPUT_SCHEMA, CREATED_ITEM_VARIANT, COMMITTED_UNVERIFIED_VARIANT],
 } as const
 
 type CreateItemOutput = InferValue<typeof CREATE_ITEM_OUTPUT_SCHEMA>

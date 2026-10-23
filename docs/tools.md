@@ -462,11 +462,13 @@ zotero_create_item(itemType="journalArticle", title="Attention Is All You Need",
 
 使用 Markdown 替换现有 Zotero 笔记正文。写入前读取笔记版本，并在 PATCH 中转换为 Zotero 安全 HTML；目标必须是 `itemType="note"`。
 
+支持独立笔记和子笔记，读取版本不要求子对象具有合集字段。创建和更新均在审批前校验原始 Markdown 的 `writeNoteMaxChars` 上限，按 JavaScript 字符串长度计数，包含空白和标记，不自动截断。
+
 ### 参数与输出
 
 | 参数       | 类型   | 必填 | 说明               |
 | ---------- | ------ | ---- | ------------------ |
-| `item`     | string | ✓    | 笔记条目 ref       |
+| `ref`      | string | ✓    | 笔记条目 ref       |
 | `markdown` | string | ✓    | 新的 Markdown 正文 |
 
 成功返回 `{kind: "applied", ref, version, libraryVersion, serverId?}`；拒绝计划卡返回 `{kind: "declined"}`，版本冲突返回 `ZOTERO_WRITE_CONFLICT`。
@@ -501,6 +503,8 @@ zotero_create_item(itemType="journalArticle", title="Attention Is All You Need",
 
 输出为 `{kind: "restored", restored, failed, serverId?}`；不会自动重试版本冲突。
 
+支持子笔记、子附件和批注。结果正文完整列出成功对象的 ref、版本、库版本，以及失败对象的 ref、错误码和原因；卡片根据实际结果显示恢复数与失败数，部分失败显示警示。
+
 ---
 
 ## Zotero saved search 工具
@@ -508,6 +512,12 @@ zotero_create_item(itemType="journalArticle", title="Attention Is All You Need",
 `zotero_create_saved_search`、`zotero_update_saved_search`、`zotero_delete_saved_search` 使用 Zotero 原生 saved-search 条件。创建至少需要一个条件；创建响应丢失或回显无法核验时返回 `committed-unverified`（`retryable: false`），必须先按 search ref/key 核对，不能重复创建。
 
 创建参数为 `name` 与 `conditions`（每项含 `condition`、`operator`、`value`）；更新参数为 `search` 以及至少一个 `name` 或 `conditions`；删除参数为 `search`。更新和删除均使用对象/库版本前置条件。
+
+创建的未核验回执区分 `commit-unknown` 和 `saved-state-unverified`，正文和展示元数据保留已知 ref、key、版本与服务器身份。无已知身份时先检查 Zotero，不重复创建。
+
+## scholarly_save_to_zotero
+
+将学术检索结果通过本地写入审批流程保存到个人库。输出为 `declined`、`applied` 或 `committed-unverified` 的联合类型。仅 `applied` 附带成功保存的 `papers`，并保留创建条目的 ref、key、版本、标签、合集与库版本；未核验结果保留原始身份及原因，禁止重试。卡片和会话回放通过持久化的正文与状态元数据区分三种结果。
 
 ---
 

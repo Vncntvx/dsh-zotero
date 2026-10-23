@@ -9,9 +9,10 @@ import {
 } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { metaRecordOf, renderDeclined } from './present.js'
-import { DECLINED_OUTPUT_SCHEMA } from './write-present.js'
+import { DECLINED_OUTPUT_SCHEMA, WRITE_FAILURE_ITEM, libraryVersionLine } from './write-present.js'
 import { parseWritableRef, assertWriteList, WRITE_REF_ARG_HINT } from './validate.js'
 import { WRITE_PLAN_LIBRARY_LINE, WRITE_PLAN_OUTCOME_DESCRIPTION } from '../write-approval.js'
+import { ZOTERO_WRITE_OBJECT_BATCH } from '../constants.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroRestoreItemsOutcome, ZoteroRestoreItemsRequest } from '../types.js'
 
@@ -38,20 +39,6 @@ const RESTORED_ITEM = {
   },
 } as const
 
-/** One failed item: the closed shape `ZoteroBatchOperationFailure` carries. */
-const FAILED_ITEM = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    op: { type: 'string', enum: ['create', 'update', 'delete'], required: true },
-    ref: { type: 'string' },
-    index: { type: 'integer' },
-    code: { type: 'string', required: true },
-    message: { type: 'string', required: true },
-    completedRefs: { type: 'array', items: { type: 'string' } },
-  },
-} as const
-
 const OUTPUT = {
   oneOf: [
     DECLINED_OUTPUT_SCHEMA,
@@ -61,7 +48,7 @@ const OUTPUT = {
       properties: {
         kind: { type: 'string', enum: ['restored'], required: true },
         restored: { type: 'array', required: true, items: RESTORED_ITEM },
-        failed: { type: 'array', required: true, items: FAILED_ITEM },
+        failed: { type: 'array', required: true, items: WRITE_FAILURE_ITEM },
         serverId: { type: 'string' },
       },
     },
@@ -83,7 +70,16 @@ export function renderRestoreItems(_args: Args, value: Output): ContentBlock[] {
   return [
     {
       type: 'text',
-      text: `Restored ${value.restored.length} item(s); ${value.failed.length} failed.`,
+      text: [
+        `Restored ${value.restored.length} item(s); ${value.failed.length} failed.`,
+        ...value.restored.map(
+          (item) => `- Restored ${item.ref} (version ${item.version}). ${libraryVersionLine(item)}`,
+        ),
+        ...value.failed.map(
+          (item) =>
+            `- Failed ${item.ref ?? `index ${item.index}`}: ${item.code}: ${item.message}${item.completedRefs === undefined ? '' : `\n  Completed refs: ${item.completedRefs.join(', ')}`}`,
+        ),
+      ].join('\n'),
     },
   ]
 }
@@ -105,11 +101,11 @@ function presentRestoreItemsResult(_args: Args, result: ToolResult): ToolResultV
   if (record.kind === 'declined') {
     return { card: 'generic', title: 'Zotero restore: declined, nothing written' }
   }
-  const restored = typeof record.restoredCount === 'number' ? record.restoredCount : 0
-  const failed = typeof record.failedCount === 'number' ? record.failedCount : 0
+  if (typeof record.restoredCount !== 'number' || typeof record.failedCount !== 'number')
+    return undefined
   return {
     card: 'generic',
-    title: `Zotero restore applied: ${restored} restored${failed > 0 ? `, ${failed} failed` : ''}`,
+    title: `Zotero restore: ${record.restoredCount} restored, ${record.failedCount} failed`,
   }
 }
 
@@ -132,7 +128,7 @@ export function registerRestoreItemsTool(ctx: Context, service: ZoteroService): 
       }),
       presentResult: presentRestoreItemsResult,
       async execute(args, exec): Promise<ZoteroRestoreItemsOutcome> {
-        const refs = assertWriteList('refs', args.refs, 50).map((ref) =>
+        const refs = assertWriteList('refs', args.refs, ZOTERO_WRITE_OBJECT_BATCH).map((ref) =>
           parseWritableRef(ref, ['item']),
         )
         const request: ZoteroRestoreItemsRequest = { items: refs }

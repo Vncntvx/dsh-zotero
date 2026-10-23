@@ -9,6 +9,7 @@
 
 import { describe, expect, it } from 'vitest'
 import type { ZoteroServiceLike } from '../../src/scholarly/zotero-link.js'
+import { renderScholarlySave } from '../../src/scholarly/tools/save-to-zotero.js'
 import { createScholarlySaveToZoteroTool } from '../../src/scholarly/tools/index.js'
 import { EXEC_CONTEXT, createMockHost, createMockHttp } from './fixtures.js'
 
@@ -55,6 +56,7 @@ describe('scholarly_save_to_zotero', () => {
       ref: 'zotero://user/0/item/SAVED001?server=srv-scholarly',
       key: 'SAVED001',
       version: 12,
+      itemType: 'journalArticle',
       libraryVersion: 12,
     })
     const result = (await toolWith(stub.service).execute(
@@ -70,10 +72,13 @@ describe('scholarly_save_to_zotero', () => {
         collections: ['Reading'],
       },
       EXEC_CONTEXT as never,
-    )) as { text: string; papers?: unknown[] }
-    expect(result.text).toContain(
-      'Saved scholarly result to Zotero as zotero://user/0/item/SAVED001?server=srv-scholarly.',
-    )
+    )) as Parameters<typeof renderScholarlySave>[1]
+    expect(renderScholarlySave({}, result)).toContainEqual({
+      type: 'text',
+      text: expect.stringContaining('zotero://user/0/item/SAVED001?server=srv-scholarly'),
+    })
+    expect(result.kind).toBe('applied')
+    if (result.kind !== 'applied') throw new Error('expected saved result')
     expect(result.papers).toEqual([
       {
         ref: 'zotero://user/0/item/SAVED001?server=srv-scholarly',
@@ -115,9 +120,8 @@ describe('scholarly_save_to_zotero', () => {
     const declinedResult = (await toolWith(declined.service).execute(
       { title: 'A study' },
       EXEC_CONTEXT as never,
-    )) as { text: string; papers?: unknown[] }
-    expect(declinedResult.text).toBe('The Zotero save was declined.')
-    expect(declinedResult.papers).toBeUndefined()
+    )) as Parameters<typeof renderScholarlySave>[1]
+    expect(declinedResult).toEqual({ kind: 'declined' })
 
     const unverified = stubZotero({
       kind: 'committed-unverified',
@@ -129,9 +133,17 @@ describe('scholarly_save_to_zotero', () => {
     const unverifiedResult = (await toolWith(unverified.service).execute(
       { title: 'A study' },
       EXEC_CONTEXT as never,
-    )) as { text: string; papers?: unknown[] }
-    expect(unverifiedResult.text).toContain('may have committed; do not retry')
-    expect(unverifiedResult.papers).toBeUndefined()
+    )) as Parameters<typeof renderScholarlySave>[1]
+    expect(unverifiedResult).toMatchObject({
+      kind: 'committed-unverified',
+      retryable: false,
+      reason: 'commit-unknown',
+    })
+    expect(renderScholarlySave({}, unverifiedResult)).toContainEqual({
+      type: 'text',
+      text: expect.stringContaining('Do not retry'),
+    })
+    expect(unverifiedResult).not.toHaveProperty('papers')
   })
 
   it('omits the optional halves a bare result does not carry', async () => {
@@ -140,6 +152,7 @@ describe('scholarly_save_to_zotero', () => {
       ref: 'zotero://user/0/item/SAVED002?server=srv-scholarly',
       key: 'SAVED002',
       version: 2,
+      itemType: 'journalArticle',
       libraryVersion: 2,
     })
     await toolWith(stub.service).execute({ title: 'Bare' }, EXEC_CONTEXT as never)

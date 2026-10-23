@@ -27,14 +27,14 @@ describe('scholarly tools registry', () => {
     expect(tools.length).toBe(SCHOLARLY_TOOL_NAMES.length)
   })
 
-  it('declares no presentationMeta: no client card reads one', () => {
-    // The removed projection emitted `kind: 'scholarly-papers'`, which no
-    // client component registered — it only persisted an unbounded paper list
-    // into every session log. A card is a `tool.call.toolview` registration;
-    // until that exists there is nothing to project.
+  it('projects write outcomes only for the scholarly save card', () => {
     const tools = createAllScholarlyTools(createMockHost(createMockHttp(() => new Response('{}'))))
     for (const tool of tools) {
-      expect(tool.output.presentationMeta, `${tool.name} must not project a card`).toBeUndefined()
+      if (tool.name === 'scholarly_save_to_zotero') {
+        expect(tool.output.presentationMeta).toBeTypeOf('function')
+      } else {
+        expect(tool.output.presentationMeta, `${tool.name} has no client card`).toBeUndefined()
+      }
     }
   })
 

@@ -117,7 +117,8 @@ describe('zotero_create_collection presentation', () => {
       key: 'NEWCOLL1',
       serverId: SERVER_ID,
     })[0] as { text: string }
-    expect(keyed.text).toContain('may have created the collection (key NEWCOLL1)')
+    expect(keyed.text).toContain('may have created the collection')
+    expect(keyed.text).toContain('key NEWCOLL1')
     expect(keyed.text).toContain('reconcile the collection by its key/ref')
     const unkeyed = render(ARGS, {
       kind: 'committed-unverified',
@@ -127,7 +128,7 @@ describe('zotero_create_collection presentation', () => {
       ref: PARENT_REF,
       serverId: SERVER_ID,
     })[0] as { text: string }
-    expect(unkeyed.text).toContain(`created the collection (ref ${PARENT_REF})`)
+    expect(unkeyed.text).toContain(`ref ${PARENT_REF}`)
     expect(unkeyed.text).toContain('could not be verified')
     const applied = render(ARGS, {
       kind: 'applied',
@@ -200,10 +201,18 @@ describe('zotero_create_collection presentation', () => {
     })
     expect(
       meta(ARGS, { kind: 'committed-unverified', reason: 'commit-unknown', key: 'NEWCOLL1' }),
-    ).toEqual({ kind: 'committed-unverified', reason: 'commit-unknown', key: 'NEWCOLL1' })
+    ).toEqual({
+      kind: 'committed-unverified',
+      committed: true,
+      retryable: false,
+      reason: 'commit-unknown',
+      key: 'NEWCOLL1',
+    })
     expect(meta(ARGS, { kind: 'committed-unverified', reason: 'saved-state-unverified' })).toEqual({
       kind: 'committed-unverified',
       reason: 'saved-state-unverified',
+      committed: true,
+      retryable: false,
     })
     expect(meta(ARGS, { kind: 'declined' })).toEqual({ kind: 'declined' })
   })

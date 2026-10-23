@@ -45,6 +45,8 @@ export interface CommittedUnverifiedLike {
   readonly ref?: string
   readonly key?: string
   readonly version?: number
+  readonly libraryVersion?: number
+  readonly serverId?: string
 }
 
 /**
@@ -57,12 +59,14 @@ export function renderCommittedUnverified(
   objectName: string,
   pastVerb: 'committed' | 'created',
 ): ContentBlock[] {
-  const identity =
-    value.key !== undefined
-      ? ` (key ${value.key})`
-      : value.ref !== undefined
-        ? ` (ref ${value.ref})`
-        : ''
+  const known = [
+    ...(value.key === undefined ? [] : [`key ${value.key}`]),
+    ...(value.ref === undefined ? [] : [`ref ${value.ref}`]),
+    ...(value.version === undefined ? [] : [`version ${value.version}`]),
+    ...(value.libraryVersion === undefined ? [] : [`library version ${value.libraryVersion}`]),
+    ...(value.serverId === undefined ? [] : [`server ${value.serverId}`]),
+  ]
+  const identity = known.length === 0 ? '' : ` (${known.join('; ')})`
   const reconciliation =
     value.key !== undefined || value.ref !== undefined
       ? `reconcile the ${objectName} by its key/ref`
@@ -114,8 +118,14 @@ export function createWritePresentationMeta(
   if (value.kind === 'committed-unverified') {
     return {
       kind: 'committed-unverified',
+      committed: true,
+      retryable: false,
       reason: value.reason,
       ...(value.key === undefined ? {} : { key: value.key }),
+      ...(value.ref === undefined ? {} : { ref: value.ref }),
+      ...(value.version === undefined ? {} : { version: value.version }),
+      ...(value.libraryVersion === undefined ? {} : { libraryVersion: value.libraryVersion }),
+      ...(value.serverId === undefined ? {} : { serverId: value.serverId }),
     }
   }
   return { kind: 'declined' }
@@ -158,6 +168,24 @@ export const DECLINED_OUTPUT_SCHEMA = {
   additionalProperties: false,
   properties: {
     kind: { type: 'string', enum: ['declined'], required: true },
+  },
+} as const
+
+/** Shared creation result for local item creation and the Scholarly write bridge. */
+export const CREATED_ITEM_VARIANT = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    kind: { type: 'string', enum: ['applied'], required: true },
+    ref: { type: 'string', required: true },
+    key: { type: 'string', required: true },
+    version: { type: 'integer', required: true },
+    itemType: { type: 'string', required: true },
+    title: { type: 'string' },
+    tags: { type: 'array', items: { type: 'string' } },
+    collections: { type: 'array', items: { type: 'string' } },
+    libraryVersion: { type: 'integer', required: true },
+    serverId: { type: 'string' },
   },
 } as const
 
@@ -292,6 +320,23 @@ export function presentDeleteResultView(
   return { card: 'generic', title: `Zotero ${deletedNoun} deleted${ref === '' ? '' : `: ${ref}`}` }
 }
 
+/**
+ * The closed shape every failed-write row carries, shared so the batch and
+ * restore receipts cannot drift.
+ */
+export const WRITE_FAILURE_ITEM = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    op: { type: 'string', enum: ['create', 'update', 'delete'], required: true },
+    ref: { type: 'string' },
+    index: { type: 'integer' },
+    code: { type: 'string', required: true },
+    message: { type: 'string', required: true },
+    completedRefs: { type: 'array', items: { type: 'string' } },
+  },
+} as const
+
 export const BATCH_ITEMS_OUTPUT_SCHEMA = {
   oneOf: [
     DECLINED_OUTPUT_SCHEMA,
@@ -376,18 +421,7 @@ export const BATCH_ITEMS_OUTPUT_SCHEMA = {
         },
         failed: {
           type: 'array',
-          items: {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              op: { type: 'string', enum: ['create', 'update', 'delete'], required: true },
-              ref: { type: 'string' },
-              index: { type: 'integer' },
-              code: { type: 'string', required: true },
-              message: { type: 'string', required: true },
-              completedRefs: { type: 'array', items: { type: 'string' } },
-            },
-          },
+          items: WRITE_FAILURE_ITEM,
           required: true,
         },
         libraryVersion: { type: 'integer' },

@@ -18,7 +18,7 @@ import {
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
 import type { ResolvedConfig } from '../config.js'
-import { WRITE_CHILD_COLLECTIONS_MESSAGE, writeNoteTooLongMessage } from '../errors.js'
+import { WRITE_CHILD_COLLECTIONS_MESSAGE } from '../errors.js'
 import { isRefString } from '../refs.js'
 import { truncateText } from '../normalize.js'
 import { renderDeclined } from './present.js'
@@ -31,7 +31,7 @@ import {
   renderCommittedUnverified,
 } from './write-present.js'
 import {
-  assertNonBlank,
+  assertNoteMarkdown,
   assertWriteList,
   invalid,
   parseSupportedRef,
@@ -151,10 +151,7 @@ export function createNotePlan(args: CreateNoteArgs): string {
  * approval (they are a live lookup, not a malformed-ask condition).
  */
 function buildRequest(args: CreateNoteArgs, config: ResolvedConfig): ZoteroCreateNoteRequest {
-  assertNonBlank('markdown', args.markdown)
-  if (args.markdown.length > config.writeNoteMaxChars) {
-    invalid(writeNoteTooLongMessage(config.writeNoteMaxChars))
-  }
+  assertNoteMarkdown(args.markdown, config.writeNoteMaxChars)
   // Bound and blank checks ride the shared assertWriteList; the ref parse
   // below stays create-note's own (collections may arrive as names).
   const collections =

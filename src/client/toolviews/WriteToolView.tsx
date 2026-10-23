@@ -1,6 +1,6 @@
 /**
- * Dedicated toolview cards for Zotero write operations.
- * tools. Renders write receipts, tags, and plan-review decline notices.
+ * Dedicated toolview cards for Zotero write operations. Renders write
+ * receipts, tags, and plan-review decline notices.
  * Each tool is one descriptor (icon, title key, summary builder) in the
  * table below; the receipt body is shared, so adding a write tool means
  * adding one descriptor, not another branch in the body.
@@ -70,13 +70,15 @@ export type WriteToolViewProps = PropsRuntime<'tool.call.toolview', WriteToolNam
  * The two merge writes each report counts beside that state, so for them a
  * missing field is a real gap in the evidence.
  */
-type ReceiptTone = 'applied' | 'noop' | 'unreported'
+type ReceiptTone = 'applied' | 'noop' | 'unreported' | 'partial' | 'failed'
 
 /**
- * The badge each claim wears: the word on it and the tone behind it, paired so
- * a fourth tone cannot be added to one half and forgotten in the other.
+ * The badge each claim wears: the word on it and the tone behind it, paired in
+ * one table so a tone cannot be added to one half and forgotten in the other.
  */
 const RECEIPT_BADGE = {
+  partial: { label: 'badgePartial', tone: 'warning' },
+  failed: { label: 'toolFailed', tone: 'danger' },
   applied: { label: 'badgeSuccess', tone: 'success' },
   noop: { label: 'badgeNoOp', tone: 'info' },
   // `unreported` is a warning, not the informational `noop`: nothing was proven
@@ -86,8 +88,8 @@ const RECEIPT_BADGE = {
 } as const satisfies Record<
   ReceiptTone,
   {
-    readonly label: 'badgeSuccess' | 'badgeNoOp' | 'badgeUnreported'
-    readonly tone: 'success' | 'info' | 'warning'
+    readonly label: 'badgeSuccess' | 'badgeNoOp' | 'badgeUnreported' | 'badgePartial' | 'toolFailed'
+    readonly tone: 'success' | 'info' | 'warning' | 'danger'
   }
 >
 
@@ -129,8 +131,9 @@ interface WriteDescriptor {
 }
 
 /**
- * One entry per write tool. The requested arguments are what the plan card
- * showed the user, not what landed; each tool names only the fact it knows.
+ * One entry per write tool. Arguments are what the plan card showed the user;
+ * a tool whose projection carries a replayable receipt reports that outcome
+ * instead, and the rest name only the request they can prove.
  */
 const WRITE_DESCRIPTORS: Record<WriteToolName, WriteDescriptor> = {
   zotero_batch_items: {
@@ -165,9 +168,9 @@ const WRITE_DESCRIPTORS: Record<WriteToolName, WriteDescriptor> = {
   },
   zotero_update_note: {
     icon: () => <IconEditOutlineRegular size={14} />,
-    titleKey: 'toolTitleCreateNote',
+    titleKey: 'toolTitleUpdateNote',
     describe: ({ args, t }) => ({
-      summary: t('toolSummaryCreateNote', {
+      summary: t('toolSummaryUpdateNote', {
         title: noteTitleOf(textArg(args, 'markdown'), t('toolDefaultNoteTitle')),
       }),
       tone: 'applied',
@@ -243,9 +246,9 @@ const WRITE_DESCRIPTORS: Record<WriteToolName, WriteDescriptor> = {
   },
   zotero_update_collection: {
     icon: () => <IconBranchOutlineRegular size={14} />,
-    titleKey: 'toolTitleCreateCollection',
+    titleKey: 'toolTitleUpdateCollection',
     describe: ({ args, t }) => ({
-      summary: t('toolSummaryCreateCollection', {
+      summary: t('toolSummaryUpdateCollection', {
         name: (textArg(args, 'name') ?? textArg(args, 'collection') ?? '').trim(),
       }),
       tone: 'applied',
@@ -294,45 +297,63 @@ const WRITE_DESCRIPTORS: Record<WriteToolName, WriteDescriptor> = {
   },
   zotero_restore_items: {
     icon: () => <IconEditOutlineRegular size={14} />,
-    titleKey: 'toolTitleUpdateItem',
-    describe: ({ args, t }) => ({
-      summary: t('toolSummaryUpdateItem', { ref: `${listArg(args, 'refs').length} item(s)` }),
-      tone: 'applied',
-      tags: [],
-    }),
+    titleKey: 'toolTitleRestoreItems',
+    describe: ({ args, write, t }) => {
+      if (
+        write?.kind !== 'restored' ||
+        write.restoredCount === null ||
+        write.failedCount === null
+      ) {
+        return {
+          summary: t('toolSummaryRestoreItemsRequested', { count: listArg(args, 'refs').length }),
+          tone: 'unreported',
+          tags: [],
+        }
+      }
+      return {
+        summary: t('toolSummaryRestoreItems', {
+          restored: write.restoredCount,
+          failed: write.failedCount,
+        }),
+        tone: write.failedCount > 0 ? (write.restoredCount > 0 ? 'partial' : 'failed') : 'applied',
+        tags: [],
+      }
+    },
   },
   zotero_create_saved_search: {
     icon: () => <IconBranchOutlineRegular size={14} />,
-    titleKey: 'toolTitleCreateCollection',
+    titleKey: 'toolTitleCreateSavedSearch',
     describe: ({ args, t }) => ({
-      summary: t('toolSummaryCreateCollection', { name: textArg(args, 'name') ?? '' }),
+      summary: t('toolSummaryCreateSavedSearch', { name: textArg(args, 'name') ?? '' }),
       tone: 'applied',
       tags: [],
     }),
   },
   zotero_update_saved_search: {
     icon: () => <IconBranchOutlineRegular size={14} />,
-    titleKey: 'toolTitleUpdateItem',
+    titleKey: 'toolTitleUpdateSavedSearch',
     describe: ({ args, t }) => ({
-      summary: t('toolSummaryUpdateItem', { ref: textArg(args, 'search') ?? '' }),
+      summary: t('toolSummaryUpdateSavedSearch', {
+        name: textArg(args, 'name') ?? textArg(args, 'search') ?? '',
+      }),
       tone: 'applied',
       tags: [],
     }),
   },
   zotero_delete_saved_search: {
     icon: () => <IconTrashOutlineRegular size={14} />,
-    titleKey: 'toolTitleDeleteCollection',
+    titleKey: 'toolTitleDeleteSavedSearch',
     describe: ({ args, t }) => ({
-      summary: t('toolSummaryDeleteCollection', { name: textArg(args, 'search') ?? '' }),
+      summary: t('toolSummaryDeleteSavedSearch', { name: textArg(args, 'search') ?? '' }),
       tone: 'applied',
       tags: [],
     }),
   },
   scholarly_save_to_zotero: {
     icon: () => <IconPlusOutlineRegular size={14} />,
-    titleKey: 'toolTitleCreateItem',
+    titleKey: 'toolTitleScholarlySave',
     describe: ({ args, t }) => ({
-      summary: t('toolSummaryCreateItem', { title: textArg(args, 'title') ?? '' }),
+      summary: t('toolSummaryScholarlySave', { title: textArg(args, 'title') ?? '' }),
       tone: 'applied',
       tags: [],
     }),
@@ -376,7 +397,7 @@ export function WriteToolView(props: WriteToolViewProps) {
     unknownTool,
   } = useMemo(() => {
     // The runtime types the slot's tool name loosely; the registrations pin it
-    // to the eight names, and the membership check keeps an unexpected name
+    // to the declared names, and the membership check keeps an unexpected name
     // from borrowing the create-note receipt, a receipt that would claim a
     // note was created by a tool that is not the note tool.
     const descriptor = (WRITE_DESCRIPTORS as Record<string, WriteDescriptor | undefined>)[toolName]

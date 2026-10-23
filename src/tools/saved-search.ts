@@ -13,11 +13,13 @@ import {
   COMMITTED_UNVERIFIED_VARIANT,
   DECLINED_OUTPUT_SCHEMA,
   createWritePresentationMeta,
+  libraryVersionLine,
   presentCreateResultView,
   presentDeleteResultView,
   presentUpdateResultView,
+  renderCommittedUnverified,
 } from './write-present.js'
-import { assertNonBlank, parseWritableRef, WRITE_COLLECTION_REF_ARG_HINT } from './validate.js'
+import { assertNonBlank, parseWritableRef, WRITE_SEARCH_REF_ARG_HINT } from './validate.js'
 import {
   WRITE_PLAN_LIBRARY_LINE,
   WRITE_PLAN_OUTCOME_DESCRIPTION,
@@ -47,13 +49,13 @@ const UPDATE = {
   search: {
     type: 'string',
     required: true,
-    description: `A ${WRITE_COLLECTION_REF_ARG_HINT.replace('collection', 'search')} ref.`,
+    description: `A ${WRITE_SEARCH_REF_ARG_HINT} ref.`,
   },
   name: { type: 'string' },
   conditions: { type: 'array', items: CONDITION },
 } as const
 const DELETE = {
-  search: { type: 'string', required: true, description: 'A zotero://user/0/search/<KEY> ref.' },
+  search: { type: 'string', required: true, description: `A ${WRITE_SEARCH_REF_ARG_HINT} ref.` },
 } as const
 /** The applied shape the create and update outcomes share. */
 const APPLIED = {
@@ -92,21 +94,19 @@ type DeleteArgs = InferArgs<typeof DELETE>
 type CreatedOutput = InferValue<typeof CREATED>
 type UpdateOutput = InferValue<typeof UPDATE_OUTPUT>
 type DeleteOutput = InferValue<typeof DELETE_OUTPUT>
-type AnyOutput = { kind: string; ref?: string; key?: string; libraryVersion?: number }
+type AnyOutput = CreatedOutput | UpdateOutput | DeleteOutput
 
 const render = (_args: unknown, value: AnyOutput): ContentBlock[] => {
   if (value.kind === 'declined') return renderDeclined()
   if (value.kind === 'committed-unverified')
-    return [
-      {
-        type: 'text',
-        text: 'Saved search creation may have committed; do not retry. Reconcile Zotero before acting again.',
-      },
-    ]
+    return renderCommittedUnverified(value, 'saved search', 'created')
   return [
     {
       type: 'text',
-      text: `Zotero saved-search operation ${value.kind === 'deleted' ? 'completed' : 'applied'} for ${value.ref ?? value.key ?? 'the requested search'}.${value.libraryVersion === undefined ? '' : `\nLibrary version: ${value.libraryVersion}.`}`,
+      text: [
+        `Zotero saved-search operation ${value.kind === 'deleted' ? 'completed' : 'applied'} for ${value.ref ?? value.key ?? 'the requested search'}.`,
+        ...(value.libraryVersion === undefined ? [] : [libraryVersionLine(value)]),
+      ].join('\n'),
     },
   ]
 }

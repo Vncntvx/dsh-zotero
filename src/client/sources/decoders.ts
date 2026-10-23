@@ -197,8 +197,8 @@ export function browseMetaOf(meta: Record<string, unknown>): BrowseMetaView {
 
 /**
  * The write projection view, decoded once for every reader. `kind` is the
- * only field the shared row needs, so the arms below carry just the fact their
- * tool is the only one that can report:
+ * only field the shared row needs, so the arms below carry the counts a tool
+ * reported beside it:
  *
  * - `declined`: the plan card was answered without approval; nothing written.
  * - `committed-unverified`: the write landed but its saved state was never
@@ -207,13 +207,21 @@ export function browseMetaOf(meta: Record<string, unknown>): BrowseMetaView {
  *   whichever tool (or malformed record) left them unreported.
  * - `deleted`: the delete reported its receipt; the count is null when
  *   unreported.
+ * - `restored`: the restore reported per-item outcomes; both counts are null
+ *   when the record carried neither.
  *
  * The unverified arm's `reason` and `key` are deliberately not decoded here:
  * the receipt shows the tool's own sentence, which already names both, and a
  * second copy of that wording is a second thing to keep in step.
  */
+const WRITE_KINDS = ['declined', 'applied', 'deleted', 'committed-unverified', 'restored'] as const
+
+export type WriteKind = (typeof WRITE_KINDS)[number]
+
 export interface WriteMetaView {
-  readonly kind: 'declined' | 'applied' | 'deleted' | 'committed-unverified'
+  readonly kind: WriteKind
+  readonly restoredCount: number | null
+  readonly failedCount: number | null
   /** Tags/collections actually added; null on every other tool. */
   readonly addedCount: number | null
   /** Tags/collections actually removed; null on every other tool. */
@@ -765,12 +773,8 @@ export function exportMetaOf(meta: Record<string, unknown>): ExportMetaView {
   }
 }
 
-const WRITE_KINDS = new Set(['declined', 'applied', 'deleted', 'committed-unverified'])
-
-function writeKindOf(value: unknown): WriteMetaView['kind'] {
-  return typeof value === 'string' && WRITE_KINDS.has(value)
-    ? (value as WriteMetaView['kind'])
-    : 'applied'
+function writeKindOf(value: unknown): WriteKind {
+  return WRITE_KINDS.find((kind) => kind === value) ?? 'applied'
 }
 
 /**
@@ -782,6 +786,8 @@ function writeKindOf(value: unknown): WriteMetaView['kind'] {
 export function writeMetaOf(meta: Record<string, unknown>): WriteMetaView {
   return {
     kind: writeKindOf(meta['kind']),
+    restoredCount: numberField(meta, 'restoredCount') ?? null,
+    failedCount: numberField(meta, 'failedCount') ?? null,
     addedCount: numberField(meta, 'addedCount') ?? null,
     removedCount: numberField(meta, 'removedCount') ?? null,
     deletedCount: numberField(meta, 'deletedCount') ?? null,

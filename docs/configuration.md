@@ -50,6 +50,8 @@
 
 ## 校验规则
 
+`writeNoteMaxChars` 同时约束创建和更新笔记工具：审批前按原始 Markdown 的 JavaScript 字符串长度检查，包含空白和标记，不自动截断。
+
 `resolveConfig` 在加载时执行以下校验：
 
 - `baseUrl` 必须为字符串，且使用 `http:` 协议（Zotero Local API 不支持 HTTPS），不得包含凭据信息、查询字符串或 URL 片段；

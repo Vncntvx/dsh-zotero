@@ -377,36 +377,49 @@ After those note/tag writes, can zotero_changes see them? Use the previous curso
 - Recoverable deletion: delete an item with child notes, an attachment, and PDF annotations. Verify the root and every descendant appear in Zotero Trash and their refs are returned; no permanent-delete request is sent;
 - Partial completion: cause a version conflict while writing a child. The result must list acknowledged Trash objects in `failed.completedRefs` and must not claim the complete graph succeeded.
 
+### W9 Child writes, restoration, and receipt replay
+
+- Create a child note under a probe-owned item and confirm its API response omits `collections`. Body updates and individual/batch tag updates must work and retain existing automatic tag types. Direct collection membership changes on children must be explicitly refused.
+- Trash and restore probe-owned child notes, attachments, and annotations. Each PATCH carries the object's own version; restoration does not depend on tag or collection state.
+- Mix successful restoration, version conflict, and a missing object. Content must list every ref and its saved version or failure code/message. Collapsed cards report actual restored/failed counts; partial failure warns and total failure shows no success badge.
+- Set the note limit to 10: both create and update accept a 10-character body for approval and reject 11 characters before approval. A live configuration change applies on the next call.
+- Exercise scholarly save with applied, declined, and both committed-unverified reasons. Discard the execution-time value and replay using only persisted content/meta: declined must not show success, unverified retains known refs/keys/versions and prohibits retries, and only applied includes saved papers.
+- Unverified saved-search creation distinguishes the reason and retains known refs/keys. Without an identity, instruct the caller to check Zotero rather than use a nonexistent key.
+- Check Chinese and English collapsed/expanded cards for note update, collection update, restoration, saved-search create/update/delete, and scholarly save. Every label must name the actual operation and object.
+
+Run the live write probe with `ZOTERO_INTEGRATION=1 ZOTERO_WRITE_PROBE=1 npx vitest run tests/integration/write-probe.integration.spec.ts`. Use only probe-owned objects. A skipped run without both switches is not a successful live-write verification.
+
 ## Execution Order
 
 1. Run `/zotero` to test connectivity. On failure, consult the [Troubleshooting Guide](troubleshooting.en.md) and stop;
 2. Execute Golden Path G1 through G8 sequentially in a single session, then inspect the Sources panel (Literature / Passages / Exports);
 3. Supplement with specific capability packs (S / R / E / C) for any failed golden path steps;
 4. Execute negative boundary cases N1 through N7;
-5. To verify write functionality, run W1 through W8 in a separate session.
+5. To verify write functionality, run W1 through W9 in a separate session.
 
 ## Coverage Map
 
-| Capability Dimension          | Tool                                                                      | Associated Cases | Key Verification Points                                                            |
-| ----------------------------- | ------------------------------------------------------------------------- | ---------------- | ---------------------------------------------------------------------------------- |
-| Service Connectivity          | `/zotero`                                                                 | G1               | connected state, version acquisition                                               |
-| Library Shape                 | `zotero_browse`                                                           | G1, C1, C2, S5   | Collection tree, tag list, saved searches                                          |
-| Bibliographic Search          | `zotero_search`                                                           | G2, S1–S4        | metadata/everything modes, collection/tag scopes, note hits                        |
-| Metadata Reading              | `zotero_get`                                                              | G3, R1           | Standard fields, child notes, truncation flags                                     |
-| Child Object Reading          | `zotero_children`                                                         | G4, R2           | Notes/attachments/annotations, dedicated annotation path                           |
-| Passage Retrieval             | `zotero_retrieve`                                                         | G5, R3, R4       | Four source types, annotation page accuracy, multi-attachment coverage             |
-| Attachment Path               | `zotero_attachment`                                                       | G6, N3           | Local absolute paths and URLs, missing attachment handling                         |
-| Citation Export               | `zotero_export`                                                           | G7, E1–E3        | Multi-format support, custom styles, batching and panel downloads                  |
-| Incremental Sync              | `zotero_changes`                                                          | C3, W7           | Cursor persistence, immediate visibility after write                               |
-| Content Writing               | `create_note` / `update_item_tags` / `update_item_collections`            | W1–W3            | Approval and plan card, merge write, declined state                                |
-| Structure and Metadata Writes | `create_collection` / `delete_collection` / `create_item` / `update_item` | W4, W5           | Same-name refusal, delete preview and invalidation, closed field set and whitelist |
-| Library-Wide Tag Delete       | `delete_library_tags`                                                     | W6               | Preview counts, library version precondition, idempotent retry                     |
-| Batch Item Writes             | `zotero_batch_items`                                                      | W8               | Complete plan and create receipts, non-retryable unknown commits, cascading Trash  |
-| Data Panel                    | Sources panel                                                             | G8               | Synchronization across Literature, Passages, and Exports pages                     |
-| Boundary Defense              | Error handling and safeguards                                             | N1–N7            | Error code accuracy, anti-hallucination, assembly errors never degrade silently    |
-| Runtime Diagnostics           | Diagnostics card (plugin detail page)                                     | Annex            | Crash funnel, level filter, bundle copy                                            |
+| Capability Dimension          | Tool                                                                      | Associated Cases | Key Verification Points                                                              |
+| ----------------------------- | ------------------------------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------ |
+| Service Connectivity          | `/zotero`                                                                 | G1               | connected state, version acquisition                                                 |
+| Library Shape                 | `zotero_browse`                                                           | G1, C1, C2, S5   | Collection tree, tag list, saved searches                                            |
+| Bibliographic Search          | `zotero_search`                                                           | G2, S1–S4        | metadata/everything modes, collection/tag scopes, note hits                          |
+| Metadata Reading              | `zotero_get`                                                              | G3, R1           | Standard fields, child notes, truncation flags                                       |
+| Child Object Reading          | `zotero_children`                                                         | G4, R2           | Notes/attachments/annotations, dedicated annotation path                             |
+| Passage Retrieval             | `zotero_retrieve`                                                         | G5, R3, R4       | Four source types, annotation page accuracy, multi-attachment coverage               |
+| Attachment Path               | `zotero_attachment`                                                       | G6, N3           | Local absolute paths and URLs, missing attachment handling                           |
+| Citation Export               | `zotero_export`                                                           | G7, E1–E3        | Multi-format support, custom styles, batching and panel downloads                    |
+| Incremental Sync              | `zotero_changes`                                                          | C3, W7           | Cursor persistence, immediate visibility after write                                 |
+| Content Writing               | `create_note` / `update_item_tags` / `update_item_collections`            | W1–W3            | Approval and plan card, merge write, declined state                                  |
+| Structure and Metadata Writes | `create_collection` / `delete_collection` / `create_item` / `update_item` | W4, W5           | Same-name refusal, delete preview and invalidation, closed field set and whitelist   |
+| Library-Wide Tag Delete       | `delete_library_tags`                                                     | W6               | Preview counts, library version precondition, idempotent retry                       |
+| Batch Item Writes             | `zotero_batch_items`                                                      | W8               | Complete plan and create receipts, non-retryable unknown commits, cascading Trash    |
+| Child Writes and Restoration  | `update_note` / `restore_items` / `scholarly_save_to_zotero`              | W9               | Child version reads, itemized receipts, body limits, replay states, bilingual labels |
+| Data Panel                    | Sources panel                                                             | G8               | Synchronization across Literature, Passages, and Exports pages                       |
+| Boundary Defense              | Error handling and safeguards                                             | N1–N7            | Error code accuracy, anti-hallucination, assembly errors never degrade silently      |
+| Runtime Diagnostics           | Diagnostics card (plugin detail page)                                     | Annex            | Crash funnel, level filter, bundle copy                                              |
 
-Passing criteria: G1 through G8 all pass, and N1, N2, N4 produce no hallucinated content. Write features are optional; if enabled, the whole W pack (W1–W8) must pass in a separate session with writes enabled, with the W1 plan card confirmation and the W2/W3 idempotent writes mandatory.
+Passing criteria: G1 through G8 all pass, and N1, N2, N4 produce no hallucinated content. Write features are optional; if enabled, the whole W pack (W1–W9) must pass in a separate session with writes enabled, with the W1 plan card confirmation and the W2/W3 idempotent writes mandatory.
 
 ## Scholarly Cases (S)
 

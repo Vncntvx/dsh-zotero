@@ -17,6 +17,8 @@ import {
 import { expectValue, setupHostLane, type HostLane } from '../helpers/lanes/host-lane.js'
 import { itemJson } from '../helpers/write-domain-fixtures.js'
 import { ZOTERO_NOT_FOUND } from '../../src/errors.js'
+import type { ZoteroRestoreItemsResult } from '../../src/types.js'
+import { renderRestoreItems } from '../../src/tools/restore-items.js'
 
 const SERVER_ID = 'srv-restore-items-01'
 const KEY_1 = 'RESTORE1'
@@ -89,6 +91,44 @@ function serveTrashedItem(key: string, version: number, restoredVersion: number)
 }
 
 describe('zotero_restore_items', () => {
+  it('renders all 50 outcomes and reports conflict reasons and partial progress', () => {
+    const restored = Array.from({ length: 48 }, (_, index) => ({
+      ref: `zotero://user/0/item/R${String(index).padStart(7, '0')}`,
+      restored: true as const,
+      version: index + 1,
+      libraryVersion: index + 1,
+    }))
+    const failed = [
+      {
+        op: 'update' as const,
+        ref: REF_1,
+        code: 'ZOTERO_WRITE_CONFLICT',
+        message: 'Version changed',
+        completedRefs: ['zotero://user/0/item/DONE0001'],
+      },
+      {
+        op: 'update' as const,
+        ref: REF_2,
+        code: ZOTERO_NOT_FOUND,
+        message: 'Object no longer exists',
+      },
+    ]
+    const content = renderRestoreItems({ refs: [] }, { kind: 'restored', restored, failed })
+    const text = content.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('\n')
+    for (const entry of [...restored, ...failed]) expect(text).toContain(entry.ref)
+    for (const failure of failed) {
+      expect(text).toContain(failure.code)
+      expect(text).toContain(failure.message)
+    }
+    expect(text).toContain(failed[0].completedRefs![0])
+    expect(
+      renderRestoreItems({ refs: [] }, { kind: 'restored', restored: [], failed }),
+    ).toContainEqual({
+      type: 'text',
+      text: expect.stringContaining('Restored 0 item(s); 2 failed.'),
+    })
+  })
+
   it('restores every trashed item under its own version precondition', async () => {
     serveIdentityAndGrant()
     serveTrashedItem(KEY_1, 10, 11)
@@ -151,6 +191,13 @@ describe('zotero_restore_items', () => {
       serverId: SERVER_ID,
     })
     expect(lane.mock.requests.filter((request) => request.method === 'PATCH')).toHaveLength(1)
+    const text = result.content
+      .flatMap((block) => (block.type === 'text' ? [block.text] : []))
+      .join('\n')
+    expect(text).toContain(SERVED_REF_1)
+    expect(text).toContain(REF_2)
+    expect(text).toContain(ZOTERO_NOT_FOUND)
+    expect(text).toContain((result.value as unknown as ZoteroRestoreItemsResult).failed[0].message)
   })
 
   it('writes nothing when the plan is rejected', async () => {
@@ -175,16 +222,17 @@ describe('zotero_restore_items', () => {
     })
     expect(present(args, ok({ kind: 'restored', restoredCount: 2, failedCount: 1 }))).toEqual({
       card: 'generic',
-      title: 'Zotero restore applied: 2 restored, 1 failed',
+      title: 'Zotero restore: 2 restored, 1 failed',
     })
     expect(present(args, ok({ kind: 'restored', restoredCount: 1, failedCount: 0 }))).toEqual({
       card: 'generic',
-      title: 'Zotero restore applied: 1 restored',
+      title: 'Zotero restore: 1 restored, 0 failed',
     })
-    expect(present(args, ok({ kind: 'restored' }))).toEqual({
+    expect(present(args, ok({ kind: 'restored', restoredCount: 0, failedCount: 1 }))).toEqual({
       card: 'generic',
-      title: 'Zotero restore applied: 0 restored',
+      title: 'Zotero restore: 0 restored, 1 failed',
     })
+    expect(present(args, ok({ kind: 'restored' }))).toBeUndefined()
     expect(present(args, ok('loose meta'))).toBeUndefined()
     expect(tool.presentCall!(args)).toEqual({
       card: 'generic',

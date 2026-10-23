@@ -15,7 +15,12 @@ import {
   setApprovalOutcome,
   StubApproval,
 } from '../helpers/approval-stub.js'
-import { expectValue, setupHostLane, type HostLane } from '../helpers/lanes/host-lane.js'
+import {
+  commitLive,
+  expectValue,
+  setupHostLane,
+  type HostLane,
+} from '../helpers/lanes/host-lane.js'
 import { itemJson } from '../helpers/write-domain-fixtures.js'
 import { ZOTERO_INVALID_ARGUMENT } from '../../src/errors.js'
 
@@ -72,6 +77,42 @@ function serveIdentityAndGrant(): void {
 }
 
 describe('zotero_update_note', () => {
+  it('rejects an oversized body before approval or HTTP, using the current limit', async () => {
+    await commitLive(lane, { writeNoteMaxChars: 10 })
+    for (const markdown of ['12345678901', ' 1234567890 ', '😀'.repeat(6)]) {
+      const result = await lane.runTool('zotero_update_note', { ref: NOTE_REF, markdown })
+      expect(result.isError).toBe(true)
+      if (!result.isError) throw new Error('expected a validation failure')
+      expect(result.error.info?.code).toBe(ZOTERO_INVALID_ARGUMENT)
+    }
+    expect(approvalAsks).toHaveLength(0)
+    expect(lane.mock.requests).toHaveLength(0)
+  })
+
+  it('accepts the exact bound for both note tools and observes a raised limit', async () => {
+    await commitLive(lane, { writeNoteMaxChars: 10 })
+    setApprovalOutcome('rejected')
+    for (const name of ['zotero_create_note', 'zotero_update_note']) {
+      const target = name === 'zotero_update_note' ? { ref: NOTE_REF } : {}
+      const result = expectValue(
+        await lane.runTool(name, { ...target, markdown: '1234567890' }),
+        name,
+      )
+      expect(result.value).toEqual({ kind: 'declined' })
+      const blank = await lane.runTool(name, { ...target, markdown: ' \n ' })
+      expect(blank.isError).toBe(true)
+    }
+    await commitLive(lane, { writeNoteMaxChars: 11 })
+    expect(
+      expectValue(
+        await lane.runTool('zotero_update_note', { ref: NOTE_REF, markdown: '12345678901' }),
+        'zotero_update_note',
+      ).value,
+    ).toEqual({ kind: 'declined' })
+    expect(approvalAsks).toHaveLength(3)
+    expect(lane.mock.requests).toHaveLength(0)
+  })
+
   it('rewrites a note body under its version precondition', async () => {
     serveIdentityAndGrant()
     lane.mock.route('GET', `/api/users/0/items/${NOTE_KEY}`, (_req, _res, h) =>

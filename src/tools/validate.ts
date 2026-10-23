@@ -10,6 +10,7 @@ import {
   ZOTERO_INVALID_ARGUMENT,
   requireNonBlank,
   writeListTooLongMessage,
+  writeNoteTooLongMessage,
   ZoteroError,
 } from '../errors.js'
 import { parseRef, requireSupportedLocalRef, requireWritableRef } from '../refs.js'
@@ -23,6 +24,9 @@ export const WRITE_REF_ARG_HINT = 'zotero://user/0/item/<KEY>'
 
 /** Write collection refs share the same personal-library boundary. */
 export const WRITE_COLLECTION_REF_ARG_HINT = 'zotero://user/0/collection/<KEY>'
+
+/** Write saved-search refs share the same personal-library boundary. */
+export const WRITE_SEARCH_REF_ARG_HINT = 'zotero://user/0/search/<KEY>'
 
 /** The JSON schema for a supported local library (personal or group). */
 export const LIBRARY_SCHEMA = {
@@ -59,6 +63,13 @@ export function intRangeArgumentMessage(
  * of every write; this is the tool layer's spelling of the same guard.
  */
 export const assertNonBlank = requireNonBlank
+
+/** Validate the original Markdown before either note tool requests approval. */
+export function assertNoteMarkdown(markdown: string, maxChars: number): string {
+  assertNonBlank('markdown', markdown)
+  if (markdown.length > maxChars) invalid(writeNoteTooLongMessage(maxChars))
+  return markdown
+}
 
 /**
  * Assert an integer within `[min, max]`, naming the argument and its value.

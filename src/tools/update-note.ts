@@ -14,9 +14,9 @@ import {
   libraryVersionLine,
   presentUpdateResultView,
 } from './write-present.js'
-import { parseWritableRef, WRITE_REF_ARG_HINT } from './validate.js'
+import { parseWritableRef, assertNoteMarkdown, WRITE_REF_ARG_HINT } from './validate.js'
 import { WRITE_PLAN_LIBRARY_LINE, WRITE_PLAN_OUTCOME_DESCRIPTION } from '../write-approval.js'
-import { assertNonBlank } from './validate.js'
+import { truncateText } from '../normalize.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroUpdateNoteOutcome, ZoteroUpdateNoteRequest } from '../types.js'
 
@@ -52,11 +52,12 @@ const OUTPUT = {
 type Output = InferValue<typeof OUTPUT>
 
 export function updateNotePlan(args: Args): string {
+  const { text, truncated } = truncateText(args.markdown, 300)
   return [
     '**Update a Zotero note**',
     WRITE_PLAN_LIBRARY_LINE,
     `- Note: ${args.ref}`,
-    `- Markdown: ${args.markdown.slice(0, 300)}`,
+    `- Markdown: ${truncated ? `${text}…` : text}`,
     'The body is converted to Zotero note HTML before the versioned PATCH.',
   ].join('\n')
 }
@@ -110,7 +111,7 @@ export function registerUpdateNoteTool(ctx: Context, service: ZoteroService): ()
       async execute(args, exec): Promise<ZoteroUpdateNoteOutcome> {
         const request: ZoteroUpdateNoteRequest = {
           item: parseWritableRef(args.ref, ['item']),
-          markdown: assertNonBlank('markdown', args.markdown),
+          markdown: assertNoteMarkdown(args.markdown, service.config.writeNoteMaxChars),
         }
         return await service.updateNote(request, { exec, plan: updateNotePlan(args) })
       },

@@ -257,6 +257,22 @@ export type ZoteroLocaleKey =
   | 'toolTitleDeleteCollection'
   | 'toolTitleCreateItem'
   | 'toolTitleUpdateItem'
+  | 'toolTitleUpdateNote'
+  | 'badgePartial'
+  | 'toolTitleUpdateCollection'
+  | 'toolTitleRestoreItems'
+  | 'toolTitleCreateSavedSearch'
+  | 'toolTitleUpdateSavedSearch'
+  | 'toolTitleDeleteSavedSearch'
+  | 'toolTitleScholarlySave'
+  | 'toolSummaryUpdateNote'
+  | 'toolSummaryUpdateCollection'
+  | 'toolSummaryRestoreItems'
+  | 'toolSummaryRestoreItemsRequested'
+  | 'toolSummaryCreateSavedSearch'
+  | 'toolSummaryUpdateSavedSearch'
+  | 'toolSummaryDeleteSavedSearch'
+  | 'toolSummaryScholarlySave'
   | 'toolTitleDeleteLibraryTags'
   | 'toolTitleBrowse'
   | 'toolTitleChanges'
@@ -713,6 +729,22 @@ export const en: Record<ZoteroLocaleKey, string> = {
   toolTitleDeleteCollection: 'Zotero Delete Collection',
   toolTitleCreateItem: 'Zotero Create Item',
   toolTitleUpdateItem: 'Zotero Update Item',
+  toolTitleUpdateNote: 'Zotero Update Note',
+  badgePartial: 'Partially completed',
+  toolTitleUpdateCollection: 'Zotero Update Collection',
+  toolTitleRestoreItems: 'Zotero Restore Items',
+  toolTitleCreateSavedSearch: 'Zotero Create Saved Search',
+  toolTitleUpdateSavedSearch: 'Zotero Update Saved Search',
+  toolTitleDeleteSavedSearch: 'Zotero Delete Saved Search',
+  toolTitleScholarlySave: 'Save Scholarly Result to Zotero',
+  toolSummaryUpdateNote: 'Updated note "{title}"',
+  toolSummaryUpdateCollection: 'Updated collection "{name}"',
+  toolSummaryRestoreItems: 'Restored {restored} items; {failed} failed',
+  toolSummaryRestoreItemsRequested: 'Requested restoration of {count} items',
+  toolSummaryCreateSavedSearch: 'Created saved search "{name}"',
+  toolSummaryUpdateSavedSearch: 'Updated saved search "{name}"',
+  toolSummaryDeleteSavedSearch: 'Deleted saved search "{name}"',
+  toolSummaryScholarlySave: 'Saved scholarly result "{title}" to Zotero',
   toolTitleDeleteLibraryTags: 'Zotero Delete Library Tags',
   toolTitleBrowse: 'Zotero Browse',
   toolTitleChanges: 'Zotero Sync Changes',
@@ -1141,6 +1173,22 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   toolTitleDeleteCollection: 'Zotero 删除合集',
   toolTitleCreateItem: 'Zotero 创建条目',
   toolTitleUpdateItem: 'Zotero 更新条目',
+  toolTitleUpdateNote: 'Zotero 更新笔记',
+  badgePartial: '部分完成',
+  toolTitleUpdateCollection: 'Zotero 更新合集',
+  toolTitleRestoreItems: 'Zotero 恢复条目',
+  toolTitleCreateSavedSearch: 'Zotero 创建已存搜索',
+  toolTitleUpdateSavedSearch: 'Zotero 更新已存搜索',
+  toolTitleDeleteSavedSearch: 'Zotero 删除已存搜索',
+  toolTitleScholarlySave: '保存学术结果到 Zotero',
+  toolSummaryUpdateNote: '已更新笔记 "{title}"',
+  toolSummaryUpdateCollection: '已更新合集 "{name}"',
+  toolSummaryRestoreItems: '已恢复 {restored} 个条目；{failed} 个失败',
+  toolSummaryRestoreItemsRequested: '请求恢复 {count} 个条目',
+  toolSummaryCreateSavedSearch: '已创建已存搜索 "{name}"',
+  toolSummaryUpdateSavedSearch: '已更新已存搜索 "{name}"',
+  toolSummaryDeleteSavedSearch: '已删除已存搜索 "{name}"',
+  toolSummaryScholarlySave: '已将学术结果 "{title}" 保存到 Zotero',
   toolTitleDeleteLibraryTags: 'Zotero 删除全库标签',
   toolTitleBrowse: 'Zotero 浏览分类',
   toolTitleChanges: 'Zotero 同步记录',

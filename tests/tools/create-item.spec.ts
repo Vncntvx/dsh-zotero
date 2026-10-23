@@ -302,7 +302,7 @@ describe('zotero_create_item presentation', () => {
       serverId: 'srv-x',
     })[0] as { text: string }
     expect(unverified.text).toContain('could not be verified')
-    expect(unverified.text).toContain('(key ITEMABC1)')
+    expect(unverified.text).toContain('key ITEMABC1')
     expect(unverified.text).toContain('reconcile the item by its key/ref')
     const applied = tool().output.render(args, {
       kind: 'applied',
@@ -372,13 +372,24 @@ describe('zotero_create_item presentation', () => {
         { itemType: 'book' },
         { kind: 'committed-unverified', reason: 'commit-unknown', key: 'k' },
       ),
-    ).toEqual({ kind: 'committed-unverified', reason: 'commit-unknown', key: 'k' })
+    ).toEqual({
+      kind: 'committed-unverified',
+      committed: true,
+      retryable: false,
+      reason: 'commit-unknown',
+      key: 'k',
+    })
     expect(
       meta(
         { itemType: 'book' },
         { kind: 'committed-unverified', reason: 'saved-state-unverified' },
       ),
-    ).toEqual({ kind: 'committed-unverified', reason: 'saved-state-unverified' })
+    ).toEqual({
+      kind: 'committed-unverified',
+      committed: true,
+      retryable: false,
+      reason: 'saved-state-unverified',
+    })
     expect(meta({ itemType: 'book' }, { kind: 'declined' })).toEqual({ kind: 'declined' })
   })
 

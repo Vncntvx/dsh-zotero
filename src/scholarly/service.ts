@@ -92,6 +92,11 @@ export class ScholarlyService extends Service {
   }
 
   private reconcileTools(ctx: Context, host: ScholarlyReadHost): void {
+    // Tools read every other setting through `host` at call time; only the
+    // enablement flag changes which tools exist, so a key or limit edit must
+    // not churn the registry.
+    const registered = this.toolDisposes.length > 0
+    if (this.currentConfig.enabled === registered) return
     for (const dispose of this.toolDisposes) dispose()
     this.toolDisposes = []
     if (!this.currentConfig.enabled) return

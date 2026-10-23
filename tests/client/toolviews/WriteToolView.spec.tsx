@@ -11,6 +11,7 @@ import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { zh } from '../../../src/client/locales.ts'
 import { WriteToolView } from '../../../src/client/toolviews/WriteToolView.tsx'
+import type { WriteToolName } from '../../../src/client/toolviews/WriteToolView.tsx'
 import { mockT } from '../helpers/mock-translate.ts'
 import { createToolViewProps, mockUseDisclosure } from '../helpers/mock-disclosure.ts'
 import { running, settled } from '../helpers/blocks.ts'
@@ -26,15 +27,7 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-type WriteName =
-  | 'zotero_create_note'
-  | 'zotero_update_item_tags'
-  | 'zotero_update_item_collections'
-  | 'zotero_create_collection'
-  | 'zotero_delete_collection'
-  | 'zotero_create_item'
-  | 'zotero_update_item'
-  | 'zotero_delete_library_tags'
+type WriteName = WriteToolName
 
 const REF = 'zotero://user/0/item/ABCD1234'
 
@@ -466,13 +459,21 @@ describe('WriteToolView argument and count fallbacks', () => {
 
   it('renders every write card from a malformed argument payload without claiming a target', () => {
     const titles: Record<WriteName, string> = {
+      zotero_batch_items: zh.toolTitleBatchItems,
       zotero_create_note: zh.toolTitleCreateNote,
+      zotero_update_note: zh.toolTitleUpdateNote,
       zotero_update_item_tags: zh.toolTitleUpdateItemTags,
       zotero_update_item_collections: zh.toolTitleUpdateItemCollections,
       zotero_create_collection: zh.toolTitleCreateCollection,
+      zotero_update_collection: zh.toolTitleUpdateCollection,
       zotero_delete_collection: zh.toolTitleDeleteCollection,
       zotero_create_item: zh.toolTitleCreateItem,
       zotero_update_item: zh.toolTitleUpdateItem,
+      zotero_restore_items: zh.toolTitleRestoreItems,
+      zotero_create_saved_search: zh.toolTitleCreateSavedSearch,
+      zotero_update_saved_search: zh.toolTitleUpdateSavedSearch,
+      zotero_delete_saved_search: zh.toolTitleDeleteSavedSearch,
+      scholarly_save_to_zotero: zh.toolTitleScholarlySave,
       zotero_delete_library_tags: zh.toolTitleDeleteLibraryTags,
     }
     for (const [name, title] of Object.entries(titles) as [WriteName, string][]) {

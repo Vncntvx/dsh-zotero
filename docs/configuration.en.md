@@ -50,6 +50,8 @@ Note: `foregroundWaitMs` controls how long foreground operations wait before pro
 
 ## Validation Rules
 
+`writeNoteMaxChars` applies to both note creation and update tools. Before approval, they check the original Markdown's JavaScript string length, including whitespace and markup, without truncation.
+
 `resolveConfig` enforces the following rules at load time:
 
 - `baseUrl` must be a string, must use the `http:` protocol (Zotero Local API does not support HTTPS), and must not contain user credentials, query strings, or URL fragments;

@@ -462,11 +462,13 @@ zotero_create_item(itemType="journalArticle", title="Attention Is All You Need",
 
 Replaces an existing Zotero note body from Markdown. The domain reads the note version and converts Markdown to Zotero-safe HTML before issuing the PATCH; the target must have `itemType="note"`.
 
+Both standalone and child notes are supported; reading a child version does not require collection state. Create and update validate the original Markdown against `writeNoteMaxChars` before approval, using JavaScript string length including whitespace and markup, without truncation.
+
 ### Parameters and output
 
 | Parameter  | Type   | Required | Description               |
 | ---------- | ------ | -------- | ------------------------- |
-| `item`     | string | ✓        | Note item ref             |
+| `ref`      | string | ✓        | Note item ref             |
 | `markdown` | string | ✓        | Replacement Markdown body |
 
 Success returns `{kind: "applied", ref, version, libraryVersion, serverId?}`. A declined plan returns `{kind: "declined"}`; a version conflict returns `ZOTERO_WRITE_CONFLICT`.
@@ -501,6 +503,8 @@ Restores selected personal-library items from Trash by PATCHing `deleted: 0` und
 
 Output is `{kind: "restored", restored, failed, serverId?}`; version conflicts are reported per item and are never retried automatically.
 
+Child notes, child attachments, and annotations are supported. The rendered receipt lists every restored ref, object version and library version, plus every failed ref, error code and reason. Cards report actual restored/failed counts and show a warning for partial failure.
+
 ---
 
 ## Zotero saved-search tools
@@ -508,6 +512,12 @@ Output is `{kind: "restored", restored, failed, serverId?}`; version conflicts a
 `zotero_create_saved_search`, `zotero_update_saved_search`, and `zotero_delete_saved_search` use Zotero's native saved-search conditions. Creation requires at least one condition. If a create response is lost or its saved state cannot be verified, the result is `committed-unverified` with `retryable: false`; reconcile by search ref/key before taking another action.
 
 Creation takes `name` and `conditions` (each with `condition`, `operator`, and `value`). Update takes `search` plus at least one of `name` or `conditions`; delete takes `search`. Update and delete use object/library version preconditions.
+
+Unverified creation receipts distinguish `commit-unknown` from `saved-state-unverified`; content and presentation metadata retain known refs, keys, versions, and server identity. Without an identity, check Zotero before any further action instead of repeating creation.
+
+## scholarly_save_to_zotero
+
+Saves a scholarly result to the personal library through the local write approval seam. Its output is a discriminated union of `declined`, `applied`, and `committed-unverified`. Only `applied` includes saved `papers`, alongside the created item's ref, key, version, tags, collections and library version. Unverified outcomes retain their original identity and reason and must not be retried. Cards and conversation replay distinguish these outcomes using persisted content and presentation metadata.
 
 ---
 

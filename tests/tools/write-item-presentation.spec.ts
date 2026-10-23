@@ -76,7 +76,7 @@ describe('collection lifecycle presentation', () => {
     )
     expect(unknown).toContain('may have created the collection')
     expect(unknown).toContain('Do not retry')
-    expect(unknown).toContain('(key COLL1234)')
+    expect(unknown).toContain('key COLL1234')
     expect(unknown).toContain('reconcile the collection by its key/ref')
     const unverified = textOfBlocks(
       renderCreateCollection({ name: 'x' }, { ...UNVERIFIED, reason: 'saved-state-unverified' }),
@@ -140,10 +140,16 @@ describe('collection lifecycle presentation', () => {
     expect(create.output.presentationMeta?.({}, UNVERIFIED)).toEqual({
       kind: 'committed-unverified',
       reason: 'commit-unknown',
+      committed: true,
+      retryable: false,
+      serverId: 'srv',
     })
     expect(create.output.presentationMeta?.({}, { ...UNVERIFIED, key: 'COLL1234' })).toEqual({
       kind: 'committed-unverified',
       reason: 'commit-unknown',
+      committed: true,
+      retryable: false,
+      serverId: 'srv',
       key: 'COLL1234',
     })
     expect(create.output.presentationMeta?.({}, { kind: 'declined' })).toEqual({
@@ -267,12 +273,12 @@ describe('item create and update presentation', () => {
         { ...UNVERIFIED, reason: 'saved-state-unverified', key: 'ITEMABC1' },
       ),
     )
-    expect(withKey).toContain('(key ITEMABC1)')
+    expect(withKey).toContain('key ITEMABC1')
     expect(withKey).toContain('reconcile the item by its key/ref')
     const withRef = textOfBlocks(
       renderCreateItem({ itemType: 'book' }, { ...UNVERIFIED, ref: 'zotero://user/0/item/X' }),
     )
-    expect(withRef).toContain('(ref zotero://user/0/item/X)')
+    expect(withRef).toContain('ref zotero://user/0/item/X')
     const bare = textOfBlocks(renderCreateItem({ itemType: 'book' }, UNVERIFIED))
     expect(bare).toContain('checking Zotero for the item')
     expect(textOfBlocks(renderCreateItem({ itemType: 'book' }, { kind: 'declined' }))).toContain(

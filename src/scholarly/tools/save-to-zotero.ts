@@ -1,54 +1,105 @@
-import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
-import {
-  SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR,
-  type ScholarlyToolHost,
-  type ScholarlyToolOutput,
-} from './search.js'
+import { defineTool, type InferValue, type ToolDefinition } from '@deepseek-ai/dsh-tools'
+import type { ScholarlyToolHost } from './search.js'
 import type { ZoteroCreateItemRequest } from '../../types.js'
 import { requireCreatableItemType, normalizeCreator } from '../../write-item-rules.js'
+import { WRITE_PLAN_LIBRARY_LINE } from '../../write-approval.js'
+import { renderDeclined } from '../../tools/present.js'
+import {
+  COMMITTED_UNVERIFIED_VARIANT,
+  CREATED_ITEM_VARIANT,
+  DECLINED_OUTPUT_SCHEMA,
+  createWritePresentationMeta,
+  libraryVersionLine,
+  presentCreateResultView,
+  renderCommittedUnverified,
+} from '../../tools/write-present.js'
+
+const OUTPUT = {
+  oneOf: [
+    DECLINED_OUTPUT_SCHEMA,
+    COMMITTED_UNVERIFIED_VARIANT,
+    {
+      ...CREATED_ITEM_VARIANT,
+      properties: {
+        ...CREATED_ITEM_VARIANT.properties,
+        papers: {
+          type: 'array',
+          required: true,
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              ref: { type: 'string', required: true },
+              key: { type: 'string', required: true },
+              title: { type: 'string' },
+              doi: { type: 'string' },
+            },
+          },
+        },
+      },
+    },
+  ],
+} as const
+type SaveOutput = InferValue<typeof OUTPUT>
+
+const PARAMETERS = {
+  itemType: { type: 'string', default: 'journalArticle' },
+  title: { type: 'string', required: true },
+  authors: { type: 'array', items: { type: 'string' } },
+  year: { type: 'integer' },
+  doi: { type: 'string' },
+  url: { type: 'string' },
+  abstract: { type: 'string' },
+  publicationTitle: { type: 'string' },
+  tags: { type: 'array', items: { type: 'string' } },
+  collections: { type: 'array', items: { type: 'string' } },
+} as const
+
+export function renderScholarlySave(_args: unknown, value: SaveOutput) {
+  if (value.kind === 'declined') return renderDeclined()
+  if (value.kind === 'committed-unverified')
+    return renderCommittedUnverified(value, 'item', 'created')
+  return [
+    {
+      type: 'text' as const,
+      text: [
+        `Saved scholarly result to Zotero as ${value.ref} (key ${value.key}; version ${value.version}).`,
+        ...value.papers.flatMap((paper) => [
+          ...(paper.title === undefined ? [] : [`Title: ${paper.title}`]),
+          ...(paper.doi === undefined ? [] : [`DOI: ${paper.doi}`]),
+        ]),
+        `Tags: ${value.tags?.join(', ') || '(none)'}`,
+        `Collections: ${value.collections?.join(', ') || '(none)'}`,
+        libraryVersionLine(value),
+      ].join('\n'),
+    },
+  ]
+}
 
 export function createScholarlySaveToZoteroTool(host: ScholarlyToolHost): ToolDefinition {
   return defineTool({
     name: 'scholarly_save_to_zotero',
     description:
       'Save one scholarly result into the local Zotero personal library through the normal write approval seam. The local Zotero component and writeEnabled must both be active.',
-    parameters: {
-      itemType: { type: 'string', default: 'journalArticle' },
-      title: { type: 'string', required: true },
-      authors: { type: 'array', items: { type: 'string' } },
-      year: { type: 'integer' },
-      doi: { type: 'string' },
-      url: { type: 'string' },
-      abstract: { type: 'string' },
-      publicationTitle: { type: 'string' },
-      tags: { type: 'array', items: { type: 'string' } },
-      collections: { type: 'array', items: { type: 'string' } },
+    parameters: PARAMETERS,
+    output: {
+      schema: OUTPUT,
+      render: renderScholarlySave,
+      presentationMeta: (_args, value) => createWritePresentationMeta(value),
     },
-    output: SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR,
+    presentResult: (_args, result) => presentCreateResultView('scholarly item', 'created', result),
     isConcurrencySafe: () => false,
     timeoutMs: 120_000,
-    async execute(args, exec): Promise<ScholarlyToolOutput> {
+    async execute(args, exec): Promise<SaveOutput> {
       const service = host.zoteroService?.()
       if (service?.createItem === undefined)
         throw new Error('The local Zotero write component is unavailable or disabled.')
-      const input = args as {
-        itemType?: string
-        title: string
-        authors?: string[]
-        year?: number
-        doi?: string
-        url?: string
-        abstract?: string
-        publicationTitle?: string
-        tags?: string[]
-        collections?: string[]
-      }
-      const itemType = requireCreatableItemType(input.itemType ?? 'journalArticle')
-      const creators = (input.authors ?? []).map((name, index) => {
+      const itemType = requireCreatableItemType(args.itemType ?? 'journalArticle')
+      const creators = (args.authors ?? []).map((name, index) => {
         const pieces = name.trim().split(/\s+/)
         return normalizeCreator(
           {
-            creatorType: index === 0 ? 'author' : 'author',
+            creatorType: 'author',
             ...(pieces.length > 1
               ? { firstName: pieces.slice(0, -1).join(' '), lastName: pieces.at(-1)! }
               : { name: pieces[0] ?? '' }),
@@ -58,21 +109,21 @@ export function createScholarlySaveToZoteroTool(host: ScholarlyToolHost): ToolDe
       })
       const request: ZoteroCreateItemRequest = {
         itemType,
-        title: input.title.trim(),
-        ...(input.url ? { url: input.url.trim() } : {}),
-        ...(input.year ? { date: String(input.year) } : {}),
-        ...(input.doi ? { doi: input.doi.trim() } : {}),
-        ...(input.abstract ? { abstractNote: input.abstract } : {}),
-        ...(input.publicationTitle ? { publicationTitle: input.publicationTitle } : {}),
+        title: args.title.trim(),
+        ...(args.url ? { url: args.url.trim() } : {}),
+        ...(args.year ? { date: String(args.year) } : {}),
+        ...(args.doi ? { doi: args.doi.trim() } : {}),
+        ...(args.abstract ? { abstractNote: args.abstract } : {}),
+        ...(args.publicationTitle ? { publicationTitle: args.publicationTitle } : {}),
         ...(creators.length ? { creators } : {}),
-        ...(input.tags ? { tags: input.tags } : {}),
-        ...(input.collections ? { collections: input.collections } : {}),
+        ...(args.tags ? { tags: args.tags } : {}),
+        ...(args.collections ? { collections: args.collections } : {}),
       }
       const result = await service.createItem(request, {
         exec,
         plan: [
           '**Save scholarly result to Zotero**',
-          '- Personal library: zotero://user/0/',
+          WRITE_PLAN_LIBRARY_LINE,
           `- Title: ${request.title}`,
           `- DOI: ${request.doi ?? '(none)'}`,
           `- Authors: ${creators.length}`,
@@ -80,31 +131,23 @@ export function createScholarlySaveToZoteroTool(host: ScholarlyToolHost): ToolDe
           `- Collections: ${(request.collections ?? []).join(', ') || '(none)'}`,
         ].join('\n'),
       })
+      if (result.kind !== 'applied') return result
       return {
-        text:
-          result.kind === 'declined'
-            ? 'The Zotero save was declined.'
-            : result.kind === 'committed-unverified'
-              ? 'The Zotero save may have committed; do not retry. Reconcile by key/ref.'
-              : `Saved scholarly result to Zotero as ${result.ref}.`,
-        ...(result.kind === 'applied'
-          ? {
-              papers: [
-                {
-                  ref: result.ref,
-                  key: result.key,
-                  ...(request.title === undefined ? {} : { title: request.title }),
-                  ...(request.doi === undefined ? {} : { doi: request.doi }),
-                },
-              ] as unknown as Record<string, import('@deepseek-ai/dsh-util-values').JsonValue>[],
-            }
-          : {}),
+        ...result,
+        papers: [
+          {
+            ref: result.ref,
+            key: result.key,
+            ...(request.title === undefined ? {} : { title: request.title }),
+            ...(request.doi === undefined ? {} : { doi: request.doi }),
+          },
+        ],
       }
     },
     presentCall: (args) => ({
       card: 'generic',
       title: 'Save scholarly result to Zotero',
-      rawInput: String((args as { title?: string }).title ?? ''),
+      rawInput: args.title ?? '',
       kind: 'edit',
     }),
   })
