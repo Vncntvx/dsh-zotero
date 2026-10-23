@@ -1,13 +1,16 @@
 /**
  * `zotero_batch_items`, the unified batch engine: argument refusals before
  * any write exists, the aggregated plan markdown it renders (including the
- * top-level deletion warning), the receipt arms, and presentation projections.
+ * top-level deletion warning), the receipt arms, presentation projections,
+ * and the delete previews. Execution through the approval seam runs against
+ * the host lane in `./batch-execution.spec.ts`.
  * @module tests/tools/batch-items
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ToolDefinition, ToolResult } from '@deepseek-ai/dsh-tools'
-import { type HostLane, setupHostLane, expectValue } from '../helpers/lanes/host-lane.js'
+import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { TOOL_ABORTED, type ToolDefinition, type ToolResult } from '@deepseek-ai/dsh-tools'
+import { type HostLane, setupHostLane } from '../helpers/lanes/host-lane.js'
 import {
   ZOTERO_NOT_FOUND,
   ZOTERO_UNEXPECTED,
@@ -20,14 +23,7 @@ import {
   writeItemTypeUnsupportedMessage,
 } from '../../src/errors.js'
 import { resolveConfig } from '../../src/config.js'
-import {
-  approvalAsks,
-  ApprovingQuestions,
-  resetApprovalStub,
-  setApprovalOutcome,
-  StubApproval,
-} from '../helpers/approval-stub.js'
-import { itemJson } from '../helpers/write-domain-fixtures.js'
+import { ApprovingQuestions, resetApprovalStub, StubApproval } from '../helpers/approval-stub.js'
 import {
   batchItemsPlan,
   buildBatchItemsRequest,
@@ -37,7 +33,6 @@ import {
 import { presentBatchItemsResultView } from '../../src/tools/write-present.js'
 import type { ZoteroService } from '../../src/service.js'
 
-const SERVER_ID = 'srv-batch-tool-0001'
 const ITEM_REF_1 = 'zotero://user/0/item/ITEMABC1'
 const ITEM_REF_2 = 'zotero://user/0/item/ITEMABC2'
 const ITEM_REF_3 = 'zotero://user/0/item/ITEMABC3'
@@ -218,6 +213,20 @@ describe('zotero_batch_items plan generation', () => {
     expect(plan).not.toContain('### Deletions')
     expect(plan).toContain('### Create items (1 item)')
     expect(plan).toContain('### Update items (1 item)')
+  })
+
+  it('lists only the list operations the updates actually carry', () => {
+    const collection = 'zotero://user/0/collection/COLLABC1'
+    const plan = batchItemsPlan({
+      update: [
+        { ref: ITEM_REF_1, removeTags: ['stale'], addCollections: [collection] },
+        { ref: ITEM_REF_3, removeCollections: [collection] },
+      ],
+    })
+    expect(plan).toContain('- Tags to remove: stale')
+    expect(plan).not.toContain('- Tags to add:')
+    expect(plan).toContain(`- Collections to join: ${collection}`)
+    expect(plan).toContain(`- Collections to leave: ${collection}`)
   })
 
   it('renders an empty plan and deletion targets whose preview is unknown', () => {
@@ -557,27 +566,37 @@ describe('zotero_batch_items request construction and previews', () => {
       .fn()
       .mockResolvedValueOnce({ title: 'First item' })
       .mockResolvedValueOnce({})
-      .mockResolvedValueOnce({ title: 'Third item' })
       .mockRejectedValueOnce(new ZoteroError('missing', ZOTERO_NOT_FOUND))
     const children = vi
       .fn()
       .mockResolvedValueOnce({ attachments: { total: 2 }, notes: { total: 1 } })
-      .mockResolvedValueOnce({ attachments: { total: 0 } })
-      .mockRejectedValueOnce(new Error('children unavailable'))
+      // Zero children, reported through the notes collection alone: the count
+      // must not invent an attachments listing the server never sent.
+      .mockResolvedValueOnce({ notes: { total: 0 } })
     const service = { get, children } as unknown as ZoteroService
     const previews = await previewBatchItems(
       service,
-      [ITEM_REF_1, ITEM_REF_2, ITEM_REF_3, ITEM_REF_4],
+      [ITEM_REF_1, ITEM_REF_2, ITEM_REF_3],
       undefined,
     )
     expect(previews).toEqual([
       { ref: ITEM_REF_1, title: 'First item', childCount: 3 },
       { ref: ITEM_REF_2, title: undefined, childCount: 0 },
-      { ref: ITEM_REF_3, title: 'Third item', childCount: undefined },
-      { ref: ITEM_REF_4 },
+      { ref: ITEM_REF_3 },
     ])
-    expect(get).toHaveBeenCalledTimes(4)
-    expect(children).toHaveBeenCalledTimes(3)
+    expect(get).toHaveBeenCalledTimes(3)
+    expect(children).toHaveBeenCalledTimes(2)
+  })
+
+  it('drops only the child count when the target itself is gone or ambiguous', async () => {
+    // The child count is the preview's one advisory field, so a gone or
+    // ambiguous target degrades it to undefined — the same closed rule
+    // `degradable.ts` states — while the rest of the preview survives.
+    const get = vi.fn().mockResolvedValue({ title: 'An item' })
+    const children = vi.fn().mockRejectedValue(new ZoteroError('gone', ZOTERO_NOT_FOUND))
+    const service = { get, children } as unknown as ZoteroService
+    const previews = await previewBatchItems(service, [ITEM_REF_1], undefined)
+    expect(previews).toEqual([{ ref: ITEM_REF_1, title: 'An item', childCount: undefined }])
   })
 
   it('does not hide non-degradable preview failures', async () => {
@@ -589,112 +608,33 @@ describe('zotero_batch_items request construction and previews', () => {
       code: ZOTERO_UNEXPECTED,
     })
   })
-})
 
-describe('batch execution through the approval seam', () => {
-  function serveIdentityAndGrant(): void {
-    lane.mock.route('GET', '/api/', (_req, _res, h) =>
-      h.json({}, { 'Zotero-Server-ID': SERVER_ID }),
-    )
-    lane.mock.route('POST', '/api/local/authorize', (_req, _res, h) =>
-      h.json({ key: 'K'.repeat(32), remember: true }, { 'Zotero-Server-ID': SERVER_ID }),
-    )
-  }
-
-  it('reviews every creation and returns refs through the native output contract', async () => {
-    serveIdentityAndGrant()
-    const create = Array.from({ length: 11 }, (_, index) => ({
-      itemType: 'book',
-      title: `Batch book ${index}`,
-      tags: ['approved'],
-    }))
-    lane.mock.route('POST', '/api/users/0/items', (_req, _res, h) => {
-      h.json(
-        {
-          successful: Object.fromEntries(
-            create.map((input, index) => [
-              index,
-              itemJson(`BATCH${String(index).padStart(3, '0')}`, 42, input),
-            ]),
-          ),
-        },
-        { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '42' },
-      )
-    })
-    const result = expectValue(
-      await lane.runTool('zotero_batch_items', { create }),
-      'zotero_batch_items',
-    )
-    expect(result.value).toMatchObject({ total: 11, unverified: [], failed: [] })
-    const text = result.content
-      .flatMap((block) => (block.type === 'text' ? [block.text] : []))
-      .join('\n')
-    expect(text).toContain(`zotero://user/0/item/BATCH010?server=${SERVER_ID}`)
-    expect(result.meta).toMatchObject({
-      createdCount: 11,
-      created: expect.arrayContaining([expect.objectContaining({ index: 10, key: 'BATCH010' })]),
-    })
-    const questions = lane.ctx.get('userQuestions') as unknown as ApprovingQuestions
-    expect(questions.asks).toHaveLength(1)
-    expect(questions.asks[0].questions[0].detail).toContain('Batch book 10')
-    const post = lane.mock.requests.find((request) => request.pathname === '/api/users/0/items')
-    expect(JSON.parse(post?.body ?? 'null')).toEqual(
-      create.map((input) => ({ ...input, tags: [{ tag: 'approved' }] })),
+  it('does not swallow a transport failure of the child-count read', async () => {
+    // The regression this locks: the child-count read used to fail into a
+    // bare `catch {}`, so a timeout or a transport error silently under-
+    // reported the deletion's blast radius and the user approved a plan
+    // that claimed fewer children than the item has.
+    const get = vi.fn().mockResolvedValue({ title: 'An item' })
+    const children = vi.fn().mockRejectedValue(new Error('children unavailable'))
+    const service = { get, children } as unknown as ZoteroService
+    await expect(previewBatchItems(service, [ITEM_REF_1], undefined)).rejects.toThrow(
+      'children unavailable',
     )
   })
 
-  it('reports an uncertain native create without converting it into an ordinary failure', async () => {
-    serveIdentityAndGrant()
-    lane.mock.route('POST', '/api/users/0/items', (_req, res) => {
-      res.destroy()
+  it('reports caller cancellation as the harness abort even when only the child read failed', async () => {
+    // Cancellation outranks every degradation rule: a cancelled call must
+    // surface as TOOL_ABORTED, never as a plan card with a missing count.
+    const caller = new AbortController()
+    caller.abort()
+    const get = vi.fn().mockResolvedValue({ title: 'An item' })
+    const children = vi.fn().mockRejectedValue(new Error('late failure'))
+    const service = { get, children } as unknown as ZoteroService
+    await expect(previewBatchItems(service, [ITEM_REF_1], caller.signal)).rejects.toBeInstanceOf(
+      HarnessError,
+    )
+    await expect(previewBatchItems(service, [ITEM_REF_1], caller.signal)).rejects.toMatchObject({
+      code: TOOL_ABORTED,
     })
-    const result = expectValue(
-      await lane.runTool('zotero_batch_items', {
-        create: [{ itemType: 'book', title: 'Uncertain' }],
-      }),
-      'zotero_batch_items',
-    )
-    expect(result.value).toMatchObject({
-      created: [],
-      failed: [],
-      unverified: [{ index: 0, retryable: false }],
-    })
-    expect(result.content).toEqual([
-      expect.objectContaining({ text: expect.stringContaining('do not retry') }),
-    ])
-  })
-
-  it('writes nothing when approval policy rejects the complete plan', async () => {
-    setApprovalOutcome('rejected')
-    const result = expectValue(
-      await lane.runTool('zotero_batch_items', {
-        create: [{ itemType: 'book', title: 'Declined' }],
-      }),
-      'zotero_batch_items',
-    )
-    expect(result.value).toEqual({ kind: 'declined' })
-    expect(lane.mock.requests).toEqual([])
-  })
-
-  it('names the recoverable Trash outcome in the policy prompt', async () => {
-    const key = 'TRASHME1'
-    lane.mock.route('GET', `/api/users/0/items/${key}`, (_req, _res, h) =>
-      h.json(itemJson(key, 7, { itemType: 'book', title: 'Old draft' }), {
-        'Zotero-Server-ID': SERVER_ID,
-      }),
-    )
-    lane.mock.route('GET', `/api/users/0/items/${key}/children`, (_req, _res, h) =>
-      h.json([], { 'Zotero-Server-ID': SERVER_ID, 'Total-Results': '0' }),
-    )
-    setApprovalOutcome('rejected')
-    const result = expectValue(
-      await lane.runTool('zotero_batch_items', { delete: [`zotero://user/0/item/${key}`] }),
-      'zotero_batch_items',
-    )
-    expect(result.value).toEqual({ kind: 'declined' })
-    expect(approvalAsks).toHaveLength(1)
-    expect(approvalAsks[0]?.displayReason?.zh).toContain('回收站')
-    expect(approvalAsks[0]?.displayReason?.en).toContain('Trash')
-    expect(lane.mock.requests.some((request) => request.method !== 'GET')).toBe(false)
   })
 })

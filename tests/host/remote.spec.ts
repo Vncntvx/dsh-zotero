@@ -14,6 +14,9 @@ import { ZOTERO_STATUS_SERVICE_KEY, type ZoteroDiagnosticEntry } from '../../src
 import { TYPERT_MANIFEST } from '../../src/typert.js'
 import { type HostLane, setupHostLane } from '../helpers/lanes/host-lane.js'
 
+/** A signal that never aborts: direct calls pass the carrier signal the gateway would inject. */
+const LIVE_SIGNAL = new AbortController().signal
+
 /** The lane the current test booted; `afterEach` releases it. */
 let lane: HostLane | undefined
 
@@ -33,7 +36,7 @@ describe('the zotero status endpoint', () => {
       ),
     )
     const runtime = lane.ctx.get('zoteroRemote') as ZoteroRuntime
-    const status = await runtime.status()
+    const status = await runtime.status(LIVE_SIGNAL)
     expect(status).toEqual({
       providerId: 'local',
       // The authority actually dialled, the mock server's own host:port, not
@@ -55,6 +58,19 @@ describe('the zotero status endpoint', () => {
     expect(status.write).toBeUndefined()
   })
 
+  it('honors a pre-aborted carrier signal instead of doing the work', async () => {
+    // The endpoints opt into cooperative cancellation: the transport injects
+    // the carrier signal as the final parameter, and an already-aborted call
+    // must stop before the probe or the snapshot runs.
+    lane = await setupHostLane(undefined, { typert: true })
+    const runtime = lane.ctx.get('zoteroRemote') as ZoteroRuntime
+    const controller = new AbortController()
+    controller.abort()
+    await expect(runtime.status(controller.signal)).rejects.toThrow()
+    await expect(runtime.diagnostics(controller.signal)).rejects.toThrow()
+    expect(lane.mock.requests).toHaveLength(0)
+  })
+
   it('reports the dialled endpoint even when the probe failed', async () => {
     lane = await setupHostLane(undefined, { typert: true })
     const endpoint = new URL(lane.mock.baseUrl).host
@@ -62,7 +78,7 @@ describe('the zotero status endpoint', () => {
     // not answer is the fact a user needs next, so the failure arm carries it.
     await lane.mock.close()
     const runtime = lane.ctx.get('zoteroRemote') as ZoteroRuntime
-    const status = await runtime.status()
+    const status = await runtime.status(LIVE_SIGNAL)
     expect(status.connected).toBe(false)
     expect(status.endpoint).toBe(endpoint)
   })
@@ -73,7 +89,7 @@ describe('the zotero status endpoint', () => {
       helpers.json({}, { 'Zotero-Server-ID': 'S-write' }),
     )
     const runtime = lane.ctx.get('zoteroRemote') as ZoteroRuntime
-    await expect(runtime.status()).resolves.toMatchObject({
+    await expect(runtime.status(LIVE_SIGNAL)).resolves.toMatchObject({
       providerId: 'local',
       connected: true,
       serverId: 'S-write',
@@ -86,7 +102,7 @@ describe('the zotero status endpoint', () => {
     lane = await setupHostLane(undefined, { typert: true })
     lane.mock.route('GET', '/api/', (_req, _res, helpers) => helpers.raw(503, {}, 'down'))
     const runtime = lane.ctx.get('zoteroRemote') as ZoteroRuntime
-    const status = await runtime.status()
+    const status = await runtime.status(LIVE_SIGNAL)
     expect(status.connected).toBe(false)
     expect(status.apiVersion).toBeUndefined()
     expect(status.serverId).toBeUndefined()
@@ -98,7 +114,7 @@ describe('the zotero status endpoint', () => {
     const context = new Context()
     await context.plugin(TypertRegistry)
     new ZoteroRuntime(context)
-    await expect(context.get('zoteroRemote')!.diagnostics()).resolves.toEqual({
+    await expect(context.get('zoteroRemote')!.diagnostics(LIVE_SIGNAL)).resolves.toEqual({
       entries: [],
       total: 0,
       truncated: false,
@@ -109,12 +125,15 @@ describe('the zotero status endpoint', () => {
 
   it('accepts a minimal client error report without optional stacks', async () => {
     lane = await setupHostLane(undefined, { typert: true })
-    const receipt = await lane.ctx.get('zoteroRemote')!.reportClientError({
-      surface: 'detail',
-      message: 'boom',
-    })
+    const receipt = await lane.ctx.get('zoteroRemote')!.reportClientError(
+      {
+        surface: 'detail',
+        message: 'boom',
+      },
+      LIVE_SIGNAL,
+    )
     expect(receipt.seq).toBeGreaterThan(0)
-    const view = await lane.ctx.get('zoteroRemote')!.diagnostics()
+    const view = await lane.ctx.get('zoteroRemote')!.diagnostics(LIVE_SIGNAL)
     const entry = (view.entries as ZoteroDiagnosticEntry[]).find(
       (candidate) => candidate.event === 'client.render',
     )
@@ -128,7 +147,9 @@ describe('the zotero status endpoint', () => {
     await context.plugin(TypertRegistry)
     new ZoteroRuntime(context)
     await expect(
-      context.get('zoteroRemote')!.reportClientError({ surface: 'sources', message: 'boom' }),
+      context
+        .get('zoteroRemote')!
+        .reportClientError({ surface: 'sources', message: 'boom' }, LIVE_SIGNAL),
     ).rejects.toThrow('The Zotero service is not composed.')
     await context.fiber.dispose()
   })
@@ -139,7 +160,7 @@ describe('the zotero status endpoint', () => {
     const context = new Context()
     await context.plugin(TypertRegistry)
     new ZoteroRuntime(context)
-    await expect(context.get('zoteroRemote')!.status()).resolves.toEqual({
+    await expect(context.get('zoteroRemote')!.status(LIVE_SIGNAL)).resolves.toEqual({
       providerId: 'local',
       connected: false,
       diagnosis: 'The Zotero service is not composed.',
@@ -322,7 +343,7 @@ describe('the zotero resolveAttachment endpoint', () => {
     await context.plugin(TypertRegistry)
     new ZoteroRuntime(context)
     await expect(
-      context.get('zoteroRemote')!.resolveAttachment('zotero://user/0/items/ITEMKEY1'),
+      context.get('zoteroRemote')!.resolveAttachment('zotero://user/0/items/ITEMKEY1', LIVE_SIGNAL),
     ).rejects.toThrow('The Zotero service is not composed.')
     await context.fiber.dispose()
   })
@@ -340,7 +361,7 @@ describe('the zotero resolveAttachment endpoint', () => {
         path: '/storage/paper.pdf',
       })
       const runtime = lane.ctx.get('zoteroRemote') as ZoteroRuntime
-      const fileRes = await runtime.resolveAttachment('zotero://user/0/item/ITEMKEY1')
+      const fileRes = await runtime.resolveAttachment('zotero://user/0/item/ITEMKEY1', LIVE_SIGNAL)
       expect(fileRes).toEqual({
         ref: 'zotero://user/0/item/ITEMKEY1',
         kind: 'file',
@@ -356,7 +377,7 @@ describe('the zotero resolveAttachment endpoint', () => {
         contentType: 'application/pdf',
         url: 'https://arxiv.org/abs/1234',
       })
-      const urlRes = await runtime.resolveAttachment('zotero://user/0/item/ITEMKEY1')
+      const urlRes = await runtime.resolveAttachment('zotero://user/0/item/ITEMKEY1', LIVE_SIGNAL)
       expect(urlRes).toEqual({
         ref: 'zotero://user/0/item/ITEMKEY1',
         kind: 'url',

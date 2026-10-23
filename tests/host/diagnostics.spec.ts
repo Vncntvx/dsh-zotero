@@ -18,6 +18,9 @@ import {
 /** The lane the current test booted; `afterEach` releases it. */
 let lane: HostLane | undefined
 
+/** A signal that never aborts: direct Remote calls pass the carrier signal the gateway would inject. */
+const LIVE_SIGNAL = new AbortController().signal
+
 afterEach(async () => {
   await lane?.ctx.fiber.dispose()
   await lane?.teardown()
@@ -31,7 +34,7 @@ function runtimeOf(l: HostLane): ZoteroRuntime {
 describe('the zotero diagnostics endpoint', () => {
   it('serves the snapshot with the debug fact and the built transport', async () => {
     lane = await setupHostLane(undefined, { typert: true })
-    const view = await runtimeOf(lane).diagnostics()
+    const view = await runtimeOf(lane).diagnostics(LIVE_SIGNAL)
     expect(view.debug).toBe(false)
     expect(view.truncated).toBe(false)
     expect(view.total).toBeGreaterThanOrEqual(1)
@@ -45,7 +48,7 @@ describe('the zotero diagnostics endpoint', () => {
     )
     const result = await lane.runTool('zotero_search', { query: 'flash attention', limit: 5 })
     expect(result.isError).toBe(true)
-    const view = await runtimeOf(lane).diagnostics()
+    const view = await runtimeOf(lane).diagnostics(LIVE_SIGNAL)
     const toolResult = view.entries.find((entry) => entry.event === 'tool.result')
     const httpFailure = view.entries.find((entry) => entry.event === 'http.failure')
     expect(toolResult).toMatchObject({
@@ -87,7 +90,7 @@ describe('the zotero diagnostics endpoint', () => {
           content: [{ type: 'text', text: 'Error: plain refusal' }],
         }) as never,
     )
-    const view = await runtimeOf(lane).diagnostics()
+    const view = await runtimeOf(lane).diagnostics(LIVE_SIGNAL)
     const entry = view.entries.find((candidate) => candidate.message.includes('plain refusal'))
     expect(entry).toMatchObject({ level: 'warn', event: 'tool.result' })
     expect(entry?.detail?.errorCode).toBeUndefined()
@@ -102,7 +105,7 @@ describe('the zotero diagnostics endpoint', () => {
       await lane.runTool('zotero_search', { query: 'quiet run', limit: 5 }),
       'zotero_search',
     )
-    const quiet = await runtimeOf(lane).diagnostics()
+    const quiet = await runtimeOf(lane).diagnostics(LIVE_SIGNAL)
     expect(quiet.debug).toBe(false)
     expect(quiet.entries.every((entry) => entry.event !== 'http.request')).toBe(true)
 
@@ -111,7 +114,7 @@ describe('the zotero diagnostics endpoint', () => {
       await lane.runTool('zotero_search', { query: 'verbose run', limit: 5 }),
       'zotero_search',
     )
-    const verbose = await runtimeOf(lane).diagnostics()
+    const verbose = await runtimeOf(lane).diagnostics(LIVE_SIGNAL)
     expect(verbose.debug).toBe(true)
     expect(verbose.entries.some((entry) => entry.event === 'http.request')).toBe(true)
     expect(verbose.entries.some((entry) => entry.event === 'tool.call')).toBe(true)
@@ -120,14 +123,17 @@ describe('the zotero diagnostics endpoint', () => {
 
   it('accepts a client error report, clamped, and assigns its sequence', async () => {
     lane = await setupHostLane(undefined, { typert: true })
-    const receipt = await runtimeOf(lane).reportClientError({
-      surface: 'sources',
-      message: 'x'.repeat(2000),
-      stack: 's'.repeat(5000),
-      componentStack: 'c'.repeat(3000),
-    })
+    const receipt = await runtimeOf(lane).reportClientError(
+      {
+        surface: 'sources',
+        message: 'x'.repeat(2000),
+        stack: 's'.repeat(5000),
+        componentStack: 'c'.repeat(3000),
+      },
+      LIVE_SIGNAL,
+    )
     expect(receipt.seq).toBeGreaterThan(0)
-    const view = await runtimeOf(lane).diagnostics()
+    const view = await runtimeOf(lane).diagnostics(LIVE_SIGNAL)
     const entry = view.entries.find((candidate) => candidate.event === 'client.render')
     expect(entry).toMatchObject({ level: 'error', seq: receipt.seq })
     expect(entry?.message.startsWith('sources: ')).toBe(true)
@@ -141,7 +147,7 @@ describe('the zotero diagnostics endpoint', () => {
     // under the fiber-derived `zotero-service` name, so it files as a
     // lifecycle entry with the stable error code.
     lane.zoteroFiber.ctx.logger.error(new ZoteroError('the library is closed', ZOTERO_NOT_RUNNING))
-    const view = await runtimeOf(lane).diagnostics()
+    const view = await runtimeOf(lane).diagnostics(LIVE_SIGNAL)
     const entry = view.entries.find((candidate) => candidate.event === 'lifecycle')
     expect(entry).toMatchObject({
       level: 'error',
@@ -154,7 +160,7 @@ describe('the zotero diagnostics endpoint', () => {
     // A root-context logger carries no plugin name: the exporter must leave
     // it for the harness's own (unmounted) sinks.
     lane.ctx.logger.warn('a root-level note')
-    const view = await runtimeOf(lane).diagnostics()
+    const view = await runtimeOf(lane).diagnostics(LIVE_SIGNAL)
     expect(view.entries.every((candidate) => candidate.event !== 'lifecycle')).toBe(true)
   })
 
@@ -166,7 +172,7 @@ describe('the zotero diagnostics endpoint', () => {
     const service = lane.ctx.get('zotero')
     await service!.status()
     await service!.status()
-    const view = await runtimeOf(lane).diagnostics()
+    const view = await runtimeOf(lane).diagnostics(LIVE_SIGNAL)
     const entries = view.entries.filter((candidate) => candidate.event === 'probe.changed')
     expect(entries).toHaveLength(1)
     expect(entries[0]).toMatchObject({ level: 'info', message: 'Zotero connected' })
@@ -174,7 +180,7 @@ describe('the zotero diagnostics endpoint', () => {
 
   it('booted with the debug flag retains debug entries from the start', async () => {
     lane = await setupHostLane({ debug: true }, { typert: true })
-    const view = await runtimeOf(lane).diagnostics()
+    const view = await runtimeOf(lane).diagnostics(LIVE_SIGNAL)
     expect(view.debug).toBe(true)
   })
 
@@ -207,7 +213,7 @@ describe('the zotero diagnostics endpoint', () => {
         () => Promise.reject(new Error('registry blew up')),
       ),
     ).rejects.toThrow('registry blew up')
-    const view = await runtimeOf(lane).diagnostics()
+    const view = await runtimeOf(lane).diagnostics(LIVE_SIGNAL)
     const entry = view.entries.find((candidate) => candidate.event === 'tool.result')
     expect(entry).toMatchObject({ level: 'error' })
     expect(entry?.message).toContain('zotero_search threw: registry blew up')
@@ -228,7 +234,7 @@ describe('the zotero diagnostics endpoint', () => {
         () => Promise.reject('bare string failure'),
       ),
     ).rejects.toBe('bare string failure')
-    const refreshed = await runtimeOf(lane).diagnostics()
+    const refreshed = await runtimeOf(lane).diagnostics(LIVE_SIGNAL)
     const bareEntry = refreshed.entries.find((candidate) =>
       candidate.message.includes('bare string failure'),
     )
@@ -237,7 +243,7 @@ describe('the zotero diagnostics endpoint', () => {
 
   it('rebuilds the transport and reconciles heavy tools from live commits', async () => {
     lane = await setupHostLane(undefined, { typert: true })
-    const before = (await runtimeOf(lane).diagnostics()).entries.find(
+    const before = (await runtimeOf(lane).diagnostics(LIVE_SIGNAL)).entries.find(
       (candidate) => candidate.event === 'transport.built',
     )
     await commitLive(lane, { timeoutMs: 12345 })
@@ -245,7 +251,7 @@ describe('the zotero diagnostics endpoint', () => {
     await commitLive(lane, { enableRunInBackground: true })
     // A transport-key commit carrying the current value rebuilds nothing.
     await commitLive(lane, { timeoutMs: 12345 })
-    const view = await runtimeOf(lane).diagnostics()
+    const view = await runtimeOf(lane).diagnostics(LIVE_SIGNAL)
     // Identical consecutive builds coalesce into a count bump; the heavy-tool
     // flips and the no-op commit must not have touched the transport count.
     const entry = view.entries.find((candidate) => candidate.event === 'transport.built')
@@ -261,7 +267,7 @@ describe('the zotero diagnostics endpoint', () => {
     }
     try {
       await commitLive(lane, { timeoutMs: 999 })
-      const view = await runtimeOf(lane).diagnostics()
+      const view = await runtimeOf(lane).diagnostics(LIVE_SIGNAL)
       const entry = view.entries.find((candidate) => candidate.event === 'config.apply.failed')
       expect(entry).toMatchObject({ level: 'error' })
       expect(entry?.message).toContain('rebuild exploded')

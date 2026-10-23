@@ -323,8 +323,14 @@ async function fetchDeletePreview(
         signal,
       )
       childCount = (children.attachments?.total ?? 0) + (children.notes?.total ?? 0)
-    } catch {
-      // Degrade child count gracefully
+    } catch (error) {
+      // The child count is the one advisory field of the preview, so only the
+      // degradable outcomes (a gone or ambiguous target) may drop it. Every
+      // other failure — a timeout, a transport error, a protocol shape change,
+      // a caller cancellation — reaches the caller, the same closed rule
+      // `degradable.ts` states and `delete-collection.ts` keeps.
+      const outcome = previewOutcomeOf(error, signal, undefined)
+      if (outcome.kind === 'rethrow') throw outcome.error
     }
     return { ref: refStr, title: detail.title, childCount }
   } catch (error) {

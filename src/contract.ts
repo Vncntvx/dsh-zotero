@@ -187,6 +187,7 @@ export function zoteroStatusInvocation(
     namespace: ZOTERO_SETTINGS_NAMESPACE,
     method: ZOTERO_STATUS_METHOD,
     invocation: { kind: ZOTERO_STATUS_INVOCATION_KIND },
+    cancellation: { parameter: 'signal' },
     parameters: [],
     result,
   }
@@ -208,6 +209,7 @@ export function zoteroResolveAttachmentInvocation(
     namespace: ZOTERO_SETTINGS_NAMESPACE,
     method: ZOTERO_RESOLVE_ATTACHMENT_METHOD,
     invocation: { kind: ZOTERO_STATUS_INVOCATION_KIND },
+    cancellation: { parameter: 'signal' },
     parameters: [
       {
         name: 'ref',
@@ -236,6 +238,7 @@ export function zoteroDiagnosticsInvocation(
     namespace: ZOTERO_SETTINGS_NAMESPACE,
     method: ZOTERO_DIAGNOSTICS_METHOD,
     invocation: { kind: ZOTERO_STATUS_INVOCATION_KIND },
+    cancellation: { parameter: 'signal' },
     parameters: [],
     result,
   }
@@ -257,6 +260,7 @@ export function zoteroReportClientErrorInvocation(
     namespace: ZOTERO_SETTINGS_NAMESPACE,
     method: ZOTERO_REPORT_CLIENT_ERROR_METHOD,
     invocation: { kind: ZOTERO_STATUS_INVOCATION_KIND },
+    cancellation: { parameter: 'signal' },
     parameters: [
       {
         name: 'report',

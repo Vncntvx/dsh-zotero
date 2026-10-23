@@ -1,7 +1,7 @@
 /**
  * The write gate lives at the `ctx.zotero` seam, not in a tool.
  *
- * The eight write tools are only one door into the write domain; the service
+ * The write tools are only one door into the write domain; the service
  * method is the other, and a spec that goes through a tool can never show
  * whether the seam itself gates. These cases call `ctx.zotero` directly, with
  * no tool in the path, and pin the whole settlement map: the
@@ -16,6 +16,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { Context, Service } from '@deepseek-ai/cordis'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import type {
   AskUserQuestionAnswer,
   AskUserQuestionItem,
@@ -360,14 +361,17 @@ describe('the session approval policy gate', () => {
     expect(itemWrites(lane.mock)).toHaveLength(0)
   })
 
-  it('declines without asking plan when the permission ask is cancelled', async () => {
+  it('reports a cancelled permission ask as the harness abort, not a decline', async () => {
+    // The official approval vocabulary produces 'cancelled' only by aborting
+    // the request's signal, and the official consumer upgrades it to the
+    // harness abort: a withdrawn request is not a user "no".
     const lane = await bootLane({ writeEnabled: true })
     serveWrites(lane.mock)
     setApprovalOutcome('cancelled')
 
-    const result = await lane.ctx.zotero.createNote({ markdown: 'x' }, callOf('- plan'))
-
-    expect(result).toEqual({ kind: 'declined' })
+    await expect(
+      lane.ctx.zotero.createNote({ markdown: 'x' }, callOf('- plan')),
+    ).rejects.toMatchObject({ code: TOOL_ABORTED })
     expect(asks).toHaveLength(0)
     expect(lane.mock.requests).toHaveLength(0)
   })

@@ -48,23 +48,24 @@ export const TYPERT_MANIFEST: TypertContribution = {
           {
             kind: 'method',
             name: ZOTERO_STATUS_METHOD,
-            signature: 'status(): Promise<ZoteroStatusView>',
+            signature: 'status(signal: AbortSignal): Promise<ZoteroStatusView>',
           },
           {
             kind: 'method',
             name: ZOTERO_RESOLVE_ATTACHMENT_METHOD,
-            signature: 'resolveAttachment(ref: string): Promise<ZoteroAttachmentLocationView>',
+            signature:
+              'resolveAttachment(ref: string, signal: AbortSignal): Promise<ZoteroAttachmentLocationView>',
           },
           {
             kind: 'method',
             name: ZOTERO_DIAGNOSTICS_METHOD,
-            signature: 'diagnostics(): Promise<ZoteroDiagnosticsView>',
+            signature: 'diagnostics(signal: AbortSignal): Promise<ZoteroDiagnosticsView>',
           },
           {
             kind: 'method',
             name: ZOTERO_REPORT_CLIENT_ERROR_METHOD,
             signature:
-              'reportClientError(report: ZoteroClientErrorReport): Promise<ZoteroReportResultView>',
+              'reportClientError(report: ZoteroClientErrorReport, signal: AbortSignal): Promise<ZoteroReportResultView>',
           },
         ],
         types: [],

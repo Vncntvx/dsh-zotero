@@ -43,16 +43,21 @@ describe('requestWriteApproval', () => {
       const exec = {
         callId: 'call-appr-1',
         name: 'zotero_create_note',
-        signal: new AbortController().signal,
+        // The official vocabulary produces 'cancelled' only by aborting the
+        // signal the request carries, so the cancelled arm models that shape.
+        signal: outcome === 'cancelled' ? AbortSignal.abort() : new AbortController().signal,
         agent: { id: 'agent-1' } as never,
       } as unknown as ToolRunContext
-      const result = await requestWriteApproval(approval as unknown as Context, {
+      const call = requestWriteApproval(approval as unknown as Context, {
         exec,
         plan: '- plan',
       })
-      if (outcome === 'allowed-once') expect(result).toBe('allowed')
-      else if (outcome === 'unavailable') expect(result).toBe('unavailable')
-      else expect(result).toBe('declined')
+      if (outcome === 'allowed-once') expect(await call).toBe('allowed')
+      else if (outcome === 'unavailable') expect(await call).toBe('unavailable')
+      else if (outcome === 'cancelled') {
+        // A withdrawn request is the harness abort, not a user "no".
+        await expect(call).rejects.toMatchObject({ code: TOOL_ABORTED })
+      } else expect(await call).toBe('declined')
     }
   })
 

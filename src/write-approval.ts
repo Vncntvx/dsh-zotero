@@ -20,7 +20,11 @@
  *
  * Approval-settlement map ({@link requestWriteApproval}):
  * - `allowed-once` → proceed to plan-review.
- * - `rejected` / `cancelled` → `declined` (no plan card, no network).
+ * - `rejected` → `declined` (no plan card, no network).
+ * - `cancelled` → the harness abort (`TOOL_ABORTED`), never a decline: the
+ *   official vocabulary produces it only by aborting the request's signal
+ *   (`user-approval/src/index.ts:268-269`), so a withdrawal must not read as
+ *   a user decision.
  * - `unavailable` / no agent / infrastructure failure →
  *   `ZOTERO_WRITE_APPROVAL_UNAVAILABLE` (fail closed).
  * - no `ctx.approval` composed → `unavailable` as well: the decision cannot
@@ -191,8 +195,15 @@ export async function requestWriteApproval(
     case 'allowed-once':
       return 'allowed'
     case 'rejected':
-    case 'cancelled':
       return 'declined'
+    case 'cancelled':
+      // The official vocabulary produces 'cancelled' only by aborting the
+      // signal passed to the request (`user-approval/src/index.ts:268-269`),
+      // and the official consumer upgrades that case to the harness abort
+      // (`core/tools/src/index.ts:1766-1769,1520-1523`). A withdrawn request
+      // is not a user "no": reporting it as declined would invite the model
+      // to treat a cancelled call as a decision.
+      throw new HarnessError(TOOL_ABORTED_MESSAGE, TOOL_ABORTED)
     default:
       // 'unavailable' and any rogue value: fail closed.
       return 'unavailable'

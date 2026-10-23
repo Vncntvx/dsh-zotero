@@ -107,7 +107,7 @@ describe('zotero Remote contract layering', () => {
     expect(service?.members).toContainEqual({
       kind: 'method',
       name: ZOTERO_STATUS_METHOD,
-      signature: 'status(): Promise<ZoteroStatusView>',
+      signature: 'status(signal: AbortSignal): Promise<ZoteroStatusView>',
     })
   })
 })

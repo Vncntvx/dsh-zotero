@@ -61,8 +61,10 @@ export class ZoteroRuntime extends TypertRemoteService {
    * healthy service.
    * @returns the connectivity view; the provider converges failures into it.
    */
-  async status(): Promise<ZoteroStatusView> {
-    const status = await this.ctx.get('zotero')?.status()
+  async status(signal: AbortSignal): Promise<ZoteroStatusView> {
+    signal.throwIfAborted()
+    const status = await this.ctx.get('zotero')?.status(signal)
+    signal.throwIfAborted()
     if (status === undefined) {
       return {
         providerId: LOCAL_PROVIDER_ID,
@@ -78,12 +80,13 @@ export class ZoteroRuntime extends TypertRemoteService {
    * @param ref - the item or attachment ref string.
    * @returns the resolved location view.
    */
-  async resolveAttachment(ref: string): Promise<ZoteroAttachmentLocationView> {
+  async resolveAttachment(ref: string, signal: AbortSignal): Promise<ZoteroAttachmentLocationView> {
+    signal.throwIfAborted()
     const service = this.ctx.get('zotero')
     if (service === undefined) {
       throw new Error('The Zotero service is not composed.')
     }
-    return await service.resolveAttachment(ref)
+    return await service.resolveAttachment(ref, signal)
   }
 
   /**
@@ -93,7 +96,8 @@ export class ZoteroRuntime extends TypertRemoteService {
    * the reader consults this record once something broke.
    * @returns the snapshot view.
    */
-  async diagnostics(): Promise<ZoteroDiagnosticsView> {
+  async diagnostics(signal: AbortSignal): Promise<ZoteroDiagnosticsView> {
+    signal.throwIfAborted()
     const service = this.ctx.get('zotero')
     if (service === undefined) {
       return { entries: [], total: 0, truncated: false, debug: false }
@@ -122,7 +126,11 @@ export class ZoteroRuntime extends TypertRemoteService {
    * @param report - the crashed surface's report.
    * @returns the ring sequence the report was assigned.
    */
-  async reportClientError(report: ZoteroClientErrorReport): Promise<ZoteroReportResultView> {
+  async reportClientError(
+    report: ZoteroClientErrorReport,
+    signal: AbortSignal,
+  ): Promise<ZoteroReportResultView> {
+    signal.throwIfAborted()
     const service = this.ctx.get('zotero')
     if (service === undefined) {
       throw new Error('The Zotero service is not composed.')
