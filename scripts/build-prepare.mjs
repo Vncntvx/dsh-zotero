@@ -80,7 +80,7 @@ if (!process.argv.includes('--force') && FULL_BUILD_OUTPUTS.every((output) => ex
  * consumer (the harness loader) resolves. Kept beside the build so a change to
  * `package.json` exports and the check that proves them cannot drift apart.
  */
-const REQUIRED_OUTPUTS = ['lib/index.js', 'lib/client.js']
+const REQUIRED_OUTPUTS = ['lib/index.js', 'lib/client.js', 'lib/scholarly/index.js']
 
 const entryPoints = nodeSources()
 if (entryPoints.length === 0) throw new Error('no Node-half sources found under src/')

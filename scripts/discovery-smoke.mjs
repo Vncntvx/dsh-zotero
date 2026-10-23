@@ -15,9 +15,8 @@
  * @module scripts/discovery-smoke
  */
 
-import { execFile, spawn } from 'node:child_process'
-import { execFileSync } from 'node:child_process'
-import { mkdtempSync, openSync, readFileSync, rmSync, closeSync } from 'node:fs'
+import { execFile, execFileSync, spawn } from 'node:child_process'
+import { closeSync, existsSync, mkdtempSync, openSync, readFileSync, rmSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -36,10 +35,31 @@ function argAfter(flag) {
   return index === -1 ? undefined : process.argv[index + 1]
 }
 
-const DSH = argAfter('--dsh') ?? 'dsh'
+function resolveDsh() {
+  const explicit = argAfter('--dsh')
+  if (explicit !== undefined) return explicit
+
+  const harnessRoot = resolve(
+    process.env.DSH_HARNESS_ROOT ?? join(PACKAGE_DIR, '../deepseek-harness'),
+  )
+  const siblingCli = join(harnessRoot, 'apps/cli/lib/bin.js')
+  if (existsSync(siblingCli)) {
+    return siblingCli
+  }
+  return 'dsh'
+}
+
+const DSH = resolveDsh()
 const HOME = argAfter('--home') ?? mkdtempSync(join(tmpdir(), 'dsh-zotero-home-'))
 const PROFILE = 'web' // `dsh web` always boots the web profile
 const ENV = { ...process.env, DSH_HOME: HOME }
+
+function dshCommand(args) {
+  if (DSH.endsWith('.js')) {
+    return { command: process.execPath, args: [DSH, ...args] }
+  }
+  return { command: DSH, args }
+}
 
 function packPath() {
   const output = execFileSync('npm', ['pack', '--silent'], { cwd: PACKAGE_DIR, encoding: 'utf8' })
@@ -133,7 +153,8 @@ async function main() {
   console.log(`packed: ${tarball}`)
   console.log(`home: ${HOME} (profile ${PROFILE})`)
 
-  await execFileAsync(DSH, ['plugin', '--profile', PROFILE, 'add', tarball], { env: ENV })
+  const add = dshCommand(['plugin', '--profile', PROFILE, 'add', tarball])
+  await execFileAsync(add.command, add.args, { env: ENV })
 
   // The reserved port can be stolen between reserve and bind; retry the whole
   // serve on EADDRINUSE instead of failing the run on a TOCTOU loss.
@@ -159,7 +180,8 @@ async function main() {
 async function serveOnce(port) {
   const logPath = join(HOME, 'dsh-web.log')
   const logFd = openSync(logPath, 'a')
-  const child = spawn(DSH, ['web', '--port', String(port)], {
+  const web = dshCommand(['web', '--port', String(port)])
+  const child = spawn(web.command, web.args, {
     // Both pipes go to the log file: an undrained pipe deadlocks the child
     // once its boot output exceeds the pipe buffer.
     stdio: ['ignore', logFd, logFd],

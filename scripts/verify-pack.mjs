@@ -44,31 +44,34 @@ function addExportPaths(paths, problems, key, value, baseDir) {
   for (const target of targets) {
     if (typeof target !== 'string') continue
     if (target.includes('*')) {
+      const star = target.indexOf('*')
+      const slash = target.lastIndexOf('/', star)
+      const dir = slash === -1 ? '.' : target.slice(0, slash)
+      const relDir = packed(dir)
+      const targetDir = resolve(baseDir, dir)
+
       // `./locale/*.json` → the concrete locale files the package ships,
       // enumerated from disk the way the market's package-meta reader does.
       if (key.includes('locale') || target.includes('locale')) {
-        const localeDir = resolve(baseDir, 'locale')
-        const bundles = existsSync(localeDir)
-          ? readdirSync(localeDir).filter((entry) => entry.endsWith('.json'))
+        const bundles = existsSync(targetDir)
+          ? readdirSync(targetDir).filter((entry) => entry.endsWith('.json'))
           : []
         if (bundles.length === 0) {
           // The gate must not narrow itself: an absent or empty directory used
           // to mean "nothing to assert", which is exactly the state a broken
           // release ships.
           problems.push(
-            `the manifest declares the locale export "${key}" but ${relative(baseDir, localeDir)}` +
+            `the manifest declares the locale export "${key}" but ${relative(baseDir, targetDir)}` +
               ' carries no *.json bundle — the tarball would ship no locale dictionaries',
           )
         }
-        for (const entry of bundles) paths.add(`locale/${entry}`)
+        const prefix = relDir === '.' ? '' : `${relDir}/`
+        for (const entry of bundles) paths.add(`${prefix}${entry}`)
       } else {
         // A non-locale wildcard must still resolve against the disk: the
         // pattern's static part names a directory, and a rename or deletion
         // on disk would ship an export that resolves to nothing.
-        const star = target.indexOf('*')
-        const slash = target.lastIndexOf('/', star)
-        const dir = slash === -1 ? '.' : target.slice(0, slash)
-        if (!existsSync(resolve(baseDir, dir))) {
+        if (!existsSync(targetDir)) {
           problems.push(
             `the manifest declares the wildcard export "${key}" but ${dir} does not exist` +
               ' on disk — the tarball would ship an export that resolves to nothing',

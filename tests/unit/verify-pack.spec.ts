@@ -64,6 +64,22 @@ describe('expectedPaths', () => {
     expect(paths).toContain('lib/index.js')
   })
 
+  it('enumerates both root and subpath locale bundles from disk', () => {
+    const subpathManifest = {
+      ...MANIFEST,
+      exports: {
+        ...MANIFEST.exports,
+        './scholarly/locale/*.json': './locale/scholarly/*.json',
+      },
+    }
+    const { paths, problems } = expectedPaths(subpathManifest)
+    expect(problems).toEqual([])
+    expect(paths).toContain('locale/en.json')
+    expect(paths).toContain('locale/zh.json')
+    expect(paths).toContain('locale/scholarly/en.json')
+    expect(paths).toContain('locale/scholarly/zh.json')
+  })
+
   it('reports a declared locale wildcard with an empty directory on disk', async () => {
     // An empty `locale/`: the manifest still promises the dictionaries, so
     // the gate must fail instead of asserting nothing.
@@ -75,6 +91,23 @@ describe('expectedPaths', () => {
       expect(problems).toHaveLength(1)
       expect(problems[0]).toContain('declares the locale export "./locale/*.json"')
       expect(problems[0]).toContain('carries no *.json bundle')
+    })
+  })
+
+  it('reports a subpath locale wildcard with an empty directory on disk', async () => {
+    await withTempDir(async (root) => {
+      await mkdir(join(root, 'lib'), { recursive: true })
+      await mkdir(join(root, 'locale', 'scholarly'), { recursive: true })
+      const manifest = {
+        main: './lib/index.js',
+        exports: { './scholarly/locale/*.json': './locale/scholarly/*.json' },
+        files: ['lib', 'locale'],
+      }
+      const { paths, problems } = expectedPaths(manifest, root)
+      expect(paths).not.toContain('locale/scholarly/en.json')
+      expect(problems).toHaveLength(1)
+      expect(problems[0]).toContain('declares the locale export "./scholarly/locale/*.json"')
+      expect(problems[0]).toContain('locale/scholarly carries no *.json bundle')
     })
   })
 
