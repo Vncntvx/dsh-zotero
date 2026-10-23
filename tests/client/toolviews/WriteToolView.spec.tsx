@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 /**
- * Test suite for WriteToolView, the eight write cards:
- * write receipts (note, tags, membership, collection, item, library tags),
- * plan-review decline banners, committed-unverified warnings,
- * error state rendering, and running states.
+ * Test suite for WriteToolView, the write cards:
+ * write receipts (batch, note, tags, membership, collection, item, saved
+ * search, library tags), plan-review decline banners, committed-unverified
+ * warnings, error state rendering, and running states.
  * @module tests/client/toolviews/WriteToolView
  */
 

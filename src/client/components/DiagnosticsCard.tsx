@@ -16,7 +16,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
-import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsLocale, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { PluginDetailProps } from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import {
   ZOTERO_REMOTE_PACKAGE,
@@ -36,8 +36,7 @@ const RENDER_LIMIT = 100
 /** How long the copied acknowledgement stays on the button. */
 const COPIED_RESET_MS = 2000
 
-export interface ZoteroDiagnosticsCardProps extends PluginDetailProps {
-  readonly t: TranslateNS<'zotero'>
+export interface ZoteroDiagnosticsCardProps extends PluginDetailProps, PropsLocale<'zotero'> {
   readonly probe: () => Promise<RemoteResult<ZoteroStatusView>>
   readonly diagnostics: () => Promise<RemoteResult<ZoteroDiagnosticsView>>
 }

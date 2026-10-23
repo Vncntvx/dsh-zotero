@@ -9,7 +9,7 @@
  * case, because the collapsed body is otherwise prop-identical.
  *
  * The card list comes from the plugin's own registration table rather than a
- * copy of it, so a twelfth tool cannot register a card this spec never renders.
+ * copy of it, so a new tool cannot register a card this spec never renders.
  * @module tests/client/toolviews/memo-stability
  */
 

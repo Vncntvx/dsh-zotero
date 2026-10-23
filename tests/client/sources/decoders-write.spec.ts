@@ -1,5 +1,5 @@
 /**
- * The write projection decoder: presentation meta for the eight write tools,
+ * The write projection decoder: presentation meta for the write tools,
  * decoded defensively. Split from `decoders.spec.ts` along its own seam, since
  * that file already sits at the size ratchet.
  * @module tests/client/sources/decoders-write

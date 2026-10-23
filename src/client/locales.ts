@@ -47,6 +47,8 @@ export type ZoteroLocaleKey =
   | 'groupJobsDesc'
   | 'groupDiagnosticsDesc'
   | 'scholarlyEmail'
+  | 'scholarlyEnabled'
+  | 'scholarlyEnabledHint'
   | 'scholarlyEmailHint'
   | 'scholarlyS2Key'
   | 'scholarlyS2KeyHint'
@@ -248,6 +250,7 @@ export type ZoteroLocaleKey =
   | 'toolTitleChildren'
   | 'toolTitleAttachment'
   | 'toolTitleCreateNote'
+  | 'toolTitleBatchItems'
   | 'toolTitleUpdateItemTags'
   | 'toolTitleUpdateItemCollections'
   | 'toolTitleCreateCollection'
@@ -277,6 +280,7 @@ export type ZoteroLocaleKey =
   | 'toolSummaryChildren'
   | 'toolSummaryAttachment'
   | 'toolSummaryCreateNote'
+  | 'toolSummaryBatchItems'
   | 'toolSummaryUpdateItemTags'
   | 'toolSummaryUpdateItemTagsRequested'
   | 'toolNoTagsChanged'
@@ -391,6 +395,8 @@ export const en: Record<ZoteroLocaleKey, string> = {
   groupJobsDesc: 'Background task offloading policies and automatic timeout escalation.',
   groupDiagnosticsDesc: 'Diagnostics logging and verbose troubleshooting traces.',
   scholarlyEmail: 'Contact email',
+  scholarlyEnabled: 'Enable external scholarly tools',
+  scholarlyEnabledHint: 'When false, no external scholarly tool is registered or called.',
   scholarlyEmailHint:
     'Contact email sent to Crossref, OpenAlex, and NCBI/Europe PMC for the polite pool and higher rate limits.',
   scholarlyS2Key: 'Semantic Scholar API key',
@@ -700,6 +706,7 @@ export const en: Record<ZoteroLocaleKey, string> = {
   toolTitleChildren: 'Zotero Item Children',
   toolTitleAttachment: 'Zotero Attachment',
   toolTitleCreateNote: 'Zotero Create Note',
+  toolTitleBatchItems: 'Zotero Batch Items',
   toolTitleUpdateItemTags: 'Zotero Update Item Tags',
   toolTitleUpdateItemCollections: 'Zotero Update Item Collections',
   toolTitleCreateCollection: 'Zotero Create Collection',
@@ -729,6 +736,7 @@ export const en: Record<ZoteroLocaleKey, string> = {
   toolSummaryChildren: '{count} child objects',
   toolSummaryAttachment: 'Attachment: {title}',
   toolSummaryCreateNote: 'Created note "{title}"',
+  toolSummaryBatchItems: 'Requested {creates} creates, {updates} updates, {deletes} deletes',
   toolSummaryUpdateItemTags: 'Updated tags: +{added} −{removed}',
   toolSummaryUpdateItemTagsRequested: 'Requested {count} tag changes',
   toolNoTagsChanged: 'The tag set already matches; nothing was written',
@@ -832,6 +840,8 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   groupJobsDesc: '耗时操作的后台异步执行策略与超时自动提升。',
   groupDiagnosticsDesc: '本地排错与详细运行日志输出。',
   scholarlyEmail: '联系邮箱',
+  scholarlyEnabled: '启用外部学术工具',
+  scholarlyEnabledHint: '关闭时不会注册或调用外部学术检索工具。',
   scholarlyEmailHint:
     '附加于 Crossref、OpenAlex 和 NCBI/Europe PMC 请求头，加入 Polite Pool 获得更高限速配额。',
   scholarlyS2Key: 'Semantic Scholar API 密钥',
@@ -1124,6 +1134,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   toolTitleChildren: 'Zotero 子项与附件',
   toolTitleAttachment: 'Zotero 附件',
   toolTitleCreateNote: 'Zotero 创建笔记',
+  toolTitleBatchItems: 'Zotero 批量条目操作',
   toolTitleUpdateItemTags: 'Zotero 更新条目标签',
   toolTitleUpdateItemCollections: 'Zotero 更新条目合集',
   toolTitleCreateCollection: 'Zotero 创建合集',
@@ -1153,6 +1164,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   toolSummaryChildren: '{count} 个子对象',
   toolSummaryAttachment: '附件: {title}',
   toolSummaryCreateNote: '已创建笔记 "{title}"',
+  toolSummaryBatchItems: '请求新建 {creates} 项、更新 {updates} 项、移入回收站 {deletes} 项',
   toolSummaryUpdateItemTags: '已更新标签：新增 {added}，移除 {removed}',
   toolSummaryUpdateItemTagsRequested: '请求修改 {count} 个标签',
   toolNoTagsChanged: '标签集合已一致，未写入任何内容',

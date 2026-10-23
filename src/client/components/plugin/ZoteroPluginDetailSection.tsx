@@ -6,7 +6,7 @@
 
 import type { ReactNode } from 'react'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
-import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsLocale, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ZoteroStatusView } from '../../remote.ts'
 import { ZOTERO_REMOTE_PACKAGE } from '../../../contract.ts'
 import { DiagnosisBox } from '../DiagnosisBox.tsx'
@@ -15,8 +15,7 @@ import type { PluginDetailProps } from '@deepseek-ai/dsh-client-ui-plugin-manage
 import { ZoteroSurfaceBoundary } from '../ZoteroSurfaceBoundary.tsx'
 import css from './plugin-cards.module.css'
 
-export interface ZoteroPluginDetailSectionProps extends PluginDetailProps {
-  readonly t: TranslateNS<'zotero'>
+export interface ZoteroPluginDetailSectionProps extends PluginDetailProps, PropsLocale<'zotero'> {
   readonly probe: () => Promise<RemoteResult<ZoteroStatusView>>
 }
 

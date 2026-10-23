@@ -115,29 +115,11 @@ describe('ZoteroActivationGuide', () => {
     expect(probe).not.toHaveBeenCalled()
   })
 
-  it('returns null when translator t is missing', () => {
-    const { container } = render(
-      <ZoteroActivationGuide
-        packageName={ZOTERO_REMOTE_PACKAGE}
-        onDismiss={vi.fn()}
-        onOpenDetails={vi.fn()}
-        probe={vi.fn()}
-      />,
-    )
-    expect(container.firstChild).toBeNull()
-  })
-
-  it('returns null when probe function is missing', () => {
-    const { container } = render(
-      <ZoteroActivationGuide
-        packageName={ZOTERO_REMOTE_PACKAGE}
-        onDismiss={vi.fn()}
-        onOpenDetails={vi.fn()}
-        t={t}
-      />,
-    )
-    expect(container.firstChild).toBeNull()
-  })
+  // The translator is no longer an optional face: the registration declares
+  // `locale: NS`, so the renderer synthesizes `t` and a namespace without an
+  // installed locale face fails the assembly loudly
+  // (`ui-renderer/src/client/scoped-slots.tsx`). The probe is an inject-face
+  // member the slot cannot render without, for the same reason.
 
   it('renders instruction steps and guidance copy', async () => {
     const probe = vi.fn(async (): Promise<RemoteResult<ZoteroStatusView>> => ({

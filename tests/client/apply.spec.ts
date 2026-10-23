@@ -17,6 +17,7 @@ import {
   ZOTERO_SETTINGS_NAMESPACE,
 } from '../../src/settings-namespace.ts'
 import { getAttachmentResolver } from '../../src/client/actions/attachment-resolver.ts'
+import { REGISTRATIONS } from '../../src/client/toolviews/index.ts'
 import { fakeScope } from './helpers/fake-scope.ts'
 import { fakeEntryErrorSeam, type EntryErrorListener } from './helpers/slot-crash-seam.ts'
 
@@ -335,12 +336,10 @@ describe('the browser-half entry', () => {
 
     const guide = world.registered.find((e) => e.name === 'plugins.bundle.activation')
     expect(guide?.options.key).toBe('dsh-zotero')
+    expect(guide?.options.locale).toBe('zotero')
     expect(typeof guide?.component).toBe('function')
-    const guideInject = (
-      guide?.options.inject as () => { probe: () => Promise<unknown>; t: unknown }
-    )()
+    const guideInject = (guide?.options.inject as () => { probe: () => Promise<unknown> })()
     expect(typeof guideInject.probe).toBe('function')
-    expect(typeof guideInject.t).toBe('function')
   })
 
   it('deduplicates concurrent in-flight probe calls sharing the same remote request', async () => {
@@ -427,12 +426,10 @@ describe('the browser-half entry', () => {
 
     const section = world.registered.find((e) => e.name === 'plugins.detail.section')
     expect(section?.options.id).toBe('zotero-status')
+    expect(section?.options.locale).toBe('zotero')
     expect(typeof section?.component).toBe('function')
-    const sectionInject = (
-      section?.options.inject as () => { probe: () => Promise<unknown>; t: unknown }
-    )()
+    const sectionInject = (section?.options.inject as () => { probe: () => Promise<unknown> })()
     expect(typeof sectionInject.probe).toBe('function')
-    expect(typeof sectionInject.t).toBe('function')
   })
 
   it('injects the diagnostics card as the second plugins.detail.section entry', async () => {
@@ -446,17 +443,16 @@ describe('the browser-half entry', () => {
     expect(sections).toHaveLength(2)
     const diagnostics = sections.find((e) => e.options.id === 'zotero-diagnostics')
     expect(diagnostics).toBeDefined()
+    expect(diagnostics?.options.locale).toBe('zotero')
     const face = (
       diagnostics?.options.inject as () => {
         probe: () => Promise<unknown>
         diagnostics: () => Promise<unknown>
-        t: unknown
       }
     )()
     expect(typeof face.diagnostics).toBe('function')
     await face.diagnostics()
     expect(typeof face.probe).toBe('function')
-    expect(typeof face.t).toBe('function')
   })
 
   it('injects and registers the zotero command card into the conversation.chat.commandview slot', async () => {
@@ -637,7 +633,7 @@ describe('the browser-half entry', () => {
     ])
   })
 
-  it('injects and registers all 16 tool views into the tool.call.toolview slot', async () => {
+  it('injects and registers all tool views into the tool.call.toolview slot', async () => {
     const world = fakeWorld()
     await applyEntry(world)
 
@@ -646,24 +642,9 @@ describe('the browser-half entry', () => {
     entry?.register()
 
     const toolRegistrations = world.registered.filter((item) => item.name === 'tool.call.toolview')
-    expect(toolRegistrations.map((item) => item.options.key)).toEqual([
-      'zotero_search',
-      'zotero_retrieve',
-      'zotero_export',
-      'zotero_get',
-      'zotero_children',
-      'zotero_attachment',
-      'zotero_create_note',
-      'zotero_update_item_tags',
-      'zotero_update_item_collections',
-      'zotero_create_collection',
-      'zotero_delete_collection',
-      'zotero_create_item',
-      'zotero_update_item',
-      'zotero_delete_library_tags',
-      'zotero_browse',
-      'zotero_changes',
-    ])
+    expect(toolRegistrations.map((item) => item.options.key)).toEqual(
+      REGISTRATIONS.map(([name]) => name),
+    )
     for (const reg of toolRegistrations) {
       expect(reg.options.locale).toBe('zotero')
       expect(typeof reg.component).toBe('function')

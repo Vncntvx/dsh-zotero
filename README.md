@@ -84,7 +84,7 @@ Agent → zotero_export(refs: ["zotero://user/0/item/ABCD1234",
 
 ## 工具一览
 
-插件提供 8 个读取工具与 9 个写入工具。写入工具默认关闭，可在配置中开启 `writeEnabled`。
+插件提供 8 个读取工具与 15 个写入工具。写入工具默认关闭，可在配置中开启 `writeEnabled`。
 
 | 工具                | 用途                                                       |
 | ------------------- | ---------------------------------------------------------- |
@@ -97,7 +97,7 @@ Agent → zotero_export(refs: ["zotero://user/0/item/ABCD1234",
 | `zotero_attachment` | 获取文献关联的本地 PDF 文件路径                            |
 | `zotero_export`     | 生成格式化引用、参考文献列表，或导出 BibTeX、RIS、CSL JSON |
 
-全部 17 个工具的参数定义见 [工具参考](docs/tools.md)。
+全部 23 个宿主工具的参数定义见 [工具参考](docs/tools.md)。
 
 ## 安全与隐私
 
@@ -107,16 +107,16 @@ Agent → zotero_export(refs: ["zotero://user/0/item/ABCD1234",
 
 ## 说明文档
 
-| 文档                                | 内容                                   |
-| ----------------------------------- | -------------------------------------- |
-| [快速入门](docs/getting-started.md) | 安装步骤、前置条件与连接验证           |
-| [功能概览](docs/features.md)        | Sources 来源面板、对话集成与导出工作流 |
-| [工具参考](docs/tools.md)           | 全部 17 个工具的参数、返回值与错误码   |
-| [配置参考](docs/configuration.md)   | 35 个配置项说明与默认值                |
-| [系统架构](docs/architecture.md)    | 数据流、分层职责与设计边界             |
-| [开发指南](docs/development.md)     | 构建、测试、调试与发布流程             |
-| [使用场景](docs/scenarios.md)       | 典型对话用例与使用示例                 |
-| [故障排查](docs/troubleshooting.md) | 常见连接问题诊断与处理方法             |
+| 文档                                | 内容                                     |
+| ----------------------------------- | ---------------------------------------- |
+| [快速入门](docs/getting-started.md) | 安装步骤、前置条件与连接验证             |
+| [功能概览](docs/features.md)        | Sources 来源面板、对话集成与导出工作流   |
+| [工具参考](docs/tools.md)           | 全部 23 个宿主工具的参数、返回值与错误码 |
+| [配置参考](docs/configuration.md)   | 35 个配置项说明与默认值                  |
+| [系统架构](docs/architecture.md)    | 数据流、分层职责与设计边界               |
+| [开发指南](docs/development.md)     | 构建、测试、调试与发布流程               |
+| [使用场景](docs/scenarios.md)       | 典型对话用例与使用示例                   |
+| [故障排查](docs/troubleshooting.md) | 常见连接问题诊断与处理方法               |
 
 ## 许可证
 

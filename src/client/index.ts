@@ -118,7 +118,7 @@ function isZoteroRegistration(_key: string, registration: unknown): boolean {
 }
 
 /**
- * Register every browser surface: the page dictionaries, the 16 dedicated
+ * Register every browser surface: the page dictionaries, the dedicated
  * tool cards, the `/zotero` command-input projection, the bundle configuration
  * page, the plugin-manager cards, and the conversation tab.
  *
@@ -162,7 +162,7 @@ function registerUi(ctx: ClientContext): void {
       }),
     'dsh-zotero: slot crash intake',
   )
-  // Dedicated Chat cards for all 16 Zotero tools in the tool.call.toolview slot
+  // Dedicated Chat cards for the registered Zotero and cross-component tools
   registerZoteroToolviews(ctx)
   // `/zotero` command-input projection: a non-command Chat node is the
   // designed way for a slash command to leave the blank Hero (see ui-goal's
@@ -198,10 +198,12 @@ function registerUi(ctx: ClientContext): void {
     },
     'dsh-zotero: card forms',
   )
-  // Bound once at registration time: the inject faces below hand this reader
-  // to the shell, which re-renders from its own ledger bump when the locale
-  // changes rather than subscribing to the namespace.
-  const t = ctx.locale.bind(NS)
+  // The plugin-manager surfaces below declare `locale: NS` and read their `t`
+  // from the renderer's synthesized seat: the framework mints a fresh
+  // reference per locale revision, so a switch re-renders these cards through
+  // ordinary shallow comparison, and a declared namespace with no installed
+  // locale face fails the assembly loudly instead of silently falling back
+  // (`ui-renderer/src/client/scoped-slots.tsx`).
   // Live connectivity for the conversation tab's status strip. This fiber is
   // only created once `$mount` published the namespace, so the call site reads
   // it directly. Concurrent probes share one in-flight call: the strip and the
@@ -223,8 +225,9 @@ function registerUi(ctx: ClientContext): void {
       {
         name: 'plugins.bundle.activation',
         key: ZOTERO_REMOTE_PACKAGE,
+        locale: NS,
         registrant: REGISTRANT,
-        inject: (): ZoteroProbeFace => ({ t, probe }),
+        inject: (): ZoteroProbeFace => ({ probe }),
       },
       ZoteroActivationGuide,
     ),
@@ -285,8 +288,9 @@ function registerUi(ctx: ClientContext): void {
       {
         name: 'plugins.detail.section',
         id: 'zotero-status',
+        locale: NS,
         registrant: REGISTRANT,
-        inject: (): ZoteroProbeFace => ({ t, probe }),
+        inject: (): ZoteroProbeFace => ({ probe }),
       },
       ZoteroPluginDetailSection,
     ),
@@ -303,8 +307,9 @@ function registerUi(ctx: ClientContext): void {
       {
         name: 'plugins.detail.section',
         id: 'zotero-diagnostics',
+        locale: NS,
         registrant: REGISTRANT,
-        inject: () => ({ t, probe, diagnostics }),
+        inject: () => ({ probe, diagnostics }),
       },
       DiagnosticsCard,
     ),

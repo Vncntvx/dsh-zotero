@@ -31,6 +31,12 @@ const DEFAULT_POLL_MS = 2000
  * document is visible and the panel is mounted. One in-flight guard keeps
  * clicks, ticks, and visibility returns from stacking calls; the unmount
  * guard mirrors {@link useZoteroProbe}.
+ *
+ * This is a foreground UI behavior, not a daemon: the interval exists only
+ * while the mounted panel is visible, and it disappears with the component.
+ * AGENTS.md's "No background polling daemons" rule governs host-side
+ * resident work (the host never polls; every request is user-driven), and
+ * `docs/architecture.md` records this panel's polling and its reason.
  */
 export function useDiagnosticsFeed(
   diagnostics?: () => Promise<RemoteResult<ZoteroDiagnosticsView>>,

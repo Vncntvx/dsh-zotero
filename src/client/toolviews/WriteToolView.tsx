@@ -1,5 +1,5 @@
 /**
- * Dedicated toolview cards for Zotero write operations: the eight write
+ * Dedicated toolview cards for Zotero write operations.
  * tools. Renders write receipts, tags, and plan-review decline notices.
  * Each tool is one descriptor (icon, title key, summary builder) in the
  * table below; the receipt body is shared, so adding a write tool means
@@ -32,15 +32,23 @@ import {
 import { RunningNotice, RawTextFallback, ZoteroToolRow } from './ZoteroToolRow.tsx'
 import css from './toolviews.module.css'
 
-/** The eight write tools this view renders. */
+/** The write tools this view renders. */
 export type WriteToolName =
+  | 'zotero_batch_items'
   | 'zotero_create_note'
+  | 'zotero_update_note'
   | 'zotero_update_item_tags'
   | 'zotero_update_item_collections'
   | 'zotero_create_collection'
+  | 'zotero_update_collection'
   | 'zotero_delete_collection'
   | 'zotero_create_item'
   | 'zotero_update_item'
+  | 'zotero_restore_items'
+  | 'zotero_create_saved_search'
+  | 'zotero_update_saved_search'
+  | 'zotero_delete_saved_search'
+  | 'scholarly_save_to_zotero'
   | 'zotero_delete_library_tags'
 
 export type WriteToolViewProps = PropsRuntime<'tool.call.toolview', WriteToolName> &
@@ -125,6 +133,24 @@ interface WriteDescriptor {
  * showed the user, not what landed; each tool names only the fact it knows.
  */
 const WRITE_DESCRIPTORS: Record<WriteToolName, WriteDescriptor> = {
+  zotero_batch_items: {
+    icon: () => <IconEditOutlineRegular size={14} />,
+    titleKey: 'toolTitleBatchItems',
+    describe: ({ args, t }) => {
+      // The requested operation counts are what the plan card reviewed; the
+      // applied receipt (per-arm counts, unverified entries) rides in the
+      // expanded body, so the summary states the request, not the outcome.
+      return {
+        summary: t('toolSummaryBatchItems', {
+          creates: listArg(args, 'create').length,
+          updates: listArg(args, 'update').length,
+          deletes: listArg(args, 'delete').length,
+        }),
+        tone: 'applied',
+        tags: [],
+      }
+    },
+  },
   zotero_create_note: {
     icon: () => <IconEditOutlineRegular size={14} />,
     titleKey: 'toolTitleCreateNote',
@@ -135,6 +161,18 @@ const WRITE_DESCRIPTORS: Record<WriteToolName, WriteDescriptor> = {
       tone: 'applied',
       tags: listArg(args, 'tags'),
       parentRef: textArg(args, 'parentItem') ?? textArg(args, 'ref'),
+    }),
+  },
+  zotero_update_note: {
+    icon: () => <IconEditOutlineRegular size={14} />,
+    titleKey: 'toolTitleCreateNote',
+    describe: ({ args, t }) => ({
+      summary: t('toolSummaryCreateNote', {
+        title: noteTitleOf(textArg(args, 'markdown'), t('toolDefaultNoteTitle')),
+      }),
+      tone: 'applied',
+      tags: [],
+      parentRef: textArg(args, 'ref'),
     }),
   },
   zotero_update_item_tags: {
@@ -203,6 +241,18 @@ const WRITE_DESCRIPTORS: Record<WriteToolName, WriteDescriptor> = {
       parentRef: textArg(args, 'parent'),
     }),
   },
+  zotero_update_collection: {
+    icon: () => <IconBranchOutlineRegular size={14} />,
+    titleKey: 'toolTitleCreateCollection',
+    describe: ({ args, t }) => ({
+      summary: t('toolSummaryCreateCollection', {
+        name: (textArg(args, 'name') ?? textArg(args, 'collection') ?? '').trim(),
+      }),
+      tone: 'applied',
+      tags: [],
+      parentRef: textArg(args, 'collection'),
+    }),
+  },
   zotero_delete_collection: {
     icon: () => <IconBranchOutlineRegular size={14} />,
     titleKey: 'toolTitleDeleteCollection',
@@ -241,6 +291,51 @@ const WRITE_DESCRIPTORS: Record<WriteToolName, WriteDescriptor> = {
         parentRef: ref,
       }
     },
+  },
+  zotero_restore_items: {
+    icon: () => <IconEditOutlineRegular size={14} />,
+    titleKey: 'toolTitleUpdateItem',
+    describe: ({ args, t }) => ({
+      summary: t('toolSummaryUpdateItem', { ref: `${listArg(args, 'refs').length} item(s)` }),
+      tone: 'applied',
+      tags: [],
+    }),
+  },
+  zotero_create_saved_search: {
+    icon: () => <IconBranchOutlineRegular size={14} />,
+    titleKey: 'toolTitleCreateCollection',
+    describe: ({ args, t }) => ({
+      summary: t('toolSummaryCreateCollection', { name: textArg(args, 'name') ?? '' }),
+      tone: 'applied',
+      tags: [],
+    }),
+  },
+  zotero_update_saved_search: {
+    icon: () => <IconBranchOutlineRegular size={14} />,
+    titleKey: 'toolTitleUpdateItem',
+    describe: ({ args, t }) => ({
+      summary: t('toolSummaryUpdateItem', { ref: textArg(args, 'search') ?? '' }),
+      tone: 'applied',
+      tags: [],
+    }),
+  },
+  zotero_delete_saved_search: {
+    icon: () => <IconTrashOutlineRegular size={14} />,
+    titleKey: 'toolTitleDeleteCollection',
+    describe: ({ args, t }) => ({
+      summary: t('toolSummaryDeleteCollection', { name: textArg(args, 'search') ?? '' }),
+      tone: 'applied',
+      tags: [],
+    }),
+  },
+  scholarly_save_to_zotero: {
+    icon: () => <IconPlusOutlineRegular size={14} />,
+    titleKey: 'toolTitleCreateItem',
+    describe: ({ args, t }) => ({
+      summary: t('toolSummaryCreateItem', { title: textArg(args, 'title') ?? '' }),
+      tone: 'applied',
+      tags: [],
+    }),
   },
   zotero_delete_library_tags: {
     // A destructive glyph: this is the irreversible library-wide delete, and

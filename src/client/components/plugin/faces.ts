@@ -5,12 +5,15 @@
  * @module dsh-zotero/client/components/plugin/faces
  */
 
-import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ZoteroStatusView } from '../../remote.ts'
 
-/** The probe face the two status cards inject (activation guide, detail section). */
+/**
+ * The probe face the two status cards inject (activation guide, detail
+ * section). The translator is not part of the face: both registrations
+ * declare `locale: NS`, so the renderer synthesizes the `t` seat
+ * (`ui-renderer/src/client/scoped-slots.tsx`).
+ */
 export interface ZoteroProbeFace {
-  readonly t: TranslateNS<'zotero'>
   readonly probe: () => Promise<RemoteResult<ZoteroStatusView>>
 }

@@ -84,7 +84,7 @@ Agent → zotero_export(refs: ["zotero://user/0/item/ABCD1234",
 
 ## Tools
 
-The plugin includes 8 read tools and 9 write tools. Write tools are disabled by default until `writeEnabled` is turned on in settings.
+The plugin includes 8 read tools and 15 write tools. Write tools are disabled by default until `writeEnabled` is turned on in settings.
 
 | Tool                | Purpose                                                                                   |
 | ------------------- | ----------------------------------------------------------------------------------------- |

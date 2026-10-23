@@ -8,16 +8,22 @@
 import type { ReactNode } from 'react'
 import { Button, Modal, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
-import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsLocale, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { ZOTERO_REMOTE_PACKAGE, type ZoteroStatusView } from '../../../contract.ts'
 import { DiagnosisBox } from '../DiagnosisBox.tsx'
 import { useZoteroProbe } from '../useZoteroProbe.ts'
 import type { PluginActivationOwnerProps } from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import css from './plugin-cards.module.css'
 
-export interface ZoteroActivationGuideProps extends PluginActivationOwnerProps {
-  readonly t?: TranslateNS<'zotero'>
-  readonly probe?: () => Promise<RemoteResult<ZoteroStatusView>>
+/**
+ * The `t` seat is synthesized by the renderer from the registration's
+ * `locale: NS` declaration — a declared namespace with no installed locale
+ * face fails the assembly loudly, so the component never renders without a
+ * translator. The probe arrives through the registration's inject face.
+ */
+export interface ZoteroActivationGuideProps
+  extends PluginActivationOwnerProps, PropsLocale<'zotero'> {
+  readonly probe: () => Promise<RemoteResult<ZoteroStatusView>>
 }
 
 interface ZoteroActivationGuideBodyProps {
@@ -28,7 +34,7 @@ interface ZoteroActivationGuideBodyProps {
 }
 
 /**
- * Slot entry: packageName and dependencies guard so hook count never varies.
+ * Slot entry: packageName guard only, so hook count never varies.
  */
 export function ZoteroActivationGuide({
   packageName,
@@ -37,7 +43,7 @@ export function ZoteroActivationGuide({
   t,
   probe,
 }: ZoteroActivationGuideProps): ReactNode {
-  if (packageName !== ZOTERO_REMOTE_PACKAGE || !t || !probe) return null
+  if (packageName !== ZOTERO_REMOTE_PACKAGE) return null
   return (
     <ZoteroActivationGuideBody
       onDismiss={onDismiss}

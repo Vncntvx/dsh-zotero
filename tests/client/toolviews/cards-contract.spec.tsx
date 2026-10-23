@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * Verification that all 16 registered Zotero tool views render conformantly
+ * Verification that every registered Zotero tool view renders conformantly
  * against the upstream 0.2.1-alpha.4 ToolCallBlock contract.
  *
  * Each card is rendered in both collapsed and expanded states with canonical
@@ -85,6 +85,18 @@ const META: Record<string, Record<string, unknown>> = {
     changes: [{ key: 'V5WYL8WM', version: 11 }],
   },
   zotero_create_note: { kind: 'committed', ref: 'zotero://user/0/item/NOTE1' },
+  zotero_batch_items: {
+    kind: 'applied',
+    createdCount: 1,
+    created: [{ index: 0, ref: ITEM_REF, key: 'BATCH000', version: 11 }],
+    updatedCount: 1,
+    deletedCount: 0,
+    failedCount: 0,
+    unverified: [],
+    unverifiedCount: 0,
+    libraryVersion: 42,
+    serverId: 'srv-cards-0001',
+  },
   zotero_update_item_tags: { kind: 'committed', ref: ITEM_REF },
   zotero_update_item_collections: { kind: 'committed', ref: ITEM_REF },
   zotero_create_collection: { kind: 'committed', key: 'COLL1' },
@@ -95,7 +107,7 @@ const META: Record<string, Record<string, unknown>> = {
 }
 
 describe('Zotero tool views render contract', () => {
-  it('covers all 16 registered tool cards in both collapsed and expanded states', () => {
+  it('covers all registered tool cards in both collapsed and expanded states', () => {
     expect(Object.keys(ARGS).sort()).toEqual(REGISTRATIONS.map(([name]) => name).sort())
 
     for (const [toolName, View] of REGISTRATIONS) {

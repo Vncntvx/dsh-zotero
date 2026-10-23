@@ -195,7 +195,7 @@ describe('ZoteroCardBoundary', () => {
     expect(view.container.textContent).toContain('simple')
   })
 
-  it('registerZoteroToolviews registers all 16 tools wrapped with card boundaries', () => {
+  it('registerZoteroToolviews registers all tools wrapped with card boundaries', () => {
     const registered: Array<{ name: string; key: string; component: unknown }> = []
     const ctx = {
       slots: {
@@ -215,7 +215,9 @@ describe('ZoteroCardBoundary', () => {
     }
 
     registerZoteroToolviews(ctx as unknown as ClientContext)
-    expect(registered).toHaveLength(16)
+    // The count is derived from the table: a card added without a test that
+    // walks the table is what `parity.spec.tsx` exists to catch.
+    expect(registered).toHaveLength(REGISTRATIONS.length)
     expect(registered.map((r) => r.key)).toEqual(REGISTRATIONS.map(([k]) => k))
 
     // Every registered component is wrapped by withCardBoundary
