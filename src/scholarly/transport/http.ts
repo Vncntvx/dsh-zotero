@@ -194,7 +194,7 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions = {}): S
         }
 
         const status = response.status
-        circuitBreaker.recordFailure(host, status)
+        circuitBreaker.recordFailure(host)
         await response.body?.cancel()
 
         const retryAfterHeader = Number(response.headers.get('retry-after'))

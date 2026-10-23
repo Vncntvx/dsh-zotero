@@ -1,6 +1,13 @@
 /**
  * Three-state circuit breaker for scholarly API hosts.
  * Protects the system from stacking 429/503 delays on failing hosts.
+ *
+ * State changes are observable through {@link CircuitBreaker.getState}
+ * alone. The scholarly transport deliberately carries no diagnostics
+ * channel: the plugin's ring belongs to the `zotero` namespace (the
+ * scholarly row is isolated from `ctx.zotero` by design, `docs/architecture.md`),
+ * a rate-limited or open host already reaches the model as an unanswered
+ * source, and an observer with no composed sink was a seam nothing read.
  * @module dsh-zotero/scholarly/transport/circuit-breaker
  */
 
@@ -22,9 +29,6 @@ export class ScholarlyCircuitOpenError extends Error {
   }
 }
 
-/** Old name for the circuit-open error, kept for existing imports. */
-export { ScholarlyCircuitOpenError as CircuitOpenError }
-
 interface HostCircuit {
   state: CircuitState
   consecutiveFailures: number
@@ -37,8 +41,6 @@ export interface CircuitBreakerOptions {
   cooldownMs?: number
   windowMs?: number
   maxTrackedCircuits?: number
-  /** Observer for state changes; the transport records these in diagnostics. */
-  onStateChange?: (host: string, from: CircuitState, to: CircuitState, reason?: string) => void
 }
 
 export class CircuitBreaker {
@@ -47,19 +49,12 @@ export class CircuitBreaker {
   private readonly cooldownMs: number
   private readonly windowMs: number
   private readonly maxTrackedCircuits: number
-  private readonly onStateChange?: (
-    host: string,
-    from: CircuitState,
-    to: CircuitState,
-    reason?: string,
-  ) => void
 
   constructor(options: CircuitBreakerOptions = {}) {
     this.failureThreshold = options.failureThreshold ?? 3
     this.cooldownMs = options.cooldownMs ?? 60_000
     this.windowMs = options.windowMs ?? 60_000
     this.maxTrackedCircuits = options.maxTrackedCircuits ?? 200
-    this.onStateChange = options.onStateChange
   }
 
   private pruneDynamicCircuits(): void {
@@ -91,17 +86,16 @@ export class CircuitBreaker {
     const now = Date.now()
 
     if (circuit.state === 'OPEN' && now >= circuit.cooldownEndsAt) {
-      this.transition(host, circuit, 'HALF_OPEN', 'Cooldown elapsed, probing host')
+      // Cooldown elapsed, probing host.
+      this.transition(circuit, 'HALF_OPEN')
     }
 
     return circuit.state
   }
 
-  private transition(host: string, circuit: HostCircuit, to: CircuitState, reason?: string): void {
-    const from = circuit.state
-    if (from === to) return
+  private transition(circuit: HostCircuit, to: CircuitState): void {
+    if (circuit.state === to) return
     circuit.state = to
-    this.onStateChange?.(host, from, to, reason)
   }
 
   beforeRequest(host: string): void {
@@ -117,7 +111,8 @@ export class CircuitBreaker {
     const circuit = this.getCircuit(host)
     if (circuit.state === 'HALF_OPEN' || circuit.consecutiveFailures > 0) {
       circuit.consecutiveFailures = 0
-      this.transition(host, circuit, 'CLOSED', 'Host recovered with successful response')
+      // Host recovered with successful response.
+      this.transition(circuit, 'CLOSED')
     }
     // A healthy ad-hoc host has no reason to stay in memory indefinitely.
     if (!isScholarlyHost(host) && circuit.state === 'CLOSED' && circuit.consecutiveFailures === 0) {
@@ -133,16 +128,15 @@ export class CircuitBreaker {
    * rest: the point is to stop stacking waits on an unhealthy host, and
    * "unhealthy" is not limited to one status code.
    * @param host - the host that failed.
-   * @param status - the HTTP status, or undefined for a transport-level failure.
    */
-  recordFailure(host: string, status?: number): void {
+  recordFailure(host: string): void {
     const circuit = this.getCircuit(host)
     const now = Date.now()
 
     if (circuit.state === 'HALF_OPEN') {
-      // Half-open probe failed: immediately reopen circuit
+      // Half-open probe failed: immediately reopen circuit.
       circuit.cooldownEndsAt = now + this.cooldownMs
-      this.transition(host, circuit, 'OPEN', `Probe failed with HTTP ${status}`)
+      this.transition(circuit, 'OPEN')
       return
     }
 
@@ -155,14 +149,9 @@ export class CircuitBreaker {
 
     if (circuit.consecutiveFailures >= this.failureThreshold) {
       circuit.cooldownEndsAt = now + this.cooldownMs
-      this.transition(
-        host,
-        circuit,
-        'OPEN',
-        `Reached ${circuit.consecutiveFailures} consecutive failures${
-          status === undefined ? '' : ` (last: HTTP ${status})`
-        }`,
-      )
+      // Reached the failure threshold (last failure's status, when it has
+      // one, is the failure the caller already carries).
+      this.transition(circuit, 'OPEN')
     }
   }
 }

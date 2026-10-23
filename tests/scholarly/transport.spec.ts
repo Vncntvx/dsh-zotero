@@ -4,7 +4,10 @@ import {
   isAllowedScholarlyHost,
   isPublicUrl,
 } from '../../src/scholarly/transport/allowlist.js'
-import { CircuitBreaker, CircuitOpenError } from '../../src/scholarly/transport/circuit-breaker.js'
+import {
+  CircuitBreaker,
+  ScholarlyCircuitOpenError,
+} from '../../src/scholarly/transport/circuit-breaker.js'
 import { createScholarlyHttp } from '../../src/scholarly/transport/http.js'
 import { HostPacer } from '../../src/scholarly/transport/pacing.js'
 
@@ -37,6 +40,38 @@ describe('scholarly transport safety: allowlist', () => {
     expect(isPublicUrl('http://172.16.0.1')).toBe(false)
     expect(isPublicUrl('file:///etc/passwd')).toBe(false)
     expect(isPublicUrl('not a url')).toBe(false)
+  })
+
+  it('refuses every IPv6 literal spelling, not only the canonical ones', () => {
+    // A prefix blacklist cannot enumerate the spellings: WHATWG URL
+    // normalizes the expanded loopback to `[::1]` but leaves the
+    // dotted-quad tail, site-local, NAT64, and expanded IPv4-mapped forms
+    // untouched — each resolves to loopback or a private network. The
+    // whole class is refused because no legitimate scholarly or OA host
+    // is an IPv6 literal.
+    for (const url of [
+      'http://[::]/',
+      'http://[::1]/',
+      'http://[0:0:0:0:0:0:0:1]/',
+      'http://[::0.0.0.1]/',
+      'http://[::ffff:127.0.0.1]/',
+      'http://[0:0:0:0:0:ffff:127.0.0.1]/',
+      'http://[fec0::1]/',
+      'http://[fc00::1]/',
+      'http://[fd00::1]/',
+      'http://[fe80::1]/',
+      'http://[64:ff9b::7f00:1]/',
+    ]) {
+      expect(isPublicUrl(url), url).toBe(false)
+    }
+    // The public-only (OA PDF) mode leans on the same guard, so a literal
+    // cannot bypass the allowlist exemption either.
+    expect(() => assertAllowedScholarlyUrl('http://[::0.0.0.1]/paper.pdf', true)).toThrow(
+      /not a valid public HTTP/,
+    )
+    expect(() => assertAllowedScholarlyUrl('http://[::ffff:127.0.0.1]/paper.pdf', true)).toThrow(
+      /not a valid public HTTP/,
+    )
   })
 
   it('asserts allowed scholarly url or throws on forbidden addresses', () => {
@@ -72,29 +107,25 @@ describe('scholarly transport safety: allowlist', () => {
 
 describe('scholarly transport resilience: circuit breaker', () => {
   it('manages CLOSED, OPEN, and HALF_OPEN state transitions', () => {
-    const transitions: string[] = []
     const breaker = new CircuitBreaker({
       failureThreshold: 3,
       cooldownMs: 50,
       windowMs: 1000,
-      onStateChange: (host, from, to, reason) => {
-        transitions.push(`${host}:${from}->${to} (${reason})`)
-      },
     })
 
     const host = 'api.semanticscholar.org'
     expect(breaker.getState(host)).toBe('CLOSED')
 
     // 2 consecutive failures do not trip
-    breaker.recordFailure(host, 429)
-    breaker.recordFailure(host, 429)
+    breaker.recordFailure(host)
+    breaker.recordFailure(host)
     expect(breaker.getState(host)).toBe('CLOSED')
     expect(() => breaker.beforeRequest(host)).not.toThrow()
 
     // 3rd failure trips the breaker to OPEN
-    breaker.recordFailure(host, 429)
+    breaker.recordFailure(host)
     expect(breaker.getState(host)).toBe('OPEN')
-    expect(() => breaker.beforeRequest(host)).toThrow(CircuitOpenError)
+    expect(() => breaker.beforeRequest(host)).toThrow(ScholarlyCircuitOpenError)
 
     // Wait for cooldown to expire using fake timers
     vi.useFakeTimers()
@@ -104,7 +135,7 @@ describe('scholarly transport resilience: circuit breaker', () => {
       // Half open probe succeeds
       breaker.recordSuccess(host)
       expect(breaker.getState(host)).toBe('CLOSED')
-      expect(transitions.length).toBeGreaterThanOrEqual(2)
+      expect(() => breaker.beforeRequest(host)).not.toThrow()
     } finally {
       vi.useRealTimers()
     }
@@ -162,9 +193,9 @@ describe('scholarly transport failure classification', () => {
       windowMs: 60_000,
     })
     const host = 'api.openalex.org'
-    breaker.recordFailure(host, 500)
-    breaker.recordFailure(host, 502)
-    breaker.recordFailure(host, 500)
+    breaker.recordFailure(host)
+    breaker.recordFailure(host)
+    breaker.recordFailure(host)
     expect(breaker.getState(host)).toBe('OPEN')
   })
 
@@ -174,8 +205,8 @@ describe('scholarly transport failure classification', () => {
       cooldownMs: 60_000,
       windowMs: 60_000,
     })
-    breaker.recordFailure('api.crossref.org', 500)
-    breaker.recordFailure('api.crossref.org', 500)
+    breaker.recordFailure('api.crossref.org')
+    breaker.recordFailure('api.crossref.org')
 
     // A redirect serves a 3xx, which is neither success nor failure for health.
     const http = createScholarlyHttp({
@@ -189,7 +220,7 @@ describe('scholarly transport failure classification', () => {
     })
     await expect(http.bytes('https://api.crossref.org/works/0')).rejects.toThrow()
     // The two failures must still stand: a redirect did not clear them.
-    breaker.recordFailure('api.crossref.org', 500)
+    breaker.recordFailure('api.crossref.org')
     expect(breaker.getState('api.crossref.org')).toBe('OPEN')
   })
 
@@ -404,7 +435,7 @@ describe('scholarly transport deadline and gate behavior', () => {
       cooldownMs: 60_000,
       windowMs: 60_000,
     })
-    breaker.recordFailure('api.crossref.org', 500)
+    breaker.recordFailure('api.crossref.org')
     const http = createScholarlyHttp({
       circuitBreaker: breaker,
       fetchImpl: async () => new Response('{}', { status: 200 }),
@@ -417,20 +448,20 @@ describe('scholarly transport deadline and gate behavior', () => {
   })
 
   it('reopens circuit when probe fails in HALF_OPEN state', async () => {
-    const transitions: string[] = []
     const breaker = new CircuitBreaker({
       failureThreshold: 1,
       cooldownMs: 5,
       windowMs: 60_000,
-      onStateChange: (_host, from, to) => transitions.push(`${from}->${to}`),
     })
-    breaker.recordFailure('api.crossref.org', 500)
-    expect(transitions).toEqual(['CLOSED->OPEN'])
+    const host = 'api.crossref.org'
+    breaker.recordFailure(host)
+    expect(breaker.getState(host)).toBe('OPEN')
     await new Promise((resolve) => setTimeout(resolve, 10))
-    breaker.beforeRequest('api.crossref.org')
-    expect(transitions).toEqual(['CLOSED->OPEN', 'OPEN->HALF_OPEN'])
-    breaker.recordFailure('api.crossref.org', 500)
-    expect(transitions).toEqual(['CLOSED->OPEN', 'OPEN->HALF_OPEN', 'HALF_OPEN->OPEN'])
+    // The cooldown elapsed: the gate read probes the host (HALF_OPEN).
+    expect(breaker.getState(host)).toBe('HALF_OPEN')
+    // A failed probe reopens immediately, with a fresh cooldown.
+    breaker.recordFailure(host)
+    expect(breaker.getState(host)).toBe('OPEN')
   })
 
   it('prunes healthy ad-hoc circuits and expired pacer request timestamps', async () => {

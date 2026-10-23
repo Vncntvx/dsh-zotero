@@ -34,10 +34,7 @@ const RRF_K = 60
 /**
  * Merges multiple ranked lists from heterogeneous scholarly indexes into a single deduplicated ranking.
  */
-export function fuseRankedLists(
-  lists: readonly RankedSourceList[],
-  customK = RRF_K,
-): ScholarlyPaper[] {
+export function fuseRankedLists(lists: readonly RankedSourceList[]): ScholarlyPaper[] {
   const merged: MergedEntry[] = []
   const keyIndex = new Map<string, MergedEntry>()
 
@@ -98,7 +95,7 @@ export function fuseRankedLists(
       }
 
       // Reciprocal Rank Fusion contribution
-      entry.score += weight / (customK + rank)
+      entry.score += weight / (RRF_K + rank)
 
       // Register all canonical keys
       for (const k of [...keys, ...canonicalKeysOf(entry.paper)]) {

@@ -95,19 +95,19 @@ export async function searchSemanticScholar(
     query.openAccess ? '&openAccessPdf' : ''
   }`
 
-  try {
-    const body = await http.json<{ data?: S2Paper[] }>(url, {
-      signal,
-      headers: s2Headers(keys),
-      timeoutMs: 25_000,
-      retries: keys?.s2Key ? 2 : 0,
-    })
-    return (body.data ?? []).map(paperFromS2).filter((p) => (p.title ?? '') !== '')
-  } catch (error) {
-    const status = httpStatusOf(error)
-    if (status === 429 || status === 404 || status === 400) return []
-    throw error
-  }
+  // Every non-2xx reaches the caller: the search endpoint answers an empty
+  // result set with 200 and an empty `data`, so a 404 is a path/protocol fault
+  // and a 429 is a rate limit the failedSources mechanism must report as an
+  // unanswered source (`docs/tools.md` failure semantics) — never as "no
+  // results". Only the single-paper lookup normalizes 404 to "no such record",
+  // the same contract `crossref.ts` keeps.
+  const body = await http.json<{ data?: S2Paper[] }>(url, {
+    signal,
+    headers: s2Headers(keys),
+    timeoutMs: 25_000,
+    retries: keys?.s2Key ? 2 : 0,
+  })
+  return (body.data ?? []).map(paperFromS2).filter((p) => (p.title ?? '') !== '')
 }
 
 export async function lookupSemanticScholar(
@@ -128,8 +128,11 @@ export async function lookupSemanticScholar(
     })
     return paperFromS2(body)
   } catch (error) {
-    const status = httpStatusOf(error)
-    if (status === 404 || status === 429 || status === 400) return undefined
+    // 404 is the single normalized "no such record"; a 429 or 400 must reach
+    // the caller as a failure so the failedSources mechanism reports this
+    // index as unanswered instead of silently absent (the same contract
+    // `crossref.ts` keeps, locked by `tests/scholarly/read-tools.spec.ts`).
+    if (httpStatusOf(error) === 404) return undefined
     throw error
   }
 }

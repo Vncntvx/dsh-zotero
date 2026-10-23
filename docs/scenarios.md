@@ -288,8 +288,8 @@
 - **S3 本地库标注缺席不等于未收藏**：让本地 Zotero 不可达（关闭 Zotero），运行 `scholarly_search`。期望结果末尾出现 `Library status unavailable for N of M results`；不得让所有条目静默地不带 `In Zotero` 标记。
 - **S4 库内命中**：本地已收藏一篇论文，检索其标题。期望该行含 `[In Zotero: <合集名>]`；合集为空时显示 `Root`。
 - **S5 付费墙与传输失败必须区分**：对一篇无开放获取副本的论文运行 `scholarly_read`。期望错误逐条列出尝试过的路由（`Tried: …`），并在某条路由是传输失败时提示「可能只是暂时不可达，先重试」。**不得**只说「likely behind a paywall」。
-- **S6 全文缓存可关闭也可复用**：同一篇开放获取论文连续两次 `scholarly_read`。第二次应命中缓存（诊断中无第二次外部请求）。缓存目录不可写时，读取仍必须成功，仅记录一条 `scholarly.store.write-failed`。
-- **S7 组件默认可关闭**：未启用 `dsh-zotero/scholarly` 行时，`ctx.scholarly` 不存在，六个工具均不注册；启用后出现且不与 16 个 `zotero_*` 工具重名。
+- **S6 全文缓存可关闭也可复用**：同一篇开放获取论文连续两次 `scholarly_read`。第二次应命中缓存（诊断中无第二次外部请求）。缓存目录不可写时，读取仍必须成功，结果附注中出现 `cache: write failed (<原因>)`。
+- **S7 组件默认可关闭**：未启用 `dsh-zotero/scholarly` 行时，`ctx.scholarly` 不存在，七个工具均不注册；启用后出现且不与 23 个 `zotero_*` 工具重名。
 
 ## 写入用例（W）
 

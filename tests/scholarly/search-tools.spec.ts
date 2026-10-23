@@ -8,27 +8,23 @@
 import { describe, expect, it } from 'vitest'
 import type { ZoteroServiceLike } from '../../src/scholarly/zotero-link.js'
 import { EXEC_CONTEXT, createMockHost, createMockHttp } from './fixtures.js'
+import { SCHOLARLY_TOOL_NAMES } from '../helpers/tool-names.js'
 import {
   createAllScholarlyTools,
-  createScholarlyCitationsTool,
   createScholarlyGetTool,
   createScholarlySearchTool,
 } from '../../src/scholarly/tools/index.js'
 
 describe('scholarly tools registry', () => {
-  it('creates all 6 scholarly model tools', () => {
+  it('creates all scholarly model tools', () => {
     const host = createMockHost(createMockHttp(() => new Response('{}')))
     const tools = createAllScholarlyTools(host)
-    expect(tools.length).toBe(6)
+    // The factories are the source of truth; the shared name list the host
+    // specs assert against must equal what they actually register, or the
+    // two drift silently (the `zotero_batch_items` gap's scholarly sibling).
     const names = tools.map((t) => t.name)
-    expect(names).toEqual([
-      'scholarly_search',
-      'scholarly_get',
-      'scholarly_citations',
-      'scholarly_read',
-      'scholarly_cite',
-      'scholarly_verify',
-    ])
+    expect(names).toEqual([...SCHOLARLY_TOOL_NAMES])
+    expect(tools.length).toBe(SCHOLARLY_TOOL_NAMES.length)
   })
 
   it('declares no presentationMeta: no client card reads one', () => {
@@ -272,6 +268,59 @@ describe('scholarly_get tool', () => {
     expect(result.text).toContain('Semantic Scholar (HTTP 503 from api.semanticscholar.org)')
   })
 
+  it('reports a rate-limited Semantic Scholar as unanswered, never as absent', async () => {
+    // The regression this locks: the S2 adapter used to swallow 429 into an
+    // empty list, so a rate-limited index vanished from the result silently.
+    // A rate limit is a transport fact: it must ride along as an unanswered
+    // source, and it must not invite the reader to "verify the identifier".
+    const mockHttp = createMockHttp((url) => {
+      if (url.includes('api.semanticscholar.org')) {
+        return new Response('{}', { status: 429, headers: { 'retry-after': '30' } })
+      }
+      if (url.includes('api.openalex.org')) {
+        return new Response(
+          JSON.stringify({
+            id: 'https://openalex.org/W99',
+            doi: 'https://doi.org/10.1038/nature1234',
+            display_name: 'Deep Learning Nature',
+            publication_year: 2015,
+            authorships: [{ author: { display_name: 'Yann LeCun' } }],
+          }),
+          { headers: { 'content-type': 'application/json' } },
+        )
+      }
+      return new Response('{}', { status: 500 })
+    })
+    const host = createMockHost(mockHttp)
+    const tool = createScholarlyGetTool(host)
+
+    const result = (await tool.execute({ id: '10.1038/nature1234' }, EXEC_CONTEXT as any)) as {
+      text: string
+    }
+    expect(result.text).toContain('Deep Learning Nature')
+    expect(result.text).toContain('Notice:')
+    expect(result.text).toContain(
+      'Semantic Scholar (HTTP 429 — Rate limited by api.semanticscholar.org',
+    )
+    expect(result.text).not.toContain('Please verify the identifier')
+  })
+
+  it('lists a rate-limited Semantic Scholar under unanswered sources when nothing is found', async () => {
+    const mockHttp = createMockHttp((url) =>
+      url.includes('api.semanticscholar.org')
+        ? new Response('{}', { status: 429, headers: { 'retry-after': '30' } })
+        : new Response('{}', { headers: { 'content-type': 'application/json' } }),
+    )
+    const tool = createScholarlySearchTool(createMockHost(mockHttp))
+
+    const result = (await tool.execute(
+      { query: 'a query no index can answer' },
+      EXEC_CONTEXT as any,
+    )) as { text: string }
+    expect(result.text).toContain('No papers found')
+    expect(result.text).toContain('Unanswered sources: Semantic Scholar (Rate limited by')
+  })
+
   it('propagates a caller abort instead of recording a failed source', async () => {
     const controller = new AbortController()
     const mockHttp = createMockHttp(() => {
@@ -284,110 +333,6 @@ describe('scholarly_get tool', () => {
     await expect(
       tool.execute({ id: '10.1038/nature1234' }, { signal: controller.signal } as any),
     ).rejects.toThrow()
-  })
-})
-
-describe('scholarly_citations tool', () => {
-  it('rejects invalid or non-paper identifier', async () => {
-    const host = createMockHost(createMockHttp(() => new Response('{}')))
-    const tool = createScholarlyCitationsTool(host)
-    await expect(
-      tool.execute(
-        { id: 'https://example.com/not-a-paper', direction: 'citations' },
-        EXEC_CONTEXT as any,
-      ),
-    ).rejects.toThrow('Please provide a valid DOI, an arXiv ID, or a PMID')
-  })
-
-  it('retrieves citing papers using OpenAlex graph', async () => {
-    const mockHttp = createMockHttp((url) => {
-      if (
-        url.includes('api.openalex.org/works/') &&
-        (url.includes('nature1234') || url.includes('doi'))
-      ) {
-        return new Response(
-          JSON.stringify({
-            id: 'https://openalex.org/W999',
-            doi: 'https://doi.org/10.1038/nature1234',
-            display_name: 'Target Paper',
-            publication_year: 2020,
-          }),
-          { headers: { 'content-type': 'application/json' } },
-        )
-      }
-      if (url.includes('filter=cites%3AW999') || url.includes('cites:W999')) {
-        return new Response(
-          JSON.stringify({
-            results: [
-              {
-                id: 'https://openalex.org/W1000',
-                display_name: 'Citing Paper Alpha',
-                publication_year: 2022,
-                authorships: [{ author: { display_name: 'Bob Citer' } }],
-                cited_by_count: 15,
-              },
-            ],
-          }),
-          { headers: { 'content-type': 'application/json' } },
-        )
-      }
-      return new Response(JSON.stringify({ results: [] }), {
-        headers: { 'content-type': 'application/json' },
-      })
-    })
-
-    const host = createMockHost(mockHttp)
-    const tool = createScholarlyCitationsTool(host)
-
-    const result = (await tool.execute(
-      { id: '10.1038/nature1234', direction: 'citations' },
-      EXEC_CONTEXT as any,
-    )) as { text: string; papers: Array<{ title: string }> }
-
-    expect(result.text).toContain('Citing Paper Alpha')
-    expect(result.text).toContain('Citing Paper Alpha')
-  })
-
-  it('retrieves referenced papers using OpenAlex graph', async () => {
-    const mockHttp = createMockHttp((url) => {
-      if (url.includes('nature1234')) {
-        return new Response(
-          JSON.stringify({
-            id: 'https://openalex.org/W999',
-            referenced_works: ['https://openalex.org/W888'],
-          }),
-          { headers: { 'content-type': 'application/json' } },
-        )
-      }
-      if (url.includes('openalex.org/works?') || url.includes('openalex.org/works/')) {
-        return new Response(
-          JSON.stringify({
-            results: [
-              {
-                id: 'https://openalex.org/W888',
-                display_name: 'Referenced Foundational Paper',
-                publication_year: 2010,
-                authorships: [{ author: { display_name: 'Original Author' } }],
-                cited_by_count: 500,
-              },
-            ],
-          }),
-          { headers: { 'content-type': 'application/json' } },
-        )
-      }
-      return new Response('{}', { headers: { 'content-type': 'application/json' } })
-    })
-
-    const host = createMockHost(mockHttp)
-    const tool = createScholarlyCitationsTool(host)
-
-    const result = (await tool.execute(
-      { id: '10.1038/nature1234', direction: 'references' },
-      EXEC_CONTEXT as any,
-    )) as { text: string; papers: Array<{ title: string }> }
-
-    expect(result.text).toContain('Referenced Foundational Paper')
-    expect(result.text).toContain('Referenced Foundational Paper')
   })
 })
 
@@ -506,99 +451,6 @@ describe('scholarly_search parameter normalization', () => {
     // The mock host caps maxResults at 10, so the per-page value cannot exceed it.
     const perPage = /per-page=(\d+)/.exec(seen.find((u) => u.includes('per-page')) ?? '')?.[1]
     expect(Number(perPage ?? 0)).toBeLessThanOrEqual(10)
-  })
-})
-
-describe('scholarly_citations direction handling', () => {
-  /**
-   * A host answering OpenAlex graph queries with one linked work.
-   * @param seen - request log.
-   * @returns the host.
-   */
-  function hostOf(seen: string[] = []): ReturnType<typeof createMockHost> {
-    return createMockHost(
-      createMockHttp((url) => {
-        const value = String(url)
-        seen.push(value)
-        if (value.includes('/works/doi%3A') || value.includes('/works/doi:')) {
-          return new Response(
-            JSON.stringify({
-              id: 'https://openalex.org/W1',
-              doi: 'https://doi.org/10.1234/seed.1',
-              display_name: 'The Seed Paper',
-              publication_year: 2020,
-              authorships: [{ author: { display_name: 'A. Author' } }],
-            }),
-            { headers: { 'content-type': 'application/json' } },
-          )
-        }
-        return new Response(
-          JSON.stringify({
-            results: [
-              {
-                id: 'https://openalex.org/W2',
-                display_name: 'A Linked Paper',
-                publication_year: 2021,
-                authorships: [{ author: { display_name: 'B. Author' } }],
-                cited_by_count: 3,
-              },
-            ],
-            meta: { count: 1 },
-          }),
-          { headers: { 'content-type': 'application/json' } },
-        )
-      }),
-    )
-  }
-
-  it('queries a different OpenAlex relation per direction', async () => {
-    const seen: string[] = []
-    const tool = createScholarlyCitationsTool(hostOf(seen))
-    for (const direction of ['citations', 'references', 'related'] as const) {
-      await tool.execute({ id: '10.1234/seed.1', direction }, EXEC_CONTEXT as never)
-    }
-    // OpenAlex filter values are URL-encoded in the query string.
-    const joined = decodeURIComponent(seen.join(' '))
-    expect(joined).toContain('cites:W1')
-    expect(joined).toContain('cited_by:W1')
-    expect(joined).toContain('related_to:W1')
-  })
-
-  it('reports when the seed paper cannot be resolved', async () => {
-    const host = createMockHost(createMockHttp(() => new Response('{}', { status: 404 })))
-    const tool = createScholarlyCitationsTool(host)
-    const result = (await tool.execute(
-      { id: '10.1234/unknown.1', direction: 'citations' },
-      EXEC_CONTEXT as never,
-    )) as { text: string }
-    expect(result.text.length).toBeGreaterThan(0)
-  })
-
-  it('reports an empty citation graph', async () => {
-    const host = createMockHost(
-      createMockHttp((url) => {
-        if (String(url).includes('/works/doi')) {
-          return new Response(
-            JSON.stringify({
-              id: 'https://openalex.org/W1',
-              display_name: 'Lonely Paper',
-              publication_year: 2020,
-              authorships: [],
-            }),
-            { headers: { 'content-type': 'application/json' } },
-          )
-        }
-        return new Response(JSON.stringify({ results: [], meta: { count: 0 } }), {
-          headers: { 'content-type': 'application/json' },
-        })
-      }),
-    )
-    const tool = createScholarlyCitationsTool(host)
-    const result = (await tool.execute(
-      { id: '10.1234/lonely.1', direction: 'citations' },
-      EXEC_CONTEXT as never,
-    )) as { text: string }
-    expect(result.text.length).toBeGreaterThan(0)
   })
 })
 

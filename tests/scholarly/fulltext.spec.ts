@@ -180,15 +180,14 @@ describe('ScholarlyTextStore (disk bodies & memory index)', () => {
     expect(read.kind).toBe('corrupt')
   })
 
-  it('records a write fault through the diagnostics sink instead of swallowing it', async () => {
-    const events: string[] = []
-    // A path under a regular file cannot be created as a directory.
+  it('rejects a write the cache root refuses instead of swallowing it', async () => {
+    // A path under a regular file cannot be created as a directory. The store
+    // owns no diagnostics ring (the scholarly row is isolated from the
+    // `zotero` namespace), so a write fault reaches the caller as a throw and
+    // the resolver decides whether it fails the read being served.
     const blocker = join(tempDir, 'blocker')
     await writeFile(blocker, 'not a directory', 'utf8')
-    const store = new ScholarlyTextStore(join(blocker, 'cache'), 8, {
-      warn: (event) => events.push(event),
-      error: (event) => events.push(event),
-    })
+    const store = new ScholarlyTextStore(join(blocker, 'cache'), 8)
 
     await expect(store.set('k', { text: 'v', source: 's', structured: false })).rejects.toThrow()
   })
@@ -340,6 +339,17 @@ describe('store and evidence-bridge contract corners', () => {
     )
     const store = new ScholarlyTextStore(dir)
     expect((await store.get('bad-url')).kind).toBe('corrupt')
+  })
+
+  it('reports a JSON null body as corrupt instead of a hit', async () => {
+    // `typeof null === 'object'`: a null on disk must fail the shape check,
+    // not reach `recordOf`'s property reads as an empty record.
+    const dir = mkdtempSync(join(tmpdir(), 'scholarly-null-'))
+    await writeFile(join(dir, 'null.json'), 'null', 'utf8')
+    const store = new ScholarlyTextStore(dir)
+    const read = await store.get('null')
+    expect(read.kind).toBe('corrupt')
+    if (read.kind === 'corrupt') expect(read.reason).toBe('record shape')
   })
 
   it('numbers an outline heading that repeats an earlier number', () => {

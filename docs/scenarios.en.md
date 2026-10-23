@@ -417,8 +417,8 @@ Run with the `dsh-zotero/scholarly` component enabled. These cases verify **what
 - **S3 An absent library annotation is not "not held"**: make local Zotero unreachable (quit Zotero) and run `scholarly_search`. Expect `Library status unavailable for N of M results`; the hits must not silently all lack the `In Zotero` mark.
 - **S4 In-library hit**: search the title of a paper already in the library. That row must carry `[In Zotero: <collection>]`, or `Root` when the item has no collection.
 - **S5 Paywall and transport failure stay distinct**: run `scholarly_read` on a paper with no open-access copy. Expect every attempted route listed (`Tried: …`), and — when a route failed at the transport — a note that the copy may merely be unreachable and worth retrying. It must not claim only "likely behind a paywall".
-- **S6 The full-text cache can be off or reused**: read one open-access paper twice. The second read hits the cache (no second outbound request in diagnostics). When the cache directory is unwritable the read must still succeed, recording one `scholarly.store.write-failed`.
-- **S7 The component is off by default**: without the `dsh-zotero/scholarly` row, `ctx.scholarly` does not exist and none of the six tools register; with it enabled they appear and collide with none of the 16 `zotero_*` tools.
+- **S6 The full-text cache can be off or reused**: read one open-access paper twice. The second read hits the cache (no second outbound request in diagnostics). When the cache directory is unwritable the read must still succeed, and the result's notes carry `cache: write failed (<reason>)`.
+- **S7 The component is off by default**: without the `dsh-zotero/scholarly` row, `ctx.scholarly` does not exist and none of the seven tools register; with it enabled they appear and collide with none of the 23 `zotero_*` tools.
 
 ## Symptom and Failure Diagnosis
 

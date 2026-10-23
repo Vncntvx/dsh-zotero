@@ -43,12 +43,6 @@ export type FullTextRead =
   | { readonly kind: 'miss' }
   | { readonly kind: 'corrupt'; readonly reason: string }
 
-/** The cache's own failure channel: every entry is a real, observable fact. */
-export interface ScholarlyStoreDiagnostics {
-  warn(event: string, detail: string): void
-  error(event: string, detail: string): void
-}
-
 /** Longest key fragment kept in a file name. */
 const MAX_KEY_CHARS = 120
 
@@ -93,6 +87,14 @@ function recordOf(value: unknown): FullTextRecord | undefined {
  * The full-text cache. Bodies live as one JSON document per key under the
  * resolved cache root; a small LRU map fronts them for the repeated reads one
  * conversation makes.
+ *
+ * A cache fault is never a quiet miss: `get` answers `corrupt` with the
+ * reason, the record is evicted, and the resolver carries that reason into
+ * the terminal error the model reads (`resolve.ts`). The scholarly
+ * subsystem deliberately runs no diagnostics ring of its own — the plugin's
+ * ring belongs to the `zotero` namespace, and the scholarly row is isolated
+ * from `ctx.zotero` by design (`docs/architecture.md`) — so the fault's
+ * observable channel is the reader's, not an operator's.
  */
 export class ScholarlyTextStore {
   private readonly memory = new Map<string, FullTextRecord>()
@@ -102,8 +104,6 @@ export class ScholarlyTextStore {
     /** Resolved cache root; defaults to the harness cache path for this component. */
     public readonly root: string = dshCachePath('zotero-scholarly'),
     private readonly memoryItems: number = DEFAULT_MEMORY_ITEMS,
-    /** Optional sink for cache faults; absent means "no sink composed". */
-    private readonly diagnostics?: ScholarlyStoreDiagnostics,
   ) {}
 
   /**
@@ -124,8 +124,8 @@ export class ScholarlyTextStore {
       const code = (error as NodeJS.ErrnoException).code
       if (code === 'ENOENT') return { kind: 'miss' }
       // EACCES, EISDIR, EIO: the directory exists but this record cannot be
-      // read. That is a fault, reported and evicted, never a quiet miss.
-      this.diagnostics?.error('scholarly.store.read-failed', `${path}: ${String(error)}`)
+      // read. That is a fault, reported through the `corrupt` outcome and
+      // evicted, never a quiet miss.
       await this.evict(path)
       return { kind: 'corrupt', reason: `unreadable (${String(code ?? error)})` }
     }
@@ -133,15 +133,13 @@ export class ScholarlyTextStore {
     let parsed: unknown
     try {
       parsed = JSON.parse(raw)
-    } catch (error) {
-      this.diagnostics?.warn('scholarly.store.malformed', `${path}: ${String(error)}`)
+    } catch {
       await this.evict(path)
       return { kind: 'corrupt', reason: 'malformed JSON' }
     }
 
     const record = recordOf(parsed)
     if (record === undefined) {
-      this.diagnostics?.warn('scholarly.store.invalid-shape', path)
       await this.evict(path)
       return { kind: 'corrupt', reason: 'record shape' }
     }
@@ -186,8 +184,9 @@ export class ScholarlyTextStore {
   private async evict(path: string): Promise<void> {
     try {
       await rm(path, { force: true })
-    } catch (error) {
-      this.diagnostics?.warn('scholarly.store.evict-failed', `${path}: ${String(error)}`)
+    } catch {
+      // A record that cannot be evicted stays corrupt on the next read, which
+      // answers `corrupt` again — the reader's outcome already carries it.
     }
   }
 

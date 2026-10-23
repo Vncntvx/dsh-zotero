@@ -18,6 +18,7 @@ import {
   searchSemanticScholar,
 } from '../../src/scholarly/sources/semanticscholar.js'
 import { createScholarlyHttp, type ScholarlyHttp } from '../../src/scholarly/transport/http.js'
+import { ScholarlyHttpError } from '../../src/scholarly/transport/http.js'
 
 describe('scholarly query router', () => {
   it('does not route ordinary English to the technical indexes', () => {
@@ -229,20 +230,29 @@ describe('index adapters degrade on a provider-side refusal', () => {
     })
   }
 
-  it('treats a Semantic Scholar 429 as "no results", not a failure', async () => {
-    const papers = await searchSemanticScholar(
-      { query: 'q', limit: 5, sort: 'relevance' },
-      await failingWith(429),
+  it('propagates a Semantic Scholar 429 instead of reporting "no results"', async () => {
+    // The regression this locks: the adapter used to swallow 429 into an empty
+    // list, so a rate-limited index looked like an index with no matches and
+    // the failedSources mechanism never saw the failure. A rate limit is a
+    // transport fact the caller must report as an unanswered source.
+    const query = { query: 'q', limit: 5, sort: 'relevance' as const }
+    await expect(searchSemanticScholar(query, await failingWith(429))).rejects.toBeInstanceOf(
+      ScholarlyHttpError,
     )
-    expect(papers).toEqual([])
+    await expect(searchSemanticScholar(query, await failingWith(429))).rejects.toMatchObject({
+      status: 429,
+    })
   })
 
-  it('treats a Semantic Scholar 400 as "no results"', async () => {
-    const papers = await searchSemanticScholar(
-      { query: 'q', limit: 5, sort: 'relevance' },
-      await failingWith(400),
-    )
-    expect(papers).toEqual([])
+  it('propagates a Semantic Scholar 400 and 404 instead of reporting "no results"', async () => {
+    // The search endpoint answers an empty result set with 200 and an empty
+    // `data`, so any 4xx here is a path/protocol fault, never "no results".
+    const query = { query: 'q', limit: 5, sort: 'relevance' as const }
+    for (const status of [400, 404]) {
+      await expect(searchSemanticScholar(query, await failingWith(status))).rejects.toMatchObject({
+        status,
+      })
+    }
   })
 
   it('propagates a Semantic Scholar 500', async () => {
@@ -251,8 +261,18 @@ describe('index adapters degrade on a provider-side refusal', () => {
     ).rejects.toThrow()
   })
 
-  it('treats a Semantic Scholar lookup 429 as an absent record', async () => {
-    expect(await lookupSemanticScholar('DOI:10.1/x', await failingWith(429))).toBeUndefined()
+  it('propagates a Semantic Scholar lookup 429 and 400 instead of an absent record', async () => {
+    // Only a 404 normalizes to "no such record" (the crossref contract); a
+    // rate limit or a malformed request must reach the caller as a failure.
+    for (const status of [429, 400]) {
+      await expect(
+        lookupSemanticScholar('DOI:10.1/x', await failingWith(status)),
+      ).rejects.toMatchObject({ status })
+    }
+  })
+
+  it('normalizes only a Semantic Scholar lookup 404 to an absent record', async () => {
+    expect(await lookupSemanticScholar('DOI:10.1/x', await failingWith(404))).toBeUndefined()
   })
 
   it('sends an API key header only when one is configured', async () => {

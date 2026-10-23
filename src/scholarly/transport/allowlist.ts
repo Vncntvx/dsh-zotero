@@ -34,6 +34,21 @@ const PRIVATE_IP_REGEX = /^(127\.|10\.|192\.168\.|169\.254\.|0\.|172\.(1[6-9]|2\
 /**
  * Validates that a URL is a legitimate public web address, rejecting
  * private/loopback addresses.
+ *
+ * IPv6 literal hosts are refused as a class, not by a prefix blacklist.
+ * A blacklist cannot enumerate the spellings: WHATWG URL normalizes
+ * `[0:0:0:0:0:0:0:1]` to `[::1]` but leaves `[::0.0.0.1]` (dotted-quad
+ * tail), `[fec0::1]` (site-local, past the `fc`/`fd` prefixes),
+ * `[64:ff9b::7f00:1]` (NAT64), and expanded IPv4-mapped forms such as
+ * `[0:0:0:0:0:ffff:127.0.0.1]` untouched — each resolves to loopback or
+ * a private network. Every host this plugin can legitimately reach is a
+ * DNS name (the `hosts.ts` allowlist carries no literals, and open-access
+ * PDFs live on publisher DNS names), so a literal has no valid use here
+ * and refusing the whole class closes every spelling at once. The
+ * harness's unicast whitelist (`web-fetch-http/src/network.ts`) exists
+ * for general web retrieval, which must admit public IPv6 literals;
+ * `ipaddr.js` is not in this dependency tree and this class closure needs
+ * no dependency.
  * @param urlString - the address to check.
  * @returns true when the address is public HTTP(S).
  */
@@ -55,7 +70,7 @@ export function isPublicUrl(urlString: string): boolean {
     }
 
     if (PRIVATE_IP_REGEX.test(host)) return false
-    if (host.includes(':') && /^(::1|fe80:|fc|fd|::ffff:)/i.test(host)) return false
+    if (host.includes(':')) return false
 
     return true
   } catch {

@@ -495,8 +495,9 @@ describe('fusion with custom weights and unknown sources', () => {
     expect(merged[0]?.sources).toContain('unknown-index')
   })
 
-  it('uses a custom RRF constant without changing the ordering contract', () => {
-    // Distinct titles stay distinct records; the constant only reweights ranks.
+  it('keeps distinct titles as distinct records under the shared RRF constant', () => {
+    // The RRF constant is a module constant with no caller override: two
+    // records with distinct titles never merge, whatever the constant.
     const lists = [
       {
         sourceId: 'arxiv',
@@ -507,7 +508,7 @@ describe('fusion with custom weights and unknown sources', () => {
         papers: [{ title: 'Distinct Paper Two', authors: [], sources: [] } as ScholarlyPaper],
       },
     ]
-    const ranked = fuseRankedLists(lists, 10)
+    const ranked = fuseRankedLists(lists)
     expect(ranked).toHaveLength(2)
   })
 })
