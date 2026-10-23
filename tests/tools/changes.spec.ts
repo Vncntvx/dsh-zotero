@@ -343,6 +343,47 @@ describe('zotero_changes tool', () => {
     expect(mock.requests).toEqual([])
   })
 
+  it('rejects a cursor whose own include list cannot describe its coverage', async () => {
+    // The cursor's include is carried back verbatim, so an empty or duplicated
+    // list is a cursor this plugin could never have issued; accepting it would
+    // invent a coverage claim the caller did not make.
+    for (const include of [[], ['items', 'items']]) {
+      const result = await runTool('zotero_changes', {
+        since: {
+          serverId: 'S1',
+          library: { type: 'user', id: 0 },
+          version: 42,
+          include,
+          unserved: [],
+        },
+      })
+      expect(result.isError).toBe(true)
+      if (!result.isError) throw new Error('unreachable')
+      expect((result.content[0] as { text: string }).text).toContain(
+        'since.include must list the resource kinds covered by the cursor',
+      )
+    }
+    expect(mock.requests).toEqual([])
+  })
+
+  it('rejects a cursor that calls a covered kind unserved', async () => {
+    const result = await runTool('zotero_changes', {
+      since: {
+        serverId: 'S1',
+        library: { type: 'user', id: 0 },
+        version: 42,
+        include: ['items'],
+        unserved: ['items'],
+      },
+    })
+    expect(result.isError).toBe(true)
+    if (!result.isError) throw new Error('unreachable')
+    expect((result.content[0] as { text: string }).text).toContain(
+      'since.unserved must list resource kinds the cursor could not observe',
+    )
+    expect(mock.requests).toEqual([])
+  })
+
   it('renders digests, withheld cursors, and unobservable kinds honestly', () => {
     // Three baseline outcomes, three texts: a cursor, a version without an
     // instance, and no version at all. None of them is a bare "Baseline

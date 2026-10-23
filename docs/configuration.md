@@ -94,11 +94,12 @@ Schema 默认值 → Composition 入口配置 → 当前 profile 的 Cordis patc
 
 ## 学术文献检索组件配置 (`dsh-zotero/scholarly`)
 
-组件行在 `cordis.patch.yml` 中默认随插件启用；如需关闭可设为 `disabled: true`。字段有三种配置方式：在 Zotero 主设置页的“学术检索”标签页直接配置，在插件列表中 `dsh-zotero#scholarly` 行的“配置”按钮进行独立配置，或直接写入 `cordis.patch.yml` 该行的 `config` 下。主设置页与子行配置共享同一表单状态，双通道互通实时同步。字段变更在下一次工具调用时生效，无需重启 profile：
+组件行可被加载，但外部学术工具默认关闭；必须将 `enabled: true` 作为显式配置后才会注册工具并发起网络请求。字段有三种配置方式：在 Zotero 主设置页的“学术检索”标签页直接配置，在插件列表中 `dsh-zotero#scholarly` 行的“配置”按钮进行独立配置，或直接写入 `cordis.patch.yml` 该行的 `config` 下。主设置页与子行配置共享同一表单状态，双通道互通实时同步。字段变更在下一次工具调用时生效，无需重启 profile：
 
 | 字段              | 默认值  | 说明                                                                                               |
 | ----------------- | ------- | -------------------------------------------------------------------------------------------------- |
 | `email`           | —       | 联系邮箱，附加于 Crossref、OpenAlex 和 NCBI/Europe PMC 请求头（加入 Polite Pool 获得更优限速配额） |
+| `enabled`         | `false` | 是否注册 Scholarly 工具并允许访问显式允许列表中的外部学术索引                                      |
 | `s2Key`           | —       | Semantic Scholar API Key（可选，避免共享 IP 池限速）                                               |
 | `ncbiKey`         | —       | NCBI / PubMed API Key（可选，将每秒请求上限从 3 提升至 10）                                        |
 | `openalexKey`     | —       | OpenAlex API Key（可选，将每秒请求上限提升至 100）                                                 |

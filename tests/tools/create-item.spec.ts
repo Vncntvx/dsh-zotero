@@ -9,7 +9,14 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { ToolDefinition, ToolResult } from '@deepseek-ai/dsh-tools'
-import { type HostLane, setupHostLane } from '../helpers/lanes/host-lane.js'
+import { expectValue, type HostLane, setupHostLane } from '../helpers/lanes/host-lane.js'
+import { ApprovingQuestions, resetApprovalStub, StubApproval } from '../helpers/approval-stub.js'
+import {
+  batchBody,
+  batchHeaders,
+  COLLECTION_KEY,
+  SERVER_ID,
+} from '../helpers/write-domain-fixtures.js'
 import {
   WRITE_ITEM_NEEDS_TITLE_OR_URL_MESSAGE,
   writeNonBlankMessage,
@@ -18,10 +25,22 @@ import {
 import { createItemPlan } from '../../src/tools/create-item.js'
 import { ZOTERO_CREATABLE_ITEM_TYPES } from '../../src/types.js'
 
+const NEW_KEY = 'NEWITEM1'
+const COLLECTION_REF = `zotero://user/0/collection/${COLLECTION_KEY}`
+
 let lane: HostLane
 
 beforeEach(async () => {
-  lane = await setupHostLane({ writeEnabled: true })
+  resetApprovalStub()
+  lane = await setupHostLane(
+    { writeEnabled: true },
+    {
+      compose: async (ctx) => {
+        await ctx.plugin(StubApproval)
+        await ctx.plugin(ApprovingQuestions)
+      },
+    },
+  )
 })
 
 afterEach(async () => {
@@ -136,6 +155,123 @@ describe('createItemPlan', () => {
     expect(plan).not.toContain('- DOI:')
     expect(plan).not.toContain('- Venue:')
     expect(plan).not.toContain('- Creators:')
+  })
+
+  it('lists tags and collections, and their empty arms, without inventing either', () => {
+    const withLists = createItemPlan({
+      itemType: 'book',
+      title: 'A book',
+      tags: ['attention', 'reading-list'],
+      collections: [COLLECTION_REF],
+    })
+    expect(withLists).toContain('- Tags: attention, reading-list')
+    expect(withLists).toContain(`- Collections: ${COLLECTION_REF}`)
+
+    const empty = createItemPlan({ itemType: 'book', title: 'A book', tags: [], collections: [] })
+    expect(empty).toContain('- Tags: (none)')
+    expect(empty).toContain('- Collections: (none)')
+  })
+})
+
+describe('zotero_create_item execution', () => {
+  /** The single item entry the last `POST /items` carried. */
+  function postedEntry(): Record<string, unknown> {
+    const post = lane.mock.requests.find(
+      (request) => request.method === 'POST' && request.pathname === '/api/users/0/items',
+    )
+    return (JSON.parse(post?.body ?? '[]') as Record<string, unknown>[])[0]!
+  }
+
+  /** Identity ping, the grant the write key comes from, and one collection to resolve. */
+  function serveIdentityAndDirectory(): void {
+    lane.mock.route('GET', '/api/', (_req, _res, h) =>
+      h.json({}, { 'Zotero-Server-ID': SERVER_ID }),
+    )
+    lane.mock.route('POST', '/api/local/authorize', (_req, _res, h) =>
+      h.json({ key: 'K'.repeat(32), remember: true }, { 'Zotero-Server-ID': SERVER_ID }),
+    )
+    lane.mock.route('GET', '/api/users/0/collections', (_req, _res, h) =>
+      h.json([{ key: COLLECTION_KEY, version: 3, data: { key: COLLECTION_KEY, name: 'Reading' } }]),
+    )
+  }
+
+  it('creates with the whole field set and reports only what the server echoed', async () => {
+    serveIdentityAndDirectory()
+    lane.mock.route('POST', '/api/users/0/items', (_req, _res, h) => {
+      const entry = postedEntry()
+      return h.raw(
+        200,
+        batchHeaders(42),
+        batchBody(NEW_KEY, 42, {
+          itemType: entry.itemType,
+          title: entry.title,
+          tags: entry.tags,
+          collections: entry.collections,
+        }),
+      )
+    })
+
+    const result = expectValue(
+      await lane.runTool('zotero_create_item', {
+        itemType: 'journalArticle',
+        title: 'Attention is all you need',
+        date: '2017',
+        doi: '10.5555/example',
+        abstractNote: 'A transformer.',
+        publicationTitle: 'NeurIPS',
+        creators: [{ creatorType: 'author', name: 'Vaswani, Ashish' }],
+        tags: ['attention', 'transformer'],
+        collections: [COLLECTION_REF],
+      }),
+      'zotero_create_item',
+    )
+    expect(result.value).toMatchObject({
+      kind: 'applied',
+      key: NEW_KEY,
+      version: 42,
+      itemType: 'journalArticle',
+      title: 'Attention is all you need',
+      tags: ['attention', 'transformer'],
+      collections: [`${COLLECTION_REF}?server=${SERVER_ID}`],
+      libraryVersion: 42,
+      serverId: SERVER_ID,
+    })
+
+    expect(postedEntry()).toMatchObject({
+      itemType: 'journalArticle',
+      DOI: '10.5555/example',
+      publicationTitle: 'NeurIPS',
+      tags: [{ tag: 'attention' }, { tag: 'transformer' }],
+      collections: [COLLECTION_KEY],
+      creators: [{ creatorType: 'author', name: 'Vaswani, Ashish' }],
+    })
+  })
+
+  it('does not claim tags or collections the server did not echo', async () => {
+    serveIdentityAndDirectory()
+    lane.mock.route('POST', '/api/users/0/items', (_req, _res, h) =>
+      // An echo whose tag rows are malformed: the write landed, but no proof
+      // of its tag/collection state exists, so the result must not invent one.
+      h.raw(
+        200,
+        batchHeaders(42),
+        batchBody(NEW_KEY, 42, {
+          itemType: 'journalArticle',
+          title: 'Attention is all you need',
+          tags: [{ tag: '' }],
+          collections: [],
+        }),
+      ),
+    )
+
+    const result = await lane.runTool('zotero_create_item', {
+      itemType: 'journalArticle',
+      title: 'Attention is all you need',
+      tags: ['attention'],
+    })
+    expect(result.isError).toBe(false)
+    if (result.isError) throw new Error('unreachable')
+    expect(result.value).toMatchObject({ kind: 'committed-unverified' })
   })
 })
 

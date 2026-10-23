@@ -94,11 +94,12 @@ In headless environments lacking a settings service, the plugin runs using value
 
 ## Scholarly Literature Component Configuration (`dsh-zotero/scholarly`)
 
-The component row in `cordis.patch.yml` ships enabled by default alongside the plugin; set `disabled: true` to disable it. Fields can be edited through three paths: directly on the "Scholarly Search" tab of the main Zotero plugin settings page, via the "Configure" button on the `dsh-zotero#scholarly` row in the Plugins manager, or written directly under that row's `config` in `cordis.patch.yml`. The main settings page and the sub-row shortcut share the same live form state across both channels. A change takes effect on the next tool call, without restarting the profile:
+The component row may be loaded, but Scholarly tools are disabled by default. Set `enabled: true` explicitly before the tools register or any external index request is made. Fields can be edited through three paths: directly on the "Scholarly Search" tab of the main Zotero plugin settings page, via the "Configure" button on the `dsh-zotero#scholarly` row in the Plugins manager, or written directly under that row's `config` in `cordis.patch.yml`. The main settings page and the sub-row shortcut share the same live form state across both channels. A change takes effect on the next tool call, without restarting the profile:
 
 | Field             | Default | Description                                                                                        |
 | ----------------- | ------- | -------------------------------------------------------------------------------------------------- |
 | `email`           | —       | Contact email sent to Crossref, OpenAlex, and NCBI/Europe PMC (polite pool for higher rate limits) |
+| `enabled`         | `false` | Register Scholarly tools and allow requests to the explicit external-index allowlist               |
 | `s2Key`           | —       | Semantic Scholar API Key (optional, avoids shared-pool rate limiting)                              |
 | `ncbiKey`         | —       | NCBI / PubMed API Key (optional, raises limit from 3 to 10 req/s)                                  |
 | `openalexKey`     | —       | OpenAlex API Key (optional, raises rate limit to 100 req/s)                                        |

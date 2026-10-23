@@ -846,6 +846,19 @@ export interface ZoteroCreateNoteResult {
   serverId?: string
 }
 
+export interface ZoteroUpdateNoteRequest {
+  item: ZoteroObjectRef
+  markdown: string
+}
+
+export interface ZoteroUpdateNoteResult {
+  kind: 'applied'
+  ref: string
+  version: number
+  libraryVersion: number
+  serverId?: string
+}
+
 /**
  * A create (note, item, or collection) that must be treated as committed for
  * retry safety, although Zotero's response could not prove the complete saved
@@ -960,6 +973,58 @@ export interface ZoteroDeleteCollectionResult {
   serverId?: string
 }
 
+export interface ZoteroUpdateCollectionRequest {
+  collection: ZoteroObjectRef
+  name?: string
+  parent?: ZoteroObjectRef | null
+}
+
+export interface ZoteroUpdateCollectionResult {
+  kind: 'applied'
+  ref: string
+  version: number
+  name?: string
+  parentRef?: string
+  libraryVersion: number
+  serverId?: string
+}
+
+export interface ZoteroSavedSearchCondition {
+  condition: string
+  operator: string
+  value: string
+}
+export interface ZoteroCreateSavedSearchRequest {
+  name: string
+  conditions: ZoteroSavedSearchCondition[]
+}
+export interface ZoteroSavedSearchResult {
+  kind: 'applied'
+  ref: string
+  key: string
+  version: number
+  name: string
+  conditions: ZoteroSavedSearchCondition[]
+  libraryVersion: number
+  serverId?: string
+}
+export interface ZoteroUpdateSavedSearchRequest {
+  search: ZoteroObjectRef
+  name?: string
+  conditions?: ZoteroSavedSearchCondition[]
+}
+export interface ZoteroDeleteSavedSearchRequest {
+  search: ZoteroObjectRef
+}
+export interface ZoteroDeleteSavedSearchResult {
+  kind: 'deleted'
+  ref: string
+  key: string
+  deleted: true
+  libraryVersion: number
+  serverId?: string
+}
+
 /** Item types `zotero_create_item` may create (closed whitelist). */
 export const ZOTERO_CREATABLE_ITEM_TYPES = [
   'webpage',
@@ -983,6 +1048,8 @@ export interface ZoteroCreateItemRequest {
   abstractNote?: string
   publicationTitle?: string
   creators?: ZoteroCreator[]
+  tags?: string[]
+  collections?: (string | ZoteroObjectRef)[]
 }
 
 export interface ZoteroCreateItemResult {
@@ -993,6 +1060,8 @@ export interface ZoteroCreateItemResult {
   version: number
   itemType: string
   title?: string
+  tags?: string[]
+  collections?: string[]
   /** The library version the write advanced the library to. */
   libraryVersion: number
   serverId?: string
@@ -1135,6 +1204,23 @@ export interface ZoteroBatchItemsResult {
   serverId?: string
 }
 
+export interface ZoteroRestoreItemsRequest {
+  items: ZoteroObjectRef[]
+}
+export interface ZoteroRestoreItemResult {
+  ref: string
+  restored: true
+  version: number
+  libraryVersion: number
+  serverId?: string
+}
+export interface ZoteroRestoreItemsResult {
+  kind: 'restored'
+  restored: ZoteroRestoreItemResult[]
+  failed: ZoteroBatchOperationFailure[]
+  serverId?: string
+}
+
 /**
  * How destructive the reviewed write is, so the approval prompt can name the
  * blast radius before the plan card shows the detail. Omitted means a plain
@@ -1200,6 +1286,13 @@ export type ZoteroCreateItemCommittedOutcome =
   ZoteroCreateItemResult | ZoteroWriteCommittedUnverified
 export type ZoteroCreateItemOutcome = ZoteroCreateItemCommittedOutcome | ZoteroWriteDeclined
 export type ZoteroUpdateItemOutcome = ZoteroUpdateItemResult | ZoteroWriteDeclined
+export type ZoteroUpdateNoteOutcome = ZoteroUpdateNoteResult | ZoteroWriteDeclined
+export type ZoteroUpdateCollectionOutcome = ZoteroUpdateCollectionResult | ZoteroWriteDeclined
+export type ZoteroRestoreItemsOutcome = ZoteroRestoreItemsResult | ZoteroWriteDeclined
+export type ZoteroCreateSavedSearchOutcome =
+  ZoteroSavedSearchResult | ZoteroWriteCommittedUnverified | ZoteroWriteDeclined
+export type ZoteroUpdateSavedSearchOutcome = ZoteroSavedSearchResult | ZoteroWriteDeclined
+export type ZoteroDeleteSavedSearchOutcome = ZoteroDeleteSavedSearchResult | ZoteroWriteDeclined
 export type ZoteroDeleteLibraryTagsOutcome = ZoteroDeleteLibraryTagsResult | ZoteroWriteDeclined
 export type ZoteroBatchItemsOutcome = ZoteroBatchItemsResult | ZoteroWriteDeclined
 
@@ -1298,6 +1391,10 @@ export interface ZoteroProvider {
     request: ZoteroCreateNoteRequest,
     signal?: AbortSignal,
   ): Promise<ZoteroCreateNoteCommittedOutcome>
+  updateNote?(
+    request: ZoteroUpdateNoteRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroUpdateNoteResult>
   /**
    * Update one item's tags (read-merge-write; add and remove settle in one write).
    * @param request - the item ref and the tags to add/remove.
@@ -1328,6 +1425,10 @@ export interface ZoteroProvider {
     request: ZoteroCreateCollectionRequest,
     signal?: AbortSignal,
   ): Promise<ZoteroCreateCollectionCommittedOutcome>
+  updateCollection?(
+    request: ZoteroUpdateCollectionRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroUpdateCollectionResult>
   /**
    * Delete a collection by ref or name.
    * @param request - the collection ref or name.
@@ -1378,6 +1479,22 @@ export interface ZoteroProvider {
     request: ZoteroBatchItemsRequest,
     signal?: AbortSignal,
   ): Promise<ZoteroBatchItemsResult>
+  restoreItems?(
+    request: ZoteroRestoreItemsRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroRestoreItemsResult>
+  createSavedSearch?(
+    request: ZoteroCreateSavedSearchRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroSavedSearchResult | ZoteroWriteCommittedUnverified>
+  updateSavedSearch?(
+    request: ZoteroUpdateSavedSearchRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroSavedSearchResult>
+  deleteSavedSearch?(
+    request: ZoteroDeleteSavedSearchRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroDeleteSavedSearchResult>
 }
 
 /**

@@ -112,6 +112,18 @@ import {
   type ZoteroUpdateItemResult,
   type ZoteroUpdateItemTagsRequest,
   type ZoteroUpdateItemTagsResult,
+  type ZoteroUpdateNoteRequest,
+  type ZoteroUpdateNoteResult,
+  type ZoteroUpdateCollectionRequest,
+  type ZoteroUpdateCollectionResult,
+  type ZoteroRestoreItemsRequest,
+  type ZoteroRestoreItemsResult,
+  type ZoteroCreateSavedSearchRequest,
+  type ZoteroSavedSearchResult,
+  type ZoteroUpdateSavedSearchRequest,
+  type ZoteroDeleteSavedSearchRequest,
+  type ZoteroDeleteSavedSearchResult,
+  type ZoteroSavedSearchCondition,
   type ZoteroWriteCommittedUnverified,
   type ZoteroBatchItemsRequest,
   type ZoteroBatchItemsResult,
@@ -617,7 +629,7 @@ function objectRefusedError(refused: ZoteroWriteObjectFailure): ZoteroError {
   }
 }
 
-type CommittedUnverifiedKind = 'note' | 'item' | 'collection'
+type CommittedUnverifiedKind = 'note' | 'item' | 'collection' | 'search'
 
 /**
  * The shared non-retryable outcome for non-idempotent creates. Notes, items,
@@ -638,7 +650,9 @@ function committedUnverified(
       ? undefined
       : kind === 'collection'
         ? collectionRef(safeKey, serverId)
-        : itemRef(safeKey, serverId)
+        : kind === 'search'
+          ? formatRef(refForLibrary(PERSONAL_LIBRARY, 'search', safeKey, serverId))
+          : itemRef(safeKey, serverId)
   return {
     kind: 'committed-unverified',
     committed: true,
@@ -1261,6 +1275,216 @@ export async function deleteCollection(
   }
 }
 
+/** Rename/reparent one collection under its object version precondition. */
+export async function updateCollection(
+  deps: WriteDomainDeps,
+  request: ZoteroUpdateCollectionRequest,
+  signal?: AbortSignal,
+): Promise<ZoteroUpdateCollectionResult> {
+  const serverId = await ensureServerId(deps, signal)
+  const ref = requireWritableRefAtServer(request.collection, ['collection'], serverId)
+  if (request.name === undefined && request.parent === undefined) {
+    throw new ZoteroError(
+      'At least one of name or parent must be provided.',
+      ZOTERO_INVALID_ARGUMENT,
+    )
+  }
+  const { json, headers } = await deps.client.getJson<unknown>(
+    `${libraryPrefix(PERSONAL_LIBRARY)}/collections/${ref.key}`,
+    undefined,
+    { signal, serverId },
+  )
+  const record = asRecord(json)
+  const data = asRecord(record?.data)
+  const version = isNonNegativeSafeInteger(record?.version) ? record.version : undefined
+  if (
+    version === undefined ||
+    asString(record?.key) !== ref.key ||
+    asString(data?.key) !== ref.key
+  ) {
+    throw new ZoteroError(
+      'Zotero returned an invalid collection version record.',
+      ZOTERO_UNEXPECTED,
+    )
+  }
+  assertServerIdMatches(headers.get(ZOTERO_SERVER_ID_HEADER), serverId)
+  const patch: Record<string, unknown> = {}
+  if (request.name !== undefined) patch.name = requireNonBlank('name', request.name)
+  if (request.parent !== undefined) {
+    if (request.parent === null) patch.parentCollection = false
+    else {
+      const parent = requireWritableRefAtServer(request.parent, ['collection'], serverId)
+      patch.parentCollection = parent.key
+    }
+  }
+  const { libraryVersion } = await withWriteKey(deps, serverId, signal, async (apiKey) =>
+    deps.writer.patch(`${libraryPrefix(PERSONAL_LIBRARY)}/collections/${ref.key}`, patch, {
+      serverId,
+      apiKey,
+      ifUnmodifiedSinceVersion: version,
+      signal,
+    }),
+  )
+  deps.onCollectionsChanged?.()
+  return {
+    kind: 'applied',
+    ref: collectionRef(ref.key, serverId),
+    version: libraryVersion,
+    ...(request.name !== undefined ? { name: requireNonBlank('name', request.name) } : {}),
+    ...(request.parent && request.parent !== null ? { parentRef: formatRef(request.parent) } : {}),
+    libraryVersion,
+    serverId,
+  }
+}
+
+function savedSearchConditionsOf(
+  data: Record<string, unknown>,
+): ZoteroSavedSearchCondition[] | undefined {
+  if (!Array.isArray(data.conditions)) return undefined
+  const out: ZoteroSavedSearchCondition[] = []
+  for (const row of data.conditions) {
+    const record = asRecord(row)
+    const condition = asString(record?.condition)
+    const operator = asString(record?.operator)
+    const value = asString(record?.value)
+    if (condition === undefined || operator === undefined || value === undefined) return undefined
+    out.push({ condition, operator, value })
+  }
+  return out
+}
+
+export async function createSavedSearch(
+  deps: WriteDomainDeps,
+  request: ZoteroCreateSavedSearchRequest,
+  signal?: AbortSignal,
+): Promise<ZoteroSavedSearchResult | ZoteroWriteCommittedUnverified> {
+  const name = requireNonBlank('name', request.name)
+  if (request.conditions.length === 0)
+    throw new ZoteroError('conditions cannot be empty.', ZOTERO_INVALID_ARGUMENT)
+  const serverId = await ensureServerId(deps, signal)
+  const entry = { name, conditions: request.conditions }
+  return await withWriteKey(deps, serverId, signal, async (apiKey) => {
+    let batch: ZoteroBatchWrite
+    try {
+      batch = await deps.writer.batch(`${libraryPrefix(PERSONAL_LIBRARY)}/searches`, [entry], {
+        serverId,
+        apiKey,
+        signal,
+      })
+    } catch (error) {
+      if (error instanceof ZoteroWriteCommitUnknownError)
+        return committedUnverified(
+          'search',
+          undefined,
+          serverId,
+          undefined,
+          undefined,
+          'commit-unknown',
+        )
+      throw error
+    }
+    const settled = settleSingleEntryBatch(batch, 'search', serverId, (data) => {
+      const savedName = asString(data.name)
+      const conditions = savedSearchConditionsOf(data)
+      return savedName === name && conditions !== undefined ? { savedName, conditions } : undefined
+    })
+    if (settled.status === 'unverified') return settled.result
+    const { key, version, payload } = settled.entry
+    return {
+      kind: 'applied',
+      ref: formatRef(refForLibrary(PERSONAL_LIBRARY, 'search', key, serverId)),
+      key,
+      version,
+      name: payload.savedName,
+      conditions: payload.conditions,
+      libraryVersion: batch.libraryVersion,
+      serverId,
+    }
+  })
+}
+
+export async function updateSavedSearch(
+  deps: WriteDomainDeps,
+  request: ZoteroUpdateSavedSearchRequest,
+  signal?: AbortSignal,
+): Promise<ZoteroSavedSearchResult> {
+  const serverId = await ensureServerId(deps, signal)
+  const ref = requireWritableRefAtServer(request.search, ['search'], serverId)
+  if (request.name === undefined && request.conditions === undefined)
+    throw new ZoteroError(
+      'At least one of name or conditions must be provided.',
+      ZOTERO_INVALID_ARGUMENT,
+    )
+  const { json } = await deps.client.getJson<unknown>(
+    `${libraryPrefix(PERSONAL_LIBRARY)}/searches/${ref.key}`,
+    undefined,
+    { signal, serverId },
+  )
+  const record = asRecord(json)
+  const data = asRecord(record?.data)
+  const version = isNonNegativeSafeInteger(record?.version) ? record.version : undefined
+  if (version === undefined) throw new ZoteroError(WRITE_VERSION_MISSING_MESSAGE, ZOTERO_UNEXPECTED)
+  const patch: Record<string, unknown> = {}
+  if (request.name !== undefined) patch.name = requireNonBlank('name', request.name)
+  if (request.conditions !== undefined) patch.conditions = request.conditions
+  const { libraryVersion } = await withWriteKey(deps, serverId, signal, (apiKey) =>
+    deps.writer.patch(`${libraryPrefix(PERSONAL_LIBRARY)}/searches/${ref.key}`, patch, {
+      serverId,
+      apiKey,
+      ifUnmodifiedSinceVersion: version,
+      signal,
+    }),
+  )
+  const name = request.name ?? asString(data?.name) ?? ''
+  const conditions = request.conditions ?? savedSearchConditionsOf(data ?? {}) ?? []
+  return {
+    kind: 'applied',
+    ref: formatRef(refForLibrary(PERSONAL_LIBRARY, 'search', ref.key, serverId)),
+    key: ref.key,
+    version: libraryVersion,
+    name,
+    conditions,
+    libraryVersion,
+    serverId,
+  }
+}
+
+export async function deleteSavedSearch(
+  deps: WriteDomainDeps,
+  request: ZoteroDeleteSavedSearchRequest,
+  signal?: AbortSignal,
+): Promise<ZoteroDeleteSavedSearchResult> {
+  const serverId = await ensureServerId(deps, signal)
+  const ref = requireWritableRefAtServer(request.search, ['search'], serverId)
+  const { json, headers } = await deps.client.getJson<unknown>(
+    `${libraryPrefix(PERSONAL_LIBRARY)}/searches/${ref.key}`,
+    undefined,
+    { signal, serverId },
+  )
+  const record = asRecord(json)
+  if (!isNonNegativeSafeInteger(record?.version))
+    throw new ZoteroError(WRITE_VERSION_MISSING_MESSAGE, ZOTERO_UNEXPECTED)
+  const precondition = parseNonNegativeSafeInteger(headers.get(ZOTERO_LIBRARY_VERSION_HEADER))
+  if (precondition === undefined)
+    throw new ZoteroError(WRITE_PRECONDITION_READ_LIBRARY_VERSION_MESSAGE, ZOTERO_UNEXPECTED)
+  const { libraryVersion } = await withWriteKey(deps, serverId, signal, (apiKey) =>
+    deps.writer.delete(`${libraryPrefix(PERSONAL_LIBRARY)}/searches/${ref.key}`, {
+      serverId,
+      apiKey,
+      ifUnmodifiedSinceVersion: precondition,
+      signal,
+    }),
+  )
+  return {
+    kind: 'deleted',
+    ref: formatRef(refForLibrary(PERSONAL_LIBRARY, 'search', ref.key, serverId)),
+    key: ref.key,
+    deleted: true,
+    libraryVersion,
+    serverId,
+  }
+}
+
 /**
  * Create a bibliographic item from the closed field set. No BibTeX/CSL-JSON
  * channel exists: `POST /items` only accepts Zotero item JSON, so the entry
@@ -1284,6 +1508,13 @@ export async function createItem(
     normalizeCreator(creator, index),
   )
   const serverId = await ensureServerId(deps, signal)
+  const tags = normalizeWriteList('tags', request.tags ?? [])
+  const collectionInputs = (request.collections ?? []).map((value) =>
+    typeof value === 'string' ? normalizeCollectionInput('collection', value) : formatRef(value),
+  )
+  const collectionRefs =
+    collectionInputs.length > 0 ? await deps.resolveCollections(collectionInputs, signal) : []
+  for (const ref of collectionRefs) requireWritableRefAtServer(ref, ['collection'], serverId)
   const entry: Record<string, unknown> = {
     itemType,
     ...(title !== '' ? { title } : {}),
@@ -1293,6 +1524,8 @@ export async function createItem(
     ...(abstractNote !== '' ? { abstractNote } : {}),
     ...(publicationTitle !== '' ? { publicationTitle } : {}),
     ...(creators.length > 0 ? { creators } : {}),
+    ...(tags.length > 0 ? { tags: tags.map((tag) => ({ tag })) } : {}),
+    ...(collectionRefs.length > 0 ? { collections: collectionRefs.map((ref) => ref.key) } : {}),
   }
   return await withWriteKey(deps, serverId, signal, async (apiKey) => {
     let batch: ZoteroBatchWrite
@@ -1317,9 +1550,18 @@ export async function createItem(
     }
     const proven = (
       data: Record<string, unknown>,
-    ): { savedTitle: string | undefined } | undefined => {
+    ):
+      | { savedTitle: string | undefined; savedTags: string[]; savedCollections: string[] }
+      | undefined => {
       if (asString(data.itemType) !== itemType) return undefined
-      return { savedTitle: asString(data.title) }
+      const savedTags = tagsOf(data)
+      const savedCollections = strictCollectionKeysOf(data)
+      if (savedTags === undefined || savedCollections === undefined) return undefined
+      return {
+        savedTitle: asString(data.title),
+        savedTags: savedTags.map((entry) => entry.tag),
+        savedCollections: savedCollections.map((key) => collectionRef(key, serverId)),
+      }
     }
     const settled = settleSingleEntryBatch(batch, 'item', serverId, proven)
     if (settled.status === 'unverified') return settled.result
@@ -1335,6 +1577,8 @@ export async function createItem(
         : title !== ''
           ? { title }
           : {}),
+      tags: payload.savedTags,
+      collections: payload.savedCollections,
       libraryVersion: batch.libraryVersion,
       serverId,
     }
@@ -1414,6 +1658,71 @@ export async function updateItem(
       }
     },
   )
+}
+
+/** Update a note body as markdown, converted to Zotero's safe note HTML. */
+export async function updateNote(
+  deps: WriteDomainDeps,
+  request: ZoteroUpdateNoteRequest,
+  signal?: AbortSignal,
+): Promise<ZoteroUpdateNoteResult> {
+  const markdown = requireNonBlank('markdown', request.markdown)
+  const localRef = requireWritableRef(request.item, ['item'])
+  return await withItemWrite(
+    deps,
+    localRef,
+    signal,
+    async ({ snapshot, serverId, resultRef, send }) => {
+      if (snapshot.itemType !== 'note') {
+        throw new ZoteroError('The target item is not a Zotero note.', ZOTERO_INVALID_ARGUMENT)
+      }
+      const { libraryVersion } = await send({ note: markdownToNoteHtml(markdown) })
+      return { kind: 'applied', ref: resultRef, version: libraryVersion, libraryVersion, serverId }
+    },
+  )
+}
+
+/** Restore trashed items by setting Zotero's deleted flag back to zero. */
+export async function restoreItems(
+  deps: WriteDomainDeps,
+  request: ZoteroRestoreItemsRequest,
+  signal?: AbortSignal,
+): Promise<ZoteroRestoreItemsResult> {
+  if (request.items.length === 0)
+    throw new ZoteroError(WRITE_LIST_SELECTION_MESSAGE, ZOTERO_INVALID_ARGUMENT)
+  if (request.items.length > ZOTERO_WRITE_OBJECT_BATCH)
+    throw new ZoteroError(
+      writeListTooLongMessage('restore items', ZOTERO_WRITE_OBJECT_BATCH),
+      ZOTERO_INVALID_ARGUMENT,
+    )
+  const restored: ZoteroRestoreItemsResult['restored'] = []
+  const failed: ZoteroBatchOperationFailure[] = []
+  const serverId = await ensureServerId(deps, signal)
+  for (const item of request.items) {
+    try {
+      const ref = requireWritableRefAtServer(item, ['item'], serverId)
+      const result = await withItemWrite(
+        deps,
+        ref,
+        signal,
+        async ({ serverId: effective, resultRef, send }) => {
+          const { libraryVersion } = await send({ deleted: 0 })
+          return {
+            ref: resultRef,
+            restored: true as const,
+            version: libraryVersion,
+            libraryVersion,
+            serverId: effective,
+          }
+        },
+      )
+      restored.push(result)
+    } catch (error) {
+      if (!(error instanceof ZoteroError)) throw error
+      failed.push({ op: 'update', ref: formatRef(item), code: error.code, message: error.message })
+    }
+  }
+  return { kind: 'restored', restored, failed, serverId }
 }
 
 /**

@@ -64,7 +64,7 @@ const zoteroStatusCodec = {
 /** Wire codec: resolveAttachment parameter (a non-empty string ref). */
 const zoteroRefSchema = z.string().min(1)
 
-export const zoteroRefParamCodec = {
+const zoteroRefParamCodec = {
   mode: 'strict',
   typeSymbol: ZOTERO_REF_PARAM_TYPE_SYMBOL,
   create: (): z.ZodType<string> => zoteroRefSchema,
@@ -83,7 +83,7 @@ const zoteroAttachmentLocationSchema = z
   .strict()
   .readonly()
 
-export const zoteroAttachmentLocationCodec = {
+const zoteroAttachmentLocationCodec = {
   mode: 'strict',
   typeSymbol: ZOTERO_RESOLVE_ATTACHMENT_TYPE_SYMBOL,
   create: (): z.ZodType<ZoteroAttachmentLocationView> => zoteroAttachmentLocationSchema,
@@ -115,7 +115,7 @@ const zoteroDiagnosticsSchema = z
   .strict()
   .readonly()
 
-export const zoteroDiagnosticsCodec = {
+const zoteroDiagnosticsCodec = {
   mode: 'strict',
   typeSymbol: ZOTERO_DIAGNOSTICS_TYPE_SYMBOL,
   create: (): z.ZodType<ZoteroDiagnosticsView> => zoteroDiagnosticsSchema,
@@ -132,7 +132,7 @@ const zoteroClientErrorReportSchema = z
   .strict()
   .readonly()
 
-export const zoteroClientErrorReportCodec = {
+const zoteroClientErrorReportCodec = {
   mode: 'strict',
   typeSymbol: ZOTERO_CLIENT_ERROR_REPORT_TYPE_SYMBOL,
   create: (): z.ZodType<ZoteroClientErrorReport> => zoteroClientErrorReportSchema,
@@ -141,7 +141,7 @@ export const zoteroClientErrorReportCodec = {
 /** Wire codec: reportClientError result (the ring sequence the report was assigned). */
 const zoteroReportResultSchema = z.object({ seq: z.number() }).strict().readonly()
 
-export const zoteroReportResultCodec = {
+const zoteroReportResultCodec = {
   mode: 'strict',
   typeSymbol: ZOTERO_REPORT_RESULT_TYPE_SYMBOL,
   create: (): z.ZodType<ZoteroReportResultView> => zoteroReportResultSchema,

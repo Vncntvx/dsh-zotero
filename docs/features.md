@@ -2,11 +2,11 @@
 
 # 功能概览
 
-dsh-zotero 让 DSH 的 LLM 对话能够直接查询和引用 Zotero 文献库。17 个工具（8 个读工具 + 9 个写工具）覆盖文献搜索、原文片段检索、原文定位、格式化导出，以及笔记、标签、合集、条目与全库标签的写入；9 个个人库写入工具默认关闭，启用后需经过会话审批与计划审查卡。Web 端 Sources 面板提供会话文献、原文片段与引用的汇总展示。
+dsh-zotero 让 DSH 的 LLM 对话能够直接查询和引用 Zotero 文献库。23 个本地工具（8 个读工具 + 15 个写工具）覆盖文献搜索、原文片段检索、原文定位、格式化导出，以及笔记、标签、合集、条目、Trash 恢复、保存搜索与全库标签的写入；15 个个人库写入工具默认关闭，启用后需经过会话审批与计划审查卡。Web 端 Sources 面板提供会话文献、原文片段与引用的汇总展示。
 
 ## 学术文献检索
 
-随插件安装默认启用 `dsh-zotero/scholarly` 组件后，模型可以检索本地库之外的学术文献：跨 arXiv、OpenAlex、Crossref、Semantic Scholar、PubMed、Europe PMC 与 DBLP 七索引检索并按相关度融合去重，按 DOI / arXiv ID / PMID / PMCID 读取开放获取全文并做段落级定位，追踪引文网络，从 DOI 注册中心取标准引用格式（BibTeX、RIS、CSL JSON、CSL 样式文本），以及核验一份参考文献列表的真伪与字段一致性。
+显式启用 `dsh-zotero/scholarly` 组件后，模型可以检索本地库之外的学术文献：跨 arXiv、OpenAlex、Crossref、Semantic Scholar、PubMed、Europe PMC 与 DBLP 七索引检索并按相关度融合去重，按 DOI / arXiv ID / PMID / PMCID 读取开放获取全文并做段落级定位，追踪引文网络，从 DOI 注册中心取标准引用格式（BibTeX、RIS、CSL JSON、CSL 样式文本），核验一份参考文献列表的真伪与字段一致性，并在用户明确要求时保存到本地 Zotero。
 
 它与本地库能力互补而非替代：检索结果会标出「已在本地库」的条目，但只读。
 
@@ -86,15 +86,19 @@ dsh-zotero 让 DSH 的 LLM 对话能够直接查询和引用 Zotero 文献库。
 
 ## 写入个人库（可选）
 
-在设置中显式启用 `writeEnabled` 后，插件注册 9 个仅面向个人库（`zotero://user/0/`）的写入工具：
+在设置中显式启用 `writeEnabled` 后，插件注册 15 个仅面向个人库（`zotero://user/0/`）的写入工具：
 
 - `zotero_create_note`：创建独立研究笔记或关联至条目的子笔记，支持标签、合集归属与 `dc:relation` 关联；
+- `zotero_update_note`：按版本前置条件替换已有笔记正文；
 - `zotero_update_item_tags`：`add`/`remove` 在一次调用内读-合并-写标签，保留既有标签类型，提交携带条目版本前置；
 - `zotero_update_item_collections`：`add`/`remove` 在一次调用内增删合集归属，名称解析失败先于任何写入；
 - `zotero_create_collection`：创建顶层或子合集，同级同名拒绝；
+- `zotero_update_collection`：重命名或移动合集；
 - `zotero_delete_collection`：删除合集（不可逆：结构被移除、子合集随之删除，条目保留），计划卡先给出条目数与子合集数；
 - `zotero_create_item`：从闭合字段集建档（无 BibTeX/CSL-JSON 入口），未知类型或缺 title/url 一律拒绝；
 - `zotero_update_item`：订正标量元数据，字段合法性以 Zotero 的 `itemTypeFields` 为准；
+- `zotero_restore_items`：恢复 Trash 条目；
+- `zotero_create_saved_search` / `zotero_update_saved_search` / `zotero_delete_saved_search`：管理保存搜索定义；
 - `zotero_delete_library_tags`：按名称全库删除标签（不可逆），计划卡先给出每个标签的条目数，未命中的名称被忽略因而重试幂等；
 - `zotero_batch_items`：在单次调用中批量创建文献、更新标签或合集归属、移入回收站，并在单张计划卡中合并确认。
 
@@ -111,7 +115,7 @@ DSH 对话中，Zotero 工具调用由专用只读卡片（`tool.call.toolview`�
 - **子对象（`zotero_children`）**：按类型分区展示子笔记、附件与带颜色高亮的 PDF 批注；
 - **库结构与变更（`zotero_browse` / `zotero_changes`）**：`zotero_browse` 展示层级合集树、标签列表及分页信息；`zotero_changes` 展示版本区间内的增量条目、删除记录及安全游标；
 - **原文定位（`zotero_attachment`）**：展示定位到的文件路径或链接，提供复制与快速打开选项；
-- **个人库写操作（9 个写工具）**：展示目标条目、笔记摘要、计划中的标签与合集增删、合集/条目创建与删除，以及全库标签删除；回执区分“已生效”“无变化（No change）”“结果未核验”与“已拒绝”，不可逆删除在计划卡上先行声明。
+- **个人库写操作（15 个写工具）**：展示目标条目、笔记摘要、计划中的标签与合集增删、合集/条目创建与删除、Trash 恢复、保存搜索与全库标签删除；回执区分“已生效”“无变化（No change）”“结果未核验”与“已拒绝”，不可逆删除在计划卡上先行声明。
 
 卡片默认采用紧凑折叠摘要，展开时惰性渲染详情，并同步反映工具执行生命周期。
 

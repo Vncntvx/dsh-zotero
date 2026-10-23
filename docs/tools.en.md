@@ -2,11 +2,11 @@
 
 # Tool Reference
 
-dsh-zotero registers 17 tools (8 read tools and 9 write tools) that interact with your Zotero library through the local HTTP API. The 9 write tools are disabled by default and require enabling `writeEnabled` in configuration, and they operate only on the personal library (`zotero://user/0/`). All item references (refs) are stable identifiers in `zotero://user/0/item/<KEY>` (personal library) or `zotero://group/<ID>/item/<KEY>` (group library) format.
+dsh-zotero registers 23 local tools (8 read tools and 15 write tools) that interact with your Zotero library through the local HTTP API. The 15 write tools are disabled by default and require enabling `writeEnabled` in configuration, and they operate only on the personal library (`zotero://user/0/`). Scholarly literature tools belong to a separate component, are disabled by default, and require explicit enablement. All item references (refs) are stable identifiers in `zotero://user/0/item/<KEY>` (personal library) or `zotero://group/<ID>/item/<KEY>` (group library) format.
 
 ### Interactive Presentation (Toolviews)
 
-In the DSH conversation stream, all 17 tools have structured, read-only cards (`tool.call.toolview`). During execution, the interface renders lifecycle status indicators (preparing, running, success, stopped, error, declined, outcome unreported), collapsible structured views, a "Read PDF" action that opens the PDF in the sidebar reader, and copy actions for titles and deep links.
+In the DSH conversation stream, all local tools and enabled Scholarly tools have structured, read-only cards (`tool.call.toolview`). During execution, the interface renders lifecycle status indicators (preparing, running, success, stopped, error, declined, outcome unreported), collapsible structured views, a "Read PDF" action that opens the PDF in the sidebar reader, and copy actions for titles and deep links.
 
 ---
 
@@ -441,10 +441,12 @@ Creates a bibliographic item from a closed field set. Zotero's `POST /items` onl
 | `abstractNote`     | string   | —        | The abstract                                                                                                  |
 | `publicationTitle` | string   | —        | The venue (journal, proceedings, site)                                                                        |
 | `creators`         | object[] | —        | Each entry carries a `creatorType` and either a `name` or a `firstName`/`lastName` pair                       |
+| `tags`             | string[] | —        | Tags applied at creation                                                                                      |
+| `collections`      | string[] | —        | Collection refs or exact names to join                                                                        |
 
 ### Output
 
-- Created: `{kind: "applied", ref, key, version, itemType, title?, libraryVersion, serverId?}`;
+- Created: `{kind: "applied", ref, key, version, itemType, title?, tags, collections, libraryVersion, serverId?}`;
 - Committed but unverified: `{kind: "committed-unverified", committed: true, retryable: false, reason, ...}`, **not retryable**;
 - Declined on the plan card: `{kind: "declined"}`.
 
@@ -453,6 +455,59 @@ Creates a bibliographic item from a closed field set. Zotero's `POST /items` onl
 ```text
 zotero_create_item(itemType="journalArticle", title="Attention Is All You Need", date="2017", doi="10.48550/arXiv.1706.03762", creators=[{"creatorType": "author", "name": "Vaswani, Ashish"}])
 ```
+
+---
+
+## zotero_update_note
+
+Replaces an existing Zotero note body from Markdown. The domain reads the note version and converts Markdown to Zotero-safe HTML before issuing the PATCH; the target must have `itemType="note"`.
+
+### Parameters and output
+
+| Parameter  | Type   | Required | Description               |
+| ---------- | ------ | -------- | ------------------------- |
+| `item`     | string | ✓        | Note item ref             |
+| `markdown` | string | ✓        | Replacement Markdown body |
+
+Success returns `{kind: "applied", ref, version, libraryVersion, serverId?}`. A declined plan returns `{kind: "declined"}`; a version conflict returns `ZOTERO_WRITE_CONFLICT`.
+
+---
+
+## zotero_update_collection
+
+Updates a collection name or parent collection. Omitting `parent` preserves the current parent; native callers may pass `null` to move it to the top level. Writes use the collection object version as the precondition.
+
+### Parameters and output
+
+| Parameter    | Type   | Required | Description               |
+| ------------ | ------ | -------- | ------------------------- |
+| `collection` | string | ✓        | Collection ref            |
+| `name`       | string | —        | New name                  |
+| `parent`     | string | —        | New parent collection ref |
+
+Success returns `{kind: "applied", ref, version, libraryVersion, serverId?}`; a declined plan returns `{kind: "declined"}`.
+
+---
+
+## zotero_restore_items
+
+Restores selected personal-library items from Trash by PATCHing `deleted: 0` under an independent version precondition for each item. Results are settled per ref and capped at 50 items.
+
+### Parameters and output
+
+| Parameter | Type     | Required | Description          |
+| --------- | -------- | -------- | -------------------- |
+| `refs`    | string[] | ✓        | Item refs to restore |
+
+Output is `{kind: "restored", restored, failed, serverId?}`; version conflicts are reported per item and are never retried automatically.
+
+---
+
+## Zotero saved-search tools
+
+`zotero_create_saved_search`, `zotero_update_saved_search`, and `zotero_delete_saved_search` use Zotero's native saved-search conditions. Creation requires at least one condition. If a create response is lost or its saved state cannot be verified, the result is `committed-unverified` with `retryable: false`; reconcile by search ref/key before taking another action.
+
+Creation takes `name` and `conditions` (each with `condition`, `operator`, and `value`). Update takes `search` plus at least one of `name` or `conditions`; delete takes `search`. Update and delete use object/library version preconditions.
 
 ---
 
@@ -605,7 +660,7 @@ Write tools are disabled by default, require `writeEnabled` in configuration, an
 
 ## Scholarly Literature Component Tools (`dsh-zotero/scholarly`)
 
-The bundle component `dsh-zotero/scholarly` ships enabled by default, registering the following 6 model tools:
+The bundle component `dsh-zotero/scholarly` is available but disabled by default. Set its `enabled` setting to `true` to register the following 7 model tools:
 
 ### scholarly_search
 
@@ -672,6 +727,10 @@ Reads lawful open-access full text with hierarchical outline navigation and pass
 | `passages`  | integer | `5`            | Maximum passages returned under `query` mode (1–12)                          |
 | `start`     | integer | `0`            | Starting character offset for chunked reading                                |
 | `max_chars` | integer | config default | Maximum characters read per chunk                                            |
+
+#### Network boundary
+
+The retrieval tools (`scholarly_search` / `scholarly_get` / `scholarly_citations` / `scholarly_verify`) only reach the fixed scholarly-index host allowlist (`src/scholarly/transport/hosts.ts`) and refuse loopback and private addresses. Full-text resolution is the exception: open-access PDFs and direct PDF links live on the publishers' own domains, so that path validates only the public/loopback address and **does not apply the host allowlist**, following at most 5 redirects. The URL passed as `id` — and any PDF address it resolves to — may therefore be any public host: read only links from sources you trust.
 
 ---
 

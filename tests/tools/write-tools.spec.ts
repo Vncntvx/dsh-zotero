@@ -143,7 +143,7 @@ afterEach(async () => {
 
 describe('registration gating', () => {
   it('keeps every write tool off the surface until writeEnabled is set', async () => {
-    expect(ZOTERO_WRITE_TOOL_NAMES).toHaveLength(9)
+    expect(ZOTERO_WRITE_TOOL_NAMES).toHaveLength(15)
     const off = await bootLane({})
     for (const name of ZOTERO_WRITE_TOOL_NAMES) expect(off.tool(name)).toBeUndefined()
     await off.teardown()

@@ -50,6 +50,12 @@ import {
   updateItem as updateItemDomain,
   updateItemCollections as updateItemCollectionsDomain,
   updateItemTags as updateItemTagsDomain,
+  updateNote as updateNoteDomain,
+  updateCollection as updateCollectionDomain,
+  restoreItems as restoreItemsDomain,
+  createSavedSearch as createSavedSearchDomain,
+  updateSavedSearch as updateSavedSearchDomain,
+  deleteSavedSearch as deleteSavedSearchDomain,
   type WriteDomainDeps,
   writeCapabilityUnavailableMessage,
 } from './write-domain.js'
@@ -94,6 +100,18 @@ import type {
   ZoteroUpdateItemResult,
   ZoteroUpdateItemTagsRequest,
   ZoteroUpdateItemTagsResult,
+  ZoteroUpdateNoteRequest,
+  ZoteroUpdateNoteResult,
+  ZoteroUpdateCollectionRequest,
+  ZoteroUpdateCollectionResult,
+  ZoteroRestoreItemsRequest,
+  ZoteroRestoreItemsResult,
+  ZoteroCreateSavedSearchRequest,
+  ZoteroSavedSearchResult,
+  ZoteroUpdateSavedSearchRequest,
+  ZoteroDeleteSavedSearchRequest,
+  ZoteroDeleteSavedSearchResult,
+  ZoteroWriteCommittedUnverified,
 } from '../types.js'
 
 export class LocalApiProvider implements ZoteroProvider {
@@ -370,6 +388,13 @@ export class LocalApiProvider implements ZoteroProvider {
     return updateItemTagsDomain(this.writeDeps(), request, signal)
   }
 
+  async updateNote(
+    request: ZoteroUpdateNoteRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroUpdateNoteResult> {
+    return updateNoteDomain(this.writeDeps(), request, signal)
+  }
+
   /**
    * Update one item's collection membership (add/remove in one write). The
    * domain logic lives in `local/write-domain`; this is the seam.
@@ -379,6 +404,13 @@ export class LocalApiProvider implements ZoteroProvider {
     signal?: AbortSignal,
   ): Promise<ZoteroUpdateItemCollectionsResult> {
     return updateItemCollectionsDomain(this.writeDeps(), request, signal)
+  }
+
+  async updateCollection(
+    request: ZoteroUpdateCollectionRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroUpdateCollectionResult> {
+    return updateCollectionDomain(this.writeDeps(), request, signal)
   }
 
   /**
@@ -444,5 +476,33 @@ export class LocalApiProvider implements ZoteroProvider {
     signal?: AbortSignal,
   ): Promise<ZoteroBatchItemsResult> {
     return batchItemsDomain(this.writeDeps(), request, signal)
+  }
+
+  async restoreItems(
+    request: ZoteroRestoreItemsRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroRestoreItemsResult> {
+    return restoreItemsDomain(this.writeDeps(), request, signal)
+  }
+
+  async createSavedSearch(
+    request: ZoteroCreateSavedSearchRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroSavedSearchResult | ZoteroWriteCommittedUnverified> {
+    return createSavedSearchDomain(this.writeDeps(), request, signal)
+  }
+
+  async updateSavedSearch(
+    request: ZoteroUpdateSavedSearchRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroSavedSearchResult> {
+    return updateSavedSearchDomain(this.writeDeps(), request, signal)
+  }
+
+  async deleteSavedSearch(
+    request: ZoteroDeleteSavedSearchRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroDeleteSavedSearchResult> {
+    return deleteSavedSearchDomain(this.writeDeps(), request, signal)
   }
 }

@@ -294,7 +294,11 @@ function buildRequest(args: BrowseArgs, config: { maxBrowseResults: number }): Z
     tagScope === undefined
       ? undefined
       : tagScope === 'collection'
-        ? { kind: 'collection' as const, refOrName: collection! }
+        ? // The guards above refuse a collection scope without tagCollection,
+          // so the narrowed value is the one the scope names.
+          collection === undefined
+          ? undefined
+          : { kind: 'collection' as const, refOrName: collection }
         : { kind: tagScope as 'library' | 'publications' }
   return {
     kind,

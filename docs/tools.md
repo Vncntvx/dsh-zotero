@@ -2,11 +2,11 @@
 
 # 工具参考
 
-dsh-zotero 注册 17 个工具（8 个读工具 + 9 个写工具），通过本地 Zotero HTTP API 与文献库交互。其中 9 个写入工具默认关闭，需在设置中显式启用 `writeEnabled`，且只操作个人库（`zotero://user/0/`）。所有文献引用（ref）均为 `zotero://user/0/item/<KEY>`（个人库）或 `zotero://group/<ID>/item/<KEY>`（群组库）格式的稳定标识符。
+dsh-zotero 注册 23 个本地工具（8 个读工具 + 15 个写工具），通过本地 Zotero HTTP API 与文献库交互。其中 15 个写入工具默认关闭，需在设置中显式启用 `writeEnabled`，且只操作个人库（`zotero://user/0/`）。学术文献工具属于单独的 Scholarly 组件，默认关闭并需显式启用。所有文献引用（ref）均为 `zotero://user/0/item/<KEY>`（个人库）或 `zotero://group/<ID>/item/<KEY>`（群组库）格式的稳定标识符。
 
 ### 交互卡片（Toolviews）
 
-在 DSH 对话流中，所有 17 个工具均配备结构化只读卡片（`tool.call.toolview`）。调用工具时，界面展示包含状态指示（准备中、运行中、成功、中断、错误、已拒绝、结果未报告）的结构化卡片，支持展开查看详细数据、通过“阅读 PDF”在侧边栏阅读原文，以及复制标题或深链快速定位。
+在 DSH 对话流中，所有本地工具以及启用后的 Scholarly 工具均配备结构化只读卡片（`tool.call.toolview`）。调用工具时，界面展示包含状态指示（准备中、运行中、成功、中断、错误、已拒绝、结果未报告）的结构化卡片，支持展开查看详细数据、通过“阅读 PDF”在侧边栏阅读原文，以及复制标题或深链快速定位。
 
 ---
 
@@ -441,10 +441,12 @@ zotero_delete_collection(collection="田野笔记")
 | `abstractNote`     | string   | —    | 摘要                                                                                                         |
 | `publicationTitle` | string   | —    | 刊名 / 会议录 / 站点名                                                                                       |
 | `creators`         | object[] | —    | 每项含 `creatorType`，以及 `name` 或 `firstName`/`lastName` 组合                                             |
+| `tags`             | string[] | —    | 创建后直接写入的标签                                                                                         |
+| `collections`      | string[] | —    | 要加入的合集 ref 或精确名称                                                                                  |
 
 ### 输出
 
-- 成功创建：`{kind: "applied", ref, key, version, itemType, title?, libraryVersion, serverId?}`；
+- 成功创建：`{kind: "applied", ref, key, version, itemType, title?, tags, collections, libraryVersion, serverId?}`；
 - 已提交但状态未核验：`{kind: "committed-unverified", committed: true, retryable: false, reason, ...}`，**不可重试**；
 - 计划卡拒绝：`{kind: "declined"}`。
 
@@ -453,6 +455,59 @@ zotero_delete_collection(collection="田野笔记")
 ```text
 zotero_create_item(itemType="journalArticle", title="Attention Is All You Need", date="2017", doi="10.48550/arXiv.1706.03762", creators=[{"creatorType": "author", "name": "Vaswani, Ashish"}])
 ```
+
+---
+
+## zotero_update_note
+
+使用 Markdown 替换现有 Zotero 笔记正文。写入前读取笔记版本，并在 PATCH 中转换为 Zotero 安全 HTML；目标必须是 `itemType="note"`。
+
+### 参数与输出
+
+| 参数       | 类型   | 必填 | 说明               |
+| ---------- | ------ | ---- | ------------------ |
+| `item`     | string | ✓    | 笔记条目 ref       |
+| `markdown` | string | ✓    | 新的 Markdown 正文 |
+
+成功返回 `{kind: "applied", ref, version, libraryVersion, serverId?}`；拒绝计划卡返回 `{kind: "declined"}`，版本冲突返回 `ZOTERO_WRITE_CONFLICT`。
+
+---
+
+## zotero_update_collection
+
+更新合集名称或父合集。名称为空、目标不存在、父合集不属于个人库或版本前置条件失效时拒绝写入；`parent` 省略表示保留现有父级，原生调用可传 `null` 将其移到顶层。
+
+### 参数与输出
+
+| 参数         | 类型   | 必填 | 说明         |
+| ------------ | ------ | ---- | ------------ |
+| `collection` | string | ✓    | 合集 ref     |
+| `name`       | string | —    | 新名称       |
+| `parent`     | string | —    | 新父合集 ref |
+
+成功返回 `{kind: "applied", ref, version, libraryVersion, serverId?}`；计划卡拒绝返回 `{kind: "declined"}`。
+
+---
+
+## zotero_restore_items
+
+将个人库 Trash 中指定的条目恢复为活动状态。每个条目独立读取版本并 PATCH `deleted: 0`，逐项返回成功或失败，最多 50 项。
+
+### 参数与输出
+
+| 参数   | 类型     | 必填 | 说明                  |
+| ------ | -------- | ---- | --------------------- |
+| `refs` | string[] | ✓    | 要恢复的条目 ref 列表 |
+
+输出为 `{kind: "restored", restored, failed, serverId?}`；不会自动重试版本冲突。
+
+---
+
+## Zotero saved search 工具
+
+`zotero_create_saved_search`、`zotero_update_saved_search`、`zotero_delete_saved_search` 使用 Zotero 原生 saved-search 条件。创建至少需要一个条件；创建响应丢失或回显无法核验时返回 `committed-unverified`（`retryable: false`），必须先按 search ref/key 核对，不能重复创建。
+
+创建参数为 `name` 与 `conditions`（每项含 `condition`、`operator`、`value`）；更新参数为 `search` 以及至少一个 `name` 或 `conditions`；删除参数为 `search`。更新和删除均使用对象/库版本前置条件。
 
 ---
 
@@ -605,7 +660,7 @@ zotero_batch_items(
 
 ## 学术文献检索组件工具 (`dsh-zotero/scholarly`)
 
-bundle 组件 `dsh-zotero/scholarly` 随插件默认启用，提供以下 6 个模型工具：
+bundle 组件 `dsh-zotero/scholarly` 可随插件加载，但默认关闭；将其 `enabled` 设置为 `true` 后提供以下 7 个模型工具：
 
 ### scholarly_search
 
@@ -672,6 +727,10 @@ bundle 组件 `dsh-zotero/scholarly` 随插件默认启用，提供以下 6 个�
 | `passages`  | integer | `5`      | `query` 模式下返回的最优段落数量（1-12）                         |
 | `start`     | integer | `0`      | 分块阅读起始字符偏移量                                           |
 | `max_chars` | integer | 配置上限 | 单次读取的最大字符数                                             |
+
+#### 网络边界
+
+检索类工具（`scholarly_search` / `scholarly_get` / `scholarly_citations` / `scholarly_verify`）只访问固定的学术索引主机白名单（`src/scholarly/transport/hosts.ts`），并拒绝回环与私网地址。全文解析是例外：开放获取 PDF 与 PDF 直链托管在出版商自己的域名上，因此该路径只做公网/回环地址校验，**不走主机白名单**，重定向最多 5 跳。这意味着 `id` 传入的 URL 或其解析出的 PDF 地址可以是任意公网主机——请只读取可信来源的文献链接。
 
 ---
 

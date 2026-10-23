@@ -82,7 +82,7 @@ describe('the write state across the status surfaces', () => {
     expect(text).toContain('report only what it proves and do not re-read to verify it')
     // Every write tool the sanctioned path names, and nothing retired.
     for (const name of ZOTERO_WRITE_TOOL_NAMES) expect(text).toContain(name)
-    expect(ZOTERO_WRITE_TOOL_NAMES).toHaveLength(9)
+    expect(ZOTERO_WRITE_TOOL_NAMES).toHaveLength(15)
     await on.teardown()
   })
 })

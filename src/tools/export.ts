@@ -179,6 +179,10 @@ function buildRequest(args: ExportArgs, config: ResolvedConfig): ZoteroExportReq
   }
 }
 
+// The render signature is the union of both parameter shapes: with the
+// background arm available the model may pass `run_in_background`, without
+// it that key is not part of the contract. `unknown` keeps the render honest
+// about both shapes instead of narrowing it to one of them.
 function renderExport(_args: unknown, value: ExportOutput): ContentBlock[] {
   if (isJobArm(value)) return renderJobArm(value)
   if (value.format === 'citation') {
@@ -258,6 +262,10 @@ export function registerExportTool(
       presentResult: presentExportResult,
       isConcurrencySafe: () => true,
       async execute(args, exec) {
+        // The parameters are two shapes (the background arm registers only
+        // while the jobs service is available), so defineTool infers a union;
+        // both arms carry the export fields, and the background key is read
+        // through the same alias below.
         const exportArgs = args as ExportArgs
         const request = buildRequest(exportArgs, service.config)
         return await executeWithJobs({

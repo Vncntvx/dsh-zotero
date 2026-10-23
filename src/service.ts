@@ -81,14 +81,18 @@ import { registerExportTool } from './tools/export.js'
 import { registerRetrieveTool } from './tools/retrieve.js'
 import { registerSearchTool } from './tools/search.js'
 import { registerCreateNoteTool } from './tools/create-note.js'
+import { registerUpdateNoteTool } from './tools/update-note.js'
 import { registerUpdateItemTagsTool } from './tools/update-item-tags.js'
 import { registerUpdateItemCollectionsTool } from './tools/update-item-collections.js'
 import { registerCreateCollectionTool } from './tools/create-collection.js'
+import { registerUpdateCollectionTool } from './tools/update-collection.js'
 import { registerDeleteCollectionTool } from './tools/delete-collection.js'
 import { registerCreateItemTool } from './tools/create-item.js'
 import { registerUpdateItemTool } from './tools/update-item.js'
 import { registerDeleteLibraryTagsTool } from './tools/delete-library-tags.js'
 import { registerBatchItemsTool } from './tools/batch-items.js'
+import { registerRestoreItemsTool } from './tools/restore-items.js'
+import { registerSavedSearchTools } from './tools/saved-search.js'
 import type {
   ZoteroAttachmentLocation,
   ZoteroBrowseRequest,
@@ -127,6 +131,18 @@ import type {
   ZoteroUpdateItemResult,
   ZoteroUpdateItemTagsRequest,
   ZoteroUpdateItemTagsResult,
+  ZoteroUpdateNoteRequest,
+  ZoteroUpdateNoteOutcome,
+  ZoteroUpdateCollectionRequest,
+  ZoteroUpdateCollectionOutcome,
+  ZoteroRestoreItemsRequest,
+  ZoteroRestoreItemsOutcome,
+  ZoteroCreateSavedSearchRequest,
+  ZoteroCreateSavedSearchOutcome,
+  ZoteroUpdateSavedSearchRequest,
+  ZoteroUpdateSavedSearchOutcome,
+  ZoteroDeleteSavedSearchRequest,
+  ZoteroDeleteSavedSearchOutcome,
   ZoteroBatchItemsOutcome,
   ZoteroBatchItemsRequest,
   ZoteroWriteCall,
@@ -136,14 +152,20 @@ import { askPlanApproval, requestWriteApproval } from './write-approval.js'
 
 type ZoteroWriteMethod =
   | 'createNote'
+  | 'updateNote'
   | 'updateItemTags'
   | 'updateItemCollections'
   | 'batchItems'
   | 'createCollection'
+  | 'updateCollection'
   | 'deleteCollection'
   | 'createItem'
   | 'updateItem'
   | 'deleteLibraryTags'
+  | 'restoreItems'
+  | 'createSavedSearch'
+  | 'updateSavedSearch'
+  | 'deleteSavedSearch'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -530,13 +552,17 @@ export class ZoteroService extends Service {
     if (enabled && this.writeToolDisposes.length === 0) {
       this.writeToolDisposes = [
         registerCreateNoteTool(this.ctx, this),
+        registerUpdateNoteTool(this.ctx, this),
         registerUpdateItemTagsTool(this.ctx, this),
         registerUpdateItemCollectionsTool(this.ctx, this),
         registerBatchItemsTool(this.ctx, this),
         registerCreateCollectionTool(this.ctx, this),
+        registerUpdateCollectionTool(this.ctx, this),
         registerDeleteCollectionTool(this.ctx, this),
         registerCreateItemTool(this.ctx, this),
         registerUpdateItemTool(this.ctx, this),
+        registerRestoreItemsTool(this.ctx, this),
+        ...registerSavedSearchTools(this.ctx, this),
         registerDeleteLibraryTagsTool(this.ctx, this),
       ]
     } else if (!enabled && this.writeToolDisposes.length > 0) {
@@ -790,6 +816,13 @@ export class ZoteroService extends Service {
     return await this.dispatchWrite(call, 'updateItemTags', request)
   }
 
+  async updateNote(
+    request: ZoteroUpdateNoteRequest,
+    call: ZoteroWriteCall,
+  ): Promise<ZoteroUpdateNoteOutcome> {
+    return await this.dispatchWrite(call, 'updateNote', request)
+  }
+
   /**
    * Update one item's collection membership (add/remove in one write).
    * @param request - the item ref and the collections to add/remove.
@@ -802,6 +835,13 @@ export class ZoteroService extends Service {
     call: ZoteroWriteCall,
   ): Promise<ZoteroUpdateItemCollectionsResult | ZoteroWriteDeclined> {
     return await this.dispatchWrite(call, 'updateItemCollections', request)
+  }
+
+  async updateCollection(
+    request: ZoteroUpdateCollectionRequest,
+    call: ZoteroWriteCall,
+  ): Promise<ZoteroUpdateCollectionOutcome> {
+    return await this.dispatchWrite(call, 'updateCollection', request)
   }
 
   /**
@@ -880,6 +920,32 @@ export class ZoteroService extends Service {
     call: ZoteroWriteCall,
   ): Promise<ZoteroBatchItemsOutcome> {
     return await this.dispatchWrite(call, 'batchItems', request)
+  }
+
+  async restoreItems(
+    request: ZoteroRestoreItemsRequest,
+    call: ZoteroWriteCall,
+  ): Promise<ZoteroRestoreItemsOutcome> {
+    return await this.dispatchWrite(call, 'restoreItems', request)
+  }
+
+  async createSavedSearch(
+    request: ZoteroCreateSavedSearchRequest,
+    call: ZoteroWriteCall,
+  ): Promise<ZoteroCreateSavedSearchOutcome> {
+    return await this.dispatchWrite(call, 'createSavedSearch', request)
+  }
+  async updateSavedSearch(
+    request: ZoteroUpdateSavedSearchRequest,
+    call: ZoteroWriteCall,
+  ): Promise<ZoteroUpdateSavedSearchOutcome> {
+    return await this.dispatchWrite(call, 'updateSavedSearch', request)
+  }
+  async deleteSavedSearch(
+    request: ZoteroDeleteSavedSearchRequest,
+    call: ZoteroWriteCall,
+  ): Promise<ZoteroDeleteSavedSearchOutcome> {
+    return await this.dispatchWrite(call, 'deleteSavedSearch', request)
   }
 
   /**

@@ -448,9 +448,12 @@ export function renderChanges(args: ChangesArgs, value: ChangesOutput): ContentB
     }
   }
   if (value.deleted !== undefined) {
+    // Bound once so the section builder below narrows on the value instead of
+    // re-asserting it inside the callback.
+    const deleted = value.deleted
     const deletedSections = DELETION_SECTIONS.map(({ key, totalKey }) => ({
       label: DELETION_RENDER_LABELS[key],
-      keys: value.deleted![key],
+      keys: deleted[key],
       total: totals?.[totalKey],
     }))
     // The tombstone read answered, so "nothing was removed" is a finding, not
@@ -571,6 +574,8 @@ export function registerChangesTool(
       presentResult: presentChangesResult,
       isConcurrencySafe: () => true,
       async execute(args, exec) {
+        // Two parameter shapes (the background arm registers only while the
+        // jobs service is available); both carry the cursor fields.
         const changesArgs = args as ChangesArgs
         const request = buildRequest(changesArgs)
         const label =

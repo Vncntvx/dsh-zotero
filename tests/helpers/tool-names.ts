@@ -1,8 +1,8 @@
 /**
  * The tool-name lists the host specs assert against, re-exported from the
  * single source the smoke check and the package surface share
- * (`src/constants.ts`): the eight read tools the write-off baseline
- * expects, the eight `writeEnabled`-gated write tools, and the union.
+ * (`src/constants.ts`): the read tools the write-off baseline expects, the
+ * `writeEnabled`-gated write tools, and the union.
  * @module tests/helpers/tool-names
  */
 
@@ -19,4 +19,5 @@ export const SCHOLARLY_TOOL_NAMES = [
   'scholarly_read',
   'scholarly_cite',
   'scholarly_verify',
+  'scholarly_save_to_zotero',
 ] as const

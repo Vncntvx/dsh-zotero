@@ -158,7 +158,7 @@ export interface PromotedJobResult {
   readonly message: string
 }
 
-export interface BackgroundJobResult {
+interface BackgroundJobResult {
   readonly kind: 'background'
   readonly jobId: JobId
 }

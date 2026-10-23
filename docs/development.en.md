@@ -47,7 +47,7 @@ src/
   remote.ts             # Web client Remote service
   typert.ts             # Typert manifest
   settings-namespace.ts # Settings namespace constants
-  tools/                # 17 model tool definitions (8 read + 9 write)
+  tools/                # 23 local model tool definitions (8 read + 15 write)
   tools/degradable.ts   # The degrade rule for write-tool plan previews (only unreachable or ambiguous targets)
   client/               # Browser client (configuration page, Sources panel, tool card views)
 tests/                  # Unit and end-to-end test suites

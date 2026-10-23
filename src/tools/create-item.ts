@@ -67,6 +67,12 @@ const CREATE_ITEM_PARAMETERS = {
     description:
       'Creators, each with a creatorType and either a name or a firstName/lastName pair.',
   },
+  tags: { type: 'array', items: { type: 'string' }, description: 'Tags to apply at creation.' },
+  collections: {
+    type: 'array',
+    items: { type: 'string' },
+    description: 'Collection refs or exact collection names to join at creation.',
+  },
 } as const
 
 type CreateItemArgs = InferArgs<typeof CREATE_ITEM_PARAMETERS>
@@ -84,6 +90,8 @@ const CREATE_ITEM_OUTPUT_SCHEMA = {
         version: { type: 'integer', required: true },
         itemType: { type: 'string', required: true },
         title: { type: 'string' },
+        tags: { type: 'array', items: { type: 'string' } },
+        collections: { type: 'array', items: { type: 'string' } },
         libraryVersion: { type: 'integer', required: true },
         serverId: { type: 'string' },
       },
@@ -109,6 +117,9 @@ export function createItemPlan(args: CreateItemArgs): string {
   if (args.creators !== undefined && args.creators.length > 0) {
     lines.push(`- Creators: ${args.creators.length} listed`)
   }
+  if (args.tags !== undefined) lines.push(`- Tags: ${args.tags.join(', ') || '(none)'}`)
+  if (args.collections !== undefined)
+    lines.push(`- Collections: ${args.collections.join(', ') || '(none)'}`)
   lines.push('Only the closed field set is stored; no BibTeX or CSL-JSON channel exists.')
   return lines.join('\n')
 }
@@ -132,6 +143,16 @@ function buildRequest(args: CreateItemArgs): ZoteroCreateItemRequest {
       ? { publicationTitle: assertNonBlank('publicationTitle', args.publicationTitle) }
       : {}),
     ...(creators !== undefined && creators.length > 0 ? { creators } : {}),
+    ...(args.tags !== undefined
+      ? { tags: args.tags.map((tag) => assertNonBlank('tag', tag)) }
+      : {}),
+    ...(args.collections !== undefined
+      ? {
+          collections: args.collections.map((collection) =>
+            assertNonBlank('collection', collection),
+          ),
+        }
+      : {}),
   }
 }
 
@@ -144,6 +165,8 @@ export function renderCreateItem(_args: CreateItemArgs, value: CreateItemOutput)
   }
   const lines = [`Created ${value.itemType} item ${value.ref} (version ${value.version}).`]
   if (value.title !== undefined) lines.push(`Title: ${value.title}`)
+  lines.push(`Tags: ${value.tags?.join(', ') || '(none)'}`)
+  lines.push(`Collections: ${value.collections?.join(', ') || '(none)'}`)
   lines.push(libraryVersionLine(value))
   return [{ type: 'text', text: lines.join('\n') }]
 }
@@ -160,7 +183,7 @@ export function registerCreateItemTool(ctx: Context, service: ZoteroService): ()
     defineTool({
       name: 'zotero_create_item',
       description:
-        'Create a bibliographic item in the Zotero personal library from the closed field set (itemType plus title, url, date, doi, abstractNote, publicationTitle, creators). At least a title or a URL is required. There is no BibTeX or CSL-JSON intake: build the entry field-by-field instead. Zotero itself may show its authorization dialog on first use. ' +
+        'Create a bibliographic item in the Zotero personal library from the closed field set (itemType plus title, url, date, doi, abstractNote, publicationTitle, creators, tags, collections). At least a title or a URL is required. There is no BibTeX or CSL-JSON intake: build the entry field-by-field instead. Zotero itself may show its authorization dialog on first use. ' +
         WRITE_PLAN_OUTCOME_DESCRIPTION +
         WRITE_COMMITTED_UNVERIFIED_DESCRIPTION,
       parameters: CREATE_ITEM_PARAMETERS,
