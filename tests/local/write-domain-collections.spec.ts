@@ -71,13 +71,13 @@ describe('updateItemCollections', () => {
     expect(mock.requests).toHaveLength(0)
   })
 
-  it('adds the collection by name under the version precondition', async () => {
+  it('adds the collection by name without requiring unrelated tag state', async () => {
     grantAuthorize(mock)
     mock.route('GET', `/api/users/0/items/${ITEM_KEY}`, (_req, res, helpers) =>
       helpers.raw(
         200,
         { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '10' },
-        JSON.stringify(itemJson(ITEM_KEY, 10, { tags: [], collections: [] })),
+        JSON.stringify(itemJson(ITEM_KEY, 10, { collections: [] })),
       ),
     )
     let body: Record<string, unknown> | undefined
@@ -203,7 +203,7 @@ describe('updateItemCollections', () => {
       ),
     )
     const cases = [
-      { data: {}, message: writeObjectStateMissingMessage('tags') },
+      { data: {}, message: writeObjectStateMissingMessage('collections') },
       {
         data: { tags: [], collections: undefined },
         message: writeObjectStateMissingMessage('collections'),

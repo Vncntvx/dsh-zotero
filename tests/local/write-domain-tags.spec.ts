@@ -170,7 +170,7 @@ describe('updateItemTags', () => {
     expect((thrown as { code?: string }).code).toBe(ZOTERO_UNEXPECTED)
   })
 
-  it('fails before PATCH when the item read omits or malforms existing tags or collections', async () => {
+  it('fails before PATCH when the item read omits or malforms existing tags', async () => {
     let data: Record<string, unknown> = {}
     mock.route('GET', `/api/users/0/items/${ITEM_KEY}`, (_req, res, helpers) =>
       helpers.raw(
@@ -182,10 +182,6 @@ describe('updateItemTags', () => {
     const cases = [
       { data: {}, message: writeObjectStateMissingMessage('tags') },
       { data: { tags: [42], collections: [] }, message: writeObjectStateMissingMessage('tags') },
-      {
-        data: { tags: [], collections: [42] },
-        message: writeObjectStateMissingMessage('collections'),
-      },
     ]
     for (const testCase of cases) {
       data = testCase.data

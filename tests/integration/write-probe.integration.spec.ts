@@ -25,6 +25,11 @@ import { PERSONAL_LIBRARY } from '../../src/refs.js'
 import { resolveCollectionsMixed, ScopeDirectory } from '../../src/local/scope-directory.js'
 import {
   createNote,
+  createItem,
+  createCollection,
+  batchItems,
+  restoreItems,
+  updateNote,
   fetchItemTypeFields,
   updateItemTags,
   type WriteDomainDeps,
@@ -78,8 +83,24 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1' && process.env.ZOTERO_WRIT
       }
     })
 
-    it('authorizes through the Zotero dialog', async () => {
+    it('authorizes through the Zotero dialog and prepares the probe collection', async () => {
       await expect(authorizer.keyFor(serverId)).resolves.toBeDefined()
+      const listing = await directory.scopeListingOf(
+        'collections',
+        { library: PERSONAL_LIBRARY, serverId },
+        undefined,
+      )
+      if (
+        !listing.entries.some(
+          (entry) => entry.name === PROBE_COLLECTION && entry.parentKey === undefined,
+        )
+      ) {
+        const created = await createCollection(deps, { name: PROBE_COLLECTION })
+        if (created.kind !== 'applied')
+          throw new Error(
+            'probe collection creation was not verified; reconcile before another run',
+          )
+      }
     })
 
     it('creates a note in the probe collection and reads the saved state back', async () => {
@@ -102,7 +123,10 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1' && process.env.ZOTERO_WRIT
     })
 
     it('merges tags under the version precondition and refuses a stale one', async () => {
-      const result = await createNote(deps, { markdown: 'probe note two' })
+      const result = await createNote(deps, {
+        markdown: 'probe note two',
+        collections: [PROBE_COLLECTION],
+      })
       expect(result.kind).toBe('applied')
       if (result.kind !== 'applied') throw new Error('expected an applied note')
       await expect(
@@ -124,6 +148,42 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1' && process.env.ZOTERO_WRIT
           },
         ),
       ).rejects.toMatchObject({ code: 'ZOTERO_WRITE_CONFLICT' })
+    })
+
+    it('updates, trashes and restores a probe-owned child note using its real wire shape', async () => {
+      const parent = await createItem(deps, {
+        itemType: 'document',
+        title: 'dsh-zotero child write probe',
+        collections: [PROBE_COLLECTION],
+      })
+      if (parent.kind !== 'applied') throw new Error('parent creation was not verified')
+      const parentRef = { library: PERSONAL_LIBRARY, kind: 'item' as const, key: parent.key }
+      const note = await createNote(deps, { parentItem: parentRef, markdown: 'Child write probe' })
+      if (note.kind !== 'applied') throw new Error('child creation was not verified')
+      const noteRef = { library: PERSONAL_LIBRARY, kind: 'item' as const, key: note.key }
+      const read = async () =>
+        (
+          await client.getJson<{
+            data: {
+              parentItem: string
+              note: string
+              collections?: string[]
+              deleted?: number | boolean
+            }
+          }>(`users/0/items/${note.key}`, undefined, {})
+        ).json.data
+      expect((await read()).collections).toBeUndefined()
+      await updateNote(deps, { item: noteRef, markdown: '**Updated child**' })
+      expect((await read()).note).toContain('<strong>Updated child</strong>')
+      const trashed = await batchItems(deps, { delete: [noteRef] })
+      expect(trashed.failed).toEqual([])
+      expect(Boolean((await read()).deleted)).toBe(true)
+      const restored = await restoreItems(deps, { items: [noteRef] })
+      expect(restored.failed).toEqual([])
+      expect(restored.restored).toHaveLength(1)
+      const saved = await read()
+      expect(Boolean(saved.deleted)).toBe(false)
+      expect(saved.parentItem).toBe(parent.key)
     })
 
     it('advances the library version the read client sees', async () => {
