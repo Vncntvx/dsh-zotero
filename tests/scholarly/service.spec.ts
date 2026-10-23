@@ -8,7 +8,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ZoteroServiceLike } from '../../src/scholarly/zotero-link.js'
 import { createVolatile } from '@deepseek-ai/cosmokit'
-import { Context } from '@deepseek-ai/cordis'
+import { Context, Service } from '@deepseek-ai/cordis'
 import { ScholarlyService } from '../../src/scholarly/service.js'
 import { resolveScholarlyConfig } from '../../src/scholarly/config.js'
 import { EXEC_CONTEXT, createMockHost, createMockHttp, writeVolatile } from './fixtures.js'
@@ -127,14 +127,14 @@ describe('scholarly tools degrade without inventing facts', () => {
 })
 
 describe('ScholarlyService construction', () => {
-  it('registers six tools and exposes a live store', async () => {
+  it('registers enabled scholarly tools and exposes a live store', async () => {
     const ctx = new Context()
     const names: string[] = []
     ;(ctx as any).tools = {
       register: (tool: { name: string }) => (names.push(tool.name), () => {}),
     }
 
-    const service = new ScholarlyService(ctx, {})
+    const service = new ScholarlyService(ctx, { enabled: createVolatile(true) })
     // Registry order, not alphabetical: cite follows citations in the factory.
     expect(names).toEqual([
       'scholarly_search',
@@ -143,6 +143,7 @@ describe('ScholarlyService construction', () => {
       'scholarly_read',
       'scholarly_cite',
       'scholarly_verify',
+      'scholarly_save_to_zotero',
     ])
     expect(service.store).toBeDefined()
     expect(service.http).toBeDefined()
@@ -151,11 +152,60 @@ describe('ScholarlyService construction', () => {
   it('resolves the in-library link to nothing when no Zotero service is composed', async () => {
     const ctx = new Context()
     ;(ctx as any).tools = { register: () => () => {} }
-    const service = new ScholarlyService(ctx, {})
+    const service = new ScholarlyService(ctx, { enabled: createVolatile(false) })
     // The link is an optional dependency read through `ctx.get`; absent means
     // "no local library", which the search tool renders as no annotation.
     expect(ctx.get('zotero')).toBeUndefined()
     expect(service).toBeDefined()
+  })
+
+  it('reconciles the tool surface when the enabled flag flips live', async () => {
+    // The loader writes the volatile reference and then emits the update; the
+    // service must retire the old definitions and register the new set on the
+    // same instance, never leaving two live copies of one tool name.
+    const ctx = new Context()
+    const names: string[] = []
+    ;(ctx as any).tools = {
+      register: (tool: { name: string }) => (names.push(tool.name), () => {}),
+    }
+    const enabled = createVolatile(true)
+    new ScholarlyService(ctx, { enabled })
+    expect(names).toHaveLength(7)
+
+    names.length = 0
+    writeVolatile(enabled, false)
+    ctx.emit('loader/volatile-update', [['enabled']])
+    expect(names).toHaveLength(0)
+
+    writeVolatile(enabled, true)
+    ctx.emit('loader/volatile-update', [['enabled']])
+    expect(names).toHaveLength(7)
+  })
+
+  it('turns the automatic settings page off for its own namespace', async () => {
+    // The component ships its own settings page (the `plugins.row.config`
+    // surface), so the schema-generated one would be a second, conflicting
+    // surface for the same namespace. The policy names this plugin fiber,
+    // exactly as the zotero row does (`packages/settings/settings/README.md`).
+    const ctx = new Context()
+    ;(ctx as any).tools = { register: () => () => {} }
+    const configured: Array<{ auto?: boolean; fiber: unknown }> = []
+    class StubSettings extends Service {
+      constructor(host: Context) {
+        super(host, 'settings')
+      }
+      configure(presentation: { auto?: boolean }, owner: unknown): () => void {
+        configured.push({ auto: presentation.auto, fiber: owner })
+        return () => {}
+      }
+    }
+    new StubSettings(ctx)
+    new ScholarlyService(ctx, {})
+    // The service's own `ctx.inject(['settings'], ...)` child starts once the
+    // dependency is available; awaiting a child of the same dependency runs
+    // the pending children first.
+    await ctx.inject(['settings'], () => {})
+    expect(configured).toEqual([{ auto: false, fiber: ctx.fiber }])
   })
 })
 
@@ -171,11 +221,14 @@ describe('scholarly tool declarations', () => {
       scholarly_read: { id: '2301.07041' },
       scholarly_cite: { ids: ['10.1/x'], format: 'bibtex' },
       scholarly_verify: { references: ['A. Author (2020). Title.'] },
+      scholarly_save_to_zotero: { title: 'A paper' },
     }
     for (const tool of tools) {
       const args = minimal[tool.name]
       expect(args, `${tool.name} needs a fixture`).toBeDefined()
-      expect(tool.isConcurrencySafe?.(args as never), tool.name).toBe(true)
+      expect(tool.isConcurrencySafe?.(args as never), tool.name).toBe(
+        tool.name === 'scholarly_save_to_zotero' ? false : true,
+      )
       expect(tool.timeoutMs, tool.name).toBeGreaterThan(0)
       expect(tool.presentCall?.(args as never), tool.name).toBeDefined()
     }

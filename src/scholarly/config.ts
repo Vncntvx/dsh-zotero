@@ -19,6 +19,7 @@ import { isVolatile } from '@deepseek-ai/cosmokit'
 import Schema from '@deepseek-ai/schemastery'
 
 export interface ScholarlyConfig {
+  enabled?: Volatile<boolean>
   email?: Volatile<string>
   s2Key?: Volatile<string>
   ncbiKey?: Volatile<string>
@@ -29,6 +30,7 @@ export interface ScholarlyConfig {
 
 /** The plain values {@link resolveScholarlyConfig} produces from a live section. */
 export interface ResolvedScholarlyConfig {
+  enabled: boolean
   email?: string
   s2Key?: string
   ncbiKey?: string
@@ -38,6 +40,10 @@ export interface ResolvedScholarlyConfig {
 }
 
 export const ScholarlyConfig = Schema.object({
+  enabled: Schema.boolean()
+    .default(false)
+    .description('Enable external scholarly literature tools and network requests')
+    .volatile(),
   email: Schema.string()
     .description(
       'Contact email sent to Crossref, OpenAlex, and NCBI/Europe PMC (polite pool for higher rate limits)',
@@ -92,6 +98,7 @@ function current<T>(value: unknown): T | undefined {
  */
 export function resolveScholarlyConfig(input?: Partial<ScholarlyConfig>): ResolvedScholarlyConfig {
   return {
+    enabled: current<boolean>(input?.enabled) ?? false,
     email: current<string>(input?.email)?.trim() || undefined,
     s2Key: current<string>(input?.s2Key)?.trim() || undefined,
     ncbiKey: current<string>(input?.ncbiKey)?.trim() || undefined,

@@ -8,4 +8,5 @@
     # (arXiv, OpenAlex, Crossref, Semantic Scholar, PubMed).
     - id: scholarly
       name: dsh-zotero/scholarly
-      config: {}
+      config:
+        enabled: false

@@ -189,7 +189,7 @@ describe('ScholarlySettingsSection', () => {
     controller.dispose()
   })
 
-  it('renders both cards and all 6 fields in page view', () => {
+  it('renders both cards and all Scholarly fields in page view', () => {
     const scope = fakeScope({
       value: {
         email: 'test@domain.org',
@@ -210,9 +210,11 @@ describe('ScholarlySettingsSection', () => {
     expect(screen.getByLabelText(zh.scholarlyOpenalexKey)).toBeDefined()
     expect(screen.getByLabelText(zh.scholarlyMaxResults)).toBeDefined()
     expect(screen.getByLabelText(zh.scholarlyMaxContentChars)).toBeDefined()
+    expect(screen.getByLabelText(zh.scholarlyEnabled)).toBeDefined()
 
-    // email, maxResults, and maxContentChars are plain inputs; the three keys are masked.
-    expect(document.querySelectorAll('input')).toHaveLength(6)
+    // enabled, email, maxResults, and maxContentChars are plain inputs; the
+    // three keys are masked.
+    expect(document.querySelectorAll('input')).toHaveLength(7)
     expect(document.querySelectorAll('input[type="password"]')).toHaveLength(3)
 
     controller.dispose()

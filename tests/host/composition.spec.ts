@@ -86,7 +86,11 @@ describe('the shipped bundle patch through a real Loader composition', () => {
       name: 'cordis:include',
       config: {
         path: pathToFileURL(configPath).href,
-        patches: [...parsedPatch, { id: 'zotero', config: { baseUrl: mock.baseUrl } }],
+        patches: [
+          ...parsedPatch,
+          { id: 'zotero', config: { baseUrl: mock.baseUrl } },
+          { id: 'scholarly', config: { enabled: true } },
+        ],
       },
     })
     await context.loader.await()

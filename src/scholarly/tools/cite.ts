@@ -8,7 +8,11 @@ import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
 import { mapWithConcurrency } from '../../concurrency.js'
 import { parsePaperIdentifier } from '../fulltext/resolve.js'
 import { lookupEuropePmc } from '../sources/pmc.js'
-import { SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR, type ScholarlyToolHost } from './search.js'
+import {
+  SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR,
+  type ScholarlyToolHost,
+  type ScholarlyToolOutput,
+} from './search.js'
 
 /** The citation formats this tool asks a registration agency for. */
 type CiteFormat = 'bibtex' | 'ris' | 'csljson' | 'text'
@@ -60,7 +64,7 @@ export function createScholarlyCiteTool(host: ScholarlyToolHost): ToolDefinition
     output: SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR,
     isConcurrencySafe: () => true,
     timeoutMs: 120_000,
-    async execute(args, exec): Promise<{ text: string }> {
+    async execute(args, exec): Promise<ScholarlyToolOutput> {
       const input = args as {
         ids: string[]
         format: CiteFormat
@@ -150,6 +154,8 @@ export function createScholarlyCiteTool(host: ScholarlyToolHost): ToolDefinition
 
       return {
         text: `${summary}\n\n${entries.join(separator)}${problemsText}`,
+        citations: entries.map((entry, index) => ({ index, value: entry })),
+        issues,
       }
     },
     presentCall: (args) => ({

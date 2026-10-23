@@ -4,6 +4,7 @@
  */
 
 import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { bestIdentifierOf, formatPaperDetail, fuseRankedLists } from '../fusion.js'
 import { openAlexIdOf, parsePaperIdentifier } from '../fulltext/resolve.js'
 import { lookupArxiv } from '../sources/arxiv.js'
@@ -15,7 +16,11 @@ import { titleKey } from '../normalize.js'
 import { SCHOLARLY_SOURCE_NAMES, type ScholarlyPaper, type ScholarlySourceId } from '../types.js'
 import { annotateWithLibraryStatus } from '../zotero-link.js'
 import { failureTextOf } from './failure.js'
-import { SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR, type ScholarlyToolHost } from './search.js'
+import {
+  SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR,
+  type ScholarlyToolHost,
+  type ScholarlyToolOutput,
+} from './search.js'
 
 export function createScholarlyGetTool(host: ScholarlyToolHost): ToolDefinition {
   return defineTool({
@@ -35,7 +40,7 @@ export function createScholarlyGetTool(host: ScholarlyToolHost): ToolDefinition 
     output: SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR,
     isConcurrencySafe: () => true,
     timeoutMs: 60_000,
-    async execute(args, exec): Promise<{ text: string }> {
+    async execute(args, exec): Promise<ScholarlyToolOutput> {
       const raw = (args as { id: string }).id.trim()
       if (!raw) throw new Error('id parameter cannot be empty.')
 
@@ -173,6 +178,8 @@ export function createScholarlyGetTool(host: ScholarlyToolHost): ToolDefinition 
         const remedy = failedSources.length > 0 ? '' : ' Please verify the identifier.'
         return {
           text: `No scholarly index found a paper matching "${raw}".${unanswered}${remedy}`,
+          papers: [],
+          issues: failedSources,
         }
       }
 
@@ -192,6 +199,8 @@ export function createScholarlyGetTool(host: ScholarlyToolHost): ToolDefinition 
 
       return {
         text: `${titlePrefix}${formatPaperDetail(paper)}\n\nCanonical ID for other scholarly tools: ${idHint}${failureNote}${libraryNotice}`,
+        papers: [paper] as unknown as Record<string, JsonValue>[],
+        issues: failedSources,
       }
     },
     presentCall: (args) => ({

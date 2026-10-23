@@ -2,7 +2,7 @@
  * Cordis Service plugin providing `ctx.scholarly`.
  *
  * Mounts the external literature retrieval subsystem as a first-class DSH
- * component: six model tools, one shared HTTP transport, and one text store.
+ * component: seven model tools, one shared HTTP transport, and one text store.
  *
  * Two lifecycle facts this file is responsible for:
  *
@@ -18,6 +18,9 @@
  */
 
 import { Context, Service } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/cordis-plugin-loader'
+// Type-only: brings the `ctx.settings` Context merge into this program.
+import type {} from '@deepseek-ai/dsh-settings'
 import {
   resolveScholarlyConfig,
   ScholarlyConfigSchema,
@@ -42,6 +45,7 @@ export class ScholarlyService extends Service {
 
   public readonly http: ScholarlyHttp
   public readonly store: ScholarlyTextStore
+  private toolDisposes: Array<() => void> = []
 
   private get currentConfig(): ResolvedScholarlyConfig {
     return resolveScholarlyConfig(this.config)
@@ -56,6 +60,15 @@ export class ScholarlyService extends Service {
     this.http = createScholarlyHttp()
     this.store = new ScholarlyTextStore()
     ctx.effect(() => () => this.store.dispose(), 'scholarly: text store teardown')
+
+    // This component ships its own settings page (the `plugins.row.config`
+    // surface the client registers), so the schema-generated page would be a
+    // second, conflicting surface for the same namespace. The optional child
+    // lets a late-loading Settings service pick the policy up, and the row
+    // still runs without Settings composed (`packages/settings/settings/README.md`).
+    ctx.inject(['settings'], (settingsCtx) => {
+      settingsCtx.effect(() => settingsCtx.settings.configure({ auto: false }, ctx.fiber))
+    })
 
     const host: ScholarlyReadHost = {
       http: this.http,
@@ -74,9 +87,15 @@ export class ScholarlyService extends Service {
       zoteroService: (): ZoteroServiceLike | undefined => ctx.get('zotero'),
     }
 
-    for (const tool of createAllScholarlyTools(host)) {
-      ctx.tools.register(tool)
-    }
+    this.reconcileTools(ctx, host)
+    ctx.on('loader/volatile-update', () => this.reconcileTools(ctx, host))
+  }
+
+  private reconcileTools(ctx: Context, host: ScholarlyReadHost): void {
+    for (const dispose of this.toolDisposes) dispose()
+    this.toolDisposes = []
+    if (!this.currentConfig.enabled) return
+    this.toolDisposes = createAllScholarlyTools(host).map((tool) => ctx.tools.register(tool))
   }
 }
 

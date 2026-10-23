@@ -4,11 +4,16 @@
  */
 
 import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { formatPaperItem, fuseRankedLists } from '../fusion.js'
 import { openAlexIdOf, parsePaperIdentifier } from '../fulltext/resolve.js'
 import { lookupOpenAlex, openalexLinkedWorks } from '../sources/openalex.js'
 import { annotateWithLibraryStatus } from '../zotero-link.js'
-import { SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR, type ScholarlyToolHost } from './search.js'
+import {
+  SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR,
+  type ScholarlyToolHost,
+  type ScholarlyToolOutput,
+} from './search.js'
 
 export function createScholarlyCitationsTool(host: ScholarlyToolHost): ToolDefinition {
   return defineTool({
@@ -38,7 +43,7 @@ export function createScholarlyCitationsTool(host: ScholarlyToolHost): ToolDefin
     output: SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR,
     isConcurrencySafe: () => true,
     timeoutMs: 60_000,
-    async execute(args, exec): Promise<{ text: string }> {
+    async execute(args, exec): Promise<ScholarlyToolOutput> {
       const input = args as {
         id: string
         direction: 'citations' | 'references' | 'related'
@@ -61,6 +66,7 @@ export function createScholarlyCitationsTool(host: ScholarlyToolHost): ToolDefin
       if (!work?.openalex) {
         return {
           text: `OpenAlex citation index does not recognize identifier "${raw}". Recent preprints may not have citation links yet.`,
+          papers: [],
         }
       }
 
@@ -90,6 +96,7 @@ export function createScholarlyCitationsTool(host: ScholarlyToolHost): ToolDefin
       if (papers.length === 0) {
         return {
           text: `No papers found that ${relDesc} "${work.title}" in OpenAlex.`,
+          papers: [],
         }
       }
 
@@ -111,6 +118,7 @@ export function createScholarlyCitationsTool(host: ScholarlyToolHost): ToolDefin
 
       return {
         text: `${countDesc}\n\n${lines}${libraryNotice}`,
+        papers: fused as unknown as Record<string, JsonValue>[],
       }
     },
     presentCall: (args) => {

@@ -25,6 +25,9 @@ import type {
   ZoteroObjectRef,
   ZoteroSearchRequest,
   ZoteroSearchResult,
+  ZoteroCreateItemRequest,
+  ZoteroCreateItemCommittedOutcome,
+  ZoteroWriteCall,
 } from '../types.js'
 import { titleKey } from './normalize.js'
 import type { ScholarlyPaper } from './types.js'
@@ -32,6 +35,10 @@ import type { ScholarlyPaper } from './types.js'
 export interface ZoteroServiceLike {
   search(request: ZoteroSearchRequest, signal?: AbortSignal): Promise<ZoteroSearchResult>
   get?(request: ZoteroGetRequest, signal?: AbortSignal): Promise<ZoteroItemDetail>
+  createItem?(
+    request: ZoteroCreateItemRequest,
+    call: ZoteroWriteCall,
+  ): Promise<ZoteroCreateItemCommittedOutcome | { kind: 'declined' }>
 }
 
 /** What one library-status pass managed to determine. */

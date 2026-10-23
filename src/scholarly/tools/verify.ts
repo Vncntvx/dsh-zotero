@@ -5,6 +5,7 @@
  */
 
 import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { mapWithConcurrency } from '../../concurrency.js'
 import { titleKey, titleTokens } from '../normalize.js'
 import {
@@ -16,7 +17,11 @@ import {
 import { cleanDoi, parseYear } from '../sources/helpers.js'
 import type { ScholarlyPaper } from '../types.js'
 import { failureTextOf } from './failure.js'
-import { SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR, type ScholarlyToolHost } from './search.js'
+import {
+  SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR,
+  type ScholarlyToolHost,
+  type ScholarlyToolOutput,
+} from './search.js'
 
 /**
  * What one reference check concluded.
@@ -241,7 +246,7 @@ export function createScholarlyVerifyTool(host: ScholarlyToolHost): ToolDefiniti
     output: SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR,
     isConcurrencySafe: () => true,
     timeoutMs: 240_000,
-    async execute(args, exec): Promise<{ text: string }> {
+    async execute(args, exec): Promise<ScholarlyToolOutput> {
       const input = args as { references: string[] }
       const list = input.references
         .map((r) => r.trim())
@@ -290,6 +295,7 @@ export function createScholarlyVerifyTool(host: ScholarlyToolHost): ToolDefiniti
 
       return {
         text: `${summary}\n\n${lines}`,
+        checks: results as unknown as Record<string, JsonValue>[],
       }
     },
     presentCall: (args) => ({

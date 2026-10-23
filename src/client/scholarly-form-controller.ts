@@ -33,9 +33,13 @@ export type ScholarlySecretKey = (typeof SCHOLARLY_SECRET_KEYS)[number]
 export const SCHOLARLY_NUMERIC_KEYS = ['maxResults', 'maxContentChars'] as const
 export type ScholarlyNumericKey = (typeof SCHOLARLY_NUMERIC_KEYS)[number]
 
-export type ScholarlyFieldKey = ScholarlyTextKey | ScholarlySecretKey | ScholarlyNumericKey
+export type ScholarlyFieldKey =
+  ScholarlyTextKey | ScholarlySecretKey | ScholarlyNumericKey | ScholarlyEnabledKey
+
+export type ScholarlyEnabledKey = 'enabled'
 
 export const SCHOLARLY_FIELD_KEYS: ReadonlySet<string> = new Set<string>([
+  'enabled',
   ...SCHOLARLY_TEXT_KEYS,
   ...SCHOLARLY_SECRET_KEYS,
   ...SCHOLARLY_NUMERIC_KEYS,
@@ -49,6 +53,7 @@ export interface ScholarlySecretFieldState {
 
 /** Everything the Scholarly configuration card renders. */
 export interface ScholarlyCardState extends SettingsFormShell {
+  readonly enabled: SettingsFieldState
   readonly email: SettingsFieldState
   readonly maxResults: SettingsFieldState
   readonly maxContentChars: SettingsFieldState
@@ -78,6 +83,11 @@ function secretFieldSpec(field: string): SettingsFieldSpec {
 
 function fieldSpecs(): SettingsFieldSpec[] {
   return [
+    {
+      field: 'enabled',
+      format: (value) => (value === true ? 'true' : 'false'),
+      parse: (text) => ({ kind: 'set', value: text.trim().toLowerCase() === 'true' }),
+    },
     settingsTextField('email'),
     secretFieldSpec('s2Key'),
     secretFieldSpec('ncbiKey'),
@@ -123,6 +133,7 @@ export class ScholarlyFormController {
 
     return {
       ...shell,
+      enabled: this.model.field('enabled'),
       email: this.model.field('email'),
       maxResults: this.model.field('maxResults'),
       maxContentChars: this.model.field('maxContentChars'),

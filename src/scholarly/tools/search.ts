@@ -5,6 +5,7 @@
  */
 
 import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import {
   formatPaperItem,
   fuseRankedLists,
@@ -29,29 +30,33 @@ export interface ScholarlyToolHost {
   zoteroService?(): ZoteroServiceLike | undefined
 }
 
-/**
- * The one output shape every scholarly tool declares: a text body.
- *
- * There is deliberately no `presentationMeta`. It projected a
- * `kind: 'scholarly-papers'` card that no client component registered, so the
- * projection was persisted into every session log and read by nobody — and it
- * carried an unbounded `papers` array past the 8 KiB budget the host's own
- * projectors respect. A specialized card is a `tool.call.toolview`
- * registration plus a component and a locale dictionary; until that exists,
- * the generic card is the honest surface.
- */
+/** One bounded, model-readable Scholarly receipt. Text remains the human rendering. */
 export const SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR = {
   schema: {
     type: 'object',
     additionalProperties: false,
     properties: {
       text: { type: 'string', required: true },
+      papers: { type: 'array', items: { type: 'object', additionalProperties: true } },
+      citations: { type: 'array', items: { type: 'object', additionalProperties: true } },
+      checks: { type: 'array', items: { type: 'object', additionalProperties: true } },
+      document: { type: 'object', additionalProperties: true },
+      issues: { type: 'array', items: { type: 'string' } },
     },
   },
   render: (_args: unknown, value: { text: string }) => [
     { type: 'text' as const, text: value.text },
   ],
 } as const
+
+export type ScholarlyToolOutput = {
+  text: string
+  papers?: Record<string, JsonValue>[]
+  citations?: Record<string, JsonValue>[]
+  checks?: Record<string, JsonValue>[]
+  document?: Record<string, JsonValue>
+  issues?: string[]
+}
 
 const CITE_HINT = 'Tip: Cite a paper from these results using its title link or ID.'
 
@@ -104,7 +109,7 @@ export function createScholarlySearchTool(host: ScholarlyToolHost): ToolDefiniti
     output: SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR,
     isConcurrencySafe: () => true,
     timeoutMs: 180_000,
-    async execute(args, exec): Promise<{ text: string }> {
+    async execute(args, exec): Promise<ScholarlyToolOutput> {
       const input = args as {
         query: string
         sources?: string[]
@@ -214,6 +219,8 @@ export function createScholarlySearchTool(host: ScholarlyToolHost): ToolDefiniti
           failedSources.length > 0 ? `\nUnanswered sources: ${failedSources.join('; ')}.` : ''
         return {
           text: `No papers found for "${text}" across ${attempted}.${failureNotice} Try fewer or alternative keywords.`,
+          papers: [],
+          issues: failedSources,
         }
       }
 
@@ -233,6 +240,8 @@ export function createScholarlySearchTool(host: ScholarlyToolHost): ToolDefiniti
 
       return {
         text: `${summaryHeader}${failureNote}${libraryNotice}\n${CITE_HINT}\n\n${formattedLines}`,
+        papers: papers as unknown as Record<string, JsonValue>[],
+        issues: failedSources,
       }
     },
     presentCall: (args) => ({
