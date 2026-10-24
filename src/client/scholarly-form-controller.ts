@@ -38,13 +38,6 @@ export type ScholarlyFieldKey =
 
 export type ScholarlyEnabledKey = 'enabled'
 
-export const SCHOLARLY_FIELD_KEYS: ReadonlySet<string> = new Set<string>([
-  'enabled',
-  ...SCHOLARLY_TEXT_KEYS,
-  ...SCHOLARLY_SECRET_KEYS,
-  ...SCHOLARLY_NUMERIC_KEYS,
-])
-
 export interface ScholarlySecretFieldState {
   readonly text: string
   readonly configured: boolean

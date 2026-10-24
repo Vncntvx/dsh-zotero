@@ -14,7 +14,7 @@
  * @module dsh-zotero/client/components/SourcesTab
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 // Session-scope standard props: `useSession` (lifecycle and identity) is
 // merged by ui-session, `useChat` (conversation data) by ui-chat; the named
 // type imports pull both merges into the program.
@@ -26,11 +26,12 @@ import { fileAddressFor } from '@deepseek-ai/dsh-util-workspace-path'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ZoteroAttachmentLocationView } from '../../contract.ts'
 import type { ZoteroStatusView } from '../remote.ts'
-import { callNameOf, isSettledTool } from '../presenters.ts'
+import { callNameOf, formatTime, isSettledTool } from '../presenters.ts'
 import { buildSourceWorkspace } from '../sources/reducer.ts'
 import { ZoteroSurfaceBoundary } from './ZoteroSurfaceBoundary.tsx'
 import type { ConnectionView } from './workspace/connection.ts'
 import { ZoteroWorkspaceView } from './workspace/ZoteroWorkspaceView.tsx'
+import { useZoteroProbe } from './useZoteroProbe.ts'
 
 /** Defensive recursion bound for nested dispatch trees (the harness block type is unbounded). */
 const MAX_SUBCALL_DEPTH = 256
@@ -109,9 +110,7 @@ export type SourcesTabProps = PropsRuntime<'conversation.view'> &
 
 /** Clock formatter: absolute time, updated per acquisition (no relative timers). */
 export function currentTime(): string {
-  const now = new Date()
-  const pad = (value: number): string => String(value).padStart(2, '0')
-  return `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
+  return formatTime(new Date(), true)
 }
 
 /**
@@ -247,12 +246,30 @@ function SourcesTabBody({
   // and the host `ISessions` declaration takes precedence).
   const cwd = useSessions((snapshot) => snapshot.byId[sessionId]?.cwd)
   const chat = useChat((snapshot) => snapshot, sameZoteroProjection)
-  const [statusState, setStatusState] = useState<ConnectionView>({ kind: 'loading' })
-  const [requestId, setRequestId] = useState(0)
-  // The last verified instance id feeds the evidenceMatch verdicts. It updates
-  // only when a connected probe settles, since a refresh's loading flip must not
-  // drop it, or the workspace would rebuild twice per probe.
-  const [serverId, setServerId] = useState<string | undefined>(undefined)
+  const { state: probeState, runProbe } = useZoteroProbe(status, { initialAutoRun: true })
+  const [checkedAt, setCheckedAt] = useState<string>(() => currentTime())
+  const prevDataRef = useRef(probeState.data)
+
+  useEffect(() => {
+    if (probeState.data !== undefined && probeState.data !== prevDataRef.current) {
+      prevDataRef.current = probeState.data
+      setCheckedAt(currentTime())
+    }
+  }, [probeState.data])
+
+  const statusState: ConnectionView = useMemo(() => {
+    if (probeState.data !== undefined) {
+      return probeState.data.connected
+        ? { kind: 'connected', data: probeState.data, checkedAt }
+        : { kind: 'unavailable', data: probeState.data, checkedAt }
+    }
+    if (probeState.error !== undefined) {
+      return { kind: 'remote-error', message: probeState.error }
+    }
+    return { kind: 'loading' }
+  }, [probeState.data, probeState.error, checkedAt])
+
+  const serverId = probeState.data?.connected ? probeState.data.serverId : undefined
   // Streaming-stable zotero rows reuse the previous block array (signature gate).
   const blocks = useZoteroBlocks(chat, sessionId)
   const workspace = useMemo(
@@ -264,54 +281,13 @@ function SourcesTabBody({
     [inputActions],
   )
 
-  useEffect(() => {
-    if (status === undefined) return
-    const controller = new AbortController()
-    setStatusState({ kind: 'loading' })
-    void (async () => {
-      let result: RemoteResult<ZoteroStatusView>
-      try {
-        result = await status()
-      } catch (error) {
-        // The Remote face folds carrier failures into `ok: false`, so a
-        // rejection is an assembly fault. Surface it as a remote error
-        // instead of leaving the surface stuck on loading.
-        if (controller.signal.aborted) return
-        setStatusState({
-          kind: 'remote-error',
-          message: error instanceof Error ? error.message : String(error),
-        })
-        setServerId(undefined)
-        return
-      }
-      // The Remote face carries no signal by contract, so cancellation is
-      // ignore-stale: the aborted probe settles normally and its result is
-      // dropped here, never mistaken for a connectivity problem.
-      if (controller.signal.aborted) return
-      const next = stateOf(result, currentTime())
-      setStatusState(next)
-      if (next.kind === 'connected' && next.data.serverId !== undefined) {
-        setServerId(next.data.serverId)
-      } else {
-        setServerId(undefined)
-      }
-    })()
-    return () => {
-      controller.abort()
-    }
-  }, [status, requestId])
-
-  const refresh = (): void => {
-    setRequestId((id) => id + 1)
-  }
-
   return (
     <ZoteroWorkspaceView
       key={sessionId ?? 'none'}
       workspace={workspace}
       connection={statusState}
       setDraft={setDraft}
-      onRefresh={refresh}
+      onRefresh={runProbe}
       openFile={
         openResource === undefined
           ? undefined

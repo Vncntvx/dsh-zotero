@@ -28,6 +28,7 @@ import {
   FIELD_GROUPS,
   NUMERIC_FIELD_KEYS,
   SEARCH_SUBGROUPS,
+  SETTINGS_TABS,
   type FieldKey,
   type GroupKey,
   type SettingsTabId,
@@ -81,32 +82,13 @@ export function ZoteroSettingsForm(props: ZoteroSettingsFormProps) {
 
   const tabItems: readonly [SegmentedTab<SettingsTabId>, ...SegmentedTab<SettingsTabId>[]] =
     useMemo(
-      () => [
-        {
-          value: 'features',
-          label: t('tabFeatures'),
-          id: 'zotero-tab-features',
-          panelId: 'zotero-panel-features',
-        },
-        {
-          value: 'connection',
-          label: t('tabConnection'),
-          id: 'zotero-tab-connection',
-          panelId: 'zotero-panel-connection',
-        },
-        {
-          value: 'search',
-          label: t('tabSearch'),
-          id: 'zotero-tab-search',
-          panelId: 'zotero-panel-search',
-        },
-        {
-          value: 'advanced',
-          label: t('tabAdvanced'),
-          id: 'zotero-tab-advanced',
-          panelId: 'zotero-panel-advanced',
-        },
-      ],
+      () =>
+        SETTINGS_TABS.filter((tab) => tab.id !== 'scholarly').map((tab) => ({
+          value: tab.id,
+          label: t(tab.labelKey),
+          id: `zotero-tab-${tab.id}`,
+          panelId: `zotero-panel-${tab.id}`,
+        })) as [SegmentedTab<SettingsTabId>, ...SegmentedTab<SettingsTabId>[]],
       [t],
     )
 

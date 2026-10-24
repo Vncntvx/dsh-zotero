@@ -74,7 +74,10 @@ interface FakeApplyWorld {
 }
 
 /** A minimal context standing in for the browser kernel's plugin ctx. */
-function fakeWorld(mountRejects: unknown = undefined): FakeApplyWorld {
+function fakeWorld(
+  mountRejects: unknown = undefined,
+  injectRejects: unknown = undefined,
+): FakeApplyWorld {
   const dictionaries: FakeApplyWorld['dictionaries'] = []
   const injected: FakeInjectedEntry[] = []
   const registered: FakeApplyWorld['registered'] = []
@@ -170,7 +173,9 @@ function fakeWorld(mountRejects: unknown = undefined): FakeApplyWorld {
         for (const disposer of owned.reverse()) disposer()
         world.uiDisposes += 1
       }
-      return Object.assign(Promise.resolve({ dispose }), { dispose })
+      const promise =
+        injectRejects !== undefined ? Promise.reject(injectRejects) : Promise.resolve({ dispose })
+      return Object.assign(promise, { dispose })
     },
     configForms: {
       get: (id: string) => {
@@ -709,5 +714,12 @@ describe('the browser-half entry', () => {
     }
     expect(state.available).toBe(true)
     expect(state.baseUrl.text).toBe('http://127.0.0.1:23119/api')
+  })
+
+  it('unwinds mount and ui if ui fiber setup rejects', async () => {
+    const world = fakeWorld(undefined, new Error('inject failed'))
+    await expect(applyEntry(world)).rejects.toThrow('inject failed')
+    expect(world.uiDisposes).toBe(1)
+    expect(world.mountDisposes).toBe(1)
   })
 })

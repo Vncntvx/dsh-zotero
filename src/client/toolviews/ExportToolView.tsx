@@ -10,7 +10,7 @@ import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots
 import { exportMetaOf, jobArmOf, jobSummaryKeyOf } from '../sources/decoders.ts'
 import { ZoteroLocateActions } from '../components/open/ZoteroLocateActions.tsx'
 import { CopyButton } from '../components/CopyButton.tsx'
-import { extensionOf, fileNameForFormat, formatLabelOf, mimeOf } from '../components/ExportCard.tsx'
+import { extensionOf, fileNameForFormat, formatLabelOf, mimeOf } from '../export-formats.ts'
 import { downloadBlob } from '../download.ts'
 import {
   argsViewOf,

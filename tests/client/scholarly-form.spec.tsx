@@ -166,6 +166,18 @@ describe('ScholarlyFormController', () => {
     expect(scope.writes).toEqual([])
     controller.dispose()
   })
+
+  it('parses boolean string when editing enabled field', () => {
+    const scope = fakeScope({ value: { enabled: true } })
+    const controller = new ScholarlyFormController(scope)
+    const face = controller.inject()
+
+    face.edit('enabled', 'false')
+    face.save()
+
+    expect(scope.writes).toEqual([{ op: 'set', field: 'enabled', value: false }])
+    controller.dispose()
+  })
 })
 
 describe('ScholarlySettingsSection', () => {

@@ -17,8 +17,8 @@ import { shortKeyOf } from '../presenters.ts'
 import { citeCommandOf } from '../sources/bibtex.ts'
 import type { ExportedDocument } from '../sources/selectors.ts'
 import { downloadBlob } from '../download.ts'
+import { extensionOf, formatLabelOf, mimeOf, sanitizeFileStem } from '../export-formats.ts'
 import { CopyButton } from './CopyButton.tsx'
-import { extensionOf, formatLabelOf, mimeOf, sanitizeFileStem } from './ExportCard.tsx'
 import css from './cards.module.css'
 
 export interface ExportDocumentRowProps {

@@ -32,7 +32,7 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-slots'
 import { ZoteroSettingsForm } from './ZoteroSettingsForm.tsx'
 import { ScholarlySettingsForm } from './ScholarlySettingsForm.tsx'
-import type { SettingsTabId, ZoteroCardFace } from './zotero-card-controller.ts'
+import { SETTINGS_TABS, type SettingsTabId, type ZoteroCardFace } from './zotero-card-controller.ts'
 import type { ScholarlyCardFace, ScholarlyCardState } from './scholarly-form-controller.ts'
 import css from './ZoteroSettingsSection.module.css'
 
@@ -71,38 +71,13 @@ export function ZoteroSettingsSection(props: ZoteroSettingsSectionProps): ReactN
 
   const tabItems: readonly [SegmentedTab<SettingsTabId>, ...SegmentedTab<SettingsTabId>[]] =
     useMemo(
-      () => [
-        {
-          value: 'features',
-          label: t('tabFeatures'),
-          id: 'zotero-tab-features',
-          panelId: 'zotero-panel-features',
-        },
-        {
-          value: 'connection',
-          label: t('tabConnection'),
-          id: 'zotero-tab-connection',
-          panelId: 'zotero-panel-connection',
-        },
-        {
-          value: 'search',
-          label: t('tabSearch'),
-          id: 'zotero-tab-search',
-          panelId: 'zotero-panel-search',
-        },
-        {
-          value: 'scholarly',
-          label: t('tabScholarly'),
-          id: 'zotero-tab-scholarly',
-          panelId: 'zotero-panel-scholarly',
-        },
-        {
-          value: 'advanced',
-          label: t('tabAdvanced'),
-          id: 'zotero-tab-advanced',
-          panelId: 'zotero-panel-advanced',
-        },
-      ],
+      () =>
+        SETTINGS_TABS.map((tab) => ({
+          value: tab.id,
+          label: t(tab.labelKey),
+          id: `zotero-tab-${tab.id}`,
+          panelId: `zotero-panel-${tab.id}`,
+        })) as [SegmentedTab<SettingsTabId>, ...SegmentedTab<SettingsTabId>[]],
       [t],
     )
 

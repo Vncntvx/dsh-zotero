@@ -30,8 +30,8 @@ export interface OperationFacts {
  */
 export type EvidenceMatchStatus = 'verified' | 'unknown' | 'mismatch'
 
-import type { SupportedLocalLibrary } from '../../types.ts'
-export type { SupportedLocalLibrary } from '../../types.ts'
+import type { SupportedLocalLibrary } from '../../contract.ts'
+export type { SupportedLocalLibrary } from '../../contract.ts'
 
 /** The normalized search scope, free of raw tool arguments. */
 export type SourceScope =

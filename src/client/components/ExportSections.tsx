@@ -17,15 +17,15 @@ import type { ExportArtifact } from '../sources/model.ts'
 import { downloadBlob } from '../download.ts'
 import { exportSectionsOf, type ExportSection } from '../sources/selectors.ts'
 import { CopyButton } from './CopyButton.tsx'
-import { ExportDocumentRow } from './ExportDocumentRow.tsx'
 import {
-  ExportCard,
   extensionOf,
   fileNameForFormat,
   fileNameOf,
   formatLabelOf,
   mimeOf,
-} from './ExportCard.tsx'
+} from '../export-formats.ts'
+import { ExportCard } from './ExportCard.tsx'
+import { ExportDocumentRow } from './ExportDocumentRow.tsx'
 import css from './cards.module.css'
 
 export interface ExportSectionsProps {

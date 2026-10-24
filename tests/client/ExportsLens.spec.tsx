@@ -13,15 +13,15 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ExportDocumentRow } from '../../src/client/components/ExportDocumentRow.tsx'
+import { ExportCard } from '../../src/client/components/ExportCard.tsx'
 import {
-  ExportCard,
   artifactTimeOf,
   extensionOf,
   fileNameOf,
   formatLabelOf,
   mimeOf,
   sanitizeFileStem,
-} from '../../src/client/components/ExportCard.tsx'
+} from '../../src/client/export-formats.ts'
 import { ExportSections, sectionTextOf } from '../../src/client/components/ExportSections.tsx'
 import { incompleteExportsNoteOf } from '../../src/client/components/operations.ts'
 import { ExportsPage } from '../../src/client/components/workspace/ExportsPage.tsx'

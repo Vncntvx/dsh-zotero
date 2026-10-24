@@ -14,7 +14,7 @@
  * @module dsh-zotero/client/components/DiagnosticsCard
  */
 
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { PropsLocale, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { PluginDetailProps } from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
@@ -25,16 +25,15 @@ import {
   type ZoteroStatusView,
 } from '../../contract.ts'
 import { buildInfoOf } from '../build-info.ts'
+import { formatTime } from '../presenters.ts'
 import { useZoteroProbe } from './useZoteroProbe.ts'
 import { useDiagnosticsFeed } from './useDiagnosticsFeed.ts'
 import { ZoteroSurfaceBoundary } from './ZoteroSurfaceBoundary.tsx'
+import { CopyButton } from './CopyButton.tsx'
 import css from './plugin/plugin-cards.module.css'
 
 /** How many filtered entries render before the "latest N" note takes over. */
 const RENDER_LIMIT = 100
-
-/** How long the copied acknowledgement stays on the button. */
-const COPIED_RESET_MS = 2000
 
 export interface ZoteroDiagnosticsCardProps extends PluginDetailProps, PropsLocale<'zotero'> {
   readonly probe: () => Promise<RemoteResult<ZoteroStatusView>>
@@ -49,9 +48,7 @@ interface DiagnosticsCardBodyProps {
 
 /** `HH:MM:SS` of one entry timestamp, local time. */
 function timeOf(ts: number): string {
-  const date = new Date(ts)
-  const pad = (value: number): string => String(value).padStart(2, '0')
-  return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+  return formatTime(ts, true)
 }
 
 /** The plain-text bundle a bug report pastes: header facts plus every served entry. */
@@ -111,9 +108,6 @@ function DiagnosticsCardBody({ t, probe, diagnostics }: DiagnosticsCardBodyProps
   const { state: feed, refresh } = useDiagnosticsFeed(diagnostics)
   const { state: probeState } = useZoteroProbe(probe, { initialAutoRun: true })
   const [problemsOnly, setProblemsOnly] = useState(false)
-  const [copied, setCopied] = useState(false)
-  const copyTimerRef = useRef<number | undefined>(undefined)
-  useEffect(() => () => window.clearTimeout(copyTimerRef.current), [])
 
   const data = feed.data
   if (data !== undefined && !data.debug) {
@@ -125,21 +119,6 @@ function DiagnosticsCardBody({ t, probe, diagnostics }: DiagnosticsCardBodyProps
       (entry) => !problemsOnly || entry.level === 'warn' || entry.level === 'error',
     ) ?? []
   const shown = filtered.slice(0, RENDER_LIMIT)
-
-  const copyBundle = (): void => {
-    if (data === undefined) return
-    void navigator.clipboard
-      ?.writeText(bundleOf(data, probeState.data, t))
-      .then(() => {
-        setCopied(true)
-        window.clearTimeout(copyTimerRef.current)
-        copyTimerRef.current = window.setTimeout(() => setCopied(false), COPIED_RESET_MS)
-      })
-      .catch(() => {
-        // A denied clipboard leaves the button as it was; the entries remain
-        // readable in the list itself.
-      })
-  }
 
   return (
     <section className={css.section} data-zotero-diagnostics>
@@ -184,9 +163,13 @@ function DiagnosticsCardBody({ t, probe, diagnostics }: DiagnosticsCardBodyProps
               {t('diagnosticsLevelProblems')}
             </button>
           </div>
-          <button type="button" className={css.refreshButton} onClick={copyBundle}>
-            {copied ? t('copied') : t('diagnosticsCopyBundle')}
-          </button>
+          <CopyButton
+            value={data !== undefined ? bundleOf(data, probeState.data, t) : ''}
+            label={t('diagnosticsCopyBundle')}
+            copiedLabel={t('copied')}
+            className={css.refreshButton}
+            disabled={data === undefined}
+          />
         </div>
 
         {feed.error !== undefined ? (

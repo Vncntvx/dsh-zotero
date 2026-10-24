@@ -18,6 +18,7 @@ import {
   callNameOf,
   errorSummaryOf,
   evidenceItemsOf,
+  formatTime,
   isRecord,
   joinNonEmpty,
   listArg,
@@ -275,5 +276,19 @@ describe('errorSummaryOf', () => {
       content: [],
     })
     expect(errorSummaryOf(blockEmpty)).toBeNull()
+  })
+})
+
+describe('formatTime', () => {
+  it('formats Date and numeric timestamp with seconds by default', () => {
+    const d = new Date(2025, 0, 1, 9, 5, 3)
+    expect(formatTime(d)).toBe('09:05:03')
+    expect(formatTime(d.getTime())).toBe('09:05:03')
+  })
+
+  it('formats without seconds when includeSeconds is false', () => {
+    const d = new Date(2025, 0, 1, 14, 25, 59)
+    expect(formatTime(d, false)).toBe('14:25')
+    expect(formatTime(d.getTime(), false)).toBe('14:25')
   })
 })

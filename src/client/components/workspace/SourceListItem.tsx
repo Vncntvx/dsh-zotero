@@ -8,6 +8,7 @@
  * @module dsh-zotero/client/components/workspace/SourceListItem
  */
 
+import { memo, useCallback } from 'react'
 import clsx from 'clsx'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { joinNonEmpty } from '../../presenters.ts'
@@ -34,39 +35,53 @@ export function badgesOf(item: SourceItem, t: TranslateNS<'zotero'>): string[] {
 
 export interface SourceListItemProps {
   readonly item: SourceItem
+  readonly index: number
   readonly selected: boolean
   readonly focused: boolean
-  readonly optionRef: (el: HTMLDivElement | null) => void
-  readonly onSelect: () => void
+  readonly setOptionRef?: (index: number, el: HTMLDivElement | null) => void
+  readonly onSelect: (key: string, index: number) => void
   readonly t: TranslateNS<'zotero'>
 }
 
 /** One source row as a listbox option. */
-export function SourceListItem({
+function SourceListItemComponent({
   item,
+  index,
   selected,
   focused,
-  optionRef,
+  setOptionRef,
   onSelect,
   t,
 }: SourceListItemProps) {
   const badges = badgesOf(item, t)
+
+  const handleSelect = useCallback(() => {
+    onSelect(item.key, index)
+  }, [onSelect, item.key, index])
+
+  const refCallback = useCallback(
+    (el: HTMLDivElement | null) => {
+      setOptionRef?.(index, el)
+    },
+    [setOptionRef, index],
+  )
+
   return (
     <div
-      ref={optionRef}
+      ref={refCallback}
       role="option"
       aria-selected={selected}
       tabIndex={focused ? 0 : -1}
       data-evidence-match={item.evidenceMatch}
       className={clsx(css.listItem, selected && css.listItemSelected)}
-      onClick={onSelect}
+      onClick={handleSelect}
       onKeyDown={(event) => {
         // Enter and Space confirm the selection on narrow surfaces (the
         // parent moves to the detail pane); the arrows are handled by the
         // listbox. Space needs preventDefault or the list scrolls instead.
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault()
-          onSelect()
+          handleSelect()
         }
       }}
     >
@@ -84,3 +99,5 @@ export function SourceListItem({
     </div>
   )
 }
+
+export const SourceListItem = memo(SourceListItemComponent)

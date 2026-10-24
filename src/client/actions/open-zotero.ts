@@ -39,19 +39,17 @@ export function parseRefIdentity(ref: string): ParsedRefIdentity | null {
   let result: ParsedRefIdentity | null = null
   if (match?.groups) {
     const { libraryType, libraryId, kind, key } = match.groups
-    if (libraryType && libraryId && kind && key) {
-      result = {
-        libraryType: libraryType as 'user' | 'group',
-        libraryId,
-        kind: kind as RefKind,
-        key,
-      }
+    result = {
+      libraryType: libraryType as 'user' | 'group',
+      libraryId: libraryId!,
+      kind: kind as RefKind,
+      key: key!,
     }
   }
 
   if (refIdentityCache.size >= REF_IDENTITY_CACHE_LIMIT) {
     const firstKey = refIdentityCache.keys().next().value
-    if (firstKey !== undefined) refIdentityCache.delete(firstKey)
+    refIdentityCache.delete(firstKey!)
   }
   refIdentityCache.set(ref, result)
   return result

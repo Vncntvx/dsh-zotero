@@ -430,4 +430,19 @@ describe('ZoteroSettingsSection', () => {
 
     controller.dispose()
   })
+
+  it('switches internal tab when uncontrolled (no onTabChange)', () => {
+    scope = fakeScope({ value: {} })
+    const controller = new ZoteroCardController(scope)
+    const face = controller.inject()
+    const state = face.hooks.zoteroCard.getSnapshot()
+
+    render(<ZoteroSettingsForm t={makeTranslate(zh)} state={state} actions={face} />)
+
+    const searchTab = screen.getByRole('tab', { name: zh.tabSearch })
+    fireEvent.click(searchTab)
+    expect(screen.getByText(zh.groupSearchQuery)).toBeDefined()
+
+    controller.dispose()
+  })
 })

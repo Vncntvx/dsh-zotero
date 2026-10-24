@@ -25,9 +25,18 @@ export interface CopyButtonProps {
   readonly className?: string
   /** Optional hover tooltip for extra guidance. */
   readonly title?: string
+  /** Whether the copy action is disabled. */
+  readonly disabled?: boolean
 }
 
-export function CopyButton({ value, label, copiedLabel, className, title }: CopyButtonProps) {
+export function CopyButton({
+  value,
+  label,
+  copiedLabel,
+  className,
+  title,
+  disabled,
+}: CopyButtonProps) {
   const [copied, setCopied] = useState(false)
   // A click epoch: a slow clipboard promise resolving after a newer click
   // (or after unmount) must not flip the flag for a value it did not write.
@@ -47,8 +56,10 @@ export function CopyButton({ value, label, copiedLabel, className, title }: Copy
       className={className ?? css.lineAction}
       aria-label={label}
       title={title ?? label}
+      disabled={disabled}
       onClick={(e) => {
         e.stopPropagation()
+        if (disabled) return
         const mine = (epoch.current += 1)
         void writeClipboard(value).then((ok) => {
           // Only a successful write earns the feedback; a denial (iframe

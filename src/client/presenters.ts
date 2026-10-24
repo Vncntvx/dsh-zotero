@@ -190,3 +190,18 @@ function matchedFieldsOf(value: unknown): readonly EvidenceField[] | undefined {
 export function joinNonEmpty(...parts: Array<string | number | undefined>): string {
   return parts.filter((part) => part !== undefined && part !== '').join(' · ')
 }
+
+/**
+ * Format a Date or timestamp as `HH:MM:SS` (default) or `HH:MM`.
+ * Shared across diagnostics, sources tab, and export artifacts.
+ */
+export function formatTime(dateOrMs: Date | number, includeSeconds = true): string {
+  const date = typeof dateOrMs === 'number' ? new Date(dateOrMs) : dateOrMs
+  const pad = (value: number): string => String(value).padStart(2, '0')
+  const hours = pad(date.getHours())
+  const minutes = pad(date.getMinutes())
+  if (!includeSeconds) {
+    return `${hours}:${minutes}`
+  }
+  return `${hours}:${minutes}:${pad(date.getSeconds())}`
+}

@@ -52,8 +52,8 @@ export function ScholarlySettingsForm(props: ScholarlySettingsFormProps): ReactN
           <p className={css.groupDescription}>{t('groupScholarlyAuthDesc')}</p>
         </div>
         <div className={css.fields}>
-          {renderValueField(t, state, actions, 'enabled')}
-          {renderValueField(t, state, actions, 'email')}
+          {renderValueField(t, state, actions, 'enabled', false)}
+          {renderValueField(t, state, actions, 'email', false)}
           {renderSecretField(t, state, actions, 's2Key')}
           {renderSecretField(t, state, actions, 'ncbiKey')}
           {renderSecretField(t, state, actions, 'openalexKey')}
@@ -79,7 +79,7 @@ function renderValueField(
   state: ScholarlyCardState,
   actions: ScholarlyFormActions,
   key: ScholarlyTextKey | ScholarlyNumericKey | 'enabled',
-  numeric = false,
+  numeric: boolean,
 ): ReactNode {
   const field = state[key]
   const labelKey = `scholarly${key.charAt(0).toUpperCase()}${key.slice(1)}` as ZoteroLocaleKey

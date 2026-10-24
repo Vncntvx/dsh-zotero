@@ -24,7 +24,7 @@ import type {
   SourceCoverage,
   SupportedLocalLibrary,
 } from './model.ts'
-import type { ZoteroResolvedScope } from '../../types.ts'
+import type { ZoteroResolvedScope } from '../../contract.ts'
 
 /** One decoded search row (with Zotero's attachment selection when present). */
 interface SearchRowMeta {

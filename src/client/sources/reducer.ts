@@ -48,7 +48,7 @@ import type {
   SupportedLocalLibrary,
 } from './model.ts'
 import { evidenceMatchOf, normalizeRefKey, serverIdOf } from './evidence-match.ts'
-import type { ZoteroResolvedScope } from '../../types.ts'
+import type { ZoteroResolvedScope } from '../../contract.ts'
 
 export interface BuildSourceWorkspaceOptions {
   /** The connected instance's Server ID from the status probe, when known. */

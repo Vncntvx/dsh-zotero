@@ -128,8 +128,9 @@ export function SourceSidebar({
   // keeps a narrow strip paging a useful distance.
   const pageFilters = (direction: -1 | 1): void => {
     const el = filterBarRef.current
-    if (el === null) return
-    el.scrollBy({ left: direction * Math.max(el.clientWidth - 60, 120) })
+    if (el) {
+      el.scrollBy({ left: direction * Math.max(el.clientWidth - 60, 120) })
+    }
   }
 
   const focusVisible = (index: number): void => {
@@ -142,11 +143,22 @@ export function SourceSidebar({
   const moveSelection = (nextIndex: number): void => {
     if (visible.length === 0) return
     const clamped = Math.max(0, Math.min(visible.length - 1, nextIndex))
-    const current = visible[clamped]
-    if (current === undefined) return
+    const current = visible[clamped]!
     setSelection({ key: current.key, focusIndex: clamped })
     focusVisible(clamped)
   }
+
+  const handleItemSelect = useCallback(
+    (key: string, index: number) => {
+      setSelection({ key, focusIndex: index })
+      setMobilePane('detail')
+    },
+    [setSelection, setMobilePane],
+  )
+
+  const setOptionRef = useCallback((index: number, el: HTMLDivElement | null) => {
+    optionRefs.current[index] = el
+  }, [])
 
   const onKeyDown = (event: React.KeyboardEvent): void => {
     const currentIndex = Math.max(0, Math.min(selection.focusIndex, visible.length - 1))
@@ -258,15 +270,11 @@ export function SourceSidebar({
             <SourceListItem
               key={item.key}
               item={item}
+              index={index}
               selected={item.key === selectedKey}
               focused={index === selection.focusIndex}
-              optionRef={(el) => {
-                optionRefs.current[index] = el
-              }}
-              onSelect={() => {
-                setSelection({ key: item.key, focusIndex: index })
-                setMobilePane('detail')
-              }}
+              setOptionRef={setOptionRef}
+              onSelect={handleItemSelect}
               t={t}
             />
           ))}
