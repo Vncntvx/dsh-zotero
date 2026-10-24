@@ -28,6 +28,7 @@ import {
 import type { ResolvedConfig } from '../config.js'
 import { citekeyOf } from '../normalize.js'
 import { assertPublicationsSupported } from '../refs.js'
+import { isItemTypeIdentifier } from '../ref-grammar.js'
 import { boundedPresentationMeta, projectSearchMeta } from '../presentation-meta.js'
 import { formatSearchLine, metaRecordOf } from './present.js'
 import { assertIntInRange, invalid, LIBRARY_SCHEMA, parseLibrary } from './validate.js'
@@ -319,7 +320,7 @@ function buildRequest(args: SearchArgs, config: ResolvedConfig): ZoteroSearchReq
     invalid(INCLUDE_TRASHED_SCOPE_MESSAGE)
   }
   for (const itemType of args.itemTypes ?? []) {
-    if (!/^[A-Za-z][A-Za-z0-9]*$/.test(itemType)) {
+    if (!isItemTypeIdentifier(itemType)) {
       invalid(`${ITEM_TYPES_LITERAL_MESSAGE}; got "${itemType}"`)
     }
   }

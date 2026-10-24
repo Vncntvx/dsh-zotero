@@ -25,8 +25,8 @@ import {
   ZOTERO_UNEXPECTED,
   ZoteroError,
 } from '../errors.js'
-import { ZOTERO_SERVER_ID_HEADER } from '../constants.js'
-import { requireAgreedServerId } from './identity.js'
+import { isItemTypeIdentifier } from '../ref-grammar.js'
+import { serverIdFromHeaders } from './identity.js'
 import { asRecord, asString, isObjectKey } from '../json.js'
 import { normalizeScopeEntry, type ScopeNameEntry } from '../normalize.js'
 import {
@@ -99,10 +99,10 @@ export async function runBrowse(
     throw new ZoteroError(ITEM_TYPE_SCOPE_MESSAGE, ZOTERO_INVALID_ARGUMENT)
   }
   if (request.kind === 'itemFields') {
-    if (request.itemType === undefined || !/^[A-Za-z][A-Za-z0-9]*$/.test(request.itemType)) {
+    if (request.itemType === undefined || !isItemTypeIdentifier(request.itemType)) {
       throw new ZoteroError(ITEM_FIELDS_ITEM_TYPE_MESSAGE, ZOTERO_INVALID_ARGUMENT)
     }
-    return await browseItemFields(deps, request, signal)
+    return await browseItemFields(directory, request, signal)
   }
   if ((request.q !== undefined || request.match !== undefined) && request.kind !== 'tags') {
     throw new ZoteroError(Q_MATCH_SCOPE_MESSAGE, ZOTERO_INVALID_ARGUMENT)
@@ -143,7 +143,7 @@ export async function runBrowse(
     case 'tags':
       return await browseTags(deps, directory, request, signal)
     case 'itemTypes':
-      return await browseItemTypes(deps, request, signal)
+      return await browseItemTypes(directory, request, signal)
     default:
       throw new ZoteroError(
         unsupportedBrowseKindMessage((request as { kind: string }).kind),
@@ -201,7 +201,7 @@ async function browseLibraries(
         signal,
       },
     )
-    serverId = headers.get(ZOTERO_SERVER_ID_HEADER) ?? undefined
+    serverId = serverIdFromHeaders(headers)
     const groups = requireArrayBody(json, 'groups')
     for (const row of groups) {
       // Zotero serializes each group as `{ id, version, links, meta, data: {
@@ -270,7 +270,7 @@ async function browseCollections(
   const params = new URLSearchParams()
   setPage(params, request.offset, request.limit)
   const { json, headers } = await deps.client.getJson<unknown>(listPath, params, { signal })
-  const serverId = headers.get(ZOTERO_SERVER_ID_HEADER) ?? undefined
+  const serverId = serverIdFromHeaders(headers)
   const total = requireTotalResults(headers, 'collections')
   const rows = requireArrayBody(json, 'collections')
   // Ancestor names resolve in parallel: each row's chain is its own TTL-cached
@@ -332,7 +332,7 @@ async function browseSavedSearches(
   const { json, headers } = await deps.client.getJson<unknown>(`${prefix}/searches`, params, {
     signal,
   })
-  const serverId = headers.get(ZOTERO_SERVER_ID_HEADER) ?? undefined
+  const serverId = serverIdFromHeaders(headers)
   const rawRows = requireArrayBody(json, 'saved searches')
   const total = requireTotalResults(headers, 'saved searches')
   const entries: ScopeNameEntry[] = rawRows.map((row) => normalizeScopeEntry(row))
@@ -425,7 +425,7 @@ async function browseTags(
     signal,
     ...(serverIdClaim !== undefined ? { serverId: serverIdClaim } : {}),
   })
-  const serverId = headers.get(ZOTERO_SERVER_ID_HEADER) ?? serverIdClaim
+  const serverId = serverIdFromHeaders(headers, serverIdClaim)
   const rawRows = requireArrayBody(json, 'tags')
   const total = requireTotalResults(headers, 'tags')
   const items = rawRows.map((row) => {
@@ -460,23 +460,12 @@ async function browseTags(
 }
 
 async function browseItemTypes(
-  deps: { client: ZoteroHttpClient },
+  directory: ScopeDirectory,
   request: ZoteroBrowseRequest,
   signal?: AbortSignal,
 ): Promise<ZoteroBrowseResult> {
-  const { json, headers } = await deps.client.getJson<unknown>('itemTypes', undefined, { signal })
-  const serverId = headers.get(ZOTERO_SERVER_ID_HEADER) ?? undefined
-  const raw = requireArrayBody(json, 'item types')
-    .map((row) => {
-      const rec = asRecord(row)
-      const it = asString(rec?.itemType) ?? asString(rec?.name)
-      if (it === undefined) return null
-      const loc = asString(rec?.localized) ?? asString(rec?.displayName)
-      return { itemType: it, ...(loc ? { localized: loc } : {}) }
-    })
-    .filter((x): x is { itemType: string; localized?: string } => x !== null)
-  raw.sort((a, b) => a.itemType.localeCompare(b.itemType))
-  return clientSlicedPage('itemTypes', raw, request, serverId)
+  const { items, serverId } = await directory.getItemTypes(signal)
+  return clientSlicedPage('itemTypes', items, request, serverId)
 }
 
 /**
@@ -487,47 +476,11 @@ async function browseItemTypes(
  * what exists and ask for it by name.
  */
 async function browseItemFields(
-  deps: { client: ZoteroHttpClient },
+  directory: ScopeDirectory,
   request: ZoteroBrowseRequest,
   signal?: AbortSignal,
 ): Promise<ZoteroBrowseResult> {
-  const itemType = request.itemType!
-  const params = new URLSearchParams()
-  params.set('itemType', itemType)
-  const [fields, creatorTypes] = await Promise.all([
-    deps.client.getJson<unknown>('itemTypeFields', params, { signal }),
-    deps.client.getJson<unknown>('itemTypeCreatorTypes', params, { signal }),
-  ])
-  // Two parallel reads compose one result, so they must not straddle an
-  // instance switch: the rows would be attributed to whichever answered first.
-  const serverId = requireAgreedServerId(
-    fields.headers.get(ZOTERO_SERVER_ID_HEADER),
-    creatorTypes.headers.get(ZOTERO_SERVER_ID_HEADER),
-  )
-  const fieldItems: ZoteroItemFieldInfo[] = []
-  for (const row of requireArrayBody(fields.json, 'item type fields')) {
-    const rec = asRecord(row)
-    const field = asString(rec?.field)
-    if (field === undefined) continue
-    const localized = asString(rec?.localized)
-    fieldItems.push({ field, ...(localized !== undefined ? { localized } : {}) })
-  }
-  fieldItems.sort((a, b) => a.field.localeCompare(b.field))
-
-  const creatorTypeItems: ZoteroCreatorTypeInfo[] = []
-  for (const row of requireArrayBody(creatorTypes.json, 'creator types')) {
-    const rec = asRecord(row)
-    const creatorType = asString(rec?.creatorType)
-    if (creatorType === undefined) continue
-    const localized = asString(rec?.localized)
-    creatorTypeItems.push({ creatorType, ...(localized !== undefined ? { localized } : {}) })
-  }
-  creatorTypeItems.sort((a, b) => a.creatorType.localeCompare(b.creatorType))
-
-  const items: (ZoteroItemFieldInfo | ZoteroCreatorTypeInfo)[] = [
-    ...fieldItems,
-    ...creatorTypeItems,
-  ]
+  const { items, serverId } = await directory.getItemFields(request.itemType!, signal)
   return clientSlicedPage('itemFields', items, request, serverId)
 }
 

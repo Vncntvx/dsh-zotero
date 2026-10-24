@@ -1,9 +1,8 @@
 /** Read and verify the complete object graph for a recoverable item deletion. */
 import type { ZoteroHttpClient } from '../http-client.js'
-import { ZOTERO_SERVER_ID_HEADER } from '../constants.js'
 import { asRecord, asString, isNonNegativeSafeInteger, isObjectKey } from '../json.js'
 import { ZoteroError, ZOTERO_UNEXPECTED } from '../errors.js'
-import { assertServerIdMatches } from './identity.js'
+import { assertServerIdMatches, serverIdFromHeaders } from './identity.js'
 import { fetchChildrenForTrash } from './children-wire.js'
 
 export interface TrashSnapshot {
@@ -52,7 +51,7 @@ export async function readTrashSnapshot(
     serverId,
     signal,
   })
-  assertServerIdMatches(headers.get(ZOTERO_SERVER_ID_HEADER), serverId)
+  assertServerIdMatches(serverIdFromHeaders(headers), serverId)
   return snapshotOf(json, key)
 }
 

@@ -18,6 +18,7 @@ import { boundedPresentationMeta } from '../presentation-meta.js'
 import { metaRecordOf } from './present.js'
 import { browseRowOf, BROWSE_KINDS, type BrowseRow } from '../browse-rows.js'
 import { assertPublicationsSupported } from '../refs.js'
+import { isItemTypeIdentifier } from '../ref-grammar.js'
 import {
   assertIntInRange,
   assertNonBlank,
@@ -241,7 +242,7 @@ function buildRequest(args: BrowseArgs, config: { maxBrowseResults: number }): Z
     invalid(ITEM_TYPE_SCOPE_MESSAGE)
   }
   if (kind === 'itemFields') {
-    if (itemType === undefined || !/^[A-Za-z][A-Za-z0-9]*$/.test(itemType)) {
+    if (itemType === undefined || !isItemTypeIdentifier(itemType)) {
       invalid(ITEM_FIELDS_ITEM_TYPE_MESSAGE)
     }
   }

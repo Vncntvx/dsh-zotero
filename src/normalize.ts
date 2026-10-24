@@ -153,6 +153,8 @@ export function normalizeSearchItem(json: unknown, ctx?: NormalizeContext): Zote
     item.attachmentSize = attachment.attachmentSize
   const extra = asString(data?.extra)?.trim()
   if (extra !== undefined && extra !== '') item.extra = extra
+  const doi = asString(data?.DOI)?.trim()
+  if (doi !== undefined && doi !== '') item.doi = doi
   return item
 }
 

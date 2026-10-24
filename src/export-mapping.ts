@@ -9,7 +9,7 @@
  * @module dsh-zotero/export-mapping
  */
 
-import { bibtexFieldOf } from './export-items.js'
+import { bibtexFieldOf, scanBibtexToken } from './export-items.js'
 import { asRecord, asString } from './json.js'
 import { citekeyOf } from './normalize.js'
 import { formatRef } from './refs.js'
@@ -52,9 +52,7 @@ const RIS_TITLE = /^TI  - (.+?)\r?$/m
 
 /** The entry's citation key: the run after `@type{` up to a comma, brace, or whitespace. */
 function entryKeyOf(text: string, from: number): string | undefined {
-  let end = from
-  while (end < text.length && !/[,\s{}]/.test(text[end]!)) end += 1
-  return end === from ? undefined : text.slice(from, end)
+  return scanBibtexToken(text, from)
 }
 
 /**

@@ -21,9 +21,9 @@ import {
   LOCAL_PROVIDER_ID,
   ZOTERO_API_VERSION_HEADER,
   ZOTERO_SCHEMA_VERSION_HEADER,
-  ZOTERO_SERVER_ID_HEADER,
   ZOTERO_VERSION_HEADER,
 } from '../constants.js'
+import { serverIdFromHeaders } from './identity.js'
 import { PERSONAL_LIBRARY } from '../refs.js'
 import { ZOTERO_DIAGNOSIS_OK } from '../contract.js'
 import { errorChain } from '@deepseek-ai/dsh-llm'
@@ -238,7 +238,7 @@ export class LocalApiProvider implements ZoteroProvider {
   async status(signal?: AbortSignal): Promise<ZoteroStatus> {
     try {
       const { headers } = await this.client.get('', undefined, { signal })
-      const serverId = headers.get(ZOTERO_SERVER_ID_HEADER) ?? undefined
+      const serverId = serverIdFromHeaders(headers)
       // The write block rides only when the provider wires the capability at
       // all; its absence is the statement "this provider serves no writes".
       const write =

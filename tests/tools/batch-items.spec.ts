@@ -564,16 +564,16 @@ describe('zotero_batch_items request construction and previews', () => {
   it('previews each deletion, keeping missing targets and child counts explicit', async () => {
     const get = vi
       .fn()
-      .mockResolvedValueOnce({ title: 'First item' })
-      .mockResolvedValueOnce({})
-      .mockRejectedValueOnce(new ZoteroError('missing', ZOTERO_NOT_FOUND))
-    const children = vi
-      .fn()
-      .mockResolvedValueOnce({ attachments: { total: 2 }, notes: { total: 1 } })
+      .mockResolvedValueOnce({
+        title: 'First item',
+        attachments: { total: 2 },
+        notes: { total: 1 },
+      })
       // Zero children, reported through the notes collection alone: the count
       // must not invent an attachments listing the server never sent.
       .mockResolvedValueOnce({ notes: { total: 0 } })
-    const service = { get, children } as unknown as ZoteroService
+      .mockRejectedValueOnce(new ZoteroError('missing', ZOTERO_NOT_FOUND))
+    const service = { get } as unknown as ZoteroService
     const previews = await previewBatchItems(
       service,
       [ITEM_REF_1, ITEM_REF_2, ITEM_REF_3],
@@ -585,7 +585,6 @@ describe('zotero_batch_items request construction and previews', () => {
       { ref: ITEM_REF_3 },
     ])
     expect(get).toHaveBeenCalledTimes(3)
-    expect(children).toHaveBeenCalledTimes(2)
   })
 
   it('drops only the child count when the target itself is gone or ambiguous', async () => {
@@ -593,8 +592,7 @@ describe('zotero_batch_items request construction and previews', () => {
     // ambiguous target degrades it to undefined — the same closed rule
     // `degradable.ts` states — while the rest of the preview survives.
     const get = vi.fn().mockResolvedValue({ title: 'An item' })
-    const children = vi.fn().mockRejectedValue(new ZoteroError('gone', ZOTERO_NOT_FOUND))
-    const service = { get, children } as unknown as ZoteroService
+    const service = { get } as unknown as ZoteroService
     const previews = await previewBatchItems(service, [ITEM_REF_1], undefined)
     expect(previews).toEqual([{ ref: ITEM_REF_1, title: 'An item', childCount: undefined }])
   })
@@ -602,7 +600,6 @@ describe('zotero_batch_items request construction and previews', () => {
   it('does not hide non-degradable preview failures', async () => {
     const service = {
       get: vi.fn().mockRejectedValue(new ZoteroError('protocol changed', ZOTERO_UNEXPECTED)),
-      children: vi.fn(),
     } as unknown as ZoteroService
     await expect(previewBatchItems(service, [ITEM_REF_1], undefined)).rejects.toMatchObject({
       code: ZOTERO_UNEXPECTED,
@@ -614,9 +611,8 @@ describe('zotero_batch_items request construction and previews', () => {
     // bare `catch {}`, so a timeout or a transport error silently under-
     // reported the deletion's blast radius and the user approved a plan
     // that claimed fewer children than the item has.
-    const get = vi.fn().mockResolvedValue({ title: 'An item' })
-    const children = vi.fn().mockRejectedValue(new Error('children unavailable'))
-    const service = { get, children } as unknown as ZoteroService
+    const get = vi.fn().mockRejectedValue(new Error('children unavailable'))
+    const service = { get } as unknown as ZoteroService
     await expect(previewBatchItems(service, [ITEM_REF_1], undefined)).rejects.toThrow(
       'children unavailable',
     )
@@ -627,9 +623,8 @@ describe('zotero_batch_items request construction and previews', () => {
     // surface as TOOL_ABORTED, never as a plan card with a missing count.
     const caller = new AbortController()
     caller.abort()
-    const get = vi.fn().mockResolvedValue({ title: 'An item' })
-    const children = vi.fn().mockRejectedValue(new Error('late failure'))
-    const service = { get, children } as unknown as ZoteroService
+    const get = vi.fn().mockRejectedValue(new Error('late failure'))
+    const service = { get } as unknown as ZoteroService
     await expect(previewBatchItems(service, [ITEM_REF_1], caller.signal)).rejects.toBeInstanceOf(
       HarnessError,
     )

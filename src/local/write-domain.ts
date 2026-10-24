@@ -31,7 +31,6 @@ import type { ZoteroHttpClient } from '../http-client.js'
 import {
   ZOTERO_LIBRARY_VERSION_HEADER,
   ZOTERO_LIST_PAGE_ROWS,
-  ZOTERO_SERVER_ID_HEADER,
   ZOTERO_WRITE_OBJECT_BATCH,
 } from '../constants.js'
 import {
@@ -77,7 +76,7 @@ import {
   requireWritableRef,
 } from '../refs.js'
 import { nextOffsetOrFail, requireArrayBody, requireTotalResults, setPage } from './pagination.js'
-import { assertServerIdMatches } from './identity.js'
+import { assertServerIdMatches, serverIdFromHeaders } from './identity.js'
 import {
   normalizeCreator,
   requireCreatableItemType,
@@ -281,7 +280,7 @@ async function readLibraryVersion(
   if (libraryVersion === undefined) {
     throw new ZoteroError(WRITE_PRECONDITION_READ_LIBRARY_VERSION_MESSAGE, ZOTERO_UNEXPECTED)
   }
-  const observed = response.headers.get(ZOTERO_SERVER_ID_HEADER)
+  const observed = serverIdFromHeaders(response.headers)
   assertServerIdMatches(observed, serverId)
   return { libraryVersion, serverId: observed ?? serverId }
 }
@@ -423,7 +422,7 @@ async function readItem<S>(
   if (itemType === undefined || itemType === '') {
     throw new ZoteroError(WRITE_ITEM_TYPE_MISSING_MESSAGE, ZOTERO_UNEXPECTED)
   }
-  const observedServerId = headers.get(ZOTERO_SERVER_ID_HEADER)
+  const observedServerId = serverIdFromHeaders(headers)
   assertServerIdMatches(observedServerId, serverId)
   return {
     ...readState(data),
@@ -469,7 +468,7 @@ async function readRecordForWrite(
       ZOTERO_UNEXPECTED,
     )
   }
-  const observed = headers.get(ZOTERO_SERVER_ID_HEADER)
+  const observed = serverIdFromHeaders(headers)
   assertServerIdMatches(observed, serverId)
   return {
     data,
@@ -663,19 +662,22 @@ function objectRefusedError(refused: ZoteroWriteObjectFailure): ZoteroError {
 
 type CommittedUnverifiedKind = 'note' | 'item' | 'collection' | 'search'
 
+export interface CommittedUnverifiedOptions {
+  kind: CommittedUnverifiedKind
+  serverId: string
+  batch?: ZoteroBatchWrite
+  key?: string
+  version?: number
+  reason?: 'saved-state-unverified' | 'commit-unknown'
+}
+
 /**
  * The shared non-retryable outcome for non-idempotent creates. Notes, items,
  * and collections share one shape; only the ref builder differs (items and
  * notes are item refs, collections are collection refs).
  */
-function committedUnverified(
-  kind: CommittedUnverifiedKind,
-  batch: ZoteroBatchWrite | undefined,
-  serverId: string,
-  key?: string,
-  version?: number,
-  reason: 'saved-state-unverified' | 'commit-unknown' = 'saved-state-unverified',
-): ZoteroWriteCommittedUnverified {
+function committedUnverified(options: CommittedUnverifiedOptions): ZoteroWriteCommittedUnverified {
+  const { kind, batch, serverId, key, version, reason = 'saved-state-unverified' } = options
   const safeKey = key !== undefined && isObjectKey(key) ? key : undefined
   const ref =
     safeKey === undefined
@@ -760,7 +762,7 @@ function settleSingleEntryBatch<P>(
   ) {
     return {
       status: 'unverified',
-      result: committedUnverified(kind, batch, serverId, undefined, undefined, 'commit-unknown'),
+      result: committedUnverified({ kind, batch, serverId, reason: 'commit-unknown' }),
     }
   }
   const refused = batch.failed['0']
@@ -788,28 +790,28 @@ function settleSingleEntryBatch<P>(
   ) {
     return {
       status: 'unverified',
-      result: committedUnverified(kind, batch, serverId, keyConflict ? undefined : key),
+      result: committedUnverified({ kind, batch, serverId, key: keyConflict ? undefined : key }),
     }
   }
   if (key === undefined) {
-    return { status: 'unverified', result: committedUnverified(kind, batch, serverId) }
+    return { status: 'unverified', result: committedUnverified({ kind, batch, serverId }) }
   }
   const version = isNonNegativeSafeInteger(written?.version) ? written.version : undefined
   if (version === undefined) {
-    return { status: 'unverified', result: committedUnverified(kind, batch, serverId, key) }
+    return { status: 'unverified', result: committedUnverified({ kind, batch, serverId, key }) }
   }
   const data = asRecord(written.data)
   if (data === undefined || data.key !== key || data.version !== version) {
     return {
       status: 'unverified',
-      result: committedUnverified(kind, batch, serverId, key, version),
+      result: committedUnverified({ kind, batch, serverId, key, version }),
     }
   }
   const payload = proven(data, key, version)
   if (payload === undefined) {
     return {
       status: 'unverified',
-      result: committedUnverified(kind, batch, serverId, key, version),
+      result: committedUnverified({ kind, batch, serverId, key, version }),
     }
   }
   return {
@@ -883,14 +885,11 @@ export async function createNote(
       })
     } catch (error) {
       if (error instanceof ZoteroWriteCommitUnknownError) {
-        return committedUnverified(
-          'note',
-          undefined,
+        return committedUnverified({
+          kind: 'note',
           serverId,
-          undefined,
-          undefined,
-          'commit-unknown',
-        )
+          reason: 'commit-unknown',
+        })
       }
       throw error
     }
@@ -1171,7 +1170,7 @@ async function assertNoSiblingWithName(
     })
     // Identity before shape: a response from another instance is never this
     // call's answer, so it is refused before its body is judged.
-    assertServerIdMatches(headers.get(ZOTERO_SERVER_ID_HEADER), serverId)
+    assertServerIdMatches(serverIdFromHeaders(headers), serverId)
     const rows = requireArrayBody(json, 'the collections listing')
     const total = requireTotalResults(headers, 'the collections listing')
     for (const row of rows) {
@@ -1232,14 +1231,11 @@ export async function createCollection(
       })
     } catch (error) {
       if (error instanceof ZoteroWriteCommitUnknownError) {
-        return committedUnverified(
-          'collection',
-          undefined,
+        return committedUnverified({
+          kind: 'collection',
           serverId,
-          undefined,
-          undefined,
-          'commit-unknown',
-        )
+          reason: 'commit-unknown',
+        })
       }
       throw error
     }
@@ -1405,14 +1401,11 @@ export async function createSavedSearch(
       })
     } catch (error) {
       if (error instanceof ZoteroWriteCommitUnknownError)
-        return committedUnverified(
-          'search',
-          undefined,
+        return committedUnverified({
+          kind: 'search',
           serverId,
-          undefined,
-          undefined,
-          'commit-unknown',
-        )
+          reason: 'commit-unknown',
+        })
       throw error
     }
     const settled = settleSingleEntryBatch(batch, 'search', serverId, (data) => {
@@ -1553,14 +1546,11 @@ export async function createItem(
       })
     } catch (error) {
       if (error instanceof ZoteroWriteCommitUnknownError) {
-        return committedUnverified(
-          'item',
-          undefined,
+        return committedUnverified({
+          kind: 'item',
           serverId,
-          undefined,
-          undefined,
-          'commit-unknown',
-        )
+          reason: 'commit-unknown',
+        })
       }
       throw error
     }
@@ -1949,7 +1939,7 @@ export async function batchItems(
           failedResults.push({
             op: 'create',
             index: i,
-            code: err instanceof ZoteroError ? err.code : 'ZOTERO_UNEXPECTED',
+            code: err instanceof ZoteroError ? err.code : ZOTERO_UNEXPECTED,
             message: err instanceof Error ? err.message : String(err),
           })
         }
@@ -2039,7 +2029,7 @@ export async function batchItems(
       failedResults.push({
         op: 'update',
         ref: itemRef(u.ref.key, serverId),
-        code: err instanceof ZoteroError ? err.code : 'ZOTERO_UNEXPECTED',
+        code: err instanceof ZoteroError ? err.code : ZOTERO_UNEXPECTED,
         message: err instanceof Error ? err.message : String(err),
       })
     }
@@ -2092,7 +2082,7 @@ export async function batchItems(
       failedResults.push({
         op: 'delete',
         ref: itemRef(delRef.key, serverId),
-        code: err instanceof ZoteroError ? err.code : 'ZOTERO_UNEXPECTED',
+        code: err instanceof ZoteroError ? err.code : ZOTERO_UNEXPECTED,
         message: err instanceof Error ? err.message : String(err),
         ...(completedRefs.length > 0 ? { completedRefs } : {}),
       })

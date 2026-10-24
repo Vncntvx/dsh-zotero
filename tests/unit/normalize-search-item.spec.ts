@@ -30,6 +30,7 @@ describe('normalizeSearchItem', () => {
       bestAttachmentRef: 'zotero://user/0/attachment/WXYZ6789?server=S1',
       bestAttachmentType: 'application/pdf',
       attachmentSize: 1234567,
+      doi: '10.48550/arXiv.2307.08691',
     })
   })
 

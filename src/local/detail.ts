@@ -11,7 +11,7 @@
  */
 
 import type { ZoteroHttpClient } from '../http-client.js'
-import { ZOTERO_SERVER_ID_HEADER } from '../constants.js'
+import { serverIdFromHeaders } from './identity.js'
 import { asRecord, asString } from '../json.js'
 import { ZOTERO_INVALID_ARGUMENT, ZoteroError } from '../errors.js'
 import type { NormalizeContext } from '../normalize.js'
@@ -76,7 +76,7 @@ export async function getItem(
     signal,
     serverId: ref.serverId,
   })
-  const serverId = parent.headers.get(ZOTERO_SERVER_ID_HEADER) ?? ref.serverId
+  const serverId = serverIdFromHeaders(parent.headers, ref.serverId)
   const includes = INCLUDE_ORDER.filter((kind) => request.include.has(kind))
   const keys = collectionKeysOf(parent.json)
   // Children and the collections listing are independent once the parent
@@ -131,7 +131,7 @@ export async function children(
     signal,
     serverId: ref.serverId,
   })
-  const serverId = row.headers.get(ZOTERO_SERVER_ID_HEADER) ?? ref.serverId
+  const serverId = serverIdFromHeaders(row.headers, ref.serverId)
   const ctx: NormalizeContext = { library, serverId: serverId ?? undefined }
   const data = asRecord(asRecord(row.json)?.data)
   const itemType = asString(data?.itemType) ?? ''
@@ -149,7 +149,7 @@ export async function children(
     if (!request.include.has('annotations')) {
       return {
         ref: formatRef(refForLibrary(library, 'attachment', ref.key, serverId)),
-        ...(itemType !== '' ? { itemType } : {}),
+        itemType,
         ...(ctx.serverId !== undefined ? { serverId: ctx.serverId } : {}),
       }
     }
@@ -162,7 +162,7 @@ export async function children(
     )
     return {
       ref: formatRef(refForLibrary(library, 'attachment', ref.key, serverId)),
-      ...(itemType !== '' ? { itemType } : {}),
+      itemType,
       annotations: childCollection(partitioned.annotations, deps.limits.maxAnnotationRecords),
       ...(ctx.serverId !== undefined ? { serverId: ctx.serverId } : {}),
     }

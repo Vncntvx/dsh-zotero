@@ -7,8 +7,8 @@
 
 import { access } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
-import { ZOTERO_SERVER_ID_HEADER } from '../constants.js'
 import type { ZoteroHttpClient } from '../http-client.js'
+import { serverIdFromHeaders } from './identity.js'
 import {
   errnoCodeOf,
   ZOTERO_FILE_MISSING,
@@ -126,7 +126,7 @@ export async function getAttachmentLocation(
     throw new ZoteroError(attachmentTypeMessage(itemType), ZOTERO_NO_ATTACHMENT)
   }
   const attachment = normalizeAttachmentRecord(item.json)
-  const serverId = item.headers.get(ZOTERO_SERVER_ID_HEADER) ?? local.serverId
+  const serverId = serverIdFromHeaders(item.headers, local.serverId)
   const formattedRef = formatRef(
     refForLibrary(local.library as SupportedLocalLibrary, 'attachment', attachment.key, serverId),
   )

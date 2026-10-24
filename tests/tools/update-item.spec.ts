@@ -98,11 +98,16 @@ describe('updateItemPlan', () => {
     expect(plan).toContain('an invalid field refuses the write before any PATCH')
   })
 
-  it('states no fields when the caller sent an empty set', () => {
+  it('states no fields when the caller sent an empty set or omitted set', () => {
     const plan = updateItemPlan({ ref: REF, set: {} })
     expect(plan).not.toContain('- title:')
     expect(plan).not.toContain('- date:')
     expect(plan).toContain('- Item: zotero://user/0/item/ITEMABC1')
+    const omitted = updateItemPlan({
+      ref: REF,
+      set: undefined as unknown as Record<string, string>,
+    })
+    expect(omitted).toContain('- Item: zotero://user/0/item/ITEMABC1')
   })
 })
 

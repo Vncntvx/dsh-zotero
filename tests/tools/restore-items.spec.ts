@@ -112,10 +112,19 @@ describe('zotero_restore_items', () => {
         code: ZOTERO_NOT_FOUND,
         message: 'Object no longer exists',
       },
+      {
+        op: 'update' as const,
+        index: 3,
+        code: 'ZOTERO_UNEXPECTED',
+        message: 'Pre-flight parse error',
+      },
     ]
     const content = renderRestoreItems({ refs: [] }, { kind: 'restored', restored, failed })
     const text = content.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('\n')
-    for (const entry of [...restored, ...failed]) expect(text).toContain(entry.ref)
+    for (const entry of restored) expect(text).toContain(entry.ref)
+    expect(text).toContain(REF_1)
+    expect(text).toContain(REF_2)
+    expect(text).toContain('index 3')
     for (const failure of failed) {
       expect(text).toContain(failure.code)
       expect(text).toContain(failure.message)
@@ -125,7 +134,7 @@ describe('zotero_restore_items', () => {
       renderRestoreItems({ refs: [] }, { kind: 'restored', restored: [], failed }),
     ).toContainEqual({
       type: 'text',
-      text: expect.stringContaining('Restored 0 item(s); 2 failed.'),
+      text: expect.stringContaining('Restored 0 item(s); 3 failed.'),
     })
   })
 

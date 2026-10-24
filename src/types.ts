@@ -19,6 +19,16 @@ import type { ChangeSectionKey, ChangeTotalKey, DeletionSectionKey } from './cha
 import type { EvidenceField, EvidenceSource } from './evidence-item.js'
 
 export type { EvidenceField, EvidenceSource } from './evidence-item.js'
+import type {
+  PersonalLibrary,
+  GroupLibrary,
+  SupportedLocalLibrary,
+  ZoteroResolvedScope,
+} from './contract.js'
+export type { PersonalLibrary, GroupLibrary, SupportedLocalLibrary, ZoteroResolvedScope }
+export { ZOTERO_CREATABLE_ITEM_TYPES, ZOTERO_UPDATABLE_ITEM_FIELDS } from './constants.js'
+import { ZOTERO_CREATABLE_ITEM_TYPES, ZOTERO_UPDATABLE_ITEM_FIELDS } from './constants.js'
+import type { ZoteroErrorCode } from './errors.js'
 
 declare module '@deepseek-ai/dsh-jobs' {
   interface JobKindMap {
@@ -60,13 +70,6 @@ export interface ZoteroLibraryRef {
   type: 'user' | 'group'
   id: number
 }
-
-/** The canonical personal library: the local API's logged-in user. */
-export type PersonalLibrary = { type: 'user'; id: 0 }
-/** A synced group library by its positive group id. */
-export type GroupLibrary = { type: 'group'; id: number }
-/** The local libraries this plugin contract supports: canonical personal + any group. */
-export type SupportedLocalLibrary = PersonalLibrary | GroupLibrary
 
 /** The object kinds the reference grammar distinguishes. */
 export type ZoteroKind = 'item' | 'attachment' | 'annotation' | 'collection' | 'search'
@@ -123,17 +126,6 @@ export type ZoteroSearchScope =
   | { kind: 'savedSearch'; refOrName: string }
 
 /**
- * Resolved scope echoed back to the Agent so pagination reuses a stable ref.
- * The `library` property identifies the target personal (`user/0`) or group library.
- */
-export type ZoteroResolvedScope =
-  | { kind: 'library'; library: PersonalLibrary }
-  | { kind: 'library'; library: GroupLibrary }
-  | { kind: 'publications'; library: PersonalLibrary }
-  | { kind: 'collection'; ref: string; name: string }
-  | { kind: 'savedSearch'; ref: string; name: string }
-
-/**
  * Sort field names accepted by `zotero_search`. Mirrors the runtime
  * `ZOTERO_SORT_FIELDS` array in `constants.ts`; keep the two in sync.
  */
@@ -184,6 +176,8 @@ export interface ZoteroSearchItem {
   attachmentSize?: number
   /** Extra metadata (e.g. Citation Key, arXiv ID, PMID). */
   extra?: string
+  /** Item DOI from data.DOI, normalized. */
+  doi?: string
 }
 
 /**
@@ -1025,18 +1019,6 @@ export interface ZoteroDeleteSavedSearchResult {
   serverId?: string
 }
 
-/** Item types `zotero_create_item` may create (closed whitelist). */
-export const ZOTERO_CREATABLE_ITEM_TYPES = [
-  'webpage',
-  'journalArticle',
-  'book',
-  'conferencePaper',
-  'report',
-  'thesis',
-  'document',
-  'preprint',
-] as const
-
 export type ZoteroCreatableItemType = (typeof ZOTERO_CREATABLE_ITEM_TYPES)[number]
 
 export interface ZoteroCreateItemRequest {
@@ -1066,17 +1048,6 @@ export interface ZoteroCreateItemResult {
   libraryVersion: number
   serverId?: string
 }
-
-/** Scalar fields `zotero_update_item` may set (closed set). */
-export const ZOTERO_UPDATABLE_ITEM_FIELDS = [
-  'title',
-  'date',
-  'url',
-  'doi',
-  'abstractNote',
-  'publicationTitle',
-  'extra',
-] as const
 
 export type ZoteroUpdatableItemField = (typeof ZOTERO_UPDATABLE_ITEM_FIELDS)[number]
 
@@ -1112,18 +1083,7 @@ export interface ZoteroDeleteLibraryTagsResult {
   serverId?: string
 }
 
-export interface ZoteroBatchCreateItemInput {
-  itemType: ZoteroCreatableItemType
-  title?: string
-  url?: string
-  date?: string
-  doi?: string
-  abstractNote?: string
-  publicationTitle?: string
-  creators?: ZoteroCreator[]
-  tags?: string[]
-  collections?: (string | ZoteroObjectRef)[]
-}
+export type ZoteroBatchCreateItemInput = ZoteroCreateItemRequest
 
 export interface ZoteroBatchUpdateItemInput {
   ref: ZoteroObjectRef
@@ -1172,7 +1132,7 @@ export interface ZoteroBatchOperationFailure {
   op: 'create' | 'update' | 'delete'
   ref?: string
   index?: number
-  code: string
+  code: ZoteroErrorCode
   message: string
   /** Trash PATCHes already acknowledged before this operation failed. */
   completedRefs?: string[]

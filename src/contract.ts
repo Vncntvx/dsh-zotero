@@ -29,6 +29,24 @@ import { ZOTERO_SETTINGS_NAMESPACE } from './settings-namespace.js'
 /** Wire namespace both halves spell; re-exported so contract is one import site. */
 export { ZOTERO_SETTINGS_NAMESPACE }
 
+/** The canonical personal library: the local API's logged-in user. */
+export type PersonalLibrary = { type: 'user'; id: 0 }
+/** A synced group library by its positive group id. */
+export type GroupLibrary = { type: 'group'; id: number }
+/** The local libraries this plugin contract supports: canonical personal + any group. */
+export type SupportedLocalLibrary = PersonalLibrary | GroupLibrary
+
+/**
+ * Resolved scope echoed back to the Agent so pagination reuses a stable ref.
+ * The `library` property identifies the target personal (`user/0`) or group library.
+ */
+export type ZoteroResolvedScope =
+  | { kind: 'library'; library: PersonalLibrary }
+  | { kind: 'library'; library: GroupLibrary }
+  | { kind: 'publications'; library: PersonalLibrary }
+  | { kind: 'collection'; ref: string; name: string }
+  | { kind: 'savedSearch'; ref: string; name: string }
+
 /** The zotero connectivity view the web tab renders (optional facts omitted when absent). */
 export interface ZoteroStatusView {
   readonly providerId: string

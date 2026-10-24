@@ -6,6 +6,7 @@
  */
 
 import type { ZoteroHttpClient } from '../http-client.js'
+import { mapWithConcurrency } from '../concurrency.js'
 import { ZOTERO_ITEMKEY_BATCH } from '../constants.js'
 import {
   ZOTERO_INVALID_ARGUMENT,
@@ -93,16 +94,15 @@ export async function exportItems(
   const style = request.style ?? deps.limits.defaultStyle
   const locale = request.locale ?? deps.limits.defaultLocale
   if (request.format === 'citation') {
-    return await exportCitations(
-      deps,
-      request.refs,
-      exportPrefix,
+    return await exportCitations(deps, {
+      refs: request.refs,
+      prefix: exportPrefix,
       serverId,
       style,
       locale,
       signal,
       onProgress,
-    )
+    })
   }
   // Duplicate refs name the same item, and Zotero caps one itemKey request
   // at ZOTERO_ITEMKEY_BATCH keys anyway, so every unique key is requested
@@ -195,6 +195,16 @@ async function fetchRawItemBatch(
   return []
 }
 
+export interface CitationExportOptions {
+  readonly refs: readonly ZoteroObjectRef[]
+  readonly prefix: string
+  readonly serverId?: string
+  readonly style: string
+  readonly locale: string
+  readonly signal?: AbortSignal
+  readonly onProgress?: (progress: ZoteroProgressEvent) => void
+}
+
 /**
  * Citation export: batches the refs into API-sized requests, merges the
  * per-key citations, and reorders them to the requested sequence. Order is
@@ -203,41 +213,59 @@ async function fetchRawItemBatch(
  */
 async function exportCitations(
   deps: { client: ZoteroHttpClient; limits: LocalApiLimits },
-  refs: readonly ZoteroObjectRef[],
-  prefix: string,
-  serverId: string | undefined,
-  style: string,
-  locale: string,
-  signal: AbortSignal | undefined,
-  onProgress?: (progress: ZoteroProgressEvent) => void,
+  options: CitationExportOptions,
 ): Promise<ZoteroExportResult> {
-  const citationByKey = new Map<string, string>()
-  for (let start = 0; start < refs.length; start += ZOTERO_ITEMKEY_BATCH) {
-    const batch = refs.slice(start, start + ZOTERO_ITEMKEY_BATCH)
-    onProgress?.({
-      phase: 'citation_batch',
-      current: start,
-      total: refs.length,
-      message: `Exporting citations ${start}/${refs.length}...`,
-    })
-    const batchCitations = await fetchCitationBatch(
-      deps,
-      batch,
-      prefix,
-      serverId,
-      style,
-      locale,
-      signal,
-    )
-    for (const [key, text] of batchCitations) citationByKey.set(key, text)
+  const batches: ZoteroObjectRef[][] = []
+  for (let start = 0; start < options.refs.length; start += ZOTERO_ITEMKEY_BATCH) {
+    batches.push(options.refs.slice(start, start + ZOTERO_ITEMKEY_BATCH))
   }
-  onProgress?.({
+
+  let completedItems = 0
+  const citationByKey = new Map<string, string>()
+  const concurrency =
+    (deps.limits as { exportConcurrency?: number }).exportConcurrency ??
+    deps.limits.graphConcurrency ??
+    4
+
+  const batchResults = await mapWithConcurrency(
+    batches,
+    concurrency,
+    async (batch, poolSignal) => {
+      const result = await fetchCitationBatch(
+        deps,
+        batch,
+        options.prefix,
+        options.serverId,
+        options.style,
+        options.locale,
+        poolSignal ?? options.signal,
+      )
+      completedItems += batch.length
+      options.onProgress?.({
+        phase: 'citation_batch',
+        current: Math.min(completedItems, options.refs.length),
+        total: options.refs.length,
+        message: `Exporting citations ${Math.min(completedItems, options.refs.length)}/${options.refs.length}...`,
+      })
+      return result
+    },
+    { signal: options.signal },
+  )
+
+  for (const batchMap of batchResults) {
+    for (const [key, text] of batchMap) {
+      citationByKey.set(key, text)
+    }
+  }
+
+  options.onProgress?.({
     phase: 'citation_batch',
-    current: refs.length,
-    total: refs.length,
-    message: `Exported ${refs.length}/${refs.length} citations`,
+    current: options.refs.length,
+    total: options.refs.length,
+    message: `Exported ${options.refs.length}/${options.refs.length} citations`,
   })
-  const citations = refs.map((ref) => {
+
+  const citations = options.refs.map((ref) => {
     const text = citationByKey.get(ref.key)
     if (text === undefined) {
       throw new ZoteroError(
@@ -254,7 +282,7 @@ async function exportCitations(
       ZOTERO_OUTPUT_TOO_LARGE,
     )
   }
-  return { format: 'citation', style, locale, citations }
+  return { format: 'citation', style: options.style, locale: options.locale, citations }
 }
 
 /** One batch of per-key citations, at most `ZOTERO_ITEMKEY_BATCH` keys. */

@@ -12,7 +12,7 @@ import { ZOTERO_ITEMKEY_BATCH, ZOTERO_LIST_PAGE_ROWS } from '../constants.js'
 import { tokenize } from '../evidence.js'
 import { ZOTERO_INVALID_ARGUMENT, ZoteroError } from '../errors.js'
 import { nextOffsetOrFail, requireArrayBody, requireTotalResults, setPage } from './pagination.js'
-import { ZOTERO_SERVER_ID_HEADER } from '../constants.js'
+import { serverIdFromHeaders } from './identity.js'
 import {
   publicationsItemsPath,
   resolveScope,
@@ -101,7 +101,7 @@ export async function runSearch(
     },
   )
   const rows = requireArrayBody(json, 'items top listing')
-  const responseServerId = headers.get(ZOTERO_SERVER_ID_HEADER) ?? scope.serverId
+  const responseServerId = serverIdFromHeaders(headers, scope.serverId)
   const libraryForItems = libraryOfResolvedScope(scope.resolved)
   const ctxForSearch: { library: SupportedLocalLibrary; serverId?: string } = {
     library: libraryForItems,

@@ -71,6 +71,7 @@ import {
   readBody,
   readFailureStatement,
   sharedHttpStatusError,
+  throwIfAbortedOrTimedOut,
   translateFetchError,
 } from './http-client.js'
 import { asRecord, asString, parseNonNegativeSafeInteger } from './json.js'
@@ -386,7 +387,7 @@ export class ZoteroWriteHttpClient {
       // can have committed and the caller must see the ordinary cancellation or
       // timeout rather than a false commit-unknown outcome.
       if (opts.signal?.aborted || d.signal.aborted) {
-        translateFetchError(new Error(), d.signal, opts.signal, deadlineMs)
+        throwIfAbortedOrTimedOut(d.signal, opts.signal, deadlineMs)
       }
       let response: Response
       try {

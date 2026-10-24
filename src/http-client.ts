@@ -162,15 +162,11 @@ export function notImplementedRequestMessage(path: string): string {
  * @param callerSignal - the caller's own signal; its abort always wins.
  * @param timeoutMs - the deadline the timeout message reports.
  */
-export function translateFetchError(
-  error: unknown,
+export function throwIfAbortedOrTimedOut(
   signal: AbortSignal,
   callerSignal: AbortSignal | undefined,
   timeoutMs: number,
-): never {
-  if (error instanceof ZoteroError) {
-    throw error
-  }
+): void {
   if (callerSignal?.aborted) {
     throw new HarnessError(TOOL_ABORTED_MESSAGE, TOOL_ABORTED)
   }
@@ -180,6 +176,18 @@ export function translateFetchError(
       cause: timeout,
     })
   }
+}
+
+export function translateFetchError(
+  error: unknown,
+  signal: AbortSignal,
+  callerSignal: AbortSignal | undefined,
+  timeoutMs: number,
+): never {
+  if (error instanceof ZoteroError) {
+    throw error
+  }
+  throwIfAbortedOrTimedOut(signal, callerSignal, timeoutMs)
   if (isUnreachableCause(error)) {
     throw new ZoteroError(NOT_RUNNING_MESSAGE, ZOTERO_NOT_RUNNING, { cause: errorCauseOf(error) })
   }

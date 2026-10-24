@@ -339,8 +339,10 @@ export class ZoteroService extends Service {
       () => () => {
         for (const dispose of this.heavyToolDisposes) dispose()
         this.heavyToolDisposes = []
+        for (const dispose of this.writeToolDisposes) dispose()
+        this.writeToolDisposes = []
       },
-      'zotero: heavy tools teardown',
+      'zotero: dynamic tools teardown',
     )
     // A shell command aimed at Zotero's own write API is not blocked outright:
     // it is made to ask. The harness's own approval request decides it before
@@ -549,6 +551,14 @@ export class ZoteroService extends Service {
    * every structural volatile-update.
    */
   private reconcileWriteTools(enabled: boolean): void {
+    if (
+      this.ctx.fiber.state !== FIBER_STATE.ACTIVE &&
+      this.ctx.fiber.state !== FIBER_STATE.LOADING
+    ) {
+      for (const dispose of this.writeToolDisposes) dispose()
+      this.writeToolDisposes = []
+      return
+    }
     if (enabled && this.writeToolDisposes.length === 0) {
       this.writeToolDisposes = [
         registerCreateNoteTool(this.ctx, this),

@@ -23,6 +23,7 @@ import {
 } from '../helpers/lanes/host-lane.js'
 import { itemJson } from '../helpers/write-domain-fixtures.js'
 import { ZOTERO_INVALID_ARGUMENT } from '../../src/errors.js'
+import { updateNotePlan } from '../../src/tools/update-note.js'
 
 const SERVER_ID = 'srv-update-note-0001'
 const NOTE_KEY = 'NOTE0001'
@@ -348,5 +349,13 @@ describe('zotero_update_collection', () => {
         text: 'Declined: the user answered the plan without approving. Nothing was written.',
       },
     ])
+  })
+
+  it('formats updateNotePlan and truncates markdown over 300 characters', () => {
+    const longMarkdown = 'a'.repeat(350)
+    const plan = updateNotePlan({ ref: NOTE_REF, markdown: longMarkdown })
+    expect(plan).toContain('…')
+    const shortPlan = updateNotePlan({ ref: NOTE_REF, markdown: 'short' })
+    expect(shortPlan).not.toContain('…')
   })
 })

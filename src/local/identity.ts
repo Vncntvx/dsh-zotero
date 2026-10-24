@@ -14,8 +14,18 @@
  * @module dsh-zotero/local/identity
  */
 
+import { ZOTERO_SERVER_ID_HEADER } from '../constants.js'
 import { SERVER_MISMATCH_MESSAGE, ZOTERO_SERVER_MISMATCH, ZoteroError } from '../errors.js'
 import type { SupportedLocalLibrary } from '../types.js'
+
+/**
+ * Extract the instance id reported by a response header, falling back to a known claim.
+ */
+export function serverIdFromHeaders(headers: Headers, fallback?: string): string | undefined {
+  const value = headers.get(ZOTERO_SERVER_ID_HEADER)
+  if (value !== null && value.trim() !== '') return value
+  return fallback !== undefined && fallback.trim() !== '' ? fallback : undefined
+}
 
 /**
  * Assert a response or qualified ref came from the expected instance.

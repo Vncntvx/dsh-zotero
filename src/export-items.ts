@@ -65,7 +65,14 @@ export function bibtexFieldOf(
   }
   if (!allowBareToken) return undefined
   // Bare numbers or tokens (e.g. year = 2024,)
-  let end = cursor
+  return scanBibtexToken(text, cursor)
+}
+
+/**
+ * Scan a bare BibTeX token (e.g. key, number, or bare value) up to comma, brace, or whitespace.
+ */
+export function scanBibtexToken(text: string, from: number): string | undefined {
+  let end = from
   while (end < text.length && !/[,\s{}]/.test(text[end]!)) end += 1
-  return end === cursor ? undefined : text.slice(cursor, end)
+  return end === from ? undefined : text.slice(from, end)
 }

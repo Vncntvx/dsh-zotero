@@ -43,6 +43,20 @@ describe('bounded body readers', () => {
     // 204 carries no body; the reader must not treat that as a failure.
     const empty = new Response(null, { status: 204 })
     expect(await readBoundedText(empty, 10)).toBe('')
+    const emptyBytes = await readBoundedBytes(empty, 10)
+    expect(emptyBytes.byteLength).toBe(0)
+  })
+
+  it('refuses a byte body without reader past the ceiling', async () => {
+    const response = new Response(new Uint8Array(20).fill(1))
+    Object.defineProperty(response, 'body', { value: null })
+    await expect(readBoundedBytes(response, 10)).rejects.toThrow(ResponseTooLargeError)
+  })
+
+  it('refuses a text body without reader past the ceiling', async () => {
+    const response = new Response(new Uint8Array(20).fill(65))
+    Object.defineProperty(response, 'body', { value: null })
+    await expect(readBoundedText(response, 10)).rejects.toThrow(ResponseTooLargeError)
   })
 
   it('reports the ceiling it enforced', async () => {

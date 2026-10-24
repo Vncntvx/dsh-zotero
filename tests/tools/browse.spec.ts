@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { browseMoreMessage, renderBrowse } from '../../src/tools/browse.js'
 import {
   MATCH_REQUIRES_Q_MESSAGE,
+  PUBLICATIONS_GROUP_UNSUPPORTED_MESSAGE,
   libraryNotAllowedMessage,
   writeNonBlankMessage,
 } from '../../src/errors.js'
@@ -82,6 +83,24 @@ describe('zotero_browse validation', () => {
       expect(result.isError).toBe(true)
       if (!result.isError) throw new Error('unreachable')
       expect((result.content[0] as { text: string }).text).toContain(c.contains)
+    }
+  })
+
+  it('refuses publications tag scope for group libraries', async () => {
+    const groupLane = await setupHostLane()
+    try {
+      const result = await groupLane.runTool('zotero_browse', {
+        kind: 'tags',
+        library: { type: 'group', id: 1 },
+        tagScope: 'publications',
+      })
+      expect(result.isError).toBe(true)
+      if (!result.isError) throw new Error('unreachable')
+      expect((result.content[0] as { text: string }).text).toContain(
+        PUBLICATIONS_GROUP_UNSUPPORTED_MESSAGE,
+      )
+    } finally {
+      await groupLane.teardown()
     }
   })
 })

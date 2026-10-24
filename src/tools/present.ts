@@ -4,22 +4,7 @@
  */
 
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
-import type { ToolResult } from '@deepseek-ai/dsh-tools'
-import { asRecord } from '../json.js'
-
-/**
- * The completed-result metadata as a record: undefined for failed calls
- * (which keep the raw error content), for absent metadata on nested code
- * dispatch or malformed replay records, and for non-object shapes. Every
- * `presentResult` funnels through here so the completed card falls back to
- * the generic card the same way on every tool.
- * @param result - the settled tool result.
- * @returns the metadata record, or undefined for the generic fallback.
- */
-export function metaRecordOf(result: ToolResult): Record<string, unknown> | undefined {
-  if (result.isError) return undefined
-  return asRecord(result.meta)
-}
+export { metaRecordOf, renderDeclined } from '../write-present.js'
 
 /**
  * The canonical search-hit title line: `ref — title (year) [itemType]`.
@@ -46,19 +31,4 @@ export function formatSearchLine(
  */
 export function textOfBlocks(blocks: ContentBlock[]): string {
   return blocks.map((block) => (block.type === 'text' ? block.text : '')).join('\n')
-}
-
-/**
- * The declined-write content: the user answered the plan without approving,
- * so nothing was written. Shared by the write tools so the wording
- * cannot drift between them.
- * @returns the single declined text block.
- */
-export function renderDeclined(): ContentBlock[] {
-  return [
-    {
-      type: 'text',
-      text: 'Declined: the user answered the plan without approving. Nothing was written.',
-    },
-  ]
 }

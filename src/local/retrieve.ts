@@ -8,7 +8,6 @@
  * @module dsh-zotero/local/retrieve
  */
 
-import { ZOTERO_SERVER_ID_HEADER } from '../constants.js'
 import type { ZoteroHttpClient } from '../http-client.js'
 import { mapWithConcurrency } from '../concurrency.js'
 import {
@@ -28,7 +27,7 @@ import {
   requireSupportedLocalRef,
   sameLibrary,
 } from '../refs.js'
-import { assertServerIdMatches } from './identity.js'
+import { assertServerIdMatches, serverIdFromHeaders } from './identity.js'
 import {
   partitionChildren,
   plainNoteText,
@@ -126,7 +125,7 @@ export async function retrieve(
     signal,
     serverId: ref.serverId,
   })
-  const serverId = parent.headers.get(ZOTERO_SERVER_ID_HEADER) ?? ref.serverId
+  const serverId = serverIdFromHeaders(parent.headers, ref.serverId)
   const record = asRecord(parent.json)
   const data = asRecord(record?.data)
   const itemType = asString(data?.itemType) ?? asString(record?.itemType)

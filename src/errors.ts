@@ -1,7 +1,7 @@
 /** Stable error classes and codes for the Zotero domain. @module dsh-zotero/errors */
 
 import { HarnessError } from '@deepseek-ai/dsh-llm'
-import { ZOTERO_UPDATABLE_ITEM_FIELDS } from './types.js'
+import { ZOTERO_UPDATABLE_ITEM_FIELDS } from './constants.js'
 
 /** Zotero is not reachable on its local port. */
 export const ZOTERO_NOT_RUNNING = 'ZOTERO_NOT_RUNNING'

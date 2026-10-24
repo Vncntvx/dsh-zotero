@@ -156,6 +156,35 @@ export const ZOTERO_TOOL_NAMES = [...ZOTERO_READ_TOOL_NAMES, ...ZOTERO_WRITE_TOO
 export const ZOTERO_AUTHORIZE_PATH = 'local/authorize'
 
 /**
+ * Item types `zotero_create_item` may create (closed whitelist).
+ * Runtime constant kept here to preserve `types.ts` as types-only.
+ */
+export const ZOTERO_CREATABLE_ITEM_TYPES = [
+  'webpage',
+  'journalArticle',
+  'book',
+  'conferencePaper',
+  'report',
+  'thesis',
+  'document',
+  'preprint',
+] as const
+
+/**
+ * Scalar fields `zotero_update_item` may set (closed set).
+ * Runtime constant kept here to preserve `types.ts` as types-only.
+ */
+export const ZOTERO_UPDATABLE_ITEM_FIELDS = [
+  'title',
+  'date',
+  'url',
+  'doi',
+  'abstractNote',
+  'publicationTitle',
+  'extra',
+] as const
+
+/**
  * Default byte ceiling for one response body, shared by both transports.
  *
  * The local Zotero API and the scholarly hosts bound bodies for the same

@@ -53,3 +53,13 @@ export const REF_PATTERN = new RegExp(
 export const REF_IN_TEXT_PATTERN = new RegExp(
   `zotero://${LIBRARY}/${KINDS}/(?<key>${REF_KEY_SOURCE})`,
 )
+
+/**
+ * Identifier grammar for Zotero item types (e.g. `journalArticle`, `book`, `note`).
+ * One initial letter followed by alphanumeric characters.
+ */
+export const ITEM_TYPE_IDENTIFIER_PATTERN = /^[A-Za-z][A-Za-z0-9]*$/
+
+export function isItemTypeIdentifier(value: string): boolean {
+  return ITEM_TYPE_IDENTIFIER_PATTERN.test(value)
+}

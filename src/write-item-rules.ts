@@ -16,13 +16,8 @@ import {
   ZOTERO_INVALID_ARGUMENT,
   ZoteroError,
 } from './errors.js'
-import {
-  ZOTERO_CREATABLE_ITEM_TYPES,
-  ZOTERO_UPDATABLE_ITEM_FIELDS,
-  type ZoteroCreatableItemType,
-  type ZoteroCreator,
-  type ZoteroUpdatableItemField,
-} from './types.js'
+import { ZOTERO_CREATABLE_ITEM_TYPES, ZOTERO_UPDATABLE_ITEM_FIELDS } from './constants.js'
+import type { ZoteroCreatableItemType, ZoteroCreator, ZoteroUpdatableItemField } from './types.js'
 
 const CREATABLE_ITEM_TYPES: ReadonlySet<string> = new Set(ZOTERO_CREATABLE_ITEM_TYPES)
 

@@ -39,12 +39,8 @@ import {
   parseNonNegativeSafeInteger,
 } from '../json.js'
 import { ALL_CHANGES_INCLUDES, DEFAULT_CHANGES_INCLUDES } from '../changes-contract.js'
-import {
-  ZOTERO_LIBRARY_VERSION_HEADER,
-  ZOTERO_SERVER_ID_HEADER,
-  ZOTERO_TOTAL_RESULTS_HEADER,
-} from '../constants.js'
-import { assertServerIdMatches } from './identity.js'
+import { ZOTERO_LIBRARY_VERSION_HEADER, ZOTERO_TOTAL_RESULTS_HEADER } from '../constants.js'
+import { assertServerIdMatches, serverIdFromHeaders } from './identity.js'
 import { libraryPrefix, PERSONAL_LIBRARY, sameLibrary } from '../refs.js'
 import type { LocalApiLimits } from './limits.js'
 import { ZoteroError } from '../errors.js'
@@ -325,7 +321,7 @@ export async function changes(
       ...(claim === undefined ? {} : { serverId: claim }),
     })
     const version = numericHeader(response.headers, ZOTERO_LIBRARY_VERSION_HEADER)
-    const observed = observedServerId(response.headers.get(ZOTERO_SERVER_ID_HEADER))
+    const observed = serverIdFromHeaders(response.headers)
     return {
       ...(version !== undefined ? { version } : {}),
       ...(observed !== undefined ? { serverId: observed } : {}),
@@ -412,7 +408,7 @@ export async function changes(
     if (rows === undefined || !rows.every(([key, value]) => isObjectKey(key) && isVersion(value))) {
       return { status: 'failed', reason: 'unreadable' }
     }
-    const observed = observedServerId(headers.get(ZOTERO_SERVER_ID_HEADER))
+    const observed = serverIdFromHeaders(headers)
     const rawTotal = headers.get(ZOTERO_TOTAL_RESULTS_HEADER)
     const headerTotal = numericHeader(headers, ZOTERO_TOTAL_RESULTS_HEADER)
     const rawVersion = headers.get(ZOTERO_LIBRARY_VERSION_HEADER)
@@ -584,25 +580,6 @@ export async function changes(
       if (reason !== undefined) recordUnobservable('items', reason)
     }
   }
-  if (include.has('collections')) {
-    onProgress?.({ phase: 'collections', message: 'Reading changed collections...' })
-    const entries = await readKind('collections', `${prefix}/collections`, 'collections')
-    if (entries !== undefined) changed.collections = entries
-  }
-  if (include.has('savedSearches')) {
-    onProgress?.({ phase: 'savedSearches', message: 'Reading changed saved searches...' })
-    const entries = await readKind('savedSearches', `${prefix}/searches`, 'savedSearches')
-    if (entries !== undefined) changed.savedSearches = entries
-  }
-  if (include.has('fulltext')) {
-    onProgress?.({ phase: 'fulltext', message: 'Reading reindexed full text...' })
-    // The index listing, read only when asked for: unbounded and unversioned,
-    // it answers in the full-text counter's own namespace, so its rows are a
-    // listing for this library version rather than a delta on it.
-    const entries = await readKind('fulltext', `${prefix}/fulltext`, 'fulltextAttachments', false)
-    if (entries !== undefined) changed.fulltextAttachments = entries
-  }
-
   /**
    * Parse the tombstone payload. Zotero documents four lists (items,
    * collections, searches, tags), and its own sync reader walks whichever keys
@@ -651,12 +628,37 @@ export async function changes(
     return { items, collections, savedSearches, tags, other }
   }
 
+  const fetchCollections = async (): Promise<void> => {
+    if (!include.has('collections')) return
+    onProgress?.({ phase: 'collections', message: 'Reading changed collections...' })
+    const entries = await readKind('collections', `${prefix}/collections`, 'collections')
+    if (entries !== undefined) changed.collections = entries
+  }
+
+  const fetchSavedSearches = async (): Promise<void> => {
+    if (!include.has('savedSearches')) return
+    onProgress?.({ phase: 'savedSearches', message: 'Reading changed saved searches...' })
+    const entries = await readKind('savedSearches', `${prefix}/searches`, 'savedSearches')
+    if (entries !== undefined) changed.savedSearches = entries
+  }
+
+  const fetchFulltext = async (): Promise<void> => {
+    if (!include.has('fulltext')) return
+    onProgress?.({ phase: 'fulltext', message: 'Reading reindexed full text...' })
+    // The index listing, read only when asked for: unbounded and unversioned,
+    // it answers in the full-text counter's own namespace, so its rows are a
+    // listing for this library version rather than a delta on it.
+    const entries = await readKind('fulltext', `${prefix}/fulltext`, 'fulltextAttachments', false)
+    if (entries !== undefined) changed.fulltextAttachments = entries
+  }
+
   // When the tombstone read succeeds every list exists, possibly empty: the
   // positive statement "nothing was removed in this range", which is why it is
   // never omitted for brevity. The endpoint carries no version of its own, so
   // it can never make the read incomplete: it only shortens what is listed.
   let deleted: ZoteroChangesResult['deleted']
-  if (include.has('deleted')) {
+  const fetchDeleted = async (): Promise<void> => {
+    if (!include.has('deleted')) return
     onProgress?.({ phase: 'deleted', message: 'Reading deleted tombstones...' })
     const read = await attempt(async () => {
       const params = new URLSearchParams()
@@ -665,10 +667,7 @@ export async function changes(
         signal,
         serverId: instance,
       })
-      assertServerIdMatches(
-        observedServerId(payload.headers.get(ZOTERO_SERVER_ID_HEADER)),
-        instance,
-      )
+      assertServerIdMatches(serverIdFromHeaders(payload.headers), instance)
       return parseTombstones(payload.json)
     })
     const tombstones = read.status === 'ok' ? read.value : undefined
@@ -690,6 +689,8 @@ export async function changes(
       if (tombstones.other > 0) totals.deletedOther = tombstones.other
     }
   }
+
+  await Promise.all([fetchCollections(), fetchSavedSearches(), fetchFulltext(), fetchDeleted()])
 
   const served = Object.keys(totals).length > 0
   // The next cursor is the snapshot reading, pinned to the instance that
@@ -717,7 +718,13 @@ export async function changes(
     changed,
     ...(deleted !== undefined ? { deleted } : {}),
     ...(served ? { totals } : {}),
-    ...(unobservable.length > 0 ? { unobservable } : {}),
+    ...(unobservable.length > 0
+      ? {
+          unobservable: unobservable.sort(
+            (a, b) => ALL_CHANGES_INCLUDES.indexOf(a.kind) - ALL_CHANGES_INCLUDES.indexOf(b.kind),
+          ),
+        }
+      : {}),
     ...(truncated ? { truncated } : {}),
   }
 }

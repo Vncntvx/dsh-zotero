@@ -329,6 +329,7 @@ describe('zotero_search validation', () => {
       // A "||" in a tag is not a tag: the API joins literal tags with it, so
       // one embedded in a name would silently become two conditions.
       { args: { excludeTags: ['a||b'] }, contains: EXCLUDE_TAGS_LITERAL_MESSAGE },
+      { args: { itemTypes: ['123invalid'] }, contains: ITEM_TYPES_LITERAL_MESSAGE },
     ]
     for (const c of cases) {
       const result = await runTool('zotero_search', c.args)
