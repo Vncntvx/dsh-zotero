@@ -1,0 +1,12 @@
+# This patch is used when the plugin is installed as a dsh bundle.
+# The `name` refers to the package name, so Node module resolution can find it.
+- insert:
+    - id: zotero
+      name: dsh-zotero
+      config: {}
+    # The scholarly component provides external academic literature retrieval
+    # (arXiv, OpenAlex, Crossref, Semantic Scholar, PubMed).
+    - id: scholarly
+      name: dsh-zotero/scholarly
+      config:
+        enabled: false
