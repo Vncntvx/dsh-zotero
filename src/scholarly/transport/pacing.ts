@@ -85,6 +85,9 @@ export class HostPacer {
    * @returns resolution once the caller may issue its request.
    */
   async pace(host: string, signal?: AbortSignal): Promise<void> {
+    if (signal?.aborted) {
+      throw signal.reason ?? new Error('Operation aborted')
+    }
     const interval = this.intervalOf(host)
     if (interval <= 0) return
 

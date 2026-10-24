@@ -663,4 +663,39 @@ describe('resolver reason composition', () => {
       resolveScholarlyFullText(parsePaperIdentifier('PMC0000000')!, { http }),
     ).rejects.toThrow(/no route was available/)
   })
+
+  it('resolves an arXiv preprint discovered via OpenAlex location', async () => {
+    const http = routed([
+      [
+        'www.ebi.ac.uk/europepmc/webservices/rest/search',
+        () =>
+          new Response(JSON.stringify({ resultList: { result: [] } }), {
+            headers: { 'content-type': 'application/json' },
+          }),
+      ],
+      [
+        'api.openalex.org/works/doi%3A',
+        () =>
+          new Response(
+            JSON.stringify({
+              id: 'https://openalex.org/W1',
+              display_name: 'A Work',
+              best_oa_location: { pdf_url: 'https://arxiv.org/pdf/2301.01234' },
+            }),
+            { headers: { 'content-type': 'application/json' } },
+          ),
+      ],
+      [
+        'arxiv.org/html/2301.01234',
+        () => new Response(`<article>${'Important preprint text. '.repeat(30)}</article>`),
+      ],
+    ])
+
+    const record = await resolveScholarlyFullText(
+      parsePaperIdentifier('10.1234/preprint.success')!,
+      { http },
+    )
+    expect(record.source).toContain("arXiv's HTML version (LaTeXML)")
+    expect(record.text).toContain('Important preprint text')
+  })
 })

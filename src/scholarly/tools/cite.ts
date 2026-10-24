@@ -6,13 +6,14 @@
 
 import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
 import { mapWithConcurrency } from '../../concurrency.js'
+import { ZoteroError, ZOTERO_INVALID_ARGUMENT } from '../../errors.js'
 import { parsePaperIdentifier } from '../fulltext/resolve.js'
 import { lookupEuropePmc } from '../sources/pmc.js'
 import {
   SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR,
   type ScholarlyToolHost,
   type ScholarlyToolOutput,
-} from './search.js'
+} from './common.js'
 
 /** The citation formats this tool asks a registration agency for. */
 type CiteFormat = 'bibtex' | 'ris' | 'csljson' | 'text'
@@ -79,7 +80,7 @@ export function createScholarlyCiteTool(host: ScholarlyToolHost): ToolDefinition
           : FORMAT_MIME_TYPES[input.format]
 
       if (!input.ids || input.ids.length === 0) {
-        throw new Error('ids parameter cannot be empty.')
+        throw new ZoteroError('ids parameter cannot be empty.', ZOTERO_INVALID_ARGUMENT)
       }
 
       const targets = input.ids.slice(0, 30)

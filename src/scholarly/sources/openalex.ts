@@ -3,7 +3,7 @@
  * @module dsh-zotero/scholarly/sources/openalex
  */
 
-import { httpStatusOf, type ScholarlyHttp } from '../transport/http.js'
+import type { ScholarlyHttp } from '../transport/http.js'
 import {
   SCHOLARLY_SOURCE_NAMES,
   type ScholarlyKeys,
@@ -11,7 +11,7 @@ import {
   type ScholarlyQuery,
 } from '../types.js'
 import { extractArxivId } from './arxiv.js'
-import { cleanDoi, encodeQueryParams, plain, stripEmptyFields } from './helpers.js'
+import { cleanDoi, encodeQueryParams, ignoreNotFound, plain, stripEmptyFields } from './helpers.js'
 
 interface OpenAlexWork {
   id?: string
@@ -153,18 +153,15 @@ export async function lookupOpenAlex(
   keys?: ScholarlyKeys,
   signal?: AbortSignal,
 ): Promise<ScholarlyPaper | undefined> {
-  try {
-    const url = buildOpenAlexUrl(`works/${encodeURIComponent(id)}`, {}, keys)
-    const work = await http.json<OpenAlexWork>(url, {
+  const url = buildOpenAlexUrl(`works/${encodeURIComponent(id)}`, {}, keys)
+  const work = await ignoreNotFound(
+    http.json<OpenAlexWork>(url, {
       signal,
       timeoutMs: 25_000,
       headers: openAlexHeaders(keys),
-    })
-    return paperFromOpenAlex(work)
-  } catch (error) {
-    if (httpStatusOf(error) === 404) return undefined
-    throw error
-  }
+    }),
+  )
+  return work ? paperFromOpenAlex(work) : undefined
 }
 
 export async function openalexLinkedWorks(

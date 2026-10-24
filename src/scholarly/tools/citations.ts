@@ -4,16 +4,17 @@
  */
 
 import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
-import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { formatPaperItem, fuseRankedLists } from '../fusion.js'
 import { openAlexIdOf, parsePaperIdentifier } from '../fulltext/resolve.js'
 import { lookupOpenAlex, openalexLinkedWorks } from '../sources/openalex.js'
 import { annotateWithLibraryStatus } from '../zotero-link.js'
+import { ZoteroError, ZOTERO_INVALID_ARGUMENT } from '../../errors.js'
 import {
   SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR,
+  toCleanJsonRecords,
   type ScholarlyToolHost,
   type ScholarlyToolOutput,
-} from './search.js'
+} from './common.js'
 
 export function createScholarlyCitationsTool(host: ScholarlyToolHost): ToolDefinition {
   return defineTool({
@@ -53,7 +54,10 @@ export function createScholarlyCitationsTool(host: ScholarlyToolHost): ToolDefin
       const parsedId = parsePaperIdentifier(raw)
       const openAlexLookupId = parsedId ? openAlexIdOf(parsedId) : undefined
       if (!openAlexLookupId) {
-        throw new Error('Please provide a valid DOI, an arXiv ID, or a PMID.')
+        throw new ZoteroError(
+          'Please provide a valid DOI, an arXiv ID, or a PMID.',
+          ZOTERO_INVALID_ARGUMENT,
+        )
       }
 
       const limit = Math.min(
@@ -118,7 +122,7 @@ export function createScholarlyCitationsTool(host: ScholarlyToolHost): ToolDefin
 
       return {
         text: `${countDesc}\n\n${lines}${libraryNotice}`,
-        papers: fused as unknown as Record<string, JsonValue>[],
+        papers: toCleanJsonRecords(fused),
       }
     },
     presentCall: (args) => {

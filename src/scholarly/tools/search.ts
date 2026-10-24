@@ -5,7 +5,6 @@
  */
 
 import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
-import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import {
   formatPaperItem,
   fuseRankedLists,
@@ -14,49 +13,17 @@ import {
 } from '../fusion.js'
 import { routeQuery } from '../router.js'
 import { SOURCE_SEARCHERS } from '../sources/index.js'
-import type { ScholarlyHttp } from '../transport/http.js'
+import { SCHOLARLY_SOURCE_IDS, SCHOLARLY_SOURCE_NAMES, type ScholarlyQuery } from '../types.js'
+import { annotateWithLibraryStatus } from '../zotero-link.js'
+import { ZoteroError, ZOTERO_INVALID_ARGUMENT } from '../../errors.js'
 import {
-  SCHOLARLY_SOURCE_IDS,
-  SCHOLARLY_SOURCE_NAMES,
-  type ScholarlyKeys,
-  type ScholarlyQuery,
-} from '../types.js'
-import { annotateWithLibraryStatus, type ZoteroServiceLike } from '../zotero-link.js'
+  SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR,
+  toCleanJsonRecords,
+  type ScholarlyToolHost,
+  type ScholarlyToolOutput,
+} from './common.js'
 
-export interface ScholarlyToolHost {
-  http: ScholarlyHttp
-  keys(): ScholarlyKeys
-  maxResults(): number
-  zoteroService?(): ZoteroServiceLike | undefined
-}
-
-/** One bounded, model-readable Scholarly receipt. Text remains the human rendering. */
-export const SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR = {
-  schema: {
-    type: 'object',
-    additionalProperties: false,
-    properties: {
-      text: { type: 'string', required: true },
-      papers: { type: 'array', items: { type: 'object', additionalProperties: true } },
-      citations: { type: 'array', items: { type: 'object', additionalProperties: true } },
-      checks: { type: 'array', items: { type: 'object', additionalProperties: true } },
-      document: { type: 'object', additionalProperties: true },
-      issues: { type: 'array', items: { type: 'string' } },
-    },
-  },
-  render: (_args: unknown, value: { text: string }) => [
-    { type: 'text' as const, text: value.text },
-  ],
-} as const
-
-export type ScholarlyToolOutput = {
-  text: string
-  papers?: Record<string, JsonValue>[]
-  citations?: Record<string, JsonValue>[]
-  checks?: Record<string, JsonValue>[]
-  document?: Record<string, JsonValue>
-  issues?: string[]
-}
+export { SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR, type ScholarlyToolHost, type ScholarlyToolOutput }
 
 const CITE_HINT = 'Tip: Cite a paper from these results using its title link or ID.'
 
@@ -123,7 +90,7 @@ export function createScholarlySearchTool(host: ScholarlyToolHost): ToolDefiniti
       }
 
       const text = input.query.trim()
-      if (!text) throw new Error('query parameter cannot be empty.')
+      if (!text) throw new ZoteroError('query parameter cannot be empty.', ZOTERO_INVALID_ARGUMENT)
 
       const limit = Math.min(
         host.maxResults(),
@@ -240,7 +207,7 @@ export function createScholarlySearchTool(host: ScholarlyToolHost): ToolDefiniti
 
       return {
         text: `${summaryHeader}${failureNote}${libraryNotice}\n${CITE_HINT}\n\n${formattedLines}`,
-        papers: papers as unknown as Record<string, JsonValue>[],
+        papers: toCleanJsonRecords(papers),
         issues: failedSources,
       }
     },

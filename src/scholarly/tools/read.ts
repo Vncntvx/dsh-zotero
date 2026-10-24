@@ -5,15 +5,16 @@
  */
 
 import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
-import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { ScholarlyTextStore } from '../fulltext/store.js'
 import { extractOutline, findSection, rankPassagesWithBM25 } from '../fulltext/evidence-bridge.js'
 import { parsePaperIdentifier, resolveScholarlyFullText } from '../fulltext/resolve.js'
+import { ZoteroError, ZOTERO_INVALID_ARGUMENT } from '../../errors.js'
 import {
   SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR,
+  toCleanJsonRecord,
   type ScholarlyToolHost,
   type ScholarlyToolOutput,
-} from './search.js'
+} from './common.js'
 
 export interface ScholarlyReadHost extends ScholarlyToolHost {
   cache?: ScholarlyTextStore
@@ -78,7 +79,10 @@ export function createScholarlyReadTool(host: ScholarlyReadHost): ToolDefinition
       const raw = input.id.trim()
       const parsedId = parsePaperIdentifier(raw)
       if (!parsedId) {
-        throw new Error('Please provide a valid arXiv ID, DOI, PMID, PMCID, or public PDF URL.')
+        throw new ZoteroError(
+          'Please provide a valid arXiv ID, DOI, PMID, PMCID, or public PDF URL.',
+          ZOTERO_INVALID_ARGUMENT,
+        )
       }
 
       const fullText = await resolveScholarlyFullText(parsedId, {
@@ -98,12 +102,12 @@ export function createScholarlyReadTool(host: ScholarlyReadHost): ToolDefinition
         if (sections.length === 0) {
           return {
             text: `${header}\n\nNotice: This document was read from an unstructured PDF and has no section headings. Please read in chunks or search with query.`,
-            document: {
+            document: toCleanJsonRecord({
               id: raw,
               source: fullText.source,
               url: fullText.url,
               sections: [],
-            } as Record<string, JsonValue>,
+            }),
           }
         }
         const outlineText = sections
@@ -116,12 +120,12 @@ export function createScholarlyReadTool(host: ScholarlyReadHost): ToolDefinition
           .join('\n')
         return {
           text: `${header}\n\nSections (use section="..." to read):\n${outlineText}`,
-          document: {
+          document: toCleanJsonRecord({
             id: raw,
             source: fullText.source,
             url: fullText.url,
             sections: sections.map((sec) => ({ id: sec.id, title: sec.title, level: sec.level })),
-          } as unknown as Record<string, JsonValue>,
+          }),
         }
       }
 
@@ -136,10 +140,11 @@ export function createScholarlyReadTool(host: ScholarlyReadHost): ToolDefinition
             .filter((s) => s.level <= 2)
             .map((s) => `"${s.id}. ${s.title}"`)
             .join(', ')
-          throw new Error(
+          throw new ZoteroError(
             sections.length === 0
               ? 'This copy has no structured headings; please read in chunks or use query.'
               : `Section "${input.section}" not found. Available main sections: ${available}`,
+            ZOTERO_INVALID_ARGUMENT,
           )
         }
         activeText = fullText.text.slice(sec.start, sec.end)
@@ -153,12 +158,12 @@ export function createScholarlyReadTool(host: ScholarlyReadHost): ToolDefinition
         if (ranked.length === 0) {
           return {
             text: `${header}${scopeLabel}\n\nNo relevant passage found matching "${input.query}". Try alternative phrasing.`,
-            document: {
+            document: toCleanJsonRecord({
               id: raw,
               source: fullText.source,
               query: input.query,
               passages: [],
-            } as Record<string, JsonValue>,
+            }),
           }
         }
 
@@ -171,12 +176,12 @@ export function createScholarlyReadTool(host: ScholarlyReadHost): ToolDefinition
 
         return {
           text: `${header}${scopeLabel}\n\nTop passages matching "${input.query}":\n\n${passagesText}`,
-          document: {
+          document: toCleanJsonRecord({
             id: raw,
             source: fullText.source,
             query: input.query,
-            passages: ranked,
-          } as unknown as Record<string, JsonValue>,
+            passages: ranked.map(toCleanJsonRecord),
+          }),
         }
       }
 
@@ -201,7 +206,7 @@ export function createScholarlyReadTool(host: ScholarlyReadHost): ToolDefinition
           start,
           end,
         )}`,
-        document: {
+        document: toCleanJsonRecord({
           id: raw,
           source: fullText.source,
           url: fullText.url,
@@ -209,7 +214,7 @@ export function createScholarlyReadTool(host: ScholarlyReadHost): ToolDefinition
           end,
           isTruncated,
           text: activeText.slice(start, end),
-        } as Record<string, JsonValue>,
+        }),
       }
     },
     presentCall: (args) => {

@@ -1,9 +1,9 @@
 import { defineTool, type InferValue, type ToolDefinition } from '@deepseek-ai/dsh-tools'
-import type { ScholarlyToolHost } from './search.js'
+import type { ScholarlyToolHost } from './common.js'
 import type { ZoteroCreateItemRequest } from '../../types.js'
 import { requireCreatableItemType, normalizeCreator } from '../../write-item-rules.js'
 import { WRITE_PLAN_LIBRARY_LINE } from '../../write-approval.js'
-import { renderDeclined } from '../../tools/present.js'
+import { ZoteroError, ZOTERO_CAPABILITY_UNAVAILABLE } from '../../errors.js'
 import {
   COMMITTED_UNVERIFIED_VARIANT,
   CREATED_ITEM_VARIANT,
@@ -12,7 +12,8 @@ import {
   libraryVersionLine,
   presentCreateResultView,
   renderCommittedUnverified,
-} from '../../tools/write-present.js'
+  renderDeclined,
+} from '../../write-present.js'
 
 const OUTPUT = {
   oneOf: [
@@ -93,7 +94,10 @@ export function createScholarlySaveToZoteroTool(host: ScholarlyToolHost): ToolDe
     async execute(args, exec): Promise<SaveOutput> {
       const service = host.zoteroService?.()
       if (service?.createItem === undefined)
-        throw new Error('The local Zotero write component is unavailable or disabled.')
+        throw new ZoteroError(
+          'The local Zotero write component is unavailable or disabled.',
+          ZOTERO_CAPABILITY_UNAVAILABLE,
+        )
       const itemType = requireCreatableItemType(args.itemType ?? 'journalArticle')
       const creators = (args.authors ?? []).map((name, index) => {
         const pieces = name.trim().split(/\s+/)

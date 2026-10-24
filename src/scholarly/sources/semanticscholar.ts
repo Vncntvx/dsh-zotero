@@ -4,14 +4,21 @@
  * @module dsh-zotero/scholarly/sources/semanticscholar
  */
 
-import { httpStatusOf, type ScholarlyHttp } from '../transport/http.js'
+import type { ScholarlyHttp } from '../transport/http.js'
 import {
   SCHOLARLY_SOURCE_NAMES,
   type ScholarlyKeys,
   type ScholarlyPaper,
   type ScholarlyQuery,
 } from '../types.js'
-import { cleanDoi, encodeQueryParams, parseYear, plain, stripEmptyFields } from './helpers.js'
+import {
+  cleanDoi,
+  encodeQueryParams,
+  ignoreNotFound,
+  parseYear,
+  plain,
+  stripEmptyFields,
+} from './helpers.js'
 
 interface S2Paper {
   paperId?: string
@@ -39,8 +46,11 @@ export function paperFromS2(paper: S2Paper): ScholarlyPaper {
   const doi = cleanDoi(paper.externalIds?.DOI)
   const arxiv = paper.externalIds?.ArXiv
   const pmid = paper.externalIds?.PubMed
-  const pmcid = paper.externalIds?.PubMedCentral
-    ? `PMC${paper.externalIds.PubMedCentral}`
+  const rawPmc = paper.externalIds?.PubMedCentral
+  const pmcid = rawPmc
+    ? rawPmc.toUpperCase().startsWith('PMC')
+      ? rawPmc
+      : `PMC${rawPmc}`
     : undefined
 
   return stripEmptyFields({
@@ -116,23 +126,16 @@ export async function lookupSemanticScholar(
   keys?: ScholarlyKeys,
   signal?: AbortSignal,
 ): Promise<ScholarlyPaper | undefined> {
-  try {
-    const url = `https://api.semanticscholar.org/graph/v1/paper/${encodeURIComponent(
-      id,
-    )}?fields=${S2_FIELDS}`
-    const body = await http.json<S2Paper>(url, {
+  const url = `https://api.semanticscholar.org/graph/v1/paper/${encodeURIComponent(
+    id,
+  )}?fields=${S2_FIELDS}`
+  const body = await ignoreNotFound(
+    http.json<S2Paper>(url, {
       signal,
       headers: s2Headers(keys),
       timeoutMs: 25_000,
       retries: keys?.s2Key ? 2 : 0,
-    })
-    return paperFromS2(body)
-  } catch (error) {
-    // 404 is the single normalized "no such record"; a 429 or 400 must reach
-    // the caller as a failure so the failedSources mechanism reports this
-    // index as unanswered instead of silently absent (the same contract
-    // `crossref.ts` keeps, locked by `tests/scholarly/read-tools.spec.ts`).
-    if (httpStatusOf(error) === 404) return undefined
-    throw error
-  }
+    }),
+  )
+  return body ? paperFromS2(body) : undefined
 }

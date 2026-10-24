@@ -11,7 +11,11 @@
 
 import { describe, expect, it } from 'vitest'
 import type { ZoteroSearchResult } from '../../src/types.js'
-import { attachLibraryStatus, type ZoteroServiceLike } from '../../src/scholarly/zotero-link.js'
+import {
+  annotateWithLibraryStatus,
+  attachLibraryStatus,
+  type ZoteroServiceLike,
+} from '../../src/scholarly/zotero-link.js'
 import type { ScholarlyPaper } from '../../src/scholarly/types.js'
 
 /** A hit with just enough fields to be annotated. @param over - overrides. */
@@ -195,5 +199,132 @@ describe('attachLibraryStatus detail enrichment corners', () => {
     })
     expect(report.matched).toBe(0)
     expect(papers[0]?.inLibrary).toBeUndefined()
+  })
+
+  it('populates collection names or refs when detail includes collections', async () => {
+    const papers = [paperOf({ title: 'Attention Is All You Need' })]
+    const report = await attachLibraryStatus(papers, {
+      search: async () => ({
+        scope: { kind: 'library', library: { type: 'user', id: 0 } },
+        items: [recordOf()],
+        total: 1,
+        returned: 1,
+        offset: 0,
+      }),
+      get: async () => ({
+        ref: 'zotero://user/0/item/ITEM1234',
+        itemType: 'journalArticle',
+        title: 'Attention Is All You Need',
+        creators: [],
+        tags: [],
+        collections: [
+          { ref: 'zotero://user/0/collection/COL1', name: 'Deep Learning' },
+          { ref: 'zotero://user/0/collection/COL2' },
+        ],
+        children: { total: 0 },
+        abstractTruncated: false,
+      }),
+    })
+    expect(report.matched).toBe(1)
+    expect(papers[0]?.inLibrary?.collections).toEqual([
+      'Deep Learning',
+      'zotero://user/0/collection/COL2',
+    ])
+  })
+
+  it('handles aborted signal in search and detail lookups', async () => {
+    const controller = new AbortController()
+    controller.abort(new Error('aborted test'))
+    await expect(
+      attachLibraryStatus(
+        [paperOf()],
+        {
+          search: async () => {
+            throw new Error('boom')
+          },
+        },
+        controller.signal,
+      ),
+    ).rejects.toThrow('aborted test')
+  })
+
+  it('handles aborted signal in detail lookup', async () => {
+    const controller = new AbortController()
+    await expect(
+      attachLibraryStatus(
+        [paperOf({ title: 'Attention Is All You Need' })],
+        {
+          search: async () => ({
+            scope: { kind: 'library', library: { type: 'user', id: 0 } },
+            items: [recordOf()],
+            total: 1,
+            returned: 1,
+            offset: 0,
+          }),
+          get: async () => {
+            controller.abort(new Error('detail aborted'))
+            throw new Error('fail')
+          },
+        },
+        controller.signal,
+      ),
+    ).rejects.toThrow('detail aborted')
+  })
+
+  it('handles detail without collections', async () => {
+    const papers = [paperOf({ title: 'Attention Is All You Need' })]
+    await attachLibraryStatus(papers, {
+      search: async () => ({
+        scope: { kind: 'library', library: { type: 'user', id: 0 } },
+        items: [recordOf()],
+        total: 1,
+        returned: 1,
+        offset: 0,
+      }),
+      get: async () => ({
+        ref: 'zotero://user/0/item/ITEM1234',
+        itemType: 'journalArticle',
+        title: 'Attention Is All You Need',
+        creators: [],
+        collections: [],
+        tags: [],
+        children: { total: 0 },
+        abstractTruncated: false,
+      }),
+    })
+    expect(papers[0]?.inLibrary?.collections).toEqual([])
+  })
+})
+
+describe('annotateWithLibraryStatus', () => {
+  it('returns empty notice and empty report for empty papers or missing service', async () => {
+    const res1 = await annotateWithLibraryStatus([])
+    expect(res1.notice).toBe('')
+    expect(res1.report.matched).toBe(0)
+
+    const res2 = await annotateWithLibraryStatus([paperOf()], undefined)
+    expect(res2.notice).toBe('')
+    expect(res2.report.matched).toBe(0)
+  })
+
+  it('formats notice for item style failure and batch style failure', async () => {
+    const failingService: ZoteroServiceLike = {
+      search: async () => {
+        throw new Error('connection refused')
+      },
+    }
+
+    const itemRes = await annotateWithLibraryStatus([paperOf()], failingService, undefined, 'item')
+    expect(itemRes.notice).toContain('Library status unavailable (local Zotero lookup failed).')
+    expect(itemRes.report.failed).toBe(1)
+
+    const batchRes = await annotateWithLibraryStatus(
+      [paperOf(), paperOf({ title: 'Paper 2' })],
+      failingService,
+      undefined,
+      'batch',
+    )
+    expect(batchRes.notice).toContain('Library status unavailable for 2 of 2 results')
+    expect(batchRes.report.failed).toBe(2)
   })
 })

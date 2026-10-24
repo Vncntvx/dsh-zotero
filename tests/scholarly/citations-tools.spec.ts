@@ -8,6 +8,7 @@
 import { describe, expect, it } from 'vitest'
 import { EXEC_CONTEXT, createMockHost, createMockHttp } from './fixtures.js'
 import { createScholarlyCitationsTool } from '../../src/scholarly/tools/index.js'
+import { toCleanJsonRecords } from '../../src/scholarly/tools/common.js'
 
 describe('scholarly_citations tool', () => {
   it('rejects invalid or non-paper identifier', async () => {
@@ -18,6 +19,9 @@ describe('scholarly_citations tool', () => {
         { id: 'https://example.com/not-a-paper', direction: 'citations' },
         EXEC_CONTEXT as any,
       ),
+    ).rejects.toThrow('Please provide a valid DOI, an arXiv ID, or a PMID')
+    await expect(
+      tool.execute({ id: 'PMC1234567', direction: 'citations' }, EXEC_CONTEXT as any),
     ).rejects.toThrow('Please provide a valid DOI, an arXiv ID, or a PMID')
   })
 
@@ -203,5 +207,32 @@ describe('scholarly_citations direction handling', () => {
       EXEC_CONTEXT as never,
     )) as { text: string }
     expect(result.text.length).toBeGreaterThan(0)
+  })
+})
+
+describe('toCleanJsonRecords helper', () => {
+  it('converts objects stripping undefined fields and handling nested primitives, arrays, and objects', () => {
+    const input = [
+      {
+        a: 'str',
+        b: 123,
+        c: true,
+        d: null,
+        e: undefined,
+        f: ['x', undefined, 1],
+        g: { nested: 'val', dropped: undefined, fn: () => {} },
+      },
+    ]
+    const cleaned = toCleanJsonRecords(input)
+    expect(cleaned).toEqual([
+      {
+        a: 'str',
+        b: 123,
+        c: true,
+        d: null,
+        f: ['x', 1],
+        g: { nested: 'val', fn: null },
+      },
+    ])
   })
 })

@@ -174,6 +174,7 @@ describe('scholarly host table is the single source', () => {
       expect(isAllowedScholarlyHost(host), `${host} must be allowed`).toBe(true)
       expect(intervalForHost(host), `${host} must be paced`).toBeGreaterThan(0)
     }
+    expect(intervalForHost('completely.unknown.domain')).toBe(0)
   })
 
   it('accepts declared subdomains and refuses undeclared hosts', () => {
@@ -259,6 +260,22 @@ describe('scholarly transport rate limiting: HostPacer', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('prunes expired last request times when host table outgrows cap', async () => {
+    const pacer = new HostPacer({ 'h1.org': 1, 'h2.org': 1 }, 1)
+    await pacer.pace('h1.org')
+    const map = (pacer as unknown as { lastRequestTime: Map<string, number> }).lastRequestTime
+    map.set('h1.org', Date.now() - 70_000)
+    await pacer.pace('h2.org')
+    expect(map.has('h1.org')).toBe(false)
+    expect(map.has('h2.org')).toBe(true)
+  })
+
+  it('rejects immediately when signal is pre-aborted', async () => {
+    const pacer = new HostPacer()
+    const preAborted = AbortSignal.abort(new Error('pre-aborted'))
+    await expect(pacer.pace('adhoc.org', preAborted)).rejects.toThrow('pre-aborted')
   })
 })
 
@@ -465,14 +482,15 @@ describe('scholarly transport deadline and gate behavior', () => {
   })
 
   it('prunes healthy ad-hoc circuits and expired pacer request timestamps', async () => {
-    const breaker = new CircuitBreaker({ maxTrackedCircuits: 1 })
+    const breaker = new CircuitBreaker({ maxTrackedCircuits: 2, cooldownMs: 10, windowMs: 10 })
     breaker.beforeRequest('adhoc-1.org')
+    breaker.recordFailure('adhoc-1.org')
     breaker.beforeRequest('adhoc-2.org')
+    breaker.recordFailure('adhoc-2.org')
+    // Wait for failure window & cooldown to elapse
+    await new Promise((resolve) => setTimeout(resolve, 15))
+    // Trigger prune on next new host
     breaker.beforeRequest('adhoc-3.org')
-
-    const pacer = new HostPacer({ 'adhoc.org': 0 }, 1)
-    await pacer.pace('adhoc.org')
-    await pacer.pace('adhoc-2.org')
   })
 })
 

@@ -4,7 +4,6 @@
  */
 
 import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
-import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { bestIdentifierOf, formatPaperDetail, fuseRankedLists } from '../fusion.js'
 import { openAlexIdOf, parsePaperIdentifier } from '../fulltext/resolve.js'
 import { lookupArxiv } from '../sources/arxiv.js'
@@ -16,11 +15,13 @@ import { titleKey } from '../normalize.js'
 import { SCHOLARLY_SOURCE_NAMES, type ScholarlyPaper, type ScholarlySourceId } from '../types.js'
 import { annotateWithLibraryStatus } from '../zotero-link.js'
 import { failureTextOf } from './failure.js'
+import { ZoteroError, ZOTERO_INVALID_ARGUMENT } from '../../errors.js'
 import {
   SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR,
+  toCleanJsonRecords,
   type ScholarlyToolHost,
   type ScholarlyToolOutput,
-} from './search.js'
+} from './common.js'
 
 export function createScholarlyGetTool(host: ScholarlyToolHost): ToolDefinition {
   return defineTool({
@@ -42,7 +43,7 @@ export function createScholarlyGetTool(host: ScholarlyToolHost): ToolDefinition 
     timeoutMs: 60_000,
     async execute(args, exec): Promise<ScholarlyToolOutput> {
       const raw = (args as { id: string }).id.trim()
-      if (!raw) throw new Error('id parameter cannot be empty.')
+      if (!raw) throw new ZoteroError('id parameter cannot be empty.', ZOTERO_INVALID_ARGUMENT)
 
       const id = parsePaperIdentifier(raw)
       const keys = host.keys()
@@ -89,9 +90,10 @@ export function createScholarlyGetTool(host: ScholarlyToolHost): ToolDefinition 
         // URL string as a title returns whatever happens to match, and the
         // result then reads like an exact hit, so point at the tool that reads
         // a URL instead of guessing.
-        throw new Error(
+        throw new ZoteroError(
           'A URL has no scholarly record to look up. Use scholarly_read with that URL to read its text, ' +
             'or pass a DOI, arXiv ID, PMID, or PMCID instead.',
+          ZOTERO_INVALID_ARGUMENT,
         )
       }
 
@@ -199,7 +201,7 @@ export function createScholarlyGetTool(host: ScholarlyToolHost): ToolDefinition 
 
       return {
         text: `${titlePrefix}${formatPaperDetail(paper)}\n\nCanonical ID for other scholarly tools: ${idHint}${failureNote}${libraryNotice}`,
-        papers: [paper] as unknown as Record<string, JsonValue>[],
+        papers: toCleanJsonRecords([paper]),
         issues: failedSources,
       }
     },

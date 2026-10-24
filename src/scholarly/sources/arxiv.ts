@@ -11,6 +11,8 @@ import { SCHOLARLY_STOPWORDS } from '../normalize.js'
 
 const NEW_ARXIV_ID = /(\d{4}\.\d{4,5})(v\d+)?/
 const OLD_ARXIV_ID = /([a-z-]+(?:\.[A-Z]{2})?\/\d{7})(v\d+)?/
+const NEW_ARXIV_ID_EXACT = new RegExp(`^${NEW_ARXIV_ID.source}(?:\\.pdf)?$`)
+const OLD_ARXIV_ID_EXACT = new RegExp(`^${OLD_ARXIV_ID.source}(?:\\.pdf)?$`)
 
 export function extractArxivId(input: string): string | undefined {
   const text = input.trim()
@@ -18,9 +20,7 @@ export function extractArxivId(input: string): string | undefined {
     /arxiv\.org\/(?:abs|pdf|html)\/([^\s?#]+)/i.exec(text)?.[1] ??
     /^(?:arxiv:|10\.48550\/arxiv\.)(.+)$/i.exec(text)?.[1] ??
     text
-  const match =
-    new RegExp(`^${NEW_ARXIV_ID.source}(?:\\.pdf)?$`).exec(scoped) ??
-    new RegExp(`^${OLD_ARXIV_ID.source}(?:\\.pdf)?$`).exec(scoped)
+  const match = NEW_ARXIV_ID_EXACT.exec(scoped) ?? OLD_ARXIV_ID_EXACT.exec(scoped)
   return match?.[1]
 }
 

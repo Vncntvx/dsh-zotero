@@ -98,6 +98,7 @@ async function fetchPdfText(
       headers: { accept: 'application/pdf,*/*' },
     })
   } catch (error) {
+    if (signal?.aborted) throw signal.reason ?? error
     return { kind: 'none', reason: 'fetch', detail: errorMessageOf(error) }
   }
 
@@ -145,6 +146,7 @@ async function tryHtmlRoute(
   try {
     html = await http.text(url, { signal, timeoutMs: 35_000, retries: 0 })
   } catch (error) {
+    if (signal?.aborted) throw signal.reason ?? error
     return { kind: 'none', reason: `${label}: ${errorMessageOf(error)}` }
   }
   const markdown = arxivHtmlToMarkdown(html)
@@ -273,23 +275,55 @@ export async function resolveScholarlyFullText(
   let pmcid: string | undefined = target.kind === 'pmcid' ? target.id : undefined
   let doi: string | undefined = target.kind === 'doi' ? target.id : undefined
 
-  // Check Europe PMC
-  let epmc: Awaited<ReturnType<typeof lookupEuropePmc>>
-  try {
-    epmc = await lookupEuropePmc(
-      target.kind === 'doi'
-        ? { doi: target.id }
-        : target.kind === 'pmid'
-          ? { pmid: target.id }
-          : { pmcid: target.id },
-      http,
-      keys,
-      signal,
-    )
-  } catch (error) {
-    epmc = undefined
+  // Initiate Europe PMC lookup
+  const epmcPromise = lookupEuropePmc(
+    target.kind === 'doi'
+      ? { doi: target.id }
+      : target.kind === 'pmid'
+        ? { pmid: target.id }
+        : { pmcid: target.id },
+    http,
+    keys,
+    signal,
+  ).catch((error) => {
+    if (signal?.aborted) throw signal.reason ?? error
     reasons.push(`Europe PMC lookup: ${errorMessageOf(error)}`)
-  }
+    return undefined
+  })
+
+  // When resolving a DOI, initiate OpenAlex and Unpaywall concurrently with Europe PMC
+  const openAlexPromise =
+    doi !== undefined
+      ? lookupOpenAlex(`doi:${doi}`, http, keys, signal)
+          .then((work) => ({ kind: 'openalex' as const, work }))
+          .catch((error) => {
+            if (signal?.aborted) throw signal.reason ?? error
+            reasons.push(`OpenAlex lookup: ${errorMessageOf(error)}`)
+            return undefined
+          })
+      : Promise.resolve(undefined)
+
+  const unpaywallPromise =
+    doi !== undefined && keys?.email !== undefined
+      ? http
+          .json<{
+            best_oa_location?: { url_for_pdf?: string | null } | null
+            oa_locations?: Array<{ url_for_pdf?: string | null }>
+          }>(
+            `https://api.unpaywall.org/v2/${encodeURIComponent(doi)}?email=${encodeURIComponent(
+              keys.email,
+            )}`,
+            { signal, timeoutMs: 25_000 },
+          )
+          .then((oa) => ({ kind: 'unpaywall' as const, oa }))
+          .catch((error) => {
+            if (signal?.aborted) throw signal.reason ?? error
+            reasons.push(`Unpaywall lookup: ${errorMessageOf(error)}`)
+            return undefined
+          })
+      : Promise.resolve(undefined)
+
+  const epmc = await epmcPromise
 
   if (epmc !== undefined) {
     if (pmcid === undefined && epmc.pmcid !== undefined) pmcid = epmc.pmcid
@@ -302,6 +336,7 @@ export async function resolveScholarlyFullText(
     try {
       xml = await fetchPmcFullTextXml(pmcid, http, signal)
     } catch (error) {
+      if (signal?.aborted) throw signal.reason ?? error
       reasons.push(`PMC full text (${pmcid}): ${errorMessageOf(error)}`)
     }
     if (xml !== undefined) {
@@ -325,32 +360,6 @@ export async function resolveScholarlyFullText(
   const attemptedArxivIds = new Set<string>()
 
   if (doi !== undefined) {
-    const openAlexPromise = lookupOpenAlex(`doi:${doi}`, http, keys, signal)
-      .then((work) => ({ kind: 'openalex' as const, work }))
-      .catch((error) => {
-        reasons.push(`OpenAlex lookup: ${errorMessageOf(error)}`)
-        return undefined
-      })
-
-    const unpaywallPromise =
-      keys?.email !== undefined
-        ? http
-            .json<{
-              best_oa_location?: { url_for_pdf?: string | null } | null
-              oa_locations?: Array<{ url_for_pdf?: string | null }>
-            }>(
-              `https://api.unpaywall.org/v2/${encodeURIComponent(doi)}?email=${encodeURIComponent(
-                keys.email,
-              )}`,
-              { signal, timeoutMs: 25_000 },
-            )
-            .then((oa) => ({ kind: 'unpaywall' as const, oa }))
-            .catch((error) => {
-              reasons.push(`Unpaywall lookup: ${errorMessageOf(error)}`)
-              return undefined
-            })
-        : Promise.resolve(undefined)
-
     const [openAlexRes, unpaywallRes] = await Promise.all([openAlexPromise, unpaywallPromise])
 
     if (openAlexRes?.work !== undefined) {
@@ -384,6 +393,7 @@ export async function resolveScholarlyFullText(
       try {
         s2 = await lookupSemanticScholar(`DOI:${doi}`, http, keys, signal)
       } catch (error) {
+        if (signal?.aborted) throw signal.reason ?? error
         s2 = undefined
         reasons.push(`Semantic Scholar lookup: ${errorMessageOf(error)}`)
       }

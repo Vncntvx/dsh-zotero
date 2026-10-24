@@ -59,9 +59,26 @@ export class CircuitBreaker {
 
   private pruneDynamicCircuits(): void {
     if (this.circuits.size <= this.maxTrackedCircuits) return
+    const now = Date.now()
+    // Phase 1: Prune dynamic circuits that are healthy or whose failures/cooldown have expired
     for (const [h, c] of this.circuits.entries()) {
-      if (!isScholarlyHost(h) && c.state === 'CLOSED' && c.consecutiveFailures === 0) {
+      if (isScholarlyHost(h)) continue
+      const isHealthy = c.state === 'CLOSED' && c.consecutiveFailures === 0
+      const isExpired = now - c.lastFailureTime > this.windowMs && now >= c.cooldownEndsAt
+      if (isHealthy || isExpired) {
         this.circuits.delete(h)
+      }
+    }
+    // Phase 2: If still above capacity, evict dynamic hosts by oldest activity
+    if (this.circuits.size > this.maxTrackedCircuits) {
+      const dynamicEntries: Array<[string, HostCircuit]> = []
+      for (const [h, c] of this.circuits.entries()) {
+        if (!isScholarlyHost(h)) dynamicEntries.push([h, c])
+      }
+      dynamicEntries.sort((a, b) => a[1].lastFailureTime - b[1].lastFailureTime)
+      const toEvict = this.circuits.size - this.maxTrackedCircuits
+      for (let i = 0; i < toEvict && i < dynamicEntries.length; i++) {
+        this.circuits.delete(dynamicEntries[i]![0])
       }
     }
   }

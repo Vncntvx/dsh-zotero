@@ -99,12 +99,26 @@ function recordOf(value: unknown): FullTextRecord | undefined {
 export class ScholarlyTextStore {
   private readonly memory = new Map<string, FullTextRecord>()
   private disposed = false
+  private rootEnsured: Promise<void> | undefined
 
   constructor(
     /** Resolved cache root; defaults to the harness cache path for this component. */
     public readonly root: string = dshCachePath('zotero-scholarly'),
     private readonly memoryItems: number = DEFAULT_MEMORY_ITEMS,
   ) {}
+
+  private ensureRoot(): Promise<void> {
+    if (!this.rootEnsured) {
+      this.rootEnsured = mkdir(this.root, { recursive: true }).then(
+        () => {},
+        (err) => {
+          this.rootEnsured = undefined
+          throw err
+        },
+      )
+    }
+    return this.rootEnsured
+  }
 
   /**
    * Read one record.
@@ -168,7 +182,7 @@ export class ScholarlyTextStore {
     this.remember(key, record)
     if (this.disposed) return
 
-    await mkdir(this.root, { recursive: true })
+    await this.ensureRoot()
     const path = join(this.root, fileNameOf(key))
     const temporary = `${path}.${process.pid}.tmp`
     await writeFile(temporary, encoded, 'utf8')

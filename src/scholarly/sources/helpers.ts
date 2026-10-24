@@ -4,6 +4,31 @@
  */
 
 import type { ScholarlyPaper } from '../types.js'
+import { httpStatusOf } from '../transport/http.js'
+
+/**
+ * Await a promise and convert HTTP 404 Not Found into `undefined`.
+ * Any other HTTP status or network failure is rethrown.
+ */
+export async function ignoreNotFound<T>(promise: Promise<T>): Promise<T | undefined> {
+  try {
+    return await promise
+  } catch (error) {
+    if (httpStatusOf(error) === 404) return undefined
+    throw error
+  }
+}
+
+/**
+ * Combine a base search query with additional filter clauses.
+ * When multiple clauses exist, parenthesizes the base query and joins with AND.
+ */
+export function combineSearchClauses(baseQuery: string, additionalClauses: string[]): string {
+  const clauses = [baseQuery, ...additionalClauses]
+  return clauses.length === 1
+    ? clauses[0]!
+    : clauses.map((c, idx) => (idx === 0 ? `(${c})` : c)).join(' AND ')
+}
 
 const ENTITIES: Record<string, string> = {
   amp: '&',

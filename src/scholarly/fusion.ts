@@ -27,6 +27,7 @@ interface MergedEntry {
   paper: ScholarlyPaper
   score: number
   titleTokens?: ReadonlySet<string>
+  titleKey?: string
 }
 
 const RRF_K = 60
@@ -63,8 +64,10 @@ export function fuseRankedLists(lists: readonly RankedSourceList[]): ScholarlyPa
         const paperTokens = titleTokens(paper.title)
         for (const existing of merged) {
           if (existing.paper.title.length < 10) continue
-          const existingKey = titleKey(existing.paper.title)
-          if (existingKey === paperKey) {
+          if (existing.titleKey === undefined) {
+            existing.titleKey = titleKey(existing.paper.title)
+          }
+          if (existing.titleKey === paperKey) {
             entry = existing
             break
           }

@@ -3,14 +3,21 @@
  * @module dsh-zotero/scholarly/sources/crossref
  */
 
-import { httpStatusOf, type ScholarlyHttp } from '../transport/http.js'
+import type { ScholarlyHttp } from '../transport/http.js'
 import {
   SCHOLARLY_SOURCE_NAMES,
   type ScholarlyKeys,
   type ScholarlyPaper,
   type ScholarlyQuery,
 } from '../types.js'
-import { cleanDoi, encodeQueryParams, parseYear, plain, stripEmptyFields } from './helpers.js'
+import {
+  cleanDoi,
+  encodeQueryParams,
+  ignoreNotFound,
+  parseYear,
+  plain,
+  stripEmptyFields,
+} from './helpers.js'
 
 export interface CrossrefWork {
   DOI?: string
@@ -112,17 +119,14 @@ export async function lookupCrossref(
     keys?.email ? `?mailto=${encodeURIComponent(keys.email)}` : ''
   }`
 
-  try {
-    const body = await http.json<{ message?: CrossrefWork }>(url, {
+  const body = await ignoreNotFound(
+    http.json<{ message?: CrossrefWork }>(url, {
       signal,
       headers: crossrefHeaders(keys),
       timeoutMs: 25_000,
-    })
-    return body.message ? paperFromCrossref(body.message) : undefined
-  } catch (error) {
-    if (httpStatusOf(error) === 404) return undefined
-    throw error
-  }
+    }),
+  )
+  return body?.message ? paperFromCrossref(body.message) : undefined
 }
 
 export async function crossrefMatchReference(

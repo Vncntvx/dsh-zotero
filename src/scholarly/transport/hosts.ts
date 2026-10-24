@@ -93,5 +93,5 @@ export function intervalForHost(hostname: string): number {
   const exact = SCHOLARLY_HOST_INTERVALS[normalized]
   if (exact !== undefined) return exact
   const parent = SUBDOMAIN_HOSTS.find((candidate) => normalized.endsWith(`.${candidate}`))
-  return parent === undefined ? 0 : (SCHOLARLY_HOST_INTERVALS[parent] ?? 0)
+  return parent === undefined ? 0 : SCHOLARLY_HOST_INTERVALS[parent]
 }

@@ -3,14 +3,22 @@
  * @module dsh-zotero/scholarly/sources/pmc
  */
 
-import { httpStatusOf, type ScholarlyHttp } from '../transport/http.js'
+import type { ScholarlyHttp } from '../transport/http.js'
 import {
   SCHOLARLY_SOURCE_NAMES,
   type ScholarlyKeys,
   type ScholarlyPaper,
   type ScholarlyQuery,
 } from '../types.js'
-import { cleanDoi, encodeQueryParams, parseYear, plain, stripEmptyFields } from './helpers.js'
+import {
+  cleanDoi,
+  combineSearchClauses,
+  encodeQueryParams,
+  ignoreNotFound,
+  parseYear,
+  plain,
+  stripEmptyFields,
+} from './helpers.js'
 
 export interface EpmcResult {
   id?: string
@@ -76,22 +84,19 @@ export async function searchEuropePmc(
   keys?: ScholarlyKeys,
   signal?: AbortSignal,
 ): Promise<ScholarlyPaper[]> {
-  const clauses = [query.query]
+  const additional: string[] = []
 
   if (query.yearFrom !== undefined || query.yearTo !== undefined) {
     const from = query.yearFrom ?? 1800
     const to = query.yearTo ?? 2100
-    clauses.push(`PUB_YEAR:[${from} TO ${to}]`)
+    additional.push(`PUB_YEAR:[${from} TO ${to}]`)
   }
 
   if (query.openAccess) {
-    clauses.push('OPEN_ACCESS:y')
+    additional.push('OPEN_ACCESS:y')
   }
 
-  const expression =
-    clauses.length === 1
-      ? clauses[0]!
-      : clauses.map((c, idx) => (idx === 0 ? `(${c})` : c)).join(' AND ')
+  const expression = combineSearchClauses(query.query, additional)
 
   const params: Record<string, string | number | undefined> = {
     query: expression,
@@ -151,14 +156,9 @@ export async function fetchPmcFullTextXml(
   http: ScholarlyHttp,
   signal?: AbortSignal,
 ): Promise<string | undefined> {
-  try {
-    const cleanPmcid = pmcid.toUpperCase().startsWith('PMC') ? pmcid : `PMC${pmcid}`
-    const url = `https://www.ebi.ac.uk/europepmc/webservices/rest/${encodeURIComponent(
-      cleanPmcid,
-    )}/fullTextXML`
-    return await http.text(url, { signal, timeoutMs: 35_000 })
-  } catch (error) {
-    if (httpStatusOf(error) === 404) return undefined
-    throw error
-  }
+  const cleanPmcid = pmcid.toUpperCase().startsWith('PMC') ? pmcid : `PMC${pmcid}`
+  const url = `https://www.ebi.ac.uk/europepmc/webservices/rest/${encodeURIComponent(
+    cleanPmcid,
+  )}/fullTextXML`
+  return await ignoreNotFound(http.text(url, { signal, timeoutMs: 35_000 }))
 }

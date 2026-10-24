@@ -11,7 +11,50 @@ import {
   type ScholarlyPaper,
   type ScholarlyQuery,
 } from '../types.js'
-import { cleanDoi, encodeQueryParams, parseYear, stripEmptyFields, xmlTextVal } from './helpers.js'
+import {
+  cleanDoi,
+  combineSearchClauses,
+  encodeQueryParams,
+  parseYear,
+  stripEmptyFields,
+  xmlTextVal,
+} from './helpers.js'
+
+interface PubmedEntry {
+  MedlineCitation?: {
+    PMID?: unknown
+    Article?: {
+      ArticleTitle?: unknown
+      Journal?: {
+        Title?: string
+        JournalIssue?: {
+          PubDate?: {
+            Year?: unknown
+            MedlineDate?: unknown
+          }
+        }
+      }
+      Abstract?: {
+        AbstractText?: unknown
+      }
+      AuthorList?: {
+        Author?: Array<{
+          LastName?: string
+          ForeName?: string
+          CollectiveName?: string
+        }>
+      }
+    }
+  }
+  PubmedData?: {
+    ArticleIdList?: {
+      ArticleId?: Array<{
+        '@IdType'?: string
+        '#text'?: unknown
+      }>
+    }
+  }
+}
 
 const pubmedParser = new XMLParser({
   ignoreAttributes: false,
@@ -22,7 +65,7 @@ const pubmedParser = new XMLParser({
 
 export function parsePubmedXml(xml: string): ScholarlyPaper[] {
   const parsed = pubmedParser.parse(xml) as {
-    PubmedArticleSet?: { PubmedArticle?: Array<Record<string, any>> }
+    PubmedArticleSet?: { PubmedArticle?: PubmedEntry[] }
   }
   const articles = parsed.PubmedArticleSet?.PubmedArticle ?? []
 
@@ -92,19 +135,17 @@ export async function searchPubMed(
     api_key: keys?.ncbiKey,
   }
 
-  const clauses = [query.query]
+  const additional: string[] = []
   if (query.yearFrom !== undefined || query.yearTo !== undefined) {
     const from = query.yearFrom ?? 1800
     const to = query.yearTo ?? 3000
-    clauses.push(`${from}:${to}[dp]`)
+    additional.push(`${from}:${to}[dp]`)
   }
   if (query.openAccess) {
-    clauses.push('free full text[sb]')
+    additional.push('free full text[sb]')
   }
 
-  const term = clauses
-    .map((c, idx, arr) => (arr.length > 1 && idx === 0 ? `(${c})` : c))
-    .join(' AND ')
+  const term = combineSearchClauses(query.query, additional)
 
   const searchUrl = `${base}/esearch.fcgi?${encodeQueryParams({
     db: 'pubmed',
@@ -133,7 +174,9 @@ export async function searchPubMed(
   const papers = parsePubmedXml(xml)
 
   // Reorder according to the esearch ranking order
-  return ids
-    .map((id) => papers.find((p) => p.pmid === id))
-    .filter((p): p is ScholarlyPaper => p !== undefined)
+  const paperByPmid = new Map<string, ScholarlyPaper>()
+  for (const p of papers) {
+    if (p.pmid) paperByPmid.set(p.pmid, p)
+  }
+  return ids.map((id) => paperByPmid.get(id)).filter((p): p is ScholarlyPaper => p !== undefined)
 }

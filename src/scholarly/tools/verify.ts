@@ -5,8 +5,8 @@
  */
 
 import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
-import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { mapWithConcurrency } from '../../concurrency.js'
+import { ZoteroError, ZOTERO_INVALID_ARGUMENT } from '../../errors.js'
 import { titleKey, titleTokens } from '../normalize.js'
 import {
   crossrefMatchReference,
@@ -19,9 +19,10 @@ import type { ScholarlyPaper } from '../types.js'
 import { failureTextOf } from './failure.js'
 import {
   SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR,
+  toCleanJsonRecords,
   type ScholarlyToolHost,
   type ScholarlyToolOutput,
-} from './search.js'
+} from './common.js'
 
 /**
  * What one reference check concluded.
@@ -252,7 +253,9 @@ export function createScholarlyVerifyTool(host: ScholarlyToolHost): ToolDefiniti
         .map((r) => r.trim())
         .filter(Boolean)
         .slice(0, 40)
-      if (list.length === 0) throw new Error('references parameter cannot be empty.')
+      if (list.length === 0) {
+        throw new ZoteroError('references parameter cannot be empty.', ZOTERO_INVALID_ARGUMENT)
+      }
 
       const counts: Record<VerificationVerdict, number> = {
         verified: 0,
@@ -295,7 +298,7 @@ export function createScholarlyVerifyTool(host: ScholarlyToolHost): ToolDefiniti
 
       return {
         text: `${summary}\n\n${lines}`,
-        checks: results as unknown as Record<string, JsonValue>[],
+        checks: toCleanJsonRecords(results),
       }
     },
     presentCall: (args) => ({

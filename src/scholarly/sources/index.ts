@@ -1,5 +1,5 @@
 /**
- * Unified dispatch registry for all 6 scholarly source adapters.
+ * Unified dispatch registry for all 7 scholarly source adapters.
  * @module dsh-zotero/scholarly/sources/index
  */
 

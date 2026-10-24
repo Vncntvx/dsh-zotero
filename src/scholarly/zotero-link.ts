@@ -19,6 +19,7 @@
  */
 
 import { parseRef } from '../refs.js'
+import { mapWithConcurrency } from '../concurrency.js'
 import type {
   ZoteroGetRequest,
   ZoteroItemDetail,
@@ -75,10 +76,10 @@ function extraDoiOf(extra: string | undefined): string | undefined {
  */
 function compactRecordMatches(
   paper: ScholarlyPaper,
-  item: { title: string; extra?: string },
+  item: { title: string; extra?: string; doi?: string },
   paperDoi: string | undefined,
 ): boolean {
-  const itemDoi = extraDoiOf(item.extra)
+  const itemDoi = item.doi?.trim().toLowerCase() ?? extraDoiOf(item.extra)
   if (itemDoi !== undefined && paperDoi !== undefined && itemDoi === paperDoi) return true
   return (
     paper.title.length >= MIN_TITLE_MATCH_LENGTH && titleKey(item.title) === titleKey(paper.title)
@@ -103,79 +104,79 @@ export async function attachLibraryStatus(
     return report
   }
 
-  await Promise.all(
-    papers.map(async (paper) => {
-      const queryTerm = paper.doi ?? paper.title
-      let res: ZoteroSearchResult
+  await mapWithConcurrency(papers, 4, async (paper) => {
+    const queryTerm = paper.doi ?? paper.title
+    let res: ZoteroSearchResult
+    try {
+      res = await zoteroService.search(
+        {
+          query: queryTerm,
+          mode: 'metadata',
+          scope: { kind: 'library' },
+          sort: 'dateModified',
+          direction: 'desc',
+          offset: 0,
+          limit: 3,
+        },
+        signal,
+      )
+    } catch (error) {
+      if (signal?.aborted) throw signal.reason ?? error
+      report.failed += 1
+      return
+    }
+
+    const paperDoi = paper.doi?.trim().toLowerCase()
+
+    for (const item of res.items ?? []) {
+      // The grammar owns ref identity: an unparseable ref is not a match, and
+      // the detail seam below takes the parsed object, never a string.
+      let ref: ZoteroObjectRef
       try {
-        res = await zoteroService.search(
-          {
-            query: queryTerm,
-            mode: 'metadata',
-            scope: { kind: 'library' },
-            sort: 'dateModified',
-            direction: 'desc',
-            offset: 0,
-            limit: 3,
-          },
-          signal,
-        )
+        ref = parseRef(item.ref)
       } catch {
-        report.failed += 1
-        return
+        report.unparseable += 1
+        continue
       }
 
-      const paperDoi = paper.doi?.trim().toLowerCase()
+      let isMatch = compactRecordMatches(paper, item, paperDoi)
+      let collections: string[] = []
 
-      for (const item of res.items ?? []) {
-        // The grammar owns ref identity: an unparseable ref is not a match, and
-        // the detail seam below takes the parsed object, never a string.
-        let ref: ZoteroObjectRef
+      // When the compact record does not match and the paper has no DOI, the
+      // detail lookup can match neither the DOI nor the title, so it is skipped.
+      if (typeof zoteroService.get === 'function' && (isMatch || paperDoi !== undefined)) {
         try {
-          ref = parseRef(item.ref)
-        } catch {
-          report.unparseable += 1
-          continue
-        }
-
-        let isMatch = compactRecordMatches(paper, item, paperDoi)
-        let collections: string[] = []
-
-        // When the compact record does not match and the paper has no DOI, the
-        // detail lookup can match neither the DOI nor the title, so it is skipped.
-        if (typeof zoteroService.get === 'function' && (isMatch || paperDoi !== undefined)) {
-          try {
-            const detail = await zoteroService.get({ ref, include: new Set() }, signal)
-            const detailDoi = detail.doi?.trim().toLowerCase()
-            if (paperDoi !== undefined && detailDoi !== undefined && paperDoi === detailDoi) {
-              isMatch = true
-            } else if (
-              paper.title.length >= MIN_TITLE_MATCH_LENGTH &&
-              titleKey(detail.title) === titleKey(paper.title)
-            ) {
-              isMatch = true
-            }
-            if (isMatch && detail.collections) {
-              collections = detail.collections.map((c) => c.name ?? c.ref)
-            }
-          } catch {
-            // A failed detail read leaves the compact record's own match intact;
-            // the collection list stays empty rather than invented.
+          const detail = await zoteroService.get({ ref, include: new Set() }, signal)
+          const detailDoi = detail.doi?.trim().toLowerCase()
+          if (paperDoi !== undefined && detailDoi !== undefined && paperDoi === detailDoi) {
+            isMatch = true
+          } else if (
+            paper.title.length >= MIN_TITLE_MATCH_LENGTH &&
+            titleKey(detail.title) === titleKey(paper.title)
+          ) {
+            isMatch = true
           }
-        }
-
-        if (isMatch) {
-          paper.inLibrary = {
-            itemKey: ref.key,
-            libraryId: String(ref.library.id),
-            collections,
+          if (isMatch && detail.collections) {
+            collections = detail.collections.map((c) => c.name ?? c.ref)
           }
-          report.matched += 1
-          break
+        } catch (error) {
+          if (signal?.aborted) throw signal.reason ?? error
+          // A failed detail read leaves the compact record's own match intact;
+          // the collection list stays empty rather than invented.
         }
       }
-    }),
-  )
+
+      if (isMatch) {
+        paper.inLibrary = {
+          itemKey: ref.key,
+          libraryId: String(ref.library.id),
+          collections,
+        }
+        report.matched += 1
+        break
+      }
+    }
+  })
 
   return report
 }

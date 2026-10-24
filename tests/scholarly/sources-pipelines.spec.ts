@@ -97,6 +97,17 @@ describe('adapter network query & lookup pipelines', () => {
     const item = await lookupCrossref('10.1038/nature1234', mockHttp)
     expect(item?.title).toBe('Deep Learning')
 
+    const itemWithMail = await lookupCrossref('10.1038/nature1234', mockHttp, {
+      email: 'test@example.com',
+    })
+    expect(itemWithMail?.title).toBe('Deep Learning')
+
+    const citationHits = await searchCrossref(
+      { query: 'deep learning', limit: 5, sort: 'citations' },
+      mockHttp,
+    )
+    expect(citationHits.length).toBe(1)
+
     const missing = await lookupCrossref('10.1038/404', mockHttp)
     expect(missing).toBeUndefined()
   })
@@ -130,6 +141,12 @@ describe('adapter network query & lookup pipelines', () => {
     const hits = await searchDblp({ query: 'transformers', limit: 5, sort: 'relevance' }, mockHttp)
     expect(hits.length).toBe(1)
     expect(hits[0]?.title).toBe('Transformers in Vision')
+
+    const filteredHits = await searchDblp(
+      { query: 'transformers', limit: 5, sort: 'relevance', yearFrom: 2021, yearTo: 2021 },
+      mockHttp,
+    )
+    expect(filteredHits.length).toBe(1)
 
     await expect(
       searchDblp({ query: 'challenge', limit: 5, sort: 'relevance' }, mockHttp),
@@ -203,7 +220,7 @@ describe('adapter network query & lookup pipelines', () => {
     })
 
     const hits = await searchEuropePmc(
-      { query: 'trial', limit: 5, sort: 'date', yearFrom: 2020 },
+      { query: 'trial', limit: 5, sort: 'date', yearFrom: 2020, openAccess: true },
       mockHttp,
     )
     expect(hits.length).toBe(1)
