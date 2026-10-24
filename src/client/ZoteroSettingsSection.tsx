@@ -133,7 +133,9 @@ export function ZoteroSettingsSection(props: ZoteroSettingsSectionProps): ReactN
             aria-labelledby="zotero-tab-scholarly"
             className={css.tabPanel}
           >
-            <p className={css.note}>{t('scholarlyDisabled')}</p>
+            <p className={css.note} role="status">
+              {t('scholarlyDisabled')}
+            </p>
           </div>
         )}
       </div>

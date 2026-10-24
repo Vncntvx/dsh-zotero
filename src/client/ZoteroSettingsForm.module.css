@@ -1,6 +1,6 @@
-/* Zotero settings form layout:
- * Segmented tabs navigation and elevated group cards aligned with
- * DeepSeek Harness design language. */
+/* Zotero settings form layout: flat grouped sections under the page's tabs,
+ * matching the official settings surface (plain sections, fields separated by
+ * hairlines) rather than nested cards. */
 
 .tabsContainer {
   margin: 16px 0 20px;
@@ -15,36 +15,36 @@
   display: none !important;
 }
 
-.groupCard {
+.group {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 16px 20px;
-  border: 0.5px solid var(--dsw-alias-border-l3);
-  border-radius: var(--dsw-radius-lg);
-  background: var(--dsw-alias-bg-layer-2);
-  margin-bottom: 16px;
+  gap: 12px;
+  padding: 16px 0;
 }
 
-.cardHeader {
+.group:first-child {
+  padding-top: 0;
+}
+
+.groupHeader {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
-.groupTitle {
+.groupHeading {
   margin: 0;
-  font-size: 14px;
-  line-height: 20px;
+  font-size: 13px;
+  line-height: 1.5;
   font-weight: 600;
   color: var(--dsw-alias-label-primary);
 }
 
-.groupDescription {
+.groupNote {
   margin: 0;
   font-size: 12px;
-  line-height: 18px;
-  color: var(--dsw-alias-label-secondary);
+  line-height: 1.5;
+  color: var(--dsw-alias-label-tertiary);
 }
 
 .fields {

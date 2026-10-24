@@ -46,10 +46,10 @@ export function ScholarlySettingsForm(props: ScholarlySettingsFormProps): ReactN
 
   return (
     <>
-      <section className={css.groupCard} aria-label={t('groupScholarlyAuth')}>
-        <div className={css.cardHeader}>
-          <h3 className={css.groupTitle}>{t('groupScholarlyAuth')}</h3>
-          <p className={css.groupDescription}>{t('groupScholarlyAuthDesc')}</p>
+      <section className={css.group} aria-label={t('groupScholarlyAuth')}>
+        <div className={css.groupHeader}>
+          <h3 className={css.groupHeading}>{t('groupScholarlyAuth')}</h3>
+          <p className={css.groupNote}>{t('groupScholarlyAuthDesc')}</p>
         </div>
         <div className={css.fields}>
           {renderValueField(t, state, actions, 'enabled', false)}
@@ -60,10 +60,10 @@ export function ScholarlySettingsForm(props: ScholarlySettingsFormProps): ReactN
         </div>
       </section>
 
-      <section className={css.groupCard} aria-label={t('groupScholarlyLimits')}>
-        <div className={css.cardHeader}>
-          <h3 className={css.groupTitle}>{t('groupScholarlyLimits')}</h3>
-          <p className={css.groupDescription}>{t('groupScholarlyLimitsDesc')}</p>
+      <section className={css.group} aria-label={t('groupScholarlyLimits')}>
+        <div className={css.groupHeader}>
+          <h3 className={css.groupHeading}>{t('groupScholarlyLimits')}</h3>
+          <p className={css.groupNote}>{t('groupScholarlyLimitsDesc')}</p>
         </div>
         <div className={css.fields}>
           {renderValueField(t, state, actions, 'maxResults', true)}

@@ -399,7 +399,7 @@ describe('ZoteroSettingsSection', () => {
     scholarlyController.dispose()
   })
 
-  it('renders structured card headers with titles and descriptions across groups', () => {
+  it('renders structured group headers with titles and descriptions across groups', () => {
     scope = fakeScope({ value: {} })
     mount()
 

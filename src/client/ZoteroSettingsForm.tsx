@@ -226,10 +226,10 @@ function renderGroupCard(
   descKey: ZoteroLocaleKey,
 ): ReactNode {
   return (
-    <section key={groupKey} className={css.groupCard} aria-label={t(groupKey)}>
-      <div className={css.cardHeader}>
-        <h3 className={css.groupTitle}>{t(groupKey)}</h3>
-        <p className={css.groupDescription}>{t(descKey)}</p>
+    <section key={groupKey} className={css.group} aria-label={t(groupKey)}>
+      <div className={css.groupHeader}>
+        <h3 className={css.groupHeading}>{t(groupKey)}</h3>
+        <p className={css.groupNote}>{t(descKey)}</p>
       </div>
       <div className={css.fields}>{fields.map((key) => field(t, state, actions, key))}</div>
     </section>
@@ -246,10 +246,10 @@ function renderCustomCard(
   fields: readonly FieldKey[],
 ): ReactNode {
   return (
-    <section key={id} className={css.groupCard} aria-label={title}>
-      <div className={css.cardHeader}>
-        <h3 className={css.groupTitle}>{title}</h3>
-        <p className={css.groupDescription}>{desc}</p>
+    <section key={id} className={css.group} aria-label={title}>
+      <div className={css.groupHeader}>
+        <h3 className={css.groupHeading}>{title}</h3>
+        <p className={css.groupNote}>{desc}</p>
       </div>
       <div className={css.fields}>{fields.map((key) => field(t, state, actions, key))}</div>
     </section>

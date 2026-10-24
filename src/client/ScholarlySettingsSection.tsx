@@ -30,10 +30,6 @@ export function ScholarlySettingsSection(props: ScholarlySettingsSectionProps): 
 
   return (
     <div className={css.page} data-scholarly-config-page>
-      <div className={css.head}>
-        <h2 className={css.title}>{t('tabScholarly')}</h2>
-      </div>
-      <p className={css.description}>{t('tabScholarlyDesc')}</p>
       <SettingsForm labels={labels} state={state} onSave={props.save} onDiscard={props.discard}>
         <ScholarlySettingsForm t={t} state={state} actions={props} />
       </SettingsForm>

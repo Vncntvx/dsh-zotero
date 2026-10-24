@@ -201,7 +201,7 @@ describe('ScholarlySettingsSection', () => {
     controller.dispose()
   })
 
-  it('renders both cards and all Scholarly fields in page view', () => {
+  it('renders both groups and all Scholarly fields in page view', () => {
     const scope = fakeScope({
       value: {
         email: 'test@domain.org',
@@ -212,7 +212,7 @@ describe('ScholarlySettingsSection', () => {
     const controller = new ScholarlyFormController(scope)
     render(<ScholarlyHarness face={controller.inject()} view="page" dictionary={zh} />)
 
-    expect(screen.getByRole('heading', { name: zh.tabScholarly })).toBeDefined()
+    expect(screen.queryByRole('heading', { level: 2 })).toBeNull()
     expect(screen.getByLabelText(zh.groupScholarlyAuth)).toBeDefined()
     expect(screen.getByLabelText(zh.groupScholarlyLimits)).toBeDefined()
 

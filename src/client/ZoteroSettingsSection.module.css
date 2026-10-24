@@ -23,12 +23,12 @@
 }
 
 /* Inert tab copy: a tab whose backing component is off, or a namespace the
- * deployment does not serve. */
+ * deployment does not serve. Matches the official SettingsForm unavailable line. */
 .note {
   margin: 0;
-  color: var(--dsw-alias-label-secondary);
-  font-size: 14px;
-  line-height: 24px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .tabPanel[hidden] {
