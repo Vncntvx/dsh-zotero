@@ -25,7 +25,7 @@ import type { Context as ClientContext } from '@deepseek-ai/cordis'
 // purity).
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
-import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
@@ -118,16 +118,22 @@ function isZoteroRegistration(_key: string, registration: unknown): boolean {
 }
 
 /**
- * Register every browser surface: the page dictionaries, the dedicated
- * tool cards, the `/zotero` command-input projection, the bundle configuration
- * page, the plugin-manager cards, and the conversation tab.
- *
- * Runs on a fiber that declares `remote.zotero`, so the namespace is readable
- * through the official dotted form (`ctx.remote.zotero`), the same shape the
- * harness's own client plugins use.
- * @param ctx - the browser plugin context, scoped to the declared services.
+ * The cross-surface facts every registration group reads: one shared probe
+ * (concurrent callers join the in-flight read) and the two settings forms.
  */
-function registerUi(ctx: ClientContext): void {
+interface UiSurfaces {
+  readonly form: ConfigForm<Record<string, unknown>>
+  readonly card: ZoteroCardController
+  readonly scholarlyCard: ScholarlyFormController
+  readonly probe: () => Promise<RemoteResult<ZoteroStatusView>>
+}
+
+/**
+ * The fiber-wide effects every surface group builds on: the page
+ * dictionaries, the attachment-resolver and error-reporter bridges, the slot
+ * crash intake, and the dedicated tool cards.
+ */
+function registerSharedSurfaces(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-zotero: page dictionaries')
   ctx.effect(() => {
     const resolver = (ref: string) => ctx.remote.zotero.resolveAttachment(ref)
@@ -164,61 +170,20 @@ function registerUi(ctx: ClientContext): void {
   )
   // Dedicated Chat cards for the registered Zotero and cross-component tools
   registerZoteroToolviews(ctx)
-  // `/zotero` command-input projection: a non-command Chat node is the
-  // designed way for a slash command to leave the blank Hero (see ui-goal's
-  // `command-input`). Without it, `command/run`+`command/done` log on a fresh
-  // session while the shell stays blank and the status result is invisible.
-  ctx.effect(
-    () => ctx.uiConversation.events.register(zoteroCommandInputDefinition),
-    'dsh-zotero: zotero command-input projection',
-  )
-  ctx.slots.inject('conversation.chat.node', () =>
-    ctx.slots.register(
-      {
-        name: 'conversation.chat.node',
-        key: 'zotero-command-input',
-        locale: NS,
-        registrant: REGISTRANT,
-      },
-      ZoteroCommandInputView,
-    ),
-  )
-  // One form controller per settings namespace. The bundle configuration page
-  // edits both at once; the dedicated scholarly row edits the scholarly one.
-  // Both live as long as the client fiber.
-  const form = ctx.configForms.get<Record<string, unknown>>(ZOTERO_SETTINGS_NAMESPACE)
-  const scholarlyForm = ctx.configForms.get<Record<string, unknown>>(SCHOLARLY_SETTINGS_NAMESPACE)
-  const card = new ZoteroCardController(form)
-  const scholarlyCard = new ScholarlyFormController(scholarlyForm)
+}
 
-  ctx.effect(
-    () => () => {
-      card.dispose()
-      scholarlyCard.dispose()
-    },
-    'dsh-zotero: card forms',
-  )
-  // The plugin-manager surfaces below declare `locale: NS` and read their `t`
-  // from the renderer's synthesized seat: the framework mints a fresh
-  // reference per locale revision, so a switch re-renders these cards through
-  // ordinary shallow comparison, and a declared namespace with no installed
-  // locale face fails the assembly loudly instead of silently falling back
-  // (`ui-renderer/src/client/scoped-slots.tsx`).
-  // Live connectivity for the conversation tab's status strip. This fiber is
-  // only created once `$mount` published the namespace, so the call site reads
-  // it directly. Concurrent probes share one in-flight call: the strip and the
-  // command card can both ask in the same tick, and one status read per tick
-  // is the product behavior, not a workaround.
-  let inFlightProbe: Promise<RemoteResult<ZoteroStatusView>> | undefined
-  const probe = (): Promise<RemoteResult<ZoteroStatusView>> => {
-    if (inFlightProbe !== undefined) return inFlightProbe
-    const task = ctx.remote.zotero.status().finally(() => {
-      if (inFlightProbe === task) inFlightProbe = undefined
-    })
-    inFlightProbe = task
-    return task
-  }
-
+/**
+ * The plugin-manager surfaces: the activation guide, the bundle configuration
+ * page, the scholarly row configuration, and the status/diagnostics cards.
+ * Every registration below declares `locale: NS` and reads its `t` from the
+ * renderer's synthesized seat: the framework mints a fresh reference per
+ * locale revision, so a switch re-renders these cards through ordinary
+ * shallow comparison, and a declared namespace with no installed locale face
+ * fails the assembly loudly instead of silently falling back
+ * (`ui-renderer/src/client/scoped-slots.tsx`).
+ */
+function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces): void {
+  const { card, scholarlyCard, probe } = surfaces
   // Guidance modal on plugin activation (plugins.bundle.activation)
   ctx.slots.inject('plugins.bundle.activation', () =>
     ctx.slots.register(
@@ -314,6 +279,41 @@ function registerUi(ctx: ClientContext): void {
       DiagnosticsCard,
     ),
   )
+}
+
+/**
+ * The `/zotero` command-input surfaces: the projection that leaves the blank
+ * Hero plus its chat node. Registered between the shared surfaces and the
+ * plugin-manager cards, the order the registration contract pins.
+ */
+function registerCommandInputSurfaces(ctx: ClientContext): void {
+  // `/zotero` command-input projection: a non-command Chat node is the
+  // designed way for a slash command to leave the blank Hero (see ui-goal's
+  // `command-input`). Without it, `command/run`+`command/done` log on a fresh
+  // session while the shell stays blank and the status result is invisible.
+  ctx.effect(
+    () => ctx.uiConversation.events.register(zoteroCommandInputDefinition),
+    'dsh-zotero: zotero command-input projection',
+  )
+  ctx.slots.inject('conversation.chat.node', () =>
+    ctx.slots.register(
+      {
+        name: 'conversation.chat.node',
+        key: 'zotero-command-input',
+        locale: NS,
+        registrant: REGISTRANT,
+      },
+      ZoteroCommandInputView,
+    ),
+  )
+}
+
+/**
+ * The conversation surfaces: the `/zotero` command result card and the
+ * Sources panel gated by `webEnabled`.
+ */
+function registerConversationSurfaces(ctx: ClientContext, surfaces: UiSurfaces): void {
+  const { form, probe } = surfaces
 
   // Dedicated Slash command result card for `/zotero`
   ctx.slots.inject('conversation.chat.commandview', () =>
@@ -378,6 +378,53 @@ function registerUi(ctx: ClientContext): void {
       tabDispose = undefined
     }
   }, 'dsh-zotero: conversation tab')
+}
+
+/**
+ * Register every browser surface: the page dictionaries, the dedicated
+ * tool cards, the `/zotero` command-input projection, the bundle configuration
+ * page, the plugin-manager cards, and the conversation tab.
+ *
+ * Runs on a fiber that declares `remote.zotero`, so the namespace is readable
+ * through the official dotted form (`ctx.remote.zotero`), the same shape the
+ * harness's own client plugins use.
+ * @param ctx - the browser plugin context, scoped to the declared services.
+ */
+function registerUi(ctx: ClientContext): void {
+  registerSharedSurfaces(ctx)
+  registerCommandInputSurfaces(ctx)
+  // One form controller per settings namespace. The bundle configuration page
+  // edits both at once; the dedicated scholarly row edits the scholarly one.
+  // Both live as long as the client fiber.
+  const form = ctx.configForms.get<Record<string, unknown>>(ZOTERO_SETTINGS_NAMESPACE)
+  const scholarlyForm = ctx.configForms.get<Record<string, unknown>>(SCHOLARLY_SETTINGS_NAMESPACE)
+  const card = new ZoteroCardController(form)
+  const scholarlyCard = new ScholarlyFormController(scholarlyForm)
+
+  ctx.effect(
+    () => () => {
+      card.dispose()
+      scholarlyCard.dispose()
+    },
+    'dsh-zotero: card forms',
+  )
+  // Live connectivity for the conversation tab's status strip. This fiber is
+  // only created once `$mount` published the namespace, so the call site reads
+  // it directly. Concurrent probes share one in-flight call: the strip and the
+  // command card can both ask in the same tick, and one status read per tick
+  // is the product behavior, not a workaround.
+  let inFlightProbe: Promise<RemoteResult<ZoteroStatusView>> | undefined
+  const probe = (): Promise<RemoteResult<ZoteroStatusView>> => {
+    if (inFlightProbe !== undefined) return inFlightProbe
+    const task = ctx.remote.zotero.status().finally(() => {
+      if (inFlightProbe === task) inFlightProbe = undefined
+    })
+    inFlightProbe = task
+    return task
+  }
+  const surfaces: UiSurfaces = { form, card, scholarlyCard, probe }
+  registerPluginManagerSurfaces(ctx, surfaces)
+  registerConversationSurfaces(ctx, surfaces)
 }
 
 /**
