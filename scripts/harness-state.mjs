@@ -49,10 +49,10 @@ import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from '
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { minVersion, validRange } from 'semver'
-import { collectHarnessPackages } from './shared/harness-packages.mjs'
+import { collectHarnessPackages, resolveHarnessRoot } from './shared/harness-packages.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const harnessRoot = resolve(process.env.DSH_HARNESS_ROOT ?? join(root, '../deepseek-harness'))
+const harnessRoot = resolveHarnessRoot(root)
 const pkgPath = join(root, 'package.json')
 const readmePaths = ['README.md', 'README.en.md'].map((name) => join(root, name))
 const agentsPath = join(root, 'AGENTS.md')

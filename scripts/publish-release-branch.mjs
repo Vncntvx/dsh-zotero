@@ -41,13 +41,23 @@ function runGit(args, cwd = root) {
   }).trim()
 }
 
+function getOptionValue(argv, flag, defaultValue) {
+  const idx = argv.indexOf(flag)
+  if (idx === -1) return defaultValue
+  const val = argv[idx + 1]
+  if (val === undefined || val.startsWith('--')) {
+    throw new Error(`[release-branch] Expected a value after ${flag}`)
+  }
+  return val
+}
+
 function parseArgs() {
   const argv = process.argv.slice(2)
   return {
     dryRun: argv.includes('--dry-run'),
     push: argv.includes('--push'),
-    branch: argv.includes('--branch') ? argv[argv.indexOf('--branch') + 1] : 'release',
-    remote: argv.includes('--remote') ? argv[argv.indexOf('--remote') + 1] : 'origin',
+    branch: getOptionValue(argv, '--branch', 'release'),
+    remote: getOptionValue(argv, '--remote', 'origin'),
   }
 }
 

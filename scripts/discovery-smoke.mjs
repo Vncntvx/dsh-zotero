@@ -22,6 +22,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
+import { resolveHarnessRoot } from './shared/harness-packages.mjs'
 
 /** The plugin id the boot graph must carry, derived from the package manifest. */
 const PLUGIN_ID = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).name
@@ -39,9 +40,7 @@ function resolveDsh() {
   const explicit = argAfter('--dsh')
   if (explicit !== undefined) return explicit
 
-  const harnessRoot = resolve(
-    process.env.DSH_HARNESS_ROOT ?? join(PACKAGE_DIR, '../deepseek-harness'),
-  )
+  const harnessRoot = resolveHarnessRoot(PACKAGE_DIR)
   const siblingCli = join(harnessRoot, 'apps/cli/lib/bin.js')
   if (existsSync(siblingCli)) {
     return siblingCli

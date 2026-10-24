@@ -9,6 +9,7 @@ import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { resolveHarnessRoot } from '../../scripts/shared/harness-packages.mjs'
 import {
   applyPinToManifest,
   checkProseText,
@@ -655,5 +656,28 @@ describe('collectArtifactProblems', () => {
       '@deepseek-ai/dsh-client-ui-chat/client',
     ])
     expect(found.staleRuntime).toHaveLength(1)
+  })
+})
+
+describe('resolveHarnessRoot', () => {
+  it('resolves relative to root when DSH_HARNESS_ROOT is unset', () => {
+    const orig = process.env.DSH_HARNESS_ROOT
+    delete process.env.DSH_HARNESS_ROOT
+    try {
+      expect(resolveHarnessRoot('/tmp/zotero')).toBe('/tmp/deepseek-harness')
+    } finally {
+      if (orig !== undefined) process.env.DSH_HARNESS_ROOT = orig
+    }
+  })
+
+  it('respects DSH_HARNESS_ROOT when set', () => {
+    const orig = process.env.DSH_HARNESS_ROOT
+    process.env.DSH_HARNESS_ROOT = '/custom/harness'
+    try {
+      expect(resolveHarnessRoot('/tmp/zotero')).toBe('/custom/harness')
+    } finally {
+      if (orig !== undefined) process.env.DSH_HARNESS_ROOT = orig
+      else delete process.env.DSH_HARNESS_ROOT
+    }
   })
 })

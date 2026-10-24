@@ -26,10 +26,10 @@ import {
 } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { collectHarnessPackages } from './shared/harness-packages.mjs'
+import { collectHarnessPackages, resolveHarnessRoot } from './shared/harness-packages.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const harnessRoot = resolve(root, '../deepseek-harness')
+const harnessRoot = resolveHarnessRoot(root)
 const nmScope = join(root, 'node_modules', '@deepseek-ai')
 const checkOnly = process.argv.includes('--check')
 

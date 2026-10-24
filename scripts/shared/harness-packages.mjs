@@ -6,7 +6,16 @@
  */
 
 import { readFileSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
+
+/**
+ * Resolve the harness monorepo root directory, respecting `DSH_HARNESS_ROOT` if set.
+ * @param {string} root - the dsh-zotero package root.
+ * @returns {string} the absolute path to the harness root.
+ */
+export function resolveHarnessRoot(root) {
+  return resolve(process.env.DSH_HARNESS_ROOT ?? join(root, '../deepseek-harness'))
+}
 
 /** Read a directory's package.json scoped name, or undefined when absent/unreadable. */
 function packageNameOf(dir) {
