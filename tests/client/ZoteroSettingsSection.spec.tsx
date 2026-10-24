@@ -99,16 +99,13 @@ describe('ZoteroSettingsSection', () => {
   it('explains itself while the namespace is unavailable', () => {
     scope = fakeScope({ status: 'unavailable' })
     render(<Harness face={new ZoteroCardController(scope).inject()} />)
-    expect(screen.getByRole('heading', { name: zh.title })).toBeDefined()
     expect(screen.getByRole('status').textContent).toContain(zh.unavailable)
     expect(document.querySelectorAll('input')).toHaveLength(0)
   })
 
-  it('renders the page header, the full grouped form, and the official save control', () => {
+  it('renders the full grouped form and the official save control', () => {
     scope = fakeScope({ value: { baseUrl: 'http://127.0.0.1:23119/api', timeoutMs: 5000 } })
     mount()
-    expect(screen.getByRole('heading', { name: zh.title })).toBeDefined()
-    expect(screen.getByText(zh.description)).toBeDefined()
     // Every field of the namespace is on the page, with no disclosure to open:
     // one control per field table row (numeric/text inputs and boolean
     // checkboxes alike). The count derives from that table, so a field added
@@ -329,6 +326,25 @@ describe('ZoteroSettingsSection', () => {
     expect(advancedTab.getAttribute('aria-selected')).toBe('true')
     const advancedPanel = document.getElementById('zotero-panel-advanced')
     expect(advancedPanel?.getAttribute('hidden')).toBeNull()
+  })
+
+  it('explains the disabled scholarly component instead of offering its fields', () => {
+    scope = fakeScope({ value: {} })
+    mount()
+    fireEvent.click(screen.getByRole('tab', { name: zh.tabScholarly }))
+    expect(screen.getByText(zh.scholarlyDisabled)).toBeDefined()
+    expect(screen.queryByLabelText(zh.scholarlyEmail)).toBeNull()
+  })
+
+  it('explains the disabled component when the scholarly namespace is not served', () => {
+    scope = fakeScope({ value: {} })
+    const scholarlyController = new ScholarlyFormController(fakeScope({ status: 'unavailable' }))
+    mount(zh, scholarlyController.inject())
+    fireEvent.click(screen.getByRole('tab', { name: zh.tabScholarly }))
+    expect(screen.getByText(zh.scholarlyDisabled)).toBeDefined()
+    expect(screen.queryByText(zh.unavailable)).toBeNull()
+    expect(screen.queryByLabelText(zh.scholarlyEmail)).toBeNull()
+    scholarlyController.dispose()
   })
 
   it('renders scholarly controls on Tab 4 when scholarly card is provided', () => {

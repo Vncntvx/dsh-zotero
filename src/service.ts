@@ -240,9 +240,6 @@ export class ZoteroService extends Service {
   private providerDispose: (() => void) | undefined
   /** Disposers of the conditionally registered write tools, tracked for the writeEnabled flip. */
   private writeToolDisposes: Array<() => void> = []
-  /** Disposers of the conditionally registered heavy tools (export, changes), tracked for the background flip. */
-  private heavyToolDisposes: Array<() => void> = []
-  private heavyToolsBackgroundState: boolean | undefined = undefined
   /** The resolved config the transport stack was last built from. */
   private lastBuilt: ResolvedConfig
   /** Cached resolved config; invalidated on any loader/volatile-update. */
@@ -316,9 +313,6 @@ export class ZoteroService extends Service {
       // emission without a rebuild.
       this.diagnostics.setThreshold(this.config.debug ? 'debug' : 'info')
       try {
-        if (touchesHeavyTools(paths)) {
-          this.reconcileHeavyTools()
-        }
         if (touchesTransport(paths)) {
           const config = this.config
           if (!sameTransportConfig(config, this.lastBuilt)) {
@@ -337,8 +331,6 @@ export class ZoteroService extends Service {
     registerPromptSection(ctx, () => this.config)
     ctx.effect(
       () => () => {
-        for (const dispose of this.heavyToolDisposes) dispose()
-        this.heavyToolDisposes = []
         for (const dispose of this.writeToolDisposes) dispose()
         this.writeToolDisposes = []
       },
@@ -412,13 +404,12 @@ export class ZoteroService extends Service {
     registerAttachmentTool(ctx, this)
     registerRetrieveTool(ctx, this)
     registerBrowseTool(ctx, this)
-    this.reconcileHeavyTools()
-    ctx.inject(['jobs'], (jobCtx) => {
-      jobCtx.effect(() => {
-        this.reconcileHeavyTools()
-        return () => this.reconcileHeavyTools()
-      })
-    })
+    // The heavy tools register statically: the run_in_background parameter is
+    // always declared and an unservable background request is refused from
+    // execute (flag off, or no jobs service mounted) instead of the schema
+    // being rebuilt around the composition's capability.
+    registerExportTool(ctx, this)
+    registerChangesTool(ctx, this)
     // The status channel: the Remote service binds the wire namespace, and
     // the strict manifest claims its endpoints. See typert.ts for why the
     // manifest self-registers through ctx.inject(['typert']).
@@ -428,16 +419,6 @@ export class ZoteroService extends Service {
       // this inject fiber on unload, and no wrapper effect is needed.
       host.typert.register(TYPERT_MANIFEST)
     })
-    // The durable half of `/zotero`: the command handler appends a
-    // `zotero/status` event and the card reads it back through this
-    // projection instead of re-parsing the text it was handed. Optional seam:
-    // a composition without the registry keeps the live probe as the only
-    // source, and the card says nothing it cannot prove.
-    ctx.inject(['sessionProjections'], (projectionCtx) => {
-      projectionCtx.effect(() =>
-        projectionCtx.sessionProjections.register(ZOTERO_STATUS_PROJECTION),
-      )
-    })
     // A plugin that ships its own settings page owns that page's presentation;
     // the automatic schema-generated one would be a second, conflicting
     // surface for the same namespace (`packages/settings/settings/README.md`).
@@ -445,6 +426,25 @@ export class ZoteroService extends Service {
       settingsCtx.effect(() => settingsCtx.settings.configure({ auto: false }, ctx.fiber))
     })
     this.reconcileWriteTools(this.config.writeEnabled)
+  }
+
+  /**
+   * The durable half of `/zotero`: the command handler appends a
+   * `zotero/status` event and the card reads it back through this projection
+   * instead of re-parsing the text it was handed. Registration resolves
+   * asynchronously; the plugin publishes nothing downstream of it, so there
+   * is no handle to retain — the registration itself is an effect on this
+   * fiber, and disposal releases it. Optional seam: a composition without the
+   * registry keeps the live probe as the only source, and the card says
+   * nothing it cannot prove. When the seam is absent the inject fiber stays
+   * pending (and `await binding` is skipped), so the plugin loads without the
+   * projection.
+   */
+  protected async [Service.init](): Promise<void> {
+    const binding = this.ctx.inject(['sessionProjections'], async (projectionCtx) => {
+      await projectionCtx.sessionProjections.register(ZOTERO_STATUS_PROJECTION)
+    })
+    if (this.ctx.get('sessionProjections') !== undefined) await binding
   }
 
   /**
@@ -512,35 +512,6 @@ export class ZoteroService extends Service {
       ),
     )
     this.diagnostics.sink.info('transport.built', 'Zotero transport stack built', { writeEnabled })
-  }
-
-  /**
-   * Register or re-register the heavy tools (export, changes) dynamically as
-   * `enableRunInBackground` or `ctx.jobs` flips. Exposes the `run_in_background`
-   * parameter to the model only when background execution is actually usable.
-   */
-  private reconcileHeavyTools(): void {
-    // Cordis Fiber lifecycle: LOADING = 1, ACTIVE = 2. When unloading (5) or
-    // disposed (4), do not re-register tools onto the dying context.
-    if (
-      this.ctx.fiber.state !== FIBER_STATE.ACTIVE &&
-      this.ctx.fiber.state !== FIBER_STATE.LOADING
-    ) {
-      for (const dispose of this.heavyToolDisposes) dispose()
-      this.heavyToolDisposes = []
-      this.heavyToolsBackgroundState = undefined
-      return
-    }
-    const shouldEnable = this.config.enableRunInBackground && this.ctx.get('jobs') !== undefined
-    if (this.heavyToolsBackgroundState === shouldEnable) {
-      return
-    }
-    for (const dispose of this.heavyToolDisposes) dispose()
-    this.heavyToolDisposes = [
-      registerExportTool(this.ctx, this, shouldEnable),
-      registerChangesTool(this.ctx, this, shouldEnable),
-    ]
-    this.heavyToolsBackgroundState = shouldEnable
   }
 
   /**
@@ -1069,24 +1040,6 @@ export function touchesTransport(paths: readonly (readonly string[])[]): boolean
     (path) =>
       path.length === 0 ||
       (path[0] !== undefined && TRANSPORT_CONFIG_KEYS.has(path[0] as keyof ResolvedConfig)),
-  )
-}
-
-export const HEAVY_TOOL_CONFIG_KEYS: ReadonlySet<keyof ResolvedConfig> = new Set([
-  'enableRunInBackground',
-])
-
-/**
- * Whether a `loader/volatile-update` path list touches the heavy tools' background capability.
- * A root path (`[]`) means the whole config moved as one reference.
- * @param paths - the changed field paths the loader reported.
- * @returns true when heavy tools may need re-registration.
- */
-export function touchesHeavyTools(paths: readonly (readonly string[])[]): boolean {
-  return paths.some(
-    (path) =>
-      path.length === 0 ||
-      (path[0] !== undefined && HEAVY_TOOL_CONFIG_KEYS.has(path[0] as keyof ResolvedConfig)),
   )
 }
 

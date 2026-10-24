@@ -541,12 +541,17 @@ function countArrayEntries(section: Record<string, unknown> | undefined): number
   return count
 }
 
-export function registerChangesTool(
-  ctx: Context,
-  service: ZoteroService,
-  enableBackground: boolean,
-): () => void {
-  const parameters = enableBackground ? CHANGES_WITH_BACKGROUND_PARAMETERS : BASE_CHANGES_PARAMETERS
+/**
+ * Register the `zotero_changes` tool once, statically: the
+ * `run_in_background` parameter is always declared, and a background request
+ * the composition cannot serve (the flag off, or no jobs service mounted) is
+ * refused from execute with a structured error instead of the parameter being
+ * hidden from the schema.
+ * @param ctx - the plugin context.
+ * @param service - the zotero service owning the request path.
+ */
+export function registerChangesTool(ctx: Context, service: ZoteroService): () => void {
+  const parameters = CHANGES_WITH_BACKGROUND_PARAMETERS
   return ctx.tools.register(
     defineTool({
       name: 'zotero_changes',

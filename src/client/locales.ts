@@ -10,8 +10,6 @@ import type { FieldKey, GroupKey } from './zotero-card-controller.ts'
 /** Locale keys the plugin renders: settings chrome, field table keys, and panel copy. */
 export type ZoteroLocaleKey =
   | 'nav'
-  | 'title'
-  | 'description'
   | 'overridden'
   | 'reset'
   | 'readOnly'
@@ -19,6 +17,7 @@ export type ZoteroLocaleKey =
   | 'saving'
   | 'saveFailed'
   | 'unavailable'
+  | 'scholarlyDisabled'
   | 'invalidNumber'
   | 'tabFeatures'
   | 'tabFeaturesDesc'
@@ -367,8 +366,6 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 /** English copy. */
 export const en: Record<ZoteroLocaleKey, string> = {
   nav: 'Zotero',
-  title: 'Zotero',
-  description: 'Connect to your local Zotero library for search, passages, and citations.',
   overridden: 'Overridden',
   reset: 'Reset to default',
   readOnly: 'This deployment stores settings read-only.',
@@ -377,6 +374,8 @@ export const en: Record<ZoteroLocaleKey, string> = {
   saveFailed: 'The deployment did not accept these values; they were left for you to correct.',
   unavailable:
     'This deployment does not serve the Zotero settings namespace, so there is nothing to configure here.',
+  scholarlyDisabled:
+    'Scholarly search comes from the dsh-zotero/scholarly component. Enable it under "Included components" to configure it.',
   invalidNumber: 'Enter a number, or leave blank to use the default.',
   tabFeatures: 'General',
   tabFeaturesDesc:
@@ -834,8 +833,6 @@ export const en: Record<ZoteroLocaleKey, string> = {
 /** Simplified Chinese copy. */
 export const zh: Record<ZoteroLocaleKey, string> = {
   nav: 'Zotero',
-  title: 'Zotero',
-  description: '连接本机 Zotero，检索文献、提取相关片段并导出引用。',
   overridden: '已覆盖',
   reset: '恢复默认',
   readOnly: '本部署的设置为只读。',
@@ -843,6 +840,8 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   saving: '保存中…',
   saveFailed: '本部署没有接受这些值，已保留供你修改。',
   unavailable: '本部署没有提供 Zotero 设置项，这里暂无可配置内容。',
+  scholarlyDisabled:
+    '学术检索由 dsh-zotero/scholarly 组件提供，未启用时不可配置。请在「包含的组件」中开启该组件。',
   invalidNumber: '请填数字；留空表示使用默认值。',
   tabFeatures: '基础设置',
   tabFeaturesDesc: '配置会话文献面板、个人文库写入授权与默认引文样式。',

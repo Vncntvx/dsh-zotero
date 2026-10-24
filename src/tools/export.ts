@@ -219,18 +219,17 @@ function presentExportResult(_args: ExportArgs, result: ToolResult): ToolResultV
 }
 
 /**
- * Register the `zotero_export` tool. The service's live config is read per
- * request so a settings edit takes effect on the next call without
- * re-registration.
+ * Register the `zotero_export` tool once, statically: the
+ * `run_in_background` parameter is always declared, and a background request
+ * the composition cannot serve (the flag off, or no jobs service mounted) is
+ * refused from execute with a structured error instead of the parameter being
+ * hidden from the schema. The service's live config is read per request so a
+ * settings edit takes effect on the next call without re-registration.
  * @param ctx - the plugin context.
  * @param service - the zotero service owning the request path.
  */
-export function registerExportTool(
-  ctx: Context,
-  service: ZoteroService,
-  enableBackground: boolean,
-): () => void {
-  const parameters = enableBackground ? EXPORT_WITH_BACKGROUND_PARAMETERS : BASE_EXPORT_PARAMETERS
+export function registerExportTool(ctx: Context, service: ZoteroService): () => void {
+  const parameters = EXPORT_WITH_BACKGROUND_PARAMETERS
   return ctx.tools.register(
     defineTool({
       name: 'zotero_export',

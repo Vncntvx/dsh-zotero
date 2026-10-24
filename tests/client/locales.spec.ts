@@ -138,6 +138,10 @@ describe('locale bundles', () => {
       // heading/hint) has no surface left to render on.
       'quickConfigTitle',
       'quickConfigHint',
+      // The plugin detail page already renders the bundle title and summary
+      // above the configuration slot.
+      'title',
+      'description',
     ]
     for (const key of retired) {
       expect(key in zh, key).toBe(false)

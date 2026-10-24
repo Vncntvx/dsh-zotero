@@ -560,39 +560,11 @@ describe('zotero_changes tool', () => {
   })
 
   describe('background jobs and promotion', () => {
-    it('exposes run_in_background parameter only when enabled and jobs service is mounted', async () => {
+    it('declares the run_in_background parameter statically regardless of composition', async () => {
       const defaultTool = lane.tool('zotero_changes')!
       const defaultProps = (defaultTool.parameters as { properties?: Record<string, unknown> })
         .properties
-      expect(defaultProps?.run_in_background).toBeUndefined()
-
-      await lane.teardown()
-      lane = await setupHostLane(
-        {},
-        {
-          compose: async (ctx) => {
-            await ctx.plugin(TestJobRegistry)
-          },
-        },
-      )
-      const mountedTool = lane.tool('zotero_changes')!
-      const mountedProps = (mountedTool.parameters as { properties?: Record<string, unknown> })
-        .properties
-      expect(mountedProps?.run_in_background).toBeDefined()
-
-      await lane.teardown()
-      lane = await setupHostLane(
-        { enableRunInBackground: false },
-        {
-          compose: async (ctx) => {
-            await ctx.plugin(TestJobRegistry)
-          },
-        },
-      )
-      const disabledTool = lane.tool('zotero_changes')!
-      const disabledProps = (disabledTool.parameters as { properties?: Record<string, unknown> })
-        .properties
-      expect(disabledProps?.run_in_background).toBeUndefined()
+      expect(defaultProps?.run_in_background).toBeDefined()
     })
 
     it('refuses run_in_background when enableRunInBackground is disabled in config', async () => {

@@ -241,7 +241,7 @@ describe('the zotero diagnostics endpoint', () => {
     expect(bareEntry?.message).toContain('zotero_search threw: bare string failure')
   })
 
-  it('rebuilds the transport and reconciles heavy tools from live commits', async () => {
+  it('rebuilds the transport from live commits and ignores heavy-tool flag flips', async () => {
     lane = await setupHostLane(undefined, { typert: true })
     const before = (await runtimeOf(lane).diagnostics(LIVE_SIGNAL)).entries.find(
       (candidate) => candidate.event === 'transport.built',
@@ -253,7 +253,8 @@ describe('the zotero diagnostics endpoint', () => {
     await commitLive(lane, { timeoutMs: 12345 })
     const view = await runtimeOf(lane).diagnostics(LIVE_SIGNAL)
     // Identical consecutive builds coalesce into a count bump; the heavy-tool
-    // flips and the no-op commit must not have touched the transport count.
+    // flag flips are not transport keys (the tools read them per request) and
+    // the no-op commit must not have touched the transport count.
     const entry = view.entries.find((candidate) => candidate.event === 'transport.built')
     expect(entry?.count).toBe((before?.count ?? 0) + 1)
   })

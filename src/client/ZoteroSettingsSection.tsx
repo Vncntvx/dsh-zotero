@@ -83,11 +83,6 @@ export function ZoteroSettingsSection(props: ZoteroSettingsSectionProps): ReactN
 
   return (
     <div className={css.page} data-zotero-config-page>
-      <div className={css.head}>
-        <h2 className={css.title}>{t('title')}</h2>
-      </div>
-      <p className={css.description}>{t('description')}</p>
-
       <div className={css.tabsContainer}>
         <SegmentedTabs
           items={tabItems}
@@ -115,7 +110,7 @@ export function ZoteroSettingsSection(props: ZoteroSettingsSectionProps): ReactN
       </div>
 
       <div className={css.tabPanel} hidden={activeTab !== 'scholarly'}>
-        {props.scholarly && scholarlyState ? (
+        {props.scholarly && scholarlyState?.available ? (
           <SettingsForm
             labels={labels}
             state={scholarlyState}
@@ -138,7 +133,7 @@ export function ZoteroSettingsSection(props: ZoteroSettingsSectionProps): ReactN
             aria-labelledby="zotero-tab-scholarly"
             className={css.tabPanel}
           >
-            <p className={css.description}>{t('unavailable')}</p>
+            <p className={css.note}>{t('scholarlyDisabled')}</p>
           </div>
         )}
       </div>
