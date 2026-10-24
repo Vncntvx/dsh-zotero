@@ -26,8 +26,6 @@ declare module '@deepseek-ai/dsh-session/types' {
   }
 }
 
-export { ZOTERO_STATUS_PROJECTION_KEY } from './projection-keys.js'
-
 /**
  * Fold a host-internal status record into the wire view.
  *

@@ -19,7 +19,9 @@ import { SERVER_MISMATCH_MESSAGE, ZOTERO_SERVER_MISMATCH, ZoteroError } from '..
 import type { SupportedLocalLibrary } from '../types.js'
 
 /**
- * Extract the instance id reported by a response header, falling back to a known claim.
+ * Extract the instance id reported by a response header, falling back to a
+ * known claim: a build that omits the header leaves a headerless first read
+ * unclaimable when the claim is not also stored.
  */
 export function serverIdFromHeaders(headers: Headers, fallback?: string): string | undefined {
   const value = headers.get(ZOTERO_SERVER_ID_HEADER)

@@ -27,7 +27,7 @@ import { assertAllowedScholarlyUrl, ScholarlySecurityError } from './allowlist.j
 import { CircuitBreaker, ScholarlyCircuitOpenError } from './circuit-breaker.js'
 import { HostPacer, abortableSleep } from './pacing.js'
 
-export type FetchFunction = (input: string, init?: RequestInit) => Promise<Response>
+type FetchFunction = (input: string, init?: RequestInit) => Promise<Response>
 
 /** Deadline code stamped on a provider timeout, so a call can classify it. */
 const SCHOLARLY_TIMEOUT = 'SCHOLARLY_TIMEOUT'
@@ -36,7 +36,7 @@ const SCHOLARLY_TIMEOUT = 'SCHOLARLY_TIMEOUT'
 export const DEFAULT_MAX_BYTES = DEFAULT_MAX_RESPONSE_BYTES
 
 /** Default per-request deadline. */
-export const DEFAULT_TIMEOUT_MS = 25_000
+const DEFAULT_TIMEOUT_MS = 25_000
 
 /**
  * One non-2xx response from a scholarly host.
@@ -63,11 +63,6 @@ export class ScholarlyHttpError extends Error {
   }
 }
 
-/** Raised when a host is refusing requests after repeated failures. */
-export { ScholarlyCircuitOpenError } from './circuit-breaker.js'
-
-export { ScholarlySecurityError } from './allowlist.js'
-
 /**
  * Extract an HTTP status code from an error, without unchecked type casts.
  * @param error - the rejection from a transport or registry read.
@@ -81,7 +76,7 @@ export function httpStatusOf(error: unknown): number | undefined {
   return undefined
 }
 
-export interface ScholarlyRequestOptions {
+interface ScholarlyRequestOptions {
   headers?: Record<string, string>
   signal?: AbortSignal
   timeoutMs?: number
@@ -98,7 +93,7 @@ export interface ScholarlyHttp {
   pacer: HostPacer
 }
 
-export interface CreateScholarlyHttpOptions {
+interface CreateScholarlyHttpOptions {
   fetchImpl?: FetchFunction
   circuitBreaker?: CircuitBreaker
   pacer?: HostPacer
@@ -264,6 +259,3 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions = {}): S
     pacer,
   }
 }
-
-/** Re-exported so a caller can classify a deadline without importing the util. */
-export { SCHOLARLY_TIMEOUT }

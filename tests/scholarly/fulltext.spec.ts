@@ -9,11 +9,8 @@ import {
   findSection,
   rankPassagesWithBM25,
 } from '../../src/scholarly/fulltext/evidence-bridge.js'
-import {
-  arxivHtmlToMarkdown,
-  decodeEntities,
-  jatsToMarkdown,
-} from '../../src/scholarly/fulltext/markup.js'
+import { decodeEntities } from '../../src/scholarly/sources/helpers.js'
+import { arxivHtmlToMarkdown, jatsToMarkdown } from '../../src/scholarly/fulltext/markup.js'
 
 describe('scholarly markup decoding & conversion', () => {
   it('decodes HTML and XML entities accurately', () => {

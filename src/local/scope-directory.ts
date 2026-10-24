@@ -64,7 +64,7 @@ import type {
 } from '../types.js'
 
 /** A cached full listing of one scope endpoint, with the identity header it was served under. */
-export interface ScopeListing {
+interface ScopeListing {
   readonly entries: readonly ScopeNameEntry[]
   readonly serverId?: string
   /** Fetch time; a cached listing older than the TTL is re-fetched. */
@@ -90,18 +90,6 @@ interface CachedCollectionNode {
 
 function cacheKey(library: SupportedLocalLibrary, plural: 'collections' | 'searches'): string {
   return `${library.type}:${library.id}:${plural}`
-}
-
-/**
- * Pin the serving identity from the response headers, falling back to the
- * claim only when the build omits the header, since storing the claim alone
- * leaves a headerless first read unclaimable.
- * @param headers - the response headers.
- * @param claim - the identity the request was pinned to, if any.
- * @returns the serving identity, or undefined when neither names one.
- */
-function resolveServedBy(headers: Headers, claim: string | undefined): string | undefined {
-  return serverIdFromHeaders(headers, claim)
 }
 
 /** The result of resolving one search scope: its API path plus what it resolved to. */
@@ -271,7 +259,7 @@ export class ScopeDirectory {
     })
     const rows = requireArrayBody(json, `${ctx.library.type} ${plural}`)
     const entries = rows.map((row) => normalizeScopeEntry(row))
-    const servedBy = resolveServedBy(headers, ctx.serverId)
+    const servedBy = serverIdFromHeaders(headers, ctx.serverId)
     const listing: ScopeListing =
       servedBy === undefined
         ? { entries, fetchedAt: Date.now() }
@@ -345,7 +333,7 @@ export class ScopeDirectory {
           ref.library as SupportedLocalLibrary,
           kind,
           entry.key,
-          resolveServedBy(headers, claim),
+          serverIdFromHeaders(headers, claim),
         ),
         name: entry.name,
       }
@@ -479,7 +467,12 @@ export class ScopeDirectory {
             ZOTERO_UNEXPECTED,
           )
         }
-        resolved[index] = refForLibrary(library, 'collection', key, resolveServedBy(headers, claim))
+        resolved[index] = refForLibrary(
+          library,
+          'collection',
+          key,
+          serverIdFromHeaders(headers, claim),
+        )
       }),
     )
     return resolved
@@ -564,6 +557,10 @@ export class ScopeDirectory {
       })
       return cached.node
     }
+    // An entry past its TTL or pinned to another instance can never be served
+    // again, so the miss drops it: a walk that revisits one key after the TTL
+    // must not leave the stale copy occupying memory until it is overwritten.
+    if (cached !== undefined) this.collectionNodeCache.delete(nodeCacheKey)
     let operation = this.collectionNodeInFlight.get(nodeCacheKey)
     if (operation === undefined || operation.settled || operation.controller.signal.aborted) {
       const controller = new AbortController()
@@ -615,7 +612,7 @@ export class ScopeDirectory {
       // Pin the serving identity from the response headers (falling back to
       // the claim only when the build omits the header), like scopeListingOf:
       // storing the claim alone leaves a headerless first read unclaimable.
-      const servedBy = resolveServedBy(headers, serverId)
+      const servedBy = serverIdFromHeaders(headers, serverId)
       this.collectionNodeCache.set(nodeCacheKey, {
         node,
         ...(servedBy !== undefined ? { serverId: servedBy } : {}),
@@ -662,7 +659,7 @@ export class ScopeDirectory {
         items: readonly { itemType: string; localized?: string }[]
       }> = {
         controller,
-        promise: undefined as any,
+        promise: Promise.resolve({ items: [] }),
         waiters: 0,
         settled: false,
       }
@@ -728,7 +725,7 @@ export class ScopeDirectory {
         items: readonly (ZoteroItemFieldInfo | ZoteroCreatorTypeInfo)[]
       }> = {
         controller,
-        promise: undefined as any,
+        promise: Promise.resolve({ items: [] }),
         waiters: 0,
         settled: false,
       }
@@ -862,7 +859,7 @@ export function publicationsTagsPath(): string {
   return `${publicationsItemsPath()}/tags`
 }
 
-export interface ResolveScopeOptions {
+interface ResolveScopeOptions {
   readonly signal?: AbortSignal
   readonly itemLevel?: ZoteroItemLevel
 }

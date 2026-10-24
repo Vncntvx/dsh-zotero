@@ -23,8 +23,6 @@ import {
   type ScholarlyToolOutput,
 } from './common.js'
 
-export { SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR, type ScholarlyToolHost, type ScholarlyToolOutput }
-
 const CITE_HINT = 'Tip: Cite a paper from these results using its title link or ID.'
 
 export function createScholarlySearchTool(host: ScholarlyToolHost): ToolDefinition {

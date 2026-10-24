@@ -5,7 +5,6 @@
  */
 
 import { decodeEntities, plain } from '../sources/helpers.js'
-export { decodeEntities }
 
 function tidy(text: string): string {
   return decodeEntities(text.replace(/<[^>]+>/g, ''))
