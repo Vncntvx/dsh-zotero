@@ -18,6 +18,7 @@ import {
   parseYear,
   plain,
   stripEmptyFields,
+  titled,
 } from './helpers.js'
 
 interface S2Paper {
@@ -117,7 +118,7 @@ export async function searchSemanticScholar(
     timeoutMs: 25_000,
     retries: keys?.s2Key ? 2 : 0,
   })
-  return (body.data ?? []).map(paperFromS2).filter((p) => (p.title ?? '') !== '')
+  return titled((body.data ?? []).map(paperFromS2))
 }
 
 export async function lookupSemanticScholar(

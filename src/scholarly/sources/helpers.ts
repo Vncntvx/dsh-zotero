@@ -20,6 +20,17 @@ export async function ignoreNotFound<T>(promise: Promise<T>): Promise<T | undefi
 }
 
 /**
+ * Papers that carry a non-empty title. Every adapter drops the rest from its
+ * result lists; the one spelling keeps the drop rule from drifting between
+ * them.
+ * @param papers - the mapped results of one source response.
+ * @returns the papers with a non-empty title.
+ */
+export function titled(papers: ScholarlyPaper[]): ScholarlyPaper[] {
+  return papers.filter((p) => (p.title ?? '') !== '')
+}
+
+/**
  * Combine a base search query with additional filter clauses.
  * When multiple clauses exist, parenthesizes the base query and joins with AND.
  */

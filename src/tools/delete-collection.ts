@@ -18,7 +18,7 @@ import {
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
 import { isRefString } from '../refs.js'
-import { previewOutcomeOf } from './degradable.js'
+import { runPreview } from './degradable.js'
 import { renderDeclined } from './present.js'
 import {
   DECLINED_OUTPUT_SCHEMA,
@@ -93,14 +93,14 @@ function buildRequest(args: DeleteCollectionArgs): ZoteroDeleteCollectionRequest
  * unknown, and the domain reports the miss after approval. Every other failure
  * (a timeout, a transport fault, a protocol change) is rethrown, and a caller
  * cancellation reaches the harness as `TOOL_ABORTED` instead of being folded
- * into a plan (see {@link previewOutcomeOf}).
+ * into a plan (see {@link runPreview}).
  */
 async function fetchItemPreview(
   service: ZoteroService,
   refOrName: string,
   signal: AbortSignal | undefined,
 ): Promise<{ total?: number; ref?: string }> {
-  try {
+  return await runPreview<{ total?: number; ref?: string }>(signal, {}, async () => {
     const searched = await service.search(
       {
         mode: 'metadata',
@@ -116,11 +116,7 @@ async function fetchItemPreview(
       total: searched.total,
       ref: searched.scope.kind === 'collection' ? searched.scope.ref : undefined,
     }
-  } catch (error) {
-    const outcome = previewOutcomeOf(error, signal, {})
-    if (outcome.kind === 'degrade') return outcome.value
-    throw outcome.error
-  }
+  })
 }
 
 async function fetchChildPreview(
@@ -128,17 +124,13 @@ async function fetchChildPreview(
   parentRef: string,
   signal: AbortSignal | undefined,
 ): Promise<number | undefined> {
-  try {
+  return await runPreview(signal, undefined, async () => {
     const browsed = await service.browse(
       { kind: 'collections', parentRef, offset: 0, limit: 1 },
       signal,
     )
     return browsed.total
-  } catch (error) {
-    const outcome = previewOutcomeOf(error, signal, undefined)
-    if (outcome.kind === 'degrade') return outcome.value
-    throw outcome.error
-  }
+  })
 }
 
 async function previewDeleteCollection(

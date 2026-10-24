@@ -19,7 +19,7 @@ import {
 } from '@deepseek-ai/dsh-tools'
 import type { ResolvedConfig } from '../config.js'
 import { writeListEmptyMessage } from '../errors.js'
-import { previewOutcomeOf } from './degradable.js'
+import { runPreview } from './degradable.js'
 import { renderDeclined } from './present.js'
 import {
   DECLINED_OUTPUT_SCHEMA,
@@ -62,7 +62,7 @@ const DELETE_LIBRARY_TAGS_OUTPUT_SCHEMA = {
 type DeleteLibraryTagsOutput = InferValue<typeof DELETE_LIBRARY_TAGS_OUTPUT_SCHEMA>
 
 /** The per-tag proven facts the plan card renders. */
-export interface TagPreview {
+interface TagPreview {
   /** Item counts; a seen-but-uncounted tag maps to `undefined`, an unlisted name is absent. */
   counts?: ReadonlyMap<string, number | undefined>
   /** Requested names the full listing does not carry; Zotero will skip them. */
@@ -125,14 +125,14 @@ interface TagRow {
  * several tags leaves every count unknown, and the delete still carries its
  * version precondition. Every other failure is rethrown, and a caller
  * cancellation reaches the harness as `TOOL_ABORTED` instead of being folded
- * into a plan (see {@link previewOutcomeOf}).
+ * into a plan (see {@link runPreview}).
  */
 async function previewLibraryTags(
   service: ZoteroService,
   tags: readonly string[],
   signal: AbortSignal | undefined,
 ): Promise<TagPreview> {
-  try {
+  return await runPreview<TagPreview>(signal, {}, async () => {
     const wanted = new Set(tags)
     const counts = new Map<string, number | undefined>()
     let offset = 0
@@ -161,11 +161,7 @@ async function previewLibraryTags(
       counts,
       ...(unknown.length > 0 ? { unknown } : {}),
     }
-  } catch (error) {
-    const outcome = previewOutcomeOf(error, signal, {})
-    if (outcome.kind === 'degrade') return outcome.value
-    throw outcome.error
-  }
+  })
 }
 
 export function renderDeleteLibraryTags(

@@ -17,6 +17,7 @@ import {
   parseYear,
   plain,
   stripEmptyFields,
+  titled,
 } from './helpers.js'
 
 export interface CrossrefWork {
@@ -105,7 +106,7 @@ export async function searchCrossref(
     timeoutMs: 30_000,
   })
 
-  return (body.message?.items ?? []).map(paperFromCrossref).filter((p) => (p.title ?? '') !== '')
+  return titled((body.message?.items ?? []).map(paperFromCrossref))
 }
 
 export async function lookupCrossref(

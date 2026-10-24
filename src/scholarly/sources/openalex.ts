@@ -11,7 +11,14 @@ import {
   type ScholarlyQuery,
 } from '../types.js'
 import { extractArxivId } from './arxiv.js'
-import { cleanDoi, encodeQueryParams, ignoreNotFound, plain, stripEmptyFields } from './helpers.js'
+import {
+  cleanDoi,
+  encodeQueryParams,
+  ignoreNotFound,
+  plain,
+  stripEmptyFields,
+  titled,
+} from './helpers.js'
 
 interface OpenAlexWork {
   id?: string
@@ -144,7 +151,7 @@ export async function searchOpenAlex(
     timeoutMs: 30_000,
     headers: openAlexHeaders(keys),
   })
-  return (body.results ?? []).map(paperFromOpenAlex).filter((p) => (p.title ?? '') !== '')
+  return titled((body.results ?? []).map(paperFromOpenAlex))
 }
 
 export async function lookupOpenAlex(
@@ -189,7 +196,7 @@ export async function openalexLinkedWorks(
   })
 
   return {
-    papers: (body.results ?? []).map(paperFromOpenAlex).filter((p) => (p.title ?? '') !== ''),
+    papers: titled((body.results ?? []).map(paperFromOpenAlex)),
     ...(body.meta?.count !== undefined ? { total: body.meta.count } : {}),
   }
 }

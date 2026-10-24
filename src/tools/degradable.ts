@@ -36,7 +36,7 @@ import { TOOL_ABORTED_MESSAGE } from '../abort.js'
  * @param error - the rejection from a preview read.
  * @returns true when the plan may render the count as unknown.
  */
-export function isPreviewDegradable(error: unknown): boolean {
+function isPreviewDegradable(error: unknown): boolean {
   return (
     error instanceof ZoteroError &&
     (error.code === ZOTERO_NOT_FOUND || error.code === ZOTERO_SCOPE_AMBIGUOUS)
@@ -44,7 +44,7 @@ export function isPreviewDegradable(error: unknown): boolean {
 }
 
 /** What one failed preview read amounts to, once the degrade rule has run. */
-export type PreviewOutcome<T> =
+type PreviewOutcome<T> =
   | { readonly kind: 'degrade'; readonly value: T }
   | { readonly kind: 'rethrow'; readonly error: unknown }
 
@@ -75,4 +75,28 @@ export function previewOutcomeOf<T>(
   }
   if (isPreviewDegradable(error)) return { kind: 'degrade', value: degraded }
   return { kind: 'rethrow', error }
+}
+
+/**
+ * Run one best-effort preview read under the shared degrade rule: the
+ * fallback value when the read was merely inconclusive, the original error
+ * (or the harness abort) otherwise. The one wrapper every previewing tool
+ * funnels through, so the rule cannot drift between them.
+ * @param signal - the caller's cancellation signal, when the read carries one.
+ * @param fallback - the value the plan renders when the read is inconclusive.
+ * @param read - the preview read.
+ * @returns the read's value, or the fallback on a degradable failure.
+ */
+export async function runPreview<T>(
+  signal: AbortSignal | undefined,
+  fallback: T,
+  read: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await read()
+  } catch (error) {
+    const outcome = previewOutcomeOf(error, signal, fallback)
+    if (outcome.kind === 'degrade') return outcome.value
+    throw outcome.error
+  }
 }

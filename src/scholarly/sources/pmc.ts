@@ -18,9 +18,10 @@ import {
   parseYear,
   plain,
   stripEmptyFields,
+  titled,
 } from './helpers.js'
 
-export interface EpmcResult {
+interface EpmcResult {
   id?: string
   source?: string
   pmid?: string
@@ -114,7 +115,7 @@ export async function searchEuropePmc(
     timeoutMs: 30_000,
   })
 
-  return (body.resultList?.result ?? []).map(paperFromEpmc).filter((p) => (p.title ?? '') !== '')
+  return titled((body.resultList?.result ?? []).map(paperFromEpmc))
 }
 
 export async function lookupEuropePmc(

@@ -17,6 +17,7 @@ import {
   encodeQueryParams,
   parseYear,
   stripEmptyFields,
+  titled,
   xmlTextVal,
 } from './helpers.js'
 
@@ -69,8 +70,8 @@ export function parsePubmedXml(xml: string): ScholarlyPaper[] {
   }
   const articles = parsed.PubmedArticleSet?.PubmedArticle ?? []
 
-  return articles
-    .map((entry) => {
+  return titled(
+    articles.map((entry) => {
       const citation = entry.MedlineCitation ?? {}
       const article = citation.Article ?? {}
       const idList = (entry.PubmedData?.ArticleIdList?.ArticleId ?? []) as Array<{
@@ -118,8 +119,8 @@ export function parsePubmedXml(xml: string): ScholarlyPaper[] {
         pmcid: getId('pmc'),
         sources: [SCHOLARLY_SOURCE_NAMES.pubmed],
       })
-    })
-    .filter((p) => (p.title ?? '') !== '')
+    }),
+  )
 }
 
 export async function searchPubMed(
