@@ -17,7 +17,7 @@ import { writeStatusLabel } from '../write-label.ts'
 import { connectionDiagnosisOf, type ConnectionView } from './connection.ts'
 import css from './workspace.module.css'
 
-export interface WorkspaceToolbarProps {
+interface WorkspaceToolbarProps {
   readonly connection: ConnectionView
   readonly onRefresh: () => void
   readonly t: TranslateNS<'zotero'>

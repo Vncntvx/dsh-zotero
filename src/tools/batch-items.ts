@@ -340,7 +340,7 @@ export async function previewBatchItems(
   return await Promise.all(deletes.map((ref) => fetchDeletePreview(service, ref, signal)))
 }
 
-export function renderBatchItems(_args: BatchItemsArgs, value: BatchItemsOutput): ContentBlock[] {
+function renderBatchItems(_args: BatchItemsArgs, value: BatchItemsOutput): ContentBlock[] {
   if (value.kind === 'declined') {
     return renderDeclined()
   }

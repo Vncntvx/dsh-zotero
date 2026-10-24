@@ -51,8 +51,7 @@ export type WriteToolName =
   | 'scholarly_save_to_zotero'
   | 'zotero_delete_library_tags'
 
-export type WriteToolViewProps = PropsRuntime<'tool.call.toolview', WriteToolName> &
-  PropsLocale<'zotero'>
+type WriteToolViewProps = PropsRuntime<'tool.call.toolview', WriteToolName> & PropsLocale<'zotero'>
 
 /**
  * What the receipt may claim about the write:

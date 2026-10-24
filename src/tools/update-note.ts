@@ -62,7 +62,7 @@ export function updateNotePlan(args: Args): string {
   ].join('\n')
 }
 
-export function renderUpdateNote(_args: Args, value: Output): ContentBlock[] {
+function renderUpdateNote(_args: Args, value: Output): ContentBlock[] {
   if (value.kind === 'declined') return renderDeclined()
   return [
     {

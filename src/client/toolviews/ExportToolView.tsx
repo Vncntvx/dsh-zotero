@@ -24,7 +24,7 @@ import {
 import { RawTextFallback, RunningNotice, ZoteroToolRow } from './ZoteroToolRow.tsx'
 import css from './toolviews.module.css'
 
-export type ExportToolViewProps = PropsRuntime<'tool.call.toolview', 'zotero_export'> &
+type ExportToolViewProps = PropsRuntime<'tool.call.toolview', 'zotero_export'> &
   PropsLocale<'zotero'>
 
 export function ExportToolView(props: ExportToolViewProps) {

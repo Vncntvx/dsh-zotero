@@ -195,7 +195,7 @@ async function fetchRawItemBatch(
   return []
 }
 
-export interface CitationExportOptions {
+interface CitationExportOptions {
   readonly refs: readonly ZoteroObjectRef[]
   readonly prefix: string
   readonly serverId?: string

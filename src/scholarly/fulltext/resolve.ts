@@ -20,7 +20,7 @@ import type { ScholarlyKeys } from '../types.js'
 import type { FullTextRecord, ScholarlyTextStore } from './store.js'
 import { arxivHtmlToMarkdown, extractPdfText, jatsToMarkdown } from './markup.js'
 
-export type PaperIdentifier =
+type PaperIdentifier =
   | { kind: 'arxiv'; id: string }
   | { kind: 'doi'; id: string }
   | { kind: 'pmid'; id: string }
@@ -203,7 +203,7 @@ async function resolveArxivFullText(
   return { reasons }
 }
 
-export interface ScholarlyResolutionContext {
+interface ScholarlyResolutionContext {
   readonly http: ScholarlyHttp
   readonly keys?: ScholarlyKeys
   readonly store?: ScholarlyTextStore

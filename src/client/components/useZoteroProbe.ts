@@ -11,17 +11,17 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ZoteroStatusView } from '../../contract.ts'
 
-export interface ZoteroProbeState {
+interface ZoteroProbeState {
   readonly loading: boolean
   readonly data?: ZoteroStatusView
   readonly error?: string
 }
 
-export interface UseZoteroProbeOptions {
+interface UseZoteroProbeOptions {
   readonly initialAutoRun?: boolean
 }
 
-export interface UseZoteroProbeReturn {
+interface UseZoteroProbeReturn {
   readonly state: ZoteroProbeState
   readonly runProbe: () => Promise<void>
 }

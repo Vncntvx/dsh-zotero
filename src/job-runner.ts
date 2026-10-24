@@ -139,7 +139,7 @@ export const RUN_IN_BACKGROUND_PARAMETER = {
   },
 } as const
 
-export interface ZoteroJobTask<T> {
+interface ZoteroJobTask<T> {
   readonly label: string
   readonly exec: ToolExecution
   readonly outputLimitBytes?: number
@@ -151,7 +151,7 @@ export interface ZoteroJobTask<T> {
   readonly renderResult?: (value: T) => string
 }
 
-export interface PromotedJobResult {
+interface PromotedJobResult {
   readonly kind: 'promoted'
   readonly jobId: JobId
   readonly timeoutMs: number
@@ -163,10 +163,10 @@ interface BackgroundJobResult {
   readonly jobId: JobId
 }
 
-export type JobArmResult = BackgroundJobResult | PromotedJobResult
+type JobArmResult = BackgroundJobResult | PromotedJobResult
 
 /** Job policy knobs every heavy tool reads from live config. */
-export interface JobPolicy {
+interface JobPolicy {
   readonly enableRunInBackground: boolean
   readonly promoteOnTimeout: boolean
   readonly foregroundWaitMs: number

@@ -11,7 +11,7 @@ import { messageOf } from '../error-text.ts'
 import { reportCrashedSurface } from '../actions/error-reporter.ts'
 import css from './cards.module.css'
 
-export interface ZoteroSurfaceBoundaryProps {
+interface ZoteroSurfaceBoundaryProps {
   readonly t: TranslateNS<'zotero'>
   readonly children: ReactNode
   /** Identity-compared between renders; a change clears the caught fault. */

@@ -15,7 +15,7 @@ import { getAttachmentResolver } from '../../actions/attachment-resolver.ts'
 import type { PdfCapability } from '../../sources/source-capabilities.ts'
 import css from './open.module.css'
 
-export interface PdfReadButtonProps {
+interface PdfReadButtonProps {
   /** Optional structured PDF capability; extracts ref, filePath, or webUrl automatically. */
   readonly capability?: PdfCapability | null
   readonly attachmentRef?: string

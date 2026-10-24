@@ -22,8 +22,7 @@ import {
 import { RawTextFallback, RunningNotice, ZoteroToolRow } from './ZoteroToolRow.tsx'
 import css from './toolviews.module.css'
 
-export type ItemToolViewProps = PropsRuntime<'tool.call.toolview', 'zotero_get'> &
-  PropsLocale<'zotero'>
+type ItemToolViewProps = PropsRuntime<'tool.call.toolview', 'zotero_get'> & PropsLocale<'zotero'>
 
 /** One preview row with the deep links its own kind can offer. */
 interface PreviewView {

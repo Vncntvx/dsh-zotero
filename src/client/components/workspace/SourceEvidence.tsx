@@ -37,7 +37,7 @@ function retrievalSummaryLineOf(item: SourceItem, t: TranslateNS<'zotero'>): str
   return parts.join(' · ')
 }
 
-export interface SourceEvidenceProps {
+interface SourceEvidenceProps {
   readonly item: SourceItem
   readonly t: TranslateNS<'zotero'>
 }

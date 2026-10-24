@@ -26,10 +26,10 @@ import type {
 import css from './ZoteroSettingsForm.module.css'
 
 /** Field-editing actions, wired from the surface's card face. */
-export type ScholarlyFormActions = Pick<SettingsFormActions, 'edit' | 'resetField'>
+type ScholarlyFormActions = Pick<SettingsFormActions, 'edit' | 'resetField'>
 
 /** What the form body needs: copy, snapshot, and staged-edit actions. */
-export interface ScholarlySettingsFormProps {
+interface ScholarlySettingsFormProps {
   /** Locale reader bound to the plugin dictionary. */
   t: (key: ZoteroLocaleKey) => string
   /** The card snapshot, from ScholarlyFormController. */

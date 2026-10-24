@@ -17,7 +17,7 @@ import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import css from './open.module.css'
 
-export interface BlockedReadActionProps {
+interface BlockedReadActionProps {
   readonly label: string
   readonly t: TranslateNS<'zotero'>
   /** The button's class; defaults to the shared action button. */

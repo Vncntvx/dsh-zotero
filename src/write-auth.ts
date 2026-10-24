@@ -59,7 +59,7 @@ export const WRITE_APP_NAME = 'dsh (Zotero plugin)'
 export const WRITE_KEY_RECORD = credentialKey('dsh-zotero', 'local-write-key')
 
 /** The grant payload this plugin stores; opaque to the credentials seam. */
-export interface ZoteroWriteGrantPayload {
+interface ZoteroWriteGrantPayload {
   /** The local API key Zotero issued. */
   readonly key: string
   /** The Zotero instance id the dialog that granted the key was served by. */
@@ -70,7 +70,7 @@ export interface ZoteroWriteGrantPayload {
   readonly authorizedAt: string
 }
 
-export interface WriteAuthorizerDeps {
+interface WriteAuthorizerDeps {
   /** The write transport; the authorize call rides it. */
   readonly client: ZoteroWriteHttpClient
   /** The host credentials seam; absent compositions keep grants in memory only. */
@@ -84,13 +84,13 @@ export interface WriteAuthorizerDeps {
 }
 
 /** One key for one write lifecycle: usable now, and either reusable or spent. */
-export interface ZoteroWriteKey {
+interface ZoteroWriteKey {
   readonly key: string
   /** True when Zotero will consume the key at authentication time. */
   readonly oneTime: boolean
 }
 
-export interface ParsedGrant {
+interface ParsedGrant {
   readonly key: string
   readonly boundTo: string
   readonly appName?: string

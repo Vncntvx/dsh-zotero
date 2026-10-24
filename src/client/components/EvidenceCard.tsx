@@ -96,7 +96,7 @@ function PassageRow({
   )
 }
 
-export interface EvidenceCardProps {
+interface EvidenceCardProps {
   readonly item: SourceItem
   readonly t: TranslateNS<'zotero'>
   readonly openFile?: (path: string) => void

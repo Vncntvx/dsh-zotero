@@ -28,7 +28,7 @@ export function writeRiskCopy(t: (key: ZoteroLocaleKey) => string): BooleanRiskC
 }
 
 /** The confirm dialog's open/acknowledge state and its transitions. */
-export interface RiskGate {
+interface RiskGate {
   readonly confirming: boolean
   readonly acknowledged: boolean
   readonly setAcknowledged: (acknowledged: boolean) => void

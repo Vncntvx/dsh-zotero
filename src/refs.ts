@@ -233,7 +233,7 @@ export function formatZoteroRelationUri(ref: Pick<ZoteroObjectRef, 'library' | '
   return `http://zotero.org/users/0/items/${ref.key}`
 }
 
-export interface RelationTargetOptions {
+interface RelationTargetOptions {
   /**
    * The library containing the object whose relations these are. Group item
    * URIs map only to this same group, and a relation to another group stays a

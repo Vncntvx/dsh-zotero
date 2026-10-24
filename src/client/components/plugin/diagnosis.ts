@@ -8,7 +8,7 @@
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ZoteroLocaleKey } from '../../locales.ts'
 
-export interface FormattedDiagnosis {
+interface FormattedDiagnosis {
   readonly message: string
   readonly rawCode?: string
 }

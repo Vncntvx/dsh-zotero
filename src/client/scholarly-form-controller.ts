@@ -22,23 +22,20 @@ import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { asFormScope } from './helpers/form-scope.ts'
 
 /** Text and path fields, edited directly. */
-export const SCHOLARLY_TEXT_KEYS = ['email'] as const
+const SCHOLARLY_TEXT_KEYS = ['email'] as const
 export type ScholarlyTextKey = (typeof SCHOLARLY_TEXT_KEYS)[number]
 
 /** Secret credentials, write-only and masked. */
-export const SCHOLARLY_SECRET_KEYS = ['s2Key', 'ncbiKey', 'openalexKey'] as const
+const SCHOLARLY_SECRET_KEYS = ['s2Key', 'ncbiKey', 'openalexKey'] as const
 export type ScholarlySecretKey = (typeof SCHOLARLY_SECRET_KEYS)[number]
 
 /** Whole-number limits. */
-export const SCHOLARLY_NUMERIC_KEYS = ['maxResults', 'maxContentChars'] as const
+const SCHOLARLY_NUMERIC_KEYS = ['maxResults', 'maxContentChars'] as const
 export type ScholarlyNumericKey = (typeof SCHOLARLY_NUMERIC_KEYS)[number]
-
-export type ScholarlyFieldKey =
-  ScholarlyTextKey | ScholarlySecretKey | ScholarlyNumericKey | ScholarlyEnabledKey
 
 export type ScholarlyEnabledKey = 'enabled'
 
-export interface ScholarlySecretFieldState {
+interface ScholarlySecretFieldState {
   readonly text: string
   readonly configured: boolean
   readonly disabled: boolean

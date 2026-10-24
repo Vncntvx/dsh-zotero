@@ -56,7 +56,7 @@ const OUTPUT = {
 } as const
 type Output = InferValue<typeof OUTPUT>
 
-export function restoreItemsPlan(args: Args): string {
+function restoreItemsPlan(args: Args): string {
   return [
     '**Restore Zotero Trash items**',
     WRITE_PLAN_LIBRARY_LINE,

@@ -28,17 +28,7 @@ import {
   mimeOf,
 } from '../export-formats.ts'
 
-export {
-  artifactTimeOf,
-  extensionOf,
-  fileNameForFormat,
-  fileNameOf,
-  formatLabelOf,
-  mimeOf,
-  sanitizeFileStem,
-} from '../export-formats.ts'
-
-export interface ExportCardProps {
+interface ExportCardProps {
   readonly artifact: ExportArtifact
   readonly t: TranslateNS<'zotero'>
 }

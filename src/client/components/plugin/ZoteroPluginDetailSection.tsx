@@ -15,7 +15,7 @@ import type { PluginDetailProps } from '@deepseek-ai/dsh-client-ui-plugin-manage
 import { ZoteroSurfaceBoundary } from '../ZoteroSurfaceBoundary.tsx'
 import css from './plugin-cards.module.css'
 
-export interface ZoteroPluginDetailSectionProps extends PluginDetailProps, PropsLocale<'zotero'> {
+interface ZoteroPluginDetailSectionProps extends PluginDetailProps, PropsLocale<'zotero'> {
   readonly probe: () => Promise<RemoteResult<ZoteroStatusView>>
 }
 

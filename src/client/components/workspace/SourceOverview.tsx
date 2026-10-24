@@ -55,7 +55,7 @@ export function filterLineOf(
   return parts.length === 0 ? '' : parts.join(' · ')
 }
 
-export interface SourceOverviewProps {
+interface SourceOverviewProps {
   readonly item: SourceItem
   readonly t: TranslateNS<'zotero'>
   readonly setDraft?: (text: string) => void

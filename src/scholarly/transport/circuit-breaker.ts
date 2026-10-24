@@ -13,7 +13,7 @@
 
 import { isScholarlyHost } from './hosts.js'
 
-export type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN'
+type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN'
 
 export class ScholarlyCircuitOpenError extends Error {
   constructor(
@@ -36,7 +36,7 @@ interface HostCircuit {
   cooldownEndsAt: number
 }
 
-export interface CircuitBreakerOptions {
+interface CircuitBreakerOptions {
   failureThreshold?: number
   cooldownMs?: number
   windowMs?: number

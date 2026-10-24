@@ -51,7 +51,7 @@ const OUTPUT = {
   ],
 } as const
 type Output = InferValue<typeof OUTPUT>
-export function updateCollectionPlan(args: Args): string {
+function updateCollectionPlan(args: Args): string {
   return [
     '**Update a Zotero collection**',
     WRITE_PLAN_LIBRARY_LINE,
@@ -61,7 +61,7 @@ export function updateCollectionPlan(args: Args): string {
     'The collection is patched under its current object version.',
   ].join('\n')
 }
-export function renderUpdateCollection(_args: Args, value: Output): ContentBlock[] {
+function renderUpdateCollection(_args: Args, value: Output): ContentBlock[] {
   if (value.kind === 'declined') return renderDeclined()
   return [
     {

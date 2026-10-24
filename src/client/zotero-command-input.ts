@@ -15,7 +15,7 @@ import type { ConversationNodeDefinition } from '@deepseek-ai/dsh-client-ui-conv
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
 
 /** The command name whose runs this projection owns. */
-export const ZOTERO_COMMAND = 'zotero'
+const ZOTERO_COMMAND = 'zotero'
 
 /** Human-entered `/zotero` command input projected independently of model messages. */
 export interface ZoteroCommandInputData {

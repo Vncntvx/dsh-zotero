@@ -39,7 +39,7 @@ import type {
 const INCLUDE_ORDER: readonly ZoteroInclude[] = ['notes', 'annotations', 'attachments']
 
 /** Which child-object halves a read must fetch. */
-export interface ChildRowNeeds {
+interface ChildRowNeeds {
   /** Bare `/children`: notes and attachments. */
   readonly direct: boolean
   /** `/children?itemType=annotation`: annotations under this key. */

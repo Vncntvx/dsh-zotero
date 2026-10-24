@@ -42,7 +42,7 @@ export const DIAGNOSTIC_LOG_PREFIX = 'zotero'
 export type DiagnosticDetail = Record<string, string | number | boolean>
 
 /** What a seam emits. The recorder stamps `seq`/`ts` and owns truncation. */
-export interface DiagnosticPushInput {
+interface DiagnosticPushInput {
   readonly level: DiagnosticLevel
   readonly event: string
   readonly message: string
@@ -58,7 +58,7 @@ export interface DiagnosticSink {
 }
 
 /** One retained diagnostic. `count` coalesces consecutive repeats of the same `(event, level, message)`. */
-export interface DiagnosticEntry {
+interface DiagnosticEntry {
   readonly seq: number
   readonly ts: number
   readonly level: DiagnosticLevel
@@ -69,7 +69,7 @@ export interface DiagnosticEntry {
 }
 
 /** Newest-first view of the ring, as the remote `diagnostics` endpoint serves it. */
-export interface DiagnosticsSnapshot {
+interface DiagnosticsSnapshot {
   readonly entries: readonly DiagnosticEntry[]
   /** Entries currently retained (after capacity eviction, before the snapshot limit). */
   readonly total: number
@@ -78,7 +78,7 @@ export interface DiagnosticsSnapshot {
 }
 
 /** Upper bound on entries held in memory; the oldest are evicted first. */
-export const DIAGNOSTIC_RING_CAPACITY = 500
+const DIAGNOSTIC_RING_CAPACITY = 500
 /** Upper bound on one entry's message, so a pathological seam cannot dominate the buffer. The remote layer pre-clamps client crash-report text to this. */
 export const DIAGNOSTIC_MESSAGE_MAX_CHARS = 500
 /** Upper bound on detail fields per entry. */
@@ -143,7 +143,7 @@ function clampDetail(detail: DiagnosticDetail): DiagnosticDetail {
 }
 
 /** A structural slice of the Cordis logger `Message`, kept local so this module stays dependency-free. */
-export interface DiagnosticLogMessage {
+interface DiagnosticLogMessage {
   readonly name: string
   readonly type: string
   readonly args: readonly unknown[]

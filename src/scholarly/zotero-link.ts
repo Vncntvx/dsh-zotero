@@ -43,7 +43,7 @@ export interface ZoteroServiceLike {
 }
 
 /** What one library-status pass managed to determine. */
-export interface LibraryStatusReport {
+interface LibraryStatusReport {
   /** Hits that received an `inLibrary` annotation. */
   readonly matched: number
   /** Hits whose lookup failed; these carry no annotation and must not read as "absent". */

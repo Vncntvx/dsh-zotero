@@ -28,7 +28,7 @@ import { ExportCard } from './ExportCard.tsx'
 import { ExportDocumentRow } from './ExportDocumentRow.tsx'
 import css from './cards.module.css'
 
-export interface ExportSectionsProps {
+interface ExportSectionsProps {
   readonly exports: readonly ExportArtifact[]
   readonly t: TranslateNS<'zotero'>
 }

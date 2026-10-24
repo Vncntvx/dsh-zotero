@@ -16,7 +16,7 @@ import { errorSummaryOf, isToolRunning, metaOf, resultTextOf } from '../presente
 import { RawTextFallback, RunningNotice, ZoteroToolRow } from './ZoteroToolRow.tsx'
 import css from './toolviews.module.css'
 
-export type RetrieveToolViewProps = PropsRuntime<'tool.call.toolview', 'zotero_retrieve'> &
+type RetrieveToolViewProps = PropsRuntime<'tool.call.toolview', 'zotero_retrieve'> &
   PropsLocale<'zotero'>
 
 export function RetrieveToolView(props: RetrieveToolViewProps) {

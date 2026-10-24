@@ -35,7 +35,7 @@ import css from './plugin/plugin-cards.module.css'
 /** How many filtered entries render before the "latest N" note takes over. */
 const RENDER_LIMIT = 100
 
-export interface ZoteroDiagnosticsCardProps extends PluginDetailProps, PropsLocale<'zotero'> {
+interface ZoteroDiagnosticsCardProps extends PluginDetailProps, PropsLocale<'zotero'> {
   readonly probe: () => Promise<RemoteResult<ZoteroStatusView>>
   readonly diagnostics: () => Promise<RemoteResult<ZoteroDiagnosticsView>>
 }

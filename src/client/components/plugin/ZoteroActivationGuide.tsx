@@ -21,8 +21,7 @@ import css from './plugin-cards.module.css'
  * face fails the assembly loudly, so the component never renders without a
  * translator. The probe arrives through the registration's inject face.
  */
-export interface ZoteroActivationGuideProps
-  extends PluginActivationOwnerProps, PropsLocale<'zotero'> {
+interface ZoteroActivationGuideProps extends PluginActivationOwnerProps, PropsLocale<'zotero'> {
   readonly probe: () => Promise<RemoteResult<ZoteroStatusView>>
 }
 

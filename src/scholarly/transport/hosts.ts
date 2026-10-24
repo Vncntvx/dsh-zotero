@@ -12,7 +12,7 @@
  */
 
 /** One host the scholarly subsystem may contact. */
-export interface ScholarlyHost {
+interface ScholarlyHost {
   /** Exact hostname, as it appears in a URL. */
   readonly host: string
   /**
@@ -55,7 +55,7 @@ export const SCHOLARLY_HOSTS: readonly ScholarlyHost[] = [
 ]
 
 /** The exact hostnames, for set membership. */
-export const SCHOLARLY_HOST_NAMES: ReadonlySet<string> = new Set(
+const SCHOLARLY_HOST_NAMES: ReadonlySet<string> = new Set(
   SCHOLARLY_HOSTS.map((entry) => entry.host),
 )
 

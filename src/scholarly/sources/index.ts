@@ -22,7 +22,7 @@ export * from './pmc.js'
 export * from './pubmed.js'
 export * from './semanticscholar.js'
 
-export type SourceSearcher = (
+type SourceSearcher = (
   query: ScholarlyQuery,
   http: ScholarlyHttp,
   keys?: ScholarlyKeys,
@@ -30,7 +30,7 @@ export type SourceSearcher = (
 ) => Promise<ScholarlyPaper[]>
 
 /** The searcher for one source id; the record is total over {@link ScholarlySourceId}. */
-export type SourceSearchers = Record<ScholarlySourceId, SourceSearcher>
+type SourceSearchers = Record<ScholarlySourceId, SourceSearcher>
 
 export const SOURCE_SEARCHERS: SourceSearchers = {
   arxiv: (q, http, _k, s) => searchArxiv(q, http, s),

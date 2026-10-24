@@ -22,14 +22,14 @@ import { isToolRunning, metaOf, rowStateOf } from '../presenters.ts'
 import { writeMetaOf } from '../sources/decoders.ts'
 import css from './toolviews.module.css'
 
-export interface ToolRowRenderContext {
+interface ToolRowRenderContext {
   readonly isRunning: boolean
   readonly isDeclined: boolean
   readonly isUnverified: boolean
   readonly state: 'preparing' | 'running' | 'ok' | 'error' | 'stopped'
 }
 
-export interface ZoteroToolRowProps {
+interface ZoteroToolRowProps {
   readonly useDisclosure: UseDisclosure
   readonly t: TranslateNS<'zotero'>
   readonly toolName: string

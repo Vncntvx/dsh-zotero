@@ -60,7 +60,7 @@ export const ZOTERO_STATUS_CLIENT_RESULT_CODEC = Object.freeze({
 
 const zoteroRefSchema = z.string().min(1)
 
-export const ZOTERO_REF_CLIENT_PARAM_CODEC = Object.freeze({
+const ZOTERO_REF_CLIENT_PARAM_CODEC = Object.freeze({
   mode: 'strict',
   typeSymbol: ZOTERO_REF_PARAM_TYPE_SYMBOL,
   create: (): z.ZodType<string> => zoteroRefSchema,
@@ -78,7 +78,7 @@ const zoteroAttachmentLocationSchema = z
   .strict()
   .readonly()
 
-export const ZOTERO_RESOLVE_ATTACHMENT_CLIENT_RESULT_CODEC = Object.freeze({
+const ZOTERO_RESOLVE_ATTACHMENT_CLIENT_RESULT_CODEC = Object.freeze({
   mode: 'strict',
   typeSymbol: ZOTERO_RESOLVE_ATTACHMENT_TYPE_SYMBOL,
   create: (): z.ZodType<ZoteroAttachmentLocationView> => zoteroAttachmentLocationSchema,
@@ -109,7 +109,7 @@ const zoteroDiagnosticsSchema = z
   .strict()
   .readonly()
 
-export const ZOTERO_DIAGNOSTICS_CLIENT_RESULT_CODEC = Object.freeze({
+const ZOTERO_DIAGNOSTICS_CLIENT_RESULT_CODEC = Object.freeze({
   mode: 'strict',
   typeSymbol: ZOTERO_DIAGNOSTICS_TYPE_SYMBOL,
   create: (): z.ZodType<ZoteroDiagnosticsView> => zoteroDiagnosticsSchema,
@@ -125,7 +125,7 @@ const zoteroClientErrorReportSchema = z
   .strict()
   .readonly()
 
-export const ZOTERO_CLIENT_ERROR_REPORT_CLIENT_PARAM_CODEC = Object.freeze({
+const ZOTERO_CLIENT_ERROR_REPORT_CLIENT_PARAM_CODEC = Object.freeze({
   mode: 'strict',
   typeSymbol: ZOTERO_CLIENT_ERROR_REPORT_TYPE_SYMBOL,
   create: (): z.ZodType<ZoteroClientErrorReport> => zoteroClientErrorReportSchema,
@@ -133,7 +133,7 @@ export const ZOTERO_CLIENT_ERROR_REPORT_CLIENT_PARAM_CODEC = Object.freeze({
 
 const zoteroReportResultSchema = z.object({ seq: z.number() }).strict().readonly()
 
-export const ZOTERO_REPORT_RESULT_CLIENT_RESULT_CODEC = Object.freeze({
+const ZOTERO_REPORT_RESULT_CLIENT_RESULT_CODEC = Object.freeze({
   mode: 'strict',
   typeSymbol: ZOTERO_REPORT_RESULT_TYPE_SYMBOL,
   create: (): z.ZodType<ZoteroReportResultView> => zoteroReportResultSchema,

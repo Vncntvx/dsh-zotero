@@ -9,7 +9,7 @@
 import { REF_IN_TEXT_PATTERN, type RefKind } from '../../ref-grammar.ts'
 
 /** Structured identity parsed from a canonical Zotero ref. */
-export interface ParsedRefIdentity {
+interface ParsedRefIdentity {
   readonly libraryType: 'user' | 'group'
   readonly libraryId: string
   readonly kind: RefKind

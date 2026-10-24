@@ -33,10 +33,7 @@ import { CopyButton } from '../components/CopyButton.tsx'
 import { RawTextFallback, RunningNotice, ZoteroToolRow } from './ZoteroToolRow.tsx'
 import css from './toolviews.module.css'
 
-export type BrowseToolViewProps = PropsRuntime<
-  'tool.call.toolview',
-  'zotero_browse' | 'zotero_changes'
-> &
+type BrowseToolViewProps = PropsRuntime<'tool.call.toolview', 'zotero_browse' | 'zotero_changes'> &
   PropsLocale<'zotero'>
 
 /** The deepest collection nesting the card indents; below it, rows stay flush. */

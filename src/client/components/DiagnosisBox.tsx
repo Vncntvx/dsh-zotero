@@ -3,7 +3,7 @@ import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { formatDiagnosis } from './plugin/diagnosis.ts'
 import css from './DiagnosisBox.module.css'
 
-export interface DiagnosisBoxProps {
+interface DiagnosisBoxProps {
   readonly diagnosis: string
   readonly t: TranslateNS<'zotero'>
 }

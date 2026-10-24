@@ -16,12 +16,12 @@ export interface DiagnosticsFeedState {
   readonly error?: string
 }
 
-export interface UseDiagnosticsFeedOptions {
+interface UseDiagnosticsFeedOptions {
   /** Poll period while the panel is visible, in milliseconds. */
   readonly pollMs?: number
 }
 
-export interface UseDiagnosticsFeedReturn {
+interface UseDiagnosticsFeedReturn {
   readonly state: DiagnosticsFeedState
   readonly refresh: () => Promise<void>
 }

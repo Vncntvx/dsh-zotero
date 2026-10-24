@@ -14,7 +14,7 @@ import { incompleteExportsNoteOf } from '../operations.ts'
 import { ExportSections } from '../ExportSections.tsx'
 import css from './workspace.module.css'
 
-export interface ExportsPageProps {
+interface ExportsPageProps {
   readonly workspace: SourceWorkspace
   readonly t: TranslateNS<'zotero'>
 }

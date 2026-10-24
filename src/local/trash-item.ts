@@ -5,7 +5,7 @@ import { ZoteroError, ZOTERO_UNEXPECTED } from '../errors.js'
 import { assertServerIdMatches, serverIdFromHeaders } from './identity.js'
 import { fetchChildrenForTrash } from './children-wire.js'
 
-export interface TrashSnapshot {
+interface TrashSnapshot {
   key: string
   version: number
   itemType: string
@@ -41,7 +41,7 @@ function snapshotOf(json: unknown, key: string): TrashSnapshot {
   }
 }
 
-export async function readTrashSnapshot(
+async function readTrashSnapshot(
   client: ZoteroHttpClient,
   key: string,
   serverId: string,

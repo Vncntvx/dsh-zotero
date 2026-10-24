@@ -21,7 +21,7 @@ import {
 import { RunningNotice, RawTextFallback, ZoteroToolRow } from './ZoteroToolRow.tsx'
 import css from './toolviews.module.css'
 
-export type SearchToolViewProps = PropsRuntime<'tool.call.toolview', 'zotero_search'> &
+type SearchToolViewProps = PropsRuntime<'tool.call.toolview', 'zotero_search'> &
   PropsLocale<'zotero'>
 
 export function SearchToolView(props: SearchToolViewProps) {

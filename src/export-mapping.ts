@@ -16,7 +16,7 @@ import { formatRef } from './refs.js'
 import type { ZoteroExportFormat, ZoteroObjectRef } from './types.js'
 
 /** One located entry of a translator export body. */
-export interface BatchEntry {
+interface BatchEntry {
   /** The entry's key: BibTeX/BibLaTeX citation key, RIS record id, or CSL JSON id. */
   readonly key?: string
   /** The entry's start offset within the body. */
@@ -28,7 +28,7 @@ export interface BatchEntry {
 }
 
 /** The per-document item of one export call: the ref plus its located entry. */
-export interface LocatedExportItem {
+interface LocatedExportItem {
   readonly ref: string
   /** The batch body's real key (BibTeX/BibLaTeX citation key, CSL JSON id). */
   readonly key?: string

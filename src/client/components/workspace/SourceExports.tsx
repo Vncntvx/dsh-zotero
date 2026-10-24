@@ -10,7 +10,7 @@ import type { SourceItem } from '../../sources/model.ts'
 import { ExportSections } from '../ExportSections.tsx'
 import css from './workspace.module.css'
 
-export interface SourceExportsProps {
+interface SourceExportsProps {
   readonly item: SourceItem
   readonly t: TranslateNS<'zotero'>
 }

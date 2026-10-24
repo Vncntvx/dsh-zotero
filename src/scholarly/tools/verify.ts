@@ -38,9 +38,9 @@ import {
  * timeout as a fabricated citation, which is exactly the reading this tool
  * exists to prevent.
  */
-export type VerificationVerdict = 'verified' | 'check' | 'not_found' | 'unverified'
+type VerificationVerdict = 'verified' | 'check' | 'not_found' | 'unverified'
 
-export interface ReferenceCheckResult {
+interface ReferenceCheckResult {
   raw: string
   verdict: VerificationVerdict
   doi?: string
@@ -145,7 +145,7 @@ function checkDiscrepancies(
   return true
 }
 
-export async function verifySingleReference(
+async function verifySingleReference(
   rawReference: string,
   host: ScholarlyToolHost,
   signal?: AbortSignal,
@@ -213,7 +213,7 @@ const VERDICT_BADGE: Record<VerificationVerdict, string> = {
   unverified: 'UNVERIFIED',
 }
 
-export function formatVerificationResult(result: ReferenceCheckResult, index: number): string {
+function formatVerificationResult(result: ReferenceCheckResult, index: number): string {
   const badge = VERDICT_BADGE[result.verdict]
 
   const lines = [`[${index}] ${badge} ${result.raw.slice(0, 160)}`]

@@ -33,11 +33,11 @@ import { messageOf } from '../error-text.ts'
  * cell. Kept discriminated so the reporter never probes an unknown object's
  * keys at runtime.
  */
-export type CrashInfo =
+type CrashInfo =
   | { readonly kind: 'componentStack'; readonly componentStack?: string | null }
   | { readonly kind: 'slotEntry'; readonly abdicated: boolean }
 
-export type ErrorReporter = (report: ZoteroClientErrorReport) => Promise<unknown>
+type ErrorReporter = (report: ZoteroClientErrorReport) => Promise<unknown>
 
 let activeReporter: ErrorReporter | undefined
 

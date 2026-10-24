@@ -11,8 +11,8 @@ import { isEvidenceSource } from '../evidence-item.ts'
 import { boolField, isRecord, stringField } from '../json.ts'
 import { REF_IN_TEXT_PATTERN } from '../ref-grammar.ts'
 
-// Field readers live in json.ts (CLIENT_SAFE). Re-exported here so toolview
-// modules that already import block readers keep one import site.
+// Field readers live in json.ts (CLIENT_SAFE). Re-exported here so modules
+// that already import block readers keep one import site.
 export { boolField, isRecord, numberField, stringField } from '../json.ts'
 
 export type ZoteroRowState = 'running' | 'ok' | 'error' | 'stopped'

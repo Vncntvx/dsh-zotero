@@ -23,13 +23,7 @@ import {
 } from '../contract.ts'
 import { ZOTERO_CLIENT_INVOCATIONS } from './status-codec.ts'
 
-export type {
-  ZoteroAttachmentLocationView,
-  ZoteroClientErrorReport,
-  ZoteroDiagnosticsView,
-  ZoteroReportResultView,
-  ZoteroStatusView,
-} from '../contract.ts'
+export type { ZoteroDiagnosticsView, ZoteroStatusView } from '../contract.ts'
 
 /** The `zotero` namespace's client contribution. */
 export const ZOTERO_REMOTE: TypertRemoteContribution = {

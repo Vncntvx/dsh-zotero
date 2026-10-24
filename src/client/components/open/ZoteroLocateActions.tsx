@@ -11,7 +11,7 @@ import { selectUrlOf } from '../../actions/open-zotero.ts'
 import { CopyButton } from '../CopyButton.tsx'
 import css from './open.module.css'
 
-export interface ZoteroLocateActionsProps {
+interface ZoteroLocateActionsProps {
   readonly title?: string | null
   readonly itemRef?: string
   readonly selectUrl?: string | null

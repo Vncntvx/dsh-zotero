@@ -34,7 +34,7 @@ import { EvidenceOverview } from './EvidenceOverview.tsx'
 import css from './workspace.module.css'
 
 /** The workspace view's top-level lenses: the sources workspace or the exports page. */
-export type WorkspaceLensId = 'sources' | 'exports'
+type WorkspaceLensId = 'sources' | 'exports'
 
 /** The lens bar's entries: id plus its locale key. */
 const LENSES: readonly {
@@ -48,7 +48,7 @@ const LENSES: readonly {
 /** The narrow-surface navigation state: one pane at a time. */
 export type MobilePane = 'list' | 'detail'
 
-export interface ZoteroWorkspaceViewProps {
+interface ZoteroWorkspaceViewProps {
   readonly workspace: SourceWorkspace
   readonly connection: ConnectionView
   /** Composer prefill; absent on surfaces without an input. */
@@ -60,7 +60,7 @@ export interface ZoteroWorkspaceViewProps {
 }
 
 /** The selected source's key, or undefined when nothing is selected. */
-export type SelectedKey = string | undefined
+type SelectedKey = string | undefined
 
 /**
  * The selection state of the master list: the user's chosen source key plus
@@ -111,7 +111,7 @@ export function effectiveSelectionOf(
 }
 
 /** The minimal item shape the selection logic needs. */
-export interface SourceItemLike {
+interface SourceItemLike {
   readonly key: string
 }
 

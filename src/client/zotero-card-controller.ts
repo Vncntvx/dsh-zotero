@@ -145,7 +145,7 @@ export const NUMERIC_FIELD_KEYS: ReadonlySet<FieldKey> = new Set<FieldKey>(
 export type SettingsTabId = 'features' | 'connection' | 'search' | 'scholarly' | 'advanced'
 
 /** Description of one tab partition and the configuration groups it carries. */
-export interface SettingsTabDescriptor {
+interface SettingsTabDescriptor {
   readonly id: SettingsTabId
   readonly labelKey: 'tabFeatures' | 'tabConnection' | 'tabSearch' | 'tabScholarly' | 'tabAdvanced'
   readonly descKey:

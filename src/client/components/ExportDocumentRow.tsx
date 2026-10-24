@@ -21,7 +21,7 @@ import { extensionOf, formatLabelOf, mimeOf, sanitizeFileStem } from '../export-
 import { CopyButton } from './CopyButton.tsx'
 import css from './cards.module.css'
 
-export interface ExportDocumentRowProps {
+interface ExportDocumentRowProps {
   readonly doc: ExportedDocument
   readonly t: TranslateNS<'zotero'>
 }

@@ -46,7 +46,7 @@ export type ScholarlyToolOutput = {
 /**
  * Recursively clean an object into pure JsonValue by removing undefined entries.
  */
-export function toCleanJsonValue(value: unknown): JsonValue {
+function toCleanJsonValue(value: unknown): JsonValue {
   if (
     value === null ||
     typeof value === 'string' ||

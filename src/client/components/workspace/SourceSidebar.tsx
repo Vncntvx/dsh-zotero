@@ -38,7 +38,7 @@ import { FILTERS, type MobilePane, type SelectionState } from './ZoteroWorkspace
 import { SourceListItem } from './SourceListItem.tsx'
 import css from './workspace.module.css'
 
-export interface SourceSidebarProps {
+interface SourceSidebarProps {
   readonly workspace: SourceWorkspace
   readonly filter: SourceFilter
   readonly counts: SourceFilterCounts

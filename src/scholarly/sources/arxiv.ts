@@ -31,7 +31,7 @@ const parser = new XMLParser({
     name === 'entry' || name === 'author' || name === 'category' || name === 'link',
 })
 
-export interface ArxivAtomEntry {
+interface ArxivAtomEntry {
   id: string
   title: string
   authors: string[]

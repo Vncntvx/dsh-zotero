@@ -16,7 +16,7 @@ import { useRiskGate, type BooleanRiskCopy } from './risk-gate.ts'
 import css from './fields.module.css'
 
 /** What the toggle needs: label, staged text, override state, and actions. */
-export interface BooleanFieldProps {
+interface BooleanFieldProps {
   /** Visible label; the official checkbox renders it as the accessible name. */
   label: string
   /** One-line explanation rendered under the control. */

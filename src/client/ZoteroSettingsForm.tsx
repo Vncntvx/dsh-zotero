@@ -38,10 +38,10 @@ import type { ZoteroLocaleKey } from './locales.ts'
 import css from './ZoteroSettingsForm.module.css'
 
 /** Field-editing actions, wired from the surface's card face. */
-export type ZoteroFormActions = Pick<SettingsFormActions, 'edit' | 'resetField'>
+type ZoteroFormActions = Pick<SettingsFormActions, 'edit' | 'resetField'>
 
 /** What the form body needs from its surface: copy, snapshot, and actions. */
-export interface ZoteroSettingsFormProps {
+interface ZoteroSettingsFormProps {
   /** Locale reader bound to the plugin dictionary. */
   t: (key: ZoteroLocaleKey) => string
   /** The card snapshot, from the surface's bound selector. */

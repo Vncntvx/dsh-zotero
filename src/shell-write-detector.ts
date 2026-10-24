@@ -151,7 +151,7 @@ interface ShapeLabel {
 }
 
 /** One detected write attempt, ready to become an approval request. */
-export interface ShellWriteAttempt {
+interface ShellWriteAttempt {
   /**
    * The audit and fallback reason. It travels into `approval/asked`, and it is
    * what the model reads when no approval channel exists at all, so it names

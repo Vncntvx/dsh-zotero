@@ -10,7 +10,7 @@
  */
 
 /** Provable outcome facts; every field is produced by successful calls only. */
-export interface SourceFacts {
+interface SourceFacts {
   /** Total evidence passages reported across all successful retrieves. */
   readonly reportedEvidenceCount: number
 }

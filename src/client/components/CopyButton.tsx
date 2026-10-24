@@ -11,7 +11,7 @@ import { useEffect, useRef, useState } from 'react'
 import { writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
 import css from './cards.module.css'
 
-export interface CopyButtonProps {
+interface CopyButtonProps {
   readonly value: string
   /** The visible (and accessible) name of the action, e.g. "Copy ref". */
   readonly label: string

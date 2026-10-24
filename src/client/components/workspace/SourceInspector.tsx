@@ -24,7 +24,7 @@ import { SourceExports } from './SourceExports.tsx'
 import css from './workspace.module.css'
 
 /** The inspector's panels. */
-export type InspectorPanelId = 'overview' | 'evidence' | 'exports'
+type InspectorPanelId = 'overview' | 'evidence' | 'exports'
 
 /**
  * The panel tab entries of one item: id, locale key, and the count shown
@@ -43,7 +43,7 @@ function panelEntriesOf(item: SourceItem): readonly {
   ]
 }
 
-export interface SourceInspectorProps {
+interface SourceInspectorProps {
   readonly workspace: SourceWorkspace
   readonly selectedKey: string | undefined
   /** True when the selection is hidden by the active filter. */

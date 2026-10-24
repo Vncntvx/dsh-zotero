@@ -18,9 +18,9 @@ import { messageOf } from '../error-text.ts'
 import { reportCrashedSurface } from '../actions/error-reporter.ts'
 import css from '../components/cards.module.css'
 
-export type AnyToolViewProps = PropsRuntime<'tool.call.toolview'> & PropsLocale<'zotero'>
+type AnyToolViewProps = PropsRuntime<'tool.call.toolview'> & PropsLocale<'zotero'>
 
-export interface ZoteroCardBoundaryProps {
+interface ZoteroCardBoundaryProps {
   readonly props: AnyToolViewProps
   readonly children: ReactNode
 }

@@ -9,7 +9,7 @@ import { IconBrowseOutlineMedium, Pill } from '@deepseek-ai/dsh-client-ui-primit
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import css from './workspace.module.css'
 
-export interface WorkspaceEmptyStateProps {
+interface WorkspaceEmptyStateProps {
   readonly t: TranslateNS<'zotero'>
   readonly setDraft?: (text: string) => void
 }

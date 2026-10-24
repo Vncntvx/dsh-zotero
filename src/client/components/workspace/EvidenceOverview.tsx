@@ -15,7 +15,7 @@ import { filterSources } from '../../sources/selectors.ts'
 import { EvidenceCard } from '../EvidenceCard.tsx'
 import css from './workspace.module.css'
 
-export interface EvidenceOverviewProps {
+interface EvidenceOverviewProps {
   readonly workspace: SourceWorkspace
   readonly onBack: () => void
   readonly openFile?: (path: string) => void

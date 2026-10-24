@@ -49,7 +49,7 @@ function detailOmittedOf(meta: Record<string, unknown>): boolean {
 }
 
 /** The search projection view; `rows === null` means malformed. */
-export interface SearchMetaView {
+interface SearchMetaView {
   readonly rows: readonly SearchRowMeta[] | null
   /** Hits the paged primary listing returned; the note-body supplement is counted separately. */
   readonly returned: number | null
@@ -84,7 +84,7 @@ export interface ChildPreviewView {
 }
 
 /** The get projection view; a null field is absent or malformed. */
-export interface GetMetaView {
+interface GetMetaView {
   readonly title: string | null
   readonly creators: string | null
   readonly year: number | null
@@ -140,7 +140,7 @@ function childPreviewsOf(value: unknown): ChildPreviewView[] {
 }
 
 /** The retrieve projection view; `items === null` means malformed. */
-export interface RetrieveMetaView {
+interface RetrieveMetaView {
   readonly items: readonly EvidenceItem[] | null
   readonly count: number | null
   readonly truncated: boolean | null
@@ -153,7 +153,7 @@ export interface RetrieveMetaView {
 }
 
 /** The attachment projection view; a null field is absent or malformed. */
-export interface AttachmentMetaView {
+interface AttachmentMetaView {
   readonly kind: 'file' | 'url' | null
   readonly title: string | null
   readonly contentType: string | null
@@ -170,7 +170,7 @@ export interface AttachmentMetaView {
  * heavy to itemize. `rows` is null exactly when the rows are unavailable:
  * an over-budget projection, an absent meta, or a malformed `items`.
  */
-export interface BrowseMetaView {
+interface BrowseMetaView {
   readonly kind: string | null
   readonly returned: number | null
   readonly total: number | null
@@ -216,7 +216,7 @@ export function browseMetaOf(meta: Record<string, unknown>): BrowseMetaView {
  */
 const WRITE_KINDS = ['declined', 'applied', 'deleted', 'committed-unverified', 'restored'] as const
 
-export type WriteKind = (typeof WRITE_KINDS)[number]
+type WriteKind = (typeof WRITE_KINDS)[number]
 
 export interface WriteMetaView {
   readonly kind: WriteKind
@@ -437,7 +437,7 @@ export interface ChildSection {
  * returned: a kind it did not ask for is absent, which is a different fact
  * from "that kind has no children".
  */
-export interface ChildrenMetaView {
+interface ChildrenMetaView {
   readonly itemType: string | null
   readonly sections: readonly ChildSection[]
   /** True when the meta budget dropped the detail rows behind these facts. */
@@ -504,7 +504,7 @@ export function childrenMetaOf(meta: Record<string, unknown>): ChildrenMetaView 
  * its own version, and the true count behind them when the listing was
  * capped. A section the call did not ask for is absent, not empty.
  */
-export interface ChangesSection {
+interface ChangesSection {
   readonly key: string
   readonly label:
     | 'toolChangesItems'
@@ -523,7 +523,7 @@ export interface ChangesSection {
  * without it a removal summary would be smaller than the count the tool
  * states, while being presented as authoritative.
  */
-export interface DeletionsSection {
+interface DeletionsSection {
   readonly key: string
   readonly label:
     | 'toolDeletedItems'

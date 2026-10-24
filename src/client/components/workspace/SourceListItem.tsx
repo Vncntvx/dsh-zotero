@@ -33,7 +33,7 @@ export function badgesOf(item: SourceItem, t: TranslateNS<'zotero'>): string[] {
   return badges
 }
 
-export interface SourceListItemProps {
+interface SourceListItemProps {
   readonly item: SourceItem
   readonly index: number
   readonly selected: boolean

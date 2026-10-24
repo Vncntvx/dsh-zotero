@@ -30,7 +30,7 @@ import {
 import { RawTextFallback, RunningNotice, ZoteroToolRow } from './ZoteroToolRow.tsx'
 import css from './toolviews.module.css'
 
-export type ChildrenToolViewProps = PropsRuntime<
+type ChildrenToolViewProps = PropsRuntime<
   'tool.call.toolview',
   'zotero_children' | 'zotero_attachment'
 > &

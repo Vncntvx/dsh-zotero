@@ -86,7 +86,7 @@ export interface ZoteroAttachmentLocationView {
 }
 
 /** Severity of one diagnostics entry, mirroring the host ring's levels. */
-export type ZoteroDiagnosticLevel = 'debug' | 'info' | 'warn' | 'error'
+type ZoteroDiagnosticLevel = 'debug' | 'info' | 'warn' | 'error'
 
 /** One retained diagnostics entry, newest-first within the snapshot. */
 export interface ZoteroDiagnosticEntry {

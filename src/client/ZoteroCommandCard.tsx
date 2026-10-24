@@ -30,7 +30,7 @@ import css from './ZoteroCommandCard.module.css'
  * projection registry still renders the card with the probe and the command
  * text as its only sources.
  */
-export interface ZoteroCommandCardFace {
+interface ZoteroCommandCardFace {
   readonly t: TranslateNS<'zotero'>
   readonly probe?: () => Promise<RemoteResult<ZoteroStatusView>>
 }

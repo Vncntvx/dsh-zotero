@@ -16,7 +16,7 @@
 
 import { chunkText, rankChunks } from '../../evidence.js'
 
-export interface SectionNode {
+interface SectionNode {
   id: string
   level: number
   title: string
@@ -25,7 +25,7 @@ export interface SectionNode {
 }
 
 /** One ranked passage, carrying the character span it occupies in the source. */
-export interface RankedPassage {
+interface RankedPassage {
   /** First character index, inclusive. */
   start: number
   /** Last character index, exclusive. */

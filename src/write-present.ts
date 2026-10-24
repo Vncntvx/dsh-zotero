@@ -64,7 +64,7 @@ export const COMMITTED_UNVERIFIED_VARIANT = {
 } as const
 
 /** The fields the shared committed-unverified render and meta read. */
-export interface CommittedUnverifiedLike {
+interface CommittedUnverifiedLike {
   readonly kind: 'committed-unverified'
   readonly reason: 'saved-state-unverified' | 'commit-unknown'
   readonly ref?: string
@@ -260,7 +260,7 @@ export const UPDATE_ITEM_COLLECTIONS_OUTPUT_SCHEMA = {
   ],
 } as const
 
-export interface UpdateListRenderOptions {
+interface UpdateListRenderOptions {
   readonly noun: string
   readonly unchangedTarget: string
   readonly currentLabel: string

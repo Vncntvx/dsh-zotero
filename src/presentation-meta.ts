@@ -49,7 +49,7 @@ const MAX_PRESENTATION_EXPORT_REFS = 20
 
 /** The search projection's row shape (subset of the tool output record). */
 /** The canonical search output the projector reads. */
-export type SearchProjectionInput = ZoteroSearchResult
+type SearchProjectionInput = ZoteroSearchResult
 
 /** One compact search row: the card's list unit with its copyable ref. */
 interface ZoteroSearchPresentationRow {
@@ -64,7 +64,7 @@ interface ZoteroSearchPresentationRow {
   readonly bestAttachmentType?: string
 }
 
-export interface ZoteroSearchPresentationMeta {
+interface ZoteroSearchPresentationMeta {
   readonly returned: number
   readonly total: number
   readonly nextOffset: number | null
@@ -96,9 +96,9 @@ interface ZoteroChildCount {
 }
 
 /** The canonical get output the projector reads. */
-export type GetProjectionInput = ZoteroItemDetail
+type GetProjectionInput = ZoteroItemDetail
 
-export interface ZoteroGetPresentationMeta {
+interface ZoteroGetPresentationMeta {
   readonly title: string
   readonly creators: string
   readonly year?: number
@@ -128,7 +128,7 @@ interface ZoteroSourceAvailabilityView {
   readonly unavailable: boolean
 }
 
-export interface ZoteroRetrievePresentationMeta {
+interface ZoteroRetrievePresentationMeta {
   readonly count: number
   readonly sources: ZoteroEvidenceSource[]
   readonly truncated: boolean
@@ -146,9 +146,9 @@ export interface ZoteroRetrievePresentationMeta {
 
 /** The retrieval facts the projection reads (the schema-inferred output satisfies this). */
 /** The canonical retrieve output the projector reads. */
-export type RetrieveProjectionInput = ZoteroRetrieveResult
+type RetrieveProjectionInput = ZoteroRetrieveResult
 
-export interface ZoteroAttachmentPresentationMeta {
+interface ZoteroAttachmentPresentationMeta {
   readonly kind: 'file' | 'url'
   readonly title: string
   readonly contentType: string
@@ -172,7 +172,7 @@ interface ZoteroExportPresentationItem {
   readonly end?: number
 }
 
-export interface ZoteroExportPresentationMeta {
+interface ZoteroExportPresentationMeta {
   readonly format: string
   readonly requested: number
   /** Actual exported citation count (citation arm only; text formats carry no per-item count). */
@@ -193,7 +193,7 @@ export interface ZoteroExportPresentationMeta {
 }
 
 /** The canonical attachment output the projector reads (discriminated on `kind`). */
-export type AttachmentProjectionInput = ZoteroAttachmentLocation
+type AttachmentProjectionInput = ZoteroAttachmentLocation
 
 /** Cut text at a character cap for a card preview. */
 function truncateChars(text: string, cap: number): string {
