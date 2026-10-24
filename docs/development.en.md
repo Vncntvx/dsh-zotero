@@ -66,7 +66,7 @@ npm run build                # Compile all artifacts (tsc → lib/, esbuild → 
 npm run build:client         # Build browser client artifact only
 npm run test:coverage        # Check coverage gates
 npm run harness:check        # Check upstream Harness version pin and artifact freshness
-npm run harness:pin -- <ver> # Update upstream Harness dependency pin across all surfaces
+npm run harness:pin -- <ver> # Update every dsh version face in package.json
 npm run verify:pack          # Validate package tarball integrity
 npm run smoke                # Production-stack smoke: every read tool against a live Zotero from a dsh profile
 npm run smoke:discovery      # Packed tarball → throwaway profile → dsh web boot probe

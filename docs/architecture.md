@@ -86,7 +86,7 @@ graph LR
 
 #### 工具参数读取与双层错误边界
 
-- **参数读取**：卡片与 Sources 归约器统一通过 `src/client/presenters.ts` 的 `argsViewOf(block)` 读取 `block.args`；上游 dsh 0.2.1-rc.2 契约保证调用头与结果块均携带非可选的 `ToolArgs`（`PartialArguments`）。
+- **参数读取**：卡片与 Sources 归约器统一通过 `src/client/presenters.ts` 的 `argsViewOf(block)` 读取 `block.args`；上游 dsh 0.2.1-rc.3 契约保证调用头与结果块均携带非可选的 `ToolArgs`（`PartialArguments`）。
 - **双层错误边界**：插件注册两层错误边界：
   - **Surface 级（`ZoteroSurfaceBoundary`）**：包裹 Sources 标签页（`conversation.view`），渲染异常时就地显示错误提示与「刷新」（`t('refresh')`）按钮，并通过 `resetKey={sessionId}` 在会话切换时自动重置；
   - **Card 级（`ZoteroCardBoundary` / `withCardBoundary`）**：包装全部本地工具卡片（`tool.call.toolview`）以及启用后的 Scholarly 卡片。卡片渲染异常时就地降级为紧凑警告行，保留在对话流中。降级视图仅读取工具名、文案与错误消息等纯字符串，不访问 block 字段；卡片异常大多由块数据异常引发，降级视图本身不抛错，可避免未捕获异常逃逸至上游插槽边界导致卡片停用。

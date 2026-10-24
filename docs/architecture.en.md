@@ -86,7 +86,7 @@ graph LR
 
 #### Tool Argument Access and Dual Error Boundaries
 
-- **Argument access**: Tool cards and the Sources reducer read `block.args` through `argsViewOf(block)` in `src/client/presenters.ts`; the upstream dsh 0.2.1-rc.2 contract guarantees a non-optional `ToolArgs` (`PartialArguments`) on every call head and result.
+- **Argument access**: Tool cards and the Sources reducer read `block.args` through `argsViewOf(block)` in `src/client/presenters.ts`; the upstream dsh 0.2.1-rc.3 contract guarantees a non-optional `ToolArgs` (`PartialArguments`) on every call head and result.
 - **Dual error boundaries**: The plugin registers two error boundaries:
   - **Surface (`ZoteroSurfaceBoundary`)**: Wraps the Sources tab (`conversation.view`); on a render error it displays an inline notice with an in-place "Refresh" (`t('refresh')`) button, and `resetKey={sessionId}` resets it automatically when the session changes;
   - **Card (`ZoteroCardBoundary` / `withCardBoundary`)**: Wraps all local tool cards (`tool.call.toolview`) and enabled Scholarly cards. A card that fails to render degrades in place to a compact warning row and remains in the chat stream. The fallback view reads only plain strings (tool name, copy, and error message) and never accesses block properties. Because malformed block data causes most card failures, the fallback must not throw, which prevents unhandled errors from bubbling up to the slot boundary and disabling the card slot permanently.

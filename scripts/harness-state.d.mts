@@ -1,20 +1,5 @@
 /** Type surface for the harness-state CLI's pure helpers (unit-tested). */
 
-export declare function versionMapBounds(lines: string[]): { start: number; end: number }
-
-export declare const PROSE_VERSION_PATTERNS: RegExp[]
-
-export declare function checkProseText(text: string, pin: string, path?: string): string[]
-
-export declare function retargetProse(source: string, previous: string, next: string): string
-
-export declare function checkVersionMap(
-  path: string,
-  source: string,
-  packageVersion: string,
-  pin: string,
-): string[]
-
 /**
  * Rewrite every harness face of a manifest to the pin (mutates `manifest`).
  * Dev/overrides take the exact pin; peers and engines become >=pin. The

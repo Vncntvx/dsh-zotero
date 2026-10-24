@@ -1,7 +1,8 @@
 /**
- * Pin-move prose rewriting and the harness compatibility policy. The
- * historical version-mapping section must never be retargeted. Dev and overrides
- * take the exact pin; peers and engines become >=pin.
+ * The harness compatibility policy: dev and overrides take the exact pin,
+ * peers and engines become >=pin, the lockfile resolves the pin, and vendored
+ * framework floors match the sibling. Documents are out of scope: they record
+ * what each released plugin version required, not the current pin.
  * @module tests/unit/harness-state
  */
 
@@ -12,141 +13,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { resolveHarnessRoot } from '../../scripts/shared/harness-packages.mjs'
 import {
   applyPinToManifest,
-  checkProseText,
-  checkVersionMap,
   collectArtifactProblems,
   collectLockProblems,
   collectPinFaceProblems,
   collectVendorProblems,
   packageNameFromLockPath,
-  retargetProse,
-  versionMapBounds,
 } from '../../scripts/harness-state.mjs'
-
-const DOC = `# Getting Started
-
-- DSH 0.1.6-alpha.2 (peer dependencies)
-
-Version mapping:
-
-| Plugin version | Minimum dsh version |
-| -------------- | ------------------- |
-| 0.8.4          | 0.1.5-rc.2          |
-| 0.9.0          | 0.1.5-rc.1 or 0.1.6-alpha.2 |
-| 0.10.0         | 0.1.6-alpha.2       |
-
-## Install
-`
-
-describe('versionMapBounds', () => {
-  it('finds the mapping section through the next heading', () => {
-    const lines = DOC.split('\n')
-    const { start, end } = versionMapBounds(lines)
-    expect(lines[start]).toMatch(/Version mapping/)
-    expect(lines[end]).toBe('## Install')
-  })
-
-  it('reports absence without inventing a section', () => {
-    expect(versionMapBounds(['# Title', 'dsh 0.1.7-rc.1'])).toEqual({
-      start: -1,
-      end: -1,
-    })
-  })
-})
-
-describe('retargetProse', () => {
-  it('moves the current-pin prose and leaves historical rows untouched', () => {
-    const moved = retargetProse(DOC, '0.1.6-alpha.2', '0.1.7-rc.1')
-    expect(moved).toContain('DSH 0.1.7-rc.1')
-    expect(moved).toContain('| 0.8.4          | 0.1.5-rc.2          |')
-    expect(moved).toContain('| 0.9.0          | 0.1.5-rc.1 or 0.1.6-alpha.2 |')
-    // The last row is historical too until a release bump rewrites it on purpose.
-    expect(moved).toContain('| 0.10.0         | 0.1.6-alpha.2       |')
-    expect(moved).not.toContain('DSH 0.1.6-alpha.2')
-  })
-
-  it('migrates a legacy >= badge to the exact badge form', () => {
-    const badge = 'https://img.shields.io/badge/dsh-%3E%3D0.1.6--alpha.2-blue'
-    const moved = retargetProse(badge, '0.1.6-alpha.2', '0.1.7-rc.1')
-    expect(moved).toContain('badge/dsh-0.1.7--rc.1-blue')
-    expect(moved).not.toContain('%3E%3D')
-  })
-
-  it('rewrites an exact badge without inventing a range', () => {
-    const badge = 'https://img.shields.io/badge/dsh-0.1.6--alpha.2-blue'
-    const moved = retargetProse(badge, '0.1.6-alpha.2', '0.1.7-rc.1')
-    expect(moved).toContain('badge/dsh-0.1.7--rc.1-blue')
-  })
-
-  it('rewrites a document that carries no version map', () => {
-    const moved = retargetProse('use dsh 0.1.6-alpha.2 here', '0.1.6-alpha.2', '0.1.7-rc.1')
-    expect(moved).toBe('use dsh 0.1.7-rc.1 here')
-  })
-
-  it('does not rewrite a longer number the old pin is a substring of', () => {
-    // `0.1.6-alpha.2` is the tail of `10.1.6-alpha.2`; a bare replaceAll would
-    // rewrite that unrelated build number's digits.
-    const moved = retargetProse('built with qt 10.1.6-alpha.2', '0.1.6-alpha.2', '0.1.7-rc.1')
-    expect(moved).toBe('built with qt 10.1.6-alpha.2')
-  })
-
-  it('leaves a longer prerelease that merely starts with the old pin', () => {
-    const moved = retargetProse('host dsh 0.1.6-alpha.2-beta', '0.1.6-alpha.2', '0.1.7-rc.1')
-    expect(moved).toBe('host dsh 0.1.6-alpha.2-beta')
-  })
-
-  it('still rewrites a v-prefixed prose mention', () => {
-    const moved = retargetProse('requires dsh v0.1.6-alpha.2 today', '0.1.6-alpha.2', '0.1.7-rc.1')
-    expect(moved).toBe('requires dsh v0.1.7-rc.1 today')
-  })
-})
-
-describe('checkProseText', () => {
-  it('matches prose version containing unicode ≥ symbol', () => {
-    const text = '宿主 dsh ≥ 0.2.0-rc.2'
-    const problems = checkProseText(text, '0.2.0-rc.2')
-    expect(problems).toEqual([])
-  })
-
-  it('matches prose version containing multiple spaces before comparison operator', () => {
-    const text = '宿主 dsh  >= 0.2.0-rc.2'
-    const problems = checkProseText(text, '0.2.0-rc.2')
-    expect(problems).toEqual([])
-  })
-
-  it('reports mismatch when unicode ≥ prose carries older pin', () => {
-    const text = '宿主 dsh ≥ 0.1.6-alpha.2'
-    const problems = checkProseText(text, '0.2.0-rc.2')
-    expect(problems).toHaveLength(1)
-    expect(problems[0]).toMatch(/still states harness version "0.1.6-alpha.2"/)
-  })
-})
-
-describe('checkVersionMap', () => {
-  it('accepts a last row that names the package version and the exact pin', () => {
-    const source = DOC.replace(
-      '| 0.10.0         | 0.1.6-alpha.2       |',
-      '| 0.10.0         | 0.1.7-rc.1          |',
-    )
-    expect(checkVersionMap('doc.md', source, '0.10.0', '0.1.7-rc.1')).toEqual([])
-  })
-
-  it('rejects a last row that trails the package version or is not the exact pin', () => {
-    const staleVersion = checkVersionMap('doc.md', DOC, '0.11.0', '0.1.6-alpha.2')
-    expect(staleVersion.join('\n')).toMatch(/expected package version/)
-    const stalePin = checkVersionMap('doc.md', DOC, '0.10.0', '0.1.7-rc.1')
-    expect(stalePin.join('\n')).toMatch(/is not the exact pin/)
-  })
-
-  it('rejects a last row that only contains the pin inside a dual arm', () => {
-    const source = DOC.replace(
-      '| 0.10.0         | 0.1.6-alpha.2       |',
-      '| 0.10.0         | 0.1.6-alpha.2 or 0.1.7-rc.1 |',
-    )
-    const errors = checkVersionMap('doc.md', source, '0.10.0', '0.1.7-rc.1')
-    expect(errors.join('\n')).toMatch(/is not the exact pin/)
-  })
-})
 
 describe('applyPinToManifest', () => {
   const manifest = () => ({
@@ -235,9 +107,14 @@ describe('collectPinFaceProblems', () => {
   })
 
   it('does not confuse a longer prerelease with the pin', () => {
-    // `dsh 0.1.7-rc.1-beta` must not be accepted as the pin `0.1.7-rc.1`.
-    const moved = retargetProse('host dsh 0.1.7-rc.1-beta', '0.1.7-rc.1', '0.1.7-rc.1')
-    expect(moved).toContain('0.1.7-rc.1-beta')
+    // `>=0.1.7-rc.1-beta` must not be accepted as the pin `0.1.7-rc.1`.
+    const longer = {
+      engines: { dsh: '>=0.1.7-rc.1-beta' },
+      peerDependencies: { '@deepseek-ai/dsh-tools': '>=0.1.7-rc.1' },
+    }
+    expect(collectPinFaceProblems(longer, '0.1.7-rc.1').join('\n')).toMatch(
+      /engines\.dsh is ">=0\.1\.7-rc\.1-beta"/,
+    )
   })
 
   it('rejects a client inject missing from peerDependencies', () => {

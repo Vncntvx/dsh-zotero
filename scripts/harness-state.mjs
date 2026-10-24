@@ -46,7 +46,7 @@
  */
 
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { minVersion, validRange } from 'semver'
 import { collectHarnessPackages, resolveHarnessRoot } from './shared/harness-packages.mjs'
@@ -54,18 +54,6 @@ import { collectHarnessPackages, resolveHarnessRoot } from './shared/harness-pac
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const harnessRoot = resolveHarnessRoot(root)
 const pkgPath = join(root, 'package.json')
-const readmePaths = ['README.md', 'README.en.md'].map((name) => join(root, name))
-const agentsPath = join(root, 'AGENTS.md')
-/** User-facing docs that restate the pin alongside the READMEs. */
-const docPaths = ['docs/getting-started.md', 'docs/getting-started.en.md'].map((name) =>
-  join(root, name),
-)
-/** Contract-baseline notes that cite the pin in prose. */
-const architecturePaths = ['docs/architecture.md', 'docs/architecture.en.md'].map((name) =>
-  join(root, name),
-)
-/** Files whose prose restates the pin. */
-const prosePaths = [...readmePaths, ...docPaths, ...architecturePaths, agentsPath]
 /** Manifest sections whose every `@deepseek-ai/dsh-*` entry must equal the pin exactly. */
 const EXACT_VERSION_SECTIONS = ['dependencies', 'devDependencies', 'overrides']
 /** All manifest sections that carry `@deepseek-ai/dsh-*` entries. */
@@ -75,24 +63,11 @@ const VENDOR_SECTIONS = ['dependencies', 'devDependencies', 'peerDependencies']
 /** Source roots scanned for the upstream imports whose artifacts must be fresh. */
 const SCAN_ROOTS = ['src', 'tests']
 const VERSION_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/
-/**
- * Prose forms of the current pin. Badges are exact (`badge/dsh-0.1.7--rc.1-blue`);
- * prose allows an optional `>=` prefix before the version.
- */
-export const PROSE_VERSION_PATTERNS = [
-  // Exact badge first so `dsh-0.1.7--rc.1-blue` never yields a bare `0.1.7`.
-  /badge\/dsh-(\d+\.\d+\.\d+(?:--[0-9A-Za-z.]+)?)-blue/g,
-  /dsh[- ]\s*(?:[≥>=]+\s*)?v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)*)(?!-)/gi,
-]
-/** Legacy `>=` badge: legal only as a migration leftover; current form is exact. */
-const LEGACY_GTE_BADGE = /%3E%3D(\d+\.\d+\.\d+(?:--[0-9A-Za-z.]+)?)-blue/g
 
 const problems = []
 const notes = []
 
 const isDshPackage = (name) => name.startsWith('@deepseek-ai/dsh-')
-const decodeBadgeVersion = (encoded) => encoded.replaceAll('--', '-')
-const encodeBadgeVersion = (version) => version.replaceAll('-', '--')
 
 /** Read and parse one JSON file. */
 function readJson(path) {
@@ -121,138 +96,6 @@ function pinnedVersion(manifest) {
     problems.push(`devDependencies pin "${pin}" is not an exact version; the pin is never a range`)
   }
   return pin
-}
-
-/**
- * Start of the historical version-mapping section in getting-started docs.
- * Pin moves must never rewrite those rows: they record what each plugin
- * release required, not the current pin.
- */
-const VERSION_MAP_HEADING = /^(?:版本对照|Version mapping)/
-
-/**
- * Locate the version-mapping section inside a getting-started document.
- * The section runs from its heading through the table, until the next `##`.
- * @param lines - the document, split on newlines.
- * @returns the half-open `[start, end)` line bounds, or `[-1, -1)` when absent.
- */
-export function versionMapBounds(lines) {
-  const start = lines.findIndex((line) => VERSION_MAP_HEADING.test(line.trim()))
-  if (start < 0) return { start: -1, end: -1 }
-  let end = lines.length
-  for (let i = start + 1; i < lines.length; i++) {
-    if (lines[i].startsWith('## ')) {
-      end = i
-      break
-    }
-  }
-  return { start, end }
-}
-
-/**
- * Replace every prose form of the old pin with the new one, leaving the
- * historical version-mapping section untouched. A bare `replaceAll` of the
- * version string is what previously rewrote release history inside the table.
- */
-export function retargetProse(source, previous, next) {
-  const lines = source.split('\n')
-  const { start, end } = versionMapBounds(lines)
-  const exactBadge = `dsh-${encodeBadgeVersion(next)}-blue`
-  // The bare prose rewrite is boundary-bounded, not a raw `replaceAll`: the
-  // old pin must not be rewritten where it is the tail of an unrelated longer
-  // number (`10.2.0-rc.2` contains `0.2.0-rc.2`), so a digit or dot may not
-  // precede the match, while a `v`/`dsh-` prefix still may. Nor may it stop
-  // inside a longer prerelease (`0.2.0-rc.2-beta`), so a letter, digit, or
-  // dash may not follow it.
-  const escaped = previous.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const bounded = new RegExp(`(?<![0-9.])${escaped}(?![0-9A-Za-z-])`, 'g')
-  const move = (line) =>
-    line
-      // Exact badge first (encoded prerelease uses `--`).
-      .replaceAll(`dsh-${encodeBadgeVersion(previous)}-blue`, exactBadge)
-      // Migrate a legacy `>=` badge to the exact current form in one step.
-      .replaceAll(`%3E%3D${encodeBadgeVersion(previous)}-blue`, `${encodeBadgeVersion(next)}-blue`)
-      .replace(bounded, next)
-  return lines.map((line, i) => (i >= start && i < end ? line : move(line))).join('\n')
-}
-
-/** Parse one `| plugin | dsh |` version-mapping row into its two cells. */
-function versionMapRow(line) {
-  const match = /^\|\s*(\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?)\s*\|([^|]*)\|/.exec(line.trim())
-  if (match === null) return undefined
-  return { plugin: match[1], dsh: match[2].trim() }
-}
-
-/**
- * The version-mapping table is historical; only its last row tracks the
- * current release. That row must name `package.json`'s version and a dsh cell
- * equal to the exact pin.
- * @returns human-readable failures; empty when the tail row is current.
- */
-export function checkVersionMap(path, source, packageVersion, pin) {
-  const errors = []
-  const lines = source.split('\n')
-  const { start, end } = versionMapBounds(lines)
-  if (start < 0) {
-    errors.push(`${relative(root, path)} has no version-mapping section`)
-    return errors
-  }
-  const rows = lines
-    .slice(start, end)
-    .map(versionMapRow)
-    .filter((row) => row !== undefined)
-  if (rows.length === 0) {
-    errors.push(`${relative(root, path)} version-mapping table has no release rows`)
-    return errors
-  }
-  const last = rows[rows.length - 1]
-  if (last.plugin !== packageVersion) {
-    errors.push(
-      `${relative(root, path)} version-mapping last row is "${last.plugin}", expected package version "${packageVersion}"`,
-    )
-  }
-  if (last.dsh !== pin) {
-    errors.push(
-      `${relative(root, path)} version-mapping last row dsh cell "${last.dsh}" is not the exact pin "${pin}"`,
-    )
-  }
-  return errors
-}
-
-/** Fail on any harness version in current-pin prose that is not the pin. */
-export function checkProseText(text, pin, path = 'doc.md') {
-  const fileProblems = []
-  const displayPath = isAbsolute(path) ? relative(root, path) : path
-  const lines = text.split('\n')
-  const { start, end } = versionMapBounds(lines)
-  const prose = lines.filter((_, i) => i < start || i >= end).join('\n')
-  for (const match of prose.matchAll(LEGACY_GTE_BADGE)) {
-    fileProblems.push(
-      `${displayPath} still carries a ">= ${decodeBadgeVersion(match[1])}" badge;` +
-        ` the current form is the exact badge "dsh ${pin}"`,
-    )
-  }
-  const found = new Set()
-  for (const pattern of PROSE_VERSION_PATTERNS) {
-    for (const match of prose.matchAll(pattern)) found.add(decodeBadgeVersion(match[1]))
-  }
-  if (found.size === 0) {
-    fileProblems.push(`${displayPath} states no harness version; name the verified pin`)
-    return fileProblems
-  }
-  for (const version of found) {
-    if (version !== pin) {
-      fileProblems.push(
-        `${displayPath} still states harness version "${version}" (the pin is "${pin}")`,
-      )
-    }
-  }
-  return fileProblems
-}
-
-function checkProse(path, pin) {
-  const text = readFileSync(path, 'utf8')
-  problems.push(...checkProseText(text, pin, path))
 }
 
 const NODE_MODULES_MARKER = 'node_modules/'
@@ -464,10 +307,6 @@ function checkPin(manifest, packages) {
     problems.push(
       'package.json still carries dshWorkshop; Workshop support was removed — delete the block',
     )
-  }
-  for (const path of prosePaths) checkProse(path, pin)
-  for (const path of docPaths) {
-    problems.push(...checkVersionMap(path, readFileSync(path, 'utf8'), manifest.version, pin))
   }
   checkLock(pin, manifest)
   checkOverrideNames(manifest, packages)
@@ -851,11 +690,6 @@ function writePin(version, previous) {
   }
   const manifest = applyPinToManifest(readJson(pkgPath), version)
   writeFileSync(pkgPath, `${JSON.stringify(manifest, null, 2)}\n`)
-  for (const path of prosePaths) {
-    const before = readFileSync(path, 'utf8')
-    const after = retargetProse(before, previous, version)
-    if (after !== before) writeFileSync(path, after)
-  }
 }
 
 /** Print the accumulated diagnostics and set the exit code. */
