@@ -8,7 +8,9 @@
 
 import { parseNonNegativeSafeInteger } from '../json.js'
 import { ZOTERO_UNEXPECTED, ZoteroError } from '../errors.js'
-import { ZOTERO_TOTAL_RESULTS_HEADER } from '../constants.js'
+import { ZOTERO_LIST_PAGE_ROWS, ZOTERO_TOTAL_RESULTS_HEADER } from '../constants.js'
+import { assertServerIdMatches, serverIdFromHeaders } from './identity.js'
+import type { ZoteroHttpClient } from '../http-client.js'
 
 /**
  * Read and validate the `Total-Results` header a server-paged list endpoint
@@ -104,4 +106,52 @@ export function setPage(params: URLSearchParams, offset: number, limit: number):
   params.set('start', String(offset))
   params.set('limit', String(limit))
   return params
+}
+
+/**
+ * Walk one server-paged listing to its honest end: every page is read at the
+ * standard window, identity-checked against the serving instance (identity
+ * before shape: an answer from another instance is refused before its body
+ * is judged), and shaped by the shared {@link requireArrayBody}/
+ * {@link requireTotalResults} guards before {@link nextOffsetOrFail}
+ * advances or ends the walk.
+ *
+ * The wire spelling of the query is fixed: each page builds a fresh
+ * `URLSearchParams` from `initial`, applies the paging window, then hands the
+ * params to `decorate` — so a caller's extra parameters land after
+ * `start`/`limit` in insertion order, exactly as a hand-rolled loop spelled it.
+ * @param client - the transport every page read rides.
+ * @param path - the listing's path relative to the API base.
+ * @param initial - query parameters every page carries before the window.
+ * @param serverId - the serving instance the answer must match.
+ * @param signal - caller cancellation, forwarded to every page read.
+ * @param what - the listing's own label for body/total errors (`body`) and
+ *   the cursor error (`page`); the two may legitimately differ.
+ * @param decorate - optional per-page query addition, applied after the
+ *   paging window (e.g. the annotation type filter).
+ * @param onPage - consumes one validated page; may throw to end the walk.
+ */
+export async function readAllPages(
+  client: ZoteroHttpClient,
+  path: string,
+  initial: Record<string, string>,
+  serverId: string,
+  signal: AbortSignal | undefined,
+  what: { readonly body: string; readonly page: string },
+  decorate: ((params: URLSearchParams) => void) | undefined,
+  onPage: (rows: readonly unknown[]) => void,
+): Promise<void> {
+  let offset = 0
+  for (;;) {
+    const params = setPage(new URLSearchParams(initial), offset, ZOTERO_LIST_PAGE_ROWS)
+    decorate?.(params)
+    const { json, headers } = await client.getJson<unknown>(path, params, { serverId, signal })
+    assertServerIdMatches(serverIdFromHeaders(headers), serverId)
+    const page = requireArrayBody(json, what.body)
+    const total = requireTotalResults(headers, what.body)
+    onPage(page)
+    const next = nextOffsetOrFail(offset, page.length, total, what.page)
+    if (next === undefined) return
+    offset = next
+  }
 }

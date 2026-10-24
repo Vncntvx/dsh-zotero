@@ -51,7 +51,7 @@ export interface ZoteroHttpClientOptions {
   readonly sink?: DiagnosticSink
 }
 
-export interface ZoteroHttpGetOptions {
+interface ZoteroHttpGetOptions {
   /** Caller cancellation; an abort preserves harness cancellation semantics, never a timeout. */
   readonly signal?: AbortSignal
   /** Override the remembered instance id for this request. */
@@ -60,7 +60,7 @@ export interface ZoteroHttpGetOptions {
   readonly sendServerId?: boolean
 }
 
-export interface ZoteroHttpResponse {
+interface ZoteroHttpResponse {
   readonly body: string
   readonly headers: Headers
 }
@@ -109,6 +109,22 @@ export function sharedHttpStatusError(status: number): ZoteroError {
 
 /** Shown when a response body is not the JSON the API documents. */
 export const UNPARSEABLE_RESPONSE_MESSAGE = 'Zotero returned an unparseable response.'
+
+/**
+ * Parse one Zotero response body, failing with the canonical unparseable
+ * error. The read and write transports share this so the failure's code,
+ * message, and cause cannot drift between them.
+ * @param text - the response body.
+ * @returns the parsed JSON value.
+ * @throws {ZoteroError} `ZOTERO_UNEXPECTED` when the body is not JSON.
+ */
+export function parseZoteroJson(text: string): unknown {
+  try {
+    return JSON.parse(text)
+  } catch (error) {
+    throw new ZoteroError(UNPARSEABLE_RESPONSE_MESSAGE, ZOTERO_UNEXPECTED, { cause: error })
+  }
+}
 
 /** Shown when a response passes the byte bound while streaming. */
 export function responseTooLargeMessage(maxResponseBytes: number): string {
@@ -530,14 +546,7 @@ export class ZoteroHttpClient {
     opts: ZoteroHttpGetOptions = {},
   ): Promise<{ json: T; body: string; headers: Headers }> {
     const { body, headers } = await this.get(path, search, opts)
-    let json: T
-    try {
-      json = JSON.parse(body) as T
-    } catch (error) {
-      throw new ZoteroError(UNPARSEABLE_RESPONSE_MESSAGE, ZOTERO_UNEXPECTED, {
-        cause: error,
-      })
-    }
+    const json = parseZoteroJson(body) as T
     return { json, body, headers }
   }
 

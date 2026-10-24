@@ -29,10 +29,7 @@
 
 import type { ZoteroHttpClient } from '../http-client.js'
 import { libraryPrefix } from '../refs.js'
-import { requireArrayBody } from './pagination.js'
-import { nextOffsetOrFail, requireTotalResults, setPage } from './pagination.js'
-import { ZOTERO_LIST_PAGE_ROWS } from '../constants.js'
-import { assertServerIdMatches, serverIdFromHeaders } from './identity.js'
+import { requireArrayBody, readAllPages } from './pagination.js'
 import type { SupportedLocalLibrary } from '../types.js'
 
 /** Query that surfaces annotation rows under one key. */
@@ -97,25 +94,17 @@ export async function fetchChildrenForTrash(
   signal?: AbortSignal,
 ): Promise<unknown[]> {
   const rows: unknown[] = []
-  let offset = 0
-  for (;;) {
-    const params = setPage(
-      new URLSearchParams({ includeTrashed: '1' }),
-      offset,
-      ZOTERO_LIST_PAGE_ROWS,
-    )
-    if (annotations) params.set('itemType', 'annotation')
-    const { json, headers } = await deps.client.getJson<unknown>(
-      `users/0/items/${key}/children`,
-      params,
-      { serverId, signal },
-    )
-    assertServerIdMatches(serverIdFromHeaders(headers), serverId)
-    const page = requireArrayBody(json, 'children to move to Trash')
-    const total = requireTotalResults(headers, 'children to move to Trash')
-    rows.push(...page)
-    const next = nextOffsetOrFail(offset, page.length, total, 'children to move to Trash')
-    if (next === undefined) return rows
-    offset = next
-  }
+  await readAllPages(
+    deps.client,
+    `users/0/items/${key}/children`,
+    { includeTrashed: '1' },
+    serverId,
+    signal,
+    { body: 'children to move to Trash', page: 'children to move to Trash' },
+    annotations ? (params) => params.set('itemType', 'annotation') : undefined,
+    (page) => {
+      rows.push(...page)
+    },
+  )
+  return rows
 }

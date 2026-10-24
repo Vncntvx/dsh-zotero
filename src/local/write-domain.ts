@@ -28,11 +28,7 @@
  */
 
 import type { ZoteroHttpClient } from '../http-client.js'
-import {
-  ZOTERO_LIBRARY_VERSION_HEADER,
-  ZOTERO_LIST_PAGE_ROWS,
-  ZOTERO_WRITE_OBJECT_BATCH,
-} from '../constants.js'
+import { ZOTERO_LIBRARY_VERSION_HEADER, ZOTERO_WRITE_OBJECT_BATCH } from '../constants.js'
 import {
   WRITE_CHILD_COLLECTIONS_MESSAGE,
   WRITE_IDENTITY_UNSUPPORTED_MESSAGE,
@@ -75,7 +71,7 @@ import {
   requireSupportedLocalRef,
   requireWritableRef,
 } from '../refs.js'
-import { nextOffsetOrFail, requireArrayBody, requireTotalResults, setPage } from './pagination.js'
+import { readAllPages } from './pagination.js'
 import { assertServerIdMatches, serverIdFromHeaders } from './identity.js'
 import {
   normalizeCreator,
@@ -169,7 +165,7 @@ export interface WriteDomainDeps {
 }
 
 /** One item's write-relevant state, read fresh for every read-merge-write. */
-export interface ItemSnapshot {
+interface ItemSnapshot {
   readonly version: number
   readonly itemType: string
   readonly serverId: string | undefined
@@ -662,7 +658,7 @@ function objectRefusedError(refused: ZoteroWriteObjectFailure): ZoteroError {
 
 type CommittedUnverifiedKind = 'note' | 'item' | 'collection' | 'search'
 
-export interface CommittedUnverifiedOptions {
+interface CommittedUnverifiedOptions {
   kind: CommittedUnverifiedKind
   serverId: string
   batch?: ZoteroBatchWrite
@@ -701,6 +697,35 @@ function committedUnverified(options: CommittedUnverifiedOptions): ZoteroWriteCo
       : {}),
     ...(batch !== undefined ? { libraryVersion: batch.libraryVersion } : {}),
     serverId,
+  }
+}
+
+/**
+ * A single-create batch outcome: the parsed batch, or the marker for a commit
+ * the transport could not prove. The marker keeps the commit-unknown
+ * translation in one place while each caller maps it to its own
+ * {@link committedUnverified} kind.
+ */
+type SingleCreateOutcome = ZoteroBatchWrite | { readonly commitUnknown: true }
+
+/**
+ * Send one non-idempotent create as a single-entry batch. A commit that
+ * could not be verified settles as the marker; every other failure rethrows
+ * untouched.
+ */
+async function sendSingleCreate(
+  deps: WriteDomainDeps,
+  path: string,
+  entry: Record<string, unknown>,
+  serverId: string,
+  apiKey: string,
+  signal: AbortSignal | undefined,
+): Promise<SingleCreateOutcome> {
+  try {
+    return await deps.writer.batch(path, [entry], { serverId, apiKey, signal })
+  } catch (error) {
+    if (error instanceof ZoteroWriteCommitUnknownError) return { commitUnknown: true }
+    throw error
   }
 }
 
@@ -876,22 +901,20 @@ export async function createNote(
       : {}),
   }
   return await withWriteKey(deps, serverId, signal, async (apiKey) => {
-    let batch: ZoteroBatchWrite
-    try {
-      batch = await deps.writer.batch(`${libraryPrefix(PERSONAL_LIBRARY)}/items`, [entry], {
+    const batch = await sendSingleCreate(
+      deps,
+      `${libraryPrefix(PERSONAL_LIBRARY)}/items`,
+      entry,
+      serverId,
+      apiKey,
+      signal,
+    )
+    if ('commitUnknown' in batch) {
+      return committedUnverified({
+        kind: 'note',
         serverId,
-        apiKey,
-        signal,
+        reason: 'commit-unknown',
       })
-    } catch (error) {
-      if (error instanceof ZoteroWriteCommitUnknownError) {
-        return committedUnverified({
-          kind: 'note',
-          serverId,
-          reason: 'commit-unknown',
-        })
-      }
-      throw error
     }
     // The requested parent is part of the saved-state claim too. Never fill a
     // missing or contradictory parent from the request after Zotero has
@@ -1160,37 +1183,31 @@ async function assertNoSiblingWithName(
     parentKey === undefined
       ? `${libraryPrefix(PERSONAL_LIBRARY)}/collections/top`
       : `${libraryPrefix(PERSONAL_LIBRARY)}/collections/${parentKey}/collections`
-  let offset = 0
-  for (;;) {
-    const params = new URLSearchParams()
-    setPage(params, offset, ZOTERO_LIST_PAGE_ROWS)
-    const { json, headers } = await deps.client.getJson<unknown>(listPath, params, {
-      signal,
-      serverId,
-    })
-    // Identity before shape: a response from another instance is never this
-    // call's answer, so it is refused before its body is judged.
-    assertServerIdMatches(serverIdFromHeaders(headers), serverId)
-    const rows = requireArrayBody(json, 'the collections listing')
-    const total = requireTotalResults(headers, 'the collections listing')
-    for (const row of rows) {
-      const record = asRecord(row)
-      const key = asString(record?.key)
-      const rowName = asString(asRecord(record?.data)?.name)
-      if (key === undefined || !isObjectKey(key) || rowName === undefined) {
-        throw new ZoteroError(
-          'Zotero returned a malformed collection row in the sibling listing',
-          ZOTERO_UNEXPECTED,
-        )
+  await readAllPages(
+    deps.client,
+    listPath,
+    {},
+    serverId,
+    signal,
+    { body: 'the collections listing', page: 'sibling collections' },
+    undefined,
+    (rows) => {
+      for (const row of rows) {
+        const record = asRecord(row)
+        const key = asString(record?.key)
+        const rowName = asString(asRecord(record?.data)?.name)
+        if (key === undefined || !isObjectKey(key) || rowName === undefined) {
+          throw new ZoteroError(
+            'Zotero returned a malformed collection row in the sibling listing',
+            ZOTERO_UNEXPECTED,
+          )
+        }
+        if (rowName === name) {
+          throw new ZoteroError(writeCollectionNameExistsMessage(name), ZOTERO_INVALID_ARGUMENT)
+        }
       }
-      if (rowName === name) {
-        throw new ZoteroError(writeCollectionNameExistsMessage(name), ZOTERO_INVALID_ARGUMENT)
-      }
-    }
-    const next = nextOffsetOrFail(offset, rows.length, total, 'sibling collections')
-    if (next === undefined) return
-    offset = next
-  }
+    },
+  )
 }
 
 /**
@@ -1222,22 +1239,20 @@ export async function createCollection(
     ...(parentKey !== undefined ? { parentCollection: parentKey } : {}),
   }
   const created = await withWriteKey(deps, serverId, signal, async (apiKey) => {
-    let batch: ZoteroBatchWrite
-    try {
-      batch = await deps.writer.batch(`${libraryPrefix(PERSONAL_LIBRARY)}/collections`, [entry], {
+    const batch = await sendSingleCreate(
+      deps,
+      `${libraryPrefix(PERSONAL_LIBRARY)}/collections`,
+      entry,
+      serverId,
+      apiKey,
+      signal,
+    )
+    if ('commitUnknown' in batch) {
+      return committedUnverified({
+        kind: 'collection',
         serverId,
-        apiKey,
-        signal,
+        reason: 'commit-unknown',
       })
-    } catch (error) {
-      if (error instanceof ZoteroWriteCommitUnknownError) {
-        return committedUnverified({
-          kind: 'collection',
-          serverId,
-          reason: 'commit-unknown',
-        })
-      }
-      throw error
     }
     const proven = (data: Record<string, unknown>): string | undefined => {
       if (asString(data.name) !== name) return undefined
@@ -1392,21 +1407,20 @@ export async function createSavedSearch(
   const serverId = await ensureServerId(deps, signal)
   const entry = { name, conditions: request.conditions }
   return await withWriteKey(deps, serverId, signal, async (apiKey) => {
-    let batch: ZoteroBatchWrite
-    try {
-      batch = await deps.writer.batch(`${libraryPrefix(PERSONAL_LIBRARY)}/searches`, [entry], {
+    const batch = await sendSingleCreate(
+      deps,
+      `${libraryPrefix(PERSONAL_LIBRARY)}/searches`,
+      entry,
+      serverId,
+      apiKey,
+      signal,
+    )
+    if ('commitUnknown' in batch) {
+      return committedUnverified({
+        kind: 'search',
         serverId,
-        apiKey,
-        signal,
+        reason: 'commit-unknown',
       })
-    } catch (error) {
-      if (error instanceof ZoteroWriteCommitUnknownError)
-        return committedUnverified({
-          kind: 'search',
-          serverId,
-          reason: 'commit-unknown',
-        })
-      throw error
     }
     const settled = settleSingleEntryBatch(batch, 'search', serverId, (data) => {
       const savedName = asString(data.name)
@@ -1537,22 +1551,20 @@ export async function createItem(
     ...(collectionRefs.length > 0 ? { collections: collectionRefs.map((ref) => ref.key) } : {}),
   }
   return await withWriteKey(deps, serverId, signal, async (apiKey) => {
-    let batch: ZoteroBatchWrite
-    try {
-      batch = await deps.writer.batch(`${libraryPrefix(PERSONAL_LIBRARY)}/items`, [entry], {
+    const batch = await sendSingleCreate(
+      deps,
+      `${libraryPrefix(PERSONAL_LIBRARY)}/items`,
+      entry,
+      serverId,
+      apiKey,
+      signal,
+    )
+    if ('commitUnknown' in batch) {
+      return committedUnverified({
+        kind: 'item',
         serverId,
-        apiKey,
-        signal,
+        reason: 'commit-unknown',
       })
-    } catch (error) {
-      if (error instanceof ZoteroWriteCommitUnknownError) {
-        return committedUnverified({
-          kind: 'item',
-          serverId,
-          reason: 'commit-unknown',
-        })
-      }
-      throw error
     }
     const proven = (
       data: Record<string, unknown>,
@@ -1785,36 +1797,44 @@ export async function deleteLibraryTags(
  * Creates land via a single multi-entry POST; updates and deletes run
  * sequentially under per-item version preconditions to avoid concurrency races.
  */
-export async function batchItems(
-  deps: WriteDomainDeps,
-  request: ZoteroBatchItemsRequest,
-  signal?: AbortSignal,
-): Promise<ZoteroBatchItemsResult> {
-  const creates = request.create ?? []
-  const updates = request.update ?? []
-  const deletes = request.delete ?? []
-  const total = creates.length + updates.length + deletes.length
+/** One pre-validated batch update: a writable item ref plus its normalized list edits. */
+interface CheckedBatchUpdate {
+  readonly ref: ZoteroObjectRef
+  readonly addTags: string[]
+  readonly removeTags: string[]
+  readonly addColInputs: string[]
+  readonly removeColInputs: string[]
+}
 
-  if (total === 0) {
-    throw new ZoteroError(WRITE_LIST_SELECTION_MESSAGE, ZOTERO_INVALID_ARGUMENT)
-  }
-  if (total > ZOTERO_WRITE_OBJECT_BATCH) {
-    throw new ZoteroError(
-      writeListTooLongMessage('batch items', ZOTERO_WRITE_OBJECT_BATCH),
-      ZOTERO_INVALID_ARGUMENT,
-    )
-  }
+/** One pre-validated batch create: the closed field set the wire entry is built from. */
+interface CheckedBatchCreate {
+  readonly itemType: string
+  readonly title: string | undefined
+  readonly url: string | undefined
+  readonly date: string | undefined
+  readonly doi: string | undefined
+  readonly abstractNote: string | undefined
+  readonly publicationTitle: string | undefined
+  readonly creators: ReturnType<typeof normalizeCreator>[] | undefined
+  readonly tags: string[]
+  readonly colInputs: string[]
+}
 
-  const serverId = await ensureServerId(deps, signal)
-
-  // 1. Pre-validate deletes
-  const checkedDeletes = deletes.map((ref) => {
+function prevalidateBatchDeletes(
+  deletes: readonly NonNullable<ZoteroBatchItemsRequest['delete']>[number][],
+  serverId: string,
+): ZoteroObjectRef[] {
+  return deletes.map((ref) => {
     const writable = requireWritableRef(ref, ['item'])
     return requireWritableRefAtServer(writable, ['item'], serverId)
   })
+}
 
-  // 2. Pre-validate updates
-  const checkedUpdates = updates.map((u) => {
+function prevalidateBatchUpdates(
+  updates: readonly NonNullable<ZoteroBatchItemsRequest['update']>[number][],
+  serverId: string,
+): CheckedBatchUpdate[] {
+  return updates.map((u) => {
     const writable = requireWritableRef(u.ref, ['item'])
     const ref = requireWritableRefAtServer(writable, ['item'], serverId)
     const addTags = normalizeWriteList('addTags', u.addTags ?? [])
@@ -1841,9 +1861,12 @@ export async function batchItems(
       removeColInputs,
     }
   })
+}
 
-  // 3. Pre-validate creates
-  const checkedCreates = creates.map((c) => {
+function prevalidateBatchCreates(
+  creates: readonly NonNullable<ZoteroBatchItemsRequest['create']>[number][],
+): CheckedBatchCreate[] {
+  return creates.map((c) => {
     const itemType = requireCreatableItemType(requireNonBlank('itemType', c.itemType))
     const title = c.title?.trim() ?? ''
     const url = c.url?.trim() ?? ''
@@ -1866,8 +1889,19 @@ export async function batchItems(
       colInputs,
     }
   })
+}
 
-  // 4. Batch resolve all collections referenced across creates and updates
+/**
+ * Resolve every collection referenced across the batch's creates and updates
+ * in one request set, keyed by the input spelling the rows carry.
+ */
+async function resolveBatchCollections(
+  deps: WriteDomainDeps,
+  checkedCreates: readonly CheckedBatchCreate[],
+  checkedUpdates: readonly CheckedBatchUpdate[],
+  serverId: string,
+  signal: AbortSignal | undefined,
+): Promise<Map<string, string>> {
   const allColInputs = [
     ...checkedCreates.flatMap((c) => c.colInputs),
     ...checkedUpdates.flatMap((u) => [...u.addColInputs, ...u.removeColInputs]),
@@ -1881,73 +1915,89 @@ export async function batchItems(
       resolvedColsMap.set(uniqueColInputs[i], key)
     }
   }
+  return resolvedColsMap
+}
 
-  const createdResults: ZoteroBatchCreateItemResult[] = []
-  const updatedResults: ZoteroBatchUpdateItemResult[] = []
-  const deletedResults: ZoteroBatchDeleteItemResult[] = []
-  const unverifiedResults: ZoteroBatchCreateUnverified[] = []
-  const failedResults: ZoteroBatchOperationFailure[] = []
-  let latestLibraryVersion: number | undefined
+/**
+ * Phase 1: send the creates as one native POST batch and settle its buckets.
+ * Fills `created`/`unverified`/`failed`; returns the library version the
+ * batch advanced to, or undefined when the batch could not be sent.
+ */
+async function runBatchCreates(
+  deps: WriteDomainDeps,
+  checkedCreates: readonly CheckedBatchCreate[],
+  resolvedColsMap: ReadonlyMap<string, string>,
+  serverId: string,
+  signal: AbortSignal | undefined,
+  created: ZoteroBatchCreateItemResult[],
+  unverified: ZoteroBatchCreateUnverified[],
+  failed: ZoteroBatchOperationFailure[],
+): Promise<number | undefined> {
+  if (checkedCreates.length === 0) return undefined
+  const entries = checkedCreates.map((c) => {
+    const colKeys = c.colInputs
+      .map((input) => resolvedColsMap.get(input))
+      .filter((k): k is string => k !== undefined)
+    return {
+      itemType: c.itemType,
+      ...(c.title !== undefined ? { title: c.title } : {}),
+      ...(c.url !== undefined ? { url: c.url } : {}),
+      ...(c.date !== undefined ? { date: c.date } : {}),
+      ...(c.doi !== undefined ? { DOI: c.doi } : {}),
+      ...(c.abstractNote !== undefined ? { abstractNote: c.abstractNote } : {}),
+      ...(c.publicationTitle !== undefined ? { publicationTitle: c.publicationTitle } : {}),
+      ...(c.creators !== undefined ? { creators: c.creators } : {}),
+      ...(c.tags.length > 0 ? { tags: c.tags.map((tag) => ({ tag })) } : {}),
+      ...(colKeys.length > 0 ? { collections: colKeys } : {}),
+    }
+  })
 
-  // Phase 1: Creates (Native POST batch)
-  if (checkedCreates.length > 0) {
-    const entries = checkedCreates.map((c) => {
-      const colKeys = c.colInputs
-        .map((input) => resolvedColsMap.get(input))
-        .filter((k): k is string => k !== undefined)
-      return {
-        itemType: c.itemType,
-        ...(c.title !== undefined ? { title: c.title } : {}),
-        ...(c.url !== undefined ? { url: c.url } : {}),
-        ...(c.date !== undefined ? { date: c.date } : {}),
-        ...(c.doi !== undefined ? { DOI: c.doi } : {}),
-        ...(c.abstractNote !== undefined ? { abstractNote: c.abstractNote } : {}),
-        ...(c.publicationTitle !== undefined ? { publicationTitle: c.publicationTitle } : {}),
-        ...(c.creators !== undefined ? { creators: c.creators } : {}),
-        ...(c.tags.length > 0 ? { tags: c.tags.map((tag) => ({ tag })) } : {}),
-        ...(colKeys.length > 0 ? { collections: colKeys } : {}),
-      }
-    })
-
-    try {
-      const batch = await withWriteKey(deps, serverId, signal, (apiKey) =>
-        deps.writer.batch(`${libraryPrefix(PERSONAL_LIBRARY)}/items`, entries, {
-          serverId,
-          apiKey,
-          signal,
-        }),
-      )
-      latestLibraryVersion = batch.libraryVersion
-
-      settleBatchCreates(
-        batch,
-        checkedCreates,
+  try {
+    const batch = await withWriteKey(deps, serverId, signal, (apiKey) =>
+      deps.writer.batch(`${libraryPrefix(PERSONAL_LIBRARY)}/items`, entries, {
         serverId,
-        createdResults,
-        unverifiedResults,
-        failedResults,
-      )
-    } catch (err) {
-      if (isWriteUnauthorized(err)) throw err
-      if (err instanceof ZoteroWriteCommitUnknownError) {
-        for (let i = 0; i < checkedCreates.length; i++) {
-          unverifiedResults.push(batchCreateUnverified(i, 'commit-unknown', serverId))
-        }
-      } else {
-        signal?.throwIfAborted()
-        for (let i = 0; i < checkedCreates.length; i++) {
-          failedResults.push({
-            op: 'create',
-            index: i,
-            code: err instanceof ZoteroError ? err.code : ZOTERO_UNEXPECTED,
-            message: err instanceof Error ? err.message : String(err),
-          })
-        }
+        apiKey,
+        signal,
+      }),
+    )
+    const libraryVersion = batch.libraryVersion
+    settleBatchCreates(batch, checkedCreates, serverId, created, unverified, failed)
+    return libraryVersion
+  } catch (err) {
+    if (isWriteUnauthorized(err)) throw err
+    if (err instanceof ZoteroWriteCommitUnknownError) {
+      for (let i = 0; i < checkedCreates.length; i++) {
+        unverified.push(batchCreateUnverified(i, 'commit-unknown', serverId))
+      }
+    } else {
+      signal?.throwIfAborted()
+      for (let i = 0; i < checkedCreates.length; i++) {
+        failed.push({
+          op: 'create',
+          index: i,
+          code: err instanceof ZoteroError ? err.code : ZOTERO_UNEXPECTED,
+          message: err instanceof Error ? err.message : String(err),
+        })
       }
     }
   }
+  return undefined
+}
 
-  // Phase 2: Updates (Sequential read-modify-write)
+/**
+ * Phase 2: sequential read-modify-write per update. Fills `updated`/`failed`;
+ * returns the last library version an applied update advanced to.
+ */
+async function runBatchUpdates(
+  deps: WriteDomainDeps,
+  checkedUpdates: readonly CheckedBatchUpdate[],
+  resolvedColsMap: ReadonlyMap<string, string>,
+  serverId: string,
+  signal: AbortSignal | undefined,
+  updated: ZoteroBatchUpdateItemResult[],
+  failed: ZoteroBatchOperationFailure[],
+): Promise<number | undefined> {
+  let lastLibraryVersion: number | undefined
   for (const u of checkedUpdates) {
     try {
       const wantsTags = u.addTags.length > 0 || u.removeTags.length > 0
@@ -2012,7 +2062,7 @@ export async function batchItems(
           if (colsChanged) patchBody.collections = nextColKeys
 
           const { libraryVersion } = await send(patchBody)
-          latestLibraryVersion = libraryVersion
+          lastLibraryVersion = libraryVersion
           return {
             ref: resultRef,
             version: libraryVersion,
@@ -2024,9 +2074,9 @@ export async function batchItems(
           }
         },
       )
-      updatedResults.push(res)
+      updated.push(res)
     } catch (err) {
-      failedResults.push({
+      failed.push({
         op: 'update',
         ref: itemRef(u.ref.key, serverId),
         code: err instanceof ZoteroError ? err.code : ZOTERO_UNEXPECTED,
@@ -2034,8 +2084,23 @@ export async function batchItems(
       })
     }
   }
+  return lastLibraryVersion
+}
 
-  // Phase 3: Move complete item graphs to Trash under object versions.
+/**
+ * Phase 3: move complete item graphs to Trash under object versions. Fills
+ * `deleted`/`failed`; returns the last library version a Trash write
+ * advanced to.
+ */
+async function runBatchDeletes(
+  deps: WriteDomainDeps,
+  checkedDeletes: readonly ZoteroObjectRef[],
+  serverId: string,
+  signal: AbortSignal | undefined,
+  deleted: ZoteroBatchDeleteItemResult[],
+  failed: ZoteroBatchOperationFailure[],
+): Promise<number | undefined> {
+  let lastLibraryVersion: number | undefined
   for (const delRef of checkedDeletes) {
     const completedRefs: string[] = []
     try {
@@ -2054,7 +2119,7 @@ export async function batchItems(
             },
           ),
         )
-        latestLibraryVersion = libraryVersion
+        lastLibraryVersion = libraryVersion
         completedRefs.push(itemRef(node.key, serverId))
       }
       const saved = await readTrashGraph(deps.client, delRef.key, serverId, signal)
@@ -2069,7 +2134,7 @@ export async function batchItems(
         )
       }
       const version = saved[saved.length - 1].version
-      deletedResults.push({
+      deleted.push({
         ref: itemRef(delRef.key, serverId),
         key: delRef.key,
         deleted: true,
@@ -2079,7 +2144,7 @@ export async function batchItems(
           .map((node) => itemRef(node.key, serverId)),
       })
     } catch (err) {
-      failedResults.push({
+      failed.push({
         op: 'delete',
         ref: itemRef(delRef.key, serverId),
         code: err instanceof ZoteroError ? err.code : ZOTERO_UNEXPECTED,
@@ -2087,6 +2152,73 @@ export async function batchItems(
         ...(completedRefs.length > 0 ? { completedRefs } : {}),
       })
     }
+  }
+  return lastLibraryVersion
+}
+
+export async function batchItems(
+  deps: WriteDomainDeps,
+  request: ZoteroBatchItemsRequest,
+  signal?: AbortSignal,
+): Promise<ZoteroBatchItemsResult> {
+  const creates = request.create ?? []
+  const updates = request.update ?? []
+  const deletes = request.delete ?? []
+  const total = creates.length + updates.length + deletes.length
+
+  if (total === 0) {
+    throw new ZoteroError(WRITE_LIST_SELECTION_MESSAGE, ZOTERO_INVALID_ARGUMENT)
+  }
+  if (total > ZOTERO_WRITE_OBJECT_BATCH) {
+    throw new ZoteroError(
+      writeListTooLongMessage('batch items', ZOTERO_WRITE_OBJECT_BATCH),
+      ZOTERO_INVALID_ARGUMENT,
+    )
+  }
+
+  const serverId = await ensureServerId(deps, signal)
+
+  const checkedDeletes = prevalidateBatchDeletes(deletes, serverId)
+  const checkedUpdates = prevalidateBatchUpdates(updates, serverId)
+  const checkedCreates = prevalidateBatchCreates(creates)
+  const resolvedColsMap = await resolveBatchCollections(
+    deps,
+    checkedCreates,
+    checkedUpdates,
+    serverId,
+    signal,
+  )
+
+  const createdResults: ZoteroBatchCreateItemResult[] = []
+  const updatedResults: ZoteroBatchUpdateItemResult[] = []
+  const deletedResults: ZoteroBatchDeleteItemResult[] = []
+  const unverifiedResults: ZoteroBatchCreateUnverified[] = []
+  const failedResults: ZoteroBatchOperationFailure[] = []
+  let latestLibraryVersion: number | undefined
+  const versions = [
+    await runBatchCreates(
+      deps,
+      checkedCreates,
+      resolvedColsMap,
+      serverId,
+      signal,
+      createdResults,
+      unverifiedResults,
+      failedResults,
+    ),
+    await runBatchUpdates(
+      deps,
+      checkedUpdates,
+      resolvedColsMap,
+      serverId,
+      signal,
+      updatedResults,
+      failedResults,
+    ),
+    await runBatchDeletes(deps, checkedDeletes, serverId, signal, deletedResults, failedResults),
+  ]
+  for (const version of versions) {
+    if (version !== undefined) latestLibraryVersion = version
   }
 
   return {

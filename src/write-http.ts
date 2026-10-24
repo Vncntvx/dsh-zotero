@@ -68,6 +68,7 @@ import {
   SERVER_ID_MISMATCH_STATEMENT,
   UNEXPECTED_REQUEST_MESSAGE,
   UNPARSEABLE_RESPONSE_MESSAGE,
+  parseZoteroJson,
   readBody,
   readFailureStatement,
   sharedHttpStatusError,
@@ -97,7 +98,7 @@ export interface ZoteroWriteHttpClientOptions {
 }
 
 /** Options every write carries: cancellation, the serving instance, the local API key. */
-export interface ZoteroWriteOptions {
+interface ZoteroWriteOptions {
   /** Caller cancellation; an abort preserves harness cancellation semantics. */
   readonly signal?: AbortSignal
   /**
@@ -110,7 +111,7 @@ export interface ZoteroWriteOptions {
   readonly apiKey: string
 }
 
-export interface ZoteroAuthorizeOptions {
+interface ZoteroAuthorizeOptions {
   readonly signal?: AbortSignal
   /** The authorize endpoint is a write-method request: Zotero requires the instance id here too. */
   readonly serverId: string
@@ -172,12 +173,12 @@ function isPreCommitWriteStatus(status: number): boolean {
   return (status >= 300 && status < 400) || PRE_COMMIT_WRITE_STATUSES.has(status)
 }
 
-export interface ZoteroPatchWriteOptions extends ZoteroWriteOptions {
+interface ZoteroPatchWriteOptions extends ZoteroWriteOptions {
   /** The object version the caller read; Zotero refuses a stale write with 412. */
   readonly ifUnmodifiedSinceVersion: number
 }
 
-export interface ZoteroDeleteWriteOptions extends ZoteroWriteOptions {
+interface ZoteroDeleteWriteOptions extends ZoteroWriteOptions {
   /**
    * The library version the caller read before the delete; Zotero refuses a
    * stale delete with 412. Absence means no version precondition is sent; the
@@ -194,7 +195,7 @@ export interface ZoteroDeleteWriteOptions extends ZoteroWriteOptions {
   readonly tagDeleteLimit?: boolean
 }
 
-export interface ZoteroAuthorizeGrant {
+interface ZoteroAuthorizeGrant {
   readonly key: string
   /** True when the user picked "Always Allow"; the key persists until revoked in Zotero. */
   readonly remember: boolean
@@ -337,12 +338,7 @@ export class ZoteroWriteHttpClient {
       // The dialog waits for a human: the data deadline must not cut it off.
       this.options.authorizeDeadlineMs,
     )
-    let json: unknown
-    try {
-      json = JSON.parse(body)
-    } catch (error) {
-      throw new ZoteroError(UNPARSEABLE_RESPONSE_MESSAGE, ZOTERO_UNEXPECTED, { cause: error })
-    }
+    const json: unknown = parseZoteroJson(body)
     const record = asRecord(json)
     const key = record === undefined ? undefined : asString(record.key)
     if (key === undefined || key === '') {
@@ -565,12 +561,7 @@ export class ZoteroWriteHttpClient {
    * silently reshaped.
    */
   private parseBatchWrite(body: string, libraryVersion: number): ZoteroBatchWrite {
-    let json: unknown
-    try {
-      json = JSON.parse(body)
-    } catch (error) {
-      throw new ZoteroError(UNPARSEABLE_RESPONSE_MESSAGE, ZOTERO_UNEXPECTED, { cause: error })
-    }
+    const json: unknown = parseZoteroJson(body)
     const record = asRecord(json)
     if (record === undefined) {
       throw new ZoteroError(UNPARSEABLE_RESPONSE_MESSAGE, ZOTERO_UNEXPECTED)
