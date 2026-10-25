@@ -193,6 +193,147 @@ async function resolveTrashRead(
 }
 
 /**
+ * Parse the tombstone payload. Zotero documents four lists (items,
+ * collections, searches, tags), and its own sync reader walks whichever keys
+ * the response carries, so a list the payload omits means "nothing of that
+ * kind was removed", while a payload that is not the documented shape is
+ * unreadable: removals are then unknown, never zero. Keys outside the
+ * documented four (Zotero also syncs a list of settings) are counted in
+ * `deletedOther` so nothing the response carried is dropped in silence.
+ */
+function parseTombstones(json: unknown): Tombstones | undefined {
+  const record = asRecord(json)
+  if (record === undefined) return undefined
+  /** One documented list: absent means empty, anything else has to be strings. */
+  const strings = (field: string): string[] | undefined => {
+    const value = record[field]
+    if (value === undefined) return []
+    if (!Array.isArray(value) || value.some((entry) => typeof entry !== 'string')) {
+      return undefined
+    }
+    return value as string[]
+  }
+  const keys = (field: string): string[] | undefined => {
+    const list = strings(field)
+    return list === undefined || list.some((key) => !isObjectKey(key)) ? undefined : list
+  }
+  const items = keys('items')
+  const collections = keys('collections')
+  const savedSearches = keys('searches')
+  // Tag names are not object keys; a blank one would be an entry the model
+  // cannot act on, so it counts as a malformed payload like any other.
+  const tags = strings('tags')
+  if (
+    items === undefined ||
+    collections === undefined ||
+    savedSearches === undefined ||
+    tags === undefined ||
+    tags.some((tag) => tag.trim() === '')
+  ) {
+    return undefined
+  }
+  let other = 0
+  for (const [field, value] of Object.entries(record)) {
+    if ((TOMBSTONE_LISTS as readonly string[]).includes(field)) continue
+    if (Array.isArray(value)) other += value.length
+  }
+  return { items, collections, savedSearches, tags, other }
+}
+
+/**
+ * The item space in the API's own three reads. All three are needed for
+ * the partition: without the top-level read no key can be told from a
+ * child object, and without the trash read a trashing would advance the
+ * library version invisibly (item listings exclude the trash). A build
+ * that serves only some of these reads leaves the kind unobservable as a
+ * whole rather than reporting a slice of the item space as the item space.
+ *
+ * The folds and verdicts ride the caller's closures (`foldRead`,
+ * `recordUnobservable`, `display`, `markIncomplete`), so completeness and
+ * truncation state stays owned by one call; only the listings land in the
+ * shared `changed`/`totals` records.
+ */
+async function readItemSpace(
+  prefix: string,
+  signal: AbortSignal | undefined,
+  readResource: ReadResourceFn,
+  foldRead: (page: VersionsPage) => void,
+  recordUnobservable: (kind: ZoteroChangesInclude, reason: ZoteroChangesUnobservableReason) => void,
+  display: <T>(rows: readonly T[]) => T[],
+  markIncomplete: () => void,
+  changed: ZoteroChangesResult['changed'],
+  totals: ZoteroChangesTotals,
+): Promise<void> {
+  const itemController = new AbortController()
+  const forwardAbort = itemController.abort.bind(itemController)
+  signal?.addEventListener('abort', forwardAbort, { once: true })
+  // An abort event is not replayed. If cancellation happened after the probe
+  // resolved but before this fan-out attached its listener, propagate the
+  // already-aborted state explicitly instead of starting three live reads.
+  if (signal?.aborted) forwardAbort()
+  let settled: PromiseSettledResult<ResourceRead>[]
+  let firstFailure: { readonly error: unknown } | undefined
+  try {
+    const reads = [
+      readResource(`${prefix}/items`, true, itemController.signal),
+      readResource(`${prefix}/items/top`, true, itemController.signal),
+      readResource(`${prefix}/items/trash`, true, itemController.signal),
+    ].map((read) =>
+      read.catch((error: unknown) => {
+        // Preserve the failure that caused the sibling abort. Promise
+        // allSettled is ordered by input, not settlement time, so selecting
+        // its first rejected entry would turn a real 500/timeout into the
+        // sibling's later TOOL_ABORTED.
+        firstFailure ??= { error }
+        itemController.abort()
+        throw error
+      }),
+    )
+    settled = await Promise.allSettled(reads)
+  } finally {
+    signal?.removeEventListener('abort', forwardAbort)
+  }
+  if (firstFailure !== undefined) throw firstFailure.error
+  const [live, top, initialTrash] = settled.map(
+    (result) => (result as PromiseFulfilledResult<ResourceRead>).value,
+  )
+  const trash = await resolveTrashRead(readResource, prefix, signal, live, initialTrash)
+  if (live.status === 'ok' && top.status === 'ok' && trash.status === 'ok') {
+    foldRead(live.value)
+    foldRead(top.value)
+    foldRead(trash.value)
+    // The top-level listing is useful even when the build capped it, but a
+    // child list computed as `live - top` is not: a missing top-level key
+    // would be indistinguishable from a child object. Keep the independent
+    // top/trash digests, and withhold only the derived child split unless
+    // both whole reads prove it.
+    changed.items = display(top.value.entries)
+    changed.trashedItems = display(trash.value.entries)
+    totals.items = top.value.total
+    totals.trashedItems = trash.value.total
+    if (live.value.complete && top.value.complete) {
+      const topKeys = new Set(top.value.entries.map((entry) => entry.key))
+      const childEntries = live.value.entries.filter((entry) => !topKeys.has(entry.key))
+      changed.childItems = display(childEntries)
+      // The split is a difference of two whole reads of one range, so it is
+      // the true count whenever neither read was capped.
+      totals.childItems = childEntries.length
+    }
+  } else {
+    markIncomplete()
+    // The conjunction above failed, so one of the three carries the reason;
+    // the kind is named once. Prefer an unreadable partition over a merely
+    // absent/range-limited one: it is the actionable diagnosis and avoids
+    // reporting `not-served` when a sibling did answer malformed data.
+    const failed = [live, top, trash].filter(
+      (read): read is Extract<typeof read, { status: 'failed' }> => read.status === 'failed',
+    )
+    const reason = failed.find((read) => read.reason === 'unreadable')?.reason ?? failed[0]?.reason
+    if (reason !== undefined) recordUnobservable('items', reason)
+  }
+}
+
+/**
  * Diff the library against a local transaction version. On the verified build
  * (Zotero 10.0.2-beta.9) versions are local transactions: every object save
  * advances the library's counter and stamps the object, so `?since=` answers
@@ -505,127 +646,19 @@ export async function changes(
       phase: 'items',
       message: 'Reading items partitions (/items, /items/top, /items/trash)...',
     })
-    // The item space in the API's own three reads. All three are needed for
-    // the partition: without the top-level read no key can be told from a
-    // child object, and without the trash read a trashing would advance the
-    // library version invisibly (item listings exclude the trash). A build
-    // that serves only some of these reads leaves the kind unobservable as a
-    // whole rather than reporting a slice of the item space as the item space.
-    const itemController = new AbortController()
-    const forwardAbort = itemController.abort.bind(itemController)
-    signal?.addEventListener('abort', forwardAbort, { once: true })
-    // An abort event is not replayed. If cancellation happened after the probe
-    // resolved but before this fan-out attached its listener, propagate the
-    // already-aborted state explicitly instead of starting three live reads.
-    if (signal?.aborted) forwardAbort()
-    let settled: PromiseSettledResult<ResourceRead>[]
-    let firstFailure: { readonly error: unknown } | undefined
-    try {
-      const reads = [
-        readResource(`${prefix}/items`, true, itemController.signal),
-        readResource(`${prefix}/items/top`, true, itemController.signal),
-        readResource(`${prefix}/items/trash`, true, itemController.signal),
-      ].map((read) =>
-        read.catch((error: unknown) => {
-          // Preserve the failure that caused the sibling abort. Promise
-          // allSettled is ordered by input, not settlement time, so selecting
-          // its first rejected entry would turn a real 500/timeout into the
-          // sibling's later TOOL_ABORTED.
-          firstFailure ??= { error }
-          itemController.abort()
-          throw error
-        }),
-      )
-      settled = await Promise.allSettled(reads)
-    } finally {
-      signal?.removeEventListener('abort', forwardAbort)
-    }
-    if (firstFailure !== undefined) throw firstFailure.error
-    const [live, top, initialTrash] = settled.map(
-      (result) => (result as PromiseFulfilledResult<ResourceRead>).value,
+    await readItemSpace(
+      prefix,
+      signal,
+      readResource,
+      foldRead,
+      recordUnobservable,
+      display,
+      () => {
+        complete = false
+      },
+      changed,
+      totals,
     )
-    const trash = await resolveTrashRead(readResource, prefix, signal, live, initialTrash)
-    if (live.status === 'ok' && top.status === 'ok' && trash.status === 'ok') {
-      foldRead(live.value)
-      foldRead(top.value)
-      foldRead(trash.value)
-      // The top-level listing is useful even when the build capped it, but a
-      // child list computed as `live - top` is not: a missing top-level key
-      // would be indistinguishable from a child object. Keep the independent
-      // top/trash digests, and withhold only the derived child split unless
-      // both whole reads prove it.
-      changed.items = display(top.value.entries)
-      changed.trashedItems = display(trash.value.entries)
-      totals.items = top.value.total
-      totals.trashedItems = trash.value.total
-      if (live.value.complete && top.value.complete) {
-        const topKeys = new Set(top.value.entries.map((entry) => entry.key))
-        const childEntries = live.value.entries.filter((entry) => !topKeys.has(entry.key))
-        changed.childItems = display(childEntries)
-        // The split is a difference of two whole reads of one range, so it is
-        // the true count whenever neither read was capped.
-        totals.childItems = childEntries.length
-      }
-    } else {
-      complete = false
-      // The conjunction above failed, so one of the three carries the reason;
-      // the kind is named once. Prefer an unreadable partition over a merely
-      // absent/range-limited one: it is the actionable diagnosis and avoids
-      // reporting `not-served` when a sibling did answer malformed data.
-      const failed = [live, top, trash].filter(
-        (read): read is Extract<typeof read, { status: 'failed' }> => read.status === 'failed',
-      )
-      const reason =
-        failed.find((read) => read.reason === 'unreadable')?.reason ?? failed[0]?.reason
-      if (reason !== undefined) recordUnobservable('items', reason)
-    }
-  }
-  /**
-   * Parse the tombstone payload. Zotero documents four lists (items,
-   * collections, searches, tags), and its own sync reader walks whichever keys
-   * the response carries, so a list the payload omits means "nothing of that
-   * kind was removed", while a payload that is not the documented shape is
-   * unreadable: removals are then unknown, never zero. Keys outside the
-   * documented four (Zotero also syncs a list of settings) are counted in
-   * `deletedOther` so nothing the response carried is dropped in silence.
-   */
-  const parseTombstones = (json: unknown): Tombstones | undefined => {
-    const record = asRecord(json)
-    if (record === undefined) return undefined
-    /** One documented list: absent means empty, anything else has to be strings. */
-    const strings = (field: string): string[] | undefined => {
-      const value = record[field]
-      if (value === undefined) return []
-      if (!Array.isArray(value) || value.some((entry) => typeof entry !== 'string')) {
-        return undefined
-      }
-      return value as string[]
-    }
-    const keys = (field: string): string[] | undefined => {
-      const list = strings(field)
-      return list === undefined || list.some((key) => !isObjectKey(key)) ? undefined : list
-    }
-    const items = keys('items')
-    const collections = keys('collections')
-    const savedSearches = keys('searches')
-    // Tag names are not object keys; a blank one would be an entry the model
-    // cannot act on, so it counts as a malformed payload like any other.
-    const tags = strings('tags')
-    if (
-      items === undefined ||
-      collections === undefined ||
-      savedSearches === undefined ||
-      tags === undefined ||
-      tags.some((tag) => tag.trim() === '')
-    ) {
-      return undefined
-    }
-    let other = 0
-    for (const [field, value] of Object.entries(record)) {
-      if ((TOMBSTONE_LISTS as readonly string[]).includes(field)) continue
-      if (Array.isArray(value)) other += value.length
-    }
-    return { items, collections, savedSearches, tags, other }
   }
 
   const fetchCollections = async (): Promise<void> => {

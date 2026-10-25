@@ -8,10 +8,16 @@
 
 import type { ZoteroHttpClient } from '../http-client.js'
 import { mapWithConcurrency } from '../concurrency.js'
-import { ZOTERO_ITEMKEY_BATCH, ZOTERO_LIST_PAGE_ROWS } from '../constants.js'
+import { ZOTERO_LIST_PAGE_ROWS } from '../constants.js'
 import { tokenize } from '../evidence.js'
 import { ZOTERO_INVALID_ARGUMENT, ZoteroError } from '../errors.js'
-import { nextOffsetOrFail, requireArrayBody, requireTotalResults, setPage } from './pagination.js'
+import {
+  chunkItemKeyBatches,
+  nextOffsetOrFail,
+  requireArrayBody,
+  requireTotalResults,
+  setPage,
+} from './pagination.js'
 import { serverIdFromHeaders } from './identity.js'
 import {
   publicationsItemsPath,
@@ -105,7 +111,7 @@ export async function runSearch(
   const libraryForItems = libraryOfResolvedScope(scope.resolved)
   const ctxForSearch: { library: SupportedLocalLibrary; serverId?: string } = {
     library: libraryForItems,
-    serverId: responseServerId ?? undefined,
+    serverId: responseServerId,
   }
   const items = rows.map((row) => normalizeSearchItem(row, ctxForSearch))
   // Pagination honesty is uniform across every paged listing: without a
@@ -312,10 +318,7 @@ async function fetchParentCollections(
   signal: AbortSignal | undefined,
 ): Promise<Map<string, Set<string>>> {
   const unique = [...new Set(parentKeys)]
-  const chunks: string[][] = []
-  for (let start = 0; start < unique.length; start += ZOTERO_ITEMKEY_BATCH) {
-    chunks.push(unique.slice(start, start + ZOTERO_ITEMKEY_BATCH))
-  }
+  const chunks = chunkItemKeyBatches(unique)
   const membershipsPerChunk = await mapWithConcurrency(
     chunks,
     deps.limits.searchConcurrency,

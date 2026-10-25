@@ -31,11 +31,10 @@ import { asRecord, asString, isObjectKey } from '../json.js'
 import { normalizeScopeEntry, type ScopeNameEntry } from '../normalize.js'
 import {
   assertPublicationsSupported,
-  formatRef,
   isRefString,
   libraryPrefix,
   parseRef,
-  refForLibrary,
+  refStringFor,
   requireSupportedLocalRef,
   sameLibrary,
   PERSONAL_GROUPS_DISCOVERY,
@@ -287,11 +286,11 @@ async function browseCollections(
       )
       const path = [...ancestors, entry.name]
       const info: ZoteroCollectionInfo = {
-        ref: formatRef(refForLibrary(library, 'collection', entry.key, serverId)),
+        ref: refStringFor(library, 'collection', entry.key, serverId),
         name: entry.name,
         ...(entry.parentKey !== undefined
           ? {
-              parentRef: formatRef(refForLibrary(library, 'collection', entry.parentKey, serverId)),
+              parentRef: refStringFor(library, 'collection', entry.parentKey, serverId),
             }
           : {}),
         path,
@@ -335,14 +334,15 @@ async function browseSavedSearches(
   const serverId = serverIdFromHeaders(headers)
   const rawRows = requireArrayBody(json, 'saved searches')
   const total = requireTotalResults(headers, 'saved searches')
-  const entries: ScopeNameEntry[] = rawRows.map((row) => normalizeScopeEntry(row))
+  const entries: ScopeNameEntry[] = []
   const condByKey = new Map<string, Record<string, JsonValue>[]>()
   for (const row of rawRows) {
+    entries.push(normalizeScopeEntry(row))
     const rec = asRecord(row)
     const key = asString(rec?.key)
     if (key === undefined || !isObjectKey(key)) continue
     const data = asRecord(rec?.data)
-    const cond = data?.conditions ?? (rec as Record<string, unknown>)?.conditions
+    const cond = data?.conditions ?? rec?.conditions
     // Zotero's saved-search conditions are an array of row objects; anything
     // else on the wire is treated as absence rather than passed through.
     if (
@@ -353,7 +353,7 @@ async function browseSavedSearches(
     }
   }
   const items = entries.map((entry) => ({
-    ref: formatRef(refForLibrary(library, 'search', entry.key, serverId)),
+    ref: refStringFor(library, 'search', entry.key, serverId),
     name: entry.name,
     ...(condByKey.has(entry.key) ? { conditions: condByKey.get(entry.key) } : {}),
   }))

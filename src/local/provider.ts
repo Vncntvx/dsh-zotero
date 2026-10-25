@@ -130,10 +130,17 @@ export class LocalApiProvider implements ZoteroProvider {
   ) {
     this.getLimits = typeof limits === 'function' ? limits : () => limits
     // The directory owns the scope-listing and breadcrumb caches. It reads the
-    // TTL through the live limits, so a settings edit changes how long an
-    // existing cache entry is trusted instead of rebuilding this provider (and
-    // with it the HTTP client, the write client and the authorizer's grants).
-    this.directory = new ScopeDirectory(client, () => this.getLimits().scopeListingTtlMs, sink)
+    // TTL and the fan-out bound through the live limits, so a settings edit
+    // changes how long an existing cache entry is trusted (and how wide a
+    // collection-resolution fan-out may run) instead of rebuilding this
+    // provider (and with it the HTTP client, the write client and the
+    // authorizer's grants).
+    this.directory = new ScopeDirectory(
+      client,
+      () => this.getLimits().scopeListingTtlMs,
+      () => this.getLimits().graphConcurrency,
+      sink,
+    )
     // `write` is declared only when the write collaborators are wired: a
     // capability without its method would be a gate that routes into
     // nothing.

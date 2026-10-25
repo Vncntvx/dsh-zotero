@@ -195,6 +195,133 @@ function renderList(ordered: boolean, hasTask: boolean, innerHtml: string): stri
   return `<${tag}${listClass}>${innerHtml}</${tag}>`
 }
 
+/** The result of one block renderer: the block's HTML and the index of the first line after it. */
+interface BlockRender {
+  readonly html: string
+  readonly nextIndex: number
+}
+
+/** One `$$`-delimited display-math block, starting at the opening line's match. */
+function renderMathBlock(
+  lines: readonly string[],
+  index: number,
+  mathBlock: RegExpExecArray,
+): BlockRender {
+  const firstLineRest = mathBlock[1].trim()
+  if (firstLineRest.endsWith('$$')) {
+    const mathContent = firstLineRest.slice(0, -2).trim()
+    return { html: `<math-display>${escapeHtml(mathContent)}</math-display>`, nextIndex: index + 1 }
+  }
+  const math: string[] = []
+  if (firstLineRest !== '') {
+    math.push(firstLineRest)
+  }
+  let cursor = index + 1
+  while (cursor < lines.length) {
+    const curLine = lines[cursor]
+    const trimmed = curLine.trim()
+    if (trimmed === '$$') {
+      cursor += 1
+      break
+    }
+    if (trimmed.endsWith('$$')) {
+      math.push(curLine.slice(0, curLine.lastIndexOf('$$')).trimEnd())
+      cursor += 1
+      break
+    }
+    math.push(curLine)
+    cursor += 1
+  }
+  return { html: `<math-display>${escapeHtml(math.join('\n'))}</math-display>`, nextIndex: cursor }
+}
+
+/** One run of `>`-quoted lines, joined into a single quoted paragraph. */
+function renderQuoteBlock(lines: readonly string[], index: number): BlockRender {
+  const quoted: string[] = []
+  let cursor = index
+  while (cursor < lines.length && QUOTE.test(lines[cursor])) {
+    quoted.push(lines[cursor].replace(QUOTE, ''))
+    cursor += 1
+  }
+  return {
+    html: `<blockquote><p>${inlineFormatting(quoted.join(' '))}</p></blockquote>`,
+    nextIndex: cursor,
+  }
+}
+
+/** One list block (ordered or unordered), including nested items and trailing text. */
+function renderListBlock(
+  lines: readonly string[],
+  index: number,
+  unordered: boolean,
+  ordered: boolean,
+): BlockRender {
+  const marker = unordered ? UNORDERED_ITEM : ORDERED_ITEM
+  const items: string[] = []
+  let hasTaskItem = false
+  let cursor = index
+  while (cursor < lines.length && marker.test(lines[cursor])) {
+    let item = lines[cursor].replace(marker, '')
+    cursor += 1
+    const nested: Array<{ ordered: boolean; text: string }> = []
+    const trailing: string[] = []
+    for (;;) {
+      if (cursor >= lines.length || lines[cursor].trim() === '' || !/^\s+\S/.test(lines[cursor])) {
+        break
+      }
+      const nestedMatch = NESTED_ITEM.exec(lines[cursor])
+      if (nestedMatch !== null && trailing.length === 0) {
+        nested.push({ ordered: /\d/.test(nestedMatch[1]), text: nestedMatch[2] })
+      } else if (nestedMatch !== null) {
+        trailing.push(lines[cursor].trim())
+      } else if (nested.length === 0) {
+        item += ` ${lines[cursor].trim()}`
+      } else {
+        trailing.push(lines[cursor].trim())
+      }
+      cursor += 1
+    }
+    let subList = ''
+    if (nested.length > 0) {
+      const nestedItems = nested.map((n) => formatListItem(n.text))
+      const nestedHasTask = nestedItems.some((n) => n.isTask)
+      subList = renderList(
+        nested[0].ordered,
+        nestedHasTask,
+        nestedItems.map((n) => n.html).join(''),
+      )
+    }
+    const trailingHtml =
+      trailing.length === 0 ? '' : `<p>${inlineFormatting(trailing.join(' '))}</p>`
+    const itemResult = formatListItem(item, subList, trailingHtml)
+    if (itemResult.isTask) hasTaskItem = true
+    items.push(itemResult.html)
+  }
+  return { html: renderList(ordered, hasTaskItem, items.join('')), nextIndex: cursor }
+}
+
+/** One pipe table: the head row plus every following pipe-carrying row. */
+function renderTableBlock(lines: readonly string[], index: number): BlockRender {
+  const head = tableCells(lines[index])
+  let cursor = index + 2
+  const rows: string[][] = []
+  while (cursor < lines.length && lines[cursor].includes('|') && lines[cursor].trim() !== '') {
+    rows.push(tableCells(lines[cursor]))
+    cursor += 1
+  }
+  const headHtml = head.map((cell) => `<th>${inlineFormatting(cell)}</th>`).join('')
+  const bodyHtml = rows
+    .map((row) => {
+      const cells = head.map((_, column) => row[column] ?? '')
+      return `<tr>${cells.map((cell) => `<td>${inlineFormatting(cell)}</td>`).join('')}</tr>`
+    })
+    .join('')
+  return {
+    html: `<table><thead><tr>${headHtml}</tr></thead><tbody>${bodyHtml}</tbody></table>`,
+    nextIndex: cursor,
+  }
+}
+
 /**
  * Convert research-note markdown to the HTML a Zotero note stores. Unknown
  * syntax never becomes markup: it is escaped and shown as written.
@@ -231,34 +358,9 @@ export function markdownToNoteHtml(markdown: string): string {
 
     const mathBlock = MATH_BLOCK_OPEN.exec(line)
     if (mathBlock !== null) {
-      const firstLineRest = mathBlock[1].trim()
-      if (firstLineRest.endsWith('$$')) {
-        const mathContent = firstLineRest.slice(0, -2).trim()
-        blocks.push(`<math-display>${escapeHtml(mathContent)}</math-display>`)
-        index += 1
-        continue
-      }
-      const math: string[] = []
-      if (firstLineRest !== '') {
-        math.push(firstLineRest)
-      }
-      index += 1
-      while (index < lines.length) {
-        const curLine = lines[index]
-        const trimmed = curLine.trim()
-        if (trimmed === '$$') {
-          index += 1
-          break
-        }
-        if (trimmed.endsWith('$$')) {
-          math.push(curLine.slice(0, curLine.lastIndexOf('$$')).trimEnd())
-          index += 1
-          break
-        }
-        math.push(curLine)
-        index += 1
-      }
-      blocks.push(`<math-display>${escapeHtml(math.join('\n'))}</math-display>`)
+      const block = renderMathBlock(lines, index, mathBlock)
+      blocks.push(block.html)
+      index = block.nextIndex
       continue
     }
 
@@ -277,80 +379,27 @@ export function markdownToNoteHtml(markdown: string): string {
     }
 
     if (QUOTE.test(line)) {
-      const quoted: string[] = []
-      while (index < lines.length && QUOTE.test(lines[index])) {
-        quoted.push(lines[index].replace(QUOTE, ''))
-        index += 1
-      }
-      blocks.push(`<blockquote><p>${inlineFormatting(quoted.join(' '))}</p></blockquote>`)
+      const block = renderQuoteBlock(lines, index)
+      blocks.push(block.html)
+      index = block.nextIndex
       continue
     }
 
     const unordered = UNORDERED_ITEM.test(line)
     const ordered = ORDERED_ITEM.test(line)
     if (unordered || ordered) {
-      const marker = unordered ? UNORDERED_ITEM : ORDERED_ITEM
-      const items: string[] = []
-      let hasTaskItem = false
-      while (index < lines.length && marker.test(lines[index])) {
-        let item = lines[index].replace(marker, '')
-        index += 1
-        const nested: Array<{ ordered: boolean; text: string }> = []
-        const trailing: string[] = []
-        for (;;) {
-          if (index >= lines.length || lines[index].trim() === '' || !/^\s+\S/.test(lines[index])) {
-            break
-          }
-          const nestedMatch = NESTED_ITEM.exec(lines[index])
-          if (nestedMatch !== null && trailing.length === 0) {
-            nested.push({ ordered: /\d/.test(nestedMatch[1]), text: nestedMatch[2] })
-          } else if (nestedMatch !== null) {
-            trailing.push(lines[index].trim())
-          } else if (nested.length === 0) {
-            item += ` ${lines[index].trim()}`
-          } else {
-            trailing.push(lines[index].trim())
-          }
-          index += 1
-        }
-        let subList = ''
-        if (nested.length > 0) {
-          const nestedItems = nested.map((n) => formatListItem(n.text))
-          const nestedHasTask = nestedItems.some((n) => n.isTask)
-          subList = renderList(
-            nested[0].ordered,
-            nestedHasTask,
-            nestedItems.map((n) => n.html).join(''),
-          )
-        }
-        const trailingHtml =
-          trailing.length === 0 ? '' : `<p>${inlineFormatting(trailing.join(' '))}</p>`
-        const itemResult = formatListItem(item, subList, trailingHtml)
-        if (itemResult.isTask) hasTaskItem = true
-        items.push(itemResult.html)
-      }
-      blocks.push(renderList(ordered, hasTaskItem, items.join('')))
+      const block = renderListBlock(lines, index, unordered, ordered)
+      blocks.push(block.html)
+      index = block.nextIndex
       continue
     }
 
     // A pipe table needs its separator row; without one the lines are plain
     // paragraph text (escaped), never a malformed table.
     if (line.includes('|') && index + 1 < lines.length && TABLE_SEPARATOR.test(lines[index + 1])) {
-      const head = tableCells(line)
-      index += 2
-      const rows: string[][] = []
-      while (index < lines.length && lines[index].includes('|') && lines[index].trim() !== '') {
-        rows.push(tableCells(lines[index]))
-        index += 1
-      }
-      const headHtml = head.map((cell) => `<th>${inlineFormatting(cell)}</th>`).join('')
-      const bodyHtml = rows
-        .map((row) => {
-          const cells = head.map((_, column) => row[column] ?? '')
-          return `<tr>${cells.map((cell) => `<td>${inlineFormatting(cell)}</td>`).join('')}</tr>`
-        })
-        .join('')
-      blocks.push(`<table><thead><tr>${headHtml}</tr></thead><tbody>${bodyHtml}</tbody></table>`)
+      const block = renderTableBlock(lines, index)
+      blocks.push(block.html)
+      index = block.nextIndex
       continue
     }
 

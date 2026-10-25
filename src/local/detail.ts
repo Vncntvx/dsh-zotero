@@ -23,7 +23,7 @@ import {
   normalizeItemDetail,
   partitionChildren,
 } from '../normalize.js'
-import { formatRef, libraryPrefix, refForLibrary, requireSupportedLocalRef } from '../refs.js'
+import { libraryPrefix, refStringFor, requireSupportedLocalRef } from '../refs.js'
 import type { ScopeDirectory } from './scope-directory.js'
 import type { LocalApiLimits } from './limits.js'
 import { fetchAnnotationChildren, fetchDirectChildren } from './children-wire.js'
@@ -148,7 +148,7 @@ export async function children(
     // under the annotation-filtered listing.
     if (!request.include.has('annotations')) {
       return {
-        ref: formatRef(refForLibrary(library, 'attachment', ref.key, serverId)),
+        ref: refStringFor(library, 'attachment', ref.key, serverId),
         itemType,
         ...(ctx.serverId !== undefined ? { serverId: ctx.serverId } : {}),
       }
@@ -161,7 +161,7 @@ export async function children(
       new Set<ZoteroChildKind>(['annotation']),
     )
     return {
-      ref: formatRef(refForLibrary(library, 'attachment', ref.key, serverId)),
+      ref: refStringFor(library, 'attachment', ref.key, serverId),
       itemType,
       annotations: childCollection(partitioned.annotations, deps.limits.maxAnnotationRecords),
       ...(ctx.serverId !== undefined ? { serverId: ctx.serverId } : {}),
@@ -182,7 +182,7 @@ export async function children(
   const partitioned =
     kinds.size > 0 ? partitionChildren(graphRows, ctx, undefined, kinds) : undefined
   return {
-    ref: formatRef(refForLibrary(library, 'item', ref.key, serverId)),
+    ref: refStringFor(library, 'item', ref.key, serverId),
     ...(itemType !== '' ? { itemType } : {}),
     ...(request.include.has('notes') && partitioned !== undefined
       ? { notes: childCollection(partitioned.notes, deps.limits.maxNoteRecords) }

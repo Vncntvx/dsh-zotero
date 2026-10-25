@@ -13,7 +13,7 @@
 
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
-import { awaitSharedOperation, type SharedOperation } from '../concurrency.js'
+import { awaitSharedOperation, mapWithConcurrency, type SharedOperation } from '../concurrency.js'
 import type { DiagnosticSink } from '../diagnostics.js'
 import { TOOL_ABORTED_MESSAGE } from '../abort.js'
 import {
@@ -32,6 +32,7 @@ import {
   isSupportedLocalLibrary,
   libraryPrefix,
   parseRef,
+  refStringFor,
   requireSupportedLocalRef,
   refForLibrary,
   sameLibrary,
@@ -160,6 +161,7 @@ export class ScopeDirectory {
   constructor(
     client: ZoteroHttpClient,
     ttlMsOf: () => number,
+    private readonly graphConcurrencyOf: () => number,
     private readonly sink?: DiagnosticSink,
   ) {
     this.client = client
@@ -365,7 +367,7 @@ export class ScopeDirectory {
     if (matched.length > 1) {
       const list = matched
         .slice(0, 5)
-        .map((entry) => formatRef(refForLibrary(effectiveLibrary, kind, entry.key)))
+        .map((entry) => refStringFor(effectiveLibrary, kind, entry.key))
         .join(', ')
       throw new ZoteroError(
         `More than one ${label} matches "${refOrName}". Pick one of: ${list}`,
@@ -451,8 +453,13 @@ export class ScopeDirectory {
         missing.push({ index, key: ref.key, claim })
       }
     })
-    await Promise.all(
-      missing.map(async ({ index, key, claim }) => {
+    // Bounded like every other read fan-out: a batch's unresolved refs must
+    // not flood the transport queue, and a first failure aborts the siblings
+    // still in flight instead of paying for reads their error already voided.
+    await mapWithConcurrency(
+      missing,
+      this.graphConcurrencyOf(),
+      async ({ index, key, claim }) => {
         const { json, headers } = await this.client.getJson<unknown>(
           `${libraryPrefix(library)}/collections/${key}`,
           undefined,
@@ -473,7 +480,8 @@ export class ScopeDirectory {
           key,
           serverIdFromHeaders(headers, claim),
         )
-      }),
+      },
+      { signal },
     )
     return resolved
   }

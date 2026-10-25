@@ -8,7 +8,11 @@
 
 import { parseNonNegativeSafeInteger } from '../json.js'
 import { ZOTERO_UNEXPECTED, ZoteroError } from '../errors.js'
-import { ZOTERO_LIST_PAGE_ROWS, ZOTERO_TOTAL_RESULTS_HEADER } from '../constants.js'
+import {
+  ZOTERO_ITEMKEY_BATCH,
+  ZOTERO_LIST_PAGE_ROWS,
+  ZOTERO_TOTAL_RESULTS_HEADER,
+} from '../constants.js'
 import { assertServerIdMatches, serverIdFromHeaders } from './identity.js'
 import type { ZoteroHttpClient } from '../http-client.js'
 
@@ -106,6 +110,20 @@ export function setPage(params: URLSearchParams, offset: number, limit: number):
   params.set('start', String(offset))
   params.set('limit', String(limit))
   return params
+}
+
+/**
+ * Split inputs into `itemKey=`-sized batches: every batched read chunks at
+ * `ZOTERO_ITEMKEY_BATCH` and then comma-joins each batch itself — that join
+ * spelling is the wire contract Zotero splits server-side
+ * (`new Set(...split(','))`, `server_localAPI.js:1117-1129`).
+ */
+export function chunkItemKeyBatches<T>(items: readonly T[]): T[][] {
+  const batches: T[][] = []
+  for (let start = 0; start < items.length; start += ZOTERO_ITEMKEY_BATCH) {
+    batches.push(items.slice(start, start + ZOTERO_ITEMKEY_BATCH))
+  }
+  return batches
 }
 
 /**

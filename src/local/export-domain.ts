@@ -27,7 +27,7 @@ import {
   requireSupportedLocalRef,
   PERSONAL_LIBRARY,
 } from '../refs.js'
-import { requireArrayBody } from './pagination.js'
+import { chunkItemKeyBatches, requireArrayBody } from './pagination.js'
 import type { LocalApiLimits } from './limits.js'
 import type {
   SupportedLocalLibrary,
@@ -215,17 +215,11 @@ async function exportCitations(
   deps: { client: ZoteroHttpClient; limits: LocalApiLimits },
   options: CitationExportOptions,
 ): Promise<ZoteroExportResult> {
-  const batches: ZoteroObjectRef[][] = []
-  for (let start = 0; start < options.refs.length; start += ZOTERO_ITEMKEY_BATCH) {
-    batches.push(options.refs.slice(start, start + ZOTERO_ITEMKEY_BATCH))
-  }
+  const batches = chunkItemKeyBatches(options.refs)
 
   let completedItems = 0
   const citationByKey = new Map<string, string>()
-  const concurrency =
-    (deps.limits as { exportConcurrency?: number }).exportConcurrency ??
-    deps.limits.graphConcurrency ??
-    4
+  const concurrency = deps.limits.graphConcurrency
 
   const batchResults = await mapWithConcurrency(
     batches,

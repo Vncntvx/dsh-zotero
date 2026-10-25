@@ -1,0 +1,476 @@
+/**
+ * ScopeDirectory sharing, cancellation, and caching specs. Each spec drives
+ * the directory over a stub HTTP client: what is under test is the
+ * directory's own bookkeeping — which concurrent reads share one request,
+ * which cancellation aborts it, which refresh generation survives, when a
+ * scope read must refuse a response that names a different object, and how
+ * schema fetches cache per claim.
+ * @module tests/local/scope-directory
+ */
+
+import { describe, expect, it } from 'vitest'
+import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
+import { ZOTERO_SERVER_ID_HEADER } from '../../src/constants.js'
+import type { ZoteroHttpClient } from '../../src/http-client.js'
+import { PERSONAL_LIBRARY } from '../../src/refs.js'
+import { ScopeDirectory } from '../../src/local/scope-directory.js'
+import { PROVIDER_LIMITS } from '../helpers/provider-harness.js'
+import { COLLECTION_KEY } from '../helpers/server/keys.js'
+import { deferred } from '../helpers/sync.js'
+
+describe('ScopeDirectory scope-listing sharing and cancellation', () => {
+  it('lets one cancelled waiter leave a shared scope read running for another', async () => {
+    const response = deferred<{ json: unknown; headers: Headers }>()
+    let reads = 0
+    const client = {
+      getJson: async () => {
+        reads += 1
+        return await response.promise
+      },
+    } as unknown as ZoteroHttpClient
+    const directory = new ScopeDirectory(
+      client,
+      () => PROVIDER_LIMITS.scopeListingTtlMs,
+      () => PROVIDER_LIMITS.graphConcurrency,
+    )
+    const alreadyAborted = new AbortController()
+    alreadyAborted.abort()
+    await expect(
+      directory.scopeListingOf('collections', { library: PERSONAL_LIBRARY }, alreadyAborted.signal),
+    ).rejects.toMatchObject({ code: TOOL_ABORTED })
+    expect(reads).toBe(0)
+    const controller = new AbortController()
+    const cancelled = directory.scopeListingOf(
+      'collections',
+      { library: PERSONAL_LIBRARY },
+      controller.signal,
+    )
+    const live = directory.scopeListingOf('collections', { library: PERSONAL_LIBRARY }, undefined)
+    controller.abort()
+    await expect(cancelled).rejects.toMatchObject({ code: TOOL_ABORTED })
+    response.resolve({ json: [], headers: new Headers() })
+    await expect(live).resolves.toMatchObject({ entries: [] })
+    expect(reads).toBe(1)
+  })
+
+  it('aborts a scope read when its sole waiter cancels', async () => {
+    let requestSignal: AbortSignal | undefined
+    const started = deferred<void>()
+    const client = {
+      getJson: async (
+        _path: string,
+        _query: URLSearchParams | undefined,
+        options: { signal?: AbortSignal } | undefined,
+      ) => {
+        requestSignal = options?.signal
+        started.resolve()
+        return await new Promise<{ json: unknown; headers: Headers }>((_, reject) => {
+          requestSignal?.addEventListener('abort', () => reject(new Error('aborted')), {
+            once: true,
+          })
+        })
+      },
+    } as unknown as ZoteroHttpClient
+    const directory = new ScopeDirectory(
+      client,
+      () => PROVIDER_LIMITS.scopeListingTtlMs,
+      () => PROVIDER_LIMITS.graphConcurrency,
+    )
+    const controller = new AbortController()
+    const pending = directory.scopeListingOf(
+      'collections',
+      { library: PERSONAL_LIBRARY },
+      controller.signal,
+    )
+    await started.promise
+    controller.abort()
+    await expect(pending).rejects.toMatchObject({ code: TOOL_ABORTED })
+    expect(requestSignal?.aborted).toBe(true)
+  })
+
+  it('does not serve a warm listing to an already-cancelled caller', async () => {
+    let reads = 0
+    const client = {
+      getJson: async () => {
+        reads += 1
+        return { json: [], headers: new Headers() }
+      },
+    } as unknown as ZoteroHttpClient
+    const directory = new ScopeDirectory(
+      client,
+      () => PROVIDER_LIMITS.scopeListingTtlMs,
+      () => PROVIDER_LIMITS.graphConcurrency,
+    )
+    await directory.scopeListingOf('collections', { library: PERSONAL_LIBRARY }, undefined)
+    const controller = new AbortController()
+    controller.abort()
+    await expect(
+      directory.scopeListingOf('collections', { library: PERSONAL_LIBRARY }, controller.signal),
+    ).rejects.toMatchObject({ code: TOOL_ABORTED })
+    expect(reads).toBe(1)
+  })
+
+  it('does not join a normal in-flight listing to a forced refresh', async () => {
+    const first = deferred<{ json: unknown; headers: Headers }>()
+    const second = deferred<{ json: unknown; headers: Headers }>()
+    const started = [deferred<void>(), deferred<void>()]
+    let reads = 0
+    const client = {
+      getJson: async () => {
+        const index = reads++
+        started[index]?.resolve()
+        return await (index === 0 ? first.promise : second.promise)
+      },
+    } as unknown as ZoteroHttpClient
+    const directory = new ScopeDirectory(
+      client,
+      () => PROVIDER_LIMITS.scopeListingTtlMs,
+      () => PROVIDER_LIMITS.graphConcurrency,
+    )
+    const normal = directory.scopeListingOf('collections', { library: PERSONAL_LIBRARY }, undefined)
+    await started[0]?.promise
+    const forced = directory.scopeListingOf(
+      'collections',
+      { library: PERSONAL_LIBRARY },
+      undefined,
+      { force: true },
+    )
+    await started[1]?.promise
+    expect(reads).toBe(2)
+    first.resolve({ json: [], headers: new Headers() })
+    second.resolve({ json: [], headers: new Headers() })
+    await expect(Promise.all([normal, forced])).resolves.toHaveLength(2)
+  })
+
+  it('shares one in-flight request across concurrent forced refreshes', async () => {
+    const first = deferred<{ json: unknown; headers: Headers }>()
+    const started = deferred<void>()
+    let reads = 0
+    const client = {
+      getJson: async () => {
+        reads += 1
+        started.resolve()
+        return await first.promise
+      },
+    } as unknown as ZoteroHttpClient
+    const directory = new ScopeDirectory(
+      client,
+      () => PROVIDER_LIMITS.scopeListingTtlMs,
+      () => PROVIDER_LIMITS.graphConcurrency,
+    )
+    const firstForce = directory.scopeListingOf(
+      'collections',
+      { library: PERSONAL_LIBRARY },
+      undefined,
+      { force: true },
+    )
+    await started.promise
+    const secondForce = directory.scopeListingOf(
+      'collections',
+      { library: PERSONAL_LIBRARY },
+      undefined,
+      { force: true },
+    )
+    first.resolve({ json: [], headers: new Headers() })
+    await expect(Promise.all([firstForce, secondForce])).resolves.toHaveLength(2)
+    // Both callers forced for the same reason (the cache missed), so they want
+    // the same fresh answer: one request serves both. A per-call key would
+    // have sent two.
+    expect(reads).toBe(1)
+  })
+
+  it('keeps the forced listing when a slower normal response settles after it', async () => {
+    const first = deferred<{ json: unknown; headers: Headers }>()
+    const second = deferred<{ json: unknown; headers: Headers }>()
+    const started = [deferred<void>(), deferred<void>()]
+    let reads = 0
+    const client = {
+      getJson: async () => {
+        const index = reads++
+        started[index]?.resolve()
+        return await (index === 0 ? first.promise : second.promise)
+      },
+    } as unknown as ZoteroHttpClient
+    const directory = new ScopeDirectory(
+      client,
+      () => PROVIDER_LIMITS.scopeListingTtlMs,
+      () => PROVIDER_LIMITS.graphConcurrency,
+    )
+    const normal = directory.scopeListingOf('collections', { library: PERSONAL_LIBRARY }, undefined)
+    await started[0]?.promise
+    const forced = directory.scopeListingOf(
+      'collections',
+      { library: PERSONAL_LIBRARY },
+      undefined,
+      { force: true },
+    )
+    await started[1]?.promise
+    // The forced read answers first and is the newer generation; the normal
+    // read that started earlier settles late and must not overwrite it.
+    second.resolve({
+      json: [{ key: 'NEW12345', data: { name: 'new' } }],
+      headers: new Headers(),
+    })
+    first.resolve({
+      json: [{ key: 'OLD12345', data: { name: 'old' } }],
+      headers: new Headers(),
+    })
+    await expect(Promise.all([normal, forced])).resolves.toHaveLength(2)
+    const cached = await directory.scopeListingOf(
+      'collections',
+      { library: PERSONAL_LIBRARY },
+      undefined,
+    )
+    expect(cached.entries.map((entry) => entry.key)).toEqual(['NEW12345'])
+    expect(reads).toBe(2)
+  })
+})
+
+describe('scope read key consistency', () => {
+  it('refuses a scope read whose response names a different object than the request', async () => {
+    // The ref names COLL1234, but the body answers with another valid key:
+    // fail loud rather than silently re-pointing the scope (write-domain's
+    // readItem enforces the same rule).
+    const client = {
+      getJson: async () => ({
+        json: { key: 'DIFF1234', data: { name: 'renamed' } },
+        headers: new Headers(),
+      }),
+    } as unknown as ZoteroHttpClient
+    const directory = new ScopeDirectory(
+      client,
+      () => PROVIDER_LIMITS.scopeListingTtlMs,
+      () => PROVIDER_LIMITS.graphConcurrency,
+    )
+    await expect(
+      directory.resolveNamed(
+        'collection',
+        `zotero://user/0/collection/${COLLECTION_KEY}`,
+        PERSONAL_LIBRARY,
+      ),
+    ).rejects.toThrow(/different object than COLL1234/)
+  })
+
+  it('accepts a scope read whose response key matches the request', async () => {
+    const client = {
+      getJson: async () => ({
+        json: { key: COLLECTION_KEY, data: { name: 'Papers' } },
+        headers: new Headers(),
+      }),
+    } as unknown as ZoteroHttpClient
+    const directory = new ScopeDirectory(
+      client,
+      () => PROVIDER_LIMITS.scopeListingTtlMs,
+      () => PROVIDER_LIMITS.graphConcurrency,
+    )
+    const resolved = await directory.resolveNamed(
+      'collection',
+      `zotero://user/0/collection/${COLLECTION_KEY}`,
+      PERSONAL_LIBRARY,
+    )
+    expect(resolved.name).toBe('Papers')
+    expect(resolved.ref.key).toBe(COLLECTION_KEY)
+  })
+})
+
+describe('ScopeDirectory schema caching and in-flight deduplication', () => {
+  it('shares in-flight getItemTypes request when called concurrently with identical claim', async () => {
+    const response = deferred<{ json: unknown; headers: Headers }>()
+    let callCount = 0
+    const client = {
+      getJson: async () => {
+        callCount++
+        return await response.promise
+      },
+    } as unknown as ZoteroHttpClient
+    const directory = new ScopeDirectory(
+      client,
+      () => PROVIDER_LIMITS.scopeListingTtlMs,
+      () => PROVIDER_LIMITS.graphConcurrency,
+    )
+
+    const first = directory.getItemTypes(undefined, 'srv-1')
+    const second = directory.getItemTypes(undefined, 'srv-1')
+
+    response.resolve({
+      json: [{ itemType: 'book', localized: 'Book' }],
+      headers: new Headers({ [ZOTERO_SERVER_ID_HEADER]: 'srv-1' }),
+    })
+
+    const [res1, res2] = await Promise.all([first, second])
+    expect(callCount).toBe(1)
+    expect(res1.serverId).toBe('srv-1')
+    expect(res1.items).toEqual([{ itemType: 'book', localized: 'Book' }])
+    expect(res2).toEqual(res1)
+  })
+
+  it('tracks concurrent getItemTypes requests independently for different claims', async () => {
+    const firstDef = deferred<{ json: unknown; headers: Headers }>()
+    const secondDef = deferred<{ json: unknown; headers: Headers }>()
+    const calls: { endpoint: string; serverId?: string }[] = []
+
+    const client = {
+      getJson: async (endpoint: string, _params: unknown, options?: { serverId?: string }) => {
+        calls.push({ endpoint, serverId: options?.serverId })
+        return options?.serverId === 'srv-1' ? await firstDef.promise : await secondDef.promise
+      },
+    } as unknown as ZoteroHttpClient
+    const directory = new ScopeDirectory(
+      client,
+      () => PROVIDER_LIMITS.scopeListingTtlMs,
+      () => PROVIDER_LIMITS.graphConcurrency,
+    )
+
+    const first = directory.getItemTypes(undefined, 'srv-1')
+    const second = directory.getItemTypes(undefined, 'srv-2')
+
+    firstDef.resolve({
+      json: [{ itemType: 'book', localized: 'Book' }],
+      headers: new Headers({ [ZOTERO_SERVER_ID_HEADER]: 'srv-1' }),
+    })
+    secondDef.resolve({
+      json: [{ itemType: 'report', localized: 'Report' }],
+      headers: new Headers({ [ZOTERO_SERVER_ID_HEADER]: 'srv-2' }),
+    })
+
+    const [res1, res2] = await Promise.all([first, second])
+    expect(calls).toHaveLength(2)
+    expect(res1.serverId).toBe('srv-1')
+    expect(res1.items[0]?.itemType).toBe('book')
+    expect(res2.serverId).toBe('srv-2')
+    expect(res2.items[0]?.itemType).toBe('report')
+  })
+
+  it('caches getItemTypes and satisfies subsequent calls from cache', async () => {
+    let callCount = 0
+    const client = {
+      getJson: async () => {
+        callCount++
+        return {
+          json: [{ itemType: 'book', localized: 'Book' }],
+          headers: new Headers({ [ZOTERO_SERVER_ID_HEADER]: 'srv-1' }),
+        }
+      },
+    } as unknown as ZoteroHttpClient
+    const directory = new ScopeDirectory(
+      client,
+      () => PROVIDER_LIMITS.scopeListingTtlMs,
+      () => PROVIDER_LIMITS.graphConcurrency,
+    )
+
+    const initial = await directory.getItemTypes(undefined, 'srv-1')
+    expect(callCount).toBe(1)
+    expect(initial.serverId).toBe('srv-1')
+
+    const withClaim = await directory.getItemTypes(undefined, 'srv-1')
+    expect(callCount).toBe(1)
+    expect(withClaim).toBe(initial)
+
+    const withoutClaim = await directory.getItemTypes()
+    expect(callCount).toBe(1)
+    expect(withoutClaim).toBe(initial)
+  })
+
+  it('shares in-flight getItemFields request when called concurrently with same itemType and claim', async () => {
+    const fieldsDef = deferred<{ json: unknown; headers: Headers }>()
+    const creatorDef = deferred<{ json: unknown; headers: Headers }>()
+    let callCount = 0
+
+    const client = {
+      getJson: async (endpoint: string) => {
+        callCount++
+        if (endpoint === 'itemTypeFields') return await fieldsDef.promise
+        return await creatorDef.promise
+      },
+    } as unknown as ZoteroHttpClient
+    const directory = new ScopeDirectory(
+      client,
+      () => PROVIDER_LIMITS.scopeListingTtlMs,
+      () => PROVIDER_LIMITS.graphConcurrency,
+    )
+
+    const first = directory.getItemFields('book')
+    const second = directory.getItemFields('book')
+
+    fieldsDef.resolve({
+      json: [{ field: 'title', localized: 'Title' }],
+      headers: new Headers({ [ZOTERO_SERVER_ID_HEADER]: 'srv-1' }),
+    })
+    creatorDef.resolve({
+      json: [{ creatorType: 'author', localized: 'Author' }],
+      headers: new Headers({ [ZOTERO_SERVER_ID_HEADER]: 'srv-1' }),
+    })
+
+    const [res1, res2] = await Promise.all([first, second])
+    expect(callCount).toBe(2)
+    expect(res1.serverId).toBe('srv-1')
+    expect(res2).toEqual(res1)
+  })
+
+  it('caches getItemFields in O(1) by serverId and default alias when claim is omitted', async () => {
+    let callCount = 0
+    const client = {
+      getJson: async (endpoint: string) => {
+        callCount++
+        if (endpoint === 'itemTypeFields') {
+          return {
+            json: [{ field: 'title', localized: 'Title' }],
+            headers: new Headers({ [ZOTERO_SERVER_ID_HEADER]: 'srv-1' }),
+          }
+        }
+        return {
+          json: [{ creatorType: 'author', localized: 'Author' }],
+          headers: new Headers({ [ZOTERO_SERVER_ID_HEADER]: 'srv-1' }),
+        }
+      },
+    } as unknown as ZoteroHttpClient
+    const directory = new ScopeDirectory(
+      client,
+      () => PROVIDER_LIMITS.scopeListingTtlMs,
+      () => PROVIDER_LIMITS.graphConcurrency,
+    )
+
+    const res1 = await directory.getItemFields('book')
+    expect(callCount).toBe(2)
+    expect(res1.serverId).toBe('srv-1')
+
+    const res2 = await directory.getItemFields('book')
+    expect(callCount).toBe(2)
+    expect(res2).toBe(res1)
+
+    const res3 = await directory.getItemFields('book', undefined, 'srv-1')
+    expect(callCount).toBe(2)
+    expect(res3).toBe(res1)
+  })
+
+  it('populates default alias when fetched with a specific claim so unclaimed calls hit cache', async () => {
+    let callCount = 0
+    const client = {
+      getJson: async (endpoint: string) => {
+        callCount++
+        if (endpoint === 'itemTypeFields') {
+          return {
+            json: [{ field: 'title', localized: 'Title' }],
+            headers: new Headers({ [ZOTERO_SERVER_ID_HEADER]: 'srv-1' }),
+          }
+        }
+        return {
+          json: [{ creatorType: 'author', localized: 'Author' }],
+          headers: new Headers({ [ZOTERO_SERVER_ID_HEADER]: 'srv-1' }),
+        }
+      },
+    } as unknown as ZoteroHttpClient
+    const directory = new ScopeDirectory(
+      client,
+      () => PROVIDER_LIMITS.scopeListingTtlMs,
+      () => PROVIDER_LIMITS.graphConcurrency,
+    )
+
+    const res1 = await directory.getItemFields('book', undefined, 'srv-1')
+    expect(callCount).toBe(2)
+
+    const res2 = await directory.getItemFields('book')
+    expect(callCount).toBe(2)
+    expect(res2).toBe(res1)
+  })
+})

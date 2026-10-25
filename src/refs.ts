@@ -143,6 +143,19 @@ export function refForLibrary(
 }
 
 /**
+ * The canonical ref string for one object of a supported local library: the
+ * `formatRef(refForLibrary(...))` composition every domain reader spelled out.
+ */
+export function refStringFor(
+  library: { type: 'user' | 'group'; id: number },
+  kind: ZoteroKind,
+  key: string,
+  serverId?: string,
+): string {
+  return formatRef(refForLibrary(library, kind, key, serverId))
+}
+
+/**
  * Assert that a ref names a supported local library: user/0 or any group.
  * This is the provider-level contract (non-zero user ids fail closed).
  */
@@ -280,24 +293,22 @@ export function relationTargetRef(
   if (parsed.library.type === 'group') {
     if (!Number.isSafeInteger(parsed.library.id) || parsed.library.id <= 0) return undefined
     if (options.personalContext === true) {
-      return formatRef(
-        refForLibrary({ type: 'group', id: parsed.library.id }, 'item', parsed.key, serverId),
-      )
+      return refStringFor({ type: 'group', id: parsed.library.id }, 'item', parsed.key, serverId)
     }
     const library = options.library
     if (library !== undefined && library.type === 'group' && parsed.library.id === library.id) {
-      return formatRef(refForLibrary(library, 'item', parsed.key, serverId))
+      return refStringFor(library, 'item', parsed.key, serverId)
     }
     return undefined
   }
   if (parsed.library.id === 0) {
-    return formatRef(refForLibrary(PERSONAL_LIBRARY, 'item', parsed.key, serverId))
+    return refStringFor(PERSONAL_LIBRARY, 'item', parsed.key, serverId)
   }
   if (options.personalContext === true) {
-    return formatRef(refForLibrary(PERSONAL_LIBRARY, 'item', parsed.key, serverId))
+    return refStringFor(PERSONAL_LIBRARY, 'item', parsed.key, serverId)
   }
   if (options.parentLibraryId !== undefined && parsed.library.id === options.parentLibraryId) {
-    return formatRef(refForLibrary(PERSONAL_LIBRARY, 'item', parsed.key, serverId))
+    return refStringFor(PERSONAL_LIBRARY, 'item', parsed.key, serverId)
   }
   return undefined
 }

@@ -16,7 +16,7 @@ import {
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { ZOTERO_UNEXPECTED, ZoteroError } from './errors.js'
 import { asJsonValue, asRecord, asString, isObjectKey, stringArrayOf } from './json.js'
-import { formatRef, refForLibrary, relationTargetRef } from './refs.js'
+import { refStringFor, relationTargetRef } from './refs.js'
 import type {
   SupportedLocalLibrary,
   ZoteroAnnotationRecord,
@@ -133,7 +133,7 @@ export function normalizeSearchItem(json: unknown, ctx?: NormalizeContext): Zote
   // Optional fields are omitted rather than set to undefined, so the record
   // is always a pure lossless-JSON value for the tool output snapshot.
   const item: ZoteroSearchItem = {
-    ref: formatRef(refForLibrary(context.library, 'item', key, context.serverId)),
+    ref: refStringFor(context.library, 'item', key, context.serverId),
     title,
     creatorSummary: asString(meta?.creatorSummary) ?? '',
     itemType,
@@ -142,10 +142,13 @@ export function normalizeSearchItem(json: unknown, ctx?: NormalizeContext): Zote
   if (year !== undefined) item.year = year
   const parentKey = parentKeyOf(data)
   if (parentKey !== undefined)
-    item.parentRef = formatRef(refForLibrary(context.library, 'item', parentKey, context.serverId))
+    item.parentRef = refStringFor(context.library, 'item', parentKey, context.serverId)
   if (attachmentKey !== undefined)
-    item.bestAttachmentRef = formatRef(
-      refForLibrary(context.library, 'attachment', attachmentKey, context.serverId),
+    item.bestAttachmentRef = refStringFor(
+      context.library,
+      'attachment',
+      attachmentKey,
+      context.serverId,
     )
   const bestAttachmentType = asString(attachment?.attachmentType)
   if (bestAttachmentType !== undefined) item.bestAttachmentType = bestAttachmentType
@@ -339,12 +342,12 @@ export function normalizeNoteRecord(
   const { text, truncated } = truncateText(raw, maxChars ?? raw.length)
   const parentKey = parentKeyOf(data)
   return {
-    ref: formatRef(refForLibrary(context.library, 'item', key, context.serverId)),
+    ref: refStringFor(context.library, 'item', key, context.serverId),
     text,
     truncated,
     ...(parentKey !== undefined
       ? {
-          parentRef: formatRef(refForLibrary(context.library, 'item', parentKey, context.serverId)),
+          parentRef: refStringFor(context.library, 'item', parentKey, context.serverId),
         }
       : {}),
   }
@@ -377,7 +380,7 @@ export function normalizeAnnotationRecord(
     // Annotations are semantic first-class objects: the ref grammar's
     // `annotation` kind, not the generic `item` kind. Their parentRef points
     // at the attachment they annotate.
-    ref: formatRef(refForLibrary(context.library, 'annotation', key, context.serverId)),
+    ref: refStringFor(context.library, 'annotation', key, context.serverId),
     type: asString(data?.annotationType) ?? '',
     text: asString(data?.annotationText) ?? '',
     ...(comment !== undefined ? { comment } : {}),
@@ -385,9 +388,7 @@ export function normalizeAnnotationRecord(
     ...(pageLabel !== undefined ? { pageLabel } : {}),
     ...(parentKey !== undefined
       ? {
-          parentRef: formatRef(
-            refForLibrary(context.library, 'attachment', parentKey, context.serverId),
-          ),
+          parentRef: refStringFor(context.library, 'attachment', parentKey, context.serverId),
         }
       : {}),
   }
@@ -572,7 +573,7 @@ export function attachmentRecordOf(
   ctx: NormalizeContext,
 ): ZoteroAttachmentRecord {
   return {
-    ref: formatRef(refForLibrary(ctx.library, 'attachment', candidate.key, ctx.serverId)),
+    ref: refStringFor(ctx.library, 'attachment', candidate.key, ctx.serverId),
     title: candidate.title,
     contentType: candidate.contentType,
     ...(candidate.linkMode !== undefined ? { linkMode: candidate.linkMode } : {}),
@@ -649,7 +650,7 @@ export function normalizeItemDetail(input: NormalizeItemDetailInput): ZoteroItem
   const collections: ZoteroCollectionRecord[] = keys.map((collectionKey) => {
     const name = input.collectionNames?.get(collectionKey)
     return {
-      ref: formatRef(refForLibrary(ctx.library, 'collection', collectionKey, ctx.serverId)),
+      ref: refStringFor(ctx.library, 'collection', collectionKey, ctx.serverId),
       ...(name !== undefined ? { name } : {}),
     }
   })
@@ -687,7 +688,7 @@ export function normalizeItemDetail(input: NormalizeItemDetailInput): ZoteroItem
   if (linkAttachment !== undefined) {
     const child = partitioned?.attachments.find((candidate) => candidate.key === linkAttachment.key)
     bestAttachment = {
-      ref: formatRef(refForLibrary(ctx.library, 'attachment', linkAttachment.key, ctx.serverId)),
+      ref: refStringFor(ctx.library, 'attachment', linkAttachment.key, ctx.serverId),
       title: child?.title ?? '',
       contentType: linkAttachment.contentType,
     }
@@ -714,7 +715,7 @@ export function normalizeItemDetail(input: NormalizeItemDetailInput): ZoteroItem
   const extra = asString(data?.extra)?.trim()
 
   return {
-    ref: formatRef(refForLibrary(ctx.library, 'item', key, ctx.serverId)),
+    ref: refStringFor(ctx.library, 'item', key, ctx.serverId),
     itemType,
     title: asString(data?.title) ?? '',
     creators: normalizeCreators(data),

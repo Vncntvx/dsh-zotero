@@ -23,7 +23,7 @@ import { selectAttachments, bestAttachmentFromLinks } from '../attachments.js'
 import {
   formatRef,
   libraryPrefix,
-  refForLibrary,
+  refStringFor,
   requireSupportedLocalRef,
   sameLibrary,
 } from '../refs.js'
@@ -107,6 +107,274 @@ function normalizeCoverage(payload: ZoteroFulltextPayload): ZoteroCoverage {
  * Passage count and character budgets are enforced with the `truncated`
  * flag, never by silently editing passage text.
  */
+/** One evidence passage accumulated by the retrieve policies, before ranking. */
+interface RetrievePassage {
+  source: ZoteroEvidenceSource
+  sourceRef: string
+  text: string
+  chunkIndex?: number
+  chunkCount?: number
+  comment?: string
+  pageLabel?: string
+  attachmentRef?: string
+  /** The text ranking scores, when it differs from the text returned. */
+  rankText?: string
+}
+
+/** What one fulltext policy arm contributed; `skippedFulltext` reports the source's absence. */
+interface FulltextPolicyOutcome {
+  readonly skippedFulltext: boolean
+  readonly fulltextWasCut: boolean
+  readonly attachmentRef?: string
+  readonly attachmentContentType?: string
+  readonly coverage?: ZoteroCoverage
+  readonly attachments?: ZoteroRetrieveAttachment[]
+  readonly passages: RetrievePassage[]
+}
+
+/** The payload shape the fulltext reads produce and coverage is normalized from. */
+type FulltextPayload = Awaited<ReturnType<typeof fetchFulltext>>
+
+/**
+ * The `best` policy's fulltext read: the linked attachment when Zotero names
+ * one, else the first PDF child. An unindexed attachment degrades like an
+ * absent one — the other requested sources still answer.
+ */
+async function readBestFulltext(
+  deps: { client: ZoteroHttpClient; limits: LocalApiLimits },
+  ref: ZoteroObjectRef,
+  serverId: string | undefined,
+  linkAttachment: ReturnType<typeof bestAttachmentFromLinks>,
+  childrenRows: readonly unknown[],
+  bestFulltextKey: string | undefined,
+  fulltextPromise: Promise<FulltextPayload> | undefined,
+  signal: AbortSignal | undefined,
+): Promise<FulltextPolicyOutcome> {
+  const passages: RetrievePassage[] = []
+  let skippedFulltext = false
+  let fulltextWasCut = false
+  let attachmentRef: string | undefined
+  let attachmentContentType: string | undefined
+  let coverage: ZoteroCoverage | undefined
+  let attachmentKey = bestFulltextKey
+  // The link arm reports Zotero's own type (possibly empty); the child
+  // fallback selects an application/pdf candidate whose type is known.
+  let selectedContentType = linkAttachment?.contentType
+  if (attachmentKey === undefined) {
+    const pdf = selectAttachments(childrenRows, 'pdf')[0]
+    if (pdf === undefined) skippedFulltext = true
+    else {
+      attachmentKey = pdf.key
+      selectedContentType = pdf.contentType
+    }
+  }
+  if (attachmentKey !== undefined) {
+    try {
+      attachmentRef = refStringFor(
+        ref.library as SupportedLocalLibrary,
+        'attachment',
+        attachmentKey,
+        serverId,
+      )
+      if (selectedContentType !== undefined && selectedContentType !== '') {
+        attachmentContentType = selectedContentType
+      }
+      const payload = await (fulltextPromise ??
+        fetchFulltext(deps, attachmentKey, ref.library as SupportedLocalLibrary, serverId, signal))
+      const content = typeof payload.content === 'string' ? payload.content : ''
+      const bounded = truncateText(content, deps.limits.maxFulltextChars)
+      fulltextWasCut = bounded.truncated
+      const chunks = chunkText(
+        bounded.text,
+        deps.limits.fulltextChunkWords,
+        deps.limits.maxEvidenceChars,
+      )
+      for (const chunk of chunks) {
+        passages.push({
+          source: 'fulltext',
+          sourceRef: attachmentRef,
+          text: chunk.text,
+          chunkIndex: chunk.index,
+          chunkCount: chunks.length,
+        })
+      }
+      coverage = normalizeCoverage(payload)
+    } catch (error) {
+      // An unindexed attachment degrades like an absent one: the other
+      // requested sources still answer, and `sourcesSkipped` reports it.
+      if (error instanceof ZoteroError && error.code === ZOTERO_NO_FULLTEXT) {
+        skippedFulltext = true
+      } else {
+        throw error
+      }
+    }
+  }
+  return {
+    skippedFulltext,
+    fulltextWasCut,
+    ...(attachmentRef !== undefined ? { attachmentRef } : {}),
+    ...(attachmentContentType !== undefined ? { attachmentContentType } : {}),
+    ...(coverage !== undefined ? { coverage } : {}),
+    passages,
+  }
+}
+
+/**
+ * The multi-attachment policies' fulltext read: every selected PDF is a
+ * first-class source, and each passage carries its own attachment provenance.
+ */
+async function readMultiAttachmentFulltext(
+  deps: { client: ZoteroHttpClient; limits: LocalApiLimits },
+  ref: ZoteroObjectRef,
+  serverId: string | undefined,
+  prefix: string,
+  policy: 'allIndexed' | 'specified',
+  attachmentRefs: readonly ZoteroObjectRef[],
+  childrenRows: readonly unknown[],
+  signal: AbortSignal | undefined,
+): Promise<FulltextPolicyOutcome> {
+  const passages: RetrievePassage[] = []
+  let skippedFulltext = false
+  let fulltextWasCut = false
+  let attachmentRef: string | undefined
+  let attachmentContentType: string | undefined
+  let coverage: ZoteroCoverage | undefined
+  let attachments: ZoteroRetrieveAttachment[] | undefined
+  let candidates: { key: string; contentType?: string }[]
+  if (policy === 'allIndexed') {
+    candidates = selectAttachments(childrenRows, 'pdf').map((candidate) => ({
+      key: candidate.key,
+      contentType: candidate.contentType,
+    }))
+  } else {
+    // One attachment contributes once: the same text entering the corpus
+    // twice would read as two sources agreeing with each other. The set is
+    // taken before the cap so a list that repeats one ref is not rejected
+    // as if it named many.
+    const distinct = new Map<string, ZoteroObjectRef>()
+    for (const attachmentRef of attachmentRefs) {
+      const identity = formatRef(attachmentRef)
+      if (!distinct.has(identity)) distinct.set(identity, attachmentRef)
+    }
+    if (distinct.size > deps.limits.retrieveAttachmentCap) {
+      throw new ZoteroError(
+        `attachmentRefs lists ${distinct.size} attachments; at most ${deps.limits.retrieveAttachmentCap} can enter one ranking; split the work across calls.`,
+        ZOTERO_INVALID_ARGUMENT,
+      )
+    }
+    candidates = await mapWithConcurrency(
+      [...distinct.values()],
+      deps.limits.graphConcurrency,
+      async (wanted, poolSignal): Promise<{ key: string; contentType?: string }> => {
+        // The ref is a claim about where this text comes from. Reading a
+        // same-key object out of the wrong library or the wrong database
+        // would attach a stranger's words to this item, so the claim is
+        // checked against the ref itself before any read, and against the
+        // object's own answer after it.
+        if (!sameLibrary(wanted.library, ref.library)) {
+          throw new ZoteroError(
+            `Attachment ref ${wanted.key} belongs to library ${wanted.library.type}/${wanted.library.id}, not to ${ref.library.type}/${ref.library.id}. Full text entering this item's evidence must come from this item's own library.`,
+            ZOTERO_INVALID_ARGUMENT,
+          )
+        }
+        assertServerIdMatches(wanted.serverId, serverId)
+        const row = await deps.client.getJson<unknown>(`${prefix}/items/${wanted.key}`, undefined, {
+          signal: poolSignal,
+          serverId,
+        })
+        const rowData = asRecord(asRecord(row.json)?.data)
+        const rowType = asString(rowData?.itemType)
+        const parentKey = asString(rowData?.parentItem)
+        if (rowType !== 'attachment') {
+          throw new ZoteroError(
+            rowType === undefined
+              ? `Attachment ref ${wanted.key} cannot be proven an attachment: Zotero's answer named no item type for it, so nothing rules out a bibliographic item. Read the item's children with zotero_children and name an attachment ref from there.`
+              : `Attachment ref ${wanted.key} names a ${rowType}, not an attachment.`,
+            ZOTERO_INVALID_ARGUMENT,
+          )
+        }
+        if (parentKey !== ref.key) {
+          throw new ZoteroError(
+            parentKey === undefined
+              ? `Attachment ref ${wanted.key} is a top-level attachment with no parent item, so its text is not evidence for ${ref.key}.`
+              : `Attachment ref ${wanted.key} is attached to item ${parentKey}, not to ${ref.key}; its text would be another work's evidence. Read this item's children with zotero_children to get refs that belong to it.`,
+            ZOTERO_INVALID_ARGUMENT,
+          )
+        }
+        return { key: wanted.key, contentType: asString(rowData?.contentType) }
+      },
+      { signal },
+    )
+  }
+  // An `allIndexed` selection can repeat a key only if the listing did; the
+  // set is taken for both policies so no attachment enters the corpus twice.
+  const unique = new Map<string, { key: string; contentType?: string }>()
+  for (const candidate of candidates) {
+    if (!unique.has(candidate.key)) unique.set(candidate.key, candidate)
+  }
+  candidates = [...unique.values()]
+  if (candidates.length === 0) {
+    skippedFulltext = true
+  } else {
+    const sources = await readFulltextSources(deps, ref, serverId, candidates, signal)
+    const indexed = sources.filter(
+      (source): source is Extract<FulltextSource, { status: 'indexed' }> =>
+        source.status === 'indexed',
+    )
+    if (indexed.length === 0) skippedFulltext = true
+    for (const source of indexed) {
+      const passageAttachmentRef = refStringFor(
+        ref.library as SupportedLocalLibrary,
+        'attachment',
+        source.key,
+        serverId,
+      )
+      fulltextWasCut = fulltextWasCut || source.inputTruncated
+      for (const chunk of source.chunks) {
+        passages.push({
+          source: 'fulltext',
+          sourceRef: passageAttachmentRef,
+          text: chunk.text,
+          chunkIndex: chunk.index,
+          chunkCount: source.chunks.length,
+        })
+      }
+    }
+    attachments = sources.map((source) => ({
+      ref: refStringFor(ref.library as SupportedLocalLibrary, 'attachment', source.key, serverId),
+      ...(source.contentType === undefined || source.contentType === ''
+        ? {}
+        : { contentType: source.contentType }),
+      ...attachmentFactOf(source),
+    }))
+    // Result-level provenance stays unambiguous: with exactly one
+    // contributing attachment it names that file; with several, the
+    // per-passage refs carry the mapping.
+    if (indexed.length === 1) {
+      const source = indexed[0]!
+      attachmentRef = refStringFor(
+        ref.library as SupportedLocalLibrary,
+        'attachment',
+        source.key,
+        serverId,
+      )
+      if (source.contentType !== undefined && source.contentType !== '') {
+        attachmentContentType = source.contentType
+      }
+      coverage = source.coverage
+    }
+  }
+  return {
+    skippedFulltext,
+    fulltextWasCut,
+    ...(attachmentRef !== undefined ? { attachmentRef } : {}),
+    ...(attachmentContentType !== undefined ? { attachmentContentType } : {}),
+    ...(coverage !== undefined ? { coverage } : {}),
+    ...(attachments !== undefined ? { attachments } : {}),
+    passages,
+  }
+}
+
 export async function retrieve(
   deps: { client: ZoteroHttpClient; limits: LocalApiLimits },
   request: ZoteroRetrieveRequest,
@@ -169,204 +437,39 @@ export async function retrieve(
   let attachmentContentType: string | undefined
   let coverage: ZoteroCoverage | undefined
   let attachments: ZoteroRetrieveAttachment[] | undefined
-  const passages: {
-    source: ZoteroEvidenceSource
-    sourceRef: string
-    text: string
-    chunkIndex?: number
-    chunkCount?: number
-    comment?: string
-    pageLabel?: string
-    attachmentRef?: string
-    /** The text ranking scores, when it differs from the text returned. */
-    rankText?: string
-  }[] = []
+  const passages: RetrievePassage[] = []
+  let fulltext: FulltextPolicyOutcome | undefined
   if (wantsFulltext && policy === 'best') {
-    let attachmentKey = bestFulltextKey
-    // The link arm reports Zotero's own type (possibly empty); the child
-    // fallback selects an application/pdf candidate whose type is known.
-    let selectedContentType = linkAttachment?.contentType
-    if (attachmentKey === undefined) {
-      const pdf = selectAttachments(childrenRows, 'pdf')[0]
-      if (pdf === undefined) skipped.push('fulltext')
-      else {
-        attachmentKey = pdf.key
-        selectedContentType = pdf.contentType
-      }
-    }
-    if (attachmentKey !== undefined) {
-      try {
-        attachmentRef = formatRef(
-          refForLibrary(
-            ref.library as SupportedLocalLibrary,
-            'attachment',
-            attachmentKey,
-            serverId,
-          ),
-        )
-        if (selectedContentType !== undefined && selectedContentType !== '') {
-          attachmentContentType = selectedContentType
-        }
-        const payload = await (fulltextPromise ??
-          fetchFulltext(
-            deps,
-            attachmentKey,
-            ref.library as SupportedLocalLibrary,
-            serverId,
-            signal,
-          ))
-        const content = typeof payload.content === 'string' ? payload.content : ''
-        const bounded = truncateText(content, deps.limits.maxFulltextChars)
-        fulltextWasCut = bounded.truncated
-        const chunks = chunkText(
-          bounded.text,
-          deps.limits.fulltextChunkWords,
-          deps.limits.maxEvidenceChars,
-        )
-        for (const chunk of chunks) {
-          passages.push({
-            source: 'fulltext',
-            sourceRef: attachmentRef,
-            text: chunk.text,
-            chunkIndex: chunk.index,
-            chunkCount: chunks.length,
-          })
-        }
-        coverage = normalizeCoverage(payload)
-      } catch (error) {
-        // An unindexed attachment degrades like an absent one: the other
-        // requested sources still answer, and `sourcesSkipped` reports it.
-        if (error instanceof ZoteroError && error.code === ZOTERO_NO_FULLTEXT) {
-          skipped.push('fulltext')
-        } else {
-          throw error
-        }
-      }
-    }
-  } else if (wantsFulltext) {
-    // Multi-attachment policies: every selected PDF is a first-class
-    // source, and each passage carries its own attachment provenance.
-    let candidates: { key: string; contentType?: string }[]
-    if (policy === 'allIndexed') {
-      candidates = selectAttachments(childrenRows, 'pdf').map((candidate) => ({
-        key: candidate.key,
-        contentType: candidate.contentType,
-      }))
-    } else {
-      // One attachment contributes once: the same text entering the corpus
-      // twice would read as two sources agreeing with each other. The set is
-      // taken before the cap so a list that repeats one ref is not rejected
-      // as if it named many.
-      const distinct = new Map<string, ZoteroObjectRef>()
-      for (const attachmentRef of request.attachmentRefs!) {
-        const identity = formatRef(attachmentRef)
-        if (!distinct.has(identity)) distinct.set(identity, attachmentRef)
-      }
-      if (distinct.size > deps.limits.retrieveAttachmentCap) {
-        throw new ZoteroError(
-          `attachmentRefs lists ${distinct.size} attachments; at most ${deps.limits.retrieveAttachmentCap} can enter one ranking; split the work across calls.`,
-          ZOTERO_INVALID_ARGUMENT,
-        )
-      }
-      candidates = await mapWithConcurrency(
-        [...distinct.values()],
-        deps.limits.graphConcurrency,
-        async (wanted, poolSignal): Promise<{ key: string; contentType?: string }> => {
-          // The ref is a claim about where this text comes from. Reading a
-          // same-key object out of the wrong library or the wrong database
-          // would attach a stranger's words to this item, so the claim is
-          // checked against the ref itself before any read, and against the
-          // object's own answer after it.
-          if (!sameLibrary(wanted.library, ref.library)) {
-            throw new ZoteroError(
-              `Attachment ref ${wanted.key} belongs to library ${wanted.library.type}/${wanted.library.id}, not to ${ref.library.type}/${ref.library.id}. Full text entering this item's evidence must come from this item's own library.`,
-              ZOTERO_INVALID_ARGUMENT,
-            )
-          }
-          assertServerIdMatches(wanted.serverId, serverId)
-          const row = await deps.client.getJson<unknown>(
-            `${prefix}/items/${wanted.key}`,
-            undefined,
-            { signal: poolSignal, serverId },
-          )
-          const rowData = asRecord(asRecord(row.json)?.data)
-          const rowType = asString(rowData?.itemType)
-          const parentKey = asString(rowData?.parentItem)
-          if (rowType !== 'attachment') {
-            throw new ZoteroError(
-              rowType === undefined
-                ? `Attachment ref ${wanted.key} cannot be proven an attachment: Zotero's answer named no item type for it, so nothing rules out a bibliographic item. Read the item's children with zotero_children and name an attachment ref from there.`
-                : `Attachment ref ${wanted.key} names a ${rowType}, not an attachment.`,
-              ZOTERO_INVALID_ARGUMENT,
-            )
-          }
-          if (parentKey !== ref.key) {
-            throw new ZoteroError(
-              parentKey === undefined
-                ? `Attachment ref ${wanted.key} is a top-level attachment with no parent item, so its text is not evidence for ${ref.key}.`
-                : `Attachment ref ${wanted.key} is attached to item ${parentKey}, not to ${ref.key}; its text would be another work's evidence. Read this item's children with zotero_children to get refs that belong to it.`,
-              ZOTERO_INVALID_ARGUMENT,
-            )
-          }
-          return { key: wanted.key, contentType: asString(rowData?.contentType) }
-        },
-        { signal },
-      )
-    }
-    // An `allIndexed` selection can repeat a key only if the listing did; the
-    // set is taken for both policies so no attachment enters the corpus twice.
-    const unique = new Map<string, { key: string; contentType?: string }>()
-    for (const candidate of candidates) {
-      if (!unique.has(candidate.key)) unique.set(candidate.key, candidate)
-    }
-    candidates = [...unique.values()]
-    if (candidates.length === 0) {
-      skipped.push('fulltext')
-    } else {
-      const sources = await readFulltextSources(deps, ref, serverId, candidates, signal)
-      const indexed = sources.filter(
-        (source): source is Extract<FulltextSource, { status: 'indexed' }> =>
-          source.status === 'indexed',
-      )
-      if (indexed.length === 0) skipped.push('fulltext')
-      for (const source of indexed) {
-        const passageAttachmentRef = formatRef(
-          refForLibrary(ref.library as SupportedLocalLibrary, 'attachment', source.key, serverId),
-        )
-        fulltextWasCut = fulltextWasCut || source.inputTruncated
-        for (const chunk of source.chunks) {
-          passages.push({
-            source: 'fulltext',
-            sourceRef: passageAttachmentRef,
-            text: chunk.text,
-            chunkIndex: chunk.index,
-            chunkCount: source.chunks.length,
-          })
-        }
-      }
-      attachments = sources.map((source) => ({
-        ref: formatRef(
-          refForLibrary(ref.library as SupportedLocalLibrary, 'attachment', source.key, serverId),
-        ),
-        ...(source.contentType === undefined || source.contentType === ''
-          ? {}
-          : { contentType: source.contentType }),
-        ...attachmentFactOf(source),
-      }))
-      // Result-level provenance stays unambiguous: with exactly one
-      // contributing attachment it names that file; with several, the
-      // per-passage refs carry the mapping.
-      if (indexed.length === 1) {
-        const source = indexed[0]!
-        attachmentRef = formatRef(
-          refForLibrary(ref.library as SupportedLocalLibrary, 'attachment', source.key, serverId),
-        )
-        if (source.contentType !== undefined && source.contentType !== '') {
-          attachmentContentType = source.contentType
-        }
-        coverage = source.coverage
-      }
-    }
+    fulltext = await readBestFulltext(
+      deps,
+      ref,
+      serverId,
+      linkAttachment,
+      childrenRows,
+      bestFulltextKey,
+      fulltextPromise,
+      signal,
+    )
+  } else if (wantsFulltext && policy !== 'best') {
+    fulltext = await readMultiAttachmentFulltext(
+      deps,
+      ref,
+      serverId,
+      prefix,
+      policy,
+      request.attachmentRefs ?? [],
+      childrenRows,
+      signal,
+    )
+  }
+  if (fulltext !== undefined) {
+    if (fulltext.skippedFulltext) skipped.push('fulltext')
+    fulltextWasCut = fulltext.fulltextWasCut
+    attachmentRef = fulltext.attachmentRef
+    attachmentContentType = fulltext.attachmentContentType
+    coverage = fulltext.coverage
+    attachments = fulltext.attachments
+    passages.push(...fulltext.passages)
   }
 
   const partitioned: PartitionedChildren = fetchChildren
@@ -402,9 +505,7 @@ export async function retrieve(
     }
   }
   if (wantsNotes) {
-    const noteRef = formatRef(
-      refForLibrary(ref.library as SupportedLocalLibrary, 'item', ref.key, serverId),
-    )
+    const noteRef = refStringFor(ref.library as SupportedLocalLibrary, 'item', ref.key, serverId)
     const noteSources: { ref: string; text: string }[] = isNoteItem
       ? [{ ref: noteRef, text: plainNoteText(data?.note) }]
       : partitioned.notes.map((note) => ({ ref: note.ref, text: note.text }))
@@ -436,9 +537,7 @@ export async function retrieve(
       abstractWasCut = bounded.truncated
       passages.push({
         source: 'abstract',
-        sourceRef: formatRef(
-          refForLibrary(ref.library as SupportedLocalLibrary, 'item', ref.key, serverId),
-        ),
+        sourceRef: refStringFor(ref.library as SupportedLocalLibrary, 'item', ref.key, serverId),
         text: bounded.text,
       })
     } else {
@@ -489,7 +588,7 @@ export async function retrieve(
     (a, b) => SOURCE_ORDER.indexOf(a) - SOURCE_ORDER.indexOf(b),
   )
   return {
-    ref: formatRef(refForLibrary(ref.library as SupportedLocalLibrary, 'item', ref.key, serverId)),
+    ref: refStringFor(ref.library as SupportedLocalLibrary, 'item', ref.key, serverId),
     ...(attachmentRef !== undefined ? { attachmentRef } : {}),
     ...(attachmentContentType !== undefined ? { attachmentContentType } : {}),
     ...(coverage !== undefined ? { coverage } : {}),
