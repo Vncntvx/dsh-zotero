@@ -66,7 +66,11 @@ export function writeDeps(mock: MockZotero): {
   const client = testHttpClient(mock.baseUrl, { maxResponseBytes: 1_000_000 })
   const writer = testWriteClient(mock.baseUrl, { maxResponseBytes: 1_000_000 })
   const authorizer = new WriteAuthorizer({ client: writer, persistKey: () => true })
-  const directory = new ScopeDirectory(client, () => 1000)
+  const directory = new ScopeDirectory(
+    client,
+    () => 1000,
+    () => 4,
+  )
   const deps: WriteDomainDeps = {
     client,
     writer,

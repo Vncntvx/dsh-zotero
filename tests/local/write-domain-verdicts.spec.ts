@@ -425,6 +425,31 @@ describe('createItem verdicts', () => {
     })
   })
 
+  it('reports no title when the echo proves the save without one', async () => {
+    grantAuthorize(mock)
+    serveCreateBatch(
+      '/api/users/0/items',
+      JSON.stringify({
+        successful: {
+          '0': {
+            key: 'NEWITEM1',
+            version: 60,
+            data: { key: 'NEWITEM1', version: 60, itemType: 'book' },
+          },
+        },
+        success: { '0': 'NEWITEM1' },
+        unchanged: {},
+        failed: {},
+      }),
+    )
+    const { deps } = writeDeps(mock)
+    const result = await createItem(deps, { itemType: 'book', title: 'A study' })
+    expect(result).toMatchObject({ kind: 'applied', key: 'NEWITEM1', version: 60 })
+    // Saved state comes only from the echo: a title the response did not
+    // carry is absent, never filled back from the request.
+    expect(result).not.toHaveProperty('title')
+  })
+
   it('rethrows a pre-commit refusal instead of calling it unknown', async () => {
     grantAuthorize(mock)
     mock.route('POST', '/api/users/0/items', (_req, res, helpers) =>

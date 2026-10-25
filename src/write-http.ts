@@ -159,6 +159,11 @@ function asCommitUnknown(error: unknown): ZoteroWriteCommitUnknownError {
   return new ZoteroWriteCommitUnknownError(message, code, { cause: error })
 }
 
+/** Wrap `error` as commit-unknown when `on`; pass it through untouched otherwise. */
+function commitUnknownOr(error: unknown, on: boolean): unknown {
+  return on ? asCommitUnknown(error) : error
+}
+
 /** Statuses whose response proves the write was refused before object commit. */
 const PRE_COMMIT_WRITE_STATUSES = new Set([
   400, 401, 403, 404, 405, 409, 410, 412, 413, 415, 422, 426, 428, 429, 501,
@@ -201,8 +206,18 @@ interface ZoteroAuthorizeGrant {
   readonly remember: boolean
 }
 
-/** The Local API endpoint that issues write keys; local-only, no web API analog. */
-const AUTHORIZE_PATH = ZOTERO_AUTHORIZE_PATH
+/**
+ * Per-call knobs of one write request: the serialized body, the deadline
+ * (overriding the transport timeout, e.g. the human-paced authorize dialog),
+ * whether a transport failure must surface as commit-unknown, and whether a
+ * 413 reads as the tag-delete limit refusal.
+ */
+interface WriteSendOptions {
+  readonly body?: string
+  readonly deadlineMs?: number
+  readonly commitSensitive?: boolean
+  readonly tagDeleteLimit?: boolean
+}
 
 /**
  * Zotero documents 5–32 characters for `Zotero-Write-Token`; a UUID without
@@ -259,9 +274,7 @@ export class ZoteroWriteHttpClient {
       'POST',
       opts,
       { 'Zotero-Write-Token': writeToken },
-      JSON.stringify(entries),
-      undefined,
-      true,
+      { body: JSON.stringify(entries), commitSensitive: true },
     )
     // The POST has crossed the commit boundary. A malformed receipt or a
     // missing version cannot prove that any requested create was refused.
@@ -287,9 +300,7 @@ export class ZoteroWriteHttpClient {
       'PATCH',
       opts,
       { 'If-Unmodified-Since-Version': String(opts.ifUnmodifiedSinceVersion) },
-      JSON.stringify(body),
-      undefined,
-      true,
+      { body: JSON.stringify(body), commitSensitive: true },
     )
     return { libraryVersion: requireLibraryVersion(headers) }
   }
@@ -309,16 +320,9 @@ export class ZoteroWriteHttpClient {
       opts.ifUnmodifiedSinceVersion === undefined
         ? {}
         : { 'If-Unmodified-Since-Version': String(opts.ifUnmodifiedSinceVersion) }
-    const { headers } = await this.send(
-      path,
-      'DELETE',
-      opts,
-      extraHeaders,
-      undefined,
-      undefined,
-      false,
-      opts.tagDeleteLimit === true,
-    )
+    const { headers } = await this.send(path, 'DELETE', opts, extraHeaders, {
+      tagDeleteLimit: opts.tagDeleteLimit,
+    })
     return { libraryVersion: requireLibraryVersion(headers) }
   }
 
@@ -330,13 +334,15 @@ export class ZoteroWriteHttpClient {
    */
   async authorize(appName: string, opts: ZoteroAuthorizeOptions): Promise<ZoteroAuthorizeGrant> {
     const { body } = await this.send(
-      AUTHORIZE_PATH,
+      ZOTERO_AUTHORIZE_PATH,
       'POST',
       { signal: opts.signal, serverId: opts.serverId, apiKey: '' },
       {},
-      JSON.stringify({ appName }),
-      // The dialog waits for a human: the data deadline must not cut it off.
-      this.options.authorizeDeadlineMs,
+      {
+        body: JSON.stringify({ appName }),
+        // The dialog waits for a human: the data deadline must not cut it off.
+        deadlineMs: this.options.authorizeDeadlineMs,
+      },
     )
     const json: unknown = parseZoteroJson(body)
     const record = asRecord(json)
@@ -357,16 +363,18 @@ export class ZoteroWriteHttpClient {
     method: 'POST' | 'PATCH' | 'DELETE',
     opts: ZoteroWriteOptions,
     extraHeaders: Record<string, string>,
-    body?: string,
-    deadlineMs: number = this.options.timeoutMs,
-    commitSensitive = false,
-    tagDeleteLimit = false,
+    {
+      body,
+      deadlineMs = this.options.timeoutMs,
+      commitSensitive = false,
+      tagDeleteLimit = false,
+    }: WriteSendOptions = {},
   ): Promise<{ body: string; headers: Headers }> {
     if (opts.serverId === '') {
       throw new ZoteroError(WRITE_IDENTITY_MISSING_MESSAGE, ZOTERO_UNEXPECTED)
     }
     const url = new URL(path, this.baseUrlWithSlash)
-    const release = await this.takeSlot(opts.signal)
+    const release = await acquireSlot(this.gate, opts.signal)
     const startedAt = Date.now()
     const target = `${method} ${path}`
     this.options.sink?.info('write.attempt', target)
@@ -407,8 +415,7 @@ export class ZoteroWriteHttpClient {
           ) {
             throw translated
           }
-          if (commitSensitive) throw asCommitUnknown(translated)
-          throw translated
+          throw commitUnknownOr(translated, commitSensitive)
         }
       }
       const observedServerId = response.headers.get(ZOTERO_SERVER_ID_HEADER)
@@ -444,15 +451,12 @@ export class ZoteroWriteHttpClient {
           }
           this.translateWriteStatus(response, detail, tagDeleteLimit)
         } catch (error) {
-          if (commitSensitive && !isPreCommitWriteStatus(response.status)) {
-            throw asCommitUnknown(error)
-          }
-          throw error
+          throw commitUnknownOr(error, commitSensitive && !isPreCommitWriteStatus(response.status))
         }
       }
       if (observedServerId === null) {
         const error = new ZoteroError(WRITE_RESPONSE_IDENTITY_MISSING_MESSAGE, ZOTERO_UNEXPECTED)
-        throw commitSensitive ? asCommitUnknown(error) : error
+        throw commitUnknownOr(error, commitSensitive)
       }
       let responseBody: string
       try {
@@ -461,7 +465,7 @@ export class ZoteroWriteHttpClient {
         try {
           translateFetchError(error, d.signal, opts.signal, deadlineMs)
         } catch (translated) {
-          throw commitSensitive ? asCommitUnknown(translated) : translated
+          throw commitUnknownOr(translated, commitSensitive)
         }
       }
       this.options.sink?.info('write.outcome', target, {
@@ -485,14 +489,6 @@ export class ZoteroWriteHttpClient {
     } finally {
       release()
     }
-  }
-
-  /**
-   * Take the single write slot; a queued abort reports as the caller's
-   * cancellation.
-   */
-  private takeSlot(signal: AbortSignal | undefined): Promise<() => void> {
-    return acquireSlot(this.gate, signal)
   }
 
   /**

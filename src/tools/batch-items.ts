@@ -22,7 +22,7 @@ import {
   requireCreatableItemType,
   requireTitleOrUrl,
 } from '../write-item-rules.js'
-import { previewOutcomeOf } from './degradable.js'
+import { runPreview } from './degradable.js'
 import { renderDeclined } from './present.js'
 import {
   BATCH_ITEMS_OUTPUT_SCHEMA,
@@ -313,7 +313,7 @@ async function fetchDeletePreview(
   refStr: string,
   signal: AbortSignal | undefined,
 ): Promise<DeleteItemPreview> {
-  try {
+  return await runPreview(signal, { ref: refStr }, async (): Promise<DeleteItemPreview> => {
     const parsed = parseRef(refStr)
     const detail = await service.get(
       { ref: parsed, include: new Set(['attachments', 'notes']) },
@@ -324,11 +324,7 @@ async function fetchDeletePreview(
         ? (detail.attachments?.total ?? 0) + (detail.notes?.total ?? 0)
         : undefined
     return { ref: refStr, title: detail.title, childCount }
-  } catch (error) {
-    const outcome = previewOutcomeOf(error, signal, { ref: refStr })
-    if (outcome.kind === 'degrade') return outcome.value
-    throw outcome.error
-  }
+  })
 }
 
 export async function previewBatchItems(

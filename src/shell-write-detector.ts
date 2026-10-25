@@ -140,8 +140,8 @@ const NEAR_WINDOW = 60
 interface WriteShape {
   /** How the texts name what was seen, per locale. */
   readonly label: ShapeLabel
-  /** Whether the command text carries this shape. */
-  readonly test: (text: string, aliases: readonly string[]) => boolean
+  /** Whether the command's pre-split shell steps carry this shape. */
+  readonly test: (segments: readonly string[], aliases: readonly string[]) => boolean
 }
 
 /** The localized name of one detected shape. */
@@ -206,9 +206,9 @@ function nearLoopback(text: string, pattern: RegExp): boolean {
   return nearMatch(text, pattern, namesLoopback)
 }
 
-/** Whether any shell step in `text` matches `probe`. */
-function anySegment(text: string, probe: (segment: string) => boolean): boolean {
-  return segmentsOf(text).some(probe)
+/** Whether any shell step among `segments` matches `probe`. */
+function anySegment(segments: readonly string[], probe: (segment: string) => boolean): boolean {
+  return segments.some(probe)
 }
 
 /** The write-request label shared by the two spellings of the same shape. */
@@ -232,13 +232,13 @@ const WRITE_SHAPES: readonly WriteShape[] = [
     // Loopback near the endpoint, not the configured port: the same shape
     // as the users path below, because authorize exists to mint a write key
     // and only a loopback host can be this library.
-    test: (text) => anySegment(text, (segment) => nearLoopback(segment, AUTHORIZE_PATH)),
+    test: (segments) => anySegment(segments, (segment) => nearLoopback(segment, AUTHORIZE_PATH)),
   },
   {
     label: LABEL_WRITE_REQUEST,
-    test: (text, aliases) =>
+    test: (segments, aliases) =>
       anySegment(
-        text,
+        segments,
         (segment) =>
           namesAuthority(segment, aliases) &&
           WRITER_PROGRAM.test(segment) &&
@@ -247,14 +247,16 @@ const WRITE_SHAPES: readonly WriteShape[] = [
   },
   {
     label: LABEL_WRITE_REQUEST,
-    test: (text, aliases) => anySegment(text, (segment) => near(segment, BARE_METHOD, aliases)),
+    test: (segments, aliases) =>
+      anySegment(segments, (segment) => near(segment, BARE_METHOD, aliases)),
   },
   {
     label: {
       en: 'a client-library write call to the local API address',
       zh: '对本地 API 地址的客户端库写调用',
     },
-    test: (text, aliases) => anySegment(text, (segment) => near(segment, LIBRARY_WRITE, aliases)),
+    test: (segments, aliases) =>
+      anySegment(segments, (segment) => near(segment, LIBRARY_WRITE, aliases)),
   },
   {
     label: {
@@ -264,7 +266,7 @@ const WRITE_SHAPES: readonly WriteShape[] = [
     // Loopback near the write, not the configured port: a users write on
     // 127.0.0.1:9999 is still this library, while the same shape against
     // api.zotero.org is not.
-    test: (text) => anySegment(text, (segment) => nearLoopback(segment, USERS_WRITE)),
+    test: (segments) => anySegment(segments, (segment) => nearLoopback(segment, USERS_WRITE)),
   },
 ]
 
@@ -282,15 +284,11 @@ const aliasCache = new Map<string, readonly string[]>()
 function authorityAliases(baseUrl: string): readonly string[] {
   const cached = aliasCache.get(baseUrl)
   if (cached !== undefined) return cached
-  let aliases: readonly string[] = []
-  try {
-    const port = new URL(baseUrl).port
-    if (port !== '') {
-      aliases = [...LOOPBACK_HOSTNAMES].map((host) => `${host}:${port}`)
-    }
-  } catch {
-    aliases = []
-  }
+  // `baseUrl` arrives from ResolvedConfig, which resolveConfig has already
+  // proven parseable; an unparseable value must fail loudly here, not blind
+  // the address-anchored shapes by silently matching nothing.
+  const port = new URL(baseUrl).port
+  const aliases = port !== '' ? [...LOOPBACK_HOSTNAMES].map((host) => `${host}:${port}`) : []
   aliasCache.set(baseUrl, aliases)
   return aliases
 }
@@ -341,8 +339,11 @@ export function detectShellWrite(
   const text = commandTextOf(execution)
   if (text === undefined) return undefined
   const aliases = authorityAliases(config.baseUrl)
+  // Every shape walks the same split; segment once here so five shapes do
+  // not re-split the same command five times on this pre-execute hot path.
+  const segments = segmentsOf(text)
   for (const shape of WRITE_SHAPES) {
-    if (shape.test(text, aliases)) {
+    if (shape.test(segments, aliases)) {
       return { reason: reasonOf(shape.label.en), displayReason: displayReasonOf(shape.label) }
     }
   }

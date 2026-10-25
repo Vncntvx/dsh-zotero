@@ -228,17 +228,16 @@ describe('the shell-write detector', () => {
     ).toBeDefined()
   })
 
-  it('treats an unparseable baseUrl as no configured aliases', () => {
+  it('fails loudly on an unparseable baseUrl instead of blinding the shapes', () => {
+    // ResolvedConfig can never carry such a value; if one arrives anyway the
+    // detector must crash rather than silently match no authorities.
     const broken = { baseUrl: 'not a url' }
-    expect(
+    expect(() =>
       detectShellWrite(
         broken,
         bash(`curl -X POST http://127.0.0.1:23119/api/users/0/items -d '{}'`),
       ),
-    ).toBeDefined()
-    expect(
-      detectShellWrite(broken, bash(`curl -X POST http://127.0.0.1:23119/api/ -d '{}'`)),
-    ).toBeUndefined()
+    ).toThrow()
   })
 
   it('recognizes loopback authorities and authorize endpoints with mixed case hostnames', () => {

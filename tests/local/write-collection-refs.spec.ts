@@ -29,7 +29,11 @@ beforeEach(async () => {
   const client = testHttpClient(mock.baseUrl, { maxResponseBytes: 1_000_000 })
   // TTL 0: every case decides freshness itself; the in-flight sharing and the
   // identity contract are what these specs observe.
-  directory = new ScopeDirectory(client, () => 0)
+  directory = new ScopeDirectory(
+    client,
+    () => 0,
+    () => 4,
+  )
 })
 
 afterEach(async () => {

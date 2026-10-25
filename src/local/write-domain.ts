@@ -66,7 +66,7 @@ import {
   libraryPrefix,
   parseRef,
   PERSONAL_LIBRARY,
-  refForLibrary,
+  refStringFor,
   relationTargetRef,
   requireSupportedLocalRef,
   requireWritableRef,
@@ -523,15 +523,15 @@ function relationUrisOf(data: Record<string, unknown> | undefined): string[] {
 }
 
 function itemRef(key: string, serverId: string): string {
-  return formatRef(refForLibrary(PERSONAL_LIBRARY, 'item', key, serverId))
+  return refStringFor(PERSONAL_LIBRARY, 'item', key, serverId)
 }
 
 function collectionRef(key: string, serverId: string): string {
-  return formatRef(refForLibrary(PERSONAL_LIBRARY, 'collection', key, serverId))
+  return refStringFor(PERSONAL_LIBRARY, 'collection', key, serverId)
 }
 
 function searchRef(key: string, serverId: string): string {
-  return formatRef(refForLibrary(PERSONAL_LIBRARY, 'search', key, serverId))
+  return refStringFor(PERSONAL_LIBRARY, 'search', key, serverId)
 }
 
 function batchCreateUnverified(
@@ -706,12 +706,10 @@ function committedUnverified(options: CommittedUnverifiedOptions): ZoteroWriteCo
  * translation in one place while each caller maps it to its own
  * {@link committedUnverified} kind.
  */
-type SingleCreateOutcome = ZoteroBatchWrite | { readonly commitUnknown: true }
-
 /**
  * Send one non-idempotent create as a single-entry batch. A commit that
- * could not be verified settles as the marker; every other failure rethrows
- * untouched.
+ * could not be verified settles as the committed-unverified receipt for
+ * `kind`; every other failure rethrows untouched.
  */
 async function sendSingleCreate(
   deps: WriteDomainDeps,
@@ -720,11 +718,14 @@ async function sendSingleCreate(
   serverId: string,
   apiKey: string,
   signal: AbortSignal | undefined,
-): Promise<SingleCreateOutcome> {
+  kind: 'note' | 'collection' | 'search' | 'item',
+): Promise<ZoteroBatchWrite | ZoteroWriteCommittedUnverified> {
   try {
     return await deps.writer.batch(path, [entry], { serverId, apiKey, signal })
   } catch (error) {
-    if (error instanceof ZoteroWriteCommitUnknownError) return { commitUnknown: true }
+    if (error instanceof ZoteroWriteCommitUnknownError) {
+      return committedUnverified({ kind, serverId, reason: 'commit-unknown' })
+    }
     throw error
   }
 }
@@ -769,7 +770,7 @@ function settleSingleEntryBatch<P>(
   | { status: 'applied'; entry: SettledEntry<P> }
   | { status: 'unverified'; result: ZoteroWriteCommittedUnverified } {
   const has = (bucket: Record<string, unknown>, index: string): boolean =>
-    Object.prototype.hasOwnProperty.call(bucket, index)
+    Object.hasOwn(bucket, index)
   const hasUnexpectedIndex = (bucket: Record<string, unknown>): boolean =>
     Object.keys(bucket).some((index) => index !== '0')
   const failed = has(batch.failed, '0')
@@ -908,14 +909,9 @@ export async function createNote(
       serverId,
       apiKey,
       signal,
+      'note',
     )
-    if ('commitUnknown' in batch) {
-      return committedUnverified({
-        kind: 'note',
-        serverId,
-        reason: 'commit-unknown',
-      })
-    }
+    if ('kind' in batch) return batch
     // The requested parent is part of the saved-state claim too. Never fill a
     // missing or contradictory parent from the request after Zotero has
     // already committed the note; the caller must reconcile an unverified
@@ -1246,14 +1242,9 @@ export async function createCollection(
       serverId,
       apiKey,
       signal,
+      'collection',
     )
-    if ('commitUnknown' in batch) {
-      return committedUnverified({
-        kind: 'collection',
-        serverId,
-        reason: 'commit-unknown',
-      })
-    }
+    if ('kind' in batch) return batch
     const proven = (data: Record<string, unknown>): string | undefined => {
       if (asString(data.name) !== name) return undefined
       // Zotero echoes no parent key for top-level collections, so both sides
@@ -1351,8 +1342,9 @@ export async function updateCollection(
     )
   }
   const { version } = await readRecordForWrite(deps, 'collection', ref.key, serverId, signal)
+  const name = request.name !== undefined ? requireNonBlank('name', request.name) : undefined
   const patch: Record<string, unknown> = {}
-  if (request.name !== undefined) patch.name = requireNonBlank('name', request.name)
+  if (name !== undefined) patch.name = name
   if (request.parent !== undefined) {
     if (request.parent === null) patch.parentCollection = false
     else {
@@ -1373,7 +1365,7 @@ export async function updateCollection(
     kind: 'applied',
     ref: collectionRef(ref.key, serverId),
     version: libraryVersion,
-    ...(request.name !== undefined ? { name: requireNonBlank('name', request.name) } : {}),
+    ...(name !== undefined ? { name } : {}),
     ...(request.parent && request.parent !== null ? { parentRef: formatRef(request.parent) } : {}),
     libraryVersion,
     serverId,
@@ -1414,14 +1406,9 @@ export async function createSavedSearch(
       serverId,
       apiKey,
       signal,
+      'search',
     )
-    if ('commitUnknown' in batch) {
-      return committedUnverified({
-        kind: 'search',
-        serverId,
-        reason: 'commit-unknown',
-      })
-    }
+    if ('kind' in batch) return batch
     const settled = settleSingleEntryBatch(batch, 'search', serverId, (data) => {
       const savedName = asString(data.name)
       const conditions = savedSearchConditionsOf(data)
@@ -1455,6 +1442,18 @@ export async function updateSavedSearch(
       ZOTERO_INVALID_ARGUMENT,
     )
   const { data, version } = await readRecordForWrite(deps, 'search', ref.key, serverId, signal)
+  // The result must report the search's post-write state: fields the request
+  // does not replace come from this pre-write read. A stored field the read
+  // cannot decode would otherwise be fabricated as empty, so an unreadable
+  // name or conditions refuses the update before anything is written.
+  const name = request.name ?? asString(data?.name)
+  const conditions = request.conditions ?? savedSearchConditionsOf(data ?? {})
+  if (name === undefined || conditions === undefined) {
+    throw new ZoteroError(
+      `The saved search's stored name or conditions are unreadable; refusing to update without an honest report of the search's state.`,
+      ZOTERO_UNEXPECTED,
+    )
+  }
   const patch: Record<string, unknown> = {}
   if (request.name !== undefined) patch.name = requireNonBlank('name', request.name)
   if (request.conditions !== undefined) patch.conditions = request.conditions
@@ -1466,8 +1465,6 @@ export async function updateSavedSearch(
       signal,
     }),
   )
-  const name = request.name ?? asString(data?.name) ?? ''
-  const conditions = request.conditions ?? savedSearchConditionsOf(data ?? {}) ?? []
   return {
     kind: 'applied',
     ref: searchRef(ref.key, serverId),
@@ -1519,37 +1516,15 @@ export async function createItem(
   request: ZoteroCreateItemRequest,
   signal?: AbortSignal,
 ): Promise<ZoteroCreateItemCommittedOutcome> {
-  const itemType = requireCreatableItemType(requireNonBlank('itemType', request.itemType))
-  const title = request.title?.trim() ?? ''
-  const url = request.url?.trim() ?? ''
-  requireTitleOrUrl(title, url)
-  const date = request.date?.trim() ?? ''
-  const doi = request.doi?.trim() ?? ''
-  const abstractNote = request.abstractNote?.trim() ?? ''
-  const publicationTitle = request.publicationTitle?.trim() ?? ''
-  const creators = (request.creators ?? []).map((creator, index) =>
-    normalizeCreator(creator, index),
-  )
+  const checked = normalizeCreateFields(request, { collections: 'collection' })
   const serverId = await ensureServerId(deps, signal)
-  const tags = normalizeWriteList('tags', request.tags ?? [])
-  const collectionInputs = (request.collections ?? []).map((value) =>
-    typeof value === 'string' ? normalizeCollectionInput('collection', value) : formatRef(value),
-  )
   const collectionRefs =
-    collectionInputs.length > 0 ? await deps.resolveCollections(collectionInputs, signal) : []
+    checked.colInputs.length > 0 ? await deps.resolveCollections(checked.colInputs, signal) : []
   for (const ref of collectionRefs) requireWritableRefAtServer(ref, ['collection'], serverId)
-  const entry: Record<string, unknown> = {
-    itemType,
-    ...(title !== '' ? { title } : {}),
-    ...(url !== '' ? { url } : {}),
-    ...(date !== '' ? { date } : {}),
-    ...(doi !== '' ? { DOI: doi } : {}),
-    ...(abstractNote !== '' ? { abstractNote } : {}),
-    ...(publicationTitle !== '' ? { publicationTitle } : {}),
-    ...(creators.length > 0 ? { creators } : {}),
-    ...(tags.length > 0 ? { tags: tags.map((tag) => ({ tag })) } : {}),
-    ...(collectionRefs.length > 0 ? { collections: collectionRefs.map((ref) => ref.key) } : {}),
-  }
+  const entry = createWireEntry(
+    checked,
+    collectionRefs.map((ref) => ref.key),
+  )
   return await withWriteKey(deps, serverId, signal, async (apiKey) => {
     const batch = await sendSingleCreate(
       deps,
@@ -1558,20 +1533,15 @@ export async function createItem(
       serverId,
       apiKey,
       signal,
+      'item',
     )
-    if ('commitUnknown' in batch) {
-      return committedUnverified({
-        kind: 'item',
-        serverId,
-        reason: 'commit-unknown',
-      })
-    }
+    if ('kind' in batch) return batch
     const proven = (
       data: Record<string, unknown>,
     ):
       | { savedTitle: string | undefined; savedTags: string[]; savedCollections: string[] }
       | undefined => {
-      if (asString(data.itemType) !== itemType) return undefined
+      if (asString(data.itemType) !== checked.itemType) return undefined
       const savedTags = tagsOf(data)
       const savedCollections = strictCollectionKeysOf(data)
       if (savedTags === undefined || savedCollections === undefined) return undefined
@@ -1589,12 +1559,11 @@ export async function createItem(
       ref: itemRef(key, serverId),
       key,
       version,
-      itemType,
-      ...(payload.savedTitle !== undefined
-        ? { title: payload.savedTitle }
-        : title !== ''
-          ? { title }
-          : {}),
+      itemType: checked.itemType,
+      // Saved state comes only from the echo. An echo that names no title
+      // reports none: filling it from the request would claim a save the
+      // response did not prove (the note-create rule, applied here too).
+      ...(payload.savedTitle !== undefined ? { title: payload.savedTitle } : {}),
       tags: payload.savedTags,
       collections: payload.savedCollections,
       libraryVersion: batch.libraryVersion,
@@ -1820,6 +1789,74 @@ interface CheckedBatchCreate {
   readonly colInputs: string[]
 }
 
+/** The create-item field set both paths carry: the single tool request and each batch row. */
+interface CreateItemFieldsInput {
+  readonly itemType: string
+  readonly title?: string
+  readonly url?: string
+  readonly date?: string
+  readonly doi?: string
+  readonly abstractNote?: string
+  readonly publicationTitle?: string
+  readonly creators?: readonly Parameters<typeof normalizeCreator>[0][]
+  readonly tags?: readonly string[]
+  readonly collections?: readonly (string | ZoteroObjectRef)[]
+}
+
+/**
+ * Normalize the closed create-item field set into its checked form.
+ * `labels.collections` names the collection field in input errors: the single
+ * create spells it `collection`, batch rows `collections`, and that spelling
+ * is part of each path's error text.
+ */
+function normalizeCreateFields(
+  raw: CreateItemFieldsInput,
+  labels: { readonly collections: string },
+): CheckedBatchCreate {
+  const itemType = requireCreatableItemType(requireNonBlank('itemType', raw.itemType))
+  const title = raw.title?.trim() ?? ''
+  const url = raw.url?.trim() ?? ''
+  requireTitleOrUrl(title, url)
+  const tags = normalizeWriteList('tags', raw.tags ?? [])
+  const colInputs = (raw.collections ?? []).map((col) =>
+    typeof col === 'string' ? normalizeCollectionInput(labels.collections, col) : formatRef(col),
+  )
+  const creators = (raw.creators ?? []).map((cr, idx) => normalizeCreator(cr, idx))
+  return {
+    itemType,
+    title: title !== '' ? title : undefined,
+    url: url !== '' ? url : undefined,
+    date: raw.date?.trim() || undefined,
+    doi: raw.doi?.trim() || undefined,
+    abstractNote: raw.abstractNote?.trim() || undefined,
+    publicationTitle: raw.publicationTitle?.trim() || undefined,
+    creators: creators.length > 0 ? creators : undefined,
+    tags,
+    colInputs,
+  }
+}
+
+/** Build the `POST /items` wire entry from one checked create and its resolved collection keys. */
+function createWireEntry(
+  checked: CheckedBatchCreate,
+  collectionKeys: readonly string[],
+): Record<string, unknown> {
+  return {
+    itemType: checked.itemType,
+    ...(checked.title !== undefined ? { title: checked.title } : {}),
+    ...(checked.url !== undefined ? { url: checked.url } : {}),
+    ...(checked.date !== undefined ? { date: checked.date } : {}),
+    ...(checked.doi !== undefined ? { DOI: checked.doi } : {}),
+    ...(checked.abstractNote !== undefined ? { abstractNote: checked.abstractNote } : {}),
+    ...(checked.publicationTitle !== undefined
+      ? { publicationTitle: checked.publicationTitle }
+      : {}),
+    ...(checked.creators !== undefined ? { creators: checked.creators } : {}),
+    ...(checked.tags.length > 0 ? { tags: checked.tags.map((tag) => ({ tag })) } : {}),
+    ...(collectionKeys.length > 0 ? { collections: collectionKeys } : {}),
+  }
+}
+
 function prevalidateBatchDeletes(
   deletes: readonly NonNullable<ZoteroBatchItemsRequest['delete']>[number][],
   serverId: string,
@@ -1866,29 +1903,7 @@ function prevalidateBatchUpdates(
 function prevalidateBatchCreates(
   creates: readonly NonNullable<ZoteroBatchItemsRequest['create']>[number][],
 ): CheckedBatchCreate[] {
-  return creates.map((c) => {
-    const itemType = requireCreatableItemType(requireNonBlank('itemType', c.itemType))
-    const title = c.title?.trim() ?? ''
-    const url = c.url?.trim() ?? ''
-    requireTitleOrUrl(title, url)
-    const tags = normalizeWriteList('tags', c.tags ?? [])
-    const colInputs = (c.collections ?? []).map((col) =>
-      typeof col === 'string' ? normalizeCollectionInput('collections', col) : formatRef(col),
-    )
-    const creators = (c.creators ?? []).map((cr, idx) => normalizeCreator(cr, idx))
-    return {
-      itemType,
-      title: title !== '' ? title : undefined,
-      url: url !== '' ? url : undefined,
-      date: c.date?.trim() || undefined,
-      doi: c.doi?.trim() || undefined,
-      abstractNote: c.abstractNote?.trim() || undefined,
-      publicationTitle: c.publicationTitle?.trim() || undefined,
-      creators: creators.length > 0 ? creators : undefined,
-      tags,
-      colInputs,
-    }
-  })
+  return creates.map((c) => normalizeCreateFields(c, { collections: 'collections' }))
 }
 
 /**
@@ -1938,18 +1953,7 @@ async function runBatchCreates(
     const colKeys = c.colInputs
       .map((input) => resolvedColsMap.get(input))
       .filter((k): k is string => k !== undefined)
-    return {
-      itemType: c.itemType,
-      ...(c.title !== undefined ? { title: c.title } : {}),
-      ...(c.url !== undefined ? { url: c.url } : {}),
-      ...(c.date !== undefined ? { date: c.date } : {}),
-      ...(c.doi !== undefined ? { DOI: c.doi } : {}),
-      ...(c.abstractNote !== undefined ? { abstractNote: c.abstractNote } : {}),
-      ...(c.publicationTitle !== undefined ? { publicationTitle: c.publicationTitle } : {}),
-      ...(c.creators !== undefined ? { creators: c.creators } : {}),
-      ...(c.tags.length > 0 ? { tags: c.tags.map((tag) => ({ tag })) } : {}),
-      ...(colKeys.length > 0 ? { collections: colKeys } : {}),
-    }
+    return createWireEntry(c, colKeys)
   })
 
   try {

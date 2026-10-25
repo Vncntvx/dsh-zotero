@@ -17,7 +17,11 @@ import {
 } from '../helpers/approval-stub.js'
 import { expectValue, setupHostLane, type HostLane } from '../helpers/lanes/host-lane.js'
 import type { Options } from '../../src/config.js'
-import { ZOTERO_INVALID_ARGUMENT, writeNonBlankMessage } from '../../src/errors.js'
+import {
+  ZOTERO_INVALID_ARGUMENT,
+  ZOTERO_UNEXPECTED,
+  writeNonBlankMessage,
+} from '../../src/errors.js'
 
 const openLanes: HostLane[] = []
 
@@ -430,6 +434,31 @@ describe('saved-search execution through the approval seam', () => {
     expect(result.isError).toBe(true)
     if (!result.isError) throw new Error('unreachable')
     expect(result.error.info?.code).toBe(ZOTERO_INVALID_ARGUMENT)
+    expect(lane.mock.requests.some((request) => request.method === 'PATCH')).toBe(false)
+  })
+
+  it('refuses a rename when the stored conditions are unreadable, before any PATCH', async () => {
+    const lane = await bootLane({ writeEnabled: true })
+    serveIdentityAndGrant(lane)
+    // A stored search whose conditions Zotero cannot decode (externally
+    // corrupted): the update result would have to fabricate them as empty.
+    lane.mock.route('GET', `/api/users/0/searches/${SEARCH_KEY}`, (_req, _res, h) =>
+      h.json(
+        {
+          key: SEARCH_KEY,
+          version: 7,
+          data: { key: SEARCH_KEY, name: 'Recent', conditions: 'corrupted' },
+        },
+        { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '7' },
+      ),
+    )
+    const result = await lane.runTool('zotero_update_saved_search', {
+      search: SEARCH_REF,
+      name: 'Newer',
+    })
+    expect(result.isError).toBe(true)
+    if (!result.isError) throw new Error('unreachable')
+    expect(result.error.info?.code).toBe(ZOTERO_UNEXPECTED)
     expect(lane.mock.requests.some((request) => request.method === 'PATCH')).toBe(false)
   })
 

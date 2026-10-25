@@ -191,12 +191,12 @@ export class WriteAuthorizer {
       if (signal?.aborted) throw new HarnessError(TOOL_ABORTED_MESSAGE, TOOL_ABORTED)
       return { key: memory.key, oneTime: memory.oneTime }
     }
-    const operation = this.authorizationFor(serverId, signal)
-    return await this.awaitAuthorization(operation, signal)
+    const operation = this.authorizationFor(serverId)
+    return await awaitSharedOperation(operation, signal)
   }
 
   /** Start or reuse the single authorization operation for one server. */
-  private authorizationFor(serverId: string, _signal?: AbortSignal): AuthorizationOperation {
+  private authorizationFor(serverId: string): AuthorizationOperation {
     const existing = this.authorizing.get(serverId)
     if (existing !== undefined && !existing.controller.signal.aborted && !existing.settled) {
       return existing
@@ -220,18 +220,6 @@ export class WriteAuthorizer {
     void operation.promise.catch(() => undefined)
     this.authorizing.set(serverId, operation)
     return operation
-  }
-
-  /**
-   * Await a shared authorization without letting one cancelled caller cancel
-   * another live caller. The underlying request is aborted only after every
-   * waiter has detached.
-   */
-  private async awaitAuthorization(
-    operation: AuthorizationOperation,
-    signal: AbortSignal | undefined,
-  ): Promise<ZoteroWriteKey> {
-    return await awaitSharedOperation(operation, signal)
   }
 
   /** Read and parse the current stored write grant without any side effects. */

@@ -61,7 +61,11 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1' && process.env.ZOTERO_WRIT
       authorizer = new WriteAuthorizer({ client: writer, persistKey: () => true })
       // TTL 0: every listing read goes to the live server, so the probe never
       // trusts a cache while it mutates the library.
-      directory = new ScopeDirectory(client, () => 0)
+      directory = new ScopeDirectory(
+        client,
+        () => 0,
+        () => 4,
+      )
       await client.get('', undefined, {})
       serverId = client.serverId ?? ''
       expect(serverId).not.toBe('')
