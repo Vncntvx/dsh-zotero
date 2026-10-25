@@ -415,19 +415,12 @@ export class ZoteroHttpClient {
     // a refresh that waited for a slot could sit behind the very holder it is
     // refreshing: with every slot held by a request whose 412 is waiting on
     // its own refresh, nothing would ever move.
-    const release = isIdentityRefresh ? undefined : await this.takeSlot(opts.signal)
+    const release = isIdentityRefresh ? undefined : await acquireSlot(this.gate, opts.signal)
     try {
       return await this.send(url, opts, isIdentityRefresh)
     } finally {
       release?.()
     }
-  }
-
-  /**
-   * Take one gate slot; a queued abort reports as the caller's cancellation.
-   */
-  private takeSlot(signal: AbortSignal | undefined): Promise<() => void> {
-    return acquireSlot(this.gate, signal)
   }
 
   /** Send one request and read its body; the caller holds a slot for this. */
@@ -544,10 +537,10 @@ export class ZoteroHttpClient {
     path: string,
     search?: URLSearchParams,
     opts: ZoteroHttpGetOptions = {},
-  ): Promise<{ json: T; body: string; headers: Headers }> {
+  ): Promise<{ json: T; headers: Headers }> {
     const { body, headers } = await this.get(path, search, opts)
     const json = parseZoteroJson(body) as T
-    return { json, body, headers }
+    return { json, headers }
   }
 
   private rememberServerId(headers: Headers): void {

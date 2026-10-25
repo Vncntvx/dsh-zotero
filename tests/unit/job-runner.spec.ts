@@ -503,14 +503,13 @@ describe('ZoteroJobRunner', () => {
       expect(outcome.detail).toBe('plain string error')
     })
 
-    it('passes outputLimitBytes and handles execution without agent and newline in log', async () => {
+    it('handles execution without agent and a log line that already ends in a newline', async () => {
       const registry = new TestJobRegistry()
       const runner = new ZoteroJobRunner(registry as unknown as JobRegistry)
 
       const { id } = runner.start({
         label: 'export items',
         exec: fakeExec(undefined, false),
-        outputLimitBytes: 1024,
         run: async (_signal, _progress, log) => {
           log('already with newline\n')
           return 'ok'
@@ -518,7 +517,6 @@ describe('ZoteroJobRunner', () => {
       })
 
       const entry = registry.jobs.get(id)!
-      expect(entry.spec.outputLimitBytes).toBe(1024)
       expect(entry.spec.owner).toBeUndefined()
       await entry.hooks.done
       expect(entry.appends).toEqual([{ text: 'already with newline\n', channel: 'log' }])

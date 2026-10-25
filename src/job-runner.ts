@@ -142,7 +142,6 @@ export const RUN_IN_BACKGROUND_PARAMETER = {
 interface ZoteroJobTask<T> {
   readonly label: string
   readonly exec: ToolExecution
-  readonly outputLimitBytes?: number
   readonly run: (
     signal: AbortSignal,
     onProgress: (event: ZoteroProgressEvent) => void,
@@ -173,7 +172,7 @@ interface JobPolicy {
 }
 
 /** Read the three job controls from a live config without repeating the mapping in each tool. */
-export function jobPolicyOf(config: Pick<JobPolicy, keyof JobPolicy>): JobPolicy {
+export function jobPolicyOf(config: JobPolicy): JobPolicy {
   return {
     enableRunInBackground: config.enableRunInBackground,
     promoteOnTimeout: config.promoteOnTimeout,
@@ -254,7 +253,6 @@ export class ZoteroJobRunner {
       label: task.label,
       toolCall: { callId: task.exec.callId, rootCallId: task.exec.rootCallId },
       ...(task.exec.agent ? { owner: task.exec.agent.id } : {}),
-      ...(task.outputLimitBytes !== undefined ? { outputLimitBytes: task.outputLimitBytes } : {}),
       run: (job: JobHandle): JobHooks => {
         void (async () => {
           try {

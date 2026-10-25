@@ -191,11 +191,13 @@ export function logMessageToPush(message: DiagnosticLogMessage): DiagnosticPushI
 }
 
 /**
- * The bounded record itself. Pushes are O(1): append, coalesce a consecutive
- * repeat of the same `(event, level, message)` into a `count` bump (a hot
- * error loop must not wash out the rest of the buffer), then evict the
- * oldest past capacity. The coalesced entry keeps its original sequence
- * number and first detail; only `count` and `ts` advance.
+ * The bounded record itself. A push appends, coalesces a consecutive repeat
+ * of the same `(event, level, message)` into a `count` bump (a hot error
+ * loop must not wash out the rest of the buffer), then evicts past capacity
+ * with one O(capacity) slice. Diagnostics are low-frequency and coalesced,
+ * so the copy is the accepted cost; revisit only if a hot debug stream
+ * appears. The coalesced entry keeps its original sequence number and first
+ * detail; only `count` and `ts` advance.
  */
 export class DiagnosticsRing {
   private readonly capacity: number

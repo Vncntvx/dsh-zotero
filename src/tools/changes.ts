@@ -405,7 +405,7 @@ export function otherDeletedMessage(count: number): string {
 
 export function renderChanges(args: ChangesArgs, value: ChangesOutput): ContentBlock[] {
   if (isJobArm(value)) return renderJobArm(value)
-  const lines = []
+  const lines: string[] = []
   const cursor = value.cursor
   const effectiveIncludes = args.include ?? args.since?.include ?? DEFAULT_INCLUDES
   if (value.fromVersion === undefined) {

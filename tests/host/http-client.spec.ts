@@ -316,9 +316,8 @@ describe('body handling', () => {
     mock.route('GET', '/api/', (req, res, helpers) =>
       helpers.json({ version: '10.0' }, { 'Zotero-Schema-Version': '25' }),
     )
-    const { json, body, headers } = await client.getJson('')
+    const { json, headers } = await client.getJson('')
     expect(json).toEqual({ version: '10.0' })
-    expect(body).toBe('{"version":"10.0"}')
     expect(headers.get('zotero-schema-version')).toBe('25')
   })
 

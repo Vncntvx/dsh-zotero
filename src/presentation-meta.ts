@@ -47,7 +47,6 @@ const MAX_PRESENTATION_EVIDENCE_PASSAGES = 4
 /** Bounded export-ref entries the projection itemizes; the rest count into `refsOmitted`. */
 const MAX_PRESENTATION_EXPORT_REFS = 20
 
-/** The search projection's row shape (subset of the tool output record). */
 /** The canonical search output the projector reads. */
 type SearchProjectionInput = ZoteroSearchResult
 
@@ -144,7 +143,6 @@ interface ZoteroRetrievePresentationMeta {
   readonly sourceAvailability: Record<string, ZoteroSourceAvailabilityView>
 }
 
-/** The retrieval facts the projection reads (the schema-inferred output satisfies this). */
 /** The canonical retrieve output the projector reads. */
 type RetrieveProjectionInput = ZoteroRetrieveResult
 

@@ -50,11 +50,6 @@ const RIS_ID = /^ID  - (.+?)\r?$/m
 /** The RIS title line: records carry no citation key, so the title is the only fact to display. */
 const RIS_TITLE = /^TI  - (.+?)\r?$/m
 
-/** The entry's citation key: the run after `@type{` up to a comma, brace, or whitespace. */
-function entryKeyOf(text: string, from: number): string | undefined {
-  return scanBibtexToken(text, from)
-}
-
 /**
  * The offset just past the `}` closing the entry that starts at `from` (the
  * entry's opening `@type{` brace). Field values nest braces and may carry
@@ -102,7 +97,8 @@ export function splitBibtexEntries(text: string): BatchEntry[] {
     ENTRY_START.lastIndex = cursor
     const start = ENTRY_START.exec(text)
     if (start === null) break
-    const key = entryKeyOf(text, start.index + start[0].length)
+    // The entry's citation key: the run after `@type{` up to a comma, brace, or whitespace.
+    const key = scanBibtexToken(text, start.index + start[0].length)
     const entryEnd = entryEndOf(text, start.index + start[0].length)
     starts.push({
       ...(key === undefined ? {} : { key }),
