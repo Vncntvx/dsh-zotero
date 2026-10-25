@@ -2,7 +2,7 @@
 
 # 工具参考
 
-dsh-zotero 注册 23 个本地工具（8 个读工具 + 15 个写工具），通过本地 Zotero HTTP API 与文献库交互。其中 15 个写入工具默认关闭，需在设置中显式启用 `writeEnabled`，且只操作个人库（`zotero://user/0/`）。学术文献工具属于单独的 Scholarly 组件，默认关闭并需显式启用。所有文献引用（ref）均为 `zotero://user/0/item/<KEY>`（个人库）或 `zotero://group/<ID>/item/<KEY>`（群组库）格式的稳定标识符。
+dsh-zotero 注册 23 个本地工具（8 个读工具 + 15 个写工具），通过本地 Zotero HTTP API 与文献库交互。其中 15 个写入工具默认关闭，需在设置中显式启用 `writeEnabled`，且只操作个人库（`zotero://user/0/`）。学术文献工具属于单独的 Scholarly 组件，随包发布但默认关闭；启用该组件即启用这些工具。所有文献引用（ref）均为 `zotero://user/0/item/<KEY>`（个人库）或 `zotero://group/<ID>/item/<KEY>`（群组库）格式的稳定标识符。
 
 ### 交互卡片（Toolviews）
 
@@ -671,7 +671,7 @@ zotero_batch_items(
 
 ## 学术文献检索组件工具 (`dsh-zotero/scholarly`)
 
-bundle 组件 `dsh-zotero/scholarly` 可随插件加载，但默认关闭；将其 `enabled` 设置为 `true` 后提供以下 7 个模型工具：
+bundle 组件 `dsh-zotero/scholarly` 随包发布但默认关闭。在插件管理器「包含的组件」中启用该组件即挂载它，并提供以下 7 个模型工具：
 
 ### scholarly_search
 

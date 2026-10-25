@@ -11,16 +11,22 @@ import { createVolatile } from '@deepseek-ai/cosmokit'
 import { Context, Service } from '@deepseek-ai/cordis'
 import { ScholarlyService } from '../../src/scholarly/service.js'
 import { resolveScholarlyConfig } from '../../src/scholarly/config.js'
-import { EXEC_CONTEXT, createMockHost, createMockHttp, writeVolatile } from './fixtures.js'
+import {
+  EXEC_CONTEXT,
+  bootScholarlyContext,
+  createMockHost,
+  createMockHttp,
+  writeVolatile,
+} from './fixtures.js'
 import {
   createAllScholarlyTools,
   createScholarlySearchTool,
 } from '../../src/scholarly/tools/index.js'
+import { SCHOLARLY_TOOL_NAMES } from '../helpers/tool-names.js'
 
 describe('ScholarlyService lifecycle & volatile config', () => {
-  it('reads a live section through the volatile references on every call', () => {
-    const ctx = new Context()
-    ;(ctx as any).tools = { register: () => () => {} }
+  it('reads a live section through the volatile references on every call', async () => {
+    const ctx = await bootScholarlyContext()
     // The loader hands the service real volatile references, never plain
     // values: a settings commit writes through the same object this instance
     // holds, so the next read sees the new value without a remount.
@@ -35,6 +41,22 @@ describe('ScholarlyService lifecycle & volatile config', () => {
     writeVolatile(maxResults, 25)
     expect(resolveScholarlyConfig(service.config).email).toBe('updated@example.com')
     expect(resolveScholarlyConfig(service.config).maxResults).toBe(25)
+  })
+
+  it('carries no enablement field: the mounted component is the authorization', () => {
+    // The component's presence already decides whether the tools exist and
+    // whether a request may leave the host. A second flag in the config would
+    // restate that fact somewhere it could disagree with.
+    const resolved = resolveScholarlyConfig({})
+    expect('enabled' in resolved).toBe(false)
+    expect(Object.keys(resolved).sort()).toEqual([
+      'email',
+      'maxContentChars',
+      'maxResults',
+      'ncbiKey',
+      'openalexKey',
+      's2Key',
+    ])
   })
 })
 
@@ -127,16 +149,17 @@ describe('scholarly tools degrade without inventing facts', () => {
 })
 
 describe('ScholarlyService construction', () => {
-  it('registers enabled scholarly tools and exposes a live store', async () => {
-    const ctx = new Context()
-    const names: string[] = []
-    ;(ctx as any).tools = {
-      register: (tool: { name: string }) => (names.push(tool.name), () => {}),
-    }
+  it('registers the seven scholarly tools and exposes a live store', async () => {
+    const ctx = await bootScholarlyContext()
 
-    const service = new ScholarlyService(ctx, { enabled: createVolatile(true) })
-    // Registry order, not alphabetical: cite follows citations in the factory.
-    expect(names).toEqual([
+    const service = new ScholarlyService(ctx)
+    // The factory's order is the contract; the registry's order is a
+    // resolution artifact.
+    expect(
+      createAllScholarlyTools(createMockHost(createMockHttp(() => new Response('{}')))).map(
+        (tool) => tool.name,
+      ),
+    ).toEqual([
       'scholarly_search',
       'scholarly_get',
       'scholarly_citations',
@@ -145,41 +168,36 @@ describe('ScholarlyService construction', () => {
       'scholarly_verify',
       'scholarly_save_to_zotero',
     ])
+    const registered = ctx.tools.schemas().map((schema) => schema.name)
+    expect([...registered].sort()).toEqual([...SCHOLARLY_TOOL_NAMES].sort())
     expect(service.store).toBeDefined()
     expect(service.http).toBeDefined()
   })
 
+  it('registers the tools once and never churns them on a config edit', async () => {
+    // Every other setting is read at call time, so a key or limit edit must
+    // not touch the registry.
+    const ctx = await bootScholarlyContext()
+
+    const email = createVolatile<string>('a@example.com')
+    new ScholarlyService(ctx, { email })
+    const registered = ctx.tools.schemas().map((schema) => schema.name)
+    expect(registered).toHaveLength(7)
+
+    // The component holds no listener for the loader's config event: it reads
+    // the live values per call.
+    writeVolatile(email, 'b@example.com')
+    expect(ctx.tools.schemas().map((schema) => schema.name)).toEqual(registered)
+    expect(new Set(registered).size).toBe(7)
+  })
+
   it('resolves the in-library link to nothing when no Zotero service is composed', async () => {
-    const ctx = new Context()
-    ;(ctx as any).tools = { register: () => () => {} }
-    const service = new ScholarlyService(ctx, { enabled: createVolatile(false) })
+    const ctx = await bootScholarlyContext()
+    const service = new ScholarlyService(ctx)
     // The link is an optional dependency read through `ctx.get`; absent means
     // "no local library", which the search tool renders as no annotation.
     expect(ctx.get('zotero')).toBeUndefined()
     expect(service).toBeDefined()
-  })
-
-  it('reconciles the tool surface when the enabled flag flips live', async () => {
-    // The loader writes the volatile reference and then emits the update; the
-    // service must retire the old definitions and register the new set on the
-    // same instance, never leaving two live copies of one tool name.
-    const ctx = new Context()
-    const names: string[] = []
-    ;(ctx as any).tools = {
-      register: (tool: { name: string }) => (names.push(tool.name), () => {}),
-    }
-    const enabled = createVolatile(true)
-    new ScholarlyService(ctx, { enabled })
-    expect(names).toHaveLength(7)
-
-    names.length = 0
-    writeVolatile(enabled, false)
-    ctx.emit('loader/volatile-update', [['enabled']])
-    expect(names).toHaveLength(0)
-
-    writeVolatile(enabled, true)
-    ctx.emit('loader/volatile-update', [['enabled']])
-    expect(names).toHaveLength(7)
   })
 
   it('turns the automatic settings page off for its own namespace', async () => {
@@ -187,8 +205,7 @@ describe('ScholarlyService construction', () => {
     // surface), so the schema-generated one would be a second, conflicting
     // surface for the same namespace. The policy names this plugin fiber,
     // exactly as the zotero row does (`packages/settings/settings/README.md`).
-    const ctx = new Context()
-    ;(ctx as any).tools = { register: () => () => {} }
+    const ctx = await bootScholarlyContext()
     const configured: Array<{ auto?: boolean; fiber: unknown }> = []
     class StubSettings extends Service {
       constructor(host: Context) {

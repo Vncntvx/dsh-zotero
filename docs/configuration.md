@@ -96,16 +96,17 @@ Schema 默认值 → Composition 入口配置 → 当前 profile 的 Cordis patc
 
 ## 学术文献检索组件配置 (`dsh-zotero/scholarly`)
 
-组件行可被加载，但外部学术工具默认关闭；必须将 `enabled: true` 作为显式配置后才会注册工具并发起网络请求。字段有三种配置方式：在 Zotero 主设置页的“学术检索”标签页直接配置，在插件列表中 `dsh-zotero#scholarly` 行的“配置”按钮进行独立配置，或直接写入 `cordis.patch.yml` 该行的 `config` 下。主设置页与子行配置共享同一表单状态，双通道互通实时同步。字段变更在下一次工具调用时生效，无需重启 profile：
+组件随包发布，默认关闭。开关只有插件管理器「包含的组件」里的 `dsh-zotero/scholarly` 那一行：启用该行即挂载组件，注册它的 7 个模型工具，并允许向显式允许列表中的外部学术索引发起请求。组件未挂载时，服务、传输层与工具都不存在，宿主无法发出任何外部请求。手改等价路径是在当前 profile 的 `cordis.patch.yml` 中写 `- id: scholarly` + `disabled: false`。
+
+组件的其余字段有三种配置方式：在 Zotero 主设置页的“学术检索”标签页直接配置，在插件列表中 `dsh-zotero#scholarly` 行的“配置”按钮进行独立配置，或直接写入当前 profile 的 `cordis.patch.yml` 中该行的 `config` 下。主设置页与子行配置共享同一表单状态，双通道互通实时同步。字段变更在下一次工具调用时生效，无需重启 profile：
 
 | 字段              | 默认值  | 说明                                                                                               |
 | ----------------- | ------- | -------------------------------------------------------------------------------------------------- |
 | `email`           | —       | 联系邮箱，附加于 Crossref、OpenAlex 和 NCBI/Europe PMC 请求头（加入 Polite Pool 获得更优限速配额） |
-| `enabled`         | `false` | 是否注册 Scholarly 工具并允许访问显式允许列表中的外部学术索引                                      |
 | `s2Key`           | —       | Semantic Scholar API Key（可选，避免共享 IP 池限速）                                               |
 | `ncbiKey`         | —       | NCBI / PubMed API Key（可选，将每秒请求上限从 3 提升至 10）                                        |
 | `openalexKey`     | —       | OpenAlex API Key（可选，将每秒请求上限提升至 100）                                                 |
 | `maxResults`      | `20`    | 单次检索返回的最大论文数量（1-100）                                                                |
 | `maxContentChars` | `12000` | 全文分块读取字符数上限（1,000-50,000）                                                             |
 
-全文缓存在 `$DSH_HOME/cache/zotero-scholarly/` 下按 key 存一份 JSON 正文（不受本表控制，无独立开关）。
+组件未启用时，Zotero 主设置页的“学术检索”标签页只显示一条指向「包含的组件」的提示，不渲染任何字段；组件启用后该标签页才成为可编辑表单。全文缓存在 `$DSH_HOME/cache/zotero-scholarly/` 下按 key 存一份 JSON 正文（不受本表控制，无独立开关）。

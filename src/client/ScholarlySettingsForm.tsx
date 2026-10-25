@@ -3,7 +3,7 @@
  *
  * Two card containers: API credentials and identification (the polite pool
  * contact email and the external scholarly API keys), and search and
- * full-text quotas (search limit, content character ceiling, cache folder).
+ * full-text quotas (search limit and content character ceiling).
  *
  * Shared by the unified 5-tab settings view (Tab 4) and the dedicated
  * `dsh-zotero#scholarly` row configuration page.
@@ -17,16 +17,22 @@ import {
   type SettingsFormActions,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ZoteroLocaleKey } from './locales.ts'
-import type {
-  ScholarlyCardState,
-  ScholarlyNumericKey,
-  ScholarlySecretKey,
-  ScholarlyTextKey,
+import {
+  SCHOLARLY_NUMERIC_KEYS,
+  type ScholarlyCardState,
+  type ScholarlyNumericKey,
+  type ScholarlySecretKey,
+  type ScholarlyTextKey,
 } from './scholarly-form-controller.ts'
 import css from './ZoteroSettingsForm.module.css'
 
 /** Field-editing actions, wired from the surface's card face. */
 type ScholarlyFormActions = Pick<SettingsFormActions, 'edit' | 'resetField'>
+
+/**
+ * The fields rendered as numbers, taken from the controller's own key list.
+ */
+const NUMERIC_FIELDS: ReadonlySet<string> = new Set(SCHOLARLY_NUMERIC_KEYS)
 
 /** What the form body needs: copy, snapshot, and staged-edit actions. */
 interface ScholarlySettingsFormProps {
@@ -52,8 +58,7 @@ export function ScholarlySettingsForm(props: ScholarlySettingsFormProps): ReactN
           <p className={css.groupNote}>{t('groupScholarlyAuthDesc')}</p>
         </div>
         <div className={css.fields}>
-          {renderValueField(t, state, actions, 'enabled', false)}
-          {renderValueField(t, state, actions, 'email', false)}
+          {renderValueField(t, state, actions, 'email')}
           {renderSecretField(t, state, actions, 's2Key')}
           {renderSecretField(t, state, actions, 'ncbiKey')}
           {renderSecretField(t, state, actions, 'openalexKey')}
@@ -66,8 +71,8 @@ export function ScholarlySettingsForm(props: ScholarlySettingsFormProps): ReactN
           <p className={css.groupNote}>{t('groupScholarlyLimitsDesc')}</p>
         </div>
         <div className={css.fields}>
-          {renderValueField(t, state, actions, 'maxResults', true)}
-          {renderValueField(t, state, actions, 'maxContentChars', true)}
+          {renderValueField(t, state, actions, 'maxResults')}
+          {renderValueField(t, state, actions, 'maxContentChars')}
         </div>
       </section>
     </>
@@ -78,8 +83,7 @@ function renderValueField(
   t: (key: ZoteroLocaleKey) => string,
   state: ScholarlyCardState,
   actions: ScholarlyFormActions,
-  key: ScholarlyTextKey | ScholarlyNumericKey | 'enabled',
-  numeric: boolean,
+  key: ScholarlyTextKey | ScholarlyNumericKey,
 ): ReactNode {
   const field = state[key]
   const labelKey = `scholarly${key.charAt(0).toUpperCase()}${key.slice(1)}` as ZoteroLocaleKey
@@ -97,7 +101,7 @@ function renderValueField(
       resetLabel={t('reset')}
       invalidLabel={t('invalidNumber')}
       disabled={!state.writable || state.saving}
-      numeric={numeric}
+      numeric={NUMERIC_FIELDS.has(key)}
       onEdit={(text) => actions.edit(key, text)}
       onReset={() => actions.resetField(key)}
     />

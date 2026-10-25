@@ -67,7 +67,9 @@ graph LR
 
 ### 学术文献子系统 (`src/scholarly/`，可选组件)
 
-`dsh-zotero/scholarly` 是一个独立的 bundle 组件（`cordis.patch.yml` 中默认随插件一同启用），注册 `ctx.scholarly` 与七个检索工具。它与 Zotero 本地路径完全隔离：所有请求发往外部学术索引，与 `ctx.zotero` 的唯一交叉点是「这封信是否已在本地库」的只读标注。
+`dsh-zotero/scholarly` 是一个独立的 bundle 组件，随包发布但默认禁用（`cordis.patch.yml` 中该行 `disabled: true`）。**组件是否挂载就是唯一授权**：挂载即注册 7 个模型工具与该组件自己的提示词段，并允许向显式允许列表中的外部索引发请求；未挂载时服务、传输层与工具都不存在，宿主无法发出任何外部请求。插件管理器「包含的组件」中的行开关，与当前 profile 的 `cordis.patch.yml` 里的 `disabled: false` 是同一条路径。它与 Zotero 本地路径完全隔离：所有请求发往外部学术索引，与 `ctx.zotero` 的唯一交叉点是「这封信是否已在本地库」的只读标注。
+
+- **授权与提示词同源**：学术工具的策略提示词由该组件自己注册（`src/scholarly/prompt.ts`，段落名 `scholarly:policy`），随组件挂载而出现、随卸载而消失。父组件的 Zotero 策略段不提及外部工具，因为它无法知道子组件是否存在。提示词中的能力与实际注册的工具始终一致。
 
 - **主机白名单**：`src/scholarly/transport/hosts.ts` 是唯一真源。允许的 host 集合与每主机限流间隔都从 `SCHOLARLY_HOSTS` 派生。白名单收录了主机却没配限流间隔，繁忙索引便会失去限流；为适配器从不调用的主机配上限流间隔，也约束不了任何请求。要新增抓取目标必须登记到这张表。
 - **传输层**：截止时间用 `@deepseek-ai/dsh-timeout` 的 `deadline()` / `timeoutOf()`，因此「provider 超时」与「调用方取消」是两件可分辨的事（后者不重试）；响应体上限用共享的 `src/transport-bounds.ts`，与本地传输同一实现、同一 16 MiB 上限；在飞请求数由 `ConcurrencyGate` 约束。
@@ -78,7 +80,7 @@ graph LR
 
 ### 浏览器客户端 (`src/client/`)
 
-- 组合包配置（`plugins.bundle.config`）：在插件管理器详情页注册统一的 5 标签页配置界面（基础设置、本地连接、检索提取、学术检索、高级选项），通过 harness 官方 `SettingsForm` 与 `SettingsFormModel` 统一管理 Zotero 主命名空间与 Scholarly 学术检索命名空间，支持双通道互通呈现与草稿防丢弃隔离；
+- 组合包配置（`plugins.bundle.config`）：在插件管理器详情页注册统一的 5 标签页配置界面（基础设置、本地连接、检索提取、学术检索、高级选项），通过 harness 官方 `SettingsForm` 与 `SettingsFormModel` 统一管理 Zotero 主命名空间与 Scholarly 学术检索命名空间，支持双通道互通呈现与草稿防丢弃隔离；学术检索标签页有两种形态：组件未启用（命名空间未被服务）时只显示一条指向「包含的组件」的提示，组件启用后才渲染可编辑表单；
 - 会话面板（`conversation.view`）：会话标签页只有一个 Zotero 面板，顶部透镜栏在文献工作区与会话级导出页之间切换；每个条目的检查器内含概览（Overview）、原文片段（Passages）与该条目导出结果（Exports）三个面板；
 - 工具卡片（`tool.call.toolview`）：23 个本地模型工具（8 读 + 15 写）与 `scholarly_save_to_zotero` 各有一张紧凑折叠卡片；其余 6 个 Scholarly 检索工具按官方契约落通用行（未占用键的 fallback）。卡片对值得复制的取值提供复制按钮，通过“阅读 PDF”在侧边栏阅读原文，并提供复制标题或规范深链的定位操作。卡片只渲染工具已有的输出，自身不调用工具；
 - 命令状态卡片（`conversation.chat.commandview`）：为 `/zotero` 输出提供连接状态灯、版本与 Server ID 明细、离线排查建议与就地刷新按钮。结构化事实来自宿主注册的 `zoteroStatus` 会话投影：命令处理器将同一份状态投影为 `zotero/status` 会话事件并以 `sourceEventSeq` 指向它，卡片经 `useProjection` 读回，命令文本只作人类可读答案、不再被解析。就地刷新发起的实时探测优先于投影（它是更新的答案）；

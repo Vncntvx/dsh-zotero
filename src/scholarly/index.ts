@@ -9,9 +9,9 @@
  *   the service,
  * - the domain types a consumer composes with.
  *
- * Everything else — the transport, the host table, the store, the adapters,
- * the fusion internals, the tool factories — stays internal. They were all
- * star-exported before, which made `readBounded`, `HostPacer`,
+ * The transport, the host table, the store, the adapters, the fusion internals,
+ * the tool factories, and the component's own prompt section stay internal.
+ * They were all star-exported before, which made `readBounded`, `HostPacer`,
  * `DEFAULT_HOST_INTERVALS` and a dozen other implementation details
  * semver-visible through a published subpath. A same-package test reaches
  * internals by relative path (`../src/scholarly/...`), which is the documented

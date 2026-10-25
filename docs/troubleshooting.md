@@ -22,24 +22,30 @@
 - **原因**：Zotero 本地 API 版本与插件支持的版本不一致。
 - **排查**：根据错误信息提示的版本号判断，若 Zotero 版本过低，请升级 Zotero；若 Zotero 本地 API 升级，请更新 dsh-zotero 插件。
 
-## 4. 安装后当前会话看不到 Zotero 工具
+## 4. 学术检索工具不出现
+
+- **现象**：模型看不到 `scholarly_search` 等 7 个学术工具，或 Zotero 主设置页的「学术检索」标签页只显示一条提示、没有任何字段。
+- **原因**：`dsh-zotero/scholarly` 组件未挂载。该组件随包发布但默认关闭，开关只有这一处：组件不挂载时，服务、传输层与工具都不存在，宿主也不会发出外部请求。
+- **排查**：在插件管理器「包含的组件」中打开 `dsh-zotero/scholarly` 那一行；启用后无需重启，工具与设置页即时生效。
+
+## 5. 安装后当前会话看不到 Zotero 工具
 
 - **现象**：Agent 无法识别或调用 Zotero 相关工具。
 - **原因**：当前会话创建于插件加载之前。
 - **排查**：新建对话会话即可使新安装的工具生效。
 
-## 5. 搜索有结果但检索不到全文片段
+## 6. 搜索有结果但检索不到全文片段
 
 - **现象**：`zotero_retrieve` 返回空片段列表，或 `sourcesSkipped` 中包含 `"fulltext"`。
 - **原因**：目标 PDF 在 Zotero 中尚未建立全文索引。
 - **排查**：在 Zotero 客户端中右键点击该附件，选择“重新建立索引”；或使用 `zotero_attachment` 获取本地文件路径进行查阅。
 
-## 6. PDF 阅读与 Zotero 文献定位
+## 7. PDF 阅读与 Zotero 文献定位
 
 - **原生阅读**：点击面板或卡片中的“阅读 PDF”按钮，会在 DeepSeek Harness 右侧边栏直接打开 PDF，无须跳转外部应用程序；桌面端和 Web 端行为一致。
 - **快速定位**：若需在 Zotero 本地客户端中查看对应条目，点击“复制标题”，粘贴到 Zotero 快捷搜索栏（快捷键 `Cmd+F` 或 `Ctrl+F`）即可定位；或点击“复制链接”，将规范深链（支持个人库与群组库）粘贴到外部笔记或地址栏。
 
-## 7. 安装提示 nothing installable
+## 8. 安装提示 nothing installable
 
 - **现象**：执行 `dsh plugin --profile <profile> add` 时报错 `nothing installable: the plugin(s) need a build step`。
 - **原因**：从 GitHub 源码分支安装时需在本地编译，而 pnpm 默认拦截依赖构建。
@@ -47,62 +53,62 @@
   - 推荐：改用 npm 包名或 GitHub `#release` 预构建分支安装。
   - 若需从源码构建：在当前 profile 的 `pnpm-workspace.yaml` 中将 `dsh-zotero` 加入 `allowBuilds` 列表后重试。
 
-## 8. Zotero 标签页不显示
+## 9. Zotero 标签页不显示
 
 - **现象**：Web 界面顶部未显示 Zotero 标签页。
 - **原因**：配置项 `webEnabled` 被设置为 `false`，或插件未成功加载。
 - **排查**：在插件管理器中打开 **dsh-zotero** 详情页的配置区检查 `webEnabled` 开关，确认插件处于已启用状态。
 
-## 9. 单次导出超过 50 篇限制
+## 10. 单次导出超过 50 篇限制
 
 - **现象**：工具调用返回 `ZOTERO_INVALID_ARGUMENT` 错误，提示 refs 数量超出限制。
 - **原因**：除 `citation` 外的五种格式（`bibliography`、BibTeX、BibLaTeX、RIS 与 CSL JSON）单次最多导出 50 篇条目，来源是 Zotero `itemKey` 的请求上限。
 - **排查**：分批次调用 `zotero_export`，每批控制在 50 篇以内；或改用 `citation` 格式，它按 50 一组自动分批，但需先将 `maxExportRefs` 调至 50 以上。
 
-## 10. Server ID 或 ref 不匹配
+## 11. Server ID 或 ref 不匹配
 
 - **现象**：工具调用返回 `ZOTERO_SERVER_MISMATCH` 错误。
 - **原因**：使用的 ref 来自另一个 Zotero 实例（如更换了数据库路径或同步至新机器）。
 - **排查**：重新执行搜索获取当前实例下的新 ref，避免跨实例复用历史 ref。
 
-## 11. 配置文件修改后未生效
+## 12. 配置文件修改后未生效
 
 - **现象**：修改配置文件后插件行为未发生改变。
 - **原因**：改错了文件或位置：alpha.4 起用户层配置位于当前 profile 的 `cordis.patch.yml`（`zotero` 条目的 `config`）；旧的 `$DSH_HOME/settings.yaml` 只在升级后首次启动时被导入一次并改名为 `settings.yaml.imported`。也可能是 YAML 键层级写错，或该项被 home patch / 命令行 overlay 覆盖。
 - **排查**：在插件管理器中打开 **dsh-zotero** 的配置区保存一次（写入落在当前 profile 的 `cordis.patch.yml`），并在会话中执行 `/zotero` 验证状态。
 
-## 12. 对话中工具卡片未直接展开
+## 13. 对话中工具卡片未直接展开
 
 - **现象**：模型调用了工具，但消息流中仅显示一条摘要栏（如“已调用工具 · 2.1s”）。
 - **原因**：DSH 通用设置中的“工作步骤展示”默认为标准模式，执行完毕后自动折叠过程卡片。
 - **排查**：点击消息上方的过程摘要栏即可就地展开卡片；若需始终默认展开，可在 **设置 → 通用设置 → 工作步骤展示**（`Settings → General → Work details`）中选择 **完全展开**（`verbose`）。
 
-## 13. 写入被 `ZOTERO_INVALID_ARGUMENT` 拒绝
+## 14. 写入被 `ZOTERO_INVALID_ARGUMENT` 拒绝
 
 - **现象**：写工具立即返回 `ZOTERO_INVALID_ARGUMENT`，消息形如 `Unknown itemType "…"`、`A new item needs at least a title or a URL`、`add and remove must carry at least one entry between them`、`tags must carry at least one item`。
 - **原因**：这类检查在工具层完成，先于任何网络请求；因此不弹出计划卡，Zotero 也不会收到写入。
 - **排查**：按消息修正参数：`itemType` 使用闭集（`webpage` / `journalArticle` / `book` / `conferencePaper` / `report` / `thesis` / `document` / `preprint`）；列表参数非空；`set` 只写可更新字段。
 - 另一类 `ZOTERO_INVALID_ARGUMENT` 需要先读取才能判定，因此出现在批准与读取之后：`A collection named "…" already exists at that level`、`Field "…" is not valid for item type "…"`。两者仍不发写入请求，但计划卡已弹出。
 
-## 14. 删除计划卡上的数量显示 unknown
+## 15. 删除计划卡上的数量显示 unknown
 
 - **现象**：`zotero_delete_collection` 或 `zotero_delete_library_tags` 的计划卡中，条目数 / 子合集数 / 标签计数显示 `unknown`。
 - **原因**：删除前的预览读取是尽力而为，读取失败不阻塞计划；删除本身仍携带读取到的库版本前置。
 - **排查**：先用 `/zotero` 确认连接正常，可拒绝本次计划卡后重跑以取得准确计数。
 
-## 15. 写入返回 ZOTERO_WRITE_CONFLICT (412)
+## 16. 写入返回 ZOTERO_WRITE_CONFLICT (412)
 
 - **现象**：写入提交被拒绝，返回 `ZOTERO_WRITE_CONFLICT`。
 - **原因**：读取与提交之间对象被并发修改，版本前置条件未满足；这是预期的安全行为。
 - **排查**：重跑一次工具；重跑会重新读取版本并重新执行合并。
 
-## 16. 结果为 committed-unverified（写入已提交但未核验）
+## 17. 结果为 committed-unverified（写入已提交但未核验）
 
 - **现象**：写工具返回 `committed-unverified`，卡片显示警示状态，不显示成功徽标。
 - **原因**：Zotero 已接受写入，但响应无法证明最终状态（提交未知或保存状态未核验）。
 - **排查**：不要重试；在 Zotero 中按 key/ref 核对对象是否已创建或变更。
 
-## 17. 如何获取诊断信息
+## 18. 如何获取诊断信息
 
 当报错信息不足以排查问题（如功能静默失效、卡片或标签页渲染异常、返回结果异常）时，可按以下步骤导出诊断日志：
 

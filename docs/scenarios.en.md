@@ -13,7 +13,7 @@ Case numbering conventions:
 - **G**: Golden Path. Executed sequentially from G1 to G8 in a single session, covering all 8 read tools and the Sources panel;
 - **S / R / E / C**: Independent capability packs. Used to test specific domains when a golden path step fails (search, retrieval, export, library structure);
 - **N**: Negative boundary cases. Validates error handling and anti-hallucination behavior under abnormal inputs and boundary conditions;
-- **SC**: Scholarly cases. Run with the `dsh-zotero/scholarly` component explicitly enabled; they verify what the tools say when they fail, not only the happy path;
+- **SC**: Scholarly cases. Run with the `dsh-zotero/scholarly` component enabled under "Included components"; they verify what the tools say when they fail, not only the happy path;
 - **W**: Write cases. Requires enabling "Allow writes" in settings first; recommended for execution in an isolated session.
 
 Execution guidelines:
@@ -282,7 +282,7 @@ The browser half mounts `remote.zotero` itself (`ctx.remote.$mount` + `ctx.injec
 
 ## Scholarly Cases (SC)
 
-Run with the `dsh-zotero/scholarly` component enabled. These cases verify **what the tool says when it fails**, not only the happy path: a tool that reports a rate limit as "does not exist" makes a user delete a correct citation.
+Run with the `dsh-zotero/scholarly` component enabled under "Included components". These cases verify **what the tool says when it fails**, not only the happy path: a tool that reports a rate limit as "does not exist" makes a user delete a correct citation.
 
 - **SC1 An unreachable registry must not read as "does not exist"**: with the network cut (or Crossref answering 5xx), run `scholarly_verify` on a reference that genuinely exists. Expect `UNVERIFIED` with a note naming `Crossref lookup failed` and the status; `NOT FOUND` must not appear. Acceptance: the summary reads `0 not found` and `1 unverified`.
 - **SC2 A genuine absence still reads NOT FOUND**: use a DOI that does not exist and whose Crossref title search returns nothing. Expect `NOT FOUND` with `No matching publication record found in Crossref.` SC1 and SC2 must be distinguishable.
@@ -290,7 +290,7 @@ Run with the `dsh-zotero/scholarly` component enabled. These cases verify **what
 - **SC4 In-library hit**: search the title of a paper already in the library. That row must carry `[In Zotero: <collection>]`, or `Root` when the item has no collection.
 - **SC5 Paywall and transport failure stay distinct**: run `scholarly_read` on a paper with no open-access copy. Expect every attempted route listed (`Tried: …`), and — when a route failed at the transport — a note that the copy may merely be unreachable and worth retrying. It must not claim only "likely behind a paywall".
 - **SC6 The full-text cache can be off or reused**: read one open-access paper twice. The second read hits the cache (no second outbound request in diagnostics). When the cache directory is unwritable the read must still succeed, and the result's notes carry `cache: write failed (<reason>)`.
-- **SC7 The component is off by default**: without the `dsh-zotero/scholarly` row, `ctx.scholarly` does not exist and none of the seven tools register; with it enabled they appear and collide with none of the 23 `zotero_*` tools.
+- **SC7 The component is off by default, and mounting it is the authorization**: the shipped patch carries `disabled: true` on that row, so while it is off `ctx.scholarly` does not exist, none of the seven tools register, and the prompt carries no `scholarly:policy` section. Enabling the row under "Included components" makes all three appear, colliding with none of the 23 `zotero_*` tools; unloading the component makes them disappear again.
 
 ## Write Cases (W)
 

@@ -23,8 +23,15 @@ import {
   ZOTERO_PROMPT_FLOOR,
   ZOTERO_PROMPT_ORDER_OFFSET,
 } from '../../src/prompt.js'
+import { PROMPT_BAND_CEILING } from '../../src/prompt-band.js'
+import ScholarlyService from '../../src/scholarly/index.js'
+import {
+  SCHOLARLY_PROMPT_ORDER_OFFSET,
+  SCHOLARLY_PROMPT_SECTION_NAME,
+} from '../../src/scholarly/prompt.js'
 import type { ZoteroProvider } from '../../src/types.js'
 import { type HostLane, setupHostLane } from '../helpers/lanes/host-lane.js'
+import { sectionPosition, withBandProbes } from '../helpers/prompt-band.js'
 import { STUB_EVENT_SEQ, stubCommandInvocation } from '../helpers/stub-commands.js'
 import { ZOTERO_TOOL_NAMES } from '../helpers/tool-names.js'
 
@@ -181,27 +188,11 @@ describe('prompt section', () => {
     expect(ZOTERO_PROMPT_FLOOR).toBe('TOOL_REPORT')
     expect(ZOTERO_PROMPT_CEILING).toBe('TOOL_COMPUTER_USE')
     expect(ZOTERO_PROMPT_ORDER_OFFSET).toBe(50)
-    const probes = [
-      lane.ctx.systemPrompt.section({
-        name: 'test:band-floor',
-        order: lane.ctx.systemPrompt.getSectionOrder('TOOL_REPORT'),
-        text: '',
-      }),
-      lane.ctx.systemPrompt.section({
-        name: 'test:band-ceiling',
-        order: lane.ctx.systemPrompt.getSectionOrder(ZOTERO_PROMPT_CEILING),
-        text: '',
-      }),
-    ]
-    try {
-      const pinned = await lane.ctx.systemPrompt.assemble()
-      const positionOf = (name: string): number =>
-        pinned.sections.findIndex((entry) => entry.name === name)
+    await withBandProbes(lane.ctx, ZOTERO_PROMPT_CEILING, (assembly) => {
+      const positionOf = (name: string): number => sectionPosition(assembly, name)
       expect(positionOf('zotero:policy')).toBeGreaterThan(positionOf('test:band-floor'))
       expect(positionOf('zotero:policy')).toBeLessThan(positionOf('test:band-ceiling'))
-    } finally {
-      for (const dispose of probes) dispose()
-    }
+    })
     for (const tool of ZOTERO_TOOL_NAMES) {
       expect(section!.text).toContain(tool)
     }
@@ -217,6 +208,26 @@ describe('prompt section', () => {
     // Library content is untrusted data, never instructions (prompt-injection
     // hardening for titles, notes, annotations, full text, URLs, exports).
     expect(section!.text).toContain('untrusted research data')
+    // The external literature component owns its own policy, and the parent
+    // cannot know whether it is mounted.
+    expect(section!.text.toLowerCase()).not.toContain('scholarly')
+  })
+
+  it('places the scholarly policy after the local-library policy', async () => {
+    // The two policy sections share one band and take one slot each.
+    lane = await setupHostLane(undefined, { commands: true })
+    await lane.ctx.plugin(ScholarlyService, {})
+    await withBandProbes(lane.ctx, PROMPT_BAND_CEILING, (assembly) => {
+      const positionOf = (name: string): number => sectionPosition(assembly, name)
+      expect(positionOf(SCHOLARLY_PROMPT_SECTION_NAME)).toBeGreaterThan(positionOf('zotero:policy'))
+      expect(positionOf(SCHOLARLY_PROMPT_SECTION_NAME)).toBeGreaterThan(
+        positionOf('test:band-floor'),
+      )
+      expect(positionOf(SCHOLARLY_PROMPT_SECTION_NAME)).toBeLessThan(
+        positionOf('test:band-ceiling'),
+      )
+      expect(SCHOLARLY_PROMPT_ORDER_OFFSET).not.toBe(ZOTERO_PROMPT_ORDER_OFFSET)
+    })
   })
 
   it('states the live tool caps the model must stay within', async () => {

@@ -5,8 +5,11 @@
       name: dsh-zotero
       config: {}
     # The scholarly component provides external academic literature retrieval
-    # (arXiv, OpenAlex, Crossref, Semantic Scholar, PubMed).
+    # (arXiv, OpenAlex, Crossref, Semantic Scholar, PubMed, Europe PMC, DBLP).
+    # It ships off. Its row's switch in the plugin manager's "Included
+    # components" list is the only authorization: mounting the component
+    # registers its seven tools and permits requests to the allowlisted
+    # external indexes.
     - id: scholarly
       name: dsh-zotero/scholarly
-      config:
-        enabled: false
+      disabled: true

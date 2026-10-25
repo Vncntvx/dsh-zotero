@@ -22,24 +22,30 @@ This document lists common issues, causes, and diagnostic steps when using dsh-z
 - **Cause**: The Zotero local API version differs from what the plugin supports.
 - **Fix**: Check the version in the error message. If Zotero is outdated, upgrade Zotero; if Zotero introduced a new API version, update dsh-zotero.
 
-## 4. Tools Not Visible After Installation
+## 4. Scholarly Tools Do Not Appear
+
+- **Symptom**: The model sees none of the seven `scholarly_*` tools, or the "Scholarly Search" tab of the Zotero settings page shows only a pointer and no field.
+- **Cause**: The `dsh-zotero/scholarly` component is not mounted. It ships with the bundle but off, and that row is the only switch: while it is not mounted, its service, its transport, and its tools do not exist, and the host makes no external request.
+- **Fix**: Enable the `dsh-zotero/scholarly` row under "Included components" in the Plugins manager; the tools and the settings page take effect without a restart.
+
+## 5. Tools Not Visible After Installation
 
 - **Symptom**: The agent cannot recognize or call Zotero tools.
 - **Cause**: The current session was created before the plugin was loaded.
 - **Fix**: Start a new chat session to use the newly installed tools.
 
-## 5. Search Yields Results but Retrieve Returns No Full-Text Passages
+## 6. Search Yields Results but Retrieve Returns No Full-Text Passages
 
 - **Symptom**: `zotero_retrieve` returns an empty passage list, or `sourcesSkipped` includes `"fulltext"`.
 - **Cause**: The PDF has not been indexed in Zotero yet.
 - **Fix**: Right-click the attachment in Zotero and select "Rebuild Index", or use `zotero_attachment` to obtain the local file path.
 
-## 6. PDF Reading and Zotero Item Locating
+## 7. PDF Reading and Zotero Item Locating
 
 - **Native Reading**: Clicking the "Read PDF" button in a panel or tool card opens the PDF in DeepSeek Harness's right sidebar viewer, so no external application is involved. Desktop and Web behave the same.
 - **Quick Locating**: To find an item in the local Zotero app, click "Copy title" and paste it into Zotero Quick Search (`Cmd+F` or `Ctrl+F`). To reference the item in notes or an address bar, click "Copy link" for the canonical deep link; it works for both personal and group libraries.
 
-## 7. Installation Error: nothing installable
+## 8. Installation Error: nothing installable
 
 - **Symptom**: `dsh plugin --profile <profile> add` fails with `nothing installable: the plugin(s) need a build step`.
 - **Cause**: Installing from the GitHub source branch runs build scripts locally, which pnpm blocks by default.
@@ -47,62 +53,62 @@ This document lists common issues, causes, and diagnostic steps when using dsh-z
   - Recommended: Install using the npm package name or the GitHub `#release` prebuilt branch.
   - If building from source: add `dsh-zotero` to `allowBuilds` in the profile's `pnpm-workspace.yaml`.
 
-## 8. Zotero Tab Does Not Appear
+## 9. Zotero Tab Does Not Appear
 
 - **Symptom**: No Zotero tab appears at the top of the web interface.
 - **Cause**: `webEnabled` is set to `false`, or the plugin failed to load.
 - **Fix**: Open the **dsh-zotero** detail page in the plugin manager and check the `webEnabled` toggle in its configuration section; confirm the plugin is enabled.
 
-## 9. Export Exceeds 50-Item Limit
+## 10. Export Exceeds 50-Item Limit
 
 - **Symptom**: Tool calls return `ZOTERO_INVALID_ARGUMENT`, indicating too many references.
 - **Cause**: The five non-`citation` formats (`bibliography`, BibTeX, BibLaTeX, RIS, and CSL JSON) accept at most 50 items per call, which is Zotero's `itemKey` request cap.
 - **Fix**: Call `zotero_export` in batches of at most 50 items, or switch to the `citation` format, which batches automatically in groups of 50 once `maxExportRefs` is raised above 50.
 
-## 10. Server ID or Ref Mismatch
+## 11. Server ID or Ref Mismatch
 
 - **Symptom**: Tool calls return `ZOTERO_SERVER_MISMATCH`.
 - **Cause**: The ref belongs to a different Zotero instance (e.g. database path changed or migrated).
 - **Fix**: Perform a new search to obtain fresh refs for the current instance.
 
-## 11. Configuration Changes Do Not Take Effect
+## 12. Configuration Changes Do Not Take Effect
 
 - **Symptom**: Plugin behavior stays unchanged after editing a config file.
 - **Cause**: The file or location is wrong: since alpha.4 the user layer lives in the active profile's `cordis.patch.yml` (the `zotero` entry's `config`); the old `$DSH_HOME/settings.yaml` is imported once on the first boot after upgrade and renamed to `settings.yaml.imported`. It can also be a YAML nesting mistake, or the field is overridden by a home patch or command-line overlay.
 - **Fix**: Save once from the **dsh-zotero** configuration section in the plugin manager (the write lands in the active profile's `cordis.patch.yml`), then run `/zotero` to verify.
 
-## 12. Tool Cards Do Not Automatically Expand
+## 13. Tool Cards Do Not Automatically Expand
 
 - **Symptom**: The model invokes tools, but the message timeline only displays a collapsed summary bar (e.g. "Called tools · 2.1s").
 - **Cause**: DSH's "Work details" setting defaults to standard mode, automatically folding completed tool cards.
 - **Fix**: Click the timer summary bar above the message to expand the tool cards. To keep tool cards expanded by default, navigate to **Settings → General → Work details** and select **Verbose** (`verbose`).
 
-## 13. A Write Is Refused with ZOTERO_INVALID_ARGUMENT
+## 14. A Write Is Refused with ZOTERO_INVALID_ARGUMENT
 
 - **Symptom**: A write tool returns `ZOTERO_INVALID_ARGUMENT` right away, with messages such as `Unknown itemType "…"`, `A new item needs at least a title or a URL`, `add and remove must carry at least one entry between them`, or `tags must carry at least one item`.
 - **Cause**: These checks run in the tool layer before any network request, so no plan card appears and Zotero receives no write.
 - **Fix**: Correct the argument as the message says: use an `itemType` from the closed set (`webpage` / `journalArticle` / `book` / `conferencePaper` / `report` / `thesis` / `document` / `preprint`); keep list arguments non-empty; send only updatable fields in `set`.
 - A second class of `ZOTERO_INVALID_ARGUMENT` needs a read to decide and so arrives after approval and after those reads: `A collection named "…" already exists at that level`, or `Field "…" is not valid for item type "…"`. Neither issues a write, but the plan card has already appeared.
 
-## 14. Delete Preview Counts Show "unknown"
+## 15. Delete Preview Counts Show "unknown"
 
 - **Symptom**: The `zotero_delete_collection` or `zotero_delete_library_tags` plan card shows `unknown` for item, subcollection, or tag counts.
 - **Cause**: The preview reads before a delete are best-effort; a failed preview never blocks the plan. The delete itself still carries the library version of its preceding read.
 - **Fix**: Check the connection with `/zotero`, then decline the plan card and run again to get exact counts.
 
-## 15. A Write Returns ZOTERO_WRITE_CONFLICT (412)
+## 16. A Write Returns ZOTERO_WRITE_CONFLICT (412)
 
 - **Symptom**: The write submission is refused with `ZOTERO_WRITE_CONFLICT`.
 - **Cause**: The object changed between the read and the commit, so the version precondition failed. This is the expected safety behavior.
 - **Fix**: Run the tool once more; the re-run re-reads the version and redoes the merge.
 
-## 16. The Result Is committed-unverified
+## 17. The Result Is committed-unverified
 
 - **Symptom**: A write tool returns `committed-unverified`, and the card shows a warning state instead of a success badge.
 - **Cause**: Zotero accepted the write, but its response could not prove the final state (commit unknown or the saved state unverified).
 - **Fix**: Do not retry. Reconcile by key/ref in Zotero to check whether the object was created or changed.
 
-## 17. How to Collect Diagnostics
+## 18. How to Collect Diagnostics
 
 When error messages alone are insufficient to diagnose an issue (such as silent failures, rendering errors in tabs or cards, or unexpected behavior), collect the diagnostic bundle as follows:
 

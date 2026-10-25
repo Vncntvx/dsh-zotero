@@ -1,11 +1,30 @@
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { Context } from '@deepseek-ai/cordis'
+import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { ScholarlyTextStore } from '../../src/scholarly/fulltext/store.js'
 import { type ScholarlyReadHost } from '../../src/scholarly/tools/index.js'
 import { createScholarlyHttp, type ScholarlyHttp } from '../../src/scholarly/transport/http.js'
 import { HostPacer } from '../../src/scholarly/transport/pacing.js'
 import type { ZoteroServiceLike } from '../../src/scholarly/zotero-link.js'
+
+/**
+ * Boot the context the scholarly component mounts on: the system prompt (it
+ * owns a prompt section) and the tool runtime (it registers seven tools).
+ *
+ * The component itself is not mounted here. A spec that needs it mounts it on
+ * this context; a spec that needs it with a specific config constructs it
+ * directly, because mounting it twice would register one tool name twice.
+ * @returns the booted context.
+ */
+export async function bootScholarlyContext(): Promise<Context> {
+  const ctx = new Context()
+  await ctx.plugin(SystemPrompt, {})
+  await ctx.plugin(ToolRuntime, {})
+  return ctx
+}
 
 export function createMockHttp(
   handler: (url: string, init?: RequestInit) => Response | Promise<Response>,

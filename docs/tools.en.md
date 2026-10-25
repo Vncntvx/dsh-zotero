@@ -2,7 +2,7 @@
 
 # Tool Reference
 
-dsh-zotero registers 23 local tools (8 read tools and 15 write tools) that interact with your Zotero library through the local HTTP API. The 15 write tools are disabled by default and require enabling `writeEnabled` in configuration, and they operate only on the personal library (`zotero://user/0/`). Scholarly literature tools belong to a separate component, are disabled by default, and require explicit enablement. All item references (refs) are stable identifiers in `zotero://user/0/item/<KEY>` (personal library) or `zotero://group/<ID>/item/<KEY>` (group library) format.
+dsh-zotero registers 23 local tools (8 read tools and 15 write tools) that interact with your Zotero library through the local HTTP API. The 15 write tools are disabled by default and require enabling `writeEnabled` in configuration, and they operate only on the personal library (`zotero://user/0/`). Scholarly literature tools belong to a separate component that ships with the bundle but off; enabling that component enables those tools. All item references (refs) are stable identifiers in `zotero://user/0/item/<KEY>` (personal library) or `zotero://group/<ID>/item/<KEY>` (group library) format.
 
 ### Interactive Presentation (Toolviews)
 
@@ -671,7 +671,7 @@ Write tools are disabled by default, require `writeEnabled` in configuration, an
 
 ## Scholarly Literature Component Tools (`dsh-zotero/scholarly`)
 
-The bundle component `dsh-zotero/scholarly` is available but disabled by default. Set its `enabled` setting to `true` to register the following 7 model tools:
+The bundle component `dsh-zotero/scholarly` ships with the bundle but is disabled by default. Enabling it under "Included components" in the Plugins manager mounts it and provides the following 7 model tools:
 
 ### scholarly_search
 

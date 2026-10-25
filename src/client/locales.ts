@@ -34,8 +34,6 @@ export type ZoteroLocaleKey =
   | 'groupScholarlyLimits'
   | 'groupScholarlyLimitsDesc'
   | 'scholarlyEmail'
-  | 'scholarlyEnabled'
-  | 'scholarlyEnabledHint'
   | 'scholarlyEmailHint'
   | 'scholarlyS2Key'
   | 'scholarlyS2KeyHint'
@@ -361,14 +359,14 @@ export const en: Record<ZoteroLocaleKey, string> = {
   unavailable:
     'This deployment does not serve the Zotero settings namespace, so there is nothing to configure here.',
   scholarlyDisabled:
-    'Scholarly search comes from the dsh-zotero/scholarly component. Enable it under "Included components" to configure it.',
+    'Scholarly search comes from the dsh-zotero/scholarly component. Enable that component under "Included components" to turn the external scholarly tools on; they will then contact the external indexes, the DOI registry, and the open-access lookup service. Nothing here is configurable while the component is off.',
   invalidNumber: 'Enter a number, or leave blank to use the default.',
   tabFeatures: 'General',
   tabConnection: 'Connection',
   tabSearch: 'Search & Extraction',
   tabScholarly: 'Scholarly Search',
   tabScholarlyDesc:
-    'Multi-source academic literature search, API keys, and fulltext extraction quotas.',
+    'Multi-source academic search, API keys, and fulltext quotas from the dsh-zotero/scholarly component. Enabling that component turns the external tools on.',
   tabAdvanced: 'Advanced',
   configTabsLabel: 'Zotero configuration tabs',
   groupWebDesc: 'Toggle conversation literature tab visibility in session views.',
@@ -385,14 +383,11 @@ export const en: Record<ZoteroLocaleKey, string> = {
   groupScholarlyAuth: 'API Credentials & Identification',
   groupScholarlyAuthDesc: 'Contact email for the Polite Pool and optional academic API keys.',
   groupScholarlyLimits: 'Search & Full-text Quotas',
-  groupScholarlyLimitsDesc:
-    'Maximum results per search, full-text reading limit, and local cache folder.',
+  groupScholarlyLimitsDesc: 'Maximum results per search and the full-text reading limit.',
   groupOutputDesc: 'Response buffer sizes and batch export caps.',
   groupJobsDesc: 'Background task offloading policies and automatic timeout escalation.',
   groupDiagnosticsDesc: 'Diagnostics logging and verbose troubleshooting traces.',
   scholarlyEmail: 'Contact email',
-  scholarlyEnabled: 'Enable external scholarly tools',
-  scholarlyEnabledHint: 'When false, no external scholarly tool is registered or called.',
   scholarlyEmailHint:
     'Contact email sent to Crossref, OpenAlex, and NCBI/Europe PMC for the polite pool and higher rate limits.',
   scholarlyS2Key: 'Semantic Scholar API key',
@@ -818,13 +813,14 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   saveFailed: '本部署没有接受这些值，已保留供你修改。',
   unavailable: '本部署没有提供 Zotero 设置项，这里暂无可配置内容。',
   scholarlyDisabled:
-    '学术检索由 dsh-zotero/scholarly 组件提供，未启用时不可配置。请在「包含的组件」中开启该组件。',
+    '学术检索由 dsh-zotero/scholarly 组件提供。在插件列表的「包含的组件」中启用该组件，即启用外部学术检索；此后会访问外部学术索引、DOI 注册中心与开放获取查找服务。组件未启用时此处不可配置。',
   invalidNumber: '请填数字；留空表示使用默认值。',
   tabFeatures: '基础设置',
   tabConnection: '本地连接',
   tabSearch: '检索提取',
   tabScholarly: '学术检索',
-  tabScholarlyDesc: '跨 arXiv、Crossref、OpenAlex 与 PubMed 全网学术检索、API 密钥及全文配额。',
+  tabScholarlyDesc:
+    'dsh-zotero/scholarly 组件提供的多源学术检索、API 密钥与全文配额。启用该组件即启用外部检索。',
   tabAdvanced: '高级选项',
   configTabsLabel: 'Zotero 设置分区',
   groupWebDesc: '控制会话顶部的文献与导出面板展示。',
@@ -839,13 +835,11 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   groupScholarlyAuthDesc:
     '配置邮箱以加入 Polite Pool 获得更优限速配额，以及可选的外部学术 API 密钥。',
   groupScholarlyLimits: '学术检索与全文配额',
-  groupScholarlyLimitsDesc: '全网检索最大返回篇数、全文提取字符上限与本地缓存目录。',
+  groupScholarlyLimitsDesc: '全网检索最大返回篇数与全文提取字符上限。',
   groupOutputDesc: '数据序列化缓冲区与批量导出规模限制。',
   groupJobsDesc: '耗时操作的后台异步执行策略与超时自动提升。',
   groupDiagnosticsDesc: '本地排错与详细运行日志输出。',
   scholarlyEmail: '联系邮箱',
-  scholarlyEnabled: '启用外部学术工具',
-  scholarlyEnabledHint: '关闭时不会注册或调用外部学术检索工具。',
   scholarlyEmailHint:
     '附加于 Crossref、OpenAlex 和 NCBI/Europe PMC 请求头，加入 Polite Pool 获得更高限速配额。',
   scholarlyS2Key: 'Semantic Scholar API 密钥',

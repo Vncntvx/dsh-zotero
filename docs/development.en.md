@@ -134,6 +134,8 @@ cd ../deepseek-harness && env DSH_HOME="$DSH_HOME" \
 
 > Note: since alpha.4 the plugin's configuration persists in the active profile's `cordis.patch.yml` (the `zotero` entry), and `~/.dsh/settings.yaml` is imported once at startup only. Fill the Zotero connection settings once in the temp instance's plugin manager under the **dsh-zotero** configuration section (or copy the `zotero` entry's `config` from one of your existing profiles' `cordis.patch.yml`).
 
+> Scholarly component: the `dsh-zotero/scholarly` row ships with the bundle disabled, and that row is its only switch. Both local overlay templates (`dev.cordis.yml.example` / `dev-lib.cordis.yml.example`) mount the scholarly component, so local debugging needs no toggle. In a real profile, enable the row under "Included components"; the tools and the settings page take effect without a restart.
+
 ### Host-Only Debugging (with HMR)
 
 ```sh

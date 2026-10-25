@@ -32,7 +32,7 @@ All operations interact with the local Zotero API (`127.0.0.1:23119`); reads nee
 - **Citation formatting and export**: Generate formatted citations or export selected items as BibTeX, RIS, or CSL JSON for copying or downloading.
 - **Dedicated conversation tab**: Papers referenced in chat automatically sync to the "Zotero" tab at the top of the session, where you can inspect item details, review passages, or open local PDFs.
 - **Two-way notes and organization**: Allow the agent to draft reading notes, add tags, and organize collections, with plan review and interactive approval for every write operation.
-- **Scholarly literature retrieval (optional component)**: With `dsh-zotero/scholarly` enabled, search across arXiv, OpenAlex, Crossref, Semantic Scholar, PubMed, Europe PMC, and DBLP, read open-access full texts, and verify reference lists; the component ships disabled because it makes outbound requests.
+- **Scholarly literature retrieval (optional component)**: With `dsh-zotero/scholarly` enabled under "Included components" in the Plugins manager, search across arXiv, OpenAlex, Crossref, Semantic Scholar, PubMed, Europe PMC, and DBLP, read open-access full texts, and verify reference lists. The component ships with the bundle but off, and enabling it is the authorization for its outbound requests.
 
 ## Install
 
@@ -117,7 +117,7 @@ Write tools (disabled by default; they write to the personal library only):
 | `zotero_delete_library_tags`     | Delete tags library-wide by name (irreversible); missed names are safe to retry                |
 | `zotero_batch_items`             | Create, retag, recollection, or trash items in one call, under one plan card                   |
 
-See [Tool reference](docs/tools.en.md) for complete parameter definitions of all 23 host tools. The scholarly literature tools belong to the `dsh-zotero/scholarly` component, which is off by default.
+See [Tool reference](docs/tools.en.md) for complete parameter definitions of all 23 host tools. The scholarly literature tools belong to the `dsh-zotero/scholarly` component, which ships with the bundle but off; enabling that component enables its seven tools.
 
 ## Security and privacy
 

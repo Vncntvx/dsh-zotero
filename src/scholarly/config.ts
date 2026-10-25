@@ -8,6 +8,11 @@
  * second answer to the same question, and a silently clamped typo is worse
  * than a refused commit.
  *
+ * The schema carries no enablement field. The component's presence is the
+ * authorization: while `dsh-zotero/scholarly` is not mounted, this service
+ * does not exist and no request can leave the host. The schema describes only
+ * how the component behaves once it is mounted.
+ *
  * Every field is volatile: a settings commit lands in the running fiber's
  * references without remounting, and each tool reads the live value per call.
  *
@@ -19,7 +24,6 @@ import { isVolatile } from '@deepseek-ai/cosmokit'
 import Schema from '@deepseek-ai/schemastery'
 
 export interface ScholarlyConfig {
-  enabled?: Volatile<boolean>
   email?: Volatile<string>
   s2Key?: Volatile<string>
   ncbiKey?: Volatile<string>
@@ -30,7 +34,6 @@ export interface ScholarlyConfig {
 
 /** The plain values {@link resolveScholarlyConfig} produces from a live section. */
 export interface ResolvedScholarlyConfig {
-  enabled: boolean
   email?: string
   s2Key?: string
   ncbiKey?: string
@@ -40,10 +43,6 @@ export interface ResolvedScholarlyConfig {
 }
 
 export const ScholarlyConfig = Schema.object({
-  enabled: Schema.boolean()
-    .default(false)
-    .description('Enable external scholarly literature tools and network requests')
-    .volatile(),
   email: Schema.string()
     .description(
       'Contact email sent to Crossref, OpenAlex, and NCBI/Europe PMC (polite pool for higher rate limits)',
@@ -98,7 +97,6 @@ function current<T>(value: unknown): T | undefined {
  */
 export function resolveScholarlyConfig(input?: Partial<ScholarlyConfig>): ResolvedScholarlyConfig {
   return {
-    enabled: current<boolean>(input?.enabled) ?? false,
     email: current<string>(input?.email)?.trim() || undefined,
     s2Key: current<string>(input?.s2Key)?.trim() || undefined,
     ncbiKey: current<string>(input?.ncbiKey)?.trim() || undefined,

@@ -6,7 +6,7 @@ dsh-zotero 让 DSH 的 LLM 对话能够直接查询和引用 Zotero 文献库。
 
 ## 学术文献检索
 
-显式启用 `dsh-zotero/scholarly` 组件后，模型可以检索本地库之外的学术文献：跨 arXiv、OpenAlex、Crossref、Semantic Scholar、PubMed、Europe PMC 与 DBLP 七索引检索并按相关度融合去重，按 DOI / arXiv ID / PMID / PMCID 读取开放获取全文并做段落级定位，追踪引文网络，从 DOI 注册中心取标准引用格式（BibTeX、RIS、CSL JSON、CSL 样式文本），核验一份参考文献列表的真伪与字段一致性，并在用户明确要求时保存到本地 Zotero。
+在插件管理器「包含的组件」中启用 `dsh-zotero/scholarly` 组件即挂载它，模型可以检索本地库之外的学术文献：跨 arXiv、OpenAlex、Crossref、Semantic Scholar、PubMed、Europe PMC 与 DBLP 七索引检索并按相关度融合去重，按 DOI / arXiv ID / PMID / PMCID 读取开放获取全文并做段落级定位，追踪引文网络，从 DOI 注册中心取标准引用格式（BibTeX、RIS、CSL JSON、CSL 样式文本），核验一份参考文献列表的真伪与字段一致性，并在用户明确要求时保存到本地 Zotero。组件未启用时，这些工具不存在，宿主也不会发出外部请求。
 
 它与本地库能力互补而非替代：检索结果会标出「已在本地库」的条目，该标注只读。
 

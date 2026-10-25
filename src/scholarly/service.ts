@@ -4,23 +4,26 @@
  * Mounts the external literature retrieval subsystem as a first-class DSH
  * component: seven model tools, one shared HTTP transport, and one text store.
  *
+ * The component's presence is the authorization. While the service is not
+ * mounted, `ctx.scholarly` does not exist, the transport does not exist, and
+ * no request can leave the host. A mounted service registers its seven tools
+ * once and owns a prompt section; unmounting it withdraws both.
+ *
  * Two lifecycle facts this file is responsible for:
  *
- * - **Tools are effects.** `ctx.tools.register()` returns the exact disposer
- *   and is itself fiber-scoped, so registering from this constructor is
- *   disposal-safe; the disposers are dropped deliberately because fiber
- *   disposal unwinds them.
+ * - **Tools are effects.** `ctx.tools.register()` is fiber-scoped, so
+ *   registering from this constructor is disposal-safe.
  * - **The store outlives no fiber.** The text store owns a directory and an
- *   in-memory map, so its teardown is a declared effect rather than an
- *   accident of process exit.
+ *   in-memory map, so its teardown is a declared effect.
  *
  * @module dsh-zotero/scholarly/service
  */
 
 import { Context, Service } from '@deepseek-ai/cordis'
-import type {} from '@deepseek-ai/cordis-plugin-loader'
 // Type-only: brings the `ctx.settings` Context merge into this program.
 import type {} from '@deepseek-ai/dsh-settings'
+// Type-only: brings the `ctx.systemPrompt` Context merge into this program.
+import type {} from '@deepseek-ai/dsh-system-prompt'
 import {
   resolveScholarlyConfig,
   ScholarlyConfigSchema,
@@ -28,6 +31,7 @@ import {
   type ScholarlyConfig,
 } from './config.js'
 import { ScholarlyTextStore } from './fulltext/store.js'
+import { registerScholarlyPromptSection } from './prompt.js'
 import { createAllScholarlyTools, type ScholarlyReadHost } from './tools/index.js'
 import { createScholarlyHttp, type ScholarlyHttp } from './transport/http.js'
 import type { ScholarlyKeys } from './types.js'
@@ -41,11 +45,10 @@ declare module '@deepseek-ai/cordis' {
 
 export class ScholarlyService extends Service {
   static readonly Config = ScholarlyConfigSchema
-  static readonly inject = ['tools']
+  static readonly inject = ['tools', 'systemPrompt']
 
   public readonly http: ScholarlyHttp
   public readonly store: ScholarlyTextStore
-  private toolDisposes: Array<() => void> = []
 
   private get currentConfig(): ResolvedScholarlyConfig {
     return resolveScholarlyConfig(this.config)
@@ -87,20 +90,13 @@ export class ScholarlyService extends Service {
       zoteroService: (): ZoteroServiceLike | undefined => ctx.get('zotero'),
     }
 
-    this.reconcileTools(ctx, host)
-    ctx.on('loader/volatile-update', () => this.reconcileTools(ctx, host))
-  }
+    // The tools are registered once, here: they exist exactly as long as this
+    // fiber does, because `ctx.tools.register()` is fiber-scoped.
+    for (const tool of createAllScholarlyTools(host)) ctx.tools.register(tool)
 
-  private reconcileTools(ctx: Context, host: ScholarlyReadHost): void {
-    // Tools read every other setting through `host` at call time; only the
-    // enablement flag changes which tools exist, so a key or limit edit must
-    // not churn the registry.
-    const registered = this.toolDisposes.length > 0
-    if (this.currentConfig.enabled === registered) return
-    for (const dispose of this.toolDisposes) dispose()
-    this.toolDisposes = []
-    if (!this.currentConfig.enabled) return
-    this.toolDisposes = createAllScholarlyTools(host).map((tool) => ctx.tools.register(tool))
+    // The component owns the policy the model reads about these tools, so the
+    // prompt names an external capability only while that capability exists.
+    registerScholarlyPromptSection(ctx, () => this.currentConfig)
   }
 }
 

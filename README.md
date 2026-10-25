@@ -32,7 +32,7 @@ dsh-zotero 是面向 DeepSeek Harness 的本地 Zotero 插件。模型可以直�
 - **引用生成与导出**：一键生成标准学术引用，支持以 BibTeX、RIS、CSL JSON 或文本参考文献格式复制与下载。
 - **会话文献标签页（Sources）**：对话中引用的文献会自动同步到会话顶部的「Zotero」专属标签页，可集中查看条目详情、回溯原文片段与打开本地 PDF。
 - **双向笔记与标签管理**：支持让模型创建读书笔记、添加标签和整理分类；所有写入操作均提供计划审查卡片并需手动确认。
-- **学术文献检索（可选组件）**：启用 `dsh-zotero/scholarly` 后可跨 arXiv、OpenAlex、Crossref、Semantic Scholar、PubMed、Europe PMC、DBLP 检索文献，读取开放获取全文并核验参考文献真伪；组件默认关闭，因为会向外部服务发起请求。
+- **学术文献检索（可选组件）**：在插件管理器「包含的组件」中启用 `dsh-zotero/scholarly` 后可跨 arXiv、OpenAlex、Crossref、Semantic Scholar、PubMed、Europe PMC、DBLP 检索文献，读取开放获取全文并核验参考文献真伪。该组件随包发布但默认关闭，启用它即授权其向外部服务发起请求。
 
 ## 安装
 
@@ -117,7 +117,7 @@ Agent → zotero_export(refs: ["zotero://user/0/item/ABCD1234",
 | `zotero_delete_library_tags`     | 按名称全库删除标签（不可逆），未命中的名称可安全重试   |
 | `zotero_batch_items`             | 批量创建文献、更新标签与合集归属、移入回收站，合并确认 |
 
-全部 23 个宿主工具的参数定义见 [工具参考](docs/tools.md)。学术文献检索另属 `dsh-zotero/scholarly` 组件，默认关闭。
+全部 23 个宿主工具的参数定义见 [工具参考](docs/tools.md)。学术文献检索另属 `dsh-zotero/scholarly` 组件，随包发布但默认关闭；启用该组件即启用这 7 个工具。
 
 ## 安全与隐私
 

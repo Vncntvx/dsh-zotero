@@ -12,13 +12,17 @@
 # hot-swaps without restarting dsh.
 # The profile-installed dsh-zotero (id zotero) is disabled in this instance
 # so the watched copy takes its place; /zotero status and the registered
-# model tools still work normally.
+# model tools still work normally. The scholarly row is disabled for the same
+# reason: the watched copy provides that component too, and two mounted rows
+# would fight over the same service name.
 # The name must be an absolute path to the BUILT entry (plain Node cannot
 # load src/index.ts). Adjust it if your checkout lives elsewhere.
 # The browser half (the settings page) loads only for rows whose name is a
 # bare package name, so this overlay row has none: to develop the page, use
 # a file: install of this checkout into the profile and npm run dev:client.
 - id: zotero
+  disabled: true
+- id: scholarly
   disabled: true
 - id: hmr
   disabled: false
@@ -29,4 +33,12 @@
 - insert:
     - id: zotero-dev
       name: <absolute-path-to-dsh-zotero>/lib/index.js
+      config: {}
+    # The scholarly component ships with the bundle disabled, its switch being
+    # the plugin manager's "Included components" row. This overlay mounts it so
+    # the external tools and their prompt section can be exercised locally.
+    # Like the row above, it points at the BUILT entry: plain Node cannot
+    # load src/scholarly/index.ts.
+    - id: scholarly-dev
+      name: <absolute-path-to-dsh-zotero>/lib/scholarly/index.js
       config: {}

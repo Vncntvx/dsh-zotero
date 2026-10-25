@@ -8,3 +8,10 @@
     - id: zotero
       name: '<absolute-path-to-dsh-zotero>/src/index.ts'
       config: {}
+    # The scholarly component ships with the bundle disabled, its switch being
+    # the plugin manager's "Included components" row. This overlay mounts it so
+    # the external tools, their prompt section, and the settings page can be
+    # exercised locally.
+    - id: scholarly
+      name: '<absolute-path-to-dsh-zotero>/src/scholarly/index.ts'
+      config: {}

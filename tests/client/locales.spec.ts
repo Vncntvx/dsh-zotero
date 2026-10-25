@@ -142,6 +142,12 @@ describe('locale bundles', () => {
       // above the configuration slot.
       'title',
       'description',
+      // The scholarly component's own switch is the only one: the component
+      // row in the plugin manager decides whether the external tools exist at
+      // all, so a second "enable external scholarly tools" field in the form
+      // would restate it where it could disagree with it.
+      'scholarlyEnabled',
+      'scholarlyEnabledHint',
     ]
     for (const key of retired) {
       expect(key in zh, key).toBe(false)

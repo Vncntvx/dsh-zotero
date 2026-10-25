@@ -1,7 +1,7 @@
 /**
  * The staged form controller for the `scholarly` namespace: the contact email,
- * the secret API keys (Semantic Scholar, NCBI, OpenAlex), the search and read
- * quotas, and the cache directory.
+ * the secret API keys (Semantic Scholar, NCBI, OpenAlex), and the search and
+ * read quotas.
  *
  * It follows the harness's own `SettingsFormModel` pattern: staged edits,
  * revision-fenced atomic mutations, discard on unmount.
@@ -30,10 +30,8 @@ const SCHOLARLY_SECRET_KEYS = ['s2Key', 'ncbiKey', 'openalexKey'] as const
 export type ScholarlySecretKey = (typeof SCHOLARLY_SECRET_KEYS)[number]
 
 /** Whole-number limits. */
-const SCHOLARLY_NUMERIC_KEYS = ['maxResults', 'maxContentChars'] as const
+export const SCHOLARLY_NUMERIC_KEYS = ['maxResults', 'maxContentChars'] as const
 export type ScholarlyNumericKey = (typeof SCHOLARLY_NUMERIC_KEYS)[number]
-
-export type ScholarlyEnabledKey = 'enabled'
 
 interface ScholarlySecretFieldState {
   readonly text: string
@@ -43,7 +41,6 @@ interface ScholarlySecretFieldState {
 
 /** Everything the Scholarly configuration card renders. */
 export interface ScholarlyCardState extends SettingsFormShell {
-  readonly enabled: SettingsFieldState
   readonly email: SettingsFieldState
   readonly maxResults: SettingsFieldState
   readonly maxContentChars: SettingsFieldState
@@ -73,11 +70,6 @@ function secretFieldSpec(field: string): SettingsFieldSpec {
 
 function fieldSpecs(): SettingsFieldSpec[] {
   return [
-    {
-      field: 'enabled',
-      format: (value) => (value === true ? 'true' : 'false'),
-      parse: (text) => ({ kind: 'set', value: text.trim().toLowerCase() === 'true' }),
-    },
     settingsTextField('email'),
     secretFieldSpec('s2Key'),
     secretFieldSpec('ncbiKey'),
@@ -123,7 +115,6 @@ export class ScholarlyFormController {
 
     return {
       ...shell,
-      enabled: this.model.field('enabled'),
       email: this.model.field('email'),
       maxResults: this.model.field('maxResults'),
       maxContentChars: this.model.field('maxContentChars'),

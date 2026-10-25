@@ -12,12 +12,4 @@ export {
   ZOTERO_WRITE_TOOL_NAMES,
 } from '../../src/constants.js'
 
-export const SCHOLARLY_TOOL_NAMES = [
-  'scholarly_search',
-  'scholarly_get',
-  'scholarly_citations',
-  'scholarly_read',
-  'scholarly_cite',
-  'scholarly_verify',
-  'scholarly_save_to_zotero',
-] as const
+export { SCHOLARLY_TOOL_NAMES } from '../../src/scholarly/types.js'

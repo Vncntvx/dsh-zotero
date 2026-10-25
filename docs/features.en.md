@@ -6,7 +6,7 @@ dsh-zotero allows DSH LLM conversations to search, inspect, and cite your local 
 
 ## Scholarly Literature Retrieval
 
-When the `dsh-zotero/scholarly` component is explicitly enabled, the model can search beyond the local library: across seven indexes (arXiv, OpenAlex, Crossref, Semantic Scholar, PubMed, Europe PMC, DBLP) with fused, deduplicated ranking; read open-access full texts by DOI / arXiv ID / PMID / PMCID with passage-level location; follow citation networks; pull canonical citation formats from DOI registration agencies (BibTeX, RIS, CSL JSON, CSL-styled text); verify a reference list for fabricated entries and field mismatches; and save an external result to local Zotero only when explicitly requested.
+Enabling the `dsh-zotero/scholarly` component under "Included components" in the Plugins manager mounts it, and the model can then search beyond the local library: across seven indexes (arXiv, OpenAlex, Crossref, Semantic Scholar, PubMed, Europe PMC, DBLP) with fused, deduplicated ranking; read open-access full texts by DOI / arXiv ID / PMID / PMCID with passage-level location; follow citation networks; pull canonical citation formats from DOI registration agencies (BibTeX, RIS, CSL JSON, CSL-styled text); verify a reference list for fabricated entries and field mismatches; and save an external result to local Zotero only when explicitly requested. While the component is off, those tools do not exist and the host makes no external request.
 
 It complements the local-library capabilities rather than replacing them: hits already in the library are annotated, and the annotation is read-only.
 

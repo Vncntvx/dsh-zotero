@@ -166,18 +166,6 @@ describe('ScholarlyFormController', () => {
     expect(scope.writes).toEqual([])
     controller.dispose()
   })
-
-  it('parses boolean string when editing enabled field', () => {
-    const scope = fakeScope({ value: { enabled: true } })
-    const controller = new ScholarlyFormController(scope)
-    const face = controller.inject()
-
-    face.edit('enabled', 'false')
-    face.save()
-
-    expect(scope.writes).toEqual([{ op: 'set', field: 'enabled', value: false }])
-    controller.dispose()
-  })
 })
 
 describe('ScholarlySettingsSection', () => {
@@ -222,11 +210,11 @@ describe('ScholarlySettingsSection', () => {
     expect(screen.getByLabelText(zh.scholarlyOpenalexKey)).toBeDefined()
     expect(screen.getByLabelText(zh.scholarlyMaxResults)).toBeDefined()
     expect(screen.getByLabelText(zh.scholarlyMaxContentChars)).toBeDefined()
-    expect(screen.getByLabelText(zh.scholarlyEnabled)).toBeDefined()
 
-    // enabled, email, maxResults, and maxContentChars are plain inputs; the
-    // three keys are masked.
-    expect(document.querySelectorAll('input')).toHaveLength(7)
+    // The component's presence is the authorization, so this form has no
+    // enablement field at all: email, three keys, and two limits. The three
+    // keys are masked.
+    expect(document.querySelectorAll('input')).toHaveLength(6)
     expect(document.querySelectorAll('input[type="password"]')).toHaveLength(3)
 
     controller.dispose()

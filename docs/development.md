@@ -134,6 +134,8 @@ cd ../deepseek-harness && env DSH_HOME="$DSH_HOME" \
 
 > 说明：alpha.4 起插件配置持久化在当前 profile 的 `cordis.patch.yml`（`zotero` 条目），`~/.dsh/settings.yaml` 只会在启动时被一次性导入。Zotero 连接等配置首次在临时实例的插件管理器中打开 **dsh-zotero** 配置区填写一次即可（也可从现有 profile 的 `cordis.patch.yml` 拷入 `zotero` 条目的 `config`）。
 
+> 学术组件：随包发布的 `dsh-zotero/scholarly` 行默认关闭，开关只有这一处。两份叠加层模板（`dev.cordis.yml.example` / `dev-lib.cordis.yml.example`）都会挂载学术组件，本地调试无需先在插件管理器里打开该行；在真实 profile 中调试时，在「包含的组件」中启用该行即可，工具与设置页即时生效，无需重启。
+
 ### 仅 Host 端调试（支持 HMR）
 
 ```sh
