@@ -100,7 +100,6 @@ interface EvidenceCardProps {
   readonly item: SourceItem
   readonly t: TranslateNS<'zotero'>
   readonly openFile?: (path: string) => void
-  readonly onOpenFile?: (path: string) => void
   readonly resolveAttachment?: (ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>
 }
 
@@ -110,14 +109,8 @@ function pdfRefOf(capability: PdfCapability | null): string | null {
 }
 
 /** One source's evidence card. */
-export function EvidenceCard({
-  item,
-  t,
-  openFile,
-  onOpenFile,
-  resolveAttachment,
-}: EvidenceCardProps) {
-  const handleOpenFile = openFile ?? onOpenFile
+export function EvidenceCard({ item, t, openFile, resolveAttachment }: EvidenceCardProps) {
+  const handleOpenFile = openFile
   const evidenceMatch = item.evidenceMatch
   const selectUrl = selectUrlOf(item.ref)
   const pdfCapability = pdfCapabilityOf(item)

@@ -14,24 +14,21 @@ import { describe, expect, it } from 'vitest'
 import {
   argsViewOf,
   boolArg,
-  boolField,
   callNameOf,
   errorSummaryOf,
   evidenceItemsOf,
   formatTime,
-  isRecord,
   joinNonEmpty,
   listArg,
   metaOf,
   numberArg,
-  numberField,
   recordArg,
   resultTextOf,
   rowStateOf,
   shortKeyOf,
-  stringField,
   textArg,
 } from '../../src/client/presenters.ts'
+import { boolField, isRecord, numberField, stringField } from '../../src/json.ts'
 import {
   preparing as blockPreparing,
   running as blockRunning,

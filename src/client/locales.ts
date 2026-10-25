@@ -20,31 +20,19 @@ export type ZoteroLocaleKey =
   | 'scholarlyDisabled'
   | 'invalidNumber'
   | 'tabFeatures'
-  | 'tabFeaturesDesc'
   | 'tabConnection'
-  | 'tabConnectionDesc'
   | 'tabSearch'
-  | 'tabSearchDesc'
   | 'tabScholarly'
   | 'tabScholarlyDesc'
   | 'tabAdvanced'
-  | 'tabAdvancedDesc'
   | 'configTabsLabel'
-  | 'groupWebDesc'
-  | 'groupWriteDesc'
-  | 'groupDefaultsDesc'
-  | 'groupConnectionDesc'
-  | 'groupSearchQuery'
-  | 'groupSearchQueryDesc'
-  | 'groupSearchEvidence'
-  | 'groupSearchEvidenceDesc'
+  | GroupKey
+  | `${GroupKey}Desc`
+  | `${FieldKey}Hint`
   | 'groupScholarlyAuth'
   | 'groupScholarlyAuthDesc'
   | 'groupScholarlyLimits'
   | 'groupScholarlyLimitsDesc'
-  | 'groupOutputDesc'
-  | 'groupJobsDesc'
-  | 'groupDiagnosticsDesc'
   | 'scholarlyEmail'
   | 'scholarlyEnabled'
   | 'scholarlyEnabledHint'
@@ -61,8 +49,6 @@ export type ZoteroLocaleKey =
   | 'scholarlyMaxContentCharsHint'
   | 'secretConfigured'
   | 'secretNotConfigured'
-  | 'scholarlyRowConfigTitle'
-  | 'scholarlyRowConfigDesc'
   | GroupKey
   | FieldKey
   | `${FieldKey}Hint`
@@ -378,17 +364,12 @@ export const en: Record<ZoteroLocaleKey, string> = {
     'Scholarly search comes from the dsh-zotero/scholarly component. Enable it under "Included components" to configure it.',
   invalidNumber: 'Enter a number, or leave blank to use the default.',
   tabFeatures: 'General',
-  tabFeaturesDesc:
-    'Conversation literature panel, personal library write permissions, and default citation styles.',
   tabConnection: 'Connection',
-  tabConnectionDesc: 'Local Zotero API endpoint, timeouts, concurrency limits, and cache duration.',
   tabSearch: 'Search & Extraction',
-  tabSearchDesc: 'Local search limits, fulltext scan quotas, and passage extraction budgets.',
   tabScholarly: 'Scholarly Search',
   tabScholarlyDesc:
     'Multi-source academic literature search, API keys, and fulltext extraction quotas.',
   tabAdvanced: 'Advanced',
-  tabAdvancedDesc: 'Data export buffers, background task policies, and runtime diagnostics.',
   configTabsLabel: 'Zotero configuration tabs',
   groupWebDesc: 'Toggle conversation literature tab visibility in session views.',
   groupWriteDesc:
@@ -427,11 +408,7 @@ export const en: Record<ZoteroLocaleKey, string> = {
     'Character ceiling for chunked open-access full-text reading (1,000-50,000).',
   secretConfigured: 'Configured',
   secretNotConfigured: 'Not configured',
-  scholarlyRowConfigTitle: 'Scholarly Literature',
-  scholarlyRowConfigDesc:
-    'Configure external literature search (arXiv, Crossref, OpenAlex, etc.) credentials, rate limits, and full-text cache.',
   groupConnection: 'Connection',
-  groupSearch: 'Search limits',
   groupOutput: 'Output limits',
   groupDefaults: 'Citation defaults',
   groupWrite: 'Writing',
@@ -844,15 +821,11 @@ export const zh: Record<ZoteroLocaleKey, string> = {
     '学术检索由 dsh-zotero/scholarly 组件提供，未启用时不可配置。请在「包含的组件」中开启该组件。',
   invalidNumber: '请填数字；留空表示使用默认值。',
   tabFeatures: '基础设置',
-  tabFeaturesDesc: '配置会话文献面板、个人文库写入授权与默认引文样式。',
   tabConnection: '本地连接',
-  tabConnectionDesc: '本地 Zotero 服务地址、通信超时、并发配额与缓存时长。',
   tabSearch: '检索提取',
-  tabSearchDesc: '本地检索条数上限、全文扫描配额与正文切片提取规模。',
   tabScholarly: '学术检索',
   tabScholarlyDesc: '跨 arXiv、Crossref、OpenAlex 与 PubMed 全网学术检索、API 密钥及全文配额。',
   tabAdvanced: '高级选项',
-  tabAdvancedDesc: '导出数据缓冲区、后台长任务调度策略与运行诊断日志。',
   configTabsLabel: 'Zotero 设置分区',
   groupWebDesc: '控制会话顶部的文献与导出面板展示。',
   groupWriteDesc: '管理对本地 Zotero 文库的写入、授权与安全门禁。',
@@ -887,11 +860,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   scholarlyMaxContentCharsHint: '开放获取全文分块读取的字符数上限（1,000-50,000）。',
   secretConfigured: '已配置',
   secretNotConfigured: '未配置',
-  scholarlyRowConfigTitle: '学术文献检索',
-  scholarlyRowConfigDesc:
-    '配置多源外部文献检索（arXiv、Crossref、OpenAlex 等）的 API 凭据、速率限制与本地缓存。',
   groupConnection: '连接',
-  groupSearch: '检索限制',
   groupOutput: '输出限制',
   groupDefaults: '引文默认值',
   groupWrite: '写入',

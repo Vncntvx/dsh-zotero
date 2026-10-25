@@ -27,7 +27,6 @@ import {
   BOOLEAN_FIELD_KEYS,
   FIELD_GROUPS,
   NUMERIC_FIELD_KEYS,
-  SEARCH_SUBGROUPS,
   SETTINGS_TABS,
   type FieldKey,
   type GroupKey,
@@ -107,149 +106,36 @@ export function ZoteroSettingsForm(props: ZoteroSettingsFormProps) {
         </div>
       )}
 
-      {/* Tab 1: General & Features */}
-      <div
-        role="tabpanel"
-        id="zotero-panel-features"
-        aria-labelledby="zotero-tab-features"
-        hidden={activeTab !== 'features'}
-        className={css.tabPanel}
-      >
-        {renderGroupCard(t, state, actions, 'groupWeb', groupFieldsOf('groupWeb'), 'groupWebDesc')}
-        {renderGroupCard(
-          t,
-          state,
-          actions,
-          'groupWrite',
-          groupFieldsOf('groupWrite'),
-          'groupWriteDesc',
-        )}
-        {renderGroupCard(
-          t,
-          state,
-          actions,
-          'groupDefaults',
-          groupFieldsOf('groupDefaults'),
-          'groupDefaultsDesc',
-        )}
-      </div>
-
-      {/* Tab 2: Local Connection */}
-      <div
-        role="tabpanel"
-        id="zotero-panel-connection"
-        aria-labelledby="zotero-tab-connection"
-        hidden={activeTab !== 'connection'}
-        className={css.tabPanel}
-      >
-        {renderGroupCard(
-          t,
-          state,
-          actions,
-          'groupConnection',
-          groupFieldsOf('groupConnection'),
-          'groupConnectionDesc',
-        )}
-      </div>
-
-      {/* Tab 3: Local Search & Passages */}
-      <div
-        role="tabpanel"
-        id="zotero-panel-search"
-        aria-labelledby="zotero-tab-search"
-        hidden={activeTab !== 'search'}
-        className={css.tabPanel}
-      >
-        {renderCustomCard(
-          t,
-          state,
-          actions,
-          'groupSearchQuery',
-          t('groupSearchQuery'),
-          t('groupSearchQueryDesc'),
-          SEARCH_SUBGROUPS.query,
-        )}
-        {renderCustomCard(
-          t,
-          state,
-          actions,
-          'groupSearchEvidence',
-          t('groupSearchEvidence'),
-          t('groupSearchEvidenceDesc'),
-          SEARCH_SUBGROUPS.evidence,
-        )}
-      </div>
-
-      {/* Tab 4: Advanced & Tasks */}
-      <div
-        role="tabpanel"
-        id="zotero-panel-advanced"
-        aria-labelledby="zotero-tab-advanced"
-        hidden={activeTab !== 'advanced'}
-        className={css.tabPanel}
-      >
-        {renderGroupCard(
-          t,
-          state,
-          actions,
-          'groupOutput',
-          groupFieldsOf('groupOutput'),
-          'groupOutputDesc',
-        )}
-        {renderGroupCard(
-          t,
-          state,
-          actions,
-          'groupJobs',
-          groupFieldsOf('groupJobs'),
-          'groupJobsDesc',
-        )}
-        {renderGroupCard(
-          t,
-          state,
-          actions,
-          'groupDiagnostics',
-          groupFieldsOf('groupDiagnostics'),
-          'groupDiagnosticsDesc',
-        )}
-      </div>
+      {SETTINGS_TABS.filter((tab) => tab.groupKeys.length > 0).map((tab) => (
+        <div
+          key={tab.id}
+          role="tabpanel"
+          id={`zotero-panel-${tab.id}`}
+          aria-labelledby={`zotero-tab-${tab.id}`}
+          hidden={activeTab !== tab.id}
+          className={css.tabPanel}
+        >
+          {tab.groupKeys.map((group) =>
+            renderGroupSection(t, state, actions, group, groupFieldsOf(group)),
+          )}
+        </div>
+      ))}
     </>
   )
 }
 
-function renderGroupCard(
+function renderGroupSection(
   t: (key: ZoteroLocaleKey) => string,
   state: ZoteroCardState,
   actions: ZoteroFormActions,
   groupKey: GroupKey,
   fields: readonly FieldKey[],
-  descKey: ZoteroLocaleKey,
 ): ReactNode {
   return (
     <section key={groupKey} className={css.group} aria-label={t(groupKey)}>
       <div className={css.groupHeader}>
         <h3 className={css.groupHeading}>{t(groupKey)}</h3>
-        <p className={css.groupNote}>{t(descKey)}</p>
-      </div>
-      <div className={css.fields}>{fields.map((key) => field(t, state, actions, key))}</div>
-    </section>
-  )
-}
-
-function renderCustomCard(
-  t: (key: ZoteroLocaleKey) => string,
-  state: ZoteroCardState,
-  actions: ZoteroFormActions,
-  id: string,
-  title: string,
-  desc: string,
-  fields: readonly FieldKey[],
-): ReactNode {
-  return (
-    <section key={id} className={css.group} aria-label={title}>
-      <div className={css.groupHeader}>
-        <h3 className={css.groupHeading}>{title}</h3>
-        <p className={css.groupNote}>{desc}</p>
+        <p className={css.groupNote}>{t(`${groupKey}Desc`)}</p>
       </div>
       <div className={css.fields}>{fields.map((key) => field(t, state, actions, key))}</div>
     </section>

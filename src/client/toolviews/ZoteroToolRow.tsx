@@ -121,10 +121,10 @@ export function ZoteroToolRow({
     [isRunning, isDeclined, isUnverified, state],
   )
 
-  const content = useMemo(() => {
-    if (!open) return null
-    return typeof children === 'function' ? children(renderContext) : children
-  }, [open, children, renderContext])
+  // No memo here: every parent render passes a fresh children closure, so a
+  // memo keyed on its identity would always miss; the closed-state skip is
+  // the early return itself.
+  const content = !open ? null : typeof children === 'function' ? children(renderContext) : children
 
   const expandedBody = open ? (
     <div className={css.bodyWrap}>

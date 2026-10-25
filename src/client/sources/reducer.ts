@@ -15,19 +15,17 @@ import {
   argsViewOf,
   boolArg,
   callNameOf,
-  isRecord,
   isSettledTool,
   listArg,
   metaOf,
-  numberArg,
   recordArg,
   resultTextOf,
   rowStateOf,
-  stringField,
   textArg,
   valueArg,
   type ZoteroRowState,
 } from '../presenters.ts'
+import { isRecord, stringField } from '../../json.ts'
 import {
   attachmentMetaOf,
   exportMetaOf,
@@ -69,7 +67,6 @@ interface SearchEpisode {
   readonly tagMatch?: 'all' | 'any'
   readonly excludeTags: readonly string[]
   readonly includeTrashed: boolean
-  readonly offset: number
   returned: number
   omitted: number
   readonly keys: Set<string>
@@ -139,6 +136,13 @@ function emptyOperations(): DraftOperations {
  * partial-json.ts`), which covers malformed JSON and every non-object payload
  * (array, number, string, boolean, null).
  */
+/** The library argument's raw type/id fields when a record is present, else null. */
+function rawLibraryArg(args: ToolArgs): { type: unknown; id: unknown } | null {
+  const libArg = recordArg(args, 'library')
+  if (libArg === null) return null
+  return { type: libArg['type'], id: libArg['id'] }
+}
+
 function searchIdentityOf(
   args: ToolArgs,
   overrides?: {
@@ -159,13 +163,13 @@ function searchIdentityOf(
   const library =
     overrides?.resolvedLibrary ??
     (() => {
-      const l = recordArg(args, 'library')
+      const raw = rawLibraryArg(args)
       if (
-        l !== null &&
-        (l['type'] === 'user' || l['type'] === 'group') &&
-        typeof l['id'] === 'number'
+        raw !== null &&
+        (raw.type === 'user' || raw.type === 'group') &&
+        typeof raw.id === 'number'
       ) {
-        return { type: l['type'] as 'user' | 'group', id: l['id'] as number }
+        return { type: raw.type as 'user' | 'group', id: raw.id as number }
       }
       return { type: 'user' as const, id: 0 }
     })()
@@ -216,11 +220,6 @@ function resolvedToSourceScope(scope: ZoteroResolvedScope): SourceScope {
   if (scope.kind === 'publications') return { kind: 'publications', library: scope.library }
   if (scope.kind === 'collection') return { kind: 'collection', ref: scope.ref, name: scope.name }
   return { kind: 'savedSearch', ref: scope.ref, name: scope.name }
-}
-
-/** The offset argument of one search call, or the tool default. */
-function offsetOf(args: ToolArgs): number {
-  return numberArg(args, 'offset')
 }
 
 /** The ref argument of one ref-carrying call; null when absent or unusable. */
@@ -458,18 +457,16 @@ export function buildSourceWorkspace(
               // scope decoder (user/0 or a positive safe-integer group id),
               // spelled inline: the client bundle must not value-import host
               // modules, so the check lives in both halves by design.
-              const libArg = recordArg(args, 'library')
-              if (libArg === null) return undefined
-              const type = libArg['type']
-              const id = libArg['id']
-              if (type === 'user' && id === 0) return { type: 'user', id: 0 as const }
+              const raw = rawLibraryArg(args)
+              if (raw === null) return undefined
+              if (raw.type === 'user' && raw.id === 0) return { type: 'user', id: 0 as const }
               if (
-                type === 'group' &&
-                typeof id === 'number' &&
-                Number.isSafeInteger(id) &&
-                id > 0
+                raw.type === 'group' &&
+                typeof raw.id === 'number' &&
+                Number.isSafeInteger(raw.id) &&
+                raw.id > 0
               ) {
-                return { type: 'group', id }
+                return { type: 'group', id: raw.id }
               }
               return undefined
             })()
@@ -486,7 +483,6 @@ export function buildSourceWorkspace(
             tagMatch: textArg(args, 'tagMatch') === 'any' ? 'any' : 'all',
             excludeTags: normalizedListOf(listArg(args, 'excludeTags')),
             includeTrashed: boolArg(args, 'includeTrashed'),
-            offset: offsetOf(args),
             returned: 0,
             omitted: 0,
             keys: new Set(),

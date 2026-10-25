@@ -9,9 +9,8 @@
  */
 
 import { evidenceItemsOf } from '../presenters.ts'
-import { boolField, isRecord, numberField, stringField } from '../../json.ts'
+import { boolField, isRecord, numberField, stringArrayOf, stringField } from '../../json.ts'
 import type { EvidenceItem } from '../../evidence-item.ts'
-import { stringArrayOf } from '../../json.ts'
 import { browseRowOf, isBrowseKind, type BrowseRow } from '../../browse-rows.ts'
 import {
   CHANGE_SECTIONS,

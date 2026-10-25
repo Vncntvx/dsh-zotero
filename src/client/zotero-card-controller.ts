@@ -54,21 +54,21 @@ const FIELD_SPECS = [
   { key: 'timeoutMs', kind: 'number', group: 'groupConnection' },
   { key: 'maxInFlightRequests', kind: 'number', group: 'groupConnection' },
   { key: 'scopeListingTtlMs', kind: 'number', group: 'groupConnection' },
-  { key: 'maxSearchResults', kind: 'number', group: 'groupSearch' },
-  { key: 'maxNoteScanRecords', kind: 'number', group: 'groupSearch' },
-  { key: 'searchConcurrency', kind: 'number', group: 'groupSearch' },
-  { key: 'maxEvidenceChars', kind: 'number', group: 'groupSearch' },
-  { key: 'maxEvidencePassages', kind: 'number', group: 'groupSearch' },
-  { key: 'maxDetailChars', kind: 'number', group: 'groupSearch' },
-  { key: 'maxNoteBodyChars', kind: 'number', group: 'groupSearch' },
-  { key: 'maxNoteChars', kind: 'number', group: 'groupSearch' },
-  { key: 'maxNoteRecords', kind: 'number', group: 'groupSearch' },
-  { key: 'maxAnnotationRecords', kind: 'number', group: 'groupSearch' },
-  { key: 'maxAttachmentRecords', kind: 'number', group: 'groupSearch' },
-  { key: 'fulltextChunkWords', kind: 'number', group: 'groupSearch' },
-  { key: 'maxFulltextChars', kind: 'number', group: 'groupSearch' },
-  { key: 'retrieveAttachmentCap', kind: 'number', group: 'groupSearch' },
-  { key: 'graphConcurrency', kind: 'number', group: 'groupSearch' },
+  { key: 'maxSearchResults', kind: 'number', group: 'groupSearchQuery' },
+  { key: 'maxNoteScanRecords', kind: 'number', group: 'groupSearchQuery' },
+  { key: 'searchConcurrency', kind: 'number', group: 'groupSearchQuery' },
+  { key: 'graphConcurrency', kind: 'number', group: 'groupSearchQuery' },
+  { key: 'retrieveAttachmentCap', kind: 'number', group: 'groupSearchQuery' },
+  { key: 'maxEvidenceChars', kind: 'number', group: 'groupSearchEvidence' },
+  { key: 'maxEvidencePassages', kind: 'number', group: 'groupSearchEvidence' },
+  { key: 'maxDetailChars', kind: 'number', group: 'groupSearchEvidence' },
+  { key: 'maxNoteBodyChars', kind: 'number', group: 'groupSearchEvidence' },
+  { key: 'maxNoteChars', kind: 'number', group: 'groupSearchEvidence' },
+  { key: 'maxNoteRecords', kind: 'number', group: 'groupSearchEvidence' },
+  { key: 'maxAnnotationRecords', kind: 'number', group: 'groupSearchEvidence' },
+  { key: 'maxAttachmentRecords', kind: 'number', group: 'groupSearchEvidence' },
+  { key: 'fulltextChunkWords', kind: 'number', group: 'groupSearchEvidence' },
+  { key: 'maxFulltextChars', kind: 'number', group: 'groupSearchEvidence' },
   { key: 'maxResponseBytes', kind: 'number', group: 'groupOutput' },
   { key: 'maxExportChars', kind: 'number', group: 'groupOutput' },
   { key: 'maxExportRefs', kind: 'number', group: 'groupOutput' },
@@ -148,12 +148,6 @@ export type SettingsTabId = 'features' | 'connection' | 'search' | 'scholarly' |
 interface SettingsTabDescriptor {
   readonly id: SettingsTabId
   readonly labelKey: 'tabFeatures' | 'tabConnection' | 'tabSearch' | 'tabScholarly' | 'tabAdvanced'
-  readonly descKey:
-    | 'tabFeaturesDesc'
-    | 'tabConnectionDesc'
-    | 'tabSearchDesc'
-    | 'tabScholarlyDesc'
-    | 'tabAdvancedDesc'
   readonly groupKeys: readonly GroupKey[]
 }
 
@@ -166,57 +160,29 @@ export const SETTINGS_TABS: readonly SettingsTabDescriptor[] = [
   {
     id: 'features',
     labelKey: 'tabFeatures',
-    descKey: 'tabFeaturesDesc',
     groupKeys: ['groupWeb', 'groupWrite', 'groupDefaults'],
   },
   {
     id: 'connection',
     labelKey: 'tabConnection',
-    descKey: 'tabConnectionDesc',
     groupKeys: ['groupConnection'],
   },
   {
     id: 'search',
     labelKey: 'tabSearch',
-    descKey: 'tabSearchDesc',
-    groupKeys: ['groupSearch'],
+    groupKeys: ['groupSearchQuery', 'groupSearchEvidence'],
   },
   {
     id: 'scholarly',
     labelKey: 'tabScholarly',
-    descKey: 'tabScholarlyDesc',
     groupKeys: [],
   },
   {
     id: 'advanced',
     labelKey: 'tabAdvanced',
-    descKey: 'tabAdvancedDesc',
     groupKeys: ['groupOutput', 'groupJobs', 'groupDiagnostics'],
   },
 ] as const
-
-/** The search tab's two cards: query-side limits and evidence-side limits. */
-export const SEARCH_SUBGROUPS = {
-  query: [
-    'maxSearchResults',
-    'maxNoteScanRecords',
-    'searchConcurrency',
-    'graphConcurrency',
-    'retrieveAttachmentCap',
-  ] as const,
-  evidence: [
-    'maxEvidenceChars',
-    'maxEvidencePassages',
-    'maxDetailChars',
-    'maxNoteBodyChars',
-    'maxNoteChars',
-    'maxNoteRecords',
-    'maxAnnotationRecords',
-    'maxAttachmentRecords',
-    'fulltextChunkWords',
-    'maxFulltextChars',
-  ] as const,
-} as const
 
 /** The boolean fields, rendered as toggles. */
 export const BOOLEAN_FIELD_KEYS: ReadonlySet<FieldKey> = new Set<FieldKey>(
