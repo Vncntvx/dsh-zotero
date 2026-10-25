@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { ZOTERO_INVALID_ARGUMENT } from '../../src/errors.js'
 import { ScholarlyTextStore } from '../../src/scholarly/fulltext/store.js'
 import { EXEC_CONTEXT, createMockHost, createMockHttp, itemLineOf } from './fixtures.js'
 import {
@@ -368,7 +369,7 @@ describe('scholarly_cite value handling', () => {
     expect(result.text).toContain('Good')
   })
 
-  it('caps a long identifier list at thirty entries', async () => {
+  it('refuses more than thirty ids instead of silently truncating them', async () => {
     const seen: string[] = []
     const host = createMockHost(
       createMockHttp((url) => {
@@ -378,8 +379,13 @@ describe('scholarly_cite value handling', () => {
     )
     const tool = createScholarlyCiteTool(host)
     const ids = Array.from({ length: 35 }, (_, i) => `10.1234/item${i}.1`)
-    await tool.execute({ ids, format: 'bibtex' }, EXEC_CONTEXT as never)
-    expect(seen.length).toBeLessThanOrEqual(30)
+    await expect(
+      tool.execute({ ids, format: 'bibtex' }, EXEC_CONTEXT as never),
+    ).rejects.toMatchObject({
+      code: ZOTERO_INVALID_ARGUMENT,
+      message: expect.stringContaining('at most 30'),
+    })
+    expect(seen).toHaveLength(0)
   })
 })
 

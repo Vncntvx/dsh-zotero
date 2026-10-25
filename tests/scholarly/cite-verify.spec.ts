@@ -10,6 +10,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
+import { ZOTERO_INVALID_ARGUMENT } from '../../src/errors.js'
 import { createScholarlyCiteTool } from '../../src/scholarly/tools/cite.js'
 import {
   createScholarlyVerifyTool,
@@ -18,6 +19,18 @@ import {
 import { createMockHost, createMockHttp, EXEC_CONTEXT } from './fixtures.js'
 
 describe('scholarly_cite failure paths', () => {
+  it('names the transport status when a registry rate-limits a citation read', async () => {
+    const host = createMockHost(
+      createMockHttp(() => new Response('{}', { status: 429, headers: { 'retry-after': '30' } })),
+    )
+    const tool = createScholarlyCiteTool(host)
+    const result = (await tool.execute(
+      { ids: ['10.1234/slow.1'], format: 'csljson' },
+      EXEC_CONTEXT as never,
+    )) as { text: string }
+    expect(result.text).toContain('HTTP 429 — Rate limited by doi.org')
+  })
+
   it('reports a registry that does not answer with a citation', async () => {
     const host = createMockHost(
       createMockHttp(() => new Response('not a citation', { status: 200 })),
@@ -186,14 +199,27 @@ describe('scholarly_verify verdict details', () => {
     expect(result.text).toMatch(/Author discrepancy|CHECK/)
   })
 
-  it('caps a long list at forty references', async () => {
+  it('refuses a list above the cap instead of silently truncating it', async () => {
     const host = createMockHost(createMockHttp(() => new Response('{}', { status: 404 })))
     const tool = createScholarlyVerifyTool(host)
     const references = Array.from({ length: 50 }, (_, i) => `Author ${i} (2020). Title ${i}.`)
-    const result = (await tool.execute({ references }, EXEC_CONTEXT as never)) as {
-      text: string
-    }
-    expect(result.text).toContain('(of 40 checked)')
+    await expect(tool.execute({ references }, EXEC_CONTEXT as never)).rejects.toMatchObject({
+      code: ZOTERO_INVALID_ARGUMENT,
+      message: expect.stringContaining('at most 40'),
+    })
+  })
+
+  it('counts blank entries toward the reference cap', async () => {
+    const host = createMockHost(createMockHttp(() => new Response('{}', { status: 404 })))
+    const tool = createScholarlyVerifyTool(host)
+    const references = [
+      ...Array.from({ length: 40 }, (_, i) => `Author ${i} (2020). Title ${i}.`),
+      ...Array.from({ length: 5 }, () => '   '),
+    ]
+    await expect(tool.execute({ references }, EXEC_CONTEXT as never)).rejects.toMatchObject({
+      code: ZOTERO_INVALID_ARGUMENT,
+      message: expect.stringContaining('got 45'),
+    })
   })
 })
 

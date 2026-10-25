@@ -272,6 +272,35 @@ export async function resolveScholarlyFullText(
   }
 
   // 3. DOI / PMID / PMCID resolution
+  const record = await resolveDoiLikeRoute(target, http, keys, signal, reasons, remember)
+  if (record !== undefined) return record
+
+  const tried =
+    reasons.length === 0 ? 'no route was available for this identifier' : reasons.join('; ')
+  throw new Error(
+    `No open-access full text found for ${target.id}. Tried: ${tried}. ` +
+      `If a route above reports a transport failure, the copy may exist but be unreachable right now — ` +
+      `retry before concluding it is paywalled. ` +
+      `If the user has it in their local Zotero library, read it with zotero_retrieve; ` +
+      `otherwise work from the abstract (scholarly_get) and say plainly that no open copy was reachable.`,
+  )
+}
+
+/**
+ * The DOI / PMID / PMCID route: Europe PMC, OpenAlex, and Unpaywall lookups
+ * start concurrently, PMC JATS XML is the preferred structured source, then
+ * the discovered open-access PDF candidates are tried in order. `reasons`
+ * accumulates by reference so the caller's terminal error names every route;
+ * the helper returns undefined when no route answered.
+ */
+async function resolveDoiLikeRoute(
+  target: PaperIdentifier,
+  http: ScholarlyHttp,
+  keys: ScholarlyKeys | undefined,
+  signal: AbortSignal | undefined,
+  reasons: string[],
+  remember: (record: FullTextRecord) => Promise<FullTextRecord>,
+): Promise<FullTextRecord | undefined> {
   let pmcid: string | undefined = target.kind === 'pmcid' ? target.id : undefined
   let doi: string | undefined = target.kind === 'doi' ? target.id : undefined
 
@@ -435,13 +464,5 @@ export async function resolveScholarlyFullText(
     )
   }
 
-  const tried =
-    reasons.length === 0 ? 'no route was available for this identifier' : reasons.join('; ')
-  throw new Error(
-    `No open-access full text found for ${target.id}. Tried: ${tried}. ` +
-      `If a route above reports a transport failure, the copy may exist but be unreachable right now — ` +
-      `retry before concluding it is paywalled. ` +
-      `If the user has it in their local Zotero library, read it with zotero_retrieve; ` +
-      `otherwise work from the abstract (scholarly_get) and say plainly that no open copy was reachable.`,
-  )
+  return undefined
 }

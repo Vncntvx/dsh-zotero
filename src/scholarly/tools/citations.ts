@@ -45,12 +45,7 @@ export function createScholarlyCitationsTool(host: ScholarlyToolHost): ToolDefin
     isConcurrencySafe: () => true,
     timeoutMs: 60_000,
     async execute(args, exec): Promise<ScholarlyToolOutput> {
-      const input = args as {
-        id: string
-        direction: 'citations' | 'references' | 'related'
-        limit?: number
-      }
-      const raw = input.id.trim()
+      const raw = args.id.trim()
       const parsedId = parsePaperIdentifier(raw)
       const openAlexLookupId = parsedId ? openAlexIdOf(parsedId) : undefined
       if (!openAlexLookupId) {
@@ -62,7 +57,7 @@ export function createScholarlyCitationsTool(host: ScholarlyToolHost): ToolDefin
 
       const limit = Math.min(
         host.maxResults(),
-        Math.max(1, input.limit ?? Math.min(10, host.maxResults())),
+        Math.max(1, args.limit ?? Math.min(10, host.maxResults())),
       )
       const keys = host.keys()
 
@@ -75,9 +70,9 @@ export function createScholarlyCitationsTool(host: ScholarlyToolHost): ToolDefin
       }
 
       const relation =
-        input.direction === 'citations'
+        args.direction === 'citations'
           ? 'cites'
-          : input.direction === 'references'
+          : args.direction === 'references'
             ? 'cited_by'
             : 'related_to'
 
@@ -91,9 +86,9 @@ export function createScholarlyCitationsTool(host: ScholarlyToolHost): ToolDefin
       )
 
       const relDesc =
-        input.direction === 'citations'
+        args.direction === 'citations'
           ? 'cite'
-          : input.direction === 'references'
+          : args.direction === 'references'
             ? 'are referenced by'
             : 'are related to'
 
@@ -126,8 +121,8 @@ export function createScholarlyCitationsTool(host: ScholarlyToolHost): ToolDefin
       }
     },
     presentCall: (args) => {
-      const dir = (args as { direction?: string }).direction
-      const id = String((args as { id?: string }).id ?? '')
+      const dir = args.direction
+      const id = String(args.id ?? '')
       const title =
         dir === 'references'
           ? 'Get paper references'

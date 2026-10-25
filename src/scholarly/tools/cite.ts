@@ -8,7 +8,9 @@ import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
 import { mapWithConcurrency } from '../../concurrency.js'
 import { ZoteroError, ZOTERO_INVALID_ARGUMENT } from '../../errors.js'
 import { parsePaperIdentifier } from '../fulltext/resolve.js'
+import { httpStatusOf } from '../transport/http.js'
 import { lookupEuropePmc } from '../sources/pmc.js'
+import { failureTextOf } from './failure.js'
 import {
   SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR,
   type ScholarlyToolHost,
@@ -31,6 +33,9 @@ const FORMAT_MIME_TYPES: Record<Exclude<CiteFormat, 'text'>, string> = {
   csljson: 'application/vnd.citationstyles.csl+json',
 }
 
+/** Per-call identifier cap; the description promises it and the executor enforces it. */
+const SCHOLARLY_CITE_MAX_IDS = 30
+
 export function createScholarlyCiteTool(host: ScholarlyToolHost): ToolDefinition {
   return defineTool({
     name: 'scholarly_cite',
@@ -43,7 +48,7 @@ export function createScholarlyCiteTool(host: ScholarlyToolHost): ToolDefinition
         type: 'array',
         required: true,
         items: { type: 'string' },
-        description: 'DOIs, arXiv IDs, or PMIDs (up to 30 items).',
+        description: `DOIs, arXiv IDs, or PMIDs (up to ${SCHOLARLY_CITE_MAX_IDS} items).`,
       },
       format: {
         type: 'string',
@@ -66,24 +71,26 @@ export function createScholarlyCiteTool(host: ScholarlyToolHost): ToolDefinition
     isConcurrencySafe: () => true,
     timeoutMs: 120_000,
     async execute(args, exec): Promise<ScholarlyToolOutput> {
-      const input = args as {
-        ids: string[]
-        format: CiteFormat
-        style?: string
-        locale?: string
-      }
-
-      const style = input.style?.trim() || 'apa'
+      const style = args.style?.trim() || 'apa'
       const acceptHeader =
-        input.format === 'text'
-          ? `text/x-bibliography; style=${style}${input.locale ? `; locale=${input.locale}` : ''}`
-          : FORMAT_MIME_TYPES[input.format]
+        args.format === 'text'
+          ? `text/x-bibliography; style=${style}${args.locale ? `; locale=${args.locale}` : ''}`
+          : FORMAT_MIME_TYPES[args.format]
 
-      if (!input.ids || input.ids.length === 0) {
+      if (!args.ids || args.ids.length === 0) {
         throw new ZoteroError('ids parameter cannot be empty.', ZOTERO_INVALID_ARGUMENT)
       }
+      // The cap is part of the tool's contract, so exceeding it is a named
+      // refusal: silently dropping ids would answer a different question
+      // than the one asked.
+      if (args.ids.length > SCHOLARLY_CITE_MAX_IDS) {
+        throw new ZoteroError(
+          `ids accepts at most ${SCHOLARLY_CITE_MAX_IDS} identifiers per call; got ${args.ids.length}. Split the list across calls.`,
+          ZOTERO_INVALID_ARGUMENT,
+        )
+      }
 
-      const targets = input.ids.slice(0, 30)
+      const targets = args.ids
 
       const outcomes = await mapWithConcurrency(
         targets,
@@ -124,15 +131,15 @@ export function createScholarlyCiteTool(host: ScholarlyToolHost): ToolDefinition
             ).trim()
 
             const formatted =
-              input.format === 'bibtex' ? citationText.replace(/^\s+@/, '@') : citationText
+              args.format === 'bibtex' ? citationText.replace(/^\s+@/, '@') : citationText
 
             return { entry: formatted }
           } catch (error) {
             if (exec.signal.aborted) throw error
-            const status = (error as { status?: number }).status
+            const status = httpStatusOf(error)
             return {
               issue: `${raw}: ${
-                status === 404 ? 'DOI does not exist on doi.org' : (error as Error).message
+                status === 404 ? 'DOI does not exist on doi.org' : failureTextOf(error)
               }`,
             }
           }
@@ -148,8 +155,8 @@ export function createScholarlyCiteTool(host: ScholarlyToolHost): ToolDefinition
         if (res.issue) issues.push(res.issue)
       }
 
-      const label = input.format === 'text' ? `style ${style}` : input.format
-      const separator = input.format === 'text' ? '\n' : '\n\n'
+      const label = args.format === 'text' ? `style ${style}` : args.format
+      const separator = args.format === 'text' ? '\n' : '\n\n'
       const summary = `Citations from official DOI registries (${label}): ${entries.length} of ${targets.length} resolved.`
       const problemsText = issues.length > 0 ? `\nUnresolved items:\n${issues.join('\n')}` : ''
 
@@ -162,7 +169,7 @@ export function createScholarlyCiteTool(host: ScholarlyToolHost): ToolDefinition
     presentCall: (args) => ({
       card: 'generic',
       title: 'Format scholarly citations',
-      rawInput: String((args as { format?: string }).format ?? 'bibtex'),
+      rawInput: String(args.format ?? 'bibtex'),
       kind: 'read',
     }),
   })

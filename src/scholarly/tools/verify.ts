@@ -40,6 +40,18 @@ import {
  */
 type VerificationVerdict = 'verified' | 'check' | 'not_found' | 'unverified'
 
+/** Per-call reference cap; the description promises it and the executor enforces it. */
+const SCHOLARLY_VERIFY_MAX_REFERENCES = 40
+
+const VERIFY_PARAMETERS = {
+  references: {
+    type: 'array',
+    required: true,
+    items: { type: 'string' },
+    description: `List of reference citation strings (up to ${SCHOLARLY_VERIFY_MAX_REFERENCES}) to verify.`,
+  },
+} as const
+
 interface ReferenceCheckResult {
   raw: string
   verdict: VerificationVerdict
@@ -234,25 +246,24 @@ export function createScholarlyVerifyTool(host: ScholarlyToolHost): ToolDefiniti
     description: [
       'Audit and verify a list of academic references or citations against Crossref official registry records.',
       'Checks for phantom/hallucinated DOIs, title discrepancies, author/year mismatches, and retracted papers.',
-      'Accepts raw bibliographic citation strings (APA, MLA, IEEE, etc.) or DOIs. Verifies up to 40 references.',
+      `Accepts raw bibliographic citation strings (APA, MLA, IEEE, etc.) or DOIs. Verifies up to ${SCHOLARLY_VERIFY_MAX_REFERENCES} references.`,
     ].join(' '),
-    parameters: {
-      references: {
-        type: 'array',
-        required: true,
-        items: { type: 'string' },
-        description: 'List of reference citation strings (up to 40) to verify.',
-      },
-    },
+    parameters: VERIFY_PARAMETERS,
     output: SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR,
     isConcurrencySafe: () => true,
     timeoutMs: 240_000,
     async execute(args, exec): Promise<ScholarlyToolOutput> {
-      const input = args as { references: string[] }
-      const list = input.references
-        .map((r) => r.trim())
-        .filter(Boolean)
-        .slice(0, 40)
+      // The cap is part of the tool's contract, so exceeding it is a named
+      // refusal: silently dropping references would answer a different
+      // question than the one asked. It counts the list as submitted,
+      // blanks included, matching the ids cap in scholarly_cite.
+      if (args.references.length > SCHOLARLY_VERIFY_MAX_REFERENCES) {
+        throw new ZoteroError(
+          `references accepts at most ${SCHOLARLY_VERIFY_MAX_REFERENCES} entries per call; got ${args.references.length}. Split the list across calls.`,
+          ZOTERO_INVALID_ARGUMENT,
+        )
+      }
+      const list = args.references.map((r) => r.trim()).filter(Boolean)
       if (list.length === 0) {
         throw new ZoteroError('references parameter cannot be empty.', ZOTERO_INVALID_ARGUMENT)
       }
@@ -304,7 +315,7 @@ export function createScholarlyVerifyTool(host: ScholarlyToolHost): ToolDefiniti
     presentCall: (args) => ({
       card: 'generic',
       title: 'Verify references',
-      rawInput: `${((args as { references?: string[] }).references ?? []).length} items`,
+      rawInput: `${(args.references ?? []).length} items`,
       kind: 'search',
     }),
   })

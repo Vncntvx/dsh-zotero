@@ -23,6 +23,15 @@ import {
   type ScholarlyToolOutput,
 } from './common.js'
 
+const GET_PARAMETERS = {
+  id: {
+    type: 'string',
+    required: true,
+    description:
+      'DOI (e.g. 10.1038/nature1234), arXiv ID (e.g. 2301.00001), PMID, PMCID, URL, or exact title.',
+  },
+} as const
+
 export function createScholarlyGetTool(host: ScholarlyToolHost): ToolDefinition {
   return defineTool({
     name: 'scholarly_get',
@@ -30,19 +39,12 @@ export function createScholarlyGetTool(host: ScholarlyToolHost): ToolDefinition 
       'Look up one scholarly paper by DOI, arXiv ID, PMID, PMCID, URL, or exact title. ' +
       'Merges metadata across OpenAlex, Crossref, arXiv, Semantic Scholar, and Europe PMC ' +
       'into full abstract, authors, venue, citations, open-access status, and retraction checks.',
-    parameters: {
-      id: {
-        type: 'string',
-        required: true,
-        description:
-          'DOI (e.g. 10.1038/nature1234), arXiv ID (e.g. 2301.00001), PMID, PMCID, URL, or exact title.',
-      },
-    },
+    parameters: GET_PARAMETERS,
     output: SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR,
     isConcurrencySafe: () => true,
     timeoutMs: 60_000,
     async execute(args, exec): Promise<ScholarlyToolOutput> {
-      const raw = (args as { id: string }).id.trim()
+      const raw = args.id.trim()
       if (!raw) throw new ZoteroError('id parameter cannot be empty.', ZOTERO_INVALID_ARGUMENT)
 
       const id = parsePaperIdentifier(raw)
@@ -208,7 +210,7 @@ export function createScholarlyGetTool(host: ScholarlyToolHost): ToolDefinition 
     presentCall: (args) => ({
       card: 'generic',
       title: 'Get scholarly paper detail',
-      rawInput: String((args as { id?: string }).id ?? ''),
+      rawInput: String(args.id ?? ''),
       kind: 'read',
     }),
   })

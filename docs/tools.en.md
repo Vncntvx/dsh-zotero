@@ -753,7 +753,7 @@ Fetches official citations directly from DOI registration agencies (Crossref, Da
 
 | Parameter | Type     | Default      | Description                                                                                                       |
 | --------- | -------- | ------------ | ----------------------------------------------------------------------------------------------------------------- |
-| `ids`     | string[] | — (required) | List of DOIs, arXiv IDs, or PMIDs (up to 30 items)                                                                |
+| `ids`     | string[] | — (required) | List of DOIs, arXiv IDs, or PMIDs (up to 30 items; a longer list is refused with an error, not truncated)         |
 | `format`  | string   | — (required) | Citation format: `bibtex`, `ris`, `csljson`, `text` (formatted reference)                                         |
 | `style`   | string   | `"apa"`      | CSL style ID for `format="text"` (e.g. `apa`, `ieee`, `nature`, `china-national-standard-gb-t-7714-2015-numeric`) |
 | `locale`  | string   | —            | Language locale code (e.g. `zh-CN`, `en-US`)                                                                      |
@@ -766,9 +766,9 @@ Bibliography verification and fact-checking tool. Parses authors, year, title, a
 
 #### Parameters
 
-| Parameter    | Type     | Default      | Description                                                      |
-| ------------ | -------- | ------------ | ---------------------------------------------------------------- |
-| `references` | string[] | — (required) | List of bibliography reference strings to check (up to 40 items) |
+| Parameter    | Type     | Default      | Description                                                                                                             |
+| ------------ | -------- | ------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `references` | string[] | — (required) | List of bibliography reference strings to check (up to 40 items; a longer list is refused with an error, not truncated) |
 
 #### Verdicts
 

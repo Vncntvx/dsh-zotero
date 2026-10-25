@@ -13,15 +13,6 @@ import { searchEuropePmc } from './pmc.js'
 import { searchPubMed } from './pubmed.js'
 import { searchSemanticScholar } from './semanticscholar.js'
 
-export * from './arxiv.js'
-export * from './crossref.js'
-export * from './dblp.js'
-export * from './helpers.js'
-export * from './openalex.js'
-export * from './pmc.js'
-export * from './pubmed.js'
-export * from './semanticscholar.js'
-
 type SourceSearcher = (
   query: ScholarlyQuery,
   http: ScholarlyHttp,

@@ -66,17 +66,7 @@ export function createScholarlyReadTool(host: ScholarlyReadHost): ToolDefinition
     isConcurrencySafe: () => true,
     timeoutMs: 180_000,
     async execute(args, exec): Promise<ScholarlyToolOutput> {
-      const input = args as {
-        id: string
-        outline?: boolean
-        section?: string
-        query?: string
-        passages?: number
-        start?: number
-        max_chars?: number
-      }
-
-      const raw = input.id.trim()
+      const raw = args.id.trim()
       const parsedId = parsePaperIdentifier(raw)
       if (!parsedId) {
         throw new ZoteroError(
@@ -98,7 +88,7 @@ export function createScholarlyReadTool(host: ScholarlyReadHost): ToolDefinition
       }`
 
       // 1. Inspect Table of Contents
-      if (input.outline) {
+      if (args.outline) {
         if (sections.length === 0) {
           return {
             text: `${header}\n\nNotice: This document was read from an unstructured PDF and has no section headings. Please read in chunks or search with query.`,
@@ -133,8 +123,8 @@ export function createScholarlyReadTool(host: ScholarlyReadHost): ToolDefinition
       let scopeLabel = ''
 
       // 2. Read specific Section
-      if (input.section?.trim()) {
-        const sec = findSection(sections, input.section)
+      if (args.section?.trim()) {
+        const sec = findSection(sections, args.section)
         if (!sec) {
           const available = sections
             .filter((s) => s.level <= 2)
@@ -143,7 +133,7 @@ export function createScholarlyReadTool(host: ScholarlyReadHost): ToolDefinition
           throw new ZoteroError(
             sections.length === 0
               ? 'This copy has no structured headings; please read in chunks or use query.'
-              : `Section "${input.section}" not found. Available main sections: ${available}`,
+              : `Section "${args.section}" not found. Available main sections: ${available}`,
             ZOTERO_INVALID_ARGUMENT,
           )
         }
@@ -152,16 +142,16 @@ export function createScholarlyReadTool(host: ScholarlyReadHost): ToolDefinition
       }
 
       // 3. BM25 Natural Language Question Matching
-      if (input.query?.trim()) {
-        const numPassages = Math.min(12, Math.max(1, input.passages ?? 5))
-        const ranked = rankPassagesWithBM25(activeText, input.query.trim(), numPassages)
+      if (args.query?.trim()) {
+        const numPassages = Math.min(12, Math.max(1, args.passages ?? 5))
+        const ranked = rankPassagesWithBM25(activeText, args.query.trim(), numPassages)
         if (ranked.length === 0) {
           return {
-            text: `${header}${scopeLabel}\n\nNo relevant passage found matching "${input.query}". Try alternative phrasing.`,
+            text: `${header}${scopeLabel}\n\nNo relevant passage found matching "${args.query}". Try alternative phrasing.`,
             document: toCleanJsonRecord({
               id: raw,
               source: fullText.source,
-              query: input.query,
+              query: args.query,
               passages: [],
             }),
           }
@@ -175,11 +165,11 @@ export function createScholarlyReadTool(host: ScholarlyReadHost): ToolDefinition
           .join('\n\n')
 
         return {
-          text: `${header}${scopeLabel}\n\nTop passages matching "${input.query}":\n\n${passagesText}`,
+          text: `${header}${scopeLabel}\n\nTop passages matching "${args.query}":\n\n${passagesText}`,
           document: toCleanJsonRecord({
             id: raw,
             source: fullText.source,
-            query: input.query,
+            query: args.query,
             passages: ranked.map(toCleanJsonRecord),
           }),
         }
@@ -187,8 +177,8 @@ export function createScholarlyReadTool(host: ScholarlyReadHost): ToolDefinition
 
       // 4. Default Chunked Reading
       const maxChars = host.maxContentChars ? host.maxContentChars() : 12_000
-      const start = Math.min(activeText.length, Math.max(0, input.start ?? 0))
-      const chunkSize = Math.min(maxChars, Math.max(500, input.max_chars ?? maxChars))
+      const start = Math.min(activeText.length, Math.max(0, args.start ?? 0))
+      const chunkSize = Math.min(maxChars, Math.max(500, args.max_chars ?? maxChars))
       const end = Math.min(activeText.length, start + chunkSize)
 
       const isTruncated = end < activeText.length
@@ -218,8 +208,8 @@ export function createScholarlyReadTool(host: ScholarlyReadHost): ToolDefinition
       }
     },
     presentCall: (args) => {
-      const isOutline = Boolean((args as { outline?: boolean }).outline)
-      const id = String((args as { id?: string }).id ?? '')
+      const isOutline = Boolean(args.outline)
+      const id = String(args.id ?? '')
       return {
         card: 'generic',
         title: isOutline ? 'Read paper outline' : 'Read paper full text',

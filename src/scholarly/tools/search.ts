@@ -1,5 +1,5 @@
 /**
- * The `scholarly_search` tool: multi-source literature retrieval across 6 academic indexes.
+ * The `scholarly_search` tool: multi-source literature retrieval across 7 academic indexes.
  * Supports intelligent routing, weighted RRF fusion, collision check against Zotero, and background promotion.
  * @module dsh-zotero/scholarly/tools/search
  */
@@ -24,6 +24,9 @@ import {
 } from './common.js'
 
 const CITE_HINT = 'Tip: Cite a paper from these results using its title link or ID.'
+
+/** Sources whose ranked lists get the boosted RRF weight (1.2 instead of 1.0). */
+const BOOSTED_RRF_SOURCES: ReadonlySet<string> = new Set(['arxiv', 'dblp', 'pubmed', 'europepmc'])
 
 export function createScholarlySearchTool(host: ScholarlyToolHost): ToolDefinition {
   return defineTool({
@@ -75,41 +78,29 @@ export function createScholarlySearchTool(host: ScholarlyToolHost): ToolDefiniti
     isConcurrencySafe: () => true,
     timeoutMs: 180_000,
     async execute(args, exec): Promise<ScholarlyToolOutput> {
-      const input = args as {
-        query: string
-        sources?: string[]
-        year_from?: number
-        year_to?: number
-        open_access?: boolean
-        sort?: 'relevance' | 'date' | 'citations'
-        categories?: string[]
-        limit?: number
-        abstract?: 'none' | 'snippet' | 'full'
-      }
-
-      const text = input.query.trim()
+      const text = args.query.trim()
       if (!text) throw new ZoteroError('query parameter cannot be empty.', ZOTERO_INVALID_ARGUMENT)
 
       const limit = Math.min(
         host.maxResults(),
-        Math.max(1, input.limit ?? Math.min(8, host.maxResults())),
+        Math.max(1, args.limit ?? Math.min(8, host.maxResults())),
       )
-      const selectedSources = routeQuery(text, input.sources)
+      const selectedSources = routeQuery(text, args.sources)
       const thisYear = new Date().getFullYear()
-      const isDateSort = input.sort === 'date'
+      const isDateSort = args.sort === 'date'
 
-      const yearFrom = input.year_from ?? (isDateSort ? thisYear - 1 : undefined)
+      const yearFrom = args.year_from ?? (isDateSort ? thisYear - 1 : undefined)
       const yearTo =
-        yearFrom === undefined && input.year_to === undefined
+        yearFrom === undefined && args.year_to === undefined
           ? undefined
-          : Math.min(input.year_to ?? thisYear + 1, thisYear + 1)
+          : Math.min(args.year_to ?? thisYear + 1, thisYear + 1)
 
       const queryObj: ScholarlyQuery = {
         query: text,
-        sort: input.sort === 'citations' ? 'relevance' : (input.sort ?? 'relevance'),
+        sort: args.sort === 'citations' ? 'relevance' : (args.sort ?? 'relevance'),
         limit: Math.min(
           50,
-          input.sort === 'citations'
+          args.sort === 'citations'
             ? limit * 4
             : selectedSources.length === 1
               ? limit
@@ -117,10 +108,8 @@ export function createScholarlySearchTool(host: ScholarlyToolHost): ToolDefiniti
         ),
         ...(yearFrom !== undefined ? { yearFrom } : {}),
         ...(yearTo !== undefined ? { yearTo } : {}),
-        ...(input.open_access ? { openAccess: true } : {}),
-        ...(input.categories && input.categories.length > 0
-          ? { categories: input.categories }
-          : {}),
+        ...(args.open_access ? { openAccess: true } : {}),
+        ...(args.categories && args.categories.length > 0 ? { categories: args.categories } : {}),
       }
 
       const keys = host.keys()
@@ -138,12 +127,7 @@ export function createScholarlySearchTool(host: ScholarlyToolHost): ToolDefiniti
                 : queryObj
 
             const papers = await searcher(queryForSource, host.http, keys, exec.signal)
-            const weight =
-              sourceId === 'arxiv' || sourceId === 'dblp'
-                ? 1.2
-                : sourceId === 'pubmed' || sourceId === 'europepmc'
-                  ? 1.2
-                  : 1.0
+            const weight = BOOSTED_RRF_SOURCES.has(sourceId) ? 1.2 : 1.0
 
             return {
               sourceId,
@@ -167,7 +151,7 @@ export function createScholarlySearchTool(host: ScholarlyToolHost): ToolDefiniti
       let papers = fuseRankedLists(sourceResults)
 
       // 2. Post-process rankings (title exact match, date/citation sorting, OA filter, limit slice)
-      papers = postProcessRanked(papers, { ...queryObj, limit, sort: input.sort ?? 'relevance' })
+      papers = postProcessRanked(papers, { ...queryObj, limit, sort: args.sort ?? 'relevance' })
 
       // 3. Cross-component collision check against the local Zotero library (top N only).
       //    A lookup that could not run reports "unavailable" instead of leaving
@@ -193,7 +177,7 @@ export function createScholarlySearchTool(host: ScholarlyToolHost): ToolDefiniti
         .filter((_, idx) => sourceResults[idx]!.papers.length > 0)
         .map((s) => SCHOLARLY_SOURCE_NAMES[s])
 
-      const abstractChars = input.abstract === 'none' ? 0 : input.abstract === 'full' ? 4000 : 300
+      const abstractChars = args.abstract === 'none' ? 0 : args.abstract === 'full' ? 4000 : 300
       const summaryHeader = `${papers.length} papers found for "${text}" (via ${answeredSources.join(
         ', ',
       )}).`
@@ -212,7 +196,7 @@ export function createScholarlySearchTool(host: ScholarlyToolHost): ToolDefiniti
     presentCall: (args) => ({
       card: 'generic',
       title: 'Search scholarly literature',
-      rawInput: String((args as { query?: string }).query ?? ''),
+      rawInput: String(args.query ?? ''),
       kind: 'search',
     }),
   })
