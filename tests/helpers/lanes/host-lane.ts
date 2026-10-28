@@ -22,7 +22,7 @@
  * @module tests/helpers/lanes/host-lane
  */
 
-import { Context, type Fiber } from '@deepseek-ai/cordis'
+import { Context, Service, type Fiber } from '@deepseek-ai/cordis'
 import { createVolatile, updateVolatile, volatileEntries } from '@deepseek-ai/cosmokit'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
@@ -64,6 +64,8 @@ export interface HostLaneOptions {
 export interface HostLane {
   /** The context the plugin is mounted on. */
   readonly ctx: Context
+  /** The settings.configure calls the services suppressing their pages made. */
+  readonly configureCalls: { auto: boolean }[]
   /** The scripted Zotero Local API the plugin talks to. */
   readonly mock: MockZotero
   /** The plugin's own fiber; disposing it unwinds every registration. */
@@ -90,6 +92,19 @@ export async function setupHostLane(
 ): Promise<HostLane> {
   const mock = await MockZotero.start()
   const ctx = new Context()
+  // The settings plane the Zotero and library services suppress their
+  // schema-generated pages against; the stub records the call.
+  const configureCalls: { auto: boolean }[] = []
+  class StubSettings extends Service {
+    constructor(settingsCtx: Context) {
+      super(settingsCtx, 'settings')
+    }
+
+    configure(config: { auto: boolean }, _fiber: Fiber): void {
+      configureCalls.push(config)
+    }
+  }
+  await ctx.plugin(StubSettings, undefined)
   await ctx.plugin(SystemPrompt, {})
   await ctx.plugin(ToolRuntime, {})
   if (options.commands === true) await ctx.plugin(StubCommands)
@@ -102,6 +117,7 @@ export async function setupHostLane(
   return {
     ctx,
     mock,
+    configureCalls,
     zoteroFiber,
     stub: options.commands === true ? (ctx.get('commands') as unknown as StubCommands) : undefined,
     runTool(name, args) {

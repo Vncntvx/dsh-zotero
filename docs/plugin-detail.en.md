@@ -1,0 +1,3 @@
+- **Core component** (`dsh-zotero`): the local Zotero connection, model tools, the conversation Sources tab, and the settings page. Writes are off by default, and every call needs approval on its plan card.
+- **Library panel** (`dsh-zotero/library`): the sidebar panel with the collection tree, saved searches, trash, multi-field filters, item details, and PDF opening.
+- **Scholarly search** (`dsh-zotero/scholarly`): external literature search, off by default. Covers arXiv, OpenAlex, Crossref, Semantic Scholar, PubMed, Europe PMC, and DBLP, with full text, citation graphs, reference verification, and saving to Zotero.

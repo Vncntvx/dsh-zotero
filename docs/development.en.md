@@ -8,13 +8,19 @@
 src/
   index.ts              # Plugin entry (pure re-export)
   service.ts            # ZoteroService (Cordis service)
+  library/              # Library panel subcomponent (ZoteroLibraryService, config schema)
+  library-views.ts      # Bidirectional mapping between the panel's wire views and domain requests
+  library-write.ts      # Panel write entry: rides the registered tool pipeline and its approval seam
   local/provider.ts     # LocalApiProvider (Zotero Local API adapter)
   local/*-domain.ts     # Domain pipelines (search, export, changes, browse, write, etc.)
-  local/                # Helper modules: detail, retrieve, attachment-location, scope-directory, etc.
+  local/                # Helper modules: detail, retrieve, attachment-location, scope-directory, search-index, item-batch, etc.
   http-client.ts        # HTTP transport layer (loopback fetch, streaming, and concurrency slot control)
   config.ts             # Configuration schema and validation logic
   types.ts              # Domain DTOs and type definitions
   contract.ts           # Remote wire protocol surface and constants
+  wire-schemas.ts       # Wire boundary zod schemas shared by both codec arms
+  creators.ts           # Creator display formatting (shared across halves)
+  media-types.ts        # Media-type constants (shared across halves)
   diagnostics.ts        # In-process diagnostics ring buffer, entry model, and sink
   status-codec.ts       # Host-side status decoding (zod)
   abort.ts              # The one spelling of the caller-cancellation error (harness TOOL_ABORTED)

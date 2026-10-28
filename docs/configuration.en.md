@@ -12,7 +12,7 @@ All configuration fields are defined in `src/config.ts`, with default values pro
 | `provider`                 | `local`                      | Selected provider identifier                                                                                                                                                                                                                     |
 | `timeoutMs`                | `5000`                       | Single HTTP request timeout in milliseconds                                                                                                                                                                                                      |
 | `maxInFlightRequests`      | `8`                          | Maximum concurrent in-flight requests to the Local API                                                                                                                                                                                           |
-| `maxSearchResults`         | `20`                         | Maximum items returned by `zotero_search`                                                                                                                                                                                                        |
+| `maxSearchResults`         | `20`                         | Maximum items returned by `zotero_search`; also clamps the library panel's search page size (the response carries the effective `limit`)                                                                                                         |
 | `maxNoteScanRecords`       | `200`                        | Maximum note records scanned for note content searches                                                                                                                                                                                           |
 | `searchConcurrency`        | `4`                          | Concurrency limit for parent attribution queries in `zotero_search`                                                                                                                                                                              |
 | `maxEvidenceChars`         | `6000`                       | Total character budget for retrieved passages                                                                                                                                                                                                    |
@@ -30,7 +30,7 @@ All configuration fields are defined in `src/config.ts`, with default values pro
 | `maxResponseBytes`         | `16777216`                   | Streaming byte limit for a single API response (16 MiB)                                                                                                                                                                                          |
 | `maxExportChars`           | `1000000`                    | Hard character limit for export output (1M characters)                                                                                                                                                                                           |
 | `maxExportRefs`            | `50`                         | Maximum references in a single `zotero_export` call                                                                                                                                                                                              |
-| `maxBrowseResults`         | `50`                         | Maximum items returned by a single `zotero_browse` call                                                                                                                                                                                          |
+| `maxBrowseResults`         | `50`                         | Maximum items returned by a single `zotero_browse` call; also clamps the library panel's browse page size (collection tree / tags / saved searches, the response carries the effective `limit`)                                                  |
 | `maxChangesResults`        | `50`                         | Display limit per resource kind in `zotero_changes`                                                                                                                                                                                              |
 | `scopeListingTtlMs`        | `30000`                      | How long a collection or saved-search scope listing is trusted before a re-read (ms)                                                                                                                                                             |
 | `defaultStyle`             | `apa`                        | CSL citation style (must be built into Zotero)                                                                                                                                                                                                   |
@@ -40,7 +40,7 @@ All configuration fields are defined in `src/config.ts`, with default values pro
 | `writeNoteMaxChars`        | `65536`                      | Maximum characters for a research note body                                                                                                                                                                                                      |
 | `writeListMaxItems`        | `50`                         | Cap on list-shaped write arguments: `add`/`remove` for `update_item_tags`/`update_item_collections`, `tags` for `delete_library_tags`, and `collections`/`tags`/`sourceRefs` for `create_note`                                                   |
 | `writeAuthorizeDeadlineMs` | `120000`                     | Timeout in milliseconds when waiting for Zotero authorization dialog                                                                                                                                                                             |
-| `webEnabled`               | `true`                       | Whether to enable the Zotero session tab in DSH Web                                                                                                                                                                                              |
+| `webEnabled`               | `true`                       | Whether to enable the Zotero session tab and the sidebar library panel in DSH Web                                                                                                                                                                |
 | `enableRunInBackground`    | `true`                       | Whether `run_in_background: true` requests may run as jobs (the parameter is always declared; passing `true` while disabled returns a structured refusal)                                                                                        |
 | `promoteOnTimeout`         | `true`                       | Whether to promote long foreground export or sync operations to background Jobs on timeout                                                                                                                                                       |
 | `foregroundWaitMs`         | `4000`                       | Foreground wait limit in milliseconds before automatic promotion to background Job                                                                                                                                                               |
@@ -84,7 +84,7 @@ Open the **dsh-zotero** detail page in the plugin manager; its configuration sec
 
 - Changes to transport fields or write gates rebuild the HTTP client, local provider, and write tools on the existing `ZoteroService` instance.
 - Limit modifications are read live on subsequent calls without rebuilding transport components.
-- The `webEnabled` toggle displays or hides the tab immediately upon save.
+- The `webEnabled` toggle displays or hides the session tab and the library panel immediately upon save.
 - The `debug` setting takes effect immediately upon saving to control diagnostics panel visibility and diagnostic logging levels without component reinitialization.
 - Nearly all configuration updates apply to the next tool invocation without restarting the host.
 
@@ -110,3 +110,23 @@ The component's remaining fields can be edited through three paths: directly on 
 | `maxContentChars` | `12000` | Character ceiling for chunked full-text reading (1,000–50,000)                                     |
 
 While the component is off, the "Scholarly Search" tab of the main settings page shows only a pointer to "Included components" and renders no field; it becomes the editable form once the component is enabled. Full texts are cached as one JSON document per key under `$DSH_HOME/cache/zotero-scholarly/` (not controlled by this table, no separate switch).
+
+---
+
+## Library Subcomponent Configuration (`dsh-zotero/library`)
+
+The library panel is an independent DSH bundle subcomponent, shipped with the plugin and enabled by default in the default profile (`cordis.patch.yml` includes `- id: library` / `name: dsh-zotero/library`). It provides whole-library search, a collection tree, item lists, and an inspector, shown as a right-sidebar tab beside the conversation and toggled by `rightSidebarEnabled`.
+
+The component has three configuration paths:
+
+1. **"Library" tab in the unified settings form**: switch to "Library" on the 6-tab plugin detail form;
+2. **Row configuration under "Included components"**: click "Configure" on the `dsh-zotero#library` row;
+3. **Configuration file**: set it under `config` on the matching row of the active profile's `cordis.patch.yml`.
+
+Both forms share one state, and updates take effect immediately:
+
+| Field                 | Default | Description                                                                                                                       |
+| --------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `rightSidebarEnabled` | `true`  | Whether to show the library tab in the right sidebar (`sidebarRightTabs` + `sidebar.right.pane.tab`), for reading beside the chat |
+
+The panel also requires the core `webEnabled` flag: with `webEnabled: false` the library does not mount.

@@ -34,7 +34,7 @@ graph LR
 
 - `LocalApiProvider` 实现 `ZoteroProvider` 接口；
 - 提供 search、metadata、attachments、citation、browse、retrieve、changes 等核心能力，写入能力仅在明确配置且授权就绪时提供；
-- 搜索与浏览的作用域名称由插件基于缓存的列表数据自行解析；缓存列表由 scope directory 持有，并随传输层一同重建；
+- 搜索与浏览的作用域名称由插件基于缓存的列表数据自行解析；缓存列表由 scope directory 持有，并随传输层一同重建；`trash` 作用域（`/items/trash` 列表）是文献库面板专属的搜索作用域，模型工具的输入 schema 不提供它；
 - 读路径的并发由 `searchConcurrency`、`graphConcurrency` 两个限额约束，避免单次调用对本地 API 造成瞬时过载；
 - 笔记内容扫描在第一页（offset 0）按限额执行；
 - 原文片段基于 BM25 词频算法排序；
@@ -78,9 +78,20 @@ graph LR
 - **失败语义**：全文解析的每条路由各自记录失败原因，终态错误逐条列出（`Tried: …`）；`scholarly_verify` 用四值结论（`verified` / `check` / `not_found` / `unverified`）区分「注册表说没有」与「注册表联系不上」——后者若报成前者，用户会删掉一条正确的引用。
 - **公开面**：`src/scholarly/index.ts` 只导出服务类、配置 schema 与领域类型；传输、主机表、存储与融合内部实现均不导出。
 
+### 文献库独立子组件 (`src/library/`，`dsh-zotero/library`)
+
+`dsh-zotero/library` 是独立声明的 DSH bundle 子组件，随包发布并默认启用（`cordis.patch.yml` 中包含该组件项）。全库浏览、检索、详情检视与右侧边栏挂载都在该组件内：
+
+- **服务边界**：独立 Cordis 服务 `ctx.zoteroLibrary`（`ZoteroLibraryService`，派生自 `TypertRemoteService`），独占 `zoteroLibrary` 服务键与 `library` 设置命名空间（即 `cordis.patch.yml` 的条目 id）。只读请求（`browse` / `search` / `item`）转交核心 `ctx.zotero` 服务；写请求经 `executeLibraryWrite` 进入标准写入审批链，与其他写工具相同：capability 门禁与 `ctx.approval.request` 会话审批；
+- **配置**：配置 schema 在 `src/library/config.ts`（`LibraryConfigSchema`），含 `rightSidebarEnabled` 一个 `volatile` 开关。核心 `webEnabled` 为 `false` 时文献库不挂载；
+- **导出**：`package.json` 公开 `./library`、`./library/locale/*.json` 与 `./library/icon`，与根导出相互独立。
+
 ### 浏览器客户端 (`src/client/`)
 
-- 组合包配置（`plugins.bundle.config`）：在插件管理器详情页注册统一的 5 标签页配置界面（基础设置、本地连接、检索提取、学术检索、高级选项），通过 harness 官方 `SettingsForm` 与 `SettingsFormModel` 统一管理 Zotero 主命名空间与 Scholarly 学术检索命名空间，支持双通道互通呈现与草稿防丢弃隔离；学术检索标签页有两种形态：组件未启用（命名空间未被服务）时只显示一条指向「包含的组件」的提示，组件启用后才渲染可编辑表单；
+- 组合包配置（`plugins.bundle.config` 与 `plugins.row.config`）：在插件管理器详情页注册统一的 6 标签页配置界面（基础设置、本地连接、检索提取、文献库、学术检索、高级选项），通过 harness 官方 `SettingsForm` 与 `SettingsFormModel` 管理 `zotero`、`library` 与 `scholarly` 三个命名空间，双通道呈现并保留未提交草稿；同时在组件列表行通过 `plugins.row.config`（声明在 `dsh-zotero#library`，受 `whileServed('library')` 守卫）提供侧边栏开关表单；
+- 文献库面板：
+  - **右侧标签页（`sidebarRightTabs` + `sidebar.right.pane.tab` + `sidebar.right.pane.tab.title`）**：由 `rightSidebarEnabled` 控制，`sidebar.right.pane.tab` 为会话作用域——面板绑定到其所在标签页的会话，文件读取与写审批锚定该会话；
+  - **容器查询布局**：宽屏由 `@container zoteroLibraryPanel (min-width: 861px)` 切换；窄屏为分段导航栏（`导航 / 列表 / 详情`），选中合集或条目后切到下一段，宽屏为三列并排；
 - 会话面板（`conversation.view`）：会话标签页只有一个 Zotero 面板，顶部透镜栏在文献工作区与会话级导出页之间切换；每个条目的检查器内含概览（Overview）、原文片段（Passages）与该条目导出结果（Exports）三个面板；
 - 工具卡片（`tool.call.toolview`）：23 个本地模型工具（8 读 + 15 写）与 `scholarly_save_to_zotero` 各有一张紧凑折叠卡片；其余 6 个 Scholarly 检索工具按官方契约落通用行（未占用键的 fallback）。卡片对值得复制的取值提供复制按钮，通过“阅读 PDF”在侧边栏阅读原文，并提供复制标题或规范深链的定位操作。卡片只渲染工具已有的输出，自身不调用工具；
 - 命令状态卡片（`conversation.chat.commandview`）：为 `/zotero` 输出提供连接状态灯、版本与 Server ID 明细、离线排查建议与就地刷新按钮。结构化事实来自宿主注册的 `zoteroStatus` 会话投影：命令处理器将同一份状态投影为 `zotero/status` 会话事件并以 `sourceEventSeq` 指向它，卡片经 `useProjection` 读回，命令文本只作人类可读答案、不再被解析。就地刷新发起的实时探测优先于投影（它是更新的答案）；
@@ -95,8 +106,8 @@ graph LR
 
 ### 远程通信与设置
 
-- 宿主半侧在 `zotero` wire 命名空间下注册 `ZoteroRuntime`，端点返回实时连接视图（`status`）、附件落点解析（`resolveAttachment`）、诊断快照（`diagnostics`）与客户端崩溃上报（`reportClientError`）；配置读写走 harness 的共享设置表单，不经过该通道；
-- 浏览器半侧自行挂载该命名空间：`apply` 先 `ctx.remote.$mount(ZOTERO_REMOTE)`，再在声明了 `remote.zotero` 的 fiber 上（`ctx.inject(['remote.zotero', …], registerUi)`）注册全部界面并直接读 `ctx.remote.zotero`。挂载失败不吞掉：入口 reject，由 harness 报告插件加载失败；
+- 宿主半侧分别通过 `ZoteroRuntime`（`zoteroRemote`）和 `ZoteroLibraryService`（`zoteroLibrary`）在 `zotero` wire 命名空间下注册各自的 Typert 端点。`ZoteroRuntime` 负责实时连接视图（`status`）、附件落点解析（`resolveAttachment`）、诊断快照（`diagnostics`）与崩溃上报（`reportClientError`）；`ZoteroLibraryService` 负责文献库面板的只读端点（`browse`、`search`、`item`）及经过审批链的 `write` 端点。配置读写走 `zotero` 与 `library` 命名空间的共享设置表单；
+- 浏览器半侧在挂载 `zotero` 命名空间后，在对应 fiber 上注册界面；文献库面板与配置行由 `whileServed('library')` 守卫，`library` 行未组合时不注册任何面板表面、不发起 `zotero/browse|search|item|write` 调用。挂载失败时入口 reject，由 harness 报告插件加载失败；
 - 配置全字段声明为 `volatile`，支持热重载。
 
 ### 诊断与日志

@@ -10,17 +10,18 @@ dsh-zotero is a DeepSeek Harness plugin enabling agents to search, read, cite, a
 
 ## Repository map
 
-| Path             | Ownership                                                                            |
-| ---------------- | ------------------------------------------------------------------------------------ |
-| `src/`           | Host runtime: Cordis service (`ZoteroService`), HTTP client, provider, tools, jobs   |
-| `src/local/`     | Local API domain pipelines (search, browse, retrieve, export, changes, write)        |
-| `src/scholarly/` | External literature retrieval subsystem (search, fusion, fulltext, citations)        |
-| `src/tools/`     | 23 host tools (8 read + 15 write; write tools disabled by default) + 7 scholarly     |
-| `src/client/`    | Browser half (settings page, Sources/Exports tabs, toolviews) → `lib/client.js`      |
-| `tests/`         | Test suite organized into declared lanes (`tests/README.md`)                         |
-| `docs/`          | Product and technical documentation, maintained in paired zh/en files                |
-| `scripts/`       | Tooling for build, pack verification, harness pinning, test linting, and smoke tests |
-| `lib/`           | Generated build output (`tsc` and `esbuild`) — never edit directly                   |
+| Path             | Ownership                                                                                   |
+| ---------------- | ------------------------------------------------------------------------------------------- |
+| `src/`           | Host runtime: Cordis service (`ZoteroService`), HTTP client, provider, tools, jobs          |
+| `src/library/`   | Library panel bundle component (`ZoteroLibraryService` + `library-views` + `library-write`) |
+| `src/local/`     | Local API domain pipelines (search, browse, retrieve, export, changes, write)               |
+| `src/scholarly/` | External literature retrieval subsystem (search, fusion, fulltext, citations)               |
+| `src/tools/`     | 23 host tools (8 read + 15 write; write tools disabled by default) + 7 scholarly            |
+| `src/client/`    | Browser half (settings page, Sources/Exports tabs, toolviews) → `lib/client.js`             |
+| `tests/`         | Test suite organized into declared lanes (`tests/README.md`)                                |
+| `docs/`          | Product and technical documentation, maintained in paired zh/en files                       |
+| `scripts/`       | Tooling for build, pack verification, harness pinning, test linting, and smoke tests        |
+| `lib/`           | Generated build output (`tsc` and `esbuild`) — never edit directly                          |
 
 ## Sources of truth
 

@@ -25,7 +25,9 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import ZoteroService from '../../src/index.js'
 import ScholarlyService from '../../src/scholarly/index.js'
+import ZoteroLibraryService from '../../src/library/index.js'
 import { SCHOLARLY_SETTINGS_NAMESPACE } from '../../src/settings-namespace.js'
+import { ZOTERO_LIBRARY_SETTINGS_NAMESPACE } from '../../src/contract.js'
 import { expectValue } from '../helpers/lanes/host-lane.js'
 import { MockZotero } from '../helpers/mock-zotero.js'
 import { StubCommands } from '../helpers/stub-commands.js'
@@ -78,6 +80,7 @@ async function bootComposition(extraPatches: readonly PatchOptions[] = []): Prom
     ['test-stub-commands', StubCommands],
     ['dsh-zotero', ZoteroService],
     ['dsh-zotero/scholarly', ScholarlyService],
+    ['dsh-zotero/library', ZoteroLibraryService],
   ])
   context.loader.internal = {
     version: 'v2',
@@ -115,6 +118,7 @@ describe('the shipped bundle patch through a real Loader composition', () => {
 
     expect(context!.get('zotero')).toBeInstanceOf(ZoteroService)
     expect(context!.get('scholarly')).toBeInstanceOf(ScholarlyService)
+    expect(context!.get('zoteroLibrary')).toBeInstanceOf(ZoteroLibraryService)
     const names = registeredToolNames()
     // Registration order is a dependency-resolution artifact, not a contract,
     // so the composition asserts the set the shared list declares.
@@ -154,6 +158,7 @@ describe('the shipped bundle patch through a real Loader composition', () => {
     await context!.fiber.dispose()
     expect(context!.get('zotero')).toBeUndefined()
     expect(context!.get('scholarly')).toBeUndefined()
+    expect(context!.get('zoteroLibrary')).toBeUndefined()
     expect(context!.get('tools')).toBeUndefined()
     expect(commands?.registered).toEqual([])
   })
@@ -166,6 +171,7 @@ describe('the shipped bundle patch through a real Loader composition', () => {
 
     expect(context!.get('zotero')).toBeInstanceOf(ZoteroService)
     expect(context!.get('scholarly')).toBeUndefined()
+    expect(context!.get('zoteroLibrary')).toBeInstanceOf(ZoteroLibraryService)
     const names = registeredToolNames()
     expect([...names].sort()).toEqual([...ZOTERO_READ_TOOL_NAMES].sort())
     expect(names.filter((name) => name.startsWith('scholarly_'))).toHaveLength(0)
@@ -213,5 +219,25 @@ describe('the shipped bundle patch through a real Loader composition', () => {
     const assembly = await context!.systemPrompt.assemble()
     expect(assembly.sections.some((section) => section.name === 'scholarly:policy')).toBe(false)
     expect(assembly.sections.some((section) => section.name === 'zotero:policy')).toBe(true)
+  })
+
+  it('disables the library subcomponent when its row is disabled', async () => {
+    await bootComposition([{ id: 'library', disabled: true }])
+    expect(context!.get('zotero')).toBeInstanceOf(ZoteroService)
+    expect(context!.get('zoteroLibrary')).toBeUndefined()
+  })
+
+  it('declares the library subcomponent row in cordis.patch.yml', async () => {
+    const bundlePatch = await readFile(new URL('../../cordis.patch.yml', import.meta.url), 'utf8')
+    const parsed = load(bundlePatch, { schema: entryListSchema }) as PatchOptions[]
+    const rows = parsed.flatMap((patch) => patch.insert ?? [])
+    const row = rows.find((entry) => entry.name === 'dsh-zotero/library')
+    expect(row).toBeDefined()
+    // The row id is the settings namespace the browser's config form
+    // addresses; any other spelling leaves the library form unavailable.
+    expect(row!.id).toBe(ZOTERO_LIBRARY_SETTINGS_NAMESPACE)
+    expect(row!.config).toEqual({
+      rightSidebarEnabled: true,
+    })
   })
 })

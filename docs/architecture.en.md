@@ -34,7 +34,7 @@ graph LR
 
 - `LocalApiProvider` implements the `ZoteroProvider` interface;
 - Exposes search, metadata, attachments, citation, browse, retrieve, and changes capabilities; write capabilities require explicit configuration and authorization;
-- Resolves search and browse scope names from its own cached scope listings; the scope directory holds those listings and rebuilds its caches with the transport;
+- Resolves search and browse scope names from its own cached scope listings; the scope directory holds those listings and rebuilds its caches with the transport; the `trash` scope (the `/items/trash` listing) is a library-panel-only search scope that the model tool input schemas omit;
 - Bounded concurrency on fan-out reads (`searchConcurrency`, `graphConcurrency`) keeps one call from flooding the local API;
 - Note content scans execute within configured record limits on the initial page (offset 0);
 - Retrieved passages rank via the BM25 term frequency algorithm;
@@ -78,9 +78,20 @@ graph LR
 - **Failure semantics**: each full-text route records why it failed and the terminal error lists them (`Tried: …`); `scholarly_verify` reports four verdicts (`verified` / `check` / `not_found` / `unverified`) so "the registry answered and holds no such work" stays distinct from "the registry could not be reached" — reporting the second as the first makes a user delete a correct citation.
 - **Public surface**: `src/scholarly/index.ts` exports only the service class, the config schema, and the domain types; the transport, host table, store, and fusion internals are not exported.
 
+### Independent Library Subcomponent (`src/library/`, `dsh-zotero/library`)
+
+`dsh-zotero/library` is an independently declared DSH bundle subcomponent, shipped with the bundle and enabled by default (`cordis.patch.yml` includes its row). Whole-library browsing, search, detail inspection, and right-sidebar mounting live in this component:
+
+- **Service boundary**: an independent Cordis service `ctx.zoteroLibrary` (`ZoteroLibraryService`, derived from `TypertRemoteService`) owns the `zoteroLibrary` service key and the `library` settings namespace (the `cordis.patch.yml` row id). Read requests (`browse` / `search` / `item`) forward to the host `ctx.zotero` service; write requests go through `executeLibraryWrite` into the standard write approval chain, the same as the other write tools: capability gate and `ctx.approval.request` session approval;
+- **Configuration**: the schema lives in `src/library/config.ts` (`LibraryConfigSchema`) with the `rightSidebarEnabled` toggle, `volatile`. With `webEnabled: false` the library does not mount;
+- **Exports**: `package.json` publishes `./library`, `./library/locale/*.json`, and `./library/icon`, separate from the root export.
+
 ### Browser Client (`src/client/`)
 
-- Bundle Configuration (`plugins.bundle.config`): registers a unified 5-tab configuration interface on the Plugin Manager detail page (General, Connection, Search & Extraction, Scholarly Search, Advanced), managing both the `zotero` and `scholarly` namespaces through the harness official `SettingsForm` and `SettingsFormModel` with dual-channel presentation and anti-discard draft preservation; the Scholarly Search tab has two shapes: while the component is off (its namespace is not served) it shows only a pointer to "Included components", and it renders the editable form once the component is enabled;
+- Bundle Configuration (`plugins.bundle.config` and `plugins.row.config`): registers a unified 6-tab configuration interface on the Plugin Manager detail page (General, Connection, Search & Extraction, Library, Scholarly Search, Advanced), managing the `zotero`, `library`, and `scholarly` namespaces through the harness `SettingsForm` and `SettingsFormModel`, with dual-channel presentation and staged drafts kept across views; also provides a sidebar toggle form via `plugins.row.config` on `dsh-zotero#library`, guarded by `whileServed('library')`;
+- Library panel:
+  - **Right tab (`sidebarRightTabs` + `sidebar.right.pane.tab` + `sidebar.right.pane.tab.title`)**: controlled by `rightSidebarEnabled`; `sidebar.right.pane.tab` is session-scoped — the panel binds to the conversation its tab belongs to, and file reads and write approvals anchor to that session;
+  - **Container query layout**: the wide layout switches at `@container zoteroLibraryPanel (min-width: 861px)`; a segmented navigation bar (`Navigation / List / Inspector`) on narrow widths, three columns on wide ones;
 - Session Panel (`conversation.view`): the conversation tab shows one Zotero panel, with a top lens bar switching between the sources workspace and the session-wide exports page. Each source's inspector holds an Overview panel, a Passages panel for retrieved passages, and an Exports panel for that item's exported documents;
 - Tool Cards (`tool.call.toolview`): one compact, collapsible card for each of the 23 local model tools (8 read and 15 write) and one for `scholarly_save_to_zotero`; the other six Scholarly retrieval tools use the generic row the slot contract defines for an unclaimed key. Cards carry copy actions on the values worth copying, sidebar PDF reading through the "Read PDF" action, and copy-to-locate actions for titles and canonical deep links. A card renders output the tool already produced and never calls the tool itself;
 - Command Status Card (`conversation.chat.commandview`): renders connectivity status, the version and Server ID details, diagnosis tips, and an in-place refresh button for `/zotero`. Structured facts come from the `zoteroStatus` session projection the host half registers: the command handler projects the same status into a `zotero/status` session event and points at it with `sourceEventSeq`, the card reads it back through `useProjection`, and the command text remains a human-readable answer that is never parsed. An in-place refresh's live probe outranks the projection, being the newer answer;
@@ -95,8 +106,8 @@ graph LR
 
 ### Remote Communication and Settings
 
-- The host half registers `ZoteroRuntime` under the `zotero` wire namespace. Its endpoints return the live connectivity view (`status`), attachment location resolution (`resolveAttachment`), the diagnostics snapshot (`diagnostics`), and the client crash report intake (`reportClientError`); configuration reads and writes travel through the harness's shared settings form, not this channel;
-- The browser half mounts that namespace itself: `apply` awaits `ctx.remote.$mount(ZOTERO_REMOTE)`, then registers every surface on a fiber that declares `remote.zotero` (`ctx.inject(['remote.zotero', …], registerUi)`) and reads it as `ctx.remote.zotero`. A failed mount is not swallowed: the entry rejects and the harness reports the plugin as failed to load;
+- The host half registers its Typert endpoints through `ZoteroRuntime` (`zoteroRemote`) and `ZoteroLibraryService` (`zoteroLibrary`) under the `zotero` wire namespace. `ZoteroRuntime` handles the live connectivity view (`status`), attachment resolution (`resolveAttachment`), diagnostics snapshot (`diagnostics`), and client crash intake (`reportClientError`); `ZoteroLibraryService` handles read-only library endpoints (`browse`, `search`, `item`) and the approved `write` endpoint. Configuration reads and writes go through the shared settings form of the `zotero` and `library` namespaces;
+- The browser half mounts that namespace itself: `apply` awaits `ctx.remote.$mount(ZOTERO_REMOTE)`, then registers every surface on a fiber that declares `remote.zotero` (`ctx.inject(['remote.zotero', …], registerUi)`). The library panels and their configuration row are guarded by `whileServed('library')`: with the `library` row not composed, no panel surface registers and no `zotero/browse|search|item|write` call is made. A failed mount rejects the entry and the harness reports the plugin as failed to load;
 - All configuration fields are declared `volatile`, supporting hot reload.
 
 ### Diagnostics and Logging

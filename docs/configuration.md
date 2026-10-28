@@ -12,7 +12,7 @@
 | `provider`                 | `local`                      | 选用的 provider 标识                                                                                                                                                          |
 | `timeoutMs`                | `5000`                       | 单次 HTTP 请求超时时间（毫秒）                                                                                                                                                |
 | `maxInFlightRequests`      | `8`                          | 对 Local API 的并发在途请求数上限                                                                                                                                             |
-| `maxSearchResults`         | `20`                         | `zotero_search` 返回条目上限                                                                                                                                                  |
+| `maxSearchResults`         | `20`                         | `zotero_search` 返回条目上限；同时钳制文献库面板的搜索页大小（响应携带实际生效的 `limit`）                                                                                    |
 | `maxNoteScanRecords`       | `200`                        | 搜索笔记内容时扫描的笔记条目上限                                                                                                                                              |
 | `searchConcurrency`        | `4`                          | `zotero_search` 归属查询的并发数                                                                                                                                              |
 | `maxEvidenceChars`         | `6000`                       | 原文片段总字符预算                                                                                                                                                            |
@@ -30,7 +30,7 @@
 | `maxResponseBytes`         | `16777216`                   | 单次 API 响应流式读取字节上限（16 MiB）                                                                                                                                       |
 | `maxExportChars`           | `1000000`                    | 导出输出字符硬上限（100 万字符）                                                                                                                                              |
 | `maxExportRefs`            | `50`                         | 单次 `zotero_export` 引用条数上限                                                                                                                                             |
-| `maxBrowseResults`         | `50`                         | 单次 `zotero_browse` 返回条目上限                                                                                                                                             |
+| `maxBrowseResults`         | `50`                         | 单次 `zotero_browse` 返回条目上限；同时钳制文献库面板的浏览页大小（集合树/标签/保存搜索，响应携带实际生效的 `limit`）                                                         |
 | `maxChangesResults`        | `50`                         | 单次 `zotero_changes` 每种资源列出的条目上限（仅影响展示）                                                                                                                    |
 | `scopeListingTtlMs`        | `30000`                      | 合集与检索范围列表的信任时长（毫秒），超时后重新读取                                                                                                                          |
 | `defaultStyle`             | `apa`                        | CSL 引用样式（需 Zotero 内置）                                                                                                                                                |
@@ -40,7 +40,7 @@
 | `writeNoteMaxChars`        | `65536`                      | 单条研究笔记正文字符上限                                                                                                                                                      |
 | `writeListMaxItems`        | `50`                         | 列表类写入参数的条目上限：`update_item_tags`/`update_item_collections` 的 `add`/`remove`、`delete_library_tags` 的 `tags`、`create_note` 的 `collections`/`tags`/`sourceRefs` |
 | `writeAuthorizeDeadlineMs` | `120000`                     | 写入时等待 Zotero 授权弹窗的时限（毫秒）                                                                                                                                      |
-| `webEnabled`               | `true`                       | 是否在 DSH Web 中启用 Zotero 会话标签页                                                                                                                                       |
+| `webEnabled`               | `true`                       | 是否在 DSH Web 中启用 Zotero 会话标签页与侧边栏文献库面板                                                                                                                     |
 | `enableRunInBackground`    | `true`                       | 是否允许 `run_in_background: true` 的请求进入后台执行（参数恒声明，关闭时传 `true` 返回结构化拒绝）                                                                           |
 | `promoteOnTimeout`         | `true`                       | 前台导出或变更同步超时时是否自动提升为后台任务                                                                                                                                |
 | `foregroundWaitMs`         | `4000`                       | 前台执行等待上限（毫秒），超时后自动提升为后台 Job                                                                                                                            |
@@ -84,7 +84,7 @@ Schema 默认值 → Composition 入口配置 → 当前 profile 的 Cordis patc
 
 - 传输层配置或写入开关变更时，在同一 `ZoteroService` 实例上重建 HTTP 客户端、local provider 与写入工具集；
 - 限额配置变更由 provider 在下次调用时直接读取，无需重建传输层；
-- `webEnabled` 开关保存后即时显示或隐藏对应标签页；
+- `webEnabled` 开关保存后即时显示或隐藏会话标签页与文献库面板；
 - `debug` 开关保存后即时生效，控制详情页底部诊断面板的显示与诊断日志保留，无需重新初始化组件；
 - 绝大多数配置更新均在下一次工具调用时生效，无需重启宿主。
 
@@ -110,3 +110,23 @@ Schema 默认值 → Composition 入口配置 → 当前 profile 的 Cordis patc
 | `maxContentChars` | `12000` | 全文分块读取字符数上限（1,000-50,000）                                                             |
 
 组件未启用时，Zotero 主设置页的“学术检索”标签页只显示一条指向「包含的组件」的提示，不渲染任何字段；组件启用后该标签页才成为可编辑表单。全文缓存在 `$DSH_HOME/cache/zotero-scholarly/` 下按 key 存一份 JSON 正文（不受本表控制，无独立开关）。
+
+---
+
+## 文献库独立子组件配置 (`dsh-zotero/library`)
+
+文献库面板是独立的 DSH bundle 子组件，随包发布并在默认 profile 中启用（`cordis.patch.yml` 包含 `- id: library` / `name: dsh-zotero/library`）。它提供全库检索、合集树、条目列表与检视器，作为右侧边栏标签页与会话并排显示，由 `rightSidebarEnabled` 启停。
+
+组件有三种配置途径：
+
+1. **统一设置页「文献库」标签页**：在插件详情页的 6 标签页表单中切换至「文献库」；
+2. **包含的组件列表行配置**：在「包含的组件」中点击 `dsh-zotero#library` 行的「配置」按钮；
+3. **配置文件**：在当前 profile 的 `cordis.patch.yml` 对应条目的 `config` 下声明。
+
+两处表单共用同一状态，修改即时生效：
+
+| 字段                  | 默认值 | 说明                                                                                            |
+| --------------------- | ------ | ----------------------------------------------------------------------------------------------- |
+| `rightSidebarEnabled` | `true` | 是否在右侧边栏显示文献库标签页（`sidebarRightTabs` + `sidebar.right.pane.tab`），可边对话边阅读 |
+
+文献库面板同时受核心 `webEnabled` 门控：`webEnabled: false` 时不挂载。

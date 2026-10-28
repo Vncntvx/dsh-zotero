@@ -8,13 +8,19 @@
 src/
   index.ts              # 插件入口（纯 re-export）
   service.ts            # ZoteroService（Cordis 服务）
+  library/              # 文献库面板子组件（ZoteroLibraryService、配置 schema）
+  library-views.ts      # 面板 wire 视图与域请求的双向映射
+  library-write.ts      # 面板写入口：进入注册工具管线与审批接缝
   local/provider.ts     # LocalApiProvider（Zotero Local API 适配）
   local/*-domain.ts     # 领域管线（search、export、changes、browse、write 等）
-  local/                # 辅助模块：detail、retrieve、attachment-location、scope-directory 等
+  local/                # 辅助模块：detail、retrieve、attachment-location、scope-directory、search-index、item-batch 等
   http-client.ts        # HTTP 传输层（环回 fetch、流式与并发槽位控制）
   config.ts             # 配置 Schema 与校验逻辑
   types.ts              # 领域 DTO 与类型定义
   contract.ts           # Remote wire 协议面与常量
+  wire-schemas.ts       # 双端共用的 wire 边界 zod schema
+  creators.ts           # 作者显示格式（端侧共享）
+  media-types.ts        # 媒体类型常量（端侧共享）
   diagnostics.ts        # 进程内诊断环形缓冲、条目模型与接收器
   status-codec.ts       # Host 端状态解码（zod）
   abort.ts              # 调用方取消错误的唯一拼写（harness TOOL_ABORTED）
