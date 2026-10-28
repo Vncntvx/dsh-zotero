@@ -5,7 +5,7 @@
  * contact email and the external scholarly API keys), and search and
  * full-text quotas (search limit and content character ceiling).
  *
- * Shared by the unified 5-tab settings view (Tab 4) and the dedicated
+ * Shared by the unified 6-tab settings view (Tab 5) and the dedicated
  * `dsh-zotero#scholarly` row configuration page.
  * @module dsh-zotero/client/ScholarlySettingsForm
  */

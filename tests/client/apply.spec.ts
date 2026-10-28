@@ -3,23 +3,25 @@
  * the zotero namespace through the shared configuration form, injects the
  * configuration page into the `plugins.bundle.config` slot on the plugins
  * manager detail page, and mounts the zotero Typert Remote namespace for the
- * conversation tab's live status, gating that tab on the namespace's
- * `webEnabled` flag.
+ * conversation tab's live status. The `webEnabled` gate's own behavior lives
+ * in `apply-gating.spec.ts`; both share `helpers/apply-world.ts`.
  * @module tests/client/apply
  */
 
 import { describe, expect, it, vi } from 'vitest'
-import type { Context } from '@deepseek-ai/cordis'
-import { apply, inject } from '../../src/client/index.ts'
+import { inject } from '../../src/client/index.ts'
 import { en, zh } from '../../src/client/locales.ts'
 import {
   SCHOLARLY_SETTINGS_NAMESPACE,
   ZOTERO_SETTINGS_NAMESPACE,
 } from '../../src/settings-namespace.ts'
+import { ZOTERO_LIBRARY_SETTINGS_NAMESPACE } from '../../src/contract.ts'
 import { getAttachmentResolver } from '../../src/client/actions/attachment-resolver.ts'
 import { REGISTRATIONS } from '../../src/client/toolviews/index.ts'
+import { applyEntry, fakeWorld, type FakeApplyWorld } from './helpers/apply-world.ts'
 import { fakeScope } from './helpers/fake-scope.ts'
-import { fakeEntryErrorSeam, type EntryErrorListener } from './helpers/slot-crash-seam.ts'
+import type { ZoteroLibraryPanelFace } from '../../src/client/components/library/ZoteroLibraryPanel.tsx'
+import { searchResult } from '../helpers/library-fixtures.ts'
 
 // The page imports primitive icons; stub them with the shared DOM face so
 // this wiring-level spec does not load the real bundle (katex css, shiki, …).
@@ -27,243 +29,6 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
   const { primitivesWithRealForm } = await import('./helpers/primitives-stub.ts')
   return primitivesWithRealForm(importOriginal)
 })
-
-interface FakeSlotsEntry {
-  name: string
-  options: Record<string, unknown>
-  component: unknown
-}
-
-interface FakeInjectedEntry {
-  name: string
-  register: () => FakeSlotsEntry | undefined
-  /** False once the disposer the inject call returned has run (withdrawn). */
-  active: boolean
-}
-
-interface FakeApplyWorld {
-  ctx: unknown
-  dictionaries: Array<{ ns: string; dict: unknown }>
-  injected: Array<FakeInjectedEntry>
-  registered: FakeSlotsEntry[]
-  mounts: unknown[]
-  effects: Array<unknown>
-  mountDisposes: number
-  injectDisposes: number
-  formIds: string[]
-  scope: ReturnType<typeof fakeScope>
-  /** Scripted namespace `status` result; defaults to ok. */
-  status: () => Promise<unknown>
-  resolveAttachment: (ref: string) => Promise<unknown>
-  /** Dependency lists each `ctx.inject` call declared, in call order. */
-  injectDeps: string[][]
-  /** Fibers disposed through the entry's disposer. */
-  uiDisposes: number
-  /** Conversation Node definitions registered through `uiConversation.events`. */
-  eventDefinitions: Array<{ kind: string }>
-  /** Disposers run for those definitions. */
-  eventDisposes: number
-  /** Every address the `sidebarRight` service was asked to open. */
-  openResourceCalls: string[]
-  /** Supervision listeners the entry registered through `slots.onEntryError`. */
-  entryErrorListeners: EntryErrorListener[]
-  /** Namespaces currently served by the host; defaults to both zotero and scholarly. */
-  servedNamespaces?: Set<string>
-  whileServedRegistrations: Array<{ namespaces: readonly string[] }>
-  whileServedDisposes: number
-}
-
-/** A minimal context standing in for the browser kernel's plugin ctx. */
-function fakeWorld(
-  mountRejects: unknown = undefined,
-  injectRejects: unknown = undefined,
-): FakeApplyWorld {
-  const dictionaries: FakeApplyWorld['dictionaries'] = []
-  const injected: FakeInjectedEntry[] = []
-  const registered: FakeApplyWorld['registered'] = []
-  const mounts: FakeApplyWorld['mounts'] = []
-  const effects: FakeApplyWorld['effects'] = []
-  const formIds: string[] = []
-  const seam = fakeEntryErrorSeam()
-  const entryErrorListeners: EntryErrorListener[] = seam.listeners
-  const scope = fakeScope()
-  const whileServedRegistrations: FakeApplyWorld['whileServedRegistrations'] = []
-  // The world object is shared with the ctx closures (disposer counters
-  // included), so the returned handle observes the disposers' side effects.
-  const world: FakeApplyWorld = {
-    ctx: undefined,
-    dictionaries,
-    injected,
-    registered,
-    mounts,
-    effects,
-    mountDisposes: 0,
-    injectDisposes: 0,
-    formIds,
-    scope,
-    status: async () => ({ ok: true, value: { connected: true } }),
-    resolveAttachment: async (ref: string) => ({ ok: true, value: { ref, kind: 'file' } }),
-    injectDeps: [],
-    uiDisposes: 0,
-    eventDefinitions: [],
-    eventDisposes: 0,
-    openResourceCalls: [],
-    entryErrorListeners,
-    whileServedRegistrations,
-    whileServedDisposes: 0,
-  }
-  // Effects registered while a fiber's callback runs belong to that fiber, so
-  // disposing the fiber unwinds exactly what it registered: the same
-  // ownership cordis gives `ctx.effect`.
-  let collector: Array<() => void> | undefined
-  const ctx = {
-    effect: (register: () => unknown): (() => void) => {
-      const dispose = register()
-      const disposer = typeof dispose === 'function' ? (dispose as () => void) : () => {}
-      effects.push(dispose)
-      collector?.push(disposer)
-      return disposer
-    },
-    locale: {
-      register: (ns: string, dict: unknown) => {
-        dictionaries.push({ ns, dict })
-      },
-      bind: () => (key: string) => key,
-    },
-    remote: {
-      $mount: async (contribution: unknown) => {
-        mounts.push(contribution)
-        if (mountRejects !== undefined) throw mountRejects
-        return () => {
-          world.mountDisposes += 1
-        }
-      },
-      /**
-       * The namespace `$mount` publishes. It is readable through the dotted
-       * form only on a fiber that declared `remote.zotero`, so the UI callback
-       * reads it here exactly as the runtime writes it.
-       */
-      zotero: {
-        status: () => world.status(),
-        resolveAttachment: (ref: string) => world.resolveAttachment(ref),
-        diagnostics: async () =>
-          ({
-            ok: true as const,
-            value: { entries: [], total: 0, truncated: false, debug: false },
-          }) as unknown,
-        reportClientError: async (report: { surface: string; message: string }) =>
-          ({ ok: true as const, value: { seq: 1, report } }) as unknown,
-      },
-    },
-    /**
-     * Start a fiber for `deps`, run its callback, and hand back the disposer
-     * that unwinds the effects it registered: the shape
-     * `vendor/cordis/src/registry.ts` gives `ctx.inject`.
-     */
-    inject: (deps: readonly string[], callback: (ctx: unknown) => void) => {
-      world.injectDeps.push([...deps])
-      const owned: Array<() => void> = []
-      collector = owned
-      try {
-        callback(ctx)
-      } finally {
-        collector = undefined
-      }
-      const dispose = async () => {
-        for (const disposer of owned.reverse()) disposer()
-        world.uiDisposes += 1
-      }
-      const promise =
-        injectRejects !== undefined ? Promise.reject(injectRejects) : Promise.resolve({ dispose })
-      return Object.assign(promise, { dispose })
-    },
-    configForms: {
-      get: (id: string) => {
-        formIds.push(id)
-        return world.scope
-      },
-      whileServed: (
-        namespaces: readonly string[],
-        register: (served: ReadonlySet<string>) => () => void,
-      ) => {
-        world.whileServedRegistrations.push({ namespaces })
-        const served =
-          world.servedNamespaces ??
-          new Set([ZOTERO_SETTINGS_NAMESPACE, SCHOLARLY_SETTINGS_NAMESPACE])
-        if (!namespaces.some((ns) => served.has(ns))) return () => {}
-        const disposer = register(served)
-        return () => {
-          world.whileServedDisposes += 1
-          disposer?.()
-        }
-      },
-    },
-    uiConversation: {
-      events: {
-        register: (definition: { kind: string }) => {
-          world.eventDefinitions.push(definition)
-          return () => {
-            world.eventDisposes += 1
-          }
-        },
-      },
-    },
-    sidebarRight: {
-      openResource: (url: string) => {
-        world.openResourceCalls.push(url)
-      },
-    },
-    slots: {
-      inject: (name: string, register: () => unknown) => {
-        const entry: FakeInjectedEntry = {
-          name,
-          register: () => {
-            const res = register()
-            if (res && typeof res === 'object' && Symbol.iterator in res) {
-              const list = [...(res as Iterable<FakeSlotsEntry>)]
-              return list[0]
-            }
-            return res as FakeSlotsEntry | undefined
-          },
-          active: true,
-        }
-        injected.push(entry)
-        return () => {
-          entry.active = false
-          world.injectDisposes += 1
-        }
-      },
-      register: (options: Record<string, unknown>, component: unknown) => {
-        // The renderer stamps `options.registrant ?? ctx.fiber?.name` onto the
-        // stored entry; the plugin declares it explicitly, so the stored shape
-        // here reproduces that stamp rather than the raw options.
-        const item = {
-          name: String(options.name),
-          options,
-          component,
-          registrant: (options.registrant as string | undefined) ?? 'dsh-zotero',
-        }
-        registered.push(item)
-        return item
-      },
-      // The crash supervision seam: the entry subscribes here, and a spec can
-      // fire it to drive the intake without mounting a crashing entry.
-      onEntryError: seam.onEntryError,
-    },
-  }
-  world.ctx = ctx
-  return world
-}
-
-/**
- * Run the entry and settle it the way the kernel does: the mount resolves and
- * the UI fiber loads, so the returned disposer owns both halves.
- * @param world - the world to apply the entry to.
- * @returns the entry's disposer.
- */
-async function applyEntry(world: FakeApplyWorld): Promise<() => Promise<void>> {
-  return await apply(world.ctx as Context)
-}
 
 describe('the browser-half entry', () => {
   it('declares the services it consumes', () => {
@@ -274,6 +39,7 @@ describe('the browser-half entry', () => {
       'configForms',
       'uiConversation',
       'sidebarRight',
+      'sidebarRightTabs',
     ])
   })
 
@@ -301,7 +67,11 @@ describe('the browser-half entry', () => {
   it('reads the shared form for the shared namespace constant', async () => {
     const world = fakeWorld()
     await applyEntry(world)
-    expect(world.formIds).toEqual([ZOTERO_SETTINGS_NAMESPACE, SCHOLARLY_SETTINGS_NAMESPACE])
+    expect(world.formIds).toEqual([
+      ZOTERO_SETTINGS_NAMESPACE,
+      SCHOLARLY_SETTINGS_NAMESPACE,
+      ZOTERO_LIBRARY_SETTINGS_NAMESPACE,
+    ])
   })
 
   it('mounts the zotero Remote namespace contribution', async () => {
@@ -316,18 +86,21 @@ describe('the browser-half entry', () => {
     const world = fakeWorld()
     await applyEntry(world)
     // All surfaces register synchronously: the command-input projection, the
-    // bundle config page, the scholarly row config, the plugin-manager cards,
-    // and the conversation tab (whose registration must not wait on the Remote mount).
+    // bundle config page, the row configs, the plugin-manager cards,
+    // the conversation tab, and the right-sidebar library surfaces.
     expect(world.injected.map((entry) => entry.name)).toEqual([
       'tool.call.toolview',
       'conversation.chat.node',
       'plugins.bundle.activation',
       'plugins.bundle.config',
       'plugins.row.config',
+      'plugins.row.config',
       'plugins.detail.section',
       'plugins.detail.section',
       'conversation.chat.commandview',
       'conversation.view',
+      'sidebar.right.pane.tab',
+      'sidebar.right.pane.tab.title',
     ])
   })
 
@@ -401,19 +174,38 @@ describe('the browser-half entry', () => {
     expect(configInject.hooks.zoteroCard).toBeDefined()
   })
 
-  it('guards scholarly row config with whileServed so it registers only when served', async () => {
+  it('guards scholarly and library row configs with whileServed so they register only when served', async () => {
     const worldServed = fakeWorld()
     await applyEntry(worldServed)
     expect(worldServed.whileServedRegistrations).toEqual([
       { namespaces: [SCHOLARLY_SETTINGS_NAMESPACE] },
+      { namespaces: [ZOTERO_LIBRARY_SETTINGS_NAMESPACE] },
+      // The panel gate: the library surfaces follow the same served watch.
+      { namespaces: [ZOTERO_LIBRARY_SETTINGS_NAMESPACE] },
     ])
-    const rowEntry = worldServed.injected.find((e) => e.name === 'plugins.row.config')
-    expect(rowEntry?.register()).toBeDefined()
-    const config = worldServed.registered.find((e) => e.name === 'plugins.row.config')
-    expect(config?.options.key).toBe('dsh-zotero#scholarly')
-    expect(config?.options.locale).toBe('zotero')
-    const face = (config?.options.inject as () => { hooks: { scholarlyCard: unknown } })()
-    expect(face.hooks.scholarlyCard).toBeDefined()
+    const rowEntries = worldServed.injected.filter((e) => e.name === 'plugins.row.config')
+    expect(rowEntries).toHaveLength(2)
+    for (const entry of rowEntries) entry.register()
+
+    const scholarlyConfig = worldServed.registered.find(
+      (e) => e.name === 'plugins.row.config' && e.options.key === 'dsh-zotero#scholarly',
+    )
+    expect(scholarlyConfig).toBeDefined()
+    expect(scholarlyConfig?.options.locale).toBe('zotero')
+    const scholarlyFace = (
+      scholarlyConfig?.options.inject as () => { hooks: { scholarlyCard: unknown } }
+    )()
+    expect(scholarlyFace.hooks.scholarlyCard).toBeDefined()
+
+    const libraryConfig = worldServed.registered.find(
+      (e) => e.name === 'plugins.row.config' && e.options.key === 'dsh-zotero#library',
+    )
+    expect(libraryConfig).toBeDefined()
+    expect(libraryConfig?.options.locale).toBe('zotero')
+    const libraryFace = (
+      libraryConfig?.options.inject as () => { hooks: { libraryCard: unknown } }
+    )()
+    expect(libraryFace.hooks.libraryCard).toBeDefined()
 
     const worldUnserved = fakeWorld()
     worldUnserved.servedNamespaces = new Set([ZOTERO_SETTINGS_NAMESPACE])
@@ -502,7 +294,15 @@ describe('the browser-half entry', () => {
     // The UI fiber declared `remote.zotero`, so `ctx.remote.zotero` is a legal
     // service read there: the same shape the harness's own client plugins use.
     expect(world.injectDeps).toEqual([
-      ['remote.zotero', 'locale', 'slots', 'configForms', 'uiConversation', 'sidebarRight'],
+      [
+        'remote.zotero',
+        'locale',
+        'slots',
+        'configForms',
+        'uiConversation',
+        'sidebarRight',
+        'sidebarRightTabs',
+      ],
     ])
     const tab = world.injected.find((entry) => entry.name === 'conversation.view')
     tab?.register()
@@ -526,44 +326,6 @@ describe('the browser-half entry', () => {
     // The UI fiber withdraws its registrations before the namespace goes, so
     // no surface is left reading a namespace that has been unmounted.
     expect(world.injected.find((entry) => entry.name === 'conversation.view')?.active).toBe(false)
-  })
-
-  it('registers the Zotero conversation tab while webEnabled is not off', async () => {
-    const world = fakeWorld()
-    const statusSpy = vi.fn(async () => ({ ok: true, value: {} }))
-    world.status = statusSpy
-    await applyEntry(world)
-    const tab = world.injected.find((entry) => entry.name === 'conversation.view')
-    expect(tab).toBeDefined()
-    tab?.register()
-    const registration = world.registered.find((entry) => entry.name === 'conversation.view')
-    expect(registration?.options.id).toBe('zotero')
-    expect(registration?.options.order).toBe(30)
-    expect(registration?.options.locale).toBe('zotero')
-    expect((registration?.options.label as () => string)()).toBe('nav')
-    // The ownership stamp the crash intake filters on: declared explicitly
-    // rather than inherited from the fiber name, so a harness-side rename
-    // cannot silently move which crashes the intake claims.
-    expect(registration?.options.registrant).toBe('dsh-zotero')
-    const face = registration?.options.inject as () => {
-      status: () => Promise<unknown>
-    }
-    const faceObj = face()
-    expect(faceObj.status).toBeTypeOf('function')
-    await faceObj.status()
-    expect(statusSpy).toHaveBeenCalled()
-  })
-
-  it('registers the tab while the namespace is loading or unavailable', async () => {
-    for (const status of ['loading', 'unavailable'] as const) {
-      const world = fakeWorld()
-      world.scope = fakeScope({ status })
-      await applyEntry(world)
-      expect(
-        world.injected.some((entry) => entry.name === 'conversation.view'),
-        `tab on ${status}`,
-      ).toBe(true)
-    }
   })
 
   it('subscribes to the slot crash intake on the fiber and withdraws it', async () => {
@@ -619,25 +381,6 @@ describe('the browser-half entry', () => {
     expect(world.openResourceCalls).toEqual(['dsh-resource://file/session/sess-9/notes/a.md'])
   })
 
-  it('skips the tab when the namespace disables webEnabled', async () => {
-    const world = fakeWorld()
-    world.scope = fakeScope({
-      value: { webEnabled: false },
-      user: { webEnabled: false },
-    })
-    await applyEntry(world)
-    expect(world.injected.map((entry) => entry.name)).toEqual([
-      'tool.call.toolview',
-      'conversation.chat.node',
-      'plugins.bundle.activation',
-      'plugins.bundle.config',
-      'plugins.row.config',
-      'plugins.detail.section',
-      'plugins.detail.section',
-      'conversation.chat.commandview',
-    ])
-  })
-
   it('injects and registers all tool views into the tool.call.toolview slot', async () => {
     const world = fakeWorld()
     await applyEntry(world)
@@ -656,47 +399,127 @@ describe('the browser-half entry', () => {
     }
   })
 
-  it('withdraws the tab live when webEnabled turns off and restores it on', async () => {
-    const world = fakeWorld()
-    await applyEntry(world)
-    expect(world.injected.some((entry) => entry.name === 'conversation.view')).toBe(true)
-
-    // Toggle the flag: the gate subscription withdraws the tab. The fake scope
-    // publishes its listeners synchronously inside the write, so the awaited
-    // write is the whole wait: the tab is withdrawn by the time it resolves.
-    await world.scope.set('webEnabled', false)
-    expect(world.injected.find((entry) => entry.name === 'conversation.view')?.active).toBe(false)
-    expect(world.injectDisposes).toBe(1)
-
-    // Toggle back on: the tab returns (a fresh live registration).
-    await world.scope.set('webEnabled', true)
-    expect(
-      world.injected
-        .filter((entry) => entry.name === 'conversation.view')
-        .some((entry) => entry.active),
-    ).toBe(true)
-  })
-
   it('withdraws the tab with the fiber and unmounts the Remote', async () => {
     const world = fakeWorld()
     const dispose = await applyEntry(world)
     expect(world.scope.unsubscribes).toBe(0)
     expect(world.injected.some((entry) => entry.name === 'conversation.view')).toBe(true)
 
-    // The entry's disposer unwinds the UI fiber, which owns every effect and
-    // slot registration it made: the projection's definition, the card form's
-    // subscription, the tab gate's subscription, the tab itself, and then the
-    // mount.
+    // The disposer unwinds the UI fiber: the projection, the card forms'
+    // subscriptions, the gated surfaces subscriptions, and the mount.
+    // Per-namespace counts: the zotero form carries the webEnabled watch, the
+    // card model, and the panel gate's sync; the library form carries its own
+    // sync and card model; the scholarly form its card model.
     await dispose()
     expect(world.eventDisposes).toBe(1)
     expect(world.scope.unsubscribes).toBe(3)
+    expect(world.libraryScope.unsubscribes).toBe(2)
+    expect(world.scholarlyScope.unsubscribes).toBe(1)
     expect(world.uiDisposes).toBe(1)
     expect(world.injected.find((entry) => entry.name === 'conversation.view')?.active).toBe(false)
     expect(world.mountDisposes).toBe(1)
   })
 
-  it('injects a page face whose scope reads the namespace snapshot', async () => {
+  it('registers the right-sidebar library surfaces', async () => {
     const world = fakeWorld()
+    await applyEntry(world)
+
+    // Right sidebar surfaces
+    expect(world.sidebarRightTabDefinitions).toHaveLength(1)
+    const rightTabDef = world.sidebarRightTabDefinitions[0] as { id: string; kind: string }
+    expect(rightTabDef.id).toBe('dsh-zotero#library')
+    expect(rightTabDef.kind).toBe('zotero-library')
+
+    const rightTabEntry = world.injected.find((e) => e.name === 'sidebar.right.pane.tab')
+    expect(rightTabEntry).toBeDefined()
+    rightTabEntry?.register()
+    const rightTabReg = world.registered.find((e) => e.name === 'sidebar.right.pane.tab')
+    expect(rightTabReg?.options.key).toBe('dsh-zotero#library')
+
+    const rightTitleEntry = world.injected.find((e) => e.name === 'sidebar.right.pane.tab.title')
+    expect(rightTitleEntry).toBeDefined()
+    rightTitleEntry?.register()
+    const rightTitleReg = world.registered.find((e) => e.name === 'sidebar.right.pane.tab.title')
+    expect(rightTitleReg?.options.key).toBe('dsh-zotero#library')
+  })
+
+  it('wires panel invalidation through the shared reads to the host search generation', async () => {
+    const world = fakeWorld()
+    const search = vi.fn(async () => ({ ok: true, value: searchResult() }))
+    const ctx = world.ctx as { remote: { zotero: Record<string, unknown> } }
+    ctx.remote.zotero.search = search
+    await applyEntry(world)
+    world.injected.find((entry) => entry.name === 'sidebar.right.pane.tab')?.register()
+    const registration = world.registered.find((entry) => entry.name === 'sidebar.right.pane.tab')
+    const face = (registration?.options.inject as () => ZoteroLibraryPanelFace)()
+    const query = {
+      scope: { kind: 'library' as const },
+      sort: 'title' as const,
+      direction: 'asc' as const,
+      offset: 0,
+      limit: 50,
+      yearFrom: 2020,
+    }
+    await face.search(query)
+    await face.search(query)
+    expect(search).toHaveBeenCalledTimes(1)
+    expect(search).toHaveBeenLastCalledWith({ ...query, cacheGeneration: 0 })
+    face.invalidate?.()
+    await face.search(query)
+    expect(search).toHaveBeenCalledTimes(2)
+    expect(search).toHaveBeenLastCalledWith({ ...query, cacheGeneration: 1 })
+  })
+
+  it('wires every panel face member through the plane to the host namespace', async () => {
+    const world = fakeWorld()
+    const wire = world.libraryWire
+    const browse = vi.spyOn(wire, 'browse')
+    const item = vi.spyOn(wire, 'item')
+    const childPage = vi.spyOn(wire, 'childPage')
+    const write = vi.spyOn(wire, 'write')
+    const resolveAttachment = vi.spyOn(world, 'resolveAttachment')
+    const status = vi.spyOn(world, 'status')
+    await applyEntry(world)
+    world.injected.find((entry) => entry.name === 'sidebar.right.pane.tab')?.register()
+    const registration = world.registered.find((entry) => entry.name === 'sidebar.right.pane.tab')
+    const face = (registration?.options.inject as () => ZoteroLibraryPanelFace)()
+
+    const browseRequest = { kind: 'libraries' as const, offset: 0, limit: 50 }
+    await face.browse(browseRequest)
+    expect(browse).toHaveBeenCalledWith(browseRequest)
+    const itemRequest = { ref: 'zotero://user/0/item/ABCD1234', include: [], childPages: {} }
+    await face.item(itemRequest)
+    expect(item).toHaveBeenCalledWith(itemRequest)
+    const childPageRequest = {
+      ref: 'zotero://user/0/item/ABCD1234',
+      kind: 'notes' as const,
+      offset: 0,
+      limit: 50,
+    }
+    await face.childPage(childPageRequest)
+    expect(childPage).toHaveBeenCalledWith(childPageRequest)
+    const writeRequest = {
+      sessionId: 's1',
+      operation: 'createCollection' as const,
+      args: { name: 'New' },
+    }
+    await face.write(writeRequest)
+    expect(write).toHaveBeenCalledWith(writeRequest)
+    await face.resolveAttachment('zotero://user/0/item/ABCD1234')
+    expect(resolveAttachment).toHaveBeenCalledWith('zotero://user/0/item/ABCD1234')
+    await face.status()
+    expect(status).toHaveBeenCalled()
+    // The plane re-keys its cache to the confirmed instance.
+    face.setInstance?.('S2')
+    face.setInstance?.('S2')
+    await face.browse(browseRequest)
+    expect(browse).toHaveBeenCalledTimes(2)
+    face.openResource('dsh-resource://file/session/s1//tmp/paper.pdf')
+    expect(world.openResourceCalls.at(-1)).toBe('dsh-resource://file/session/s1//tmp/paper.pdf')
+  })
+
+  it('injects a page face whose scope reads the namespace snapshot', async () => {
+    const world: FakeApplyWorld = fakeWorld()
     world.scope = fakeScope({
       value: { baseUrl: 'http://127.0.0.1:23119/api', timeoutMs: 5000 },
     })

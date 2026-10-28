@@ -53,8 +53,10 @@ import {
 } from './actions/error-reporter.ts'
 import { ZoteroCardController } from './zotero-card-controller.ts'
 import { ScholarlyFormController } from './scholarly-form-controller.ts'
+import { LibraryFormController } from './library-form-controller.ts'
 import type { ZoteroProbeFace } from './components/plugin/faces.ts'
 import {
+  ZOTERO_LIBRARY_SETTINGS_NAMESPACE,
   ZOTERO_REMOTE_PACKAGE,
   type ZoteroClientErrorReport,
   type ZoteroDiagnosticsView,
@@ -65,6 +67,14 @@ import type {} from './plugin-slots.d.ts'
 import { ZoteroActivationGuide } from './components/plugin/ZoteroActivationGuide.tsx'
 import { ZoteroPluginDetailSection } from './components/plugin/ZoteroPluginDetailSection.tsx'
 import { DiagnosticsCard } from './components/DiagnosticsCard.tsx'
+import { LibrarySettingsSection } from './LibrarySettingsSection.tsx'
+import {
+  ZoteroLibraryPanel,
+  type ZoteroLibraryPanelFace,
+} from './components/library/ZoteroLibraryPanel.tsx'
+import { createLibraryDataPlane } from './components/library/library-data-plane.ts'
+import { ZoteroLibraryIcon } from './components/library/ZoteroLibraryIcon.tsx'
+import { gatedMount, registerGatedSurfaces, watchWebEnabled, webEnabledOf } from './web-enabled.ts'
 import { registerZoteroToolviews } from './toolviews/index.ts'
 import { en, zh } from './locales.ts'
 
@@ -86,7 +96,15 @@ const NS = 'zotero'
  * `packages/experimental/client-ui-voice-input/src/client/mount.ts` and
  * `packages/experimental/client-ui-claude-code-mods/src/client/mount.ts`).
  */
-export const inject = ['locale', 'slots', 'remote', 'configForms', 'uiConversation', 'sidebarRight']
+export const inject = [
+  'locale',
+  'slots',
+  'remote',
+  'configForms',
+  'uiConversation',
+  'sidebarRight',
+  'sidebarRightTabs',
+]
 
 /**
  * The registrant stamped on every slot entry this plugin registers.
@@ -125,6 +143,8 @@ interface UiSurfaces {
   readonly form: ConfigForm<Record<string, unknown>>
   readonly card: ZoteroCardController
   readonly scholarlyCard: ScholarlyFormController
+  readonly libraryForm: ConfigForm<Record<string, unknown>>
+  readonly libraryCard: LibraryFormController
   readonly probe: () => Promise<RemoteResult<ZoteroStatusView>>
 }
 
@@ -183,7 +203,7 @@ function registerSharedSurfaces(ctx: ClientContext): void {
  * (`ui-renderer/src/client/scoped-slots.tsx`).
  */
 function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces): void {
-  const { card, scholarlyCard, probe } = surfaces
+  const { card, scholarlyCard, libraryCard, probe } = surfaces
   // Guidance modal on plugin activation (plugins.bundle.activation)
   ctx.slots.inject('plugins.bundle.activation', () =>
     ctx.slots.register(
@@ -199,8 +219,8 @@ function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces)
   )
 
   // Bundle configuration on the plugin manager detail page (plugins.bundle.config).
-  // The page renders the unified 5-tab form through ZoteroSettingsSection and stages edits
-  // over both zotero and scholarly namespaces.
+  // The page renders the unified 6-tab form through ZoteroSettingsSection and stages edits
+  // over zotero, scholarly, and library namespaces.
   ctx.slots.inject('plugins.bundle.config', () =>
     ctx.slots.register(
       {
@@ -211,13 +231,16 @@ function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces)
         inject: () => {
           const zoteroFace = card.inject()
           const scholarlyFace = scholarlyCard.inject()
+          const libraryFace = libraryCard.inject()
           return {
             ...zoteroFace,
             hooks: {
               zoteroCard: zoteroFace.hooks.zoteroCard,
               scholarlyCard: scholarlyFace.hooks.scholarlyCard,
+              libraryCard: libraryFace.hooks.libraryCard,
             },
             scholarly: scholarlyFace,
+            library: libraryFace,
           }
         },
       },
@@ -245,6 +268,28 @@ function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces)
         ),
       ),
     'dsh-zotero: scholarly row config',
+  )
+
+  // Dedicated row configuration for the library subsystem (plugins.row.config),
+  // opened from the "Configure" button on the dsh-zotero#library row.
+  // whileServed guards it to the host serving the library namespace.
+  ctx.effect(
+    () =>
+      ctx.configForms.whileServed([ZOTERO_LIBRARY_SETTINGS_NAMESPACE], () =>
+        ctx.slots.inject('plugins.row.config', () =>
+          ctx.slots.register(
+            {
+              name: 'plugins.row.config',
+              key: `${ZOTERO_REMOTE_PACKAGE}#library`,
+              locale: NS,
+              registrant: REGISTRANT,
+              inject: () => libraryCard.inject(),
+            },
+            LibrarySettingsSection,
+          ),
+        ),
+      ),
+    'dsh-zotero: library row config',
   )
 
   // Service status & quick start card at the bottom of the plugin manager detail page
@@ -333,13 +378,13 @@ function registerConversationSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
   // `webEnabled` namespace flag is explicitly off; before the first snapshot
   // the tab stays on, so a config hiccup never blocks it. The gate is live:
   // toggling the flag in the page hides or restores the tab without a reload.
-  let tabDispose: (() => void) | undefined
   const tabT = ctx.locale.bind(NS)
-  const sync = (): void => {
-    const snapshot = form.getSnapshot()
-    const enabled = snapshot.status !== 'ready' || snapshot.value?.webEnabled !== false
-    if (enabled && tabDispose === undefined) {
-      tabDispose = ctx.slots.inject('conversation.view', () =>
+  registerGatedSurfaces(
+    ctx,
+    'dsh-zotero: conversation tab',
+    (onChange) => watchWebEnabled(form, onChange),
+    () => {
+      return ctx.slots.inject('conversation.view', () =>
         ctx.slots.register(
           {
             name: 'conversation.view',
@@ -364,20 +409,138 @@ function registerConversationSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
           SourcesTab,
         ),
       )
-    } else if (!enabled && tabDispose !== undefined) {
-      tabDispose()
-      tabDispose = undefined
+    },
+  )
+}
+
+/**
+ * Whether the library sidebar surface is enabled: the root `webEnabled` flag
+ * (false only when the snapshot says so) and the surface's own switch.
+ */
+function sidebarEnabledOf(
+  form: ConfigForm<Record<string, unknown>>,
+  libraryForm: ConfigForm<Record<string, unknown>>,
+  key: 'rightSidebarEnabled',
+): boolean {
+  const snapshot = libraryForm.getSnapshot()
+  const ownSwitchOn = snapshot.status !== 'ready' || snapshot.value?.[key] !== false
+  return webEnabledOf(form) && ownSwitchOn
+}
+
+/**
+ * The library panel surface: the right `sidebarRightTabs` + `sidebar.right.pane.tab`
+ * pair, gated by `rightSidebarEnabled` and the global `webEnabled` flag. The
+ * panel lives beside the session on purpose: the right reader (local PDFs)
+ * and the session composer (ask / add-to-chat) are session-adjacent seams the
+ * main-column placement cannot reach.
+ *
+ * The panel is session-scoped (the pane tab binds to one conversation), so the
+ * injected face carries everything it reads: the wire calls, the shared
+ * connectivity probe, and the right-sidebar opener for local-file reading.
+ * @param ctx - the browser plugin context.
+ * @param surfaces - the shared facts every registration group reads.
+ */
+function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces): void {
+  const { form, libraryForm, probe } = surfaces
+  const panelT = ctx.locale.bind(NS)
+
+  /**
+   * Both the reader and the chat actions rely on session-adjacent seams: the
+   * harness opens resources into and prefills the draft of the on-screen
+   * session's surfaces, which this placement (mounted beside the session)
+   * always is.
+   */
+  const plane = createLibraryDataPlane({
+    browse: (request) => ctx.remote.zotero.browse(request),
+    search: (request) => ctx.remote.zotero.search(request),
+    item: (request) => ctx.remote.zotero.item(request),
+    childPage: (request) => ctx.remote.zotero.childPage(request),
+  })
+  const panelFace = (): ZoteroLibraryPanelFace => ({
+    status: () => probe(),
+    browse: (request) => plane.browse(request),
+    search: (request) => plane.search(request),
+    item: (request) => plane.item(request),
+    childPage: (request) => plane.childPage(request),
+    invalidate: plane.invalidate,
+    setInstance: plane.setInstance,
+    write: (request) => ctx.remote.zotero.write(request),
+    resolveAttachment: (ref: string) => ctx.remote.zotero.resolveAttachment(ref),
+    openResource: (url: string) => ctx.sidebarRight.openResource(url),
+  })
+
+  const mountRight = (): (() => void) => {
+    const TAB_ID = `${ZOTERO_REMOTE_PACKAGE}#library`
+    const TAB_KIND = 'zotero-library'
+
+    const disposeTabDef = ctx.sidebarRightTabs?.register({
+      id: TAB_ID,
+      kind: TAB_KIND,
+      title: () => panelT('tabLibrary'),
+      guide: [
+        {
+          id: 'zotero-library-guide',
+          order: 25,
+          title: () => panelT('tabLibrary'),
+          description: () => panelT('tabLibraryDesc'),
+          icon: ZoteroLibraryIcon,
+        },
+      ],
+    })
+
+    const disposeTabBody = ctx.slots.inject('sidebar.right.pane.tab', () =>
+      ctx.slots.register(
+        {
+          name: 'sidebar.right.pane.tab',
+          key: TAB_ID,
+          locale: NS,
+          registrant: REGISTRANT,
+          inject: panelFace,
+        },
+        ZoteroLibraryPanel,
+      ),
+    )
+
+    const disposeTabTitle = ctx.slots.inject('sidebar.right.pane.tab.title', () =>
+      ctx.slots.register(
+        {
+          name: 'sidebar.right.pane.tab.title',
+          key: TAB_ID,
+          locale: NS,
+          registrant: REGISTRANT,
+        },
+        () => panelT('tabLibrary'),
+      ),
+    )
+
+    return () => {
+      disposeTabTitle()
+      disposeTabBody()
+      disposeTabDef?.()
     }
   }
-  ctx.effect(() => {
-    const unsubscribe = form.subscribe(sync)
-    sync()
-    return () => {
-      unsubscribe()
-      tabDispose?.()
-      tabDispose = undefined
-    }
-  }, 'dsh-zotero: conversation tab')
+
+  // The `library` settings namespace is served exactly while the
+  // `dsh-zotero/library` row is composed; with the row off, no surface
+  // registers and no `zotero/browse|search|item|write` call is made.
+  ctx.effect(
+    () =>
+      ctx.configForms.whileServed([ZOTERO_LIBRARY_SETTINGS_NAMESPACE], () => {
+        const right = gatedMount(mountRight)
+        const sync = (): void => {
+          right.sync(sidebarEnabledOf(form, libraryForm, 'rightSidebarEnabled'))
+        }
+        const unsubscribeForm = form.subscribe(sync)
+        const unsubscribeLibrary = libraryForm.subscribe(sync)
+        sync()
+        return () => {
+          unsubscribeForm()
+          unsubscribeLibrary()
+          right.dispose()
+        }
+      }),
+    'dsh-zotero: library right-sidebar surface',
+  )
 }
 
 /**
@@ -394,17 +557,22 @@ function registerUi(ctx: ClientContext): void {
   registerSharedSurfaces(ctx)
   registerCommandInputSurfaces(ctx)
   // One form controller per settings namespace. The bundle configuration page
-  // edits both at once; the dedicated scholarly row edits the scholarly one.
-  // Both live as long as the client fiber.
+  // edits all three at once; the dedicated rows edit their specific subsystem.
+  // All live as long as the client fiber.
   const form = ctx.configForms.get<Record<string, unknown>>(ZOTERO_SETTINGS_NAMESPACE)
   const scholarlyForm = ctx.configForms.get<Record<string, unknown>>(SCHOLARLY_SETTINGS_NAMESPACE)
+  const libraryForm = ctx.configForms.get<Record<string, unknown>>(
+    ZOTERO_LIBRARY_SETTINGS_NAMESPACE,
+  )
   const card = new ZoteroCardController(form)
   const scholarlyCard = new ScholarlyFormController(scholarlyForm)
+  const libraryCard = new LibraryFormController(libraryForm)
 
   ctx.effect(
     () => () => {
       card.dispose()
       scholarlyCard.dispose()
+      libraryCard.dispose()
     },
     'dsh-zotero: card forms',
   )
@@ -422,9 +590,17 @@ function registerUi(ctx: ClientContext): void {
     inFlightProbe = task
     return task
   }
-  const surfaces: UiSurfaces = { form, card, scholarlyCard, probe }
+  const surfaces: UiSurfaces = {
+    form,
+    card,
+    scholarlyCard,
+    libraryForm,
+    libraryCard,
+    probe,
+  }
   registerPluginManagerSurfaces(ctx, surfaces)
   registerConversationSurfaces(ctx, surfaces)
+  registerLibraryPanelSurfaces(ctx, surfaces)
 }
 
 /**
@@ -451,7 +627,15 @@ function registerUi(ctx: ClientContext): void {
 export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
   const disposeRemote = await ctx.remote.$mount(ZOTERO_REMOTE)
   const ui = ctx.inject(
-    ['remote.zotero', 'locale', 'slots', 'configForms', 'uiConversation', 'sidebarRight'],
+    [
+      'remote.zotero',
+      'locale',
+      'slots',
+      'configForms',
+      'uiConversation',
+      'sidebarRight',
+      'sidebarRightTabs',
+    ],
     registerUi,
   )
   try {

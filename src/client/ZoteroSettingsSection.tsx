@@ -1,14 +1,15 @@
 /**
  * The Zotero settings page: rendered in the Plugins manager detail page
  * (`plugins.bundle.config` slot, keyed by package name). It edits every field
- * of the `zotero` namespace and `scholarly` namespace across a unified 5-tab
- * interface.
+ * of the `zotero`, `library`, and `scholarly` namespaces across a unified
+ * 6-tab interface.
  *
  * Tab 1: General (conversation tab, personal library write gate, default style/locale)
  * Tab 2: Connection (API URL, timeout, max requests, cache TTL)
  * Tab 3: Search & Extraction (query/concurrency quotas, passage and fulltext limits)
- * Tab 4: Scholarly Search (API keys, Polite Pool email, scholarly quotas)
- * Tab 5: Advanced (output limits, background job policy, diagnostics)
+ * Tab 4: Library (right-sidebar display for the library panel)
+ * Tab 5: Scholarly Search (API keys, Polite Pool email, scholarly quotas)
+ * Tab 6: Advanced (output limits, background job policy, diagnostics)
  *
  * Both the Zotero and Scholarly SettingsForm containers remain mounted in the DOM
  * to prevent unmount-triggered discard of uncommitted drafts when navigating between
@@ -34,6 +35,8 @@ import { ZoteroSettingsForm } from './ZoteroSettingsForm.tsx'
 import { ScholarlySettingsForm } from './ScholarlySettingsForm.tsx'
 import { SETTINGS_TABS, type SettingsTabId, type ZoteroCardFace } from './zotero-card-controller.ts'
 import type { ScholarlyCardFace, ScholarlyCardState } from './scholarly-form-controller.ts'
+import type { LibraryCardFace, LibraryCardState } from './library-form-controller.ts'
+import { LibrarySettingsForm } from './LibrarySettingsForm.tsx'
 import css from './ZoteroSettingsSection.module.css'
 
 /** Props the renderer binds for the Zotero settings page in plugins.bundle.config. */
@@ -42,6 +45,8 @@ export type ZoteroSettingsSectionProps = PropsRuntime<'plugins.bundle.config'> &
   InjectFace<ZoteroCardFace> & {
     readonly useScholarlyCard?: SnapshotSelectorHook<ScholarlyCardState>
     readonly scholarly?: ScholarlyCardFace
+    readonly useLibraryCard?: SnapshotSelectorHook<LibraryCardState>
+    readonly library?: LibraryCardFace
   }
 
 /** The five labels the official form chrome renders, from the plugin dictionary. */
@@ -56,7 +61,7 @@ export function formLabels(t: TranslateNS<'zotero'>): SettingsFormLabels {
 }
 
 /**
- * Render the unified 5-tab Zotero settings page.
+ * Render the unified 6-tab Zotero settings page.
  * @param props - locale copy, the page snapshot, and its form actions.
  * @returns the page, with the official chrome around its grouped form.
  */
@@ -66,6 +71,9 @@ export function ZoteroSettingsSection(props: ZoteroSettingsSectionProps): ReactN
   const zoteroState = props.useZoteroCard((snapshot) => snapshot)
   const scholarlyState = props.useScholarlyCard
     ? props.useScholarlyCard((snapshot) => snapshot)
+    : undefined
+  const libraryState = props.useLibraryCard
+    ? props.useLibraryCard((snapshot) => snapshot)
     : undefined
   const labels = useMemo(() => formLabels(t), [t])
 
@@ -92,7 +100,7 @@ export function ZoteroSettingsSection(props: ZoteroSettingsSectionProps): ReactN
         />
       </div>
 
-      <div className={css.tabPanel} hidden={activeTab === 'scholarly'}>
+      <div className={css.tabPanel} hidden={activeTab === 'scholarly' || activeTab === 'library'}>
         <SettingsForm
           labels={labels}
           state={zoteroState}
@@ -107,6 +115,37 @@ export function ZoteroSettingsSection(props: ZoteroSettingsSectionProps): ReactN
             showTabs={false}
           />
         </SettingsForm>
+      </div>
+
+      <div className={css.tabPanel} hidden={activeTab !== 'library'}>
+        {props.library && libraryState?.available ? (
+          <SettingsForm
+            labels={labels}
+            state={libraryState}
+            onSave={props.library.save}
+            onDiscard={props.library.discard}
+          >
+            <div
+              role="tabpanel"
+              id="zotero-panel-library"
+              aria-labelledby="zotero-tab-library"
+              className={css.tabPanel}
+            >
+              <LibrarySettingsForm t={t} state={libraryState} actions={props.library} />
+            </div>
+          </SettingsForm>
+        ) : (
+          <div
+            role="tabpanel"
+            id="zotero-panel-library"
+            aria-labelledby="zotero-tab-library"
+            className={css.tabPanel}
+          >
+            <p className={css.note} role="status">
+              {t('libraryDisabled')}
+            </p>
+          </div>
+        )}
       </div>
 
       <div className={css.tabPanel} hidden={activeTab !== 'scholarly'}>

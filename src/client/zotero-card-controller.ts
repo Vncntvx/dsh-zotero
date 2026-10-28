@@ -34,6 +34,7 @@ import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { ResolvedConfig } from '../config.ts'
 import { asFormScope } from './helpers/form-scope.ts'
+import { booleanFieldSpec } from './helpers/settings-fields.ts'
 
 /**
  * The section fields this card edits: the host `Config` surface, all of it,
@@ -98,26 +99,6 @@ type AssertNever<T extends never> = T
 declare const _configSurfaceComplete: AssertNever<MissingConfigField>
 
 /**
- * A boolean field: the draft is the literal 'true'/'false' text a toggle
- * control maps to a checked state. An empty draft clears the field.
- * @param field - field name inside the settings section.
- * @returns the field's conversion spec in the official shape.
- */
-function booleanFieldSpec(field: string): SettingsFieldSpec {
-  return {
-    field,
-    format: (value) => (typeof value === 'boolean' ? String(value) : ''),
-    parse: (text) => {
-      const trimmed = text.trim()
-      if (trimmed === '') return { kind: 'clear' }
-      if (trimmed === 'true') return { kind: 'set', value: true }
-      if (trimmed === 'false') return { kind: 'set', value: false }
-      return undefined
-    },
-  }
-}
-
-/**
  * Field specs, built on first use. The official helpers resolve through the
  * loader's module table, which only exists once the factory runs: the bundle
  * self-check stubs externals at import, so module-level calls would fail there.
@@ -141,20 +122,22 @@ export const NUMERIC_FIELD_KEYS: ReadonlySet<FieldKey> = new Set<FieldKey>(
   FIELD_SPECS.filter((spec) => spec.kind === 'number').map((spec) => spec.key),
 )
 
-/** The tab partition identifiers for the 5-tab settings view. */
-export type SettingsTabId = 'features' | 'connection' | 'search' | 'scholarly' | 'advanced'
+/** The tab partition identifiers for the 6-tab settings view. */
+export type SettingsTabId =
+  'features' | 'connection' | 'search' | 'library' | 'scholarly' | 'advanced'
 
 /** Description of one tab partition and the configuration groups it carries. */
 interface SettingsTabDescriptor {
   readonly id: SettingsTabId
-  readonly labelKey: 'tabFeatures' | 'tabConnection' | 'tabSearch' | 'tabScholarly' | 'tabAdvanced'
+  readonly labelKey:
+    'tabFeatures' | 'tabConnection' | 'tabSearch' | 'tabLibrary' | 'tabScholarly' | 'tabAdvanced'
   readonly groupKeys: readonly GroupKey[]
 }
 
 /**
- * The five tab partitions, in display order. `groupKeys` lists the
- * configuration groups each one carries (scholarly has empty groupKeys here
- * as it is managed by ScholarlyFormController).
+ * The six tab partitions, in display order. `groupKeys` lists the configuration
+ * groups each one carries; library and scholarly leave it empty because their
+ * own form controllers manage them.
  */
 export const SETTINGS_TABS: readonly SettingsTabDescriptor[] = [
   {
@@ -171,6 +154,11 @@ export const SETTINGS_TABS: readonly SettingsTabDescriptor[] = [
     id: 'search',
     labelKey: 'tabSearch',
     groupKeys: ['groupSearchQuery', 'groupSearchEvidence'],
+  },
+  {
+    id: 'library',
+    labelKey: 'tabLibrary',
+    groupKeys: [],
   },
   {
     id: 'scholarly',

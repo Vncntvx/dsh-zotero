@@ -27,6 +27,11 @@ import {
   type ScholarlyCardFace,
   type ScholarlyCardState,
 } from '../../src/client/scholarly-form-controller.ts'
+import {
+  LibraryFormController,
+  type LibraryCardFace,
+  type LibraryCardState,
+} from '../../src/client/library-form-controller.ts'
 import { fakeScope, type FakeScope } from './helpers/fake-scope.ts'
 import { makeTranslate } from './helpers/mock-translate.ts'
 
@@ -41,10 +46,12 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
 function Harness({
   face,
   scholarlyFace,
+  libraryFace,
   dictionary = zh,
 }: {
   face: ZoteroCardFace
   scholarlyFace?: ScholarlyCardFace
+  libraryFace?: LibraryCardFace
   dictionary?: typeof zh
 }) {
   const state = useSyncExternalStore(
@@ -54,6 +61,10 @@ function Harness({
   const scholarlyState = useSyncExternalStore(
     scholarlyFace ? scholarlyFace.hooks.scholarlyCard.subscribe : () => () => {},
     scholarlyFace ? scholarlyFace.hooks.scholarlyCard.getSnapshot : () => undefined as any,
+  )
+  const libraryState = useSyncExternalStore(
+    libraryFace ? libraryFace.hooks.libraryCard.subscribe : () => () => {},
+    libraryFace ? libraryFace.hooks.libraryCard.getSnapshot : () => undefined as any,
   )
   const props = {
     // `plugins.bundle.config` renders its entries with `view: 'page'` only.
@@ -66,21 +77,34 @@ function Harness({
     useScholarlyCard: scholarlyFace
       ? (selector: (snapshot: ScholarlyCardState) => unknown) => selector(scholarlyState)
       : undefined,
+    useLibraryCard: libraryFace
+      ? (selector: (snapshot: LibraryCardState) => unknown) => selector(libraryState)
+      : undefined,
     edit: face.edit,
     resetField: face.resetField,
     save: face.save,
     discard: face.discard,
     scholarly: scholarlyFace,
+    library: libraryFace,
   } as unknown as ZoteroSettingsSectionProps
   return <ZoteroSettingsSection {...props} />
 }
 
 let scope: FakeScope
 
-function mount(dictionary: typeof zh = zh, scholarlyFace?: ScholarlyCardFace): void {
+function mount(
+  dictionary: typeof zh = zh,
+  scholarlyFace?: ScholarlyCardFace,
+  libraryFace?: LibraryCardFace,
+): void {
   const controller = new ZoteroCardController(scope)
   render(
-    <Harness face={controller.inject()} scholarlyFace={scholarlyFace} dictionary={dictionary} />,
+    <Harness
+      face={controller.inject()}
+      scholarlyFace={scholarlyFace}
+      libraryFace={libraryFace}
+      dictionary={dictionary}
+    />,
   )
 }
 
@@ -271,7 +295,7 @@ describe('ZoteroSettingsSection', () => {
     expect(saveButton().disabled).toBe(true)
   })
 
-  it('renders SegmentedTabs with all 5 tabs and features as default selected tab', () => {
+  it('renders SegmentedTabs with all 6 tabs and features as default selected tab', () => {
     scope = fakeScope({ value: {} })
     mount()
 
@@ -279,11 +303,12 @@ describe('ZoteroSettingsSection', () => {
     expect(tabList).toBeDefined()
 
     const tabs = screen.getAllByRole('tab')
-    expect(tabs).toHaveLength(5)
+    expect(tabs).toHaveLength(6)
     expect(tabs.map((tab) => tab.textContent)).toEqual([
       zh.tabFeatures,
       zh.tabConnection,
       zh.tabSearch,
+      zh.tabLibrary,
       zh.tabScholarly,
       zh.tabAdvanced,
     ])
@@ -321,11 +346,32 @@ describe('ZoteroSettingsSection', () => {
     const scholarlyPanel = document.getElementById('zotero-panel-scholarly')
     expect(scholarlyPanel?.getAttribute('hidden')).toBeNull()
 
+    const libraryTab = screen.getByRole('tab', { name: zh.tabLibrary })
+    fireEvent.click(libraryTab)
+    expect(libraryTab.getAttribute('aria-selected')).toBe('true')
+    const libraryPanel = document.getElementById('zotero-panel-library')
+    expect(libraryPanel?.getAttribute('hidden')).toBeNull()
+
     const advancedTab = screen.getByRole('tab', { name: zh.tabAdvanced })
     fireEvent.click(advancedTab)
     expect(advancedTab.getAttribute('aria-selected')).toBe('true')
     const advancedPanel = document.getElementById('zotero-panel-advanced')
     expect(advancedPanel?.getAttribute('hidden')).toBeNull()
+  })
+
+  it('renders library form inside library tab when libraryFace is supplied', () => {
+    scope = fakeScope({ value: {} })
+    const libraryScope = fakeScope({
+      value: { rightSidebarEnabled: true },
+    })
+    const libraryController = new LibraryFormController(libraryScope)
+    mount(zh, undefined, libraryController.inject())
+
+    const libraryTab = screen.getByRole('tab', { name: zh.tabLibrary })
+    fireEvent.click(libraryTab)
+
+    expect(screen.getByText(zh.groupLibrarySidebar)).toBeDefined()
+    expect(screen.getByText(zh.rightSidebarEnabled)).toBeDefined()
   })
 
   it('explains the disabled scholarly component instead of offering its fields', () => {
