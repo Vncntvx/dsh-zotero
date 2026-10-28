@@ -5,7 +5,7 @@ dsh-zotero is a DeepSeek Harness plugin enabling agents to search, read, cite, a
 ## Workspace
 
 - Developed as a sibling checkout of `../deepseek-harness`. Upstream contracts outrank this file.
-- Baseline harness pin is `dsh 0.2.1-rc.3`. Use `npm run link:local-harness` when local types drift.
+- Baseline harness pin is `dsh 0.2.1-rc.4`. Use `npm run link:local-harness` when local types drift.
 - Vendored framework packages (`cordis`, `cosmokit`, `schemastery`, `cordis-plugin-*`) track the sibling's `vendor/<pkg>/package.json` version, not a prerelease range. A `^X.Y.Z-alpha.N` base pins the lockfile to a prerelease even after the stable tag ships, producing two `cordis` instances in the profile. `node scripts/harness-state.mjs` fails when a vendor declaration's `minVersion` differs from the sibling's version.
 
 ## Repository map
@@ -30,7 +30,7 @@ dsh-zotero is a DeepSeek Harness plugin enabling agents to search, read, cite, a
 - Configuration & validation: `docs/configuration.md` (read before changing config schemas or defaults)
 - Development & launch setup: `docs/development.md` (read for full-plugin vs HMR launch flows)
 - Acceptance scenarios: `docs/scenarios.md` (walk matching G/S/R/E/C/N/W packs after behavioral changes)
-- Test suite rules & fixtures: `tests/README.md` (read before adding or refactoring tests)
+- Test suite rules & fixtures: [tests/README.md](tests/README.md) (required before adding, modifying, moving, or refactoring tests or test helpers)
 - Upstream harness contracts: sibling `../deepseek-harness/docs/`
 
 Always maintain `docs/*.md` and `docs/*.en.md` pairs in lockstep.
@@ -63,7 +63,8 @@ Refer to `docs/development.md` for interactive local launch workflows (full plug
 
 ## Development & Test Discipline
 
-- **Lanes & ratchets**: Place every test in its declared lane under `tests/` (`tests/README.md`). Maximum spec length (`MAX_SPEC_LINES` in `scripts/test-lint.mjs`) and coverage ratchets (`vitest.config.ts`) only move in the tightening direction.
+- **Test organization & ownership**: Follow [tests/README.md](tests/README.md): retain the seven lanes, group by module within a lane, and split specs by behaviour. Give each behaviour a primary verification layer; preserve live protocol checks and write-entry approval checks when removing duplication.
+- **Test complexity & ratchets**: Apply the spec/helper size budgets, support dependency direction, minimal setup, and migration checks in `tests/README.md`. Review-enforced rules apply even before lint automation exists. Maximum spec length (`MAX_SPEC_LINES` in `scripts/test-lint.mjs`) and coverage ratchets (`vitest.config.ts`) only move in the tightening direction.
 - **Test practices**: Never use `.only`, `.skip`, or `.todo` (use `.runIf` when gating). Synchronize on owned promises (`deferred()`), never on arbitrary sleep durations. Use canonical fixture builders from `tests/helpers/server/objects.ts`.
 - **Commits**: Follow Conventional Commits: `<type>(<scope>): <subject>` (lowercase type, imperative subject, header < 72 chars). Body: blank line, followed by bullet points explaining what and why without hard wrapping.
 

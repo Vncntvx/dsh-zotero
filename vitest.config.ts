@@ -4,6 +4,9 @@ export default defineConfig({
   oxc: {
     jsx: { runtime: 'automatic' },
   },
+  resolve: {
+    dedupe: ['react', 'react-dom'],
+  },
   test: {
     // The published harness client packages ship their CSS modules and keep
     // their runtime third-party imports in `devDependencies` (the shell bundles
