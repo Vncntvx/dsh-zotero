@@ -91,7 +91,7 @@ graph LR
 - 组合包配置（`plugins.bundle.config` 与 `plugins.row.config`）：在插件管理器详情页注册统一的 6 标签页配置界面（基础设置、本地连接、检索提取、文献库、学术检索、高级选项），通过 harness 官方 `SettingsForm` 与 `SettingsFormModel` 管理 `zotero`、`library` 与 `scholarly` 三个命名空间，双通道呈现并保留未提交草稿；同时在组件列表行通过 `plugins.row.config`（声明在 `dsh-zotero#library`，受 `whileServed('library')` 守卫）提供侧边栏开关表单；
 - 文献库面板：
   - **右侧标签页（`sidebarRightTabs` + `sidebar.right.pane.tab` + `sidebar.right.pane.tab.title`）**：由 `rightSidebarEnabled` 控制，`sidebar.right.pane.tab` 为会话作用域——面板绑定到其所在标签页的会话，文件读取与写审批锚定该会话；
-  - **容器查询布局**：宽屏由 `@container zoteroLibraryPanel (min-width: 861px)` 切换；窄屏为分段导航栏（`导航 / 列表 / 详情`），选中合集或条目后切到下一段，宽屏为三列并排；
+  - **容器查询布局**：宽屏由匿名容器查询 `@container (min-width: 720px)` 切换；窄屏为分段导航栏（`导航 / 列表 / 详情`），选中合集或条目后切到下一段，宽屏为三列并排；
 - 会话面板（`conversation.view`）：会话标签页只有一个 Zotero 面板，顶部透镜栏在文献工作区与会话级导出页之间切换；每个条目的检查器内含概览（Overview）、原文片段（Passages）与该条目导出结果（Exports）三个面板；
 - 工具卡片（`tool.call.toolview`）：23 个本地模型工具（8 读 + 15 写）与 `scholarly_save_to_zotero` 各有一张紧凑折叠卡片；其余 6 个 Scholarly 检索工具按官方契约落通用行（未占用键的 fallback）。卡片对值得复制的取值提供复制按钮，通过“阅读 PDF”在侧边栏阅读原文，并提供复制标题或规范深链的定位操作。卡片只渲染工具已有的输出，自身不调用工具；
 - 命令状态卡片（`conversation.chat.commandview`）：为 `/zotero` 输出提供连接状态灯、版本与 Server ID 明细、离线排查建议与就地刷新按钮。结构化事实来自宿主注册的 `zoteroStatus` 会话投影：命令处理器将同一份状态投影为 `zotero/status` 会话事件并以 `sourceEventSeq` 指向它，卡片经 `useProjection` 读回，命令文本只作人类可读答案、不再被解析。就地刷新发起的实时探测优先于投影（它是更新的答案）；

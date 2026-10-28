@@ -197,7 +197,7 @@ export interface ScriptedFace {
 /** One session snapshot row for the `useSessions` stub. */
 export interface SessionStub {
   ids: string[]
-  byId: Record<string, { cwd?: string; running?: boolean }>
+  byId: Record<string, { cwd?: string; running?: boolean; removed?: boolean }>
   /** The conversation this pane belongs to; defaults to the first id. */
   paneId?: string
 }
@@ -282,7 +282,7 @@ export function mountPanel(
       return select({
         sessionId: paneId,
         running: sessions.byId[paneId]?.running === true,
-        removed: false,
+        removed: sessions.byId[paneId]?.removed === true,
       })
     },
     useSessionStatus: (

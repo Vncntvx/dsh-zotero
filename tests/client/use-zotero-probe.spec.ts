@@ -98,6 +98,44 @@ describe('useZoteroProbe', () => {
     expect(result.current.state.error).toBe('Transport error')
   })
 
+  it('settles on this mount own answer and keeps it across refreshes', async () => {
+    const probe = vi.fn(async () => ({
+      ok: true as const,
+      value: { providerId: 'local', connected: true, zoteroVersion: '7.0.15' },
+    }))
+
+    const { result } = renderHook(() => useZoteroProbe(probe, { initialAutoRun: true }))
+    expect(result.current.settled).toBe(false)
+
+    await act(async () => {})
+    expect(result.current.settled).toBe(true)
+
+    await act(async () => {
+      await result.current.runProbe()
+    })
+    expect(result.current.settled).toBe(true)
+  })
+
+  it('paints a cached seed without treating it as this mount own answer', async () => {
+    const pending = deferred<RemoteResult<ZoteroStatusView>>()
+    const probe = vi.fn(() => pending.promise)
+    const { result } = renderHook(() =>
+      useZoteroProbe(probe, {
+        initialAutoRun: true,
+        initialData: { providerId: 'local', connected: true, serverId: 'S1' },
+      }),
+    )
+    expect(result.current.state.data?.connected).toBe(true)
+    expect(result.current.settled).toBe(false)
+
+    await act(async () => {
+      pending.resolve({ ok: false, error: { message: 'Transport error' } as never })
+    })
+    expect(result.current.settled).toBe(true)
+    expect(result.current.state.data).toBeUndefined()
+    expect(result.current.state.error).toBe('Transport error')
+  })
+
   it('handles probe throwing Error', async () => {
     const probe = vi.fn(async () => {
       throw new Error('Network failure')

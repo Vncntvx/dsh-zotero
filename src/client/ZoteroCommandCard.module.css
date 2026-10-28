@@ -40,18 +40,6 @@
   gap: 6px;
 }
 
-.dotGreen {
-  color: var(--dsw-alias-state-success-primary, #10b981);
-}
-
-.dotRed {
-  color: var(--dsw-alias-state-error-primary, #ef4444);
-}
-
-.dotYellow {
-  color: var(--dsw-alias-state-warn-primary, #f59e0b);
-}
-
 .bodyWrap {
   display: flex;
   flex-direction: column;
@@ -89,7 +77,7 @@
 .itemValue {
   font-size: 12px;
   font-weight: 500;
-  font-family: var(--dsw-font-code, monospace);
+  font-family: var(--ds-font-family-code);
   color: var(--dsw-alias-label-primary);
   word-break: break-all;
 }
@@ -102,31 +90,6 @@
   margin-top: 2px;
 }
 
-.actionButton {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
-  border: 0.5px solid var(--dsw-alias-border-l2);
-  border-radius: var(--dsw-radius-sm);
-  background: var(--dsw-alias-bg-layer-2);
-  color: var(--dsw-alias-label-secondary);
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 120ms ease;
-}
-
-.actionButton:hover:not(:disabled) {
-  background: var(--dsw-alias-bg-layer-3);
-  color: var(--dsw-alias-label-primary);
-  border-color: var(--dsw-alias-border-l1);
-}
-
-.actionButton:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 .errorBody {
   margin: 0;
   padding: 8px 12px;
@@ -135,6 +98,6 @@
   background: var(--dsw-alias-markdown-code-block);
   color: var(--dsw-alias-state-error-primary);
   font-size: 12px;
-  font-family: var(--dsw-font-code, monospace);
+  font-family: var(--ds-font-family-code);
   white-space: pre-wrap;
 }

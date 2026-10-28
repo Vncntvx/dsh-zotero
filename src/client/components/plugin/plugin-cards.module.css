@@ -65,9 +65,11 @@
   cursor: pointer;
 }
 
-.refreshButton:hover {
-  color: var(--dsw-alias-label-primary);
-  background: var(--dsw-alias-bg-layer-3);
+@media (hover: hover) {
+  .refreshButton:hover {
+    color: var(--dsw-alias-label-primary);
+    background: var(--dsw-alias-bg-layer-3);
+  }
 }
 
 .statusRow {
@@ -208,27 +210,6 @@
   padding: 8px 0;
 }
 
-.diagFilter {
-  display: flex;
-  gap: 4px;
-}
-
-.diagFilterButton {
-  border: 0.5px solid var(--dsw-alias-border-l2);
-  border-radius: var(--dsw-radius-lg);
-  background: transparent;
-  color: var(--dsw-alias-label-secondary);
-  font-size: 11px;
-  line-height: 16px;
-  padding: 2px 8px;
-  cursor: pointer;
-}
-
-.diagFilterButton[aria-pressed='true'] {
-  background: var(--dsw-alias-bg-layer-2);
-  color: var(--dsw-alias-label-primary);
-}
-
 .diagList {
   display: flex;
   flex-direction: column;
@@ -259,6 +240,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
+  corner-shape: round;
   background: var(--dsw-alias-label-tertiary);
 }
 
@@ -283,7 +265,7 @@
 }
 
 .diagEvent {
-  font-family: var(--dsw-font-mono, monospace);
+  font-family: var(--ds-font-family-code);
   font-size: 11px;
   line-height: 16px;
   color: var(--dsw-alias-label-secondary);

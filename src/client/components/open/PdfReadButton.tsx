@@ -7,7 +7,11 @@
 
 import { useEffect, useState } from 'react'
 import clsx from 'clsx'
-import { Button, IconDeliverDocRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import {
+  Button,
+  IconDeliverDocRegular,
+  type ButtonVariant,
+} from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ZoteroAttachmentLocationView } from '../../../contract.ts'
@@ -32,6 +36,8 @@ interface PdfReadButtonProps {
   readonly disabledReason?: string
   readonly requireSessionForResolvedFile?: boolean
   readonly variant?: 'button' | 'link'
+  /** Button emphasis when variant="button": the inspector's action row asks for `primary`. */
+  readonly emphasis?: ButtonVariant
 }
 
 export function PdfReadButton({
@@ -43,6 +49,7 @@ export function PdfReadButton({
   onOpenUrl,
   resolveAttachment,
   label,
+  emphasis = 'outline',
   t,
   className,
   title,
@@ -154,7 +161,7 @@ export function PdfReadButton({
 
   return (
     <Button
-      variant="outline"
+      variant={emphasis}
       size="sm"
       className={clsx(className, resolving && css.resolving)}
       onClick={handleClick}

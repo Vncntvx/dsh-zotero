@@ -9,7 +9,13 @@
 
 import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
-import { DisclosureRow, IconRefreshOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import {
+  Button,
+  DisclosureRow,
+  IconRefreshOutlineRegular,
+  StateDot,
+  type StateDotState,
+} from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ZoteroStatusView } from '../contract.ts'
 import { DiagnosisBox } from './components/DiagnosisBox.tsx'
@@ -121,20 +127,16 @@ export function ZoteroCommandCard({
   const hasFacts = probeState.data !== undefined || projected != null
 
   const headerPrefix = useMemo(() => {
-    let dotClass = css.dotGreen
-    if (probeState.loading) {
-      dotClass = css.dotYellow
-    } else if (isRunning) {
-      dotClass = css.dotYellow
+    let dotState: StateDotState = 'done'
+    if (probeState.loading || isRunning) {
+      dotState = 'ongoing'
     } else if (isError || !effectiveStatus.connected) {
-      dotClass = css.dotRed
+      dotState = 'error'
     }
 
     return (
       <span className={css.summaryBadge}>
-        <span className={dotClass} aria-hidden>
-          ●
-        </span>
+        <StateDot state={dotState} size={10} />
       </span>
     )
   }, [probeState.loading, isRunning, isError, effectiveStatus.connected])
@@ -206,15 +208,15 @@ export function ZoteroCommandCard({
     const actions =
       probe === undefined ? null : (
         <div className={css.actionsRow}>
-          <button
-            type="button"
-            className={css.actionButton}
+          <Button
+            variant="outline"
+            size="sm"
+            icon={<IconRefreshOutlineRegular size={14} />}
             disabled={probeState.loading}
             onClick={handleRecheck}
           >
-            <IconRefreshOutlineRegular size={12} />
-            <span>{probeState.loading ? t('checking') : t('refresh')}</span>
-          </button>
+            {probeState.loading ? t('checking') : t('refresh')}
+          </Button>
         </div>
       )
 

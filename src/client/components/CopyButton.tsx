@@ -7,7 +7,7 @@
  * @module dsh-zotero/client/components/CopyButton
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { Button, writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
 import css from './cards.module.css'
 
@@ -29,6 +29,8 @@ interface CopyButtonProps {
   readonly disabled?: boolean
   /** Renders as official Button variant="outline" size="sm". */
   readonly asButton?: boolean
+  /** Optional leading icon node when rendered as Button. */
+  readonly icon?: ReactNode
 }
 
 export function CopyButton({
@@ -39,28 +41,22 @@ export function CopyButton({
   title,
   disabled,
   asButton = false,
+  icon,
 }: CopyButtonProps) {
   const [copied, setCopied] = useState(false)
-  // A click epoch: a slow clipboard promise resolving after a newer click
-  // (or after unmount) must not flip the flag for a value it did not write.
+  // Click epochs drop a late clipboard answer that a newer click superseded.
   const epoch = useRef(0)
+
   useEffect(() => {
     if (!copied) return
-    const timer = window.setTimeout(() => {
-      setCopied(false)
-    }, 1500)
-    return () => {
-      window.clearTimeout(timer)
-    }
+    const timer = window.setTimeout(() => setCopied(false), 1500)
+    return () => window.clearTimeout(timer)
   }, [copied])
 
-  const handleClick = (e: React.MouseEvent) => {
+  const handleClick = (e: MouseEvent) => {
     e.stopPropagation()
-    if (disabled) return
     const mine = (epoch.current += 1)
     void writeClipboard(value).then((ok) => {
-      // Only a successful write earns the feedback; a denial (iframe
-      // permissions, insecure context) stays on the action label.
       if (ok && epoch.current === mine) setCopied(true)
     })
   }
@@ -74,6 +70,7 @@ export function CopyButton({
         aria-label={label}
         title={title ?? label}
         disabled={disabled}
+        icon={icon}
         onClick={handleClick}
       >
         {copied ? copiedLabel : label}
@@ -90,7 +87,8 @@ export function CopyButton({
       disabled={disabled}
       onClick={handleClick}
     >
-      {copied ? copiedLabel : label}
+      {icon}
+      <span>{copied ? copiedLabel : label}</span>
     </button>
   )
 }

@@ -1,14 +1,10 @@
 // @vitest-environment jsdom
 /** Independent request lanes, restoration and inspector lifetime. */
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
+import { act, cleanup, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
-import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
-import {
-  useLibraryFeed,
-  type LibraryFeedFace,
-} from '../../src/client/components/library/useLibraryFeed.ts'
-import type { ZoteroChildPageView, ZoteroLibraryChildPageRequestView } from '../../src/contract.ts'
+import type { LibraryFeedFace } from '../../src/client/components/library/useLibraryFeed.ts'
+import type { ZoteroLibraryBrowseRequestView } from '../../src/contract.ts'
 import {
   libraryStorageKey,
   readLibraryState,
@@ -22,7 +18,7 @@ import {
   searchPage,
 } from './helpers/library-panel-harness.tsx'
 import { deferred } from '../helpers/sync.ts'
-import type { ZoteroLibraryBrowseRequestView } from '../../src/contract.ts'
+import { setupLibraryFeed as setup } from './helpers/library-feed-harness.ts'
 
 beforeEach(() => localStorage.clear())
 afterEach(() => {
@@ -30,42 +26,6 @@ afterEach(() => {
   vi.useRealTimers()
   vi.restoreAllMocks()
 })
-
-function setup(overrides: Partial<LibraryFeedFace> = {}, serverId = 'S1') {
-  const face = {
-    browse: vi.fn(async (request: ZoteroLibraryBrowseRequestView) => ({
-      ok: true as const,
-      value:
-        request.kind === 'libraries'
-          ? LIBRARY_ROWS
-          : request.kind === 'savedSearches'
-            ? SAVED_SEARCHES
-            : ROOT_COLLECTIONS,
-    })),
-    search: vi.fn(async () => ({ ok: true as const, value: searchPage() })),
-    item: vi.fn(async () => ({ ok: true as const, value: ITEM_DETAIL })),
-    childPage: vi.fn(
-      async (
-        request: ZoteroLibraryChildPageRequestView,
-      ): Promise<RemoteResult<ZoteroChildPageView>> => ({
-        ok: true,
-        value: {
-          kind: request.kind,
-          page: {
-            total: 0,
-            returned: 0,
-            offset: request.offset,
-            limit: request.limit,
-            items: [],
-          },
-        },
-      }),
-    ),
-    ...overrides,
-  }
-  const hook = renderHook(({ id }) => useLibraryFeed(face, id), { initialProps: { id: serverId } })
-  return { ...hook, face }
-}
 
 describe('navigation lanes', () => {
   it('pages two expanded collections independently when responses arrive in reverse order', async () => {

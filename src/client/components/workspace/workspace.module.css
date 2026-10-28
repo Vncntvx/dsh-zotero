@@ -90,9 +90,11 @@
     color 120ms var(--ds-ease-in-out);
 }
 
-.menuButton:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .menuButton:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .menuButton:focus-visible {
@@ -119,9 +121,11 @@
     color 120ms var(--ds-ease-in-out);
 }
 
-.refresh:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .refresh:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .refresh:disabled {
@@ -162,8 +166,10 @@
   transition: color 120ms var(--ds-ease-in-out);
 }
 
-.lensTab:hover {
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .lensTab:hover {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .lensTab:focus-visible {
@@ -259,8 +265,10 @@
   transform: translateY(-50%);
 }
 
-.filterArrow:hover {
-  background: var(--dsw-alias-interactive-bg-hover-solid);
+@media (hover: hover) {
+  .filterArrow:hover {
+    background: var(--dsw-alias-interactive-bg-hover-solid);
+  }
 }
 
 .filterArrowLeft {
@@ -293,9 +301,11 @@
   text-decoration: none;
 }
 
-.evidenceEntry:hover {
-  text-decoration: underline dotted;
-  text-underline-offset: 3px;
+@media (hover: hover) {
+  .evidenceEntry:hover {
+    text-decoration: underline dotted;
+    text-underline-offset: 3px;
+  }
 }
 
 .evidenceEntry:focus-visible {
@@ -349,9 +359,11 @@
     color 120ms var(--ds-ease-in-out);
 }
 
-.filterClear:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .filterClear:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .filterClear:focus-visible {
@@ -382,8 +394,10 @@
   cursor: pointer;
 }
 
-.listItem:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .listItem:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .listItem:focus-visible {
@@ -506,8 +520,10 @@
   transition: color 120ms var(--ds-ease-in-out);
 }
 
-.detailTab:hover {
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .detailTab:hover {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .detailTab:focus-visible {
@@ -611,9 +627,11 @@
     color 120ms var(--ds-ease-in-out);
 }
 
-.action:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .action:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .action:focus-visible {
@@ -683,9 +701,11 @@
   cursor: pointer;
 }
 
-.detailToggle:hover {
-  color: var(--dsw-alias-label-primary);
-  text-decoration: underline;
+@media (hover: hover) {
+  .detailToggle:hover {
+    color: var(--dsw-alias-label-primary);
+    text-decoration: underline;
+  }
 }
 
 .detailToggle:focus-visible {
@@ -778,9 +798,11 @@
     cursor: pointer;
   }
 
-  .backAction:hover {
-    background: var(--dsw-alias-interactive-bg-hover);
-    color: var(--dsw-alias-label-primary);
+  @media (hover: hover) {
+    .backAction:hover {
+      background: var(--dsw-alias-interactive-bg-hover);
+      color: var(--dsw-alias-label-primary);
+    }
   }
 
   .backAction:focus-visible {

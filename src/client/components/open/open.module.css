@@ -25,15 +25,18 @@
   text-decoration: none;
 }
 
-.link:hover,
 .link:focus-visible {
   text-decoration: underline dotted;
   text-underline-offset: 3px;
-}
-
-.link:focus-visible {
   outline: 1px solid var(--dsw-alias-link);
   outline-offset: 1px;
+}
+
+@media (hover: hover) {
+  .link:hover {
+    text-decoration: underline dotted;
+    text-underline-offset: 3px;
+  }
 }
 
 /* Leading link-category glyph seat for `<LinkIcon kind="url">`
@@ -78,9 +81,11 @@
     color 120ms var(--ds-ease-in-out);
 }
 
-.button:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .button:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .button:focus-visible {
@@ -95,9 +100,11 @@
   cursor: default;
 }
 
-.blocked:hover {
-  background: transparent;
-  color: var(--dsw-alias-label-secondary);
+@media (hover: hover) {
+  .blocked:hover {
+    background: transparent;
+    color: var(--dsw-alias-label-secondary);
+  }
 }
 
 .resolving {

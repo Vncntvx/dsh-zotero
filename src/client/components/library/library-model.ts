@@ -28,6 +28,9 @@ export const LIBRARY_PAGE_SIZE = 50
 /** The canonical personal library; the host lists it first on every page walk. */
 export const PERSONAL_LIBRARY: SupportedLocalLibrary = { type: 'user', id: 0 }
 
+/** The narrow layout's panes; a wide layout shows all three side by side. */
+export type LibraryPane = 'tree' | 'list' | 'inspector'
+
 /** A non-negative integer page offset from untrusted arithmetic. */
 export function pageOffsetOf(value: number): number {
   return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0

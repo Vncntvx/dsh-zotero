@@ -28,24 +28,8 @@ import { Fragment, createElement, useEffect, memo, useRef, type ReactElement } f
 import { vi, type MockedFunction } from 'vitest'
 import type { SettingsFormLabels } from '@deepseek-ai/dsh-client-ui-primitives'
 import { TagStub } from './tag-stub.tsx'
-
-/** One selectable row of the `Menu` stub, as the workspace specs declare it. */
-export interface MenuStubItem {
-  readonly id: string
-  readonly label?: unknown
-  readonly disabled?: boolean
-}
-
-/** Props the `Menu` stub reads: the subset of the primitive's surface in play. */
-export interface MenuStubProps {
-  readonly anchor?: unknown
-  readonly items?: readonly MenuStubItem[]
-  readonly open?: boolean
-  /** Row activation; the interactive variant forwards it. */
-  readonly onSelect?: (id: string) => void
-  /** Escape and outside-click close; the interactive variant forwards it. */
-  readonly onClose?: () => void
-}
+import { staticMenu, type MenuStubProps } from './menu-stub.tsx'
+import { primitivesIcons } from './primitives-icons.ts'
 
 /** The real clipboard writer, reached through the mocked module. */
 type WriteClipboard = (typeof import('@deepseek-ai/dsh-client-ui-primitives'))['writeClipboard']
@@ -170,84 +154,26 @@ export interface PrimitivesStub extends Omit<RealForm, 'SettingsValueField'> {
     active?: boolean
     [key: string]: unknown
   }) => ReactElement
+  readonly SegmentedControl?: (props: Record<string, unknown>) => ReactElement
+  readonly JsonTree?: (props: Record<string, unknown>) => ReactElement
   readonly IconInspectOutlineRegular: (props: Record<string, unknown>) => ReactElement
   readonly IconBrowseOutlineRegular: (props: Record<string, unknown>) => ReactElement
   readonly IconRefreshOutlineRegular: (props: Record<string, unknown>) => ReactElement
   readonly IconSearchOutlineRegular: (props: Record<string, unknown>) => ReactElement
+  readonly IconSearchOutlineMedium: (props: Record<string, unknown>) => ReactElement
   readonly IconPlusOutlineRegular: (props: Record<string, unknown>) => ReactElement
+  readonly IconQuestionOutlineRegular: (props: Record<string, unknown>) => ReactElement
   readonly IconCopyOutlineRegular: (props: Record<string, unknown>) => ReactElement
   readonly IconDeliverDocRegular: (props: Record<string, unknown>) => ReactElement
   readonly IconBranchOutlineRegular: (props: Record<string, unknown>) => ReactElement
   readonly IconEditOutlineRegular: (props: Record<string, unknown>) => ReactElement
   readonly IconTrashOutlineRegular: (props: Record<string, unknown>) => ReactElement
   readonly IconChevronDownOutlineRegular: (props: Record<string, unknown>) => ReactElement
+  readonly IconChevronsUpDownOutlineMedium: (props: Record<string, unknown>) => ReactElement
+  readonly IconCheckOutlineRegular: (props: Record<string, unknown>) => ReactElement
   readonly Button: (props: Record<string, unknown>) => ReactElement
   readonly Input: (props: Record<string, unknown>) => ReactElement
   readonly FileTypeIcon: (props: Record<string, unknown>) => ReactElement
-}
-
-/** The icon stubs: an inline glyph carrying the icon name. */
-const icon =
-  (name: string) =>
-  (props: Record<string, unknown>): ReactElement =>
-    createElement('span', { 'data-icon': name, ...props })
-
-/**
- * The display-only `Menu`: the trigger plus the open rows, without the
- * primitive's callbacks. Owners whose menu rows act through their own state
- * need no more than this.
- */
-function staticMenu({ anchor, items, open }: MenuStubProps): ReactElement {
-  return createElement(
-    'div',
-    { 'data-menu': open === true ? 'open' : undefined },
-    anchor as never,
-    open === true
-      ? items?.map((item) =>
-          createElement('span', { key: item.id, 'data-menu-item': item.id }, item.label as never),
-        )
-      : undefined,
-  )
-}
-
-/**
- * The `Menu` variant that keeps the primitive's contract: a row click invokes
- * `onSelect`, Escape invokes `onClose`, so the owning component's own
- * callbacks stay exercised without the real portal. Opt in where the spec
- * asserts on them: `primitivesStub({ Menu: interactiveMenu })`.
- */
-export function interactiveMenu({
-  anchor,
-  items,
-  open,
-  onSelect,
-  onClose,
-}: MenuStubProps): ReactElement {
-  return createElement(
-    'div',
-    {
-      'data-menu': open === true ? 'open' : undefined,
-      onKeyDown: (event: { key: string }) => {
-        if (event.key === 'Escape') onClose?.()
-      },
-    },
-    anchor as never,
-    open === true
-      ? items?.map((item) =>
-          createElement(
-            'span',
-            {
-              key: item.id,
-              'data-menu-item': item.id,
-              onClick: () => {
-                onSelect?.(item.id)
-              },
-            },
-            item.label as never,
-          ),
-        )
-      : undefined,
-  )
 }
 
 /** The DOM face the `countingDisclosure` variant takes, as a memo boundary sees it. */
@@ -380,11 +306,7 @@ export function primitivesStub(overrides: Partial<PrimitivesStub> = {}): Primiti
         children as never,
       ),
     Menu: staticMenu,
-    IconChevronDownOutlineMedium: icon('chevron-down'),
-    IconChevronLeftOutlineMedium: icon('chevron-left'),
-    IconChevronRightOutlineMedium: icon('chevron-right'),
-    IconBrowseOutlineMedium: icon('browse'),
-    IconLinkOutlineMedium: icon('link'),
+    ...primitivesIcons,
     SettingsValueField: (props) => {
       // Faithful to the official control's input contract (label, input with
       // draft text, hint/invalid copy, override badge with reset): the real
@@ -603,17 +525,6 @@ export function primitivesStub(overrides: Partial<PrimitivesStub> = {}): Primiti
     DisclosureRow: disclosureRowElement,
     TextShimmer: ({ children, active }) =>
       createElement('span', { 'data-shimmer': active ? 'true' : undefined }, children as never),
-    IconInspectOutlineRegular: icon('inspect'),
-    IconBrowseOutlineRegular: icon('browse-regular'),
-    IconRefreshOutlineRegular: icon('refresh-regular'),
-    IconSearchOutlineRegular: icon('search-regular'),
-    IconPlusOutlineRegular: icon('plus-regular'),
-    IconCopyOutlineRegular: icon('copy-regular'),
-    IconDeliverDocRegular: icon('deliver-doc'),
-    IconBranchOutlineRegular: icon('branch-regular'),
-    IconEditOutlineRegular: icon('edit-regular'),
-    IconTrashOutlineRegular: icon('trash-regular'),
-    IconChevronDownOutlineRegular: icon('chevron-down-regular'),
     Button: ({
       children,
       icon: buttonIcon,
@@ -653,6 +564,26 @@ export function primitivesStub(overrides: Partial<PrimitivesStub> = {}): Primiti
         className: className as string | undefined,
         'aria-hidden': 'true',
       }),
+    SegmentedControl: ({ value, options, onChange, label, className }: Record<string, unknown>) =>
+      createElement(
+        'div',
+        { role: 'tablist', 'aria-label': label as string, className: className as string },
+        ((options as readonly { value: string; label: string }[]) ?? []).map((opt) =>
+          createElement(
+            'button',
+            {
+              key: opt.value,
+              type: 'button',
+              role: 'tab',
+              'aria-selected': opt.value === value,
+              onClick: () => (onChange as (val: string) => void)?.(opt.value),
+            },
+            opt.label,
+          ),
+        ),
+      ),
+    JsonTree: ({ data, label }: Record<string, unknown>) =>
+      createElement('div', { role: 'tree', 'aria-label': label as string }, JSON.stringify(data)),
     ...overrides,
   } as PrimitivesStub
 }

@@ -107,12 +107,11 @@ function buildCommitOf() {
  *
  *  No PLATFORM_MODULES member can be silently inlined: `@deepseek-ai/cordis`,
  *  `ui-slots`, and `ui-dockkit` match the purity plugin's `@deepseek-ai/*`
- *  filter; `react-dom` is listed here as forward cover; and
- *  `@tanstack/react-virtual` (new on the platform table in dsh 0.2.1-alpha.4)
- *  is refused by the graph-authority metafile check until a real value import
- *  externalizes it here. At dsh 0.2.1-alpha.4 this bundle value-imports none
- *  of them (cordis and ui-slots are type-only), so the day one becomes a
- *  value import it resolves through the shell's one copy instead of a second
+ *  filter; `react-dom` is external because the tag filter's portal is a real
+ *  value import (`createPortal`); and `@tanstack/react-virtual` (new on the
+ *  platform table in dsh 0.2.1-alpha.4) is refused by the graph-authority
+ *  metafile check until a real value import externalizes it here. Every
+ *  external above resolves through the shell's one copy instead of a second
  *  copy bundled into the artifact. */
 const EXTERNALS = [
   'react',

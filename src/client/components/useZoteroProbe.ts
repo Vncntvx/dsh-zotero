@@ -19,11 +19,26 @@ interface ZoteroProbeState {
 
 interface UseZoteroProbeOptions {
   readonly initialAutoRun?: boolean
+  readonly initialData?: ZoteroStatusView
 }
 
 interface UseZoteroProbeReturn {
   readonly state: ZoteroProbeState
+  /**
+   * Whether this mount's probe has answered, successfully or not. Callers that
+   * gate side effects on connectivity wait for it: a cached seed only paints.
+   */
+  readonly settled: boolean
   readonly runProbe: () => Promise<void>
+}
+
+/** The single derivation of a probe answer, used by the seed and the answer. */
+function probeStateOf(status: ZoteroStatusView): ZoteroProbeState {
+  return {
+    loading: false,
+    data: status,
+    error: status.connected ? undefined : status.diagnosis,
+  }
 }
 
 /**
@@ -44,9 +59,12 @@ export function useZoteroProbe(
   probe?: () => Promise<RemoteResult<ZoteroStatusView>>,
   options?: UseZoteroProbeOptions,
 ): UseZoteroProbeReturn {
-  const [state, setState] = useState<ZoteroProbeState>({
-    loading: options?.initialAutoRun ?? false,
-  })
+  const [state, setState] = useState<ZoteroProbeState>(() =>
+    options?.initialData !== undefined
+      ? probeStateOf(options.initialData)
+      : { loading: options?.initialAutoRun === true },
+  )
+  const [settled, setSettled] = useState(false)
 
   const inFlightRef = useRef(false)
   const unmountedRef = useRef(false)
@@ -67,11 +85,7 @@ export function useZoteroProbe(
       const res = await probe()
       if (unmountedRef.current) return
       if (res.ok) {
-        setState({
-          loading: false,
-          data: res.value,
-          error: res.value.connected ? undefined : res.value.diagnosis,
-        })
+        setState(probeStateOf(res.value))
       } else {
         setState({
           loading: false,
@@ -86,6 +100,7 @@ export function useZoteroProbe(
       })
     } finally {
       inFlightRef.current = false
+      if (!unmountedRef.current) setSettled(true)
     }
   }, [probe])
 
@@ -95,5 +110,5 @@ export function useZoteroProbe(
     }
   }, [options?.initialAutoRun, probe, runProbe])
 
-  return { state, runProbe }
+  return { state, settled, runProbe }
 }

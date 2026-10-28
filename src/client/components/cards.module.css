@@ -48,9 +48,11 @@
     color 120ms var(--ds-ease-in-out);
 }
 
-.lineAction:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .lineAction:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .lineAction:focus-visible {
@@ -75,7 +77,7 @@
   gap: 6px;
   padding: 10px 12px;
   border: 0.5px solid var(--dsw-alias-border-l2);
-  border-radius: var(--dsw-radius-sm);
+  border-radius: var(--dsw-radius-lg);
   background: var(--dsw-alias-bg-layer-1);
   max-width: 900px;
 }
@@ -122,15 +124,18 @@
   text-decoration: none;
 }
 
-.link:hover,
 .link:focus-visible {
   text-decoration: underline dotted;
   text-underline-offset: 3px;
-}
-
-.link:focus-visible {
   outline: 1px solid var(--dsw-alias-link);
   outline-offset: 1px;
+}
+
+@media (hover: hover) {
+  .link:hover {
+    text-decoration: underline dotted;
+    text-underline-offset: 3px;
+  }
 }
 
 .passages {
@@ -441,13 +446,15 @@
   cursor: pointer;
 }
 
-.surfaceRetryButton:hover {
-  background: var(--dsw-alias-bg-layer-1);
+@media (hover: hover) {
+  .surfaceRetryButton:hover {
+    background: var(--dsw-alias-bg-layer-1);
+  }
 }
 
 .surfaceErrorDetail {
   margin: 0;
-  font-family: var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-family: var(--ds-font-family-code);
   font-size: 12px;
   line-height: 18px;
   color: var(--dsw-alias-label-secondary);
@@ -475,7 +482,7 @@
 
 .cardErrorDetail {
   margin: 2px 0 0;
-  font-family: var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-family: var(--ds-font-family-code);
   font-size: 11px;
   line-height: 16px;
   color: var(--dsw-alias-label-secondary);

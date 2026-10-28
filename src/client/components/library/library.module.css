@@ -7,7 +7,6 @@
 
 .panel {
   container-type: inline-size;
-  container-name: zoteroLibraryPanel;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -24,12 +23,38 @@
   flex: none;
   display: flex;
   align-items: center;
-  gap: 6px 8px;
-  height: 38px;
-  padding: 0 8px 0 12px;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  min-height: 38px;
+  padding: 4px 8px 4px 12px;
   border-bottom: 0.5px solid var(--dsw-alias-border-l3);
   background: var(--dsw-alias-bg-layer-1);
   box-sizing: border-box;
+}
+
+.librarySelectWrap {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.searchModeWrap {
+  flex: none;
+}
+
+.sortSelectWrap {
+  flex: none;
+}
+
+.diagnosticsWrap {
+  flex: none;
+}
+
+.refreshWrap {
+  flex: none;
+}
+
+.toolbarBreak {
+  display: none;
 }
 
 .selectorButton {
@@ -72,9 +97,23 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+.sortIcon {
+  display: block;
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.sortLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .searchInputWrap {
-  flex: 1 1 160px;
-  min-width: 140px;
+  flex: 1 1 140px;
+  min-width: 80px;
   max-width: 320px;
   height: 28px !important;
   box-sizing: border-box;
@@ -97,6 +136,7 @@
   align-items: center;
   gap: 6px;
   padding: 0 2px;
+  flex: none;
 }
 
 .statusText {
@@ -242,6 +282,129 @@
   outline-offset: 1px;
 }
 
+/* ── Tag filter popover ───────────────────────────────────────────────── */
+
+.tagPickerWrap {
+  flex: none;
+  display: inline-flex;
+}
+
+.tagPanel {
+  box-sizing: border-box;
+  width: 240px;
+  max-width: calc(100vw - 24px);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--dsw-alias-bg-layer-1);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  box-shadow: var(--dsw-elevation-prominent);
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+}
+
+.tagSearchInput {
+  height: 28px !important;
+  flex: none;
+}
+
+.tagSearchInput input {
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.tagOptions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 220px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+.tagOptions li {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tagOption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+  box-sizing: border-box;
+  text-align: left;
+  transition:
+    background 120ms var(--ds-ease-in-out),
+    color 120ms var(--ds-ease-in-out);
+}
+
+.tagOption:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: -1px;
+}
+
+@media (hover: hover) {
+  .tagOption:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.tagOptionSelected {
+  color: var(--dsw-alias-state-business-primary);
+  font-weight: 500;
+}
+
+.tagOptionLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tagCheckIcon {
+  flex: none;
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.tagPanelNote {
+  list-style: none;
+  margin: 0;
+  padding: 12px 8px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  text-align: center;
+}
+
+.tagPanelFoot {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: 4px;
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+}
+
 .chevronIcon {
   width: 12px;
   height: 12px;
@@ -319,6 +482,10 @@
   scrollbar-width: none;
 }
 
+.narrowNavWrap > * {
+  width: 100%;
+}
+
 .narrowNavWrap::-webkit-scrollbar {
   display: none;
 }
@@ -376,16 +543,15 @@
 /* Wide: three panes side by side over hairlines. The `.columns .pane`
  * prefix out-specifies `.columnPaneHidden`, so a stale narrow-pane state
  * cannot leave an empty grid track — no !important. */
-@container zoteroLibraryPanel (min-width: 861px) {
+@container (min-width: 720px) {
   .narrowNavWrap {
     display: none;
   }
 
   .columns {
     display: grid;
-    /* The 300px floors fit 861px exactly (220 + 600 + hairlines), so the
-     * wide grid never overflows at the threshold it switches on. */
-    grid-template-columns: clamp(220px, 22cqi, 280px) minmax(300px, 1.2fr) minmax(300px, 1fr);
+    /* The floors fit 720px comfortably (180 + 240 + 240 + hairlines) */
+    grid-template-columns: clamp(180px, 20cqi, 260px) minmax(240px, 1.2fr) minmax(240px, 1fr);
     grid-template-rows: minmax(0, 1fr);
   }
 
@@ -914,6 +1080,7 @@
   margin: 0;
   font-size: 12px;
   line-height: 18px;
+  font-weight: 600;
   color: var(--dsw-alias-label-tertiary);
 }
 
@@ -921,8 +1088,8 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 6px;
+  gap: 6px;
+  margin-top: 8px;
 }
 
 /* The abstract's expand/collapse toggle: the workspace `.detailToggle`
@@ -1026,13 +1193,6 @@
   flex: 1;
 }
 
-.inspectorActions {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
 .metaTable {
   margin: 0;
   display: grid;
@@ -1130,6 +1290,32 @@
   min-width: 0;
 }
 
+.childRowClickable {
+  border: 0;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition:
+    background 120ms var(--ds-ease-in-out),
+    color 120ms var(--ds-ease-in-out);
+}
+
+.childRowClickable:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: -1px;
+}
+
+@media (hover: hover) {
+  .childRowClickable:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+  .childRowClickable:hover .childTitle {
+    color: var(--dsw-alias-link);
+  }
+}
+
 .childInfo {
   display: flex;
   align-items: center;
@@ -1168,6 +1354,247 @@
   padding: 6px 8px;
   border-radius: var(--dsw-radius-sm);
   background: var(--dsw-alias-bg-layer-2);
+}
+
+/* Collapsible child section header button */
+.sectionHeaderBtn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 2px 0;
+  margin: 0 0 6px 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.sectionHeaderBtn .sectionTitle {
+  margin: 0;
+}
+
+@media (hover: hover) {
+  .sectionHeaderBtn:hover .sectionTitle {
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.sectionHeaderBtn:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+  border-radius: var(--dsw-radius-xs);
+}
+
+/* Multiline clamped text block with fade mask */
+.cardClamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  position: relative;
+  mask-image: linear-gradient(180deg, #000 65%, transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg, #000 65%, transparent 100%);
+}
+
+.truncatedHint {
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--dsw-alias-label-caption);
+  font-style: italic;
+}
+
+/* Note card */
+.noteCard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-2);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  box-sizing: border-box;
+  min-width: 0;
+  transition: border-color 120ms var(--ds-ease-in-out);
+}
+
+@media (hover: hover) {
+  .noteCard:hover {
+    border-color: var(--dsw-alias-border-l1);
+  }
+}
+
+.noteText {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  margin: 0;
+}
+
+/* Annotation card */
+.annotationCard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-2);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-left: 2px solid var(--dsw-alias-state-business-primary);
+  box-sizing: border-box;
+  min-width: 0;
+  transition: border-color 120ms var(--ds-ease-in-out);
+}
+
+@media (hover: hover) {
+  .annotationCard:hover {
+    border-top-color: var(--dsw-alias-border-l1);
+    border-right-color: var(--dsw-alias-border-l1);
+    border-bottom-color: var(--dsw-alias-border-l1);
+  }
+}
+
+.annotationHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pageBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  background: var(--dsw-alias-bg-layer-3);
+  color: var(--dsw-alias-label-caption);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  flex: none;
+}
+
+.annotationQuote {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  font-style: normal;
+}
+
+.annotationComment {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 2px;
+  padding: 6px 8px;
+  border-radius: var(--dsw-radius-xs);
+  background: var(--dsw-alias-bg-layer-3);
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.commentIcon {
+  flex: none;
+  font-size: 12px;
+  line-height: 16px;
+  user-select: none;
+  opacity: 0.8;
+}
+
+.commentText {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+/* Card footer and actions */
+.cardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 2px;
+  min-width: 0;
+}
+
+.cardToggle {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 2px;
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--dsw-alias-label-caption);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .cardToggle:hover {
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.cardToggle:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+.cardActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex: none;
+}
+
+.cardActionBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 5px;
+  background: transparent;
+  border: none;
+  border-radius: var(--dsw-radius-xs);
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--dsw-alias-label-caption);
+  cursor: pointer;
+  transition:
+    background 120ms var(--ds-ease-in-out),
+    color 120ms var(--ds-ease-in-out);
+}
+
+@media (hover: hover) {
+  .cardActionBtn:hover {
+    color: var(--dsw-alias-label-primary);
+    background: var(--dsw-alias-bg-layer-3);
+  }
+}
+
+.cardActionBtn:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
 }
 
 /* One child listing's pager: a quiet inline row, not a full-bleed footer. */
@@ -1362,6 +1789,7 @@
 @media (pointer: coarse) {
   .searchInputWrap input,
   .filterNumberInput,
+  .tagSearchInput input,
   .writeInput,
   .writeSelect,
   .writeTextarea {
@@ -1369,25 +1797,79 @@
   }
 }
 
-/* The 1440px business axis the workspace shares: on a wide main column the
- * three panes stop stretching and center, the toolbar stays full chrome. */
-@container zoteroLibraryPanel (max-width: 640px) {
+/* Container queries: anonymous queries evaluate against the nearest ancestor container (.panel). */
+@container (max-width: 640px) {
   /* The lamp dot carries the state on a narrow toolbar; the full text lives
    * in the diagnostics menu and in the offline note. */
   .statusText {
     display: none;
   }
 
+  .sortLabel {
+    display: none;
+  }
+
   .searchInputWrap {
     max-width: none;
-    flex-basis: 200px;
+    flex-basis: 100px;
+  }
+
+  .searchModeWrap :global([role='tab']) {
+    padding: 0 8px;
+    font-size: 11px;
+    height: 24px;
   }
 }
 
-@container zoteroLibraryPanel (max-width: 560px) {
+@container (max-width: 520px) {
+  .librarySelectWrap {
+    order: 1;
+    max-width: 140px;
+  }
+
+  .spacer {
+    order: 2;
+    flex: 1 1 auto;
+  }
+
+  .statusGroup {
+    order: 3;
+  }
+
+  .diagnosticsWrap {
+    order: 4;
+  }
+
+  .refreshWrap {
+    order: 5;
+  }
+
+  .toolbarBreak {
+    display: block;
+    order: 6;
+    flex-basis: 100%;
+    width: 100%;
+    height: 0;
+    margin: 0;
+  }
+
+  .searchInputWrap {
+    order: 7;
+    flex: 1 1 80px;
+    min-width: 80px;
+  }
+
+  .searchModeWrap {
+    order: 8;
+  }
+
+  .sortSelectWrap {
+    order: 9;
+  }
+
   .toolbar {
     gap: 4px 6px;
-    padding: 0 6px 0 8px;
+    padding: 4px 8px;
   }
 
   .filterRail {
@@ -1399,9 +1881,19 @@
   }
 }
 
-@container zoteroLibraryPanel (max-width: 460px) {
+@container (max-width: 460px) {
   .toolbar {
-    padding: 0 4px 0 6px;
+    padding: 4px 6px;
+    gap: 4px;
+  }
+
+  .narrowNavWrap {
+    padding: 4px 8px;
+  }
+
+  .narrowNavWrap :global([role='tab']) {
+    padding-inline: 8px;
+    font-size: 12px;
   }
 
   .listHeader {
@@ -1421,6 +1913,26 @@
     grid-template-columns: minmax(0, 1fr);
     row-gap: 2px;
   }
+
+  .writeConditionRow {
+    flex-wrap: wrap;
+  }
+}
+
+@container (max-width: 360px) {
+  .librarySelectWrap {
+    max-width: 110px;
+  }
+
+  .searchModeWrap :global([role='tab']) {
+    padding: 0 4px;
+    font-size: 10px;
+  }
+
+  .paginator {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1431,7 +1943,8 @@
   .treeExpander,
   .treeRow,
   .itemRow,
-  .pageButton {
+  .pageButton,
+  .tagOption {
     transition: none;
   }
 }

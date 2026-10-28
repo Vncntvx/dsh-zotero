@@ -12,14 +12,18 @@ import { zh } from '../../src/client/locales.ts'
 import { mockT } from './helpers/mock-translate.ts'
 import { deferred } from '../helpers/sync.ts'
 
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
+// The visual primitives are stubbed; the positioning and dismiss hooks stay
+// real, because this spec is what proves the popover's placement and closing.
+vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>()
   const { primitivesStub } = await import('./helpers/primitives-stub.ts')
-  return primitivesStub()
+  return { ...actual, ...primitivesStub() }
 })
 
 afterEach(() => {
   cleanup()
   vi.useRealTimers()
+  vi.restoreAllMocks()
 })
 
 function tagPage(tag: string): RemoteResult<ZoteroLibraryBrowseResultView> {
@@ -187,5 +191,139 @@ describe('tag picker request lifetime', () => {
     picker.unmount()
     await act(async () => pending.reject(new Error('old request')))
     expect(picker.onError).not.toHaveBeenCalled()
+  })
+})
+
+describe('tag picker popover', () => {
+  it('dismisses on outside pointerdown and keeps open on inside pointerdown', async () => {
+    const browse = vi.fn<LibraryFeedFace['browse']>().mockResolvedValue(tagPage('alpha'))
+    const picker = mountPicker(browse)
+    picker.toggle()
+    const input = await screen.findByRole('searchbox')
+    fireEvent.pointerDown(input)
+    expect(screen.getByRole('searchbox')).toBeTruthy()
+
+    fireEvent.pointerDown(document.body)
+    expect(screen.queryByRole('searchbox')).toBeNull()
+  })
+
+  it('dismisses on Escape key, ignores other keys, and returns focus to the trigger', async () => {
+    const browse = vi.fn<LibraryFeedFace['browse']>().mockResolvedValue(tagPage('alpha'))
+    const picker = mountPicker(browse)
+    picker.toggle()
+    const input = await screen.findByRole('searchbox')
+    input.focus()
+
+    fireEvent.keyDown(document, { key: 'Enter' })
+    expect(screen.getByRole('searchbox')).toBeTruthy()
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('searchbox')).toBeNull()
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: zh.libraryFilterTags }))
+  })
+
+  it('renders the empty note when no tags match and loading is false', async () => {
+    const emptyResult: RemoteResult<ZoteroLibraryBrowseResultView> = {
+      ok: true,
+      value: {
+        kind: 'tags',
+        items: [],
+        total: 0,
+        offset: 0,
+        returned: 0,
+        limit: 50,
+      },
+    }
+    const browse = vi.fn<LibraryFeedFace['browse']>().mockResolvedValue(emptyResult)
+    const picker = mountPicker(browse)
+    picker.toggle()
+    expect(await screen.findByText(zh.libraryEmptyList)).toBeTruthy()
+  })
+
+  it('ignores rows that are not tags', async () => {
+    const browse = vi.fn<LibraryFeedFace['browse']>().mockResolvedValue({
+      ok: true,
+      value: {
+        kind: 'tags',
+        items: [{ kind: 'item', ref: 'zotero://user/0/item/ITEM0001' } as never],
+        total: 1,
+        offset: 0,
+        returned: 1,
+        limit: 50,
+      },
+    })
+    const picker = mountPicker(browse)
+    picker.toggle()
+    expect(await screen.findByText(zh.libraryEmptyList)).toBeTruthy()
+  })
+
+  it('closes on Escape without stealing focus from outside the panel', async () => {
+    const browse = vi.fn<LibraryFeedFace['browse']>().mockResolvedValue(tagPage('alpha'))
+    const picker = mountPicker(browse)
+    picker.toggle()
+    await screen.findByRole('searchbox')
+    const trigger = screen.getByRole('button', { name: zh.libraryFilterTags })
+    ;(document.activeElement as HTMLElement | null)?.blur()
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('searchbox')).toBeNull()
+    expect(document.activeElement).not.toBe(trigger)
+  })
+
+  it('returns focus to the trigger when Escape is pressed from the trigger', async () => {
+    const browse = vi.fn<LibraryFeedFace['browse']>().mockResolvedValue(tagPage('alpha'))
+    const picker = mountPicker(browse)
+    picker.toggle()
+    await screen.findByRole('searchbox')
+    const trigger = screen.getByRole('button', { name: zh.libraryFilterTags })
+    trigger.focus()
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('searchbox')).toBeNull()
+    expect(document.activeElement).toBe(trigger)
+  })
+
+  it('updates position on resize and scroll, clamping to viewport right edge', async () => {
+    const browse = vi.fn<LibraryFeedFace['browse']>().mockResolvedValue(tagPage('alpha'))
+    const picker = mountPicker(browse)
+    const trigger = screen.getByRole('button', { name: zh.libraryFilterTags })
+    const parent = trigger.parentElement as HTMLElement
+    vi.spyOn(parent, 'getBoundingClientRect').mockReturnValue({
+      top: 10,
+      bottom: 40,
+      left: 800,
+      right: 900,
+      width: 100,
+      height: 30,
+      x: 800,
+      y: 10,
+      toJSON: () => {},
+    })
+    Object.defineProperty(window, 'innerWidth', { value: 900, writable: true, configurable: true })
+    // jsdom lays nothing out: give the panel a measured box so the shared
+    // hook's right-edge clamp actually runs (900 - 240 - 8 = 652).
+    vi.spyOn(HTMLDivElement.prototype, 'offsetWidth', 'get').mockReturnValue(240)
+    vi.spyOn(HTMLDivElement.prototype, 'offsetHeight', 'get').mockReturnValue(200)
+
+    picker.toggle()
+    await screen.findByRole('searchbox')
+    const group = screen.getByRole('group', { name: zh.libraryFilterTags })
+    expect(group.style.left).toBe('652px')
+    expect(group.style.top).toBe('44px')
+
+    fireEvent(window, new Event('resize'))
+    fireEvent(window, new Event('scroll'))
+    expect(group.style.left).toBe('652px')
+  })
+
+  it('cancels a queued search when the panel closes before the debounce fires', async () => {
+    vi.useFakeTimers()
+    const browse = vi.fn<LibraryFeedFace['browse']>().mockResolvedValue(tagPage('user-tag'))
+    const picker = mountPicker(browse)
+    await act(async () => picker.toggle())
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'queued' } })
+    picker.toggle()
+    await act(async () => vi.runAllTimersAsync())
+    expect(browse).toHaveBeenCalledTimes(1)
   })
 })

@@ -18,13 +18,24 @@ import {
   Button,
   FileTypeIcon,
   IconChevronDownOutlineRegular,
+  IconCopyOutlineRegular,
   IconFolderCloseMedium,
   IconInspectOutlineMedium,
+  IconNewChatOutlineRegular,
+  IconPlusOutlineRegular,
+  IconQuestionOutlineRegular,
   Tag,
   type FileTypeKind,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
-import type { ZoteroChildListingKind, ZoteroAttachmentLocationView } from '../../../contract.ts'
+import type {
+  ZoteroAnnotationRowView,
+  ZoteroAttachmentLocationView,
+  ZoteroAttachmentRowView,
+  ZoteroChildListingKind,
+  ZoteroNoteRowView,
+} from '../../../contract.ts'
+import { getAttachmentResolver } from '../../actions/attachment-resolver.ts'
 import { formatCreatorsList } from '../../../creators.ts'
 import { HTML_CONTENT_TYPE, PDF_CONTENT_TYPE } from '../../../media-types.ts'
 import { CopyButton } from '../CopyButton.tsx'
@@ -73,6 +84,274 @@ function fileTypeKindFor(contentType: string, filename: string): FileTypeKind {
   if (contentType === HTML_CONTENT_TYPE) return 'html'
   if (contentType.includes('markdown') || filename.toLowerCase().endsWith('.md')) return 'markdown'
   return 'other'
+}
+
+const DSH_SUPPORTED_MIMES = [
+  'application/pdf',
+  'text/',
+  'image/',
+  'application/json',
+  'application/xml',
+]
+
+const DSH_SUPPORTED_EXTS = new Set([
+  'pdf',
+  'md',
+  'markdown',
+  'txt',
+  'text',
+  'html',
+  'htm',
+  'json',
+  'xml',
+  'png',
+  'jpg',
+  'jpeg',
+  'gif',
+  'svg',
+  'webp',
+])
+
+function isDshSupportedAttachment(contentType: string, title: string): boolean {
+  if (DSH_SUPPORTED_MIMES.some((mime) => contentType.startsWith(mime))) return true
+  const ext = title.split('.').pop()?.toLowerCase()
+  return ext !== undefined && DSH_SUPPORTED_EXTS.has(ext)
+}
+
+function AttachmentItem({
+  t,
+  attachment,
+  openFile,
+  resolveAttachment,
+}: {
+  readonly t: TranslateNS<'zotero'>
+  readonly attachment: ZoteroAttachmentRowView
+  readonly openFile: ((path: string) => void) | undefined
+  readonly resolveAttachment:
+    ((ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>) | undefined
+}) {
+  const [resolving, setResolving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const supported = isDshSupportedAttachment(attachment.contentType, attachment.title)
+  const canOpen = supported && (openFile !== undefined || resolveAttachment !== undefined)
+
+  const handleOpen = async () => {
+    if (!canOpen || resolving) return
+    setError(null)
+    setResolving(true)
+    try {
+      const resolver = resolveAttachment ?? getAttachmentResolver()
+      if (!resolver) return
+      const res = await resolver(attachment.ref)
+      if (res.ok) {
+        if (res.value.kind === 'file' && res.value.path) {
+          if (openFile) openFile(res.value.path)
+        } else if (res.value.kind === 'url' && res.value.url) {
+          window.open(res.value.url, '_blank', 'noopener,noreferrer')
+        }
+      } else {
+        setError(res.error.message)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setResolving(false)
+    }
+  }
+
+  const content = (
+    <>
+      <div className={css.childInfo}>
+        <FileTypeIcon
+          kind={fileTypeKindFor(attachment.contentType, attachment.title)}
+          size={18}
+          className={css.childFileIcon}
+        />
+        <span className={css.childTitle} title={error ?? attachment.title}>
+          {resolving ? `${attachment.title} (${t('libraryLoading')})` : attachment.title}
+        </span>
+      </div>
+      <span className={css.childKind}>{attachmentKindOf(attachment.contentType)}</span>
+    </>
+  )
+
+  if (canOpen) {
+    return (
+      <li>
+        <button
+          type="button"
+          className={clsx(css.childRow, css.childRowClickable)}
+          onClick={handleOpen}
+          disabled={resolving}
+          aria-label={attachment.title}
+          title={error ?? (supported ? t('readPdfInSidebar') : attachment.title)}
+        >
+          {content}
+        </button>
+      </li>
+    )
+  }
+
+  return <li className={css.childRow}>{content}</li>
+}
+
+function NoteItem({
+  t,
+  note,
+  inputActions,
+}: {
+  readonly t: TranslateNS<'zotero'>
+  readonly note: ZoteroNoteRowView
+  readonly inputActions: InputActions | undefined
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const isLong = note.truncated || note.text.length > 180 || note.text.split('\n').length > 4
+
+  const handleInsert = () => {
+    if (!inputActions) return
+    const span = inputActions.captureInsertion()
+    if (span !== undefined) {
+      inputActions.insertText(note.text, span)
+    }
+  }
+
+  return (
+    <li className={css.noteCard}>
+      <div className={clsx(css.noteText, isLong && !expanded && css.cardClamped)}>{note.text}</div>
+      {note.truncated && !expanded && (
+        <span className={css.truncatedHint}>{t('libraryAbstractTruncated')}</span>
+      )}
+      <div className={css.cardFooter}>
+        {isLong ? (
+          <button
+            type="button"
+            className={css.cardToggle}
+            aria-expanded={expanded}
+            onClick={() => setExpanded((v) => !v)}
+          >
+            <span>{expanded ? t('libraryCollapse') : t('libraryExpand')}</span>
+            <IconChevronDownOutlineRegular
+              size={12}
+              className={clsx(css.toggleChevron, expanded && css.toggleChevronOpen)}
+            />
+          </button>
+        ) : (
+          <span />
+        )}
+        <div className={css.cardActions}>
+          <CopyButton
+            value={note.text}
+            label={t('copy')}
+            copiedLabel={t('copied')}
+            className={css.cardActionBtn}
+            icon={<IconCopyOutlineRegular size={11} />}
+            title={t('libraryCopyNote')}
+          />
+          {inputActions !== undefined && (
+            <button
+              type="button"
+              className={css.cardActionBtn}
+              onClick={handleInsert}
+              title={t('libraryInsertNote')}
+              aria-label={t('libraryInsertNote')}
+            >
+              <IconNewChatOutlineRegular size={11} />
+              <span>{t('libraryInsertNote')}</span>
+            </button>
+          )}
+        </div>
+      </div>
+    </li>
+  )
+}
+
+function AnnotationItem({
+  t,
+  annotation,
+  inputActions,
+}: {
+  readonly t: TranslateNS<'zotero'>
+  readonly annotation: ZoteroAnnotationRowView
+  readonly inputActions: InputActions | undefined
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const isLong = annotation.text.length > 180 || annotation.text.split('\n').length > 4
+
+  const handleInsert = () => {
+    if (!inputActions) return
+    const span = inputActions.captureInsertion()
+    if (span !== undefined) {
+      const pageInfo = annotation.pageLabel ? ` (P. ${annotation.pageLabel})` : ''
+      const quote = `> "${annotation.text}"${pageInfo}\n\n`
+      inputActions.insertText(quote, span)
+    }
+  }
+
+  return (
+    <li className={css.annotationCard}>
+      <div className={css.annotationHeader}>
+        {annotation.pageLabel !== undefined ? (
+          <span className={css.pageBadge}>
+            {t('libraryAnnotationPageBadge', { page: annotation.pageLabel })}
+          </span>
+        ) : (
+          <span />
+        )}
+        <div className={css.cardActions}>
+          <CopyButton
+            value={annotation.text}
+            label={t('copy')}
+            copiedLabel={t('copied')}
+            className={css.cardActionBtn}
+            icon={<IconCopyOutlineRegular size={11} />}
+            title={t('libraryCopyQuote')}
+          />
+          {inputActions !== undefined && (
+            <button
+              type="button"
+              className={css.cardActionBtn}
+              onClick={handleInsert}
+              title={t('libraryInsertQuote')}
+              aria-label={t('libraryInsertQuote')}
+            >
+              <IconNewChatOutlineRegular size={11} />
+              <span>{t('libraryInsertQuote')}</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {annotation.text !== '' && (
+        <blockquote className={clsx(css.annotationQuote, isLong && !expanded && css.cardClamped)}>
+          {annotation.text}
+        </blockquote>
+      )}
+
+      {isLong && (
+        <button
+          type="button"
+          className={css.cardToggle}
+          aria-expanded={expanded}
+          onClick={() => setExpanded((v) => !v)}
+        >
+          <span>{expanded ? t('libraryCollapse') : t('libraryExpand')}</span>
+          <IconChevronDownOutlineRegular
+            size={12}
+            className={clsx(css.toggleChevron, expanded && css.toggleChevronOpen)}
+          />
+        </button>
+      )}
+
+      {annotation.comment !== undefined && annotation.comment !== '' && (
+        <div className={css.annotationComment}>
+          <span className={css.commentIcon} aria-hidden="true">
+            💬
+          </span>
+          <p className={css.commentText}>{annotation.comment}</p>
+        </div>
+      )}
+    </li>
+  )
 }
 
 export function LibraryInspector({
@@ -153,20 +432,38 @@ export function LibraryInspector({
               onOpenFile={openFile}
               resolveAttachment={resolveAttachment}
               requireSessionForResolvedFile={openFile === undefined}
+              emphasis="primary"
               t={t}
             />
           )}
-          <CopyButton value={detail.ref} label={t('copyRef')} copiedLabel={t('copied')} asButton />
           {inputActions !== undefined && (
             <>
-              <Button variant="outline" size="sm" onClick={askInChat}>
+              <Button
+                variant="outline"
+                size="sm"
+                icon={<IconQuestionOutlineRegular size={14} />}
+                onClick={askInChat}
+              >
                 {t('libraryAskInChat')}
               </Button>
-              <Button variant="outline" size="sm" onClick={addToChat}>
+              <Button
+                variant="outline"
+                size="sm"
+                icon={<IconPlusOutlineRegular size={14} />}
+                onClick={addToChat}
+              >
                 {t('libraryAddToChat')}
               </Button>
             </>
           )}
+          <CopyButton
+            value={detail.ref}
+            label={t('copyRef')}
+            copiedLabel={t('copied')}
+            title={t('copyZoteroLinkTooltip')}
+            icon={<IconCopyOutlineRegular size={14} />}
+            asButton
+          />
         </div>
       </header>
 
@@ -235,7 +532,19 @@ export function LibraryInspector({
                 </dd>
               </div>
             )}
-            {detail.url !== undefined && <MetaRow label={t('libraryMetaUrl')} value={detail.url} />}
+            {detail.url !== undefined && (
+              <div className={css.metaRow}>
+                <dt className={css.metaLabel}>{t('libraryMetaUrl')}</dt>
+                <dd className={css.metaValue}>
+                  <CopyButton
+                    value={detail.url}
+                    label={detail.url}
+                    copiedLabel={t('copied')}
+                    className={css.copyInline}
+                  />
+                </dd>
+              </div>
+            )}
             {detail.extra !== undefined && (
               <MetaRow label={t('libraryMetaExtra')} value={detail.extra} />
             )}
@@ -280,21 +589,13 @@ export function LibraryInspector({
           pageTo={(offset) => pageChild('attachments', offset)}
         >
           {detail.attachments.items.map((attachment) => (
-            <li key={attachment.ref} className={css.childRow}>
-              <div className={css.childInfo}>
-                <FileTypeIcon
-                  kind={fileTypeKindFor(attachment.contentType, attachment.title)}
-                  size={18}
-                  className={css.childFileIcon}
-                />
-                <span className={css.childTitle} title={attachment.title}>
-                  {attachment.title}
-                </span>
-              </div>
-              {/* The head action row owns reading (one entry point, the
-               * first PDF attachment); rows carry their type badge only. */}
-              <span className={css.childKind}>{attachmentKindOf(attachment.contentType)}</span>
-            </li>
+            <AttachmentItem
+              key={attachment.ref}
+              t={t}
+              attachment={attachment}
+              openFile={openFile}
+              resolveAttachment={resolveAttachment}
+            />
           ))}
         </ChildSection>
       )}
@@ -309,12 +610,7 @@ export function LibraryInspector({
           pageTo={(offset) => pageChild('notes', offset)}
         >
           {detail.notes.items.map((note) => (
-            <li key={note.ref} className={css.childNote}>
-              {note.text}
-              {note.truncated && (
-                <span className={css.listNote}> {t('libraryAbstractTruncated')}</span>
-              )}
-            </li>
+            <NoteItem key={note.ref} t={t} note={note} inputActions={inputActions} />
           ))}
         </ChildSection>
       )}
@@ -329,17 +625,12 @@ export function LibraryInspector({
           pageTo={(offset) => pageChild('annotations', offset)}
         >
           {detail.annotations.items.map((annotation) => (
-            <li key={annotation.ref} className={css.childNote}>
-              {annotation.text !== '' && <p className={css.abstract}>{annotation.text}</p>}
-              {annotation.comment !== undefined && (
-                <p className={css.listNote}>{annotation.comment}</p>
-              )}
-              {annotation.pageLabel !== undefined && (
-                <span className={css.listNote}>
-                  {t('libraryAnnotationPage', { page: annotation.pageLabel })}
-                </span>
-              )}
-            </li>
+            <AnnotationItem
+              key={annotation.ref}
+              t={t}
+              annotation={annotation}
+              inputActions={inputActions}
+            />
           ))}
         </ChildSection>
       )}
@@ -356,6 +647,7 @@ function ChildSection({
   retry,
   pageTo,
   children,
+  defaultOpen = true,
 }: {
   readonly t: TranslateNS<'zotero'>
   readonly title: string
@@ -370,23 +662,43 @@ function ChildSection({
   readonly retry: () => void
   readonly pageTo: (offset: number) => void
   readonly children: ReactNode
+  readonly defaultOpen?: boolean
 }) {
+  const [open, setOpen] = useState(defaultOpen)
   return (
     <section className={css.section}>
-      <h4 className={css.sectionTitle}>{title}</h4>
-      <ul className={css.childList}>{children}</ul>
-      <ChildPager
-        t={t}
-        label={title}
-        offset={page.offset}
-        limit={page.limit}
-        total={page.total}
-        returned={page.returned}
-        nextOffset={page.nextOffset}
-        setOffset={pageTo}
-        state={state}
-        retry={retry}
-      />
+      <button
+        type="button"
+        className={css.sectionHeaderBtn}
+        aria-expanded={open}
+        aria-label={
+          open ? t('librarySectionCollapse', { title }) : t('librarySectionExpand', { title })
+        }
+        onClick={() => setOpen((prev) => !prev)}
+      >
+        <h4 className={css.sectionTitle}>{title}</h4>
+        <IconChevronDownOutlineRegular
+          size={12}
+          className={clsx(css.toggleChevron, open && css.toggleChevronOpen)}
+        />
+      </button>
+      {open && (
+        <>
+          <ul className={css.childList}>{children}</ul>
+          <ChildPager
+            t={t}
+            label={title}
+            offset={page.offset}
+            limit={page.limit}
+            total={page.total}
+            returned={page.returned}
+            nextOffset={page.nextOffset}
+            setOffset={pageTo}
+            state={state}
+            retry={retry}
+          />
+        </>
+      )}
     </section>
   )
 }

@@ -73,6 +73,7 @@ import {
   type ZoteroLibraryPanelFace,
 } from './components/library/ZoteroLibraryPanel.tsx'
 import { createLibraryDataPlane } from './components/library/library-data-plane.ts'
+import { clearLibrarySessionMemory } from './components/library/library-storage.ts'
 import { ZoteroLibraryIcon } from './components/library/ZoteroLibraryIcon.tsx'
 import { gatedMount, registerGatedSurfaces, watchWebEnabled, webEnabledOf } from './web-enabled.ts'
 import { registerZoteroToolviews } from './toolviews/index.ts'
@@ -155,6 +156,9 @@ interface UiSurfaces {
  */
 function registerSharedSurfaces(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-zotero: page dictionaries')
+  // The library panel's session view cache outlives its pane tab on purpose;
+  // the plugin's own teardown is the one point that owns every entry.
+  ctx.effect(() => () => clearLibrarySessionMemory(), 'dsh-zotero: library session views')
   ctx.effect(() => {
     const resolver = (ref: string) => ctx.remote.zotero.resolveAttachment(ref)
     setAttachmentResolver(resolver)
@@ -481,8 +485,8 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
         {
           id: 'zotero-library-guide',
           order: 25,
-          title: () => panelT('tabLibrary'),
-          description: () => panelT('tabLibraryDesc'),
+          title: () => panelT('libraryGuideTitle'),
+          description: () => panelT('libraryGuideDesc'),
           icon: ZoteroLibraryIcon,
         },
       ],

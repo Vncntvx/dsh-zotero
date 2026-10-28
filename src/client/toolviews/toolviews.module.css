@@ -57,9 +57,11 @@
   transition: color 100ms ease;
 }
 
-div[data-tool]:hover .summary:not(.errorSummary):not(.cautionSummary),
-div[data-tool]:hover .summarySuffix {
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  div[data-tool]:hover .summary:not(.errorSummary):not(.cautionSummary),
+  div[data-tool]:hover .summarySuffix {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .errorSummary {
@@ -95,10 +97,12 @@ div[data-tool]:hover .summarySuffix {
   transition: all 120ms ease;
 }
 
-.inspectButton:hover {
-  color: var(--dsw-alias-label-primary);
-  border-color: var(--dsw-alias-border-l1, var(--dsw-alias-border-l2));
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .inspectButton:hover {
+    color: var(--dsw-alias-label-primary);
+    border-color: var(--dsw-alias-border-l1, var(--dsw-alias-border-l2));
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .lineAction {
@@ -124,10 +128,12 @@ div[data-tool]:hover .summarySuffix {
     border-color 120ms ease;
 }
 
-.lineAction:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-primary);
-  border-color: var(--dsw-alias-border-l1, var(--dsw-alias-border-l2));
+@media (hover: hover) {
+  .lineAction:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+    border-color: var(--dsw-alias-border-l1, var(--dsw-alias-border-l2));
+  }
 }
 
 .lineAction:focus-visible {
@@ -153,10 +159,12 @@ div[data-tool]:hover .summarySuffix {
   transition: opacity 120ms ease;
 }
 
-.actionLink:hover {
-  text-decoration: underline dotted;
-  text-underline-offset: 3px;
-  opacity: 0.85;
+@media (hover: hover) {
+  .actionLink:hover {
+    text-decoration: underline dotted;
+    text-underline-offset: 3px;
+    opacity: 0.85;
+  }
 }
 
 /* --- Badges --- */
@@ -224,8 +232,10 @@ div[data-tool]:hover .summarySuffix {
   transition: border-color 120ms ease;
 }
 
-.itemCard:hover {
-  border-color: var(--dsw-alias-border-l1, var(--dsw-alias-border-l2));
+@media (hover: hover) {
+  .itemCard:hover {
+    border-color: var(--dsw-alias-border-l1, var(--dsw-alias-border-l2));
+  }
 }
 
 .itemHeader {
@@ -290,8 +300,10 @@ div[data-tool]:hover .summarySuffix {
   transition: border-color 120ms ease;
 }
 
-.evidenceItem:hover {
-  border-color: var(--dsw-alias-border-l1, var(--dsw-alias-border-l2));
+@media (hover: hover) {
+  .evidenceItem:hover {
+    border-color: var(--dsw-alias-border-l1, var(--dsw-alias-border-l2));
+  }
 }
 
 .evidenceHeader {
@@ -341,15 +353,7 @@ div[data-tool]:hover .summarySuffix {
 .codeBox {
   margin: 0;
   padding: 10px 12px;
-  font-family: var(
-    --ds-font-family-code,
-    ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    Monaco,
-    Consolas,
-    monospace
-  );
+  font-family: var(--ds-font-family-code);
   font-size: 12px;
   line-height: 1.5;
   color: var(--dsw-alias-label-secondary);

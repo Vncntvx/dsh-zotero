@@ -23,7 +23,8 @@ import { CONNECTED, mountView } from './helpers/workspace-harness.tsx'
 // the one surface this spec drives through the primitive's own callbacks, so
 // it swaps in the interactive variant instead of the display-only default.
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
-  const { interactiveMenu, primitivesStub } = await import('./helpers/primitives-stub.ts')
+  const { primitivesStub } = await import('./helpers/primitives-stub.ts')
+  const { interactiveMenu } = await import('./helpers/menu-stub.tsx')
   return primitivesStub({ Menu: interactiveMenu })
 })
 

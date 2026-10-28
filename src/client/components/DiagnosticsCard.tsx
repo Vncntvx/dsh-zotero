@@ -14,8 +14,15 @@
  * @module dsh-zotero/client/components/DiagnosticsCard
  */
 
-import { useState, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
+import {
+  Button,
+  JsonTree,
+  type JsonTreeLabels,
+  SegmentedControl,
+  type SegmentedControlOption,
+} from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { PluginDetailProps } from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import {
@@ -109,6 +116,30 @@ function DiagnosticsCardBody({ t, probe, diagnostics }: DiagnosticsCardBodyProps
   const { state: probeState } = useZoteroProbe(probe, { initialAutoRun: true })
   const [problemsOnly, setProblemsOnly] = useState(false)
 
+  const filterOptions: readonly SegmentedControlOption<'all' | 'problems'>[] = useMemo(
+    () => [
+      { value: 'all', label: t('diagnosticsLevelAll') },
+      { value: 'problems', label: t('diagnosticsLevelProblems') },
+    ],
+    [t],
+  )
+
+  const jsonLabels: JsonTreeLabels = useMemo(
+    () => ({
+      copyValue: t('jsonCopyValue'),
+      copyJson: t('jsonCopyJson'),
+      copyPath: t('jsonCopyPath'),
+      copyPrettyJson: t('jsonCopyPrettyJson'),
+      copyCompactJson: t('jsonCopyCompactJson'),
+      copied: t('copied'),
+      copyFailed: t('jsonCopyFailed'),
+      collapseNode: t('jsonCollapseNode'),
+      expandNode: t('jsonExpandNode'),
+      copyButtonTitle: (action: string) => action,
+    }),
+    [t],
+  )
+
   const data = feed.data
   if (data !== undefined && !data.debug) {
     return null
@@ -128,46 +159,31 @@ function DiagnosticsCardBody({ t, probe, diagnostics }: DiagnosticsCardBodyProps
       <div className={css.card}>
         <div className={css.cardHead}>
           <span className={css.cardTitle}>{t('diagnosticsLogLabel')}</span>
-          <button
-            type="button"
-            className={css.refreshButton}
+          <Button
+            variant="outline"
+            size="sm"
             disabled={feed.loading}
             onClick={() => {
               void refresh()
             }}
           >
             {feed.loading ? t('checking') : t('refresh')}
-          </button>
+          </Button>
         </div>
 
         <div className={css.diagToolbar}>
-          <div className={css.diagFilter} role="group">
-            <button
-              type="button"
-              className={css.diagFilterButton}
-              aria-pressed={!problemsOnly}
-              onClick={() => {
-                setProblemsOnly(false)
-              }}
-            >
-              {t('diagnosticsLevelAll')}
-            </button>
-            <button
-              type="button"
-              className={css.diagFilterButton}
-              aria-pressed={problemsOnly}
-              onClick={() => {
-                setProblemsOnly(true)
-              }}
-            >
-              {t('diagnosticsLevelProblems')}
-            </button>
-          </div>
+          <SegmentedControl
+            id="diagnostics-level-filter"
+            value={problemsOnly ? 'problems' : 'all'}
+            options={filterOptions}
+            onChange={(next) => setProblemsOnly(next === 'problems')}
+            label={t('diagnosticsFilterLabel')}
+          />
           <CopyButton
             value={data !== undefined ? bundleOf(data, probeState.data, t) : ''}
             label={t('diagnosticsCopyBundle')}
             copiedLabel={t('copied')}
-            className={css.refreshButton}
+            asButton
             disabled={data === undefined}
           />
         </div>
@@ -193,7 +209,16 @@ function DiagnosticsCardBody({ t, probe, diagnostics }: DiagnosticsCardBodyProps
                   {entry.detail === undefined ? null : (
                     <details className={css.diagDetail}>
                       <summary>{t('diagnosticsDetail')}</summary>
-                      <pre>{JSON.stringify(entry.detail, null, 2)}</pre>
+                      <JsonTree
+                        data={
+                          typeof entry.detail === 'object' && entry.detail !== null
+                            ? (entry.detail as object)
+                            : { value: entry.detail }
+                        }
+                        label={t('diagnosticsDetail')}
+                        labels={jsonLabels}
+                        collapsedStringLines={3}
+                      />
                     </details>
                   )}
                 </div>

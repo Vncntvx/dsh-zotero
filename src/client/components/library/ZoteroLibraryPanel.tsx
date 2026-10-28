@@ -20,6 +20,7 @@ import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { InputActions } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import {
   IconChevronDownOutlineRegular,
+  IconChevronsUpDownOutlineMedium,
   IconEllipsisOutlineMedium,
   IconRefreshOutlineMedium,
   IconSearchOutlineMedium,
@@ -43,6 +44,11 @@ import { ZoteroSurfaceBoundary } from '../ZoteroSurfaceBoundary.tsx'
 import { useZoteroProbe } from '../useZoteroProbe.ts'
 import { writeStatusLabel } from '../write-label.ts'
 import { useLibraryFeed, type LibraryFeedFace } from './useLibraryFeed.ts'
+import {
+  clearLibrarySessionMemory,
+  readLibrarySessionMemory,
+  writeLibrarySessionView,
+} from './library-storage.ts'
 import { LIBRARY_SORTS, libraryKeyOf, type LibrarySelectorState } from './library-model.ts'
 import { LibraryTree } from './LibraryTree.tsx'
 import { LibraryItemList } from './LibraryItemList.tsx'
@@ -112,13 +118,19 @@ const SORT_BY_VALUE = new Map(
 
 function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
   const { t } = props
-  const [narrowPane, setNarrowPane] = useState<'tree' | 'list' | 'inspector'>('list')
   const [diagMenuOpen, setDiagMenuOpen] = useState(false)
+  const sessionKey = props.sessionId
+  const initialView = readLibrarySessionMemory(sessionKey)
 
   // The connectivity lamp: the shared probe hook owns the in-flight, unmount,
   // and rejection guards. One probe on open, another on every refresh.
-  const { state: probeState, runProbe } = useZoteroProbe(props.status, {
+  const {
+    state: probeState,
+    settled,
+    runProbe,
+  } = useZoteroProbe(props.status, {
     initialAutoRun: true,
+    initialData: initialView?.lastProbeData,
   })
 
   const face = useMemo<ZoteroLibraryPanelFace>(
@@ -146,12 +158,30 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
     ],
   )
   const connected = probeState.data?.connected === true
+  // A cached snapshot paints the lamp; only this mount's own answer opens the
+  // wire. An offline or failed probe therefore never sends a first batch.
+  const confirmed = settled && connected
   // The chat actions ride the session-scope input face; the pane-tab runtime
   // always carries it (session scope).
   const inputActions: InputActions | undefined = props.inputActions
   // Lanes read the wire only through a confirmed connection: an offline or
   // failed probe gates every request, and the body renders the offline note.
-  const feed = useLibraryFeed(face, connected ? probeState.data?.serverId : undefined, connected)
+  const feed = useLibraryFeed(
+    face,
+    confirmed ? probeState.data?.serverId : undefined,
+    confirmed,
+    props.sessionId,
+  )
+  // The session view's only writer: the detail payload and the probe snapshot
+  // are one record, so neither can clear the other through a partial merge.
+  useEffect(() => {
+    const inspector = feed.inspector?.phase === 'ready' ? feed.inspector : undefined
+    if (inspector === undefined && probeState.data === undefined) {
+      clearLibrarySessionMemory(props.sessionId)
+      return
+    }
+    writeLibrarySessionView(props.sessionId, { inspector, lastProbeData: probeState.data })
+  }, [feed.inspector, probeState.data, props.sessionId])
   useEffect(() => {
     if (feed.refreshToken > 0) void runProbe()
   }, [feed.refreshToken, runProbe])
@@ -160,6 +190,12 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
   // conversation this tab belongs to, so file reads and write approvals anchor
   // to it — never to whatever session happens to sit first in the host list.
   const sessionRunning = props.useSession((snapshot) => snapshot.running && !snapshot.removed)
+  // A removed session owns no view; the panel unmounts in the same batch, so
+  // this is best effort — the plugin teardown clears whatever it misses.
+  const sessionRemoved = props.useSession((snapshot) => snapshot.removed)
+  useEffect(() => {
+    if (sessionRemoved) clearLibrarySessionMemory(props.sessionId)
+  }, [sessionRemoved, props.sessionId])
   const cwd = props.useSessions((snapshot) => snapshot.byId[props.sessionId]?.cwd)
   // Local-file reading rides the right reader this session hosts. A missing
   // workspace root is fine: `fileAddressFor` resolves absolute paths as-is.
@@ -178,14 +214,10 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
 
   const handleSelectScope = (selection: Parameters<typeof feed.selectScope>[0]) => {
     feed.selectScope(selection)
-    setNarrowPane('list')
   }
 
   const handleSelectItem = (ref: string | undefined) => {
     feed.selectItem(ref)
-    if (ref !== undefined) {
-      setNarrowPane('inspector')
-    }
   }
 
   const diagnosticMenuItems: MenuEntry[] = useMemo(() => {
@@ -220,14 +252,16 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
 
   return (
     <div className={css.panel}>
-      {/* Streamlined Single-Line Header */}
+      {/* Streamlined Responsive Header */}
       <header className={css.toolbar}>
-        <LibrarySelect
-          t={t}
-          state={feed.libraries}
-          current={feed.currentLibrary}
-          onSelect={feed.selectLibrary}
-        />
+        <div className={css.librarySelectWrap}>
+          <LibrarySelect
+            t={t}
+            state={feed.libraries}
+            current={feed.currentLibrary}
+            onSelect={feed.selectLibrary}
+          />
+        </div>
 
         <Input
           className={css.searchInputWrap}
@@ -239,23 +273,27 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
           aria-label={t('librarySearchPlaceholder')}
         />
 
-        <SegmentedControl
-          id="zotero-search-mode"
-          label={t('librarySearchModeLabel')}
-          value={feed.mode}
-          onChange={feed.setMode}
-          options={[
-            { value: 'metadata', label: t('librarySearchModeMetadata') },
-            { value: 'everything', label: t('librarySearchModeEverything') },
-          ]}
-        />
+        <div className={css.searchModeWrap}>
+          <SegmentedControl
+            id="zotero-search-mode"
+            label={t('librarySearchModeLabel')}
+            value={feed.mode}
+            onChange={feed.setMode}
+            options={[
+              { value: 'metadata', label: t('librarySearchModeMetadata') },
+              { value: 'everything', label: t('librarySearchModeEverything') },
+            ]}
+          />
+        </div>
 
-        <SortSelect
-          t={t}
-          sort={feed.sort}
-          direction={feed.direction}
-          onSelect={(sort, direction) => feed.setSort(sort, direction)}
-        />
+        <div className={css.sortSelectWrap}>
+          <SortSelect
+            t={t}
+            sort={feed.sort}
+            direction={feed.direction}
+            onSelect={(sort, direction) => feed.setSort(sort, direction)}
+          />
+        </div>
 
         <span className={css.spacer} />
 
@@ -275,42 +313,52 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
         </div>
 
         {diagnosticMenuItems.length > 0 && (
-          <Menu
-            open={diagMenuOpen}
-            anchor={
-              <Tooltip label={t('detailsLabel')} side="bottom" delayMs={500}>
-                <button
-                  type="button"
-                  className={css.toolButton}
-                  aria-label={t('detailsLabel')}
-                  onClick={() => setDiagMenuOpen(!diagMenuOpen)}
-                >
-                  <IconEllipsisOutlineMedium className={css.actionIcon} />
-                </button>
-              </Tooltip>
-            }
-            items={diagnosticMenuItems}
-            onClose={() => setDiagMenuOpen(false)}
-            align="end"
-            portal
-          />
+          <div className={css.diagnosticsWrap}>
+            <Menu
+              open={diagMenuOpen}
+              anchor={
+                <Tooltip label={t('detailsLabel')} side="bottom" delayMs={500}>
+                  <button
+                    type="button"
+                    className={css.toolButton}
+                    aria-label={t('detailsLabel')}
+                    onClick={() => setDiagMenuOpen(!diagMenuOpen)}
+                  >
+                    <IconEllipsisOutlineMedium className={css.actionIcon} />
+                  </button>
+                </Tooltip>
+              }
+              items={diagnosticMenuItems}
+              onClose={() => setDiagMenuOpen(false)}
+              align="end"
+              portal
+            />
+          </div>
         )}
 
-        <Tooltip label={t('refresh')} side="bottom" delayMs={500}>
-          <button
-            type="button"
-            className={css.toolButton}
-            onClick={() => feed.refresh()}
-            aria-label={t('refresh')}
-          >
-            <IconRefreshOutlineMedium className={css.actionIcon} />
-          </button>
-        </Tooltip>
+        <div className={css.refreshWrap}>
+          <Tooltip label={t('refresh')} side="bottom" delayMs={500}>
+            <button
+              type="button"
+              className={css.toolButton}
+              onClick={() => feed.refresh()}
+              aria-label={t('refresh')}
+            >
+              <IconRefreshOutlineMedium className={css.actionIcon} />
+            </button>
+          </Tooltip>
+        </div>
+
+        <div className={css.toolbarBreak} aria-hidden="true" />
       </header>
 
       {/* An answered-but-offline probe (or a failed one) replaces the whole
-       * workspace: the lanes stay gated and the note carries the diagnosis. */}
-      {!connected && (probeState.data !== undefined || probeState.error !== undefined) ? (
+       * workspace: the lanes stay gated and the note carries the diagnosis.
+       * Until this mount's probe answers, the cached snapshot may still paint
+       * the workspace, with every request still gated. */}
+      {settled &&
+      !connected &&
+      (probeState.data !== undefined || probeState.error !== undefined) ? (
         <div className={css.offline} role="note">
           <p className={css.offlineText}>{t('libraryOfflineNote')}</p>
           {(probeState.error ?? probeState.data?.diagnosis) !== undefined && (
@@ -324,8 +372,8 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
             <SegmentedControl
               id="zotero-library-narrow-nav"
               label={t('tabLibrary')}
-              value={narrowPane}
-              onChange={setNarrowPane}
+              value={feed.narrowPane}
+              onChange={feed.setNarrowPane}
               options={[
                 { value: 'tree', label: t('libraryNavTree') },
                 { value: 'list', label: t('libraryNavList') },
@@ -340,7 +388,7 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
               className={clsx(
                 css.columnPane,
                 css.treePane,
-                narrowPane !== 'tree' && css.columnPaneHidden,
+                feed.narrowPane !== 'tree' && css.columnPaneHidden,
               )}
             >
               <LibraryTree
@@ -363,7 +411,7 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
               className={clsx(
                 css.columnPane,
                 css.listPane,
-                narrowPane !== 'list' && css.columnPaneHidden,
+                feed.narrowPane !== 'list' && css.columnPaneHidden,
               )}
             >
               {/* Pill-based Filter Rail */}
@@ -398,7 +446,7 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
               className={clsx(
                 css.columnPane,
                 css.inspectorPane,
-                narrowPane !== 'inspector' && css.columnPaneHidden,
+                feed.narrowPane !== 'inspector' && css.columnPaneHidden,
               )}
             >
               {/* Write Support Drawer: acts on the inspected scope, so it
@@ -476,18 +524,20 @@ function LibrarySelect({
       align="start"
       onClose={() => setOpen(false)}
       anchor={
-        <button
-          type="button"
-          className={css.selectorButton}
-          aria-haspopup="menu"
-          aria-expanded={open}
-          aria-label={t('librarySelectLibrary')}
-          title={currentName}
-          onClick={() => setOpen((prev) => !prev)}
-        >
-          <span className={css.selectorLabel}>{currentName}</span>
-          <IconChevronDownOutlineRegular size={12} className={css.dropdownChevron} />
-        </button>
+        <Tooltip label={`${t('librarySelectLibrary')}: ${currentName}`} side="bottom" delayMs={500}>
+          <button
+            type="button"
+            className={css.selectorButton}
+            aria-haspopup="menu"
+            aria-expanded={open}
+            aria-label={t('librarySelectLibrary')}
+            title={currentName}
+            onClick={() => setOpen((prev) => !prev)}
+          >
+            <span className={css.selectorLabel}>{currentName}</span>
+            <IconChevronDownOutlineRegular size={12} className={css.dropdownChevron} />
+          </button>
+        </Tooltip>
       }
       items={items}
       selectedId={currentKey}
@@ -532,18 +582,20 @@ function SortSelect({
       align="start"
       onClose={() => setOpen(false)}
       anchor={
-        <button
-          type="button"
-          className={css.selectorButton}
-          aria-haspopup="menu"
-          aria-expanded={open}
-          aria-label={t('librarySortLabel')}
-          title={currentLabel}
-          onClick={() => setOpen((prev) => !prev)}
-        >
-          <span className={css.selectorLabel}>{currentLabel}</span>
-          <IconChevronDownOutlineRegular size={12} className={css.dropdownChevron} />
-        </button>
+        <Tooltip label={`${t('librarySortLabel')}: ${currentLabel}`} side="bottom" delayMs={500}>
+          <button
+            type="button"
+            className={css.selectorButton}
+            aria-haspopup="menu"
+            aria-expanded={open}
+            aria-label={t('librarySortLabel')}
+            title={currentLabel}
+            onClick={() => setOpen((prev) => !prev)}
+          >
+            <IconChevronsUpDownOutlineMedium size={14} className={css.sortIcon} />
+            <span className={css.sortLabel}>{currentLabel}</span>
+          </button>
+        </Tooltip>
       }
       items={items}
       selectedId={currentValue}

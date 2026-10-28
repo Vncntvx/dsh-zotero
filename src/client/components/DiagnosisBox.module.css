@@ -22,7 +22,7 @@
 }
 
 .diagnosisCode {
-  font-family: var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-family: var(--ds-font-family-code);
   font-size: 10px;
   line-height: 14px;
   padding: 1px 4px;

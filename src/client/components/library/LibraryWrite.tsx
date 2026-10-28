@@ -1,6 +1,7 @@
 /** The write form: a submission opens the session approval and plan card of the matching write tool. */
 import { useEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
+import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type {
@@ -303,25 +304,25 @@ export function LibraryWrite({
                           />
                         </label>
                       ))}
-                      <button
-                        type="button"
-                        className={css.pageButton}
+                      <Button
+                        variant="outline"
+                        size="sm"
                         disabled={conditions.length === 1}
                         onClick={() => setConditions((rows) => rows.filter((_, i) => i !== index))}
                       >
                         {t('libraryWriteRemoveCondition')}
-                      </button>
+                      </Button>
                     </div>
                   ))}
-                  <button
-                    type="button"
-                    className={css.pageButton}
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() =>
                       setConditions((rows) => [...rows, { condition: '', operator: '', value: '' }])
                     }
                   >
                     {t('libraryWriteAddCondition')}
-                  </button>
+                  </Button>
                 </fieldset>
               ) : (
                 <label className={css.writeField} key={field}>
@@ -341,9 +342,15 @@ export function LibraryWrite({
                 </label>
               ),
             )}
-          <button type="submit" className={clsx(css.pageButton, css.writeSubmitButton)}>
+          <Button
+            type="submit"
+            variant="primary"
+            size="sm"
+            className={css.writeSubmitButton}
+            disabled={busy}
+          >
             {busy ? t('libraryWritePending') : t('libraryWriteReview')}
-          </button>
+          </Button>
         </fieldset>
       </form>
       {result !== undefined && (

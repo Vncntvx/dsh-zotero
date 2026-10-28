@@ -34,6 +34,7 @@ import {
   type LibrarySearchMode,
   type LibrarySelection,
   type LibraryItemState,
+  type LibraryPane,
   type LibrarySelectorState,
   type SavedSearchRowView,
   flattenTree,
@@ -52,7 +53,12 @@ import {
   treeRequestOf,
 } from './library-model.ts'
 import { messageOf } from '../../error-text.ts'
-import { readLibraryState, writeLibraryState, type LibraryStoredState } from './library-storage.ts'
+import {
+  readLibrarySessionMemory,
+  readLibraryState,
+  writeLibraryState,
+  type LibraryStoredState,
+} from './library-storage.ts'
 
 /** The wire face the panel calls; injected so specs can stub it wholesale. */
 export interface LibraryFeedFace {
@@ -91,6 +97,8 @@ export type ChildKind = ZoteroChildListingKind
 export type ChildLoadState = { phase: 'loading' } | { phase: 'error'; message: string }
 
 export interface LibraryFeed {
+  readonly narrowPane: LibraryPane
+  readonly setNarrowPane: (pane: LibraryPane) => void
   readonly libraries: LibrarySelectorState
   readonly currentLibrary: SupportedLocalLibrary
   readonly selectLibrary: (library: SupportedLocalLibrary) => void
@@ -142,14 +150,15 @@ export interface LibraryFeed {
  */
 export function useLibraryFeed(
   face: LibraryFeedFace,
-  serverId?: string,
-  enabled = true,
+  serverId: string | undefined,
+  enabled: boolean,
+  sessionId: string,
 ): LibraryFeed {
+  // The session cache carries only the detail payload; every preference and
+  // the view pins (`selectedRef` / `narrowPane`) hydrate from localStorage.
+  const initialView = readLibrarySessionMemory(sessionId)
   const [libraries, setLibraries] = useState<LibraryFeed['libraries']>({ phase: 'loading' })
-  const [currentLibrary, setCurrentLibrary] = useState<SupportedLocalLibrary>({
-    type: 'user',
-    id: 0,
-  })
+  const [currentLibrary, setCurrentLibrary] = useState<SupportedLocalLibrary>(PERSONAL_LIBRARY)
   const [lanes, setLanes] = useState<TreeLanes>(new Map())
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
   const [savedSearches, setSavedSearches] = useState<LibraryFeed['savedSearches']>({
@@ -166,7 +175,14 @@ export function useLibraryFeed(
   const [offset, setOffset] = useState(0)
   const [list, setList] = useState<LibraryListState>({ phase: 'loading' })
   const [selectedRef, setSelectedRef] = useState<string | undefined>(undefined)
-  const [inspector, setInspector] = useState<LibraryItemState | undefined>(undefined)
+  const [inspector, setInspector] = useState<LibraryItemState | undefined>(
+    () => initialView?.inspector,
+  )
+  const [narrowPane, setNarrowPaneState] = useState<LibraryPane>('list')
+
+  const setNarrowPane = useCallback((pane: LibraryPane) => {
+    setNarrowPaneState(pane)
+  }, [])
   const [refreshToken, setRefreshToken] = useState(0)
   const [libraryRetry, setLibraryRetry] = useState(0)
   const [savedRetry, setSavedRetry] = useState(0)
@@ -211,7 +227,6 @@ export function useLibraryFeed(
   const resetLibraryState = useCallback(
     (library: SupportedLocalLibrary, restored?: LibraryStoredState): void => {
       seq.current.list += 1
-      seq.current.inspector += 1
       seq.current.saved += 1
       for (const [key, ticket] of seq.current.lanes) seq.current.lanes.set(key, ticket + 1)
       laneOffsets.current.clear()
@@ -228,8 +243,19 @@ export function useLibraryFeed(
       setFiltersRaw(restored?.filters ?? {})
       setOffset(restored?.offset ?? 0)
       setExpanded(new Set(restored?.expanded ?? []))
-      setSelectedRef(undefined)
-      setInspector(undefined)
+      // Hydration is the one path that restores a selection. The cached detail
+      // survives when it still names that row: the inspector effect then
+      // refreshes it without dropping the ready payload back to `loading`.
+      seq.current.inspector += 1
+      setSelectedRef(restored?.selectedRef)
+      setInspector((previous) =>
+        previous?.phase === 'ready' && previous.detail.ref === restored?.selectedRef
+          ? previous
+          : undefined,
+      )
+      setNarrowPaneState(
+        restored?.narrowPane ?? (restored?.selectedRef !== undefined ? 'inspector' : 'list'),
+      )
     },
     [],
   )
@@ -261,6 +287,8 @@ export function useLibraryFeed(
       offset,
       expanded: [...expanded],
       filters,
+      selectedRef,
+      narrowPane,
     })
   }, [
     serverId,
@@ -275,6 +303,8 @@ export function useLibraryFeed(
     offset,
     expanded,
     filters,
+    selectedRef,
+    narrowPane,
   ])
 
   // The debounced query drives requests; the raw input drives the text box.
@@ -473,17 +503,39 @@ export function useLibraryFeed(
     listRetry,
   ])
 
+  const lastInspectorKey = useRef<string>()
+
   // The inspector: one detail per selected row, all child kinds included.
   useEffect(() => {
-    childOffsets.current = {}
-    setChildStates({})
     if (selectedRef === undefined) {
+      // Deselecting already cleared the detail (`selectItem` / `rewindList`);
+      // the cached payload survives here so hydration can still restore it on
+      // a remount that has not read its view pins yet.
       seq.current.inspector += 1
-      setInspector(undefined)
+      childOffsets.current = {}
+      setChildStates({})
+      lastInspectorKey.current = undefined
       return
     }
+    const currentKey = `${selectedRef}:${inspectorRetry}:${refreshToken}`
+    if (
+      inspector?.phase === 'ready' &&
+      inspector.detail.ref === selectedRef &&
+      lastInspectorKey.current === currentKey
+    ) {
+      return
+    }
+    // A freshly fetched detail owns fresh child pages; the skipped refresh
+    // above keeps the pages the user already paged through.
+    childOffsets.current = {}
+    setChildStates({})
+    lastInspectorKey.current = currentKey
     const ticket = ++seq.current.inspector
-    setInspector((previous) => (previous?.phase === 'ready' ? previous : { phase: 'loading' }))
+    setInspector((previous) =>
+      previous?.phase === 'ready' && previous.detail.ref === selectedRef
+        ? previous
+        : { phase: 'loading' },
+    )
     void face
       .item({ ref: selectedRef, include: INSPECTOR_INCLUDE, childPages: {} })
       .then((result) => {
@@ -591,6 +643,7 @@ export function useLibraryFeed(
     (next: LibrarySelection): void => {
       setSelection(next)
       rewindList()
+      setNarrowPaneState('list')
     },
     [rewindList],
   )
@@ -692,12 +745,19 @@ export function useLibraryFeed(
     list,
     offset,
     gotoOffset,
+    narrowPane,
+    setNarrowPane,
     selectedRef,
     selectItem: (ref) => {
       seq.current.inspector += 1
       setSelectedRef(ref)
       childOffsets.current = {}
       setChildStates({})
+      if (ref !== undefined) {
+        setNarrowPaneState('inspector')
+      } else {
+        setInspector(undefined)
+      }
     },
     inspector,
     refreshToken,
