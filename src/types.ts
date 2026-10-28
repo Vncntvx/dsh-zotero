@@ -118,12 +118,16 @@ export interface ZoteroStatus {
   diagnosis: string
 }
 
-/** Where `zotero_search` looks for items. */
+/**
+ * Where `zotero_search` looks for items. The `trash` kind serves the library
+ * panel's trash listing; the model-facing tool schema does not offer it.
+ */
 export type ZoteroSearchScope =
   | { kind: 'library' }
   | { kind: 'publications' }
   | { kind: 'collection'; refOrName: string }
   | { kind: 'savedSearch'; refOrName: string }
+  | { kind: 'trash' }
 
 /**
  * Sort field names accepted by `zotero_search`. Mirrors the runtime
@@ -146,14 +150,35 @@ export interface ZoteroSearchRequest {
   tags?: string[]
   /** Tag query mode: all=AND (default) any=OR */
   tagMatch?: 'all' | 'any'
+  yearFrom?: number
+  yearTo?: number
+  hasAttachment?: boolean
   excludeTags?: string[]
   includeTrashed?: boolean
   sort: ZoteroSortField
   direction: ZoteroSortDirection
   offset: number
   limit: number
-  /** Scope level: top counts/searches top items only (default); all includes child items. Applies to library/collection scopes; publications and saved searches serve one listing. */
+  /** Scope level: top counts/searches top items only (default); all includes child items. Applies to library/collection scopes; publications, saved searches, and trash serve one listing. */
   itemLevel?: ZoteroItemLevel
+}
+
+/**
+ * Per-caller search policy, kept off {@link ZoteroSearchRequest} so an
+ * internal knob can never ride a model-facing request.
+ */
+export interface ZoteroSearchOptions {
+  /**
+   * Whether the caller consumes the note-body supplement. Every caller states
+   * it: the tool path scans note bodies, the panel's wire view does not.
+   */
+  includeSupplemental: boolean
+  /**
+   * The library panel's data generation: the panel bumps it on every refresh
+   * and post-write invalidation, and the host's filtered-search index keys on
+   * it so a bumped generation rescans instead of serving the previous scan.
+   */
+  cacheGeneration?: number
 }
 
 /** Scope level: top counts/searches top items only (default); all includes child items. Applies to library/collection scopes; publications and saved searches serve one listing. */
@@ -248,6 +273,9 @@ export interface ZoteroChildrenResult {
 export interface ZoteroGetRequest {
   ref: ZoteroObjectRef
   include: ReadonlySet<ZoteroInclude>
+  childPages?: Partial<
+    Record<'notes' | 'attachments' | 'annotations', { offset: number; limit: number }>
+  >
   /**
    * `standard` (default) returns the normalized model; `all` additionally
    * passes through every `data` field the model does not consume, so
@@ -293,6 +321,13 @@ export interface ZoteroChildCollection<T> {
   total: number
   returned: number
   items: T[]
+  offset?: number
+  /**
+   * The page size the host served. Paged detail reads always set it (the wire
+   * view requires it); the unbounded tool reads leave it absent.
+   */
+  limit?: number
+  nextOffset?: number
 }
 
 export interface ZoteroCreator {
@@ -301,6 +336,20 @@ export interface ZoteroCreator {
   firstName?: string
   lastName?: string
 }
+
+/** One paged child-listing read. */
+export interface ZoteroChildPageRequest {
+  ref: ZoteroObjectRef
+  kind: 'notes' | 'attachments' | 'annotations'
+  offset: number
+  limit: number
+}
+
+/** One child page, discriminated by the kind it carries. */
+export type ZoteroChildPage =
+  | { kind: 'notes'; page: ZoteroChildCollection<ZoteroNoteRecord> }
+  | { kind: 'attachments'; page: ZoteroChildCollection<ZoteroAttachmentRecord> }
+  | { kind: 'annotations'; page: ZoteroChildCollection<ZoteroAnnotationRecord> }
 
 export interface ZoteroItemDetail {
   ref: string
@@ -605,8 +654,12 @@ export interface ZoteroCollectionInfo {
 export interface ZoteroSavedSearchInfo {
   ref: string
   name: string
-  /** Zotero's saved-search condition rows; absent when the record carried none. */
-  conditions?: Record<string, JsonValue>[]
+  /**
+   * Zotero's saved-search condition rows, normalized to the plugin's closed
+   * record by the browse domain (which refuses malformed rows); absent when
+   * the record carried none.
+   */
+  conditions?: ZoteroSavedSearchCondition[]
 }
 
 export interface ZoteroTagInfo {
@@ -1283,7 +1336,11 @@ export interface ZoteroProvider {
    * @param signal - caller cancellation; forwarded to the transport.
    * @returns the resolved scope plus the compact hit records.
    */
-  search?(request: ZoteroSearchRequest, signal?: AbortSignal): Promise<ZoteroSearchResult>
+  search?(
+    request: ZoteroSearchRequest,
+    signal: AbortSignal | undefined,
+    options: ZoteroSearchOptions,
+  ): Promise<ZoteroSearchResult>
   /**
    * Read one item's detail, including requested child kinds.
    * @param request - the item ref and the child kinds to include.
@@ -1291,6 +1348,13 @@ export interface ZoteroProvider {
    * @returns the normalized item detail.
    */
   getItem?(request: ZoteroGetRequest, signal?: AbortSignal): Promise<ZoteroItemDetail>
+  /**
+   * Read one page of a single child kind.
+   * @param request - the item/attachment ref, kind, and page window.
+   * @param signal - caller cancellation; forwarded to the transport.
+   * @returns the normalized child page.
+   */
+  getChildPage?(request: ZoteroChildPageRequest, signal?: AbortSignal): Promise<ZoteroChildPage>
   /**
    * Explore one item's or attachment's child-object graph.
    * @param request - the item/attachment ref and the child kinds to return.

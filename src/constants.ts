@@ -80,6 +80,24 @@ export const ZOTERO_ITEMKEY_BATCH = 50
 export const ZOTERO_LIST_PAGE_ROWS = 100
 
 /**
+ * The child-listing page the panel's detail requests by default and the
+ * largest one the detail endpoint accepts. The wire `childPageSchema` spells
+ * the same two numbers; the detail domain clamps every requested page to the
+ * per-kind record caps (`maxNoteRecords`/`maxAnnotationRecords`/
+ * `maxAttachmentRecords`) before issuing it.
+ */
+export const ZOTERO_CHILD_PAGE_ROWS = 50
+export const ZOTERO_CHILD_PAGE_MAX_ROWS = 100
+
+/**
+ * The closed year interval the panel's filters may ask for. The wire schema,
+ * the stored panel state, and the search domain all bound years to this
+ * interval; one constant keeps the three from drifting.
+ */
+export const ZOTERO_YEAR_MIN = 0
+export const ZOTERO_YEAR_MAX = 9999
+
+/**
  * The write transport keeps exactly one request in flight. Zotero stamps the
  * library version per committed object, and the plugin's tag/collection
  * updates are read-modify-write cycles, where an overlapping write could

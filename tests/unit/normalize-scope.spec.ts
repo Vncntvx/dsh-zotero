@@ -6,9 +6,9 @@
  */
 
 import { describe, expect, it } from 'vitest'
+import { formatCreatorDisplayName } from '../../src/creators.js'
 import {
   collectionKeysOf,
-  formatCreatorDisplayName,
   matchScopeName,
   nearScopeCandidates,
   normalizeCreators,

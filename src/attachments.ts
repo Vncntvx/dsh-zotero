@@ -12,6 +12,7 @@
 
 import { ZOTERO_UNEXPECTED, ZoteroError } from './errors.js'
 import { asRecord, asString, isObjectKey } from './json.js'
+import { PDF_CONTENT_TYPE } from './media-types.js'
 import { ATTACHMENT_HREF_PATTERN } from './ref-grammar.js'
 
 /**
@@ -87,7 +88,7 @@ export function selectAttachments(
   rows: readonly unknown[],
   kind: string,
 ): readonly ZoteroAttachmentCandidate[] {
-  const wantedContentType = kind === 'pdf' ? 'application/pdf' : kind
+  const wantedContentType = kind === 'pdf' ? PDF_CONTENT_TYPE : kind
   const scored: { candidate: ZoteroAttachmentCandidate; dateAdded: string }[] = []
   for (const row of rows) {
     const record = asRecord(row)

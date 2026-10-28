@@ -1,6 +1,7 @@
 /** Stable error classes and codes for the Zotero domain. @module dsh-zotero/errors */
 
 import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { ZOTERO_UPDATABLE_ITEM_FIELDS } from './constants.js'
 
 /** Zotero is not reachable on its local port. */
@@ -39,6 +40,8 @@ export const ZOTERO_OUTPUT_TOO_LARGE = 'ZOTERO_OUTPUT_TOO_LARGE'
 export const ZOTERO_CAPABILITY_UNAVAILABLE = 'ZOTERO_CAPABILITY_UNAVAILABLE'
 /** The configured provider is not registered. */
 export const ZOTERO_PROVIDER_UNAVAILABLE = 'ZOTERO_PROVIDER_UNAVAILABLE'
+/** The one message every "zotero is not composed" answer spells. */
+export const ZOTERO_NOT_COMPOSED_MESSAGE = 'The Zotero service is not composed.'
 /** A response could not be parsed or behaved unexpectedly. */
 export const ZOTERO_UNEXPECTED = 'ZOTERO_UNEXPECTED'
 /** Zotero refused a write for lack of a valid local API key (401), including a declined authorization dialog. */
@@ -406,6 +409,17 @@ const UNREACHABLE_CODES = new Set([
 /** Render any thrown value's message; non-Error values fall back to String(). */
 export function errorMessageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+/** Preserve domain failure codes across the gateway's typed error carrier. */
+export async function domainCall<T>(call: () => Promise<T>): Promise<T> {
+  try {
+    return await call()
+  } catch (error) {
+    if (error instanceof ZoteroError)
+      throw new RemoteError('zotero/domain', error.message, { code: error.code }, { cause: error })
+    throw error
+  }
 }
 
 /** The error's chained cause, or the error itself when it has no cause. */

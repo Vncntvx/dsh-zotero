@@ -26,9 +26,14 @@ import {
   ZoteroError,
 } from '../errors.js'
 import { isItemTypeIdentifier } from '../ref-grammar.js'
-import { serverIdFromHeaders } from './identity.js'
+import { assertServerIdMatches, serverIdFromHeaders } from './identity.js'
 import { asRecord, asString, isObjectKey } from '../json.js'
-import { normalizeScopeEntry, type ScopeNameEntry } from '../normalize.js'
+import {
+  normalizeSavedSearchConditions,
+  normalizeScopeEntry,
+  type ScopeNameEntry,
+} from '../normalize.js'
+import type { ZoteroSavedSearchCondition } from '../types.js'
 import {
   assertPublicationsSupported,
   isRefString,
@@ -47,7 +52,6 @@ import {
   requireTotalResults,
   setPage,
 } from './pagination.js'
-import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { itemsSegmentFor, publicationsTagsPath, type ScopeDirectory } from './scope-directory.js'
 import type { ZoteroHttpClient } from '../http-client.js'
 import type { LocalApiLimits } from './limits.js'
@@ -256,6 +260,10 @@ async function browseCollections(
   const library: SupportedLocalLibrary = request.library ?? PERSONAL_LIBRARY
   const prefix = libraryPrefix(library)
   let listPath = `${prefix}/collections/top`
+  // A qualified parent ref sets the identity for the whole child request
+  // chain. The provider's current session identity may point at a different
+  // Zotero profile, so the HTTP client does not choose it.
+  let parentServerId: string | undefined
   if (request.parentRef !== undefined) {
     const parentRef = requireSupportedLocalRef(parseRef(request.parentRef), ['collection'])
     if (!sameLibrary(parentRef.library as SupportedLocalLibrary, library)) {
@@ -265,11 +273,18 @@ async function browseCollections(
       )
     }
     listPath = `${prefix}/collections/${parentRef.key}/collections`
+    parentServerId = parentRef.serverId
   }
   const params = new URLSearchParams()
   setPage(params, request.offset, request.limit)
-  const { json, headers } = await deps.client.getJson<unknown>(listPath, params, { signal })
-  const serverId = serverIdFromHeaders(headers)
+  const { json, headers } = await deps.client.getJson<unknown>(listPath, params, {
+    signal,
+    ...(parentServerId !== undefined ? { serverId: parentServerId } : {}),
+  })
+  const observedServerId = serverIdFromHeaders(headers)
+  assertServerIdMatches(observedServerId, parentServerId)
+  // Headerless responses are still attributable to a qualified parent ref.
+  const serverId = observedServerId ?? parentServerId
   const total = requireTotalResults(headers, 'collections')
   const rows = requireArrayBody(json, 'collections')
   // Ancestor names resolve in parallel: each row's chain is its own TTL-cached
@@ -335,7 +350,7 @@ async function browseSavedSearches(
   const rawRows = requireArrayBody(json, 'saved searches')
   const total = requireTotalResults(headers, 'saved searches')
   const entries: ScopeNameEntry[] = []
-  const condByKey = new Map<string, Record<string, JsonValue>[]>()
+  const condByKey = new Map<string, ZoteroSavedSearchCondition[]>()
   for (const row of rawRows) {
     entries.push(normalizeScopeEntry(row))
     const rec = asRecord(row)
@@ -343,14 +358,15 @@ async function browseSavedSearches(
     if (key === undefined || !isObjectKey(key)) continue
     const data = asRecord(rec?.data)
     const cond = data?.conditions ?? rec?.conditions
-    // Zotero's saved-search conditions are an array of row objects; anything
-    // else on the wire is treated as absence rather than passed through.
-    if (
-      Array.isArray(cond) &&
-      cond.every((row) => row !== null && typeof row === 'object' && !Array.isArray(row))
-    ) {
-      condByKey.set(key, cond as Record<string, JsonValue>[])
+    if (cond === undefined) continue
+    const conditions = normalizeSavedSearchConditions(cond)
+    if (conditions === undefined) {
+      throw new ZoteroError(
+        `Zotero returned malformed saved-search conditions for ${key}`,
+        ZOTERO_UNEXPECTED,
+      )
     }
+    condByKey.set(key, conditions)
   }
   const items = entries.map((entry) => ({
     ref: refStringFor(library, 'search', entry.key, serverId),

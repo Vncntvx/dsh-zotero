@@ -273,6 +273,108 @@ describe('scope read key consistency', () => {
   })
 })
 
+describe('scope resolution ref caching', () => {
+  const REF = `zotero://user/0/collection/${COLLECTION_KEY}`
+
+  function resolvingClient(reads: { count: number }): ZoteroHttpClient {
+    return {
+      getJson: async () => {
+        reads.count += 1
+        return { json: { key: COLLECTION_KEY, data: { name: 'Papers' } }, headers: new Headers() }
+      },
+    } as unknown as ZoteroHttpClient
+  }
+
+  it('serves a second ref resolution from the cache within the TTL', async () => {
+    const reads = { count: 0 }
+    const directory = new ScopeDirectory(
+      resolvingClient(reads),
+      () => 60_000,
+      () => PROVIDER_LIMITS.graphConcurrency,
+    )
+    const first = await directory.resolveNamed('collection', REF, PERSONAL_LIBRARY)
+    const second = await directory.resolveNamed('collection', REF, PERSONAL_LIBRARY)
+    expect(second.name).toBe(first.name)
+    expect(reads.count).toBe(1)
+  })
+
+  it('re-fetches a ref resolution after the directory invalidates its endpoint', async () => {
+    const reads = { count: 0 }
+    const directory = new ScopeDirectory(
+      resolvingClient(reads),
+      () => 60_000,
+      () => PROVIDER_LIMITS.graphConcurrency,
+    )
+    await directory.resolveNamed('collection', REF, PERSONAL_LIBRARY)
+    directory.invalidate(PERSONAL_LIBRARY, 'collections')
+    await directory.resolveNamed('collection', REF, PERSONAL_LIBRARY)
+    expect(reads.count).toBe(2)
+  })
+
+  it('re-fetches a cached resolution pinned to a different server instance', async () => {
+    const reads = { count: 0 }
+    const client = {
+      getJson: async () => {
+        reads.count += 1
+        return {
+          json: { key: COLLECTION_KEY, data: { name: 'Papers' } },
+          headers: new Headers([[ZOTERO_SERVER_ID_HEADER, reads.count === 1 ? 'S1' : 'S2']]),
+        }
+      },
+    } as unknown as ZoteroHttpClient
+    const directory = new ScopeDirectory(
+      client,
+      () => 60_000,
+      () => PROVIDER_LIMITS.graphConcurrency,
+    )
+    await directory.resolveNamed('collection', REF, PERSONAL_LIBRARY)
+    // Same TTL window, but this caller claims another instance: the cached
+    // entry was served by S1 and cannot answer for S2.
+    await directory.resolveNamed('collection', REF, PERSONAL_LIBRARY, undefined, 'S2')
+    expect(reads.count).toBe(2)
+  })
+
+  it('re-fetches a ref resolution past its TTL', async () => {
+    const reads = { count: 0 }
+    let ttl = 60_000
+    const directory = new ScopeDirectory(
+      resolvingClient(reads),
+      () => ttl,
+      () => PROVIDER_LIMITS.graphConcurrency,
+    )
+    await directory.resolveNamed('collection', REF, PERSONAL_LIBRARY)
+    ttl = 0
+    await directory.resolveNamed('collection', REF, PERSONAL_LIBRARY)
+    expect(reads.count).toBe(2)
+  })
+
+  it('shares one in-flight ref resolution across concurrent callers', async () => {
+    const response = deferred<{ json: unknown; headers: Headers }>()
+    let reads = 0
+    const client = {
+      getJson: async () => {
+        reads += 1
+        return await response.promise
+      },
+    } as unknown as ZoteroHttpClient
+    const directory = new ScopeDirectory(
+      client,
+      () => 60_000,
+      () => PROVIDER_LIMITS.graphConcurrency,
+    )
+    const first = directory.resolveNamed('collection', REF, PERSONAL_LIBRARY)
+    const second = directory.resolveNamed('collection', REF, PERSONAL_LIBRARY)
+    response.resolve({
+      json: { key: COLLECTION_KEY, data: { name: 'Papers' } },
+      headers: new Headers(),
+    })
+    const [a, b] = await Promise.all([first, second])
+    expect(a.name).toBe('Papers')
+    expect(b.name).toBe('Papers')
+    expect(reads).toBe(1)
+  })
+})
+
 describe('ScopeDirectory schema caching and in-flight deduplication', () => {
   it('shares in-flight getItemTypes request when called concurrently with identical claim', async () => {
     const response = deferred<{ json: unknown; headers: Headers }>()

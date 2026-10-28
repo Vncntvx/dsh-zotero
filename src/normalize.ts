@@ -14,6 +14,7 @@ import {
   type ZoteroAttachmentCandidate,
 } from './attachments.js'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
+import { DEFAULT_CREATOR_TYPE } from './creators.js'
 import { ZOTERO_UNEXPECTED, ZoteroError } from './errors.js'
 import { asJsonValue, asRecord, asString, isObjectKey, stringArrayOf } from './json.js'
 import { refStringFor, relationTargetRef } from './refs.js'
@@ -28,6 +29,7 @@ import type {
   ZoteroItemDetail,
   ZoteroNoteRecord,
   ZoteroRelation,
+  ZoteroSavedSearchCondition,
   ZoteroSearchItem,
 } from './types.js'
 
@@ -162,6 +164,30 @@ export function normalizeSearchItem(json: unknown, ctx?: NormalizeContext): Zote
 }
 
 /**
+ * Normalize Zotero's saved-search condition rows into the plugin's closed
+ * record: every row must carry string `condition`, `operator`, and `value`.
+ * `undefined` means "not condition-shaped" — the caller decides between fail
+ * loud (browse listings refuse the answer) and fail closed (write
+ * verification treats the object as unverifiable), so the two sides share one
+ * field grammar without sharing a failure policy.
+ */
+export function normalizeSavedSearchConditions(
+  value: unknown,
+): ZoteroSavedSearchCondition[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const out: ZoteroSavedSearchCondition[] = []
+  for (const row of value) {
+    const record = asRecord(row)
+    const condition = asString(record?.condition)
+    const operator = asString(record?.operator)
+    const matched = asString(record?.value)
+    if (condition === undefined || operator === undefined || matched === undefined) return undefined
+    out.push({ condition, operator, value: matched })
+  }
+  return out
+}
+
+/**
  * Normalize one collection or saved-search JSON object into its identity pair.
  * Collections also carry their parent key, so a cached listing is rich enough
  * to rebuild breadcrumbs without a second fetch.
@@ -225,15 +251,6 @@ export function nearScopeCandidates(
 }
 
 /**
- * The creator role assumed when Zotero omits `creatorType`. Zotero creator
- * rows always carry a type in practice; inventing `author` keeps a named
- * creator instead of dropping research metadata over a missing role. Rows
- * with no name at all are still skipped: the default never fabricates a
- * creator, only a role.
- */
-const DEFAULT_CREATOR_TYPE = 'author'
-
-/**
  * Format creator records into structured ZoteroCreator objects.
  * Empty or malformed entries are skipped.
  */
@@ -260,24 +277,6 @@ export function normalizeCreators(data: Record<string, unknown> | undefined): Zo
     }
   }
   return out
-}
-
-/** Format a single creator into a display name with optional role suffix. */
-export function formatCreatorDisplayName(creator: ZoteroCreator): string {
-  const name = creator.name ?? `${creator.firstName ?? ''} ${creator.lastName ?? ''}`.trim()
-  if (name === '') return ''
-  return creator.creatorType !== DEFAULT_CREATOR_TYPE ? `${name} (${creator.creatorType})` : name
-}
-
-/**
- * Format a list of creators, omitting any creators that have no display name,
- * joined by semicolons.
- */
-export function formatCreatorsList(creators: readonly ZoteroCreator[]): string {
-  return creators
-    .map(formatCreatorDisplayName)
-    .filter((s) => s !== '')
-    .join('; ')
 }
 
 /**
@@ -466,6 +465,14 @@ export function partitionChildren(
   }
 }
 
+/** One child listing's page window, as the detail's paged read measured it. */
+export interface ChildPageMeta {
+  readonly total: number
+  readonly offset: number
+  readonly limit: number
+  readonly nextOffset?: number
+}
+
 export interface NormalizeItemDetailInput {
   /** The single-item response body of `GET /users/0/items/<key>`. */
   readonly parent: unknown
@@ -483,6 +490,12 @@ export interface NormalizeItemDetailInput {
    * than the direct child set, so the fallback total needs the original count.
    */
   readonly directChildCount?: number
+  /**
+   * Per-kind page window of a paged detail read. When present, each served
+   * child collection carries `total`/`offset`/`limit` from here instead of the
+   * unbounded read's defaults; the wire view requires `limit`.
+   */
+  readonly childPages?: Partial<Record<'notes' | 'attachments' | 'annotations', ChildPageMeta>>
   /** Collection names by key; missing entries render ref-only records. */
   readonly collectionNames?: ReadonlyMap<string, string>
   /** Character budget for the abstract preview. */
@@ -549,10 +562,25 @@ function extraFieldsOf(
   return Object.keys(out).length > 0 ? out : undefined
 }
 
-/** Bound records to `cap` while keeping Zotero's total honest. */
-export function childCollection<T>(items: readonly T[], cap: number): ZoteroChildCollection<T> {
+/**
+ * One bounded child listing. Without a `page` this is the unbounded read's
+ * shape (total from the rows, no window); with a `page` the collection is the
+ * paged detail's: the server-reported total, the served window, and the
+ * effective page size the wire view requires.
+ */
+export function childCollection<T>(
+  items: readonly T[],
+  cap: number,
+  page?: ChildPageMeta,
+): ZoteroChildCollection<T> {
   const bounded = items.slice(0, cap)
-  return { total: items.length, returned: bounded.length, items: bounded }
+  return {
+    total: page?.total ?? items.length,
+    returned: bounded.length,
+    items: bounded,
+    ...(page !== undefined ? { offset: page.offset, limit: page.limit } : {}),
+    ...(page?.nextOffset !== undefined ? { nextOffset: page.nextOffset } : {}),
+  }
 }
 
 /**
@@ -671,15 +699,24 @@ export function normalizeItemDetail(input: NormalizeItemDetailInput): ZoteroItem
   } = {}
   if (partitioned !== undefined) {
     if (input.include.has('notes'))
-      childCollections.notes = childCollection(partitioned.notes, input.maxNoteRecords)
+      childCollections.notes = childCollection(
+        partitioned.notes,
+        input.maxNoteRecords,
+        input.childPages?.notes,
+      )
     if (input.include.has('annotations'))
       childCollections.annotations = childCollection(
         partitioned.annotations,
         input.maxAnnotationRecords,
+        input.childPages?.annotations,
       )
     if (input.include.has('attachments')) {
       const records = partitioned.attachments.map((candidate) => attachmentRecordOf(candidate, ctx))
-      childCollections.attachments = childCollection(records, input.maxAttachmentRecords)
+      childCollections.attachments = childCollection(
+        records,
+        input.maxAttachmentRecords,
+        input.childPages?.attachments,
+      )
     }
   }
 

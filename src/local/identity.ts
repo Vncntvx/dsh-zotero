@@ -37,7 +37,15 @@ export function assertServerIdMatches(
   observed: string | null | undefined,
   expected: string | null | undefined,
 ): void {
-  if (observed !== undefined && observed !== null && observed !== expected) {
+  // An unqualified read discovers the serving instance; only a caller that
+  // carries an explicit claim can be contradicted by the response.
+  if (
+    expected !== undefined &&
+    expected !== null &&
+    observed !== undefined &&
+    observed !== null &&
+    observed !== expected
+  ) {
     throw new ZoteroError(SERVER_MISMATCH_MESSAGE, ZOTERO_SERVER_MISMATCH)
   }
 }
@@ -77,18 +85,4 @@ export function requireAgreedServerId(
 export interface LocalReadContext {
   readonly library: SupportedLocalLibrary
   readonly serverId?: string
-}
-
-/**
- * Whether a cached listing may answer a read carrying `claimed`. A read
- * without a claim accepts whatever is cached (its TTL bounds staleness); a
- * read with a claim accepts only an entry whose own identity matches. An
- * entry without an identity cannot prove a match and fails closed.
- */
-export function cacheEntryMatchesIdentity(
-  cachedServerId: string | undefined,
-  claimed: string | undefined,
-): boolean {
-  if (claimed === undefined) return true
-  return cachedServerId !== undefined && cachedServerId === claimed
 }

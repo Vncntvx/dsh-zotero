@@ -111,6 +111,8 @@ async function fetchItemPreview(
         limit: 1,
       },
       signal,
+      // The preview reads the count and the resolved ref only.
+      { includeSupplemental: false },
     )
     return {
       total: searched.total,

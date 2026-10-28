@@ -13,7 +13,7 @@
 
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { asJsonValue } from './json.js'
-import { formatCreatorsList } from './normalize.js'
+import { formatCreatorsList } from './creators.js'
 import { isEvidenceSource, type EvidenceItem } from './evidence-item.js'
 import type {
   SupportedLocalLibrary,
@@ -47,8 +47,14 @@ const MAX_PRESENTATION_EVIDENCE_PASSAGES = 4
 /** Bounded export-ref entries the projection itemizes; the rest count into `refsOmitted`. */
 const MAX_PRESENTATION_EXPORT_REFS = 20
 
-/** The canonical search output the projector reads. */
-type SearchProjectionInput = ZoteroSearchResult
+/**
+ * The canonical search output the projector reads: the domain result with the
+ * trash scope excluded. `toolScopeOf` fails before an output exists, so a
+ * trash scope does not reach a projection.
+ */
+export type SearchProjectionInput = Omit<ZoteroSearchResult, 'scope'> & {
+  scope: Exclude<ZoteroResolvedScope, { kind: 'trash' }>
+}
 
 /** One compact search row: the card's list unit with its copyable ref. */
 interface ZoteroSearchPresentationRow {
@@ -212,8 +218,10 @@ function sourcesOf(evidence: ReadonlyArray<{ readonly source: string }>): Zotero
   return sources
 }
 
-function libraryOfScope(scope: ZoteroResolvedScope): SupportedLocalLibrary | undefined {
-  if (scope.kind === 'library' || scope.kind === 'publications') return scope.library
+function libraryOfScope(scope: SearchProjectionInput['scope']): SupportedLocalLibrary | undefined {
+  if (scope.kind === 'library' || scope.kind === 'publications') {
+    return scope.library
+  }
   return supportedLibraryOfRef(scope.ref)
 }
 

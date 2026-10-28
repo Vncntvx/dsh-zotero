@@ -100,14 +100,18 @@ describe('live configuration', () => {
     // transport key, so the edit must land through the entry read alone.
     await commitLive(lane as HostLane, { provider: 'missing' })
     await expect(
-      lane.ctx.zotero.search({
-        scope: { kind: 'library' },
-        mode: 'metadata',
-        sort: 'dateModified',
-        direction: 'desc',
-        offset: 0,
-        limit: 5,
-      }),
+      lane.ctx.zotero.search(
+        {
+          scope: { kind: 'library' },
+          mode: 'metadata',
+          sort: 'dateModified',
+          direction: 'desc',
+          offset: 0,
+          limit: 5,
+        },
+        undefined,
+        { includeSupplemental: false },
+      ),
     ).rejects.toMatchObject({ code: ZOTERO_PROVIDER_UNAVAILABLE })
     await commitLive(lane as HostLane, { provider: 'local' })
     expect(lane.ctx.zotero.config.provider).toBe('local')

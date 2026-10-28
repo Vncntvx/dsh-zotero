@@ -7,18 +7,20 @@
  */
 
 import type { ZoteroHttpClient } from '../http-client.js'
-import { mapWithConcurrency } from '../concurrency.js'
-import { ZOTERO_LIST_PAGE_ROWS } from '../constants.js'
+import { ZOTERO_LIST_PAGE_ROWS, ZOTERO_YEAR_MAX, ZOTERO_YEAR_MIN } from '../constants.js'
 import { tokenize } from '../evidence.js'
-import { ZOTERO_INVALID_ARGUMENT, ZoteroError } from '../errors.js'
+import { ZOTERO_INVALID_ARGUMENT, ZOTERO_UNEXPECTED, ZoteroError } from '../errors.js'
 import {
-  chunkItemKeyBatches,
   nextOffsetOrFail,
+  readPagesConcurrentlyFolded,
   requireArrayBody,
   requireTotalResults,
+  nextOffsetOf,
   setPage,
 } from './pagination.js'
 import { serverIdFromHeaders } from './identity.js'
+import { fetchItemKeyBatches } from './item-batch.js'
+import { parseRef, libraryPrefix } from '../refs.js'
 import {
   publicationsItemsPath,
   resolveScope,
@@ -27,12 +29,22 @@ import {
 } from './scope-directory.js'
 import { asRecord, asString } from '../json.js'
 import { collectionKeysOf, normalizeSearchItem, plainNoteText } from '../normalize.js'
-import { libraryPrefix, requireSupportedLibraryOfRef } from '../refs.js'
+import { requireSupportedLibraryOfRef } from '../refs.js'
+import {
+  attachmentParentKeys,
+  attachmentParentsCacheKey,
+  searchIndexKeyOf,
+  searchRowsByKeys,
+  type FilteredCandidate,
+  type FilteredIndex,
+  type SearchIndexCaches,
+} from './search-index.js'
 import type { LocalApiLimits } from './limits.js'
 import type {
   SupportedLocalLibrary,
   ZoteroResolvedScope,
   ZoteroSearchItem,
+  ZoteroSearchOptions,
   ZoteroSearchRequest,
   ZoteroSearchResult,
   ZoteroSearchSupplement,
@@ -61,8 +73,13 @@ export function encodeExcludeTag(tag: string): string {
  */
 export const INCLUDE_TRASHED_SCOPE_MESSAGE = 'includeTrashed is only allowed with library scope.'
 
-/** Serialize a search request into the Local API's documented query parameters. */
-export function buildSearchParams(request: ZoteroSearchRequest): URLSearchParams {
+/**
+ * Serialize a search request into the Local API's documented query parameters,
+ * without the paging window. Repeated `tag` values survive here, so the
+ * concurrent page reader can clone the query per page. `buildSearchParams`
+ * adds `start`/`limit` on top.
+ */
+function searchQueryOf(request: ZoteroSearchRequest): URLSearchParams {
   const params = new URLSearchParams()
   if (request.query !== undefined && request.query !== '') params.set('q', request.query)
   if (request.mode === 'everything') params.set('qmode', 'everything')
@@ -81,15 +98,24 @@ export function buildSearchParams(request: ZoteroSearchRequest): URLSearchParams
   if (request.includeTrashed) params.set('includeTrashed', '1')
   params.set('sort', request.sort)
   params.set('direction', request.direction)
-  setPage(params, request.offset, request.limit)
   return params
 }
 
+/** Serialize a search request into the Local API's documented query parameters. */
+export function buildSearchParams(request: ZoteroSearchRequest): URLSearchParams {
+  return setPage(
+    new URLSearchParams(searchQueryOf(request).toString()),
+    request.offset,
+    request.limit,
+  )
+}
+
 export async function runSearch(
-  deps: { client: ZoteroHttpClient; limits: LocalApiLimits },
+  deps: { client: ZoteroHttpClient; limits: LocalApiLimits; searchCaches: SearchIndexCaches },
   directory: ScopeDirectory,
   request: ZoteroSearchRequest,
-  signal?: AbortSignal,
+  signal: AbortSignal | undefined,
+  options: ZoteroSearchOptions,
 ): Promise<ZoteroSearchResult> {
   if (request.includeTrashed && request.scope.kind !== 'library') {
     throw new ZoteroError(INCLUDE_TRASHED_SCOPE_MESSAGE, ZOTERO_INVALID_ARGUMENT)
@@ -98,6 +124,18 @@ export async function runSearch(
     signal,
     itemLevel: request.itemLevel,
   })
+  if (
+    request.yearFrom !== undefined ||
+    request.yearTo !== undefined ||
+    request.hasAttachment !== undefined
+  ) {
+    // The exact path serves paged primary hits only and cannot scan note
+    // bodies, so a caller that also asks for the supplement is refused.
+    if (options.includeSupplemental) {
+      throw new ZoteroError(FILTERED_SEARCH_SUPPLEMENT_MESSAGE, ZOTERO_INVALID_ARGUMENT)
+    }
+    return exactFilteredSearch(deps, scope, request, signal, options)
+  }
   const { json, headers } = await deps.client.getJson<unknown>(
     scope.path,
     buildSearchParams(request),
@@ -118,8 +156,7 @@ export async function runSearch(
   // valid Total-Results header the call fails instead of guessing a total.
   const apiTotal = requireTotalResults(headers, 'items top listing')
   // A server-paged listing that answers an in-range page with no rows has
-  // breached the total it just reported; `nextOffsetOrFail` fails loud here
-  // rather than letting the empty page read as the end of the results.
+  // breached the total it just reported; `nextOffsetOrFail` fails loud.
   const nextOffset = nextOffsetOrFail(request.offset, items.length, apiTotal, 'search results')
   // Zotero's index never searches note bodies, so the first page of a
   // queried search lists client-side note-content matches in `supplemental`,
@@ -131,7 +168,7 @@ export async function runSearch(
   // `shouldScanNotes` is the scan's single authority, query emptiness
   // included; the tokenizer below tolerates a blank query (zero terms) and
   // the guard inside turns it off.
-  if (shouldScanNotes(request, scope.resolved)) {
+  if (shouldScanNotes(request, scope.resolved, options.includeSupplemental)) {
     const terms = tokenize(query ?? '')
     // A query whose tokens are all punctuation/emoji/whitespace matches
     // every note (the empty token list is vacuously present), so the scan
@@ -146,13 +183,11 @@ export async function runSearch(
           .map((row) => asString(asRecord(row)?.key))
           .filter((key): key is string => key !== undefined),
       )
-      // One pass over the scan: the collector examines only each batch's own
-      // slice as it arrives (never the whole accumulated array again) and
-      // records the matches for the page below, so saturation and the
-      // supplement list share a single walk instead of O(batches × rows)
-      // rescans with a full re-tokenization per pass. Matched rows keep scan
-      // order; child notes wait here for the parent-membership resolution
-      // below before they can join the page.
+      // One pass over the scan: the collector examines each batch's slice as
+      // it arrives, so saturation and the supplement list share a single walk
+      // instead of O(batches × rows) rescans. Matched rows keep scan order;
+      // child notes wait here for the parent-membership resolution below
+      // before they can join the page.
       const matched: { row: unknown; key: string; parentKey?: string }[] = []
       const collect = (added: readonly unknown[]): boolean => {
         for (const row of added) {
@@ -218,14 +253,256 @@ export async function runSearch(
   return result
 }
 
+/**
+ * The message for a filtered search that also asks for the note-body
+ * supplement. The exact path serves paged primary hits only and cannot scan
+ * note bodies.
+ */
+export const FILTERED_SEARCH_SUPPLEMENT_MESSAGE =
+  'Year and attachment filters are panel-only and do not support the note-body supplement.'
+
+/**
+ * Serve one filtered page from the candidate index. The first request for a
+ * filter definition scans the whole listing once (concurrently by page),
+ * applies the year and attachment-existence filters, and stores the accepted
+ * keys; every later page of the same filter definition slices those keys and
+ * fetches the rows in batched `itemKey=` reads. A stored index is fenced by
+ * the library version: a batch whose version differs from the scan drops the
+ * index and rescans once, and a second drift fails loud.
+ */
+async function exactFilteredSearch(
+  deps: { client: ZoteroHttpClient; limits: LocalApiLimits; searchCaches: SearchIndexCaches },
+  scope: ResolvedScopeResult,
+  request: ZoteroSearchRequest,
+  signal: AbortSignal | undefined,
+  options: ZoteroSearchOptions,
+): Promise<ZoteroSearchResult> {
+  if (
+    (request.yearFrom !== undefined &&
+      (!Number.isInteger(request.yearFrom) ||
+        request.yearFrom < ZOTERO_YEAR_MIN ||
+        request.yearFrom > ZOTERO_YEAR_MAX)) ||
+    (request.yearTo !== undefined &&
+      (!Number.isInteger(request.yearTo) ||
+        request.yearTo < ZOTERO_YEAR_MIN ||
+        request.yearTo > ZOTERO_YEAR_MAX)) ||
+    (request.yearFrom !== undefined &&
+      request.yearTo !== undefined &&
+      request.yearFrom > request.yearTo)
+  ) {
+    throw new ZoteroError(
+      `The year range must be an ordered closed interval between ${ZOTERO_YEAR_MIN} and ${ZOTERO_YEAR_MAX}.`,
+      ZOTERO_INVALID_ARGUMENT,
+    )
+  }
+  const library = libraryOfResolvedScope(scope.resolved)
+  const includeTrashed = request.includeTrashed === true || scope.resolved.kind === 'trash'
+  const indexKey = searchIndexKeyOf(scope, request, options.cacheGeneration)
+
+  let index = deps.searchCaches.filtered.get(indexKey)
+  let rescanned = false
+  if (index === undefined) {
+    index = await scanFilteredIndex(deps, scope, request, library, includeTrashed, signal, options)
+    deps.searchCaches.filtered.put(indexKey, index)
+    rescanned = true
+  }
+
+  /** Serve one page from an index; `undefined` means the index drifted. */
+  const servePage = async (pageIndex: FilteredIndex): Promise<ZoteroSearchResult | undefined> => {
+    const filtered = filteredCandidatesOf(pageIndex, request)
+    const pageKeys = filtered
+      .slice(request.offset, request.offset + request.limit)
+      .map((candidate) => candidate.key)
+    const { byKey, libraryVersion } = await searchRowsByKeys(
+      deps,
+      library,
+      pageIndex.serverId,
+      pageKeys,
+      includeTrashed,
+      signal,
+    )
+    const drifted =
+      (pageIndex.libraryVersion !== undefined &&
+        libraryVersion !== undefined &&
+        libraryVersion !== pageIndex.libraryVersion) ||
+      pageKeys.some((key) => !byKey.has(key))
+    if (drifted) return undefined
+    const items = pageKeys.map((key) => byKey.get(key)!)
+    const nextOffset = nextOffsetOf(request.offset, items.length, filtered.length)
+    return {
+      scope: scope.resolved,
+      items,
+      total: filtered.length,
+      offset: request.offset,
+      returned: items.length,
+      ...(nextOffset === undefined ? {} : { nextOffset }),
+    }
+  }
+
+  let page = await servePage(index)
+  if (page === undefined) {
+    if (rescanned) {
+      throw new ZoteroError(
+        'The library changed while a filtered search page was served; retry the request.',
+        ZOTERO_UNEXPECTED,
+      )
+    }
+    deps.searchCaches.filtered.delete(indexKey)
+    index = await scanFilteredIndex(deps, scope, request, library, includeTrashed, signal, options)
+    deps.searchCaches.filtered.put(indexKey, index)
+    page = await servePage(index)
+    if (page === undefined) {
+      throw new ZoteroError(
+        'The library changed while a filtered search page was served; retry the request.',
+        ZOTERO_UNEXPECTED,
+      )
+    }
+  }
+  return page
+}
+
+/**
+ * The index candidates one request's year/attachment filters accept. The
+ * values are applied at page time: the stored index stays valid across year
+ * edits and attachment toggles, and only the `attachmentIndexed` dimension
+ * decides whether presence facts exist at all.
+ */
+function filteredCandidatesOf(
+  index: FilteredIndex,
+  request: ZoteroSearchRequest,
+): readonly FilteredCandidate[] {
+  return index.candidates.filter(
+    (candidate) =>
+      (request.yearFrom === undefined ||
+        (candidate.year !== undefined && candidate.year >= request.yearFrom)) &&
+      (request.yearTo === undefined ||
+        (candidate.year !== undefined && candidate.year <= request.yearTo)) &&
+      (request.hasAttachment === undefined || candidate.hasAttachment === request.hasAttachment),
+  )
+}
+
+/**
+ * Scan the whole listing once and store the candidate facts. The candidate
+ * scan and the attachment-presence walk run concurrently when the request
+ * filters on attachment existence; each scan halves the configured
+ * concurrency so the total stays inside the caller's budget.
+ */
+async function scanFilteredIndex(
+  deps: { client: ZoteroHttpClient; limits: LocalApiLimits; searchCaches: SearchIndexCaches },
+  scope: ResolvedScopeResult,
+  request: ZoteroSearchRequest,
+  library: SupportedLocalLibrary,
+  includeTrashed: boolean,
+  signal: AbortSignal | undefined,
+  options: ZoteroSearchOptions,
+): Promise<FilteredIndex> {
+  const wantParents = request.hasAttachment !== undefined
+  const scanConcurrency = wantParents
+    ? Math.max(1, Math.floor(deps.limits.searchConcurrency / 2))
+    : deps.limits.searchConcurrency
+  const scanPromise = readPagesConcurrentlyFolded(
+    deps.client,
+    scope.path,
+    // The scan's own offset/limit are placeholders: every page re-windows
+    // the clone at the standard listing size.
+    buildSearchParams(request),
+    scope.serverId,
+    signal,
+    { body: 'filtered search candidates', page: 'filtered search candidates' },
+    scanConcurrency,
+    (rows) =>
+      rows.map((row) => {
+        const item = normalizeSearchItem(row, { library })
+        return { key: parseRef(item.ref).key, year: item.year }
+      }),
+  )
+  const parentsPromise = wantParents
+    ? attachmentParentKeys(deps, deps.searchCaches, library, scope.serverId, includeTrashed, {
+        cacheGeneration: options.cacheGeneration,
+        signal,
+      })
+    : undefined
+  // A scan that rejects first (an aborted caller, a version drift) must not
+  // leave the concurrent walk's rejection unconsumed; awaiting it below still
+  // surfaces the original rejection.
+  if (parentsPromise !== undefined) void parentsPromise.catch(() => undefined)
+  const scanned = await scanPromise
+  let parentSet: ReadonlySet<string> | undefined
+  if (parentsPromise !== undefined) {
+    const fetched = await parentsPromise
+    const drifted =
+      scanned.libraryVersion !== undefined &&
+      fetched.libraryVersion !== undefined &&
+      fetched.libraryVersion !== scanned.libraryVersion
+    if (drifted && fetched.fromCache) {
+      // A stored presence set read through an older revision: drop it and
+      // re-read once before giving up.
+      deps.searchCaches.attachmentParents.delete(
+        attachmentParentsCacheKey(library, scope.serverId, includeTrashed, options.cacheGeneration),
+      )
+      const refetched = await attachmentParentKeys(
+        deps,
+        deps.searchCaches,
+        library,
+        scope.serverId,
+        includeTrashed,
+        { cacheGeneration: options.cacheGeneration, signal },
+      )
+      if (
+        scanned.libraryVersion !== undefined &&
+        refetched.libraryVersion !== undefined &&
+        refetched.libraryVersion !== scanned.libraryVersion
+      ) {
+        throw new ZoteroError(
+          'The library changed while attachment presence was indexed; retry the request.',
+          ZOTERO_UNEXPECTED,
+        )
+      }
+      parentSet = refetched.parents
+    } else if (drifted) {
+      throw new ZoteroError(
+        'The library changed while attachment presence was indexed; retry the request.',
+        ZOTERO_UNEXPECTED,
+      )
+    } else {
+      parentSet = fetched.parents
+    }
+  }
+  const candidates = scanned.pages.flatMap((page) => page.value)
+  return {
+    candidates:
+      parentSet === undefined
+        ? candidates
+        : candidates.map((candidate) => ({
+            key: candidate.key,
+            year: candidate.year,
+            hasAttachment: parentSet.has(candidate.key),
+          })),
+    attachmentIndexed: wantParents,
+    ...(scanned.serverId !== undefined ? { serverId: scanned.serverId } : {}),
+    ...(scanned.libraryVersion !== undefined ? { libraryVersion: scanned.libraryVersion } : {}),
+    fetchedAt: Date.now(),
+  }
+}
+
 /** Whether a search request qualifies for the client-side note-body scan. */
-function shouldScanNotes(request: ZoteroSearchRequest, resolved: ZoteroResolvedScope): boolean {
+function shouldScanNotes(
+  request: ZoteroSearchRequest,
+  resolved: ZoteroResolvedScope,
+  includeSupplemental: boolean,
+): boolean {
+  // The scan runs only for a caller that consumes the supplement; every
+  // caller states it explicitly through the search options.
+  if (!includeSupplemental) return false
   const query = request.query?.trim()
+  // The trash scope skips the scan: the scan reads the live `/items` note
+  // listing, and those rows are not the trash's rows.
   return (
     query !== undefined &&
     query !== '' &&
     request.offset === 0 &&
     resolved.kind !== 'savedSearch' &&
+    resolved.kind !== 'trash' &&
     (request.itemTypes === undefined || request.itemTypes.includes('note'))
   )
 }
@@ -317,34 +594,14 @@ async function fetchParentCollections(
   serverId: string | undefined,
   signal: AbortSignal | undefined,
 ): Promise<Map<string, Set<string>>> {
-  const unique = [...new Set(parentKeys)]
-  const chunks = chunkItemKeyBatches(unique)
-  const membershipsPerChunk = await mapWithConcurrency(
-    chunks,
-    deps.limits.searchConcurrency,
-    async (chunk, poolSignal) => {
-      const params = new URLSearchParams()
-      params.set('itemKey', chunk.join(','))
-      const { json } = await deps.client.getJson<unknown>(
-        `${libraryPrefix(library)}/items`,
-        params,
-        { signal: poolSignal, serverId },
-      )
-      const memberships = new Map<string, Set<string>>()
-      for (const row of requireArrayBody(json, 'parent item batch')) {
-        const key = asString(asRecord(row)?.key)
-        if (key === undefined) continue
-        memberships.set(key, new Set(collectionKeysOf(row)))
-      }
-      return memberships
-    },
-    { signal },
-  )
-  const merged = new Map<string, Set<string>>()
-  for (const memberships of membershipsPerChunk) {
-    for (const [key, collections] of memberships) merged.set(key, collections)
-  }
-  return merged
+  const { byKey } = await fetchItemKeyBatches(deps, library, parentKeys, {
+    ...(serverId !== undefined ? { serverId } : {}),
+    ...(signal !== undefined ? { signal } : {}),
+    what: 'parent item batch',
+    onMissingKey: 'skip',
+    mapRow: (row) => new Set(collectionKeysOf(row)),
+  })
+  return byKey
 }
 
 /**

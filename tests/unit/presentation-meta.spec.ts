@@ -7,7 +7,8 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import type { ZoteroItemDetail, ZoteroRetrieveResult, ZoteroSearchResult } from '../../src/types.js'
+import type { ZoteroItemDetail, ZoteroRetrieveResult } from '../../src/types.js'
+import type { SearchProjectionInput } from '../../src/presentation-meta.js'
 import {
   MAX_PRESENTATION_EVIDENCE_CHARS,
   MAX_PRESENTATION_GET_VENUE_CHARS,
@@ -20,7 +21,7 @@ import {
   projectSearchMeta,
 } from '../../src/presentation-meta.js'
 
-function searchResult(rows: number): ZoteroSearchResult {
+function searchResult(rows: number): SearchProjectionInput {
   return {
     scope: { kind: 'library', library: { type: 'user', id: 0 } },
     items: Array.from({ length: rows }, (_, index) => ({
@@ -134,7 +135,7 @@ describe('projectSearchMeta', () => {
   })
 
   it('keeps the copyable ref on every row and normalizes the page marker', () => {
-    const meta = projectSearchMeta({ ...searchResult(2), nextOffset: 20 } as ZoteroSearchResult)
+    const meta = projectSearchMeta({ ...searchResult(2), nextOffset: 20 })
     expect(meta.nextOffset).toBe(20)
     expect(meta.items.map((item) => item.ref)).toEqual([
       'zotero://user/0/item/ABCDEFG0',
@@ -152,8 +153,13 @@ describe('projectSearchMeta', () => {
     }
     const meta = projectSearchMeta({
       ...searchResult(1),
-      supplemental: { items: [noteRow, noteRow] },
-    } as ZoteroSearchResult)
+      supplemental: {
+        kind: 'noteBody',
+        items: [noteRow, noteRow],
+        scanned: 2,
+        truncated: false,
+      },
+    })
     expect(meta.noteMatches).toBe(2)
     expect(meta.items).toHaveLength(3)
     expect(meta.omitted).toBe(0)

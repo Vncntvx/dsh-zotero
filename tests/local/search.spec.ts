@@ -22,6 +22,7 @@ import { type LocalApiProvider } from '../../src/local/provider.js'
 import { MockZotero } from '../helpers/mock-zotero.js'
 import {
   request,
+  searchOptions,
   setupProvider,
   teardownProvider,
   zoteroError,
@@ -121,7 +122,11 @@ describe('encodeExcludeTag', () => {
 describe('search: library scope', () => {
   it('searches /items/top with server-side pagination and a Total-Results header', async () => {
     serveSearchPage(mock, { items: [searchHit()], total: 25 })
-    const result = await provider.search(request({ query: 'flash', offset: 10, limit: 5 }))
+    const result = await provider.search(
+      request({ query: 'flash', offset: 10, limit: 5 }),
+      undefined,
+      searchOptions(),
+    )
     const sent = mock.requests[0]!
     expect(sent.pathname).toBe('/api/users/0/items/top')
     expect(sent.search.get('start')).toBe('10')
@@ -143,7 +148,11 @@ describe('search: library scope', () => {
       total: 3,
       path: '/api/users/0/publications/items',
     })
-    const result = await provider.search(request({ scope: { kind: 'publications' } }))
+    const result = await provider.search(
+      request({ scope: { kind: 'publications' } }),
+      undefined,
+      searchOptions(),
+    )
     expect(result.scope).toEqual({ kind: 'publications', library: { type: 'user', id: 0 } })
     expect(mock.requests[0]!.pathname).toBe('/api/users/0/publications/items')
     expect(result.total).toBe(3)
@@ -157,6 +166,8 @@ describe('search: library scope', () => {
           scope: { kind: 'publications' },
           library: { type: 'group', id: 123 },
         }),
+        undefined,
+        searchOptions(),
       ),
       ZOTERO_INVALID_ARGUMENT,
       'My Publications scope is only valid for personal libraries.',
@@ -165,7 +176,11 @@ describe('search: library scope', () => {
 
   it('omits nextOffset when the page reaches the reported total', async () => {
     serveSearchPage(mock, { items: [searchHit()], total: 1, serverId: null })
-    const result = await provider.search(request({ offset: 0, limit: 10 }))
+    const result = await provider.search(
+      request({ offset: 0, limit: 10 }),
+      undefined,
+      searchOptions(),
+    )
     expect(result.total).toBe(1)
     expect(result.nextOffset).toBeUndefined()
   })
@@ -175,21 +190,29 @@ describe('search: library scope', () => {
     // fails instead of guessing one from the body length.
     serveJson(mock, /^\/api\/users\/0\/items(\/top)?$/, [searchHit()])
     await zoteroError(
-      provider.search(request({})),
+      provider.search(request({}), undefined, searchOptions()),
       'ZOTERO_UNEXPECTED',
       'Total-Results header for items top listing',
     )
     serveJson(mock, /^\/api\/users\/0\/items(\/top)?$/, [searchHit()], {
       'Total-Results': 'garbage',
     })
-    await zoteroError(provider.search(request({})), 'ZOTERO_UNEXPECTED', 'Total-Results')
+    await zoteroError(
+      provider.search(request({}), undefined, searchOptions()),
+      'ZOTERO_UNEXPECTED',
+      'Total-Results',
+    )
   })
 
   it('rejects an unsafe integer Total-Results value', async () => {
     serveJson(mock, /^\/api\/users\/0\/items(\/top)?$/, [searchHit()], {
       'Total-Results': '9007199254740992',
     })
-    await zoteroError(provider.search(request({})), 'ZOTERO_UNEXPECTED', 'Total-Results')
+    await zoteroError(
+      provider.search(request({}), undefined, searchOptions()),
+      'ZOTERO_UNEXPECTED',
+      'Total-Results',
+    )
   })
 
   it('fails loud on a non-array body instead of treating it as an empty page', async () => {
@@ -201,7 +224,11 @@ describe('search: library scope', () => {
         'Total-Results': '3',
       },
     )
-    await zoteroError(provider.search(request({})), 'ZOTERO_UNEXPECTED', 'non-array body')
+    await zoteroError(
+      provider.search(request({}), undefined, searchOptions()),
+      'ZOTERO_UNEXPECTED',
+      'non-array body',
+    )
   })
 
   it('fails loud on an empty page that still has range left', async () => {
@@ -209,7 +236,7 @@ describe('search: library scope', () => {
     // nothing. A next cursor would stall at the same offset forever.
     serveJson(mock, /^\/api\/users\/0\/items(\/top)?$/, [], { 'Total-Results': '5' })
     await zoteroError(
-      provider.search(request({ offset: 2, limit: 10 })),
+      provider.search(request({ offset: 2, limit: 10 }), undefined, searchOptions()),
       'ZOTERO_UNEXPECTED',
       'empty page',
     )
@@ -229,8 +256,79 @@ describe('search: library scope', () => {
       request({
         scope: { kind: 'collection', refOrName: 'zotero://user/0/collection/COLL1234?server=S1' },
       }),
+      undefined,
+      searchOptions(),
     )
     expect(result.items[0]!.ref).toBe('zotero://user/0/item/ABCD1234?server=S1')
+  })
+})
+
+describe('search: trash scope', () => {
+  it('lists the personal library trash with server-side pagination and an echoed scope', async () => {
+    serveSearchPage(mock, { items: [searchHit()], total: 7, path: '/api/users/0/items/trash' })
+    const result = await provider.search(
+      request({ scope: { kind: 'trash' }, offset: 0, limit: 5 }),
+      undefined,
+      searchOptions(),
+    )
+    expect(mock.requests[0]!.pathname).toBe('/api/users/0/items/trash')
+    expect(result.scope).toEqual({ kind: 'trash', library: { type: 'user', id: 0 } })
+    expect(result.total).toBe(7)
+    expect(result.nextOffset).toBe(1)
+  })
+
+  it('serves a group library trash under the group prefix and echoes its library', async () => {
+    serveSearchPage(mock, {
+      items: [searchHit()],
+      total: 1,
+      path: '/api/groups/123/items/trash',
+    })
+    const result = await provider.search(
+      request({ scope: { kind: 'trash' }, library: { type: 'group', id: 123 } }),
+      undefined,
+      searchOptions(),
+    )
+    expect(mock.requests[0]!.pathname).toBe('/api/groups/123/items/trash')
+    expect(result.scope).toEqual({ kind: 'trash', library: { type: 'group', id: 123 } })
+  })
+
+  it('passes the query and sort through to the trash listing', async () => {
+    serveSearchPage(mock, { items: [searchHit()], total: 1, path: '/api/users/0/items/trash' })
+    await provider.search(
+      request({ scope: { kind: 'trash' }, query: 'flash', sort: 'title', direction: 'asc' }),
+      undefined,
+      searchOptions(),
+    )
+    const sent = mock.requests[0]!
+    expect(sent.search.get('q')).toBe('flash')
+    expect(sent.search.get('sort')).toBe('title')
+    expect(sent.search.get('direction')).toBe('asc')
+  })
+
+  it('rejects includeTrashed inside a trash scope', async () => {
+    await zoteroError(
+      provider.search(
+        request({ scope: { kind: 'trash' }, includeTrashed: true }),
+        undefined,
+        searchOptions(),
+      ),
+      ZOTERO_INVALID_ARGUMENT,
+      'includeTrashed is only allowed with library scope.',
+    )
+  })
+
+  it('never scans note bodies from a trash scope', async () => {
+    // A qualifying query with note itemTypes would start the note scan on any
+    // scanning scope; the trash listing must stay one request, because the
+    // scan reads the live /items note rows, which are not the trash's rows.
+    serveSearchPage(mock, { items: [searchHit()], total: 1, path: '/api/users/0/items/trash' })
+    await provider.search(
+      request({ scope: { kind: 'trash' }, query: 'flash', itemTypes: ['note'] }),
+      undefined,
+      searchOptions(),
+    )
+    expect(mock.requests).toHaveLength(1)
+    expect(mock.requests[0]!.pathname).toBe('/api/users/0/items/trash')
   })
 })
 
@@ -244,6 +342,8 @@ describe('search: collection scope', () => {
     })
     const result = await provider.search(
       request({ scope: { kind: 'collection', refOrName: 'LLM Papers' } }),
+      undefined,
+      searchOptions(),
     )
     expectRequestPaths(mock, [
       '/api/users/0/collections',
@@ -270,6 +370,8 @@ describe('search: collection scope', () => {
       request({
         scope: { kind: 'collection', refOrName: 'zotero://user/0/collection/COLL1234?server=S1' },
       }),
+      undefined,
+      searchOptions(),
     )
     expectRequestPaths(mock, [
       '/api/users/0/collections/COLL1234',
@@ -285,7 +387,11 @@ describe('search: collection scope', () => {
   it('fails with SCOPE_AMBIGUOUS listing candidate refs for multiple matches', async () => {
     serveJson(mock, '/api/users/0/collections', COLLECTIONS, { 'Total-Results': '3' })
     const error = await zoteroError(
-      provider.search(request({ scope: { kind: 'collection', refOrName: 'llm papers' } })),
+      provider.search(
+        request({ scope: { kind: 'collection', refOrName: 'llm papers' } }),
+        undefined,
+        searchOptions(),
+      ),
       ZOTERO_SCOPE_AMBIGUOUS,
       'COLL1234',
     )
@@ -295,7 +401,11 @@ describe('search: collection scope', () => {
   it('fails with NOT_FOUND and near candidates when nothing matches', async () => {
     serveJson(mock, '/api/users/0/collections', COLLECTIONS, { 'Total-Results': '3' })
     const error = await zoteroError(
-      provider.search(request({ scope: { kind: 'collection', refOrName: 'reason' } })),
+      provider.search(
+        request({ scope: { kind: 'collection', refOrName: 'reason' } }),
+        undefined,
+        searchOptions(),
+      ),
       ZOTERO_NOT_FOUND,
       'Reasoning',
     )
@@ -305,7 +415,11 @@ describe('search: collection scope', () => {
   it('fails with NOT_FOUND without candidates when nothing is even close', async () => {
     serveJson(mock, '/api/users/0/collections', COLLECTIONS, { 'Total-Results': '3' })
     const error = await zoteroError(
-      provider.search(request({ scope: { kind: 'collection', refOrName: 'quantization' } })),
+      provider.search(
+        request({ scope: { kind: 'collection', refOrName: 'quantization' } }),
+        undefined,
+        searchOptions(),
+      ),
       ZOTERO_NOT_FOUND,
     )
     expect(error.message).not.toContain('Possible matches')
@@ -317,7 +431,11 @@ describe('search: collection scope', () => {
       savedSearchRow({ key: 'SRCH2222', data: { name: 'UNREAD' } }),
     ])
     const error = await zoteroError(
-      provider.search(request({ scope: { kind: 'savedSearch', refOrName: 'Unread' } })),
+      provider.search(
+        request({ scope: { kind: 'savedSearch', refOrName: 'Unread' } }),
+        undefined,
+        searchOptions(),
+      ),
       ZOTERO_SCOPE_AMBIGUOUS,
       'saved search',
     )
@@ -335,6 +453,8 @@ describe('search: collection scope', () => {
     })
     const result = await provider.search(
       request({ scope: { kind: 'collection', refOrName: 'LLM Papers' } }),
+      undefined,
+      searchOptions(),
     )
     expect(result.scope).toEqual({
       kind: 'collection',
@@ -352,8 +472,16 @@ describe('search: collection scope', () => {
       serverId: null,
       path: '/api/users/0/collections/COLL1234/items/top',
     })
-    await provider.search(request({ scope: { kind: 'collection', refOrName: 'LLM Papers' } }))
-    await provider.search(request({ scope: { kind: 'collection', refOrName: 'LLM Papers' } }))
+    await provider.search(
+      request({ scope: { kind: 'collection', refOrName: 'LLM Papers' } }),
+      undefined,
+      searchOptions(),
+    )
+    await provider.search(
+      request({ scope: { kind: 'collection', refOrName: 'LLM Papers' } }),
+      undefined,
+      searchOptions(),
+    )
     expect(
       mock.requests.filter((entry) => entry.pathname === '/api/users/0/collections'),
     ).toHaveLength(1)
@@ -367,9 +495,15 @@ describe('search: collection scope', () => {
       serverId: null,
       path: '/api/users/0/collections/COLL1234/items/top',
     })
-    await provider.search(request({ scope: { kind: 'collection', refOrName: 'LLM Papers' } }))
+    await provider.search(
+      request({ scope: { kind: 'collection', refOrName: 'LLM Papers' } }),
+      undefined,
+      searchOptions(),
+    )
     await makeProvider(mock).search(
       request({ scope: { kind: 'collection', refOrName: 'LLM Papers' } }),
+      undefined,
+      searchOptions(),
     )
     expect(
       mock.requests.filter((entry) => entry.pathname === '/api/users/0/collections'),
@@ -378,13 +512,21 @@ describe('search: collection scope', () => {
 
   it('fails loud on a non-array items response instead of folding it to an empty set', async () => {
     serveJson(mock, '/api/users/0/items/top', { key: ITEM_KEY }, { 'Total-Results': '0' })
-    await zoteroError(provider.search(request({})), 'ZOTERO_UNEXPECTED', 'non-array body')
+    await zoteroError(
+      provider.search(request({}), undefined, searchOptions()),
+      'ZOTERO_UNEXPECTED',
+      'non-array body',
+    )
   })
 
   it('fails loud on a non-array scope listing instead of treating it as an empty set', async () => {
     serveJson(mock, '/api/users/0/collections', { key: COLLECTION_KEY })
     await zoteroError(
-      provider.search(request({ scope: { kind: 'collection', refOrName: 'LLM Papers' } })),
+      provider.search(
+        request({ scope: { kind: 'collection', refOrName: 'LLM Papers' } }),
+        undefined,
+        searchOptions(),
+      ),
       'ZOTERO_UNEXPECTED',
       'non-array body',
     )
@@ -402,6 +544,8 @@ describe('search: collection scope', () => {
       request({
         scope: { kind: 'collection', refOrName: 'zotero://user/0/collection/COLL1234?server=S1' },
       }),
+      undefined,
+      searchOptions(),
     )
     expect(result.scope).toEqual({
       kind: 'collection',
@@ -426,6 +570,8 @@ describe('search: saved search scope', () => {
         mode: 'everything',
         query: 'attention',
       }),
+      undefined,
+      searchOptions(),
     )
     expect(mock.requests[1]!.pathname).toBe('/api/users/0/searches/SRCH1234/items')
     expect(mock.requests[1]!.search.get('qmode')).toBe('everything')
@@ -446,6 +592,8 @@ describe('search failures', () => {
         request({
           scope: { kind: 'collection', refOrName: 'zotero://user/0/collection/COLL1234' },
         }),
+        undefined,
+        searchOptions(),
       ),
       ZOTERO_NOT_FOUND,
     )
@@ -457,6 +605,8 @@ describe('search failures', () => {
         request({
           scope: { kind: 'collection', refOrName: 'zotero://user/123/collection/COLL1234' },
         }),
+        undefined,
+        searchOptions(),
       ),
       'ZOTERO_INVALID_REF',
       'user/0',
@@ -471,6 +621,8 @@ describe('search failures', () => {
           library: { type: 'group', id: 42 },
           scope: { kind: 'collection', refOrName: 'zotero://group/51/collection/COLL1234' },
         }),
+        undefined,
+        searchOptions(),
       ),
       'ZOTERO_INVALID_ARGUMENT',
       'Library mismatch',
@@ -497,6 +649,8 @@ describe('search failures', () => {
       request({
         scope: { kind: 'collection', refOrName: 'zotero://group/42/collection/COLL1234' },
       }),
+      undefined,
+      searchOptions(),
     )
     expect(result.scope).toEqual({
       kind: 'collection',

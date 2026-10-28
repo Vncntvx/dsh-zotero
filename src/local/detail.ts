@@ -11,9 +11,10 @@
  */
 
 import type { ZoteroHttpClient } from '../http-client.js'
-import { serverIdFromHeaders } from './identity.js'
+import { assertServerIdMatches, serverIdFromHeaders } from './identity.js'
 import { asRecord, asString } from '../json.js'
 import { ZOTERO_INVALID_ARGUMENT, ZoteroError } from '../errors.js'
+import { ZOTERO_CHILD_PAGE_MAX_ROWS, ZOTERO_CHILD_PAGE_ROWS } from '../constants.js'
 import type { NormalizeContext } from '../normalize.js'
 import { type ZoteroChildKind } from '../normalize.js'
 import {
@@ -26,9 +27,11 @@ import {
 import { libraryPrefix, refStringFor, requireSupportedLocalRef } from '../refs.js'
 import type { ScopeDirectory } from './scope-directory.js'
 import type { LocalApiLimits } from './limits.js'
-import { fetchAnnotationChildren, fetchDirectChildren } from './children-wire.js'
+import { fetchAnnotationChildren, fetchChildPage, fetchDirectChildren } from './children-wire.js'
 import type {
   SupportedLocalLibrary,
+  ZoteroChildPage,
+  ZoteroChildPageRequest,
   ZoteroChildrenRequest,
   ZoteroChildrenResult,
   ZoteroGetRequest,
@@ -55,6 +58,36 @@ export function attachmentTargetKindMessage(itemType: string): string {
 }
 
 /**
+ * Validate and clamp one child-listing page window to the kind's record cap.
+ * The detail read and the dedicated child-page read share this rule, so a
+ * page the panel pages by is the page the host actually serves.
+ */
+export function childPageWindowOf(
+  request: { readonly kind: ZoteroInclude; readonly offset: number; readonly limit: number },
+  limits: Pick<LocalApiLimits, 'maxNoteRecords' | 'maxAttachmentRecords' | 'maxAnnotationRecords'>,
+): { offset: number; limit: number } {
+  if (
+    !Number.isInteger(request.offset) ||
+    request.offset < 0 ||
+    !Number.isInteger(request.limit) ||
+    request.limit < 1 ||
+    request.limit > ZOTERO_CHILD_PAGE_MAX_ROWS
+  ) {
+    throw new ZoteroError(
+      `Child pages require a nonnegative offset and a limit between 1 and ${ZOTERO_CHILD_PAGE_MAX_ROWS}.`,
+      ZOTERO_INVALID_ARGUMENT,
+    )
+  }
+  const cap =
+    request.kind === 'notes'
+      ? limits.maxNoteRecords
+      : request.kind === 'attachments'
+        ? limits.maxAttachmentRecords
+        : limits.maxAnnotationRecords
+  return { offset: request.offset, limit: Math.min(request.limit, cap) }
+}
+
+/**
  * Fetch one item's full detail. The parent is always fetched once; child
  * rows are fetched lazily only when the caller asked to include
  * notes/annotations/attachments, since the Local API ignores `?include=` on
@@ -77,8 +110,76 @@ export async function getItem(
     serverId: ref.serverId,
   })
   const serverId = serverIdFromHeaders(parent.headers, ref.serverId)
+  assertServerIdMatches(serverId, ref.serverId)
   const includes = INCLUDE_ORDER.filter((kind) => request.include.has(kind))
   const keys = collectionKeysOf(parent.json)
+  if (request.childPages !== undefined) {
+    // The configured record caps bound every page: the panel asks for its full
+    // page and the domain serves at most what the config allows, so the
+    // response's `limit` is the size the caller must page by.
+    const pages = await Promise.all(
+      includes.map(async (kind) => {
+        const requested = request.childPages?.[kind] ?? {
+          offset: 0,
+          limit: ZOTERO_CHILD_PAGE_ROWS,
+        }
+        const page = childPageWindowOf({ kind, ...requested }, deps.limits)
+        return {
+          kind,
+          ...(await fetchChildPage(
+            deps,
+            kind,
+            ref.key,
+            ref.library as SupportedLocalLibrary,
+            serverId,
+            page,
+            signal,
+          )),
+        }
+      }),
+    )
+    const collectionNames =
+      keys.length > 0
+        ? await directory.collectionNamesFor(
+            keys,
+            ref.library as SupportedLocalLibrary,
+            serverId,
+            signal,
+          )
+        : undefined
+    const directPages = pages.filter((page) => page.kind !== 'annotations')
+    return normalizeItemDetail({
+      parent: parent.json,
+      library: ref.library as SupportedLocalLibrary,
+      serverId,
+      include: request.include,
+      childrenRows: pages.flatMap((page) => page.rows),
+      // Every requested direct kind contributes its server-reported total, so
+      // `children.total` stays exact even when only one of the two kinds rides
+      // along; with neither, `childrenTotal` falls back to `meta.numChildren`.
+      directChildCount:
+        directPages.length > 0 ? directPages.reduce((sum, page) => sum + page.total, 0) : undefined,
+      childPages: Object.fromEntries(
+        pages.map((page) => [
+          page.kind,
+          {
+            total: page.total,
+            offset: page.offset,
+            limit: page.limit,
+            ...(page.nextOffset !== undefined ? { nextOffset: page.nextOffset } : {}),
+          },
+        ]),
+      ),
+      collectionNames,
+      maxAbstractChars: deps.limits.maxDetailChars,
+      maxNoteBodyChars: deps.limits.maxNoteBodyChars,
+      maxNoteChars: deps.limits.maxNoteChars,
+      maxNoteRecords: deps.limits.maxNoteRecords,
+      maxAnnotationRecords: deps.limits.maxAnnotationRecords,
+      maxAttachmentRecords: deps.limits.maxAttachmentRecords,
+      fields: request.fields,
+    })
+  }
   // Children and the collections listing are independent once the parent
   // has arrived; the Local API is a loopback server with no per-client
   // throttling, so both ride the same await.
@@ -201,6 +302,144 @@ export async function children(
         }
       : {}),
     ...(ctx.serverId !== undefined ? { serverId: ctx.serverId } : {}),
+  }
+}
+
+/**
+ * Read one page of a single child kind without re-reading the parent item or
+ * its collection names. An attachment ref serves annotations only and is
+ * validated against its target row; an item ref reads the child listing
+ * directly, proving the parent exists only when the first page is empty (so a
+ * deleted item still yields the typed 404 instead of a silent empty page).
+ */
+export async function getChildPage(
+  deps: { client: ZoteroHttpClient; limits: LocalApiLimits },
+  request: ZoteroChildPageRequest,
+  signal?: AbortSignal,
+): Promise<ZoteroChildPage> {
+  const ref = requireSupportedLocalRef(request.ref, ['item', 'attachment'])
+  const library = ref.library as SupportedLocalLibrary
+  const page = childPageWindowOf(request, deps.limits)
+  if (ref.kind === 'attachment') {
+    if (request.kind !== 'annotations') {
+      throw new ZoteroError('An attachment ref serves annotations only.', ZOTERO_INVALID_ARGUMENT)
+    }
+    const row = await deps.client.getJson<unknown>(
+      `${libraryPrefix(library)}/items/${ref.key}`,
+      undefined,
+      {
+        signal,
+        serverId: ref.serverId,
+      },
+    )
+    const serverId = serverIdFromHeaders(row.headers, ref.serverId)
+    assertServerIdMatches(serverId, ref.serverId)
+    const itemType = asString(asRecord(asRecord(row.json)?.data)?.itemType) ?? ''
+    if (itemType !== 'attachment') {
+      throw new ZoteroError(
+        itemType === ''
+          ? `The referenced object ${ref.key} could not be confirmed as an attachment.`
+          : attachmentTargetKindMessage(itemType),
+        ZOTERO_INVALID_ARGUMENT,
+      )
+    }
+    const fetched = await fetchChildPage(
+      deps,
+      'annotations',
+      ref.key,
+      library,
+      serverId,
+      page,
+      signal,
+    )
+    const ctx: NormalizeContext = { library, serverId: fetched.serverId ?? serverId ?? undefined }
+    const partitioned = partitionChildren(
+      fetched.rows,
+      ctx,
+      deps.limits.maxNoteChars,
+      new Set<ZoteroChildKind>(['annotation']),
+    )
+    return {
+      kind: 'annotations',
+      page: childCollection(
+        partitioned.annotations,
+        deps.limits.maxAnnotationRecords,
+        pageMetaOf(fetched),
+      ),
+    }
+  }
+  const fetched = await fetchChildPage(
+    deps,
+    request.kind,
+    ref.key,
+    library,
+    ref.serverId,
+    page,
+    signal,
+  )
+  let serverId = fetched.serverId ?? ref.serverId
+  if (fetched.total === 0 && page.offset === 0) {
+    // A missing parent must still surface as the typed 404; a parent that
+    // exists with no children stays an empty page.
+    const parent = await deps.client.getJson<unknown>(
+      `${libraryPrefix(library)}/items/${ref.key}`,
+      undefined,
+      { signal, serverId: ref.serverId },
+    )
+    const parentServerId = serverIdFromHeaders(parent.headers, ref.serverId)
+    assertServerIdMatches(parentServerId, ref.serverId)
+    serverId = parentServerId ?? serverId
+  }
+  const ctx: NormalizeContext = { library, serverId }
+  const kinds = new Set<ZoteroChildKind>(
+    request.kind === 'notes'
+      ? ['note']
+      : request.kind === 'attachments'
+        ? ['attachment']
+        : ['annotation'],
+  )
+  const partitioned = partitionChildren(fetched.rows, ctx, deps.limits.maxNoteChars, kinds)
+  const meta = pageMetaOf(fetched)
+  switch (request.kind) {
+    case 'notes':
+      return {
+        kind: 'notes',
+        page: childCollection(partitioned.notes, deps.limits.maxNoteRecords, meta),
+      }
+    case 'attachments':
+      return {
+        kind: 'attachments',
+        page: childCollection(
+          partitioned.attachments.map((candidate) => attachmentRecordOf(candidate, ctx)),
+          deps.limits.maxAttachmentRecords,
+          meta,
+        ),
+      }
+    case 'annotations':
+      return {
+        kind: 'annotations',
+        page: childCollection(partitioned.annotations, deps.limits.maxAnnotationRecords, meta),
+      }
+  }
+}
+
+/** The page metadata one fetched child page reports. */
+function pageMetaOf(fetched: {
+  total: number
+  offset: number
+  limit: number
+  nextOffset?: number
+}): {
+  total: number
+  offset: number
+  limit: number
+  nextOffset?: number
+} {
+  return {
+    total: fetched.total,
+    offset: fetched.offset,
+    limit: fetched.limit,
+    ...(fetched.nextOffset !== undefined ? { nextOffset: fetched.nextOffset } : {}),
   }
 }
 

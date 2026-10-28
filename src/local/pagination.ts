@@ -10,10 +10,12 @@ import { parseNonNegativeSafeInteger } from '../json.js'
 import { ZOTERO_UNEXPECTED, ZoteroError } from '../errors.js'
 import {
   ZOTERO_ITEMKEY_BATCH,
+  ZOTERO_LIBRARY_VERSION_HEADER,
   ZOTERO_LIST_PAGE_ROWS,
   ZOTERO_TOTAL_RESULTS_HEADER,
 } from '../constants.js'
 import { assertServerIdMatches, serverIdFromHeaders } from './identity.js'
+import { mapWithConcurrency } from '../concurrency.js'
 import type { ZoteroHttpClient } from '../http-client.js'
 
 /**
@@ -171,5 +173,183 @@ export async function readAllPages(
     const next = nextOffsetOrFail(offset, page.length, total, what.page)
     if (next === undefined) return
     offset = next
+  }
+}
+
+/**
+ * Read every page of one listing concurrently, fold each page as it arrives,
+ * and return the folded pages in listing order. Page 0 measures both the
+ * `Total-Results` window and the window size the server actually honors, so a
+ * server capped below `ZOTERO_LIST_PAGE_ROWS` is walked at its own stride
+ * rather than skipping the rows between the cap and 100. A short middle page
+ * leaves a gap that is repaired at the exact missing offset; the assembled
+ * row count must equal the reported total.
+ *
+ * Every page keeps the shared guards: identity, array body, honest total, the
+ * empty-page breach, an overlong-page refusal, and the same
+ * `Last-Modified-Version` fence.
+ * @param client - the transport every page read rides.
+ * @param path - the listing's path relative to the API base.
+ * @param initial - the query every page carries; cloned per page.
+ * @param serverId - the instance claim, if the caller carries one.
+ * @param signal - caller cancellation, forwarded to every page read.
+ * @param what - the listing's own label for body/total errors.
+ * @param concurrency - the bounded pool size for the non-first pages.
+ * @param fold - folds one page into the caller's compact value, releasing the
+ *   raw rows as soon as the page is validated.
+ * @returns the folded pages, the measured total, the serving instance, and
+ *   the library version the listing was read through.
+ */
+export async function readPagesConcurrentlyFolded<T>(
+  client: ZoteroHttpClient,
+  path: string,
+  initial: URLSearchParams,
+  serverId: string | undefined,
+  signal: AbortSignal | undefined,
+  what: { readonly body: string; readonly page: string },
+  concurrency: number,
+  fold: (rows: readonly unknown[], offset: number) => T,
+): Promise<{
+  pages: { offset: number; value: T }[]
+  total: number
+  serverId?: string
+  libraryVersion?: number
+}> {
+  const versionOf = (headers: Headers): number | undefined =>
+    parseNonNegativeSafeInteger(headers.get(ZOTERO_LIBRARY_VERSION_HEADER))
+  const readPage = (offset: number, limit: number, poolSignal: AbortSignal | undefined) =>
+    client.getJson<unknown>(path, setPage(new URLSearchParams(initial.toString()), offset, limit), {
+      signal: poolSignal,
+      serverId,
+    })
+  const first = await readPage(0, ZOTERO_LIST_PAGE_ROWS, signal)
+  let observed = serverIdFromHeaders(first.headers, serverId)
+  assertServerIdMatches(observed, serverId)
+  const version = versionOf(first.headers)
+  const firstRows = requireArrayBody(first.json, what.body)
+  const total = requireTotalResults(first.headers, what.body)
+  if (firstRows.length > ZOTERO_LIST_PAGE_ROWS) {
+    throw new ZoteroError(
+      `Zotero returned ${firstRows.length} rows for ${what.page} at offset 0 but the window is ${ZOTERO_LIST_PAGE_ROWS}`,
+      ZOTERO_UNEXPECTED,
+    )
+  }
+  nextOffsetOrFail(0, firstRows.length, total, what.page)
+  const pages: { offset: number; value: T }[] = [{ offset: 0, value: fold(firstRows, 0) }]
+  let rowsRead = firstRows.length
+  if (firstRows.length === 0) {
+    return { pages, total, serverId: observed ?? undefined, libraryVersion: version }
+  }
+
+  const readWindow = async (
+    offset: number,
+    requested: number,
+    poolSignal: AbortSignal | undefined,
+  ): Promise<readonly unknown[]> => {
+    const { json, headers } = await readPage(offset, requested, poolSignal)
+    const pageServerId = serverIdFromHeaders(headers, observed)
+    assertServerIdMatches(pageServerId, observed)
+    observed ??= pageServerId
+    const pageRows = requireArrayBody(json, what.body)
+    if (pageRows.length > requested) {
+      throw new ZoteroError(
+        `Zotero returned ${pageRows.length} rows for ${what.page} at offset ${offset} but the window is ${requested}`,
+        ZOTERO_UNEXPECTED,
+      )
+    }
+    nextOffsetOrFail(offset, pageRows.length, total, what.page)
+    if (versionOf(headers) !== version) {
+      throw new ZoteroError(
+        `Zotero's library version changed during the ${what.page}; the listing cannot be assembled.`,
+        ZOTERO_UNEXPECTED,
+      )
+    }
+    return pageRows
+  }
+
+  const window = firstRows.length
+  const windows: { offset: number; limit: number }[] = []
+  for (let offset = window; offset < total; offset += window) {
+    windows.push({ offset, limit: Math.min(window, total - offset) })
+  }
+  const results = await mapWithConcurrency(
+    windows,
+    Math.max(1, concurrency),
+    async (entry, poolSignal) => {
+      const rows = await readWindow(entry.offset, entry.limit, poolSignal)
+      return { offset: entry.offset, requested: entry.limit, rows }
+    },
+    { signal },
+  )
+  results.sort((a, b) => a.offset - b.offset)
+  const gaps: { start: number; end: number }[] = []
+  for (const result of results) {
+    pages.push({ offset: result.offset, value: fold(result.rows, result.offset) })
+    rowsRead += result.rows.length
+    if (result.rows.length < result.requested) {
+      gaps.push({
+        start: result.offset + result.rows.length,
+        end: result.offset + result.requested,
+      })
+    }
+  }
+  gaps.sort((a, b) => a.start - b.start)
+  // The repair loop closes every gap by construction: an empty page or an
+  // overlong repair page throws above, and the cursor only advances by the
+  // rows actually read, so `rowsRead` ends at exactly `total`.
+  for (const gap of gaps) {
+    let cursor = gap.start
+    while (cursor < gap.end) {
+      const remaining = gap.end - cursor
+      const rows = await readWindow(cursor, remaining, signal)
+      if (rows.length === 0) {
+        throw new ZoteroError(
+          `Zotero returned an empty repair page for ${what.page} at offset ${cursor} but ${remaining} rows are missing`,
+          ZOTERO_UNEXPECTED,
+        )
+      }
+      pages.push({ offset: cursor, value: fold(rows, cursor) })
+      rowsRead += rows.length
+      cursor += rows.length
+    }
+  }
+  pages.sort((a, b) => a.offset - b.offset)
+  return { pages, total, serverId: observed ?? undefined, libraryVersion: version }
+}
+
+/**
+ * Read every page of one listing concurrently and return the raw rows in
+ * listing order. The folded reader owns the windowing and repair; this
+ * wrapper is the identity fold for callers that still consume raw rows.
+ */
+export async function readPagesConcurrently(
+  client: ZoteroHttpClient,
+  path: string,
+  initial: URLSearchParams,
+  serverId: string | undefined,
+  signal: AbortSignal | undefined,
+  what: { readonly body: string; readonly page: string },
+  concurrency: number,
+): Promise<{
+  rows: readonly unknown[]
+  total: number
+  serverId?: string
+  libraryVersion?: number
+}> {
+  const result = await readPagesConcurrentlyFolded(
+    client,
+    path,
+    initial,
+    serverId,
+    signal,
+    what,
+    concurrency,
+    (rows) => rows,
+  )
+  return {
+    rows: result.pages.flatMap((page) => page.value),
+    total: result.total,
+    ...(result.serverId !== undefined ? { serverId: result.serverId } : {}),
+    ...(result.libraryVersion !== undefined ? { libraryVersion: result.libraryVersion } : {}),
   }
 }

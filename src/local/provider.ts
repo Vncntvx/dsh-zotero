@@ -33,7 +33,12 @@ import type { DiagnosticSink } from '../diagnostics.js'
 import type { ZoteroHttpClient } from '../http-client.js'
 import type { LocalApiLimits } from './limits.js'
 import { runSearch } from './search-domain.js'
-import { getItem as getItemDomain, children as childrenDomain } from './detail.js'
+import { createSearchIndexCaches, type SearchIndexCaches } from './search-index.js'
+import {
+  getItem as getItemDomain,
+  getChildPage as getChildPageDomain,
+  children as childrenDomain,
+} from './detail.js'
 import { retrieve as retrieveDomain } from './retrieve.js'
 import { getAttachmentLocation as attachmentLocationDomain } from './attachment-location.js'
 import { exportItems as exportItemsDomain } from './export-domain.js'
@@ -68,6 +73,8 @@ import type {
   ZoteroCapability,
   ZoteroChangesRequest,
   ZoteroChangesResult,
+  ZoteroChildPage,
+  ZoteroChildPageRequest,
   ZoteroChildrenRequest,
   ZoteroChildrenResult,
   ZoteroCreateCollectionCommittedOutcome,
@@ -91,6 +98,7 @@ import type {
   ZoteroProvider,
   ZoteroRetrieveRequest,
   ZoteroRetrieveResult,
+  ZoteroSearchOptions,
   ZoteroSearchRequest,
   ZoteroSearchResult,
   ZoteroStatus,
@@ -120,6 +128,7 @@ export class LocalApiProvider implements ZoteroProvider {
 
   private readonly directory: ScopeDirectory
   private readonly getLimits: () => LocalApiLimits
+  private readonly searchCaches: SearchIndexCaches
 
   constructor(
     private readonly client: ZoteroHttpClient,
@@ -129,6 +138,7 @@ export class LocalApiProvider implements ZoteroProvider {
     sink?: DiagnosticSink,
   ) {
     this.getLimits = typeof limits === 'function' ? limits : () => limits
+    this.searchCaches = createSearchIndexCaches()
     // The directory owns the scope-listing and breadcrumb caches. It reads the
     // TTL and the fan-out bound through the live limits, so a settings edit
     // changes how long an existing cache entry is trusted (and how wide a
@@ -157,8 +167,12 @@ export class LocalApiProvider implements ZoteroProvider {
   }
 
   /** One deps bundle per call keeps every domain signature explicit. */
-  private deps(): { client: ZoteroHttpClient; limits: LocalApiLimits } {
-    return { client: this.client, limits: this.getLimits() }
+  private deps(): {
+    client: ZoteroHttpClient
+    limits: LocalApiLimits
+    searchCaches: SearchIndexCaches
+  } {
+    return { client: this.client, limits: this.getLimits(), searchCaches: this.searchCaches }
   }
 
   /**
@@ -293,8 +307,12 @@ export class LocalApiProvider implements ZoteroProvider {
    * records. The domain logic lives in `local/search-domain`; this method is
    * the provider seam that carries the client/limits/directory wiring.
    */
-  async search(request: ZoteroSearchRequest, signal?: AbortSignal): Promise<ZoteroSearchResult> {
-    return runSearch(this.deps(), this.directory, request, signal)
+  async search(
+    request: ZoteroSearchRequest,
+    signal: AbortSignal | undefined,
+    options: ZoteroSearchOptions,
+  ): Promise<ZoteroSearchResult> {
+    return runSearch(this.deps(), this.directory, request, signal, options)
   }
 
   /**
@@ -326,6 +344,14 @@ export class LocalApiProvider implements ZoteroProvider {
     signal?: AbortSignal,
   ): Promise<ZoteroChildrenResult> {
     return childrenDomain(this.deps(), request, signal)
+  }
+
+  /** One paged child listing; the domain owns the ref/window/cap rules. */
+  async getChildPage(
+    request: ZoteroChildPageRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroChildPage> {
+    return getChildPageDomain(this.deps(), request, signal)
   }
 
   /**

@@ -12,10 +12,8 @@
  */
 
 import { parseRefIdentity } from '../actions/open-zotero.ts'
+import { PDF_CONTENT_TYPE } from '../../media-types.ts'
 import type { SourceItem } from './model.ts'
-
-/** The content type that makes an attachment a PDF for the open action. */
-const PDF_CONTENT_TYPE = 'application/pdf'
 
 /** The PDF capability of one source, or null when nothing answers the open-PDF action. */
 export type PdfCapability =

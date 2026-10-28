@@ -81,6 +81,7 @@ import {
   wireFieldOf,
 } from '../write-item-rules.js'
 import { markdownToNoteHtml } from './note-format.js'
+import { normalizeSavedSearchConditions } from '../normalize.js'
 import { readTrashGraph } from './trash-item.js'
 import type { WriteAuthorizer } from '../write-auth.js'
 import {
@@ -118,7 +119,6 @@ import {
   type ZoteroUpdateSavedSearchRequest,
   type ZoteroDeleteSavedSearchRequest,
   type ZoteroDeleteSavedSearchResult,
-  type ZoteroSavedSearchCondition,
   type ZoteroWriteCommittedUnverified,
   type ZoteroBatchItemsRequest,
   type ZoteroBatchItemsResult,
@@ -1372,22 +1372,6 @@ export async function updateCollection(
   }
 }
 
-function savedSearchConditionsOf(
-  data: Record<string, unknown>,
-): ZoteroSavedSearchCondition[] | undefined {
-  if (!Array.isArray(data.conditions)) return undefined
-  const out: ZoteroSavedSearchCondition[] = []
-  for (const row of data.conditions) {
-    const record = asRecord(row)
-    const condition = asString(record?.condition)
-    const operator = asString(record?.operator)
-    const value = asString(record?.value)
-    if (condition === undefined || operator === undefined || value === undefined) return undefined
-    out.push({ condition, operator, value })
-  }
-  return out
-}
-
 export async function createSavedSearch(
   deps: WriteDomainDeps,
   request: ZoteroCreateSavedSearchRequest,
@@ -1411,7 +1395,7 @@ export async function createSavedSearch(
     if ('kind' in batch) return batch
     const settled = settleSingleEntryBatch(batch, 'search', serverId, (data) => {
       const savedName = asString(data.name)
-      const conditions = savedSearchConditionsOf(data)
+      const conditions = normalizeSavedSearchConditions(data.conditions)
       return savedName === name && conditions !== undefined ? { savedName, conditions } : undefined
     })
     if (settled.status === 'unverified') return settled.result
@@ -1447,7 +1431,7 @@ export async function updateSavedSearch(
   // cannot decode would otherwise be fabricated as empty, so an unreadable
   // name or conditions refuses the update before anything is written.
   const name = request.name ?? asString(data?.name)
-  const conditions = request.conditions ?? savedSearchConditionsOf(data ?? {})
+  const conditions = request.conditions ?? normalizeSavedSearchConditions(data?.conditions)
   if (name === undefined || conditions === undefined) {
     throw new ZoteroError(
       `The saved search's stored name or conditions are unreadable; refusing to update without an honest report of the search's state.`,

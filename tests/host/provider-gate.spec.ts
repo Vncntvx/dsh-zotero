@@ -53,14 +53,18 @@ describe('provider seam double gate', () => {
       search: async () => searchResult(),
     }
     service.registerProvider(stub)
-    const result = await service.search({
-      scope: { kind: 'library' },
-      mode: 'metadata',
-      sort: 'dateModified',
-      direction: 'desc',
-      offset: 0,
-      limit: 10,
-    })
+    const result = await service.search(
+      {
+        scope: { kind: 'library' },
+        mode: 'metadata',
+        sort: 'dateModified',
+        direction: 'desc',
+        offset: 0,
+        limit: 10,
+      },
+      undefined,
+      { includeSupplemental: false },
+    )
     expect(result.total).toBe(0)
   })
 
@@ -123,14 +127,18 @@ describe('provider seam double gate', () => {
     }
     const counting = new CountingProvider()
     service.registerProvider(counting)
-    await service.search({
-      scope: { kind: 'library' },
-      mode: 'metadata',
-      sort: 'dateModified',
-      direction: 'desc',
-      offset: 0,
-      limit: 10,
-    })
+    await service.search(
+      {
+        scope: { kind: 'library' },
+        mode: 'metadata',
+        sort: 'dateModified',
+        direction: 'desc',
+        offset: 0,
+        limit: 10,
+      },
+      undefined,
+      { includeSupplemental: false },
+    )
     expect(counting.calls).toBe(1)
   })
 })

@@ -99,6 +99,41 @@ describe('attachLibraryStatus', () => {
     expect(papers[0]?.inLibrary).toBeUndefined()
   })
 
+  it('rethrows an aborted caller instead of counting a failed lookup', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    const papers = [paperOf()]
+    await expect(
+      attachLibraryStatus(
+        papers,
+        {
+          search: async () => {
+            throw new Error('local API unreachable')
+          },
+        },
+        controller.signal,
+      ),
+    ).rejects.toThrow()
+  })
+
+  it('rethrows an aborted caller from the detail read', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    const papers = [paperOf()]
+    await expect(
+      attachLibraryStatus(
+        papers,
+        {
+          ...libraryOf([recordOf()]),
+          get: async () => {
+            throw new Error('local API unreachable')
+          },
+        },
+        controller.signal,
+      ),
+    ).rejects.toThrow()
+  })
+
   it('reads the detail of a matched record to collect its collections', async () => {
     // The detail read confirms and enriches a compact match; it is not a second
     // discovery path, so the compact record already has to match.

@@ -451,14 +451,18 @@ describe('capability gating', () => {
     })
     let thrown: unknown
     try {
-      await service.search({
-        scope: { kind: 'library' },
-        mode: 'metadata',
-        sort: 'dateModified',
-        direction: 'desc',
-        offset: 0,
-        limit: 5,
-      })
+      await service.search(
+        {
+          scope: { kind: 'library' },
+          mode: 'metadata',
+          sort: 'dateModified',
+          direction: 'desc',
+          offset: 0,
+          limit: 5,
+        },
+        undefined,
+        { includeSupplemental: false },
+      )
     } catch (error) {
       thrown = error
     }

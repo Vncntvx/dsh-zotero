@@ -158,9 +158,19 @@ const BROWSE_OUTPUT_SCHEMA = {
             properties: {
               ref: { type: 'string', required: true },
               name: { type: 'string', required: true },
+              // The browse domain normalizes (and refuses malformed) rows, so
+              // the model sees the closed condition record.
               conditions: {
                 type: 'array',
-                items: { type: 'object', additionalProperties: true },
+                items: {
+                  type: 'object',
+                  additionalProperties: false,
+                  properties: {
+                    condition: { type: 'string', required: true },
+                    operator: { type: 'string', required: true },
+                    value: { type: 'string', required: true },
+                  },
+                },
               },
             },
           },

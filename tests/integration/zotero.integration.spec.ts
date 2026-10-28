@@ -75,14 +75,18 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', 
   })
 
   it('browses the library and yields valid item refs', async () => {
-    const result = await provider.search({
-      scope: { kind: 'library' },
-      mode: 'metadata',
-      sort: 'dateModified',
-      direction: 'desc',
-      offset: 0,
-      limit: 3,
-    })
+    const result = await provider.search(
+      {
+        scope: { kind: 'library' },
+        mode: 'metadata',
+        sort: 'dateModified',
+        direction: 'desc',
+        offset: 0,
+        limit: 3,
+      },
+      undefined,
+      { includeSupplemental: false },
+    )
     expect(result.total).toBeGreaterThanOrEqual(result.returned)
     expect(result.items).toHaveLength(result.returned)
     for (const item of result.items) {
@@ -137,14 +141,18 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', 
     // from other items to try.
     const candidates: { ref: string; attachmentRef: string }[] = []
     for (let offset = 0; offset < 60 && candidates.length < 2; offset += 20) {
-      const page = await provider.search({
-        scope: { kind: 'library' },
-        mode: 'metadata',
-        sort: 'dateModified',
-        direction: 'desc',
-        offset,
-        limit: 20,
-      })
+      const page = await provider.search(
+        {
+          scope: { kind: 'library' },
+          mode: 'metadata',
+          sort: 'dateModified',
+          direction: 'desc',
+          offset,
+          limit: 20,
+        },
+        undefined,
+        { includeSupplemental: false },
+      )
       for (const item of page.items) {
         if (item.bestAttachmentRef === undefined) continue
         candidates.push({ ref: item.ref, attachmentRef: item.bestAttachmentRef })
@@ -191,14 +199,18 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', 
   })
 
   it('accounts for each full-text source it considered', async () => {
-    const page = await provider.search({
-      scope: { kind: 'library' },
-      mode: 'metadata',
-      sort: 'dateModified',
-      direction: 'desc',
-      offset: 0,
-      limit: 20,
-    })
+    const page = await provider.search(
+      {
+        scope: { kind: 'library' },
+        mode: 'metadata',
+        sort: 'dateModified',
+        direction: 'desc',
+        offset: 0,
+        limit: 20,
+      },
+      undefined,
+      { includeSupplemental: false },
+    )
     const withAttachment = page.items.find((item) => item.bestAttachmentRef !== undefined)
     if (withAttachment === undefined) {
       console.log('[integration] no item with an attachment; skipping per-source accounting check')
@@ -379,14 +391,18 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', 
   })
 
   it('explores an item graph through children with attachment-nested annotations', async () => {
-    const search = await provider.search({
-      scope: { kind: 'library' },
-      mode: 'metadata',
-      sort: 'dateModified',
-      direction: 'desc',
-      offset: 0,
-      limit: 5,
-    })
+    const search = await provider.search(
+      {
+        scope: { kind: 'library' },
+        mode: 'metadata',
+        sort: 'dateModified',
+        direction: 'desc',
+        offset: 0,
+        limit: 5,
+      },
+      undefined,
+      { includeSupplemental: false },
+    )
     for (const hit of search.items.slice(0, 3)) {
       const graph = await provider.children({
         ref: parseRef(hit.ref),
@@ -574,15 +590,19 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', 
       console.log('[integration] no group libraries; skipping group read checks')
       return
     }
-    const search = await provider.search({
-      scope: { kind: 'library' },
-      library: { type: 'group', id: group.library.id },
-      mode: 'metadata',
-      sort: 'dateModified',
-      direction: 'desc',
-      offset: 0,
-      limit: 3,
-    })
+    const search = await provider.search(
+      {
+        scope: { kind: 'library' },
+        library: { type: 'group', id: group.library.id },
+        mode: 'metadata',
+        sort: 'dateModified',
+        direction: 'desc',
+        offset: 0,
+        limit: 3,
+      },
+      undefined,
+      { includeSupplemental: false },
+    )
     expect(search.scope).toMatchObject({ kind: 'library', library: { id: group.library.id } })
     for (const item of search.items) {
       expect(item.ref).toMatch(new RegExp(`^zotero://group/${group.library.id}/item/[A-Z0-9]{8}`))
@@ -647,15 +667,19 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', 
       )
       return
     }
-    const result = await provider.search({
-      scope: { kind: 'collection', refOrName: `zotero://user/0/collection/${collections[0]}` },
-      mode: 'metadata',
-      query: token,
-      sort: 'dateModified',
-      direction: 'desc',
-      offset: 0,
-      limit: 20,
-    })
+    const result = await provider.search(
+      {
+        scope: { kind: 'collection', refOrName: `zotero://user/0/collection/${collections[0]}` },
+        mode: 'metadata',
+        query: token,
+        sort: 'dateModified',
+        direction: 'desc',
+        offset: 0,
+        limit: 20,
+      },
+      undefined,
+      { includeSupplemental: false },
+    )
     expect(result.scope).toMatchObject({ kind: 'collection' })
     expect(result.returned).toBe(result.items.length)
     // The membership regression itself: the child note (whose own

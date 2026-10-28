@@ -57,6 +57,8 @@ describe('client graph authority', () => {
         'src/changes-contract.ts',
         'src/browse-rows.ts',
         'src/evidence-item.ts',
+        'src/creators.ts',
+        'src/media-types.ts',
         'node_modules/clsx/dist/clsx.mjs',
         'node_modules/@deepseek-ai/dsh-util-values/lib/index.js',
       ]),
@@ -157,6 +159,13 @@ describe('client graph authority', () => {
         `import { ZOTERO_INVOCATIONS } from '../status-codec.ts'\nexport default { apply() {}, inject: [], invocations: ZOTERO_INVOCATIONS }\n`,
       ),
     ).rejects.toThrow(/status-codec|host-local|client graph/i)
+  })
+
+  it('allows the shared wire-schemas module and still rejects other host-local files', () => {
+    const violations = clientGraphViolations(metafileOf(['src/wire-schemas.ts', 'src/config.ts']))
+    // wire-schemas is on the deliberate allowlist (both codec arms import it);
+    // config.ts is host authority and stays refused.
+    expect(violations.map((entry) => entry.key)).toEqual(['src/config.ts'])
   })
 
   it('allows a client graph that value-imports zod through external platform module', async () => {

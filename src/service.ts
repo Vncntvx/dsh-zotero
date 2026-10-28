@@ -63,6 +63,7 @@ import {
 import {
   WRITE_APPROVAL_UNAVAILABLE_MESSAGE,
   ZOTERO_CAPABILITY_UNAVAILABLE,
+  ZOTERO_NOT_COMPOSED_MESSAGE,
   ZOTERO_PROVIDER_UNAVAILABLE,
   ZOTERO_WRITE_APPROVAL_UNAVAILABLE,
   errorMessageOf,
@@ -100,6 +101,8 @@ import type {
   ZoteroCapability,
   ZoteroChangesRequest,
   ZoteroChangesResult,
+  ZoteroChildPage,
+  ZoteroChildPageRequest,
   ZoteroChildrenRequest,
   ZoteroChildrenResult,
   ZoteroCreateCollectionCommittedOutcome,
@@ -122,6 +125,7 @@ import type {
   ZoteroProviderMethod,
   ZoteroRetrieveRequest,
   ZoteroRetrieveResult,
+  ZoteroSearchOptions,
   ZoteroSearchRequest,
   ZoteroSearchResult,
   ZoteroStatus,
@@ -222,6 +226,23 @@ function toolCallDigest(execution: { name: string; arguments: unknown }): string
 export function isOwnConfigFiber(thisArg: unknown, own: Fiber): boolean {
   if (thisArg === own) return true
   return typeof thisArg === 'object' && thisArg !== null && Object.getPrototypeOf(thisArg) === own
+}
+
+/**
+ * The composed Zotero service every strict endpoint reads. Abort is checked
+ * first, so a cancelled caller observes its own cancellation; a missing
+ * service fails with the one stable provider-unavailable code both Remote
+ * services (and the panel's write pipeline) answer with.
+ * @param ctx - the endpoint's own context.
+ * @param signal - caller cancellation, when the caller carries one.
+ */
+export function requireZoteroService(ctx: Context, signal?: AbortSignal): ZoteroService {
+  signal?.throwIfAborted()
+  const service = ctx.get('zotero')
+  if (service === undefined) {
+    throw new ZoteroError(ZOTERO_NOT_COMPOSED_MESSAGE, ZOTERO_PROVIDER_UNAVAILABLE)
+  }
+  return service
 }
 
 export class ZoteroService extends Service {
@@ -610,13 +631,18 @@ export class ZoteroService extends Service {
    * Discover candidates; the provider resolves scopes and serves the compact records.
    * @param request - the search request with scope, mode, filters, and pagination.
    * @param signal - caller cancellation; forwarded to the provider.
+   * @param options - the caller's search policy (supplement, cache generation).
    * @returns the resolved scope plus the compact hit records and pagination facts.
    */
-  async search(request: ZoteroSearchRequest, signal?: AbortSignal): Promise<ZoteroSearchResult> {
+  async search(
+    request: ZoteroSearchRequest,
+    signal: AbortSignal | undefined,
+    options: ZoteroSearchOptions,
+  ): Promise<ZoteroSearchResult> {
     const provider = this.resolveProvider()
     this.requireCapability(provider, 'search')
     const search = this.requireMethod(provider, 'search')
-    return await search(request, signal)
+    return await search(request, signal, options)
   }
 
   /**
@@ -646,6 +672,19 @@ export class ZoteroService extends Service {
     this.requireCapability(provider, 'metadata')
     const children = this.requireMethod(provider, 'children')
     return await children(request, signal)
+  }
+
+  /**
+   * Read one page of a single child kind without re-reading the parent.
+   * @param request - the item/attachment ref, kind, and page window.
+   * @param signal - caller cancellation; forwarded to the provider.
+   * @returns the normalized child page.
+   */
+  async childPage(request: ZoteroChildPageRequest, signal?: AbortSignal): Promise<ZoteroChildPage> {
+    const provider = this.resolveProvider()
+    this.requireCapability(provider, 'metadata')
+    const childPage = this.requireMethod(provider, 'getChildPage')
+    return await childPage(request, signal)
   }
 
   /**

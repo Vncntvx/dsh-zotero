@@ -21,7 +21,7 @@ import {
 import { boundedPresentationMeta, projectGetMeta } from '../presentation-meta.js'
 import { ANNOTATION_RECORD, ATTACHMENT_RECORD, NOTE_RECORD } from './child-records.js'
 import { formatSearchLine, metaRecordOf } from './present.js'
-import { formatCreatorsList } from '../normalize.js'
+import { formatCreatorsList } from '../creators.js'
 import { parseSupportedRef, REF_ARG_HINT } from './validate.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroGetRequest, ZoteroInclude } from '../types.js'

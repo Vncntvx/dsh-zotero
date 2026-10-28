@@ -11,6 +11,7 @@ import { pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ZOTERO_FILE_MISSING, ZOTERO_NO_ATTACHMENT, ZOTERO_UNEXPECTED } from '../../src/errors.js'
 import { type LocalApiProvider } from '../../src/local/provider.js'
+import type { ZoteroGetRequest } from '../../src/types.js'
 import {
   attachmentTypeMessage,
   missingAttachmentFileMessage,
@@ -92,6 +93,70 @@ const PARENT_WITHOUT_COLLECTIONS = paperItem({
 const FILE_ATTACHMENT = attachment()
 
 describe('getItem', () => {
+  it('passes an independent offset and limit to every requested child lane', async () => {
+    serveJson(mock, `${apiPath()}/items/${ITEM_KEY}`, PARENT_WITHOUT_COLLECTIONS, versionHeaders())
+    mock.route(
+      'GET',
+      `${apiPath()}/items/${ITEM_KEY}/children`,
+      (_request, _response, helpers, search) => {
+        const kind = search.get('itemType')
+        if (kind === 'note') {
+          expect(search.get('start')).toBe('0')
+          expect(search.get('limit')).toBe('1')
+          helpers.json([noteRow()], { 'Total-Results': '2', 'Zotero-Server-ID': 'S1' })
+        } else if (kind === 'attachment') {
+          expect(search.get('start')).toBe('1')
+          expect(search.get('limit')).toBe('2')
+          helpers.json([], { 'Total-Results': '1', 'Zotero-Server-ID': 'S1' })
+        } else {
+          expect(kind).toBe('annotation')
+          helpers.json([], { 'Total-Results': '0', 'Zotero-Server-ID': 'S1' })
+        }
+      },
+    )
+    const detail = await provider.getItem({
+      ...getRequest(['notes', 'attachments', 'annotations']),
+      childPages: {
+        notes: { offset: 0, limit: 1 },
+        attachments: { offset: 1, limit: 2 },
+        annotations: { offset: 0, limit: 2 },
+      },
+    } as ZoteroGetRequest & { childPages: NonNullable<ZoteroGetRequest['childPages']> })
+    expect(detail.notes).toMatchObject({ total: 2, returned: 1, offset: 0, nextOffset: 1 })
+    expect(detail.attachments).toMatchObject({ total: 1, returned: 0, offset: 1 })
+    expect(detail.annotations).toMatchObject({ total: 0, returned: 0, offset: 0 })
+  })
+
+  it('clamps a paged child lane to the configured record cap and reports the effective limit', async () => {
+    const notes = Array.from({ length: 5 }, (_, i) =>
+      noteRow({ key: `NOTE${String(i).padStart(4, '0')}`, data: { note: `note ${i}` } }),
+    )
+    serveJson(mock, `${apiPath()}/items/${ITEM_KEY}`, PARENT_WITHOUT_COLLECTIONS, versionHeaders())
+    mock.route(
+      'GET',
+      `${apiPath()}/items/${ITEM_KEY}/children`,
+      (_request, _response, helpers, search) => {
+        // The panel asked for a 50-row page; the configured cap narrows it,
+        // and the answer's `limit` tells the client what it must page by.
+        expect(search.get('start')).toBe('0')
+        expect(search.get('limit')).toBe('5')
+        helpers.json(notes, { 'Total-Results': '12', 'Zotero-Server-ID': 'S1' })
+      },
+    )
+    const capped = makeProvider({ maxNoteRecords: 5 })
+    const detail = await capped.getItem({
+      ...getRequest(['notes']),
+      childPages: { notes: { offset: 0, limit: 50 } },
+    } as ZoteroGetRequest & { childPages: NonNullable<ZoteroGetRequest['childPages']> })
+    expect(detail.notes).toMatchObject({
+      total: 12,
+      returned: 5,
+      offset: 0,
+      limit: 5,
+      nextOffset: 5,
+    })
+  })
+
   it('fetches only the parent when nothing is included', async () => {
     serveJson(mock, `${apiPath()}/items/${ITEM_KEY}`, PARENT_WITHOUT_COLLECTIONS, versionHeaders())
     const detail = await provider.getItem(getRequest())

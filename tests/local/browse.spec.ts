@@ -305,6 +305,31 @@ describe('browse: collections', () => {
     ).toHaveLength(1)
   })
 
+  it('keeps a qualified parent identity on the child request and rejects a foreign response', async () => {
+    let foreign = false
+    mock.route('GET', `${apiPath()}/collections/COLL0001/collections`, (req, _res, helpers) => {
+      expect(req.headers['zotero-server-id']).toBe('S1')
+      helpers.json([], { 'Total-Results': '0', ...(foreign ? { 'Zotero-Server-ID': 'S2' } : {}) })
+    })
+    const empty = await provider.browse({
+      kind: 'collections',
+      parentRef: 'zotero://user/0/collection/COLL0001?server=S1',
+      offset: 0,
+      limit: 10,
+    })
+    expect(empty.serverId).toBe('S1')
+    foreign = true
+    await zoteroError(
+      provider.browse({
+        kind: 'collections',
+        parentRef: 'zotero://user/0/collection/COLL0001?server=S1',
+        offset: 0,
+        limit: 10,
+      }),
+      'ZOTERO_SERVER_MISMATCH',
+    )
+  })
+
   it('walks multi-level ancestors for deep breadcrumbs', async () => {
     serveJson(
       mock,
@@ -460,7 +485,7 @@ describe('browse: savedSearches', () => {
   const searches = [
     savedSearchRow({
       key: 'SRCH0001',
-      data: { name: 'Unread', conditions: [{ condition: 'unread' }] },
+      data: { name: 'Unread', conditions: [{ condition: 'unread', operator: 'true', value: '' }] },
     }),
     savedSearchRow({ key: 'SRCH0002', data: { name: 'Recent' } }),
     savedSearchRow({ key: 'SRCH0003', data: { name: 'Pinned' } }),
@@ -501,6 +526,17 @@ describe('browse: savedSearches', () => {
     serveJson(mock, `${apiPath()}/searches`, searches)
     await expect(provider.browse({ kind: 'savedSearches', offset: 0, limit: 10 })).rejects.toThrow(
       'Total-Results',
+    )
+  })
+  it('does not silently drop malformed condition rows', async () => {
+    serveJson(
+      mock,
+      `${apiPath()}/searches`,
+      [savedSearchRow({ data: { name: 'Broken', conditions: [{ condition: 'unread' }] } })],
+      { 'Total-Results': '1' },
+    )
+    await expect(provider.browse({ kind: 'savedSearches', offset: 0, limit: 10 })).rejects.toThrow(
+      'malformed saved-search conditions',
     )
   })
 })

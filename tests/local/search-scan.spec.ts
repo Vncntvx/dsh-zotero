@@ -20,6 +20,7 @@ import {
   createProvider,
   PROVIDER_LIMITS,
   request,
+  searchOptions,
   setupProvider,
   teardownProvider,
   zoteroError,
@@ -56,12 +57,35 @@ describe('search: note-content scan', () => {
   const NOTE_HIT = noteRow({ data: { note: 'cascade failure chains in infrastructure' } })
   const NOTE_OTHER = noteRow({ key: 'NOTE2222', data: { note: 'something unrelated entirely' } })
 
+  it('skips the scan entirely when the request does not want the supplement', async () => {
+    // The library panel's wire view drops the supplement, so its requests
+    // opt out through the search options: a qualifying first-page query must
+    // stay one request, with no note listing and no supplement in the result.
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers, search) => {
+      if (search.get('itemType') === 'note') helpers.json([NOTE_HIT, NOTE_OTHER])
+      else helpers.json([searchHit()], { 'Total-Results': '1', 'Zotero-Server-ID': SERVER_ID })
+    })
+    const result = await provider.search(request({ query: 'cascade infrastructure' }), undefined, {
+      includeSupplemental: false,
+    })
+    expect(result.items.map((entry) => entry.ref)).toEqual([
+      'zotero://user/0/item/ABCD1234?server=S1',
+    ])
+    expect(result.supplemental).toBeUndefined()
+    expect(mock.requests).toHaveLength(1)
+    expect(mock.requests[0]!.search.get('itemType')).toBeNull()
+  })
+
   it('lists body-matched notes as a first-page supplement beside the paged results', async () => {
     mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers, search) => {
       if (search.get('itemType') === 'note') helpers.json([NOTE_HIT, NOTE_OTHER])
       else helpers.json([searchHit()], { 'Total-Results': '1', 'Zotero-Server-ID': SERVER_ID })
     })
-    const result = await provider.search(request({ query: 'cascade infrastructure' }))
+    const result = await provider.search(
+      request({ query: 'cascade infrastructure' }),
+      undefined,
+      searchOptions(),
+    )
     expect(result.items.map((entry) => entry.ref)).toEqual([
       'zotero://user/0/item/ABCD1234?server=S1',
     ])
@@ -92,7 +116,11 @@ describe('search: note-content scan', () => {
     })
     // Unaccented query, accented note: the server-side search matches that
     // pair, so the client-side scan must not be the one that misses it.
-    const result = await provider.search(request({ query: 'cafe seance' }))
+    const result = await provider.search(
+      request({ query: 'cafe seance' }),
+      undefined,
+      searchOptions(),
+    )
     expect(result.supplemental?.items.map((entry) => entry.ref)).toEqual([
       'zotero://user/0/item/NOTE3333?server=S1',
     ])
@@ -105,7 +133,7 @@ describe('search: note-content scan', () => {
       } else helpers.json([searchHit()], { 'Total-Results': '1', 'Zotero-Server-ID': SERVER_ID })
     })
 
-    const result = await provider.search(request({ query: 'cat' }))
+    const result = await provider.search(request({ query: 'cat' }), undefined, searchOptions())
     expect(result.supplemental).toBeUndefined()
   })
 
@@ -135,12 +163,16 @@ describe('search: note-content scan', () => {
     // `any`: one matching tag is enough, so both tagged notes pass.
     const any = await provider.search(
       request({ query: 'cascade infrastructure', tags: ['reviewed', 'draft'], tagMatch: 'any' }),
+      undefined,
+      searchOptions(),
     )
     expect(refsOf(any)).toEqual([scanRefs('NOTE5555'), scanRefs('NOTE6666')])
 
     // excludeTags drops the notes carrying the tag; the untagged one stays.
     const excluded = await provider.search(
       request({ query: 'cascade infrastructure', excludeTags: ['draft'] }),
+      undefined,
+      searchOptions(),
     )
     expect(refsOf(excluded)).toEqual([scanRefs('NOTE7777')])
   })
@@ -151,7 +183,11 @@ describe('search: note-content scan', () => {
         helpers.json([noteRow({ key: 'NOTE8888', data: { note: 'cascade trashed' } })])
       } else helpers.json([searchHit()], { 'Total-Results': '1', 'Zotero-Server-ID': SERVER_ID })
     })
-    const result = await provider.search(request({ query: 'cascade', includeTrashed: true }))
+    const result = await provider.search(
+      request({ query: 'cascade', includeTrashed: true }),
+      undefined,
+      searchOptions(),
+    )
     expect(result.supplemental?.items.map((entry) => entry.ref)).toEqual([
       'zotero://user/0/item/NOTE8888?server=S1',
     ])
@@ -174,6 +210,8 @@ describe('search: note-content scan', () => {
           includeTrashed: true,
           scope: { kind: 'collection', refOrName: 'zotero://user/0/collection/COLL1234' },
         }),
+        undefined,
+        searchOptions(),
       ),
       ZOTERO_INVALID_ARGUMENT,
       INCLUDE_TRASHED_SCOPE_MESSAGE,
@@ -189,6 +227,8 @@ describe('search: note-content scan', () => {
     })
     const result = await provider.search(
       request({ query: 'cascade infrastructure', scope: { kind: 'publications' } }),
+      undefined,
+      searchOptions(),
     )
     // The scan must hit the publications segment; the bare library prefix
     // would leak note matches from outside My Publications.
@@ -205,7 +245,7 @@ describe('search: note-content scan', () => {
       if (search.get('itemType') === 'note') helpers.json([titled])
       else helpers.json([titled], { 'Total-Results': '1' })
     })
-    const result = await provider.search(request({ query: 'cascade' }))
+    const result = await provider.search(request({ query: 'cascade' }), undefined, searchOptions())
     expect(result.items).toHaveLength(1)
     expect(result.items[0]!.title).toBe('数据计算 notes about cascade risk')
     expect(result.total).toBe(1)
@@ -220,11 +260,17 @@ describe('search: note-content scan', () => {
       total: 1,
       path: '/api/users/0/searches/SRCH1234/items',
     })
-    await provider.search(request({ query: 'cascade', offset: 10 }))
-    await provider.search(request({ query: 'cascade', itemTypes: ['journalArticle'] }))
-    await provider.search(request({ query: '' }))
+    await provider.search(request({ query: 'cascade', offset: 10 }), undefined, searchOptions())
+    await provider.search(
+      request({ query: 'cascade', itemTypes: ['journalArticle'] }),
+      undefined,
+      searchOptions(),
+    )
+    await provider.search(request({ query: '' }), undefined, searchOptions())
     await provider.search(
       request({ query: 'cascade', scope: { kind: 'savedSearch', refOrName: 'Unread Papers' } }),
+      undefined,
+      searchOptions(),
     )
     expect(mock.requests.filter((entry) => entry.search.get('itemType') === 'note')).toEqual([])
   })
@@ -266,6 +312,8 @@ describe('search: note-content scan', () => {
         scope: { kind: 'collection', refOrName: 'LLM Papers' },
         tags: ['reviewed'],
       }),
+      undefined,
+      searchOptions(),
     )
     expect(result.items).toEqual([])
     expect(result.supplemental?.items.map((entry) => entry.ref)).toEqual([
@@ -314,6 +362,8 @@ describe('search: note-content scan', () => {
     })
     const result = await provider.search(
       request({ query: 'cascade', scope: { kind: 'collection', refOrName: 'LLM Papers' } }),
+      undefined,
+      searchOptions(),
     )
     expect(result.items).toEqual([])
     expect(result.supplemental?.items.map((entry) => entry.ref)).toEqual([
@@ -367,6 +417,8 @@ describe('search: note-content scan', () => {
         scope: { kind: 'collection', refOrName: 'LLM Papers' },
         limit: 60,
       }),
+      undefined,
+      searchOptions(),
     )
     expect(result.supplemental?.items).toHaveLength(60)
     expect(parentFetches.map((keys) => keys.length).sort((a, b) => a - b)).toEqual([9, 50])
@@ -384,7 +436,11 @@ describe('search: note-content scan', () => {
     })
     // No tags or collection scope here: the only thing that can exclude the
     // note is the AND term matching itself.
-    const result = await provider.search(request({ query: 'cascade infrastructure' }))
+    const result = await provider.search(
+      request({ query: 'cascade infrastructure' }),
+      undefined,
+      searchOptions(),
+    )
     expect(result.items.map((entry) => entry.ref)).toEqual([
       'zotero://user/0/item/ABCD1234?server=S1',
     ])
@@ -396,7 +452,7 @@ describe('search: note-content scan', () => {
         helpers.json([noteRow({ data: { note: 'Cascade Risk Assessment' } })])
       else helpers.json([], { 'Total-Results': '0' })
     })
-    const result = await provider.search(request({ query: 'cascade' }))
+    const result = await provider.search(request({ query: 'cascade' }), undefined, searchOptions())
     expect(result.supplemental?.items.map((entry) => entry.ref)).toEqual([
       'zotero://user/0/item/NOTE1111',
     ])
@@ -410,6 +466,8 @@ describe('search: note-content scan', () => {
     })
     const result = await provider.search(
       request({ query: 'cascade', itemTypes: ['journalArticle', 'note'] }),
+      undefined,
+      searchOptions(),
     )
     expect(result.items.map((entry) => entry.ref)).toEqual([
       'zotero://user/0/item/ABCD1234?server=S1',
@@ -424,8 +482,8 @@ describe('search: note-content scan', () => {
       if (search.get('itemType') === 'note') helpers.json([NOTE_HIT])
       else helpers.json([], { 'Total-Results': '0' })
     })
-    const punctuated = await provider.search(request({ query: '---' }))
-    const emoted = await provider.search(request({ query: '👾👾' }))
+    const punctuated = await provider.search(request({ query: '---' }), undefined, searchOptions())
+    const emoted = await provider.search(request({ query: '👾👾' }), undefined, searchOptions())
     expect(punctuated.items).toEqual([])
     expect(punctuated.supplemental).toBeUndefined()
     expect(emoted.items).toEqual([])
@@ -440,7 +498,11 @@ describe('search: note-content scan', () => {
       if (search.get('itemType') === 'note') helpers.json([NOTE_HIT])
       else helpers.json([searchHit(), searchHit(), searchHit()], { 'Total-Results': '3' })
     })
-    const result = await provider.search(request({ query: 'cascade', limit: 3 }))
+    const result = await provider.search(
+      request({ query: 'cascade', limit: 3 }),
+      undefined,
+      searchOptions(),
+    )
     expect(result.items).toHaveLength(3)
     expect(result.supplemental).toBeUndefined()
     expect(result.returned).toBe(3)
@@ -459,7 +521,11 @@ describe('search: note-content scan', () => {
       if (search.get('itemType') === 'note') helpers.json([NOTE_HIT, NOTE_HIT_2, NOTE_HIT_3])
       else helpers.json([searchHit()], { 'Total-Results': '1' })
     })
-    const result = await provider.search(request({ query: 'cascade', limit: 3 }))
+    const result = await provider.search(
+      request({ query: 'cascade', limit: 3 }),
+      undefined,
+      searchOptions(),
+    )
     expect(result.items.map((entry) => entry.ref)).toEqual(['zotero://user/0/item/ABCD1234'])
     expect(result.supplemental?.items.map((entry) => entry.ref)).toEqual([
       'zotero://user/0/item/NOTE1111',
@@ -485,6 +551,8 @@ describe('search: note-content scan', () => {
     const searchByName = () =>
       ttlProvider.search(
         request({ query: 'cascade', scope: { kind: 'collection', refOrName: 'LLM Papers' } }),
+        undefined,
+        searchOptions(),
       )
     await searchByName()
     const first = mock.requests.filter((entry) => entry.pathname === '/api/users/0/collections')
@@ -519,6 +587,8 @@ describe('search: note-content scan', () => {
     const searchByName = () =>
       live.search(
         request({ query: 'cascade', scope: { kind: 'collection', refOrName: 'LLM Papers' } }),
+        undefined,
+        searchOptions(),
       )
     const listingReads = () =>
       mock.requests.filter((entry) => entry.pathname === '/api/users/0/collections').length
@@ -540,6 +610,8 @@ describe('search: note-content scan', () => {
     await zoteroError(
       provider.search(
         request({ query: 'cascade', scope: { kind: 'collection', refOrName: 'Missing' } }),
+        undefined,
+        searchOptions(),
       ),
       'ZOTERO_NOT_FOUND',
       'No collection',
@@ -573,6 +645,8 @@ describe('search: note-content scan', () => {
     await zoteroError(
       provider.search(
         request({ query: 'cascade', scope: { kind: 'collection', refOrName: 'Brand New' } }),
+        undefined,
+        searchOptions(),
       ),
       'ZOTERO_NOT_FOUND',
       'No collection',
@@ -580,6 +654,8 @@ describe('search: note-content scan', () => {
     created = true
     const result = await provider.search(
       request({ query: 'cascade', scope: { kind: 'collection', refOrName: 'Brand New' } }),
+      undefined,
+      searchOptions(),
     )
     expect(result.scope).toEqual({
       kind: 'collection',
@@ -594,7 +670,7 @@ describe('search: note-content scan', () => {
       else helpers.json([searchHit()], { 'Total-Results': '1', 'Zotero-Server-ID': SERVER_ID })
     })
     await zoteroError(
-      provider.search(request({ query: 'cascade infrastructure' })),
+      provider.search(request({ query: 'cascade infrastructure' }), undefined, searchOptions()),
       'ZOTERO_UNEXPECTED',
     )
   })

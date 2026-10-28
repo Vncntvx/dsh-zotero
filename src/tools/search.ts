@@ -26,14 +26,38 @@ import {
   ZOTERO_SORT_FIELDS,
 } from '../constants.js'
 import type { ResolvedConfig } from '../config.js'
+import { isPdfContentType } from '../media-types.js'
 import { citekeyOf } from '../normalize.js'
 import { assertPublicationsSupported } from '../refs.js'
 import { isItemTypeIdentifier } from '../ref-grammar.js'
 import { boundedPresentationMeta, projectSearchMeta } from '../presentation-meta.js'
 import { formatSearchLine, metaRecordOf } from './present.js'
 import { assertIntInRange, invalid, LIBRARY_SCHEMA, parseLibrary } from './validate.js'
+import { ZOTERO_UNEXPECTED, ZoteroError } from '../errors.js'
 import type { ZoteroService } from '../service.js'
-import type { ZoteroSearchRequest } from '../types.js'
+import type { ZoteroResolvedScope, ZoteroSearchRequest } from '../types.js'
+
+/**
+ * The tool-facing scope arms: exactly what the output schema infers. The
+ * `trash` kind exists on the domain type for the library panel's wire
+ * endpoint; the tool's input schema does not offer it, and a tool result
+ * carrying one fails output validation.
+ */
+type SearchOutput = InferValue<typeof SEARCH_OUTPUT_SCHEMA>
+
+type ToolSearchScope = SearchOutput['scope']
+
+function toolScopeOf(scope: ZoteroResolvedScope): ToolSearchScope {
+  if (scope.kind === 'trash') {
+    throw new ZoteroError(
+      'The trash scope is panel-only and can never be a zotero_search output.',
+      ZOTERO_UNEXPECTED,
+    )
+  }
+  // The resolved scope already splits the library arms by user/group, so the
+  // domain record passes through as the tool output verbatim.
+  return scope
+}
 
 const SEARCH_PARAMETERS = {
   query: { type: 'string', description: 'Free-text query; omit to browse the scope unfiltered.' },
@@ -266,8 +290,6 @@ const SEARCH_OUTPUT_SCHEMA = {
   },
 } as const
 
-type SearchOutput = InferValue<typeof SEARCH_OUTPUT_SCHEMA>
-
 /** The model-facing messages the search argument rules throw. */
 export const SCOPE_REF_OR_NAME_MESSAGE =
   'scope.refOrName must be a collection/saved-search name or ref'
@@ -360,7 +382,7 @@ function formatSearchResultLine(
   const citekey = citekeyOf(item.extra)
   const citeTag = citekey ? ` [@${citekey}]` : ''
   const creator = item.creatorSummary === '' ? '' : ` — ${item.creatorSummary}`
-  const pdf = withPdfHint && item.bestAttachmentType === 'application/pdf' ? ' — PDF' : ''
+  const pdf = withPdfHint && isPdfContentType(item.bestAttachmentType) ? ' — PDF' : ''
   return `${index + 1}. ${formatSearchLine(item.ref, item.title, item.year, item.itemType)}${citeTag}${creator}${pdf}`
 }
 
@@ -442,7 +464,13 @@ export function registerSearchTool(ctx: Context, service: ZoteroService): void {
       presentResult: presentSearchResult,
       isConcurrencySafe: () => true,
       async execute(args, exec) {
-        return await service.search(buildRequest(args, service.config), exec.signal)
+        const result = await service.search(
+          buildRequest(args, service.config),
+          exec.signal,
+          // The model consumes the note-body supplement.
+          { includeSupplemental: true },
+        )
+        return { ...result, scope: toolScopeOf(result.scope) }
       },
     }),
   )

@@ -12,6 +12,7 @@ import { LocalApiProvider } from '../../src/local/provider.js'
 import { MockZotero } from '../helpers/mock-zotero.js'
 import {
   request,
+  searchOptions,
   setupProvider,
   teardownProvider,
   type ProviderHarness,
@@ -47,7 +48,7 @@ describe('search scan bounds', () => {
         ])
       else helpers.json([], { 'Total-Results': '0' })
     })
-    const result = await capped.search(request({ query: 'cascade' }))
+    const result = await capped.search(request({ query: 'cascade' }), undefined, searchOptions())
     expect(result.items).toEqual([])
     expect(result.supplemental?.items.map((entry) => entry.ref)).toEqual([
       'zotero://user/0/item/NOTE1111',
@@ -75,7 +76,7 @@ describe('search scan bounds', () => {
         helpers.json(library.slice(start, start + limit))
       } else helpers.json([], { 'Total-Results': '0' })
     })
-    const result = await capped.search(request({ query: 'cascade' }))
+    const result = await capped.search(request({ query: 'cascade' }), undefined, searchOptions())
     expect(result.items).toEqual([])
     expect(result.supplemental?.scanned).toBe(2)
     expect(result.supplemental?.truncated).toBe(false)
@@ -99,7 +100,7 @@ describe('search scan bounds', () => {
         helpers.json(library.slice(start, start + limit))
       } else helpers.json([], { 'Total-Results': '0' })
     })
-    const result = await capped.search(request({ query: 'cascade' }))
+    const result = await capped.search(request({ query: 'cascade' }), undefined, searchOptions())
     expect(result.supplemental?.scanned).toBe(2)
     expect(result.supplemental?.truncated).toBe(true)
     const scanRequests = mock.requests.filter((entry) => entry.search.get('itemType') === 'note')
@@ -122,7 +123,7 @@ describe('search scan bounds', () => {
         helpers.json(library.slice(start, start + limit))
       } else helpers.json([], { 'Total-Results': '0' })
     })
-    const result = await provider.search(request({ query: 'cascade' }))
+    const result = await provider.search(request({ query: 'cascade' }), undefined, searchOptions())
     expect(result.supplemental?.scanned).toBe(3)
     expect(result.supplemental?.truncated).toBe(false)
     // A short page is EOF on its own: no probe request may follow it.
@@ -134,7 +135,7 @@ describe('search scan bounds', () => {
       if (search.get('itemType') === 'note') helpers.json([])
       else helpers.json([searchHit()], { 'Total-Results': '1', 'Zotero-Server-ID': SERVER_ID })
     })
-    const result = await provider.search(request({ query: 'cascade' }))
+    const result = await provider.search(request({ query: 'cascade' }), undefined, searchOptions())
     expect(result.items.map((entry) => entry.ref)).toEqual([
       'zotero://user/0/item/ABCD1234?server=S1',
     ])
@@ -155,6 +156,8 @@ describe('search scan bounds', () => {
     })
     const result = await provider.search(
       request({ query: 'cascade infrastructure', tags: ['reviewed'] }),
+      undefined,
+      searchOptions(),
     )
     expect(result.items.map((entry) => entry.ref)).toEqual([
       'zotero://user/0/item/ABCD1234?server=S1',
@@ -179,7 +182,7 @@ describe('search scan bounds', () => {
         helpers.json([searchHit()], { 'Total-Results': '1', 'Zotero-Server-ID': SERVER_ID })
       }
     })
-    const result = await capped.search(request({ query: 'cascade' }))
+    const result = await capped.search(request({ query: 'cascade' }), undefined, searchOptions())
     expect(result.items.map((entry) => entry.ref)).toEqual([
       'zotero://user/0/item/ABCD1234?server=S1',
     ])

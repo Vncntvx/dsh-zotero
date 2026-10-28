@@ -48,7 +48,7 @@ import {
 import type { ZoteroHttpClient } from '../http-client.js'
 import { asRecord, asString } from '../json.js'
 import {
-  cacheEntryMatchesIdentity,
+  assertServerIdMatches,
   requireAgreedServerId,
   serverIdFromHeaders,
   type LocalReadContext,
@@ -89,8 +89,30 @@ interface CachedCollectionNode {
   readonly fetchedAt: number
 }
 
+/** A TTL-cached single-object scope resolution with the identity that served it. */
+interface CachedScopeResolution {
+  readonly name: string
+  readonly serverId?: string
+  readonly fetchedAt: number
+}
+
+/** Entries the single-object resolution cache holds; the oldest insertion is evicted past this. */
+const SCOPE_RESOLUTION_CACHE_LIMIT = 512
+
 function cacheKey(library: SupportedLocalLibrary, plural: 'collections' | 'searches'): string {
   return `${library.type}:${library.id}:${plural}`
+}
+
+/** Partition shared state by the caller's instance claim. Unqualified reads
+ * may share with other unqualified reads, but not with an instance-pinned
+ * operation. */
+function identityKey(serverId: string | undefined): string {
+  return serverId === undefined ? 'unclaimed' : `server:${encodeURIComponent(serverId)}`
+}
+
+/** The canonical library a user spelling stands for: the local API's logged-in user. */
+function canonicalLibraryOf(library: SupportedLocalLibrary): SupportedLocalLibrary {
+  return library.type === 'user' ? PERSONAL_LIBRARY : library
 }
 
 /** The result of resolving one search scope: its API path plus what it resolved to. */
@@ -124,6 +146,25 @@ export class ScopeDirectory {
     string,
     SharedOperation<CollectionNode | undefined>
   >()
+
+  /** TTL-cached single-object scope resolutions (the ref arm of `resolveNamed`). */
+  private readonly scopeResolutionCache = new Map<string, CachedScopeResolution>()
+
+  /** In-flight single-object scope resolutions, shared so concurrent panel reads fetch once. */
+  private readonly scopeResolutionInFlight = new Map<
+    string,
+    SharedOperation<{ name: string; serverId?: string }>
+  >()
+
+  /**
+   * Invalidation epochs, one per `(library, plural)` base. A fetch captures
+   * its base's epoch and may populate the shared state only while the epoch
+   * is unchanged, so a write's invalidation strands every in-flight read of
+   * that base at once. Keyed by base — not by the browsed object — so the
+   * maps stay at O(libraries), never at O(browsed objects).
+   */
+  private readonly scopeBaseGeneration = new Map<string, number>()
+  private readonly collectionBaseGeneration = new Map<string, number>()
 
   /** Cached static item types schema per serverId. */
   private readonly itemTypesCache = new Map<
@@ -185,14 +226,13 @@ export class ScopeDirectory {
     options: { force?: boolean } = {},
   ): Promise<ScopeListing> {
     if (signal?.aborted) throw new HarnessError(TOOL_ABORTED_MESSAGE, TOOL_ABORTED)
-    const key = cacheKey(ctx.library, plural)
+    const baseKey = cacheKey(ctx.library, plural)
+    const key = `${baseKey}:${identityKey(ctx.serverId)}`
+    // The identity is part of the key: an unclaimed read and an
+    // instance-pinned read never share state, so no per-entry identity check
+    // is needed here — only freshness.
     const cached = this.scopeListingCache.get(key)
-    if (
-      !options.force &&
-      cached !== undefined &&
-      Date.now() - cached.fetchedAt < this.ttlMsOf() &&
-      cacheEntryMatchesIdentity(cached.serverId, ctx.serverId)
-    ) {
+    if (!options.force && cached !== undefined && Date.now() - cached.fetchedAt < this.ttlMsOf()) {
       this.sink?.debug('scope.cache', `served the cached ${plural} listing`, {
         ageMs: Date.now() - cached.fetchedAt,
       })
@@ -262,11 +302,13 @@ export class ScopeDirectory {
     const rows = requireArrayBody(json, `${ctx.library.type} ${plural}`)
     const entries = rows.map((row) => normalizeScopeEntry(row))
     const servedBy = serverIdFromHeaders(headers, ctx.serverId)
+    assertServerIdMatches(servedBy, ctx.serverId)
     const listing: ScopeListing =
       servedBy === undefined
         ? { entries, fetchedAt: Date.now() }
         : { entries, serverId: servedBy, fetchedAt: Date.now() }
-    const key = cacheKey(ctx.library, plural)
+    const baseKey = cacheKey(ctx.library, plural)
+    const key = `${baseKey}:${identityKey(ctx.serverId)}`
     // A response from an older request must not replace a listing already
     // refreshed by a later request. The caller still receives its own answer;
     // only the shared cache follows freshness order.
@@ -284,6 +326,57 @@ export class ScopeDirectory {
     signal: AbortSignal | undefined,
   ): Promise<ScopeListing> {
     return await awaitSharedOperation(operation, signal)
+  }
+
+  /**
+   * Fetch and cache one single-object scope resolution for all current
+   * waiters, validating that the answer names the requested key.
+   */
+  private async fetchScopeResolution(
+    resolutionKey: string,
+    library: SupportedLocalLibrary,
+    plural: 'collections' | 'searches',
+    ref: ZoteroObjectRef,
+    claim: string | undefined,
+    signal: AbortSignal,
+    baseEpoch: number,
+  ): Promise<{ name: string; serverId?: string }> {
+    const prefix = libraryPrefix(library)
+    const { json, headers } = await this.client.getJson<unknown>(
+      `${prefix}/${plural}/${ref.key}`,
+      undefined,
+      {
+        signal,
+        serverId: claim,
+      },
+    )
+    const entry = normalizeScopeEntry(json)
+    // The ref is authority: an answer that names a different object is a
+    // contract breach. write-domain's readItem enforces the same rule.
+    if (entry.key !== ref.key) {
+      throw new ZoteroError(
+        `Zotero answered the scope read with a different object than ${ref.key}; the response cannot be used.`,
+        ZOTERO_UNEXPECTED,
+      )
+    }
+    const serverId = serverIdFromHeaders(headers, claim)
+    assertServerIdMatches(serverId, claim)
+    const resolution: CachedScopeResolution = {
+      name: entry.name,
+      ...(serverId === undefined ? {} : { serverId }),
+      fetchedAt: Date.now(),
+    }
+    // Bounded: the oldest insertion is evicted, so the map stays at its cap.
+    // An invalidation that landed mid-flight bumped the base epoch, so the
+    // stale answer is dropped instead of cached.
+    if ((this.scopeBaseGeneration.get(cacheKey(library, plural)) ?? 0) === baseEpoch) {
+      if (this.scopeResolutionCache.size >= SCOPE_RESOLUTION_CACHE_LIMIT) {
+        const oldest = this.scopeResolutionCache.keys().next().value
+        if (oldest !== undefined) this.scopeResolutionCache.delete(oldest)
+      }
+      this.scopeResolutionCache.set(resolutionKey, resolution)
+    }
+    return { name: resolution.name, serverId: resolution.serverId }
   }
 
   /**
@@ -310,35 +403,51 @@ export class ScopeDirectory {
           ZOTERO_INVALID_ARGUMENT,
         )
       }
-      const prefix = libraryPrefix(ref.library as SupportedLocalLibrary)
+      const library = ref.library as SupportedLocalLibrary
       const claim = ref.serverId ?? claimServerId
-      const { json, headers } = await this.client.getJson<unknown>(
-        `${prefix}/${plural}/${ref.key}`,
-        undefined,
-        {
-          signal,
-          serverId: claim,
-        },
-      )
-      const entry = normalizeScopeEntry(json)
-      // The ref is authority: an answer that names a different object is a
-      // contract breach, not a silent re-point (write-domain's readItem
-      // enforces the same rule).
-      if (entry.key !== ref.key) {
-        throw new ZoteroError(
-          `Zotero answered the scope read with a different object than ${ref.key}; the response cannot be used.`,
-          ZOTERO_UNEXPECTED,
-        )
+      const baseKey = cacheKey(library, plural)
+      const resolutionKey = `${baseKey}:${identityKey(claim)}:${ref.key}`
+      const cached = this.scopeResolutionCache.get(resolutionKey)
+      if (cached !== undefined && Date.now() - cached.fetchedAt < this.ttlMsOf()) {
+        this.sink?.debug('scope.cache', 'served a cached scope resolution', {
+          ageMs: Date.now() - cached.fetchedAt,
+        })
+        return { ref: refForLibrary(library, kind, ref.key, cached.serverId), name: cached.name }
       }
-      return {
-        ref: refForLibrary(
-          ref.library as SupportedLocalLibrary,
-          kind,
-          entry.key,
-          serverIdFromHeaders(headers, claim),
-        ),
-        name: entry.name,
+      // An entry past its TTL is dropped on the miss. A rename or delete
+      // inside the TTL window returns the stale name, or delays the 404 until
+      // the item listing.
+      if (cached !== undefined) this.scopeResolutionCache.delete(resolutionKey)
+      let operation = this.scopeResolutionInFlight.get(resolutionKey)
+      if (operation === undefined || operation.settled || operation.controller.signal.aborted) {
+        const controller = new AbortController()
+        const baseEpoch = this.scopeBaseGeneration.get(baseKey) ?? 0
+        const op: SharedOperation<{ name: string; serverId?: string }> = {
+          controller,
+          promise: Promise.resolve({ name: '' }),
+          waiters: 0,
+          settled: false,
+        }
+        op.promise = this.fetchScopeResolution(
+          resolutionKey,
+          library,
+          plural,
+          ref,
+          claim,
+          controller.signal,
+          baseEpoch,
+        ).finally(() => {
+          op.settled = true
+          if (this.scopeResolutionInFlight.get(resolutionKey) === op) {
+            this.scopeResolutionInFlight.delete(resolutionKey)
+          }
+        })
+        void op.promise.catch(() => undefined)
+        this.scopeResolutionInFlight.set(resolutionKey, op)
+        operation = op
       }
+      const resolved = await awaitSharedOperation(operation, signal)
+      return { ref: refForLibrary(library, kind, ref.key, resolved.serverId), name: resolved.name }
     }
     // Name resolution matches over the effective library's full listing.
     let listing = await this.scopeListingOf(
@@ -526,15 +635,45 @@ export class ScopeDirectory {
     const plurals: readonly ('collections' | 'searches')[] =
       plural === undefined ? (['collections', 'searches'] as const) : [plural]
     for (const scope of plurals) {
-      const key = cacheKey(library, scope)
-      this.scopeListingCache.delete(key)
+      const baseKey = cacheKey(library, scope)
+      for (const key of [...this.scopeListingCache.keys()]) {
+        if (key === baseKey || key.startsWith(`${baseKey}:`)) this.scopeListingCache.delete(key)
+      }
       // Advance past any in-flight fetch so its older generation cannot
-      // repopulate the cache it just cleared.
-      this.latestListingGeneration.set(key, ++this.nextListingGeneration)
+      // repopulate the cache it just cleared. One bump per listing key (the
+      // keys are identity-partitioned), and each key is bumped exactly once.
+      for (const key of [...this.latestListingGeneration.keys()]) {
+        if (key === baseKey || key.startsWith(`${baseKey}:`)) {
+          this.latestListingGeneration.set(key, ++this.nextListingGeneration)
+        }
+      }
+      this.scopeBaseGeneration.set(baseKey, (this.scopeBaseGeneration.get(baseKey) ?? 0) + 1)
+      // The single-object resolutions answer from the same state the listing
+      // did, so the write drops them and their in-flight reads with it.
+      const resolutionPrefix = `${baseKey}:`
+      for (const resolutionKey of [...this.scopeResolutionCache.keys()]) {
+        if (resolutionKey.startsWith(resolutionPrefix))
+          this.scopeResolutionCache.delete(resolutionKey)
+      }
+      for (const resolutionKey of [...this.scopeResolutionInFlight.keys()]) {
+        if (resolutionKey.startsWith(resolutionPrefix)) {
+          this.scopeResolutionInFlight.delete(resolutionKey)
+        }
+      }
     }
-    const prefix = `${library.type}:${library.id}:collections:`
+    const collectionBase = cacheKey(library, 'collections')
+    const nodePrefix = `${collectionBase}:`
+    this.collectionBaseGeneration.set(
+      collectionBase,
+      (this.collectionBaseGeneration.get(collectionBase) ?? 0) + 1,
+    )
     for (const nodeKey of [...this.collectionNodeCache.keys()]) {
-      if (nodeKey.startsWith(prefix)) this.collectionNodeCache.delete(nodeKey)
+      if (nodeKey.startsWith(nodePrefix)) this.collectionNodeCache.delete(nodeKey)
+    }
+    for (const nodeKey of [...this.collectionNodeInFlight.keys()]) {
+      if (nodeKey.startsWith(nodePrefix)) {
+        this.collectionNodeInFlight.delete(nodeKey)
+      }
     }
   }
 
@@ -553,39 +692,42 @@ export class ScopeDirectory {
     signal: AbortSignal | undefined,
   ): Promise<CollectionNode | undefined> {
     if (signal?.aborted) throw new HarnessError(TOOL_ABORTED_MESSAGE, TOOL_ABORTED)
-    const nodeCacheKey = `${cacheKey(library, 'collections')}:${key}`
+    const collectionBase = cacheKey(library, 'collections')
+    const nodeCacheKey = `${collectionBase}:${identityKey(serverId)}:${key}`
     const cached = this.collectionNodeCache.get(nodeCacheKey)
-    if (
-      cached !== undefined &&
-      Date.now() - cached.fetchedAt < this.ttlMsOf() &&
-      cacheEntryMatchesIdentity(cached.serverId, serverId)
-    ) {
+    if (cached !== undefined && Date.now() - cached.fetchedAt < this.ttlMsOf()) {
       this.sink?.debug('scope.cache', 'served a cached collection node', {
         ageMs: Date.now() - cached.fetchedAt,
       })
       return cached.node
     }
-    // An entry past its TTL or pinned to another instance can never be served
-    // again, so the miss drops it: a walk that revisits one key after the TTL
-    // must not leave the stale copy occupying memory until it is overwritten.
+    // An entry past its TTL can never be served again, so the miss drops it:
+    // a walk that revisits one key after the TTL must not leave the stale
+    // copy occupying memory until it is overwritten.
     if (cached !== undefined) this.collectionNodeCache.delete(nodeCacheKey)
     let operation = this.collectionNodeInFlight.get(nodeCacheKey)
     if (operation === undefined || operation.settled || operation.controller.signal.aborted) {
       const controller = new AbortController()
+      const baseEpoch = this.collectionBaseGeneration.get(collectionBase) ?? 0
       const op: SharedOperation<CollectionNode | undefined> = {
         controller,
         promise: Promise.resolve(undefined),
         waiters: 0,
         settled: false,
       }
-      op.promise = this.fetchCollectionNode(library, key, serverId, controller.signal).finally(
-        () => {
-          op.settled = true
-          if (this.collectionNodeInFlight.get(nodeCacheKey) === op) {
-            this.collectionNodeInFlight.delete(nodeCacheKey)
-          }
-        },
-      )
+      op.promise = this.fetchCollectionNode(
+        library,
+        key,
+        serverId,
+        controller.signal,
+        nodeCacheKey,
+        baseEpoch,
+      ).finally(() => {
+        op.settled = true
+        if (this.collectionNodeInFlight.get(nodeCacheKey) === op) {
+          this.collectionNodeInFlight.delete(nodeCacheKey)
+        }
+      })
       void op.promise.catch(() => undefined)
       this.collectionNodeInFlight.set(nodeCacheKey, op)
       operation = op
@@ -598,8 +740,9 @@ export class ScopeDirectory {
     key: string,
     serverId: string | undefined,
     signal: AbortSignal | undefined,
+    nodeCacheKey: string,
+    baseEpoch: number,
   ): Promise<CollectionNode | undefined> {
-    const nodeCacheKey = `${cacheKey(library, 'collections')}:${key}`
     try {
       const { json, headers } = await this.client.getJson<unknown>(
         `${libraryPrefix(library)}/collections/${key}`,
@@ -621,19 +764,28 @@ export class ScopeDirectory {
       // the claim only when the build omits the header), like scopeListingOf:
       // storing the claim alone leaves a headerless first read unclaimable.
       const servedBy = serverIdFromHeaders(headers, serverId)
-      this.collectionNodeCache.set(nodeCacheKey, {
-        node,
-        ...(servedBy !== undefined ? { serverId: servedBy } : {}),
-        fetchedAt: Date.now(),
-      })
+      assertServerIdMatches(servedBy, serverId)
+      if (
+        (this.collectionBaseGeneration.get(cacheKey(library, 'collections')) ?? 0) === baseEpoch
+      ) {
+        this.collectionNodeCache.set(nodeCacheKey, {
+          node,
+          ...(servedBy !== undefined ? { serverId: servedBy } : {}),
+          fetchedAt: Date.now(),
+        })
+      }
       return node
     } catch (error) {
       if (isNotFoundError(error)) {
-        this.collectionNodeCache.set(nodeCacheKey, {
-          node: undefined,
-          ...(serverId !== undefined ? { serverId } : {}),
-          fetchedAt: Date.now(),
-        })
+        if (
+          (this.collectionBaseGeneration.get(cacheKey(library, 'collections')) ?? 0) === baseEpoch
+        ) {
+          this.collectionNodeCache.set(nodeCacheKey, {
+            node: undefined,
+            ...(serverId !== undefined ? { serverId } : {}),
+            fetchedAt: Date.now(),
+          })
+        }
         return undefined
       }
       throw error
@@ -904,16 +1056,19 @@ export async function resolveScope(
   }
   const itemsSegment = itemsSegmentFor(itemLevel)
   switch (scope.kind) {
-    case 'library':
-      return effectiveLibrary.type === 'user'
-        ? {
-            path: `${libraryPrefix(PERSONAL_LIBRARY)}/${itemsSegment}`,
-            resolved: { kind: 'library', library: { type: 'user', id: 0 } },
-          }
-        : {
-            path: `${libraryPrefix(effectiveLibrary)}/${itemsSegment}`,
-            resolved: { kind: 'library', library: { type: 'group', id: effectiveLibrary.id } },
-          }
+    case 'library': {
+      // The resolved scope keeps the two library arms split (user/0 vs
+      // group/<id>), so a tool result's library shape needs no runtime
+      // re-narrowing downstream.
+      const library = canonicalLibraryOf(effectiveLibrary)
+      return {
+        path: `${libraryPrefix(library)}/${itemsSegment}`,
+        resolved:
+          library.type === 'user'
+            ? { kind: 'library', library: { type: 'user', id: 0 } }
+            : { kind: 'library', library: { type: 'group', id: library.id } },
+      }
+    }
     case 'publications':
       assertPublicationsSupported(effectiveLibrary)
       return {
@@ -948,6 +1103,16 @@ export async function resolveScope(
         path: `${libraryPrefix(found.ref.library as SupportedLocalLibrary)}/searches/${found.ref.key}/items`,
         resolved: { kind: 'savedSearch', ref: formatRef(found.ref), name: found.name },
         serverId: found.ref.serverId,
+      }
+    }
+    case 'trash': {
+      // The trash listing serves one flat partition (no /top variant, like
+      // saved searches), so itemLevel does not apply. The library panel is
+      // the only caller: the tool schema never offers this scope.
+      const trashLibrary = canonicalLibraryOf(effectiveLibrary)
+      return {
+        path: `${libraryPrefix(trashLibrary)}/items/trash`,
+        resolved: { kind: 'trash', library: trashLibrary },
       }
     }
   }

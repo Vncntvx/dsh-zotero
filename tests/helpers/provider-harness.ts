@@ -18,6 +18,7 @@ import type {
   ZoteroExportRequest,
   ZoteroGetRequest,
   ZoteroRetrieveRequest,
+  ZoteroSearchOptions,
   ZoteroSearchRequest,
 } from '../../src/types.js'
 import { MockZotero } from './mock-zotero.js'
@@ -113,7 +114,7 @@ export function exportRequest(overrides: Partial<ZoteroExportRequest> = {}): Zot
   }
 }
 
-/** A plain library search request. */
+/** A plain library search request; tool-path defaults. */
 export function request(overrides: Partial<ZoteroSearchRequest> = {}): ZoteroSearchRequest {
   return {
     scope: { kind: 'library' },
@@ -124,6 +125,11 @@ export function request(overrides: Partial<ZoteroSearchRequest> = {}): ZoteroSea
     limit: 10,
     ...overrides,
   }
+}
+
+/** Tool-path search options: the note-body supplement is consumed. */
+export function searchOptions(overrides: Partial<ZoteroSearchOptions> = {}): ZoteroSearchOptions {
+  return { includeSupplemental: true, ...overrides }
 }
 
 /**
