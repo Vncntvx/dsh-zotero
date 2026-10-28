@@ -35,7 +35,7 @@ dsh-zotero 注册 23 个本地工具（8 个读工具 + 15 个写工具），通
 
 ### 输出
 
-返回对象包含：`scope`、`items`（包含 ref、title、creatorSummary、year、itemType、parentRef、bestAttachmentRef、bestAttachmentType、attachmentSize、extra）、`total`、`offset`、`returned`、`nextOffset`，以及可选的 `supplemental`（包含笔记命中内容 `{kind:"noteBody", items, scanned, truncated}`）。在卡片呈现中，若 `extra` 携带 Citation Key（大小写不敏感，含 `citekey` 别名，与导出对齐共用同一语法，取冒号后的首个 token），会以 `[@citekey]` 形式显示。
+返回对象包含：`scope`、`items`（包含 ref、title、creatorSummary、year、itemType、parentRef、bestAttachmentRef、bestAttachmentType、attachmentSize、extra、doi）、`total`、`offset`、`returned`、`nextOffset`，以及可选的 `supplemental`（包含笔记命中内容 `{kind:"noteBody", items, scanned, truncated}`）。在卡片呈现中，若 `extra` 携带 Citation Key（大小写不敏感，含 `citekey` 别名，与导出对齐共用同一语法，取冒号后的首个 token），会以 `[@citekey]` 形式显示。
 
 ### 说明
 

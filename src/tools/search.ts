@@ -35,7 +35,7 @@ import { formatSearchLine, metaRecordOf } from './present.js'
 import { assertIntInRange, invalid, LIBRARY_SCHEMA, parseLibrary } from './validate.js'
 import { ZOTERO_UNEXPECTED, ZoteroError } from '../errors.js'
 import type { ZoteroService } from '../service.js'
-import type { ZoteroResolvedScope, ZoteroSearchRequest } from '../types.js'
+import type { ZoteroResolvedScope, ZoteroSearchItem, ZoteroSearchRequest } from '../types.js'
 
 /**
  * The tool-facing scope arms: exactly what the output schema infers. The
@@ -187,8 +187,19 @@ const SEARCH_ITEM_SCHEMA = {
     bestAttachmentType: { type: 'string' },
     attachmentSize: { type: 'integer' },
     extra: { type: 'string' },
+    doi: { type: 'string', description: 'Item DOI if present.' },
   },
 } as const
+
+type AssertNever<T extends never> = T
+type InferredSearchItem = InferValue<typeof SEARCH_ITEM_SCHEMA>
+
+type MissingInSearchItemSchema = Exclude<keyof ZoteroSearchItem, keyof InferredSearchItem>
+type ExtraInSearchItemSchema = Exclude<keyof InferredSearchItem, keyof ZoteroSearchItem>
+
+// Compile-time pins: fails build if ZoteroSearchItem and SEARCH_ITEM_SCHEMA drift
+declare const _searchItemSchemaComplete: AssertNever<MissingInSearchItemSchema>
+declare const _searchItemSchemaNoExtra: AssertNever<ExtraInSearchItemSchema>
 
 const SEARCH_OUTPUT_SCHEMA = {
   type: 'object',

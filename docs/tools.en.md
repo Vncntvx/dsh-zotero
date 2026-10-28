@@ -35,7 +35,7 @@ Search for candidate items in the library. Supports metadata matching and indexe
 
 ### Output
 
-Returns an object containing: `scope`, `items` (including ref, title, creatorSummary, year, itemType, parentRef, bestAttachmentRef, bestAttachmentType, attachmentSize, extra), `total`, `offset`, `returned`, `nextOffset`, and optional `supplemental` (containing note matches `{kind:"noteBody", items, scanned, truncated}`). In card presentations, if `extra` carries a Citation Key (case-insensitive, including the `citekey` alias; one shared grammar with export alignment, taking the first token after the colon), it is formatted as `[@citekey]`.
+Returns an object containing: `scope`, `items` (including ref, title, creatorSummary, year, itemType, parentRef, bestAttachmentRef, bestAttachmentType, attachmentSize, extra, doi), `total`, `offset`, `returned`, `nextOffset`, and optional `supplemental` (containing note matches `{kind:"noteBody", items, scanned, truncated}`). In card presentations, if `extra` carries a Citation Key (case-insensitive, including the `citekey` alias; one shared grammar with export alignment, taking the first token after the colon), it is formatted as `[@citekey]`.
 
 ### Notes
 

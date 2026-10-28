@@ -24,6 +24,7 @@ import {
   PERSONAL_LIBRARY_MESSAGE,
 } from '../../src/tools/validate.js'
 import { expectValue, type HostLane, setupHostLane } from '../helpers/lanes/host-lane.js'
+import { fixtureJson } from '../helpers/fixtures-dir.js'
 import { collectionRow, searchHit } from '../helpers/server/objects.js'
 
 let lane: HostLane
@@ -91,6 +92,51 @@ describe('zotero_search tool', () => {
     expect((result.content[0] as { text: string }).text).toBe(
       'Found 1 of 1 results:\n1. zotero://user/0/item/ABCD1234?server=S1 — FlashAttention-2 (2023) [conferencePaper] — Dao, Tri',
     )
+  })
+
+  it('validates and outputs items carrying a DOI without schema rejection', async () => {
+    const hitWithDoi = searchHit({
+      data: {
+        itemType: 'journalArticle',
+        title: 'Attention Is All You Need',
+        DOI: '10.48550/arXiv.1706.03762',
+      },
+    })
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers) =>
+      helpers.json([hitWithDoi], { 'Total-Results': '1', 'Zotero-Server-ID': 'S1' }),
+    )
+
+    const result = expectValue(
+      await runTool('zotero_search', { query: 'attention', limit: 5 }),
+      'zotero_search',
+    )
+    const items = (result.value as { items: Array<{ doi?: string }> }).items
+    expect(items[0]?.doi).toBe('10.48550/arXiv.1706.03762')
+  })
+
+  it('validates and returns full fixture item carrying DOI and best attachment', async () => {
+    const fixtureItem = fixtureJson('item10.json')
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers) =>
+      helpers.json([fixtureItem], { 'Total-Results': '1', 'Zotero-Server-ID': 'S1' }),
+    )
+
+    const result = expectValue(
+      await runTool('zotero_search', { query: 'flash', limit: 5 }),
+      'zotero_search',
+    )
+    expect((result.value as { items: unknown[] }).items).toEqual([
+      {
+        ref: 'zotero://user/0/item/ABCD1234?server=S1',
+        title: 'FlashAttention-2: Faster Attention with Better Parallelism and Work Partitioning',
+        creatorSummary: 'Dao, Tri',
+        year: 2023,
+        itemType: 'conferencePaper',
+        bestAttachmentRef: 'zotero://user/0/attachment/WXYZ6789?server=S1',
+        bestAttachmentType: 'application/pdf',
+        attachmentSize: 1234567,
+        doi: '10.48550/arXiv.2307.08691',
+      },
+    ])
   })
 
   it('renders the supplemental note list only when note-body matches exist', () => {
