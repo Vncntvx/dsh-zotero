@@ -29,6 +29,13 @@ afterEach(() => {
 })
 
 describe('PdfReadButton', () => {
+  it('disables a direct local path when no sidebar opener is available', () => {
+    render(<PdfReadButton filePath="/storage/test.pdf" t={t} />)
+    const button = screen.getByRole('button', { name: mockT('libraryNoSessionForOpen') })
+    expect(button).toHaveProperty('disabled', true)
+    fireEvent.click(button)
+  })
+
   it('opens a direct local file in the sidebar', () => {
     const onOpenFile = vi.fn()
     render(<PdfReadButton filePath="/storage/test.pdf" onOpenFile={onOpenFile} t={t} />)
@@ -314,7 +321,8 @@ describe('PdfReadButton', () => {
 
   it('safely handles filePath when onOpenFile is omitted', () => {
     render(<PdfReadButton filePath="/storage/unhandled.pdf" t={t} />)
-    fireEvent.click(screen.getByRole('button', { name: mockT('readPdf') }))
+    const button = screen.getByRole('button', { name: mockT('libraryNoSessionForOpen') })
+    expect(button.hasAttribute('disabled')).toBe(true)
   })
 
   it('safely handles attachmentRef when no resolver is available', () => {
@@ -323,7 +331,7 @@ describe('PdfReadButton', () => {
   })
 
   it('renders link variant with default class', () => {
-    render(<PdfReadButton filePath="/storage/test.pdf" variant="link" t={t} />)
+    render(<PdfReadButton filePath="/storage/test.pdf" onOpenFile={vi.fn()} variant="link" t={t} />)
     const button = screen.getByRole('button', { name: mockT('readPdf') })
     expect(button.className).toBeTruthy()
   })
@@ -332,6 +340,7 @@ describe('PdfReadButton', () => {
     render(
       <PdfReadButton
         filePath="/storage/test.pdf"
+        onOpenFile={vi.fn()}
         variant="link"
         label="Custom Read"
         title="Custom Title"

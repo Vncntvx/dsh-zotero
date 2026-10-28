@@ -1,344 +1,12 @@
 /**
  * Locale bundles for the Zotero plugin: the Settings page (fixed chrome,
- * groups, and the field table) and the Sources panel. Both dictionaries are
- * typed `Record<ZoteroLocaleKey, string>`, so the key sets cannot drift; the
- * wording stays provable, with no stage claims (精读/已引用) anywhere.
+ * groups, and the field table) and the Sources panel. English declares the key
+ * set and every other dictionary is typed against it. The copy has no
+ * reading-stage labels (精读/已引用).
  */
 
-import type { FieldKey, GroupKey } from './zotero-card-controller.ts'
-
-/** Locale keys the plugin renders: settings chrome, field table keys, and panel copy. */
-export type ZoteroLocaleKey =
-  | 'nav'
-  | 'overridden'
-  | 'reset'
-  | 'readOnly'
-  | 'save'
-  | 'saving'
-  | 'saveFailed'
-  | 'unavailable'
-  | 'scholarlyDisabled'
-  | 'invalidNumber'
-  | 'tabFeatures'
-  | 'tabConnection'
-  | 'tabSearch'
-  | 'tabScholarly'
-  | 'tabScholarlyDesc'
-  | 'tabAdvanced'
-  | 'configTabsLabel'
-  | GroupKey
-  | `${GroupKey}Desc`
-  | `${FieldKey}Hint`
-  | 'groupScholarlyAuth'
-  | 'groupScholarlyAuthDesc'
-  | 'groupScholarlyLimits'
-  | 'groupScholarlyLimitsDesc'
-  | 'scholarlyEmail'
-  | 'scholarlyEmailHint'
-  | 'scholarlyS2Key'
-  | 'scholarlyS2KeyHint'
-  | 'scholarlyNcbiKey'
-  | 'scholarlyNcbiKeyHint'
-  | 'scholarlyOpenalexKey'
-  | 'scholarlyOpenalexKeyHint'
-  | 'scholarlyMaxResults'
-  | 'scholarlyMaxResultsHint'
-  | 'scholarlyMaxContentChars'
-  | 'scholarlyMaxContentCharsHint'
-  | 'secretConfigured'
-  | 'secretNotConfigured'
-  | GroupKey
-  | FieldKey
-  | `${FieldKey}Hint`
-  | 'copy'
-  | 'copied'
-  | 'commandInputAria'
-  | 'checking'
-  | 'statusUnavailable'
-  | 'statusConnectedNote'
-  | 'detailsLabel'
-  | 'apiVersionLabel'
-  | 'schemaVersionLabel'
-  | 'zoteroVersionLabel'
-  | 'serverIdLabel'
-  | 'writeLabel'
-  | 'writeAuthorizedLabel'
-  | 'writeUnauthorizedLabel'
-  | 'writeDisabledLabel'
-  | 'writeRiskTitle'
-  | 'writeRiskDescription'
-  | 'writeRiskAcknowledge'
-  | 'writeRiskConfirm'
-  | 'writeRiskCancel'
-  | 'writeRiskClose'
-  | 'buildInfoLabel'
-  | 'diagnosisLabel'
-  | 'diagnosisNotRunning'
-  | 'diagnosisApiDisabled'
-  | 'diagnosisApiVersion'
-  | 'diagnosisTimeout'
-  | 'diagnosisNotComposed'
-  | 'diagnosisProviderUnavailable'
-  | 'diagnosisCapabilityUnavailable'
-  | 'diagnosisUnknown'
-  | 'diagnosticsTitle'
-  | 'diagnosticsLogLabel'
-  | 'diagnosticsEmpty'
-  | 'diagnosticsNoProblems'
-  | 'diagnosticsLevelAll'
-  | 'diagnosticsLevelProblems'
-  | 'diagnosticsShowLatest'
-  | 'diagnosticsCopyBundle'
-  | 'diagnosticsDebugOn'
-  | 'diagnosticsDebugOff'
-  | 'diagnosticsDetail'
-  | 'renderFailed'
-  | 'refresh'
-  | 'lastCheckedLabel'
-  | 'detailSectionTitle'
-  | 'activationTitle'
-  | 'activationClose'
-  | 'activationDescription'
-  | 'activationStep1'
-  | 'activationStep2'
-  | 'activationStep2Note'
-  | 'activationStatusLabel'
-  | 'activationReady'
-  | 'activationReadyVersion'
-  | 'activationLater'
-  | 'activationDetails'
-  | 'activationDone'
-  | 'activationCheckAgain'
-  | 'tipsLabel'
-  | 'tipWebTab'
-  | 'tipWriteGate'
-  | 'tipSettingsNav'
-  | 'lensSources'
-  | 'lensExports'
-  | 'lensBarLabel'
-  | 'filterBarLabel'
-  | 'inspectorTabsLabel'
-  | 'panelOverview'
-  | 'panelEvidence'
-  | 'panelExports'
-  | 'backToList'
-  | 'selectionHiddenNote'
-  | 'inspectorEmptyNote'
-  | 'scopeLine'
-  | 'filterLine'
-  | 'modeLine'
-  | 'modeMetadata'
-  | 'modeEverything'
-  | 'overviewScopeLibrary'
-  | 'overviewScopePublications'
-  | 'overviewScopeCollection'
-  | 'overviewScopeSavedSearch'
-  | 'searchDetailOpen'
-  | 'searchDetailClose'
-  | 'refLine'
-  | 'overviewNoSearch'
-  | 'retrievalRunCount'
-  | 'retrievalKeptCount'
-  | 'retrievalReportedCount'
-  | 'availabilityTitle'
-  | 'evidenceEntryLabel'
-  | 'backToSources'
-  | 'downloadArtifact'
-  | 'filterAll'
-  | 'filterPdf'
-  | 'filterRetrieved'
-  | 'filterEvidence'
-  | 'filterExported'
-  | 'filterIssues'
-  | 'filterClear'
-  | 'filterEmptyNote'
-  | 'filterScrollLeft'
-  | 'filterScrollRight'
-  | 'omittedRowsNote'
-  | 'detailOmittedNote'
-  | 'noSources'
-  | 'searchFrom'
-  | 'searchFromBrowse'
-  | 'databaseMismatch'
-  | 'evidenceBadge'
-  | 'exportBadge'
-  | 'failedBadge'
-  | 'runningBadge'
-  | 'stoppedBadge'
-  | 'badgePdf'
-  | 'issuesBadge'
-  | 'copyRef'
-  | 'copyExport'
-  | 'copyCite'
-  | 'copyAll'
-  | 'downloadAll'
-  | 'unresolvedItemsNote'
-  | 'downloadFull'
-  | 'askAboutItem'
-  | 'askTemplate'
-  | 'citeTemplate'
-  | 'exportCitation'
-  | 'sourceAnnotation'
-  | 'sourceNote'
-  | 'sourceAbstract'
-  | 'sourceFulltext'
-  | 'pageLabel'
-  | 'matchedInText'
-  | 'matchedInComment'
-  | 'truncatedPreview'
-  | 'retrievedMultiple'
-  | 'coverageLabel'
-  | 'coveragePages'
-  | 'coverageChars'
-  | 'coverageComplete'
-  | 'coverageIncomplete'
-  | 'countOfReturned'
-  | 'budgetLimitedNote'
-  | 'availReturned'
-  | 'availUnavailable'
-  | 'availNoMatch'
-  | 'evidenceRetrievedNone'
-  | 'evidenceNotRetrieved'
-  | 'evidenceReportedNoPreview'
-  | 'evidenceEmptyNote'
-  | 'exportsEmptyNote'
-  | 'exportsIncompleteNote'
-  | 'formatCitation'
-  | 'formatBibliography'
-  | 'formatUnknown'
-  | 'exportRefCount'
-  | 'exportRefsOmitted'
-  | 'readPdf'
-  | 'readPdfInSidebar'
-  | 'copyTitle'
-  | 'copyTitleTooltip'
-  | 'copyZoteroLink'
-  | 'copyZoteroLinkTooltip'
-  | 'pdfResolving'
-  | 'pdfFileNotFound'
-  | 'instanceUnverified'
-  | 'availabilityEntry'
-  | 'starterFind'
-  | 'starterFindTemplate'
-  | 'starterCompare'
-  | 'starterCompareTemplate'
-  | 'starterEvidence'
-  | 'starterEvidenceTemplate'
-  | 'starterExportSelected'
-  | 'starterExportSelectedTemplate'
-  | 'toolTitleSearch'
-  | 'toolTitleRetrieve'
-  | 'toolTitleExport'
-  | 'toolTitleGet'
-  | 'toolTitleChildren'
-  | 'toolTitleAttachment'
-  | 'toolTitleCreateNote'
-  | 'toolTitleBatchItems'
-  | 'toolTitleUpdateItemTags'
-  | 'toolTitleUpdateItemCollections'
-  | 'toolTitleCreateCollection'
-  | 'toolTitleDeleteCollection'
-  | 'toolTitleCreateItem'
-  | 'toolTitleUpdateItem'
-  | 'toolTitleUpdateNote'
-  | 'badgePartial'
-  | 'toolTitleUpdateCollection'
-  | 'toolTitleRestoreItems'
-  | 'toolTitleCreateSavedSearch'
-  | 'toolTitleUpdateSavedSearch'
-  | 'toolTitleDeleteSavedSearch'
-  | 'toolTitleScholarlySave'
-  | 'toolSummaryUpdateNote'
-  | 'toolSummaryUpdateCollection'
-  | 'toolSummaryRestoreItems'
-  | 'toolSummaryRestoreItemsRequested'
-  | 'toolSummaryCreateSavedSearch'
-  | 'toolSummaryUpdateSavedSearch'
-  | 'toolSummaryDeleteSavedSearch'
-  | 'toolSummaryScholarlySave'
-  | 'toolTitleDeleteLibraryTags'
-  | 'toolTitleBrowse'
-  | 'toolTitleChanges'
-  | 'toolRunning'
-  | 'toolFailed'
-  | 'toolStopped'
-  | 'toolDeclined'
-  | 'toolUnverified'
-  | 'toolUnverifiedDetail'
-  | 'toolSummaryJobPending'
-  | 'toolOmittedPassages'
-  | 'toolInspect'
-  | 'toolSearchRunning'
-  | 'toolRetrieveRunning'
-  | 'toolExportRunning'
-  | 'toolSummaryFound'
-  | 'toolSummaryFoundWithNotes'
-  | 'toolSummaryEvidence'
-  | 'toolSummaryExport'
-  | 'toolSummaryItem'
-  | 'toolSummaryChildren'
-  | 'toolSummaryAttachment'
-  | 'toolSummaryCreateNote'
-  | 'toolSummaryBatchItems'
-  | 'toolSummaryUpdateItemTags'
-  | 'toolSummaryUpdateItemTagsRequested'
-  | 'toolNoTagsChanged'
-  | 'toolSummaryUpdateItemCollections'
-  | 'toolSummaryUpdateItemCollectionsRequested'
-  | 'toolNoMembershipChanged'
-  | 'toolSummaryCreateCollection'
-  | 'toolSummaryDeleteCollection'
-  | 'toolSummaryCreateItem'
-  | 'toolSummaryUpdateItem'
-  | 'toolSummaryDeleteLibraryTags'
-  | 'toolSummaryDeleteLibraryTagsRequested'
-  | 'toolSummaryBrowseKind'
-  | 'toolSummaryBrowsePage'
-  | 'toolBrowseNextPage'
-  | 'toolSummaryChanges'
-  | 'toolChangesItems'
-  | 'toolChangesChildItems'
-  | 'toolChangesTrashedItems'
-  | 'toolChangesCollections'
-  | 'toolChangesSavedSearches'
-  | 'toolChangesFulltext'
-  | 'toolChangesCursor'
-  | 'toolChangesCursorValue'
-  | 'toolChangesRange'
-  | 'toolChangesRangeUnknown'
-  | 'toolChangesNoCursor'
-  | 'toolChangesWithheld'
-  | 'toolChangesFulltextCaveat'
-  | 'withheldNotServed'
-  | 'withheldRangeNotCovered'
-  | 'withheldUnreadable'
-  | 'withheldRemedyPermanent'
-  | 'withheldRemedyRebaseline'
-  | 'withheldRemedyRerun'
-  | 'toolDeletedTitle'
-  | 'toolDeletedNone'
-  | 'toolDeletedItems'
-  | 'toolDeletedCollections'
-  | 'toolDeletedSavedSearches'
-  | 'toolDeletedTags'
-  | 'toolDeletedOther'
-  | 'toolSummaryJobBackground'
-  | 'toolSummaryJobPromoted'
-  | 'toolParentItem'
-  | 'toolTags'
-  | 'toolChildrenNotes'
-  | 'toolChildrenAnnotations'
-  | 'toolChildrenAttachments'
-  | 'toolChildrenNone'
-  | 'toolNoResults'
-  | 'toolDefaultNoteTitle'
-  | 'badgeSuccess'
-  | 'badgeNoOp'
-  | 'badgeUnreported'
-  | 'commandChecking'
-  | 'commandFailed'
-  | 'statusServerIdUnreported'
-  | 'statusLocalApiAddress'
+/** Every locale key the plugin renders: English is the source of the key set. */
+export type ZoteroLocaleKey = keyof typeof en
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -347,8 +15,66 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 }
 
-/** English copy. */
-export const en: Record<ZoteroLocaleKey, string> = {
+/** English copy. A key added here becomes required in every other dictionary. */
+export const en = {
+  libraryWriteActions: 'Write actions',
+  libraryWriteApprovalHint:
+    'Submit once to review the exact plan in this conversation. Every change requires session approval and plan approval. Writes are never retried automatically.',
+  libraryWriteNeedsSession:
+    'This conversation is not running. Start it to receive the write approval and plan card.',
+  libraryWriteSession: 'Approval conversation',
+  libraryWriteConditionsRequired: 'Add at least one complete condition row.',
+  libraryWriteConditionIncomplete:
+    'Every condition row needs a condition, an operator, and a value; remove the empty rows.',
+  libraryWriteOperation: 'Operation',
+  libraryWriteRef: 'Item or note ref',
+  libraryWriteRefs: 'Item refs',
+  libraryWriteParentItem: 'Parent item ref (optional)',
+  libraryWriteCollection: 'Collection ref',
+  libraryWriteParentCollection: 'Parent collection ref (optional)',
+  libraryWriteSearch: 'Saved search ref',
+  libraryWriteTitle: 'Title',
+  libraryWriteName: 'Name',
+  libraryWriteItemType: 'Item type',
+  libraryWriteMarkdown: 'Note body (Markdown)',
+  libraryWriteSources: 'Source item refs',
+  libraryWriteAdd: 'Add',
+  libraryWriteRemove: 'Remove',
+  libraryWriteMetadata: 'Metadata fields',
+  libraryWriteCreators: 'Creators',
+  libraryWriteBatchCreate: 'Items to create',
+  libraryWriteBatchUpdate: 'Items to update',
+  libraryWriteTrashRefs: 'Items to move to Trash',
+  libraryWriteUpdateItem: 'Update metadata',
+  libraryWriteTags: 'Update tags',
+  libraryWriteMembership: 'Update collection membership',
+  libraryWriteCreateItem: 'Create item',
+  libraryWriteCreateNote: 'Create note',
+  libraryWriteUpdateNote: 'Update note',
+  libraryWriteCreateCollection: 'Create collection',
+  libraryWriteUpdateCollection: 'Update collection',
+  libraryWriteDeleteCollection: 'Delete collection',
+  libraryWriteCreateSearch: 'Create saved search',
+  libraryWriteUpdateSearch: 'Update saved search',
+  libraryWriteDeleteSearch: 'Delete saved search',
+  libraryWriteTrash: 'Move items to Trash',
+  libraryWriteRestore: 'Restore items',
+  libraryWriteBatch: 'Batch changes',
+  libraryWriteCondition: 'Condition',
+  libraryWriteOperator: 'Operator',
+  libraryWriteValue: 'Value',
+  libraryWriteAddCondition: 'Add condition',
+  libraryWriteRemoveCondition: 'Remove condition',
+  libraryWriteOnePerLine: 'One entry per line.',
+  libraryWriteJsonHint: 'Enter a JSON array using the documented batch or creator fields.',
+  libraryWriteReview: 'Review write plan',
+  libraryWritePending: 'Awaiting approval or result…',
+  libraryWriteDeclined: 'Declined; nothing written.',
+  libraryWriteUnverified: 'Commit unverified; check Zotero before submitting again.',
+  libraryWriteFailed: 'Write failed',
+  libraryWriteApplied: 'Change applied',
+  libraryWriteInvalid: 'Check required fields and JSON arrays before submitting.',
+
   nav: 'Zotero',
   overridden: 'Overridden',
   reset: 'Reset to default',
@@ -364,10 +90,23 @@ export const en: Record<ZoteroLocaleKey, string> = {
   tabFeatures: 'General',
   tabConnection: 'Connection',
   tabSearch: 'Search & Extraction',
+  tabLibrary: 'Library panel',
+  tabLibraryDesc: 'Preferences for the Zotero library panel and its right-sidebar display.',
   tabScholarly: 'Scholarly Search',
   tabScholarlyDesc:
     'Multi-source academic search, API keys, and fulltext quotas from the dsh-zotero/scholarly component. Enabling that component turns the external tools on.',
   tabAdvanced: 'Advanced',
+  groupLibrarySidebar: 'Sidebar Display',
+  groupLibrarySidebarDesc:
+    'Choose where the library panel appears in DeepSeek Harness, with support for right-sidebar display.',
+  libraryDisabled:
+    'The library panel is provided by the dsh-zotero/library component. Enable that component under "Included components" to turn on library browsing and sidebar configuration.',
+  rightSidebarEnabled: 'Show in right sidebar',
+  rightSidebarHint:
+    'Provide a library tab and quick launcher in the right sidebar for simultaneous chat and reading.',
+  libraryNavTree: 'Collections',
+  libraryNavList: 'Items',
+  libraryNavInspector: 'Inspector',
   configTabsLabel: 'Zotero configuration tabs',
   groupWebDesc: 'Toggle conversation literature tab visibility in session views.',
   groupWriteDesc:
@@ -800,10 +539,151 @@ export const en: Record<ZoteroLocaleKey, string> = {
   commandFailed: 'Command failed',
   statusServerIdUnreported: 'Not reported (this build does not identify database)',
   statusLocalApiAddress: 'Local API Address',
+  libraryPanel: 'Zotero Library',
+  librarySelectLibrary: 'Library',
+  librarySearchLabel: 'Search',
+  librarySearchPlaceholder: 'Search titles, creators, years…',
+  librarySearchModeLabel: 'Mode',
+  librarySearchModeMetadata: 'Metadata',
+  librarySearchModeEverything: 'Full text',
+  libraryEverythingHint:
+    'Full-text mode searches PDF contents through Zotero’s local index; unindexed files may be missed.',
+  librarySortLabel: 'Sort',
+  librarySortAsc: 'Ascending',
+  librarySortDesc: 'Descending',
+  librarySortDateModified: 'Date modified',
+  librarySortDateAdded: 'Date added',
+  librarySortDate: 'Publication date',
+  librarySortTitle: 'Title',
+  librarySortCreator: 'Creator',
+  libraryStatusLabel: 'Connection',
+  libraryConnected: 'Connected',
+  libraryOffline: 'Offline',
+  libraryAllItems: 'All items',
+  libraryPublications: 'My Publications',
+  libraryTrash: 'Trash',
+  libraryCollections: 'Collections',
+  libraryNoCollections: 'No collections',
+  librarySavedSearches: 'Saved searches',
+  libraryNoSavedSearches: 'No saved searches',
+  libraryItemList: 'Item list',
+  libraryLoading: 'Loading…',
+  libraryEmptyList: 'No items in this scope',
+  libraryRangeOfTotal: '{start}–{end} of {total}',
+  libraryPagePrev: 'Previous',
+  libraryPageNext: 'Next',
+  libraryRetry: 'Retry',
+  libraryFilters: 'Filters',
+  libraryFilterTypes: 'Item types',
+  libraryFilterTags: 'Tags',
+  libraryTagMatch: 'Tag match',
+  libraryTagAll: 'All selected tags',
+  libraryTagAny: 'Any selected tag',
+  libraryYearFrom: 'Year from (inclusive)',
+  libraryYearTo: 'Year to (inclusive)',
+  libraryYearLabel: 'Year',
+  libraryYearFromShort: 'From',
+  libraryYearToShort: 'To',
+  libraryFilterRemove: 'Remove {label}',
+  libraryTagRemove: 'Remove tag {tag}',
+  librarySearchTags: 'Search tags',
+  libraryLoadMore: 'Load more',
+  libraryYearRangeInvalid: 'From year must not exceed to year',
+  libraryAnnotationPage: 'p. {page}',
+  libraryAttachmentFilter: 'Attachments',
+  libraryFilterAny: 'Any',
+  libraryHasAttachment: 'Has attachments',
+  libraryNoAttachment: 'No attachments',
+  libraryClearFilters: 'Clear filters',
+  librarySearchConditions: 'Stored conditions',
+  libraryInvalidPage: 'Invalid pagination cursor',
+  libraryOfflineNote: 'Zotero is offline; browsing is paused. Start Zotero, then refresh.',
+  libraryInspector: 'Item detail',
+  libraryNoSelection: 'Select an item to see its detail',
+  libraryAskInChat: 'Ask',
+  libraryAddToChat: 'Add to chat',
+  libraryExpand: 'Expand',
+  libraryCollapse: 'Collapse',
+  libraryInfoTitle: 'Info',
+  libraryAskTemplate: 'Answer questions about the paper "{title}" ({ref}). My question: ',
+  libraryCiteLine: '"{title}" ({ref})',
+  libraryMetaType: 'Type',
+  libraryMetaCreators: 'Creators',
+  libraryMetaDate: 'Date',
+  libraryMetaVenue: 'Venue',
+  libraryMetaDoi: 'DOI',
+  libraryMetaUrl: 'URL',
+  libraryMetaCollections: 'Collections',
+  libraryMetaTags: 'Tags',
+  libraryMetaExtra: 'Extra',
+  libraryMetaAbstract: 'Abstract',
+  libraryMetaNote: 'Note',
+  libraryAbstractTruncated: 'Content truncated for display.',
+  libraryNotesTitle: 'Notes ({count})',
+  libraryAttachmentsTitle: 'Attachments ({count})',
+  libraryAnnotationsTitle: 'Annotations ({count})',
+  libraryNoSessionForOpen:
+    'No session is open, so local attachments cannot open in the right reader.',
 }
 
 /** Simplified Chinese copy. */
 export const zh: Record<ZoteroLocaleKey, string> = {
+  libraryWriteActions: '写入操作',
+  libraryWriteApprovalHint:
+    '提交后请在当前会话中核对具体计划。每次变更都需要会话审批和计划批准，写入不会自动重试。',
+  libraryWriteNeedsSession: '当前会话未运行；启动该会话后才能接收写入审批与计划卡。',
+  libraryWriteSession: '审批会话',
+  libraryWriteConditionsRequired: '至少填写一行完整条件。',
+  libraryWriteConditionIncomplete: '每个条件行都需要条件、运算符与值；请删除空行。',
+  libraryWriteOperation: '操作',
+  libraryWriteRef: '条目或笔记引用',
+  libraryWriteRefs: '条目引用',
+  libraryWriteParentItem: '父条目引用（可选）',
+  libraryWriteCollection: '合集引用',
+  libraryWriteParentCollection: '父合集引用（可选）',
+  libraryWriteSearch: '保存搜索引用',
+  libraryWriteTitle: '标题',
+  libraryWriteName: '名称',
+  libraryWriteItemType: '条目类型',
+  libraryWriteMarkdown: '笔记正文（Markdown）',
+  libraryWriteSources: '来源条目引用',
+  libraryWriteAdd: '添加',
+  libraryWriteRemove: '移除',
+  libraryWriteMetadata: '元数据字段',
+  libraryWriteCreators: '作者',
+  libraryWriteBatchCreate: '待创建条目',
+  libraryWriteBatchUpdate: '待更新条目',
+  libraryWriteTrashRefs: '待移入回收站的条目',
+  libraryWriteUpdateItem: '更新元数据',
+  libraryWriteTags: '更新标签',
+  libraryWriteMembership: '更新所属合集',
+  libraryWriteCreateItem: '创建条目',
+  libraryWriteCreateNote: '创建笔记',
+  libraryWriteUpdateNote: '更新笔记',
+  libraryWriteCreateCollection: '创建合集',
+  libraryWriteUpdateCollection: '更新合集',
+  libraryWriteDeleteCollection: '删除合集',
+  libraryWriteCreateSearch: '创建保存搜索',
+  libraryWriteUpdateSearch: '更新保存搜索',
+  libraryWriteDeleteSearch: '删除保存搜索',
+  libraryWriteTrash: '移入回收站',
+  libraryWriteRestore: '恢复条目',
+  libraryWriteBatch: '批量变更',
+  libraryWriteCondition: '条件',
+  libraryWriteOperator: '运算符',
+  libraryWriteValue: '值',
+  libraryWriteAddCondition: '添加条件',
+  libraryWriteRemoveCondition: '移除条件',
+  libraryWriteOnePerLine: '每行一项。',
+  libraryWriteJsonHint: '使用文档中的批量或作者字段填写 JSON 数组。',
+  libraryWriteReview: '审核写入计划',
+  libraryWritePending: '等待审批或结果…',
+  libraryWriteDeclined: '已拒绝，未写入。',
+  libraryWriteUnverified: '提交未核验，再次提交前请先检查 Zotero。',
+  libraryWriteFailed: '写入失败',
+  libraryWriteApplied: '变更已应用',
+  libraryWriteInvalid: '提交前请检查必填字段和 JSON 数组。',
+
   nav: 'Zotero',
   overridden: '已覆盖',
   reset: '恢复默认',
@@ -818,10 +698,21 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   tabFeatures: '基础设置',
   tabConnection: '本地连接',
   tabSearch: '检索提取',
+  tabLibrary: '文献面板',
+  tabLibraryDesc: 'Zotero 文献面板与其右侧边栏显示偏好。',
   tabScholarly: '学术检索',
   tabScholarlyDesc:
     'dsh-zotero/scholarly 组件提供的多源学术检索、API 密钥与全文配额。启用该组件即启用外部检索。',
   tabAdvanced: '高级选项',
+  groupLibrarySidebar: '侧边栏显示设置',
+  groupLibrarySidebarDesc: '选择是否在 DeepSeek Harness 右侧边栏显示文献面板标签页。',
+  libraryDisabled:
+    '文献面板由 dsh-zotero/library 组件提供。在插件列表的「包含的组件」中启用该组件，即可开启文献面板与侧边栏配置。',
+  rightSidebarEnabled: '在右侧侧边栏显示',
+  rightSidebarHint: '在右侧边栏提供文献面板标签页与快捷入口，支持边对话边查阅文献。',
+  libraryNavTree: '目录',
+  libraryNavList: '列表',
+  libraryNavInspector: '详情',
   configTabsLabel: 'Zotero 设置分区',
   groupWebDesc: '控制会话顶部的文献与导出面板展示。',
   groupWriteDesc: '管理对本地 Zotero 文库的写入、授权与安全门禁。',
@@ -1234,4 +1125,87 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   commandFailed: '执行失败',
   statusServerIdUnreported: '未报告（当前构建不支持数据库标识）',
   statusLocalApiAddress: '本地 API 地址',
+  libraryPanel: 'Zotero 文献库',
+  librarySelectLibrary: '文献库',
+  librarySearchLabel: '搜索',
+  librarySearchPlaceholder: '搜索标题、作者、年份…',
+  librarySearchModeLabel: '模式',
+  librarySearchModeMetadata: '标题/作者',
+  librarySearchModeEverything: '全文',
+  libraryEverythingHint: '全文模式检索 PDF 正文，依赖 Zotero 本地索引；未索引的文件可能搜不到。',
+  librarySortLabel: '排序',
+  librarySortAsc: '升序',
+  librarySortDesc: '降序',
+  librarySortDateModified: '修改时间',
+  librarySortDateAdded: '添加时间',
+  librarySortDate: '出版日期',
+  librarySortTitle: '标题',
+  librarySortCreator: '作者',
+  libraryStatusLabel: '连接',
+  libraryConnected: '已连接',
+  libraryOffline: '未连接',
+  libraryAllItems: '全部条目',
+  libraryPublications: '我的出版物',
+  libraryTrash: '回收站',
+  libraryCollections: '集合',
+  libraryNoCollections: '暂无集合',
+  librarySavedSearches: '保存的搜索',
+  libraryNoSavedSearches: '暂无保存的搜索',
+  libraryItemList: '条目列表',
+  libraryLoading: '加载中…',
+  libraryEmptyList: '此范围暂无条目',
+  libraryRangeOfTotal: '第 {start}–{end} 条，共 {total} 条',
+  libraryPagePrev: '上一页',
+  libraryPageNext: '下一页',
+  libraryRetry: '重试',
+  libraryFilters: '筛选',
+  libraryFilterTypes: '条目类型',
+  libraryFilterTags: '标签',
+  libraryTagMatch: '标签匹配',
+  libraryTagAll: '包含全部标签',
+  libraryTagAny: '包含任一标签',
+  libraryYearFrom: '起始年份（含）',
+  libraryYearTo: '结束年份（含）',
+  libraryYearLabel: '年份',
+  libraryYearFromShort: '起始',
+  libraryYearToShort: '结束',
+  libraryFilterRemove: '移除 {label}',
+  libraryTagRemove: '移除标签 {tag}',
+  librarySearchTags: '搜索标签',
+  libraryLoadMore: '加载更多',
+  libraryYearRangeInvalid: '起始年份不能晚于结束年份',
+  libraryAnnotationPage: '第 {page} 页',
+  libraryAttachmentFilter: '附件条件',
+  libraryFilterAny: '不限',
+  libraryHasAttachment: '有附件',
+  libraryNoAttachment: '无附件',
+  libraryClearFilters: '清除筛选',
+  librarySearchConditions: '保存的条件',
+  libraryInvalidPage: '分页游标无效',
+  libraryOfflineNote: 'Zotero 未连接，面板已暂停检索。请确认 Zotero 正在运行后点击刷新。',
+  libraryInspector: '条目详情',
+  libraryNoSelection: '选择一个条目查看详情',
+  libraryAskInChat: '提问',
+  libraryAddToChat: '加入对话',
+  libraryExpand: '展开',
+  libraryCollapse: '收起',
+  libraryInfoTitle: '信息',
+  libraryAskTemplate: '请围绕文献《{title}》（{ref}）回答我的问题：',
+  libraryCiteLine: '《{title}》（{ref}）',
+  libraryMetaType: '类型',
+  libraryMetaCreators: '作者',
+  libraryMetaDate: '日期',
+  libraryMetaVenue: '来源',
+  libraryMetaDoi: 'DOI',
+  libraryMetaUrl: '链接',
+  libraryMetaCollections: '所属集合',
+  libraryMetaTags: '标签',
+  libraryMetaExtra: '附加',
+  libraryMetaAbstract: '摘要',
+  libraryMetaNote: '笔记',
+  libraryAbstractTruncated: '内容过长，已截断显示。',
+  libraryNotesTitle: '笔记（{count}）',
+  libraryAttachmentsTitle: '附件（{count}）',
+  libraryAnnotationsTitle: '标注（{count}）',
+  libraryNoSessionForOpen: '当前没有会话，无法在右侧阅读栏打开本地附件。',
 }

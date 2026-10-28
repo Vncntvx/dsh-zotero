@@ -31,6 +31,7 @@ All operations interact with the local Zotero API (`127.0.0.1:23119`); reads nee
 - **Passage retrieval**: Query papers to locate relevant passages across full text, notes, and annotations; PDF annotations retain original page numbers for direct verification.
 - **Citation formatting and export**: Generate formatted citations or export selected items as BibTeX, RIS, or CSL JSON for copying or downloading.
 - **Dedicated conversation tab**: Papers referenced in chat automatically sync to the "Zotero" tab at the top of the session, where you can inspect item details, review passages, or open local PDFs.
+- **Library panel**: the Zotero icon in the DSH sidebar opens a global library panel for browsing the collection tree, saved searches, and the trash without a conversation, with search, sort, paging, full item details, and PDF reading in the right reader; gated by the `webEnabled` switch.
 - **Two-way notes and organization**: Allow the agent to draft reading notes, add tags, and organize collections, with plan review and interactive approval for every write operation.
 - **Scholarly literature retrieval (optional component)**: With `dsh-zotero/scholarly` enabled under "Included components" in the Plugins manager, search across arXiv, OpenAlex, Crossref, Semantic Scholar, PubMed, Europe PMC, and DBLP, read open-access full texts, and verify reference lists. The component ships with the bundle but off, and enabling it is the authorization for its outbound requests.
 

@@ -180,6 +180,10 @@ export interface PrimitivesStub extends Omit<RealForm, 'SettingsValueField'> {
   readonly IconBranchOutlineRegular: (props: Record<string, unknown>) => ReactElement
   readonly IconEditOutlineRegular: (props: Record<string, unknown>) => ReactElement
   readonly IconTrashOutlineRegular: (props: Record<string, unknown>) => ReactElement
+  readonly IconChevronDownOutlineRegular: (props: Record<string, unknown>) => ReactElement
+  readonly Button: (props: Record<string, unknown>) => ReactElement
+  readonly Input: (props: Record<string, unknown>) => ReactElement
+  readonly FileTypeIcon: (props: Record<string, unknown>) => ReactElement
 }
 
 /** The icon stubs: an inline glyph carrying the icon name. */
@@ -609,6 +613,46 @@ export function primitivesStub(overrides: Partial<PrimitivesStub> = {}): Primiti
     IconBranchOutlineRegular: icon('branch-regular'),
     IconEditOutlineRegular: icon('edit-regular'),
     IconTrashOutlineRegular: icon('trash-regular'),
+    IconChevronDownOutlineRegular: icon('chevron-down-regular'),
+    Button: ({
+      children,
+      icon: buttonIcon,
+      variant,
+      size,
+      disabled,
+      onClick,
+      className,
+      ...rest
+    }: Record<string, unknown>) =>
+      createElement(
+        'button',
+        {
+          type: 'button',
+          disabled: disabled as boolean | undefined,
+          onClick: onClick as React.MouseEventHandler | undefined,
+          className: className as string | undefined,
+          'data-variant': variant,
+          'data-size': size,
+          ...rest,
+        },
+        buttonIcon != null
+          ? createElement('span', { className: 'icon' }, buttonIcon as never)
+          : null,
+        children as never,
+      ),
+    Input: ({ icon: inputIcon, className, ...rest }: Record<string, unknown>) =>
+      createElement(
+        'span',
+        { className: className as string | undefined },
+        inputIcon != null ? createElement('span', { className: 'icon' }, inputIcon as never) : null,
+        createElement('input', rest),
+      ),
+    FileTypeIcon: ({ kind, path, className }: Record<string, unknown>) =>
+      createElement('span', {
+        'data-file-type': (kind ?? path) as string | undefined,
+        className: className as string | undefined,
+        'aria-hidden': 'true',
+      }),
     ...overrides,
   } as PrimitivesStub
 }

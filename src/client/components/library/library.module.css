@@ -1,0 +1,1437 @@
+/* The library panel's layout. Tokens only, no theme selectors; light/dark
+ * resolves through the inherited --dsw-* aliases, like every other surface
+ * in this bundle. The visual language mirrors `../workspace/workspace.module.css`:
+ * one surface color with hairline dividers, quiet rows that select through a
+ * 2px primary left edge, 24px bordered-quiet controls, and unboxed inspector
+ * sections. */
+
+.panel {
+  container-type: inline-size;
+  container-name: zoteroLibraryPanel;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* ── Toolbar ──────────────────────────────────────────────────────────── */
+
+.toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px 8px;
+  height: 38px;
+  padding: 0 8px 0 12px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+  background: var(--dsw-alias-bg-layer-1);
+  box-sizing: border-box;
+}
+
+.selectorButton {
+  flex: 0 1 auto;
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  box-sizing: border-box;
+  max-width: 220px;
+  height: 28px;
+  padding: 0 6px 0 8px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  line-height: 20px;
+  transition:
+    background 120ms var(--ds-ease-in-out),
+    color 120ms var(--ds-ease-in-out);
+}
+
+.selectorButton[aria-expanded='true'] {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.selectorLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dropdownChevron {
+  display: block;
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.searchInputWrap {
+  flex: 1 1 160px;
+  min-width: 140px;
+  max-width: 320px;
+  height: 28px !important;
+  box-sizing: border-box;
+}
+
+.searchInputWrap input {
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.searchIcon {
+  width: 14px;
+  height: 14px;
+  color: var(--dsw-alias-label-tertiary);
+  pointer-events: none;
+}
+
+.statusGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 2px;
+}
+
+.statusText {
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.spacer {
+  flex: 1 1 auto;
+}
+
+/* The quiet borderless tool button (refresh, diagnostics), following the
+ * standard 28px right sidebar tool geometry. */
+.toolButton {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  line-height: 1;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition:
+    background 120ms var(--ds-ease-in-out),
+    color 120ms var(--ds-ease-in-out);
+}
+
+.toolButton:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+.actionIcon {
+  width: 15px;
+  height: 15px;
+}
+
+/* The everything-mode and no-session notes: quiet caption lines, no chip. */
+.everywhereHint {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-caption);
+}
+
+.hintIcon {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ── Offline note ─────────────────────────────────────────────────────── */
+
+.offline {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.offlineText {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.offlineDetail {
+  margin: 0;
+  max-width: 480px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-state-error-primary);
+  overflow-wrap: anywhere;
+}
+
+/* ── Filter rail ──────────────────────────────────────────────────────── */
+
+.filterRail {
+  flex: none;
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 4px;
+  padding: 6px 12px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+  overflow-x: auto;
+  scrollbar-width: none;
+  box-sizing: border-box;
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+}
+
+.filterRail > * {
+  flex: none;
+}
+
+.filterRail::-webkit-scrollbar {
+  display: none;
+}
+
+.filterTagWrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tagRemoveButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-xs);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+.tagRemoveButton:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+.chevronIcon {
+  width: 12px;
+  height: 12px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.filterYearRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.filterNumberInput {
+  width: 60px;
+  height: 24px;
+  padding: 0 6px;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 16px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  box-sizing: border-box;
+}
+
+.filterNumberInput:focus {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: -1px;
+}
+
+.filterClear {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+  background: transparent;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  cursor: pointer;
+  margin-left: auto;
+  transition:
+    background 120ms var(--ds-ease-in-out),
+    color 120ms var(--ds-ease-in-out);
+}
+
+.filterClear:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+.filterError {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* ── Columns & narrow navigation ──────────────────────────────────────── */
+
+.narrowNavWrap {
+  flex: none;
+  display: flex;
+  padding: 6px 12px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.narrowNavWrap::-webkit-scrollbar {
+  display: none;
+}
+
+/* Narrow (default): one pane at a time over the segmented tabs. Wide: the
+ * three panes center on the 1440px business axis the workspace shares. */
+.columns {
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
+  max-width: 1440px;
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.columnPane {
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+}
+
+.columnPaneHidden {
+  display: none;
+}
+
+/* The three panes share `.columnPane`, applied explicitly from the panel TSX
+ * (esbuild's CSS-module build drops `composes`, so composition must not be
+ * load-bearing here). */
+.treePane {
+  padding: 8px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  border-right: none;
+}
+
+.listPane {
+  padding: 0;
+  overflow: hidden;
+  border-right: none;
+}
+
+.inspectorPane {
+  padding: 8px 16px 16px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Wide: three panes side by side over hairlines. The `.columns .pane`
+ * prefix out-specifies `.columnPaneHidden`, so a stale narrow-pane state
+ * cannot leave an empty grid track — no !important. */
+@container zoteroLibraryPanel (min-width: 861px) {
+  .narrowNavWrap {
+    display: none;
+  }
+
+  .columns {
+    display: grid;
+    /* The 300px floors fit 861px exactly (220 + 600 + hairlines), so the
+     * wide grid never overflows at the threshold it switches on. */
+    grid-template-columns: clamp(220px, 22cqi, 280px) minmax(300px, 1.2fr) minmax(300px, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .columns .treePane,
+  .columns .listPane,
+  .columns .inspectorPane {
+    display: flex;
+  }
+
+  .treePane,
+  .listPane {
+    border-right: 0.5px solid var(--dsw-alias-border-l2);
+  }
+}
+
+/* ── Navigation tree ──────────────────────────────────────────────────── */
+
+.tree {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.treeList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.treeSectionHeader {
+  display: flex;
+  align-items: center;
+  padding: 4px 8px 2px;
+}
+
+.treeSection {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-caption);
+}
+
+/* The quiet tree row: selection is the 2px primary left edge over the hover
+ * wash, the workspace `.listItem` geometry. */
+.treeRowWrap {
+  display: flex;
+  align-items: center;
+  padding-left: calc(var(--tree-depth, 0) * 14px + 4px);
+  border-left: 2px solid transparent;
+  border-radius: var(--dsw-radius-sm);
+  box-sizing: border-box;
+  transition: background 120ms var(--ds-ease-in-out);
+}
+
+.treeRowWrapActive {
+  background: var(--dsw-alias-interactive-bg-hover);
+  border-left-color: var(--dsw-alias-state-business-primary);
+}
+
+.treeExpander {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-right: 2px;
+  border: 0;
+  border-radius: var(--dsw-radius-xs);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+  padding: 0;
+  transition:
+    transform 150ms cubic-bezier(0.2, 0, 0, 1),
+    color 120ms;
+}
+
+.treeExpander:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+.treeExpanderOpen {
+  transform: rotate(90deg);
+}
+
+.chevronSvg {
+  display: block;
+  flex: none;
+  width: 12px;
+  height: 12px;
+}
+
+.treeExpanderPlaceholder {
+  flex: none;
+  width: 20px;
+  height: 18px;
+}
+
+.treeRow {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  text-align: left;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 20px;
+  padding: 4px 6px;
+  cursor: pointer;
+  transition: color 120ms var(--ds-ease-in-out);
+}
+
+.treeRow:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: -1px;
+}
+
+.treeRowActive {
+  color: var(--dsw-alias-label-primary);
+  font-weight: 500;
+}
+
+.treeRowIcon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.treeRowActive .treeRowIcon {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.treeRowLabel {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.treeNote {
+  margin: 0;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-caption);
+  padding: 2px 8px;
+}
+
+.treeError {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-state-error-primary);
+  overflow-wrap: anywhere;
+}
+
+/* One saved search's stored conditions, folded under its row. */
+.searchConditions {
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-caption);
+  padding-left: 22px;
+}
+
+.searchConditions summary {
+  cursor: pointer;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.searchConditions ol {
+  margin: 2px 0;
+  padding-left: 16px;
+}
+
+/* The navigation lanes' paging/recovery cluster under a tree section. */
+.laneControls {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.laneError {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.lanePager {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+}
+
+/* ── Item list ────────────────────────────────────────────────────────── */
+
+.list {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.listHeader {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px 6px;
+}
+
+.listTitle {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.listCount {
+  flex: none;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-caption);
+  padding: 2px 6px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.listScrollArea {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px 12px 8px;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+}
+
+.listRows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* The quiet item row: the workspace `.listItem` geometry — hover wash and a
+ * 2px primary left edge for the selection, no box. */
+.itemRow {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-left: 2px solid transparent;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  font-family: inherit;
+  padding: 6px 8px 6px 10px;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition:
+    background 120ms var(--ds-ease-in-out),
+    border-color 120ms var(--ds-ease-in-out);
+}
+
+/* The PDF detection badge owns the row's right edge; the text keeps clear. */
+.itemRowHasPdf .itemTitle,
+.itemRowHasPdf .itemMeta {
+  padding-right: 44px;
+}
+
+.pdfBadge {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  height: 16px;
+  padding: 0 5px;
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-state-business-primary) 40%, transparent);
+  border-radius: var(--dsw-radius-xs);
+  color: var(--dsw-alias-state-business-primary);
+  font-size: 9px;
+  line-height: 1;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  user-select: none;
+}
+
+.itemRow:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: -1px;
+}
+
+.itemRowActive {
+  background: var(--dsw-alias-interactive-bg-hover);
+  border-left-color: var(--dsw-alias-state-business-primary);
+}
+
+.itemTitle {
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.itemYear {
+  color: var(--dsw-alias-label-tertiary);
+  font-weight: normal;
+}
+
+.itemMeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.itemType {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: var(--dsw-radius-xs);
+  font-size: 10px;
+  line-height: 12px;
+  font-weight: 650;
+  letter-spacing: 0.035em;
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.itemCreator {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.paginator {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 12px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+  box-sizing: border-box;
+}
+
+.pageInfo {
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-caption);
+}
+
+/* The quiet bordered text button every lane's pager and retry reuses. */
+.pageButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 22px;
+  padding: 0 8px;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+  background: transparent;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  cursor: pointer;
+  transition:
+    background 120ms var(--ds-ease-in-out),
+    color 120ms var(--ds-ease-in-out);
+}
+
+.pageButton:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+.pageButton:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.listNote {
+  margin: 0;
+  padding: 12px 4px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  text-align: center;
+}
+
+.listErrorWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 8px 4px;
+}
+
+.listError {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-state-error-primary);
+  overflow-wrap: anywhere;
+}
+
+/* ── Inspector ────────────────────────────────────────────────────────── */
+
+.inspector {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.inspectorEmpty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-height: 160px;
+}
+
+/* The empty state: a 16px glyph over one caption line, the workspace
+ * `.empty` pattern, no medal circle. */
+.emptyStateWrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+  padding: 24px 16px;
+  max-width: 280px;
+}
+
+.emptyStateIcon {
+  width: 16px;
+  height: 16px;
+  color: var(--dsw-alias-label-caption);
+}
+
+.emptyStateTitle {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* The inspector's sections: unboxed, separated by rhythm only. */
+.inspectorCard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* The head block: eyebrow type line, title, creators, origin, then the
+ * action row — the reference reader's hierarchy on the harness's type scale. */
+.inspectorHead {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  width: 100%;
+}
+
+.inspectorEyebrow {
+  margin: 0;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-caption);
+}
+
+.inspectorCreators {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.inspectorOrigin {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.inspectorActions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+/* The abstract's expand/collapse toggle: the workspace `.detailToggle`
+ * pattern — a quiet text button under the clamped paragraph. */
+.abstractToggle {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 2px;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .abstractToggle:hover {
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.abstractToggle:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+.toggleChevron {
+  display: block;
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  transition: transform 140ms var(--ds-ease-in-out);
+}
+
+.toggleChevronOpen {
+  transform: rotate(180deg);
+}
+
+/* The clamped abstract: subtle fade mask while collapsed. */
+.abstractClamped {
+  max-height: 160px;
+  overflow-y: hidden;
+  mask-image: linear-gradient(180deg, #000 65%, transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg, #000 65%, transparent 100%);
+}
+
+/* Collection and tag chips: one quiet row of outlined tags. */
+.chipRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+}
+
+.chipIcon {
+  flex: none;
+  width: 11px;
+  height: 11px;
+}
+
+/* The attachment row's type badge: the reference reader's
+ * `Full Text PDF — PDF` geometry. */
+.childKind {
+  flex: none;
+  font-size: 10px;
+  line-height: 12px;
+  font-weight: 650;
+  letter-spacing: 0.035em;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.inspectorHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.inspectorTitle {
+  margin: 0;
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  min-width: 0;
+  flex: 1;
+}
+
+.inspectorActions {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.metaTable {
+  margin: 0;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: 12px;
+  row-gap: 4px;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.metaRow {
+  display: contents;
+}
+
+.metaLabel {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-caption);
+  text-align: left;
+  user-select: none;
+}
+
+.metaValue {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  min-width: 0;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.copyInline {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--dsw-alias-link);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.copyInline:focus-visible {
+  outline: 1px solid var(--dsw-alias-link);
+  outline-offset: 1px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sectionTitle {
+  margin: 0 0 6px 0;
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-caption);
+  letter-spacing: 0.02em;
+}
+
+.abstract {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.childList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.childRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-2);
+  font-size: 12px;
+  line-height: 18px;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.childInfo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.childFileIcon {
+  flex: none;
+}
+
+.childIcon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.childTitle {
+  color: var(--dsw-alias-label-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  min-width: 0;
+}
+
+.childNote {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  padding: 6px 8px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+/* One child listing's pager: a quiet inline row, not a full-bleed footer. */
+.childPager {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* ── Write drawer ─────────────────────────────────────────────────────── */
+
+.writeCard {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  box-sizing: border-box;
+}
+
+.writeCard > summary {
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.writeForm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.writeField {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.writeFieldLabel {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-caption);
+}
+
+.writeInput,
+.writeSelect,
+.writeTextarea {
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 16px;
+  padding: 4px 8px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  box-sizing: border-box;
+}
+
+.writeTextarea {
+  resize: vertical;
+}
+
+.writeInput:focus,
+.writeSelect:focus,
+.writeTextarea:focus {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: -1px;
+}
+
+.writeConditionRow {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.writeConditionField {
+  flex: 1;
+}
+
+.writeSubmitButton {
+  align-self: flex-start;
+  height: 24px;
+  font-weight: 500;
+}
+
+.writeResult {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.writeResult strong {
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.writeResult pre {
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-2);
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.writeResultFailed,
+.writeResultFailed strong {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* ── Reduced motion ───────────────────────────────────────────────────── */
+
+/* ── Responsive ladders ─────────────────────────────────────────────────
+ * Mirroring the harness's own surfaces: hover affordances sit under
+ * `(hover: hover)` (a tap latches :hover), text fields take a 16px floor
+ * under `(pointer: coarse)` (iOS Safari zooms a focused field under 16px),
+ * and the container ladders reflow or hide rather than shrink — ordered so
+ * each step lands before the next needs it. */
+
+@media (hover: hover) {
+  .selectorButton:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+
+  .toolButton:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+
+  .tagRemoveButton:hover {
+    color: var(--dsw-alias-label-primary);
+  }
+
+  .filterClear:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+
+  .treeRowWrap:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+
+  .treeExpander:hover {
+    color: var(--dsw-alias-label-primary);
+  }
+
+  .treeRow:hover {
+    color: var(--dsw-alias-label-primary);
+  }
+
+  .itemRow:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+
+  .pageButton:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+
+  .writeCard > summary:hover {
+    color: var(--dsw-alias-label-primary);
+  }
+
+  .copyInline:hover {
+    text-decoration: underline dotted;
+    text-underline-offset: 3px;
+  }
+}
+
+/* The composer's own convention: a coarse pointer raises the input floor so
+ * the visual viewport never zooms on focus. */
+@media (pointer: coarse) {
+  .searchInputWrap input,
+  .filterNumberInput,
+  .writeInput,
+  .writeSelect,
+  .writeTextarea {
+    font-size: 16px;
+  }
+}
+
+/* The 1440px business axis the workspace shares: on a wide main column the
+ * three panes stop stretching and center, the toolbar stays full chrome. */
+@container zoteroLibraryPanel (max-width: 640px) {
+  /* The lamp dot carries the state on a narrow toolbar; the full text lives
+   * in the diagnostics menu and in the offline note. */
+  .statusText {
+    display: none;
+  }
+
+  .searchInputWrap {
+    max-width: none;
+    flex-basis: 200px;
+  }
+}
+
+@container zoteroLibraryPanel (max-width: 560px) {
+  .toolbar {
+    gap: 4px 6px;
+    padding: 0 6px 0 8px;
+  }
+
+  .filterRail {
+    padding-inline: 8px;
+  }
+
+  .inspectorPane {
+    padding-inline: 12px;
+  }
+}
+
+@container zoteroLibraryPanel (max-width: 460px) {
+  .toolbar {
+    padding: 0 4px 0 6px;
+  }
+
+  .listHeader {
+    padding-inline: 8px;
+  }
+
+  .listScrollArea {
+    padding-inline: 8px;
+  }
+
+  .paginator {
+    padding-inline: 8px;
+  }
+
+  /* The metadata table stacks: one full-width line per field on very narrow widths. */
+  .metaTable {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .selectorButton,
+  .toolButton,
+  .filterClear,
+  .treeRowWrap,
+  .treeExpander,
+  .treeRow,
+  .itemRow,
+  .pageButton {
+    transition: none;
+  }
+}
