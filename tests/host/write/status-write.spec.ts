@@ -1,0 +1,141 @@
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { setupHostLane, type HostLane } from '../../helpers/lanes/host-lane.js'
+import { STUB_EVENT_SEQ, stubCommandInvocation } from '../../helpers/stub-commands.js'
+import { formatStatus } from '../../../src/command.js'
+import { ZOTERO_WRITE_TOOL_NAMES } from '../../../src/constants.js'
+import { WRITE_DISABLED_SENTENCE, WRITE_POLICY_SENTENCE } from '../../../src/prompt.js'
+import type { ZoteroStatus } from '../../../src/types.js'
+
+let lane: HostLane | undefined
+
+beforeEach(() => {
+  lane = undefined
+})
+
+afterEach(async () => {
+  if (lane !== undefined) await lane.teardown()
+  lane = undefined
+})
+
+describe('the write state across the status surfaces', () => {
+  it('reports the write line on /zotero status while no key is stored yet', async () => {
+    lane = await setupHostLane({ writeEnabled: true }, { commands: true })
+    lane.mock.route('GET', '/api/', (_req, res, helpers) =>
+      helpers.json({}, { 'Zotero-Server-ID': 'srv-status-write1', 'X-Zotero-Version': '10.0.2' }),
+    )
+    const definition = lane.stub!.registered[0]!
+    const call = stubCommandInvocation('status')
+    const result = (await definition.handler(call)) as {
+      kind: string
+      text?: string
+      sourceEventSeq?: number
+    }
+    expect(result.kind).toBe('success')
+    expect(result.text).toContain('Write: enabled (no key yet)')
+    // The structured status travels as its own durable event, and the handler
+    // names that event's seq so the client card reads the projection instead
+    // of re-parsing the text. Both halves are the contract.
+    expect(call.appended).toHaveLength(1)
+    const [event] = call.appended
+    expect(event?.type).toBe('zotero/status')
+    const data = event?.data as { version: number; status: { connected: boolean } }
+    expect(data.version).toBe(1)
+    expect(data.status.connected).toBe(true)
+    expect(result.sourceEventSeq).toBe(STUB_EVENT_SEQ)
+  })
+
+  it('states the write policy in the prompt only while writes are enabled', async () => {
+    const on = await setupHostLane({ writeEnabled: true })
+    const assembly = await on.ctx.systemPrompt.assemble()
+    const section = assembly.sections.find((entry) => entry.name === 'zotero:policy')
+    expect(section?.text).toContain(WRITE_POLICY_SENTENCE)
+    expect(section?.text).not.toContain(WRITE_DISABLED_SENTENCE)
+    await on.teardown()
+    const off = await setupHostLane({})
+    const offAssembly = await off.ctx.systemPrompt.assemble()
+    const offSection = offAssembly.sections.find((entry) => entry.name === 'zotero:policy')
+    expect(offSection?.text).not.toContain(WRITE_POLICY_SENTENCE)
+    await off.teardown()
+  })
+
+  it('says writes are off, and forbids the out-of-band routes, while the capability is disabled', async () => {
+    const off = await setupHostLane({})
+    const assembly = await off.ctx.systemPrompt.assemble()
+    const section = assembly.sections.find((entry) => entry.name === 'zotero:policy')
+    const text = section?.text ?? ''
+    // The disabled state is stated, with the way to turn it on and the routes
+    // that stay out of bounds even when the user asks for the change directly.
+    expect(text).toContain(WRITE_DISABLED_SENTENCE)
+    expect(text).toContain('writeEnabled')
+    expect(text).toContain('do not call the Zotero local API yourself')
+    expect(text).toContain('out of bounds even when the user asks for the change directly')
+    await off.teardown()
+  })
+
+  it('keeps the model on the sanctioned path and off the verification read while writes are enabled', async () => {
+    const on = await setupHostLane({ writeEnabled: true })
+    const assembly = await on.ctx.systemPrompt.assemble()
+    const section = assembly.sections.find((entry) => entry.name === 'zotero:policy')
+    const text = section?.text ?? ''
+    expect(text).toContain('Write only through these tools')
+    expect(text).toContain('never ask for or reuse a local-API authorization key')
+    expect(text).toContain('report only what it proves and do not re-read to verify it')
+    // Every write tool the sanctioned path names, and nothing retired.
+    for (const name of ZOTERO_WRITE_TOOL_NAMES) expect(text).toContain(name)
+    expect(ZOTERO_WRITE_TOOL_NAMES).toHaveLength(15)
+    await on.teardown()
+  })
+})
+
+describe('formatStatus write line', () => {
+  const connected: ZoteroStatus = {
+    providerId: 'local',
+    endpoint: '127.0.0.1:23119',
+    connected: true,
+    diagnosis: 'ok',
+    zoteroVersion: '10.0.2',
+  }
+
+  it('reports disabled when write.enabled is false, regardless of authorization', () => {
+    const text = formatStatus({
+      ...connected,
+      write: { enabled: false, authorized: true },
+    })
+    expect(text).toContain('Write: disabled')
+    expect(text).not.toContain('key stored')
+    expect(text).not.toContain('no key yet')
+  })
+
+  it('reports the authorization state only while write.enabled is true', () => {
+    expect(formatStatus({ ...connected, write: { enabled: true, authorized: true } })).toContain(
+      'Write: enabled (key stored)',
+    )
+    expect(formatStatus({ ...connected, write: { enabled: true, authorized: false } })).toContain(
+      'Write: enabled (no key yet)',
+    )
+  })
+
+  it('omits the write line when the provider serves no writes', () => {
+    expect(formatStatus(connected)).not.toContain('Write:')
+  })
+
+  it('names the dialled endpoint on both the connected and the failed probe', () => {
+    // The address that did not answer is the first thing worth checking, so a
+    // disconnected status has to carry it too, not only the happy path.
+    expect(formatStatus(connected)).toContain('Local API: 127.0.0.1:23119')
+    const failed = formatStatus({
+      ...connected,
+      endpoint: 'localhost:23119',
+      connected: false,
+      diagnosis: 'ZOTERO_NOT_RUNNING: offline',
+    })
+    expect(failed).toContain('Local API: localhost:23119')
+    expect(failed).toContain('ZOTERO_NOT_RUNNING: offline')
+  })
+
+  it('leads the connected status with the endpoint so it is the first fact read', () => {
+    const lines = formatStatus(connected).split('\n')
+    expect(lines[0]).toBe('Zotero local API: connected')
+    expect(lines[1]).toBe('Local API: 127.0.0.1:23119')
+  })
+})

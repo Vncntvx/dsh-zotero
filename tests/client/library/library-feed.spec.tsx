@@ -1,0 +1,597 @@
+// @vitest-environment jsdom
+/** Independent request lanes, restoration and inspector lifetime. */
+import { act, cleanup, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
+import type { LibraryFeedFace } from '../../../src/client/components/library/useLibraryFeed.ts'
+import type { ZoteroLibraryBrowseRequestView } from '../../../src/contract.ts'
+import {
+  libraryStorageKey,
+  readLibraryState,
+  writeLibraryState,
+} from '../../../src/client/components/library/library-storage.ts'
+import {
+  ITEM_DETAIL,
+  LIBRARY_ROWS,
+  ROOT_COLLECTIONS,
+  SAVED_SEARCHES,
+  searchPage,
+} from '../helpers/library-panel-harness.tsx'
+import { deferred } from '../../helpers/sync.ts'
+import { setupLibraryFeed as setup } from '../helpers/library-feed-harness.ts'
+
+beforeEach(() => localStorage.clear())
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+  vi.restoreAllMocks()
+})
+
+describe('navigation lanes', () => {
+  it('pages two expanded collections independently when responses arrive in reverse order', async () => {
+    const pending = [deferred<any>(), deferred<any>()]
+    const browse = vi.fn(async (request: ZoteroLibraryBrowseRequestView) => {
+      if (request.kind === 'libraries') return { ok: true, value: LIBRARY_ROWS }
+      if (request.kind === 'savedSearches') return { ok: true, value: SAVED_SEARCHES }
+      if (request.offset === 50) return pending[request.parentRef?.endsWith('1') ? 0 : 1]!.promise
+      return { ok: true, value: { ...ROOT_COLLECTIONS, total: 53, nextOffset: 50 } }
+    }) as LibraryFeedFace['browse']
+    const { result } = setup({ browse })
+    await waitFor(() => expect(result.current.flatTree).toHaveLength(2))
+    const refs = ROOT_COLLECTIONS.items.map((row) => ('ref' in row ? row.ref : ''))
+    act(() => {
+      result.current.toggleCollection(refs[0]!)
+      result.current.toggleCollection(refs[1]!)
+    })
+    await waitFor(() => expect(result.current.treeLane(refs[1])?.phase).toBe('ready'))
+    act(() => {
+      result.current.pageTree(refs[0], 50)
+      result.current.pageTree(refs[1], 50)
+    })
+    await act(async () =>
+      pending[1]!.resolve({
+        ok: true,
+        value: { ...ROOT_COLLECTIONS, items: [], total: 53, offset: 50, returned: 0 },
+      }),
+    )
+    await act(async () =>
+      pending[0]!.resolve({
+        ok: true,
+        value: { ...ROOT_COLLECTIONS, total: 53, offset: 50, nextOffset: undefined },
+      }),
+    )
+    expect(result.current.treeLane(refs[0])).toMatchObject({
+      phase: 'ready',
+      offset: 50,
+      total: 53,
+    })
+    expect(result.current.treeLane(refs[1])).toMatchObject({ phase: 'ready', rows: [], offset: 50 })
+    expect(result.current.expanded.size).toBe(2)
+  })
+
+  it('retries only the failed root and retains the successful child lane', async () => {
+    let fail = true
+    const browse = vi.fn(async (request: ZoteroLibraryBrowseRequestView) => {
+      if (request.kind === 'libraries') return { ok: true, value: LIBRARY_ROWS }
+      if (request.kind === 'savedSearches') return { ok: true, value: SAVED_SEARCHES }
+      if (!request.parentRef && fail)
+        return { ok: false, error: new RemoteError('gateway/internal', 'root down', {}) }
+      return { ok: true, value: ROOT_COLLECTIONS }
+    }) as LibraryFeedFace['browse']
+    const { result } = setup({ browse })
+    await waitFor(() => expect(result.current.treeLane(undefined)?.phase).toBe('error'))
+    act(() => result.current.pageTree('child', 50))
+    await waitFor(() => expect(result.current.treeLane('child')?.phase).toBe('ready'))
+    fail = false
+    act(() => result.current.retryTree(undefined))
+    await waitFor(() => expect(result.current.treeLane(undefined)?.phase).toBe('ready'))
+    expect(result.current.treeLane('child')?.phase).toBe('ready')
+    expect(browse).toHaveBeenLastCalledWith(expect.objectContaining({ offset: 0 }))
+  })
+
+  it('makes saved searches after the first fifty reachable and retries the same page', async () => {
+    const browse = vi.fn(async (request: ZoteroLibraryBrowseRequestView) => {
+      if (request.kind === 'libraries') return { ok: true, value: LIBRARY_ROWS }
+      if (request.kind === 'savedSearches')
+        return {
+          ok: true,
+          value: {
+            ...SAVED_SEARCHES,
+            total: 53,
+            offset: request.offset,
+            ...(request.offset === 0 ? { nextOffset: 50 } : {}),
+          },
+        }
+      return { ok: true, value: ROOT_COLLECTIONS }
+    }) as LibraryFeedFace['browse']
+    const { result } = setup({ browse })
+    await waitFor(() => expect(result.current.savedSearches).toMatchObject({ nextOffset: 50 }))
+    act(() => result.current.pageSavedSearches(50))
+    await waitFor(() => expect(result.current.savedSearches).toMatchObject({ offset: 50 }))
+    act(() => result.current.retrySavedSearches())
+    await waitFor(() =>
+      expect(browse).toHaveBeenLastCalledWith(
+        expect.objectContaining({ kind: 'savedSearches', offset: 50 }),
+      ),
+    )
+  })
+})
+
+describe('list and inspector lifetime', () => {
+  it.each(['library', 'scope', 'mode', 'sort', 'page', 'query', 'filter'] as const)(
+    'clears the inspector on %s changes and discards a late detail',
+    async (change) => {
+      const old = deferred<any>()
+      const { result } = setup({ item: () => old.promise })
+      await waitFor(() => expect(result.current.list.phase).toBe('ready'))
+      act(() => result.current.selectItem(ITEM_DETAIL.ref))
+      await waitFor(() => expect(result.current.inspector?.phase).toBe('loading'))
+      act(() => {
+        const feed = result.current
+        if (change === 'library') feed.selectLibrary({ type: 'group', id: 123 })
+        if (change === 'scope') feed.selectScope({ kind: 'trash' })
+        if (change === 'mode') feed.setMode('everything')
+        if (change === 'sort') feed.setSort('title', 'asc')
+        if (change === 'page') feed.gotoOffset(50)
+        if (change === 'query') feed.setQ('new')
+        if (change === 'filter') feed.setFilters({ tags: ['read'] })
+      })
+      await act(async () => old.resolve({ ok: true, value: ITEM_DETAIL }))
+      expect(result.current.selectedRef).toBeUndefined()
+      expect(result.current.inspector).toBeUndefined()
+    },
+  )
+
+  it('debounces a changed query at offset zero and rejects the old list response', async () => {
+    vi.useFakeTimers()
+    const stale = deferred<any>()
+    const search = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, value: searchPage() })
+      .mockImplementationOnce(() => stale.promise)
+      .mockResolvedValue({ ok: true, value: searchPage({ items: [], total: 0, returned: 0 }) })
+    const { result } = setup({ search })
+    await act(async () => {})
+    act(() => result.current.gotoOffset(50))
+    await act(async () => {})
+    act(() => result.current.setQ('updated'))
+    await act(async () => vi.advanceTimersByTimeAsync(300))
+    expect(search).toHaveBeenLastCalledWith(expect.objectContaining({ q: 'updated', offset: 0 }))
+    await act(async () => stale.resolve({ ok: true, value: searchPage({ offset: 50 }) }))
+    expect(result.current.list).toMatchObject({ phase: 'ready', items: [] })
+  })
+
+  it('recovers a failed list without changing its parameters', async () => {
+    const search = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, error: new RemoteError('gateway/internal', 'down', {}) })
+      .mockResolvedValue({ ok: true, value: searchPage() })
+    const { result } = setup({ search })
+    await waitFor(() => expect(result.current.list.phase).toBe('error'))
+    act(() => result.current.retryList())
+    await waitFor(() => expect(result.current.list.phase).toBe('ready'))
+    expect(search.mock.calls[0]).toEqual(search.mock.calls[1])
+  })
+
+  it('keeps child pages independent and ignores child replies from a previously selected item', async () => {
+    const notes = deferred<any>()
+    const attachments = deferred<any>()
+    const item = vi.fn(async (request: any) =>
+      request.include.length === 3
+        ? { ok: true, value: ITEM_DETAIL }
+        : request.include[0] === 'notes'
+          ? notes.promise
+          : attachments.promise,
+    )
+    const { result } = setup({ item })
+    act(() => result.current.selectItem(ITEM_DETAIL.ref))
+    await waitFor(() => expect(result.current.inspector?.phase).toBe('ready'))
+    act(() => {
+      result.current.pageChild('notes', 50)
+      result.current.pageChild('attachments', 50)
+    })
+    await act(async () =>
+      attachments.resolve({
+        ok: true,
+        value: { ...ITEM_DETAIL, attachments: { ...ITEM_DETAIL.attachments, offset: 50 } },
+      }),
+    )
+    await act(async () =>
+      notes.resolve({
+        ok: true,
+        value: { ...ITEM_DETAIL, notes: { ...ITEM_DETAIL.notes, offset: 50 } },
+      }),
+    )
+    expect(result.current.inspector).toMatchObject({
+      detail: {
+        notes: { offset: 50 },
+        attachments: { offset: 50 },
+        annotations: ITEM_DETAIL.annotations,
+      },
+    })
+    const late = deferred<any>()
+    item.mockImplementationOnce(() => late.promise)
+    act(() => result.current.pageChild('notes', 100))
+    act(() => result.current.selectItem(undefined))
+    await act(async () => late.resolve({ ok: true, value: ITEM_DETAIL }))
+    expect(result.current.inspector).toBeUndefined()
+  })
+})
+
+describe('instance preferences', () => {
+  it('discards cross-instance or wrong-kind expanded refs and a group publications scope', () => {
+    writeLibraryState('S1', {
+      version: 1,
+      library: { type: 'group', id: 123 },
+      selection: { kind: 'publications' },
+      q: '',
+      mode: 'metadata',
+      sort: 'title',
+      direction: 'asc',
+      offset: 50,
+      filters: {},
+      expanded: [
+        'zotero://group/123/collection/COLL0001?server=S1',
+        'zotero://group/123/collection/COLL0002?server=S2',
+        'zotero://user/0/collection/COLL0001',
+        'zotero://group/123/search/SEARCH01',
+      ],
+    })
+    expect(readLibraryState('S1')).toMatchObject({
+      selection: { kind: 'library' },
+      offset: 0,
+      expanded: ['zotero://group/123/collection/COLL0001?server=S1'],
+    })
+  })
+
+  it.each(['zotero://user/0/search/SEARCH01', 'zotero://user/0/search/SEARCH01?server=S1'])(
+    'restores the saved-search selection and page for %s',
+    (ref) => {
+      writeLibraryState('S1', {
+        version: 1,
+        library: { type: 'user', id: 0 },
+        selection: { kind: 'savedSearch', ref, name: 'Unread' },
+        q: '',
+        mode: 'metadata',
+        sort: 'title',
+        direction: 'asc',
+        offset: 50,
+        expanded: [],
+        filters: {},
+      })
+      expect(readLibraryState('S1')).toMatchObject({
+        selection: { kind: 'savedSearch', ref, name: 'Unread' },
+        offset: 50,
+      })
+    },
+  )
+
+  it('ignores malformed or cross-instance storage without blocking startup', () => {
+    localStorage.setItem(libraryStorageKey('S1'), '{broken')
+    expect(readLibraryState('S1')).toBeUndefined()
+    localStorage.setItem(libraryStorageKey('S1'), JSON.stringify({ version: 2 }))
+    expect(readLibraryState('S1')).toBeUndefined()
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('quota')
+    })
+    expect(() =>
+      writeLibraryState('S1', {
+        version: 1,
+        library: { type: 'user', id: 0 },
+        selection: { kind: 'library' },
+        q: '',
+        mode: 'metadata',
+        sort: 'title',
+        direction: 'asc',
+        offset: 0,
+        expanded: [],
+        filters: {},
+      }),
+    ).not.toThrow()
+    expect(setItem).toHaveBeenCalled()
+  })
+
+  it('restores a confirmed instance and isolates another instance', async () => {
+    writeLibraryState('S1', {
+      version: 1,
+      library: { type: 'group', id: 123 },
+      selection: { kind: 'library' },
+      q: 'saved',
+      mode: 'everything',
+      sort: 'title',
+      direction: 'asc',
+      offset: 50,
+      expanded: [],
+      filters: { yearFrom: 2020 },
+    })
+    const { result, face, rerender } = setup()
+    await waitFor(() => expect(result.current.list.phase).toBe('ready'))
+    expect(face.search).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        library: { type: 'group', id: 123 },
+        q: 'saved',
+        offset: 50,
+        yearFrom: 2020,
+      }),
+    )
+    rerender({ id: 'S2' })
+    await waitFor(() => expect(result.current.q).toBe(''))
+    expect(result.current.currentLibrary).toEqual({ type: 'user', id: 0 })
+    expect(JSON.parse(localStorage.getItem(libraryStorageKey('S1'))!).q).toBe('saved')
+  })
+
+  it('returns to the library when a restored scope no longer exists', async () => {
+    writeLibraryState('S1', {
+      version: 1,
+      library: { type: 'user', id: 0 },
+      selection: {
+        kind: 'collection',
+        ref: 'zotero://user/0/collection/GONE0001?server=S1',
+        name: 'gone',
+      },
+      q: '',
+      mode: 'metadata',
+      sort: 'title',
+      direction: 'asc',
+      offset: 50,
+      expanded: [],
+      filters: {},
+    })
+    const search = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        error: new RemoteError('zotero/domain', 'gone', { code: 'ZOTERO_NOT_FOUND' }),
+      })
+      .mockResolvedValue({ ok: true, value: searchPage() })
+    const { result } = setup({ search })
+    await waitFor(() => expect(result.current.list.phase).toBe('ready'))
+    expect(result.current.selection).toEqual({ kind: 'library' })
+    expect(result.current.offset).toBe(0)
+  })
+})
+
+describe('targeted recovery and write refresh', () => {
+  it('reports rejected library and saved-search reads and recovers each independently', async () => {
+    const pending = deferred<Awaited<ReturnType<LibraryFeedFace['browse']>>>()
+    let rejectLibraries = true,
+      rejectSaved = true
+    const browse = vi.fn<LibraryFeedFace['browse']>(async (request) => {
+      if (request.kind === 'libraries') {
+        if (rejectLibraries) throw new Error('libraries disconnected')
+        return { ok: true, value: LIBRARY_ROWS }
+      }
+      if (request.kind === 'savedSearches') {
+        if (rejectSaved) return pending.promise
+        return { ok: true, value: SAVED_SEARCHES }
+      }
+      return { ok: true, value: ROOT_COLLECTIONS }
+    })
+    const { result } = setup({ browse })
+    await waitFor(() =>
+      expect(result.current.libraries).toEqual({
+        phase: 'error',
+        message: 'libraries disconnected',
+      }),
+    )
+    await act(async () => pending.reject(new Error('saved disconnected')))
+    await waitFor(() =>
+      expect(result.current.savedSearches).toMatchObject({
+        phase: 'error',
+        message: 'saved disconnected',
+      }),
+    )
+    rejectLibraries = false
+    rejectSaved = false
+    act(() => {
+      result.current.retryLibraries()
+      result.current.retrySavedSearches()
+    })
+    await waitFor(() => expect(result.current.libraries.phase).toBe('ready'))
+    await waitFor(() => expect(result.current.savedSearches.phase).toBe('ready'))
+  })
+
+  it('ignores library, saved-search, and tree failures superseded by a refresh', async () => {
+    const pendingLibraries = deferred<Awaited<ReturnType<LibraryFeedFace['browse']>>>()
+    const pendingSaved = deferred<Awaited<ReturnType<LibraryFeedFace['browse']>>>()
+    const pendingTree = deferred<Awaited<ReturnType<LibraryFeedFace['browse']>>>()
+    let first = true
+    const browse = vi.fn<LibraryFeedFace['browse']>(async (request) => {
+      if (first)
+        return request.kind === 'libraries'
+          ? pendingLibraries.promise
+          : request.kind === 'savedSearches'
+            ? pendingSaved.promise
+            : pendingTree.promise
+      return {
+        ok: true,
+        value:
+          request.kind === 'libraries'
+            ? LIBRARY_ROWS
+            : request.kind === 'savedSearches'
+              ? SAVED_SEARCHES
+              : ROOT_COLLECTIONS,
+      }
+    })
+    const { result } = setup({ browse })
+    await waitFor(() => expect(browse).toHaveBeenCalledTimes(3))
+    first = false
+    act(() => result.current.refresh())
+    await waitFor(() => expect(result.current.libraries.phase).toBe('ready'))
+    await act(async () => {
+      pendingLibraries.reject(new Error('old library error'))
+      pendingSaved.reject(new Error('old saved error'))
+      pendingTree.reject(new Error('old tree error'))
+    })
+    expect(result.current.libraries.phase).toBe('ready')
+    expect(result.current.savedSearches.phase).toBe('ready')
+    expect(result.current.treeLane(undefined)?.phase).toBe('ready')
+  })
+
+  it('falls back to the first available library when a restored group is no longer listed', async () => {
+    const { result } = setup()
+    await waitFor(() => expect(result.current.list.phase).toBe('ready'))
+    act(() => result.current.selectLibrary({ type: 'group', id: 999 }))
+    await waitFor(() => expect(result.current.currentLibrary).toEqual({ type: 'user', id: 0 }))
+  })
+
+  it('keeps a failed library search visible and ignores an inspector rejection after deselection', async () => {
+    const item = deferred<Awaited<ReturnType<LibraryFeedFace['item']>>>()
+    const search = vi.fn<LibraryFeedFace['search']>().mockResolvedValue({
+      ok: false,
+      error: new RemoteError('zotero/domain', 'scope missing', { code: 'ZOTERO_NOT_FOUND' }),
+    })
+    const { result } = setup({ search, item: () => item.promise })
+    await waitFor(() =>
+      expect(result.current.list).toEqual({ phase: 'error', message: 'scope missing' }),
+    )
+    expect(result.current.selection).toEqual({ kind: 'library' })
+    act(() => result.current.selectItem(ITEM_DETAIL.ref))
+    act(() => result.current.selectItem(undefined))
+    await act(async () => item.reject(new Error('late inspector failure')))
+    expect(result.current.inspector).toBeUndefined()
+  })
+  it('retains the tree page after a rejected page request and retries that offset', async () => {
+    const { result, face } = setup()
+    await waitFor(() => expect(result.current.treeLane(undefined)?.phase).toBe('ready'))
+    vi.mocked(face.browse).mockRejectedValueOnce(new Error('tree disconnected'))
+    act(() => result.current.pageTree(undefined, 50))
+    await waitFor(() =>
+      expect(result.current.treeLane(undefined)).toMatchObject({
+        phase: 'error',
+        message: 'tree disconnected',
+        previous: { rows: ROOT_COLLECTIONS.items },
+      }),
+    )
+    act(() => result.current.retryTree(undefined))
+    await waitFor(() => expect(result.current.treeLane(undefined)?.phase).toBe('ready'))
+    expect(face.browse).toHaveBeenLastCalledWith(
+      expect.objectContaining({ kind: 'collections', offset: 50 }),
+    )
+  })
+
+  it('keeps inspector detail through failed child pages and retries the failed offset', async () => {
+    const { result, face } = setup()
+    await waitFor(() => expect(result.current.list.phase).toBe('ready'))
+    act(() => result.current.selectItem(ITEM_DETAIL.ref))
+    await waitFor(() => expect(result.current.inspector?.phase).toBe('ready'))
+    vi.mocked(face.childPage).mockRejectedValueOnce(new Error('child disconnected'))
+    act(() => result.current.pageChild('notes', 50))
+    await waitFor(() =>
+      expect(result.current.childStates.notes).toEqual({
+        phase: 'error',
+        message: 'child disconnected',
+      }),
+    )
+    expect(result.current.inspector).toEqual({ phase: 'ready', detail: ITEM_DETAIL })
+    act(() => result.current.retryChild('notes'))
+    await waitFor(() => expect(result.current.childStates.notes).toBeUndefined())
+    expect(face.childPage).toHaveBeenLastCalledWith({
+      ref: ITEM_DETAIL.ref,
+      kind: 'notes',
+      offset: 50,
+      limit: 50,
+    })
+    vi.mocked(face.childPage).mockResolvedValueOnce({
+      ok: false as const,
+      error: new RemoteError('zotero/domain', 'child denied', { code: 'ZOTERO_NOT_FOUND' }),
+    })
+    act(() => result.current.pageChild('attachments', 0))
+    await waitFor(() =>
+      expect(result.current.childStates.attachments).toEqual({
+        phase: 'error',
+        message: 'child denied',
+      }),
+    )
+    expect(result.current.inspector?.phase).toBe('ready')
+  })
+
+  it('reports a child reply that answers a different kind as a child error', async () => {
+    const { result, face } = setup()
+    await waitFor(() => expect(result.current.list.phase).toBe('ready'))
+    act(() => result.current.selectItem(ITEM_DETAIL.ref))
+    await waitFor(() => expect(result.current.inspector?.phase).toBe('ready'))
+    vi.mocked(face.childPage).mockResolvedValueOnce({
+      ok: true,
+      value: {
+        kind: 'annotations',
+        page: { total: 0, returned: 0, offset: 0, limit: 50, items: [] },
+      },
+    })
+    act(() => result.current.pageChild('notes', 0))
+    await waitFor(() =>
+      expect(result.current.childStates.notes).toEqual({
+        phase: 'error',
+        message: 'The child page answered a different kind.',
+      }),
+    )
+    // The inspector keeps its detail; the mismatch never patches the state.
+    expect(result.current.inspector).toEqual({ phase: 'ready', detail: ITEM_DETAIL })
+  })
+
+  it('drops late child rejections after another item is selected', async () => {
+    const pending = deferred<Awaited<ReturnType<LibraryFeedFace['childPage']>>>()
+    const { result, face } = setup()
+    await waitFor(() => expect(result.current.list.phase).toBe('ready'))
+    act(() => result.current.selectItem(ITEM_DETAIL.ref))
+    await waitFor(() => expect(result.current.inspector?.phase).toBe('ready'))
+    vi.mocked(face.childPage).mockImplementationOnce(() => pending.promise)
+    act(() => result.current.pageChild('notes', 50))
+    act(() => result.current.selectItem(undefined))
+    await act(async () => pending.reject(new Error('old child failure')))
+    expect(result.current.inspector).toBeUndefined()
+    expect(result.current.childStates).toEqual({})
+  })
+
+  it.each(['items', 'collections', 'savedSearches'] as const)(
+    'refreshes only the affected navigation lane after a %s write',
+    async (kind) => {
+      const invalidate = vi.fn()
+      const { result, face } = setup({ invalidate })
+      await waitFor(() => expect(result.current.list.phase).toBe('ready'))
+      act(() => result.current.toggleCollection('zotero://user/0/collection/COLL0001'))
+      await waitFor(() =>
+        expect(result.current.treeLane('zotero://user/0/collection/COLL0001')?.phase).toBe('ready'),
+      )
+      act(() => result.current.selectItem(ITEM_DETAIL.ref))
+      await waitFor(() => expect(result.current.inspector?.phase).toBe('ready'))
+      const browse = vi.mocked(face.browse),
+        search = vi.mocked(face.search),
+        item = vi.mocked(face.item)
+      browse.mockClear()
+      search.mockClear()
+      item.mockClear()
+      act(() => result.current.refreshAffected(kind))
+      await waitFor(() => expect(search).toHaveBeenCalledTimes(1))
+      await waitFor(() => expect(item).toHaveBeenCalledTimes(1))
+      expect(invalidate).toHaveBeenCalledTimes(1)
+      const kinds = browse.mock.calls.map(([request]) => request.kind)
+      expect(kinds).toEqual(
+        kind === 'items'
+          ? []
+          : kind === 'collections'
+            ? ['collections', 'collections']
+            : ['savedSearches'],
+      )
+      expect(result.current.selectedRef).toBe(ITEM_DETAIL.ref)
+    },
+  )
+
+  it('retries the library list, search and inspector without resetting selection', async () => {
+    const { result, face } = setup()
+    await waitFor(() => expect(result.current.list.phase).toBe('ready'))
+    act(() => result.current.selectItem(ITEM_DETAIL.ref))
+    await waitFor(() => expect(result.current.inspector?.phase).toBe('ready'))
+    vi.mocked(face.browse).mockClear()
+    vi.mocked(face.search).mockClear()
+    vi.mocked(face.item).mockClear()
+    act(() => result.current.retryLibraries())
+    await waitFor(() => expect(face.browse).toHaveBeenCalledTimes(1))
+    expect(face.browse).toHaveBeenLastCalledWith({ kind: 'libraries', offset: 0, limit: 50 })
+    act(() => result.current.retryList())
+    await waitFor(() => expect(face.search).toHaveBeenCalledTimes(1))
+    act(() => result.current.retryInspector())
+    await waitFor(() => expect(face.item).toHaveBeenCalledTimes(1))
+    expect(result.current.selectedRef).toBe(ITEM_DETAIL.ref)
+  })
+})

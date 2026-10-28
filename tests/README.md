@@ -6,8 +6,7 @@ from, what an assertion is allowed to say, and what the guards will refuse.
 
 These rules apply to new and changed specs, helpers, fixtures, and test setup.
 The Guards section distinguishes automated checks from review requirements;
-a rule does not become optional because lint cannot check it yet. Existing
-files migrate incrementally under the size and migration rules below.
+a rule does not become optional because lint cannot check it yet.
 
 ## Layout: a spec's location is decided by what it tests
 
@@ -135,8 +134,8 @@ instead of reporting a mocked pass as live verification.
 
 - Keep a helper local when only one spec uses it. Put module-shared setup and
   fixtures in that module's `support/`; promote to `tests/helpers/` only when
-  independent modules share the same contract. Existing helper locations may
-  migrate gradually; move their definition instead of copying it.
+  independent modules share the same contract. When a helper outgrows its
+  module, move its definition instead of copying it.
 - Dependencies flow from specs to module support to public shared helpers.
   Shared helpers never import module support; support modules never import
   specs; specs never import other specs. Keep the helper graph acyclic.
@@ -216,10 +215,9 @@ instead of reporting a mocked pass as live verification.
 
 ### Complexity budgets
 
-These are review requirements until corresponding automation is added:
-
 - A new spec stays at or below 400 lines and a new helper at or below 300
-  lines. Count the complete file, including setup and comments. First split
+  lines. The helper budget is enforced by lint; the spec budget by review.
+  Count the complete file, including setup and comments. First split
   by responsibility; moving the same complexity into one oversized helper
   does not satisfy the rule.
 - Existing files above these budgets are grandfathered at their pre-change
@@ -235,7 +233,7 @@ These are review requirements until corresponding automation is added:
 
 ## Guards
 
-`npm run lint:test` (also the first step of `npm test`) enforces five
+`npm run lint:test` (also the first step of `npm test`) enforces seven
 mechanical rules; each one exists because this repository hit it:
 
 - no raw control bytes in source or prose. The SourcesTab spec (since split
@@ -247,7 +245,12 @@ mechanical rules; each one exists because this repository hit it:
 - no `.only`, `.skip` or `.todo` (gate a suite with `.runIf` instead);
 - no file extension under the text roots that is neither a declared text
   extension nor a declared binary one, so an asset type is skipped only after
-  someone decided it should be.
+  someone decided it should be;
+- helpers stay at or below 300 lines; files over the limit are frozen in a
+  path-specific baseline that only shrinks, and new files may never enter it;
+- helper imports flow specs → module support → shared helpers: no cross-module
+  support references, no support importing specs, no shared helper importing
+  module support.
 
 `vitest.config.ts` holds coverage ratchets per layer, each set just under
 what that layer measures today. They are not aspirations: a layer earns a
@@ -263,31 +266,20 @@ suite's actual maximum; deleting redundant tests does not lower a coverage
 floor. New module coverage floors require measured evidence, and directory
 moves must preserve the coverage include/exclude and threshold scope.
 
-The module layout, behaviour ownership, helper dependency rules, resource
-ownership, and 400/300-line budgets above are enforced by review today. The
-current lint does not check them. When adding automation, use an import graph
-for dependency rules and a path-specific baseline for oversized existing
-files; neither may silently exempt new violations. Add checks to the existing
-test lint entry point where appropriate and test the checks themselves.
+The module layout, behaviour ownership, and resource-ownership rules above
+remain review-enforced: lint proves file size and the import graph, not that a
+spec names one behaviour or releases the resources it creates. When adding
+automation, extend the existing test lint entry point and test the checks
+themselves; a baseline for oversized files may only shrink and must never
+silently exempt new violations.
 
-## Migration and validation
+## Validation
 
-1. Record the affected module's spec names/count, fixture owners, coverage
-   scope, and verification responsibilities before moving it. Measure runtime
-   before claiming a performance improvement.
-2. Move files and repair imports in a separate change from deleting cases or
-   changing assertions. A move preserves the collected case names/count and
-   behaviour. Preserve test discovery and both Node/client typecheck scopes.
-3. Separate pure logic from composition, then split mixed responsibilities.
-   Start with `client/library`, scholarly source adapters, and `local/write`;
-   keep each migration small enough to review independently.
-4. Consolidate support definitions and cleanup ownership without introducing
-   helper cycles. Before removing overlap, identify the primary test and the
-   retained live-protocol or write-entry checks.
-5. Run focused specs and `npm run typecheck`; add `npm run build:client` for
-   browser changes. Behaviour changes also require `npm test` and the relevant
-   acceptance packs. Shared test infrastructure or other cross-cutting changes
-   require `npm run release:check`. Report unexecuted live acceptance checks.
+Run focused specs and `npm run typecheck` during iteration; add
+`npm run build:client` for browser changes. Behaviour changes also require
+`npm test` and the relevant acceptance packs in `docs/scenarios.md`. Shared
+test infrastructure or other cross-cutting changes require
+`npm run release:check`. Report unexecuted live acceptance checks.
 
 Documentation-only rule changes need focused formatting and test-lint checks.
 They do not require running the behavioural suite when no executable files

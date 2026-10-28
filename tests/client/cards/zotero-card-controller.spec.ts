@@ -1,0 +1,121 @@
+/**
+ * The Zotero card controller: field projection over the `zotero` namespace
+ * and the inject face it hands to the slot registration.
+ * @module tests/client/cards/zotero-card-controller
+ */
+
+import { describe, expect, it, vi } from 'vitest'
+import { ZoteroCardController } from '../../../src/client/zotero-card-controller.ts'
+import { fakeScope } from '../helpers/fake-scope.ts'
+
+describe('ZoteroCardController', () => {
+  it('projects every Config field from the namespace section', () => {
+    const scope = fakeScope({
+      value: {
+        baseUrl: 'http://127.0.0.1:23119/api',
+        provider: 'local',
+        timeoutMs: 5000,
+        maxSearchResults: 20,
+        defaultStyle: 'apa',
+      },
+      base: { baseUrl: 'http://127.0.0.1:23119/api' },
+    })
+    const controller = new ZoteroCardController(scope)
+    const state = controller.inject().hooks.zoteroCard.getSnapshot()
+    expect(state.baseUrl.text).toBe('http://127.0.0.1:23119/api')
+    expect(state.baseUrl.overridden).toBe(false)
+    expect(state.provider.text).toBe('local')
+    expect(state.timeoutMs.text).toBe('5000')
+    expect(state.maxSearchResults.text).toBe('20')
+    expect(state.defaultStyle.text).toBe('apa')
+    // Fields the section does not carry render empty rather than a fake value.
+    expect(state.maxExportRefs.text).toBe('')
+    expect(state.available).toBe(true)
+  })
+
+  it('marks user-layer presence as overridden, not value equality', () => {
+    const scope = fakeScope({
+      value: { timeoutMs: 5000 },
+      user: { timeoutMs: 5000 },
+    })
+    const controller = new ZoteroCardController(scope)
+    const state = controller.inject().hooks.zoteroCard.getSnapshot()
+    expect(state.timeoutMs.overridden).toBe(true)
+  })
+
+  it('publishes a fresh projection when the scope changes', () => {
+    const scope = fakeScope({ value: { timeoutMs: 5000 } })
+    const controller = new ZoteroCardController(scope)
+    const store = controller.inject().hooks.zoteroCard
+    const before = store.getSnapshot()
+    void scope.set('timeoutMs', 7000)
+    expect(store.getSnapshot()).not.toBe(before)
+    expect(store.getSnapshot().timeoutMs.text).toBe('7000')
+  })
+
+  it('exposes the write actions the card binds', () => {
+    const scope = fakeScope({ value: {} })
+    const controller = new ZoteroCardController(scope)
+    const face = controller.inject()
+    expect(typeof face.edit).toBe('function')
+    expect(typeof face.resetField).toBe('function')
+    expect(typeof face.save).toBe('function')
+    expect(typeof face.discard).toBe('function')
+    expect(typeof face.hooks.zoteroCard.getSnapshot).toBe('function')
+    expect(typeof face.hooks.zoteroCard.subscribe).toBe('function')
+  })
+
+  it('reports an unavailable namespace through the shell', () => {
+    const controller = new ZoteroCardController(fakeScope({ status: 'unavailable' }))
+    const state = controller.inject().hooks.zoteroCard.getSnapshot()
+    expect(state.available).toBe(false)
+  })
+
+  it('rejects a boolean draft that is neither literal and blocks the save', async () => {
+    const scope = fakeScope({ value: { webEnabled: true } })
+    const controller = new ZoteroCardController(scope)
+    const face = controller.inject()
+    face.edit('webEnabled', 'maybe')
+    expect(face.hooks.zoteroCard.getSnapshot().webEnabled.invalid).toBe(true)
+    expect(face.hooks.zoteroCard.getSnapshot().invalid).toBe(true)
+    face.save()
+    await Promise.resolve()
+    expect(scope.writes).toEqual([])
+  })
+
+  it('saves a staged clear as an unset write', async () => {
+    const scope = fakeScope({
+      value: { timeoutMs: 5000 },
+      base: { timeoutMs: 5000 },
+      user: { timeoutMs: 5000 },
+    })
+    const controller = new ZoteroCardController(scope)
+    const face = controller.inject()
+    face.resetField('timeoutMs')
+    face.save()
+    await vi.waitFor(() => expect(scope.writes).toEqual([{ op: 'unset', field: 'timeoutMs' }]))
+  })
+
+  it('treats an empty boolean draft as clear, not as false', async () => {
+    const scope = fakeScope({
+      value: { webEnabled: true },
+      base: { webEnabled: true },
+      user: { webEnabled: true },
+    })
+    const controller = new ZoteroCardController(scope)
+    const face = controller.inject()
+    face.edit('webEnabled', '   ')
+    // Whitespace parses as clear: valid draft that unsets, never `false`.
+    expect(face.hooks.zoteroCard.getSnapshot().webEnabled.invalid).toBe(false)
+    face.save()
+    await vi.waitFor(() => expect(scope.writes).toEqual([{ op: 'unset', field: 'webEnabled' }]))
+  })
+
+  it('releases the namespace subscription on dispose', () => {
+    const scope = fakeScope({ value: {} })
+    const controller = new ZoteroCardController(scope)
+    expect(scope.unsubscribes).toBe(0)
+    controller.dispose()
+    expect(scope.unsubscribes).toBe(1)
+  })
+})
