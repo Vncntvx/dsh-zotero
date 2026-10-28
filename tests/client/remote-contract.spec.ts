@@ -1,14 +1,14 @@
 /**
  * The zotero Remote contract across the two halves: shared structural identity
- * (`contract.ts`) plus the host and client codec arms, which each materialize
- * their own strict schema for the same wire identity. Neither half may import
- * the other's schemas, so the parity cases below are the only thing standing
- * between a one-sided edit and a silent wire drift.
+ * (`contract.ts`) plus the host and client codec arms. Both arms materialize
+ * the same strict schemas from the shared `wire-schemas.ts`, so a schema edit
+ * serves both halves; the parity cases below still read each arm's own
+ * wrappers, so a wrapper wired to the wrong schema — or a schema dropped from
+ * one arm's import — fails here instead of on the wire.
  * @module tests/client/remote-contract
  */
 
 import { describe, expect, it } from 'vitest'
-import type { InvocationDescriptor } from '@deepseek-ai/dsh-typert-protocol'
 import { ZOTERO_REMOTE } from '../../src/client/remote.ts'
 import { ZOTERO_STATUS_CLIENT_RESULT_CODEC } from '../../src/client/status-codec.ts'
 import {
@@ -112,43 +112,7 @@ describe('zotero Remote contract layering', () => {
   })
 })
 
-/** The `{ mode, typeSymbol, create }` arm both halves hand the wire. */
-interface BoundaryCodec {
-  readonly mode: string
-  readonly typeSymbol: string
-  readonly create: () => { parse: (value: unknown) => unknown }
-}
-
-/** Which end of an invocation a boundary sits on. */
-type Boundary = { readonly kind: 'result' } | { readonly kind: 'param'; readonly index: number }
-
-/**
- * One wire boundary plus the verdicts both schema arms must reach. The sample
- * lists are hand-written per field on purpose: a reflection-based comparison
- * would compare the two schemas to each other and pass when both sides drift
- * the same way, which is exactly the failure a shared-identity contract must
- * not hide.
- */
-interface ParityCase {
-  /** The invocation method that carries the boundary. */
-  readonly method: string
-  /** Which end of that invocation it is. */
-  readonly boundary: Boundary
-  /** Human label used in failure messages. */
-  readonly wire: string
-  /** The strict typeSymbol the shared contract fixes for it. */
-  readonly typeSymbol: string
-  /** A value both arms must accept, to equal parsed results. */
-  readonly valid: unknown
-  /** Each entry omits a member the schema requires. */
-  readonly incomplete: readonly unknown[]
-  /** Each entry puts a member at a type the schema does not declare. */
-  readonly malformed: readonly unknown[]
-  /** Each entry adds a member `.strict()` must refuse. */
-  readonly undeclared: readonly unknown[]
-  /** Each entry names an enum member outside the declared set. */
-  readonly badEnum: readonly unknown[]
-}
+import { runRemoteParitySpec, type ParityCase } from './helpers/remote-parity.ts'
 
 const PARITY_CASES: readonly ParityCase[] = [
   {
@@ -301,79 +265,4 @@ const PARITY_CASES: readonly ParityCase[] = [
   },
 ]
 
-/** Locate one boundary's codec on a descriptor. */
-function codecAt(descriptor: InvocationDescriptor, boundary: Boundary): BoundaryCodec {
-  if (boundary.kind === 'result') return descriptor.result as BoundaryCodec
-  const parameter = descriptor.parameters[boundary.index]
-  if (parameter === undefined) {
-    throw new Error(`${descriptor.method} has no parameter at index ${boundary.index}`)
-  }
-  return parameter.codec as BoundaryCodec
-}
-
-/** Locate an invocation on either half by wire method. */
-function invocationOf(
-  invocations: readonly InvocationDescriptor[],
-  method: string,
-): InvocationDescriptor {
-  const found = invocations.find((entry) => entry.method === method)
-  if (found === undefined) throw new Error(`no invocation for ${method}`)
-  return found
-}
-
-describe('host/client schema parity', () => {
-  for (const testCase of PARITY_CASES) {
-    it(`fixes one strict codec on both arms for the ${testCase.wire}`, () => {
-      const hostCodec = codecAt(
-        invocationOf(TYPERT_MANIFEST.invocations, testCase.method),
-        testCase.boundary,
-      )
-      const clientCodec = codecAt(
-        invocationOf(ZOTERO_REMOTE.descriptors, testCase.method),
-        testCase.boundary,
-      )
-      expect(hostCodec.mode).toBe('strict')
-      expect(clientCodec.mode).toBe('strict')
-      expect(hostCodec.typeSymbol).toBe(testCase.typeSymbol)
-      expect(clientCodec.typeSymbol).toBe(testCase.typeSymbol)
-      expect(typeof hostCodec.create).toBe('function')
-      expect(typeof clientCodec.create).toBe('function')
-    })
-
-    it(`holds both arms to the same verdicts on the ${testCase.wire}`, () => {
-      const hostParse = codecAt(
-        invocationOf(TYPERT_MANIFEST.invocations, testCase.method),
-        testCase.boundary,
-      ).create()
-      const clientParse = codecAt(
-        invocationOf(ZOTERO_REMOTE.descriptors, testCase.method),
-        testCase.boundary,
-      ).create()
-      // A case whose refusal lists all emptied out would pass vacuously.
-      const refusals = [
-        ...testCase.incomplete,
-        ...testCase.malformed,
-        ...testCase.undeclared,
-        ...testCase.badEnum,
-      ]
-      expect(refusals.length, testCase.wire).toBeGreaterThanOrEqual(3)
-
-      const hostAccepted = hostParse.parse(testCase.valid)
-      expect(hostAccepted, testCase.wire).toEqual(testCase.valid)
-      expect(clientParse.parse(testCase.valid), testCase.wire).toEqual(hostAccepted)
-
-      const groups: readonly (readonly [string, readonly unknown[]])[] = [
-        ['incomplete', testCase.incomplete],
-        ['malformed', testCase.malformed],
-        ['undeclared', testCase.undeclared],
-        ['bad-enum', testCase.badEnum],
-      ]
-      for (const [group, samples] of groups) {
-        for (const sample of samples) {
-          expect(() => hostParse.parse(sample), `${testCase.wire} ${group}`).toThrow()
-          expect(() => clientParse.parse(sample), `${testCase.wire} ${group}`).toThrow()
-        }
-      }
-    })
-  }
-})
+runRemoteParitySpec(PARITY_CASES)

@@ -13,17 +13,31 @@
  * `zotero/status` and needs no `@Remote` markers.
  *
  * Invocations come from `status-codec.ts` (host zod factories); the client half
- * mounts structurally identical codecs of its own in `client/status-codec.ts`.
- * Structural endpoint identity is shared between the halves through
- * `contract.ts`, so only the codec arm differs by side. The model's
- * service key spells {@link ZOTERO_STATUS_SERVICE_KEY}, the same constant the
- * host Remote service and the invocation descriptor use.
+ * mounts its own codecs in `client/status-codec.ts`. Both arms materialize the
+ * same strict schemas from the client-safe `wire-schemas.ts`. Structural
+ * endpoint identity is shared through `contract.ts`; only the codec arm differs
+ * by side. The service key spells {@link ZOTERO_STATUS_SERVICE_KEY}, the same
+ * constant the host Remote service and the invocation descriptor use.
+ *
+ * The manifest declares the `zoteroLibrary` service of the separate
+ * `dsh-zotero/library` bundle row. Deliberate: Typert binds endpoints by
+ * composed service at runtime, so with the row disabled nothing answers, but
+ * the declaration stays here because the manifest is one static contribution
+ * per package. The browser-side `whileServed('library')` watch
+ * (`client/index.ts`) is therefore the only gate that keeps the panels from
+ * calling unbound endpoints.
  * @module dsh-zotero/typert
  */
 
 import type { TypertContribution } from '@deepseek-ai/dsh-typert-registry/types'
 import {
   ZOTERO_DIAGNOSTICS_METHOD,
+  ZOTERO_LIBRARY_BROWSE_METHOD,
+  ZOTERO_LIBRARY_CHILD_PAGE_METHOD,
+  ZOTERO_LIBRARY_ITEM_METHOD,
+  ZOTERO_LIBRARY_SEARCH_METHOD,
+  ZOTERO_LIBRARY_SERVICE_KEY,
+  ZOTERO_LIBRARY_WRITE_METHOD,
   ZOTERO_REMOTE_PACKAGE,
   ZOTERO_REPORT_CLIENT_ERROR_METHOD,
   ZOTERO_RESOLVE_ATTACHMENT_METHOD,
@@ -66,6 +80,45 @@ export const TYPERT_MANIFEST: TypertContribution = {
             name: ZOTERO_REPORT_CLIENT_ERROR_METHOD,
             signature:
               'reportClientError(report: ZoteroClientErrorReport, signal: AbortSignal): Promise<ZoteroReportResultView>',
+          },
+        ],
+        types: [],
+      },
+      {
+        key: ZOTERO_LIBRARY_SERVICE_KEY,
+        exportName: 'ZoteroLibraryService',
+        description: 'Serves library panel listings and approved mutations.',
+        tags: [],
+        members: [
+          {
+            kind: 'method',
+            name: ZOTERO_LIBRARY_BROWSE_METHOD,
+            signature:
+              'browse(request: ZoteroLibraryBrowseRequestView, signal: AbortSignal): Promise<ZoteroLibraryBrowseResultView>',
+          },
+          {
+            kind: 'method',
+            name: ZOTERO_LIBRARY_SEARCH_METHOD,
+            signature:
+              'search(request: ZoteroLibrarySearchRequestView, signal: AbortSignal): Promise<ZoteroSearchResultView>',
+          },
+          {
+            kind: 'method',
+            name: ZOTERO_LIBRARY_ITEM_METHOD,
+            signature:
+              'item(request: ZoteroLibraryItemRequestView, signal: AbortSignal): Promise<ZoteroItemDetailView>',
+          },
+          {
+            kind: 'method',
+            name: ZOTERO_LIBRARY_CHILD_PAGE_METHOD,
+            signature:
+              'childPage(request: ZoteroLibraryChildPageRequestView, signal: AbortSignal): Promise<ZoteroChildPageView>',
+          },
+          {
+            kind: 'method',
+            name: ZOTERO_LIBRARY_WRITE_METHOD,
+            signature:
+              'write(request: ZoteroLibraryWriteRequestView, signal: AbortSignal): Promise<ZoteroLibraryWriteResultView>',
           },
         ],
         types: [],

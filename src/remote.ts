@@ -18,6 +18,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import { TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
+import { domainCall, ZOTERO_NOT_COMPOSED_MESSAGE } from './errors.js'
 import { LOCAL_PROVIDER_ID } from './constants.js'
 import {
   DIAGNOSTIC_DETAIL_VALUE_MAX_CHARS,
@@ -25,6 +26,7 @@ import {
   clampText,
 } from './diagnostics.js'
 import { toStatusView } from './session-events.js'
+import { requireZoteroService } from './service.js'
 import {
   ZOTERO_SETTINGS_NAMESPACE,
   ZOTERO_STATUS_SERVICE_KEY,
@@ -69,7 +71,7 @@ export class ZoteroRuntime extends TypertRemoteService {
       return {
         providerId: LOCAL_PROVIDER_ID,
         connected: false,
-        diagnosis: 'The Zotero service is not composed.',
+        diagnosis: ZOTERO_NOT_COMPOSED_MESSAGE,
       }
     }
     return toStatusView(status)
@@ -81,12 +83,8 @@ export class ZoteroRuntime extends TypertRemoteService {
    * @returns the resolved location view.
    */
   async resolveAttachment(ref: string, signal: AbortSignal): Promise<ZoteroAttachmentLocationView> {
-    signal.throwIfAborted()
-    const service = this.ctx.get('zotero')
-    if (service === undefined) {
-      throw new Error('The Zotero service is not composed.')
-    }
-    return await service.resolveAttachment(ref, signal)
+    const service = requireZoteroService(this.ctx, signal)
+    return await domainCall(() => service.resolveAttachment(ref, signal))
   }
 
   /**
@@ -130,11 +128,7 @@ export class ZoteroRuntime extends TypertRemoteService {
     report: ZoteroClientErrorReport,
     signal: AbortSignal,
   ): Promise<ZoteroReportResultView> {
-    signal.throwIfAborted()
-    const service = this.ctx.get('zotero')
-    if (service === undefined) {
-      throw new Error('The Zotero service is not composed.')
-    }
+    const service = requireZoteroService(this.ctx, signal)
     const detail: Record<string, string> = {}
     if (report.stack !== undefined && report.stack !== '') {
       detail.stack = clampText(report.stack, DIAGNOSTIC_DETAIL_VALUE_MAX_CHARS)

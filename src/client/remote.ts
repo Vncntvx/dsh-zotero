@@ -18,12 +18,31 @@ import {
   type ZoteroAttachmentLocationView,
   type ZoteroClientErrorReport,
   type ZoteroDiagnosticsView,
+  type ZoteroItemDetailView,
+  type ZoteroChildPageView,
+  type ZoteroLibraryBrowseRequestView,
+  type ZoteroLibraryBrowseResultView,
+  type ZoteroLibraryChildPageRequestView,
+  type ZoteroLibraryItemRequestView,
+  type ZoteroLibrarySearchRequestView,
   type ZoteroReportResultView,
+  type ZoteroSearchResultView,
   type ZoteroStatusView,
+  type ZoteroLibraryWriteRequestView,
+  type ZoteroLibraryWriteResultView,
 } from '../contract.ts'
 import { ZOTERO_CLIENT_INVOCATIONS } from './status-codec.ts'
 
-export type { ZoteroDiagnosticsView, ZoteroStatusView } from '../contract.ts'
+export type {
+  ZoteroDiagnosticsView,
+  ZoteroItemDetailView,
+  ZoteroLibraryBrowseRequestView,
+  ZoteroLibraryBrowseResultView,
+  ZoteroLibraryItemRequestView,
+  ZoteroLibrarySearchRequestView,
+  ZoteroSearchResultView,
+  ZoteroStatusView,
+} from '../contract.ts'
 
 /** The `zotero` namespace's client contribution. */
 export const ZOTERO_REMOTE: TypertRemoteContribution = {
@@ -38,20 +57,48 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
   // read `ctx.remote.zotero` resolves it on that fiber.
   /** The `zotero` namespace face mounted under `ctx.remote.zotero`. */
   interface TypertRemoteNamespace$7a6f7465726f {
+    write: (
+      request: ZoteroLibraryWriteRequestView,
+    ) => Promise<RemoteResult<ZoteroLibraryWriteResultView>>
     status: () => Promise<RemoteResult<ZoteroStatusView>>
     resolveAttachment: (ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>
     diagnostics: () => Promise<RemoteResult<ZoteroDiagnosticsView>>
     reportClientError: (
       report: ZoteroClientErrorReport,
     ) => Promise<RemoteResult<ZoteroReportResultView>>
+    browse: (
+      request: ZoteroLibraryBrowseRequestView,
+    ) => Promise<RemoteResult<ZoteroLibraryBrowseResultView>>
+    search: (
+      request: ZoteroLibrarySearchRequestView,
+    ) => Promise<RemoteResult<ZoteroSearchResultView>>
+    item: (request: ZoteroLibraryItemRequestView) => Promise<RemoteResult<ZoteroItemDetailView>>
+    childPage: (
+      request: ZoteroLibraryChildPageRequestView,
+    ) => Promise<RemoteResult<ZoteroChildPageView>>
   }
   interface TypertRemoteMap {
+    'zotero/write': (
+      request: ZoteroLibraryWriteRequestView,
+    ) => Promise<RemoteResult<ZoteroLibraryWriteResultView>>
     'zotero/status': () => Promise<RemoteResult<ZoteroStatusView>>
     'zotero/resolveAttachment': (ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>
     'zotero/diagnostics': () => Promise<RemoteResult<ZoteroDiagnosticsView>>
     'zotero/reportClientError': (
       report: ZoteroClientErrorReport,
     ) => Promise<RemoteResult<ZoteroReportResultView>>
+    'zotero/browse': (
+      request: ZoteroLibraryBrowseRequestView,
+    ) => Promise<RemoteResult<ZoteroLibraryBrowseResultView>>
+    'zotero/search': (
+      request: ZoteroLibrarySearchRequestView,
+    ) => Promise<RemoteResult<ZoteroSearchResultView>>
+    'zotero/item': (
+      request: ZoteroLibraryItemRequestView,
+    ) => Promise<RemoteResult<ZoteroItemDetailView>>
+    'zotero/childPage': (
+      request: ZoteroLibraryChildPageRequestView,
+    ) => Promise<RemoteResult<ZoteroChildPageView>>
   }
   interface TypertRemoteNamespaceMap {
     zotero: TypertRemoteNamespace$7a6f7465726f

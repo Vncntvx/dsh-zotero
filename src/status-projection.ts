@@ -20,7 +20,7 @@ import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import { ZOTERO_STATUS_PROJECTION_KEY } from './projection-keys.js'
 import type { ZoteroStatusView } from './contract.js'
-import { zoteroStatusSchema } from './status-codec.js'
+import { zoteroStatusSchema } from './wire-schemas.js'
 
 /** Narrow one arbitrary session event to the status event this unit owns. */
 function statusEventOf(event: SessionEvent): ZoteroStatusView | undefined {

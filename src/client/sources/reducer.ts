@@ -219,7 +219,11 @@ function resolvedToSourceScope(scope: ZoteroResolvedScope): SourceScope {
   if (scope.kind === 'library') return { kind: 'library', library: scope.library }
   if (scope.kind === 'publications') return { kind: 'publications', library: scope.library }
   if (scope.kind === 'collection') return { kind: 'collection', ref: scope.ref, name: scope.name }
-  return { kind: 'savedSearch', ref: scope.ref, name: scope.name }
+  if (scope.kind === 'savedSearch') return { kind: 'savedSearch', ref: scope.ref, name: scope.name }
+  // Trash is the library panel's own scope; a tool result never carries it,
+  // and the Sources projection has no trash container, so it reads as the
+  // library it belongs to.
+  return { kind: 'library', library: scope.library }
 }
 
 /** The ref argument of one ref-carrying call; null when absent or unusable. */

@@ -1,162 +1,156 @@
 /**
- * Host-only strict boundary codec for `zotero/status`.
+ * Host-only strict boundary codecs for the `zotero` wire namespace.
  *
  * Typert host registration (`ctx.typert.register`) materializes schemas
  * through `create()` (upstream `perf(typert): materialize generated schemas
- * on first use`). Structural endpoint identity comes from `./contract.js`.
+ * on first use`). Structural endpoint identity comes from `./contract.js`;
+ * the strict schemas are the shared definitions in `./wire-schemas.js`, the
+ * same objects the client arm carries.
  * @module dsh-zotero/status-codec
  */
 
-import { z } from 'zod'
 import type { InvocationDescriptor } from '@deepseek-ai/dsh-typert-protocol'
 import {
   ZOTERO_CLIENT_ERROR_REPORT_TYPE_SYMBOL,
   ZOTERO_DIAGNOSTICS_TYPE_SYMBOL,
+  ZOTERO_LIBRARY_BROWSE_REQUEST_TYPE_SYMBOL,
+  ZOTERO_LIBRARY_BROWSE_RESULT_TYPE_SYMBOL,
+  ZOTERO_LIBRARY_CHILD_PAGE_REQUEST_TYPE_SYMBOL,
+  ZOTERO_LIBRARY_CHILD_PAGE_RESULT_TYPE_SYMBOL,
+  ZOTERO_LIBRARY_ITEM_REQUEST_TYPE_SYMBOL,
+  ZOTERO_LIBRARY_ITEM_RESULT_TYPE_SYMBOL,
+  ZOTERO_LIBRARY_SEARCH_REQUEST_TYPE_SYMBOL,
+  ZOTERO_LIBRARY_SEARCH_RESULT_TYPE_SYMBOL,
+  ZOTERO_LIBRARY_WRITE_REQUEST_TYPE_SYMBOL,
+  ZOTERO_LIBRARY_WRITE_RESULT_TYPE_SYMBOL,
   ZOTERO_REF_PARAM_TYPE_SYMBOL,
   ZOTERO_REPORT_RESULT_TYPE_SYMBOL,
   ZOTERO_RESOLVE_ATTACHMENT_TYPE_SYMBOL,
   ZOTERO_STATUS_TYPE_SYMBOL,
   zoteroDiagnosticsInvocation,
+  zoteroLibraryBrowseInvocation,
+  zoteroLibraryChildPageInvocation,
+  zoteroLibraryItemInvocation,
+  zoteroLibrarySearchInvocation,
+  zoteroLibraryWriteInvocation,
   zoteroReportClientErrorInvocation,
   zoteroResolveAttachmentInvocation,
   zoteroStatusInvocation,
-  type ZoteroAttachmentLocationView,
-  type ZoteroClientErrorReport,
-  type ZoteroDiagnosticsView,
-  type ZoteroReportResultView,
-  type ZoteroStatusView,
 } from './contract.js'
+import {
+  strictCodec,
+  zoteroAttachmentLocationSchema,
+  zoteroClientErrorReportSchema,
+  zoteroDiagnosticsSchema,
+  zoteroItemDetailSchema,
+  zoteroLibraryBrowseRequestSchema,
+  zoteroLibraryBrowseResultSchema,
+  zoteroLibraryChildPageRequestSchema,
+  zoteroLibraryItemRequestSchema,
+  zoteroLibrarySearchRequestSchema,
+  zoteroLibraryWriteRequestSchema,
+  zoteroLibraryWriteResultSchema,
+  zoteroRefSchema,
+  zoteroReportResultSchema,
+  zoteroSearchResultSchema,
+  zoteroStatusSchema,
+  zoteroChildPageSchema,
+} from './wire-schemas.js'
 
-/** Wire codec: one status view (strict; absent optional facts stay absent). */
-export const zoteroStatusSchema = z
-  .object({
-    providerId: z.string(),
-    // Optional on the wire because a service that is not composed dialled
-    // nothing; required of every answer that reached a provider, which is what
-    // `ZoteroStatus` (the provider's own record) carries.
-    endpoint: z.string().optional(),
-    connected: z.boolean(),
-    apiVersion: z.string().optional(),
-    serverId: z.string().optional(),
-    schemaVersion: z.string().optional(),
-    zoteroVersion: z.string().optional(),
-    write: z.object({ enabled: z.boolean(), authorized: z.boolean() }).strict().optional(),
-    // Optional on the wire because a connected probe has nothing to diagnose;
-    // the host-internal `ZoteroStatus` keeps the total field with the
-    // `ZOTERO_DIAGNOSIS_OK` sentinel, which the wire producer strips.
-    diagnosis: z.string().optional(),
-  })
-  .strict()
-  .readonly()
+const ZOTERO_STATUS_CODEC = strictCodec(ZOTERO_STATUS_TYPE_SYMBOL, zoteroStatusSchema)
 
-/**
- * Strict status codec. The `TypertCodec` strict arm is exactly
- * `{ mode, typeSymbol, create }` (plus optional `encode`/`decode` for
- * byte-carrying results, which this pure-JSON view does not need), so no live
- * `schema` property is carried.
- */
-const zoteroStatusCodec = {
-  mode: 'strict',
-  typeSymbol: ZOTERO_STATUS_TYPE_SYMBOL,
-  create: (): z.ZodType<ZoteroStatusView> => zoteroStatusSchema,
-} as const
+const ZOTERO_REF_PARAM_CODEC = strictCodec(ZOTERO_REF_PARAM_TYPE_SYMBOL, zoteroRefSchema)
 
-/** Wire codec: resolveAttachment parameter (a non-empty string ref). */
-const zoteroRefSchema = z.string().min(1)
+const ZOTERO_ATTACHMENT_LOCATION_CODEC = strictCodec(
+  ZOTERO_RESOLVE_ATTACHMENT_TYPE_SYMBOL,
+  zoteroAttachmentLocationSchema,
+)
 
-const zoteroRefParamCodec = {
-  mode: 'strict',
-  typeSymbol: ZOTERO_REF_PARAM_TYPE_SYMBOL,
-  create: (): z.ZodType<string> => zoteroRefSchema,
-} as const
+const ZOTERO_DIAGNOSTICS_CODEC = strictCodec(
+  ZOTERO_DIAGNOSTICS_TYPE_SYMBOL,
+  zoteroDiagnosticsSchema,
+)
 
-/** Wire codec: resolveAttachment result. */
-const zoteroAttachmentLocationSchema = z
-  .object({
-    ref: z.string(),
-    kind: z.enum(['file', 'url']),
-    title: z.string(),
-    contentType: z.string(),
-    path: z.string().optional(),
-    url: z.string().optional(),
-  })
-  .strict()
-  .readonly()
+const ZOTERO_CLIENT_ERROR_REPORT_CODEC = strictCodec(
+  ZOTERO_CLIENT_ERROR_REPORT_TYPE_SYMBOL,
+  zoteroClientErrorReportSchema,
+)
 
-const zoteroAttachmentLocationCodec = {
-  mode: 'strict',
-  typeSymbol: ZOTERO_RESOLVE_ATTACHMENT_TYPE_SYMBOL,
-  create: (): z.ZodType<ZoteroAttachmentLocationView> => zoteroAttachmentLocationSchema,
-} as const
+const ZOTERO_REPORT_RESULT_CODEC = strictCodec(
+  ZOTERO_REPORT_RESULT_TYPE_SYMBOL,
+  zoteroReportResultSchema,
+)
 
-/** Wire codec: one diagnostics snapshot (strict; the ring pre-strips absent optionals). */
-const zoteroDiagnosticsSchema = z
-  .object({
-    entries: z
-      .array(
-        z
-          .object({
-            seq: z.number(),
-            ts: z.number(),
-            level: z.enum(['debug', 'info', 'warn', 'error']),
-            event: z.string(),
-            message: z.string(),
-            count: z.number(),
-            detail: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
-          })
-          .strict()
-          .readonly(),
-      )
-      .readonly(),
-    total: z.number(),
-    truncated: z.boolean(),
-    debug: z.boolean(),
-  })
-  .strict()
-  .readonly()
+// ── Library panel endpoints ────────────────────────────────────────────────
 
-const zoteroDiagnosticsCodec = {
-  mode: 'strict',
-  typeSymbol: ZOTERO_DIAGNOSTICS_TYPE_SYMBOL,
-  create: (): z.ZodType<ZoteroDiagnosticsView> => zoteroDiagnosticsSchema,
-} as const
+const ZOTERO_LIBRARY_BROWSE_REQUEST_CODEC = strictCodec(
+  ZOTERO_LIBRARY_BROWSE_REQUEST_TYPE_SYMBOL,
+  zoteroLibraryBrowseRequestSchema,
+)
 
-/** Wire codec: reportClientError parameter (surface + message required, stacks optional). */
-const zoteroClientErrorReportSchema = z
-  .object({
-    surface: z.string().min(1),
-    message: z.string().min(1),
-    stack: z.string().optional(),
-    componentStack: z.string().optional(),
-  })
-  .strict()
-  .readonly()
+const ZOTERO_LIBRARY_BROWSE_RESULT_CODEC = strictCodec(
+  ZOTERO_LIBRARY_BROWSE_RESULT_TYPE_SYMBOL,
+  zoteroLibraryBrowseResultSchema,
+)
 
-const zoteroClientErrorReportCodec = {
-  mode: 'strict',
-  typeSymbol: ZOTERO_CLIENT_ERROR_REPORT_TYPE_SYMBOL,
-  create: (): z.ZodType<ZoteroClientErrorReport> => zoteroClientErrorReportSchema,
-} as const
+const ZOTERO_LIBRARY_SEARCH_REQUEST_CODEC = strictCodec(
+  ZOTERO_LIBRARY_SEARCH_REQUEST_TYPE_SYMBOL,
+  zoteroLibrarySearchRequestSchema,
+)
 
-/** Wire codec: reportClientError result (the ring sequence the report was assigned). */
-const zoteroReportResultSchema = z.object({ seq: z.number() }).strict().readonly()
+const ZOTERO_SEARCH_RESULT_CODEC = strictCodec(
+  ZOTERO_LIBRARY_SEARCH_RESULT_TYPE_SYMBOL,
+  zoteroSearchResultSchema,
+)
 
-const zoteroReportResultCodec = {
-  mode: 'strict',
-  typeSymbol: ZOTERO_REPORT_RESULT_TYPE_SYMBOL,
-  create: (): z.ZodType<ZoteroReportResultView> => zoteroReportResultSchema,
-} as const
+const ZOTERO_LIBRARY_ITEM_REQUEST_CODEC = strictCodec(
+  ZOTERO_LIBRARY_ITEM_REQUEST_TYPE_SYMBOL,
+  zoteroLibraryItemRequestSchema,
+)
+
+const ZOTERO_ITEM_DETAIL_CODEC = strictCodec(
+  ZOTERO_LIBRARY_ITEM_RESULT_TYPE_SYMBOL,
+  zoteroItemDetailSchema,
+)
+
+const ZOTERO_LIBRARY_CHILD_PAGE_REQUEST_CODEC = strictCodec(
+  ZOTERO_LIBRARY_CHILD_PAGE_REQUEST_TYPE_SYMBOL,
+  zoteroLibraryChildPageRequestSchema,
+)
+
+const ZOTERO_CHILD_PAGE_CODEC = strictCodec(
+  ZOTERO_LIBRARY_CHILD_PAGE_RESULT_TYPE_SYMBOL,
+  zoteroChildPageSchema,
+)
+
+const ZOTERO_LIBRARY_WRITE_REQUEST_CODEC = strictCodec(
+  ZOTERO_LIBRARY_WRITE_REQUEST_TYPE_SYMBOL,
+  zoteroLibraryWriteRequestSchema,
+)
+
+const ZOTERO_LIBRARY_WRITE_RESULT_CODEC = strictCodec(
+  ZOTERO_LIBRARY_WRITE_RESULT_TYPE_SYMBOL,
+  zoteroLibraryWriteResultSchema,
+)
 
 /** Host Typert manifest invocations (real zod factory). */
 export const ZOTERO_INVOCATIONS: readonly InvocationDescriptor[] = [
-  zoteroStatusInvocation(zoteroStatusCodec as InvocationDescriptor['result']),
-  zoteroResolveAttachmentInvocation(
-    zoteroRefParamCodec as InvocationDescriptor['parameters'][number]['codec'],
-    zoteroAttachmentLocationCodec as InvocationDescriptor['result'],
+  zoteroStatusInvocation(ZOTERO_STATUS_CODEC),
+  zoteroResolveAttachmentInvocation(ZOTERO_REF_PARAM_CODEC, ZOTERO_ATTACHMENT_LOCATION_CODEC),
+  zoteroDiagnosticsInvocation(ZOTERO_DIAGNOSTICS_CODEC),
+  zoteroReportClientErrorInvocation(ZOTERO_CLIENT_ERROR_REPORT_CODEC, ZOTERO_REPORT_RESULT_CODEC),
+  zoteroLibraryBrowseInvocation(
+    ZOTERO_LIBRARY_BROWSE_REQUEST_CODEC,
+    ZOTERO_LIBRARY_BROWSE_RESULT_CODEC,
   ),
-  zoteroDiagnosticsInvocation(zoteroDiagnosticsCodec as InvocationDescriptor['result']),
-  zoteroReportClientErrorInvocation(
-    zoteroClientErrorReportCodec as InvocationDescriptor['parameters'][number]['codec'],
-    zoteroReportResultCodec as InvocationDescriptor['result'],
+  zoteroLibrarySearchInvocation(ZOTERO_LIBRARY_SEARCH_REQUEST_CODEC, ZOTERO_SEARCH_RESULT_CODEC),
+  zoteroLibraryItemInvocation(ZOTERO_LIBRARY_ITEM_REQUEST_CODEC, ZOTERO_ITEM_DETAIL_CODEC),
+  zoteroLibraryChildPageInvocation(
+    ZOTERO_LIBRARY_CHILD_PAGE_REQUEST_CODEC,
+    ZOTERO_CHILD_PAGE_CODEC,
+  ),
+  zoteroLibraryWriteInvocation(
+    ZOTERO_LIBRARY_WRITE_REQUEST_CODEC,
+    ZOTERO_LIBRARY_WRITE_RESULT_CODEC,
   ),
 ]

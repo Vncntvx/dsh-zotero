@@ -178,10 +178,19 @@ describe('the zotero typert manifest', () => {
       'resolveAttachment',
       'diagnostics',
       'reportClientError',
+      'browse',
+      'search',
+      'item',
+      'childPage',
+      'write',
     ])
     for (const invocation of TYPERT_MANIFEST.invocations) {
       expect(invocation.namespace).toBe('zotero')
-      expect(invocation.service).toBe('zoteroRemote')
+      if (['browse', 'search', 'item', 'childPage', 'write'].includes(invocation.method)) {
+        expect(invocation.service).toBe('zoteroLibrary')
+      } else {
+        expect(invocation.service).toBe('zoteroRemote')
+      }
     }
     const status = TYPERT_MANIFEST.invocations.find((invocation) => invocation.method === 'status')
     expect(status?.result).toMatchObject({
