@@ -232,6 +232,22 @@ describe('zotero_search tool', () => {
     expect((result.content[0] as { text: string }).text).toContain(searchMoreMessage(1))
   })
 
+  it('declares the doi a hit carries, so a DOI-bearing library still returns results', async () => {
+    const doiHit = searchHit({
+      data: {
+        itemType: 'preprint',
+        date: '2026-09-23',
+        DOI: '10.48550/arXiv.2609.28589',
+      },
+    })
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers) =>
+      helpers.json([doiHit], { 'Total-Results': '1' }),
+    )
+    const result = expectValue(await runTool('zotero_search', { limit: 5 }), 'zotero_search')
+    const items = (result.value as { items: { doi?: string }[] }).items
+    expect(items[0]?.doi).toBe('10.48550/arXiv.2609.28589')
+  })
+
   it('declares itself concurrency-safe', () => {
     const definition = lane.tool('zotero_search')!
     expect(definition.isConcurrencySafe?.({})).toBe(true)

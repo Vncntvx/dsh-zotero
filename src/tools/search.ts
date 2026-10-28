@@ -187,6 +187,7 @@ const SEARCH_ITEM_SCHEMA = {
     bestAttachmentType: { type: 'string' },
     attachmentSize: { type: 'integer' },
     extra: { type: 'string' },
+    doi: { type: 'string' },
   },
 } as const
 
