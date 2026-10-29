@@ -5,7 +5,7 @@ dsh-zotero is a DeepSeek Harness plugin enabling agents to search, read, cite, a
 ## Workspace
 
 - Developed as a sibling checkout of `../deepseek-harness`. Upstream contracts outrank this file.
-- Baseline harness pin is `dsh 0.2.1-rc.4`. Use `npm run link:local-harness` when local types drift.
+- Baseline harness pin is `dsh 0.2.1-rc.3`. Use `npm run link:local-harness` when local types drift.
 - Vendored framework packages (`cordis`, `cosmokit`, `schemastery`, `cordis-plugin-*`) track the sibling's `vendor/<pkg>/package.json` version, not a prerelease range. A `^X.Y.Z-alpha.N` base pins the lockfile to a prerelease even after the stable tag ships, producing two `cordis` instances in the profile. `node scripts/harness-state.mjs` fails when a vendor declaration's `minVersion` differs from the sibling's version.
 
 ## Repository map

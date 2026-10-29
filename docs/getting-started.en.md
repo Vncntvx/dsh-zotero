@@ -9,7 +9,7 @@ dsh-zotero is a Zotero plugin for DeepSeek Harness that enables agents to search
 - Zotero ≥ 7 desktop installed (reads require Zotero ≥ 7; writes require Zotero 10)
 - Local API enabled: **Settings → Advanced → check "Allow other applications on this computer to communicate with Zotero"**
 - Node.js ≥ 22.19 or ≥ 24
-- Host dsh >= 0.2.1-rc.4
+- Host dsh >= 0.2.1-rc.3
 
 Version mapping:
 
@@ -38,6 +38,7 @@ Version mapping:
 | 0.13.0         | 0.2.1-rc.2                  |
 | 0.13.1         | 0.2.1-rc.3                  |
 | 0.14.0         | 0.2.1-rc.4                  |
+| 0.14.1         | 0.2.1-rc.3                  |
 
 ## Installing the Plugin
 
