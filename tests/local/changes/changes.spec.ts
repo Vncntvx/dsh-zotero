@@ -11,7 +11,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
-import { cursorLibraryMismatchMessage } from '../../../src/local/changes-domain.js'
+import { cursorLibraryMismatchMessage } from '../../../src/local/changes-cursor.js'
 import { type LocalApiProvider } from '../../../src/local/provider.js'
 import type { ZoteroChangesCursor, ZoteroChangesInclude } from '../../../src/types.js'
 import {

@@ -1,6 +1,6 @@
 /** Every create index settles once, including uncertain commits and authorization renewal. */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { batchItems } from '../../../src/local/write-domain.js'
+import { batchItems } from '../../../src/local/write-batch.js'
 import { WRITE_UNAUTHORIZED_AFTER_AUTH_MESSAGE } from '../../../src/errors.js'
 import {
   batchHeaders,

@@ -16,7 +16,7 @@ import {
 } from './write-present.js'
 import { parseWritableRef, assertNoteMarkdown, WRITE_REF_ARG_HINT } from './validate.js'
 import { WRITE_PLAN_LIBRARY_LINE, WRITE_PLAN_OUTCOME_DESCRIPTION } from '../write-approval.js'
-import { truncateText } from '../normalize.js'
+import { truncateText } from '../normalize-context.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroUpdateNoteOutcome, ZoteroUpdateNoteRequest } from '../types.js'
 

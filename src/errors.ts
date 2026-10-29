@@ -101,6 +101,17 @@ export class ZoteroError extends HarnessError {
   }
 }
 
+/**
+ * Throw an argument error: the message is model-facing and names the offending
+ * value. The argument schemas cannot express every domain constraint, so tool
+ * and endpoint validation fail through this one typed refusal.
+ * @param message - the model-facing argument error text.
+ * @throws {ZoteroError} `ZOTERO_INVALID_ARGUMENT`.
+ */
+export function invalid(message: string): never {
+  throw new ZoteroError(message, ZOTERO_INVALID_ARGUMENT)
+}
+
 /** Setting checkbox label in Zotero Preferences -> Advanced -> Allow other applications... */
 export const ZOTERO_ALLOW_OTHER_APPLICATIONS_HINT =
   'Allow other applications on this computer to communicate with Zotero'

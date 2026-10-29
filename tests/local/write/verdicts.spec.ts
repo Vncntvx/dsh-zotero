@@ -9,13 +9,10 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import {
-  createCollection,
-  createItem,
-  createNote,
-  deleteCollection,
-  updateItemTags,
-} from '../../../src/local/write-domain.js'
+import { createItem } from '../../../src/local/write-domain.js'
+import { createNote } from '../../../src/local/write-notes.js'
+import { updateItemTags } from '../../../src/local/write-item-lists.js'
+import { createCollection, deleteCollection } from '../../../src/local/write-collections.js'
 import { OBJECT_NOT_FOUND_MESSAGE } from '../../../src/http-client.js'
 import {
   SERVER_MISMATCH_MESSAGE,

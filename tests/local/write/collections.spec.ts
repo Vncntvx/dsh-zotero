@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { updateItemCollections } from '../../../src/local/write-domain.js'
+import { updateItemCollections } from '../../../src/local/write-item-lists.js'
 import {
   WRITE_LIST_SELECTION_MESSAGE,
   WRITE_VERSION_MISSING_MESSAGE,

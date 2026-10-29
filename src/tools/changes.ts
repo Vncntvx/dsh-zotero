@@ -21,6 +21,7 @@ import {
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
 import { asRecord } from '../json.js'
+import { invalid } from '../errors.js'
 import {
   ALL_CHANGES_INCLUDES,
   DEFAULT_CHANGES_INCLUDES as DEFAULT_INCLUDES,
@@ -30,7 +31,6 @@ import { metaRecordOf } from './present.js'
 import {
   assertIntInRange,
   assertNonEmptyList,
-  invalid,
   LIBRARY_SCHEMA,
   parseLibrary,
   requireLibrary,

@@ -18,7 +18,7 @@ import {
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
 import type { ResolvedConfig } from '../config.js'
-import { writeListEmptyMessage } from '../errors.js'
+import { invalid, writeListEmptyMessage } from '../errors.js'
 import { runPreview } from './degradable.js'
 import { renderDeclined } from './present.js'
 import {
@@ -26,7 +26,7 @@ import {
   libraryVersionLine,
   presentDeleteResultView,
 } from './write-present.js'
-import { assertWriteList, invalid } from './validate.js'
+import { assertWriteList } from './validate.js'
 import { WRITE_PLAN_OUTCOME_DESCRIPTION, WRITE_PLAN_LIBRARY_LINE } from '../write-approval.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroDeleteLibraryTagsOutcome, ZoteroDeleteLibraryTagsRequest } from '../types.js'

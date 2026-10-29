@@ -15,15 +15,11 @@ import { assertServerIdMatches, serverIdFromHeaders } from './identity.js'
 import { asRecord, asString } from '../json.js'
 import { ZOTERO_INVALID_ARGUMENT, ZoteroError } from '../errors.js'
 import { ZOTERO_CHILD_PAGE_MAX_ROWS, ZOTERO_CHILD_PAGE_ROWS } from '../constants.js'
-import type { NormalizeContext } from '../normalize.js'
-import { type ZoteroChildKind } from '../normalize.js'
-import {
-  attachmentRecordOf,
-  childCollection,
-  collectionKeysOf,
-  normalizeItemDetail,
-  partitionChildren,
-} from '../normalize.js'
+import type { NormalizeContext } from '../normalize-context.js'
+import { type ZoteroChildKind } from '../normalize-children.js'
+import { childCollection, normalizeItemDetail } from '../normalize-item-detail.js'
+import { collectionKeysOf } from '../normalize-search.js'
+import { attachmentRecordOf, partitionChildren } from '../normalize-children.js'
 import { libraryPrefix, refStringFor, requireSupportedLocalRef } from '../refs.js'
 import type { ScopeDirectory } from './scope-directory.js'
 import type { LocalApiLimits } from './limits.js'

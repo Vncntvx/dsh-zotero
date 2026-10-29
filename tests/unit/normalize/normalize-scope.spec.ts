@@ -9,12 +9,14 @@ import { describe, expect, it } from 'vitest'
 import { formatCreatorDisplayName } from '../../../src/creators.js'
 import {
   collectionKeysOf,
+  normalizeCreators,
+  normalizeVenue,
+} from '../../../src/normalize-search.js'
+import {
   matchScopeName,
   nearScopeCandidates,
-  normalizeCreators,
   normalizeScopeEntry,
-  normalizeVenue,
-} from '../../../src/normalize.js'
+} from '../../../src/normalize-scope.js'
 import { expectUnexpected } from './normalize-helpers.js'
 
 describe('normalizeScopeEntry', () => {

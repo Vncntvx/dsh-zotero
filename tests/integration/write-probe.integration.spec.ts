@@ -23,17 +23,14 @@ import type { ZoteroWriteHttpClient } from '../../src/write-http.js'
 import { WriteAuthorizer } from '../../src/write-auth.js'
 import { PERSONAL_LIBRARY } from '../../src/refs.js'
 import { resolveCollectionsMixed, ScopeDirectory } from '../../src/local/scope-directory.js'
-import {
-  createNote,
-  createItem,
-  createCollection,
-  batchItems,
-  restoreItems,
-  updateNote,
-  fetchItemTypeFields,
-  updateItemTags,
-  type WriteDomainDeps,
-} from '../../src/local/write-domain.js'
+import { createItem } from '../../src/local/write-domain.js'
+import type { WriteDomainDeps } from '../../src/local/write-deps.js'
+import { createNote, updateNote } from '../../src/local/write-notes.js'
+import { restoreItems } from '../../src/local/write-library-maintenance.js'
+import { updateItemTags } from '../../src/local/write-item-lists.js'
+import { batchItems } from '../../src/local/write-batch.js'
+import { createCollection } from '../../src/local/write-collections.js'
+import { ItemSchemaDirectory } from '../../src/local/item-schema-directory.js'
 import { testHttpClient, testWriteClient } from '../helpers/test-clients.js'
 
 const BASE_URL = process.env.ZOTERO_BASE_URL ?? 'http://127.0.0.1:23119/api'
@@ -69,6 +66,7 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1' && process.env.ZOTERO_WRIT
       await client.get('', undefined, {})
       serverId = client.serverId ?? ''
       expect(serverId).not.toBe('')
+      const itemSchema = new ItemSchemaDirectory(client)
       deps = {
         client,
         writer,
@@ -83,7 +81,7 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1' && process.env.ZOTERO_WRIT
           ).then((refs) => refs[0]!),
         resolveCollections: (inputs, signal) =>
           resolveCollectionsMixed(directory, inputs, PERSONAL_LIBRARY, signal, client.serverId),
-        itemTypeFields: (itemType, signal) => fetchItemTypeFields({ client }, itemType, signal),
+        itemTypeFields: (itemType, signal) => itemSchema.getWritableItemFields(itemType, signal),
       }
     })
 

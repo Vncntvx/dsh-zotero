@@ -44,26 +44,33 @@ import { getAttachmentLocation as attachmentLocationDomain } from './attachment-
 import { exportItems as exportItemsDomain } from './export-domain.js'
 import { changes as changesDomain } from './changes-domain.js'
 import { runBrowse } from './browse-domain.js'
+import { ItemSchemaDirectory } from './item-schema-directory.js'
+import type { WriteDomainDeps } from './write-deps.js'
 import {
-  batchItems as batchItemsDomain,
-  createCollection as createCollectionDomain,
   createItem as createItemDomain,
-  createNote as createNoteDomain,
-  deleteCollection as deleteCollectionDomain,
-  deleteLibraryTags as deleteLibraryTagsDomain,
-  fetchItemTypeFields,
   updateItem as updateItemDomain,
+  writeCapabilityUnavailableMessage,
+} from './write-domain.js'
+import {
+  deleteLibraryTags as deleteLibraryTagsDomain,
+  restoreItems as restoreItemsDomain,
+} from './write-library-maintenance.js'
+import { createNote as createNoteDomain, updateNote as updateNoteDomain } from './write-notes.js'
+import {
   updateItemCollections as updateItemCollectionsDomain,
   updateItemTags as updateItemTagsDomain,
-  updateNote as updateNoteDomain,
+} from './write-item-lists.js'
+import { batchItems as batchItemsDomain } from './write-batch.js'
+import {
+  createCollection as createCollectionDomain,
+  deleteCollection as deleteCollectionDomain,
   updateCollection as updateCollectionDomain,
-  restoreItems as restoreItemsDomain,
+} from './write-collections.js'
+import {
   createSavedSearch as createSavedSearchDomain,
   updateSavedSearch as updateSavedSearchDomain,
   deleteSavedSearch as deleteSavedSearchDomain,
-  type WriteDomainDeps,
-  writeCapabilityUnavailableMessage,
-} from './write-domain.js'
+} from './write-saved-searches.js'
 import type { WriteAuthorizer } from '../write-auth.js'
 import type { ZoteroWriteHttpClient } from '../write-http.js'
 import type {
@@ -127,6 +134,7 @@ export class LocalApiProvider implements ZoteroProvider {
   readonly capabilities: ReadonlySet<ZoteroCapability>
 
   private readonly directory: ScopeDirectory
+  private readonly itemSchema: ItemSchemaDirectory
   private readonly getLimits: () => LocalApiLimits
   private readonly searchCaches: SearchIndexCaches
 
@@ -151,6 +159,7 @@ export class LocalApiProvider implements ZoteroProvider {
       () => this.getLimits().graphConcurrency,
       sink,
     )
+    this.itemSchema = new ItemSchemaDirectory(client)
     // `write` is declared only when the write collaborators are wired: a
     // capability without its method would be a gate that routes into
     // nothing.
@@ -197,7 +206,7 @@ export class LocalApiProvider implements ZoteroProvider {
       resolveCollection: (refOrName, signal) =>
         this.resolveCollections([refOrName], signal).then((refs) => refs[0]!),
       resolveCollections: (inputs, signal) => this.resolveCollections(inputs, signal),
-      itemTypeFields: (itemType, signal) => this.itemTypeFields(itemType, signal),
+      itemTypeFields: (itemType, signal) => this.itemSchema.getWritableItemFields(itemType, signal),
       onCollectionsChanged: () => this.directory.invalidate(PERSONAL_LIBRARY, 'collections'),
     }
   }
@@ -218,36 +227,6 @@ export class LocalApiProvider implements ZoteroProvider {
       signal,
       this.client.serverId,
     )
-  }
-
-  /** Memoized field sets per (serving instance, item type), keyed for identity changes. */
-  private readonly itemTypeFieldsMemo = new Map<string, ReadonlySet<string>>()
-
-  /** In-flight field-set fetches, shared so parallel updates fetch each set once. */
-  private readonly itemTypeFieldsInFlight = new Map<string, Promise<ReadonlySet<string>>>()
-
-  /**
-   * The field names one item type accepts. The set is static for a running
-   * Zotero build, so each (instance, item type) pair is fetched once and
-   * memoized: a failed or aborted fetch is not cached, and a second update
-   * of the same item type costs no request.
-   */
-  private itemTypeFields(itemType: string, signal?: AbortSignal): Promise<ReadonlySet<string>> {
-    const cacheKey = `${this.client.serverId ?? ''}:${itemType}`
-    const memoized = this.itemTypeFieldsMemo.get(cacheKey)
-    if (memoized !== undefined) return Promise.resolve(memoized)
-    const inFlight = this.itemTypeFieldsInFlight.get(cacheKey)
-    if (inFlight !== undefined) return inFlight
-    const pending = fetchItemTypeFields({ client: this.client }, itemType, signal).then(
-      (fields) => {
-        this.itemTypeFieldsMemo.set(cacheKey, fields)
-        return fields
-      },
-    )
-    this.itemTypeFieldsInFlight.set(cacheKey, pending)
-    return pending.finally(() => {
-      this.itemTypeFieldsInFlight.delete(cacheKey)
-    })
   }
 
   /**
@@ -394,13 +373,13 @@ export class LocalApiProvider implements ZoteroProvider {
    * is the seam.
    */
   async browse(request: ZoteroBrowseRequest, signal?: AbortSignal): Promise<ZoteroBrowseResult> {
-    return runBrowse(this.deps(), this.directory, request, signal)
+    return runBrowse(this.deps(), this.directory, this.itemSchema, request, signal)
   }
 
   /**
    * Create a research note (standalone, or a child note under a parent item)
    * with tags, collections, and source relations. The domain logic lives in
-   * `local/write-domain`; this is the seam, and it is only reachable through
+   * `local/write-notes`; this is the seam, and it is only reachable through
    * the `write` capability gate.
    */
   async createNote(
@@ -412,7 +391,7 @@ export class LocalApiProvider implements ZoteroProvider {
 
   /**
    * Update one item's tags (add/remove in one write). The domain logic lives
-   * in `local/write-domain`; this is the seam.
+   * in `local/write-item-lists`; this is the seam.
    */
   async updateItemTags(
     request: ZoteroUpdateItemTagsRequest,
@@ -430,7 +409,7 @@ export class LocalApiProvider implements ZoteroProvider {
 
   /**
    * Update one item's collection membership (add/remove in one write). The
-   * domain logic lives in `local/write-domain`; this is the seam.
+   * domain logic lives in `local/write-item-lists`; this is the seam.
    */
   async updateItemCollections(
     request: ZoteroUpdateItemCollectionsRequest,
@@ -448,7 +427,7 @@ export class LocalApiProvider implements ZoteroProvider {
 
   /**
    * Create a collection, optionally under a parent. The domain logic lives in
-   * `local/write-domain`; this is the seam.
+   * `local/write-collections`; this is the seam.
    */
   async createCollection(
     request: ZoteroCreateCollectionRequest,
@@ -459,7 +438,7 @@ export class LocalApiProvider implements ZoteroProvider {
 
   /**
    * Delete a collection by ref or name. The domain logic lives in
-   * `local/write-domain`; this is the seam.
+   * `local/write-collections`; this is the seam.
    */
   async deleteCollection(
     request: ZoteroDeleteCollectionRequest,
@@ -492,7 +471,7 @@ export class LocalApiProvider implements ZoteroProvider {
 
   /**
    * Delete tags library-wide. The domain logic lives in
-   * `local/write-domain`; this is the seam.
+   * `local/write-library-maintenance`; this is the seam.
    */
   async deleteLibraryTags(
     request: ZoteroDeleteLibraryTagsRequest,

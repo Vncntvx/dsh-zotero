@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { touchesTransport, TRANSPORT_CONFIG_KEYS } from '../../src/service.js'
+import { touchesTransport, TRANSPORT_CONFIG_KEYS } from '../../src/service-config.js'
 
 describe('TRANSPORT_CONFIG_KEYS', () => {
   it('names only the fields baked into the transport stack', () => {

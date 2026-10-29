@@ -32,6 +32,7 @@ import {
 } from '../helpers/server/keys.js'
 import { collectionRow, item, versionHeaders } from '../helpers/server/objects.js'
 import { serveJson, serveStatus } from '../helpers/server/serve.js'
+import { deferred } from '../helpers/sync.js'
 
 let mock: ProviderHarness['mock']
 let provider: LocalApiProviderType
@@ -246,9 +247,12 @@ describe('Server-ID cache identity', () => {
 
   it('deduplicates concurrent itemTypeFields fetches in flight and caches results', async () => {
     let requests = 0
+    const started = deferred<void>()
+    const release = deferred<void>()
     mock.route('GET', '/api/itemTypeFields', async (_req, res, helpers) => {
       requests += 1
-      await new Promise((resolve) => setTimeout(resolve, 5))
+      started.resolve()
+      await release.promise
       helpers.json([{ field: 'title' }])
     })
     const client = testHttpClient(mock.baseUrl, { maxResponseBytes: 1_000_000 })
@@ -259,16 +263,19 @@ describe('Server-ID cache identity', () => {
       writer,
       new WriteAuthorizer({ client: writer, persistKey: () => true }),
     )
-    type FieldsInvoker = { itemTypeFields: (t: string) => Promise<ReadonlySet<string>> }
-    const invoker = writable as unknown as FieldsInvoker
-    const [res1, res2] = await Promise.all([
-      invoker.itemTypeFields('book'),
-      invoker.itemTypeFields('book'),
-    ])
+    type SchemaOwner = {
+      itemSchema: { getWritableItemFields: (t: string) => Promise<ReadonlySet<string>> }
+    }
+    const { itemSchema } = writable as unknown as SchemaOwner
+    const first = itemSchema.getWritableItemFields('book')
+    const second = itemSchema.getWritableItemFields('book')
+    await started.promise
+    release.resolve()
+    const [res1, res2] = await Promise.all([first, second])
     expect(res1).toEqual(new Set(['title']))
     expect(res2).toEqual(new Set(['title']))
     expect(requests).toBe(1)
-    const res3 = await invoker.itemTypeFields('book')
+    const res3 = await itemSchema.getWritableItemFields('book')
     expect(res3).toEqual(new Set(['title']))
     expect(requests).toBe(1)
   })

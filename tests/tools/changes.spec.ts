@@ -6,7 +6,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { cursorLibraryMismatchMessage } from '../../src/local/changes-domain.js'
+import { cursorLibraryMismatchMessage } from '../../src/local/changes-cursor.js'
 import {
   BASELINE_CURSOR_REUSE,
   baselineCursorMessage,

@@ -18,16 +18,11 @@ import {
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
 import type { ResolvedConfig } from '../config.js'
-import { formatRef, sameLibrary } from '../refs.js'
+import { invalid } from '../errors.js'
+import { formatRef, parseSupportedRef, sameLibrary } from '../refs.js'
 import { boundedPresentationMeta, projectRetrieveMeta } from '../presentation-meta.js'
 import { metaRecordOf } from './present.js'
-import {
-  assertIntInRange,
-  assertNonEmptyList,
-  invalid,
-  parseSupportedRef,
-  REF_ARG_HINT,
-} from './validate.js'
+import { assertIntInRange, assertNonEmptyList, REF_ARG_HINT } from './validate.js'
 import type { ZoteroService } from '../service.js'
 import type {
   ZoteroEvidenceField,

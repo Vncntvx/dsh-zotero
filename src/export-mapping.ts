@@ -11,7 +11,7 @@
 
 import { bibtexFieldOf, scanBibtexToken } from './export-items.js'
 import { asRecord, asString } from './json.js'
-import { citekeyOf } from './normalize.js'
+import { citekeyOf } from './normalize-search.js'
 import { formatRef } from './refs.js'
 import type { ZoteroExportFormat, ZoteroObjectRef } from './types.js'
 

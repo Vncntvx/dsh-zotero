@@ -18,7 +18,7 @@ import {
   ZoteroError,
 } from '../errors.js'
 import { asRecord, asString, isObjectKey } from '../json.js'
-import { ITEM_WITHOUT_KEY_MESSAGE } from '../normalize.js'
+import { ITEM_WITHOUT_KEY_MESSAGE } from '../normalize-context.js'
 import { locateExportItemsFromBatch } from '../export-mapping.js'
 import {
   formatRef,

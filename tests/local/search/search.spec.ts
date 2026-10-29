@@ -17,7 +17,7 @@ import {
   buildSearchParams,
   encodeExcludeTag,
   encodeLiteralTag,
-} from '../../../src/local/search-domain.js'
+} from '../../../src/local/search-query.js'
 import { type LocalApiProvider } from '../../../src/local/provider.js'
 import { MockZotero } from '../../helpers/mock-zotero.js'
 import {

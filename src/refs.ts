@@ -188,6 +188,18 @@ export function requireSupportedLocalRef(
 }
 
 /**
+ * Parse a model-provided ref string and gate it on the supported local
+ * libraries plus the allowed object kinds: the shared entry every tool and the
+ * library panel use to turn a `zotero://` argument into a domain ref.
+ * @param value - the raw ref string argument.
+ * @param kinds - allowed kinds; omit to accept any parsed kind.
+ * @throws {ZoteroError} `ZOTERO_INVALID_REF` outside the grammar or contract.
+ */
+export function parseSupportedRef(value: string, kinds?: readonly ZoteroKind[]): ZoteroObjectRef {
+  return requireSupportedLocalRef(parseRef(value), kinds)
+}
+
+/**
  * Assert the ref can be used by the write path: the supported local grammar,
  * an allowed object kind, and the canonical personal library. Tool argument
  * validation calls this before showing a plan; the write domain calls it again

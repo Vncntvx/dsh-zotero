@@ -1,12 +1,9 @@
 /** Operation-specific snapshots must accept real child-item wire shapes. */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import {
-  batchItems,
-  restoreItems,
-  updateItemCollections,
-  updateItemTags,
-  updateNote,
-} from '../../../src/local/write-domain.js'
+import { restoreItems } from '../../../src/local/write-library-maintenance.js'
+import { updateNote } from '../../../src/local/write-notes.js'
+import { batchItems } from '../../../src/local/write-batch.js'
+import { updateItemCollections, updateItemTags } from '../../../src/local/write-item-lists.js'
 import {
   batchHeaders,
   COLLECTION_KEY,

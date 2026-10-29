@@ -16,7 +16,7 @@ import {
 } from '@deepseek-ai/dsh-tools'
 import { boundedPresentationMeta, projectAttachmentMeta } from '../presentation-meta.js'
 import { metaRecordOf } from './present.js'
-import { parseSupportedRef } from './validate.js'
+import { parseSupportedRef } from '../refs.js'
 import type { ZoteroService } from '../service.js'
 
 const ATTACHMENT_PARAMETERS = {

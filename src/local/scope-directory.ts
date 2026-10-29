@@ -39,30 +39,19 @@ import {
   unsupportedLibraryMessage,
   PERSONAL_LIBRARY,
 } from '../refs.js'
-import {
-  matchScopeName,
-  nearScopeCandidates,
-  normalizeScopeEntry,
-  type ScopeNameEntry,
-} from '../normalize.js'
+import type { ScopeNameEntry } from '../normalize-scope.js'
+import { matchScopeName, nearScopeCandidates, normalizeScopeEntry } from '../normalize-scope.js'
 import type { ZoteroHttpClient } from '../http-client.js'
-import { asRecord, asString } from '../json.js'
-import {
-  assertServerIdMatches,
-  requireAgreedServerId,
-  serverIdFromHeaders,
-  type LocalReadContext,
-} from './identity.js'
+import { assertServerIdMatches, serverIdFromHeaders, type LocalReadContext } from './identity.js'
 import { requireArrayBody } from './pagination.js'
 import type {
   SupportedLocalLibrary,
-  ZoteroCreatorTypeInfo,
-  ZoteroItemFieldInfo,
   ZoteroItemLevel,
   ZoteroObjectRef,
   ZoteroSearchScope,
   ZoteroResolvedScope,
 } from '../types.js'
+import { itemsSegmentFor, publicationsItemsPath } from './scope-paths.js'
 
 /** A cached full listing of one scope endpoint, with the identity header it was served under. */
 interface ScopeListing {
@@ -165,32 +154,6 @@ export class ScopeDirectory {
    */
   private readonly scopeBaseGeneration = new Map<string, number>()
   private readonly collectionBaseGeneration = new Map<string, number>()
-
-  /** Cached static item types schema per serverId. */
-  private readonly itemTypesCache = new Map<
-    string,
-    { serverId?: string; items: readonly { itemType: string; localized?: string }[] }
-  >()
-  private readonly itemTypesInFlight = new Map<
-    string,
-    SharedOperation<{
-      serverId?: string
-      items: readonly { itemType: string; localized?: string }[]
-    }>
-  >()
-
-  /** Cached static item fields schema per `${serverId}:${itemType}`. */
-  private readonly itemFieldsCache = new Map<
-    string,
-    { serverId?: string; items: readonly (ZoteroItemFieldInfo | ZoteroCreatorTypeInfo)[] }
-  >()
-  private readonly itemFieldsInFlight = new Map<
-    string,
-    SharedOperation<{
-      serverId?: string
-      items: readonly (ZoteroItemFieldInfo | ZoteroCreatorTypeInfo)[]
-    }>
-  >()
 
   /**
    * @param client - the HTTP client every listing read rides.
@@ -791,170 +754,6 @@ export class ScopeDirectory {
       throw error
     }
   }
-
-  /**
-   * The static item types schema, cached per server instance.
-   */
-  async getItemTypes(
-    signal?: AbortSignal,
-    claim?: string,
-  ): Promise<{ serverId?: string; items: readonly { itemType: string; localized?: string }[] }> {
-    if (signal?.aborted) throw new HarnessError(TOOL_ABORTED_MESSAGE, TOOL_ABORTED)
-    if (claim !== undefined) {
-      const cached = this.itemTypesCache.get(claim)
-      if (cached !== undefined) return cached
-    } else {
-      const cached =
-        this.itemTypesCache.get('') ??
-        (this.itemTypesCache.size > 0 ? this.itemTypesCache.values().next().value : undefined)
-      if (cached !== undefined) return cached
-    }
-
-    const flightKey = claim ?? ''
-    let operation = this.itemTypesInFlight.get(flightKey)
-    if (operation === undefined || operation.settled) {
-      const controller = new AbortController()
-      const op: SharedOperation<{
-        serverId?: string
-        items: readonly { itemType: string; localized?: string }[]
-      }> = {
-        controller,
-        promise: Promise.resolve({ items: [] }),
-        waiters: 0,
-        settled: false,
-      }
-      op.promise = (async () => {
-        const { json, headers } = await this.client.getJson<unknown>('itemTypes', undefined, {
-          signal: controller.signal,
-          ...(claim !== undefined ? { serverId: claim } : {}),
-        })
-        const serverId = serverIdFromHeaders(headers, claim)
-        const raw = requireArrayBody(json, 'item types')
-          .map((row) => {
-            const rec = asRecord(row)
-            const it = asString(rec?.itemType) ?? asString(rec?.name)
-            if (it === undefined) return null
-            const loc = asString(rec?.localized) ?? asString(rec?.displayName)
-            return { itemType: it, ...(loc ? { localized: loc } : {}) }
-          })
-          .filter((x): x is { itemType: string; localized?: string } => x !== null)
-        raw.sort((a, b) => a.itemType.localeCompare(b.itemType))
-        const result = { serverId, items: raw }
-        this.itemTypesCache.set(serverId ?? '', result)
-        this.itemTypesCache.set('', result)
-        if (claim !== undefined && claim !== '') {
-          this.itemTypesCache.set(claim, result)
-        }
-        return result
-      })().finally(() => {
-        op.settled = true
-        if (this.itemTypesInFlight.get(flightKey) === op) {
-          this.itemTypesInFlight.delete(flightKey)
-        }
-      })
-      void op.promise.catch(() => undefined)
-      this.itemTypesInFlight.set(flightKey, op)
-      operation = op
-    }
-
-    return await awaitSharedOperation(operation, signal)
-  }
-
-  /**
-   * The static metadata fields and creator types valid for an item type, cached per server instance and item type.
-   */
-  async getItemFields(
-    itemType: string,
-    signal?: AbortSignal,
-    claim?: string,
-  ): Promise<{
-    serverId?: string
-    items: readonly (ZoteroItemFieldInfo | ZoteroCreatorTypeInfo)[]
-  }> {
-    if (signal?.aborted) throw new HarnessError(TOOL_ABORTED_MESSAGE, TOOL_ABORTED)
-    const cacheKey = `${claim ?? ''}:${itemType}`
-    const cached = this.itemFieldsCache.get(cacheKey)
-    if (cached !== undefined) return cached
-
-    const flightKey = `${claim ?? ''}:${itemType}`
-    let operation = this.itemFieldsInFlight.get(flightKey)
-    if (operation === undefined || operation.settled) {
-      const controller = new AbortController()
-      const op: SharedOperation<{
-        serverId?: string
-        items: readonly (ZoteroItemFieldInfo | ZoteroCreatorTypeInfo)[]
-      }> = {
-        controller,
-        promise: Promise.resolve({ items: [] }),
-        waiters: 0,
-        settled: false,
-      }
-      op.promise = (async () => {
-        const params = new URLSearchParams()
-        params.set('itemType', itemType)
-        const [fields, creatorTypes] = await Promise.all([
-          this.client.getJson<unknown>('itemTypeFields', params, {
-            signal: controller.signal,
-            ...(claim !== undefined ? { serverId: claim } : {}),
-          }),
-          this.client.getJson<unknown>('itemTypeCreatorTypes', params, {
-            signal: controller.signal,
-            ...(claim !== undefined ? { serverId: claim } : {}),
-          }),
-        ])
-        const serverId = requireAgreedServerId(
-          serverIdFromHeaders(fields.headers, claim),
-          serverIdFromHeaders(creatorTypes.headers, claim),
-        )
-        const fieldItems: ZoteroItemFieldInfo[] = []
-        for (const row of requireArrayBody(fields.json, 'item type fields')) {
-          const rec = asRecord(row)
-          const field = asString(rec?.field)
-          if (field === undefined) continue
-          const localized = asString(rec?.localized)
-          fieldItems.push({ field, ...(localized !== undefined ? { localized } : {}) })
-        }
-        fieldItems.sort((a, b) => a.field.localeCompare(b.field))
-
-        const creatorTypeItems: ZoteroCreatorTypeInfo[] = []
-        for (const row of requireArrayBody(creatorTypes.json, 'creator types')) {
-          const rec = asRecord(row)
-          const creatorType = asString(rec?.creatorType)
-          if (creatorType === undefined) continue
-          const localized = asString(rec?.localized)
-          creatorTypeItems.push({ creatorType, ...(localized !== undefined ? { localized } : {}) })
-        }
-        creatorTypeItems.sort((a, b) => a.creatorType.localeCompare(b.creatorType))
-
-        const items: (ZoteroItemFieldInfo | ZoteroCreatorTypeInfo)[] = [
-          ...fieldItems,
-          ...creatorTypeItems,
-        ]
-        const result = { serverId, items }
-        this.itemFieldsCache.set(`${serverId ?? ''}:${itemType}`, result)
-        this.itemFieldsCache.set(`:${itemType}`, result)
-        if (claim !== undefined && claim !== '') {
-          this.itemFieldsCache.set(`${claim}:${itemType}`, result)
-        }
-        return result
-      })().finally(() => {
-        op.settled = true
-        if (this.itemFieldsInFlight.get(flightKey) === op) {
-          this.itemFieldsInFlight.delete(flightKey)
-        }
-      })
-      void op.promise.catch(() => undefined)
-      this.itemFieldsInFlight.set(flightKey, op)
-      operation = op
-    }
-
-    return await awaitSharedOperation(operation, signal)
-  }
-}
-
-/** Path segment for the requested item level: `items` for all items, `items/top` for top-level only. */
-export function itemsSegmentFor(itemLevel?: ZoteroItemLevel): string {
-  return itemLevel === 'all' ? 'items' : 'items/top'
 }
 
 /**
@@ -1003,20 +802,6 @@ export async function resolveCollectionsMixed(
     results[entry.index] = nameResults[position]!
   })
   return results
-}
-
-/**
- * My Publications item listing: the Local API mirrors the Web API's
- * `/publications/items` scope without a `/top` partition. Pinned to the
- * canonical personal library; callers assert personal-only first.
- */
-export function publicationsItemsPath(): string {
-  return `${libraryPrefix(PERSONAL_LIBRARY)}/publications/items`
-}
-
-/** My Publications tag facet over the same listing. */
-export function publicationsTagsPath(): string {
-  return `${publicationsItemsPath()}/tags`
 }
 
 interface ResolveScopeOptions {

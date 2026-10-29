@@ -7,13 +7,12 @@
 
 import {
   WRITE_LIST_SELECTION_MESSAGE,
-  ZOTERO_INVALID_ARGUMENT,
+  invalid,
   requireNonBlank,
   writeListTooLongMessage,
   writeNoteTooLongMessage,
-  ZoteroError,
 } from '../errors.js'
-import { parseRef, requireSupportedLocalRef, requireWritableRef } from '../refs.js'
+import { parseRef, requireWritableRef } from '../refs.js'
 import type { ZoteroKind, ZoteroObjectRef, SupportedLocalLibrary } from '../types.js'
 
 /** The item-ref format for read tools that serve personal and group libraries. */
@@ -37,11 +36,6 @@ export const LIBRARY_SCHEMA = {
     id: { type: 'integer', required: true },
   },
 } as const
-
-/** Throw an argument error; the message is model-facing. */
-export function invalid(message: string): never {
-  throw new ZoteroError(message, ZOTERO_INVALID_ARGUMENT)
-}
 
 /** The model-facing message for an integer argument outside `[min, max]`. */
 export function intRangeArgumentMessage(
@@ -94,18 +88,6 @@ export function assertIntInRange(name: string, value: number, min: number, max: 
  */
 export function assertNonEmptyList(values: readonly unknown[], message: string): void {
   if (values.length === 0) invalid(message)
-}
-
-/**
- * Parse a model-provided ref string and gate it on the supported local
- * libraries plus the allowed object kinds: the shared entry every tool
- * uses to turn a `zotero://` argument into a domain ref.
- * @param value - the raw ref string argument.
- * @param kinds - allowed kinds; omit to accept any parsed kind.
- * @throws {ZoteroError} `ZOTERO_INVALID_REF` outside the grammar or contract.
- */
-export function parseSupportedRef(value: string, kinds?: readonly ZoteroKind[]): ZoteroObjectRef {
-  return requireSupportedLocalRef(parseRef(value), kinds)
 }
 
 /**

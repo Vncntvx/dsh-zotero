@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { createNote, updateItemTags } from '../../../src/local/write-domain.js'
+import { createNote } from '../../../src/local/write-notes.js'
+import { updateItemTags } from '../../../src/local/write-item-lists.js'
 import {
   WRITE_LIST_SELECTION_MESSAGE,
   WRITE_VERSION_MISSING_MESSAGE,

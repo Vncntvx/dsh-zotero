@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { normalizeItemDetail } from '../../../src/normalize.js'
+import { normalizeItemDetail } from '../../../src/normalize-item-detail.js'
 
 describe('extraFields lossless-JSON gate', () => {
   it('drops non-finite and negative-zero numbers that JSON cannot round-trip', () => {

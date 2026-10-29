@@ -19,9 +19,10 @@ import {
 } from '@deepseek-ai/dsh-tools'
 import { asRecord } from '../json.js'
 import { boundedPresentationMeta } from '../presentation-meta.js'
+import { parseSupportedRef } from '../refs.js'
 import { ANNOTATION_RECORD, ATTACHMENT_RECORD, NOTE_RECORD } from './child-records.js'
 import { metaRecordOf } from './present.js'
-import { assertNonEmptyList, parseSupportedRef } from './validate.js'
+import { assertNonEmptyList } from './validate.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroChildrenInclude, ZoteroChildrenRequest } from '../types.js'
 

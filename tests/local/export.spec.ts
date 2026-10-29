@@ -15,7 +15,7 @@ import {
 } from '../../src/errors.js'
 import { type LocalApiProvider } from '../../src/local/provider.js'
 import type { LocalApiLimits } from '../../src/local/limits.js'
-import { ITEM_WITHOUT_KEY_MESSAGE } from '../../src/normalize.js'
+import { ITEM_WITHOUT_KEY_MESSAGE } from '../../src/normalize-context.js'
 import { expectedKindRefMessage, parseRef } from '../../src/refs.js'
 import {
   createProvider,

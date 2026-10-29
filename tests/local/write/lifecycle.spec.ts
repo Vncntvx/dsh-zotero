@@ -1,9 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  createCollection,
-  deleteCollection,
-  deleteLibraryTags,
-} from '../../../src/local/write-domain.js'
+import { deleteLibraryTags } from '../../../src/local/write-library-maintenance.js'
+import { createCollection, deleteCollection } from '../../../src/local/write-collections.js'
 import {
   SERVER_MISMATCH_MESSAGE,
   WRITE_PRECONDITION_READ_LIBRARY_VERSION_MESSAGE,

@@ -1,7 +1,7 @@
 /**
  * Child-level projection specs: `extractAttachmentKey` (from
- * `src/attachments.ts`), and `normalizeNoteRecord`, `plainNoteText`,
- * `normalizeAnnotationRecord`, and `partitionChildren` from `src/normalize.ts`.
+ * `src/attachments.ts`), child records from `src/normalize-children.ts`, and
+ * note text conversion from `src/normalize-context.ts`.
  * @module tests/unit/normalize/normalize-children
  */
 
@@ -12,9 +12,9 @@ import {
   normalizeAnnotationRecord,
   normalizeNoteRecord,
   partitionChildren,
-  plainNoteText,
   type ZoteroChildKind,
-} from '../../../src/normalize.js'
+} from '../../../src/normalize-children.js'
+import { plainNoteText } from '../../../src/normalize-context.js'
 import { ctx, expectUnexpected } from './normalize-helpers.js'
 
 describe('extractAttachmentKey', () => {

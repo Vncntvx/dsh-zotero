@@ -18,9 +18,9 @@ import {
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
 import type { ResolvedConfig } from '../config.js'
-import { WRITE_CHILD_COLLECTIONS_MESSAGE } from '../errors.js'
-import { isRefString } from '../refs.js'
-import { truncateText } from '../normalize.js'
+import { invalid, WRITE_CHILD_COLLECTIONS_MESSAGE } from '../errors.js'
+import { isRefString, parseSupportedRef } from '../refs.js'
+import { truncateText } from '../normalize-context.js'
 import { renderDeclined } from './present.js'
 import {
   COMMITTED_UNVERIFIED_VARIANT,
@@ -33,8 +33,6 @@ import {
 import {
   assertNoteMarkdown,
   assertWriteList,
-  invalid,
-  parseSupportedRef,
   parseWritableRef,
   WRITE_REF_ARG_HINT,
 } from './validate.js'

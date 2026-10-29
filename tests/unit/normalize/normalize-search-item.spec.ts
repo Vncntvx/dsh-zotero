@@ -12,7 +12,7 @@
 import { describe, expect, it } from 'vitest'
 import { ZOTERO_UNEXPECTED, ZoteroError } from '../../../src/errors.js'
 import { fixtureJson } from '../../helpers/fixtures-dir.js'
-import { citekeyOf, normalizeSearchItem } from '../../../src/normalize.js'
+import { citekeyOf, normalizeSearchItem } from '../../../src/normalize-search.js'
 import { ctx, expectUnexpected } from './normalize-helpers.js'
 
 /** One captured response body from `tests/fixtures/`. */

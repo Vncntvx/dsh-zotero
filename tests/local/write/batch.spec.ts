@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { batchItems } from '../../../src/local/write-domain.js'
+import { batchItems } from '../../../src/local/write-batch.js'
 import {
   WRITE_LIST_SELECTION_MESSAGE,
   writeListTooLongMessage,

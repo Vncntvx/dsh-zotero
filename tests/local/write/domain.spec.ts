@@ -1,11 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LocalApiProvider } from '../../../src/local/provider.js'
-import {
-  createNote,
-  updateItemCollections,
-  updateItemTags,
-  writeCapabilityUnavailableMessage,
-} from '../../../src/local/write-domain.js'
+import { writeCapabilityUnavailableMessage } from '../../../src/local/write-domain.js'
+import { createNote } from '../../../src/local/write-notes.js'
+import { updateItemCollections, updateItemTags } from '../../../src/local/write-item-lists.js'
 import {
   SERVER_MISMATCH_MESSAGE,
   WRITE_CHILD_COLLECTIONS_MESSAGE,

@@ -11,7 +11,8 @@
 
 import { describe, expect, it } from 'vitest'
 import { ZOTERO_UNEXPECTED } from '../../../src/errors.js'
-import { normalizeItemDetail, type NormalizeItemDetailInput } from '../../../src/normalize.js'
+import { normalizeItemDetail } from '../../../src/normalize-item-detail.js'
+import type { NormalizeItemDetailInput } from '../../../src/normalize-item-detail.js'
 import { expectUnexpected } from './normalize-helpers.js'
 
 describe('normalizeItemDetail', () => {
@@ -355,10 +356,7 @@ describe('normalizeItemDetail', () => {
 
   it('returns the note body for note items under the budget', () => {
     const detail = normalizeItemDetail({
-      parent: {
-        key: 'NOTE1111',
-        data: { itemType: 'note', note: '<p>hello <b>world</b></p>' },
-      },
+      parent: { key: 'NOTE1111', data: { itemType: 'note', note: '<p>hello <b>world</b></p>' } },
       include: new Set(),
       maxAbstractChars: 100,
       maxNoteBodyChars: 8,

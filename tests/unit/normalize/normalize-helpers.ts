@@ -11,7 +11,7 @@
 
 import { expect } from 'vitest'
 import { ZOTERO_UNEXPECTED, ZoteroError } from '../../../src/errors.js'
-import type { NormalizeContext } from '../../../src/normalize.js'
+import type { NormalizeContext } from '../../../src/normalize-context.js'
 
 /** Personal-library context with an optional server provenance qualifier. */
 export function ctx(serverId?: string): NormalizeContext {

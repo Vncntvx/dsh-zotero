@@ -1,16 +1,10 @@
-/**
- * Shared fixtures for the write-domain specs (the eight entries: createNote /
- * updateItemTags / updateItemCollections / createCollection / deleteCollection
- * / createItem / updateItem / deleteLibraryTags). One source so those specs
- * cannot drift on mock shape, key constants, or the authorizer wiring.
- * @module dsh-zotero/tests/helpers/write-domain-fixtures
- */
+/** Shared mock shapes, keys, and authorizer wiring for local write specs. */
 
 import { WriteAuthorizer } from '../../src/write-auth.js'
 import { resolveCollectionsMixed, ScopeDirectory } from '../../src/local/scope-directory.js'
-import { fetchItemTypeFields } from '../../src/local/write-domain.js'
+import { ItemSchemaDirectory } from '../../src/local/item-schema-directory.js'
 import { PERSONAL_LIBRARY, parseRef } from '../../src/refs.js'
-import type { WriteDomainDeps } from '../../src/local/write-domain.js'
+import type { WriteDomainDeps } from '../../src/local/write-deps.js'
 import type { ZoteroObjectRef } from '../../src/types.js'
 import { MockZotero } from './mock-zotero.js'
 import { testHttpClient, testWriteClient } from './test-clients.js'
@@ -71,6 +65,7 @@ export function writeDeps(mock: MockZotero): {
     () => 1000,
     () => 4,
   )
+  const itemSchema = new ItemSchemaDirectory(client)
   const deps: WriteDomainDeps = {
     client,
     writer,
@@ -85,7 +80,7 @@ export function writeDeps(mock: MockZotero): {
       ).then((refs) => refs[0]!),
     resolveCollections: (inputs, signal) =>
       resolveCollectionsMixed(directory, inputs, PERSONAL_LIBRARY, signal, client.serverId),
-    itemTypeFields: (itemType, signal) => fetchItemTypeFields({ client }, itemType, signal),
+    itemTypeFields: (itemType, signal) => itemSchema.getWritableItemFields(itemType, signal),
     onCollectionsChanged: () => directory.invalidate(PERSONAL_LIBRARY, 'collections'),
   }
   return { deps, directory, authorizer }

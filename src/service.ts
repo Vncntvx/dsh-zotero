@@ -21,13 +21,7 @@
  * @module dsh-zotero/service
  */
 
-import {
-  Service,
-  type Context,
-  type Fiber,
-  type FiberState,
-  type LoggerLevel,
-} from '@deepseek-ai/cordis'
+import { Service, type Context, type FiberState, type LoggerLevel } from '@deepseek-ai/cordis'
 // Type-only: brings the loader `loader/volatile-update` Events merge into
 // this program (the structural-flip reaction below).
 import type {} from '@deepseek-ai/cordis-plugin-loader'
@@ -40,8 +34,6 @@ import type {} from '@deepseek-ai/dsh-session-projection'
 // Type-only: brings the `ctx.settings` Context merge into this program.
 import type {} from '@deepseek-ai/dsh-settings'
 import { DiagnosticsRecorder, logMessageToPush, loggerNameMatches } from './diagnostics.js'
-import type { DiagnosticDetail } from './diagnostics.js'
-import type { ToolExecutionResult } from '@deepseek-ai/dsh-tools'
 import { ZoteroHttpClient } from './http-client.js'
 import { registerStatusCommand } from './command.js'
 import { ZoteroRuntime } from './remote.js'
@@ -66,34 +58,15 @@ import {
   ZOTERO_NOT_COMPOSED_MESSAGE,
   ZOTERO_PROVIDER_UNAVAILABLE,
   ZOTERO_WRITE_APPROVAL_UNAVAILABLE,
-  errorMessageOf,
   ZoteroError,
 } from './errors.js'
 import { LocalApiProvider } from './local/provider.js'
-import type { LocalApiLimits } from './local/limits.js'
+import { localProviderLimits } from './service-config.js'
+import { installServiceConfigLifecycle } from './service-lifecycle.js'
 import { registerPromptSection } from './prompt.js'
-import { detectShellWrite, SHELL_TOOL_NAMES } from './shell-write-detector.js'
-import { registerAttachmentTool } from './tools/attachment.js'
-import { registerBrowseTool } from './tools/browse.js'
-import { registerChangesTool } from './tools/changes.js'
-import { registerChildrenTool } from './tools/children.js'
-import { registerGetTool } from './tools/get.js'
-import { registerExportTool } from './tools/export.js'
-import { registerRetrieveTool } from './tools/retrieve.js'
-import { registerSearchTool } from './tools/search.js'
-import { registerCreateNoteTool } from './tools/create-note.js'
-import { registerUpdateNoteTool } from './tools/update-note.js'
-import { registerUpdateItemTagsTool } from './tools/update-item-tags.js'
-import { registerUpdateItemCollectionsTool } from './tools/update-item-collections.js'
-import { registerCreateCollectionTool } from './tools/create-collection.js'
-import { registerUpdateCollectionTool } from './tools/update-collection.js'
-import { registerDeleteCollectionTool } from './tools/delete-collection.js'
-import { registerCreateItemTool } from './tools/create-item.js'
-import { registerUpdateItemTool } from './tools/update-item.js'
-import { registerDeleteLibraryTagsTool } from './tools/delete-library-tags.js'
-import { registerBatchItemsTool } from './tools/batch-items.js'
-import { registerRestoreItemsTool } from './tools/restore-items.js'
-import { registerSavedSearchTools } from './tools/saved-search.js'
+import { installShellWriteApproval } from './shell-write-approval.js'
+import { registerReadTools, registerWriteTools } from './tool-registration.js'
+import { installToolDiagnostics } from './tool-diagnostics.js'
 import type {
   ZoteroAttachmentLocation,
   ZoteroBrowseRequest,
@@ -195,38 +168,8 @@ const FIBER_STATE = {
 /** Runtime mirror of Cordis's `LoggerLevel`, anchored the same way as {@link FIBER_STATE}. */
 const LOGGER_LEVEL = { DEBUG: 3 as LoggerLevel.DEBUG } as const
 
-/**
- * One-line digest of a tool call for the debug ring: the wire name plus the
- * argument JSON, bounded so a pathological argument cannot dominate an
- * entry. Arguments can quote the user's library content; they reach the ring
- * only at `debug`, which the `debug` config flag gates.
- */
-function toolCallDigest(execution: { name: string; arguments: unknown }): string {
-  let digest = ''
-  try {
-    digest = JSON.stringify(execution.arguments) ?? ''
-  } catch {
-    digest = ''
-  }
-  const args = digest.length > 300 ? `${digest.slice(0, 299)}…` : digest
-  return args === '' ? execution.name : `${execution.name} ${args}`
-}
-
-/**
- * Whether an `internal/config` waterfall `this` is this plugin's fiber.
- * The Loader passes the fiber itself; `ctx.plugin()` returns
- * `Object.create(fiber)`, so the prototype-linked face counts as the same
- * fiber. Anything else is another plugin's config resolution. Exported for
- * the unit lane: the false arms need a foreign `this` no in-lane waterfall
- * can carry.
- * @param thisArg - the waterfall's bound `this`.
- * @param own - the fiber that owns this service.
- * @returns true when the candidate config belongs to this plugin.
- */
-export function isOwnConfigFiber(thisArg: unknown, own: Fiber): boolean {
-  if (thisArg === own) return true
-  return typeof thisArg === 'object' && thisArg !== null && Object.getPrototypeOf(thisArg) === own
-}
+/** The fiber-ownership check lives in `service-lifecycle.ts`; it is re-exported for the unit lane. */
+export { isOwnConfigFiber } from './service-lifecycle.js'
 
 /**
  * The composed Zotero service every strict endpoint reads. Abort is checked
@@ -261,8 +204,6 @@ export class ZoteroService extends Service {
   private providerDispose: (() => void) | undefined
   /** Disposers of the conditionally registered write tools, tracked for the writeEnabled flip. */
   private writeToolDisposes: Array<() => void> = []
-  /** The resolved config the transport stack was last built from. */
-  private lastBuilt: ResolvedConfig
   /** Cached resolved config; invalidated on any loader/volatile-update. */
   private cachedConfig?: ResolvedConfig
   /**
@@ -300,53 +241,19 @@ export class ZoteroService extends Service {
     const resolved = resolveConfig(config)
     this.diagnostics.setThreshold(resolved.debug ? 'debug' : 'info')
     this.entry = toLiveEntry(config)
-    this.lastBuilt = this.config
-    this.buildTransport(this.lastBuilt)
-    // Veto a settings commit the schema alone cannot refuse (loopback-only
-    // baseUrl, positive limits): throwing here refuses the commit before it
-    // lands, so the live read only ever observes accepted values. The guard
-    // scopes the veto to this plugin's fiber: the loader passes the fiber
-    // itself as the waterfall `this`, while `ctx.plugin()` returns
-    // `Object.create(fiber)`, a prototype-linked face of the same fiber.
-    const recorder = this.diagnostics
-    ctx.on('internal/config', function (this: Fiber | null, _raw, next) {
-      const raw = next()
-      if (!isOwnConfigFiber(this, ctx.fiber)) return raw
-      try {
-        resolveConfig(raw as Config | Options)
-      } catch (error) {
-        recorder.sink.error('config.rejected', errorMessageOf(error), { scope: 'settings-commit' })
-        throw error
-      }
-      return raw
-    })
-    // Structural flips land without remounting: rebuild the transport stack
-    // and reconcile the write tools on this same instance. Limit-only edits
-    // need no reaction, because the provider's per-call limits getter reads them.
-    // Loader emits
-    // `loader/volatile-update` fiber-filtered (`owner.fiber === fiber`), so a
-    // listener on this fiber's ctx receives own updates without `global`.
-    // Failures are logged, never thrown into the dispatch.
-    ctx.on('loader/volatile-update', (paths: readonly (readonly string[])[]) => {
-      this.cachedConfig = undefined
-      // The debug flag is volatile like every other field: sync the ring's
-      // threshold on any commit so a settings flip applies to the next
-      // emission without a rebuild.
-      this.diagnostics.setThreshold(this.config.debug ? 'debug' : 'info')
-      try {
-        if (touchesTransport(paths)) {
-          const config = this.config
-          if (!sameTransportConfig(config, this.lastBuilt)) {
-            this.buildTransport(config)
-            this.reconcileWriteTools(config.writeEnabled)
-            this.lastBuilt = config
-          }
-        }
-      } catch (error) {
-        // Into the diagnostics ring, never thrown into the dispatch: a
-        // failing rebuild leaves the previous transport serving.
-        this.diagnostics.sink.error('config.apply.failed', errorMessageOf(error))
-      }
+    const initialConfig = this.config
+    this.buildTransport(initialConfig)
+    installServiceConfigLifecycle(ctx, {
+      diagnostics: this.diagnostics,
+      initialConfig,
+      configOf: () => this.config,
+      invalidateConfig: () => {
+        this.cachedConfig = undefined
+      },
+      applyTransportConfig: (config) => {
+        this.buildTransport(config)
+        this.reconcileWriteTools(config.writeEnabled)
+      },
     })
     registerStatusCommand(ctx, this)
     registerPromptSection(ctx, () => this.config)
@@ -357,80 +264,11 @@ export class ZoteroService extends Service {
       },
       'zotero: dynamic tools teardown',
     )
-    // A shell command aimed at Zotero's own write API is not blocked outright:
-    // it is made to ask. The harness's own approval request decides it before
-    // the body runs, so the write happens only when the user confirms that one
-    // call, and not when they decline, cancel, run under the `never` policy,
-    // or have no approval channel. Registered as a listener on this fiber, so
-    // the plugin's disposal unwinds it. The name gate runs before any config
-    // read so non-shell tools never pay the detector (or the live getter).
-    ctx.on('tools/pre-execute', (execution, next) => {
-      if (!SHELL_TOOL_NAMES.has(execution.name)) return next()
-      const attempt = detectShellWrite(this.config, execution)
-      if (attempt === undefined) return next()
-      this.diagnostics.sink.warn('shell.intercepted', attempt.reason, { tool: execution.name })
-      return Promise.resolve({
-        kind: 'ask',
-        reason: attempt.reason,
-        displayReason: attempt.displayReason,
-      })
-    })
-    // One observe-only wrapper covers every tool: the dispatch waterfall's
-    // `next()` is the actual tool body, so wrapping it times the call and
-    // records the outcome without touching a single tool file. A successful
-    // call is debug-level (the conversation already shows it); a typed
-    // failure result is a warn; an unexpected throw is an error.
-    ctx.on('tools/execute', async (execution, next) => {
-      if (!execution.name.startsWith('zotero_')) return await next()
-      const startedAt = Date.now()
-      // The digest JSON-stringifies the arguments; building it below the
-      // debug threshold would be spent work, so the gate is read before
-      // construction.
-      if (this.diagnostics.admits('debug')) {
-        this.diagnostics.sink.debug('tool.call', toolCallDigest(execution))
-      }
-      try {
-        const result: ToolExecutionResult = await next()
-        const ms = Date.now() - startedAt
-        if (result.isError) {
-          // The registry parks the stable error code at `error.info.code`
-          // (a plain throw folds without one); recording it gives the panel
-          // the same grep anchor the transport failure lines carry.
-          const detail: DiagnosticDetail = { ms }
-          const code = result.error.info?.code
-          if (code !== undefined) detail.errorCode = code
-          this.diagnostics.sink.warn(
-            'tool.result',
-            `${execution.name} failed: ${result.error.message}`,
-            detail,
-          )
-        } else {
-          this.diagnostics.sink.debug('tool.result', `${execution.name} completed`, { ms })
-        }
-        return result
-      } catch (error) {
-        this.diagnostics.sink.error(
-          'tool.result',
-          `${execution.name} threw: ${errorMessageOf(error)}`,
-          {
-            ms: Date.now() - startedAt,
-          },
-        )
-        throw error
-      }
-    })
-    registerSearchTool(ctx, this)
-    registerGetTool(ctx, this)
-    registerChildrenTool(ctx, this)
-    registerAttachmentTool(ctx, this)
-    registerRetrieveTool(ctx, this)
-    registerBrowseTool(ctx, this)
-    // The heavy tools register statically: the run_in_background parameter is
-    // always declared and an unservable background request is refused from
-    // execute (flag off, or no jobs service mounted) instead of the schema
-    // being rebuilt around the composition's capability.
-    registerExportTool(ctx, this)
-    registerChangesTool(ctx, this)
+    installShellWriteApproval(ctx, () => this.config, this.diagnostics)
+    installToolDiagnostics(ctx, this.diagnostics)
+    // Background-capable tools keep their parameters static; execution refuses
+    // requests the current composition cannot serve.
+    registerReadTools(ctx, this)
     // The status channel: the Remote service binds the wire namespace, and
     // the strict manifest claims its endpoints. See typert.ts for why the
     // manifest self-registers through ctx.inject(['typert']).
@@ -552,21 +390,7 @@ export class ZoteroService extends Service {
       return
     }
     if (enabled && this.writeToolDisposes.length === 0) {
-      this.writeToolDisposes = [
-        registerCreateNoteTool(this.ctx, this),
-        registerUpdateNoteTool(this.ctx, this),
-        registerUpdateItemTagsTool(this.ctx, this),
-        registerUpdateItemCollectionsTool(this.ctx, this),
-        registerBatchItemsTool(this.ctx, this),
-        registerCreateCollectionTool(this.ctx, this),
-        registerUpdateCollectionTool(this.ctx, this),
-        registerDeleteCollectionTool(this.ctx, this),
-        registerCreateItemTool(this.ctx, this),
-        registerUpdateItemTool(this.ctx, this),
-        registerRestoreItemsTool(this.ctx, this),
-        ...registerSavedSearchTools(this.ctx, this),
-        registerDeleteLibraryTagsTool(this.ctx, this),
-      ]
+      this.writeToolDisposes = registerWriteTools(this.ctx, this)
     } else if (!enabled && this.writeToolDisposes.length > 0) {
       for (const dispose of this.writeToolDisposes) dispose()
       this.writeToolDisposes = []
@@ -1045,87 +869,6 @@ export class ZoteroService extends Service {
     }
     const bound = (fn as (...args: never[]) => unknown).bind(provider)
     return bound as NonNullable<ZoteroProvider[M]>
-  }
-}
-
-/**
- * Top-level config keys whose change rebuilds the transport stack: the HTTP
- * client identity and bounds (`baseUrl`, `timeoutMs`, `maxResponseBytes`,
- * `maxInFlightRequests`, the last of which sizes the client-wide concurrency
- * gate), the write client's human-scale dialog budget
- * (`writeAuthorizeDeadlineMs`), and the write-capability flip (writer,
- * authorizer, and tool set). `provider` and `writePersistKey` are live reads
- * (`resolveProvider()` and the authorizer's `persistKey` callback) and never
- * rebuild; every remaining bound, the scope-listing TTL included, is read
- * through the provider's live limits getter on the next call.
- */
-export const TRANSPORT_CONFIG_KEYS: ReadonlySet<keyof ResolvedConfig> = new Set([
-  'baseUrl',
-  'timeoutMs',
-  'maxResponseBytes',
-  'maxInFlightRequests',
-  'writeAuthorizeDeadlineMs',
-  'writeEnabled',
-])
-
-/**
- * Whether a `loader/volatile-update` path list touches a transport key.
- * A root path (`[]`) means the whole config moved as one reference.
- * @param paths - the changed field paths the loader reported.
- * @returns true when the transport stack may need a rebuild.
- */
-export function touchesTransport(paths: readonly (readonly string[])[]): boolean {
-  return paths.some(
-    (path) =>
-      path.length === 0 ||
-      (path[0] !== undefined && TRANSPORT_CONFIG_KEYS.has(path[0] as keyof ResolvedConfig)),
-  )
-}
-
-/**
- * Whether two resolved configs agree on every field the transport stack is
- * built from. Limits and display fields are read per request and never
- * trigger a rebuild.
- * @param current - the live resolved config.
- * @param built - the config the transport was last built from.
- * @returns true when no rebuild is needed.
- */
-function sameTransportConfig(current: ResolvedConfig, built: ResolvedConfig): boolean {
-  for (const key of TRANSPORT_CONFIG_KEYS) {
-    if (current[key] !== built[key]) return false
-  }
-  return true
-}
-
-/**
- * Project one resolved config onto the `local` provider's limits. Called
- * per request through the provider's live getter, so limit-only edits apply
- * without rebuilding the transport.
- * @param config - the resolved config to project.
- * @returns the provider limits the transport and ranking behavior read.
- */
-function localProviderLimits(config: ResolvedConfig): LocalApiLimits {
-  return {
-    maxNoteScanRecords: config.maxNoteScanRecords,
-    maxDetailChars: config.maxDetailChars,
-    maxNoteBodyChars: config.maxNoteBodyChars,
-    maxNoteChars: config.maxNoteChars,
-    maxNoteRecords: config.maxNoteRecords,
-    maxAnnotationRecords: config.maxAnnotationRecords,
-    maxAttachmentRecords: config.maxAttachmentRecords,
-    fulltextChunkWords: config.fulltextChunkWords,
-    maxEvidenceChars: config.maxEvidenceChars,
-    maxEvidencePassages: config.maxEvidencePassages,
-    maxFulltextChars: config.maxFulltextChars,
-    maxExportChars: config.maxExportChars,
-    maxBrowseResults: config.maxBrowseResults,
-    maxChangesResults: config.maxChangesResults,
-    scopeListingTtlMs: config.scopeListingTtlMs,
-    searchConcurrency: config.searchConcurrency,
-    graphConcurrency: config.graphConcurrency,
-    retrieveAttachmentCap: config.retrieveAttachmentCap,
-    defaultStyle: config.defaultStyle,
-    defaultLocale: config.defaultLocale,
   }
 }
 

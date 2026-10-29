@@ -21,14 +21,11 @@ import {
 import { serverIdFromHeaders } from './identity.js'
 import { fetchItemKeyBatches } from './item-batch.js'
 import { parseRef, libraryPrefix } from '../refs.js'
-import {
-  publicationsItemsPath,
-  resolveScope,
-  ScopeDirectory,
-  type ResolvedScopeResult,
-} from './scope-directory.js'
+import { resolveScope, ScopeDirectory, type ResolvedScopeResult } from './scope-directory.js'
+import { publicationsItemsPath } from './scope-paths.js'
 import { asRecord, asString } from '../json.js'
-import { collectionKeysOf, normalizeSearchItem, plainNoteText } from '../normalize.js'
+import { collectionKeysOf, normalizeSearchItem } from '../normalize-search.js'
+import { plainNoteText } from '../normalize-context.js'
 import { requireSupportedLibraryOfRef } from '../refs.js'
 import {
   attachmentParentKeys,
@@ -49,22 +46,7 @@ import type {
   ZoteroSearchResult,
   ZoteroSearchSupplement,
 } from '../types.js'
-
-/** Escape a literal tag so a leading `-` never becomes Zotero's NOT syntax. */
-export function encodeLiteralTag(tag: string): string {
-  return tag.startsWith('-') ? `\\-${tag.slice(1)}` : tag
-}
-
-/**
- * Escape for NOT filter: `-` + escaped literal. For a tag that itself starts with `-`
- * (e.g. `-foo` literal), this intentionally yields `-\-foo` = NOT literal "-foo".
- * This is the Local API's documented escaping: `tag=\\-foo` means literal "-foo",
- * `tag=-\\-foo` means NOT literal "-foo". The backslash is part of the literal syntax,
- * not double-escaping.
- */
-export function encodeExcludeTag(tag: string): string {
-  return `-${encodeLiteralTag(tag)}`
-}
+import { buildSearchParams } from './search-query.js'
 
 /**
  * The model-facing message for `includeTrashed` outside a library scope. The
@@ -72,43 +54,6 @@ export function encodeExcludeTag(tag: string): string {
  * the full stop, so the two are separate constants rather than one shared one.
  */
 export const INCLUDE_TRASHED_SCOPE_MESSAGE = 'includeTrashed is only allowed with library scope.'
-
-/**
- * Serialize a search request into the Local API's documented query parameters,
- * without the paging window. Repeated `tag` values survive here, so the
- * concurrent page reader can clone the query per page. `buildSearchParams`
- * adds `start`/`limit` on top.
- */
-function searchQueryOf(request: ZoteroSearchRequest): URLSearchParams {
-  const params = new URLSearchParams()
-  if (request.query !== undefined && request.query !== '') params.set('q', request.query)
-  if (request.mode === 'everything') params.set('qmode', 'everything')
-  if (request.itemTypes !== undefined && request.itemTypes.length > 0) {
-    params.set('itemType', request.itemTypes.join(' || '))
-  }
-  // tagMatch ALL (default) -> repeated tag (AND); ANY -> single tag with || (OR)
-  if (request.tags !== undefined && request.tags.length > 0) {
-    if (request.tagMatch === 'any' && request.tags.length > 1) {
-      params.set('tag', request.tags.map(encodeLiteralTag).join(' || '))
-    } else {
-      for (const tag of request.tags) params.append('tag', encodeLiteralTag(tag))
-    }
-  }
-  for (const tag of request.excludeTags ?? []) params.append('tag', encodeExcludeTag(tag))
-  if (request.includeTrashed) params.set('includeTrashed', '1')
-  params.set('sort', request.sort)
-  params.set('direction', request.direction)
-  return params
-}
-
-/** Serialize a search request into the Local API's documented query parameters. */
-export function buildSearchParams(request: ZoteroSearchRequest): URLSearchParams {
-  return setPage(
-    new URLSearchParams(searchQueryOf(request).toString()),
-    request.offset,
-    request.limit,
-  )
-}
 
 export async function runSearch(
   deps: { client: ZoteroHttpClient; limits: LocalApiLimits; searchCaches: SearchIndexCaches },

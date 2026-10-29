@@ -1,6 +1,7 @@
 /**
- * Bounded-concurrency task pooling shared by the graph walk and export, plus
- * the process-wide request gate the HTTP client holds every data request in.
+ * Bounded-concurrency task pooling shared by the graph walk and export, the
+ * process-wide request gate the HTTP client holds every data request in, and
+ * the single-flight read cache built on {@link SharedOperation}.
  * @module dsh-zotero/concurrency
  */
 
@@ -128,6 +129,73 @@ export async function awaitSharedOperation<T>(
     signal.removeEventListener('abort', onAbort)
     release()
   }
+}
+
+/**
+ * How one {@link sharedRead} entry is looked up and stored: the key concurrent
+ * callers share one in-flight load under, the cache hit test for the current
+ * caller, and the cache keys one successful load is stored under.
+ */
+export interface SharedReadKeys<T> {
+  /** Key under which concurrent callers share one in-flight load. */
+  readonly flightKey: string
+  /** A cache hit for the current caller, or undefined on a miss. */
+  readonly find: () => T | undefined
+  /** The cache keys one successful load is stored under (all aliases it must answer). */
+  readonly store: (value: T) => readonly string[]
+}
+
+/**
+ * Read one value through a cache with at most one in-flight load per flight
+ * key. A cache hit returns immediately; concurrent misses share the load; the
+ * successful value is stored under every alias {@link SharedReadKeys.store}
+ * names; a load that fails or is aborted is never cached. Waiters share the
+ * operation through {@link awaitSharedOperation}, so one cancelled caller does
+ * not abort the read for the others.
+ *
+ * A settled or aborted operation is never reused. An operation whose last
+ * waiter cancelled has its controller aborted while its promise may still be
+ * pending, and joining that doomed operation would hand a fresh caller the
+ * cancellation error it did not cause; the next read therefore starts a new
+ * load instead.
+ * @param input - the caches, key family, loader, and caller cancellation.
+ * @returns the cached or freshly loaded value.
+ */
+export async function sharedRead<T>(input: {
+  readonly cache: Map<string, T>
+  readonly inFlight: Map<string, SharedOperation<T>>
+  readonly keys: SharedReadKeys<T>
+  readonly load: (signal: AbortSignal) => Promise<T>
+  readonly signal?: AbortSignal
+}): Promise<T> {
+  if (input.signal?.aborted) throw new HarnessError(TOOL_ABORTED_MESSAGE, TOOL_ABORTED)
+  const { cache, inFlight, keys } = input
+  const cached = keys.find()
+  if (cached !== undefined) return cached
+
+  let operation = inFlight.get(keys.flightKey)
+  if (operation === undefined || operation.settled || operation.controller.signal.aborted) {
+    const controller = new AbortController()
+    // The operation is assigned synchronously below, before any microtask can
+    // run the loader's cleanup; the guard keeps that ordering honest.
+    let created: SharedOperation<T> | undefined
+    const promise = (async () => {
+      const value = await input.load(controller.signal)
+      for (const key of keys.store(value)) cache.set(key, value)
+      return value
+    })().finally(() => {
+      if (created === undefined) return
+      created.settled = true
+      if (inFlight.get(keys.flightKey) === created) inFlight.delete(keys.flightKey)
+    })
+    created = { controller, promise, waiters: 0, settled: false }
+    // A sole cancelled waiter leaves nobody to consume the shared rejection.
+    // Keep it observed without changing the promise returned to real waiters.
+    void promise.catch(() => undefined)
+    inFlight.set(keys.flightKey, created)
+    operation = created
+  }
+  return await awaitSharedOperation(operation, input.signal)
 }
 
 /** Thrown when a queued holder is aborted before it ever takes its slot. */

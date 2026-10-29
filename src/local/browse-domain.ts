@@ -28,11 +28,8 @@ import {
 import { isItemTypeIdentifier } from '../ref-grammar.js'
 import { assertServerIdMatches, serverIdFromHeaders } from './identity.js'
 import { asRecord, asString, isObjectKey } from '../json.js'
-import {
-  normalizeSavedSearchConditions,
-  normalizeScopeEntry,
-  type ScopeNameEntry,
-} from '../normalize.js'
+import { normalizeSavedSearchConditions } from '../normalize-saved-search.js'
+import { normalizeScopeEntry, type ScopeNameEntry } from '../normalize-scope.js'
 import type { ZoteroSavedSearchCondition } from '../types.js'
 import {
   assertPublicationsSupported,
@@ -52,7 +49,9 @@ import {
   requireTotalResults,
   setPage,
 } from './pagination.js'
-import { itemsSegmentFor, publicationsTagsPath, type ScopeDirectory } from './scope-directory.js'
+import type { ScopeDirectory } from './scope-directory.js'
+import type { ItemSchemaDirectory } from './item-schema-directory.js'
+import { itemsSegmentFor, publicationsTagsPath } from './scope-paths.js'
 import type { ZoteroHttpClient } from '../http-client.js'
 import type { LocalApiLimits } from './limits.js'
 import type {
@@ -71,6 +70,7 @@ import type {
 export async function runBrowse(
   deps: { client: ZoteroHttpClient; limits: LocalApiLimits },
   directory: ScopeDirectory,
+  itemSchema: ItemSchemaDirectory,
   request: ZoteroBrowseRequest,
   signal?: AbortSignal,
 ): Promise<ZoteroBrowseResult> {
@@ -105,7 +105,7 @@ export async function runBrowse(
     if (request.itemType === undefined || !isItemTypeIdentifier(request.itemType)) {
       throw new ZoteroError(ITEM_FIELDS_ITEM_TYPE_MESSAGE, ZOTERO_INVALID_ARGUMENT)
     }
-    return await browseItemFields(directory, request, signal)
+    return await browseItemFields(itemSchema, request, signal)
   }
   if ((request.q !== undefined || request.match !== undefined) && request.kind !== 'tags') {
     throw new ZoteroError(Q_MATCH_SCOPE_MESSAGE, ZOTERO_INVALID_ARGUMENT)
@@ -146,7 +146,7 @@ export async function runBrowse(
     case 'tags':
       return await browseTags(deps, directory, request, signal)
     case 'itemTypes':
-      return await browseItemTypes(directory, request, signal)
+      return await browseItemTypes(itemSchema, request, signal)
     default:
       throw new ZoteroError(
         unsupportedBrowseKindMessage((request as { kind: string }).kind),
@@ -476,11 +476,11 @@ async function browseTags(
 }
 
 async function browseItemTypes(
-  directory: ScopeDirectory,
+  itemSchema: ItemSchemaDirectory,
   request: ZoteroBrowseRequest,
   signal?: AbortSignal,
 ): Promise<ZoteroBrowseResult> {
-  const { items, serverId } = await directory.getItemTypes(signal)
+  const { items, serverId } = await itemSchema.getItemTypes(signal)
   return clientSlicedPage('itemTypes', items, request, serverId)
 }
 
@@ -492,11 +492,11 @@ async function browseItemTypes(
  * what exists and ask for it by name.
  */
 async function browseItemFields(
-  directory: ScopeDirectory,
+  itemSchema: ItemSchemaDirectory,
   request: ZoteroBrowseRequest,
   signal?: AbortSignal,
 ): Promise<ZoteroBrowseResult> {
-  const { items, serverId } = await directory.getItemFields(request.itemType!, signal)
+  const { items, serverId } = await itemSchema.getItemFields(request.itemType!, signal)
   return clientSlicedPage('itemFields', items, request, serverId)
 }
 

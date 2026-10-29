@@ -1,6 +1,6 @@
 /** A Trash operation retains objects, verifies every descendant and reports partial progress. */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { batchItems } from '../../../src/local/write-domain.js'
+import { batchItems } from '../../../src/local/write-batch.js'
 import {
   batchHeaders,
   ITEM_KEY,
