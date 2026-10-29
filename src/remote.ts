@@ -16,6 +16,7 @@
  * @module dsh-zotero/remote
  */
 
+import { execFile } from 'node:child_process'
 import type { Context } from '@deepseek-ai/cordis'
 import { TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { domainCall, ZOTERO_NOT_COMPOSED_MESSAGE } from './errors.js'
@@ -33,9 +34,84 @@ import {
   type ZoteroAttachmentLocationView,
   type ZoteroClientErrorReport,
   type ZoteroDiagnosticsView,
+  type ZoteroOpenProtocolResultView,
   type ZoteroReportResultView,
   type ZoteroStatusView,
 } from './contract.js'
+
+/** Await the OS launcher accepting the protocol request. */
+export type ProtocolLauncher = (
+  command: string,
+  args: readonly string[],
+  options: { signal?: AbortSignal; env?: NodeJS.ProcessEnv },
+) => Promise<void>
+
+const defaultLauncher: ProtocolLauncher = (command, args, options) =>
+  new Promise((resolve, reject) => {
+    execFile(command, [...args], { ...options, windowsHide: true, shell: false }, (error) => {
+      if (error) reject(error)
+      else resolve()
+    })
+  })
+
+function validProtocolUrl(url: string): boolean {
+  if (url === 'zotero://select/') return true
+  const match =
+    /^zotero:\/\/(select|open-pdf)\/(?:library|groups\/[1-9][0-9]*)\/items\/[A-Z0-9]{8}(?:\?([^#]*))?$/.exec(
+      url,
+    )
+  if (!match) return false
+  if (match[2] === undefined) return true
+  if (match[1] !== 'open-pdf' || !match[2]) return false
+  const seen = new Set<string>()
+  return match[2].split('&').every((part) => {
+    const pair = /^(page|annotation)=([^=]+)$/.exec(part)
+    if (!pair || seen.has(pair[1]!)) return false
+    seen.add(pair[1]!)
+    try {
+      const value = decodeURIComponent(pair[2]!)
+      return pair[1] === 'annotation' ? /^[A-Z0-9]{8}$/.test(value) : /^[1-9][0-9]*$/.test(value)
+    } catch {
+      return false
+    }
+  })
+}
+
+/** Validate a Zotero target and dispatch without a command interpreter. */
+export async function executeOpenProtocol(
+  url: string,
+  platform: NodeJS.Platform = process.platform,
+  launcher: ProtocolLauncher = defaultLauncher,
+  signal?: AbortSignal,
+): Promise<ZoteroOpenProtocolResultView> {
+  if (!url.startsWith('zotero://')) return { ok: false, error: 'Protocol not allowed' }
+  if (!validProtocolUrl(url)) return { ok: false, error: 'Malformed zotero:// URL' }
+  try {
+    signal?.throwIfAborted()
+    if (platform === 'win32') {
+      const script =
+        "$ErrorActionPreference = 'Stop'; $p = New-Object System.Diagnostics.ProcessStartInfo; $p.UseShellExecute = $true; $p.FileName = $env:DSH_ZOTERO_PROTOCOL_URL; [System.Diagnostics.Process]::Start($p) | Out-Null"
+      await launcher(
+        'powershell.exe',
+        [
+          '-NoProfile',
+          '-NonInteractive',
+          '-EncodedCommand',
+          Buffer.from(script, 'utf16le').toString('base64'),
+        ],
+        {
+          signal,
+          env: { ...process.env, DSH_ZOTERO_PROTOCOL_URL: url },
+        },
+      )
+    } else {
+      await launcher(platform === 'darwin' ? 'open' : 'xdg-open', [url], { signal })
+    }
+    return { ok: true }
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) }
+  }
+}
 
 /** Newest entries one diagnostics snapshot serves; the panel renders fewer. */
 const SNAPSHOT_SERVE_LIMIT = 200
@@ -143,6 +219,16 @@ export class ZoteroRuntime extends TypertRemoteService {
       ...(Object.keys(detail).length > 0 ? { detail } : {}),
     })
     return { seq }
+  }
+
+  /**
+   * Launch a zotero:// deep link natively through the host operating system.
+   * @param url - canonical zotero:// deep link.
+   * @param signal - cancellation signal.
+   */
+  async openProtocol(url: string, signal: AbortSignal): Promise<ZoteroOpenProtocolResultView> {
+    signal.throwIfAborted()
+    return executeOpenProtocol(url, process.platform, defaultLauncher, signal)
   }
 
   /** The live `debug` flag, so the snapshot names the verbosity it was taken at. */

@@ -136,6 +136,18 @@ export const zoteroClientErrorReportSchema = z
 /** Wire schema: reportClientError result (the ring sequence the report was assigned). */
 export const zoteroReportResultSchema = z.object({ seq: z.number() }).strict().readonly()
 
+/** Wire schema: openProtocol parameter (a string starting with zotero://). */
+export const zoteroProtocolUrlSchema = z.string().startsWith('zotero://')
+
+/** Wire schema: openProtocol result. */
+export const zoteroOpenProtocolResultSchema = z
+  .object({
+    ok: z.boolean(),
+    error: z.string().optional(),
+  })
+  .strict()
+  .readonly()
+
 // ── Library panel endpoints ────────────────────────────────────────────────
 
 /** Wire schema: the canonical personal library (user/0) on its own. */

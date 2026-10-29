@@ -7,6 +7,7 @@
  */
 
 import { REF_IN_TEXT_PATTERN, type RefKind } from '../../ref-grammar.ts'
+import { getProtocolDispatcher } from './protocol-dispatcher.ts'
 
 /** Structured identity parsed from a canonical Zotero ref. */
 interface ParsedRefIdentity {
@@ -18,6 +19,9 @@ interface ParsedRefIdentity {
 
 const REF_IDENTITY_CACHE_LIMIT = 500
 const refIdentityCache = new Map<string, ParsedRefIdentity | null>()
+
+const GENERAL_REF_PATTERN =
+  /^zotero:\/\/(?<libraryType>user|group)\/(?<libraryId>\d+)\/(?<kind>item|attachment|annotation|collection|search)\/(?<key>[A-Za-z0-9_-]+)/
 
 /**
  * Clear the reference identity cache. Exported for test isolation.
@@ -35,7 +39,7 @@ export function parseRefIdentity(ref: string): ParsedRefIdentity | null {
   const cached = refIdentityCache.get(ref)
   if (cached !== undefined) return cached
 
-  const match = REF_IN_TEXT_PATTERN.exec(ref)
+  const match = REF_IN_TEXT_PATTERN.exec(ref) ?? GENERAL_REF_PATTERN.exec(ref)
   let result: ParsedRefIdentity | null = null
   if (match?.groups) {
     const { libraryType, libraryId, kind, key } = match.groups
@@ -94,4 +98,67 @@ export function pdfUrlOf(
   if (options.annotation !== undefined && options.annotation !== '')
     params.push(`annotation=${encodeURIComponent(options.annotation)}`)
   return `zotero://open-pdf/${target}${params.length === 0 ? '' : `?${params.join('&')}`}`
+}
+
+/**
+ * Safely trigger the system protocol handler for a zotero:// deep link.
+ * Prioritizes the host remote RPC dispatcher (allowing native launching in Electron desktop);
+ * falls back to a detached DOM anchor element click in pure web browsers.
+ * @param url - canonical zotero:// URL.
+ * @returns true if dispatched, false if refused or invalid.
+ */
+export function launchZoteroProtocol(url: string): boolean {
+  if (!url.startsWith('zotero://')) return false
+
+  const dispatcher = getProtocolDispatcher()
+  if (dispatcher !== undefined) {
+    void dispatcher(url)
+      .then((handled) => {
+        if (!handled) {
+          dispatchDomProtocol(url)
+        }
+      })
+      .catch(() => {
+        dispatchDomProtocol(url)
+      })
+    return true
+  }
+
+  return dispatchDomProtocol(url)
+}
+
+/**
+ * Asynchronously trigger the system protocol handler for a zotero:// deep link.
+ * Awaits the host remote RPC when available.
+ */
+export async function launchZoteroProtocolAsync(url: string): Promise<boolean> {
+  if (!url.startsWith('zotero://')) return false
+
+  const dispatcher = getProtocolDispatcher()
+  if (dispatcher !== undefined) {
+    try {
+      return await dispatcher(url)
+    } catch {
+      return false
+    }
+  }
+
+  return dispatchDomProtocol(url)
+}
+
+function dispatchDomProtocol(url: string): boolean {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return false
+  if (!url.startsWith('zotero://')) return false
+  try {
+    const link = document.createElement('a')
+    link.href = url
+    link.rel = 'noopener noreferrer'
+    link.style.display = 'none'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    return true
+  } catch {
+    return false
+  }
 }

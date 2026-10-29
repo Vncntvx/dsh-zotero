@@ -136,6 +136,12 @@ export interface ZoteroReportResultView {
   readonly seq: number
 }
 
+/** The result of launching a zotero:// protocol URL via the host. */
+export interface ZoteroOpenProtocolResultView {
+  readonly ok: boolean
+  readonly error?: string
+}
+
 /** Package identity every Typert contribution from this plugin claims. */
 export const ZOTERO_REMOTE_PACKAGE = 'dsh-zotero'
 
@@ -165,6 +171,12 @@ export const ZOTERO_CLIENT_ERROR_REPORT_TYPE_SYMBOL = 'dsh-zotero#ZoteroClientEr
 /** Strict codec type symbol for {@link ZoteroReportResultView}. */
 export const ZOTERO_REPORT_RESULT_TYPE_SYMBOL = 'dsh-zotero#ZoteroReportResultView'
 
+/** Strict codec type symbol for the string url parameter of openProtocol. */
+export const ZOTERO_OPEN_PROTOCOL_PARAM_TYPE_SYMBOL = 'dsh-zotero#ProtocolUrl'
+
+/** Strict codec type symbol for {@link ZoteroOpenProtocolResultView}. */
+export const ZOTERO_OPEN_PROTOCOL_RESULT_TYPE_SYMBOL = 'dsh-zotero#ZoteroOpenProtocolResultView'
+
 /** Globally stable invocation id for the status probe. */
 export const ZOTERO_STATUS_INVOCATION_ID = 'dsh-zotero#zotero/status'
 
@@ -176,6 +188,9 @@ const ZOTERO_DIAGNOSTICS_INVOCATION_ID = 'dsh-zotero#zotero/diagnostics'
 
 /** Globally stable invocation id for the client error report. */
 const ZOTERO_REPORT_CLIENT_ERROR_INVOCATION_ID = 'dsh-zotero#zotero/reportClientError'
+
+/** Globally stable invocation id for openProtocol. */
+const ZOTERO_OPEN_PROTOCOL_INVOCATION_ID = 'dsh-zotero#zotero/openProtocol'
 
 /**
  * Cordis service key that owns the status method on the host half.
@@ -195,6 +210,9 @@ export const ZOTERO_DIAGNOSTICS_METHOD = 'diagnostics'
 
 /** Wire method name for the client error report. */
 export const ZOTERO_REPORT_CLIENT_ERROR_METHOD = 'reportClientError'
+
+/** Wire method name for openProtocol. */
+export const ZOTERO_OPEN_PROTOCOL_METHOD = 'openProtocol'
 
 /** Invocation kind for direct service calls (no Context receiver). */
 export const ZOTERO_STATUS_INVOCATION_KIND = 'direct'
@@ -294,6 +312,35 @@ export function zoteroReportClientErrorInvocation(
       {
         name: 'report',
         wire: 'report',
+        source: 'json',
+        codec: param,
+      },
+    ],
+    result,
+  }
+}
+
+/**
+ * Build one openProtocol invocation descriptor around parameter and result codecs.
+ * @param param - the strict parameter codec for the zotero:// URL string.
+ * @param result - the strict result codec for {@link ZoteroOpenProtocolResultView}.
+ * @returns a complete invocation descriptor.
+ */
+export function zoteroOpenProtocolInvocation(
+  param: InvocationDescriptor['parameters'][number]['codec'],
+  result: InvocationDescriptor['result'],
+): InvocationDescriptor {
+  return {
+    id: ZOTERO_OPEN_PROTOCOL_INVOCATION_ID,
+    service: ZOTERO_STATUS_SERVICE_KEY,
+    namespace: ZOTERO_SETTINGS_NAMESPACE,
+    method: ZOTERO_OPEN_PROTOCOL_METHOD,
+    invocation: { kind: ZOTERO_STATUS_INVOCATION_KIND },
+    cancellation: { parameter: 'signal' },
+    parameters: [
+      {
+        name: 'url',
+        wire: 'url',
         source: 'json',
         codec: param,
       },

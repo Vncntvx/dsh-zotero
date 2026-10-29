@@ -39,6 +39,7 @@ import {
   ZOTERO_LIBRARY_SEARCH_METHOD,
   ZOTERO_LIBRARY_SERVICE_KEY,
   ZOTERO_LIBRARY_WRITE_METHOD,
+  ZOTERO_OPEN_PROTOCOL_METHOD,
   ZOTERO_REMOTE_PACKAGE,
   ZOTERO_REPORT_CLIENT_ERROR_METHOD,
   ZOTERO_RESOLVE_ATTACHMENT_METHOD,
@@ -81,6 +82,12 @@ export const TYPERT_MANIFEST: TypertContribution = {
             name: ZOTERO_REPORT_CLIENT_ERROR_METHOD,
             signature:
               'reportClientError(report: ZoteroClientErrorReport, signal: AbortSignal): Promise<ZoteroReportResultView>',
+          },
+          {
+            kind: 'method',
+            name: ZOTERO_OPEN_PROTOCOL_METHOD,
+            signature:
+              'openProtocol(url: string, signal: AbortSignal): Promise<ZoteroOpenProtocolResultView>',
           },
         ],
         types: [],

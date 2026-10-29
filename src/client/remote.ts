@@ -32,6 +32,7 @@ import {
   type ZoteroStatusView,
   type ZoteroLibraryWriteRequestView,
   type ZoteroLibraryWriteResultView,
+  type ZoteroOpenProtocolResultView,
 } from '../contract.ts'
 import { ZOTERO_CLIENT_INVOCATIONS } from './status-codec.ts'
 
@@ -68,6 +69,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     reportClientError: (
       report: ZoteroClientErrorReport,
     ) => Promise<RemoteResult<ZoteroReportResultView>>
+    openProtocol: (url: string) => Promise<RemoteResult<ZoteroOpenProtocolResultView>>
     browse: (
       request: ZoteroLibraryBrowseRequestView,
     ) => Promise<RemoteResult<ZoteroLibraryBrowseResultView>>

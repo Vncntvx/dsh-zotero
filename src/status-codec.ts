@@ -25,6 +25,8 @@ import {
   ZOTERO_LIBRARY_SEARCH_RESULT_TYPE_SYMBOL,
   ZOTERO_LIBRARY_WRITE_REQUEST_TYPE_SYMBOL,
   ZOTERO_LIBRARY_WRITE_RESULT_TYPE_SYMBOL,
+  ZOTERO_OPEN_PROTOCOL_PARAM_TYPE_SYMBOL,
+  ZOTERO_OPEN_PROTOCOL_RESULT_TYPE_SYMBOL,
   ZOTERO_REF_PARAM_TYPE_SYMBOL,
   ZOTERO_REPORT_RESULT_TYPE_SYMBOL,
   ZOTERO_RESOLVE_ATTACHMENT_TYPE_SYMBOL,
@@ -36,6 +38,7 @@ import {
   zoteroLibraryItemInvocation,
   zoteroLibrarySearchInvocation,
   zoteroLibraryWriteInvocation,
+  zoteroOpenProtocolInvocation,
   zoteroReportClientErrorInvocation,
   zoteroResolveAttachmentInvocation,
   zoteroStatusInvocation,
@@ -55,6 +58,8 @@ import {
   zoteroLibrarySearchRequestSchema,
   zoteroLibraryWriteRequestSchema,
   zoteroLibraryWriteResultSchema,
+  zoteroOpenProtocolResultSchema,
+  zoteroProtocolUrlSchema,
   zoteroRefSchema,
   zoteroReportResultSchema,
   zoteroSearchResultSchema,
@@ -84,6 +89,16 @@ const ZOTERO_CLIENT_ERROR_REPORT_CODEC = strictCodec(
 const ZOTERO_REPORT_RESULT_CODEC = strictCodec(
   ZOTERO_REPORT_RESULT_TYPE_SYMBOL,
   zoteroReportResultSchema,
+)
+
+const ZOTERO_OPEN_PROTOCOL_PARAM_CODEC = strictCodec(
+  ZOTERO_OPEN_PROTOCOL_PARAM_TYPE_SYMBOL,
+  zoteroProtocolUrlSchema,
+)
+
+const ZOTERO_OPEN_PROTOCOL_RESULT_CODEC = strictCodec(
+  ZOTERO_OPEN_PROTOCOL_RESULT_TYPE_SYMBOL,
+  zoteroOpenProtocolResultSchema,
 )
 
 // ── Library panel endpoints ────────────────────────────────────────────────
@@ -154,6 +169,7 @@ export const ZOTERO_INVOCATIONS: readonly InvocationDescriptor[] = [
   zoteroResolveAttachmentInvocation(ZOTERO_REF_PARAM_CODEC, ZOTERO_ATTACHMENT_LOCATION_CODEC),
   zoteroDiagnosticsInvocation(ZOTERO_DIAGNOSTICS_CODEC),
   zoteroReportClientErrorInvocation(ZOTERO_CLIENT_ERROR_REPORT_CODEC, ZOTERO_REPORT_RESULT_CODEC),
+  zoteroOpenProtocolInvocation(ZOTERO_OPEN_PROTOCOL_PARAM_CODEC, ZOTERO_OPEN_PROTOCOL_RESULT_CODEC),
   zoteroLibraryBrowseInvocation(
     ZOTERO_LIBRARY_BROWSE_REQUEST_CODEC,
     ZOTERO_LIBRARY_BROWSE_RESULT_CODEC,

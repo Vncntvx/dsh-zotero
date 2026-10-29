@@ -1,16 +1,20 @@
+// @vitest-environment jsdom
 /**
  * The canonical Zotero deep links: URL construction, ref parsing, and
  * group-library support, plus the PDF capability of one source.
  * @module tests/client/actions/open-zotero
  */
 
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   clearRefIdentityCacheForTesting,
+  launchZoteroProtocol,
+  launchZoteroProtocolAsync,
   parseRefIdentity,
   pdfUrlOf,
   selectUrlOf,
 } from '../../../src/client/actions/open-zotero.ts'
+import { setProtocolDispatcher } from '../../../src/client/actions/protocol-dispatcher.ts'
 import { hasPdf, pdfCapabilityOf } from '../../../src/client/sources/source-capabilities.ts'
 import type { SourceAttachment } from '../../../src/client/sources/model.ts'
 import { sourceOf } from '../helpers/source-fixtures.ts'
@@ -123,6 +127,74 @@ describe('pdfUrlOf', () => {
 
   it('returns null for an unparseable ref', () => {
     expect(pdfUrlOf('junk')).toBeNull()
+  })
+})
+
+describe('launchZoteroProtocol', () => {
+  it('safely dispatches a valid zotero:// url via DOM click', () => {
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    const appendSpy = vi.spyOn(document.body, 'appendChild')
+    const removeSpy = vi.spyOn(document.body, 'removeChild')
+
+    const result = launchZoteroProtocol('zotero://select/library/items/ITEM1234')
+    expect(result).toBe(true)
+    expect(clickSpy).toHaveBeenCalledTimes(1)
+    expect(appendSpy).toHaveBeenCalledTimes(1)
+    expect(removeSpy).toHaveBeenCalledTimes(1)
+
+    clickSpy.mockRestore()
+    appendSpy.mockRestore()
+    removeSpy.mockRestore()
+  })
+
+  it('refuses invalid non-zotero schemes', () => {
+    expect(launchZoteroProtocol('https://example.com')).toBe(false)
+    expect(launchZoteroProtocol('javascript:alert(1)')).toBe(false)
+    expect(launchZoteroProtocol('')).toBe(false)
+  })
+
+  it('delegates to protocol dispatcher when configured', async () => {
+    let dispatchedUrl: string | undefined
+    setProtocolDispatcher(async (url) => {
+      dispatchedUrl = url
+      return true
+    })
+
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click')
+    const result = launchZoteroProtocol('zotero://select/library/items/CUSTOM1')
+    expect(result).toBe(true)
+    expect(dispatchedUrl).toBe('zotero://select/library/items/CUSTOM1')
+    expect(clickSpy).not.toHaveBeenCalled()
+
+    const asyncRes = await launchZoteroProtocolAsync('zotero://select/library/items/ASYNC1')
+    expect(asyncRes).toBe(true)
+    expect(dispatchedUrl).toBe('zotero://select/library/items/ASYNC1')
+
+    clickSpy.mockRestore()
+    setProtocolDispatcher(undefined)
+  })
+
+  it('reports host dispatch failure without claiming a DOM fallback succeeded', async () => {
+    setProtocolDispatcher(async () => false)
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    const appendSpy = vi.spyOn(document.body, 'appendChild')
+    const removeSpy = vi.spyOn(document.body, 'removeChild')
+
+    const asyncRes = await launchZoteroProtocolAsync('zotero://select/library/items/FALLBACK1')
+    expect(asyncRes).toBe(false)
+    expect(clickSpy).not.toHaveBeenCalled()
+
+    setProtocolDispatcher(async () => {
+      throw new Error('remote error')
+    })
+    const asyncResError = await launchZoteroProtocolAsync('zotero://select/library/items/FALLBACK2')
+    expect(asyncResError).toBe(false)
+    expect(clickSpy).not.toHaveBeenCalled()
+
+    clickSpy.mockRestore()
+    appendSpy.mockRestore()
+    removeSpy.mockRestore()
+    setProtocolDispatcher(undefined)
   })
 })
 

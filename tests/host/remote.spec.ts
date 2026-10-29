@@ -8,8 +8,8 @@
 
 import { Context } from '@deepseek-ai/cordis'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
-import { afterEach, describe, expect, it } from 'vitest'
-import { ZoteroRuntime } from '../../src/remote.js'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { executeOpenProtocol, type ProtocolLauncher, ZoteroRuntime } from '../../src/remote.js'
 import { ZOTERO_STATUS_SERVICE_KEY, type ZoteroDiagnosticEntry } from '../../src/contract.js'
 import { TYPERT_MANIFEST } from '../../src/typert.js'
 import { type HostLane, setupHostLane } from '../helpers/lanes/host-lane.js'
@@ -178,6 +178,7 @@ describe('the zotero typert manifest', () => {
       'resolveAttachment',
       'diagnostics',
       'reportClientError',
+      'openProtocol',
       'browse',
       'search',
       'item',
@@ -400,5 +401,62 @@ describe('the zotero resolveAttachment endpoint', () => {
     } finally {
       zotero.attachment = origAttachment
     }
+  })
+})
+
+describe('the zotero openProtocol endpoint', () => {
+  it.each(['darwin', 'linux'] as const)('awaits the %s launcher', async (platform) => {
+    const launcher = vi.fn<ProtocolLauncher>(async () => {})
+    expect(
+      await executeOpenProtocol('zotero://select/library/items/ABC12345', platform, launcher),
+    ).toEqual({ ok: true })
+    expect(launcher).toHaveBeenCalledWith(
+      platform === 'darwin' ? 'open' : 'xdg-open',
+      ['zotero://select/library/items/ABC12345'],
+      { signal: undefined },
+    )
+  })
+  it('passes the complete Windows URL only through the environment', async () => {
+    const launcher = vi.fn<ProtocolLauncher>(async () => {})
+    const url = 'zotero://open-pdf/groups/123/items/ABC12345?page=12&annotation=ABCD1234'
+    expect(await executeOpenProtocol(url, 'win32', launcher)).toEqual({ ok: true })
+    const [command, args, options] = launcher.mock.calls[0]!
+    expect(command).toBe('powershell.exe')
+    expect(options.env?.DSH_ZOTERO_PROTOCOL_URL).toBe(url)
+    const script = Buffer.from(args[3]!, 'base64').toString('utf16le')
+    expect(script).toContain('UseShellExecute = $true')
+    expect(script).not.toContain(url)
+    expect(script).not.toContain('Invoke-Expression')
+  })
+  it.each([
+    'https://evil.com',
+    'zotero://select/&calc.exe',
+    'zotero://select/library/items/ABC12345/extra',
+    'zotero://open-pdf/library/items/ABC12345?page=1&page=2',
+    'zotero://open-pdf/library/items/ABC12345?annotation=%ZZ',
+    'zotero://open-pdf/library/items/ABC12345?page=1&evil=x',
+  ])('refuses invalid target %s before launching', async (url) => {
+    const launcher = vi.fn<ProtocolLauncher>(async () => {})
+    expect((await executeOpenProtocol(url, 'win32', launcher)).ok).toBe(false)
+    expect(launcher).not.toHaveBeenCalled()
+  })
+  it.each([false, true])('reports launcher failure (async=%s)', async (asyncFailure) => {
+    const launcher: ProtocolLauncher = () => {
+      if (asyncFailure) return Promise.reject(new Error('ENOENT'))
+      throw new Error('ENOENT')
+    }
+    expect(await executeOpenProtocol('zotero://select/', 'linux', launcher)).toEqual({
+      ok: false,
+      error: 'ENOENT',
+    })
+  })
+  it('rejects cancellation before dispatch', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    const launcher = vi.fn<ProtocolLauncher>(async () => {})
+    expect(
+      (await executeOpenProtocol('zotero://select/', 'linux', launcher, controller.signal)).ok,
+    ).toBe(false)
+    expect(launcher).not.toHaveBeenCalled()
   })
 })
