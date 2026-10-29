@@ -18,3 +18,7 @@
 
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import type {} from '@deepseek-ai/dsh-client-ui-tool/client'
+import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
+import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+
+import type {} from '@deepseek-ai/dsh-client-ui-deliverables/client'

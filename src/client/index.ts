@@ -46,6 +46,7 @@ import { ScholarlySettingsSection } from './ScholarlySettingsSection.tsx'
 import { SourcesTab, type SourcesTabFace } from './components/SourcesTab.tsx'
 import { ZOTERO_REMOTE } from './remote.ts'
 import { getAttachmentResolver, setAttachmentResolver } from './actions/attachment-resolver.ts'
+import { getProtocolDispatcher, setProtocolDispatcher } from './actions/protocol-dispatcher.ts'
 import {
   getErrorReporter,
   reportCrashedSurface,
@@ -77,6 +78,9 @@ import { clearLibrarySessionMemory } from './components/library/library-storage.
 import { ZoteroLibraryIcon } from './components/library/ZoteroLibraryIcon.tsx'
 import { gatedMount, registerGatedSurfaces, watchWebEnabled, webEnabledOf } from './web-enabled.ts'
 import { registerZoteroToolviews } from './toolviews/index.ts'
+import { ZoteroLibraryMenu } from './components/library/ZoteroLibraryMenu.tsx'
+import { ZoteroComposerSlot } from './components/composer/ZoteroComposerButton.tsx'
+import { DeliverableZoteroAction } from './components/deliverables/DeliverableZoteroAction.tsx'
 import { en, zh } from './locales.ts'
 
 /** Dictionary namespace owned by this plugin. */
@@ -168,6 +172,22 @@ function registerSharedSurfaces(ctx: ClientContext): void {
       }
     }
   }, 'dsh-zotero: attachment resolver')
+  ctx.effect(() => {
+    const dispatcher = async (url: string): Promise<boolean> => {
+      try {
+        const res = await ctx.remote.zotero.openProtocol(url)
+        return res.ok && res.value.ok
+      } catch {
+        return false
+      }
+    }
+    setProtocolDispatcher(dispatcher)
+    return () => {
+      if (getProtocolDispatcher() === dispatcher) {
+        setProtocolDispatcher(undefined)
+      }
+    }
+  }, 'dsh-zotero: protocol dispatcher')
   const reporter = (report: ZoteroClientErrorReport) => ctx.remote.zotero.reportClientError(report)
   ctx.effect(() => {
     setErrorReporter(reporter)
@@ -407,7 +427,10 @@ function registerConversationSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
               // address and hands the entry a ready URL. This fiber cannot do
               // it: on the browser side the `ctx.sessions` Context key carries
               // the host `SessionStore`, not the client `ISessions` catalog.
-              openResource: (url: string) => ctx.sidebarRight.openResource(url),
+              openResource: (
+                url: string,
+                options?: { readonly params?: Record<string, unknown> },
+              ) => ctx.sidebarRight.openResource(url, options as any),
             }),
           },
           SourcesTab,
@@ -461,7 +484,17 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
     childPage: (request) => ctx.remote.zotero.childPage(request),
     export: (request) => ctx.remote.zotero.export(request),
   })
+  const refreshBindings = new Map<string, () => void>()
+  const refreshKey = (sessionId: string, tabId: string) => JSON.stringify([sessionId, tabId])
+  const bindRefresh = (sessionId: string, tabId: string, refresh: () => void) => {
+    const key = refreshKey(sessionId, tabId)
+    refreshBindings.set(key, refresh)
+    return () => {
+      if (refreshBindings.get(key) === refresh) refreshBindings.delete(key)
+    }
+  }
   const panelFace = (): ZoteroLibraryPanelFace => ({
+    bindRefresh,
     status: () => probe(),
     browse: (request) => plane.browse(request),
     search: (request) => plane.search(request),
@@ -519,9 +552,60 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
       ),
     )
 
+    const disposeTabMenu = ctx.slots.inject('sidebar.right.tab.menu.item', () =>
+      ctx.slots.register(
+        {
+          name: 'sidebar.right.tab.menu.item',
+          id: `${REGISTRANT}.library.menu`,
+          order: 200,
+          locale: NS,
+          registrant: REGISTRANT,
+          inject: () => ({
+            onRefresh: (sessionId: string, tabId: string) => {
+              const refresh = refreshBindings.get(refreshKey(sessionId, tabId))
+              if (refresh) refresh()
+              else plane.invalidate()
+            },
+          }),
+        },
+        ZoteroLibraryMenu,
+      ),
+    )
+
+    const disposeInputButton = ctx.slots.inject('conversation.input.left', () =>
+      ctx.slots.register(
+        {
+          name: 'conversation.input.left',
+          id: `${REGISTRANT}.composer.button`,
+          order: 80,
+          locale: NS,
+          registrant: REGISTRANT,
+          inject: () => ({ onOpen: () => ctx.sidebarRight.openTab(TAB_KIND) }),
+        },
+        ZoteroComposerSlot,
+      ),
+    )
+
+    const disposeDeliverableAction = ctx.slots.inject('deliverables.file.actions', () =>
+      ctx.slots.register(
+        {
+          name: 'deliverables.file.actions',
+          id: `${REGISTRANT}.deliverables.action`,
+          locale: NS,
+          registrant: REGISTRANT,
+          inject: () => ({ onOpenLibrary: () => ctx.sidebarRight.openTab(TAB_KIND) }),
+        },
+        DeliverableZoteroAction,
+      ),
+    )
+
     return () => {
+      disposeDeliverableAction()
+      disposeInputButton()
+      disposeTabMenu()
       disposeTabTitle()
       disposeTabBody()
+      refreshBindings.clear()
       disposeTabDef?.()
     }
   }

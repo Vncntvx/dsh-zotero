@@ -92,7 +92,7 @@ describe('the browser-half entry behind the webEnabled gate', () => {
     expect(
       world.injected.find((entry) => entry.name === 'sidebar.right.pane.tab.title')?.active,
     ).toBe(false)
-    expect(world.injectDisposes).toBe(3)
+    expect(world.injectDisposes).toBe(6)
 
     // Toggle back on: the tab returns (a fresh live registration).
     await world.scope.set('webEnabled', true)
@@ -137,7 +137,13 @@ describe('the browser-half entry behind the webEnabled gate', () => {
     const world = fakeWorld()
     world.servedNamespaces = new Set(['zotero', 'scholarly'])
     await applyEntry(world)
-    const librarySurfaces = ['sidebar.right.pane.tab', 'sidebar.right.pane.tab.title']
+    const librarySurfaces = [
+      'sidebar.right.pane.tab',
+      'sidebar.right.pane.tab.title',
+      'sidebar.right.tab.menu.item',
+      'conversation.input.left',
+      'deliverables.file.actions',
+    ]
     for (const name of librarySurfaces) {
       expect(
         world.injected.find((e) => e.name === name),

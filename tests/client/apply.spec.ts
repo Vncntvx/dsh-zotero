@@ -101,6 +101,9 @@ describe('the browser-half entry', () => {
       'conversation.view',
       'sidebar.right.pane.tab',
       'sidebar.right.pane.tab.title',
+      'sidebar.right.tab.menu.item',
+      'conversation.input.left',
+      'deliverables.file.actions',
     ])
   })
 
