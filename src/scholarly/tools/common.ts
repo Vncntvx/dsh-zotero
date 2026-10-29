@@ -3,7 +3,9 @@
  * @module dsh-zotero/scholarly/tools/common
  */
 
+import type { Context } from '@deepseek-ai/cordis'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
+import type { SpillRef } from '@deepseek-ai/dsh-spill'
 import type { ScholarlyHttp } from '../transport/http.js'
 import type { ScholarlyKeys } from '../types.js'
 import type { ZoteroServiceLike } from '../zotero-link.js'
@@ -13,6 +15,7 @@ export interface ScholarlyToolHost {
   keys(): ScholarlyKeys
   maxResults(): number
   zoteroService?(): ZoteroServiceLike | undefined
+  ctx?: Context
 }
 
 /** One bounded, model-readable Scholarly receipt. Text remains the human rendering. */
@@ -27,11 +30,25 @@ export const SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR = {
       checks: { type: 'array', items: { type: 'object', additionalProperties: true } },
       document: { type: 'object', additionalProperties: true },
       issues: { type: 'array', items: { type: 'string' } },
+      spill: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          locator: { type: 'string', required: true },
+          bytes: { type: 'integer', required: true },
+          retrievalHint: { type: 'string', required: true },
+        },
+      },
     },
   },
-  render: (_args: unknown, value: { text: string }) => [
-    { type: 'text' as const, text: value.text },
-  ],
+  render: (_args: unknown, value: { text: string; spill?: SpillRef }) => {
+    const text = value.text
+    const recovery =
+      value.spill !== undefined && !text.includes(value.spill.locator)
+        ? `\n\n(Full content stored at: ${value.spill.locator}. ${value.spill.retrievalHint})`
+        : ''
+    return [{ type: 'text' as const, text: `${text}${recovery}` }]
+  },
 } as const
 
 export type ScholarlyToolOutput = {
@@ -41,6 +58,7 @@ export type ScholarlyToolOutput = {
   checks?: Array<Record<string, JsonValue>>
   document?: Record<string, JsonValue>
   issues?: string[]
+  spill?: SpillRef
 }
 
 /**

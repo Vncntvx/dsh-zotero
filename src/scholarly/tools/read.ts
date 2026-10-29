@@ -9,6 +9,7 @@ import type { ScholarlyTextStore } from '../fulltext/store.js'
 import { extractOutline, findSection, rankPassagesWithBM25 } from '../fulltext/evidence-bridge.js'
 import { parsePaperIdentifier, resolveScholarlyFullText } from '../fulltext/resolve.js'
 import { ZoteroError, ZOTERO_INVALID_ARGUMENT } from '../../errors.js'
+import { DEFAULT_SPILL_CHAR_THRESHOLD, trySpillToolOutput } from '../../spill.js'
 import {
   SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR,
   toCleanJsonRecord,
@@ -182,8 +183,22 @@ export function createScholarlyReadTool(host: ScholarlyReadHost): ToolDefinition
       const end = Math.min(activeText.length, start + chunkSize)
 
       const isTruncated = end < activeText.length
+      let spillRef: import('@deepseek-ai/dsh-spill').SpillRef | undefined
+      if (isTruncated && activeText.length > DEFAULT_SPILL_CHAR_THRESHOLD && host.ctx) {
+        spillRef = await trySpillToolOutput(
+          host.ctx,
+          exec,
+          `${raw.replace(/[^a-zA-Z0-9._-]/g, '_')}-fulltext.txt`,
+          activeText,
+        )
+      }
+      const spillNotice =
+        spillRef !== undefined
+          ? `\nFull paper text saved to spill storage: ${spillRef.locator}. ${spillRef.retrievalHint}`
+          : ''
+
       const statusTail = isTruncated
-        ? `is_truncated: true, next_start: ${end}`
+        ? `is_truncated: true, next_start: ${end}${spillNotice}`
         : 'is_truncated: false (end of section/text)'
 
       const hint =
@@ -205,6 +220,7 @@ export function createScholarlyReadTool(host: ScholarlyReadHost): ToolDefinition
           isTruncated,
           text: activeText.slice(start, end),
         }),
+        ...(spillRef !== undefined ? { spill: spillRef } : {}),
       }
     },
     presentCall: (args) => {

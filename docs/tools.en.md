@@ -138,6 +138,8 @@ zotero_attachment(ref="zotero://user/0/item/ABC123")
 
 ## zotero_export
 
+Pass a non-empty `outputFile` to deliver bibliography or translator text (`citation` rejects it). The Harness filesystem resolves the path against the calling session’s current directory and enforces that session’s sandbox policy. Foreground, background, and promoted jobs finish after writing, publishing the delivery to the original turn, and optional spill storage. Write failures fail the tool or job. If delivery publication fails after writing, the error includes the actual path; no automatic retry occurs.
+
 Generate formatted citations or export data files.
 
 ### Parameters

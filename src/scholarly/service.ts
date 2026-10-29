@@ -88,6 +88,7 @@ export class ScholarlyService extends Service {
       // `undefined` when the local Zotero component is not composed, which is
       // exactly the in-library link's absent behavior.
       zoteroService: (): ZoteroServiceLike | undefined => ctx.get('zotero'),
+      ctx,
     }
 
     // The tools are registered once, here: they exist exactly as long as this

@@ -5,7 +5,8 @@
  * @module tests/tools/export
  */
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { invalidRefMessage } from '../../src/refs.js'
 import {
   EXPORT_LOCALE_BLANK_MESSAGE,
@@ -370,6 +371,101 @@ describe('zotero_export tool', () => {
         style: 'apa',
         locale: 'en-US',
         citations: [{ ref: 'zotero://user/0/item/ABCD1234', text: '<span>A, 2023</span>' }],
+      })
+    })
+
+    it('writes export to outputFile and emits deliverables/presented event', async () => {
+      lane.mock.route('GET', '/api/users/0/items', (req, res, helpers) =>
+        helpers.text('@article{A2023,\n  title={Paper A}\n}'),
+      )
+      const appendedEvents: Array<{ type: string; data: unknown }> = []
+      const fakeSession = {
+        header: { id: 'session-deliv', cwd: '/workspace' },
+        append: (type: string, data: unknown) => {
+          appendedEvents.push({ type, data })
+        },
+      }
+      lane.ctx.provide('workingDirectory', { ensure: async () => '/workspace' } as never)
+      lane.ctx.provide('agents', { turnBoundaryOf: () => ({ lastTurn: 3 }) } as never)
+      const writtenFiles: Record<string, string> = {}
+      lane.ctx.provide('fs', {
+        resolve: async (path: string, opts?: { cwd?: string }) => ({
+          targetKey: `key:${path}`,
+          displayPath: path.startsWith('/') ? path : `${opts?.cwd ?? ''}/${path}`,
+        }),
+        writeText: async (target: { displayPath: string }, content: string) => {
+          writtenFiles[target.displayPath] = content
+        },
+        processPath: (target: { displayPath: string }) => target.displayPath,
+      } as never)
+
+      const batch = await lane.ctx.tools.execute({
+        calls: [
+          {
+            type: 'tool-call',
+            id: ToolCallId('tool-deliv'),
+            name: 'zotero_export',
+            arguments: JSON.stringify({
+              refs: ['zotero://user/0/item/ABCD1234'],
+              format: 'bibtex',
+              outputFile: 'references.bib',
+            }),
+          },
+        ],
+        signal: new AbortController().signal,
+        agent: { session: fakeSession } as never,
+      })
+      const result = expectValue(batch.results[0]!.result, 'zotero_export')
+
+      expect(writtenFiles['/workspace/references.bib']).toContain('@article{A2023')
+      expect(result.value).toMatchObject({
+        format: 'bibtex',
+        outputFile: '/workspace/references.bib',
+        delivered: true,
+      })
+      expect(appendedEvents).toHaveLength(1)
+      expect(appendedEvents[0].type).toBe('deliverables/presented')
+      expect(appendedEvents[0].data).toMatchObject({
+        turn: 3,
+        callId: 'tool-deliv',
+        files: [{ path: '/workspace/references.bib', description: 'Exported bibtex' }],
+      })
+    })
+
+    it('spills oversized export results to ctx.spillStore', async () => {
+      const hugeBibtex = '@article{Huge,\n  title={' + 'X'.repeat(20_000) + '}\n}'
+      lane.mock.route('GET', '/api/users/0/items', (req, res, helpers) => helpers.text(hugeBibtex))
+      const saveText = vi.fn(async (save: { content: string }) => ({
+        locator: 'spill://session-spill/export-bibtex.bib',
+        bytes: save.content.length,
+        retrievalHint: 'Use read_file to inspect',
+      }))
+      lane.ctx.provide('spillStore', { saveText } as never)
+
+      const batch = await lane.ctx.tools.execute({
+        calls: [
+          {
+            type: 'tool-call',
+            id: ToolCallId('tool-spill'),
+            name: 'zotero_export',
+            arguments: JSON.stringify({
+              refs: ['zotero://user/0/item/ABCD1234'],
+              format: 'bibtex',
+            }),
+          },
+        ],
+        signal: new AbortController().signal,
+        agent: { session: { header: { id: 'session-spill' } } } as never,
+      })
+      const result = expectValue(batch.results[0]!.result, 'zotero_export')
+
+      expect(saveText).toHaveBeenCalledOnce()
+      expect(result.value).toMatchObject({
+        format: 'bibtex',
+        spill: {
+          locator: 'spill://session-spill/export-bibtex.bib',
+          retrievalHint: 'Use read_file to inspect',
+        },
       })
     })
   })

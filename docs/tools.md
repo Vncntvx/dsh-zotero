@@ -138,6 +138,8 @@ zotero_attachment(ref="zotero://user/0/item/ABC123")
 
 ## zotero_export
 
+文件导出可传 `outputFile`（非空路径，仅适用于书目及 translator 文本格式，不适用于 `citation`）。文件路径按调用会话的当前工作目录解析，由 Harness 文件系统按该会话的沙箱策略写入；写入失败会使工具或后台任务失败。前台、显式后台和超时提升均在文件写入、原始 turn 的交付事件及可选 spill 完成后才结束。若文件已写入而交付发布失败，错误包含实际路径，不自动重试。
+
 生成格式化引用或导出数据文件。
 
 ### 参数
