@@ -137,15 +137,19 @@ describe('SourceOverview component', () => {
     expect(setDraft).toHaveBeenCalledWith(mockT('citeTemplate', { ref: item.ref }))
   })
 
-  it('copies ref to clipboard when copy button clicked', () => {
+  it('provides open in Zotero and canonical link actions in the action row', () => {
     const item = sourceOf({
       ref: 'zotero://user/0/item/ITEMKEY1',
     })
 
     render(<SourceOverview item={item} t={t} />)
 
-    fireEvent.click(screen.getByLabelText(mockT('copyRef')))
-    expect(writeClipboard).toHaveBeenCalledWith(item.ref)
+    const openBtn = screen.getByRole('button', { name: mockT('openInZotero') })
+    expect(openBtn).toBeDefined()
+    const copyBtn = screen.getByRole('button', { name: mockT('copyZoteroLink') })
+    expect(copyBtn).toBeDefined()
+    fireEvent.click(copyBtn)
+    expect(writeClipboard).toHaveBeenCalledWith('zotero://select/library/items/ITEMKEY1')
   })
 })
 

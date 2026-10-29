@@ -45,6 +45,17 @@ describe('reading an attachment', () => {
     expect(address).toContain(encodeURIComponent('/storage/paper.pdf').replace(/%2F/g, '/'))
   })
 
+  it('shows annotation page labels as noninteractive provenance', async () => {
+    const { face } = mountPanel()
+    const row = await screen.findByText('FlashAttention-2')
+    act(() => row.click())
+    const badge = await screen.findByText('P. 3')
+    expect(badge.tagName).toBe('SPAN')
+    expect(screen.queryByRole('button', { name: 'P. 3' })).toBeNull()
+    expect(face.resolveAttachment).not.toHaveBeenCalled()
+    expect(face.openResource).not.toHaveBeenCalled()
+  })
+
   it('resolves through the wire and shows the resolve error inline', async () => {
     const { face } = mountPanel({
       resolveAttachment: vi.fn(async () => ({ ok: false, error: { message: 'resolve failed' } })),

@@ -11,7 +11,7 @@
 
 import { useMemo, useState } from 'react'
 import clsx from 'clsx'
-import { IconChevronDownOutlineMedium } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconChevronDownOutlineMedium } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { shortKeyOf } from '../presenters.ts'
 import { citeCommandOf } from '../sources/bibtex.ts'
@@ -60,9 +60,9 @@ export function ExportDocumentRow({ doc, t }: ExportDocumentRowProps) {
           {citeCommand !== '' && (
             <CopyButton value={citeCommand} label={t('copyCite')} copiedLabel={t('copied')} />
           )}
-          <button type="button" className={css.lineAction} onClick={download}>
+          <Button variant="outline" size="sm" className={css.lineAction} onClick={download}>
             {`${t('downloadArtifact')} ${extensionOf(doc.format)}`}
-          </button>
+          </Button>
         </span>
       </div>
       {doc.key !== undefined && doc.title !== undefined && (

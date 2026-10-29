@@ -10,7 +10,7 @@
  */
 
 import { useState } from 'react'
-import { Menu, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, Menu, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { buildInfoOf } from '../../build-info.ts'
 import { writeStatusLabel } from '../write-label.ts'
@@ -107,8 +107,9 @@ export function WorkspaceToolbar({ connection, onRefresh, t }: WorkspaceToolbarP
       <Menu
         open={menuOpen}
         anchor={
-          <button
-            type="button"
+          <Button
+            variant="outline"
+            size="sm"
             className={css.menuButton}
             aria-label={t('detailsLabel')}
             onClick={() => {
@@ -116,7 +117,7 @@ export function WorkspaceToolbar({ connection, onRefresh, t }: WorkspaceToolbarP
             }}
           >
             ···
-          </button>
+          </Button>
         }
         items={menuItems}
         onSelect={() => {
@@ -129,14 +130,15 @@ export function WorkspaceToolbar({ connection, onRefresh, t }: WorkspaceToolbarP
         autoFocus
         align="end"
       />
-      <button
-        type="button"
+      <Button
+        variant="outline"
+        size="sm"
         className={css.refresh}
         onClick={onRefresh}
         disabled={connection.kind === 'loading'}
       >
         {t('refresh')}
-      </button>
+      </Button>
     </div>
   )
 }

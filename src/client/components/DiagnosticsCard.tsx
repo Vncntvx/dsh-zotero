@@ -22,6 +22,7 @@ import {
   type JsonTreeLabels,
   SegmentedControl,
   type SegmentedControlOption,
+  StateDot,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { PluginDetailProps } from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
@@ -201,7 +202,12 @@ function DiagnosticsCardBody({ t, probe, diagnostics }: DiagnosticsCardBodyProps
             {shown.map((entry) => (
               <div key={entry.seq} className={css.diagRow}>
                 <span className={css.diagTime}>{timeOf(entry.ts)}</span>
-                <span className={css.diagDot} data-level={entry.level} />
+                <StateDot
+                  size={6}
+                  state={
+                    entry.level === 'error' ? 'error' : entry.level === 'warn' ? 'warning' : 'done'
+                  }
+                />
                 <div className={css.diagBody}>
                   <span className={css.diagEvent}>{entry.event}</span>
                   {entry.count > 1 ? <span className={css.diagCount}>×{entry.count}</span> : null}

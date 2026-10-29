@@ -56,7 +56,8 @@
 }
 
 .lineAction:focus-visible {
-  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline: var(--dsw-focus-ring-width, 1px) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 1px;
 }
 
@@ -127,7 +128,7 @@
 .link:focus-visible {
   text-decoration: underline dotted;
   text-underline-offset: 3px;
-  outline: 1px solid var(--dsw-alias-link);
+  outline: var(--dsw-focus-ring-width, 1px) solid var(--dsw-focus-ring-color, var(--dsw-alias-link));
   outline-offset: 1px;
 }
 
@@ -136,6 +137,14 @@
     text-decoration: underline dotted;
     text-underline-offset: 3px;
   }
+}
+
+.linkIcon {
+  flex: none;
+  width: 1.1em;
+  height: 1.1em;
+  vertical-align: -0.25em;
+  margin-right: 4px;
 }
 
 .passages {
@@ -294,7 +303,8 @@
 }
 
 .exportToggle:focus-visible {
-  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline: var(--dsw-focus-ring-width, 1px) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 2px;
   border-radius: var(--dsw-radius-xs);
 }
@@ -436,7 +446,7 @@
 .surfaceRetryButton {
   appearance: none;
   border: 0.5px solid var(--dsw-alias-border-l3);
-  border-radius: var(--dsw-radius-sm, 4px);
+  border-radius: var(--dsw-radius-sm, 8px);
   background: var(--dsw-alias-bg-layer-2);
   color: var(--dsw-alias-label-primary);
   font-size: 11px;

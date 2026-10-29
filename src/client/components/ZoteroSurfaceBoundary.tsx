@@ -7,6 +7,7 @@
 
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import { messageOf } from '../error-text.ts'
 import { reportCrashedSurface } from '../actions/error-reporter.ts'
 import css from './cards.module.css'
@@ -70,14 +71,15 @@ export class ZoteroSurfaceBoundary extends Component<
       <div className={css.surfaceError} data-zotero-surface-error>
         <div className={css.surfaceErrorHeader}>
           <p className={css.surfaceErrorTitle}>{t('renderFailed')}</p>
-          <button
-            type="button"
+          <Button
+            variant="outline"
+            size="sm"
             className={css.surfaceRetryButton}
             onClick={this.handleRetry}
             data-zotero-surface-retry
           >
             {t('refresh')}
-          </button>
+          </Button>
         </div>
         <p className={css.surfaceErrorDetail}>{message}</p>
       </div>

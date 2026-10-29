@@ -23,6 +23,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
+  Button,
   IconChevronLeftOutlineMedium,
   IconChevronRightOutlineMedium,
   Pill,
@@ -249,15 +250,16 @@ export function SourceSidebar({
       {visible.length === 0 ? (
         <div className={css.emptyWrap}>
           <p className={css.emptyNote}>{t('filterEmptyNote')}</p>
-          <button
-            type="button"
+          <Button
+            variant="outline"
+            size="sm"
             className={css.filterClear}
             onClick={() => {
               setFilter('all')
             }}
           >
             {t('filterClear')}
-          </button>
+          </Button>
         </div>
       ) : (
         <div

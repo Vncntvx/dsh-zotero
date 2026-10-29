@@ -207,19 +207,24 @@ export interface MountedPanel {
   view: ReturnType<typeof render>
   face: Record<keyof ScriptedFace, Mock>
   /** The composer stub the panel receives; the chat-action specs assert on it. */
-  inputActions: { setDraft: Mock; captureInsertion: Mock; insertText: Mock; submit: Mock }
+  inputActions: {
+    setDraft: Mock
+    captureInsertion: Mock
+    insertText: Mock
+    insertQuote: Mock
+    submit: Mock
+  }
 }
 
 /**
  * Mount the panel with a scripted face and a sessions stub. The default face
  * answers connected, the libraries/collections/searches listings, one item
  * page, and the detail; tests override individual spies before mounting.
- * `inputActions` rides in the mounted props exactly as the real renderer's
- * session-scope prop merge delivers it.
  */
 export function mountPanel(
   overrides: Partial<Record<keyof ScriptedFace, Mock>> = {},
   sessions: SessionStub = { ids: ['s1'], byId: { s1: { cwd: '/tmp/ws', running: true } } },
+  surface: Partial<ZoteroLibraryPanelProps> = {},
 ): MountedPanel {
   const browse =
     overrides.browse ??
@@ -233,6 +238,7 @@ export function mountPanel(
     setDraft: vi.fn(),
     captureInsertion: vi.fn(() => ({ anchor: 0 })),
     insertText: vi.fn(() => true),
+    insertQuote: vi.fn(() => true),
     submit: vi.fn(),
   }
   const face = {
@@ -321,7 +327,7 @@ export function mountPanel(
     },
   } as unknown as ZoteroLibraryPanelProps
   return {
-    view: render(<ZoteroLibraryPanel {...props} />),
+    view: render(<ZoteroLibraryPanel {...props} {...surface} />),
     face: face as unknown as MountedPanel['face'],
     inputActions,
   }

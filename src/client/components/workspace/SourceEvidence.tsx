@@ -13,6 +13,7 @@
  */
 
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import { Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { EvidencePassage, SourceItem } from '../../sources/model.ts'
 import {
   availabilityLineOf,
@@ -55,7 +56,9 @@ function PassageRow({
   return (
     <li className={css.passage} data-source={passage.source}>
       <p className={css.passageHead}>
-        <span className={css.sourceTag}>{t(sourceLabelKeyOf(passage.source))}</span>
+        <Tag tone="neutral" className={css.sourceTag}>
+          {t(sourceLabelKeyOf(passage.source))}
+        </Tag>
         {passage.pageLabel !== undefined && (
           <span className={css.note}>{t('pageLabel', { label: passage.pageLabel })}</span>
         )}

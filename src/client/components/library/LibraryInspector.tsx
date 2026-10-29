@@ -21,9 +21,9 @@ import {
   IconCopyOutlineRegular,
   IconFolderCloseMedium,
   IconInspectOutlineMedium,
+  IconLinkOutlineRegular,
   IconNewChatOutlineRegular,
   IconPlusOutlineRegular,
-  IconQuestionOutlineRegular,
   Tag,
   type FileTypeKind,
 } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -36,6 +36,12 @@ import type {
   ZoteroNoteRowView,
 } from '../../../contract.ts'
 import { getAttachmentResolver } from '../../actions/attachment-resolver.ts'
+import {
+  launchZoteroProtocol,
+  parseRefIdentity,
+  pdfUrlOf,
+  selectUrlOf,
+} from '../../actions/open-zotero.ts'
 import { formatCreatorsList } from '../../../creators.ts'
 import { HTML_CONTENT_TYPE, PDF_CONTENT_TYPE } from '../../../media-types.ts'
 import { CopyButton } from '../CopyButton.tsx'
@@ -212,10 +218,7 @@ function NoteItem({
 
   const handleInsert = () => {
     if (!inputActions) return
-    const span = inputActions.captureInsertion()
-    if (span !== undefined) {
-      inputActions.insertText(note.text, span)
-    }
+    inputActions.insertQuote(note.text.replace(/\r\n?/gu, '\n'))
   }
 
   return (
@@ -272,35 +275,58 @@ function AnnotationItem({
   t,
   annotation,
   inputActions,
+  targetAttachmentRef,
 }: {
   readonly t: TranslateNS<'zotero'>
   readonly annotation: ZoteroAnnotationRowView
   readonly inputActions: InputActions | undefined
+  readonly targetAttachmentRef?: string
 }) {
   const [expanded, setExpanded] = useState(false)
   const isLong = annotation.text.length > 180 || annotation.text.split('\n').length > 4
 
   const handleInsert = () => {
     if (!inputActions) return
-    const span = inputActions.captureInsertion()
-    if (span !== undefined) {
-      const pageInfo = annotation.pageLabel ? ` (P. ${annotation.pageLabel})` : ''
-      const quote = `> "${annotation.text}"${pageInfo}\n\n`
-      inputActions.insertText(quote, span)
-    }
+    const pageInfo = annotation.pageLabel ? ` (P. ${annotation.pageLabel})` : ''
+    const quote = `"${annotation.text}"${pageInfo}`
+    inputActions.insertQuote(quote)
   }
+
+  const identity = parseRefIdentity(annotation.ref)
+  const annotationKey =
+    identity &&
+    (identity.kind === 'annotation' || identity.kind === 'item') &&
+    /^[A-Z0-9]{8}$/.test(identity.key)
+      ? identity.key
+      : undefined
+  const annotationUrl =
+    targetAttachmentRef && annotationKey
+      ? pdfUrlOf(targetAttachmentRef, { annotation: annotationKey })
+      : null
 
   return (
     <li className={css.annotationCard}>
       <div className={css.annotationHeader}>
         {annotation.pageLabel !== undefined ? (
-          <span className={css.pageBadge}>
+          <Tag className={css.pageBadge} tone="neutral">
             {t('libraryAnnotationPageBadge', { page: annotation.pageLabel })}
-          </span>
+          </Tag>
         ) : (
           <span />
         )}
         <div className={css.cardActions}>
+          {annotationUrl !== null && (
+            <button
+              type="button"
+              className={css.cardActionBtn}
+              onClick={() => void launchZoteroProtocol(annotationUrl)}
+              title={t('openInZoteroTooltip')}
+              aria-label={t('openInZotero')}
+            >
+              <IconLinkOutlineRegular size={11} />
+              <span>{t('openInZotero')}</span>
+            </button>
+          )}
           <CopyButton
             value={annotation.text}
             label={t('copy')}
@@ -414,13 +440,17 @@ export function LibraryInspector({
   const creators = formatCreatorsList(detail.creators)
   const origin = [detail.venue, detail.date].filter(Boolean).join(' · ')
   const pdfAttachment = pdfAttachmentOf(detail)
-  const citeLine = t('libraryCiteLine', { title: detail.title, ref: detail.ref })
+  const askPrompt = t('libraryAskPrompt', { title: detail.title, ref: detail.ref })
   const askInChat = () => {
-    inputActions?.setDraft(t('libraryAskTemplate', { title: detail.title, ref: detail.ref }))
-  }
-  const addToChat = () => {
-    const span = inputActions?.captureInsertion()
-    if (span !== undefined) inputActions?.insertText(citeLine, span)
+    if (!inputActions) return
+    if (!inputActions.insertQuote(askPrompt)) {
+      const span = inputActions.captureInsertion()
+      if (span !== undefined) {
+        inputActions.insertText(askPrompt, span)
+      } else {
+        inputActions.setDraft(askPrompt)
+      }
+    }
   }
   return (
     <aside className={css.inspector} aria-label={t('libraryInspector')}>
@@ -441,34 +471,31 @@ export function LibraryInspector({
             />
           )}
           {inputActions !== undefined && (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                icon={<IconQuestionOutlineRegular size={14} />}
-                onClick={askInChat}
-              >
-                {t('libraryAskInChat')}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                icon={<IconPlusOutlineRegular size={14} />}
-                onClick={addToChat}
-              >
-                {t('libraryAddToChat')}
-              </Button>
-            </>
+            <Button
+              variant="outline"
+              size="sm"
+              icon={<IconPlusOutlineRegular size={14} />}
+              onClick={askInChat}
+              title={t('libraryAskInChat')}
+            >
+              {t('libraryAskInChat')}
+            </Button>
           )}
           <LibraryCitationActions detail={detail} exportItem={exportItem} t={t} />
-          <CopyButton
-            value={detail.ref}
-            label={t('copyRef')}
-            copiedLabel={t('copied')}
-            title={t('copyZoteroLinkTooltip')}
-            icon={<IconCopyOutlineRegular size={14} />}
-            asButton
-          />
+          {selectUrlOf(detail.ref) !== null && (
+            <Button
+              variant="outline"
+              size="sm"
+              icon={<IconLinkOutlineRegular size={14} />}
+              onClick={() => {
+                const url = selectUrlOf(detail.ref)
+                if (url) void launchZoteroProtocol(url)
+              }}
+              title={t('openInZoteroTooltip')}
+            >
+              {t('openInZotero')}
+            </Button>
+          )}
         </div>
       </header>
 
@@ -629,14 +656,21 @@ export function LibraryInspector({
           retry={() => retryChild('annotations')}
           pageTo={(offset) => pageChild('annotations', offset)}
         >
-          {detail.annotations.items.map((annotation) => (
-            <AnnotationItem
-              key={annotation.ref}
-              t={t}
-              annotation={annotation}
-              inputActions={inputActions}
-            />
-          ))}
+          {detail.annotations.items.map((annotation) => {
+            const targetAttachmentRef =
+              annotation.parentRef ??
+              detail.attachments?.items.find((att) => att.contentType === 'application/pdf')?.ref ??
+              detail.attachments?.items[0]?.ref
+            return (
+              <AnnotationItem
+                key={annotation.ref}
+                t={t}
+                annotation={annotation}
+                inputActions={inputActions}
+                targetAttachmentRef={targetAttachmentRef}
+              />
+            )
+          })}
         </ChildSection>
       )}
     </aside>

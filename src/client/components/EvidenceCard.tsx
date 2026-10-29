@@ -11,9 +11,10 @@
 
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
+import { IconLinkOutlineRegular, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ZoteroAttachmentLocationView } from '../../contract.ts'
 import { joinNonEmpty, shortKeyOf } from '../presenters.ts'
-import { pdfUrlOf, selectUrlOf } from '../actions/open-zotero.ts'
+import { launchZoteroProtocol, pdfUrlOf, selectUrlOf } from '../actions/open-zotero.ts'
 import {
   availabilityLineOf,
   coverageLineOf,
@@ -57,7 +58,9 @@ function PassageRow({
   return (
     <li className={css.passage} data-source={passage.source}>
       <p className={css.passageHead}>
-        <span className={css.sourceTag}>{t(sourceLabelKeyOf(passage.source))}</span>
+        <Tag tone="neutral" className={css.sourceTag}>
+          {t(sourceLabelKeyOf(passage.source))}
+        </Tag>
         {passage.pageLabel !== undefined && (
           <span className={css.note}>{t('pageLabel', { label: passage.pageLabel })}</span>
         )}
@@ -76,13 +79,25 @@ function PassageRow({
             />
           ))}
         {annotationUrl !== null && (
-          <CopyButton
-            value={annotationUrl}
-            label={t('copyZoteroLink')}
-            copiedLabel={t('copied')}
-            title={t('copyZoteroLinkTooltip')}
-            className={css.link}
-          />
+          <>
+            <button
+              type="button"
+              className={css.link}
+              onClick={() => void launchZoteroProtocol(annotationUrl)}
+              title={t('openInZoteroTooltip')}
+              aria-label={t('openInZotero')}
+            >
+              <IconLinkOutlineRegular size={12} className={css.linkIcon} />
+              <span>{t('openInZotero')}</span>
+            </button>
+            <CopyButton
+              value={annotationUrl}
+              label={t('copyZoteroLink')}
+              copiedLabel={t('copied')}
+              title={t('copyZoteroLinkTooltip')}
+              className={css.link}
+            />
+          </>
         )}
       </p>
       <p className={css.line}>
@@ -149,7 +164,6 @@ export function EvidenceCard({ item, t, openFile, resolveAttachment }: EvidenceC
             className={css.link}
           />
         )}
-        <CopyButton value={item.ref} label={t('copyRef')} copiedLabel={t('copied')} />
         {evidenceMatch === 'unknown' && (
           <span className={css.badge} title={t('instanceUnverified')}>
             {t('instanceUnverified')}

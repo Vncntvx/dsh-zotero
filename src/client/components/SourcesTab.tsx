@@ -100,7 +100,7 @@ export interface SourcesTabFace {
    * because the plugin fiber cannot: on this side the `ctx.sessions` Context
    * key is the host `SessionStore`, not the client `ISessions` catalog.
    */
-  openResource?: (url: string) => void
+  openResource?: (url: string, options?: { readonly params?: Record<string, unknown> }) => void
 }
 
 /** Props the conversation view ring binds for this tab. */
@@ -291,7 +291,9 @@ function SourcesTabBody({
       openFile={
         openResource === undefined
           ? undefined
-          : (path: string) => openResource(fileAddressFor(sessionId, cwd, path))
+          : (path: string) => {
+              openResource(fileAddressFor(sessionId, cwd, path))
+            }
       }
       resolveAttachment={resolveAttachment}
       t={t}

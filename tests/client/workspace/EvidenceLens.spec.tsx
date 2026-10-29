@@ -233,7 +233,9 @@ describe('EvidenceCard', () => {
     const { container } = render(<EvidenceCard item={mismatch} t={t} />)
     expect(container.querySelector('a')).toBeNull()
     expect(screen.getAllByText(new RegExp(zh.databaseMismatch)).length).toBeGreaterThanOrEqual(1)
-    expect(screen.getByRole('button', { name: zh.copyRef })).toBeDefined()
+    expect(screen.getAllByRole('button', { name: zh.openInZotero }).length).toBeGreaterThanOrEqual(
+      1,
+    )
     for (const readBtn of screen.getAllByRole('button', { name: zh.readPdf })) {
       expect(readBtn.getAttribute('aria-disabled')).toBe('true')
     }

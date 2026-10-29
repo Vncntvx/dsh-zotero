@@ -174,7 +174,8 @@
 }
 
 .toolButton:focus-visible {
-  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline: var(--dsw-focus-ring-width, 1px) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 1px;
 }
 
@@ -278,7 +279,8 @@
 }
 
 .tagRemoveButton:focus-visible {
-  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline: var(--dsw-focus-ring-width, 1px) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 1px;
 }
 
@@ -297,8 +299,7 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  background: var(--dsw-alias-bg-layer-1);
-  border: 0.5px solid var(--dsw-alias-border-l2);
+  border: 0;
   border-radius: var(--dsw-radius-md);
   box-shadow: var(--dsw-elevation-prominent);
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
@@ -358,7 +359,8 @@
 }
 
 .tagOption:focus-visible {
-  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline: var(--dsw-focus-ring-width, 1px) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: -1px;
 }
 
@@ -434,7 +436,8 @@
 }
 
 .filterNumberInput:focus {
-  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline: var(--dsw-focus-ring-width, 1px) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: -1px;
 }
 
@@ -458,7 +461,8 @@
 }
 
 .filterClear:focus-visible {
-  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline: var(--dsw-focus-ring-width, 1px) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 1px;
 }
 
@@ -634,7 +638,8 @@
 }
 
 .treeExpander:focus-visible {
-  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline: var(--dsw-focus-ring-width, 1px) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 1px;
 }
 
@@ -675,7 +680,8 @@
 }
 
 .treeRow:focus-visible {
-  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline: var(--dsw-focus-ring-width, 1px) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: -1px;
 }
 
@@ -868,7 +874,8 @@
 }
 
 .itemRow:focus-visible {
-  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline: var(--dsw-focus-ring-width, 1px) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: -1px;
 }
 
@@ -963,7 +970,8 @@
 }
 
 .pageButton:focus-visible {
-  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline: var(--dsw-focus-ring-width, 1px) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 1px;
 }
 
@@ -1092,6 +1100,14 @@
   margin-top: 8px;
 }
 
+.inspectorActions > * {
+  flex-shrink: 0;
+}
+
+.inspectorActions button {
+  white-space: nowrap;
+}
+
 /* The abstract's expand/collapse toggle: the workspace `.detailToggle`
  * pattern — a quiet text button under the clamped paragraph. */
 .abstractToggle {
@@ -1117,7 +1133,8 @@
 }
 
 .abstractToggle:focus-visible {
-  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline: var(--dsw-focus-ring-width, 1px) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 1px;
 }
 
@@ -1240,7 +1257,7 @@
 }
 
 .copyInline:focus-visible {
-  outline: 1px solid var(--dsw-alias-link);
+  outline: var(--dsw-focus-ring-width, 1px) solid var(--dsw-focus-ring-color, var(--dsw-alias-link));
   outline-offset: 1px;
 }
 
@@ -1303,7 +1320,8 @@
 }
 
 .childRowClickable:focus-visible {
-  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline: var(--dsw-focus-ring-width, 1px) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: -1px;
 }
 
@@ -1381,7 +1399,8 @@
 }
 
 .sectionHeaderBtn:focus-visible {
-  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline: var(--dsw-focus-ring-width, 1px) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 1px;
   border-radius: var(--dsw-radius-xs);
 }
@@ -1469,7 +1488,7 @@
   display: inline-flex;
   align-items: center;
   padding: 1px 6px;
-  border-radius: 10px;
+  border-radius: var(--dsw-radius-xs);
   font-size: 11px;
   line-height: 14px;
   font-weight: 500;
@@ -1478,6 +1497,28 @@
   color: var(--dsw-alias-label-caption);
   border: 0.5px solid var(--dsw-alias-border-l2);
   flex: none;
+}
+
+.tabMenuItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 7px;
+  color: var(--dsw-alias-label-primary);
+  font-size: calc(var(--dsh-content-font-size-secondary, 13px) - 1px);
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: var(--dsw-radius-md);
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+@media (hover: hover) {
+  .tabMenuItem:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .annotationQuote {
@@ -1555,7 +1596,8 @@
 }
 
 .cardToggle:focus-visible {
-  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline: var(--dsw-focus-ring-width, 1px) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 1px;
 }
 
@@ -1593,7 +1635,8 @@
 }
 
 .cardActionBtn:focus-visible {
-  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline: var(--dsw-focus-ring-width, 1px) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 1px;
 }
 
@@ -1674,7 +1717,8 @@
 .writeInput:focus,
 .writeSelect:focus,
 .writeTextarea:focus {
-  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline: var(--dsw-focus-ring-width, 1px) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: -1px;
 }
 

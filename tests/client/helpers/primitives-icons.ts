@@ -19,6 +19,7 @@ export const primitivesIcons = {
   IconChevronRightOutlineMedium: icon('chevron-right'),
   IconBrowseOutlineMedium: icon('browse'),
   IconLinkOutlineMedium: icon('link'),
+  IconLinkOutlineRegular: icon('link-regular'),
   IconInspectOutlineRegular: icon('inspect'),
   IconBrowseOutlineRegular: icon('browse-regular'),
   IconRefreshOutlineRegular: icon('refresh-regular'),

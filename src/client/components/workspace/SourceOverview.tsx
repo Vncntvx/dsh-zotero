@@ -15,13 +15,13 @@
  */
 
 import { useMemo, useState } from 'react'
+import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ZoteroAttachmentLocationView } from '../../../contract.ts'
 import { askDraftOf, exportDraftOf } from '../../actions/source-actions.ts'
 import type { SearchOccurrence, SourceItem } from '../../sources/model.ts'
 import { pdfCapabilityOf } from '../../sources/source-capabilities.ts'
-import { CopyButton } from '../CopyButton.tsx'
 import { BlockedReadAction } from '../open/BlockedReadAction.tsx'
 import { PdfReadButton } from '../open/PdfReadButton.tsx'
 import { ZoteroLocateActions } from '../open/ZoteroLocateActions.tsx'
@@ -121,33 +121,29 @@ export function SourceOverview({
           ))}
         <ZoteroLocateActions title={item.title} itemRef={item.ref} t={t} className={css.action} />
         {setDraft !== undefined && (
-          <button
-            type="button"
+          <Button
+            variant="outline"
+            size="sm"
             className={css.action}
             onClick={() => {
               setDraft(askDraftOf(item.ref, t))
             }}
           >
             {t('askAboutItem')}
-          </button>
+          </Button>
         )}
         {setDraft !== undefined && (
-          <button
-            type="button"
+          <Button
+            variant="outline"
+            size="sm"
             className={css.action}
             onClick={() => {
               setDraft(exportDraftOf(item.ref, t))
             }}
           >
             {t('exportCitation')}
-          </button>
+          </Button>
         )}
-        <CopyButton
-          className={css.action}
-          value={item.ref}
-          label={t('copyRef')}
-          copiedLabel={t('copied')}
-        />
       </div>
       {item.evidenceMatch === 'mismatch' && <p className={css.warning}>{t('databaseMismatch')}</p>}
       {searchRows.length > 0 ? (

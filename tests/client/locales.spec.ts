@@ -129,7 +129,6 @@ describe('locale bundles', () => {
       'localFile',
       'linkedUrl',
       // Retired OS/external link actions replaced by in-app reading & clipboard actions
-      'openInZotero',
       'openPdf',
       'openAnnotation',
       'openUnverifiedNote',

@@ -18,6 +18,7 @@ import {
   IconChevronDownOutlineMedium,
   IconSearchOutlineMedium,
   Input,
+  MenuSurface,
   Pill,
   useAnchoredPosition,
   useDismissOnOutsidePointer,
@@ -32,6 +33,7 @@ const TAG_SEARCH_DEBOUNCE_MS = 200
 /** Space between the trigger and its panel, and between the panel and the viewport. */
 const PANEL_GAP = 4
 const VIEWPORT_MARGIN = 8
+const TAG_PANEL_Z_INDEX = 1100
 
 export function LibraryTagPicker({
   t,
@@ -212,14 +214,15 @@ export function LibraryTagPicker({
 
       {open &&
         createPortal(
-          <div
+          <MenuSurface
             ref={panelRef}
+            compact
             className={css.tagPanel}
             role="group"
             aria-label={t('libraryFilterTags')}
             style={{
               position: 'fixed',
-              zIndex: 1100,
+              zIndex: TAG_PANEL_Z_INDEX,
               // The first measure runs after mount; until then the panel is
               // placed but invisible, so it can read its own size.
               ...(position ?? { visibility: 'hidden' }),
@@ -253,7 +256,7 @@ export function LibraryTagPicker({
                 </Button>
               )}
             </div>
-          </div>,
+          </MenuSurface>,
           document.body,
         )}
     </div>

@@ -12,13 +12,15 @@ import type { ReactNode } from 'react'
 import {
   IconBranchOutlineRegular,
   IconEditOutlineRegular,
+  IconLinkOutlineRegular,
   IconPlusOutlineRegular,
   IconTrashOutlineRegular,
+  Tag,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ToolArgs } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { CopyButton } from '../components/CopyButton.tsx'
-import { selectUrlOf } from '../actions/open-zotero.ts'
+import { launchZoteroProtocol, selectUrlOf } from '../actions/open-zotero.ts'
 import { writeMetaOf, type WriteMetaView } from '../sources/write-decoder.ts'
 import {
   argsViewOf,
@@ -479,9 +481,9 @@ export function WriteToolView(props: WriteToolViewProps) {
         if (isDeclined) {
           return (
             <div className={css.receiptCard} data-state="declined">
-              <span className={css.badge} data-tone="warning">
+              <Tag className={css.badge} tone="warning">
                 {t('toolDeclined')}
-              </span>
+              </Tag>
               <div className={css.itemMeta}>{rawText}</div>
             </div>
           )
@@ -503,9 +505,9 @@ export function WriteToolView(props: WriteToolViewProps) {
           return (
             <div className={css.receiptCard}>
               <div className={css.itemHeader}>
-                <span className={css.badge} data-tone="danger">
+                <Tag className={css.badge} tone="danger">
                   {t('toolFailed')}
-                </span>
+                </Tag>
                 <span className={css.receiptTitle}>{errorSummary}</span>
               </div>
               {rawText && <RawTextFallback text={rawText} />}
@@ -515,18 +517,31 @@ export function WriteToolView(props: WriteToolViewProps) {
         return (
           <div className={css.receiptCard} data-state={tone}>
             <div className={css.itemHeader}>
-              <span className={css.badge} data-tone={RECEIPT_BADGE[tone].tone}>
+              <Tag className={css.badge} tone={RECEIPT_BADGE[tone].tone}>
                 {t(RECEIPT_BADGE[tone].label)}
-              </span>
+              </Tag>
               <span className={css.receiptTitle}>{summary}</span>
             </div>
 
             {parentRef && (
               <div className={css.itemActions}>
                 <span className={css.itemMeta}>{t('toolParentItem')}:</span>
+                <button
+                  type="button"
+                  className={css.actionLink}
+                  onClick={() => {
+                    const targetUrl = parentSelectUrl ?? selectUrlOf(parentRef)
+                    if (targetUrl) void launchZoteroProtocol(targetUrl)
+                  }}
+                  title={t('openInZoteroTooltip')}
+                  aria-label={t('openInZotero')}
+                >
+                  <IconLinkOutlineRegular size={12} />
+                  <span>{parentRef}</span>
+                </button>
                 <CopyButton
-                  value={parentSelectUrl ?? parentRef}
-                  label={parentRef}
+                  value={parentSelectUrl ?? selectUrlOf(parentRef) ?? parentRef}
+                  label={t('copyZoteroLink')}
                   copiedLabel={t('copied')}
                   title={t('copyZoteroLinkTooltip')}
                   className={css.actionLink}
@@ -543,13 +558,13 @@ export function WriteToolView(props: WriteToolViewProps) {
                       full strength, anything else as a statement about the plan
                       rather than about the library. */}
                   {tagsList.map((tag) => (
-                    <span
+                    <Tag
                       key={tag}
                       className={css.badge}
-                      data-tone={tone === 'applied' ? undefined : RECEIPT_BADGE[tone].tone}
+                      tone={tone === 'applied' ? 'outline' : RECEIPT_BADGE[tone].tone}
                     >
                       {tag}
-                    </span>
+                    </Tag>
                   ))}
                 </div>
               </div>

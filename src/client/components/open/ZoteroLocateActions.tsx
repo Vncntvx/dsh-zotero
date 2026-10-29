@@ -7,7 +7,8 @@
 
 import clsx from 'clsx'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import { selectUrlOf } from '../../actions/open-zotero.ts'
+import { IconLinkOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { launchZoteroProtocol, selectUrlOf } from '../../actions/open-zotero.ts'
 import { CopyButton } from '../CopyButton.tsx'
 import css from './open.module.css'
 
@@ -32,6 +33,12 @@ export function ZoteroLocateActions({
   const baseClass = variant === 'link' ? css.link : css.button
   const buttonClass = clsx(baseClass, className)
 
+  const handleOpen = () => {
+    if (canonicalUrl) {
+      launchZoteroProtocol(canonicalUrl)
+    }
+  }
+
   return (
     <>
       {title && (
@@ -44,13 +51,25 @@ export function ZoteroLocateActions({
         />
       )}
       {canonicalUrl && (
-        <CopyButton
-          value={canonicalUrl}
-          label={t('copyZoteroLink')}
-          copiedLabel={t('copied')}
-          title={t('copyZoteroLinkTooltip')}
-          className={buttonClass}
-        />
+        <>
+          <button
+            type="button"
+            className={buttonClass}
+            onClick={handleOpen}
+            title={t('openInZoteroTooltip')}
+            aria-label={t('openInZotero')}
+          >
+            <IconLinkOutlineRegular size={12} className={css.linkIcon} />
+            <span>{t('openInZotero')}</span>
+          </button>
+          <CopyButton
+            value={canonicalUrl}
+            label={t('copyZoteroLink')}
+            copiedLabel={t('copied')}
+            title={t('copyZoteroLinkTooltip')}
+            className={buttonClass}
+          />
+        </>
       )}
     </>
   )
