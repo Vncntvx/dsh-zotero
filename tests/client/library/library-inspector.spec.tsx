@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /** Inspector disclosure, child paging and recovery keep metadata visible. */
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LibraryInspector } from '../../../src/client/components/library/LibraryInspector.tsx'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
@@ -17,7 +17,7 @@ function mountInspector(
   detail: ZoteroItemDetailView,
   childStates = {},
   inputActions?: InputActions,
-  openFile?: (path: string) => void,
+  openFile?: (path: string, options?: any) => void,
   resolveAttachment?: (ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>,
 ) {
   const pageChild = vi.fn(),
@@ -286,9 +286,8 @@ describe('library inspector', () => {
       value: { writeText },
       configurable: true,
     })
-    const captureInsertion = vi.fn().mockReturnValue({ start: 0, end: 0 })
-    const insertText = vi.fn()
-    const inputActions = { captureInsertion, insertText } as unknown as InputActions
+    const insertQuote = vi.fn().mockReturnValue(true)
+    const inputActions = { insertQuote } as unknown as InputActions
 
     mountInspector(
       {
@@ -321,8 +320,7 @@ describe('library inspector', () => {
     // Quote note in chat action
     const quoteNoteBtn = screen.getByRole('button', { name: zh.libraryInsertNote })
     fireEvent.click(quoteNoteBtn)
-    expect(captureInsertion).toHaveBeenCalled()
-    expect(insertText).toHaveBeenCalledWith(longText, { start: 0, end: 0 })
+    expect(insertQuote).toHaveBeenCalledWith(longText)
   })
 
   it('renders annotation card with color, page badge, comment, clamping, copy, and chat quote', () => {
@@ -332,9 +330,8 @@ describe('library inspector', () => {
       value: { writeText },
       configurable: true,
     })
-    const captureInsertion = vi.fn().mockReturnValue({ start: 0, end: 0 })
-    const insertText = vi.fn()
-    const inputActions = { captureInsertion, insertText } as unknown as InputActions
+    const insertQuote = vi.fn().mockReturnValue(true)
+    const inputActions = { insertQuote } as unknown as InputActions
 
     mountInspector(
       {
@@ -384,10 +381,163 @@ describe('library inspector', () => {
     // Quote in chat action
     const quoteBtn = screen.getByRole('button', { name: zh.libraryInsertQuote })
     fireEvent.click(quoteBtn)
-    expect(captureInsertion).toHaveBeenCalled()
-    expect(insertText).toHaveBeenCalledWith(`> "${longQuote}" (P. 5)\n\n`, {
-      start: 0,
-      end: 0,
+    expect(insertQuote).toHaveBeenCalledWith(`"${longQuote}" (P. 5)`)
+  })
+
+  it('displays annotation page as plain provenance text', async () => {
+    const openFile = vi.fn()
+    const resolveAttachment = vi.fn().mockResolvedValue({
+      ok: true,
+      value: {
+        ref: 'zotero://user/0/item/ATT00001',
+        kind: 'file',
+        path: '/storage/sample.pdf',
+      },
     })
+
+    mountInspector(
+      {
+        ...ITEM_DETAIL,
+        attachments: {
+          offset: 0,
+          total: 1,
+          returned: 1,
+          limit: 1,
+          items: [
+            {
+              ref: 'zotero://user/0/item/ATT00001',
+              title: 'sample.pdf',
+              contentType: 'application/pdf',
+            },
+          ],
+        },
+        annotations: {
+          offset: 0,
+          total: 1,
+          returned: 1,
+          limit: 1,
+          items: [
+            {
+              ref: 'zotero://user/0/item/ANNO0001',
+              type: 'highlight',
+              text: 'Highlighted passage',
+              pageLabel: '7',
+            },
+          ],
+        },
+      },
+      {},
+      undefined,
+      openFile,
+      resolveAttachment,
+    )
+
+    const badge = screen.getByText('P. 7')
+    expect(badge).toBeTruthy()
+    await act(async () => {
+      fireEvent.click(badge)
+    })
+
+    expect(resolveAttachment).not.toHaveBeenCalled()
+    expect(openFile).not.toHaveBeenCalled()
+    expect(resolveAttachment).not.toHaveBeenCalled()
+  })
+
+  it('triggers launchZoteroProtocol with deep link when clicking annotation open in zotero button', () => {
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    mountInspector({
+      ...ITEM_DETAIL,
+      attachments: {
+        offset: 0,
+        total: 1,
+        returned: 1,
+        limit: 1,
+        items: [
+          {
+            ref: 'zotero://user/0/item/ATTAC001',
+            title: 'sample.pdf',
+            contentType: 'application/pdf',
+          },
+        ],
+      },
+      annotations: {
+        offset: 0,
+        total: 1,
+        returned: 1,
+        limit: 1,
+        items: [
+          {
+            ref: 'zotero://user/0/item/ANNO0001',
+            type: 'highlight',
+            text: 'Highlighted passage',
+            pageLabel: '7',
+          },
+        ],
+      },
+    })
+
+    const openBtns = screen.getAllByRole('button', { name: zh.openInZotero })
+    expect(openBtns.length).toBeGreaterThanOrEqual(1)
+    const annoOpenBtn = openBtns[openBtns.length - 1]!
+    fireEvent.click(annoOpenBtn)
+    expect(clickSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('renders extra metadata row and handles attachment row clicks', async () => {
+    const openFile = vi.fn()
+    const resolveAttachment = vi.fn().mockResolvedValue({
+      ok: true,
+      value: {
+        ref: 'zotero://user/0/item/ATT00001',
+        kind: 'file',
+        path: '/storage/sample.pdf',
+      },
+    })
+
+    mountInspector(
+      {
+        ...ITEM_DETAIL,
+        extra: 'Citation Key: test2024',
+        attachments: {
+          offset: 0,
+          total: 1,
+          returned: 1,
+          limit: 1,
+          items: [
+            {
+              ref: 'zotero://user/0/item/ATT00001',
+              title: 'sample.pdf',
+              contentType: 'application/pdf',
+            },
+          ],
+        },
+      },
+      {},
+      undefined,
+      openFile,
+      resolveAttachment,
+    )
+
+    // Extra metadata
+    expect(screen.getByText('Citation Key: test2024')).toBeTruthy()
+
+    // Attachment row click
+    const attBtn = screen.getByRole('button', { name: 'sample.pdf' })
+    await act(async () => {
+      fireEvent.click(attBtn)
+    })
+    expect(openFile).toHaveBeenCalledWith('/storage/sample.pdf')
+  })
+
+  it('opens external zotero url via direct open-in-zotero button', () => {
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    clickSpy.mockClear()
+
+    mountInspector(ITEM_DETAIL)
+    const openBtns = screen.getAllByRole('button', { name: zh.openInZotero })
+    expect(openBtns.length).toBeGreaterThanOrEqual(1)
+    fireEvent.click(openBtns[0]!)
+    expect(clickSpy).toHaveBeenCalledTimes(1)
+    clickSpy.mockRestore()
   })
 })

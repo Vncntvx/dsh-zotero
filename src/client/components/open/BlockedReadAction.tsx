@@ -13,7 +13,7 @@
 
 import { useId } from 'react'
 import clsx from 'clsx'
-import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import css from './open.module.css'
 
@@ -31,8 +31,9 @@ export function BlockedReadAction({ label, t, className }: BlockedReadActionProp
   return (
     <>
       <Tooltip label={reason}>
-        <button
-          type="button"
+        <Button
+          variant="outline"
+          size="sm"
           className={clsx(className ?? css.button, css.blocked)}
           aria-disabled="true"
           aria-describedby={reasonId}
@@ -42,7 +43,7 @@ export function BlockedReadAction({ label, t, className }: BlockedReadActionProp
           }}
         >
           {label}
-        </button>
+        </Button>
       </Tooltip>
       <span id={reasonId} className={css.srOnly}>
         {reason}

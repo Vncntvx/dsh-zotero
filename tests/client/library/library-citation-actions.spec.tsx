@@ -36,16 +36,6 @@ beforeEach(() => {
   })
 })
 
-/** A citation result for the inspected ref. */
-function citationResult(text: string): ZoteroLibraryExportResultView {
-  return { format: 'citation', citations: [{ ref: ITEM_DETAIL.ref, text }] }
-}
-
-/** A bibliography result with its rendered body. */
-function bibliographyResult(text: string): ZoteroLibraryExportResultView {
-  return { format: 'bibliography', text }
-}
-
 /** A translator result: the rendered body only (the panel wire carries no itemization). */
 function translatorResult(
   format: 'bibtex' | 'biblatex' | 'ris' | 'csljson',
@@ -67,26 +57,15 @@ function expectedRequest(format: ZoteroLibraryExportRequestView['format']): unkn
   return { refs: [ITEM_DETAIL.ref], format }
 }
 
-describe('copy citation and BibTeX buttons', () => {
-  it('sends the citation request and copies the host citation text', async () => {
-    const exportItem = vi.fn<LibraryExportItem>(async () => ({
-      ok: true,
-      value: citationResult('Dao, T. (2023).'),
-    }))
-    mount(exportItem)
-    fireEvent.click(screen.getByRole('button', { name: zh.libraryCopyCitation }))
-    await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith('Dao, T. (2023).'))
-    expect(exportItem).toHaveBeenCalledWith(expectedRequest('citation'))
-    expect(screen.getByRole('button', { name: zh.libraryCopyCitationDone })).toBeTruthy()
-  })
-
+describe('export citation menu', () => {
   it('sends the BibTeX request and copies the translator body', async () => {
     const exportItem = vi.fn<LibraryExportItem>(async () => ({
       ok: true,
       value: translatorResult('bibtex', '@article{dao2023flashattention,}'),
     }))
     mount(exportItem)
-    fireEvent.click(screen.getByRole('button', { name: zh.libraryCopyBibtex }))
+    fireEvent.click(screen.getByRole('button', { name: zh.libraryCitationMenu }))
+    fireEvent.click(screen.getByRole('menuitem', { name: zh.libraryCopyBibtex }))
     await vi.waitFor(() =>
       expect(writeText).toHaveBeenCalledWith('@article{dao2023flashattention,}'),
     )
@@ -96,14 +75,16 @@ describe('copy citation and BibTeX buttons', () => {
 
   it('renders the controls wire-disabled and still copies item info without an export face', async () => {
     mount(undefined)
-    const citation = screen.getByRole('button', {
-      name: zh.libraryCopyCitation,
+    fireEvent.click(screen.getByRole('button', { name: zh.libraryCitationMenu }))
+    const bibtex = screen.getByRole('menuitem', {
+      name: zh.libraryCopyBibtex,
     }) as HTMLButtonElement
-    expect(citation.disabled).toBe(true)
+    expect(bibtex.disabled).toBe(true)
     expect(
-      (screen.getByRole('button', { name: zh.libraryCopyBibtex }) as HTMLButtonElement).disabled,
+      (screen.getByRole('menuitem', { name: zh.libraryCopyRis }) as HTMLButtonElement).disabled,
     ).toBe(true)
-    fireEvent.click(screen.getByRole('button', { name: zh.libraryCopyMoreFormats }))
+    if (!screen.queryByRole('menu'))
+      fireEvent.click(screen.getByRole('button', { name: zh.libraryCitationMenu }))
     fireEvent.click(await screen.findByText(zh.libraryCopyItemInfo))
     await vi.waitFor(() => expect(writeText).toHaveBeenCalledTimes(1))
   })
@@ -111,13 +92,6 @@ describe('copy citation and BibTeX buttons', () => {
 
 describe('the more-formats menu', () => {
   const MENU_CASES = [
-    {
-      format: 'bibliography' as const,
-      label: zh.libraryCopyBibliography,
-      done: zh.libraryCopyBibliographyDone,
-      text: 'Dao, T. FlashAttention-2. NeurIPS, 2023.',
-      result: bibliographyResult('Dao, T. FlashAttention-2. NeurIPS, 2023.'),
-    },
     {
       format: 'biblatex' as const,
       label: zh.libraryCopyBiblatex,
@@ -144,19 +118,19 @@ describe('the more-formats menu', () => {
   it.each(MENU_CASES)('copies the $format result through its menu row', async (entry) => {
     const exportItem = vi.fn<LibraryExportItem>(async () => ({ ok: true, value: entry.result }))
     mount(exportItem)
-    fireEvent.click(screen.getByRole('button', { name: zh.libraryCopyMoreFormats }))
+    fireEvent.click(screen.getByRole('button', { name: zh.libraryCitationMenu }))
     fireEvent.click(await screen.findByText(entry.label))
     await vi.waitFor(() => {
       expect(writeText).toHaveBeenCalledWith(entry.text)
       // Each menu format reports the format it copied, not the citation's label.
-      expect(screen.getByRole('status').textContent).toBe(entry.done)
+      expect(screen.getByRole('button').textContent).toBe(entry.done)
     })
     expect(exportItem).toHaveBeenCalledWith(expectedRequest(entry.format))
   })
 
   it('closes the menu on Escape without copying', async () => {
     mount(vi.fn<LibraryExportItem>())
-    fireEvent.click(screen.getByRole('button', { name: zh.libraryCopyMoreFormats }))
+    fireEvent.click(screen.getByRole('button', { name: zh.libraryCitationMenu }))
     expect(await screen.findByRole('menu')).toBeTruthy()
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(screen.queryByRole('menu')).toBeNull()
@@ -166,15 +140,15 @@ describe('the more-formats menu', () => {
   it('shows the pending label while a menu-format request is in flight', async () => {
     const pending = deferred<RemoteResult<ZoteroLibraryExportResultView>>()
     mount(() => pending.promise)
-    fireEvent.click(screen.getByRole('button', { name: zh.libraryCopyMoreFormats }))
+    fireEvent.click(screen.getByRole('button', { name: zh.libraryCitationMenu }))
     fireEvent.click(await screen.findByText(zh.libraryCopyRis))
-    expect(screen.getByRole('status').textContent).toBe(zh.libraryExportPending)
+    expect(screen.getByRole('button').textContent).toBe(zh.libraryExportPending)
     await act(async () => {
       pending.resolve({ ok: true, value: translatorResult('ris', 'TY  - CONF') })
       await pending.promise
     })
     await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith('TY  - CONF'))
-    expect(screen.getByRole('status').textContent).toBe(zh.libraryCopyRisDone)
+    expect(screen.getByRole('button').textContent).toBe(zh.libraryCopyRisDone)
   })
 })
 
@@ -183,11 +157,12 @@ describe('the client-only item info block', () => {
 
   it('copies title, creators, year and venue, DOI, and URL as five lines', async () => {
     mount(undefined, withUrl)
-    fireEvent.click(screen.getByRole('button', { name: zh.libraryCopyMoreFormats }))
+    if (!screen.queryByRole('menu'))
+      fireEvent.click(screen.getByRole('button', { name: zh.libraryCitationMenu }))
     fireEvent.click(await screen.findByText(zh.libraryCopyItemInfo))
     await vi.waitFor(() => {
       expect(writeText).toHaveBeenCalledTimes(1)
-      expect(screen.getByRole('status').textContent).toBe(zh.libraryCopyItemInfoDone)
+      expect(screen.getByRole('button').textContent).toBe(zh.libraryCopyItemInfoDone)
     })
     const [text] = writeText.mock.calls[0] as [string]
     expect(text.split('\n')).toEqual([
@@ -218,49 +193,35 @@ describe('an export in flight disables the controls', () => {
   it('shows the pending label on the acting button and disables the row', async () => {
     const pending = deferred<RemoteResult<ZoteroLibraryExportResultView>>()
     mount(() => pending.promise)
-    fireEvent.click(screen.getByRole('button', { name: zh.libraryCopyCitation }))
+    fireEvent.click(screen.getByRole('button', { name: zh.libraryCitationMenu }))
+    fireEvent.click(screen.getByRole('menuitem', { name: zh.libraryCopyBibtex }))
     const pendingButton = screen.getByRole('button', {
       name: zh.libraryExportPending,
     }) as HTMLButtonElement
     expect(pendingButton.disabled).toBe(true)
     expect(
-      (screen.getByRole('button', { name: zh.libraryCopyBibtex }) as HTMLButtonElement).disabled,
+      (screen.getByRole('button', { name: zh.libraryExportPending }) as HTMLButtonElement).disabled,
     ).toBe(true)
     await act(async () => {
-      pending.resolve({ ok: true, value: citationResult('Dao, T.') })
+      pending.resolve({
+        ok: true,
+        value: translatorResult('bibtex', '@article{dao2023flashattention,}'),
+      })
       await pending.promise
     })
-    await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith('Dao, T.'))
-    expect(screen.getByRole('button', { name: zh.libraryCopyCitationDone })).toBeTruthy()
+    await vi.waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith('@article{dao2023flashattention,}'),
+    )
+    expect(screen.getByRole('button', { name: zh.libraryCopyBibtexDone })).toBeTruthy()
   })
 })
 
 describe('failures stay inline and copy nothing', () => {
-  const EMPTY_CITATION_CASES: readonly {
-    readonly name: string
-    readonly value: ZoteroLibraryExportResultView
-  }[] = [
-    { name: 'no citation entry', value: { format: 'citation', citations: [] } },
-    {
-      name: 'empty citation text',
-      value: { format: 'citation', citations: [{ ref: ITEM_DETAIL.ref, text: '' }] },
-    },
-  ]
-
-  it.each(EMPTY_CITATION_CASES)('treats $name as an error', async ({ value }) => {
-    mount(vi.fn<LibraryExportItem>(async () => ({ ok: true, value })))
-    fireEvent.click(screen.getByRole('button', { name: zh.libraryCopyCitation }))
-    const alert = await screen.findByRole('alert')
-    // The empty-text arm is client-owned, so its message is a locale key, not
-    // the host-failure template.
-    expect(alert.textContent).toBe(zh.libraryCopyCitationEmpty)
-    expect(writeText).not.toHaveBeenCalled()
-  })
-
   it('renders the host failure message', async () => {
     const error = new RemoteError('gateway/internal', 'export failed', {})
     mount(async () => ({ ok: false, error }))
-    fireEvent.click(screen.getByRole('button', { name: zh.libraryCopyCitation }))
+    fireEvent.click(screen.getByRole('button', { name: zh.libraryCitationMenu }))
+    fireEvent.click(screen.getByRole('menuitem', { name: zh.libraryCopyBibtex }))
     const alert = await screen.findByRole('alert')
     expect(alert.textContent).toBe(mockT('libraryCopyFailed', { message: 'export failed' }))
     expect(writeText).not.toHaveBeenCalled()
@@ -270,7 +231,8 @@ describe('failures stay inline and copy nothing', () => {
     mount(async () => {
       throw new Error('wire down')
     })
-    fireEvent.click(screen.getByRole('button', { name: zh.libraryCopyCitation }))
+    fireEvent.click(screen.getByRole('button', { name: zh.libraryCitationMenu }))
+    fireEvent.click(screen.getByRole('menuitem', { name: zh.libraryCopyBibtex }))
     const alert = await screen.findByRole('alert')
     expect(alert.textContent).toBe(mockT('libraryCopyFailed', { message: 'wire down' }))
   })
@@ -279,15 +241,20 @@ describe('failures stay inline and copy nothing', () => {
     mount(async () => {
       throw 'wire down'
     })
-    fireEvent.click(screen.getByRole('button', { name: zh.libraryCopyCitation }))
+    fireEvent.click(screen.getByRole('button', { name: zh.libraryCitationMenu }))
+    fireEvent.click(screen.getByRole('menuitem', { name: zh.libraryCopyBibtex }))
     const alert = await screen.findByRole('alert')
     expect(alert.textContent).toBe(mockT('libraryCopyFailed', { message: 'wire down' }))
   })
 
   it('reports a refused clipboard write', async () => {
     writeText.mockRejectedValueOnce(new Error('clipboard denied'))
-    mount(async () => ({ ok: true, value: citationResult('Dao, T.') }))
-    fireEvent.click(screen.getByRole('button', { name: zh.libraryCopyCitation }))
+    mount(async () => ({
+      ok: true,
+      value: translatorResult('bibtex', '@article{dao2023flashattention,}'),
+    }))
+    fireEvent.click(screen.getByRole('button', { name: zh.libraryCitationMenu }))
+    fireEvent.click(screen.getByRole('menuitem', { name: zh.libraryCopyBibtex }))
     const alert = await screen.findByRole('alert')
     expect(alert.textContent).toBe(zh.libraryCopyClipboardUnavailable)
   })
@@ -297,18 +264,22 @@ describe('the feedback and stale-selection guards', () => {
   it('clears the copied label after the feedback window', async () => {
     vi.useFakeTimers()
     try {
-      mount(async () => ({ ok: true, value: citationResult('Dao, T.') }))
+      mount(async () => ({
+        ok: true,
+        value: translatorResult('bibtex', '@article{dao2023flashattention,}'),
+      }))
+      fireEvent.click(screen.getByRole('button', { name: zh.libraryCitationMenu }))
       await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: zh.libraryCopyCitation }))
+        fireEvent.click(screen.getByRole('menuitem', { name: zh.libraryCopyBibtex }))
         await Promise.resolve()
         await Promise.resolve()
         await Promise.resolve()
       })
-      expect(screen.getByRole('button', { name: zh.libraryCopyCitationDone })).toBeTruthy()
+      expect(screen.getByRole('button', { name: zh.libraryCopyBibtexDone })).toBeTruthy()
       act(() => {
         vi.advanceTimersByTime(COPY_FEEDBACK_MS)
       })
-      expect(screen.getByRole('button', { name: zh.libraryCopyCitation })).toBeTruthy()
+      expect(screen.getByRole('button', { name: zh.libraryCitationMenu })).toBeTruthy()
     } finally {
       vi.useRealTimers()
     }
@@ -318,7 +289,8 @@ describe('the feedback and stale-selection guards', () => {
     const pending = deferred<RemoteResult<ZoteroLibraryExportResultView>>()
     const exportItem = vi.fn(() => pending.promise)
     const { rerender } = mount(exportItem)
-    fireEvent.click(screen.getByRole('button', { name: zh.libraryCopyCitation }))
+    fireEvent.click(screen.getByRole('button', { name: zh.libraryCitationMenu }))
+    fireEvent.click(screen.getByRole('menuitem', { name: zh.libraryCopyBibtex }))
     rerender(
       <LibraryCitationActions
         detail={{ ...ITEM_DETAIL, ref: 'zotero://user/0/item/ITEM0002' }}
@@ -327,12 +299,12 @@ describe('the feedback and stale-selection guards', () => {
       />,
     )
     await act(async () => {
-      pending.resolve({ ok: true, value: citationResult('Stale citation') })
+      pending.resolve({ ok: true, value: translatorResult('bibtex', 'Stale citation') })
       await pending.promise
     })
     expect(writeText).not.toHaveBeenCalled()
     expect(screen.queryByRole('alert')).toBeNull()
-    expect(screen.queryByRole('button', { name: zh.libraryCopyCitationDone })).toBeNull()
+    expect(screen.queryByRole('button', { name: zh.libraryCopyBibtexDone })).toBeNull()
   })
 
   it('drops a copy outcome that lands after the selection changed mid-clipboard', async () => {
@@ -340,11 +312,12 @@ describe('the feedback and stale-selection guards', () => {
     writeText.mockReturnValueOnce(clipboard.promise)
     const exportItem = vi.fn<LibraryExportItem>(async () => ({
       ok: true,
-      value: citationResult('Old citation'),
+      value: translatorResult('bibtex', 'Old citation'),
     }))
     const { rerender } = mount(exportItem)
+    fireEvent.click(screen.getByRole('button', { name: zh.libraryCitationMenu }))
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: zh.libraryCopyCitation }))
+      fireEvent.click(screen.getByRole('menuitem', { name: zh.libraryCopyBibtex }))
       await Promise.resolve()
       await Promise.resolve()
     })
@@ -361,14 +334,15 @@ describe('the feedback and stale-selection guards', () => {
       await clipboard.promise
     })
     expect(screen.queryByRole('alert')).toBeNull()
-    expect(screen.queryByRole('button', { name: zh.libraryCopyCitationDone })).toBeNull()
+    expect(screen.queryByRole('button', { name: zh.libraryCopyBibtexDone })).toBeNull()
   })
 
   it('drops a rejection that belongs to the previous selection', async () => {
     const pending = deferred<RemoteResult<ZoteroLibraryExportResultView>>()
     const exportItem = vi.fn(() => pending.promise)
     const { rerender } = mount(exportItem)
-    fireEvent.click(screen.getByRole('button', { name: zh.libraryCopyCitation }))
+    fireEvent.click(screen.getByRole('button', { name: zh.libraryCitationMenu }))
+    fireEvent.click(screen.getByRole('menuitem', { name: zh.libraryCopyBibtex }))
     rerender(
       <LibraryCitationActions
         detail={{ ...ITEM_DETAIL, ref: 'zotero://user/0/item/ITEM0002' }}

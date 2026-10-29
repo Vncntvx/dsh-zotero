@@ -24,7 +24,15 @@
  * @module tests/client/helpers/primitives-stub
  */
 
-import { Fragment, createElement, useEffect, memo, useRef, type ReactElement } from 'react'
+import {
+  Fragment,
+  createElement,
+  useEffect,
+  memo,
+  useRef,
+  forwardRef,
+  type ReactElement,
+} from 'react'
 import { vi, type MockedFunction } from 'vitest'
 import type { SettingsFormLabels } from '@deepseek-ai/dsh-client-ui-primitives'
 import { TagStub } from './tag-stub.tsx'
@@ -306,6 +314,20 @@ export function primitivesStub(overrides: Partial<PrimitivesStub> = {}): Primiti
         children as never,
       ),
     Menu: staticMenu,
+    MenuSurface: forwardRef<HTMLDivElement, Record<string, unknown>>((props, ref) => {
+      const { children, className, style, compact, ...rest } = props
+      return createElement(
+        'div',
+        {
+          ref,
+          className: className as string | undefined,
+          style: style as React.CSSProperties | undefined,
+          'data-menu-surface': compact ? 'compact' : 'true',
+          ...rest,
+        },
+        children as never,
+      )
+    }),
     ...primitivesIcons,
     SettingsValueField: (props) => {
       // Faithful to the official control's input contract (label, input with

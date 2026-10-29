@@ -335,7 +335,7 @@ describe('the library selector switches libraries', () => {
 })
 
 describe('the inspector chat actions ride the session input face', () => {
-  it('asks in chat by prefilling the draft without submitting', async () => {
+  it('asks in chat by inserting citation quote without submitting', async () => {
     const { inputActions } = mountPanel()
     const row = await screen.findByText('FlashAttention-2')
     act(() => {
@@ -345,29 +345,11 @@ describe('the inspector chat actions ride the session input face', () => {
     act(() => {
       ask.click()
     })
-    expect(inputActions.setDraft).toHaveBeenCalledTimes(1)
-    const [draft] = inputActions.setDraft.mock.calls[0] as unknown as [string]
-    expect(draft).toContain('FlashAttention-2')
-    expect(draft).toContain('zotero://user/0/item/ITEM0001')
+    expect(inputActions.insertQuote).toHaveBeenCalledTimes(1)
+    const [quote] = inputActions.insertQuote.mock.calls[0] as unknown as [string]
+    expect(quote).toContain('FlashAttention-2')
+    expect(quote).toContain('zotero://user/0/item/ITEM0001')
     expect(inputActions.submit).not.toHaveBeenCalled()
-  })
-
-  it('adds the citation line at the caret without touching the rest of the draft', async () => {
-    const { inputActions } = mountPanel()
-    const row = await screen.findByText('FlashAttention-2')
-    act(() => {
-      row.click()
-    })
-    const add = await screen.findByRole('button', { name: zh.libraryAddToChat })
-    act(() => {
-      add.click()
-    })
-    expect(inputActions.captureInsertion).toHaveBeenCalledTimes(1)
-    expect(inputActions.insertText).toHaveBeenCalledTimes(1)
-    const [text, span] = inputActions.insertText.mock.calls[0] as unknown as [string, unknown]
-    expect(text).toContain('FlashAttention-2')
-    expect(text).toContain('zotero://user/0/item/ITEM0001')
-    expect(span).toBe(inputActions.captureInsertion.mock.results[0]?.value)
   })
 })
 

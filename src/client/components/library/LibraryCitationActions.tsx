@@ -1,15 +1,15 @@
 /**
- * The inspector action row's citation controls: one button each for the CSL
- * citation and BibTeX arms, and a "more formats" menu for the remaining host
- * formats (bibliography, BibLaTeX, RIS, CSL-JSON) plus a client-only item-info
- * block generated from the inspected record.
+ * The inspector action row's citation controls: a single consolidated menu
+ * offering all export formats (CSL citation, bibliography, BibTeX, BibLaTeX,
+ * RIS, CSL-JSON) plus a client-only item-info block generated from the
+ * inspected record.
  *
  * Every wire copy asks for `refs: [detail.ref]` with no style/locale, so the
  * host's configured rendering defaults decide the text, exactly like the
  * zotero_export tool. The shared {@link useCopyFeedback} lane owns the
- * clipboard write and the stale-answer guards; each action names its own done
- * label, a failure stays inline beside the controls instead of becoming a
- * panel-wide error, and no copy is ever retried.
+ * clipboard write and the stale-answer guards; the anchor button reflects the
+ * active copy state and done label, failures stay inline beside the control,
+ * and no copy is ever retried.
  * @module dsh-zotero/client/components/library/LibraryCitationActions
  */
 
@@ -18,6 +18,7 @@ import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import {
   Button,
   IconChevronDownOutlineRegular,
+  IconCopyOutlineRegular,
   Menu,
   MenuItemButton,
 } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -48,27 +49,18 @@ const DONE_KEY: Record<CopyAction, ZoteroLocaleKey> = {
   itemInfo: 'libraryCopyItemInfoDone',
 }
 
-/** The menu's wire formats, in the order the menu lists them. */
-const MORE_FORMATS: readonly {
-  readonly format: ZoteroLibraryExportFormatView
+/** The menu's wire and local formats, in frequency order. */
+const ALL_FORMATS: readonly {
+  readonly format: CopyAction
   readonly label: ZoteroLocaleKey
+  readonly separatorBefore?: boolean
 }[] = [
-  { format: 'bibliography', label: 'libraryCopyBibliography' },
+  { format: 'bibtex', label: 'libraryCopyBibtex' },
   { format: 'biblatex', label: 'libraryCopyBiblatex' },
   { format: 'ris', label: 'libraryCopyRis' },
   { format: 'csljson', label: 'libraryCopyCsljson' },
+  { format: 'itemInfo', label: 'libraryCopyItemInfo', separatorBefore: true },
 ]
-
-/** The action ids that live behind the more-formats menu. */
-const MENU_ACTIONS: ReadonlySet<CopyAction> = new Set<CopyAction>([
-  ...MORE_FORMATS.map(({ format }) => format),
-  'itemInfo',
-])
-
-/** Whether one action is a menu row rather than one of the two buttons. */
-function isMenuAction(action: CopyAction): boolean {
-  return MENU_ACTIONS.has(action)
-}
 
 /** A client-owned failure whose message is a locale key, not English prose. */
 class CopyLocaleError extends Error {
@@ -112,7 +104,7 @@ export function itemInfoTextOf(detail: ZoteroItemDetailView): string {
 /**
  * The inspector's citation-copy controls.
  * @param props.detail - the inspected record whose citation is copied.
- * @param props.exportItem - the panel's export face; undefined hides the wire formats as unavailable.
+ * @param props.exportItem - the panel's export face; undefined disables wire formats as unavailable.
  * @param props.t - the zotero dictionary.
  */
 export function LibraryCitationActions({
@@ -125,15 +117,11 @@ export function LibraryCitationActions({
   readonly t: TranslateNS<'zotero'>
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
-  // Which control started the shared lane: only it may show the pending/done
-  // label, and only while the lane is in that phase.
   const [action, setAction] = useState<CopyAction | undefined>(undefined)
   const { phase, error, copy } = useCopyFeedback(detail.ref)
   const busy = phase === 'pending'
   const wireUnavailable = exportItem === undefined
 
-  // The selection moved on: the open menu and the acting control belong to the
-  // previous row; the hook's reset key drops that row's answer.
   useEffect(() => {
     setMenuOpen(false)
     setAction(undefined)
@@ -145,8 +133,6 @@ export function LibraryCitationActions({
       copy(async () => itemInfoTextOf(detail))
       return
     }
-    // The wire controls render disabled without the face; this keeps the
-    // handler safe if one is ever invoked programmatically.
     if (exportItem === undefined) return
     const face = exportItem
     setAction(next)
@@ -157,19 +143,12 @@ export function LibraryCitationActions({
     })
   }
 
-  const labelFor = (name: CopyAction, normal: ZoteroLocaleKey): string => {
-    if (action !== name) return t(normal)
-    if (phase === 'pending') return t('libraryExportPending')
-    if (phase === 'done') return t(DONE_KEY[name])
-    return t(normal)
-  }
-
-  let menuFeedback: string | undefined
-  if (action !== undefined && isMenuAction(action)) {
+  let buttonLabel = t('libraryCitationMenu')
+  if (action !== undefined) {
     if (phase === 'pending') {
-      menuFeedback = t('libraryExportPending')
+      buttonLabel = t('libraryExportPending')
     } else if (phase === 'done') {
-      menuFeedback = t(DONE_KEY[action])
+      buttonLabel = t(DONE_KEY[action])
     }
   }
 
@@ -185,22 +164,6 @@ export function LibraryCitationActions({
 
   return (
     <>
-      <Button
-        variant="outline"
-        size="sm"
-        disabled={busy || wireUnavailable}
-        onClick={() => void run('citation')}
-      >
-        {labelFor('citation', 'libraryCopyCitation')}
-      </Button>
-      <Button
-        variant="outline"
-        size="sm"
-        disabled={busy || wireUnavailable}
-        onClick={() => void run('bibtex')}
-      >
-        {labelFor('bibtex', 'libraryCopyBibtex')}
-      </Button>
       <Menu
         open={menuOpen}
         portal
@@ -210,20 +173,23 @@ export function LibraryCitationActions({
           <Button
             variant="outline"
             size="sm"
-            icon={<IconChevronDownOutlineRegular size={14} />}
+            icon={<IconCopyOutlineRegular size={14} />}
             aria-haspopup="menu"
             aria-expanded={menuOpen}
+            aria-label={buttonLabel}
             disabled={busy}
             onClick={() => setMenuOpen((open) => !open)}
           >
-            {t('libraryCopyMoreFormats')}
+            <span>{buttonLabel}</span>
+            <IconChevronDownOutlineRegular size={12} />
           </Button>
         }
       >
-        {MORE_FORMATS.map(({ format, label }) => (
+        {ALL_FORMATS.map(({ format, label, separatorBefore }) => (
           <MenuItemButton
             key={format}
-            disabled={busy || wireUnavailable}
+            separatorBefore={separatorBefore}
+            disabled={busy || (format !== 'itemInfo' && wireUnavailable)}
             onSelect={() => {
               setMenuOpen(false)
               void run(format)
@@ -232,22 +198,7 @@ export function LibraryCitationActions({
             {t(label)}
           </MenuItemButton>
         ))}
-        <MenuItemButton
-          separatorBefore
-          disabled={busy}
-          onSelect={() => {
-            setMenuOpen(false)
-            void run('itemInfo')
-          }}
-        >
-          {t('libraryCopyItemInfo')}
-        </MenuItemButton>
       </Menu>
-      {menuFeedback !== undefined && (
-        <span className={css.statusText} role="status">
-          {menuFeedback}
-        </span>
-      )}
       {errorText !== undefined && (
         <span className={css.listError} role="alert">
           {errorText}

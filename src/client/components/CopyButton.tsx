@@ -72,16 +72,17 @@ export function CopyButton({
   }
 
   return (
-    <button
-      type="button"
+    <Button
+      variant="outline"
+      size="sm"
       className={className ?? css.lineAction}
       aria-label={label}
       title={title ?? label}
       disabled={disabled}
       onClick={handleClick}
+      icon={icon}
     >
-      {icon}
       <span>{copied ? copiedLabel : label}</span>
-    </button>
+    </Button>
   )
 }

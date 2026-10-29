@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "Zotero Assistant",
+    "title": "dsh-zotero",
     "description": "Zotero plugin for DeepSeek Harness: search and read papers in conversation, audit the literature trail, and browse the literature panel for citations and approved writes.",
     "detail": "docs/plugin-detail.en.md"
   }

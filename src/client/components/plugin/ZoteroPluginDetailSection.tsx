@@ -7,6 +7,7 @@
 import type { ReactNode } from 'react'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { PropsLocale, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ZoteroStatusView } from '../../remote.ts'
 import { ZOTERO_REMOTE_PACKAGE } from '../../../contract.ts'
 import { DiagnosisBox } from '../DiagnosisBox.tsx'
@@ -64,8 +65,9 @@ function ZoteroPluginDetailSectionBody({ t, probe }: DetailSectionBodyProps): Re
         <div className={css.card}>
           <div className={css.cardHead}>
             <span className={css.cardTitle}>{t('detailsLabel')}</span>
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="sm"
               className={css.refreshButton}
               disabled={state.loading}
               onClick={() => {
@@ -73,7 +75,7 @@ function ZoteroPluginDetailSectionBody({ t, probe }: DetailSectionBodyProps): Re
               }}
             >
               {state.loading ? t('checking') : t('refresh')}
-            </button>
+            </Button>
           </div>
           <div className={css.statusRow} data-state={connected ? 'connected' : 'disconnected'}>
             <span>

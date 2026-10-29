@@ -44,6 +44,14 @@ describe('PdfReadButton', () => {
     expect(onOpenFile).toHaveBeenCalledWith('/storage/test.pdf')
   })
 
+  it('opens a direct local file without navigation options in the sidebar', () => {
+    const onOpenFile = vi.fn()
+    render(<PdfReadButton filePath="/storage/test.pdf" onOpenFile={onOpenFile} t={t} />)
+    const button = screen.getByRole('button', { name: mockT('readPdf') })
+    fireEvent.click(button)
+    expect(onOpenFile).toHaveBeenCalledWith('/storage/test.pdf')
+  })
+
   it('opens a web PDF url with custom or window opener', () => {
     const onOpenUrl = vi.fn()
     const { rerender } = render(
@@ -90,6 +98,58 @@ describe('PdfReadButton', () => {
 
     expect(resolveAttachment).toHaveBeenCalledWith('zotero://user/0/item/ATT12345')
     expect(onOpenFile).toHaveBeenCalledWith('/storage/sample.pdf')
+  })
+
+  it('resolves attachment and opens without navigation options', async () => {
+    const onOpenFile = vi.fn()
+    const resolveAttachment = vi.fn().mockResolvedValue({
+      ok: true,
+      value: {
+        ref: 'zotero://user/0/item/ATT12345',
+        kind: 'file',
+        title: 'sample.pdf',
+        contentType: 'application/pdf',
+        path: '/storage/sample.pdf',
+      },
+    })
+
+    render(
+      <PdfReadButton
+        attachmentRef="zotero://user/0/item/ATT12345"
+        resolveAttachment={resolveAttachment}
+        onOpenFile={onOpenFile}
+        t={t}
+      />,
+    )
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: mockT('readPdf') }))
+    })
+
+    expect(resolveAttachment).toHaveBeenCalledWith('zotero://user/0/item/ATT12345')
+    expect(onOpenFile).toHaveBeenCalledWith('/storage/sample.pdf')
+  })
+
+  it('handles non-Error thrown during open and resolution', async () => {
+    const onOpenFile = vi.fn().mockImplementation(() => {
+      throw 'direct string error'
+    })
+    render(<PdfReadButton filePath="/storage/test.pdf" onOpenFile={onOpenFile} t={t} />)
+    fireEvent.click(screen.getByRole('button', { name: mockT('readPdf') }))
+    expect(screen.getByRole('button', { name: 'direct string error' })).toBeTruthy()
+
+    const resolveAttachment = vi.fn().mockRejectedValue('async string failure')
+    render(
+      <PdfReadButton
+        attachmentRef="zotero://user/0/item/ATT12345"
+        resolveAttachment={resolveAttachment}
+        t={t}
+      />,
+    )
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: mockT('readPdf') }))
+    })
+    expect(screen.getByRole('button', { name: 'async string failure' })).toBeTruthy()
   })
 
   it('uses singleton attachment resolver when prop is omitted', async () => {

@@ -28,7 +28,7 @@
 .link:focus-visible {
   text-decoration: underline dotted;
   text-underline-offset: 3px;
-  outline: 1px solid var(--dsw-alias-link);
+  outline: var(--dsw-focus-ring-width, 1px) solid var(--dsw-focus-ring-color, var(--dsw-alias-link));
   outline-offset: 1px;
 }
 
@@ -89,7 +89,8 @@
 }
 
 .button:focus-visible {
-  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline: var(--dsw-focus-ring-width, 1px) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 1px;
 }
 

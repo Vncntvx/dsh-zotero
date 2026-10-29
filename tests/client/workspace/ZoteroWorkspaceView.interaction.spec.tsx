@@ -254,13 +254,14 @@ describe('overview panel', () => {
     view.unmount()
   })
 
-  it('copies the ref from a visible action-row button and confirms it', async () => {
+  it('copies the canonical link from a visible action-row button and confirms it', async () => {
     const workspace = singleFixture()
     const { view } = mountView(workspace)
     // The copy sits beside its siblings, not behind an overflow trigger.
     expect(view.container.querySelector('[data-menu]')).toBeNull()
-    fireEvent.click(screen.getByLabelText(zh.copyRef))
-    expect(writeClipboard).toHaveBeenCalledWith('zotero://user/0/item/P')
+    expect(screen.getByRole('button', { name: zh.openInZotero })).toBeDefined()
+    fireEvent.click(screen.getByLabelText(zh.copyZoteroLink))
+    expect(writeClipboard).toHaveBeenCalledWith('zotero://select/library/items/P')
     // A successful write earns the feedback, and the label persists now, so
     // the button can say so.
     await vi.waitFor(() => expect(screen.getByText(zh.copied)).toBeDefined())

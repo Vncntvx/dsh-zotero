@@ -98,7 +98,8 @@
 }
 
 .menuButton:focus-visible {
-  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline: var(--dsw-focus-ring-width, 1px) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 1px;
 }
 
@@ -134,7 +135,8 @@
 }
 
 .refresh:focus-visible {
-  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline: var(--dsw-focus-ring-width, 1px) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 1px;
 }
 
@@ -173,7 +175,8 @@
 }
 
 .lensTab:focus-visible {
-  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline: var(--dsw-focus-ring-width, 1px) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: -1px;
 }
 
@@ -309,7 +312,7 @@
 }
 
 .evidenceEntry:focus-visible {
-  outline: 1px solid var(--dsw-alias-link);
+  outline: var(--dsw-focus-ring-width, 1px) solid var(--dsw-focus-ring-color, var(--dsw-alias-link));
   outline-offset: 1px;
 }
 
@@ -367,7 +370,8 @@
 }
 
 .filterClear:focus-visible {
-  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline: var(--dsw-focus-ring-width, 1px) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 1px;
 }
 
@@ -401,7 +405,8 @@
 }
 
 .listItem:focus-visible {
-  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline: var(--dsw-focus-ring-width, 1px) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: -1px;
 }
 
@@ -527,7 +532,8 @@
 }
 
 .detailTab:focus-visible {
-  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline: var(--dsw-focus-ring-width, 1px) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: -1px;
 }
 
@@ -635,7 +641,8 @@
 }
 
 .action:focus-visible {
-  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline: var(--dsw-focus-ring-width, 1px) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 1px;
 }
 
@@ -709,7 +716,8 @@
 }
 
 .detailToggle:focus-visible {
-  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline: var(--dsw-focus-ring-width, 1px) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 1px;
 }
 
@@ -806,7 +814,8 @@
   }
 
   .backAction:focus-visible {
-    outline: 1px solid var(--dsw-alias-state-business-primary);
+    outline: var(--dsw-focus-ring-width, 1px) solid
+      var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
     outline-offset: 1px;
   }
 }

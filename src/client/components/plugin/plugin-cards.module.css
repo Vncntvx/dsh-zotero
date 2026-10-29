@@ -235,27 +235,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-.diagDot {
-  flex: none;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  corner-shape: round;
-  background: var(--dsw-alias-label-tertiary);
-}
-
-.diagDot[data-level='error'] {
-  background: var(--dsw-alias-label-error, var(--dsw-alias-state-error-primary));
-}
-
-.diagDot[data-level='warn'] {
-  background: var(--dsw-alias-state-warn-label);
-}
-
-.diagDot[data-level='info'] {
-  background: var(--dsw-alias-state-success-secondary);
-}
-
 .diagBody {
   min-width: 0;
   display: flex;

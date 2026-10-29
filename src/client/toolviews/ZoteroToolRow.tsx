@@ -7,6 +7,7 @@
 import { useMemo, type ReactNode } from 'react'
 import clsx from 'clsx'
 import {
+  Button,
   DisclosureRow,
   IconInspectOutlineRegular,
   TextShimmer,
@@ -130,8 +131,9 @@ export function ZoteroToolRow({
     <div className={css.bodyWrap}>
       {content}
       {inspect !== undefined && (
-        <button
-          type="button"
+        <Button
+          variant="outline"
+          size="sm"
           className={css.inspectButton}
           onClick={(e) => {
             e.stopPropagation()
@@ -140,7 +142,7 @@ export function ZoteroToolRow({
         >
           <IconInspectOutlineRegular size={12} />
           <span>{t('toolInspect')}</span>
-        </button>
+        </Button>
       )}
     </div>
   ) : null

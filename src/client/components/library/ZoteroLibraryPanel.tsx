@@ -69,9 +69,13 @@ import css from './library.module.css'
  * composer for the chat actions — are always reachable.
  */
 export interface ZoteroLibraryPanelFace extends LibraryPanelWireFace {
+  readonly bindRefresh?: (sessionId: string, tabId: string, refresh: () => void) => () => void
   readonly status: () => Promise<RemoteResult<ZoteroStatusView>>
   readonly resolveAttachment: (ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>
-  readonly openResource: (url: string) => void
+  readonly openResource: (
+    url: string,
+    options?: { readonly params?: Record<string, unknown> },
+  ) => void
   readonly write: (
     request: ZoteroLibraryWriteRequestView,
   ) => Promise<RemoteResult<ZoteroLibraryWriteResultView>>
@@ -202,6 +206,21 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
       throw error
     }
   }
+
+  // Bind the right-sidebar native refresh command to invalidate the panel feed.
+  const tabInfo = props.useTabInfo?.()
+  useEffect(() => {
+    if (!tabInfo?.tab || sessionRemoved) return
+    return props.bindRefresh?.(props.sessionId, tabInfo.tab.id, feed.refresh)
+  }, [props.bindRefresh, props.sessionId, tabInfo?.tab?.id, feed.refresh, sessionRemoved])
+  useEffect(() => {
+    if (!tabInfo?.tab?.actions?.bindCommands) return
+    return tabInfo.tab.actions.bindCommands({
+      refresh: () => {
+        feed.refresh()
+      },
+    })
+  }, [tabInfo?.tab?.actions, feed])
 
   const handleSelectScope = (selection: Parameters<typeof feed.selectScope>[0]) => {
     feed.selectScope(selection)

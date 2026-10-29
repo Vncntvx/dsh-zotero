@@ -27,7 +27,7 @@
   font-weight: 400;
   line-height: calc(24px + var(--dsh-content-font-delta, 0px));
   color: var(--dsw-alias-label-tertiary);
-  transition: color 100ms ease;
+  transition: color 120ms var(--ds-ease-in-out);
 }
 
 .summary[data-error='true'] {
