@@ -1,7 +1,9 @@
 /**
- * The `zotero_export` domain: citations batched to the API's itemKey cap,
- * the CSL-sorted bibliography, and the translator formats whose per-document
- * entries are located server-side against the merged batch body.
+ * The export domain shared by the `zotero_export` tool and the library
+ * panel's export endpoint: citations batched to the API's itemKey cap, the
+ * CSL-sorted bibliography, and the translator formats whose per-document
+ * entries the tool locates server-side against the merged batch body. The
+ * panel's text arm stops at the rendered body; itemization is tool-only.
  * @module dsh-zotero/local/export-domain
  */
 
@@ -33,6 +35,7 @@ import type {
   SupportedLocalLibrary,
   ZoteroExportRequest,
   ZoteroExportResult,
+  ZoteroExportTextResult,
   ZoteroObjectRef,
   ZoteroProgressEvent,
 } from '../types.js'
@@ -46,6 +49,31 @@ function itemKeyList(refs: readonly ZoteroObjectRef[]): string {
   return refs.map((ref) => ref.key).join(',')
 }
 
+/** The un-itemized export body plus the request facts the tool arm itemizes from. */
+interface ExportBody {
+  readonly result: ZoteroExportTextResult
+  /** The deduped refs the batch request named, in first-seen order (batch formats only). */
+  readonly refs: readonly ZoteroObjectRef[]
+  /** The raw item JSON a bibtex-family metadata read returned (empty otherwise). */
+  readonly rawItems: readonly Record<string, unknown>[]
+}
+
+/**
+ * The panel's export arm: the rendered text/citations for the requested
+ * items and nothing else. Citation and bibliography answers are identical to
+ * {@link exportItems}; the translator formats return the merged body without
+ * locating individual documents inside it.
+ */
+export async function exportText(
+  deps: { client: ZoteroHttpClient; limits: LocalApiLimits },
+  request: ZoteroExportRequest,
+  signal?: AbortSignal,
+  onProgress?: (progress: ZoteroProgressEvent) => void,
+): Promise<ZoteroExportTextResult> {
+  const { result } = await exportBody(deps, request, signal, onProgress, false)
+  return result
+}
+
 /**
  * Export the requested items through the Local API's format pipeline:
  * `include=citation` pairs each item with its HTML citation (batched to the
@@ -54,11 +82,11 @@ function itemKeyList(refs: readonly ZoteroObjectRef[]): string {
  * (`bibtex`/`biblatex`/`ris`/`csljson`) export the whole set at once. The
  * batch-breaking formats refuse to exceed `ZOTERO_ITEMKEY_BATCH`, because
  * their global ordering belongs to Zotero and splitting them would silently
- * reorder the output. The translator formats itemize each document by
- * locating it directly within the batch body in memory, pairing each ref
- * with its citation key, span offsets, and display title where possible,
- * and falling back gracefully to a bare ref if an item is omitted by the
- * translator output. Output that exceeds `maxExportChars` fails with
+ * reorder the output. The translator formats additionally itemize each
+ * document by locating it directly within the batch body in memory, pairing
+ * each ref with its citation key, span offsets, and display title where
+ * possible, and falling back gracefully to a bare ref if an item is omitted
+ * by the translator output. Output that exceeds `maxExportChars` fails with
  * OUTPUT_TOO_LARGE: export text is never mid-truncated.
  */
 export async function exportItems(
@@ -67,6 +95,32 @@ export async function exportItems(
   signal?: AbortSignal,
   onProgress?: (progress: ZoteroProgressEvent) => void,
 ): Promise<ZoteroExportResult> {
+  const { result, refs, rawItems } = await exportBody(deps, request, signal, onProgress, true)
+  if (result.format === 'citation' || result.format === 'bibliography') return result
+  // The browser holds `text` with its leading whitespace trimmed (the
+  // render strips it), so the entry offsets are measured on that same
+  // trimmed body.
+  const items = locateExportItemsFromBatch(
+    result.format,
+    result.text.trimStart(),
+    [...refs],
+    rawItems,
+  )
+  return { ...result, items }
+}
+
+/**
+ * The shared format pipeline behind both arms. `itemizeMetadata` decides
+ * whether the bibtex-family raw-item read runs: the tool's itemization needs
+ * it, while the panel's text arm must not pay for it.
+ */
+async function exportBody(
+  deps: { client: ZoteroHttpClient; limits: LocalApiLimits },
+  request: ZoteroExportRequest,
+  signal: AbortSignal | undefined,
+  onProgress: ((progress: ZoteroProgressEvent) => void) | undefined,
+  itemizeMetadata: boolean,
+): Promise<ExportBody> {
   for (const ref of request.refs) requireSupportedLocalRef(ref, ['item'])
   // Export is single-library (v3 lock): all refs must share the same SupportedLocalLibrary
   const firstLibrary = request.refs[0]?.library as SupportedLocalLibrary | undefined
@@ -94,15 +148,19 @@ export async function exportItems(
   const style = request.style ?? deps.limits.defaultStyle
   const locale = request.locale ?? deps.limits.defaultLocale
   if (request.format === 'citation') {
-    return await exportCitations(deps, {
-      refs: request.refs,
-      prefix: exportPrefix,
-      serverId,
-      style,
-      locale,
-      signal,
-      onProgress,
-    })
+    return {
+      result: await exportCitations(deps, {
+        refs: request.refs,
+        prefix: exportPrefix,
+        serverId,
+        style,
+        locale,
+        signal,
+        onProgress,
+      }),
+      refs: [],
+      rawItems: [],
+    }
   }
   // Duplicate refs name the same item, and Zotero caps one itemKey request
   // at ZOTERO_ITEMKEY_BATCH keys anyway, so every unique key is requested
@@ -139,9 +197,10 @@ export async function exportItems(
   }
   const isBibtexFamily = request.format === 'bibtex' || request.format === 'biblatex'
   const exportPromise = deps.client.get(`${exportPrefix}/items`, search, { signal, serverId })
-  const metaPromise = isBibtexFamily
-    ? fetchRawItemBatch(deps.client, exportPrefix, refs, signal, serverId)
-    : Promise.resolve<readonly Record<string, unknown>[]>([])
+  const metaPromise =
+    itemizeMetadata && isBibtexFamily
+      ? fetchRawItemBatch(deps.client, exportPrefix, refs, signal, serverId)
+      : Promise.resolve<readonly Record<string, unknown>[]>([])
 
   const [{ body }, rawItems] = await Promise.all([exportPromise, metaPromise])
   // Close the progress event the fetch opened: without this the receipt
@@ -160,13 +219,9 @@ export async function exportItems(
     )
   }
   if (request.format === 'bibliography') {
-    return { format: 'bibliography', style, locale, text: body }
+    return { result: { format: 'bibliography', style, locale, text: body }, refs, rawItems: [] }
   }
-  // The browser holds `text` with its leading whitespace trimmed (the
-  // render strips it), so the entry offsets are measured on that same
-  // trimmed body.
-  const items = locateExportItemsFromBatch(request.format, body.trimStart(), refs, rawItems)
-  return { format: request.format, text: body, items }
+  return { result: { format: request.format, text: body }, refs, rawItems }
 }
 
 async function fetchRawItemBatch(
@@ -214,7 +269,7 @@ interface CitationExportOptions {
 async function exportCitations(
   deps: { client: ZoteroHttpClient; limits: LocalApiLimits },
   options: CitationExportOptions,
-): Promise<ZoteroExportResult> {
+): Promise<ZoteroExportTextResult> {
   const batches = chunkItemKeyBatches(options.refs)
 
   let completedItems = 0

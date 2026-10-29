@@ -8,7 +8,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { createLibraryDataPlane } from '../../../src/client/components/library/library-data-plane.ts'
-import type { LibraryFeedFace } from '../../../src/client/components/library/useLibraryFeed.ts'
+import type { LibraryPanelWireFace } from '../../../src/client/components/library/library-feed-types.ts'
 import { browseResult, itemDetail, searchResult } from '../../helpers/library-fixtures.js'
 import { deferred } from '../../helpers/sync.js'
 
@@ -16,7 +16,20 @@ function ok<T>(value: T): RemoteResult<T> {
   return { ok: true, value }
 }
 
-function face(): Record<'browse' | 'search' | 'item' | 'childPage', ReturnType<typeof vi.fn>> {
+/** The export request/result the export-cache cases share. */
+const EXPORT_REQUEST = { refs: ['zotero://user/0/item/ABCD1234'], format: 'citation' as const }
+
+function exportResult() {
+  return ok({
+    format: 'citation' as const,
+    citations: [{ ref: 'zotero://user/0/item/ABCD1234', text: 'Dao, T. (2023).' }],
+  })
+}
+
+function face(): Record<
+  'browse' | 'search' | 'item' | 'childPage' | 'export',
+  ReturnType<typeof vi.fn>
+> {
   return {
     browse: vi.fn(async () => ok(browseResult())),
     search: vi.fn(async () => ok(searchResult())),
@@ -27,13 +40,17 @@ function face(): Record<'browse' | 'search' | 'item' | 'childPage', ReturnType<t
         page: { total: 0, returned: 0, offset: request.offset, limit: request.limit, items: [] },
       }),
     ),
+    export: vi.fn(async () => exportResult()),
   }
 }
 
 function planeOf(
-  underlying: Record<'browse' | 'search' | 'item' | 'childPage', ReturnType<typeof vi.fn>>,
+  underlying: Record<
+    'browse' | 'search' | 'item' | 'childPage' | 'export',
+    ReturnType<typeof vi.fn>
+  >,
 ) {
-  return createLibraryDataPlane(underlying as unknown as LibraryFeedFace)
+  return createLibraryDataPlane(underlying as unknown as LibraryPanelWireFace)
 }
 
 describe('the library data plane', () => {
@@ -202,5 +219,84 @@ describe('the library data plane', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('collapses identical in-flight export reads into one wire call', async () => {
+    const underlying = face()
+    let release: ((value: RemoteResult<unknown>) => void) | undefined
+    underlying.export.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = resolve
+        }),
+    )
+    const plane = planeOf(underlying)
+    const first = plane.export(EXPORT_REQUEST)
+    const second = plane.export(EXPORT_REQUEST)
+    release?.(exportResult())
+    const [a, b] = await Promise.all([first, second])
+    expect(underlying.export).toHaveBeenCalledTimes(1)
+    expect(a).toEqual(b)
+  })
+
+  it('answers an identical later export request from the settled cache', async () => {
+    const underlying = face()
+    const plane = planeOf(underlying)
+    await plane.export(EXPORT_REQUEST)
+    await plane.export(EXPORT_REQUEST)
+    expect(underlying.export).toHaveBeenCalledTimes(1)
+  })
+
+  it('expires a settled export after its ten-second TTL', async () => {
+    vi.useFakeTimers()
+    try {
+      const underlying = face()
+      const plane = planeOf(underlying)
+      await plane.export(EXPORT_REQUEST)
+      await plane.export(EXPORT_REQUEST)
+      expect(underlying.export).toHaveBeenCalledTimes(1)
+      vi.setSystemTime(Date.now() + 11_000)
+      await plane.export(EXPORT_REQUEST)
+      expect(underlying.export).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('re-fetches an export after invalidate and for a different format', async () => {
+    const underlying = face()
+    const plane = planeOf(underlying)
+    await plane.export(EXPORT_REQUEST)
+    await plane.export(EXPORT_REQUEST)
+    expect(underlying.export).toHaveBeenCalledTimes(1)
+    plane.invalidate()
+    await plane.export(EXPORT_REQUEST)
+    expect(underlying.export).toHaveBeenCalledTimes(2)
+    await plane.export({ ...EXPORT_REQUEST, format: 'bibtex' })
+    expect(underlying.export).toHaveBeenCalledTimes(3)
+  })
+
+  it('re-keys the export cache on an instance change, so a restart never answers from the old Zotero', async () => {
+    const underlying = face()
+    const plane = planeOf(underlying)
+    plane.setInstance('S1')
+    await plane.export(EXPORT_REQUEST)
+    await plane.export(EXPORT_REQUEST)
+    expect(underlying.export).toHaveBeenCalledTimes(1)
+    plane.setInstance('S2')
+    await plane.export(EXPORT_REQUEST)
+    expect(underlying.export).toHaveBeenCalledTimes(2)
+    plane.setInstance('S1')
+    await plane.export(EXPORT_REQUEST)
+    expect(underlying.export).toHaveBeenCalledTimes(3)
+  })
+
+  it('never caches a failed export, so retry re-requests', async () => {
+    const underlying = face()
+    underlying.export.mockRejectedValueOnce(new Error('loopback reset'))
+    const plane = planeOf(underlying)
+    await expect(plane.export(EXPORT_REQUEST)).rejects.toThrow('loopback reset')
+    await expect(plane.export(EXPORT_REQUEST)).resolves.toEqual(exportResult())
+    expect(underlying.export).toHaveBeenCalledTimes(2)
   })
 })

@@ -8,21 +8,11 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type {
   SupportedLocalLibrary,
   ZoteroChildListingKind,
-  ZoteroChildPageView,
-  ZoteroItemDetailView,
   ZoteroLibraryBrowseItemView,
-  ZoteroLibraryBrowseRequestView,
-  ZoteroLibraryBrowseResultView,
-  ZoteroLibraryChildPageRequestView,
-  ZoteroLibraryItemRequestView,
-  ZoteroLibrarySearchRequestView,
-  ZoteroSearchResultView,
 } from '../../../contract.ts'
-import { ZOTERO_CHILD_PAGE_ROWS } from '../../../constants.ts'
 import {
   collectionRowsOf,
   type CollectionRowView,
@@ -53,39 +43,14 @@ import {
   treeRequestOf,
 } from './library-model.ts'
 import { messageOf } from '../../error-text.ts'
+import { useLibraryChildFeed } from './useLibraryChildFeed.ts'
 import {
   readLibrarySessionMemory,
   readLibraryState,
   writeLibraryState,
   type LibraryStoredState,
 } from './library-storage.ts'
-
-/** The wire face the panel calls; injected so specs can stub it wholesale. */
-export interface LibraryFeedFace {
-  readonly browse: (
-    request: ZoteroLibraryBrowseRequestView,
-  ) => Promise<RemoteResult<ZoteroLibraryBrowseResultView>>
-  readonly search: (
-    request: ZoteroLibrarySearchRequestView,
-  ) => Promise<RemoteResult<ZoteroSearchResultView>>
-  readonly item: (
-    request: ZoteroLibraryItemRequestView,
-  ) => Promise<RemoteResult<ZoteroItemDetailView>>
-  readonly childPage: (
-    request: ZoteroLibraryChildPageRequestView,
-  ) => Promise<RemoteResult<ZoteroChildPageView>>
-  /**
-   * Drops the shared data plane's cached reads. Present when the face is the
-   * panel's shared plane; a bare spec stub may omit it.
-   */
-  readonly invalidate?: () => void
-  /**
-   * Pins the shared plane's cache to one Zotero instance. Present when the
-   * face is the panel's shared plane; a bare spec stub may omit it, in which
-   * case the feed falls back to {@link LibraryFeedFace.invalidate}.
-   */
-  readonly setInstance?: (serverId: string | undefined) => void
-}
+import type { ChildKind, ChildLoadState, LibraryFeedFace } from './library-feed-types.ts'
 
 const SEARCH_DEBOUNCE_MS = 300
 
@@ -93,8 +58,6 @@ const INSPECTOR_INCLUDE: readonly ZoteroChildListingKind[] = ['notes', 'attachme
 
 type CollectionRow = CollectionRowView
 type TreeLanes = ReadonlyMap<string, LibraryLaneState<CollectionRow>>
-export type ChildKind = ZoteroChildListingKind
-export type ChildLoadState = { phase: 'loading' } | { phase: 'error'; message: string }
 
 export interface LibraryFeed {
   readonly narrowPane: LibraryPane
@@ -188,9 +151,6 @@ export function useLibraryFeed(
   const [savedRetry, setSavedRetry] = useState(0)
   const [listRetry, setListRetry] = useState(0)
   const [inspectorRetry, setInspectorRetry] = useState(0)
-  const [childStates, setChildStates] = useState<Partial<Record<ChildKind, ChildLoadState>>>({})
-  const childOffsets = useRef<Partial<Record<ChildKind, number>>>({})
-  const childSeq = useRef<Partial<Record<ChildKind, number>>>({})
   const laneOffsets = useRef(new Map<string, number>())
   // Monotonic sequences: the winner is the request issued last, and a stale
   // answer that resolves late is dropped by comparison. Tree lanes ticket per
@@ -202,6 +162,9 @@ export function useLibraryFeed(
     list: 0,
     inspector: 0,
   })
+  const inspectorTicketOf = useCallback(() => seq.current.inspector, [])
+  const childFeed = useLibraryChildFeed(face, selectedRef, inspectorTicketOf, setInspector)
+  const { childStates, pageChild, reset: resetChildren } = childFeed
   // Mirror of `expanded` for the refresh path; the sync effect below is
   // declared before the tree effect, so the refresh commit reads the set the
   // user currently sees open.
@@ -512,8 +475,7 @@ export function useLibraryFeed(
       // the cached payload survives here so hydration can still restore it on
       // a remount that has not read its view pins yet.
       seq.current.inspector += 1
-      childOffsets.current = {}
-      setChildStates({})
+      resetChildren()
       lastInspectorKey.current = undefined
       return
     }
@@ -527,8 +489,7 @@ export function useLibraryFeed(
     }
     // A freshly fetched detail owns fresh child pages; the skipped refresh
     // above keeps the pages the user already paged through.
-    childOffsets.current = {}
-    setChildStates({})
+    resetChildren()
     lastInspectorKey.current = currentKey
     const ticket = ++seq.current.inspector
     setInspector((previous) =>
@@ -546,54 +507,7 @@ export function useLibraryFeed(
         if (ticket !== seq.current.inspector) return
         setInspector({ phase: 'error', message: messageOf(error) })
       })
-  }, [face, selectedRef, inspectorRetry, refreshToken])
-
-  const pageChild = useCallback(
-    (kind: ChildKind, nextOffset: number): void => {
-      if (selectedRef === undefined) return
-      const parentTicket = seq.current.inspector
-      const ticket = (childSeq.current[kind] ?? 0) + 1
-      childSeq.current[kind] = ticket
-      const offset = pageOffsetOf(nextOffset)
-      childOffsets.current[kind] = offset
-      setChildStates((states) => ({ ...states, [kind]: { phase: 'loading' } }))
-      const current = () =>
-        parentTicket === seq.current.inspector && childSeq.current[kind] === ticket
-      void face
-        .childPage({ ref: selectedRef, kind, offset, limit: ZOTERO_CHILD_PAGE_ROWS })
-        .then((result) => {
-          if (!current()) return
-          if (!result.ok) {
-            setChildStates((states) => ({
-              ...states,
-              [kind]: { phase: 'error', message: result.error.message },
-            }))
-            return
-          }
-          if (result.value.kind !== kind) {
-            setChildStates((states) => ({
-              ...states,
-              [kind]: { phase: 'error', message: 'The child page answered a different kind.' },
-            }))
-            return
-          }
-          setInspector((state) =>
-            state?.phase === 'ready'
-              ? { phase: 'ready', detail: { ...state.detail, [kind]: result.value.page } }
-              : state,
-          )
-          setChildStates((states) => ({ ...states, [kind]: undefined }))
-        })
-        .catch((error: unknown) => {
-          if (current())
-            setChildStates((states) => ({
-              ...states,
-              [kind]: { phase: 'error', message: messageOf(error) },
-            }))
-        })
-    },
-    [face, selectedRef],
-  )
+  }, [face, selectedRef, inspectorRetry, refreshToken, resetChildren])
 
   const toggleCollection = useCallback(
     (ref: string): void => {
@@ -751,8 +665,7 @@ export function useLibraryFeed(
     selectItem: (ref) => {
       seq.current.inspector += 1
       setSelectedRef(ref)
-      childOffsets.current = {}
-      setChildStates({})
+      resetChildren()
       if (ref !== undefined) {
         setNarrowPaneState('inspector')
       } else {
@@ -768,6 +681,6 @@ export function useLibraryFeed(
     retryInspector: () => setInspectorRetry((value) => value + 1),
     pageChild,
     childStates,
-    retryChild: (kind) => pageChild(kind, childOffsets.current[kind] ?? 0),
+    retryChild: (kind) => pageChild(kind, childFeed.childOffsetOf(kind)),
   }
 }

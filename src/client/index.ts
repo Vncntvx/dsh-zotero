@@ -459,6 +459,7 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
     search: (request) => ctx.remote.zotero.search(request),
     item: (request) => ctx.remote.zotero.item(request),
     childPage: (request) => ctx.remote.zotero.childPage(request),
+    export: (request) => ctx.remote.zotero.export(request),
   })
   const panelFace = (): ZoteroLibraryPanelFace => ({
     status: () => probe(),
@@ -468,6 +469,7 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
     childPage: (request) => plane.childPage(request),
     invalidate: plane.invalidate,
     setInstance: plane.setInstance,
+    export: (request) => plane.export(request),
     write: (request) => ctx.remote.zotero.write(request),
     resolveAttachment: (ref: string) => ctx.remote.zotero.resolveAttachment(ref),
     openResource: (url: string) => ctx.sidebarRight.openResource(url),
@@ -526,7 +528,7 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
 
   // The `library` settings namespace is served exactly while the
   // `dsh-zotero/library` row is composed; with the row off, no surface
-  // registers and no `zotero/browse|search|item|write` call is made.
+  // registers and no `zotero/browse|search|item|childPage|export|write` call is made.
   ctx.effect(
     () =>
       ctx.configForms.whileServed([ZOTERO_LIBRARY_SETTINGS_NAMESPACE], () => {

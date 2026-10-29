@@ -1,7 +1,9 @@
 /**
- * The `zotero_export` provider contract: per-ref citations reordered to the
- * requested order, joined bibliography and translator formats, and the never
- * mid-truncated output limit.
+ * The `zotero_export` provider contract and the library panel's text arm:
+ * per-ref citations reordered to the requested order, joined bibliography and
+ * translator formats, and the never mid-truncated output limit. `exportText`
+ * is the panel's arm: same rendered/citation output, but no tool-side
+ * per-document itemization and no bibtex-family metadata read.
  * @module tests/provider/export
  */
 
@@ -463,6 +465,63 @@ describe('export', () => {
     )
     expectRequestCount(mock, 0)
   })
+})
+
+describe('exportText', () => {
+  it('keeps the citation arm identical to the itemized export', async () => {
+    serveJson(mock, `${apiPath()}/items`, [
+      citationRow(SECOND_ITEM_KEY, '<span>B, 2021</span>'),
+      citationRow(ITEM_KEY, '<span>A, 2023</span>'),
+    ])
+    const text = await provider.exportText(
+      exportRequest({ style: 'chicago-note-bibliography', locale: 'fr-FR' }),
+    )
+    expect(text).toEqual({
+      format: 'citation',
+      style: 'chicago-note-bibliography',
+      locale: 'fr-FR',
+      citations: [
+        { ref: 'zotero://user/0/item/ABCD1234', text: '<span>A, 2023</span>' },
+        { ref: 'zotero://user/0/item/BBBB1234', text: '<span>B, 2021</span>' },
+      ],
+    })
+    expectRequestCount(mock, 1)
+  })
+
+  it('keeps the bibliography arm identical to the itemized export', async () => {
+    const body = '<div class="csl-entry">A</div>\n<div class="csl-entry">B</div>'
+    serveText(mock, `${apiPath()}/items`, body)
+    const text = await provider.exportText(exportRequest({ format: 'bibliography' }))
+    expect(text).toEqual({ format: 'bibliography', style: 'apa', locale: 'en-US', text: body })
+    expectRequestCount(mock, 1)
+  })
+
+  it.each(['bibtex', 'biblatex'] as const)(
+    'renders %s text in one request without the metadata read',
+    async (format) => {
+      mock.route('GET', `${apiPath()}/items`, (req, res, helpers) => {
+        helpers.text(`exported-as-${format}`)
+      })
+      const text = await provider.exportText(exportRequest({ format }))
+      expect(text).toEqual({ format, text: `exported-as-${format}` })
+      expect('items' in text).toBe(false)
+      // The text arm must not pay for the tool's raw-item metadata read.
+      expectRequestCount(mock, 1)
+    },
+  )
+
+  it.each(['ris', 'csljson'] as const)(
+    'renders %s text in one request without itemization',
+    async (format) => {
+      mock.route('GET', `${apiPath()}/items`, (req, res, helpers) => {
+        helpers.text(`exported-as-${format}`)
+      })
+      const text = await provider.exportText(exportRequest({ format }))
+      expect(text).toEqual({ format, text: `exported-as-${format}` })
+      expect('items' in text).toBe(false)
+      expectRequestCount(mock, 1)
+    },
+  )
 })
 
 describe('export tolerances', () => {

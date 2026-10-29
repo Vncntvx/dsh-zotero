@@ -34,6 +34,7 @@ import {
   ZOTERO_DIAGNOSTICS_METHOD,
   ZOTERO_LIBRARY_BROWSE_METHOD,
   ZOTERO_LIBRARY_CHILD_PAGE_METHOD,
+  ZOTERO_LIBRARY_EXPORT_METHOD,
   ZOTERO_LIBRARY_ITEM_METHOD,
   ZOTERO_LIBRARY_SEARCH_METHOD,
   ZOTERO_LIBRARY_SERVICE_KEY,
@@ -113,6 +114,12 @@ export const TYPERT_MANIFEST: TypertContribution = {
             name: ZOTERO_LIBRARY_CHILD_PAGE_METHOD,
             signature:
               'childPage(request: ZoteroLibraryChildPageRequestView, signal: AbortSignal): Promise<ZoteroChildPageView>',
+          },
+          {
+            kind: 'method',
+            name: ZOTERO_LIBRARY_EXPORT_METHOD,
+            signature:
+              'export(request: ZoteroLibraryExportRequestView, signal: AbortSignal): Promise<ZoteroLibraryExportResultView>',
           },
           {
             kind: 'method',

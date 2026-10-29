@@ -17,6 +17,8 @@ import {
   ZOTERO_LIBRARY_BROWSE_RESULT_TYPE_SYMBOL,
   ZOTERO_LIBRARY_CHILD_PAGE_REQUEST_TYPE_SYMBOL,
   ZOTERO_LIBRARY_CHILD_PAGE_RESULT_TYPE_SYMBOL,
+  ZOTERO_LIBRARY_EXPORT_REQUEST_TYPE_SYMBOL,
+  ZOTERO_LIBRARY_EXPORT_RESULT_TYPE_SYMBOL,
   ZOTERO_LIBRARY_ITEM_REQUEST_TYPE_SYMBOL,
   ZOTERO_LIBRARY_ITEM_RESULT_TYPE_SYMBOL,
   ZOTERO_LIBRARY_SEARCH_REQUEST_TYPE_SYMBOL,
@@ -30,6 +32,7 @@ import {
   zoteroDiagnosticsInvocation,
   zoteroLibraryBrowseInvocation,
   zoteroLibraryChildPageInvocation,
+  zoteroLibraryExportInvocation,
   zoteroLibraryItemInvocation,
   zoteroLibrarySearchInvocation,
   zoteroLibraryWriteInvocation,
@@ -46,6 +49,8 @@ import {
   zoteroLibraryBrowseRequestSchema,
   zoteroLibraryBrowseResultSchema,
   zoteroLibraryChildPageRequestSchema,
+  zoteroLibraryExportRequestSchema,
+  zoteroLibraryExportResultSchema,
   zoteroLibraryItemRequestSchema,
   zoteroLibrarySearchRequestSchema,
   zoteroLibraryWriteRequestSchema,
@@ -123,6 +128,16 @@ const ZOTERO_CHILD_PAGE_CODEC = strictCodec(
   zoteroChildPageSchema,
 )
 
+const ZOTERO_LIBRARY_EXPORT_REQUEST_CODEC = strictCodec(
+  ZOTERO_LIBRARY_EXPORT_REQUEST_TYPE_SYMBOL,
+  zoteroLibraryExportRequestSchema,
+)
+
+const ZOTERO_LIBRARY_EXPORT_RESULT_CODEC = strictCodec(
+  ZOTERO_LIBRARY_EXPORT_RESULT_TYPE_SYMBOL,
+  zoteroLibraryExportResultSchema,
+)
+
 const ZOTERO_LIBRARY_WRITE_REQUEST_CODEC = strictCodec(
   ZOTERO_LIBRARY_WRITE_REQUEST_TYPE_SYMBOL,
   zoteroLibraryWriteRequestSchema,
@@ -148,6 +163,10 @@ export const ZOTERO_INVOCATIONS: readonly InvocationDescriptor[] = [
   zoteroLibraryChildPageInvocation(
     ZOTERO_LIBRARY_CHILD_PAGE_REQUEST_CODEC,
     ZOTERO_CHILD_PAGE_CODEC,
+  ),
+  zoteroLibraryExportInvocation(
+    ZOTERO_LIBRARY_EXPORT_REQUEST_CODEC,
+    ZOTERO_LIBRARY_EXPORT_RESULT_CODEC,
   ),
   zoteroLibraryWriteInvocation(
     ZOTERO_LIBRARY_WRITE_REQUEST_CODEC,

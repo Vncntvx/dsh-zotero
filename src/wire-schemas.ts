@@ -4,10 +4,12 @@
  * the browser arm (`src/client/status-codec.ts`) carries the same objects.
  * Neither half imports the other's module.
  *
- * Client-safe: its imports are `zod`, the contract's own types, and the
- * runtime constants module (values and type-only imports only), all of which
+ * Client-safe: its imports are `zod`, the contract's own types, type-only
+ * domain unions from `types.ts` (erased at build), and the runtime constants
+ * module (values and type-only imports only), all of which
  * `scripts/client-graph-authority.mjs` allowlists. The sort enum derives from
- * `src/constants.ts`, and the updatable-field set is pinned to it by
+ * `src/constants.ts`, the export enums derive from the sibling arrays there,
+ * and the updatable-field set is pinned to it by
  * `tests/unit/wire-schemas.spec.ts`. The parity specs read both arms and keep
  * a hand-written refusal table per schema.
  * @module dsh-zotero/wire-schemas
@@ -17,12 +19,19 @@ import { z } from 'zod'
 import type { TypertCodec } from '@deepseek-ai/dsh-typert-protocol'
 import type {
   ZoteroChildRowsView,
+  ZoteroLibraryExportFormatView,
+  ZoteroLibraryExportRequestView,
+  ZoteroLibraryExportResultView,
   ZoteroLibrarySortField,
   ZoteroLibraryWriteRequestView,
 } from './contract.js'
+import type { ZoteroTranslatorExportFormat } from './types.js'
 import {
   ZOTERO_CHILD_PAGE_MAX_ROWS,
+  ZOTERO_EXPORT_FORMATS,
+  ZOTERO_ITEMKEY_BATCH,
   ZOTERO_SORT_FIELDS,
+  ZOTERO_TRANSLATOR_EXPORT_FORMATS,
   ZOTERO_YEAR_MAX,
   ZOTERO_YEAR_MIN,
 } from './constants.js'
@@ -472,6 +481,73 @@ export const zoteroItemDetailSchema = z
   })
   .strict()
   .readonly()
+
+/** Wire schema: the export formats, derived from the domain's one ordered array. */
+export const zoteroLibraryExportFormatSchema = z.enum(
+  ZOTERO_EXPORT_FORMATS as [ZoteroLibraryExportFormatView, ...ZoteroLibraryExportFormatView[]],
+)
+
+/** Wire schema: the translator export formats, derived from the sibling array. */
+export const zoteroLibraryTranslatorExportFormatSchema = z.enum(
+  ZOTERO_TRANSLATOR_EXPORT_FORMATS as [
+    ZoteroTranslatorExportFormat,
+    ...ZoteroTranslatorExportFormat[],
+  ],
+)
+
+/**
+ * Wire schema: library export request. The refs bound is Zotero's own
+ * `itemKey` per-request cap — the configured `maxExportRefs` gate runs in the
+ * host service, where the live config is read.
+ */
+export const zoteroLibraryExportRequestSchema = z
+  .object({
+    refs: z.array(z.string().min(1)).min(1).max(ZOTERO_ITEMKEY_BATCH).readonly(),
+    format: zoteroLibraryExportFormatSchema,
+    style: z.string().min(1).optional(),
+    locale: z.string().min(1).optional(),
+  })
+  .strict()
+  .readonly() satisfies z.ZodType<ZoteroLibraryExportRequestView>
+
+/**
+ * Wire schema: library export result, discriminated by the exported format.
+ * The panel endpoint serves rendered text only, so the translator arm carries
+ * no per-document itemization.
+ */
+export const zoteroLibraryExportResultSchema = z
+  .discriminatedUnion('format', [
+    z
+      .object({
+        format: z.literal('citation'),
+        style: z.string().optional(),
+        locale: z.string().optional(),
+        citations: z
+          .array(z.object({ ref: z.string(), text: z.string() }).strict().readonly())
+          .readonly(),
+      })
+      .strict()
+      .readonly(),
+    z
+      .object({
+        format: z.literal('bibliography'),
+        style: z.string().optional(),
+        locale: z.string().optional(),
+        text: z.string(),
+      })
+      .strict()
+      .readonly(),
+    z
+      .object({
+        format: zoteroLibraryTranslatorExportFormatSchema,
+        style: z.string().optional(),
+        locale: z.string().optional(),
+        text: z.string(),
+      })
+      .strict()
+      .readonly(),
+  ])
+  .readonly() satisfies z.ZodType<ZoteroLibraryExportResultView>
 
 const writeText = z.string().min(1)
 const writeList = z.array(writeText)

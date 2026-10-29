@@ -9,13 +9,19 @@ import { describe, expect, it } from 'vitest'
 import {
   browseRequestOf,
   browseViewOf,
+  exportViewOf,
   itemRequestOf,
   itemViewOf,
   searchOptionsOf,
   searchRequestOf,
   searchViewOf,
 } from '../../src/library-views.js'
-import type { ZoteroBrowseResult, ZoteroItemDetail, ZoteroSearchResult } from '../../src/types.js'
+import type {
+  ZoteroBrowseResult,
+  ZoteroExportTextResult,
+  ZoteroItemDetail,
+  ZoteroSearchResult,
+} from '../../src/types.js'
 import type { ZoteroItemDetailView, ZoteroLibrarySearchRequestView } from '../../src/contract.js'
 import { ZOTERO_UNEXPECTED, ZoteroError } from '../../src/errors.js'
 import { itemDetail } from '../helpers/library-fixtures.js'
@@ -622,5 +628,47 @@ describe('itemViewOf', () => {
     ]) {
       expect(key in view).toBe(false)
     }
+  })
+})
+
+describe('exportViewOf', () => {
+  it('maps the citation arm and carries resolved style/locale', () => {
+    const result: ZoteroExportTextResult = {
+      format: 'citation',
+      style: 'apa',
+      locale: 'en-US',
+      citations: [{ ref: 'r', text: '(Doe, 2020)' }],
+    }
+    expect(exportViewOf(result)).toEqual({
+      format: 'citation',
+      style: 'apa',
+      locale: 'en-US',
+      citations: [{ ref: 'r', text: '(Doe, 2020)' }],
+    })
+  })
+
+  it('maps the bibliography arm and keeps absent style/locale absent', () => {
+    const result: ZoteroExportTextResult = { format: 'bibliography', text: '[1] Doe.' }
+    const view = exportViewOf(result)
+    expect(view).toEqual({ format: 'bibliography', text: '[1] Doe.' })
+    expect('style' in view).toBe(false)
+    expect('locale' in view).toBe(false)
+  })
+
+  it('maps the translator arm as the opaque body only, never itemizing', () => {
+    const result: ZoteroExportTextResult = {
+      format: 'bibtex',
+      style: 'apa',
+      locale: 'en-US',
+      text: '@article{doe2020}',
+    }
+    const view = exportViewOf(result)
+    expect(view).toEqual({
+      format: 'bibtex',
+      style: 'apa',
+      locale: 'en-US',
+      text: '@article{doe2020}',
+    })
+    expect('items' in view).toBe(false)
   })
 })

@@ -8,10 +8,8 @@
 import { renderHook } from '@testing-library/react'
 import { vi } from 'vitest'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
-import {
-  useLibraryFeed,
-  type LibraryFeedFace,
-} from '../../../src/client/components/library/useLibraryFeed.ts'
+import { useLibraryFeed } from '../../../src/client/components/library/useLibraryFeed.ts'
+import type { LibraryFeedFace } from '../../../src/client/components/library/library-feed-types.ts'
 import type {
   ZoteroChildPageView,
   ZoteroLibraryBrowseRequestView,

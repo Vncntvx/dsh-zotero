@@ -18,18 +18,20 @@ import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type {
   ZoteroLibraryBrowseRequestView,
   ZoteroLibraryChildPageRequestView,
+  ZoteroLibraryExportRequestView,
   ZoteroLibraryItemRequestView,
   ZoteroLibrarySearchRequestView,
 } from '../../../contract.ts'
-import type { LibraryFeedFace } from './useLibraryFeed.ts'
+import type { LibraryPanelWireFace } from './library-feed-types.ts'
 
 /** The wire reads the plane deduplicates. */
-type PlaneMethod = 'browse' | 'search' | 'item' | 'childPage'
+type PlaneMethod = 'browse' | 'search' | 'item' | 'childPage' | 'export'
 
 /** How long a settled read may answer a later identical request. */
 const TTL_MS: Record<PlaneMethod, number> = {
   browse: 30_000,
   item: 10_000,
+  export: 10_000,
   search: 2_000,
   childPage: 2_000,
 }
@@ -37,14 +39,14 @@ const TTL_MS: Record<PlaneMethod, number> = {
 /** The most settled reads the plane retains, regardless of TTL. */
 const MAX_SETTLED_ENTRIES = 128
 
-export interface LibraryDataPlane extends LibraryFeedFace {
+export interface LibraryDataPlane extends LibraryPanelWireFace {
   /** Drop every cached read; later requests re-fetch. */
   invalidate: () => void
   /** Re-key the cache to one Zotero instance; a change clears it. */
   setInstance: (serverId: string | undefined) => void
 }
 
-export function createLibraryDataPlane(face: LibraryFeedFace): LibraryDataPlane {
+export function createLibraryDataPlane(face: LibraryPanelWireFace): LibraryDataPlane {
   let generation = 0
   let instance: string | undefined
   const inflight = new Map<string, Promise<RemoteResult<unknown>>>()
@@ -106,6 +108,8 @@ export function createLibraryDataPlane(face: LibraryFeedFace): LibraryDataPlane 
       call('item', request, () => face.item(request)),
     childPage: (request: ZoteroLibraryChildPageRequestView) =>
       call('childPage', request, () => face.childPage(request)),
+    export: (request: ZoteroLibraryExportRequestView) =>
+      call('export', request, () => face.export(request)),
     invalidate: () => {
       generation += 1
       settled.clear()

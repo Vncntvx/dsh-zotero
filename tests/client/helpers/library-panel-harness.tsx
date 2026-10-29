@@ -187,6 +187,7 @@ export interface ScriptedFace {
   search: (request: unknown) => Promise<{ ok: boolean; value?: unknown; error?: unknown }>
   item: (request: unknown) => Promise<{ ok: boolean; value?: unknown; error?: unknown }>
   childPage: (request: unknown) => Promise<{ ok: boolean; value?: unknown; error?: unknown }>
+  export: (request: unknown) => Promise<{ ok: boolean; value?: unknown; error?: unknown }>
   invalidate: () => void
   setInstance?: (serverId: string | undefined) => void
   resolveAttachment: (ref: string) => Promise<{ ok: boolean; value?: unknown; error?: unknown }>
@@ -250,6 +251,15 @@ export function mountPanel(
       })),
     invalidate: overrides.invalidate ?? vi.fn(),
     setInstance: overrides.setInstance ?? vi.fn(),
+    export:
+      overrides.export ??
+      vi.fn(async () => ({
+        ok: true,
+        value: {
+          format: 'citation',
+          citations: [{ ref: 'zotero://user/0/item/ITEM0001', text: 'Dao, T. (2023).' }],
+        },
+      })),
     resolveAttachment:
       overrides.resolveAttachment ??
       vi.fn(async () => ({

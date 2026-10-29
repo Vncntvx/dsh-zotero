@@ -515,6 +515,13 @@ export type ZoteroExportFormat =
   'citation' | 'bibliography' | 'bibtex' | 'biblatex' | 'ris' | 'csljson'
 
 /**
+ * The export formats Zotero renders as a whole-body translator export (no CSL
+ * engine): the arms whose text the panel serves un-itemized and the tool
+ * serves with one located entry per exported document.
+ */
+export type ZoteroTranslatorExportFormat = Exclude<ZoteroExportFormat, 'citation' | 'bibliography'>
+
+/**
  * Export request for one or more items. Export is single-library only: all refs
  * must belong to the same library (personal user/0 or a single group). Mixing
  * libraries throws `ZOTERO_INVALID_ARGUMENT`.
@@ -557,12 +564,15 @@ export interface ZoteroExportItem {
 }
 
 /**
- * Citation exports keep Zotero's per-item HTML strings paired with their
- * refs, ordered as requested. The bibliography's ordering belongs to the CSL
- * style, not the caller. The translator formats keep the merged body opaque
- * (same ordering caveat) but itemize each exported document with its ref.
+ * The text-only export result: the rendered output for the requested items
+ * with no per-document itemization. Citation exports keep Zotero's per-item
+ * HTML strings paired with their refs, ordered as requested; the
+ * bibliography's ordering belongs to the CSL style, not the caller; the
+ * translator formats keep the merged body opaque (same ordering caveat). The
+ * panel endpoint serves this arm, because it renders text/citations and never
+ * locates individual documents inside the batch body.
  */
-export type ZoteroExportResult =
+export type ZoteroExportTextResult =
   | {
       format: 'citation'
       style?: string
@@ -576,12 +586,25 @@ export type ZoteroExportResult =
       text: string
     }
   | {
-      format: 'bibtex' | 'biblatex' | 'ris' | 'csljson'
+      format: ZoteroTranslatorExportFormat
       style?: string
       locale?: string
       text: string
-      items: ZoteroExportItem[]
     }
+
+/**
+ * The `zotero_export` tool's result: {@link ZoteroExportTextResult} plus, for
+ * the translator formats, one located entry per exported document (its
+ * citation key, span offsets, and display title where the batch body proves
+ * them). Itemization is tool-only, so the extra members live on the tool arm
+ * alone.
+ */
+export type ZoteroExportResult =
+  | Extract<ZoteroExportTextResult, { format: 'citation' }>
+  | Extract<ZoteroExportTextResult, { format: 'bibliography' }>
+  | (Extract<ZoteroExportTextResult, { format: ZoteroTranslatorExportFormat }> & {
+      items: ZoteroExportItem[]
+    })
 
 /** Raw fulltext payload from `GET /items/<attachmentKey>/fulltext`. */
 export interface ZoteroFulltextPayload {
@@ -1401,6 +1424,22 @@ export interface ZoteroProvider {
     signal?: AbortSignal,
     onProgress?: (progress: ZoteroProgressEvent) => void,
   ): Promise<ZoteroExportResult>
+  /**
+   * Export rendered text (citations, bibliography, or a translator format)
+   * for the requested items, without per-document itemization. The library
+   * panel endpoint serves this arm; {@link ZoteroProvider.export} stays the
+   * tool's itemized arm, so the text the panel renders never depends on
+   * locating documents inside the batch body.
+   * @param request - the item refs, format, and optional style/locale.
+   * @param signal - caller cancellation; forwarded to the transport.
+   * @param onProgress - optional progress reporter.
+   * @returns per-ref citations or the rendered export text.
+   */
+  exportText?(
+    request: ZoteroExportRequest,
+    signal?: AbortSignal,
+    onProgress?: (progress: ZoteroProgressEvent) => void,
+  ): Promise<ZoteroExportTextResult>
   browse?(request: ZoteroBrowseRequest, signal?: AbortSignal): Promise<ZoteroBrowseResult>
   /**
    * Create a research note (standalone or under a parent item) with tags,

@@ -1,6 +1,7 @@
 /**
  * Cordis Service plugin providing `ctx.zoteroLibrary` and its Typert remote
- * endpoints: browse, search, item detail, and approved writes.
+ * endpoints: browse, search, item detail, citation/BibTeX export, and
+ * approved writes.
  *
  * @module dsh-zotero/library/service
  */
@@ -9,12 +10,15 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-settings'
 import { TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { domainCall } from '../errors.js'
+import { assertExportRefsWithinCap } from '../export-limits.js'
 import { executeLibraryWrite } from '../library-write.js'
 import {
   browseRequestOf,
   browseViewOf,
   childPageRequestOf,
   childPageViewOf,
+  exportRequestOf,
+  exportViewOf,
   itemRequestOf,
   itemViewOf,
   searchOptionsOf,
@@ -30,6 +34,8 @@ import {
   type ZoteroLibraryBrowseRequestView,
   type ZoteroLibraryBrowseResultView,
   type ZoteroLibraryChildPageRequestView,
+  type ZoteroLibraryExportRequestView,
+  type ZoteroLibraryExportResultView,
   type ZoteroLibraryItemRequestView,
   type ZoteroLibrarySearchRequestView,
   type ZoteroLibraryWriteRequestView,
@@ -44,7 +50,7 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-/** The library panel's host service: browse, search, item detail, and approved writes. */
+/** The library panel's host service: browse, search, item detail, child page, export, and approved writes. */
 export class ZoteroLibraryService extends TypertRemoteService {
   static readonly Config = LibraryConfigSchema
   static readonly inject = ['zotero']
@@ -113,6 +119,27 @@ export class ZoteroLibraryService extends TypertRemoteService {
     return await domainCall(async () =>
       childPageViewOf(await service.childPage(childPageRequestOf(request), signal)),
     )
+  }
+
+  /**
+   * Export the requested refs as citations, a bibliography, or a translator
+   * format. The panel renders the rendered text only: it takes the provider's
+   * text arm through `service.exportText`, so no per-document itemization
+   * runs. The live `maxExportRefs` cap refuses an over-long list with the
+   * same message the tool uses, and style/locale are forwarded only when the
+   * panel supplied them so the export domain's configured defaults apply.
+   * The cap check rides `domainCall` so the panel receives the same stable
+   * `ZOTERO_INVALID_ARGUMENT` the tool reports, not a generic gateway error.
+   */
+  async export(
+    request: ZoteroLibraryExportRequestView,
+    signal: AbortSignal,
+  ): Promise<ZoteroLibraryExportResultView> {
+    const service = requireZoteroService(this.ctx, signal)
+    return await domainCall(async () => {
+      assertExportRefsWithinCap(request.refs.length, service.config.maxExportRefs)
+      return exportViewOf(await service.exportText(exportRequestOf(request), signal))
+    })
   }
 
   async write(

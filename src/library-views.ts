@@ -1,5 +1,6 @@
 /**
- * Domain↔wire mappings for the library panel's three Remote endpoints. The
+ * Domain↔wire mappings for the library panel's five Remote endpoints
+ * (browse, search, item detail, child page, export). The
  * browser panel speaks the contract views (`src/contract.ts`); the service
  * speaks the domain records (`src/types.ts`). These pure functions are where
  * the two shapes meet on the host half, and fields the panel does not render
@@ -9,7 +10,7 @@
  * @module dsh-zotero/library-views
  */
 
-import { parseRef } from './refs.js'
+import { parseRef, parseSupportedRef } from './refs.js'
 import { ZOTERO_UNEXPECTED, ZoteroError } from './errors.js'
 import type {
   ZoteroAnnotationRecord,
@@ -20,6 +21,8 @@ import type {
   ZoteroChildPage,
   ZoteroChildPageRequest,
   ZoteroCollectionInfo,
+  ZoteroExportRequest,
+  ZoteroExportTextResult,
   ZoteroGetRequest,
   ZoteroInclude,
   ZoteroItemDetail,
@@ -42,6 +45,8 @@ import type {
   ZoteroLibraryBrowseRequestView,
   ZoteroLibraryBrowseResultView,
   ZoteroLibraryChildPageRequestView,
+  ZoteroLibraryExportRequestView,
+  ZoteroLibraryExportResultView,
   ZoteroLibraryItemRequestView,
   ZoteroLibraryRowView,
   ZoteroLibrarySearchRequestView,
@@ -246,6 +251,23 @@ export function childPageRequestOf(
 }
 
 /**
+ * Wire export request → domain request. Refs go through the same parser the
+ * tool uses, so a malformed ref (or a non-item/unsupported one) fails with
+ * `ZOTERO_INVALID_REF` before any provider call. The format union is the
+ * domain union spelled again, so it crosses unchanged. Omitted style/locale
+ * stay absent here on purpose: the export domain applies the configured
+ * defaults, which keeps the panel's answer identical to the tool's.
+ */
+export function exportRequestOf(view: ZoteroLibraryExportRequestView): ZoteroExportRequest {
+  return {
+    refs: view.refs.map((value) => parseSupportedRef(value, ['item'])),
+    format: view.format,
+    ...(view.style !== undefined ? { style: view.style } : {}),
+    ...(view.locale !== undefined ? { locale: view.locale } : {}),
+  }
+}
+
+/**
  * Domain child page → wire view. `pageMetaOf` guarantees every served page
  * carries its window, so the wire view requires `limit`.
  */
@@ -257,6 +279,47 @@ export function childPageViewOf(page: ZoteroChildPage): ZoteroChildPageView {
       return { kind: 'attachments', page: rowsPageOf(page.page, attachmentRowOf) }
     case 'annotations':
       return { kind: 'annotations', page: rowsPageOf(page.page, annotationRowOf) }
+  }
+}
+
+/**
+ * Domain text export result → wire view, mapped arm by arm so the wire shape
+ * cannot inherit a host-only field by spread. The panel renders rendered text
+ * only, so the translator arm carries no per-document itemization. The CSL
+ * style/locale are carried only when the domain result actually answered with
+ * them (the codec is strict).
+ */
+export function exportViewOf(result: ZoteroExportTextResult): ZoteroLibraryExportResultView {
+  switch (result.format) {
+    case 'citation':
+      return {
+        format: 'citation',
+        ...styleLocaleViewOf(result),
+        citations: result.citations.map((entry) => ({ ref: entry.ref, text: entry.text })),
+      }
+    case 'bibliography':
+      return {
+        format: 'bibliography',
+        ...styleLocaleViewOf(result),
+        text: result.text,
+      }
+    default:
+      return {
+        format: result.format,
+        ...styleLocaleViewOf(result),
+        text: result.text,
+      }
+  }
+}
+
+/** The optional CSL facts an export result may carry; absent stays absent. */
+function styleLocaleViewOf(result: { readonly style?: string; readonly locale?: string }): {
+  style?: string
+  locale?: string
+} {
+  return {
+    ...(result.style !== undefined ? { style: result.style } : {}),
+    ...(result.locale !== undefined ? { locale: result.locale } : {}),
   }
 }
 

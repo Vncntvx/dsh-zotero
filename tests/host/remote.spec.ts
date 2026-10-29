@@ -182,11 +182,14 @@ describe('the zotero typert manifest', () => {
       'search',
       'item',
       'childPage',
+      'export',
       'write',
     ])
     for (const invocation of TYPERT_MANIFEST.invocations) {
       expect(invocation.namespace).toBe('zotero')
-      if (['browse', 'search', 'item', 'childPage', 'write'].includes(invocation.method)) {
+      if (
+        ['browse', 'search', 'item', 'childPage', 'export', 'write'].includes(invocation.method)
+      ) {
         expect(invocation.service).toBe('zoteroLibrary')
       } else {
         expect(invocation.service).toBe('zoteroRemote')

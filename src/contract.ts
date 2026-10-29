@@ -25,7 +25,7 @@
  */
 
 import type { InvocationDescriptor } from '@deepseek-ai/dsh-typert-protocol'
-import type { ZoteroSortField } from './types.js'
+import type { ZoteroExportFormat, ZoteroSortField } from './types.js'
 import { ZOTERO_SETTINGS_NAMESPACE } from './settings-namespace.js'
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
@@ -549,6 +549,49 @@ export type ZoteroChildPageView =
   | { readonly kind: 'attachments'; readonly page: ZoteroChildRowsView<ZoteroAttachmentRowView> }
   | { readonly kind: 'annotations'; readonly page: ZoteroChildRowsView<ZoteroAnnotationRowView> }
 
+/** The export formats the panel offers; the domain union is the one source. */
+export type ZoteroLibraryExportFormatView = ZoteroExportFormat
+
+/**
+ * A panel export request: the item refs and format, plus the optional CSL
+ * style/locale for citation and bibliography. Omitted style/locale let the
+ * host apply its configured defaults, exactly like the tool request.
+ */
+export interface ZoteroLibraryExportRequestView {
+  readonly refs: readonly string[]
+  readonly format: ZoteroLibraryExportFormatView
+  readonly style?: string
+  readonly locale?: string
+}
+
+/**
+ * A panel export result, discriminated by `format` and mirroring the domain's
+ * text arm ({@link ZoteroExportTextResult}): citation pairs each ref with
+ * Zotero's own HTML citation, bibliography yields the joined CSL body, and the
+ * translator formats carry the merged body only. The panel renders text and
+ * citations; per-document itemization stays on the tool's `zotero_export`
+ * result and never crosses this boundary.
+ */
+export type ZoteroLibraryExportResultView =
+  | {
+      readonly format: 'citation'
+      readonly style?: string
+      readonly locale?: string
+      readonly citations: readonly { readonly ref: string; readonly text: string }[]
+    }
+  | {
+      readonly format: 'bibliography'
+      readonly style?: string
+      readonly locale?: string
+      readonly text: string
+    }
+  | {
+      readonly format: 'bibtex' | 'biblatex' | 'ris' | 'csljson'
+      readonly style?: string
+      readonly locale?: string
+      readonly text: string
+    }
+
 /** Strict codec type symbol for {@link ZoteroLibraryBrowseRequestView}. */
 export const ZOTERO_LIBRARY_BROWSE_REQUEST_TYPE_SYMBOL = 'dsh-zotero#ZoteroLibraryBrowseRequestView'
 
@@ -574,6 +617,12 @@ export const ZOTERO_LIBRARY_CHILD_PAGE_REQUEST_TYPE_SYMBOL =
 /** Strict codec type symbol for {@link ZoteroChildPageView}. */
 export const ZOTERO_LIBRARY_CHILD_PAGE_RESULT_TYPE_SYMBOL = 'dsh-zotero#ZoteroChildPageView'
 
+/** Strict codec type symbol for {@link ZoteroLibraryExportRequestView}. */
+export const ZOTERO_LIBRARY_EXPORT_REQUEST_TYPE_SYMBOL = 'dsh-zotero#ZoteroLibraryExportRequestView'
+
+/** Strict codec type symbol for {@link ZoteroLibraryExportResultView}. */
+export const ZOTERO_LIBRARY_EXPORT_RESULT_TYPE_SYMBOL = 'dsh-zotero#ZoteroLibraryExportResultView'
+
 /** Globally stable invocation id for the library browse. */
 const ZOTERO_LIBRARY_BROWSE_INVOCATION_ID = 'dsh-zotero#zotero/browse'
 
@@ -586,6 +635,9 @@ const ZOTERO_LIBRARY_ITEM_INVOCATION_ID = 'dsh-zotero#zotero/item'
 /** Globally stable invocation id for the library child page. */
 const ZOTERO_LIBRARY_CHILD_PAGE_INVOCATION_ID = 'dsh-zotero#zotero/childPage'
 
+/** Globally stable invocation id for the library export. */
+const ZOTERO_LIBRARY_EXPORT_INVOCATION_ID = 'dsh-zotero#zotero/export'
+
 /** Wire method name for the library browse. */
 export const ZOTERO_LIBRARY_BROWSE_METHOD = 'browse'
 
@@ -597,6 +649,9 @@ export const ZOTERO_LIBRARY_ITEM_METHOD = 'item'
 
 /** Wire method name for one paged child listing. */
 export const ZOTERO_LIBRARY_CHILD_PAGE_METHOD = 'childPage'
+
+/** Wire method name for one citation/BibTeX export. */
+export const ZOTERO_LIBRARY_EXPORT_METHOD = 'export'
 
 /**
  * Settings namespace of the library panel's configuration section. Must spell
@@ -797,6 +852,19 @@ export function zoteroLibraryChildPageInvocation(
   return libraryInvocation(
     ZOTERO_LIBRARY_CHILD_PAGE_INVOCATION_ID,
     ZOTERO_LIBRARY_CHILD_PAGE_METHOD,
+    param,
+    result,
+  )
+}
+
+/** The panel export invocation (one item ref plus the citation/BibTeX format). */
+export function zoteroLibraryExportInvocation(
+  param: InvocationDescriptor['parameters'][number]['codec'],
+  result: InvocationDescriptor['result'],
+): InvocationDescriptor {
+  return libraryInvocation(
+    ZOTERO_LIBRARY_EXPORT_INVOCATION_ID,
+    ZOTERO_LIBRARY_EXPORT_METHOD,
     param,
     result,
   )

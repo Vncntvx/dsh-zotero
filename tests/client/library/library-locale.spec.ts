@@ -22,6 +22,8 @@ import pagerSource from '../../../src/client/components/library/LibraryPager.tsx
 import modelSource from '../../../src/client/components/library/library-model.ts?raw'
 import storageSource from '../../../src/client/components/library/library-storage.ts?raw'
 import feedSource from '../../../src/client/components/library/useLibraryFeed.ts?raw'
+import childFeedSource from '../../../src/client/components/library/useLibraryChildFeed.ts?raw'
+import citationActionsSource from '../../../src/client/components/library/LibraryCitationActions.tsx?raw'
 import dataPlaneSource from '../../../src/client/components/library/library-data-plane.ts?raw'
 
 const CJK = /[\u4e00-\u9fff]/
@@ -40,6 +42,8 @@ const SOURCES: Readonly<Record<string, string>> = {
   'library-model.ts': modelSource,
   'library-storage.ts': storageSource,
   'useLibraryFeed.ts': feedSource,
+  'useLibraryChildFeed.ts': childFeedSource,
+  'LibraryCitationActions.tsx': citationActionsSource,
   'library-data-plane.ts': dataPlaneSource,
 }
 

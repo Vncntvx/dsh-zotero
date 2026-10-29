@@ -40,9 +40,10 @@ import { formatCreatorsList } from '../../../creators.ts'
 import { HTML_CONTENT_TYPE, PDF_CONTENT_TYPE } from '../../../media-types.ts'
 import { CopyButton } from '../CopyButton.tsx'
 import { PdfReadButton } from '../open/PdfReadButton.tsx'
+import { LibraryCitationActions } from './LibraryCitationActions.tsx'
 import { ListingPager } from './ListingPager.tsx'
 import { pdfAttachmentOf, type LibraryItemState } from './library-model.ts'
-import type { ChildKind, ChildLoadState } from './useLibraryFeed.ts'
+import type { ChildKind, ChildLoadState, LibraryExportItem } from './library-feed-types.ts'
 import css from './library.module.css'
 
 interface LibraryInspectorProps {
@@ -58,6 +59,8 @@ interface LibraryInspectorProps {
   readonly openFile: ((path: string) => void) | undefined
   readonly resolveAttachment:
     ((ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>) | undefined
+  /** The panel's export face; the citation-copy controls stay wire-disabled without it. */
+  readonly exportItem?: LibraryExportItem
 }
 
 /** One label/value row of the metadata table. */
@@ -364,6 +367,7 @@ export function LibraryInspector({
   pageChild,
   childStates,
   retryChild,
+  exportItem,
 }: LibraryInspectorProps) {
   // The abstract's expand state resets with the selection: the section
   // remounts through the inspector's key when another row is picked.
@@ -456,6 +460,7 @@ export function LibraryInspector({
               </Button>
             </>
           )}
+          <LibraryCitationActions detail={detail} exportItem={exportItem} t={t} />
           <CopyButton
             value={detail.ref}
             label={t('copyRef')}

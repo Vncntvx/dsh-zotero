@@ -23,7 +23,7 @@ import {
   useDismissOnOutsidePointer,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SupportedLocalLibrary } from '../../../contract.ts'
-import type { LibraryFeedFace } from './useLibraryFeed.ts'
+import type { LibraryFeedFace } from './library-feed-types.ts'
 import { LIBRARY_PAGE_SIZE, sameLibrary, type LibraryFilters as Filters } from './library-model.ts'
 import { messageOf } from '../../error-text.ts'
 import css from './library.module.css'

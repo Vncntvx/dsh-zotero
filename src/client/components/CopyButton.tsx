@@ -3,12 +3,15 @@
  * The shared copy leaf of the panel's rows and cards. The visible text is
  * the caller's own label, switching to `copiedLabel` while the feedback
  * window is open, so two copy buttons in one card never both read "Copy";
- * `label` doubles as the accessible name.
+ * `label` doubles as the accessible name. The feedback lane itself lives in
+ * {@link useCopyFeedback}, so the citation action row and this button share
+ * one stale-answer rule.
  * @module dsh-zotero/client/components/CopyButton
  */
 
-import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
-import { Button, writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
+import { type MouseEvent, type ReactNode } from 'react'
+import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
+import { useCopyFeedback } from './useCopyFeedback.ts'
 import css from './cards.module.css'
 
 interface CopyButtonProps {
@@ -43,22 +46,12 @@ export function CopyButton({
   asButton = false,
   icon,
 }: CopyButtonProps) {
-  const [copied, setCopied] = useState(false)
-  // Click epochs drop a late clipboard answer that a newer click superseded.
-  const epoch = useRef(0)
-
-  useEffect(() => {
-    if (!copied) return
-    const timer = window.setTimeout(() => setCopied(false), 1500)
-    return () => window.clearTimeout(timer)
-  }, [copied])
+  const { phase, copyText } = useCopyFeedback(value)
+  const copied = phase === 'done'
 
   const handleClick = (e: MouseEvent) => {
     e.stopPropagation()
-    const mine = (epoch.current += 1)
-    void writeClipboard(value).then((ok) => {
-      if (ok && epoch.current === mine) setCopied(true)
-    })
+    copyText(value)
   }
 
   if (asButton) {

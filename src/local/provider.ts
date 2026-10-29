@@ -41,7 +41,10 @@ import {
 } from './detail.js'
 import { retrieve as retrieveDomain } from './retrieve.js'
 import { getAttachmentLocation as attachmentLocationDomain } from './attachment-location.js'
-import { exportItems as exportItemsDomain } from './export-domain.js'
+import {
+  exportItems as exportItemsDomain,
+  exportText as exportTextDomain,
+} from './export-domain.js'
 import { changes as changesDomain } from './changes-domain.js'
 import { runBrowse } from './browse-domain.js'
 import { ItemSchemaDirectory } from './item-schema-directory.js'
@@ -98,6 +101,7 @@ import type {
   ZoteroBatchItemsResult,
   ZoteroExportRequest,
   ZoteroExportResult,
+  ZoteroExportTextResult,
   ZoteroGetRequest,
   ZoteroItemDetail,
   ZoteroObjectRef,
@@ -365,6 +369,19 @@ export class LocalApiProvider implements ZoteroProvider {
     onProgress?: (progress: ZoteroProgressEvent) => void,
   ): Promise<ZoteroExportResult> {
     return exportItemsDomain(this.deps(), request, signal, onProgress)
+  }
+
+  /**
+   * Export rendered text/citations for the requested items, without the
+   * tool-side per-document itemization. The domain logic lives in
+   * `local/export-domain`; this is the seam the library panel's endpoint uses.
+   */
+  async exportText(
+    request: ZoteroExportRequest,
+    signal?: AbortSignal,
+    onProgress?: (progress: ZoteroProgressEvent) => void,
+  ): Promise<ZoteroExportTextResult> {
+    return exportTextDomain(this.deps(), request, signal, onProgress)
   }
 
   /**

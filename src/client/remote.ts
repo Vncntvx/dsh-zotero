@@ -23,6 +23,8 @@ import {
   type ZoteroLibraryBrowseRequestView,
   type ZoteroLibraryBrowseResultView,
   type ZoteroLibraryChildPageRequestView,
+  type ZoteroLibraryExportRequestView,
+  type ZoteroLibraryExportResultView,
   type ZoteroLibraryItemRequestView,
   type ZoteroLibrarySearchRequestView,
   type ZoteroReportResultView,
@@ -76,6 +78,9 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     childPage: (
       request: ZoteroLibraryChildPageRequestView,
     ) => Promise<RemoteResult<ZoteroChildPageView>>
+    export: (
+      request: ZoteroLibraryExportRequestView,
+    ) => Promise<RemoteResult<ZoteroLibraryExportResultView>>
   }
   interface TypertRemoteMap {
     'zotero/write': (
@@ -99,6 +104,9 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'zotero/childPage': (
       request: ZoteroLibraryChildPageRequestView,
     ) => Promise<RemoteResult<ZoteroChildPageView>>
+    'zotero/export': (
+      request: ZoteroLibraryExportRequestView,
+    ) => Promise<RemoteResult<ZoteroLibraryExportResultView>>
   }
   interface TypertRemoteNamespaceMap {
     zotero: TypertRemoteNamespace$7a6f7465726f

@@ -93,6 +93,7 @@ import type {
   ZoteroObjectRef,
   ZoteroExportRequest,
   ZoteroExportResult,
+  ZoteroExportTextResult,
   ZoteroProgressEvent,
   ZoteroProvider,
   ZoteroProviderMethod,
@@ -578,6 +579,26 @@ export class ZoteroService extends Service {
     const provider = this.resolveProvider()
     this.requireCapability(provider, 'citation')
     const doExport = this.requireMethod(provider, 'export')
+    return await doExport(request, signal, onProgress)
+  }
+
+  /**
+   * Export rendered text/citations for the requested items, without the
+   * tool-side per-document itemization. This is the text arm the library
+   * panel's export endpoint serves; the tool keeps {@link export}.
+   * @param request - the item refs and the export format plus optional style/locale.
+   * @param signal - caller cancellation; forwarded to the provider.
+   * @param onProgress - optional progress reporter.
+   * @returns per-ref citations or the rendered export text.
+   */
+  async exportText(
+    request: ZoteroExportRequest,
+    signal?: AbortSignal,
+    onProgress?: (progress: ZoteroProgressEvent) => void,
+  ): Promise<ZoteroExportTextResult> {
+    const provider = this.resolveProvider()
+    this.requireCapability(provider, 'citation')
+    const doExport = this.requireMethod(provider, 'exportText')
     return await doExport(request, signal, onProgress)
   }
 

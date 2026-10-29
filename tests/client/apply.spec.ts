@@ -479,6 +479,14 @@ describe('the browser-half entry', () => {
     const write = vi.spyOn(wire, 'write')
     const resolveAttachment = vi.spyOn(world, 'resolveAttachment')
     const status = vi.spyOn(world, 'status')
+    // The panel's export read goes through the plane too, so its wire method
+    // is scripted on the namespace the fake world publishes.
+    const remote = (world.ctx as { remote: { zotero: Record<string, unknown> } }).remote
+    const exportSpy = vi.fn(async () => ({
+      ok: true as const,
+      value: { format: 'citation' as const, citations: [] },
+    }))
+    remote.zotero.export = exportSpy
     await applyEntry(world)
     world.injected.find((entry) => entry.name === 'sidebar.right.pane.tab')?.register()
     const registration = world.registered.find((entry) => entry.name === 'sidebar.right.pane.tab')
@@ -498,6 +506,15 @@ describe('the browser-half entry', () => {
     }
     await face.childPage(childPageRequest)
     expect(childPage).toHaveBeenCalledWith(childPageRequest)
+    const exportRequest = {
+      refs: ['zotero://user/0/item/ABCD1234'],
+      format: 'citation' as const,
+    }
+    await face.export(exportRequest)
+    expect(exportSpy).toHaveBeenCalledWith(exportRequest)
+    // The second identical copy is answered by the plane's cache, not the wire.
+    await face.export(exportRequest)
+    expect(exportSpy).toHaveBeenCalledTimes(1)
     const writeRequest = {
       sessionId: 's1',
       operation: 'createCollection' as const,

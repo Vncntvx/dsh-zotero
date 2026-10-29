@@ -19,7 +19,7 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SupportedLocalLibrary, ZoteroLibraryBrowseItemView } from '../../../contract.ts'
 import { ZOTERO_YEAR_MAX, ZOTERO_YEAR_MIN } from '../../../constants.ts'
-import type { LibraryFeedFace } from './useLibraryFeed.ts'
+import type { LibraryFeedFace } from './library-feed-types.ts'
 import { LIBRARY_PAGE_SIZE, type LibraryFilters as Filters } from './library-model.ts'
 import { LibraryTagPicker } from './LibraryTagPicker.tsx'
 import { messageOf } from '../../error-text.ts'

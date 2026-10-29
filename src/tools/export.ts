@@ -19,10 +19,17 @@ import {
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
 import type { ResolvedConfig } from '../config.js'
+import { invalid } from '../errors.js'
+import { parseSupportedRef } from '../refs.js'
+import { assertExportRefsWithinCap } from '../export-limits.js'
 import { boundedPresentationMeta, projectExportMeta } from '../presentation-meta.js'
 import { metaRecordOf, textOfBlocks } from './present.js'
-import { ZOTERO_ITEMKEY_BATCH } from '../constants.js'
-import { assertNonEmptyList, invalid, parseSupportedRef, REF_ARG_HINT } from './validate.js'
+import {
+  ZOTERO_EXPORT_FORMATS,
+  ZOTERO_ITEMKEY_BATCH,
+  ZOTERO_TRANSLATOR_EXPORT_FORMATS,
+} from '../constants.js'
+import { assertNonEmptyList, REF_ARG_HINT } from './validate.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroExportFormat, ZoteroExportRequest } from '../types.js'
 import {
@@ -46,7 +53,7 @@ const BASE_EXPORT_PARAMETERS = {
   },
   format: {
     type: 'string',
-    enum: ['citation', 'bibliography', 'bibtex', 'biblatex', 'ris', 'csljson'],
+    enum: [...ZOTERO_EXPORT_FORMATS],
     required: true,
     description:
       'citation: per-ref HTML citations; bibliography: joined CSL bibliography; the rest: raw translator exports.',
@@ -117,7 +124,7 @@ const EXPORT_OUTPUT_SCHEMA = {
       properties: {
         format: {
           type: 'string',
-          enum: ['bibtex', 'biblatex', 'ris', 'csljson'],
+          enum: [...ZOTERO_TRANSLATOR_EXPORT_FORMATS],
           required: true,
         },
         style: { type: 'string' },
@@ -149,10 +156,9 @@ type ExportOutput = InferValue<typeof EXPORT_OUTPUT_SCHEMA>
 /** The model-facing message for an empty refs list. */
 export const EXPORT_REFS_EMPTY_MESSAGE = 'refs must list at least one zotero:// item ref'
 
-/** The model-facing message for a refs list past the configured cap. */
-export function exportRefsOverCapMessage(maxExportRefs: number, requested: number): string {
-  return `refs must list at most ${maxExportRefs} item refs per call; got ${requested}; export in batches`
-}
+// The shared cap message stays importable from the tool module: the tool spec
+// asserts it by identity and the library endpoint refuses with the same text.
+export { exportRefsOverCapMessage } from '../export-limits.js'
 
 /** The model-facing messages for a blank style or locale argument. */
 export const EXPORT_STYLE_BLANK_MESSAGE = 'style must be a non-empty CSL style id when provided'
@@ -160,9 +166,7 @@ export const EXPORT_LOCALE_BLANK_MESSAGE = 'locale must be a non-empty CSL local
 
 function buildRequest(args: ExportArgs, config: ResolvedConfig): ZoteroExportRequest {
   assertNonEmptyList(args.refs, EXPORT_REFS_EMPTY_MESSAGE)
-  if (args.refs.length > config.maxExportRefs) {
-    invalid(exportRefsOverCapMessage(config.maxExportRefs, args.refs.length))
-  }
+  assertExportRefsWithinCap(args.refs.length, config.maxExportRefs)
   const refs = args.refs.map((value) => {
     const ref = parseSupportedRef(value, ['item'])
     return ref

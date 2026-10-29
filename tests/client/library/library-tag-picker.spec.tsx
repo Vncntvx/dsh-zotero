@@ -6,7 +6,7 @@ import { RemoteError, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol
 import { useState } from 'react'
 import type { SupportedLocalLibrary, ZoteroLibraryBrowseResultView } from '../../../src/contract.ts'
 import { LibraryTagPicker } from '../../../src/client/components/library/LibraryTagPicker.tsx'
-import type { LibraryFeedFace } from '../../../src/client/components/library/useLibraryFeed.ts'
+import type { LibraryFeedFace } from '../../../src/client/components/library/library-feed-types.ts'
 import type { LibraryFilters } from '../../../src/client/components/library/library-model.ts'
 import { zh } from '../../../src/client/locales.ts'
 import { mockT } from '../helpers/mock-translate.ts'

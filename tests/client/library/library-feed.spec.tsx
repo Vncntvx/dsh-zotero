@@ -3,7 +3,7 @@
 import { act, cleanup, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
-import type { LibraryFeedFace } from '../../../src/client/components/library/useLibraryFeed.ts'
+import type { LibraryFeedFace } from '../../../src/client/components/library/library-feed-types.ts'
 import type { ZoteroLibraryBrowseRequestView } from '../../../src/contract.ts'
 import {
   libraryStorageKey,
@@ -171,50 +171,6 @@ describe('list and inspector lifetime', () => {
     act(() => result.current.retryList())
     await waitFor(() => expect(result.current.list.phase).toBe('ready'))
     expect(search.mock.calls[0]).toEqual(search.mock.calls[1])
-  })
-
-  it('keeps child pages independent and ignores child replies from a previously selected item', async () => {
-    const notes = deferred<any>()
-    const attachments = deferred<any>()
-    const item = vi.fn(async (request: any) =>
-      request.include.length === 3
-        ? { ok: true, value: ITEM_DETAIL }
-        : request.include[0] === 'notes'
-          ? notes.promise
-          : attachments.promise,
-    )
-    const { result } = setup({ item })
-    act(() => result.current.selectItem(ITEM_DETAIL.ref))
-    await waitFor(() => expect(result.current.inspector?.phase).toBe('ready'))
-    act(() => {
-      result.current.pageChild('notes', 50)
-      result.current.pageChild('attachments', 50)
-    })
-    await act(async () =>
-      attachments.resolve({
-        ok: true,
-        value: { ...ITEM_DETAIL, attachments: { ...ITEM_DETAIL.attachments, offset: 50 } },
-      }),
-    )
-    await act(async () =>
-      notes.resolve({
-        ok: true,
-        value: { ...ITEM_DETAIL, notes: { ...ITEM_DETAIL.notes, offset: 50 } },
-      }),
-    )
-    expect(result.current.inspector).toMatchObject({
-      detail: {
-        notes: { offset: 50 },
-        attachments: { offset: 50 },
-        annotations: ITEM_DETAIL.annotations,
-      },
-    })
-    const late = deferred<any>()
-    item.mockImplementationOnce(() => late.promise)
-    act(() => result.current.pageChild('notes', 100))
-    act(() => result.current.selectItem(undefined))
-    await act(async () => late.resolve({ ok: true, value: ITEM_DETAIL }))
-    expect(result.current.inspector).toBeUndefined()
   })
 })
 
@@ -468,79 +424,6 @@ describe('targeted recovery and write refresh', () => {
     expect(face.browse).toHaveBeenLastCalledWith(
       expect.objectContaining({ kind: 'collections', offset: 50 }),
     )
-  })
-
-  it('keeps inspector detail through failed child pages and retries the failed offset', async () => {
-    const { result, face } = setup()
-    await waitFor(() => expect(result.current.list.phase).toBe('ready'))
-    act(() => result.current.selectItem(ITEM_DETAIL.ref))
-    await waitFor(() => expect(result.current.inspector?.phase).toBe('ready'))
-    vi.mocked(face.childPage).mockRejectedValueOnce(new Error('child disconnected'))
-    act(() => result.current.pageChild('notes', 50))
-    await waitFor(() =>
-      expect(result.current.childStates.notes).toEqual({
-        phase: 'error',
-        message: 'child disconnected',
-      }),
-    )
-    expect(result.current.inspector).toEqual({ phase: 'ready', detail: ITEM_DETAIL })
-    act(() => result.current.retryChild('notes'))
-    await waitFor(() => expect(result.current.childStates.notes).toBeUndefined())
-    expect(face.childPage).toHaveBeenLastCalledWith({
-      ref: ITEM_DETAIL.ref,
-      kind: 'notes',
-      offset: 50,
-      limit: 50,
-    })
-    vi.mocked(face.childPage).mockResolvedValueOnce({
-      ok: false as const,
-      error: new RemoteError('zotero/domain', 'child denied', { code: 'ZOTERO_NOT_FOUND' }),
-    })
-    act(() => result.current.pageChild('attachments', 0))
-    await waitFor(() =>
-      expect(result.current.childStates.attachments).toEqual({
-        phase: 'error',
-        message: 'child denied',
-      }),
-    )
-    expect(result.current.inspector?.phase).toBe('ready')
-  })
-
-  it('reports a child reply that answers a different kind as a child error', async () => {
-    const { result, face } = setup()
-    await waitFor(() => expect(result.current.list.phase).toBe('ready'))
-    act(() => result.current.selectItem(ITEM_DETAIL.ref))
-    await waitFor(() => expect(result.current.inspector?.phase).toBe('ready'))
-    vi.mocked(face.childPage).mockResolvedValueOnce({
-      ok: true,
-      value: {
-        kind: 'annotations',
-        page: { total: 0, returned: 0, offset: 0, limit: 50, items: [] },
-      },
-    })
-    act(() => result.current.pageChild('notes', 0))
-    await waitFor(() =>
-      expect(result.current.childStates.notes).toEqual({
-        phase: 'error',
-        message: 'The child page answered a different kind.',
-      }),
-    )
-    // The inspector keeps its detail; the mismatch never patches the state.
-    expect(result.current.inspector).toEqual({ phase: 'ready', detail: ITEM_DETAIL })
-  })
-
-  it('drops late child rejections after another item is selected', async () => {
-    const pending = deferred<Awaited<ReturnType<LibraryFeedFace['childPage']>>>()
-    const { result, face } = setup()
-    await waitFor(() => expect(result.current.list.phase).toBe('ready'))
-    act(() => result.current.selectItem(ITEM_DETAIL.ref))
-    await waitFor(() => expect(result.current.inspector?.phase).toBe('ready'))
-    vi.mocked(face.childPage).mockImplementationOnce(() => pending.promise)
-    act(() => result.current.pageChild('notes', 50))
-    act(() => result.current.selectItem(undefined))
-    await act(async () => pending.reject(new Error('old child failure')))
-    expect(result.current.inspector).toBeUndefined()
-    expect(result.current.childStates).toEqual({})
   })
 
   it.each(['items', 'collections', 'savedSearches'] as const)(

@@ -43,7 +43,8 @@ import type { ZoteroLocaleKey } from '../../locales.ts'
 import { ZoteroSurfaceBoundary } from '../ZoteroSurfaceBoundary.tsx'
 import { useZoteroProbe } from '../useZoteroProbe.ts'
 import { writeStatusLabel } from '../write-label.ts'
-import { useLibraryFeed, type LibraryFeedFace } from './useLibraryFeed.ts'
+import { useLibraryFeed } from './useLibraryFeed.ts'
+import type { LibraryFeedFace, LibraryPanelWireFace } from './library-feed-types.ts'
 import {
   clearLibrarySessionMemory,
   readLibrarySessionMemory,
@@ -62,12 +63,12 @@ import type {
 import css from './library.module.css'
 
 /**
- * The injected face: the wire calls plus the right-sidebar opener. The panel
- * mounts beside the session (right sidebar), so the harness's session-adjacent
- * seams — the right reader for local files and the session composer for the
- * chat actions — are always reachable.
+ * The injected face: the panel's wire calls plus the right-sidebar opener. The
+ * panel mounts beside the session (right sidebar), so the harness's
+ * session-adjacent seams — the right reader for local files and the session
+ * composer for the chat actions — are always reachable.
  */
-export interface ZoteroLibraryPanelFace extends LibraryFeedFace {
+export interface ZoteroLibraryPanelFace extends LibraryPanelWireFace {
   readonly status: () => Promise<RemoteResult<ZoteroStatusView>>
   readonly resolveAttachment: (ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>
   readonly openResource: (url: string) => void
@@ -133,29 +134,19 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
     initialData: initialView?.lastProbeData,
   })
 
-  const face = useMemo<ZoteroLibraryPanelFace>(
+  // The feed reads only: every non-feed member (probe, export, write, the
+  // right reader) is read from props where it is used, so this inner face
+  // stays the narrow shape `useLibraryFeed` and the filters rail consume.
+  const face = useMemo<LibraryFeedFace>(
     () => ({
-      status: props.status,
       browse: props.browse,
       search: props.search,
       item: props.item,
       childPage: props.childPage,
       invalidate: props.invalidate,
-      write: props.write,
-      resolveAttachment: props.resolveAttachment,
-      openResource: props.openResource,
+      setInstance: props.setInstance,
     }),
-    [
-      props.status,
-      props.browse,
-      props.search,
-      props.item,
-      props.childPage,
-      props.invalidate,
-      props.write,
-      props.resolveAttachment,
-      props.openResource,
-    ],
+    [props.browse, props.search, props.item, props.childPage, props.invalidate, props.setInstance],
   )
   const connected = probeState.data?.connected === true
   // A cached snapshot paints the lamp; only this mount's own answer opens the
@@ -479,6 +470,7 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
                 retryChild={feed.retryChild}
                 openFile={openFile}
                 resolveAttachment={props.resolveAttachment}
+                exportItem={props.export}
               />
             </div>
           </div>
