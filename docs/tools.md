@@ -2,11 +2,7 @@
 
 # 工具参考
 
-dsh-zotero 注册 23 个本地工具（8 个读工具 + 15 个写工具），通过本地 Zotero HTTP API 与文献库交互。其中 15 个写入工具默认关闭，需在设置中显式启用 `writeEnabled`，且只操作个人库（`zotero://user/0/`）。学术文献工具属于单独的 Scholarly 组件，随包发布但默认关闭；启用该组件即启用这些工具。所有文献引用（ref）均为 `zotero://user/0/item/<KEY>`（个人库）或 `zotero://group/<ID>/item/<KEY>`（群组库）格式的稳定标识符。
-
-### 交互卡片（Toolviews）
-
-在 DSH 对话流中，所有本地工具以及启用后的 Scholarly 工具均配备结构化只读卡片（`tool.call.toolview`）。调用工具时，界面展示包含状态指示（准备中、运行中、成功、中断、错误、已拒绝、结果未报告）的结构化卡片，支持展开查看详细数据、通过“阅读 PDF”在侧边栏阅读原文，以及复制标题或深链快速定位。
+dsh-zotero 注册 23 个本地工具（8 个读工具 + 15 个写工具），通过本地 Zotero HTTP API 与文献库交互。其中 15 个写入工具默认关闭，需在设置中显式启用 `writeEnabled`，且只操作个人库（`zotero://user/0/`）。另有 7 个学术检索工具属于单独的 `dsh-zotero/scholarly` 组件，随包发布但默认关闭；启用该组件即启用这些工具。所有文献引用（ref）均为 `zotero://user/0/item/<KEY>`（个人库）或 `zotero://group/<ID>/item/<KEY>`（群组库）格式的稳定标识符。
 
 ---
 
@@ -741,7 +737,7 @@ bundle 组件 `dsh-zotero/scholarly` 随包发布但默认关闭。在插件管�
 
 #### 网络边界
 
-检索类工具（`scholarly_search` / `scholarly_get` / `scholarly_citations` / `scholarly_verify`）只访问固定的学术索引主机白名单（`src/scholarly/transport/hosts.ts`），并拒绝回环与私网地址。全文解析是例外：开放获取 PDF 与 PDF 直链托管在出版商自己的域名上，因此该路径只做公网/回环地址校验，**不走主机白名单**，重定向最多 5 跳。这意味着 `id` 传入的 URL 或其解析出的 PDF 地址可以是任意公网主机——请只读取可信来源的文献链接。
+检索类工具（`scholarly_search` / `scholarly_get` / `scholarly_citations` / `scholarly_verify`）只访问固定的学术索引主机白名单（`src/scholarly/transport/hosts.ts`），并拒绝回环与私网地址。全文解析是例外：开放获取 PDF 与 PDF 直链托管在出版商自己的域名上，因此该路径只做公网/回环地址校验，「不走主机白名单」，重定向最多 5 跳。这意味着 `id` 传入的 URL 或其解析出的 PDF 地址可以是任意公网主机，请只读取可信来源的文献链接。
 
 ---
 

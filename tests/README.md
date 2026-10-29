@@ -50,6 +50,52 @@ never in a file named after a number or a function.
   test locations, primary verification levels, and relevant acceptance packs
   in a short module README or the change description. Update that record when
   ownership changes; do not maintain a second inventory of every test case.
+- Current split-module ownership: `src/local/item-schema-directory.ts` is
+  verified by `local/item-schema-directory.spec.ts` at module-behaviour level,
+  with browse and item-write suites covering its consumers; collection writes
+  live in `src/local/write-collections.ts` and are covered by the write
+  lifecycle/verdict specs; saved-search writes live in
+  `src/local/write-saved-searches.ts` and are covered by
+  `local/write/saved-searches.spec.ts`; shared commit proof lives in
+  `src/local/write-verdicts.ts` and is exercised by write verdict and batch
+  verdict specs; multi-operation item writes live in `src/local/write-batch.ts`
+  and are verified by `local/write/batch.spec.ts`, `batch-verdicts.spec.ts`,
+  and the trash/child-write consumer specs; note writes live in
+  `src/local/write-notes.ts` and are verified by child-write, tags, and verdict
+  specs; the write collaborators and per-read item state shared by all of them
+  live in `src/local/write-deps.ts`, and the specs pass that contract through
+  `tests/helpers/write-domain-fixtures.ts`; tag and collection membership
+  writes live in `src/local/write-item-lists.ts` and are verified by the tags,
+  collections, and child-write specs; trash restoration and library-wide tag
+  deletion live in `src/local/write-library-maintenance.ts` and are verified by
+  child-write and lifecycle specs. Scope and saved-search normalization live in
+  `src/normalize-scope.ts` and `src/normalize-saved-search.ts`, with pure
+  normalization checks under `unit/normalize/` and browse/write consumer
+  checks in their owning lanes. Behavioral acceptance remains in the matching
+  local browse, write, and library test suites.
+- Sources write receipts and export projections live in
+  `src/client/sources/write-decoder.ts` and `export-decoder.ts`; their pure
+  behavior is covered by `client/sources/decoders-write.spec.ts` and the export
+  section of `client/sources/decoders.spec.ts`, with tool cards and the Sources
+  reducer exercising those projections in client behavior tests.
+- Sources diff and background-job projections live in
+  `src/client/sources/sync-decoder.ts`; pure behavior is covered by
+  `client/sources/decoders-sync.spec.ts`, and the browse/export cards verify
+  their rendered use.
+- Zotero search, detail, and child normalization live in
+  `src/normalize-search.ts`, `normalize-item-detail.ts`, and
+  `normalize-children.ts`, with shared identity/text rules in
+  `normalize-context.ts`; pure behavior is owned by the matching specs under
+  `unit/normalize/`, while local search/detail/retrieve specs verify assembly.
+- Library inspector child pagination is owned by `useLibraryChildFeed.ts`;
+  `client/library/library-child-feed.spec.tsx` owns writeback, first-page retry,
+  same-kind race, cross-kind reply error, failed-page error/retry, the
+  late-rejection drop, and the no-selection and child-before-detail guards.
+  `library-feed.spec.tsx` and `library-feed.seams.spec.tsx` keep parent-feed and
+  instance behavior; `library-inspector.spec.tsx` owns rendered paging behavior.
+- Service config commit validation and volatile-update handling live in
+  `src/service-lifecycle.ts`; composition and transport rebuild behavior stay
+  covered by `host/lifecycle.spec.ts` and `host/settings.spec.ts`.
 
 ### Verification levels and behaviour ownership
 
@@ -57,13 +103,13 @@ Use the smallest real assembly that can establish the behaviour. Keep real
 module internals and substitute external boundaries; do not rebuild the
 production algorithm inside a mock.
 
-| Level                           | Establishes                                                              | Assembly and substitutions                                                             |
-| ------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
-| Pure logic                      | refs, normalization, ranking, reducers, parameter encoding, presentation | Direct calls; no host, HTTP server, or unrelated temporary directory                   |
-| Module behaviour                | domain pipelines, feeds, resolvers, state machines                       | Real collaborating modules; controlled HTTP, clock, or filesystem boundary as needed   |
-| Contract                        | wire shapes, stable errors, remote parity, source formats                | Real codecs/validators and independently specified valid and invalid samples           |
-| Composition                     | registration, injection, entry routing, approval, disposal               | Minimal necessary host services; scripted Zotero or scholarly boundary                 |
-| Live integration and acceptance | actual protocol assumptions, browser behaviour, model tool use           | Explicitly enabled real Zotero/Harness sessions and matching `docs/scenarios.md` packs |
+| Level                           | Establishes                                                              | Assembly and substitutions                                                           |
+| ------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| Pure logic                      | refs, normalization, ranking, reducers, parameter encoding, presentation | Direct calls; no host, HTTP server, or unrelated temporary directory                 |
+| Module behaviour                | domain pipelines, feeds, resolvers, state machines                       | Real collaborating modules; controlled HTTP, clock, or filesystem boundary as needed |
+| Contract                        | wire shapes, stable errors, remote parity, source formats                | Real codecs/validators and independently specified valid and invalid samples         |
+| Composition                     | registration, injection, entry routing, approval, disposal               | Minimal necessary host services; scripted Zotero or scholarly boundary               |
+| Live integration and acceptance | actual protocol assumptions, browser behaviour, model tool use           | Explicitly enabled real Zotero/Harness sessions and live integration tests           |
 
 Each behaviour has a primary verification level. Exhaustive query encoding
 and pagination cases belong to local/transport tests; tool tests prove input
@@ -277,7 +323,7 @@ silently exempt new violations.
 
 Run focused specs and `npm run typecheck` during iteration; add
 `npm run build:client` for browser changes. Behaviour changes also require
-`npm test` and the relevant acceptance packs in `docs/scenarios.md`. Shared
+`npm test`. Shared
 test infrastructure or other cross-cutting changes require
 `npm run release:check`. Report unexecuted live acceptance checks.
 

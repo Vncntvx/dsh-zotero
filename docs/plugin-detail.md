@@ -1,3 +1,3 @@
-- **核心组件**（`dsh-zotero`）：本机 Zotero 连接、模型工具、会话 Sources 标签页与设置页。写入默认关闭，每次写入需在计划审查卡中确认。
-- **文献面板**（`dsh-zotero/library`）：侧边栏面板，含合集树、保存的搜索、回收站、多维筛选、条目详情与 PDF 打开。
-- **学术检索**（`dsh-zotero/scholarly`）：外部文献检索，默认关闭。覆盖 arXiv、OpenAlex、Crossref、Semantic Scholar、PubMed、Europe PMC、DBLP，支持全文、引用网络、参考文献核验与保存到 Zotero。
+- **核心组件**（`dsh-zotero`）：本机 Zotero 连接、8 个读工具与 15 个写工具（默认关闭，启用后每次写入都需在计划审查卡中确认）、文献轨迹与设置页。
+- **文献面板**（`dsh-zotero/library`）：右侧边栏标签页，覆盖全库导航（合集树、保存的搜索、我的出版物、回收站）、条目列表筛选、条目检视、复制引用（CSL 引文、BibTeX、参考文献表、BibLaTeX、RIS、CSL-JSON 与条目信息）以及经审批的受控写入。
+- **学术检索**（`dsh-zotero/scholarly`）：外部文献检索组件，默认关闭；组件挂载即授权对外部学术索引的请求。覆盖 arXiv、OpenAlex、Crossref、Semantic Scholar、PubMed、Europe PMC 与 DBLP，支持全文读取、引文网络、参考文献核验与保存到 Zotero。

@@ -7,13 +7,19 @@
 ```text
 src/
   index.ts              # 插件入口（纯 re-export）
-  service.ts            # ZoteroService（Cordis 服务）
-  library/              # 文献库面板子组件（ZoteroLibraryService、配置 schema）
-  library-views.ts      # 面板 wire 视图与域请求的双向映射
-  library-write.ts      # 面板写入口：进入注册工具管线与审批接缝
+  service.ts            # ZoteroService（Cordis 服务：工具接线、命令、投影与 Provider 生命周期）
+  service-config.ts     # 传输重建配置键与 LocalApiLimits 映射（自 service.ts 拆分）
+  service-lifecycle.ts  # 配置提交校验与 volatile 更新处理（自 service.ts 拆分）
+  shell-write-approval.ts # shell 直写本地 API 的审批接缝（自 service.ts 拆分）
+  tool-diagnostics.ts   # 工具执行诊断记录（自 service.ts 拆分）
+  tool-registration.ts  # 读/写工具注册清单（自 service.ts 拆分）
+  library/              # 文献面板子组件（ZoteroLibraryService、配置 schema）
+  library-views.ts      # 文献面板 wire 视图与域请求的双向映射（含 export）
+  library-write.ts      # 文献面板写入口：进入注册工具管线与审批接缝
   local/provider.ts     # LocalApiProvider（Zotero Local API 适配）
   local/*-domain.ts     # 领域管线（search、export、changes、browse、write 等）
-  local/                # 辅助模块：detail、retrieve、attachment-location、scope-directory、search-index、item-batch 等
+  local/                # 辅助模块：detail、retrieve、retrieve-fulltext、attachment-location、scope-directory、scope-paths、search-index、search-query、item-schema-directory、changes-cursor、item-batch 等
+  local/write-*.ts      # 写域模块：write-domain 与 batch、collections、item-lists、library-maintenance、notes、refs、saved-searches、verdicts、deps
   http-client.ts        # HTTP 传输层（环回 fetch、流式与并发槽位控制）
   config.ts             # 配置 Schema 与校验逻辑
   types.ts              # 领域 DTO 与类型定义
@@ -40,12 +46,18 @@ src/
   evidence.ts           # BM25 排序算法
   search-text.ts        # 与 Zotero normalizeForSearch 一致的搜索折叠
   attachments.ts        # 附件选择与优先级逻辑
-  normalize.ts          # Zotero 响应至领域 DTO 的归一化转换
+  normalize-children.ts # 笔记、批注与附件子行的归一化
+  normalize-context.ts  # 归一化共享的身份与文本规则
+  normalize-item-detail.ts # 条目详情与其子列表的归一化
+  normalize-saved-search.ts # 保存检索条件的归一化
+  normalize-scope.ts    # 合集/保存检索身份条目的归一化
+  normalize-search.ts   # 搜索命中与共享条目事实的归一化
   presentation-meta.ts  # 工具结果的展示投影
   refs.ts               # Zotero ref 语法解析与格式化
   ref-grammar.ts        # 引用语法校验模式
   export-items.ts       # BibTeX 条目键语法与字段提取
   export-mapping.ts     # 引用与批量条目映射
+  export-limits.ts      # zotero_export 与文献面板 export 端点共用的引用条数上限校验
   prompt.ts             # 面向模型的系统提示词
   command.ts            # /zotero 状态命令
   write-approval.ts     # 写入双层确认（审批策略与计划审查卡）
@@ -58,9 +70,27 @@ src/
   settings-namespace.ts # 设置命名空间常量
   tools/                # 23 个本地模型工具定义（8 读 + 15 写）
   tools/degradable.ts   # 写工具计划预览的降级规则（不可达/歧义才降级）
-  client/               # 浏览器端（配置页、Sources 面板、工具卡片视图）
+  client/               # 浏览器端（设置页、文献轨迹、文献面板、工具卡片视图）
 tests/                  # 单元测试与端到端测试用例
 ```
+
+## 文档资产
+
+`docs/` 下的中文文档与 `.en.md` 英文文档成对维护，修改一侧必须同步另一侧；术语与边界以 [产品模型](product-model.md) 为准。
+
+| 文档                           | 内容                                                         |
+| ------------------------------ | ------------------------------------------------------------ |
+| [快速入门](getting-started.md) | 安装、前置条件与连接验证                                     |
+| [产品模型](product-model.md)   | 两个入口、两大视图、组件分工与系统边界：命名与边界的唯一来源 |
+| [功能概览](features.md)        | 对话能力、文献轨迹、文献面板、写入与学术检索                 |
+| [工具参考](tools.md)           | 23 个本地工具（8 读 + 15 写）与 7 个学术检索工具             |
+| [配置参考](configuration.md)   | 三个设置命名空间、44 个字段与热更新机制                      |
+| [故障排查](troubleshooting.md) | 常见问题、原因与排查步骤                                     |
+| [系统架构](architecture.md)    | 数据流、分层职责与设计边界                                   |
+| [开发指南](development.md)     | 构建、测试、调试与发布流程                                   |
+| [文档索引](index.md)           | 读者文档入口                                                 |
+
+产品结构与术语见 [产品模型](product-model.md)；代理与贡献者规则见仓库根部的 `AGENTS.md`。
 
 ## 安装与构建
 
@@ -120,7 +150,7 @@ npm run test:integration
 ## 构建产物
 
 - Node 端产物（`lib/`）：由 `tsc` 编译生成，包含服务逻辑、工具定义、Provider 与传输层；
-- 浏览器端产物（`lib/client.js`）：由 `esbuild` 打包生成，包含配置页、Sources 面板与会话卡片。
+- 浏览器端产物（`lib/client.js`）：由 `esbuild` 打包生成，包含设置页、文献轨迹、文献面板与会话卡片。
 
 ## 本地调试
 
@@ -138,7 +168,7 @@ cd ../deepseek-harness && env DSH_HOME="$DSH_HOME" \
   node --import tsx/esm apps/cli/src/bin.ts web --port 3307
 ```
 
-> 说明：alpha.4 起插件配置持久化在当前 profile 的 `cordis.patch.yml`（`zotero` 条目），`~/.dsh/settings.yaml` 只会在启动时被一次性导入。Zotero 连接等配置首次在临时实例的插件管理器中打开 **dsh-zotero** 配置区填写一次即可（也可从现有 profile 的 `cordis.patch.yml` 拷入 `zotero` 条目的 `config`）。
+> 说明：插件配置持久化在当前 profile 的 `cordis.patch.yml`（`zotero` 条目）。Zotero 连接等配置首次在临时实例的插件管理器中打开 **dsh-zotero** 配置区填写一次即可（也可从现有 profile 的 `cordis.patch.yml` 拷入 `zotero` 条目的 `config`）。
 
 > 学术组件：随包发布的 `dsh-zotero/scholarly` 行默认关闭，开关只有这一处。两份叠加层模板（`dev.cordis.yml.example` / `dev-lib.cordis.yml.example`）都会挂载学术组件，本地调试无需先在插件管理器里打开该行；在真实 profile 中调试时，在「包含的组件」中启用该行即可，工具与设置页即时生效，无需重启。
 
@@ -151,15 +181,15 @@ cp dev-lib.cordis.yml.example dev-lib.cordis.yml # 复制叠加层模板并配�
 dsh web --patch ./dev-lib.cordis.yml --port 3307
 ```
 
-> 注意：`dev-lib.cordis.yml` 叠加层通过配置构建入口的绝对路径（`<absolute-path-to-dsh-zotero>/lib/index.js`）加载插件，使得 Host 端（模型工具与 `/zotero` 命令行）能在 Loader 监视下实现免重启热重载；但 Harness 客户端模块加载器仅解析已注册的裸包名，因此该模式不加载浏览器端前端组件（配置页与 Sources Tab）。如需调试前端 UI，请使用上述「完整插件调试」流程（`dsh plugin --profile web add .` 与 `npm run dev:client`）。
+> 注意：`dev-lib.cordis.yml` 叠加层通过配置构建入口的绝对路径（`<absolute-path-to-dsh-zotero>/lib/index.js`）加载插件，使得 Host 端（模型工具与 `/zotero` 命令行）能在 Loader 监视下实现免重启热重载；但 Harness 客户端模块加载器仅解析已注册的裸包名，因此该模式不加载浏览器端前端组件（设置页、文献轨迹与文献面板）。如需调试前端 UI，请使用上述「完整插件调试」流程（`dsh plugin --profile web add .` 与 `npm run dev:client`）。
 
 ### 诊断面板与诊断包
 
 排查插件运行问题时，可在配置区开启「开启诊断」后，在插件详情页底部的「诊断」卡片中查看运行时状态与日志：
 
 - **日志收集与过滤**：开启诊断后，收集并保留相关条目，支持按级别筛选（「仅问题」筛选 warn 与 error）。条目按时间倒序排列，连续出现的重复记录会自动合并计数；
-- **诊断模式**：在 dsh-zotero 配置区的「诊断」配置组中开启「开启诊断」并保存后，详情页底部即展示诊断面板并记录详细排障日志；
-- **前端异常捕获**：前端界面（Sources 标签页、工具卡片、详情面板等）发生渲染崩溃时，错误边界会自动记录异常信息，并在 `surface` 字段标明触发位置（如 `sources`、`tool:zotero_search`）；
+- **诊断模式**：在 dsh-zotero 配置区的「高级选项 → 诊断」分组中开启「开启诊断」并保存后，详情页底部即展示诊断面板并记录详细排障日志；
+- **前端异常捕获**：前端界面（文献轨迹、文献面板、工具卡片等）发生渲染崩溃时，错误边界会自动记录异常信息，并在 `surface` 字段标明触发位置（如 `sources`、`tool:zotero_search`）；
 - **导出诊断包**：点击「复制诊断信息」可生成包含插件版本、Zotero 端点与版本、debug 状态及全部缓冲记录的文本包，便于粘贴至问题报告。
 
 ## 测试规范
@@ -171,15 +201,15 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 
 ## 发布检查清单
 
-`package.json` 的 `release:check` 定义了发布门禁。下列第 1 至 7 步由该脚本按顺序执行，任一步失败即中断；第 8 项为脚本之外的人工验证：
+发布前按顺序完成以下检查，任一步失败即停止：
 
-1. `npm run format:check`：Prettier 格式检查；
-2. `npm run harness:check -- --strict`：版本钉、上游声明与 vendored 框架版本须对齐，过期产物在该模式下变为错误（`release:check` 直接以 `node scripts/harness-state.mjs --strict` 调用同一脚本）；
-3. `npm run lint:test`：测试规范守卫（lane、`.only`/`.skip`、spec 行数棘轮）；
-4. `npm run typecheck`：Node、测试与浏览器端三个工程的类型检查；
-5. `npm run test:coverage`：全量 vitest 测试与分层覆盖率门禁；
-6. `npm run build`：生产构建（`tsc` → `lib/`，esbuild → `lib/client.js`）；
-7. `npm run verify:pack`：校验打包 tarball 的必需文件；
-8. 人工验证 [使用场景](scenarios.md) 中的主流程用例（G1 至 G8），若启用写入需验证 W1 至 W9。
+1. `npm run typecheck`：Node、测试与浏览器端三个工程的类型检查；
+2. `npm run build:client`：浏览器端产物可以单独构建；
+3. `npm test`：测试规范守卫（lane、`.only`/`.skip`、spec 行数棘轮）与全量 vitest；
+4. `npm run format:check`：Prettier 格式检查；
+5. `npm run release:check`：发布门禁，依次运行 `format:check`、`harness-state.mjs --strict`、`lint:test`、`typecheck`、`test:coverage`、`build` 与 `verify:pack`；
+6. 打包核对：`verify:pack` 已在第 5 步校验 tarball 的必需文件；如需人工确认可执行 `npm pack --dry-run`，核对产物包含 `lib/`、`cordis.patch.yml`、`locale/`、`README` 与 `docs/plugin-detail.md`；
+7. 走查核心流程：G1 至 G8 主流程必跑；改动涉及面板或轨迹时补 P 组用例，涉及写入时在启用写入的独立会话中补 W 组用例；
+8. 素材核对：本版本文档不引用截图，`docs/images/` 只保留插件图标 `icon.png`；若发布说明另行配图，必须从当前 Web UI 截取，并与界面文案一致。
 
-`npm test` 与发布门禁不等价：它执行 `node scripts/test-lint.mjs` 加 `vitest run`（不跑覆盖率门禁），是日常回归命令；发布路径把这两件事分别交给第 3 步和第 5 步。
+`npm test` 与发布门禁不等价：它执行 `node scripts/test-lint.mjs` 加 `vitest run`（不跑覆盖率门禁），是日常回归命令；发布路径把这两件事分别交给第 3 步与第 5 步。

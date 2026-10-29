@@ -2,171 +2,107 @@
 
 # Features
 
-dsh-zotero allows DSH LLM conversations to search, inspect, and cite your local Zotero library. Twenty-three local tools cover literature discovery, passage retrieval, source attachment location, formatted export, and personal-library writes. Fifteen personal-library write tools are disabled by default and require session approval and plan review when enabled. The web Sources panel aggregates literature, relevant passages, and exports referenced throughout the session.
+dsh-zotero connects the Zotero library to DSH. The agent searches, reads, and cites literature in conversation, and can write when needed. You browse the whole library and copy citations in the literature panel. The literature trail gathers the papers, extracted passages, and exports from the session for verification. See the [product model](product-model.en.md) for how the three divide the work.
 
-## Scholarly Literature Retrieval
+## Searching and Reading in Conversation
 
-Enabling the `dsh-zotero/scholarly` component under "Included components" in the Plugins manager mounts it, and the model can then search beyond the local library: across seven indexes (arXiv, OpenAlex, Crossref, Semantic Scholar, PubMed, Europe PMC, DBLP) with fused, deduplicated ranking; read open-access full texts by DOI / arXiv ID / PMID / PMCID with passage-level location; follow citation networks; pull canonical citation formats from DOI registration agencies (BibTeX, RIS, CSL JSON, CSL-styled text); verify a reference list for fabricated entries and field mismatches; and save an external result to local Zotero only when explicitly requested. While the component is off, those tools do not exist and the host makes no external request.
+The agent has eight read-only tools. Parameters and error codes are in the [tool reference](tools.en.md).
 
-It complements the local-library capabilities rather than replacing them: hits already in the library are annotated, and the annotation is read-only.
+- `zotero_search` matches title, author, and year by default, and `everything` mode searches the full-text index as well. The scope can be the whole library, My Publications, a collection, or a saved search. The first page also scans note bodies; matching items are listed separately in `supplemental` and do not count toward the pagination total.
+- `zotero_browse` reads the collection tree, tag list, and saved searches; the page size is bounded by `maxBrowseResults`, and the response carries the total and paging cursor.
+- `zotero_get` returns title, authors, year, journal, DOI, URL, and abstract. Add `include` to load child note bodies, PDF annotations, and the attachment list.
+- `zotero_children` reads notes, attachments, and annotations. Annotations need a separate request with `itemType=annotation`.
+- `zotero_retrieve` finds passages in annotations, notes, the abstract, and the full-text index and ranks them by BM25 term frequency. Each passage carries its source and a page label; only annotations have page numbers, taken from Zotero. The result marks whether a hit landed in body text or an annotation comment. Full-text coverage is in `coverage`, sources that are unindexed or unreadable go into `sourcesSkipped`, and attachment status is `indexed`, `unindexed`, or `unread`.
+- `zotero_attachment` resolves an item or attachment to a local absolute path; linked attachments return the URL.
+- `zotero_export` supports six formats. Every format except `citation` takes at most 50 items per call, the request limit of Zotero's `itemKey`; `citation` batches in groups of 50.
 
-## Literature Search
+  | Format                | Output                                                              |
+  | --------------------- | ------------------------------------------------------------------- |
+  | `citation`            | HTML citations, one per item, in input order                        |
+  | `bibliography`        | A merged bibliography in CSL order                                  |
+  | `bibtex` / `biblatex` | BibTeX / BibLaTeX entries, with each entry's citation key available |
+  | `ris` / `csljson`     | RIS text / CSL-JSON                                                 |
 
-`zotero_search` invokes Zotero's local quick search:
+  Style and language default to `defaultStyle` and `defaultLocale` from configuration and can be overridden with `style` and `locale`.
 
-- Search modes:
-  - `metadata` (default): matches title, author, and year;
-  - `everything`: additionally queries indexed full-text content.
-- Search scopes:
-  - Entire library (default);
-  - Personal publications (`publications`);
-  - Specific collection by name or ref (`collection`);
-  - Specific saved search by name or ref (`savedSearch`).
+- `zotero_changes` starts from the local library version and reports additions, modifications, and deletions; the Trash counts as a separate block.
 
-Initial queries (offset 0) scan note bodies in batches, returning matches under `supplemental` without inflating the primary pagination count. Search results return stable `zotero://` references for downstream tools.
+Tool results appear in the conversation as read-only cards. Collapsed, each shows a one-line summary; expanded, it shows items, passages, export text, or a receipt according to the tool type, with copy actions and "Read PDF". A card renders only the output the tool already produced and never calls a tool itself.
 
-![Sources panel: search results and item action panel](images/zotero-sources-overview.png)
+## Checking the Literature Trail
 
-## Metadata and Notes
+The literature trail sits at the top of the conversation and groups the literature the agent found and read in this session by item. The data comes from this session's tool-call snapshots, so switching to it issues no new request.
 
-`zotero_get` retrieves structured bibliographic metadata for a single item, including title, creators, publication year, venue, DOI, URL, and abstract.
+It records the results of read tools and exports. Writes do not enter the trail; modifications have their own cards and approval records. Results from scholarly retrieval appear only after they are saved into the library.
 
-Use `include` to selectively load child resources:
+The criteria of each search sit on the first screen: query, scope (library, My Publications, collection, saved search), mode (metadata or full text), filters (item type, tags, Trash), and the returned count against the total. When the note scan ran, the note hit count gets its own line. Technical refs are folded under "Technical details".
 
-- `notes`: child notes and their text content;
-- `annotations`: PDF annotations, highlighted text, comments, and page labels;
-- `attachments`: associated attachments with file types and link modes.
+The item inspector has three parts. Overview gives the source and action; passages are grouped by source with page labels and coverage; exports list the citation text this paper produced. The session also has an exports summary page, segmented by format and deduplicated across items. Failed export calls are listed separately under operations and do not count as results.
 
-When a note body exceeds the character budget the response sets `truncated: true`, and a cut abstract sets `abstractTruncated: true`.
+The status bar at the top shows whether the local Zotero is connected. When offline it offers troubleshooting hints and an in-place refresh.
 
-![Passage view: relevant text segments grouped by source](images/zotero-evidence-passages.png)
+The built-in DSH "Trail" tab shows how tool calls ran. The literature trail shows only literature-related results.
 
-## Passage Retrieval
+## Using the Literature Panel
 
-`zotero_retrieve` gathers text passages across multiple item sources and ranks them using the BM25 algorithm:
+The literature panel lives in the right sidebar, beside the conversation. It appears only when all three of these are on:
 
-| Source       | Description                                                                                                            |
-| ------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| `annotation` | PDF annotations: highlights and reader comments rank together with page labels; `matchedFields` indicates match origin |
-| `note`       | Chunked child note body text                                                                                           |
-| `abstract`   | Item abstract text                                                                                                     |
-| `fulltext`   | Chunked full text from Zotero's local index                                                                            |
+- the `dsh-zotero/library` row under "Included components" is enabled;
+- the core `webEnabled` is on;
+- the component's `rightSidebarEnabled` is on.
 
-Full-text coverage is reported via the `coverage` field. Unavailable or unindexed sources are logged in `sourcesSkipped`.
+The navigation area supports multi-library switching (personal and group libraries), a collection tree expanded on demand, saved searches, "My Publications", and "Trash". Saved searches show Zotero's original conditions.
 
-Under multi-attachment policies (`allIndexed` or `specified`), the `attachments` array reports individual attachment status: `indexed` (full text and coverage retrieved), `unindexed` (no index built in Zotero), or `unread` (skipped due to attachment limit).
+The item list pages through results and can switch between metadata and full-text search modes, five sort fields and both directions, and filter by item type, tag (all/any), year range, and whether an attachment exists. The PDF badge at the end of a row means the best attachment among the search hits is a PDF; a row without the badge does not mean the item has no file.
 
-![Multi-step tool call flow in conversation](images/zotero-chat-workflow.png)
+The inspector header has type, title, authors, venue, and year. The action row can read the PDF, ask, add to chat, copy citation or BibTeX, open more formats (bibliography, BibLaTeX, RIS, CSL-JSON, copy item info), and copy the Zotero link. Below it, the info table, the collection and tag chips, and the three child sets (notes, attachments, annotations) each page independently.
 
-## Locating Source Attachments
+Copying citations uses the same source as `zotero_export`, with style and language following the configuration defaults. BibTeX can be used in LaTeX directly, and the citation key is emitted with the entry. When copying fails, the reason is shown inline in the action row and is not retried automatically.
 
-`zotero_attachment` resolves attachment references to accessible locations:
+Local attachments open in the right reader of the owning conversation; URL attachments open in a new browser tab. A host refusal degrades to an inline hint. The panel belongs to the session of the current tab, so write approvals and plan cards go to that session as well.
 
-- Local file: returns an on-disk path verified via async `stat`;
-- Linked attachment: returns the target URL.
+The panel issues requests only after it is open and the connection is confirmed. No new requests are issued after it closes. When the probe is offline, the area below the toolbar becomes an offline note, and no request is sent until the connection returns.
 
-Passing an item ref lets Zotero select the best attachment automatically; passing an attachment ref targets that specific file.
+Wide screens show three columns side by side (navigation, list, detail); narrow screens switch to segmented navigation. The panel remembers the selected item and current segment per Zotero instance.
 
-Note: Reading PDF content depends on host environment capabilities; dsh-zotero resolves and validates the path.
+The panel searches only the local library. Literature outside it is found by the agent with the scholarly retrieval component and appears in the panel and the trail only after it is saved into the library.
 
-## Citation Export
+## Writing to the Library (Optional)
 
-`zotero_export` supports the following output formats:
+Write tools are off by default. Turning on `writeEnabled` in settings registers fifteen tools that write only to the personal library (`zotero://user/0/`):
 
-| Format         | Output                                          |
-| -------------- | ----------------------------------------------- |
-| `citation`     | Individual HTML citations ordered by input refs |
-| `bibliography` | CSL-ordered consolidated bibliography           |
-| `bibtex`       | BibTeX entries                                  |
-| `biblatex`     | BibLaTeX entries                                |
-| `ris`          | RIS text                                        |
-| `csljson`      | CSL-JSON data                                   |
+| Category            | Tools                                                                                    | Notes                                                                                                                                    |
+| ------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Notes               | `zotero_create_note`, `zotero_update_note`                                               | Create standalone notes or child notes, with tags, collections, and `dc:relation`; updates replace the body under a version precondition |
+| Tags and membership | `zotero_update_item_tags`, `zotero_update_item_collections`                              | Read, merge, and write back within one call, preserving existing tag types; name resolution fails before any write                       |
+| Collections         | `zotero_create_collection`, `zotero_update_collection`, `zotero_delete_collection`       | Same-name siblings are refused; deletion is irreversible, and the plan card states the item and child-collection counts first            |
+| Items               | `zotero_create_item`, `zotero_update_item`, `zotero_restore_items`                       | Create items, correct scalar metadata, restore from the Trash                                                                            |
+| Saved searches      | `zotero_create_saved_search`, `zotero_update_saved_search`, `zotero_delete_saved_search` | Manage saved-search definitions                                                                                                          |
+| Library-wide tags   | `zotero_delete_library_tags`                                                             | Delete tags library-wide by name (irreversible); unmatched names are ignored, so a retry is idempotent                                   |
+| Batch               | `zotero_batch_items`                                                                     | Create, retag, recollect, or trash items in one call, merged under one plan card                                                         |
 
-Optional `style` and `locale` parameters set the citation format. The five non-`citation` formats accept at most 50 items per call; `citation` is the only format that batches, and it does so only once `maxExportRefs` is raised above 50.
+Every write passes a capability check, session approval, and a plan review card. Irreversible operations declare their impact on the plan card first. When a commit result is unverified, the status reads "submitted, unconfirmed" and never success. Writes in the panel go the same way as agent writes and differ only in who triggers them; panel writes require the owning conversation to be running.
 
-## Optional Personal-Library Writes
+## Scholarly Retrieval (Optional Component)
 
-When `writeEnabled` is turned on, the plugin registers 15 write tools restricted to the personal library (`zotero://user/0/`):
+Scholarly retrieval is provided by the `dsh-zotero/scholarly` component, shipped with the package but off by default. Enabling that component row is the authorization: once enabled it registers seven tools and allows requests to allowlisted external scholarly indexes. While it is not enabled, those tools do not exist and the host issues no external request.
 
-- `zotero_create_note`: creates standalone notes or child notes with tags, collections, and `dc:relation` links;
-- `zotero_update_note`: replaces an existing note body under its version precondition;
-- `zotero_update_item_tags`: settles `add`/`remove` in one read-merge-write call, keeping existing tag types, under the item's version precondition;
-- `zotero_update_item_collections`: settles `add`/`remove` membership changes in one call, resolving names before any write;
-- `zotero_create_collection`: creates a top-level or child collection; a sibling with the same name refuses the write;
-- `zotero_update_collection`: renames or reparents a collection;
-- `zotero_delete_collection`: deletes a collection (irreversible: its structure and child collections go, the items stay); the plan card states the item and subcollection counts first;
-- `zotero_create_item`: creates an item from a closed field set (no BibTeX/CSL-JSON channel); an unknown type or a missing title and URL is refused;
-- `zotero_update_item`: corrects scalar metadata, with field validity taken from Zotero's `itemTypeFields`;
-- `zotero_restore_items`: restores items from Trash;
-- `zotero_create_saved_search` / `zotero_update_saved_search` / `zotero_delete_saved_search`: manage saved-search definitions;
-- `zotero_delete_library_tags`: deletes tags library-wide by name (irreversible), stating each tag's item count first; unmatched names are ignored so a retry is idempotent;
-- `zotero_batch_items`: creates items, updates tags and collections, and moves items to trash in a single call under one plan card.
+- Search covers arXiv, OpenAlex, Crossref, Semantic Scholar, PubMed, Europe PMC, and DBLP; results are fused and deduplicated by relevance and annotated with whether they are already in the local library.
+- It can read open-access full text by DOI, arXiv ID, PMID, or PMCID and locate passages, and it can follow citation networks.
+- Citation formats come from DOI registration agencies. When verifying a reference list, the conclusion is one of "verified", "needs manual confirmation", "the registry says it does not exist", or "unable to verify".
+- When the user explicitly asks, it saves an external result to the local personal library. Only after saving does the result enter the Zotero library and the literature trail.
 
-Every write requires passing session approval policy and plan card review. Deletion cards state whether items are moved to trash or removed permanently. Zotero 10 also prompts a local authorization dialog on first write.
+External retrieval belongs to the agent entry point; the literature panel issues no external request.
 
-## Chat Tool Cards (Toolviews)
+## Capabilities and Tools at a Glance
 
-In DSH conversations, Zotero tool calls render using dedicated read-only cards (`tool.call.toolview`):
-
-- **Search (`zotero_search`)**: displays queries, total hits, expandable item summaries, plus the "Read PDF" and copy-to-locate actions;
-- **Passage Retrieval (`zotero_retrieve`)**: displays extracted passage counts, ranked excerpts, page numbers, and index coverage;
-- **Export (`zotero_export`)**: shows format badges, copy actions, and formatted download buttons;
-- **Item Details (`zotero_get`)**: displays bibliographic metadata, venue details, child item counts, and previews;
-- **Child Objects (`zotero_children`)**: partitions child notes, attachments, and highlighted PDF annotations by kind;
-- **Library Structure & Changes (`zotero_browse` / `zotero_changes`)**: `zotero_browse` renders collection trees and tag lists; `zotero_changes` displays versioned diffs, deletions, and reusable cursors;
-- **Attachment Locator (`zotero_attachment`)**: displays verified file paths or links with one-click copy and open actions;
-- **Personal Library Writes (all 15 write tools)**: displays target items, note summaries, planned tag and membership changes, collection/item creation and deletion, Trash restoration, saved-search operations, and library-wide tag deletion; receipts distinguish "applied", "no change", "outcome unreported", and "declined", with irreversible deletes declared on the plan card first.
-
-Cards use compact summary headers by default and lazily render details when expanded, tracking tool lifecycle states throughout execution.
-
-## Slash Command Status Card (Commandview)
-
-Running `/zotero` (or `/zotero status`) in the chat composer renders a dedicated status card:
-
-- Online/offline indicator and summary status;
-- Local endpoint address, Zotero version, API and schema versions, Server ID, and write permission state (endpoint address remains visible when disconnected to aid diagnosis);
-- Inline Refresh button to re-run local connectivity checks immediately;
-- Actionable diagnostic steps when offline or encountering errors.
-
-## Plugin Management and Activation Guidance
-
-The plugin integrates with Harness plugin slots:
-
-- **Activation Guidance (`plugins.bundle.activation`)**: opens an onboarding modal when enabling the plugin, checking local API connectivity and guiding users to enable communications in Zotero preferences;
-- **Detail Page Configuration and Status (`plugins.bundle.config` / `plugins.row.config` / `plugins.detail.section`)**: `plugins.bundle.config` carries the unified 6-tab configuration form on the plugin detail page (covering General, Connection, Search & Extraction, Library, Scholarly Search, and Advanced, synchronized across dual channels with the Library and Scholarly sub-row configurations); `plugins.row.config` provides a dedicated sidebar toggles form for `dsh-zotero#library`; `plugins.detail.section` renders the live readiness card that reports connection state, the Zotero version, and diagnostic tips;
-
-## Library Panel and Subcomponent
-
-The library panel is an independent DSH bundle subcomponent (`dsh-zotero/library`) that browses the whole library, searches, inspects items, and runs controlled writes without the Agent. The panel lives in the right sidebar, beside the conversation:
-
-- **Mounting and gating**:
-  - **Right sidebar tab (`sidebarRightTabs` + `sidebar.right.pane.tab`)**: controlled by `rightSidebarEnabled` (on by default); the library shows as a right sidebar tab beside the conversation;
-  - **Global gate**: the panel also requires `webEnabled`; with `webEnabled: false` it does not mount;
-- **Container query layout**: the wide layout switches at the anonymous container query `@container (min-width: 720px)`:
-  - **Narrow (< 720px)**: a segmented navigation bar (`Navigation / List / Inspector`); selecting a collection shows the list, selecting an item shows the inspector, and the bar navigates back (with 640/520/460/360px narrow refinements);
-  - **Wide (≥ 720px)**: three columns (navigation, item list, inspector);
-- **Session binding**: the panel belongs to the conversation its tab is bound to — "Read PDF" opens in that session's right reader, and the write drawer sends its approval and plan card to that conversation;
-- **Navigation**: multi-library selection, independently paged collection tree, paged saved searches, My Publications, and Trash; saved-search rows show Zotero's original conditions and keep unknown condition names as strings;
-- **Item list**: paged results with metadata/full-text modes, five sort fields and both directions, plus item-type, tag (all/any), inclusive year-range, and attachment-existence filters; the year and attachment filters run one concurrent whole-library candidate scan on the host (the filter index caches each candidate's key, year, and attachment presence per (scope, query, sort, tags, item types, attachment dimension); the year range and attachment value are applied at page time, later pages fetch rows by key in batches, and a library-version change rescans once); the tag filter is an on-demand panel over server-side tag search (requests start on open, input is debounced, pages load until the end); changing a filter, query, scope, or sort returns to offset 0 and clears the inspector; a trailing PDF badge marks rows whose indexed best attachment is a PDF (a detection marker; an unbadged row may still carry files); rows still open the inspector on click;
-- **Item inspector**: a head block (item-type eyebrow, title, creators, venue · date) with an action row (read Zotero's chosen best PDF attachment, copy the Zotero link); a clamped abstract with an expand/collapse toggle; the info table, collection and tag chips, and the notes, attachments, and annotations child kinds (each with its own offset/limit pager: the page size is clamped by `maxNoteRecords` and friends, the response carries the effective `limit`, and the total comes from the matching Zotero response; child paging rides a dedicated `childPage` endpoint and never re-reads the parent); the action row additionally offers "Ask" (prefills a question template into the session draft, never auto-submits) and "Add to chat" (appends "《title》 (ref)" at the draft caret), both through the session-scope input face;
-- **Attachment reading**: "Read PDF" rides the head action row: local attachments open in DSH's right reader (the same route the Sources panel uses), URL attachments open in a new browser tab; a host refusal degrades to an inline hint;
-- **Errors and races**: tree, saved-search, list, inspector, and child lanes expose retry actions; each lane numbers its requests, so a late answer is dropped by sequence;
-- **State and accessibility**: preferences and the view pins (selected row, narrow pane) are stored in `localStorage` under the confirmed Zotero `serverId`; malformed or foreign values are discarded. The detail payload and the probe snapshot are kept in memory per session (at most eight sessions; cleared when the session is removed or the plugin unloads). The collection tree is an ARIA tree with roving tabindex and Up/Down/Left/Right/Home/End/Enter navigation;
-- **Remount restore**: switching to the PDF reader or another tab unmounts the library tab; on return, once the probe answers, the selected row, the narrow pane, and the last detail payload are back immediately, and the detail then refreshes silently in the background (no loading placeholder);
-- **Write entry**: shown when `writeEnabled` is on and the personal library is selected; submittable only while the panel's own conversation is running, with the approval and plan card landing in that conversation. Submission goes through the `ctx.zoteroLibrary` service and `executeLibraryWrite` with capability, session approval, plan review, and version preconditions. Declines, conflicts, and unverified commits render differently; writes are not retried;
-- **On demand**: requests start while the panel is open and the connection is confirmed; closing the panel stops new requests from being issued (ones already in flight run to completion on the host). A disconnected probe (or a failed one) replaces the area below the toolbar with the offline note (carrying the diagnosis) and holds all requests until the connection returns. A cached snapshot only paints the first frame and never opens the wire: no `browse`/`search`/`item` request goes out before this mount's own probe answers. Panel searches list items only and skip the tool path's note-body scan.
-
-## Session Sources Panel
-
-The Zotero tab in DSH Web includes two sub-views (Sources, Exports); Passages is a panel inside each item's inspector, with a session-wide overview entry when the session holds passages for several items:
-
-- **Sources**: displays items referenced through search and read tools during the session; the item inspector carries a passages panel grouping the text excerpts `zotero_retrieve` extracted;
-- **Exports**: lists all generated citation and bibliography text, with copy and download actions.
-
-## Design Boundaries
-
-- **Read-only by default**: `writeEnabled` is disabled by default; when enabled, writes apply only to the personal library and require dual confirmation;
-- **Term frequency ranking**: passage retrieval matches terms with BM25, not vector embeddings;
-- **Text exports**: citations and bibliographies return plain text;
-- **Session isolation**: the Sources panel maintains an isolated snapshot for the active conversation;
-- **Index dependency**: full-text search and retrieval rely on Zotero's local index.
+| Capability                                | Conversation (agent tools)                           | Literature panel (human)                 | Literature trail                                |
+| ----------------------------------------- | ---------------------------------------------------- | ---------------------------------------- | ----------------------------------------------- |
+| Whole-library browsing and structure      | `zotero_browse`                                      | Collection tree, saved searches, Trash   | Records only the structure the agent read       |
+| Search                                    | `zotero_search`                                      | Item-list search and filters             | Records criteria and hits                       |
+| Details and notes/attachments/annotations | `zotero_get`, `zotero_children`                      | Item inspection and child sets           | Records the items and passages read             |
+| Passages                                  | `zotero_retrieve`                                    | Not offered                              | Records passages and sources                    |
+| Locate PDF                                | `zotero_attachment`                                  | Read PDF                                 | Records the location result                     |
+| Citations and exports                     | `zotero_export`                                      | Copy citation, BibTeX, and other formats | Records export output                           |
+| Writes                                    | Fifteen write tools (optional)                       | Approved writes                          | Not recorded                                    |
+| Out-of-library literature                 | Seven scholarly retrieval tools (optional component) | Not offered                              | Appears only after being saved into the library |
