@@ -27,11 +27,13 @@ import { createVolatile, updateVolatile, volatileEntries } from '@deepseek-ai/co
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, {
+  projectToolSchema,
   type ToolDefinition,
   type ToolExecutionFailure,
   type ToolExecutionResult,
   type ToolExecutionSuccess,
 } from '@deepseek-ai/dsh-tools'
+import { ToolExecutionPipeline, executeToolBatch } from '@deepseek-ai/dsh-tools/pipeline'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import type { Options } from '../../../src/config.js'
 import ZoteroService from '../../../src/index.js'
@@ -107,6 +109,14 @@ export async function setupHostLane(
   await ctx.plugin(StubSettings, undefined)
   await ctx.plugin(SystemPrompt, {})
   await ctx.plugin(ToolRuntime, {})
+  ctx.tools.setExecutor({
+    describe(tools) {
+      return { schemas: tools.map((definition) => projectToolSchema(definition, false)) }
+    },
+    execute(input) {
+      return executeToolBatch(input, new ToolExecutionPipeline(ctx), () => 10)
+    },
+  })
   if (options.commands === true) await ctx.plugin(StubCommands)
   if (options.typert === true) await ctx.plugin(TypertRegistry)
   if (options.compose !== undefined) await options.compose(ctx)
@@ -120,16 +130,24 @@ export async function setupHostLane(
     configureCalls,
     zoteroFiber,
     stub: options.commands === true ? (ctx.get('commands') as unknown as StubCommands) : undefined,
-    runTool(name, args) {
-      return ctx.tools.execute({
-        callId: ToolCallId(`tool-${++callCounter}`),
-        name,
-        arguments: args,
+    async runTool(name, args) {
+      const batch = await ctx.tools.execute({
+        calls: [
+          {
+            type: 'tool-call',
+            id: ToolCallId(`tool-${++callCounter}`),
+            name,
+            arguments: JSON.stringify(args),
+          },
+        ],
         signal: new AbortController().signal,
         // The agent loop always sets the caller; the write gate routes and
         // audits by it, so the lane must carry one too.
         agent: {} as never,
       })
+      const call = batch.results[0]
+      if (call === undefined) throw new Error('Tool execution produced no result')
+      return call.result
     },
     tool(name) {
       return ctx.tools.get(name)

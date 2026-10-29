@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime from '@deepseek-ai/dsh-tools'
+import ToolRuntime, { projectToolSchema } from '@deepseek-ai/dsh-tools'
+import { ToolExecutionPipeline, executeToolBatch } from '@deepseek-ai/dsh-tools/pipeline'
 import { ScholarlyTextStore } from '../../src/scholarly/fulltext/store.js'
 import { type ScholarlyReadHost } from '../../src/scholarly/tools/index.js'
 import { createScholarlyHttp, type ScholarlyHttp } from '../../src/scholarly/transport/http.js'
@@ -23,6 +24,14 @@ export async function bootScholarlyContext(): Promise<Context> {
   const ctx = new Context()
   await ctx.plugin(SystemPrompt, {})
   await ctx.plugin(ToolRuntime, {})
+  ctx.tools.setExecutor({
+    describe(tools) {
+      return { schemas: tools.map((definition) => projectToolSchema(definition, false)) }
+    },
+    execute(input) {
+      return executeToolBatch(input, new ToolExecutionPipeline(ctx), () => 10)
+    },
+  })
   return ctx
 }
 

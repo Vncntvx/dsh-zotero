@@ -14,8 +14,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
-import { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
+import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { Options } from '../../../src/config.js'
 import {
   approvalAsks,
@@ -37,10 +36,14 @@ const authorizeOf = (lane: HostLane) =>
 
 /** The stub shell: records what it ran. */
 function stubBash() {
-  return defineContentToolFixture({
+  return defineTool({
     name: 'bash',
     description: 'stub shell for the approval lane',
     parameters: { command: { type: 'string', required: true } },
+    output: {
+      schema: { type: 'array', items: { type: 'json' } },
+      render: (_args, value) => value as any,
+    },
     async execute(args: { command: string }) {
       ran.push(args.command)
       return [{ type: 'text', text: 'ran' }]
@@ -61,21 +64,13 @@ async function bootLane(config: Options, withApproval = true): Promise<HostLane>
   return lane
 }
 
-let callCounter = 0
-
 /**
  * Run one tool call the way an agent loop would: with an agent on the
  * execution. The registry refuses to route an approval ask for a call that has
  * no agent, so the field has to be there; the stub approval never reads it.
  */
 function runTool(lane: HostLane, command: string): ReturnType<HostLane['runTool']> {
-  return lane.ctx.tools.execute({
-    callId: ToolCallId(`shell-approval-${++callCounter}`),
-    name: 'bash',
-    arguments: { command },
-    agent: {} as never,
-    signal: new AbortController().signal,
-  })
+  return lane.runTool('bash', { command })
 }
 
 beforeEach(() => {

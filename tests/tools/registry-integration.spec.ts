@@ -1,7 +1,8 @@
 import { Context } from '@deepseek-ai/cordis'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime from '@deepseek-ai/dsh-tools'
+import ToolRuntime, { projectToolSchema } from '@deepseek-ai/dsh-tools'
+import { ToolExecutionPipeline, executeToolBatch } from '@deepseek-ai/dsh-tools/pipeline'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import ZoteroService from '../../src/index.js'
 import {
@@ -31,6 +32,14 @@ beforeEach(async () => {
   ctx = new Context()
   await ctx.plugin(SystemPrompt, {})
   await ctx.plugin(ToolRuntime as never, {} as never)
+  ctx.tools.setExecutor({
+    describe(tools) {
+      return { schemas: tools.map((definition) => projectToolSchema(definition, false)) }
+    },
+    execute(input) {
+      return executeToolBatch(input, new ToolExecutionPipeline(ctx), () => 10)
+    },
+  })
   await ctx.plugin(ZoteroService as never, { baseUrl: mock.baseUrl } as never)
 })
 
@@ -38,13 +47,21 @@ afterEach(async () => {
   await mock.close()
 })
 
-function run(name: string, args: Record<string, unknown>) {
-  return ctx.tools.execute({
-    callId: ToolCallId(`t-${++counter}`),
-    name,
-    arguments: args,
+async function run(name: string, args: Record<string, unknown>) {
+  const batch = await ctx.tools.execute({
+    calls: [
+      {
+        type: 'tool-call',
+        id: ToolCallId(`t-${++counter}`),
+        name,
+        arguments: JSON.stringify(args),
+      },
+    ],
     signal: new AbortController().signal,
   })
+  const call = batch.results[0]
+  if (call === undefined) throw new Error('Tool execution produced no result')
+  return call.result
 }
 
 describe('registry integration: zotero_get schema + render', () => {

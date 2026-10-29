@@ -12,6 +12,7 @@ import {
   ZOTERO_CAPABILITY_UNAVAILABLE,
   ZOTERO_WRITE_APPROVAL_UNAVAILABLE,
   WRITE_APPROVAL_UNAVAILABLE_MESSAGE,
+  ZOTERO_UNEXPECTED,
 } from './errors.js'
 import { zoteroLibraryWriteRequestSchema } from './wire-schemas.js'
 
@@ -69,18 +70,39 @@ export async function executeLibraryWrite(
     )
   }
   // No retry: even an interrupted or unverified result may already have committed.
-  const result = await tools.execute({
+  const batch = await tools.execute({
     agent: resolved.agent,
     signal,
-    callId: ToolCallId(`zotero-panel-${randomUUID()}`),
-    name,
-    arguments: request.operation === 'trash' ? { delete: request.args.refs } : request.args,
+    calls: [
+      {
+        type: 'tool-call',
+        id: ToolCallId(`zotero-panel-${randomUUID()}`),
+        name,
+        arguments: JSON.stringify(
+          request.operation === 'trash' ? { delete: request.args.refs } : request.args,
+        ),
+      },
+    ],
   })
+  const callResult = batch.results[0]
+  if (callResult === undefined) {
+    throw new ZoteroError(
+      'The requested Zotero write tool produced no execution result.',
+      ZOTERO_UNEXPECTED,
+    )
+  }
+  const result = callResult.result
   const meta = result.meta
   const kind =
-    meta !== null && typeof meta === 'object' && !Array.isArray(meta) ? meta.kind : undefined
-  const code = result.error?.info?.code
-  const declined = result.isError && result.error?.message.includes('user rejected tool')
+    meta !== null &&
+    typeof meta === 'object' &&
+    !Array.isArray(meta) &&
+    'kind' in meta &&
+    typeof (meta as Record<string, unknown>).kind === 'string'
+      ? ((meta as Record<string, unknown>).kind as ZoteroLibraryWriteResultView['kind'])
+      : undefined
+  const code = result.isError ? result.error.info?.code : undefined
+  const declined = result.isError && result.error.message.includes('user rejected tool')
   return {
     kind: declined
       ? 'declined'

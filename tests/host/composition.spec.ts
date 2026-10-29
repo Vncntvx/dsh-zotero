@@ -22,7 +22,8 @@ import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include, { entryListSchema, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime from '@deepseek-ai/dsh-tools'
+import ToolRuntime, { projectToolSchema } from '@deepseek-ai/dsh-tools'
+import { ToolExecutionPipeline, executeToolBatch } from '@deepseek-ai/dsh-tools/pipeline'
 import ZoteroService from '../../src/index.js'
 import ScholarlyService from '../../src/scholarly/index.js'
 import ZoteroLibraryService from '../../src/library/index.js'
@@ -105,6 +106,14 @@ async function bootComposition(extraPatches: readonly PatchOptions[] = []): Prom
     },
   })
   await context.loader.await()
+  context.tools.setExecutor({
+    describe(tools) {
+      return { schemas: tools.map((definition) => projectToolSchema(definition, false)) }
+    },
+    execute(input) {
+      return executeToolBatch(input, new ToolExecutionPipeline(context!), () => 10)
+    },
+  })
 }
 
 /** The names of every registered model tool in the current composition. */
@@ -143,15 +152,20 @@ describe('the shipped bundle patch through a real Loader composition', () => {
         { 'Total-Results': '1' },
       ),
     )
-    const result = expectValue(
-      await context!.tools.execute({
-        callId: ToolCallId('composition-search'),
-        name: 'zotero_search',
-        arguments: { query: 'flash', limit: 5 },
-        signal: new AbortController().signal,
-      }),
-      'zotero_search',
-    )
+    const batch = await context!.tools.execute({
+      calls: [
+        {
+          type: 'tool-call',
+          id: ToolCallId('composition-search'),
+          name: 'zotero_search',
+          arguments: JSON.stringify({ query: 'flash', limit: 5 }),
+        },
+      ],
+      signal: new AbortController().signal,
+    })
+    const call = batch.results[0]
+    if (call === undefined) throw new Error('Tool execution produced no result')
+    const result = expectValue(call.result, 'zotero_search')
     expect(result.value).toMatchObject({ total: 1, returned: 1 })
 
     // Disposal unwinds every registration owned by the composed tree.

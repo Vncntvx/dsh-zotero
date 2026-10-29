@@ -121,6 +121,57 @@ describe('the zotero diagnostics endpoint', () => {
     expect(verbose.entries.some((entry) => entry.event === 'tool.result')).toBe(true)
   })
 
+  it('formats tool call digest for debug entries with long or circular arguments', async () => {
+    lane = await setupHostLane(undefined, { typert: true })
+    await commitLive(lane, { debug: true })
+
+    // Long arguments (>300 chars)
+    const longQuery = 'q'.repeat(400)
+    lane.mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (_req, _res, helpers) =>
+      helpers.json([], { 'Total-Results': '0' }),
+    )
+    await lane.runTool('zotero_search', { query: longQuery, limit: 5 })
+
+    // Circular arguments (JSON.stringify throws)
+    const circular: Record<string, unknown> = {}
+    circular.self = circular
+    const execCircular = {
+      callId: 'diag-circular-1' as never,
+      name: 'zotero_search',
+      arguments: circular,
+      signal: new AbortController().signal,
+    }
+    await lane.zoteroFiber.ctx.waterfall(
+      lane.zoteroFiber as never,
+      'tools/execute',
+      execCircular as never,
+      () => Promise.resolve({ isError: false, content: [] }) as never,
+    )
+
+    // Undefined arguments
+    const execEmpty = {
+      callId: 'diag-empty-1' as never,
+      name: 'zotero_search',
+      arguments: undefined,
+      signal: new AbortController().signal,
+    }
+    await lane.zoteroFiber.ctx.waterfall(
+      lane.zoteroFiber as never,
+      'tools/execute',
+      execEmpty as never,
+      () => Promise.resolve({ isError: false, content: [] }) as never,
+    )
+
+    const view = await runtimeOf(lane).diagnostics(LIVE_SIGNAL)
+    const callEntries = view.entries.filter((entry) => entry.event === 'tool.call')
+    const longCall = callEntries.find((entry) => entry.message.includes('…'))
+    expect(longCall).toBeDefined()
+    expect(longCall?.message.endsWith('…')).toBe(true)
+
+    const bareCalls = callEntries.filter((entry) => entry.message === 'zotero_search')
+    expect(bareCalls.length).toBeGreaterThanOrEqual(2)
+  })
+
   it('accepts a client error report, clamped, and assigns its sequence', async () => {
     lane = await setupHostLane(undefined, { typert: true })
     const receipt = await runtimeOf(lane).reportClientError(

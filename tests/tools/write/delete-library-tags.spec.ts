@@ -161,13 +161,19 @@ describe('zotero_delete_library_tags preview', () => {
       caller.abort()
       helpers.raw(404, { 'Content-Type': 'text/plain' }, 'Not found')
     })
-    const result = await lane.ctx.tools.execute({
-      callId: 'tool-aborted-tags-preview' as never,
-      name: tool.name,
-      arguments: { tags: ['methods'] },
+    const batch = await lane.ctx.tools.execute({
+      calls: [
+        {
+          type: 'tool-call',
+          id: 'tool-aborted-tags-preview' as never,
+          name: tool.name,
+          arguments: JSON.stringify({ tags: ['methods'] }),
+        },
+      ],
       signal: caller.signal,
       agent: {} as never,
     })
+    const result = batch.results[0]!.result
     expect(result.isError).toBe(true)
     expect(JSON.stringify(result)).toContain(TOOL_ABORTED)
     expect(JSON.stringify(result)).not.toContain(WRITE_APPROVAL_UNAVAILABLE_MESSAGE)

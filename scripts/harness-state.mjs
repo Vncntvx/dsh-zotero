@@ -527,9 +527,27 @@ function declarationOf(pkgDir, specifier) {
   const manifest = readJson(join(pkgDir, 'package.json'))
   const sub = specifier.slice(manifest.name.length).replace(/^\//, '')
   const key = sub === '' ? '.' : `./${sub}`
-  const entry = manifest.exports?.[key] ?? (sub === '' ? manifest.types : undefined)
+  const wildcard = Object.keys(manifest.exports ?? {}).find(
+    (pattern) =>
+      pattern.includes('*') &&
+      key.startsWith(pattern.split('*')[0]) &&
+      key.endsWith(pattern.split('*')[1]),
+  )
+  const matched = wildcard === undefined ? undefined : manifest.exports[wildcard]
+  const capture =
+    wildcard === undefined
+      ? ''
+      : key.slice(wildcard.split('*')[0].length, key.length - wildcard.split('*')[1].length)
+  const entry =
+    manifest.exports?.[key] ??
+    (typeof matched === 'string' ? matched.replace('*', capture) : undefined) ??
+    (sub === '' ? manifest.types : undefined)
   const types = typeof entry === 'string' ? entry : entry?.types
-  return typeof types === 'string' ? join(pkgDir, types) : undefined
+  if (typeof types !== 'string') return undefined
+  const path = types.startsWith('./src/')
+    ? types.replace('./src/', './lib/types/').replace(/\.tsx?$/, '.d.ts')
+    : types
+  return join(pkgDir, path)
 }
 
 /**

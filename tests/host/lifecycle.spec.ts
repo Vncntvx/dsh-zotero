@@ -31,6 +31,7 @@ import {
 } from '../../src/scholarly/prompt.js'
 import type { ZoteroProvider } from '../../src/types.js'
 import { type HostLane, setupHostLane } from '../helpers/lanes/host-lane.js'
+import { deferred } from '../helpers/sync.js'
 import { sectionPosition, withBandProbes } from '../helpers/prompt-band.js'
 import { STUB_EVENT_SEQ, stubCommandInvocation } from '../helpers/stub-commands.js'
 import { ZOTERO_TOOL_NAMES } from '../helpers/tool-names.js'
@@ -263,19 +264,28 @@ describe('disposal unwinds registrations', () => {
     // hang the host: the provider deadline ends it, so a reload leaves no
     // work waiting forever.
     lane = await setupHostLane({ timeoutMs: 60 }, { commands: true })
-    lane.mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) =>
-      helpers.delayJson({ key: 'ABCD1234', data: {} }, 5000),
-    )
+    const arrived = deferred<void>()
+    lane.mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) => {
+      arrived.resolve()
+      return helpers.delayJson({ key: 'ABCD1234', data: {} }, 5000)
+    })
     const pending = lane.ctx.tools.execute({
-      callId: ToolCallId('lifecycle-in-flight'),
-      name: 'zotero_get',
-      arguments: { ref: 'zotero://user/0/item/ABCD1234' },
+      calls: [
+        {
+          type: 'tool-call',
+          id: ToolCallId('lifecycle-in-flight'),
+          name: 'zotero_get',
+          arguments: JSON.stringify({ ref: 'zotero://user/0/item/ABCD1234' }),
+        },
+      ],
       signal: new AbortController().signal,
     })
+    await arrived.promise
     await lane.zoteroFiber.dispose()
-    const result = await pending
-    expect(result.isError).toBe(true)
-    expect(JSON.stringify(result)).toContain('ZOTERO_TIMEOUT')
+    const batch = await pending
+    const call = batch.results[0]
+    expect(call?.result.isError).toBe(true)
+    expect(JSON.stringify(call?.result)).toContain('ZOTERO_TIMEOUT')
   })
 
   it('removes tools, the prompt section, and the command when the plugin fiber is disposed', async () => {
@@ -595,5 +605,56 @@ describe('capability gating', () => {
       expect((thrown as ZoteroError).code).toBe(ZOTERO_CAPABILITY_UNAVAILABLE)
       expect((thrown as ZoteroError).message).toContain(capability)
     }
+  })
+
+  it('re-registers cleanly when a replacement fails and HMR rolls back to the previous version', async () => {
+    lane = await setupHostLane({ writeEnabled: true })
+    const initialService = lane.ctx.get('zotero') as ZoteroService
+    expect(initialService).toBeDefined()
+    expect(lane.tool('zotero_read_item')).toBeUndefined()
+    expect(lane.tool('zotero_get')).toBeDefined()
+    expect(lane.tool('zotero_create_item')).toBeDefined()
+
+    // 1. Simulate HMR stopping the running version
+    await lane.zoteroFiber.dispose()
+    expect(lane.ctx.get('zotero')).toBeUndefined()
+    expect(lane.tool('zotero_get')).toBeUndefined()
+    expect(lane.tool('zotero_create_item')).toBeUndefined()
+
+    // 2. Simulate replacement plugin activation failure
+    class BrokenReplacementPlugin {
+      constructor() {
+        throw new Error('HMR replacement synthetic activation error')
+      }
+    }
+    const failedFiber = lane.ctx.plugin(BrokenReplacementPlugin)
+    await expect(failedFiber).rejects.toThrow('HMR replacement synthetic activation error')
+
+    // 3. Simulate HMR rollback re-instantiating the previous version
+    const restoredFiber = lane.ctx.plugin(ZoteroService, {
+      baseUrl: lane.mock.baseUrl,
+      writeEnabled: true,
+    })
+    await restoredFiber
+
+    // 4. Assert restored state is healthy, without duplicate-id or leak errors
+    const restoredService = lane.ctx.get('zotero') as ZoteroService
+    expect(restoredService).toBeDefined()
+    expect(restoredService).not.toBe(initialService)
+    expect(lane.tool('zotero_get')).toBeDefined()
+    expect(lane.tool('zotero_create_item')).toBeDefined()
+
+    lane.mock.route('GET', '/api/', (req, res, helpers) =>
+      helpers.json({}, { 'Zotero-API-Version': '3' }),
+    )
+    const status = await restoredService.status()
+    expect(status.connected).toBe(true)
+    expect(status.providerId).toBe('local')
+
+    // 5. Verify restored fiber disposes cleanly
+    await restoredFiber.dispose()
+    expect(lane.ctx.get('zotero')).toBeUndefined()
+    expect(lane.tool('zotero_get')).toBeUndefined()
+    expect(lane.tool('zotero_create_item')).toBeUndefined()
   })
 })

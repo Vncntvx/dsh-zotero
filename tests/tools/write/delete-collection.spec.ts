@@ -160,13 +160,19 @@ describe('zotero_delete_collection preview', () => {
       caller.abort()
       helpers.raw(404, { 'Content-Type': 'text/plain' }, 'Not found')
     })
-    const result = await lane.ctx.tools.execute({
-      callId: 'tool-aborted-preview' as never,
-      name: definition.name,
-      arguments: { collection: COLLECTION_REF },
+    const batch = await lane.ctx.tools.execute({
+      calls: [
+        {
+          type: 'tool-call',
+          id: 'tool-aborted-preview' as never,
+          name: definition.name,
+          arguments: JSON.stringify({ collection: COLLECTION_REF }),
+        },
+      ],
       signal: caller.signal,
       agent: {} as never,
     })
+    const result = batch.results[0]!.result
     expect(result.isError).toBe(true)
     expect(JSON.stringify(result)).toContain(TOOL_ABORTED)
     expect(JSON.stringify(result)).not.toContain(WRITE_APPROVAL_UNAVAILABLE_MESSAGE)
@@ -184,13 +190,19 @@ describe('zotero_delete_collection preview', () => {
     lane.mock.route('GET', '/api/users/0/collections/ABCD1234', (_req, res, helpers) =>
       helpers.raw(500, { 'Content-Type': 'text/plain' }, 'boom'),
     )
-    const result = await lane.ctx.tools.execute({
-      callId: 'tool-late-fault-after-abort' as never,
-      name: definition.name,
-      arguments: { collection: COLLECTION_REF },
+    const batch = await lane.ctx.tools.execute({
+      calls: [
+        {
+          type: 'tool-call',
+          id: 'tool-late-fault-after-abort' as never,
+          name: definition.name,
+          arguments: JSON.stringify({ collection: COLLECTION_REF }),
+        },
+      ],
       signal: caller.signal,
       agent: {} as never,
     })
+    const result = batch.results[0]!.result
     expect(result.isError).toBe(true)
     expect(JSON.stringify(result)).toContain(TOOL_ABORTED)
     // A protocol fault must not be laundered into an approval prompt either.

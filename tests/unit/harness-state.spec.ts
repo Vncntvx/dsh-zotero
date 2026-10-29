@@ -534,6 +534,21 @@ describe('collectArtifactProblems', () => {
     ])
     expect(found.staleRuntime).toHaveLength(1)
   })
+  it('checks built declarations for a source wildcard subpath export', () => {
+    writePackage('dsh-client-ui-chat', { source: 30, declaration: 20, runtime: 10 })
+    const dir = join(tree, 'packages/client/dsh-client-ui-chat')
+    writeFileSync(
+      join(dir, 'package.json'),
+      JSON.stringify({
+        name: '@deepseek-ai/dsh-client-ui-chat',
+        exports: { './src/*': './src/*' },
+      }),
+    )
+    writeFileSync(join(dir, 'lib/types/panel.d.ts'), 'export declare const panel: number')
+    const found = collectArtifactProblems(tree, ['@deepseek-ai/dsh-client-ui-chat/src/panel.ts'])
+    expect(found.missing).toEqual([])
+    expect(found.stale).toEqual([])
+  })
 })
 
 describe('resolveHarnessRoot', () => {

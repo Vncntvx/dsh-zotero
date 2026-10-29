@@ -123,10 +123,19 @@ describe('panel write gateway', () => {
   ])('preserves %s settlement and never retries', async (kind, isError, expected) => {
     const host = await boot()
     const execute = vi.spyOn(host.ctx.tools, 'execute').mockResolvedValue({
-      isError,
-      meta: { kind },
-      content: [{ type: 'text', text: kind }],
-      ...(isError ? { error: { message: kind, info: { code: 'ZOTERO_CONFLICT' } } } : {}),
+      results: [
+        {
+          callId: 'call-1' as never,
+          result: {
+            isError,
+            meta: { kind },
+            content: [{ type: 'text', text: kind }],
+            ...(isError ? { error: { message: kind, info: { code: 'ZOTERO_CONFLICT' } } } : {}),
+          },
+        },
+      ],
+      additionalContexts: [],
+      concluded: false,
     } as never)
     expect(await executeLibraryWrite(host.ctx, request, signal())).toMatchObject({
       kind: expected,
@@ -136,25 +145,39 @@ describe('panel write gateway', () => {
     expect(execute).toHaveBeenCalledTimes(1)
     expect(execute.mock.calls[0]?.[0]).toMatchObject({
       agent,
-      name: 'zotero_create_note',
-      arguments: request.args,
+      calls: [
+        {
+          type: 'tool-call',
+          name: 'zotero_create_note',
+          arguments: JSON.stringify(request.args),
+        },
+      ],
     })
   })
 
   it('maps a tool-level user rejection to declined via the harness refusal message', async () => {
     const host = await boot()
     const execute = vi.spyOn(host.ctx.tools, 'execute').mockResolvedValue({
-      isError: true,
-      meta: null,
-      content: [
-        { type: 'text', text: 'the plan was not approved' },
-        { type: 'other' },
-        { type: 'text', text: 'no retry will happen' },
+      results: [
+        {
+          callId: 'call-1' as never,
+          result: {
+            isError: true,
+            meta: null,
+            content: [
+              { type: 'text', text: 'the plan was not approved' },
+              { type: 'other' },
+              { type: 'text', text: 'no retry will happen' },
+            ],
+            error: {
+              message: 'the user rejected tool "zotero_create_note"',
+              info: { code: 'TOOL_DENIED' },
+            },
+          },
+        },
       ],
-      error: {
-        message: 'the user rejected tool "zotero_create_note"',
-        info: { code: 'TOOL_DENIED' },
-      },
+      additionalContexts: [],
+      concluded: false,
     } as never)
     const outcome = await executeLibraryWrite(host.ctx, request, signal())
     expect(outcome.kind).toBe('declined')
@@ -165,9 +188,11 @@ describe('panel write gateway', () => {
 
   it('maps Trash to the existing batch soft-delete operation', async () => {
     const host = await boot()
-    const execute = vi
-      .spyOn(host.ctx.tools, 'execute')
-      .mockResolvedValue({ isError: false, meta: null, content: [] } as never)
+    const execute = vi.spyOn(host.ctx.tools, 'execute').mockResolvedValue({
+      results: [{ callId: 'call-1' as never, result: { isError: false, meta: null, content: [] } }],
+      additionalContexts: [],
+      concluded: false,
+    } as never)
     await executeLibraryWrite(
       host.ctx,
       {
@@ -178,8 +203,13 @@ describe('panel write gateway', () => {
       signal(),
     )
     expect(execute.mock.calls[0]?.[0]).toMatchObject({
-      name: 'zotero_batch_items',
-      arguments: { delete: ['zotero://user/0/item/ITEM0001'] },
+      calls: [
+        {
+          type: 'tool-call',
+          name: 'zotero_batch_items',
+          arguments: JSON.stringify({ delete: ['zotero://user/0/item/ITEM0001'] }),
+        },
+      ],
     })
   })
 
