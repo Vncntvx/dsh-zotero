@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Zotero 助手",
-    "description": "DeepSeek Harness 的本地 Zotero 插件：检索文献、阅读 PDF 全文与笔记、提取原文片段并在会话标签页中管理文献与导出。",
+    "description": "DeepSeek Harness 的本地 Zotero 插件：在对话中检索文献并核对文献轨迹，在文献面板里浏览全库、复制引用并受审批写入。",
     "detail": "docs/plugin-detail.md"
   }
 }

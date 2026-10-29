@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "dsh-zotero/library",
-    "description": "Global Zotero library panel: a right-sidebar tab with multi-dimensional filters, item inspection, and approved write mutations."
+    "description": "Literature panel: a right-sidebar tab for browsing the whole Zotero library, multi-field search, item inspection, citation copying, and approved writes."
   }
 }

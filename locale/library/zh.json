@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "dsh-zotero/library",
-    "description": "Zotero 全局文献库面板：右侧边栏标签页、多维复合检索、条目检视及受审批的安全写入。"
+    "description": "文献面板：右侧边栏标签页，浏览整个 Zotero 文献库、多维检索、条目检视、复制引用及受审批的安全写入。"
   }
 }

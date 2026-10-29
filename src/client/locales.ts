@@ -75,7 +75,7 @@ export const en = {
   libraryWriteApplied: 'Change applied',
   libraryWriteInvalid: 'Check required fields and JSON arrays before submitting.',
 
-  nav: 'Zotero',
+  nav: 'Literature trail',
   overridden: 'Overridden',
   reset: 'Reset to default',
   readOnly: 'This deployment stores settings read-only.',
@@ -90,9 +90,9 @@ export const en = {
   tabFeatures: 'General',
   tabConnection: 'Connection',
   tabSearch: 'Search & Extraction',
-  tabLibrary: 'Library panel',
-  tabLibraryDesc: 'Preferences for the Zotero library panel and its right-sidebar display.',
-  libraryGuideTitle: 'Library panel',
+  tabLibrary: 'Literature panel',
+  tabLibraryDesc: 'Preferences for the literature panel and its right-sidebar display.',
+  libraryGuideTitle: 'Literature panel',
   libraryGuideDesc: 'Browse Zotero literature.',
   tabScholarly: 'Scholarly Search',
   tabScholarlyDesc:
@@ -100,17 +100,17 @@ export const en = {
   tabAdvanced: 'Advanced',
   groupLibrarySidebar: 'Sidebar Display',
   groupLibrarySidebarDesc:
-    'Choose where the library panel appears in DeepSeek Harness, with support for right-sidebar display.',
+    'Choose where the literature panel appears in DeepSeek Harness, with support for right-sidebar display.',
   libraryDisabled:
-    'The library panel is provided by the dsh-zotero/library component. Enable that component under "Included components" to turn on library browsing and sidebar configuration.',
+    'The literature panel is provided by the dsh-zotero/library component. Enable that component under "Included components" to turn on library browsing and sidebar configuration.',
   rightSidebarEnabled: 'Show in right sidebar',
   rightSidebarHint:
-    'Provide a library tab and quick launcher in the right sidebar for simultaneous chat and reading.',
+    'Provide a literature panel tab and quick launcher in the right sidebar for simultaneous chat and reading.',
   libraryNavTree: 'Collections',
   libraryNavList: 'Items',
   libraryNavInspector: 'Inspector',
   configTabsLabel: 'Zotero configuration tabs',
-  groupWebDesc: 'Toggle conversation literature tab visibility in session views.',
+  groupWebDesc: 'Toggle the literature trail tab in conversations.',
   groupWriteDesc:
     'Manage write access, authorizations, and safety gates for your personal library.',
   groupDefaultsDesc:
@@ -233,10 +233,10 @@ export const en = {
   foregroundWaitMs: 'Foreground wait timeout (ms)',
   foregroundWaitMsHint:
     'How long to wait synchronously before promoting an operation to a background job.',
-  groupWeb: 'Literature tab',
-  webEnabled: 'Show literature tab',
+  groupWeb: 'Literature trail',
+  webEnabled: 'Show literature trail',
   webEnabledHint:
-    'Shows a Zotero literature tab at the top of conversations, with literature, passages, and exports.',
+    'Shows the literature trail tab at the top of conversations: the papers the agent retrieved or read in this session, their passages, and its exports.',
   groupDiagnostics: 'Diagnostics',
   debug: 'Diagnostic mode',
   debugHint:
@@ -314,7 +314,7 @@ export const en = {
   activationCheckAgain: 'Check Again',
   tipsLabel: 'Quick tips',
   tipWebTab:
-    'Turn on "Show literature tab" and the Zotero tab appears at the top of conversations, with literature, passages, and exports.',
+    'Turn on "Show literature trail" and the literature trail tab appears at the top of conversations, with the papers this session touched, their passages, and exports.',
   tipWriteGate:
     'To let the agent write notes, tags, collections, or items, turn on "Allow writes" and approve the Zotero popup.',
   tipSettingsNav:
@@ -550,7 +550,7 @@ export const en = {
   commandFailed: 'Command failed',
   statusServerIdUnreported: 'Not reported (this build does not identify database)',
   statusLocalApiAddress: 'Local API Address',
-  libraryPanel: 'Zotero Library',
+  libraryPanel: 'Literature panel navigation',
   librarySelectLibrary: 'Library',
   librarySearchLabel: 'Search',
   librarySearchPlaceholder: 'Search titles, creators, years…',
@@ -701,7 +701,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   libraryWriteApplied: '变更已应用',
   libraryWriteInvalid: '提交前请检查必填字段和 JSON 数组。',
 
-  nav: 'Zotero',
+  nav: '文献轨迹',
   overridden: '已覆盖',
   reset: '恢复默认',
   readOnly: '本部署的设置为只读。',
@@ -733,7 +733,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   libraryNavList: '列表',
   libraryNavInspector: '详情',
   configTabsLabel: 'Zotero 设置分区',
-  groupWebDesc: '控制会话顶部的文献与导出面板展示。',
+  groupWebDesc: '控制会话顶部文献轨迹标签页的显示。',
   groupWriteDesc: '管理对本地 Zotero 文库的写入、授权与安全门禁。',
   groupDefaultsDesc: '设定生成引文与参考文献时使用的默认样式与语言代码。',
   groupConnectionDesc: '配置与当前运行的本机 Zotero 实例的 HTTP API 通信参数。',
@@ -849,9 +849,9 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   promoteOnTimeoutHint: '当同步等待超时时，自动将耗时操作转为后台任务继续执行。',
   foregroundWaitMs: '前台等待超时 (毫秒)',
   foregroundWaitMsHint: '同步等待耗时操作完成的最大毫秒数，超出后转入后台任务。',
-  groupWeb: '文献标签',
-  webEnabled: '显示文献标签',
-  webEnabledHint: '在会话顶部显示 Zotero 文献标签，包括文献、相关片段和导出。',
+  groupWeb: '文献轨迹',
+  webEnabled: '显示文献轨迹',
+  webEnabledHint: '在会话顶部显示文献轨迹标签页：本会话中 Agent 检索或读到的文献、原文片段与导出。',
   groupDiagnostics: '诊断',
   debug: '开启诊断',
   debugHint:
@@ -923,7 +923,8 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   activationDone: '完成',
   activationCheckAgain: '重新检测',
   tipsLabel: '使用小贴士',
-  tipWebTab: '打开「显示文献标签」后，会话顶部出现 Zotero 标签页，文献、相关片段与导出都在其中。',
+  tipWebTab:
+    '打开「显示文献轨迹」后，会话顶部出现文献轨迹标签页，本会话涉及的文献、相关片段与导出都在其中。',
   tipWriteGate: '智能体要写笔记、标签、合集或条目，需打开「允许写入」并在 Zotero 弹窗中授权。',
   tipSettingsNav: '连接、结果上限与引文格式的完整设置在插件页的 dsh-zotero 配置区。',
   lensSources: '文献',
@@ -1153,7 +1154,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   commandFailed: '执行失败',
   statusServerIdUnreported: '未报告（当前构建不支持数据库标识）',
   statusLocalApiAddress: '本地 API 地址',
-  libraryPanel: 'Zotero 文献库',
+  libraryPanel: '文献面板导航',
   librarySelectLibrary: '文献库',
   librarySearchLabel: '搜索',
   librarySearchPlaceholder: '搜索标题、作者、年份…',
