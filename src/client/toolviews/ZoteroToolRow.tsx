@@ -19,7 +19,7 @@ import type {
   ToolResultNode,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { isToolRunning, metaOf, rowStateOf } from '../presenters.ts'
-import { writeMetaOf } from '../sources/decoders.ts'
+import { writeMetaOf } from '../sources/write-decoder.ts'
 import css from './toolviews.module.css'
 
 interface ToolRowRenderContext {

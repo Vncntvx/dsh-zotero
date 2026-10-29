@@ -10,15 +10,15 @@ import {
   IconRefreshOutlineRegular,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import { browseMetaOf } from '../sources/decoders.ts'
 import {
-  browseMetaOf,
   changesMetaOf,
   jobArmOf,
   jobSummaryKeyOf,
   type ChangesMetaView,
   type ChangesWithheldReason,
   type JobArmView,
-} from '../sources/decoders.ts'
+} from '../sources/sync-decoder.ts'
 import type { BrowseRow } from '../../browse-rows.ts'
 import { countOfLabel } from '../evidence-labels.ts'
 import {

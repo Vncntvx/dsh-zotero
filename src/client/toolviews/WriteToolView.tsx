@@ -19,7 +19,7 @@ import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots
 import type { ToolArgs } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { CopyButton } from '../components/CopyButton.tsx'
 import { selectUrlOf } from '../actions/open-zotero.ts'
-import { writeMetaOf, type WriteMetaView } from '../sources/decoders.ts'
+import { writeMetaOf, type WriteMetaView } from '../sources/write-decoder.ts'
 import {
   argsViewOf,
   errorSummaryOf,

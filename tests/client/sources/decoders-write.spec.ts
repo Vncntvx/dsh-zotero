@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { writeMetaOf } from '../../../src/client/sources/decoders.ts'
+import { writeMetaOf } from '../../../src/client/sources/write-decoder.ts'
 
 describe('writeMetaOf', () => {
   it('decodes restoration as its own outcome with actual success and failure counts', () => {
