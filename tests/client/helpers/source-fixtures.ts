@@ -126,6 +126,8 @@ export function searchOf(
     tags: [],
     excludeTags: [],
     includeTrashed: false,
+    returned: 1,
+    total: 1,
     ...overrides,
   }
 }

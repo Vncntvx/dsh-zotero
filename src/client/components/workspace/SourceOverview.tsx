@@ -4,16 +4,17 @@
  * copy title / copy link, ask, export citation, copy ref) as one flat row of
  * visible actions: the copy belongs beside its siblings, not folded into an
  * overflow menu whose single item sat ~190px from its own trigger.
- * Below it the search occurrences show just the query
- * per episode; scope, mode, and filter fields wait behind the "search
- * details" disclosure, together with the raw ref, developer facts that
- * must not compete with the primary actions. Only the PDF read is
- * instance-guarded (a mismatched ref may resolve to the wrong document);
- * the clipboard actions never are.
+ * Below it every search occurrence is the audit record, in the first screen
+ * without expanding anything: query (or the browse marker) with scope and
+ * mode, the active filters, and the episode's hit counts. The "technical
+ * details" disclosure keeps only the raw ref, developer data that must not
+ * compete with the audit record. Only the PDF read is instance-guarded (a
+ * mismatched ref may resolve to the wrong document); the clipboard actions
+ * never are.
  * @module dsh-zotero/client/components/workspace/SourceOverview
  */
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ZoteroAttachmentLocationView } from '../../../contract.ts'
@@ -74,6 +75,33 @@ export function SourceOverview({
   const [detailOpen, setDetailOpen] = useState(false)
   const evidenceMatch = item.evidenceMatch
   const pdfCapability = pdfCapabilityOf(item)
+  // The audit lines are formatted once per data/locale change: the inspector
+  // re-renders on view-local state, and every label and t() call used to be
+  // recomputed per occurrence on each of those renders.
+  const searchRows = useMemo(
+    () =>
+      item.searches.map((search, index) => {
+        const scope = scopeLabelOf(search.scope, t)
+        const mode = modeLabelOf(search.mode, t)
+        const filters = filterLineOf(search.itemTypes, search.tags, t)
+        // The note supplement is a second count on the same line: the first
+        // screen answers "how many hits, and did notes add any" at a glance.
+        const hits =
+          search.total === undefined
+            ? t('searchEpisodeHitsNoTotal', { returned: search.returned })
+            : t('searchEpisodeHitsLine', { returned: search.returned, total: search.total })
+        const hitsWithNotes =
+          search.noteMatches === undefined
+            ? hits
+            : `${hits} · ${t('searchEpisodeNoteHits', { noteMatches: search.noteMatches })}`
+        const queryLine =
+          search.query !== undefined
+            ? t('searchEpisodeQueryLine', { query: search.query, scope, mode })
+            : t('searchEpisodeNoQueryLine', { scope, mode })
+        return { key: `${search.callId}-${index}`, queryLine, filters, hitsWithNotes }
+      }),
+    [item.searches, t],
+  )
 
   return (
     <div className={css.panel}>
@@ -122,13 +150,17 @@ export function SourceOverview({
         />
       </div>
       {item.evidenceMatch === 'mismatch' && <p className={css.warning}>{t('databaseMismatch')}</p>}
-      {item.searches.length > 0 ? (
-        item.searches.map((search, index) => (
-          <p key={`${search.callId}-${index}`} className={css.line}>
-            {search.query !== undefined
-              ? t('searchFrom', { query: search.query })
-              : t('searchFromBrowse')}
-          </p>
+      {searchRows.length > 0 ? (
+        searchRows.map((search) => (
+          <div key={search.key} className={css.section}>
+            <p className={css.line}>{search.queryLine}</p>
+            {search.filters !== '' && (
+              <p className={css.note}>
+                {t('searchEpisodeFilterLine', { filters: search.filters })}
+              </p>
+            )}
+            <p className={css.line}>{search.hitsWithNotes}</p>
+          </div>
         ))
       ) : (
         <p className={css.note}>{t('overviewNoSearch')}</p>
@@ -145,16 +177,6 @@ export function SourceOverview({
       </button>
       {detailOpen && (
         <div className={css.section}>
-          {item.searches.map((search, index) => {
-            const filters = filterLineOf(search.itemTypes, search.tags, t)
-            return (
-              <p key={`${search.callId}-${index}`} className={css.note}>
-                {`${t('scopeLine')} ${scopeLabelOf(search.scope, t)}`}
-                {filters !== '' ? ` · ${t('filterLine')} ${filters}` : ''}
-                {` · ${t('modeLine')} ${modeLabelOf(search.mode, t)}`}
-              </p>
-            )
-          })}
           <p className={css.note}>{`${t('refLine')} ${item.ref}`}</p>
         </div>
       )}

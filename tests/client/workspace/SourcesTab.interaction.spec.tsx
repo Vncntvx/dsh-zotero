@@ -227,7 +227,12 @@ describe('composer prefills', () => {
     // The first source is selected by default; the overview shows the query
     // that surfaced it, and the passages tab carries the kept-passage count.
     expect(
-      screen.getByText(new RegExp(zh.searchFrom.replace('{query}', 'attention'))),
+      screen.getByText(
+        zh.searchEpisodeQueryLine
+          .replace('{query}', 'attention')
+          .replace('{scope}', zh.overviewScopeLibrary)
+          .replace('{mode}', zh.modeMetadata),
+      ),
     ).toBeDefined()
     expect(
       view.container.querySelector('[data-inspector-panel="evidence"]')!.textContent,

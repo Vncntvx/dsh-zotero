@@ -91,7 +91,9 @@ export function searchMetaOf(
 /**
  * The expected SearchOccurrence of one episode: defaults mirror the reducer's
  * argument normalization, so an episode created from plain `query` args
- * carries the library scope and empty filters.
+ * carries the library scope, empty filters, and one returned row of a
+ * one-hit total. A spec asserting an unreported count reads the field
+ * directly instead: this builder always states a total.
  */
 export function searchOccurrenceOf(
   overrides: Partial<{
@@ -105,6 +107,9 @@ export function searchOccurrenceOf(
     tagMatch?: 'all' | 'any'
     excludeTags?: string[]
     includeTrashed?: boolean
+    returned: number
+    total: number
+    noteMatches: number
   }> = {},
 ): Record<string, unknown> {
   return {
@@ -116,6 +121,8 @@ export function searchOccurrenceOf(
     tagMatch: 'all',
     excludeTags: [],
     includeTrashed: false,
+    returned: 1,
+    total: 1,
     ...overrides,
   }
 }

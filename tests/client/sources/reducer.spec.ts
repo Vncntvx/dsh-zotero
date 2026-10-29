@@ -97,7 +97,9 @@ describe('buildSourceWorkspace', () => {
       ])
       expect(workspace.sources).toHaveLength(3)
       for (const source of workspace.sources) {
-        expect(source.searches).toEqual([searchOccurrenceOf({ callId: 's1', query: 'attention' })])
+        expect(source.searches).toEqual([
+          searchOccurrenceOf({ callId: 's1', query: 'attention', returned: 3, total: 2 }),
+        ])
       }
     })
 
@@ -483,10 +485,10 @@ describe('buildSourceWorkspace', () => {
       ])
       expect(workspace.sources).toHaveLength(2)
       expect(workspace.sources[0]!.searches).toEqual([
-        searchOccurrenceOf({ callId: 's1', query: 'x', tags: ['ml', 'review'] }),
+        searchOccurrenceOf({ callId: 's1', query: 'x', tags: ['ml', 'review'], returned: 2 }),
       ])
       expect(workspace.sources[1]!.searches).toEqual([
-        searchOccurrenceOf({ callId: 's1', query: 'x', tags: ['ml', 'review'] }),
+        searchOccurrenceOf({ callId: 's1', query: 'x', tags: ['ml', 'review'], returned: 2 }),
       ])
     })
   })

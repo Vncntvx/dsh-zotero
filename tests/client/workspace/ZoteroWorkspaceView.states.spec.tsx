@@ -195,7 +195,7 @@ describe('inspector', () => {
 })
 
 describe('overview panel', () => {
-  it('lists the episode filters and a browse search without a query', () => {
+  it('shows the browse line and filters on the overview without expanding', () => {
     const workspace = singleFixture()
     const browse = {
       ...workspace,
@@ -211,9 +211,17 @@ describe('overview panel', () => {
       })),
     }
     const { view } = mountView(browse)
-    expect(screen.getByText(zh.searchFromBrowse)).toBeDefined()
-    fireEvent.click(screen.getByText(zh.searchDetailOpen))
-    expect(screen.getByText(new RegExp(`${zh.filterLine} journalArticle · hot`))).toBeDefined()
+    // Scope and mode ride on the browse line; the filters get their own line.
+    expect(
+      screen.getByText(
+        zh.searchEpisodeNoQueryLine
+          .replace('{scope}', zh.overviewScopeLibrary)
+          .replace('{mode}', zh.modeEverything),
+      ),
+    ).toBeDefined()
+    expect(
+      screen.getByText(zh.searchEpisodeFilterLine.replace('{filters}', 'journalArticle · hot')),
+    ).toBeDefined()
     view.unmount()
   })
 

@@ -60,6 +60,25 @@ export interface SearchOccurrence {
   readonly tagMatch?: 'all' | 'any'
   readonly excludeTags: readonly string[]
   readonly includeTrashed: boolean
+  /**
+   * Hits this episode's pages returned to the agent. Continuation pages of one
+   * folded episode only ever add to it: the episode counts what it retrieved,
+   * not what its last page happened to carry.
+   */
+  readonly returned: number
+  /**
+   * The scope's whole hit count as the episode's first page reported it.
+   * Continuation pages never overwrite it, and the field is absent when Zotero
+   * did not report a total (the decoder's `null`, a different fact from zero).
+   */
+  readonly total?: number
+  /**
+   * Note-body matches the episode's first page folded in. `0` means the note
+   * scan ran and matched nothing; the field is absent when the decoder read
+   * `null`, i.e. no note scan ran at all, which is a different fact.
+   * Continuation pages never overwrite it.
+   */
+  readonly noteMatches?: number
 }
 
 /** One deduplicated evidence passage with the calls that returned it. */

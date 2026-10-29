@@ -63,6 +63,12 @@ interface SearchEpisode {
   readonly includeTrashed: boolean
   returned: number
   omitted: number
+  /**
+   * The first page's whole-hit count and note-scan matches. Later pages of the
+   * same identity never overwrite them: they describe the episode, not a page.
+   */
+  readonly total?: number
+  readonly noteMatches?: number
   readonly keys: Set<string>
 }
 
@@ -483,11 +489,17 @@ export function buildSourceWorkspace(
             includeTrashed: boolArg(args, 'includeTrashed'),
             returned: 0,
             omitted: 0,
+            ...(view.total === null ? {} : { total: view.total }),
+            ...(view.noteMatches === null ? {} : { noteMatches: view.noteMatches }),
             keys: new Set(),
           }
           episodes.push(lastEpisode)
         }
-        lastEpisode.returned += view.rows.length
+        // `returned` is the hits the paged listing returned to the agent. The
+        // rows are the byte-budget-bounded presentation projection: they drop
+        // hits over the budget and carry note-supplement rows, so they cannot
+        // stand in for the hit count when the projection reports one.
+        lastEpisode.returned += view.returned ?? view.rows.length
         lastEpisode.omitted += view.omitted ?? 0
         for (const row of view.rows) {
           const draft = draftOf(row.ref, seq)
@@ -613,6 +625,9 @@ export function buildSourceWorkspace(
       ...(episode.tagMatch ? { tagMatch: episode.tagMatch } : {}),
       excludeTags: episode.excludeTags,
       includeTrashed: episode.includeTrashed,
+      returned: episode.returned,
+      ...(episode.total === undefined ? {} : { total: episode.total }),
+      ...(episode.noteMatches === undefined ? {} : { noteMatches: episode.noteMatches }),
     }
     for (const key of episode.keys) {
       // Every episode key entered through `draftOf`, so the draft exists.

@@ -139,7 +139,12 @@ describe('inspector', () => {
     const workspace = singleFixture()
     const { view } = mountView(workspace)
     expect(
-      screen.getByText(new RegExp(zh.searchFrom.replace('{query}', 'risk policy'))),
+      screen.getByText(
+        zh.searchEpisodeQueryLine
+          .replace('{query}', 'risk policy')
+          .replace('{scope}', zh.overviewScopeLibrary)
+          .replace('{mode}', zh.modeEverything),
+      ),
     ).toBeDefined()
     fireEvent.click(view.container.querySelector('[data-inspector-panel="evidence"]')!)
     // The summary line names the retrieves and the kept counts.
@@ -221,16 +226,31 @@ describe('inspector', () => {
 })
 
 describe('overview panel', () => {
-  it('reveals the search details behind the disclosure and hides them again', () => {
+  it('keeps the search audit lines visible and the disclosure to the ref', () => {
     const workspace = singleFixture()
     const { view } = mountView(workspace)
-    expect(screen.queryByText(new RegExp(zh.scopeLine))).toBeNull()
+    // The audit record is first-screen: query line and hit counts.
+    expect(
+      screen.getByText(
+        zh.searchEpisodeQueryLine
+          .replace('{query}', 'risk policy')
+          .replace('{scope}', zh.overviewScopeLibrary)
+          .replace('{mode}', zh.modeEverything),
+      ),
+    ).toBeDefined()
+    expect(
+      screen.getByText(zh.searchEpisodeHitsLine.replace('{returned}', '1').replace('{total}', '1')),
+    ).toBeDefined()
+    // The developer ref stays behind the disclosure until it is opened.
+    expect(screen.queryByText(new RegExp(`${zh.refLine} zotero://user/0/item/P`))).toBeNull()
     fireEvent.click(screen.getByText(zh.searchDetailOpen))
-    expect(screen.getByText(new RegExp(`${zh.scopeLine} ${zh.overviewScopeLibrary}`))).toBeDefined()
-    expect(screen.getByText(new RegExp(zh.modeEverything))).toBeDefined()
+    // Opening swaps the toggle and reveals the ref; the audit lines stay in
+    // the first screen above, so the disclosure carries no second copy of them.
+    expect(screen.getByText(zh.searchDetailClose)).toBeDefined()
     expect(screen.getByText(new RegExp(`${zh.refLine} zotero://user/0/item/P`))).toBeDefined()
     fireEvent.click(screen.getByText(zh.searchDetailClose))
-    expect(screen.queryByText(new RegExp(zh.scopeLine))).toBeNull()
+    expect(screen.queryByText(new RegExp(`${zh.refLine} zotero://user/0/item/P`))).toBeNull()
+    expect(screen.getByText(zh.searchDetailOpen)).toBeDefined()
     view.unmount()
   })
 
