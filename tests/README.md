@@ -97,6 +97,18 @@ never in a file named after a number or a function.
   `src/service-lifecycle.ts`; composition and transport rebuild behavior stay
   covered by `host/lifecycle.spec.ts` and `host/settings.spec.ts`.
 
+### Navigation module verification
+
+`src/client/components/library/useLibraryNavigation.ts` owns continuous collection
+and saved-search prefixes, restoration, library-version fences and location.
+The `client/library/navigation-*` specs use the real feed and controlled remote
+boundaries; tree and panel specs verify rendering, keyboard focus and controls.
+`local/collection-path.spec.ts` owns fresh parent-chain protocol behavior,
+`host/library-path.spec.ts` proves the core-service route, and
+`client/library/remote-contract-path.spec.ts` verifies both strict codecs.
+Live acceptance includes `test:integration` and the manual panel checks recorded
+in `docs/navigation-validation.md`; mocked passes do not establish browser QA.
+
 ### Verification levels and behaviour ownership
 
 Use the smallest real assembly that can establish the behaviour. Keep real

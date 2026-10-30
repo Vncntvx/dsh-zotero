@@ -771,3 +771,5 @@ Reference truthfulness and accuracy verification. Parses the authors, year, titl
 #### Verdicts
 
 Each reference returns one of four verdicts: `VERIFIED` (the registry record exists and every compared field agrees), `CHECK` (the record exists but a field differs or the work is retracted), `NOT FOUND` (the registry answered and holds no such record), `UNVERIFIED` (the registry was unreachable, so nothing is concluded about this entry). An unreachable registry is never reported as `NOT FOUND`.
+
+Collection and saved-search browse results include `libraryVersion` from a valid `Last-Modified-Version` response header. Missing or invalid versions fail explicitly rather than returning a synthetic version.

@@ -79,3 +79,7 @@ Both primary paths reach the local library through `ctx.zotero`. External schola
 - **Research and verify in chat**: Ask questions in chat → the agent queries the local library and extracts passages with page numbers → switch to the **literature trail** at the top to check search terms and original sources.
 - **Browse and cite in the sidebar**: Open the **literature panel** in the right sidebar to browse collections or filter items, and read PDFs; copy BibTeX or CSL citations from the action row, or click "Ask" to send the item into the composer.
 - **Find and save external literature**: Have the agent search external indexes and read open-access full text via the scholarly component; save selected papers to the personal library upon confirmation, after which they appear in both the panel and the trail.
+
+## Library panel navigation rules
+
+Collections and saved searches load continuous prefixes per level. Load more retains existing rows. Selecting a different scope clears keywords and added filters while preserving search mode and sort; selecting the same scope or reopening preserves the query. Expanders only expand; names only select. Locate follows actual parents to load and reveal the current collection.

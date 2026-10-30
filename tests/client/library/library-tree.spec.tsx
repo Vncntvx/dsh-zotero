@@ -39,14 +39,14 @@ function mountTree(
   expanded = new Set([rootRef]),
   lane: LibraryLaneState<CollectionRowView> = { phase: 'ready', ...childPage },
 ) {
-  const pageTree = vi.fn(),
+  const loadMoreTree = vi.fn(),
     retryTree = vi.fn(),
     selectScope = vi.fn(),
     toggleCollection = vi.fn()
   const props = {
     t: mockT,
     expanded,
-    pageTree,
+    loadMoreTree,
     retryTree,
     selectScope,
     toggleCollection,
@@ -67,7 +67,7 @@ function mountTree(
     },
     rootLane: { phase: 'ready' as const, ...rootPage },
     treeLane: () => lane,
-    pageSavedSearches: vi.fn(),
+    loadMoreSavedSearches: vi.fn(),
     retrySavedSearches: vi.fn(),
   }
   const view = render(<LibraryTree {...props} />)
@@ -162,10 +162,9 @@ describe('collection tree navigation', () => {
     })
     const rootGroup = screen.getAllByRole('group', { name: zh.libraryCollections })[0]!
     const childGroup = screen.getAllByRole('group', { name: rootPage.rows[0]!.name })[0]!
-    fireEvent.click(within(rootGroup).getByRole('button', { name: zh.libraryPageNext }))
-    expect(props.pageTree).toHaveBeenCalledWith(undefined, 2)
-    fireEvent.click(within(childGroup).getByRole('button', { name: zh.libraryPageNext }))
-    expect(props.pageTree).toHaveBeenCalledWith(rootRef, 1)
+    fireEvent.click(within(rootGroup).getByRole('button', { name: zh.libraryLoadMore }))
+    expect(props.loadMoreTree).toHaveBeenCalledWith(undefined)
+    expect(within(childGroup).queryByRole('button', { name: zh.libraryLoadMore })).toBeNull()
     fireEvent.click(
       within(childGroup).getByRole('button', {
         name: `${rootPage.rows[0]!.name}: ${zh.libraryRetry}`,
@@ -174,4 +173,50 @@ describe('collection tree navigation', () => {
     expect(props.retryTree).toHaveBeenCalledWith(rootRef)
     expect(screen.getByText('title · contains · term')).toBeTruthy()
   })
+})
+
+it('removes confirmed leaf expanders and keeps the row keyboard focus', () => {
+  mountTree(new Set(), {
+    phase: 'ready',
+    rows: [],
+    total: 0,
+    offset: 0,
+    limit: 50,
+    nextOffset: undefined,
+  })
+  const row = screen.getAllByRole('treeitem')[0]!
+  act(() => row.focus())
+  expect(row.hasAttribute('aria-expanded')).toBe(false)
+  expect(screen.queryByRole('button', { name: rootPage.rows[0]!.name })).toBeNull()
+  fireEvent.keyDown(row, { key: 'ArrowRight' })
+  expect(document.activeElement).toBe(row)
+})
+
+it('locates and focuses the selected row without changing selection', () => {
+  const { props, rerender } = mountTree()
+  rerender(<LibraryTree {...props} locatedRef={rootRef} />)
+  expect(document.activeElement?.getAttribute('role')).toBe('treeitem')
+  expect(props.selectScope).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('button', { name: rootPage.rows[0]!.name }))
+  expect(props.toggleCollection).toHaveBeenCalledWith(rootRef)
+})
+
+it('appends children from the control after the visible branch', () => {
+  const { props } = mountTree()
+  const group = screen.getByRole('group', { name: rootPage.rows[0]!.name })
+  fireEvent.click(within(group).getByRole('button', { name: zh.libraryLoadMore }))
+  expect(props.loadMoreTree).toHaveBeenCalledWith(rootRef)
+  const child = screen.getAllByRole('treeitem')[1]!
+  fireEvent.keyDown(child, { key: 'ArrowRight' })
+  fireEvent.keyDown(child, { key: 'ArrowRight' })
+})
+
+it('keeps focus on an expanded row with no visible child when pressing right', () => {
+  const childRef = childPage.rows[0]!.ref
+  const { props } = mountTree(new Set([rootRef, childRef]))
+  const child = screen.getAllByRole('treeitem')[1]!
+  act(() => child.focus())
+  fireEvent.keyDown(child, { key: 'ArrowRight' })
+  expect(document.activeElement).toBe(child)
+  expect(props.toggleCollection).not.toHaveBeenCalled()
 })

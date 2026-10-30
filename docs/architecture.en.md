@@ -167,3 +167,7 @@ The plugin maintains an in-process diagnostic ring buffer of 500 entries (`src/d
 - Passage ranking: BM25 term frequency matching over the item's own passage corpus, with no vector or embedding model;
 - Trail boundary: the literature trail shows only facts produced by read tools and exports in this session, never writes, and never literature from outside the library;
 - Scope boundary: the Trash is a scope reserved for the literature panel and is not offered by the model tool schemas.
+
+## Navigation state and path endpoint
+
+`useLibraryNavigation` owns continuous prefixes, library versions, deduplication, up to four navigation tasks, restoration and location; `useLibraryFeed` owns items and persistence. Storage uses a v2 key and format without migration, response snapshots or durable leaf conclusions. The read-only `collectionPath({ library, ref, libraryVersion })` endpoint routes through `ctx.zoteroLibrary` → `ctx.zotero` → Local Provider under the browse capability, without adding a model tool. It returns actual collection rows from root to target and verifies the library version with a final lightweight listing. Missing ancestors, cycles and invalid parents fail explicitly. Collection and saved-search pages require valid `Last-Modified-Version`; both codecs reject missing versions. The path data plane only merges in-flight requests within a generation.

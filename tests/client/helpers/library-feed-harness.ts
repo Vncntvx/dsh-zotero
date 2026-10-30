@@ -31,6 +31,10 @@ import {
  */
 export function setupLibraryFeed(overrides: Partial<LibraryFeedFace> = {}, serverId = 'S1') {
   const face = {
+    collectionPath: vi.fn<LibraryFeedFace['collectionPath']>(async (request) => ({
+      ok: true,
+      value: { ...request, path: [] },
+    })),
     browse: vi.fn(async (request: ZoteroLibraryBrowseRequestView) => ({
       ok: true as const,
       value:

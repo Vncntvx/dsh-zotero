@@ -46,6 +46,7 @@ export const LIBRARY_ROWS: ZoteroLibraryBrowseResultView = {
 /** Root collections with a parent/child pair, plus one saved search. */
 export const ROOT_COLLECTIONS: ZoteroLibraryBrowseResultView = {
   kind: 'collections',
+  libraryVersion: 1,
   items: [
     {
       kind: 'collection',
@@ -70,6 +71,7 @@ export const ROOT_COLLECTIONS: ZoteroLibraryBrowseResultView = {
 
 export const CHILD_COLLECTIONS: ZoteroLibraryBrowseResultView = {
   kind: 'collections',
+  libraryVersion: 1,
   items: [
     {
       kind: 'collection',
@@ -88,6 +90,7 @@ export const CHILD_COLLECTIONS: ZoteroLibraryBrowseResultView = {
 
 export const SAVED_SEARCHES: ZoteroLibraryBrowseResultView = {
   kind: 'savedSearches',
+  libraryVersion: 1,
   items: [
     { kind: 'savedSearch', ref: 'zotero://user/0/search/SEARCH01', name: 'Unread', conditions: [] },
   ],
@@ -180,6 +183,7 @@ export const ITEM_DETAIL: ZoteroItemDetailView = {
 
 /** The wire face the specs script; loose, so a scripted spy stays assignable. */
 export interface ScriptedFace {
+  collectionPath: (request: unknown) => Promise<{ ok: boolean; value?: unknown; error?: unknown }>
   status: () => Promise<{ ok: boolean; value?: unknown; error?: unknown }>
   browse: (
     request: ZoteroLibraryBrowseRequestView,
@@ -242,6 +246,12 @@ export function mountPanel(
     submit: vi.fn(),
   }
   const face = {
+    collectionPath:
+      overrides.collectionPath ??
+      vi.fn(async (request) => ({
+        ok: true,
+        value: { library: request.library, libraryVersion: request.libraryVersion, path: [] },
+      })),
     status: overrides.status ?? vi.fn(async () => ({ ok: true, value: CONNECTED })),
     browse,
     search: overrides.search ?? vi.fn(async () => ({ ok: true, value: searchPage() })),

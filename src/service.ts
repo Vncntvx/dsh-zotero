@@ -1,3 +1,4 @@
+import type { ZoteroCollectionPathRequestView, ZoteroCollectionPathResultView } from './contract.js'
 /**
  * `ctx.zotero`: the stable research-domain boundary of the plugin.
  *
@@ -600,6 +601,15 @@ export class ZoteroService extends Service {
     this.requireCapability(provider, 'citation')
     const doExport = this.requireMethod(provider, 'exportText')
     return await doExport(request, signal, onProgress)
+  }
+
+  async collectionPath(
+    request: ZoteroCollectionPathRequestView,
+    signal?: AbortSignal,
+  ): Promise<ZoteroCollectionPathResultView> {
+    const provider = this.resolveProvider()
+    this.requireCapability(provider, 'browse')
+    return this.requireMethod(provider, 'collectionPath')(request, signal)
   }
 
   async browse(request: ZoteroBrowseRequest, signal?: AbortSignal): Promise<ZoteroBrowseResult> {

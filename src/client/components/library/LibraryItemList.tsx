@@ -14,6 +14,8 @@ import { LibraryPager } from './LibraryPager.tsx'
 import css from './library.module.css'
 
 interface LibraryItemListProps {
+  readonly returnToLibrary?: () => void
+  readonly filtered?: boolean
   readonly t: TranslateNS<'zotero'>
   readonly list: LibraryListState
   readonly selection: LibrarySelection
@@ -34,7 +36,7 @@ function selectionLabelOf(selection: LibrarySelection, t: TranslateNS<'zotero'>)
     case 'trash':
       return t('libraryTrash')
     case 'collection':
-      return selection.name
+      return selection.path?.join(' / ') || selection.name
     case 'savedSearch':
       return selection.name
   }
@@ -42,6 +44,8 @@ function selectionLabelOf(selection: LibrarySelection, t: TranslateNS<'zotero'>)
 
 export function LibraryItemList({
   t,
+  filtered,
+  returnToLibrary,
   list,
   selection,
   offset,
@@ -53,7 +57,11 @@ export function LibraryItemList({
   const range = list.phase === 'ready' ? pageRangeOf(list, list.items.length) : undefined
 
   return (
-    <section className={css.list} aria-label={t('libraryItemList')}>
+    <section
+      className={css.list}
+      aria-busy={list.phase === 'loading'}
+      aria-label={t('libraryItemList')}
+    >
       <header className={css.listHeader}>
         <h2 className={css.listTitle}>{selectionLabelOf(selection, t)}</h2>
         {list.phase === 'ready' && range !== undefined && (
@@ -76,11 +84,16 @@ export function LibraryItemList({
             <Button variant="outline" size="sm" onClick={retry}>
               {t('libraryRetry')}
             </Button>
+            {'ref' in selection && returnToLibrary && (
+              <Button variant="outline" size="sm" onClick={returnToLibrary}>
+                {t('libraryAllItems')}
+              </Button>
+            )}
           </div>
         )}
 
         {list.phase === 'ready' && list.items.length === 0 && (
-          <p className={css.listNote}>{t('libraryEmptyList')}</p>
+          <p className={css.listNote}>{t(filtered ? 'libraryNoMatches' : 'libraryEmptyList')}</p>
         )}
 
         {list.phase === 'ready' && list.items.length > 0 && (

@@ -678,7 +678,7 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', 
         limit: 20,
       },
       undefined,
-      { includeSupplemental: false },
+      { includeSupplemental: true },
     )
     expect(result.scope).toMatchObject({ kind: 'collection' })
     expect(result.returned).toBe(result.items.length)

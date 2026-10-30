@@ -1,3 +1,4 @@
+import { requireNavigationVersion } from './collection-path.js'
 /**
  * The `zotero_browse` domain: the six bounded discovery kinds (libraries,
  * server-side collection navigation with breadcrumb walks, saved searches,
@@ -166,6 +167,7 @@ export async function runBrowse(
 function browsePage(
   kind: ZoteroBrowseKind,
   page: {
+    libraryVersion?: number
     items: ZoteroBrowseItem[]
     total: number
     offset: number
@@ -176,6 +178,7 @@ function browsePage(
 ): ZoteroBrowseResult {
   return {
     kind,
+    ...(page.libraryVersion !== undefined ? { libraryVersion: page.libraryVersion } : {}),
     ...(page.library !== undefined ? { library: page.library } : {}),
     ...(page.serverId !== undefined && page.serverId !== '' ? { serverId: page.serverId } : {}),
     items: page.items,
@@ -320,6 +323,7 @@ async function browseCollections(
   // a page-local re-sort of a server-paged window would order each page
   // internally while scrambling the sequence across pages.
   return browsePage('collections', {
+    libraryVersion: requireNavigationVersion(headers),
     items,
     total,
     offset: request.offset,
@@ -377,6 +381,7 @@ async function browseSavedSearches(
   // listing, and a page-local re-sort of a server-paged window would order
   // each page internally while scrambling the sequence across pages.
   return browsePage('savedSearches', {
+    libraryVersion: requireNavigationVersion(headers),
     items,
     total,
     offset: request.offset,

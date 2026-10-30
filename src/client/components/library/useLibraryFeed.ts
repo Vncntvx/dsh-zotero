@@ -1,3 +1,4 @@
+import { useLibraryNavigation } from './useLibraryNavigation.ts'
 /**
  * The library panel's data feed: one hook owning every wire call the panel
  * makes. The panel mounts while its sidebar entry is selected, so requests
@@ -7,14 +8,13 @@
  * @module dsh-zotero/client/components/library/useLibraryFeed
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   SupportedLocalLibrary,
   ZoteroChildListingKind,
   ZoteroLibraryBrowseItemView,
 } from '../../../contract.ts'
 import {
-  collectionRowsOf,
   type CollectionRowView,
   type FlatCollectionRow,
   type LibraryLaneState,
@@ -27,10 +27,8 @@ import {
   type LibraryPane,
   type LibrarySelectorState,
   type SavedSearchRowView,
-  flattenTree,
   itemStateOf,
   librariesRequestOf,
-  lanePageOf,
   libraryOptionsOf,
   LIBRARY_SORTS,
   listRequestOf,
@@ -38,10 +36,8 @@ import {
   pageOffsetOf,
   PERSONAL_LIBRARY,
   sameLibrary,
-  savedSearchesRequestOf,
-  savedSearchRowsOf,
-  treeRequestOf,
 } from './library-model.ts'
+import { scopeIdentity } from './navigation-identity.ts'
 import { messageOf } from '../../error-text.ts'
 import { useLibraryChildFeed } from './useLibraryChildFeed.ts'
 import {
@@ -57,9 +53,11 @@ const SEARCH_DEBOUNCE_MS = 300
 const INSPECTOR_INCLUDE: readonly ZoteroChildListingKind[] = ['notes', 'attachments', 'annotations']
 
 type CollectionRow = CollectionRowView
-type TreeLanes = ReadonlyMap<string, LibraryLaneState<CollectionRow>>
 
 export interface LibraryFeed {
+  readonly locate: () => void
+  readonly locatedRef?: string
+  readonly locateError?: string
   readonly narrowPane: LibraryPane
   readonly setNarrowPane: (pane: LibraryPane) => void
   readonly libraries: LibrarySelectorState
@@ -68,11 +66,11 @@ export interface LibraryFeed {
   readonly flatTree: readonly FlatCollectionRow[]
   readonly expanded: ReadonlySet<string>
   readonly toggleCollection: (ref: string) => void
-  readonly pageTree: (ref: string | undefined, offset: number) => void
+  readonly loadMoreTree: (ref: string | undefined) => void
   readonly retryTree: (ref: string | undefined) => void
   readonly treeLane: (ref: string | undefined) => LibraryLaneState<CollectionRow> | undefined
   readonly savedSearches: LibraryLaneState<SavedSearchRowView>
-  readonly pageSavedSearches: (offset: number) => void
+  readonly loadMoreSavedSearches: () => void
   readonly retrySavedSearches: () => void
   readonly selection: LibrarySelection
   readonly selectScope: (selection: LibrarySelection) => void
@@ -122,13 +120,13 @@ export function useLibraryFeed(
   const initialView = readLibrarySessionMemory(sessionId)
   const [libraries, setLibraries] = useState<LibraryFeed['libraries']>({ phase: 'loading' })
   const [currentLibrary, setCurrentLibrary] = useState<SupportedLocalLibrary>(PERSONAL_LIBRARY)
-  const [lanes, setLanes] = useState<TreeLanes>(new Map())
+  const [prefixes, setPrefixes] = useState<Readonly<Record<string, number>>>({})
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
-  const [savedSearches, setSavedSearches] = useState<LibraryFeed['savedSearches']>({
-    phase: 'loading',
-  })
-  const [savedOffset, setSavedOffset] = useState(0)
+
   const [selection, setSelection] = useState<LibrarySelection>({ kind: 'library' })
+  const scopeToken = JSON.stringify([serverId, currentLibrary, scopeIdentity(selection, serverId)])
+  const liveScope = useRef(scopeToken)
+  liveScope.current = scopeToken
   const [q, setQRaw] = useState('')
   const [filters, setFiltersRaw] = useState<LibraryFilters>({})
   const [debouncedQ, setDebouncedQ] = useState('')
@@ -136,6 +134,7 @@ export function useLibraryFeed(
   const [sort, setSortRaw] = useState<(typeof LIBRARY_SORTS)[number]>('dateModified')
   const [direction, setDirectionRaw] = useState<'asc' | 'desc'>('desc')
   const [offset, setOffset] = useState(0)
+  const [listOwner, setListOwner] = useState('')
   const [list, setList] = useState<LibraryListState>({ phase: 'loading' })
   const [selectedRef, setSelectedRef] = useState<string | undefined>(undefined)
   const [inspector, setInspector] = useState<LibraryItemState | undefined>(
@@ -148,37 +147,55 @@ export function useLibraryFeed(
   }, [])
   const [refreshToken, setRefreshToken] = useState(0)
   const [libraryRetry, setLibraryRetry] = useState(0)
-  const [savedRetry, setSavedRetry] = useState(0)
   const [listRetry, setListRetry] = useState(0)
   const [inspectorRetry, setInspectorRetry] = useState(0)
-  const laneOffsets = useRef(new Map<string, number>())
+  const requestIdentity = JSON.stringify([
+    serverId,
+    currentLibrary,
+    scopeIdentity(selection, serverId),
+    q,
+    debouncedQ,
+    mode,
+    sort,
+    direction,
+    offset,
+    filters,
+    refreshToken,
+    listRetry,
+  ])
   // Monotonic sequences: the winner is the request issued last, and a stale
   // answer that resolves late is dropped by comparison. Tree lanes ticket per
   // key: only a newer request for the same key invalidates a lane.
   const seq = useRef({
     libraries: 0,
-    lanes: new Map<string, number>(),
-    saved: 0,
     list: 0,
     inspector: 0,
   })
   const inspectorTicketOf = useCallback(() => seq.current.inspector, [])
   const childFeed = useLibraryChildFeed(face, selectedRef, inspectorTicketOf, setInspector)
   const { childStates, pageChild, reset: resetChildren } = childFeed
-  // Mirror of `expanded` for the refresh path; the sync effect below is
-  // declared before the tree effect, so the refresh commit reads the set the
-  // user currently sees open.
-  const expandedRef = useRef(expanded)
   // Live reads for the stable post-write refresh: a form that resolves after
   // its own unmount still refreshes the scope the user sees now, not the one
   // captured when the write was submitted.
-  const currentLibraryRef = useRef(currentLibrary)
-  currentLibraryRef.current = currentLibrary
   const selectedRefRef = useRef(selectedRef)
   selectedRefRef.current = selectedRef
   const restoredServer = useRef<string>()
   const [hydratedServer, setHydratedServer] = useState<string>()
-  const active = enabled && (serverId === undefined || hydratedServer === serverId)
+  const active = enabled && serverId !== undefined && hydratedServer === serverId
+
+  const navigation = useLibraryNavigation(
+    face,
+    serverId,
+    currentLibrary,
+    active,
+    expanded,
+    setExpanded,
+    prefixes,
+    selection,
+    setSelection,
+  )
+  const { flatTree, savedSearches } = navigation
+  const reloadCachedTree = navigation.refresh
 
   /**
    * Reset on every library change: hydration on a server switch and an
@@ -190,12 +207,7 @@ export function useLibraryFeed(
   const resetLibraryState = useCallback(
     (library: SupportedLocalLibrary, restored?: LibraryStoredState): void => {
       seq.current.list += 1
-      seq.current.saved += 1
-      for (const [key, ticket] of seq.current.lanes) seq.current.lanes.set(key, ticket + 1)
-      laneOffsets.current.clear()
-      setLanes(new Map())
-      setSavedSearches({ phase: 'loading' })
-      setSavedOffset(0)
+      setPrefixes(restored?.prefixes ?? {})
       setCurrentLibrary(library)
       setSelection(restored?.selection ?? { kind: 'library' })
       setQRaw(restored?.q ?? '')
@@ -240,7 +252,8 @@ export function useLibraryFeed(
   useEffect(() => {
     if (!active || serverId === undefined || hydratedServer !== serverId) return
     writeLibraryState(serverId, {
-      version: 1,
+      version: 2,
+      prefixes: navigation.prefixes,
       library: currentLibrary,
       selection,
       q: debouncedQ,
@@ -268,6 +281,7 @@ export function useLibraryFeed(
     filters,
     selectedRef,
     narrowPane,
+    JSON.stringify(navigation.prefixes),
   ])
 
   // The debounced query drives requests; the raw input drives the text box.
@@ -310,106 +324,15 @@ export function useLibraryFeed(
     })
   }, [active, face, refreshToken, libraryRetry])
 
-  const loadLane = useCallback(
-    (parentRef: string | undefined, offset = 0): void => {
-      const key = parentRef ?? ''
-      laneOffsets.current.set(key, offset)
-      const ticket = (seq.current.lanes.get(key) ?? 0) + 1
-      seq.current.lanes.set(key, ticket)
-      setLanes((prev) =>
-        new Map(prev).set(key, { phase: 'loading', previous: lanePageOf(prev.get(key)) }),
-      )
-      void face
-        .browse(treeRequestOf(currentLibraryRef.current, parentRef, offset))
-        .then((result) => {
-          if (seq.current.lanes.get(key) !== ticket) return
-          setLanes((prev) =>
-            new Map(prev).set(
-              key,
-              result.ok
-                ? {
-                    phase: 'ready',
-                    rows: collectionRowsOf(result.value.items),
-                    total: result.value.total,
-                    offset: result.value.offset,
-                    limit: result.value.limit,
-                    nextOffset: result.value.nextOffset,
-                  }
-                : {
-                    phase: 'error',
-                    message: result.error.message,
-                    previous: lanePageOf(prev.get(key)),
-                  },
-            ),
-          )
-        })
-        .catch((error: unknown) => {
-          if (seq.current.lanes.get(key) !== ticket) return
-          setLanes((prev) =>
-            new Map(prev).set(key, {
-              phase: 'error',
-              message: messageOf(error),
-              previous: lanePageOf(prev.get(key)),
-            }),
-          )
-        })
+  useEffect(
+    () => () => {
+      seq.current.list++
+      seq.current.inspector++
+      seq.current.libraries++
+      resetChildren()
     },
-    [face],
+    [active, serverId, resetChildren],
   )
-
-  useEffect(() => {
-    expandedRef.current = expanded
-  })
-
-  /**
-   * A refresh re-asks every level the tree has loaded — expanded or folded —
-   * at its last offset. Collapsed-but-cached levels would otherwise serve
-   * stale rows on re-expand after a collection write.
-   */
-  const reloadCachedTree = useCallback((): void => {
-    loadLane(undefined, laneOffsets.current.get('') ?? 0)
-    for (const [ref] of laneOffsets.current) {
-      if (ref === '') continue
-      loadLane(ref, laneOffsets.current.get(ref) ?? 0)
-    }
-  }, [loadLane])
-
-  useEffect(() => {
-    if (!active) return
-    // Selecting a library resets `expanded` first, so the loop is empty there.
-    reloadCachedTree()
-  }, [active, currentLibrary, refreshToken, reloadCachedTree])
-
-  useEffect(() => {
-    if (!active) return
-    const ticket = ++seq.current.saved
-    setSavedSearches((previous) => ({ phase: 'loading', previous: lanePageOf(previous) }))
-    void face
-      .browse(savedSearchesRequestOf(currentLibrary, savedOffset))
-      .then((result) => {
-        if (ticket !== seq.current.saved) return
-        setSavedSearches((previous) =>
-          result.ok
-            ? {
-                phase: 'ready',
-                rows: savedSearchRowsOf(result.value.items),
-                total: result.value.total,
-                offset: result.value.offset,
-                limit: result.value.limit,
-                nextOffset: result.value.nextOffset,
-              }
-            : { phase: 'error', message: result.error.message, previous: lanePageOf(previous) },
-        )
-      })
-      .catch((error: unknown) => {
-        if (ticket !== seq.current.saved) return
-        setSavedSearches((previous) => ({
-          phase: 'error',
-          message: messageOf(error),
-          previous: lanePageOf(previous),
-        }))
-      })
-  }, [active, face, currentLibrary, refreshToken, savedOffset, savedRetry])
 
   // The item list: every toolbar change reloads from the page the offset names.
   useEffect(() => {
@@ -429,21 +352,12 @@ export function useLibraryFeed(
       offset,
       filters,
     }
-    setList((previous) => (previous.phase === 'ready' ? previous : { phase: 'loading' }))
+    setListOwner(requestIdentity)
+    setList({ phase: 'loading' })
     void face
       .search(listRequestOf(query))
       .then((result) => {
         if (ticket !== seq.current.list) return
-        if (
-          !result.ok &&
-          result.error.code === 'zotero/domain' &&
-          result.error.details.code === 'ZOTERO_NOT_FOUND' &&
-          (selection.kind === 'collection' || selection.kind === 'savedSearch')
-        ) {
-          setSelection({ kind: 'library' })
-          setOffset(0)
-          return
-        }
         setList(listStateOf(result))
       })
       .catch((error: unknown) => {
@@ -466,31 +380,19 @@ export function useLibraryFeed(
     listRetry,
   ])
 
-  const lastInspectorKey = useRef<string>()
-
   // The inspector: one detail per selected row, all child kinds included.
   useEffect(() => {
+    if (!active) return
     if (selectedRef === undefined) {
       // Deselecting already cleared the detail (`selectItem` / `rewindList`);
       // the cached payload survives here so hydration can still restore it on
       // a remount that has not read its view pins yet.
       seq.current.inspector += 1
       resetChildren()
-      lastInspectorKey.current = undefined
       return
     }
-    const currentKey = `${selectedRef}:${inspectorRetry}:${refreshToken}`
-    if (
-      inspector?.phase === 'ready' &&
-      inspector.detail.ref === selectedRef &&
-      lastInspectorKey.current === currentKey
-    ) {
-      return
-    }
-    // A freshly fetched detail owns fresh child pages; the skipped refresh
-    // above keeps the pages the user already paged through.
+    // Each effect activation owns a fresh detail read, including reconnects.
     resetChildren()
-    lastInspectorKey.current = currentKey
     const ticket = ++seq.current.inspector
     setInspector((previous) =>
       previous?.phase === 'ready' && previous.detail.ref === selectedRef
@@ -507,32 +409,27 @@ export function useLibraryFeed(
         if (ticket !== seq.current.inspector) return
         setInspector({ phase: 'error', message: messageOf(error) })
       })
-  }, [face, selectedRef, inspectorRetry, refreshToken, resetChildren])
+  }, [active, face, selectedRef, inspectorRetry, refreshToken, resetChildren])
 
   const toggleCollection = useCallback(
-    (ref: string): void => {
+    (ref: string) => {
+      navigation.cancelLocate()
+      const lane = navigation.treeLane(ref)
+      if (lane?.phase === 'ready' && lane.total === 0) return
       setExpanded((prev) => {
         const next = new Set(prev)
-        if (next.has(ref)) next.delete(ref)
+        const existing = [...next].filter(
+          (item) =>
+            scopeIdentity({ kind: 'collection', ref: item, name: '' }, serverId) ===
+            scopeIdentity({ kind: 'collection', ref, name: '' }, serverId),
+        )
+        if (existing.length) existing.forEach((item) => next.delete(item))
         else next.add(ref)
         return next
       })
-      // Expanding a level the cache has never loaded requests it; a re-expand
-      // of a previously loaded level reuses the cached rows until refresh.
-      if (!lanes.has(ref)) loadLane(ref)
     },
-    [lanes, loadLane],
+    [navigation],
   )
-
-  const flatTree = useMemo(() => {
-    const roots = lanePageOf(lanes.get(''))?.rows ?? []
-    return flattenTree(
-      roots,
-      (ref) => lanePageOf(lanes.get(ref)),
-      expanded,
-      lanePageOf(lanes.get('')),
-    )
-  }, [lanes, expanded])
 
   /**
    * Rewind the list and drop the inspector: any change to what the list shows
@@ -548,18 +445,38 @@ export function useLibraryFeed(
 
   const selectLibrary = useCallback(
     (library: SupportedLocalLibrary): void => {
+      if (sameLibrary(library, currentLibrary)) return
       resetLibraryState(library)
+      setModeRaw(mode)
+      setSortRaw(sort)
+      setDirectionRaw(direction)
     },
-    [resetLibraryState],
+    [resetLibraryState, currentLibrary, mode, sort, direction],
   )
 
   const selectScope = useCallback(
     (next: LibrarySelection): void => {
-      setSelection(next)
+      if (scopeIdentity(next, serverId) === scopeIdentity(selection, serverId)) {
+        setNarrowPaneState('list')
+        return
+      }
+      const row =
+        next.kind === 'collection'
+          ? flatTree.find(
+              ({ row }) =>
+                scopeIdentity({ kind: 'collection', ref: row.ref, name: '' }, serverId) ===
+                scopeIdentity(next, serverId),
+            )?.row
+          : undefined
+      navigation.cancelLocate()
+      setSelection(next.kind === 'collection' && row ? { ...next, path: row.path } : next)
+      setQRaw('')
+      setDebouncedQ('')
+      setFiltersRaw({})
       rewindList()
       setNarrowPaneState('list')
     },
-    [rewindList],
+    [rewindList, selection, serverId, flatTree],
   )
 
   const setMode = useCallback(
@@ -596,16 +513,18 @@ export function useLibraryFeed(
 
   const setFilters = useCallback(
     (next: LibraryFilters): void => {
+      if (liveScope.current !== scopeToken) return
       setFiltersRaw(next)
       rewindList()
     },
-    [rewindList],
+    [rewindList, scopeToken],
   )
 
   const refresh = useCallback((): void => {
     face.invalidate?.()
     setRefreshToken((token) => token + 1)
-  }, [face])
+    reloadCachedTree()
+  }, [face, reloadCachedTree])
 
   /**
    * The post-write invalidation, stable so a write form can invoke it after
@@ -616,7 +535,7 @@ export function useLibraryFeed(
     (kind: 'items' | 'collections' | 'savedSearches'): void => {
       face.invalidate?.()
       if (kind === 'collections') reloadCachedTree()
-      if (kind === 'savedSearches') setSavedRetry((value) => value + 1)
+      if (kind === 'savedSearches') reloadCachedTree()
       setListRetry((value) => value + 1)
       if (selectedRefRef.current !== undefined) setInspectorRetry((value) => value + 1)
     },
@@ -637,14 +556,39 @@ export function useLibraryFeed(
     currentLibrary,
     selectLibrary,
     flatTree,
-    expanded,
+    expanded: new Set([
+      ...expanded,
+      ...flatTree
+        .filter(({ row }) =>
+          [...expanded].some(
+            (ref) =>
+              scopeIdentity({ kind: 'collection', ref, name: '' }, serverId) ===
+              scopeIdentity({ kind: 'collection', ref: row.ref, name: '' }, serverId),
+          ),
+        )
+        .map(({ row }) => row.ref),
+    ]),
     toggleCollection,
-    pageTree: loadLane,
-    retryTree: (ref) => loadLane(ref, laneOffsets.current.get(ref ?? '') ?? 0),
-    treeLane: (ref) => lanes.get(ref ?? ''),
+    loadMoreTree: (ref) => {
+      void navigation.loadMore(ref)
+    },
+    retryTree: (ref) => {
+      void navigation.retryTree(ref)
+    },
+    treeLane: navigation.treeLane,
     savedSearches,
-    pageSavedSearches: (next) => setSavedOffset(pageOffsetOf(next)),
-    retrySavedSearches: () => setSavedRetry((value) => value + 1),
+    loadMoreSavedSearches: () => {
+      void navigation.loadMoreSaved()
+    },
+    retrySavedSearches: () => {
+      void navigation.retrySaved()
+    },
+    locate: () => {
+      setNarrowPaneState('tree')
+      void navigation.locate()
+    },
+    locatedRef: navigation.locatedRef,
+    locateError: navigation.locateError,
     selection,
     selectScope,
     q,
@@ -656,7 +600,7 @@ export function useLibraryFeed(
     sort,
     direction,
     setSort,
-    list,
+    list: listOwner === requestIdentity ? list : { phase: 'loading' },
     offset,
     gotoOffset,
     narrowPane,

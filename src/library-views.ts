@@ -80,6 +80,7 @@ export function browseViewOf(
 ): ZoteroLibraryBrowseResultView {
   return {
     ...itemsViewOf(result),
+    ...(result.libraryVersion !== undefined ? { libraryVersion: result.libraryVersion } : {}),
     total: result.total,
     offset: result.offset,
     returned: result.returned,

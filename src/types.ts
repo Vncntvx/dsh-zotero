@@ -717,6 +717,7 @@ export type ZoteroBrowseItem =
   | ZoteroCreatorTypeInfo
 
 export interface ZoteroBrowseResult {
+  readonly libraryVersion?: number
   kind: ZoteroBrowseKind
   library?: SupportedLocalLibrary
   serverId?: string
@@ -1440,6 +1441,10 @@ export interface ZoteroProvider {
     signal?: AbortSignal,
     onProgress?: (progress: ZoteroProgressEvent) => void,
   ): Promise<ZoteroExportTextResult>
+  collectionPath?(
+    request: import('./contract.js').ZoteroCollectionPathRequestView,
+    signal?: AbortSignal,
+  ): Promise<import('./contract.js').ZoteroCollectionPathResultView>
   browse?(request: ZoteroBrowseRequest, signal?: AbortSignal): Promise<ZoteroBrowseResult>
   /**
    * Create a research note (standalone or under a parent item) with tags,

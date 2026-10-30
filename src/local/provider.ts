@@ -1,3 +1,8 @@
+import { readCollectionPath } from './collection-path.js'
+import type {
+  ZoteroCollectionPathRequestView,
+  ZoteroCollectionPathResultView,
+} from '../contract.js'
 /**
  * The `local` provider facade: the Zotero Local API seam implementing
  * {@link ZoteroProvider}. Capabilities are declared only for what this
@@ -389,6 +394,13 @@ export class LocalApiProvider implements ZoteroProvider {
    * metadata fields. The domain logic lives in `local/browse-domain`; this
    * is the seam.
    */
+  async collectionPath(
+    request: ZoteroCollectionPathRequestView,
+    signal?: AbortSignal,
+  ): Promise<ZoteroCollectionPathResultView> {
+    return readCollectionPath(this.deps().client, request, signal)
+  }
+
   async browse(request: ZoteroBrowseRequest, signal?: AbortSignal): Promise<ZoteroBrowseResult> {
     return runBrowse(this.deps(), this.directory, this.itemSchema, request, signal)
   }

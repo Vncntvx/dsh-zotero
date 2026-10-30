@@ -1,3 +1,12 @@
+import {
+  ZOTERO_COLLECTION_PATH_REQUEST_TYPE_SYMBOL,
+  ZOTERO_COLLECTION_PATH_RESULT_TYPE_SYMBOL,
+  zoteroCollectionPathInvocation,
+} from './contract.js'
+import {
+  zoteroCollectionPathRequestSchema,
+  zoteroCollectionPathResultSchema,
+} from './wire-schemas.js'
 /**
  * Host-only strict boundary codecs for the `zotero` wire namespace.
  *
@@ -170,6 +179,10 @@ export const ZOTERO_INVOCATIONS: readonly InvocationDescriptor[] = [
   zoteroDiagnosticsInvocation(ZOTERO_DIAGNOSTICS_CODEC),
   zoteroReportClientErrorInvocation(ZOTERO_CLIENT_ERROR_REPORT_CODEC, ZOTERO_REPORT_RESULT_CODEC),
   zoteroOpenProtocolInvocation(ZOTERO_OPEN_PROTOCOL_PARAM_CODEC, ZOTERO_OPEN_PROTOCOL_RESULT_CODEC),
+  zoteroCollectionPathInvocation(
+    strictCodec(ZOTERO_COLLECTION_PATH_REQUEST_TYPE_SYMBOL, zoteroCollectionPathRequestSchema),
+    strictCodec(ZOTERO_COLLECTION_PATH_RESULT_TYPE_SYMBOL, zoteroCollectionPathResultSchema),
+  ),
   zoteroLibraryBrowseInvocation(
     ZOTERO_LIBRARY_BROWSE_REQUEST_CODEC,
     ZOTERO_LIBRARY_BROWSE_RESULT_CODEC,

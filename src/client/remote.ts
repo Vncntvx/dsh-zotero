@@ -1,3 +1,7 @@
+import type {
+  ZoteroCollectionPathRequestView,
+  ZoteroCollectionPathResultView,
+} from '../contract.ts'
 /**
  * The client-side Typert Remote contribution for the dsh-zotero host
  * service: mounts the shared structural descriptors into `ctx.remote.zotero`.
@@ -70,6 +74,9 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
       report: ZoteroClientErrorReport,
     ) => Promise<RemoteResult<ZoteroReportResultView>>
     openProtocol: (url: string) => Promise<RemoteResult<ZoteroOpenProtocolResultView>>
+    collectionPath: (
+      request: ZoteroCollectionPathRequestView,
+    ) => Promise<RemoteResult<ZoteroCollectionPathResultView>>
     browse: (
       request: ZoteroLibraryBrowseRequestView,
     ) => Promise<RemoteResult<ZoteroLibraryBrowseResultView>>
@@ -94,6 +101,9 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'zotero/reportClientError': (
       report: ZoteroClientErrorReport,
     ) => Promise<RemoteResult<ZoteroReportResultView>>
+    'zotero/collectionPath': (
+      request: ZoteroCollectionPathRequestView,
+    ) => Promise<RemoteResult<ZoteroCollectionPathResultView>>
     'zotero/browse': (
       request: ZoteroLibraryBrowseRequestView,
     ) => Promise<RemoteResult<ZoteroLibraryBrowseResultView>>

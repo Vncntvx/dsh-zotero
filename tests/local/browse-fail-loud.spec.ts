@@ -73,6 +73,7 @@ describe('browse: non-array bodies fail loud', () => {
   it('refuses a tag listing containing a malformed tag row without a tag name', async () => {
     mock.route('GET', '/api/users/0/tags', (_req, res, helpers) => {
       helpers.json([{ data: {} }], {
+        'Last-Modified-Version': '1',
         'Total-Results': '1',
         'Zotero-Server-ID': 'srv-1',
       })
@@ -96,7 +97,11 @@ describe('browse: non-array bodies fail loud', () => {
 describe('browse: empty pages with range left fail loud', () => {
   it('refuses an empty collections page that still has range left', async () => {
     mock.route('GET', '/api/users/0/collections/top', (_req, res, helpers) => {
-      helpers.json([], { 'Total-Results': '5', 'Zotero-Server-ID': 'srv-1' })
+      helpers.json([], {
+        'Last-Modified-Version': '1',
+        'Total-Results': '5',
+        'Zotero-Server-ID': 'srv-1',
+      })
     })
     await zoteroError(
       provider.browse({ kind: 'collections', offset: 2, limit: 10 }),
@@ -107,7 +112,11 @@ describe('browse: empty pages with range left fail loud', () => {
 
   it('refuses an empty savedSearches page that still has range left', async () => {
     mock.route('GET', '/api/users/0/searches', (_req, res, helpers) => {
-      helpers.json([], { 'Total-Results': '5', 'Zotero-Server-ID': 'srv-1' })
+      helpers.json([], {
+        'Last-Modified-Version': '1',
+        'Total-Results': '5',
+        'Zotero-Server-ID': 'srv-1',
+      })
     })
     await zoteroError(
       provider.browse({ kind: 'savedSearches', offset: 2, limit: 10 }),
@@ -118,7 +127,11 @@ describe('browse: empty pages with range left fail loud', () => {
 
   it('refuses an empty tags page that still has range left', async () => {
     mock.route('GET', '/api/users/0/tags', (_req, res, helpers) => {
-      helpers.json([], { 'Total-Results': '5', 'Zotero-Server-ID': 'srv-1' })
+      helpers.json([], {
+        'Last-Modified-Version': '1',
+        'Total-Results': '5',
+        'Zotero-Server-ID': 'srv-1',
+      })
     })
     await zoteroError(
       provider.browse({ kind: 'tags', offset: 2, limit: 10 }),
@@ -131,7 +144,11 @@ describe('browse: empty pages with range left fail loud', () => {
     // The offset is beyond the total, so the empty body agrees with the
     // header: this is the end of the listing, not a breach.
     mock.route('GET', '/api/users/0/tags', (_req, res, helpers) => {
-      helpers.json([], { 'Total-Results': '2', 'Zotero-Server-ID': 'srv-1' })
+      helpers.json([], {
+        'Last-Modified-Version': '1',
+        'Total-Results': '2',
+        'Zotero-Server-ID': 'srv-1',
+      })
     })
     const page = await provider.browse({ kind: 'tags', offset: 2, limit: 10 })
     expect(page.returned).toBe(0)

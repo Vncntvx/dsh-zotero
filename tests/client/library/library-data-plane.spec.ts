@@ -300,3 +300,20 @@ describe('the library data plane', () => {
     expect(underlying.export).toHaveBeenCalledTimes(2)
   })
 })
+
+it('deduplicates only in-flight collection paths and rereads after settlement', async () => {
+  const response = deferred<Awaited<ReturnType<LibraryPanelWireFace['collectionPath']>>>()
+  const underlying = { ...face(), collectionPath: vi.fn(() => response.promise) }
+  const plane = createLibraryDataPlane(underlying as unknown as LibraryPanelWireFace)
+  const request = {
+    library: { type: 'user', id: 0 } as const,
+    ref: 'zotero://user/0/collection/COLL0001',
+    libraryVersion: 1,
+  }
+  const first = plane.collectionPath(request)
+  expect(plane.collectionPath(request)).toBe(first)
+  response.resolve({ ok: true, value: { library: request.library, libraryVersion: 1, path: [] } })
+  await first
+  await plane.collectionPath(request)
+  expect(underlying.collectionPath).toHaveBeenCalledTimes(2)
+})

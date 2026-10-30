@@ -83,7 +83,7 @@ function serveCatalog(mock: MockZotero): void {
       { key: 'COLL1234', version: 3, data: { key: 'COLL1234', name: '方法论' } },
       { key: COLLECTION_KEY, version: 4, data: { key: COLLECTION_KEY, name: 'Second' } },
     ],
-    { 'Zotero-Server-ID': SERVER_ID, 'Total-Results': '2' },
+    { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '1', 'Total-Results': '2' },
   )
 }
 
@@ -164,11 +164,13 @@ describe('zotero_delete_collection', () => {
     serveCatalog(lane.mock)
     // The item-count preview: a search scoped to the collection.
     serveJson(lane.mock, `/api/users/0/collections/${COLLECTION_KEY}/items/top`, [searchHit()], {
+      'Last-Modified-Version': '1',
       'Total-Results': '1',
       'Zotero-Server-ID': SERVER_ID,
     })
     // The child-collection preview: the browse under this parent.
     serveJson(lane.mock, `/api/users/0/collections/${COLLECTION_KEY}/collections`, [], {
+      'Last-Modified-Version': '1',
       'Total-Results': '0',
       'Zotero-Server-ID': SERVER_ID,
     })
@@ -380,7 +382,7 @@ describe('zotero_delete_library_tags', () => {
         { tag: 'methods', numItems: 7 },
         { tag: 'legacy', numItems: 3 },
       ],
-      { 'Total-Results': '2', 'Zotero-Server-ID': SERVER_ID },
+      { 'Last-Modified-Version': '1', 'Total-Results': '2', 'Zotero-Server-ID': SERVER_ID },
     )
     // The library-version read the delete's precondition comes from.
     serveJson(lane.mock, '/api/users/0/items/top', [], {

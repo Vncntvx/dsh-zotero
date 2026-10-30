@@ -1,3 +1,7 @@
+import type {
+  ZoteroCollectionPathRequestView,
+  ZoteroCollectionPathResultView,
+} from '../../../contract.ts'
 /**
  * The library feed's shared vocabulary: the feed wire face, the panel's full
  * wire face the data plane wraps, and the child-listing shapes the feed and
@@ -23,6 +27,9 @@ import type {
 
 /** The wire face the panel calls; injected so specs can stub it wholesale. */
 export interface LibraryFeedFace {
+  readonly collectionPath: (
+    request: ZoteroCollectionPathRequestView,
+  ) => Promise<RemoteResult<ZoteroCollectionPathResultView>>
   readonly browse: (
     request: ZoteroLibraryBrowseRequestView,
   ) => Promise<RemoteResult<ZoteroLibraryBrowseResultView>>

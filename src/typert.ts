@@ -100,6 +100,12 @@ export const TYPERT_MANIFEST: TypertContribution = {
         members: [
           {
             kind: 'method',
+            name: 'collectionPath',
+            signature:
+              'collectionPath(request: ZoteroCollectionPathRequestView, signal: AbortSignal): Promise<ZoteroCollectionPathResultView>',
+          },
+          {
+            kind: 'method',
             name: ZOTERO_LIBRARY_BROWSE_METHOD,
             signature:
               'browse(request: ZoteroLibraryBrowseRequestView, signal: AbortSignal): Promise<ZoteroLibraryBrowseResultView>',

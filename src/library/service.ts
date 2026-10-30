@@ -1,3 +1,7 @@
+import type {
+  ZoteroCollectionPathRequestView,
+  ZoteroCollectionPathResultView,
+} from '../contract.js'
 /**
  * Cordis Service plugin providing `ctx.zoteroLibrary` and its Typert remote
  * endpoints: browse, search, item detail, citation/BibTeX export, and
@@ -74,6 +78,13 @@ export class ZoteroLibraryService extends TypertRemoteService {
    * `maxBrowseResults`/`maxSearchResults` narrows its pages. The view echoes
    * the effective size for the client's pager.
    */
+  async collectionPath(
+    request: ZoteroCollectionPathRequestView,
+    signal: AbortSignal,
+  ): Promise<ZoteroCollectionPathResultView> {
+    return domainCall(() => requireZoteroService(this.ctx, signal).collectionPath(request, signal))
+  }
+
   async browse(
     request: ZoteroLibraryBrowseRequestView,
     signal: AbortSignal,

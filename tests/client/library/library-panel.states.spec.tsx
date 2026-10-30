@@ -235,7 +235,14 @@ describe('lane states', () => {
     mountPanel({
       browse: vi.fn(async () => ({
         ok: true,
-        value: { kind: 'collections', items: [], total: 0, offset: 0, returned: 0 },
+        value: {
+          kind: 'collections',
+          libraryVersion: 1,
+          items: [],
+          total: 0,
+          offset: 0,
+          returned: 0,
+        },
       })),
     })
     expect(await screen.findByText(zh.libraryNoCollections)).toBeTruthy()
@@ -257,6 +264,7 @@ describe('lane states', () => {
               }
             : {
                 kind: 'collections',
+                libraryVersion: 1,
                 items: [{ kind: 'collection', ref: 'c1', name: 'Flat', path: [], depth: 0 }],
                 total: 1,
                 offset: 0,
@@ -276,7 +284,14 @@ describe('lane states', () => {
           return { ok: false, error: { message: 'searches down' } }
         return {
           ok: true,
-          value: { kind: 'collections', items: [], total: 0, offset: 0, returned: 0 },
+          value: {
+            kind: 'collections',
+            libraryVersion: 1,
+            items: [],
+            total: 0,
+            offset: 0,
+            returned: 0,
+          },
         }
       }),
     })

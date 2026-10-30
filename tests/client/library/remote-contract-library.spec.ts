@@ -51,6 +51,7 @@ const PARITY_CASES: readonly ParityCase[] = [
     typeSymbol: ZOTERO_LIBRARY_BROWSE_RESULT_TYPE_SYMBOL,
     valid: {
       kind: 'collections',
+      libraryVersion: 1,
       items: [{ kind: 'collection', ref: 'r', name: 'n', path: [], depth: 0 }],
       total: 1,
       offset: 0,

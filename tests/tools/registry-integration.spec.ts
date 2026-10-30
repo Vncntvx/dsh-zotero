@@ -182,7 +182,7 @@ describe('registry integration: zotero_browse libraries Native identity', () => 
       data: { key: `COLL${String(i).padStart(4, '0')}`, name: `C${i}` },
     }))
     mock.route('GET', '/api/users/0/collections/top', (req, res, helpers) =>
-      helpers.json(cols, { 'Total-Results': String(cols.length) }),
+      helpers.json(cols, { 'Last-Modified-Version': '1', 'Total-Results': String(cols.length) }),
     )
     const result = expectValue(
       await run('zotero_browse', { kind: 'collections', limit: 35 }),
@@ -259,6 +259,7 @@ describe('registry integration: browse render exposes structured fields', () => 
   it('renders collection breadcrumbs instead of bare names', async () => {
     mock.route('GET', '/api/users/0/collections/top', (req, res, helpers) =>
       helpers.json([{ key: 'COLL0001', data: { key: 'COLL0001', name: 'Methods' } }], {
+        'Last-Modified-Version': '1',
         'Total-Results': '1',
         'Zotero-Server-ID': 'S1',
       }),
@@ -283,7 +284,7 @@ describe('registry integration: browse render exposes structured fields', () => 
             data: { key: 'COLL0002', name: 'RAG', parentCollection: 'COLL0001' },
           },
         ],
-        { 'Total-Results': '1', 'Zotero-Server-ID': 'S1' },
+        { 'Last-Modified-Version': '1', 'Total-Results': '1', 'Zotero-Server-ID': 'S1' },
       ),
     )
     const children = expectValue(
@@ -300,6 +301,7 @@ describe('registry integration: browse render exposes structured fields', () => 
   it('renders tag counts, saved-search condition counts, and localized item types', async () => {
     mock.route('GET', '/api/users/0/tags', (req, res, helpers) =>
       helpers.json([{ tag: 'machine-learning', meta: { numItems: 84 } }], {
+        'Last-Modified-Version': '1',
         'Total-Results': '1',
       }),
     )
@@ -321,7 +323,7 @@ describe('registry integration: browse render exposes structured fields', () => 
             },
           },
         ],
-        { 'Total-Results': '1' },
+        { 'Last-Modified-Version': '1', 'Total-Results': '1' },
       ),
     )
     const searches = await run('zotero_browse', { kind: 'savedSearches' })
@@ -360,7 +362,10 @@ describe('registry integration: browseTags server pagination', () => {
         )
       }
       const slice = filtered.slice(start, start + limit)
-      helpers.json(slice, { 'Total-Results': String(filtered.length) })
+      helpers.json(slice, {
+        'Last-Modified-Version': '1',
+        'Total-Results': String(filtered.length),
+      })
     })
     const r = expectValue(
       await run('zotero_browse', { kind: 'tags', q: 'alp', match: 'contains', limit: 10 }),

@@ -426,6 +426,7 @@ export type ZoteroLibraryBrowseItemView =
 
 /** A panel browse result: the requested page of one navigation listing. */
 export interface ZoteroLibraryBrowseResultView {
+  readonly libraryVersion?: number
   readonly kind: ZoteroLibraryBrowseKind
   readonly items: readonly ZoteroLibraryBrowseItemView[]
   readonly total: number
@@ -915,4 +916,24 @@ export function zoteroLibraryExportInvocation(
     param,
     result,
   )
+}
+
+export interface ZoteroCollectionPathRequestView {
+  readonly library: SupportedLocalLibrary
+  readonly ref: string
+  readonly libraryVersion: number
+}
+export interface ZoteroCollectionPathResultView {
+  readonly library: SupportedLocalLibrary
+  readonly libraryVersion: number
+  readonly path: readonly ZoteroCollectionRowView[]
+}
+export const ZOTERO_COLLECTION_PATH_REQUEST_TYPE_SYMBOL =
+  'dsh-zotero#ZoteroCollectionPathRequestView'
+export const ZOTERO_COLLECTION_PATH_RESULT_TYPE_SYMBOL = 'dsh-zotero#ZoteroCollectionPathResultView'
+export function zoteroCollectionPathInvocation(
+  param: InvocationDescriptor['parameters'][number]['codec'],
+  result: InvocationDescriptor['result'],
+): InvocationDescriptor {
+  return libraryInvocation('dsh-zotero#zotero/collectionPath', 'collectionPath', param, result)
 }

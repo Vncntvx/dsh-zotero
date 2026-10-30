@@ -1,3 +1,12 @@
+import {
+  ZOTERO_COLLECTION_PATH_REQUEST_TYPE_SYMBOL,
+  ZOTERO_COLLECTION_PATH_RESULT_TYPE_SYMBOL,
+  zoteroCollectionPathInvocation,
+} from '../contract.ts'
+import {
+  zoteroCollectionPathRequestSchema,
+  zoteroCollectionPathResultSchema,
+} from '../wire-schemas.ts'
 /**
  * Client-side strict codecs for Zotero Typert remotes.
  *
@@ -186,6 +195,10 @@ export const ZOTERO_CLIENT_INVOCATIONS: readonly InvocationDescriptor[] = Object
   zoteroOpenProtocolInvocation(
     ZOTERO_OPEN_PROTOCOL_CLIENT_PARAM_CODEC,
     ZOTERO_OPEN_PROTOCOL_CLIENT_RESULT_CODEC,
+  ),
+  zoteroCollectionPathInvocation(
+    strictCodec(ZOTERO_COLLECTION_PATH_REQUEST_TYPE_SYMBOL, zoteroCollectionPathRequestSchema),
+    strictCodec(ZOTERO_COLLECTION_PATH_RESULT_TYPE_SYMBOL, zoteroCollectionPathResultSchema),
   ),
   zoteroLibraryBrowseInvocation(
     ZOTERO_LIBRARY_BROWSE_CLIENT_PARAM_CODEC,

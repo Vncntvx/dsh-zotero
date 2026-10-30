@@ -195,9 +195,7 @@ describe('browse: libraries', () => {
 
 describe('browse: collections', () => {
   it('lists top-level collections server-side paged, in server order', async () => {
-    // Deliberately unsorted fixture: the plugin must preserve Zotero's own
-    // ordering (its data layer name-collates the listing) instead of
-    // re-sorting each page locally, which would scramble cross-page order.
+    // Preserve server ordering across pages, even for this unsorted fixture.
     const tops = [
       collectionRow({ key: 'COLL0001', data: { name: 'Root B' } }),
       collectionRow({ key: 'COLL0002', data: { name: 'Root A' } }),
@@ -205,7 +203,10 @@ describe('browse: collections', () => {
     mock.route('GET', `${apiPath()}/collections/top`, (req, res, helpers, search) => {
       expect(search.get('start')).toBe('0')
       expect(search.get('limit')).toBe('10')
-      helpers.json(tops, { 'Total-Results': '2', 'Zotero-Server-ID': 'S1' })
+      helpers.json(tops, {
+        ...versionHeaders('S1', 1),
+        'Total-Results': '2',
+      })
     })
     const result = await provider.browse({ kind: 'collections', offset: 0, limit: 10 })
     expect(result.total).toBe(2)
@@ -227,7 +228,10 @@ describe('browse: collections', () => {
     mock.route('GET', `${apiPath()}/collections/top`, (req, res, helpers, search) => {
       const start = Number(search.get('start') ?? '0')
       const limit = Number(search.get('limit') ?? '10')
-      helpers.json(tops.slice(start, start + limit), { 'Total-Results': String(tops.length) })
+      helpers.json(tops.slice(start, start + limit), {
+        'Last-Modified-Version': '1',
+        'Total-Results': String(tops.length),
+      })
     })
     const page1 = await provider.browse({ kind: 'collections', offset: 0, limit: 2 })
     const page2 = await provider.browse({ kind: 'collections', offset: 2, limit: 2 })
@@ -245,7 +249,10 @@ describe('browse: collections', () => {
     mock.route('GET', `${apiPath()}/collections/top`, (req, res, helpers, search) => {
       const start = Number(search.get('start') ?? '0')
       const limit = Number(search.get('limit') ?? '10')
-      helpers.json(tops.slice(start, start + limit), { 'Total-Results': String(tops.length) })
+      helpers.json(tops.slice(start, start + limit), {
+        'Last-Modified-Version': '1',
+        'Total-Results': String(tops.length),
+      })
     })
     const r = await provider.browse({ kind: 'collections', offset: 1, limit: 2 })
     expect(r.returned).toBe(2)
@@ -269,7 +276,7 @@ describe('browse: collections', () => {
               data: { name: 'Child B', parentCollection: 'COLL0001' },
             }),
           ],
-          { 'Total-Results': '2', 'Zotero-Server-ID': 'S1' },
+          { 'Last-Modified-Version': '1', 'Total-Results': '2', 'Zotero-Server-ID': 'S1' },
         )
       },
     )
@@ -309,7 +316,11 @@ describe('browse: collections', () => {
     let foreign = false
     mock.route('GET', `${apiPath()}/collections/COLL0001/collections`, (req, _res, helpers) => {
       expect(req.headers['zotero-server-id']).toBe('S1')
-      helpers.json([], { 'Total-Results': '0', ...(foreign ? { 'Zotero-Server-ID': 'S2' } : {}) })
+      helpers.json([], {
+        'Last-Modified-Version': '1',
+        'Total-Results': '0',
+        ...(foreign ? { 'Zotero-Server-ID': 'S2' } : {}),
+      })
     })
     const empty = await provider.browse({
       kind: 'collections',
@@ -340,7 +351,7 @@ describe('browse: collections', () => {
           data: { name: 'Leaf', parentCollection: 'COLL0002' },
         }),
       ],
-      { 'Total-Results': '1' },
+      { 'Last-Modified-Version': '1', 'Total-Results': '1' },
     )
     serveJson(
       mock,
@@ -375,7 +386,7 @@ describe('browse: collections', () => {
           data: { name: 'Selfy', parentCollection: 'COLL0011' },
         }),
       ],
-      { 'Total-Results': '2' },
+      { 'Last-Modified-Version': '1', 'Total-Results': '2' },
     )
     const result = await provider.browse({
       kind: 'collections',
@@ -399,7 +410,7 @@ describe('browse: collections', () => {
           data: { name: 'Orphan', parentCollection: 'MISSING1' },
         }),
       ],
-      { 'Total-Results': '1' },
+      { 'Last-Modified-Version': '1', 'Total-Results': '1' },
     )
     await provider.browse({
       kind: 'collections',
@@ -450,7 +461,7 @@ describe('browse: collections', () => {
       mock,
       `${apiPath()}/collections/COLL0001/collections`,
       [collectionRow({ key: 'COLL0002', data: { name: 'Child', parentCollection: 'COLL0001' } })],
-      { 'Total-Results': '1' },
+      { 'Last-Modified-Version': '1', 'Total-Results': '1' },
     )
     serveStatus(mock, `${apiPath()}/collections/COLL0001`, 500, 'boom')
     await zoteroError(
@@ -468,8 +479,8 @@ describe('browse: collections', () => {
   it('supports group library', async () => {
     const cols = [collectionRow({ key: 'COLL0001', data: { name: 'G Root' } })]
     serveJson(mock, `${apiPath(GROUP_LIBRARY)}/collections/top`, cols, {
+      ...versionHeaders('S2', 1),
       'Total-Results': '1',
-      'Zotero-Server-ID': 'S2',
     })
     const result = await provider.browse({
       kind: 'collections',
@@ -495,8 +506,8 @@ describe('browse: savedSearches', () => {
       const start = Number(search.get('start') ?? '0')
       const limit = Number(search.get('limit') ?? '10')
       helpers.json(searches.slice(start, start + limit), {
+        ...versionHeaders('S1', 1),
         'Total-Results': String(searches.length),
-        'Zotero-Server-ID': 'S1',
       })
     })
   }
@@ -533,7 +544,7 @@ describe('browse: savedSearches', () => {
       mock,
       `${apiPath()}/searches`,
       [savedSearchRow({ data: { name: 'Broken', conditions: [{ condition: 'unread' }] } })],
-      { 'Total-Results': '1' },
+      { 'Last-Modified-Version': '1', 'Total-Results': '1' },
     )
     await expect(provider.browse({ kind: 'savedSearches', offset: 0, limit: 10 })).rejects.toThrow(
       'malformed saved-search conditions',
@@ -563,7 +574,10 @@ describe('browse: tags', () => {
       const start = Number(search.get('start') ?? '0')
       const limit = Number(search.get('limit') ?? '10')
       const slice = filtered.slice(start, start + limit)
-      helpers.json(slice, { 'Total-Results': String(filtered.length) })
+      helpers.json(slice, {
+        'Last-Modified-Version': '1',
+        'Total-Results': String(filtered.length),
+      })
     })
     const all = await provider.browse({ kind: 'tags', offset: 0, limit: 10 })
     expect(all.total).toBe(3)
@@ -590,7 +604,7 @@ describe('browse: tags', () => {
       const start = Number(search.get('start') ?? '0')
       const limit = Number(search.get('limit') ?? '10')
       const slice = tags.slice(start, start + limit)
-      helpers.json(slice, { 'Total-Results': String(tags.length) })
+      helpers.json(slice, { 'Last-Modified-Version': '1', 'Total-Results': String(tags.length) })
     })
     const r = await provider.browse({ kind: 'tags', offset: 2, limit: 2 })
     expect(r.returned).toBe(2)
@@ -627,7 +641,7 @@ describe('browse: tags', () => {
             { tag: 'long-term-memory', meta: { numItems: 31 } },
             { tag: 'benchmark', meta: { numItems: 9 } },
           ],
-          { 'Total-Results': '2', 'Zotero-Server-ID': 'S1' },
+          { 'Last-Modified-Version': '1', 'Total-Results': '2', 'Zotero-Server-ID': 'S1' },
         )
       },
     )
@@ -649,6 +663,7 @@ describe('browse: tags', () => {
   it('resolves a collection by name through the cached listing before the scoped tags call', async () => {
     serveJson(mock, `${apiPath()}/collections`, [collectionRow()], versionHeaders('S1'))
     serveJson(mock, `${apiPath()}/collections/${COLLECTION_KEY}/items/top/tags`, [{ tag: 'rag' }], {
+      'Last-Modified-Version': '1',
       'Total-Results': '1',
     })
     const result = await provider.browse({
@@ -665,7 +680,7 @@ describe('browse: tags', () => {
     const route = (matcher: string): void => {
       mock.route('GET', matcher, (req, res, helpers) => {
         routed.push(matcher)
-        helpers.json([{ tag: 'x' }], { 'Total-Results': '1' })
+        helpers.json([{ tag: 'x' }], { 'Last-Modified-Version': '1', 'Total-Results': '1' })
       })
     }
     route(`${apiPath()}/items/top/tags`)

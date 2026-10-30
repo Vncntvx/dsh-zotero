@@ -143,6 +143,7 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
   // stays the narrow shape `useLibraryFeed` and the filters rail consume.
   const face = useMemo<LibraryFeedFace>(
     () => ({
+      collectionPath: props.collectionPath,
       browse: props.browse,
       search: props.search,
       item: props.item,
@@ -150,7 +151,15 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
       invalidate: props.invalidate,
       setInstance: props.setInstance,
     }),
-    [props.browse, props.search, props.item, props.childPage, props.invalidate, props.setInstance],
+    [
+      props.collectionPath,
+      props.browse,
+      props.search,
+      props.item,
+      props.childPage,
+      props.invalidate,
+      props.setInstance,
+    ],
   )
   const connected = probeState.data?.connected === true
   // A cached snapshot paints the lamp; only this mount's own answer opens the
@@ -403,6 +412,7 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
             >
               <LibraryTree
                 t={t}
+                locatedRef={feed.locatedRef}
                 flatTree={feed.flatTree}
                 expanded={feed.expanded}
                 toggleCollection={feed.toggleCollection}
@@ -411,9 +421,9 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
                 savedSearches={feed.savedSearches}
                 rootLane={feed.treeLane(undefined)}
                 treeLane={feed.treeLane}
-                pageTree={feed.pageTree}
+                loadMoreTree={feed.loadMoreTree}
                 retryTree={feed.retryTree}
-                pageSavedSearches={feed.pageSavedSearches}
+                loadMoreSavedSearches={feed.loadMoreSavedSearches}
                 retrySavedSearches={feed.retrySavedSearches}
               />
             </div>
@@ -426,6 +436,10 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
             >
               {/* Pill-based Filter Rail */}
               <LibraryFilters
+                key={JSON.stringify([
+                  feed.currentLibrary,
+                  'ref' in feed.selection ? feed.selection.ref : feed.selection.kind,
+                ])}
                 t={t}
                 face={face}
                 library={feed.currentLibrary}
@@ -441,7 +455,20 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
                 </div>
               )}
 
+              {'ref' in feed.selection && (
+                <button type="button" onClick={feed.locate}>
+                  {t('libraryLocate')}
+                </button>
+              )}
+              {feed.locateError && <p role="alert">{feed.locateError}</p>}
               <LibraryItemList
+                returnToLibrary={() => feed.selectScope({ kind: 'library' })}
+                filtered={
+                  feed.q !== '' ||
+                  Object.values(feed.filters).some((value) =>
+                    Array.isArray(value) ? value.length > 0 : value !== undefined,
+                  )
+                }
                 t={t}
                 list={feed.list}
                 selection={feed.selection}
