@@ -179,6 +179,7 @@ describe('the zotero typert manifest', () => {
       'diagnostics',
       'reportClientError',
       'openProtocol',
+      'collectionPath',
       'browse',
       'search',
       'item',
@@ -189,7 +190,9 @@ describe('the zotero typert manifest', () => {
     for (const invocation of TYPERT_MANIFEST.invocations) {
       expect(invocation.namespace).toBe('zotero')
       if (
-        ['browse', 'search', 'item', 'childPage', 'export', 'write'].includes(invocation.method)
+        ['collectionPath', 'browse', 'search', 'item', 'childPage', 'export', 'write'].includes(
+          invocation.method,
+        )
       ) {
         expect(invocation.service).toBe('zoteroLibrary')
       } else {

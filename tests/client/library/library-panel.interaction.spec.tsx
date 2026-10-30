@@ -505,7 +505,7 @@ describe('a stale answer never overwrites a newer one', () => {
     act(() => {
       screen.getByRole('button', { name: 'Reasoning', expanded: false }).click()
     })
-    expect(childCalls).toBe(2)
+    await waitFor(() => expect(childCalls).toBe(2))
     // The newer answer lands first; the older one must still take its lane.
     await act(async () => {
       second.resolve({ ok: true, value: reasoningChildren })

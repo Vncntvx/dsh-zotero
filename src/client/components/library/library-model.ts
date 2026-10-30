@@ -76,7 +76,7 @@ export type LibrarySelection =
   | { kind: 'library' }
   | { kind: 'publications' }
   | { kind: 'trash' }
-  | { kind: 'collection'; ref: string; name: string }
+  | { kind: 'collection'; ref: string; name: string; path?: readonly string[] }
   | { kind: 'savedSearch'; ref: string; name: string }
 
 /** The wire scope a selection lists. */

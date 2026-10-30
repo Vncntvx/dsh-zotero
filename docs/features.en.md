@@ -106,3 +106,7 @@ External retrieval belongs to the agent entry point; the literature panel issues
 | Citations and exports                     | `zotero_export`                                      | Copy citation, BibTeX, and other formats | Records export output                           |
 | Writes                                    | Fifteen write tools (optional)                       | Approved writes                          | Not recorded                                    |
 | Out-of-library literature                 | Seven scholarly retrieval tools (optional component) | Not offered                              | Appears only after being saved into the library |
+
+## Collection navigation and restoration
+
+Navigation uses load more and independent branch retry; item lists retain pagination. Reopening restores loaded prefixes and visible expanded branches and resolves the current collection name and parent chain again. Only a successful empty child response removes the expander; failures remain retryable. A changed list request immediately hides previous results. Deleted objects display an error with all items available as an explicit destination. Filter chips wrap.

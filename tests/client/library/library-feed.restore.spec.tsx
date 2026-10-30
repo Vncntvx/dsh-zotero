@@ -20,7 +20,7 @@ const SELECTED = 'zotero://user/0/item/ITEM0001?server=S1'
 /** The durable record with everything at its default but the view pins. */
 function stored(overrides: Partial<LibraryStoredState> = {}): LibraryStoredState {
   return {
-    version: 1,
+    version: 2,
     library: { type: 'user', id: 0 },
     selection: { kind: 'library' },
     q: '',

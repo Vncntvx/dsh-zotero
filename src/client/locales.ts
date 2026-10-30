@@ -17,6 +17,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 /** English copy. A key added here becomes required in every other dictionary. */
 export const en = {
+  libraryLoadedCount: '{loaded} / {total} loaded',
+  libraryLocate: 'Locate current scope',
   libraryWriteActions: 'Write actions',
   libraryWriteApprovalHint:
     'Submit once to review the exact plan in this conversation. Every change requires session approval and plan approval. Writes are never retried automatically.',
@@ -584,6 +586,7 @@ export const en = {
   libraryItemList: 'Item list',
   libraryLoading: 'Loading…',
   libraryEmptyList: 'No items in this scope',
+  libraryNoMatches: 'No items match these filters',
   libraryRangeOfTotal: '{start}–{end} of {total}',
   libraryPagePrev: 'Previous',
   libraryPageNext: 'Next',
@@ -673,6 +676,8 @@ export const en = {
 
 /** Simplified Chinese copy. */
 export const zh: Record<ZoteroLocaleKey, string> = {
+  libraryLoadedCount: '已加载 {loaded} / {total}',
+  libraryLocate: '定位当前范围',
   libraryWriteActions: '写入操作',
   libraryWriteApprovalHint:
     '提交后请在当前会话中核对具体计划。每次变更都需要会话审批和计划批准，写入不会自动重试。',
@@ -1216,6 +1221,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   libraryItemList: '条目列表',
   libraryLoading: '加载中…',
   libraryEmptyList: '此范围暂无条目',
+  libraryNoMatches: '没有匹配当前筛选的条目',
   libraryRangeOfTotal: '第 {start}–{end} 条，共 {total} 条',
   libraryPagePrev: '上一页',
   libraryPageNext: '下一页',

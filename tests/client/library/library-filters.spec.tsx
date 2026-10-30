@@ -35,7 +35,13 @@ function mountFilters(
   enabled = true,
 ) {
   const change = vi.fn()
-  const face: LibraryFeedFace = { browse, search: vi.fn(), item: vi.fn(), childPage: vi.fn() }
+  const face: LibraryFeedFace = {
+    collectionPath: vi.fn(),
+    browse,
+    search: vi.fn(),
+    item: vi.fn(),
+    childPage: vi.fn(),
+  }
   function Controlled() {
     const [value, setValue] = useState(initial)
     return (

@@ -251,6 +251,7 @@ export const zoteroLibraryBrowseItemSchema = z.discriminatedUnion('kind', [
 /** Wire schema: browse result (the requested page of one navigation listing). */
 export const zoteroLibraryBrowseResultSchema = z
   .object({
+    libraryVersion: z.number().int().nonnegative().optional(),
     kind: z.enum(['libraries', 'collections', 'savedSearches', 'tags', 'itemTypes']),
     items: z.array(zoteroLibraryBrowseItemSchema).readonly(),
     total: z.number().int().nonnegative(),
@@ -260,6 +261,11 @@ export const zoteroLibraryBrowseResultSchema = z
     nextOffset: z.number().int().nonnegative().optional(),
   })
   .strict()
+  .refine(
+    (value) =>
+      !['collections', 'savedSearches'].includes(value.kind) || value.libraryVersion !== undefined,
+    { message: 'Navigation results require a library version.' },
+  )
   .readonly()
 
 /** Wire schema: search request scope (the panel's scope set, including trash). */
@@ -671,6 +677,23 @@ export const zoteroLibraryWriteResultSchema = z
     kind: z.enum(['applied', 'declined', 'committed-unverified', 'failed']),
     message: z.string(),
     code: z.string().optional(),
+  })
+  .strict()
+  .readonly()
+
+export const zoteroCollectionPathRequestSchema = z
+  .object({
+    library: zoteroLibrarySchema,
+    ref: z.string().min(1),
+    libraryVersion: z.number().int().nonnegative(),
+  })
+  .strict()
+  .readonly()
+export const zoteroCollectionPathResultSchema = z
+  .object({
+    library: zoteroLibrarySchema,
+    libraryVersion: z.number().int().nonnegative(),
+    path: z.array(zoteroLibraryBrowseItemSchema.options[3]!).readonly(),
   })
   .strict()
   .readonly()

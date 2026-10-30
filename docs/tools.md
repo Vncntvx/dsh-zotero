@@ -771,3 +771,5 @@ bundle 组件 `dsh-zotero/scholarly` 随包发布但默认关闭。在插件管�
 #### 核验结论
 
 每条参考文献返回四态之一：`VERIFIED`（注册记录存在且各字段一致）、`CHECK`（记录存在但存在差异或已撤稿）、`NOT FOUND`（注册库已应答且无此记录）、`UNVERIFIED`（注册库不可达，对该条目无任何结论）。注册库不可达永远不会报告为 `NOT FOUND`。
+
+合集和保存搜索的浏览结果包含 `libraryVersion`，来自有效的 `Last-Modified-Version` 响应头；缺失或非法版本会报错，不返回虚构版本。

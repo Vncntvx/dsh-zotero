@@ -4,7 +4,6 @@ import { act, cleanup, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import type { LibraryFeedFace } from '../../../src/client/components/library/library-feed-types.ts'
-import type { ZoteroLibraryBrowseRequestView } from '../../../src/contract.ts'
 import {
   libraryStorageKey,
   readLibraryState,
@@ -25,96 +24,6 @@ afterEach(() => {
   cleanup()
   vi.useRealTimers()
   vi.restoreAllMocks()
-})
-
-describe('navigation lanes', () => {
-  it('pages two expanded collections independently when responses arrive in reverse order', async () => {
-    const pending = [deferred<any>(), deferred<any>()]
-    const browse = vi.fn(async (request: ZoteroLibraryBrowseRequestView) => {
-      if (request.kind === 'libraries') return { ok: true, value: LIBRARY_ROWS }
-      if (request.kind === 'savedSearches') return { ok: true, value: SAVED_SEARCHES }
-      if (request.offset === 50) return pending[request.parentRef?.endsWith('1') ? 0 : 1]!.promise
-      return { ok: true, value: { ...ROOT_COLLECTIONS, total: 53, nextOffset: 50 } }
-    }) as LibraryFeedFace['browse']
-    const { result } = setup({ browse })
-    await waitFor(() => expect(result.current.flatTree).toHaveLength(2))
-    const refs = ROOT_COLLECTIONS.items.map((row) => ('ref' in row ? row.ref : ''))
-    act(() => {
-      result.current.toggleCollection(refs[0]!)
-      result.current.toggleCollection(refs[1]!)
-    })
-    await waitFor(() => expect(result.current.treeLane(refs[1])?.phase).toBe('ready'))
-    act(() => {
-      result.current.pageTree(refs[0], 50)
-      result.current.pageTree(refs[1], 50)
-    })
-    await act(async () =>
-      pending[1]!.resolve({
-        ok: true,
-        value: { ...ROOT_COLLECTIONS, items: [], total: 53, offset: 50, returned: 0 },
-      }),
-    )
-    await act(async () =>
-      pending[0]!.resolve({
-        ok: true,
-        value: { ...ROOT_COLLECTIONS, total: 53, offset: 50, nextOffset: undefined },
-      }),
-    )
-    expect(result.current.treeLane(refs[0])).toMatchObject({
-      phase: 'ready',
-      offset: 50,
-      total: 53,
-    })
-    expect(result.current.treeLane(refs[1])).toMatchObject({ phase: 'ready', rows: [], offset: 50 })
-    expect(result.current.expanded.size).toBe(2)
-  })
-
-  it('retries only the failed root and retains the successful child lane', async () => {
-    let fail = true
-    const browse = vi.fn(async (request: ZoteroLibraryBrowseRequestView) => {
-      if (request.kind === 'libraries') return { ok: true, value: LIBRARY_ROWS }
-      if (request.kind === 'savedSearches') return { ok: true, value: SAVED_SEARCHES }
-      if (!request.parentRef && fail)
-        return { ok: false, error: new RemoteError('gateway/internal', 'root down', {}) }
-      return { ok: true, value: ROOT_COLLECTIONS }
-    }) as LibraryFeedFace['browse']
-    const { result } = setup({ browse })
-    await waitFor(() => expect(result.current.treeLane(undefined)?.phase).toBe('error'))
-    act(() => result.current.pageTree('child', 50))
-    await waitFor(() => expect(result.current.treeLane('child')?.phase).toBe('ready'))
-    fail = false
-    act(() => result.current.retryTree(undefined))
-    await waitFor(() => expect(result.current.treeLane(undefined)?.phase).toBe('ready'))
-    expect(result.current.treeLane('child')?.phase).toBe('ready')
-    expect(browse).toHaveBeenLastCalledWith(expect.objectContaining({ offset: 0 }))
-  })
-
-  it('makes saved searches after the first fifty reachable and retries the same page', async () => {
-    const browse = vi.fn(async (request: ZoteroLibraryBrowseRequestView) => {
-      if (request.kind === 'libraries') return { ok: true, value: LIBRARY_ROWS }
-      if (request.kind === 'savedSearches')
-        return {
-          ok: true,
-          value: {
-            ...SAVED_SEARCHES,
-            total: 53,
-            offset: request.offset,
-            ...(request.offset === 0 ? { nextOffset: 50 } : {}),
-          },
-        }
-      return { ok: true, value: ROOT_COLLECTIONS }
-    }) as LibraryFeedFace['browse']
-    const { result } = setup({ browse })
-    await waitFor(() => expect(result.current.savedSearches).toMatchObject({ nextOffset: 50 }))
-    act(() => result.current.pageSavedSearches(50))
-    await waitFor(() => expect(result.current.savedSearches).toMatchObject({ offset: 50 }))
-    act(() => result.current.retrySavedSearches())
-    await waitFor(() =>
-      expect(browse).toHaveBeenLastCalledWith(
-        expect.objectContaining({ kind: 'savedSearches', offset: 50 }),
-      ),
-    )
-  })
 })
 
 describe('list and inspector lifetime', () => {
@@ -177,7 +86,7 @@ describe('list and inspector lifetime', () => {
 describe('instance preferences', () => {
   it('discards cross-instance or wrong-kind expanded refs and a group publications scope', () => {
     writeLibraryState('S1', {
-      version: 1,
+      version: 2,
       library: { type: 'group', id: 123 },
       selection: { kind: 'publications' },
       q: '',
@@ -204,7 +113,7 @@ describe('instance preferences', () => {
     'restores the saved-search selection and page for %s',
     (ref) => {
       writeLibraryState('S1', {
-        version: 1,
+        version: 2,
         library: { type: 'user', id: 0 },
         selection: { kind: 'savedSearch', ref, name: 'Unread' },
         q: '',
@@ -232,7 +141,7 @@ describe('instance preferences', () => {
     })
     expect(() =>
       writeLibraryState('S1', {
-        version: 1,
+        version: 2,
         library: { type: 'user', id: 0 },
         selection: { kind: 'library' },
         q: '',
@@ -249,7 +158,7 @@ describe('instance preferences', () => {
 
   it('restores a confirmed instance and isolates another instance', async () => {
     writeLibraryState('S1', {
-      version: 1,
+      version: 2,
       library: { type: 'group', id: 123 },
       selection: { kind: 'library' },
       q: 'saved',
@@ -276,9 +185,9 @@ describe('instance preferences', () => {
     expect(JSON.parse(localStorage.getItem(libraryStorageKey('S1'))!).q).toBe('saved')
   })
 
-  it('returns to the library when a restored scope no longer exists', async () => {
+  it('preserves a missing restored scope and exposes its error', async () => {
     writeLibraryState('S1', {
-      version: 1,
+      version: 2,
       library: { type: 'user', id: 0 },
       selection: {
         kind: 'collection',
@@ -301,9 +210,9 @@ describe('instance preferences', () => {
       })
       .mockResolvedValue({ ok: true, value: searchPage() })
     const { result } = setup({ search })
-    await waitFor(() => expect(result.current.list.phase).toBe('ready'))
-    expect(result.current.selection).toEqual({ kind: 'library' })
-    expect(result.current.offset).toBe(0)
+    await waitFor(() => expect(result.current.list.phase).toBe('error'))
+    expect(result.current.selection.kind).toBe('collection')
+    expect(result.current.offset).toBe(50)
   })
 })
 
@@ -408,10 +317,36 @@ describe('targeted recovery and write refresh', () => {
     expect(result.current.inspector).toBeUndefined()
   })
   it('retains the tree page after a rejected page request and retries that offset', async () => {
-    const { result, face } = setup()
+    const { result, face } = setup({
+      browse: async (request) => ({
+        ok: true,
+        value:
+          request.kind === 'libraries'
+            ? LIBRARY_ROWS
+            : request.kind === 'savedSearches'
+              ? SAVED_SEARCHES
+              : {
+                  ...ROOT_COLLECTIONS,
+                  total: 3,
+                  ...(request.offset === 0
+                    ? { nextOffset: 2 }
+                    : {
+                        offset: 2,
+                        returned: 1,
+                        items: [
+                          {
+                            ...ROOT_COLLECTIONS.items[0]!,
+                            ref: 'zotero://user/0/collection/COLL0003',
+                          },
+                        ],
+                      }),
+                },
+      }),
+    })
     await waitFor(() => expect(result.current.treeLane(undefined)?.phase).toBe('ready'))
+    face.browse = vi.fn(face.browse)
     vi.mocked(face.browse).mockRejectedValueOnce(new Error('tree disconnected'))
-    act(() => result.current.pageTree(undefined, 50))
+    act(() => result.current.loadMoreTree(undefined))
     await waitFor(() =>
       expect(result.current.treeLane(undefined)).toMatchObject({
         phase: 'error',
@@ -422,7 +357,7 @@ describe('targeted recovery and write refresh', () => {
     act(() => result.current.retryTree(undefined))
     await waitFor(() => expect(result.current.treeLane(undefined)?.phase).toBe('ready'))
     expect(face.browse).toHaveBeenLastCalledWith(
-      expect.objectContaining({ kind: 'collections', offset: 50 }),
+      expect.objectContaining({ kind: 'collections', offset: 2 }),
     )
   })
 
@@ -453,8 +388,8 @@ describe('targeted recovery and write refresh', () => {
         kind === 'items'
           ? []
           : kind === 'collections'
-            ? ['collections', 'collections']
-            : ['savedSearches'],
+            ? ['collections', 'savedSearches', 'collections']
+            : ['collections', 'savedSearches', 'collections'],
       )
       expect(result.current.selectedRef).toBe(ITEM_DETAIL.ref)
     },

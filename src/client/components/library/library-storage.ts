@@ -29,13 +29,20 @@ const selection = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('library') }).strict(),
   z.object({ kind: z.literal('publications') }).strict(),
   z.object({ kind: z.literal('trash') }).strict(),
-  z.object({ kind: z.literal('collection'), ref: z.string().min(1), name: z.string() }).strict(),
+  z
+    .object({
+      kind: z.literal('collection'),
+      ref: z.string().min(1),
+      name: z.string(),
+      path: z.array(z.string()).readonly().optional(),
+    })
+    .strict(),
   z.object({ kind: z.literal('savedSearch'), ref: z.string().min(1), name: z.string() }).strict(),
 ])
 
 export const libraryStoredStateSchema = z
   .object({
-    version: z.literal(1),
+    version: z.literal(2),
     library: zoteroLibrarySchema,
     selection,
     q: z.string(),
@@ -43,6 +50,7 @@ export const libraryStoredStateSchema = z
     sort: zoteroLibrarySortSchema,
     direction: z.enum(['asc', 'desc']),
     offset: z.number().int().nonnegative(),
+    prefixes: z.record(z.string(), z.number().int().nonnegative()).default({}),
     expanded: z.array(z.string().min(1)),
     filters: zoteroLibraryFiltersSchema,
     selectedRef: z.string().optional(),
@@ -50,7 +58,7 @@ export const libraryStoredStateSchema = z
   })
   .strict()
 
-export type LibraryStoredState = z.infer<typeof libraryStoredStateSchema>
+export type LibraryStoredState = z.input<typeof libraryStoredStateSchema>
 
 /**
  * What a session keeps across a pane remount: the payload the durable record
@@ -89,7 +97,7 @@ export function clearLibrarySessionMemory(sessionId?: string): void {
   }
 }
 export const libraryStorageKey = (serverId: string) =>
-  `dsh-zotero:library:1:${encodeURIComponent(serverId)}`
+  `dsh-zotero:library:2:${encodeURIComponent(serverId)}`
 
 /** The selection arms that carry a ref needing a library/instance check. */
 function isRefScope(

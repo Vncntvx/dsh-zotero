@@ -207,6 +207,7 @@ const BROWSE_OUTPUT_SCHEMA = {
     total: { type: 'integer', required: true },
     offset: { type: 'integer', required: true },
     returned: { type: 'integer', required: true },
+    libraryVersion: { type: 'integer' },
     nextOffset: { type: 'integer' },
   },
 } as const

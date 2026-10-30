@@ -1,3 +1,4 @@
+import { objectIdentity } from './navigation-identity.ts'
 /**
  * The library panel's navigation column: the fixed scopes (all items, My
  * Publications, trash), the lazily expanding collection tree, and the saved
@@ -53,6 +54,7 @@ const FIXED_SCOPES: readonly {
 ]
 
 interface LibraryTreeProps {
+  readonly locatedRef?: string
   readonly t: TranslateNS<'zotero'>
   readonly flatTree: readonly FlatCollectionRow[]
   readonly expanded: ReadonlySet<string>
@@ -64,9 +66,9 @@ interface LibraryTreeProps {
   readonly treeLane: (
     ref: string | undefined,
   ) => LibraryLaneState<FlatCollectionRow['row']> | undefined
-  readonly pageTree: (ref: string | undefined, offset: number) => void
+  readonly loadMoreTree: (ref: string | undefined) => void
   readonly retryTree: (ref: string | undefined) => void
-  readonly pageSavedSearches: (offset: number) => void
+  readonly loadMoreSavedSearches: () => void
   readonly retrySavedSearches: () => void
 }
 
@@ -77,6 +79,7 @@ function sameFixedScope(selection: LibrarySelection, fixed: LibrarySelection): b
 
 export function LibraryTree({
   t,
+  locatedRef,
   flatTree,
   expanded,
   toggleCollection,
@@ -85,9 +88,9 @@ export function LibraryTree({
   savedSearches,
   rootLane,
   treeLane,
-  pageTree,
+  loadMoreTree,
   retryTree,
-  pageSavedSearches,
+  loadMoreSavedSearches,
   retrySavedSearches,
 }: LibraryTreeProps) {
   const savedPage = lanePageOf(savedSearches)
@@ -103,10 +106,20 @@ export function LibraryTree({
     if (focused !== undefined && focusRef !== focused) setFocused(focusRef)
   }, [focusRef, focused])
 
+  useEffect(() => {
+    if (locatedRef === undefined) return
+    const button = buttons.current.get(locatedRef)
+    button?.scrollIntoView?.({ block: 'nearest' })
+    focus(locatedRef)
+  }, [locatedRef])
+  const isLeaf = (ref: string) => {
+    const lane = treeLane(ref)
+    return lane?.phase === 'ready' && lane.total === 0
+  }
+
   const keyDown = (event: React.KeyboardEvent, index: number) => {
-    const entry = flatTree[index]
-    if (entry === undefined) return
-    const { row, depth } = entry
+    // The handler is installed by the row map, so its index belongs to this render.
+    const { row, depth } = flatTree[index]!
     switch (event.key) {
       case 'ArrowDown':
         focus(flatTree[index + 1]?.row.ref)
@@ -121,6 +134,7 @@ export function LibraryTree({
         focus(flatTree.at(-1)?.row.ref)
         break
       case 'ArrowRight':
+        if (isLeaf(row.ref)) break
         if (!expanded.has(row.ref)) toggleCollection(row.ref)
         else if (flatTree[index + 1]?.depth === depth + 1) focus(flatTree[index + 1]?.row.ref)
         break
@@ -174,13 +188,6 @@ export function LibraryTree({
       <div className={css.treeSectionHeader}>
         <p className={css.treeSection}>{t('libraryCollections')}</p>
       </div>
-      <LibraryLaneControls
-        t={t}
-        label={t('libraryCollections')}
-        lane={rootLane}
-        page={(offset) => pageTree(undefined, offset)}
-        retry={() => retryTree(undefined)}
-      />
       {rootLane?.phase === 'ready' && flatTree.length === 0 && (
         <p className={css.treeNote}>{t('libraryNoCollections')}</p>
       )}
@@ -206,8 +213,14 @@ export function LibraryTree({
         }}
       >
         {flatTree.map(({ row, depth, setSize, posInSet }, index) => {
-          const isExpanded = expanded.has(row.ref)
-          const isSelected = selection.kind === 'collection' && selection.ref === row.ref
+          const leaf = isLeaf(row.ref)
+          const isExpanded = !leaf && expanded.has(row.ref)
+          const isSelected =
+            selection.kind === 'collection' &&
+            objectIdentity(
+              selection.ref,
+              new URL(row.ref).searchParams.get('server') ?? undefined,
+            ) === objectIdentity(row.ref)
 
           return (
             <li key={row.ref} role="none">
@@ -215,16 +228,23 @@ export function LibraryTree({
                 className={clsx(css.treeRowWrap, isSelected && css.treeRowWrapActive)}
                 style={{ '--tree-depth': depth } as React.CSSProperties}
               >
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  className={clsx(css.treeExpander, isExpanded && css.treeExpanderOpen)}
-                  aria-expanded={isExpanded}
-                  aria-label={row.name}
-                  onClick={() => toggleCollection(row.ref)}
-                >
-                  <IconChevronRightOutlineMedium className={css.chevronSvg} />
-                </button>
+                {leaf ? (
+                  <span className={css.treeExpanderPlaceholder} />
+                ) : (
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    className={clsx(css.treeExpander, isExpanded && css.treeExpanderOpen)}
+                    aria-expanded={isExpanded}
+                    aria-label={row.name}
+                    onClick={() => {
+                      buttons.current.get(row.ref)?.focus()
+                      toggleCollection(row.ref)
+                    }}
+                  >
+                    <IconChevronRightOutlineMedium className={css.chevronSvg} />
+                  </button>
+                )}
                 <button
                   type="button"
                   role="treeitem"
@@ -234,7 +254,8 @@ export function LibraryTree({
                   }}
                   tabIndex={focusRef === row.ref ? 0 : -1}
                   aria-level={depth + 1}
-                  aria-expanded={isExpanded}
+                  aria-expanded={leaf ? undefined : isExpanded}
+                  aria-busy={treeLane(row.ref)?.phase === 'loading' || undefined}
                   aria-selected={isSelected}
                   aria-setsize={setSize}
                   aria-posinset={posInSet}
@@ -252,37 +273,55 @@ export function LibraryTree({
                   <span className={css.treeRowLabel}>{row.name}</span>
                 </button>
               </div>
-              {isExpanded && (
-                <LibraryLaneControls
-                  t={t}
-                  label={row.name}
-                  lane={treeLane(row.ref)}
-                  page={(offset) => pageTree(row.ref, offset)}
-                  retry={() => retryTree(row.ref)}
-                />
-              )}
+              {flatTree
+                .slice(0, index + 1)
+                .filter(
+                  (entry, start) =>
+                    expanded.has(entry.row.ref) &&
+                    (flatTree[index + 1]?.depth ?? -1) <= entry.depth &&
+                    flatTree
+                      .slice(start + 1, index + 1)
+                      .every((child) => child.depth > entry.depth),
+                )
+                .reverse()
+                .map((entry) => (
+                  <LibraryLaneControls
+                    key={entry.row.ref}
+                    t={t}
+                    label={entry.row.name}
+                    lane={treeLane(entry.row.ref)}
+                    page={() => loadMoreTree(entry.row.ref)}
+                    retry={() => retryTree(entry.row.ref)}
+                  />
+                ))}
             </li>
           )
         })}
       </ul>
 
+      <LibraryLaneControls
+        t={t}
+        label={t('libraryCollections')}
+        lane={rootLane}
+        page={() => loadMoreTree(undefined)}
+        retry={() => retryTree(undefined)}
+      />
+
       {/* Saved Searches Section */}
       <div className={css.treeSectionHeader}>
         <p className={css.treeSection}>{t('librarySavedSearches')}</p>
       </div>
-      <LibraryLaneControls
-        t={t}
-        label={t('librarySavedSearches')}
-        lane={savedSearches}
-        page={pageSavedSearches}
-        retry={retrySavedSearches}
-      />
       {savedPage?.rows.length === 0 && (
         <p className={css.treeNote}>{t('libraryNoSavedSearches')}</p>
       )}
       <ul className={css.treeList}>
         {savedPage?.rows.map((row) => {
-          const isSelected = selection.kind === 'savedSearch' && selection.ref === row.ref
+          const isSelected =
+            selection.kind === 'savedSearch' &&
+            objectIdentity(
+              selection.ref,
+              new URL(row.ref).searchParams.get('server') ?? undefined,
+            ) === objectIdentity(row.ref)
           return (
             <li key={row.ref}>
               <div className={clsx(css.treeRowWrap, isSelected && css.treeRowWrapActive)}>
@@ -313,6 +352,13 @@ export function LibraryTree({
           )
         })}
       </ul>
+      <LibraryLaneControls
+        t={t}
+        label={t('librarySavedSearches')}
+        lane={savedSearches}
+        page={loadMoreSavedSearches}
+        retry={retrySavedSearches}
+      />
     </nav>
   )
 }

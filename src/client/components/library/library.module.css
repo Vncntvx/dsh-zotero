@@ -239,11 +239,11 @@
   flex: none;
   display: flex;
   align-items: center;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 4px;
   padding: 6px 12px;
   border-bottom: 0.5px solid var(--dsw-alias-border-l2);
-  overflow-x: auto;
+  overflow-x: visible;
   scrollbar-width: none;
   box-sizing: border-box;
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);

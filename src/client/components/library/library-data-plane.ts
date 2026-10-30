@@ -25,11 +25,12 @@ import type {
 import type { LibraryPanelWireFace } from './library-feed-types.ts'
 
 /** The wire reads the plane deduplicates. */
-type PlaneMethod = 'browse' | 'search' | 'item' | 'childPage' | 'export'
+type PlaneMethod = 'collectionPath' | 'browse' | 'search' | 'item' | 'childPage' | 'export'
 
 /** How long a settled read may answer a later identical request. */
 const TTL_MS: Record<PlaneMethod, number> = {
   browse: 30_000,
+  collectionPath: 0,
   item: 10_000,
   export: 10_000,
   search: 2_000,
@@ -76,7 +77,7 @@ export function createLibraryDataPlane(face: LibraryPanelWireFace): LibraryDataP
     const task = send().then(
       (result) => {
         inflight.delete(key)
-        if (result.ok && requestGeneration === generation) {
+        if (result.ok && requestGeneration === generation && TTL_MS[method] > 0) {
           const at = Date.now()
           pruneExpired(at)
           settled.set(key, { at, ttlMs: TTL_MS[method], result })
@@ -98,6 +99,8 @@ export function createLibraryDataPlane(face: LibraryPanelWireFace): LibraryDataP
   }
 
   return {
+    collectionPath: (request) =>
+      call('collectionPath', request, () => face.collectionPath(request)),
     browse: (request: ZoteroLibraryBrowseRequestView) =>
       call('browse', request, () => face.browse(request)),
     search: (request: ZoteroLibrarySearchRequestView) => {

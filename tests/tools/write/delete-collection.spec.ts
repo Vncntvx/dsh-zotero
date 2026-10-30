@@ -120,7 +120,7 @@ describe('zotero_delete_collection preview', () => {
           { key: 'COLL1111', data: { name: 'My Target' } },
           { key: 'COLL2222', data: { name: 'My Target' } },
         ],
-        { 'Total-Results': '2', 'Zotero-Server-ID': SERVER_ID },
+        { 'Last-Modified-Version': '1', 'Total-Results': '2', 'Zotero-Server-ID': SERVER_ID },
       )
     })
     const result = await lane.runTool('zotero_delete_collection', { collection: 'My Target' })
@@ -233,6 +233,7 @@ describe('zotero_delete_collection preview', () => {
 
     lane.mock.route('GET', '/api/users/0/collections', (_req, res, helpers) => {
       helpers.json([{ key: 'COLL9999', data: { name: 'My Target' } }], {
+        'Last-Modified-Version': '1',
         'Total-Results': '1',
         'Zotero-Server-ID': SERVER_ID,
       })
@@ -246,7 +247,7 @@ describe('zotero_delete_collection preview', () => {
             data: { key: 'ITEM1111', itemType: 'journalArticle', title: 'T' },
           },
         ],
-        { 'Total-Results': '5', 'Zotero-Server-ID': SERVER_ID },
+        { 'Last-Modified-Version': '1', 'Total-Results': '5', 'Zotero-Server-ID': SERVER_ID },
       )
     })
     lane.mock.route(
@@ -258,7 +259,7 @@ describe('zotero_delete_collection preview', () => {
             { key: 'SUB11111', data: { name: 'Sub 1' } },
             { key: 'SUB22222', data: { name: 'Sub 2' } },
           ],
-          { 'Total-Results': '2', 'Zotero-Server-ID': SERVER_ID },
+          { 'Last-Modified-Version': '1', 'Total-Results': '2', 'Zotero-Server-ID': SERVER_ID },
         )
       },
     )

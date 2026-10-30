@@ -47,7 +47,13 @@ function mountPicker(
 ) {
   const onError = vi.fn()
   const change = vi.fn()
-  const face: LibraryFeedFace = { browse, search: vi.fn(), item: vi.fn(), childPage: vi.fn() }
+  const face: LibraryFeedFace = {
+    collectionPath: vi.fn(),
+    browse,
+    search: vi.fn(),
+    item: vi.fn(),
+    childPage: vi.fn(),
+  }
   function Picker({ library }: { library: SupportedLocalLibrary }) {
     const [value, setValue] = useState(initial)
     return (

@@ -478,6 +478,7 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
    * always is.
    */
   const plane = createLibraryDataPlane({
+    collectionPath: (request) => ctx.remote.zotero.collectionPath(request),
     browse: (request) => ctx.remote.zotero.browse(request),
     search: (request) => ctx.remote.zotero.search(request),
     item: (request) => ctx.remote.zotero.item(request),
@@ -496,6 +497,7 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
   const panelFace = (): ZoteroLibraryPanelFace => ({
     bindRefresh,
     status: () => probe(),
+    collectionPath: (request) => plane.collectionPath(request),
     browse: (request) => plane.browse(request),
     search: (request) => plane.search(request),
     item: (request) => plane.item(request),
