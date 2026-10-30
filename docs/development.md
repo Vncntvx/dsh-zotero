@@ -103,6 +103,7 @@ npm run build:client         # 仅构建浏览器端产物
 npm run test:coverage        # 覆盖率门禁检查
 npm run harness:check        # 检查上游 Harness 版本钉与产物一致性
 npm run harness:pin -- <ver> # 统一更新 Harness 依赖版本钉
+npm run deps:check           # 查询 registry，列出落后于最新版的直接依赖
 npm run verify:pack          # 校验打包产物文件完整性
 npm run smoke                # 生产栈冒烟：在 dsh profile 内对真实 Zotero 调用全部读工具
 npm run smoke:discovery      # 打包产物 → 临时 profile → dsh web 启动探针
@@ -198,6 +199,22 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 - 浏览器配置页测试基于 JSDOM 与 `@testing-library/react`；
 - 覆盖率阈值定义在 `vitest.config.ts` 中，对各核心分层分别设置门禁指标；
 - 集成测试针对真实运行的 Zotero 实例验证网络协议与真实数据。
+
+## CI 工作流
+
+`.github/workflows/` 下有三个工作流：
+
+- `release-branch.yml`：在 `main` 推送、版本 tag 与手动触发时构建并推送预构建 release 分支，只授予 `contents: write`；
+- `upstream-health.yml`：每周一 02:00 UTC 定时跑 `npm run release:check`，并比对已钉版本与上游 harness 主线；
+- `scanner.yml`：在 pull request 与 `main` 推送时运行 HOL Guard 扫描器，规范化分数低于 75 即失败。
+
+供应链约定：
+
+- 所有第三方 GitHub Action 固定到不可变 commit SHA，行尾注释标注对应版本号，避免可变 tag 静默改变执行内容；
+- `npm run deps:check` 直接查询 registry，比对 `package-lock.json` 中的版本，列出发行版领先的直接依赖；版本更新由人工执行，Dependabot 不开版本更新 PR；
+- Dependabot alerts 只用于 CVE 提醒，security updates 关闭，因此不会生成任何 PR；
+- 浏览器 bundle 镜像 sibling harness 在 `packages/client/*` 清单里声明的第三方运行时依赖（lexical、katex、react、zod 等），这些版本随 harness 一起升版，`deps:check` 的排除集合已把它们滤掉；
+- 扫描器工作流只授予 `contents: read` 且不保留 checkout 凭据，因此 fork 的 pull request 也能在同等约束下运行。
 
 ## 发布检查清单
 

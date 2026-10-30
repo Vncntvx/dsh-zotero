@@ -1,0 +1,34 @@
+name: Plugin Security Scan
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+# The scan only reads the repository: no secrets, no write permissions, and no
+# checkout credentials are persisted, so a pull request from a fork runs it
+# under the same constraints as a maintainer push.
+permissions:
+  contents: read
+
+concurrency:
+  group: scanner-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run the HOL Guard scanner
+        uses: hashgraph-online/ai-plugin-scanner-action@3220f5fedcd269533a6275738b2ab5d5f9753e8e # v1.2.811
+        with:
+          plugin_dir: '.'
+          min_score: 75
+          fail_on_severity: none

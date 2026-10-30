@@ -28,7 +28,7 @@ afterEach(async () => {
 })
 
 function writeOptions(): { serverId: string; apiKey: string } {
-  return { serverId: SERVER_ID, apiKey: 'key-for-tests' }
+  return { serverId: SERVER_ID, apiKey: 'placeholder-api-key' }
 }
 
 describe('the write transport diagnostics log', () => {
