@@ -209,7 +209,7 @@
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.20.0",
     "@types/react": "~18.3.1",
-    "@vitest/coverage-v8": "^4.1.8",
+    "@vitest/coverage-v8": "^5.0.5",
     "anser": "^2.3.5",
     "diff": "^9.0.0",
     "esbuild": "^0.28.2",
