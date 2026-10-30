@@ -40,6 +40,7 @@ npm test                     # test-lint guards + full vitest suite
 npm run test:integration     # live read spec against Zotero on 127.0.0.1:23119
 npm run format               # prettier --write; verify with format:check
 npm run harness:check        # pin, lockfile, and upstream artifact freshness
+npm run deps:check           # direct dependencies behind the registry; harness-owned ones excluded
 npm run release:check        # full gate: format, strict harness, lint, typecheck, coverage, build, pack
 ```
 
@@ -47,7 +48,7 @@ Interactive launches (full plugin vs host-only HMR) and the opt-in write probe (
 
 ## Invariants
 
-- **Harness pin**: every `@deepseek-ai/dsh-*` in `dependencies`, `devDependencies`, and `overrides` is an exact version; `peerDependencies` and `engines.dsh` use `>=`. Never hand-edit versions — run `npm run harness:pin -- <ver>`, then `npm install --package-lock-only`. Vendored `cordis`, `cosmokit`, `schemastery`, and `cordis-plugin-*` floors must match the sibling's `vendor/<pkg>/package.json`.
+- **Harness pin**: every `@deepseek-ai/dsh-*` in `dependencies`, `devDependencies`, and `overrides` is an exact version; `peerDependencies` and `engines.dsh` use `>=`. Never hand-edit versions — run `npm run harness:pin -- <ver>`, then `npm install --package-lock-only`. Vendored `cordis`, `cosmokit`, `schemastery`, and `cordis-plugin-*` floors must match the sibling's `vendor/<pkg>/package.json`. The browser bundle's third-party runtime dependencies mirror the sibling's `packages/client/*` declarations and move with the harness, never on their own; `npm run deps:check` excludes them.
 - **Component authorization**: mounting `dsh-zotero/scholarly` is the only authorization for external requests, its 7 tools, and its prompt section. The core is request-driven: no external calls, background pollers, or load-time network I/O.
 - **Write seam**: every write targets the personal library (`zotero://user/0/`) and passes through `ctx.zotero`: capability gate → `ctx.approval.request` → plan-review card. No bypass; a stale `writeConfirm: false` cannot opt out. Writes never retry — `committed-unverified` is reconciled, not retried. Shell commands that write to the Local API are intercepted by `src/shell-write-detector.ts`.
 - **Client graph**: browser code may value-import only `src/client/**` and the pure modules allowlisted in `scripts/client-graph-authority.mjs`; never `@deepseek-ai/schemastery`, `src/config.ts`, `src/status-codec.ts`, or `src/typert.ts`. Keep `zod` external — the build refuses an inlined copy. `src/client/index.ts` must `await ctx.remote.$mount` before injecting on `remote.zotero`.

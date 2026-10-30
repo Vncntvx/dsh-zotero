@@ -95,7 +95,7 @@ describe('scholarly transport safety: allowlist', () => {
   it('never repeats the full URL in a rejection message', () => {
     // A rejection string reaches tool output; a URL can carry a credential or
     // a DOI the user is researching, so only the hostname may appear.
-    const secret = 'SEKRET-KEY-123'
+    const secret = 'placeholder-secret-value'
     expect(() => assertAllowedScholarlyUrl(`http://127.0.0.1:23119/api?api_key=${secret}`)).toThrow(
       expect.not.stringContaining(secret),
     )

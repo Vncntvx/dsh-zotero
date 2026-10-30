@@ -103,6 +103,7 @@ npm run build:client         # Build the browser artifact only
 npm run test:coverage        # Coverage gate check
 npm run harness:check        # Check the upstream Harness version pin and artifact consistency
 npm run harness:pin -- <ver> # Update every Harness dependency pin together
+npm run deps:check           # Query the registry for direct dependencies behind their latest release
 npm run verify:pack          # Validate the packed tarball contents
 npm run smoke                # Production-stack smoke: call every read tool against a real Zotero inside a dsh profile
 npm run smoke:discovery      # Packed artifact → temporary profile → dsh web boot probe
@@ -198,6 +199,22 @@ When investigating plugin runtime issues, turn on "Diagnostic mode" in the confi
 - Browser configuration page tests use JSDOM and `@testing-library/react`;
 - Coverage thresholds live in `vitest.config.ts`, with a gate metric for each core layer;
 - Integration tests validate wire protocols and real data against a running Zotero instance.
+
+## CI Workflows
+
+Three workflows live under `.github/workflows/`:
+
+- `release-branch.yml`: builds and pushes the prebuilt release branch on pushes to `main`, on version tags, and on manual dispatch, and is granted only `contents: write`;
+- `upstream-health.yml`: runs `npm run release:check` every Monday at 02:00 UTC and compares the pinned version against the upstream harness mainline;
+- `scanner.yml`: runs the HOL Guard scanner on pull requests and pushes to `main`, failing when the normalized score drops below 75.
+
+Supply-chain rules:
+
+- Every third-party GitHub Action is pinned to an immutable commit SHA, with the matching version kept in a trailing comment, so a mutable tag cannot silently change the executed code;
+- `npm run deps:check` queries the registry directly and compares against `package-lock.json` to list direct dependencies behind their published release; upgrades stay manual, and Dependabot opens no version-update pull requests;
+- Dependabot alerts are the CVE reminder only; security updates are off, so no pull request is generated;
+- The browser bundle mirrors the third-party runtime dependencies the sibling harness declares in its own `packages/client/*` manifests (lexical, katex, react, zod, …); those versions move with the harness, and the `deps:check` exclusion set keeps them out of the report;
+- The scanner workflow is granted only `contents: read` and keeps no checkout credentials, so a pull request from a fork runs it under the same constraints.
 
 ## Release Checklist
 
