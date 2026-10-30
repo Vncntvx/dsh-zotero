@@ -239,7 +239,7 @@
     "simple-icons": "16.31.0",
     "typescript": "^5.9.0",
     "use-sync-external-store": "1.6.0",
-    "vitest": "^4.1.8",
+    "vitest": "^5.0.5",
     "zustand": "~4.5.7"
   },
   "overrides": {
