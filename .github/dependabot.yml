@@ -1,0 +1,15 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    ignore:
+      # Harness pins are bumped with `npm run harness:pin -- <ver>` so every
+      # @deepseek-ai/* version stays exact and lockstep with the sibling
+      # harness checkout; Dependabot must not drift them independently.
+      - dependency-name: '@deepseek-ai/*'
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
