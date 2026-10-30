@@ -1,0 +1,71 @@
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    ignore:
+      # Harness pins are bumped with `npm run harness:pin -- <ver>` so every
+      # @deepseek-ai/* version stays exact and lockstep with the sibling
+      # harness checkout; Dependabot must not drift them independently.
+      - dependency-name: '@deepseek-ai/*'
+      # The browser bundle mirrors the third-party runtime dependencies the
+      # sibling harness declares in its own `packages/client/*` manifests, so
+      # the bundle resolves the versions the harness UI was built against.
+      # These ranges move with the harness, never on their own: a caret range
+      # on a 0.x package already pins the harness's minor line, and an
+      # independent bump here would load a different copy than the harness
+      # ships. Update them together with the harness pin.
+      - dependency-name: '@lexical/headless'
+      - dependency-name: '@lexical/history'
+      - dependency-name: '@lexical/plain-text'
+      - dependency-name: '@lexical/text'
+      - dependency-name: '@lexical/utils'
+      - dependency-name: '@shikijs/langs'
+      - dependency-name: '@tanstack/react-virtual'
+      - dependency-name: '@types/react'
+      - dependency-name: 'anser'
+      - dependency-name: 'clsx'
+      - dependency-name: 'diff'
+      - dependency-name: 'fast-xml-parser'
+      - dependency-name: 'immer'
+      - dependency-name: 'katex'
+      - dependency-name: 'lexical'
+      - dependency-name: 'mdast-util-from-markdown'
+      - dependency-name: 'mdast-util-gfm'
+      - dependency-name: 'mdast-util-math'
+      - dependency-name: 'micromark-core-commonmark'
+      - dependency-name: 'micromark-extension-gfm'
+      - dependency-name: 'micromark-extension-math'
+      - dependency-name: 'micromark-factory-space'
+      - dependency-name: 'micromark-util-character'
+      - dependency-name: 'micromark-util-classify-character'
+      - dependency-name: 'micromark-util-sanitize-uri'
+      - dependency-name: 'micromark-util-symbol'
+      - dependency-name: 'micromark-util-types'
+      - dependency-name: 'react'
+      - dependency-name: 'react-dom'
+      - dependency-name: 'shiki'
+      - dependency-name: 'simple-icons'
+      - dependency-name: 'use-sync-external-store'
+      - dependency-name: 'zod'
+      - dependency-name: 'zustand'
+    groups:
+      # Patch and minor bumps arrive as one reviewable pull request; majors
+      # stay on their own so a React or jsdom jump never hides behind an
+      # unrelated bump.
+      dev-minor-patches:
+        update-types:
+          - patch
+          - minor
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      action-patches:
+        update-types:
+          - patch
+          - minor

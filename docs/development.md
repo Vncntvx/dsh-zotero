@@ -199,6 +199,21 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 - 覆盖率阈值定义在 `vitest.config.ts` 中，对各核心分层分别设置门禁指标；
 - 集成测试针对真实运行的 Zotero 实例验证网络协议与真实数据。
 
+## CI 工作流
+
+`.github/workflows/` 下有三个工作流：
+
+- `release-branch.yml`：在 `main` 推送、版本 tag 与手动触发时构建并推送预构建 release 分支，只授予 `contents: write`；
+- `upstream-health.yml`：每周一 02:00 UTC 定时跑 `npm run release:check`，并比对已钉版本与上游 harness 主线；
+- `scanner.yml`：在 pull request 与 `main` 推送时运行 HOL Guard 扫描器，规范化分数低于 75 即失败。
+
+供应链约定：
+
+- 所有第三方 GitHub Action 固定到不可变 commit SHA，行尾注释标注对应版本号，避免可变 tag 静默改变执行内容；
+- `.github/dependabot.yml` 跟踪 npm 与 GitHub Actions 上游，`@deepseek-ai/*` 由 `npm run harness:pin` 统一升版，Dependabot 不得自行漂移；
+- 浏览器 bundle 镜像 sibling harness 在 `packages/client/*` 清单里声明的第三方运行时依赖（lexical、katex、react、zod 等），这些版本随 harness 一起升版，Dependabot 忽略清单已把它们排除；
+- 扫描器工作流只授予 `contents: read` 且不保留 checkout 凭据，因此 fork 的 pull request 也能在同等约束下运行。
+
 ## 发布检查清单
 
 发布前按顺序完成以下检查，任一步失败即停止：
