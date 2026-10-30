@@ -237,7 +237,7 @@
     "semver": "^7.7.2",
     "shiki": "^4.4.3",
     "simple-icons": "16.31.0",
-    "typescript": "^5.9.0",
+    "typescript": "^7.0.2",
     "use-sync-external-store": "1.6.0",
     "vitest": "^4.1.8",
     "zustand": "~4.5.7"
