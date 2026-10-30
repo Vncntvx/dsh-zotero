@@ -1,0 +1,30 @@
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    ignore:
+      # Harness pins are bumped with `npm run harness:pin -- <ver>` so every
+      # @deepseek-ai/* version stays exact and lockstep with the sibling
+      # harness checkout; Dependabot must not drift them independently.
+      - dependency-name: '@deepseek-ai/*'
+    groups:
+      # Patch and minor bumps arrive as one reviewable pull request; majors
+      # stay on their own so a React or jsdom jump never hides behind an
+      # unrelated bump.
+      dev-minor-patches:
+        update-types:
+          - patch
+          - minor
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      action-patches:
+        update-types:
+          - patch
+          - minor
