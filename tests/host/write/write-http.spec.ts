@@ -45,7 +45,7 @@ let mock: MockZotero
 let client: ZoteroWriteHttpClient
 
 const SERVER_ID = 'srv-id-for-tests-01'
-const API_KEY = 'localwritekey0123456789abcdef'
+const API_KEY = 'example-local-write-key'
 
 /** A documented-shape batch answer for one created note. */
 function batchBody(): Record<string, unknown> {
