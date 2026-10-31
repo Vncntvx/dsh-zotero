@@ -126,7 +126,7 @@
 ## 19. 文献面板不出现
 
 - **现象**：右侧边栏没有「文献面板」标签页或快捷入口；设置页的「文献面板」标签页只显示一条指向「包含的组件」的提示。
-- **原因**：文献面板要出现，需要三闸同时成立：`dsh-zotero/library` 组件行已组合；核心 `webEnabled`（「基础设置 → 文献轨迹 → 显示文献轨迹」）开启；组件自己的 `rightSidebarEnabled`（「文献面板 → 侧边栏显示设置 → 在右侧侧边栏显示」）开启。任意一处关闭都不会注册面板表面，也不会发起 `zotero/browse|search|item|childPage|export|write` 请求。
+- **原因**：文献面板要出现，需要三闸同时成立：`dsh-zotero/library` 组件行已组合；核心 `webEnabled`（「基础设置 → 文献轨迹 → 显示文献轨迹」）开启；组件自己的 `rightSidebarEnabled`（「文献面板 → 侧边栏显示设置 → 在右侧侧边栏显示」）开启。任意一处关闭都不会注册面板表面，也不会发起 `zotero/browse|collectionPath|search|item|childPage|export|write` 请求。
 - **排查**：
   1. 在插件管理器「包含的组件」中确认 `dsh-zotero/library` 行已启用并重载插件；
   2. 确认核心 `webEnabled` 开启（见第 9 项）；

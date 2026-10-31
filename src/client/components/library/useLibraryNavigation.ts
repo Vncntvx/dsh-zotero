@@ -1,3 +1,11 @@
+/**
+ * The library panel's navigation state: continuous collection prefixes, the
+ * saved-search listing, restoration, per-prefix library-version fencing, and
+ * location. A lane is one continuous prefix rather than a page window, so
+ * paging only ever appends; the feed owns the item list and persistence.
+ * @module dsh-zotero/client/components/library/useLibraryNavigation
+ */
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SupportedLocalLibrary } from '../../../contract.ts'
 import type { LibraryFeedFace } from './library-feed-types.ts'
@@ -9,29 +17,42 @@ import {
   flattenTree,
   lanePageOf,
   type CollectionRowView,
+  type LibraryLanePage,
   type SavedSearchRowView,
   type LibrarySelection,
 } from './library-model.ts'
 import { objectIdentity } from './navigation-identity.ts'
 import { messageOf } from '../../error-text.ts'
 
-export interface NavigationPage<T> {
-  readonly phase: 'ready'
-  readonly rows: readonly T[]
-  readonly total: number
-  readonly offset: 0
-  readonly limit: number
-  readonly nextOffset: number | undefined
-  readonly libraryVersion: number
-}
+/** One navigation prefix: rows accumulated from offset 0 and the version they were read at. */
+export type NavigationPage<T> = LibraryLanePage<T> & { readonly libraryVersion: number }
+
+/** A lane's render state: the prefix plus its loading and error frames. */
 export type NavigationLane<T> =
   | NavigationPage<T>
   | { phase: 'loading'; previous?: NavigationPage<T> }
   | { phase: 'error'; message: string; previous?: NavigationPage<T> }
+
+/** The rows every lane carries, whatever listing served them. */
 type Row = CollectionRowView | SavedSearchRowView
+/** The one lane key that is not an object identity; no valid ref can equal it. */
 const SAVED = '@saved'
 
-/** Owns continuous prefixes; every operation is fenced by instance/library generation. */
+/**
+ * Whether two breadcrumbs name the same path. An absent path and an empty one
+ * are different facts: one is a saved search, the other a collection whose
+ * path has not been resolved yet.
+ */
+function samePath(a: readonly string[] | undefined, b: readonly string[] | undefined): boolean {
+  if (a === undefined || b === undefined) return a === b
+  return a.length === b.length && a.every((value, index) => value === b[index])
+}
+
+/**
+ * Own the panel's navigation: one continuous prefix per collection level and
+ * one for saved searches, every request fenced by the library version its
+ * prefix was read at and every write-back compared before it replaces state.
+ */
 export function useLibraryNavigation(
   face: LibraryFeedFace,
   serverId: string | undefined,
@@ -51,9 +72,6 @@ export function useLibraryNavigation(
   const state = useRef(new Map<string, NavigationLane<Row>>())
   const generation = useRef(0)
   const locationGeneration = useRef(0)
-  const libraryFence = useRef<number>()
-  const automaticRebuilds = useRef(0)
-  const recover = useRef<() => void>()
   const recheckLeaves = useRef(new Set<string>())
   const pending = useRef(new Map<string, Promise<void>>())
   const open = useRef(expanded)
@@ -70,6 +88,11 @@ export function useLibraryNavigation(
   const publish = (key: string, lane: NavigationLane<Row>) => {
     state.current.set(key, lane)
     setLanes(new Map(state.current))
+  }
+  /** The lane's visible page: the ready prefix, or the previous one while it reloads. */
+  const pageOf = (key: string): NavigationPage<Row> | undefined => {
+    const lane = state.current.get(key)
+    return lane?.phase === 'ready' ? lane : lane?.previous
   }
   const load = useCallback(
     (ref?: string, goal = 0, rebuild = false): Promise<void> => {
@@ -91,9 +114,10 @@ export function useLibraryNavigation(
         })
         try {
           if (!valid()) return
-          let previous = lanePageOf(state.current.get(key)) as NavigationPage<Row> | undefined
+          let previous = pageOf(key)
           const target = Math.max(goal, rebuild ? (previous?.rows.length ?? 0) : 0)
           let page = rebuild ? undefined : previous
+          let restarted = false
           publish(key, { phase: 'loading', previous })
           for (;;) {
             const offset = page?.nextOffset ?? 0
@@ -109,16 +133,21 @@ export function useLibraryNavigation(
             const version = value.libraryVersion
             if (!Number.isSafeInteger(version) || version! < 0)
               throw new Error('Navigation response lacks a valid library version.')
-            if (libraryFence.current !== undefined && libraryFence.current !== version) {
-              if (automaticRebuilds.current >= 1)
-                throw new Error('Library keeps changing. Reload navigation.')
-              automaticRebuilds.current++
-              restoreCounts.current = { ...restoreCounts.current, [key]: target }
+            // A prefix is one snapshot: every page reports the version the
+            // first page did. A page read after the library moved would make
+            // this prefix skip or duplicate rows across the seam, so the
+            // whole prefix is read again at the new version instead of merged.
+            // Only this lane restarts; other lanes are independent listings.
+            if (page !== undefined && page.libraryVersion !== version) {
+              if (restarted) throw new Error('Library keeps changing. Reload this branch.')
+              restarted = true
+              // The settled plane answers by request shape, not by version, so
+              // the restart would otherwise be served the prefix it is trying
+              // to replace.
               face.invalidate?.()
-              recover.current?.()
-              return
+              page = undefined
+              continue
             }
-            libraryFence.current = version
             const rows =
               ref === SAVED ? savedSearchRowsOf(value.items) : collectionRowsOf(value.items)
             const all = [...(page?.rows ?? []), ...rows]
@@ -153,7 +182,7 @@ export function useLibraryNavigation(
             publish(key, {
               phase: 'error',
               message: messageOf(error),
-              previous: lanePageOf(state.current.get(key)) as NavigationPage<Row> | undefined,
+              previous: pageOf(key),
             })
         } finally {
           slots.current--
@@ -170,8 +199,6 @@ export function useLibraryNavigation(
 
   useEffect(() => {
     live.current = active
-    libraryFence.current = undefined
-    automaticRebuilds.current = 0
     generation.current++
     pending.current.clear()
     state.current.clear()
@@ -188,24 +215,42 @@ export function useLibraryNavigation(
 
   const lane = (ref?: string) => lanes.get(ref === SAVED ? SAVED : keyOf(ref))
   const root = lanePageOf(lane())
+
+  /**
+   * Every spelling the loaded rows use for one object identity. A stored ref
+   * may lack the server qualifier the served rows carry, so the expansion
+   * tests below need the spellings the rows actually have.
+   */
+  const rowRefsByIdentity = useMemo(() => {
+    const index = new Map<string, Set<string>>()
+    for (const value of lanes.values())
+      for (const row of lanePageOf(value)?.rows ?? []) {
+        const key = keyOf(row.ref)
+        const spellings = index.get(key) ?? new Set<string>()
+        spellings.add(row.ref)
+        index.set(key, spellings)
+      }
+    return index
+  }, [lanes, keyOf])
+
+  /** The expanded set in every spelling: the stored refs plus the rows naming them. */
+  const expandedRefs = useMemo(() => {
+    const refs = new Set(expanded)
+    for (const ref of expanded)
+      for (const spelling of rowRefsByIdentity.get(keyOf(ref)) ?? []) refs.add(spelling)
+    return refs
+  }, [expanded, rowRefsByIdentity, keyOf])
+
   const flatTree = useMemo(
     () =>
       flattenTree(
         (root?.rows ?? []) as CollectionRowView[],
-        (ref) => lanePageOf(lanes.get(keyOf(ref))) as NavigationPage<CollectionRowView> | undefined,
-        new Set(
-          [...expanded].flatMap((ref) => {
-            const key = keyOf(ref)
-            return [...lanes.values()].flatMap((value) =>
-              (lanePageOf(value)?.rows ?? [])
-                .filter((row) => keyOf(row.ref) === key)
-                .map((row) => row.ref),
-            )
-          }),
-        ),
+        (ref) =>
+          lanePageOf(lanes.get(keyOf(ref))) as LibraryLanePage<CollectionRowView> | undefined,
+        expandedRefs,
         root,
       ),
-    [lanes, expanded, keyOf, root],
+    [lanes, expandedRefs, keyOf, root],
   )
 
   useEffect(() => {
@@ -231,18 +276,18 @@ export function useLibraryNavigation(
     setLocatedRef(undefined)
     try {
       await load()
-      const root = lanePageOf(state.current.get('')) as NavigationPage<Row> | undefined
+      const root = pageOf('')
       if (!valid()) return
       if (!root) throw new Error('Load navigation before locating the current scope.')
       if (selection.kind === 'savedSearch') {
         await load(SAVED)
         while (valid()) {
-          const page = lanePageOf(state.current.get(SAVED))
+          const page = pageOf(SAVED)
           const savedLane = state.current.get(SAVED)
           if (savedLane?.phase === 'error') throw new Error(savedLane.message)
           const found = page?.rows.find((row) => keyOf(row.ref) === keyOf(selection.ref))
           if (found) {
-            updateSelection({ ...selection, name: found.name })
+            if (found.name !== selection.name) updateSelection({ ...selection, name: found.name })
             setLocatedRef(found.ref)
             return
           }
@@ -262,7 +307,7 @@ export function useLibraryNavigation(
       let parent: string | undefined
       for (const row of response.value.path) {
         while (valid()) {
-          const page = lanePageOf(state.current.get(keyOf(parent)))
+          const page = pageOf(keyOf(parent))
           if (page?.rows.some((item) => keyOf(item.ref) === keyOf(row.ref))) break
           if (page && page.nextOffset === undefined)
             throw new Error('Collection path changed. Reload navigation.')
@@ -279,7 +324,17 @@ export function useLibraryNavigation(
       }
       const target = response.value.path.at(-1)
       if (target) {
-        updateSelection({ ...selection, ref: target.ref, name: target.name, path: target.path })
+        // A locate that resolves to the scope already shown must not replace
+        // the selection object: the item list keys its read on that identity,
+        // so a fresh-but-equal object would refetch the same page and flash
+        // the list back to `loading`.
+        const currentPath = 'path' in selection ? selection.path : undefined
+        if (
+          keyOf(target.ref) !== keyOf(selection.ref) ||
+          target.name !== selection.name ||
+          !samePath(target.path, currentPath)
+        )
+          updateSelection({ ...selection, ref: target.ref, name: target.name, path: target.path })
         setLocatedRef(target.ref)
       }
     } catch (error) {
@@ -292,8 +347,13 @@ export function useLibraryNavigation(
     if (active) void locateRef.current()
   }, [active, serverId, library])
 
+  /**
+   * Reload every lane from offset 0 at whatever version the library is now.
+   * The manual refresh and a collection write both need the whole tree: a
+   * collection write can move any ancestor, and the located path has to be
+   * re-proven. Saved-search writes use {@link refreshSaved} instead.
+   */
   const rebuild = useCallback(() => {
-    libraryFence.current = undefined
     generation.current++
     pending.current.clear()
     const counts = new Map(
@@ -313,18 +373,34 @@ export function useLibraryNavigation(
       await load(SAVED, counts.get(SAVED) ?? 0, true)
       await locateRef.current()
     })()
-  }, [face, load])
-  recover.current = rebuild
-  const refresh = useCallback(() => {
-    automaticRebuilds.current = 0
-    rebuild()
-  }, [rebuild])
+  }, [load])
+  /**
+   * Reload only the saved-search lane after a saved-search write. The write
+   * advanced the library version, so this prefix restarts at offset 0 and
+   * re-reads at the new version; collection lanes are independent listings
+   * and keep their rows instead of being rebuilt and re-located.
+   */
+  const refreshSaved = useCallback(() => {
+    const lane = state.current.get(SAVED)
+    const loadedRows = (lane?.phase === 'ready' ? lane : lane?.previous)?.rows.length ?? 0
+    void load(SAVED, Math.max(loadedRows, prefixes[SAVED] ?? 0), true)
+  }, [load, prefixes])
+  /** Loaded rows per lane key; the feed persists exactly this record. */
+  const persistedPrefixes = useMemo(
+    () =>
+      Object.fromEntries(
+        [...lanes].map(([key, value]) => [key, lanePageOf(value)?.rows.length ?? 0]),
+      ),
+    [lanes],
+  )
   return {
     flatTree,
+    expanded: expandedRefs,
     locatedRef,
     locateError,
     locate,
-    refresh,
+    refresh: rebuild,
+    refreshSaved,
     cancelLocate: () => {
       locationGeneration.current++
     },
@@ -335,8 +411,6 @@ export function useLibraryNavigation(
       load(ref, prefixes[keyOf(ref)] ?? 0, state.current.get(keyOf(ref))?.phase === 'ready'),
     loadMoreSaved: () => load(SAVED, (lanePageOf(lane(SAVED))?.rows.length ?? 0) + 1),
     retrySaved: () => load(SAVED, prefixes[SAVED] ?? 0),
-    prefixes: Object.fromEntries(
-      [...lanes].map(([key, value]) => [key, lanePageOf(value)?.rows.length ?? 0]),
-    ),
+    prefixes: persistedPrefixes,
   }
 }

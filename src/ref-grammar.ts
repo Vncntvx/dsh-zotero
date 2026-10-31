@@ -45,6 +45,34 @@ export const REF_PATTERN = new RegExp(
   `^zotero://${LIBRARY}/${KINDS}/(?<key>${REF_KEY_SOURCE})(?:${SERVER_QUALIFIER})?$`,
 )
 
+/** The identity fields of one canonical ref; `serverId` is absent when unqualified. */
+export interface RefFields {
+  readonly serverId?: string
+  readonly libraryType: string
+  readonly libraryId: string
+  readonly kind: RefKind
+  readonly key: string
+}
+
+/**
+ * Split one canonical ref into its identity fields, or `undefined` when the
+ * string is not a ref. Every object-identity comparison shares this parse, so
+ * the named groups are read in one place instead of by each caller.
+ * @param ref - the string to parse; anything but a whole canonical ref fails.
+ * @returns the captured fields, or `undefined` for a non-ref string.
+ */
+export function refFieldsOf(ref: string): RefFields | undefined {
+  const fields = REF_PATTERN.exec(ref)?.groups
+  if (fields === undefined) return undefined
+  return {
+    ...(fields.serverId !== undefined ? { serverId: fields.serverId } : {}),
+    libraryType: fields.libraryType,
+    libraryId: fields.libraryId,
+    kind: fields.kind as RefKind,
+    key: fields.key,
+  }
+}
+
 /**
  * One ref embedded in longer text (tool args, results, prose): the
  * key-bearing prefix, unanchored. Provenance qualifiers are not matched,

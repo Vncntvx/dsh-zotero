@@ -19,7 +19,7 @@ import {
   zoteroLibrarySchema,
   zoteroLibrarySortSchema,
 } from '../../../wire-schemas.ts'
-import { REF_PATTERN, type RefKind } from '../../../ref-grammar.ts'
+import { refFieldsOf, type RefKind } from '../../../ref-grammar.ts'
 import { messageOf } from '../../error-text.ts'
 import type { LibraryItemState, LibraryPane } from './library-model.ts'
 
@@ -58,7 +58,7 @@ export const libraryStoredStateSchema = z
   })
   .strict()
 
-export type LibraryStoredState = z.input<typeof libraryStoredStateSchema>
+export type LibraryStoredState = z.infer<typeof libraryStoredStateSchema>
 
 /**
  * What a session keeps across a pane remount: the payload the durable record
@@ -118,7 +118,7 @@ function sameInstanceRef(
   saved: { library: { type: string; id: number } },
   serverId: string,
 ): boolean {
-  const fields = REF_PATTERN.exec(ref)?.groups
+  const fields = refFieldsOf(ref)
   return (
     fields !== undefined &&
     fields.kind === kind &&

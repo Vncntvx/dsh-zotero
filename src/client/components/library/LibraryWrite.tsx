@@ -252,11 +252,11 @@ export function LibraryWrite({
       <form className={css.writeForm} onSubmit={(event) => void submit(event)}>
         <fieldset disabled={busy || !sessionRunning} className={css.writeForm}>
           <label className={css.writeField}>
-            <span className={css.writeFieldLabel}>{t('libraryWriteSession')}</span>
+            <span className={css.caption}>{t('libraryWriteSession')}</span>
             <input className={css.writeInput} value={sessionId} readOnly aria-readonly="true" />
           </label>
           <label className={css.writeField}>
-            <span className={css.writeFieldLabel}>{t('libraryWriteOperation')}</span>
+            <span className={css.caption}>{t('libraryWriteOperation')}</span>
             <select
               className={css.writeSelect}
               value={operation}
@@ -279,12 +279,12 @@ export function LibraryWrite({
             .map((field) =>
               field === 'conditions' ? (
                 <fieldset key={field} className={css.writeField}>
-                  <legend className={css.writeFieldLabel}>{labels.conditions}</legend>
+                  <legend className={css.caption}>{labels.conditions}</legend>
                   {conditions.map((row, index) => (
                     <div key={index} className={css.writeConditionRow}>
                       {(['condition', 'operator', 'value'] as const).map((part) => (
                         <label key={part} className={clsx(css.writeField, css.writeConditionField)}>
-                          <span className={css.writeFieldLabel}>
+                          <span className={css.caption}>
                             {part === 'condition'
                               ? t('libraryWriteCondition')
                               : part === 'operator'
@@ -326,7 +326,7 @@ export function LibraryWrite({
                 </fieldset>
               ) : (
                 <label className={css.writeField} key={field}>
-                  <span className={css.writeFieldLabel}>{labels[field]}</span>
+                  <span className={css.caption}>{labels[field]}</span>
                   {LISTS.has(field) && (
                     <small className={css.listNote}>{t('libraryWriteOnePerLine')}</small>
                   )}

@@ -73,7 +73,7 @@ interface LibraryInspectorProps {
 function MetaRow({ label, value }: { label: string; value: string }) {
   return (
     <div className={css.metaRow}>
-      <dt className={css.metaLabel}>{label}</dt>
+      <dt className={clsx(css.caption, css.metaLabel)}>{label}</dt>
       <dd className={css.metaValue}>{value}</dd>
     </div>
   )
@@ -455,7 +455,7 @@ export function LibraryInspector({
   return (
     <aside className={css.inspector} aria-label={t('libraryInspector')}>
       <header className={css.inspectorHead}>
-        <p className={css.inspectorEyebrow}>{detail.itemType}</p>
+        <p className={clsx(css.caption, css.inspectorEyebrow)}>{detail.itemType}</p>
         <h3 className={css.inspectorTitle}>{detail.title}</h3>
         {creators !== '' && <p className={css.inspectorCreators}>{creators}</p>}
         {origin !== '' && <p className={css.inspectorOrigin}>{origin}</p>}
@@ -553,7 +553,7 @@ export function LibraryInspector({
             )}
             {detail.doi !== undefined && (
               <div className={css.metaRow}>
-                <dt className={css.metaLabel}>{t('libraryMetaDoi')}</dt>
+                <dt className={clsx(css.caption, css.metaLabel)}>{t('libraryMetaDoi')}</dt>
                 <dd className={css.metaValue}>
                   <CopyButton
                     value={detail.doi}
@@ -566,7 +566,7 @@ export function LibraryInspector({
             )}
             {detail.url !== undefined && (
               <div className={css.metaRow}>
-                <dt className={css.metaLabel}>{t('libraryMetaUrl')}</dt>
+                <dt className={clsx(css.caption, css.metaLabel)}>{t('libraryMetaUrl')}</dt>
                 <dd className={css.metaValue}>
                   <CopyButton
                     value={detail.url}
@@ -772,8 +772,7 @@ function ChildPager({
         t={t}
         status={state}
         retry={retry}
-        pager={{ label, offset, limit, total, returned, nextOffset }}
-        onPage={setOffset}
+        pager={{ page: { label, offset, limit, total, returned, nextOffset }, onPage: setOffset }}
       />
     </div>
   )

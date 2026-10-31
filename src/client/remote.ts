@@ -1,7 +1,3 @@
-import type {
-  ZoteroCollectionPathRequestView,
-  ZoteroCollectionPathResultView,
-} from '../contract.ts'
 /**
  * The client-side Typert Remote contribution for the dsh-zotero host
  * service: mounts the shared structural descriptors into `ctx.remote.zotero`.
@@ -16,6 +12,10 @@ import type {
  * @module dsh-zotero/client/remote
  */
 
+import type {
+  ZoteroCollectionPathRequestView,
+  ZoteroCollectionPathResultView,
+} from '../contract.ts'
 import type { RemoteResult, TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
 import {
   ZOTERO_REMOTE_PACKAGE,

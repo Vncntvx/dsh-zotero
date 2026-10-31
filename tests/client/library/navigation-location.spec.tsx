@@ -11,6 +11,7 @@ import {
 import {
   readLibraryState,
   writeLibraryState,
+  type LibraryStoredState,
 } from '../../../src/client/components/library/library-storage.ts'
 import type { ZoteroCollectionRowView } from '../../../src/contract.ts'
 import type { LibraryFeedFace } from '../../../src/client/components/library/library-feed-types.ts'
@@ -27,11 +28,18 @@ const target: ZoteroCollectionRowView = {
   path: [parent.name, 'Current'],
   depth: 1,
 }
-function store() {
+function store(
+  selection: LibraryStoredState['selection'] = {
+    kind: 'collection',
+    ref: target.ref,
+    name: 'Old name',
+  },
+) {
   writeLibraryState('S1', {
     version: 2,
+    prefixes: {},
     library: { type: 'user', id: 0 },
-    selection: { kind: 'collection', ref: target.ref, name: 'Old name' },
+    selection,
     q: 'retained',
     filters: { tags: ['read'] },
     mode: 'metadata',
@@ -72,6 +80,17 @@ it('locates a restored deep scope through real parent rows and sequential root p
   expect(result.current.q).toBe('retained')
   expect(result.current.filters).toEqual({ tags: ['read'] })
   expect(Object.values(readLibraryState('S1')!.prefixes!)).toContain(2)
+})
+it('does not reread the list when locate resolves to the scope already shown', async () => {
+  store({ kind: 'collection', ref: target.ref, name: target.name, path: target.path })
+  const collectionPath = vi.fn<LibraryFeedFace['collectionPath']>(async (request) => ({
+    ok: true,
+    value: { library: request.library, libraryVersion: 1, path: [parent, target] },
+  }))
+  const { result, face } = setupLibraryFeed({ browse: scripted(), collectionPath })
+  await waitFor(() => expect(result.current.locatedRef).toBe(target.ref))
+  expect(result.current.selection).toMatchObject({ name: target.name, path: target.path })
+  expect(face.search).toHaveBeenCalledTimes(1)
 })
 it('keeps a user collapse when a pending restored path finishes', async () => {
   store()
@@ -136,6 +155,7 @@ it('finds a saved search on a later page and refreshes its current name', async 
   const searchRef = 'zotero://user/0/search/SEARCH02'
   writeLibraryState('S1', {
     version: 2,
+    prefixes: {},
     library: { type: 'user', id: 0 },
     selection: { kind: 'savedSearch', ref: searchRef, name: 'Old' },
     q: '',
@@ -174,9 +194,30 @@ it('finds a saved search on a later page and refreshes its current name', async 
   )
   expect(result.current.selection).toMatchObject({ ref: searchRef })
 })
+it('does not reread the list when a saved search already carries its served name', async () => {
+  const searchRef = 'zotero://user/0/search/SEARCH01'
+  writeLibraryState('S1', {
+    version: 2,
+    prefixes: {},
+    library: { type: 'user', id: 0 },
+    selection: { kind: 'savedSearch', ref: searchRef, name: 'Unread' },
+    q: '',
+    filters: {},
+    mode: 'metadata',
+    sort: 'title',
+    direction: 'asc',
+    offset: 0,
+    expanded: [],
+  })
+  const { result, face } = setupLibraryFeed()
+  await waitFor(() => expect(result.current.locatedRef).toBe(searchRef))
+  expect(result.current.selection).toMatchObject({ name: 'Unread' })
+  expect(face.search).toHaveBeenCalledTimes(1)
+})
 it('reports a removed saved search after exhausting its listing', async () => {
   writeLibraryState('S1', {
     version: 2,
+    prefixes: {},
     library: { type: 'user', id: 0 },
     selection: { kind: 'savedSearch', ref: 'zotero://user/0/search/MISSING1', name: 'Missing' },
     q: '',
@@ -235,6 +276,7 @@ it('shows a navigation failure before attempting a restored path', async () => {
 it('shows a saved-search listing failure during restored location', async () => {
   writeLibraryState('S1', {
     version: 2,
+    prefixes: {},
     library: { type: 'user', id: 0 },
     selection: { kind: 'savedSearch', ref: 'zotero://user/0/search/SEARCH01', name: 'Unread' },
     q: '',
@@ -259,6 +301,7 @@ it('walks more than two saved-search pages to reveal the restored search', async
   const ref = 'zotero://user/0/search/SEARCH03'
   writeLibraryState('S1', {
     version: 2,
+    prefixes: {},
     library: { type: 'user', id: 0 },
     selection: { kind: 'savedSearch', ref, name: 'Third' },
     q: '',

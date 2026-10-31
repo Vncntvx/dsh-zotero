@@ -415,6 +415,7 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
                 locatedRef={feed.locatedRef}
                 flatTree={feed.flatTree}
                 expanded={feed.expanded}
+                identityOf={feed.identityOf}
                 toggleCollection={feed.toggleCollection}
                 selection={feed.selection}
                 selectScope={handleSelectScope}
@@ -436,10 +437,7 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
             >
               {/* Pill-based Filter Rail */}
               <LibraryFilters
-                key={JSON.stringify([
-                  feed.currentLibrary,
-                  'ref' in feed.selection ? feed.selection.ref : feed.selection.kind,
-                ])}
+                key={feed.scopeKey}
                 t={t}
                 face={face}
                 library={feed.currentLibrary}
@@ -449,18 +447,12 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
               />
 
               {feed.mode === 'everything' && (
-                <div className={css.everywhereHint}>
+                <div className={clsx(css.caption, css.everywhereHint)}>
                   <IconSearchOutlineMedium className={css.hintIcon} />
                   <span>{t('libraryEverythingHint')}</span>
                 </div>
               )}
 
-              {'ref' in feed.selection && (
-                <button type="button" onClick={feed.locate}>
-                  {t('libraryLocate')}
-                </button>
-              )}
-              {feed.locateError && <p role="alert">{feed.locateError}</p>}
               <LibraryItemList
                 returnToLibrary={() => feed.selectScope({ kind: 'library' })}
                 filtered={
@@ -469,6 +461,8 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
                     Array.isArray(value) ? value.length > 0 : value !== undefined,
                   )
                 }
+                locate={'ref' in feed.selection ? feed.locate : undefined}
+                locateError={feed.locateError}
                 t={t}
                 list={feed.list}
                 selection={feed.selection}
@@ -491,9 +485,9 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
               {probeState.data?.write?.enabled === true && feed.currentLibrary.type === 'user' && (
                 <LibraryWrite
                   // The write targets ride the inspected scope, so a selection
-                  // change remounts the form: a draft ref can never outlive
-                  // the item it was typed against.
-                  key={`${feed.selectedRef ?? ''}|${feed.selection.kind === 'collection' ? feed.selection.ref : ''}|${feed.selection.kind === 'savedSearch' ? feed.selection.ref : ''}`}
+                  // or inspected row change remounts the form: a draft ref can
+                  // never outlive the item it was typed against.
+                  key={JSON.stringify([feed.scopeKey, feed.selectedRef ?? null])}
                   t={t}
                   write={props.write}
                   sessionId={props.sessionId}

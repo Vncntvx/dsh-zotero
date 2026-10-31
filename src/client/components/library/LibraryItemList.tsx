@@ -7,7 +7,7 @@
 
 import clsx from 'clsx'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconWorkspaceTreeOutlineMedium } from '@deepseek-ai/dsh-client-ui-primitives'
 import { isPdfContentType } from '../../../media-types.ts'
 import { pageRangeOf, type LibraryListState, type LibrarySelection } from './library-model.ts'
 import { LibraryPager } from './LibraryPager.tsx'
@@ -16,6 +16,9 @@ import css from './library.module.css'
 interface LibraryItemListProps {
   readonly returnToLibrary?: () => void
   readonly filtered?: boolean
+  /** Reveals the current scope's row in the collection tree; absent for fixed scopes. */
+  readonly locate?: () => void
+  readonly locateError?: string
   readonly t: TranslateNS<'zotero'>
   readonly list: LibraryListState
   readonly selection: LibrarySelection
@@ -46,6 +49,8 @@ export function LibraryItemList({
   t,
   filtered,
   returnToLibrary,
+  locate,
+  locateError,
   list,
   selection,
   offset,
@@ -64,12 +69,31 @@ export function LibraryItemList({
     >
       <header className={css.listHeader}>
         <h2 className={css.listTitle}>{selectionLabelOf(selection, t)}</h2>
-        {list.phase === 'ready' && range !== undefined && (
-          <span className={css.listCount}>
-            {t('libraryRangeOfTotal', { start: range.start, end: range.end, total: range.total })}
-          </span>
-        )}
+        <div className={css.listHeaderMeta}>
+          {list.phase === 'ready' && range !== undefined && (
+            <span className={css.listCount}>
+              {t('libraryRangeOfTotal', { start: range.start, end: range.end, total: range.total })}
+            </span>
+          )}
+          {locate !== undefined && (
+            <button
+              type="button"
+              className={clsx(css.toolButton, css.listLocate)}
+              aria-label={t('libraryLocate')}
+              title={t('libraryLocate')}
+              onClick={locate}
+            >
+              <IconWorkspaceTreeOutlineMedium className={css.actionIcon} />
+            </button>
+          )}
+        </div>
       </header>
+
+      {locate !== undefined && locateError !== undefined && (
+        <p role="alert" className={clsx(css.treeError, css.listLocateError)}>
+          {locateError}
+        </p>
+      )}
 
       <div className={css.listScrollArea}>
         {list.phase === 'loading' && (

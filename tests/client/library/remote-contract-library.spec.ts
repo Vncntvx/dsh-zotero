@@ -52,7 +52,17 @@ const PARITY_CASES: readonly ParityCase[] = [
     valid: {
       kind: 'collections',
       libraryVersion: 1,
-      items: [{ kind: 'collection', ref: 'r', name: 'n', path: [], depth: 0 }],
+      items: [
+        {
+          kind: 'collection',
+          ref: 'r',
+          name: 'n',
+          path: [],
+          depth: 0,
+          childCount: 0,
+          itemCount: 0,
+        },
+      ],
       total: 1,
       offset: 0,
       returned: 1,

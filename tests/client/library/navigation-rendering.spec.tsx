@@ -12,6 +12,7 @@ afterEach(cleanup)
 it('renders active-filter empty results distinctly and keeps clear filters visible', async () => {
   writeLibraryState('S1', {
     version: 2,
+    prefixes: {},
     library: { type: 'user', id: 0 },
     selection: { kind: 'library' },
     q: '',
@@ -37,6 +38,12 @@ it('offers location in the list after selecting a collection', async () => {
   await waitFor(() => expect(face.collectionPath).toHaveBeenCalled())
 })
 
+it('offers no location action for the fixed library scope', async () => {
+  mountPanel()
+  await screen.findByText('LLM Papers')
+  expect(screen.queryByRole('button', { name: zh.libraryLocate })).toBeNull()
+})
+
 it('lets the user explicitly leave a missing collection for all items', async () => {
   const search = vi.fn(async (request: { scope: { kind: string } }) =>
     request.scope.kind === 'collection'
@@ -54,6 +61,7 @@ it('lets the user explicitly leave a missing collection for all items', async ()
 it('keeps the restored name visible while its fresh collection path is pending', async () => {
   writeLibraryState('S1', {
     version: 2,
+    prefixes: {},
     library: { type: 'user', id: 0 },
     selection: {
       kind: 'collection',

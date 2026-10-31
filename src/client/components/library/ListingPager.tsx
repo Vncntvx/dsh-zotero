@@ -1,18 +1,17 @@
 /**
- * The one rendering of a listing's recovery row and pager: a loading note or
- * an error with its retry action, then the numeric pager when the listing has
- * pages. The lane controls and the inspector's child sections both render
- * this; only their containers differ.
+ * The one rendering of a listing's recovery row: a loading note or an error
+ * with its retry action, plus the numeric pager when the listing carries one.
+ * The lane controls render the recovery row alone; the inspector's child
+ * listings render it with their pager.
  * @module dsh-zotero/client/components/library/ListingPager
  */
+import clsx from 'clsx'
 import type { ReactNode } from 'react'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { ListingStatus } from './library-feed-types.ts'
 import { LibraryPager } from './LibraryPager.tsx'
 import css from './library.module.css'
-
-/** The listing's in-flight or failed state; `undefined` renders neither row. */
-export type ListingStatus = { phase: 'loading' } | { phase: 'error'; message: string }
 
 /** The pager window one served page reports. */
 export interface ListingPage {
@@ -31,8 +30,6 @@ export function ListingPager({
   retryAriaLabel,
   errorVariant = 'inline',
   pager,
-  onPage,
-  pagerClassName,
 }: {
   readonly t: TranslateNS<'zotero'>
   readonly status: ListingStatus | undefined
@@ -41,13 +38,11 @@ export function ListingPager({
   readonly retryAriaLabel?: string
   /** `lane` wraps the error in the lane's alert block; `inline` is a bare line. */
   readonly errorVariant?: 'lane' | 'inline'
-  /** The served page; `undefined` renders no pager. */
-  readonly pager: ListingPage | undefined
-  readonly onPage: (offset: number) => void
-  /** The lane wraps its pager in its own spacing block. */
-  readonly pagerClassName?: string
+  /** The served page and its paging action; omitted when the listing cannot page. */
+  readonly pager?: { readonly page: ListingPage; readonly onPage: (offset: number) => void }
 }): ReactNode {
-  const paging = pager !== undefined && (pager.offset > 0 || pager.nextOffset !== undefined)
+  const page = pager?.page
+  const paging = page !== undefined && (page.offset > 0 || page.nextOffset !== undefined)
   const retryButton = (
     <Button
       variant="outline"
@@ -61,7 +56,7 @@ export function ListingPager({
   return (
     <>
       {status?.phase === 'loading' && (
-        <span role="status" className={css.treeNote}>
+        <span role="status" className={clsx(css.caption, css.treeNote)}>
           {t('libraryLoading')}
         </span>
       )}
@@ -79,20 +74,18 @@ export function ListingPager({
             {retryButton}
           </>
         ))}
-      {paging && pager !== undefined && (
-        <div className={pagerClassName}>
-          <LibraryPager
-            t={t}
-            label={pager.label}
-            offset={pager.offset}
-            limit={pager.limit}
-            total={pager.total}
-            returned={pager.returned}
-            nextOffset={pager.nextOffset}
-            busy={status?.phase === 'loading'}
-            onPage={onPage}
-          />
-        </div>
+      {paging && pager !== undefined && page !== undefined && (
+        <LibraryPager
+          t={t}
+          label={page.label}
+          offset={page.offset}
+          limit={page.limit}
+          total={page.total}
+          returned={page.returned}
+          nextOffset={page.nextOffset}
+          busy={status?.phase === 'loading'}
+          onPage={pager.onPage}
+        />
       )}
     </>
   )
