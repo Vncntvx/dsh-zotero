@@ -1,8 +1,3 @@
-import { readCollectionPath } from './collection-path.js'
-import type {
-  ZoteroCollectionPathRequestView,
-  ZoteroCollectionPathResultView,
-} from '../contract.js'
 /**
  * The `local` provider facade: the Zotero Local API seam implementing
  * {@link ZoteroProvider}. Capabilities are declared only for what this
@@ -21,6 +16,12 @@ import type {
  * does not rebuild its transport or discard its scope caches.
  * @module dsh-zotero/local/provider
  */
+
+import { readCollectionPath } from './collection-path.js'
+import type {
+  ZoteroCollectionPathRequestView,
+  ZoteroCollectionPathResultView,
+} from '../contract.js'
 
 import {
   LOCAL_PROVIDER_ID,
@@ -390,9 +391,9 @@ export class LocalApiProvider implements ZoteroProvider {
   }
 
   /**
-   * Discover libraries, collections, saved searches, tags, item types, and
-   * metadata fields. The domain logic lives in `local/browse-domain`; this
-   * is the seam.
+   * Read one collection's exact parent chain, fresh, under the caller's
+   * library version. The path domain lives in `local/collection-path`; this
+   * is the seam, and it rides the `browse` capability.
    */
   async collectionPath(
     request: ZoteroCollectionPathRequestView,
@@ -401,6 +402,11 @@ export class LocalApiProvider implements ZoteroProvider {
     return readCollectionPath(this.deps().client, request, signal)
   }
 
+  /**
+   * Discover libraries, collections, saved searches, tags, item types, and
+   * metadata fields. The domain logic lives in `local/browse-domain`; this
+   * is the seam.
+   */
   async browse(request: ZoteroBrowseRequest, signal?: AbortSignal): Promise<ZoteroBrowseResult> {
     return runBrowse(this.deps(), this.directory, this.itemSchema, request, signal)
   }

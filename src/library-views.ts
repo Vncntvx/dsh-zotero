@@ -118,6 +118,8 @@ function itemsViewOf(
             ...(collection.parentRef !== undefined ? { parentRef: collection.parentRef } : {}),
             path: collection.path,
             depth: collection.depth,
+            ...(collection.childCount !== undefined ? { childCount: collection.childCount } : {}),
+            ...(collection.itemCount !== undefined ? { itemCount: collection.itemCount } : {}),
           }
         }),
       }

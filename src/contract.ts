@@ -399,6 +399,10 @@ export interface ZoteroCollectionRowView {
   readonly parentRef?: string
   readonly path: readonly string[]
   readonly depth: number
+  /** Sub-collections Zotero counted (`meta.numCollections`); absent when unreported. */
+  readonly childCount?: number
+  /** Items Zotero counted directly (`meta.numItems`); absent when unreported. */
+  readonly itemCount?: number
 }
 
 /** One stored Zotero condition; unknown condition names are preserved as strings. */

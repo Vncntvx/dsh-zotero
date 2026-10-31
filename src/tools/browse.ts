@@ -145,6 +145,8 @@ const BROWSE_OUTPUT_SCHEMA = {
               parentRef: { type: 'string' },
               path: { type: 'array', required: true, items: { type: 'string' } },
               depth: { type: 'integer', required: true },
+              childCount: { type: 'integer' },
+              itemCount: { type: 'integer' },
             },
           },
           {

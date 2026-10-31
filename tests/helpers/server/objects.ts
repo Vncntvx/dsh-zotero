@@ -189,6 +189,7 @@ export function collectionRow(overrides: ObjectOverrides = {}): WireObject {
   return {
     key,
     version: overrides.version ?? 1,
+    ...(overrides.meta !== undefined ? { meta: overrides.meta } : {}),
     data: { key, version: overrides.version ?? 1, name: 'LLM Papers', ...overrides.data },
   }
 }

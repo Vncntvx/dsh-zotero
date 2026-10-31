@@ -38,6 +38,19 @@ describe('normalizeScopeEntry', () => {
   it('defaults a missing collection name to an empty string', () => {
     expect(normalizeScopeEntry({ key: 'COLL1234' })).toEqual({ key: 'COLL1234', name: '' })
   })
+
+  it('carries the reported counts and omits unreported ones', () => {
+    expect(
+      normalizeScopeEntry({
+        key: 'COLL1234',
+        meta: { numCollections: 0, numItems: 4 },
+        data: { name: 'Nested' },
+      }),
+    ).toEqual({ key: 'COLL1234', name: 'Nested', childCount: 0, itemCount: 4 })
+    expect(
+      normalizeScopeEntry({ key: 'COLL1234', meta: { numItems: 4 }, data: { name: 'Nested' } }),
+    ).toEqual({ key: 'COLL1234', name: 'Nested', itemCount: 4 })
+  })
 })
 
 describe('matchScopeName', () => {

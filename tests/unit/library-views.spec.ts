@@ -144,6 +144,34 @@ describe('browseViewOf', () => {
     ])
   })
 
+  it('forwards Zotero counts on collection rows and omits them when unreported', () => {
+    const counted: ZoteroBrowseResult = {
+      kind: 'collections',
+      items: [
+        {
+          ref: 'zotero://user/0/collection/C3',
+          name: 'Counted',
+          path: ['Counted'],
+          depth: 0,
+          childCount: 2,
+          itemCount: 0,
+        },
+      ],
+      ...base,
+    }
+    expect(browseViewOf(counted, 50).items).toEqual([
+      {
+        kind: 'collection',
+        ref: 'zotero://user/0/collection/C3',
+        name: 'Counted',
+        path: ['Counted'],
+        depth: 0,
+        childCount: 2,
+        itemCount: 0,
+      },
+    ])
+  })
+
   it('tags library and saved-search rows; conditions cross intact', () => {
     const libraries: ZoteroBrowseResult = {
       kind: 'libraries',

@@ -206,11 +206,13 @@ Browse library structure and taxonomy metadata. Supports paged queries.
 Each `kind` returns the matching structured array:
 
 - `libraries`: `{library, name}`
-- `collections`: `{ref, name, parentRef?, path, depth}`
+- `collections`: `{ref, name, parentRef?, path, depth, childCount?, itemCount?}` (`childCount` and `itemCount` are Zotero's own counts of direct sub-collections and direct items; omitted when unreported, and `childCount: 0` confirms a childless collection)
 - `savedSearches`: `{ref, name, conditions?}`
 - `tags`: `{tag, count?}`
 - `itemTypes`: `{itemType, localized?}`
 - `itemFields`: `{field, localized?}` or `{creatorType, localized?}`
+
+Collection and saved-search results also carry a top-level `libraryVersion` taken from a valid `Last-Modified-Version` response header; a missing or malformed version fails explicitly rather than being invented.
 
 ### Example
 
@@ -771,5 +773,3 @@ Reference truthfulness and accuracy verification. Parses the authors, year, titl
 #### Verdicts
 
 Each reference returns one of four verdicts: `VERIFIED` (the registry record exists and every compared field agrees), `CHECK` (the record exists but a field differs or the work is retracted), `NOT FOUND` (the registry answered and holds no such record), `UNVERIFIED` (the registry was unreachable, so nothing is concluded about this entry). An unreachable registry is never reported as `NOT FOUND`.
-
-Collection and saved-search browse results include `libraryVersion` from a valid `Last-Modified-Version` response header. Missing or invalid versions fail explicitly rather than returning a synthetic version.

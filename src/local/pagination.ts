@@ -37,6 +37,24 @@ export function requireTotalResults(headers: Headers, what: string): number {
 }
 
 /**
+ * Read and validate the `Last-Modified-Version` header a navigation listing or
+ * collection read must report. A navigation page without an honest library
+ * version cannot be fenced against a snapshot that moved underneath it, so the
+ * read fails loud instead of inventing one.
+ */
+export function requireLibraryVersionHeader(headers: Headers, what: string): number {
+  const raw = headers.get(ZOTERO_LIBRARY_VERSION_HEADER)
+  const version = parseNonNegativeSafeInteger(raw)
+  if (version === undefined) {
+    throw new ZoteroError(
+      `Zotero did not return a valid Last-Modified-Version header for ${what}`,
+      ZOTERO_UNEXPECTED,
+    )
+  }
+  return version
+}
+
+/**
  * Require a listing body to be an array. A non-array is a contract breach,
  * not an empty page: folding it to `[]` would silently under-report and can
  * stall pagination against a non-zero total.

@@ -23,6 +23,8 @@ import type {
   PersonalLibrary,
   GroupLibrary,
   SupportedLocalLibrary,
+  ZoteroCollectionPathRequestView,
+  ZoteroCollectionPathResultView,
   ZoteroResolvedScope,
 } from './contract.js'
 export type { PersonalLibrary, GroupLibrary, SupportedLocalLibrary, ZoteroResolvedScope }
@@ -672,6 +674,13 @@ export interface ZoteroCollectionInfo {
   parentRef?: string
   path: string[]
   depth: number
+  /**
+   * Sub-collections Zotero counted (`meta.numCollections`); absent when the
+   * response did not report it.
+   */
+  childCount?: number
+  /** Items Zotero counted directly (`meta.numItems`); absent when unreported. */
+  itemCount?: number
 }
 
 export interface ZoteroSavedSearchInfo {
@@ -1442,9 +1451,9 @@ export interface ZoteroProvider {
     onProgress?: (progress: ZoteroProgressEvent) => void,
   ): Promise<ZoteroExportTextResult>
   collectionPath?(
-    request: import('./contract.js').ZoteroCollectionPathRequestView,
+    request: ZoteroCollectionPathRequestView,
     signal?: AbortSignal,
-  ): Promise<import('./contract.js').ZoteroCollectionPathResultView>
+  ): Promise<ZoteroCollectionPathResultView>
   browse?(request: ZoteroBrowseRequest, signal?: AbortSignal): Promise<ZoteroBrowseResult>
   /**
    * Create a research note (standalone or under a parent item) with tags,

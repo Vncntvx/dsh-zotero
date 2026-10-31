@@ -1,14 +1,15 @@
+/**
+ * Cordis Service plugin providing `ctx.zoteroLibrary` and its Typert remote
+ * endpoints: browse, collection path, search, item detail, citation/BibTeX
+ * export, and approved writes.
+ *
+ * @module dsh-zotero/library/service
+ */
+
 import type {
   ZoteroCollectionPathRequestView,
   ZoteroCollectionPathResultView,
 } from '../contract.js'
-/**
- * Cordis Service plugin providing `ctx.zoteroLibrary` and its Typert remote
- * endpoints: browse, search, item detail, citation/BibTeX export, and
- * approved writes.
- *
- * @module dsh-zotero/library/service
- */
 
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-settings'
@@ -73,10 +74,12 @@ export class ZoteroLibraryService extends TypertRemoteService {
   }
 
   /**
-   * The panel's page size is the request's, clamped to the core read bounds:
-   * the panel consumes the same provider limits the tools honor, so a lowered
-   * `maxBrowseResults`/`maxSearchResults` narrows its pages. The view echoes
-   * the effective size for the client's pager.
+   * The exact parent chain of one collection, read fresh under the caller's
+   * library version. Read-only and gated on the browse capability, because it
+   * walks the same collection endpoints the browse listings do.
+   * @param request - the library, the collection ref, and the version to prove.
+   * @param signal - caller cancellation.
+   * @returns the rows from root to target and the version they were read at.
    */
   async collectionPath(
     request: ZoteroCollectionPathRequestView,
@@ -85,6 +88,12 @@ export class ZoteroLibraryService extends TypertRemoteService {
     return domainCall(() => requireZoteroService(this.ctx, signal).collectionPath(request, signal))
   }
 
+  /**
+   * The panel's page size is the request's, clamped to the core read bounds:
+   * the panel consumes the same provider limits the tools honor, so a lowered
+   * `maxBrowseResults`/`maxSearchResults` narrows its pages. The view echoes
+   * the effective size for the client's pager.
+   */
   async browse(
     request: ZoteroLibraryBrowseRequestView,
     signal: AbortSignal,
