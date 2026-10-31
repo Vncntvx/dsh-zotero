@@ -213,6 +213,21 @@ export const zoteroSavedSearchConditionSchema = z
   .strict()
   .readonly()
 
+/** Wire schema: one collection row, shared by browse listings and path breadcrumbs. */
+export const zoteroCollectionRowSchema = z
+  .object({
+    kind: z.literal('collection'),
+    ref: z.string(),
+    name: z.string(),
+    parentRef: z.string().optional(),
+    path: z.array(z.string()).readonly(),
+    depth: z.number().int().nonnegative(),
+    childCount: z.number().int().nonnegative().optional(),
+    itemCount: z.number().int().nonnegative().optional(),
+  })
+  .strict()
+  .readonly()
+
 export const zoteroLibraryBrowseItemSchema = z.discriminatedUnion('kind', [
   z
     .object({ kind: z.literal('tag'), tag: z.string() })
@@ -226,17 +241,7 @@ export const zoteroLibraryBrowseItemSchema = z.discriminatedUnion('kind', [
     .object({ kind: z.literal('library'), library: zoteroLibrarySchema, name: z.string() })
     .strict()
     .readonly(),
-  z
-    .object({
-      kind: z.literal('collection'),
-      ref: z.string(),
-      name: z.string(),
-      parentRef: z.string().optional(),
-      path: z.array(z.string()).readonly(),
-      depth: z.number().int().nonnegative(),
-    })
-    .strict()
-    .readonly(),
+  zoteroCollectionRowSchema,
   z
     .object({
       kind: z.literal('savedSearch'),
@@ -693,7 +698,7 @@ export const zoteroCollectionPathResultSchema = z
   .object({
     library: zoteroLibrarySchema,
     libraryVersion: z.number().int().nonnegative(),
-    path: z.array(zoteroLibraryBrowseItemSchema.options[3]!).readonly(),
+    path: z.array(zoteroCollectionRowSchema).readonly(),
   })
   .strict()
   .readonly()

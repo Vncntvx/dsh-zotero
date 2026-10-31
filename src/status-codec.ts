@@ -1,12 +1,3 @@
-import {
-  ZOTERO_COLLECTION_PATH_REQUEST_TYPE_SYMBOL,
-  ZOTERO_COLLECTION_PATH_RESULT_TYPE_SYMBOL,
-  zoteroCollectionPathInvocation,
-} from './contract.js'
-import {
-  zoteroCollectionPathRequestSchema,
-  zoteroCollectionPathResultSchema,
-} from './wire-schemas.js'
 /**
  * Host-only strict boundary codecs for the `zotero` wire namespace.
  *
@@ -17,6 +8,16 @@ import {
  * same objects the client arm carries.
  * @module dsh-zotero/status-codec
  */
+
+import {
+  ZOTERO_COLLECTION_PATH_REQUEST_TYPE_SYMBOL,
+  ZOTERO_COLLECTION_PATH_RESULT_TYPE_SYMBOL,
+  zoteroCollectionPathInvocation,
+} from './contract.js'
+import {
+  zoteroCollectionPathRequestSchema,
+  zoteroCollectionPathResultSchema,
+} from './wire-schemas.js'
 
 import type { InvocationDescriptor } from '@deepseek-ai/dsh-typert-protocol'
 import {

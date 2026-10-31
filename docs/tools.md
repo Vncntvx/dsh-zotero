@@ -206,11 +206,13 @@ zotero_export(refs=["zotero://user/0/item/ABC123", "zotero://user/0/item/DEF456"
 各 `kind` 返回对应的结构化数组：
 
 - `libraries`：`{library, name}`
-- `collections`：`{ref, name, parentRef?, path, depth}`
+- `collections`：`{ref, name, parentRef?, path, depth, childCount?, itemCount?}`（`childCount`/`itemCount` 为 Zotero 报告的直属子合集数与直属条目数，缺省表示未报告；`childCount` 为 0 即确认无子合集）
 - `savedSearches`：`{ref, name, conditions?}`
 - `tags`：`{tag, count?}`
 - `itemTypes`：`{itemType, localized?}`
 - `itemFields`：`{field, localized?}` 或 `{creatorType, localized?}`
+
+合集与保存搜索的结果还包含顶层 `libraryVersion`，来自有效的 `Last-Modified-Version` 响应头；缺失或非法版本会报错，不返回虚构版本。
 
 ### 示例
 
@@ -771,5 +773,3 @@ bundle 组件 `dsh-zotero/scholarly` 随包发布但默认关闭。在插件管�
 #### 核验结论
 
 每条参考文献返回四态之一：`VERIFIED`（注册记录存在且各字段一致）、`CHECK`（记录存在但存在差异或已撤稿）、`NOT FOUND`（注册库已应答且无此记录）、`UNVERIFIED`（注册库不可达，对该条目无任何结论）。注册库不可达永远不会报告为 `NOT FOUND`。
-
-合集和保存搜索的浏览结果包含 `libraryVersion`，来自有效的 `Last-Modified-Version` 响应头；缺失或非法版本会报错，不返回虚构版本。

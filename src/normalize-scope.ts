@@ -3,13 +3,17 @@
  */
 
 import { ZOTERO_UNEXPECTED, ZoteroError } from './errors.js'
-import { asRecord, asString, isObjectKey } from './json.js'
+import { asRecord, asString, isObjectKey, numberField } from './json.js'
 
 export interface ScopeNameEntry {
   readonly key: string
   readonly name: string
   /** Parent collection key; present only for non-root collections. */
   readonly parentKey?: string
+  /** Sub-collections Zotero counted (`meta.numCollections`); absent when unreported. */
+  readonly childCount?: number
+  /** Items Zotero counted directly in this collection (`meta.numItems`); absent when unreported. */
+  readonly itemCount?: number
 }
 
 export function normalizeScopeEntry(json: unknown): ScopeNameEntry {
@@ -22,12 +26,17 @@ export function normalizeScopeEntry(json: unknown): ScopeNameEntry {
     )
   }
   const data = asRecord(record?.data)
+  const meta = asRecord(record?.meta) ?? {}
   const parent = asString(data?.parentCollection)
   const parentKey = parent !== undefined && isObjectKey(parent) ? parent : undefined
+  const childCount = numberField(meta, 'numCollections')
+  const itemCount = numberField(meta, 'numItems')
   return {
     key,
     name: asString(data?.name) ?? '',
     ...(parentKey !== undefined ? { parentKey } : {}),
+    ...(childCount !== undefined ? { childCount } : {}),
+    ...(itemCount !== undefined ? { itemCount } : {}),
   }
 }
 

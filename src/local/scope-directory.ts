@@ -707,18 +707,13 @@ export class ScopeDirectory {
     baseEpoch: number,
   ): Promise<CollectionNode | undefined> {
     try {
-      const { json, headers } = await this.client.getJson<unknown>(
-        `${libraryPrefix(library)}/collections/${key}`,
-        undefined,
-        { signal, serverId },
+      const { entry, servedBy } = await readCollectionNode(
+        this.client,
+        library,
+        key,
+        serverId,
+        signal,
       )
-      const entry = normalizeScopeEntry(json)
-      if (entry.key !== key) {
-        throw new ZoteroError(
-          `Zotero answered the collection read with a different object than ${key}; the response cannot be used.`,
-          ZOTERO_UNEXPECTED,
-        )
-      }
       const node: CollectionNode = {
         name: entry.name,
         ...(entry.parentKey !== undefined ? { parentKey: entry.parentKey } : {}),
@@ -726,7 +721,6 @@ export class ScopeDirectory {
       // Pin the serving identity from the response headers (falling back to
       // the claim only when the build omits the header), like scopeListingOf:
       // storing the claim alone leaves a headerless first read unclaimable.
-      const servedBy = serverIdFromHeaders(headers, serverId)
       assertServerIdMatches(servedBy, serverId)
       if (
         (this.collectionBaseGeneration.get(cacheKey(library, 'collections')) ?? 0) === baseEpoch
@@ -754,6 +748,42 @@ export class ScopeDirectory {
       throw error
     }
   }
+}
+
+/**
+ * Read one collection node straight from the wire: no cache, no epoch check,
+ * no identity pinning, no 404 folding. The browse breadcrumb walk wraps it in
+ * the node cache; the collection-path endpoint calls it directly so every
+ * ancestor is read fresh under the caller's library-version fence. A 404
+ * propagates untouched, because a missing key truncates a breadcrumb on one
+ * path and fails an exact walk on the other.
+ * @param client - the transport the read rides.
+ * @param library - the library the collection belongs to.
+ * @param key - the 8-character collection key.
+ * @param serverId - the instance claim, if the caller carries one.
+ * @param signal - caller cancellation.
+ * @returns the normalized node, the serving identity, and the raw body.
+ */
+export async function readCollectionNode(
+  client: ZoteroHttpClient,
+  library: SupportedLocalLibrary,
+  key: string,
+  serverId: string | undefined,
+  signal: AbortSignal | undefined,
+): Promise<{ entry: ScopeNameEntry; servedBy: string | undefined; json: unknown }> {
+  const { json, headers } = await client.getJson<unknown>(
+    `${libraryPrefix(library)}/collections/${key}`,
+    undefined,
+    { signal, serverId },
+  )
+  const entry = normalizeScopeEntry(json)
+  if (entry.key !== key) {
+    throw new ZoteroError(
+      `Zotero answered the collection read with a different object than ${key}; the response cannot be used.`,
+      ZOTERO_UNEXPECTED,
+    )
+  }
+  return { entry, servedBy: serverIdFromHeaders(headers, serverId), json }
 }
 
 /**
