@@ -45,8 +45,7 @@
   flex-direction: column;
   gap: 12px;
   padding: 8px 12px 12px 28px;
-  font-size: 13px;
-  line-height: 1.5;
+  font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-secondary);
 }
 
@@ -67,7 +66,7 @@
 }
 
 .itemLabel {
-  font-size: 11px;
+  font: var(--dsw-font-xxxs-11);
   font-weight: 500;
   color: var(--dsw-alias-label-tertiary);
   text-transform: uppercase;
@@ -75,9 +74,8 @@
 }
 
 .itemValue {
-  font-size: 12px;
+  font: var(--dsw-font-markdown-code);
   font-weight: 500;
-  font-family: var(--ds-font-family-code);
   color: var(--dsw-alias-label-primary);
   word-break: break-all;
 }
@@ -97,7 +95,12 @@
   border-radius: var(--dsw-radius-md);
   background: var(--dsw-alias-markdown-code-block);
   color: var(--dsw-alias-state-error-primary);
-  font-size: 12px;
-  font-family: var(--ds-font-family-code);
+  font: var(--dsw-font-markdown-code-block-small);
   white-space: pre-wrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .summary {
+    transition: none;
+  }
 }

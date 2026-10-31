@@ -25,9 +25,7 @@
   border: none;
   background: none;
   padding: 0;
-  font: inherit;
-  font-size: 12px;
-  line-height: 1.5;
+  font: var(--dsw-font-xxs-12);
   color: var(--dsw-alias-label-secondary);
   cursor: pointer;
 }
@@ -44,8 +42,7 @@
 
 .hint {
   margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
+  font: var(--dsw-font-xxs-12);
   color: var(--dsw-alias-label-tertiary);
 }
 

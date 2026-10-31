@@ -27,6 +27,7 @@ import {
 import { ExportCard } from './ExportCard.tsx'
 import { ExportDocumentRow } from './ExportDocumentRow.tsx'
 import css from './cards.module.css'
+import quiet from './quiet.module.css'
 
 interface ExportSectionsProps {
   readonly exports: readonly ExportArtifact[]
@@ -73,7 +74,7 @@ export function ExportSections({ exports, t }: ExportSectionsProps) {
                 />
                 <button
                   type="button"
-                  className={css.lineAction}
+                  className={quiet.quiet}
                   onClick={() => {
                     downloadSection(section)
                   }}
@@ -93,7 +94,7 @@ export function ExportSections({ exports, t }: ExportSectionsProps) {
               </span>
               <button
                 type="button"
-                className={css.lineAction}
+                className={quiet.quiet}
                 onClick={() => {
                   downloadArtifact(group.artifact)
                 }}

@@ -10,10 +10,12 @@
  */
 
 import { useState } from 'react'
-import { Button, Menu, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
+import clsx from 'clsx'
+import { Menu, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { buildInfoOf } from '../../build-info.ts'
 import { writeStatusLabel } from '../write-label.ts'
+import quiet from '../quiet.module.css'
 import { connectionDiagnosisOf, type ConnectionView } from './connection.ts'
 import css from './workspace.module.css'
 
@@ -107,17 +109,16 @@ export function WorkspaceToolbar({ connection, onRefresh, t }: WorkspaceToolbarP
       <Menu
         open={menuOpen}
         anchor={
-          <Button
-            variant="outline"
-            size="sm"
-            className={css.menuButton}
+          <button
+            type="button"
+            className={clsx(quiet.quiet, quiet.tight, css.menuButton)}
             aria-label={t('detailsLabel')}
             onClick={() => {
               setMenuOpen(!menuOpen)
             }}
           >
             ···
-          </Button>
+          </button>
         }
         items={menuItems}
         onSelect={() => {
@@ -130,15 +131,14 @@ export function WorkspaceToolbar({ connection, onRefresh, t }: WorkspaceToolbarP
         autoFocus
         align="end"
       />
-      <Button
-        variant="outline"
-        size="sm"
-        className={css.refresh}
+      <button
+        type="button"
+        className={clsx(quiet.quiet, css.refresh)}
         onClick={onRefresh}
         disabled={connection.kind === 'loading'}
       >
         {t('refresh')}
-      </Button>
+      </button>
     </div>
   )
 }

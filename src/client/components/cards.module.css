@@ -5,60 +5,26 @@
 /* Caption geometry: one shared note style, 12px/18px caption gray. */
 .note {
   margin: 0;
-  font-size: 12px;
-  line-height: 18px;
+  font: var(--dsw-font-xxs-12);
   color: var(--dsw-alias-label-caption);
 }
 
 .line {
   margin: 0;
-  font-size: 12px;
-  line-height: 18px;
+  font: var(--dsw-font-xxs-12);
   color: var(--dsw-alias-label-secondary);
   overflow-wrap: anywhere;
 }
 
 /* Line-end actions sit outside a disclosure toggle: a copy or download
- * never expands the row. Geometry intentionally duplicated with
- * `open/open.module.css` `.button` and `workspace/workspace.module.css`
- * `.action`, so change all three together (see above for why). */
+ * never expands the row. The bordered-quiet geometry itself lives in
+ * `../quiet.module.css`. */
 .lineActions {
   flex: none;
   display: inline-flex;
   align-items: center;
   gap: 4px;
   margin-left: auto;
-}
-
-.lineAction {
-  display: inline-flex;
-  align-items: center;
-  height: 24px;
-  padding: 0 8px;
-  font-family: inherit;
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--dsw-alias-label-secondary);
-  background: transparent;
-  border: 0.5px solid var(--dsw-alias-border-l2);
-  border-radius: var(--dsw-radius-sm);
-  cursor: pointer;
-  transition:
-    background 120ms var(--ds-ease-in-out),
-    color 120ms var(--ds-ease-in-out);
-}
-
-@media (hover: hover) {
-  .lineAction:hover {
-    background: var(--dsw-alias-interactive-bg-hover);
-    color: var(--dsw-alias-label-primary);
-  }
-}
-
-.lineAction:focus-visible {
-  outline: var(--dsw-focus-ring-width, 1px) solid
-    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
-  outline-offset: 1px;
 }
 
 .chevron {
@@ -91,8 +57,7 @@
 }
 
 .cardTitle {
-  font-size: 13px;
-  line-height: 20px;
+  font: var(--dsw-font-xs-13);
   font-weight: 500;
   color: var(--dsw-alias-label-primary);
 }
@@ -103,8 +68,7 @@
   height: 18px;
   padding: 0 6px;
   border-radius: var(--dsw-radius-xs);
-  font-size: 10px;
-  line-height: 12px;
+  font: var(--dsw-font-xxxs-11);
   font-weight: 500;
   color: var(--dsw-alias-label-secondary);
   background: var(--dsw-alias-bg-layer-2);
@@ -118,8 +82,7 @@
  * `open/open.module.css` `.link`: the esbuild css-modules pipeline resolves each
  * file independently, so `composes` across files would drop the base rules). */
 .link {
-  font-size: 12px;
-  line-height: 16px;
+  font: var(--dsw-font-xxs-12);
   font-weight: 500;
   color: var(--dsw-alias-link);
   text-decoration: none;
@@ -175,9 +138,8 @@
   height: 18px;
   padding: 0 6px;
   border-radius: var(--dsw-radius-xs);
-  font-size: 10px;
-  line-height: 12px;
-  font-weight: 650;
+  font: var(--dsw-font-xxxs-11);
+  font-weight: 600;
   letter-spacing: 0.035em;
   color: var(--dsw-alias-label-tertiary);
   background: var(--dsw-alias-bg-layer-2);
@@ -234,16 +196,14 @@
 
 .exportSectionTitle {
   flex: none;
-  font-size: 13px;
-  line-height: 20px;
+  font: var(--dsw-font-xs-13);
   font-weight: 500;
   color: var(--dsw-alias-label-primary);
 }
 
 .exportSectionCount {
   flex: none;
-  font-size: 12px;
-  line-height: 18px;
+  font: var(--dsw-font-xxs-12);
   color: var(--dsw-alias-label-caption);
 }
 
@@ -263,9 +223,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: var(--ds-font-family-code);
-  font-size: 13px;
-  line-height: 20px;
+  font: var(--dsw-font-markdown-code);
   font-weight: 500;
   color: var(--dsw-alias-label-primary);
 }
@@ -276,8 +234,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
-  line-height: 18px;
+  font: var(--dsw-font-xxs-12);
   color: var(--dsw-alias-label-caption);
 }
 
@@ -311,8 +268,7 @@
 
 .exportTitle {
   flex: none;
-  font-size: 13px;
-  line-height: 20px;
+  font: var(--dsw-font-xs-13);
   font-weight: 500;
   color: var(--dsw-alias-label-primary);
 }
@@ -323,8 +279,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
-  line-height: 18px;
+  font: var(--dsw-font-xxs-12);
   color: var(--dsw-alias-label-caption);
 }
 
@@ -357,8 +312,7 @@
 .exportCodeLabel {
   flex: 1 1 auto;
   min-width: 0;
-  font-size: 12px;
-  line-height: 16px;
+  font: var(--dsw-font-xxs-12);
   color: var(--dsw-alias-label-secondary);
 }
 
@@ -378,9 +332,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: var(--ds-font-family-code);
-  font-size: 12px;
-  line-height: 18px;
+  font: var(--dsw-font-markdown-code);
   color: var(--dsw-alias-label-secondary);
 }
 
@@ -390,9 +342,7 @@
   max-height: 280px;
   overflow: auto;
   padding: 10px 12px;
-  font-family: var(--ds-font-family-code);
-  font-size: 12px;
-  line-height: 18px;
+  font: var(--dsw-font-markdown-code-block);
   color: var(--dsw-alias-label-secondary);
   white-space: pre;
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
@@ -411,8 +361,7 @@
 }
 
 .unresolvedItemsText {
-  font-size: 12px;
-  line-height: 18px;
+  font: var(--dsw-font-xxs-12);
   color: var(--dsw-alias-label-caption);
 }
 
@@ -437,8 +386,7 @@
 
 .surfaceErrorTitle {
   margin: 0;
-  font-size: 13px;
-  line-height: 18px;
+  font: var(--dsw-font-xs-13);
   font-weight: 600;
   color: var(--dsw-alias-label-primary);
 }
@@ -449,8 +397,7 @@
   border-radius: var(--dsw-radius-sm, 8px);
   background: var(--dsw-alias-bg-layer-2);
   color: var(--dsw-alias-label-primary);
-  font-size: 11px;
-  line-height: 16px;
+  font: var(--dsw-font-xxxs-11);
   font-weight: 500;
   padding: 2px 8px;
   cursor: pointer;
@@ -464,9 +411,7 @@
 
 .surfaceErrorDetail {
   margin: 0;
-  font-family: var(--ds-font-family-code);
-  font-size: 12px;
-  line-height: 18px;
+  font: var(--dsw-font-markdown-code-block-small);
   color: var(--dsw-alias-label-secondary);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -484,25 +429,21 @@
 
 .cardErrorTitle {
   margin: 0;
-  font-size: 12px;
-  line-height: 18px;
+  font: var(--dsw-font-xxs-12);
   font-weight: 600;
   color: var(--dsw-alias-label-primary);
 }
 
 .cardErrorDetail {
   margin: 2px 0 0;
-  font-family: var(--ds-font-family-code);
-  font-size: 11px;
-  line-height: 16px;
+  font: var(--dsw-font-markdown-code-block-small);
   color: var(--dsw-alias-label-secondary);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .chevron,
-  .lineAction {
+  .chevron {
     transition: none;
   }
 }

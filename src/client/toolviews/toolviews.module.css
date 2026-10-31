@@ -8,8 +8,7 @@
   flex-direction: column;
   gap: 8px;
   padding: 8px 12px 12px 28px;
-  font-size: 13px;
-  line-height: 1.5;
+  font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-secondary);
 }
 
@@ -77,68 +76,10 @@
 
 /* --- Card Actions & Buttons --- */
 
+/* The 22px quiet rows keep only their seat: `../components/quiet.module.css`
+ * owns the stroke, radius, typography, and interaction. */
 .inspectButton {
   align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 22px;
-  padding: 0 8px;
-  font-family: inherit;
-  font-size: 11px;
-  line-height: 14px;
-  color: var(--dsw-alias-label-tertiary);
-  background: transparent;
-  border: 0.5px solid var(--dsw-alias-border-l2);
-  border-radius: var(--dsw-radius-xs);
-  cursor: pointer;
-  outline: none;
-  box-sizing: border-box;
-  transition: all 120ms var(--ds-ease-in-out);
-}
-
-@media (hover: hover) {
-  .inspectButton:hover {
-    color: var(--dsw-alias-label-primary);
-    border-color: var(--dsw-alias-border-l1, var(--dsw-alias-border-l2));
-    background: var(--dsw-alias-interactive-bg-hover);
-  }
-}
-
-.lineAction {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  height: 22px;
-  padding: 0 8px;
-  font-family: inherit;
-  font-size: 11px;
-  line-height: 14px;
-  color: var(--dsw-alias-label-secondary);
-  background: transparent;
-  border: 0.5px solid var(--dsw-alias-border-l2);
-  border-radius: var(--dsw-radius-xs);
-  cursor: pointer;
-  outline: none;
-  box-sizing: border-box;
-  transition:
-    background 120ms var(--ds-ease-in-out),
-    color 120ms var(--ds-ease-in-out),
-    border-color 120ms var(--ds-ease-in-out);
-}
-
-@media (hover: hover) {
-  .lineAction:hover {
-    background: var(--dsw-alias-interactive-bg-hover);
-    color: var(--dsw-alias-label-primary);
-    border-color: var(--dsw-alias-border-l1, var(--dsw-alias-border-l2));
-  }
-}
-
-.lineAction:focus-visible {
-  outline: var(--dsw-focus-ring-width, 1px) solid var(--dsw-focus-ring-color, var(--dsw-alias-link));
-  outline-offset: 1px;
 }
 
 .actionLink {
@@ -147,9 +88,7 @@
   gap: 4px;
   height: 22px;
   padding: 0 4px;
-  font-family: inherit;
-  font-size: 11px;
-  line-height: 14px;
+  font: var(--dsw-font-xxxs-11);
   font-weight: 500;
   color: var(--dsw-alias-link);
   text-decoration: none;
@@ -170,13 +109,13 @@
 /* --- Badges --- */
 
 .badge {
+  box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   gap: 4px;
   height: 18px;
   padding: 0 6px;
-  font-size: 10px;
-  line-height: 12px;
+  font: var(--dsw-font-xxxs-11);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.03em;
@@ -196,18 +135,21 @@
 .badge[data-tone='success'] {
   background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 10%, transparent);
   color: var(--dsw-alias-state-success-primary);
+  border-width: 1px;
   border-color: color-mix(in srgb, var(--dsw-alias-state-success-primary) 20%, transparent);
 }
 
 .badge[data-tone='warning'] {
   background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 10%, transparent);
   color: var(--dsw-alias-state-warn-label);
+  border-width: 1px;
   border-color: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 20%, transparent);
 }
 
 .badge[data-tone='danger'],
 .badge[data-tone='error'],
 .badge[data-tone='pdf'] {
+  border-width: 1px;
   background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 8%, transparent);
   color: var(--dsw-alias-state-error-primary);
   border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 20%, transparent);
@@ -246,18 +188,16 @@
 }
 
 .itemTitle {
-  font-weight: 500;
   color: var(--dsw-alias-label-primary);
-  font-size: 13px;
-  line-height: 18px;
+  font: var(--dsw-font-xs-13);
+  font-weight: 500;
 }
 
 .itemMeta {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
-  line-height: 16px;
+  font: var(--dsw-font-xxs-12);
   color: var(--dsw-alias-label-caption);
 }
 
@@ -320,12 +260,11 @@
 }
 
 .evidenceText {
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: calc(22px + var(--dsh-content-font-delta, 0px));
   color: var(--dsw-alias-label-primary);
   white-space: pre-wrap;
   word-break: break-word;
-  font-family: inherit;
   padding-top: 2px;
 }
 
@@ -353,9 +292,7 @@
 .codeBox {
   margin: 0;
   padding: 10px 12px;
-  font-family: var(--ds-font-family-code);
-  font-size: 12px;
-  line-height: 1.5;
+  font: var(--dsw-font-markdown-code-block);
   color: var(--dsw-alias-label-secondary);
   overflow-x: auto;
   max-height: 360px;
@@ -375,6 +312,7 @@
 }
 
 .receiptCard[data-state='declined'] {
+  border-width: 1px;
   border-color: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 40%, transparent);
   background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 5%, transparent);
 }
@@ -383,14 +321,14 @@
    one: both are "the write boundary did not reach a clean outcome", and
    neither may read as a plain success. */
 .receiptCard[data-state='unverified'] {
+  border-width: 1px;
   border-color: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 40%, transparent);
   background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 5%, transparent);
 }
 
 .receiptTitle {
+  font: var(--dsw-font-xs-13);
   font-weight: 500;
-  font-size: 13px;
-  line-height: 18px;
   color: var(--dsw-alias-label-primary);
 }
 
@@ -404,7 +342,7 @@
 }
 
 .sectionTitle {
-  font-size: 11px;
+  font: var(--dsw-font-xxxs-11);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -432,11 +370,20 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
-  line-height: 18px;
+  font: var(--dsw-font-xxs-12);
   color: var(--dsw-alias-label-caption);
   padding: 4px 8px;
   border-radius: var(--dsw-radius-sm);
   background: var(--dsw-alias-bg-layer-2);
   border: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .summary,
+  .summarySuffix,
+  .actionLink,
+  .itemCard,
+  .evidenceItem {
+    transition: none;
+  }
 }

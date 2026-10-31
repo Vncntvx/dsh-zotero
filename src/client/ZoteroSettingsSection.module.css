@@ -27,8 +27,7 @@
 .note {
   margin: 0;
   color: var(--dsw-alias-label-tertiary);
-  font-size: 12px;
-  line-height: 1.5;
+  font: var(--dsw-font-xxs-12);
 }
 
 .tabPanel[hidden] {

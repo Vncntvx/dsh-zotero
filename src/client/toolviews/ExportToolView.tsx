@@ -24,6 +24,7 @@ import {
 } from '../presenters.ts'
 import { RawTextFallback, RunningNotice, ZoteroToolRow } from './ZoteroToolRow.tsx'
 import css from './toolviews.module.css'
+import quiet from '../components/quiet.module.css'
 
 type ExportToolViewProps = PropsRuntime<'tool.call.toolview', 'zotero_export'> &
   PropsLocale<'zotero'>
@@ -135,11 +136,11 @@ export function ExportToolView(props: ExportToolViewProps) {
                       value={rawText}
                       label={t('copy')}
                       copiedLabel={t('copied')}
-                      className={css.lineAction}
+                      className={quiet.quietDense}
                     />
                     <button
                       type="button"
-                      className={css.lineAction}
+                      className={quiet.quietDense}
                       onClick={() => {
                         // The translator id, not the display label: the
                         // extension and MIME type are the format's, and a

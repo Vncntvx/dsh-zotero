@@ -15,6 +15,7 @@ import { CopyButton } from '../components/CopyButton.tsx'
 import { errorSummaryOf, isToolRunning, metaOf, resultTextOf } from '../presenters.ts'
 import { RawTextFallback, RunningNotice, ZoteroToolRow } from './ZoteroToolRow.tsx'
 import css from './toolviews.module.css'
+import quiet from '../components/quiet.module.css'
 
 type RetrieveToolViewProps = PropsRuntime<'tool.call.toolview', 'zotero_retrieve'> &
   PropsLocale<'zotero'>
@@ -122,7 +123,7 @@ export function RetrieveToolView(props: RetrieveToolViewProps) {
                           value={item.preview}
                           label={t('copy')}
                           copiedLabel={t('copied')}
-                          className={css.lineAction}
+                          className={quiet.quietDense}
                         />
                         {item.attachmentRef && (
                           <PdfReadButton

@@ -34,16 +34,14 @@
 
 .groupHeading {
   margin: 0;
-  font-size: 13px;
-  line-height: 1.5;
+  font: var(--dsw-font-xs-13);
   font-weight: 600;
   color: var(--dsw-alias-label-primary);
 }
 
 .groupNote {
   margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
+  font: var(--dsw-font-xxs-12);
   color: var(--dsw-alias-label-tertiary);
 }
 

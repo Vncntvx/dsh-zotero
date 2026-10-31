@@ -7,7 +7,6 @@
 import { useMemo, type ReactNode } from 'react'
 import clsx from 'clsx'
 import {
-  Button,
   DisclosureRow,
   IconInspectOutlineRegular,
   TextShimmer,
@@ -22,6 +21,7 @@ import type {
 import { isToolRunning, metaOf, rowStateOf } from '../presenters.ts'
 import { writeMetaOf } from '../sources/write-decoder.ts'
 import css from './toolviews.module.css'
+import quiet from '../components/quiet.module.css'
 
 interface ToolRowRenderContext {
   readonly isRunning: boolean
@@ -131,10 +131,9 @@ export function ZoteroToolRow({
     <div className={css.bodyWrap}>
       {content}
       {inspect !== undefined && (
-        <Button
-          variant="outline"
-          size="sm"
-          className={css.inspectButton}
+        <button
+          type="button"
+          className={clsx(quiet.quietDense, quiet.muted, css.inspectButton)}
           onClick={(e) => {
             e.stopPropagation()
             inspect()
@@ -142,7 +141,7 @@ export function ZoteroToolRow({
         >
           <IconInspectOutlineRegular size={12} />
           <span>{t('toolInspect')}</span>
-        </Button>
+        </button>
       )}
     </div>
   ) : null

@@ -12,7 +12,7 @@
 import { type MouseEvent, type ReactNode } from 'react'
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useCopyFeedback } from './useCopyFeedback.ts'
-import css from './cards.module.css'
+import quiet from './quiet.module.css'
 
 interface CopyButtonProps {
   readonly value: string
@@ -72,17 +72,16 @@ export function CopyButton({
   }
 
   return (
-    <Button
-      variant="outline"
-      size="sm"
-      className={className ?? css.lineAction}
+    <button
+      type="button"
+      className={className ?? quiet.quiet}
       aria-label={label}
       title={title ?? label}
       disabled={disabled}
       onClick={handleClick}
-      icon={icon}
     >
+      {icon}
       <span>{copied ? copiedLabel : label}</span>
-    </Button>
+    </button>
   )
 }

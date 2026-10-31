@@ -29,6 +29,7 @@ import {
 } from '../presenters.ts'
 import { RawTextFallback, RunningNotice, ZoteroToolRow } from './ZoteroToolRow.tsx'
 import css from './toolviews.module.css'
+import quiet from '../components/quiet.module.css'
 
 type ChildrenToolViewProps = PropsRuntime<
   'tool.call.toolview',
@@ -210,7 +211,7 @@ export function ChildrenToolView(props: ChildrenToolViewProps) {
                       value={attachView.location}
                       label={t('copy')}
                       copiedLabel={t('copied')}
-                      className={css.lineAction}
+                      className={quiet.quietDense}
                     />
                   )}
                   {(attachView.ref || attachView.location) && (

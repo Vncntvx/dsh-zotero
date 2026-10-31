@@ -18,8 +18,7 @@
 
 .sectionTitle {
   margin: 0;
-  font-size: 14px;
-  line-height: 20px;
+  font: var(--dsw-font-s-14);
   font-weight: 500;
   color: var(--dsw-alias-label-primary);
 }
@@ -49,8 +48,7 @@
 
 .cardTitle {
   margin: 0;
-  font-size: 13px;
-  line-height: 18px;
+  font: var(--dsw-font-xs-13);
   font-weight: 600;
   color: var(--dsw-alias-label-primary);
 }
@@ -59,7 +57,7 @@
   border: none;
   background: none;
   padding: 2px 6px;
-  font-size: 11px;
+  font: var(--dsw-font-xxxs-11);
   color: var(--dsw-alias-label-secondary);
   border-radius: var(--dsw-radius-sm);
   cursor: pointer;
@@ -76,8 +74,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
-  line-height: 18px;
+  font: var(--dsw-font-xxs-12);
   font-weight: 500;
 }
 
@@ -90,8 +87,7 @@
 }
 
 .statusDetail {
-  font-size: 11px;
-  line-height: 16px;
+  font: var(--dsw-font-xxxs-11);
   color: var(--dsw-alias-label-tertiary);
   margin: 0;
 }
@@ -109,15 +105,14 @@
   display: flex;
   align-items: baseline;
   gap: 6px;
-  font-size: 12px;
-  line-height: 16px;
+  font: var(--dsw-font-xxs-12);
   color: var(--dsw-alias-label-secondary);
 }
 
 .tipBullet {
   flex: none;
   color: var(--dsw-alias-label-caption);
-  font-size: 12px;
+  font: var(--dsw-font-xxs-12);
 }
 
 /* Activation Guide (plugins.bundle.activation) */
@@ -130,8 +125,7 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
-  font-size: 13px;
-  line-height: 18px;
+  font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-primary);
 }
 
@@ -161,9 +155,8 @@
   corner-shape: round;
   background: var(--dsw-alias-bg-layer-3);
   color: var(--dsw-alias-label-primary);
-  font-size: 11px;
+  font: var(--dsw-font-xxxs-11);
   font-weight: 600;
-  line-height: 1;
 }
 
 .activationStepBody {
@@ -180,8 +173,7 @@
 
 .activationStepNote {
   margin: 0;
-  font-size: 12px;
-  line-height: 16px;
+  font: var(--dsw-font-xxs-12);
   color: var(--dsw-alias-state-warn-label);
 }
 
@@ -229,8 +221,7 @@
 
 .diagTime {
   flex: none;
-  font-size: 11px;
-  line-height: 16px;
+  font: var(--dsw-font-xxxs-11);
   color: var(--dsw-alias-label-tertiary);
   font-variant-numeric: tabular-nums;
 }
@@ -244,15 +235,12 @@
 }
 
 .diagEvent {
-  font-family: var(--ds-font-family-code);
-  font-size: 11px;
-  line-height: 16px;
+  font: var(--dsw-font-markdown-code-block-small);
   color: var(--dsw-alias-label-secondary);
 }
 
 .diagCount {
-  font-size: 10px;
-  line-height: 14px;
+  font: var(--dsw-font-xxxs-11);
   color: var(--dsw-alias-label-tertiary);
   border: 0.5px solid var(--dsw-alias-border-l2);
   border-radius: var(--dsw-radius-lg);
@@ -262,23 +250,20 @@
 .diagMessage {
   margin: 0;
   width: 100%;
-  font-size: 12px;
-  line-height: 18px;
+  font: var(--dsw-font-xxs-12);
   color: var(--dsw-alias-label-primary);
   overflow-wrap: anywhere;
 }
 
 .diagDetail summary {
-  font-size: 11px;
-  line-height: 16px;
+  font: var(--dsw-font-xxxs-11);
   color: var(--dsw-alias-label-tertiary);
   cursor: pointer;
 }
 
 .diagDetail pre {
   margin: 4px 0 0;
-  font-size: 11px;
-  line-height: 16px;
+  font: var(--dsw-font-markdown-code-block-small);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   color: var(--dsw-alias-label-secondary);
@@ -286,21 +271,18 @@
 
 .diagEmpty {
   margin: 0;
-  font-size: 12px;
-  line-height: 18px;
+  font: var(--dsw-font-xxs-12);
   color: var(--dsw-alias-label-tertiary);
 }
 
 .diagFetchError {
   margin: 0;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--dsw-alias-label-error, var(--dsw-alias-state-error-primary));
+  font: var(--dsw-font-xxs-12);
+  color: var(--dsw-alias-state-error-primary);
 }
 
 .diagFooter {
   margin: 0;
-  font-size: 11px;
-  line-height: 16px;
+  font: var(--dsw-font-xxxs-11);
   color: var(--dsw-alias-label-tertiary);
 }

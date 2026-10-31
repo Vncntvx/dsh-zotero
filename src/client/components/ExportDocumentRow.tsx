@@ -11,7 +11,7 @@
 
 import { useMemo, useState } from 'react'
 import clsx from 'clsx'
-import { Button, IconChevronDownOutlineMedium } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconChevronDownOutlineMedium } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { shortKeyOf } from '../presenters.ts'
 import { citeCommandOf } from '../sources/bibtex.ts'
@@ -20,6 +20,7 @@ import { downloadBlob } from '../download.ts'
 import { extensionOf, formatLabelOf, mimeOf, sanitizeFileStem } from '../export-formats.ts'
 import { CopyButton } from './CopyButton.tsx'
 import css from './cards.module.css'
+import quiet from './quiet.module.css'
 
 interface ExportDocumentRowProps {
   readonly doc: ExportedDocument
@@ -60,9 +61,9 @@ export function ExportDocumentRow({ doc, t }: ExportDocumentRowProps) {
           {citeCommand !== '' && (
             <CopyButton value={citeCommand} label={t('copyCite')} copiedLabel={t('copied')} />
           )}
-          <Button variant="outline" size="sm" className={css.lineAction} onClick={download}>
+          <button type="button" className={quiet.quiet} onClick={download}>
             {`${t('downloadArtifact')} ${extensionOf(doc.format)}`}
-          </Button>
+          </button>
         </span>
       </div>
       {doc.key !== undefined && doc.title !== undefined && (

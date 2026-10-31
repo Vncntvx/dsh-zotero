@@ -11,6 +11,7 @@ import { IconLinkOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import { launchZoteroProtocol, selectUrlOf } from '../../actions/open-zotero.ts'
 import { CopyButton } from '../CopyButton.tsx'
 import css from './open.module.css'
+import quiet from '../quiet.module.css'
 
 interface ZoteroLocateActionsProps {
   readonly title?: string | null
@@ -30,7 +31,7 @@ export function ZoteroLocateActions({
   variant = 'button',
 }: ZoteroLocateActionsProps) {
   const canonicalUrl = selectUrl !== undefined ? selectUrl : itemRef ? selectUrlOf(itemRef) : null
-  const baseClass = variant === 'link' ? css.link : css.button
+  const baseClass = variant === 'link' ? css.link : quiet.quiet
   const buttonClass = clsx(baseClass, className)
 
   const handleOpen = () => {

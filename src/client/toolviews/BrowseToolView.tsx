@@ -32,6 +32,7 @@ import {
 import { CopyButton } from '../components/CopyButton.tsx'
 import { RawTextFallback, RunningNotice, ZoteroToolRow } from './ZoteroToolRow.tsx'
 import css from './toolviews.module.css'
+import quiet from '../components/quiet.module.css'
 
 type BrowseToolViewProps = PropsRuntime<'tool.call.toolview', 'zotero_browse' | 'zotero_changes'> &
   PropsLocale<'zotero'>
@@ -232,7 +233,7 @@ function ChangesBody({
               })}
               label={t('copy')}
               copiedLabel={t('copied')}
-              className={css.lineAction}
+              className={quiet.quietDense}
             />
           </div>
         </div>
