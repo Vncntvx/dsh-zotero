@@ -1,0 +1,1 @@
+{"version":3,"file":"write-batch.d.ts","sourceRoot":"","sources":["../../src/local/write-batch.ts"],"names":[],"mappings":"AAAA;;;GAGG;AAcH,OAAO,KAAK,EAIV,uBAAuB,EACvB,sBAAsB,EAIvB,MAAM,aAAa,CAAA;AACpB,OAAO,KAAK,EAAE,eAAe,EAAE,MAAM,iBAAiB,CAAA;AAiTtD,wBAAsB,UAAU,CAC9B,IAAI,EAAE,eAAe,EACrB,OAAO,EAAE,uBAAuB,EAChC,MAAM,CAAC,EAAE,WAAW,GACnB,OAAO,CAAC,sBAAsB,CAAC,CA4DjC"}

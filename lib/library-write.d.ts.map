@@ -1,0 +1,1 @@
+{"version":3,"file":"library-write.d.ts","sourceRoot":"","sources":["../src/library-write.ts"],"names":[],"mappings":"AAAA,8FAA8F;AAC9F,OAAO,KAAK,EAAE,OAAO,EAAE,MAAM,qBAAqB,CAAA;AAKlD,OAAO,KAAK,EAAE,6BAA6B,EAAE,4BAA4B,EAAE,MAAM,eAAe,CAAA;AAsChG,wBAAsB,mBAAmB,CACvC,GAAG,EAAE,OAAO,EACZ,KAAK,EAAE,6BAA6B,EACpC,MAAM,EAAE,WAAW,GAClB,OAAO,CAAC,4BAA4B,CAAC,CAoEvC"}

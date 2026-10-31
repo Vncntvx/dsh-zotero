@@ -1,0 +1,1 @@
+{"version":3,"file":"search-query.d.ts","sourceRoot":"","sources":["../../src/local/search-query.ts"],"names":[],"mappings":"AAAA;;GAEG;AAEH,OAAO,KAAK,EAAE,mBAAmB,EAAE,MAAM,aAAa,CAAA;AAGtD,wBAAgB,gBAAgB,CAAC,GAAG,EAAE,MAAM,GAAG,MAAM,CAEpD;AAED;;;;;;GAMG;AACH,wBAAgB,gBAAgB,CAAC,GAAG,EAAE,MAAM,GAAG,MAAM,CAEpD;AA4BD,wBAAgB,iBAAiB,CAAC,OAAO,EAAE,mBAAmB,GAAG,eAAe,CAM/E"}

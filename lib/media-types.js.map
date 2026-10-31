@@ -1,0 +1,1 @@
+{"version":3,"file":"media-types.js","sourceRoot":"","sources":["../src/media-types.ts"],"names":[],"mappings":"AAAA;;;;GAIG;AAEH,uDAAuD;AACvD,MAAM,CAAC,MAAM,gBAAgB,GAAG,iBAAiB,CAAA;AAEjD,kEAAkE;AAClE,MAAM,CAAC,MAAM,iBAAiB,GAAG,WAAW,CAAA;AAE5C,0CAA0C;AAC1C,MAAM,UAAU,gBAAgB,CAAC,WAA+B;IAC9D,OAAO,WAAW,KAAK,gBAAgB,CAAA;AACzC,CAAC"}
