@@ -163,7 +163,7 @@ The first two are two views of one form state, synced live over both channels; t
 
 The literature panel appears only when all three conditions hold:
 
-1. The `dsh-zotero/library` component row is composed: while the row is off, no panel surface is registered and no `zotero/browse|search|item|childPage|export|write` request is issued;
+1. The `dsh-zotero/library` component row is composed: while the row is off, no panel surface is registered and no `zotero/browse|collectionPath|search|item|childPage|export|write` request is issued;
 2. The core `webEnabled` is on ("General → Literature trail → Show literature trail");
 3. This component's `rightSidebarEnabled` is on.
 

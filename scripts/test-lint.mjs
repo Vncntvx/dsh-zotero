@@ -72,7 +72,9 @@ const ALLOWED_CONTROL = new Set([0x09, 0x0a, 0x0d])
 
 /**
  * Ratchet: the most lines one spec file may occupy. Lower it in the same
- * commit that splits a file, never preemptively.
+ * commit that splits a file, never preemptively. The current ceiling is
+ * `tests/tools/write/write-presentation.spec.ts`; lowering it requires
+ * splitting that spec first.
  */
 const MAX_SPEC_LINES = 726
 

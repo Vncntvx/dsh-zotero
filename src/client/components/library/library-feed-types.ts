@@ -1,7 +1,3 @@
-import type {
-  ZoteroCollectionPathRequestView,
-  ZoteroCollectionPathResultView,
-} from '../../../contract.ts'
 /**
  * The library feed's shared vocabulary: the feed wire face, the panel's full
  * wire face the data plane wraps, and the child-listing shapes the feed and
@@ -10,6 +6,10 @@ import type {
  * @module dsh-zotero/client/components/library/library-feed-types
  */
 
+import type {
+  ZoteroCollectionPathRequestView,
+  ZoteroCollectionPathResultView,
+} from '../../../contract.ts'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type {
   ZoteroChildListingKind,
@@ -69,5 +69,9 @@ export interface LibraryPanelWireFace extends LibraryFeedFace {
   readonly export: LibraryExportItem
 }
 
+/** A listing's in-flight or failed state; `undefined` renders neither row. */
+export type ListingStatus = { phase: 'loading' } | { phase: 'error'; message: string }
+
 export type ChildKind = ZoteroChildListingKind
-export type ChildLoadState = { phase: 'loading' } | { phase: 'error'; message: string }
+/** Child listings report the same loading/error shapes as every other listing. */
+export type ChildLoadState = ListingStatus

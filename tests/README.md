@@ -106,8 +106,8 @@ boundaries; tree and panel specs verify rendering, keyboard focus and controls.
 `local/collection-path.spec.ts` owns fresh parent-chain protocol behavior,
 `host/library-path.spec.ts` proves the core-service route, and
 `client/library/remote-contract-path.spec.ts` verifies both strict codecs.
-Live acceptance includes `test:integration` and the manual panel checks recorded
-in `docs/navigation-validation.md`; mocked passes do not establish browser QA.
+Live acceptance includes `test:integration` and manual panel checks; mocked
+passes do not establish browser QA.
 
 ### Verification levels and behaviour ownership
 

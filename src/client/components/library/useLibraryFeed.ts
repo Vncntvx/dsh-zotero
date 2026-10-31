@@ -1,10 +1,11 @@
-import { useLibraryNavigation } from './useLibraryNavigation.ts'
 /**
- * The library panel's data feed: one hook owning every wire call the panel
- * makes. The panel mounts while its sidebar entry is selected, so requests
- * run on open and stop on switch-away. Each lane numbers its requests with a
- * monotonic sequence, and tree lanes do so per collection key: an answer
- * whose sequence is not the latest is dropped.
+ * The library panel's data feed: one hook owning the item list, the library
+ * selector, the inspector, and persistence, plus the seam through which the
+ * panel reaches navigation. The panel mounts while its sidebar entry is
+ * selected, so requests run on open and stop on switch-away. Each of these
+ * lanes numbers its requests with a monotonic sequence; an answer whose
+ * sequence is not the latest is dropped. Collection and saved-search lanes
+ * belong to `useLibraryNavigation`, which fences them by library version.
  * @module dsh-zotero/client/components/library/useLibraryFeed
  */
 
@@ -28,6 +29,7 @@ import {
   type LibrarySelectorState,
   type SavedSearchRowView,
   itemStateOf,
+  isContainerOnly,
   librariesRequestOf,
   libraryOptionsOf,
   LIBRARY_SORTS,
@@ -37,9 +39,10 @@ import {
   PERSONAL_LIBRARY,
   sameLibrary,
 } from './library-model.ts'
-import { scopeIdentity } from './navigation-identity.ts'
+import { objectIdentity, scopeIdentity, scopeKeyOf } from './navigation-identity.ts'
 import { messageOf } from '../../error-text.ts'
 import { useLibraryChildFeed } from './useLibraryChildFeed.ts'
+import { useLibraryNavigation } from './useLibraryNavigation.ts'
 import {
   readLibrarySessionMemory,
   readLibraryState,
@@ -65,6 +68,8 @@ export interface LibraryFeed {
   readonly selectLibrary: (library: SupportedLocalLibrary) => void
   readonly flatTree: readonly FlatCollectionRow[]
   readonly expanded: ReadonlySet<string>
+  /** The object identity of one ref under this feed's instance; the tree compares with it. */
+  readonly identityOf: (ref: string) => string
   readonly toggleCollection: (ref: string) => void
   readonly loadMoreTree: (ref: string | undefined) => void
   readonly retryTree: (ref: string | undefined) => void
@@ -73,6 +78,8 @@ export interface LibraryFeed {
   readonly loadMoreSavedSearches: () => void
   readonly retrySavedSearches: () => void
   readonly selection: LibrarySelection
+  /** Instance + library + scope: the key every scope-owned surface remounts on. */
+  readonly scopeKey: string
   readonly selectScope: (selection: LibrarySelection) => void
   readonly q: string
   readonly setQ: (q: string) => void
@@ -124,9 +131,10 @@ export function useLibraryFeed(
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
 
   const [selection, setSelection] = useState<LibrarySelection>({ kind: 'library' })
-  const scopeToken = JSON.stringify([serverId, currentLibrary, scopeIdentity(selection, serverId)])
-  const liveScope = useRef(scopeToken)
-  liveScope.current = scopeToken
+  /** The instance + library + scope key every scope-owned surface remounts on. */
+  const scopeKey = scopeKeyOf(currentLibrary, selection, serverId)
+  const liveScope = useRef(scopeKey)
+  liveScope.current = scopeKey
   const [q, setQRaw] = useState('')
   const [filters, setFiltersRaw] = useState<LibraryFilters>({})
   const [debouncedQ, setDebouncedQ] = useState('')
@@ -164,8 +172,9 @@ export function useLibraryFeed(
     listRetry,
   ])
   // Monotonic sequences: the winner is the request issued last, and a stale
-  // answer that resolves late is dropped by comparison. Tree lanes ticket per
-  // key: only a newer request for the same key invalidates a lane.
+  // answer that resolves late is dropped by comparison. Collection and
+  // saved-search lanes are not here: they carry their own generation and
+  // library-version fence in `useLibraryNavigation`.
   const seq = useRef({
     libraries: 0,
     list: 0,
@@ -196,25 +205,31 @@ export function useLibraryFeed(
   )
   const { flatTree, savedSearches } = navigation
   const reloadCachedTree = navigation.refresh
+  const refreshSavedLane = navigation.refreshSaved
+  /** The one identity spelling every consumer compares against this instance. */
+  const identityOf = useCallback((ref: string) => objectIdentity(ref, serverId), [serverId])
 
   /**
    * Reset on every library change: hydration on a server switch and an
-   * explicit library selection. Invalidates every outstanding lane, saved,
-   * list, and inspector answer, clears the lane cache, and installs the given
-   * library, with stored preferences after hydration and defaults after a
-   * selection.
+   * explicit library selection. Installs the given library, with stored
+   * preferences after hydration, the caller's kept reading preferences after
+   * a selection, and defaults otherwise.
    */
   const resetLibraryState = useCallback(
-    (library: SupportedLocalLibrary, restored?: LibraryStoredState): void => {
+    (
+      library: SupportedLocalLibrary,
+      restored?: LibraryStoredState,
+      keep?: Pick<LibraryFeed, 'mode' | 'sort' | 'direction'>,
+    ): void => {
       seq.current.list += 1
       setPrefixes(restored?.prefixes ?? {})
       setCurrentLibrary(library)
       setSelection(restored?.selection ?? { kind: 'library' })
       setQRaw(restored?.q ?? '')
       setDebouncedQ(restored?.q ?? '')
-      setModeRaw(restored?.mode ?? 'metadata')
-      setSortRaw(restored?.sort ?? 'dateModified')
-      setDirectionRaw(restored?.direction ?? 'desc')
+      setModeRaw(restored?.mode ?? keep?.mode ?? 'metadata')
+      setSortRaw(restored?.sort ?? keep?.sort ?? 'dateModified')
+      setDirectionRaw(restored?.direction ?? keep?.direction ?? 'desc')
       setFiltersRaw(restored?.filters ?? {})
       setOffset(restored?.offset ?? 0)
       setExpanded(new Set(restored?.expanded ?? []))
@@ -281,7 +296,7 @@ export function useLibraryFeed(
     filters,
     selectedRef,
     narrowPane,
-    JSON.stringify(navigation.prefixes),
+    navigation.prefixes,
   ])
 
   // The debounced query drives requests; the raw input drives the text box.
@@ -411,24 +426,34 @@ export function useLibraryFeed(
       })
   }, [active, face, selectedRef, inspectorRetry, refreshToken, resetChildren])
 
+  /**
+   * Open or close one branch. Refs may arrive in alias spellings, so
+   * membership compares object identity instead of string equality.
+   */
+  const setBranchOpen = useCallback(
+    (ref: string, open: boolean) => {
+      setExpanded((prev) => {
+        const key = objectIdentity(ref, serverId)
+        const matching = [...prev].filter((item) => objectIdentity(item, serverId) === key)
+        if (open) return matching.length > 0 ? prev : new Set([...prev, ref])
+        if (matching.length === 0) return prev
+        const next = new Set(prev)
+        matching.forEach((item) => next.delete(item))
+        return next
+      })
+    },
+    [serverId],
+  )
+
   const toggleCollection = useCallback(
     (ref: string) => {
       navigation.cancelLocate()
       const lane = navigation.treeLane(ref)
       if (lane?.phase === 'ready' && lane.total === 0) return
-      setExpanded((prev) => {
-        const next = new Set(prev)
-        const existing = [...next].filter(
-          (item) =>
-            scopeIdentity({ kind: 'collection', ref: item, name: '' }, serverId) ===
-            scopeIdentity({ kind: 'collection', ref, name: '' }, serverId),
-        )
-        if (existing.length) existing.forEach((item) => next.delete(item))
-        else next.add(ref)
-        return next
-      })
+      const key = objectIdentity(ref, serverId)
+      setBranchOpen(ref, ![...expanded].some((item) => objectIdentity(item, serverId) === key))
     },
-    [navigation],
+    [expanded, navigation, serverId, setBranchOpen],
   )
 
   /**
@@ -446,37 +471,43 @@ export function useLibraryFeed(
   const selectLibrary = useCallback(
     (library: SupportedLocalLibrary): void => {
       if (sameLibrary(library, currentLibrary)) return
-      resetLibraryState(library)
-      setModeRaw(mode)
-      setSortRaw(sort)
-      setDirectionRaw(direction)
+      // Switching library keeps how the reader reads: the mode and sort are
+      // about the list, not the library that list belongs to.
+      resetLibraryState(library, undefined, { mode, sort, direction })
     },
     [resetLibraryState, currentLibrary, mode, sort, direction],
   )
 
   const selectScope = useCallback(
     (next: LibrarySelection): void => {
-      if (scopeIdentity(next, serverId) === scopeIdentity(selection, serverId)) {
-        setNarrowPaneState('list')
-        return
-      }
+      const nextId = scopeIdentity(next, serverId)
       const row =
         next.kind === 'collection'
-          ? flatTree.find(
-              ({ row }) =>
-                scopeIdentity({ kind: 'collection', ref: row.ref, name: '' }, serverId) ===
-                scopeIdentity(next, serverId),
-            )?.row
+          ? flatTree.find(({ row }) => objectIdentity(row.ref, serverId) === nextId)?.row
           : undefined
+      // Zotero counts items directly in the collection. Zero items with
+      // children is a container-only collection: its content is the branch,
+      // so selecting it opens the branch instead of parking on an empty list.
+      const containerRef =
+        next.kind === 'collection' && row !== undefined && isContainerOnly(row)
+          ? next.ref
+          : undefined
+      const pane = containerRef === undefined ? 'list' : 'tree'
+      if (nextId === scopeIdentity(selection, serverId)) {
+        if (containerRef !== undefined) setBranchOpen(containerRef, true)
+        setNarrowPaneState(pane)
+        return
+      }
       navigation.cancelLocate()
       setSelection(next.kind === 'collection' && row ? { ...next, path: row.path } : next)
       setQRaw('')
       setDebouncedQ('')
       setFiltersRaw({})
       rewindList()
-      setNarrowPaneState('list')
+      if (containerRef !== undefined) setBranchOpen(containerRef, true)
+      setNarrowPaneState(pane)
     },
-    [rewindList, selection, serverId, flatTree],
+    [rewindList, selection, serverId, flatTree, setBranchOpen],
   )
 
   const setMode = useCallback(
@@ -513,11 +544,11 @@ export function useLibraryFeed(
 
   const setFilters = useCallback(
     (next: LibraryFilters): void => {
-      if (liveScope.current !== scopeToken) return
+      if (liveScope.current !== scopeKey) return
       setFiltersRaw(next)
       rewindList()
     },
-    [rewindList, scopeToken],
+    [rewindList, scopeKey],
   )
 
   const refresh = useCallback((): void => {
@@ -529,17 +560,19 @@ export function useLibraryFeed(
   /**
    * The post-write invalidation, stable so a write form can invoke it after
    * its own unmount. Reads the live refs: the refreshed scope is the one the
-   * user sees now, not the one captured when the write was submitted.
+   * user sees now, not the one captured when the write was submitted. A
+   * collection write can move any ancestor, so it rebuilds the tree and
+   * re-proves the located path; a saved-search write owns one lane.
    */
   const refreshAffected = useCallback(
     (kind: 'items' | 'collections' | 'savedSearches'): void => {
       face.invalidate?.()
       if (kind === 'collections') reloadCachedTree()
-      if (kind === 'savedSearches') reloadCachedTree()
+      if (kind === 'savedSearches') refreshSavedLane()
       setListRetry((value) => value + 1)
       if (selectedRefRef.current !== undefined) setInspectorRetry((value) => value + 1)
     },
-    [face, reloadCachedTree],
+    [face, reloadCachedTree, refreshSavedLane],
   )
 
   useEffect(() => {
@@ -556,18 +589,8 @@ export function useLibraryFeed(
     currentLibrary,
     selectLibrary,
     flatTree,
-    expanded: new Set([
-      ...expanded,
-      ...flatTree
-        .filter(({ row }) =>
-          [...expanded].some(
-            (ref) =>
-              scopeIdentity({ kind: 'collection', ref, name: '' }, serverId) ===
-              scopeIdentity({ kind: 'collection', ref: row.ref, name: '' }, serverId),
-          ),
-        )
-        .map(({ row }) => row.ref),
-    ]),
+    expanded: navigation.expanded,
+    identityOf,
     toggleCollection,
     loadMoreTree: (ref) => {
       void navigation.loadMore(ref)
@@ -590,6 +613,7 @@ export function useLibraryFeed(
     locatedRef: navigation.locatedRef,
     locateError: navigation.locateError,
     selection,
+    scopeKey,
     selectScope,
     q,
     setQ,

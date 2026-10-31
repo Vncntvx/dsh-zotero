@@ -87,6 +87,7 @@ describe('instance preferences', () => {
   it('discards cross-instance or wrong-kind expanded refs and a group publications scope', () => {
     writeLibraryState('S1', {
       version: 2,
+      prefixes: {},
       library: { type: 'group', id: 123 },
       selection: { kind: 'publications' },
       q: '',
@@ -114,6 +115,7 @@ describe('instance preferences', () => {
     (ref) => {
       writeLibraryState('S1', {
         version: 2,
+        prefixes: {},
         library: { type: 'user', id: 0 },
         selection: { kind: 'savedSearch', ref, name: 'Unread' },
         q: '',
@@ -142,6 +144,7 @@ describe('instance preferences', () => {
     expect(() =>
       writeLibraryState('S1', {
         version: 2,
+        prefixes: {},
         library: { type: 'user', id: 0 },
         selection: { kind: 'library' },
         q: '',
@@ -159,6 +162,7 @@ describe('instance preferences', () => {
   it('restores a confirmed instance and isolates another instance', async () => {
     writeLibraryState('S1', {
       version: 2,
+      prefixes: {},
       library: { type: 'group', id: 123 },
       selection: { kind: 'library' },
       q: 'saved',
@@ -188,6 +192,7 @@ describe('instance preferences', () => {
   it('preserves a missing restored scope and exposes its error', async () => {
     writeLibraryState('S1', {
       version: 2,
+      prefixes: {},
       library: { type: 'user', id: 0 },
       selection: {
         kind: 'collection',
@@ -389,7 +394,7 @@ describe('targeted recovery and write refresh', () => {
           ? []
           : kind === 'collections'
             ? ['collections', 'savedSearches', 'collections']
-            : ['collections', 'savedSearches', 'collections'],
+            : ['savedSearches'],
       )
       expect(result.current.selectedRef).toBe(ITEM_DETAIL.ref)
     },

@@ -5,15 +5,16 @@
  * @module tests/client/library/library-feed.restore
  */
 
-import { cleanup, waitFor } from '@testing-library/react'
+import { act, cleanup, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   writeLibrarySessionView,
   writeLibraryState,
 } from '../../../src/client/components/library/library-storage.ts'
 import type { LibraryStoredState } from '../../../src/client/components/library/library-storage.ts'
-import { ITEM_DETAIL } from '../helpers/library-panel-harness.tsx'
+import { ITEM_DETAIL, LIBRARY_ROWS, SAVED_SEARCHES } from '../helpers/library-panel-harness.tsx'
 import { setupLibraryFeed as setup } from '../helpers/library-feed-harness.ts'
+import type { LibraryFeedFace } from '../../../src/client/components/library/library-feed-types.ts'
 
 const SELECTED = 'zotero://user/0/item/ITEM0001?server=S1'
 
@@ -21,6 +22,7 @@ const SELECTED = 'zotero://user/0/item/ITEM0001?server=S1'
 function stored(overrides: Partial<LibraryStoredState> = {}): LibraryStoredState {
   return {
     version: 2,
+    prefixes: {},
     library: { type: 'user', id: 0 },
     selection: { kind: 'library' },
     q: '',
@@ -57,6 +59,40 @@ describe('restored view pins', () => {
     await waitFor(() => expect(result.current.narrowPane).toBe('inspector'))
   })
 
+  it('bridges a persisted unqualified expanded ref to the served qualified row', async () => {
+    const bare = 'zotero://user/0/collection/COLL0001'
+    const qualified = `${bare}?server=S1`
+    writeLibraryState('S1', stored({ expanded: [bare] }))
+    const { result, face } = setup({
+      browse: vi.fn<LibraryFeedFace['browse']>(async (request) => ({
+        ok: true,
+        value:
+          request.kind === 'libraries'
+            ? LIBRARY_ROWS
+            : request.kind === 'savedSearches'
+              ? SAVED_SEARCHES
+              : {
+                  kind: 'collections',
+                  libraryVersion: 1,
+                  items: [
+                    { kind: 'collection', ref: qualified, name: 'LLM Papers', path: [], depth: 0 },
+                  ],
+                  total: 1,
+                  offset: 0,
+                  returned: 1,
+                  limit: 1,
+                },
+      })),
+    })
+    await waitFor(() =>
+      expect(result.current.flatTree.some(({ row }) => row.ref === qualified)).toBe(true),
+    )
+    expect(result.current.expanded.has(qualified)).toBe(true)
+    await waitFor(() =>
+      expect(face.browse).toHaveBeenCalledWith(expect.objectContaining({ parentRef: qualified })),
+    )
+  })
+
   it('drops a cached detail that names another row and refetches the restored one', async () => {
     writeLibrarySessionView('session-1', {
       inspector: {
@@ -74,5 +110,18 @@ describe('restored view pins', () => {
     const inspector = result.current.inspector
     // The stale payload named ITEM0002; the restored row's answer replaced it.
     expect(inspector?.phase === 'ready' ? inspector.detail.ref : undefined).toBe(ITEM_DETAIL.ref)
+  })
+})
+
+describe('library switch', () => {
+  it('keeps the reading preferences the reader chose', async () => {
+    writeLibraryState('S1', stored({ mode: 'everything', sort: 'title', direction: 'asc' }))
+    const { result } = setup()
+    await waitFor(() => expect(result.current.mode).toBe('everything'))
+    act(() => result.current.selectLibrary({ type: 'group', id: 123 }))
+    expect(result.current.currentLibrary).toEqual({ type: 'group', id: 123 })
+    expect(result.current.mode).toBe('everything')
+    expect(result.current.sort).toBe('title')
+    expect(result.current.direction).toBe('asc')
   })
 })

@@ -3,6 +3,7 @@
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LibraryTree } from '../../../src/client/components/library/LibraryTree.tsx'
+import { objectIdentity } from '../../../src/client/components/library/navigation-identity.ts'
 import {
   collectionRowsOf,
   flattenTree,
@@ -34,11 +35,20 @@ const childPage = {
   limit: 1,
   nextOffset: 1,
 }
+const loadedCount = (loaded: number, total: number) =>
+  zh.libraryLoadedCount.replace('{loaded}', `${loaded}`).replace('{total}', `${total}`)
 
 function mountTree(
   expanded = new Set([rootRef]),
   lane: LibraryLaneState<CollectionRowView> = { phase: 'ready', ...childPage },
+  roots: readonly CollectionRowView[] = rootPage.rows,
+  laneOf?: (ref?: string) => LibraryLaneState<CollectionRowView> | undefined,
 ) {
+  const treeLane = laneOf ?? (() => lane)
+  const servedLane = (ref?: string) => {
+    const state = treeLane(ref)
+    return state?.phase === 'ready' ? state : undefined
+  }
   const loadMoreTree = vi.fn(),
     retryTree = vi.fn(),
     selectScope = vi.fn(),
@@ -46,12 +56,13 @@ function mountTree(
   const props = {
     t: mockT,
     expanded,
+    identityOf: (ref: string) => objectIdentity(ref),
     loadMoreTree,
     retryTree,
     selectScope,
     toggleCollection,
     selection: { kind: 'library' as const },
-    flatTree: flattenTree(rootPage.rows, () => childPage, expanded, rootPage),
+    flatTree: flattenTree(roots, servedLane, expanded, rootPage),
     savedSearches: {
       phase: 'ready' as const,
       rows: SAVED_SEARCHES.items
@@ -65,8 +76,8 @@ function mountTree(
       limit: 1,
       nextOffset: undefined,
     },
-    rootLane: { phase: 'ready' as const, ...rootPage },
-    treeLane: () => lane,
+    rootLane: { phase: 'ready' as const, ...rootPage, rows: roots },
+    treeLane,
     loadMoreSavedSearches: vi.fn(),
     retrySavedSearches: vi.fn(),
   }
@@ -173,6 +184,95 @@ describe('collection tree navigation', () => {
     expect(props.retryTree).toHaveBeenCalledWith(rootRef)
     expect(screen.getByText('title · contains · term')).toBeTruthy()
   })
+
+  it('shows the shared loading note while a lane pages further', () => {
+    mountTree(new Set([rootRef]), {
+      phase: 'loading',
+      previous: { phase: 'ready', ...childPage },
+    })
+    const childGroup = screen.getAllByRole('group', { name: rootPage.rows[0]!.name })[0]!
+    expect(within(childGroup).getByRole('status').textContent).toBe(zh.libraryLoading)
+  })
+
+  it('shows the loaded count beside load more and drops it once the lane is complete', () => {
+    const { props, rerender } = mountTree()
+    const childGroup = () => screen.getAllByRole('group', { name: rootPage.rows[0]!.name })[0]!
+    expect(within(childGroup()).getByText(loadedCount(1, 2))).toBeTruthy()
+    rerender(
+      <LibraryTree
+        {...props}
+        treeLane={() => ({ phase: 'ready', ...childPage, total: 1, nextOffset: undefined })}
+      />,
+    )
+    expect(within(childGroup()).queryByText(loadedCount(1, 1))).toBeNull()
+  })
+
+  it('hides the expander for a collection Zotero counts as childless', () => {
+    const roots: CollectionRowView[] = [
+      {
+        kind: 'collection',
+        ref: 'zotero://user/0/collection/COLL0098',
+        name: 'Childless',
+        path: ['Childless'],
+        depth: 0,
+        childCount: 0,
+      },
+      {
+        kind: 'collection',
+        ref: 'zotero://user/0/collection/COLL0099',
+        name: 'Nested',
+        path: ['Nested'],
+        depth: 0,
+        childCount: 2,
+      },
+    ]
+    // No child page served yet: the count alone decides the expander.
+    mountTree(new Set(), { phase: 'loading' }, roots)
+    expect(screen.queryByRole('button', { name: 'Childless' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Nested' })).toBeTruthy()
+  })
+  it('renders nested closing branches innermost first and pages the lane they close', () => {
+    const root: CollectionRowView = {
+      kind: 'collection',
+      ref: 'zotero://user/0/collection/COLL0100',
+      name: 'Root',
+      path: ['Root'],
+      depth: 0,
+    }
+    const child: CollectionRowView = {
+      ...root,
+      ref: 'zotero://user/0/collection/COLL0101',
+      name: 'Child',
+      path: ['Root', 'Child'],
+      depth: 1,
+    }
+    const grand: CollectionRowView = {
+      ...root,
+      ref: 'zotero://user/0/collection/COLL0102',
+      name: 'Grandchild',
+      path: ['Root', 'Child', 'Grandchild'],
+      depth: 2,
+    }
+    const lanes = new Map<string, LibraryLaneState<CollectionRowView>>([
+      [
+        root.ref,
+        { phase: 'ready', rows: [child], total: 1, offset: 0, limit: 1, nextOffset: undefined },
+      ],
+      [child.ref, { phase: 'ready', rows: [grand], total: 2, offset: 0, limit: 1, nextOffset: 1 }],
+    ])
+    const { props } = mountTree(
+      new Set([root.ref, child.ref]),
+      { phase: 'ready', ...childPage },
+      [root],
+      (ref) => (ref === undefined ? undefined : lanes.get(ref)),
+    )
+    const row = screen.getByRole('treeitem', { name: 'Grandchild' })
+    const groups = within(row.closest('li')!).getAllByRole('group')
+    expect(groups.map((group) => group.getAttribute('aria-label'))).toEqual(['Child', 'Root'])
+    const childGroup = groups.find((group) => group.getAttribute('aria-label') === 'Child')!
+    fireEvent.click(within(childGroup).getByRole('button', { name: zh.libraryLoadMore }))
+    expect(props.loadMoreTree).toHaveBeenCalledWith(child.ref)
+  })
 })
 
 it('removes confirmed leaf expanders and keeps the row keyboard focus', () => {
@@ -219,4 +319,49 @@ it('keeps focus on an expanded row with no visible child when pressing right', (
   fireEvent.keyDown(child, { key: 'ArrowRight' })
   expect(document.activeElement).toBe(child)
   expect(props.toggleCollection).not.toHaveBeenCalled()
+})
+
+it('selects a row whose server qualifier only the row carries', () => {
+  const qualified: CollectionRowView = {
+    kind: 'collection',
+    ref: 'zotero://user/0/collection/COLL0200?server=S1',
+    name: 'Qualified',
+    path: ['Qualified'],
+    depth: 0,
+  }
+  const { props, rerender } = mountTree(new Set(), { phase: 'loading' }, [qualified])
+  rerender(
+    <LibraryTree
+      {...props}
+      identityOf={(ref: string) => objectIdentity(ref, 'S1')}
+      selection={{
+        kind: 'collection',
+        ref: 'zotero://user/0/collection/COLL0200',
+        name: 'Qualified',
+      }}
+    />,
+  )
+  expect(screen.getByRole('treeitem', { name: 'Qualified' }).getAttribute('aria-selected')).toBe(
+    'true',
+  )
+})
+
+it('renders a row whose ref is not a URL', () => {
+  const opaque: CollectionRowView = {
+    kind: 'collection',
+    ref: 'not-a-url',
+    name: 'Opaque',
+    path: ['Opaque'],
+    depth: 0,
+  }
+  const { props, rerender } = mountTree(new Set(), { phase: 'loading' }, [opaque])
+  rerender(
+    <LibraryTree
+      {...props}
+      selection={{ kind: 'collection', ref: 'zotero://user/0/collection/COLL0999', name: 'Other' }}
+    />,
+  )
+  expect(screen.getByRole('treeitem', { name: 'Opaque' }).getAttribute('aria-selected')).toBe(
+    'false',
+  )
 })

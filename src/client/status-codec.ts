@@ -1,12 +1,3 @@
-import {
-  ZOTERO_COLLECTION_PATH_REQUEST_TYPE_SYMBOL,
-  ZOTERO_COLLECTION_PATH_RESULT_TYPE_SYMBOL,
-  zoteroCollectionPathInvocation,
-} from '../contract.ts'
-import {
-  zoteroCollectionPathRequestSchema,
-  zoteroCollectionPathResultSchema,
-} from '../wire-schemas.ts'
 /**
  * Client-side strict codecs for Zotero Typert remotes.
  *
@@ -23,6 +14,15 @@ import {
  * @module dsh-zotero/client/status-codec
  */
 
+import {
+  ZOTERO_COLLECTION_PATH_REQUEST_TYPE_SYMBOL,
+  ZOTERO_COLLECTION_PATH_RESULT_TYPE_SYMBOL,
+  zoteroCollectionPathInvocation,
+} from '../contract.ts'
+import {
+  zoteroCollectionPathRequestSchema,
+  zoteroCollectionPathResultSchema,
+} from '../wire-schemas.ts'
 import type { InvocationDescriptor } from '@deepseek-ai/dsh-typert-protocol'
 import {
   ZOTERO_CLIENT_ERROR_REPORT_TYPE_SYMBOL,

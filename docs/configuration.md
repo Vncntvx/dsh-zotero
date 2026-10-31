@@ -163,7 +163,7 @@ Schema 默认值 → Composition 入口配置 → 当前 profile 的 Cordis patc
 
 文献面板要出现，需要以下三处同时成立：
 
-1. `dsh-zotero/library` 组件行已组合：行未启用时不注册任何面板表面，也不发起 `zotero/browse|search|item|childPage|export|write` 请求；
+1. `dsh-zotero/library` 组件行已组合：行未启用时不注册任何面板表面，也不发起 `zotero/browse|collectionPath|search|item|childPage|export|write` 请求；
 2. 核心 `webEnabled` 开启（「基础设置 → 文献轨迹 → 显示文献轨迹」）；
 3. 本组件的 `rightSidebarEnabled` 开启。
 

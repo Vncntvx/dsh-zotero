@@ -1,8 +1,8 @@
 /**
- * The library panel's shared pager: prev/next around the localized range
- * line. Every listing in the panel — the item list, each navigation lane, and
- * the inspector's child collections — steps back by the page size the host
- * actually served (`limit`).
+ * The library panel's shared numeric pager: prev/next around the localized
+ * range line. The item list and the inspector's child listings step back by
+ * the page size the host actually served (`limit`); navigation lanes load a
+ * prefix instead and do not use it.
  * @module dsh-zotero/client/components/library/LibraryPager
  */
 
@@ -56,7 +56,7 @@ export function LibraryPager({
         {t('libraryPagePrev')}
       </Button>
       {showRange && (
-        <span className={css.pageInfo} aria-live="polite">
+        <span className={css.caption} aria-live="polite">
           {t('libraryRangeOfTotal', {
             start: range.start,
             end: range.end,

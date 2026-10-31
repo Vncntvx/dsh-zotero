@@ -1,0 +1,94 @@
+/* The one definition of the bordered-quiet control: 24px and 22px rows with a
+ * hairline stroke, used by every toolbar, card footer, and tool-row action in
+ * this bundle. Call sites import this sheet and reference its class names
+ * rather than restating the geometry; esbuild's CSS-module build drops
+ * `composes`, so a shared class name is the only cross-file reuse it supports.
+ *
+ * Site-specific layout (flex, margin, min-width, text-decoration) stays in the
+ * consuming module; size, stroke, radius, typography, and interaction live
+ * here. The 24px row keeps its stroke on hover; the 22px row lightens it one
+ * step, as the tool row it sits in does. */
+.quiet {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  font: var(--dsw-font-xxs-12);
+  color: var(--dsw-alias-label-secondary);
+  background: transparent;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  cursor: pointer;
+  transition:
+    background 120ms var(--ds-ease-in-out),
+    color 120ms var(--ds-ease-in-out);
+}
+
+.quietDense {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  font: var(--dsw-font-xxxs-11);
+  color: var(--dsw-alias-label-secondary);
+  background: transparent;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-xs);
+  cursor: pointer;
+  transition:
+    background 120ms var(--ds-ease-in-out),
+    color 120ms var(--ds-ease-in-out),
+    border-color 120ms var(--ds-ease-in-out);
+}
+
+/* Icon-first 24px row: centred content and a 28px floor, as the toolbar's
+ * diagnostic trigger needs. Declared after `.quiet` so the padding wins. */
+.tight {
+  justify-content: center;
+  min-width: 28px;
+  padding: 0 6px;
+}
+
+/* Tertiary tone for the 22px row; the hover rule is more specific, so the base
+ * tone does not survive a pointer. */
+.muted {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+@media (hover: hover) {
+  .quiet:hover:not(:disabled):not([aria-disabled='true']) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+
+  .quietDense:hover:not(:disabled):not([aria-disabled='true']) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+    border-color: var(--dsw-alias-border-l1);
+  }
+}
+
+.quiet:focus-visible,
+.quietDense:focus-visible {
+  outline: var(--dsw-focus-ring-width, 1px) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 1px;
+}
+
+.quiet:disabled,
+.quietDense:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* The transition lives here now that the geometry does, so the reduction has to
+ * live here too: leaving it behind in the consuming modules would name classes
+ * that no longer declare one. */
+@media (prefers-reduced-motion: reduce) {
+  .quiet,
+  .quietDense {
+    transition: none;
+  }
+}

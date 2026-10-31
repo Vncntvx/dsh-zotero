@@ -181,6 +181,14 @@ export function libraryOptionsOf(
 /** The collection rows a `collections` listing serves, in listing order. */
 export type CollectionRowView = Extract<ZoteroLibraryBrowseItemView, { kind: 'collection' }>
 
+/**
+ * A collection Zotero reports with zero items and at least one sub-collection:
+ * its content is the branch, not a listing.
+ */
+export function isContainerOnly(row: CollectionRowView): boolean {
+  return row.childCount !== undefined && row.childCount > 0 && row.itemCount === 0
+}
+
 /** The saved-search rows a `savedSearches` listing serves. */
 export type SavedSearchRowView = Extract<ZoteroLibraryBrowseItemView, { kind: 'savedSearch' }>
 

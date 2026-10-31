@@ -25,6 +25,7 @@ const child: ZoteroCollectionRowView = {
 }
 const saved = {
   version: 2 as const,
+  prefixes: {},
   library: { type: 'user' as const, id: 0 as const },
   selection: { kind: 'library' as const },
   q: '',
@@ -155,4 +156,47 @@ it('does not reread a confirmed leaf when expansion is attempted again', async (
   act(() => result.current.toggleCollection(root.ref))
   expect(result.current.expanded.has(root.ref)).toBe(false)
   expect(browse).toHaveBeenCalledTimes(calls)
+})
+
+it('keeps an expanded branch and its children while that lane reloads', async () => {
+  const grand: ZoteroCollectionRowView = {
+    ...child,
+    ref: child.ref.replace('CHILD001', 'GRAND001'),
+    parentRef: child.ref,
+    name: 'Grand',
+    path: [root.name, child.name, 'Grand'],
+    depth: 2,
+  }
+  const gate = deferred<Awaited<ReturnType<LibraryFeedFace['browse']>>>()
+  let hold = false
+  writeLibraryState('S1', { ...saved, expanded: [root.ref, child.ref] })
+  const { result } = setupLibraryFeed({
+    browse: async (request) => {
+      if (request.kind === 'libraries') return { ok: true, value: LIBRARY_ROWS }
+      if (request.kind === 'savedSearches') return { ok: true, value: SAVED_SEARCHES }
+      if (request.parentRef === child.ref)
+        return hold
+          ? gate.promise
+          : { ok: true, value: { ...ROOT_COLLECTIONS, items: [grand], total: 1, returned: 1 } }
+      const items = request.parentRef === root.ref ? [child] : request.parentRef ? [] : [root]
+      return {
+        ok: true,
+        value: { ...ROOT_COLLECTIONS, items, total: items.length, returned: items.length },
+      }
+    },
+  })
+  await waitFor(() =>
+    expect(result.current.flatTree.map(({ row }) => row.ref)).toContain(grand.ref),
+  )
+  hold = true
+  act(() => result.current.retryTree(child.ref))
+  await waitFor(() => expect(result.current.treeLane(child.ref)?.phase).toBe('loading'))
+  expect(result.current.expanded.has(child.ref)).toBe(true)
+  expect(result.current.flatTree.map(({ row }) => row.ref)).toContain(grand.ref)
+  await act(async () =>
+    gate.resolve({
+      ok: true,
+      value: { ...ROOT_COLLECTIONS, items: [grand], total: 1, returned: 1 },
+    }),
+  )
 })

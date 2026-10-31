@@ -126,7 +126,7 @@ Note: diagnostic records stay in the current process memory and are cleared when
 ## 19. Literature panel does not appear
 
 - Symptom: the right sidebar has no "Literature panel" tab or quick entry; the "Literature panel" tab of the settings page shows only a pointer to "Included components".
-- Cause: the literature panel needs three gates at once: the `dsh-zotero/library` component row is composed; the core `webEnabled` ("General → Literature trail → Show literature trail") is on; the component's own `rightSidebarEnabled` ("Literature panel → Sidebar Display → Show in right sidebar") is on. If any one is off, no panel surface is registered and no `zotero/browse|search|item|childPage|export|write` request is issued.
+- Cause: the literature panel needs three gates at once: the `dsh-zotero/library` component row is composed; the core `webEnabled` ("General → Literature trail → Show literature trail") is on; the component's own `rightSidebarEnabled` ("Literature panel → Sidebar Display → Show in right sidebar") is on. If any one is off, no panel surface is registered and no `zotero/browse|collectionPath|search|item|childPage|export|write` request is issued.
 - Fix:
   1. Under "Included components" in the plugin manager, confirm the `dsh-zotero/library` row is enabled and reload the plugin;
   2. Confirm the core `webEnabled` is on (see item 9);
