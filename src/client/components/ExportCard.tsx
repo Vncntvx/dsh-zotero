@@ -13,11 +13,12 @@
 
 import { useMemo, useState } from 'react'
 import clsx from 'clsx'
-import { Button, IconChevronDownOutlineMedium } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconChevronDownOutlineMedium } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { bibTexKeysOf, citeCommandOf } from '../sources/bibtex.ts'
 import type { ExportArtifact } from '../sources/model.ts'
 import { downloadBlob } from '../download.ts'
+import quiet from './quiet.module.css'
 import { CopyButton } from './CopyButton.tsx'
 import css from './cards.module.css'
 import {
@@ -79,9 +80,9 @@ export function ExportCard({ artifact, t }: ExportCardProps) {
         </button>
         <span className={css.lineActions}>
           <CopyButton value={artifact.text} label={t('copyExport')} copiedLabel={t('copied')} />
-          <Button variant="outline" size="sm" className={css.lineAction} onClick={download}>
+          <button type="button" className={quiet.quiet} onClick={download}>
             {`${t('downloadArtifact')} ${extensionOf(artifact.format)}`}
-          </Button>
+          </button>
         </span>
       </div>
       {open && (

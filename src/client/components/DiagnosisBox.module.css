@@ -15,16 +15,13 @@
 }
 
 .diagnosisLabelText {
-  font-size: 11px;
-  line-height: 16px;
+  font: var(--dsw-font-xxxs-11);
   font-weight: 600;
   color: var(--dsw-alias-label-secondary);
 }
 
 .diagnosisCode {
-  font-family: var(--ds-font-family-code);
-  font-size: 10px;
-  line-height: 14px;
+  font: var(--dsw-font-markdown-code-block-small);
   padding: 1px 4px;
   border-radius: var(--dsw-radius-xs);
   background: var(--dsw-alias-markdown-inline-code);
@@ -33,8 +30,8 @@
 
 .diagnosisMessage {
   margin: 0;
-  font-size: 12px;
-  line-height: 18px;
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: calc(22px + var(--dsh-content-font-delta, 0px));
   color: var(--dsw-alias-label-primary);
   white-space: pre-wrap;
   overflow-wrap: anywhere;

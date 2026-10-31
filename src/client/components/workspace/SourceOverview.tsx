@@ -26,6 +26,7 @@ import { BlockedReadAction } from '../open/BlockedReadAction.tsx'
 import { PdfReadButton } from '../open/PdfReadButton.tsx'
 import { ZoteroLocateActions } from '../open/ZoteroLocateActions.tsx'
 import css from './workspace.module.css'
+import quiet from '../quiet.module.css'
 
 /** The display label of one search mode. */
 export function modeLabelOf(mode: 'metadata' | 'everything', t: TranslateNS<'zotero'>): string {
@@ -108,7 +109,7 @@ export function SourceOverview({
       <div className={css.actionRow}>
         {pdfCapability !== null &&
           (evidenceMatch === 'mismatch' ? (
-            <BlockedReadAction label={t('readPdf')} t={t} className={css.action} />
+            <BlockedReadAction label={t('readPdf')} t={t} className={quiet.quiet} />
           ) : (
             <PdfReadButton
               capability={pdfCapability}
@@ -116,15 +117,15 @@ export function SourceOverview({
               resolveAttachment={resolveAttachment}
               label={t('readPdf')}
               t={t}
-              className={css.action}
+              className={quiet.quiet}
             />
           ))}
-        <ZoteroLocateActions title={item.title} itemRef={item.ref} t={t} className={css.action} />
+        <ZoteroLocateActions title={item.title} itemRef={item.ref} t={t} className={quiet.quiet} />
         {setDraft !== undefined && (
           <Button
             variant="outline"
             size="sm"
-            className={css.action}
+            className={quiet.quiet}
             onClick={() => {
               setDraft(askDraftOf(item.ref, t))
             }}
@@ -136,7 +137,7 @@ export function SourceOverview({
           <Button
             variant="outline"
             size="sm"
-            className={css.action}
+            className={quiet.quiet}
             onClick={() => {
               setDraft(exportDraftOf(item.ref, t))
             }}

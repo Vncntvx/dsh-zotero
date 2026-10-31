@@ -26,3 +26,9 @@
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .composerButton {
+    transition: none;
+  }
+}

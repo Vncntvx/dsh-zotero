@@ -40,6 +40,8 @@ npm test                     # test-lint guards + full vitest suite
 npm run test:integration     # live read spec against Zotero on 127.0.0.1:23119
 npm run format               # prettier --write; verify with format:check
 npm run harness:check        # pin, lockfile, and upstream artifact freshness
+npm run style:check          # client stylesheet guards against the token snapshot
+npm run tokens:write         # refresh the token snapshot after a harness upgrade
 npm run deps:check           # direct dependencies behind the registry; harness-owned ones excluded
 npm run release:check        # full gate: format, strict harness, lint, typecheck, coverage, build, pack
 ```
@@ -52,9 +54,10 @@ Interactive launches (full plugin vs host-only HMR) and the opt-in write probe (
 - **Component authorization**: mounting `dsh-zotero/scholarly` is the only authorization for external requests, its 7 tools, and its prompt section. The core is request-driven: no external calls, background pollers, or load-time network I/O.
 - **Write seam**: every write targets the personal library (`zotero://user/0/`) and passes through `ctx.zotero`: capability gate → `ctx.approval.request` → plan-review card. No bypass; a stale `writeConfirm: false` cannot opt out. Writes never retry — `committed-unverified` is reconciled, not retried. Shell commands that write to the Local API are intercepted by `src/shell-write-detector.ts`.
 - **Client graph**: browser code may value-import only `src/client/**` and the pure modules allowlisted in `scripts/client-graph-authority.mjs`; never `@deepseek-ai/schemastery`, `src/config.ts`, `src/status-codec.ts`, or `src/typert.ts`. Keep `zod` external — the build refuses an inlined copy. `src/client/index.ts` must `await ctx.remote.$mount` before injecting on `remote.zotero`.
-- **Zotero wire**: `src/search-text.ts` must keep mirroring Zotero's `normalizeForSearch`. A bare `/items/{key}/children` never returns annotations; request `?itemType=annotation`. Server-paged listings require a valid `Total-Results` header.
+- **Zotero wire**: `src/search-text.ts` must keep mirroring Zotero's `normalizeForSearch`. A bare `/items/{key}/children` never returns annotations; request `?itemType=annotation`. Server-paged listings require a valid `Total-Results` header, and collection and saved-search pages additionally require a valid `Last-Modified-Version`.
 - **文献轨迹**: a read-only ledger projected from `ChatSnapshot`; it records read calls and exports, never writes or external results.
-- **文献面板**: reaches the library only through `ctx.zoteroLibrary` / `ctx.remote.zotero` (`browse`, `search`, `item`, `childPage`, `export`, `write`). The web UI never dispatches model tools; `export` is read-only and shares the core export domain.
+- **文献面板**: reaches the library only through `ctx.zoteroLibrary` / `ctx.remote.zotero` (`browse`, `collectionPath`, `search`, `item`, `childPage`, `export`, `write`). The web UI never dispatches model tools; `export` is read-only and shares the core export domain.
+- **Client styling**: feature CSS consumes the host design system and defines none of it — no `--dsw-*` declaration, no literal colour outside a `mask-image`, no literal size outside the 16px `@media (pointer: coarse)` focus-zoom guard, and the reader's `--dsh-content-font-*` axis on every body-text surface. State borders are 1px, every full-round radius pairs `corner-shape: round`, every transition is reduced under `prefers-reduced-motion: reduce`, and quiet controls take their geometry from `src/client/components/quiet.module.css`. `npm run style:check` (spec: `tests/unit/style-guard.spec.ts`) enforces it against the token snapshot in `tests/fixtures/style-tokens.json`; a host upgrade means `npm run tokens:write`.
 - **Teardown**: disposing the plugin does not abort in-flight requests; they settle on provider deadlines.
 
 ## Development rules

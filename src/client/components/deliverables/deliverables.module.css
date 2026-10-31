@@ -4,8 +4,7 @@
   gap: 4px;
   height: 22px;
   padding: 0 6px;
-  font-size: 11px;
-  line-height: 1;
+  font: var(--dsw-font-xxxs-11);
   color: var(--dsw-alias-label-secondary);
   background: transparent;
   border: 0.5px solid var(--dsw-alias-border-l2);
@@ -22,5 +21,11 @@
     color: var(--dsw-alias-label-primary);
     background: var(--dsw-alias-interactive-bg-hover);
     border-color: var(--dsw-alias-border-l3);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .actionButton {
+    transition: none;
   }
 }
