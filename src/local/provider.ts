@@ -40,11 +40,7 @@ import type { ZoteroHttpClient } from '../http-client.js'
 import type { LocalApiLimits } from './limits.js'
 import { runSearch } from './search-domain.js'
 import { createSearchIndexCaches, type SearchIndexCaches } from './search-index.js'
-import {
-  getItem as getItemDomain,
-  getChildPage as getChildPageDomain,
-  children as childrenDomain,
-} from './detail.js'
+import { getItem as getItemDomain, getChildPage as getChildPageDomain } from './detail.js'
 import { retrieve as retrieveDomain } from './retrieve.js'
 import { getAttachmentLocation as attachmentLocationDomain } from './attachment-location.js'
 import {
@@ -91,8 +87,6 @@ import type {
   ZoteroChangesResult,
   ZoteroChildPage,
   ZoteroChildPageRequest,
-  ZoteroChildrenRequest,
-  ZoteroChildrenResult,
   ZoteroCreateCollectionCommittedOutcome,
   ZoteroCreateCollectionRequest,
   ZoteroCreateItemCommittedOutcome,
@@ -322,17 +316,6 @@ export class LocalApiProvider implements ZoteroProvider {
    */
   async getItem(request: ZoteroGetRequest, signal?: AbortSignal): Promise<ZoteroItemDetail> {
     return getItemDomain(this.deps(), this.directory, request, signal)
-  }
-
-  /**
-   * Explore one item's or attachment's child-object graph. The domain logic
-   * lives in `local/detail`; this is the provider seam.
-   */
-  async children(
-    request: ZoteroChildrenRequest,
-    signal?: AbortSignal,
-  ): Promise<ZoteroChildrenResult> {
-    return childrenDomain(this.deps(), request, signal)
   }
 
   /** One paged child listing; the domain owns the ref/window/cap rules. */

@@ -159,16 +159,37 @@ export function serveItemGraph(mock: MockZotero, spec: ItemGraphSpec = {}): void
     // One handler per children path: the contract is the query, not the route.
     mock.route('GET', `${prefix}/items/${parent.key}/children`, (req, res, helpers, search) => {
       if (search.get('itemType') === 'annotation') {
-        helpers.json(parentAnnotations ?? [], headers)
+        const rows = parentAnnotations ?? []
+        helpers.json(
+          rows.slice(
+            Number(search.get('start') ?? 0),
+            Number(search.get('start') ?? 0) + Number(search.get('limit') ?? rows.length),
+          ),
+          { ...headers, 'Total-Results': String(rows.length) },
+        )
         return
       }
-      helpers.json(children ?? [], headers)
+      const kind = search.get('itemType')
+      const rows = (children ?? []).filter((row) => kind === null || row.data.itemType === kind)
+      helpers.json(
+        rows.slice(
+          Number(search.get('start') ?? 0),
+          Number(search.get('start') ?? 0) + Number(search.get('limit') ?? rows.length),
+        ),
+        { ...headers, 'Total-Results': String(rows.length) },
+      )
     })
   }
   if (annotations !== null) {
     mock.route('GET', `${prefix}/items/${pdfKey}/children`, (req, res, helpers, search) => {
       if (search.get('itemType') === 'annotation') {
-        helpers.json(annotations, headers)
+        helpers.json(
+          annotations.slice(
+            Number(search.get('start') ?? 0),
+            Number(search.get('start') ?? 0) + Number(search.get('limit') ?? annotations.length),
+          ),
+          { ...headers, 'Total-Results': String(annotations.length) },
+        )
         return
       }
       // Bare attachment children are not part of the contract; 404 so a

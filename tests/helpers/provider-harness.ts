@@ -31,8 +31,6 @@ import { testHttpClient } from './test-clients.js'
  */
 export const PROVIDER_LIMITS: LocalApiLimits = {
   maxNoteScanRecords: 200,
-  maxDetailChars: 500,
-  maxNoteBodyChars: 30_000,
   maxNoteChars: 2000,
   maxNoteRecords: 50,
   maxAnnotationRecords: 100,

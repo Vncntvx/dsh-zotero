@@ -33,12 +33,14 @@
  */
 
 import type { ZoteroHttpClient } from '../http-client.js'
+import { ZoteroError, ZOTERO_UNEXPECTED } from '../errors.js'
 import { libraryPrefix } from '../refs.js'
 import {
   nextOffsetOrFail,
   readAllPages,
   requireArrayBody,
   requireTotalResults,
+  requireLibraryVersionHeader,
   setPage,
 } from './pagination.js'
 import { assertServerIdMatches, serverIdFromHeaders } from './identity.js'
@@ -129,26 +131,10 @@ export async function fetchChildPage(
   nextOffset?: number
   serverId?: string
 }> {
-  const params = new URLSearchParams({ itemType: CHILD_ITEM_TYPE[kind] })
-  setPage(params, page.offset, page.limit)
-  const { json, headers } = await deps.client.getJson<unknown>(
-    `${libraryPrefix(library)}/items/${key}/children`,
-    params,
-    { signal, serverId },
-  )
-  const observed = serverIdFromHeaders(headers, serverId)
-  assertServerIdMatches(observed, serverId)
-  const rows = requireArrayBody(json, `item ${kind}`)
-  const total = requireTotalResults(headers, `item ${kind}`)
-  const nextOffset = nextOffsetOrFail(page.offset, rows.length, total, `item ${kind}`)
-  return {
-    rows,
-    total,
-    offset: page.offset,
-    limit: page.limit,
-    ...(nextOffset !== undefined ? { nextOffset } : {}),
-    ...(observed !== undefined ? { serverId: observed } : {}),
+  for await (const current of childPages(deps, key, library, serverId, kind, signal, page)) {
+    return current
   }
+  throw new ZoteroError('Zotero returned no child page.', ZOTERO_UNEXPECTED)
 }
 
 /** Read every child, including trashed rows, before a versioned Trash operation. */
@@ -173,4 +159,74 @@ export async function fetchChildrenForTrash(
     },
   )
   return rows
+}
+
+/** Sequential page source. Awaiting the consumer before advancing provides backpressure. */
+export async function* childPages(
+  deps: { client: ZoteroHttpClient },
+  key: string,
+  library: SupportedLocalLibrary,
+  serverId: string | undefined,
+  kind: ChildListingKind | 'direct',
+  signal?: AbortSignal,
+  window?: { offset: number; limit: number },
+): AsyncGenerator<{
+  rows: readonly unknown[]
+  total: number
+  offset: number
+  limit: number
+  nextOffset?: number
+  serverId?: string
+}> {
+  let offset = window?.offset ?? 0
+  let identity = serverId
+  let version: number | undefined
+  let total: number | undefined
+  const limit = window?.limit ?? 100
+  for (;;) {
+    const params = new URLSearchParams()
+    if (kind !== 'direct') params.set('itemType', CHILD_ITEM_TYPE[kind])
+    setPage(params, offset, limit)
+    const response = await deps.client.getJson<unknown>(
+      `${libraryPrefix(library)}/items/${key}/children`,
+      params,
+      { signal, serverId: identity },
+    )
+    const observed = serverIdFromHeaders(response.headers, identity)
+    assertServerIdMatches(observed, identity)
+    identity ??= observed
+    const currentVersion = response.headers.has('Last-Modified-Version')
+      ? requireLibraryVersionHeader(response.headers, 'item children')
+      : undefined
+    const currentTotal = requireTotalResults(response.headers, 'item children')
+    if (
+      (total !== undefined && version !== currentVersion) ||
+      (total !== undefined && total !== currentTotal)
+    ) {
+      throw new ZoteroError(
+        'Zotero children changed during reading; retry the read.',
+        ZOTERO_UNEXPECTED,
+      )
+    }
+    version = currentVersion
+    total = currentTotal
+    const rows = requireArrayBody(response.json, 'item children')
+    if (rows.length > limit || (rows.length > 0 && offset + rows.length > total)) {
+      throw new ZoteroError(
+        'Zotero returned children outside the reported page.',
+        ZOTERO_UNEXPECTED,
+      )
+    }
+    const nextOffset = nextOffsetOrFail(offset, rows.length, total, 'item children')
+    yield {
+      rows,
+      total,
+      offset,
+      limit,
+      ...(identity !== undefined ? { serverId: identity } : {}),
+      ...(nextOffset !== undefined ? { nextOffset } : {}),
+    }
+    if (window !== undefined || nextOffset === undefined) return
+    offset = nextOffset
+  }
 }

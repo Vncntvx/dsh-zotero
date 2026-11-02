@@ -1,5 +1,5 @@
 /**
- * The `zotero_get` and `zotero_children` domain: one item's detail with its
+ * The `zotero_get` and the panel child-page reader domain: one item's detail with its
  * lazily loaded child rows, and child-object exploration. Child rows are
  * shared with retrieve.
  *
@@ -13,26 +13,44 @@
 import type { ZoteroHttpClient } from '../http-client.js'
 import { assertServerIdMatches, serverIdFromHeaders } from './identity.js'
 import { asRecord, asString } from '../json.js'
-import { ZOTERO_INVALID_ARGUMENT, ZoteroError } from '../errors.js'
-import { ZOTERO_CHILD_PAGE_MAX_ROWS, ZOTERO_CHILD_PAGE_ROWS } from '../constants.js'
+import {
+  ZOTERO_UNEXPECTED,
+  ZOTERO_INVALID_ARGUMENT,
+  ZOTERO_FILE_MISSING,
+  ZOTERO_FILE_UNREADABLE,
+  ZoteroError,
+} from '../errors.js'
+import { ZOTERO_CHILD_PAGE_MAX_ROWS } from '../constants.js'
 import type { NormalizeContext } from '../normalize-context.js'
 import { type ZoteroChildKind } from '../normalize-children.js'
 import { childCollection, normalizeItemDetail } from '../normalize-item-detail.js'
 import { collectionKeysOf } from '../normalize-search.js'
 import { attachmentRecordOf, partitionChildren } from '../normalize-children.js'
-import { libraryPrefix, refStringFor, requireSupportedLocalRef } from '../refs.js'
+import {
+  libraryPrefix,
+  parseSupportedRef,
+  refStringFor,
+  requireSupportedLocalRef,
+} from '../refs.js'
 import type { ScopeDirectory } from './scope-directory.js'
 import type { LocalApiLimits } from './limits.js'
-import { fetchAnnotationChildren, fetchChildPage, fetchDirectChildren } from './children-wire.js'
+import {
+  childPages,
+  fetchAnnotationChildren,
+  fetchChildPage,
+  fetchDirectChildren,
+} from './children-wire.js'
+import { resolveAttachmentRow } from './attachment-location.js'
+import { normalizeAttachmentRecord } from '../attachments.js'
+import { mapWithConcurrency } from '../concurrency.js'
 import type {
   SupportedLocalLibrary,
   ZoteroChildPage,
   ZoteroChildPageRequest,
-  ZoteroChildrenRequest,
-  ZoteroChildrenResult,
   ZoteroGetRequest,
   ZoteroInclude,
   ZoteroItemDetail,
+  ZoteroAttachmentRecord,
 } from '../types.js'
 
 const INCLUDE_ORDER: readonly ZoteroInclude[] = ['notes', 'annotations', 'attachments']
@@ -63,9 +81,9 @@ export function childPageWindowOf(
   limits: Pick<LocalApiLimits, 'maxNoteRecords' | 'maxAttachmentRecords' | 'maxAnnotationRecords'>,
 ): { offset: number; limit: number } {
   if (
-    !Number.isInteger(request.offset) ||
+    !Number.isSafeInteger(request.offset) ||
     request.offset < 0 ||
-    !Number.isInteger(request.limit) ||
+    !Number.isSafeInteger(request.limit) ||
     request.limit < 1 ||
     request.limit > ZOTERO_CHILD_PAGE_MAX_ROWS
   ) {
@@ -83,222 +101,235 @@ export function childPageWindowOf(
   return { offset: request.offset, limit: Math.min(request.limit, cap) }
 }
 
-/**
- * Fetch one item's full detail. The parent is always fetched once; child
- * rows are fetched lazily only when the caller asked to include
- * notes/annotations/attachments, since the Local API ignores `?include=` on
- * single-item responses. Direct children (notes/attachments) come from the
- * bare `/children` endpoint; annotations additionally require the
- * `?itemType=annotation` listing under the same key. Collection names
- * resolve from a cached full listing only when the item belongs to
- * collections.
- */
+/** Read metadata once, then consume requested child kinds at their own windows. */
 export async function getItem(
   deps: { client: ZoteroHttpClient; limits: LocalApiLimits },
   directory: ScopeDirectory,
   request: ZoteroGetRequest,
   signal?: AbortSignal,
 ): Promise<ZoteroItemDetail> {
-  const ref = requireSupportedLocalRef(request.ref, ['item'])
-  const prefix = libraryPrefix(ref.library as SupportedLocalLibrary)
-  const parent = await deps.client.getJson<unknown>(`${prefix}/items/${ref.key}`, undefined, {
-    signal,
-    serverId: ref.serverId,
-  })
-  const serverId = serverIdFromHeaders(parent.headers, ref.serverId)
-  assertServerIdMatches(serverId, ref.serverId)
-  const includes = INCLUDE_ORDER.filter((kind) => request.include.has(kind))
-  const keys = collectionKeysOf(parent.json)
-  if (request.childPages !== undefined) {
-    // The configured record caps bound every page: the panel asks for its full
-    // page and the domain serves at most what the config allows, so the
-    // response's `limit` is the size the caller must page by.
-    const pages = await Promise.all(
-      includes.map(async (kind) => {
-        const requested = request.childPages?.[kind] ?? {
-          offset: 0,
-          limit: ZOTERO_CHILD_PAGE_ROWS,
-        }
-        const page = childPageWindowOf({ kind, ...requested }, deps.limits)
-        return {
-          kind,
-          ...(await fetchChildPage(
-            deps,
-            kind,
-            ref.key,
-            ref.library as SupportedLocalLibrary,
-            serverId,
-            page,
-            signal,
-          )),
-        }
-      }),
-    )
-    const collectionNames =
-      keys.length > 0
-        ? await directory.collectionNamesFor(
-            keys,
-            ref.library as SupportedLocalLibrary,
-            serverId,
-            signal,
-          )
-        : undefined
-    const directPages = pages.filter((page) => page.kind !== 'annotations')
-    return normalizeItemDetail({
-      parent: parent.json,
-      library: ref.library as SupportedLocalLibrary,
-      serverId,
-      include: request.include,
-      childrenRows: pages.flatMap((page) => page.rows),
-      // Every requested direct kind contributes its server-reported total, so
-      // `children.total` stays exact even when only one of the two kinds rides
-      // along; with neither, `childrenTotal` falls back to `meta.numChildren`.
-      directChildCount:
-        directPages.length > 0 ? directPages.reduce((sum, page) => sum + page.total, 0) : undefined,
-      childPages: Object.fromEntries(
-        pages.map((page) => [
-          page.kind,
-          {
-            total: page.total,
-            offset: page.offset,
-            limit: page.limit,
-            ...(page.nextOffset !== undefined ? { nextOffset: page.nextOffset } : {}),
-          },
-        ]),
-      ),
-      collectionNames,
-      maxAbstractChars: deps.limits.maxDetailChars,
-      maxNoteBodyChars: deps.limits.maxNoteBodyChars,
-      maxNoteChars: deps.limits.maxNoteChars,
-      maxNoteRecords: deps.limits.maxNoteRecords,
-      maxAnnotationRecords: deps.limits.maxAnnotationRecords,
-      maxAttachmentRecords: deps.limits.maxAttachmentRecords,
-      fields: request.fields,
-    })
-  }
-  // Children and the collections listing are independent once the parent
-  // has arrived; the Local API is a loopback server with no per-client
-  // throttling, so both ride the same await.
-  const [children, collectionNames] = await Promise.all([
-    includes.length > 0
-      ? loadChildRows(deps, ref.key, ref.library as SupportedLocalLibrary, serverId, signal, {
-          direct: request.include.has('notes') || request.include.has('attachments'),
-          annotations: request.include.has('annotations'),
-        })
-      : undefined,
-    keys.length > 0
-      ? directory.collectionNamesFor(keys, ref.library as SupportedLocalLibrary, serverId, signal)
-      : undefined,
-  ])
-  return normalizeItemDetail({
-    parent: parent.json,
-    library: ref.library as SupportedLocalLibrary,
-    serverId: serverId ?? undefined,
-    include: request.include,
-    childrenRows: children?.rows,
-    directChildCount: children?.directCount,
-    collectionNames,
-    maxAbstractChars: deps.limits.maxDetailChars,
-    maxNoteBodyChars: deps.limits.maxNoteBodyChars,
-    maxNoteChars: deps.limits.maxNoteChars,
-    maxNoteRecords: deps.limits.maxNoteRecords,
-    maxAnnotationRecords: deps.limits.maxAnnotationRecords,
-    maxAttachmentRecords: deps.limits.maxAttachmentRecords,
-    fields: request.fields,
-  })
-}
-
-/**
- * Explore one item's or attachment's child-object graph. An item ref yields
- * the requested direct notes/attachments and, when asked, annotations under
- * the item (one filtered children listing); an attachment ref yields that
- * file's annotations. The target row is always fetched first so the whole
- * result pins to one Server-ID and a non-attachment target of an attachment
- * ref fails with a typed error.
- */
-export async function children(
-  deps: { client: ZoteroHttpClient; limits: LocalApiLimits },
-  request: ZoteroChildrenRequest,
-  signal?: AbortSignal,
-): Promise<ZoteroChildrenResult> {
   const ref = requireSupportedLocalRef(request.ref, ['item', 'attachment'])
-  const library = ref.library as SupportedLocalLibrary
-  const prefix = libraryPrefix(library)
-  const row = await deps.client.getJson<unknown>(`${prefix}/items/${ref.key}`, undefined, {
-    signal,
-    serverId: ref.serverId,
-  })
-  const serverId = serverIdFromHeaders(row.headers, ref.serverId)
-  const ctx: NormalizeContext = { library, serverId: serverId ?? undefined }
-  const data = asRecord(asRecord(row.json)?.data)
-  const itemType = asString(data?.itemType) ?? ''
-  if (ref.kind === 'attachment' && itemType !== 'attachment') {
+  const locations = request.locations ?? 'none'
+  if (
+    (locations === 'included' && !request.include.has('attachments')) ||
+    (ref.kind === 'attachment' &&
+      (locations === 'included' || [...request.include].some((kind) => kind !== 'annotations')))
+  ) {
     throw new ZoteroError(
-      itemType === ''
-        ? `The referenced object ${ref.key} could not be confirmed as an attachment.`
-        : attachmentTargetKindMessage(itemType),
+      'Attachment targets accept annotations and locations none/best; included locations require attachments.',
       ZOTERO_INVALID_ARGUMENT,
     )
   }
-  if (ref.kind === 'attachment') {
-    // An attachment's own child objects are its annotations, served only
-    // under the annotation-filtered listing.
-    if (!request.include.has('annotations')) {
-      return {
-        ref: refStringFor(library, 'attachment', ref.key, serverId),
-        itemType,
-        ...(ctx.serverId !== undefined ? { serverId: ctx.serverId } : {}),
-      }
-    }
-    const rows = await fetchAnnotationChildren(deps, ref.key, library, serverId, signal)
-    const partitioned = partitionChildren(
-      rows,
-      ctx,
-      undefined,
-      new Set<ZoteroChildKind>(['annotation']),
-    )
-    return {
-      ref: refStringFor(library, 'attachment', ref.key, serverId),
-      itemType,
-      annotations: childCollection(partitioned.annotations, deps.limits.maxAnnotationRecords),
-      ...(ctx.serverId !== undefined ? { serverId: ctx.serverId } : {}),
+  for (const kind of Object.keys(request.childPages ?? {})) {
+    if (!request.include.has(kind as ZoteroInclude)) {
+      throw new ZoteroError(
+        'childPages must refer to requested include kinds.',
+        ZOTERO_INVALID_ARGUMENT,
+      )
     }
   }
-  const wantsDirect = request.include.has('notes') || request.include.has('attachments')
-  const wantsAnnotations = request.include.has('annotations')
-  const graphRows = (
-    await loadChildRows(deps, ref.key, library, serverId, signal, {
-      direct: wantsDirect,
-      annotations: wantsAnnotations,
+  const library = ref.library as SupportedLocalLibrary
+  const parent = await deps.client.getJson<unknown>(
+    `${libraryPrefix(library)}/items/${ref.key}`,
+    undefined,
+    { signal, serverId: ref.serverId },
+  )
+  const serverId = serverIdFromHeaders(parent.headers, ref.serverId)
+  assertServerIdMatches(serverId, ref.serverId)
+  const data = asRecord(asRecord(parent.json)?.data)
+  const itemType = asString(data?.itemType) ?? ''
+  if (ref.kind === 'attachment' && itemType !== 'attachment') {
+    throw new ZoteroError(attachmentTargetKindMessage(itemType), ZOTERO_INVALID_ARGUMENT)
+  }
+  const keys = collectionKeysOf(parent.json)
+  const collectionNames =
+    keys.length > 0
+      ? await directory.collectionNamesFor(keys, library, serverId, signal)
+      : undefined
+  const context = { library, serverId }
+  const normalize = (rows?: readonly unknown[]) =>
+    normalizeItemDetail({
+      parent: parent.json,
+      library,
+      serverId,
+      include: request.include,
+      childrenRows: rows,
+      collectionNames,
+      fields: request.fields,
+      maxAbstractChars: Number.MAX_SAFE_INTEGER,
+      maxNoteBodyChars: Number.MAX_SAFE_INTEGER,
+      maxNoteChars: Number.MAX_SAFE_INTEGER,
+      maxNoteRecords: Number.MAX_SAFE_INTEGER,
+      maxAnnotationRecords: Number.MAX_SAFE_INTEGER,
+      maxAttachmentRecords: Number.MAX_SAFE_INTEGER,
     })
-  ).rows
-  const kinds = new Set<ZoteroChildKind>()
-  if (request.include.has('notes')) kinds.add('note')
-  if (request.include.has('attachments')) kinds.add('attachment')
-  if (request.include.has('annotations')) kinds.add('annotation')
-  const partitioned =
-    kinds.size > 0 ? partitionChildren(graphRows, ctx, undefined, kinds) : undefined
-  return {
-    ref: refStringFor(library, 'item', ref.key, serverId),
-    ...(itemType !== '' ? { itemType } : {}),
-    ...(request.include.has('notes') && partitioned !== undefined
-      ? { notes: childCollection(partitioned.notes, deps.limits.maxNoteRecords) }
-      : {}),
-    ...(request.include.has('annotations') && partitioned !== undefined
-      ? {
-          annotations: childCollection(partitioned.annotations, deps.limits.maxAnnotationRecords),
-        }
-      : {}),
-    ...(request.include.has('attachments') && partitioned !== undefined
-      ? {
-          attachments: childCollection(
-            partitioned.attachments.map((candidate) => attachmentRecordOf(candidate, ctx)),
-            deps.limits.maxAttachmentRecords,
-          ),
-        }
-      : {}),
-    ...(ctx.serverId !== undefined ? { serverId: ctx.serverId } : {}),
+  const detail = normalize()
+  detail.ref = refStringFor(library, ref.kind, ref.key, serverId)
+  if (itemType === 'attachment') {
+    detail.contentType = asString(data?.contentType) ?? ''
+    detail.children.total = 0
+    detail.bestAttachment = attachmentRecordOf(normalizeAttachmentRecord(parent.json), context)
   }
+  let bestRow: unknown = itemType === 'attachment' ? parent.json : undefined
+  const resolveRecord = async (
+    attachment: ZoteroAttachmentRecord,
+    row: unknown,
+    poolSignal?: AbortSignal,
+  ) => {
+    const target = parseSupportedRef(attachment.ref, ['attachment'])
+    if (row === undefined || row === null) {
+      const response = await deps.client.getJson<unknown>(
+        `${libraryPrefix(library)}/items/${target.key}`,
+        undefined,
+        { signal: poolSignal, serverId },
+      )
+      assertServerIdMatches(serverIdFromHeaders(response.headers, serverId), serverId)
+      row = response.json
+    }
+    try {
+      const location = await resolveAttachmentRow(deps, { ...target, serverId }, row, poolSignal)
+      attachment.location =
+        location.kind === 'file'
+          ? { kind: 'file', path: location.path }
+          : { kind: 'url', url: location.url }
+      if (location.kind === 'file') attachment.path = location.path
+    } catch (error) {
+      if (
+        !(error instanceof ZoteroError) ||
+        ![ZOTERO_FILE_MISSING, ZOTERO_FILE_UNREADABLE].includes(error.code)
+      )
+        throw error
+      attachment.location = { kind: 'unavailable', reason: error.message }
+    }
+    if (detail.bestAttachment?.ref === attachment.ref)
+      Object.assign(detail.bestAttachment, attachment)
+    if (itemType === 'attachment' || locations === 'best') detail.location = attachment.location
+    if (itemType === 'attachment' && attachment.path !== undefined) detail.path = attachment.path
+  }
+  const includes = INCLUDE_ORDER.filter((kind) => request.include.has(kind))
+  const combined =
+    includes.some((kind) => kind !== 'annotations') &&
+    request.childPages?.notes === undefined &&
+    request.childPages?.attachments === undefined
+  const listings: (ZoteroInclude | 'direct')[] = combined
+    ? ['direct', ...includes.filter((kind) => kind === 'annotations')]
+    : includes
+  for (const listing of listings) {
+    const kinds =
+      listing === 'direct' ? includes.filter((kind) => kind !== 'annotations') : [listing]
+    const requested = listing === 'direct' ? undefined : request.childPages?.[listing]
+    const window =
+      requested === undefined
+        ? undefined
+        : childPageWindowOf({ kind: listing as ZoteroInclude, ...requested }, deps.limits)
+    for (const kind of kinds) {
+      Object.assign(detail, {
+        [kind]: { total: 0, returned: 0, items: [], completeness: window ? 'page' : 'complete' },
+      })
+    }
+    const seen = new Set<string>()
+    for await (const page of childPages(
+      deps,
+      ref.key,
+      library,
+      serverId,
+      listing,
+      signal,
+      window,
+    )) {
+      const normalized = normalize(page.rows)
+      if (normalized.bestAttachment) detail.bestAttachment ??= normalized.bestAttachment
+      if (locations === 'best' && !detail.bestAttachment) {
+        const candidateRow = page.rows.find(
+          (row) =>
+            asRecord(asRecord(row)?.data)?.itemType === 'attachment' &&
+            normalizeAttachmentRecord(row).contentType === 'application/pdf',
+        )
+        if (candidateRow) {
+          detail.bestAttachment = attachmentRecordOf(
+            normalizeAttachmentRecord(candidateRow),
+            context,
+          )
+          bestRow = candidateRow
+        }
+      }
+      for (const row of page.rows) {
+        const rowKey = asString(asRecord(row)?.key)
+        if (!rowKey || seen.has(rowKey))
+          throw new ZoteroError('Duplicate or invalid child key during reading.', ZOTERO_UNEXPECTED)
+        seen.add(rowKey)
+        if (
+          locations === 'best' &&
+          refStringFor(library, 'attachment', rowKey, serverId) === detail.bestAttachment?.ref
+        )
+          bestRow = row
+      }
+      if (locations === 'included') {
+        // Resolve only this page, then discard its raw rows before fetching another.
+        const pageRows = new Map(page.rows.map((row) => [asString(asRecord(row)?.key), row]))
+        await mapWithConcurrency(
+          normalized.attachments?.items ?? [],
+          deps.limits.graphConcurrency,
+          (attachment, poolSignal) =>
+            resolveRecord(
+              attachment,
+              pageRows.get(parseSupportedRef(attachment.ref, ['attachment']).key),
+              poolSignal,
+            ),
+          { signal },
+        )
+      }
+      for (const kind of kinds) {
+        const target = detail[kind]!
+        const current = normalized[kind]!
+        // Each page is normalized before another raw response is requested.
+        target.items.push(...(current.items as never[]))
+        target.returned += current.returned
+        if (kind === 'attachments' && detail.bestAttachment) {
+          const same = normalized.attachments?.items.find(
+            (attachment) => attachment.ref === detail.bestAttachment?.ref,
+          )
+          if (same) Object.assign(detail.bestAttachment, same)
+        }
+        target.total = listing === 'direct' ? target.returned : page.total
+        if (window)
+          Object.assign(target, {
+            offset: page.offset,
+            limit: page.limit,
+            ...(page.nextOffset !== undefined ? { nextOffset: page.nextOffset } : {}),
+          })
+      }
+      if (listing === 'direct') detail.children.total = page.total
+    }
+  }
+  if (locations !== 'none') {
+    if (locations === 'best' && detail.bestAttachment === undefined) {
+      // Fetch candidates only when the caller explicitly asks for a location.
+      for await (const page of childPages(
+        deps,
+        ref.key,
+        library,
+        serverId,
+        'attachments',
+        signal,
+      )) {
+        for (const row of page.rows) {
+          const candidate = normalizeAttachmentRecord(row)
+          if (detail.bestAttachment === undefined && candidate.contentType === 'application/pdf') {
+            detail.bestAttachment = attachmentRecordOf(candidate, context)
+            bestRow = row
+          }
+        }
+        if (detail.bestAttachment !== undefined) break
+      }
+      if (detail.bestAttachment === undefined)
+        detail.location = { kind: 'unavailable', reason: 'No attachment to resolve.' }
+    }
+    if (locations === 'best' && detail.bestAttachment)
+      await resolveRecord(detail.bestAttachment, bestRow, signal)
+  }
+  signal?.throwIfAborted()
+  return detail
 }
 
 /**

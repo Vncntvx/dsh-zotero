@@ -7,7 +7,6 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { expectedKindRefMessage, invalidRefMessage } from '../../src/refs.js'
-import { renderGet } from '../../src/tools/get.js'
 import { expectValue, type HostLane, setupHostLane } from '../helpers/lanes/host-lane.js'
 import { serveChildrenContract } from '../helpers/server/children-contract.js'
 import { annotationRow, attachment, collectionRow, noteRow } from '../helpers/server/objects.js'
@@ -166,8 +165,8 @@ describe('zotero_get tool', () => {
     expect(lines[0]).toBe('/api/users/0/items/ABCD1234')
     expect(lines.slice(1).sort()).toEqual(
       [
-        '/api/users/0/items/ABCD1234/children',
-        '/api/users/0/items/ABCD1234/children?itemType=annotation',
+        '/api/users/0/items/ABCD1234/children?start=0&limit=100',
+        '/api/users/0/items/ABCD1234/children?itemType=annotation&start=0&limit=100',
         '/api/users/0/collections',
       ].sort(),
     )
@@ -185,14 +184,14 @@ describe('zotero_get tool', () => {
     expect(value.notes.returned).toBe(1)
     expect(value.annotations.returned).toBe(1)
     expect(value.attachments.returned).toBe(1)
-    expect(value.bestAttachment).toEqual({
+    expect(value.bestAttachment).toMatchObject({
       ref: 'zotero://user/0/attachment/WXYZ6789?server=S1',
       title: 'Full Text PDF',
       contentType: 'application/pdf',
     })
     const text = (result.content[0] as { text: string }).text
     expect(text).toContain(
-      'Children: 3 total (1 of 1 notes; 1 of 1 annotations; 1 of 1 attachments)',
+      'Children: 2 total (1 of 1 notes; 1 of 1 annotations; 1 of 1 attachments)',
     )
     expect(text).toContain('Collections: LLM Papers, zotero://user/0/collection/COLL9999?server=S1')
     expect(text).toContain(
@@ -229,7 +228,7 @@ describe('zotero_get tool', () => {
       'zotero_get',
     )
     const text = (result.content[0] as { text: string }).text
-    expect(text).toContain('Abstract (truncated): ')
+    expect(text).toContain('Abstract: ')
     expect(text).toContain('Best attachment: zotero://user/0/attachment/WXYZ6789 (unknown type)')
     expect(text).not.toContain('Creators:')
     expect(text).not.toContain('Tags:')
@@ -246,7 +245,7 @@ describe('zotero_get tool', () => {
     expect(wrongKind.isError).toBe(true)
     if (!wrongKind.isError) throw new Error('unreachable')
     expect((wrongKind.content[0] as { text: string }).text).toContain(
-      expectedKindRefMessage(['item'], 'collection'),
+      expectedKindRefMessage(['item', 'attachment'], 'collection'),
     )
 
     expect(mock.requests).toEqual([])
@@ -256,70 +255,5 @@ describe('zotero_get tool', () => {
     expect(
       lane.tool('zotero_get')!.isConcurrencySafe?.({ ref: 'zotero://user/0/item/ABCD1234' }),
     ).toBe(true)
-  })
-})
-
-describe('zotero_get render', () => {
-  function render(value: never): string {
-    return (renderGet({} as never, value)[0] as { text: string }).text
-  }
-
-  it('omits the additional-fields line when every extra field is undefined', () => {
-    const text = render({
-      ref: 'zotero://user/0/item/ABCD1234',
-      itemType: 'dataset',
-      title: 'T',
-      creators: [],
-      abstractTruncated: false,
-      tags: [],
-      collections: [],
-      children: { total: 0 },
-      extraFields: { ghost: undefined },
-    } as never)
-    expect(text).not.toContain('Additional fields')
-  })
-
-  it('JSON-encodes non-string extra field values', () => {
-    const text = render({
-      ref: 'zotero://user/0/item/ABCD1234',
-      itemType: 'dataset',
-      title: 'T',
-      creators: [],
-      abstractTruncated: false,
-      tags: [],
-      collections: [],
-      children: { total: 0 },
-      extraFields: { versionNumber: 2, flags: ['a', true] },
-    } as never)
-    expect(text).toContain('versionNumber: 2')
-    expect(text).toContain('flags: ["a",true]')
-  })
-
-  it('renders the note body with a truncation marker for note items', () => {
-    const truncated = render({
-      ref: 'zotero://user/0/item/NOTE1111',
-      itemType: 'note',
-      title: '',
-      creators: [],
-      abstractTruncated: false,
-      tags: [],
-      collections: [],
-      children: { total: 0 },
-      noteBody: { text: 'first line of the note', truncated: true },
-    } as never)
-    expect(truncated).toContain('Note (truncated): first line of the note')
-
-    const full = render({
-      ref: 'zotero://user/0/item/NOTE2222',
-      itemType: 'note',
-      title: '',
-      creators: [],
-      abstractTruncated: false,
-      tags: [],
-      collections: [],
-      children: { total: 0 },
-      noteBody: { text: 'short note', truncated: false },
-    } as never)
-    expect(full).toContain('Note: short note')
   })
 })

@@ -127,5 +127,6 @@ export function attachmentRecordOf(
     title: candidate.title,
     contentType: candidate.contentType,
     ...(candidate.linkMode !== undefined ? { linkMode: candidate.linkMode } : {}),
+    ...(candidate.url !== undefined ? { url: candidate.url } : {}),
   }
 }

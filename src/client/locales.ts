@@ -17,6 +17,10 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 /** English copy. A key added here becomes required in every other dictionary. */
 export const en = {
+  childPageResult: 'Requested page: offset {offset}, {returned} of {total} records',
+  childCompleteResult: 'Complete: {total} records',
+  childDisplayPreview: 'Card preview: {shown} records',
+  exportDisplayPreview: 'Display preview; copy and download use the complete text.',
   libraryLoadedCount: '{loaded} / {total} loaded',
   libraryLocate: 'Locate current scope',
   libraryWriteActions: 'Write actions',
@@ -676,6 +680,11 @@ export const en = {
 
 /** Simplified Chinese copy. */
 export const zh: Record<ZoteroLocaleKey, string> = {
+  childPageResult: '指定页：偏移 {offset}，返回 {returned} / {total} 条',
+  childCompleteResult: '完整读取：{total} 条',
+  childDisplayPreview: '卡片预览：{shown} 条',
+  exportDisplayPreview: '此处仅为展示预览；复制和下载使用完整正文。',
+
   libraryLoadedCount: '已加载 {loaded} / {total}',
   libraryLocate: '定位当前范围',
   libraryWriteActions: '写入操作',

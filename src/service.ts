@@ -77,8 +77,6 @@ import type {
   ZoteroChangesResult,
   ZoteroChildPage,
   ZoteroChildPageRequest,
-  ZoteroChildrenRequest,
-  ZoteroChildrenResult,
   ZoteroCreateCollectionCommittedOutcome,
   ZoteroCreateCollectionRequest,
   ZoteroCreateItemCommittedOutcome,
@@ -482,22 +480,6 @@ export class ZoteroService extends Service {
     this.requireCapability(provider, 'metadata')
     const getItem = this.requireMethod(provider, 'getItem')
     return await getItem(request, signal)
-  }
-
-  /**
-   * Explore one item's or attachment's child-object graph.
-   * @param request - the item/attachment ref and the child kinds to return.
-   * @param signal - caller cancellation; forwarded to the provider.
-   * @returns the bounded child collections with their totals.
-   */
-  async children(
-    request: ZoteroChildrenRequest,
-    signal?: AbortSignal,
-  ): Promise<ZoteroChildrenResult> {
-    const provider = this.resolveProvider()
-    this.requireCapability(provider, 'metadata')
-    const children = this.requireMethod(provider, 'children')
-    return await children(request, signal)
   }
 
   /**

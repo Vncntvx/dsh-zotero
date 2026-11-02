@@ -1,5 +1,5 @@
 /**
- * The `zotero_attachment` domain: resolving an item or attachment ref to a
+ * The attachment-location domain: resolving an item or attachment ref to a
  * verified on-disk path or a protocol-checked linked URL, via Zotero's own
  * best-attachment choice with the deterministic PDF fallback.
  * @module dsh-zotero/local/attachment-location
@@ -8,12 +8,12 @@
 import { access } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import type { ZoteroHttpClient } from '../http-client.js'
-import { serverIdFromHeaders } from './identity.js'
+import { assertServerIdMatches, serverIdFromHeaders } from './identity.js'
 import {
   errnoCodeOf,
   ZOTERO_FILE_MISSING,
   ZOTERO_NO_ATTACHMENT,
-  ZOTERO_UNEXPECTED,
+  ZOTERO_FILE_UNREADABLE,
   ZoteroError,
 } from '../errors.js'
 import { asRecord, asString } from '../json.js'
@@ -114,19 +114,43 @@ export async function getAttachmentLocation(
   signal?: AbortSignal,
 ): Promise<ZoteroAttachmentLocation> {
   const local = requireSupportedLocalRef(ref, ['item', 'attachment'])
-  const attachmentKey = await resolveAttachmentKey(deps, local, signal)
+  const resolved = await resolveAttachmentKey(deps, local, signal)
+  const attachmentKey = resolved.key
   const prefix = libraryPrefix(local.library as SupportedLocalLibrary)
   const item = await deps.client.getJson<unknown>(`${prefix}/items/${attachmentKey}`, undefined, {
     signal,
-    serverId: local.serverId,
+    serverId: resolved.serverId,
   })
-  const data = asRecord(asRecord(item.json)?.data)
+  assertServerIdMatches(serverIdFromHeaders(item.headers, resolved.serverId), resolved.serverId)
+  return resolveAttachmentRow(
+    deps,
+    {
+      ...local,
+      key: attachmentKey,
+      kind: 'attachment',
+      serverId: serverIdFromHeaders(item.headers, resolved.serverId),
+    },
+    item.json,
+    signal,
+  )
+}
+
+/** Resolve an already identity-checked row without fetching metadata again. */
+export async function resolveAttachmentRow(
+  deps: { client: ZoteroHttpClient },
+  local: ZoteroObjectRef,
+  row: unknown,
+  signal?: AbortSignal,
+): Promise<ZoteroAttachmentLocation> {
+  const attachmentKey = local.key
+  const prefix = libraryPrefix(local.library as SupportedLocalLibrary)
+  const data = asRecord(asRecord(row)?.data)
   const itemType = asString(data?.itemType)
   if (itemType !== undefined && itemType !== 'attachment') {
     throw new ZoteroError(attachmentTypeMessage(itemType), ZOTERO_NO_ATTACHMENT)
   }
-  const attachment = normalizeAttachmentRecord(item.json)
-  const serverId = serverIdFromHeaders(item.headers, local.serverId)
+  const attachment = normalizeAttachmentRecord(row)
+  const serverId = local.serverId
   const formattedRef = formatRef(
     refForLibrary(local.library as SupportedLocalLibrary, 'attachment', attachment.key, serverId),
   )
@@ -145,8 +169,9 @@ export async function getAttachmentLocation(
   }
   const file = await deps.client.get(`${prefix}/items/${attachmentKey}/file/view/url`, undefined, {
     signal,
-    serverId: local.serverId,
+    serverId,
   })
+  assertServerIdMatches(serverIdFromHeaders(file.headers, serverId), serverId)
   const target = parseAttachmentLocation(
     file.body.trim(),
     ['file:', 'http:', 'https:'],
@@ -157,7 +182,7 @@ export async function getAttachmentLocation(
     try {
       path = fileURLToPath(target)
     } catch (error) {
-      throw new ZoteroError(NOT_A_LOCAL_PATH_MESSAGE, ZOTERO_NO_ATTACHMENT, { cause: error })
+      throw new ZoteroError(NOT_A_LOCAL_PATH_MESSAGE, ZOTERO_FILE_UNREADABLE, { cause: error })
     }
     try {
       await access(path)
@@ -165,12 +190,13 @@ export async function getAttachmentLocation(
       if (errnoCodeOf(error) === 'ENOENT') {
         throw new ZoteroError(missingAttachmentFileMessage(path), ZOTERO_FILE_MISSING)
       }
-      // Not a named constant: no spec asserts this message, and extracting it
-      // would add an uncovered function to this file's coverage floor. Same
-      // rule that keeps `since.serverId must be…` inline in changes.ts.
-      throw new ZoteroError(`The attachment file cannot be accessed: ${path}`, ZOTERO_UNEXPECTED, {
-        cause: error,
-      })
+      throw new ZoteroError(
+        `The attachment file cannot be accessed: ${path}`,
+        ZOTERO_FILE_UNREADABLE,
+        {
+          cause: error,
+        },
+      )
     }
     return { ref: formattedRef, title, contentType, kind: 'file', path }
   }
@@ -189,20 +215,21 @@ async function resolveAttachmentKey(
   deps: { client: ZoteroHttpClient },
   ref: ZoteroObjectRef,
   signal?: AbortSignal,
-): Promise<string> {
-  if (ref.kind === 'attachment') return ref.key
+): Promise<{ key: string; serverId?: string }> {
+  if (ref.kind === 'attachment') return { key: ref.key, serverId: ref.serverId }
   const library = ref.library as SupportedLocalLibrary
   const prefix = libraryPrefix(library)
   const parent = await deps.client.getJson<unknown>(`${prefix}/items/${ref.key}`, undefined, {
     signal,
     serverId: ref.serverId,
   })
+  const serverId = serverIdFromHeaders(parent.headers, ref.serverId)
   const link = bestAttachmentFromLinks(parent.json)
-  if (link !== undefined) return link.key
-  const childrenRows = await fetchDirectChildren(deps, ref.key, library, ref.serverId, signal)
+  if (link !== undefined) return { key: link.key, serverId }
+  const childrenRows = await fetchDirectChildren(deps, ref.key, library, serverId, signal)
   const pdf = selectAttachments(childrenRows, 'pdf')[0]
   if (pdf === undefined) {
     throw new ZoteroError(noAttachmentToResolveMessage(ref.key), ZOTERO_NO_ATTACHMENT)
   }
-  return pdf.key
+  return { key: pdf.key, serverId }
 }

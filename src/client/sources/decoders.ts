@@ -64,6 +64,10 @@ interface SearchMetaView {
 export interface ChildCountView {
   readonly total: number
   readonly returned: number
+  readonly completeness?: 'complete' | 'page'
+  readonly offset?: number
+  readonly limit?: number
+  readonly nextOffset?: number
 }
 
 /** One bounded child preview: a note or annotation the projection kept. */
@@ -77,6 +81,7 @@ export interface ChildPreviewView {
 
 /** The get projection view; a null field is absent or malformed. */
 interface GetMetaView {
+  readonly resolvedAttachment: AttachmentMetaView | null
   readonly title: string | null
   readonly creators: string | null
   readonly year: number | null
@@ -102,7 +107,19 @@ function childCountOf(value: unknown): ChildCountView | null {
   if (!isRecord(value)) return null
   const total = numberField(value, 'total')
   if (total === undefined) return null
-  return { total, returned: numberField(value, 'returned') ?? total }
+  return {
+    total,
+    returned: numberField(value, 'returned') ?? total,
+    ...(value['completeness'] === 'complete' || value['completeness'] === 'page'
+      ? { completeness: value['completeness'] }
+      : {}),
+    ...Object.fromEntries(
+      ['offset', 'limit', 'nextOffset'].flatMap((key) => {
+        const number = numberField(value, key)
+        return number === undefined ? [] : [[key, number]]
+      }),
+    ),
+  }
 }
 
 /**
@@ -264,6 +281,10 @@ export function searchMetaOf(meta: Record<string, unknown>): SearchMetaView {
 }
 
 export function getMetaOf(meta: Record<string, unknown>): GetMetaView {
+  const resolved = isRecord(meta['resolvedAttachment']) ? meta['resolvedAttachment'] : null
+  const location = resolved && isRecord(resolved['location']) ? resolved['location'] : null
+  const resolvedAttachment =
+    resolved && location ? attachmentMetaOf({ ...resolved, ...location }) : null
   let bestAttachment: GetMetaView['bestAttachment'] = null
   const attachment = meta['bestAttachment']
   if (isRecord(attachment)) {
@@ -279,6 +300,7 @@ export function getMetaOf(meta: Record<string, unknown>): GetMetaView {
     year: numberField(meta, 'year') ?? null,
     venue: stringField(meta, 'venue') ?? null,
     bestAttachment,
+    resolvedAttachment,
     notes: childCountOf(meta['notes']),
     annotations: childCountOf(meta['annotations']),
     attachments: childCountOf(meta['attachments']),
@@ -317,104 +339,6 @@ function decodeCoverage(value: unknown): SourceCoverage | null {
     ...(totalPages === undefined ? {} : { totalPages }),
     ...(indexedChars === undefined ? {} : { indexedChars }),
     ...(totalChars === undefined ? {} : { totalChars }),
-  }
-}
-
-/** One child row of a `zotero_children` listing, in the kind's own shape. */
-export type ChildRow =
-  | { readonly kind: 'note'; readonly ref: string; readonly text: string }
-  | {
-      readonly kind: 'attachment'
-      readonly ref: string
-      readonly title: string
-      readonly contentType: string
-    }
-  | {
-      readonly kind: 'annotation'
-      readonly ref: string
-      readonly type: string
-      readonly text: string
-      /** Zotero's own annotation colour, e.g. `#ffd400`. */
-      readonly color: string | null
-      readonly pageLabel: string | null
-      readonly parentRef: string | null
-    }
-
-/** One child kind's section of a children listing. */
-export interface ChildSection {
-  readonly kind: ChildRow['kind']
-  readonly total: number
-  /** How many rows the projection returned, before this decoder drops malformed ones. */
-  readonly returned: number
-  /** The rows a card can actually draw; the count beside a section must be this. */
-  readonly shown: number
-  readonly rows: readonly ChildRow[]
-}
-
-/**
- * The children projection view. `sections` lists only the kinds the call
- * returned: a kind it did not ask for is absent, which is a different fact
- * from "that kind has no children".
- */
-interface ChildrenMetaView {
-  readonly itemType: string | null
-  readonly sections: readonly ChildSection[]
-  /** True when the meta budget dropped the detail rows behind these facts. */
-  readonly detailOmitted: boolean
-}
-
-const CHILD_SECTIONS = [
-  { key: 'notes', kind: 'note' },
-  { key: 'attachments', kind: 'attachment' },
-  { key: 'annotations', kind: 'annotation' },
-] as const satisfies readonly { readonly key: string; readonly kind: ChildRow['kind'] }[]
-
-function childRowOf(kind: ChildRow['kind'], value: unknown): ChildRow | null {
-  if (!isRecord(value)) return null
-  const ref = stringField(value, 'ref')
-  if (ref === undefined) return null
-  if (kind === 'note') {
-    const text = stringField(value, 'text')
-    return text === undefined ? null : { kind, ref, text }
-  }
-  if (kind === 'attachment') {
-    const title = stringField(value, 'title')
-    const contentType = stringField(value, 'contentType')
-    if (title === undefined || contentType === undefined) return null
-    return { kind, ref, title, contentType }
-  }
-  const type = stringField(value, 'type')
-  const text = stringField(value, 'text')
-  if (type === undefined || text === undefined) return null
-  const color = stringField(value, 'color')
-  const pageLabel = stringField(value, 'pageLabel')
-  const parentRef = stringField(value, 'parentRef')
-  return {
-    kind,
-    ref,
-    type,
-    text,
-    color: color === undefined || color === '' ? null : color,
-    pageLabel: pageLabel ?? null,
-    parentRef: parentRef ?? null,
-  }
-}
-
-export function childrenMetaOf(meta: Record<string, unknown>): ChildrenMetaView {
-  const sections: ChildSection[] = []
-  for (const { key, kind } of CHILD_SECTIONS) {
-    const count = childCountOf(meta[key])
-    if (count === null) continue
-    const items = isRecord(meta[key]) ? meta[key]['items'] : undefined
-    const rows = Array.isArray(items)
-      ? items.map((item) => childRowOf(kind, item)).filter((row): row is ChildRow => row !== null)
-      : []
-    sections.push({ kind, total: count.total, returned: count.returned, shown: rows.length, rows })
-  }
-  return {
-    itemType: stringField(meta, 'itemType') ?? null,
-    sections,
-    detailOmitted: detailOmittedOf(meta),
   }
 }
 

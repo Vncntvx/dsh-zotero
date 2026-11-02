@@ -10,7 +10,6 @@ import { SearchToolView } from './SearchToolView.tsx'
 import { RetrieveToolView } from './RetrieveToolView.tsx'
 import { ExportToolView } from './ExportToolView.tsx'
 import { ItemToolView } from './ItemToolView.tsx'
-import { ChildrenToolView } from './ChildrenToolView.tsx'
 import { WriteToolView } from './WriteToolView.tsx'
 import { BrowseToolView } from './BrowseToolView.tsx'
 
@@ -24,8 +23,6 @@ export const REGISTRATIONS = [
   ['zotero_retrieve', RetrieveToolView],
   ['zotero_export', ExportToolView],
   ['zotero_get', ItemToolView],
-  ['zotero_children', ChildrenToolView],
-  ['zotero_attachment', ChildrenToolView],
   ['zotero_create_note', WriteToolView],
   ['zotero_batch_items', WriteToolView],
   ['zotero_update_note', WriteToolView],

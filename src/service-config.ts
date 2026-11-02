@@ -43,8 +43,6 @@ export function sameTransportConfig(current: ResolvedConfig, built: ResolvedConf
 export function localProviderLimits(config: ResolvedConfig): LocalApiLimits {
   return {
     maxNoteScanRecords: config.maxNoteScanRecords,
-    maxDetailChars: config.maxDetailChars,
-    maxNoteBodyChars: config.maxNoteBodyChars,
     maxNoteChars: config.maxNoteChars,
     maxNoteRecords: config.maxNoteRecords,
     maxAnnotationRecords: config.maxAnnotationRecords,

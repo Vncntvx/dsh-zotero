@@ -10,7 +10,7 @@ dsh-zotero is a DeepSeek Harness plugin: agents search, read, cite, and (when en
 | `src/local/`     | Local API domain pipelines behind the provider: search, browse, retrieve, export, changes, write |
 | `src/library/`   | `dsh-zotero/library` component: `ctx.zoteroLibrary` panel endpoints and config                   |
 | `src/scholarly/` | `dsh-zotero/scholarly` component: external search, fusion, fulltext, citations (7 tools)         |
-| `src/tools/`     | The 23 host tools: 8 read + 15 write (write tools disabled by default)                           |
+| `src/tools/`     | The 21 host tools: 6 read + 15 write (write tools disabled by default)                           |
 | `src/client/`    | Browser half bundled into `lib/client.js`: settings, 文献轨迹, 文献面板, tool cards              |
 | `tests/`         | Seven declared lanes by ownership and verification level; rules in `tests/README.md`             |
 | `docs/`          | Product and technical docs, maintained as zh/en pairs                                            |

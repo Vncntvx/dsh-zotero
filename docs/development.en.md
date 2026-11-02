@@ -68,7 +68,7 @@ src/
   remote.ts             # Web-side Remote service
   typert.ts             # Typert manifest
   settings-namespace.ts # Settings namespace constants
-  tools/                # 23 local model tool definitions (8 read + 15 write)
+  tools/                # 21 local model tool definitions (6 read + 15 write)
   tools/degradable.ts   # Degrade rule for write-tool plan previews (degrade only when unreachable or ambiguous)
   client/               # Browser side (settings page, literature trail, literature panel, tool card views)
 tests/                  # Unit tests and end-to-end test cases
@@ -83,7 +83,7 @@ Chinese documents under `docs/` are maintained in pairs with their `.en.md` Engl
 | [Getting started](getting-started.en.md)       | Installation, prerequisites, and connection verification                                                                  |
 | [Product model](product-model.en.md)           | Two entry points, two UI surfaces, component division, and system boundaries: the single source for naming and boundaries |
 | [Features](features.en.md)                     | Conversation capabilities, literature trail, literature panel, writing, and scholarly search                              |
-| [Tool reference](tools.en.md)                  | 23 local tools (8 read + 15 write) and 7 scholarly retrieval tools                                                        |
+| [Tool reference](tools.en.md)                  | 21 local tools (6 read + 15 write) and 7 scholarly retrieval tools                                                        |
 | [Configuration reference](configuration.en.md) | Three settings namespaces, 44 fields, and the hot-reload mechanism                                                        |
 | [Troubleshooting](troubleshooting.en.md)       | Common issues, causes, and diagnostic steps                                                                               |
 | [Architecture](architecture.en.md)             | Data flow, layer responsibilities, and design boundaries                                                                  |

@@ -256,7 +256,7 @@ async function readMultiAttachmentFulltext(
         if (rowType !== 'attachment') {
           throw new ZoteroError(
             rowType === undefined
-              ? `Attachment ref ${wanted.key} cannot be proven an attachment: Zotero's answer named no item type for it, so nothing rules out a bibliographic item. Read the item's children with zotero_children and name an attachment ref from there.`
+              ? `Attachment ref ${wanted.key} cannot be proven an attachment: Zotero's answer named no item type for it, so nothing rules out a bibliographic item. Read the item's attachments with zotero_get (with include: ["attachments"]) and name an attachment ref from there.`
               : `Attachment ref ${wanted.key} names a ${rowType}, not an attachment.`,
             ZOTERO_INVALID_ARGUMENT,
           )
@@ -265,7 +265,7 @@ async function readMultiAttachmentFulltext(
           throw new ZoteroError(
             parentKey === undefined
               ? `Attachment ref ${wanted.key} is a top-level attachment with no parent item, so its text is not evidence for ${ref.key}.`
-              : `Attachment ref ${wanted.key} is attached to item ${parentKey}, not to ${ref.key}; its text would be another work's evidence. Read this item's children with zotero_children to get refs that belong to it.`,
+              : `Attachment ref ${wanted.key} is attached to item ${parentKey}, not to ${ref.key}; its text would be another work's evidence. Read this item's attachments with zotero_get to get refs that belong to it.`,
             ZOTERO_INVALID_ARGUMENT,
           )
         }

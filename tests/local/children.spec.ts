@@ -11,7 +11,7 @@ import { ZOTERO_INVALID_ARGUMENT, ZOTERO_INVALID_REF, ZOTERO_UNEXPECTED } from '
 import { attachmentTargetKindMessage } from '../../src/local/detail.js'
 import { type LocalApiProvider } from '../../src/local/provider.js'
 import { expectedKindRefMessage, parseRef } from '../../src/refs.js'
-import type { ZoteroChildrenRequest } from '../../src/types.js'
+import type { ZoteroGetRequest } from '../../src/types.js'
 import {
   createProvider,
   setupProvider,
@@ -90,19 +90,22 @@ function routeGraph(serverId?: string): void {
 
 function childrenRequest(
   ref: string,
-  include: ('notes' | 'attachments' | 'annotations')[] = ['notes', 'attachments', 'annotations'],
-): ZoteroChildrenRequest {
+  include: ('notes' | 'attachments' | 'annotations')[] = ref.includes('/attachment/')
+    ? ['annotations']
+    : ['notes', 'attachments', 'annotations'],
+): ZoteroGetRequest {
   return { ref: parseRef(ref), include: new Set(include) }
 }
 
 describe('children', () => {
   it('returns an item graph: direct notes, attachments, and filtered annotations', async () => {
     routeGraph('S1')
-    const result = await provider.children(childrenRequest(itemRef()))
+    const result = await provider.getItem(childrenRequest(itemRef()))
     expect(result.ref).toBe('zotero://user/0/item/ABCD1234?server=S1')
     expect(result.itemType).toBe('journalArticle')
     expect(result.serverId).toBe('S1')
     expect(result.notes).toEqual({
+      completeness: 'complete',
       total: 1,
       returned: 1,
       items: [
@@ -129,7 +132,7 @@ describe('children', () => {
     )
   })
 
-  it('caps the attachment listing at the configured record bound with honest totals', async () => {
+  it('reads all attachments despite the configured page size', async () => {
     // Attachments are the one child kind whose records come in open-ended
     // batches (multi-file items), so their cap is a config field like the
     // note and annotation ones — not the row count itself.
@@ -139,48 +142,52 @@ describe('children', () => {
       children: [attachment(), attachment({ key: 'ATTA2222' })],
       serverId: 'S1',
     })
-    const result = await capped.children(childrenRequest(itemRef(), ['attachments']))
+    const result = await capped.getItem(childrenRequest(itemRef(), ['attachments']))
     expect(result.attachments).toEqual({
       total: 2,
-      returned: 1,
-      items: [expect.objectContaining({ ref: 'zotero://user/0/attachment/WXYZ6789?server=S1' })],
+      returned: 2,
+      completeness: 'complete',
+      items: [
+        expect.objectContaining({ ref: 'zotero://user/0/attachment/WXYZ6789?server=S1' }),
+        expect.objectContaining({ ref: 'zotero://user/0/attachment/ATTA2222?server=S1' }),
+      ],
     })
   })
 
   it('reads only the bare children listing when annotations are not requested', async () => {
     routeGraph()
-    await provider.children(childrenRequest(itemRef(), ['notes', 'attachments']))
+    await provider.getItem(childrenRequest(itemRef(), ['notes', 'attachments']))
     expectRequestLines(mock, [
       '/api/users/0/items/ABCD1234',
-      '/api/users/0/items/ABCD1234/children',
+      '/api/users/0/items/ABCD1234/children?start=0&limit=100',
     ])
   })
 
   it('reads only the filtered annotation listing for an annotations-only item ref', async () => {
     routeGraph()
-    const result = await provider.children(childrenRequest(itemRef(), ['annotations']))
+    const result = await provider.getItem(childrenRequest(itemRef(), ['annotations']))
     expect(result.notes).toBeUndefined()
     expect(result.attachments).toBeUndefined()
     expect(result.annotations?.total).toBe(2)
     expectRequestLines(mock, [
       '/api/users/0/items/ABCD1234',
-      '/api/users/0/items/ABCD1234/children?itemType=annotation',
+      '/api/users/0/items/ABCD1234/children?itemType=annotation&start=0&limit=100',
     ])
   })
 
   it('fans out the two contracts in parallel when both halves are requested', async () => {
     routeGraph()
-    await provider.children(childrenRequest(itemRef(), ['notes', 'annotations']))
+    await provider.getItem(childrenRequest(itemRef(), ['notes', 'annotations']))
     expectRequestLinesAnyOrder(mock, [
       '/api/users/0/items/ABCD1234',
-      '/api/users/0/items/ABCD1234/children',
-      '/api/users/0/items/ABCD1234/children?itemType=annotation',
+      '/api/users/0/items/ABCD1234/children?start=0&limit=100',
+      '/api/users/0/items/ABCD1234/children?itemType=annotation&start=0&limit=100',
     ])
   })
 
   it('returns an attachment ref own annotations via the filtered listing only', async () => {
     routeGraph('S1')
-    const result = await provider.children(childrenRequest(attachmentRef()))
+    const result = await provider.getItem(childrenRequest(attachmentRef()))
     expect(result.ref).toBe('zotero://user/0/attachment/WXYZ6789?server=S1')
     expect(result.itemType).toBe('attachment')
     expect(result.notes).toBeUndefined()
@@ -191,13 +198,13 @@ describe('children', () => {
     ])
     expectRequestLines(mock, [
       `/api/users/0/items/${ATTACHMENT_KEY}`,
-      `/api/users/0/items/${ATTACHMENT_KEY}/children?itemType=annotation`,
+      `/api/users/0/items/${ATTACHMENT_KEY}/children?itemType=annotation&start=0&limit=100`,
     ])
   })
 
   it('issues no children request for an attachment ref that omits annotations', async () => {
     routeGraph()
-    const result = await provider.children(childrenRequest(attachmentRef(), ['notes']))
+    const result = await provider.getItem(childrenRequest(attachmentRef(), []))
     expect(result.annotations).toBeUndefined()
     expectRequestLines(mock, [`/api/users/0/items/${ATTACHMENT_KEY}`])
   })
@@ -205,7 +212,7 @@ describe('children', () => {
   it('fails closed when an attachment ref names a non-attachment object', async () => {
     routeGraph()
     await zoteroError(
-      provider.children(childrenRequest('zotero://user/0/attachment/ABCD1234')),
+      provider.getItem(childrenRequest('zotero://user/0/attachment/ABCD1234')),
       ZOTERO_INVALID_ARGUMENT,
       attachmentTargetKindMessage('journalArticle'),
     )
@@ -213,7 +220,7 @@ describe('children', () => {
 
   it('rejects annotation refs before any request happens', async () => {
     await zoteroError(
-      provider.children(childrenRequest('zotero://user/0/annotation/ANNO1111')),
+      provider.getItem(childrenRequest('zotero://user/0/annotation/ANNO1111')),
       ZOTERO_INVALID_REF,
       expectedKindRefMessage(['item', 'attachment'], 'annotation'),
     )
@@ -231,7 +238,7 @@ describe('children', () => {
       annotationRow(),
     ])
     await zoteroError(
-      provider.children(childrenRequest(itemRef())),
+      provider.getItem(childrenRequest(itemRef())),
       ZOTERO_UNEXPECTED,
       'item children',
     )
@@ -244,9 +251,9 @@ describe('children', () => {
       key: 'ANNO1111',
     })
     await zoteroError(
-      provider.children(childrenRequest(itemRef())),
+      provider.getItem(childrenRequest(itemRef())),
       ZOTERO_UNEXPECTED,
-      'item annotations',
+      'item children',
     )
   })
 })

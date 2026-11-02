@@ -17,7 +17,6 @@ import { formatCreatorsList } from './creators.js'
 import { isEvidenceSource, type EvidenceItem } from './evidence-item.js'
 import type {
   SupportedLocalLibrary,
-  ZoteroAttachmentLocation,
   ZoteroCoverage,
   ZoteroEvidenceField,
   ZoteroEvidenceSource,
@@ -98,12 +97,29 @@ interface ZoteroChildPreview {
 interface ZoteroChildCount {
   readonly total: number
   readonly returned: number
+  readonly completeness?: 'complete' | 'page'
+  readonly offset?: number
+  readonly limit?: number
+  readonly nextOffset?: number
+}
+
+function childFacts(value: ZoteroChildCount): ZoteroChildCount {
+  return {
+    total: value.total,
+    returned: value.returned,
+    ...(value.completeness === undefined ? {} : { completeness: value.completeness }),
+    ...(value.offset === undefined ? {} : { offset: value.offset }),
+    ...(value.limit === undefined ? {} : { limit: value.limit }),
+    ...(value.nextOffset === undefined ? {} : { nextOffset: value.nextOffset }),
+  }
 }
 
 /** The canonical get output the projector reads. */
 type GetProjectionInput = ZoteroItemDetail
 
 interface ZoteroGetPresentationMeta {
+  readonly location?: ZoteroItemDetail['location']
+  readonly resolvedAttachment?: ZoteroItemDetail['bestAttachment']
   readonly title: string
   readonly creators: string
   readonly year?: number
@@ -152,16 +168,6 @@ interface ZoteroRetrievePresentationMeta {
 /** The canonical retrieve output the projector reads. */
 type RetrieveProjectionInput = ZoteroRetrieveResult
 
-interface ZoteroAttachmentPresentationMeta {
-  readonly kind: 'file' | 'url'
-  readonly title: string
-  readonly contentType: string
-  /** The resolved attachment's own ref (the open-PDF deep-link key). */
-  readonly ref?: string
-  readonly path?: string
-  readonly url?: string
-}
-
 /** One bounded export document item: the ref with its format-local key, display title, and located entry. */
 interface ZoteroExportPresentationItem {
   readonly ref: string
@@ -195,9 +201,6 @@ interface ZoteroExportPresentationMeta {
    */
   readonly items?: readonly ZoteroExportPresentationItem[]
 }
-
-/** The canonical attachment output the projector reads (discriminated on `kind`). */
-type AttachmentProjectionInput = ZoteroAttachmentLocation
 
 /** Cut text at a character cap for a card preview. */
 function truncateChars(text: string, cap: number): string {
@@ -301,6 +304,8 @@ function childPreviews(
  */
 export function projectGetMeta(value: GetProjectionInput): ZoteroGetPresentationMeta {
   return {
+    ...(value.location ? { location: value.location } : {}),
+    ...(value.bestAttachment?.location ? { resolvedAttachment: value.bestAttachment } : {}),
     title: truncateChars(value.title, MAX_PRESENTATION_GET_TITLE_CHARS),
     creators: truncateChars(
       formatCreatorsList(value.creators),
@@ -312,15 +317,9 @@ export function projectGetMeta(value: GetProjectionInput): ZoteroGetPresentation
     ...(value.venue === undefined
       ? {}
       : { venue: truncateChars(value.venue, MAX_PRESENTATION_GET_VENUE_CHARS) }),
-    ...(value.notes === undefined
-      ? {}
-      : { notes: { total: value.notes.total, returned: value.notes.returned } }),
-    ...(value.annotations === undefined
-      ? {}
-      : { annotations: { total: value.annotations.total, returned: value.annotations.returned } }),
-    ...(value.attachments === undefined
-      ? {}
-      : { attachments: { total: value.attachments.total, returned: value.attachments.returned } }),
+    ...(value.notes === undefined ? {} : { notes: childFacts(value.notes) }),
+    ...(value.annotations === undefined ? {} : { annotations: childFacts(value.annotations) }),
+    ...(value.attachments === undefined ? {} : { attachments: childFacts(value.attachments) }),
     ...(value.bestAttachment === undefined
       ? {}
       : {
@@ -386,34 +385,6 @@ export function projectRetrieveMeta(
       : { attachmentContentType: value.attachmentContentType }),
     ...(value.coverage === undefined ? {} : { coverage: value.coverage }),
     sourceAvailability,
-  }
-}
-
-/**
- * Project one attachment location into card-sized facts; the full path or
- * URL stays the copyable canonical value.
- * @param value - the canonical attachment location.
- * @returns the bounded projection.
- */
-export function projectAttachmentMeta(
-  value: AttachmentProjectionInput,
-): ZoteroAttachmentPresentationMeta {
-  const title = truncateChars(value.title, MAX_PRESENTATION_GET_TITLE_CHARS)
-  if (value.kind === 'file') {
-    return {
-      kind: value.kind,
-      title,
-      contentType: value.contentType,
-      path: value.path,
-      ...(value.ref === undefined ? {} : { ref: value.ref }),
-    }
-  }
-  return {
-    kind: value.kind,
-    title,
-    contentType: value.contentType,
-    url: value.url,
-    ...(value.ref === undefined ? {} : { ref: value.ref }),
   }
 }
 

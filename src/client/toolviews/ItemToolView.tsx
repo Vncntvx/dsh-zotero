@@ -228,6 +228,25 @@ export function ItemToolView(props: ItemToolViewProps) {
                 </div>
               )}
 
+              {childCounts.map(
+                ({ key, label, count, shown }) =>
+                  count.completeness && (
+                    <div key={key} className={css.coverageNotice} data-child-completeness={key}>
+                      {label}:{' '}
+                      {count.completeness === 'page'
+                        ? t('childPageResult', {
+                            offset: count.offset ?? 0,
+                            returned: count.returned,
+                            total: count.total,
+                          })
+                        : t('childCompleteResult', { total: count.total })}
+                      {shown !== null &&
+                        count.returned > shown &&
+                        ` · ${t('childDisplayPreview', { shown })}`}
+                    </div>
+                  ),
+              )}
+
               <div className={css.itemActions}>
                 {getItemView?.bestAttachment?.ref && (
                   <PdfReadButton

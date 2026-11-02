@@ -112,20 +112,18 @@ When writing papers or organizing literature independently, use the **Literature
 
 ## Tools
 
-The plugin provides eight read tools and fifteen write tools. Write tools are off by default; turn on `writeEnabled` in configuration to enable them.
+The plugin provides six read tools and fifteen write tools. Write tools are off by default; turn on `writeEnabled` in configuration to enable them.
 
-| Tool                | Purpose                                                                                                            |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `zotero_search`     | Search papers by title, author, year, tag, or full text, with collection and tag filters                           |
-| `zotero_browse`     | Browse the library structure, including the collection tree, tag list, and saved searches                          |
-| `zotero_get`        | Read the metadata detail, abstract, attachments, and note list of a single paper                                   |
-| `zotero_children`   | View the child items associated with a paper, including standalone notes, PDF attachments, and reading annotations |
-| `zotero_retrieve`   | Find passages relevant to a question in full text, notes, and annotations (annotations keep page numbers)          |
-| `zotero_changes`    | Check recent additions, modifications, and deletions in the library                                                |
-| `zotero_attachment` | Get the local PDF file path associated with a paper                                                                |
-| `zotero_export`     | Generate formatted citations or a bibliography, or export BibTeX, RIS, or CSL JSON                                 |
+| Tool              | Purpose                                                                                                   |
+| ----------------- | --------------------------------------------------------------------------------------------------------- |
+| `zotero_search`   | Search papers by title, author, year, tag, or full text, with collection and tag filters                  |
+| `zotero_browse`   | Browse the library structure, including the collection tree, tag list, and saved searches                 |
+| `zotero_get`      | Read the metadata detail, abstract, attachments, and note list of a single paper                          |
+| `zotero_retrieve` | Find passages relevant to a question in full text, notes, and annotations (annotations keep page numbers) |
+| `zotero_changes`  | Check recent additions, modifications, and deletions in the library                                       |
+| `zotero_export`   | Generate formatted citations or a bibliography, or export BibTeX, RIS, or CSL JSON                        |
 
-The fifteen write tools (notes, tags and collection membership, collections, items, saved searches, Trash restore, library-wide tags, and batch operations) are off by default. Once enabled they write only to the personal library, and every write needs approval. See the [tool reference](docs/tools.en.md) for the full contract of all 23 tools.
+The fifteen write tools (notes, tags and collection membership, collections, items, saved searches, Trash restore, library-wide tags, and batch operations) are off by default. Once enabled they write only to the personal library, and every write needs approval. See the [tool reference](docs/tools.en.md) for the full contract of all 21 tools.
 
 ## Documentation
 
@@ -143,7 +141,7 @@ The fifteen write tools (notes, tags and collection membership, collections, ite
 | Document                                            | Covers                                                                                  |
 | --------------------------------------------------- | --------------------------------------------------------------------------------------- |
 | [Architecture](docs/architecture.en.md)             | Data flow, layer responsibilities, component boundaries, and design boundaries          |
-| [Tool reference](docs/tools.en.md)                  | Parameters, return values, and error codes for the 23 local tools and 7 scholarly tools |
+| [Tool reference](docs/tools.en.md)                  | Parameters, return values, and error codes for the 21 local tools and 7 scholarly tools |
 | [Configuration reference](docs/configuration.en.md) | Fields, defaults, and hot-reload behavior of each settings namespace                    |
 | [Development guide](docs/development.en.md)         | Build, test, debug, and release workflow                                                |
 

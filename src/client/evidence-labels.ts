@@ -10,7 +10,6 @@
 
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ZoteroLocaleKey } from './locales.ts'
-import type { ChildRow } from './sources/decoders.ts'
 import type { SourceAvailabilityEntry, SourceCoverage } from './sources/model.ts'
 
 /** The locale key of one evidence source kind; unknown kinds read as fulltext. */
@@ -49,7 +48,7 @@ export function coverageLineOf(coverage: SourceCoverage, t: TranslateNS<'zotero'
 
 /**
  * The heading each child kind is named by, wherever a card mentions it: the
- * `zotero_children` section headings and the `zotero_get` count badge and
+ * the panel child-page reader section headings and the `zotero_get` count badge and
  * preview sections. One mapping, so a kind cannot be renamed in a section and
  * left stale in a badge.
  */
@@ -57,7 +56,7 @@ export const CHILD_KIND_LABEL = {
   note: 'toolChildrenNotes',
   attachment: 'toolChildrenAttachments',
   annotation: 'toolChildrenAnnotations',
-} as const satisfies Record<ChildRow['kind'], ZoteroLocaleKey>
+} as const satisfies Record<'note' | 'attachment' | 'annotation', ZoteroLocaleKey>
 
 /**
  * The "how many of how many" line every card that shows a bounded listing

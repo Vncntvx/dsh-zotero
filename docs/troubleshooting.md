@@ -38,7 +38,7 @@
 
 - **现象**：`zotero_retrieve` 返回空片段列表，或 `sourcesSkipped` 中包含 `"fulltext"`。
 - **原因**：目标 PDF 在 Zotero 中尚未建立全文索引。
-- **排查**：在 Zotero 客户端中右键点击该附件，选择“重新建立索引”；或使用 `zotero_attachment` 获取本地文件路径进行查阅。
+- **排查**：在 Zotero 客户端中右键点击该附件，选择“重新建立索引”；或使用 `zotero_get(locations="best")` 获取本地文件路径进行查阅。
 
 ## 7. PDF 阅读与 Zotero 文献定位
 

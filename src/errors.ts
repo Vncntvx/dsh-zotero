@@ -24,6 +24,8 @@ export const ZOTERO_NO_ATTACHMENT = 'ZOTERO_NO_ATTACHMENT'
 export const ZOTERO_NO_FULLTEXT = 'ZOTERO_NO_FULLTEXT'
 /** Zotero reports a local file that is missing from disk. */
 export const ZOTERO_FILE_MISSING = 'ZOTERO_FILE_MISSING'
+/** Existing attachment cannot be read. */
+export const ZOTERO_FILE_UNREADABLE = 'ZOTERO_FILE_UNREADABLE'
 /** A ref string does not match the zotero:// grammar or names an unsupported library. */
 export const ZOTERO_INVALID_REF = 'ZOTERO_INVALID_REF'
 /** An argument the schema cannot express violates a domain constraint. */
@@ -69,6 +71,7 @@ const ZOTERO_ERROR_CODES = [
   ZOTERO_NO_ATTACHMENT,
   ZOTERO_NO_FULLTEXT,
   ZOTERO_FILE_MISSING,
+  ZOTERO_FILE_UNREADABLE,
   ZOTERO_INVALID_REF,
   ZOTERO_INVALID_ARGUMENT,
   ZOTERO_SCOPE_AMBIGUOUS,
@@ -135,7 +138,7 @@ export const SERVER_MISMATCH_MESSAGE =
 export const NO_FULLTEXT_MESSAGE =
   'Zotero has no indexed full text for this attachment. Check that the file contains searchable text; ' +
   'if needed, right-click the attachment in Zotero and choose "Reindex Item". ' +
-  'You can also use zotero_attachment to access the original file.'
+  'You can also use zotero_get to access the original file.'
 
 // The caller-cancellation wording lives in `src/abort.ts`. This module is
 // re-exported wholesale by `src/index.ts`, and the harness owns both the code

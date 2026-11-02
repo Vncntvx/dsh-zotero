@@ -11,17 +11,13 @@
 export interface LocalApiLimits {
   /** Upper bound for note records the search scan fetches for body matches. */
   readonly maxNoteScanRecords: number
-  /** Character budget for `zotero_get` abstract previews. */
-  readonly maxDetailChars: number
-  /** Character budget for a note item's own body returned by `zotero_get`. */
-  readonly maxNoteBodyChars: number
-  /** Per-note character budget for `zotero_get` note previews. */
+  /** Per-note character budget for panel child-page previews. */
   readonly maxNoteChars: number
-  /** Upper bound for note records returned by `zotero_get`. */
+  /** Maximum notes in an explicitly requested child page. */
   readonly maxNoteRecords: number
-  /** Upper bound for annotation records returned by `zotero_get`. */
+  /** Maximum annotations in an explicitly requested child page. */
   readonly maxAnnotationRecords: number
-  /** Upper bound for attachment records returned by `zotero_get` and `zotero_children`. */
+  /** Maximum attachments in an explicitly requested child page. */
   readonly maxAttachmentRecords: number
   /** Word count of each full-text passage entering evidence ranking. */
   readonly fulltextChunkWords: number

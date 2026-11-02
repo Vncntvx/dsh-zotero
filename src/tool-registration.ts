@@ -4,10 +4,8 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { ZoteroService } from './service.js'
-import { registerAttachmentTool } from './tools/attachment.js'
 import { registerBrowseTool } from './tools/browse.js'
 import { registerChangesTool } from './tools/changes.js'
-import { registerChildrenTool } from './tools/children.js'
 import { registerExportTool } from './tools/export.js'
 import { registerGetTool } from './tools/get.js'
 import { registerRetrieveTool } from './tools/retrieve.js'
@@ -29,8 +27,6 @@ import { registerUpdateNoteTool } from './tools/update-note.js'
 export function registerReadTools(ctx: Context, service: ZoteroService): void {
   registerSearchTool(ctx, service)
   registerGetTool(ctx, service)
-  registerChildrenTool(ctx, service)
-  registerAttachmentTool(ctx, service)
   registerRetrieveTool(ctx, service)
   registerBrowseTool(ctx, service)
   registerExportTool(ctx, service)

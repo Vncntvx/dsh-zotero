@@ -245,36 +245,10 @@ export interface ZoteroSearchResult {
 /** Child content kinds `zotero_get` can include beyond plain metadata. */
 export type ZoteroInclude = 'notes' | 'annotations' | 'attachments'
 
-/**
- * Child content kinds `zotero_children` returns. The tool explores the
- * Zotero object graph: an item ref yields its direct notes and attachments
- * plus every attachment's annotations; an attachment ref yields its own
- * annotations.
- */
-export type ZoteroChildrenInclude = 'notes' | 'attachments' | 'annotations'
-
-export interface ZoteroChildrenRequest {
-  /** An item or attachment ref; annotation refs have no children and fail closed. */
-  ref: ZoteroObjectRef
-  include: ReadonlySet<ZoteroChildrenInclude>
-}
-
-/** The explored child-object graph of one item or attachment. */
-export interface ZoteroChildrenResult {
-  /** Echo of the requested object's ref, provenance-qualified with the serving instance. */
-  ref: string
-  /** The requested object's Zotero item type (`attachment` for attachment refs). */
-  itemType?: string
-  notes?: ZoteroChildCollection<ZoteroNoteRecord>
-  annotations?: ZoteroChildCollection<ZoteroAnnotationRecord>
-  attachments?: ZoteroChildCollection<ZoteroAttachmentRecord>
-  /** Identity of the Zotero instance that served these records. */
-  serverId?: string
-}
-
 export interface ZoteroGetRequest {
   ref: ZoteroObjectRef
   include: ReadonlySet<ZoteroInclude>
+  locations?: 'none' | 'best' | 'included'
   childPages?: Partial<
     Record<'notes' | 'attachments' | 'annotations', { offset: number; limit: number }>
   >
@@ -306,11 +280,19 @@ export interface ZoteroAnnotationRecord {
   parentRef?: string
 }
 
+export type ZoteroResolvedLocation =
+  | { kind: 'file'; path: string }
+  | { kind: 'url'; url: string }
+  | { kind: 'unavailable'; reason: string }
+
 export interface ZoteroAttachmentRecord {
+  location?: ZoteroResolvedLocation
   ref: string
   title: string
   contentType: string
   linkMode?: string
+  path?: string
+  url?: string
 }
 
 export interface ZoteroCollectionRecord {
@@ -320,6 +302,7 @@ export interface ZoteroCollectionRecord {
 
 /** One included child kind: Zotero's total count plus the bounded records returned. */
 export interface ZoteroChildCollection<T> {
+  completeness?: 'complete' | 'page'
   total: number
   returned: number
   items: T[]
@@ -354,6 +337,7 @@ export type ZoteroChildPage =
   | { kind: 'annotations'; page: ZoteroChildCollection<ZoteroAnnotationRecord> }
 
 export interface ZoteroItemDetail {
+  location?: ZoteroResolvedLocation
   ref: string
   itemType: string
   title: string
@@ -385,6 +369,10 @@ export interface ZoteroItemDetail {
    * the request asked `fields:"all"`. Values are lossless JSON.
    */
   extraFields?: Record<string, JsonValue>
+  /** On-disk local file path when reading an attachment ref. */
+  path?: string
+  /** Content type when reading an attachment ref. */
+  contentType?: string
 }
 
 /** Evidence sources `zotero_retrieve` can rank against the query. */
@@ -1394,7 +1382,7 @@ export interface ZoteroProvider {
    * @param signal - caller cancellation; forwarded to the transport.
    * @returns the bounded child collections with their totals.
    */
-  children?(request: ZoteroChildrenRequest, signal?: AbortSignal): Promise<ZoteroChildrenResult>
+
   /**
    * Diff the library against a local transaction version.
    * @param request - the baseline version and the resource kinds to diff.

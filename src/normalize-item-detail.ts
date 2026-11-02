@@ -81,7 +81,7 @@ const CONSUMED_DATA_KEYS: ReadonlySet<string> = new Set([
   'extra',
 ])
 
-function extraFieldsOf(
+export function extraFieldsOf(
   data: Record<string, unknown> | undefined,
 ): Record<string, JsonValue> | undefined {
   if (data === undefined) return undefined

@@ -26,7 +26,7 @@ import {
   type ZoteroRowState,
 } from '../presenters.ts'
 import { isRecord, stringField } from '../../json.ts'
-import { attachmentMetaOf, getMetaOf, retrieveMetaOf, searchMetaOf } from './decoders.ts'
+import { getMetaOf, retrieveMetaOf, searchMetaOf } from './decoders.ts'
 import { exportMetaOf, type ExportMetaView } from './export-decoder.ts'
 import type {
   EvidencePassage,
@@ -534,6 +534,15 @@ export function buildSourceWorkspace(
         if (view.venue !== null) draft.venue = view.venue
         if (view.year !== null) draft.year = view.year
         if (view.bestAttachment !== null) draft.bestAttachment = view.bestAttachment
+        const attachment = view.resolvedAttachment
+        if (attachment?.kind && attachment.contentType)
+          draft.attachment = {
+            kind: attachment.kind,
+            contentType: attachment.contentType,
+            title: attachment.title ?? '',
+            location: attachment.location ?? '',
+            ...(attachment.ref ? { ref: attachment.ref } : {}),
+          }
         break
       }
       case 'zotero_retrieve': {
@@ -543,23 +552,6 @@ export function buildSourceWorkspace(
         countOperation(draft, state)
         if (state === 'ok' && meta !== null) {
           pushEvidence(draft, meta, block.callId, seq)
-        }
-        break
-      }
-      case 'zotero_attachment': {
-        const ref = refArgOf(args)
-        if (ref === null) break
-        const draft = draftOf(ref, seq)
-        countOperation(draft, state)
-        if (state !== 'ok' || meta === null) break
-        const view = attachmentMetaOf(meta)
-        if (view.kind === null || view.contentType === null) break
-        draft.attachment = {
-          kind: view.kind,
-          contentType: view.contentType,
-          title: view.title ?? '',
-          location: view.location ?? '',
-          ...(view.ref === null ? {} : { ref: view.ref }),
         }
         break
       }

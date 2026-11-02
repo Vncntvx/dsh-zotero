@@ -139,7 +139,7 @@ export function searchResult(overrides: Partial<ToolResultNode> = {}): ToolResul
 }
 
 /**
- * A settled `zotero_attachment` result: one item whose PDF resolves to a local
+ * A settled `zotero_get` result: one item whose PDF resolves to a local
  * file, which is what gives the overview a "Read PDF" button to press.
  * @param path - the resolved local path; absolute by default.
  * @returns the settled tool result.
@@ -149,17 +149,20 @@ export function attachmentResult(path = '/storage/paper.pdf'): ToolResultNode {
     seq: 5,
     callId: 'a1',
     call: {
-      name: 'zotero_attachment',
+      name: 'zotero_get',
       argsRaw: '{"ref":"zotero://user/0/item/AAAAAAA1"}',
     },
     meta: {
-      // A Zotero key is eight characters; a shorter one fails the ref grammar
-      // and the capability is dropped, leaving the row with no read action.
-      ref: 'zotero://user/0/attachment/ATTACH01',
-      kind: 'file',
       title: 'paper.pdf',
-      contentType: 'application/pdf',
-      path,
+      resolvedAttachment: {
+        // A Zotero key is eight characters; a shorter one fails the ref grammar
+        // and the capability is dropped, leaving the row with no read action.
+        ref: 'zotero://user/0/attachment/ATTACH01',
+        kind: 'file',
+        title: 'paper.pdf',
+        contentType: 'application/pdf',
+        location: { kind: 'file', path },
+      },
     },
   })
 }

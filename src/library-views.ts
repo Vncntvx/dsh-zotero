@@ -1,3 +1,4 @@
+import { ZOTERO_CHILD_PAGE_ROWS } from './constants.js'
 /**
  * Domain↔wire mappings for the library panel's five Remote endpoints
  * (browse, search, item detail, child page, export). The
@@ -237,7 +238,12 @@ export function itemRequestOf(view: ZoteroLibraryItemRequestView): ZoteroGetRequ
   return {
     ref: parseRef(view.ref),
     include: new Set<ZoteroInclude>(view.include),
-    childPages: { ...view.childPages },
+    childPages: Object.fromEntries(
+      view.include.map((kind) => [
+        kind,
+        view.childPages?.[kind] ?? { offset: 0, limit: ZOTERO_CHILD_PAGE_ROWS },
+      ]),
+    ),
   }
 }
 

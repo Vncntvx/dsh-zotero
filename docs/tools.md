@@ -2,7 +2,7 @@
 
 # 工具参考
 
-dsh-zotero 注册 23 个本地工具（8 个读工具 + 15 个写工具），通过本地 Zotero HTTP API 与文献库交互。其中 15 个写入工具默认关闭，需在设置中显式启用 `writeEnabled`，且只操作个人库（`zotero://user/0/`）。另有 7 个学术检索工具属于单独的 `dsh-zotero/scholarly` 组件，随包发布但默认关闭；启用该组件即启用这些工具。所有文献引用（ref）均为 `zotero://user/0/item/<KEY>`（个人库）或 `zotero://group/<ID>/item/<KEY>`（群组库）格式的稳定标识符。
+dsh-zotero 注册 21 个本地工具（6 个读工具 + 15 个写工具），通过本地 Zotero HTTP API 与文献库交互。其中 15 个写入工具默认关闭，需在设置中显式启用 `writeEnabled`，且只操作个人库（`zotero://user/0/`）。另有 7 个学术检索工具属于单独的 `dsh-zotero/scholarly` 组件，随包发布但默认关闭；启用该组件即启用这些工具。所有文献引用（ref）均为 `zotero://user/0/item/<KEY>`（个人库）或 `zotero://group/<ID>/item/<KEY>`（群组库）格式的稳定标识符。
 
 ---
 
@@ -47,15 +47,17 @@ zotero_search(query="transformer attention", mode="everything", tags=["deep-lear
 
 ## zotero_get
 
-读取单篇文献的详细元数据与关联子内容。
+读取单篇文献或附件的详细元数据、本地文件路径与关联子内容。
 
 ### 参数
 
-| 参数      | 类型                                        | 必填 | 说明                                                                             |
-| --------- | ------------------------------------------- | ---- | -------------------------------------------------------------------------------- |
-| `ref`     | string                                      | ✓    | 文献条目 ref                                                                     |
-| `include` | `("notes"\|"annotations"\|"attachments")[]` | —    | 需包含的子内容类型                                                               |
-| `fields`  | `"standard"` \| `"all"`                     | —    | 返回字段范围：`standard`（默认）返回规范化字段模型；`all` 额外包含 `extraFields` |
+| 参数         | 类型                                        | 必填 | 说明                                                                                                                                              |
+| ------------ | ------------------------------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ref`        | string                                      | ✓    | 文献条目 ref 或附件 ref（`zotero://user/0/item/<KEY>` 或 `zotero://user/0/attachment/<KEY>`）                                                     |
+| `include`    | `("notes"\|"annotations"\|"attachments")[]` | —    | 需包含的子内容类型（条目包含 direct 与批注；附件包含其自身批注）                                                                                  |
+| `fields`     | `"standard"` \| `"all"`                     | —    | 返回字段范围：`standard`（默认）返回规范化字段模型；`all` 额外包含 `extraFields`                                                                  |
+| `locations`  | `"none"` \| `"best"` \| `"included"`        | 否   | 默认 `none` 只读元数据；`best` 解析目标附件或条目的最佳附件；`included` 仅解析本次返回附件且要求 include attachments。附件 ref 只接受 none/best。 |
+| `childPages` | object                                      | 否   | 按 notes/annotations/attachments 独立指定 `{offset,limit}`；未指定窗口的请求种类读取全部记录及完整规范化正文。                                    |
 
 ### 输出
 
@@ -66,13 +68,14 @@ zotero_search(query="transformer attention", mode="everything", tags=["deep-lear
 - `extra`：附加元数据（如 Citation Key、arXiv ID、PMID 等）；
 - `date`、`year`、`venue`、`doi`、`url`、`abstract`、`abstractTruncated`；
 - `tags`、`collections`、`children`、`bestAttachment`、`relations`；
+- 本地文件路径 `path` 与内容类型 `contentType`（已核实本地磁盘存在）；
 - `fields="all"` 时的原生附加字段 `extraFields`；
-- 请求的子项集合：`notes`、`annotations`、`attachments`（包含 total、returned、items）。
+- 请求的子项集合：`notes`、`annotations`、`attachments`（含 completeness、total、returned、items；指定页另含 offset、limit、nextOffset。位置只在显式请求时解析）。
 
 ### 示例
 
 ```text
-zotero_get(ref="zotero://user/0/item/ABC123", include=["notes", "annotations"])
+zotero_get(ref="zotero://user/0/item/ABC123", include=["notes", "annotations", "attachments"])
 ```
 
 ---
@@ -107,31 +110,6 @@ zotero_get(ref="zotero://user/0/item/ABC123", include=["notes", "annotations"])
 
 ```text
 zotero_retrieve(ref="zotero://user/0/item/ABC123", query="attention mechanism", sources=["annotation", "fulltext"], passages=6)
-```
-
----
-
-## zotero_attachment
-
-将文献或附件 ref 解析为本地文件路径或链接 URL。
-
-### 参数
-
-| 参数  | 类型   | 必填 | 说明                    |
-| ----- | ------ | ---- | ----------------------- |
-| `ref` | string | ✓    | 文献条目 ref 或附件 ref |
-
-### 输出
-
-联合类型结果：
-
-- 本地文件：`{kind: "file", path, ref, title, contentType}`（路径经异步 `stat` 验证存在）；
-- 链接附件：`{kind: "url", url, ref, title, contentType}`。
-
-### 示例
-
-```text
-zotero_attachment(ref="zotero://user/0/item/ABC123")
 ```
 
 ---
@@ -219,33 +197,6 @@ zotero_export(refs=["zotero://user/0/item/ABC123", "zotero://user/0/item/DEF456"
 ```text
 zotero_browse(kind="collections", library={type:"group", id:42}, limit=20)
 zotero_browse(kind="tags", q="review", match="contains")
-```
-
----
-
-## zotero_children
-
-列出文献条目或附件的下属子对象。
-
-### 参数
-
-| 参数      | 类型     | 必填 | 说明                                                                    |
-| --------- | -------- | ---- | ----------------------------------------------------------------------- |
-| `ref`     | string   | ✓    | 文献条目 ref 或附件 ref                                                 |
-| `include` | string[] | —    | 包含的子类型：`notes`、`attachments`、`annotations`（省略返回全部三类） |
-
-### 输出
-
-返回 `{ref, itemType?, serverId?, notes?, attachments?, annotations?}`，每类对象包含 `total`、`returned` 与 `items` 列表。
-
-### 说明
-
-若条目在本地无任何下属子条目，底层 `/children` 接口返回空响应时按空子列表处理。
-
-### 示例
-
-```text
-zotero_children(ref="zotero://user/0/item/ABC123", include=["annotations"])
 ```
 
 ---

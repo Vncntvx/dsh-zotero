@@ -43,7 +43,6 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', 
         ...PROVIDER_LIMITS,
         // The live lane reads real abstracts and real full text, so it takes
         // the production-scale budgets for those two bounds.
-        maxDetailChars: 3000,
         maxFulltextChars: 250_000,
       },
     )
@@ -359,14 +358,14 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', 
     const itemKey = attachment.json?.data?.parentItem
     expect(itemKey).toBeTruthy()
 
-    const itemGraph = await provider.children({
+    const itemGraph = await provider.getItem({
       ref: parseRef(`zotero://user/0/item/${itemKey}`),
       include: new Set(['annotations']),
     })
     const itemRefs = (itemGraph.annotations?.items ?? []).map((entry) => entry.ref)
     expect(itemRefs.some((ref) => ref.includes(annotationKey!))).toBe(true)
 
-    const attachmentGraph = await provider.children({
+    const attachmentGraph = await provider.getItem({
       ref: parseRef(`zotero://user/0/attachment/${attachmentKey}`),
       include: new Set(['annotations']),
     })
@@ -404,7 +403,7 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', 
       { includeSupplemental: false },
     )
     for (const hit of search.items.slice(0, 3)) {
-      const graph = await provider.children({
+      const graph = await provider.getItem({
         ref: parseRef(hit.ref),
         include: new Set(['notes', 'attachments', 'annotations']),
       })
@@ -420,7 +419,7 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', 
           (attachment) => attachment.contentType === 'application/pdf',
         )
         if (pdf !== undefined) {
-          const nested = await provider.children({
+          const nested = await provider.getItem({
             ref: parseRef(pdf.ref),
             include: new Set(['annotations']),
           })

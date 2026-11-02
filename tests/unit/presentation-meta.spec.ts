@@ -14,7 +14,6 @@ import {
   MAX_PRESENTATION_GET_VENUE_CHARS,
   MAX_PRESENTATION_SEARCH_ROWS,
   MAX_PRESENTATION_SEARCH_ROWS_BYTES,
-  projectAttachmentMeta,
   projectExportMeta,
   projectGetMeta,
   projectRetrieveMeta,
@@ -511,77 +510,6 @@ describe('projectRetrieveMeta', () => {
     expect(meta.sources).not.toContain('unknown')
     expect(meta.sources).not.toContain('invalid_source')
     expect(meta.count).toBe(6)
-  })
-})
-
-describe('projectAttachmentMeta', () => {
-  it('projects the file arm with its copyable path', () => {
-    expect(
-      projectAttachmentMeta({
-        ref: 'zotero://user/0/attachment/WXYZ6789',
-        title: 'FlashAttention-2.pdf',
-        contentType: 'application/pdf',
-        kind: 'file',
-        path: '/Users/xu/Zotero/storage/ABCD1234/FlashAttention-2.pdf',
-      }),
-    ).toEqual({
-      kind: 'file',
-      title: 'FlashAttention-2.pdf',
-      contentType: 'application/pdf',
-      ref: 'zotero://user/0/attachment/WXYZ6789',
-      path: '/Users/xu/Zotero/storage/ABCD1234/FlashAttention-2.pdf',
-    })
-  })
-
-  it('projects the linked-url arm', () => {
-    expect(
-      projectAttachmentMeta({
-        ref: 'zotero://user/0/attachment/WXYZ6789',
-        title: 'paper page',
-        contentType: 'text/html',
-        kind: 'url',
-        url: 'https://example.org/paper',
-      }),
-    ).toEqual({
-      kind: 'url',
-      title: 'paper page',
-      contentType: 'text/html',
-      ref: 'zotero://user/0/attachment/WXYZ6789',
-      url: 'https://example.org/paper',
-    })
-  })
-
-  it('passes the provenance ref through for both location kinds', () => {
-    expect(
-      projectAttachmentMeta({
-        kind: 'file',
-        ref: 'zotero://user/0/attachment/WXYZ6789',
-        title: 'a.pdf',
-        contentType: 'application/pdf',
-        path: '/tmp/a.pdf',
-      }),
-    ).toEqual({
-      kind: 'file',
-      ref: 'zotero://user/0/attachment/WXYZ6789',
-      title: 'a.pdf',
-      contentType: 'application/pdf',
-      path: '/tmp/a.pdf',
-    })
-    expect(
-      projectAttachmentMeta({
-        kind: 'url',
-        ref: 'zotero://user/0/attachment/WXYZ6789',
-        title: 'p',
-        contentType: 'text/html',
-        url: 'https://e.org/x',
-      }),
-    ).toEqual({
-      kind: 'url',
-      ref: 'zotero://user/0/attachment/WXYZ6789',
-      title: 'p',
-      contentType: 'text/html',
-      url: 'https://e.org/x',
-    })
   })
 })
 

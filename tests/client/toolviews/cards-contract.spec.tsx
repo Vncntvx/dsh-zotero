@@ -56,26 +56,6 @@ const META: Record<string, Record<string, unknown>> = {
     count: 1,
     entries: ['@article{vaswani2017attention, title={Attention is all you need}}'],
   },
-  zotero_children: {
-    count: 2,
-    notes: [{ ref: 'zotero://user/0/annotation/N1', preview: 'Note preview' }],
-    attachments: [
-      {
-        ref: ATTACHMENT_REF,
-        kind: 'file',
-        location: '/path/to/paper.pdf',
-        title: 'Full text',
-      },
-    ],
-    detailOmitted: true,
-  },
-  zotero_attachment: {
-    ref: ATTACHMENT_REF,
-    kind: 'file',
-    location: '/path/to/paper.pdf',
-    title: 'Paper PDF',
-    contentType: 'application/pdf',
-  },
   zotero_browse: {
     kind: 'collections',
     rows: [{ name: 'Reading', key: 'COLL1', count: 5 }],

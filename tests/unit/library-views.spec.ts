@@ -368,7 +368,7 @@ describe('itemRequestOf', () => {
     ).toEqual({
       ref: { library: { type: 'user', id: 0 }, kind: 'item', key: 'ITEMKEY1' },
       include: new Set(['notes', 'annotations']),
-      childPages: {},
+      childPages: { notes: { offset: 0, limit: 50 }, annotations: { offset: 0, limit: 50 } },
     })
   })
 })

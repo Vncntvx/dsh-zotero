@@ -46,25 +46,13 @@ describe('tool presentation', () => {
       },
     )
     expect(
-      definition('zotero_attachment').presentCall!({ ref: 'zotero://user/0/attachment/WXYZ6789' }),
+      definition('zotero_get').presentCall!({ ref: 'zotero://user/0/attachment/WXYZ6789' }),
     ).toEqual({
       card: 'generic',
       kind: 'read',
-      title: 'Resolve Zotero attachment',
+      title: 'Read Zotero attachment',
       rawInput: 'zotero://user/0/attachment/WXYZ6789',
     })
-    expect(
-      definition('zotero_children').presentCall!({ ref: 'zotero://user/0/item/ABCD1234' }),
-    ).toEqual({
-      card: 'generic',
-      kind: 'read',
-      title: 'Read Zotero children',
-      rawInput: 'zotero://user/0/item/ABCD1234',
-    })
-    expect(definition('zotero_children').isConcurrencySafe?.({})).toBe(false)
-    expect(
-      definition('zotero_children').isConcurrencySafe?.({ ref: 'zotero://user/0/item/ABCD1234' }),
-    ).toBe(true)
     expect(
       definition('zotero_retrieve').presentCall!({
         ref: 'zotero://user/0/item/ABCD1234',
@@ -190,16 +178,10 @@ describe('tool presentation', () => {
       'Zotero item: Paper',
     ],
     [
-      'zotero_children',
-      { ref: 'zotero://user/0/item/ABCD1234' },
-      { notes: { total: 2, returned: 2 }, attachments: { total: 1, returned: 1 } },
-      'Zotero children: 2 notes, 1 attachments',
-    ],
-    [
-      'zotero_attachment',
-      { ref: 'zotero://user/0/item/ABCD1234' },
-      { title: 'paper.pdf', kind: 'file' },
-      'Zotero attachment: paper.pdf (file)',
+      'zotero_get',
+      { ref: 'zotero://user/0/attachment/WXYZ6789' },
+      { title: 'paper.pdf', itemType: 'attachment' },
+      'Zotero attachment: paper.pdf',
     ],
     [
       'zotero_retrieve',
@@ -288,8 +270,6 @@ describe('tool presentation', () => {
     })
     const argsFor: Record<string, Record<string, unknown>> = {
       zotero_get: { ref: 'zotero://user/0/item/ABCD1234' },
-      zotero_children: { ref: 'zotero://user/0/item/ABCD1234' },
-      zotero_attachment: { ref: 'zotero://user/0/item/ABCD1234' },
       zotero_retrieve: { ref: 'zotero://user/0/item/ABCD1234', query: 'tiling' },
       zotero_export: { refs: ['zotero://user/0/item/ABCD1234'], format: 'citation' },
       zotero_browse: { kind: 'tags' },
@@ -307,24 +287,6 @@ describe('tool presentation', () => {
     const getArgs = argsFor.zotero_get
     expect(definition('zotero_get').presentResult!(getArgs, ok({}))).toBeUndefined()
     expect(definition('zotero_get').presentResult!(getArgs, ok({ title: '' }))).toBeUndefined()
-    const childrenArgs = argsFor.zotero_children
-    expect(definition('zotero_children').presentResult!(childrenArgs, ok({}))).toBeUndefined()
-    expect(
-      definition('zotero_children').presentResult!(childrenArgs, ok({ notes: { total: 'x' } })),
-    ).toBeUndefined()
-    expect(
-      definition('zotero_children').presentResult!(childrenArgs, ok({ notes: 'x' })),
-    ).toBeUndefined()
-    const attachmentArgs = argsFor.zotero_attachment
-    expect(
-      definition('zotero_attachment').presentResult!(
-        attachmentArgs,
-        ok({ title: 'a', kind: 'other' }),
-      ),
-    ).toBeUndefined()
-    expect(
-      definition('zotero_attachment').presentResult!(attachmentArgs, ok({ kind: 'file' })),
-    ).toBeUndefined()
     const retrieveArgs = argsFor.zotero_retrieve
     expect(definition('zotero_retrieve').presentResult!(retrieveArgs, ok({}))).toBeUndefined()
     expect(definition('zotero_retrieve').presentResult!(retrieveArgs, ok({ count: 2 }))).toEqual({

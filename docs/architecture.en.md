@@ -131,7 +131,7 @@ A single client artifact (`lib/client.js`) contains all interfaces. Every surfac
 
 ### Tool Cards and Command Card
 
-- Tool cards (`tool.call.toolview`): each of the 23 local model tools and `scholarly_save_to_zotero` has a compact collapsible card, and the other six scholarly retrieval tools fall back to the generic row defined by the official contract. A card renders only output the tool already produced, calls no tools itself, and offers copy buttons for values worth copying; "Read PDF" opens the source in the right sidebar.
+- Tool cards (`tool.call.toolview`): each of the 21 local model tools and `scholarly_save_to_zotero` has a compact collapsible card, and the other six scholarly retrieval tools fall back to the generic row defined by the official contract. A card renders only output the tool already produced, calls no tools itself, and offers copy buttons for values worth copying; "Read PDF" opens the source in the right sidebar.
 - Command card (`conversation.chat.commandview`): it provides for `/zotero` a connection status light, version and Server ID details, offline troubleshooting suggestions, and an in-place refresh button. Structured facts come from the host-registered `zoteroStatus` session projection; a live probe started by an in-place refresh outranks the projection.
 - Argument access and error boundaries: cards and the trail reducer read `block.args` uniformly through `argsViewOf(block)`; `ZoteroSurfaceBoundary` wraps the literature trail page and `ZoteroCardBoundary` wraps all tool cards, so a render failure degrades in place and does not escape upward.
 

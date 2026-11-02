@@ -38,7 +38,7 @@ This document lists common issues, possible causes, and the matching fixes when 
 
 - Symptom: `zotero_retrieve` returns an empty passage list, or `sourcesSkipped` includes `"fulltext"`.
 - Cause: the target PDF has no full-text index in Zotero yet.
-- Fix: right-click the attachment in the Zotero client and choose "Rebuild Index"; or use `zotero_attachment` to get the local file path and read it directly.
+- Fix: right-click the attachment in the Zotero client and choose "Rebuild Index"; or use `zotero_get(locations="best")` to get the local file path and read it directly.
 
 ## 7. PDF reading and locating an item in Zotero
 

@@ -2,7 +2,7 @@
 
 # Tool Reference
 
-dsh-zotero registers 23 local tools (8 read tools and 15 write tools) that work with the Zotero library through the local Zotero HTTP API. The 15 write tools are off by default and need `writeEnabled` turned on in configuration, and they operate only on the personal library (`zotero://user/0/`). Another 7 scholarly retrieval tools belong to the separate `dsh-zotero/scholarly` component, which ships with the package and is off by default; enabling that component enables those tools. Every item reference (ref) is a stable identifier in `zotero://user/0/item/<KEY>` (personal library) or `zotero://group/<ID>/item/<KEY>` (group library) form.
+dsh-zotero registers 21 local tools (6 read tools and 15 write tools) that work with the Zotero library through the local Zotero HTTP API. The 15 write tools are off by default and need `writeEnabled` turned on in configuration, and they operate only on the personal library (`zotero://user/0/`). Another 7 scholarly retrieval tools belong to the separate `dsh-zotero/scholarly` component, which ships with the package and is off by default; enabling that component enables those tools. Every item reference (ref) is a stable identifier in `zotero://user/0/item/<KEY>` (personal library) or `zotero://group/<ID>/item/<KEY>` (group library) form.
 
 ---
 
@@ -47,32 +47,35 @@ zotero_search(query="transformer attention", mode="everything", tags=["deep-lear
 
 ## zotero_get
 
-Read the detailed metadata and related child content of a single paper.
+Read detailed metadata and related child content; resolve locations explicitly of a single paper or attachment.
 
 ### Parameters
 
-| Parameter | Type                                        | Required | Description                                                                                    |
-| --------- | ------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------- |
-| `ref`     | string                                      | ✓        | Item ref                                                                                       |
-| `include` | `("notes"\|"annotations"\|"attachments")[]` | none     | Child content types to include                                                                 |
-| `fields`  | `"standard"` \| `"all"`                     | none     | Field scope: `standard` (default) returns the normalized field model; `all` adds `extraFields` |
+| Parameter    | Type                                        | Required | Description                                                                                                                                                                                                                 |
+| ------------ | ------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ref`        | string                                      | ✓        | Item ref or attachment ref (`zotero://user/0/item/<KEY>` or `zotero://user/0/attachment/<KEY>`)                                                                                                                             |
+| `include`    | `("notes"\|"annotations"\|"attachments")[]` | none     | Child content types to include (items include direct and annotations; attachments include their annotations)                                                                                                                |
+| `fields`     | `"standard"` \| `"all"`                     | none     | Field scope: `standard` (default) returns the normalized field model; `all` adds `extraFields`                                                                                                                              |
+| `locations`  | `"none"` \| `"best"` \| `"included"`        | none     | Default `none`: metadata only. `best` resolves the target attachment or item’s best attachment. `included` resolves returned attachments and requires `include:["attachments"]`; attachment refs accept only `none`/`best`. |
+| `childPages` | object                                      | none     | Independent `{offset,limit}` windows for notes/annotations/attachments. Omitted kinds read all requested rows and full normalized bodies.                                                                                   |
 
 ### Output
 
-Returns a detailed item object:
+Returns a detailed item or attachment object:
 
 - `ref`, `itemType`, `title`;
 - `creators`: list of creator objects (each with `creatorType`, plus optional `name`, `firstName`, `lastName`);
 - `extra`: extra metadata (such as Citation Key, arXiv ID, PMID);
 - `date`, `year`, `venue`, `doi`, `url`, `abstract`, `abstractTruncated`;
 - `tags`, `collections`, `children`, `bestAttachment`, `relations`;
+- `contentType`; explicit location requests add `location` (`file`, `url`, or `unavailable` with a reason);
 - the native extra fields `extraFields` when `fields="all"`;
-- the requested child sets: `notes`, `annotations`, `attachments` (each with total, returned, items).
+- the requested child sets: `notes`, `annotations`, `attachments` (each with total, returned, items, completeness and, for explicit pages, offset/limit/nextOffset).
 
 ### Example
 
 ```text
-zotero_get(ref="zotero://user/0/item/ABC123", include=["notes", "annotations"])
+zotero_get(ref="zotero://user/0/item/ABC123", include=["notes", "annotations", "attachments"])
 ```
 
 ---
@@ -107,31 +110,6 @@ The returned structure contains `ref`, `attachmentRef`, `attachmentContentType`,
 
 ```text
 zotero_retrieve(ref="zotero://user/0/item/ABC123", query="attention mechanism", sources=["annotation", "fulltext"], passages=6)
-```
-
----
-
-## zotero_attachment
-
-Resolve an item or attachment ref to a local file path or link URL.
-
-### Parameters
-
-| Parameter | Type   | Required | Description                |
-| --------- | ------ | -------- | -------------------------- |
-| `ref`     | string | ✓        | Item ref or attachment ref |
-
-### Output
-
-A union result:
-
-- Local file: `{kind: "file", path, ref, title, contentType}` (the path is verified to exist with an async `stat`);
-- Linked attachment: `{kind: "url", url, ref, title, contentType}`.
-
-### Example
-
-```text
-zotero_attachment(ref="zotero://user/0/item/ABC123")
 ```
 
 ---
@@ -219,33 +197,6 @@ Collection and saved-search results also carry a top-level `libraryVersion` take
 ```text
 zotero_browse(kind="collections", library={type:"group", id:42}, limit=20)
 zotero_browse(kind="tags", q="review", match="contains")
-```
-
----
-
-## zotero_children
-
-List the child objects under an item or attachment.
-
-### Parameters
-
-| Parameter | Type     | Required | Description                                                                        |
-| --------- | -------- | -------- | ---------------------------------------------------------------------------------- |
-| `ref`     | string   | ✓        | Item ref or attachment ref                                                         |
-| `include` | string[] | none     | Child types to include: `notes`, `attachments`, `annotations` (omit for all three) |
-
-### Output
-
-Returns `{ref, itemType?, serverId?, notes?, attachments?, annotations?}`, and each object class carries `total`, `returned`, and an `items` list.
-
-### Notes
-
-When an item has no child objects at all and the underlying `/children` endpoint returns an empty response, the result is treated as an empty child list.
-
-### Example
-
-```text
-zotero_children(ref="zotero://user/0/item/ABC123", include=["annotations"])
 ```
 
 ---

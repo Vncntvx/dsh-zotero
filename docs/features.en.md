@@ -6,14 +6,12 @@ dsh-zotero connects the Zotero library to DSH. The agent searches, reads, and ci
 
 ## Searching and Reading in Conversation
 
-The agent has eight read-only tools. Parameters and error codes are in the [tool reference](tools.en.md).
+The agent has six read-only tools. Parameters and error codes are in the [tool reference](tools.en.md).
 
 - `zotero_search` matches title, author, and year by default, and `everything` mode searches the full-text index as well. The scope can be the whole library, My Publications, a collection, or a saved search. The first page also scans note bodies; matching items are listed separately in `supplemental` and do not count toward the pagination total.
 - `zotero_browse` reads the collection tree, tag list, and saved searches; the page size is bounded by `maxBrowseResults`, and the response carries the total and paging cursor.
 - `zotero_get` returns title, authors, year, journal, DOI, URL, and abstract. Add `include` to load child note bodies, PDF annotations, and the attachment list.
-- `zotero_children` reads notes, attachments, and annotations. Annotations need a separate request with `itemType=annotation`.
 - `zotero_retrieve` finds passages in annotations, notes, the abstract, and the full-text index and ranks them by BM25 term frequency. Each passage carries its source and a page label; only annotations have page numbers, taken from Zotero. The result marks whether a hit landed in body text or an annotation comment. Full-text coverage is in `coverage`, sources that are unindexed or unreadable go into `sourcesSkipped`, and attachment status is `indexed`, `unindexed`, or `unread`.
-- `zotero_attachment` resolves an item or attachment to a local absolute path; linked attachments return the URL.
 - `zotero_export` supports six formats. Every format except `citation` takes at most 50 items per call, the request limit of Zotero's `itemKey`; `citation` batches in groups of 50.
 
   | Format                | Output                                                              |
@@ -100,9 +98,9 @@ External retrieval belongs to the agent entry point; the literature panel issues
 | ----------------------------------------- | ---------------------------------------------------- | ---------------------------------------- | ----------------------------------------------- |
 | Whole-library browsing and structure      | `zotero_browse`                                      | Collection tree, saved searches, Trash   | Records only the structure the agent read       |
 | Search                                    | `zotero_search`                                      | Item-list search and filters             | Records criteria and hits                       |
-| Details and notes/attachments/annotations | `zotero_get`, `zotero_children`                      | Item inspection and child sets           | Records the items and passages read             |
+| Details and notes/attachments/annotations | `zotero_get`                                         | Item inspection and child sets           | Records the items and passages read             |
 | Passages                                  | `zotero_retrieve`                                    | Not offered                              | Records passages and sources                    |
-| Locate PDF                                | `zotero_attachment`                                  | Read PDF                                 | Records the location result                     |
+| Locate PDF                                | `zotero_get` (`locations="best"`)                    | Read PDF                                 | Records the location result                     |
 | Citations and exports                     | `zotero_export`                                      | Copy citation, BibTeX, and other formats | Records export output                           |
 | Writes                                    | Fifteen write tools (optional)                       | Approved writes                          | Not recorded                                    |
 | Out-of-library literature                 | Seven scholarly retrieval tools (optional component) | Not offered                              | Appears only after being saved into the library |

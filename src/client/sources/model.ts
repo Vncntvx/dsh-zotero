@@ -101,7 +101,7 @@ interface AttachmentHint {
   readonly contentType?: string
 }
 
-/** A resolved attachment location from a successful zotero_attachment call. */
+/** A resolved attachment location from a successful zotero_get location request. */
 export interface SourceAttachment {
   readonly ref?: string
   readonly kind: 'file' | 'url'
@@ -213,7 +213,7 @@ export interface SourceItem {
   readonly evidence: readonly EvidencePassage[]
   /** Zotero's attachment selection (search/get facts); never a resolved location. */
   readonly bestAttachment?: AttachmentHint
-  /** The resolved location from a successful zotero_attachment call. */
+  /** The resolved location from a successful zotero_get location request. */
   readonly attachment?: SourceAttachment
   /** Aggregated retrieval facts of the successful zotero_retrieve calls. */
   readonly retrievalFacts?: SourceRetrievalFacts

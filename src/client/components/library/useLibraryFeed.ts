@@ -415,7 +415,13 @@ export function useLibraryFeed(
         : { phase: 'loading' },
     )
     void face
-      .item({ ref: selectedRef, include: INSPECTOR_INCLUDE, childPages: {} })
+      .item({
+        ref: selectedRef,
+        include: INSPECTOR_INCLUDE,
+        childPages: Object.fromEntries(
+          INSPECTOR_INCLUDE.map((kind) => [kind, { offset: 0, limit: 20 }]),
+        ),
+      })
       .then((result) => {
         if (ticket !== seq.current.inspector) return
         setInspector(itemStateOf(result))

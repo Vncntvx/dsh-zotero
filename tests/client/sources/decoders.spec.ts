@@ -7,7 +7,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   attachmentMetaOf,
-  childrenMetaOf,
   getMetaOf,
   retrieveMetaOf,
   searchMetaOf,
@@ -305,91 +304,6 @@ describe('retrieveMetaOf', () => {
   it('degrades malformed items to null', () => {
     const meta = retrieveMetaOf({ items: [{ source: 'annotation' }] })
     expect(meta.items).toBeNull()
-  })
-})
-
-describe('childrenMetaOf', () => {
-  it('partitions the listing by kind, in the order the tool returns them', () => {
-    const meta = childrenMetaOf({
-      ref: 'zotero://user/0/item/ABCD1234',
-      itemType: 'journalArticle',
-      notes: { total: 1, returned: 1, items: [{ ref: 'zotero://user/0/note/N1', text: 'a' }] },
-      attachments: {
-        total: 1,
-        returned: 1,
-        items: [
-          { ref: 'zotero://user/0/attachment/A1', title: 'p.pdf', contentType: 'application/pdf' },
-        ],
-      },
-      annotations: {
-        total: 2,
-        returned: 1,
-        items: [
-          {
-            ref: 'zotero://user/0/annotation/ANN1',
-            type: 'highlight',
-            text: 'hit',
-            color: '#ffd400',
-            pageLabel: '3',
-            parentRef: 'zotero://user/0/attachment/A1',
-          },
-        ],
-      },
-    })
-    expect(meta.itemType).toBe('journalArticle')
-    expect(meta.sections.map((s) => s.kind)).toEqual(['note', 'attachment', 'annotation'])
-    expect(meta.sections[2]!.rows[0]).toEqual({
-      kind: 'annotation',
-      ref: 'zotero://user/0/annotation/ANN1',
-      type: 'highlight',
-      text: 'hit',
-      color: '#ffd400',
-      pageLabel: '3',
-      parentRef: 'zotero://user/0/attachment/A1',
-    })
-  })
-
-  it('omits a kind the call did not ask for, and keeps an empty one', () => {
-    const meta = childrenMetaOf({ notes: { total: 0, returned: 0, items: [] } })
-    expect(meta.sections.map((s) => s.kind)).toEqual(['note'])
-    // "No notes exist" is a finding; dropping the section would read as
-    // "notes were not requested".
-    expect(meta.sections[0]!.rows).toEqual([])
-  })
-
-  it('drops a row missing the field that identifies it', () => {
-    const meta = childrenMetaOf({
-      notes: {
-        total: 2,
-        returned: 2,
-        items: [{ ref: 'zotero://user/0/note/N1' }, { ref: 'N2', text: 'ok' }],
-      },
-      annotations: {
-        total: 1,
-        returned: 1,
-        items: [{ ref: 'zotero://user/0/annotation/A1', text: 'no type' }],
-      },
-    })
-    expect(meta.sections[0]!.rows).toEqual([{ kind: 'note', ref: 'N2', text: 'ok' }])
-    expect(meta.sections[1]!.rows).toEqual([])
-  })
-
-  it('nulls an annotation colour the projection left blank', () => {
-    // The hex guard that decides whether a swatch renders at all lives in the
-    // view; this only pins that a blank colour never reaches it as a value.
-    const row = (color: unknown) =>
-      childrenMetaOf({
-        annotations: {
-          total: 1,
-          returned: 1,
-          items: [{ ref: 'A1', type: 'highlight', text: 't', color }],
-        },
-      }).sections[0]!.rows[0]
-    expect(row('')).toMatchObject({ color: null })
-    expect(row(undefined)).toMatchObject({ color: null })
-    // An unparseable colour is carried through for the view to reject, rather
-    // than being second-guessed here.
-    expect(row('not-a-colour')).toMatchObject({ color: 'not-a-colour' })
   })
 })
 

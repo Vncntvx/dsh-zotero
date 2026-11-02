@@ -637,7 +637,7 @@ describe('buildSourceWorkspace', () => {
         block('g1', 1, 'zotero_get', {}, {}),
         block('e1', 2, 'zotero_export', { refs: 3 }, {}),
         block('r1', 3, 'zotero_retrieve', {}, {}),
-        block('a1', 4, 'zotero_attachment', {}, {}),
+        block('a1', 4, 'zotero_get', {}, {}),
       ])
       expect(workspace.sources).toEqual([])
       expect(workspace.exports).toEqual([])

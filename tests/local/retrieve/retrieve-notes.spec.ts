@@ -132,7 +132,7 @@ describe('note-first-class paths', () => {
   })
 
   it('returns the note body for note items under the configured budget', async () => {
-    const narrow = makeProvider({ maxNoteBodyChars: 8 })
+    const narrow = makeProvider()
     serveJson(
       mock,
       `${apiPath()}/items/${NOTE_ITEM_KEY}`,
@@ -146,7 +146,7 @@ describe('note-first-class paths', () => {
       include: new Set(),
     })
     expect(detail.itemType).toBe('note')
-    expect(detail.noteBody).toEqual({ text: 'first li', truncated: true })
+    expect(detail.noteBody).toEqual({ text: 'first line\nsecond line long', truncated: false })
   })
 
   it('carries the parent ref on child note records', async () => {

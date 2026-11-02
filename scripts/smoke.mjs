@@ -77,7 +77,7 @@ if (search.items.length > 0) {
   const detail = await zotero.get({ ref, include: new Set() })
   console.log(`get: ${detail.title} [${detail.itemType}] (children ${detail.children.total})`)
 
-  const children = await zotero.children({
+  const children = await zotero.get({
     ref,
     include: new Set(['notes', 'attachments', 'annotations']),
   })

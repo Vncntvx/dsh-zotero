@@ -353,9 +353,6 @@ describe('provider registration', () => {
       export: async () => {
         throw new Error('test double: must not be called')
       },
-      children: async () => {
-        throw new Error('test double: must not be called')
-      },
       changes: async () => {
         throw new Error('test double: must not be called')
       },
@@ -398,9 +395,6 @@ describe('provider registration', () => {
         throw new Error('test double: must not be called')
       },
       export: async () => {
-        throw new Error('test double: must not be called')
-      },
-      children: async () => {
         throw new Error('test double: must not be called')
       },
       changes: async () => {
@@ -447,9 +441,6 @@ describe('capability gating', () => {
         throw new Error('test double: must not be called')
       },
       export: async () => {
-        throw new Error('test double: must not be called')
-      },
-      children: async () => {
         throw new Error('test double: must not be called')
       },
       changes: async () => {
@@ -508,9 +499,6 @@ describe('capability gating', () => {
       export: async () => {
         throw new Error('test double: must not be called')
       },
-      children: async () => {
-        throw new Error('test double: must not be called')
-      },
       changes: async () => {
         throw new Error('test double: must not be called')
       },
@@ -547,9 +535,6 @@ describe('capability gating', () => {
       getItem: async () => {
         throw new Error('test double: must not be called')
       },
-      children: async () => {
-        throw new Error('test double: must not be called')
-      },
       changes: async () => {
         throw new Error('test double: must not be called')
       },
@@ -574,7 +559,7 @@ describe('capability gating', () => {
       ['attachments', service.attachment(parseRef('zotero://user/0/attachment/WXYZ6789'))],
       [
         'metadata',
-        service.children({
+        service.get({
           ref: parseRef('zotero://user/0/item/ABCD1234'),
           include: new Set(),
         }),

@@ -258,15 +258,17 @@ describe('buildSourceWorkspace', () => {
         block(
           'a1',
           1,
-          'zotero_attachment',
+          'zotero_get',
           { ref: REF('A1') },
           {
             meta: {
-              kind: 'file',
-              title: 'a.pdf',
-              contentType: 'application/pdf',
-              ref: 'zotero://user/0/attachment/WXYZ6789',
-              path: '/tmp/a.pdf',
+              title: 'T',
+              resolvedAttachment: {
+                location: { kind: 'file', path: '/tmp/a.pdf' },
+                title: 'a.pdf',
+                contentType: 'application/pdf',
+                ref: 'zotero://user/0/attachment/WXYZ6789',
+              },
             },
           },
         ),
@@ -307,8 +309,8 @@ describe('buildSourceWorkspace', () => {
 
     it('ignores an attachment without meta or without a usable arm', () => {
       const workspace = buildSourceWorkspace([
-        block('a1', 1, 'zotero_attachment', { ref: REF('A1') }, {}),
-        block('a2', 2, 'zotero_attachment', { ref: REF('A2') }, { meta: { kind: 'other' } }),
+        block('a1', 1, 'zotero_get', { ref: REF('A1') }, {}),
+        block('a2', 2, 'zotero_get', { ref: REF('A2') }, { meta: { kind: 'other' } }),
       ])
       expect(workspace.sources).toHaveLength(2)
       expect(workspace.sources.every((item) => item.attachment === undefined)).toBe(true)
@@ -319,9 +321,14 @@ describe('buildSourceWorkspace', () => {
         block(
           'a1',
           1,
-          'zotero_attachment',
+          'zotero_get',
           { ref: REF('A1') },
-          { meta: { kind: 'url', contentType: 'text/html' } },
+          {
+            meta: {
+              title: 'T',
+              resolvedAttachment: { location: { kind: 'url' }, contentType: 'text/html' },
+            },
+          },
         ),
       ])
       expect(workspace.sources[0]!.attachment !== undefined).toBe(true)

@@ -178,8 +178,8 @@ describe('live configuration', () => {
       'zotero_get',
     )
     expect(initial.value).toMatchObject({
-      abstract: 'A'.repeat(100),
-      abstractTruncated: true,
+      abstract: 'A'.repeat(200),
+      abstractTruncated: false,
     })
 
     await commitLive(lane as HostLane, { maxDetailChars: 500 })
