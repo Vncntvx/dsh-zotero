@@ -14,6 +14,7 @@ import {
   jobStartedMessage,
 } from '../../src/job-runner.js'
 import { TestJobRegistry } from '../helpers/fake-jobs.js'
+import { resultStorage } from '../helpers/result-storage.js'
 import { expectValue, setupHostLane, type HostLane } from '../helpers/lanes/host-lane.js'
 import { citationRow } from '../helpers/server/objects.js'
 
@@ -158,10 +159,12 @@ describe('zotero_export jobs', () => {
 
     it('returns the foreground result when execution completes within foregroundWaitMs', async () => {
       await lane.teardown()
+      let storage!: ReturnType<typeof resultStorage>
       lane = await setupHostLane(
         { foregroundWaitMs: 1000 },
         {
           compose: async (ctx) => {
+            storage = resultStorage(ctx)
             await ctx.plugin(TestJobRegistry)
           },
         },
@@ -185,6 +188,9 @@ describe('zotero_export jobs', () => {
         locale: 'en-US',
         citations: [{ ref: 'zotero://user/0/item/ABCD1234', text: '<span>A, 2023</span>' }],
       })
+      // A foreground settle is delivered inline: no attachment, no receipt.
+      expect(storage.save).not.toHaveBeenCalled()
+      expect(storage.receipts.size).toBe(0)
     })
 
     it('writes export to outputFile and emits deliverables/presented event', async () => {

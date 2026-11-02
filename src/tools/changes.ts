@@ -1,4 +1,3 @@
-import type { ResultDelivery } from '../result-delivery.js'
 /**
  * The `zotero_changes` tool: incremental awareness of the local library. On
  * the verified build (Zotero 10.0.2-beta.9) versions are local transactions:
@@ -12,6 +11,8 @@ import type { ResultDelivery } from '../result-delivery.js'
  * @module dsh-zotero/tools/changes
  */
 
+import type { ResultDelivery } from '../result-delivery.js'
+import { identityToolWrapper, type ToolWrapper } from '../result-delivery.js'
 import type { Context } from '@deepseek-ai/cordis'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import {
@@ -555,66 +556,69 @@ export function registerChangesTool(
   ctx: Context,
   service: ZoteroService,
   delivery?: ResultDelivery,
+  wrap: ToolWrapper = identityToolWrapper,
 ): () => void {
   const parameters = CHANGES_WITH_BACKGROUND_PARAMETERS
   return ctx.tools.register(
-    defineTool({
-      name: 'zotero_changes',
-      description: [
-        'See what changed in the Zotero library since a version: new/edited items (top-level items, the notes/attachments/annotations under them, and trashed items, each listed apart), collections, saved searches, reindexed full text, and deletions.',
-        'Call without since first to take a baseline reading, then pass the cursor it returns back as since, fully local, no cloud.',
-        'Listings are capped digests; totals reports the true counts behind them. A returned cursor always accounts for every change in the range it reports, so it is safe to pass back as since; a result without one is not. The cursor is pinned to the instance and library it came from, and a cursor from another database is refused instead of diffed against this one.',
-        'unobservable names every kind this call could not cover, with the reason: a build that does not serve it, a range older than the history the build keeps, or an answer it could not read. Never read an absent listing as "nothing changed" before checking unobservable; deleted is present exactly when removals were actually observed. versionUnavailable means the build reports no library version at all, so no diff can be taken from it.',
-      ].join(' '),
-      parameters,
-      output: {
-        schema: CHANGES_OUTPUT_SCHEMA,
-        render: renderChanges,
-        presentationMeta: (_args, value) => {
-          if (isJobArm(value)) return value
-          return boundedPresentationMeta(value, ['changed', 'deleted'])
-        },
-      },
-      presentCall: (args) => ({
-        card: 'generic',
-        kind: 'read',
-        title: 'Read Zotero changes',
-        rawInput: args.since === undefined ? 'baseline' : String(args.since.version),
-      }),
-      presentResult: presentChangesResult,
-      isConcurrencySafe: () => true,
-      async execute(args, exec) {
-        // Two parameter shapes (the background arm registers only while the
-        // jobs service is available); both carry the cursor fields.
-        const changesArgs = args as ChangesArgs
-        const request = buildRequest(changesArgs)
-        const label =
-          changesArgs.since === undefined
-            ? 'zotero_changes (baseline)'
-            : `zotero_changes (since v${changesArgs.since.version})`
-        return await executeWithJobs({
-          runner: new ZoteroJobRunner(ctx.get('jobs'), service.diagnostics.sink, delivery),
-          exec,
-          label,
-          run: async (signal, onProgress) => {
-            const value = await service.changes(request, signal, onProgress)
-            // A kind that contributed nothing is a degradation the model sees
-            // inline, but the reason (a short history, a 404) is what a
-            // "changes look incomplete" question needs from the record.
-            for (const gap of value.unobservable ?? []) {
-              service.diagnostics.sink.warn(
-                'degraded.unobservable',
-                `${gap.kind} contributed nothing to the diff: ${gap.reason}`,
-                { kind: gap.kind, reason: gap.reason },
-              )
-            }
-            return value
+    wrap(
+      defineTool({
+        name: 'zotero_changes',
+        description: [
+          'See what changed in the Zotero library since a version: new/edited items (top-level items, the notes/attachments/annotations under them, and trashed items, each listed apart), collections, saved searches, reindexed full text, and deletions.',
+          'Call without since first to take a baseline reading, then pass the cursor it returns back as since, fully local, no cloud.',
+          'Listings are capped digests; totals reports the true counts behind them. A returned cursor always accounts for every change in the range it reports, so it is safe to pass back as since; a result without one is not. The cursor is pinned to the instance and library it came from, and a cursor from another database is refused instead of diffed against this one.',
+          'unobservable names every kind this call could not cover, with the reason: a build that does not serve it, a range older than the history the build keeps, or an answer it could not read. Never read an absent listing as "nothing changed" before checking unobservable; deleted is present exactly when removals were actually observed. versionUnavailable means the build reports no library version at all, so no diff can be taken from it.',
+        ].join(' '),
+        parameters,
+        output: {
+          schema: CHANGES_OUTPUT_SCHEMA,
+          render: renderChanges,
+          presentationMeta: (_args, value) => {
+            if (isJobArm(value)) return value
+            return boundedPresentationMeta(value, ['changed', 'deleted'])
           },
-          renderResult: (value) => textOfBlocks(renderChanges(changesArgs, value)),
-          runInBackground: changesArgs.run_in_background === true,
-          policy: jobPolicyOf(service.config),
-        })
-      },
-    }),
+        },
+        presentCall: (args) => ({
+          card: 'generic',
+          kind: 'read',
+          title: 'Read Zotero changes',
+          rawInput: args.since === undefined ? 'baseline' : String(args.since.version),
+        }),
+        presentResult: presentChangesResult,
+        isConcurrencySafe: () => true,
+        async execute(args, exec) {
+          // Two parameter shapes (the background arm registers only while the
+          // jobs service is available); both carry the cursor fields.
+          const changesArgs = args as ChangesArgs
+          const request = buildRequest(changesArgs)
+          const label =
+            changesArgs.since === undefined
+              ? 'zotero_changes (baseline)'
+              : `zotero_changes (since v${changesArgs.since.version})`
+          return await executeWithJobs({
+            runner: new ZoteroJobRunner(ctx.get('jobs'), service.diagnostics.sink, delivery),
+            exec,
+            label,
+            run: async (signal, onProgress) => {
+              const value = await service.changes(request, signal, onProgress)
+              // A kind that contributed nothing is a degradation the model sees
+              // inline, but the reason (a short history, a 404) is what a
+              // "changes look incomplete" question needs from the record.
+              for (const gap of value.unobservable ?? []) {
+                service.diagnostics.sink.warn(
+                  'degraded.unobservable',
+                  `${gap.kind} contributed nothing to the diff: ${gap.reason}`,
+                  { kind: gap.kind, reason: gap.reason },
+                )
+              }
+              return value
+            },
+            renderResult: (value) => textOfBlocks(renderChanges(changesArgs, value)),
+            runInBackground: changesArgs.run_in_background === true,
+            policy: jobPolicyOf(service.config),
+          })
+        },
+      }),
+    ),
   )
 }

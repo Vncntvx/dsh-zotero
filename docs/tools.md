@@ -122,7 +122,7 @@ zotero_retrieve(ref="zotero://user/0/item/ABC123", query="attention mechanism", 
 
 ## zotero_export
 
-文件导出可传 `outputFile`（非空路径，仅适用于书目及 translator 文本格式，不适用于 `citation`）。文件路径按调用会话的当前工作目录解析，由 Harness 文件系统按该会话的沙箱策略写入；写入失败会使工具或后台任务失败。前台、显式后台和超时提升均在文件写入、原始 turn 的交付事件及超预算或后台所需的内部持久化完成后才结束。若文件已写入而交付发布失败，错误包含实际路径，不自动重试。
+文件导出可传 `outputFile`（非空路径，适用于书目、translator 文本及 `csv` 格式，不适用于 `citation`）。文件路径按调用会话的当前工作目录解析，由 Harness 文件系统按该会话的沙箱策略写入；写入失败会使工具或后台任务失败。前台、显式后台和超时提升均在文件写入、原始 turn 的交付事件及超预算或后台所需的内部持久化完成后才结束。若文件已写入而交付发布失败，错误包含实际路径，不自动重试。
 
 生成格式化引用或导出数据文件。
 
@@ -142,14 +142,15 @@ zotero_retrieve(ref="zotero://user/0/item/ABC123", query="attention mechanism", 
 
 - `citation`：`{citations: [{ref, text}]}`；
 - `bibliography`：`{text}`；
-- `bibtex` / `biblatex` / `ris` / `csljson`：`{text, items: [{ref, key, title, entryIndex, start, end}]}`。
+- `bibtex` / `biblatex` / `ris` / `csljson`：`{text, items: [{ref, key, title, entryIndex, start, end}]}`；
+- `csv`：`{text}`（Zotero 自身的整表导出，无逐条目定位）。
 
 后台执行（或前台等待超时自动提升）时：
 返回 `{kind: "background", jobId}` 或 `{kind: "promoted", jobId, timeoutMs, message}`。任务进度在 Web 会话顶栏与日志中展示，完成后结果写入 Job 产物。
 
 ### 说明
 
-- refs 总数先受 `maxExportRefs` 拦截（默认 50）。除 `citation` 外的 5 种格式（`bibliography`、`bibtex`、`biblatex`、`ris`、`csljson`）单次调用最多 50 条，这是 Zotero `itemKey` 请求的上限，超出即报错，不会自动分批；
+- refs 总数先受 `maxExportRefs` 拦截（默认 50）。除 `citation` 外的 6 种格式（`bibliography`、`bibtex`、`biblatex`、`ris`、`csljson`、`csv`）单次调用最多 50 条，这是 Zotero `itemKey` 请求的上限，超出即报错，不会自动分批；
 - `citation` 是唯一会分批的格式：refs 数超过 50 时按 50 一组分批请求。默认 `maxExportRefs` 同为 50，因此需先将该配置调至 50 以上，分批才会实际发生；
 - `bibtex`、`biblatex`、`ris`、`csljson` 的批量导出全程使用批处理请求：`ris`、`csljson` 发起 1 次本地 API 批处理请求；`bibtex`、`biblatex` 在此基础上并行发起第 2 次批处理请求，读取条目原始元数据用于字段对齐。返回内容在内存中解析，每条记录按 key 或元数据指纹与 ref 配对，不按位置猜测；无法定位的 ref 在结果中只保留自身。第 2 次元数据请求失败（如 Zotero 返回 5xx）时导出照常完成：正文原样返回，未能配对的 ref 保持仅有 `ref` 的裸形状。调用方取消（abort）不属于这类降级，仍照常抛出。单次调用最多支持 50 条；
 - 单次导出仅允许同一 library 的 refs，不支持跨库混合导出。

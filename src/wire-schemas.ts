@@ -25,13 +25,13 @@ import type {
   ZoteroLibrarySortField,
   ZoteroLibraryWriteRequestView,
 } from './contract.js'
-import type { ZoteroTranslatorExportFormat } from './types.js'
+import type { ZoteroItemizedExportFormat } from './types.js'
 import {
   ZOTERO_CHILD_PAGE_MAX_ROWS,
   ZOTERO_EXPORT_FORMATS,
   ZOTERO_ITEMKEY_BATCH,
   ZOTERO_SORT_FIELDS,
-  ZOTERO_TRANSLATOR_EXPORT_FORMATS,
+  ZOTERO_ITEMIZED_EXPORT_FORMATS,
   ZOTERO_YEAR_MAX,
   ZOTERO_YEAR_MIN,
 } from './constants.js'
@@ -511,11 +511,8 @@ export const zoteroLibraryExportFormatSchema = z.enum(
 )
 
 /** Wire schema: the translator export formats, derived from the sibling array. */
-export const zoteroLibraryTranslatorExportFormatSchema = z.enum(
-  ZOTERO_TRANSLATOR_EXPORT_FORMATS as [
-    ZoteroTranslatorExportFormat,
-    ...ZoteroTranslatorExportFormat[],
-  ],
+export const zoteroLibraryItemizedExportFormatSchema = z.enum(
+  ZOTERO_ITEMIZED_EXPORT_FORMATS as [ZoteroItemizedExportFormat, ...ZoteroItemizedExportFormat[]],
 )
 
 /**
@@ -562,7 +559,7 @@ export const zoteroLibraryExportResultSchema = z
       .readonly(),
     z
       .object({
-        format: zoteroLibraryTranslatorExportFormatSchema,
+        format: zoteroLibraryItemizedExportFormatSchema,
         style: z.string().optional(),
         locale: z.string().optional(),
         text: z.string(),

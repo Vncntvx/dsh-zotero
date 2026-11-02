@@ -122,7 +122,7 @@ zotero_retrieve(ref="zotero://user/0/item/ABC123", query="attention mechanism", 
 
 ## zotero_export
 
-Pass a non-empty `outputFile` to deliver bibliography or translator text (`citation` rejects it). The Harness filesystem resolves the path against the calling session’s current directory and enforces that session’s sandbox policy. Foreground, background, and promoted jobs finish after writing, publishing the delivery to the original turn, and required internal persistence when oversized or background. Write failures fail the tool or job. If delivery publication fails after writing, the error includes the actual path; no automatic retry occurs.
+Pass a non-empty `outputFile` to deliver bibliography, translator, or `csv` text (`citation` rejects it). The Harness filesystem resolves the path against the calling session’s current directory and enforces that session’s sandbox policy. Foreground, background, and promoted jobs finish after writing, publishing the delivery to the original turn, and required internal persistence when oversized or background. Write failures fail the tool or job. If delivery publication fails after writing, the error includes the actual path; no automatic retry occurs.
 
 Generate formatted citations or export data files.
 
@@ -142,14 +142,15 @@ When the foreground call finishes synchronously:
 
 - `citation`: `{citations: [{ref, text}]}`;
 - `bibliography`: `{text}`;
-- `bibtex` / `biblatex` / `ris` / `csljson`: `{text, items: [{ref, key, title, entryIndex, start, end}]}`.
+- `bibtex` / `biblatex` / `ris` / `csljson`: `{text, items: [{ref, key, title, entryIndex, start, end}]}`;
+- `csv`: `{text}` (Zotero's own whole-table export, with no per-document entries).
 
 When it runs in the background (or is promoted automatically after the foreground wait times out):
 Returns `{kind: "background", jobId}` or `{kind: "promoted", jobId, timeoutMs, message}`. Job progress shows in the Web session header and the logs, and the result is written to the job artifact when done.
 
 ### Notes
 
-- The ref count is first blocked by `maxExportRefs` (default 50). The five formats other than `citation` (`bibliography`, `bibtex`, `biblatex`, `ris`, `csljson`) take at most 50 items per call, which is the cap on Zotero `itemKey` requests; going over is an error, and no automatic batching happens;
+- The ref count is first blocked by `maxExportRefs` (default 50). The six formats other than `citation` (`bibliography`, `bibtex`, `biblatex`, `ris`, `csljson`, `csv`) take at most 50 items per call, which is the cap on Zotero `itemKey` requests; going over is an error, and no automatic batching happens;
 - `citation` is the only format that batches: above 50 refs it sends requests in groups of 50. The default `maxExportRefs` is also 50, so batching only happens after that setting is raised above 50;
 - `bibtex`, `biblatex`, `ris`, and `csljson` batch-export the whole set: `ris` and `csljson` send 1 local API batch request, while `bibtex` and `biblatex` additionally run a 2nd batch request in parallel to read the items' raw metadata for field alignment. The returned content is parsed in memory, and each record is paired with its ref by key or metadata fingerprint, never by position; a ref that cannot be located keeps only its own ref in the result. If the 2nd metadata request fails (for example Zotero returns 5xx), the export still completes: the body comes back as-is and refs that could not be paired stay in their bare `ref`-only shape. A caller abort is not this kind of degradation and still throws. One call supports at most 50 items;
 - A single export only accepts refs from the same library; mixed cross-library exports are not supported.

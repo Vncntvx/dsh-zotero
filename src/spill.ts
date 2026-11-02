@@ -1,7 +1,8 @@
 /**
  * Opportunistic spill storage helper for dsh-zotero.
- * Persists oversized text outputs (export documents, full-text reading)
- * via `ctx.spillStore` without hard dependency on its backend.
+ * Persists oversized scholarly full-text reads via `ctx.spillStore` without a
+ * hard dependency on its backend. Export delivery does not go through here:
+ * it rides `src/result-delivery.ts`.
  *
  * @module dsh-zotero/spill
  */
@@ -23,6 +24,8 @@ export const DEFAULT_SPILL_CHAR_THRESHOLD = 16_000
  * @param exec - tool execution context.
  * @param suggestedName - file name hint for the backend (e.g. `export-bibtex.bib`).
  * @param content - complete text to persist.
+ * @param ownerSessionId - the session that owns the spill; defaults to the
+ *   execution's own session.
  */
 export async function trySpillToolOutput(
   ctx: Context,
@@ -31,8 +34,7 @@ export async function trySpillToolOutput(
   content: string,
   ownerSessionId = exec.agent?.session.header.id,
 ): Promise<SpillRef | undefined> {
-  const sessionId = ownerSessionId
-  if (sessionId === undefined) {
+  if (ownerSessionId === undefined) {
     return undefined
   }
   const spillStore = ctx.get('spillStore')
@@ -40,7 +42,7 @@ export async function trySpillToolOutput(
     return undefined
   }
   const save: SaveTextSpill = {
-    owner: { sessionId },
+    owner: { sessionId: ownerSessionId },
     source: {
       kind: 'tool',
       toolName: exec.name,

@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest'
 import {
   ZOTERO_EXPORT_FORMATS,
   ZOTERO_SORT_FIELDS,
-  ZOTERO_TRANSLATOR_EXPORT_FORMATS,
+  ZOTERO_ITEMIZED_EXPORT_FORMATS,
   ZOTERO_UPDATABLE_ITEM_FIELDS,
   ZOTERO_YEAR_MAX,
   ZOTERO_YEAR_MIN,
@@ -19,7 +19,7 @@ import {
   zoteroLibraryExportFormatSchema,
   zoteroLibrarySearchRequestSchema,
   zoteroLibrarySortSchema,
-  zoteroLibraryTranslatorExportFormatSchema,
+  zoteroLibraryItemizedExportFormatSchema,
   zoteroLibraryWriteRequestSchema,
 } from '../../src/wire-schemas.js'
 
@@ -35,8 +35,8 @@ describe('the panel wire schemas derive from the domain constants', () => {
   })
 
   it('offers exactly the translator export formats, in domain order', () => {
-    expect(zoteroLibraryTranslatorExportFormatSchema.options).toEqual([
-      ...ZOTERO_TRANSLATOR_EXPORT_FORMATS,
+    expect(zoteroLibraryItemizedExportFormatSchema.options).toEqual([
+      ...ZOTERO_ITEMIZED_EXPORT_FORMATS,
     ])
   })
 

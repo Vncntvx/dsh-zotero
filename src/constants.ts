@@ -10,7 +10,7 @@
  * @module dsh-zotero/constants
  */
 
-import type { ZoteroExportFormat, ZoteroSortField, ZoteroTranslatorExportFormat } from './types.js'
+import type { ZoteroExportFormat, ZoteroSortField, ZoteroItemizedExportFormat } from './types.js'
 
 /** The id the built-in local provider registers under; also the provider config default. */
 export const LOCAL_PROVIDER_ID = 'local'
@@ -68,7 +68,7 @@ export const ZOTERO_EXPORT_FORMATS: readonly ZoteroExportFormat[] = [
 ] as const
 
 /** The translator export formats: the rendered-body arms, in Zotero's own order. */
-export const ZOTERO_TRANSLATOR_EXPORT_FORMATS: readonly ZoteroTranslatorExportFormat[] = [
+export const ZOTERO_ITEMIZED_EXPORT_FORMATS: readonly ZoteroItemizedExportFormat[] = [
   'bibtex',
   'biblatex',
   'ris',

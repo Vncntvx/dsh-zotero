@@ -1,19 +1,20 @@
-import { asJsonValue } from '../json.js'
-import type { ResultDelivery } from '../result-delivery.js'
-import type {} from '@deepseek-ai/dsh-tool-present/types'
-import type {} from '@deepseek-ai/dsh-fs'
-import type {} from '@deepseek-ai/dsh-sandbox'
-import type {} from '@deepseek-ai/dsh-working-directory'
 /**
  * The `zotero_export` tool: turn item refs into citations or formatted
  * exports. Citation mode pairs every requested ref with Zotero's own HTML
  * citation, ordered as requested; bibliography mode yields the joined
- * CSL-sorted bibliography; bibtex/biblatex/ris/csljson pass the translator
+ * CSL-sorted bibliography; bibtex/biblatex/ris/csljson/csv pass the translator
  * output through verbatim and itemize each exported document (its citation
  * key and title) paired with its ref. Export output is never mid-truncated:
  * it either fits the provider's character limit or fails with a typed error.
  * @module dsh-zotero/tools/export
  */
+
+import type { ResultDelivery } from '../result-delivery.js'
+import { identityToolWrapper, type ToolWrapper } from '../result-delivery.js'
+import type {} from '@deepseek-ai/dsh-tool-present/types'
+import type {} from '@deepseek-ai/dsh-fs'
+import type {} from '@deepseek-ai/dsh-sandbox'
+import type {} from '@deepseek-ai/dsh-working-directory'
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
@@ -33,7 +34,7 @@ import { metaRecordOf, textOfBlocks } from './present.js'
 import {
   ZOTERO_EXPORT_FORMATS,
   ZOTERO_ITEMKEY_BATCH,
-  ZOTERO_TRANSLATOR_EXPORT_FORMATS,
+  ZOTERO_ITEMIZED_EXPORT_FORMATS,
 } from '../constants.js'
 import { assertNonEmptyList, REF_ARG_HINT } from './validate.js'
 import type { ZoteroService } from '../service.js'
@@ -55,7 +56,7 @@ const BASE_EXPORT_PARAMETERS = {
     type: 'array',
     items: { type: 'string' },
     required: true,
-    description: `${REF_ARG_HINT} refs to export, in the order citations should appear; capped by the configured maxExportRefs. citation batches past Zotero's ${ZOTERO_ITEMKEY_BATCH}-key request cap; bibliography/bibtex/biblatex/ris/csljson accept at most ${ZOTERO_ITEMKEY_BATCH}, so batch those calls.`,
+    description: `${REF_ARG_HINT} refs to export, in the order citations should appear; capped by the configured maxExportRefs. citation batches past Zotero's ${ZOTERO_ITEMKEY_BATCH}-key request cap; bibliography/bibtex/biblatex/ris/csljson/csv accept at most ${ZOTERO_ITEMKEY_BATCH}, so batch those calls.`,
   },
   format: {
     type: 'string',
@@ -75,7 +76,7 @@ const BASE_EXPORT_PARAMETERS = {
   outputFile: {
     type: 'string',
     description:
-      'Optional file path (relative to the session workspace) to write the exported bibliography or translator text into, declaring it as a deliverable for the user.',
+      'Optional file path (relative to the session workspace) to write the exported bibliography, translator, or CSV text into, declaring it as a deliverable for the user.',
   },
 } as const
 
@@ -147,7 +148,7 @@ const EXPORT_OUTPUT_SCHEMA = {
       properties: {
         format: {
           type: 'string',
-          enum: [...ZOTERO_TRANSLATOR_EXPORT_FORMATS],
+          enum: [...ZOTERO_ITEMIZED_EXPORT_FORMATS],
           required: true,
         },
         style: { type: 'string' },
@@ -200,7 +201,7 @@ function buildRequest(args: ExportArgs, config: ResolvedConfig): ZoteroExportReq
     args.outputFile !== undefined &&
     (args.outputFile.trim() === '' || args.format === 'citation')
   )
-    invalid('outputFile requires a non-empty path and a bibliography or translator export')
+    invalid('outputFile requires a non-empty path and a bibliography, translator, or CSV export')
   const style = args.style?.trim()
   if (style === '') invalid(EXPORT_STYLE_BLANK_MESSAGE)
   const locale = args.locale?.trim()
@@ -277,118 +278,113 @@ export function registerExportTool(
   ctx: Context,
   service: ZoteroService,
   delivery?: ResultDelivery,
+  wrap: ToolWrapper = identityToolWrapper,
 ): () => void {
   const parameters = EXPORT_WITH_BACKGROUND_PARAMETERS
   return ctx.tools.register(
-    defineTool({
-      name: 'zotero_export',
-      description: [
-        'Export Zotero items as citations, a bibliography, or translator formats.',
-        `Citation mode pairs each ref with its HTML citation in the requested order and batches past Zotero's ${ZOTERO_ITEMKEY_BATCH}-key request cap;`,
-        `bibliography mode returns the joined CSL-sorted bibliography; bibtex/biblatex/ris/csljson return raw export text; those formats stay at one request (up to ${ZOTERO_ITEMKEY_BATCH} refs), their ordering remains Zotero's own, and every exported document is itemized with its ref, citation key, and title.`,
-      ].join(' '),
-      parameters,
-      output: {
-        schema: EXPORT_OUTPUT_SCHEMA,
-        render: renderExport,
-        // Drop optional document previews while retaining citation attribution.
-        presentationMeta: (args, value) => {
-          if (isJobArm(value)) return value
-          return boundedPresentationMeta(
-            projectExportMeta(value as Parameters<typeof projectExportMeta>[0], args.refs),
-            ['items'],
-          )
-        },
-      },
-      presentCall: (args) => ({
-        card: 'generic',
-        title: 'Export Zotero citations',
-        rawInput: `${args.refs.length} refs · ${args.format}`,
-      }),
-      presentResult: presentExportResult,
-      isConcurrencySafe: () => true,
-      async execute(args, exec) {
-        // The parameters are two shapes (the background arm registers only
-        // while the jobs service is available), so defineTool infers a union;
-        // both arms carry the export fields, and the background key is read
-        // through the same alias below.
-        const exportArgs = args as ExportArgs
-        const request = buildRequest(exportArgs, service.config)
-        const session = exec.agent?.session
-        const fs = ctx.get('fs')
-        const workingDirectory = ctx.get('workingDirectory')
-        const turn =
-          session && exportArgs.outputFile !== undefined
-            ? ctx.get('agents')?.turnBoundaryOf(session).lastTurn
-            : undefined
-        if (
-          exportArgs.outputFile !== undefined &&
-          (!session || !fs || !workingDirectory || !Number.isSafeInteger(turn) || turn! < 1)
-        ) {
-          throw new Error(
-            'Export file delivery requires filesystem, working directory, session and owning turn',
-          )
-        }
-        if (
-          exportArgs.outputFile !== undefined &&
-          fs!.sandboxMode !== undefined &&
-          !ctx.get('sandboxPolicy')
-        )
-          throw new Error('Sandbox filesystem requires sandboxPolicy')
-        const cwd =
-          exportArgs.outputFile !== undefined
-            ? await workingDirectory!.ensure(exec.agent!, exec.signal)
-            : undefined
-        return executeWithJobs({
-          runner: new ZoteroJobRunner(ctx.get('jobs'), service.diagnostics.sink, delivery),
-          exec,
-          label: `zotero_export (${exportArgs.refs.length} refs, ${exportArgs.format})`,
-          run: async (signal, onProgress, _log, jobId) => {
-            let result: Awaited<ReturnType<typeof service.export>> & {
-              outputFile?: string
-              delivered?: boolean
-            } = await service.export(request, signal, onProgress)
-            if (result.format === 'citation') return result
-            signal.throwIfAborted()
-            if (delivery)
-              await delivery.prepare(
-                exec,
-                asJsonValue(result)!,
-                (data) => renderExport(exportArgs, data as ExportOutput),
-                signal,
-                jobId,
-              )
-            if (exportArgs.outputFile !== undefined) {
-              const policyService = ctx.get('sandboxPolicy')
-              if (fs!.sandboxMode !== undefined && !policyService)
-                throw new Error('Sandbox filesystem requires sandboxPolicy')
-              const target = await fs!.resolve(exportArgs.outputFile.trim(), { cwd, signal })
-              signal.throwIfAborted()
-              const policy = policyService?.resolve({ session: session! })
-              await fs!.writeText(target, result.text, undefined, signal, policy)
-              const path = fs!.processPath(target)
-              signal.throwIfAborted()
-              try {
-                session!.append('deliverables/presented', {
-                  turn: turn!,
-                  callId: exec.callId,
-                  files: [{ path, description: `Exported ${exportArgs.format}` }],
-                })
-              } catch (error) {
-                throw new Error(`Export written to ${path}; deliverable publication failed`, {
-                  cause: error,
-                })
-              }
-              result = { ...result, outputFile: path, delivered: true }
-            }
-            signal.throwIfAborted()
-            return result
+    wrap(
+      defineTool({
+        name: 'zotero_export',
+        description: [
+          'Export Zotero items as citations, a bibliography, or translator formats (bibtex, biblatex, ris, csljson, csv).',
+          `Citation mode pairs each ref with its HTML citation in the requested order and batches past Zotero's ${ZOTERO_ITEMKEY_BATCH}-key request cap;`,
+          `bibliography mode returns the joined CSL-sorted bibliography; the other formats return raw export text and stay at one request (up to ${ZOTERO_ITEMKEY_BATCH} refs), their ordering remains Zotero's own, and bibtex/biblatex documents are itemized with their ref, citation key, and title.`,
+        ].join(' '),
+        parameters,
+        output: {
+          schema: EXPORT_OUTPUT_SCHEMA,
+          render: renderExport,
+          // Drop optional document previews while retaining citation attribution.
+          presentationMeta: (args, value) => {
+            if (isJobArm(value)) return value
+            return boundedPresentationMeta(
+              projectExportMeta(value as Parameters<typeof projectExportMeta>[0], args.refs),
+              ['items'],
+            )
           },
-          renderResult: (value) => textOfBlocks(renderExport(exportArgs, value)),
-          runInBackground: exportArgs.run_in_background === true,
-          policy: jobPolicyOf(service.config),
-        })
-      },
-    }),
+        },
+        presentCall: (args) => ({
+          card: 'generic',
+          title: 'Export Zotero citations',
+          rawInput: `${args.refs.length} refs · ${args.format}`,
+        }),
+        presentResult: presentExportResult,
+        isConcurrencySafe: () => true,
+        async execute(args, exec) {
+          // The parameters are two shapes (the background arm registers only
+          // while the jobs service is available), so defineTool infers a union;
+          // both arms carry the export fields, and the background key is read
+          // through the same alias below.
+          const exportArgs = args as ExportArgs
+          const request = buildRequest(exportArgs, service.config)
+          const session = exec.agent?.session
+          const fs = ctx.get('fs')
+          const workingDirectory = ctx.get('workingDirectory')
+          const turn =
+            session && exportArgs.outputFile !== undefined
+              ? ctx.get('agents')?.turnBoundaryOf(session).lastTurn
+              : undefined
+          if (
+            exportArgs.outputFile !== undefined &&
+            (!session || !fs || !workingDirectory || !Number.isSafeInteger(turn) || turn! < 1)
+          ) {
+            throw new Error(
+              'Export file delivery requires filesystem, working directory, session and owning turn',
+            )
+          }
+          if (
+            exportArgs.outputFile !== undefined &&
+            fs!.sandboxMode !== undefined &&
+            !ctx.get('sandboxPolicy')
+          )
+            throw new Error('Sandbox filesystem requires sandboxPolicy')
+          const cwd =
+            exportArgs.outputFile !== undefined
+              ? await workingDirectory!.ensure(exec.agent!, exec.signal)
+              : undefined
+          return executeWithJobs({
+            runner: new ZoteroJobRunner(ctx.get('jobs'), service.diagnostics.sink, delivery),
+            exec,
+            label: `zotero_export (${exportArgs.refs.length} refs, ${exportArgs.format})`,
+            run: async (signal, onProgress) => {
+              let result: Awaited<ReturnType<typeof service.export>> & {
+                outputFile?: string
+                delivered?: boolean
+              } = await service.export(request, signal, onProgress)
+              if (result.format === 'citation') return result
+              signal.throwIfAborted()
+              if (exportArgs.outputFile !== undefined) {
+                const policyService = ctx.get('sandboxPolicy')
+                if (fs!.sandboxMode !== undefined && !policyService)
+                  throw new Error('Sandbox filesystem requires sandboxPolicy')
+                const target = await fs!.resolve(exportArgs.outputFile.trim(), { cwd, signal })
+                signal.throwIfAborted()
+                const policy = policyService?.resolve({ session: session! })
+                await fs!.writeText(target, result.text, undefined, signal, policy)
+                const path = fs!.processPath(target)
+                signal.throwIfAborted()
+                try {
+                  session!.append('deliverables/presented', {
+                    turn: turn!,
+                    callId: exec.callId,
+                    files: [{ path, description: `Exported ${exportArgs.format}` }],
+                  })
+                } catch (error) {
+                  throw new Error(`Export written to ${path}; deliverable publication failed`, {
+                    cause: error,
+                  })
+                }
+                result = { ...result, outputFile: path, delivered: true }
+              }
+              signal.throwIfAborted()
+              return result
+            },
+            renderResult: (value) => textOfBlocks(renderExport(exportArgs, value)),
+            runInBackground: exportArgs.run_in_background === true,
+            policy: jobPolicyOf(service.config),
+          })
+        },
+      }),
+    ),
   )
 }

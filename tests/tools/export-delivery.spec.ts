@@ -73,6 +73,7 @@ function prepare(
 it.each([false, true])(
   'writes and delivers exactly once with original turn (background=%s)',
   async (background) => {
+    const storage = resultStorage(lane.ctx)
     const jobs = new TestJobRegistry(lane.ctx)
     const { append, policy, saveText, session, invoke } = prepare()
     const batch = await invoke(background)
@@ -95,8 +96,38 @@ it.each([false, true])(
       files: [{ path: join(directory, 'references.ris'), description: 'Exported ris' }],
     })
     expect(saveText).not.toHaveBeenCalled()
+    // Delivery runs after the deliverable is published, so the persisted body
+    // carries the final outputFile/delivered facts rather than a pre-write snapshot.
+    expect(storage.save).toHaveBeenCalledTimes(1)
+    const persisted = JSON.parse(new TextDecoder().decode([...storage.files.values()][0])) as {
+      data: { outputFile?: string; delivered?: boolean }
+    }
+    expect(persisted.data).toMatchObject({
+      outputFile: join(directory, 'references.ris'),
+      delivered: true,
+    })
   },
 )
+
+it('keeps a published export completed when result persistence fails', async () => {
+  const storage = resultStorage(lane.ctx)
+  storage.save.mockRejectedValueOnce(new Error('store unavailable'))
+  const jobs = new TestJobRegistry(lane.ctx)
+  const { append, invoke } = prepare()
+  const batch = await invoke(true)
+  expectValue(batch.results[0]!.result, 'zotero_export')
+
+  const job = [...jobs.jobs.values()][0]!
+  const outcome = await job.hooks.done
+  expect(outcome.status).toBe('completed')
+  expect(outcome.result).toContain('TY  - JOUR')
+  expect(append).toHaveBeenCalledTimes(1)
+  expect(
+    lane.ctx.zotero.diagnostics
+      .snapshot(50)
+      .entries.some((entry) => entry.event === 'job.delivery'),
+  ).toBe(true)
+})
 
 it('session read-only rejects a deployment-writable filesystem without delivery', async () => {
   const { append, saveText, invoke } = prepare('read-only')

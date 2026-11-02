@@ -21,6 +21,7 @@ import type { ResolvedConfig } from '../config.js'
 import { invalid } from '../errors.js'
 import { formatRef, parseSupportedRef, sameLibrary } from '../refs.js'
 import { boundedPresentationMeta, projectRetrieveMeta } from '../presentation-meta.js'
+import { identityToolWrapper, type ToolWrapper } from '../result-delivery.js'
 import { metaRecordOf } from './present.js'
 import { assertIntInRange, assertNonEmptyList, REF_ARG_HINT } from './validate.js'
 import type { ZoteroService } from '../service.js'
@@ -364,39 +365,45 @@ function presentRetrieveResult(
  * @param ctx - the plugin context.
  * @param service - the zotero service owning the request path.
  */
-export function registerRetrieveTool(ctx: Context, service: ZoteroService): void {
+export function registerRetrieveTool(
+  ctx: Context,
+  service: ZoteroService,
+  wrap: ToolWrapper = identityToolWrapper,
+): void {
   ctx.tools.register(
-    defineTool({
-      name: 'zotero_retrieve',
-      description: [
-        'Gather evidence passages for one Zotero item and rank them against a query.',
-        "Sources: annotations (with Zotero's own page labels), notes, the abstract, and BM25-ranked full-text chunks.",
-        "An annotation ranks on its highlight and its reader comment together, and matchedFields names which of the two carried the query terms; a hit found only in the comment is the annotator's view, not the paper's text.",
-        'A note item contributes its own body; child notes contribute every chunk of their full text (chunkIndex/chunkCount locate each passage).',
-        "attachmentPolicy picks the fulltext sources: best (default, Zotero's chosen PDF), allIndexed (every PDF child, use when a work has several files), or specified via attachmentRefs; a specified attachment must provably be this item's own child.",
-        'Unavailable sources are skipped and listed in sourcesSkipped instead of failing the call.',
-        'Results are capped by passage count and character budget: a passage charges its text and, for an annotation, its comment; a truncated flag signals omitted evidence.',
-      ].join(' '),
-      parameters: RETRIEVE_PARAMETERS,
-      output: {
-        schema: RETRIEVE_OUTPUT_SCHEMA,
-        render: renderRetrieve,
-        presentationMeta: (args, value) =>
-          boundedPresentationMeta(projectRetrieveMeta(value, args.sources ?? ALL_SOURCES), [
-            'items',
-          ]),
-      },
-      presentCall: (args) => ({
-        card: 'generic',
-        kind: 'search',
-        title: 'Retrieve Zotero evidence',
-        rawInput: args.query,
+    wrap(
+      defineTool({
+        name: 'zotero_retrieve',
+        description: [
+          'Gather evidence passages for one Zotero item and rank them against a query.',
+          "Sources: annotations (with Zotero's own page labels), notes, the abstract, and BM25-ranked full-text chunks.",
+          "An annotation ranks on its highlight and its reader comment together, and matchedFields names which of the two carried the query terms; a hit found only in the comment is the annotator's view, not the paper's text.",
+          'A note item contributes its own body; child notes contribute every chunk of their full text (chunkIndex/chunkCount locate each passage).',
+          "attachmentPolicy picks the fulltext sources: best (default, Zotero's chosen PDF), allIndexed (every PDF child, use when a work has several files), or specified via attachmentRefs; a specified attachment must provably be this item's own child.",
+          'Unavailable sources are skipped and listed in sourcesSkipped instead of failing the call.',
+          'Results are capped by passage count and character budget: a passage charges its text and, for an annotation, its comment; a truncated flag signals omitted evidence.',
+        ].join(' '),
+        parameters: RETRIEVE_PARAMETERS,
+        output: {
+          schema: RETRIEVE_OUTPUT_SCHEMA,
+          render: renderRetrieve,
+          presentationMeta: (args, value) =>
+            boundedPresentationMeta(projectRetrieveMeta(value, args.sources ?? ALL_SOURCES), [
+              'items',
+            ]),
+        },
+        presentCall: (args) => ({
+          card: 'generic',
+          kind: 'search',
+          title: 'Retrieve Zotero evidence',
+          rawInput: args.query,
+        }),
+        presentResult: presentRetrieveResult,
+        isConcurrencySafe: () => true,
+        async execute(args, exec) {
+          return await service.retrieve(buildRequest(args, service.config), exec.signal)
+        },
       }),
-      presentResult: presentRetrieveResult,
-      isConcurrencySafe: () => true,
-      async execute(args, exec) {
-        return await service.retrieve(buildRequest(args, service.config), exec.signal)
-      },
-    }),
+    ),
   )
 }

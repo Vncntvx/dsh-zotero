@@ -19,6 +19,7 @@ import {
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
 import { boundedPresentationMeta, projectGetMeta } from '../presentation-meta.js'
+import { identityToolWrapper, type ToolWrapper } from '../result-delivery.js'
 import {
   ANNOTATION_RECORD,
   ATTACHMENT_RECORD,
@@ -312,40 +313,46 @@ function presentGetResult(_args: GetArgs, result: ToolResult): ToolResultView | 
   return { card: 'generic', title: `Zotero item: ${record.title}${year}` }
 }
 
-export function registerGetTool(ctx: Context, service: ZoteroService): void {
+export function registerGetTool(
+  ctx: Context,
+  service: ZoteroService,
+  wrap: ToolWrapper = identityToolWrapper,
+): void {
   ctx.tools.register(
-    defineTool({
-      name: 'zotero_get',
-      description: [
-        'Read the metadata of one Zotero library item or attachment referenced by a zotero:// ref.',
-        'The default call fetches metadata only; request include to also return child notes, annotations, and attachments (full normalized bodies unless childPages specifies a window).',
-        'When the target is an attachment, returns metadata and optionally annotations; locations best explicitly resolves a file path or URL.',
-        'When the item is a note, noteBody returns its full normalized text. include governs child kinds only.',
-        'Child notes carry parentRef, the parent item ref that produced them.',
-        'Results echo the served instance in the ref, so refs can be reused safely.',
-      ].join(' '),
-      parameters: GET_PARAMETERS,
-      output: {
-        schema: GET_OUTPUT_SCHEMA,
-        render: renderGet,
-        presentationMeta: (_args, value) =>
-          boundedPresentationMeta(projectGetMeta(value), [
-            'notesPreview',
-            'annotationsPreview',
-            'relations',
-          ]),
-      },
-      presentCall: (args) => ({
-        card: 'generic',
-        kind: 'read',
-        title: args.ref.includes('/attachment/') ? 'Read Zotero attachment' : 'Read Zotero item',
-        rawInput: args.ref,
+    wrap(
+      defineTool({
+        name: 'zotero_get',
+        description: [
+          'Read the metadata of one Zotero library item or attachment referenced by a zotero:// ref.',
+          'The default call fetches metadata only; request include to also return child notes, annotations, and attachments (full normalized bodies unless childPages specifies a window).',
+          'When the target is an attachment, returns metadata and optionally annotations; locations best explicitly resolves a file path or URL.',
+          'When the item is a note, noteBody returns its full normalized text. include governs child kinds only.',
+          'Child notes carry parentRef, the parent item ref that produced them.',
+          'Results echo the served instance in the ref, so refs can be reused safely.',
+        ].join(' '),
+        parameters: GET_PARAMETERS,
+        output: {
+          schema: GET_OUTPUT_SCHEMA,
+          render: renderGet,
+          presentationMeta: (_args, value) =>
+            boundedPresentationMeta(projectGetMeta(value), [
+              'notesPreview',
+              'annotationsPreview',
+              'relations',
+            ]),
+        },
+        presentCall: (args) => ({
+          card: 'generic',
+          kind: 'read',
+          title: args.ref.includes('/attachment/') ? 'Read Zotero attachment' : 'Read Zotero item',
+          rawInput: args.ref,
+        }),
+        presentResult: presentGetResult,
+        isConcurrencySafe: () => true,
+        async execute(args, exec) {
+          return await service.get(buildRequest(args), exec.signal)
+        },
       }),
-      presentResult: presentGetResult,
-      isConcurrencySafe: () => true,
-      async execute(args, exec) {
-        return await service.get(buildRequest(args), exec.signal)
-      },
-    }),
+    ),
   )
 }

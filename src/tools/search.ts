@@ -31,6 +31,7 @@ import { citekeyOf } from '../normalize-search.js'
 import { assertPublicationsSupported } from '../refs.js'
 import { isItemTypeIdentifier } from '../ref-grammar.js'
 import { boundedPresentationMeta, projectSearchMeta } from '../presentation-meta.js'
+import { identityToolWrapper, type ToolWrapper } from '../result-delivery.js'
 import { formatSearchLine, metaRecordOf } from './present.js'
 import { assertIntInRange, LIBRARY_SCHEMA, parseLibrary } from './validate.js'
 import { ZOTERO_UNEXPECTED, ZoteroError, invalid } from '../errors.js'
@@ -449,40 +450,46 @@ function presentSearchResult(_args: SearchArgs, result: ToolResult): ToolResultV
  * @param ctx - the plugin context.
  * @param service - the zotero service owning the request path.
  */
-export function registerSearchTool(ctx: Context, service: ZoteroService): void {
+export function registerSearchTool(
+  ctx: Context,
+  service: ZoteroService,
+  wrap: ToolWrapper = identityToolWrapper,
+): void {
   ctx.tools.register(
-    defineTool({
-      name: 'zotero_search',
-      description: [
-        "Search the user's local Zotero research library for candidate papers.",
-        'metadata mode matches titles, creators, and years; everything mode also searches indexed full text.',
-        'On the first page of a library or collection scope (saved-search scopes never scan note bodies), a client-side note-body scan lists matching notes separately in supplemental; they fill unused page slots up to the limit, are ordered by dateModified desc, never displace a full primary result page, and are not part of the paged total/nextOffset; notes show a synthesized title from their first line.',
-        "scope restricts the search to a collection or a Zotero saved search by name or zotero:// ref; additional filters combine with a saved search's own conditions.",
-        'Results carry stable zotero:// refs for zotero_get/zotero_retrieve, and a scope ref for pagination via offset.',
-      ].join(' '),
-      parameters: SEARCH_PARAMETERS,
-      output: {
-        schema: SEARCH_OUTPUT_SCHEMA,
-        render: renderSearch,
-        presentationMeta: searchPresentationMeta,
-      },
-      presentCall: (args) => ({
-        card: 'generic',
-        kind: 'search',
-        title: 'Search Zotero library',
-        rawInput: args.query ?? '(browse)',
+    wrap(
+      defineTool({
+        name: 'zotero_search',
+        description: [
+          "Search the user's local Zotero research library for candidate papers.",
+          'metadata mode matches titles, creators, and years; everything mode also searches indexed full text.',
+          'On the first page of a library or collection scope (saved-search scopes never scan note bodies), a client-side note-body scan lists matching notes separately in supplemental; they fill unused page slots up to the limit, are ordered by dateModified desc, never displace a full primary result page, and are not part of the paged total/nextOffset; notes show a synthesized title from their first line.',
+          "scope restricts the search to a collection or a Zotero saved search by name or zotero:// ref; additional filters combine with a saved search's own conditions.",
+          'Results carry stable zotero:// refs for zotero_get/zotero_retrieve, and a scope ref for pagination via offset.',
+        ].join(' '),
+        parameters: SEARCH_PARAMETERS,
+        output: {
+          schema: SEARCH_OUTPUT_SCHEMA,
+          render: renderSearch,
+          presentationMeta: searchPresentationMeta,
+        },
+        presentCall: (args) => ({
+          card: 'generic',
+          kind: 'search',
+          title: 'Search Zotero library',
+          rawInput: args.query ?? '(browse)',
+        }),
+        presentResult: presentSearchResult,
+        isConcurrencySafe: () => true,
+        async execute(args, exec) {
+          const result = await service.search(
+            buildRequest(args, service.config),
+            exec.signal,
+            // The model consumes the note-body supplement.
+            { includeSupplemental: true },
+          )
+          return { ...result, scope: toolScopeOf(result.scope) }
+        },
       }),
-      presentResult: presentSearchResult,
-      isConcurrencySafe: () => true,
-      async execute(args, exec) {
-        const result = await service.search(
-          buildRequest(args, service.config),
-          exec.signal,
-          // The model consumes the note-body supplement.
-          { includeSupplemental: true },
-        )
-        return { ...result, scope: toolScopeOf(result.scope) }
-      },
-    }),
+    ),
   )
 }

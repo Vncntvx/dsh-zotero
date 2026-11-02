@@ -5,7 +5,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { ZoteroService } from './service.js'
 import { registerResultRoute } from './result-route.js'
-import { ResultDelivery } from './result-delivery.js'
+import { ResultDelivery, type ToolWrapper } from './result-delivery.js'
 import { registerBrowseTool } from './tools/browse.js'
 import { registerChangesTool } from './tools/changes.js'
 import { registerExportTool } from './tools/export.js'
@@ -30,21 +30,16 @@ export function registerReadTools(ctx: Context, service: ZoteroService): void {
   const delivery = new ResultDelivery(ctx, () => service.config)
   delivery.installJobs()
   registerResultRoute(ctx, delivery)
-  const tools = {
-    register: (definition: Parameters<typeof ctx.tools.register>[0]) =>
-      ctx.tools.register(delivery.wrap(definition)),
-  }
-  const readContext = new Proxy(ctx, {
-    get(target, key) {
-      return key === 'tools' ? tools : Reflect.get(target, key, target)
-    },
-  })
-  registerSearchTool(readContext, service)
-  registerGetTool(readContext, service)
-  registerRetrieveTool(readContext, service)
-  registerBrowseTool(readContext, service)
-  registerExportTool(readContext, service, delivery)
-  registerChangesTool(readContext, service, delivery)
+  // Every read tool registers through the same delivery envelope, explicitly:
+  // the tool module still owns its schema and execute, and this is the one
+  // place that wraps them.
+  const wrap: ToolWrapper = (definition) => delivery.wrap(definition)
+  registerSearchTool(ctx, service, wrap)
+  registerGetTool(ctx, service, wrap)
+  registerRetrieveTool(ctx, service, wrap)
+  registerBrowseTool(ctx, service, wrap)
+  registerExportTool(ctx, service, delivery, wrap)
+  registerChangesTool(ctx, service, delivery, wrap)
 }
 
 export function registerWriteTools(ctx: Context, service: ZoteroService): Array<() => void> {

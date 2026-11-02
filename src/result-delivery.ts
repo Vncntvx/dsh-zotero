@@ -55,6 +55,12 @@ const resultDomain = defineDomain({
 type Receipt = z.infer<typeof receiptSchema>
 export type DeliveredResult = { delivery: 'inline'; data: JsonValue } | Receipt
 
+/** A registration transform applied to one tool definition before it is registered. */
+export type ToolWrapper = (definition: ToolDefinition) => ToolDefinition
+
+/** The pass-through wrapper for registrations that need no delivery envelope. */
+export const identityToolWrapper: ToolWrapper = (definition) => definition
+
 /** JSON encoder with bounded string chunks, including pathological single-line fields. */
 export async function* jsonBytes(value: unknown, signal?: AbortSignal): AsyncGenerator<Uint8Array> {
   const encode = (text: string) => new TextEncoder().encode(text)
@@ -113,6 +119,12 @@ export class ResultDelivery {
   private domain?: Promise<Domain<typeof resultDomain>>
   private readonly pending = new Set<Promise<unknown>>()
   private readonly outputs = new Map<string, ToolDefinition['output']>()
+  /**
+   * One publication per owning call. A foreground settle and a promotion can
+   * both reach the same call after a timeout; deduplicating in flight keeps
+   * them from streaming the same body twice.
+   */
+  private readonly publishing = new Map<string, Promise<DeliveredResult>>()
   constructor(
     private readonly ctx: Context,
     private readonly config: () => ResolvedConfig,
@@ -144,6 +156,25 @@ export class ResultDelivery {
     return (await this.domain).table('receipts')
   }
   async prepare(
+    exec: ToolExecution,
+    data: JsonValue,
+    render: (value: JsonValue) => ContentBlock[],
+    signal: AbortSignal,
+    jobId?: string,
+    facts?: JsonValue,
+  ): Promise<DeliveredResult> {
+    const dedupeKey = `${exec.agent?.session?.header.id ?? ''}:${exec.callId}`
+    const running = this.publishing.get(dedupeKey)
+    if (running) return await running
+    const task = this.publish(exec, data, render, signal, jobId, facts)
+    this.publishing.set(dedupeKey, task)
+    try {
+      return await task
+    } finally {
+      if (this.publishing.get(dedupeKey) === task) this.publishing.delete(dedupeKey)
+    }
+  }
+  private async publish(
     exec: ToolExecution,
     data: JsonValue,
     render: (value: JsonValue) => ContentBlock[],
@@ -217,10 +248,10 @@ export class ResultDelivery {
       )
     }
     // Only previews may be omitted; ownership, file and completeness facts survive.
-    for (const key of ['items', 'notesPreview', 'annotationsPreview']) {
+    for (const field of ['items', 'notesPreview', 'annotationsPreview']) {
       if (fits()) break
-      if (receipt.facts?.[key] !== undefined) {
-        delete receipt.facts[key]
+      if (receipt.facts?.[field] !== undefined) {
+        delete receipt.facts[field]
         receipt.facts.detailOmitted = true
       }
     }

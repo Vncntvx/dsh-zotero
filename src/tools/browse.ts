@@ -15,6 +15,7 @@ import {
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
 import { boundedPresentationMeta } from '../presentation-meta.js'
+import { identityToolWrapper, type ToolWrapper } from '../result-delivery.js'
 import { metaRecordOf } from './present.js'
 import { browseRowOf, BROWSE_KINDS, type BrowseRow } from '../browse-rows.js'
 import { assertPublicationsSupported } from '../refs.js'
@@ -392,34 +393,40 @@ function presentBrowseResult(_args: BrowseArgs, result: ToolResult): ToolResultV
   }
 }
 
-export function registerBrowseTool(ctx: Context, service: ZoteroService): void {
+export function registerBrowseTool(
+  ctx: Context,
+  service: ZoteroService,
+  wrap: ToolWrapper = identityToolWrapper,
+): void {
   ctx.tools.register(
-    defineTool({
-      name: 'zotero_browse',
-      description: [
-        'Browse Zotero library structure. Use libraries to discover personal/group libraries,',
-        'collections/savedSearches/tags per library, itemTypes globally, itemFields with an itemType for its valid fields/creator types.',
-        'Collections navigate the tree: omit parentRef for top-level, pass a collection ref to list its children.',
-        'Tags accept a scope plus itemQuery for faceted discovery (which tags do my search hits carry?).',
-        'Always offset/limit paginated; use for discovery before search/get.',
-      ].join(' '),
-      parameters: BROWSE_PARAMETERS,
-      output: {
-        schema: BROWSE_OUTPUT_SCHEMA,
-        render: renderBrowse,
-        presentationMeta: (_args, value) => boundedPresentationMeta(value, ['items']),
-      },
-      presentCall: (args) => ({
-        card: 'generic',
-        kind: 'search',
-        title: `Browse Zotero ${args.kind}`,
-        rawInput: args.kind,
+    wrap(
+      defineTool({
+        name: 'zotero_browse',
+        description: [
+          'Browse Zotero library structure. Use libraries to discover personal/group libraries,',
+          'collections/savedSearches/tags per library, itemTypes globally, itemFields with an itemType for its valid fields/creator types.',
+          'Collections navigate the tree: omit parentRef for top-level, pass a collection ref to list its children.',
+          'Tags accept a scope plus itemQuery for faceted discovery (which tags do my search hits carry?).',
+          'Always offset/limit paginated; use for discovery before search/get.',
+        ].join(' '),
+        parameters: BROWSE_PARAMETERS,
+        output: {
+          schema: BROWSE_OUTPUT_SCHEMA,
+          render: renderBrowse,
+          presentationMeta: (_args, value) => boundedPresentationMeta(value, ['items']),
+        },
+        presentCall: (args) => ({
+          card: 'generic',
+          kind: 'search',
+          title: `Browse Zotero ${args.kind}`,
+          rawInput: args.kind,
+        }),
+        presentResult: presentBrowseResult,
+        isConcurrencySafe: () => true,
+        async execute(args, exec) {
+          return await service.browse(buildRequest(args, service.config), exec.signal)
+        },
       }),
-      presentResult: presentBrowseResult,
-      isConcurrencySafe: () => true,
-      async execute(args, exec) {
-        return await service.browse(buildRequest(args, service.config), exec.signal)
-      },
-    }),
+    ),
   )
 }

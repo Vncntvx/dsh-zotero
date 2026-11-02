@@ -160,11 +160,15 @@ interface PromotedJobResult {
   readonly jobId: JobId
   readonly timeoutMs: number
   readonly message: string
+  /** The owning session whose receipts resolve this job's persisted result. */
+  readonly resultSessionId?: string
 }
 
 interface BackgroundJobResult {
   readonly kind: 'background'
   readonly jobId: JobId
+  /** The owning session whose receipts resolve this job's persisted result. */
+  readonly resultSessionId?: string
 }
 
 type JobArmResult = BackgroundJobResult | PromotedJobResult
@@ -247,8 +251,14 @@ export class ZoteroJobRunner {
 
   /**
    * Start an asynchronous background job with `ctx.jobs`.
+   * @param task - the job body and its rendered outcome text.
+   * @param options - `persistAtCompletion` is read once the body settles; a
+   *   foreground wait passes a predicate so only a promoted settle publishes.
    */
-  start<T>(task: ZoteroJobTask<T>): { id: JobId; done: Promise<ZoteroJobOutcome> } {
+  start<T>(
+    task: ZoteroJobTask<T>,
+    options?: { readonly persistAtCompletion?: () => boolean },
+  ): { id: JobId; done: Promise<ZoteroJobOutcome> } {
     if (!this.registry) {
       throw new Error(JOBS_UNAVAILABLE_MESSAGE)
     }
@@ -282,15 +292,26 @@ export class ZoteroJobRunner {
               },
               job.id,
             )
-            const prepared = this.delivery
-              ? await this.delivery.prepare(
-                  task.exec,
-                  value as JsonValue,
-                  (data) => [{ type: 'text', text: task.renderResult?.(data as T) ?? '' }],
-                  abortController.signal,
-                  job.id,
-                )
-              : undefined
+            const prepared =
+              this.delivery && (options?.persistAtCompletion?.() ?? true)
+                ? await this.delivery
+                    .prepare(
+                      task.exec,
+                      value as JsonValue,
+                      (data) => [{ type: 'text', text: task.renderResult?.(data as T) ?? '' }],
+                      abortController.signal,
+                      job.id,
+                    )
+                    .catch((error: unknown) => {
+                      // A publish failure after the body has settled must not turn a
+                      // completed, already-published job into a failed one.
+                      this.sink?.warn(
+                        'job.delivery',
+                        `${task.label} completed but its result could not be persisted: ${errorMessageOf(error)}`,
+                      )
+                      return undefined
+                    })
+                : undefined
             const result =
               prepared?.delivery === 'file' ? prepared.summary : task.renderResult?.(value)
             this.sink?.info('job.outcome', `${task.label} completed`)
@@ -366,6 +387,8 @@ export class ZoteroJobRunner {
     }
 
     let resultValue: T | undefined
+    /** A promoted job publishes its result; a foreground settle leaves that to `wrap`. */
+    let promoted = false
     // Outcome text is always materialized when the job settles. Skipping it for
     // a foreground settle is racy: the job can finish and render just as the
     // wait times out, leaving a promoted `JobOutcome.result` empty for
@@ -385,7 +408,7 @@ export class ZoteroJobRunner {
     // Mirrors tool-bash's startJob catch → foreground fallback.
     let started: { id: JobId; done: Promise<ZoteroJobOutcome> } | undefined
     try {
-      started = this.start(wrappedTask)
+      started = this.start(wrappedTask, { persistAtCompletion: () => promoted })
     } catch (error) {
       this.sink?.warn(
         'job.refused',
@@ -400,6 +423,28 @@ export class ZoteroJobRunner {
     }
     const { id, done } = started
     const owner = task.exec.agent?.id
+    /**
+     * Publish a body the run already produced. The job body itself publishes
+     * too (same owning call, deduplicated in `ResultDelivery`), so a promotion
+     * that races the settle still has one receipt before the caller sees it.
+     */
+    const publishSettled = async (value: T | undefined): Promise<void> => {
+      if (value === undefined || this.delivery === undefined) return
+      try {
+        await this.delivery.prepare(
+          task.exec,
+          value as JsonValue,
+          (data) => [{ type: 'text', text: task.renderResult?.(data as T) ?? '' }],
+          task.exec.signal,
+          id,
+        )
+      } catch (error) {
+        this.sink?.warn(
+          'job.delivery',
+          `${task.label} was promoted but its result could not be persisted: ${errorMessageOf(error)}`,
+        )
+      }
+    }
 
     let view: JobView
     try {
@@ -432,6 +477,8 @@ export class ZoteroJobRunner {
           jobId: id,
         },
       )
+      promoted = true
+      await publishSettled(resultValue)
       return {
         kind: 'promoted',
         jobId: id,
@@ -446,6 +493,8 @@ export class ZoteroJobRunner {
         jobId: id,
         waitMs: waitTimeoutMs,
       })
+      promoted = true
+      await publishSettled(resultValue)
       return {
         kind: 'promoted',
         jobId: id,

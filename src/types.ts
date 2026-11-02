@@ -509,7 +509,7 @@ export type ZoteroExportFormat =
  * engine): the arms whose text the panel serves un-itemized and the tool
  * serves with one located entry per exported document.
  */
-export type ZoteroTranslatorExportFormat = Exclude<
+export type ZoteroItemizedExportFormat = Exclude<
   ZoteroExportFormat,
   'citation' | 'bibliography' | 'csv'
 >
@@ -583,7 +583,7 @@ export type ZoteroExportTextResult =
       text: string
     }
   | {
-      format: ZoteroTranslatorExportFormat
+      format: ZoteroItemizedExportFormat
       style?: string
       locale?: string
       text: string
@@ -600,7 +600,7 @@ export type ZoteroExportResult =
   | Extract<ZoteroExportTextResult, { format: 'citation' }>
   | Extract<ZoteroExportTextResult, { format: 'bibliography' }>
   | Extract<ZoteroExportTextResult, { format: 'csv' }>
-  | (Extract<ZoteroExportTextResult, { format: ZoteroTranslatorExportFormat }> & {
+  | (Extract<ZoteroExportTextResult, { format: ZoteroItemizedExportFormat }> & {
       items: ZoteroExportItem[]
     })
 
@@ -1385,13 +1385,6 @@ export interface ZoteroProvider {
    * @returns the normalized child page.
    */
   getChildPage?(request: ZoteroChildPageRequest, signal?: AbortSignal): Promise<ZoteroChildPage>
-  /**
-   * Explore one item's or attachment's child-object graph.
-   * @param request - the item/attachment ref and the child kinds to return.
-   * @param signal - caller cancellation; forwarded to the transport.
-   * @returns the bounded child collections with their totals.
-   */
-
   /**
    * Diff the library against a local transaction version.
    * @param request - the baseline version and the resource kinds to diff.
