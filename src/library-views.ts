@@ -312,6 +312,11 @@ export function exportViewOf(result: ZoteroExportTextResult): ZoteroLibraryExpor
         ...styleLocaleViewOf(result),
         text: result.text,
       }
+    case 'csv':
+      return {
+        format: 'csv',
+        text: result.text,
+      }
     default:
       return {
         format: result.format,

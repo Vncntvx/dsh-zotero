@@ -25,16 +25,20 @@ export class ResponseTooLargeError extends Error {
  * @returns the decoded body.
  * @throws {ResponseTooLargeError} when the body exceeds the ceiling.
  */
-export async function readBoundedText(response: Response, maxBytes: number): Promise<string> {
+export async function readBoundedText(
+  response: Response,
+  maxBytes: number,
+  preserveBOM = false,
+): Promise<string> {
   const reader = response.body?.getReader()
   if (reader === undefined) {
     const buffer = await response.arrayBuffer()
     if (buffer.byteLength > maxBytes) throw new ResponseTooLargeError(maxBytes)
-    return new TextDecoder().decode(buffer)
+    return new TextDecoder('utf-8', { ignoreBOM: preserveBOM }).decode(buffer)
   }
 
   const parts: string[] = []
-  const decoder = new TextDecoder()
+  const decoder = new TextDecoder('utf-8', { ignoreBOM: preserveBOM })
   let total = 0
   try {
     for (;;) {

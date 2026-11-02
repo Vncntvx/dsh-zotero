@@ -643,6 +643,10 @@ export type ZoteroLibraryExportResultView =
       readonly locale?: string
       readonly text: string
     }
+  | {
+      readonly format: 'csv'
+      readonly text: string
+    }
 
 /** Strict codec type symbol for {@link ZoteroLibraryBrowseRequestView}. */
 export const ZOTERO_LIBRARY_BROWSE_REQUEST_TYPE_SYMBOL = 'dsh-zotero#ZoteroLibraryBrowseRequestView'

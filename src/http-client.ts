@@ -120,7 +120,7 @@ export const UNPARSEABLE_RESPONSE_MESSAGE = 'Zotero returned an unparseable resp
  */
 export function parseZoteroJson(text: string): unknown {
   try {
-    return JSON.parse(text)
+    return JSON.parse(text.replace(/^\uFEFF/, ''))
   } catch (error) {
     throw new ZoteroError(UNPARSEABLE_RESPONSE_MESSAGE, ZOTERO_UNEXPECTED, { cause: error })
   }
@@ -305,7 +305,7 @@ function notImplementedError(response: Response, detail: string, path: string): 
  */
 export async function readBody(response: Response, maxResponseBytes: number): Promise<string> {
   try {
-    return await readBoundedText(response, maxResponseBytes)
+    return await readBoundedText(response, maxResponseBytes, true)
   } catch (error) {
     // The shared reader reports the ceiling generically; this transport owns
     // the Zotero error vocabulary its callers branch on.

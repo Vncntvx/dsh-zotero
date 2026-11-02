@@ -569,6 +569,13 @@ export const zoteroLibraryExportResultSchema = z
       })
       .strict()
       .readonly(),
+    z
+      .object({
+        format: z.literal('csv'),
+        text: z.string(),
+      })
+      .strict()
+      .readonly(),
   ])
   .readonly() satisfies z.ZodType<ZoteroLibraryExportResultView>
 

@@ -64,6 +64,7 @@ export const ZOTERO_EXPORT_FORMATS: readonly ZoteroExportFormat[] = [
   'biblatex',
   'ris',
   'csljson',
+  'csv',
 ] as const
 
 /** The translator export formats: the rendered-body arms, in Zotero's own order. */

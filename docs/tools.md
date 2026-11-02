@@ -131,7 +131,7 @@ zotero_retrieve(ref="zotero://user/0/item/ABC123", query="attention mechanism", 
 | 参数                | 类型     | 默认值     | 说明                                                                                                                                                    |
 | ------------------- | -------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `refs`              | string[] | —          | 条目 ref 列表（必填，单次受 `maxExportRefs` 限制，默认 50）                                                                                             |
-| `format`            | string   | —          | 导出格式：`citation`、`bibliography`、`bibtex`、`biblatex`、`ris`、`csljson`（必填）                                                                    |
+| `format`            | string   | —          | 导出格式：`citation`、`bibliography`、`bibtex`、`biblatex`、`ris`、`csljson`、`csv`（必填）                                                             |
 | `style`             | string   | 配置默认值 | CSL 样式标识（仅用于 citation 和 bibliography）                                                                                                         |
 | `locale`            | string   | `"en-US"`  | CSL 语言环境（仅用于 citation 和 bibliography）                                                                                                         |
 | `run_in_background` | boolean  | `false`    | 是否作为后台任务启动（由 Harness `ctx.jobs` 管理；参数恒定声明，当 `enableRunInBackground=false` 或宿主未挂载 `jobs` 服务时传 `true` 会得到结构化拒绝） |

@@ -135,6 +135,16 @@ const EXPORT_OUTPUT_SCHEMA = {
       type: 'object',
       additionalProperties: false,
       properties: {
+        format: { type: 'string', const: 'csv', required: true },
+        text: { type: 'string', required: true },
+        outputFile: { type: 'string' },
+        delivered: { type: 'boolean' },
+      },
+    },
+    {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
         format: {
           type: 'string',
           enum: [...ZOTERO_TRANSLATOR_EXPORT_FORMATS],
@@ -217,9 +227,8 @@ function renderExport(_args: unknown, value: ExportOutput): ContentBlock[] {
       },
     ]
   }
-  // Zotero's raw translator output can lead with stray whitespace; a text
-  // export reads cleaner without it (display and copy alike).
-  const text = value.text.trimStart()
+  // Preserve translator bytes, including whitespace and BOM.
+  const text = value.text
   const outputFile = (value as { outputFile?: string }).outputFile
   const delivered = (value as { delivered?: boolean }).delivered
   const notes: string[] = []

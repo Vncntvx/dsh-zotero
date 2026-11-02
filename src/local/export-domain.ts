@@ -96,16 +96,11 @@ export async function exportItems(
   onProgress?: (progress: ZoteroProgressEvent) => void,
 ): Promise<ZoteroExportResult> {
   const { result, refs, rawItems } = await exportBody(deps, request, signal, onProgress, true)
-  if (result.format === 'citation' || result.format === 'bibliography') return result
-  // The browser holds `text` with its leading whitespace trimmed (the
-  // render strips it), so the entry offsets are measured on that same
-  // trimmed body.
-  const items = locateExportItemsFromBatch(
-    result.format,
-    result.text.trimStart(),
-    [...refs],
-    rawItems,
-  )
+  if (result.format === 'citation' || result.format === 'bibliography' || result.format === 'csv') {
+    return result
+  }
+  // Entry spans address the verbatim translator body, including leading whitespace.
+  const items = locateExportItemsFromBatch(result.format, result.text, [...refs], rawItems)
   return { ...result, items }
 }
 

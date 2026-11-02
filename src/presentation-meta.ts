@@ -177,7 +177,7 @@ interface ZoteroExportPresentationItem {
   readonly title?: string
   /** The located entry's index within the parsed CSL JSON array. */
   readonly entryIndex?: number
-  /** The located entry's text span within the trimmed batch body (text formats). */
+  /** The located entry's text span within the original batch body (text formats). */
   readonly start?: number
   readonly end?: number
 }

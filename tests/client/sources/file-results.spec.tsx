@@ -83,6 +83,25 @@ const artifact: ExportArtifact = {
   text: '',
   resultFile: { seq: 2, index: 0 },
 }
+it('loads the exact file body before enabling export actions', async () => {
+  const fetch = vi.fn(async () =>
+    Response.json({ version: 1, data: { format: 'csv', text: '\ufeffTitle\n尾\n  ' } }),
+  )
+  vi.stubGlobal('fetch', fetch)
+  render(
+    <ResultSessionContext.Provider value="s">
+      <ExportCard artifact={artifact} t={mockT} />
+    </ResultSessionContext.Provider>,
+  )
+  expect(screen.queryByRole('button', { name: zh.copyExport })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: zh.readCompleteResult }))
+  await screen.findByRole('button', { name: zh.copyExport })
+  const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+  vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:test')
+  vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+  fireEvent.click(screen.getByRole('button', { name: zh.downloadArtifact + ' .csv' }))
+  expect(click).toHaveBeenCalledOnce()
+})
 it('keeps failed file reads retryable without offering summary downloads', async () => {
   vi.stubGlobal(
     'fetch',
@@ -98,6 +117,16 @@ it('keeps failed file reads retryable without offering summary downloads', async
   expect(screen.queryByRole('button', { name: zh.copyExport })).toBeNull()
 })
 
+it('labels a long preview while copying the entire native body', async () => {
+  const { writeClipboard } = await import('@deepseek-ai/dsh-client-ui-primitives')
+  const text = 'x'.repeat(2500) + 'END'
+  render(<ExportCard artifact={{ ...artifact, resultFile: undefined, text }} t={mockT} />)
+  fireEvent.click(screen.getByRole('button', { name: /CSV/ }))
+  expect(screen.getByText(zh.exportDisplayPreview)).toBeTruthy()
+  expect(document.querySelector('pre')?.textContent).toHaveLength(2000)
+  fireEvent.click(screen.getByRole('button', { name: zh.copyExport }))
+  expect(writeClipboard).toHaveBeenCalledWith(text)
+})
 it.each([{ version: 2, data: {} }, { version: 1, data: [] }, null])(
   'rejects an invalid complete document %s',
   async (value) => {

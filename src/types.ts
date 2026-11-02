@@ -502,14 +502,17 @@ export type ZoteroAttachmentLocation =
 
 /** Export/citation output formats. `citation`/`bibliography` use Zotero's CSL engine. */
 export type ZoteroExportFormat =
-  'citation' | 'bibliography' | 'bibtex' | 'biblatex' | 'ris' | 'csljson'
+  'citation' | 'bibliography' | 'bibtex' | 'biblatex' | 'ris' | 'csljson' | 'csv'
 
 /**
  * The export formats Zotero renders as a whole-body translator export (no CSL
  * engine): the arms whose text the panel serves un-itemized and the tool
  * serves with one located entry per exported document.
  */
-export type ZoteroTranslatorExportFormat = Exclude<ZoteroExportFormat, 'citation' | 'bibliography'>
+export type ZoteroTranslatorExportFormat = Exclude<
+  ZoteroExportFormat,
+  'citation' | 'bibliography' | 'csv'
+>
 
 /**
  * Export request for one or more items. Export is single-library only: all refs
@@ -547,9 +550,9 @@ export interface ZoteroExportItem {
   title?: string
   /** The located entry's index within the parsed CSL JSON array. */
   entryIndex?: number
-  /** The located entry's start offset within the trimmed batch body. */
+  /** The located entry's start offset within the original batch body. */
   start?: number
-  /** The located entry's end offset (exclusive) within the trimmed batch body. */
+  /** The located entry's end offset (exclusive) within the original batch body. */
   end?: number
 }
 
@@ -576,6 +579,10 @@ export type ZoteroExportTextResult =
       text: string
     }
   | {
+      format: 'csv'
+      text: string
+    }
+  | {
       format: ZoteroTranslatorExportFormat
       style?: string
       locale?: string
@@ -592,6 +599,7 @@ export type ZoteroExportTextResult =
 export type ZoteroExportResult =
   | Extract<ZoteroExportTextResult, { format: 'citation' }>
   | Extract<ZoteroExportTextResult, { format: 'bibliography' }>
+  | Extract<ZoteroExportTextResult, { format: 'csv' }>
   | (Extract<ZoteroExportTextResult, { format: ZoteroTranslatorExportFormat }> & {
       items: ZoteroExportItem[]
     })

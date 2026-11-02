@@ -46,6 +46,7 @@ const DONE_KEY: Record<CopyAction, ZoteroLocaleKey> = {
   biblatex: 'libraryCopyBiblatexDone',
   ris: 'libraryCopyRisDone',
   csljson: 'libraryCopyCsljsonDone',
+  csv: 'libraryCopyCsvDone',
   itemInfo: 'libraryCopyItemInfoDone',
 }
 
@@ -59,6 +60,7 @@ const ALL_FORMATS: readonly {
   { format: 'biblatex', label: 'libraryCopyBiblatex' },
   { format: 'ris', label: 'libraryCopyRis' },
   { format: 'csljson', label: 'libraryCopyCsljson' },
+  { format: 'csv', label: 'libraryCopyCsv' },
   { format: 'itemInfo', label: 'libraryCopyItemInfo', separatorBefore: true },
 ]
 

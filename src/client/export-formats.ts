@@ -18,6 +18,8 @@ export function formatLabelOf(format: string, t: TranslateNS<'zotero'>): string 
       return 'RIS'
     case 'csljson':
       return 'CSL JSON'
+    case 'csv':
+      return 'CSV'
     case 'citation':
       return t('formatCitation')
     case 'bibliography':
@@ -38,6 +40,8 @@ export function extensionOf(format: string): string {
       return '.ris'
     case 'csljson':
       return '.json'
+    case 'csv':
+      return '.csv'
     case 'citation':
     case 'bibliography':
       return '.txt'
@@ -57,6 +61,8 @@ export function mimeOf(format: string): string {
       return 'application/x-research-info-systems'
     case 'csljson':
       return 'application/json'
+    case 'csv':
+      return 'text/csv'
     case 'citation':
     case 'bibliography':
       return 'text/plain'

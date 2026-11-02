@@ -18,10 +18,12 @@ import { expectValue, setupHostLane, type HostLane } from '../helpers/lanes/host
 import { citationRow } from '../helpers/server/objects.js'
 
 let lane: HostLane
+let mock: HostLane['mock']
 let runTool: HostLane['runTool']
 
 beforeEach(async () => {
   lane = await setupHostLane()
+  mock = lane.mock
   runTool = lane.runTool
 })
 
@@ -243,5 +245,26 @@ describe('zotero_export jobs', () => {
       })
     })
 
+    it('exports references in CSV format', async () => {
+      const mockCsv = '"Key","Item Type","Title"\n"ABCD1234","journalArticle","A Study"\n'
+      mock.route('GET', '/api/users/0/items', (_req, _res, helpers, search) => {
+        if (search.get('format') === 'csv') {
+          return helpers.text(mockCsv)
+        }
+        return helpers.raw(400, {}, '')
+      })
+
+      const result = expectValue(
+        await runTool('zotero_export', {
+          refs: ['zotero://user/0/item/ABCD1234'],
+          format: 'csv',
+        }),
+        'zotero_export',
+      )
+      expect(result.value).toEqual({
+        format: 'csv',
+        text: mockCsv,
+      })
+    })
   })
 })
