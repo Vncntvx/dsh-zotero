@@ -1,12 +1,12 @@
 /**
- * The `zotero_get` / `zotero_attachment` provider contract: item detail with
- * lazy children and collection names, and attachment resolution to verified
- * on-disk files or linked URLs.
+ * The `zotero_get` provider contract: item detail with lazy children and
+ * collection names, and attachment resolution to verified on-disk files or
+ * linked URLs.
  * @module tests/provider/get
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { ZOTERO_UNEXPECTED } from '../../src/errors.js'
+import { ZOTERO_INVALID_ARGUMENT, ZOTERO_UNEXPECTED } from '../../src/errors.js'
 import type { LocalApiLimits } from '../../src/local/limits.js'
 import { type LocalApiProvider } from '../../src/local/provider.js'
 import { expectedKindRefMessage, parseRef } from '../../src/refs.js'
@@ -30,6 +30,7 @@ import {
   ITEM_KEY,
   SECOND_ITEM_KEY,
   apiPath,
+  attachmentRef,
   collectionRef,
   itemRef,
 } from '../helpers/server/keys.js'
@@ -43,6 +44,7 @@ import {
   versionHeaders,
 } from '../helpers/server/objects.js'
 import { serveItemGraph, serveJson } from '../helpers/server/serve.js'
+import { deferred } from '../helpers/sync.js'
 
 let mock: ProviderHarness['mock']
 let provider: LocalApiProvider
@@ -249,6 +251,52 @@ describe('getItem', () => {
     serveJson(mock, `${apiPath()}/items/${ITEM_KEY}`, PARENT_WITHOUT_COLLECTIONS)
     serveJson(mock, `${apiPath()}/items/${ITEM_KEY}/children`, { key: 'NOTE1111' })
     await zoteroError(provider.getItem(getRequest(['notes'])), ZOTERO_UNEXPECTED)
+  })
+
+  it('reads every requested child lane as one batch', async () => {
+    serveJson(mock, `${apiPath()}/items/${ITEM_KEY}`, PARENT_WITHOUT_COLLECTIONS, versionHeaders())
+    let inFlight = 0
+    let peak = 0
+    const release = deferred()
+    mock.route(
+      'GET',
+      `${apiPath()}/items/${ITEM_KEY}/children`,
+      async (_request, _response, helpers) => {
+        inFlight++
+        peak = Math.max(peak, inFlight)
+        if (inFlight === 3) release.resolve()
+        await release.promise
+        inFlight--
+        helpers.json([], { 'Total-Results': '0', 'Zotero-Server-ID': 'S1' })
+      },
+    )
+    const detail = await provider.getItem({
+      ref: parseRef(itemRef()),
+      include: new Set(['notes', 'attachments', 'annotations']),
+      childPages: {
+        notes: { offset: 0, limit: 10 },
+        attachments: { offset: 0, limit: 10 },
+        annotations: { offset: 0, limit: 10 },
+      },
+    })
+    // The three listings are independent; all three requests must be in
+    // flight before any of them is answered.
+    expect(peak).toBe(3)
+    expect(detail.notes).toMatchObject({ returned: 0 })
+  })
+
+  it('names an unconfirmed attachment target instead of a blank item type', async () => {
+    serveJson(
+      mock,
+      `${apiPath()}/items/${ATTACHMENT_KEY}`,
+      { key: ATTACHMENT_KEY, data: { title: 'Mystery' } },
+      versionHeaders(),
+    )
+    await zoteroError(
+      provider.getItem({ ref: parseRef(attachmentRef()), include: new Set() }),
+      ZOTERO_INVALID_ARGUMENT,
+      'could not be confirmed as an attachment',
+    )
   })
 
   it('reads full bodies independently of configured page caps', async () => {

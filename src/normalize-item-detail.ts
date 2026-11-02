@@ -13,6 +13,7 @@ import type { NormalizeContext } from './normalize-context.js'
 import {
   attachmentRecordOf,
   partitionChildren,
+  type PartitionedChildren,
   type ZoteroChildKind,
 } from './normalize-children.js'
 import {
@@ -116,6 +117,25 @@ function detailChildKinds(include: ReadonlySet<ZoteroInclude>): ReadonlySet<Zote
   return kinds
 }
 
+/**
+ * Partition one page of child rows into the detail's included kinds. The
+ * whole-detail normalizer and the paged reader share this one composition,
+ * so a page and a complete read produce identical child records.
+ * @param rows - raw child rows from one `/children` listing.
+ * @param context - the library and serving instance the rows belong to.
+ * @param include - the child kinds the caller requested.
+ * @param noteMaxChars - the per-note preview budget.
+ * @returns the normalized notes, annotations, and attachment candidates.
+ */
+export function partitionDetailChildren(
+  rows: readonly unknown[],
+  context: NormalizeContext,
+  include: ReadonlySet<ZoteroInclude>,
+  noteMaxChars: number,
+): PartitionedChildren {
+  return partitionChildren(rows, context, noteMaxChars, detailChildKinds(include))
+}
+
 function normalizeRelations(
   data: Record<string, unknown> | undefined,
   context: NormalizeContext,
@@ -211,12 +231,7 @@ export function normalizeItemDetail(input: NormalizeItemDetailInput): ZoteroItem
   const partitioned =
     input.childrenRows === undefined
       ? undefined
-      : partitionChildren(
-          input.childrenRows,
-          context,
-          input.maxNoteChars,
-          detailChildKinds(input.include),
-        )
+      : partitionDetailChildren(input.childrenRows, context, input.include, input.maxNoteChars)
   const childCollections: {
     notes?: ZoteroChildCollection<ZoteroNoteRecord>
     annotations?: ZoteroChildCollection<ZoteroAnnotationRecord>

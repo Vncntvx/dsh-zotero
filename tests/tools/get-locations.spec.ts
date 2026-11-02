@@ -210,5 +210,80 @@ describe('zotero_get requested locations', () => {
     expect(text).toContain(
       `  - Attachment: zotero://user/0/attachment/WXYZ6789?server=S1: Full Text PDF (application/pdf) → ${filePath}`,
     )
+    // The included rows carry their own raw attachment data, so resolving a
+    // location never re-reads the attachment item.
+    expect(
+      mock.requests
+        .filter((entry) => /^\/api\/users\/0\/items\/[A-Z0-9]{8}$/.test(entry.pathname))
+        .map((entry) => entry.pathname),
+    ).toEqual(['/api/users/0/items/ABCD1234'])
+  })
+
+  it('ranks the best PDF by Zotero order rather than by row order', async () => {
+    const filePath = __filename
+    const fileUrl = `file://${filePath}`
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) =>
+      helpers.json(
+        {
+          ...GET_PARENT,
+          links: { self: GET_PARENT.links.self },
+          meta: { ...GET_PARENT.meta, numChildren: 2 },
+        },
+        { 'Zotero-Server-ID': 'S1' },
+      ),
+    )
+    mock.route('GET', '/api/users/0/collections', (req, res, helpers) => helpers.json([]))
+    mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) =>
+      helpers.json(
+        [
+          attachment({
+            key: 'LINKED01',
+            data: {
+              title: 'Linked PDF',
+              contentType: 'application/pdf',
+              linkMode: 'linked_file',
+              parentItem: 'ABCD1234',
+              dateAdded: '2023-01-01T00:00:00Z',
+            },
+          }),
+          attachment({
+            key: 'IMPORT01',
+            data: {
+              title: 'Imported PDF',
+              contentType: 'application/pdf',
+              linkMode: 'imported_file',
+              parentItem: 'ABCD1234',
+              dateAdded: '2024-01-01T00:00:00Z',
+            },
+          }),
+        ],
+        { 'Total-Results': '2' },
+      ),
+    )
+    mock.route('GET', '/api/users/0/items/IMPORT01/file/view/url', (req, res, helpers) =>
+      helpers.text(fileUrl, { 'Zotero-Server-ID': 'S1' }),
+    )
+
+    const result = expectValue(
+      await runTool('zotero_get', {
+        ref: 'zotero://user/0/item/ABCD1234',
+        locations: 'best',
+      }),
+      'zotero_get',
+    )
+    // imported_file outranks an earlier-added linked_file, the same rule
+    // resolveAttachment uses.
+    expect(result.value).toMatchObject({
+      bestAttachment: {
+        ref: 'zotero://user/0/attachment/IMPORT01?server=S1',
+        title: 'Imported PDF',
+      },
+      location: { kind: 'file', path: filePath },
+    })
+    expect(
+      mock.requests
+        .filter((entry) => /^\/api\/users\/0\/items\/[A-Z0-9]{8}$/.test(entry.pathname))
+        .map((entry) => entry.pathname),
+    ).toEqual(['/api/users/0/items/ABCD1234'])
   })
 })

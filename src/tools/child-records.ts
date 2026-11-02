@@ -35,7 +35,7 @@ export const ANNOTATION_RECORD = {
   },
 } as const
 
-/** One attachment row: identity, title, content type, link mode, and optional file path or URL. */
+/** One resolved attachment location: on-disk file, external URL, or the reason neither is available. */
 export const LOCATION_RECORD = {
   oneOf: [
     {

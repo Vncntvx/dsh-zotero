@@ -35,6 +35,7 @@
 import type { ZoteroHttpClient } from '../http-client.js'
 import { ZoteroError, ZOTERO_UNEXPECTED } from '../errors.js'
 import { libraryPrefix } from '../refs.js'
+import { ZOTERO_LIBRARY_VERSION_HEADER, ZOTERO_LIST_PAGE_ROWS } from '../constants.js'
 import {
   nextOffsetOrFail,
   readAllPages,
@@ -109,6 +110,16 @@ export async function fetchAnnotationChildren(
   return getChildrenJson(deps, key, library, serverId, signal, ANNOTATION_SEARCH)
 }
 
+/** One child listing read: which key, which kind, and the window to serve. */
+export interface ChildListingRequest {
+  readonly key: string
+  readonly library: SupportedLocalLibrary
+  readonly serverId: string | undefined
+  readonly kind: ChildListingKind | 'direct'
+  readonly signal?: AbortSignal
+  readonly window?: { readonly offset: number; readonly limit: number }
+}
+
 /**
  * One paged child listing: the same filtered-children wire form the bare read
  * uses, narrowed to one kind and windowed by `start`/`limit`. `limit` in the
@@ -117,12 +128,7 @@ export async function fetchAnnotationChildren(
  */
 export async function fetchChildPage(
   deps: { client: ZoteroHttpClient },
-  kind: ChildListingKind,
-  key: string,
-  library: SupportedLocalLibrary,
-  serverId: string | undefined,
-  page: { offset: number; limit: number },
-  signal: AbortSignal | undefined,
+  request: ChildListingRequest & { readonly kind: ChildListingKind },
 ): Promise<{
   rows: readonly unknown[]
   total: number
@@ -131,7 +137,7 @@ export async function fetchChildPage(
   nextOffset?: number
   serverId?: string
 }> {
-  for await (const current of childPages(deps, key, library, serverId, kind, signal, page)) {
+  for await (const current of childPages(deps, request)) {
     return current
   }
   throw new ZoteroError('Zotero returned no child page.', ZOTERO_UNEXPECTED)
@@ -164,12 +170,7 @@ export async function fetchChildrenForTrash(
 /** Sequential page source. Awaiting the consumer before advancing provides backpressure. */
 export async function* childPages(
   deps: { client: ZoteroHttpClient },
-  key: string,
-  library: SupportedLocalLibrary,
-  serverId: string | undefined,
-  kind: ChildListingKind | 'direct',
-  signal?: AbortSignal,
-  window?: { offset: number; limit: number },
+  request: ChildListingRequest,
 ): AsyncGenerator<{
   rows: readonly unknown[]
   total: number
@@ -178,11 +179,12 @@ export async function* childPages(
   nextOffset?: number
   serverId?: string
 }> {
+  const { key, library, kind, signal, window } = request
   let offset = window?.offset ?? 0
-  let identity = serverId
+  let identity = request.serverId
   let version: number | undefined
   let total: number | undefined
-  const limit = window?.limit ?? 100
+  const limit = window?.limit ?? ZOTERO_LIST_PAGE_ROWS
   for (;;) {
     const params = new URLSearchParams()
     if (kind !== 'direct') params.set('itemType', CHILD_ITEM_TYPE[kind])
@@ -195,7 +197,7 @@ export async function* childPages(
     const observed = serverIdFromHeaders(response.headers, identity)
     assertServerIdMatches(observed, identity)
     identity ??= observed
-    const currentVersion = response.headers.has('Last-Modified-Version')
+    const currentVersion = response.headers.has(ZOTERO_LIBRARY_VERSION_HEADER)
       ? requireLibraryVersionHeader(response.headers, 'item children')
       : undefined
     const currentTotal = requireTotalResults(response.headers, 'item children')

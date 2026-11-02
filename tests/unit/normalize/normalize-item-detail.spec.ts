@@ -11,8 +11,11 @@
 
 import { describe, expect, it } from 'vitest'
 import { ZOTERO_UNEXPECTED } from '../../../src/errors.js'
-import { normalizeItemDetail } from '../../../src/normalize-item-detail.js'
+import { normalizeItemDetail, partitionDetailChildren } from '../../../src/normalize-item-detail.js'
 import type { NormalizeItemDetailInput } from '../../../src/normalize-item-detail.js'
+import { attachmentRecordOf } from '../../../src/normalize-children.js'
+import type { NormalizeContext } from '../../../src/normalize-context.js'
+import type { ZoteroInclude } from '../../../src/types.js'
 import { expectUnexpected } from './normalize-helpers.js'
 
 describe('normalizeItemDetail', () => {
@@ -136,6 +139,31 @@ describe('normalizeItemDetail', () => {
       version: 3,
       serverId: 'S1',
     })
+  })
+
+  it('builds the same child collections from one page as from the whole detail', () => {
+    const include = new Set<ZoteroInclude>(['notes', 'annotations', 'attachments'])
+    const context: NormalizeContext = { library: { type: 'user', id: 0 }, serverId: 'S1' }
+    const partitioned = partitionDetailChildren(CHILDREN, context, include, 2000)
+    const detail = normalizeItemDetail({
+      parent: PARENT,
+      serverId: 'S1',
+      include,
+      childrenRows: CHILDREN,
+      maxAbstractChars: 100,
+      maxNoteBodyChars: 3000,
+      maxNoteChars: 2000,
+      maxNoteRecords: 50,
+      maxAnnotationRecords: 100,
+      maxAttachmentRecords: 50,
+    })
+    expect(detail.notes?.items).toEqual(partitioned.notes.slice(0, 50))
+    expect(detail.annotations?.items).toEqual(partitioned.annotations.slice(0, 100))
+    expect(detail.attachments?.items).toEqual(
+      partitioned.attachments
+        .slice(0, 50)
+        .map((candidate) => attachmentRecordOf(candidate, context)),
+    )
   })
 
   it('omits unrequested child kinds, optionals, and provenance when absent', () => {

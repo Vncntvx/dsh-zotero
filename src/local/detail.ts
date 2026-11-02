@@ -12,7 +12,7 @@
 
 import type { ZoteroHttpClient } from '../http-client.js'
 import { assertServerIdMatches, serverIdFromHeaders } from './identity.js'
-import { asRecord, asString } from '../json.js'
+import { asRecord, asString, isObjectKey } from '../json.js'
 import {
   ZOTERO_UNEXPECTED,
   ZOTERO_INVALID_ARGUMENT,
@@ -23,7 +23,11 @@ import {
 import { ZOTERO_CHILD_PAGE_MAX_ROWS } from '../constants.js'
 import type { NormalizeContext } from '../normalize-context.js'
 import { type ZoteroChildKind } from '../normalize-children.js'
-import { childCollection, normalizeItemDetail } from '../normalize-item-detail.js'
+import {
+  childCollection,
+  normalizeItemDetail,
+  partitionDetailChildren,
+} from '../normalize-item-detail.js'
 import { collectionKeysOf } from '../normalize-search.js'
 import { attachmentRecordOf, partitionChildren } from '../normalize-children.js'
 import {
@@ -41,15 +45,23 @@ import {
   fetchDirectChildren,
 } from './children-wire.js'
 import { resolveAttachmentRow } from './attachment-location.js'
-import { normalizeAttachmentRecord } from '../attachments.js'
+import {
+  bestAttachmentFromLinks,
+  normalizeAttachmentRecord,
+  selectAttachments,
+  type ZoteroAttachmentCandidate,
+} from '../attachments.js'
+import { isPdfContentType } from '../media-types.js'
 import { mapWithConcurrency } from '../concurrency.js'
 import type {
   SupportedLocalLibrary,
+  ZoteroAnnotationRecord,
   ZoteroChildPage,
   ZoteroChildPageRequest,
   ZoteroGetRequest,
   ZoteroInclude,
   ZoteroItemDetail,
+  ZoteroNoteRecord,
   ZoteroAttachmentRecord,
 } from '../types.js'
 
@@ -69,6 +81,23 @@ interface ChildRowNeeds {
  */
 export function attachmentTargetKindMessage(itemType: string): string {
   return `The referenced object is a ${itemType}, not an attachment; annotations hang off attachment refs.`
+}
+
+/**
+ * Refuse an attachment ref unless the served row is itself an attachment. A
+ * row with no itemType cannot be confirmed, which is a different failure from
+ * a known other type and must not read as a blank type name.
+ * @param itemType - the served object's itemType, or '' when it carried none.
+ * @param key - the object key, for the unconfirmed message.
+ */
+export function assertAttachmentTarget(itemType: string, key: string): void {
+  if (itemType === 'attachment') return
+  throw new ZoteroError(
+    itemType === ''
+      ? `The referenced object ${key} could not be confirmed as an attachment.`
+      : attachmentTargetKindMessage(itemType),
+    ZOTERO_INVALID_ARGUMENT,
+  )
 }
 
 /**
@@ -138,22 +167,20 @@ export async function getItem(
   assertServerIdMatches(serverId, ref.serverId)
   const data = asRecord(asRecord(parent.json)?.data)
   const itemType = asString(data?.itemType) ?? ''
-  if (ref.kind === 'attachment' && itemType !== 'attachment') {
-    throw new ZoteroError(attachmentTargetKindMessage(itemType), ZOTERO_INVALID_ARGUMENT)
-  }
+  if (ref.kind === 'attachment') assertAttachmentTarget(itemType, ref.key)
   const keys = collectionKeysOf(parent.json)
   const collectionNames =
     keys.length > 0
       ? await directory.collectionNamesFor(keys, library, serverId, signal)
       : undefined
-  const context = { library, serverId }
-  const normalize = (rows?: readonly unknown[]) =>
+  const context: NormalizeContext = { library, serverId }
+  const linkBest = bestAttachmentFromLinks(parent.json)
+  const normalize = () =>
     normalizeItemDetail({
       parent: parent.json,
       library,
       serverId,
       include: request.include,
-      childrenRows: rows,
       collectionNames,
       fields: request.fields,
       maxAbstractChars: Number.MAX_SAFE_INTEGER,
@@ -214,7 +241,33 @@ export async function getItem(
   const listings: (ZoteroInclude | 'direct')[] = combined
     ? ['direct', ...includes.filter((kind) => kind === 'annotations')]
     : includes
-  for (const listing of listings) {
+
+  /** One listing's answer: normalized buckets plus the raw rows a location read needs. */
+  interface ListingRead {
+    readonly listing: ZoteroInclude | 'direct'
+    readonly kinds: readonly ZoteroInclude[]
+    readonly notes: ZoteroNoteRecord[]
+    readonly annotations: ZoteroAnnotationRecord[]
+    readonly attachments: ZoteroAttachmentCandidate[]
+    readonly attachmentRows: Map<string, unknown>
+    readonly pdfRows: unknown[]
+    readonly total: number
+    readonly page?: { offset: number; limit: number; nextOffset?: number }
+  }
+
+  const isPdfRow = (row: unknown): boolean => {
+    const key = asString(asRecord(row)?.key)
+    return (
+      key !== undefined &&
+      isObjectKey(key) &&
+      isPdfContentType(normalizeAttachmentRecord(row).contentType)
+    )
+  }
+
+  const readListing = async (
+    listing: ZoteroInclude | 'direct',
+    poolSignal: AbortSignal,
+  ): Promise<ListingRead> => {
     const kinds =
       listing === 'direct' ? includes.filter((kind) => kind !== 'annotations') : [listing]
     const requested = listing === 'direct' ? undefined : request.childPages?.[listing]
@@ -222,112 +275,164 @@ export async function getItem(
       requested === undefined
         ? undefined
         : childPageWindowOf({ kind: listing as ZoteroInclude, ...requested }, deps.limits)
-    for (const kind of kinds) {
-      Object.assign(detail, {
-        [kind]: { total: 0, returned: 0, items: [], completeness: window ? 'page' : 'complete' },
-      })
-    }
+    const notes: ZoteroNoteRecord[] = []
+    const annotations: ZoteroAnnotationRecord[] = []
+    const attachments: ZoteroAttachmentCandidate[] = []
+    const attachmentRows = new Map<string, unknown>()
+    const pdfRows: unknown[] = []
     const seen = new Set<string>()
-    for await (const page of childPages(
-      deps,
-      ref.key,
+    let total = 0
+    let page: ListingRead['page']
+    for await (const current of childPages(deps, {
+      key: ref.key,
       library,
       serverId,
-      listing,
-      signal,
-      window,
-    )) {
-      const normalized = normalize(page.rows)
-      if (normalized.bestAttachment) detail.bestAttachment ??= normalized.bestAttachment
-      if (locations === 'best' && !detail.bestAttachment) {
-        const candidateRow = page.rows.find(
-          (row) =>
-            asRecord(asRecord(row)?.data)?.itemType === 'attachment' &&
-            normalizeAttachmentRecord(row).contentType === 'application/pdf',
-        )
-        if (candidateRow) {
-          detail.bestAttachment = attachmentRecordOf(
-            normalizeAttachmentRecord(candidateRow),
-            context,
-          )
-          bestRow = candidateRow
-        }
-      }
-      for (const row of page.rows) {
+      kind: listing,
+      signal: poolSignal,
+      ...(window !== undefined ? { window } : {}),
+    })) {
+      const rowsByKey = new Map(current.rows.map((row) => [asString(asRecord(row)?.key), row]))
+      const partitioned = partitionDetailChildren(
+        current.rows,
+        context,
+        request.include,
+        Number.MAX_SAFE_INTEGER,
+      )
+      for (const row of current.rows) {
         const rowKey = asString(asRecord(row)?.key)
         if (!rowKey || seen.has(rowKey))
           throw new ZoteroError('Duplicate or invalid child key during reading.', ZOTERO_UNEXPECTED)
         seen.add(rowKey)
-        if (
-          locations === 'best' &&
-          refStringFor(library, 'attachment', rowKey, serverId) === detail.bestAttachment?.ref
-        )
-          bestRow = row
       }
-      if (locations === 'included') {
-        // Resolve only this page, then discard its raw rows before fetching another.
-        const pageRows = new Map(page.rows.map((row) => [asString(asRecord(row)?.key), row]))
-        await mapWithConcurrency(
-          normalized.attachments?.items ?? [],
-          deps.limits.graphConcurrency,
-          (attachment, poolSignal) =>
-            resolveRecord(
-              attachment,
-              pageRows.get(parseSupportedRef(attachment.ref, ['attachment']).key),
-              poolSignal,
-            ),
-          { signal },
-        )
+      notes.push(...partitioned.notes)
+      annotations.push(...partitioned.annotations)
+      for (const candidate of partitioned.attachments) {
+        attachments.push(candidate)
+        const row = rowsByKey.get(candidate.key)
+        if (row !== undefined) attachmentRows.set(candidate.key, row)
+        if (locations === 'best' && isPdfContentType(candidate.contentType) && row !== undefined)
+          pdfRows.push(row)
       }
-      for (const kind of kinds) {
-        const target = detail[kind]!
-        const current = normalized[kind]!
-        // Each page is normalized before another raw response is requested.
-        target.items.push(...(current.items as never[]))
-        target.returned += current.returned
-        if (kind === 'attachments' && detail.bestAttachment) {
-          const same = normalized.attachments?.items.find(
-            (attachment) => attachment.ref === detail.bestAttachment?.ref,
-          )
-          if (same) Object.assign(detail.bestAttachment, same)
+      total = current.total
+      if (window !== undefined)
+        page ??= {
+          offset: current.offset,
+          limit: current.limit,
+          ...(current.nextOffset !== undefined ? { nextOffset: current.nextOffset } : {}),
         }
-        target.total = listing === 'direct' ? target.returned : page.total
-        if (window)
-          Object.assign(target, {
-            offset: page.offset,
-            limit: page.limit,
-            ...(page.nextOffset !== undefined ? { nextOffset: page.nextOffset } : {}),
-          })
-      }
-      if (listing === 'direct') detail.children.total = page.total
     }
+    return { listing, kinds, notes, annotations, attachments, attachmentRows, pdfRows, total, page }
   }
-  if (locations !== 'none') {
-    if (locations === 'best' && detail.bestAttachment === undefined) {
-      // Fetch candidates only when the caller explicitly asks for a location.
-      for await (const page of childPages(
-        deps,
-        ref.key,
+
+  // One batch after the parent: every listing is independent, and the first
+  // failure cancels its siblings instead of letting them finish unseen.
+  const pool = new AbortController()
+  const relayAbort = () => pool.abort(signal?.reason)
+  if (signal?.aborted) relayAbort()
+  else signal?.addEventListener('abort', relayAbort, { once: true })
+  let reads: ListingRead[]
+  try {
+    const settled = await Promise.allSettled(
+      listings.map((listing) => readListing(listing, pool.signal)),
+    )
+    const rejected = settled.find(
+      (entry): entry is PromiseRejectedResult => entry.status === 'rejected',
+    )
+    if (rejected !== undefined) {
+      pool.abort(rejected.reason)
+      throw rejected.reason
+    }
+    reads = settled.map((entry) => (entry as PromiseFulfilledResult<ListingRead>).value)
+  } finally {
+    signal?.removeEventListener('abort', relayAbort)
+  }
+
+  for (const read of reads) {
+    const completeness = read.page === undefined ? 'complete' : 'page'
+    const pageFields =
+      read.page === undefined
+        ? {}
+        : {
+            offset: read.page.offset,
+            limit: read.page.limit,
+            ...(read.page.nextOffset !== undefined ? { nextOffset: read.page.nextOffset } : {}),
+          }
+    if (read.kinds.includes('notes'))
+      detail.notes = {
+        ...pageFields,
+        completeness,
+        total: read.listing === 'direct' ? read.notes.length : read.total,
+        returned: read.notes.length,
+        items: read.notes,
+      }
+    if (read.kinds.includes('annotations'))
+      detail.annotations = {
+        ...pageFields,
+        completeness,
+        total: read.listing === 'direct' ? read.annotations.length : read.total,
+        returned: read.annotations.length,
+        items: read.annotations,
+      }
+    if (read.kinds.includes('attachments')) {
+      const items = read.attachments.map((candidate) => attachmentRecordOf(candidate, context))
+      detail.attachments = {
+        ...pageFields,
+        completeness,
+        total: read.listing === 'direct' ? items.length : read.total,
+        returned: items.length,
+        items,
+      }
+    }
+    if (read.listing === 'direct') detail.children.total = read.total
+  }
+
+  // The link attachment keeps its place; only its title comes from the rows.
+  if (detail.bestAttachment !== undefined && linkBest !== undefined) {
+    const linked = reads
+      .flatMap((read) => read.attachments)
+      .find((candidate) => candidate.key === linkBest.key)
+    if (linked !== undefined) detail.bestAttachment.title = linked.title
+  }
+
+  if (locations === 'included') {
+    const rowsByKey = new Map<string, unknown>()
+    for (const read of reads) for (const [key, row] of read.attachmentRows) rowsByKey.set(key, row)
+    await mapWithConcurrency(
+      detail.attachments?.items ?? [],
+      deps.limits.graphConcurrency,
+      (attachment, poolSignal) =>
+        resolveRecord(
+          attachment,
+          rowsByKey.get(parseSupportedRef(attachment.ref, ['attachment']).key),
+          poolSignal,
+        ),
+      { signal },
+    )
+  }
+  if (locations === 'best' && detail.bestAttachment === undefined) {
+    // Candidates only when the caller explicitly asks; the ranking is Zotero's
+    // own, so it must see every PDF, not just the first page that carried one.
+    const candidates = reads.flatMap((read) => read.pdfRows)
+    if (candidates.length === 0 && !request.include.has('attachments')) {
+      for await (const current of childPages(deps, {
+        key: ref.key,
         library,
         serverId,
-        'attachments',
+        kind: 'attachments',
         signal,
-      )) {
-        for (const row of page.rows) {
-          const candidate = normalizeAttachmentRecord(row)
-          if (detail.bestAttachment === undefined && candidate.contentType === 'application/pdf') {
-            detail.bestAttachment = attachmentRecordOf(candidate, context)
-            bestRow = row
-          }
-        }
-        if (detail.bestAttachment !== undefined) break
-      }
-      if (detail.bestAttachment === undefined)
-        detail.location = { kind: 'unavailable', reason: 'No attachment to resolve.' }
+      }))
+        candidates.push(...current.rows.filter(isPdfRow))
     }
-    if (locations === 'best' && detail.bestAttachment)
-      await resolveRecord(detail.bestAttachment, bestRow, signal)
+    const [best] = selectAttachments(candidates, 'pdf')
+    if (best === undefined) {
+      detail.location = { kind: 'unavailable', reason: 'No attachment to resolve.' }
+    } else {
+      detail.bestAttachment = attachmentRecordOf(best, context)
+      bestRow = candidates.find((row) => asString(asRecord(row)?.key) === best.key)
+    }
   }
+  if (locations === 'best' && detail.bestAttachment)
+    await resolveRecord(detail.bestAttachment, bestRow, signal)
   signal?.throwIfAborted()
   return detail
 }
@@ -362,23 +467,15 @@ export async function getChildPage(
     const serverId = serverIdFromHeaders(row.headers, ref.serverId)
     assertServerIdMatches(serverId, ref.serverId)
     const itemType = asString(asRecord(asRecord(row.json)?.data)?.itemType) ?? ''
-    if (itemType !== 'attachment') {
-      throw new ZoteroError(
-        itemType === ''
-          ? `The referenced object ${ref.key} could not be confirmed as an attachment.`
-          : attachmentTargetKindMessage(itemType),
-        ZOTERO_INVALID_ARGUMENT,
-      )
-    }
-    const fetched = await fetchChildPage(
-      deps,
-      'annotations',
-      ref.key,
+    assertAttachmentTarget(itemType, ref.key)
+    const fetched = await fetchChildPage(deps, {
+      key: ref.key,
       library,
       serverId,
-      page,
+      kind: 'annotations',
       signal,
-    )
+      window: page,
+    })
     const ctx: NormalizeContext = { library, serverId: fetched.serverId ?? serverId ?? undefined }
     const partitioned = partitionChildren(
       fetched.rows,
@@ -395,15 +492,14 @@ export async function getChildPage(
       ),
     }
   }
-  const fetched = await fetchChildPage(
-    deps,
-    request.kind,
-    ref.key,
+  const fetched = await fetchChildPage(deps, {
+    key: ref.key,
     library,
-    ref.serverId,
-    page,
+    serverId: ref.serverId,
+    kind: request.kind,
     signal,
-  )
+    window: page,
+  })
   let serverId = fetched.serverId ?? ref.serverId
   if (fetched.total === 0 && page.offset === 0) {
     // A missing parent must still surface as the typed 404; a parent that

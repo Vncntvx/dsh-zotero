@@ -54,7 +54,10 @@ it('requests the next raw page only when the consumer advances', async () => {
     maxResponseBytes: 100000,
     maxInFlight: 4,
   })
-  const pages = childPages({ client }, 'ABCD1234', { type: 'user', id: 0 }, 'S1', 'notes')
+  const pages = childPages(
+    { client },
+    { key: 'ABCD1234', library: { type: 'user', id: 0 }, serverId: 'S1', kind: 'notes' },
+  )
   expect((await pages.next()).value).toMatchObject({ offset: 0, nextOffset: 1 })
   expect(harness.mock.requests).toHaveLength(1)
   expect((await pages.next()).value).toMatchObject({ offset: 1 })

@@ -332,42 +332,11 @@ export async function readPagesConcurrentlyFolded<T>(
     }
   }
   pages.sort((a, b) => a.offset - b.offset)
-  return { pages, total, serverId: observed ?? undefined, libraryVersion: version }
-}
-
-/**
- * Read every page of one listing concurrently and return the raw rows in
- * listing order. The folded reader owns the windowing and repair; this
- * wrapper is the identity fold for callers that still consume raw rows.
- */
-export async function readPagesConcurrently(
-  client: ZoteroHttpClient,
-  path: string,
-  initial: URLSearchParams,
-  serverId: string | undefined,
-  signal: AbortSignal | undefined,
-  what: { readonly body: string; readonly page: string },
-  concurrency: number,
-): Promise<{
-  rows: readonly unknown[]
-  total: number
-  serverId?: string
-  libraryVersion?: number
-}> {
-  const result = await readPagesConcurrentlyFolded(
-    client,
-    path,
-    initial,
-    serverId,
-    signal,
-    what,
-    concurrency,
-    (rows) => rows,
-  )
-  return {
-    rows: result.pages.flatMap((page) => page.value),
-    total: result.total,
-    ...(result.serverId !== undefined ? { serverId: result.serverId } : {}),
-    ...(result.libraryVersion !== undefined ? { libraryVersion: result.libraryVersion } : {}),
+  if (rowsRead !== total) {
+    throw new ZoteroError(
+      `Zotero returned ${rowsRead} rows for ${what.page} but reported ${total}.`,
+      ZOTERO_UNEXPECTED,
+    )
   }
+  return { pages, total, serverId: observed ?? undefined, libraryVersion: version }
 }

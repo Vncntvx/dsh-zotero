@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ZoteroHttpClient } from '../../src/http-client.js'
 import { ZOTERO_UNEXPECTED } from '../../src/errors.js'
-import { readPagesConcurrently, readPagesConcurrentlyFolded } from '../../src/local/pagination.js'
+import { readPagesConcurrentlyFolded } from '../../src/local/pagination.js'
 
 function rowsOf(total: number): { key: string }[] {
   return Array.from({ length: total }, (_, index) => ({
@@ -213,9 +213,9 @@ describe('readPagesConcurrentlyFolded', () => {
     ).rejects.toMatchObject({ code: ZOTERO_UNEXPECTED })
   })
 
-  it('keeps the raw-row wrapper in listing order', async () => {
+  it('returns folded pages in listing order after a short page', async () => {
     const rows = rowsOf(120)
-    const result = await readPagesConcurrently(
+    const result = await readPagesConcurrentlyFolded(
       clientOf(rows, { shortAt: new Map([[100, 10]]) }),
       '/items',
       new URLSearchParams(),
@@ -223,9 +223,10 @@ describe('readPagesConcurrentlyFolded', () => {
       undefined,
       what,
       4,
+      (page) => page,
     )
-    expect(result.rows.map((row) => (row as { key: string }).key)).toEqual(
-      rows.map((row) => row.key),
-    )
+    expect(
+      result.pages.flatMap((page) => page.value).map((row) => (row as { key: string }).key),
+    ).toEqual(rows.map((row) => row.key))
   })
 })

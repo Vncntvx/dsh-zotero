@@ -1,7 +1,7 @@
 /**
- * The `zotero_get` / `zotero_attachment` provider contract: item detail with
- * lazy children and collection names, and attachment resolution to verified
- * on-disk files or linked URLs.
+ * The `zotero_get` provider contract: item detail with lazy children and
+ * collection names, and attachment resolution to verified on-disk files or
+ * linked URLs.
  * @module tests/provider/get
  */
 
