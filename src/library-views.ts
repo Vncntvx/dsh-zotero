@@ -1,4 +1,3 @@
-import { ZOTERO_CHILD_PAGE_ROWS } from './constants.js'
 /**
  * Domain↔wire mappings for the library panel's five Remote endpoints
  * (browse, search, item detail, child page, export). The
@@ -11,6 +10,7 @@ import { ZOTERO_CHILD_PAGE_ROWS } from './constants.js'
  * @module dsh-zotero/library-views
  */
 
+import { ZOTERO_CHILD_PAGE_ROWS } from './constants.js'
 import { parseRef, parseSupportedRef } from './refs.js'
 import { ZOTERO_UNEXPECTED, ZoteroError } from './errors.js'
 import type {

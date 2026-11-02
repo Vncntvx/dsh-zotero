@@ -26,9 +26,11 @@ import {
   DIAGNOSTIC_MESSAGE_MAX_CHARS,
   clampText,
 } from './diagnostics.js'
-import { toStatusView } from './session-events.js'
 import { requireZoteroService } from './service.js'
+import { REF_KEY_SOURCE } from './ref-grammar.js'
+import { isObjectKey } from './json.js'
 import {
+  ZOTERO_DIAGNOSIS_OK,
   ZOTERO_SETTINGS_NAMESPACE,
   ZOTERO_STATUS_SERVICE_KEY,
   type ZoteroAttachmentLocationView,
@@ -38,6 +40,33 @@ import {
   type ZoteroReportResultView,
   type ZoteroStatusView,
 } from './contract.js'
+import type { ZoteroStatus } from './types.js'
+
+/**
+ * Fold a host-internal status record into the wire view.
+ *
+ * Absent optional facts stay absent: the strict codec rejects undefined keys,
+ * and a connected probe carries no diagnosis. The success sentinel is stripped
+ * for the same reason the Remote endpoint strips it: it marks "nothing to
+ * explain" internally and must never reach a renderer.
+ * @param status - the provider's own status record.
+ * @returns the view the wire `status` endpoint serves.
+ */
+function toStatusView(status: ZoteroStatus): ZoteroStatusView {
+  return {
+    providerId: status.providerId,
+    ...(status.endpoint === undefined ? {} : { endpoint: status.endpoint }),
+    connected: status.connected,
+    ...(status.apiVersion === undefined ? {} : { apiVersion: status.apiVersion }),
+    ...(status.serverId === undefined ? {} : { serverId: status.serverId }),
+    ...(status.schemaVersion === undefined ? {} : { schemaVersion: status.schemaVersion }),
+    ...(status.zoteroVersion === undefined ? {} : { zoteroVersion: status.zoteroVersion }),
+    ...(status.write === undefined ? {} : { write: status.write }),
+    ...(status.diagnosis === undefined || status.diagnosis === ZOTERO_DIAGNOSIS_OK
+      ? {}
+      : { diagnosis: status.diagnosis }),
+  }
+}
 
 /** Await the OS launcher accepting the protocol request. */
 export type ProtocolLauncher = (
@@ -54,12 +83,14 @@ const defaultLauncher: ProtocolLauncher = (command, args, options) =>
     })
   })
 
+/** The deep links this host may launch: a selection or a PDF read under a library. */
+const PROTOCOL_URL_PATTERN = new RegExp(
+  `^zotero://(select|open-pdf)/(?:library|groups/[1-9][0-9]*)/items/${REF_KEY_SOURCE}(?:\\?([^#]*))?$`,
+)
+
 function validProtocolUrl(url: string): boolean {
   if (url === 'zotero://select/') return true
-  const match =
-    /^zotero:\/\/(select|open-pdf)\/(?:library|groups\/[1-9][0-9]*)\/items\/[A-Z0-9]{8}(?:\?([^#]*))?$/.exec(
-      url,
-    )
+  const match = PROTOCOL_URL_PATTERN.exec(url)
   if (!match) return false
   if (match[2] === undefined) return true
   if (match[1] !== 'open-pdf' || !match[2]) return false
@@ -70,7 +101,7 @@ function validProtocolUrl(url: string): boolean {
     seen.add(pair[1]!)
     try {
       const value = decodeURIComponent(pair[2]!)
-      return pair[1] === 'annotation' ? /^[A-Z0-9]{8}$/.test(value) : /^[1-9][0-9]*$/.test(value)
+      return pair[1] === 'annotation' ? isObjectKey(value) : /^[1-9][0-9]*$/.test(value)
     } catch {
       return false
     }

@@ -1,4 +1,3 @@
-import { receiptOf } from '../result-reader.ts'
 /**
  * The session source reducer: turns the session's zotero tool blocks into a
  * {@link SourceWorkspace}. The listed sources are the stable union (every
@@ -10,6 +9,8 @@ import { receiptOf } from '../result-reader.ts'
  * workspace.
  * @module dsh-zotero/client/sources/reducer
  */
+
+import { receiptOf } from '../result-reader.ts'
 
 import type { ToolArgs, ToolCallBlock } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import {

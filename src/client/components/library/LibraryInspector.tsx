@@ -43,7 +43,8 @@ import {
   selectUrlOf,
 } from '../../actions/open-zotero.ts'
 import { formatCreatorsList } from '../../../creators.ts'
-import { HTML_CONTENT_TYPE, PDF_CONTENT_TYPE } from '../../../media-types.ts'
+import { HTML_CONTENT_TYPE, PDF_CONTENT_TYPE, isPdfContentType } from '../../../media-types.ts'
+import { isObjectKey } from '../../../json.ts'
 import { CopyButton } from '../CopyButton.tsx'
 import { PdfReadButton } from '../open/PdfReadButton.tsx'
 import { LibraryCitationActions } from './LibraryCitationActions.tsx'
@@ -296,7 +297,7 @@ function AnnotationItem({
   const annotationKey =
     identity &&
     (identity.kind === 'annotation' || identity.kind === 'item') &&
-    /^[A-Z0-9]{8}$/.test(identity.key)
+    isObjectKey(identity.key)
       ? identity.key
       : undefined
   const annotationUrl =
@@ -659,7 +660,7 @@ export function LibraryInspector({
           {detail.annotations.items.map((annotation) => {
             const targetAttachmentRef =
               annotation.parentRef ??
-              detail.attachments?.items.find((att) => att.contentType === 'application/pdf')?.ref ??
+              detail.attachments?.items.find((att) => isPdfContentType(att.contentType))?.ref ??
               detail.attachments?.items[0]?.ref
             return (
               <AnnotationItem

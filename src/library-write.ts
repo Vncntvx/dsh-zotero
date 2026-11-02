@@ -15,6 +15,7 @@ import {
   ZOTERO_UNEXPECTED,
 } from './errors.js'
 import { zoteroLibraryWriteRequestSchema } from './wire-schemas.js'
+import { asRecord, asString } from './json.js'
 
 /**
  * Panel operation → registered write tool. The values are pinned to the one
@@ -92,15 +93,8 @@ export async function executeLibraryWrite(
     )
   }
   const result = callResult.result
-  const meta = result.meta
-  const kind =
-    meta !== null &&
-    typeof meta === 'object' &&
-    !Array.isArray(meta) &&
-    'kind' in meta &&
-    typeof (meta as Record<string, unknown>).kind === 'string'
-      ? ((meta as Record<string, unknown>).kind as ZoteroLibraryWriteResultView['kind'])
-      : undefined
+  const kind = asString(asRecord(result.meta)?.kind) as
+    ZoteroLibraryWriteResultView['kind'] | undefined
   const code = result.isError ? result.error.info?.code : undefined
   const declined = result.isError && result.error.message.includes('user rejected tool')
   return {

@@ -1,4 +1,3 @@
-import type { ZoteroCollectionPathRequestView, ZoteroCollectionPathResultView } from './contract.js'
 /**
  * `ctx.zotero`: the stable research-domain boundary of the plugin.
  *
@@ -22,6 +21,7 @@ import type { ZoteroCollectionPathRequestView, ZoteroCollectionPathResultView } 
  * @module dsh-zotero/service
  */
 
+import type { ZoteroCollectionPathRequestView, ZoteroCollectionPathResultView } from './contract.js'
 import { Service, type Context, type FiberState, type LoggerLevel } from '@deepseek-ai/cordis'
 // Type-only: brings the loader `loader/volatile-update` Events merge into
 // this program (the structural-flip reaction below).
@@ -30,17 +30,13 @@ import type {} from '@deepseek-ai/cordis-plugin-loader'
 import type {} from '@deepseek-ai/dsh-typert-registry'
 // Type-only: brings the `ctx.credentials` Context merge into this program.
 import type { CredentialProvider } from '@deepseek-ai/dsh-credentials'
-// Type-only: brings the `ctx.sessionProjections` Context merge into this program.
-import type {} from '@deepseek-ai/dsh-session-projection'
 // Type-only: brings the `ctx.settings` Context merge into this program.
 import type {} from '@deepseek-ai/dsh-settings'
 import { DiagnosticsRecorder, logMessageToPush, loggerNameMatches } from './diagnostics.js'
 import { ZoteroHttpClient } from './http-client.js'
-import { registerStatusCommand } from './command.js'
 import { ZoteroRuntime } from './remote.js'
 import { parseRef } from './refs.js'
 import type { ZoteroAttachmentLocationView } from './contract.js'
-import { ZOTERO_STATUS_PROJECTION } from './status-projection.js'
 import { TYPERT_MANIFEST } from './typert.js'
 import { WriteAuthorizer } from './write-auth.js'
 import { ZoteroWriteHttpClient } from './write-http.js'
@@ -255,7 +251,6 @@ export class ZoteroService extends Service {
         this.reconcileWriteTools(config.writeEnabled)
       },
     })
-    registerStatusCommand(ctx, this)
     registerPromptSection(ctx, () => this.config)
     ctx.effect(
       () => () => {
@@ -285,25 +280,6 @@ export class ZoteroService extends Service {
       settingsCtx.effect(() => settingsCtx.settings.configure({ auto: false }, ctx.fiber))
     })
     this.reconcileWriteTools(this.config.writeEnabled)
-  }
-
-  /**
-   * The durable half of `/zotero`: the command handler appends a
-   * `zotero/status` event and the card reads it back through this projection
-   * instead of re-parsing the text it was handed. Registration resolves
-   * asynchronously; the plugin publishes nothing downstream of it, so there
-   * is no handle to retain — the registration itself is an effect on this
-   * fiber, and disposal releases it. Optional seam: a composition without the
-   * registry keeps the live probe as the only source, and the card says
-   * nothing it cannot prove. When the seam is absent the inject fiber stays
-   * pending (and `await binding` is skipped), so the plugin loads without the
-   * projection.
-   */
-  protected async [Service.init](): Promise<void> {
-    const binding = this.ctx.inject(['sessionProjections'], async (projectionCtx) => {
-      await projectionCtx.sessionProjections.register(ZOTERO_STATUS_PROJECTION)
-    })
-    if (this.ctx.get('sessionProjections') !== undefined) await binding
   }
 
   /**

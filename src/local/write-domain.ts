@@ -411,15 +411,11 @@ export interface ItemWriteContext<S> {
 }
 
 /**
- * The read-merge-write scaffold shared by every item update: pin the instance,
- * check the ref against it, read the item once, and hand the plan a snapshot
- * plus a `send` that carries the version precondition. The plan owns the merge
- * and the result shaping; an unchanged plan simply never calls `send`.
- */
-/**
- * The same scaffold for plans that merge list state: the reader decides what
- * the snapshot must carry, and its result is the only place that state is
- * read, so a plan never guesses at a field the read did not prove.
+ * The read-merge-write scaffold every item update shares: pin the instance,
+ * check the ref against it, read the item or list state once, and hand the
+ * plan a snapshot plus a `send` that carries the version precondition. The
+ * plan owns the merge and the result shaping; an unchanged plan simply never
+ * calls `send`.
  */
 export async function withItemStateWrite<S, T>(
   deps: WriteDomainDeps,

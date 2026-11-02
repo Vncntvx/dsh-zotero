@@ -8,6 +8,7 @@
  */
 
 import type { EvidenceMatchStatus } from './model.ts'
+import { SERVER_ID_SOURCE } from '../../ref-grammar.ts'
 
 /** The item identity: the ref without its query, lowercased. */
 export function normalizeRefKey(ref: string): string {
@@ -16,11 +17,12 @@ export function normalizeRefKey(ref: string): string {
 }
 
 /** The `?server=` qualifier of a zotero:// ref, when it carries one. */
+const SERVER_PARAM_PATTERN = new RegExp(`(?:^|&)server=(${SERVER_ID_SOURCE})(?:&|$)`)
+
 export function serverIdOf(ref: string): string | undefined {
   const query = ref.split('?', 2)[1]
   if (query === undefined) return undefined
-  const match = /(?:^|&)server=([A-Za-z0-9_-]{1,64})(?:&|$)/.exec(query)
-  return match?.[1]
+  return SERVER_PARAM_PATTERN.exec(query)?.[1]
 }
 
 /**

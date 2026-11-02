@@ -91,7 +91,7 @@ export function artifactOf(
 /** One confirmed-PDF item, the fixture gallery's shared building block. */
 function pdfItemOf(overrides: Partial<SourceItem> = {}): SourceItem {
   return sourceOf({
-    ref: 'zotero://user/0/item/P',
+    ref: 'zotero://user/0/item/PPPP0001',
     key: 'zotero://user/0/item/p',
     title: 'Risk policy in practice',
     creators: 'Xu, Wenjie',

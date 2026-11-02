@@ -38,7 +38,9 @@ const KINDS = '(?<kind>item|attachment|annotation|collection|search)'
 /** The five object kinds the canonical Zotero ref grammar admits. */
 export type RefKind = 'item' | 'attachment' | 'annotation' | 'collection' | 'search'
 
-const SERVER_QUALIFIER = '\\?server=(?<serverId>[A-Za-z0-9_-]{1,64})'
+/** The server-id source: one to 64 URL-safe characters. */
+export const SERVER_ID_SOURCE = '[A-Za-z0-9_-]{1,64}'
+const SERVER_QUALIFIER = `\\?server=(?<serverId>${SERVER_ID_SOURCE})`
 
 /** Full ref grammar, anchored: the whole string must be exactly one ref. */
 export const REF_PATTERN = new RegExp(

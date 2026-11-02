@@ -20,9 +20,6 @@ interface ParsedRefIdentity {
 const REF_IDENTITY_CACHE_LIMIT = 500
 const refIdentityCache = new Map<string, ParsedRefIdentity | null>()
 
-const GENERAL_REF_PATTERN =
-  /^zotero:\/\/(?<libraryType>user|group)\/(?<libraryId>\d+)\/(?<kind>item|attachment|annotation|collection|search)\/(?<key>[A-Za-z0-9_-]+)/
-
 /**
  * Clear the reference identity cache. Exported for test isolation.
  */
@@ -39,7 +36,7 @@ export function parseRefIdentity(ref: string): ParsedRefIdentity | null {
   const cached = refIdentityCache.get(ref)
   if (cached !== undefined) return cached
 
-  const match = REF_IN_TEXT_PATTERN.exec(ref) ?? GENERAL_REF_PATTERN.exec(ref)
+  const match = REF_IN_TEXT_PATTERN.exec(ref)
   let result: ParsedRefIdentity | null = null
   if (match?.groups) {
     const { libraryType, libraryId, kind, key } = match.groups

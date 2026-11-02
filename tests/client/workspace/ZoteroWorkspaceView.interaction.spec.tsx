@@ -242,14 +242,16 @@ describe('overview panel', () => {
       screen.getByText(zh.searchEpisodeHitsLine.replace('{returned}', '1').replace('{total}', '1')),
     ).toBeDefined()
     // The developer ref stays behind the disclosure until it is opened.
-    expect(screen.queryByText(new RegExp(`${zh.refLine} zotero://user/0/item/P`))).toBeNull()
+    expect(screen.queryByText(new RegExp(`${zh.refLine} zotero://user/0/item/PPPP0001`))).toBeNull()
     fireEvent.click(screen.getByText(zh.searchDetailOpen))
     // Opening swaps the toggle and reveals the ref; the audit lines stay in
     // the first screen above, so the disclosure carries no second copy of them.
     expect(screen.getByText(zh.searchDetailClose)).toBeDefined()
-    expect(screen.getByText(new RegExp(`${zh.refLine} zotero://user/0/item/P`))).toBeDefined()
+    expect(
+      screen.getByText(new RegExp(`${zh.refLine} zotero://user/0/item/PPPP0001`)),
+    ).toBeDefined()
     fireEvent.click(screen.getByText(zh.searchDetailClose))
-    expect(screen.queryByText(new RegExp(`${zh.refLine} zotero://user/0/item/P`))).toBeNull()
+    expect(screen.queryByText(new RegExp(`${zh.refLine} zotero://user/0/item/PPPP0001`))).toBeNull()
     expect(screen.getByText(zh.searchDetailOpen)).toBeDefined()
     view.unmount()
   })
@@ -261,7 +263,7 @@ describe('overview panel', () => {
     expect(view.container.querySelector('[data-menu]')).toBeNull()
     expect(screen.getByRole('button', { name: zh.openInZotero })).toBeDefined()
     fireEvent.click(screen.getByLabelText(zh.copyZoteroLink))
-    expect(writeClipboard).toHaveBeenCalledWith('zotero://select/library/items/P')
+    expect(writeClipboard).toHaveBeenCalledWith('zotero://select/library/items/PPPP0001')
     // A successful write earns the feedback, and the label persists now, so
     // the button can say so.
     await vi.waitFor(() => expect(screen.getByText(zh.copied)).toBeDefined())
@@ -274,7 +276,7 @@ describe('overview panel', () => {
     const { view } = mountView(workspace, CONNECTED, setDraft)
     fireEvent.click(screen.getByText(zh.exportCitation))
     expect(setDraft).toHaveBeenCalledWith(
-      zh.citeTemplate.replace('{ref}', 'zotero://user/0/item/P'),
+      zh.citeTemplate.replace('{ref}', 'zotero://user/0/item/PPPP0001'),
     )
     view.unmount()
   })

@@ -1,15 +1,14 @@
-import type {} from '@deepseek-ai/dsh-client-ui-deliverables/src/client/turn-deliverables.ts'
 /**
  * File action rendered inside `deliverables.file.actions` for bibliography deliverables.
  * Clicking reveals the Zotero library panel in the right sidebar.
  * @module dsh-zotero/client/components/deliverables/DeliverableZoteroAction
  */
 
+import type {} from '@deepseek-ai/dsh-client-ui-deliverables/src/client/turn-deliverables.ts'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ChatSnapshot, UseChat } from '@deepseek-ai/dsh-client-ui-chat/client'
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import { ZoteroLibraryIcon } from '../library/ZoteroLibraryIcon.tsx'
-import css from './deliverables.module.css'
 
 export interface DeliverableZoteroActionProps {
   readonly actionUrl?: string
@@ -107,7 +106,6 @@ export function DeliverableZoteroAction(props: DeliverableZoteroActionProps) {
     <Button
       variant="outline"
       size="sm"
-      className={css.actionButton}
       onClick={onOpenLibrary}
       title={t('deliverableOpenLibrary')}
       aria-label={t('deliverableOpenLibrary')}

@@ -58,6 +58,9 @@ describe('parseRefIdentity', () => {
     expect(parseRefIdentity('not a ref')).toBeNull()
     expect(parseRefIdentity('')).toBeNull()
     expect(parseRefIdentity('zotero://invalid/0/item/ABC')).toBeNull()
+    // The key grammar is Zotero's: exactly eight uppercase alphanumerics.
+    expect(parseRefIdentity('zotero://user/0/item/abc12345')).toBeNull()
+    expect(parseRefIdentity('zotero://user/0/item/ABC1234')).toBeNull()
   })
 
   it('serves cached results and handles eviction at cache limit', () => {
