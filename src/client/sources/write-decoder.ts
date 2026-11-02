@@ -2,7 +2,7 @@
  * @module dsh-zotero/client/sources/write-decoder
  */
 
-import { numberField } from '../../json.ts'
+import { boolField, numberField } from '../../json.ts'
 
 /**
  * The write projection view, decoded once for every reader. `kind` is the
@@ -28,6 +28,7 @@ const WRITE_KINDS = ['declined', 'applied', 'deleted', 'committed-unverified', '
 type WriteKind = (typeof WRITE_KINDS)[number]
 
 export interface WriteMetaView {
+  readonly unchanged?: boolean
   readonly kind: WriteKind
   readonly restoredCount: number | null
   readonly failedCount: number | null
@@ -52,6 +53,7 @@ function writeKindOf(value: unknown): WriteKind {
 export function writeMetaOf(meta: Record<string, unknown>): WriteMetaView {
   return {
     kind: writeKindOf(meta['kind']),
+    ...(boolField(meta, 'unchanged') === true ? { unchanged: true } : {}),
     restoredCount: numberField(meta, 'restoredCount') ?? null,
     failedCount: numberField(meta, 'failedCount') ?? null,
     addedCount: numberField(meta, 'addedCount') ?? null,

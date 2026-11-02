@@ -3,6 +3,7 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { ItemToolView } from '../../../src/client/toolviews/ItemToolView.tsx'
+import { WriteToolView } from '../../../src/client/toolviews/WriteToolView.tsx'
 import { settled } from '../helpers/blocks.ts'
 import { createToolViewProps, mockUseDisclosure } from '../helpers/mock-disclosure.ts'
 import { mockT } from '../helpers/mock-translate.ts'
@@ -34,4 +35,31 @@ it('retains independent page windows and labels a complete collection with fewer
   expect(screen.getByText(/指定页：偏移 10，返回 1 \/ 51 条/)).toBeTruthy()
   expect(screen.getByText(/完整读取：101 条/)).toBeTruthy()
   expect(screen.getByText(/卡片预览：1 条/)).toBeTruthy()
+})
+it('shows an already satisfied scalar write as a no-change receipt', () => {
+  const block = settled({
+    call: {
+      name: 'zotero_update_item',
+      argsRaw: '{"ref":"zotero://user/0/item/ABCD1234","set":{"title":"Saved"}}',
+    },
+    meta: {
+      kind: 'applied',
+      unchanged: true,
+      changedCount: 0,
+      version: 7,
+      ref: 'zotero://user/0/item/ABCD1234',
+    },
+    content: [{ type: 'text', text: 'Already satisfied; no fields changed.' }],
+  })
+  const { container } = render(
+    <WriteToolView
+      {...createToolViewProps({
+        toolName: 'zotero_update_item',
+        block,
+        useDisclosure: mockUseDisclosure(true),
+        t: mockT,
+      })}
+    />,
+  )
+  expect(container.querySelector('[data-state="noop"]')).toBeTruthy()
 })

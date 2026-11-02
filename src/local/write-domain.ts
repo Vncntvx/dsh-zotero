@@ -416,15 +416,6 @@ export interface ItemWriteContext<S> {
  * plus a `send` that carries the version precondition. The plan owns the merge
  * and the result shaping; an unchanged plan simply never calls `send`.
  */
-async function withItemWrite<T>(
-  deps: WriteDomainDeps,
-  item: ZoteroObjectRef,
-  signal: AbortSignal | undefined,
-  plan: (context: ItemWriteContext<unknown>) => Promise<T>,
-): Promise<T> {
-  return await withItemStateWrite(deps, item, signal, () => ({}), plan)
-}
-
 /**
  * The same scaffold for plans that merge list state: the reader decides what
  * the snapshot must carry, and its result is the only place that state is
@@ -620,10 +611,15 @@ export async function updateItem(
 ): Promise<ZoteroUpdateItemResult> {
   const localRef = requireWritableRef(request.item, ['item'])
   const updates = validateItemUpdateFields(request.set)
-  return await withItemWrite(
+  return await withItemStateWrite(
     deps,
     localRef,
     signal,
+    (data) => ({
+      fields: Object.fromEntries(
+        [...updates].map(([field]) => [wireFieldOf(field), data[wireFieldOf(field)]]),
+      ),
+    }),
     async ({ snapshot, serverId, resultRef, send }) => {
       const valid = await deps.itemTypeFields(snapshot.itemType, signal)
       const patch: Record<string, string> = {}
@@ -636,9 +632,20 @@ export async function updateItem(
             ZOTERO_INVALID_ARGUMENT,
           )
         }
-        patch[wire] = value
-        changed.push(field)
+        if (snapshot.fields[wire] !== value) {
+          patch[wire] = value
+          changed.push(field)
+        }
       }
+      if (changed.length === 0)
+        return {
+          kind: 'applied',
+          ref: resultRef,
+          version: snapshot.version,
+          changed: [],
+          unchanged: true,
+          serverId,
+        }
       changed.sort()
       const { libraryVersion } = await send(patch)
       return {

@@ -730,3 +730,5 @@ Reference truthfulness and accuracy verification. Parses the authors, year, titl
 #### Verdicts
 
 Each reference returns one of four verdicts: `VERIFIED` (the registry record exists and every compared field agrees), `CHECK` (the record exists but a field differs or the work is retracted), `NOT FOUND` (the registry answered and holds no such record), `UNVERIFIED` (the registry was unreachable, so nothing is concluded about this entry). An unreachable registry is never reported as `NOT FOUND`.
+
+Scalar updates validate every requested field against the item type, compare normalized wire values strictly, and PATCH only differences. A satisfied request returns `kind:"applied", unchanged:true, changed:[]` with the observed item `version`, no new `libraryVersion`, and obtains no write key. Capability and both approval gates still apply.

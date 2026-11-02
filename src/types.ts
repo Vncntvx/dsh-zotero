@@ -1140,7 +1140,8 @@ export interface ZoteroUpdateItemResult {
   /** The fields this call changed. */
   changed: string[]
   /** The library version the write advanced the library to. */
-  libraryVersion: number
+  libraryVersion?: number
+  unchanged?: boolean
   serverId?: string
 }
 

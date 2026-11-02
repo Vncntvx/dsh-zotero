@@ -318,6 +318,11 @@ export function presentUpdateResultView(
     return { card: 'generic', title: declinedTitle(noun) }
   }
   const ref = typeof record.ref === 'string' ? record.ref : ''
+  if (record.unchanged === true)
+    return {
+      card: 'generic',
+      title: `Zotero ${noun}: already satisfied${ref === '' ? '' : `: ${ref}`}`,
+    }
   return { card: 'generic', title: `Zotero ${noun} updated${ref === '' ? '' : `: ${ref}`}` }
 }
 

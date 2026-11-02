@@ -70,7 +70,8 @@ const UPDATE_ITEM_OUTPUT_SCHEMA = {
         ref: { type: 'string', required: true },
         version: { type: 'integer', required: true },
         changed: { type: 'array', items: { type: 'string' }, required: true },
-        libraryVersion: { type: 'integer', required: true },
+        libraryVersion: { type: 'integer' },
+        unchanged: { type: 'boolean' },
         serverId: { type: 'string' },
       },
     },
@@ -103,12 +104,21 @@ export function renderUpdateItem(_args: UpdateItemArgs, value: UpdateItemOutput)
   if (value.kind === 'declined') {
     return renderDeclined()
   }
+  if (value.unchanged)
+    return [
+      {
+        type: 'text',
+        text: `Already satisfied: ${value.ref} (version ${value.version}); no fields changed.`,
+      },
+    ]
   return [
     {
       type: 'text',
       text: [
         `Updated ${value.ref} (version ${value.version}); changed ${value.changed.join(', ')}.`,
-        libraryVersionLine(value),
+        ...(value.libraryVersion === undefined
+          ? []
+          : [libraryVersionLine({ ...value, libraryVersion: value.libraryVersion })]),
       ].join('\n'),
     },
   ]
@@ -138,6 +148,7 @@ export function registerUpdateItemTool(ctx: Context, service: ZoteroService): ()
                 kind: 'applied',
                 ref: value.ref,
                 version: value.version,
+                ...(value.unchanged ? { unchanged: true } : {}),
                 changedCount: value.changed.length,
               }
             : { kind: 'declined' },

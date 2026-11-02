@@ -181,6 +181,28 @@ describe('zotero_update_item presentation', () => {
     })
   })
 
+  it('reports an unchanged receipt without claiming a new write version', () => {
+    const value = { kind: 'applied', ref: REF, version: 7, changed: [], unchanged: true }
+    const blocks = tool().output.render(ARGS, value)
+    expect(blocks).toEqual([
+      { type: 'text', text: `Already satisfied: ${REF} (version 7); no fields changed.` },
+    ])
+    const meta = tool().output.presentationMeta!(ARGS, value)
+    expect(meta).toEqual({
+      kind: 'applied',
+      ref: REF,
+      version: 7,
+      changedCount: 0,
+      unchanged: true,
+    })
+    expect(tool().presentResult!(ARGS, ok(meta))?.title).toBe(
+      `Zotero item: already satisfied: ${REF}`,
+    )
+    expect(
+      tool().output.render(ARGS, { kind: 'applied', ref: REF, version: 8, changed: ['date'] })[0],
+    ).toEqual({ type: 'text', text: `Updated ${REF} (version 8); changed date.` })
+  })
+
   it('offers the pending card with the ref', () => {
     expect(tool().presentCall!({ ref: REF, set: { date: '2026' } })).toEqual({
       card: 'generic',

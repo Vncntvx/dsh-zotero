@@ -427,7 +427,7 @@ export function WriteToolView(props: WriteToolViewProps) {
       icon: descriptor.icon(),
       title: t(descriptor.titleKey),
       summary: described.summary,
-      tone: described.tone,
+      tone: write?.unchanged ? ('noop' as const) : described.tone,
       errorSummary: errorSummaryOf(block, raw),
       parentRef: described.parentRef,
       parentSelectUrl: pUrl,
