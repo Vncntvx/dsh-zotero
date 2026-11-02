@@ -30,16 +30,11 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 // Type-only: the `conversation.view` SlotMap row (declared by the slot's
-// owning package) must be in the program for the tab registration to type;
-// `uiConversation` (the event registry the command-input projection uses)
-// merges through the same package.
+// owning package) must be in the program for the tab registration to type.
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 // Type-only: the `sidebarRight` service the tab's `openResource` reads to reveal
 // resolved attachments in the right sidebar.
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
-import { zoteroCommandInputDefinition } from './zotero-command-input.ts'
-import { ZoteroCommandInputView } from './ZoteroCommandInputView.tsx'
-import { ZoteroCommandCard } from './ZoteroCommandCard.tsx'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { ZoteroSettingsSection } from './ZoteroSettingsSection.tsx'
 import { ScholarlySettingsSection } from './ScholarlySettingsSection.tsx'
@@ -106,7 +101,6 @@ export const inject = [
   'slots',
   'remote',
   'configForms',
-  'uiConversation',
   'sidebarRight',
   'sidebarRightTabs',
 ]
@@ -351,52 +345,10 @@ function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces)
 }
 
 /**
- * The `/zotero` command-input surfaces: the projection that leaves the blank
- * Hero plus its chat node. Registered between the shared surfaces and the
- * plugin-manager cards, the order the registration contract pins.
- */
-function registerCommandInputSurfaces(ctx: ClientContext): void {
-  // `/zotero` command-input projection: a non-command Chat node is the
-  // designed way for a slash command to leave the blank Hero (see ui-goal's
-  // `command-input`). Without it, `command/run`+`command/done` log on a fresh
-  // session while the shell stays blank and the status result is invisible.
-  ctx.effect(
-    () => ctx.uiConversation.events.register(zoteroCommandInputDefinition),
-    'dsh-zotero: zotero command-input projection',
-  )
-  ctx.slots.inject('conversation.chat.node', () =>
-    ctx.slots.register(
-      {
-        name: 'conversation.chat.node',
-        key: 'zotero-command-input',
-        locale: NS,
-        registrant: REGISTRANT,
-      },
-      ZoteroCommandInputView,
-    ),
-  )
-}
-
-/**
- * The conversation surfaces: the `/zotero` command result card and the
- * Sources panel gated by `webEnabled`.
+ * The conversation surfaces: the Sources panel gated by `webEnabled`.
  */
 function registerConversationSurfaces(ctx: ClientContext, surfaces: UiSurfaces): void {
   const { form, probe } = surfaces
-
-  // Dedicated Slash command result card for `/zotero`
-  ctx.slots.inject('conversation.chat.commandview', () =>
-    ctx.slots.register(
-      {
-        name: 'conversation.chat.commandview',
-        key: 'zotero',
-        locale: NS,
-        registrant: REGISTRANT,
-        inject: () => ({ probe }),
-      },
-      ZoteroCommandCard,
-    ),
-  )
 
   // The dedicated Sources panel (a conversation tab) registers unless the
   // `webEnabled` namespace flag is explicitly off; before the first snapshot
@@ -427,10 +379,7 @@ function registerConversationSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
               // address and hands the entry a ready URL. This fiber cannot do
               // it: on the browser side the `ctx.sessions` Context key carries
               // the host `SessionStore`, not the client `ISessions` catalog.
-              openResource: (
-                url: string,
-                options?: { readonly params?: Record<string, unknown> },
-              ) => ctx.sidebarRight.openResource(url, options as any),
+              openResource: (url: string) => ctx.sidebarRight.openResource(url),
             }),
           },
           SourcesTab,
@@ -637,8 +586,8 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
 
 /**
  * Register every browser surface: the page dictionaries, the dedicated
- * tool cards, the `/zotero` command-input projection, the bundle configuration
- * page, the plugin-manager cards, and the conversation tab.
+ * tool cards, the bundle configuration page, the plugin-manager cards, and
+ * the conversation tab.
  *
  * Runs on a fiber that declares `remote.zotero`, so the namespace is readable
  * through the official dotted form (`ctx.remote.zotero`), the same shape the
@@ -647,7 +596,6 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
  */
 function registerUi(ctx: ClientContext): void {
   registerSharedSurfaces(ctx)
-  registerCommandInputSurfaces(ctx)
   // One form controller per settings namespace. The bundle configuration page
   // edits all three at once; the dedicated rows edit their specific subsystem.
   // All live as long as the client fiber.
@@ -724,7 +672,6 @@ export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
       'locale',
       'slots',
       'configForms',
-      'uiConversation',
       'sidebarRight',
       'sidebarRightTabs',
     ],

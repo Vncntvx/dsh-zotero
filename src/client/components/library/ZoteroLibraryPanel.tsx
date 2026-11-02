@@ -72,10 +72,7 @@ export interface ZoteroLibraryPanelFace extends LibraryPanelWireFace {
   readonly bindRefresh?: (sessionId: string, tabId: string, refresh: () => void) => () => void
   readonly status: () => Promise<RemoteResult<ZoteroStatusView>>
   readonly resolveAttachment: (ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>
-  readonly openResource: (
-    url: string,
-    options?: { readonly params?: Record<string, unknown> },
-  ) => void
+  readonly openResource: (url: string) => void
   readonly write: (
     request: ZoteroLibraryWriteRequestView,
   ) => Promise<RemoteResult<ZoteroLibraryWriteResultView>>

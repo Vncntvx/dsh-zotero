@@ -1,4 +1,3 @@
-import { ResultSessionContext, receiptOf } from '../result-reader.ts'
 /**
  * The Sources panel: the plugin's conversation tab (id `zotero`, order 30).
  * This module is the controller: it reads the session's identity (the id
@@ -14,6 +13,8 @@ import { ResultSessionContext, receiptOf } from '../result-reader.ts'
  * through the injected inputActions.setDraft and never submit.
  * @module dsh-zotero/client/components/SourcesTab
  */
+
+import { ResultSessionContext, receiptOf } from '../result-reader.ts'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 // Session-scope standard props: `useSession` (lifecycle and identity) is
@@ -104,7 +105,7 @@ export interface SourcesTabFace {
    * because the plugin fiber cannot: on this side the `ctx.sessions` Context
    * key is the host `SessionStore`, not the client `ISessions` catalog.
    */
-  openResource?: (url: string, options?: { readonly params?: Record<string, unknown> }) => void
+  openResource?: (url: string) => void
 }
 
 /** Props the conversation view ring binds for this tab. */

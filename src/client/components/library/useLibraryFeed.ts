@@ -9,7 +9,7 @@
  * @module dsh-zotero/client/components/library/useLibraryFeed
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   SupportedLocalLibrary,
   ZoteroChildListingKind,
@@ -157,20 +157,38 @@ export function useLibraryFeed(
   const [libraryRetry, setLibraryRetry] = useState(0)
   const [listRetry, setListRetry] = useState(0)
   const [inspectorRetry, setInspectorRetry] = useState(0)
-  const requestIdentity = JSON.stringify([
-    serverId,
-    currentLibrary,
-    scopeIdentity(selection, serverId),
-    q,
-    debouncedQ,
-    mode,
-    sort,
-    direction,
-    offset,
-    filters,
-    refreshToken,
-    listRetry,
-  ])
+  // The list owner is one string that names the exact request in flight; the
+  // raw `q` is absent because the list effect parks on `q !== debouncedQ`
+  // instead, so the identity stays stable while the user types.
+  const requestIdentity = useMemo(
+    () =>
+      JSON.stringify([
+        serverId,
+        currentLibrary,
+        scopeIdentity(selection, serverId),
+        debouncedQ,
+        mode,
+        sort,
+        direction,
+        offset,
+        filters,
+        refreshToken,
+        listRetry,
+      ]),
+    [
+      serverId,
+      currentLibrary,
+      selection,
+      debouncedQ,
+      mode,
+      sort,
+      direction,
+      offset,
+      filters,
+      refreshToken,
+      listRetry,
+    ],
+  )
   // Monotonic sequences: the winner is the request issued last, and a stale
   // answer that resolves late is dropped by comparison. Collection and
   // saved-search lanes are not here: they carry their own generation and
@@ -192,22 +210,38 @@ export function useLibraryFeed(
   const [hydratedServer, setHydratedServer] = useState<string>()
   const active = enabled && serverId !== undefined && hydratedServer === serverId
 
-  const navigation = useLibraryNavigation(
-    face,
-    serverId,
-    currentLibrary,
-    active,
-    expanded,
-    setExpanded,
-    prefixes,
-    selection,
-    setSelection,
+  /** The one identity spelling every consumer compares against this instance, memoized per ref. */
+  const identityCache = useRef<{ serverId: string | undefined; map: Map<string, string> }>({
+    serverId: undefined,
+    map: new Map(),
+  })
+  const identityOf = useCallback(
+    (ref: string): string => {
+      if (identityCache.current.serverId !== serverId)
+        identityCache.current = { serverId, map: new Map() }
+      let identity = identityCache.current.map.get(ref)
+      if (identity === undefined) {
+        identity = objectIdentity(ref, serverId)
+        if (identityCache.current.map.size >= 2000) identityCache.current.map.clear()
+        identityCache.current.map.set(ref, identity)
+      }
+      return identity
+    },
+    [serverId],
   )
+
+  const navigation = useLibraryNavigation({
+    face,
+    instance: { serverId, library: currentLibrary },
+    active,
+    expansion: { expanded, setExpanded },
+    restore: { prefixes },
+    selection: { value: selection, update: setSelection },
+    identityOf,
+  })
   const { flatTree, savedSearches } = navigation
   const reloadCachedTree = navigation.refresh
   const refreshSavedLane = navigation.refreshSaved
-  /** The one identity spelling every consumer compares against this instance. */
-  const identityOf = useCallback((ref: string) => objectIdentity(ref, serverId), [serverId])
 
   /**
    * Reset on every library change: hydration on a server switch and an

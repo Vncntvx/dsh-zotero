@@ -18,20 +18,28 @@ import {
   lanePageOf,
   type CollectionRowView,
   type LibraryLanePage,
+  type LibraryLaneState,
   type SavedSearchRowView,
   type LibrarySelection,
 } from './library-model.ts'
-import { objectIdentity } from './navigation-identity.ts'
 import { messageOf } from '../../error-text.ts'
 
 /** One navigation prefix: rows accumulated from offset 0 and the version they were read at. */
 export type NavigationPage<T> = LibraryLanePage<T> & { readonly libraryVersion: number }
 
-/** A lane's render state: the prefix plus its loading and error frames. */
+/**
+ * The lane arms of {@link LibraryLaneState} with every `previous` and the ready
+ * page fenced by the library version. Derived from the model's own arms, so a
+ * field a lane arm gains cannot be forgotten here.
+ */
 export type NavigationLane<T> =
   | NavigationPage<T>
-  | { phase: 'loading'; previous?: NavigationPage<T> }
-  | { phase: 'error'; message: string; previous?: NavigationPage<T> }
+  | (Omit<Extract<LibraryLaneState<T>, { phase: 'loading' }>, 'previous'> & {
+      previous?: NavigationPage<T>
+    })
+  | (Omit<Extract<LibraryLaneState<T>, { phase: 'error' }>, 'previous'> & {
+      previous?: NavigationPage<T>
+    })
 
 /** The rows every lane carries, whatever listing served them. */
 type Row = CollectionRowView | SavedSearchRowView
@@ -48,24 +56,45 @@ function samePath(a: readonly string[] | undefined, b: readonly string[] | undef
   return a.length === b.length && a.every((value, index) => value === b[index])
 }
 
+/** Everything the navigation owns, grouped by what re-creates it. */
+export interface LibraryNavigationOptions {
+  readonly face: LibraryFeedFace
+  /** The confirmed instance and the library the lanes read. */
+  readonly instance: {
+    readonly serverId: string | undefined
+    readonly library: SupportedLocalLibrary
+  }
+  readonly active: boolean
+  /** Which branches are open, and the setter that opens or closes them. */
+  readonly expansion: {
+    readonly expanded: ReadonlySet<string>
+    setExpanded: (
+      next: ReadonlySet<string> | ((prev: ReadonlySet<string>) => ReadonlySet<string>),
+    ) => void
+  }
+  /** The row counts a restored session asks each lane to reach again. */
+  readonly restore: { readonly prefixes: Readonly<Record<string, number>> }
+  /** The selected scope and its setter. */
+  readonly selection: {
+    readonly value: LibrarySelection
+    update: (scope: LibrarySelection) => void
+  }
+  /** The object identity of one ref under the confirmed instance (the feed's cached spelling). */
+  readonly identityOf: (ref: string) => string
+}
+
 /**
  * Own the panel's navigation: one continuous prefix per collection level and
  * one for saved searches, every request fenced by the library version its
  * prefix was read at and every write-back compared before it replaces state.
  */
-export function useLibraryNavigation(
-  face: LibraryFeedFace,
-  serverId: string | undefined,
-  library: SupportedLocalLibrary,
-  active: boolean,
-  expanded: ReadonlySet<string>,
-  setExpanded: (
-    next: ReadonlySet<string> | ((prev: ReadonlySet<string>) => ReadonlySet<string>),
-  ) => void,
-  prefixes: Readonly<Record<string, number>>,
-  selection: LibrarySelection,
-  updateSelection: (scope: LibrarySelection) => void,
-) {
+export function useLibraryNavigation(options: LibraryNavigationOptions) {
+  const { face, active, identityOf } = options
+  const { serverId, library } = options.instance
+  const { expanded, setExpanded } = options.expansion
+  const { prefixes } = options.restore
+  const selection = options.selection.value
+  const updateSelection = options.selection.update
   const [lanes, setLanes] = useState<ReadonlyMap<string, NavigationLane<Row>>>(new Map())
   const [locateError, setLocateError] = useState<string>()
   const [locatedRef, setLocatedRef] = useState<string>()
@@ -82,8 +111,8 @@ export function useLibraryNavigation(
   const slots = useRef(0)
   const queue = useRef<(() => void)[]>([])
   const keyOf = useCallback(
-    (ref?: string) => (ref === undefined ? '' : objectIdentity(ref, serverId)),
-    [serverId],
+    (ref?: string) => (ref === undefined ? '' : identityOf(ref)),
+    [identityOf],
   )
   const publish = (key: string, lane: NavigationLane<Row>) => {
     state.current.set(key, lane)
@@ -118,6 +147,8 @@ export function useLibraryNavigation(
           const target = Math.max(goal, rebuild ? (previous?.rows.length ?? 0) : 0)
           let page = rebuild ? undefined : previous
           let restarted = false
+          const rows: Row[] = page !== undefined ? [...page.rows] : []
+          const seen = new Set(rows.map((row) => keyOf(row.ref)))
           publish(key, { phase: 'loading', previous })
           for (;;) {
             const offset = page?.nextOffset ?? 0
@@ -146,23 +177,30 @@ export function useLibraryNavigation(
               // to replace.
               face.invalidate?.()
               page = undefined
+              rows.length = 0
+              seen.clear()
               continue
             }
-            const rows =
+            const batch =
               ref === SAVED ? savedSearchRowsOf(value.items) : collectionRowsOf(value.items)
-            const all = [...(page?.rows ?? []), ...rows]
+            for (const row of batch) {
+              const identity = keyOf(row.ref)
+              if (seen.has(identity))
+                throw new Error('Navigation pagination is inconsistent. Reload this branch.')
+              seen.add(identity)
+            }
+            rows.push(...batch)
             if (
               value.offset !== offset ||
-              new Set(all.map((row) => keyOf(row.ref))).size !== all.length ||
               (value.nextOffset !== undefined &&
-                (value.nextOffset !== offset + rows.length || value.nextOffset <= offset)) ||
-              all.length > value.total ||
-              (value.nextOffset === undefined && all.length !== value.total)
+                (value.nextOffset !== offset + batch.length || value.nextOffset <= offset)) ||
+              rows.length > value.total ||
+              (value.nextOffset === undefined && rows.length !== value.total)
             )
               throw new Error('Navigation pagination is inconsistent. Reload this branch.')
             page = {
               phase: 'ready',
-              rows: all,
+              rows,
               total: value.total,
               offset: 0,
               limit: value.limit,
@@ -255,14 +293,12 @@ export function useLibraryNavigation(
 
   useEffect(() => {
     if (!active) return
+    const openKeys = new Set([...open.current].map((ref) => keyOf(ref)))
     for (const { row } of flatTree) {
-      if (
-        ![...open.current].some((ref) => keyOf(ref) === keyOf(row.ref)) &&
-        !recheckLeaves.current.has(keyOf(row.ref))
-      )
-        continue
-      if (!state.current.has(keyOf(row.ref)))
-        void load(row.ref, restoreCounts.current[keyOf(row.ref)] ?? prefixes[keyOf(row.ref)] ?? 0)
+      const identity = keyOf(row.ref)
+      if (!openKeys.has(identity) && !recheckLeaves.current.has(identity)) continue
+      if (!state.current.has(identity))
+        void load(row.ref, restoreCounts.current[identity] ?? prefixes[identity] ?? 0)
     }
   }, [active, flatTree, keyOf, load, prefixes])
 
