@@ -1,6 +1,6 @@
 /** Durable result handles are recovered only from recorded tool blocks. */
 import { createContext } from 'react'
-import { RESULT_RECEIPT_PREFIX } from '../constants.ts'
+import { parseReceiptLine } from '../result-receipt.ts'
 import { isRecord } from '../json.ts'
 import type { ToolCallBlock } from '@deepseek-ai/dsh-client-ui-conversation/client'
 
@@ -15,24 +15,14 @@ export function receiptOf(block: ToolCallBlock): Record<string, unknown> | null 
   const file = block.content.find((entry) => entry.type === 'file')
   if (file?.type !== 'file') return null
   for (const entry of block.content) {
-    if (entry.type !== 'text' || !entry.text.startsWith(RESULT_RECEIPT_PREFIX)) continue
-    try {
-      const receipt: unknown = JSON.parse(
-        entry.text.slice(RESULT_RECEIPT_PREFIX.length).split('\n')[0]!,
-      )
-      if (
-        isRecord(receipt) &&
-        receipt['delivery'] === 'file' &&
-        receipt['version'] === 1 &&
-        typeof receipt['tool'] === 'string' &&
-        receipt['tool'].startsWith('zotero_') &&
-        isRecord(receipt['file']) &&
-        receipt['file']['attachmentId'] === file.attachment.attachmentId
-      )
-        return receipt
-    } catch {
-      /* Malformed persisted projections provide no authority. */
-    }
+    if (entry.type !== 'text') continue
+    const receipt = parseReceiptLine(entry.text)
+    if (
+      receipt !== undefined &&
+      isRecord(receipt['file']) &&
+      receipt['file']['attachmentId'] === file.attachment.attachmentId
+    )
+      return receipt
   }
   return null
 }

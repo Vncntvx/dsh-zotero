@@ -1,4 +1,3 @@
-import { readCompleteResult, ResultSessionContext, rawExportText } from '../result-reader.ts'
 /**
  * One export artifact as a disclosure row: format name in proper case
  * (BibTeX, not "bibtex"), scope facts and the settled time on the head
@@ -12,7 +11,7 @@ import { readCompleteResult, ResultSessionContext, rawExportText } from '../resu
  * @module dsh-zotero/client/components/ExportCard
  */
 
-import { useContext, useMemo, useState, useEffect, useRef } from 'react'
+import { useContext, useMemo, useState } from 'react'
 import clsx from 'clsx'
 import { IconChevronDownOutlineMedium } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
@@ -22,7 +21,10 @@ import { downloadBlob } from '../download.ts'
 import quiet from './quiet.module.css'
 import { CopyButton } from './CopyButton.tsx'
 import css from './cards.module.css'
+import { useCompleteResult } from './useCompleteResult.ts'
+import { ResultSessionContext } from '../result-reader.ts'
 import {
+  RESULT_PREVIEW_CHARS,
   artifactTimeOf,
   extensionOf,
   fileNameOf,
@@ -47,31 +49,13 @@ function ExportCardBody({
   sessionId,
 }: ExportCardProps & { sessionId: string | undefined }) {
   const [open, setOpen] = useState(false)
-  const pending = useRef<AbortController>()
-  useEffect(() => () => pending.current?.abort(), [])
-  const [loadedText, setLoadedText] = useState<string>()
-  const [error, setError] = useState<string>()
-  const [loading, setLoading] = useState(false)
-  const text = artifact.resultFile ? loadedText : artifact.text
-  const load = async () => {
-    if (!sessionId || !artifact.resultFile) return
-    pending.current?.abort()
-    const controller = new AbortController()
-    pending.current = controller
-    setLoading(true)
-    setError(undefined)
-    try {
-      const data = await readCompleteResult(sessionId, artifact.resultFile, controller.signal)
-      controller.signal.throwIfAborted()
-      const raw = rawExportText(data)
-      if (raw === undefined) throw new Error(t('resultReadFailed'))
-      setLoadedText(raw)
-    } catch {
-      setError(t('resultReadFailed'))
-    } finally {
-      setLoading(false)
-    }
-  }
+  const { state, load } = useCompleteResult({
+    sessionId,
+    coordinates: artifact.resultFile,
+    requireExportText: true,
+    failureMessage: t('resultReadFailed'),
+  })
+  const text = artifact.resultFile ? state.body?.text : artifact.text
   // Key extraction is only meaningful for the BibTeX family; other bodies
   // can be large, so the regex never runs on them.
   const keys = useMemo(
@@ -119,7 +103,7 @@ function ExportCardBody({
             <button
               type="button"
               className={quiet.quiet}
-              disabled={loading || !sessionId}
+              disabled={state.loading || !sessionId}
               onClick={() => {
                 void load()
               }}
@@ -136,7 +120,7 @@ function ExportCardBody({
           )}
         </span>
       </div>
-      {error && <p role="alert">{error}</p>}
+      {state.error && <p role="alert">{state.error}</p>}
       {open && (
         <div className={css.exportBody}>
           {citeCommand !== '' && (
@@ -145,8 +129,10 @@ function ExportCardBody({
               <CopyButton value={citeCommand} label={t('copyCite')} copiedLabel={t('copied')} />
             </p>
           )}
-          {text !== undefined && text.length > 2000 && <p>{t('exportDisplayPreview')}</p>}
-          <pre className={css.exportPre}>{text?.slice(0, 2000)}</pre>
+          {text !== undefined && text.length > RESULT_PREVIEW_CHARS && (
+            <p>{t('exportDisplayPreview')}</p>
+          )}
+          <pre className={css.exportPre}>{text?.slice(0, RESULT_PREVIEW_CHARS)}</pre>
         </div>
       )}
     </section>

@@ -7,6 +7,9 @@ import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { formatTime } from './presenters.ts'
 import type { ExportArtifact } from './sources/model.ts'
 
+/** Characters of a complete result shown before the reader has to open it. */
+export const RESULT_PREVIEW_CHARS = 2000
+
 /** Localized display label for one export format. */
 export function formatLabelOf(format: string, t: TranslateNS<'zotero'>): string {
   switch (format) {

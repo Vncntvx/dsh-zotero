@@ -5,7 +5,7 @@ import type {} from '@deepseek-ai/dsh-session-query'
 import type { SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { FileAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { ResultDelivery } from './result-delivery.js'
-import { RESULT_RECEIPT_PREFIX } from './constants.js'
+import { announcedReceipt } from './result-receipt.js'
 import { asRecord } from './json.js'
 
 export async function readResult(
@@ -32,22 +32,9 @@ export async function readResult(
     const meta = asRecord(data?.meta)
     let attachment = asRecord(asRecord(files[index])?.attachment)
     // Standard blocks remain readable after replay/fork without a running job registry.
-    const announced = blocks.some((block) => {
-      const text = asRecord(block)?.text
-      if (typeof text !== 'string' || !text.startsWith(RESULT_RECEIPT_PREFIX)) return false
-      try {
-        const receipt = asRecord(
-          JSON.parse(text.slice(RESULT_RECEIPT_PREFIX.length).split('\n')[0]!),
-        )
-        return (
-          receipt?.delivery === 'file' &&
-          asRecord(receipt.file)?.attachmentId === attachment?.attachmentId
-        )
-      } catch {
-        return false
-      }
-    })
-    if (!announced) attachment = undefined
+    const announcedId =
+      typeof attachment?.attachmentId === 'string' ? attachment.attachmentId : undefined
+    if (announcedReceipt(blocks, announcedId) === undefined) attachment = undefined
     // An original background acknowledgement is also a durable owning-call coordinate.
     if (
       !attachment &&

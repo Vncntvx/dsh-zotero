@@ -8,6 +8,8 @@ import { settled } from '../helpers/blocks.ts'
 import { mockT } from '../helpers/mock-translate.ts'
 import { writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
 import { zh } from '../../../src/client/locales.ts'
+import { downloadBlob } from '../../../src/client/download.ts'
+vi.mock('../../../src/client/download.ts', () => ({ downloadBlob: vi.fn() }))
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
   const { primitivesStub } = await import('../helpers/primitives-stub.ts')
   return primitivesStub()
@@ -17,13 +19,13 @@ afterEach(() => {
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
-function show() {
+function show(toolName = 'zotero_export') {
   const useSession: Parameters<typeof FileResultView>[0]['useSession'] = (select) =>
     select({ sessionId: 'session' } as never)
   render(
     <FileResultView
       {...createToolViewProps({
-        toolName: 'zotero_export',
+        toolName,
         phase: 'result',
         block: settled({ meta: { delivery: 'file', summary: 'Stored' } }),
         t: mockT,
@@ -46,6 +48,21 @@ it('preserves BOM, whitespace, quoted commas and multiline Unicode CSV when copy
   await waitFor(() => expect(writeClipboard).toHaveBeenCalledWith(text))
   expect(fetch.mock.calls[0]?.[0]).toContain('seq=2&index=0')
 })
+it('names a non-export body as plain text instead of CSL JSON', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => Response.json({ version: 1, data: { title: 'Item' } })),
+  )
+  show('zotero_get')
+  fireEvent.click(screen.getByRole('button', { name: zh.readCompleteResult }))
+  fireEvent.click(await screen.findByRole('button', { name: zh.downloadArtifact }))
+  expect(downloadBlob).toHaveBeenCalledWith(
+    '{\n  "title": "Item"\n}',
+    'zotero-export.txt',
+    'text/plain',
+  )
+})
+
 it.each(['http', 'truncated', 'stream'])(
   'offers no body actions after a %s failure',
   async (failure) => {

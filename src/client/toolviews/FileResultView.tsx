@@ -1,11 +1,10 @@
 /** File results are read by persisted event coordinates before copying or downloading. */
-import { useEffect, useRef, useState } from 'react'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import { readCompleteResult, rawExportText } from '../result-reader.ts'
+import { useCompleteResult } from '../components/useCompleteResult.ts'
 import { metaOf } from '../presenters.ts'
 import { CopyButton } from '../components/CopyButton.tsx'
 import { downloadBlob } from '../download.ts'
-import { fileNameForFormat, mimeOf } from '../export-formats.ts'
+import { RESULT_PREVIEW_CHARS, fileNameForFormat, mimeOf } from '../export-formats.ts'
 import css from './toolviews.module.css'
 import quiet from '../components/quiet.module.css'
 
@@ -16,39 +15,14 @@ export function FileResultView(props: Props) {
   return <FileResultBody key={`${sessionId}:${seq}`} {...props} sessionId={sessionId} />
 }
 function FileResultBody(props: Props & { sessionId: string }) {
-  const { sessionId } = props
-  const active = useRef<AbortController>()
-  useEffect(() => () => active.current?.abort(), [])
-  const [state, setState] = useState<{
-    body?: { text: string; format: string }
-    error?: string
-    loading?: boolean
-  }>({})
   const meta = metaOf(props.block)
-  const load = async () => {
-    if (!('seq' in props.block)) return
-    const controller = new AbortController()
-    active.current?.abort()
-    active.current = controller
-    setState({ loading: true })
-    try {
-      const data = await readCompleteResult(
-        sessionId,
-        { seq: props.block.seq, index: 0 },
-        controller.signal,
-      )
-      controller.signal.throwIfAborted()
-      const exported = rawExportText(data)
-      if (props.toolName === 'zotero_export' && exported === undefined)
-        throw new Error(props.t('resultReadFailed'))
-      const text = exported ?? JSON.stringify(data, null, 2)
-      setState({
-        body: { text, format: typeof data['format'] === 'string' ? data['format'] : 'csljson' },
-      })
-    } catch {
-      if (!controller.signal.aborted) setState({ error: props.t('resultReadFailed') })
-    }
-  }
+  const coordinates = 'seq' in props.block ? { seq: props.block.seq, index: 0 } : undefined
+  const { state, load } = useCompleteResult({
+    sessionId: props.sessionId,
+    coordinates,
+    requireExportText: props.toolName === 'zotero_export',
+    failureMessage: props.t('resultReadFailed'),
+  })
   return (
     <div className={css.codeWrap}>
       <div className={css.coverageNotice}>
@@ -86,8 +60,10 @@ function FileResultBody(props: Props & { sessionId: string }) {
           >
             {props.t('downloadArtifact')}
           </button>
-          {state.body.text.length > 2000 && <div>{props.t('exportDisplayPreview')}</div>}
-          <pre className={css.codeBox}>{state.body.text.slice(0, 2000)}</pre>
+          {state.body.text.length > RESULT_PREVIEW_CHARS && (
+            <div>{props.t('exportDisplayPreview')}</div>
+          )}
+          <pre className={css.codeBox}>{state.body.text.slice(0, RESULT_PREVIEW_CHARS)}</pre>
         </>
       )}
     </div>
