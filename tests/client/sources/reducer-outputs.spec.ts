@@ -192,7 +192,7 @@ describe('buildSourceWorkspace', () => {
       expect(workspace.exports[0]).toMatchObject({ style: 'apa', locale: 'en-US' })
     })
 
-    it('still records the artifact text when the meta is absent', () => {
+    it('omits an artifact without verified export text', () => {
       const workspace = buildSourceWorkspace([
         block(
           'e1',
@@ -202,7 +202,7 @@ describe('buildSourceWorkspace', () => {
           { content: [{ type: 'text', text: 'raw' }] },
         ),
       ])
-      expect(workspace.exports[0]).toMatchObject({ format: '', refsOmitted: 0, text: 'raw' })
+      expect(workspace.exports).toEqual([])
     })
 
     it('attributes every ref of a 50-ref export from the arguments, with no phantom omitted count', () => {

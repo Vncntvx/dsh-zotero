@@ -1,3 +1,5 @@
+import { sandboxFixture } from '../helpers/sandbox-paths.ts'
+import { tmpdir } from 'node:os'
 /** Export completion includes file publication, original-turn delivery and spill. */
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
@@ -6,13 +8,14 @@ import { mkdir, mkdtemp, readFile, realpath, rm, symlink } from 'node:fs/promise
 import { join } from 'node:path'
 import { setupHostLane, expectValue, type HostLane } from '../helpers/lanes/host-lane.ts'
 import { TestJobRegistry } from '../helpers/fake-jobs.ts'
+import { resultStorage } from '../helpers/result-storage.ts'
 import { deferred } from '../helpers/sync.ts'
 
 let lane: HostLane
 let directory: string
 let base: string
 beforeEach(async () => {
-  base = await realpath(await mkdtemp(join(process.cwd(), '.zotero-export-')))
+  base = await sandboxFixture('.zotero-export-')
   directory = join(base, 'workspace')
   await mkdir(directory)
   await mkdir(join(base, 'outside'))
@@ -39,6 +42,7 @@ function prepare(
   lane.mock.route('GET', '/api/users/0/items', (_req, _res, helpers) =>
     helpers.text('TY  - JOUR\n' + 'x'.repeat(17_000)),
   )
+  if (!lane.ctx.get('attachments')) resultStorage(lane.ctx)
   const saveText = vi.fn(async () => ({
     locator: 'spill://export',
     bytes: 17011,
@@ -77,12 +81,10 @@ it.each([false, true])(
       const job = [...jobs.jobs.values()][0]!
       const outcome = await job.hooks.done
       expect(outcome.status).toBe('completed')
-      expect(outcome.result).toContain(join(directory, 'references.ris'))
-      expect(outcome.result).toContain('spill://export')
+      expect(outcome.result).toContain('full result persisted')
     } else {
       expect(result.value).toMatchObject({
-        outputFile: join(directory, 'references.ris'),
-        delivered: true,
+        delivery: 'file',
       })
     }
     expect(await readFile(join(directory, 'references.ris'), 'utf8')).toContain('TY  - JOUR')
@@ -92,7 +94,7 @@ it.each([false, true])(
       callId: 'delivery-call',
       files: [{ path: join(directory, 'references.ris'), description: 'Exported ris' }],
     })
-    expect(saveText).toHaveBeenCalledOnce()
+    expect(saveText).not.toHaveBeenCalled()
   },
 )
 
@@ -211,4 +213,17 @@ it('refuses outputFile without session services before export', async () => {
   })
   expect(result.isError).toBe(true)
   expect(exported).not.toHaveBeenCalled()
+})
+
+it('permits an explicitly authorized platform temporary directory', async () => {
+  const temporary = await realpath(await mkdtemp(join(tmpdir(), 'zotero-authorized-')))
+  try {
+    const target = join(temporary, 'references.ris')
+    const { invoke } = prepare('workspace-write', target)
+    const batch = await invoke(false)
+    expect(batch.results[0]!.result.isError).toBe(false)
+    expect(await readFile(target, 'utf8')).toContain('TY  - JOUR')
+  } finally {
+    await rm(temporary, { recursive: true, force: true })
+  }
 })

@@ -229,3 +229,6 @@ export const ZOTERO_UPDATABLE_ITEM_FIELDS = [
  * larger one would silently become the real policy.
  */
 export const DEFAULT_MAX_RESPONSE_BYTES = 16 * 1024 * 1024
+
+/** Identifies a bounded durable receipt in standard tool-result text. */
+export const RESULT_RECEIPT_PREFIX = 'Zotero persisted result: '

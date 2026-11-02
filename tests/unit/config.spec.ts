@@ -4,6 +4,8 @@ import { readResolvedConfig, resolveConfig, toLiveEntry } from '../../src/config
 describe('resolveConfig', () => {
   it('applies schema defaults for an empty config', () => {
     expect(resolveConfig({})).toEqual({
+      maxInlineResultTokens: 4000,
+      maxInlineResultBytes: 65536,
       baseUrl: 'http://127.0.0.1:23119/api',
       provider: 'local',
       timeoutMs: 5000,
@@ -13,8 +15,6 @@ describe('resolveConfig', () => {
       searchConcurrency: 4,
       maxEvidenceChars: 6000,
       maxEvidencePassages: 4,
-      maxDetailChars: 3000,
-      maxNoteBodyChars: 30_000,
       maxNoteChars: 2000,
       maxNoteRecords: 50,
       maxAnnotationRecords: 100,
@@ -54,7 +54,6 @@ describe('resolveConfig', () => {
         maxNoteRecords: 3,
         maxAnnotationRecords: 7,
         fulltextChunkWords: 12,
-        maxNoteBodyChars: 123,
         maxNoteScanRecords: 9,
         maxExportRefs: 7,
       }),
@@ -66,7 +65,6 @@ describe('resolveConfig', () => {
       maxNoteRecords: 3,
       maxAnnotationRecords: 7,
       fulltextChunkWords: 12,
-      maxNoteBodyChars: 123,
       maxNoteScanRecords: 9,
       maxExportRefs: 7,
     })
@@ -140,7 +138,6 @@ describe('resolveConfig', () => {
     expect(() => resolveConfig({ maxExportChars: Number.NaN })).toThrowError(/maxExportChars/)
     expect(() => resolveConfig({ maxFulltextChars: 0 })).toThrowError(/maxFulltextChars/)
     expect(() => resolveConfig({ maxNoteChars: 0 })).toThrowError(/maxNoteChars/)
-    expect(() => resolveConfig({ maxNoteBodyChars: -1 })).toThrowError(/maxNoteBodyChars/)
     expect(() => resolveConfig({ maxNoteScanRecords: 0 })).toThrowError(/maxNoteScanRecords/)
     expect(() => resolveConfig({ maxExportRefs: 1.5 })).toThrowError(/maxExportRefs/)
     expect(() => resolveConfig({ maxExportRefs: -2 })).toThrowError(/maxExportRefs/)

@@ -19,7 +19,7 @@ import { mockT } from '../helpers/mock-translate.ts'
 // browser-safe source in this standalone Vitest environment (alpha.2).
 vi.mock(
   '@deepseek-ai/dsh-util-workspace-path',
-  () => import('@deepseek-ai/dsh-util-workspace-path/src/index.ts'),
+  () => import('@deepseek-ai/dsh-util-workspace-path'),
 )
 afterEach(cleanup)
 

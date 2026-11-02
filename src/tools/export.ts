@@ -1,3 +1,5 @@
+import { asJsonValue } from '../json.js'
+import type { ResultDelivery } from '../result-delivery.js'
 import type {} from '@deepseek-ai/dsh-tool-present/types'
 import type {} from '@deepseek-ai/dsh-fs'
 import type {} from '@deepseek-ai/dsh-sandbox'
@@ -15,7 +17,6 @@ import type {} from '@deepseek-ai/dsh-working-directory'
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
-import type { SpillRef } from '@deepseek-ai/dsh-spill'
 import {
   defineTool,
   type InferArgs,
@@ -29,7 +30,6 @@ import { parseSupportedRef } from '../refs.js'
 import { assertExportRefsWithinCap } from '../export-limits.js'
 import { boundedPresentationMeta, projectExportMeta } from '../presentation-meta.js'
 import { metaRecordOf, textOfBlocks } from './present.js'
-import { DEFAULT_SPILL_CHAR_THRESHOLD, trySpillToolOutput } from '../spill.js'
 import {
   ZOTERO_EXPORT_FORMATS,
   ZOTERO_ITEMKEY_BATCH,
@@ -129,15 +129,6 @@ const EXPORT_OUTPUT_SCHEMA = {
         text: { type: 'string', required: true },
         outputFile: { type: 'string' },
         delivered: { type: 'boolean' },
-        spill: {
-          type: 'object',
-          additionalProperties: false,
-          properties: {
-            locator: { type: 'string', required: true },
-            bytes: { type: 'integer', required: true },
-            retrievalHint: { type: 'string', required: true },
-          },
-        },
       },
     },
     {
@@ -154,15 +145,6 @@ const EXPORT_OUTPUT_SCHEMA = {
         text: { type: 'string', required: true },
         outputFile: { type: 'string' },
         delivered: { type: 'boolean' },
-        spill: {
-          type: 'object',
-          additionalProperties: false,
-          properties: {
-            locator: { type: 'string', required: true },
-            bytes: { type: 'integer', required: true },
-            retrievalHint: { type: 'string', required: true },
-          },
-        },
         items: {
           type: 'array',
           required: true,
@@ -238,7 +220,6 @@ function renderExport(_args: unknown, value: ExportOutput): ContentBlock[] {
   // Zotero's raw translator output can lead with stray whitespace; a text
   // export reads cleaner without it (display and copy alike).
   const text = value.text.trimStart()
-  const spill = (value as { spill?: SpillRef }).spill
   const outputFile = (value as { outputFile?: string }).outputFile
   const delivered = (value as { delivered?: boolean }).delivered
   const notes: string[] = []
@@ -248,9 +229,6 @@ function renderExport(_args: unknown, value: ExportOutput): ContentBlock[] {
         ? `Export written to ${outputFile} and declared as a deliverable.`
         : `Export written to ${outputFile}.`,
     )
-  }
-  if (spill !== undefined) {
-    notes.push(`Full export stored at: ${spill.locator}. ${spill.retrievalHint}`)
   }
   const footer = notes.length > 0 ? `\n\n(${notes.join(' ')})` : ''
   return [{ type: 'text', text: `${text}${footer}` }]
@@ -286,7 +264,11 @@ function presentExportResult(_args: ExportArgs, result: ToolResult): ToolResultV
  * @param ctx - the plugin context.
  * @param service - the zotero service owning the request path.
  */
-export function registerExportTool(ctx: Context, service: ZoteroService): () => void {
+export function registerExportTool(
+  ctx: Context,
+  service: ZoteroService,
+  delivery?: ResultDelivery,
+): () => void {
   const parameters = EXPORT_WITH_BACKGROUND_PARAMETERS
   return ctx.tools.register(
     defineTool({
@@ -300,14 +282,12 @@ export function registerExportTool(ctx: Context, service: ZoteroService): () => 
       output: {
         schema: EXPORT_OUTPUT_SCHEMA,
         render: renderExport,
-        // The refs list and the per-document items are the long fields; the
-        // shared byte budget drops them (with detailOmitted) rather than
-        // mid-cutting the artifact facts.
+        // Drop optional document previews while retaining citation attribution.
         presentationMeta: (args, value) => {
           if (isJobArm(value)) return value
           return boundedPresentationMeta(
             projectExportMeta(value as Parameters<typeof projectExportMeta>[0], args.refs),
-            ['refs', 'items'],
+            ['items'],
           )
         },
       },
@@ -326,7 +306,6 @@ export function registerExportTool(ctx: Context, service: ZoteroService): () => 
         const exportArgs = args as ExportArgs
         const request = buildRequest(exportArgs, service.config)
         const session = exec.agent?.session
-        const spillSessionId = session?.header.id
         const fs = ctx.get('fs')
         const workingDirectory = ctx.get('workingDirectory')
         const turn =
@@ -352,17 +331,24 @@ export function registerExportTool(ctx: Context, service: ZoteroService): () => 
             ? await workingDirectory!.ensure(exec.agent!, exec.signal)
             : undefined
         return executeWithJobs({
-          runner: new ZoteroJobRunner(ctx.get('jobs'), service.diagnostics.sink),
+          runner: new ZoteroJobRunner(ctx.get('jobs'), service.diagnostics.sink, delivery),
           exec,
           label: `zotero_export (${exportArgs.refs.length} refs, ${exportArgs.format})`,
-          run: async (signal, onProgress) => {
+          run: async (signal, onProgress, _log, jobId) => {
             let result: Awaited<ReturnType<typeof service.export>> & {
               outputFile?: string
               delivered?: boolean
-              spill?: SpillRef
             } = await service.export(request, signal, onProgress)
             if (result.format === 'citation') return result
             signal.throwIfAborted()
+            if (delivery)
+              await delivery.prepare(
+                exec,
+                asJsonValue(result)!,
+                (data) => renderExport(exportArgs, data as ExportOutput),
+                signal,
+                jobId,
+              )
             if (exportArgs.outputFile !== undefined) {
               const policyService = ctx.get('sandboxPolicy')
               if (fs!.sandboxMode !== undefined && !policyService)
@@ -387,22 +373,6 @@ export function registerExportTool(ctx: Context, service: ZoteroService): () => 
               result = { ...result, outputFile: path, delivered: true }
             }
             signal.throwIfAborted()
-            if (result.text.length > DEFAULT_SPILL_CHAR_THRESHOLD) {
-              const ext =
-                exportArgs.format === 'ris'
-                  ? 'ris'
-                  : exportArgs.format === 'csljson'
-                    ? 'json'
-                    : 'bib'
-              const spill = await trySpillToolOutput(
-                ctx,
-                exec,
-                `export-${exportArgs.format}.${ext}`,
-                result.text,
-                spillSessionId,
-              )
-              if (spill !== undefined) result = { ...result, spill }
-            }
             return result
           },
           renderResult: (value) => textOfBlocks(renderExport(exportArgs, value)),

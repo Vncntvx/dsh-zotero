@@ -1,3 +1,4 @@
+import { resultStorage } from '../helpers/result-storage.ts'
 /**
  * Live configuration: the entry applies at boot, violating commits are
  * vetoed before they land, and volatile commits rebuild the structural
@@ -147,8 +148,15 @@ describe('live configuration', () => {
     for (const name of ZOTERO_WRITE_TOOL_NAMES) expect(lane.tool(name)).toBeUndefined()
   })
 
-  it('live-applies provider limits to LocalApiProvider without rebuilding transport', async () => {
-    lane = await setupHostLane({ maxDetailChars: 100 })
+  it('live-applies result budgets without truncating the underlying data', async () => {
+    lane = await setupHostLane(
+      { maxInlineResultBytes: 65536 },
+      {
+        compose: async (ctx) => {
+          resultStorage(ctx)
+        },
+      },
+    )
     lane.mock.route('GET', '/api/', (req, res, helpers) =>
       helpers.json({}, { 'Zotero-Server-ID': 'S1', 'Zotero-API-Version': '3' }),
     )
@@ -166,7 +174,7 @@ describe('live configuration', () => {
           data: {
             itemType: 'journalArticle',
             title: 'Paper Title',
-            abstractNote: 'A'.repeat(200),
+            abstractNote: 'A'.repeat(4000),
           },
         },
         { 'Zotero-Server-ID': 'S1' },
@@ -178,21 +186,18 @@ describe('live configuration', () => {
       'zotero_get',
     )
     expect(initial.value).toMatchObject({
-      abstract: 'A'.repeat(200),
+      abstract: 'A'.repeat(4000),
       abstractTruncated: false,
     })
 
-    await commitLive(lane as HostLane, { maxDetailChars: 500 })
-    expect(lane.ctx.zotero.config.maxDetailChars).toBe(500)
+    await commitLive(lane as HostLane, { maxInlineResultBytes: 2048 })
+    expect(lane.ctx.zotero.config.maxInlineResultBytes).toBe(2048)
 
     const updated = expectValue(
       await lane.runTool('zotero_get', { ref: 'zotero://user/0/item/ABCD1234' }),
       'zotero_get',
     )
-    expect(updated.value).toMatchObject({
-      abstract: 'A'.repeat(200),
-      abstractTruncated: false,
-    })
+    expect(updated.value).toMatchObject({ delivery: 'file' })
   })
 
   it('live-applies the scope-listing TTL without rebuilding the transport', async () => {

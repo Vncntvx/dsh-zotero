@@ -17,6 +17,8 @@ import Schema from '@deepseek-ai/schemastery'
 import { DEFAULT_MAX_RESPONSE_BYTES, LOCAL_PROVIDER_ID } from './constants.js'
 
 export interface Config {
+  maxInlineResultTokens?: Volatile<number>
+  maxInlineResultBytes?: Volatile<number>
   /** Zotero Local API base URL. Must be plain loopback HTTP. */
   baseUrl?: Volatile<string>
   /** Provider id to select; the built-in local provider registers as `local`. */
@@ -43,17 +45,13 @@ export interface Config {
   maxEvidenceChars?: Volatile<number>
   /** Upper bound for the number of evidence passages. */
   maxEvidencePassages?: Volatile<number>
-  /** Character budget for the `zotero_get` abstract preview. */
-  maxDetailChars?: Volatile<number>
-  /** Character budget for a note item's own body returned by `zotero_get`. */
-  maxNoteBodyChars?: Volatile<number>
-  /** Per-note character budget for `zotero_get` note previews. */
+  /** Per-note character budget for panel child-page previews. */
   maxNoteChars?: Volatile<number>
-  /** Upper bound for note records returned by `zotero_get`. */
+  /** Maximum notes in an explicitly requested child page. */
   maxNoteRecords?: Volatile<number>
-  /** Upper bound for annotation records returned by `zotero_get`. */
+  /** Maximum annotations in an explicitly requested child page. */
   maxAnnotationRecords?: Volatile<number>
-  /** Upper bound for attachment records returned by `zotero_get` and `zotero_children`. */
+  /** Maximum attachments in an explicitly requested child page. */
   maxAttachmentRecords?: Volatile<number>
   /** Word count of each full-text passage entering evidence ranking. */
   fulltextChunkWords?: Volatile<number>
@@ -136,6 +134,8 @@ export interface Config {
  * to `loader/volatile-update` for structural flips (transport, write tools).
  */
 export const Config = Schema.object({
+  maxInlineResultTokens: Schema.number().default(4000).volatile(),
+  maxInlineResultBytes: Schema.number().default(65536).volatile(),
   baseUrl: Schema.string().default('http://127.0.0.1:23119/api').volatile(),
   provider: Schema.string().default(LOCAL_PROVIDER_ID).volatile(),
   timeoutMs: Schema.number().default(5000).volatile(),
@@ -145,8 +145,6 @@ export const Config = Schema.object({
   searchConcurrency: Schema.number().default(4).volatile(),
   maxEvidenceChars: Schema.number().default(6000).volatile(),
   maxEvidencePassages: Schema.number().default(4).volatile(),
-  maxDetailChars: Schema.number().default(3000).volatile(),
-  maxNoteBodyChars: Schema.number().default(30_000).volatile(),
   maxNoteChars: Schema.number().default(2000).volatile(),
   maxNoteRecords: Schema.number().default(50).volatile(),
   maxAnnotationRecords: Schema.number().default(100).volatile(),
@@ -176,6 +174,8 @@ export const Config = Schema.object({
 })
 
 export interface ResolvedConfig {
+  readonly maxInlineResultTokens: number
+  readonly maxInlineResultBytes: number
   readonly baseUrl: string
   readonly provider: string
   readonly timeoutMs: number
@@ -185,8 +185,6 @@ export interface ResolvedConfig {
   readonly searchConcurrency: number
   readonly maxEvidenceChars: number
   readonly maxEvidencePassages: number
-  readonly maxDetailChars: number
-  readonly maxNoteBodyChars: number
   readonly maxNoteChars: number
   readonly maxNoteRecords: number
   readonly maxAnnotationRecords: number
@@ -243,7 +241,7 @@ function pinLoopbackHostname(hostname: string): string {
 }
 
 function assertPositiveInteger(name: string, value: unknown): asserts value is number {
-  if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) {
     throw new Error(`dsh-zotero: ${name} must be a positive integer; got ${value}`)
   }
 }
@@ -390,8 +388,8 @@ function assertResolvedConfig(plain: Record<string, unknown>): ResolvedConfig {
   assertPositiveInteger('searchConcurrency', plain.searchConcurrency)
   assertPositiveInteger('maxEvidenceChars', plain.maxEvidenceChars)
   assertPositiveInteger('maxEvidencePassages', plain.maxEvidencePassages)
-  assertPositiveInteger('maxDetailChars', plain.maxDetailChars)
-  assertPositiveInteger('maxNoteBodyChars', plain.maxNoteBodyChars)
+  assertPositiveInteger('maxInlineResultTokens', plain.maxInlineResultTokens)
+  assertPositiveInteger('maxInlineResultBytes', plain.maxInlineResultBytes)
   assertPositiveInteger('maxNoteChars', plain.maxNoteChars)
   assertPositiveInteger('maxNoteRecords', plain.maxNoteRecords)
   assertPositiveInteger('maxAnnotationRecords', plain.maxAnnotationRecords)

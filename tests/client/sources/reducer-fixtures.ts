@@ -25,6 +25,18 @@ export function block(
   args: Record<string, unknown>,
   extra: Partial<ToolResultNode> = {},
 ): ToolResultNode {
+  if (name === 'zotero_export' && extra.meta && typeof extra.meta === 'object')
+    extra = {
+      ...extra,
+      meta: {
+        ...extra.meta,
+        text:
+          extra.content
+            ?.filter((block) => block.type === 'text')
+            .map((block) => block.text)
+            .join('') ?? '',
+      },
+    }
   return settled({ callId, seq, call: { name, argsRaw: JSON.stringify(args) }, ...extra })
 }
 

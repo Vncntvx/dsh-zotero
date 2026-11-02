@@ -5,6 +5,7 @@
  * @module tests/helpers/fake-jobs
  */
 
+import { resultStorage } from './result-storage.js'
 import { Context, Service } from '@deepseek-ai/cordis'
 import type { JobHandle, JobHooks, JobId, JobSpec, JobStatus, JobView } from '@deepseek-ai/dsh-jobs'
 import type { SessionId } from '@deepseek-ai/dsh-session'
@@ -42,6 +43,7 @@ export class TestJobRegistry extends Service {
 
   constructor(ctx: Context = new Context()) {
     super(ctx, 'jobs')
+    if (!ctx.get('attachments')) resultStorage(ctx)
   }
 
   start(spec: JobSpec): JobId {
@@ -75,6 +77,12 @@ export class TestJobRegistry extends Service {
     })
     this.jobs.set(id, record)
     return id
+  }
+
+  list(caller?: SessionId): JobView[] {
+    return [...this.jobs]
+      .filter(([, record]) => caller === undefined || record.spec.owner === caller)
+      .map(([id, record]) => projectJobView(id, record))
   }
 
   async wait(

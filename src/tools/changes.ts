@@ -1,3 +1,4 @@
+import type { ResultDelivery } from '../result-delivery.js'
 /**
  * The `zotero_changes` tool: incremental awareness of the local library. On
  * the verified build (Zotero 10.0.2-beta.9) versions are local transactions:
@@ -550,7 +551,11 @@ function countArrayEntries(section: Record<string, unknown> | undefined): number
  * @param ctx - the plugin context.
  * @param service - the zotero service owning the request path.
  */
-export function registerChangesTool(ctx: Context, service: ZoteroService): () => void {
+export function registerChangesTool(
+  ctx: Context,
+  service: ZoteroService,
+  delivery?: ResultDelivery,
+): () => void {
   const parameters = CHANGES_WITH_BACKGROUND_PARAMETERS
   return ctx.tools.register(
     defineTool({
@@ -588,7 +593,7 @@ export function registerChangesTool(ctx: Context, service: ZoteroService): () =>
             ? 'zotero_changes (baseline)'
             : `zotero_changes (since v${changesArgs.since.version})`
         return await executeWithJobs({
-          runner: new ZoteroJobRunner(ctx.get('jobs'), service.diagnostics.sink),
+          runner: new ZoteroJobRunner(ctx.get('jobs'), service.diagnostics.sink, delivery),
           exec,
           label,
           run: async (signal, onProgress) => {

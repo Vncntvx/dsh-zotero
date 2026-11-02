@@ -1,3 +1,4 @@
+import { ResultSessionContext, receiptOf } from '../result-reader.ts'
 /**
  * The Sources panel: the plugin's conversation tab (id `zotero`, order 30).
  * This module is the controller: it reads the session's identity (the id
@@ -59,7 +60,10 @@ function visibleToolRoots(snapshot: ChatSnapshot | undefined): Array<{
 /** True for the plugin's own tool names (settled and running forms). */
 function isZoteroRoot(root: ToolCallBlock): boolean {
   const name = callNameOf(root)
-  return name !== null && name.startsWith('zotero_')
+  return (
+    name !== null &&
+    (name.startsWith('zotero_') || (name === 'job_output' && receiptOf(root) !== null))
+  )
 }
 
 /**
@@ -282,21 +286,23 @@ function SourcesTabBody({
   )
 
   return (
-    <ZoteroWorkspaceView
-      key={sessionId ?? 'none'}
-      workspace={workspace}
-      connection={statusState}
-      setDraft={setDraft}
-      onRefresh={runProbe}
-      openFile={
-        openResource === undefined
-          ? undefined
-          : (path: string) => {
-              openResource(fileAddressFor(sessionId, cwd, path))
-            }
-      }
-      resolveAttachment={resolveAttachment}
-      t={t}
-    />
+    <ResultSessionContext.Provider value={sessionId}>
+      <ZoteroWorkspaceView
+        key={sessionId ?? 'none'}
+        workspace={workspace}
+        connection={statusState}
+        setDraft={setDraft}
+        onRefresh={runProbe}
+        openFile={
+          openResource === undefined
+            ? undefined
+            : (path: string) => {
+                openResource(fileAddressFor(sessionId, cwd, path))
+              }
+        }
+        resolveAttachment={resolveAttachment}
+        t={t}
+      />
+    </ResultSessionContext.Provider>
   )
 }

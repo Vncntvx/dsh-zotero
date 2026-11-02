@@ -143,7 +143,7 @@ export async function setupHostLane(
         signal: new AbortController().signal,
         // The agent loop always sets the caller; the write gate routes and
         // audits by it, so the lane must carry one too.
-        agent: {} as never,
+        agent: { id: 'test-session', session: { header: { id: 'test-session' } } } as never,
       })
       const call = batch.results[0]
       if (call === undefined) throw new Error('Tool execution produced no result')
@@ -177,7 +177,20 @@ export async function setupHostLane(
  * @returns the same result, typed as its success arm.
  */
 export function expectValue(result: ToolExecutionResult, tool: string): ToolExecutionSuccess {
-  if (!result.isError) return result
+  if (!result.isError) {
+    const value = result.value
+    // Tool behavior specs inspect domain data; delivery-contract specs inspect
+    // the raw pipeline value directly.
+    if (
+      value &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      value.delivery === 'inline' &&
+      'data' in value
+    )
+      return { ...result, value: value.data! }
+    return result
+  }
   throw new Error(`${tool} failed${failureCode(result)}: ${failureText(result)}`)
 }
 

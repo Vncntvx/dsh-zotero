@@ -97,6 +97,14 @@ never in a file named after a number or a function.
   `src/service-lifecycle.ts`; composition and transport rebuild behavior stay
   covered by `host/lifecycle.spec.ts` and `host/settings.spec.ts`.
 
+- Complete result delivery is owned by `src/result-delivery.ts` and
+  `src/result-route.ts`. The host result-delivery, result-jobs, result-pipeline,
+  result-route, and result-persistence specs cover their service boundaries;
+  the persistence spec uses official disk attachment and storage backends and
+  Session ZIP export. Client loading and export behavior live in
+  `src/client/result-reader.ts`, `FileResultView.tsx`, and `ExportCard.tsx`,
+  with behavior specs in `client/toolviews/` and `client/sources/file-results.spec.tsx`.
+
 ### Navigation module verification
 
 `src/client/components/library/useLibraryNavigation.ts` owns continuous collection

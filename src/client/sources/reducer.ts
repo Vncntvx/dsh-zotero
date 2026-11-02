@@ -1,3 +1,4 @@
+import { receiptOf } from '../result-reader.ts'
 /**
  * The session source reducer: turns the session's zotero tool blocks into a
  * {@link SourceWorkspace}. The listed sources are the stable union (every
@@ -19,7 +20,6 @@ import {
   listArg,
   metaOf,
   recordArg,
-  resultTextOf,
   rowStateOf,
   textArg,
   valueArg,
@@ -432,9 +432,13 @@ export function buildSourceWorkspace(
     // ones regardless of where it actually runs.
     const seq = index
     const state = rowStateOf(block)
-    const name = callNameOf(block)
+    const receipt = receiptOf(block)
+    const name = typeof receipt?.tool === 'string' ? receipt.tool : callNameOf(block)
     const args = argsViewOf(block)
-    const meta = metaOf(block)
+    const meta =
+      receipt === null
+        ? metaOf(block)
+        : { ...(isRecord(receipt.facts) ? receipt.facts : {}), ...receipt }
 
     switch (name) {
       case 'zotero_search': {
@@ -569,9 +573,12 @@ export function buildSourceWorkspace(
           countOperation(draft, state)
         }
         if (state !== 'ok') break
-        const text = (resultTextOf(block) ?? '').trimStart()
-        if (text === '') break
+        const text = typeof meta?.text === 'string' ? meta.text : ''
+        const resultFile =
+          receipt !== null && 'seq' in block ? { seq: block.seq, index: 0 } : undefined
+        if (text === '' && resultFile === undefined) break
         const artifact: ExportArtifact = {
+          ...(resultFile ? { resultFile } : {}),
           callId: block.callId,
           format: metaView?.format ?? '',
           ...(metaView?.style === null || metaView?.style === undefined

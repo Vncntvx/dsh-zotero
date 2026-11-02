@@ -7,6 +7,8 @@
  * @module dsh-zotero/job-runner
  */
 
+import type { ResultDelivery } from './result-delivery.js'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
@@ -119,11 +121,13 @@ export function presentJobArm(
 export const BACKGROUND_OUTPUT_PROPERTIES = {
   kind: { type: 'string', required: true, const: 'background' },
   jobId: { type: 'string', required: true },
+  resultSessionId: { type: 'string' },
 } as const
 
 export const PROMOTED_OUTPUT_PROPERTIES = {
   kind: { type: 'string', required: true, const: 'promoted' },
   jobId: { type: 'string', required: true },
+  resultSessionId: { type: 'string' },
   timeoutMs: { type: 'number', required: true },
   message: { type: 'string', required: true },
 } as const
@@ -146,6 +150,7 @@ interface ZoteroJobTask<T> {
     signal: AbortSignal,
     onProgress: (event: ZoteroProgressEvent) => void,
     log: (text: string) => void,
+    jobId?: string,
   ) => Promise<T>
   readonly renderResult?: (value: T) => string
 }
@@ -205,12 +210,21 @@ export async function executeWithJobs<T>(options: {
       throw new Error(JOBS_UNAVAILABLE_MESSAGE)
     }
     const { id } = runner.start(task)
-    return { kind: 'background', jobId: id }
+    return {
+      kind: 'background',
+      jobId: id,
+      ...(exec.agent?.session ? { resultSessionId: exec.agent.session.header.id } : {}),
+    }
   }
 
   if (runner.isAvailable && policy.promoteOnTimeout) {
     const outcome = await runner.waitOrPromote(task, policy.foregroundWaitMs)
-    return outcome.kind === 'promoted' ? outcome : outcome.value
+    return outcome.kind === 'promoted'
+      ? {
+          ...outcome,
+          ...(exec.agent?.session ? { resultSessionId: exec.agent.session.header.id } : {}),
+        }
+      : outcome.value
   }
 
   return await run(
@@ -224,6 +238,7 @@ export class ZoteroJobRunner {
   constructor(
     private readonly registry?: JobRegistry,
     private readonly sink?: DiagnosticSink,
+    private readonly delivery?: ResultDelivery,
   ) {}
 
   get isAvailable(): boolean {
@@ -265,8 +280,19 @@ export class ZoteroJobRunner {
               (text) => {
                 job.append(text.endsWith('\n') ? text : `${text}\n`, { channel: 'log' })
               },
+              job.id,
             )
-            const result = task.renderResult ? task.renderResult(value) : undefined
+            const prepared = this.delivery
+              ? await this.delivery.prepare(
+                  task.exec,
+                  value as JsonValue,
+                  (data) => [{ type: 'text', text: task.renderResult?.(data as T) ?? '' }],
+                  abortController.signal,
+                  job.id,
+                )
+              : undefined
+            const result =
+              prepared?.delivery === 'file' ? prepared.summary : task.renderResult?.(value)
             this.sink?.info('job.outcome', `${task.label} completed`)
             resolveOutcome({
               status: 'completed',
@@ -312,6 +338,7 @@ export class ZoteroJobRunner {
       },
     })
 
+    this.delivery?.track(donePromise)
     return { id, done: donePromise }
   }
 

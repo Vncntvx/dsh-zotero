@@ -4,6 +4,8 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { ZoteroService } from './service.js'
+import { registerResultRoute } from './result-route.js'
+import { ResultDelivery } from './result-delivery.js'
 import { registerBrowseTool } from './tools/browse.js'
 import { registerChangesTool } from './tools/changes.js'
 import { registerExportTool } from './tools/export.js'
@@ -25,12 +27,24 @@ import { registerUpdateItemTool } from './tools/update-item.js'
 import { registerUpdateNoteTool } from './tools/update-note.js'
 
 export function registerReadTools(ctx: Context, service: ZoteroService): void {
-  registerSearchTool(ctx, service)
-  registerGetTool(ctx, service)
-  registerRetrieveTool(ctx, service)
-  registerBrowseTool(ctx, service)
-  registerExportTool(ctx, service)
-  registerChangesTool(ctx, service)
+  const delivery = new ResultDelivery(ctx, () => service.config)
+  delivery.installJobs()
+  registerResultRoute(ctx, delivery)
+  const tools = {
+    register: (definition: Parameters<typeof ctx.tools.register>[0]) =>
+      ctx.tools.register(delivery.wrap(definition)),
+  }
+  const readContext = new Proxy(ctx, {
+    get(target, key) {
+      return key === 'tools' ? tools : Reflect.get(target, key, target)
+    },
+  })
+  registerSearchTool(readContext, service)
+  registerGetTool(readContext, service)
+  registerRetrieveTool(readContext, service)
+  registerBrowseTool(readContext, service)
+  registerExportTool(readContext, service, delivery)
+  registerChangesTool(readContext, service, delivery)
 }
 
 export function registerWriteTools(ctx: Context, service: ZoteroService): Array<() => void> {

@@ -132,6 +132,7 @@ export interface ExportDocumentItem {
 
 /** The export facts of one successful artifact. */
 export interface ExportArtifact {
+  readonly resultFile?: { readonly seq: number; readonly index: number }
   readonly callId: string
   readonly format: string
   readonly style?: string

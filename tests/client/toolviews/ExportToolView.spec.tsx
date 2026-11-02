@@ -25,6 +25,25 @@ afterEach(() => {
 })
 
 function renderView(props: Parameters<typeof createToolViewProps<'zotero_export'>>[0]) {
+  if (
+    props.block &&
+    'content' in props.block &&
+    props.block.meta &&
+    typeof props.block.meta === 'object'
+  )
+    props = {
+      ...props,
+      block: {
+        ...props.block,
+        meta: {
+          ...props.block.meta,
+          text: props.block.content
+            .filter((block) => block.type === 'text')
+            .map((block) => block.text)
+            .join(''),
+        },
+      },
+    }
   return render(<ExportToolView {...createToolViewProps(props)} />)
 }
 

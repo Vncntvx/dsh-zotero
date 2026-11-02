@@ -4,6 +4,12 @@
 
 dsh-zotero registers 21 local tools (6 read tools and 15 write tools) that work with the Zotero library through the local Zotero HTTP API. The 15 write tools are off by default and need `writeEnabled` turned on in configuration, and they operate only on the personal library (`zotero://user/0/`). Another 7 scholarly retrieval tools belong to the separate `dsh-zotero/scholarly` component, which ships with the package and is off by default; enabling that component enables those tools. Every item reference (ref) is a stable identifier in `zotero://user/0/item/<KEY>` (personal library) or `zotero://group/<ID>/item/<KEY>` (group library) form.
 
+All six local read tools share a delivery envelope. `{delivery:"inline", data:…}` contains the complete domain result within both budgets. `{delivery:"file", version:1, tool, sessionId, callId, summary, file, facts}` contains bounded facts and a standard Harness FileBlock. Its immutable JSON file contains `{version:1, tool, request, data}` with the complete domain result. Page completeness (`page` or `complete`) is independent of delivery. Parse large single-line fields with the official `run_code` Node file interface; line-oriented previews can truncate long lines.
+
+Files are saved with `AttachmentStore.saveFileStream`; validated receipts live in the `zotero_results` storage domain. Both services are required for oversized or managed background results. Any save, index, cancellation or integrity failure is an error; full text never falls back inline. Completed `job_output` for an owned Zotero job appends the same file reference without changing its canonical value. Nested PTC calls forward standard file context. Original background acknowledgements retain `resultSessionId`; the client can read an already-persisted receipt after restart, but running jobs are not resumed.
+
+The authenticated `GET /api/zotero/result?sessionId=<id>&seq=<event>&index=<file>` route reads only a file recorded at those persistent coordinates, or the verified receipt of that event's background acknowledgement. It does not accept a path or arbitrary attachment ID. Copy/download become available after the entire verified stream has completed. Attachments use the host lifecycle and may occupy disk beyond a Session's lifetime; this plugin does not delete shared files.
+
 ---
 
 ## zotero_search
@@ -116,7 +122,7 @@ zotero_retrieve(ref="zotero://user/0/item/ABC123", query="attention mechanism", 
 
 ## zotero_export
 
-Pass a non-empty `outputFile` to deliver bibliography or translator text (`citation` rejects it). The Harness filesystem resolves the path against the calling session’s current directory and enforces that session’s sandbox policy. Foreground, background, and promoted jobs finish after writing, publishing the delivery to the original turn, and optional spill storage. Write failures fail the tool or job. If delivery publication fails after writing, the error includes the actual path; no automatic retry occurs.
+Pass a non-empty `outputFile` to deliver bibliography or translator text (`citation` rejects it). The Harness filesystem resolves the path against the calling session’s current directory and enforces that session’s sandbox policy. Foreground, background, and promoted jobs finish after writing, publishing the delivery to the original turn, and required internal persistence when oversized or background. Write failures fail the tool or job. If delivery publication fails after writing, the error includes the actual path; no automatic retry occurs.
 
 Generate formatted citations or export data files.
 

@@ -190,6 +190,7 @@ function documentsOf(artifact: ExportArtifact):
     }
   | undefined {
   if (
+    artifact.resultFile !== undefined ||
     artifact.items === undefined ||
     artifact.items.length === 0 ||
     !DOCUMENT_FORMATS.has(artifact.format)

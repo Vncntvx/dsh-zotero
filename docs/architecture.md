@@ -171,3 +171,5 @@ graph LR
 ## 导航状态与路径端点
 
 `useLibraryNavigation` 独立管理连续前缀、库版本、在途去重、最多四个导航任务以及恢复和定位；`useLibraryFeed` 管理条目与统一持久化。存储键与格式为 v2，不迁移旧记录，不保存目录响应或叶节点结论。新增只读 `collectionPath({ library, ref, libraryVersion })` 经 `ctx.zoteroLibrary` → `ctx.zotero` → Local Provider，使用 browse 能力门控，不新增工具。返回根至目标的真实合集行及库版本；结束时通过轻量列表读取校验版本，不使用单对象版本或名称缓存。祖先缺失、循环与非法父关系明确失败。合集和保存搜索分页必须携带有效 `Last-Modified-Version`，双端 codec 拒绝缺失版本。同一前缀的各页必须共享同一库版本；版本前进时只重启该前缀，其余分支与服务请求不受影响。路径数据面只合并同代在途请求，不复用已完成结果。
+
+读取交付由 `result-delivery.ts` 统一管理：`zotero_results` 保存持久回执，AttachmentStore 保存单份完整 JSON。`result-route.ts` 按认证的持久事件坐标读取；六个读取工具共用 inline/file 结构，后台先持久化再完成，post-execute 为所属 job_output 追加有界标准 FileBlock。`result-reader.ts` 在校验流结束后才允许复制下载。按种类窗口和完整读取共用顺序 `childPages`，位置解析复用当前页并限制并发。

@@ -14,6 +14,8 @@ import {
   type ReactNode,
 } from 'react'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import { FileResultView } from './FileResultView.tsx'
+import { metaOf } from '../presenters.ts'
 import { messageOf } from '../error-text.ts'
 import { reportCrashedSurface } from '../actions/error-reporter.ts'
 import css from '../components/cards.module.css'
@@ -82,7 +84,12 @@ export function withCardBoundary<P extends AnyToolViewProps>(
   function GuardedToolView(props: P): ReactNode {
     return (
       <ZoteroCardBoundary props={props}>
-        <Wrapped {...props} />
+        {metaOf(props.block)?.delivery === 'file' ||
+        typeof metaOf(props.block)?.resultSessionId === 'string' ? (
+          <FileResultView {...props} />
+        ) : (
+          <Wrapped {...props} />
+        )}
       </ZoteroCardBoundary>
     )
   }

@@ -46,7 +46,7 @@ export function ExportToolView(props: ExportToolViewProps) {
     job,
     detailOmitted,
   } = useMemo(() => {
-    const raw = (resultTextOf(block) ?? '').trim()
+    const raw = resultTextOf(block) ?? ''
     const errSummary = errorSummaryOf(block, raw)
     const args = argsViewOf(block)
     const formatArg = textArg(args, 'format') ?? 'bibtex'
@@ -88,7 +88,7 @@ export function ExportToolView(props: ExportToolViewProps) {
       // A job arm's text is only an acknowledgement, never an export
       // artifact. Keep it out of the code/download surface until job_output
       // supplies the completed translator text.
-      rawText: job === null ? raw : '',
+      rawText: job === null && typeof meta?.text === 'string' ? meta.text : '',
       job,
       detailOmitted: exportView?.detailOmitted === true,
     }

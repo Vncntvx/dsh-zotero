@@ -46,6 +46,18 @@ export function settled(overrides: Partial<ToolResultNode> = {}): ToolResultNode
   const call = Object.hasOwn(overrides, 'call')
     ? (overrides.call ?? null)
     : { name: 'zotero_search', argsRaw: '{}' }
+  if (call?.name === 'zotero_export' && overrides.meta && typeof overrides.meta === 'object')
+    overrides = {
+      ...overrides,
+      meta: {
+        ...overrides.meta,
+        text:
+          overrides.content
+            ?.filter((block) => block.type === 'text')
+            .map((block) => block.text)
+            .join('') ?? '',
+      },
+    }
   return {
     kind: 'tool-result',
     seq: 2,
