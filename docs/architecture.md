@@ -23,11 +23,11 @@ graph LR
 
 ## 组件与边界
 
-| 组件                   | Cordis 键                                 | 设置命名空间 | 默认 | 职责                                             |
-| ---------------------- | ----------------------------------------- | ------------ | ---- | ------------------------------------------------ |
-| `dsh-zotero`           | `zotero`（wire 命名空间 `zotero`）        | `zotero`     | 启用 | 连接、模型工具、文献轨迹、设置页、`/zotero` 命令 |
-| `dsh-zotero/library`   | `zoteroLibrary`（wire 命名空间 `zotero`） | `library`    | 启用 | 文献面板的宿主端点与右侧边栏界面                 |
-| `dsh-zotero/scholarly` | `scholarly`                               | `scholarly`  | 关闭 | 外部学术索引检索与全文读取                       |
+| 组件                   | Cordis 键                                 | 设置命名空间 | 默认 | 职责                             |
+| ---------------------- | ----------------------------------------- | ------------ | ---- | -------------------------------- |
+| `dsh-zotero`           | `zotero`（wire 命名空间 `zotero`）        | `zotero`     | 启用 | 连接、模型工具、文献轨迹、设置页 |
+| `dsh-zotero/library`   | `zoteroLibrary`（wire 命名空间 `zotero`） | `library`    | 启用 | 文献面板的宿主端点与右侧边栏界面 |
+| `dsh-zotero/scholarly` | `scholarly`                               | `scholarly`  | 关闭 | 外部学术索引检索与全文读取       |
 
 三者不是同类同级：核心持有数据面与 Agent 能力；文献面板组件没有工具、没有提示词段、没有自己的传输层，端点全部转交核心，拆出来是为了可整体关闭并拥有独立设置；学术检索组件是外部授权边界，未挂载时服务、传输层与工具都不存在。
 
@@ -129,10 +129,9 @@ graph LR
 - 写入口：`writeEnabled` 且选中个人库时显示；仅当所属会话正在运行时才能提交。
 - 引用复制：动作行经 `zotero/export` 端点复制 CSL 引用、BibTeX 等格式，面板只取与 `zotero_export` 同源的渲染文本/引文（不含工具侧的逐条文档定位）；失败就地展示错误，不自动重试。
 
-### 工具卡片与命令卡片
+### 工具卡片
 
 - 工具卡片（`tool.call.toolview`）：21 个本地模型工具与 `scholarly_save_to_zotero` 各有一张紧凑折叠卡片，其余 6 个学术检索工具按官方契约落通用行。卡片只渲染工具已有的输出，自身不调用工具，并对值得复制的取值提供复制按钮；「阅读 PDF」在右侧边栏打开原文。
-- 命令卡片（`conversation.chat.commandview`）：为 `/zotero` 输出提供连接状态灯、版本与 Server ID 明细、离线排查建议与就地刷新按钮。结构化事实来自宿主注册的 `zoteroStatus` 会话投影；就地刷新发起的实时探测优先于投影。
 - 参数读取与错误边界：卡片与轨迹归约器统一通过 `argsViewOf(block)` 读取 `block.args`；`ZoteroSurfaceBoundary` 包裹文献轨迹页，`ZoteroCardBoundary` 包裹全部工具卡片，渲染异常就地降级，不向上逃逸。
 
 ### 设置与插件管理表面

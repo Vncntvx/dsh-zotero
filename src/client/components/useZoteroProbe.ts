@@ -1,7 +1,7 @@
 /**
- * The shared live-probe hook behind the `/zotero` command card and the
- * plugin-detail status card. Both read the same `zoteroStatus` endpoint and
- * neither may stack calls on it, so the in-flight and unmount guards live here
+ * The shared live-probe hook behind the plugin-detail status card and the
+ * other status surfaces. All of them read the same `zoteroStatus` endpoint and
+ * none may stack calls on it, so the in-flight and unmount guards live here
  * rather than in each caller.
  *
  * @module dsh-zotero/client/useZoteroProbe

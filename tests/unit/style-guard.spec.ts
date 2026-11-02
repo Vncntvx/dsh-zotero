@@ -305,7 +305,7 @@ describe('styleViolations', () => {
 describe('styleSources', () => {
   it('finds every stylesheet under the scanned root, sorted', () => {
     const sources = styleSources()
-    expect(sources.length).toBeGreaterThanOrEqual(14)
+    expect(sources.length).toBeGreaterThanOrEqual(12)
     expect(sources.map((source) => source.file)).toEqual(
       sources
         .map((source) => source.file)

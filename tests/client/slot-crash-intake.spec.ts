@@ -308,11 +308,11 @@ describe('the slot crash intake', () => {
     // The key and the options carry "zotero", but the registration belongs to
     // another plugin: ownership is the registrant stamp, so this is foreign.
     world.crash(
-      'conversation.chat.commandview',
+      'plugins.row.config',
       {
         registrant: 'some-other-plugin',
         options: { key: 'zotero', locale: 'zotero' },
-        name: 'conversation.chat.commandview',
+        name: 'plugins.row.config',
         component: () => null,
       },
       new Error('borrowed key'),

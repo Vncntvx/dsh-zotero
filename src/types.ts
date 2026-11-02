@@ -88,7 +88,7 @@ export interface ZoteroObjectRef {
   serverId?: string
 }
 
-/** Live connectivity facts for one provider, rendered by `/zotero status`. */
+/** Live connectivity facts for one provider, served by the wire `status` endpoint. */
 export interface ZoteroStatus {
   providerId: string
   /**

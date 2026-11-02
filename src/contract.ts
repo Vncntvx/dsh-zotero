@@ -350,12 +350,6 @@ export function zoteroOpenProtocolInvocation(
 }
 
 /*
- * The `/zotero` status strings live in `src/command.ts` with the formatter that
- * emits them. The card reads the `zoteroStatus` projection, so these strings
- * are human-facing output only and do not cross the boundary.
- */
-
-/*
  * ── Library panel endpoints ──────────────────────────────────────────────
  *
  * The read endpoints below serve the browser library panel. They are a

@@ -23,11 +23,11 @@ graph LR
 
 ## Components and Boundaries
 
-| Component              | Cordis key                                | Settings namespace | Default | Responsibility                                                              |
-| ---------------------- | ----------------------------------------- | ------------------ | ------- | --------------------------------------------------------------------------- |
-| `dsh-zotero`           | `zotero` (wire namespace `zotero`)        | `zotero`           | Enabled | Connection, model tools, literature trail, settings page, `/zotero` command |
-| `dsh-zotero/library`   | `zoteroLibrary` (wire namespace `zotero`) | `library`          | Enabled | Host endpoints and right-sidebar interface of the literature panel          |
-| `dsh-zotero/scholarly` | `scholarly`                               | `scholarly`        | Off     | External scholarly index search and full-text reads                         |
+| Component              | Cordis key                                | Settings namespace | Default | Responsibility                                                     |
+| ---------------------- | ----------------------------------------- | ------------------ | ------- | ------------------------------------------------------------------ |
+| `dsh-zotero`           | `zotero` (wire namespace `zotero`)        | `zotero`           | Enabled | Connection, model tools, literature trail, settings page           |
+| `dsh-zotero/library`   | `zoteroLibrary` (wire namespace `zotero`) | `library`          | Enabled | Host endpoints and right-sidebar interface of the literature panel |
+| `dsh-zotero/scholarly` | `scholarly`                               | `scholarly`        | Off     | External scholarly index search and full-text reads                |
 
 The three are not peers of one kind. The core holds the data plane and the agent capabilities. The literature panel component has no tools, no prompt section, and no transport of its own; its endpoints all forward to the core, and it is split out so it can be disabled as a whole and keep its own settings. The scholarly retrieval component is the external authorization boundary: while it is not mounted, its service, transport, and tools do not exist.
 
@@ -129,10 +129,9 @@ A single client artifact (`lib/client.js`) contains all interfaces. Every surfac
 - Write entry: shown when `writeEnabled` is on and the personal library is selected; it can be submitted only while the owning conversation is running.
 - Citation copying: the action row copies CSL citations, BibTeX, and other formats through the `zotero/export` endpoint, and the panel takes the rendered text/citations from the same source as `zotero_export` (never the tool-side per-document location); failures are shown in place and are not retried automatically.
 
-### Tool Cards and Command Card
+### Tool Cards
 
 - Tool cards (`tool.call.toolview`): each of the 21 local model tools and `scholarly_save_to_zotero` has a compact collapsible card, and the other six scholarly retrieval tools fall back to the generic row defined by the official contract. A card renders only output the tool already produced, calls no tools itself, and offers copy buttons for values worth copying; "Read PDF" opens the source in the right sidebar.
-- Command card (`conversation.chat.commandview`): it provides for `/zotero` a connection status light, version and Server ID details, offline troubleshooting suggestions, and an in-place refresh button. Structured facts come from the host-registered `zoteroStatus` session projection; a live probe started by an in-place refresh outranks the projection.
 - Argument access and error boundaries: cards and the trail reducer read `block.args` uniformly through `argsViewOf(block)`; `ZoteroSurfaceBoundary` wraps the literature trail page and `ZoteroCardBoundary` wraps all tool cards, so a render failure degrades in place and does not escape upward.
 
 ### Settings and Plugin Management Surfaces

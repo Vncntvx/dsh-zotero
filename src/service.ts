@@ -8,8 +8,8 @@
  *
  * The plugin is request-driven by design: loading it never touches Zotero
  * (no probes, no timers, no background work). The only request sources are
- * the tools, invoked because the user asked about their library, and
- * the `/zotero status` command the user invokes explicitly.
+ * the tools invoked because the user asked about their library, and client
+ * panels and probes.
  *
  * The effective config is live: every schema field is `volatile`, so a
  * settings commit lands in the running fiber's references without remounting

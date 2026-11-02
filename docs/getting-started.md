@@ -68,28 +68,15 @@ dsh plugin --profile <profile-name> add github:Vncntvx/dsh-zotero#<commit-hash>
 
 ## 验证连接
 
-在会话输入框执行状态命令：
+启用插件时系统会自动探活本地连接。需要手动核对时，打开 Harness 插件管理器中 **dsh-zotero** 的详情页，页面底部的服务状态卡显示：
 
-```text
-/zotero
-```
+- 连接状态（已连接 / 不可用）；
+- 应答的 Zotero 版本；
+- 离线时的具体诊断与处置建议。
 
-或等价命令 `/zotero status`。
+点击状态卡中的刷新按钮可随时重新探测。`API version` 是插件在每个请求上固定的本地 API 版本（3）；不支持该版本的 Zotero 构建会返回 501。
 
-正常响应示例：
-
-```text
-Zotero local API: connected
-Local API: 127.0.0.1:23119
-Zotero version: 10.0.6-beta.4+4d4c2c141
-API version: 3
-Schema version: 44
-Server ID: Cq1f76x70ESV
-```
-
-这些版本行取自 Zotero 应答的响应头，因此随你的 Zotero 版本变化。`API version` 是插件在每个请求上固定的本地 API 版本（3）；不支持该版本的 Zotero 构建会返回 501。
-
-若提示无法连接，请检查：
+若显示无法连接，请检查：
 
 1. Zotero 桌面版是否正常运行；
 2. Zotero 设置的高级面板中是否已勾选允许通信选项。

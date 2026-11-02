@@ -50,17 +50,25 @@ export default defineConfig({
       // Raising any of these is a separate decision with its own evidence: a
       // layer earns a higher floor by specifying more behavior, never by
       // touching branches to satisfy the number.
+      //
+      // Recalibrated when the /zotero command chain (command, session event,
+      // projection, command card, command input) was removed: every deleted
+      // module was fully covered, so the surviving code's own coverage is
+      // unchanged while the layers lost that high-coverage mass. The floors
+      // that moved were re-set just under the surviving layers' measured
+      // values (global branches 94.92, src/*.ts branches 96.22 and functions
+      // 98.59, client components branches 95.91).
       thresholds: {
-        'src/*.ts': { statements: 98, branches: 97, functions: 99, lines: 98 },
+        'src/*.ts': { statements: 98, branches: 96, functions: 98, lines: 98 },
         'src/local/**': { statements: 98, branches: 93, functions: 99, lines: 98 },
         'src/tools/**': { statements: 98, branches: 95, functions: 99, lines: 99 },
         'src/client/sources/**': { statements: 96, branches: 94, functions: 97, lines: 97 },
         // Component layer ratchets include both SourcesTab and the global Library components.
-        'src/client/components/**': { statements: 95, branches: 96, functions: 99, lines: 97 },
+        'src/client/components/**': { statements: 95, branches: 95, functions: 99, lines: 97 },
         'src/client/**': { statements: 97, branches: 96, functions: 97, lines: 97 },
         'src/scholarly/**': { statements: 95, branches: 88, functions: 91, lines: 95 },
         statements: 97,
-        branches: 95,
+        branches: 94,
         functions: 98,
         lines: 97,
       },

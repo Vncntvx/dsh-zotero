@@ -7,7 +7,7 @@
 ```text
 src/
   index.ts              # 插件入口（纯 re-export）
-  service.ts            # ZoteroService（Cordis 服务：工具接线、命令、投影与 Provider 生命周期）
+  service.ts            # ZoteroService（Cordis 服务：工具接线与 Provider 生命周期）
   service-config.ts     # 传输重建配置键与 LocalApiLimits 映射（自 service.ts 拆分）
   service-lifecycle.ts  # 配置提交校验与 volatile 更新处理（自 service.ts 拆分）
   shell-write-approval.ts # shell 直写本地 API 的审批接缝（自 service.ts 拆分）
@@ -35,9 +35,6 @@ src/
   evidence-item.ts      # 原文片段投影定义（端侧共享）
   browse-rows.ts        # 浏览行分类（端侧共享）
   changes-contract.ts   # changes 投影的共享 wire 描述符
-  projection-keys.ts    # zoteroStatus 投影键与类型合并（端侧共享）
-  session-events.ts     # zotero/status 会话事件与状态→wire 视图折叠
-  status-projection.ts     # zoteroStatus 会话投影单元（last-value fold）
   transport-bounds.ts      # 本地与学术两套传输共用的响应体上限判定
   transport-diagnostics.ts # 传输层诊断行记录（请求行、取消与降级）
   constants.ts             # 常量定义
@@ -59,7 +56,6 @@ src/
   export-mapping.ts     # 引用与批量条目映射
   export-limits.ts      # zotero_export 与文献面板 export 端点共用的引用条数上限校验
   prompt.ts             # 面向模型的系统提示词
-  command.ts            # /zotero 状态命令
   write-approval.ts     # 写入双层确认（审批策略与计划审查卡）
   write-auth.ts         # Zotero 本地写入密钥获取与持久化
   write-http.ts         # 本地写入 HTTP 请求处理
@@ -182,7 +178,7 @@ cp dev-lib.cordis.yml.example dev-lib.cordis.yml # 复制叠加层模板并配�
 dsh web --patch ./dev-lib.cordis.yml --port 3307
 ```
 
-> 注意：`dev-lib.cordis.yml` 叠加层通过配置构建入口的绝对路径（`<absolute-path-to-dsh-zotero>/lib/index.js`）加载插件，使得 Host 端（模型工具与 `/zotero` 命令行）能在 Loader 监视下实现免重启热重载；但 Harness 客户端模块加载器仅解析已注册的裸包名，因此该模式不加载浏览器端前端组件（设置页、文献轨迹与文献面板）。如需调试前端 UI，请使用上述「完整插件调试」流程（`dsh plugin --profile web add .` 与 `npm run dev:client`）。
+> 注意：`dev-lib.cordis.yml` 叠加层通过配置构建入口的绝对路径（`<absolute-path-to-dsh-zotero>/lib/index.js`）加载插件，使得 Host 端（模型工具）能在 Loader 监视下实现免重启热重载；但 Harness 客户端模块加载器仅解析已注册的裸包名，因此该模式不加载浏览器端前端组件（设置页、文献轨迹与文献面板）。如需调试前端 UI，请使用上述「完整插件调试」流程（`dsh plugin --profile web add .` 与 `npm run dev:client`）。
 
 ### 诊断面板与诊断包
 

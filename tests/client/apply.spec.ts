@@ -37,7 +37,6 @@ describe('the browser-half entry', () => {
       'slots',
       'remote',
       'configForms',
-      'uiConversation',
       'sidebarRight',
       'sidebarRightTabs',
     ])
@@ -47,21 +46,6 @@ describe('the browser-half entry', () => {
     const world = fakeWorld()
     await applyEntry(world)
     expect(world.dictionaries).toEqual([{ ns: 'zotero', dict: { zh, en } }])
-  })
-
-  it('registers the zotero command-input projection and its chat node renderer', async () => {
-    const world = fakeWorld()
-    await applyEntry(world)
-    expect(world.eventDefinitions.map((definition) => definition.kind)).toEqual([
-      'zotero-command-input',
-    ])
-    const entry = world.injected.find((item) => item.name === 'conversation.chat.node')
-    expect(entry).toBeDefined()
-    expect(entry?.register()).toBeDefined()
-    const registration = world.registered.find((item) => item.name === 'conversation.chat.node')
-    expect(registration?.options.key).toBe('zotero-command-input')
-    expect(registration?.options.locale).toBe('zotero')
-    expect(typeof registration?.component).toBe('function')
   })
 
   it('reads the shared form for the shared namespace constant', async () => {
@@ -85,19 +69,17 @@ describe('the browser-half entry', () => {
   it('registers all plugin surfaces synchronously on apply', async () => {
     const world = fakeWorld()
     await applyEntry(world)
-    // All surfaces register synchronously: the command-input projection, the
-    // bundle config page, the row configs, the plugin-manager cards,
-    // the conversation tab, and the right-sidebar library surfaces.
+    // All surfaces register synchronously: the bundle config page, the row
+    // configs, the plugin-manager cards, the conversation tab, and the
+    // right-sidebar library surfaces.
     expect(world.injected.map((entry) => entry.name)).toEqual([
       'tool.call.toolview',
-      'conversation.chat.node',
       'plugins.bundle.activation',
       'plugins.bundle.config',
       'plugins.row.config',
       'plugins.row.config',
       'plugins.detail.section',
       'plugins.detail.section',
-      'conversation.chat.commandview',
       'conversation.view',
       'sidebar.right.pane.tab',
       'sidebar.right.pane.tab.title',
@@ -255,22 +237,6 @@ describe('the browser-half entry', () => {
     expect(typeof face.probe).toBe('function')
   })
 
-  it('injects and registers the zotero command card into the conversation.chat.commandview slot', async () => {
-    const world = fakeWorld()
-    await applyEntry(world)
-
-    const entry = world.injected.find((e) => e.name === 'conversation.chat.commandview')
-    expect(entry).toBeDefined()
-    expect(entry?.register()).toBeDefined()
-
-    const card = world.registered.find((e) => e.name === 'conversation.chat.commandview')
-    expect(card?.options.key).toBe('zotero')
-    expect(card?.options.locale).toBe('zotero')
-    expect(typeof card?.component).toBe('function')
-    const cardInject = (card?.options.inject as () => { probe: () => Promise<unknown> })()
-    expect(typeof cardInject.probe).toBe('function')
-  })
-
   it('rejects instead of degrading when the mount rejects', async () => {
     const world = fakeWorld(new Error('gateway offline'))
     // An assembly mistake is not swallowed: the entry rejects, so the harness
@@ -297,15 +263,7 @@ describe('the browser-half entry', () => {
     // The UI fiber declared `remote.zotero`, so `ctx.remote.zotero` is a legal
     // service read there: the same shape the harness's own client plugins use.
     expect(world.injectDeps).toEqual([
-      [
-        'remote.zotero',
-        'locale',
-        'slots',
-        'configForms',
-        'uiConversation',
-        'sidebarRight',
-        'sidebarRightTabs',
-      ],
+      ['remote.zotero', 'locale', 'slots', 'configForms', 'sidebarRight', 'sidebarRightTabs'],
     ])
     const tab = world.injected.find((entry) => entry.name === 'conversation.view')
     tab?.register()
@@ -408,13 +366,13 @@ describe('the browser-half entry', () => {
     expect(world.scope.unsubscribes).toBe(0)
     expect(world.injected.some((entry) => entry.name === 'conversation.view')).toBe(true)
 
-    // The disposer unwinds the UI fiber: the projection, the card forms'
-    // subscriptions, the gated surfaces subscriptions, and the mount.
+    // The disposer unwinds the UI fiber: the card forms' subscriptions, the
+    // gated surfaces subscriptions, and the mount.
     // Per-namespace counts: the zotero form carries the webEnabled watch, the
     // card model, and the panel gate's sync; the library form carries its own
     // sync and card model; the scholarly form its card model.
     await dispose()
-    expect(world.eventDisposes).toBe(1)
+    expect(world.eventDisposes).toBe(0)
     expect(world.scope.unsubscribes).toBe(3)
     expect(world.libraryScope.unsubscribes).toBe(2)
     expect(world.scholarlyScope.unsubscribes).toBe(1)

@@ -31,7 +31,6 @@ import { SCHOLARLY_SETTINGS_NAMESPACE } from '../../src/settings-namespace.js'
 import { ZOTERO_LIBRARY_SETTINGS_NAMESPACE } from '../../src/contract.js'
 import { expectValue } from '../helpers/lanes/host-lane.js'
 import { MockZotero } from '../helpers/mock-zotero.js'
-import { StubCommands } from '../helpers/stub-commands.js'
 import { SCHOLARLY_TOOL_NAMES, ZOTERO_READ_TOOL_NAMES } from '../helpers/tool-names.js'
 
 let root: string | undefined
@@ -63,12 +62,7 @@ async function bootComposition(extraPatches: readonly PatchOptions[] = []): Prom
   const parsedPatch = load(bundlePatch, { schema: entryListSchema }) as PatchOptions[]
   await writeFile(
     configPath,
-    [
-      "- name: '@deepseek-ai/dsh-system-prompt'",
-      "- name: '@deepseek-ai/dsh-tools'",
-      "- name: 'test-stub-commands'",
-      '',
-    ].join('\n'),
+    ["- name: '@deepseek-ai/dsh-system-prompt'", "- name: '@deepseek-ai/dsh-tools'", ''].join('\n'),
   )
 
   context = new Context()
@@ -78,7 +72,6 @@ async function bootComposition(extraPatches: readonly PatchOptions[] = []): Prom
   const modules = new Map<string, unknown>([
     ['@deepseek-ai/dsh-system-prompt', SystemPrompt],
     ['@deepseek-ai/dsh-tools', ToolRuntime],
-    ['test-stub-commands', StubCommands],
     ['dsh-zotero', ZoteroService],
     ['dsh-zotero/scholarly', ScholarlyService],
     ['dsh-zotero/library', ZoteroLibraryService],
@@ -134,8 +127,6 @@ describe('the shipped bundle patch through a real Loader composition', () => {
     expect([...names].sort()).toEqual([...ZOTERO_READ_TOOL_NAMES, ...SCHOLARLY_TOOL_NAMES].sort())
     const assembly = await context!.systemPrompt.assemble()
     expect(assembly.sections.some((entry) => entry.name === 'zotero:policy')).toBe(true)
-    const commands = context!.get('commands') as StubCommands | undefined
-    expect(commands?.registered.map((definition) => definition.name)).toEqual(['zotero'])
 
     // One end-to-end tool call through the assembled registry.
     mock!.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers) =>
@@ -174,7 +165,6 @@ describe('the shipped bundle patch through a real Loader composition', () => {
     expect(context!.get('scholarly')).toBeUndefined()
     expect(context!.get('zoteroLibrary')).toBeUndefined()
     expect(context!.get('tools')).toBeUndefined()
-    expect(commands?.registered).toEqual([])
   })
 
   it('leaves the scholarly component off until its row is enabled', async () => {

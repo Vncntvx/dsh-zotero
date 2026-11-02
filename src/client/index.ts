@@ -618,9 +618,9 @@ function registerUi(ctx: ClientContext): void {
   )
   // Live connectivity for the conversation tab's status strip. This fiber is
   // only created once `$mount` published the namespace, so the call site reads
-  // it directly. Concurrent probes share one in-flight call: the strip and the
-  // command card can both ask in the same tick, and one status read per tick
-  // is the product behavior, not a workaround.
+  // it directly. Concurrent probes share one in-flight call: multiple consumers
+  // can ask in the same tick, and one status read per tick is the product
+  // behavior, not a workaround.
   let inFlightProbe: Promise<RemoteResult<ZoteroStatusView>> | undefined
   const probe = (): Promise<RemoteResult<ZoteroStatusView>> => {
     if (inFlightProbe !== undefined) return inFlightProbe
@@ -667,14 +667,7 @@ function registerUi(ctx: ClientContext): void {
 export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
   const disposeRemote = await ctx.remote.$mount(ZOTERO_REMOTE)
   const ui = ctx.inject(
-    [
-      'remote.zotero',
-      'locale',
-      'slots',
-      'configForms',
-      'sidebarRight',
-      'sidebarRightTabs',
-    ],
+    ['remote.zotero', 'locale', 'slots', 'configForms', 'sidebarRight', 'sidebarRightTabs'],
     registerUi,
   )
   try {

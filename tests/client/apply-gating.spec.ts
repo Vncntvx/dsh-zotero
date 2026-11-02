@@ -65,14 +65,12 @@ describe('the browser-half entry behind the webEnabled gate', () => {
     await applyEntry(world)
     expect(world.injected.map((entry) => entry.name)).toEqual([
       'tool.call.toolview',
-      'conversation.chat.node',
       'plugins.bundle.activation',
       'plugins.bundle.config',
       'plugins.row.config',
       'plugins.row.config',
       'plugins.detail.section',
       'plugins.detail.section',
-      'conversation.chat.commandview',
     ])
   })
 

@@ -6,7 +6,7 @@ dsh-zotero is a DeepSeek Harness plugin: agents search, read, cite, and (when en
 
 | Path             | Ownership                                                                                        |
 | ---------------- | ------------------------------------------------------------------------------------------------ |
-| `src/`           | Host runtime: `ZoteroService` (`ctx.zotero`), HTTP transport, provider, `/zotero` command        |
+| `src/`           | Host runtime: `ZoteroService` (`ctx.zotero`), HTTP transport, provider                           |
 | `src/local/`     | Local API domain pipelines behind the provider: search, browse, retrieve, export, changes, write |
 | `src/library/`   | `dsh-zotero/library` component: `ctx.zoteroLibrary` panel endpoints and config                   |
 | `src/scholarly/` | `dsh-zotero/scholarly` component: external search, fusion, fulltext, citations (7 tools)         |

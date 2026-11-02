@@ -1,21 +1,11 @@
-import type { CommandResult } from '@deepseek-ai/dsh-commands'
-import { readFileSync } from 'node:fs'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { afterEach, describe, expect, it } from 'vitest'
 import ZoteroService from '../../src/index.js'
 import {
-  NOT_RUNNING_MESSAGE,
   ZOTERO_CAPABILITY_UNAVAILABLE,
   ZOTERO_PROVIDER_UNAVAILABLE,
   ZoteroError,
 } from '../../src/errors.js'
-import {
-  ZOTERO_STATUS_CONNECTED,
-  ZOTERO_STATUS_DISCONNECTED,
-  ZOTERO_STATUS_SERVER_ID_UNREPORTED,
-  ZOTERO_USAGE_MESSAGE,
-  statusLine,
-} from '../../src/command.js'
 import { parseRef } from '../../src/refs.js'
 import {
   CONNECTIVITY_POLICY_SENTENCE,
@@ -33,7 +23,6 @@ import type { ZoteroProvider } from '../../src/types.js'
 import { type HostLane, setupHostLane } from '../helpers/lanes/host-lane.js'
 import { deferred } from '../helpers/sync.js'
 import { sectionPosition, withBandProbes } from '../helpers/prompt-band.js'
-import { STUB_EVENT_SEQ, stubCommandInvocation } from '../helpers/stub-commands.js'
 import { ZOTERO_TOOL_NAMES } from '../helpers/tool-names.js'
 
 /** The lane the current test booted; `afterEach` releases it. */
@@ -47,130 +36,33 @@ afterEach(async () => {
 
 describe('ZoteroService lifecycle', () => {
   it('provides ctx.zotero and removes it when its fiber is disposed', async () => {
-    lane = await setupHostLane(undefined, { commands: true })
+    lane = await setupHostLane()
     const { ctx, zoteroFiber } = lane
     expect(ctx.get('zotero')).toBeInstanceOf(ZoteroService)
     await zoteroFiber.dispose()
     expect(ctx.get('zotero')).toBeUndefined()
   })
 
-  it('registers the zotero command only when a command registry exists', async () => {
-    lane = await setupHostLane(undefined, { commands: true })
-    expect(lane.stub!.registered.map((definition) => definition.name)).toEqual(['zotero'])
-
-    // This lane is released here; `lane` above is the one `afterEach` tears down.
-    const withoutCommands = await setupHostLane()
-    // The plugin still loads fine; there is just no command registry to register into.
-    expect(withoutCommands.ctx.get('zotero')).toBeInstanceOf(ZoteroService)
-    await withoutCommands.ctx.fiber.dispose()
-    await withoutCommands.teardown()
-  })
-
-  it('brands the definitionId through the CommandDefinitionId constructor', async () => {
-    lane = await setupHostLane(undefined, { commands: true })
-    const definition = lane.stub!.registered[0]!
-    // The brand constructor is an identity function; the wire value is the string.
-    expect(definition.definitionId).toBe('dsh-zotero/status')
-  })
-
-  it('ships lib/command.js with a value import of CommandDefinitionId', () => {
-    const built = readFileSync(new URL('../../lib/command.js', import.meta.url), 'utf8')
-    expect(built).toMatch(/import\s*\{[^}]*CommandDefinitionId/)
-    expect(built).toContain('dsh-zotero/status')
-  })
-
   it('never touches Zotero while loading or disposing: the plugin is request-driven only', async () => {
-    lane = await setupHostLane(undefined, { commands: true })
+    lane = await setupHostLane()
     expect(lane.mock.requests).toEqual([])
     await lane.zoteroFiber.dispose()
     expect(lane.mock.requests).toEqual([])
 
     // The second composition observes its own server, so a request made while
     // loading or disposing shows up in the lane that made it.
-    const withoutCommands = await setupHostLane()
-    expect(withoutCommands.mock.requests).toEqual([])
-    await withoutCommands.zoteroFiber.dispose()
-    expect(withoutCommands.mock.requests).toEqual([])
-    await withoutCommands.ctx.fiber.dispose()
-    await withoutCommands.teardown()
-  })
-})
-
-describe('/zotero status command', () => {
-  it('reports a connected instance with the build that answered', async () => {
-    lane = await setupHostLane(undefined, { commands: true })
-    lane.mock.route('GET', '/api/', (req, res, helpers) =>
-      helpers.json(
-        {},
-        {
-          'Zotero-API-Version': '3',
-          'Zotero-Schema-Version': '25',
-          'Zotero-Server-ID': 'sPMHtLD6HHBd',
-          'X-Zotero-Version': '10.0.2-beta.9+c77df79af',
-        },
-      ),
-    )
-    const definition = lane.stub!.registered[0]!
-    const call = stubCommandInvocation('status')
-    const result = (await definition.handler(call)) as CommandResult
-    expect(result.kind).toBe('success')
-    if (result.kind !== 'success') throw new Error('unreachable')
-    // The structured status is a durable session event, and the result names
-    // its seq so the client card reads the projection instead of re-parsing
-    // this text. Both halves are the contract.
-    expect(call.appended).toHaveLength(1)
-    expect(call.appended[0]?.type).toBe('zotero/status')
-    expect(result.sourceEventSeq).toBe(STUB_EVENT_SEQ)
-    expect(result.text).toContain(ZOTERO_STATUS_CONNECTED)
-    expect(result.text).toContain(statusLine('API version', '3'))
-    expect(result.text).toContain(statusLine('Schema version', '25'))
-    expect(result.text).toContain(statusLine('Server ID', 'sPMHtLD6HHBd'))
-    // The build header is the only version fact that names a release, so the
-    // command reports it rather than leaving the answering Zotero unnamed.
-    expect(result.text).toContain(statusLine('Zotero version', '10.0.2-beta.9+c77df79af'))
-  })
-
-  it('reports a missing Server-ID and missing headers as a degraded instance without failing', async () => {
-    lane = await setupHostLane(undefined, { commands: true })
-    lane.mock.route('GET', '/api/', (req, res, helpers) => helpers.json({}))
-    const definition = lane.stub!.registered[0]!
-    const result = (await definition.handler(stubCommandInvocation('status'))) as CommandResult
-    expect(result.kind).toBe('success')
-    if (result.kind !== 'success') throw new Error('unreachable')
-    expect(result.text).toContain(ZOTERO_STATUS_CONNECTED)
-    expect(result.text).toContain(statusLine('Zotero version', undefined))
-    expect(result.text).toContain(statusLine('API version', undefined))
-    expect(result.text).toContain(statusLine('Schema version', undefined))
-    expect(result.text).toContain(ZOTERO_STATUS_SERVER_ID_UNREPORTED)
-  })
-
-  it('reports a disconnected Zotero with the actionable diagnosis', async () => {
-    lane = await setupHostLane(undefined, { commands: true })
-    // The plugin makes no request while loading, so closing the mock after the
-    // mount leaves a dead endpoint for the status probe to hit.
-    await lane.mock.close()
-    const definition = lane.stub!.registered[0]!
-    const result = (await definition.handler(stubCommandInvocation('status'))) as CommandResult
-    expect(result.kind).toBe('success')
-    if (result.kind !== 'success') throw new Error('unreachable')
-    expect(result.text).toContain(ZOTERO_STATUS_DISCONNECTED)
-    expect(result.text).toContain(NOT_RUNNING_MESSAGE)
-  })
-
-  it('rejects unknown subcommands with usage text', async () => {
-    lane = await setupHostLane(undefined, { commands: true })
-    lane.mock.route('GET', '/api/', (req, res, helpers) =>
-      helpers.json({}, { 'Zotero-API-Version': '3' }),
-    )
-    const definition = lane.stub!.registered[0]!
-    const result = (await definition.handler(stubCommandInvocation('open'))) as CommandResult
-    expect(result).toEqual({ kind: 'error', text: ZOTERO_USAGE_MESSAGE })
+    const secondLane = await setupHostLane()
+    expect(secondLane.mock.requests).toEqual([])
+    await secondLane.zoteroFiber.dispose()
+    expect(secondLane.mock.requests).toEqual([])
+    await secondLane.ctx.fiber.dispose()
+    await secondLane.teardown()
   })
 })
 
 describe('prompt section', () => {
   it('contributes the zotero policy section after the first-party tool band', async () => {
-    lane = await setupHostLane(undefined, { commands: true })
+    lane = await setupHostLane()
     const assembly = await lane.ctx.systemPrompt.assemble()
     const section = assembly.sections.find((entry) => entry.name === 'zotero:policy')
     expect(section).toBeDefined()
@@ -216,7 +108,7 @@ describe('prompt section', () => {
 
   it('places the scholarly policy after the local-library policy', async () => {
     // The two policy sections share one band and take one slot each.
-    lane = await setupHostLane(undefined, { commands: true })
+    lane = await setupHostLane()
     await lane.ctx.plugin(ScholarlyService, {})
     await withBandProbes(lane.ctx, PROMPT_BAND_CEILING, (assembly) => {
       const positionOf = (name: string): number => sectionPosition(assembly, name)
@@ -232,7 +124,7 @@ describe('prompt section', () => {
   })
 
   it('states the live tool caps the model must stay within', async () => {
-    lane = await setupHostLane(undefined, { commands: true })
+    lane = await setupHostLane()
     const assembly = await lane.ctx.systemPrompt.assemble()
     const section = assembly.sections.find((entry) => entry.name === 'zotero:policy')
     expect(section!.text).toContain('zotero_search limit up to 20')
@@ -243,10 +135,11 @@ describe('prompt section', () => {
   })
 
   it('tracks config edits in the assembled cap values', async () => {
-    lane = await setupHostLane(
-      { maxSearchResults: 30, maxEvidencePassages: 6, maxExportRefs: 50 },
-      { commands: true },
-    )
+    lane = await setupHostLane({
+      maxSearchResults: 30,
+      maxEvidencePassages: 6,
+      maxExportRefs: 50,
+    })
     const assembly = await lane.ctx.systemPrompt.assemble()
     const section = assembly.sections.find((entry) => entry.name === 'zotero:policy')
     expect(section!.text).toContain('zotero_search limit up to 30')
@@ -263,7 +156,7 @@ describe('disposal unwinds registrations', () => {
     // unwinds it on unload. What has to hold is that such a request cannot
     // hang the host: the provider deadline ends it, so a reload leaves no
     // work waiting forever.
-    lane = await setupHostLane({ timeoutMs: 60 }, { commands: true })
+    lane = await setupHostLane({ timeoutMs: 60 })
     const arrived = deferred<void>()
     lane.mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) => {
       arrived.resolve()
@@ -288,14 +181,13 @@ describe('disposal unwinds registrations', () => {
     expect(JSON.stringify(call?.result)).toContain('ZOTERO_TIMEOUT')
   })
 
-  it('removes tools, the prompt section, and the command when the plugin fiber is disposed', async () => {
-    lane = await setupHostLane(undefined, { commands: true })
-    const { ctx, stub, zoteroFiber } = lane
+  it('removes tools and the prompt section when the plugin fiber is disposed', async () => {
+    lane = await setupHostLane()
+    const { ctx, zoteroFiber } = lane
     expect(ctx.tools.get('zotero_search')).toBeDefined()
     expect(
       (await ctx.systemPrompt.assemble()).sections.some((entry) => entry.name === 'zotero:policy'),
     ).toBe(true)
-    expect(stub!.registered.map((definition) => definition.name)).toEqual(['zotero'])
 
     await zoteroFiber.dispose()
 
@@ -305,7 +197,6 @@ describe('disposal unwinds registrations', () => {
     expect(
       (await ctx.systemPrompt.assemble()).sections.some((entry) => entry.name === 'zotero:policy'),
     ).toBe(false)
-    expect(stub!.registered).toEqual([])
   })
 })
 
@@ -327,7 +218,7 @@ describe('provider selection', () => {
 
 describe('provider registration', () => {
   it('rejects a duplicate provider id', async () => {
-    lane = await setupHostLane(undefined, { commands: true })
+    lane = await setupHostLane()
     const service = lane.ctx.get('zotero') as ZoteroService
     const foreign: ZoteroProvider = {
       id: 'local',
@@ -371,7 +262,7 @@ describe('provider registration', () => {
   })
 
   it('removes a provider when its registration disposer runs', async () => {
-    lane = await setupHostLane(undefined, { commands: true })
+    lane = await setupHostLane()
     const service = lane.ctx.get('zotero') as ZoteroService
     const foreign: ZoteroProvider = {
       id: 'foreign',

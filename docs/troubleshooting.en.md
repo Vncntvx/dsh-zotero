@@ -80,7 +80,7 @@ This document lists common issues, possible causes, and the matching fixes when 
 
 - Symptom: plugin behavior does not change after the configuration is edited.
 - Cause: the wrong file or wrong place. User-level configuration lives under `config` on the matching entry (`zotero` / `library` / `scholarly`) in the current profile's `cordis.patch.yml`; the YAML key nesting may also be wrong, or the entry may be overridden by a home patch or command-line overlay.
-- Fix: open the **dsh-zotero** configuration area in the plugin manager and save once (the write lands in the current profile's `cordis.patch.yml`), then run `/zotero` to verify the state; make sure the file you edited belongs to the profile used for this launch.
+- Fix: open the **dsh-zotero** configuration area in the plugin manager and save once (the write lands in the current profile's `cordis.patch.yml`), then hit refresh on the service status card at the bottom of the detail page to verify the state; make sure the file you edited belongs to the profile used for this launch.
 
 ## 13. Tool cards do not expand in the conversation
 
@@ -99,7 +99,7 @@ This document lists common issues, possible causes, and the matching fixes when 
 
 - Symptom: in the `zotero_delete_collection` or `zotero_delete_library_tags` plan card, item, subcollection, or tag counts show `unknown`.
 - Cause: the preview reads before a delete are best-effort, and a failed read does not block the plan; the delete itself still carries the library version of its preceding read.
-- Fix: run `/zotero` first to confirm the connection, then decline the plan card and run again to get exact counts.
+- Fix: confirm the connection on the detail page's service status card first, then decline the plan card and run again to get exact counts.
 
 ## 16. A write returns ZOTERO_WRITE_CONFLICT (412)
 

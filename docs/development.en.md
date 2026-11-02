@@ -7,7 +7,7 @@
 ```text
 src/
   index.ts              # Plugin entry (pure re-export)
-  service.ts            # ZoteroService (Cordis service: tool wiring, commands, projections, and provider lifecycle)
+  service.ts            # ZoteroService (Cordis service: tool wiring and provider lifecycle)
   service-config.ts     # Transport-rebuild config keys and the LocalApiLimits mapping (split from service.ts)
   service-lifecycle.ts  # Config commit validation and volatile-update handling (split from service.ts)
   shell-write-approval.ts # Approval seam for shell commands that write to the local API directly (split from service.ts)
@@ -35,9 +35,6 @@ src/
   evidence-item.ts      # Passage item projection definitions (shared by both halves)
   browse-rows.ts        # Browse row classification (shared by both halves)
   changes-contract.ts   # Shared wire descriptors for the changes projection
-  projection-keys.ts    # The zoteroStatus projection key and its type merge (shared by both halves)
-  session-events.ts     # The zotero/status session event and the state-to-wire view fold
-  status-projection.ts     # The zoteroStatus session projection unit (last-value fold)
   transport-bounds.ts      # Response-body limits shared by the local and scholarly transports
   transport-diagnostics.ts # Transport-layer diagnostic line recording (request lines, cancellation, and degradation)
   constants.ts             # Constant definitions
@@ -59,7 +56,6 @@ src/
   export-mapping.ts     # Citation and batch item mapping
   export-limits.ts      # Ref count cap shared by zotero_export and the literature panel export endpoint
   prompt.ts             # Model-facing system prompt
-  command.ts            # /zotero status command
   write-approval.ts     # Two-tier write confirmation (approval policy and plan review card)
   write-auth.ts         # Zotero local write key acquisition and persistence
   write-http.ts         # Local write HTTP request handling
@@ -182,7 +178,7 @@ cp dev-lib.cordis.yml.example dev-lib.cordis.yml # Copy the template and fill in
 dsh web --patch ./dev-lib.cordis.yml --port 3307
 ```
 
-> Note: the `dev-lib.cordis.yml` overlay loads the plugin through its built entry's absolute path (`<absolute-path-to-dsh-zotero>/lib/index.js`), which gives the host half (model tools and the `/zotero` command) restart-free hot reload under the Loader's watch. The Harness client module loader resolves only registered bare package names, so this mode does not load browser-side frontend components (settings page, literature trail, and literature panel). To debug the frontend UI, use the "Full Plugin Debugging" flow above (`dsh plugin --profile web add .` and `npm run dev:client`).
+> Note: the `dev-lib.cordis.yml` overlay loads the plugin through its built entry's absolute path (`<absolute-path-to-dsh-zotero>/lib/index.js`), which gives the host half (model tools) restart-free hot reload under the Loader's watch. The Harness client module loader resolves only registered bare package names, so this mode does not load browser-side frontend components (settings page, literature trail, and literature panel). To debug the frontend UI, use the "Full Plugin Debugging" flow above (`dsh plugin --profile web add .` and `npm run dev:client`).
 
 ### Diagnostics Panel and Diagnostics Bundle
 

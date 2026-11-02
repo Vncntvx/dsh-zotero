@@ -233,9 +233,8 @@ export class WriteAuthorizer {
   /**
    * Whether a grant for this Zotero instance is already available: the
    * in-memory key of this process, or a persisted grant bound to the
-   * instance. It is a status fact for the settings card and the command
-   * output, never a capability, since {@link keyFor} still runs the full
-   * resolution.
+   * instance. It is a status fact for the settings card, never a
+   * capability, since {@link keyFor} still runs the full resolution.
    */
   async hasGrant(serverId: string): Promise<boolean> {
     if (this.memory !== undefined && this.memory.serverId === serverId) return true

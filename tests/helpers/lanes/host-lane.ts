@@ -16,9 +16,9 @@
  *
  * The optional compositions are the seams the host specs exercise beyond the
  * tool lane. Each one mounts before the plugin, because the plugin resolves
- * its injects at mount time: the stub command registry (`commands`), the
- * Typert registry (`typert`, whose endpoint registration has to be up while
- * the service mounts), and the in-memory settings provider (`settings`).
+ * its injects at mount time: the Typert registry (`typert`, whose endpoint
+ * registration has to be up while the service mounts), and the in-memory
+ * settings provider (`settings`).
  * @module tests/helpers/lanes/host-lane
  */
 
@@ -38,15 +38,9 @@ import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import type { Options } from '../../../src/config.js'
 import ZoteroService from '../../../src/index.js'
 import { MockZotero } from '../mock-zotero.js'
-import { StubCommands } from '../stub-commands.js'
 
 /** The optional services a lane composes before the plugin mounts. */
 export interface HostLaneOptions {
-  /**
-   * Compose the stub command registry, so the plugin's optional `/zotero`
-   * command path registers; the registry itself is {@link HostLane.stub}.
-   */
-  readonly commands?: boolean
   /**
    * Compose the Typert registry before the plugin, so the host manifest
    * self-registers while the service is mounting (the optional inject waits
@@ -72,8 +66,6 @@ export interface HostLane {
   readonly mock: MockZotero
   /** The plugin's own fiber; disposing it unwinds every registration. */
   readonly zoteroFiber: Fiber
-  /** The stub command registry, present only when `commands` composed it. */
-  readonly stub: StubCommands | undefined
   /** Execute one tool call the way the harness does, with a fresh signal and call id. */
   runTool(name: string, args: Record<string, unknown>): Promise<ToolExecutionResult>
   /** The registered definition for one tool name, if the assembly carries it. */
@@ -117,7 +109,6 @@ export async function setupHostLane(
       return executeToolBatch(input, new ToolExecutionPipeline(ctx), () => 10)
     },
   })
-  if (options.commands === true) await ctx.plugin(StubCommands)
   if (options.typert === true) await ctx.plugin(TypertRegistry)
   if (options.compose !== undefined) await options.compose(ctx)
   const entry: Options = { baseUrl: mock.baseUrl, ...config }
@@ -129,7 +120,6 @@ export async function setupHostLane(
     mock,
     configureCalls,
     zoteroFiber,
-    stub: options.commands === true ? (ctx.get('commands') as unknown as StubCommands) : undefined,
     async runTool(name, args) {
       const batch = await ctx.tools.execute({
         calls: [

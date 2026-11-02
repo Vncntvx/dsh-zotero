@@ -80,7 +80,7 @@
 
 - **现象**：修改配置后插件行为未发生改变。
 - **原因**：改错了文件或位置。用户层配置位于当前 profile 的 `cordis.patch.yml` 中对应条目（`zotero` / `library` / `scholarly`）的 `config`；也可能是 YAML 键层级写错，或该项被 home patch / 命令行 overlay 覆盖。
-- **排查**：在插件管理器中打开 **dsh-zotero** 的配置区保存一次（写入落在当前 profile 的 `cordis.patch.yml`），并在会话中执行 `/zotero` 验证状态；确认修改的是当前启动所用 profile 的文件。
+- **排查**：在插件管理器中打开 **dsh-zotero** 的配置区保存一次（写入落在当前 profile 的 `cordis.patch.yml`），并在详情页底部的服务状态卡点击刷新验证状态；确认修改的是当前启动所用 profile 的文件。
 
 ## 13. 对话中工具卡片未直接展开
 
@@ -99,7 +99,7 @@
 
 - **现象**：`zotero_delete_collection` 或 `zotero_delete_library_tags` 的计划卡中，条目数 / 子合集数 / 标签计数显示 `unknown`。
 - **原因**：删除前的预览读取是尽力而为，读取失败不阻塞计划；删除本身仍携带读取到的库版本前置。
-- **排查**：先用 `/zotero` 确认连接正常，可拒绝本次计划卡后重跑以取得准确计数。
+- **排查**：先在插件详情页的服务状态卡确认连接正常，可拒绝本次计划卡后重跑以取得准确计数。
 
 ## 16. 写入返回 ZOTERO_WRITE_CONFLICT (412)
 

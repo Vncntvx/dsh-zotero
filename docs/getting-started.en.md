@@ -68,26 +68,13 @@ When you enable the plugin in the Harness plugin management list, the system pro
 
 ## Verifying Connection
 
-In the chat composer, run the status command:
+When you enable the plugin, the system probes the local connection automatically. To check it manually, open the **dsh-zotero** detail page in the Harness plugin manager; the service status card at the bottom of the page shows:
 
-```text
-/zotero
-```
+- The connection state (connected / unavailable);
+- The Zotero version that answered;
+- The concrete diagnosis and suggestions while offline.
 
-Or the equivalent `/zotero status`.
-
-A healthy response looks like:
-
-```text
-Zotero local API: connected
-Local API: 127.0.0.1:23119
-Zotero version: 10.0.6-beta.4+4d4c2c141
-API version: 3
-Schema version: 44
-Server ID: Cq1f76x70ESV
-```
-
-These version lines come from the response headers of the Zotero build that answered, so they follow your Zotero version. `API version` is the local API version the plugin pins on every request (3); a Zotero build that does not support that version answers with 501.
+The refresh button on the status card re-probes at any time. `API version` is the local API version the plugin pins on every request (3); a Zotero build that does not support that version answers with 501.
 
 If the connection fails, check:
 
