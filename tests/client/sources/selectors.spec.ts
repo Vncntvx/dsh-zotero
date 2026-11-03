@@ -151,7 +151,7 @@ describe('exportSectionsOf', () => {
   const BIBTEX_TEXT = '@article{a,\n  title = {A},\n}'
   const RIS_TEXT = 'TY  - JOUR\nTI  - A\nID  - QRST3456\nER  -\n'
   const RIS_END = RIS_TEXT.length
-  const BIBTEX_ITEMS = [{ ref: REF, key: 'a', title: 'A', start: 0, end: BIBTEX_TEXT.length }]
+  const BIBTEX_ITEMS = [{ ref: REF, exportKey: 'a', title: 'A', start: 0, end: BIBTEX_TEXT.length }]
 
   it('groups documents into first-seen format sections', () => {
     const bibtex = artifactOf({
@@ -175,7 +175,7 @@ describe('exportSectionsOf', () => {
     expect(sections[0]!.documents[0]).toEqual({
       ref: REF,
       format: 'bibtex',
-      key: 'a',
+      exportKey: 'a',
       title: 'A',
       text: BIBTEX_TEXT,
       callIds: ['e1'],
@@ -200,7 +200,13 @@ describe('exportSectionsOf', () => {
       refs: [REF],
       settledAt: 1000,
       text: BIBTEX_TEXT,
-      items: BIBTEX_ITEMS,
+      items: [
+        {
+          ...BIBTEX_ITEMS[0]!,
+          citationKey: 'zotero2024',
+          citationKeySource: 'native',
+        },
+      ],
     })
     const second = artifactOf({
       callId: 'e2',
@@ -208,7 +214,18 @@ describe('exportSectionsOf', () => {
       refs: [REF],
       settledAt: 2000,
       text: updated,
-      items: [{ ref: REF, key: 'a', title: 'A updated', start: 0, end: updated.length }],
+      items: [
+        {
+          ref: REF,
+          exportKey: 'a',
+          citationKey: 'extra2024',
+          citationKeySource: 'extra',
+          citationKeyConflict: { native: 'zotero2024', extra: 'extra2024' },
+          title: 'A updated',
+          start: 0,
+          end: updated.length,
+        },
+      ],
     })
     const sections = exportSectionsOf([first, second])
     expect(sections).toHaveLength(1)
@@ -216,7 +233,10 @@ describe('exportSectionsOf', () => {
     expect(sections[0]!.documents[0]).toEqual({
       ref: REF,
       format: 'bibtex',
-      key: 'a',
+      exportKey: 'a',
+      citationKey: 'extra2024',
+      citationKeySource: 'extra',
+      citationKeyConflict: { native: 'zotero2024', extra: 'extra2024' },
       title: 'A updated',
       text: updated,
       callIds: ['e1', 'e2'],
@@ -231,14 +251,14 @@ describe('exportSectionsOf', () => {
       refs: [REF, 'zotero://user/0/item/BBBBBBBB'],
       text,
       items: [
-        { ref: REF, key: 'a', title: 'A', start: 0, end: text.indexOf('@article{b,') },
+        { ref: REF, exportKey: 'a', title: 'A', start: 0, end: text.indexOf('@article{b,') },
         // The provider could not locate this item in the body.
-        { ref: 'zotero://user/0/item/BBBBBBBB', key: 'b', title: 'B' },
+        { ref: 'zotero://user/0/item/BBBBBBBB', exportKey: 'b', title: 'B' },
       ],
     })
     const sections = exportSectionsOf([artifact])
     expect(sections[0]!.documents).toHaveLength(1)
-    expect(sections[0]!.documents[0]).toMatchObject({ ref: REF, key: 'a' })
+    expect(sections[0]!.documents[0]).toMatchObject({ ref: REF, exportKey: 'a' })
     expect(sections[0]!.unresolved).toEqual([])
     expect(sections[0]!.unresolvedItems).toEqual([{ artifact, count: 1 }])
   })
@@ -292,14 +312,14 @@ describe('exportSectionsOf', () => {
       format: 'csljson',
       refs: [REF],
       text: JSON.stringify([{ id: 'wang2023', title: 'Carbon trading' }]),
-      items: [{ ref: REF, key: 'wang2023', title: 'Carbon trading', entryIndex: 0 }],
+      items: [{ ref: REF, exportKey: 'wang2023', title: 'Carbon trading', entryIndex: 0 }],
     })
     const sections = exportSectionsOf([csljson])
     expect(sections[0]!.documents).toEqual([
       {
         ref: REF,
         format: 'csljson',
-        key: 'wang2023',
+        exportKey: 'wang2023',
         title: 'Carbon trading',
         text: '{"id":"wang2023","title":"Carbon trading"}',
         callIds: ['e4'],
@@ -313,21 +333,21 @@ describe('exportSectionsOf', () => {
       format: 'csljson',
       refs: [REF],
       text: 'not json',
-      items: [{ ref: REF, key: 'wang2023', entryIndex: 0 }],
+      items: [{ ref: REF, exportKey: 'wang2023', entryIndex: 0 }],
     })
     const noIndex = artifactOf({
       callId: 'e8',
       format: 'csljson',
       refs: [REF],
       text: JSON.stringify([{ id: 'wang2023' }]),
-      items: [{ ref: REF, key: 'wang2023' }],
+      items: [{ ref: REF, exportKey: 'wang2023' }],
     })
     const notAnArray = artifactOf({
       callId: 'e9',
       format: 'csljson',
       refs: [REF],
       text: '{}',
-      items: [{ ref: REF, key: 'wang2023', entryIndex: 0 }],
+      items: [{ ref: REF, exportKey: 'wang2023', entryIndex: 0 }],
     })
     const notAnObject = artifactOf({
       callId: 'e10',
@@ -335,8 +355,8 @@ describe('exportSectionsOf', () => {
       refs: [REF],
       text: JSON.stringify(['junk', null]),
       items: [
-        { ref: REF, key: 'wang2023', entryIndex: 0 },
-        { ref: 'zotero://user/0/item/DDDDDDDD', key: 'x', entryIndex: 1 },
+        { ref: REF, exportKey: 'wang2023', entryIndex: 0 },
+        { ref: 'zotero://user/0/item/DDDDDDDD', exportKey: 'x', entryIndex: 1 },
       ],
     })
     const sections = exportSectionsOf([malformed, noIndex, notAnArray, notAnObject])
@@ -352,12 +372,12 @@ describe('exportSectionsOf', () => {
   it('omits the title when the entry carried none', () => {
     const artifact = artifactOf({
       callId: 'e6',
-      items: [{ ref: REF, key: 'a', start: 0, end: BIBTEX_TEXT.length }],
+      items: [{ ref: REF, exportKey: 'a', start: 0, end: BIBTEX_TEXT.length }],
     })
     const sections = exportSectionsOf([artifact])
     expect(sections[0]!.documents[0]).toMatchObject({
       ref: REF,
-      key: 'a',
+      exportKey: 'a',
       text: BIBTEX_TEXT,
     })
     expect(sections[0]!.documents[0]!).not.toHaveProperty('title')

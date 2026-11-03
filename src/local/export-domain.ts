@@ -54,7 +54,7 @@ interface ExportBody {
   readonly result: ZoteroExportTextResult
   /** The deduped refs the batch request named, in first-seen order (batch formats only). */
   readonly refs: readonly ZoteroObjectRef[]
-  /** The raw item JSON a bibtex-family metadata read returned (empty otherwise). */
+  /** Raw item JSON used to attach Zotero citation-key facts to located entries. */
   readonly rawItems: readonly Record<string, unknown>[]
 }
 
@@ -82,11 +82,10 @@ export async function exportText(
  * (`bibtex`/`biblatex`/`ris`/`csljson`/`csv`) export the whole set at once.
  * The batch-breaking formats refuse to exceed `ZOTERO_ITEMKEY_BATCH`, because
  * their global ordering belongs to Zotero and splitting them would silently
- * reorder the output. The itemized formats (bibtex/biblatex) additionally
- * locate each document directly within the batch body in memory, pairing
- * each ref with its citation key, span offsets, and display title where
- * possible, and falling back gracefully to a bare ref if an item is omitted
- * by the translator output; `csv` returns Zotero's own whole-body table with
+ * reorder the output. Itemized formats also read one bounded raw-metadata
+ * batch for citekeys and field alignment, then pair each ref with its export
+ * key, citekey, span offsets, and display title where available. An item
+ * omitted by the translator stays ref-only; `csv` returns Zotero's whole-body table with
  * no per-document entries. Output that exceeds `maxExportChars` fails with
  * OUTPUT_TOO_LARGE: export text is never mid-truncated.
  */
@@ -191,10 +190,14 @@ async function exportBody(
   } else {
     search.set('format', request.format)
   }
-  const isBibtexFamily = request.format === 'bibtex' || request.format === 'biblatex'
+  const isItemizedTranslator =
+    request.format === 'bibtex' ||
+    request.format === 'biblatex' ||
+    request.format === 'ris' ||
+    request.format === 'csljson'
   const exportPromise = deps.client.get(`${exportPrefix}/items`, search, { signal, serverId })
   const metaPromise =
-    itemizeMetadata && isBibtexFamily
+    itemizeMetadata && isItemizedTranslator
       ? fetchRawItemBatch(deps.client, exportPrefix, refs, signal, serverId)
       : Promise.resolve<readonly Record<string, unknown>[]>([])
 

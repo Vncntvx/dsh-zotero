@@ -11,6 +11,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { ZOTERO_UNEXPECTED, ZoteroError } from '../../../src/errors.js'
+import { citationKeyInfoOf } from '../../../src/citation-key.js'
 import { fixtureJson } from '../../helpers/fixtures-dir.js'
 import { citekeyOf, normalizeSearchItem } from '../../../src/normalize-search.js'
 import { ctx, expectUnexpected } from './normalize-helpers.js'
@@ -25,6 +26,8 @@ describe('normalizeSearchItem', () => {
       ref: 'zotero://user/0/item/ABCD1234?server=S1',
       title: 'FlashAttention-2: Faster Attention with Better Parallelism and Work Partitioning',
       creatorSummary: 'Dao, Tri',
+      authors: ['Tri Dao', 'Fu'],
+      venue: 'International Conference on Machine Learning',
       year: 2023,
       itemType: 'conferencePaper',
       bestAttachmentRef: 'zotero://user/0/attachment/WXYZ6789?server=S1',
@@ -155,6 +158,15 @@ describe('normalization of hostile inputs', () => {
   it('tolerates non-string item types in search hits', () => {
     expect(normalizeSearchItem({ key: 'ABCD1234', data: { itemType: 42 } }).itemType).toBe('')
   })
+
+  it('uses author as the creator type when Zotero omits it', () => {
+    const item = normalizeSearchItem({
+      key: 'ABCD1234',
+      data: { itemType: 'book', creators: [{ firstName: 'Ada', lastName: 'Lovelace' }] },
+    })
+    expect(item.authors).toEqual(['Ada Lovelace'])
+    expect(item.creatorSummary).toBe('')
+  })
 })
 
 describe('citekeyOf: the one citation-key grammar', () => {
@@ -180,5 +192,37 @@ describe('citekeyOf: the one citation-key grammar', () => {
     expect(citekeyOf(undefined)).toBeUndefined()
     expect(citekeyOf('')).toBeUndefined()
     expect(citekeyOf('arXiv: 2401.12345')).toBeUndefined()
+  })
+
+  it('prefers a native key when extra has none or the same value', () => {
+    expect(citationKeyInfoOf({ citationKey: 'native', extra: 'DOI: 10.1/x' })).toEqual({
+      citationKey: 'native',
+      citationKeySource: 'native',
+    })
+    expect(citationKeyInfoOf({ citationKey: 'native', extra: 'Citation Key: native' })).toEqual({
+      citationKey: 'native',
+      citationKeySource: 'native',
+    })
+  })
+
+  it('uses an extra citekey only when the native field is absent', () => {
+    expect(citationKeyInfoOf({ extra: 'citekey: legacyKey' })).toEqual({
+      citationKey: 'legacyKey',
+      citationKeySource: 'extra',
+    })
+  })
+
+  it('keeps the native value and reports a conflicting extra citekey', () => {
+    expect(citationKeyInfoOf({ citationKey: 'native', extra: 'Citation Key: legacy' })).toEqual({
+      citationKey: 'native',
+      citationKeySource: 'native',
+      citationKeyConflict: { native: 'native', extra: 'legacy' },
+    })
+  })
+
+  it('treats blank and non-string keys as missing', () => {
+    expect(citationKeyInfoOf({ citationKey: '   ', extra: 'Citation Key:  ' })).toEqual({})
+    expect(citationKeyInfoOf({ citationKey: 42, extra: 42 })).toEqual({})
+    expect(citationKeyInfoOf(undefined)).toEqual({})
   })
 })

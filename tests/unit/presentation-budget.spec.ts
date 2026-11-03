@@ -53,7 +53,7 @@ describe('boundedPresentationMeta', () => {
       {
         format: 'bibtex',
         text: 'raw',
-        items: [{ ref: 'zotero://user/0/item/AAAAAAA1', key: 'a1', title: filler, start: 0 }],
+        items: [{ ref: 'zotero://user/0/item/AAAAAAA1', exportKey: 'a1', title: filler, start: 0 }],
       },
       ['zotero://user/0/item/AAAAAAA1'],
     )

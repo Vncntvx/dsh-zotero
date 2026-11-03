@@ -33,6 +33,7 @@ import type {
   ZoteroNoteRecord,
   ZoteroRelation,
 } from './types.js'
+import { citationKeyInfoOf } from './citation-key.js'
 
 export interface ChildPageMeta {
   readonly total: number
@@ -80,6 +81,7 @@ const CONSUMED_DATA_KEYS: ReadonlySet<string> = new Set([
   'journalAbbreviation',
   'conferenceName',
   'extra',
+  'citationKey',
 ])
 
 export function extraFieldsOf(
@@ -297,6 +299,7 @@ export function normalizeItemDetail(input: NormalizeItemDetailInput): ZoteroItem
   const relations = normalizeRelations(data, context, parentLibraryId)
   const extraFields = input.fields === 'all' ? extraFieldsOf(data) : undefined
   const extra = asString(data?.extra)?.trim()
+  const citationKey = citationKeyInfoOf(data)
 
   return {
     ref: refStringFor(context.library, 'item', key, context.serverId),
@@ -304,6 +307,7 @@ export function normalizeItemDetail(input: NormalizeItemDetailInput): ZoteroItem
     title: asString(data?.title) ?? '',
     creators: normalizeCreators(data),
     ...(extra !== undefined && extra !== '' ? { extra } : {}),
+    ...citationKey,
     abstractTruncated: abstract.truncated,
     tags,
     collections,

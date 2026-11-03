@@ -122,7 +122,7 @@ describe('export', () => {
     })
   })
 
-  it('passes translator export bodies through and itemizes every ref in a single request', async () => {
+  it('passes translator bodies through and pairs itemized entries with a bounded metadata batch', async () => {
     mock.route('GET', `${apiPath()}/items`, (req, res, helpers, search) => {
       helpers.text(`exported-as-${search.get('format')}`)
     })
@@ -137,13 +137,10 @@ describe('export', () => {
         { ref: 'zotero://user/0/item/ABCD1234' },
         { ref: 'zotero://user/0/item/BBBB1234' },
       ])
-      const expectedRequests = format === 'bibtex' || format === 'biblatex' ? 2 : 1
       const batchRequests = mock.requests.slice(before)
-      expect(batchRequests).toHaveLength(expectedRequests)
+      expect(batchRequests).toHaveLength(2)
       expect(batchRequests.some((r) => r.search.get('format') === format)).toBe(true)
-      if (format === 'bibtex' || format === 'biblatex') {
-        expect(batchRequests.some((r) => r.search.get('format') === null)).toBe(true)
-      }
+      expect(batchRequests.some((r) => r.search.get('format') === null)).toBe(true)
     }
   })
 
@@ -157,8 +154,18 @@ describe('export', () => {
         helpers.text(batchText)
       } else {
         helpers.json([
-          { key: 'ABCD1234', data: { key: 'ABCD1234', title: 'Carbon price forecasting' } },
-          { key: 'BBBB1234', data: { key: 'BBBB1234', title: 'Insight into heterogeneous risks' } },
+          {
+            key: 'ABCD1234',
+            data: { key: 'ABCD1234', title: 'Carbon price forecasting', citationKey: 'nativeA' },
+          },
+          {
+            key: 'BBBB1234',
+            data: {
+              key: 'BBBB1234',
+              title: 'Insight into heterogeneous risks',
+              citationKey: 'nativeB',
+            },
+          },
         ])
       }
     })
@@ -168,14 +175,18 @@ describe('export', () => {
     expect(result.items).toEqual([
       {
         ref: 'zotero://user/0/item/ABCD1234',
-        key: 'customKeyA',
+        exportKey: 'customKeyA',
+        citationKey: 'nativeA',
+        citationKeySource: 'native',
         title: 'Carbon price forecasting',
         start: 0,
         end: secondStart,
       },
       {
         ref: 'zotero://user/0/item/BBBB1234',
-        key: 'customKeyB',
+        exportKey: 'customKeyB',
+        citationKey: 'nativeB',
+        citationKeySource: 'native',
         title: 'Insight into heterogeneous risks',
         start: secondStart,
         end: batchText.length,
@@ -195,10 +206,10 @@ describe('export', () => {
     if (risResult.format !== 'ris') throw new Error('unreachable')
     expect(risResult.items).toHaveLength(2)
     expect(risResult.items[0]!.ref).toBe('zotero://user/0/item/ABCD1234')
-    expect(risResult.items[0]!.key).toBe('ABCD1234')
+    expect(risResult.items[0]!.exportKey).toBe('ABCD1234')
     expect(risResult.items[0]!.title).toBe('First Paper')
     expect(risResult.items[1]!.ref).toBe('zotero://user/0/item/BBBB1234')
-    expect(risResult.items[1]!.key).toBe('BBBB1234')
+    expect(risResult.items[1]!.exportKey).toBe('BBBB1234')
     expect(risResult.items[1]!.title).toBe('Second Paper')
   })
 
@@ -212,10 +223,10 @@ describe('export', () => {
     if (cslResult.format !== 'csljson') throw new Error('unreachable')
     expect(cslResult.items).toHaveLength(2)
     expect(cslResult.items[0]!.ref).toBe('zotero://user/0/item/ABCD1234')
-    expect(cslResult.items[0]!.key).toBe('ABCD1234')
+    expect(cslResult.items[0]!.exportKey).toBe('ABCD1234')
     expect(cslResult.items[0]!.title).toBe('Paper A')
     expect(cslResult.items[1]!.ref).toBe('zotero://user/0/item/BBBB1234')
-    expect(cslResult.items[1]!.key).toBe('http://zotero.org/users/0/items/BBBB1234')
+    expect(cslResult.items[1]!.exportKey).toBe('http://zotero.org/users/0/items/BBBB1234')
     expect(cslResult.items[1]!.title).toBe('Paper B')
   })
 
@@ -368,10 +379,10 @@ describe('export', () => {
         .map((r) => `TY  - JOUR\nID  - ${r.key}\nER  -\n`)
         .join('\n'),
     )
-    // 51 refs with one duplicate are 50 unique items, so the export proceeds in 1 batch request.
+    // 51 refs with one duplicate are 50 unique items and one bounded metadata batch.
     const result = await provider.export(exportRequest({ refs, format: 'ris' }))
     if (result.format !== 'ris') throw new Error('unreachable')
-    expectRequestCount(mock, 1)
+    expectRequestCount(mock, 2)
     expect(result.items).toHaveLength(50)
   })
 
@@ -388,12 +399,14 @@ describe('export', () => {
       }),
     )
     if (result.format !== 'ris') throw new Error('unreachable')
-    expectRequestCount(mock, 1)
-    expect(mock.requests[0]!.search.get('itemKey')).toBe('ABCD1234,BBBB1234')
+    expectRequestCount(mock, 2)
+    expect(
+      mock.requests.some((request) => request.search.get('itemKey') === 'ABCD1234,BBBB1234'),
+    ).toBe(true)
     expect(result.items).toHaveLength(2)
   })
 
-  it('itemizes a full 50-ref translator export in 1 batch request', async () => {
+  it('itemizes a full 50-ref translator export with one metadata batch', async () => {
     const refs = Array.from({ length: 50 }, (_, i) =>
       parseRef(`zotero://user/0/item/${String(i).padStart(4, '0')}ABCD`),
     )
@@ -404,7 +417,7 @@ describe('export', () => {
     )
     const result = await provider.export(exportRequest({ refs, format: 'ris' }))
     if (result.format !== 'ris') throw new Error('unreachable')
-    expectRequestCount(mock, 1)
+    expectRequestCount(mock, 2)
     expect(result.items).toHaveLength(50)
     // Every item locates its batch record, in the requested ref order.
     expect(result.items.every((item) => item.start !== undefined && item.end !== undefined)).toBe(

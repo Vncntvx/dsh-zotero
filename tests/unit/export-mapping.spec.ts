@@ -272,7 +272,7 @@ describe('locateExportItemsFromBatch', () => {
       {
         ref: R1,
         title: 'Paper One',
-        key: 'AAAAAAA1',
+        exportKey: 'AAAAAAA1',
         start: 0,
         end: directText.length,
       },
@@ -285,7 +285,7 @@ describe('locateExportItemsFromBatch', () => {
       {
         ref: R1,
         title: 'Paper One',
-        key: 'customCitekey',
+        exportKey: 'customCitekey',
         start: 0,
         end: mentionText.length,
       },
@@ -303,7 +303,7 @@ describe('locateExportItemsFromBatch', () => {
       {
         ref: R1,
         title: 'Paper Meta',
-        key: 'unrelatedCitekey',
+        exportKey: 'unrelatedCitekey',
         start: 0,
         end: metaText.length,
       },
@@ -365,21 +365,21 @@ describe('locateExportItemsFromBatch', () => {
     expect(items).toEqual([
       {
         ref: R1,
-        key: 'zhang2023',
+        exportKey: 'zhang2023',
         title: 'Quantum Computing Foundations',
         start: thirdStart,
         end: bibtex.length,
       },
       {
         ref: R2,
-        key: 'brown2022',
+        exportKey: 'brown2022',
         title: 'Deep Residual Learning',
         start: secondStart,
         end: thirdStart,
       },
       {
         ref: R3,
-        key: 'adams2017',
+        exportKey: 'adams2017',
         title: '{Attention} is All You Need',
         start: 0,
         end: secondStart,
@@ -415,14 +415,14 @@ describe('locateExportItemsFromBatch', () => {
     expect(items).toEqual([
       {
         ref: R1,
-        key: 'editorial2021',
+        exportKey: 'editorial2021',
         title: 'Editorial Overview',
         start: 0,
         end: secondStart,
       },
       {
         ref: R2,
-        key: 'editorial2023',
+        exportKey: 'editorial2023',
         title: 'Editorial Overview',
         start: secondStart,
         end: bibtex.length,
@@ -441,7 +441,7 @@ describe('locateExportItemsFromBatch', () => {
       { ref: R1 },
       {
         ref: R2,
-        key: 'adams2017',
+        exportKey: 'adams2017',
         title: 'Attention is All You Need',
         start: 0,
         end: bibtex.length,
@@ -456,7 +456,7 @@ describe('locateExportItemsFromBatch', () => {
       {
         ref: R1,
         title: 'One',
-        key: 'AAAAAAA1',
+        exportKey: 'AAAAAAA1',
         start: 0,
         end: risText.length,
       },
@@ -471,8 +471,13 @@ describe('locateExportItemsFromBatch', () => {
     ])
     const items = locateExportItemsFromBatch('csljson', cslText, [ref1, ref2])
     expect(items).toEqual([
-      { ref: R1, title: 'Paper 1', key: 'AAAAAAA1', entryIndex: 0 },
-      { ref: R2, title: 'Paper 2', key: 'http://zotero.org/users/0/items/BBBBBBBB', entryIndex: 1 },
+      { ref: R1, title: 'Paper 1', exportKey: 'AAAAAAA1', entryIndex: 0 },
+      {
+        ref: R2,
+        title: 'Paper 2',
+        exportKey: 'http://zotero.org/users/0/items/BBBBBBBB',
+        entryIndex: 1,
+      },
     ])
 
     // Malformed JSON falls back gracefully
@@ -485,7 +490,7 @@ describe('locateExportItemsFromBatch', () => {
       JSON.stringify([null, 42, 'string', [], { other: 1 }, { id: 'AAAAAAA1' }]),
       [ref1],
     )
-    expect(mixed).toEqual([{ ref: R1, key: 'AAAAAAA1', entryIndex: 5 }])
+    expect(mixed).toEqual([{ ref: R1, exportKey: 'AAAAAAA1', entryIndex: 5 }])
   })
 
   it('never equates a key with a longer token containing it and refuses positional guessing', () => {
@@ -517,7 +522,9 @@ describe('locateExportItemsFromBatch', () => {
     expect(items).toEqual([
       {
         ref: R1,
-        key: 'daoLowerKey',
+        citationKey: 'daoLowerKey',
+        citationKeySource: 'extra',
+        exportKey: 'daoLowerKey',
         title: 'Alias Title',
         start: 0,
         end: bibtex.length,
@@ -538,7 +545,15 @@ describe('locateExportItemsFromBatch', () => {
     ]
     const items = locateExportItemsFromBatch('bibtex', bibtex, [ref1], rawItems)
     expect(items).toEqual([
-      { ref: R1, key: 'daoToken', title: 'Token Title', start: 0, end: bibtex.length },
+      {
+        ref: R1,
+        citationKey: 'daoToken',
+        citationKeySource: 'extra',
+        exportKey: 'daoToken',
+        title: 'Token Title',
+        start: 0,
+        end: bibtex.length,
+      },
     ])
   })
 
@@ -557,7 +572,9 @@ describe('locateExportItemsFromBatch', () => {
     expect(items).toEqual([
       {
         ref: R1,
-        key: 'customExtraKey',
+        citationKey: 'customExtraKey',
+        citationKeySource: 'extra',
+        exportKey: 'customExtraKey',
         title: 'Different Title in Bib',
         start: 0,
         end: bibtex.length,
@@ -570,8 +587,8 @@ describe('locateExportItemsFromBatch', () => {
       '@article{AAAAAAA1,\n  title = {One},\n}\n\n' +
       '@article{customKey,\n  title = {Two},\n  note = {BBBBBBBB},\n}\n'
     const items = locateExportItemsFromBatch('bibtex', text, [ref1, ref2])
-    expect(items[0]!.key).toBe('AAAAAAA1')
-    expect(items[1]!.key).toBe('customKey')
+    expect(items[0]!.exportKey).toBe('AAAAAAA1')
+    expect(items[1]!.exportKey).toBe('customKey')
     expect(items[0]!.start).toBe(0)
     expect(items[1]!.start).toBeGreaterThan(0)
   })
@@ -586,7 +603,7 @@ describe('locateExportItemsFromBatch', () => {
       [{ key: 'AAAAAAA1', data: { extra: 'Citation Key: keyNoTitle' } }],
     )
     expect(itemsNoTitle[0]?.title).toBeUndefined()
-    expect(itemsNoTitle[0]?.key).toBe('keyNoTitle')
+    expect(itemsNoTitle[0]?.exportKey).toBe('keyNoTitle')
 
     // 2. Homonyms with completely identical title, year, and author cannot be disambiguated -> stay unlocated
     const homonymText =
@@ -610,7 +627,7 @@ describe('locateExportItemsFromBatch', () => {
       { id: 'http://zotero.org/groups/1/items/AAAAAAA1', title: 'Duplicate' },
     ])
     const cslRes = locateExportItemsFromBatch('csljson', cslDup, [ref1])
-    expect(cslRes[0]?.key).toBe('http://zotero.org/users/0/items/AAAAAAA1')
+    expect(cslRes[0]?.exportKey).toBe('http://zotero.org/users/0/items/AAAAAAA1')
   })
 
   it('returns plain refs for non-per-document formats', () => {

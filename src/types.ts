@@ -31,6 +31,7 @@ export type { PersonalLibrary, GroupLibrary, SupportedLocalLibrary, ZoteroResolv
 export { ZOTERO_CREATABLE_ITEM_TYPES, ZOTERO_UPDATABLE_ITEM_FIELDS } from './constants.js'
 import { ZOTERO_CREATABLE_ITEM_TYPES, ZOTERO_UPDATABLE_ITEM_FIELDS } from './constants.js'
 import type { ZoteroErrorCode } from './errors.js'
+import type { CitationKeyConflict, CitationKeySource } from './citation-key.js'
 
 declare module '@deepseek-ai/dsh-jobs' {
   interface JobKindMap {
@@ -194,6 +195,8 @@ export interface ZoteroSearchItem {
   ref: string
   title: string
   creatorSummary: string
+  authors?: string[]
+  venue?: string
   year?: number
   itemType: string
   /** Parent item of a child note; provenance-qualified like the record's own ref. */
@@ -203,6 +206,9 @@ export interface ZoteroSearchItem {
   attachmentSize?: number
   /** Extra metadata (e.g. Citation Key, arXiv ID, PMID). */
   extra?: string
+  citationKey?: string
+  citationKeySource?: CitationKeySource
+  citationKeyConflict?: CitationKeyConflict
   /** Item DOI from data.DOI, normalized. */
   doi?: string
 }
@@ -232,6 +238,10 @@ export interface ZoteroSearchResult {
   offset: number
   /** Primary hits on this page (`items.length`); supplements never inflate it. */
   returned: number
+  normalizedQuery?: string
+  queryWasEmpty?: boolean
+  nextActions?: string[]
+  maximum?: number
   nextOffset?: number
   /**
    * On the first page of a library/collection-scope query (saved-search
@@ -258,6 +268,71 @@ export interface ZoteroGetRequest {
    * dataset/patent/statute-style metadata survives instead of being dropped.
    */
   fields?: 'standard' | 'all'
+}
+
+/** One bounded batch metadata read. Results preserve input order and isolate failures. */
+export interface ZoteroGetBatchRequest {
+  refs: ZoteroObjectRef[]
+  fields?: 'standard' | 'all'
+  include?: {
+    children?: boolean
+    attachments?: boolean
+    relations?: boolean
+    bestAttachment?: boolean
+  }
+}
+
+export type ZoteroGetBatchItem =
+  | { ref: string; status: 'ok'; item: ZoteroItemDetail }
+  | { ref: string; status: 'error'; code: string; message: string; next?: string }
+
+export interface ZoteroGetBatchResult {
+  items: ZoteroGetBatchItem[]
+  counts: { requested: number; succeeded: number; failed: number }
+}
+
+export interface ZoteroMatchReferenceInput {
+  inputId: string
+  bibKey?: string
+  doi?: string
+  title?: string
+  authors?: string[]
+  year?: number
+  venue?: string
+}
+
+export interface ZoteroMatchReferenceCandidate {
+  ref: string
+  citationKey?: string
+  citationKeySource?: CitationKeySource
+  exportKey?: string
+  title: string
+  authors?: string[]
+  year?: number
+  doi?: string
+  venue?: string
+  citationKeyConflict?: CitationKeyConflict
+  matchMethod: string
+  confidence: string
+}
+
+export interface ZoteroMatchReferenceResult {
+  inputId: string
+  bibKey?: string
+  status: 'matched' | 'ambiguous' | 'notFound' | 'conflict'
+  reason?: string
+  selected?: ZoteroMatchReferenceCandidate
+  candidates?: ZoteroMatchReferenceCandidate[]
+  fieldDiff?: Record<string, { input: JsonValue; zotero: JsonValue }>
+}
+
+export interface ZoteroMatchReferencesRequest {
+  references: ZoteroMatchReferenceInput[]
+  includeFieldDiff?: boolean
+}
+
+export interface ZoteroMatchReferencesResult {
+  items: ZoteroMatchReferenceResult[]
 }
 
 export interface ZoteroNoteRecord {
@@ -343,6 +418,9 @@ export interface ZoteroItemDetail {
   title: string
   creators: ZoteroCreator[]
   extra?: string
+  citationKey?: string
+  citationKeySource?: CitationKeySource
+  citationKeyConflict?: CitationKeyConflict
   date?: string
   year?: number
   venue?: string
@@ -545,7 +623,10 @@ export interface ZoteroExportItem {
    * JSON id; absent when the format has none (RIS) or the entry could not
    * be located.
    */
-  key?: string
+  exportKey?: string
+  citationKey?: string
+  citationKeySource?: CitationKeySource
+  citationKeyConflict?: CitationKeyConflict
   /** The item's title for display, when the entry carried one. */
   title?: string
   /** The located entry's index within the parsed CSL JSON array. */
@@ -1378,6 +1459,11 @@ export interface ZoteroProvider {
    * @returns the normalized item detail.
    */
   getItem?(request: ZoteroGetRequest, signal?: AbortSignal): Promise<ZoteroItemDetail>
+  getBatch?(request: ZoteroGetBatchRequest, signal?: AbortSignal): Promise<ZoteroGetBatchResult>
+  matchReferences?(
+    request: ZoteroMatchReferencesRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroMatchReferencesResult>
   /**
    * Read one page of a single child kind.
    * @param request - the item/attachment ref, kind, and page window.

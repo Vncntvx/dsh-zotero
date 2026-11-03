@@ -78,7 +78,7 @@ export function artifactOf(
     items: [
       {
         ref: 'zotero://user/0/item/QRST3456',
-        key: 'a',
+        exportKey: 'a',
         title: 'A',
         start: 0,
         end: text.length,

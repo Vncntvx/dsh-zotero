@@ -55,6 +55,36 @@ describe('searchMetaOf', () => {
     ])
   })
 
+  it('keeps citation-key provenance and only complete conflicts', () => {
+    const meta = searchMetaOf({
+      items: [
+        {
+          ...ROW,
+          citationKey: 'native-key',
+          citationKeySource: 'native',
+          citationKeyConflict: { native: 'native-key', extra: 'extra-key' },
+        },
+        { ...ROW, citationKey: 'extra-key', citationKeySource: 'extra' },
+        {
+          ...ROW,
+          citationKey: 'legacy-key',
+          citationKeySource: 'unknown',
+          citationKeyConflict: { native: 'native-key' },
+        },
+      ],
+    })
+    expect(meta.rows).toEqual([
+      {
+        ...ROW,
+        citationKey: 'native-key',
+        citationKeySource: 'native',
+        citationKeyConflict: { native: 'native-key', extra: 'extra-key' },
+      },
+      { ...ROW, citationKey: 'extra-key', citationKeySource: 'extra' },
+      { ...ROW, citationKey: 'legacy-key' },
+    ])
+  })
+
   it('decodes a row item type and omits it when the projection left it out', () => {
     expect(searchMetaOf({ items: [{ ...ROW, itemType: 'preprint' }] }).rows).toEqual([
       { ...ROW, itemType: 'preprint' },
@@ -155,6 +185,23 @@ describe('getMetaOf', () => {
       ref: 'zotero://user/0/attachment/WXYZ6789',
       contentType: 'application/pdf',
     })
+  })
+
+  it('decodes citation-key provenance and drops an incomplete conflict', () => {
+    expect(
+      getMetaOf({
+        citationKey: 'extra-key',
+        citationKeySource: 'extra',
+        citationKeyConflict: { native: 'native-key', extra: 'extra-key' },
+      }),
+    ).toMatchObject({
+      citationKey: 'extra-key',
+      citationKeySource: 'extra',
+      citationKeyConflict: { native: 'native-key', extra: 'extra-key' },
+    })
+    expect(
+      getMetaOf({ citationKeySource: 'unknown', citationKeyConflict: { native: 'native-key' } }),
+    ).toMatchObject({ citationKeySource: null, citationKeyConflict: null })
   })
 
   it('keeps a ref-less attachment selection as the content type alone', () => {
@@ -397,7 +444,10 @@ describe('exportMetaOf', () => {
       items: [
         {
           ref: 'zotero://user/0/item/AAAAAAA1',
-          key: 'a1',
+          exportKey: 'a1',
+          citationKey: 'native-a1',
+          citationKeySource: 'native',
+          citationKeyConflict: { native: 'native-a1', extra: 'extra-a1' },
           title: 'Alpha',
           start: 0,
           end: 41,
@@ -406,14 +456,29 @@ describe('exportMetaOf', () => {
         { ref: 'zotero://user/0/item/AAAAAAA4', start: 'x' },
         { key: 'no-ref' },
         'junk',
-        { ref: 'zotero://user/0/item/AAAAAAA3', key: 7 },
+        {
+          ref: 'zotero://user/0/item/AAAAAAA3',
+          citationKey: 'extra-a3',
+          citationKeySource: 'invalid',
+          citationKeyConflict: { native: 'native-a3' },
+          key: 7,
+        },
       ],
     })
     expect(meta.items).toEqual([
-      { ref: 'zotero://user/0/item/AAAAAAA1', key: 'a1', title: 'Alpha', start: 0, end: 41 },
+      {
+        ref: 'zotero://user/0/item/AAAAAAA1',
+        exportKey: 'a1',
+        citationKey: 'native-a1',
+        citationKeySource: 'native',
+        citationKeyConflict: { native: 'native-a1', extra: 'extra-a1' },
+        title: 'Alpha',
+        start: 0,
+        end: 41,
+      },
       { ref: 'zotero://user/0/item/AAAAAAA2', entryIndex: 1 },
       { ref: 'zotero://user/0/item/AAAAAAA4' },
-      { ref: 'zotero://user/0/item/AAAAAAA3' },
+      { ref: 'zotero://user/0/item/AAAAAAA3', citationKey: 'extra-a3' },
     ])
   })
 })

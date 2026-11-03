@@ -26,6 +26,9 @@ interface SearchRowMeta {
   readonly year?: number
   /** The item's own Zotero type, e.g. `journalArticle`. */
   readonly itemType?: string
+  readonly citationKey?: string
+  readonly citationKeySource?: 'native' | 'extra'
+  readonly citationKeyConflict?: { readonly native: string; readonly extra: string }
   readonly bestAttachmentRef?: string
   readonly bestAttachmentType?: string
 }
@@ -84,6 +87,9 @@ interface GetMetaView {
   readonly resolvedAttachment: AttachmentMetaView | null
   readonly title: string | null
   readonly creators: string | null
+  readonly citationKey: string | null
+  readonly citationKeySource: 'native' | 'extra' | null
+  readonly citationKeyConflict: { readonly native: string; readonly extra: string } | null
   readonly year: number | null
   readonly venue: string | null
   readonly bestAttachment: { readonly ref?: string; readonly contentType: string } | null
@@ -215,6 +221,20 @@ function decodeSearchRows(value: unknown): SearchRowMeta[] | null {
     if (ref === undefined || title === undefined || creatorSummary === undefined) return null
     const year = numberField(item, 'year')
     const itemType = stringField(item, 'itemType')
+    const citationKey = stringField(item, 'citationKey')
+    const citationKeySourceValue = stringField(item, 'citationKeySource')
+    const citationKeySource =
+      citationKeySourceValue === 'native' || citationKeySourceValue === 'extra'
+        ? citationKeySourceValue
+        : undefined
+    const conflict = isRecord(item['citationKeyConflict']) ? item['citationKeyConflict'] : null
+    const citationKeyConflict =
+      conflict === null
+        ? undefined
+        : {
+            native: stringField(conflict, 'native'),
+            extra: stringField(conflict, 'extra'),
+          }
     const bestAttachmentRef = stringField(item, 'bestAttachmentRef')
     const bestAttachmentType = stringField(item, 'bestAttachmentType')
     rows.push({
@@ -223,6 +243,16 @@ function decodeSearchRows(value: unknown): SearchRowMeta[] | null {
       creatorSummary,
       ...(year === undefined ? {} : { year }),
       ...(itemType === undefined ? {} : { itemType }),
+      ...(citationKey === undefined ? {} : { citationKey }),
+      ...(citationKeySource === undefined ? {} : { citationKeySource }),
+      ...(citationKeyConflict?.native === undefined || citationKeyConflict.extra === undefined
+        ? {}
+        : {
+            citationKeyConflict: {
+              native: citationKeyConflict.native,
+              extra: citationKeyConflict.extra,
+            },
+          }),
       ...(bestAttachmentRef === undefined ? {} : { bestAttachmentRef }),
       ...(bestAttachmentType === undefined ? {} : { bestAttachmentType }),
     })
@@ -286,6 +316,20 @@ export function getMetaOf(meta: Record<string, unknown>): GetMetaView {
   const resolvedAttachment =
     resolved && location ? attachmentMetaOf({ ...resolved, ...location }) : null
   let bestAttachment: GetMetaView['bestAttachment'] = null
+  const citationKeySourceValue = stringField(meta, 'citationKeySource')
+  const citationKeySource =
+    citationKeySourceValue === 'native' || citationKeySourceValue === 'extra'
+      ? citationKeySourceValue
+      : null
+  const keyConflict = isRecord(meta['citationKeyConflict']) ? meta['citationKeyConflict'] : null
+  const citationKeyConflict =
+    keyConflict === null
+      ? null
+      : (() => {
+          const native = stringField(keyConflict, 'native')
+          const extra = stringField(keyConflict, 'extra')
+          return native === undefined || extra === undefined ? null : { native, extra }
+        })()
   const attachment = meta['bestAttachment']
   if (isRecord(attachment)) {
     const contentType = stringField(attachment, 'contentType')
@@ -297,6 +341,9 @@ export function getMetaOf(meta: Record<string, unknown>): GetMetaView {
   return {
     title: stringField(meta, 'title') ?? null,
     creators: stringField(meta, 'creators') ?? null,
+    citationKey: stringField(meta, 'citationKey') ?? null,
+    citationKeySource,
+    citationKeyConflict,
     year: numberField(meta, 'year') ?? null,
     venue: stringField(meta, 'venue') ?? null,
     bestAttachment,

@@ -56,14 +56,14 @@ const BASE_EXPORT_PARAMETERS = {
     type: 'array',
     items: { type: 'string' },
     required: true,
-    description: `${REF_ARG_HINT} refs to export, in the order citations should appear; capped by the configured maxExportRefs. citation batches past Zotero's ${ZOTERO_ITEMKEY_BATCH}-key request cap; bibliography/bibtex/biblatex/ris/csljson/csv accept at most ${ZOTERO_ITEMKEY_BATCH}, so batch those calls.`,
+    description: `${REF_ARG_HINT} refs in output order; maxExportRefs applies. citation batches above ${ZOTERO_ITEMKEY_BATCH}; other formats require batching above that cap.`,
   },
   format: {
     type: 'string',
     enum: [...ZOTERO_EXPORT_FORMATS],
     required: true,
     description:
-      'citation: per-ref HTML citations; bibliography: joined CSL bibliography; the rest: raw translator exports.',
+      'citation: per-ref HTML; bibliography: joined CSL; other formats: translator exports.',
   },
   style: {
     type: 'string',
@@ -76,7 +76,7 @@ const BASE_EXPORT_PARAMETERS = {
   outputFile: {
     type: 'string',
     description:
-      'Optional file path (relative to the session workspace) to write the exported bibliography, translator, or CSV text into, declaring it as a deliverable for the user.',
+      'Optional session-workspace path for the exported bibliography, translator, or CSV text.',
   },
 } as const
 
@@ -164,7 +164,17 @@ const EXPORT_OUTPUT_SCHEMA = {
             additionalProperties: false,
             properties: {
               ref: { type: 'string', required: true },
-              key: { type: 'string' },
+              exportKey: { type: 'string' },
+              citationKey: { type: 'string' },
+              citationKeySource: { type: 'string', enum: ['native', 'extra'] },
+              citationKeyConflict: {
+                type: 'object',
+                additionalProperties: false,
+                properties: {
+                  native: { type: 'string', required: true },
+                  extra: { type: 'string', required: true },
+                },
+              },
               title: { type: 'string' },
               entryIndex: { type: 'integer' },
               start: { type: 'integer' },
@@ -240,8 +250,31 @@ function renderExport(_args: unknown, value: ExportOutput): ContentBlock[] {
         : `Export written to ${outputFile}.`,
     )
   }
+  const mapped =
+    'items' in value && Array.isArray(value.items)
+      ? value.items.map((item) => {
+          const identity = [
+            `ref: ${item.ref}`,
+            item.exportKey === undefined ? undefined : `exportKey: ${item.exportKey}`,
+            item.citationKey === undefined ? undefined : `citationKey: ${item.citationKey}`,
+            item.title,
+            item.entryIndex === undefined ? undefined : `entryIndex: ${item.entryIndex}`,
+            item.citationKeyConflict === undefined
+              ? undefined
+              : `citationKey conflict: native=${item.citationKeyConflict.native}, extra=${item.citationKeyConflict.extra}`,
+          ]
+            .filter((part): part is string => part !== undefined)
+            .join(' · ')
+          const unavailable =
+            item.exportKey === undefined && item.title === undefined
+              ? ' (mapping unavailable; do not pair by raw order)'
+              : ''
+          return `- ${identity}${unavailable}`
+        })
+      : []
+  const mapping = mapped.length > 0 ? `Mapped items:\n${mapped.join('\n')}\n\n` : ''
   const footer = notes.length > 0 ? `\n\n(${notes.join(' ')})` : ''
-  return [{ type: 'text', text: `${text}${footer}` }]
+  return [{ type: 'text', text: `${mapping}${text}${footer}` }]
 }
 
 /**
@@ -288,7 +321,7 @@ export function registerExportTool(
         description: [
           'Export Zotero items as citations, a bibliography, or translator formats (bibtex, biblatex, ris, csljson, csv).',
           `Citation mode pairs each ref with its HTML citation in the requested order and batches past Zotero's ${ZOTERO_ITEMKEY_BATCH}-key request cap;`,
-          `bibliography mode returns the joined CSL-sorted bibliography; the other formats return raw export text and stay at one request (up to ${ZOTERO_ITEMKEY_BATCH} refs), their ordering remains Zotero's own, and bibtex/biblatex documents are itemized with their ref, citation key, and title.`,
+          `bibliography returns the joined CSL-sorted text; translator formats return Zotero's raw ordering and are itemized by ref, exportKey, citationKey, and title, never by position. Itemized formats use one export request and one bounded metadata batch, up to ${ZOTERO_ITEMKEY_BATCH} refs.`,
         ].join(' '),
         parameters,
         output: {

@@ -48,6 +48,48 @@ function renderView(props: Parameters<typeof createToolViewProps<'zotero_export'
 }
 
 describe('ExportToolView', () => {
+  it('shows ref, translator exportKey, and Zotero citationKey as separate mapping facts', () => {
+    const block = settled({
+      call: {
+        name: 'zotero_export',
+        argsRaw: JSON.stringify({ format: 'bibtex', refs: ['zotero://user/0/item/ABCD1234'] }),
+      },
+      meta: {
+        format: 'bibtex',
+        requested: 1,
+        refs: ['zotero://user/0/item/ABCD1234'],
+        refsOmitted: 0,
+        items: [
+          {
+            ref: 'zotero://user/0/item/ABCD1234',
+            exportKey: 'doe2024translator',
+            citationKey: 'doe2024native',
+            citationKeySource: 'native',
+            citationKeyConflict: { native: 'doe2024native', extra: 'doe2024legacy' },
+            title: 'A Study',
+            start: 0,
+            end: 20,
+          },
+        ],
+      },
+      content: [{ type: 'text', text: '@article{doe2024translator}' }],
+    })
+    renderView({
+      callId: 'c1',
+      toolName: 'zotero_export',
+      phase: 'result',
+      block,
+      useDisclosure: mockUseDisclosure(true),
+      t: mockT,
+    })
+    expect(screen.getByText('ref: zotero://user/0/item/ABCD1234')).toBeTruthy()
+    expect(screen.getByText('exportKey: doe2024translator')).toBeTruthy()
+    expect(screen.getByText('Zotero citationKey (native): doe2024native')).toBeTruthy()
+    expect(
+      screen.getByText('Citation key conflict: native=doe2024native; extra=doe2024legacy'),
+    ).toBeTruthy()
+  })
+
   it('names the CSL style and locale the call resolved, and downloads the format', () => {
     // A citation's rendering is unknowable without its style and locale, and
     // the Exports panel states both beside the format. The projection carried

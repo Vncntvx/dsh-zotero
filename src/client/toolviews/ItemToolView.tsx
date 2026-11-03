@@ -207,6 +207,18 @@ export function ItemToolView(props: ItemToolViewProps) {
 
               {getItemView?.creators && <div className={css.itemMeta}>{getItemView.creators}</div>}
               {getItemView?.venue && <div className={css.itemMeta}>{getItemView.venue}</div>}
+              {getItemView?.citationKey && (
+                <div className={css.itemMeta}>
+                  Citation key ({getItemView.citationKeySource ?? 'unknown'}):{' '}
+                  {getItemView.citationKey}
+                </div>
+              )}
+              {getItemView?.citationKeyConflict && (
+                <div className={css.coverageNotice}>
+                  Citation key conflict: native={getItemView.citationKeyConflict.native}; extra=
+                  {getItemView.citationKeyConflict.extra}
+                </div>
+              )}
 
               {childCounts.length > 0 && (
                 <div className={css.evidenceBadges}>

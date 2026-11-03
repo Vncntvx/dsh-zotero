@@ -97,10 +97,19 @@ export function SearchToolView(props: SearchToolViewProps) {
                         {row.year !== undefined && <Tag tone="neutral">{row.year}</Tag>}
                         {row.itemType !== undefined && <Tag tone="info">{row.itemType}</Tag>}
                         {row.bestAttachmentType && <Tag tone="danger">{t('badgePdf')}</Tag>}
-                        <span className={css.itemTitle}>{row.title}</span>
+                        <span className={css.itemTitle}>
+                          {row.title}
+                          {row.citationKey !== undefined ? ` [@${row.citationKey}]` : ''}
+                        </span>
                       </div>
                       {row.creatorSummary && (
                         <div className={css.itemMeta}>{row.creatorSummary}</div>
+                      )}
+                      {row.citationKeyConflict && (
+                        <div className={css.coverageNotice}>
+                          Citation key conflict: native={row.citationKeyConflict.native}; extra=
+                          {row.citationKeyConflict.extra}
+                        </div>
                       )}
                       <div className={css.itemActions}>
                         {row.bestAttachmentRef && (

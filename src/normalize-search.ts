@@ -16,6 +16,7 @@ import {
   type NormalizeContext,
 } from './normalize-context.js'
 import type { ZoteroCreator, ZoteroSearchItem } from './types.js'
+import { citationKeyInfoOf } from './citation-key.js'
 
 /** The publication year of a parsed date string (`YYYY-…`), or undefined. */
 export function parsedYearOf(parsedDate: string | undefined): number | undefined {
@@ -51,6 +52,15 @@ export function normalizeSearchItem(json: unknown, context?: NormalizeContext): 
     creatorSummary: asString(meta?.creatorSummary) ?? '',
     itemType,
   }
+  const authors = normalizeCreators(data)
+    .filter((creator) => creator.creatorType === 'author')
+    .map(
+      (creator) => creator.name ?? [creator.firstName, creator.lastName].filter(Boolean).join(' '),
+    )
+    .filter((author) => author !== '')
+  if (authors.length > 0) item.authors = authors
+  const venue = normalizeVenue(data)
+  if (venue !== undefined) item.venue = venue
   const year = parsedYearOf(asString(meta?.parsedDate))
   if (year !== undefined) item.year = year
   const parentKey = parentKeyOf(data)
@@ -70,6 +80,8 @@ export function normalizeSearchItem(json: unknown, context?: NormalizeContext): 
     item.attachmentSize = attachment.attachmentSize
   const extra = asString(data?.extra)?.trim()
   if (extra !== undefined && extra !== '') item.extra = extra
+  const citationKey = citationKeyInfoOf(data)
+  Object.assign(item, citationKey)
   const doi = asString(data?.DOI)?.trim()
   if (doi !== undefined && doi !== '') item.doi = doi
   return item
@@ -100,11 +112,7 @@ export function normalizeCreators(data: Record<string, unknown> | undefined): Zo
   return normalized
 }
 
-export function citekeyOf(extra?: string): string | undefined {
-  if (!extra) return undefined
-  const value = /(?<![A-Za-z0-9_])(?:Citation Key|citekey):\s*([^\r\n\s,]+)/i.exec(extra)?.[1]
-  return value !== undefined && value !== '' ? value : undefined
-}
+export { citekeyOf } from './citation-key.js'
 
 export function normalizeVenue(data: Record<string, unknown> | undefined): string | undefined {
   for (const field of [

@@ -99,7 +99,10 @@ export interface ExportedDocument {
    * The format-local identifier: the BibTeX/BibLaTeX citation key or the
    * CSL JSON id; absent when the format has none (RIS).
    */
-  readonly key?: string
+  readonly exportKey?: string
+  readonly citationKey?: string
+  readonly citationKeySource?: 'native' | 'extra'
+  readonly citationKeyConflict?: { readonly native: string; readonly extra: string }
   /** The item's title for display, when the entry carried one. */
   readonly title?: string
   /** The latest successful entry text of this document. */
@@ -209,7 +212,14 @@ function documentsOf(artifact: ExportArtifact):
     documents.push({
       ref: item.ref,
       format: artifact.format,
-      ...(item.key === undefined ? {} : { key: item.key }),
+      ...(item.exportKey === undefined ? {} : { exportKey: item.exportKey }),
+      ...(item.citationKey === undefined ? {} : { citationKey: item.citationKey }),
+      ...(item.citationKeySource === undefined
+        ? {}
+        : { citationKeySource: item.citationKeySource }),
+      ...(item.citationKeyConflict === undefined
+        ? {}
+        : { citationKeyConflict: item.citationKeyConflict }),
       ...(item.title === undefined ? {} : { title: item.title }),
       text,
       callIds: [artifact.callId],
@@ -256,7 +266,14 @@ export function exportSectionsOf(exports: readonly ExportArtifact[]): readonly E
         const merged: ExportedDocument = {
           ...existing,
           ...(document.title === undefined ? {} : { title: document.title }),
-          ...(document.key === undefined ? {} : { key: document.key }),
+          ...(document.exportKey === undefined ? {} : { exportKey: document.exportKey }),
+          ...(document.citationKey === undefined ? {} : { citationKey: document.citationKey }),
+          ...(document.citationKeySource === undefined
+            ? {}
+            : { citationKeySource: document.citationKeySource }),
+          ...(document.citationKeyConflict === undefined
+            ? {}
+            : { citationKeyConflict: document.citationKeyConflict }),
           text: document.text,
           callIds: [...existing.callIds, ...document.callIds],
           ...(document.latestExportedAt === undefined

@@ -141,6 +141,30 @@ describe('normalizeItemDetail', () => {
     })
   })
 
+  it('exposes citekeys as structured detail and consumes them from extraFields', () => {
+    const detail = normalizeItemDetail({
+      parent: {
+        ...PARENT,
+        data: { ...PARENT.data, citationKey: 'nativeKey', extra: 'Citation Key: oldKey' },
+      },
+      include: new Set(),
+      fields: 'all',
+      maxAbstractChars: 100,
+      maxNoteBodyChars: 3000,
+      maxNoteChars: 2000,
+      maxNoteRecords: 50,
+      maxAnnotationRecords: 100,
+      maxAttachmentRecords: 50,
+    })
+    expect(detail).toMatchObject({
+      citationKey: 'nativeKey',
+      citationKeySource: 'native',
+      citationKeyConflict: { native: 'nativeKey', extra: 'oldKey' },
+      extra: 'Citation Key: oldKey',
+    })
+    expect(detail.extraFields?.citationKey).toBeUndefined()
+  })
+
   it('builds the same child collections from one page as from the whole detail', () => {
     const include = new Set<ZoteroInclude>(['notes', 'annotations', 'attachments'])
     const context: NormalizeContext = { library: { type: 'user', id: 0 }, serverId: 'S1' }
@@ -189,6 +213,36 @@ describe('normalizeItemDetail', () => {
       children: { total: 0 },
       notes: { total: 0, returned: 0, items: [] },
     })
+  })
+
+  it('uses the direct child count when Zotero omits its count metadata', () => {
+    const detail = normalizeItemDetail({
+      parent: { ...PARENT, meta: undefined },
+      include: new Set(),
+      directChildCount: 4,
+      maxAbstractChars: 100,
+      maxNoteBodyChars: 3000,
+      maxNoteChars: 2000,
+      maxNoteRecords: 50,
+      maxAnnotationRecords: 100,
+      maxAttachmentRecords: 50,
+    })
+    expect(detail.children.total).toBe(4)
+  })
+
+  it('accepts a parent without a data block when projecting all fields', () => {
+    const detail = normalizeItemDetail({
+      parent: { key: 'ABCD1234' },
+      include: new Set(),
+      fields: 'all',
+      maxAbstractChars: 100,
+      maxNoteBodyChars: 3000,
+      maxNoteChars: 2000,
+      maxNoteRecords: 50,
+      maxAnnotationRecords: 100,
+      maxAttachmentRecords: 50,
+    })
+    expect(detail.extraFields).toBeUndefined()
   })
 
   it('omits the abstract entirely when it is empty', () => {
@@ -367,18 +421,17 @@ describe('normalizeItemDetail', () => {
   })
 
   it('fails loud when the parent has no valid key', () => {
-    const error = expectUnexpected(() =>
-      normalizeItemDetail({
-        parent: {},
-        include: new Set(),
-        maxAbstractChars: 100,
-        maxNoteBodyChars: 3000,
-        maxNoteChars: 2000,
-        maxNoteRecords: 50,
-        maxAnnotationRecords: 100,
-        maxAttachmentRecords: 50,
-      }),
-    )
+    const options = {
+      include: new Set<ZoteroInclude>(),
+      maxAbstractChars: 100,
+      maxNoteBodyChars: 3000,
+      maxNoteChars: 2000,
+      maxNoteRecords: 50,
+      maxAnnotationRecords: 100,
+      maxAttachmentRecords: 50,
+    }
+    expectUnexpected(() => normalizeItemDetail({ parent: null, ...options }))
+    const error = expectUnexpected(() => normalizeItemDetail({ parent: {}, ...options }))
     expect(error.code).toBe(ZOTERO_UNEXPECTED)
   })
 

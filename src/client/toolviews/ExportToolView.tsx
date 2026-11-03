@@ -159,15 +159,34 @@ export function ExportToolView(props: ExportToolViewProps) {
                 <span className={css.sectionTitle}>{t('lensSources')}</span>
                 <div className={css.cardList}>
                   {items.map((item) => (
-                    <div key={item.ref} className={css.itemHeader}>
-                      <span className={css.itemTitle}>{item.title || item.ref}</span>
-                      <ZoteroLocateActions
-                        title={item.title}
-                        itemRef={item.ref}
-                        t={t}
-                        variant="link"
-                        className={css.actionLink}
-                      />
+                    <div key={item.ref} className={css.itemCard}>
+                      <div className={css.itemHeader}>
+                        <span className={css.itemTitle}>{item.title || item.ref}</span>
+                        <ZoteroLocateActions
+                          title={item.title}
+                          itemRef={item.ref}
+                          t={t}
+                          variant="link"
+                          className={css.actionLink}
+                        />
+                      </div>
+                      <div className={css.itemMeta}>ref: {item.ref}</div>
+                      {item.exportKey && (
+                        <div className={css.itemMeta}>exportKey: {item.exportKey}</div>
+                      )}
+                      {item.citationKey && (
+                        <div className={css.itemMeta}>
+                          Zotero citationKey
+                          {item.citationKeySource ? ` (${item.citationKeySource})` : ''}:{' '}
+                          {item.citationKey}
+                        </div>
+                      )}
+                      {item.citationKeyConflict && (
+                        <div className={css.coverageNotice}>
+                          Citation key conflict: native={item.citationKeyConflict.native}; extra=
+                          {item.citationKeyConflict.extra}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

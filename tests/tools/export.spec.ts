@@ -102,14 +102,31 @@ describe('zotero_export tool', () => {
     expect((result.content[0] as { text: string }).text).toBe('entry-a\nentry-b')
   })
 
-  it('itemizes each translator document with its batch citation key and title', async () => {
+  it('shows mapped refs and both key meanings while preserving raw translator text', async () => {
     const batchText =
       '@article{ABCD1234,\n  title = {Carbon price forecasting},\n}\n\n' +
       '@article{BBBB1234,\n  title = {Insight into heterogeneous risks},\n}\n'
     const secondStart = batchText.indexOf('@article{BBBB1234,')
     const before = mock.requests.length
-    mock.route('GET', '/api/users/0/items', (req, res, helpers) => {
-      helpers.text(batchText)
+    mock.route('GET', '/api/users/0/items', (req, res, helpers, search) => {
+      if (search.has('format')) {
+        helpers.text(batchText)
+      } else {
+        helpers.json([
+          {
+            key: 'ABCD1234',
+            data: { key: 'ABCD1234', title: 'Carbon price forecasting', citationKey: 'nativeA' },
+          },
+          {
+            key: 'BBBB1234',
+            data: {
+              key: 'BBBB1234',
+              title: 'Insight into heterogeneous risks',
+              citationKey: 'nativeB',
+            },
+          },
+        ])
+      }
     })
     const result = expectValue(
       await runTool('zotero_export', {
@@ -124,24 +141,55 @@ describe('zotero_export tool', () => {
       items: [
         {
           ref: 'zotero://user/0/item/ABCD1234',
-          key: 'ABCD1234',
+          exportKey: 'ABCD1234',
+          citationKey: 'nativeA',
+          citationKeySource: 'native',
           title: 'Carbon price forecasting',
           start: 0,
           end: secondStart,
         },
         {
           ref: 'zotero://user/0/item/BBBB1234',
-          key: 'BBBB1234',
+          exportKey: 'BBBB1234',
+          citationKey: 'nativeB',
+          citationKeySource: 'native',
           title: 'Insight into heterogeneous risks',
           start: secondStart,
           end: batchText.length,
         },
       ],
     })
-    // Zero N+1: bibtex batch export uses 2 parallel batch requests (export text + raw metadata)
+    // The raw translator body and citekey metadata are fetched in bounded batches.
     expect(mock.requests.length - before).toBe(2)
-    // The model-visible render stays the merged body, not the itemization.
-    expect((result.content[0] as { text: string }).text).toBe(batchText)
+    const rendered = (result.content[0] as { text: string }).text
+    expect(rendered).toContain('Mapped items:')
+    expect(rendered).toContain(
+      'zotero://user/0/item/ABCD1234 · exportKey: ABCD1234 · citationKey: nativeA',
+    )
+    expect(rendered).toContain(
+      'zotero://user/0/item/BBBB1234 · exportKey: BBBB1234 · citationKey: nativeB',
+    )
+    expect(rendered).toContain(batchText)
+  })
+
+  it('marks unlocated translator rows instead of implying positional matches', async () => {
+    const batchText = '@article{unrelated, title={A different work}}'
+    mock.route('GET', '/api/users/0/items', (req, res, helpers, search) => {
+      if (search.has('format')) helpers.text(batchText)
+      else helpers.json([{ key: 'ABCD1234', data: { key: 'ABCD1234', title: 'Requested work' } }])
+    })
+    const result = expectValue(
+      await runTool('zotero_export', {
+        refs: ['zotero://user/0/item/ABCD1234'],
+        format: 'bibtex',
+      }),
+      'zotero_export',
+    )
+    const rendered = (result.content[0] as { text: string }).text
+    expect(rendered).toContain(
+      'ref: zotero://user/0/item/ABCD1234 (mapping unavailable; do not pair by raw order)',
+    )
+    expect(rendered).toContain(batchText)
   })
 
   it('rejects empty ref lists, malformed refs, and blank styles before any request', async () => {

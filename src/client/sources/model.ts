@@ -114,12 +114,12 @@ export interface SourceAttachment {
 export interface ExportDocumentItem {
   /** The formatted `zotero://` ref the entry was exported for. */
   readonly ref: string
-  /**
-   * The batch body's real key: the BibTeX/BibLaTeX citation key or the CSL
-   * JSON id; absent when the format has none (RIS) or the entry could not
-   * be located.
-   */
-  readonly key?: string
+  /** Translator's BibTeX/BibLaTeX entry key or CSL JSON id. */
+  readonly exportKey?: string
+  /** Zotero's native citation key or the value parsed from `extra`. */
+  readonly citationKey?: string
+  readonly citationKeySource?: 'native' | 'extra'
+  readonly citationKeyConflict?: { readonly native: string; readonly extra: string }
   /** The item's title for display, when the entry carried one. */
   readonly title?: string
   /** The located entry's index within the parsed CSL JSON array. */
@@ -144,8 +144,7 @@ export interface ExportArtifact {
   /** The settled result's event time (Unix epoch ms); always set on current reducers. */
   readonly settledAt?: number
   /**
-   * The per-document itemization of a translator-format export (ref, key,
-   * and title, never the entry text, which stays in the merged body); absent
+   * Per-document export facts. Entry text stays in the merged body; absent
    * for citation/bibliography artifacts, which have no per-document rows.
    */
   readonly items?: readonly ExportDocumentItem[]

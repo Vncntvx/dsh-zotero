@@ -11,7 +11,7 @@
 
 import { bibtexFieldOf, scanBibtexToken } from './export-items.js'
 import { asRecord, asString } from './json.js'
-import { citekeyOf } from './normalize-search.js'
+import { citationKeyInfoOf } from './citation-key.js'
 import { formatRef } from './refs.js'
 import type { ZoteroExportFormat, ZoteroObjectRef } from './types.js'
 
@@ -31,7 +31,10 @@ interface BatchEntry {
 interface LocatedExportItem {
   readonly ref: string
   /** The batch body's real key (BibTeX/BibLaTeX citation key, CSL JSON id). */
-  readonly key?: string
+  readonly exportKey?: string
+  readonly citationKey?: string
+  readonly citationKeySource?: 'native' | 'extra'
+  readonly citationKeyConflict?: { readonly native: string; readonly extra: string }
   /** The item's title for display, when the entry carried one. */
   readonly title?: string
   /** The located entry's index within the parsed CSL JSON array. */
@@ -244,6 +247,7 @@ interface RefFingerprint {
   readonly yearClean?: string
   readonly authorClean?: string
   readonly extraCiteKey?: string
+  readonly citationKey?: string
 }
 
 interface EntryFingerprint {
@@ -287,7 +291,6 @@ function alignBibtexEntries(
     const title = asString(data?.['title'])
     const doi = asString(data?.['DOI'])
     const date = asString(data?.['date'])
-    const extra = asString(data?.['extra'])
     const creators = Array.isArray(data?.['creators']) ? data!['creators'] : []
     const firstCreator = asRecord(creators[0])
     const authorName = asString(firstCreator?.['lastName'] ?? firstCreator?.['name'])
@@ -299,7 +302,10 @@ function alignBibtexEntries(
       doiClean: normalizeDoiForAlignment(doi),
       yearClean: normalizeYearForAlignment(date),
       authorClean: normalizeAuthorForAlignment(authorName),
-      extraCiteKey: citekeyOf(extra),
+      extraCiteKey: citationKeyInfoOf(data).citationKey,
+      ...(citationKeyInfoOf(data).citationKey === undefined
+        ? {}
+        : { citationKey: citationKeyInfoOf(data).citationKey }),
     }
   })
 
@@ -389,7 +395,8 @@ function alignBibtexEntries(
     return {
       ref: r.formattedRef,
       ...(entryFp.title !== undefined ? { title: entryFp.title } : {}),
-      key: entryFp.entry.key,
+      ...(entryFp.entry.key !== undefined ? { exportKey: entryFp.entry.key } : {}),
+      ...(r.citationKey !== undefined ? { citationKey: r.citationKey } : {}),
       start: entryFp.entry.start,
       end: entryFp.entry.end,
     }
@@ -407,7 +414,7 @@ function locateRisFromBatch(text: string, refs: readonly ZoteroObjectRef[]): Loc
     const title = match === undefined ? undefined : RIS_TITLE.exec(match.text)?.[1]
     return {
       ref: formattedRef,
-      ...(match?.key !== undefined ? { key: match.key } : {}),
+      ...(match?.key !== undefined ? { exportKey: match.key } : {}),
       ...(title !== undefined ? { title } : {}),
       ...(match !== undefined ? { start: match.start, end: match.end } : {}),
     }
@@ -451,7 +458,7 @@ function locateCslFromBatch(text: string, refs: readonly ZoteroObjectRef[]): Loc
     return {
       ref: formattedRef,
       ...(found?.title !== undefined ? { title: found.title } : {}),
-      ...(found !== undefined ? { key: found.id, entryIndex: found.index } : {}),
+      ...(found !== undefined ? { exportKey: found.id, entryIndex: found.index } : {}),
     }
   })
 }
@@ -466,10 +473,26 @@ export function locateExportItemsFromBatch(
   refs: readonly ZoteroObjectRef[],
   rawItems?: readonly unknown[],
 ): LocatedExportItem[] {
-  if (format === 'bibtex' || format === 'biblatex') {
-    return alignBibtexEntries(text, refs, rawItems)
+  const located =
+    format === 'bibtex' || format === 'biblatex'
+      ? alignBibtexEntries(text, refs, rawItems)
+      : format === 'ris'
+        ? locateRisFromBatch(text, refs)
+        : format === 'csljson'
+          ? locateCslFromBatch(text, refs)
+          : refs.map((ref) => ({ ref: formatRef(ref) }))
+  const rawByKey = new Map<string, Record<string, unknown>>()
+  for (const raw of rawItems ?? []) {
+    const item = asRecord(raw)
+    if (item === undefined) continue
+    const data = asRecord(item['data'])
+    const key = asString(item['key']) ?? asString(data?.['key'])
+    if (key !== undefined) rawByKey.set(key, data === undefined ? item : { ...item, data })
   }
-  if (format === 'ris') return locateRisFromBatch(text, refs)
-  if (format === 'csljson') return locateCslFromBatch(text, refs)
-  return refs.map((ref) => ({ ref: formatRef(ref) }))
+  return located.map((entry, index) => {
+    const ref = refs[index]
+    const raw = ref === undefined ? undefined : rawByKey.get(ref.key)
+    const citation = citationKeyInfoOf(asRecord(raw?.['data']) ?? raw)
+    return { ...entry, ...citation }
+  })
 }

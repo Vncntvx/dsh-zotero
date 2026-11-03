@@ -20,7 +20,9 @@ import type {
   ZoteroCoverage,
   ZoteroEvidenceField,
   ZoteroEvidenceSource,
+  ZoteroGetBatchResult,
   ZoteroItemDetail,
+  ZoteroMatchReferencesResult,
   ZoteroResolvedScope,
   ZoteroRetrieveResult,
   ZoteroSearchResult,
@@ -45,6 +47,7 @@ export const MAX_PRESENTATION_EVIDENCE_CHARS = 400
 const MAX_PRESENTATION_EVIDENCE_PASSAGES = 4
 /** Bounded export-ref entries the projection itemizes; the rest count into `refsOmitted`. */
 const MAX_PRESENTATION_EXPORT_REFS = 20
+const MAX_PRESENTATION_BATCH_ROWS = 20
 
 /**
  * The canonical search output the projector reads: the domain result with the
@@ -60,8 +63,13 @@ interface ZoteroSearchPresentationRow {
   readonly ref: string
   readonly title: string
   readonly creatorSummary: string
+  readonly authors?: readonly string[]
+  readonly venue?: string
   readonly year?: number
   readonly itemType: string
+  readonly citationKey?: string
+  readonly citationKeySource?: 'native' | 'extra'
+  readonly citationKeyConflict?: { readonly native: string; readonly extra: string }
   /** Zotero's own attachment selection for the row; the open-PDF deep-link key. */
   readonly bestAttachmentRef?: string
   /** The content type of Zotero's attachment selection; tells a PDF from other kinds. */
@@ -70,6 +78,9 @@ interface ZoteroSearchPresentationRow {
 
 interface ZoteroSearchPresentationMeta {
   readonly returned: number
+  readonly normalizedQuery: string
+  readonly queryWasEmpty: boolean
+  readonly nextActions?: string[]
   readonly total: number
   readonly nextOffset: number | null
   readonly displayed: number
@@ -122,6 +133,9 @@ interface ZoteroGetPresentationMeta {
   readonly resolvedAttachment?: ZoteroItemDetail['bestAttachment']
   readonly title: string
   readonly creators: string
+  readonly citationKey?: string
+  readonly citationKeySource?: 'native' | 'extra'
+  readonly citationKeyConflict?: { readonly native: string; readonly extra: string }
   readonly year?: number
   readonly venue?: string
   /** The item's own type; kept on the wire for clients that distinguish notes. */
@@ -171,8 +185,10 @@ type RetrieveProjectionInput = ZoteroRetrieveResult
 /** One bounded export document item: the ref with its format-local key, display title, and located entry. */
 interface ZoteroExportPresentationItem {
   readonly ref: string
-  /** The format-local identifier (citation key, CSL JSON id). */
-  readonly key?: string
+  readonly exportKey?: string
+  readonly citationKey?: string
+  readonly citationKeySource?: 'native' | 'extra'
+  readonly citationKeyConflict?: { readonly native: string; readonly extra: string }
   /** The item's title for display, when the entry carried one. */
   readonly title?: string
   /** The located entry's index within the parsed CSL JSON array. */
@@ -247,8 +263,21 @@ export function projectSearchMeta(value: SearchProjectionInput): ZoteroSearchPre
       ref: item.ref,
       title: truncateChars(item.title, MAX_PRESENTATION_SEARCH_TITLE_CHARS),
       creatorSummary: truncateChars(item.creatorSummary, MAX_PRESENTATION_SEARCH_CREATOR_CHARS),
+      ...(item.authors === undefined
+        ? {}
+        : { authors: item.authors.slice(0, 3).map((author) => truncateChars(author, 60)) }),
+      ...(item.venue === undefined
+        ? {}
+        : { venue: truncateChars(item.venue, MAX_PRESENTATION_GET_VENUE_CHARS) }),
       ...(item.year === undefined ? {} : { year: item.year }),
       itemType: item.itemType,
+      ...(item.citationKey === undefined ? {} : { citationKey: item.citationKey }),
+      ...(item.citationKeySource === undefined
+        ? {}
+        : { citationKeySource: item.citationKeySource }),
+      ...(item.citationKeyConflict === undefined
+        ? {}
+        : { citationKeyConflict: item.citationKeyConflict }),
       ...(item.bestAttachmentRef === undefined
         ? {}
         : { bestAttachmentRef: item.bestAttachmentRef }),
@@ -267,6 +296,9 @@ export function projectSearchMeta(value: SearchProjectionInput): ZoteroSearchPre
   const library = libraryOfScope(value.scope)
   return {
     returned: value.returned,
+    normalizedQuery: value.normalizedQuery ?? '',
+    queryWasEmpty: value.queryWasEmpty ?? true,
+    ...(value.nextActions === undefined ? {} : { nextActions: value.nextActions }),
     total: value.total,
     nextOffset: value.nextOffset ?? null,
     displayed,
@@ -311,6 +343,13 @@ export function projectGetMeta(value: GetProjectionInput): ZoteroGetPresentation
       formatCreatorsList(value.creators),
       MAX_PRESENTATION_GET_CREATORS_CHARS,
     ),
+    ...(value.citationKey === undefined ? {} : { citationKey: value.citationKey }),
+    ...(value.citationKeySource === undefined
+      ? {}
+      : { citationKeySource: value.citationKeySource }),
+    ...(value.citationKeyConflict === undefined
+      ? {}
+      : { citationKeyConflict: value.citationKeyConflict }),
     ...(value.year === undefined ? {} : { year: value.year }),
     ...(value.itemType === undefined ? {} : { itemType: value.itemType }),
     ...(value.ref === undefined ? {} : { ref: value.ref }),
@@ -333,6 +372,74 @@ export function projectGetMeta(value: GetProjectionInput): ZoteroGetPresentation
       value.annotations === undefined ? [] : childPreviews(value.annotations.items),
     ...(value.relations === undefined ? {} : { relations: value.relations }),
   }
+}
+
+/** Project bounded per-ref facts for batch read cards and the literature trail. */
+export function projectGetBatchMeta(value: ZoteroGetBatchResult): JsonValue {
+  // Keep one ordered status per requested ref outside the bounded display
+  // rows. The Sources reducer joins this vector to the complete refs argument
+  // so every read remains attributable without duplicating long refs.
+  const statuses = value.items.map((entry) => entry.status)
+  const items = value.items.slice(0, MAX_PRESENTATION_BATCH_ROWS).map((entry) => {
+    if (entry.status === 'error') {
+      return {
+        ref: entry.ref,
+        status: entry.status,
+        code: entry.code,
+        message: truncateChars(entry.message, 180),
+      }
+    }
+    const item = entry.item
+    return {
+      ref: entry.ref,
+      status: entry.status,
+      title: truncateChars(item.title, MAX_PRESENTATION_GET_TITLE_CHARS),
+      itemType: item.itemType,
+      creators: truncateChars(
+        formatCreatorsList(item.creators),
+        MAX_PRESENTATION_GET_CREATORS_CHARS,
+      ),
+      ...(item.year === undefined ? {} : { year: item.year }),
+      ...(item.venue === undefined
+        ? {}
+        : { venue: truncateChars(item.venue, MAX_PRESENTATION_GET_VENUE_CHARS) }),
+      ...(item.citationKey === undefined ? {} : { citationKey: item.citationKey }),
+      ...(item.citationKeySource === undefined
+        ? {}
+        : { citationKeySource: item.citationKeySource }),
+      ...(item.citationKeyConflict === undefined
+        ? {}
+        : { citationKeyConflict: item.citationKeyConflict }),
+      ...(item.bestAttachment?.ref === undefined
+        ? {}
+        : { bestAttachmentRef: item.bestAttachment.ref }),
+      ...(item.bestAttachment?.contentType === undefined
+        ? {}
+        : { bestAttachmentType: item.bestAttachment.contentType }),
+    }
+  })
+  return boundedPresentationMeta(
+    { counts: value.counts, statuses, items, omitted: value.items.length - items.length },
+    ['items'],
+  )
+}
+
+/** Project compact reconciliation rows; the canonical result retains every candidate and diff. */
+export function projectMatchReferencesMeta(value: ZoteroMatchReferencesResult): JsonValue {
+  const matched = value.items.filter((item) => item.status === 'matched').length
+  const items = value.items.slice(0, MAX_PRESENTATION_BATCH_ROWS).map((item) => ({
+    inputId: item.inputId,
+    status: item.status,
+    ...(item.reason === undefined ? {} : { reason: item.reason }),
+    ...(item.bibKey === undefined ? {} : { bibKey: item.bibKey }),
+    ...(item.selected === undefined ? {} : { selected: item.selected }),
+    ...(item.candidates === undefined ? {} : { candidates: item.candidates.slice(0, 3) }),
+    ...(item.fieldDiff === undefined ? {} : { fieldDiff: item.fieldDiff }),
+  }))
+  return boundedPresentationMeta(
+    { requested: value.items.length, matched, items, omitted: value.items.length - items.length },
+    ['items'],
+  )
 }
 
 /**
@@ -410,7 +517,10 @@ export function projectExportMeta(
     readonly text?: string
     readonly items?: readonly {
       readonly ref: string
-      readonly key?: string
+      readonly exportKey?: string
+      readonly citationKey?: string
+      readonly citationKeySource?: 'native' | 'extra'
+      readonly citationKeyConflict?: { readonly native: string; readonly extra: string }
       readonly title?: string
       readonly entryIndex?: number
       readonly start?: number
@@ -437,7 +547,12 @@ export function projectExportMeta(
   if (value.items === undefined) return base
   const items = value.items.slice(0, MAX_PRESENTATION_EXPORT_REFS).map((item) => ({
     ref: item.ref,
-    ...(item.key === undefined ? {} : { key: item.key }),
+    ...(item.exportKey === undefined ? {} : { exportKey: item.exportKey }),
+    ...(item.citationKey === undefined ? {} : { citationKey: item.citationKey }),
+    ...(item.citationKeySource === undefined ? {} : { citationKeySource: item.citationKeySource }),
+    ...(item.citationKeyConflict === undefined
+      ? {}
+      : { citationKeyConflict: item.citationKeyConflict }),
     ...(item.title === undefined ? {} : { title: item.title }),
     ...(item.entryIndex === undefined ? {} : { entryIndex: item.entryIndex }),
     ...(item.start === undefined ? {} : { start: item.start }),

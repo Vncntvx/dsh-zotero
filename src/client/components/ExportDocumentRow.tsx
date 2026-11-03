@@ -38,15 +38,15 @@ export function ExportDocumentRow({ doc, t }: ExportDocumentRowProps) {
   const [open, setOpen] = useState(false)
   // The cite command is only meaningful when the entry carries a key.
   const citeCommand = useMemo(
-    () => (doc.key === undefined ? '' : citeCommandOf([doc.key])),
-    [doc.key],
+    () => (doc.exportKey === undefined ? '' : citeCommandOf([doc.exportKey])),
+    [doc.exportKey],
   )
   const download = (): void => {
-    const base = sanitizeFileStem(doc.key ?? shortKeyOf(doc.ref) ?? 'export')
+    const base = sanitizeFileStem(doc.exportKey ?? shortKeyOf(doc.ref) ?? 'export')
     downloadBlob(doc.text, `zotero-${base}${extensionOf(doc.format)}`, mimeOf(doc.format))
   }
 
-  const title = doc.key ?? doc.title ?? formatLabelOf(doc.format, t)
+  const title = doc.exportKey ?? doc.title ?? formatLabelOf(doc.format, t)
 
   return (
     <section className={css.exportRow} data-export-document>
@@ -54,7 +54,7 @@ export function ExportDocumentRow({ doc, t }: ExportDocumentRowProps) {
         icon={<IconChevronDownOutlineRegular />}
         previewChevron={false}
         title={title}
-        titleClassName={doc.key === undefined ? css.exportTitle : css.documentKey}
+        titleClassName={doc.exportKey === undefined ? css.exportTitle : css.documentKey}
         open={open}
         expandable
         expandOnRowClick
@@ -82,8 +82,20 @@ export function ExportDocumentRow({ doc, t }: ExportDocumentRowProps) {
           />
         </div>
       </DisclosureRow>
-      {doc.key !== undefined && doc.title !== undefined && (
+      {doc.exportKey !== undefined && doc.title !== undefined && (
         <p className={css.documentTitle}>{doc.title}</p>
+      )}
+      {doc.citationKey !== undefined && (
+        <p className={css.documentTitle}>
+          Zotero citation key{doc.citationKeySource ? ` (${doc.citationKeySource})` : ''}:{' '}
+          {doc.citationKey}
+        </p>
+      )}
+      {doc.citationKeyConflict !== undefined && (
+        <p className={css.documentTitle}>
+          Citation key conflict: native={doc.citationKeyConflict.native}; extra=
+          {doc.citationKeyConflict.extra}
+        </p>
       )}
     </section>
   )

@@ -15,10 +15,13 @@ import {
   MAX_PRESENTATION_SEARCH_ROWS,
   MAX_PRESENTATION_SEARCH_ROWS_BYTES,
   projectExportMeta,
+  projectGetBatchMeta,
+  projectMatchReferencesMeta,
   projectGetMeta,
   projectRetrieveMeta,
   projectSearchMeta,
 } from '../../src/presentation-meta.js'
+import type { ZoteroGetBatchResult, ZoteroMatchReferencesResult } from '../../src/types.js'
 
 function searchResult(rows: number): SearchProjectionInput {
   return {
@@ -208,6 +211,41 @@ describe('projectSearchMeta', () => {
     })
     expect(meta.items[0]!.bestAttachmentRef).toBe('zotero://user/0/attachment/WXYZ6789')
     expect(meta.items[1]!.bestAttachmentRef).toBeUndefined()
+  })
+})
+
+describe('batch and match projections', () => {
+  it('keeps every batch outcome in compact metadata while bounding detail rows', () => {
+    const serverId = 'S'.repeat(64)
+    const value: ZoteroGetBatchResult = {
+      items: Array.from({ length: 50 }, (_, index) => ({
+        ref: `zotero://user/0/item/${String(index).padStart(8, '0')}?server=${serverId}`,
+        status: 'ok' as const,
+        item: getDetail({
+          title: `Paper ${index}`.padEnd(200, 'x'),
+          citationKey: 'k'.repeat(500),
+        }),
+      })),
+      counts: { requested: 50, succeeded: 50, failed: 0 },
+    }
+    const meta = projectGetBatchMeta(value) as Record<string, unknown>
+    expect(meta['statuses']).toEqual(Array.from({ length: 50 }, () => 'ok'))
+    expect(meta['items']).toBeUndefined()
+    expect(meta['detailOmitted']).toBe(true)
+    expect(meta['omitted']).toBe(30)
+  })
+
+  it('keeps the complete matched count when match rows are bounded', () => {
+    const value: ZoteroMatchReferencesResult = {
+      items: Array.from({ length: 25 }, (_, index) => ({
+        inputId: `ref-${index}`,
+        status: index < 23 ? ('matched' as const) : ('notFound' as const),
+      })),
+    }
+    const meta = projectMatchReferencesMeta(value) as Record<string, unknown>
+    expect(meta['requested']).toBe(25)
+    expect(meta['matched']).toBe(23)
+    expect(meta['items']).toHaveLength(20)
   })
 })
 
@@ -578,8 +616,8 @@ describe('projectExportMeta', () => {
         format: 'bibtex',
         text: 'raw',
         items: [
-          { ref: 'zotero://user/0/item/AAAAAAA1', key: 'a1', title: 'A', start: 0, end: 11 },
-          { ref: 'zotero://user/0/item/AAAAAAA2', key: 'a2', entryIndex: 1 },
+          { ref: 'zotero://user/0/item/AAAAAAA1', exportKey: 'a1', title: 'A', start: 0, end: 11 },
+          { ref: 'zotero://user/0/item/AAAAAAA2', exportKey: 'a2', entryIndex: 1 },
           { ref: 'zotero://user/0/item/AAAAAAA3' },
         ],
       },
@@ -591,11 +629,47 @@ describe('projectExportMeta', () => {
       refs: REFS,
       refsOmitted: 0,
       items: [
-        { ref: 'zotero://user/0/item/AAAAAAA1', key: 'a1', title: 'A', start: 0, end: 11 },
-        { ref: 'zotero://user/0/item/AAAAAAA2', key: 'a2', entryIndex: 1 },
+        { ref: 'zotero://user/0/item/AAAAAAA1', exportKey: 'a1', title: 'A', start: 0, end: 11 },
+        { ref: 'zotero://user/0/item/AAAAAAA2', exportKey: 'a2', entryIndex: 1 },
         { ref: 'zotero://user/0/item/AAAAAAA3' },
       ],
     })
+  })
+
+  it('omits absent citation-key conflict metadata', () => {
+    const meta = projectExportMeta(
+      {
+        format: 'bibtex',
+        text: 'raw',
+        items: [{ ref: 'zotero://user/0/item/AAAAAAA1', citationKey: 'nativeKey' }],
+      },
+      ['zotero://user/0/item/AAAAAAA1'],
+    )
+    expect(meta.items).toEqual([{ ref: 'zotero://user/0/item/AAAAAAA1', citationKey: 'nativeKey' }])
+  })
+
+  it('preserves citation-key conflict metadata for review', () => {
+    const meta = projectExportMeta(
+      {
+        format: 'bibtex',
+        text: 'raw',
+        items: [
+          {
+            ref: 'zotero://user/0/item/AAAAAAA1',
+            citationKey: 'nativeKey',
+            citationKeyConflict: { native: 'nativeKey', extra: 'legacyKey' },
+          },
+        ],
+      },
+      ['zotero://user/0/item/AAAAAAA1'],
+    )
+    expect(meta.items).toEqual([
+      {
+        ref: 'zotero://user/0/item/AAAAAAA1',
+        citationKey: 'nativeKey',
+        citationKeyConflict: { native: 'nativeKey', extra: 'legacyKey' },
+      },
+    ])
   })
 
   it('bounds the per-document items to the same ref bound', () => {

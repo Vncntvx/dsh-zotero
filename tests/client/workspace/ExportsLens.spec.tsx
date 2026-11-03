@@ -57,7 +57,13 @@ function itemizedBibtex(overrides: Partial<ExportArtifact> = {}): ExportArtifact
     refs: [REF_A],
     text: BIBTEX_TEXT,
     items: [
-      { ref: REF_A, key: 'dao2023', title: 'A study on dao', start: 0, end: BIBTEX_TEXT.length },
+      {
+        ref: REF_A,
+        exportKey: 'dao2023',
+        title: 'A study on dao',
+        start: 0,
+        end: BIBTEX_TEXT.length,
+      },
     ],
     ...overrides,
   })
@@ -88,7 +94,7 @@ const BIBTEX_ARTIFACT: ExportArtifact = artifactOf({
 const BIBTEX_DOC: ExportedDocument = {
   ref: REF_A,
   format: 'bibtex',
-  key: 'dao2023',
+  exportKey: 'dao2023',
   title: 'A study on dao',
   text: '@article{dao2023,\n title={A study on dao}\n}',
   callIds: ['e1'],
@@ -335,7 +341,7 @@ describe('ExportSections', () => {
       items: [
         {
           ref: REF_A,
-          key: 'dao2023',
+          exportKey: 'dao2023',
           title: 'A study on dao, revised',
           start: 0,
           end: updated.length,
@@ -354,9 +360,15 @@ describe('ExportSections', () => {
       callId: 'e1',
       refs: [REF_A, 'zotero://user/0/item/CCCCCCCC'],
       items: [
-        { ref: REF_A, key: 'dao2023', title: 'A study on dao', start: 0, end: BIBTEX_TEXT.length },
+        {
+          ref: REF_A,
+          exportKey: 'dao2023',
+          title: 'A study on dao',
+          start: 0,
+          end: BIBTEX_TEXT.length,
+        },
         // The provider could not locate this item in the body.
-        { ref: 'zotero://user/0/item/CCCCCCCC', key: 'other' },
+        { ref: 'zotero://user/0/item/CCCCCCCC', exportKey: 'other' },
       ],
     })
     const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})

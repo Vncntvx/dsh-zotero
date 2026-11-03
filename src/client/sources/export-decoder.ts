@@ -27,14 +27,40 @@ function exportItemsOf(value: unknown): ExportDocumentItem[] {
     if (!isRecord(entry)) continue
     const ref = stringField(entry, 'ref')
     if (ref === undefined) continue
-    const key = stringField(entry, 'key')
+    const exportKey = stringField(entry, 'exportKey')
+    const citationKey = stringField(entry, 'citationKey')
+    const citationKeySourceValue = stringField(entry, 'citationKeySource')
+    const citationKeySource =
+      citationKeySourceValue === 'native' || citationKeySourceValue === 'extra'
+        ? citationKeySourceValue
+        : undefined
+    const conflictValue = isRecord(entry['citationKeyConflict'])
+      ? entry['citationKeyConflict']
+      : null
+    const citationKeyConflict =
+      conflictValue === null
+        ? undefined
+        : {
+            native: stringField(conflictValue, 'native'),
+            extra: stringField(conflictValue, 'extra'),
+          }
     const title = stringField(entry, 'title')
     const entryIndex = numberField(entry, 'entryIndex')
     const start = numberField(entry, 'start')
     const end = numberField(entry, 'end')
     items.push({
       ref,
-      ...(key === undefined ? {} : { key }),
+      ...(exportKey === undefined ? {} : { exportKey }),
+      ...(citationKey === undefined ? {} : { citationKey }),
+      ...(citationKeySource === undefined ? {} : { citationKeySource }),
+      ...(citationKeyConflict?.native === undefined || citationKeyConflict.extra === undefined
+        ? {}
+        : {
+            citationKeyConflict: {
+              native: citationKeyConflict.native,
+              extra: citationKeyConflict.extra,
+            },
+          }),
       ...(title === undefined ? {} : { title }),
       ...(entryIndex === undefined ? {} : { entryIndex }),
       ...(start === undefined ? {} : { start }),
