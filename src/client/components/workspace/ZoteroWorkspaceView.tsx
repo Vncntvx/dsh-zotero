@@ -13,11 +13,12 @@
  */
 
 import { useMemo, useState } from 'react'
-import clsx from 'clsx'
+import { SegmentedTabs } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ZoteroAttachmentLocationView } from '../../../contract.ts'
 import type { SourceWorkspace } from '../../sources/model.ts'
+import { mapTuple } from '../../segmented-tabs.ts'
 import {
   exportedRefCountOf,
   filterCountsOf,
@@ -36,11 +37,11 @@ import css from './workspace.module.css'
 /** The workspace view's top-level lenses: the sources workspace or the exports page. */
 type WorkspaceLensId = 'sources' | 'exports'
 
-/** The lens bar's entries: id plus its locale key. */
-const LENSES: readonly {
-  readonly id: WorkspaceLensId
-  readonly key: 'lensSources' | 'lensExports'
-}[] = [
+/** The lens bar's entries: id plus its locale key. A tuple, so the tab row can be built without asserting it is non-empty. */
+const LENSES: readonly [
+  { readonly id: 'sources'; readonly key: 'lensSources' },
+  { readonly id: 'exports'; readonly key: 'lensExports' },
+] = [
   { id: 'sources', key: 'lensSources' },
   { id: 'exports', key: 'lensExports' },
 ]
@@ -143,6 +144,24 @@ export function ZoteroWorkspaceView({
   // The exports lens counts distinct exported documents, not export calls.
   const exportedCount = useMemo(() => exportedRefCountOf(workspace.exports), [workspace.exports])
 
+  const lensTabItems = useMemo(
+    () =>
+      mapTuple(LENSES, (entry) => ({
+        value: entry.id,
+        label: (
+          <span data-workspace-lens={entry.id}>
+            {t(entry.key)}
+            {entry.id === 'exports' && exportedCount > 0 && (
+              <span className={css.lensTabCount}>{exportedCount}</span>
+            )}
+          </span>
+        ),
+        id: `workspace-lens-${entry.id}`,
+        panelId: `workspace-lens-${entry.id}-panel`,
+      })),
+    [exportedCount, t],
+  )
+
   if (evidenceOpen) {
     return (
       <div className={css.view} data-conversation-composer-overlay>
@@ -172,58 +191,14 @@ export function ZoteroWorkspaceView({
       }}
     >
       <WorkspaceToolbar connection={connection} onRefresh={onRefresh} t={t} />
-      <div
-        className={css.lensBar}
-        role="tablist"
-        aria-label={t('lensBarLabel')}
-        onKeyDown={(event) => {
-          // Automatic activation: arrows move the lens, matching click.
-          const at = LENSES.findIndex((entry) => entry.id === lens)
-          const move = (next: number): void => {
-            const entry = LENSES[(next + LENSES.length) % LENSES.length]
-            if (entry !== undefined) setLens(entry.id)
-          }
-          switch (event.key) {
-            case 'ArrowRight':
-              event.preventDefault()
-              move(at + 1)
-              break
-            case 'ArrowLeft':
-              event.preventDefault()
-              move(at - 1)
-              break
-            case 'Home':
-              event.preventDefault()
-              move(0)
-              break
-            case 'End':
-              event.preventDefault()
-              move(LENSES.length - 1)
-              break
-            default:
-              break
-          }
-        }}
-      >
-        {LENSES.map((entry) => (
-          <button
-            type="button"
-            key={entry.id}
-            role="tab"
-            aria-selected={lens === entry.id}
-            tabIndex={lens === entry.id ? 0 : -1}
-            className={clsx(css.lensTab, lens === entry.id && css.lensTabActive)}
-            data-workspace-lens={entry.id}
-            onClick={() => {
-              setLens(entry.id)
-            }}
-          >
-            {t(entry.key)}
-            {entry.id === 'exports' && exportedCount > 0 && (
-              <span className={css.lensTabCount}>{exportedCount}</span>
-            )}
-          </button>
-        ))}
+      <div className={css.lensBar}>
+        <SegmentedTabs
+          items={lensTabItems}
+          value={lens}
+          onChange={(next) => setLens(next)}
+          label={t('lensBarLabel')}
+          size="sm"
+        />
       </div>
       {lens === 'exports' ? (
         <ExportsPage workspace={workspace} t={t} />

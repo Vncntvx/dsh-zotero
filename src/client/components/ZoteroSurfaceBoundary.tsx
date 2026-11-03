@@ -71,13 +71,7 @@ export class ZoteroSurfaceBoundary extends Component<
       <div className={css.surfaceError} data-zotero-surface-error>
         <div className={css.surfaceErrorHeader}>
           <p className={css.surfaceErrorTitle}>{t('renderFailed')}</p>
-          <Button
-            variant="outline"
-            size="sm"
-            className={css.surfaceRetryButton}
-            onClick={this.handleRetry}
-            data-zotero-surface-retry
-          >
+          <Button variant="outline" size="sm" onClick={this.handleRetry} data-zotero-surface-retry>
             {t('refresh')}
           </Button>
         </div>

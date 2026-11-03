@@ -30,8 +30,8 @@ describe('ZoteroLibraryMenu', () => {
         t={t}
       />,
     )
-    expect(screen.getByRole('button', { name: mockT('libraryMenuRefresh') })).toBeDefined()
-    expect(screen.getByRole('button', { name: mockT('openInZotero') })).toBeDefined()
+    expect(screen.getByRole('menuitem', { name: mockT('libraryMenuRefresh') })).toBeDefined()
+    expect(screen.getByRole('menuitem', { name: mockT('openInZotero') })).toBeDefined()
   })
 
   it('invokes onRefresh and dismiss when clicking refresh button', () => {
@@ -46,7 +46,7 @@ describe('ZoteroLibraryMenu', () => {
         dismiss={handleDismiss}
       />,
     )
-    const refreshBtn = screen.getByRole('button', { name: mockT('libraryMenuRefresh') })
+    const refreshBtn = screen.getByRole('menuitem', { name: mockT('libraryMenuRefresh') })
     fireEvent.click(refreshBtn)
     expect(handleDismiss).toHaveBeenCalledTimes(1)
     expect(handleRefresh).toHaveBeenCalledTimes(1)
@@ -63,7 +63,7 @@ describe('ZoteroLibraryMenu', () => {
         dismiss={handleDismiss}
       />,
     )
-    const openBtn = screen.getByRole('button', { name: mockT('openInZotero') })
+    const openBtn = screen.getByRole('menuitem', { name: mockT('openInZotero') })
     fireEvent.click(openBtn)
     expect(handleDismiss).toHaveBeenCalledTimes(1)
     expect(clickSpy).toHaveBeenCalledTimes(1)

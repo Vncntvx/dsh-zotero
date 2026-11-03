@@ -147,7 +147,7 @@ describe('ZoteroPluginDetailSection', () => {
     expect(screen.getByText(t('remediationDescription'))).toBeDefined()
 
     await waitFor(() => {
-      expect(screen.getByText(`● ${t('statusConnectedNote')}`)).toBeDefined()
+      expect(screen.getByText(t('statusConnectedNote'))).toBeDefined()
     })
     expect(screen.getByText(`${t('zoteroVersionLabel')}: 7.0.5`)).toBeDefined()
     expect(screen.queryByText(`${t('diagnosisLabel')}:`)).toBeNull()
@@ -174,7 +174,7 @@ describe('ZoteroPluginDetailSection', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByText(`○ ${t('statusUnavailable')}`)).toBeDefined()
+      expect(screen.getByText(t('statusUnavailable'))).toBeDefined()
     })
     expect(screen.getByText(`${t('diagnosisLabel')}:`)).toBeDefined()
     expect(screen.getByText('Zotero is not running on 127.0.0.1:23119')).toBeDefined()
@@ -201,7 +201,7 @@ describe('ZoteroPluginDetailSection', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByText(`○ ${t('statusUnavailable')}`)).toBeDefined()
+      expect(screen.getByText(t('statusUnavailable'))).toBeDefined()
     })
     expect(screen.getByText('ZOTERO_NOT_RUNNING')).toBeDefined()
     expect(screen.getByText(t('diagnosisNotRunning'))).toBeDefined()
@@ -224,7 +224,7 @@ describe('ZoteroPluginDetailSection', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByText(`○ ${t('statusUnavailable')}`)).toBeDefined()
+      expect(screen.getByText(t('statusUnavailable'))).toBeDefined()
     })
     expect(screen.getByText(`${t('diagnosisLabel')}:`)).toBeDefined()
     expect(screen.getByText('Failed to connect to local gateway')).toBeDefined()
@@ -246,7 +246,7 @@ describe('ZoteroPluginDetailSection', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByText(`○ ${t('statusUnavailable')}`)).toBeDefined()
+      expect(screen.getByText(t('statusUnavailable'))).toBeDefined()
     })
     expect(screen.getByText(`${t('diagnosisLabel')}:`)).toBeDefined()
     expect(screen.getByText('Network fatal')).toBeDefined()
@@ -279,14 +279,14 @@ describe('ZoteroPluginDetailSection', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByText(`○ ${t('statusUnavailable')}`)).toBeDefined()
+      expect(screen.getByText(t('statusUnavailable'))).toBeDefined()
     })
 
     const refreshBtn = screen.getByText(t('refresh'))
     fireEvent.click(refreshBtn)
 
     await waitFor(() => {
-      expect(screen.getByText(`● ${t('statusConnectedNote')}`)).toBeDefined()
+      expect(screen.getByText(t('statusConnectedNote'))).toBeDefined()
     })
     expect(screen.getByText(`${t('zoteroVersionLabel')}: 7.1.0`)).toBeDefined()
     expect(probe).toHaveBeenCalledTimes(2)

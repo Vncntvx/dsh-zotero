@@ -56,9 +56,7 @@ function PassageRow({
   return (
     <li className={css.passage} data-source={passage.source}>
       <p className={css.passageHead}>
-        <Tag tone="neutral" className={css.sourceTag}>
-          {t(sourceLabelKeyOf(passage.source))}
-        </Tag>
+        <Tag tone="neutral">{t(sourceLabelKeyOf(passage.source))}</Tag>
         {passage.pageLabel !== undefined && (
           <span className={css.note}>{t('pageLabel', { label: passage.pageLabel })}</span>
         )}

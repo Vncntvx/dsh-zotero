@@ -119,7 +119,7 @@
   flex: 1 1 140px;
   min-width: 80px;
   max-width: 320px;
-  height: 28px !important;
+  height: 28px;
   box-sizing: border-box;
 }
 
@@ -282,6 +282,8 @@
 }
 
 .tagPanel {
+  position: fixed;
+  z-index: 1100;
   box-sizing: border-box;
   width: 240px;
   max-width: calc(100vw - 24px);
@@ -297,7 +299,7 @@
 }
 
 .tagSearchInput {
-  height: 28px !important;
+  height: 28px;
   flex: none;
 }
 
@@ -850,7 +852,7 @@
   height: 16px;
   padding: 0 4px;
   box-sizing: border-box;
-  border: 1px solid color-mix(in srgb, var(--dsw-alias-state-business-primary) 40%, transparent);
+  border: 1px solid var(--dsw-alias-state-business-primary);
   border-radius: var(--dsw-radius-xs);
   color: var(--dsw-alias-state-business-primary);
   font: var(--dsw-font-xxxs-11);
@@ -1132,7 +1134,7 @@
   grid-template-columns: max-content minmax(0, 1fr);
   column-gap: 12px;
   row-gap: 4px;
-  align-items: baseline;
+  align-items: start;
   min-width: 0;
 }
 
@@ -1374,46 +1376,6 @@
   min-width: 0;
 }
 
-.pageBadge {
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 6px;
-  border-radius: var(--dsw-radius-xs);
-  font: var(--dsw-font-xxxs-11);
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-  background: var(--dsw-alias-bg-layer-3);
-  color: var(--dsw-alias-label-caption);
-  border: 0.5px solid var(--dsw-alias-border-l2);
-  flex: none;
-}
-
-/* Rows contributed to the host's tab menu: geometry comes from the shared menu
- * cell (`ui-primitives/Menu.module.css` `.item`) so the injected rows sit in the
- * host list without a second cadence. */
-.tabMenuItem {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  min-height: 34px;
-  padding: 6px 8px;
-  color: var(--dsw-alias-label-primary);
-  font: var(--dsw-font-xs-13);
-  text-align: left;
-  background: transparent;
-  border: none;
-  border-radius: var(--dsw-radius-md);
-  cursor: pointer;
-  box-sizing: border-box;
-}
-
-@media (hover: hover) {
-  .tabMenuItem:hover {
-    background: var(--dsw-alias-interactive-bg-hover);
-  }
-}
-
 .annotationQuote {
   margin: 0;
   font-size: var(--dsh-content-font-size-secondary, 13px);
@@ -1613,8 +1575,6 @@
 
 .writeSubmitButton {
   align-self: flex-start;
-  height: 24px;
-  font-weight: 500;
 }
 
 .writeResult {
@@ -1724,12 +1684,6 @@
     max-width: none;
     flex-basis: 100px;
   }
-
-  .searchModeWrap :global([role='tab']) {
-    padding: 0 8px;
-    font-size: var(--dsw-font-xxxs-11-font-size);
-    height: 24px;
-  }
 }
 
 @container (max-width: 520px) {
@@ -1802,11 +1756,6 @@
     padding: 4px 8px;
   }
 
-  .narrowNavWrap :global([role='tab']) {
-    padding-inline: 8px;
-    font-size: var(--dsw-font-xxs-12-font-size);
-  }
-
   .listHeader {
     padding-inline: 8px;
   }
@@ -1833,11 +1782,6 @@
 @container (max-width: 360px) {
   .librarySelectWrap {
     max-width: 110px;
-  }
-
-  .searchModeWrap :global([role='tab']) {
-    padding: 0 4px;
-    font-size: var(--dsw-font-xxxs-11-font-size);
   }
 
   .paginator {

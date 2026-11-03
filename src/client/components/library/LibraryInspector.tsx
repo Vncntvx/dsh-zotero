@@ -309,7 +309,7 @@ function AnnotationItem({
     <li className={css.annotationCard}>
       <div className={css.annotationHeader}>
         {annotation.pageLabel !== undefined ? (
-          <Tag className={css.pageBadge} tone="neutral">
+          <Tag tone="neutral">
             {t('libraryAnnotationPageBadge', { page: annotation.pageLabel })}
           </Tag>
         ) : (

@@ -106,55 +106,6 @@
   }
 }
 
-/* --- Badges --- */
-
-.badge {
-  box-sizing: border-box;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 18px;
-  padding: 0 6px;
-  font: var(--dsw-font-xxxs-11);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  border-radius: var(--dsw-radius-xs);
-  background: var(--dsw-alias-bg-layer-2);
-  color: var(--dsw-alias-label-secondary);
-  border: 0.5px solid var(--dsw-alias-border-l2);
-  user-select: none;
-}
-
-.badge[data-tone='info'] {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-link);
-  border-color: transparent;
-}
-
-.badge[data-tone='success'] {
-  background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 10%, transparent);
-  color: var(--dsw-alias-state-success-primary);
-  border-width: 1px;
-  border-color: color-mix(in srgb, var(--dsw-alias-state-success-primary) 20%, transparent);
-}
-
-.badge[data-tone='warning'] {
-  background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 10%, transparent);
-  color: var(--dsw-alias-state-warn-label);
-  border-width: 1px;
-  border-color: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 20%, transparent);
-}
-
-.badge[data-tone='danger'],
-.badge[data-tone='error'],
-.badge[data-tone='pdf'] {
-  border-width: 1px;
-  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 8%, transparent);
-  color: var(--dsw-alias-state-error-primary);
-  border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 20%, transparent);
-}
-
 /* --- Card Lists & Item Cards --- */
 
 .cardList {
@@ -313,8 +264,8 @@
 
 .receiptCard[data-state='declined'] {
   border-width: 1px;
-  border-color: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 40%, transparent);
-  background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 5%, transparent);
+  border-color: var(--dsw-alias-state-warn-secondary);
+  background: var(--dsw-alias-state-warn-tertiary);
 }
 
 /* A committed-but-unverified write wears the same warning tint as a declined
@@ -322,8 +273,8 @@
    neither may read as a plain success. */
 .receiptCard[data-state='unverified'] {
   border-width: 1px;
-  border-color: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 40%, transparent);
-  background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 5%, transparent);
+  border-color: var(--dsw-alias-state-warn-secondary);
+  background: var(--dsw-alias-state-warn-tertiary);
 }
 
 .receiptTitle {

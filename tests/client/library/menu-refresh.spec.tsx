@@ -45,7 +45,7 @@ it('menu click refreshes the target feed and displays the new server data', asyn
     />,
   )
   title = 'After refresh'
-  fireEvent.click(screen.getByRole('button', { name: mockT('libraryMenuRefresh') }))
+  fireEvent.click(screen.getByRole('menuitem', { name: mockT('libraryMenuRefresh') }))
   await screen.findByText('After refresh')
   expect(dismiss).toHaveBeenCalledOnce()
   const count = search.mock.calls.length

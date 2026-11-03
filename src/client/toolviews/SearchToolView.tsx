@@ -5,7 +5,7 @@
  */
 
 import { useMemo } from 'react'
-import { IconSearchOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconSearchOutlineRegular, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { searchMetaOf } from '../sources/decoders.ts'
 import { PdfReadButton } from '../components/open/PdfReadButton.tsx'
@@ -94,17 +94,9 @@ export function SearchToolView(props: SearchToolViewProps) {
                   {rows.map((row) => (
                     <div key={row.ref} className={css.itemCard}>
                       <div className={css.itemHeader}>
-                        {row.year !== undefined && <span className={css.badge}>{row.year}</span>}
-                        {row.itemType !== undefined && (
-                          <span className={css.badge} data-tone="info">
-                            {row.itemType}
-                          </span>
-                        )}
-                        {row.bestAttachmentType && (
-                          <span className={css.badge} data-tone="pdf">
-                            {t('badgePdf')}
-                          </span>
-                        )}
+                        {row.year !== undefined && <Tag tone="neutral">{row.year}</Tag>}
+                        {row.itemType !== undefined && <Tag tone="info">{row.itemType}</Tag>}
+                        {row.bestAttachmentType && <Tag tone="danger">{t('badgePdf')}</Tag>}
                         <span className={css.itemTitle}>{row.title}</span>
                       </div>
                       {row.creatorSummary && (

@@ -481,9 +481,7 @@ export function WriteToolView(props: WriteToolViewProps) {
         if (isDeclined) {
           return (
             <div className={css.receiptCard} data-state="declined">
-              <Tag className={css.badge} tone="warning">
-                {t('toolDeclined')}
-              </Tag>
+              <Tag tone="warning">{t('toolDeclined')}</Tag>
               <div className={css.itemMeta}>{rawText}</div>
             </div>
           )
@@ -505,9 +503,7 @@ export function WriteToolView(props: WriteToolViewProps) {
           return (
             <div className={css.receiptCard}>
               <div className={css.itemHeader}>
-                <Tag className={css.badge} tone="danger">
-                  {t('toolFailed')}
-                </Tag>
+                <Tag tone="danger">{t('toolFailed')}</Tag>
                 <span className={css.receiptTitle}>{errorSummary}</span>
               </div>
               {rawText && <RawTextFallback text={rawText} />}
@@ -517,9 +513,7 @@ export function WriteToolView(props: WriteToolViewProps) {
         return (
           <div className={css.receiptCard} data-state={tone}>
             <div className={css.itemHeader}>
-              <Tag className={css.badge} tone={RECEIPT_BADGE[tone].tone}>
-                {t(RECEIPT_BADGE[tone].label)}
-              </Tag>
+              <Tag tone={RECEIPT_BADGE[tone].tone}>{t(RECEIPT_BADGE[tone].label)}</Tag>
               <span className={css.receiptTitle}>{summary}</span>
             </div>
 
@@ -558,11 +552,7 @@ export function WriteToolView(props: WriteToolViewProps) {
                       full strength, anything else as a statement about the plan
                       rather than about the library. */}
                   {tagsList.map((tag) => (
-                    <Tag
-                      key={tag}
-                      className={css.badge}
-                      tone={tone === 'applied' ? 'outline' : RECEIPT_BADGE[tone].tone}
-                    >
+                    <Tag key={tag} tone={tone === 'applied' ? 'outline' : RECEIPT_BADGE[tone].tone}>
                       {tag}
                     </Tag>
                   ))}

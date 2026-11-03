@@ -76,52 +76,18 @@
   flex: none;
 }
 
-/* The top lens bar: 文献 | 导出 as plain text tabs with an active
- * underline, page-level navigation, deliberately not pills (those belong
- * to the filter bar one level down). */
+/* The top lens bar: 文献 | 导出 as the host's segmented tabs, page-level
+ * navigation. The class only places the row; the control draws itself. */
 .lensBar {
   flex: none;
   display: flex;
-  align-items: stretch;
-  gap: 12px;
   padding: 4px 12px 0;
-}
-
-.lensTab {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 2px;
-  font: var(--dsw-font-xs-13);
-  color: var(--dsw-alias-label-secondary);
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  cursor: pointer;
-  transition: color 120ms var(--ds-ease-in-out);
-}
-
-@media (hover: hover) {
-  .lensTab:hover {
-    color: var(--dsw-alias-label-primary);
-  }
-}
-
-.lensTab:focus-visible {
-  outline: var(--dsw-focus-ring-width, 1px) solid
-    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
-  outline-offset: -1px;
-}
-
-.lensTabActive {
-  color: var(--dsw-alias-label-primary);
-  border-bottom-color: var(--dsw-alias-label-primary);
 }
 
 .lensTabCount {
   font: var(--dsw-font-xxs-12);
   color: var(--dsw-alias-label-caption);
+  margin-left: 4px;
 }
 
 /* The master-detail pair: a proportionally clamped sidebar rail plus the
@@ -337,19 +303,6 @@
   gap: 4px;
 }
 
-.badge {
-  display: inline-flex;
-  align-items: center;
-  height: 18px;
-  padding: 0 6px;
-  border-radius: var(--dsw-radius-xs);
-  font: var(--dsw-font-xxxs-11);
-  font-weight: 600;
-  letter-spacing: 0.035em;
-  color: var(--dsw-alias-label-tertiary);
-  background: var(--dsw-alias-bg-layer-2);
-}
-
 /* The inspector: the selected source's detail surface. */
 .inspector {
   min-height: 0;
@@ -391,52 +344,18 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* The inspector's panel tabs: light text tabs (概览 / 相关片段 / 导出) with
- * counts, a third visual level that stays quieter than the top lens tabs and
- * is never confused with the filter pills. */
+/* The inspector's panel tabs: 概览 / 相关片段 / 导出, the same host segmented
+ * tabs the lens bar uses, carrying each panel's count. */
 .inspectorTabs {
   flex: none;
   display: flex;
-  align-items: stretch;
-  gap: 12px;
-  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
-}
-
-.detailTab {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 1px;
-  font: var(--dsw-font-xxs-12);
-  color: var(--dsw-alias-label-secondary);
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  cursor: pointer;
-  transition: color 120ms var(--ds-ease-in-out);
-}
-
-@media (hover: hover) {
-  .detailTab:hover {
-    color: var(--dsw-alias-label-primary);
-  }
-}
-
-.detailTab:focus-visible {
-  outline: var(--dsw-focus-ring-width, 1px) solid
-    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
-  outline-offset: -1px;
-}
-
-.detailTabActive {
-  color: var(--dsw-alias-label-primary);
-  border-bottom-color: var(--dsw-alias-label-primary);
+  margin-bottom: 4px;
 }
 
 .detailTabCount {
   font: var(--dsw-font-xxxs-11);
   color: var(--dsw-alias-label-caption);
+  margin-left: 4px;
 }
 
 .inspectorBody {
@@ -522,19 +441,6 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 4px 8px;
-}
-
-.sourceTag {
-  display: inline-flex;
-  align-items: center;
-  height: 18px;
-  padding: 0 6px;
-  border-radius: var(--dsw-radius-xs);
-  font: var(--dsw-font-xxxs-11);
-  font-weight: 600;
-  letter-spacing: 0.035em;
-  color: var(--dsw-alias-label-tertiary);
-  background: var(--dsw-alias-bg-layer-2);
 }
 
 .availability {
@@ -696,12 +602,5 @@
 @container (max-width: 460px) {
   .toolbar {
     padding: 4px 8px;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .lensTab,
-  .detailTab {
-    transition: none;
   }
 }

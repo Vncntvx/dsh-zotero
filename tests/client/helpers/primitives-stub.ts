@@ -153,7 +153,18 @@ export interface PrimitivesStub extends Omit<RealForm, 'SettingsValueField'> {
     expandable?: boolean
     onToggle?: () => void
     collapsedContent?: unknown
+    headerAccessory?: unknown
     children?: unknown
+    [key: string]: unknown
+  }) => ReactElement
+  /** The code block, as its DOM face. */
+  readonly CodeBlock: (props: {
+    code: string
+    lang?: string
+    copyLabel?: string
+    copiedLabel?: string
+    className?: string
+    showHeader?: boolean
     [key: string]: unknown
   }) => ReactElement
   /** Shimmering text indicator. */
@@ -178,6 +189,7 @@ export interface PrimitivesStub extends Omit<RealForm, 'SettingsValueField'> {
   readonly IconTrashOutlineRegular: (props: Record<string, unknown>) => ReactElement
   readonly IconChevronDownOutlineRegular: (props: Record<string, unknown>) => ReactElement
   readonly IconChevronsUpDownOutlineMedium: (props: Record<string, unknown>) => ReactElement
+  readonly IconEllipsisOutlineMedium: (props: Record<string, unknown>) => ReactElement
   readonly IconCheckOutlineRegular: (props: Record<string, unknown>) => ReactElement
   readonly Button: (props: Record<string, unknown>) => ReactElement
   readonly Input: (props: Record<string, unknown>) => ReactElement
@@ -192,6 +204,7 @@ interface DisclosureRowStubProps {
   readonly expandable?: boolean
   readonly onToggle?: () => void
   readonly collapsedContent?: unknown
+  readonly headerAccessory?: unknown
   readonly children?: unknown
 }
 
@@ -208,6 +221,7 @@ function disclosureRowElement({
   expandable,
   onToggle,
   collapsedContent,
+  headerAccessory,
   children,
 }: DisclosureRowStubProps): ReactElement {
   return createElement(
@@ -217,9 +231,10 @@ function disclosureRowElement({
       'data-expandable': expandable ? 'true' : 'false',
     },
     createElement(
-      'div',
+      'button',
       {
-        role: 'button',
+        type: 'button',
+        'aria-expanded': open,
         'data-disclosure-trigger': 'true',
         onClick: () => onToggle?.(),
       },
@@ -227,6 +242,7 @@ function disclosureRowElement({
       createElement('span', { 'data-disclosure-title': 'true' }, title as never),
       collapsedContent as never,
     ),
+    headerAccessory as never,
     open ? (children as never) : null,
   )
 }
@@ -305,6 +321,7 @@ function SettingsFormFace({
  * @returns the module shape the spec's `vi.mock` factory returns.
  */
 export function primitivesStub(overrides: Partial<PrimitivesStub> = {}): PrimitivesStub {
+  const writeClipboard = overrides.writeClipboard ?? vi.fn(async () => true)
   return {
     StateDot: ({ state }) => createElement('span', { 'data-state': state }),
     Pill: ({ active, children, ...rest }) =>
@@ -449,10 +466,37 @@ export function primitivesStub(overrides: Partial<PrimitivesStub> = {}): Primiti
       label: string
       className?: string
     }) => {
+      const onKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
+        let next: number
+        switch (event.key) {
+          case 'ArrowLeft':
+            next = (index + items.length - 1) % items.length
+            break
+          case 'ArrowRight':
+            next = (index + 1) % items.length
+            break
+          case 'Home':
+            next = 0
+            break
+          case 'End':
+            next = items.length - 1
+            break
+          default:
+            return
+        }
+        event.preventDefault()
+        event.stopPropagation()
+        const tablist = event.currentTarget.parentElement
+        const nextItem = items[next]
+        if (tablist === null || nextItem === undefined) return
+        tablist.querySelectorAll<HTMLButtonElement>('[role="tab"]').item(next)?.focus()
+        onChange(nextItem.value)
+      }
+
       return createElement(
         'div',
         { role: 'tablist', 'aria-label': label, className },
-        items.map((item) =>
+        items.map((item, index) =>
           createElement(
             'button',
             {
@@ -462,8 +506,12 @@ export function primitivesStub(overrides: Partial<PrimitivesStub> = {}): Primiti
               id: item.id,
               'aria-selected': item.value === value,
               'aria-controls': item.panelId,
+              tabIndex: item.value === value ? 0 : -1,
               onClick: () => {
                 onChange(item.value)
+              },
+              onKeyDown: (event: React.KeyboardEvent<HTMLButtonElement>) => {
+                onKeyDown(event, index)
               },
             },
             item.label as never,
@@ -473,7 +521,7 @@ export function primitivesStub(overrides: Partial<PrimitivesStub> = {}): Primiti
     },
     Tooltip: ({ children }) => children,
     Tag: TagStub,
-    writeClipboard: vi.fn(async () => true),
+    writeClipboard,
     Switch: ({ checked, onChange, label, disabled }) =>
       createElement('input', {
         type: 'checkbox',
@@ -545,6 +593,44 @@ export function primitivesStub(overrides: Partial<PrimitivesStub> = {}): Primiti
       )
     },
     DisclosureRow: disclosureRowElement,
+    CodeBlock: ({
+      code,
+      lang,
+      copyLabel,
+      className,
+      showHeader = true,
+    }: {
+      code: string
+      lang?: string
+      copyLabel?: string
+      copiedLabel?: string
+      className?: string
+      showHeader?: boolean
+    }) =>
+      createElement(
+        'div',
+        { className, 'data-code-block': true, 'data-lang': lang },
+        showHeader
+          ? createElement(
+              'div',
+              { 'data-code-header': true },
+              lang ? createElement('span', null, lang) : null,
+              createElement(
+                'button',
+                {
+                  type: 'button',
+                  'aria-label': copyLabel ?? 'Copy',
+                  'data-copy-button': true,
+                  onClick: () => {
+                    void writeClipboard(code)
+                  },
+                },
+                copyLabel ?? 'Copy',
+              ),
+            )
+          : null,
+        createElement('pre', null, createElement('code', null, code)),
+      ),
     TextShimmer: ({ children, active }) =>
       createElement('span', { 'data-shimmer': active ? 'true' : undefined }, children as never),
     Button: ({

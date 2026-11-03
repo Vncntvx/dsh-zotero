@@ -166,7 +166,9 @@ describe('sources states', () => {
     })
     const { view } = mountTab(chatOf([toolRow(search), toolRow(get)]), status)
     await act(async () => {})
-    const lensTab = view.container.querySelector('[data-workspace-lens="sources"]')!
+    const lensTab = view.container
+      .querySelector('[data-workspace-lens="sources"]')!
+      .closest('[role="tab"]')!
     expect(lensTab.getAttribute('aria-selected')).toBe('true')
     expect(view.container.querySelectorAll('[data-evidence-match]')).toHaveLength(20)
     // The workflow stats strip is gone; the filter bar is the only count line.

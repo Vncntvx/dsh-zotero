@@ -8,6 +8,7 @@ import { useMemo, type ReactNode } from 'react'
 import {
   IconBrowseOutlineRegular,
   IconRefreshOutlineRegular,
+  Tag,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { browseMetaOf } from '../sources/decoders.ts'
@@ -154,14 +155,12 @@ function ChangesBody({
           <div key={section.key} className={css.itemCard} data-changes-kind={section.key}>
             <div className={css.itemHeader}>
               <span className={css.itemTitle}>{t(section.label)}</span>
-              <span className={css.badge}>
-                {countOfLabel(section.total, section.entries.length, t)}
-              </span>
+              <Tag tone="neutral">{countOfLabel(section.total, section.entries.length, t)}</Tag>
             </div>
             {section.entries.map((entry) => (
               <div key={entry.key} className={css.itemMeta} data-changes-entry>
                 <span>{entry.key}</span>
-                <span className={css.badge}>v{entry.version}</span>
+                <Tag tone="neutral">v{entry.version}</Tag>
               </div>
             ))}
             {/* A full-text row's number comes from the index's own counter, not
@@ -187,9 +186,7 @@ function ChangesBody({
               <div key={section.key} className={css.itemCard} data-changes-kind={section.key}>
                 <div className={css.itemHeader}>
                   <span className={css.itemTitle}>{t(section.label)}</span>
-                  <span className={css.badge}>
-                    {countOfLabel(section.total, section.keys.length, t)}
-                  </span>
+                  <Tag tone="neutral">{countOfLabel(section.total, section.keys.length, t)}</Tag>
                 </div>
                 {section.keys.map((key) => (
                   <div key={key} className={css.itemMeta} data-changes-entry>
@@ -422,7 +419,7 @@ export function BrowseToolView(props: BrowseToolViewProps) {
                 >
                   <div className={css.itemHeader}>
                     <span className={css.itemTitle}>{row.name}</span>
-                    {row.detail !== null && <span className={css.badge}>{row.detail}</span>}
+                    {row.detail !== null && <Tag tone="neutral">{row.detail}</Tag>}
                   </div>
                   {row.ref !== null && <div className={css.itemMeta}>{row.ref}</div>}
                 </div>

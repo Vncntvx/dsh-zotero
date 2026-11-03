@@ -38,7 +38,6 @@ import {
 import { FILTERS, type MobilePane, type SelectionState } from './ZoteroWorkspaceView.tsx'
 import { SourceListItem } from './SourceListItem.tsx'
 import css from './workspace.module.css'
-import quiet from '../quiet.module.css'
 
 interface SourceSidebarProps {
   readonly workspace: SourceWorkspace
@@ -254,7 +253,6 @@ export function SourceSidebar({
           <Button
             variant="outline"
             size="sm"
-            className={quiet.quiet}
             onClick={() => {
               setFilter('all')
             }}

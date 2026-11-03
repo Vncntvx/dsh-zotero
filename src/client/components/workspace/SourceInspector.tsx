@@ -2,21 +2,22 @@
  * The source inspector: the detail surface of the selected source. Three
  * panels, Overview (identity and search records), Passages (the
  * retrieval summary, passages, and per-source availability), and Exports
- * (the item's export artifacts), switch through the inspector's own tab
- * row: light text tabs (no pill chrome, so the three hierarchy levels,
- * top lens tabs, filter pills, and detail tabs, read differently at a glance)
- * carrying the panel's count when there is something to count. A selection
+ * (the item's export artifacts), switch through a panel row the host draws
+ * (`SegmentedTabs`, size sm) — the same control the workspace's top lens bar
+ * uses, so the two navigation levels read as one system rather than three. The
+ * row carries the panel's count when there is something to count. A selection
  * hidden by the current filter keeps rendering with a note instead of
  * vanishing. The narrow-surface back action returns to the list pane.
  * @module dsh-zotero/client/components/workspace/SourceInspector
  */
 
 import { useMemo, useState } from 'react'
-import clsx from 'clsx'
+import { SegmentedTabs } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ZoteroAttachmentLocationView } from '../../../contract.ts'
 import type { SourceItem, SourceWorkspace } from '../../sources/model.ts'
+import { mapTuple } from '../../segmented-tabs.ts'
 import type { MobilePane } from './ZoteroWorkspaceView.tsx'
 import { SourceOverview } from './SourceOverview.tsx'
 import { SourceEvidence } from './SourceEvidence.tsx'
@@ -26,16 +27,20 @@ import css from './workspace.module.css'
 /** The inspector's panels. */
 type InspectorPanelId = 'overview' | 'evidence' | 'exports'
 
-/**
- * The panel tab entries of one item: id, locale key, and the count shown
- * beside the label (omitted when zero, since an empty panel's onboarding note
- * states more than a "0" would).
- */
-function panelEntriesOf(item: SourceItem): readonly {
+/** One panel tab entry: id, locale key, and the count shown beside the label. */
+interface PanelEntry {
   readonly id: InspectorPanelId
   readonly key: 'panelOverview' | 'panelEvidence' | 'panelExports'
   readonly count: number | undefined
-}[] {
+}
+
+/**
+ * The panel tab entries of one item: the count beside the label is omitted
+ * when zero, since an empty panel's onboarding note states more than a "0"
+ * would. The tuple is what lets the tab row build without asserting that the
+ * list is non-empty.
+ */
+function panelEntriesOf(item: SourceItem): readonly [PanelEntry, PanelEntry, PanelEntry] {
   return [
     { id: 'overview', key: 'panelOverview', count: undefined },
     { id: 'evidence', key: 'panelEvidence', count: item.evidence.length },
@@ -100,60 +105,7 @@ export function SourceInspector({
         </div>
       </div>
       {selectionHidden && <p className={css.warning}>{t('selectionHiddenNote')}</p>}
-      <div
-        className={css.inspectorTabs}
-        role="tablist"
-        aria-label={t('inspectorTabsLabel')}
-        onKeyDown={(event) => {
-          // Automatic activation: arrows move the panel, matching click.
-          const entries = panelEntriesOf(selected)
-          const at = entries.findIndex((entry) => entry.id === panel)
-          const move = (next: number): void => {
-            const entry = entries[(next + entries.length) % entries.length]
-            if (entry !== undefined) setPanel(entry.id)
-          }
-          switch (event.key) {
-            case 'ArrowRight':
-              event.preventDefault()
-              move(at + 1)
-              break
-            case 'ArrowLeft':
-              event.preventDefault()
-              move(at - 1)
-              break
-            case 'Home':
-              event.preventDefault()
-              move(0)
-              break
-            case 'End':
-              event.preventDefault()
-              move(entries.length - 1)
-              break
-            default:
-              break
-          }
-        }}
-      >
-        {panelEntriesOf(selected).map((entry) => (
-          <button
-            type="button"
-            key={entry.id}
-            role="tab"
-            aria-selected={panel === entry.id}
-            tabIndex={panel === entry.id ? 0 : -1}
-            className={clsx(css.detailTab, panel === entry.id && css.detailTabActive)}
-            data-inspector-panel={entry.id}
-            onClick={() => {
-              setPanel(entry.id)
-            }}
-          >
-            {t(entry.key)}
-            {entry.count !== undefined && entry.count > 0 && (
-              <span className={css.detailTabCount}>{entry.count}</span>
-            )}
-          </button>
-        ))}
-      </div>
+      <InspectorTabs item={selected} panel={panel} setPanel={setPanel} t={t} />
       <div className={css.inspectorBody}>
         {panel === 'overview' ? (
           <SourceOverview
@@ -170,5 +122,49 @@ export function SourceInspector({
         )}
       </div>
     </main>
+  )
+}
+
+/** The inspector's panel row: the host tab list plus its per-panel counts. */
+function InspectorTabs({
+  item,
+  panel,
+  setPanel,
+  t,
+}: {
+  readonly item: SourceItem
+  readonly panel: InspectorPanelId
+  readonly setPanel: (panel: InspectorPanelId) => void
+  readonly t: TranslateNS<'zotero'>
+}) {
+  const entries = useMemo(() => panelEntriesOf(item), [item])
+  const items = useMemo(
+    () =>
+      mapTuple(entries, (entry) => ({
+        value: entry.id,
+        label: (
+          <span data-inspector-panel={entry.id}>
+            {t(entry.key)}
+            {entry.count !== undefined && entry.count > 0 && (
+              <span className={css.detailTabCount}>{entry.count}</span>
+            )}
+          </span>
+        ),
+        id: `inspector-panel-${entry.id}`,
+        panelId: `inspector-panel-${entry.id}-panel`,
+      })),
+    [entries, t],
+  )
+
+  return (
+    <div className={css.inspectorTabs}>
+      <SegmentedTabs
+        items={items}
+        value={panel}
+        onChange={setPanel}
+        label={t('inspectorTabsLabel')}
+        size="sm"
+      />
+    </div>
   )
 }

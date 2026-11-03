@@ -57,7 +57,13 @@ describe('Scholarly persisted write outcomes', () => {
       )
       const expected = state === 'declined' ? 'declined' : state === 'applied' ? 'ok' : 'unverified'
       expect(container.querySelector('[data-tool]')?.getAttribute('data-state')).toBe(expected)
-      if (state !== 'applied') expect(container.querySelector('[data-tone="success"]')).toBeNull()
+      // Only a fully applied write wears the success tone; every other outcome
+      // must not read as one, which is what makes the negative check below bite.
+      if (state === 'applied') {
+        expect(container.querySelector('[data-tone="success"]')).not.toBeNull()
+      } else {
+        expect(container.querySelector('[data-tone="success"]')).toBeNull()
+      }
       if (state !== 'applied' && state !== 'declined') {
         expect(container.textContent).toContain(REF)
         expect(result.meta).toMatchObject({

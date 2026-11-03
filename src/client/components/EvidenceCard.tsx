@@ -58,9 +58,7 @@ function PassageRow({
   return (
     <li className={css.passage} data-source={passage.source}>
       <p className={css.passageHead}>
-        <Tag tone="neutral" className={css.sourceTag}>
-          {t(sourceLabelKeyOf(passage.source))}
-        </Tag>
+        <Tag tone="neutral">{t(sourceLabelKeyOf(passage.source))}</Tag>
         {passage.pageLabel !== undefined && (
           <span className={css.note}>{t('pageLabel', { label: passage.pageLabel })}</span>
         )}
@@ -164,11 +162,7 @@ export function EvidenceCard({ item, t, openFile, resolveAttachment }: EvidenceC
             className={css.link}
           />
         )}
-        {evidenceMatch === 'unknown' && (
-          <span className={css.badge} title={t('instanceUnverified')}>
-            {t('instanceUnverified')}
-          </span>
-        )}
+        {evidenceMatch === 'unknown' && <Tag tone="warning">{t('instanceUnverified')}</Tag>}
       </header>
       {coverageLine !== '' && <p className={css.note}>{coverageLine}</p>}
       {item.retrievalFacts?.truncated === true && (

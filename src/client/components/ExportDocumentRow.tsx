@@ -4,14 +4,20 @@
  * have none), the paper title as the weak second line, and the per-document
  * actions (the `\cite{}` copy for the BibTeX family, the single-document
  * download) outside the toggle. The verbatim entry body sits behind the
- * toggle with the entry's copy action inside, so the row stays a document,
- * not a call.
+ * toggle, drawn by the host code block and bounded by `.exportCode`; its
+ * header names the format in the user's language, which is why `lang` carries
+ * the localized label here while the tool card's code block carries the raw
+ * format id beside its own format tag. The key stays the row's visible title:
+ * `DisclosureRow` takes no title, so the old native key tooltip has no home.
  * @module dsh-zotero/client/components/ExportDocumentRow
  */
 
 import { useMemo, useState } from 'react'
-import clsx from 'clsx'
-import { IconChevronDownOutlineMedium } from '@deepseek-ai/dsh-client-ui-primitives'
+import {
+  CodeBlock,
+  DisclosureRow,
+  IconChevronDownOutlineRegular,
+} from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { shortKeyOf } from '../presenters.ts'
 import { citeCommandOf } from '../sources/bibtex.ts'
@@ -40,45 +46,44 @@ export function ExportDocumentRow({ doc, t }: ExportDocumentRowProps) {
     downloadBlob(doc.text, `zotero-${base}${extensionOf(doc.format)}`, mimeOf(doc.format))
   }
 
+  const title = doc.key ?? doc.title ?? formatLabelOf(doc.format, t)
+
   return (
     <section className={css.exportRow} data-export-document>
-      <div className={css.exportHead}>
-        <button
-          type="button"
-          className={css.exportToggle}
-          aria-expanded={open}
-          title={doc.key}
-          onClick={() => {
-            setOpen(!open)
-          }}
-        >
-          <span className={doc.key === undefined ? css.exportTitle : css.documentKey}>
-            {doc.key ?? doc.title ?? formatLabelOf(doc.format, t)}
+      <DisclosureRow
+        icon={<IconChevronDownOutlineRegular />}
+        previewChevron={false}
+        title={title}
+        titleClassName={doc.key === undefined ? css.exportTitle : css.documentKey}
+        open={open}
+        expandable
+        expandOnRowClick
+        onToggle={() => {
+          setOpen(!open)
+        }}
+        headerAccessory={
+          <span className={css.lineActions}>
+            {citeCommand !== '' && (
+              <CopyButton value={citeCommand} label={t('copyCite')} copiedLabel={t('copied')} />
+            )}
+            <button type="button" className={quiet.quiet} onClick={download}>
+              {`${t('downloadArtifact')} ${extensionOf(doc.format)}`}
+            </button>
           </span>
-          <IconChevronDownOutlineMedium className={clsx(css.chevron, open && css.chevronOpen)} />
-        </button>
-        <span className={css.lineActions}>
-          {citeCommand !== '' && (
-            <CopyButton value={citeCommand} label={t('copyCite')} copiedLabel={t('copied')} />
-          )}
-          <button type="button" className={quiet.quiet} onClick={download}>
-            {`${t('downloadArtifact')} ${extensionOf(doc.format)}`}
-          </button>
-        </span>
-      </div>
+        }
+      >
+        <div className={css.exportBody}>
+          <CodeBlock
+            code={doc.text}
+            lang={formatLabelOf(doc.format, t)}
+            copyLabel={t('copyExport')}
+            copiedLabel={t('copied')}
+            className={css.exportCode}
+          />
+        </div>
+      </DisclosureRow>
       {doc.key !== undefined && doc.title !== undefined && (
         <p className={css.documentTitle}>{doc.title}</p>
-      )}
-      {open && (
-        <div className={css.exportBody}>
-          <div className={css.exportCode}>
-            <div className={css.exportCodeHead}>
-              <span className={css.exportCodeLabel}>{formatLabelOf(doc.format, t)}</span>
-              <CopyButton value={doc.text} label={t('copyExport')} copiedLabel={t('copied')} />
-            </div>
-            <pre className={css.exportPre}>{doc.text}</pre>
-          </div>
-        </div>
       )}
     </section>
   )

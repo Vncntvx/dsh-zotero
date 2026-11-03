@@ -11,7 +11,7 @@
 
 import { useState } from 'react'
 import clsx from 'clsx'
-import { Menu, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconEllipsisOutlineMedium, Menu, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { buildInfoOf } from '../../build-info.ts'
 import { writeStatusLabel } from '../write-label.ts'
@@ -117,7 +117,7 @@ export function WorkspaceToolbar({ connection, onRefresh, t }: WorkspaceToolbarP
               setMenuOpen(!menuOpen)
             }}
           >
-            ···
+            <IconEllipsisOutlineMedium size={14} />
           </button>
         }
         items={menuItems}

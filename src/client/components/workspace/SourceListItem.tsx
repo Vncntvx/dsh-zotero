@@ -10,6 +10,7 @@
 
 import { memo, useCallback } from 'react'
 import clsx from 'clsx'
+import { Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { joinNonEmpty } from '../../presenters.ts'
 import type { SourceItem } from '../../sources/model.ts'
@@ -90,9 +91,9 @@ function SourceListItemComponent({
       {badges.length > 0 && (
         <span className={css.badges}>
           {badges.map((badge) => (
-            <span key={badge} className={css.badge} data-badge>
+            <Tag key={badge} tone="neutral">
               {badge}
-            </span>
+            </Tag>
           ))}
         </span>
       )}

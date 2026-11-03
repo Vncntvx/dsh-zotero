@@ -3,9 +3,9 @@
  * @module dsh-zotero/client/components/library/ZoteroLibraryMenu
  */
 
+import { MenuItemButton } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { launchZoteroProtocol } from '../../actions/open-zotero.ts'
-import css from './library.module.css'
 
 export interface ZoteroLibraryMenuProps {
   readonly tab?: { readonly kind?: string; readonly id?: string }
@@ -25,26 +25,22 @@ export function ZoteroLibraryMenu({
   if (tab?.kind !== 'zotero-library') return null
   return (
     <>
-      <button
-        type="button"
-        className={css.tabMenuItem}
-        onClick={() => {
+      <MenuItemButton
+        onSelect={() => {
           dismiss?.()
           if (sessionId && tab?.id) onRefresh?.(sessionId, tab.id)
         }}
       >
         {t('libraryMenuRefresh')}
-      </button>
-      <button
-        type="button"
-        className={css.tabMenuItem}
-        onClick={() => {
+      </MenuItemButton>
+      <MenuItemButton
+        onSelect={() => {
           dismiss?.()
           launchZoteroProtocol('zotero://select/')
         }}
       >
         {t('openInZotero')}
-      </button>
+      </MenuItemButton>
     </>
   )
 }

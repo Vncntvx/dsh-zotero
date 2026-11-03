@@ -42,7 +42,8 @@ function optionAt(view: View, index: number): Element {
 
 /** The tab carrying `data-inspector-panel` / `data-workspace-lens` = `name`. */
 function tabOf(view: View, attribute: string, name: string): Element {
-  return view.container.querySelector(`[${attribute}="${name}"]`)!
+  const el = view.container.querySelector(`[${attribute}="${name}"]`)!
+  return el.closest('[role="tab"]') ?? el
 }
 
 /**
@@ -159,43 +160,59 @@ describe('inspector', () => {
   it('exposes the lens bar and inspector tabs as tablists with roving selection', () => {
     const workspace = singleFixture()
     const { view } = mountView(workspace)
-    const tabs = view.container.querySelector('[data-inspector-panel="overview"]')!.parentElement!
+    const tabs = view.container
+      .querySelector('[data-inspector-panel="overview"]')!
+      .closest('[role="tablist"]')!
     expect(tabs.getAttribute('role')).toBe('tablist')
     expect(tabs.getAttribute('aria-label')).toBe(zh.inspectorTabsLabel)
-    expectKeySelects(tabs, 'ArrowRight', () => tabOf(view, 'data-inspector-panel', 'evidence'))
-    expectKeySelects(tabs, 'ArrowLeft', () => tabOf(view, 'data-inspector-panel', 'overview'))
-    expectKeySelects(tabs, 'End', () => tabOf(view, 'data-inspector-panel', 'exports'))
-    expectKeySelects(tabs, 'Home', () => tabOf(view, 'data-inspector-panel', 'overview'))
-    const lensBar = view.container.querySelector('[data-workspace-lens="sources"]')!.parentElement!
+    expectKeySelects(tabOf(view, 'data-inspector-panel', 'overview'), 'ArrowRight', () =>
+      tabOf(view, 'data-inspector-panel', 'evidence'),
+    )
+    expectKeySelects(tabOf(view, 'data-inspector-panel', 'evidence'), 'ArrowLeft', () =>
+      tabOf(view, 'data-inspector-panel', 'overview'),
+    )
+    expectKeySelects(tabOf(view, 'data-inspector-panel', 'overview'), 'End', () =>
+      tabOf(view, 'data-inspector-panel', 'exports'),
+    )
+    expectKeySelects(tabOf(view, 'data-inspector-panel', 'exports'), 'Home', () =>
+      tabOf(view, 'data-inspector-panel', 'overview'),
+    )
+    const lensBar = view.container
+      .querySelector('[data-workspace-lens="sources"]')!
+      .closest('[role="tablist"]')!
     expect(lensBar.getAttribute('role')).toBe('tablist')
     expect(lensBar.getAttribute('aria-label')).toBe(zh.lensBarLabel)
-    const lensTab = view.container.querySelector('[data-workspace-lens="sources"]')!
+    const lensTab = tabOf(view, 'data-workspace-lens', 'sources')
     expect(lensTab.getAttribute('role')).toBe('tab')
     expect(lensTab.getAttribute('aria-selected')).toBe('true')
-    expectKeySelects(lensBar, 'ArrowRight', () => tabOf(view, 'data-workspace-lens', 'exports'))
-    expectKeySelects(lensBar, 'ArrowLeft', () => tabOf(view, 'data-workspace-lens', 'sources'))
-    expectKeySelects(lensBar, 'End', () => tabOf(view, 'data-workspace-lens', 'exports'))
-    expectKeySelects(lensBar, 'Home', () => tabOf(view, 'data-workspace-lens', 'sources'))
+    expectKeySelects(tabOf(view, 'data-workspace-lens', 'sources'), 'ArrowRight', () =>
+      tabOf(view, 'data-workspace-lens', 'exports'),
+    )
+    expectKeySelects(tabOf(view, 'data-workspace-lens', 'exports'), 'ArrowLeft', () =>
+      tabOf(view, 'data-workspace-lens', 'sources'),
+    )
+    expectKeySelects(tabOf(view, 'data-workspace-lens', 'sources'), 'End', () =>
+      tabOf(view, 'data-workspace-lens', 'exports'),
+    )
+    expectKeySelects(tabOf(view, 'data-workspace-lens', 'exports'), 'Home', () =>
+      tabOf(view, 'data-workspace-lens', 'sources'),
+    )
   })
 
   it('resets to the overview panel when the selection changes', () => {
     const workspace = mixedFixture()
     const { view } = mountView(workspace)
     fireEvent.click(view.container.querySelector('[data-inspector-panel="exports"]')!)
-    expect(
-      view.container
-        .querySelector('[data-inspector-panel="exports"]')!
-        .getAttribute('aria-selected'),
-    ).toBe('true')
+    expect(tabOf(view, 'data-inspector-panel', 'exports').getAttribute('aria-selected')).toBe(
+      'true',
+    )
     // Select the second visible row: the inspector returns to overview.
     const options = view.container.querySelectorAll('[role="option"]')
     expect(options.length).toBeGreaterThan(1)
     fireEvent.click(options[1]!)
-    expect(
-      view.container
-        .querySelector('[data-inspector-panel="overview"]')!
-        .getAttribute('aria-selected'),
-    ).toBe('true')
+    expect(tabOf(view, 'data-inspector-panel', 'overview').getAttribute('aria-selected')).toBe(
+      'true',
+    )
     view.unmount()
   })
 

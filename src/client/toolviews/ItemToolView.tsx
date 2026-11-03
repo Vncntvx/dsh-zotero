@@ -5,7 +5,7 @@
  */
 
 import { useMemo, type ReactNode } from 'react'
-import { IconDeliverDocRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconDeliverDocRegular, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { getMetaOf, type ChildCountView, type ChildPreviewView } from '../sources/decoders.ts'
 import { PdfReadButton } from '../components/open/PdfReadButton.tsx'
@@ -148,9 +148,7 @@ export function ItemToolView(props: ItemToolViewProps) {
           {previews.map((preview) => (
             <div key={preview.key} className={css.itemCard} data-child-row>
               <div className={css.itemHeader}>
-                {preview.pageLabel !== null && (
-                  <span className={css.badge}>{preview.pageLabel}</span>
-                )}
+                {preview.pageLabel !== null && <Tag tone="neutral">{preview.pageLabel}</Tag>}
                 <span className={css.itemMeta}>{preview.preview}</span>
               </div>
               <div className={css.itemActions}>
@@ -201,13 +199,9 @@ export function ItemToolView(props: ItemToolViewProps) {
             <div className={css.itemCard}>
               <div className={css.itemHeader}>
                 {getItemView?.year !== null && getItemView?.year !== undefined && (
-                  <span className={css.badge}>{getItemView.year}</span>
+                  <Tag tone="neutral">{getItemView.year}</Tag>
                 )}
-                {getItemView?.bestAttachment && (
-                  <span className={css.badge} data-tone="pdf">
-                    {t('badgePdf')}
-                  </span>
-                )}
+                {getItemView?.bestAttachment && <Tag tone="danger">{t('badgePdf')}</Tag>}
                 <span className={css.itemTitle}>{getItemView?.title ?? ref}</span>
               </div>
 
@@ -217,12 +211,14 @@ export function ItemToolView(props: ItemToolViewProps) {
               {childCounts.length > 0 && (
                 <div className={css.evidenceBadges}>
                   {childCounts.map((entry) => (
-                    <span key={entry.key} className={css.badge} data-child-count={entry.key}>
-                      {entry.shown === null
-                        ? // No list of this kind on this card, so there is nothing
-                          // to pair the count against: state the count itself.
-                          `${entry.label} ${entry.count.returned}`
-                        : `${entry.label} ${countOfLabel(entry.count.total, entry.shown, t)}`}
+                    <span key={entry.key} data-child-count={entry.key}>
+                      <Tag tone="neutral">
+                        {entry.shown === null
+                          ? // No list of this kind on this card, so there is nothing
+                            // to pair the count against: state the count itself.
+                            `${entry.label} ${entry.count.returned}`
+                          : `${entry.label} ${countOfLabel(entry.count.total, entry.shown, t)}`}
+                      </Tag>
                     </span>
                   ))}
                 </div>

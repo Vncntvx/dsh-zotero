@@ -7,7 +7,7 @@
 
 import type { ReactNode } from 'react'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
-import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
 import { ZOTERO_REMOTE_PACKAGE } from '../../../contract.ts'
 import { DiagnosisBox } from '../DiagnosisBox.tsx'
 import { useZoteroProbe } from '../useZoteroProbe.ts'
@@ -74,7 +74,6 @@ function ZoteroPluginDetailSectionBody({
             <Button
               variant="ghost"
               size="sm"
-              className={css.refreshButton}
               disabled={state.loading}
               onClick={() => {
                 void runProbe()
@@ -84,12 +83,13 @@ function ZoteroPluginDetailSectionBody({
             </Button>
           </div>
           <div className={css.statusRow} data-state={connected ? 'connected' : 'disconnected'}>
+            <StateDot state={state.loading ? 'ongoing' : connected ? 'done' : 'error'} />
             <span>
               {state.loading
-                ? `● ${t('checking')}`
+                ? t('checking')
                 : connected
-                  ? `● ${t('statusConnectedNote')}`
-                  : `○ ${t('statusUnavailable')}`}
+                  ? t('statusConnectedNote')
+                  : t('statusUnavailable')}
             </span>
           </div>
           {version ? (

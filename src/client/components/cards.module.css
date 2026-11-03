@@ -27,16 +27,6 @@
   margin-left: auto;
 }
 
-.chevron {
-  flex: none;
-  color: var(--dsw-alias-label-caption);
-  transition: transform 120ms var(--ds-ease-in-out);
-}
-
-.chevronOpen {
-  transform: rotate(180deg);
-}
-
 /* Evidence card: one per literature item, provable facts only. */
 .card {
   display: flex;
@@ -60,18 +50,6 @@
   font: var(--dsw-font-xs-13);
   font-weight: 500;
   color: var(--dsw-alias-label-primary);
-}
-
-.badge {
-  display: inline-flex;
-  align-items: center;
-  height: 18px;
-  padding: 0 6px;
-  border-radius: var(--dsw-radius-xs);
-  font: var(--dsw-font-xxxs-11);
-  font-weight: 500;
-  color: var(--dsw-alias-label-secondary);
-  background: var(--dsw-alias-bg-layer-2);
 }
 
 /* Text-link language (mirrors the harness clickable-link spec:
@@ -130,19 +108,6 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 4px 8px;
-}
-
-.sourceTag {
-  display: inline-flex;
-  align-items: center;
-  height: 18px;
-  padding: 0 6px;
-  border-radius: var(--dsw-radius-xs);
-  font: var(--dsw-font-xxxs-11);
-  font-weight: 600;
-  letter-spacing: 0.035em;
-  color: var(--dsw-alias-label-tertiary);
-  background: var(--dsw-alias-bg-layer-2);
 }
 
 .availability {
@@ -238,34 +203,6 @@
   color: var(--dsw-alias-label-caption);
 }
 
-.exportHead {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px 8px;
-}
-
-.exportToggle {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 2px 0;
-  font-family: inherit;
-  text-align: left;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-}
-
-.exportToggle:focus-visible {
-  outline: var(--dsw-focus-ring-width, 1px) solid
-    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
-  outline-offset: 2px;
-  border-radius: var(--dsw-radius-xs);
-}
-
 .exportTitle {
   flex: none;
   font: var(--dsw-font-xs-13);
@@ -291,33 +228,17 @@
   padding: 4px 0 10px;
 }
 
-/* The expanded code surface of a document row: bordered and rounded with a
- * head bar naming the format and carrying the copy action; the verbatim
- * entry scrolls inside, never stretching the row. */
+/* The verbatim export body keeps the row bounded: a long BibTeX or RIS entry
+ * scrolls inside its own surface instead of stretching the exports page. The
+ * host code block pins its own header above the scroll (`position: sticky`),
+ * so the format label and the copy action stay reachable; `margin: 0` drops the
+ * host block's 16px vertical rhythm, which the deleted `.exportPre` never had. */
 .exportCode {
-  overflow: hidden;
-  border: 0.5px solid var(--dsw-alias-border-l2);
-  border-radius: var(--dsw-radius-sm);
-  background: var(--dsw-alias-bg-layer-2);
+  max-height: 280px;
+  margin: 0;
+  overflow: auto;
 }
 
-.exportCodeHead {
-  display: flex;
-  align-items: center;
-  min-height: 32px;
-  padding: 0 10px;
-  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
-}
-
-.exportCodeLabel {
-  flex: 1 1 auto;
-  min-width: 0;
-  font: var(--dsw-font-xxs-12);
-  color: var(--dsw-alias-label-secondary);
-}
-
-/* The BibTeX keys and the \cite convenience of a whole-text fallback row:
- * inside the body, capped so a long key never stretches the row. */
 .exportKeys {
   margin: 0;
   display: flex;
@@ -334,19 +255,6 @@
   white-space: nowrap;
   font: var(--dsw-font-markdown-code);
   color: var(--dsw-alias-label-secondary);
-}
-
-/* The verbatim export body: self-scrolling, bounded, code type. */
-.exportPre {
-  margin: 0;
-  max-height: 280px;
-  overflow: auto;
-  padding: 10px 12px;
-  font: var(--dsw-font-markdown-code-block);
-  color: var(--dsw-alias-label-secondary);
-  white-space: pre;
-  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
-  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
 
 /* The light note for entries the provider could not locate: the count and
@@ -391,24 +299,6 @@
   color: var(--dsw-alias-label-primary);
 }
 
-.surfaceRetryButton {
-  appearance: none;
-  border: 0.5px solid var(--dsw-alias-border-l3);
-  border-radius: var(--dsw-radius-sm, 8px);
-  background: var(--dsw-alias-bg-layer-2);
-  color: var(--dsw-alias-label-primary);
-  font: var(--dsw-font-xxxs-11);
-  font-weight: 500;
-  padding: 2px 8px;
-  cursor: pointer;
-}
-
-@media (hover: hover) {
-  .surfaceRetryButton:hover {
-    background: var(--dsw-alias-bg-layer-1);
-  }
-}
-
 .surfaceErrorDetail {
   margin: 0;
   font: var(--dsw-font-markdown-code-block-small);
@@ -440,10 +330,4 @@
   color: var(--dsw-alias-label-secondary);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .chevron {
-    transition: none;
-  }
 }

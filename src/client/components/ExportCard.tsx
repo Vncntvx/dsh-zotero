@@ -2,18 +2,22 @@
  * One export artifact as a disclosure row: format name in proper case
  * (BibTeX, not "bibtex"), scope facts and the settled time on the head
  * line, copy and download actions after the complete body has loaded (the
- * download names its extension), and the body preview behind the toggle,
- * a layer-2 code surface with its own padding, rounding, and scroll, so a
- * long BibTeX or RIS body never stretches the row. The BibTeX keys and the
- * \cite convenience live inside the expanded body, not in the title. The
- * timestamp is the settled result's event time (absolute time, no relative
- * "just now" that would need a timer). Only successful exports appear here.
+ * download names its extension), and the body preview behind the toggle. The
+ * body is the host code block, and `.exportCode` bounds it to 280px of
+ * self-scrolling height, so a long BibTeX or RIS body never stretches the
+ * row. The BibTeX keys and the \cite convenience live inside the expanded
+ * body, not in the title. The timestamp is the settled result's event time
+ * (absolute time, no relative "just now" that would need a timer). Only
+ * successful exports appear here.
  * @module dsh-zotero/client/components/ExportCard
  */
 
 import { useContext, useMemo, useState } from 'react'
-import clsx from 'clsx'
-import { IconChevronDownOutlineMedium } from '@deepseek-ai/dsh-client-ui-primitives'
+import {
+  CodeBlock,
+  DisclosureRow,
+  IconChevronDownOutlineRegular,
+} from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { bibTexKeysOf, citeCommandOf } from '../sources/bibtex.ts'
 import type { ExportArtifact } from '../sources/model.ts'
@@ -85,43 +89,43 @@ function ExportCardBody({
 
   return (
     <section className={css.exportRow} data-export-card>
-      <div className={css.exportHead}>
-        <button
-          type="button"
-          className={css.exportToggle}
-          aria-expanded={open}
-          onClick={() => {
-            setOpen(!open)
-          }}
-        >
-          <span className={css.exportTitle}>{formatLabelOf(artifact.format, t)}</span>
-          <span className={css.exportFacts}>{headFacts}</span>
-          <IconChevronDownOutlineMedium className={clsx(css.chevron, open && css.chevronOpen)} />
-        </button>
-        <span className={css.lineActions}>
-          {text === undefined ? (
-            <button
-              type="button"
-              className={quiet.quiet}
-              disabled={state.loading || !sessionId}
-              onClick={() => {
-                void load()
-              }}
-            >
-              {t('readCompleteResult')}
-            </button>
-          ) : (
-            <>
-              <CopyButton value={text} label={t('copyExport')} copiedLabel={t('copied')} />
-              <button type="button" className={quiet.quiet} onClick={download}>
-                {`${t('downloadArtifact')} ${extensionOf(artifact.format)}`}
+      <DisclosureRow
+        icon={<IconChevronDownOutlineRegular />}
+        previewChevron={false}
+        title={formatLabelOf(artifact.format, t)}
+        titleClassName={css.exportTitle}
+        open={open}
+        expandable
+        expandOnRowClick
+        keepContentWhenOpen
+        onToggle={() => {
+          setOpen(!open)
+        }}
+        collapsedContent={<span className={css.exportFacts}>{headFacts}</span>}
+        headerAccessory={
+          <span className={css.lineActions}>
+            {text === undefined ? (
+              <button
+                type="button"
+                className={quiet.quiet}
+                disabled={state.loading || !sessionId}
+                onClick={() => {
+                  void load()
+                }}
+              >
+                {t('readCompleteResult')}
               </button>
-            </>
-          )}
-        </span>
-      </div>
-      {state.error && <p role="alert">{state.error}</p>}
-      {open && (
+            ) : (
+              <>
+                <CopyButton value={text} label={t('copyExport')} copiedLabel={t('copied')} />
+                <button type="button" className={quiet.quiet} onClick={download}>
+                  {`${t('downloadArtifact')} ${extensionOf(artifact.format)}`}
+                </button>
+              </>
+            )}
+          </span>
+        }
+      >
         <div className={css.exportBody}>
           {citeCommand !== '' && (
             <p className={css.exportKeys} title={citeCommand}>
@@ -132,9 +136,17 @@ function ExportCardBody({
           {text !== undefined && text.length > RESULT_PREVIEW_CHARS && (
             <p>{t('exportDisplayPreview')}</p>
           )}
-          <pre className={css.exportPre}>{text?.slice(0, RESULT_PREVIEW_CHARS)}</pre>
+          <CodeBlock
+            code={text?.slice(0, RESULT_PREVIEW_CHARS) ?? ''}
+            lang={artifact.format}
+            copyLabel={t('copyExport')}
+            copiedLabel={t('copied')}
+            showHeader={false}
+            className={css.exportCode}
+          />
         </div>
-      )}
+      </DisclosureRow>
+      {state.error && <p role="alert">{state.error}</p>}
     </section>
   )
 }

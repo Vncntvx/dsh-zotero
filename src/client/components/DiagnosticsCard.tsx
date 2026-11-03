@@ -203,7 +203,6 @@ function DiagnosticsCardBody({ t, probe, diagnostics }: DiagnosticsCardBodyProps
               <div key={entry.seq} className={css.diagRow}>
                 <span className={css.diagTime}>{timeOf(entry.ts)}</span>
                 <StateDot
-                  size={6}
                   state={
                     entry.level === 'error' ? 'error' : entry.level === 'warn' ? 'warning' : 'done'
                   }

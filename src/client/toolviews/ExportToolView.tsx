@@ -5,12 +5,11 @@
  */
 
 import { useMemo } from 'react'
-import { IconCopyOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { CodeBlock, IconCopyOutlineRegular, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { exportMetaOf } from '../sources/export-decoder.ts'
 import { jobArmOf, jobSummaryKeyOf } from '../sources/sync-decoder.ts'
 import { ZoteroLocateActions } from '../components/open/ZoteroLocateActions.tsx'
-import { CopyButton } from '../components/CopyButton.tsx'
 import { extensionOf, fileNameForFormat, formatLabelOf, mimeOf } from '../export-formats.ts'
 import { downloadBlob } from '../download.ts'
 import {
@@ -22,7 +21,7 @@ import {
   resultTextOf,
   textArg,
 } from '../presenters.ts'
-import { RawTextFallback, RunningNotice, ZoteroToolRow } from './ZoteroToolRow.tsx'
+import { RunningNotice, ZoteroToolRow } from './ZoteroToolRow.tsx'
 import css from './toolviews.module.css'
 import quiet from '../components/quiet.module.css'
 
@@ -122,22 +121,14 @@ export function ExportToolView(props: ExportToolViewProps) {
               <div className={css.codeWrap}>
                 <div className={css.codeHeader}>
                   <div className={css.evidenceBadges}>
-                    <span className={css.badge} data-tone="info">
-                      {formatLabel}
-                    </span>
+                    <Tag tone="info">{formatLabel}</Tag>
                     {refsCount > 0 && (
-                      <span className={css.badge}>{t('exportRefCount', { count: refsCount })}</span>
+                      <Tag tone="neutral">{t('exportRefCount', { count: refsCount })}</Tag>
                     )}
-                    {style !== null && <span className={css.badge}>{style}</span>}
-                    {locale !== null && <span className={css.badge}>{locale}</span>}
+                    {style !== null && <Tag tone="neutral">{style}</Tag>}
+                    {locale !== null && <Tag tone="neutral">{locale}</Tag>}
                   </div>
                   <div className={css.itemActions}>
-                    <CopyButton
-                      value={rawText}
-                      label={t('copy')}
-                      copiedLabel={t('copied')}
-                      className={quiet.quietDense}
-                    />
                     <button
                       type="button"
                       className={quiet.quietDense}
@@ -152,7 +143,12 @@ export function ExportToolView(props: ExportToolViewProps) {
                     </button>
                   </div>
                 </div>
-                <RawTextFallback text={rawText} />
+                <CodeBlock
+                  code={rawText}
+                  lang={format}
+                  copyLabel={t('copy')}
+                  copiedLabel={t('copied')}
+                />
               </div>
             ) : (
               <div className={css.coverageNotice}>{t('toolNoResults')}</div>

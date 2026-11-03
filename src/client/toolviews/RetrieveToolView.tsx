@@ -5,7 +5,7 @@
  */
 
 import { useMemo } from 'react'
-import { IconBrowseOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconBrowseOutlineRegular, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { retrieveMetaOf } from '../sources/decoders.ts'
 import { PdfReadButton } from '../components/open/PdfReadButton.tsx'
@@ -102,20 +102,17 @@ export function RetrieveToolView(props: RetrieveToolViewProps) {
                   <div key={`${item.sourceRef}-${index}`} className={css.evidenceItem}>
                     <div className={css.evidenceHeader}>
                       <div className={css.evidenceBadges}>
-                        <span
-                          className={css.badge}
-                          data-tone={item.source === 'fulltext' ? 'pdf' : 'info'}
-                        >
+                        <Tag tone={item.source === 'fulltext' ? 'danger' : 'info'}>
                           {t(sourceLabelKeyOf(item.source))}
-                        </span>
-                        {item.pageLabel && <span className={css.badge}>{item.pageLabel}</span>}
+                        </Tag>
+                        {item.pageLabel && <Tag tone="neutral">{item.pageLabel}</Tag>}
                         {/* A match found only in the annotator's own comment is
                             the annotator's view, not the paper's text; the
                             badge says which field carried the query. */}
                         {item.matchedFields?.map((field) => (
-                          <span key={field} className={css.badge} data-tone="warning">
+                          <Tag key={field} tone="warning">
                             {t(field === 'comment' ? 'matchedInComment' : 'matchedInText')}
-                          </span>
+                          </Tag>
                         ))}
                       </div>
                       <div className={css.itemActions}>

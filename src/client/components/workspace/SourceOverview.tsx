@@ -125,7 +125,6 @@ export function SourceOverview({
           <Button
             variant="outline"
             size="sm"
-            className={quiet.quiet}
             onClick={() => {
               setDraft(askDraftOf(item.ref, t))
             }}
@@ -137,7 +136,6 @@ export function SourceOverview({
           <Button
             variant="outline"
             size="sm"
-            className={quiet.quiet}
             onClick={() => {
               setDraft(exportDraftOf(item.ref, t))
             }}
