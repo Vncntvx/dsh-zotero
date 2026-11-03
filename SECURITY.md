@@ -13,8 +13,8 @@ version before reporting an issue that may already be fixed.
 ## Reporting a Vulnerability
 
 Report suspected vulnerabilities privately by emailing
-[wenjie.xu.cn@outlook.com](mailto:wenjie.xu.cn@outlook.com). Please do not open
-a public issue for anything security-sensitive.
+[wenjie.xu.cn@outlook.com](mailto:wenjie.xu.cn@outlook.com); security-sensitive
+matters are handled by private email rather than public issues.
 
 Include the affected version, reproduction steps, and impact. You can expect an
 acknowledgement within 14 days; fixes for confirmed issues are released through
@@ -41,6 +41,14 @@ These properties are intentional; regressions are treated as security bugs. The
   component, behind an SSRF-guarded transport.
 - **Rejection messages leak nothing**: tool errors name hostnames at most; full
   URLs, which can carry credentials or DOIs, are never echoed back.
+- **Session-log maintenance goes through the persistence seam**: the repair
+  rewrites stored session files only through
+  `ctx.sessionPersistence.openArtifactMaintenance`, which holds the session's
+  write exclusion, keeps a byte-exact 0600 backup, and re-validates the whole
+  log against the storage contract before publishing. The plugin opens no file
+  itself. Only the retired type `zotero/status` may be marked; a request cannot
+  name other types, and the panel confirms the action before it runs. Cache and
+  credential stores are outside this capability.
 
 ## Supply Chain
 

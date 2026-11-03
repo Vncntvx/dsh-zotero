@@ -27,6 +27,31 @@
 import type { InvocationDescriptor } from '@deepseek-ai/dsh-typert-protocol'
 import type { ZoteroExportFormat, ZoteroSortField } from './types.js'
 import { ZOTERO_SETTINGS_NAMESPACE } from './settings-namespace.js'
+import type {
+  ZoteroRemediationCapability,
+  ZoteroRemediationCategory,
+  ZoteroRemediationIssue,
+  ZoteroRemediationItemResult,
+  ZoteroRemediationOutcome,
+  ZoteroRemediationReason,
+  ZoteroRemediationReport,
+  ZoteroRemediationRequest,
+  ZoteroRemediationResult,
+  ZoteroRemediationSeverity,
+} from './remediation/contract.js'
+
+export type {
+  ZoteroRemediationCapability,
+  ZoteroRemediationCategory,
+  ZoteroRemediationIssue,
+  ZoteroRemediationItemResult,
+  ZoteroRemediationOutcome,
+  ZoteroRemediationReason,
+  ZoteroRemediationReport,
+  ZoteroRemediationRequest,
+  ZoteroRemediationResult,
+  ZoteroRemediationSeverity,
+}
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface RemoteErrorDetailsMap {
@@ -147,8 +172,8 @@ export const ZOTERO_REMOTE_PACKAGE = 'dsh-zotero'
 
 /**
  * Success sentinel the host status probe writes into its total `diagnosis`
- * field (`src/local/provider.ts`). The wire view strips it — a connected probe
- * has nothing to diagnose — so this constant is the single spelling both the
+ * field (`src/local/provider.ts`). The wire view strips it: a connected probe
+ * has nothing to diagnose: so this constant is the single spelling both the
  * writer and the stripper compare against.
  */
 export const ZOTERO_DIAGNOSIS_OK = 'ok'
@@ -177,6 +202,15 @@ export const ZOTERO_OPEN_PROTOCOL_PARAM_TYPE_SYMBOL = 'dsh-zotero#ProtocolUrl'
 /** Strict codec type symbol for {@link ZoteroOpenProtocolResultView}. */
 export const ZOTERO_OPEN_PROTOCOL_RESULT_TYPE_SYMBOL = 'dsh-zotero#ZoteroOpenProtocolResultView'
 
+/** Strict codec type symbol for {@link ZoteroRemediationReport}. */
+export const ZOTERO_REMEDIATION_REPORT_TYPE_SYMBOL = 'dsh-zotero#ZoteroRemediationReport'
+
+/** Strict codec type symbol for {@link ZoteroRemediationRequest}. */
+export const ZOTERO_REMEDIATION_REQUEST_TYPE_SYMBOL = 'dsh-zotero#ZoteroRemediationRequest'
+
+/** Strict codec type symbol for {@link ZoteroRemediationResult}. */
+export const ZOTERO_REMEDIATION_RESULT_TYPE_SYMBOL = 'dsh-zotero#ZoteroRemediationResult'
+
 /** Globally stable invocation id for the status probe. */
 export const ZOTERO_STATUS_INVOCATION_ID = 'dsh-zotero#zotero/status'
 
@@ -191,6 +225,12 @@ const ZOTERO_REPORT_CLIENT_ERROR_INVOCATION_ID = 'dsh-zotero#zotero/reportClient
 
 /** Globally stable invocation id for openProtocol. */
 const ZOTERO_OPEN_PROTOCOL_INVOCATION_ID = 'dsh-zotero#zotero/openProtocol'
+
+/** Globally stable invocation id for remediationInspect. */
+export const ZOTERO_REMEDIATION_INSPECT_INVOCATION_ID = 'dsh-zotero#zotero/remediationInspect'
+
+/** Globally stable invocation id for remediationExecute. */
+export const ZOTERO_REMEDIATION_EXECUTE_INVOCATION_ID = 'dsh-zotero#zotero/remediationExecute'
 
 /**
  * Cordis service key that owns the status method on the host half.
@@ -213,6 +253,12 @@ export const ZOTERO_REPORT_CLIENT_ERROR_METHOD = 'reportClientError'
 
 /** Wire method name for openProtocol. */
 export const ZOTERO_OPEN_PROTOCOL_METHOD = 'openProtocol'
+
+/** Wire method name for remediationInspect. */
+export const ZOTERO_REMEDIATION_INSPECT_METHOD = 'remediationInspect'
+
+/** Wire method name for remediationExecute. */
+export const ZOTERO_REMEDIATION_EXECUTE_METHOD = 'remediationExecute'
 
 /** Invocation kind for direct service calls (no Context receiver). */
 export const ZOTERO_STATUS_INVOCATION_KIND = 'direct'
@@ -341,6 +387,55 @@ export function zoteroOpenProtocolInvocation(
       {
         name: 'url',
         wire: 'url',
+        source: 'json',
+        codec: param,
+      },
+    ],
+    result,
+  }
+}
+
+/**
+ * Build one remediationInspect invocation descriptor around a result codec.
+ * @param result - the strict result codec for {@link ZoteroRemediationReport}.
+ * @returns a complete invocation descriptor.
+ */
+export function zoteroRemediationInspectInvocation(
+  result: InvocationDescriptor['result'],
+): InvocationDescriptor {
+  return {
+    id: ZOTERO_REMEDIATION_INSPECT_INVOCATION_ID,
+    service: ZOTERO_STATUS_SERVICE_KEY,
+    namespace: ZOTERO_SETTINGS_NAMESPACE,
+    method: ZOTERO_REMEDIATION_INSPECT_METHOD,
+    invocation: { kind: ZOTERO_STATUS_INVOCATION_KIND },
+    cancellation: { parameter: 'signal' },
+    parameters: [],
+    result,
+  }
+}
+
+/**
+ * Build one remediationExecute invocation descriptor around parameter and result codecs.
+ * @param param - the strict parameter codec for {@link ZoteroRemediationRequest}.
+ * @param result - the strict result codec for {@link ZoteroRemediationResult}.
+ * @returns a complete invocation descriptor.
+ */
+export function zoteroRemediationExecuteInvocation(
+  param: InvocationDescriptor['parameters'][number]['codec'],
+  result: InvocationDescriptor['result'],
+): InvocationDescriptor {
+  return {
+    id: ZOTERO_REMEDIATION_EXECUTE_INVOCATION_ID,
+    service: ZOTERO_STATUS_SERVICE_KEY,
+    namespace: ZOTERO_SETTINGS_NAMESPACE,
+    method: ZOTERO_REMEDIATION_EXECUTE_METHOD,
+    invocation: { kind: ZOTERO_STATUS_INVOCATION_KIND },
+    cancellation: { parameter: 'signal' },
+    parameters: [
+      {
+        name: 'request',
+        wire: 'request',
         source: 'json',
         codec: param,
       },
@@ -716,8 +811,8 @@ export const ZOTERO_LIBRARY_SERVICE_KEY = 'zoteroLibrary'
 
 /**
  * Panel writes use the same closed arguments and execution pipeline as the
- * tools. The type is hand-written here — this module stays free of value
- * imports from the zod layer — and the wire schema in `wire-schemas.ts` is
+ * tools. The type is hand-written here: this module stays free of value
+ * imports from the zod layer: and the wire schema in `wire-schemas.ts` is
  * pinned back to it with `satisfies z.ZodType<…>`, so the two cannot drift in
  * either direction.
  */

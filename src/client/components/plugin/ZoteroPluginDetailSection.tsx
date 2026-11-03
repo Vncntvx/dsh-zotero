@@ -1,29 +1,30 @@
 /**
  * Custom section rendered at the bottom of the plugin manager detail page
- * (plugins.detail.section slot). Shows readiness status and quick usage tips.
+ * (plugins.detail.section slot). Shows readiness status and the session-log
+ * data maintenance section.
  * @module dsh-zotero/client/components/plugin/ZoteroPluginDetailSection
  */
 
 import type { ReactNode } from 'react'
-import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
-import type { PropsLocale, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { ZoteroStatusView } from '../../remote.ts'
 import { ZOTERO_REMOTE_PACKAGE } from '../../../contract.ts'
 import { DiagnosisBox } from '../DiagnosisBox.tsx'
 import { useZoteroProbe } from '../useZoteroProbe.ts'
 import type { PluginDetailProps } from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import { ZoteroSurfaceBoundary } from '../ZoteroSurfaceBoundary.tsx'
+import { ZoteroRemediationSection } from './ZoteroRemediationSection.tsx'
+import type { ZoteroDetailFace } from './faces.ts'
 import css from './plugin-cards.module.css'
 
-interface ZoteroPluginDetailSectionProps extends PluginDetailProps, PropsLocale<'zotero'> {
-  readonly probe: () => Promise<RemoteResult<ZoteroStatusView>>
-}
+export interface ZoteroPluginDetailSectionProps
+  extends PluginDetailProps, PropsLocale<'zotero'>, ZoteroDetailFace {}
 
-interface DetailSectionBodyProps {
-  readonly t: TranslateNS<'zotero'>
-  readonly probe: () => Promise<RemoteResult<ZoteroStatusView>>
-}
+type DetailSectionBodyProps = Pick<
+  ZoteroPluginDetailSectionProps,
+  'probe' | 'inspect' | 'execute'
+> &
+  PropsLocale<'zotero'>
 
 /**
  * Slot entry: subject guard only, so the body's hook count never varies with
@@ -33,6 +34,8 @@ export function ZoteroPluginDetailSection({
   subject,
   t,
   probe,
+  inspect,
+  execute,
 }: ZoteroPluginDetailSectionProps): ReactNode {
   const pkgName = subject.kind === 'bundle' || subject.kind === 'row' ? subject.pkg.name : undefined
   if (pkgName !== ZOTERO_REMOTE_PACKAGE) {
@@ -40,12 +43,17 @@ export function ZoteroPluginDetailSection({
   }
   return (
     <ZoteroSurfaceBoundary t={t} surface="detail" resetKey={pkgName}>
-      <ZoteroPluginDetailSectionBody t={t} probe={probe} />
+      <ZoteroPluginDetailSectionBody t={t} probe={probe} inspect={inspect} execute={execute} />
     </ZoteroSurfaceBoundary>
   )
 }
 
-function ZoteroPluginDetailSectionBody({ t, probe }: DetailSectionBodyProps): ReactNode {
+function ZoteroPluginDetailSectionBody({
+  t,
+  probe,
+  inspect,
+  execute,
+}: DetailSectionBodyProps): ReactNode {
   const { state, runProbe } = useZoteroProbe(probe, {
     initialAutoRun: true,
   })
@@ -53,8 +61,6 @@ function ZoteroPluginDetailSectionBody({ t, probe }: DetailSectionBodyProps): Re
   const connected = state.data?.connected ?? false
   const version = state.data?.zoteroVersion
   const diagnosis = state.error ?? state.data?.diagnosis
-
-  const tips = ['tipWebTab', 'tipSettingsNav', 'tipWriteGate'] as const
 
   return (
     <section className={css.section} data-zotero-plugin-section>
@@ -94,19 +100,7 @@ function ZoteroPluginDetailSectionBody({ t, probe }: DetailSectionBodyProps): Re
           {diagnosis ? <DiagnosisBox diagnosis={diagnosis} t={t} /> : null}
         </div>
 
-        <div className={css.card}>
-          <div className={css.cardHead}>
-            <span className={css.cardTitle}>{t('tipsLabel')}</span>
-          </div>
-          <ul className={css.tipList}>
-            {tips.map((key) => (
-              <li key={key} className={css.tipItem}>
-                <span className={css.tipBullet}>💡</span>
-                <span>{t(key)}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <ZoteroRemediationSection t={t} inspect={inspect} execute={execute} />
       </div>
     </section>
   )

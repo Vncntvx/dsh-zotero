@@ -24,6 +24,11 @@ import type {
   ZoteroLibraryExportResultView,
   ZoteroLibrarySortField,
   ZoteroLibraryWriteRequestView,
+  ZoteroRemediationIssue,
+  ZoteroRemediationItemResult,
+  ZoteroRemediationReport,
+  ZoteroRemediationRequest,
+  ZoteroRemediationResult,
 } from './contract.js'
 import type { ZoteroItemizedExportFormat } from './types.js'
 import {
@@ -517,7 +522,7 @@ export const zoteroLibraryItemizedExportFormatSchema = z.enum(
 
 /**
  * Wire schema: library export request. The refs bound is Zotero's own
- * `itemKey` per-request cap — the configured `maxExportRefs` gate runs in the
+ * `itemKey` per-request cap: the configured `maxExportRefs` gate runs in the
  * host service, where the live config is read.
  */
 export const zoteroLibraryExportRequestSchema = z
@@ -706,3 +711,68 @@ export const zoteroCollectionPathResultSchema = z
   })
   .strict()
   .readonly()
+
+export const zoteroRemediationReasonSchema = z.enum([
+  'unknown-event-vocabulary',
+  'format-version-unsupported',
+  'artifact-corrupt',
+  'open-failed',
+])
+
+export const zoteroRemediationOutcomeSchema = z.enum([
+  'repaired',
+  'unchanged',
+  'refused',
+  'busy',
+  'unsupported',
+  'failed',
+])
+
+export const zoteroRemediationIssueSchema = z
+  .object({
+    id: z.string(),
+    category: z.enum(['session-log']),
+    severity: z.enum(['critical', 'warning']),
+    reason: zoteroRemediationReasonSchema,
+    sessionId: z.string(),
+    eventTypes: z.array(z.string()).readonly(),
+  })
+  .strict()
+  .readonly() satisfies z.ZodType<ZoteroRemediationIssue>
+
+export const zoteroRemediationReportSchema = z
+  .object({
+    capability: z.enum(['available', 'unavailable']),
+    scannedSessions: z.number().int().nonnegative(),
+    issues: z.array(zoteroRemediationIssueSchema).readonly(),
+    timestamp: z.number(),
+  })
+  .strict()
+  .readonly() satisfies z.ZodType<ZoteroRemediationReport>
+
+export const zoteroRemediationRequestSchema = z
+  .object({
+    issueIds: z.array(z.string()).min(1).readonly(),
+  })
+  .strict()
+  .readonly() satisfies z.ZodType<ZoteroRemediationRequest>
+
+export const zoteroRemediationItemResultSchema = z
+  .object({
+    issueId: z.string(),
+    outcome: zoteroRemediationOutcomeSchema,
+    changedRecords: z.number().int().nonnegative().optional(),
+    totalRecords: z.number().int().nonnegative().optional(),
+    droppedTailBytes: z.number().int().nonnegative().optional(),
+    backupPath: z.string().optional(),
+  })
+  .strict()
+  .readonly() satisfies z.ZodType<ZoteroRemediationItemResult>
+
+export const zoteroRemediationResultSchema = z
+  .object({
+    items: z.array(zoteroRemediationItemResultSchema).readonly(),
+    timestamp: z.number(),
+  })
+  .strict()
+  .readonly() satisfies z.ZodType<ZoteroRemediationResult>

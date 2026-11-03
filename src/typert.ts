@@ -40,6 +40,8 @@ import {
   ZOTERO_LIBRARY_SERVICE_KEY,
   ZOTERO_LIBRARY_WRITE_METHOD,
   ZOTERO_OPEN_PROTOCOL_METHOD,
+  ZOTERO_REMEDIATION_EXECUTE_METHOD,
+  ZOTERO_REMEDIATION_INSPECT_METHOD,
   ZOTERO_REMOTE_PACKAGE,
   ZOTERO_REPORT_CLIENT_ERROR_METHOD,
   ZOTERO_RESOLVE_ATTACHMENT_METHOD,
@@ -88,6 +90,17 @@ export const TYPERT_MANIFEST: TypertContribution = {
             name: ZOTERO_OPEN_PROTOCOL_METHOD,
             signature:
               'openProtocol(url: string, signal: AbortSignal): Promise<ZoteroOpenProtocolResultView>',
+          },
+          {
+            kind: 'method',
+            name: ZOTERO_REMEDIATION_INSPECT_METHOD,
+            signature: 'remediationInspect(signal: AbortSignal): Promise<ZoteroRemediationReport>',
+          },
+          {
+            kind: 'method',
+            name: ZOTERO_REMEDIATION_EXECUTE_METHOD,
+            signature:
+              'remediationExecute(request: ZoteroRemediationRequest, signal: AbortSignal): Promise<ZoteroRemediationResult>',
           },
         ],
         types: [],

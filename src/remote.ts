@@ -37,6 +37,9 @@ import {
   type ZoteroClientErrorReport,
   type ZoteroDiagnosticsView,
   type ZoteroOpenProtocolResultView,
+  type ZoteroRemediationReport,
+  type ZoteroRemediationRequest,
+  type ZoteroRemediationResult,
   type ZoteroReportResultView,
   type ZoteroStatusView,
 } from './contract.js'
@@ -260,6 +263,25 @@ export class ZoteroRuntime extends TypertRemoteService {
   async openProtocol(url: string, signal: AbortSignal): Promise<ZoteroOpenProtocolResultView> {
     signal.throwIfAborted()
     return executeOpenProtocol(url, process.platform, defaultLauncher, signal)
+  }
+
+  /**
+   * Run a remediation inspection across sessions and plugin data.
+   */
+  async remediationInspect(signal: AbortSignal): Promise<ZoteroRemediationReport> {
+    const service = requireZoteroService(this.ctx, signal)
+    return await domainCall(() => service.remediation.inspect(signal))
+  }
+
+  /**
+   * Execute remediation on the specified (or all) detected issues.
+   */
+  async remediationExecute(
+    request: ZoteroRemediationRequest,
+    signal: AbortSignal,
+  ): Promise<ZoteroRemediationResult> {
+    const service = requireZoteroService(this.ctx, signal)
+    return await domainCall(() => service.remediation.execute(request, signal))
   }
 
   /** The live `debug` flag, so the snapshot names the verbosity it was taken at. */

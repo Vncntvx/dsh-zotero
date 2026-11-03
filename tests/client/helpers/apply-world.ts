@@ -215,6 +215,13 @@ export function fakeWorld(
           }) as unknown,
         reportClientError: async (report: { surface: string; message: string }) =>
           ({ ok: true as const, value: { seq: 1, report } }) as unknown,
+        remediationInspect: async () =>
+          ({
+            ok: true as const,
+            value: { capability: 'available', scannedSessions: 0, issues: [], timestamp: 0 },
+          }) as unknown,
+        remediationExecute: async () =>
+          ({ ok: true as const, value: { items: [], timestamp: 0 } }) as unknown,
       },
     },
     /**

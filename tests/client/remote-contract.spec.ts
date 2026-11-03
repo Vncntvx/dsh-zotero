@@ -3,8 +3,8 @@
  * (`contract.ts`) plus the host and client codec arms. Both arms materialize
  * the same strict schemas from the shared `wire-schemas.ts`, so a schema edit
  * serves both halves; the parity cases below still read each arm's own
- * wrappers, so a wrapper wired to the wrong schema — or a schema dropped from
- * one arm's import — fails here instead of on the wire.
+ * wrappers, so a wrapper wired to the wrong schema: or a schema dropped from
+ * one arm's import: fails here instead of on the wire.
  * @module tests/client/remote-contract
  */
 
@@ -15,6 +15,9 @@ import {
   ZOTERO_CLIENT_ERROR_REPORT_TYPE_SYMBOL,
   ZOTERO_DIAGNOSTICS_TYPE_SYMBOL,
   ZOTERO_REF_PARAM_TYPE_SYMBOL,
+  ZOTERO_REMEDIATION_REPORT_TYPE_SYMBOL,
+  ZOTERO_REMEDIATION_REQUEST_TYPE_SYMBOL,
+  ZOTERO_REMEDIATION_RESULT_TYPE_SYMBOL,
   ZOTERO_REMOTE_PACKAGE,
   ZOTERO_REPORT_RESULT_TYPE_SYMBOL,
   ZOTERO_RESOLVE_ATTACHMENT_TYPE_SYMBOL,
@@ -262,6 +265,122 @@ const PARITY_CASES: readonly ParityCase[] = [
     malformed: [{ seq: '1' }],
     undeclared: [{ seq: 1, extra: 1 }],
     badEnum: [],
+  },
+  {
+    method: 'remediationInspect',
+    boundary: { kind: 'result' },
+    wire: 'remediationInspect result',
+    typeSymbol: ZOTERO_REMEDIATION_REPORT_TYPE_SYMBOL,
+    valid: {
+      capability: 'available',
+      scannedSessions: 1,
+      issues: [
+        {
+          id: 'session-log:test-1',
+          category: 'session-log',
+          severity: 'critical',
+          reason: 'unknown-event-vocabulary',
+          sessionId: 'test-1',
+          eventTypes: ['zotero/status'],
+        },
+      ],
+      timestamp: 1000,
+    },
+    incomplete: [
+      { issues: [], timestamp: 1000 },
+      { capability: 'available', timestamp: 1000 },
+      { capability: 'available', scannedSessions: 1, issues: [] },
+    ],
+    malformed: [
+      { capability: 'available', scannedSessions: '1', issues: [], timestamp: 1000 },
+      { capability: 'available', scannedSessions: 1, issues: 'bad', timestamp: 1000 },
+      {
+        capability: 'available',
+        scannedSessions: 1,
+        issues: [{ id: 'session-log:test-1' }],
+        timestamp: 1000,
+      },
+    ],
+    undeclared: [
+      { capability: 'available', scannedSessions: 1, issues: [], timestamp: 1000, extra: 1 },
+    ],
+    badEnum: [
+      {
+        capability: 'maybe',
+        scannedSessions: 1,
+        issues: [],
+        timestamp: 1000,
+      },
+      {
+        capability: 'available',
+        scannedSessions: 1,
+        issues: [
+          {
+            id: 'session-log:test-1',
+            category: 'cache',
+            severity: 'critical',
+            reason: 'unknown-event-vocabulary',
+            sessionId: 'test-1',
+            eventTypes: [],
+          },
+        ],
+        timestamp: 1000,
+      },
+      {
+        capability: 'available',
+        scannedSessions: 1,
+        issues: [
+          {
+            id: 'session-log:test-1',
+            category: 'session-log',
+            severity: 'critical',
+            reason: 'made-up-reason',
+            sessionId: 'test-1',
+            eventTypes: [],
+          },
+        ],
+        timestamp: 1000,
+      },
+    ],
+  },
+  {
+    method: 'remediationExecute',
+    boundary: { kind: 'param', index: 0 },
+    wire: 'remediationExecute request parameter',
+    typeSymbol: ZOTERO_REMEDIATION_REQUEST_TYPE_SYMBOL,
+    valid: { issueIds: ['session-log:test-1'] },
+    // An omitted list would mean "repair everything"; the contract forbids it.
+    incomplete: [{}, { issueIds: undefined }],
+    malformed: [{ issueIds: [123] }, { issueIds: 'all' }, { issueIds: [] }],
+    undeclared: [{ issueIds: ['session-log:test-1'], extra: 1 }],
+    badEnum: [],
+  },
+  {
+    method: 'remediationExecute',
+    boundary: { kind: 'result' },
+    wire: 'remediationExecute result',
+    typeSymbol: ZOTERO_REMEDIATION_RESULT_TYPE_SYMBOL,
+    valid: {
+      items: [
+        {
+          issueId: 'session-log:test-1',
+          outcome: 'repaired',
+          changedRecords: 1,
+          totalRecords: 3,
+          droppedTailBytes: 0,
+          backupPath: '/store/test-1/session.jsonl.zstd.keep',
+        },
+      ],
+      timestamp: 1000,
+    },
+    incomplete: [{ timestamp: 1000 }, { items: [] }],
+    malformed: [
+      { items: [{ issueId: 'session-log:test-1' }], timestamp: 1000 },
+      { items: [42], timestamp: 1000 },
+      { items: [{ issueId: 'session-log:test-1', outcome: 'repaired', changedRecords: -1 }] },
+    ],
+    undeclared: [{ items: [], timestamp: 1000, extra: 1 }],
+    badEnum: [{ items: [{ issueId: 'session-log:test-1', outcome: 'success' }], timestamp: 1000 }],
   },
 ]
 

@@ -1,30 +1,31 @@
 # AGENTS.md
 
-dsh-zotero is a DeepSeek Harness plugin: agents search, read, cite, and (when enabled and approved) write a local Zotero library through the loopback Local API (`127.0.0.1:23119/api`). It ships three Cordis bundle components — core, `dsh-zotero/library` (enabled), `dsh-zotero/scholarly` (disabled). Read `docs/product-model.md` before naming a component, surface, or scope.
+dsh-zotero is a DeepSeek Harness plugin: agents search, read, cite, and (when enabled and approved) write a local Zotero library through the loopback Local API (`127.0.0.1:23119/api`). It ships three Cordis bundle components: core, `dsh-zotero/library` (enabled), `dsh-zotero/scholarly` (disabled). Read `docs/product-model.md` before naming a component, surface, or scope.
 
 ## Repository map
 
-| Path             | Ownership                                                                                        |
-| ---------------- | ------------------------------------------------------------------------------------------------ |
-| `src/`           | Host runtime: `ZoteroService` (`ctx.zotero`), HTTP transport, provider                           |
-| `src/local/`     | Local API domain pipelines behind the provider: search, browse, retrieve, export, changes, write |
-| `src/library/`   | `dsh-zotero/library` component: `ctx.zoteroLibrary` panel endpoints and config                   |
-| `src/scholarly/` | `dsh-zotero/scholarly` component: external search, fusion, fulltext, citations (7 tools)         |
-| `src/tools/`     | The 21 host tools: 6 read + 15 write (write tools disabled by default)                           |
-| `src/client/`    | Browser half bundled into `lib/client.js`: settings, 文献轨迹, 文献面板, tool cards              |
-| `tests/`         | Seven declared lanes by ownership and verification level; rules in `tests/README.md`             |
-| `docs/`          | Product and technical docs, maintained as zh/en pairs                                            |
-| `scripts/`       | Build, pack verification, harness pinning, test lint, smoke probes                               |
-| `lib/`           | Generated output from `tsc` and `esbuild`; never edited                                          |
+| Path               | Ownership                                                                                                         |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `src/`             | Host runtime: `ZoteroService` (`ctx.zotero`), HTTP transport, provider                                            |
+| `src/local/`       | Local API domain pipelines behind the provider: search, browse, retrieve, export, changes, write                  |
+| `src/remediation/` | Session-log maintenance: `inspect` / `execute`, only through `ctx.sessionPersistence`'s artifact-maintenance seam |
+| `src/library/`     | `dsh-zotero/library` component: `ctx.zoteroLibrary` panel endpoints and config                                    |
+| `src/scholarly/`   | `dsh-zotero/scholarly` component: external search, fusion, fulltext, citations (7 tools)                          |
+| `src/tools/`       | The 21 host tools: 6 read + 15 write (write tools disabled by default)                                            |
+| `src/client/`      | Browser half bundled into `lib/client.js`: settings, 文献轨迹, 文献面板, tool cards                               |
+| `tests/`           | Seven declared lanes by ownership and verification level; rules in `tests/README.md`                              |
+| `docs/`            | Product and technical docs, maintained as zh/en pairs                                                             |
+| `scripts/`         | Build, pack verification, harness pinning, test lint, smoke probes                                                |
+| `lib/`             | Generated output from `tsc` and `esbuild`; never edited                                                           |
 
 ## Sources of truth
 
 - Product model, vocabulary, component boundaries: `docs/product-model.md`.
-- Architecture, data flow, service layers: `docs/architecture.md` — read before changing services, jobs, the provider, or client surfaces.
-- Tool contracts, schemas, errors: `docs/tools.md` — read before changing any tool.
+- Architecture, data flow, service layers: `docs/architecture.md`: read before changing services, jobs, the provider, or client surfaces.
+- Tool contracts, schemas, errors: `docs/tools.md`: read before changing any tool.
 - Configuration schemas and defaults: `docs/configuration.md`.
 - Build, launch, debug, release: `docs/development.md`.
-- Test lanes, fixtures, verification levels, guards: [tests/README.md](tests/README.md) — required before adding, moving, or refactoring tests or helpers.
+- Test lanes, fixtures, verification levels, guards: [tests/README.md](tests/README.md): required before adding, moving, or refactoring tests or helpers.
 - Upstream harness contracts: this repo is normally developed as a sibling checkout of `../deepseek-harness`; its docs and types outrank this file.
 
 Keep `docs/x.md` and `docs/x.en.md` in lockstep. Tool-call examples in `README*.md` and the docs listed in `tests/host/doc-examples.spec.ts` are validated against the tools' parameter schemas.
@@ -50,20 +51,20 @@ Interactive launches (full plugin vs host-only HMR) and the opt-in write probe (
 
 ## Invariants
 
-- **Harness pin**: every `@deepseek-ai/dsh-*` in `dependencies`, `devDependencies`, and `overrides` is an exact version; `peerDependencies` and `engines.dsh` use `>=`. Never hand-edit versions — run `npm run harness:pin -- <ver>`, then `npm install --package-lock-only`. Vendored `cordis`, `cosmokit`, `schemastery`, and `cordis-plugin-*` floors must match the sibling's `vendor/<pkg>/package.json`. The browser bundle's third-party runtime dependencies mirror the sibling's `packages/client/*` declarations and move with the harness, never on their own; `npm run deps:check` excludes them.
+- **Harness pin**: every `@deepseek-ai/dsh-*` in `dependencies`, `devDependencies`, and `overrides` is an exact version; `peerDependencies` and `engines.dsh` use `>=`. Never hand-edit versions: run `npm run harness:pin -- <ver>`, then `npm install --package-lock-only`. Vendored `cordis`, `cosmokit`, `schemastery`, and `cordis-plugin-*` floors must match the sibling's `vendor/<pkg>/package.json`. The browser bundle's third-party runtime dependencies mirror the sibling's `packages/client/*` declarations and move with the harness, never on their own; `npm run deps:check` excludes them.
 - **Component authorization**: mounting `dsh-zotero/scholarly` is the only authorization for external requests, its 7 tools, and its prompt section. The core is request-driven: no external calls, background pollers, or load-time network I/O.
-- **Write seam**: every write targets the personal library (`zotero://user/0/`) and passes through `ctx.zotero`: capability gate → `ctx.approval.request` → plan-review card. No bypass; a stale `writeConfirm: false` cannot opt out. Writes never retry — `committed-unverified` is reconciled, not retried. Shell commands that write to the Local API are intercepted by `src/shell-write-detector.ts`.
-- **Client graph**: browser code may value-import only `src/client/**` and the pure modules allowlisted in `scripts/client-graph-authority.mjs`; never `@deepseek-ai/schemastery`, `src/config.ts`, `src/status-codec.ts`, or `src/typert.ts`. Keep `zod` external — the build refuses an inlined copy. `src/client/index.ts` must `await ctx.remote.$mount` before injecting on `remote.zotero`.
+- **Write seam**: every write targets the personal library (`zotero://user/0/`) and passes through `ctx.zotero`: capability gate → `ctx.approval.request` → plan-review card. No bypass; a stale `writeConfirm: false` cannot opt out. Writes never retry: `committed-unverified` is reconciled, not retried. Shell commands that write to the Local API are intercepted by `src/shell-write-detector.ts`.
+- **Client graph**: browser code may value-import only `src/client/**` and the pure modules allowlisted in `scripts/client-graph-authority.mjs`; never `@deepseek-ai/schemastery`, `src/config.ts`, `src/status-codec.ts`, or `src/typert.ts`. Keep `zod` external: the build refuses an inlined copy. `src/client/index.ts` must `await ctx.remote.$mount` before injecting on `remote.zotero`.
 - **Zotero wire**: `src/search-text.ts` must keep mirroring Zotero's `normalizeForSearch`. A bare `/items/{key}/children` never returns annotations; request `?itemType=annotation`. Server-paged listings require a valid `Total-Results` header, and collection and saved-search pages additionally require a valid `Last-Modified-Version`.
 - **文献轨迹**: a read-only ledger projected from `ChatSnapshot`; it records read calls and exports, never writes or external results.
 - **文献面板**: reaches the library only through `ctx.zoteroLibrary` / `ctx.remote.zotero` (`browse`, `collectionPath`, `search`, `item`, `childPage`, `export`, `write`). The web UI never dispatches model tools; `export` is read-only and shares the core export domain.
-- **Client styling**: feature CSS consumes the host design system and defines none of it — no `--dsw-*` declaration, no literal colour outside a `mask-image`, no literal size outside the 16px `@media (pointer: coarse)` focus-zoom guard, and the reader's `--dsh-content-font-*` axis on every body-text surface. State borders are 1px, every full-round radius pairs `corner-shape: round`, every transition is reduced under `prefers-reduced-motion: reduce`, and quiet controls take their geometry from `src/client/components/quiet.module.css`. `npm run style:check` (spec: `tests/unit/style-guard.spec.ts`) enforces it against the token snapshot in `tests/fixtures/style-tokens.json`; a host upgrade means `npm run tokens:write`.
+- **Client styling**: feature CSS consumes the host design system and defines none of it: no `--dsw-*` declaration, no literal colour outside a `mask-image`, no literal size outside the 16px `@media (pointer: coarse)` focus-zoom guard, and the reader's `--dsh-content-font-*` axis on every body-text surface. State borders are 1px, every full-round radius pairs `corner-shape: round`, every transition is reduced under `prefers-reduced-motion: reduce`, and quiet controls take their geometry from `src/client/components/quiet.module.css`. `npm run style:check` (spec: `tests/unit/style-guard.spec.ts`) enforces it against the token snapshot in `tests/fixtures/style-tokens.json`; a host upgrade means `npm run tokens:write`.
 - **Teardown**: disposing the plugin does not abort in-flight requests; they settle on provider deadlines.
 
 ## Development rules
 
 - Tests: one behaviour per spec; never `.only`, `.skip`, or `.todo` (use `.runIf`); synchronize on owned promises (`deferred()`), never sleeps; build fixtures with `tests/helpers/server/objects.ts`. `tests/README.md` owns the full rules and ratchets.
-- Commits: `<type>(<scope>): <emoji> <subject>` — scope optional, lowercase type, imperative subject; body after a blank line, as bullet points explaining what and why.
+- Commits: `<type>(<scope>): <emoji> <subject>`: scope optional, lowercase type, imperative subject; body after a blank line, as bullet points explaining what and why.
 - Never commit `dev.cordis.yml` or `dev-lib.cordis.yml`; both carry absolute paths. Edit the `.example` templates.
 
 ## Validation

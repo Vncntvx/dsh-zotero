@@ -50,7 +50,7 @@ import {
 import { ZoteroCardController } from './zotero-card-controller.ts'
 import { ScholarlyFormController } from './scholarly-form-controller.ts'
 import { LibraryFormController } from './library-form-controller.ts'
-import type { ZoteroProbeFace } from './components/plugin/faces.ts'
+import type { ZoteroDetailFace, ZoteroProbeFace } from './components/plugin/faces.ts'
 import {
   ZOTERO_LIBRARY_SETTINGS_NAMESPACE,
   ZOTERO_REMOTE_PACKAGE,
@@ -310,7 +310,7 @@ function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces)
     'dsh-zotero: library row config',
   )
 
-  // Service status & quick start card at the bottom of the plugin manager detail page
+  // Service status & data maintenance section at the bottom of the plugin manager detail page
   ctx.slots.inject('plugins.detail.section', () =>
     ctx.slots.register(
       {
@@ -318,7 +318,11 @@ function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces)
         id: 'zotero-status',
         locale: NS,
         registrant: REGISTRANT,
-        inject: (): ZoteroProbeFace => ({ probe }),
+        inject: (): ZoteroDetailFace => ({
+          probe,
+          inspect: () => ctx.remote.zotero.remediationInspect(),
+          execute: (request) => ctx.remote.zotero.remediationExecute(request),
+        }),
       },
       ZoteroPluginDetailSection,
     ),

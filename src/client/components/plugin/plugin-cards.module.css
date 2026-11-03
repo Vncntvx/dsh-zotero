@@ -44,6 +44,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  min-width: 0;
 }
 
 .cardTitle {
@@ -51,6 +52,8 @@
   font: var(--dsw-font-xs-13);
   font-weight: 600;
   color: var(--dsw-alias-label-primary);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .refreshButton {
@@ -61,6 +64,8 @@
   color: var(--dsw-alias-label-secondary);
   border-radius: var(--dsw-radius-sm);
   cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 @media (hover: hover) {
@@ -90,29 +95,6 @@
   font: var(--dsw-font-xxxs-11);
   color: var(--dsw-alias-label-tertiary);
   margin: 0;
-}
-
-.tipList {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.tipItem {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  font: var(--dsw-font-xxs-12);
-  color: var(--dsw-alias-label-secondary);
-}
-
-.tipBullet {
-  flex: none;
-  color: var(--dsw-alias-label-caption);
-  font: var(--dsw-font-xxs-12);
 }
 
 /* Activation Guide (plugins.bundle.activation) */
@@ -285,4 +267,139 @@
   margin: 0;
   font: var(--dsw-font-xxxs-11);
   color: var(--dsw-alias-label-tertiary);
+}
+
+/* Remediation section (plugins.detail.section) */
+
+.remediationActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.remediationRepairButton {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.remediationIdle {
+  margin: 0;
+  font: var(--dsw-font-xxs-12);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.remediationIssueList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+  padding-top: 8px;
+}
+
+.remediationIssueItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-3);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.remediationIssueHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.remediationIssueTitle {
+  font: var(--dsw-font-xs-13);
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.remediationIssueBadges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.remediationIssueDesc {
+  margin: 0;
+  font: var(--dsw-font-xxs-12);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.remediationConfirm {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-3);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.remediationConfirmTitle {
+  margin: 0;
+  font: var(--dsw-font-xs-13);
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+}
+
+.remediationConfirmText {
+  margin: 0;
+  font: var(--dsw-font-xxs-12);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.remediationConfirmWarning {
+  margin: 0;
+  font: var(--dsw-font-xxs-12);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.remediationResultBanner {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-3);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.remediationResultItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font: var(--dsw-font-xxs-12);
+  color: var(--dsw-alias-label-secondary);
+  margin: 0;
+}
+
+.remediationResultLabel {
+  font-weight: 500;
+  color: var(--dsw-alias-state-success-secondary);
+}
+
+.remediationResultItem[data-outcome='failed'] .remediationResultLabel,
+.remediationResultItem[data-outcome='refused'] .remediationResultLabel,
+.remediationResultItem[data-outcome='busy'] .remediationResultLabel,
+.remediationResultItem[data-outcome='unsupported'] .remediationResultLabel {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.remediationFact {
+  font: var(--dsw-font-xxs-12);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.remediationBackupPath {
+  font: var(--dsw-font-markdown-code-block-small);
+  color: var(--dsw-alias-label-tertiary);
+  word-break: break-all;
 }

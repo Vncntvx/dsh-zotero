@@ -10,9 +10,25 @@ import { ZoteroPluginDetailSection } from '../../../src/client/components/plugin
 import type { PluginsSubject } from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import { RemoteError, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ZoteroStatusView } from '../../../src/client/remote.ts'
+import type {
+  ZoteroRemediationReport,
+  ZoteroRemediationResult,
+} from '../../../src/client/remote.ts'
 
 import { mockT } from '../helpers/mock-translate.ts'
 const t = mockT
+
+/** Inert maintenance face: this section never inspects on mount. */
+const inspect = async (): Promise<RemoteResult<ZoteroRemediationReport>> => ({
+  ok: true,
+  value: { capability: 'available', scannedSessions: 0, issues: [], timestamp: 0 },
+})
+
+/** Inert repair face. */
+const execute = async (): Promise<RemoteResult<ZoteroRemediationResult>> => ({
+  ok: true,
+  value: { items: [], timestamp: 0 },
+})
 
 afterEach(cleanup)
 
@@ -66,13 +82,25 @@ describe('ZoteroPluginDetailSection', () => {
     }))
 
     const { container: c1 } = render(
-      <ZoteroPluginDetailSection subject={otherSubject} t={t} probe={probe} />,
+      <ZoteroPluginDetailSection
+        subject={otherSubject}
+        t={t}
+        probe={probe}
+        inspect={inspect}
+        execute={execute}
+      />,
     )
     expect(c1.innerHTML).toBe('')
 
     const itemSubject: PluginsSubject = { kind: 'item', id: 'dsh-zotero' }
     const { container: c2 } = render(
-      <ZoteroPluginDetailSection subject={itemSubject} t={t} probe={probe} />,
+      <ZoteroPluginDetailSection
+        subject={itemSubject}
+        t={t}
+        probe={probe}
+        inspect={inspect}
+        execute={execute}
+      />,
     )
     expect(c2.innerHTML).toBe('')
     expect(probe).not.toHaveBeenCalled()
@@ -85,7 +113,13 @@ describe('ZoteroPluginDetailSection', () => {
     }))
 
     const { container } = render(
-      <ZoteroPluginDetailSection subject={rowSubject} t={t} probe={probe} />,
+      <ZoteroPluginDetailSection
+        subject={rowSubject}
+        t={t}
+        probe={probe}
+        inspect={inspect}
+        execute={execute}
+      />,
     )
     expect(container.querySelector('[data-zotero-plugin-section]')).not.toBeNull()
   })
@@ -98,13 +132,19 @@ describe('ZoteroPluginDetailSection', () => {
       value: { providerId: 'local', connected: true, zoteroVersion: '7.0.5' },
     }))
 
-    render(<ZoteroPluginDetailSection subject={targetSubject} t={t} probe={probe} />)
+    render(
+      <ZoteroPluginDetailSection
+        subject={targetSubject}
+        t={t}
+        probe={probe}
+        inspect={inspect}
+        execute={execute}
+      />,
+    )
 
     expect(screen.getByText(t('detailSectionTitle'))).toBeDefined()
-    expect(screen.getByText(t('tipsLabel'))).toBeDefined()
-    expect(screen.getByText(t('tipWebTab'))).toBeDefined()
-    expect(screen.getByText(t('tipSettingsNav'))).toBeDefined()
-    expect(screen.getByText(t('tipWriteGate'))).toBeDefined()
+    expect(screen.getByText(t('remediationSectionTitle'))).toBeDefined()
+    expect(screen.getByText(t('remediationDescription'))).toBeDefined()
 
     await waitFor(() => {
       expect(screen.getByText(`● ${t('statusConnectedNote')}`)).toBeDefined()
@@ -123,7 +163,15 @@ describe('ZoteroPluginDetailSection', () => {
       },
     }))
 
-    render(<ZoteroPluginDetailSection subject={targetSubject} t={t} probe={probe} />)
+    render(
+      <ZoteroPluginDetailSection
+        subject={targetSubject}
+        t={t}
+        probe={probe}
+        inspect={inspect}
+        execute={execute}
+      />,
+    )
 
     await waitFor(() => {
       expect(screen.getByText(`○ ${t('statusUnavailable')}`)).toBeDefined()
@@ -142,7 +190,15 @@ describe('ZoteroPluginDetailSection', () => {
       },
     }))
 
-    render(<ZoteroPluginDetailSection subject={targetSubject} t={t} probe={probe} />)
+    render(
+      <ZoteroPluginDetailSection
+        subject={targetSubject}
+        t={t}
+        probe={probe}
+        inspect={inspect}
+        execute={execute}
+      />,
+    )
 
     await waitFor(() => {
       expect(screen.getByText(`○ ${t('statusUnavailable')}`)).toBeDefined()
@@ -157,7 +213,15 @@ describe('ZoteroPluginDetailSection', () => {
       error: new RemoteError('gateway/internal', 'Failed to connect to local gateway', {}),
     }))
 
-    render(<ZoteroPluginDetailSection subject={targetSubject} t={t} probe={probe} />)
+    render(
+      <ZoteroPluginDetailSection
+        subject={targetSubject}
+        t={t}
+        probe={probe}
+        inspect={inspect}
+        execute={execute}
+      />,
+    )
 
     await waitFor(() => {
       expect(screen.getByText(`○ ${t('statusUnavailable')}`)).toBeDefined()
@@ -171,7 +235,15 @@ describe('ZoteroPluginDetailSection', () => {
       throw new Error('Network fatal')
     })
 
-    render(<ZoteroPluginDetailSection subject={targetSubject} t={t} probe={probe} />)
+    render(
+      <ZoteroPluginDetailSection
+        subject={targetSubject}
+        t={t}
+        probe={probe}
+        inspect={inspect}
+        execute={execute}
+      />,
+    )
 
     await waitFor(() => {
       expect(screen.getByText(`○ ${t('statusUnavailable')}`)).toBeDefined()
@@ -196,7 +268,15 @@ describe('ZoteroPluginDetailSection', () => {
       }
     })
 
-    render(<ZoteroPluginDetailSection subject={targetSubject} t={t} probe={probe} />)
+    render(
+      <ZoteroPluginDetailSection
+        subject={targetSubject}
+        t={t}
+        probe={probe}
+        inspect={inspect}
+        execute={execute}
+      />,
+    )
 
     await waitFor(() => {
       expect(screen.getByText(`○ ${t('statusUnavailable')}`)).toBeDefined()

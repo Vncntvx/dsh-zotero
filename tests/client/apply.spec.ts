@@ -21,6 +21,7 @@ import { REGISTRATIONS } from '../../src/client/toolviews/index.ts'
 import { applyEntry, fakeWorld, type FakeApplyWorld } from './helpers/apply-world.ts'
 import { fakeScope } from './helpers/fake-scope.ts'
 import type { ZoteroLibraryPanelFace } from '../../src/client/components/library/ZoteroLibraryPanel.tsx'
+import type { ZoteroDetailFace } from '../../src/client/components/plugin/faces.ts'
 import { searchResult } from '../helpers/library-fixtures.ts'
 
 // The page imports primitive icons; stub them with the shared DOM face so
@@ -237,6 +238,28 @@ describe('the browser-half entry', () => {
     expect(typeof face.probe).toBe('function')
   })
 
+  it('injects the detail face, and every member reaches the remote namespace', async () => {
+    const world = fakeWorld()
+    await applyEntry(world)
+
+    for (const entry of world.injected.filter((e) => e.name === 'plugins.detail.section')) {
+      entry.register()
+    }
+    const sections = world.registered.filter((e) => e.name === 'plugins.detail.section')
+    expect(sections).toHaveLength(2)
+    const statusSection = sections.find((e) => e.options.id === 'zotero-status')
+    expect(statusSection).toBeDefined()
+    expect(statusSection?.options.locale).toBe('zotero')
+    // Typed as the declared face: a registration that drops a member fails to
+    // compile rather than rendering a section that reports every session healthy.
+    const face = (statusSection?.options.inject as () => ZoteroDetailFace)()
+    expect(typeof face.probe).toBe('function')
+    await expect(face.inspect()).resolves.toMatchObject({ ok: true })
+    await expect(face.execute({ issueIds: ['session-log:session-1'] })).resolves.toMatchObject({
+      ok: true,
+    })
+  })
+
   it('rejects instead of degrading when the mount rejects', async () => {
     const world = fakeWorld(new Error('gateway offline'))
     // An assembly mistake is not swallowed: the entry rejects, so the harness
@@ -329,7 +352,7 @@ describe('the browser-half entry', () => {
     const world = fakeWorld()
     // The fake world carries no session catalog at all: the fiber does not
     // declare `sessions`, so a face that consulted one would find nothing and
-    // could not resolve a workspace root — its output would differ from the
+    // could not resolve a workspace root: its output would differ from the
     // input URL. Passing it through verbatim is the whole contract.
     await applyEntry(world)
     const tab = world.injected.find((entry) => entry.name === 'conversation.view')

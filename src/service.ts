@@ -58,6 +58,7 @@ import {
   ZoteroError,
 } from './errors.js'
 import { LocalApiProvider } from './local/provider.js'
+import { ZoteroRemediationService } from './remediation/service.js'
 import { localProviderLimits } from './service-config.js'
 import { installServiceConfigLifecycle } from './service-lifecycle.js'
 import { registerPromptSection } from './prompt.js'
@@ -208,11 +209,17 @@ export class ZoteroService extends Service {
    * for degradation facts) can read it without a second service.
    */
   readonly diagnostics = new DiagnosticsRecorder()
+  /**
+   * The plugin's data remediation and self-repair engine: detects and resolves
+   * historical corruptions, breaking schema transitions, and un-ignorable session logs.
+   */
+  readonly remediation: ZoteroRemediationService
   /** Last observed probe connectivity; `undefined` until the first probe, so the initial state always records. */
   private lastProbeConnected: boolean | undefined = undefined
 
   constructor(ctx: Context, config: Config | Options = {}) {
     super(ctx, 'zotero')
+    this.remediation = new ZoteroRemediationService(ctx)
     // Diagnostics come first: the exporter is a process-wide tap disposed
     // with this fiber, filtering this subtree's logger names into the ring.
     // Both spellings match: the explicit `zotero.*` names the seams choose,

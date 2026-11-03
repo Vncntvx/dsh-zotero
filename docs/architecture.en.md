@@ -57,7 +57,7 @@ The three are not peers of one kind. The core holds the data plane and the agent
 - Full-text reads, coverage interpretation, and attachment source facts live in `src/local/retrieve-fulltext.ts`; changes cursor identity, coverage, and version construction live in `src/local/changes-cursor.ts`;
 - Scope listing normalization and name matching live in `src/normalize-scope.ts`, and saved-search condition decoding lives in `src/normalize-saved-search.ts`; search hits, item details, child rows, and shared context live in `src/normalize-search.ts`, `src/normalize-item-detail.ts`, `src/normalize-children.ts`, and `src/normalize-context.ts`;
 - Passages are ranked with the BM25 term frequency algorithm;
-- Export follows the single-request limits of Zotero's local API. The five formats other than `citation` fetch all items in one request (at most 50 `itemKey` values) and are refused above that. `ris` and `csljson` need only that batch request; `bibtex` and `biblatex` send one more metadata batch in parallel to align the export with each item. `citation` sends multiple requests in groups of 50; per-document location inside the merged body serves the tool result only — the panel endpoint takes rendered text/citations only;
+- Export follows the single-request limits of Zotero's local API. The five formats other than `citation` fetch all items in one request (at most 50 `itemKey` values) and are refused above that. `ris` and `csljson` need only that batch request; `bibtex` and `biblatex` send one more metadata batch in parallel to align the export with each item. `citation` sends multiple requests in groups of 50; per-document location inside the merged body serves the tool result only: the panel endpoint takes rendered text/citations only;
 - The write domain supports cross-library item relations (`dc:relation`), and group library items are mapped automatically to canonical `http://zotero.org/groups/<id>/items/<key>` URIs;
 - Commit proof for non-idempotent writes, refusal mapping, and `committed-unverified` results are centralized in `src/local/write-verdicts.ts`; operation domains only build requests and interpret verified receipts;
 - Saved searches, collections, tag/collection membership, notes, batch writes, Trash restore, and library-wide tag deletion live in `src/local/write-saved-searches.ts`, `write-collections.ts`, `write-item-lists.ts`, `write-notes.ts`, `write-batch.ts`, and `write-library-maintenance.ts`, reusing the versioned write primitives centered on `write-domain.ts`.
@@ -143,9 +143,21 @@ A single client artifact (`lib/client.js`) contains all interfaces. Every surfac
 
 ## Remote Communication and Settings
 
-- The host half registers Typert endpoints in the `zotero` wire namespace through `ZoteroRuntime` (`zoteroRemote`) and `ZoteroLibraryService` (`zoteroLibrary`). `ZoteroRuntime` handles `status`, `resolveAttachment`, `diagnostics`, and `reportClientError`; `ZoteroLibraryService` handles `browse`, `search`, `item`, `childPage`, `export`, and `write`;
+- The host half registers Typert endpoints in the `zotero` wire namespace through `ZoteroRuntime` (`zoteroRemote`) and `ZoteroLibraryService` (`zoteroLibrary`). `ZoteroRuntime` handles `status`, `resolveAttachment`, `diagnostics`, `reportClientError`, `remediationInspect`, and `remediationExecute`; `ZoteroLibraryService` handles `browse`, `search`, `item`, `childPage`, `export`, and `write`;
 - The browser half mounts the namespace through `ctx.remote.$mount`, and configuration reads and writes go through the shared settings forms of the `zotero`, `library`, and `scholarly` namespaces;
 - Every configuration field is declared volatile and supports hot reload.
+
+## Session Log Maintenance (`src/remediation/`)
+
+Handles historical session logs this build refuses to interpret: the `zotero/status` events the plugin wrote before `56d800e` carry no `ignorable` marker, so once that event chain was removed the storage contract refused those logs (`session-format-unsupported`) and the sessions could no longer be opened.
+
+- Detection: `ZoteroRemediationService.inspect` does exactly two things: `ctx.sessionPersistence.list()` and, per session, `open(id,'read')` followed by `close()`. A resolved open proves the backend validated the whole log through `validateStoredEvents` at load; a failure is classified by exception type, and `snapshot.formatStatus === 'migration-required'` separates "newer format version" from "unknown event vocabulary". No error text is matched.
+- Capability: `capability` distinguishes `available` from `unavailable`. Without a persistence seam the report says `unavailable`, and the panel shows "unavailable" rather than "healthy"; a failing `list()` fails the whole inspection instead of producing an empty report.
+- Repair: `execute` runs `openArtifactMaintenance(sessionId)` → `markEventTypesIgnorable(['zotero/status'], { keepBackup: true })` → `close()` per item. Write exclusion, the byte-exact backup, contract re-validation before publication, atomic publication, and 0600 permissions all belong to the backend's maintenance session; the plugin takes no part in opening files, compressing bytes, or deciding session paths.
+- Whitelist: a caller submits session identifiers only. The event types to mark are the plugin constant `RETIRED_SESSION_EVENT_TYPES` and are never supplied by the request; logs that are newer-format or corrupt are refused outright.
+- Result: every requested id yields exactly one `outcome` (`repaired`, `unchanged`, `refused`, `busy`, `unsupported`, `failed`) and passes through the backend's `changedRecords`, `totalRecords`, `droppedTailBytes`, and `backupPath`. Counts are derived from the items rather than reported separately.
+- Failure semantics: a log that still fails its post-repair check reports `failed` with the backup path and is not rolled back: a rollback would be a second write that no contract validated.
+- Gate: a confirmation layer in the panel lists how many sessions will be rewritten and states that the action cannot be undone. `ctx.approval` requires an agent context and this panel action has none, so the gate is the confirmation plus the server-side whitelist, not tool approval.
 
 ## Diagnostics and Logging
 

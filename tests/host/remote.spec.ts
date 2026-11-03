@@ -169,6 +169,53 @@ describe('the zotero status endpoint', () => {
   })
 })
 
+describe('the zotero maintenance endpoints', () => {
+  it('reports an unavailable capability rather than an empty clean scan', async () => {
+    // The lane composes the plugin without a session-persistence seam. The
+    // wire must say "cannot check": a zero-issue report from a store the host
+    // never read would be a false all-clear.
+    lane = await setupHostLane(undefined, { typert: true })
+    const runtime = lane.ctx.get('zoteroRemote') as ZoteroRuntime
+    await expect(runtime.remediationInspect(LIVE_SIGNAL)).resolves.toEqual({
+      capability: 'unavailable',
+      scannedSessions: 0,
+      issues: [],
+      timestamp: expect.any(Number),
+    })
+  })
+
+  it('answers every requested id instead of dropping the ones it cannot repair', async () => {
+    lane = await setupHostLane(undefined, { typert: true })
+    const runtime = lane.ctx.get('zoteroRemote') as ZoteroRuntime
+    await expect(
+      runtime.remediationExecute(
+        { issueIds: ['session-log:absent', 'session-log:other'] },
+        LIVE_SIGNAL,
+      ),
+    ).resolves.toEqual({
+      items: [
+        { issueId: 'session-log:absent', outcome: 'unsupported' },
+        { issueId: 'session-log:other', outcome: 'unsupported' },
+      ],
+      timestamp: expect.any(Number),
+    })
+  })
+
+  it('refuses both endpoints without the zotero service composed', async () => {
+    const context = new Context()
+    await context.plugin(TypertRegistry)
+    new ZoteroRuntime(context)
+    const runtime = context.get('zoteroRemote')!
+    await expect(runtime.remediationInspect(LIVE_SIGNAL)).rejects.toThrow(
+      'The Zotero service is not composed.',
+    )
+    await expect(
+      runtime.remediationExecute({ issueIds: ['session-log:absent'] }, LIVE_SIGNAL),
+    ).rejects.toThrow('The Zotero service is not composed.')
+    await context.fiber.dispose()
+  })
+})
+
 describe('the zotero typert manifest', () => {
   it('declares the status endpoint under the zotero namespace', () => {
     expect(TYPERT_MANIFEST.package).toBe('dsh-zotero')
@@ -179,6 +226,8 @@ describe('the zotero typert manifest', () => {
       'diagnostics',
       'reportClientError',
       'openProtocol',
+      'remediationInspect',
+      'remediationExecute',
       'collectionPath',
       'browse',
       'search',

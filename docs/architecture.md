@@ -143,9 +143,21 @@ graph LR
 
 ## 远程通信与设置
 
-- 宿主半侧分别通过 `ZoteroRuntime`（`zoteroRemote`）和 `ZoteroLibraryService`（`zoteroLibrary`）在 `zotero` wire 命名空间下注册 Typert 端点。`ZoteroRuntime` 负责 `status`、`resolveAttachment`、`diagnostics`、`reportClientError`；`ZoteroLibraryService` 负责 `browse`、`search`、`item`、`childPage`、`export`、`write`；
+- 宿主半侧分别通过 `ZoteroRuntime`（`zoteroRemote`）和 `ZoteroLibraryService`（`zoteroLibrary`）在 `zotero` wire 命名空间下注册 Typert 端点。`ZoteroRuntime` 负责 `status`、`resolveAttachment`、`diagnostics`、`reportClientError`、`remediationInspect`、`remediationExecute`；`ZoteroLibraryService` 负责 `browse`、`search`、`item`、`childPage`、`export`、`write`；
 - 浏览器半侧通过 `ctx.remote.$mount` 挂载命名空间，配置读写走 `zotero`、`library`、`scholarly` 三个命名空间的共享设置表单；
 - 配置全字段声明为 volatile，支持热重载。
+
+## 会话日志维护（`src/remediation/`）
+
+用于处置本版本拒绝解释的历史会话日志：插件在 `56d800e` 之前写入的 `zotero/status` 事件没有携带 `ignorable`，移除该事件链后，这类日志在读取时被存储契约拒绝（`session-format-unsupported`），会话因此永久无法打开。
+
+- 检测：`ZoteroRemediationService.inspect` 只做两件事：`ctx.sessionPersistence.list()` 列举、对每个会话 `open(id,'read')` 后立即 `close()`。`open` 成功即代表后端在加载阶段已用 `validateStoredEvents` 校验过整份日志；失败则按异常类型判定原因，`snapshot.formatStatus === 'migration-required'` 用于把「格式版本过新」与「事件词表未知」区分开，不匹配任何错误文案。
+- 能力：`capability` 字段显式区分 `available` / `unavailable`。没有持久化 seam 时返回 `unavailable`，界面显示「不可用」而不是「健康」；`list()` 失败则整次检查失败，不产出空报告。
+- 修复：`execute` 逐项 `openArtifactMaintenance(sessionId)` → `markEventTypesIgnorable(['zotero/status'], { keepBackup: true })` → `close()`。写排他、字节级备份、发布前契约复核、原子发布、0600 权限全部由后端维护会话负责；插件不参与文件打开、字节压缩与会话路径决策。
+- 白名单：调用方只能提交会话标识，待标记的事件类型是插件常量 `RETIRED_SESSION_EVENT_TYPES`，永不由请求传入；格式过新与损坏的日志一律拒绝修复。
+- 结果：每个请求 id 恰好产出一个 `outcome`（`repaired` / `unchanged` / `refused` / `busy` / `unsupported` / `failed`），并透传后端回报的 `changedRecords`、`totalRecords`、`droppedTailBytes`、`backupPath`；计数由条目派生，不单独上报。
+- 失败语义：修复后复验仍失败即报 `failed` 并保留备份路径，不自动回滚：回滚是第二次未经契约校验的写入。
+- 门禁：修复前由界面确认层列出将改写的会话数并提示不可撤销；`ctx.approval` 要求 agent 上下文，插件详情页触发的动作没有 agent，因此门禁落在界面确认与服务端白名单，而不是工具审批。
 
 ## 诊断与日志
 

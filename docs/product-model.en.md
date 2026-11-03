@@ -45,7 +45,7 @@ The plugin is split into three components with distinct roles:
 
 ### Component Roles
 
-- **Core component**: The plugin body. Manages communication with the local Zotero API (`127.0.0.1:23119`), registers 6 read tools and 15 write tools, and maintains the literature trail and configuration options.
+- **Core component**: The plugin body. Manages communication with the local Zotero API (`127.0.0.1:23119`), registers 6 read tools and 15 write tools, and maintains the literature trail and configuration options. The settings page also offers session-log maintenance for history sessions written by an older plugin build that the current version refuses to load; the capability adds no component and never touches the library.
 - **Literature panel component**: Exposes read and write endpoints (`browse`, `search`, `item`, etc.) to the frontend. It registers no tools and injects no prompts; requests forward directly to the core service. It can be unmounted entirely if the sidebar is not needed.
 - **Scholarly retrieval component**: The only component capable of accessing the external network. When unmounted, no outbound networking capability or tools exist in the host; when mounted, it registers 7 scholarly retrieval tools, strictly confined to allowlisted academic indexes.
 
