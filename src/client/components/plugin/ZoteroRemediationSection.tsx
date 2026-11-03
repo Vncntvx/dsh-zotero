@@ -191,7 +191,6 @@ export function ZoteroRemediationSection({
           <Button
             variant="ghost"
             size="sm"
-            className={css.refreshButton}
             disabled={busy}
             onClick={() => {
               void scan()
@@ -200,8 +199,10 @@ export function ZoteroRemediationSection({
             {scanning ? t('remediationScanning') : t('remediationScan')}
           </Button>
           {/* Visible only before confirmation, so it never carries the
-              repairing label: the confirmation layer owns that state. */}
-          {issues.length > 0 && !confirming ? (
+              repairing label: the confirmation layer owns that state. The
+              repair action also needs the maintenance seam: without it every
+              attempt answers "unsupported". */}
+          {issues.length > 0 && !unavailable && !confirming ? (
             <Button
               variant="primary"
               size="sm"

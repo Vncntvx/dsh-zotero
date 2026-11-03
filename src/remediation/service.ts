@@ -10,7 +10,6 @@
  * @module dsh-zotero/remediation/service
  */
 
-import { copyFile } from 'node:fs/promises'
 import type { Context } from '@deepseek-ai/cordis'
 import { SessionId } from '@deepseek-ai/dsh-session'
 // Type-only: brings `ctx.sessionPersistence` into this program.
@@ -22,12 +21,13 @@ import {
   SessionPersistenceNotFoundError,
 } from '@deepseek-ai/dsh-session-persistence'
 import type {
-  SessionArtifactMaintenance,
   SessionHandle,
   SessionPersistence,
   SessionPersistenceSnapshot,
 } from '@deepseek-ai/dsh-session-persistence'
 import type {
+  SessionArtifactMaintenance,
+  SessionPersistenceWithMaintenance,
   ZoteroRemediationIssue,
   ZoteroRemediationItemResult,
   ZoteroRemediationOutcome,
@@ -37,7 +37,6 @@ import type {
   ZoteroRemediationResult,
 } from './contract.js'
 import { RETIRED_SESSION_EVENT_TYPES } from './session-events.js'
-import { repairArtifactFile, type ArtifactRepairOutcome } from './artifact-repair.js'
 
 /** Prefix of every issue id; the remainder is the session id. */
 const ISSUE_PREFIX = 'session-log:'
@@ -49,11 +48,13 @@ const NO_EVENT_TYPES: readonly string[] = Object.freeze([])
  * The maintenance capability's two refusal classes, matched by the stable name
  * each constructor assigns.
  *
- * `@deepseek-ai/dsh-session-persistence@0.2.2-alpha.2` declares both classes in
- * `lib/types/index.d.ts` but its shipped `lib/index.js` does not re-export them,
- * so binding them here would make `instanceof` throw on `undefined`. The name is
- * part of each class's own contract (`this.name = …` in both constructors), and
- * this plugin may not rebuild the harness to close the gap.
+ * Neither class reaches this program as a binding: the sibling checkout's type
+ * declarations declare them, but the runtime entry this plugin resolves
+ * (`lib/index.js`) re-exports neither, and the published
+ * `@deepseek-ai/dsh-session-persistence@0.2.2-alpha.2` declares them in
+ * neither. Binding them here would make `instanceof` throw on `undefined`. The
+ * name is part of each class's own contract (`this.name = …` in both
+ * constructors), and this plugin may not rebuild the harness to close the gap.
  */
 const REFUSED_NAME = 'SessionArtifactRewriteRefusedError'
 const UNSUPPORTED_NAME = 'SessionArtifactMaintenanceUnsupportedError'
@@ -114,9 +115,6 @@ async function probe(
     // A cancelled inspection is not a finding.
     signal?.throwIfAborted()
     if (error instanceof SessionPersistenceNotFoundError) return undefined
-    if (error instanceof SessionFormatUnsupportedError && error.location?.path) {
-      ;(snapshot as unknown as { _artifactPath?: string })._artifactPath = error.location.path
-    }
     return reasonOf(snapshot, error)
   }
   await handle.close()
@@ -128,6 +126,23 @@ function outcomeOfOpenFailure(error: unknown): ZoteroRemediationOutcome {
   if (isNamed(error, UNSUPPORTED_NAME)) return 'unsupported'
   if (error instanceof SessionAlreadyOwnedError) return 'busy'
   return 'failed'
+}
+
+/**
+ * Whether the composed persistence exposes the artifact-maintenance seam.
+ *
+ * A runtime fact, never a type-level one: neither the published pin
+ * (0.2.2-alpha.2) nor the sibling's current runtime build implements
+ * `openArtifactMaintenance`, so a backend this plugin cannot repair still
+ * satisfies the `SessionPersistence` type.
+ */
+function maintenanceSeamOf(
+  persistence: SessionPersistence,
+): persistence is SessionPersistence & SessionPersistenceWithMaintenance {
+  return (
+    typeof (persistence as unknown as Partial<SessionPersistenceWithMaintenance>)
+      .openArtifactMaintenance === 'function'
+  )
 }
 
 /** The remediation service the host exposes as `ctx.zotero.remediation`. */
@@ -164,7 +179,14 @@ export class ZoteroRemediationService {
           reason === 'unknown-event-vocabulary' ? RETIRED_SESSION_EVENT_TYPES : NO_EVENT_TYPES,
       })
     }
-    return { capability: 'available', scannedSessions: snapshots.length, issues, timestamp }
+    // The scan is worth reporting either way: the issues are facts about the
+    // user's stored logs. Only the repair action depends on the seam.
+    return {
+      capability: maintenanceSeamOf(persistence) ? 'available' : 'unavailable',
+      scannedSessions: snapshots.length,
+      issues,
+      timestamp,
+    }
   }
 
   /**
@@ -219,89 +241,35 @@ export class ZoteroRemediationService {
     if (reason === undefined) return { issueId, outcome: 'unchanged' }
     if (reason !== 'unknown-event-vocabulary') return { issueId, outcome: 'refused' }
 
-    // 1. Prefer official harness openArtifactMaintenance seam when available:
-    if (
-      typeof (persistence as unknown as { openArtifactMaintenance?: unknown })
-        .openArtifactMaintenance === 'function'
-    ) {
-      let maintenance: SessionArtifactMaintenance
-      try {
-        maintenance = await persistence.openArtifactMaintenance(SessionId(sessionId), { signal })
-      } catch (error) {
-        return { issueId, outcome: outcomeOfOpenFailure(error) }
-      }
+    // Maintenance operates strictly through the persistence seam:
+    if (!maintenanceSeamOf(persistence)) return { issueId, outcome: 'unsupported' }
 
-      try {
-        const outcome = await maintenance.markEventTypesIgnorable(RETIRED_SESSION_EVENT_TYPES, {
-          keepBackup: true,
-          signal,
-        })
-        const facts = {
-          changedRecords: outcome.changedRecords,
-          totalRecords: outcome.totalRecords,
-          droppedTailBytes: outcome.droppedTailBytes,
-          ...(outcome.backupPath === undefined ? {} : { backupPath: outcome.backupPath }),
-        }
-        if (outcome.changedRecords === 0) return { issueId, outcome: 'unchanged', ...facts }
-        const stillBlocked = (await probe(persistence, snapshot, signal)) !== undefined
-        return { issueId, outcome: stillBlocked ? 'failed' : 'repaired', ...facts }
-      } catch (error) {
-        if (isNamed(error, REFUSED_NAME)) return { issueId, outcome: 'refused' }
-        return { issueId, outcome: 'failed' }
-      } finally {
-        await maintenance.close()
-      }
-    }
-
-    // 2. Direct verified fallback when running on a harness release that has
-    // not exported openArtifactMaintenance (such as 0.2.2-alpha.2):
-    return this.repairDirectFallback(persistence, snapshot, issueId, signal)
-  }
-
-  /**
-   * Direct verified repair fallback when running on a harness release that has
-   * not exported `openArtifactMaintenance` on the persistence service.
-   */
-  private async repairDirectFallback(
-    persistence: SessionPersistence,
-    snapshot: SessionPersistenceSnapshot,
-    issueId: string,
-    signal: AbortSignal | undefined,
-  ): Promise<ZoteroRemediationItemResult> {
-    const artifactPath =
-      snapshot.location?.path ?? (snapshot as unknown as { _artifactPath?: string })._artifactPath
-    if (!artifactPath) return { issueId, outcome: 'failed' }
-
-    signal?.throwIfAborted()
-    let outcome: ArtifactRepairOutcome
+    let maintenance: SessionArtifactMaintenance
     try {
-      outcome = await repairArtifactFile(artifactPath, RETIRED_SESSION_EVENT_TYPES)
-    } catch {
-      return { issueId, outcome: 'failed' }
+      maintenance = await persistence.openArtifactMaintenance(SessionId(sessionId), { signal })
+    } catch (error) {
+      return { issueId, outcome: outcomeOfOpenFailure(error) }
     }
 
-    const facts = {
-      changedRecords: outcome.changedRecords,
-      totalRecords: outcome.totalRecords,
-      droppedTailBytes: outcome.droppedTailBytes,
-      ...(outcome.backupPath === undefined ? {} : { backupPath: outcome.backupPath }),
-    }
-
-    if (outcome.changedRecords === 0) return { issueId, outcome: 'unchanged', ...facts }
-
-    // Re-verify through ground truth probe:
-    const stillBlocked = (await probe(persistence, snapshot, signal)) !== undefined
-    if (stillBlocked) {
-      if (outcome.backupPath) {
-        try {
-          await copyFile(outcome.backupPath, artifactPath)
-        } catch {
-          // ignore revert error
-        }
+    try {
+      const outcome = await maintenance.markEventTypesIgnorable(RETIRED_SESSION_EVENT_TYPES, {
+        keepBackup: true,
+        signal,
+      })
+      const facts = {
+        changedRecords: outcome.changedRecords,
+        totalRecords: outcome.totalRecords,
+        droppedTailBytes: outcome.droppedTailBytes,
+        ...(outcome.backupPath === undefined ? {} : { backupPath: outcome.backupPath }),
       }
-      return { issueId, outcome: 'failed', ...facts }
+      if (outcome.changedRecords === 0) return { issueId, outcome: 'unchanged', ...facts }
+      const stillBlocked = (await probe(persistence, snapshot, signal)) !== undefined
+      return { issueId, outcome: stillBlocked ? 'failed' : 'repaired', ...facts }
+    } catch (error) {
+      if (isNamed(error, REFUSED_NAME)) return { issueId, outcome: 'refused' }
+      return { issueId, outcome: 'failed' }
+    } finally {
+      await maintenance.close()
     }
-
-    return { issueId, outcome: 'repaired', ...facts }
   }
 }

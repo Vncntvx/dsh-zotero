@@ -12,9 +12,6 @@
  */
 
 import { beforeEach, describe, expect, it } from 'vitest'
-import { writeFileSync, unlinkSync, readFileSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
-import { tmpdir } from 'node:os'
 import { Context, Service } from '@deepseek-ai/cordis'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
@@ -24,7 +21,6 @@ import {
   SessionPersistenceCorruptionError,
   SessionPersistenceNotFoundError,
   validateStoredEvents,
-  type SessionLocation,
 } from '@deepseek-ai/dsh-session-persistence'
 import { ZoteroRemediationService } from '../../src/remediation/service.js'
 import { RETIRED_SESSION_EVENT_TYPES } from '../../src/remediation/session-events.js'
@@ -32,8 +28,8 @@ import { RETIRED_SESSION_EVENT_TYPES } from '../../src/remediation/session-event
 /**
  * Rebuild one of the maintenance capability's refusals.
  *
- * The classes themselves are declared by the pinned package's types but absent
- * from its shipped JavaScript, which is why the service matches their `name`
+ * The classes themselves reach neither the published package nor the sibling's
+ * runtime entry as a binding, which is why the service matches their `name`
  * rather than importing them; the stub reproduces exactly that surface.
  */
 function maintenanceRefusal(name: string): Error {
@@ -52,8 +48,6 @@ interface StubSession {
   openError?: unknown
   /** Thrown by `openArtifactMaintenance` before any rewrite. */
   maintenanceError?: unknown
-  /** Optional location reported by list or snapshot. */
-  location?: SessionLocation
 }
 
 /**
@@ -152,7 +146,6 @@ class StubPersistence extends Service {
           header: JSON.parse(stored.records[0] as string),
           formatStatus: stored.formatStatus ?? 'current',
           revision: 'revision',
-          ...(stored.location ? { location: stored.location } : {}),
         }) as never,
     )
   }
@@ -160,34 +153,7 @@ class StubPersistence extends Service {
   async open(id: string): Promise<never> {
     const stored = this.sessions.get(id)
     if (stored === undefined) throw new SessionPersistenceNotFoundError(SessionId(id))
-    if (stored.openError !== undefined) {
-      const err = stored.openError
-      if (err instanceof SessionFormatUnsupportedError && err.location?.path) {
-        const content = readFileSync(err.location.path, 'utf8')
-        const records = content.trim().split('\n')
-        try {
-          assertReadable({ id, records })
-          stored.openError = undefined
-          return { id, close: async () => {} } as never
-        } catch {
-          throw err
-        }
-      }
-      throw err
-    }
-    if (stored.location?.path) {
-      const content = readFileSync(stored.location.path, 'utf8')
-      const records = content.trim().split('\n')
-      try {
-        assertReadable({ id, records })
-      } catch (err) {
-        if (err instanceof SessionFormatUnsupportedError) {
-          throw new SessionFormatUnsupportedError(err.message, stored.location)
-        }
-        throw err
-      }
-      return { id, close: async () => {} } as never
-    }
+    if (stored.openError !== undefined) throw stored.openError
     assertReadable(stored)
     return { id, close: async () => {} } as never
   }
@@ -228,6 +194,24 @@ describe('ZoteroRemediationService.inspect', () => {
       reason: 'unknown-event-vocabulary',
       sessionId: 'broken',
       eventTypes: [...RETIRED_SESSION_EVENT_TYPES],
+    })
+  })
+
+  it('reports no capability, yet still the findings, when the backend has no seam', async () => {
+    const { service, stub } = await compose()
+    stub.sessions.set('broken', session('broken', [{ type: 'zotero/status' }]))
+    // A persistence service this build cannot ask for a rewrite through.
+    stub.openArtifactMaintenance = undefined
+
+    const report = await service.inspect()
+
+    expect(report.capability).toBe('unavailable')
+    expect(report.scannedSessions).toBe(1)
+    expect(report.issues).toHaveLength(1)
+    expect(report.issues[0]).toMatchObject({
+      id: 'session-log:broken',
+      reason: 'unknown-event-vocabulary',
+      sessionId: 'broken',
     })
   })
 
@@ -426,90 +410,13 @@ describe('ZoteroRemediationService.execute', () => {
     ])
   })
 
-  it('falls back to direct artifact repair when openArtifactMaintenance is not exported', async () => {
+  it('reports unsupported when openArtifactMaintenance is not exported on persistence', async () => {
     stub.openArtifactMaintenance = undefined
-    const tempFile = join(tmpdir(), `remediation-fallback-test-${Date.now()}.jsonl`)
     const brokenSession = session('fallback', [{ type: 'zotero/status' }])
-    writeFileSync(tempFile, `${brokenSession.records.join('\n')}\n`, 'utf8')
-    stub.sessions.set('fallback', {
-      ...brokenSession,
-      location: { kind: 'jsonl', path: tempFile },
-    })
+    stub.sessions.set('fallback', brokenSession)
 
-    try {
-      const result = await service.execute({ issueIds: ['session-log:fallback'] })
+    const result = await service.execute({ issueIds: ['session-log:fallback'] })
 
-      expect(result.items).toHaveLength(1)
-      expect(result.items[0]).toMatchObject({
-        issueId: 'session-log:fallback',
-        outcome: 'repaired',
-        changedRecords: 1,
-        totalRecords: 2,
-      })
-      expect(result.items[0]?.backupPath).toBeDefined()
-
-      const updated = readFileSync(tempFile, 'utf8')
-      expect(updated).toContain('"ignorable":true')
-      await expect(stub.open('fallback')).resolves.toBeDefined()
-    } finally {
-      try {
-        unlinkSync(tempFile)
-      } catch {
-        // ignore missing file during cleanup
-      }
-      const dir = tmpdir()
-      for (const file of readdirSync(dir)) {
-        if (file.startsWith('remediation-fallback-test-')) {
-          try {
-            unlinkSync(join(dir, file))
-          } catch {
-            // ignore cleanup failure
-          }
-        }
-      }
-    }
-  })
-
-  it('learns the artifact location from open format error when snapshot has no location', async () => {
-    stub.openArtifactMaintenance = undefined
-    const tempFile = join(tmpdir(), `remediation-errloc-test-${Date.now()}.jsonl`)
-    const brokenSession = session('from-err', [{ type: 'zotero/status' }])
-    writeFileSync(tempFile, `${brokenSession.records.join('\n')}\n`, 'utf8')
-    stub.sessions.set('from-err', {
-      ...brokenSession,
-      openError: new SessionFormatUnsupportedError('unknown event type', {
-        kind: 'jsonl',
-        path: tempFile,
-      }),
-    })
-
-    try {
-      const result = await service.execute({ issueIds: ['session-log:from-err'] })
-
-      expect(result.items).toHaveLength(1)
-      expect(result.items[0]).toMatchObject({
-        issueId: 'session-log:from-err',
-        outcome: 'repaired',
-        changedRecords: 1,
-      })
-      const updated = readFileSync(tempFile, 'utf8')
-      expect(updated).toContain('"ignorable":true')
-    } finally {
-      try {
-        unlinkSync(tempFile)
-      } catch {
-        // ignore missing file during cleanup
-      }
-      const dir = tmpdir()
-      for (const file of readdirSync(dir)) {
-        if (file.startsWith('remediation-errloc-test-')) {
-          try {
-            unlinkSync(join(dir, file))
-          } catch {
-            // ignore cleanup failure
-          }
-        }
-      }
-    }
+    expect(result.items).toEqual([{ issueId: 'session-log:fallback', outcome: 'unsupported' }])
   })
 })

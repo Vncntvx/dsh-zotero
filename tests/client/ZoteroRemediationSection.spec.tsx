@@ -42,6 +42,12 @@ const CLEAN_REPORT: ZoteroRemediationReport = {
   timestamp: 1_700_000_000_000,
 }
 
+/** A backend that stores sessions but exposes no artifact-maintenance seam. */
+const SEAMLESS_REPORT: ZoteroRemediationReport = {
+  ...BROKEN_REPORT,
+  capability: 'unavailable',
+}
+
 function reporting(
   value: ZoteroRemediationReport,
 ): () => Promise<RemoteResult<ZoteroRemediationReport>> {
@@ -107,6 +113,26 @@ describe('ZoteroRemediationSection', () => {
     })
     expect(screen.queryByText(t('remediationHealthy'))).toBeNull()
     expect(screen.queryByText(t('remediationScannedSummary', { sessions: 0 }))).toBeNull()
+  })
+
+  it('keeps the findings but withholds repair when the backend has no seam', async () => {
+    const execute = repairResult({ items: [], timestamp: 0 })
+
+    render(
+      <ZoteroRemediationSection t={t} inspect={reporting(SEAMLESS_REPORT)} execute={execute} />,
+    )
+    fireEvent.click(screen.getByText(t('remediationScan')))
+
+    await waitFor(() => {
+      expect(screen.getByText(t('remediationCapabilityUnavailable'))).toBeDefined()
+    })
+    // The scan still measured the stored logs, so the finding stays visible…
+    expect(screen.getByText('session-1aa4e258')).toBeDefined()
+    expect(screen.getByText(t('remediationReasonUnknownVocabulary'))).toBeDefined()
+    // …but an action that can only answer "unsupported" is not offered.
+    expect(screen.queryByText(t('remediationRepair'))).toBeNull()
+    expect(screen.queryByText(t('remediationConfirmTitle'))).toBeNull()
+    expect(execute).not.toHaveBeenCalled()
   })
 
   it('lists the session and localizes the reason instead of the enum value', async () => {

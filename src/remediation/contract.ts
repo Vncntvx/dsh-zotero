@@ -8,6 +8,57 @@
  * @module dsh-zotero/remediation/contract
  */
 
+import type { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
+
+/**
+ * Record-level maintenance session opened through the persistence seam.
+ *
+ * Declared locally, field for field, because the published pin this plugin
+ * compiles against (`@deepseek-ai/dsh-session-persistence@0.2.2-alpha.2`,
+ * verified against its registry tarball) exports neither the seam nor these
+ * types, while the sibling checkout's declarations do. `Omit` in
+ * {@link SessionPersistenceWithMaintenance} keeps this compiling against both.
+ *
+ * The shape mirrors the upstream contract: `src/maintenance.ts` and the built
+ * `lib/types/maintenance.d.ts` of
+ * `../deepseek-harness/packages/session/session-persistence`. When the pin
+ * moves to a release that publishes the seam, delete this interface and
+ * {@link SessionPersistenceWithMaintenance} and import the upstream ones.
+ */
+export interface SessionArtifactMaintenance {
+  readonly path: string
+  readonly compression: 'zstd' | 'none'
+  markEventTypesIgnorable(
+    eventTypes: readonly string[],
+    options?: {
+      readonly keepBackup?: boolean
+      readonly signal?: AbortSignal
+    },
+  ): Promise<{
+    readonly changedRecords: number
+    readonly totalRecords: number
+    readonly droppedTailBytes: number
+    readonly backupPath?: string
+    readonly bytesBefore: number
+    readonly bytesAfter: number
+  }>
+  close(): Promise<void>
+}
+
+/**
+ * Extension contract for SessionPersistence exposing the exclusive artifact maintenance seam.
+ */
+export interface SessionPersistenceWithMaintenance extends Omit<
+  SessionPersistence,
+  'openArtifactMaintenance'
+> {
+  openArtifactMaintenance(
+    id: SessionId,
+    options?: { readonly signal?: AbortSignal },
+  ): Promise<SessionArtifactMaintenance>
+}
+
 /** The subsystem domain a remediation issue belongs to. */
 export type ZoteroRemediationCategory = 'session-log'
 
