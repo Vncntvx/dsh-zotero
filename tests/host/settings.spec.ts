@@ -134,7 +134,7 @@ describe('live configuration', () => {
     expect(result.isError).toBe(true)
     if (!result.isError) throw new Error('unreachable')
     expect((result.content[0] as { text: string }).text).toContain(
-      intRangeArgumentMessage('limit', 10, 1, 5),
+      `${intRangeArgumentMessage('limit', 10, 1, 5)}. Set limit <= 5 and use offset for the next page.`,
     )
   })
 

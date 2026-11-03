@@ -111,6 +111,8 @@ describe('tool presentation', () => {
     }
     expect(tool.output.presentationMeta!({}, value)).toEqual({
       returned: 10,
+      normalizedQuery: '',
+      queryWasEmpty: true,
       total: 42,
       nextOffset: 10,
       displayed: 0,
@@ -135,6 +137,8 @@ describe('tool presentation', () => {
       ),
     ).toEqual({
       returned: 10,
+      normalizedQuery: '',
+      queryWasEmpty: true,
       total: 42,
       nextOffset: null,
       displayed: 0,

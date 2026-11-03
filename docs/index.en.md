@@ -14,7 +14,7 @@ Read these in order to get from installation to daily use:
 ## Maintenance
 
 - [Architecture](architecture.en.md): data flow, layer responsibilities, component boundaries, and design boundaries
-- [Tool reference](tools.en.md): parameters, return values, and error codes for the 21 local tools and 7 scholarly retrieval tools
+- [Tool reference](tools.en.md): parameters, return values, and error codes for the 23 local tools and 7 scholarly retrieval tools
 - [Configuration reference](configuration.en.md): the three settings namespaces, field defaults, and hot-reload behavior
 - [Development guide](development.en.md): build, test, debug, and release workflow
 

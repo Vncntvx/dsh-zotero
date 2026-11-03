@@ -117,7 +117,7 @@ export function createScholarlyCiteTool(host: ScholarlyToolHost): ToolDefinition
 
             if (!doi) {
               return {
-                issue: `${raw}: No DOI found for this item, cannot query registry citation.`,
+                issue: `${raw}: No DOI found for this item, cannot query registry citation. Use scholarly_get to resolve metadata before retrying scholarly_cite.`,
               }
             }
 
@@ -158,7 +158,10 @@ export function createScholarlyCiteTool(host: ScholarlyToolHost): ToolDefinition
       const label = args.format === 'text' ? `style ${style}` : args.format
       const separator = args.format === 'text' ? '\n' : '\n\n'
       const summary = `Citations from official DOI registries (${label}): ${entries.length} of ${targets.length} resolved.`
-      const problemsText = issues.length > 0 ? `\nUnresolved items:\n${issues.join('\n')}` : ''
+      const problemsText =
+        issues.length > 0
+          ? `\nUnresolved items:\n${issues.join('\n')}\nNext: use scholarly_get to check alternate-index metadata before treating an item as absent.`
+          : ''
 
       return {
         text: `${summary}\n\n${entries.join(separator)}${problemsText}`,

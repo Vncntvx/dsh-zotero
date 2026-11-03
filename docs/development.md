@@ -64,7 +64,7 @@ src/
   remote.ts             # Web 端 Remote 服务
   typert.ts             # Typert 清单
   settings-namespace.ts # 设置命名空间常量
-  tools/                # 21 个本地模型工具定义（6 读 + 15 写）
+  tools/                # 23 个本地模型工具定义（8 读 + 15 写）
   tools/degradable.ts   # 写工具计划预览的降级规则（不可达/歧义才降级）
   client/               # 浏览器端（设置页、文献轨迹、文献面板、工具卡片视图）
 tests/                  # 单元测试与端到端测试用例
@@ -79,7 +79,7 @@ tests/                  # 单元测试与端到端测试用例
 | [快速入门](getting-started.md) | 安装、前置条件与连接验证                                     |
 | [产品模型](product-model.md)   | 两个入口、两大视图、组件分工与系统边界：命名与边界的唯一来源 |
 | [功能概览](features.md)        | 对话能力、文献轨迹、文献面板、写入与学术检索                 |
-| [工具参考](tools.md)           | 21 个本地工具（6 读 + 15 写）与 7 个学术检索工具             |
+| [工具参考](tools.md)           | 23 个本地工具（8 读 + 15 写）与 7 个学术检索工具             |
 | [配置参考](configuration.md)   | 三个设置命名空间、44 个字段与热更新机制                      |
 | [故障排查](troubleshooting.md) | 常见问题、原因与排查步骤                                     |
 | [系统架构](architecture.md)    | 数据流、分层职责与设计边界                                   |

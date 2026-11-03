@@ -40,65 +40,58 @@ const BROWSE_PARAMETERS = {
     enum: [...BROWSE_KINDS],
     required: true,
     description:
-      'What to browse: libraries, collections, savedSearches, tags, itemTypes, itemFields (itemFields requires itemType)',
+      'Browse libraries, collections, savedSearches, tags, itemTypes, itemFields (itemType required).',
   },
   library: {
     ...LIBRARY_SCHEMA,
     description:
-      'Library for collections/savedSearches/tags; omitted defaults to personal user/0. Not allowed for libraries/itemTypes/itemFields (fail-closed).',
+      'For collections/savedSearches/tags; defaults user/0. Invalid for libraries/itemTypes/itemFields.',
   },
   parentRef: {
     type: 'string',
-    description:
-      'Collections only: a zotero://.../collection/<KEY> ref whose children to list. Omit to list top-level collections.',
+    description: 'Collections only: parent collection ref; omit for top-level collections.',
   },
   tagScope: {
     type: 'string',
     enum: ['library', 'collection', 'publications'],
-    description:
-      'Tags only: count tags over this item set. Omit for the whole-library tag list; collection/publications use the scoped tag endpoints.',
+    description: 'Tags only: count scope (library, collection, or publications).',
   },
   tagCollection: {
     type: 'string',
-    description:
-      'Tags only with tagScope="collection": a collection ref or exact name whose items the tag counts describe.',
+    description: 'Tags with collection scope: collection ref or exact name.',
   },
   itemLevel: {
     type: 'string',
     enum: ['top', 'all'],
-    description:
-      'Tags only with a scope: top counts bibliographic items (default), all includes child items.',
+    description: 'Tags only: top-level (default) or all items including children.',
   },
   itemQuery: {
     type: 'string',
-    description:
-      'Tags only with a scope: count only tags of items matching this query, the facet-discovery move after a search.',
+    description: 'Tags only: count tags on matching items.',
   },
   itemQueryMode: {
     type: 'string',
     enum: ['titleCreatorYear', 'everything'],
-    description:
-      'Tags only with itemQuery: the Zotero item-query mode (titleCreatorYear or everything; default titleCreatorYear).',
+    description: 'itemQuery mode: titleCreatorYear (default) or everything.',
   },
   itemType: {
     type: 'string',
-    description:
-      'ItemFields only: the Zotero item type whose valid fields and creator types to list (e.g. dataset, patent).',
+    description: 'itemFields only: Zotero item type, e.g. dataset.',
   },
   q: {
     type: 'string',
-    description: 'Filter for tags kind (substring); only valid when kind="tags"',
+    description: 'Substring filter; tags only.',
   },
   match: {
     type: 'string',
     enum: ['contains', 'startsWith'],
-    description: 'How q matches tags; only valid when kind="tags"; default contains',
+    description: 'Tag q match: contains (default) or startsWith.',
   },
-  offset: { type: 'integer', default: 0, description: 'Pagination offset' },
+  offset: { type: 'integer', default: 0, description: 'Offset.' },
   limit: {
     type: 'integer',
     default: 20,
-    description: 'Max items to return; capped by maxBrowseResults',
+    description: 'Max rows; capped by maxBrowseResults.',
   },
 } as const
 
@@ -212,6 +205,7 @@ const BROWSE_OUTPUT_SCHEMA = {
     returned: { type: 'integer', required: true },
     libraryVersion: { type: 'integer' },
     nextOffset: { type: 'integer' },
+    maximum: { type: 'integer' },
   },
 } as const
 
@@ -237,7 +231,11 @@ function buildRequest(args: BrowseArgs, config: { maxBrowseResults: number }): Z
   const offset = args.offset ?? 0
   const limit = args.limit ?? 20
   assertIntInRange('offset', offset, 0, 1_000_000)
-  assertIntInRange('limit', limit, 1, config.maxBrowseResults)
+  if (!Number.isInteger(limit) || limit < 1 || limit > config.maxBrowseResults) {
+    invalid(
+      `limit must be an integer between 1 and ${config.maxBrowseResults}; got ${limit}. Set limit <= ${config.maxBrowseResults} and use offset for the next page.`,
+    )
+  }
   const library = parseLibrary(args.library)
   // Fail-closed: libraries/itemTypes/itemFields are global; library param is not allowed
   if (
@@ -424,7 +422,9 @@ export function registerBrowseTool(
         presentResult: presentBrowseResult,
         isConcurrencySafe: () => true,
         async execute(args, exec) {
-          return await service.browse(buildRequest(args, service.config), exec.signal)
+          const request = buildRequest(args, service.config)
+          const value = await service.browse(request, exec.signal)
+          return { ...value, maximum: service.config.maxBrowseResults }
         },
       }),
     ),

@@ -27,7 +27,6 @@ import {
 } from '../constants.js'
 import type { ResolvedConfig } from '../config.js'
 import { isPdfContentType } from '../media-types.js'
-import { citekeyOf } from '../normalize-search.js'
 import { assertPublicationsSupported } from '../refs.js'
 import { isItemTypeIdentifier } from '../ref-grammar.js'
 import { boundedPresentationMeta, projectSearchMeta } from '../presentation-meta.js'
@@ -61,12 +60,15 @@ function toolScopeOf(scope: ZoteroResolvedScope): ToolSearchScope {
 }
 
 const SEARCH_PARAMETERS = {
-  query: { type: 'string', description: 'Free-text query; omit to browse the scope unfiltered.' },
+  query: {
+    type: 'string',
+    description: 'Free text; omit, empty, or whitespace browses unfiltered.',
+  },
   mode: {
     type: 'string',
     enum: ['metadata', 'everything'],
     default: SEARCH_DEFAULT_MODE,
-    description: 'metadata: title/creator/year only; everything: also indexed full text.',
+    description: 'metadata: title/creator/year; everything adds indexed full text.',
   },
   scope: {
     oneOf: [
@@ -108,44 +110,37 @@ const SEARCH_PARAMETERS = {
       },
     ],
     default: SEARCH_DEFAULT_SCOPE,
-    description:
-      'Where to search. Defaults to the whole library; publications searches My Publications.',
+    description: 'Search scope; defaults to library. publications searches My Publications.',
   },
   library: {
     ...LIBRARY_SCHEMA,
-    description:
-      'Library to search (personal user/0 or group/<id>); omit defaults to user/0. For collection/savedSearch by name, this chooses the library; for ref scopes must match the ref.',
+    description: 'Library (default user/0); name scopes resolve here, ref scopes must match.',
   },
   itemTypes: {
     type: 'array',
     items: { type: 'string' },
-    description: 'Zotero item type names (e.g. journalArticle), combined with OR.',
+    description: 'Zotero item types (e.g. journalArticle); combined with OR.',
   },
   tags: {
     type: 'array',
     items: { type: 'string' },
-    description: 'Literal tag names; items must have ALL of them (tagMatch controls ANY).',
+    description: 'Literal tags; default requires ALL (tagMatch can use ANY).',
   },
   tagMatch: {
     type: 'string',
     enum: ['all', 'any'],
-    description: 'How multiple tags combine: all=AND (default), any=OR.',
+    description: 'Tag combination: all=AND (default), any=OR.',
   },
   excludeTags: {
     type: 'array',
     items: { type: 'string' },
-    description: 'Literal tag names to exclude (NOT).',
-  },
-  includeTrashed: {
-    type: 'boolean',
-    description: 'Include trashed items (only with library scope); default false.',
+    description: 'Literal tags to exclude.',
   },
   itemLevel: {
     type: 'string',
     enum: ['top', 'all'],
     default: 'top',
-    description:
-      'top searches only top-level bibliographic items (default); all searches both top-level items and child notes/attachments.',
+    description: 'top-level items (default) or all items including child notes/attachments.',
   },
   sort: {
     type: 'string',
@@ -162,12 +157,12 @@ const SEARCH_PARAMETERS = {
   offset: {
     type: 'integer',
     default: SEARCH_DEFAULT_OFFSET,
-    description: 'Pagination offset for exploring more results.',
+    description: 'Pagination offset.',
   },
   limit: {
     type: 'integer',
     default: SEARCH_DEFAULT_LIMIT,
-    description: 'Maximum results to return; capped by the configured maxSearchResults.',
+    description: 'Result count, capped by maxSearchResults.',
   },
 } as const
 
@@ -181,6 +176,8 @@ const SEARCH_ITEM_SCHEMA = {
     ref: { type: 'string', required: true },
     title: { type: 'string', required: true },
     creatorSummary: { type: 'string', required: true },
+    authors: { type: 'array', items: { type: 'string' } },
+    venue: { type: 'string' },
     year: { type: 'integer' },
     itemType: { type: 'string', required: true },
     parentRef: { type: 'string' },
@@ -188,7 +185,17 @@ const SEARCH_ITEM_SCHEMA = {
     bestAttachmentType: { type: 'string' },
     attachmentSize: { type: 'integer' },
     extra: { type: 'string' },
-    doi: { type: 'string', description: 'Item DOI if present.' },
+    citationKey: { type: 'string' },
+    citationKeySource: { type: 'string', enum: ['native', 'extra'] },
+    citationKeyConflict: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        native: { type: 'string', required: true },
+        extra: { type: 'string', required: true },
+      },
+    },
+    doi: { type: 'string' },
   },
 } as const
 
@@ -288,6 +295,10 @@ const SEARCH_OUTPUT_SCHEMA = {
     total: { type: 'integer', required: true },
     offset: { type: 'integer', required: true },
     returned: { type: 'integer', required: true },
+    maximum: { type: 'integer' },
+    normalizedQuery: { type: 'string' },
+    queryWasEmpty: { type: 'boolean' },
+    nextActions: { type: 'array', items: { type: 'string' } },
     nextOffset: { type: 'integer' },
     supplemental: {
       type: 'object',
@@ -303,6 +314,8 @@ const SEARCH_OUTPUT_SCHEMA = {
 } as const
 
 /** The model-facing messages the search argument rules throw. */
+export const INCLUDE_TRASHED_SCOPE_MESSAGE =
+  'includeTrashed is not available on zotero_search; use the Zotero library panel trash scope.'
 export const SCOPE_REF_OR_NAME_MESSAGE =
   'scope.refOrName must be a collection/saved-search name or ref'
 export const TAGS_LITERAL_MESSAGE =
@@ -310,9 +323,12 @@ export const TAGS_LITERAL_MESSAGE =
 export const EXCLUDE_TAGS_LITERAL_MESSAGE = 'excludeTags are literal tag names'
 export const TAG_MATCH_REQUIRES_TAGS_MESSAGE =
   'tagMatch requires tags; it has no effect without a tag filter'
-export const INCLUDE_TRASHED_SCOPE_MESSAGE = 'includeTrashed is only allowed with library scope'
 export const ITEM_TYPES_LITERAL_MESSAGE =
   'itemTypes are positive Zotero item type names joined with OR'
+
+export function searchLimitMessage(requested: number, maximum: number): string {
+  return `limit must be an integer between 1 and ${maximum}; got ${requested}. Set limit <= ${maximum} and use offset for the next page.`
+}
 
 /** The page announcement: where the next page starts, and that the scope stays. */
 export function searchMoreMessage(nextOffset: number): string {
@@ -326,7 +342,9 @@ export function noteBodyMatchesMessage(count: number, scanned: number, truncated
 
 function buildRequest(args: SearchArgs, config: ResolvedConfig): ZoteroSearchRequest {
   const limit = args.limit ?? SEARCH_DEFAULT_LIMIT
-  assertIntInRange('limit', limit, 1, config.maxSearchResults)
+  if (!Number.isInteger(limit) || limit < 1 || limit > config.maxSearchResults) {
+    invalid(searchLimitMessage(limit, config.maxSearchResults))
+  }
   const offset = args.offset ?? SEARCH_DEFAULT_OFFSET
   assertIntInRange('offset', offset, 0, 1_000_000)
   const query = args.query?.trim()
@@ -349,8 +367,8 @@ function buildRequest(args: SearchArgs, config: ResolvedConfig): ZoteroSearchReq
   const tagMatch = args.tagMatch
   if (tagMatch !== undefined && (args.tags === undefined || args.tags.length === 0))
     invalid(TAG_MATCH_REQUIRES_TAGS_MESSAGE)
-  const includeTrashed = args.includeTrashed
-  if (includeTrashed === true && scope.kind !== 'library') {
+  const legacyIncludeTrashed = (args as Record<string, unknown>).includeTrashed
+  if (legacyIncludeTrashed !== undefined) {
     invalid(INCLUDE_TRASHED_SCOPE_MESSAGE)
   }
   for (const itemType of args.itemTypes ?? []) {
@@ -376,7 +394,6 @@ function buildRequest(args: SearchArgs, config: ResolvedConfig): ZoteroSearchReq
     tags: args.tags,
     ...(tagMatch ? { tagMatch } : {}),
     ...(args.excludeTags ? { excludeTags: args.excludeTags } : {}),
-    ...(includeTrashed ? { includeTrashed: true } : {}),
     itemLevel: args.itemLevel ?? 'top',
     sort: args.sort ?? SEARCH_DEFAULT_SORT,
     direction: args.direction ?? SEARCH_DEFAULT_DIRECTION,
@@ -391,15 +408,24 @@ function formatSearchResultLine(
   index: number,
   withPdfHint: boolean,
 ): string {
-  const citekey = citekeyOf(item.extra)
+  const citekey = item.citationKey
   const citeTag = citekey ? ` [@${citekey}]` : ''
+  const conflict = item.citationKeyConflict
+  const conflictTag = conflict
+    ? ` [citation key conflict: native=${conflict.native}, extra=${conflict.extra}]`
+    : ''
   const creator = item.creatorSummary === '' ? '' : ` — ${item.creatorSummary}`
   const pdf = withPdfHint && isPdfContentType(item.bestAttachmentType) ? ' — PDF' : ''
-  return `${index + 1}. ${formatSearchLine(item.ref, item.title, item.year, item.itemType)}${citeTag}${creator}${pdf}`
+  return `${index + 1}. ${formatSearchLine(item.ref, item.title, item.year, item.itemType)}${citeTag}${conflictTag}${creator}${pdf}`
 }
 
 export function renderSearch(_args: SearchArgs, value: SearchOutput): ContentBlock[] {
   const lines = [`Found ${value.returned} of ${value.total} results:`]
+  if (value.returned === 0) {
+    lines.push(
+      `No matches. ${value.nextActions?.join('; ') ?? 'Try a DOI, shorten the title, or add an author surname.'}.`,
+    )
+  }
   value.items.forEach((item, index) => {
     lines.push(formatSearchResultLine(item, index, true))
   })
@@ -481,13 +507,18 @@ export function registerSearchTool(
         presentResult: presentSearchResult,
         isConcurrencySafe: () => true,
         async execute(args, exec) {
+          const request = buildRequest(args, service.config)
           const result = await service.search(
-            buildRequest(args, service.config),
+            request,
             exec.signal,
             // The model consumes the note-body supplement.
             { includeSupplemental: true },
           )
-          return { ...result, scope: toolScopeOf(result.scope) }
+          return {
+            ...result,
+            maximum: service.config.maxSearchResults,
+            scope: toolScopeOf(result.scope),
+          }
         },
       }),
     ),

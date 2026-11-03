@@ -122,6 +122,35 @@ describe('zotero_get tool', () => {
     expect(text).toContain('Additional fields: libraryCatalog: Zotero; repository: Zenodo')
   })
 
+  it('renders native citekeys separately and exposes conflicts without hiding extra fields', async () => {
+    mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) =>
+      helpers.json({
+        ...GET_PARENT,
+        data: {
+          ...GET_PARENT.data,
+          collections: [],
+          citationKey: 'nativeKey',
+          extra: 'Citation Key: oldKey',
+        },
+      }),
+    )
+    const result = expectValue(
+      await runTool('zotero_get', { ref: 'zotero://user/0/item/ABCD1234', fields: 'all' }),
+      'zotero_get',
+    )
+    expect(result.value).toMatchObject({
+      citationKey: 'nativeKey',
+      citationKeySource: 'native',
+      citationKeyConflict: { native: 'nativeKey', extra: 'oldKey' },
+    })
+    expect(
+      (result.value as { extraFields?: Record<string, unknown> }).extraFields?.citationKey,
+    ).toBeUndefined()
+    const text = (result.content[0] as { text: string }).text
+    expect(text).toContain('Citation key (native): nativeKey')
+    expect(text).toContain('Citation key conflict: native=nativeKey; extra=oldKey')
+  })
+
   it('renders a bare item without decorations', async () => {
     mock.route('GET', '/api/users/0/items/ABCD1234', (req, res, helpers) =>
       helpers.json({

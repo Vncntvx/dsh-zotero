@@ -298,6 +298,8 @@ describe('scholarly_verify tool', () => {
     expect(result.text).toContain('1 unverified')
     expect(result.text).toContain('UNVERIFIED')
     expect(result.text).toContain('Crossref lookup failed')
+    expect(result.text).toContain('scholarly_get')
+    expect(result.text).toContain('retry scholarly_verify')
     expect(result.text).not.toContain('does not exist in Crossref registry')
   })
 
@@ -444,6 +446,7 @@ describe('scholarly_cite identifier resolution', () => {
       EXEC_CONTEXT as never,
     )) as { text: string }
     expect(result.text).toContain('No DOI found')
+    expect(result.text).toContain('scholarly_get')
   })
 
   it('reports a 404 as a DOI that does not exist on doi.org', async () => {

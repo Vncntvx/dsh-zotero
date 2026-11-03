@@ -20,6 +20,10 @@ export function canonicalToolArgs(
     zotero_retrieve: { ref: CANONICAL_ITEM_REF, query: 'disaster response' },
     zotero_export: { format: 'bibtex', refs: [CANONICAL_ITEM_REF] },
     zotero_get: { ref: CANONICAL_ITEM_REF },
+    zotero_get_batch: { refs: [CANONICAL_ITEM_REF, CANONICAL_ATTACHMENT_REF] },
+    zotero_match_references: {
+      references: [{ inputId: 'ref-1', doi: '10.1234/example', title: 'A study' }],
+    },
     zotero_create_note: { markdown: '# Note' },
     zotero_update_note: { ref: CANONICAL_ITEM_REF, markdown: '# Updated' },
     zotero_update_item_tags: { ref: CANONICAL_ITEM_REF, add: ['ai'] },

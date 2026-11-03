@@ -51,25 +51,23 @@ const RETRIEVE_PARAMETERS = {
     type: 'array',
     items: { type: 'string', enum: ['annotation', 'note', 'abstract', 'fulltext'] },
     default: ALL_SOURCES,
-    description:
-      'Evidence sources to gather; defaults to all four. Sources the item cannot provide are skipped and reported in sourcesSkipped, not an error.',
+    description: 'Sources to gather (default all); unavailable sources appear in sourcesSkipped.',
   },
   passages: {
     type: 'integer',
     default: DEFAULT_PASSAGES,
-    description:
-      'Maximum ranked evidence passages to return; capped by the configured maxEvidencePassages.',
+    description: 'Passage cap, bounded by maxEvidencePassages.',
   },
   attachmentPolicy: {
     type: 'string',
     enum: ['best', 'allIndexed', 'specified'],
-    description:
-      "How full text is sourced when requested. best (default) uses Zotero's single chosen PDF; allIndexed ranks every PDF child (publisher copy, manuscript, supplement); specified ranks exactly the attachmentRefs.",
+    description: 'Full-text source: best (default), allIndexed PDFs, or specified attachmentRefs.',
   },
   attachmentRefs: {
     type: 'array',
     items: { type: 'string' },
-    description: `Required with attachmentPolicy="specified": zotero://.../attachment/<KEY> refs of the same library whose full text enters ranking. Each must be an attachment of ref (a child of that item) on the same Zotero instance; anything else fails the call. Repeats are read once; the number entering one call is capped by the configured retrieveAttachmentCap.`,
+    description:
+      'For specified: attachment refs belonging to ref in the same library and instance; repeats read once, bounded by retrieveAttachmentCap.',
   },
 } as const
 

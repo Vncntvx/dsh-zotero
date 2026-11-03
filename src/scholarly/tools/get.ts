@@ -179,7 +179,10 @@ export function createScholarlyGetTool(host: ScholarlyToolHost): ToolDefinition 
         // Only the first may say "verify the identifier".
         const unanswered =
           failedSources.length > 0 ? ` Unanswered sources: ${failedSources.join('; ')}.` : ''
-        const remedy = failedSources.length > 0 ? '' : ' Please verify the identifier.'
+        const remedy =
+          failedSources.length > 0
+            ? ' Use scholarly_search for broader candidates after the unavailable sources recover.'
+            : ' Verify the identifier or use scholarly_search for broader candidates.'
         return {
           text: `No scholarly index found a paper matching "${raw}".${unanswered}${remedy}`,
           papers: [],

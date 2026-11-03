@@ -56,7 +56,8 @@ describe('zotero_browse validation', () => {
       },
       {
         args: { kind: 'tags', limit: 9999 },
-        contains: intRangeArgumentMessage('limit', 9999, 1, 50),
+        contains:
+          'limit must be an integer between 1 and 50; got 9999. Set limit <= 50 and use offset for the next page.',
       },
       // The kind enum is the parameter schema's, not this plugin's message.
       { args: { kind: 'unsupported' }, contains: 'kind' },

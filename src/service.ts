@@ -85,6 +85,10 @@ import type {
   ZoteroDeleteLibraryTagsRequest,
   ZoteroDeleteLibraryTagsResult,
   ZoteroGetRequest,
+  ZoteroGetBatchRequest,
+  ZoteroGetBatchResult,
+  ZoteroMatchReferencesRequest,
+  ZoteroMatchReferencesResult,
   ZoteroItemDetail,
   ZoteroObjectRef,
   ZoteroExportRequest,
@@ -463,6 +467,28 @@ export class ZoteroService extends Service {
     this.requireCapability(provider, 'metadata')
     const getItem = this.requireMethod(provider, 'getItem')
     return await getItem(request, signal)
+  }
+
+  /** Read multiple item refs with bounded concurrency and per-ref outcomes. */
+  async getBatch(
+    request: ZoteroGetBatchRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroGetBatchResult> {
+    const provider = this.resolveProvider()
+    this.requireCapability(provider, 'metadata')
+    const getBatch = this.requireMethod(provider, 'getBatch')
+    return await getBatch(request, signal)
+  }
+
+  /** Match external reference fingerprints against local Zotero metadata. */
+  async matchReferences(
+    request: ZoteroMatchReferencesRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroMatchReferencesResult> {
+    const provider = this.resolveProvider()
+    this.requireCapability(provider, 'metadata')
+    const match = this.requireMethod(provider, 'matchReferences')
+    return await match(request, signal)
   }
 
   /**

@@ -15,6 +15,160 @@ import { buildSourceWorkspace } from '../../../src/client/sources/reducer.ts'
 import { REF, block } from './reducer-fixtures.ts'
 
 describe('buildSourceWorkspace', () => {
+  describe('batch reads and reference matching', () => {
+    it('records every ref from a bounded batch projection in the Sources ledger', () => {
+      const refs = Array.from({ length: 25 }, (_, index) =>
+        REF(`Q${String(index).padStart(6, '0')}`),
+      )
+      const workspace = buildSourceWorkspace([
+        block(
+          'b-wide',
+          1,
+          'zotero_get_batch',
+          { refs },
+          {
+            meta: {
+              counts: { requested: 25, succeeded: 24, failed: 1 },
+              statuses: refs.map((_, index) => (index === 24 ? 'error' : 'ok')),
+              items: refs.slice(0, 20).map((ref, index) => ({
+                ref,
+                status: 'ok',
+                title: `Paper ${index}`,
+              })),
+              omitted: 5,
+            },
+          },
+        ),
+      ])
+      expect(workspace.sources).toHaveLength(25)
+      expect(workspace.sources.every((source) => source.operations.running === 0)).toBe(true)
+      expect(workspace.sources.slice(0, 24).every((source) => source.operations.failed === 0)).toBe(
+        true,
+      )
+      expect(workspace.sources.slice(20).map((source) => source.ref)).toEqual(refs.slice(20))
+      expect(workspace.sources[24]?.operations).toEqual({ running: 0, failed: 1, stopped: 0 })
+    })
+
+    it('keeps successful batch details and counts per-ref or whole-call failures', () => {
+      const workspace = buildSourceWorkspace([
+        block(
+          'b1',
+          1,
+          'zotero_get_batch',
+          { refs: [REF('A1'), REF('B2'), REF('C3')] },
+          {
+            meta: {
+              items: [
+                null,
+                { status: 'ok' },
+                { ref: REF('A1'), status: 'error', code: 'ZOTERO_NOT_FOUND' },
+                {
+                  ref: REF('B2'),
+                  status: 'ok',
+                  title: 'Batch result',
+                  creators: 'Ada Lovelace',
+                  venue: 'Computing Annals',
+                  year: 1843,
+                  bestAttachmentRef: 'zotero://user/0/attachment/ATTACH01',
+                  bestAttachmentType: 'application/pdf',
+                },
+                { ref: REF('C3'), status: 'ok', year: 1843.5 },
+              ],
+            },
+          },
+        ),
+        settled({
+          callId: 'b2',
+          seq: 2,
+          call: { name: 'zotero_get_batch', argsRaw: JSON.stringify({ refs: [REF('D4')] }) },
+          isError: true,
+          meta: { items: [{ ref: REF('D4'), status: 'ok', title: 'Must not be recorded' }] },
+        }),
+      ])
+
+      const a1 = workspace.sources.find((item) => item.ref === REF('A1'))
+      const b2 = workspace.sources.find((item) => item.ref === REF('B2'))
+      const c3 = workspace.sources.find((item) => item.ref === REF('C3'))
+      const d4 = workspace.sources.find((item) => item.ref === REF('D4'))
+      expect(a1?.operations).toEqual({ running: 0, failed: 1, stopped: 0 })
+      expect(a1?.title).toBeUndefined()
+      expect(b2).toMatchObject({
+        title: 'Batch result',
+        creators: 'Ada Lovelace',
+        venue: 'Computing Annals',
+        year: 1843,
+        bestAttachment: {
+          ref: 'zotero://user/0/attachment/ATTACH01',
+          contentType: 'application/pdf',
+        },
+      })
+      expect(c3?.year).toBeUndefined()
+      expect(d4?.operations).toEqual({ running: 0, failed: 1, stopped: 0 })
+      expect(d4?.title).toBeUndefined()
+    })
+
+    it('records selected matches and candidate facts, but ignores malformed or failed results', () => {
+      const workspace = buildSourceWorkspace([
+        block(
+          'm1',
+          1,
+          'zotero_match_references',
+          { references: [{ inputId: 'selected', title: 'Selected' }] },
+          {
+            meta: {
+              items: [
+                null,
+                {
+                  inputId: 'selected',
+                  selected: {
+                    ref: REF('E5'),
+                    title: 'Selected match',
+                    authors: ['Ada Lovelace', 3],
+                    venue: 'Computing Annals',
+                    year: 1843,
+                  },
+                  candidates: [{ ref: REF('IGNORED'), title: 'Not selected' }],
+                },
+                {
+                  inputId: 'candidate',
+                  candidates: [
+                    { ref: REF('F6'), title: 'Candidate match', authors: [], year: 2023.5 },
+                    { ref: REF('NO_TITLE') },
+                    { title: 'No ref' },
+                    'junk',
+                  ],
+                },
+              ],
+            },
+          },
+        ),
+        block('m2', 2, 'zotero_match_references', { references: [] }, { meta: { items: 'bad' } }),
+        block(
+          'm3',
+          3,
+          'zotero_match_references',
+          { references: [{ inputId: 'failed' }] },
+          {
+            isError: true,
+            meta: { items: [{ selected: { ref: REF('FAILED'), title: 'Not recorded' } }] },
+          },
+        ),
+      ])
+
+      expect(workspace.sources).toHaveLength(2)
+      expect(workspace.sources[0]).toMatchObject({
+        ref: REF('E5'),
+        title: 'Selected match',
+        creators: 'Ada Lovelace',
+        venue: 'Computing Annals',
+        year: 1843,
+      })
+      expect(workspace.sources[1]).toMatchObject({ ref: REF('F6'), title: 'Candidate match' })
+      expect(workspace.sources[1]?.creators).toBeUndefined()
+      expect(workspace.sources[1]?.year).toBeUndefined()
+    })
+  })
+
   describe('export artifacts and attribution', () => {
     it('skips an export with neither projection refs nor usable arguments', () => {
       const workspace = buildSourceWorkspace([
@@ -69,13 +223,15 @@ describe('buildSourceWorkspace', () => {
               requested: 1,
               refs: [REF('A1')],
               refsOmitted: 0,
-              items: [{ ref: REF('A1'), key: 'a1', title: 'Alpha' }],
+              items: [{ ref: REF('A1'), exportKey: 'a1', title: 'Alpha' }],
             },
             content: [{ type: 'text', text: '@article{a1}' }],
           },
         ),
       ])
-      expect(workspace.exports[0]!.items).toEqual([{ ref: REF('A1'), key: 'a1', title: 'Alpha' }])
+      expect(workspace.exports[0]!.items).toEqual([
+        { ref: REF('A1'), exportKey: 'a1', title: 'Alpha' },
+      ])
     })
 
     it('drops malformed item rows while decoding the rest', () => {
@@ -92,7 +248,7 @@ describe('buildSourceWorkspace', () => {
               refs: [REF('A1'), REF('A2')],
               refsOmitted: 0,
               items: [
-                { ref: REF('A1'), key: 'a1' },
+                { ref: REF('A1'), exportKey: 'a1' },
                 { key: 'no-ref' },
                 'junk',
                 { ref: REF('A2'), key: 7 },
@@ -103,7 +259,7 @@ describe('buildSourceWorkspace', () => {
         ),
       ])
       expect(workspace.exports[0]!.items).toEqual([
-        { ref: REF('A1'), key: 'a1' },
+        { ref: REF('A1'), exportKey: 'a1' },
         { ref: REF('A2') },
       ])
     })

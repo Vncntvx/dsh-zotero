@@ -229,6 +229,7 @@ describe('scholarly_get tool', () => {
     expect(result.text).toContain('No scholarly index found a paper matching')
     expect(result.text).toContain('Unanswered sources:')
     expect(result.text).toContain('Europe PMC (HTTP 404 from www.ebi.ac.uk)')
+    expect(result.text).toContain('scholarly_search')
     expect(result.text).not.toContain('Please verify the identifier')
   })
 

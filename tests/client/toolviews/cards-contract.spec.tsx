@@ -38,6 +38,10 @@ const META: Record<string, Record<string, unknown>> = {
     bestAttachmentRef: ATTACHMENT_REF,
     bestAttachmentType: 'application/pdf',
   },
+  zotero_get_batch: { items: [], counts: { requested: 2, succeeded: 2, failed: 0 } },
+  zotero_match_references: {
+    items: [{ inputId: 'ref-1', status: 'matched', selected: { ref: ITEM_REF } }],
+  },
   zotero_retrieve: {
     count: 1,
     query: 'disaster response',

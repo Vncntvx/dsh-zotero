@@ -10,6 +10,8 @@ import { registerBrowseTool } from './tools/browse.js'
 import { registerChangesTool } from './tools/changes.js'
 import { registerExportTool } from './tools/export.js'
 import { registerGetTool } from './tools/get.js'
+import { registerGetBatchTool } from './tools/get-batch.js'
+import { registerMatchReferencesTool } from './tools/match-references.js'
 import { registerRetrieveTool } from './tools/retrieve.js'
 import { registerSearchTool } from './tools/search.js'
 import { registerBatchItemsTool } from './tools/batch-items.js'
@@ -36,6 +38,8 @@ export function registerReadTools(ctx: Context, service: ZoteroService): void {
   const wrap: ToolWrapper = (definition) => delivery.wrap(definition)
   registerSearchTool(ctx, service, wrap)
   registerGetTool(ctx, service, wrap)
+  registerGetBatchTool(ctx, service, wrap)
+  registerMatchReferencesTool(ctx, service, wrap)
   registerRetrieveTool(ctx, service, wrap)
   registerBrowseTool(ctx, service, wrap)
   registerExportTool(ctx, service, delivery, wrap)

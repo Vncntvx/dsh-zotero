@@ -41,6 +41,8 @@ import type { LocalApiLimits } from './limits.js'
 import { runSearch } from './search-domain.js'
 import { createSearchIndexCaches, type SearchIndexCaches } from './search-index.js'
 import { getItem as getItemDomain, getChildPage as getChildPageDomain } from './detail.js'
+import { getBatch as getBatchDomain } from './get-batch-domain.js'
+import { matchReferences as matchReferencesDomain } from './match-references-domain.js'
 import { retrieve as retrieveDomain } from './retrieve.js'
 import { getAttachmentLocation as attachmentLocationDomain } from './attachment-location.js'
 import {
@@ -103,6 +105,10 @@ import type {
   ZoteroExportResult,
   ZoteroExportTextResult,
   ZoteroGetRequest,
+  ZoteroGetBatchRequest,
+  ZoteroGetBatchResult,
+  ZoteroMatchReferencesRequest,
+  ZoteroMatchReferencesResult,
   ZoteroItemDetail,
   ZoteroObjectRef,
   ZoteroProgressEvent,
@@ -316,6 +322,27 @@ export class LocalApiProvider implements ZoteroProvider {
    */
   async getItem(request: ZoteroGetRequest, signal?: AbortSignal): Promise<ZoteroItemDetail> {
     return getItemDomain(this.deps(), this.directory, request, signal)
+  }
+
+  async getBatch(
+    request: ZoteroGetBatchRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroGetBatchResult> {
+    return getBatchDomain((item, itemSignal) => this.getItem(item, itemSignal), request, signal)
+  }
+
+  async matchReferences(
+    request: ZoteroMatchReferencesRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroMatchReferencesResult> {
+    return matchReferencesDomain(
+      {
+        search: (searchRequest, searchSignal) =>
+          this.search(searchRequest, searchSignal, { includeSupplemental: false }),
+      },
+      request,
+      signal,
+    )
   }
 
   /** One paged child listing; the domain owns the ref/window/cap rules. */

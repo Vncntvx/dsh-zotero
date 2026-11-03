@@ -48,31 +48,31 @@ const GET_PARAMETERS = {
     type: 'string',
     enum: ['none', 'best', 'included'],
     description:
-      'none (default): metadata only. best: resolve target attachment or item best attachment. included: resolve only returned attachments; requires include attachments and an item ref.',
+      'none (default), best attachment, or included attachments; included requires include attachments.',
   },
   childPages: {
     type: 'object',
     additionalProperties: false,
     properties: { notes: PAGE_PARAMETER, annotations: PAGE_PARAMETER, attachments: PAGE_PARAMETER },
     description:
-      'Optional independent windows (offset >= 0, limit 1–100). Omitted kinds read all requested children and their full normalized bodies.',
+      'Per-kind child windows (offset >= 0, limit 1–100); omitted windows read all requested children.',
   },
   ref: {
     type: 'string',
     required: true,
-    description: `A ${REF_ARG_HINT} item or attachment ref (zotero://user/0/item/<KEY> or zotero://user/0/attachment/<KEY>).`,
+    description: `One ${REF_ARG_HINT} item or attachment ref. For multiple refs use zotero_get_batch.`,
   },
   include: {
     type: 'array',
     items: { type: 'string', enum: ['notes', 'annotations', 'attachments'] },
     description:
-      'Child content kinds to include. Omit for metadata only. For items, notes/attachments read direct children; annotations read under PDF attachments. For attachments, annotations read its annotations. Locations are resolved only when explicitly requested.',
+      'Child kinds to include; omit for metadata only. Item annotations are read under PDF attachments.',
   },
   fields: {
     type: 'string',
     enum: ['standard', 'all'],
     description:
-      'standard (default) returns the normalized model; all additionally returns extraFields, which is every data field the model does not consume (repository, archive, number-of-pages, …), so special item types keep their metadata.',
+      'standard normalized fields; all also returns unconsumed Zotero data in extraFields.',
   },
 } as const
 
@@ -101,6 +101,16 @@ const GET_OUTPUT_SCHEMA = {
       },
     },
     extra: { type: 'string' },
+    citationKey: { type: 'string' },
+    citationKeySource: { type: 'string', enum: ['native', 'extra'] },
+    citationKeyConflict: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        native: { type: 'string', required: true },
+        extra: { type: 'string', required: true },
+      },
+    },
     date: { type: 'string' },
     year: { type: 'integer' },
     venue: { type: 'string' },
@@ -219,6 +229,15 @@ export function renderGet(_args: GetArgs, value: GetOutput): ContentBlock[] {
     lines.push(FILE_ENVIRONMENT_MESSAGE)
   }
   if (value.extra !== undefined) lines.push(`Extra: ${value.extra}`)
+  if (value.citationKey !== undefined) {
+    const source = value.citationKeySource === undefined ? '' : ` (${value.citationKeySource})`
+    lines.push(`Citation key${source}: ${value.citationKey}`)
+  }
+  if (value.citationKeyConflict !== undefined) {
+    lines.push(
+      `Citation key conflict: native=${value.citationKeyConflict.native}; extra=${value.citationKeyConflict.extra}`,
+    )
+  }
   const venueLine = [
     value.venue,
     value.date,

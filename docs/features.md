@@ -6,11 +6,13 @@ dsh-zotero 把 Zotero 文献库接进 DSH。Agent 在对话里检索、阅读、
 
 ## 在对话中检索与研读
 
-Agent 有 6 个只读工具，参数和错误码见[工具参考](tools.md)。
+Agent 有 8 个只读工具，参数和错误码见[工具参考](tools.md)。
 
 - `zotero_search` 默认匹配标题、作者和年份，`everything` 模式连全文索引一起搜。范围可以是整个库、个人出版物、某个合集或某个保存的搜索。第一页会顺带扫笔记正文，命中的笔记条目单列在 `supplemental` 里，不计入分页总数。
 - `zotero_browse` 读合集树、标签列表和保存的搜索，单页条数受 `maxBrowseResults` 约束，响应携带总数与游标。
-- `zotero_get` 返回标题、作者、年份、期刊、DOI、URL 和摘要。加上 `include` 可以取子笔记正文、PDF 批注和附件列表。
+- `zotero_get` 返回标题、作者、年份、期刊、DOI、URL、摘要和独立的 `citationKey`；citekey 来源冲突会显式标记。加上 `include` 可以取子笔记正文、PDF 批注和附件列表。
+- `zotero_get_batch` 按输入顺序批量读取最多 50 个已知 ref，每条结果独立报告；单条读取仍用 `zotero_get`。
+- `zotero_match_references` 用 DOI、BibTeX 键和文献指纹与本地库对账，返回 ref、citekey、置信度和可审阅的字段差异；citekey 冲突不会被静默选中。
 - `zotero_retrieve` 从批注、笔记、摘要和全文索引里找片段，用 BM25 词频排序。每条片段带来源和页码标签，页码只有批注才有，取自 Zotero；命中落在正文还是批注评论会标出来。全文覆盖度放在 `coverage`，没建索引或读不到的来源记进 `sourcesSkipped`，附件状态分 `indexed`、`unindexed`、`unread`。
 - `zotero_export` 支持六种格式。除 `citation` 外，单次最多 50 篇，这是 Zotero `itemKey` 的请求上限；`citation` 按 50 一组分批。
 

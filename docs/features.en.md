@@ -6,11 +6,13 @@ dsh-zotero connects the Zotero library to DSH. The agent searches, reads, and ci
 
 ## Searching and Reading in Conversation
 
-The agent has six read-only tools. Parameters and error codes are in the [tool reference](tools.en.md).
+The agent has eight read-only tools. Parameters and error codes are in the [tool reference](tools.en.md).
 
 - `zotero_search` matches title, author, and year by default, and `everything` mode searches the full-text index as well. The scope can be the whole library, My Publications, a collection, or a saved search. The first page also scans note bodies; matching items are listed separately in `supplemental` and do not count toward the pagination total.
 - `zotero_browse` reads the collection tree, tag list, and saved searches; the page size is bounded by `maxBrowseResults`, and the response carries the total and paging cursor.
-- `zotero_get` returns title, authors, year, journal, DOI, URL, and abstract. Add `include` to load child note bodies, PDF annotations, and the attachment list.
+- `zotero_get` returns title, authors, year, journal, DOI, URL, abstract, and a separate `citationKey`; citekey-source conflicts are explicit. Add `include` to load child note bodies, PDF annotations, and the attachment list.
+- `zotero_get_batch` reads up to 50 known refs in input order and reports each result independently; use `zotero_get` for one ref.
+- `zotero_match_references` reconciles DOI, BibTeX keys, and reference fingerprints with the local library, returning refs, citekeys, confidence, and reviewable field differences; citekey conflicts are never silently selected.
 - `zotero_retrieve` finds passages in annotations, notes, the abstract, and the full-text index and ranks them by BM25 term frequency. Each passage carries its source and a page label; only annotations have page numbers, taken from Zotero. The result marks whether a hit landed in body text or an annotation comment. Full-text coverage is in `coverage`, sources that are unindexed or unreadable go into `sourcesSkipped`, and attachment status is `indexed`, `unindexed`, or `unread`.
 - `zotero_export` supports six formats. Every format except `citation` takes at most 50 items per call, the request limit of Zotero's `itemKey`; `citation` batches in groups of 50.
 

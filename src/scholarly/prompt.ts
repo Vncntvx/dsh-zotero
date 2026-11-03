@@ -41,6 +41,9 @@ const SCHOLARLY_TOOL_ROLES: Readonly<Record<ScholarlyToolName, string>> = {
  */
 export const SCHOLARLY_TOOL_ROUTING = `Scholarly tools (the external literature component): ${SCHOLARLY_TOOL_NAMES.map((name) => `${name} ${SCHOLARLY_TOOL_ROLES[name]}`).join('; ')}. Use zotero_* for the local library; the scholarly tools reach external indexes only.`
 
+export const SCHOLARLY_ROUTE_SENTENCE =
+  'For DOI metadata, Crossref lookup, and citation verification, use scholarly_get, scholarly_cite, or scholarly_verify; do not route academic index requests through generic web_fetch. Generic web access remains available when the user asks for ordinary webpage content.'
+
 /**
  * The honesty rule the source layer depends on: a rate-limited or unreachable
  * index reported as "no such paper" makes the user delete a correct citation.
@@ -70,6 +73,7 @@ export const SCHOLARLY_SAVE_SENTENCE =
 function scholarlyPromptTextOf(config: ResolvedScholarlyConfig): string {
   return [
     SCHOLARLY_TOOL_ROUTING,
+    SCHOLARLY_ROUTE_SENTENCE,
     `Tool caps (set on the dsh-zotero/scholarly configuration page): scholarly_search returns at most ${config.maxResults} papers per search, scholarly_citations at most ${config.maxResults} citation records, and scholarly_read at most ${config.maxContentChars} characters per chunk. A request above a cap is reduced to it. When a chunk stops before the end of the text, scholarly_read reports is_truncated with next_start, and the next call continues from that offset.`,
     SCHOLARLY_UNANSWERED_SENTENCE,
     SCHOLARLY_UNTRUSTED_SENTENCE,

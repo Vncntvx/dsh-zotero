@@ -169,13 +169,15 @@ export const ZOTERO_WRITE_TOOL_NAMES = [
 ] as const
 
 /**
- * The six read tools, in ZoteroService registration order (export and
+ * The eight read tools, in ZoteroService registration order (export and
  * zotero_changes register unconditionally; only their run_in_background
  * parameter waits on the jobs service).
  */
 export const ZOTERO_READ_TOOL_NAMES = [
   'zotero_search',
   'zotero_get',
+  'zotero_get_batch',
+  'zotero_match_references',
   'zotero_retrieve',
   'zotero_browse',
   'zotero_export',

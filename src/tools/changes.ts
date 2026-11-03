@@ -145,7 +145,7 @@ const BASE_CHANGES_PARAMETERS = {
   since: {
     ...CURSOR_INPUT_SCHEMA,
     description:
-      'The cursor to diff from, passed back verbatim from an earlier zotero_changes result. It carries the instance, the library, the version, the resource kinds it covers, and the kinds the build cannot serve (`unserved`): a bare version number is not accepted, because the same number means an unrelated counter in another database or library. A cursor from another instance is rejected, one for another library is an argument error, and every kind this call asks for must appear in the cursor\u2019s include or unserved list. Never advance from a result without a cursor: that read did not verify the whole range. Omit to take a baseline reading (current version, no diffs).',
+      'Cursor from an earlier result; it binds instance, library, version, included and unserved kinds. Bare versions and cursors for another instance/library are rejected. Requested kinds must be in include or unserved. Omit for a baseline; only advance with a returned cursor.',
   },
   include: {
     type: 'array',
@@ -154,7 +154,7 @@ const BASE_CHANGES_PARAMETERS = {
     // stays the single authority (buildRequest falls back to it directly).
     default: [...DEFAULT_INCLUDES] as ZoteroChangesInclude[],
     description:
-      'Resource kinds to diff; defaults to everything but fulltext. items covers the whole item space as Zotero partitions it: top-level items, child objects (notes, attachments, annotations), and items in the trash. Each is reported as its own list, because a child object carries its own version: editing one advances the library without touching any top-level item. deleted lists tombstoned items, collections, saved searches and tag names. fulltext is a separate listing: its endpoint answers in the full-text index\u2019s own version counter, so its rows are not a delta on the library version and it is left out unless named explicitly.',
+      'Kinds to diff (default all except fulltext). items includes top-level, child, and trashed items; deleted lists observed removals. fulltext uses a separate index version and must be requested explicitly.',
   },
 } as const
 
@@ -564,10 +564,10 @@ export function registerChangesTool(
       defineTool({
         name: 'zotero_changes',
         description: [
-          'See what changed in the Zotero library since a version: new/edited items (top-level items, the notes/attachments/annotations under them, and trashed items, each listed apart), collections, saved searches, reindexed full text, and deletions.',
-          'Call without since first to take a baseline reading, then pass the cursor it returns back as since, fully local, no cloud.',
-          'Listings are capped digests; totals reports the true counts behind them. A returned cursor always accounts for every change in the range it reports, so it is safe to pass back as since; a result without one is not. The cursor is pinned to the instance and library it came from, and a cursor from another database is refused instead of diffed against this one.',
-          'unobservable names every kind this call could not cover, with the reason: a build that does not serve it, a range older than the history the build keeps, or an answer it could not read. Never read an absent listing as "nothing changed" before checking unobservable; deleted is present exactly when removals were actually observed. versionUnavailable means the build reports no library version at all, so no diff can be taken from it.',
+          'Read local Zotero changes since a version: items, child objects, collections, saved searches, fulltext, and deletions.',
+          'Omit since for a baseline; pass its cursor back for the next diff.',
+          'Totals are complete while listings are capped. Only a result with a cursor covers its full range; cursors are instance/library-bound.',
+          'Check unobservable before treating a missing list as unchanged. deleted lists observed removals; versionUnavailable means no library version.',
         ].join(' '),
         parameters,
         output: {

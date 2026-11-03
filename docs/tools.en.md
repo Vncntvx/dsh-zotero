@@ -2,9 +2,9 @@
 
 # Tool Reference
 
-dsh-zotero registers 21 local tools (6 read tools and 15 write tools) that work with the Zotero library through the local Zotero HTTP API. The 15 write tools are off by default and need `writeEnabled` turned on in configuration, and they operate only on the personal library (`zotero://user/0/`). Another 7 scholarly retrieval tools belong to the separate `dsh-zotero/scholarly` component, which ships with the package and is off by default; enabling that component enables those tools. Every item reference (ref) is a stable identifier in `zotero://user/0/item/<KEY>` (personal library) or `zotero://group/<ID>/item/<KEY>` (group library) form.
+dsh-zotero registers 23 local tools (8 read tools and 15 write tools) that work with the Zotero library through the local Zotero HTTP API. The 15 write tools are off by default and need `writeEnabled` turned on in configuration, and they operate only on the personal library (`zotero://user/0/`). Another 7 scholarly retrieval tools belong to the separate `dsh-zotero/scholarly` component, which ships with the package and is off by default; enabling that component enables those tools. Every item reference (ref) is a stable identifier in `zotero://user/0/item/<KEY>` (personal library) or `zotero://group/<ID>/item/<KEY>` (group library) form.
 
-All six local read tools share a delivery envelope. `{delivery:"inline", data:…}` contains the complete domain result within both budgets. `{delivery:"file", version:1, tool, sessionId, callId, summary, file, facts}` contains bounded facts and a standard Harness FileBlock. Its immutable JSON file contains `{version:1, tool, request, data}` with the complete domain result. Page completeness (`page` or `complete`) is independent of delivery. Parse large single-line fields with the official `run_code` Node file interface; line-oriented previews can truncate long lines.
+All eight local read tools share a delivery envelope. `{delivery:"inline", data:…}` contains the complete domain result within both budgets. `{delivery:"file", version:1, tool, sessionId, callId, summary, file, facts}` contains bounded facts and a standard Harness FileBlock. Its immutable JSON file contains `{version:1, tool, request, data}` with the complete domain result. Page completeness (`page` or `complete`) is independent of delivery. Parse large single-line fields with the official `run_code` Node file interface; line-oriented previews can truncate long lines.
 
 Files are saved with `AttachmentStore.saveFileStream`; validated receipts live in the `zotero_results` storage domain. Both services are required for oversized or managed background results. Any save, index, cancellation or integrity failure is an error; full text never falls back inline. Completed `job_output` for an owned Zotero job appends the same file reference without changing its canonical value. Nested PTC calls forward standard file context. Original background acknowledgements retain `resultSessionId`; the client can read an already-persisted receipt after restart, but running jobs are not resumed.
 
@@ -18,26 +18,25 @@ Search for items in the library. Supports metadata matching and full-text search
 
 ### Parameters
 
-| Parameter        | Type                           | Default             | Description                                                                                                                                                                             |
-| ---------------- | ------------------------------ | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `query`          | string                         | none                | Free-text query; omit it to browse all items                                                                                                                                            |
-| `mode`           | `"metadata"` \| `"everything"` | `"metadata"`        | Search mode: `metadata` matches title/author/year; `everything` also searches the full-text index                                                                                       |
-| `scope`          | object                         | `{kind: "library"}` | Search scope: `{kind:"library"}`, `{kind:"collection", refOrName}`, `{kind:"savedSearch", refOrName}`, or `{kind:"publications"}` (`publications` is personal library only)             |
-| `library`        | object                         | none                | Target library: `{type:"user", id:0}` or `{type:"group", id}`; sets the context when `scope` is given a name                                                                            |
-| `itemTypes`      | string[]                       | none                | Zotero item types (such as `journalArticle`), combined with OR                                                                                                                          |
-| `tags`           | string[]                       | none                | Tag list; `tagMatch` decides how they combine                                                                                                                                           |
-| `tagMatch`       | `"all"` \| `"any"`             | `"all"`             | Multi-tag matching: `all` is AND, `any` is OR (used with `tags`)                                                                                                                        |
-| `excludeTags`    | string[]                       | none                | Tags to exclude (NOT)                                                                                                                                                                   |
-| `includeTrashed` | boolean                        | `false`             | Whether to include items in the trash (`library` scope only)                                                                                                                            |
-| `itemLevel`      | `"top"` \| `"all"`             | `"top"`             | Item level: `top` searches top-level items only; `all` also searches child items and attachments (`library`/`collection` scopes only; `publications` and saved searches serve one list) |
-| `sort`           | string                         | `"dateModified"`    | Sort field: `dateModified`, `dateAdded`, `date`, `title`, `creator`                                                                                                                     |
-| `direction`      | `"asc"` \| `"desc"`            | `"desc"`            | Sort direction                                                                                                                                                                          |
-| `offset`         | integer                        | `0`                 | Pagination offset                                                                                                                                                                       |
-| `limit`          | integer                        | `10`                | Item cap (bounded by `maxSearchResults`, default 20)                                                                                                                                    |
+| Parameter     | Type                           | Default             | Description                                                                                                                                                                             |
+| ------------- | ------------------------------ | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `query`       | string                         | none                | Free-text query; omit it to browse all items                                                                                                                                            |
+| `mode`        | `"metadata"` \| `"everything"` | `"metadata"`        | Search mode: `metadata` matches title/author/year; `everything` also searches the full-text index                                                                                       |
+| `scope`       | object                         | `{kind: "library"}` | Search scope: `{kind:"library"}`, `{kind:"collection", refOrName}`, `{kind:"savedSearch", refOrName}`, or `{kind:"publications"}` (`publications` is personal library only)             |
+| `library`     | object                         | none                | Target library: `{type:"user", id:0}` or `{type:"group", id}`; sets the context when `scope` is given a name                                                                            |
+| `itemTypes`   | string[]                       | none                | Zotero item types (such as `journalArticle`), combined with OR                                                                                                                          |
+| `tags`        | string[]                       | none                | Tag list; `tagMatch` decides how they combine                                                                                                                                           |
+| `tagMatch`    | `"all"` \| `"any"`             | `"all"`             | Multi-tag matching: `all` is AND, `any` is OR (used with `tags`)                                                                                                                        |
+| `excludeTags` | string[]                       | none                | Tags to exclude (NOT)                                                                                                                                                                   |
+| `itemLevel`   | `"top"` \| `"all"`             | `"top"`             | Item level: `top` searches top-level items only; `all` also searches child items and attachments (`library`/`collection` scopes only; `publications` and saved searches serve one list) |
+| `sort`        | string                         | `"dateModified"`    | Sort field: `dateModified`, `dateAdded`, `date`, `title`, `creator`                                                                                                                     |
+| `direction`   | `"asc"` \| `"desc"`            | `"desc"`            | Sort direction                                                                                                                                                                          |
+| `offset`      | integer                        | `0`                 | Pagination offset                                                                                                                                                                       |
+| `limit`       | integer                        | `10`                | Item cap (bounded by `maxSearchResults`, default 20)                                                                                                                                    |
 
 ### Output
 
-The returned object contains `scope`, `items` (with ref, title, creatorSummary, year, itemType, parentRef, bestAttachmentRef, bestAttachmentType, attachmentSize, extra, doi), `total`, `offset`, `returned`, `nextOffset`, and an optional `supplemental` (with note hits `{kind:"noteBody", items, scanned, truncated}`). In the card presentation, when `extra` carries a Citation Key (case-insensitive, including the `citekey` alias, sharing one grammar with export alignment and taking the first token after the colon), it is shown as `[@citekey]`.
+The returned object contains `normalizedQuery`, `queryWasEmpty`, `maximum`, `scope`, `items` (with ref, title, creatorSummary, authors, venue, year, itemType, parentRef, bestAttachmentRef, bestAttachmentType, attachmentSize, extra, citationKey, citationKeySource, citationKeyConflict, doi), `total`, `offset`, `returned`, `nextOffset`, and optional `nextActions` and `supplemental` (with note hits `{kind:"noteBody", items, scanned, truncated}`). The model search surface cannot access the trash; the library panel owns that scope. Native `citationKey` wins over a citekey in `extra`, and conflicts are explicit.
 
 ### Notes
 
@@ -54,6 +53,7 @@ zotero_search(query="transformer attention", mode="everything", tags=["deep-lear
 ## zotero_get
 
 Read detailed metadata and related child content; resolve locations explicitly of a single paper or attachment.
+`ref` is one string; pass multiple known items as `refs[]` to `zotero_get_batch`.
 
 ### Parameters
 
@@ -71,7 +71,8 @@ Returns a detailed item or attachment object:
 
 - `ref`, `itemType`, `title`;
 - `creators`: list of creator objects (each with `creatorType`, plus optional `name`, `firstName`, `lastName`);
-- `extra`: extra metadata (such as Citation Key, arXiv ID, PMID);
+- `citationKey`: a separate first-class field, from Zotero's native value or parsed from `extra`; `citationKeySource` identifies its source and `citationKeyConflict` preserves both values when they disagree;
+- `extra`: extra metadata (such as arXiv ID or PMID);
 - `date`, `year`, `venue`, `doi`, `url`, `abstract`, `abstractTruncated`;
 - `tags`, `collections`, `children`, `bestAttachment`, `relations`;
 - `contentType`; explicit location requests add `location` (`file`, `url`, or `unavailable` with a reason);
@@ -82,6 +83,53 @@ Returns a detailed item or attachment object:
 
 ```text
 zotero_get(ref="zotero://user/0/item/ABC123", include=["notes", "annotations", "attachments"])
+```
+
+---
+
+## zotero_get_batch
+
+Read known item or attachment refs in input order. Each result reports success or failure independently; batches accept up to 50 unique refs with at most eight concurrent reads. Use `zotero_get` for one ref and this tool for multiple refs.
+
+### Parameters
+
+| Parameter | Type     | Default      | Description                                                                                                                                                                                   |
+| --------- | -------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `refs`    | string[] | none         | 1–50 unique item or attachment refs, returned in this order                                                                                                                                   |
+| `fields`  | string   | `"standard"` | `standard` or `all`; the latter preserves unconsumed Zotero data fields                                                                                                                       |
+| `include` | object   | none         | `children` includes notes, annotations, and attachments; `attachments` includes attachments only; `relations:true` includes relations; `bestAttachment` resolves the best attachment location |
+
+### Output
+
+`{items, counts}`. `items` follows the input order; each result is `{ref, status:"ok", item}` or `{ref, status:"error", code, message, next?}`. `counts` contains `requested`, `succeeded`, and `failed`.
+
+### Example
+
+```text
+zotero_get_batch(refs=["zotero://user/0/item/ABC123", "zotero://user/0/item/DEF456"], fields="standard")
+```
+
+---
+
+## zotero_match_references
+
+Reconcile BibTeX, DOI, or reference fields against the local Zotero library. It uses only the local library, does not call scholarly tools, and never writes. Exact DOI matching pages through top-level item metadata once per call because Zotero quick search does not index DOI fields. Each call accepts up to 50 references. Only a unique high-confidence result is `matched`; weak or competing candidates are `ambiguous`, and citekey-source disagreements are `conflict`.
+
+### Parameters
+
+| Parameter          | Type     | Default | Description                                                                                                                 |
+| ------------------ | -------- | ------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `references`       | object[] | none    | 1–50 entries with unique `inputId`; each needs a `doi` or `title`, and may include `bibKey`, `authors`, `year`, and `venue` |
+| `includeFieldDiff` | boolean  | `false` | Include comparable title, DOI, year, author, and venue differences for unique matches                                       |
+
+### Output
+
+`{items}` follows the input order. Each row has `inputId` and `status`; incomplete search pages also carry `reason` and can never return `matched`. Selected records and candidates include `ref`, `citationKey`, optional `citationKeySource`, title, authors, year, DOI, venue, match method, and confidence. `citationKeyConflict` prevents silent selection. `fieldDiff` reports comparable title, DOI, year, author, and venue differences for review before Bib/TeX changes.
+
+### Example
+
+```text
+zotero_match_references(references=[{inputId:"ref-1", bibKey:"doe2024", doi:"10.1000/example", title:"A Paper"}, {inputId:"ref-2", title:"Another Paper", authors:["Jane Doe"], year:2023}, {inputId:"ref-3", doi:"10.1000/third"}], includeFieldDiff=true)
 ```
 
 ---
@@ -142,7 +190,7 @@ When the foreground call finishes synchronously:
 
 - `citation`: `{citations: [{ref, text}]}`;
 - `bibliography`: `{text}`;
-- `bibtex` / `biblatex` / `ris` / `csljson`: `{text, items: [{ref, key, title, entryIndex, start, end}]}`;
+- `bibtex` / `biblatex` / `ris` / `csljson`: `{text, items: [{ref, citationKey, exportKey, title, entryIndex, start, end}]}`; `citationKey` is Zotero's native/extra citekey, while `exportKey` is the translator-generated entry key;
 - `csv`: `{text}` (Zotero's own whole-table export, with no per-document entries).
 
 When it runs in the background (or is promoted automatically after the foreground wait times out):
@@ -152,7 +200,7 @@ Returns `{kind: "background", jobId}` or `{kind: "promoted", jobId, timeoutMs, m
 
 - The ref count is first blocked by `maxExportRefs` (default 50). The six formats other than `citation` (`bibliography`, `bibtex`, `biblatex`, `ris`, `csljson`, `csv`) take at most 50 items per call, which is the cap on Zotero `itemKey` requests; going over is an error, and no automatic batching happens;
 - `citation` is the only format that batches: above 50 refs it sends requests in groups of 50. The default `maxExportRefs` is also 50, so batching only happens after that setting is raised above 50;
-- `bibtex`, `biblatex`, `ris`, and `csljson` batch-export the whole set: `ris` and `csljson` send 1 local API batch request, while `bibtex` and `biblatex` additionally run a 2nd batch request in parallel to read the items' raw metadata for field alignment. The returned content is parsed in memory, and each record is paired with its ref by key or metadata fingerprint, never by position; a ref that cannot be located keeps only its own ref in the result. If the 2nd metadata request fails (for example Zotero returns 5xx), the export still completes: the body comes back as-is and refs that could not be paired stay in their bare `ref`-only shape. A caller abort is not this kind of degradation and still throws. One call supports at most 50 items;
+- `bibtex`, `biblatex`, `ris`, and `csljson` use one translator request and one bounded raw-metadata batch for citekeys and alignment. The returned content is parsed in memory, and each record is paired with its ref by key or metadata fingerprint, never by position; a ref that cannot be located keeps only its own ref in the result. If the metadata request fails (for example Zotero returns 5xx), the export still completes: the raw body is retained and refs that could not be paired stay in their bare `ref`-only shape. A caller abort still throws. One call supports at most 50 items;
 - A single export only accepts refs from the same library; mixed cross-library exports are not supported.
 
 ### Example

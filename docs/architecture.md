@@ -131,7 +131,7 @@ graph LR
 
 ### 工具卡片
 
-- 工具卡片（`tool.call.toolview`）：21 个本地模型工具与 `scholarly_save_to_zotero` 各有一张紧凑折叠卡片，其余 6 个学术检索工具按官方契约落通用行。卡片只渲染工具已有的输出，自身不调用工具，并对值得复制的取值提供复制按钮；「阅读 PDF」在右侧边栏打开原文。
+- 工具卡片（`tool.call.toolview`）：23 个本地模型工具与 `scholarly_save_to_zotero` 各有一张紧凑折叠卡片，其余 6 个学术检索工具按官方契约落通用行。卡片只渲染工具已有的输出，自身不调用工具，并对值得复制的取值提供复制按钮；「阅读 PDF」在右侧边栏打开原文。
 - 参数读取与错误边界：卡片与轨迹归约器统一通过 `argsViewOf(block)` 读取 `block.args`；`ZoteroSurfaceBoundary` 包裹文献轨迹页，`ZoteroCardBoundary` 包裹全部工具卡片，渲染异常就地降级，不向上逃逸。
 
 ### 设置与插件管理表面

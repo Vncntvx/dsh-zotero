@@ -303,7 +303,8 @@ export function createScholarlyVerifyTool(host: ScholarlyToolHost): ToolDefiniti
         'VERIFIED: official record exists and matches.\n' +
         'CHECK: record found but discrepancies detected (mismatched DOI/year or retracted).\n' +
         'NOT FOUND: no matching record found in official registries; verify before using.\n' +
-        'UNVERIFIED: the registry could not be reached; nothing is known about this entry.'
+        'UNVERIFIED: the registry could not be reached; nothing is known about this entry.\n' +
+        'Next: retry scholarly_verify after Crossref recovers; scholarly_get checks alternate indexes before excluding a reference.'
 
       const lines = results.map((r, i) => formatVerificationResult(r, i + 1)).join('\n\n')
 

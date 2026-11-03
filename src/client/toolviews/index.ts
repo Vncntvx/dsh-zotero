@@ -12,6 +12,8 @@ import { ExportToolView } from './ExportToolView.tsx'
 import { ItemToolView } from './ItemToolView.tsx'
 import { WriteToolView } from './WriteToolView.tsx'
 import { BrowseToolView } from './BrowseToolView.tsx'
+import { MatchReferencesToolView } from './MatchReferencesToolView.tsx'
+import { GetBatchToolView } from './GetBatchToolView.tsx'
 
 /**
  * Every model tool's card, keyed by the wire tool name. Exported so a spec can
@@ -23,6 +25,8 @@ export const REGISTRATIONS = [
   ['zotero_retrieve', RetrieveToolView],
   ['zotero_export', ExportToolView],
   ['zotero_get', ItemToolView],
+  ['zotero_get_batch', GetBatchToolView],
+  ['zotero_match_references', MatchReferencesToolView],
   ['zotero_create_note', WriteToolView],
   ['zotero_batch_items', WriteToolView],
   ['zotero_update_note', WriteToolView],

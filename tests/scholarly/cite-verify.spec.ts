@@ -347,6 +347,7 @@ describe('scholarly_verify transport failure detail', () => {
     )) as { text: string }
     expect(result.text).toContain('UNVERIFIED')
     expect(result.text).toContain('429')
+    expect(result.text).toContain('scholarly_get')
   })
 
   it('reports a non-Error rejection as its string form', async () => {

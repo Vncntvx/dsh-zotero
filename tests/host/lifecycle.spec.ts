@@ -23,7 +23,6 @@ import type { ZoteroProvider } from '../../src/types.js'
 import { type HostLane, setupHostLane } from '../helpers/lanes/host-lane.js'
 import { deferred } from '../helpers/sync.js'
 import { sectionPosition, withBandProbes } from '../helpers/prompt-band.js'
-import { ZOTERO_TOOL_NAMES } from '../helpers/tool-names.js'
 
 /** The lane the current test booted; `afterEach` releases it. */
 let lane: HostLane | undefined
@@ -86,10 +85,15 @@ describe('prompt section', () => {
       expect(positionOf('zotero:policy')).toBeGreaterThan(positionOf('test:band-floor'))
       expect(positionOf('zotero:policy')).toBeLessThan(positionOf('test:band-ceiling'))
     })
-    for (const tool of ZOTERO_TOOL_NAMES) {
+    for (const tool of [
+      'zotero_search',
+      'zotero_match_references',
+      'zotero_get_batch',
+      'zotero_get',
+      'zotero_export.items[].ref',
+    ]) {
       expect(section!.text).toContain(tool)
     }
-    expect(section!.text).toContain('zotero://user/0/item/')
     expect(section!.text).toContain('never invent page numbers')
     expect(section!.text).toContain('use the Zotero tools only when the user explicitly asks')
     expect(section!.text).toContain(CONNECTIVITY_POLICY_SENTENCE)

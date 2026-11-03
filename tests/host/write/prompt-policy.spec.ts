@@ -50,7 +50,14 @@ describe('the write policy prompt section', () => {
     const text = section?.text ?? ''
     expect(text).toContain('Write only through these tools')
     expect(text).toContain('never ask for or reuse a local-API authorization key')
-    expect(text).toContain('report only what it proves and do not re-read to verify it')
+    expect(text).toContain('report only proven facts; do not re-read to verify')
+    expect(text).toContain('All writes require session approval and an approved plan')
+    expect(text).toContain('Never retry committed-unverified/commit-unknown')
+    expect(text).toContain('ZOTERO_WRITE_CONFLICT requires one fresh read and replan')
+    expect(text).toContain('ZOTERO_WRITE_APPROVAL_UNAVAILABLE means stop')
+    expect(text).toContain(
+      'Item deletion verifies item and all children moved to recoverable Trash',
+    )
     // Every write tool the sanctioned path names, and nothing retired.
     for (const name of ZOTERO_WRITE_TOOL_NAMES) expect(text).toContain(name)
     expect(ZOTERO_WRITE_TOOL_NAMES).toHaveLength(15)

@@ -17,6 +17,7 @@ import ScholarlyService from '../../src/scholarly/index.js'
 import {
   SCHOLARLY_PROMPT_ORDER_OFFSET,
   SCHOLARLY_PROMPT_SECTION_NAME,
+  SCHOLARLY_ROUTE_SENTENCE,
   SCHOLARLY_SAVE_SENTENCE,
   SCHOLARLY_TOOL_ROUTING,
   SCHOLARLY_UNANSWERED_SENTENCE,
@@ -51,6 +52,8 @@ describe('the scholarly component prompt section', () => {
     // The routing sentence is one exported constant, so a wording change
     // shows up here.
     expect(section!.text).toContain(SCHOLARLY_TOOL_ROUTING)
+    expect(section!.text).toContain(SCHOLARLY_ROUTE_SENTENCE)
+    expect(section!.text).toContain('Generic web access remains available')
     expect(section!.text).toContain(SCHOLARLY_UNANSWERED_SENTENCE)
     expect(section!.text).toContain(SCHOLARLY_UNTRUSTED_SENTENCE)
     expect(section!.text).toContain(SCHOLARLY_SAVE_SENTENCE)

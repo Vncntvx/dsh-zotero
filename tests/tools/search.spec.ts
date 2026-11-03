@@ -13,6 +13,7 @@ import {
   ITEM_TYPES_LITERAL_MESSAGE,
   noteBodyMatchesMessage,
   renderSearch,
+  searchLimitMessage,
   SCOPE_REF_OR_NAME_MESSAGE,
   searchMoreMessage,
   TAGS_LITERAL_MESSAGE,
@@ -80,6 +81,7 @@ describe('zotero_search tool', () => {
           ref: 'zotero://user/0/item/ABCD1234?server=S1',
           title: 'FlashAttention-2',
           creatorSummary: 'Dao, Tri',
+          authors: ['Tri Dao'],
           year: 2023,
           itemType: 'conferencePaper',
         },
@@ -87,6 +89,9 @@ describe('zotero_search tool', () => {
       total: 1,
       offset: 0,
       returned: 1,
+      maximum: 20,
+      normalizedQuery: 'flash attention',
+      queryWasEmpty: false,
     })
     expect(result.content[0]?.type).toBe('text')
     expect((result.content[0] as { text: string }).text).toBe(
@@ -134,6 +139,8 @@ describe('zotero_search tool', () => {
         bestAttachmentRef: 'zotero://user/0/attachment/WXYZ6789?server=S1',
         bestAttachmentType: 'application/pdf',
         attachmentSize: 1234567,
+        authors: ['Tri Dao', 'Fu'],
+        venue: 'International Conference on Machine Learning',
         doi: '10.48550/arXiv.2307.08691',
       },
     ])
@@ -243,9 +250,7 @@ describe('zotero_search tool', () => {
     const result = await runTool('zotero_search', { query: 'x', limit: 21 })
     expect(result.isError).toBe(true)
     if (!result.isError) throw new Error('unreachable')
-    expect((result.content[0] as { text: string }).text).toContain(
-      intRangeArgumentMessage('limit', 21, 1, 20),
-    )
+    expect((result.content[0] as { text: string }).text).toContain(searchLimitMessage(21, 20))
   })
 
   it('rejects tagMatch without a tag filter', async () => {
@@ -317,15 +322,19 @@ describe('zotero_search tool', () => {
       helpers.json([], { 'Total-Results': '0' }),
     )
     const blankQuery = await runTool('zotero_search', { query: '   ' })
-    expectValue(blankQuery, 'zotero_search')
+    const blankResult = expectValue(blankQuery, 'zotero_search')
     expect(mock.requests[0]!.search.has('q')).toBe(false)
+    expect(blankResult.value).toMatchObject({
+      normalizedQuery: '',
+      queryWasEmpty: true,
+      maximum: 20,
+      nextActions: expect.any(Array),
+    })
 
     const zeroLimit = await runTool('zotero_search', { limit: 0 })
     expect(zeroLimit.isError).toBe(true)
     if (!zeroLimit.isError) throw new Error('unreachable')
-    expect((zeroLimit.content[0] as { text: string }).text).toContain(
-      intRangeArgumentMessage('limit', 0, 1, 20),
-    )
+    expect((zeroLimit.content[0] as { text: string }).text).toContain(searchLimitMessage(0, 20))
 
     const negativeOffset = await runTool('zotero_search', { offset: -1 })
     expect(negativeOffset.isError).toBe(true)
@@ -383,6 +392,9 @@ describe('zotero_search validation', () => {
       if (!result.isError) throw new Error('unreachable')
       expect((result.content[0] as { text: string }).text).toContain(c.contains)
     }
+    const schema = lane.ctx.tools.schemas().find((entry) => entry.name === 'zotero_search')
+    expect(JSON.stringify(schema)).not.toContain('"includeTrashed"')
+    expect(mock.requests).toEqual([])
   })
 
   it('renders citation key in search results when available in extra', async () => {

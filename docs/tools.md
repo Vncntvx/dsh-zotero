@@ -2,9 +2,9 @@
 
 # 工具参考
 
-dsh-zotero 注册 21 个本地工具（6 个读工具 + 15 个写工具），通过本地 Zotero HTTP API 与文献库交互。其中 15 个写入工具默认关闭，需在设置中显式启用 `writeEnabled`，且只操作个人库（`zotero://user/0/`）。另有 7 个学术检索工具属于单独的 `dsh-zotero/scholarly` 组件，随包发布但默认关闭；启用该组件即启用这些工具。所有文献引用（ref）均为 `zotero://user/0/item/<KEY>`（个人库）或 `zotero://group/<ID>/item/<KEY>`（群组库）格式的稳定标识符。
+dsh-zotero 注册 23 个本地工具（8 个读工具 + 15 个写工具），通过本地 Zotero HTTP API 与文献库交互。其中 15 个写入工具默认关闭，需在设置中显式启用 `writeEnabled`，且只操作个人库（`zotero://user/0/`）。另有 7 个学术检索工具属于单独的 `dsh-zotero/scholarly` 组件，随包发布但默认关闭；启用该组件即启用这些工具。所有文献引用（ref）均为 `zotero://user/0/item/<KEY>`（个人库）或 `zotero://group/<ID>/item/<KEY>`（群组库）格式的稳定标识符。
 
-六个本地读取工具共用交付结构：`{delivery:"inline", data:…}` 在两项预算内返回完整领域结果；`{delivery:"file", version:1, tool, sessionId, callId, summary, file, facts}` 返回有界事实及标准 Harness FileBlock。不可变 JSON 文件保存 `{version:1, tool, request, data}`，其中 `data` 是完整领域结果。分页完整性（`page` 或 `complete`）与交付方式独立。长单行字段应由官方 `run_code` 的 Node 文件接口解析；逐行预览可能截断长行。
+八个本地读取工具共用交付结构：`{delivery:"inline", data:…}` 在两项预算内返回完整领域结果；`{delivery:"file", version:1, tool, sessionId, callId, summary, file, facts}` 返回有界事实及标准 Harness FileBlock。不可变 JSON 文件保存 `{version:1, tool, request, data}`，其中 `data` 是完整领域结果。分页完整性（`page` 或 `complete`）与交付方式独立。长单行字段应由官方 `run_code` 的 Node 文件接口解析；逐行预览可能截断长行。
 
 正文使用 `AttachmentStore.saveFileStream`，校验后的回执写入 `zotero_results` storage domain。超预算或受管理后台结果需要这两项服务；保存、索引、取消及完整性校验失败均明确报错，不回退全文内联。所属 Zotero 后台任务成功后，`job_output` 追加同一文件引用并保留官方 canonical value。PTC 嵌套调用传递标准文件附加上下文。原始后台确认保留 `resultSessionId`；重启后可按持久回执读取已保存结果，但不会恢复运行任务。
 
@@ -18,26 +18,25 @@ dsh-zotero 注册 21 个本地工具（6 个读工具 + 15 个写工具），通
 
 ### 参数
 
-| 参数             | 类型                           | 默认值              | 说明                                                                                                                                                      |
-| ---------------- | ------------------------------ | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `query`          | string                         | —                   | 自由文本查询词；省略则浏览全部条目                                                                                                                        |
-| `mode`           | `"metadata"` \| `"everything"` | `"metadata"`        | 搜索模式：`metadata` 匹配标题/作者/年份；`everything` 同时检索全文索引                                                                                    |
-| `scope`          | object                         | `{kind: "library"}` | 搜索范围：`{kind:"library"}`、`{kind:"collection", refOrName}`、`{kind:"savedSearch", refOrName}` 或 `{kind:"publications"}`（`publications` 仅限个人库） |
-| `library`        | object                         | —                   | 目标库：`{type:"user", id:0}` 或 `{type:"group", id}`；当 `scope` 传名称时用于指定上下文                                                                  |
-| `itemTypes`      | string[]                       | —                   | Zotero 条目类型列表（如 `journalArticle`），按 OR 组合                                                                                                    |
-| `tags`           | string[]                       | —                   | 标签列表，由 `tagMatch` 决定组合逻辑                                                                                                                      |
-| `tagMatch`       | `"all"` \| `"any"`             | `"all"`             | 多标签匹配逻辑：`all` 为 AND，`any` 为 OR（需与 `tags` 配合使用）                                                                                         |
-| `excludeTags`    | string[]                       | —                   | 排除的标签列表（NOT）                                                                                                                                     |
-| `includeTrashed` | boolean                        | `false`             | 是否包含回收站中的条目（仅限 `library` 范围）                                                                                                             |
-| `itemLevel`      | `"top"` \| `"all"`             | `"top"`             | 条目层级：`top` 仅检索顶层条目；`all` 同时检索子条目与附件（仅 `library`/`collection` 范围；`publications` 与已存搜索为单一列表）                         |
-| `sort`           | string                         | `"dateModified"`    | 排序字段：`dateModified`、`dateAdded`、`date`、`title`、`creator`                                                                                         |
-| `direction`      | `"asc"` \| `"desc"`            | `"desc"`            | 排序方向                                                                                                                                                  |
-| `offset`         | integer                        | `0`                 | 分页偏移量                                                                                                                                                |
-| `limit`          | integer                        | `10`                | 返回条目数量上限（受配置项 `maxSearchResults` 限制，默认 20）                                                                                             |
+| 参数          | 类型                           | 默认值              | 说明                                                                                                                                                      |
+| ------------- | ------------------------------ | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `query`       | string                         | —                   | 自由文本查询词；省略则浏览全部条目                                                                                                                        |
+| `mode`        | `"metadata"` \| `"everything"` | `"metadata"`        | 搜索模式：`metadata` 匹配标题/作者/年份；`everything` 同时检索全文索引                                                                                    |
+| `scope`       | object                         | `{kind: "library"}` | 搜索范围：`{kind:"library"}`、`{kind:"collection", refOrName}`、`{kind:"savedSearch", refOrName}` 或 `{kind:"publications"}`（`publications` 仅限个人库） |
+| `library`     | object                         | —                   | 目标库：`{type:"user", id:0}` 或 `{type:"group", id}`；当 `scope` 传名称时用于指定上下文                                                                  |
+| `itemTypes`   | string[]                       | —                   | Zotero 条目类型列表（如 `journalArticle`），按 OR 组合                                                                                                    |
+| `tags`        | string[]                       | —                   | 标签列表，由 `tagMatch` 决定组合逻辑                                                                                                                      |
+| `tagMatch`    | `"all"` \| `"any"`             | `"all"`             | 多标签匹配逻辑：`all` 为 AND，`any` 为 OR（需与 `tags` 配合使用）                                                                                         |
+| `excludeTags` | string[]                       | —                   | 排除的标签列表（NOT）                                                                                                                                     |
+| `itemLevel`   | `"top"` \| `"all"`             | `"top"`             | 条目层级：`top` 仅检索顶层条目；`all` 同时检索子条目与附件（仅 `library`/`collection` 范围；`publications` 与已存搜索为单一列表）                         |
+| `sort`        | string                         | `"dateModified"`    | 排序字段：`dateModified`、`dateAdded`、`date`、`title`、`creator`                                                                                         |
+| `direction`   | `"asc"` \| `"desc"`            | `"desc"`            | 排序方向                                                                                                                                                  |
+| `offset`      | integer                        | `0`                 | 分页偏移量                                                                                                                                                |
+| `limit`       | integer                        | `10`                | 返回条目数量上限（受配置项 `maxSearchResults` 限制，默认 20）                                                                                             |
 
 ### 输出
 
-返回对象包含：`scope`、`items`（包含 ref、title、creatorSummary、year、itemType、parentRef、bestAttachmentRef、bestAttachmentType、attachmentSize、extra、doi）、`total`、`offset`、`returned`、`nextOffset`，以及可选的 `supplemental`（包含笔记命中内容 `{kind:"noteBody", items, scanned, truncated}`）。在卡片呈现中，若 `extra` 携带 Citation Key（大小写不敏感，含 `citekey` 别名，与导出对齐共用同一语法，取冒号后的首个 token），会以 `[@citekey]` 形式显示。
+返回对象包含 `normalizedQuery`、`queryWasEmpty`、`maximum`、`scope`、`items`（包含 ref、title、creatorSummary、authors、venue、year、itemType、parentRef、bestAttachmentRef、bestAttachmentType、attachmentSize、extra、citationKey、citationKeySource、citationKeyConflict、doi）、`total`、`offset`、`returned`、`nextOffset`，以及可选的 `nextActions` 和 `supplemental`（包含笔记命中内容 `{kind:"noteBody", items, scanned, truncated}`）。模型不能通过此工具访问回收站；回收站只在文献面板显示。原生 `citationKey` 优先于 `extra` 中的 citekey，冲突会显式返回。
 
 ### 说明
 
@@ -54,6 +53,7 @@ zotero_search(query="transformer attention", mode="everything", tags=["deep-lear
 ## zotero_get
 
 读取单篇文献或附件的详细元数据、本地文件路径与关联子内容。
+`ref` 是单个字符串；读取多个已知条目时传 `refs[]` 给 `zotero_get_batch`。
 
 ### 参数
 
@@ -71,7 +71,8 @@ zotero_search(query="transformer attention", mode="everything", tags=["deep-lear
 
 - `ref`、`itemType`、`title`；
 - `creators`：创作者对象列表（每个创作者包含 `creatorType`，以及可选的 `name`、`firstName`、`lastName`）；
-- `extra`：附加元数据（如 Citation Key、arXiv ID、PMID 等）；
+- `citationKey`：独立的一等字段，包含 Zotero 原生 citekey 或从 `extra` 提取的 citekey；`citationKeySource` 标明来源，冲突时 `citationKeyConflict` 同时保留两值；
+- `extra`：附加元数据（如 arXiv ID、PMID 等）；
 - `date`、`year`、`venue`、`doi`、`url`、`abstract`、`abstractTruncated`；
 - `tags`、`collections`、`children`、`bestAttachment`、`relations`；
 - 本地文件路径 `path` 与内容类型 `contentType`（已核实本地磁盘存在）；
@@ -82,6 +83,53 @@ zotero_search(query="transformer attention", mode="everything", tags=["deep-lear
 
 ```text
 zotero_get(ref="zotero://user/0/item/ABC123", include=["notes", "annotations", "attachments"])
+```
+
+---
+
+## zotero_get_batch
+
+按输入顺序批量读取已知条目或附件 ref。每条结果独立报告成功或失败；最多 50 条唯一 ref，最多 8 路并发。单条 `zotero_get` 用于一个 ref；多个 ref 使用本工具。
+
+### 参数
+
+| 参数      | 类型     | 默认值       | 说明                                                                                                                    |
+| --------- | -------- | ------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `refs`    | string[] | —            | 1–50 个唯一条目或附件 ref，按此顺序返回                                                                                 |
+| `fields`  | string   | `"standard"` | `standard` 或 `all`；后者保留未消费的 Zotero 数据字段                                                                   |
+| `include` | object   | —            | `children` 包含笔记、标注和附件；`attachments` 仅包含附件；`relations:true` 返回关联；`bestAttachment` 解析最佳附件位置 |
+
+### 输出
+
+`{items, counts}`。`items` 与 `refs` 同序，每项为 `{ref, status:"ok", item}` 或 `{ref, status:"error", code, message, next?}`；`counts` 含 `requested`、`succeeded`、`failed`。
+
+### 示例
+
+```text
+zotero_get_batch(refs=["zotero://user/0/item/ABC123", "zotero://user/0/item/DEF456"], fields="standard")
+```
+
+---
+
+## zotero_match_references
+
+将 BibTeX、DOI 或参考文献字段与本地 Zotero 库对账。仅访问本地库，不调用 scholarly，也不写入。DOI 精确匹配会在每次调用中分页读取一次全部顶层条目的元数据，因为 Zotero 快速搜索不检索 DOI 字段。每次最多 50 条；超过上限时分批。唯一高置信匹配才返回 `matched`；候选不唯一或证据不足时返回 `ambiguous`，citekey 来源冲突时返回 `conflict`。
+
+### 参数
+
+| 参数               | 类型     | 默认值  | 说明                                                                                                  |
+| ------------------ | -------- | ------- | ----------------------------------------------------------------------------------------------------- |
+| `references`       | object[] | —       | 1–50 条，`inputId` 必须唯一；每条至少提供 `doi` 或 `title`，可附 `bibKey`、`authors`、`year`、`venue` |
+| `includeFieldDiff` | boolean  | `false` | 唯一匹配时返回可比较的标题、DOI、年份、作者和来源差异                                                 |
+
+### 输出
+
+`{items}` 与输入同序。每项包含 `inputId`、`status`，搜索页不完整时附 `reason` 并且不会报告 `matched`；匹配项和候选包含 `ref`、`citationKey`、`citationKeySource`（可用时）、`title`、作者、年份、DOI、来源、匹配方法和置信度；`citationKeyConflict` 会阻止静默选中。`fieldDiff` 返回可比较的标题、DOI、年份、作者和来源差异，可用于审阅 Bib/TeX 修改。
+
+### 示例
+
+```text
+zotero_match_references(references=[{inputId:"ref-1", bibKey:"doe2024", doi:"10.1000/example", title:"A Paper"}, {inputId:"ref-2", title:"Another Paper", authors:["Jane Doe"], year:2023}, {inputId:"ref-3", doi:"10.1000/third"}], includeFieldDiff=true)
 ```
 
 ---
@@ -142,7 +190,7 @@ zotero_retrieve(ref="zotero://user/0/item/ABC123", query="attention mechanism", 
 
 - `citation`：`{citations: [{ref, text}]}`；
 - `bibliography`：`{text}`；
-- `bibtex` / `biblatex` / `ris` / `csljson`：`{text, items: [{ref, key, title, entryIndex, start, end}]}`；
+- `bibtex` / `biblatex` / `ris` / `csljson`：`{text, items: [{ref, citationKey, exportKey, title, entryIndex, start, end}]}`；`citationKey` 是 Zotero 原生/extra citekey，`exportKey` 是 translator 生成词条键；
 - `csv`：`{text}`（Zotero 自身的整表导出，无逐条目定位）。
 
 后台执行（或前台等待超时自动提升）时：
@@ -152,7 +200,7 @@ zotero_retrieve(ref="zotero://user/0/item/ABC123", query="attention mechanism", 
 
 - refs 总数先受 `maxExportRefs` 拦截（默认 50）。除 `citation` 外的 6 种格式（`bibliography`、`bibtex`、`biblatex`、`ris`、`csljson`、`csv`）单次调用最多 50 条，这是 Zotero `itemKey` 请求的上限，超出即报错，不会自动分批；
 - `citation` 是唯一会分批的格式：refs 数超过 50 时按 50 一组分批请求。默认 `maxExportRefs` 同为 50，因此需先将该配置调至 50 以上，分批才会实际发生；
-- `bibtex`、`biblatex`、`ris`、`csljson` 的批量导出全程使用批处理请求：`ris`、`csljson` 发起 1 次本地 API 批处理请求；`bibtex`、`biblatex` 在此基础上并行发起第 2 次批处理请求，读取条目原始元数据用于字段对齐。返回内容在内存中解析，每条记录按 key 或元数据指纹与 ref 配对，不按位置猜测；无法定位的 ref 在结果中只保留自身。第 2 次元数据请求失败（如 Zotero 返回 5xx）时导出照常完成：正文原样返回，未能配对的 ref 保持仅有 `ref` 的裸形状。调用方取消（abort）不属于这类降级，仍照常抛出。单次调用最多支持 50 条；
+- `bibtex`、`biblatex`、`ris`、`csljson` 各使用 1 次 translator 请求和 1 次有界原始元数据批处理，用于 citekey 与字段对齐。返回内容在内存中解析，每条记录按 key 或元数据指纹与 ref 配对，不按位置猜测；无法定位的 ref 在结果中只保留自身。元数据请求失败（如 Zotero 返回 5xx）时导出照常完成：正文原样返回，未能配对的 ref 保持仅有 `ref` 的裸形状。调用方取消（abort）仍会抛出。单次调用最多支持 50 条；
 - 单次导出仅允许同一 library 的 refs，不支持跨库混合导出。
 
 ### 示例

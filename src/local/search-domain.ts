@@ -192,6 +192,18 @@ export async function runSearch(
     total: apiTotal,
     offset: request.offset,
     returned: items.length,
+    normalizedQuery: request.query?.trim() ?? '',
+    queryWasEmpty: request.query?.trim() === undefined || request.query.trim() === '',
+    ...(items.length === 0
+      ? {
+          nextActions: [
+            'Try a DOI',
+            'Shorten the title',
+            'Add an author surname',
+            'Search a collection scope',
+          ],
+        }
+      : {}),
   }
   if (supplemental !== undefined) result.supplemental = supplemental
   if (nextOffset !== undefined) result.nextOffset = nextOffset
@@ -280,6 +292,18 @@ async function exactFilteredSearch(
       total: filtered.length,
       offset: request.offset,
       returned: items.length,
+      normalizedQuery: request.query?.trim() ?? '',
+      queryWasEmpty: request.query?.trim() === undefined || request.query.trim() === '',
+      ...(items.length === 0
+        ? {
+            nextActions: [
+              'Try a DOI',
+              'Shorten the title',
+              'Add an author surname',
+              'Search a collection scope',
+            ],
+          }
+        : {}),
       ...(nextOffset === undefined ? {} : { nextOffset }),
     }
   }
