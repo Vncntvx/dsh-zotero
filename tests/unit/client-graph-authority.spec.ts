@@ -135,6 +135,19 @@ describe('client graph authority', () => {
     expect(violations.every((entry) => entry.kind === 'host-local')).toBe(true)
   })
 
+  it('keeps skill definitions and the subagent guard outside the browser authority', () => {
+    const paths = [
+      'src/skills/register.ts',
+      'src/skills/definition.ts',
+      'src/skills/core.ts',
+      'src/subagent-guard.ts',
+      'src/fiber-state.ts',
+    ]
+    const violations = clientGraphViolations(metafileOf(paths))
+    expect(violations.map(({ key }) => key).sort()).toEqual(paths.sort())
+    expect(violations.every(({ kind }) => kind === 'host-local')).toBe(true)
+  })
+
   it('rejects inlined zod package inputs when not externalized', () => {
     const violations = clientGraphViolations(
       metafileOf(['src/client/index.ts', 'node_modules/zod/v4/classic/external.js']),

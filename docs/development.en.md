@@ -14,6 +14,7 @@ src/
   subagent-guard.ts     # Subagent write policy: narrows write-tool visibility by session lineage and denies child write calls at execution time (split from service.ts)
   tool-diagnostics.ts   # Tool execution diagnostics recording (split from service.ts)
   tool-registration.ts  # Read/write tool registration lists (split from service.ts)
+  skills/               # Host-only research SOP definitions, recipes and component-scoped registration; see skills.en.md for maintenance and verification
   library/              # Literature panel subcomponent (ZoteroLibraryService, config schema)
   library-views.ts      # Bidirectional mapping between the literature panel's wire views and domain requests (including export)
   library-write.ts      # Literature panel write entry: enters the registered tool pipeline and approval seam

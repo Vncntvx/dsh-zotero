@@ -33,6 +33,12 @@ graph LR
 
 ## 核心分层
 
+### 按需研究 SOP 技能
+
+`src/skills/` 向 Harness 可选 `ctx.skills` 注册 7 个研究 SOP 技能：核心服务持有证据比较、写作对账和文库治理，Scholarly 组件持有主题版图、引文脉络、真伪审查和文献入库。每个 SOP 的 Markdown 正文仅按需加载；短目录常驻，完整正文不写入 system prompt。组件 fiber 管理注册/注销，registry 后挂载或替换时自动重绑。详见[研究 SOP 技能参考](skills.md)。
+
+子 Agent 写面同时包含 15 个核心工具和 `scholarly_save_to_zotero`。`tools/change` 刷新只覆盖已注册名称的 scoped restriction，适配 Scholarly 后挂载/卸载；基于会话血缘的执行 guard 在展示限制失败时仍拒绝子 Agent 按名称调用写工具。
+
 ### 服务层 (`src/service.ts`)
 
 - `ZoteroService` 扩展 Cordis `Service`，注册为 `ctx.zotero`；
@@ -183,6 +189,6 @@ graph LR
 
 ## 导航状态与路径端点
 
-`useLibraryNavigation` 独立管理连续前缀、库版本、在途去重、最多四个导航任务以及恢复和定位；`useLibraryFeed` 管理条目与统一持久化。存储键与格式为 v2，不迁移旧记录，不保存目录响应或叶节点结论。新增只读 `collectionPath({ library, ref, libraryVersion })` 经 `ctx.zoteroLibrary` → `ctx.zotero` → Local Provider，使用 browse 能力门控，不新增工具。返回根至目标的真实合集行及库版本；结束时通过轻量列表读取校验版本，不使用单对象版本或名称缓存。祖先缺失、循环与非法父关系明确失败。合集和保存搜索分页必须携带有效 `Last-Modified-Version`，双端 codec 拒绝缺失版本。同一前缀的各页必须共享同一库版本；版本前进时只重启该前缀，其余分支与服务请求不受影响。路径数据面只合并同代在途请求，不复用已完成结果。
+`useLibraryNavigation` 独立管理连续前缀、库版本、在途去重、最多四个导航任务以及恢复和定位；`useLibraryFeed` 管理条目与统一持久化。存储键与格式为 v2，不迁移旧记录，不保存目录响应或叶节点结论。新增只读 `collectionPath({ library, ref, libraryVersion })` 经 `ctx.zoteroLibrary` → `ctx.zotero` → Local Provider，使用 browse 能力门控。返回根至目标的真实合集行及库版本；结束时通过轻量列表读取校验版本，不使用单对象版本或名称缓存。祖先缺失、循环与非法父关系明确失败。合集和保存搜索分页必须携带有效 `Last-Modified-Version`，双端 codec 拒绝缺失版本。同一前缀的各页必须共享同一库版本；版本前进时只重启该前缀，其余分支与服务请求不受影响。路径数据面只合并同代在途请求，不复用已完成结果。
 
 读取交付由 `result-delivery.ts` 统一管理：`zotero_results` 保存持久回执，AttachmentStore 保存单份完整 JSON。`result-route.ts` 按认证的持久事件坐标读取；六个读取工具共用 inline/file 结构，后台与超时提升的任务先持久化再完成（前台落定由 inline 预算决定），post-execute 为所属 job_output 追加有界标准 FileBlock。`result-reader.ts` 在校验流结束后才允许复制下载。按种类窗口和完整读取共用顺序 `childPages`，位置解析复用当前页并限制并发。

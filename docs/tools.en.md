@@ -6,7 +6,7 @@ dsh-zotero registers 23 local tools (8 read tools and 15 write tools) that work 
 
 All eight local read tools share a delivery envelope. `{delivery:"inline", data:…}` contains the complete domain result within both budgets. `{delivery:"file", version:1, tool, sessionId, callId, summary, file, facts}` contains bounded facts and a standard Harness FileBlock. Its immutable JSON file contains `{version:1, tool, request, data}` with the complete domain result. Page completeness (`page` or `complete`) is independent of delivery. Parse large single-line fields with the official `run_code` Node file interface; line-oriented previews can truncate long lines.
 
-When argument validation fails (for example `refs` sent as `ref`), every dsh-zotero tool — the eight local read tools, the fifteen write tools, and the scholarly component's tools — carries the pipeline's `invalid arguments` error and then a correction hint naming both the rejected argument and the declared parameter. Matching ignores case and `_`/`-`, and an adjacent transposition counts as one edit. The hint appears only for a single close match; it does not change the error code, issue a request, or retry the call.
+When argument validation fails (for example `refs` sent as `ref`), every dsh-zotero tool (the eight local read tools, the fifteen write tools, and the scholarly component's tools) carries the pipeline's `invalid arguments` error and then a correction hint naming both the rejected argument and the declared parameter. Matching ignores case and `_`/`-`, and an adjacent transposition counts as one edit. The hint appears only for a single close match; it does not change the error code, issue a request, or retry the call.
 
 Files are saved with `AttachmentStore.saveFileStream`; validated receipts live in the `zotero_results` storage domain. Both services are required for oversized or managed background results. Any save, index, cancellation or integrity failure is an error; full text never falls back inline. Completed `job_output` for an owned Zotero job appends the same file reference without changing its canonical value. Nested PTC calls forward standard file context. Original background acknowledgements retain `resultSessionId`; the client can read an already-persisted receipt after restart, but running jobs are not resumed.
 
@@ -526,6 +526,21 @@ An unverified creation receipt distinguishes `commit-unknown` from `saved-state-
 
 ## scholarly_save_to_zotero
 
+### Parameters
+
+| Parameter          | Type     | Required | Description                                                             |
+| ------------------ | -------- | -------- | ----------------------------------------------------------------------- |
+| `itemType`         | string   | —        | Defaults to `journalArticle`; accepts the core create tool's item types |
+| `title`            | string   | ✓        | Paper title                                                             |
+| `authors`          | string[] | —        | Author names                                                            |
+| `year`             | integer  | —        | Publication year                                                        |
+| `doi`              | string   | —        | DOI                                                                     |
+| `url`              | string   | —        | Publication URL                                                         |
+| `abstract`         | string   | —        | Abstract (core batch create uses `abstractNote` instead)                |
+| `publicationTitle` | string   | —        | Journal or conference name                                              |
+| `tags`             | string[] | —        | Tags to add on creation                                                 |
+| `collections`      | string[] | —        | Destination collection refs or exact names                              |
+
 Save scholarly search results into the personal library through the local write approval flow. The output is a union of `declined`, `applied`, and `committed-unverified`. Only `applied` carries the successfully saved `papers`, with the created items' ref, key, version, tags, collections, and library version; unverified results keep their original identity and reason and must not be retried. The card and conversation replay tell the three outcomes apart from the persisted content and state metadata.
 
 ---
@@ -591,7 +606,6 @@ The total number of operations in one call (create, update, and delete combined)
 | `create`  | object[] | none     | Items to create. Each has `itemType` (required), `title` or `url`, and optionally `tags`, `collections`, `creators`, and similar fields |
 | `update`  | object[] | none     | Items to update. Each has `ref` (required), and optionally `addTags`, `removeTags`, `addCollections`, `removeCollections`               |
 | `delete`  | string[] | none     | Item refs to move to the trash (`zotero://user/0/item/<KEY>`)                                                                           |
-| `reason`  | string   | none     | Operation note, shown on the plan card                                                                                                  |
 
 At least one of `create`, `update`, or `delete` must be given, and the total count must not exceed the cap.
 

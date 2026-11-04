@@ -526,6 +526,21 @@ zotero_create_item(itemType="journalArticle", title="Attention Is All You Need",
 
 ## scholarly_save_to_zotero
 
+### 参数
+
+| 参数               | 类型     | 必填 | 说明                                                |
+| ------------------ | -------- | ---- | --------------------------------------------------- |
+| `itemType`         | string   | —    | 默认 `journalArticle`，支持核心创建工具的条目类型   |
+| `title`            | string   | ✓    | 文献标题                                            |
+| `authors`          | string[] | —    | 作者姓名                                            |
+| `year`             | integer  | —    | 发表年份                                            |
+| `doi`              | string   | —    | DOI                                                 |
+| `url`              | string   | —    | 文献链接                                            |
+| `abstract`         | string   | —    | 摘要（批量核心创建使用 `abstractNote`，不是此字段） |
+| `publicationTitle` | string   | —    | 刊物或会议名称                                      |
+| `tags`             | string[] | —    | 创建时添加的标签                                    |
+| `collections`      | string[] | —    | 目标合集 ref 或精确名称                             |
+
 将学术检索结果通过本地写入审批流程保存到个人库。输出为 `declined`、`applied` 或 `committed-unverified` 的联合类型。仅 `applied` 附带成功保存的 `papers`，并保留创建条目的 ref、key、版本、标签、合集与库版本；未核验结果保留原始身份及原因，禁止重试。卡片和会话回放通过持久化的正文与状态元数据区分三种结果。
 
 ---
@@ -591,7 +606,6 @@ zotero_delete_library_tags(tags=["旧标签", "废弃"])
 | `create` | object[] | —    | 批量创建的条目列表。每项包含 `itemType`（必填）、`title` 或 `url`，可选提供 `tags`、`collections`、`creators` 等字段          |
 | `update` | object[] | —    | 批量更新标签或合集的条目列表。每项包含 `ref`（必填），可选提供 `addTags`、`removeTags`、`addCollections`、`removeCollections` |
 | `delete` | string[] | —    | 移至回收站（Trash）的条目 ref 列表（`zotero://user/0/item/<KEY>`）                                                            |
-| `reason` | string   | —    | 操作说明，展示在计划卡中                                                                                                      |
 
 `create`、`update` 与 `delete` 至少提供一项，总数不得超过上限。
 

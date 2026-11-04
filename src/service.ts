@@ -22,7 +22,8 @@
  */
 
 import type { ZoteroCollectionPathRequestView, ZoteroCollectionPathResultView } from './contract.js'
-import { Service, type Context, type FiberState, type LoggerLevel } from '@deepseek-ai/cordis'
+import { Service, type Context, type LoggerLevel } from '@deepseek-ai/cordis'
+import { FIBER_STATE } from './fiber-state.js'
 // Type-only: brings the loader `loader/volatile-update` Events merge into
 // this program (the structural-flip reaction below).
 import type {} from '@deepseek-ai/cordis-plugin-loader'
@@ -68,6 +69,8 @@ import { installShellWriteApproval } from './shell-write-approval.js'
 import { registerReadTools, registerWriteTools } from './tool-registration.js'
 import { installToolDiagnostics } from './tool-diagnostics.js'
 import { createSubagentGuard, type SubagentGuard } from './subagent-guard.js'
+import { CORE_SOPS } from './skills/core.js'
+import { registerResearchSkills } from './skills/register.js'
 import type {
   ZoteroAttachmentLocation,
   ZoteroBrowseRequest,
@@ -154,22 +157,7 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-/**
- * Runtime mirror of Cordis's `FiberState`.
- *
- * Cordis compiles `FiberState` as a `const enum`, so no runtime object exists to
- * import across packages. The values are anchored to the enum members instead
- * of spelled as bare numbers (`1 as FiberState.LOADING`), the same mirror
- * `packages/host/plugin-inventory/src/index.ts` keeps: a member that moves or
- * disappears then fails the typecheck rather than silently shifting the state
- * this plugin compares against.
- */
-const FIBER_STATE = {
-  LOADING: 1 as FiberState.LOADING,
-  ACTIVE: 2 as FiberState.ACTIVE,
-} as const
-
-/** Runtime mirror of Cordis's `LoggerLevel`, anchored the same way as {@link FIBER_STATE}. */
+/** Runtime mirror of Cordis's `LoggerLevel`, anchored the same way as `fiber-state.ts`. */
 const LOGGER_LEVEL = { DEBUG: 3 as LoggerLevel.DEBUG } as const
 
 /** The fiber-ownership check lives in `service-lifecycle.ts`; it is re-exported for the unit lane. */
@@ -271,9 +259,9 @@ export class ZoteroService extends Service {
     registerPromptSection(ctx, () => this.config)
     ctx.effect(
       () => () => {
+        this.subagentGuard.dispose()
         for (const dispose of this.writeToolDisposes) dispose()
         this.writeToolDisposes = []
-        this.subagentGuard.dispose()
       },
       'zotero: dynamic tools and subagent guard teardown',
     )
@@ -283,6 +271,7 @@ export class ZoteroService extends Service {
     // Background-capable tools keep their parameters static; execution refuses
     // requests the current composition cannot serve.
     registerReadTools(ctx, this)
+    registerResearchSkills(ctx, CORE_SOPS)
     // The status channel: the Remote service binds the wire namespace, and
     // the strict manifest claims its endpoints. See typert.ts for why the
     // manifest self-registers through ctx.inject(['typert']).

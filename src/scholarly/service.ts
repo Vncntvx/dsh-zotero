@@ -31,6 +31,8 @@ import {
   type ScholarlyConfig,
 } from './config.js'
 import { installParameterCorrection } from '../parameter-correction.js'
+import { registerResearchSkills } from '../skills/register.js'
+import { SCHOLARLY_SOPS } from '../skills/scholarly.js'
 import { ScholarlyTextStore } from './fulltext/store.js'
 import { registerScholarlyPromptSection } from './prompt.js'
 import { createAllScholarlyTools, type ScholarlyReadHost } from './tools/index.js'
@@ -95,6 +97,7 @@ export class ScholarlyService extends Service {
     // The tools are registered once, here: they exist exactly as long as this
     // fiber does, because `ctx.tools.register()` is fiber-scoped.
     for (const tool of createAllScholarlyTools(host)) ctx.tools.register(tool)
+    registerResearchSkills(ctx, SCHOLARLY_SOPS)
     installParameterCorrection(ctx, SCHOLARLY_TOOL_NAMES)
 
     // The component owns the policy the model reads about these tools, so the

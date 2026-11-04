@@ -20,6 +20,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { AssembleContext } from '@deepseek-ai/dsh-system-prompt'
 import type { ResolvedConfig } from './config.js'
 import {
+  LIBRARY_WRITE_TOOL_NAMES,
   SCHOLARLY_SAVE_TOOL_NAME,
   ZOTERO_READ_TOOL_NAMES,
   ZOTERO_WRITE_TOOL_NAMES,
@@ -186,8 +187,7 @@ const READ_EVIDENCE_SENTENCE =
   "truncated, coverage, attachments, matchedFields, sourcesSkipped, and an empty evidence array are honest signals. Absence is not evidence: an unindexed or unread attachment is a named gap in coverage rather than a file with nothing to say, and a hit whose matchedFields is comment is the annotator's own view, not the paper's words. Only annotations carry Zotero's own page labels; never invent page numbers from full text. Refs are checked for database instance match against the running Zotero instance and fail closed on mismatch."
 
 /** Every write name the plugin can put on a step's surface. */
-export type ZoteroWriteToolName =
-  (typeof ZOTERO_WRITE_TOOL_NAMES)[number] | typeof SCHOLARLY_SAVE_TOOL_NAME
+export type ZoteroWriteToolName = (typeof LIBRARY_WRITE_TOOL_NAMES)[number]
 
 /** One write-policy facet, selected by the admitted tools that need it. */
 type WriteFacet =

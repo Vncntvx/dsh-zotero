@@ -14,6 +14,7 @@ src/
   subagent-guard.ts     # 子 agent 写策略：按会话血缘收缩写工具可见性并在执行期拒绝其写调用（自 service.ts 拆分）
   tool-diagnostics.ts   # 工具执行诊断记录（自 service.ts 拆分）
   tool-registration.ts  # 读/写工具注册清单（自 service.ts 拆分）
+  skills/               # Host 端按需研究 SOP：定义、Recipe、组件分层注册；维护与验证见 skills.md
   library/              # 文献面板子组件（ZoteroLibraryService、配置 schema）
   library-views.ts      # 文献面板 wire 视图与域请求的双向映射（含 export）
   library-write.ts      # 文献面板写入口：进入注册工具管线与审批接缝

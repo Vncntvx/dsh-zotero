@@ -196,6 +196,12 @@ export const ZOTERO_TOOL_NAMES = [...ZOTERO_READ_TOOL_NAMES, ...ZOTERO_WRITE_TOO
  */
 export const SCHOLARLY_SAVE_TOOL_NAME = 'scholarly_save_to_zotero'
 
+/** Every model-tool entry that can mutate the personal library, across components. */
+export const LIBRARY_WRITE_TOOL_NAMES = [
+  ...ZOTERO_WRITE_TOOL_NAMES,
+  SCHOLARLY_SAVE_TOOL_NAME,
+] as const
+
 /**
  * The Local API path that exists only to issue write keys. The write
  * transport joins it onto `/api/`; the shell-write detector matches the same

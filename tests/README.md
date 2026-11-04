@@ -73,6 +73,12 @@ never in a file named after a number or a function.
   normalization checks under `unit/normalize/` and browse/write consumer
   checks in their owning lanes. Behavioral acceptance remains in the matching
   local browse, write, and library test suites.
+- The subagent write policy in `src/subagent-guard.ts` is split by public
+  surface: `host/subagent-view.spec.ts` owns the scoped tool view and
+  restriction lifecycle, `host/subagent-guard.spec.ts` owns execution-time
+  denial and refresh failure containment, and both share the lane fixture in
+  `host/support/subagent-guard.ts`. The `tools/change` emit containment is
+  pinned by the guard spec's injected-restriction-failure case.
 - Sources write receipts and export projections live in
   `src/client/sources/write-decoder.ts` and `export-decoder.ts`; their pure
   behavior is covered by `client/sources/decoders-write.spec.ts` and the export

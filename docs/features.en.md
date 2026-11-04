@@ -29,6 +29,8 @@ The agent has eight read-only tools. Parameters and error codes are in the [tool
 
 Tool results appear in the conversation as read-only cards. Collapsed, each shows a one-line summary; expanded, it shows items, passages, export text, or a receipt according to the tool type, with copy actions and "Read PDF". A card renders only the output the tool already produced and never calls a tool itself.
 
+Research SOP skills add seven on-demand workflows: research landscape, citation lineage, evidence synthesis, manuscript reference audit, library governance, publication integrity and literature intake. The model selects one from a short catalog of names and descriptions, then loads its full phased instructions with the `skill` tool; bodies stay out of the standing system prompt. See the [research SOP skill reference](skills.en.md).
+
 ## Checking the Literature Trail
 
 The literature trail sits at the top of the conversation and groups the literature the agent found and read in this session by item. The data comes from this session's tool-call snapshots, so switching to it issues no new request.

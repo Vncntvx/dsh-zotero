@@ -136,6 +136,7 @@ The fifteen write tools (notes, tags and collection membership, collections, ite
 | [Getting started](docs/getting-started.en.md) | Installation, connection verification, and the first task                                              |
 | [Product model](docs/product-model.en.md)     | Two entry points, two UI surfaces, component division, and system boundaries                           |
 | [Features](docs/features.en.md)               | Conversation capabilities, the literature trail, the literature panel, writes, and scholarly retrieval |
+| [Research SOP skills](docs/skills.en.md)      | Seven on-demand research workflows, batching budgets and evidence boundaries                           |
 | [Troubleshooting](docs/troubleshooting.en.md) | Common issues, diagnostic steps, and remedies                                                          |
 
 ### Maintenance
