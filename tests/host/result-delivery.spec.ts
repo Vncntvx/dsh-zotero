@@ -1,4 +1,4 @@
-/** The real six-tool pipeline must persist before publishing an oversized success. */
+/** Result delivery through the real pipeline: inline versus persisted-file publication. */
 import { afterEach, expect, it } from 'vitest'
 import { estimateContent } from '@deepseek-ai/dsh-token-meter/estimate'
 import { setupHostLane, type HostLane } from '../helpers/lanes/host-lane.ts'

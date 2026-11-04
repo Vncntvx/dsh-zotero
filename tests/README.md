@@ -193,6 +193,9 @@ instead of reporting a mocked pass as live verification.
   and `expectApplied`.
 - `tests/helpers/sync.ts`: `deferred()` / `progress()` for tests that need to
   wait on the code rather than on a duration.
+- `tests/helpers/tool-set.ts`: `admittedToolSet`, one step admission over real
+  definitions that honours the registry's scope rule, shared by the host and
+  scholarly prompt specs.
 - `tests/helpers/fixtures-dir.ts`: the captured response bodies under
   `tests/fixtures/`, resolved from the helper so a spec can move.
 

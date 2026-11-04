@@ -57,7 +57,9 @@ import {
   ZOTERO_WRITE_APPROVAL_UNAVAILABLE,
   ZoteroError,
 } from './errors.js'
+import { ZOTERO_TOOL_NAMES } from './constants.js'
 import { LocalApiProvider } from './local/provider.js'
+import { installParameterCorrection } from './parameter-correction.js'
 import { ZoteroRemediationService } from './remediation/service.js'
 import { localProviderLimits } from './service-config.js'
 import { installServiceConfigLifecycle } from './service-lifecycle.js'
@@ -272,6 +274,7 @@ export class ZoteroService extends Service {
     )
     installShellWriteApproval(ctx, () => this.config, this.diagnostics)
     installToolDiagnostics(ctx, this.diagnostics)
+    installParameterCorrection(ctx, ZOTERO_TOOL_NAMES)
     // Background-capable tools keep their parameters static; execution refuses
     // requests the current composition cannot serve.
     registerReadTools(ctx, this)

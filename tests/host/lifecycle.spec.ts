@@ -9,9 +9,11 @@ import {
 import { parseRef } from '../../src/refs.js'
 import {
   CONNECTIVITY_POLICY_SENTENCE,
+  ZOTERO_CONSENT_SENTENCE,
   ZOTERO_PROMPT_CEILING,
   ZOTERO_PROMPT_FLOOR,
   ZOTERO_PROMPT_ORDER_OFFSET,
+  ZOTERO_UNTRUSTED_SENTENCE,
 } from '../../src/prompt.js'
 import { PROMPT_BAND_CEILING } from '../../src/prompt-band.js'
 import ScholarlyService from '../../src/scholarly/index.js'
@@ -95,7 +97,7 @@ describe('prompt section', () => {
       expect(section!.text).toContain(tool)
     }
     expect(section!.text).toContain('never invent page numbers')
-    expect(section!.text).toContain('use the Zotero tools only when the user explicitly asks')
+    expect(section!.text).toContain(ZOTERO_CONSENT_SENTENCE)
     expect(section!.text).toContain(CONNECTIVITY_POLICY_SENTENCE)
     // A connectivity failure is the tool call's own error result, not a prompt:
     // the ask mechanism (src/ask.ts) is gone, so the policy must never promise
@@ -104,9 +106,10 @@ describe('prompt section', () => {
     expect(section!.text).not.toContain('asks the user')
     // Library content is untrusted data, never instructions (prompt-injection
     // hardening for titles, notes, annotations, full text, URLs, exports).
-    expect(section!.text).toContain('untrusted research data')
-    // The external literature component owns its own policy, and the parent
-    // cannot know whether it is mounted.
+    expect(section!.text).toContain(ZOTERO_UNTRUSTED_SENTENCE)
+    // The external literature component owns the external-tool policy. The
+    // parent names no external retrieval tool; it only classifies the save
+    // entry when that entry is on the step's surface.
     expect(section!.text.toLowerCase()).not.toContain('scholarly')
   })
 

@@ -41,7 +41,8 @@ graph LR
 - 结构性配置变更会在现有实例上重建 HTTP 客户端、Provider 与写工具集，触发条件是 `TRANSPORT_CONFIG_KEYS` 中的六个键（`baseUrl`、`timeoutMs`、`maxResponseBytes`、`maxInFlightRequests`、`writeAuthorizeDeadlineMs`、`writeEnabled`）；其余限额由 Provider 实时读取，不触发重建；
 - 写入闸门统一收敛于服务接缝：所有写操作接收 `ZoteroWriteCall`，依次通过能力检查、会话审批策略（`ctx.approval.request`）以及计划审查卡；
 - 注册 `tools/pre-execute` 监听器，检测直写本地 API 的 shell 命令并提升为审批请求；
-- 配置重建策略与 config→limits 投影集中于 `src/service-config.ts`；本地工具注册清单由 `src/tool-registration.ts` 管理，工具调用诊断 hook 由 `src/tool-diagnostics.ts` 安装，service 保留 fiber 生命周期和这些协作者的组合；
+- 策略提示词段（`zotero:policy`，`src/prompt.ts`）随每一步准入的工具集合裁剪：读路由、读上限与写策略只点名该步准入的工具；只要存在任一 Zotero 工具，就保留调用同意、注入防护与连接失败三段；没有本地读工具时保留写路由约束，准入为空时只保留该约束；写能力关闭时完整保留关闭状态说明与越界路由禁令；全量工具时文本保持稳定；
+- 配置重建策略与 config→limits 投影集中于 `src/service-config.ts`；本地工具注册清单由 `src/tool-registration.ts` 管理，工具调用诊断 hook 由 `src/tool-diagnostics.ts` 安装，步骤准入解析由 `src/step-tools.ts` 每步缓存一次，参数纠错由 `src/parameter-correction.ts` 通过 `tools/post-execute` 安装，`ResultDelivery` 只负责投递；service 保留 fiber 生命周期和这些协作者的组合；
 - 配置提交校验与 volatile-update 监听由 `src/service-lifecycle.ts` 承担；ZoteroService 提供 live config 和重建 transport/tool 的回调；
 - 请求驱动架构：插件加载过程不发起任何外部或本地网络请求。
 
@@ -89,7 +90,7 @@ graph LR
 
 `dsh-zotero/scholarly` 是独立 bundle 组件，随包发布但默认禁用。组件是否挂载就是唯一授权：挂载即注册 7 个模型工具与自己的提示词段，并允许向显式允许列表中的外部索引发请求；未挂载时服务、传输层与工具都不存在。
 
-- 授权与提示词同源：策略提示词由该组件自己注册（`src/scholarly/prompt.ts`，段落名 `scholarly:policy`），随组件挂载出现、随卸载消失；父组件的策略段不提及外部工具。
+- 授权与提示词同源：策略提示词由该组件自己注册（`src/scholarly/prompt.ts`，段落名 `scholarly:policy`），随组件挂载出现、随卸载消失；段落只列出该步骤准入的工具，准入为空时不渲染；web_fetch 路由禁令随任一外部 scholarly 工具保留；父组件的策略段不描述外部检索工具，只在 save 进入本步准入时按其名字归类写面。
 - 主机白名单：`src/scholarly/transport/hosts.ts` 是唯一真源，允许的 host 与每主机限流间隔都从 `SCHOLARLY_HOSTS` 派生。
 - 传输层：截止时间用 `@deepseek-ai/dsh-timeout` 的 `deadline()` / `timeoutOf()`，区分“provider 超时”与“调用方取消”（后者不重试）；响应体上限用共享的 `src/transport-bounds.ts`；在飞请求数由 `ConcurrencyGate` 约束。
 - 凭证：三个 `role('secret')` 声明的 API Key 中，Semantic Scholar 与 OpenAlex 走请求头；NCBI E-utilities 只接受 query 参数，该密钥经 URL 传递，错误消息只报 hostname，不内插完整 URL。

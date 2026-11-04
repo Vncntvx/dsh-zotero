@@ -1,4 +1,5 @@
 import { defineTool, type InferValue, type ToolDefinition } from '@deepseek-ai/dsh-tools'
+import { SCHOLARLY_SAVE_TOOL_NAME } from '../../constants.js'
 import type { ScholarlyToolHost } from './common.js'
 import type { ZoteroCreateItemRequest } from '../../types.js'
 import { requireCreatableItemType, normalizeCreator } from '../../write-item-rules.js'
@@ -79,7 +80,7 @@ export function renderScholarlySave(_args: unknown, value: SaveOutput) {
 
 export function createScholarlySaveToZoteroTool(host: ScholarlyToolHost): ToolDefinition {
   return defineTool({
-    name: 'scholarly_save_to_zotero',
+    name: SCHOLARLY_SAVE_TOOL_NAME,
     description:
       'Save one scholarly result into the local Zotero personal library through the normal write approval seam. The local Zotero component and writeEnabled must both be active.',
     parameters: PARAMETERS,

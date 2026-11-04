@@ -188,6 +188,14 @@ export const ZOTERO_READ_TOOL_NAMES = [
 export const ZOTERO_TOOL_NAMES = [...ZOTERO_READ_TOOL_NAMES, ...ZOTERO_WRITE_TOOL_NAMES] as const
 
 /**
+ * The scholarly component's local-write entry, shared by the tool registration
+ * and the core policy. It reaches the personal library through the same
+ * `ctx.zotero` gate as the core write tools, so the core policy counts it as a
+ * write surface even when a step admits no `ZOTERO_WRITE_TOOL_NAMES` member.
+ */
+export const SCHOLARLY_SAVE_TOOL_NAME = 'scholarly_save_to_zotero'
+
+/**
  * The Local API path that exists only to issue write keys. The write
  * transport joins it onto `/api/`; the shell-write detector matches the same
  * spelling in command text so both sides recognize one endpoint.

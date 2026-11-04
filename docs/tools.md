@@ -6,6 +6,8 @@ dsh-zotero 注册 23 个本地工具（8 个读工具 + 15 个写工具），通
 
 八个本地读取工具共用交付结构：`{delivery:"inline", data:…}` 在两项预算内返回完整领域结果；`{delivery:"file", version:1, tool, sessionId, callId, summary, file, facts}` 返回有界事实及标准 Harness FileBlock。不可变 JSON 文件保存 `{version:1, tool, request, data}`，其中 `data` 是完整领域结果。分页完整性（`page` 或 `complete`）与交付方式独立。长单行字段应由官方 `run_code` 的 Node 文件接口解析；逐行预览可能截断长行。
 
+参数校验失败（例如把 `refs` 写成 `ref`）时，所有 dsh-zotero 工具（8 个本地读工具、15 个写入工具与 scholarly 组件工具）都会在管线的 `invalid arguments` 错误后附一条纠错提示，同时指明被拒绝的参数名与声明的参数名。匹配忽略大小写与 `_`/`-`，相邻字符换位计为一次编辑。提示只在唯一近似匹配时出现，不改变错误码，不发起请求，也不自动重试。
+
 正文使用 `AttachmentStore.saveFileStream`，校验后的回执写入 `zotero_results` storage domain。超预算或受管理后台结果需要这两项服务；保存、索引、取消及完整性校验失败均明确报错，不回退全文内联。所属 Zotero 后台任务成功后，`job_output` 追加同一文件引用并保留官方 canonical value。PTC 嵌套调用传递标准文件附加上下文。原始后台确认保留 `resultSessionId`；重启后可按持久回执读取已保存结果，但不会恢复运行任务。
 
 认证端点 `GET /api/zotero/result?sessionId=<id>&seq=<event>&index=<file>` 仅读取持久事件坐标指向的文件，或该事件后台确认对应的已核实回执，不接收任意路径或附件 ID。复制和下载须等待流完整结束并通过校验。附件遵循宿主生命周期，可能在会话结束后继续占用磁盘；插件不自行删除共享文件。

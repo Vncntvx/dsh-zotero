@@ -30,11 +30,12 @@ import {
   type ResolvedScholarlyConfig,
   type ScholarlyConfig,
 } from './config.js'
+import { installParameterCorrection } from '../parameter-correction.js'
 import { ScholarlyTextStore } from './fulltext/store.js'
 import { registerScholarlyPromptSection } from './prompt.js'
 import { createAllScholarlyTools, type ScholarlyReadHost } from './tools/index.js'
 import { createScholarlyHttp, type ScholarlyHttp } from './transport/http.js'
-import type { ScholarlyKeys } from './types.js'
+import { SCHOLARLY_TOOL_NAMES, type ScholarlyKeys } from './types.js'
 import type { ZoteroServiceLike } from './zotero-link.js'
 
 declare module '@deepseek-ai/cordis' {
@@ -94,6 +95,7 @@ export class ScholarlyService extends Service {
     // The tools are registered once, here: they exist exactly as long as this
     // fiber does, because `ctx.tools.register()` is fiber-scoped.
     for (const tool of createAllScholarlyTools(host)) ctx.tools.register(tool)
+    installParameterCorrection(ctx, SCHOLARLY_TOOL_NAMES)
 
     // The component owns the policy the model reads about these tools, so the
     // prompt names an external capability only while that capability exists.
