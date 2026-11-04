@@ -6,6 +6,7 @@
  */
 
 import { afterEach, describe, expect, it } from 'vitest'
+import { TOOL_ABORTED_BEFORE_DISPATCH, defineTool } from '@deepseek-ai/dsh-tools'
 import { ZOTERO_NOT_RUNNING, ZOTERO_UNEXPECTED, ZoteroError } from '../../src/errors.js'
 import { ZoteroRuntime } from '../../src/remote.js'
 import {
@@ -31,6 +32,19 @@ function runtimeOf(l: HostLane): ZoteroRuntime {
   return l.ctx.get('zoteroRemote') as ZoteroRuntime
 }
 
+/** A zotero_-prefixed probe reaches the diagnostics listeners without a real tool. */
+function installProbe(lane: HostLane, execute: () => Promise<string>): void {
+  lane.ctx.tools.register(
+    defineTool({
+      name: 'zotero_probe',
+      description: 'Diagnostics probe',
+      parameters: {},
+      output: { schema: { type: 'string' }, render: () => [] },
+      execute,
+    }),
+  )
+}
+
 describe('the zotero diagnostics endpoint', () => {
   it('serves the snapshot with the debug fact and the built transport', async () => {
     lane = await setupHostLane(undefined, { typert: true })
@@ -51,13 +65,11 @@ describe('the zotero diagnostics endpoint', () => {
     const view = await runtimeOf(lane).diagnostics(LIVE_SIGNAL)
     const toolResult = view.entries.find((entry) => entry.event === 'tool.result')
     const httpFailure = view.entries.find((entry) => entry.event === 'http.failure')
-    expect(toolResult).toMatchObject({
-      level: 'warn',
-      // The folded ZoteroError's stable code rides the detail, the same grep
-      // anchor the transport failure line beneath it carries.
-      detail: { errorCode: ZOTERO_UNEXPECTED },
-      // Newest-first: the tool outcome sits above the transport line.
-    })
+    expect(toolResult).toMatchObject({ level: 'warn' })
+    // The folded ZoteroError's stable code rides the detail, the same grep
+    // anchor the transport failure line beneath it carries; `ms` spans the
+    // dispatch through result publication.
+    expect(toolResult?.detail).toEqual({ ms: expect.any(Number), errorCode: ZOTERO_UNEXPECTED })
     expect(toolResult?.message).toContain('zotero_search failed')
     expect(httpFailure).toMatchObject({ level: 'error' })
     expect(httpFailure?.message).toContain('GET ')
@@ -68,32 +80,79 @@ describe('the zotero diagnostics endpoint', () => {
     expect(view.entries.every((entry) => entry.event !== 'tool.call')).toBe(true)
   })
 
-  it('records a failed tool result without an error code when the fold carried none', async () => {
+  it('records a failed call without an error code when the tool threw a plain error', async () => {
     lane = await setupHostLane(undefined, { typert: true })
-    // A result the registry would hand back with no `error.info` (a plain
-    // throw folded without a HarnessError code): the warn still lands, and
-    // the detail carries the timing alone.
-    const exec = {
-      callId: 'diag-call-3' as never,
-      name: 'zotero_search',
-      arguments: undefined,
-      signal: new AbortController().signal,
-    }
-    await lane.zoteroFiber.ctx.waterfall(
-      lane.zoteroFiber as never,
-      'tools/execute',
-      exec as never,
-      () =>
-        Promise.resolve({
-          isError: true,
-          error: { message: 'plain refusal' },
-          content: [{ type: 'text', text: 'Error: plain refusal' }],
-        }) as never,
-    )
+    // The probe runs through the real registry: a plain throw folds to an
+    // `isError` result with no `error.info`, so the detail carries timing only.
+    installProbe(lane, async () => {
+      throw new Error('plain refusal')
+    })
+    expect((await lane.runTool('zotero_probe', {})).isError).toBe(true)
     const view = await runtimeOf(lane).diagnostics(LIVE_SIGNAL)
-    const entry = view.entries.find((candidate) => candidate.message.includes('plain refusal'))
-    expect(entry).toMatchObject({ level: 'warn', event: 'tool.result' })
-    expect(entry?.detail?.errorCode).toBeUndefined()
+    const entry = view.entries.find((candidate) => candidate.event === 'tool.result')
+    expect(entry).toMatchObject({ level: 'warn', message: 'zotero_probe failed: plain refusal' })
+    expect(entry?.detail).toEqual({ ms: expect.any(Number) })
+  })
+
+  it('records a call denied before dispatch without a duration or a digest', async () => {
+    lane = await setupHostLane({ debug: true }, { typert: true })
+    let bodyRan = false
+    installProbe(lane, async () => {
+      bodyRan = true
+      return 'ok'
+    })
+    lane.ctx.on('tools/pre-execute', async (execution, next) => {
+      if (execution.name !== 'zotero_probe') return next()
+      return { kind: 'deny', reason: 'policy blocked' }
+    })
+
+    expect((await lane.runTool('zotero_probe', {})).isError).toBe(true)
+    // The denial really stopped the call before dispatch.
+    expect(bodyRan).toBe(false)
+    const view = await runtimeOf(lane).diagnostics(LIVE_SIGNAL)
+    const entry = view.entries.find((candidate) => candidate.event === 'tool.result')
+    expect(entry).toMatchObject({ level: 'warn', message: 'zotero_probe failed: policy blocked' })
+    // No dispatch, no duration, and no stable code: the detail is omitted.
+    expect(entry?.detail).toBeUndefined()
+    expect(view.entries.every((candidate) => candidate.event !== 'tool.call')).toBe(true)
+  })
+
+  it('records a call cancelled before dispatch with the abort code and no duration', async () => {
+    lane = await setupHostLane(undefined, { typert: true })
+    installProbe(lane, async () => 'ok')
+    lane.ctx.on('tools/pre-execute', async (execution, next) => {
+      if (execution.name !== 'zotero_probe') return next()
+      return { kind: 'cancel' }
+    })
+
+    expect((await lane.runTool('zotero_probe', {})).isError).toBe(true)
+    const view = await runtimeOf(lane).diagnostics(LIVE_SIGNAL)
+    const entry = view.entries.find((candidate) => candidate.event === 'tool.result')
+    expect(entry).toMatchObject({
+      level: 'warn',
+      message: 'zotero_probe failed: tool call aborted before dispatch',
+    })
+    // The canonical cancellation keeps its code and carries no dispatch timing.
+    expect(entry?.detail).toEqual({ errorCode: TOOL_ABORTED_BEFORE_DISPATCH })
+  })
+
+  it('records the published result when post-execute blocks a dispatched call', async () => {
+    lane = await setupHostLane(undefined, { typert: true })
+    installProbe(lane, async () => 'ok')
+    lane.ctx.on('tools/post-execute', async (execution, _result, next) => {
+      if (execution.name !== 'zotero_probe') return next()
+      return { kind: 'block', feedback: [{ type: 'text', text: 'blocked after dispatch' }] }
+    })
+
+    expect((await lane.runTool('zotero_probe', {})).isError).toBe(true)
+    const view = await runtimeOf(lane).diagnostics(LIVE_SIGNAL)
+    const entry = view.entries.find((candidate) => candidate.event === 'tool.result')
+    expect(entry).toMatchObject({
+      level: 'warn',
+      message: 'zotero_probe failed: blocked after dispatch',
+    })
+    // Dispatch ran, so the timing exists; the block carried no stable code.
+    expect(entry?.detail).toEqual({ ms: expect.any(Number) })
   })
 
   it('keeps debug entries out until the config flag flips', async () => {
@@ -118,7 +177,9 @@ describe('the zotero diagnostics endpoint', () => {
     expect(verbose.debug).toBe(true)
     expect(verbose.entries.some((entry) => entry.event === 'http.request')).toBe(true)
     expect(verbose.entries.some((entry) => entry.event === 'tool.call')).toBe(true)
-    expect(verbose.entries.some((entry) => entry.event === 'tool.result')).toBe(true)
+    const toolResult = verbose.entries.find((entry) => entry.event === 'tool.result')
+    expect(toolResult).toMatchObject({ level: 'debug', message: 'zotero_search completed' })
+    expect(toolResult?.detail).toEqual({ ms: expect.any(Number) })
   })
 
   it('formats tool call digest for debug entries with long or circular arguments', async () => {
@@ -169,7 +230,9 @@ describe('the zotero diagnostics endpoint', () => {
     expect(longCall?.message.endsWith('…')).toBe(true)
 
     const bareCalls = callEntries.filter((entry) => entry.message === 'zotero_search')
-    expect(bareCalls.length).toBeGreaterThanOrEqual(2)
+    // Both serialization failures emit a bare-name line. The ring may merge them,
+    // so count emissions, not entries.
+    expect(bareCalls.reduce((total, entry) => total + entry.count, 0)).toBe(2)
   })
 
   it('accepts a client error report, clamped, and assigns its sequence', async () => {
@@ -243,53 +306,6 @@ describe('the zotero diagnostics endpoint', () => {
     expect(
       lane.zoteroFiber.ctx.waterfall(lane.ctx as never, 'internal/config', raw, () => raw),
     ).toBe(raw)
-  })
-
-  it('records a registry-level tool throw and digests hostile arguments', async () => {
-    lane = await setupHostLane(undefined, { typert: true })
-    // Cyclic arguments: the digest must degrade to a string, never throw.
-    const cyclic: Record<string, unknown> = {}
-    cyclic.self = cyclic
-    const exec = {
-      callId: 'diag-call' as never,
-      name: 'zotero_search',
-      arguments: cyclic,
-      signal: new AbortController().signal,
-    }
-    await expect(
-      lane.zoteroFiber.ctx.waterfall(
-        lane.zoteroFiber as never,
-        'tools/execute',
-        exec as never,
-        () => Promise.reject(new Error('registry blew up')),
-      ),
-    ).rejects.toThrow('registry blew up')
-    const view = await runtimeOf(lane).diagnostics(LIVE_SIGNAL)
-    const entry = view.entries.find((candidate) => candidate.event === 'tool.result')
-    expect(entry).toMatchObject({ level: 'error' })
-    expect(entry?.message).toContain('zotero_search threw: registry blew up')
-
-    // A non-Error rejection renders through its string form, and absent
-    // arguments digest to the bare tool name.
-    const bare = {
-      callId: 'diag-call-2' as never,
-      name: 'zotero_search',
-      arguments: undefined,
-      signal: new AbortController().signal,
-    }
-    await expect(
-      lane.zoteroFiber.ctx.waterfall(
-        lane.zoteroFiber as never,
-        'tools/execute',
-        bare as never,
-        () => Promise.reject('bare string failure'),
-      ),
-    ).rejects.toBe('bare string failure')
-    const refreshed = await runtimeOf(lane).diagnostics(LIVE_SIGNAL)
-    const bareEntry = refreshed.entries.find((candidate) =>
-      candidate.message.includes('bare string failure'),
-    )
-    expect(bareEntry?.message).toContain('zotero_search threw: bare string failure')
   })
 
   it('rebuilds the transport from live commits and ignores heavy-tool flag flips', async () => {

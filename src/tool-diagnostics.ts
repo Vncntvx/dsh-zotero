@@ -1,11 +1,19 @@
 /**
+ * Tool-call diagnostics: a debug digest when a `zotero_` call enters dispatch,
+ * and one outcome line when the harness publishes the result.
+ *
+ * `tools/result` is the authoritative, frozen outcome, and it also fires for
+ * calls the pipeline refused before dispatch (a `tools/pre-execute` denial, a
+ * guard, a cancellation). Those report their outcome without `ms`; `ms`
+ * therefore spans dispatch entry to result publication, including post-execute
+ * and finalization. A retrying wrapper above this listener re-stamps the start,
+ * so `ms` covers the last attempt.
  * @module dsh-zotero/tool-diagnostics
  */
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { ToolExecutionResult } from '@deepseek-ai/dsh-tools'
 import { DiagnosticsRecorder, type DiagnosticDetail } from './diagnostics.js'
-import { errorMessageOf } from './errors.js'
 
 function toolCallDigest(execution: { name: string; arguments: unknown }): string {
   let digest = ''
@@ -18,34 +26,42 @@ function toolCallDigest(execution: { name: string; arguments: unknown }): string
   return args === '' ? execution.name : `${execution.name} ${args}`
 }
 
+/** Structured facts for one outcome line; absent when there are none. */
+function outcomeDetail(ms: number | undefined, errorCode?: string): DiagnosticDetail | undefined {
+  if (ms === undefined && errorCode === undefined) return undefined
+  return {
+    ...(ms === undefined ? {} : { ms }),
+    ...(errorCode === undefined ? {} : { errorCode }),
+  }
+}
+
 export function installToolDiagnostics(ctx: Context, diagnostics: DiagnosticsRecorder): void {
+  // The harness passes the same execution object to `tools/execute` and, after
+  // freezing it, to `tools/result`.
+  const startedAt = new WeakMap<object, number>()
+
   ctx.on('tools/execute', async (execution, next) => {
     if (!execution.name.startsWith('zotero_')) return await next()
-    const startedAt = Date.now()
+    startedAt.set(execution, Date.now())
     if (diagnostics.admits('debug')) {
       diagnostics.sink.debug('tool.call', toolCallDigest(execution))
     }
-    try {
-      const result: ToolExecutionResult = await next()
-      const ms = Date.now() - startedAt
-      if (result.isError) {
-        const detail: DiagnosticDetail = { ms }
-        const code = result.error.info?.code
-        if (code !== undefined) detail.errorCode = code
-        diagnostics.sink.warn(
-          'tool.result',
-          `${execution.name} failed: ${result.error.message}`,
-          detail,
-        )
-      } else {
-        diagnostics.sink.debug('tool.result', `${execution.name} completed`, { ms })
-      }
-      return result
-    } catch (error) {
-      diagnostics.sink.error('tool.result', `${execution.name} threw: ${errorMessageOf(error)}`, {
-        ms: Date.now() - startedAt,
-      })
-      throw error
+    return await next()
+  })
+
+  ctx.on('tools/result', (execution, result: Readonly<ToolExecutionResult>) => {
+    if (!execution.name.startsWith('zotero_')) return
+    const started = startedAt.get(execution)
+    const ms = started === undefined ? undefined : Date.now() - started
+
+    if (result.isError) {
+      diagnostics.sink.warn(
+        'tool.result',
+        `${execution.name} failed: ${result.error.message}`,
+        outcomeDetail(ms, result.error.info?.code),
+      )
+      return
     }
+    diagnostics.sink.debug('tool.result', `${execution.name} completed`, outcomeDetail(ms))
   })
 }
