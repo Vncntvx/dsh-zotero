@@ -145,10 +145,11 @@ export const ZOTERO_WRITE_OBJECT_BATCH = 50
 export const ZOTERO_LIBRARY_VERSION_HEADER = 'last-modified-version'
 
 /**
- * The personal-library write tools. One list for the capability
- * surface, the model-facing policy, and the shell-write detector's audit
- * copy, so a rename or a new write tool must not leave any of those three
- * telling the user a different set.
+ * The personal-library write tools. One authoritative list for the capability
+ * surface, the model-facing policy, the shell-write detector's audit copy,
+ * the literature panel's write entry, and the subagent write policy, so a
+ * rename or a new write tool cannot leave any consumer telling the user a
+ * different set.
  */
 export const ZOTERO_WRITE_TOOL_NAMES = [
   'zotero_create_note',

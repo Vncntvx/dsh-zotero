@@ -11,6 +11,7 @@ src/
   service-config.ts     # 传输重建配置键与 LocalApiLimits 映射（自 service.ts 拆分）
   service-lifecycle.ts  # 配置提交校验与 volatile 更新处理（自 service.ts 拆分）
   shell-write-approval.ts # shell 直写本地 API 的审批接缝（自 service.ts 拆分）
+  subagent-guard.ts     # 子 agent 写策略：按会话血缘收缩写工具可见性并在执行期拒绝其写调用（自 service.ts 拆分）
   tool-diagnostics.ts   # 工具执行诊断记录（自 service.ts 拆分）
   tool-registration.ts  # 读/写工具注册清单（自 service.ts 拆分）
   library/              # 文献面板子组件（ZoteroLibraryService、配置 schema）

@@ -11,6 +11,7 @@ src/
   service-config.ts     # Transport-rebuild config keys and the LocalApiLimits mapping (split from service.ts)
   service-lifecycle.ts  # Config commit validation and volatile-update handling (split from service.ts)
   shell-write-approval.ts # Approval seam for shell commands that write to the local API directly (split from service.ts)
+  subagent-guard.ts     # Subagent write policy: narrows write-tool visibility by session lineage and denies child write calls at execution time (split from service.ts)
   tool-diagnostics.ts   # Tool execution diagnostics recording (split from service.ts)
   tool-registration.ts  # Read/write tool registration lists (split from service.ts)
   library/              # Literature panel subcomponent (ZoteroLibraryService, config schema)

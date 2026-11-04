@@ -23,6 +23,7 @@
  */
 
 import { Context, Service, type Fiber } from '@deepseek-ai/cordis'
+import type { Agent } from '@deepseek-ai/dsh-agent'
 import { createVolatile, updateVolatile, volatileEntries } from '@deepseek-ai/cosmokit'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
@@ -56,6 +57,21 @@ export interface HostLaneOptions {
   readonly compose?: (ctx: Context) => Promise<void>
 }
 
+/**
+ * The caller a tool spec uses when it does not vary the agent: the agent loop
+ * always sets one, and the write gate routes and audits by it.
+ *
+ * A live `Agent` is only constructible by the loop — it carries the driver,
+ * inbox, cancellation, and status surface — so this is the external-stub
+ * boundary: the literal supplies the members the tool surfaces read (`id`,
+ * `session.header`, and, where a scope is involved, `ctx`) and asserts the
+ * published handle once, here, instead of at every call site.
+ */
+const DEFAULT_AGENT = {
+  id: 'test-session',
+  session: { header: { id: 'test-session' } },
+} as never
+
 /** One booted lane: the mounted context, the scripted server, and the call surface. */
 export interface HostLane {
   /** The context the plugin is mounted on. */
@@ -66,8 +82,12 @@ export interface HostLane {
   readonly mock: MockZotero
   /** The plugin's own fiber; disposing it unwinds every registration. */
   readonly zoteroFiber: Fiber
-  /** Execute one tool call the way the harness does, with a fresh signal and call id. */
-  runTool(name: string, args: Record<string, unknown>): Promise<ToolExecutionResult>
+  /**
+   * Execute one tool call the way the harness does, with a fresh signal and
+   * call id. Omit `agent` for the lane's default caller; pass one to exercise
+   * a caller-scoped policy.
+   */
+  runTool(name: string, args: Record<string, unknown>, agent?: Agent): Promise<ToolExecutionResult>
   /** The registered definition for one tool name, if the assembly carries it. */
   tool(name: string): ToolDefinition | undefined
   /** Close the mock server; call it from the spec's `afterEach`. */
@@ -120,7 +140,7 @@ export async function setupHostLane(
     mock,
     configureCalls,
     zoteroFiber,
-    async runTool(name, args) {
+    async runTool(name, args, agent) {
       const batch = await ctx.tools.execute({
         calls: [
           {
@@ -131,9 +151,7 @@ export async function setupHostLane(
           },
         ],
         signal: new AbortController().signal,
-        // The agent loop always sets the caller; the write gate routes and
-        // audits by it, so the lane must carry one too.
-        agent: { id: 'test-session', session: { header: { id: 'test-session' } } } as never,
+        agent: agent ?? DEFAULT_AGENT,
       })
       const call = batch.results[0]
       if (call === undefined) throw new Error('Tool execution produced no result')

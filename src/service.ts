@@ -67,6 +67,7 @@ import { registerPromptSection } from './prompt.js'
 import { installShellWriteApproval } from './shell-write-approval.js'
 import { registerReadTools, registerWriteTools } from './tool-registration.js'
 import { installToolDiagnostics } from './tool-diagnostics.js'
+import { createSubagentGuard, type SubagentGuard } from './subagent-guard.js'
 import type {
   ZoteroAttachmentLocation,
   ZoteroBrowseRequest,
@@ -207,6 +208,8 @@ export class ZoteroService extends Service {
   private providerDispose: (() => void) | undefined
   /** Disposers of the conditionally registered write tools, tracked for the writeEnabled flip. */
   private writeToolDisposes: Array<() => void> = []
+  /** Child-scope restrictions that follow the live write-tool registration set. */
+  private readonly subagentGuard: SubagentGuard
   /** Cached resolved config; invalidated on any loader/volatile-update. */
   private cachedConfig?: ResolvedConfig
   /**
@@ -226,6 +229,7 @@ export class ZoteroService extends Service {
   constructor(ctx: Context, config: Config | Options = {}) {
     super(ctx, 'zotero')
     this.remediation = new ZoteroRemediationService(ctx)
+    this.subagentGuard = createSubagentGuard(ctx, this.diagnostics)
     // Diagnostics come first: the exporter is a process-wide tap disposed
     // with this fiber, filtering this subtree's logger names into the ring.
     // Both spellings match: the explicit `zotero.*` names the seams choose,
@@ -269,8 +273,9 @@ export class ZoteroService extends Service {
       () => () => {
         for (const dispose of this.writeToolDisposes) dispose()
         this.writeToolDisposes = []
+        this.subagentGuard.dispose()
       },
-      'zotero: dynamic tools teardown',
+      'zotero: dynamic tools and subagent guard teardown',
     )
     installShellWriteApproval(ctx, () => this.config, this.diagnostics)
     installToolDiagnostics(ctx, this.diagnostics)
@@ -377,6 +382,7 @@ export class ZoteroService extends Service {
     ) {
       for (const dispose of this.writeToolDisposes) dispose()
       this.writeToolDisposes = []
+      this.subagentGuard.refresh(this.writeToolDisposes.length > 0)
       return
     }
     if (enabled && this.writeToolDisposes.length === 0) {
@@ -385,6 +391,7 @@ export class ZoteroService extends Service {
       for (const dispose of this.writeToolDisposes) dispose()
       this.writeToolDisposes = []
     }
+    this.subagentGuard.refresh(this.writeToolDisposes.length > 0)
   }
 
   /**
