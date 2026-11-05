@@ -210,7 +210,7 @@ function buildRequest(args: GetArgs): ZoteroGetRequest {
 }
 
 export const FILE_ENVIRONMENT_MESSAGE =
-  'File environment: the machine running Zotero (this plugin only reaches a loopback API, so that is this machine). A reader elsewhere (a sandbox, a container, a remote host) may not see this path.'
+  'File environment: local filesystem or host mount (e.g. WSL /mnt/…). A reader elsewhere (a sandbox without mounts, an isolated container, a remote host) may not see this path.'
 
 export function renderGet(_args: GetArgs, value: GetOutput): ContentBlock[] {
   const lines = [formatSearchLine(value.ref, value.title, value.year, value.itemType)]

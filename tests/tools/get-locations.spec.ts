@@ -8,6 +8,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { expectValue, type HostLane, setupHostLane } from '../helpers/lanes/host-lane.js'
 import { annotationRow, attachment, collectionRow } from '../helpers/server/objects.js'
+import { unmountedDriveMessage } from '../../src/local/path-resolution.js'
 
 let lane: HostLane
 let mock: HostLane['mock']
@@ -285,5 +286,44 @@ describe('zotero_get requested locations', () => {
         .filter((entry) => /^\/api\/users\/0\/items\/[A-Z0-9]{8}$/.test(entry.pathname))
         .map((entry) => entry.pathname),
     ).toEqual(['/api/users/0/items/ABCD1234'])
+  })
+
+  it('reports unmounted Windows drive as unavailable location with clear diagnostic message', async () => {
+    mock.route('GET', '/api/users/0/items/WXYZ6789', (req, res, helpers) =>
+      helpers.json(
+        attachment({
+          key: 'WXYZ6789',
+          version: 5,
+          data: {
+            title: 'Full Text PDF',
+            contentType: 'application/pdf',
+            linkMode: 'imported_file',
+            parentItem: 'ABCD1234',
+          },
+        }),
+        { 'Zotero-Server-ID': 'S1' },
+      ),
+    )
+    mock.route('GET', '/api/users/0/items/WXYZ6789/file/view/url', (req, res, helpers) =>
+      helpers.text('file:///Z:/Users/alice/paper.pdf', { 'Zotero-Server-ID': 'S1' }),
+    )
+
+    const result = expectValue(
+      await runTool('zotero_get', {
+        ref: 'zotero://user/0/attachment/WXYZ6789',
+        locations: 'best',
+      }),
+      'zotero_get',
+    )
+    expect(result.value).toMatchObject({
+      location: {
+        kind: 'unavailable',
+      },
+    })
+    const reason = (result.value as { location?: { reason?: string } }).location?.reason
+    const expectedReason = unmountedDriveMessage('z', '/Z:/Users/alice/paper.pdf')
+    expect(reason).toBe(expectedReason)
+    const text = (result.content[0] as { text: string }).text
+    expect(text).toContain(`Location unavailable: ${expectedReason}`)
   })
 })

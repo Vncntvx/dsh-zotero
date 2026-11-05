@@ -29,6 +29,7 @@ import {
 import { requireZoteroService } from './service.js'
 import { REF_KEY_SOURCE } from './ref-grammar.js'
 import { isObjectKey } from './json.js'
+import { isWsl, appendWslEnv } from './environment.js'
 import {
   ZOTERO_DIAGNOSIS_OK,
   ZOTERO_SETTINGS_NAMESPACE,
@@ -111,33 +112,75 @@ function validProtocolUrl(url: string): boolean {
   })
 }
 
+const POWERSHELL_LAUNCHER_SCRIPT =
+  "$ErrorActionPreference = 'Stop'; $p = New-Object System.Diagnostics.ProcessStartInfo; $p.UseShellExecute = $true; $p.FileName = $env:DSH_ZOTERO_PROTOCOL_URL; [System.Diagnostics.Process]::Start($p) | Out-Null"
+
+/** Pre-encoded PowerShell script payload avoiding runtime re-encoding. */
+export const POWERSHELL_LAUNCHER_BASE64 = Buffer.from(
+  POWERSHELL_LAUNCHER_SCRIPT,
+  'utf16le',
+).toString('base64')
+
+/** Options for launching a native zotero:// protocol deep link. */
+export interface OpenProtocolOptions {
+  readonly platform?: NodeJS.Platform
+  readonly launcher?: ProtocolLauncher
+  readonly signal?: AbortSignal
+  readonly env?: NodeJS.ProcessEnv
+}
+
 /** Validate a Zotero target and dispatch without a command interpreter. */
 export async function executeOpenProtocol(
   url: string,
-  platform: NodeJS.Platform = process.platform,
-  launcher: ProtocolLauncher = defaultLauncher,
-  signal?: AbortSignal,
+  options: OpenProtocolOptions = {},
 ): Promise<ZoteroOpenProtocolResultView> {
+  const {
+    platform = process.platform,
+    launcher = defaultLauncher,
+    signal,
+    env = process.env,
+  } = options
+
   if (!url.startsWith('zotero://')) return { ok: false, error: 'Protocol not allowed' }
   if (!validProtocolUrl(url)) return { ok: false, error: 'Malformed zotero:// URL' }
   try {
     signal?.throwIfAborted()
-    if (platform === 'win32') {
-      const script =
-        "$ErrorActionPreference = 'Stop'; $p = New-Object System.Diagnostics.ProcessStartInfo; $p.UseShellExecute = $true; $p.FileName = $env:DSH_ZOTERO_PROTOCOL_URL; [System.Diagnostics.Process]::Start($p) | Out-Null"
-      await launcher(
-        'powershell.exe',
-        [
-          '-NoProfile',
-          '-NonInteractive',
-          '-EncodedCommand',
-          Buffer.from(script, 'utf16le').toString('base64'),
-        ],
-        {
-          signal,
-          env: { ...process.env, DSH_ZOTERO_PROTOCOL_URL: url },
-        },
-      )
+    const inWsl = platform === 'linux' && isWsl(env)
+    if (platform === 'win32' || inWsl) {
+      const wslenv = inWsl ? appendWslEnv(env, 'DSH_ZOTERO_PROTOCOL_URL') : env.WSLENV
+      const launcherEnv = {
+        ...env,
+        DSH_ZOTERO_PROTOCOL_URL: url,
+        ...(wslenv ? { WSLENV: wslenv } : {}),
+      }
+      try {
+        await launcher(
+          'powershell.exe',
+          ['-NoProfile', '-NonInteractive', '-EncodedCommand', POWERSHELL_LAUNCHER_BASE64],
+          {
+            signal,
+            env: launcherEnv,
+          },
+        )
+        return { ok: true }
+      } catch (error) {
+        if (signal?.aborted) throw error
+        if (inWsl) {
+          try {
+            await launcher('wslview', [url], { signal })
+            return { ok: true }
+          } catch (wslviewError) {
+            if (signal?.aborted) throw wslviewError
+            try {
+              await launcher('xdg-open', [url], { signal })
+              return { ok: true }
+            } catch {
+              throw error
+            }
+          }
+        }
+        throw error
+      }
     } else {
       await launcher(platform === 'darwin' ? 'open' : 'xdg-open', [url], { signal })
     }
@@ -262,7 +305,7 @@ export class ZoteroRuntime extends TypertRemoteService {
    */
   async openProtocol(url: string, signal: AbortSignal): Promise<ZoteroOpenProtocolResultView> {
     signal.throwIfAborted()
-    return executeOpenProtocol(url, process.platform, defaultLauncher, signal)
+    return executeOpenProtocol(url, { signal })
   }
 
   /**

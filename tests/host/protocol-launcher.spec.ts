@@ -13,7 +13,7 @@ afterEach(async () => {
 it('contains a real ENOENT failure without terminating the host', async () => {
   directory = await mkdtemp(join(tmpdir(), 'zotero-launch-'))
   vi.stubEnv('PATH', directory)
-  const result = await executeOpenProtocol('zotero://select/', 'linux')
+  const result = await executeOpenProtocol('zotero://select/', { platform: 'linux' })
   expect(result.ok).toBe(false)
   expect(result.error).toContain('ENOENT')
   expect(process.pid).toBeGreaterThan(0)
@@ -24,5 +24,5 @@ it.runIf(process.platform !== 'win32')('reports a real launcher nonzero exit', a
   await writeFile(executable, '#!/bin/sh\nexit 7\n')
   await chmod(executable, 0o700)
   vi.stubEnv('PATH', directory)
-  expect((await executeOpenProtocol('zotero://select/', 'linux')).ok).toBe(false)
+  expect((await executeOpenProtocol('zotero://select/', { platform: 'linux' })).ok).toBe(false)
 })

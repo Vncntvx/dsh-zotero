@@ -5,17 +5,9 @@
  * @module dsh-zotero/local/attachment-location
  */
 
-import { access } from 'node:fs/promises'
-import { fileURLToPath } from 'node:url'
 import type { ZoteroHttpClient } from '../http-client.js'
 import { assertServerIdMatches, serverIdFromHeaders } from './identity.js'
-import {
-  errnoCodeOf,
-  ZOTERO_FILE_MISSING,
-  ZOTERO_NO_ATTACHMENT,
-  ZOTERO_FILE_UNREADABLE,
-  ZoteroError,
-} from '../errors.js'
+import { ZOTERO_NO_ATTACHMENT, ZoteroError } from '../errors.js'
 import { asRecord, asString } from '../json.js'
 import {
   normalizeAttachmentRecord,
@@ -24,11 +16,10 @@ import {
 } from '../attachments.js'
 import { formatRef, libraryPrefix, refForLibrary, requireSupportedLocalRef } from '../refs.js'
 import { fetchDirectChildren } from './children-wire.js'
+import { resolveExistingAttachmentPath, type PathResolutionDeps } from './path-resolution.js'
 import type { SupportedLocalLibrary, ZoteroAttachmentLocation, ZoteroObjectRef } from '../types.js'
 
-/** Shown when a reported file location cannot be expressed as a local path. */
-export const NOT_A_LOCAL_PATH_MESSAGE =
-  'Zotero reported an attachment file location that is not a usable local path.'
+export { missingAttachmentFileMessage } from './attachment-messages.js'
 
 /** The model-facing message for a location whose protocol the caller cannot open. */
 export function unsupportedAttachmentProtocolMessage(
@@ -53,11 +44,6 @@ export function notAWebLocationMessage(key: string): string {
 /** The model-facing message for a file attachment whose reported location is unusable. */
 export function noUsableFileLocationMessage(key: string): string {
   return `Zotero reported no usable file location for attachment ${key}.`
-}
-
-/** The model-facing message for an attachment whose file is gone from disk. */
-export function missingAttachmentFileMessage(path: string): string {
-  return `The attachment file is missing from disk: ${path}`
 }
 
 /** The model-facing message for a target that is a different item type than the ref claims. */
@@ -109,7 +95,7 @@ function parseAttachmentLocation(
  * dead path.
  */
 export async function getAttachmentLocation(
-  deps: { client: ZoteroHttpClient },
+  deps: { client: ZoteroHttpClient; pathResolution?: PathResolutionDeps },
   ref: ZoteroObjectRef,
   signal?: AbortSignal,
 ): Promise<ZoteroAttachmentLocation> {
@@ -137,7 +123,7 @@ export async function getAttachmentLocation(
 
 /** Resolve an already identity-checked row without fetching metadata again. */
 export async function resolveAttachmentRow(
-  deps: { client: ZoteroHttpClient },
+  deps: { client: ZoteroHttpClient; pathResolution?: PathResolutionDeps },
   local: ZoteroObjectRef,
   row: unknown,
   signal?: AbortSignal,
@@ -178,27 +164,11 @@ export async function resolveAttachmentRow(
     noUsableFileLocationMessage(attachmentKey),
   )
   if (target.protocol === 'file:') {
-    let path: string
-    try {
-      path = fileURLToPath(target)
-    } catch (error) {
-      throw new ZoteroError(NOT_A_LOCAL_PATH_MESSAGE, ZOTERO_FILE_UNREADABLE, { cause: error })
-    }
-    try {
-      await access(path)
-    } catch (error) {
-      if (errnoCodeOf(error) === 'ENOENT') {
-        throw new ZoteroError(missingAttachmentFileMessage(path), ZOTERO_FILE_MISSING)
-      }
-      throw new ZoteroError(
-        `The attachment file cannot be accessed: ${path}`,
-        ZOTERO_FILE_UNREADABLE,
-        {
-          cause: error,
-        },
-      )
-    }
-    return { ref: formattedRef, title, contentType, kind: 'file', path }
+    const resolved = await resolveExistingAttachmentPath(target, {
+      ...deps.pathResolution,
+      signal,
+    })
+    return { ref: formattedRef, title, contentType, kind: 'file', path: resolved.path }
   }
   return { ref: formattedRef, title, contentType, kind: 'url', url: target.toString() }
 }

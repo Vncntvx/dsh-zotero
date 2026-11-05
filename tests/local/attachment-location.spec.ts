@@ -9,7 +9,12 @@ import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { ZOTERO_FILE_MISSING, ZOTERO_NO_ATTACHMENT, ZOTERO_UNEXPECTED } from '../../src/errors.js'
+import {
+  ZOTERO_FILE_MISSING,
+  ZOTERO_FILE_UNREADABLE,
+  ZOTERO_NO_ATTACHMENT,
+  ZOTERO_UNEXPECTED,
+} from '../../src/errors.js'
 import {
   attachmentTypeMessage,
   missingAttachmentFileMessage,
@@ -17,8 +22,10 @@ import {
   noAttachmentToResolveMessage,
   noUsableFileLocationMessage,
   notAWebLocationMessage,
+  resolveAttachmentRow,
   unsupportedAttachmentProtocolMessage,
 } from '../../src/local/attachment-location.js'
+import { unmountedDriveMessage } from '../../src/local/path-resolution.js'
 import { type LocalApiProvider } from '../../src/local/provider.js'
 import { foreignUserRefMessage, parseRef } from '../../src/refs.js'
 import {
@@ -27,6 +34,7 @@ import {
   type ProviderHarness,
 } from '../helpers/provider-harness.js'
 import { expectRequestCount, expectRequestPaths, zoteroError } from '../helpers/server/assert.js'
+import { testHttpClient } from '../helpers/test-clients.js'
 import {
   ATTACHMENT_KEY,
   ITEM_KEY,
@@ -91,6 +99,55 @@ describe('getAttachmentLocation', () => {
       missingAttachmentFileMessage(join(tempDir, 'gone.pdf')),
     )
     expect(error.message).toContain('gone.pdf')
+  })
+
+  it('resolves a Windows drive URL when custom mountRoot option is provided', async () => {
+    const fakeFile = join(tempDir, 'c', 'wsl_paper.pdf')
+    serveJson(mock, `${apiPath()}/items/${ATTACHMENT_KEY}`, FILE_ATTACHMENT, versionHeaders())
+    serveText(
+      mock,
+      `${apiPath()}/items/${ATTACHMENT_KEY}/file/view/url`,
+      'file:///C:/wsl_paper.pdf',
+    )
+    const customDeps = {
+      client: testHttpClient(mock.baseUrl),
+      pathResolution: {
+        access: async (p: string) => {
+          if (p === fakeFile || p === join(tempDir, 'c')) return
+          const err = new Error('ENOENT') as NodeJS.ErrnoException
+          err.code = 'ENOENT'
+          throw err
+        },
+        platform: 'linux' as const,
+        mountRoot: tempDir,
+      },
+    }
+    const location = await resolveAttachmentRow(
+      customDeps,
+      parseRef(attachmentRef()),
+      FILE_ATTACHMENT,
+    )
+    expect(location).toEqual({
+      ref: 'zotero://user/0/attachment/WXYZ6789',
+      title: 'Full Text PDF',
+      contentType: 'application/pdf',
+      kind: 'file',
+      path: fakeFile,
+    })
+  })
+
+  it('fails with FILE_UNREADABLE and unmounted drive message when Windows drive is not mounted', async () => {
+    serveJson(mock, `${apiPath()}/items/${ATTACHMENT_KEY}`, FILE_ATTACHMENT)
+    serveText(
+      mock,
+      `${apiPath()}/items/${ATTACHMENT_KEY}/file/view/url`,
+      'file:///Z:/Users/test/paper.pdf',
+    )
+    const error = await zoteroError(
+      provider.getAttachmentLocation(parseRef(attachmentRef())),
+      ZOTERO_FILE_UNREADABLE,
+    )
+    expect(error.message).toBe(unmountedDriveMessage('z', '/Z:/Users/test/paper.pdf'))
   })
 
   it('serves linked-URL attachments from data.url without touching /file/view/url', async () => {
