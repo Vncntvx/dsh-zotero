@@ -164,6 +164,7 @@ export function renderDelivered(
 }
 
 export class ResultDelivery {
+  private facility?: unknown
   private domain?: Promise<Domain<typeof resultDomain>>
   private readonly pending = new Set<Promise<unknown>>()
   private readonly outputs = new Map<string, ToolDefinition['output']>()
@@ -191,14 +192,22 @@ export class ResultDelivery {
     return promise
   }
   private async receipts() {
-    if (!this.domain) {
-      const facility = this.ctx.get('storageDomain')
-      if (!facility)
-        throw new Error('Complete result delivery requires storageDomain and attachments services.')
+    // The facility is resolved per call and the opened domain is cached
+    // against it: a storageDomain replacement must be picked up instead of
+    // pinning a handle to a facility that was disposed with its own fiber.
+    const facility = this.ctx.get('storageDomain')
+    if (!facility) {
+      throw new Error('Complete result delivery requires storageDomain and attachments services.')
+    }
+    if (this.domain === undefined || this.facility !== facility) {
+      this.facility = facility
       const opening = facility.open(resultDomain)
       this.domain = opening
       void opening.catch(() => {
-        if (this.domain === opening) this.domain = undefined
+        if (this.domain === opening) {
+          this.domain = undefined
+          this.facility = undefined
+        }
       })
     }
     return (await this.domain).table('receipts')

@@ -8,7 +8,7 @@
  */
 
 import type { DiagnosticDetail, DiagnosticSink } from './diagnostics.js'
-import { ZOTERO_TIMEOUT, ZoteroError } from './errors.js'
+import { ZOTERO_TIMEOUT, ZoteroError, ZoteroWriteCommitUnknownError } from './errors.js'
 
 /** The event names one transport grades its failures under. */
 export interface TransportFailureEvents {
@@ -41,7 +41,12 @@ export function logTransportFailure(
     return
   }
   const message = error instanceof Error ? error.message : String(error)
-  const code = error instanceof ZoteroError ? error.code : undefined
+  // The commit-unknown envelope is a HarnessError, not a ZoteroError, but it
+  // preserves the wrapped failure's code — classify on that code all the same.
+  const code =
+    error instanceof ZoteroError || error instanceof ZoteroWriteCommitUnknownError
+      ? error.code
+      : undefined
   const withCode: DiagnosticDetail = code === undefined ? detail : { ...detail, errorCode: code }
   if (code === ZOTERO_TIMEOUT) {
     sink.warn(events.timeout, `${target}: ${message}`, withCode)

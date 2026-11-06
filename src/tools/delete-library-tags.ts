@@ -37,7 +37,7 @@ const DELETE_LIBRARY_TAGS_PARAMETERS = {
     items: { type: 'string' },
     required: true,
     description:
-      'Tag names to delete library-wide (1..writeListMaxItems). Unknown names are ignored; the delete is irreversible.',
+      'Tag names to delete library-wide (1..writeListMaxItems). Names the listing proves absent are reported as no-ops; the delete is irreversible.',
   },
 } as const
 
@@ -52,6 +52,7 @@ const DELETE_LIBRARY_TAGS_OUTPUT_SCHEMA = {
       properties: {
         kind: { type: 'string', enum: ['deleted'], required: true },
         deletedTags: { type: 'array', items: { type: 'string' }, required: true },
+        absentTags: { type: 'array', items: { type: 'string' } },
         libraryVersion: { type: 'integer', required: true },
         serverId: { type: 'string' },
       },
@@ -176,6 +177,9 @@ export function renderDeleteLibraryTags(
       type: 'text',
       text: [
         `Deleted ${value.deletedTags.length} tags library-wide: ${value.deletedTags.join(', ')}.`,
+        ...(value.absentTags === undefined || value.absentTags.length === 0
+          ? []
+          : [`Proven absent (no-op): ${value.absentTags.join(', ')}.`]),
         libraryVersionLine(value),
       ].join('\n'),
     },
@@ -215,11 +219,16 @@ export function registerDeleteLibraryTagsTool(ctx: Context, service: ZoteroServi
       async execute(args, exec): Promise<ZoteroDeleteLibraryTagsOutcome> {
         const request = buildRequest(args, service.config)
         const preview = await previewLibraryTags(service, request.tags, exec.signal)
-        return await service.deleteLibraryTags(request, {
+        const outcome = await service.deleteLibraryTags(request, {
           exec,
           plan: deleteLibraryTagsPlan(args, preview),
           risk: 'irreversible-delete',
         })
+        // The plan card proved which names are absent; the receipt carries
+        // that proof so a no-op name is never counted as deleted.
+        return outcome.kind === 'deleted' && preview.unknown !== undefined
+          ? { ...outcome, absentTags: [...preview.unknown] }
+          : outcome
       },
     }),
   )

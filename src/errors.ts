@@ -111,6 +111,24 @@ export class ZoteroError extends HarnessError {
 }
 
 /**
+ * A write request that reached the response/commit boundary but whose
+ * outcome could not be proven. Callers that create non-idempotent objects
+ * must surface this as a non-retryable, commit-unknown result rather than
+ * inviting a second write.
+ *
+ * The envelope wraps any settled transport failure, so its code is the
+ * wrapped error's own (a Zotero domain code, or the harness `TOOL_ABORTED`
+ * when a caller cancellation landed after dispatch); the class identity
+ * carries the commit-state marking.
+ */
+export class ZoteroWriteCommitUnknownError extends HarnessError {
+  constructor(message: string, code: string, options?: ErrorOptions) {
+    super(message, code, options)
+    this.name = 'ZoteroWriteCommitUnknownError'
+  }
+}
+
+/**
  * Throw an argument error: the message is model-facing and names the offending
  * value. The argument schemas cannot express every domain constraint, so tool
  * and endpoint validation fail through this one typed refusal.
@@ -351,6 +369,16 @@ export const WRITE_APPROVAL_UNAVAILABLE_MESSAGE =
   'questions are available, and never write around an unanswered plan.'
 
 /**
+ * Shown when a caller cancellation landed after a commit-sensitive write was
+ * dispatched. Unlike a pre-dispatch cancellation, Zotero may have committed
+ * the write, so the outcome is unknown rather than cancelled and the model
+ * must reconcile instead of re-issuing.
+ */
+export const WRITE_ABORTED_AFTER_DISPATCH_MESSAGE =
+  'The write was cancelled after Zotero received it, so whether it committed is unknown. Do not ' +
+  'retry it; re-read the affected item, note, or collection first and reconcile with what actually landed.'
+
+/**
  * The model-facing messages the `zotero_browse` argument rules throw. The
  * rules are enforced at both ends of the call (the tool's `buildRequest` and
  * the browse domain entry), so the wording lives with the errors and both
@@ -436,7 +464,7 @@ export async function domainCall<T>(call: () => Promise<T>): Promise<T> {
   try {
     return await call()
   } catch (error) {
-    if (error instanceof ZoteroError)
+    if (error instanceof ZoteroError || error instanceof ZoteroWriteCommitUnknownError)
       throw new RemoteError('zotero/domain', error.message, { code: error.code }, { cause: error })
     throw error
   }

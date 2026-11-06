@@ -25,19 +25,30 @@ afterEach(async () => {
 })
 
 function child(itemType = 'note', data: Record<string, unknown> = {}) {
+  // Stateful so the restore's read-back sees the graph it wrote: the item
+  // flips out of the Trash and advances when its PATCH lands. A Trash graph
+  // read also lists children (a childless object answers an empty page).
+  let deleted = data.deleted === 1
+  let version = 10
   mock.route('GET', `/api/users/0/items/${ITEM_KEY}`, (_req, _res, h) =>
     h.json(
-      itemJson(ITEM_KEY, 10, {
+      itemJson(ITEM_KEY, version, {
         itemType,
         parentItem: 'PARENT01',
         tags: [{ tag: 'existing', type: 1 }],
         ...data,
+        deleted: deleted ? 1 : data.deleted === undefined ? undefined : 0,
       }),
-      batchHeaders(10),
+      batchHeaders(version),
     ),
+  )
+  mock.route('GET', `/api/users/0/items/${ITEM_KEY}/children`, (_req, _res, h) =>
+    h.json([], { ...batchHeaders(version), 'Total-Results': '0' }),
   )
   mock.route('PATCH', `/api/users/0/items/${ITEM_KEY}`, (req, _res, h) => {
     expect(req.headers['if-unmodified-since-version']).toBe('10')
+    deleted = false
+    version = 11
     h.raw(204, batchHeaders(11), '')
   })
   grantAuthorize(mock)

@@ -7,12 +7,15 @@ import { ZOTERO_LIBRARY_VERSION_HEADER, ZOTERO_WRITE_OBJECT_BATCH } from '../con
 import {
   WRITE_LIST_SELECTION_MESSAGE,
   ZOTERO_INVALID_ARGUMENT,
+  ZOTERO_UNEXPECTED,
   ZoteroError,
   writeListTooLongMessage,
   writeListEmptyMessage,
 } from '../errors.js'
 import { parseNonNegativeSafeInteger } from '../json.js'
 import { libraryPrefix, PERSONAL_LIBRARY, formatRef } from '../refs.js'
+import { itemRef } from './write-refs.js'
+import { readTrashGraph } from './trash-item.js'
 import { assertServerIdMatches, serverIdFromHeaders } from './identity.js'
 import type { WriteDomainDeps } from './write-deps.js'
 import {
@@ -20,11 +23,9 @@ import {
   normalizeWriteList,
   requireLibraryVersion,
   requireWritableRefAtServer,
-  withItemStateWrite,
   withWriteKey,
 } from './write-domain.js'
 import type {
-  ZoteroBatchOperationFailure,
   ZoteroDeleteLibraryTagsRequest,
   ZoteroDeleteLibraryTagsResult,
   ZoteroRestoreItemsRequest,
@@ -49,7 +50,15 @@ async function readLibraryVersion(
   return { libraryVersion, serverId: observed ?? serverId }
 }
 
-/** Restore trashed items by setting Zotero's deleted flag back to zero. */
+/**
+ * Restore trashed items to the live library. Zotero's own un-delete writes
+ * only the object it is asked about (`item.js` removes one `deletedItems`
+ * row per save), so restoring the parent alone would strand its attachments,
+ * notes, and annotations in the Trash while the tool claimed a full restore.
+ * Each item's whole graph is therefore read children-first, restored
+ * children-first under its own version precondition, and read back to prove
+ * every node is live before the result claims it.
+ */
 export async function restoreItems(
   deps: WriteDomainDeps,
   request: ZoteroRestoreItemsRequest,
@@ -63,31 +72,77 @@ export async function restoreItems(
       ZOTERO_INVALID_ARGUMENT,
     )
   const restored: ZoteroRestoreItemsResult['restored'] = []
-  const failed: ZoteroBatchOperationFailure[] = []
+  const failed: ZoteroRestoreItemsResult['failed'] = []
   const serverId = await ensureServerId(deps, signal)
   for (const item of request.items) {
+    const completedRefs: string[] = []
     try {
       const ref = requireWritableRefAtServer(item, ['item'], serverId)
-      const result = await withItemStateWrite(
-        deps,
-        ref,
-        signal,
-        () => ({}),
-        async ({ serverId: effective, resultRef, send }) => {
-          const { libraryVersion } = await send({ deleted: 0 })
-          return {
-            ref: resultRef,
-            restored: true as const,
-            version: libraryVersion,
-            libraryVersion,
-            serverId: effective,
-          }
-        },
-      )
-      restored.push(result)
+      const graph = await readTrashGraph(deps.client, ref.key, serverId, signal)
+      if (!graph.some((node) => node.deleted)) {
+        // The whole graph is already live: writing a `deleted: 0` that the
+        // server would accept as a no-op must not be reported as a restore.
+        const present = graph[graph.length - 1]!
+        restored.push({
+          ref: itemRef(ref.key, serverId),
+          restored: false,
+          alreadyPresent: true,
+          version: present.version,
+          serverId,
+        })
+        continue
+      }
+      let lastLibraryVersion: number | undefined
+      // Children precede their parent, so a failed child never leaves an
+      // orphaned parent behind a claimed full restore.
+      for (const node of graph) {
+        if (!node.deleted) continue
+        const { libraryVersion } = await withWriteKey(deps, serverId, signal, (apiKey) =>
+          deps.writer.patch(
+            `${libraryPrefix(PERSONAL_LIBRARY)}/items/${node.key}`,
+            { deleted: 0 },
+            {
+              serverId,
+              apiKey,
+              ifUnmodifiedSinceVersion: node.version,
+              signal,
+            },
+          ),
+        )
+        lastLibraryVersion = libraryVersion
+        completedRefs.push(itemRef(node.key, serverId))
+      }
+      const saved = await readTrashGraph(deps.client, ref.key, serverId, signal)
+      const keys = new Set(graph.map((node) => node.key))
+      if (
+        saved.length !== graph.length ||
+        saved.some((node) => node.deleted || !keys.has(node.key))
+      ) {
+        throw new ZoteroError(
+          `Zotero did not verify the restored graph for ${ref.key}. Check the completed refs before further action.`,
+          ZOTERO_UNEXPECTED,
+        )
+      }
+      const parent = saved[saved.length - 1]!
+      restored.push({
+        ref: itemRef(ref.key, serverId),
+        restored: true,
+        version: parent.version,
+        libraryVersion: lastLibraryVersion,
+        serverId,
+        ...(graph.length > 1
+          ? { children: graph.slice(0, -1).map((node) => ({ ref: itemRef(node.key, serverId) })) }
+          : {}),
+      })
     } catch (error) {
       if (!(error instanceof ZoteroError)) throw error
-      failed.push({ op: 'update', ref: formatRef(item), code: error.code, message: error.message })
+      failed.push({
+        op: 'update',
+        ref: formatRef(item),
+        code: error.code,
+        message: error.message,
+        ...(completedRefs.length > 0 ? { completedRefs } : {}),
+      })
     }
   }
   return { kind: 'restored', restored, failed, serverId }

@@ -62,7 +62,8 @@ import {
   ZoteroError,
   errorMessageOf,
 } from './errors.js'
-import { ZOTERO_TOOL_NAMES } from './constants.js'
+import { ZOTERO_MAX_WRITE_INFLIGHT_REQUESTS, ZOTERO_TOOL_NAMES } from './constants.js'
+import { ConcurrencyGate } from './concurrency.js'
 import { LocalApiProvider } from './local/provider.js'
 import { installParameterCorrection } from './parameter-correction.js'
 import { localProviderLimits } from './service-config.js'
@@ -198,7 +199,15 @@ export class ZoteroService extends Service {
    * {@link config} per request so settings edits apply without a restart.
    */
   private readonly entry: Config | Options
-  /** Disposer of the currently registered `local` provider, released before a rebuild re-registers it. */
+  /**
+   * The write path's in-flight gate, created once for this service instance.
+   * Serialization is a process-wide invariant of the read-modify-write cycles
+   * the write domain performs, so the gate outlives every transport rebuild:
+   * a rebuilt write client and a write already in flight cannot run side by
+   * side.
+   */
+  private readonly writeGate = new ConcurrencyGate(ZOTERO_MAX_WRITE_INFLIGHT_REQUESTS)
+  /** Disposer of the currently registered `local` provider, released after a rebuild's new registration lands. */
   private providerDispose: (() => void) | undefined
   /** Disposers of the conditionally registered write tools, tracked for the writeEnabled flip. */
   private writeToolDisposes: Array<() => void> = []
@@ -401,19 +410,20 @@ export class ZoteroService extends Service {
 
   /**
    * Build the transport stack from the given config: HTTP client, write
-   * client, write authorizer, and the `local` provider registration (the
-   * previous registration is disposed first so the duplicate-id guard never
-   * fires). A request already in flight finishes on the client it started
-   * with; later calls resolve the fresh provider.
+   * client, write authorizer, and the `local` provider registration. The new
+   * stack is fully constructed before the previous registration is released,
+   * so a construction failure leaves the old stack serving; between the new
+   * registration and the old release the seam answers with the new provider,
+   * never with none. A request already in flight finishes on the client it
+   * started with; later calls resolve the fresh provider.
    *
    * The write transport and authorizer exist only while `writeEnabled` is
    * set: without them the provider declares no `write` capability, so the
-   * gate answers before any network happens.
+   * gate answers before any network happens. The write gate itself is not
+   * rebuilt — serialization is a process-wide invariant, so every rebuild
+   * shares this service's one slot.
    */
   private buildTransport(config: ResolvedConfig): void {
-    this.providerDispose?.()
-    this.providerDispose = undefined
-    this.authorizer = undefined
     const client = new ZoteroHttpClient({
       baseUrl: config.baseUrl,
       timeoutMs: config.timeoutMs,
@@ -428,6 +438,7 @@ export class ZoteroService extends Service {
           timeoutMs: config.timeoutMs,
           maxResponseBytes: config.maxResponseBytes,
           authorizeDeadlineMs: config.writeAuthorizeDeadlineMs,
+          gate: this.writeGate,
           sink: this.diagnostics.sink,
         })
       : undefined
@@ -439,16 +450,30 @@ export class ZoteroService extends Service {
             credentials: () => this.credentials(),
             persistKey: () => this.config.writePersistKey,
           })
-    this.authorizer = authorizer
-    this.providerDispose = this.registerProvider(
-      new LocalApiProvider(
-        client,
-        () => localProviderLimits(this.config),
-        writer,
-        authorizer,
-        this.diagnostics.sink,
-      ),
+    const authorizerInstance = authorizer
+    const provider = new LocalApiProvider(
+      client,
+      () => localProviderLimits(this.config),
+      writer,
+      authorizer,
+      this.diagnostics.sink,
     )
+    // The swap is synchronous: the new provider is in the seam before the
+    // old registration is released, so a caller between the two steps — and
+    // a construction failure before either — never sees zero providers. The
+    // disposer is identity-checked, because the id is stable across swaps.
+    this.providers.set(provider.id, provider)
+    const previousDispose = this.providerDispose
+    this.providerDispose = this.ctx.effect(
+      () => () => {
+        if (this.providers.get(provider.id) === provider) {
+          this.providers.delete(provider.id)
+        }
+      },
+      'zotero.transportRegistration()',
+    )
+    previousDispose?.()
+    this.authorizer = authorizerInstance
     this.diagnostics.sink.info('transport.built', 'Zotero transport stack built', { writeEnabled })
   }
 
@@ -504,7 +529,12 @@ export class ZoteroService extends Service {
     return this.ctx.effect(() => {
       providers.set(provider.id, provider)
       return () => {
-        providers.delete(provider.id)
+        // Only remove the registration this effect installed: a transport
+        // rebuild swaps a newer provider under the same id, and this older
+        // disposer must not delete it.
+        if (providers.get(provider.id) === provider) {
+          providers.delete(provider.id)
+        }
       }
     }, 'zotero.registerProvider()')
   }

@@ -14,7 +14,7 @@ import {
 import { formatRef, libraryPrefix, PERSONAL_LIBRARY, requireWritableRef } from '../refs.js'
 import { readTrashGraph } from './trash-item.js'
 import { batchCreateUnverified, settleBatchCreates } from './write-verdicts.js'
-import { ZoteroWriteCommitUnknownError } from '../write-http.js'
+import { ZoteroWriteCommitUnknownError } from '../errors.js'
 import type {
   ZoteroBatchCreateItemResult,
   ZoteroBatchCreateUnverified,
@@ -151,6 +151,11 @@ async function runBatchCreates(
   } catch (err) {
     if (isWriteUnauthorized(err)) throw err
     if (err instanceof ZoteroWriteCommitUnknownError) {
+      // Same split as `sendSingleCreate` in write-verdicts.ts: an aborted
+      // caller would never see these receipt buckets (the pipeline masks a
+      // settled success with the canonical cancellation), so the commit
+      // state must travel as a thrown error result instead.
+      if (signal?.aborted) throw err
       for (let i = 0; i < checkedCreates.length; i++) {
         unverified.push(batchCreateUnverified(i, 'commit-unknown', serverId))
       }

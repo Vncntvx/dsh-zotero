@@ -281,12 +281,47 @@ describe('export', () => {
     })
     // The cap accounts batch + singles (both stay in the result): 10 + 5 + 5
     // lands exactly on 20 and must pass; an off-by-one (>=) would reject it.
+    // This mock cannot tell the body request from the metadata request, so
+    // the alignment arm also fails and the receipt says so.
     const result = await narrow.export(exportRequest({ format: 'bibtex' }))
     expect(result).toEqual({
       format: 'bibtex',
       text: '0123456789',
       items: [{ ref: 'zotero://user/0/item/ABCD1234' }, { ref: 'zotero://user/0/item/BBBB1234' }],
+      metadataIncomplete: true,
     })
+  })
+
+  it('reports partial citekey alignment instead of silently dropping metadata', async () => {
+    // The metadata batch failing is not the export failing: the body is
+    // complete, but the receipt must say the per-document facts are partial.
+    let metadataFails = true
+    mock.route('GET', `${apiPath()}/items`, (req, res, helpers, search) => {
+      if (search.get('format') === 'bibtex') {
+        helpers.text('@article{customKeyA,\\n  title = {Carbon price forecasting},\\n}')
+        return
+      }
+      if (metadataFails) {
+        metadataFails = false
+        res.writeHead(500, { 'Content-Type': 'text/plain' })
+        res.end('boom')
+        return
+      }
+      helpers.json([
+        { key: 'ABCD1234', data: { key: 'ABCD1234', title: 'Carbon price forecasting' } },
+      ])
+    })
+    const partial = await provider.export(
+      exportRequest({ format: 'bibtex', refs: [parseRef(itemRef())] }),
+    )
+    if (partial.format !== 'bibtex') throw new Error('unreachable')
+    expect(partial.metadataIncomplete).toBe(true)
+    expect(partial.items).toEqual([{ ref: 'zotero://user/0/item/ABCD1234' }])
+    const complete = await provider.export(
+      exportRequest({ format: 'bibtex', refs: [parseRef(itemRef())] }),
+    )
+    if (complete.format !== 'bibtex') throw new Error('unreachable')
+    expect(complete.metadataIncomplete).toBeUndefined()
   })
 
   it("sends the first ref's server provenance on the export request", async () => {

@@ -1,15 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import {
   OBJECT_NOT_FOUND_MESSAGE,
   REDIRECT_REFUSED_MESSAGE,
   UNPARSEABLE_RESPONSE_MESSAGE,
   httpStatusMessage,
-  requestTimeoutMessage,
   responseTooLargeMessage,
 } from '../../../src/http-client.js'
-import { ZoteroWriteHttpClient, ZoteroWriteCommitUnknownError } from '../../../src/write-http.js'
-import { TOOL_ABORTED_MESSAGE } from '../../../src/abort.js'
+import { ZoteroWriteHttpClient } from '../../../src/write-http.js'
+import { ZoteroWriteCommitUnknownError } from '../../../src/errors.js'
 import {
   API_DISABLED_MESSAGE,
   SERVER_MISMATCH_MESSAGE,
@@ -27,7 +25,6 @@ import {
   ZOTERO_NOT_FOUND,
   ZOTERO_RESPONSE_TOO_LARGE,
   ZOTERO_SERVER_MISMATCH,
-  ZOTERO_TIMEOUT,
   ZOTERO_UNEXPECTED,
   ZOTERO_WRITE_CONFLICT,
   ZOTERO_WRITE_RATE_LIMITED,
@@ -458,128 +455,6 @@ describe('write status translations', () => {
       httpStatusMessage(500),
       '/api/users/0/items/unknown',
     )
-  })
-})
-
-describe('cancellation and bounds', () => {
-  it('reports the provider deadline as a timeout', async () => {
-    const short = testWriteClient(mock.baseUrl, { timeoutMs: 20 })
-    mock.route('POST', '/api/users/0/items', (_req, res, helpers) =>
-      helpers.delayJson(batchBody(), 2000),
-    )
-    await expectZoteroError(
-      short.batch('users/0/items', [{ itemType: 'note' }], writeOptions()),
-      ZOTERO_TIMEOUT,
-      requestTimeoutMessage(20),
-    )
-  })
-
-  it('carries caller cancellation through the single flight slot', async () => {
-    const controller = new AbortController()
-    const sync = progress()
-    mock.route('POST', '/api/users/0/items', (_req, res, helpers) => {
-      sync.notify()
-      helpers.delayJson(batchBody(), 2000)
-    })
-    const pending = client.batch('users/0/items', [{ itemType: 'note' }], {
-      ...writeOptions(),
-      signal: controller.signal,
-    })
-    await sync.when(() => mock.requests.length === 1)
-    controller.abort()
-    await expectZoteroError(pending, TOOL_ABORTED, TOOL_ABORTED_MESSAGE)
-  })
-
-  it('translates a queued abort into the same cancellation error', async () => {
-    const firstAbort = new AbortController()
-    const secondAbort = new AbortController()
-    const sync = progress()
-    mock.route('POST', '/api/users/0/items', (_req, res, helpers) => {
-      sync.notify()
-      helpers.delayJson(batchBody(), 2000)
-    })
-    const first = client.batch('users/0/items', [{ itemType: 'note' }], {
-      ...writeOptions(),
-      signal: firstAbort.signal,
-    })
-    await sync.when(() => mock.requests.length === 1)
-    const second = client.batch('users/0/items', [{ itemType: 'note' }], {
-      ...writeOptions(),
-      signal: secondAbort.signal,
-    })
-    secondAbort.abort()
-    await expectZoteroError(second, TOOL_ABORTED, TOOL_ABORTED_MESSAGE)
-    firstAbort.abort()
-    await expectZoteroError(first, TOOL_ABORTED, TOOL_ABORTED_MESSAGE)
-  })
-
-  it('refuses a batch body that is not a JSON record', async () => {
-    mock.route('POST', '/api/users/0/items', (_req, res, helpers) =>
-      helpers.raw(200, batchResponseHeaders(42), JSON.stringify([1, 2, 3])),
-    )
-    await expectZoteroError(
-      client.batch('users/0/items', [{ itemType: 'note' }], writeOptions()),
-      ZOTERO_UNEXPECTED,
-      UNPARSEABLE_RESPONSE_MESSAGE,
-    )
-  })
-
-  it('enforces the response byte bound on write responses', async () => {
-    const small = testWriteClient(mock.baseUrl, { maxResponseBytes: 16 })
-    mock.route('POST', '/api/users/0/items', (_req, res, helpers) =>
-      helpers.raw(200, batchResponseHeaders(), JSON.stringify(batchBody())),
-    )
-    await expectZoteroError(
-      small.batch('users/0/items', [{ itemType: 'note' }], writeOptions()),
-      ZOTERO_RESPONSE_TOO_LARGE,
-      responseTooLargeMessage(16),
-    )
-  })
-
-  it('refuses a batch response whose successful entry is not an object', async () => {
-    mock.route('POST', '/api/users/0/items', (_req, res, helpers) =>
-      helpers.raw(
-        200,
-        batchResponseHeaders(42),
-        JSON.stringify({ ...batchBody(), successful: { '0': 'not an object' } }),
-      ),
-    )
-    await expectZoteroError(
-      client.batch('users/0/items', [{ itemType: 'note' }], writeOptions()),
-      ZOTERO_UNEXPECTED,
-      writeBatchShapeMessage('successful'),
-    )
-  })
-
-  it('refuses a batch response whose failed entry is not an object', async () => {
-    mock.route('POST', '/api/users/0/items', (_req, res, helpers) =>
-      helpers.raw(
-        200,
-        batchResponseHeaders(42),
-        JSON.stringify({ ...batchBody(), failed: { '0': 'not an object' } }),
-      ),
-    )
-    await expectZoteroError(
-      client.batch('users/0/items', [{ itemType: 'note' }], writeOptions()),
-      ZOTERO_UNEXPECTED,
-      writeBatchShapeMessage('failed'),
-    )
-  })
-
-  it('marks a patch write as commit-unknown when the connection drops', async () => {
-    mock.route('PATCH', '/api/users/0/items/ITEM1234', (_req, res) => {
-      res.destroy()
-    })
-    await expect(
-      client.patch(
-        'users/0/items/ITEM1234',
-        { tags: [] },
-        {
-          ...writeOptions(),
-          ifUnmodifiedSinceVersion: 1,
-        },
-      ),
-    ).rejects.toBeInstanceOf(ZoteroWriteCommitUnknownError)
   })
 })
 

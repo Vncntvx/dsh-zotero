@@ -67,27 +67,45 @@ function serveIdentityAndGrant(): void {
   )
 }
 
-/** One trashed item's versioned read and the restore PATCH that follows it. */
+/**
+ * One item's Trash graph, served statefully: the graph read (parent plus its
+ * childless children listing), the restore PATCH that flips the flag, and the
+ * read-back that must see the restored state.
+ */
 function serveTrashedItem(key: string, version: number, restoredVersion: number): void {
+  let deleted = true
+  let current = version
   lane.mock.route('GET', `/api/users/0/items/${key}`, (_req, _res, h) =>
     h.json(
-      itemJson(key, version, {
+      itemJson(key, current, {
         itemType: 'book',
         title: 'Old draft',
-        deleted: 1,
+        deleted: deleted ? 1 : 0,
         tags: [],
         collections: [],
       }),
-      { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': String(version) },
+      {
+        'Zotero-Server-ID': SERVER_ID,
+        'Last-Modified-Version': String(current),
+      },
     ),
   )
-  lane.mock.route('PATCH', `/api/users/0/items/${key}`, (_req, _res, h) =>
+  lane.mock.route('GET', `/api/users/0/items/${key}/children`, (_req, _res, h) =>
+    h.json([], {
+      'Zotero-Server-ID': SERVER_ID,
+      'Last-Modified-Version': String(current),
+      'Total-Results': '0',
+    }),
+  )
+  lane.mock.route('PATCH', `/api/users/0/items/${key}`, (_req, _res, h) => {
+    deleted = false
+    current = restoredVersion
     h.raw(
       204,
       { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': String(restoredVersion) },
       '',
-    ),
-  )
+    )
+  })
 }
 
 describe('zotero_restore_items', () => {
@@ -134,7 +152,7 @@ describe('zotero_restore_items', () => {
       renderRestoreItems({ refs: [] }, { kind: 'restored', restored: [], failed }),
     ).toContainEqual({
       type: 'text',
-      text: expect.stringContaining('Restored 0 item(s); 3 failed.'),
+      text: expect.stringContaining('Restored 0 item(s) from Trash; 0 already live; 3 failed.'),
     })
   })
 
@@ -229,17 +247,26 @@ describe('zotero_restore_items', () => {
       card: 'generic',
       title: 'Zotero restore: declined, nothing written',
     })
+    expect(
+      present(
+        args,
+        ok({ kind: 'restored', restoredCount: 2, failedCount: 1, alreadyPresentCount: 1 }),
+      ),
+    ).toEqual({
+      card: 'generic',
+      title: 'Zotero restore: 2 restored, 1 already live, 1 failed',
+    })
     expect(present(args, ok({ kind: 'restored', restoredCount: 2, failedCount: 1 }))).toEqual({
       card: 'generic',
-      title: 'Zotero restore: 2 restored, 1 failed',
+      title: 'Zotero restore: 2 restored, 0 already live, 1 failed',
     })
     expect(present(args, ok({ kind: 'restored', restoredCount: 1, failedCount: 0 }))).toEqual({
       card: 'generic',
-      title: 'Zotero restore: 1 restored, 0 failed',
+      title: 'Zotero restore: 1 restored, 0 already live, 0 failed',
     })
     expect(present(args, ok({ kind: 'restored', restoredCount: 0, failedCount: 1 }))).toEqual({
       card: 'generic',
-      title: 'Zotero restore: 0 restored, 1 failed',
+      title: 'Zotero restore: 0 restored, 0 already live, 1 failed',
     })
     expect(present(args, ok({ kind: 'restored' }))).toBeUndefined()
     expect(present(args, ok('loose meta'))).toBeUndefined()
@@ -252,5 +279,54 @@ describe('zotero_restore_items', () => {
     expect(
       tool.output.presentationMeta!(args, { kind: 'restored', restored: [], failed: [] }),
     ).toEqual({ kind: 'restored', restoredCount: 0, failedCount: 0 })
+  })
+
+  it('reports an already-live graph without writing anything', async () => {
+    serveIdentityAndGrant()
+    // The whole graph is live: the item read answers deleted=0 and the read-back
+    // must agree, without any PATCH reaching the wire.
+    lane.mock.route('GET', `/api/users/0/items/${KEY_1}`, (_req, _res, h) =>
+      h.json(
+        itemJson(KEY_1, 10, {
+          itemType: 'book',
+          title: 'Live item',
+          deleted: 0,
+          tags: [],
+          collections: [],
+        }),
+        { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '10' },
+      ),
+    )
+    lane.mock.route('GET', `/api/users/0/items/${KEY_1}/children`, (_req, _res, h) =>
+      h.json([], {
+        'Zotero-Server-ID': SERVER_ID,
+        'Last-Modified-Version': '10',
+        'Total-Results': '0',
+      }),
+    )
+
+    const result = expectValue(
+      await lane.runTool('zotero_restore_items', { refs: [REF_1] }),
+      'zotero_restore_items',
+    )
+    expect(result.value).toEqual({
+      kind: 'restored',
+      restored: [
+        {
+          ref: SERVED_REF_1,
+          restored: false,
+          alreadyPresent: true,
+          version: 10,
+          serverId: SERVER_ID,
+        },
+      ],
+      failed: [],
+      serverId: SERVER_ID,
+    })
+    expect(lane.mock.requests.filter((request) => request.method === 'PATCH')).toHaveLength(0)
+    const text = result.content
+      .flatMap((block) => (block.type === 'text' ? [block.text] : []))
+      .join('\n')
+    expect(text).toContain('Already live in the library (nothing written)')
   })
 })

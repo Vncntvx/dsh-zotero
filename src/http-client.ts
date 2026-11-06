@@ -469,6 +469,9 @@ export class ZoteroHttpClient {
         // Single-refresh guard: the identity refresh runs with
         // `isIdentityRefresh`, so a refresh endpoint that also 412s fails loud
         // instead of recursing into an unbounded 412→refresh→412 loop.
+        // The unread body is released before the refresh, the same way every
+        // other non-2xx branch below releases one.
+        void response.body?.cancel()
         if (isIdentityRefresh) {
           throw new ZoteroError(SERVER_MISMATCH_MESSAGE, ZOTERO_SERVER_MISMATCH)
         }
