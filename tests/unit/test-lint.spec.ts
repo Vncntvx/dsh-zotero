@@ -13,6 +13,7 @@ import {
   TEXT_EXTENSIONS,
   TEXT_ROOTS,
   focusViolationsOf,
+  helperSizeViolations,
   stripCommentsAndStrings,
   unscannedExtensionsOf,
 } from '../../scripts/test-lint.mjs'
@@ -115,5 +116,33 @@ describe('extension coverage guard', () => {
   it('scans the locale catalogs as text roots', () => {
     expect(TEXT_ROOTS).toContain('locale')
     expect(BINARY_EXTENSIONS).toEqual(['.png'])
+  })
+})
+
+describe('helper size guard', () => {
+  const baseline = { 'tests/client/helpers/big.ts': 400 }
+
+  it('allows a new helper at the limit and rejects one line over', () => {
+    expect(
+      helperSizeViolations([{ path: 'tests/client/helpers/new.ts', lines: 300 }], {}, 300),
+    ).toEqual([])
+    expect(
+      helperSizeViolations([{ path: 'tests/client/helpers/new.ts', lines: 301 }], {}, 300),
+    ).toMatchObject([{ kind: 'new', path: 'tests/client/helpers/new.ts', lines: 301 }])
+  })
+
+  it('allows a baselined helper to shrink and rejects growth', () => {
+    expect(
+      helperSizeViolations([{ path: 'tests/client/helpers/big.ts', lines: 399 }], baseline, 300),
+    ).toEqual([])
+    expect(
+      helperSizeViolations([{ path: 'tests/client/helpers/big.ts', lines: 401 }], baseline, 300),
+    ).toMatchObject([{ kind: 'grown', path: 'tests/client/helpers/big.ts', limit: 400 }])
+  })
+
+  it('names a baseline entry whose file disappeared', () => {
+    expect(helperSizeViolations([], baseline, 300)).toMatchObject([
+      { kind: 'stale', path: 'tests/client/helpers/big.ts' },
+    ])
   })
 })

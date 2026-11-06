@@ -48,7 +48,7 @@
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { minVersion, validRange } from 'semver'
+import { minVersion, satisfies, validRange } from 'semver'
 import { collectHarnessPackages, resolveHarnessRoot } from './shared/harness-packages.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -189,7 +189,60 @@ export function collectLockProblems(lock, manifest, pin) {
   return problems
 }
 
-/** Fail when the lockfile resolves any harness package off the pin or overrides is not a superset. */
+/**
+ * Manifest sections that may name a vendored framework package.
+ *
+ * `collectLockProblems` only walks `@deepseek-ai/dsh-*`, which is the pin line.
+ * The vendored packages travel outside that line, so a manifest edited against
+ * a sibling checkout whose vendor floor is ahead of the pin can leave the lock
+ * resolving the pinned copy while `package.json` asks for another. `npm ci`
+ * then refuses to install, and `harness:check` would otherwise stay green.
+ */
+const VENDOR_LOCK_SECTIONS = ['dependencies', 'devDependencies', 'peerDependencies']
+
+/**
+ * Every non-dsh `@deepseek-ai` dependency must be declared in the lock root
+ * with the same range and resolve to a version that range accepts.
+ * @param lock - parsed package-lock.json.
+ * @param manifest - parsed package.json.
+ * @returns human-readable problems; empty when every vendored dependency agrees.
+ */
+export function collectVendorLockProblems(lock, manifest) {
+  const found = []
+  const rootEntry = (lock.packages ?? {})['']
+  if (rootEntry === undefined) return found
+  for (const section of VENDOR_LOCK_SECTIONS) {
+    for (const [name, range] of Object.entries(manifest[section] ?? {})) {
+      if (!name.startsWith('@deepseek-ai/') || isDshPackage(name)) continue
+      const lockRange = rootEntry[section]?.[name]
+      if (lockRange !== range) {
+        found.push(
+          `package-lock.json root ${section}["${name}"] is ${
+            lockRange === undefined ? 'missing' : `"${lockRange}"`
+          }, but package.json declares "${range}" — run: npm install --package-lock-only`,
+        )
+        continue
+      }
+      const resolved = lock.packages[`node_modules/${name}`]
+      if (resolved === undefined || resolved.version === undefined) {
+        found.push(
+          `package-lock.json has no resolved version for ${section}["${name}"]` +
+            ' — run: npm install --package-lock-only',
+        )
+        continue
+      }
+      if (!satisfies(resolved.version, range, { includePrerelease: true })) {
+        found.push(
+          `package-lock.json resolves ${name}@${resolved.version}, which does not satisfy` +
+            ` ${section}["${name}"] "${range}" — run: npm install --package-lock-only`,
+        )
+      }
+    }
+  }
+  return found
+}
+
+/** Fail when the lockfile resolves any harness package off the pin or a vendor entry drifts. */
 function checkLock(pin, manifest) {
   const lockPath = join(root, 'package-lock.json')
   if (!existsSync(lockPath)) {
@@ -198,6 +251,7 @@ function checkLock(pin, manifest) {
   }
   const lock = readJson(lockPath)
   problems.push(...collectLockProblems(lock, manifest, pin))
+  problems.push(...collectVendorLockProblems(lock, manifest))
 }
 
 /**

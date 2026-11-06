@@ -308,8 +308,8 @@ instead of reporting a mocked pass as live verification.
 
 ## Guards
 
-`npm run lint:test` (also the first step of `npm test`) enforces seven
-mechanical rules; each one exists because this repository hit it:
+`npm run lint:test` (also the first step of `npm test`) enforces six mechanical
+rules; each one exists because this repository hit it:
 
 - no raw control bytes in source or prose. The SourcesTab spec (since split
   into `SourcesTab.*.spec.tsx`) once carried NUL bytes, which made the file
@@ -322,10 +322,12 @@ mechanical rules; each one exists because this repository hit it:
   extension nor a declared binary one, so an asset type is skipped only after
   someone decided it should be;
 - helpers stay at or below 300 lines; files over the limit are frozen in a
-  path-specific baseline that only shrinks, and new files may never enter it;
-- helper imports flow specs → module support → shared helpers: no cross-module
-  support references, no support importing specs, no shared helper importing
-  module support.
+  path-specific baseline that only shrinks, and new files may never enter it.
+
+The helper import graph — specs → module support → shared helpers, with no
+cross-module support references, no support importing specs, and no shared
+helper importing module support — remains review-enforced; the lint pass does
+not parse it.
 
 `vitest.config.ts` holds coverage ratchets per layer, each set just under
 what that layer measures today. They are not aspirations: a layer earns a
@@ -341,9 +343,10 @@ suite's actual maximum; deleting redundant tests does not lower a coverage
 floor. New module coverage floors require measured evidence, and directory
 moves must preserve the coverage include/exclude and threshold scope.
 
-The module layout, behaviour ownership, and resource-ownership rules above
-remain review-enforced: lint proves file size and the import graph, not that a
-spec names one behaviour or releases the resources it creates. When adding
+The module layout, behaviour ownership, helper import graph, and
+resource-ownership rules above remain review-enforced: lint proves spec and
+helper size, not that a spec names one behaviour or releases the resources it
+creates. When adding
 automation, extend the existing test lint entry point and test the checks
 themselves; a baseline for oversized files may only shrink and must never
 silently exempt new violations.

@@ -16,6 +16,7 @@ import {
   collectArtifactProblems,
   collectLockProblems,
   collectPinFaceProblems,
+  collectVendorLockProblems,
   collectVendorProblems,
   packageNameFromLockPath,
 } from '../../scripts/harness-state.mjs'
@@ -227,6 +228,81 @@ describe('collectLockProblems', () => {
       },
     }
     expect(collectLockProblems(lockWithWorkspace, validManifest, pin)).toEqual([])
+  })
+})
+
+describe('collectVendorLockProblems', () => {
+  const vendorManifest = {
+    dependencies: { '@deepseek-ai/cosmokit': '~1.8.7-alpha.2' },
+    devDependencies: { '@deepseek-ai/cordis': '~4.0.6-alpha.2' },
+    peerDependencies: { '@deepseek-ai/cordis': '~4.0.6-alpha.2' },
+  }
+  const validVendorLock = {
+    packages: {
+      '': {
+        dependencies: { '@deepseek-ai/cosmokit': '~1.8.7-alpha.2' },
+        devDependencies: { '@deepseek-ai/cordis': '~4.0.6-alpha.2' },
+        peerDependencies: { '@deepseek-ai/cordis': '~4.0.6-alpha.2' },
+      },
+      'node_modules/@deepseek-ai/cordis': { version: '4.0.6-alpha.2' },
+      'node_modules/@deepseek-ai/cosmokit': { version: '1.8.7-alpha.2' },
+    },
+  }
+
+  it('accepts a lock whose root ranges and resolved vendor versions match', () => {
+    expect(collectVendorLockProblems(validVendorLock, vendorManifest)).toEqual([])
+  })
+
+  it('rejects a manifest floor from the sibling HEAD while the lock holds the pin', () => {
+    const ahead = {
+      ...vendorManifest,
+      devDependencies: { '@deepseek-ai/cordis': '^4.1.0' },
+    }
+    const problems = collectVendorLockProblems(validVendorLock, ahead).join('\n')
+    expect(problems).toMatch(/devDependencies\["@deepseek-ai\/cordis"\]/)
+    expect(problems).toMatch(/npm install --package-lock-only/)
+  })
+
+  it('rejects a root range that drifted from the manifest even when the version fits', () => {
+    const drifted = {
+      ...validVendorLock,
+      packages: {
+        ...validVendorLock.packages,
+        '': {
+          ...validVendorLock.packages[''],
+          devDependencies: { '@deepseek-ai/cordis': '^4.0.6-alpha.2' },
+        },
+      },
+    }
+    expect(collectVendorLockProblems(drifted, vendorManifest).join('\n')).toMatch(
+      /root devDependencies\["@deepseek-ai\/cordis"\] is "\^4\.0\.6-alpha\.2"/,
+    )
+  })
+
+  it('rejects a resolved vendor version outside the declared range', () => {
+    const stale = {
+      ...validVendorLock,
+      packages: {
+        ...validVendorLock.packages,
+        'node_modules/@deepseek-ai/cordis': { version: '4.1.0' },
+      },
+    }
+    expect(collectVendorLockProblems(stale, vendorManifest).join('\n')).toMatch(
+      /resolves @deepseek-ai\/cordis@4\.1\.0/,
+    )
+  })
+
+  it('rejects a vendor dependency the lock never resolves', () => {
+    const missing = {
+      ...validVendorLock,
+      packages: {
+        ...validVendorLock.packages,
+        'node_modules/@deepseek-ai/cordis': undefined,
+      },
+    }
+    expect(collectVendorLockProblems(missing, vendorManifest).join('\n')).toMatch(
+      /has no resolved version for devDependencies\["@deepseek-ai\/cordis"\]/,
+    )
   })
 })
 

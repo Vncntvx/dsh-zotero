@@ -29,13 +29,13 @@ export declare const CLIENT_INLINE_PACKAGES: readonly string[]
  */
 export declare function packageNameOf(key: string): string | undefined
 
-/** Counterpart of tsdown `INLINE_SAFE` at dsh-v0.2.1-rc.2 (verbatim copy). */
+/** Counterpart of tsdown `INLINE_SAFE` at dsh-v0.2.2-rc.1 (verbatim copy). */
 export declare const INLINE_SAFE: RegExp
 
-/** Counterpart of tsdown `GENERATED_REMOTE` at dsh-v0.2.1-rc.2 (verbatim copy). */
+/** Counterpart of tsdown `GENERATED_REMOTE` at dsh-v0.2.2-rc.1 (verbatim copy). */
 export declare const GENERATED_REMOTE: RegExp
 
-/** Counterpart of tsdown `VENDORED_LIBRARY` at dsh-v0.2.1-rc.2 (verbatim copy). */
+/** Counterpart of tsdown `VENDORED_LIBRARY` at dsh-v0.2.2-rc.1 (verbatim copy). */
 export declare const VENDORED_LIBRARY: RegExp
 
 /**

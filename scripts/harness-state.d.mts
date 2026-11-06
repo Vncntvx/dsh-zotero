@@ -40,6 +40,20 @@ export declare function collectLockProblems(
 ): string[]
 
 /**
+ * Every non-dsh `@deepseek-ai` dependency whose lock root declaration or
+ * resolved version disagrees with the manifest. This is the vendor counterpart
+ * of {@link collectLockProblems}: a manifest edited against a sibling HEAD's
+ * vendor floor while the lock still carries the pinned release.
+ * @param lock - parsed package-lock.json.
+ * @param manifest - parsed package.json.
+ * @returns human-readable problems; empty when every vendored dependency agrees.
+ */
+export declare function collectVendorLockProblems(
+  lock: Record<string, unknown>,
+  manifest: Record<string, unknown>,
+): string[]
+
+/**
  * Extracts the package name from a package-lock.json path key.
  * Handles nested node_modules (e.g. `node_modules/a/node_modules/b` -> `b`).
  * Returns undefined for paths outside node_modules, such as the root `""` or a workspace package.

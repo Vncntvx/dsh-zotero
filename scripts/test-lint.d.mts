@@ -39,3 +39,28 @@ export declare function focusViolationsOf(source: string): FocusViolation[]
  * @returns sorted extension names (with the leading dot).
  */
 export declare function unscannedExtensionsOf(paths: readonly string[]): string[]
+
+/** One helper whose size exceeds its limit or frozen baseline. */
+export interface HelperSizeViolation {
+  /** `grown` for a baselined file, `new` for an unbudgeted one, `stale` for a vanished baseline path. */
+  readonly kind: 'grown' | 'new' | 'stale'
+  /** Repo-root-relative helper path. */
+  readonly path: string
+  /** Actual line count (0 for a stale baseline entry). */
+  readonly lines: number
+  /** The applicable limit: the frozen baseline for `grown`, the new-helper limit otherwise. */
+  readonly limit: number
+}
+
+/**
+ * Compare helper sizes against the new-helper limit and the frozen baseline.
+ * @param entries - `{ path, lines }` for every helper.
+ * @param baseline - frozen path → line count; defaults to the repository baseline.
+ * @param limit - the new-helper limit; defaults to 300.
+ * @returns violations; empty when every helper is within its budget.
+ */
+export declare function helperSizeViolations(
+  entries: readonly { readonly path: string; readonly lines: number }[],
+  baseline?: Readonly<Record<string, number>>,
+  limit?: number,
+): HelperSizeViolation[]

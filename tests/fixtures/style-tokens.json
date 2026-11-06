@@ -1,5 +1,5 @@
 {
-  "harness": "0.2.2-alpha.2",
+  "harness": "0.2.2-rc.1",
   "dsw": [
     "--dsw-alias-bg-base",
     "--dsw-alias-bg-document-preview",

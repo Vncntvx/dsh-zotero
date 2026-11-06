@@ -229,7 +229,7 @@ describe('client graph authority', () => {
   })
 })
 
-describe('harness inline-safe table (dsh-v0.2.1-rc.2)', () => {
+describe('harness inline-safe table (dsh-v0.2.2-rc.1)', () => {
   it('accepts the pinned package names and rejects the retired agent-presets arm', () => {
     expect(isInlineSafeHarness('@deepseek-ai/dsh-agent-preset-registry/display')).toBe(true)
     expect(isInlineSafeHarness('@deepseek-ai/dsh-agent-presets/display')).toBe(false)
@@ -238,17 +238,22 @@ describe('harness inline-safe table (dsh-v0.2.1-rc.2)', () => {
   it('covers the full pinned INLINE_SAFE arms', () => {
     for (const specifier of [
       '@deepseek-ai/dsh-file-reference',
+      '@deepseek-ai/dsh-fs-patch',
       '@deepseek-ai/dsh-session/client',
       '@deepseek-ai/dsh-llm',
       '@deepseek-ai/dsh-tools/types',
       '@deepseek-ai/dsh-brand',
+      '@deepseek-ai/dsh-official-bundles',
       '@deepseek-ai/dsh-deque',
       '@deepseek-ai/dsh-output-retention',
       '@deepseek-ai/dsh-typert-protocol',
       '@deepseek-ai/dsh-util-crypto',
+      '@deepseek-ai/dsh-util-time',
       '@deepseek-ai/dsh-util-values',
       '@deepseek-ai/dsh-util-workspace-path',
+      '@deepseek-ai/dsh-util-file-drag',
       '@deepseek-ai/dsh-token-meter/client',
+      '@deepseek-ai/dsh-commands/builtin',
       '@deepseek-ai/dsh-native-command/types',
       '@deepseek-ai/dsh-host-open-in-app/shared',
       '@deepseek-ai/dsh-plugin-manager/registry',
@@ -258,6 +263,7 @@ describe('harness inline-safe table (dsh-v0.2.1-rc.2)', () => {
       '@deepseek-ai/dsh-anything/remote',
       '@deepseek-ai/cosmokit',
       '@deepseek-ai/schemastery/utils',
+      '@deepseek-ai/cordis-plugin-timer',
     ]) {
       expect(isInlineSafeHarness(specifier), specifier).toBe(true)
     }

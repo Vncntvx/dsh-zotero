@@ -79,6 +79,25 @@ const ALLOWED_CONTROL = new Set([0x09, 0x0a, 0x0d])
 const MAX_SPEC_LINES = 726
 
 /**
+ * Ratchet: the most lines one helper may occupy. Existing helpers above the
+ * limit are frozen in {@link HELPER_SIZE_BASELINE}; a baselined file may only
+ * shrink, and a new helper may never enter the baseline.
+ */
+const MAX_HELPER_LINES = 300
+
+/**
+ * Grandfathered helpers at their pre-change size. Removing a file or splitting
+ * it means deleting or lowering its entry in the same commit; adding an entry
+ * is never allowed.
+ */
+const HELPER_SIZE_BASELINE = Object.freeze({
+  'tests/client/helpers/primitives-stub.ts': 732,
+  'tests/client/helpers/source-fixtures.ts': 435,
+  'tests/client/helpers/apply-world.ts': 378,
+  'tests/client/helpers/library-panel-harness.tsx': 354,
+})
+
+/**
  * Ratchet: the directories a spec may live in, relative to `tests/`. Each lane
  * mirrors the `src/` layer it covers, so where a spec lives is decided by what
  * it tests rather than by when it was written. Nested lanes such as
@@ -115,6 +134,14 @@ function lineCountOf(path) {
 function specFiles() {
   return filesUnder(join(root, 'tests'))
     .filter((path) => /\.spec\.tsx?$/.test(path))
+    .map((path) => relative(root, path))
+    .sort()
+}
+
+/** File paths of every helper under a `helpers/` directory, relative to the repo root. */
+function helperFiles() {
+  return filesUnder(join(root, 'tests'))
+    .filter((path) => /[\\/]helpers[\\/]/.test(path) && /\.tsx?$/.test(path))
     .map((path) => relative(root, path))
     .sort()
 }
@@ -198,6 +225,69 @@ function checkSpecSize() {
   }
   const largest = sized.slice().sort((a, b) => b.lines - a.lines)[0]
   return largest === undefined ? '(none)' : `${largest.path} (${largest.lines} lines)`
+}
+
+/**
+ * Compare helper sizes against the limit and the frozen baseline.
+ *
+ * A baselined helper may shrink but never grow; a helper outside the baseline
+ * may not exceed the limit; a baseline entry whose file disappeared is stale
+ * and must be removed with the split.
+ * @param entries - `{ path, lines }` for every helper.
+ * @param baseline - frozen path → line count.
+ * @param limit - the new-helper limit.
+ * @returns violations with the kind, path, actual lines, and applicable limit.
+ */
+export function helperSizeViolations(
+  entries,
+  baseline = HELPER_SIZE_BASELINE,
+  limit = MAX_HELPER_LINES,
+) {
+  const found = []
+  const seen = new Set()
+  for (const { path, lines } of entries) {
+    const frozen = baseline[path]
+    if (frozen !== undefined) {
+      seen.add(path)
+      if (lines > frozen) found.push({ kind: 'grown', path, lines, limit: frozen })
+      continue
+    }
+    if (lines > limit) found.push({ kind: 'new', path, lines, limit })
+  }
+  for (const path of Object.keys(baseline)) {
+    if (!seen.has(path)) found.push({ kind: 'stale', path, lines: 0, limit: baseline[path] })
+  }
+  return found
+}
+
+/** No helper may outgrow its baseline or the new-helper limit. */
+function checkHelperSize() {
+  const entries = helperFiles().map((path) => ({ path, lines: lineCountOf(join(root, path)) }))
+  for (const violation of helperSizeViolations(entries)) {
+    if (violation.kind === 'grown') {
+      failures.push(
+        [
+          `${violation.path} is ${violation.lines} lines; its frozen baseline is ${violation.limit}`,
+          `  fix: split it and lower the baseline in the same commit`,
+        ].join('\n'),
+      )
+    } else if (violation.kind === 'stale') {
+      failures.push(
+        [
+          `${violation.path} is in the helper-size baseline but no longer exists`,
+          `  fix: remove its baseline entry in the same commit that removed or renamed it`,
+        ].join('\n'),
+      )
+    } else {
+      failures.push(
+        [
+          `${violation.path} is ${violation.lines} lines; new helpers are limited to ${violation.limit}`,
+          `  fix: move the seam into module support instead of growing the helper`,
+        ].join('\n'),
+      )
+    }
+  }
+  return `${entries.length} helpers`
 }
 
 /** A spec's location is decided by the module it tests, so only lanes are allowed. */
@@ -342,6 +432,7 @@ const invokedDirectly =
 
 if (invokedDirectly) {
   const largest = checkSpecSize()
+  const helpers = checkHelperSize()
   checkTextFiles()
   checkExtensionCoverage()
   checkLanes()
@@ -354,6 +445,6 @@ if (invokedDirectly) {
   }
 
   process.stdout.write(
-    `test-lint: ok — ${specFiles().length} specs, largest ${largest}, lane ratchet ${SPEC_LANES.map((name) => name || '.').join('/')}\n`,
+    `test-lint: ok — ${specFiles().length} specs, largest ${largest}, ${helpers}, lane ratchet ${SPEC_LANES.map((name) => name || '.').join('/')}\n`,
   )
 }
