@@ -252,6 +252,7 @@ function SourcesTabBody({
   useChat,
   useSessions,
   useProjection,
+  useRemoteAccess,
   useZoteroClient,
   inputActions,
 }: SourcesTabBodyProps) {
@@ -262,7 +263,16 @@ function SourcesTabBody({
   // and the host `ISessions` declaration takes precedence).
   const cwd = useSessions((snapshot) => snapshot.byId[sessionId]?.cwd)
   const chat = useChat((snapshot) => snapshot, sameZoteroProjection)
-  const { state: probeState, runProbe } = useZoteroProbe(status, { initialAutoRun: true })
+  // The trail itself is local session data; only its wire-backed controls are
+  // gated. A refused action would fail at the gateway, so the panel skips the
+  // request and says why instead of rendering a permanent error.
+  const canStatus = useRemoteAccess('zotero/status')
+  const canResolve = useRemoteAccess('zotero/resolveAttachment')
+  const canOpen = useRemoteAccess('zotero/openProtocol')
+  const { state: probeState, runProbe } = useZoteroProbe(status, {
+    initialAutoRun: true,
+    enabled: canStatus,
+  })
   const [checkedAt, setCheckedAt] = useState<string>(() => currentTime())
   const prevDataRef = useRef(probeState.data)
 
@@ -274,6 +284,7 @@ function SourcesTabBody({
   }, [probeState.data])
 
   const statusState: ConnectionView = useMemo(() => {
+    if (!canStatus) return { kind: 'no-access' }
     if (probeState.data !== undefined) {
       return probeState.data.connected
         ? { kind: 'connected', data: probeState.data, checkedAt }
@@ -283,7 +294,7 @@ function SourcesTabBody({
       return { kind: 'remote-error', message: probeState.error }
     }
     return { kind: 'loading' }
-  }, [probeState.data, probeState.error, checkedAt])
+  }, [canStatus, probeState.data, probeState.error, checkedAt])
 
   const serverId = probeState.data?.connected ? probeState.data.serverId : undefined
   // Streaming-stable zotero rows reuse the previous block array (signature gate).
@@ -320,8 +331,8 @@ function SourcesTabBody({
                 openResource(fileAddressFor(sessionId, cwd, path))
               }
         }
-        resolveAttachment={resolveAttachment}
-        openProtocol={client.openProtocol}
+        resolveAttachment={canResolve ? resolveAttachment : undefined}
+        openProtocol={canOpen ? client.openProtocol : undefined}
         t={t}
       />
     </ResultSessionContext.Provider>

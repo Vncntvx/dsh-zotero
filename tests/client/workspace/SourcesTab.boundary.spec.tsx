@@ -191,6 +191,8 @@ describe('the Sources tab keeps its registration when its body throws', () => {
     const props = {
       t: mockT,
       useProjection: () => undefined,
+      useRemoteAccess: () => true,
+      useAccess: () => true,
       useZoteroClient: zoteroClient,
       status: connectedProbe(),
       useSession: (sel: (snap: { sessionId: string }) => unknown) =>
@@ -224,6 +226,8 @@ describe('the Sources tab keeps its registration when its body throws', () => {
     const props = {
       t: mockT,
       useProjection: () => undefined,
+      useRemoteAccess: () => true,
+      useAccess: () => true,
       useZoteroClient: zoteroClient,
       status: connectedProbe(),
       openResource,
@@ -255,6 +259,8 @@ describe('the Sources tab keeps its registration when its body throws', () => {
     const props = {
       t: mockT,
       useProjection: () => undefined,
+      useRemoteAccess: () => true,
+      useAccess: () => true,
       useZoteroClient: zoteroClient,
       status: connectedProbe(),
       openResource,

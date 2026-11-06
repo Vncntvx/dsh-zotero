@@ -41,7 +41,7 @@ The criteria of each search sit on the first screen: query, scope (library, My P
 
 The item inspector has three parts. Overview gives the source and action; passages are grouped by source with page labels and coverage; exports list the citation text this paper produced. The session also has an exports summary page, segmented by format and deduplicated across items. Failed export calls are listed separately under operations and do not count as results.
 
-The status bar at the top shows whether the local Zotero is connected. When offline it offers troubleshooting hints and an in-place refresh.
+The status bar at the top shows whether the local Zotero is connected. When offline it offers troubleshooting hints and an in-place refresh. A peer without access to `zotero/status` sees only a refusal notice and issues no probe; the local items in the trail remain readable.
 
 The built-in DSH "Trail" tab shows how tool calls ran. The literature trail shows only literature-related results.
 

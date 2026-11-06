@@ -20,6 +20,8 @@ interface ZoteroProbeState {
 interface UseZoteroProbeOptions {
   readonly initialAutoRun?: boolean
   readonly initialData?: ZoteroStatusView
+  /** False when the current Peer may not call the status endpoint. */
+  readonly enabled?: boolean
 }
 
 interface UseZoteroProbeReturn {
@@ -59,10 +61,11 @@ export function useZoteroProbe(
   probe?: () => Promise<RemoteResult<ZoteroStatusView>>,
   options?: UseZoteroProbeOptions,
 ): UseZoteroProbeReturn {
+  const enabled = options?.enabled !== false
   const [state, setState] = useState<ZoteroProbeState>(() =>
     options?.initialData !== undefined
       ? probeStateOf(options.initialData)
-      : { loading: options?.initialAutoRun === true },
+      : { loading: options?.initialAutoRun === true && enabled },
   )
   const [settled, setSettled] = useState(false)
 
@@ -77,7 +80,7 @@ export function useZoteroProbe(
   }, [])
 
   const runProbe = useCallback(async (): Promise<void> => {
-    if (!probe || inFlightRef.current) return
+    if (!probe || !enabled || inFlightRef.current) return
     inFlightRef.current = true
     setState((prev) => ({ ...prev, loading: true }))
 
@@ -105,10 +108,10 @@ export function useZoteroProbe(
   }, [probe])
 
   useEffect(() => {
-    if (options?.initialAutoRun && probe) {
+    if (enabled && options?.initialAutoRun && probe) {
       void runProbe()
     }
-  }, [options?.initialAutoRun, probe, runProbe])
+  }, [enabled, options?.initialAutoRun, probe, runProbe])
 
   return { state, settled, runProbe }
 }

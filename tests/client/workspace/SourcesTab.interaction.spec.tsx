@@ -159,6 +159,8 @@ describe('filters', () => {
     const props = {
       t,
       useProjection: () => undefined,
+      useRemoteAccess: () => true,
+      useAccess: () => true,
       useZoteroClient: () => zoteroClientStub(),
       status: async () => ({ ok: true, value: CONNECTED }),
       useSession: (sel: (snap: SessionSnapshot) => unknown) => sel(sessionOf()),
@@ -197,6 +199,8 @@ describe('filters', () => {
     const props = {
       t,
       useProjection: () => undefined,
+      useRemoteAccess: () => true,
+      useAccess: () => true,
       useZoteroClient: () => zoteroClientStub(),
       status: async () => ({ ok: true, value: CONNECTED }),
       useSession: (sel: (snap: SessionSnapshot) => unknown) => sel(holder.session),

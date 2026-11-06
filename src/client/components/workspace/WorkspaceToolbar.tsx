@@ -28,7 +28,10 @@ interface WorkspaceToolbarProps {
 /** The toolbar: connection strip with the diagnostic menu and refresh. */
 export function WorkspaceToolbar({ connection, onRefresh, t }: WorkspaceToolbarProps) {
   const [menuOpen, setMenuOpen] = useState(false)
-  const failed = connection.kind === 'unavailable' || connection.kind === 'remote-error'
+  const failed =
+    connection.kind === 'unavailable' ||
+    connection.kind === 'remote-error' ||
+    connection.kind === 'no-access'
   const diagnosis = failed ? connectionDiagnosisOf(connection, t) : ''
   const checkedAt =
     connection.kind === 'connected' || connection.kind === 'unavailable'
@@ -135,7 +138,7 @@ export function WorkspaceToolbar({ connection, onRefresh, t }: WorkspaceToolbarP
         type="button"
         className={clsx(quiet.quiet, css.refresh)}
         onClick={onRefresh}
-        disabled={connection.kind === 'loading'}
+        disabled={connection.kind === 'loading' || connection.kind === 'no-access'}
       >
         {t('refresh')}
       </button>

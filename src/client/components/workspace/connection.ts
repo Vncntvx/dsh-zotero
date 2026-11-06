@@ -15,6 +15,7 @@ import type { ZoteroStatusView } from '../../remote.ts'
 /** The connection view the workspace renders; fixture-constructible. */
 export type ConnectionView =
   | { readonly kind: 'loading' }
+  | { readonly kind: 'no-access' }
   | {
       readonly kind: 'connected'
       readonly data: ZoteroStatusView
@@ -35,6 +36,7 @@ export function connectionDiagnosisOf(
   // Both failure kinds route through diagnosisLine, so a raw English probe
   // string never renders bare inside the zh interface: known codes become
   // localized sentences, and the label prefix stays registrant-localized.
+  if (connection.kind === 'no-access') return t('remoteAccessDenied')
   if (connection.kind === 'remote-error') return diagnosisLine(connection.message, t)
   if (connection.kind === 'unavailable') {
     const diagnosis = connection.data.diagnosis

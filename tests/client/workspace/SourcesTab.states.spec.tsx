@@ -64,6 +64,8 @@ describe('connectivity strip states', () => {
     const props = {
       t,
       useProjection: () => undefined,
+      useRemoteAccess: () => true,
+      useAccess: () => true,
       useZoteroClient: () => zoteroClientStub(),
       status: undefined,
       useSession: (sel: (snap: SessionSnapshot) => unknown) => sel(sessionOf()),

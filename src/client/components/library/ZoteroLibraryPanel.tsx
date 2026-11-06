@@ -127,6 +127,12 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
 
   // The connectivity lamp: the shared probe hook owns the in-flight, unmount,
   // and rejection guards. One probe on open, another on every refresh.
+  // The panel is a session-scoped surface, but its wire reads target the
+  // global resource: the gateway resolves no session id from a browse request.
+  // A refused action would fail on every call, so the panel skips the request
+  // and renders one localized notice instead. The write drawer reads the
+  // session action itself and passes it down as `writeAllowed`.
+  const canBrowse = props.useRemoteAccess('zotero/browse')
   const {
     state: probeState,
     settled,
@@ -134,6 +140,7 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
   } = useZoteroProbe(props.status, {
     initialAutoRun: true,
     initialData: initialView?.lastProbeData,
+    enabled: canBrowse,
   })
 
   // The feed reads only: every non-feed member (probe, export, write, the
@@ -162,7 +169,7 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
   const connected = probeState.data?.connected === true
   // A cached snapshot paints the lamp; only this mount's own answer opens the
   // wire. An offline or failed probe therefore never sends a first batch.
-  const confirmed = settled && connected
+  const confirmed = settled && connected && canBrowse
   // The chat actions ride the session-scope input face; the pane-tab runtime
   // always carries it (session scope).
   const inputActions: InputActions | undefined = props.inputActions
@@ -386,9 +393,13 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
        * workspace: the lanes stay gated and the note carries the diagnosis.
        * Until this mount's probe answers, the cached snapshot may still paint
        * the workspace, with every request still gated. */}
-      {settled &&
-      !connected &&
-      (probeState.data !== undefined || probeState.error !== undefined) ? (
+      {!canBrowse ? (
+        <div className={css.offline} role="note">
+          <p className={css.offlineText}>{t('remoteAccessDenied')}</p>
+        </div>
+      ) : settled &&
+        !connected &&
+        (probeState.data !== undefined || probeState.error !== undefined) ? (
         <div className={css.offline} role="note">
           <p className={css.offlineText}>{t('libraryOfflineNote')}</p>
           {(probeState.error ?? probeState.data?.diagnosis) !== undefined && (

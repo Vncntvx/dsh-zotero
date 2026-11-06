@@ -276,6 +276,8 @@ export function mountTab(
     },
     ...(inputActions === undefined ? {} : { inputActions }),
     useProjection: () => undefined,
+    useRemoteAccess: () => true,
+    useAccess: () => true,
     useZoteroClient: () => zoteroClientStub(),
   } as unknown as SourcesTabProps
   const view = render(<SourcesTab {...props} />)
