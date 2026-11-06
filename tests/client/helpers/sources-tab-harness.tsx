@@ -275,6 +275,7 @@ export function mountTab(
       return chat === undefined ? undefined : sel(chat)
     },
     ...(inputActions === undefined ? {} : { inputActions }),
+    useProjection: () => undefined,
     useZoteroClient: () => zoteroClientStub(),
   } as unknown as SourcesTabProps
   const view = render(<SourcesTab {...props} />)

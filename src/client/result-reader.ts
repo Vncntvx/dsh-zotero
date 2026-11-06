@@ -1,30 +1,13 @@
 /** Durable result handles are recovered only from recorded tool blocks. */
 import { createContext } from 'react'
-import { parseReceiptLine } from '../result-receipt.ts'
 import { isRecord } from '../json.ts'
-import type { ToolCallBlock } from '@deepseek-ai/dsh-client-ui-conversation/client'
+
+export { receiptOf } from '../sources/receipt.js'
 
 export const ResultSessionContext = createContext<string | undefined>(undefined)
 export interface ResultCoordinates {
   readonly seq: number
   readonly index: number
-}
-
-export function receiptOf(block: ToolCallBlock): Record<string, unknown> | null {
-  if (!('content' in block) || block.isError) return null
-  const file = block.content.find((entry) => entry.type === 'file')
-  if (file?.type !== 'file') return null
-  for (const entry of block.content) {
-    if (entry.type !== 'text') continue
-    const receipt = parseReceiptLine(entry.text)
-    if (
-      receipt !== undefined &&
-      isRecord(receipt['file']) &&
-      receipt['file']['attachmentId'] === file.attachment.attachmentId
-    )
-      return receipt
-  }
-  return null
 }
 
 /** response.json waits for EOF, including the AttachmentStore's integrity check. */

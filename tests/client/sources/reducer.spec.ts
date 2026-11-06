@@ -10,7 +10,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { settled, running } from '../helpers/blocks.ts'
-import { buildSourceWorkspace } from '../../../src/client/sources/reducer.ts'
+import { buildSourceWorkspace } from '../../../src/sources/ledger.js'
 import { GET_META, REF, block, searchMetaOf, searchOccurrenceOf } from './reducer-fixtures.ts'
 
 describe('buildSourceWorkspace', () => {

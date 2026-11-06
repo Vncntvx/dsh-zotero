@@ -6,7 +6,7 @@
  */
 
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import type { SourceItem } from '../../sources/model.ts'
+import type { SourceItem } from '../../../sources/model.js'
 import { ExportSections } from '../ExportSections.tsx'
 import css from './workspace.module.css'
 

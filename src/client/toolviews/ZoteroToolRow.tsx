@@ -18,7 +18,7 @@ import type {
   StartedToolCall,
   ToolResultNode,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { isToolRunning, metaOf, rowStateOf } from '../presenters.ts'
+import { isToolRunning, metaOf, rowStateOf } from '../../sources/presenters.js'
 import { writeMetaOf } from '../sources/write-decoder.ts'
 import css from './toolviews.module.css'
 import quiet from '../components/quiet.module.css'

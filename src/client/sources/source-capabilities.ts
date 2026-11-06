@@ -13,7 +13,7 @@
 
 import { parseRefIdentity } from '../actions/open-zotero.ts'
 import { PDF_CONTENT_TYPE } from '../../media-types.ts'
-import type { SourceItem } from './model.ts'
+import type { SourceItem } from '../../sources/model.js'
 
 /** The PDF capability of one source, or null when nothing answers the open-PDF action. */
 export type PdfCapability =

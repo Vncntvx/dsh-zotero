@@ -4,12 +4,12 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { receiptOf, ResultSessionContext } from '../../../src/client/result-reader.ts'
 import { RESULT_RECEIPT_PREFIX } from '../../../src/constants.ts'
-import { buildSourceWorkspace } from '../../../src/client/sources/reducer.ts'
+import { buildSourceWorkspace } from '../../../src/sources/ledger.js'
 import { ExportCard } from '../../../src/client/components/ExportCard.tsx'
 import { settled, running } from '../helpers/blocks.ts'
 import { mockT } from '../helpers/mock-translate.ts'
 import { zh } from '../../../src/client/locales.ts'
-import type { ExportArtifact } from '../../../src/client/sources/model.ts'
+import type { ExportArtifact } from '../../../src/sources/model.js'
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
   const { primitivesStub } = await import('../helpers/primitives-stub.ts')
   return primitivesStub()

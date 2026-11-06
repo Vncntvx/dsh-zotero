@@ -18,7 +18,7 @@ import {
   Tag,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import type { ToolArgs } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { ArgsView } from '../../sources/block-types.js'
 import { CopyButton } from '../components/CopyButton.tsx'
 import { selectUrlOf } from '../actions/open-zotero.ts'
 import { writeMetaOf, type WriteMetaView } from '../sources/write-decoder.ts'
@@ -30,7 +30,7 @@ import {
   resultTextOf,
   shortKeyOf,
   textArg,
-} from '../presenters.ts'
+} from '../../sources/presenters.js'
 import { RunningNotice, RawTextFallback, ZoteroToolRow } from './ZoteroToolRow.tsx'
 import css from './toolviews.module.css'
 
@@ -107,7 +107,7 @@ function noteTitleOf(markdown: string | undefined, defaultTitle: string): string
 
 /** What one tool's summary builder receives: the call, the projection, and the locale. */
 interface DescribeContext {
-  readonly args: ToolArgs
+  readonly args: ArgsView
   readonly write: WriteMetaView | null
   readonly t: WriteToolViewProps['t']
 }

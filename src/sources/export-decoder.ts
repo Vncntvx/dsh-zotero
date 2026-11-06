@@ -2,9 +2,9 @@
  * @module dsh-zotero/client/sources/export-decoder
  */
 
-import { isRecord, numberField, stringArrayOf, stringField } from '../../json.ts'
-import { detailOmittedOf } from './decoders.ts'
-import type { ExportDocumentItem } from './model.ts'
+import { isRecord, numberField, stringArrayOf, stringField } from '../json.js'
+import { detailOmittedOf } from './decoders.js'
+import type { ExportDocumentItem } from './model.js'
 
 /** The export projection view; a record without refs itemizes none. */
 export interface ExportMetaView {

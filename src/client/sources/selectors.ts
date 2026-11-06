@@ -9,8 +9,8 @@
  * @module dsh-zotero/client/sources/selectors
  */
 
-import type { ExportArtifact, ExportDocumentItem, SourceItem } from './model.ts'
-import { normalizeRefKey } from './evidence-match.ts'
+import type { ExportArtifact, ExportDocumentItem, SourceItem } from '../../sources/model.js'
+import { normalizeRefKey } from '../../sources/evidence-match.js'
 import { hasPdf } from './source-capabilities.ts'
 
 /** The sources filters; every filter is a subset of the stable union. */

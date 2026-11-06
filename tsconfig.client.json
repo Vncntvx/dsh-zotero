@@ -14,5 +14,5 @@
     "forceConsistentCasingInFileNames": true,
     "types": []
   },
-  "include": ["src/client", "tests/client"]
+  "include": ["src/client", "src/sources", "tests/client"]
 }

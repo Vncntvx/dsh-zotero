@@ -97,10 +97,11 @@ never in a file named after a number or a function.
   `host/support/subagent-guard.ts`. The `tools/change` emit containment is
   pinned by the guard spec's injected-restriction-failure case.
 - Sources write receipts and export projections live in
-  `src/client/sources/write-decoder.ts` and `export-decoder.ts`; their pure
-  behavior is covered by `client/sources/decoders-write.spec.ts` and the export
-  section of `client/sources/decoders.spec.ts`, with tool cards and the Sources
-  reducer exercising those projections in client behavior tests.
+  `src/client/sources/write-decoder.ts` and `src/sources/export-decoder.ts`;
+  their pure behavior is covered by `client/sources/decoders-write.spec.ts` and
+  the export section of `client/sources/decoders.spec.ts`, with tool cards and
+  the shared ledger (`src/sources/ledger.ts`) exercising those projections in
+  client behavior tests.
 - Sources diff and background-job projections live in
   `src/client/sources/sync-decoder.ts`; pure behavior is covered by
   `client/sources/decoders-sync.spec.ts`, and the browse/export cards verify

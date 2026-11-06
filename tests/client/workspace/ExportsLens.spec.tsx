@@ -26,8 +26,8 @@ import { ExportSections, sectionTextOf } from '../../../src/client/components/Ex
 import { incompleteExportsNoteOf } from '../../../src/client/components/operations.ts'
 import { ExportsPage } from '../../../src/client/components/workspace/ExportsPage.tsx'
 import { zh } from '../../../src/client/locales.ts'
-import { bibTexKeysOf, citeCommandOf } from '../../../src/client/sources/bibtex.ts'
-import type { ExportArtifact } from '../../../src/client/sources/model.ts'
+import { bibTexKeysOf, citeCommandOf } from '../../../src/sources/bibtex.js'
+import type { ExportArtifact } from '../../../src/sources/model.js'
 import type { ExportedDocument } from '../../../src/client/sources/selectors.ts'
 import { artifactOf, workspaceOf } from '../helpers/source-fixtures.ts'
 

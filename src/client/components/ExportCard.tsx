@@ -19,8 +19,8 @@ import {
   IconChevronDownOutlineRegular,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import { bibTexKeysOf, citeCommandOf } from '../sources/bibtex.ts'
-import type { ExportArtifact } from '../sources/model.ts'
+import { bibTexKeysOf, citeCommandOf } from '../../sources/bibtex.js'
+import type { ExportArtifact } from '../../sources/model.js'
 import { downloadBlob } from '../download.ts'
 import quiet from './quiet.module.css'
 import { CopyButton } from './CopyButton.tsx'

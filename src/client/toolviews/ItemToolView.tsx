@@ -7,7 +7,7 @@
 import { useMemo, type ReactNode } from 'react'
 import { IconDeliverDocRegular, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import { getMetaOf, type ChildCountView, type ChildPreviewView } from '../sources/decoders.ts'
+import { getMetaOf, type ChildCountView, type ChildPreviewView } from '../../sources/decoders.js'
 import { PdfReadButton } from '../components/open/PdfReadButton.tsx'
 import { ZoteroLocateActions } from '../components/open/ZoteroLocateActions.tsx'
 import { countOfLabel, CHILD_KIND_LABEL } from '../evidence-labels.ts'
@@ -18,7 +18,7 @@ import {
   metaOf,
   resultTextOf,
   textArg,
-} from '../presenters.ts'
+} from '../../sources/presenters.js'
 import { RawTextFallback, RunningNotice, ZoteroToolRow } from './ZoteroToolRow.tsx'
 import css from './toolviews.module.css'
 

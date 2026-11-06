@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { buildSourceWorkspace } from '../../../src/client/sources/reducer.ts'
+import { buildSourceWorkspace } from '../../../src/sources/ledger.js'
 import { REF, block, searchMetaOf, searchOccurrenceOf } from './reducer-fixtures.ts'
 
 describe('buildSourceWorkspace - resolved search scopes', () => {

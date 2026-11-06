@@ -15,7 +15,7 @@ import {
   sanitizeFileStem,
 } from '../../src/client/export-formats.ts'
 import { zh } from '../../src/client/locales.ts'
-import type { ExportArtifact } from '../../src/client/sources/model.ts'
+import type { ExportArtifact } from '../../src/sources/model.js'
 
 import { mockT } from './helpers/mock-translate.ts'
 

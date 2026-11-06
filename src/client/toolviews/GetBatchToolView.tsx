@@ -10,7 +10,7 @@ import {
   listArg,
   metaOf,
   resultTextOf,
-} from '../presenters.ts'
+} from '../../sources/presenters.js'
 import { isRecord, numberField, stringField } from '../../json.ts'
 import { RunningNotice, RawTextFallback, ZoteroToolRow } from './ZoteroToolRow.tsx'
 import css from './toolviews.module.css'

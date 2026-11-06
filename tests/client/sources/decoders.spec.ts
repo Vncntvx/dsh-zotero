@@ -10,8 +10,8 @@ import {
   getMetaOf,
   retrieveMetaOf,
   searchMetaOf,
-} from '../../../src/client/sources/decoders.ts'
-import { exportMetaOf } from '../../../src/client/sources/export-decoder.ts'
+} from '../../../src/sources/decoders.js'
+import { exportMetaOf } from '../../../src/sources/export-decoder.js'
 
 describe('searchMetaOf', () => {
   it('reads the detailOmitted stamp the byte budget leaves on the meta', () => {

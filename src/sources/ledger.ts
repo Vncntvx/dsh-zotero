@@ -7,12 +7,12 @@
  * running, failed, and stopped calls count into operations, never into
  * achievements. Pure over the frozen blocks: the same slice builds the same
  * workspace.
- * @module dsh-zotero/client/sources/reducer
+ * @module dsh-zotero/sources/ledger
  */
 
-import { receiptOf } from '../result-reader.ts'
+import { receiptOf } from './receipt.js'
 
-import type { ToolArgs, ToolCallBlock } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { ArgsView, ToolBlockLike } from './block-types.js'
 import {
   argsViewOf,
   boolArg,
@@ -25,10 +25,10 @@ import {
   textArg,
   valueArg,
   type ZoteroRowState,
-} from '../presenters.ts'
-import { isRecord, stringField } from '../../json.ts'
-import { getMetaOf, retrieveMetaOf, searchMetaOf } from './decoders.ts'
-import { exportMetaOf, type ExportMetaView } from './export-decoder.ts'
+} from './presenters.js'
+import { isRecord, stringField } from '../json.js'
+import { getMetaOf, retrieveMetaOf, searchMetaOf } from './decoders.js'
+import { exportMetaOf, type ExportMetaView } from './export-decoder.js'
 import type {
   EvidencePassage,
   ExportArtifact,
@@ -39,9 +39,9 @@ import type {
   SourceScope,
   SourceWorkspace,
   SupportedLocalLibrary,
-} from './model.ts'
-import { evidenceMatchOf, normalizeRefKey, serverIdOf } from './evidence-match.ts'
-import type { ZoteroResolvedScope } from '../../contract.ts'
+} from './model.js'
+import { evidenceMatchOf, normalizeRefKey, serverIdOf } from './evidence-match.js'
+import type { ZoteroResolvedScope } from '../contract.js'
 
 interface BuildSourceWorkspaceOptions {
   /** The connected instance's Server ID from the status probe, when known. */
@@ -138,14 +138,14 @@ function emptyOperations(): DraftOperations {
  * (array, number, string, boolean, null).
  */
 /** The library argument's raw type/id fields when a record is present, else null. */
-function rawLibraryArg(args: ToolArgs): { type: unknown; id: unknown } | null {
+function rawLibraryArg(args: ArgsView): { type: unknown; id: unknown } | null {
   const libArg = recordArg(args, 'library')
   if (libArg === null) return null
   return { type: libArg['type'], id: libArg['id'] }
 }
 
 function searchIdentityOf(
-  args: ToolArgs,
+  args: ArgsView,
   overrides?: {
     readonly resolvedScope: ZoteroResolvedScope
     readonly resolvedLibrary: SupportedLocalLibrary
@@ -228,7 +228,7 @@ function resolvedToSourceScope(scope: ZoteroResolvedScope): SourceScope {
 }
 
 /** The ref argument of one ref-carrying call; null when absent or unusable. */
-function refArgOf(args: ToolArgs): string | null {
+function refArgOf(args: ArgsView): string | null {
   const ref = textArg(args, 'ref')
   return ref === undefined || ref === '' ? null : ref
 }
@@ -241,7 +241,7 @@ function refArgOf(args: ToolArgs): string | null {
  */
 function exportRefsOf(
   metaView: ExportMetaView | null,
-  args: ToolArgs,
+  args: ArgsView,
 ): { readonly refs: readonly string[]; readonly refsOmitted: number } {
   if (args.has('refs')) {
     const refs = args.value('refs')
@@ -275,7 +275,7 @@ function evidenceKeyOf(
  * @returns the aggregated workspace.
  */
 export function buildSourceWorkspace(
-  blocks: readonly ToolCallBlock[],
+  blocks: readonly ToolBlockLike[],
   options: BuildSourceWorkspaceOptions = {},
 ): SourceWorkspace {
   const byKey = new Map<string, Draft>()
@@ -324,7 +324,7 @@ export function buildSourceWorkspace(
    * `rowStateOf` also funnels through), so an unsettled block never arrives
    * here: the early return, not a cast, carries the proof.
    */
-  const eventTimeOf = (block: ToolCallBlock): number => {
+  const eventTimeOf = (block: ToolBlockLike): number => {
     if (!isSettledTool(block)) return 0
     return block.time
   }
@@ -721,6 +721,7 @@ export function buildSourceWorkspace(
       return {
         key: draft.key,
         ref: draft.ref,
+        serverIds: [...draft.serverIds].sort(),
         evidenceMatch: evidenceMatchOf(draft.serverIds, currentServerId),
         ...(draft.title === undefined ? {} : { title: draft.title }),
         ...(draft.creators === undefined ? {} : { creators: draft.creators }),

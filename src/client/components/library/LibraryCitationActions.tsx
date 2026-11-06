@@ -30,7 +30,7 @@ import type {
 import { formatCreatorsList } from '../../../creators.ts'
 import type { ZoteroLocaleKey } from '../../locales.ts'
 import { messageOf } from '../../error-text.ts'
-import { joinNonEmpty } from '../../presenters.ts'
+import { joinNonEmpty } from '../../../sources/presenters.js'
 import { useCopyFeedback } from '../useCopyFeedback.ts'
 import type { LibraryExportItem } from './library-feed-types.ts'
 import css from './library.module.css'

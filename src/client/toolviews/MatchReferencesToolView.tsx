@@ -3,7 +3,13 @@
 import { useMemo } from 'react'
 import { IconSearchOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import { argsViewOf, errorSummaryOf, isToolRunning, metaOf, resultTextOf } from '../presenters.ts'
+import {
+  argsViewOf,
+  errorSummaryOf,
+  isToolRunning,
+  metaOf,
+  resultTextOf,
+} from '../../sources/presenters.js'
 import { isRecord, numberField, stringField } from '../../json.ts'
 import { RunningNotice, RawTextFallback, ZoteroToolRow } from './ZoteroToolRow.tsx'
 import css from './toolviews.module.css'

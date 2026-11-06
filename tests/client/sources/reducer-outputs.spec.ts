@@ -11,7 +11,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { settled, running } from '../helpers/blocks.ts'
-import { buildSourceWorkspace } from '../../../src/client/sources/reducer.ts'
+import { buildSourceWorkspace } from '../../../src/sources/ledger.js'
 import { REF, block } from './reducer-fixtures.ts'
 
 describe('buildSourceWorkspace', () => {

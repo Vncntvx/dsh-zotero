@@ -7,8 +7,8 @@
  * @module dsh-zotero/client/sources/evidence-match
  */
 
-import type { EvidenceMatchStatus } from './model.ts'
-import { SERVER_ID_SOURCE } from '../../ref-grammar.ts'
+import type { EvidenceMatchStatus, SourceWorkspace } from './model.js'
+import { SERVER_ID_SOURCE } from '../ref-grammar.js'
 
 /** The item identity: the ref without its query, lowercased. */
 export function normalizeRefKey(ref: string): string {
@@ -43,4 +43,25 @@ export function evidenceMatchOf(
     if (id !== currentServerId) return 'mismatch'
   }
   return 'verified'
+}
+
+/**
+ * Recompute the instance verdict with the connected Server ID the browser probe
+ * knows and the host fold cannot. The ledger view carries the raw qualified
+ * ids; only the client has the live connection fact.
+ * @param workspace - a workspace whose sources carry `serverIds`.
+ * @param currentServerId - the connected instance's Server ID, when known.
+ * @returns the same workspace with every item's `evidenceMatch` re-evaluated.
+ */
+export function withEvidenceMatch(
+  workspace: SourceWorkspace,
+  currentServerId: string | undefined,
+): SourceWorkspace {
+  return {
+    ...workspace,
+    sources: workspace.sources.map((item) => ({
+      ...item,
+      evidenceMatch: evidenceMatchOf(new Set(item.serverIds), currentServerId),
+    })),
+  }
 }

@@ -10,7 +10,7 @@
 import { render } from '@testing-library/react'
 import { vi } from 'vitest'
 import type { ZoteroStatusView } from '../../../src/client/remote.ts'
-import type { SourceWorkspace } from '../../../src/client/sources/model.ts'
+import type { SourceWorkspace } from '../../../src/sources/model.js'
 import type { ConnectionView } from '../../../src/client/components/workspace/connection.ts'
 import { ZoteroWorkspaceView } from '../../../src/client/components/workspace/ZoteroWorkspaceView.tsx'
 import { mockT } from './mock-translate.ts'

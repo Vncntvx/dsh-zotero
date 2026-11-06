@@ -6,7 +6,7 @@
  * @module dsh-zotero/client/sources/bibtex
  */
 
-import { BIBTEX_KEY_SOURCE } from '../../export-items.ts'
+import { BIBTEX_KEY_SOURCE } from '../export-items.js'
 
 const BIBTEX_KEY = new RegExp(BIBTEX_KEY_SOURCE, 'g')
 

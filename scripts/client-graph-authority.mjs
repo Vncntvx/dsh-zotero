@@ -15,6 +15,8 @@
  * import zod today:
  *
  * - `src/client/**`: the browser half.
+ * - `src/sources/**`: the host-safe source ledger both halves read (no React,
+ *   no zod, no host Context merges).
  * - Shared pure surfaces both halves already use: wire identity (`contract`),
  *   settings wire name (`settings-namespace`), JSON guards (`json`), the
  *   `zotero://` ref grammar (`ref-grammar`), export-key grammar
@@ -30,7 +32,7 @@
  * this list deliberately and must stay free of host authority.
  */
 export const CLIENT_SAFE_LOCAL =
-  /^src\/(?:client(?:\/|$)|contract\.(?:ts|js|mjs|cjs)$|settings-namespace\.(?:ts|js|mjs|cjs)$|json\.(?:ts|js|mjs|cjs)$|ref-grammar\.(?:ts|js|mjs|cjs)$|export-items\.(?:ts|js|mjs|cjs)$|changes-contract\.(?:ts|js|mjs|cjs)$|browse-rows\.(?:ts|js|mjs|cjs)$|evidence-item\.(?:ts|js|mjs|cjs)$|constants\.(?:ts|js|mjs|cjs)$|credential-names\.(?:ts|js|mjs|cjs)$|wire-schemas\.(?:ts|js|mjs|cjs)$|creators\.(?:ts|js|mjs|cjs)$|media-types\.(?:ts|js|mjs|cjs)$|result-receipt\.(?:ts|js|mjs|cjs)$)/
+  /^src\/(?:client(?:\/|$)|sources(?:\/|$)|contract\.(?:ts|js|mjs|cjs)$|settings-namespace\.(?:ts|js|mjs|cjs)$|json\.(?:ts|js|mjs|cjs)$|ref-grammar\.(?:ts|js|mjs|cjs)$|export-items\.(?:ts|js|mjs|cjs)$|changes-contract\.(?:ts|js|mjs|cjs)$|browse-rows\.(?:ts|js|mjs|cjs)$|evidence-item\.(?:ts|js|mjs|cjs)$|constants\.(?:ts|js|mjs|cjs)$|credential-names\.(?:ts|js|mjs|cjs)$|wire-schemas\.(?:ts|js|mjs|cjs)$|creators\.(?:ts|js|mjs|cjs)$|media-types\.(?:ts|js|mjs|cjs)$|result-receipt\.(?:ts|js|mjs|cjs)$)/
 
 /**
  * Packages the host half owns. Boundary schema materialization (schemastery

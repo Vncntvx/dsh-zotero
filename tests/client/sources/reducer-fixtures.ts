@@ -9,7 +9,7 @@
  */
 
 import type { ToolResultNode } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { SourceScope } from '../../../src/client/sources/model.ts'
+import type { SourceScope } from '../../../src/sources/model.js'
 import { settled } from '../helpers/blocks.ts'
 import { CANONICAL_ATTACHMENT_REF, CANONICAL_ITEM_REF } from '../helpers/toolview-fixtures.ts'
 

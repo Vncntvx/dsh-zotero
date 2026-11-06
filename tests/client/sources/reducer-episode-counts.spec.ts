@@ -12,7 +12,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { buildSourceWorkspace } from '../../../src/client/sources/reducer.ts'
+import { buildSourceWorkspace } from '../../../src/sources/ledger.js'
 import { REF, block, searchMetaOf } from './reducer-fixtures.ts'
 
 /** The first source's one search occurrence (every source folds the same episode). */

@@ -7,7 +7,7 @@
 import { useMemo } from 'react'
 import { IconSearchOutlineRegular, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import { searchMetaOf } from '../sources/decoders.ts'
+import { searchMetaOf } from '../../sources/decoders.js'
 import { PdfReadButton } from '../components/open/PdfReadButton.tsx'
 import { ZoteroLocateActions } from '../components/open/ZoteroLocateActions.tsx'
 import {
@@ -17,7 +17,7 @@ import {
   isToolRunning,
   resultTextOf,
   textArg,
-} from '../presenters.ts'
+} from '../../sources/presenters.js'
 import { RunningNotice, RawTextFallback, ZoteroToolRow } from './ZoteroToolRow.tsx'
 import css from './toolviews.module.css'
 

@@ -29,7 +29,7 @@ import {
   Pill,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import type { SourceItem, SourceWorkspace } from '../../sources/model.ts'
+import type { SourceItem, SourceWorkspace } from '../../../sources/model.js'
 import {
   evidencePassageTotalOf,
   type SourceFilter,

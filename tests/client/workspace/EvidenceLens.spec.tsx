@@ -16,7 +16,7 @@ import {
 } from '../../../src/client/evidence-labels.ts'
 import { EvidenceOverview } from '../../../src/client/components/workspace/EvidenceOverview.tsx'
 import { zh } from '../../../src/client/locales.ts'
-import type { SourceItem } from '../../../src/client/sources/model.ts'
+import type { SourceItem } from '../../../src/sources/model.js'
 import { passageOf, sourceOf, workspaceOf } from '../helpers/source-fixtures.ts'
 
 // The real primitives bundle pulls heavy dependencies (katex, shiki, the

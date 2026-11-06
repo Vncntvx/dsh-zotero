@@ -33,7 +33,7 @@ Research SOP skills add seven on-demand workflows: research landscape, citation 
 
 ## Checking the Literature Trail
 
-The literature trail sits at the top of the conversation and groups the literature the agent found and read in this session by item. The data comes from this session's tool-call snapshots, so switching to it issues no new request.
+The literature trail sits at the top of the conversation and groups the literature the agent found and read in this session by item. The data comes from a host session projection folded over the whole session log, so a long session does not lose early items to the history window; when the projection is unavailable it falls back to the tool-call snapshot of the currently loaded window. Switching to it issues no new request.
 
 It records the results of read tools and exports. Writes do not enter the trail; modifications have their own cards and approval records. Results from scholarly retrieval appear only after they are saved into the library.
 

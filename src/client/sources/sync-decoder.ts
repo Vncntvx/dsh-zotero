@@ -9,7 +9,7 @@ import {
   DELETED_OTHER_TOTAL_KEY,
   DELETION_SECTIONS,
 } from '../../changes-contract.ts'
-import { detailOmittedOf } from './decoders.ts'
+import { detailOmittedOf } from '../../sources/decoders.js'
 
 /**
  * One changed-object section of a diff: the keys the read returned, each with

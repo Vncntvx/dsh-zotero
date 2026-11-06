@@ -28,8 +28,10 @@ import { fileAddressFor } from '@deepseek-ai/dsh-util-workspace-path'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ZoteroAttachmentLocationView } from '../../contract.ts'
 import type { ZoteroStatusView } from '../remote.ts'
-import { callNameOf, formatTime, isSettledTool } from '../presenters.ts'
-import { buildSourceWorkspace } from '../sources/reducer.ts'
+import { callNameOf, formatTime, isSettledTool } from '../../sources/presenters.js'
+import { buildSourceWorkspace } from '../../sources/ledger.js'
+import { withEvidenceMatch } from '../../sources/evidence-match.js'
+import type {} from '../../session-projection/types.js'
 import { ZoteroSurfaceBoundary } from './ZoteroSurfaceBoundary.tsx'
 import type { ConnectionView } from './workspace/connection.ts'
 import { ZoteroWorkspaceView } from './workspace/ZoteroWorkspaceView.tsx'
@@ -249,6 +251,7 @@ function SourcesTabBody({
   sessionId,
   useChat,
   useSessions,
+  useProjection,
   useZoteroClient,
   inputActions,
 }: SourcesTabBodyProps) {
@@ -285,9 +288,17 @@ function SourcesTabBody({
   const serverId = probeState.data?.connected ? probeState.data.serverId : undefined
   // Streaming-stable zotero rows reuse the previous block array (signature gate).
   const blocks = useZoteroBlocks(chat, sessionId)
+  // The host projection folds the whole session log; the chat snapshot only
+  // holds the opening window. Absent means the capability is not composed (or
+  // the baseline has not carried it yet), so the window fold remains the
+  // fallback rather than a compatibility layer.
+  const projected = useProjection('zoteroSources')
   const workspace = useMemo(
-    () => buildSourceWorkspace(blocks, { currentServerId: serverId }),
-    [blocks, serverId],
+    () =>
+      projected !== undefined
+        ? withEvidenceMatch(projected, serverId)
+        : buildSourceWorkspace(blocks, { currentServerId: serverId }),
+    [projected, blocks, serverId],
   )
   const setDraft = useMemo(
     () => (inputActions === undefined ? undefined : inputActions.setDraft.bind(inputActions)),

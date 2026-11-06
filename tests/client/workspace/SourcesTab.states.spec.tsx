@@ -63,6 +63,7 @@ describe('connectivity strip states', () => {
     // PropsRuntime surface: upstream merges stop breaking it.
     const props = {
       t,
+      useProjection: () => undefined,
       useZoteroClient: () => zoteroClientStub(),
       status: undefined,
       useSession: (sel: (snap: SessionSnapshot) => unknown) => sel(sessionOf()),

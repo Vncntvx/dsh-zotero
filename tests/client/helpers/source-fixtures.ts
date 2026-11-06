@@ -10,7 +10,7 @@
  * @module tests/client/helpers/source-fixtures
  */
 
-import type { SourceItem, SourceWorkspace } from '../../../src/client/sources/model.ts'
+import type { SourceItem, SourceWorkspace } from '../../../src/sources/model.js'
 
 /** The mutable twin of SourceItem; fixture builders assign per-scenario fields. */
 type MutableSourceItem = { -readonly [K in keyof SourceItem]: SourceItem[K] }
@@ -20,10 +20,9 @@ export function sourceOf(overrides: Partial<SourceItem> = {}): SourceItem {
   return {
     key: 'zotero://user/0/item/a',
     ref: 'zotero://user/0/item/A',
+    serverIds: [],
     evidenceMatch: 'unknown',
-    facts: {
-      reportedEvidenceCount: 0,
-    },
+    facts: { reportedEvidenceCount: 0 },
     operations: { running: 0, failed: 0, stopped: 0 },
     searches: [],
     evidence: [],

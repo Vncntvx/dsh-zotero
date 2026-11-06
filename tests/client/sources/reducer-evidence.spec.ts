@@ -9,7 +9,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { buildSourceWorkspace } from '../../../src/client/sources/reducer.ts'
+import { buildSourceWorkspace } from '../../../src/sources/ledger.js'
 import { GET_META, REF, block } from './reducer-fixtures.ts'
 
 const RETRIEVE_META = {

@@ -27,7 +27,7 @@ import {
   rowStateOf,
   shortKeyOf,
   textArg,
-} from '../../src/client/presenters.ts'
+} from '../../src/sources/presenters.js'
 import { boolField, isRecord, numberField, stringField } from '../../src/json.ts'
 import {
   preparing as blockPreparing,

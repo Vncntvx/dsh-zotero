@@ -19,7 +19,7 @@ import {
   stateOf,
 } from '../../../src/client/components/SourcesTab.tsx'
 import { connectionDiagnosisOf } from '../../../src/client/components/workspace/connection.ts'
-import { callNameOf } from '../../../src/client/presenters.ts'
+import { callNameOf } from '../../../src/sources/presenters.js'
 import { zh } from '../../../src/client/locales.ts'
 import { preparing, running, settled } from '../helpers/blocks.ts'
 import { CONNECTED, UNAVAILABLE, chatOf, toolRow } from '../helpers/sources-tab-harness.tsx'

@@ -4,8 +4,8 @@
  */
 
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import { formatTime } from './presenters.ts'
-import type { ExportArtifact } from './sources/model.ts'
+import { formatTime } from '../sources/presenters.js'
+import type { ExportArtifact } from '../sources/model.js'
 
 /** Characters of a complete result shown before the reader has to open it. */
 export const RESULT_PREVIEW_CHARS = 2000

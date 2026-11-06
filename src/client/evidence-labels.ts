@@ -10,7 +10,7 @@
 
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ZoteroLocaleKey } from './locales.ts'
-import type { SourceAvailabilityEntry, SourceCoverage } from './sources/model.ts'
+import type { SourceAvailabilityEntry, SourceCoverage } from '../sources/model.js'
 
 /** The locale key of one evidence source kind; unknown kinds read as fulltext. */
 export function sourceLabelKeyOf(

@@ -9,7 +9,7 @@
  */
 
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import type { SourceWorkspace } from '../../sources/model.ts'
+import type { SourceWorkspace } from '../../../sources/model.js'
 import { incompleteExportsNoteOf } from '../operations.ts'
 import { ExportSections } from '../ExportSections.tsx'
 import css from './workspace.module.css'

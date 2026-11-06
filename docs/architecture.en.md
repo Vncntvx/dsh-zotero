@@ -119,7 +119,8 @@ A single client artifact (`lib/client.js`) contains all interfaces. Every surfac
 
 ### Conversation Literature Trail (`conversation.view`, id `zotero`, order 30)
 
-- Data source: the session projection `ChatSnapshot`, taking only visible `zotero_*` tool calls; the reducer (`src/client/sources/reducer.ts`) folds them into a per-item `SourceWorkspace`. Running, failed, and stopped calls count only toward `operations` and never become results; only successful, structurally valid calls produce facts.
+- Data source: the host session projection `zoteroSources` (`src/session-projection/source-ledger.ts`) first; it folds the whole session log and is not limited by the browser history window. When the projection is unavailable, the loaded `ChatSnapshot` window is folded instead. Both paths use the one reducer in `src/sources/ledger.ts`, which aggregates `zotero_*` calls into a per-item `SourceWorkspace`. Running, failed, and stopped calls count only toward `operations` and never become results; only successful, structurally valid calls produce facts.
+- Instance verdict: the fold keeps each item's qualified `serverIds`; the host does not know the connected Server ID, so the browser materializes `evidenceMatch` from the status probe through `withEvidenceMatch`.
 - Search folding: paginated continuation calls fold by identity into one search; the first screen's `total` and `noteMatches` come from the first call, while `returned` and `omitted` accumulate across pages.
 - Interface structure: the top lens bar switches between the "Literature" and "Exports" views; the item inspector has three panels, overview, passages, and exports; the session-level exports page is segmented by format and deduplicated across items.
 - Gating: when `webEnabled` is false the whole page is hidden, and the switch hot-reloads; the page stays visible until the first snapshot arrives.

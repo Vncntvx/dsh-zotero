@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import type { SourceItem } from '../../../src/client/sources/model.ts'
+import type { SourceItem } from '../../../src/sources/model.js'
 import {
   evidencePassageTotalOf,
   exportedRefCountOf,

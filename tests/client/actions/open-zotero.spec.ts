@@ -15,7 +15,7 @@ import {
 } from '../../../src/client/actions/open-zotero.ts'
 import { createZoteroClientFace } from '../../../src/client/actions/client-face.ts'
 import { hasPdf, pdfCapabilityOf } from '../../../src/client/sources/source-capabilities.ts'
-import type { SourceAttachment } from '../../../src/client/sources/model.ts'
+import type { SourceAttachment } from '../../../src/sources/model.js'
 import { sourceOf } from '../helpers/source-fixtures.ts'
 
 describe('parseRefIdentity', () => {

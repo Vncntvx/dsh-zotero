@@ -13,7 +13,7 @@
 
 import { useMemo } from 'react'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import type { ExportArtifact } from '../sources/model.ts'
+import type { ExportArtifact } from '../../sources/model.js'
 import { downloadBlob } from '../download.ts'
 import { exportSectionsOf, type ExportSection } from '../sources/selectors.ts'
 import { CopyButton } from './CopyButton.tsx'

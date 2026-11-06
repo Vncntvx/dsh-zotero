@@ -190,6 +190,7 @@ describe('the Sources tab keeps its registration when its body throws', () => {
     let currentChat: ChatSnapshot = hostile
     const props = {
       t: mockT,
+      useProjection: () => undefined,
       useZoteroClient: zoteroClient,
       status: connectedProbe(),
       useSession: (sel: (snap: { sessionId: string }) => unknown) =>
@@ -222,6 +223,7 @@ describe('the Sources tab keeps its registration when its body throws', () => {
     const openResource = vi.fn<(url: string) => void>()
     const props = {
       t: mockT,
+      useProjection: () => undefined,
       useZoteroClient: zoteroClient,
       status: connectedProbe(),
       openResource,
@@ -252,6 +254,7 @@ describe('the Sources tab keeps its registration when its body throws', () => {
     const openResource = vi.fn<(url: string) => void>()
     const props = {
       t: mockT,
+      useProjection: () => undefined,
       useZoteroClient: zoteroClient,
       status: connectedProbe(),
       openResource,

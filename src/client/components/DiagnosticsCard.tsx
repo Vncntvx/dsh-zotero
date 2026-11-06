@@ -34,7 +34,7 @@ import {
 } from '../../contract.ts'
 import { buildInfoOf } from '../build-info.ts'
 import type { ZoteroClientFace } from '../actions/client-face.ts'
-import { formatTime } from '../presenters.ts'
+import { formatTime } from '../../sources/presenters.js'
 import { useZoteroProbe } from './useZoteroProbe.ts'
 import { useDiagnosticsFeed } from './useDiagnosticsFeed.ts'
 import { ZoteroSurfaceBoundary } from './ZoteroSurfaceBoundary.tsx'

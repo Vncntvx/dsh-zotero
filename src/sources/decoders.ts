@@ -11,12 +11,12 @@
  * @module dsh-zotero/client/sources/decoders
  */
 
-import { evidenceItemsOf } from '../presenters.ts'
-import { boolField, isRecord, numberField, stringField } from '../../json.ts'
-import type { EvidenceItem } from '../../evidence-item.ts'
-import { browseRowOf, isBrowseKind, type BrowseRow } from '../../browse-rows.ts'
-import type { SourceAvailabilityEntry, SourceCoverage, SupportedLocalLibrary } from './model.ts'
-import type { ZoteroResolvedScope } from '../../contract.ts'
+import { evidenceItemsOf } from './presenters.js'
+import { boolField, isRecord, numberField, stringField } from '../json.js'
+import type { EvidenceItem } from '../evidence-item.js'
+import { browseRowOf, isBrowseKind, type BrowseRow } from '../browse-rows.js'
+import type { SourceAvailabilityEntry, SourceCoverage, SupportedLocalLibrary } from './model.js'
+import type { ZoteroResolvedScope } from '../contract.js'
 
 /** One decoded search row (with Zotero's attachment selection when present). */
 interface SearchRowMeta {

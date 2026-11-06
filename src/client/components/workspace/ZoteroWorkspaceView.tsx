@@ -17,7 +17,7 @@ import { SegmentedTabs } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ZoteroAttachmentLocationView } from '../../../contract.ts'
-import type { SourceWorkspace } from '../../sources/model.ts'
+import type { SourceWorkspace } from '../../../sources/model.js'
 import { mapTuple } from '../../segmented-tabs.ts'
 import {
   exportedRefCountOf,

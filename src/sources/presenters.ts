@@ -1,15 +1,15 @@
 /**
  * Pure block readers shared by the Sources panel.
  * Extracts call state, presentation facts, and tool arguments from frozen blocks.
- * @module dsh-zotero/client/presenters
+ * @module dsh-zotero/sources/presenters
  */
 
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import type { ToolArgs, ToolCallBlock } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { EvidenceItem, EvidenceField } from '../evidence-item.ts'
-import { isEvidenceSource } from '../evidence-item.ts'
-import { boolField, isRecord, stringField } from '../json.ts'
-import { REF_IN_TEXT_PATTERN } from '../ref-grammar.ts'
+import type { ArgsView, ToolBlockLike } from './block-types.js'
+import type { EvidenceItem, EvidenceField } from '../evidence-item.js'
+import { isEvidenceSource } from '../evidence-item.js'
+import { boolField, isRecord, stringField } from '../json.js'
+import { REF_IN_TEXT_PATTERN } from '../ref-grammar.js'
 
 export type ZoteroRowState = 'running' | 'ok' | 'error' | 'stopped'
 
@@ -22,8 +22,8 @@ export type ZoteroRowState = 'running' | 'ok' | 'error' | 'stopped'
  * carries the one-line predicate locally instead of value-importing it.
  */
 export function isSettledTool(
-  block: ToolCallBlock,
-): block is Extract<ToolCallBlock, { kind: 'tool-result' }> {
+  block: ToolBlockLike,
+): block is Extract<ToolBlockLike, { kind: 'tool-result' }> {
   return 'kind' in block
 }
 
@@ -34,23 +34,23 @@ export function isSettledTool(
  * in-progress copy; testing `phase === 'start'` alone would show a preparing
  * call the settled fallback instead.
  */
-export function isToolRunning(block: ToolCallBlock): boolean {
+export function isToolRunning(block: ToolBlockLike): boolean {
   return !isSettledTool(block)
 }
 
 /** The wire name of one tool call block (settled and running forms). */
-export function callNameOf(block: ToolCallBlock): string | null {
+export function callNameOf(block: ToolBlockLike): string | null {
   return isSettledTool(block) ? (block.call?.name ?? null) : block.name
 }
 
 /** The validated presentation-meta object, or null when absent or malformed. */
-export function metaOf(block: ToolCallBlock): Record<string, unknown> | null {
+export function metaOf(block: ToolBlockLike): Record<string, unknown> | null {
   if (!isSettledTool(block)) return null
   return isRecord(block.meta) ? block.meta : null
 }
 
 /** Lifecycle state derived from the frozen block, independent of meta. */
-export function rowStateOf(block: ToolCallBlock): ZoteroRowState {
+export function rowStateOf(block: ToolBlockLike): ZoteroRowState {
   if (!isSettledTool(block)) return 'running'
   if (block.error?.code === 'interrupted') return 'stopped'
   return block.isError ? 'error' : 'ok'
@@ -66,7 +66,7 @@ export function rowStateOf(block: ToolCallBlock): ZoteroRowState {
  * (the harness helper only accepts settled nodes); callers normalize with
  * `?? ''`.
  */
-export function resultTextOf(block: ToolCallBlock): string | null {
+export function resultTextOf(block: ToolBlockLike): string | null {
   if (!isSettledTool(block)) return null
   const parts: string[] = []
   for (const item of block.content) {
@@ -81,7 +81,7 @@ export function resultTextOf(block: ToolCallBlock): string | null {
 }
 
 /** Single-line error summary derived from settled error content, or null when not errored. */
-export function errorSummaryOf(block: ToolCallBlock, rawText?: string | null): string | null {
+export function errorSummaryOf(block: ToolBlockLike, rawText?: string | null): string | null {
   if (rowStateOf(block) !== 'error') return null
   const text = rawText !== undefined ? rawText : resultTextOf(block)
   return text ? text.split('\n')[0]?.trim() || null : null
@@ -93,22 +93,22 @@ export function errorSummaryOf(block: ToolCallBlock, rawText?: string | null): s
  * @param block - call block to read.
  * @returns the block's argument view.
  */
-export function argsViewOf(block: ToolCallBlock): ToolArgs {
+export function argsViewOf(block: ToolBlockLike): ArgsView {
   return block.args
 }
 
 /** A string argument, including the streaming prefix while it is still open. */
-export function textArg(view: ToolArgs, key: string): string | undefined {
+export function textArg(view: ArgsView, key: string): string | undefined {
   return view.text(key)
 }
 
 /** A non-string argument; undefined while that field is still open or absent. */
-export function valueArg(view: ToolArgs, key: string): JsonValue | undefined {
+export function valueArg(view: ArgsView, key: string): JsonValue | undefined {
   return view.value(key)
 }
 
 /** String entries of an array argument; empty when absent, incomplete, or not an array. */
-export function listArg(view: ToolArgs, key: string): string[] {
+export function listArg(view: ArgsView, key: string): string[] {
   const value = valueArg(view, key)
   return Array.isArray(value)
     ? value.filter((entry): entry is string => typeof entry === 'string')
@@ -116,18 +116,18 @@ export function listArg(view: ToolArgs, key: string): string[] {
 }
 
 /** A non-negative finite numeric argument, or `fallback` when absent or unusable. */
-export function numberArg(view: ToolArgs, key: string, fallback = 0): number {
+export function numberArg(view: ArgsView, key: string, fallback = 0): number {
   const value = valueArg(view, key)
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : fallback
 }
 
 /** A boolean argument: true only for a completed JSON `true`. */
-export function boolArg(view: ToolArgs, key: string): boolean {
+export function boolArg(view: ArgsView, key: string): boolean {
   return valueArg(view, key) === true
 }
 
 /** A plain-object argument, or null when absent, incomplete, or not an object. */
-export function recordArg(view: ToolArgs, key: string): Record<string, unknown> | null {
+export function recordArg(view: ArgsView, key: string): Record<string, unknown> | null {
   const value = valueArg(view, key)
   return isRecord(value) ? value : null
 }

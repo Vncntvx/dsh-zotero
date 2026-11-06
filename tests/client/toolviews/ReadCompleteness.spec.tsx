@@ -7,7 +7,7 @@ import { WriteToolView } from '../../../src/client/toolviews/WriteToolView.tsx'
 import { settled } from '../helpers/blocks.ts'
 import { createToolViewProps, mockUseDisclosure } from '../helpers/mock-disclosure.ts'
 import { mockT } from '../helpers/mock-translate.ts'
-import { getMetaOf } from '../../../src/client/sources/decoders.ts'
+import { getMetaOf } from '../../../src/sources/decoders.js'
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
   const { primitivesStub } = await import('../helpers/primitives-stub.ts')
   return primitivesStub()

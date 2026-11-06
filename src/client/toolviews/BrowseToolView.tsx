@@ -11,7 +11,7 @@ import {
   Tag,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import { browseMetaOf } from '../sources/decoders.ts'
+import { browseMetaOf } from '../../sources/decoders.js'
 import {
   changesMetaOf,
   jobArmOf,
@@ -29,7 +29,7 @@ import {
   metaOf,
   resultTextOf,
   textArg,
-} from '../presenters.ts'
+} from '../../sources/presenters.js'
 import { CopyButton } from '../components/CopyButton.tsx'
 import { RawTextFallback, RunningNotice, ZoteroToolRow } from './ZoteroToolRow.tsx'
 import css from './toolviews.module.css'

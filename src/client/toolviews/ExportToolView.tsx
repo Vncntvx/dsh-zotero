@@ -7,7 +7,7 @@
 import { useMemo } from 'react'
 import { CodeBlock, IconCopyOutlineRegular, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import { exportMetaOf } from '../sources/export-decoder.ts'
+import { exportMetaOf } from '../../sources/export-decoder.js'
 import { jobArmOf, jobSummaryKeyOf } from '../sources/sync-decoder.ts'
 import { ZoteroLocateActions } from '../components/open/ZoteroLocateActions.tsx'
 import { extensionOf, fileNameForFormat, formatLabelOf, mimeOf } from '../export-formats.ts'
@@ -20,7 +20,7 @@ import {
   metaOf,
   resultTextOf,
   textArg,
-} from '../presenters.ts'
+} from '../../sources/presenters.js'
 import { RunningNotice, ZoteroToolRow } from './ZoteroToolRow.tsx'
 import css from './toolviews.module.css'
 import quiet from '../components/quiet.module.css'

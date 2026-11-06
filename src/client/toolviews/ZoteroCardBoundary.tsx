@@ -15,7 +15,7 @@ import {
 } from 'react'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { FileResultView } from './FileResultView.tsx'
-import { metaOf } from '../presenters.ts'
+import { metaOf } from '../../sources/presenters.js'
 import { messageOf } from '../error-text.ts'
 import { reportCrashedSurface, type ErrorReporter } from '../actions/error-reporter.ts'
 import css from '../components/cards.module.css'

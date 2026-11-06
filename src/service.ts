@@ -40,6 +40,7 @@ import { parseRef } from './refs.js'
 import type { ZoteroAttachmentLocationView } from './contract.js'
 import { TYPERT_MANIFEST } from './typert.js'
 import { WriteAuthorizer } from './write-auth.js'
+import { sourceLedgerProjection } from './session-projection/source-ledger.js'
 import { ZoteroWriteHttpClient } from './write-http.js'
 import {
   Config as ConfigSchema,
@@ -57,6 +58,7 @@ import {
   ZOTERO_PROVIDER_UNAVAILABLE,
   ZOTERO_WRITE_APPROVAL_UNAVAILABLE,
   ZoteroError,
+  errorMessageOf,
 } from './errors.js'
 import { ZOTERO_TOOL_NAMES } from './constants.js'
 import { LocalApiProvider } from './local/provider.js'
@@ -264,6 +266,15 @@ export class ZoteroService extends Service {
     // Background-capable tools keep their parameters static; execution refuses
     // requests the current composition cannot serve.
     registerReadTools(ctx, this)
+    // The literature trail is served as a session projection when the harness
+    // composes the registry: the fold sees the whole log, not the bounded
+    // history window the browser chat store receives. Optional assembly: a
+    // headless composition without the registry keeps the browser fallback.
+    ctx.inject(['sessionProjections'], (host) => {
+      void host.sessionProjections.register(sourceLedgerProjection).catch((error: unknown) => {
+        this.diagnostics.sink.error('projection.register', errorMessageOf(error))
+      })
+    })
     registerResearchSkills(ctx, CORE_SOPS)
     // The status channel: the Remote service binds the wire namespace, and
     // the strict manifest claims its endpoints. See typert.ts for why the

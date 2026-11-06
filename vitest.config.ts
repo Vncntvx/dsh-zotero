@@ -35,7 +35,9 @@ export default defineConfig({
         'src/client/build-info-globals.d.ts',
         'src/client/plugin-slots.d.ts',
         'src/client/deliverables-turn-data.d.ts',
-        'src/client/sources/model.ts',
+        'src/sources/model.ts',
+        'src/sources/block-types.ts',
+        'src/session-projection/types.ts',
       ],
       // Thresholds are **ratchets per layer**, not aspirations: each number is
       // set just under what that layer measures today, so any drop fails while
@@ -59,14 +61,20 @@ export default defineConfig({
       // that moved were re-set just under the surviving layers' measured
       // values (global branches 94.92, src/*.ts branches 96.22 and functions
       // 98.59, client components branches 95.91).
+      //
+      // Recalibrated again when the source ledger moved out of the browser
+      // graph to `src/sources`: the moved modules carry their own floor (the
+      // old `src/client/sources` entry, renamed), and the surviving client
+      // layer lost that mass, so its branch floor follows the same rule
+      // (measured 95.90).
       thresholds: {
         'src/*.ts': { statements: 98, branches: 96, functions: 98, lines: 98 },
         'src/local/**': { statements: 98, branches: 93, functions: 99, lines: 98 },
         'src/tools/**': { statements: 98, branches: 95, functions: 99, lines: 99 },
-        'src/client/sources/**': { statements: 96, branches: 94, functions: 97, lines: 97 },
+        'src/sources/**': { statements: 96, branches: 94, functions: 97, lines: 97 },
         // Component layer ratchets include both SourcesTab and the global Library components.
         'src/client/components/**': { statements: 95, branches: 95, functions: 99, lines: 97 },
-        'src/client/**': { statements: 97, branches: 96, functions: 97, lines: 97 },
+        'src/client/**': { statements: 97, branches: 95.8, functions: 97, lines: 97 },
         'src/scholarly/**': { statements: 95, branches: 88, functions: 91, lines: 95 },
         statements: 97,
         branches: 94,

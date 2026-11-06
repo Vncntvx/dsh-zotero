@@ -1,7 +1,7 @@
 /** File results are read by persisted event coordinates before copying or downloading. */
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { useCompleteResult } from '../components/useCompleteResult.ts'
-import { metaOf } from '../presenters.ts'
+import { metaOf } from '../../sources/presenters.js'
 import { CopyButton } from '../components/CopyButton.tsx'
 import { downloadBlob } from '../download.ts'
 import { RESULT_PREVIEW_CHARS, fileNameForFormat, mimeOf } from '../export-formats.ts'

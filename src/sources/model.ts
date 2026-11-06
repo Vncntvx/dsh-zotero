@@ -30,8 +30,8 @@ export interface OperationFacts {
  */
 export type EvidenceMatchStatus = 'verified' | 'unknown' | 'mismatch'
 
-import type { SupportedLocalLibrary } from '../../contract.ts'
-export type { SupportedLocalLibrary } from '../../contract.ts'
+import type { SupportedLocalLibrary } from '../contract.js'
+export type { SupportedLocalLibrary } from '../contract.js'
 
 /** The normalized search scope, free of raw tool arguments. */
 export type SourceScope =
@@ -202,6 +202,8 @@ export interface SourceItem {
   readonly key: string
   /** First-seen full ref, the display and copy form. */
   readonly ref: string
+  /** Distinct Server IDs carried by the item's qualified refs. */
+  readonly serverIds: readonly string[]
   readonly evidenceMatch: EvidenceMatchStatus
   readonly title?: string
   readonly creators?: string

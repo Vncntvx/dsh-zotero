@@ -13,7 +13,7 @@ import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { IconLinkOutlineRegular, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ZoteroAttachmentLocationView } from '../../contract.ts'
-import { joinNonEmpty, shortKeyOf } from '../presenters.ts'
+import { joinNonEmpty, shortKeyOf } from '../../sources/presenters.js'
 import { pdfUrlOf, selectUrlOf } from '../actions/open-zotero.ts'
 import {
   availabilityLineOf,
@@ -21,7 +21,7 @@ import {
   emptyEvidenceNoteOf,
   sourceLabelKeyOf,
 } from '../evidence-labels.ts'
-import type { EvidenceMatchStatus, EvidencePassage, SourceItem } from '../sources/model.ts'
+import type { EvidenceMatchStatus, EvidencePassage, SourceItem } from '../../sources/model.js'
 import { pdfCapabilityOf, type PdfCapability } from '../sources/source-capabilities.ts'
 import { CopyButton } from './CopyButton.tsx'
 import { BlockedReadAction } from './open/BlockedReadAction.tsx'

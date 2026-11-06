@@ -8,7 +8,7 @@ import {
   evidenceMatchOf,
   normalizeRefKey,
   serverIdOf,
-} from '../../../src/client/sources/evidence-match.ts'
+} from '../../../src/sources/evidence-match.js'
 
 describe('normalizeRefKey', () => {
   it('strips the query qualifier and lowercases', () => {

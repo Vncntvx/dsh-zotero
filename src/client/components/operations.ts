@@ -7,8 +7,8 @@
  */
 
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import { joinNonEmpty } from '../presenters.ts'
-import type { OperationFacts } from '../sources/model.ts'
+import { joinNonEmpty } from '../../sources/presenters.js'
+import type { OperationFacts } from '../../sources/model.js'
 
 /** The non-zero operation labels of one operation-facts record, in fixed order. */
 function operationsLabelsOf(operations: OperationFacts, t: TranslateNS<'zotero'>): string[] {

@@ -158,6 +158,7 @@ describe('filters', () => {
     const holder = { chat: chatOf([toolRow(searchResult())]) }
     const props = {
       t,
+      useProjection: () => undefined,
       useZoteroClient: () => zoteroClientStub(),
       status: async () => ({ ok: true, value: CONNECTED }),
       useSession: (sel: (snap: SessionSnapshot) => unknown) => sel(sessionOf()),
@@ -195,6 +196,7 @@ describe('filters', () => {
     const chat = chatOf([toolRow(searchResult()), toolRow(retrieve)])
     const props = {
       t,
+      useProjection: () => undefined,
       useZoteroClient: () => zoteroClientStub(),
       status: async () => ({ ok: true, value: CONNECTED }),
       useSession: (sel: (snap: SessionSnapshot) => unknown) => sel(holder.session),
