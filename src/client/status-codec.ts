@@ -42,9 +42,6 @@ import {
   ZOTERO_OPEN_PROTOCOL_PARAM_TYPE_SYMBOL,
   ZOTERO_OPEN_PROTOCOL_RESULT_TYPE_SYMBOL,
   ZOTERO_REF_PARAM_TYPE_SYMBOL,
-  ZOTERO_REMEDIATION_REPORT_TYPE_SYMBOL,
-  ZOTERO_REMEDIATION_REQUEST_TYPE_SYMBOL,
-  ZOTERO_REMEDIATION_RESULT_TYPE_SYMBOL,
   ZOTERO_REPORT_RESULT_TYPE_SYMBOL,
   ZOTERO_RESOLVE_ATTACHMENT_TYPE_SYMBOL,
   ZOTERO_STATUS_TYPE_SYMBOL,
@@ -56,8 +53,6 @@ import {
   zoteroLibrarySearchInvocation,
   zoteroLibraryWriteInvocation,
   zoteroOpenProtocolInvocation,
-  zoteroRemediationExecuteInvocation,
-  zoteroRemediationInspectInvocation,
   zoteroReportClientErrorInvocation,
   zoteroResolveAttachmentInvocation,
   zoteroStatusInvocation,
@@ -80,9 +75,6 @@ import {
   zoteroOpenProtocolResultSchema,
   zoteroProtocolUrlSchema,
   zoteroRefSchema,
-  zoteroRemediationReportSchema,
-  zoteroRemediationRequestSchema,
-  zoteroRemediationResultSchema,
   zoteroReportResultSchema,
   zoteroSearchResultSchema,
   zoteroStatusSchema,
@@ -188,21 +180,6 @@ const zoteroLibraryWriteResultCodec = strictCodec(
   zoteroLibraryWriteResultSchema,
 )
 
-const ZOTERO_REMEDIATION_REPORT_CLIENT_CODEC = strictCodec(
-  ZOTERO_REMEDIATION_REPORT_TYPE_SYMBOL,
-  zoteroRemediationReportSchema,
-)
-
-const ZOTERO_REMEDIATION_REQUEST_CLIENT_CODEC = strictCodec(
-  ZOTERO_REMEDIATION_REQUEST_TYPE_SYMBOL,
-  zoteroRemediationRequestSchema,
-)
-
-const ZOTERO_REMEDIATION_RESULT_CLIENT_CODEC = strictCodec(
-  ZOTERO_REMEDIATION_RESULT_TYPE_SYMBOL,
-  zoteroRemediationResultSchema,
-)
-
 /** The client contribution's invocations, in the manifest's endpoint order. */
 export const ZOTERO_CLIENT_INVOCATIONS: readonly InvocationDescriptor[] = Object.freeze([
   zoteroStatusInvocation(ZOTERO_STATUS_CLIENT_RESULT_CODEC),
@@ -218,11 +195,6 @@ export const ZOTERO_CLIENT_INVOCATIONS: readonly InvocationDescriptor[] = Object
   zoteroOpenProtocolInvocation(
     ZOTERO_OPEN_PROTOCOL_CLIENT_PARAM_CODEC,
     ZOTERO_OPEN_PROTOCOL_CLIENT_RESULT_CODEC,
-  ),
-  zoteroRemediationInspectInvocation(ZOTERO_REMEDIATION_REPORT_CLIENT_CODEC),
-  zoteroRemediationExecuteInvocation(
-    ZOTERO_REMEDIATION_REQUEST_CLIENT_CODEC,
-    ZOTERO_REMEDIATION_RESULT_CLIENT_CODEC,
   ),
   zoteroCollectionPathInvocation(
     strictCodec(ZOTERO_COLLECTION_PATH_REQUEST_TYPE_SYMBOL, zoteroCollectionPathRequestSchema),

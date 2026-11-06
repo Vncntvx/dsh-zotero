@@ -38,9 +38,6 @@ import {
   ZOTERO_OPEN_PROTOCOL_PARAM_TYPE_SYMBOL,
   ZOTERO_OPEN_PROTOCOL_RESULT_TYPE_SYMBOL,
   ZOTERO_REF_PARAM_TYPE_SYMBOL,
-  ZOTERO_REMEDIATION_REPORT_TYPE_SYMBOL,
-  ZOTERO_REMEDIATION_REQUEST_TYPE_SYMBOL,
-  ZOTERO_REMEDIATION_RESULT_TYPE_SYMBOL,
   ZOTERO_REPORT_RESULT_TYPE_SYMBOL,
   ZOTERO_RESOLVE_ATTACHMENT_TYPE_SYMBOL,
   ZOTERO_STATUS_TYPE_SYMBOL,
@@ -52,8 +49,6 @@ import {
   zoteroLibrarySearchInvocation,
   zoteroLibraryWriteInvocation,
   zoteroOpenProtocolInvocation,
-  zoteroRemediationExecuteInvocation,
-  zoteroRemediationInspectInvocation,
   zoteroReportClientErrorInvocation,
   zoteroResolveAttachmentInvocation,
   zoteroStatusInvocation,
@@ -76,9 +71,6 @@ import {
   zoteroOpenProtocolResultSchema,
   zoteroProtocolUrlSchema,
   zoteroRefSchema,
-  zoteroRemediationReportSchema,
-  zoteroRemediationRequestSchema,
-  zoteroRemediationResultSchema,
   zoteroReportResultSchema,
   zoteroSearchResultSchema,
   zoteroStatusSchema,
@@ -181,21 +173,6 @@ const ZOTERO_LIBRARY_WRITE_RESULT_CODEC = strictCodec(
   zoteroLibraryWriteResultSchema,
 )
 
-const ZOTERO_REMEDIATION_REPORT_CODEC = strictCodec(
-  ZOTERO_REMEDIATION_REPORT_TYPE_SYMBOL,
-  zoteroRemediationReportSchema,
-)
-
-const ZOTERO_REMEDIATION_REQUEST_CODEC = strictCodec(
-  ZOTERO_REMEDIATION_REQUEST_TYPE_SYMBOL,
-  zoteroRemediationRequestSchema,
-)
-
-const ZOTERO_REMEDIATION_RESULT_CODEC = strictCodec(
-  ZOTERO_REMEDIATION_RESULT_TYPE_SYMBOL,
-  zoteroRemediationResultSchema,
-)
-
 /** Host Typert manifest invocations (real zod factory). */
 export const ZOTERO_INVOCATIONS: readonly InvocationDescriptor[] = [
   zoteroStatusInvocation(ZOTERO_STATUS_CODEC),
@@ -203,11 +180,6 @@ export const ZOTERO_INVOCATIONS: readonly InvocationDescriptor[] = [
   zoteroDiagnosticsInvocation(ZOTERO_DIAGNOSTICS_CODEC),
   zoteroReportClientErrorInvocation(ZOTERO_CLIENT_ERROR_REPORT_CODEC, ZOTERO_REPORT_RESULT_CODEC),
   zoteroOpenProtocolInvocation(ZOTERO_OPEN_PROTOCOL_PARAM_CODEC, ZOTERO_OPEN_PROTOCOL_RESULT_CODEC),
-  zoteroRemediationInspectInvocation(ZOTERO_REMEDIATION_REPORT_CODEC),
-  zoteroRemediationExecuteInvocation(
-    ZOTERO_REMEDIATION_REQUEST_CODEC,
-    ZOTERO_REMEDIATION_RESULT_CODEC,
-  ),
   zoteroCollectionPathInvocation(
     strictCodec(ZOTERO_COLLECTION_PATH_REQUEST_TYPE_SYMBOL, zoteroCollectionPathRequestSchema),
     strictCodec(ZOTERO_COLLECTION_PATH_RESULT_TYPE_SYMBOL, zoteroCollectionPathResultSchema),

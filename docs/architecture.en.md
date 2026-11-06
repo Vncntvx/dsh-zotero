@@ -154,18 +154,6 @@ A single client artifact (`lib/client.js`) contains all interfaces. Every surfac
 - The browser half mounts the namespace through `ctx.remote.$mount`, and configuration reads and writes go through the shared settings forms of the `zotero`, `library`, and `scholarly` namespaces;
 - Every configuration field is declared volatile and supports hot reload.
 
-## Session Log Maintenance (`src/remediation/`)
-
-Handles historical session logs this build refuses to interpret: the `zotero/status` events the plugin wrote before `56d800e` carry no `ignorable` marker, so once that event chain was removed the storage contract refused those logs (`session-format-unsupported`) and the sessions could no longer be opened.
-
-- Detection: `ZoteroRemediationService.inspect` does exactly two things: `ctx.sessionPersistence.list()` and, per session, `open(id,'read')` followed by `close()`. A resolved open proves the backend validated the whole log through `validateStoredEvents` at load; a failure is classified by exception type, and `snapshot.formatStatus === 'migration-required'` separates "newer format version" from "unknown event vocabulary". No error text is matched.
-- Capability: `capability` distinguishes `available` from `unavailable`. Without a persistence seam the report says `unavailable`, and the panel shows "unavailable" rather than "healthy"; a failing `list()` fails the whole inspection instead of producing an empty report.
-- Repair: `execute` runs `openArtifactMaintenance(sessionId)` → `markEventTypesIgnorable(['zotero/status'], { keepBackup: true })` → `close()` per item. Write exclusion, the byte-exact backup, contract re-validation before publication, atomic publication, and 0600 permissions all belong to the backend's maintenance session; the plugin takes no part in opening files, compressing bytes, or deciding session paths.
-- Whitelist: a caller submits session identifiers only. The event types to mark are the plugin constant `RETIRED_SESSION_EVENT_TYPES` and are never supplied by the request; logs that are newer-format or corrupt are refused outright.
-- Result: every requested id yields exactly one `outcome` (`repaired`, `unchanged`, `refused`, `busy`, `unsupported`, `failed`) and passes through the backend's `changedRecords`, `totalRecords`, `droppedTailBytes`, and `backupPath`. Counts are derived from the items rather than reported separately.
-- Failure semantics: a log that still fails its post-repair check reports `failed` with the backup path and is not rolled back: a rollback would be a second write that no contract validated.
-- Gate: a confirmation layer in the panel lists how many sessions will be rewritten and states that the action cannot be undone. `ctx.approval` requires an agent context and this panel action has none, so the gate is the confirmation plus the server-side whitelist, not tool approval.
-
 ## Diagnostics and Logging
 
 The plugin maintains an in-process diagnostic ring buffer of 500 entries (`src/diagnostics.ts`) that records runtime errors, degraded features, and render crashes:

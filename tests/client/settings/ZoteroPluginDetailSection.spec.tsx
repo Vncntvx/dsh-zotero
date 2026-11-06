@@ -10,25 +10,12 @@ import { ZoteroPluginDetailSection } from '../../../src/client/components/plugin
 import type { PluginsSubject } from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import { RemoteError, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ZoteroStatusView } from '../../../src/client/remote.ts'
-import type {
-  ZoteroRemediationReport,
-  ZoteroRemediationResult,
-} from '../../../src/client/remote.ts'
+import type { ZoteroClientFace } from '../../../src/client/actions/client-face.ts'
 
 import { mockT } from '../helpers/mock-translate.ts'
 const t = mockT
 
-/** Inert maintenance face: this section never inspects on mount. */
-const inspect = async (): Promise<RemoteResult<ZoteroRemediationReport>> => ({
-  ok: true,
-  value: { capability: 'available', scannedSessions: 0, issues: [], timestamp: 0 },
-})
-
-/** Inert repair face. */
-const execute = async (): Promise<RemoteResult<ZoteroRemediationResult>> => ({
-  ok: true,
-  value: { items: [], timestamp: 0 },
-})
+const client = () => ({ reportClientError: vi.fn(async () => {}) }) as unknown as ZoteroClientFace
 
 afterEach(cleanup)
 
@@ -85,9 +72,8 @@ describe('ZoteroPluginDetailSection', () => {
       <ZoteroPluginDetailSection
         subject={otherSubject}
         t={t}
+        useZoteroClient={client}
         probe={probe}
-        inspect={inspect}
-        execute={execute}
       />,
     )
     expect(c1.innerHTML).toBe('')
@@ -97,9 +83,8 @@ describe('ZoteroPluginDetailSection', () => {
       <ZoteroPluginDetailSection
         subject={itemSubject}
         t={t}
+        useZoteroClient={client}
         probe={probe}
-        inspect={inspect}
-        execute={execute}
       />,
     )
     expect(c2.innerHTML).toBe('')
@@ -116,9 +101,8 @@ describe('ZoteroPluginDetailSection', () => {
       <ZoteroPluginDetailSection
         subject={rowSubject}
         t={t}
+        useZoteroClient={client}
         probe={probe}
-        inspect={inspect}
-        execute={execute}
       />,
     )
     expect(container.querySelector('[data-zotero-plugin-section]')).not.toBeNull()
@@ -136,15 +120,12 @@ describe('ZoteroPluginDetailSection', () => {
       <ZoteroPluginDetailSection
         subject={targetSubject}
         t={t}
+        useZoteroClient={client}
         probe={probe}
-        inspect={inspect}
-        execute={execute}
       />,
     )
 
     expect(screen.getByText(t('detailSectionTitle'))).toBeDefined()
-    expect(screen.getByText(t('remediationSectionTitle'))).toBeDefined()
-    expect(screen.getByText(t('remediationDescription'))).toBeDefined()
 
     await waitFor(() => {
       expect(screen.getByText(t('statusConnectedNote'))).toBeDefined()
@@ -167,9 +148,8 @@ describe('ZoteroPluginDetailSection', () => {
       <ZoteroPluginDetailSection
         subject={targetSubject}
         t={t}
+        useZoteroClient={client}
         probe={probe}
-        inspect={inspect}
-        execute={execute}
       />,
     )
 
@@ -194,9 +174,8 @@ describe('ZoteroPluginDetailSection', () => {
       <ZoteroPluginDetailSection
         subject={targetSubject}
         t={t}
+        useZoteroClient={client}
         probe={probe}
-        inspect={inspect}
-        execute={execute}
       />,
     )
 
@@ -217,9 +196,8 @@ describe('ZoteroPluginDetailSection', () => {
       <ZoteroPluginDetailSection
         subject={targetSubject}
         t={t}
+        useZoteroClient={client}
         probe={probe}
-        inspect={inspect}
-        execute={execute}
       />,
     )
 
@@ -239,9 +217,8 @@ describe('ZoteroPluginDetailSection', () => {
       <ZoteroPluginDetailSection
         subject={targetSubject}
         t={t}
+        useZoteroClient={client}
         probe={probe}
-        inspect={inspect}
-        execute={execute}
       />,
     )
 
@@ -272,9 +249,8 @@ describe('ZoteroPluginDetailSection', () => {
       <ZoteroPluginDetailSection
         subject={targetSubject}
         t={t}
+        useZoteroClient={client}
         probe={probe}
-        inspect={inspect}
-        execute={execute}
       />,
     )
 

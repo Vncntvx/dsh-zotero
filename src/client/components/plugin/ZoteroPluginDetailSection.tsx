@@ -1,7 +1,6 @@
 /**
  * Custom section rendered at the bottom of the plugin manager detail page
- * (plugins.detail.section slot). Shows readiness status and the session-log
- * data maintenance section.
+ * (plugins.detail.section slot). Shows readiness status.
  * @module dsh-zotero/client/components/plugin/ZoteroPluginDetailSection
  */
 
@@ -13,18 +12,16 @@ import { DiagnosisBox } from '../DiagnosisBox.tsx'
 import { useZoteroProbe } from '../useZoteroProbe.ts'
 import type { PluginDetailProps } from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import { ZoteroSurfaceBoundary } from '../ZoteroSurfaceBoundary.tsx'
-import { ZoteroRemediationSection } from './ZoteroRemediationSection.tsx'
-import type { ZoteroDetailFace } from './faces.ts'
+import type { ZoteroClientFace } from '../../actions/client-face.ts'
+import type { ZoteroProbeFace } from './faces.ts'
 import css from './plugin-cards.module.css'
 
 export interface ZoteroPluginDetailSectionProps
-  extends PluginDetailProps, PropsLocale<'zotero'>, ZoteroDetailFace {}
+  extends PluginDetailProps, PropsLocale<'zotero'>, ZoteroProbeFace {
+  readonly useZoteroClient: () => ZoteroClientFace
+}
 
-type DetailSectionBodyProps = Pick<
-  ZoteroPluginDetailSectionProps,
-  'probe' | 'inspect' | 'execute'
-> &
-  PropsLocale<'zotero'>
+type DetailSectionBodyProps = Pick<ZoteroPluginDetailSectionProps, 'probe'> & PropsLocale<'zotero'>
 
 /**
  * Slot entry: subject guard only, so the body's hook count never varies with
@@ -34,26 +31,26 @@ export function ZoteroPluginDetailSection({
   subject,
   t,
   probe,
-  inspect,
-  execute,
+  useZoteroClient,
 }: ZoteroPluginDetailSectionProps): ReactNode {
   const pkgName = subject.kind === 'bundle' || subject.kind === 'row' ? subject.pkg.name : undefined
   if (pkgName !== ZOTERO_REMOTE_PACKAGE) {
     return null
   }
+  const client = useZoteroClient()
   return (
-    <ZoteroSurfaceBoundary t={t} surface="detail" resetKey={pkgName}>
-      <ZoteroPluginDetailSectionBody t={t} probe={probe} inspect={inspect} execute={execute} />
+    <ZoteroSurfaceBoundary
+      t={t}
+      surface="detail"
+      resetKey={pkgName}
+      report={client.reportClientError}
+    >
+      <ZoteroPluginDetailSectionBody t={t} probe={probe} />
     </ZoteroSurfaceBoundary>
   )
 }
 
-function ZoteroPluginDetailSectionBody({
-  t,
-  probe,
-  inspect,
-  execute,
-}: DetailSectionBodyProps): ReactNode {
+function ZoteroPluginDetailSectionBody({ t, probe }: DetailSectionBodyProps): ReactNode {
   const { state, runProbe } = useZoteroProbe(probe, {
     initialAutoRun: true,
   })
@@ -99,8 +96,6 @@ function ZoteroPluginDetailSectionBody({
           ) : null}
           {diagnosis ? <DiagnosisBox diagnosis={diagnosis} t={t} /> : null}
         </div>
-
-        <ZoteroRemediationSection t={t} inspect={inspect} execute={execute} />
       </div>
     </section>
   )

@@ -37,9 +37,6 @@ import {
   type ZoteroLibraryWriteRequestView,
   type ZoteroLibraryWriteResultView,
   type ZoteroOpenProtocolResultView,
-  type ZoteroRemediationReport,
-  type ZoteroRemediationRequest,
-  type ZoteroRemediationResult,
 } from '../contract.ts'
 import { ZOTERO_CLIENT_INVOCATIONS } from './status-codec.ts'
 
@@ -50,14 +47,6 @@ export type {
   ZoteroLibraryBrowseResultView,
   ZoteroLibraryItemRequestView,
   ZoteroLibrarySearchRequestView,
-  ZoteroRemediationCapability,
-  ZoteroRemediationIssue,
-  ZoteroRemediationItemResult,
-  ZoteroRemediationOutcome,
-  ZoteroRemediationReason,
-  ZoteroRemediationReport,
-  ZoteroRemediationRequest,
-  ZoteroRemediationResult,
   ZoteroSearchResultView,
   ZoteroStatusView,
 } from '../contract.ts'
@@ -85,10 +74,6 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
       report: ZoteroClientErrorReport,
     ) => Promise<RemoteResult<ZoteroReportResultView>>
     openProtocol: (url: string) => Promise<RemoteResult<ZoteroOpenProtocolResultView>>
-    remediationInspect: () => Promise<RemoteResult<ZoteroRemediationReport>>
-    remediationExecute: (
-      request: ZoteroRemediationRequest,
-    ) => Promise<RemoteResult<ZoteroRemediationResult>>
     collectionPath: (
       request: ZoteroCollectionPathRequestView,
     ) => Promise<RemoteResult<ZoteroCollectionPathResultView>>
@@ -117,10 +102,6 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
       report: ZoteroClientErrorReport,
     ) => Promise<RemoteResult<ZoteroReportResultView>>
     'zotero/openProtocol': (url: string) => Promise<RemoteResult<ZoteroOpenProtocolResultView>>
-    'zotero/remediationInspect': () => Promise<RemoteResult<ZoteroRemediationReport>>
-    'zotero/remediationExecute': (
-      request: ZoteroRemediationRequest,
-    ) => Promise<RemoteResult<ZoteroRemediationResult>>
     'zotero/collectionPath': (
       request: ZoteroCollectionPathRequestView,
     ) => Promise<RemoteResult<ZoteroCollectionPathResultView>>
