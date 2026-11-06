@@ -14,10 +14,12 @@ import { zh } from '../../src/client/locales.ts'
 import { deferred, type Deferred } from '../helpers/sync.js'
 import { entry, fakeProbe, okView, targetSubject } from './helpers/diagnostics-fixtures.ts'
 import { mockT } from './helpers/mock-translate.ts'
+import type { ZoteroClientFace } from '../../src/client/actions/client-face.ts'
 
 afterEach(cleanup)
 
 const t = mockT
+const client = () => ({ reportClientError: vi.fn(async () => {}) }) as unknown as ZoteroClientFace
 
 describe('DiagnosticsCard copy', () => {
   it('copies the diagnostics bundle to the clipboard', async () => {
@@ -30,7 +32,13 @@ describe('DiagnosticsCard copy', () => {
       okView({ entries: [entry(1, 'info', 'transport.built')], total: 1 }),
     )
     const { container } = render(
-      <DiagnosticsCard subject={targetSubject} t={t} probe={fakeProbe} diagnostics={diagnostics} />,
+      <DiagnosticsCard
+        useZoteroClient={client}
+        subject={targetSubject}
+        t={t}
+        probe={fakeProbe}
+        diagnostics={diagnostics}
+      />,
     )
     await waitFor(() => expect(container.textContent).toContain('transport.built'))
     fireEvent.click(screen.getByText(zh.diagnosticsCopyBundle))
@@ -48,7 +56,13 @@ describe('DiagnosticsCard copy', () => {
       okView({ entries: [entry(1, 'info', 'transport.built')], total: 1 }),
     )
     const { container } = render(
-      <DiagnosticsCard subject={targetSubject} t={t} probe={fakeProbe} diagnostics={diagnostics} />,
+      <DiagnosticsCard
+        useZoteroClient={client}
+        subject={targetSubject}
+        t={t}
+        probe={fakeProbe}
+        diagnostics={diagnostics}
+      />,
     )
     await waitFor(() => expect(container.textContent).toContain('transport.built'))
     expect(() => fireEvent.click(screen.getByText(zh.diagnosticsCopyBundle))).not.toThrow()
@@ -64,7 +78,13 @@ describe('DiagnosticsCard copy', () => {
       okView({ entries: [entry(1, 'info', 'transport.built')], total: 1 }),
     )
     const { container } = render(
-      <DiagnosticsCard subject={targetSubject} t={t} probe={fakeProbe} diagnostics={diagnostics} />,
+      <DiagnosticsCard
+        useZoteroClient={client}
+        subject={targetSubject}
+        t={t}
+        probe={fakeProbe}
+        diagnostics={diagnostics}
+      />,
     )
     await waitFor(() => expect(container.textContent).toContain('transport.built'))
     fireEvent.click(screen.getByText(zh.diagnosticsCopyBundle))
@@ -98,7 +118,13 @@ describe('DiagnosticsCard copy', () => {
         }) as RemoteResult<ZoteroStatusView>,
     )
     const { container } = render(
-      <DiagnosticsCard subject={targetSubject} t={t} probe={probe} diagnostics={diagnostics} />,
+      <DiagnosticsCard
+        useZoteroClient={client}
+        subject={targetSubject}
+        t={t}
+        probe={probe}
+        diagnostics={diagnostics}
+      />,
     )
     await waitFor(() => expect(container.textContent).toContain('http.failure'))
     fireEvent.click(screen.getByText(zh.diagnosticsCopyBundle))
@@ -125,7 +151,13 @@ describe('DiagnosticsCard copy', () => {
       return okView()
     })
     const { container } = render(
-      <DiagnosticsCard subject={targetSubject} t={t} probe={fakeProbe} diagnostics={diagnostics} />,
+      <DiagnosticsCard
+        useZoteroClient={client}
+        subject={targetSubject}
+        t={t}
+        probe={fakeProbe}
+        diagnostics={diagnostics}
+      />,
     )
     // No entries yet (fetch pending): the click is a safe no-op.
     expect(() => fireEvent.click(screen.getByText(zh.diagnosticsCopyBundle))).not.toThrow()

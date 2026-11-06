@@ -283,19 +283,71 @@
 
 .tagPanel {
   position: fixed;
+  position-area: none;
+  position-try-fallbacks:
+    --dsh-zotero-tags-above, --dsh-zotero-tags-end, --dsh-zotero-tags-above-end,
+    --dsh-zotero-tags-window, --dsh-zotero-tags-viewport;
+  top: max(12px, calc(anchor(bottom) + 4px));
+  bottom: 12px;
+  left: max(12px, anchor(left));
+  right: 12px;
+  margin: 0;
+  width: 240px;
+  height: fit-content;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 24px);
+  align-self: start;
+  justify-self: start;
   z-index: 1100;
   box-sizing: border-box;
-  width: 240px;
-  max-width: calc(100vw - 24px);
   padding: 6px;
   display: flex;
   flex-direction: column;
   gap: 6px;
+  overflow: hidden;
   border: 0;
   border-radius: var(--dsw-radius-md);
   box-shadow: var(--dsw-elevation-prominent);
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+}
+
+/* Flip above the trigger while preserving the 12px window margin. */
+@position-try --dsh-zotero-tags-above {
+  top: 12px;
+  bottom: max(12px, calc(anchor(top) + 4px));
+  align-self: end;
+}
+
+/* Open toward the start edge when the trigger is near the right edge. */
+@position-try --dsh-zotero-tags-end {
+  left: 12px;
+  right: max(12px, anchor(right));
+  justify-self: end;
+}
+
+@position-try --dsh-zotero-tags-above-end {
+  top: 12px;
+  bottom: max(12px, calc(anchor(top) + 4px));
+  left: 12px;
+  right: max(12px, anchor(right));
+  align-self: end;
+  justify-self: end;
+}
+
+@position-try --dsh-zotero-tags-window {
+  top: 12px;
+  bottom: 12px;
+  margin: 0;
+  align-self: safe end;
+}
+
+@position-try --dsh-zotero-tags-viewport {
+  position-area: none;
+  inset: 12px;
+  margin: 0;
+  align-self: safe end;
+  justify-self: safe end;
 }
 
 .tagSearchInput {
@@ -312,6 +364,8 @@
   margin: 0;
   padding: 0;
   display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
   flex-direction: column;
   gap: 1px;
   max-height: 220px;

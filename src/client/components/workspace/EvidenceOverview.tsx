@@ -10,6 +10,8 @@
  */
 
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
+import type { ZoteroAttachmentLocationView } from '../../../contract.ts'
 import type { SourceWorkspace } from '../../sources/model.ts'
 import { filterSources } from '../../sources/selectors.ts'
 import { EvidenceCard } from '../EvidenceCard.tsx'
@@ -19,11 +21,20 @@ interface EvidenceOverviewProps {
   readonly workspace: SourceWorkspace
   readonly onBack: () => void
   readonly openFile?: (path: string) => void
+  readonly resolveAttachment?: (ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>
+  readonly openProtocol?: (url: string) => Promise<boolean>
   readonly t: TranslateNS<'zotero'>
 }
 
 /** The evidence overview: one card per evidence-bearing source. */
-export function EvidenceOverview({ workspace, onBack, openFile, t }: EvidenceOverviewProps) {
+export function EvidenceOverview({
+  workspace,
+  onBack,
+  openFile,
+  resolveAttachment,
+  openProtocol,
+  t,
+}: EvidenceOverviewProps) {
   const sources = filterSources(workspace.sources, 'evidence')
   return (
     <div className={css.evidencePage}>
@@ -35,7 +46,14 @@ export function EvidenceOverview({ workspace, onBack, openFile, t }: EvidenceOve
       ) : (
         <>
           {sources.map((item) => (
-            <EvidenceCard key={item.key} item={item} openFile={openFile} t={t} />
+            <EvidenceCard
+              key={item.key}
+              item={item}
+              openFile={openFile}
+              resolveAttachment={resolveAttachment}
+              openProtocol={openProtocol}
+              t={t}
+            />
           ))}
         </>
       )}

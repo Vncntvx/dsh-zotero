@@ -13,6 +13,8 @@ import {
 } from '../../../src/settings-namespace.ts'
 import { ZOTERO_LIBRARY_SETTINGS_NAMESPACE } from '../../../src/contract.ts'
 import { fakeScope } from './fake-scope.ts'
+import { createFakeContextMenus, type FakeContextMenuRegistration } from './fake-context-menus.ts'
+import { fakeProvideRoot } from './fake-slot-root.ts'
 import { fakeEntryErrorSeam, type EntryErrorListener } from './slot-crash-seam.ts'
 
 export interface FakeSlotsEntry {
@@ -65,18 +67,30 @@ export interface FakeApplyWorld {
   eventDisposes: number
   /** Every address the `sidebarRight` service was asked to open. */
   openResourceCalls: string[]
+  /** Every page the `sidebarRight` service was asked to open, with its captured session. */
+  openTabCalls: Array<{ sessionId?: string; kind: string }>
+  /** Every protocol URL the Remote namespace was asked to launch. */
+  openProtocolCalls: string[]
+  /** Every context-menu toast, in call order. */
+  notifications: Array<{ text: string; success: boolean }>
   /** SidebarRight tab definitions registered. */
   sidebarRightTabDefinitions: Array<unknown>
   /** Disposers run for those tab definitions. */
   sidebarRightTabDisposes: number
   /** Supervision listeners the entry registered through `slots.onEntryError`. */
   entryErrorListeners: EntryErrorListener[]
+  /** Context menu contributions registered through `ctx.contextMenus.register`. */
+  contextMenuRegistrations: FakeContextMenuRegistration[]
+  /** Disposers run for context menu contributions. */
+  contextMenuDisposes: number
   /** Namespaces currently served by the host; defaults to both zotero and scholarly. */
   servedNamespaces?: Set<string>
   whileServedRegistrations: Array<{ namespaces: readonly string[] }>
   whileServedDisposes: number
   /** Slot names in the order their inject disposers ran. */
   disposeOrder: string[]
+  /** Root props installed through `slots.provideRoot`, if any. */
+  rootProps?: Record<string, unknown>
 }
 
 /** A minimal context standing in for the browser kernel's plugin ctx. */
@@ -90,6 +104,7 @@ export function fakeWorld(
   const mounts: FakeApplyWorld['mounts'] = []
   const effects: FakeApplyWorld['effects'] = []
   const formIds: string[] = []
+  const contextMenuRegistrations: FakeApplyWorld['contextMenuRegistrations'] = []
   const seam = fakeEntryErrorSeam()
   const entryErrorListeners: EntryErrorListener[] = seam.listeners
   const scope = fakeScope()
@@ -163,8 +178,13 @@ export function fakeWorld(
     eventDefinitions: [],
     eventDisposes: 0,
     openResourceCalls: [],
+    openTabCalls: [],
+    openProtocolCalls: [],
+    notifications: [],
     sidebarRightTabDefinitions: [],
     sidebarRightTabDisposes: 0,
+    contextMenuRegistrations,
+    contextMenuDisposes: 0,
     entryErrorListeners,
     whileServedRegistrations,
     whileServedDisposes: 0,
@@ -215,13 +235,10 @@ export function fakeWorld(
           }) as unknown,
         reportClientError: async (report: { surface: string; message: string }) =>
           ({ ok: true as const, value: { seq: 1, report } }) as unknown,
-        remediationInspect: async () =>
-          ({
-            ok: true as const,
-            value: { capability: 'available', scannedSessions: 0, issues: [], timestamp: 0 },
-          }) as unknown,
-        remediationExecute: async () =>
-          ({ ok: true as const, value: { items: [], timestamp: 0 } }) as unknown,
+        openProtocol: async (url: string) => {
+          world.openProtocolCalls.push(url)
+          return { ok: true as const, value: { success: true as const } } as unknown
+        },
       },
     },
     /**
@@ -283,6 +300,12 @@ export function fakeWorld(
       openResource: (url: string) => {
         world.openResourceCalls.push(url)
       },
+      openTab: (kind: string) => {
+        world.openTabCalls.push({ kind })
+      },
+      openTabIn: (sessionId: string, kind: string) => {
+        world.openTabCalls.push({ sessionId, kind })
+      },
     },
     sidebarRightTabs: {
       register: (definition: unknown) => {
@@ -291,7 +314,12 @@ export function fakeWorld(
           world.sidebarRightTabDisposes += 1
         }
       },
+      get: (kind: string) =>
+        world.sidebarRightTabDefinitions.find(
+          (definition) => (definition as { kind?: string }).kind === kind,
+        ),
     },
+    contextMenus: createFakeContextMenus(world),
     slots: {
       inject: (name: string, register: () => unknown) => {
         const entry: FakeInjectedEntry = {
@@ -329,6 +357,7 @@ export function fakeWorld(
       // The crash supervision seam: the entry subscribes here, and a spec can
       // fire it to drive the intake without mounting a crashing entry.
       onEntryError: seam.onEntryError,
+      provideRoot: fakeProvideRoot(world),
     },
   }
   world.ctx = ctx

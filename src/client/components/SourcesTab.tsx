@@ -227,8 +227,14 @@ interface SourcesTabBodyProps extends SourcesTabProps {
 export function SourcesTab(props: SourcesTabProps) {
   // The body sits inside an error boundary that resets when the session changes.
   const sessionId = props.useSession((snapshot) => snapshot.sessionId)
+  const client = props.useZoteroClient()
   return (
-    <ZoteroSurfaceBoundary resetKey={sessionId} t={props.t} surface="sources">
+    <ZoteroSurfaceBoundary
+      resetKey={sessionId}
+      t={props.t}
+      surface="sources"
+      report={client.reportClientError}
+    >
       <SourcesTabBody {...props} sessionId={sessionId} />
     </ZoteroSurfaceBoundary>
   )
@@ -243,8 +249,10 @@ function SourcesTabBody({
   sessionId,
   useChat,
   useSessions,
+  useZoteroClient,
   inputActions,
 }: SourcesTabBodyProps) {
+  const client = useZoteroClient()
   // The workspace root for file address resolution. Read from the standard
   // session catalog (`useSessions`) because on the browser side `ctx.sessions`
   // resolves to the host `SessionStore` (both client and host share the program,
@@ -302,6 +310,7 @@ function SourcesTabBody({
               }
         }
         resolveAttachment={resolveAttachment}
+        openProtocol={client.openProtocol}
         t={t}
       />
     </ResultSessionContext.Provider>

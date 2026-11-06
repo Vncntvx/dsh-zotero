@@ -46,6 +46,7 @@ function previewView(preview: ChildPreviewView, index: number): PreviewView {
 
 export function ItemToolView(props: ItemToolViewProps) {
   const { toolName, block, useDisclosure, inspect, t } = props
+  const client = props.useZoteroClient()
 
   const {
     icon,
@@ -156,6 +157,7 @@ export function ItemToolView(props: ItemToolViewProps) {
                   <PdfReadButton
                     attachmentRef={preview.parentRef}
                     onOpenFile={props.openFile}
+                    resolveAttachment={client.resolveAttachment}
                     label={t('readPdf')}
                     t={t}
                     variant="link"
@@ -167,6 +169,7 @@ export function ItemToolView(props: ItemToolViewProps) {
                   variant="link"
                   className={css.actionLink}
                   t={t}
+                  openProtocol={client.openProtocol}
                 />
               </div>
             </div>
@@ -260,6 +263,7 @@ export function ItemToolView(props: ItemToolViewProps) {
                   <PdfReadButton
                     attachmentRef={getItemView.bestAttachment.ref}
                     onOpenFile={props.openFile}
+                    resolveAttachment={client.resolveAttachment}
                     label={t('readPdf')}
                     t={t}
                     variant="link"
@@ -272,6 +276,7 @@ export function ItemToolView(props: ItemToolViewProps) {
                   t={t}
                   variant="link"
                   className={css.actionLink}
+                  openProtocol={client.openProtocol}
                 />
               </div>
             </div>

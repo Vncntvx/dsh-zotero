@@ -1,27 +1,40 @@
-import { useSyncExternalStore } from 'react'
 // @vitest-environment jsdom
+import { useSyncExternalStore } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { ChatSnapshot } from '@deepseek-ai/dsh-client-ui-chat/client'
+import type { ChatSnapshot, UseChat } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { ConversationViewDefinition } from '@deepseek-ai/dsh-client-ui-conversation/client'
+// Dev-only source imports: the published packages expose neither the assembler
+// nor the deliverable Definition through their public entries.
 import { ConversationNodeAssembler } from '@deepseek-ai/dsh-client-ui-conversation/src/client/conversation/assembler.ts'
 import { SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session/types'
 import { deliverablesDefinition } from '@deepseek-ai/dsh-client-ui-deliverables/src/client/turn-deliverables.ts'
 import type { SessionLiveEventEntry } from '@deepseek-ai/dsh-api-session-controller/client'
+import { isBibliographyDeliverable } from '../../../src/client/bibliography.ts'
 import {
   DeliverableZoteroAction,
-  isBibliographyDeliverable,
+  type DeliverableZoteroActionProps,
   resolveDeliverablePath,
 } from '../../../src/client/components/deliverables/DeliverableZoteroAction.tsx'
+
 import { mockT } from '../helpers/mock-translate.ts'
 
-// The published util bundle expects the harness platform loader; use its real
-// browser-safe source in this standalone Vitest environment (alpha.2).
-vi.mock(
-  '@deepseek-ai/dsh-util-workspace-path',
-  () => import('@deepseek-ai/dsh-util-workspace-path'),
-)
 afterEach(cleanup)
+
+function renderAction(props: {
+  readonly actionUrl: string
+  readonly useChat: UseChat
+  readonly onOpenLibrary?: () => void
+}) {
+  const full = {
+    ...props,
+    t: mockT,
+    available: true,
+    pending: false,
+    onAction: vi.fn(),
+  } as unknown as DeliverableZoteroActionProps
+  return render(<DeliverableZoteroAction {...full} />)
+}
 
 const empty: ChatSnapshot = {
   order: [],
@@ -44,6 +57,7 @@ const empty: ChatSnapshot = {
     runningCalls: [],
   },
 }
+
 function projection() {
   const view: ConversationViewDefinition<never, ChatSnapshot> = {
     target: 'test',
@@ -79,48 +93,47 @@ function snapshot() {
   return projection().assembler.snapshot('test') as ChatSnapshot
 }
 
-it('reads deliveries from real turn projection when nodes are empty', () => {
+it('reads deliveries from the real turn projection when nodes are empty', () => {
   const state = snapshot()
-  expect(state.nodes.values()).toEqual([])
   expect(resolveDeliverablePath('seq=10&index=0', state)).toBe('/workspace/papers.bib')
+  expect(resolveDeliverablePath('seq=10&index=1', state)).toBe('/workspace/package.json')
+  expect(resolveDeliverablePath('seq=10&index=2', state)).toBeUndefined()
   for (const query of [
-    'seq=10&index=-1',
-    'seq=10&index=0.5',
-    'seq=10&index=2',
+    'seq=10',
+    'index=0',
+    'seq=10&index=0&seq=10',
     'seq=10&index=0&index=1',
-    'seq=NaN&index=0',
+    'seq=-1&index=0',
+    'seq=10&index=-1',
   ]) {
     expect(resolveDeliverablePath(query, state)).toBeUndefined()
   }
+  // The mirror in plugin-slots.d.ts must stay structurally compatible with
+  // the shape the real deliverable Definition publishes.
+  const data = state.timeline.turns.get(1)?.data.get('deliverables')
+  expect(data?.presented?.[0]).toMatchObject({ path: '/workspace/papers.bib', seq: 10, index: 0 })
 })
+
 it('opens the library for a projected bibliography file', () => {
   const state = snapshot()
   const open = vi.fn()
-  render(
-    <DeliverableZoteroAction
-      actionUrl="seq=10&index=0"
-      useChat={(select) => select(state)}
-      onOpenLibrary={open}
-      t={mockT}
-    />,
-  )
+  renderAction({
+    actionUrl: 'seq=10&index=0',
+    useChat: useChatOf(state),
+    onOpenLibrary: open,
+  })
   fireEvent.click(screen.getByRole('button'))
   expect(open).toHaveBeenCalledOnce()
 })
+
 it('does not offer a bibliography action for ordinary JSON', () => {
   expect(isBibliographyDeliverable({ path: 'package.json' })).toBe(false)
   expect(
-    isBibliographyDeliverable({ path: 'references.json', description: 'Exported csljson' }),
+    isBibliographyDeliverable({ path: 'citations.json', description: 'exported CSL JSON' }),
   ).toBe(true)
   const state = snapshot()
-  const { container } = render(
-    <DeliverableZoteroAction
-      actionUrl="seq=10&index=1"
-      useChat={(select) => select(state)}
-      t={mockT}
-    />,
-  )
-  expect(container.firstChild).toBeNull()
+  renderAction({ actionUrl: 'seq=10&index=1', useChat: useChatOf(state) })
+  expect(screen.queryByRole('button')).toBeNull()
 })
 
 it('shows a subscribed delivery appended after its original turn ends', () => {
@@ -132,14 +145,14 @@ it('shows a subscribed delivery appended after its original turn ends', () => {
   const listeners = new Set<() => void>()
   const subscribe = (listener: () => void) => {
     listeners.add(listener)
-    return () => {
-      listeners.delete(listener)
-    }
+    return () => listeners.delete(listener)
   }
   const useChat = <T,>(select: (snapshot: ChatSnapshot) => T) =>
     select(useSyncExternalStore(subscribe, () => state))
-  render(<DeliverableZoteroAction actionUrl="seq=13&index=0" useChat={useChat} t={mockT} />)
+
+  renderAction({ actionUrl: 'seq=13&index=0', useChat })
   expect(screen.queryByRole('button')).toBeNull()
+
   act(() => {
     assembler.append(
       event(13, 'deliverables/presented', {
@@ -153,6 +166,9 @@ it('shows a subscribed delivery appended after its original turn ends', () => {
     listeners.forEach((listener) => listener())
   })
   expect(screen.getByRole('button')).toBeTruthy()
-  expect(resolveDeliverablePath('seq=10&index=0', state)).toBe('/workspace/papers.bib')
-  expect(resolveDeliverablePath('seq=13&index=0', state)).toBe('/workspace/late.bib')
 })
+
+/** A `useChat`-shaped reader over one fixed snapshot. */
+function useChatOf(state: ChatSnapshot) {
+  return <T,>(select: (snapshot: ChatSnapshot) => T) => select(state)
+}

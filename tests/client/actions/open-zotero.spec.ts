@@ -6,15 +6,14 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Context } from '@deepseek-ai/cordis'
 import {
   clearRefIdentityCacheForTesting,
-  launchZoteroProtocol,
-  launchZoteroProtocolAsync,
   parseRefIdentity,
   pdfUrlOf,
   selectUrlOf,
 } from '../../../src/client/actions/open-zotero.ts'
-import { setProtocolDispatcher } from '../../../src/client/actions/protocol-dispatcher.ts'
+import { createZoteroClientFace } from '../../../src/client/actions/client-face.ts'
 import { hasPdf, pdfCapabilityOf } from '../../../src/client/sources/source-capabilities.ts'
 import type { SourceAttachment } from '../../../src/client/sources/model.ts'
 import { sourceOf } from '../helpers/source-fixtures.ts'
@@ -133,71 +132,67 @@ describe('pdfUrlOf', () => {
   })
 })
 
-describe('launchZoteroProtocol', () => {
-  it('safely dispatches a valid zotero:// url via DOM click', () => {
-    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
-    const appendSpy = vi.spyOn(document.body, 'appendChild')
-    const removeSpy = vi.spyOn(document.body, 'removeChild')
+describe('ZoteroClientFace.openProtocol', () => {
+  function faceWith(openProtocol: (url: string) => Promise<unknown>) {
+    const reportClientError = vi.fn(async () => ({ ok: true, value: { seq: 1 } }))
+    const ctx = {
+      remote: {
+        zotero: {
+          openProtocol,
+          reportClientError,
+          resolveAttachment: vi.fn(),
+        },
+      },
+    } as unknown as Context
+    return { face: createZoteroClientFace(ctx), reportClientError }
+  }
 
-    const result = launchZoteroProtocol('zotero://select/library/items/ITEM1234')
-    expect(result).toBe(true)
-    expect(clickSpy).toHaveBeenCalledTimes(1)
-    expect(appendSpy).toHaveBeenCalledTimes(1)
-    expect(removeSpy).toHaveBeenCalledTimes(1)
-
-    clickSpy.mockRestore()
-    appendSpy.mockRestore()
-    removeSpy.mockRestore()
+  it('returns true and leaves the notice empty when the Host accepts the launch', async () => {
+    const openProtocol = vi.fn(async () => ({ ok: true, value: { success: true } }))
+    const { face, reportClientError } = faceWith(openProtocol)
+    await expect(face.openProtocol('zotero://select/library/items/ITEM1234')).resolves.toBe(true)
+    expect(openProtocol).toHaveBeenCalledWith('zotero://select/library/items/ITEM1234')
+    expect(face.protocolNotice.getSnapshot()).toBeNull()
+    expect(reportClientError).not.toHaveBeenCalled()
   })
 
-  it('refuses invalid non-zotero schemes', () => {
-    expect(launchZoteroProtocol('https://example.com')).toBe(false)
-    expect(launchZoteroProtocol('javascript:alert(1)')).toBe(false)
-    expect(launchZoteroProtocol('')).toBe(false)
+  it('returns false, files diagnostics, and raises a notice when the Host rejects the launch', async () => {
+    const failure = new Error('launch failed')
+    const { face, reportClientError } = faceWith(async () => ({ ok: false, error: failure }))
+    await expect(face.openProtocol('zotero://select/library/items/ITEM1234')).resolves.toBe(false)
+    expect(face.protocolNotice.getSnapshot()).toEqual({ seq: 1 })
+    expect(reportClientError).toHaveBeenCalledWith(
+      expect.objectContaining({ surface: 'action:open-zotero', message: 'launch failed' }),
+    )
   })
 
-  it('delegates to protocol dispatcher when configured', async () => {
-    let dispatchedUrl: string | undefined
-    setProtocolDispatcher(async (url) => {
-      dispatchedUrl = url
-      return true
-    })
-
-    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click')
-    const result = launchZoteroProtocol('zotero://select/library/items/CUSTOM1')
-    expect(result).toBe(true)
-    expect(dispatchedUrl).toBe('zotero://select/library/items/CUSTOM1')
-    expect(clickSpy).not.toHaveBeenCalled()
-
-    const asyncRes = await launchZoteroProtocolAsync('zotero://select/library/items/ASYNC1')
-    expect(asyncRes).toBe(true)
-    expect(dispatchedUrl).toBe('zotero://select/library/items/ASYNC1')
-
-    clickSpy.mockRestore()
-    setProtocolDispatcher(undefined)
-  })
-
-  it('reports host dispatch failure without claiming a DOM fallback succeeded', async () => {
-    setProtocolDispatcher(async () => false)
-    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
-    const appendSpy = vi.spyOn(document.body, 'appendChild')
-    const removeSpy = vi.spyOn(document.body, 'removeChild')
-
-    const asyncRes = await launchZoteroProtocolAsync('zotero://select/library/items/FALLBACK1')
-    expect(asyncRes).toBe(false)
-    expect(clickSpy).not.toHaveBeenCalled()
-
-    setProtocolDispatcher(async () => {
+  it('files a thrown Remote failure the same way', async () => {
+    const { face, reportClientError } = faceWith(async () => {
       throw new Error('remote error')
     })
-    const asyncResError = await launchZoteroProtocolAsync('zotero://select/library/items/FALLBACK2')
-    expect(asyncResError).toBe(false)
-    expect(clickSpy).not.toHaveBeenCalled()
+    await expect(face.openProtocol('zotero://select/library/items/ITEM1234')).resolves.toBe(false)
+    expect(face.protocolNotice.getSnapshot()).toEqual({ seq: 1 })
+    expect(reportClientError).toHaveBeenCalledWith(
+      expect.objectContaining({ surface: 'action:open-zotero', message: 'remote error' }),
+    )
+  })
 
-    clickSpy.mockRestore()
-    appendSpy.mockRestore()
-    removeSpy.mockRestore()
-    setProtocolDispatcher(undefined)
+  it('refuses a non-zotero scheme without touching the Host', async () => {
+    const openProtocol = vi.fn()
+    const { face, reportClientError } = faceWith(openProtocol)
+    await expect(face.openProtocol('https://example.com')).resolves.toBe(false)
+    expect(openProtocol).not.toHaveBeenCalled()
+    expect(reportClientError).not.toHaveBeenCalled()
+  })
+
+  it('clears the notice on dismissal', async () => {
+    const { face } = faceWith(async () => {
+      throw new Error('remote error')
+    })
+    await face.openProtocol('zotero://select/library/items/ITEM1234')
+    expect(face.protocolNotice.getSnapshot()).toEqual({ seq: 1 })
+    face.dismissProtocolNotice()
+    expect(face.protocolNotice.getSnapshot()).toBeNull()
   })
 })
 

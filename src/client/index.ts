@@ -16,6 +16,7 @@
  */
 
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
+import { createElement } from 'react'
 // Type-only Context merges: locale (ctx.locale) arrives through its package's
 // client declaration; the Remote face (ctx.remote) through the api-remotes
 // assembly; ui-settings supplies the `configForms` service; ui-renderer the
@@ -32,29 +33,26 @@ import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 // Type-only: the `conversation.view` SlotMap row (declared by the slot's
 // owning package) must be in the program for the tab registration to type.
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type {} from '@deepseek-ai/dsh-client-ui-context-menu/client'
+import type {} from '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/client'
 // Type-only: the `sidebarRight` service the tab's `openResource` reads to reveal
 // resolved attachments in the right sidebar.
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
+import { writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
 import { ZoteroSettingsSection } from './ZoteroSettingsSection.tsx'
 import { ScholarlySettingsSection } from './ScholarlySettingsSection.tsx'
 import { SourcesTab, type SourcesTabFace } from './components/SourcesTab.tsx'
 import { ZOTERO_REMOTE } from './remote.ts'
-import { getAttachmentResolver, setAttachmentResolver } from './actions/attachment-resolver.ts'
-import { getProtocolDispatcher, setProtocolDispatcher } from './actions/protocol-dispatcher.ts'
-import {
-  getErrorReporter,
-  reportCrashedSurface,
-  setErrorReporter,
-} from './actions/error-reporter.ts'
+import { createZoteroClientFace, type ZoteroClientFace } from './actions/client-face.ts'
+import { reportCrashedSurface } from './actions/error-reporter.ts'
 import { ZoteroCardController } from './zotero-card-controller.ts'
 import { ScholarlyFormController } from './scholarly-form-controller.ts'
 import { LibraryFormController } from './library-form-controller.ts'
-import type { ZoteroDetailFace, ZoteroProbeFace } from './components/plugin/faces.ts'
+import type { ZoteroProbeFace } from './components/plugin/faces.ts'
 import {
   ZOTERO_LIBRARY_SETTINGS_NAMESPACE,
   ZOTERO_REMOTE_PACKAGE,
-  type ZoteroClientErrorReport,
   type ZoteroDiagnosticsView,
   type ZoteroStatusView,
 } from '../contract.ts'
@@ -70,12 +68,18 @@ import {
 } from './components/library/ZoteroLibraryPanel.tsx'
 import { createLibraryDataPlane } from './components/library/library-data-plane.ts'
 import { clearLibrarySessionMemory } from './components/library/library-storage.ts'
+import { LIBRARY_ICON_KEY, LIBRARY_TAB_KIND } from './library-tab.ts'
 import { ZoteroLibraryIcon } from './components/library/ZoteroLibraryIcon.tsx'
 import { gatedMount, registerGatedSurfaces, watchWebEnabled, webEnabledOf } from './web-enabled.ts'
 import { registerZoteroToolviews } from './toolviews/index.ts'
 import { ZoteroLibraryMenu } from './components/library/ZoteroLibraryMenu.tsx'
 import { ZoteroComposerSlot } from './components/composer/ZoteroComposerButton.tsx'
+import { isBibliographyPath } from './bibliography.ts'
 import { DeliverableZoteroAction } from './components/deliverables/DeliverableZoteroAction.tsx'
+import { DocumentZoteroAction } from './components/document/DocumentZoteroAction.tsx'
+import { DocumentUnpreviewableAction } from './components/document/DocumentUnpreviewableAction.tsx'
+import { ZoteroToast } from './components/ZoteroToast.tsx'
+import { selectUrlOf } from './actions/open-zotero.ts'
 import { en, zh } from './locales.ts'
 
 /** Dictionary namespace owned by this plugin. */
@@ -103,6 +107,7 @@ export const inject = [
   'configForms',
   'sidebarRight',
   'sidebarRightTabs',
+  'contextMenus',
 ]
 
 /**
@@ -149,48 +154,38 @@ interface UiSurfaces {
 
 /**
  * The fiber-wide effects every surface group builds on: the page
- * dictionaries, the attachment-resolver and error-reporter bridges, the slot
+ * dictionaries, the shared client face, the protocol-failure toast, the slot
  * crash intake, and the dedicated tool cards.
  */
-function registerSharedSurfaces(ctx: ClientContext): void {
+function registerSharedSurfaces(ctx: ClientContext): ZoteroClientFace {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-zotero: page dictionaries')
   // The library panel's session view cache outlives its pane tab on purpose;
   // the plugin's own teardown is the one point that owns every entry.
   ctx.effect(() => () => clearLibrarySessionMemory(), 'dsh-zotero: library session views')
-  ctx.effect(() => {
-    const resolver = (ref: string) => ctx.remote.zotero.resolveAttachment(ref)
-    setAttachmentResolver(resolver)
-    return () => {
-      if (getAttachmentResolver() === resolver) {
-        setAttachmentResolver(undefined)
-      }
-    }
-  }, 'dsh-zotero: attachment resolver')
-  ctx.effect(() => {
-    const dispatcher = async (url: string): Promise<boolean> => {
-      try {
-        const res = await ctx.remote.zotero.openProtocol(url)
-        return res.ok && res.value.ok
-      } catch {
-        return false
-      }
-    }
-    setProtocolDispatcher(dispatcher)
-    return () => {
-      if (getProtocolDispatcher() === dispatcher) {
-        setProtocolDispatcher(undefined)
-      }
-    }
-  }, 'dsh-zotero: protocol dispatcher')
-  const reporter = (report: ZoteroClientErrorReport) => ctx.remote.zotero.reportClientError(report)
-  ctx.effect(() => {
-    setErrorReporter(reporter)
-    return () => {
-      if (getErrorReporter() === reporter) {
-        setErrorReporter(undefined)
-      }
-    }
-  }, 'dsh-zotero: error reporter')
+  const client = createZoteroClientFace(ctx)
+  ctx.effect(
+    () => ctx.slots.provideRoot({ props: { useZoteroClient: () => client } }),
+    'dsh-zotero: client face',
+  )
+  ctx.effect(
+    () =>
+      ctx.slots.inject('shell.overlay', () =>
+        ctx.slots.register(
+          {
+            name: 'shell.overlay',
+            id: 'zotero.protocol-toast',
+            locale: NS,
+            registrant: REGISTRANT,
+            inject: () => ({
+              hooks: { toast: client.protocolNotice },
+              dismiss: client.dismissProtocolNotice,
+            }),
+          },
+          ZoteroToast,
+        ),
+      ),
+    'dsh-zotero: protocol toast',
+  )
   // Crash intake: the slot registry's own supervision seam, which the renderer
   // fires for every crashed entry (render throws and `inject` factory throws,
   // ordinary Slots and Factory occurrences alike). Filtered to our own
@@ -202,12 +197,18 @@ function registerSharedSurfaces(ctx: ClientContext): void {
     () =>
       ctx.slots.onEntryError((key, registration, error, info) => {
         if (!isZoteroRegistration(key, registration)) return
-        reportCrashedSurface(key, error, { kind: 'slotEntry', abdicated: info.abdicated }, reporter)
+        reportCrashedSurface(
+          key,
+          error,
+          { kind: 'slotEntry', abdicated: info.abdicated },
+          client.reportClientError,
+        )
       }),
     'dsh-zotero: slot crash intake',
   )
   // Dedicated Chat cards for the registered Zotero and cross-component tools
   registerZoteroToolviews(ctx)
+  return client
 }
 
 /**
@@ -310,7 +311,7 @@ function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces)
     'dsh-zotero: library row config',
   )
 
-  // Service status & data maintenance section at the bottom of the plugin manager detail page
+  // Service status section at the bottom of the plugin manager detail page
   ctx.slots.inject('plugins.detail.section', () =>
     ctx.slots.register(
       {
@@ -318,11 +319,7 @@ function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces)
         id: 'zotero-status',
         locale: NS,
         registrant: REGISTRANT,
-        inject: (): ZoteroDetailFace => ({
-          probe,
-          inspect: () => ctx.remote.zotero.remediationInspect(),
-          execute: (request) => ctx.remote.zotero.remediationExecute(request),
-        }),
+        inject: (): ZoteroProbeFace => ({ probe }),
       },
       ZoteroPluginDetailSection,
     ),
@@ -420,7 +417,11 @@ function sidebarEnabledOf(
  * @param ctx - the browser plugin context.
  * @param surfaces - the shared facts every registration group reads.
  */
-function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces): void {
+function registerLibraryPanelSurfaces(
+  ctx: ClientContext,
+  surfaces: UiSurfaces,
+  client: ZoteroClientFace,
+): void {
   const { form, libraryForm, probe } = surfaces
   const panelT = ctx.locale.bind(NS)
 
@@ -465,11 +466,13 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
 
   const mountRight = (): (() => void) => {
     const TAB_ID = `${ZOTERO_REMOTE_PACKAGE}#library`
-    const TAB_KIND = 'zotero-library'
+    const openLibraryFace = (): { onOpenLibrary: () => void } => ({
+      onOpenLibrary: () => ctx.sidebarRight.openTab(LIBRARY_TAB_KIND),
+    })
 
     const disposeTabDef = ctx.sidebarRightTabs?.register({
       id: TAB_ID,
-      kind: TAB_KIND,
+      kind: LIBRARY_TAB_KIND,
       title: () => panelT('tabLibrary'),
       guide: [
         {
@@ -521,6 +524,7 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
               if (refresh) refresh()
               else plane.invalidate()
             },
+            openProtocol: client.openProtocol,
           }),
         },
         ZoteroLibraryMenu,
@@ -535,7 +539,7 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
           order: 80,
           locale: NS,
           registrant: REGISTRANT,
-          inject: () => ({ onOpen: () => ctx.sidebarRight.openTab(TAB_KIND) }),
+          inject: () => ({ onOpen: () => ctx.sidebarRight.openTab(LIBRARY_TAB_KIND) }),
         },
         ZoteroComposerSlot,
       ),
@@ -548,13 +552,108 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
           id: `${REGISTRANT}.deliverables.action`,
           locale: NS,
           registrant: REGISTRANT,
-          inject: () => ({ onOpenLibrary: () => ctx.sidebarRight.openTab(TAB_KIND) }),
+          inject: openLibraryFace,
         },
         DeliverableZoteroAction,
       ),
     )
 
+    const disposeDocumentActions = ctx.slots.inject('sidebar.right.tab.document.actions', () =>
+      ctx.slots.register(
+        {
+          name: 'sidebar.right.tab.document.actions',
+          id: `${REGISTRANT}.document.action`,
+          locale: NS,
+          registrant: REGISTRANT,
+          inject: openLibraryFace,
+        },
+        DocumentZoteroAction,
+      ),
+    )
+
+    const disposeDocumentUnpreviewable = ctx.slots.inject(
+      'sidebar.right.tab.document.unpreviewable',
+      () =>
+        ctx.slots.register(
+          {
+            name: 'sidebar.right.tab.document.unpreviewable',
+            id: `${REGISTRANT}.document.unpreviewable`,
+            locale: NS,
+            registrant: REGISTRANT,
+            inject: openLibraryFace,
+          },
+          DocumentUnpreviewableAction,
+        ),
+    )
+
+    const disposeContextIcon = ctx.slots.inject('contextMenu.icon', () =>
+      ctx.slots.register(
+        {
+          name: 'contextMenu.icon',
+          key: LIBRARY_ICON_KEY,
+          registrant: REGISTRANT,
+        },
+        () => createElement(ZoteroLibraryIcon, { size: 14 }),
+      ),
+    )
+
+    const disposeFileMenu = ctx.contextMenus.register({
+      id: `${REGISTRANT}.file`,
+      target: 'file',
+      order: 150,
+      resolve: (target) => {
+        if (!isBibliographyPath(target.path)) return []
+        return [
+          {
+            id: 'openInLibrary',
+            label: panelT('openInLibraryPanel'),
+            icon: { key: LIBRARY_ICON_KEY },
+            run: () => {
+              ctx.sidebarRight.openTabIn(target.sessionId, LIBRARY_TAB_KIND)
+            },
+          },
+        ]
+      },
+    })
+
+    const disposeItemMenu = ctx.contextMenus.register({
+      id: `${REGISTRANT}.item`,
+      target: 'zoteroItem',
+      order: 100,
+      resolve: (target) => {
+        const selectUrl = selectUrlOf(target.ref)
+        if (!selectUrl) return []
+        return [
+          {
+            id: 'openInDesktop',
+            label: panelT('openInZotero'),
+            icon: { key: LIBRARY_ICON_KEY },
+            run: async () => {
+              await client.openProtocol(selectUrl)
+            },
+          },
+          {
+            id: 'copySelectLink',
+            label: panelT('copyZoteroLink'),
+            failureLabel: panelT('menuCopyLinkFailed'),
+            run: async () => {
+              const accepted = await writeClipboard(selectUrl)
+              ctx.contextMenus.notify(
+                accepted ? panelT('copied') : panelT('libraryCopyClipboardUnavailable'),
+                accepted,
+              )
+            },
+          },
+        ]
+      },
+    })
+
     return () => {
+      disposeItemMenu()
+      disposeFileMenu()
+      disposeContextIcon()
+      disposeDocumentUnpreviewable()
+      disposeDocumentActions()
       disposeDeliverableAction()
       disposeInputButton()
       disposeTabMenu()
@@ -599,7 +698,7 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
  * @param ctx - the browser plugin context, scoped to the declared services.
  */
 function registerUi(ctx: ClientContext): void {
-  registerSharedSurfaces(ctx)
+  const client = registerSharedSurfaces(ctx)
   // One form controller per settings namespace. The bundle configuration page
   // edits all three at once; the dedicated rows edit their specific subsystem.
   // All live as long as the client fiber.
@@ -644,7 +743,7 @@ function registerUi(ctx: ClientContext): void {
   }
   registerPluginManagerSurfaces(ctx, surfaces)
   registerConversationSurfaces(ctx, surfaces)
-  registerLibraryPanelSurfaces(ctx, surfaces)
+  registerLibraryPanelSurfaces(ctx, surfaces, client)
 }
 
 /**
@@ -671,7 +770,15 @@ function registerUi(ctx: ClientContext): void {
 export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
   const disposeRemote = await ctx.remote.$mount(ZOTERO_REMOTE)
   const ui = ctx.inject(
-    ['remote.zotero', 'locale', 'slots', 'configForms', 'sidebarRight', 'sidebarRightTabs'],
+    [
+      'remote.zotero',
+      'locale',
+      'slots',
+      'configForms',
+      'sidebarRight',
+      'sidebarRightTabs',
+      'contextMenus',
+    ],
     registerUi,
   )
   try {

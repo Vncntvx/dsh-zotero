@@ -148,12 +148,22 @@ A single client artifact (`lib/client.js`) contains all interfaces. Every surfac
 - `plugins.bundle.activation` shows a connectivity guide when the plugin is enabled; `plugins.detail.section` provides the live status card and the diagnostics card;
 - Write receipts, export metadata, and sync diff/job are decoded by `write-decoder.ts`, `export-decoder.ts`, and `sync-decoder.ts`, and the other tool results are decoded by `decoders.ts`.
 
+### Unified Context Menus and Literature Interactions (`contextMenus`)
+
+- Workspace file contributions (`dsh-zotero.file`, order 150): when the captured target is a bibliography file (`.bib`, `.ris`, `.csljson`, `.csl.json`, `.biblatex`, `.bibtex`), registers an "View in Zotero library" action; the contribution exists only while the library panel is mounted, and its run opens the `zotero-library` page in the target's captured session;
+- Literature item contributions (`dsh-zotero.item`, order 100): provides "Open in Zotero" and "Copy link" for `zoteroItem` targets; a failed launch rejects to the menu's failure toast, and a refused clipboard write reports that the clipboard is unavailable.
+
+### Document Preview Actions (`sidebar.right.tab.document.actions` / `.unpreviewable`)
+
+- Preview toolbar extension: renders a shortcut action in the document preview toolbar for bibliography files (`.bib`, `.ris`, `.csljson`, `.csl.json`, `.biblatex`, `.bibtex`) to jump into the Zotero library panel;
+- Unpreviewable empty state extension: offers the same entry when a bibliography file cannot be rendered inline.
+
 ## Remote Communication and Settings
 
-- The host half registers Typert endpoints in the `zotero` wire namespace through `ZoteroRuntime` (`zoteroRemote`) and `ZoteroLibraryService` (`zoteroLibrary`). `ZoteroRuntime` handles `status`, `resolveAttachment`, `diagnostics`, `reportClientError`, `remediationInspect`, and `remediationExecute`; `ZoteroLibraryService` handles `browse`, `search`, `item`, `childPage`, `export`, and `write`;
+- The host half registers Typert endpoints in the `zotero` wire namespace through `ZoteroRuntime` (`zoteroRemote`) and `ZoteroLibraryService` (`zoteroLibrary`). `ZoteroRuntime` handles `status`, `resolveAttachment`, `diagnostics`, `reportClientError`, and `openProtocol`; `ZoteroLibraryService` handles `browse`, `search`, `item`, `childPage`, `export`, and `write`;
 - The browser half mounts the namespace through `ctx.remote.$mount`, and configuration reads and writes go through the shared settings forms of the `zotero`, `library`, and `scholarly` namespaces;
 - Every configuration field is declared volatile and supports hot reload;
-- `openProtocol` protocol launch: WSL and Windows environments unify on `powershell.exe` to launch `zotero://` links through the host system default handler; a host endpoint failure throws `zotero/protocol-failed`, and the browser half surfaces the failure via a `shell.overlay` toast and diagnostics reporting, dropping the DOM anchor fallback.
+- `openProtocol` protocol dispatch: WSL and Windows environments uniformly use `powershell.exe` to trigger the host protocol handler; the host endpoint throws `zotero/protocol-failed` on failure, and the browser half surfaces it through the `shell.overlay` toast and diagnostics instead of a DOM-anchor fallback.
 
 ## Diagnostics and Logging
 

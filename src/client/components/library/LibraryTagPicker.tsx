@@ -8,7 +8,7 @@
  * @module dsh-zotero/client/components/library/LibraryTagPicker
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import clsx from 'clsx'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
@@ -20,7 +20,6 @@ import {
   Input,
   MenuSurface,
   Pill,
-  useAnchoredPosition,
   useDismissOnOutsidePointer,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SupportedLocalLibrary } from '../../../contract.ts'
@@ -30,9 +29,6 @@ import { messageOf } from '../../error-text.ts'
 import css from './library.module.css'
 
 const TAG_SEARCH_DEBOUNCE_MS = 200
-/** Space between the trigger and its panel, and between the panel and the viewport. */
-const PANEL_GAP = 4
-const VIEWPORT_MARGIN = 8
 
 export function LibraryTagPicker({
   t,
@@ -63,6 +59,10 @@ export function LibraryTagPicker({
   const rowsLibrary = useRef<SupportedLocalLibrary>()
   const triggerRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
+  // The CSS anchor name is unique per picker: multiple library panels can be
+  // mounted in different sidebar tabs, and duplicate anchor names would make
+  // each panel follow the wrong trigger.
+  const anchorName = `--dsh-zotero-tags-${useId().replaceAll(':', '')}`
 
   const requestPage = (search: string, offset: number, append: boolean): void => {
     const ticket = seq.current + 1
@@ -108,16 +108,6 @@ export function LibraryTagPicker({
     }
   }, [library.type, library.id])
 
-  // The shared anchored-position hook measures the panel itself (no width
-  // constant of ours), clamps it to both viewport edges, and re-places it on
-  // resize, any scroll, and its own size changes.
-  const position = useAnchoredPosition({
-    open,
-    anchorRef: triggerRef,
-    panelRef,
-    gap: PANEL_GAP,
-    margin: VIEWPORT_MARGIN,
-  })
   // The panel is portaled, so it must be named as an inside target explicitly.
   useDismissOnOutsidePointer(triggerRef, open, setOpen, panelRef)
 
@@ -199,7 +189,7 @@ export function LibraryTagPicker({
   )
 
   return (
-    <div className={css.tagPickerWrap} ref={triggerRef}>
+    <div className={css.tagPickerWrap} ref={triggerRef} style={{ anchorName }}>
       <Pill
         active={selected.size > 0}
         onClick={toggleOpen}
@@ -219,11 +209,7 @@ export function LibraryTagPicker({
             className={css.tagPanel}
             role="group"
             aria-label={t('libraryFilterTags')}
-            style={
-              // The first measure runs after mount; until then the panel is
-              // placed but invisible, so it can read its own size.
-              position ?? { visibility: 'hidden' }
-            }
+            style={{ positionAnchor: anchorName }}
           >
             <Input
               type="search"

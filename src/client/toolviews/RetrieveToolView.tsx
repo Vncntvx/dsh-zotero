@@ -22,6 +22,7 @@ type RetrieveToolViewProps = PropsRuntime<'tool.call.toolview', 'zotero_retrieve
 
 export function RetrieveToolView(props: RetrieveToolViewProps) {
   const { toolName, block, useDisclosure, inspect, t } = props
+  const client = props.useZoteroClient()
 
   const { icon, summary, errorSummary, items, coverageLine, omittedNote, detailOmitted, rawText } =
     useMemo(() => {
@@ -126,6 +127,7 @@ export function RetrieveToolView(props: RetrieveToolViewProps) {
                           <PdfReadButton
                             attachmentRef={item.attachmentRef}
                             onOpenFile={props.openFile}
+                            resolveAttachment={client.resolveAttachment}
                             label={t('readPdf')}
                             t={t}
                             variant="link"
@@ -137,6 +139,7 @@ export function RetrieveToolView(props: RetrieveToolViewProps) {
                           t={t}
                           variant="link"
                           className={css.actionLink}
+                          openProtocol={client.openProtocol}
                         />
                       </div>
                     </div>

@@ -23,6 +23,7 @@ import {
   type SessionsStub,
 } from '../helpers/sources-tab-harness.tsx'
 import { mockT } from '../helpers/mock-translate.ts'
+import type { ZoteroClientFace } from '../../../src/client/actions/client-face.ts'
 
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
   const { primitivesStub } = await import('../helpers/primitives-stub.ts')
@@ -33,6 +34,17 @@ afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
 })
+
+const report = vi.fn(async () => {})
+const zoteroClient = () =>
+  ({
+    reportClientError: vi.fn(async () => {}),
+    openProtocol: vi.fn(async () => true),
+    resolveAttachment: vi.fn(async () => ({
+      ok: true,
+      value: { ref: '', kind: 'file', title: '', contentType: '' },
+    })),
+  }) as unknown as ZoteroClientFace
 
 /**
  * Silence React's own error logging for the deliberate throw, returning the spy
@@ -49,7 +61,7 @@ function Bomb(): never {
 describe('ZoteroSurfaceBoundary', () => {
   it('renders its children untouched while nothing throws', () => {
     const view = render(
-      <ZoteroSurfaceBoundary t={mockT} surface="sources">
+      <ZoteroSurfaceBoundary t={mockT} surface="sources" report={report}>
         <p>panel body</p>
       </ZoteroSurfaceBoundary>,
     )
@@ -60,7 +72,7 @@ describe('ZoteroSurfaceBoundary', () => {
   it('keeps the surface mounted and names the failure when a child throws', () => {
     const logged = captureConsoleError()
     const view = render(
-      <ZoteroSurfaceBoundary t={mockT} surface="sources">
+      <ZoteroSurfaceBoundary t={mockT} surface="sources" report={report}>
         <Bomb />
       </ZoteroSurfaceBoundary>,
     )
@@ -83,7 +95,7 @@ describe('ZoteroSurfaceBoundary', () => {
       throw 'a bare string failure'
     }
     const view = render(
-      <ZoteroSurfaceBoundary t={mockT} surface="sources">
+      <ZoteroSurfaceBoundary t={mockT} surface="sources" report={report}>
         <ThrowString />
       </ZoteroSurfaceBoundary>,
     )
@@ -98,7 +110,7 @@ describe('ZoteroSurfaceBoundary', () => {
       throw new Error('')
     }
     const view = render(
-      <ZoteroSurfaceBoundary t={mockT} surface="sources">
+      <ZoteroSurfaceBoundary t={mockT} surface="sources" report={report}>
         <ThrowEmpty />
       </ZoteroSurfaceBoundary>,
     )
@@ -112,14 +124,14 @@ describe('ZoteroSurfaceBoundary', () => {
       return <p>healthy body</p>
     }
     const view = render(
-      <ZoteroSurfaceBoundary t={mockT} surface="sources" resetKey="s1">
+      <ZoteroSurfaceBoundary t={mockT} surface="sources" resetKey="s1" report={report}>
         <Flaky shouldThrow={true} />
       </ZoteroSurfaceBoundary>,
     )
     expect(view.container.querySelector('[data-zotero-surface-error]')).not.toBeNull()
 
     view.rerender(
-      <ZoteroSurfaceBoundary t={mockT} surface="sources" resetKey="s2">
+      <ZoteroSurfaceBoundary t={mockT} surface="sources" resetKey="s2" report={report}>
         <Flaky shouldThrow={false} />
       </ZoteroSurfaceBoundary>,
     )
@@ -135,7 +147,7 @@ describe('ZoteroSurfaceBoundary', () => {
       return <p>recovered body</p>
     }
     const view = render(
-      <ZoteroSurfaceBoundary t={mockT} surface="sources">
+      <ZoteroSurfaceBoundary t={mockT} surface="sources" report={report}>
         <Flaky />
       </ZoteroSurfaceBoundary>,
     )
@@ -186,6 +198,7 @@ describe('the Sources tab keeps its registration when its body throws', () => {
     let currentChat: ChatSnapshot = hostile
     const props = {
       t: mockT,
+      useZoteroClient: zoteroClient,
       status: connectedProbe(),
       useSession: (sel: (snap: { sessionId: string }) => unknown) =>
         sel({ sessionId: currentSessionId }),
@@ -217,6 +230,7 @@ describe('the Sources tab keeps its registration when its body throws', () => {
     const openResource = vi.fn<(url: string) => void>()
     const props = {
       t: mockT,
+      useZoteroClient: zoteroClient,
       status: connectedProbe(),
       openResource,
       useSession: (sel: (snap: { sessionId: string }) => unknown) => sel({ sessionId: 'sess-1' }),
@@ -246,6 +260,7 @@ describe('the Sources tab keeps its registration when its body throws', () => {
     const openResource = vi.fn<(url: string) => void>()
     const props = {
       t: mockT,
+      useZoteroClient: zoteroClient,
       status: connectedProbe(),
       openResource,
       useSession: (sel: (snap: { sessionId: string }) => unknown) => sel({ sessionId: 'sess-2' }),
@@ -280,7 +295,7 @@ describe('ZoteroSurfaceBoundary containment', () => {
     // the crash never reaches the harness boundary that would retire the entry.
     const logged = captureConsoleError()
     const view = render(
-      <ZoteroSurfaceBoundary t={mockT} surface="sources">
+      <ZoteroSurfaceBoundary t={mockT} surface="sources" report={report}>
         <Bomb />
       </ZoteroSurfaceBoundary>,
     )
@@ -306,14 +321,14 @@ describe('ZoteroSurfaceBoundary containment', () => {
       throw ''
     }
     const view = render(
-      <ZoteroSurfaceBoundary t={mockT} surface="sources">
+      <ZoteroSurfaceBoundary t={mockT} surface="sources" report={report}>
         <ThrowEmptyError />
       </ZoteroSurfaceBoundary>,
     )
     expect(view.container.querySelector('[data-zotero-surface-error]')).not.toBeNull()
 
     view.rerender(
-      <ZoteroSurfaceBoundary t={mockT} surface="sources" resetKey="again">
+      <ZoteroSurfaceBoundary t={mockT} surface="sources" resetKey="again" report={report}>
         <ThrowEmptyString />
       </ZoteroSurfaceBoundary>,
     )

@@ -148,9 +148,19 @@ graph LR
 - `plugins.bundle.activation` 在启用插件时弹出连通性引导；`plugins.detail.section` 提供实时状态卡与诊断卡；
 - 文献轨迹的写回执、导出元数据与同步 diff/job 分别由 `write-decoder.ts`、`export-decoder.ts`、`sync-decoder.ts` 解码，其余工具结果由 `decoders.ts` 解码。
 
+### 统一右键菜单与文献交互（`contextMenus`）
+
+- 工作区文件（`dsh-zotero.file`，order 150）：目标为文献引用文件（`.bib`、`.ris`、`.csljson`、`.csl.json`、`.biblatex`、`.bibtex`）时，提供「在 Zotero 文献库中查看」操作；该菜单只在文献库面板挂载时注册，点击用 target 捕获的 session 打开 `zotero-library` 页；
+- 文献条目（`dsh-zotero.item`，order 100）：为 `zoteroItem` 目标提供「在 Zotero 中打开」与「复制链接」操作；启动失败会向菜单返回失败提示，剪贴板拒绝会显示不可用提示。
+
+### 文档预览动作（`sidebar.right.tab.document.actions` / `.unpreviewable`）
+
+- 预览工具栏扩展：针对 preview 中的文献引用文件（`.bib`、`.ris`、`.csljson`、`.csl.json`、`.biblatex`、`.bibtex`），在右侧头部动作行中提供直达 Zotero 文献库面板的快捷按钮；
+- 不可预览状态扩展：当文献引用文件不可直接内联预览时，提供同一入口。
+
 ## 远程通信与设置
 
-- 宿主半侧分别通过 `ZoteroRuntime`（`zoteroRemote`）和 `ZoteroLibraryService`（`zoteroLibrary`）在 `zotero` wire 命名空间下注册 Typert 端点。`ZoteroRuntime` 负责 `status`、`resolveAttachment`、`diagnostics`、`reportClientError`、`remediationInspect`、`remediationExecute`；`ZoteroLibraryService` 负责 `browse`、`search`、`item`、`childPage`、`export`、`write`；
+- 宿主半侧分别通过 `ZoteroRuntime`（`zoteroRemote`）和 `ZoteroLibraryService`（`zoteroLibrary`）在 `zotero` wire 命名空间下注册 Typert 端点。`ZoteroRuntime` 负责 `status`、`resolveAttachment`、`diagnostics`、`reportClientError`、`openProtocol`；`ZoteroLibraryService` 负责 `browse`、`search`、`item`、`childPage`、`export`、`write`；
 - 浏览器半侧通过 `ctx.remote.$mount` 挂载命名空间，配置读写走 `zotero`、`library`、`scholarly` 三个命名空间的共享设置表单；
 - 配置全字段声明为 volatile，支持热重载；
 - `openProtocol` 协议唤醒：WSL 与 Windows 环境统一采用 `powershell.exe` 调用宿主系统默认程序唤醒 `zotero://` 链接；host 端点失败时抛 `zotero/protocol-failed`，浏览器半侧通过 `shell.overlay` 的 toast 与诊断上报呈现失败，不再保留 DOM anchor 回退。

@@ -14,7 +14,7 @@ import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { IconLinkOutlineRegular, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ZoteroAttachmentLocationView } from '../../contract.ts'
 import { joinNonEmpty, shortKeyOf } from '../presenters.ts'
-import { launchZoteroProtocol, pdfUrlOf, selectUrlOf } from '../actions/open-zotero.ts'
+import { pdfUrlOf, selectUrlOf } from '../actions/open-zotero.ts'
 import {
   availabilityLineOf,
   coverageLineOf,
@@ -37,6 +37,7 @@ function PassageRow({
   evidenceMatch,
   onOpenFile,
   resolveAttachment,
+  openProtocol,
   t,
 }: {
   readonly passage: EvidencePassage
@@ -46,6 +47,7 @@ function PassageRow({
   readonly evidenceMatch: EvidenceMatchStatus
   readonly onOpenFile?: (path: string) => void
   readonly resolveAttachment?: (ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>
+  readonly openProtocol?: (url: string) => Promise<boolean>
   readonly t: TranslateNS<'zotero'>
 }) {
   const targetPdfRef = passage.attachmentRef ?? pdfRef
@@ -81,7 +83,9 @@ function PassageRow({
             <button
               type="button"
               className={css.link}
-              onClick={() => void launchZoteroProtocol(annotationUrl)}
+              onClick={() => {
+                if (openProtocol !== undefined) void openProtocol(annotationUrl)
+              }}
               title={t('openInZoteroTooltip')}
               aria-label={t('openInZotero')}
             >
@@ -114,6 +118,8 @@ interface EvidenceCardProps {
   readonly t: TranslateNS<'zotero'>
   readonly openFile?: (path: string) => void
   readonly resolveAttachment?: (ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>
+  /** Host-backed protocol launcher from the shared client face. */
+  readonly openProtocol?: (url: string) => Promise<boolean>
 }
 
 /** The source's file-PDF ref for annotation jumps; a web PDF cannot jump to annotations. */
@@ -122,7 +128,13 @@ function pdfRefOf(capability: PdfCapability | null): string | null {
 }
 
 /** One source's evidence card. */
-export function EvidenceCard({ item, t, openFile, resolveAttachment }: EvidenceCardProps) {
+export function EvidenceCard({
+  item,
+  t,
+  openFile,
+  resolveAttachment,
+  openProtocol,
+}: EvidenceCardProps) {
   const handleOpenFile = openFile
   const evidenceMatch = item.evidenceMatch
   const selectUrl = selectUrlOf(item.ref)
@@ -160,6 +172,7 @@ export function EvidenceCard({ item, t, openFile, resolveAttachment }: EvidenceC
             t={t}
             variant="link"
             className={css.link}
+            openProtocol={openProtocol}
           />
         )}
         {evidenceMatch === 'unknown' && <Tag tone="warning">{t('instanceUnverified')}</Tag>}
@@ -178,6 +191,7 @@ export function EvidenceCard({ item, t, openFile, resolveAttachment }: EvidenceC
             evidenceMatch={evidenceMatch}
             onOpenFile={handleOpenFile}
             resolveAttachment={resolveAttachment}
+            openProtocol={openProtocol}
             t={t}
           />
         ))}

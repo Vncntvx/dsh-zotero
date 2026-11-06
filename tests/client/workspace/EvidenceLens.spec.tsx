@@ -113,9 +113,28 @@ describe('availabilityLineOf', () => {
   })
 })
 
+const resolveAttachment = vi.fn(async (ref: string) => ({
+  ok: true as const,
+  value: {
+    ref,
+    kind: 'file' as const,
+    title: 'paper.pdf',
+    contentType: 'application/pdf',
+    path: '/tmp/paper.pdf',
+  },
+}))
+const openProtocol = vi.fn(async () => true)
+
 describe('EvidenceCard', () => {
   it('renders the passages with source tags, page labels, and passage dedup', () => {
-    const { container } = render(<EvidenceCard item={EVIDENCE_ITEM} t={t} />)
+    const { container } = render(
+      <EvidenceCard
+        item={EVIDENCE_ITEM}
+        t={t}
+        resolveAttachment={resolveAttachment}
+        openProtocol={openProtocol}
+      />,
+    )
     expect(screen.getByText(zh.sourceAnnotation)).toBeDefined()
     expect(screen.getByText(zh.pageLabel.replace('{label}', '7'))).toBeDefined()
     expect(screen.getByText(/the paper body \(截断\)/)).toBeDefined()
@@ -124,7 +143,14 @@ describe('EvidenceCard', () => {
   })
 
   it('renders coverage, the budget note, and the availability lines', () => {
-    render(<EvidenceCard item={EVIDENCE_ITEM} t={t} />)
+    render(
+      <EvidenceCard
+        item={EVIDENCE_ITEM}
+        t={t}
+        resolveAttachment={resolveAttachment}
+        openProtocol={openProtocol}
+      />,
+    )
     expect(screen.getByText(`${zh.coverageLabel} 5/10 页 · 未完整`)).toBeDefined()
     expect(screen.getByText(zh.budgetLimitedNote)).toBeDefined()
     expect(screen.getByText(/该来源不可用/)).toBeDefined()
@@ -143,7 +169,14 @@ describe('EvidenceCard', () => {
         },
       },
     })
-    render(<EvidenceCard item={item} t={t} />)
+    render(
+      <EvidenceCard
+        item={item}
+        t={t}
+        resolveAttachment={resolveAttachment}
+        openProtocol={openProtocol}
+      />,
+    )
     expect(screen.getByText(zh.evidenceRetrievedNone)).toBeDefined()
     expect(screen.getAllByText(/没有返回匹配/).length).toBeGreaterThanOrEqual(2)
   })
@@ -161,7 +194,14 @@ describe('EvidenceCard', () => {
         },
       },
     })
-    render(<EvidenceCard item={item} t={t} />)
+    render(
+      <EvidenceCard
+        item={item}
+        t={t}
+        resolveAttachment={resolveAttachment}
+        openProtocol={openProtocol}
+      />,
+    )
     expect(screen.queryByText(zh.evidenceRetrievedNone)).toBeNull()
     expect(screen.getByText(zh.evidenceReportedNoPreview.replace('{count}', '25'))).toBeDefined()
     expect(screen.getByText(zh.budgetLimitedNote)).toBeDefined()
@@ -172,12 +212,26 @@ describe('EvidenceCard', () => {
       title: 'No Retrieval',
       evidence: [],
     })
-    render(<EvidenceCard item={item} t={t} />)
+    render(
+      <EvidenceCard
+        item={item}
+        t={t}
+        resolveAttachment={resolveAttachment}
+        openProtocol={openProtocol}
+      />,
+    )
     expect(screen.getByText('No Retrieval')).toBeDefined()
   })
 
   it('renders in-app open actions for a verified item with an attachment ref', () => {
-    const { container } = render(<EvidenceCard item={EVIDENCE_ITEM} t={t} />)
+    const { container } = render(
+      <EvidenceCard
+        item={EVIDENCE_ITEM}
+        t={t}
+        resolveAttachment={resolveAttachment}
+        openProtocol={openProtocol}
+      />,
+    )
     expect(container.querySelectorAll('a[href^="zotero://"]')).toHaveLength(0)
     expect(
       screen.getAllByRole('button', { name: new RegExp(zh.readPdf) }).length,
@@ -195,7 +249,14 @@ describe('EvidenceCard', () => {
           : passage,
       ),
     })
-    const { container } = render(<EvidenceCard item={item} t={t} />)
+    const { container } = render(
+      <EvidenceCard
+        item={item}
+        t={t}
+        resolveAttachment={resolveAttachment}
+        openProtocol={openProtocol}
+      />,
+    )
     expect(container.querySelectorAll('a[href^="zotero://"]')).toHaveLength(0)
     expect(
       screen.getAllByRole('button', { name: new RegExp(zh.readPdf) }).length,
@@ -217,7 +278,14 @@ describe('EvidenceCard', () => {
         location: 'https://e.org/paper.pdf',
       },
     })
-    const { container } = render(<EvidenceCard item={item} t={t} />)
+    const { container } = render(
+      <EvidenceCard
+        item={item}
+        t={t}
+        resolveAttachment={resolveAttachment}
+        openProtocol={openProtocol}
+      />,
+    )
     expect(container.querySelectorAll('a[href^="zotero://"]')).toHaveLength(0)
     const readBtn = screen.getByRole('button', { name: new RegExp(zh.readPdf) })
     fireEvent.click(readBtn)
@@ -230,7 +298,14 @@ describe('EvidenceCard', () => {
       ...EVIDENCE_ITEM,
       evidenceMatch: 'mismatch',
     })
-    const { container } = render(<EvidenceCard item={mismatch} t={t} />)
+    const { container } = render(
+      <EvidenceCard
+        item={mismatch}
+        t={t}
+        resolveAttachment={resolveAttachment}
+        openProtocol={openProtocol}
+      />,
+    )
     expect(container.querySelector('a')).toBeNull()
     expect(screen.getAllByText(new RegExp(zh.databaseMismatch)).length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByRole('button', { name: zh.openInZotero }).length).toBeGreaterThanOrEqual(
@@ -246,7 +321,14 @@ describe('EvidenceCard', () => {
 
   it('caves unverified items with an instance caveat', () => {
     const unverified = sourceOf({ ...EVIDENCE_ITEM, evidenceMatch: 'unknown' })
-    const { container } = render(<EvidenceCard item={unverified} t={t} />)
+    const { container } = render(
+      <EvidenceCard
+        item={unverified}
+        t={t}
+        resolveAttachment={resolveAttachment}
+        openProtocol={openProtocol}
+      />,
+    )
     expect(container.querySelectorAll('a[href^="zotero://"]')).toHaveLength(0)
     expect(screen.getAllByText(new RegExp(zh.instanceUnverified)).length).toBeGreaterThanOrEqual(1)
   })
@@ -258,7 +340,14 @@ describe('EvidenceCard', () => {
       creators: undefined,
       year: undefined,
     })
-    render(<EvidenceCard item={untitled} t={t} />)
+    render(
+      <EvidenceCard
+        item={untitled}
+        t={t}
+        resolveAttachment={resolveAttachment}
+        openProtocol={openProtocol}
+      />,
+    )
     expect(screen.getByText('zotero://user/0/item/ABCDEFGH')).toBeDefined()
   })
 })

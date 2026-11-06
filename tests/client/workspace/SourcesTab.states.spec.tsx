@@ -62,6 +62,14 @@ describe('connectivity strip states', () => {
     // PropsRuntime surface: upstream merges stop breaking it.
     const props = {
       t,
+      useZoteroClient: () => ({
+        reportClientError: vi.fn(async () => {}),
+        openProtocol: vi.fn(async () => true),
+        resolveAttachment: vi.fn(async () => ({
+          ok: true,
+          value: { ref: '', kind: 'file', title: '', contentType: '' },
+        })),
+      }),
       status: undefined,
       useSession: (sel: (snap: SessionSnapshot) => unknown) => sel(sessionOf()),
       useSessions: (sel: (snapshot: ReturnType<typeof sessionsOf>) => unknown) => sel(sessionsOf()),

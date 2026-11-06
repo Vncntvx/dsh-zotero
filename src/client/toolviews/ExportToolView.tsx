@@ -30,6 +30,7 @@ type ExportToolViewProps = PropsRuntime<'tool.call.toolview', 'zotero_export'> &
 
 export function ExportToolView(props: ExportToolViewProps) {
   const { toolName, block, useDisclosure, inspect, t } = props
+  const client = props.useZoteroClient()
 
   const {
     icon,
@@ -168,6 +169,7 @@ export function ExportToolView(props: ExportToolViewProps) {
                           t={t}
                           variant="link"
                           className={css.actionLink}
+                          openProtocol={client.openProtocol}
                         />
                       </div>
                       <div className={css.itemMeta}>ref: {item.ref}</div>

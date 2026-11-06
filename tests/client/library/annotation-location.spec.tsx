@@ -28,14 +28,14 @@ it.each([
   ],
 ])('opens annotation ref %s using the owning attachment', (ref, parentRef, target) => {
   const opened: string[] = []
-  vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
-    this: HTMLAnchorElement,
-  ) {
-    opened.push(this.href)
+  const openProtocol = vi.fn(async (url: string) => {
+    opened.push(url)
+    return true
   })
   render(
     <LibraryInspector
       t={mockT}
+      openProtocol={openProtocol}
       inspector={{
         phase: 'ready',
         detail: {

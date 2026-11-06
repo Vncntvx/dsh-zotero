@@ -22,6 +22,7 @@ function mountInspector(
 ) {
   const pageChild = vi.fn(),
     retryChild = vi.fn()
+  const openProtocol = vi.fn(async () => true)
   const props = {
     t: mockT,
     inspector: { phase: 'ready' as const, detail },
@@ -31,9 +32,21 @@ function mountInspector(
     retryChild,
     inputActions,
     openFile,
-    resolveAttachment,
+    resolveAttachment:
+      resolveAttachment ??
+      (async (ref: string) => ({
+        ok: true as const,
+        value: {
+          ref,
+          kind: 'file' as const,
+          title: 'paper.pdf',
+          contentType: 'application/pdf',
+          path: '/tmp/paper.pdf',
+        },
+      })),
+    openProtocol,
   }
-  return { ...render(<LibraryInspector {...props} />), pageChild, retryChild }
+  return { ...render(<LibraryInspector {...props} />), pageChild, retryChild, openProtocol }
 }
 
 describe('library inspector', () => {
@@ -443,9 +456,8 @@ describe('library inspector', () => {
     expect(resolveAttachment).not.toHaveBeenCalled()
   })
 
-  it('triggers launchZoteroProtocol with deep link when clicking annotation open in zotero button', () => {
-    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
-    mountInspector({
+  it('triggers protocol dispatch with a deep link when clicking annotation open in zotero button', () => {
+    const { openProtocol } = mountInspector({
       ...ITEM_DETAIL,
       attachments: {
         offset: 0,
@@ -480,7 +492,7 @@ describe('library inspector', () => {
     expect(openBtns.length).toBeGreaterThanOrEqual(1)
     const annoOpenBtn = openBtns[openBtns.length - 1]!
     fireEvent.click(annoOpenBtn)
-    expect(clickSpy).toHaveBeenCalledTimes(1)
+    expect(openProtocol).toHaveBeenCalledTimes(1)
   })
 
   it('renders extra metadata row and handles attachment row clicks', async () => {
@@ -530,14 +542,10 @@ describe('library inspector', () => {
   })
 
   it('opens external zotero url via direct open-in-zotero button', () => {
-    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
-    clickSpy.mockClear()
-
-    mountInspector(ITEM_DETAIL)
+    const { openProtocol } = mountInspector(ITEM_DETAIL)
     const openBtns = screen.getAllByRole('button', { name: zh.openInZotero })
     expect(openBtns.length).toBeGreaterThanOrEqual(1)
     fireEvent.click(openBtns[0]!)
-    expect(clickSpy).toHaveBeenCalledTimes(1)
-    clickSpy.mockRestore()
+    expect(openProtocol).toHaveBeenCalledTimes(1)
   })
 })

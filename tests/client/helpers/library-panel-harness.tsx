@@ -9,6 +9,7 @@
 
 import { render } from '@testing-library/react'
 import { vi, type Mock } from 'vitest'
+import { inputActionsStub, zoteroClientStub } from './zotero-client.ts'
 import type {
   ZoteroItemDetailView,
   ZoteroLibraryBrowseRequestView,
@@ -218,6 +219,8 @@ export interface MountedPanel {
     insertQuote: Mock
     submit: Mock
   }
+  /** Every `zoteroItem` target the list rows handed to `getTriggerProps`. */
+  contextMenuTargets: Array<{ kind: string; value: unknown }>
 }
 
 /**
@@ -238,13 +241,7 @@ export function mountPanel(
       if (request.parentRef !== undefined) return { ok: true, value: CHILD_COLLECTIONS }
       return { ok: true, value: ROOT_COLLECTIONS }
     })
-  const inputActions = {
-    setDraft: vi.fn(),
-    captureInsertion: vi.fn(() => ({ anchor: 0 })),
-    insertText: vi.fn(() => true),
-    insertQuote: vi.fn(() => true),
-    submit: vi.fn(),
-  }
+  const inputActions = inputActionsStub()
   const face = {
     collectionPath:
       overrides.collectionPath ??
@@ -295,9 +292,17 @@ export function mountPanel(
   }
   let lastSelection: unknown
   let lastStatus: unknown
+  const contextMenuTargets: Array<{ kind: string; value: unknown }> = []
   const props = {
     t: mockT,
+    useZoteroClient: zoteroClientStub,
     ...face,
+    useContextMenu: () => ({
+      getTriggerProps: (target: { kind: string; value: unknown }) => {
+        contextMenuTargets.push(target)
+        return {}
+      },
+    }),
     // The session-scope composer face; the panel picks it up through its
     // `in` guard exactly as the real renderer's prop merge delivers it.
     inputActions,
@@ -340,5 +345,6 @@ export function mountPanel(
     view: render(<ZoteroLibraryPanel {...props} {...surface} />),
     face: face as unknown as MountedPanel['face'],
     inputActions,
+    contextMenuTargets,
   }
 }

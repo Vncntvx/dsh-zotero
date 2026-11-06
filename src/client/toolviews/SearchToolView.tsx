@@ -26,6 +26,7 @@ type SearchToolViewProps = PropsRuntime<'tool.call.toolview', 'zotero_search'> &
 
 export function SearchToolView(props: SearchToolViewProps) {
   const { toolName, block, useDisclosure, inspect, t } = props
+  const client = props.useZoteroClient()
 
   const { icon, query, summary, errorSummary, rows, omitted, detailOmitted, rawText } =
     useMemo(() => {
@@ -116,6 +117,7 @@ export function SearchToolView(props: SearchToolViewProps) {
                           <PdfReadButton
                             attachmentRef={row.bestAttachmentRef}
                             onOpenFile={props.openFile}
+                            resolveAttachment={client.resolveAttachment}
                             label={t('readPdf')}
                             t={t}
                             variant="link"
@@ -128,6 +130,7 @@ export function SearchToolView(props: SearchToolViewProps) {
                           t={t}
                           variant="link"
                           className={css.actionLink}
+                          openProtocol={client.openProtocol}
                         />
                       </div>
                     </div>

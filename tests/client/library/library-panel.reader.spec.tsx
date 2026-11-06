@@ -185,7 +185,7 @@ describe('reading an attachment', () => {
     const { face } = mountPanel({ item: vi.fn(() => refetch.promise) }, sessions)
 
     expect(await screen.findByRole('button', { name: zh.readPdf })).toBeTruthy()
-    expect(face.item).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(face.item).toHaveBeenCalledTimes(1))
     expect(screen.queryByText(zh.libraryNoSelection)).toBeNull()
     expect(screen.getByRole('button', { name: zh.libraryAskInChat })).toBeTruthy()
 

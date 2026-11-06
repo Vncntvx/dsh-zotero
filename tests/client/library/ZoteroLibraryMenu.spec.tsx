@@ -53,7 +53,7 @@ describe('ZoteroLibraryMenu', () => {
   })
 
   it('triggers protocol open and dismiss when clicking open in zotero button', () => {
-    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    const openProtocol = vi.fn(async () => true)
     const handleDismiss = vi.fn()
     render(
       <ZoteroLibraryMenu
@@ -61,11 +61,12 @@ describe('ZoteroLibraryMenu', () => {
         sessionId="session-1"
         t={t}
         dismiss={handleDismiss}
+        openProtocol={openProtocol}
       />,
     )
     const openBtn = screen.getByRole('menuitem', { name: mockT('openInZotero') })
     fireEvent.click(openBtn)
     expect(handleDismiss).toHaveBeenCalledTimes(1)
-    expect(clickSpy).toHaveBeenCalledTimes(1)
+    expect(openProtocol).toHaveBeenCalledWith('zotero://select/')
   })
 })

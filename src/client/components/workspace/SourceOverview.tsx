@@ -63,6 +63,7 @@ interface SourceOverviewProps {
   readonly setDraft?: (text: string) => void
   readonly openFile?: (path: string) => void
   readonly resolveAttachment?: (ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>
+  readonly openProtocol?: (url: string) => Promise<boolean>
 }
 
 /** The overview panel: guarded actions, search records, and the detail disclosure. */
@@ -72,6 +73,7 @@ export function SourceOverview({
   setDraft,
   openFile,
   resolveAttachment,
+  openProtocol,
 }: SourceOverviewProps) {
   const [detailOpen, setDetailOpen] = useState(false)
   const evidenceMatch = item.evidenceMatch
@@ -120,7 +122,13 @@ export function SourceOverview({
               className={quiet.quiet}
             />
           ))}
-        <ZoteroLocateActions title={item.title} itemRef={item.ref} t={t} className={quiet.quiet} />
+        <ZoteroLocateActions
+          title={item.title}
+          itemRef={item.ref}
+          t={t}
+          className={quiet.quiet}
+          openProtocol={openProtocol}
+        />
         {setDraft !== undefined && (
           <Button
             variant="outline"

@@ -157,6 +157,20 @@ describe('filters', () => {
     const holder = { chat: chatOf([toolRow(searchResult())]) }
     const props = {
       t,
+      useZoteroClient: () => ({
+        reportClientError: vi.fn(async () => {}),
+        openProtocol: vi.fn(async () => true),
+        resolveAttachment: vi.fn(async (ref: string) => ({
+          ok: true,
+          value: {
+            ref,
+            kind: 'file',
+            title: 'paper.pdf',
+            contentType: 'application/pdf',
+            path: '/tmp/paper.pdf',
+          },
+        })),
+      }),
       status: async () => ({ ok: true, value: CONNECTED }),
       useSession: (sel: (snap: SessionSnapshot) => unknown) => sel(sessionOf()),
       // The standard session catalog the tab resolves file addresses against;
@@ -193,6 +207,20 @@ describe('filters', () => {
     const chat = chatOf([toolRow(searchResult()), toolRow(retrieve)])
     const props = {
       t,
+      useZoteroClient: () => ({
+        reportClientError: vi.fn(async () => {}),
+        openProtocol: vi.fn(async () => true),
+        resolveAttachment: vi.fn(async (ref: string) => ({
+          ok: true,
+          value: {
+            ref,
+            kind: 'file',
+            title: 'paper.pdf',
+            contentType: 'application/pdf',
+            path: '/tmp/paper.pdf',
+          },
+        })),
+      }),
       status: async () => ({ ok: true, value: CONNECTED }),
       useSession: (sel: (snap: SessionSnapshot) => unknown) => sel(holder.session),
       useSessions: (sel: (snapshot: SessionsStub) => unknown) =>

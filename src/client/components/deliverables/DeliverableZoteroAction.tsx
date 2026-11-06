@@ -4,47 +4,16 @@
  * @module dsh-zotero/client/components/deliverables/DeliverableZoteroAction
  */
 
-import type {} from '@deepseek-ai/dsh-client-ui-deliverables/src/client/turn-deliverables.ts'
-import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import type { ChatSnapshot, UseChat } from '@deepseek-ai/dsh-client-ui-chat/client'
-import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
-import { ZoteroLibraryIcon } from '../library/ZoteroLibraryIcon.tsx'
+import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { ChatSnapshot } from '@deepseek-ai/dsh-client-ui-chat/client'
+import { isBibliographyDeliverable, type DeliverableFileMeta } from '../../bibliography.ts'
+import { BibliographyLibraryButton } from '../document/BibliographyLibraryButton.tsx'
 
-export interface DeliverableZoteroActionProps {
-  readonly actionUrl?: string
-  readonly t: TranslateNS<'zotero'>
-  readonly useChat?: UseChat
-  readonly onOpenLibrary?: () => void
-}
-
-export interface DeliverableFileMeta {
-  readonly path: string
-  readonly description?: string
-}
-
-const STRICT_BIBLIOGRAPHY_EXTENSIONS = /\.(bib|ris|csljson|csl\.json|biblatex|bibtex)$/i
-const BIBLIOGRAPHY_DESCRIPTION_PATTERN = /exported (?:csljson|citation|references|bib)/i
-const BIBLIOGRAPHY_FILENAME_PATTERN = /(?:csl|zotero|citations?|references?|bibliography)/i
-
-/**
- * Determine whether a delivered file represents a bibliography export.
- * Strict extensions (.bib, .ris, .csljson, etc.) pass unconditionally;
- * generic .json files must carry a bibliography description or naming token.
- */
-export function isBibliographyDeliverable(file: DeliverableFileMeta | undefined): boolean {
-  if (!file?.path) return false
-  if (STRICT_BIBLIOGRAPHY_EXTENSIONS.test(file.path)) return true
-  if (/\.json$/i.test(file.path)) {
-    if (file.description && BIBLIOGRAPHY_DESCRIPTION_PATTERN.test(file.description)) return true
-    if (BIBLIOGRAPHY_FILENAME_PATTERN.test(file.path)) return true
-  }
-  return false
-}
-
-export function isBibliographyPath(path: string | undefined): boolean {
-  if (!path) return false
-  return isBibliographyDeliverable({ path })
-}
+export interface DeliverableZoteroActionProps
+  extends
+    PropsRuntime<'deliverables.file.actions'>,
+    PropsLocale<'zotero'>,
+    InjectFace<{ readonly onOpenLibrary: () => void }> {}
 
 /**
  * Resolves the delivered file metadata (path and optional description) from actionUrl coordinates.
@@ -97,21 +66,9 @@ export function resolveDeliverablePath(
 
 export function DeliverableZoteroAction(props: DeliverableZoteroActionProps) {
   const { actionUrl, t, useChat, onOpenLibrary } = props
-  const snapshot = useChat ? useChat((s) => s) : undefined
-  const file = resolveDeliverableFile(actionUrl, snapshot)
+  const file = useChat((snapshot) => resolveDeliverableFile(actionUrl, snapshot))
 
   if (!isBibliographyDeliverable(file)) return null
 
-  return (
-    <Button
-      variant="outline"
-      size="sm"
-      onClick={onOpenLibrary}
-      title={t('deliverableOpenLibrary')}
-      aria-label={t('deliverableOpenLibrary')}
-    >
-      <ZoteroLibraryIcon size={12} />
-      <span>{t('deliverableOpenLibrary')}</span>
-    </Button>
-  )
+  return <BibliographyLibraryButton label={t('openInLibraryPanel')} onOpenLibrary={onOpenLibrary} />
 }

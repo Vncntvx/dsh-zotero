@@ -9,7 +9,7 @@ import { Component, type ErrorInfo, type ReactNode } from 'react'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import { messageOf } from '../error-text.ts'
-import { reportCrashedSurface } from '../actions/error-reporter.ts'
+import { reportCrashedSurface, type ErrorReporter } from '../actions/error-reporter.ts'
 import css from './cards.module.css'
 
 interface ZoteroSurfaceBoundaryProps {
@@ -22,6 +22,8 @@ interface ZoteroSurfaceBoundaryProps {
    * client-error intake files the entry under this key (`sources`, `detail`).
    */
   readonly surface: string
+  /** The gateway this boundary files its contained crash through. */
+  readonly report: ErrorReporter
 }
 
 interface ZoteroSurfaceBoundaryState {
@@ -47,10 +49,15 @@ export class ZoteroSurfaceBoundary extends Component<
       messageOf(error),
       info,
     )
-    reportCrashedSurface(this.props.surface, error, {
-      kind: 'componentStack',
-      componentStack: info.componentStack,
-    })
+    reportCrashedSurface(
+      this.props.surface,
+      error,
+      {
+        kind: 'componentStack',
+        componentStack: info.componentStack,
+      },
+      this.props.report,
+    )
   }
 
   override componentDidUpdate(prevProps: ZoteroSurfaceBoundaryProps): void {

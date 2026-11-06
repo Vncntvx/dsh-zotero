@@ -7,6 +7,7 @@
 
 import clsx from 'clsx'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import type { UseContextMenu } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import { Button, IconWorkspaceTreeOutlineMedium } from '@deepseek-ai/dsh-client-ui-primitives'
 import { isPdfContentType } from '../../../media-types.ts'
 import { pageRangeOf, type LibraryListState, type LibrarySelection } from './library-model.ts'
@@ -27,6 +28,7 @@ interface LibraryItemListProps {
   readonly selectedRef: string | undefined
   readonly selectItem: (ref: string | undefined) => void
   readonly retry: () => void
+  readonly useContextMenu: UseContextMenu
 }
 
 /** The header a selection shows; collection/search rows carry their own name. */
@@ -58,8 +60,10 @@ export function LibraryItemList({
   selectedRef,
   selectItem,
   retry,
+  useContextMenu,
 }: LibraryItemListProps) {
   const range = list.phase === 'ready' ? pageRangeOf(list, list.items.length) : undefined
+  const contextMenu = useContextMenu()
 
   return (
     <section
@@ -125,10 +129,19 @@ export function LibraryItemList({
             {list.items.map((item) => {
               const isSelected = selectedRef === item.ref
               const hasPdf = isPdfContentType(item.bestAttachmentType)
+              const triggerProps = contextMenu?.getTriggerProps({
+                kind: 'zoteroItem',
+                value: {
+                  ref: item.ref,
+                  title: item.title,
+                  itemType: item.itemType,
+                },
+              })
               return (
                 <li key={item.ref}>
                   <button
                     type="button"
+                    {...triggerProps}
                     className={clsx(
                       css.itemRow,
                       isSelected && css.itemRowActive,

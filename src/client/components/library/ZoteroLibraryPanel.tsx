@@ -84,8 +84,9 @@ export type ZoteroLibraryPanelProps = PropsRuntime<'sidebar.right.pane.tab'> &
 
 export function ZoteroLibraryPanel(props: ZoteroLibraryPanelProps) {
   const { t } = props
+  const client = props.useZoteroClient()
   return (
-    <ZoteroSurfaceBoundary t={t} surface="library">
+    <ZoteroSurfaceBoundary t={t} surface="library" report={client.reportClientError}>
       <ZoteroLibraryPanelBody {...props} />
     </ZoteroSurfaceBoundary>
   )
@@ -198,6 +199,7 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
     if (sessionRemoved) clearLibrarySessionMemory(props.sessionId)
   }, [sessionRemoved, props.sessionId])
   const cwd = props.useSessions((snapshot) => snapshot.byId[props.sessionId]?.cwd)
+  const client = props.useZoteroClient()
   // Local-file reading rides the right reader this session hosts. A missing
   // workspace root is fine: `fileAddressFor` resolves absolute paths as-is.
   const openFile = (path: string): void => {
@@ -468,6 +470,7 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
                 selectedRef={feed.selectedRef}
                 selectItem={handleSelectItem}
                 retry={feed.retryList}
+                useContextMenu={props.useContextMenu}
               />
             </div>
             <div
@@ -507,6 +510,7 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
                 retryChild={feed.retryChild}
                 openFile={openFile}
                 resolveAttachment={props.resolveAttachment}
+                openProtocol={client.openProtocol}
                 exportItem={props.export}
               />
             </div>

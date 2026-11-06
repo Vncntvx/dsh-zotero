@@ -17,7 +17,7 @@ import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots
 import { FileResultView } from './FileResultView.tsx'
 import { metaOf } from '../presenters.ts'
 import { messageOf } from '../error-text.ts'
-import { reportCrashedSurface } from '../actions/error-reporter.ts'
+import { reportCrashedSurface, type ErrorReporter } from '../actions/error-reporter.ts'
 import css from '../components/cards.module.css'
 
 type AnyToolViewProps = PropsRuntime<'tool.call.toolview'> & PropsLocale<'zotero'>
@@ -25,6 +25,8 @@ type AnyToolViewProps = PropsRuntime<'tool.call.toolview'> & PropsLocale<'zotero
 interface ZoteroCardBoundaryProps {
   readonly props: AnyToolViewProps
   readonly children: ReactNode
+  /** The gateway this boundary files its contained crash through. */
+  readonly report: ErrorReporter
 }
 
 interface ZoteroCardBoundaryState {
@@ -46,10 +48,15 @@ export class ZoteroCardBoundary extends Component<
 
   override componentDidCatch(error: unknown, info: ErrorInfo): void {
     console.error('dsh-zotero: tool card failed to render:', messageOf(error), info)
-    reportCrashedSurface(`tool:${this.props.props.toolName}`, error, {
-      kind: 'componentStack',
-      componentStack: info.componentStack,
-    })
+    reportCrashedSurface(
+      `tool:${this.props.props.toolName}`,
+      error,
+      {
+        kind: 'componentStack',
+        componentStack: info.componentStack,
+      },
+      this.props.report,
+    )
   }
 
   override render(): ReactNode {
@@ -83,7 +90,7 @@ export function withCardBoundary<P extends AnyToolViewProps>(
 ): FunctionComponent<P> {
   function GuardedToolView(props: P): ReactNode {
     return (
-      <ZoteroCardBoundary props={props}>
+      <ZoteroCardBoundary props={props} report={props.useZoteroClient().reportClientError}>
         {metaOf(props.block)?.delivery === 'file' ||
         typeof metaOf(props.block)?.resultSessionId === 'string' ? (
           <FileResultView {...props} />

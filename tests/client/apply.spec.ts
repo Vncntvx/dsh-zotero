@@ -16,12 +16,11 @@ import {
   ZOTERO_SETTINGS_NAMESPACE,
 } from '../../src/settings-namespace.ts'
 import { ZOTERO_LIBRARY_SETTINGS_NAMESPACE } from '../../src/contract.ts'
-import { getAttachmentResolver } from '../../src/client/actions/attachment-resolver.ts'
 import { REGISTRATIONS } from '../../src/client/toolviews/index.ts'
 import { applyEntry, fakeWorld, type FakeApplyWorld } from './helpers/apply-world.ts'
 import { fakeScope } from './helpers/fake-scope.ts'
 import type { ZoteroLibraryPanelFace } from '../../src/client/components/library/ZoteroLibraryPanel.tsx'
-import type { ZoteroDetailFace } from '../../src/client/components/plugin/faces.ts'
+import type { ZoteroProbeFace } from '../../src/client/components/plugin/faces.ts'
 import { searchResult } from '../helpers/library-fixtures.ts'
 
 // The page imports primitive icons; stub them with the shared DOM face so
@@ -40,6 +39,7 @@ describe('the browser-half entry', () => {
       'configForms',
       'sidebarRight',
       'sidebarRightTabs',
+      'contextMenus',
     ])
   })
 
@@ -74,6 +74,7 @@ describe('the browser-half entry', () => {
     // configs, the plugin-manager cards, the conversation tab, and the
     // right-sidebar library surfaces.
     expect(world.injected.map((entry) => entry.name)).toEqual([
+      'shell.overlay',
       'tool.call.toolview',
       'plugins.bundle.activation',
       'plugins.bundle.config',
@@ -87,6 +88,9 @@ describe('the browser-half entry', () => {
       'sidebar.right.tab.menu.item',
       'conversation.input.left',
       'deliverables.file.actions',
+      'sidebar.right.tab.document.actions',
+      'sidebar.right.tab.document.unpreviewable',
+      'contextMenu.icon',
     ])
   })
 
@@ -251,13 +255,9 @@ describe('the browser-half entry', () => {
     expect(statusSection).toBeDefined()
     expect(statusSection?.options.locale).toBe('zotero')
     // Typed as the declared face: a registration that drops a member fails to
-    // compile rather than rendering a section that reports every session healthy.
-    const face = (statusSection?.options.inject as () => ZoteroDetailFace)()
+    // compile rather than rendering a section that cannot answer its probe.
+    const face = (statusSection?.options.inject as () => ZoteroProbeFace)()
     expect(typeof face.probe).toBe('function')
-    await expect(face.inspect()).resolves.toMatchObject({ ok: true })
-    await expect(face.execute({ issueIds: ['session-log:session-1'] })).resolves.toMatchObject({
-      ok: true,
-    })
   })
 
   it('rejects instead of degrading when the mount rejects', async () => {
@@ -286,7 +286,15 @@ describe('the browser-half entry', () => {
     // The UI fiber declared `remote.zotero`, so `ctx.remote.zotero` is a legal
     // service read there: the same shape the harness's own client plugins use.
     expect(world.injectDeps).toEqual([
-      ['remote.zotero', 'locale', 'slots', 'configForms', 'sidebarRight', 'sidebarRightTabs'],
+      [
+        'remote.zotero',
+        'locale',
+        'slots',
+        'configForms',
+        'sidebarRight',
+        'sidebarRightTabs',
+        'contextMenus',
+      ],
     ])
     const tab = world.injected.find((entry) => entry.name === 'conversation.view')
     tab?.register()
@@ -345,7 +353,11 @@ describe('the browser-half entry', () => {
     ])
     await face().resolveAttachment('item-123')
     await face().status()
-    await getAttachmentResolver()?.('item-123')
+    const client = (
+      world.rootProps?.useZoteroClient as
+        (() => { resolveAttachment: (ref: string) => Promise<unknown> }) | undefined
+    )?.()
+    await client?.resolveAttachment('item-123')
   })
 
   it('passes the address through without reading any session state', async () => {

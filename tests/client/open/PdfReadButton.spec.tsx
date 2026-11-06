@@ -10,7 +10,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ZoteroAttachmentLocationView } from '../../../src/contract.ts'
 import { PdfReadButton } from '../../../src/client/components/open/PdfReadButton.tsx'
-import { setAttachmentResolver } from '../../../src/client/actions/attachment-resolver.ts'
 import { deferred } from '../../helpers/sync.ts'
 
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
@@ -25,7 +24,6 @@ const t = mockT
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
-  setAttachmentResolver(undefined)
 })
 
 describe('PdfReadButton', () => {
@@ -152,30 +150,10 @@ describe('PdfReadButton', () => {
     expect(screen.getByRole('button', { name: 'async string failure' })).toBeTruthy()
   })
 
-  it('uses singleton attachment resolver when prop is omitted', async () => {
-    const onOpenFile = vi.fn()
-    const singletonResolver = vi.fn().mockResolvedValue({
-      ok: true,
-      value: {
-        ref: 'zotero://user/0/item/ATT12345',
-        kind: 'file',
-        title: 'sample.pdf',
-        contentType: 'application/pdf',
-        path: '/storage/singleton.pdf',
-      },
-    })
-    setAttachmentResolver(singletonResolver)
-
-    render(
-      <PdfReadButton attachmentRef="zotero://user/0/item/ATT12345" onOpenFile={onOpenFile} t={t} />,
-    )
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: mockT('readPdf') }))
-    })
-
-    expect(singletonResolver).toHaveBeenCalledWith('zotero://user/0/item/ATT12345')
-    expect(onOpenFile).toHaveBeenCalledWith('/storage/singleton.pdf')
+  it('disables attachment resolution when no resolver prop is available', () => {
+    render(<PdfReadButton attachmentRef="zotero://user/0/item/ATT12345" t={t} />)
+    const button = screen.getByRole('button', { name: mockT('libraryNoSessionForOpen') })
+    expect((button as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('shows error when resolved file has no local path', async () => {
@@ -387,7 +365,8 @@ describe('PdfReadButton', () => {
 
   it('safely handles attachmentRef when no resolver is available', () => {
     render(<PdfReadButton attachmentRef="zotero://user/0/item/ATT12345" t={t} />)
-    fireEvent.click(screen.getByRole('button', { name: mockT('readPdf') }))
+    const button = screen.getByRole('button', { name: mockT('libraryNoSessionForOpen') })
+    expect(button.hasAttribute('disabled')).toBe(true)
   })
 
   it('renders link variant with default class', () => {

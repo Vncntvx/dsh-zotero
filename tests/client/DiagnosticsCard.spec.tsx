@@ -15,10 +15,12 @@ import type { ZoteroDiagnosticsView } from '../../src/client/remote.ts'
 import { zh } from '../../src/client/locales.ts'
 import { entry, fakeProbe, okView, targetSubject } from './helpers/diagnostics-fixtures.ts'
 import { mockT } from './helpers/mock-translate.ts'
+import type { ZoteroClientFace } from '../../src/client/actions/client-face.ts'
 
 afterEach(cleanup)
 
 const t = mockT
+const client = () => ({ reportClientError: vi.fn(async () => {}) }) as unknown as ZoteroClientFace
 
 const otherSubject: PluginsSubject = {
   kind: 'bundle',
@@ -36,7 +38,13 @@ describe('DiagnosticsCard', () => {
   it('returns null when the subject is another plugin', () => {
     const diagnostics = vi.fn(async () => okView())
     const { container } = render(
-      <DiagnosticsCard subject={otherSubject} t={t} probe={fakeProbe} diagnostics={diagnostics} />,
+      <DiagnosticsCard
+        useZoteroClient={client}
+        subject={otherSubject}
+        t={t}
+        probe={fakeProbe}
+        diagnostics={diagnostics}
+      />,
     )
     expect(container.innerHTML).toBe('')
     expect(diagnostics).not.toHaveBeenCalled()
@@ -45,7 +53,13 @@ describe('DiagnosticsCard', () => {
   it('returns null and does not render when diagnostics is disabled (debug: false)', async () => {
     const diagnostics = vi.fn(async () => okView({ debug: false }))
     const { container } = render(
-      <DiagnosticsCard subject={targetSubject} t={t} probe={fakeProbe} diagnostics={diagnostics} />,
+      <DiagnosticsCard
+        useZoteroClient={client}
+        subject={targetSubject}
+        t={t}
+        probe={fakeProbe}
+        diagnostics={diagnostics}
+      />,
     )
     await waitFor(() => expect(diagnostics).toHaveBeenCalled())
     expect(container.querySelector('[data-zotero-diagnostics]')).toBeNull()
@@ -63,7 +77,13 @@ describe('DiagnosticsCard', () => {
       }),
     )
     const { container } = render(
-      <DiagnosticsCard subject={targetSubject} t={t} probe={fakeProbe} diagnostics={diagnostics} />,
+      <DiagnosticsCard
+        useZoteroClient={client}
+        subject={targetSubject}
+        t={t}
+        probe={fakeProbe}
+        diagnostics={diagnostics}
+      />,
     )
     await waitFor(() => expect(container.querySelector('[data-zotero-diagnostics]')).toBeTruthy())
     expect(container.textContent).toContain('tool.result')
@@ -88,7 +108,13 @@ describe('DiagnosticsCard', () => {
       }),
     )
     const { container } = render(
-      <DiagnosticsCard subject={targetSubject} t={t} probe={fakeProbe} diagnostics={diagnostics} />,
+      <DiagnosticsCard
+        useZoteroClient={client}
+        subject={targetSubject}
+        t={t}
+        probe={fakeProbe}
+        diagnostics={diagnostics}
+      />,
     )
     await waitFor(() => expect(container.textContent).toContain('http.failure'))
     fireEvent.click(screen.getByText(zh.diagnosticsLevelProblems))
@@ -104,7 +130,13 @@ describe('DiagnosticsCard', () => {
       okView({ entries: [entry(1, 'info', 'transport.built')], total: 1 }),
     )
     const { container } = render(
-      <DiagnosticsCard subject={targetSubject} t={t} probe={fakeProbe} diagnostics={diagnostics} />,
+      <DiagnosticsCard
+        useZoteroClient={client}
+        subject={targetSubject}
+        t={t}
+        probe={fakeProbe}
+        diagnostics={diagnostics}
+      />,
     )
     await waitFor(() => expect(container.textContent).toContain('transport.built'))
     fireEvent.click(screen.getByText(zh.refresh))
@@ -120,7 +152,13 @@ describe('DiagnosticsCard', () => {
         }) as RemoteResult<ZoteroDiagnosticsView>,
     )
     const { container } = render(
-      <DiagnosticsCard subject={targetSubject} t={t} probe={fakeProbe} diagnostics={diagnostics} />,
+      <DiagnosticsCard
+        useZoteroClient={client}
+        subject={targetSubject}
+        t={t}
+        probe={fakeProbe}
+        diagnostics={diagnostics}
+      />,
     )
     await waitFor(() => expect(container.textContent).toContain('down'))
     expect(container.querySelector('[data-zotero-diagnostics]')).toBeTruthy()
@@ -129,7 +167,13 @@ describe('DiagnosticsCard', () => {
   it('renders the empty state when the ring holds nothing', async () => {
     const diagnostics = vi.fn(async (): Promise<RemoteResult<ZoteroDiagnosticsView>> => okView())
     const { container } = render(
-      <DiagnosticsCard subject={targetSubject} t={t} probe={fakeProbe} diagnostics={diagnostics} />,
+      <DiagnosticsCard
+        useZoteroClient={client}
+        subject={targetSubject}
+        t={t}
+        probe={fakeProbe}
+        diagnostics={diagnostics}
+      />,
     )
     await waitFor(() => expect(container.textContent).toContain(zh.diagnosticsEmpty))
   })
@@ -139,7 +183,13 @@ describe('DiagnosticsCard', () => {
       okView({ entries: [entry(1, 'info', 'transport.built')], total: 1 }),
     )
     const { container } = render(
-      <DiagnosticsCard subject={targetSubject} t={t} probe={fakeProbe} diagnostics={diagnostics} />,
+      <DiagnosticsCard
+        useZoteroClient={client}
+        subject={targetSubject}
+        t={t}
+        probe={fakeProbe}
+        diagnostics={diagnostics}
+      />,
     )
     await waitFor(() => expect(container.textContent).toContain('transport.built'))
     fireEvent.click(screen.getByText(zh.diagnosticsLevelProblems))
@@ -161,6 +211,7 @@ describe('DiagnosticsCard', () => {
       }
       const { container } = render(
         <DiagnosticsCard
+          useZoteroClient={client}
           subject={targetSubject}
           t={explodingT}
           probe={fakeProbe}
@@ -185,7 +236,13 @@ describe('DiagnosticsCard', () => {
     const diagnostics = vi.fn(async (): Promise<RemoteResult<ZoteroDiagnosticsView>> => okView())
     const itemSubject: PluginsSubject = { kind: 'item', id: 'dsh-zotero' }
     const { container } = render(
-      <DiagnosticsCard subject={itemSubject} t={t} probe={fakeProbe} diagnostics={diagnostics} />,
+      <DiagnosticsCard
+        useZoteroClient={client}
+        subject={itemSubject}
+        t={t}
+        probe={fakeProbe}
+        diagnostics={diagnostics}
+      />,
     )
     expect(container.innerHTML).toBe('')
     expect(diagnostics).not.toHaveBeenCalled()
@@ -202,7 +259,13 @@ describe('DiagnosticsCard', () => {
       }),
     )
     const { container } = render(
-      <DiagnosticsCard subject={targetSubject} t={t} probe={fakeProbe} diagnostics={diagnostics} />,
+      <DiagnosticsCard
+        useZoteroClient={client}
+        subject={targetSubject}
+        t={t}
+        probe={fakeProbe}
+        diagnostics={diagnostics}
+      />,
     )
     await waitFor(() => expect(container.textContent).toContain('×3'))
     expect(container.querySelector('details')).toBeTruthy()
@@ -215,7 +278,13 @@ describe('DiagnosticsCard', () => {
       okView({ entries: [entry(1, 'info', 'transport.built')], total: 1, debug: true }),
     )
     const { container } = render(
-      <DiagnosticsCard subject={targetSubject} t={t} probe={fakeProbe} diagnostics={diagnostics} />,
+      <DiagnosticsCard
+        useZoteroClient={client}
+        subject={targetSubject}
+        t={t}
+        probe={fakeProbe}
+        diagnostics={diagnostics}
+      />,
     )
     await waitFor(() => expect(container.textContent).toContain(zh.diagnosticsDebugOn))
   })
@@ -231,7 +300,13 @@ describe('DiagnosticsCard', () => {
       okView({ entries, total: 120 }),
     )
     const { container } = render(
-      <DiagnosticsCard subject={targetSubject} t={t} probe={fakeProbe} diagnostics={diagnostics} />,
+      <DiagnosticsCard
+        useZoteroClient={client}
+        subject={targetSubject}
+        t={t}
+        probe={fakeProbe}
+        diagnostics={diagnostics}
+      />,
     )
     await waitFor(() => expect(container.textContent).toContain('m0100'))
     expect(container.textContent).toContain(
@@ -253,7 +328,13 @@ describe('DiagnosticsCard', () => {
       }),
     )
     const { container } = render(
-      <DiagnosticsCard subject={targetSubject} t={t} probe={fakeProbe} diagnostics={diagnostics} />,
+      <DiagnosticsCard
+        useZoteroClient={client}
+        subject={targetSubject}
+        t={t}
+        probe={fakeProbe}
+        diagnostics={diagnostics}
+      />,
     )
     await waitFor(() => expect(container.textContent).toContain('string.event'))
     expect(container.querySelector('details')).toBeTruthy()

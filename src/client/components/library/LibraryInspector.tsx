@@ -35,13 +35,7 @@ import type {
   ZoteroChildListingKind,
   ZoteroNoteRowView,
 } from '../../../contract.ts'
-import { getAttachmentResolver } from '../../actions/attachment-resolver.ts'
-import {
-  launchZoteroProtocol,
-  parseRefIdentity,
-  pdfUrlOf,
-  selectUrlOf,
-} from '../../actions/open-zotero.ts'
+import { parseRefIdentity, pdfUrlOf, selectUrlOf } from '../../actions/open-zotero.ts'
 import { formatCreatorsList } from '../../../creators.ts'
 import { HTML_CONTENT_TYPE, PDF_CONTENT_TYPE, isPdfContentType } from '../../../media-types.ts'
 import { isObjectKey } from '../../../json.ts'
@@ -66,6 +60,8 @@ interface LibraryInspectorProps {
   readonly openFile: ((path: string) => void) | undefined
   readonly resolveAttachment:
     ((ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>) | undefined
+  /** Host-backed protocol launcher from the shared client face. */
+  readonly openProtocol?: (url: string) => Promise<boolean>
   /** The panel's export face; the citation-copy controls stay wire-disabled without it. */
   readonly exportItem?: LibraryExportItem
 }
@@ -133,24 +129,26 @@ function AttachmentItem({
   attachment,
   openFile,
   resolveAttachment,
+  openProtocol,
 }: {
   readonly t: TranslateNS<'zotero'>
   readonly attachment: ZoteroAttachmentRowView
   readonly openFile: ((path: string) => void) | undefined
   readonly resolveAttachment:
     ((ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>) | undefined
+  readonly openProtocol?: (url: string) => Promise<boolean>
 }) {
   const [resolving, setResolving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const supported = isDshSupportedAttachment(attachment.contentType, attachment.title)
-  const canOpen = supported && (openFile !== undefined || resolveAttachment !== undefined)
+  const canOpen = supported && resolveAttachment !== undefined
 
   const handleOpen = async () => {
     if (!canOpen || resolving) return
     setError(null)
     setResolving(true)
     try {
-      const resolver = resolveAttachment ?? getAttachmentResolver()
+      const resolver = resolveAttachment
       if (!resolver) return
       const res = await resolver(attachment.ref)
       if (res.ok) {
@@ -277,11 +275,13 @@ function AnnotationItem({
   annotation,
   inputActions,
   targetAttachmentRef,
+  openProtocol,
 }: {
   readonly t: TranslateNS<'zotero'>
   readonly annotation: ZoteroAnnotationRowView
   readonly inputActions: InputActions | undefined
   readonly targetAttachmentRef?: string
+  readonly openProtocol?: (url: string) => Promise<boolean>
 }) {
   const [expanded, setExpanded] = useState(false)
   const isLong = annotation.text.length > 180 || annotation.text.split('\n').length > 4
@@ -320,7 +320,9 @@ function AnnotationItem({
             <button
               type="button"
               className={css.cardActionBtn}
-              onClick={() => void launchZoteroProtocol(annotationUrl)}
+              onClick={() => {
+                if (openProtocol !== undefined) void openProtocol(annotationUrl)
+              }}
               title={t('openInZoteroTooltip')}
               aria-label={t('openInZotero')}
             >
@@ -390,6 +392,7 @@ export function LibraryInspector({
   inputActions,
   openFile,
   resolveAttachment,
+  openProtocol,
   retry,
   pageChild,
   childStates,
@@ -490,7 +493,7 @@ export function LibraryInspector({
               icon={<IconLinkOutlineRegular size={14} />}
               onClick={() => {
                 const url = selectUrlOf(detail.ref)
-                if (url) void launchZoteroProtocol(url)
+                if (url && openProtocol !== undefined) void openProtocol(url)
               }}
               title={t('openInZoteroTooltip')}
             >
@@ -628,6 +631,7 @@ export function LibraryInspector({
               attachment={attachment}
               openFile={openFile}
               resolveAttachment={resolveAttachment}
+              openProtocol={openProtocol}
             />
           ))}
         </ChildSection>
@@ -669,6 +673,7 @@ export function LibraryInspector({
                 annotation={annotation}
                 inputActions={inputActions}
                 targetAttachmentRef={targetAttachmentRef}
+                openProtocol={openProtocol}
               />
             )
           })}

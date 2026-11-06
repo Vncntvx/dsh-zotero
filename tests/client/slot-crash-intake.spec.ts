@@ -23,6 +23,7 @@ import { apply } from '../../src/client/index.ts'
 import { RETIRED_ENTRY } from '../../src/client/actions/error-reporter.ts'
 import type { ZoteroClientErrorReport } from '../../src/contract.ts'
 import { fakeScope } from './helpers/fake-scope.ts'
+import { createFakeContextMenus, type FakeContextMenuSink } from './helpers/fake-context-menus.ts'
 import { fakeEntryErrorSeam } from './helpers/slot-crash-seam.ts'
 
 // The page imports primitive icons; stub them with the shared DOM face so this
@@ -77,6 +78,11 @@ function intakeWorld(journal: ZoteroClientErrorReport[]): IntakeWorld {
   const scope = fakeScope()
   const seam = fakeEntryErrorSeam()
   let collector: Array<() => void> | undefined
+  const contextMenuSink: FakeContextMenuSink = {
+    contextMenuRegistrations: [],
+    notifications: [],
+    contextMenuDisposes: 0,
+  }
   const ctx = {
     effect: (register: () => unknown): (() => void) => {
       const dispose = register()
@@ -121,11 +127,13 @@ function intakeWorld(journal: ZoteroClientErrorReport[]): IntakeWorld {
       ) => register(new Set(namespaces)),
     },
     uiConversation: { events: { register: () => () => {} } },
+    contextMenus: createFakeContextMenus(contextMenuSink),
     slots: {
       inject: () => () => {},
       register: (options: Record<string, unknown>, component: unknown) =>
         storedEntry(options, component),
       onEntryError: seam.onEntryError,
+      provideRoot: () => () => {},
     },
   }
   return {

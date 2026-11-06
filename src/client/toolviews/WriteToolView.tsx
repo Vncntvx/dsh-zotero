@@ -20,7 +20,7 @@ import {
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ToolArgs } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { CopyButton } from '../components/CopyButton.tsx'
-import { launchZoteroProtocol, selectUrlOf } from '../actions/open-zotero.ts'
+import { selectUrlOf } from '../actions/open-zotero.ts'
 import { writeMetaOf, type WriteMetaView } from '../sources/write-decoder.ts'
 import {
   argsViewOf,
@@ -384,6 +384,7 @@ const WRITE_DESCRIPTORS: Record<WriteToolName, WriteDescriptor> = {
 
 export function WriteToolView(props: WriteToolViewProps) {
   const { toolName, block, useDisclosure, inspect, t } = props
+  const client = props.useZoteroClient()
 
   const {
     icon,
@@ -525,7 +526,7 @@ export function WriteToolView(props: WriteToolViewProps) {
                   className={css.actionLink}
                   onClick={() => {
                     const targetUrl = parentSelectUrl ?? selectUrlOf(parentRef)
-                    if (targetUrl) void launchZoteroProtocol(targetUrl)
+                    if (targetUrl) void client.openProtocol(targetUrl)
                   }}
                   title={t('openInZoteroTooltip')}
                   aria-label={t('openInZotero')}

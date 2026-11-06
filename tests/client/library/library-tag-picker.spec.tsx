@@ -12,8 +12,9 @@ import { zh } from '../../../src/client/locales.ts'
 import { mockT } from '../helpers/mock-translate.ts'
 import { deferred } from '../../helpers/sync.ts'
 
-// The visual primitives are stubbed; the positioning and dismiss hooks stay
-// real, because this spec is what proves the popover's placement and closing.
+// The visual primitives are stubbed; the CSS-anchor styling and dismiss hook
+// stay real, because this spec is what proves the popover's placement and
+// closing.
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   const { primitivesStub } = await import('../helpers/primitives-stub.ts')
@@ -201,6 +202,18 @@ describe('tag picker request lifetime', () => {
 })
 
 describe('tag picker popover', () => {
+  it('anchors the portaled panel to its trigger with CSS anchor positioning', async () => {
+    const browse = vi.fn<LibraryFeedFace['browse']>().mockResolvedValue(tagPage('alpha'))
+    const picker = mountPicker(browse)
+    picker.toggle()
+    const trigger = screen.getByRole('button', { name: zh.libraryFilterTags }).parentElement
+    const panel = await screen.findByRole('group', { name: zh.libraryFilterTags })
+    const anchorName = (trigger?.style as unknown as { anchorName?: string }).anchorName
+    const positionAnchor = (panel.style as unknown as { positionAnchor?: string }).positionAnchor
+    expect(anchorName).not.toBe('')
+    expect(positionAnchor).toBe(anchorName)
+  })
+
   it('dismisses on outside pointerdown and keeps open on inside pointerdown', async () => {
     const browse = vi.fn<LibraryFeedFace['browse']>().mockResolvedValue(tagPage('alpha'))
     const picker = mountPicker(browse)
@@ -287,39 +300,6 @@ describe('tag picker popover', () => {
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(screen.queryByRole('searchbox')).toBeNull()
     expect(document.activeElement).toBe(trigger)
-  })
-
-  it('updates position on resize and scroll, clamping to viewport right edge', async () => {
-    const browse = vi.fn<LibraryFeedFace['browse']>().mockResolvedValue(tagPage('alpha'))
-    const picker = mountPicker(browse)
-    const trigger = screen.getByRole('button', { name: zh.libraryFilterTags })
-    const parent = trigger.parentElement as HTMLElement
-    vi.spyOn(parent, 'getBoundingClientRect').mockReturnValue({
-      top: 10,
-      bottom: 40,
-      left: 800,
-      right: 900,
-      width: 100,
-      height: 30,
-      x: 800,
-      y: 10,
-      toJSON: () => {},
-    })
-    Object.defineProperty(window, 'innerWidth', { value: 900, writable: true, configurable: true })
-    // jsdom lays nothing out: give the panel a measured box so the shared
-    // hook's right-edge clamp actually runs (900 - 240 - 8 = 652).
-    vi.spyOn(HTMLDivElement.prototype, 'offsetWidth', 'get').mockReturnValue(240)
-    vi.spyOn(HTMLDivElement.prototype, 'offsetHeight', 'get').mockReturnValue(200)
-
-    picker.toggle()
-    await screen.findByRole('searchbox')
-    const group = screen.getByRole('group', { name: zh.libraryFilterTags })
-    expect(group.style.left).toBe('652px')
-    expect(group.style.top).toBe('44px')
-
-    fireEvent(window, new Event('resize'))
-    fireEvent(window, new Event('scroll'))
-    expect(group.style.left).toBe('652px')
   })
 
   it('cancels a queued search when the panel closes before the debounce fires', async () => {

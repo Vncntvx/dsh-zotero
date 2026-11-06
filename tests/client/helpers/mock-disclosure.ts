@@ -7,6 +7,7 @@ import { vi } from 'vitest'
 import type { UseDisclosure } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ToolCallPhaseProps } from '@deepseek-ai/dsh-client-ui-tool/client'
+import type { ZoteroClientFace } from '../../../src/client/actions/client-face.ts'
 import { mockT } from './mock-translate.ts'
 
 export function mockUseDisclosure(expanded = true): UseDisclosure {
@@ -33,6 +34,7 @@ export function createToolViewProps<TToolName extends string>(props: {
   readonly inspect?: () => void
   readonly callId?: string
   readonly t?: typeof mockT
+  readonly useZoteroClient?: () => ZoteroClientFace
 }): MockToolViewProps<TToolName> {
   return {
     callId: props.callId ?? 'c1',
@@ -44,5 +46,22 @@ export function createToolViewProps<TToolName extends string>(props: {
     openFile: vi.fn(),
     loadImage: vi.fn(),
     inspect: props.inspect,
+    useZoteroClient:
+      props.useZoteroClient ??
+      (() =>
+        ({
+          reportClientError: vi.fn(async () => {}),
+          openProtocol: vi.fn(async () => true),
+          resolveAttachment: vi.fn(async (ref: string) => ({
+            ok: true,
+            value: {
+              ref,
+              kind: 'file',
+              title: 'paper.pdf',
+              contentType: 'application/pdf',
+              path: '/tmp/paper.pdf',
+            },
+          })),
+        }) as unknown as ZoteroClientFace),
   } as unknown as MockToolViewProps<TToolName>
 }

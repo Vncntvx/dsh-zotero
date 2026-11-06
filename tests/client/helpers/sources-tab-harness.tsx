@@ -15,6 +15,7 @@ import type { SessionSnapshot } from '@deepseek-ai/dsh-api-session-controller/cl
 import { vi, type Mock } from 'vitest'
 import type { ZoteroStatusView } from '../../../src/client/remote.ts'
 import { SourcesTab, type SourcesTabProps } from '../../../src/client/components/SourcesTab.tsx'
+import type { ZoteroClientFace } from '../../../src/client/actions/client-face.ts'
 import { settled } from './blocks.ts'
 import { mockT } from './mock-translate.ts'
 
@@ -274,6 +275,21 @@ export function mountTab(
       return chat === undefined ? undefined : sel(chat)
     },
     ...(inputActions === undefined ? {} : { inputActions }),
+    useZoteroClient: () =>
+      ({
+        reportClientError: vi.fn(async () => {}),
+        openProtocol: vi.fn(async () => true),
+        resolveAttachment: vi.fn(async (ref: string) => ({
+          ok: true,
+          value: {
+            ref,
+            kind: 'file',
+            title: 'paper.pdf',
+            contentType: 'application/pdf',
+            path: '/tmp/paper.pdf',
+          },
+        })),
+      }) as unknown as ZoteroClientFace,
   } as unknown as SourcesTabProps
   const view = render(<SourcesTab {...props} />)
   return { view }

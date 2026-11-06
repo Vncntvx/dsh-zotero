@@ -58,6 +58,7 @@ interface SourceInspectorProps {
   readonly t: TranslateNS<'zotero'>
   readonly openFile?: (path: string) => void
   readonly resolveAttachment?: (ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>
+  readonly openProtocol?: (url: string) => Promise<boolean>
 }
 
 /** The inspector: panel tabs plus the selected source's active panel. */
@@ -70,6 +71,7 @@ export function SourceInspector({
   t,
   openFile,
   resolveAttachment,
+  openProtocol,
 }: SourceInspectorProps) {
   const [panel, setPanel] = useState<InspectorPanelId>('overview')
   const selected = useMemo(
@@ -114,6 +116,7 @@ export function SourceInspector({
             setDraft={setDraft}
             openFile={openFile}
             resolveAttachment={resolveAttachment}
+            openProtocol={openProtocol}
           />
         ) : panel === 'evidence' ? (
           <SourceEvidence item={selected} t={t} />

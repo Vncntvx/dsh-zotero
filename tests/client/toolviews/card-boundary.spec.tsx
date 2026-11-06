@@ -15,7 +15,6 @@ import {
 import { registerZoteroToolviews, REGISTRATIONS } from '../../../src/client/toolviews/index.ts'
 import { settled } from '../helpers/blocks.ts'
 import { createToolViewProps } from '../helpers/mock-disclosure.ts'
-import { setErrorReporter } from '../../../src/client/actions/error-reporter.ts'
 import { zh } from '../../../src/client/locales.ts'
 
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
@@ -24,10 +23,12 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
 })
 
 afterEach(() => {
-  setErrorReporter(undefined)
+  report.mockClear()
   cleanup()
   vi.restoreAllMocks()
 })
+
+const report = vi.fn(async () => {})
 
 function captureConsoleError() {
   return vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -45,7 +46,7 @@ describe('ZoteroCardBoundary', () => {
     })
 
     const view = render(
-      <ZoteroCardBoundary props={props}>
+      <ZoteroCardBoundary props={props} report={report}>
         <div data-testid="healthy-card">healthy content</div>
       </ZoteroCardBoundary>,
     )
@@ -64,7 +65,7 @@ describe('ZoteroCardBoundary', () => {
     })
 
     const view = render(
-      <ZoteroCardBoundary props={props}>
+      <ZoteroCardBoundary props={props} report={report}>
         <Bomb />
       </ZoteroCardBoundary>,
     )
@@ -103,7 +104,7 @@ describe('ZoteroCardBoundary', () => {
     const props = createToolViewProps({ toolName: 'zotero_get', block: hostile })
 
     const view = render(
-      <ZoteroCardBoundary props={props}>
+      <ZoteroCardBoundary props={props} report={report}>
         <Bomb />
       </ZoteroCardBoundary>,
     )
@@ -131,7 +132,7 @@ describe('ZoteroCardBoundary', () => {
       throw 'bare string card failure'
     }
     const view1 = render(
-      <ZoteroCardBoundary props={props}>
+      <ZoteroCardBoundary props={props} report={report}>
         <ThrowString />
       </ZoteroCardBoundary>,
     )
@@ -141,7 +142,7 @@ describe('ZoteroCardBoundary', () => {
       throw new Error('')
     }
     const view2 = render(
-      <ZoteroCardBoundary props={props}>
+      <ZoteroCardBoundary props={props} report={report}>
         <ThrowEmpty />
       </ZoteroCardBoundary>,
     )
@@ -153,23 +154,21 @@ describe('ZoteroCardBoundary', () => {
     expect(Anonymous.displayName).toBe('Guarded(ToolView)')
   })
 
-  it('contains the crash locally and reports to the active error reporter', () => {
+  it('contains the crash locally and reports through the supplied reporter', () => {
     const logged = captureConsoleError()
-    const reportFn = vi.fn(async () => {})
-    setErrorReporter(reportFn)
     const props = createToolViewProps({
       toolName: 'zotero_search',
       block: settled(),
     })
     const view = render(
-      <ZoteroCardBoundary props={props}>
+      <ZoteroCardBoundary props={props} report={report}>
         <Bomb />
       </ZoteroCardBoundary>,
     )
     expect(view.container.querySelector('[data-zotero-card-error]')).not.toBeNull()
     expect(logged).toHaveBeenCalled()
-    expect(reportFn).toHaveBeenCalledTimes(1)
-    expect(reportFn).toHaveBeenCalledWith(
+    expect(report).toHaveBeenCalledTimes(1)
+    expect(report).toHaveBeenCalledWith(
       expect.objectContaining({
         surface: 'tool:zotero_search',
         message: 'card render failed: unexpected data error',

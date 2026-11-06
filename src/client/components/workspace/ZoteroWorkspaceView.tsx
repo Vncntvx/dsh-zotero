@@ -58,6 +58,7 @@ interface ZoteroWorkspaceViewProps {
   readonly t: TranslateNS<'zotero'>
   readonly openFile?: (path: string) => void
   readonly resolveAttachment?: (ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>
+  readonly openProtocol?: (url: string) => Promise<boolean>
 }
 
 /** The selected source's key, or undefined when nothing is selected. */
@@ -125,6 +126,7 @@ export function ZoteroWorkspaceView({
   t,
   openFile,
   resolveAttachment,
+  openProtocol,
 }: ZoteroWorkspaceViewProps) {
   const [lens, setLens] = useState<WorkspaceLensId>('sources')
   const [filter, setFilter] = useState<SourceFilter>('all')
@@ -169,6 +171,8 @@ export function ZoteroWorkspaceView({
         <EvidenceOverview
           workspace={workspace}
           openFile={openFile}
+          resolveAttachment={resolveAttachment}
+          openProtocol={openProtocol}
           onBack={() => {
             setEvidenceOpen(false)
           }}
@@ -236,6 +240,7 @@ export function ZoteroWorkspaceView({
             setDraft={setDraft}
             openFile={openFile}
             resolveAttachment={resolveAttachment}
+            openProtocol={openProtocol}
             t={t}
           />
         </div>

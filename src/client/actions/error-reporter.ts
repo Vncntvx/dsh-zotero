@@ -9,16 +9,18 @@
  * (an `inject` factory throw, or a throw in a surface with no boundary of its
  * own) is never seen by the plugin boundaries.
  *
- * - The render boundaries report what they contain, through the module-level
- *   reporter binding set at registration time. A class component mounted by
- *   the slot renderer is handed no face of its own, so a module binding is the
- *   only channel that reaches the gateway without threading a prop through the
- *   renderer; the attachment resolver takes the same shape.
+ * - The render boundaries report what they contain through the `report` prop
+ *   their slot surface hands them from `useZoteroClient()`; a class component
+ *   cannot call the root hook itself, so the function component that mounts it
+ *   passes the reporter down.
  * - The slot intake (`src/client/index.ts`) reports what the boundaries cannot
  *   see, subscribing to `ctx.slots.onEntryError` — the registry's own
  *   supervision seam, which fires for a render throw and an `inject` factory
  *   throw, for ordinary Slots and Factory occurrences alike — and passing the
- *   reporter explicitly rather than reading the binding.
+ *   reporter explicitly.
+ *
+ * There is no module-level binding: an unload or a second plugin instance must
+ * not leave a stale reporter reachable.
  * @module dsh-zotero/client/actions/error-reporter
  */
 
@@ -37,17 +39,8 @@ type CrashInfo =
   | { readonly kind: 'componentStack'; readonly componentStack?: string | null }
   | { readonly kind: 'slotEntry'; readonly abdicated: boolean }
 
-type ErrorReporter = (report: ZoteroClientErrorReport) => Promise<unknown>
-
-let activeReporter: ErrorReporter | undefined
-
-export function setErrorReporter(reporter: ErrorReporter | undefined): void {
-  activeReporter = reporter
-}
-
-export function getErrorReporter(): ErrorReporter | undefined {
-  return activeReporter
-}
+/** The gateway a surface files one client-error report through. */
+export type ErrorReporter = (report: ZoteroClientErrorReport) => Promise<unknown>
 
 /**
  * The component-stack line filed for a crash that retired its entry. Spelled
@@ -63,18 +56,15 @@ export const RETIRED_ENTRY = 'slot entry retired after crash (abdicated)'
  * @param surface - the crashed surface: a SlotMap key, `factory:<name>`, `tool:<name>`, or `root`.
  * @param error - the thrown value.
  * @param info - React's component stack (a boundary catch) or the seam's abdication fact.
- * @param reporter - the gateway to file through; the slot intake passes the one
- *   its fiber was handed, while a boundary omits it and reads the registration
- *   binding. One argument, both callers: the boundary has no other channel.
+ * @param reporter - the gateway to file through, supplied by the mounting
+ *   surface's `useZoteroClient()` face or by the slot intake.
  */
 export function reportCrashedSurface(
   surface: string,
   error: unknown,
-  info?: CrashInfo,
-  reporter?: ErrorReporter,
+  info: CrashInfo | undefined,
+  reporter: ErrorReporter,
 ): void {
-  const targetReporter = reporter ?? getErrorReporter()
-  if (targetReporter === undefined) return
   // The intake's wire contract requires a non-empty message, so the report goes
   // through the same first-line fallback the boundaries' console lines use, with
   // one final placeholder for a literally empty thrown string, since
@@ -94,7 +84,7 @@ export function reportCrashedSurface(
     ...(error instanceof Error && error.stack !== undefined ? { stack: error.stack } : {}),
     ...(componentStack === undefined ? {} : { componentStack }),
   }
-  void targetReporter(report).catch(() => {
+  void reporter(report).catch(() => {
     // Unreachable through the gateway (it folds failures into ok:false), but a
     // rejected intake must never become a second render failure.
   })

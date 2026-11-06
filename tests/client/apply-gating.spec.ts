@@ -64,6 +64,7 @@ describe('the browser-half entry behind the webEnabled gate', () => {
     })
     await applyEntry(world)
     expect(world.injected.map((entry) => entry.name)).toEqual([
+      'shell.overlay',
       'tool.call.toolview',
       'plugins.bundle.activation',
       'plugins.bundle.config',
@@ -90,7 +91,7 @@ describe('the browser-half entry behind the webEnabled gate', () => {
     expect(
       world.injected.find((entry) => entry.name === 'sidebar.right.pane.tab.title')?.active,
     ).toBe(false)
-    expect(world.injectDisposes).toBe(6)
+    expect(world.injectDisposes).toBe(9)
 
     // Toggle back on: the tab returns (a fresh live registration).
     await world.scope.set('webEnabled', true)
@@ -141,6 +142,9 @@ describe('the browser-half entry behind the webEnabled gate', () => {
       'sidebar.right.tab.menu.item',
       'conversation.input.left',
       'deliverables.file.actions',
+      'sidebar.right.tab.document.actions',
+      'sidebar.right.tab.document.unpreviewable',
+      'contextMenu.icon',
     ]
     for (const name of librarySurfaces) {
       expect(

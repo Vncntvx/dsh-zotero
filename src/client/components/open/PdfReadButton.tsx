@@ -15,7 +15,6 @@ import {
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ZoteroAttachmentLocationView } from '../../../contract.ts'
-import { getAttachmentResolver } from '../../actions/attachment-resolver.ts'
 import type { PdfCapability } from '../../sources/source-capabilities.ts'
 import css from './open.module.css'
 
@@ -104,7 +103,7 @@ export function PdfReadButton({
     }
 
     // Otherwise, resolve the location via the Typert remote.
-    const resolver = resolveAttachment ?? getAttachmentResolver()
+    const resolver = resolveAttachment
     if (targetRef && resolver) {
       setResolving(true)
       try {
@@ -140,7 +139,9 @@ export function PdfReadButton({
     disabledReason ??
     (targetPath && !targetWebUrl && onOpenFile === undefined
       ? t('libraryNoSessionForOpen')
-      : undefined)
+      : targetPath === undefined && targetRef !== undefined && resolveAttachment === undefined
+        ? t('libraryNoSessionForOpen')
+        : undefined)
   const disabled = resolving || unavailableReason !== undefined
 
   if (variant === 'link') {

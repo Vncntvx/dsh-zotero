@@ -8,7 +8,7 @@
 import clsx from 'clsx'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { IconLinkOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
-import { launchZoteroProtocol, selectUrlOf } from '../../actions/open-zotero.ts'
+import { selectUrlOf } from '../../actions/open-zotero.ts'
 import { CopyButton } from '../CopyButton.tsx'
 import css from './open.module.css'
 import quiet from '../quiet.module.css'
@@ -20,6 +20,8 @@ interface ZoteroLocateActionsProps {
   readonly t: TranslateNS<'zotero'>
   readonly className?: string
   readonly variant?: 'button' | 'link'
+  /** The shared client face's Host-backed launcher; absent only in bare tests. */
+  readonly openProtocol?: (url: string) => Promise<boolean>
 }
 
 export function ZoteroLocateActions({
@@ -29,14 +31,15 @@ export function ZoteroLocateActions({
   t,
   className,
   variant = 'button',
+  openProtocol,
 }: ZoteroLocateActionsProps) {
   const canonicalUrl = selectUrl !== undefined ? selectUrl : itemRef ? selectUrlOf(itemRef) : null
   const baseClass = variant === 'link' ? css.link : quiet.quiet
   const buttonClass = clsx(baseClass, className)
 
   const handleOpen = () => {
-    if (canonicalUrl) {
-      launchZoteroProtocol(canonicalUrl)
+    if (canonicalUrl && openProtocol !== undefined) {
+      void openProtocol(canonicalUrl)
     }
   }
 
@@ -57,6 +60,7 @@ export function ZoteroLocateActions({
             type="button"
             className={buttonClass}
             onClick={handleOpen}
+            disabled={openProtocol === undefined}
             title={t('openInZoteroTooltip')}
             aria-label={t('openInZotero')}
           >

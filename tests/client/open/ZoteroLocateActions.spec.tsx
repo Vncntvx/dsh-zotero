@@ -43,12 +43,17 @@ describe('ZoteroLocateActions', () => {
   })
 
   it('triggers protocol dispatch when clicking open in zotero button', () => {
-    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
-    render(<ZoteroLocateActions itemRef="zotero://user/0/item/ITEMKEY1" t={t} />)
+    const openProtocol = vi.fn(async () => true)
+    render(
+      <ZoteroLocateActions
+        itemRef="zotero://user/0/item/ITEMKEY1"
+        openProtocol={openProtocol}
+        t={t}
+      />,
+    )
     const openBtn = screen.getByRole('button', { name: mockT('openInZotero') })
     fireEvent.click(openBtn)
-    expect(clickSpy).toHaveBeenCalledTimes(1)
-    clickSpy.mockRestore()
+    expect(openProtocol).toHaveBeenCalledWith('zotero://select/library/items/ITEMKEY1')
   })
 
   it('renders buttons with link variant and custom class', () => {

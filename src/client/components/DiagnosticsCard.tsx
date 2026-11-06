@@ -33,6 +33,7 @@ import {
   type ZoteroStatusView,
 } from '../../contract.ts'
 import { buildInfoOf } from '../build-info.ts'
+import type { ZoteroClientFace } from '../actions/client-face.ts'
 import { formatTime } from '../presenters.ts'
 import { useZoteroProbe } from './useZoteroProbe.ts'
 import { useDiagnosticsFeed } from './useDiagnosticsFeed.ts'
@@ -46,6 +47,7 @@ const RENDER_LIMIT = 100
 interface ZoteroDiagnosticsCardProps extends PluginDetailProps, PropsLocale<'zotero'> {
   readonly probe: () => Promise<RemoteResult<ZoteroStatusView>>
   readonly diagnostics: () => Promise<RemoteResult<ZoteroDiagnosticsView>>
+  readonly useZoteroClient: () => ZoteroClientFace
 }
 
 interface DiagnosticsCardBodyProps {
@@ -100,13 +102,20 @@ export function DiagnosticsCard({
   t,
   probe,
   diagnostics,
+  useZoteroClient,
 }: ZoteroDiagnosticsCardProps): ReactNode {
   const pkgName = subject.kind === 'bundle' || subject.kind === 'row' ? subject.pkg.name : undefined
   if (pkgName !== ZOTERO_REMOTE_PACKAGE) {
     return null
   }
+  const client = useZoteroClient()
   return (
-    <ZoteroSurfaceBoundary t={t} surface="diagnostics" resetKey={pkgName}>
+    <ZoteroSurfaceBoundary
+      t={t}
+      surface="diagnostics"
+      resetKey={pkgName}
+      report={client.reportClientError}
+    >
       <DiagnosticsCardBody t={t} probe={probe} diagnostics={diagnostics} />
     </ZoteroSurfaceBoundary>
   )
