@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { setupHostLane, type HostLane } from '../helpers/lanes/host-lane.js'
+import { MATCH_REFERENCES_MAX } from '../../src/local/match-references-domain.js'
 
 let lane: HostLane
 
@@ -23,7 +24,7 @@ describe('zotero_match_references validation', () => {
       },
       { references: [{ inputId: 'x' }] },
       {
-        references: Array.from({ length: 51 }, (_, index) => ({
+        references: Array.from({ length: MATCH_REFERENCES_MAX + 1 }, (_, index) => ({
           inputId: `r-${index}`,
           doi: `10.1000/${index}`,
         })),

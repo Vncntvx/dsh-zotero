@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { expectValue, setupHostLane, type HostLane } from '../helpers/lanes/host-lane.js'
 import { searchHit } from '../helpers/server/objects.js'
+import { MATCH_REFERENCES_MAX } from '../../src/local/match-references-domain.js'
 
 let lane: HostLane
 
@@ -106,5 +107,30 @@ describe('zotero_match_references', () => {
         ],
       },
     ])
+  })
+
+  it('keeps the model-visible limit and the upper bound on the domain constant', async () => {
+    const tool = lane.tool('zotero_match_references')
+    expect(tool).toBeDefined()
+    expect(JSON.stringify(tool?.parameters)).toContain(`Maximum ${MATCH_REFERENCES_MAX}.`)
+    expect(tool?.description).toContain(`up to ${MATCH_REFERENCES_MAX}`)
+
+    lane.mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (_req, _res, helpers) =>
+      helpers.json([], { 'Total-Results': '0' }),
+    )
+    const atLimit = Array.from({ length: MATCH_REFERENCES_MAX }, (_, index) => ({
+      inputId: `r-${index}`,
+      doi: `10.1000/${index}`,
+    }))
+    expect((await lane.runTool('zotero_match_references', { references: atLimit })).isError).toBe(
+      false,
+    )
+
+    const overLimit = await lane.runTool('zotero_match_references', {
+      references: [...atLimit, { inputId: 'over', doi: '10.1000/over' }],
+    })
+    expect(overLimit.isError).toBe(true)
+    if (!overLimit.isError) throw new Error('unreachable')
+    expect(overLimit.error.message).toContain(`1-${MATCH_REFERENCES_MAX}`)
   })
 })

@@ -1,5 +1,6 @@
 /** Panel mutations retain the tool policy, approval gate and single dispatch. */
 import { Context, Service } from '@deepseek-ai/cordis'
+import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { executeLibraryWrite } from '../../../src/library-write.js'
 import type { ZoteroLibraryWriteRequestView } from '../../../src/contract.js'
@@ -15,6 +16,12 @@ import {
   setApprovalOutcome,
   ApprovingQuestions,
 } from '../../helpers/approval-stub.js'
+import {
+  harnessRefusal,
+  nonTextContent,
+  textContent,
+  toolBatchResult,
+} from '../support/tool-batch.js'
 
 let lane: HostLane | undefined
 const agent = { status: 'running' }
@@ -40,6 +47,7 @@ const request: ZoteroLibraryWriteRequestView = {
   operation: 'createNote',
   args: { markdown: 'panel note' },
 }
+const TOOL = 'zotero_create_note'
 
 beforeEach(() => {
   resetApprovalStub()
@@ -72,7 +80,7 @@ describe('panel write gateway', () => {
     const result = await executeLibraryWrite(host.ctx, request, signal())
     expect(result.kind).toBe('declined')
     expect(approvalAsks).toHaveLength(1)
-    expect(approvalAsks[0]?.toolName).toBe('zotero_create_note')
+    expect(approvalAsks[0]?.toolName).toBe(TOOL)
     expect(host.mock.requests).toHaveLength(0)
   })
 
@@ -104,7 +112,7 @@ describe('panel write gateway', () => {
     const host = await boot()
     const resolve = vi
       .spyOn(host.ctx.get('sessionController')!, 'resolveAgent')
-      .mockResolvedValue({ error: 'missing' } as never)
+      .mockResolvedValue({ error: new RemoteError('gateway/internal', 'missing', {}) })
     await expect(executeLibraryWrite(host.ctx, request, signal())).rejects.toMatchObject({
       code: ZOTERO_WRITE_APPROVAL_UNAVAILABLE,
     })
@@ -122,21 +130,22 @@ describe('panel write gateway', () => {
     ['conflict', true, 'failed'],
   ])('preserves %s settlement and never retries', async (kind, isError, expected) => {
     const host = await boot()
-    const execute = vi.spyOn(host.ctx.tools, 'execute').mockResolvedValue({
-      results: [
-        {
-          callId: 'call-1' as never,
-          result: {
-            isError,
-            meta: { kind },
-            content: [{ type: 'text', text: kind }],
-            ...(isError ? { error: { message: kind, info: { code: 'ZOTERO_CONFLICT' } } } : {}),
+    const batch = isError
+      ? toolBatchResult({
+          isError: true,
+          meta: { kind },
+          content: [textContent(kind)],
+          error: {
+            message: kind,
+            info: { name: 'ZoteroError', code: 'ZOTERO_CONFLICT' },
           },
-        },
-      ],
-      additionalContexts: [],
-      concluded: false,
-    } as never)
+        })
+      : toolBatchResult({
+          isError: false,
+          meta: { kind },
+          content: [textContent(kind)],
+        })
+    const execute = vi.spyOn(host.ctx.tools, 'execute').mockResolvedValue(batch)
     expect(await executeLibraryWrite(host.ctx, request, signal())).toMatchObject({
       kind: expected,
       message: kind,
@@ -148,7 +157,7 @@ describe('panel write gateway', () => {
       calls: [
         {
           type: 'tool-call',
-          name: 'zotero_create_note',
+          name: TOOL,
           arguments: JSON.stringify(request.args),
         },
       ],
@@ -157,27 +166,18 @@ describe('panel write gateway', () => {
 
   it('maps a tool-level user rejection to declined via the harness refusal message', async () => {
     const host = await boot()
-    const execute = vi.spyOn(host.ctx.tools, 'execute').mockResolvedValue({
-      results: [
-        {
-          callId: 'call-1' as never,
-          result: {
-            isError: true,
-            meta: null,
-            content: [
-              { type: 'text', text: 'the plan was not approved' },
-              { type: 'other' },
-              { type: 'text', text: 'no retry will happen' },
-            ],
-            error: {
-              message: 'the user rejected tool "zotero_create_note"',
-            },
-          },
-        },
-      ],
-      additionalContexts: [],
-      concluded: false,
-    } as never)
+    const execute = vi.spyOn(host.ctx.tools, 'execute').mockResolvedValue(
+      toolBatchResult({
+        isError: true,
+        meta: null,
+        content: [
+          textContent('the plan was not approved'),
+          nonTextContent(),
+          textContent('no retry will happen'),
+        ],
+        error: { message: harnessRefusal('rejected', TOOL) },
+      }),
+    )
     const outcome = await executeLibraryWrite(host.ctx, request, signal())
     expect(outcome.kind).toBe('declined')
     expect(outcome.message).toBe('the plan was not approved\nno retry will happen')
@@ -187,34 +187,25 @@ describe('panel write gateway', () => {
 
   it('does not classify an unrelated error that merely mentions a rejected tool', async () => {
     const host = await boot()
-    vi.spyOn(host.ctx.tools, 'execute').mockResolvedValue({
-      results: [
-        {
-          callId: 'call-1' as never,
-          result: {
-            isError: true,
-            meta: null,
-            content: [{ type: 'text', text: 'gateway failed' }],
-            error: {
-              message: 'gateway failed after the user rejected tool "zotero_create_note"',
-            },
-          },
+    vi.spyOn(host.ctx.tools, 'execute').mockResolvedValue(
+      toolBatchResult({
+        isError: true,
+        meta: null,
+        content: [textContent('gateway failed')],
+        error: {
+          message: `gateway failed after ${harnessRefusal('rejected', TOOL)}`,
         },
-      ],
-      additionalContexts: [],
-      concluded: false,
-    } as never)
+      }),
+    )
     const outcome = await executeLibraryWrite(host.ctx, request, signal())
     expect(outcome.kind).toBe('failed')
   })
 
   it('maps Trash to the existing batch soft-delete operation', async () => {
     const host = await boot()
-    const execute = vi.spyOn(host.ctx.tools, 'execute').mockResolvedValue({
-      results: [{ callId: 'call-1' as never, result: { isError: false, meta: null, content: [] } }],
-      additionalContexts: [],
-      concluded: false,
-    } as never)
+    const execute = vi
+      .spyOn(host.ctx.tools, 'execute')
+      .mockResolvedValue(toolBatchResult({ isError: false, meta: null, content: [] }))
     await executeLibraryWrite(
       host.ctx,
       {
@@ -238,12 +229,11 @@ describe('panel write gateway', () => {
   it('rejects malformed or cancelled requests before dispatch', async () => {
     const host = await boot()
     const execute = vi.spyOn(host.ctx.tools, 'execute')
+    // Deliberately invalid wire value: the closed request schema must reject
+    // the extra `args` key. The cast is confined to this invalid-input boundary.
+    const malformed: unknown = { ...request, args: { markdown: 'x', bypass: true } }
     await expect(
-      executeLibraryWrite(
-        host.ctx,
-        { ...request, args: { markdown: 'x', bypass: true } } as never,
-        signal(),
-      ),
+      executeLibraryWrite(host.ctx, malformed as ZoteroLibraryWriteRequestView, signal()),
     ).rejects.toThrow()
     await expect(executeLibraryWrite(host.ctx, request, AbortSignal.abort())).rejects.toThrow()
     expect(execute).not.toHaveBeenCalled()

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { matchReferences } from '../../src/local/match-references-domain.js'
+import { MATCH_REFERENCES_MAX, matchReferences } from '../../src/local/match-references-domain.js'
 import type { ZoteroSearchItem, ZoteroSearchResult } from '../../src/types.js'
 import { deferred } from '../helpers/sync.js'
 
@@ -202,7 +202,7 @@ describe('matchReferences', () => {
     expect(empty.items[0]).toEqual({ inputId: 'missing', status: 'notFound' })
     await expect(
       matchReferences({ search: async () => result([]) }, { references: [] }),
-    ).rejects.toThrow('1-50')
+    ).rejects.toThrow(`1-${MATCH_REFERENCES_MAX}`)
     await expect(
       matchReferences(
         { search: async () => result([]) },
@@ -296,8 +296,8 @@ describe('matchReferences', () => {
     ).rejects.toThrow('did not return every library page')
   })
 
-  it('limits concurrent searches to eight and preserves the fifty input ids', async () => {
-    const references = Array.from({ length: 50 }, (_, index) => ({
+  it('limits concurrent searches to eight and preserves every input id at the domain maximum', async () => {
+    const references = Array.from({ length: MATCH_REFERENCES_MAX }, (_, index) => ({
       inputId: `entry-${index}`,
       title: `Reference title ${index}`,
     }))

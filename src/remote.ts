@@ -19,7 +19,7 @@
 import { execFile } from 'node:child_process'
 import type { Context } from '@deepseek-ai/cordis'
 import { RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
-import { domainCall, ZOTERO_NOT_COMPOSED_MESSAGE } from './errors.js'
+import { domainCall, errorMessageOf, ZOTERO_NOT_COMPOSED_MESSAGE } from './errors.js'
 import { LOCAL_PROVIDER_ID } from './constants.js'
 import {
   DIAGNOSTIC_DETAIL_VALUE_MAX_CHARS,
@@ -183,8 +183,7 @@ export async function executeOpenProtocol(
     }
     return { success: true }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    throw protocolFailure(url, message, error)
+    throw protocolFailure(url, errorMessageOf(error), error)
   }
 }
 

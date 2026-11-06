@@ -13,6 +13,7 @@ import { executeOpenProtocol, type ProtocolLauncher, ZoteroRuntime } from '../..
 import { ZOTERO_STATUS_SERVICE_KEY, type ZoteroDiagnosticEntry } from '../../src/contract.js'
 import { TYPERT_MANIFEST } from '../../src/typert.js'
 import { type HostLane, setupHostLane } from '../helpers/lanes/host-lane.js'
+import { rejectionOf } from './support/open-protocol.js'
 
 /** A signal that never aborts: direct calls pass the carrier signal the gateway would inject. */
 const LIVE_SIGNAL = new AbortController().signal
@@ -408,19 +409,6 @@ describe('the zotero resolveAttachment endpoint', () => {
 })
 
 describe('the zotero openProtocol endpoint', () => {
-  /** Execute one launch and return its rejection so the code and details are assertable. */
-  async function rejectionOf(
-    url: string,
-    options: Parameters<typeof executeOpenProtocol>[1],
-  ): Promise<{ code?: string; details?: unknown; cause?: unknown }> {
-    try {
-      await executeOpenProtocol(url, options)
-    } catch (error) {
-      return error as { code?: string; details?: unknown; cause?: unknown }
-    }
-    throw new Error(`expected ${url} to fail`)
-  }
-
   it.each(['darwin', 'linux'] as const)('awaits the %s launcher', async (platform) => {
     const launcher = vi.fn<ProtocolLauncher>(async () => {})
     expect(

@@ -96,6 +96,42 @@ export async function* jsonBytes(value: unknown, signal?: AbortSignal): AsyncGen
   } else yield encode(JSON.stringify(value) ?? 'null')
 }
 
+/**
+ * Count an inline result's bytes and recover its canonical text in one pass.
+ *
+ * `jsonBytes` is the only encoder: decoding each chunk with a streaming
+ * `TextDecoder` rebuilds exactly the text that encoder emitted, so the caller
+ * no longer pays for a second `JSON.stringify` of the same object. A chunk may
+ * split a multi-byte UTF-8 sequence, which is why the decoder stays open until
+ * the final `decode()`; `jsonBytes` additionally avoids splitting surrogate
+ * pairs. Returning `undefined` at the first chunk past `limit` preserves the
+ * original early-exit behaviour (including the generator's cleanup).
+ *
+ * The value must be JSON-shaped (`JsonValue`): encoder and `JSON.stringify`
+ * agree on strings, arrays, plain objects, skipped `undefined` properties and
+ * non-finite numbers, but not on `toJSON()` hosts such as `Date` or BigInt.
+ * @param value - the object to encode.
+ * @param limit - maximum byte length before the inline branch gives up.
+ * @param signal - cancellation carried into every encoded chunk.
+ * @returns byte count and canonical text, or undefined when over the limit.
+ */
+export async function inlineJson(
+  value: unknown,
+  limit: number,
+  signal?: AbortSignal,
+): Promise<{ bytes: number; canonical: string } | undefined> {
+  const decoder = new TextDecoder()
+  let bytes = 0
+  let canonical = ''
+  for await (const chunk of jsonBytes(value, signal)) {
+    bytes += chunk.byteLength
+    if (bytes > limit) return undefined
+    canonical += decoder.decode(chunk, { stream: true })
+  }
+  canonical += decoder.decode()
+  return { bytes, canonical }
+}
+
 export function isDelivered(value: unknown): value is DeliveredResult {
   const record = asRecord(value)
   return record?.delivery === 'inline' || record?.delivery === 'file'
@@ -184,16 +220,16 @@ export class ResultDelivery {
   ): Promise<DeliveredResult> {
     const config = this.config()
     if (jobId === undefined) {
-      let bytes = 0
-      for await (const chunk of jsonBytes({ delivery: 'inline', data }, signal)) {
-        bytes += chunk.byteLength
-        if (bytes > config.maxInlineResultBytes) break
-      }
-      if (bytes <= config.maxInlineResultBytes) {
+      const inline = await inlineJson(
+        { delivery: 'inline', data },
+        config.maxInlineResultBytes,
+        signal,
+      )
+      if (inline !== undefined) {
         const content = render(data)
-        const canonical = JSON.stringify({ delivery: 'inline', data })
         if (
-          estimateContent([{ type: 'text', text: canonical }]) <= config.maxInlineResultTokens &&
+          estimateContent([{ type: 'text', text: inline.canonical }]) <=
+            config.maxInlineResultTokens &&
           estimateContent(content) <= config.maxInlineResultTokens &&
           new TextEncoder().encode(JSON.stringify(content)).byteLength <=
             config.maxInlineResultBytes

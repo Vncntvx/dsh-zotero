@@ -57,6 +57,16 @@ never in a file named after a number or a function.
   `client/deliverables/support/turn-projection.ts` fixture, which builds a
   typed `ChatSnapshot` from public harness types rather than importing the
   upstream package's unpublished source tree.
+- The harness approval-refusal boundary lives in
+  `src/library-write-denial.ts` and is verified at contract level by
+  `host/write/library-write-denial.spec.ts` and at gateway level by
+  `host/write/library-write.spec.ts`. Both consume the one
+  `host/support/tool-batch.ts` fixture; the refusal sentences and their
+  matchers have a single home in the production module.
+- The host protocol endpoint's `RemoteError` shape is read by
+  `host/support/open-protocol.ts`, shared by `host/remote.spec.ts` (injected
+  launcher cases) and `host/protocol-launcher.spec.ts` (real process cases).
+  The default Linux platform lives in that support module, not in either spec.
 - Current split-module ownership: `src/local/item-schema-directory.ts` is
   verified by `local/item-schema-directory.spec.ts` at module-behaviour level,
   with browse and item-write suites covering its consumers; collection writes
@@ -211,6 +221,13 @@ instead of reporting a mocked pass as live verification.
   scholarly prompt specs.
 - `tests/helpers/fixtures-dir.ts`: the captured response bodies under
   `tests/fixtures/`, resolved from the helper so a spec can move.
+- `tests/host/support/tool-batch.ts`: the host write specs' one
+  `ToolBatchResult` fixture. `toolBatchResult()` and `toolExecutionResult()`
+  assemble the real `ToolExecutionSuccess | ToolExecutionFailure` union with a
+  branded `ToolCallId`, so a spec states only the arm it varies instead of
+  restating the batch shape behind `as never`. `nonTextContent()` supplies a
+  legal non-text block, and `harnessRefusal()` interpolates the refusal
+  sentences owned by `src/library-write-denial.ts`.
 
 ### Support ownership and dependencies
 

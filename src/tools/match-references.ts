@@ -4,6 +4,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { defineTool, type InferArgs, type InferValue } from '@deepseek-ai/dsh-tools'
 import { invalid } from '../errors.js'
+import { MATCH_REFERENCES_MAX } from '../local/match-references-domain.js'
 import { projectMatchReferencesMeta } from '../presentation-meta.js'
 import { identityToolWrapper, type ToolWrapper } from '../result-delivery.js'
 import type { ZoteroMatchReferencesRequest, ZoteroMatchReferencesResult } from '../types.js'
@@ -13,7 +14,7 @@ const PARAMETERS = {
   references: {
     type: 'array',
     required: true,
-    description: 'Reference fingerprints; provide a unique inputId and DOI or title. Maximum 50.',
+    description: `Reference fingerprints; provide a unique inputId and DOI or title. Maximum ${MATCH_REFERENCES_MAX}.`,
     items: {
       type: 'object',
       additionalProperties: false,
@@ -65,8 +66,8 @@ const OUTPUT = {
 } as const
 
 function buildRequest(args: Args): ZoteroMatchReferencesRequest {
-  if (args.references.length === 0 || args.references.length > 50)
-    invalid('references must contain 1-50 entries')
+  if (args.references.length === 0 || args.references.length > MATCH_REFERENCES_MAX)
+    invalid(`references must contain 1-${MATCH_REFERENCES_MAX} entries`)
   return {
     references: args.references,
     ...(args.includeFieldDiff === undefined ? {} : { includeFieldDiff: args.includeFieldDiff }),
@@ -128,8 +129,7 @@ export function registerMatchReferencesTool(
     wrap(
       defineTool({
         name: 'zotero_match_references',
-        description:
-          'Match up to 50 external reference fingerprints to local Zotero refs. Exact DOI matching scans paged top-level local metadata once per call because Zotero quick search does not index DOI fields; ambiguous or conflicting matches are reported for review. Use zotero_get_batch for details after matching.',
+        description: `Match up to ${MATCH_REFERENCES_MAX} external reference fingerprints to local Zotero refs. Exact DOI matching scans paged top-level local metadata once per call because Zotero quick search does not index DOI fields; ambiguous or conflicting matches are reported for review. Use zotero_get_batch for details after matching.`,
         parameters: PARAMETERS,
         output: {
           schema: OUTPUT,

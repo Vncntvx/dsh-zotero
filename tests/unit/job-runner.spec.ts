@@ -670,6 +670,32 @@ describe('ZoteroJobRunner', () => {
     })
   })
 
+  describe('killAll', () => {
+    it('kills every live job with its owner and forgets the settled one', async () => {
+      const registry = new TestJobRegistry()
+      const kill = vi.spyOn(registry, 'kill')
+      const runner = new ZoteroJobRunner(registry as unknown as JobRegistry)
+
+      const settled = runner.start({ label: 'settled', exec: fakeExec(), run: async () => 'done' })
+      const live = runner.start({
+        label: 'live',
+        exec: fakeExec(undefined, false),
+        run: async () => await new Promise<never>(() => {}),
+      })
+      await settled.done
+      await Promise.resolve()
+
+      runner.killAll('component disposed')
+      expect(kill).toHaveBeenCalledTimes(1)
+      expect(kill).toHaveBeenCalledWith(live.id, undefined, 'component disposed')
+    })
+
+    it('is a no-op without a registry', () => {
+      const runner = new ZoteroJobRunner(undefined)
+      expect(() => runner.killAll('nothing to stop')).not.toThrow()
+    })
+  })
+
   describe('executeWithJobs', () => {
     it('runs the plain synchronous arm with no-op channels when promotion is off', async () => {
       const runner = new ZoteroJobRunner()

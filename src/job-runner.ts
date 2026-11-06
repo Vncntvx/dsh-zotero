@@ -20,6 +20,7 @@ import type {
   JobId,
   JobOutcome,
   JobRegistry,
+  JobSpec,
   JobView,
 } from '@deepseek-ai/dsh-jobs'
 import { TOOL_ABORTED_MESSAGE } from './abort.js'
@@ -143,9 +144,15 @@ export const RUN_IN_BACKGROUND_PARAMETER = {
   },
 } as const
 
-interface ZoteroJobTask<T> {
+/** The job kind a shared task registers under. */
+type JobSpecKind = JobSpec['kind']
+
+/** One heavy operation the shared job runner can start or promote. */
+export interface ZoteroJobTask<T> {
   readonly label: string
   readonly exec: ToolExecution
+  readonly kind?: JobSpecKind
+  readonly outputLimitBytes?: number
   readonly run: (
     signal: AbortSignal,
     onProgress: (event: ZoteroProgressEvent) => void,
@@ -171,10 +178,10 @@ interface BackgroundJobResult {
   readonly resultSessionId?: string
 }
 
-type JobArmResult = BackgroundJobResult | PromotedJobResult
+export type JobArmResult = BackgroundJobResult | PromotedJobResult
 
 /** Job policy knobs every heavy tool reads from live config. */
-interface JobPolicy {
+export interface JobPolicy {
   readonly enableRunInBackground: boolean
   readonly promoteOnTimeout: boolean
   readonly foregroundWaitMs: number
@@ -198,13 +205,24 @@ export async function executeWithJobs<T>(options: {
   readonly runner: ZoteroJobRunner
   readonly exec: ToolExecution
   readonly label: string
+  readonly kind?: ZoteroJobTask<T>['kind']
+  readonly outputLimitBytes?: number
   readonly run: ZoteroJobTask<T>['run']
   readonly renderResult: ZoteroJobTask<T>['renderResult']
   readonly runInBackground: boolean
   readonly policy: JobPolicy
 }): Promise<T | JobArmResult> {
   const { runner, exec, label, run, renderResult, policy } = options
-  const task: ZoteroJobTask<T> = { label, exec, run, renderResult }
+  const task: ZoteroJobTask<T> = {
+    label,
+    exec,
+    ...(options.kind === undefined ? {} : { kind: options.kind }),
+    ...(options.outputLimitBytes === undefined
+      ? {}
+      : { outputLimitBytes: options.outputLimitBytes }),
+    run,
+    renderResult,
+  }
 
   if (options.runInBackground) {
     if (!policy.enableRunInBackground) {
@@ -239,6 +257,9 @@ export async function executeWithJobs<T>(options: {
 }
 
 export class ZoteroJobRunner {
+  /** Live jobs this runner started, with the owner the registry fences on. */
+  private readonly active = new Map<JobId, SessionId | undefined>()
+
   constructor(
     private readonly registry?: JobRegistry,
     private readonly sink?: DiagnosticSink,
@@ -247,6 +268,23 @@ export class ZoteroJobRunner {
 
   get isAvailable(): boolean {
     return this.registry !== undefined
+  }
+
+  /**
+   * Stop every job this runner started and has not observed settling. Used by
+   * a component teardown so disabling a producer does not leave its jobs
+   * pointing at a disposed store or transport.
+   * @param reason - registry-visible cancellation reason.
+   */
+  killAll(reason: string): void {
+    if (!this.registry) return
+    for (const [id, owner] of this.active) {
+      try {
+        this.registry.kill(id, owner, reason)
+      } catch {
+        // A job that settled between the snapshot and kill is already gone.
+      }
+    }
   }
 
   /**
@@ -274,8 +312,9 @@ export class ZoteroJobRunner {
     })
 
     const id = this.registry.start({
-      kind: 'zotero',
+      kind: task.kind ?? 'zotero',
       label: task.label,
+      ...(task.outputLimitBytes === undefined ? {} : { outputLimitBytes: task.outputLimitBytes }),
       toolCall: { callId: task.exec.callId, rootCallId: task.exec.rootCallId },
       ...(task.exec.agent ? { owner: task.exec.agent.id } : {}),
       run: (job: JobHandle): JobHooks => {
@@ -360,6 +399,11 @@ export class ZoteroJobRunner {
     })
 
     this.delivery?.track(donePromise)
+    this.active.set(id, task.exec.agent?.id)
+    void donePromise.then(
+      () => this.active.delete(id),
+      () => this.active.delete(id),
+    )
     return { id, done: donePromise }
   }
 

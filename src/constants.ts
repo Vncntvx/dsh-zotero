@@ -196,16 +196,6 @@ export const ZOTERO_TOOL_NAMES = [...ZOTERO_READ_TOOL_NAMES, ...ZOTERO_WRITE_TOO
  */
 export const SCHOLARLY_SAVE_TOOL_NAME = 'scholarly_save_to_zotero'
 
-/**
- * The harness's denial wording for a user-rejected approval request.
- *
- * `packages/core/tools/src/pipeline.ts` builds this sentence in `serviceAsk`
- * and attaches no error code to the denial, so a tool result can only be
- * classified by the message it carries. Keep the prefix exact; a later harness
- * release that adds a stable deny code replaces this constant.
- */
-export const HARNESS_USER_REJECTION_PREFIX = 'the user rejected tool "'
-
 /** Every model-tool entry that can mutate the personal library, across components. */
 export const LIBRARY_WRITE_TOOL_NAMES = [
   ...ZOTERO_WRITE_TOOL_NAMES,
