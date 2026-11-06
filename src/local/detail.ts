@@ -11,6 +11,7 @@
  */
 
 import type { ZoteroHttpClient } from '../http-client.js'
+import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { assertServerIdMatches, serverIdFromHeaders } from './identity.js'
 import { asRecord, asString, isObjectKey } from '../json.js'
 import {
@@ -431,8 +432,19 @@ export async function getItem(
       bestRow = candidates.find((row) => asString(asRecord(row)?.key) === best.key)
     }
   }
-  if (locations === 'best' && detail.bestAttachment)
+  if (locations === 'best' && detail.bestAttachment) {
+    if (bestRow === undefined) {
+      const bestTarget = parseSupportedRef(detail.bestAttachment.ref, ['attachment'])
+      for (const read of reads) {
+        const found = read.attachmentRows.get(bestTarget.key)
+        if (found !== undefined) {
+          bestRow = found
+          break
+        }
+      }
+    }
     await resolveRecord(detail.bestAttachment, bestRow, signal)
+  }
   signal?.throwIfAborted()
   return detail
 }
@@ -543,6 +555,8 @@ export async function getChildPage(
         kind: 'annotations',
         page: childCollection(partitioned.annotations, deps.limits.maxAnnotationRecords, meta),
       }
+    default:
+      return assertNever(request.kind)
   }
 }
 

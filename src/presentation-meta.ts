@@ -327,6 +327,35 @@ function childPreviews(
   }))
 }
 
+interface BibliographicFactsSource {
+  title: string
+  creators?: ZoteroItemDetail['creators']
+  year?: number
+  venue?: string
+  citationKey?: string
+  citationKeySource?: ZoteroItemDetail['citationKeySource']
+  citationKeyConflict?: ZoteroItemDetail['citationKeyConflict']
+}
+
+function projectBibliographicFacts(item: BibliographicFactsSource) {
+  return {
+    title: truncateChars(item.title, MAX_PRESENTATION_GET_TITLE_CHARS),
+    creators: truncateChars(
+      formatCreatorsList(item.creators ?? []),
+      MAX_PRESENTATION_GET_CREATORS_CHARS,
+    ),
+    ...(item.year === undefined ? {} : { year: item.year }),
+    ...(item.venue === undefined
+      ? {}
+      : { venue: truncateChars(item.venue, MAX_PRESENTATION_GET_VENUE_CHARS) }),
+    ...(item.citationKey === undefined ? {} : { citationKey: item.citationKey }),
+    ...(item.citationKeySource === undefined ? {} : { citationKeySource: item.citationKeySource }),
+    ...(item.citationKeyConflict === undefined
+      ? {}
+      : { citationKeyConflict: item.citationKeyConflict }),
+  }
+}
+
 /**
  * Project one item detail into card-sized facts: the header line, child
  * counts, and (when requested) bounded note/annotation previews kept apart
@@ -338,24 +367,9 @@ export function projectGetMeta(value: GetProjectionInput): ZoteroGetPresentation
   return {
     ...(value.location ? { location: value.location } : {}),
     ...(value.bestAttachment?.location ? { resolvedAttachment: value.bestAttachment } : {}),
-    title: truncateChars(value.title, MAX_PRESENTATION_GET_TITLE_CHARS),
-    creators: truncateChars(
-      formatCreatorsList(value.creators),
-      MAX_PRESENTATION_GET_CREATORS_CHARS,
-    ),
-    ...(value.citationKey === undefined ? {} : { citationKey: value.citationKey }),
-    ...(value.citationKeySource === undefined
-      ? {}
-      : { citationKeySource: value.citationKeySource }),
-    ...(value.citationKeyConflict === undefined
-      ? {}
-      : { citationKeyConflict: value.citationKeyConflict }),
-    ...(value.year === undefined ? {} : { year: value.year }),
+    ...projectBibliographicFacts(value),
     ...(value.itemType === undefined ? {} : { itemType: value.itemType }),
     ...(value.ref === undefined ? {} : { ref: value.ref }),
-    ...(value.venue === undefined
-      ? {}
-      : { venue: truncateChars(value.venue, MAX_PRESENTATION_GET_VENUE_CHARS) }),
     ...(value.notes === undefined ? {} : { notes: childFacts(value.notes) }),
     ...(value.annotations === undefined ? {} : { annotations: childFacts(value.annotations) }),
     ...(value.attachments === undefined ? {} : { attachments: childFacts(value.attachments) }),
@@ -393,23 +407,8 @@ export function projectGetBatchMeta(value: ZoteroGetBatchResult): JsonValue {
     return {
       ref: entry.ref,
       status: entry.status,
-      title: truncateChars(item.title, MAX_PRESENTATION_GET_TITLE_CHARS),
       itemType: item.itemType,
-      creators: truncateChars(
-        formatCreatorsList(item.creators),
-        MAX_PRESENTATION_GET_CREATORS_CHARS,
-      ),
-      ...(item.year === undefined ? {} : { year: item.year }),
-      ...(item.venue === undefined
-        ? {}
-        : { venue: truncateChars(item.venue, MAX_PRESENTATION_GET_VENUE_CHARS) }),
-      ...(item.citationKey === undefined ? {} : { citationKey: item.citationKey }),
-      ...(item.citationKeySource === undefined
-        ? {}
-        : { citationKeySource: item.citationKeySource }),
-      ...(item.citationKeyConflict === undefined
-        ? {}
-        : { citationKeyConflict: item.citationKeyConflict }),
+      ...projectBibliographicFacts(item),
       ...(item.bestAttachment?.ref === undefined
         ? {}
         : { bestAttachmentRef: item.bestAttachment.ref }),

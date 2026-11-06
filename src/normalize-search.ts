@@ -4,7 +4,7 @@
  */
 
 import { extractAttachmentKey } from './attachments.js'
-import { DEFAULT_CREATOR_TYPE } from './creators.js'
+import { DEFAULT_CREATOR_TYPE, formatCreatorDisplayName } from './creators.js'
 import { ZOTERO_UNEXPECTED, ZoteroError } from './errors.js'
 import { asRecord, asString, isObjectKey, stringArrayOf } from './json.js'
 import { refStringFor } from './refs.js'
@@ -54,9 +54,7 @@ export function normalizeSearchItem(json: unknown, context?: NormalizeContext): 
   }
   const authors = normalizeCreators(data)
     .filter((creator) => creator.creatorType === 'author')
-    .map(
-      (creator) => creator.name ?? [creator.firstName, creator.lastName].filter(Boolean).join(' '),
-    )
+    .map(formatCreatorDisplayName)
     .filter((author) => author !== '')
   if (authors.length > 0) item.authors = authors
   const venue = normalizeVenue(data)

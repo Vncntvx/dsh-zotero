@@ -1,6 +1,7 @@
 /** Bounded, order-preserving batch metadata reads. */
 
 import { formatRef } from '../refs.js'
+import { mapWithConcurrency } from '../concurrency.js'
 import { ZoteroError } from '../errors.js'
 import type {
   ZoteroGetBatchRequest,
@@ -64,17 +65,13 @@ export async function getBatch(
     seen.add(formatted)
   }
 
-  const result = new Array<ZoteroGetBatchResult['items'][number]>(request.refs.length)
-  let next = 0
-  const worker = async (): Promise<void> => {
-    for (;;) {
-      if (signal?.aborted) throw signal.reason ?? new Error('aborted')
-      const index = next++
-      if (index >= request.refs.length) return
-      const ref = request.refs[index]!
+  const items = await mapWithConcurrency(
+    request.refs,
+    CONCURRENCY,
+    async (ref, poolSignal) => {
       const refString = formatRef(ref)
       try {
-        const detail = await getItem(getRequestOf(ref, request), signal)
+        const detail = await getItem(getRequestOf(ref, request), poolSignal)
         const item =
           request.include?.relations === true
             ? detail
@@ -82,13 +79,13 @@ export async function getBatch(
                 const { relations: _relations, ...withoutRelations } = detail
                 return withoutRelations
               })()
-        result[index] = { ref: refString, status: 'ok', item }
+        return { ref: refString, status: 'ok' as const, item }
       } catch (error) {
-        if (signal?.aborted) throw error
+        if (poolSignal.aborted) throw error
         const detail = errorOf(error)
-        result[index] = {
+        return {
           ref: refString,
-          status: 'error',
+          status: 'error' as const,
           code: detail.code,
           message: detail.message,
           ...(detail.code === 'ZOTERO_NOT_FOUND'
@@ -96,10 +93,9 @@ export async function getBatch(
             : {}),
         }
       }
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, request.refs.length) }, worker))
-  const items = result as ZoteroGetBatchResult['items']
+    },
+    { signal },
+  )
   const succeeded = items.filter((item) => item.status === 'ok').length
   return {
     items,

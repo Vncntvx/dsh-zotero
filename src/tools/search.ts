@@ -27,6 +27,7 @@ import {
 } from '../constants.js'
 import type { ResolvedConfig } from '../config.js'
 import { isPdfContentType } from '../media-types.js'
+import { formatCitationKeyConflict } from '../citation-key.js'
 import { assertPublicationsSupported } from '../refs.js'
 import { isItemTypeIdentifier } from '../ref-grammar.js'
 import { boundedPresentationMeta, projectSearchMeta } from '../presentation-meta.js'
@@ -412,7 +413,7 @@ function formatSearchResultLine(
   const citeTag = citekey ? ` [@${citekey}]` : ''
   const conflict = item.citationKeyConflict
   const conflictTag = conflict
-    ? ` [citation key conflict: native=${conflict.native}, extra=${conflict.extra}]`
+    ? ` [citation key conflict: ${formatCitationKeyConflict(conflict)}]`
     : ''
   const creator = item.creatorSummary === '' ? '' : ` — ${item.creatorSummary}`
   const pdf = withPdfHint && isPdfContentType(item.bestAttachmentType) ? ' — PDF' : ''

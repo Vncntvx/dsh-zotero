@@ -28,6 +28,7 @@ import {
 import type { ResolvedConfig } from '../config.js'
 import { invalid } from '../errors.js'
 import { parseSupportedRef } from '../refs.js'
+import { formatCitationKeyConflict } from '../citation-key.js'
 import { assertExportRefsWithinCap } from '../export-limits.js'
 import { boundedPresentationMeta, projectExportMeta } from '../presentation-meta.js'
 import { metaRecordOf, textOfBlocks } from './present.js'
@@ -261,7 +262,7 @@ function renderExport(_args: unknown, value: ExportOutput): ContentBlock[] {
             item.entryIndex === undefined ? undefined : `entryIndex: ${item.entryIndex}`,
             item.citationKeyConflict === undefined
               ? undefined
-              : `citationKey conflict: native=${item.citationKeyConflict.native}, extra=${item.citationKeyConflict.extra}`,
+              : `citationKey conflict: ${formatCitationKeyConflict(item.citationKeyConflict)}`,
           ]
             .filter((part): part is string => part !== undefined)
             .join(' · ')

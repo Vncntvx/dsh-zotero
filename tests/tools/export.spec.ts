@@ -172,6 +172,44 @@ describe('zotero_export tool', () => {
     expect(rendered).toContain(batchText)
   })
 
+  it('renders the mapping conflict in the one unified format', async () => {
+    // The `; ` separator is the intentional unification: the export mapping
+    // line, the search hit line, and the get detail all spell a conflict
+    // `native=<native>; extra=<extra>` through `formatCitationKeyConflict`.
+    const batchText = '@article{ABCD1234,\n  title = {Carbon price forecasting},\n}\n'
+    mock.route('GET', '/api/users/0/items', (req, res, helpers, search) => {
+      if (search.has('format')) helpers.text(batchText)
+      else
+        helpers.json([
+          {
+            key: 'ABCD1234',
+            data: {
+              key: 'ABCD1234',
+              title: 'Carbon price forecasting',
+              citationKey: 'nativeA',
+              extra: 'Citation Key: extraA',
+            },
+          },
+        ])
+    })
+    const result = expectValue(
+      await runTool('zotero_export', { refs: ['zotero://user/0/item/ABCD1234'], format: 'bibtex' }),
+      'zotero_export',
+    )
+    expect(result.value).toMatchObject({
+      format: 'bibtex',
+      items: [
+        {
+          ref: 'zotero://user/0/item/ABCD1234',
+          citationKey: 'nativeA',
+          citationKeyConflict: { native: 'nativeA', extra: 'extraA' },
+        },
+      ],
+    })
+    const rendered = (result.content[0] as { text: string }).text
+    expect(rendered).toContain('citationKey conflict: native=nativeA; extra=extraA')
+  })
+
   it('marks unlocated translator rows instead of implying positional matches', async () => {
     const batchText = '@article{unrelated, title={A different work}}'
     mock.route('GET', '/api/users/0/items', (req, res, helpers, search) => {

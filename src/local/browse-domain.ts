@@ -6,6 +6,7 @@
  * @module dsh-zotero/local/browse-domain
  */
 
+import { assertNever } from '@deepseek-ai/dsh-util-values'
 import {
   ITEM_FIELDS_ITEM_TYPE_MESSAGE,
   ITEM_LEVEL_REQUIRES_SCOPE_MESSAGE,
@@ -432,6 +433,8 @@ async function browseTags(
         path = `${libraryPrefix(found.ref.library as SupportedLocalLibrary)}/collections/${found.ref.key}/${itemsSegment}/tags`
         break
       }
+      default:
+        return assertNever(request.scope)
     }
   }
   const params = new URLSearchParams()

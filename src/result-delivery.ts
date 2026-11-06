@@ -26,13 +26,25 @@ export async function resultReceiptKey(...coordinates: string[]): Promise<string
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
-const fileSchema = z
+/**
+ * The one file-attachment shape both the delivery writer and the result read
+ * route accept: the delivery persists receipts shaped by this schema, and the
+ * read route narrows event payloads through the same definition, so the two
+ * ends cannot drift apart on what counts as a readable attachment.
+ */
+export const fileSchema = z
   .object({
     attachmentId: z.string().min(1),
     name: z.string().min(1),
     bytes: z.number().int().nonnegative(),
   })
   .strict()
+
+/** Narrow an unknown block payload to the FileAttachmentRef the delivery writes. */
+export function isFileAttachmentRef(value: unknown): value is FileAttachmentRef {
+  return fileSchema.safeParse(value).success
+}
+
 const receiptSchema = z
   .object({
     delivery: z.literal('file'),

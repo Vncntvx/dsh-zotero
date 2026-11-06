@@ -5,7 +5,8 @@ import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { defineTool, type InferArgs, type InferValue } from '@deepseek-ai/dsh-tools'
 import { identityToolWrapper, type ToolWrapper } from '../result-delivery.js'
-import { parseSupportedRef } from '../refs.js'
+import { asJsonValue } from '../json.js'
+import { formatRef, parseSupportedRef } from '../refs.js'
 import { invalid } from '../errors.js'
 import { GET_BATCH_MAX } from '../local/get-batch-domain.js'
 import { projectGetBatchMeta } from '../presentation-meta.js'
@@ -91,7 +92,7 @@ function buildRequest(args: Args): ZoteroGetBatchRequest {
   const seen = new Set<string>()
   const refs = args.refs.map((value) => {
     const ref = parseSupportedRef(value, ['item', 'attachment'])
-    const canonical = `${ref.library.type}/${ref.library.id}/${ref.kind}/${ref.key}${ref.serverId === undefined ? '' : `?server=${ref.serverId}`}`
+    const canonical = formatRef(ref)
     if (seen.has(canonical)) invalid(`refs must be unique; duplicate ref: ${value}`)
     seen.add(canonical)
     return ref
@@ -133,8 +134,7 @@ export function registerGetBatchTool(
         output: {
           schema: OUTPUT,
           render: renderGetBatch,
-          presentationMeta: (_args, value) =>
-            projectGetBatchMeta(value as unknown as ZoteroGetBatchResult),
+          presentationMeta: (_args, value) => projectGetBatchMeta(value as ZoteroGetBatchResult),
         },
         presentCall: (args) => ({
           card: 'generic',
@@ -147,15 +147,19 @@ export function registerGetBatchTool(
           const result = await service.getBatch(buildRequest(args), exec.signal)
           return {
             counts: result.counts,
-            items: result.items.map((entry) =>
-              entry.status === 'ok'
-                ? {
-                    ref: entry.ref,
-                    status: entry.status,
-                    item: entry.item as unknown as Record<string, JsonValue>,
-                  }
-                : entry,
-            ),
+            items: result.items.map((entry) => {
+              if (entry.status === 'error') return entry
+              const itemRecord: Record<string, JsonValue> = {}
+              for (const [k, v] of Object.entries(entry.item)) {
+                const json = asJsonValue(v)
+                if (json !== undefined) itemRecord[k] = json
+              }
+              return {
+                ref: entry.ref,
+                status: entry.status,
+                item: itemRecord,
+              }
+            }),
           }
         },
       }),

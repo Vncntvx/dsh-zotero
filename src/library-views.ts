@@ -11,6 +11,7 @@
  */
 
 import { ZOTERO_CHILD_PAGE_ROWS } from './constants.js'
+import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { parseRef, parseSupportedRef } from './refs.js'
 import { ZOTERO_UNEXPECTED, ZoteroError } from './errors.js'
 import type {
@@ -163,6 +164,8 @@ function itemsViewOf(
         `The library browse view cannot serve kind '${result.kind}'.`,
         ZOTERO_UNEXPECTED,
       )
+    default:
+      return assertNever(result.kind)
   }
 }
 
@@ -288,6 +291,8 @@ export function childPageViewOf(page: ZoteroChildPage): ZoteroChildPageView {
       return { kind: 'attachments', page: rowsPageOf(page.page, attachmentRowOf) }
     case 'annotations':
       return { kind: 'annotations', page: rowsPageOf(page.page, annotationRowOf) }
+    default:
+      return assertNever(page)
   }
 }
 

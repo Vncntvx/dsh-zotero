@@ -41,3 +41,8 @@ export function citationKeyInfoOf(data: Record<string, unknown> | undefined): Ci
   }
   return extra === undefined ? {} : { citationKey: extra, citationKeySource: 'extra' }
 }
+
+/** Format a citation-key conflict as `native=<native>; extra=<extra>`. */
+export function formatCitationKeyConflict(conflict: CitationKeyConflict): string {
+  return `native=${conflict.native}; extra=${conflict.extra}`
+}

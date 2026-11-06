@@ -135,7 +135,7 @@ export function registerMatchReferencesTool(
           schema: OUTPUT,
           render: renderMatchReferences,
           presentationMeta: (_args, value) =>
-            projectMatchReferencesMeta(value as unknown as ZoteroMatchReferencesResult),
+            projectMatchReferencesMeta(value as ZoteroMatchReferencesResult),
         },
         presentCall: (args) => ({
           card: 'generic',
@@ -145,10 +145,7 @@ export function registerMatchReferencesTool(
         }),
         isConcurrencySafe: () => true,
         async execute(args, exec) {
-          return (await service.matchReferences(
-            buildRequest(args),
-            exec.signal,
-          )) as unknown as Output
+          return (await service.matchReferences(buildRequest(args), exec.signal)) as Output
         },
       }),
     ),

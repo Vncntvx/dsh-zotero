@@ -119,6 +119,42 @@ describe('zotero_search tool', () => {
     expect(items[0]?.doi).toBe('10.48550/arXiv.1706.03762')
   })
 
+  it('renders the citation-key conflict in the one unified format', async () => {
+    // The `; ` separator is the intentional unification: every surface that
+    // names both sides of a conflict (search hit line, get detail, export
+    // mapping) spells it `native=<native>; extra=<extra>` through
+    // `formatCitationKeyConflict`, so the model reads one shape everywhere.
+    const conflicted = searchHit({
+      meta: { creatorSummary: 'Dao, Tri', numChildren: 1 },
+      data: {
+        itemType: 'conferencePaper',
+        date: '2023-07-28',
+        citationKey: 'nativeA',
+        extra: 'Citation Key: extraA',
+        creators: [{ creatorType: 'author', firstName: 'Tri', lastName: 'Dao' }],
+        tags: [],
+        collections: [],
+        relations: {},
+      },
+    })
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers) =>
+      helpers.json([conflicted], { 'Total-Results': '1', 'Zotero-Server-ID': 'S1' }),
+    )
+    const result = expectValue(
+      await runTool('zotero_search', { query: 'flash attention', limit: 5 }),
+      'zotero_search',
+    )
+    expect((result.value as { items: Array<Record<string, unknown>> }).items[0]).toMatchObject({
+      citationKey: 'nativeA',
+      citationKeyConflict: { native: 'nativeA', extra: 'extraA' },
+    })
+    expect((result.content[0] as { text: string }).text).toBe(
+      'Found 1 of 1 results:\n' +
+        '1. zotero://user/0/item/ABCD1234?server=S1 — FlashAttention-2 (2023) [conferencePaper]' +
+        ' [@nativeA] [citation key conflict: native=nativeA; extra=extraA] — Dao, Tri',
+    )
+  })
+
   it('validates and returns full fixture item carrying DOI and best attachment', async () => {
     const fixtureItem = fixtureJson('item10.json')
     mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers) =>

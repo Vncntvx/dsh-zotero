@@ -147,7 +147,7 @@ export function createSubagentGuard(ctx: Context, diagnostics: DiagnosticsRecord
 
   // A denial that must hold regardless of listener order: the tool remains
   // callable by name, so the view-layer restriction alone cannot enforce it.
-  ctx.tools.guard((execution: Readonly<ToolExecution>) => {
+  const guardDispose = ctx.tools.guard((execution: Readonly<ToolExecution>) => {
     if (disposed || !WRITE_NAME_SET.has(execution.name)) return undefined
     const agent = execution.agent
     return agent !== undefined && isRestricted(agent) ? SUBAGENT_WRITE_DENIAL_REASON : undefined
@@ -200,9 +200,14 @@ export function createSubagentGuard(ctx: Context, diagnostics: DiagnosticsRecord
     dispose() {
       if (disposed) return
       disposed = true
+      const errors: unknown[] = []
+      try {
+        guardDispose()
+      } catch (error) {
+        errors.push(error)
+      }
       const restrictions = [...active.values()]
       active.clear()
-      const errors: unknown[] = []
       for (const restriction of restrictions) {
         try {
           release(restriction)

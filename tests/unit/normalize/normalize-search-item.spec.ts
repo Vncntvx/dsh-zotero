@@ -11,7 +11,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { ZOTERO_UNEXPECTED, ZoteroError } from '../../../src/errors.js'
-import { citationKeyInfoOf } from '../../../src/citation-key.js'
+import { citationKeyInfoOf, formatCitationKeyConflict } from '../../../src/citation-key.js'
 import { fixtureJson } from '../../helpers/fixtures-dir.js'
 import { citekeyOf, normalizeSearchItem } from '../../../src/normalize-search.js'
 import { ctx, expectUnexpected } from './normalize-helpers.js'
@@ -224,5 +224,9 @@ describe('citekeyOf: the one citation-key grammar', () => {
     expect(citationKeyInfoOf({ citationKey: '   ', extra: 'Citation Key:  ' })).toEqual({})
     expect(citationKeyInfoOf({ citationKey: 42, extra: 42 })).toEqual({})
     expect(citationKeyInfoOf(undefined)).toEqual({})
+  })
+
+  it('formats a citation-key conflict as native and extra key pairs', () => {
+    expect(formatCitationKeyConflict({ native: 'nat', extra: 'ext' })).toBe('native=nat; extra=ext')
   })
 })

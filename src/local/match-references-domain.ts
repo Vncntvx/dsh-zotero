@@ -1,5 +1,6 @@
 /** Local-only reference reconciliation for BibTeX-like inputs. */
 
+import { deepEqualJson, type JsonValue } from '@deepseek-ai/dsh-util-values'
 import { mapWithConcurrency } from '../concurrency.js'
 import { ZOTERO_LIST_PAGE_ROWS } from '../constants.js'
 import {
@@ -59,10 +60,6 @@ function candidateOf(
   }
 }
 
-function surname(value: string): string | undefined {
-  return normalizeAuthorForAlignment(value)
-}
-
 function fieldDiffOf(
   input: ZoteroMatchReferenceInput,
   candidate: ZoteroMatchReferenceCandidate,
@@ -70,14 +67,14 @@ function fieldDiffOf(
   const diff: NonNullable<ZoteroMatchReferenceResult['fieldDiff']> = {}
   const add = (field: string, expected: unknown, actual: unknown): void => {
     if (expected === undefined || actual === undefined) return
-    if (JSON.stringify(expected) !== JSON.stringify(actual)) {
+    if (!deepEqualJson(expected as JsonValue, actual as JsonValue)) {
       diff[field] = { input: expected as never, zotero: actual as never }
     }
   }
   add('title', clean(input.title), candidate.title)
   add('doi', normalizeDoiForAlignment(clean(input.doi)), normalizeDoiForAlignment(candidate.doi))
   add('year', input.year, candidate.year)
-  add('authors', input.authors?.map((author) => author.trim()).filter(Boolean), candidate.authors)
+  add('authors', input.authors ? authorsOf(input) : undefined, candidate.authors)
   add('venue', clean(input.venue), candidate.venue)
   return Object.keys(diff).length === 0 ? undefined : diff
 }
@@ -99,10 +96,8 @@ async function candidatesByDoi(
   const matches = new Map([...dois].map((doi) => [doi, [] as ZoteroSearchItem[]]))
   if (matches.size === 0) return matches
 
-  let offset = 0
-  let total: number | undefined
-  for (;;) {
-    const page = await deps.search(
+  const fetchPage = (offset: number) =>
+    deps.search(
       {
         query: '',
         mode: 'metadata',
@@ -115,36 +110,70 @@ async function candidatesByDoi(
       },
       signal,
     )
-    if (page.offset !== offset || page.returned !== page.items.length) {
-      throw new ZoteroError('DOI lookup received an inconsistent page.', ZOTERO_UNEXPECTED)
-    }
-    if (total === undefined) total = page.total
-    else if (page.total !== total) {
-      throw new ZoteroError('The Zotero library changed during DOI lookup.', ZOTERO_UNEXPECTED)
-    }
-    if (offset > page.total || page.returned > page.total - offset) {
-      throw new ZoteroError('DOI lookup received an inconsistent page.', ZOTERO_UNEXPECTED)
-    }
 
-    for (const item of page.items) {
+  const firstPage = await fetchPage(0)
+  if (firstPage.offset !== 0 || firstPage.returned !== firstPage.items.length) {
+    throw new ZoteroError('DOI lookup received an inconsistent page.', ZOTERO_UNEXPECTED)
+  }
+  const total = firstPage.total
+  if (firstPage.returned > total) {
+    throw new ZoteroError('DOI lookup received an inconsistent page.', ZOTERO_UNEXPECTED)
+  }
+
+  const addItems = (items: ZoteroSearchItem[]) => {
+    for (const item of items) {
       const doi = normalizeDoiForAlignment(item.doi)
       if (doi === undefined) continue
       const bucket = matches.get(doi)
       if (bucket !== undefined) bucket.push(item)
     }
+  }
 
-    const next = offset + page.returned
-    if (next >= page.total) {
+  addItems(firstPage.items)
+
+  const next = firstPage.returned
+  if (next >= total) {
+    if (firstPage.nextOffset !== undefined) {
+      throw new ZoteroError('DOI lookup returned a cursor beyond its total.', ZOTERO_UNEXPECTED)
+    }
+    return matches
+  }
+
+  if (firstPage.returned === 0 || firstPage.nextOffset !== next) {
+    throw new ZoteroError('DOI lookup did not return every library page.', ZOTERO_UNEXPECTED)
+  }
+
+  const remainingOffsets: number[] = []
+  for (let offset = next; offset < total; offset += ZOTERO_LIST_PAGE_ROWS) {
+    remainingOffsets.push(offset)
+  }
+
+  const remainingPages = await mapWithConcurrency(remainingOffsets, 4, async (offset) => {
+    const page = await fetchPage(offset)
+    if (page.offset !== offset || page.returned !== page.items.length) {
+      throw new ZoteroError('DOI lookup received an inconsistent page.', ZOTERO_UNEXPECTED)
+    }
+    if (page.total !== total) {
+      throw new ZoteroError('The Zotero library changed during DOI lookup.', ZOTERO_UNEXPECTED)
+    }
+    if (offset > page.total || page.returned > page.total - offset) {
+      throw new ZoteroError('DOI lookup received an inconsistent page.', ZOTERO_UNEXPECTED)
+    }
+    const pageNext = offset + page.returned
+    if (pageNext >= total) {
       if (page.nextOffset !== undefined) {
         throw new ZoteroError('DOI lookup returned a cursor beyond its total.', ZOTERO_UNEXPECTED)
       }
-      break
-    }
-    if (page.returned === 0 || page.nextOffset !== next) {
+    } else if (page.returned === 0 || page.nextOffset !== pageNext) {
       throw new ZoteroError('DOI lookup did not return every library page.', ZOTERO_UNEXPECTED)
     }
-    offset = page.nextOffset
+    return page
+  })
+
+  for (const page of remainingPages) {
+    addItems(page.items)
   }
+
   return matches
 }
 
@@ -222,7 +251,7 @@ export async function matchReferences(
       }
       const title = titleOf(input)
       const inputAuthors = authorsOf(input)
-        .map(surname)
+        .map(normalizeAuthorForAlignment)
         .filter((value): value is string => value !== undefined)
       const scored = candidates
         .map((detail) => {
@@ -239,7 +268,7 @@ export async function matchReferences(
             normalizeYearForAlignment(String(detail.year)) ===
               normalizeYearForAlignment(String(input.year))
           const detailAuthors = (detail.authors ?? [])
-            .map(surname)
+            .map(normalizeAuthorForAlignment)
             .filter((value): value is string => value !== undefined)
           const authorMatch =
             inputAuthors.length === 0 ||

@@ -29,6 +29,7 @@ import {
 } from './child-records.js'
 import { formatSearchLine, metaRecordOf } from './present.js'
 import { formatCreatorsList } from '../creators.js'
+import { formatCitationKeyConflict } from '../citation-key.js'
 import { parseSupportedRef } from '../refs.js'
 import { REF_ARG_HINT } from './validate.js'
 import type { ZoteroService } from '../service.js'
@@ -234,9 +235,7 @@ export function renderGet(_args: GetArgs, value: GetOutput): ContentBlock[] {
     lines.push(`Citation key${source}: ${value.citationKey}`)
   }
   if (value.citationKeyConflict !== undefined) {
-    lines.push(
-      `Citation key conflict: native=${value.citationKeyConflict.native}; extra=${value.citationKeyConflict.extra}`,
-    )
+    lines.push(`Citation key conflict: ${formatCitationKeyConflict(value.citationKeyConflict)}`)
   }
   const venueLine = [
     value.venue,

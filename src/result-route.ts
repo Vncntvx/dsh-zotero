@@ -3,10 +3,10 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-connection'
 import type {} from '@deepseek-ai/dsh-session-query'
 import type { SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
-import type { FileAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { ResultDelivery } from './result-delivery.js'
-import { announcedReceipt } from './result-receipt.js'
-import { asRecord } from './json.js'
+import { isFileAttachmentRef } from './result-delivery.js'
+import { announcedReceipt, attachmentIdOf } from './result-receipt.js'
+import { asRecord, parseNonNegativeSafeInteger } from './json.js'
 
 export async function readResult(
   ctx: Context,
@@ -14,14 +14,16 @@ export async function readResult(
   request: Request,
 ): Promise<Response> {
   const query = new URL(request.url).searchParams
-  const id = query.get('sessionId')
-  const seq = coordinate(query.get('seq'))
-  const index = coordinate(query.get('index'))
-  if (!id || seq === undefined || index === undefined)
+  const rawId = query.get('sessionId')?.trim()
+  const seq = parseNonNegativeSafeInteger(query.get('seq'))
+  const index = parseNonNegativeSafeInteger(query.get('index'))
+  if (!rawId || seq === undefined || index === undefined)
     return new Response('Invalid result coordinates', { status: 400 })
+  const sessionId = rawId as SessionId
+  const sessionSeq = seq as SessionSeq
   try {
     const { target } = await ctx.sessionQuery.readEvent(
-      { sessionId: id as SessionId, seq: seq as SessionSeq, before: 0, after: 0 },
+      { sessionId, seq: sessionSeq, before: 0, after: 0 },
       request.signal,
     )
     const data = asRecord(target.data)
@@ -30,10 +32,10 @@ export async function readResult(
     const blocks = Array.isArray(content) ? content : []
     const files = blocks.filter((block) => asRecord(block)?.type === 'file')
     const meta = asRecord(data?.meta)
-    let attachment = asRecord(asRecord(files[index])?.attachment)
+    const attachmentRecord = asRecord(asRecord(files[index])?.attachment)
+    let attachment: unknown = attachmentRecord
     // Standard blocks remain readable after replay/fork without a running job registry.
-    const announcedId =
-      typeof attachment?.attachmentId === 'string' ? attachment.attachmentId : undefined
+    const announcedId = attachmentIdOf(attachmentRecord)
     if (announcedReceipt(blocks, announcedId) === undefined) attachment = undefined
     // An original background acknowledgement is also a durable owning-call coordinate.
     if (
@@ -47,10 +49,13 @@ export async function readResult(
       const receipt = await delivery.receipt(meta.resultSessionId, message.toolCallId)
       if (receipt && receipt.jobId === meta.jobId) attachment = receipt.file
     }
-    if (!attachment || !['tool/result', 'tool/ptc-dispatch', 'user/message'].includes(target.type))
+    if (
+      !isFileAttachmentRef(attachment) ||
+      !['tool/result', 'tool/ptc-dispatch', 'user/message'].includes(target.type)
+    )
       return new Response('Result file not found', { status: 404 })
     const source = ctx.attachments
-      .readFileStream(attachment as unknown as FileAttachmentRef, request.signal)
+      .readFileStream(attachment, request.signal)
       [Symbol.asyncIterator]()
     const stream = new ReadableStream<Uint8Array>({
       async pull(controller) {
@@ -74,18 +79,18 @@ export async function readResult(
     return new Response('Result unavailable', { status: 404 })
   }
 }
-function coordinate(value: string | null): number | undefined {
-  if (value === null || !/^\d+$/.test(value)) return undefined
-  const number = Number(value)
-  return Number.isSafeInteger(number) ? number : undefined
-}
+
 export function registerResultRoute(ctx: Context, delivery: ResultDelivery): void {
   ctx.inject(['connection', 'sessionQuery', 'attachments'], (host) => {
-    host.connection.fetch.register({
-      path: '/api/zotero/result',
-      methods: ['GET'],
-      requestBody: 'buffered',
-      fetch: (request) => readResult(host, delivery, request),
-    })
+    host.effect(
+      () =>
+        host.connection.fetch.register({
+          path: '/api/zotero/result',
+          methods: ['GET'],
+          requestBody: 'buffered',
+          fetch: (request) => readResult(host, delivery, request),
+        }),
+      'zotero: result route',
+    )
   })
 }

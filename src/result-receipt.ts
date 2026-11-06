@@ -32,6 +32,19 @@ export function parseReceiptLine(text: string): ResultReceipt | undefined {
 }
 
 /**
+ * The attachment id a file-shaped record names, or undefined when the value
+ * is not a record carrying a string id. The result read route and the ledger
+ * receipt projection both narrow through this one check, so what counts as
+ * "names an attachment" cannot drift between the two halves.
+ * @param value - a candidate `attachment` record, or undefined.
+ * @returns the attachment id, or undefined.
+ */
+export function attachmentIdOf(value: unknown): string | undefined {
+  if (!isRecord(value)) return undefined
+  return typeof value['attachmentId'] === 'string' ? value['attachmentId'] : undefined
+}
+
+/**
  * Find the announced receipt for one attachment among a block list.
  * @param blocks - block-shaped records from a tool result or message.
  * @param attachmentId - the attachment the caller intends to read.

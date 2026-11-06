@@ -9,6 +9,7 @@ import {
   isToolRunning,
   metaOf,
   resultTextOf,
+  valueArg,
 } from '../../sources/presenters.js'
 import { isRecord, numberField, stringField } from '../../json.ts'
 import { RunningNotice, RawTextFallback, ZoteroToolRow } from './ZoteroToolRow.tsx'
@@ -21,8 +22,8 @@ export function MatchReferencesToolView(props: Props) {
   const icon = useMemo(() => <IconSearchOutlineRegular size={14} />, [])
   const view = useMemo(() => {
     const args = argsViewOf(block)
-    const argsRecord = args as unknown as Record<string, unknown>
-    const input = Array.isArray(argsRecord['references']) ? argsRecord['references'].length : 0
+    const refs = valueArg(args, 'references')
+    const input = Array.isArray(refs) ? refs.length : 0
     const meta = metaOf(block)
     const items =
       meta !== null && Array.isArray(meta['items']) ? meta['items'].filter(isRecord) : []

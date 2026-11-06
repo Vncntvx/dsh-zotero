@@ -72,6 +72,42 @@ describe('matchReferences', () => {
     expect(requests).toEqual([{ query: '', mode: 'metadata' }])
   })
 
+  it('finds DOI across multiple library pages', async () => {
+    const output = await matchReferences(
+      {
+        search: async (request) => {
+          if (request.offset === 0) {
+            return result(
+              Array.from({ length: 50 }, (_, i) =>
+                hit({ ref: `zotero://user/0/item/PAGE1_${i}`, doi: `10.1000/page1_${i}` }),
+              ),
+              60,
+              0,
+            )
+          }
+          // The second page is the last one: it serves offsets 50–59 in full
+          // (60 total), so the helper derives no `nextOffset`. A short page
+          // here would advertise a third page the fixture never answers.
+          return result(
+            [
+              hit({ ref: 'zotero://user/0/item/MATCHED', doi: '10.1000/target-multi-page' }),
+              ...Array.from({ length: 9 }, (_, i) =>
+                hit({ ref: `zotero://user/0/item/PAGE2_${i}`, doi: `10.1000/page2_${i}` }),
+              ),
+            ],
+            60,
+            50,
+          )
+        },
+      },
+      { references: [{ inputId: 'multi-page', doi: '10.1000/target-multi-page' }] },
+    )
+    expect(output.items[0]).toMatchObject({
+      status: 'matched',
+      selected: { ref: 'zotero://user/0/item/MATCHED', matchMethod: 'doi' },
+    })
+  })
+
   it('falls back to a normalized title and reports field differences', async () => {
     const output = await matchReferences(
       {
