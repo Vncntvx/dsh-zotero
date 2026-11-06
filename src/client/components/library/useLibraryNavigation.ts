@@ -109,6 +109,17 @@ export function useLibraryNavigation(options: LibraryNavigationOptions) {
   live.current = active
   const restoreCounts = useRef<Readonly<Record<string, number>>>({})
   const slots = useRef(0)
+  /**
+   * Slot handoff for loads beyond the 4-concurrent cap. The reset and cleanup
+   * effects below drop this array together with `pending`, which is a
+   * deliberate never-settle contract, not a leak: a task still queued at that
+   * moment has its `await` abandoned — the suspended frame never reaches
+   * `valid()`, never publishes a lane, and never runs its `finally`. With the
+   * only strong reference to the task promise gone from `pending`, the whole
+   * frame (promise, resolvers, closures) is unreachable and left to GC.
+   * Nothing observes the difference because nothing awaits a queued load
+   * across an epoch change.
+   */
   const queue = useRef<(() => void)[]>([])
   const keyOf = useCallback(
     (ref?: string) => (ref === undefined ? '' : identityOf(ref)),
@@ -239,6 +250,7 @@ export function useLibraryNavigation(options: LibraryNavigationOptions) {
     live.current = active
     generation.current++
     pending.current.clear()
+    queue.current = []
     state.current.clear()
     setLanes(new Map())
     if (active) {
@@ -248,6 +260,8 @@ export function useLibraryNavigation(options: LibraryNavigationOptions) {
     return () => {
       generation.current++
       live.current = false
+      queue.current = []
+      pending.current.clear()
     }
   }, [active, serverId, library, load])
 

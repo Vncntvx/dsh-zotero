@@ -304,26 +304,26 @@ export function useLibraryFeed(
   // `prefixes` object for every pagination step, including loading states
   // whose visible prefix is unchanged; keying the effect on that identity
   // made each intermediate publish a synchronous localStorage write of an
-  // identical value. A serialized value compares by content, and the ref
-  // also makes an instance switch write once even when the content matches.
-  const persistedState: LibraryStoredState = {
-    version: 2,
-    prefixes: navigation.prefixes,
-    library: currentLibrary,
-    selection,
-    q: debouncedQ,
-    mode,
-    sort,
-    direction,
-    offset,
-    expanded: [...expanded],
-    filters,
-    selectedRef,
-    narrowPane,
-  }
-  const serialized = JSON.stringify(persistedState)
+  // identical value. Serializing inside the effect prevents JSON.stringify
+  // from running on every keystroke/render tick.
   useEffect(() => {
     if (!active || serverId === undefined || hydratedServer !== serverId) return
+    const persistedState: LibraryStoredState = {
+      version: 2,
+      prefixes: navigation.prefixes,
+      library: currentLibrary,
+      selection,
+      q: debouncedQ,
+      mode,
+      sort,
+      direction,
+      offset,
+      expanded: [...expanded],
+      filters,
+      selectedRef,
+      narrowPane,
+    }
+    const serialized = JSON.stringify(persistedState)
     if (
       lastPersisted.current?.serverId === serverId &&
       lastPersisted.current.serialized === serialized
@@ -331,7 +331,23 @@ export function useLibraryFeed(
       return
     writeLibraryState(serverId, persistedState)
     lastPersisted.current = { serverId, serialized }
-  }, [active, serverId, hydratedServer, serialized])
+  }, [
+    active,
+    serverId,
+    hydratedServer,
+    navigation.prefixes,
+    currentLibrary,
+    selection,
+    debouncedQ,
+    mode,
+    sort,
+    direction,
+    offset,
+    expanded,
+    filters,
+    selectedRef,
+    narrowPane,
+  ])
 
   // The debounced query drives requests; the raw input drives the text box.
   useEffect(() => {

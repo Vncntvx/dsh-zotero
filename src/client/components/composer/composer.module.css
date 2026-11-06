@@ -1,12 +1,4 @@
-/* The composer trigger is the host IconButton; this carries only the selector
- * surface colour, doubled so it outranks the host Button's hover fill. */
-.composerTone.composerTone {
-  background: var(--dsw-specific-selector);
-  color: var(--dsw-alias-label-primary);
-}
-
-@media (hover: hover) {
-  .composerTone.composerTone:hover:not(:disabled) {
-    background: var(--dsw-alias-interactive-bg-hover-solid);
-  }
+/* Layout only for the composer toolbar shortcut button */
+.composerTone {
+  flex: none;
 }

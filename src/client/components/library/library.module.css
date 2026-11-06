@@ -208,26 +208,6 @@
   gap: 4px;
 }
 
-.tagRemoveButton {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 14px;
-  height: 14px;
-  padding: 0;
-  border: 0;
-  border-radius: var(--dsw-radius-xs);
-  background: transparent;
-  color: var(--dsw-alias-label-tertiary);
-  cursor: pointer;
-}
-
-.tagRemoveButton:focus-visible {
-  outline: var(--dsw-focus-ring-width, 1px) solid
-    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
-  outline-offset: 1px;
-}
-
 /* ── Tag filter popover ───────────────────────────────────────────────── */
 
 .tagPickerWrap {
@@ -585,28 +565,8 @@
 }
 
 .treeExpander {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
   margin-right: 2px;
-  border: 0;
-  border-radius: var(--dsw-radius-xs);
-  background: transparent;
-  color: var(--dsw-alias-label-tertiary);
-  cursor: pointer;
-  padding: 0;
-  transition:
-    transform 150ms var(--ds-ease-in-out),
-    color 120ms var(--ds-ease-in-out);
-}
-
-.treeExpander:focus-visible {
-  outline: var(--dsw-focus-ring-width, 1px) solid
-    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
-  outline-offset: 1px;
+  transition: transform 150ms var(--ds-ease-in-out);
 }
 
 .treeExpanderOpen {
@@ -1472,16 +1432,8 @@
  * each step lands before the next needs it. */
 
 @media (hover: hover) {
-  .tagRemoveButton:hover {
-    color: var(--dsw-alias-label-primary);
-  }
-
   .treeRowWrap:hover {
     background: var(--dsw-alias-interactive-bg-hover);
-  }
-
-  .treeExpander:hover {
-    color: var(--dsw-alias-label-primary);
   }
 
   .treeRow:hover {

@@ -23,6 +23,7 @@ import { ZOTERO_YEAR_MAX, ZOTERO_YEAR_MIN } from '../../../constants.ts'
 import type { LibraryFeedFace } from './library-feed-types.ts'
 import { LIBRARY_PAGE_SIZE, type LibraryFilters as Filters } from './library-model.ts'
 import { LibraryTagPicker } from './LibraryTagPicker.tsx'
+import { IconButton } from '../IconButton.tsx'
 import { messageOf } from '../../error-text.ts'
 import css from './library.module.css'
 
@@ -212,18 +213,17 @@ export function LibraryFilters({
         return (
           <Tag key={typeVal} tone="neutral" className={css.filterTagWrap}>
             <span>{label}</span>
-            <button
-              type="button"
-              className={css.tagRemoveButton}
+            <IconButton
+              size="sm"
+              shape="square"
               aria-label={t('libraryFilterRemove', { label })}
+              icon={<IconCloseOutlineRegular size={11} />}
               onClick={() => {
                 const next = new Set(selectedTypes)
                 next.delete(typeVal)
                 change({ ...value, itemTypes: Array.from(next) })
               }}
-            >
-              <IconCloseOutlineRegular size={11} />
-            </button>
+            />
           </Tag>
         )
       })}
@@ -243,18 +243,17 @@ export function LibraryFilters({
       {Array.from(selectedTags).map((tag) => (
         <Tag key={tag} tone="neutral" className={css.filterTagWrap}>
           <span>{tag}</span>
-          <button
-            type="button"
-            className={css.tagRemoveButton}
+          <IconButton
+            size="sm"
+            shape="square"
             aria-label={t('libraryTagRemove', { tag })}
+            icon={<IconCloseOutlineRegular size={11} />}
             onClick={() => {
               const next = new Set(selectedTags)
               next.delete(tag)
               change({ ...value, tags: Array.from(next) })
             }}
-          >
-            <IconCloseOutlineRegular size={11} />
-          </button>
+          />
         </Tag>
       ))}
 

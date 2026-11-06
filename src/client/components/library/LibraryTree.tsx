@@ -26,6 +26,7 @@ import type {
   SavedSearchRowView,
 } from './library-model.ts'
 import { lanePageOf } from './library-model.ts'
+import { IconButton } from '../IconButton.tsx'
 import css from './library.module.css'
 import { LibraryLaneControls } from './LibraryLaneControls.tsx'
 
@@ -263,19 +264,19 @@ export function LibraryTree({
                 {childless ? (
                   <span className={css.treeExpanderPlaceholder} />
                 ) : (
-                  <button
-                    type="button"
+                  <IconButton
+                    size="sm"
+                    shape="square"
                     tabIndex={-1}
-                    className={clsx(css.treeExpander, isExpanded && css.treeExpanderOpen)}
                     aria-expanded={isExpanded}
                     aria-label={row.name}
+                    className={clsx(css.treeExpander, isExpanded && css.treeExpanderOpen)}
+                    icon={<IconChevronRightOutlineMedium className={css.chevronSvg} />}
                     onClick={() => {
                       buttons.current.get(row.ref)?.focus()
                       toggleCollection(row.ref)
                     }}
-                  >
-                    <IconChevronRightOutlineMedium className={css.chevronSvg} />
-                  </button>
+                  />
                 )}
                 <button
                   type="button"
