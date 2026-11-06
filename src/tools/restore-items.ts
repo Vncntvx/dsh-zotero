@@ -32,10 +32,19 @@ const RESTORED_ITEM = {
   additionalProperties: false,
   properties: {
     ref: { type: 'string', required: true },
-    restored: { type: 'boolean', enum: [true], required: true },
+    restored: { type: 'boolean', required: true },
+    alreadyPresent: { type: 'boolean' },
     version: { type: 'integer', required: true },
-    libraryVersion: { type: 'integer', required: true },
+    libraryVersion: { type: 'integer' },
     serverId: { type: 'string' },
+    children: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: { ref: { type: 'string', required: true } },
+      },
+    },
   },
 } as const
 
@@ -61,20 +70,33 @@ function restoreItemsPlan(args: Args): string {
     '**Restore Zotero Trash items**',
     WRITE_PLAN_LIBRARY_LINE,
     `- Items: ${args.refs.join(', ')}`,
-    'Each item is restored with deleted=0 under its own version precondition; failures are reported per ref.',
+    "Each item's whole child graph (attachments, notes, annotations) is restored children-first, every node under its own version precondition, and the graph is read back to prove the restore; failures are reported per ref with the refs already acknowledged.",
   ].join('\n')
 }
 
 export function renderRestoreItems(_args: Args, value: Output): ContentBlock[] {
   if (value.kind === 'declined') return renderDeclined()
+  const written = value.restored.filter((item) => item.restored)
+  const alreadyLive = value.restored.filter((item) => item.alreadyPresent === true)
   return [
     {
       type: 'text',
       text: [
-        `Restored ${value.restored.length} item(s); ${value.failed.length} failed.`,
-        ...value.restored.map(
-          (item) => `- Restored ${item.ref} (version ${item.version}). ${libraryVersionLine(item)}`,
-        ),
+        `Restored ${written.length} item(s) from Trash; ${alreadyLive.length} already live; ${value.failed.length} failed.`,
+        ...value.restored.map((item) => {
+          if (item.alreadyPresent === true) {
+            return `- Already live in the library (nothing written): ${item.ref} (version ${item.version}).`
+          }
+          const children =
+            item.children === undefined
+              ? ''
+              : ` Restored ${item.children.length} child object(s) beside it.`
+          const version = libraryVersionLine({
+            libraryVersion: item.libraryVersion ?? item.version,
+            serverId: item.serverId,
+          })
+          return `- Restored ${item.ref} (version ${item.version}).${children} ${version}`
+        }),
         ...value.failed.map(
           (item) =>
             `- Failed ${item.ref ?? `index ${item.index}`}: ${item.code}: ${item.message}${item.completedRefs === undefined ? '' : `\n  Completed refs: ${item.completedRefs.join(', ')}`}`,
@@ -87,10 +109,12 @@ export function renderRestoreItems(_args: Args, value: Output): ContentBlock[] {
 /** Replayable projection: the per-arm counts, so the card can state them without the rows. */
 function presentRestoreItemsMeta(_args: Args, value: Output): JsonValue {
   if (value.kind === 'declined') return { kind: 'declined' }
+  const alreadyPresentCount = value.restored.filter((item) => item.alreadyPresent === true).length
   return {
     kind: 'restored',
-    restoredCount: value.restored.length,
+    restoredCount: value.restored.filter((item) => item.restored).length,
     failedCount: value.failed.length,
+    ...(alreadyPresentCount > 0 ? { alreadyPresentCount } : {}),
     ...(value.serverId === undefined ? {} : { serverId: value.serverId }),
   }
 }
@@ -103,9 +127,10 @@ function presentRestoreItemsResult(_args: Args, result: ToolResult): ToolResultV
   }
   if (typeof record.restoredCount !== 'number' || typeof record.failedCount !== 'number')
     return undefined
+  const already = typeof record.alreadyPresentCount === 'number' ? record.alreadyPresentCount : 0
   return {
     card: 'generic',
-    title: `Zotero restore: ${record.restoredCount} restored, ${record.failedCount} failed`,
+    title: `Zotero restore: ${record.restoredCount} restored, ${already} already live, ${record.failedCount} failed`,
   }
 }
 

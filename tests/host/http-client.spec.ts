@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import {
@@ -126,6 +126,45 @@ describe('identity protection', () => {
     ).toHaveLength(1)
     expect(rootHits).toBe(1)
     expect(client.serverId).toBe('NEWID')
+  })
+
+  it('cancels the unread 412 body before refreshing identity', async () => {
+    // The 412 branch must release the unread body the same way every other
+    // non-2xx branch does; an unclosed stream keeps the pooled connection
+    // parked until garbage collection. The mock server cannot observe a
+    // client-side body cancel, so the client's fetch is stubbed and the
+    // assertion watches the stream itself.
+    let cancelled = false
+    const fetchStub = vi.fn(async (input: string | URL) => {
+      const url = String(input)
+      if (url.endsWith('/api/')) {
+        return new Response('{}', {
+          headers: { 'Zotero-API-Version': '3', 'Zotero-Server-ID': 'NEWID' },
+        })
+      }
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(
+            new TextEncoder().encode('Zotero-Server-ID does not match this server'),
+          )
+        },
+        cancel() {
+          cancelled = true
+        },
+      })
+      return new Response(body, { status: 412, headers: { 'Content-Type': 'text/plain' } })
+    })
+    vi.stubGlobal('fetch', fetchStub)
+    try {
+      await expectZoteroError(
+        client.getJson('users/0/items'),
+        ZOTERO_SERVER_MISMATCH,
+        SERVER_MISMATCH_MESSAGE,
+      )
+    } finally {
+      vi.unstubAllGlobals()
+    }
+    expect(cancelled).toBe(true)
   })
 
   it('fails closed instead of looping when the identity refresh itself 412s', async () => {

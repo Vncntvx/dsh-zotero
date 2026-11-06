@@ -8,7 +8,10 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
-import { TOOL_ABORTED_MESSAGE } from '../../../src/abort.js'
+import {
+  WRITE_ABORTED_AFTER_DISPATCH_MESSAGE,
+  ZoteroWriteCommitUnknownError,
+} from '../../../src/errors.js'
 import { ZOTERO_API_DISABLED, ZOTERO_TIMEOUT } from '../../../src/errors.js'
 import { expectZoteroError } from '../../helpers/error-expectations.js'
 import { MockZotero } from '../../helpers/mock-zotero.js'
@@ -101,7 +104,14 @@ describe('the write transport diagnostics log', () => {
     )
     await outstanding.promise
     controller.abort()
-    await expectZoteroError(pending, TOOL_ABORTED, TOOL_ABORTED_MESSAGE)
+    // The PATCH dispatched, so the cancellation is commit-unknown even though
+    // the diagnostics classification still keys on the abort signal itself.
+    const error = await expectZoteroError(
+      pending,
+      TOOL_ABORTED,
+      WRITE_ABORTED_AFTER_DISPATCH_MESSAGE,
+    )
+    expect(error).toBeInstanceOf(ZoteroWriteCommitUnknownError)
     expect(lines.find((candidate) => candidate.event === 'write.abort')?.level).toBe('debug')
   })
 })

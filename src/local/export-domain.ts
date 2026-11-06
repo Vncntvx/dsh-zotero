@@ -56,6 +56,8 @@ interface ExportBody {
   readonly refs: readonly ZoteroObjectRef[]
   /** Raw item JSON used to attach Zotero citation-key facts to located entries. */
   readonly rawItems: readonly Record<string, unknown>[]
+  /** The raw-metadata batch failed; alignment covers only what arrived. */
+  readonly metadataIncomplete: boolean
 }
 
 /**
@@ -95,13 +97,23 @@ export async function exportItems(
   signal?: AbortSignal,
   onProgress?: (progress: ZoteroProgressEvent) => void,
 ): Promise<ZoteroExportResult> {
-  const { result, refs, rawItems } = await exportBody(deps, request, signal, onProgress, true)
+  const { result, refs, rawItems, metadataIncomplete } = await exportBody(
+    deps,
+    request,
+    signal,
+    onProgress,
+    true,
+  )
   if (result.format === 'citation' || result.format === 'bibliography' || result.format === 'csv') {
     return result
   }
   // Entry spans address the verbatim translator body, including leading whitespace.
   const items = locateExportItemsFromBatch(result.format, result.text, [...refs], rawItems)
-  return { ...result, items }
+  return {
+    ...result,
+    items,
+    ...(metadataIncomplete ? { metadataIncomplete: true as const } : {}),
+  }
 }
 
 /**
@@ -155,6 +167,7 @@ async function exportBody(
       }),
       refs: [],
       rawItems: [],
+      metadataIncomplete: false,
     }
   }
   // Duplicate refs name the same item, and Zotero caps one itemKey request
@@ -196,12 +209,12 @@ async function exportBody(
     request.format === 'ris' ||
     request.format === 'csljson'
   const exportPromise = deps.client.get(`${exportPrefix}/items`, search, { signal, serverId })
-  const metaPromise =
+  const metaPromise: Promise<{ rows: readonly Record<string, unknown>[]; incomplete: boolean }> =
     itemizeMetadata && isItemizedTranslator
       ? fetchRawItemBatch(deps.client, exportPrefix, refs, signal, serverId)
-      : Promise.resolve<readonly Record<string, unknown>[]>([])
+      : Promise.resolve({ rows: [], incomplete: false })
 
-  const [{ body }, rawItems] = await Promise.all([exportPromise, metaPromise])
+  const [{ body }, meta] = await Promise.all([exportPromise, metaPromise])
   // Close the progress event the fetch opened: without this the receipt
   // would sit at "Fetching N items…" forever, since the batched read has no
   // per-item steps to report.
@@ -218,35 +231,51 @@ async function exportBody(
     )
   }
   if (request.format === 'bibliography') {
-    return { result: { format: 'bibliography', style, locale, text: body }, refs, rawItems: [] }
+    return {
+      result: { format: 'bibliography', style, locale, text: body },
+      refs,
+      rawItems: [],
+      metadataIncomplete: meta.incomplete,
+    }
   }
-  return { result: { format: request.format, text: body }, refs, rawItems }
+  return {
+    result: { format: request.format, text: body },
+    refs,
+    rawItems: meta.rows,
+    metadataIncomplete: meta.incomplete,
+  }
 }
 
+/**
+ * One raw-metadata batch for citekey and field alignment. The batch failing
+ * is not the export failing: the body is already in hand, so the caller
+ * reports the alignment as partial instead of silently serving fewer facts.
+ * Cancellation is not a metadata failure: swallowing it would report a body
+ * the caller stopped as a settled success.
+ */
 async function fetchRawItemBatch(
   client: ZoteroHttpClient,
   prefix: string,
   refs: readonly ZoteroObjectRef[],
   signal: AbortSignal | undefined,
   serverId: string | undefined,
-): Promise<readonly Record<string, unknown>[]> {
+): Promise<{ rows: readonly Record<string, unknown>[]; incomplete: boolean }> {
   const search = new URLSearchParams()
   search.set('itemKey', itemKeyList(refs))
   try {
     const { json } = await client.getJson<unknown>(`${prefix}/items`, search, { signal, serverId })
     if (Array.isArray(json)) {
-      return json
-        .map(asRecord)
-        .filter((item): item is Record<string, unknown> => item !== undefined)
+      return {
+        rows: json
+          .map(asRecord)
+          .filter((item): item is Record<string, unknown> => item !== undefined),
+        incomplete: false,
+      }
     }
   } catch (error) {
-    // Fail-open for metadata: if raw JSON fetch fails, alignment still proceeds with
-    // available fields and direct keys without failing the export. Cancellation is
-    // not a metadata failure: swallowing it would report a body the caller stopped
-    // as a settled success.
     if (signal?.aborted) throw error
   }
-  return []
+  return { rows: [], incomplete: true }
 }
 
 interface CitationExportOptions {

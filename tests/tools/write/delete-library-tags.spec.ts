@@ -221,6 +221,24 @@ describe('zotero_delete_library_tags presentation', () => {
     expect(unserved.text).not.toContain('served by')
   })
 
+  it('renders proven-absent names as no-ops beside the deleted ones', () => {
+    const render = tool().output.render
+    const served = render(ARGS, {
+      kind: 'deleted',
+      deletedTags: ['methods'],
+      absentTags: ['ghost', 'typo'],
+      libraryVersion: 12,
+    })[0] as { text: string }
+    expect(served.text).toContain('Deleted 1 tags library-wide: methods.')
+    expect(served.text).toContain('Proven absent (no-op): ghost, typo.')
+    const silent = render(ARGS, {
+      kind: 'deleted',
+      deletedTags: ['methods'],
+      libraryVersion: 12,
+    })[0] as { text: string }
+    expect(silent.text).not.toContain('Proven absent')
+  })
+
   it('names the card for every settle state', () => {
     const present = tool().presentResult!
     expect(present(ARGS, ok({ kind: 'declined' }))).toEqual({

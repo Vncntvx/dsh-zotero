@@ -1,7 +1,12 @@
 /** Every create index settles once, including uncertain commits and authorization renewal. */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import { batchItems } from '../../../src/local/write-batch.js'
-import { WRITE_UNAUTHORIZED_AFTER_AUTH_MESSAGE } from '../../../src/errors.js'
+import {
+  WRITE_ABORTED_AFTER_DISPATCH_MESSAGE,
+  WRITE_UNAUTHORIZED_AFTER_AUTH_MESSAGE,
+  ZoteroWriteCommitUnknownError,
+} from '../../../src/errors.js'
 import {
   batchHeaders,
   grantAuthorize,
@@ -11,6 +16,8 @@ import {
   writeDeps,
 } from '../../helpers/write-domain-fixtures.js'
 import { testWriteClient } from '../../helpers/test-clients.js'
+import { progress } from '../../helpers/sync.js'
+import { expectZoteroError } from '../../helpers/error-expectations.js'
 import type { MockZotero } from '../../helpers/mock-zotero.js'
 
 let mock: MockZotero
@@ -217,4 +224,36 @@ describe('batch create authorization', () => {
       expect(mock.requests.filter((r) => r.pathname === '/api/users/0/items')).toHaveLength(2)
     },
   )
+})
+
+describe('batch create cancellation', () => {
+  it('rethrows a commit-unknown write when the caller already aborted', async () => {
+    // The buckets this domain would otherwise build can never reach the
+    // model: the pipeline masks a settled result of an aborted call with the
+    // canonical cancellation. The commit state has to travel as the thrown
+    // error instead, so the re-issue decision carries it.
+    grantAuthorize(mock)
+    const sync = progress()
+    mock.route('POST', '/api/users/0/items', (_req, _res, h) => {
+      sync.notify()
+      h.delayJson(
+        { successful: { '0': written('NEWITEM1') }, success: { '0': 'NEWITEM1' } },
+        2000,
+        batchHeaders(25),
+      )
+    })
+    const { deps } = writeDeps(mock)
+    const controller = new AbortController()
+    const pending = batchItems(deps, { create: creates }, controller.signal)
+    await sync.when(
+      () => mock.requests.filter((r) => r.pathname === '/api/users/0/items').length === 1,
+    )
+    controller.abort()
+    const error = await expectZoteroError(
+      pending,
+      TOOL_ABORTED,
+      WRITE_ABORTED_AFTER_DISPATCH_MESSAGE,
+    )
+    expect(error).toBeInstanceOf(ZoteroWriteCommitUnknownError)
+  })
 })

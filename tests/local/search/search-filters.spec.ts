@@ -60,14 +60,27 @@ function setup(total = 250) {
         headers.set('Last-Modified-Version', String(walkVersion.current))
         return { json: attachmentRows.slice(start, start + limit), headers }
       }
-      // The batched row fetch for one stored-index page.
+      // The batched row fetch for one stored-index page. The scope listing
+      // carries no limit: its rows include every child of each key, and a
+      // limit at the key count would let children displace requested keys —
+      // so this fixture expands one child beside the first key, exactly like
+      // the real server does for an item with an attachment or note.
       const itemKey = params?.get('itemKey')
       if (itemKey !== null && itemKey !== undefined && itemKey !== '') {
         const keys = itemKey.split(',')
-        expect(params?.get('limit')).toBe('50')
-        headers.set('Total-Results', String(keys.length))
+        expect(params?.get('limit')).toBeNull()
+        const answer = rows.filter((row) => keys.includes(String(row.key)))
+        const firstParent = answer.find((row) => keys[0] === String(row.key))
+        if (firstParent !== undefined) {
+          answer.splice(answer.indexOf(firstParent) + 1, 0, {
+            key: `CHLD${String(firstParent.key).slice(4)}`,
+            version: 2083,
+            data: { parentItem: firstParent.key },
+          })
+        }
+        headers.set('Total-Results', String(answer.length))
         headers.set('Last-Modified-Version', String(batchVersion.current))
-        return { json: rows.filter((row) => keys.includes(String(row.key))), headers }
+        return { json: answer, headers }
       }
       // The candidate listing itself.
       const start = Number(params?.get('start') ?? 0)

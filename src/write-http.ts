@@ -33,7 +33,6 @@ import {
   ZOTERO_AUTHORIZE_PATH,
   ZOTERO_LIBRARY_VERSION_HEADER,
   ZOTERO_LOCAL_API_VERSION,
-  ZOTERO_MAX_WRITE_INFLIGHT_REQUESTS,
   ZOTERO_RETRY_AFTER_HEADER,
   ZOTERO_SERVER_ID_HEADER,
   ZOTERO_WRITE_OBJECT_BATCH,
@@ -41,6 +40,7 @@ import {
 import {
   API_DISABLED_MESSAGE,
   SERVER_MISMATCH_MESSAGE,
+  WRITE_ABORTED_AFTER_DISPATCH_MESSAGE,
   WRITE_AUTH_DENIED_MESSAGE,
   WRITE_AUTH_SHAPE_MESSAGE,
   WRITE_BATCH_REFUSED_MESSAGE,
@@ -59,7 +59,7 @@ import {
   ZOTERO_WRITE_RATE_LIMITED,
   ZOTERO_WRITE_UNAUTHORIZED,
   ZoteroError,
-  type ZoteroErrorCode,
+  ZoteroWriteCommitUnknownError,
   writeBatchShapeMessage,
   writeRateLimitedMessage,
   writeTagDeleteLimitMessage,
@@ -93,6 +93,13 @@ export interface ZoteroWriteHttpClientOptions {
    * human, so it is independent of the per-request data deadline.
    */
   readonly authorizeDeadlineMs: number
+  /**
+   * The shared in-flight gate. One write request at a time is a process-wide
+   * invariant, so every transport rebuild passes the same gate instead of
+   * owning one; a rebuilt stack and an in-flight write cannot then run side
+   * by side.
+   */
+  readonly gate: ConcurrencyGate
   /** Diagnostics sink for write attempts and outcomes; absent means silently unobserved. */
   readonly sink?: DiagnosticSink
 }
@@ -139,22 +146,9 @@ export interface ZoteroBatchWrite {
   readonly libraryVersion: number
 }
 
-/**
- * A write request that reached the response/commit boundary but whose
- * outcome could not be proven. Callers that create non-idempotent objects
- * must surface this as a non-retryable, commit-unknown result rather than
- * inviting a second write.
- */
-export class ZoteroWriteCommitUnknownError extends ZoteroError {
-  constructor(message: string, code: ZoteroErrorCode, options?: ErrorOptions) {
-    super(message, code, options)
-    this.name = 'ZoteroWriteCommitUnknownError'
-  }
-}
-
 /** Preserve a typed error's code/message while marking its commit state unknown. */
 function asCommitUnknown(error: unknown): ZoteroWriteCommitUnknownError {
-  const code = (error instanceof ZoteroError ? error.code : ZOTERO_UNEXPECTED) as ZoteroErrorCode
+  const code = error instanceof ZoteroError ? error.code : ZOTERO_UNEXPECTED
   const message = error instanceof Error ? error.message : UNEXPECTED_REQUEST_MESSAGE
   return new ZoteroWriteCommitUnknownError(message, code, { cause: error })
 }
@@ -248,6 +242,11 @@ function requireLibraryVersion(headers: Headers): number {
  * retries, no identity refresh. The write path has exactly one legitimate
  * replay (re-authorize after 401, then send the same batch again) and that
  * replay belongs to the domain, not to transport heuristics.
+ *
+ * The in-flight gate is injected, not owned: serialization is a process-wide
+ * invariant of the read-modify-write cycles the write domain performs, so the
+ * gate outlives any single transport instance and every rebuild of the stack
+ * shares the same slot.
  */
 export class ZoteroWriteHttpClient {
   private readonly baseUrlWithSlash: string
@@ -255,7 +254,7 @@ export class ZoteroWriteHttpClient {
 
   constructor(private readonly options: ZoteroWriteHttpClientOptions) {
     this.baseUrlWithSlash = options.baseUrl.endsWith('/') ? options.baseUrl : `${options.baseUrl}/`
-    this.gate = new ConcurrencyGate(ZOTERO_MAX_WRITE_INFLIGHT_REQUESTS)
+    this.gate = options.gate
   }
 
   /**
@@ -413,7 +412,19 @@ export class ZoteroWriteHttpClient {
             opts.signal?.aborted ||
             (translated instanceof HarnessError && translated.code === TOOL_ABORTED)
           ) {
-            throw translated
+            // A caller cancellation observed after dispatch sits in the same
+            // commit window as a deadline: the request reached Zotero, whose
+            // single-use keys are consumed and whose batches commit per
+            // object regardless of whether the client reads the response. A
+            // commit-sensitive call therefore reports commit-unknown instead
+            // of a clean cancellation; the pre-dispatch check above already
+            // gave the not-yet-sent case its clean one.
+            if (!commitSensitive) throw translated
+            throw new ZoteroWriteCommitUnknownError(
+              WRITE_ABORTED_AFTER_DISPATCH_MESSAGE,
+              TOOL_ABORTED,
+              { cause: translated },
+            )
           }
           throw commitUnknownOr(translated, commitSensitive)
         }

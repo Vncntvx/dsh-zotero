@@ -9,6 +9,7 @@
 
 import { ZoteroHttpClient, type ZoteroHttpClientOptions } from '../../src/http-client.js'
 import { ZoteroWriteHttpClient, type ZoteroWriteHttpClientOptions } from '../../src/write-http.js'
+import { ConcurrencyGate } from '../../src/concurrency.js'
 
 /** Per-request data deadline every spec starts from. */
 const STANDARD_TIMEOUT_MS = 5000
@@ -53,6 +54,7 @@ export function testWriteClient(
     timeoutMs: STANDARD_TIMEOUT_MS,
     maxResponseBytes: STANDARD_MAX_RESPONSE_BYTES,
     authorizeDeadlineMs: STANDARD_AUTHORIZE_DEADLINE_MS,
+    gate: new ConcurrencyGate(1),
     ...overrides,
   })
 }

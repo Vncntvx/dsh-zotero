@@ -684,6 +684,11 @@ export type ZoteroExportResult =
   | Extract<ZoteroExportTextResult, { format: 'csv' }>
   | (Extract<ZoteroExportTextResult, { format: ZoteroItemizedExportFormat }> & {
       items: ZoteroExportItem[]
+      /**
+       * The raw-metadata batch behind citekey and field alignment failed; the
+       * body is complete but the per-document facts cover only what arrived.
+       */
+      metadataIncomplete?: true
     })
 
 /** Raw fulltext payload from `GET /items/<attachmentKey>/fulltext`. */
@@ -1243,6 +1248,11 @@ export interface ZoteroDeleteLibraryTagsRequest {
 export interface ZoteroDeleteLibraryTagsResult {
   kind: 'deleted'
   deletedTags: string[]
+  /**
+   * Requested names the plan card already proved absent: they are no-ops,
+   * reported so the receipt never counts an unknown name as deleted.
+   */
+  absentTags?: string[]
   /** The library version the delete advanced the library to. */
   libraryVersion: number
   serverId?: string
@@ -1334,10 +1344,22 @@ export interface ZoteroRestoreItemsRequest {
 }
 export interface ZoteroRestoreItemResult {
   ref: string
-  restored: true
+  /**
+   * True when nodes of the graph moved out of the Trash. False with
+   * `alreadyPresent` means the whole graph was already live and nothing was
+   * written; a partial restore with a failed node is reported in `failed`
+   * with the acknowledged refs, never here.
+   */
+  restored: boolean
+  /** The whole graph was already live in the library; no write happened. */
+  alreadyPresent?: true
+  /** The requested item's version after the call. */
   version: number
-  libraryVersion: number
+  /** The library version the restore writes advanced to; absent when nothing was written. */
+  libraryVersion?: number
   serverId?: string
+  /** The child graph this restore covered, children first; absent for a childless item. */
+  children?: { ref: string }[]
 }
 export interface ZoteroRestoreItemsResult {
   kind: 'restored'

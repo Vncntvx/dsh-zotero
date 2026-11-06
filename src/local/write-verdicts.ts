@@ -14,11 +14,8 @@ import {
 import { asRecord, asString, isNonNegativeSafeInteger, isObjectKey } from '../json.js'
 import type { WriteDomainDeps } from './write-deps.js'
 import { collectionRef, itemRef, searchRef } from './write-refs.js'
-import {
-  ZoteroWriteCommitUnknownError,
-  type ZoteroBatchWrite,
-  type ZoteroWriteObjectFailure,
-} from '../write-http.js'
+import { ZoteroWriteCommitUnknownError } from '../errors.js'
+import { type ZoteroBatchWrite, type ZoteroWriteObjectFailure } from '../write-http.js'
 import type {
   ZoteroBatchCreateItemResult,
   ZoteroBatchCreateUnverified,
@@ -103,6 +100,12 @@ async function sendSingleCreate(
     return await deps.writer.batch(path, [entry], { serverId, apiKey, signal })
   } catch (error) {
     if (error instanceof ZoteroWriteCommitUnknownError) {
+      // A caller abort leaves the caller's tool result masked by the
+      // pipeline's canonical cancellation, which would hide the commit state
+      // behind a plain "aborted". Rethrow instead: the recorded error result
+      // carries the commit-unknown wording. A deadline keeps the receipt —
+      // its caller is still listening.
+      if (signal?.aborted) throw error
       return committedUnverified({ kind, serverId, reason: 'commit-unknown' })
     }
     throw error

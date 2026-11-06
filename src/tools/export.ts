@@ -157,6 +157,7 @@ const EXPORT_OUTPUT_SCHEMA = {
         text: { type: 'string', required: true },
         outputFile: { type: 'string' },
         delivered: { type: 'boolean' },
+        metadataIncomplete: { type: 'boolean' },
         items: {
           type: 'array',
           required: true,
@@ -244,6 +245,11 @@ function renderExport(_args: unknown, value: ExportOutput): ContentBlock[] {
   const outputFile = (value as { outputFile?: string }).outputFile
   const delivered = (value as { delivered?: boolean }).delivered
   const notes: string[] = []
+  if ((value as { metadataIncomplete?: boolean }).metadataIncomplete === true) {
+    notes.push(
+      'Citekey and field alignment is partial: the raw metadata batch failed, so the body is complete but per-document facts are missing.',
+    )
+  }
   if (outputFile !== undefined) {
     notes.push(
       delivered

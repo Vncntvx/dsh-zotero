@@ -1,4 +1,9 @@
-/** Batched filtered-search reads reject malformed rows and mixed-version pages. */
+/**
+ * Filtered-search row reads reject malformed answers and mixed-version pages.
+ * Reads without trash visibility go through chunked `itemKey=` scope listings;
+ * reads that must see trash go one key at a time through `GET /items/{key}`,
+ * because Zotero's `includeTrashed` parameter never reaches the itemKey scope.
+ */
 import { describe, expect, it, vi } from 'vitest'
 import type { ZoteroHttpClient } from '../../../src/http-client.js'
 import { ZOTERO_UNEXPECTED } from '../../../src/errors.js'
@@ -47,11 +52,35 @@ describe('filtered-search row batches', () => {
         { type: 'user', id: 0 },
         'S1',
         keys,
-        true,
+        false,
         undefined,
       ),
     ).rejects.toMatchObject({ code: ZOTERO_UNEXPECTED })
     expect(getJson).toHaveBeenCalledTimes(2)
-    for (const [, params] of getJson.mock.calls) expect(params.get('includeTrashed')).toBe('1')
+  })
+
+  it('serves trashed rows through per-key single reads that carry no query', async () => {
+    const getJson = vi.fn(async (path: string) => {
+      const key = path.split('/items/')[1]!
+      return {
+        json: searchHit({ key, data: { deleted: true } }),
+        headers: new Headers({ 'Zotero-Server-ID': 'S1', 'Last-Modified-Version': '7' }),
+      }
+    })
+    const client = { getJson } as unknown as ZoteroHttpClient
+    const result = await searchRowsByKeys(
+      { client, limits: PROVIDER_LIMITS },
+      { type: 'user', id: 0 },
+      'S1',
+      ['ITEM0001', 'ITEM0002'],
+      true,
+      undefined,
+    )
+    expect([...result.byKey.keys()].sort()).toEqual(['ITEM0001', 'ITEM0002'])
+    expect(result.libraryVersion).toBe(7)
+    expect(getJson).toHaveBeenCalledTimes(2)
+    for (const [path] of getJson.mock.calls) {
+      expect(path).toMatch(/^users\/0\/items\/ITEM\d{4}$/)
+    }
   })
 })
