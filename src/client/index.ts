@@ -257,6 +257,8 @@ function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces)
           const libraryFace = libraryCard.inject()
           return {
             ...zoteroFace,
+            probe,
+            revokeWriteGrant: () => ctx.remote.zotero.revokeWriteGrant(),
             hooks: {
               zoteroCard: zoteroFace.hooks.zoteroCard,
               scholarlyCard: scholarlyFace.hooks.scholarlyCard,

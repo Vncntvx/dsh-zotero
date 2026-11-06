@@ -25,6 +25,8 @@ import {
   type SettingsFormLabels,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-store'
+import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
+import type { ZoteroStatusView, ZoteroWriteGrantRevokeView } from '../contract.ts'
 import type {
   InjectFace,
   PropsLocale,
@@ -47,6 +49,8 @@ export type ZoteroSettingsSectionProps = PropsRuntime<'plugins.bundle.config'> &
     readonly scholarly?: ScholarlyCardFace
     readonly useLibraryCard?: SnapshotSelectorHook<LibraryCardState>
     readonly library?: LibraryCardFace
+    readonly probe?: () => Promise<RemoteResult<ZoteroStatusView>>
+    readonly revokeWriteGrant?: () => Promise<RemoteResult<ZoteroWriteGrantRevokeView>>
   }
 
 /** The five labels the official form chrome renders, from the plugin dictionary. */
@@ -113,6 +117,8 @@ export function ZoteroSettingsSection(props: ZoteroSettingsSectionProps): ReactN
             actions={props}
             activeTab={activeTab}
             showTabs={false}
+            probe={props.probe}
+            revokeWriteGrant={props.revokeWriteGrant}
           />
         </SettingsForm>
       </div>

@@ -197,6 +197,8 @@ export class ZoteroService extends Service {
   private providerDispose: (() => void) | undefined
   /** Disposers of the conditionally registered write tools, tracked for the writeEnabled flip. */
   private writeToolDisposes: Array<() => void> = []
+  /** The live write authorizer; absent while writes are disabled. */
+  private authorizer: WriteAuthorizer | undefined
   /** Child-scope restrictions that follow the live write-tool registration set. */
   private readonly subagentGuard: SubagentGuard
   /** Cached resolved config; invalidated on any loader/volatile-update. */
@@ -311,6 +313,18 @@ export class ZoteroService extends Service {
   }
 
   /**
+   * Revoke this plugin's persisted Zotero write grant and forget the process's
+   * copy. Local credential surgery only: no Zotero request and no approval.
+   * @returns whether a stored grant was removed.
+   * @throws {ZoteroError} `ZOTERO_CAPABILITY_UNAVAILABLE` while writes are disabled.
+   */
+  async revokeWriteGrant(): Promise<{ removed: boolean }> {
+    if (this.authorizer === undefined)
+      throw new ZoteroError('Zotero writes are disabled.', ZOTERO_CAPABILITY_UNAVAILABLE)
+    return await this.authorizer.revoke()
+  }
+
+  /**
    * The live write capability, read through {@link config} on every call.
    * Cross-component admission checks (the scholarly save tool) use it so a
    * disabled write surface never appears in a model step's tool set.
@@ -334,6 +348,7 @@ export class ZoteroService extends Service {
   private buildTransport(config: ResolvedConfig): void {
     this.providerDispose?.()
     this.providerDispose = undefined
+    this.authorizer = undefined
     const client = new ZoteroHttpClient({
       baseUrl: config.baseUrl,
       timeoutMs: config.timeoutMs,
@@ -359,6 +374,7 @@ export class ZoteroService extends Service {
             credentials: () => this.credentials(),
             persistKey: () => this.config.writePersistKey,
           })
+    this.authorizer = authorizer
     this.providerDispose = this.registerProvider(
       new LocalApiProvider(
         client,

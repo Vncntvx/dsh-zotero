@@ -96,6 +96,9 @@ export const zoteroAttachmentLocationSchema = z
   .strict()
   .readonly()
 
+/** Wire schema: the write-grant revocation result (strict). */
+export const zoteroWriteGrantRevokeSchema = z.object({ removed: z.boolean() }).strict()
+
 /** Wire schema: one diagnostics snapshot (strict; the ring pre-strips absent optionals). */
 export const zoteroDiagnosticsSchema = z
   .object({

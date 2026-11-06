@@ -43,6 +43,7 @@ import {
   ZOTERO_REMOTE_PACKAGE,
   ZOTERO_REPORT_CLIENT_ERROR_METHOD,
   ZOTERO_RESOLVE_ATTACHMENT_METHOD,
+  ZOTERO_REVOKE_WRITE_GRANT_METHOD,
   ZOTERO_STATUS_METHOD,
   ZOTERO_STATUS_SERVICE_KEY,
 } from './contract.js'
@@ -88,6 +89,11 @@ export const TYPERT_MANIFEST: TypertContribution = {
             name: ZOTERO_OPEN_PROTOCOL_METHOD,
             signature:
               'openProtocol(url: string, signal: AbortSignal): Promise<ZoteroOpenProtocolResultView>',
+          },
+          {
+            kind: 'method',
+            name: ZOTERO_REVOKE_WRITE_GRANT_METHOD,
+            signature: 'revokeWriteGrant(signal: AbortSignal): Promise<ZoteroWriteGrantRevokeView>',
           },
         ],
         types: [],

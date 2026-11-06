@@ -180,6 +180,7 @@ describe('the zotero typert manifest', () => {
       'diagnostics',
       'reportClientError',
       'openProtocol',
+      'revokeWriteGrant',
       'collectionPath',
       'browse',
       'search',
@@ -512,5 +513,29 @@ describe('the zotero openProtocol endpoint', () => {
       details: { url, reason: expect.any(String) },
     })
     expect(launcher).not.toHaveBeenCalled()
+  })
+})
+
+describe('the zotero revokeWriteGrant endpoint', () => {
+  it('refuses while writes are disabled', async () => {
+    lane = await setupHostLane(undefined, { typert: true })
+    const runtime = lane.ctx.get('zoteroRemote') as ZoteroRuntime
+    await expect(runtime.revokeWriteGrant(LIVE_SIGNAL)).rejects.toMatchObject({
+      code: 'ZOTERO_CAPABILITY_UNAVAILABLE',
+    })
+  })
+
+  it('reports no removed record when writes are enabled without a credentials seam', async () => {
+    lane = await setupHostLane({ writeEnabled: true }, { typert: true })
+    const runtime = lane.ctx.get('zoteroRemote') as ZoteroRuntime
+    await expect(runtime.revokeWriteGrant(LIVE_SIGNAL)).resolves.toEqual({ removed: false })
+  })
+
+  it('honors a pre-aborted carrier signal', async () => {
+    lane = await setupHostLane({ writeEnabled: true }, { typert: true })
+    const runtime = lane.ctx.get('zoteroRemote') as ZoteroRuntime
+    const controller = new AbortController()
+    controller.abort()
+    await expect(runtime.revokeWriteGrant(controller.signal)).rejects.toThrow()
   })
 })

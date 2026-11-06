@@ -34,6 +34,9 @@ import {
   type ZoteroCardState,
 } from './zotero-card-controller.ts'
 import type { ZoteroLocaleKey } from './locales.ts'
+import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
+import type { ZoteroStatusView, ZoteroWriteGrantRevokeView } from '../contract.ts'
+import { WriteGrantAction } from './components/WriteGrantAction.tsx'
 import css from './ZoteroSettingsForm.module.css'
 
 /** Field-editing actions, wired from the surface's card face. */
@@ -53,6 +56,10 @@ interface ZoteroSettingsFormProps {
   onTabChange?: (tab: SettingsTabId) => void
   /** Whether to render the internal SegmentedTabs (false when hoisted). */
   showTabs?: boolean
+  /** Live connectivity probe, for the write-grant row. */
+  probe?: () => Promise<RemoteResult<ZoteroStatusView>>
+  /** Revoke the persisted write grant, for the write-grant row. */
+  revokeWriteGrant?: () => Promise<RemoteResult<ZoteroWriteGrantRevokeView>>
 }
 
 /** Field map by group key, for quick lookups. */
@@ -116,7 +123,16 @@ export function ZoteroSettingsForm(props: ZoteroSettingsFormProps) {
           className={css.tabPanel}
         >
           {tab.groupKeys.map((group) =>
-            renderGroupSection(t, state, actions, group, groupFieldsOf(group)),
+            renderGroupSection(
+              t,
+              state,
+              actions,
+              group,
+              groupFieldsOf(group),
+              props.probe !== undefined && props.revokeWriteGrant !== undefined
+                ? { probe: props.probe, revoke: props.revokeWriteGrant }
+                : undefined,
+            ),
           )}
         </div>
       ))}
@@ -130,6 +146,10 @@ function renderGroupSection(
   actions: ZoteroFormActions,
   groupKey: GroupKey,
   fields: readonly FieldKey[],
+  grant?: {
+    readonly probe: () => Promise<RemoteResult<ZoteroStatusView>>
+    readonly revoke: () => Promise<RemoteResult<ZoteroWriteGrantRevokeView>>
+  },
 ): ReactNode {
   return (
     <section key={groupKey} className={css.group} aria-label={t(groupKey)}>
@@ -137,7 +157,12 @@ function renderGroupSection(
         <h3 className={css.groupHeading}>{t(groupKey)}</h3>
         <p className={css.groupNote}>{t(`${groupKey}Desc`)}</p>
       </div>
-      <div className={css.fields}>{fields.map((key) => field(t, state, actions, key))}</div>
+      <div className={css.fields}>
+        {fields.map((key) => field(t, state, actions, key))}
+        {groupKey === 'groupWrite' && grant !== undefined && (
+          <WriteGrantAction t={t} probe={grant.probe} revoke={grant.revoke} />
+        )}
+      </div>
     </section>
   )
 }

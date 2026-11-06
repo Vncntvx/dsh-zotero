@@ -161,11 +161,29 @@ export class WriteAuthorizer {
   private memory: MemoryGrant | undefined
   private readonly authorizing = new Map<string, AuthorizationOperation>()
   private readonly persisting = new Map<string, Promise<void>>()
+  /** Bumped by a user revoke so an in-flight dialog cannot re-persist a grant. */
+  private revokeEpoch = 0
 
   constructor(private readonly deps: WriteAuthorizerDeps) {}
 
   private getCredentials(): CredentialProvider | undefined {
     return this.deps.credentials?.()
+  }
+
+  /**
+   * Remove this plugin's persisted write grant and forget this process's
+   * copy. An authorization dialog already open is invalidated: its result may
+   * serve the write that asked for it, but it never becomes a stored grant.
+   * @returns whether a credential record was removed.
+   */
+  async revoke(): Promise<{ removed: boolean }> {
+    this.revokeEpoch += 1
+    this.memory = undefined
+    const credentials = this.getCredentials()
+    if (credentials === undefined) return { removed: false }
+    const current = await credentials.readRecord(WRITE_KEY_RECORD)
+    await credentials.deleteRecord(WRITE_KEY_RECORD)
+    return { removed: current !== undefined }
   }
 
   /**
@@ -367,8 +385,13 @@ export class WriteAuthorizer {
    * absent, persistence remains pending for a later key resolution.
    */
   private async authorize(serverId: string, signal?: AbortSignal): Promise<ZoteroWriteKey> {
+    const epoch = this.revokeEpoch
     const grant = await this.deps.client.authorize(WRITE_APP_NAME, { serverId, signal })
     if (signal?.aborted) throw new HarnessError(TOOL_ABORTED_MESSAGE, TOOL_ABORTED)
+    // A revoke landed while the dialog was open. The user approved this one
+    // write, so its key is returned, but it must never be remembered: the
+    // revocation wins over a grant the plugin was still waiting for.
+    if (this.revokeEpoch !== epoch) return { key: grant.key, oneTime: true }
     const persistPending = grant.remember && this.deps.persistKey()
     this.memory = {
       key: grant.key,

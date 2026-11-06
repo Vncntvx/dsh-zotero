@@ -648,7 +648,7 @@ Write tools are not registered by default, need `writeEnabled` turned on explici
 2. Local API authentication:
    - A write must carry an API key issued by local Zotero;
    - The first write needs confirmation in Zotero's local authorization dialog (Allow, Always Allow, or Decline);
-   - With `writePersistKey` on, the persistent key issued by Always Allow is stored safely in the host credentials manager.
+   - With `writePersistKey` on, the persistent key issued by Always Allow is stored safely in the host credentials manager; the settings page's "General → Writing" group can revoke it, and the next write asks again.
 3. Shell write interception:
    - A listener detects write commands aimed at the local API, intercepts them, and escalates them to a Harness approval request, so unauthorized scripts cannot modify the library.
 

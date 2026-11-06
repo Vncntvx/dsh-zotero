@@ -630,3 +630,45 @@ describe('authorization refusals', () => {
     expect(authorizeCalls).toBe(2)
   })
 })
+
+describe('user revocation', () => {
+  it("deletes only this plugin's record and forgets the process copy", async () => {
+    credentials.records.set(String(WRITE_KEY_RECORD), storedGrant('stored-key-02'))
+    credentials.records.set('sentinel-record', { kind: 'api-key', key: 'other' })
+    const writer = authorizer()
+    expect(await writer.hasGrant(SERVER_ID)).toBe(true)
+
+    expect(await writer.revoke()).toEqual({ removed: true })
+    expect(credentials.deletions).toEqual([String(WRITE_KEY_RECORD)])
+    expect(credentials.records.has('sentinel-record')).toBe(true)
+    expect(await writer.hasGrant(SERVER_ID)).toBe(false)
+  })
+
+  it('reports nothing removed when no record is stored', async () => {
+    const writer = authorizer()
+    expect(await writer.revoke()).toEqual({ removed: false })
+    expect(credentials.records.size).toBe(0)
+  })
+
+  it('works without the credentials seam', async () => {
+    expect(await authorizerWithoutSeam().revoke()).toEqual({ removed: false })
+  })
+
+  it('invalidates a dialog that was open when the user revoked', async () => {
+    const gate = deferred<{ key: string; remember: boolean }>()
+    const entered = deferred<void>()
+    vi.spyOn(client, 'authorize').mockImplementation(async () => {
+      entered.resolve()
+      return await gate.promise
+    })
+    const writer = authorizer()
+    const pending = writer.keyFor(SERVER_ID)
+    await entered.promise
+
+    await writer.revoke()
+    gate.resolve({ key: ISSUED_KEY, remember: true })
+    await expect(pending).resolves.toEqual({ key: ISSUED_KEY, oneTime: true })
+    expect(credentials.records.size).toBe(0)
+    expect(await writer.hasGrant(SERVER_ID)).toBe(false)
+  })
+})

@@ -45,6 +45,7 @@ import {
   ZOTERO_REPORT_RESULT_TYPE_SYMBOL,
   ZOTERO_RESOLVE_ATTACHMENT_TYPE_SYMBOL,
   ZOTERO_STATUS_TYPE_SYMBOL,
+  ZOTERO_WRITE_GRANT_REVOKE_TYPE_SYMBOL,
   zoteroDiagnosticsInvocation,
   zoteroLibraryBrowseInvocation,
   zoteroLibraryChildPageInvocation,
@@ -54,6 +55,7 @@ import {
   zoteroLibraryWriteInvocation,
   zoteroOpenProtocolInvocation,
   zoteroReportClientErrorInvocation,
+  zoteroRevokeWriteGrantInvocation,
   zoteroResolveAttachmentInvocation,
   zoteroStatusInvocation,
 } from '../contract.ts'
@@ -79,6 +81,7 @@ import {
   zoteroSearchResultSchema,
   zoteroStatusSchema,
   zoteroChildPageSchema,
+  zoteroWriteGrantRevokeSchema,
 } from '../wire-schemas.ts'
 
 export const ZOTERO_STATUS_CLIENT_RESULT_CODEC = strictCodec(
@@ -96,6 +99,11 @@ const ZOTERO_RESOLVE_ATTACHMENT_CLIENT_RESULT_CODEC = strictCodec(
 const ZOTERO_DIAGNOSTICS_CLIENT_RESULT_CODEC = strictCodec(
   ZOTERO_DIAGNOSTICS_TYPE_SYMBOL,
   zoteroDiagnosticsSchema,
+)
+
+const ZOTERO_WRITE_GRANT_REVOKE_CLIENT_RESULT_CODEC = strictCodec(
+  ZOTERO_WRITE_GRANT_REVOKE_TYPE_SYMBOL,
+  zoteroWriteGrantRevokeSchema,
 )
 
 const ZOTERO_CLIENT_ERROR_REPORT_CLIENT_PARAM_CODEC = strictCodec(
@@ -196,6 +204,7 @@ export const ZOTERO_CLIENT_INVOCATIONS: readonly InvocationDescriptor[] = Object
     ZOTERO_OPEN_PROTOCOL_CLIENT_PARAM_CODEC,
     ZOTERO_OPEN_PROTOCOL_CLIENT_RESULT_CODEC,
   ),
+  zoteroRevokeWriteGrantInvocation(ZOTERO_WRITE_GRANT_REVOKE_CLIENT_RESULT_CODEC),
   zoteroCollectionPathInvocation(
     strictCodec(ZOTERO_COLLECTION_PATH_REQUEST_TYPE_SYMBOL, zoteroCollectionPathRequestSchema),
     strictCodec(ZOTERO_COLLECTION_PATH_RESULT_TYPE_SYMBOL, zoteroCollectionPathResultSchema),

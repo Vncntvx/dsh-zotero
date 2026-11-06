@@ -48,11 +48,15 @@ function Harness({
   face,
   scholarlyFace,
   libraryFace,
+  probe,
+  revokeWriteGrant,
   dictionary = zh,
 }: {
   face: ZoteroCardFace
   scholarlyFace?: ScholarlyCardFace
   libraryFace?: LibraryCardFace
+  probe?: ZoteroSettingsSectionProps['probe']
+  revokeWriteGrant?: ZoteroSettingsSectionProps['revokeWriteGrant']
   dictionary?: typeof zh
 }) {
   const state = useSyncExternalStore(
@@ -87,6 +91,8 @@ function Harness({
     discard: face.discard,
     scholarly: scholarlyFace,
     library: libraryFace,
+    probe,
+    revokeWriteGrant,
   } as unknown as ZoteroSettingsSectionProps
   return <ZoteroSettingsSection {...props} />
 }
@@ -121,6 +127,26 @@ const saveButton = (): HTMLButtonElement =>
   screen.getByRole('button', { name: new RegExp(`^(?:${zh.save}|${zh.saving})`) })
 
 describe('ZoteroSettingsSection', () => {
+  it('renders the write-grant revoke row when the page injects the probe faces', async () => {
+    scope = fakeScope({ value: {} })
+    const controller = new ZoteroCardController(scope)
+    render(
+      <Harness
+        face={controller.inject()}
+        probe={async () => ({
+          ok: true,
+          value: {
+            providerId: 'local',
+            connected: true,
+            write: { enabled: true, authorized: true },
+          },
+        })}
+        revokeWriteGrant={async () => ({ ok: true, value: { removed: true } })}
+      />,
+    )
+    expect(await screen.findByRole('button', { name: zh.writeGrantRevoke })).toBeDefined()
+  })
+
   it('explains itself while the namespace is unavailable', () => {
     scope = fakeScope({ status: 'unavailable' })
     render(<Harness face={new ZoteroCardController(scope).inject()} />)

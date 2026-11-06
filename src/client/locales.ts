@@ -182,6 +182,13 @@ export const en = {
   writeRiskConfirm: 'Allow writes',
   writeRiskCancel: 'Cancel',
   writeRiskClose: 'Close',
+  writeGrantRevoke: 'Revoke saved write grant',
+  writeGrantRevokeHint:
+    'Delete the Zotero write key stored in the host credentials manager. The next write opens the authorization dialog again.',
+  writeGrantRevokeConfirmHint:
+    "This removes only the plugin's stored key. Zotero keeps any Always-Allow key it issued until you discard it there; the next write asks again.",
+  writeGrantRevokeAcknowledge: 'I understand the next write will ask for authorization again.',
+  writeGrantRevokeConfirm: 'Revoke',
   writePersistKey: 'Remember the Zotero write key',
   writePersistKeyHint:
     'Stores an "Always Allow" key from the Zotero dialog so writes stop asking every time. One-time approvals are never stored.',
@@ -849,6 +856,13 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   writeRiskConfirm: '允许写入',
   writeRiskCancel: '取消',
   writeRiskClose: '关闭',
+  writeGrantRevoke: '撤销已保存的写入授权',
+  writeGrantRevokeHint:
+    '删除宿主凭据管理器中保存的 Zotero 写入密钥；下一次写入会重新弹出授权对话框。',
+  writeGrantRevokeConfirmHint:
+    '这里只删除插件保存的密钥。Zotero 侧已发放的「始终允许」密钥不会自动作废，但下一次写入会重新询问。',
+  writeGrantRevokeAcknowledge: '我了解下一次写入会重新请求授权。',
+  writeGrantRevokeConfirm: '撤销',
   writePersistKey: '记住 Zotero 写入授权',
   writePersistKeyHint:
     '保存 Zotero 弹窗里「始终允许」的授权密钥，之后写入不再反复弹窗。一次性授权不会保存。',

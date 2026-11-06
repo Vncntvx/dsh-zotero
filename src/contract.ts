@@ -136,6 +136,12 @@ export interface ZoteroReportResultView {
   readonly seq: number
 }
 
+/** The result of revoking the persisted Zotero write grant. */
+export interface ZoteroWriteGrantRevokeView {
+  /** Whether a stored credential record was removed. */
+  readonly removed: boolean
+}
+
 /** The result of launching a zotero:// protocol URL via the host. */
 export interface ZoteroOpenProtocolResultView {
   readonly success: true
@@ -176,6 +182,9 @@ export const ZOTERO_OPEN_PROTOCOL_PARAM_TYPE_SYMBOL = 'dsh-zotero#ProtocolUrl'
 /** Strict codec type symbol for {@link ZoteroOpenProtocolResultView}. */
 export const ZOTERO_OPEN_PROTOCOL_RESULT_TYPE_SYMBOL = 'dsh-zotero#ZoteroOpenProtocolResultView'
 
+/** Strict codec type symbol for {@link ZoteroWriteGrantRevokeView}. */
+export const ZOTERO_WRITE_GRANT_REVOKE_TYPE_SYMBOL = 'dsh-zotero#ZoteroWriteGrantRevokeView'
+
 /** Globally stable invocation id for the status probe. */
 export const ZOTERO_STATUS_INVOCATION_ID = 'dsh-zotero#zotero/status'
 
@@ -190,6 +199,9 @@ const ZOTERO_REPORT_CLIENT_ERROR_INVOCATION_ID = 'dsh-zotero#zotero/reportClient
 
 /** Globally stable invocation id for openProtocol. */
 const ZOTERO_OPEN_PROTOCOL_INVOCATION_ID = 'dsh-zotero#zotero/openProtocol'
+
+/** Globally stable invocation id for revokeWriteGrant. */
+const ZOTERO_REVOKE_WRITE_GRANT_INVOCATION_ID = 'dsh-zotero#zotero/revokeWriteGrant'
 
 /**
  * Cordis service key that owns the status method on the host half.
@@ -213,6 +225,9 @@ export const ZOTERO_REPORT_CLIENT_ERROR_METHOD = 'reportClientError'
 /** Wire method name for openProtocol. */
 export const ZOTERO_OPEN_PROTOCOL_METHOD = 'openProtocol'
 
+/** Wire method name for revokeWriteGrant. */
+export const ZOTERO_REVOKE_WRITE_GRANT_METHOD = 'revokeWriteGrant'
+
 /** Invocation kind for direct service calls (no Context receiver). */
 export const ZOTERO_STATUS_INVOCATION_KIND = 'direct'
 
@@ -232,6 +247,27 @@ export function zoteroStatusInvocation(
     service: ZOTERO_STATUS_SERVICE_KEY,
     namespace: ZOTERO_SETTINGS_NAMESPACE,
     method: ZOTERO_STATUS_METHOD,
+    invocation: { kind: ZOTERO_STATUS_INVOCATION_KIND },
+    cancellation: { parameter: 'signal' },
+    parameters: [],
+    result,
+  }
+}
+
+/**
+ * Build one revokeWriteGrant invocation descriptor: no parameters, direct
+ * dispatch, and the caller's cancellation signal.
+ * @param result - the strict result codec for {@link ZoteroWriteGrantRevokeView}.
+ * @returns a complete invocation descriptor.
+ */
+export function zoteroRevokeWriteGrantInvocation(
+  result: InvocationDescriptor['result'],
+): InvocationDescriptor {
+  return {
+    id: ZOTERO_REVOKE_WRITE_GRANT_INVOCATION_ID,
+    service: ZOTERO_STATUS_SERVICE_KEY,
+    namespace: ZOTERO_SETTINGS_NAMESPACE,
+    method: ZOTERO_REVOKE_WRITE_GRANT_METHOD,
     invocation: { kind: ZOTERO_STATUS_INVOCATION_KIND },
     cancellation: { parameter: 'signal' },
     parameters: [],

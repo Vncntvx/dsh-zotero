@@ -57,7 +57,7 @@ dsh-zotero 的配置按三个设置命名空间分开定义，字段默认值由
 | `defaultStyle`             | `apa`                        | CSL 引用样式（需 Zotero 内置）；用于 `citation` 与 `bibliography`，工具导出与文献面板复制引用共用                                                                             |
 | `defaultLocale`            | `en-US`                      | CSL 引用语言；用于 `citation` 与 `bibliography`，工具导出与文献面板复制引用共用                                                                                               |
 | `writeEnabled`             | `false`                      | 是否注册并启用个人库写入工具                                                                                                                                                  |
-| `writePersistKey`          | `true`                       | 是否将 Always-Allow 写入密钥保存到宿主凭据管理器                                                                                                                              |
+| `writePersistKey`          | `true`                       | 是否将 Always-Allow 写入密钥保存到宿主凭据管理器；已保存的授权可在设置页「写入」分组撤销                                                                                      |
 | `writeNoteMaxChars`        | `65536`                      | 单条研究笔记正文字符上限                                                                                                                                                      |
 | `writeListMaxItems`        | `50`                         | 列表类写入参数的条目上限：`update_item_tags`/`update_item_collections` 的 `add`/`remove`、`delete_library_tags` 的 `tags`、`create_note` 的 `collections`/`tags`/`sourceRefs` |
 | `writeAuthorizeDeadlineMs` | `120000`                     | 写入时等待 Zotero 授权弹窗的时限（毫秒）                                                                                                                                      |

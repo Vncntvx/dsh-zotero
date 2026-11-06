@@ -37,6 +37,7 @@ import {
   type ZoteroLibraryWriteRequestView,
   type ZoteroLibraryWriteResultView,
   type ZoteroOpenProtocolResultView,
+  type ZoteroWriteGrantRevokeView,
 } from '../contract.ts'
 import { ZOTERO_CLIENT_INVOCATIONS } from './status-codec.ts'
 
@@ -74,6 +75,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
       report: ZoteroClientErrorReport,
     ) => Promise<RemoteResult<ZoteroReportResultView>>
     openProtocol: (url: string) => Promise<RemoteResult<ZoteroOpenProtocolResultView>>
+    revokeWriteGrant: () => Promise<RemoteResult<ZoteroWriteGrantRevokeView>>
     collectionPath: (
       request: ZoteroCollectionPathRequestView,
     ) => Promise<RemoteResult<ZoteroCollectionPathResultView>>
@@ -102,6 +104,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
       report: ZoteroClientErrorReport,
     ) => Promise<RemoteResult<ZoteroReportResultView>>
     'zotero/openProtocol': (url: string) => Promise<RemoteResult<ZoteroOpenProtocolResultView>>
+    'zotero/revokeWriteGrant': () => Promise<RemoteResult<ZoteroWriteGrantRevokeView>>
     'zotero/collectionPath': (
       request: ZoteroCollectionPathRequestView,
     ) => Promise<RemoteResult<ZoteroCollectionPathResultView>>

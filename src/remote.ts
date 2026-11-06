@@ -40,6 +40,7 @@ import {
   type ZoteroOpenProtocolResultView,
   type ZoteroReportResultView,
   type ZoteroStatusView,
+  type ZoteroWriteGrantRevokeView,
 } from './contract.js'
 import type { ZoteroStatus } from './types.js'
 
@@ -304,6 +305,21 @@ export class ZoteroRuntime extends TypertRemoteService {
    */
   async openProtocol(url: string, signal: AbortSignal): Promise<ZoteroOpenProtocolResultView> {
     return executeOpenProtocol(url, { signal })
+  }
+
+  /**
+   * Revoke this plugin's persisted Zotero write grant: a local credentials
+   * deletion plus an in-memory reset, with no Zotero request and no approval.
+   * The endpoint carries no session identity, so the gateway evaluates it on
+   * the global resource: the owner and explicitly global-authorized peers may
+   * call it, and a session-scoped viewer may not.
+   * @param signal - cancellation signal.
+   * @returns whether a stored grant was removed.
+   */
+  async revokeWriteGrant(signal: AbortSignal): Promise<ZoteroWriteGrantRevokeView> {
+    signal.throwIfAborted()
+    const service = requireZoteroService(this.ctx, signal)
+    return await service.revokeWriteGrant()
   }
 
   /** The live `debug` flag, so the snapshot names the verbosity it was taken at. */
