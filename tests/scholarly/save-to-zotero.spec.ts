@@ -23,6 +23,7 @@ function stubZotero(outcome: unknown): {
   const plans: string[] = []
   return {
     service: {
+      writeEnabled: () => true,
       createItem: async (request: unknown, call: { plan: string }) => {
         requests.push(request)
         plans.push(call.plan)

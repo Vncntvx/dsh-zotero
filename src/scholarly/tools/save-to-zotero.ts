@@ -94,7 +94,10 @@ export function createScholarlySaveToZoteroTool(host: ScholarlyToolHost): ToolDe
     timeoutMs: 120_000,
     async execute(args, exec): Promise<SaveOutput> {
       const service = host.zoteroService?.()
-      if (service?.createItem === undefined)
+      // Admission already excludes the tool while writes are off; this guard
+      // covers a config flip between step admission and execution, and a
+      // provider that exposes the capability without a createItem method.
+      if (service === undefined || !service.writeEnabled?.() || service.createItem === undefined)
         throw new ZoteroError(
           'The local Zotero write component is unavailable or disabled.',
           ZOTERO_CAPABILITY_UNAVAILABLE,

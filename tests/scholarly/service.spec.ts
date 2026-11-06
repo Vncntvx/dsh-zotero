@@ -363,3 +363,38 @@ describe('scholarly tool declarations', () => {
     }
   })
 })
+
+describe('scholarly tool admission', () => {
+  it('admits the save tool only while writes are enabled', async () => {
+    const ctx = await bootScholarlyContext()
+    let writeEnabled = false
+    ctx.provide('zotero', { writeEnabled: () => writeEnabled } as never)
+    new ScholarlyService(ctx)
+    const agent = {} as never
+    const admitted = async (): Promise<string[]> => {
+      const set = await ctx.tools.resolve({
+        agent,
+        modelSelection: { provider: 'test', model: 'test' } as never,
+        signal: new AbortController().signal,
+      })
+      try {
+        return [...set.view(agent).keys()]
+      } finally {
+        set.dispose()
+      }
+    }
+
+    expect(await admitted()).not.toContain('scholarly_save_to_zotero')
+    writeEnabled = true
+    expect(await admitted()).toContain('scholarly_save_to_zotero')
+    writeEnabled = false
+    expect(await admitted()).not.toContain('scholarly_save_to_zotero')
+  })
+
+  it('keeps the save tool registered: admission is a step decision, not a registry edit', async () => {
+    const ctx = await bootScholarlyContext()
+    ctx.provide('zotero', { writeEnabled: () => false } as never)
+    new ScholarlyService(ctx)
+    expect(ctx.tools.schemas().map((schema) => schema.name)).toContain('scholarly_save_to_zotero')
+  })
+})

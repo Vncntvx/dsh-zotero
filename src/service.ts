@@ -300,6 +300,16 @@ export class ZoteroService extends Service {
   }
 
   /**
+   * The live write capability, read through {@link config} on every call.
+   * Cross-component admission checks (the scholarly save tool) use it so a
+   * disabled write surface never appears in a model step's tool set.
+   * @returns whether writes are enabled in the current configuration.
+   */
+  writeEnabled(): boolean {
+    return this.config.writeEnabled
+  }
+
+  /**
    * Build the transport stack from the given config: HTTP client, write
    * client, write authorizer, and the `local` provider registration (the
    * previous registration is disposed first so the duplicate-id guard never

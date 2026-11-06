@@ -39,6 +39,7 @@ export async function scholarlySaveReceipt(outcome: ZoteroCreateItemOutcome) {
     }),
     jobRunner: () => new ZoteroJobRunner(undefined),
     zoteroService: () => ({
+      writeEnabled: () => true,
       search: async () => {
         throw new Error('Saving must not perform an implicit search')
       },

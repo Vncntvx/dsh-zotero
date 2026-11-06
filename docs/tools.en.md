@@ -541,6 +541,8 @@ An unverified creation receipt distinguishes `commit-unknown` from `saved-state-
 | `tags`             | string[] | —        | Tags to add on creation                                                 |
 | `collections`      | string[] | —        | Destination collection refs or exact names                              |
 
+The tool enters the model's tool set only while the local Zotero component is mounted and `writeEnabled=true`; with writes off it is not admitted to any step, so the model never sees a tool that can only answer "writes are disabled".
+
 Save scholarly search results into the personal library through the local write approval flow. The output is a union of `declined`, `applied`, and `committed-unverified`. Only `applied` carries the successfully saved `papers`, with the created items' ref, key, version, tags, collections, and library version; unverified results keep their original identity and reason and must not be retried. The card and conversation replay tell the three outcomes apart from the persisted content and state metadata.
 
 ---

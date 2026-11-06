@@ -12,7 +12,10 @@ import { ZoteroJobRunner, jobPromotedMessage } from '../../src/job-runner.js'
 import { createScholarlyReadTool } from '../../src/scholarly/tools/read.js'
 import { createScholarlySearchTool } from '../../src/scholarly/tools/search.js'
 import { createScholarlyVerifyTool } from '../../src/scholarly/tools/verify.js'
-import { SCHOLARLY_JOB_OUTPUT_LIMIT_BYTES } from '../../src/scholarly/tools/jobs.js'
+import {
+  SCHOLARLY_JOB_OUTPUT_DESCRIPTOR,
+  SCHOLARLY_JOB_OUTPUT_LIMIT_BYTES,
+} from '../../src/scholarly/tools/jobs.js'
 import type { JobRegistry } from '@deepseek-ai/dsh-jobs'
 import { TestJobRegistry } from '../helpers/fake-jobs.js'
 import { deferred } from '../helpers/sync.js'
@@ -242,5 +245,38 @@ describe('scholarly background jobs', () => {
     runner.killAll('scholarly service disposed')
     const outcome = await job.hooks.done
     expect(outcome.status).toBe('killed')
+  })
+
+  it('renders and projects both job arms and plain text', () => {
+    const output = SCHOLARLY_JOB_OUTPUT_DESCRIPTOR
+    const background = { kind: 'background', jobId: 'job-1' } as const
+    expect(output.render({}, background)).toEqual([
+      { type: 'text', text: 'started background job job-1' },
+    ])
+    expect(output.presentationMeta?.({}, background)).toEqual(background)
+    expect(output.render({}, { text: 'body' } as const)).toEqual([{ type: 'text', text: 'body' }])
+    expect(output.presentationMeta?.({}, { text: 'body' } as const)).toEqual({})
+  })
+
+  it("projects job arms through the tools' own presentResult", () => {
+    const { host } = hostWith({
+      enableRunInBackground: true,
+      promoteOnTimeout: true,
+      foregroundWaitMs: 1_000,
+    })
+    const arm = { kind: 'background', jobId: 'job-present' }
+    const result = { meta: arm, content: [], isError: false }
+    // `defineTool` validates the arguments before the projection runs, so each
+    // call needs its tool's own minimal valid input.
+    const minimalArgs = new Map([
+      [createScholarlyReadTool(host), { id: '2301.07041' }],
+      [createScholarlySearchTool(host), { query: 'attention' }],
+    ])
+    for (const [tool, args] of minimalArgs) {
+      expect(tool.presentResult?.(args as never, result as never)).toEqual({
+        card: 'generic',
+        title: expect.stringContaining('background job job-present'),
+      })
+    }
   })
 })

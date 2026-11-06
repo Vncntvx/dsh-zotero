@@ -26,8 +26,8 @@ it('names the rejected argument and the declared parameter for a scholarly tool'
       {
         type: 'tool-call',
         id: ToolCallId('scholarly-save-1'),
-        name: 'scholarly_save_to_zotero',
-        arguments: JSON.stringify({ titel: 'A study' }),
+        name: 'scholarly_get',
+        arguments: JSON.stringify({ idd: '10.1/x' }),
       },
     ],
     signal: new AbortController().signal,
@@ -40,9 +40,9 @@ it('names the rejected argument and the declared parameter for a scholarly tool'
   expect(result.error.info?.code).toBe('INVALID_ARGS')
   expect(result.content.at(-1)).toEqual({
     type: 'text',
-    text: parameterCorrectionHint('scholarly_save_to_zotero', {
-      input: 'titel',
-      expected: 'title',
+    text: parameterCorrectionHint('scholarly_get', {
+      input: 'idd',
+      expected: 'id',
     }),
   })
 })

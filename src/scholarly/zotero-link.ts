@@ -40,6 +40,8 @@ export interface ZoteroServiceLike {
     signal: AbortSignal | undefined,
     options: ZoteroSearchOptions,
   ): Promise<ZoteroSearchResult>
+  /** Live write capability of the local component, when it exposes one. */
+  writeEnabled?(): boolean
   get?(request: ZoteroGetRequest, signal?: AbortSignal): Promise<ZoteroItemDetail>
   createItem?(
     request: ZoteroCreateItemRequest,

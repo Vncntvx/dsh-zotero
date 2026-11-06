@@ -541,6 +541,8 @@ zotero_create_item(itemType="journalArticle", title="Attention Is All You Need",
 | `tags`             | string[] | —    | 创建时添加的标签                                    |
 | `collections`      | string[] | —    | 目标合集 ref 或精确名称                             |
 
+该工具只在本地 Zotero 组件已挂载且 `writeEnabled=true` 时进入模型的工具清单；写入关闭时它不注册到当前 step 的工具集合，模型不会看到一个只能回答「写入已关闭」的工具。
+
 将学术检索结果通过本地写入审批流程保存到个人库。输出为 `declined`、`applied` 或 `committed-unverified` 的联合类型。仅 `applied` 附带成功保存的 `papers`，并保留创建条目的 ref、key、版本、标签、合集与库版本；未核验结果保留原始身份及原因，禁止重试。卡片和会话回放通过持久化的正文与状态元数据区分三种结果。
 
 ---

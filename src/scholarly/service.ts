@@ -33,6 +33,8 @@ import {
   type ResolvedScholarlyConfig,
   type ScholarlyConfig,
 } from './config.js'
+import { SCHOLARLY_SAVE_TOOL_NAME } from '../constants.js'
+import type { ScholarlyToolHost } from './tools/common.js'
 import { installParameterCorrection } from '../parameter-correction.js'
 import { ZoteroJobRunner, jobPolicyOf } from '../job-runner.js'
 import { registerResearchSkills } from '../skills/register.js'
@@ -50,6 +52,18 @@ declare module '@deepseek-ai/cordis' {
   interface Context {
     scholarly: ScholarlyService
   }
+}
+
+/**
+ * Whether the save tool can ever succeed in this composition: the local Zotero
+ * component must be mounted and its live write capability must be on. The
+ * condition reads live state on every step, so a settings flip applies without
+ * re-registering anything.
+ * @param host - the scholarly tool host whose optional link is read.
+ * @returns whether the save tool may be admitted to a step.
+ */
+export function canSaveScholarlyToZotero(host: Pick<ScholarlyToolHost, 'zoteroService'>): boolean {
+  return host.zoteroService?.()?.writeEnabled?.() === true
 }
 
 export class ScholarlyService extends Service {
@@ -107,8 +121,13 @@ export class ScholarlyService extends Service {
     }
 
     // The tools are registered once, here: they exist exactly as long as this
-    // fiber does, because `ctx.tools.register()` is fiber-scoped.
-    for (const tool of createAllScholarlyTools(host)) ctx.tools.register(tool)
+    // fiber does, because `ctx.tools.register()` is fiber-scoped. The save tool
+    // is conditional: with writes disabled it could only ever answer
+    // "write capability is disabled", which invites the model to retry it.
+    const canSave = (): boolean => canSaveScholarlyToZotero(host)
+    for (const tool of createAllScholarlyTools(host)) {
+      ctx.tools.register(tool, tool.name === SCHOLARLY_SAVE_TOOL_NAME ? { when: canSave } : {})
+    }
     registerResearchSkills(ctx, SCHOLARLY_SOPS)
     installParameterCorrection(ctx, SCHOLARLY_TOOL_NAMES)
 
